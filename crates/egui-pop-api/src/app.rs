@@ -1,0 +1,1658 @@
+//! The application: an [`AppBuilder`] takes plugins and a theme, sorts and
+//! connects the plugins, and gives an [`App`] that draws the shell (menu
+//! bar, zones, panels, the command palette) and dispatches keys. It runs
+//! in eframe (feature `eframe`) or headless, driven by tests.
+
+use std::cell::{RefCell, RefMut};
+use std::collections::{BTreeMap, BTreeSet};
+use std::fmt;
+use std::rc::Rc;
+use std::sync::{Arc, Mutex};
+
+use egui::{Context, Id, Ui};
+use egui_pop_core::binding::SharedStore;
+use egui_pop_core::keys::KeyDispatcher;
+use egui_pop_core::overlay::{self, Kind, OverlaySpec};
+use egui_pop_core::persist::Persist;
+use egui_pop_core::theme::{self, ThemeSpec, Themes};
+use egui_pop_core::{a11y, fault, focus, lock};
+use egui_pop_model::commands::{CommandSpec, Commands, Origin, Run};
+use egui_pop_model::diagnostics::{Diagnostic, Diagnostics};
+use egui_pop_model::ids::{
+    CommandId, MenuId, OwnerId, PanelId, PluginId, SettingId, StoryId, ZoneId,
+};
+use egui_pop_model::keymap::{Keymap, Layer};
+use egui_pop_model::menus::{Item, MenuItem, Menus, Shown, show_items, sort_items};
+use egui_pop_model::order::{Node, order};
+use egui_pop_model::panels::{Area, Panels};
+use egui_pop_model::registry::{OwnedList, Registry};
+use egui_pop_model::values::{Store, settings_schema};
+use egui_pop_model::when::WhenContext;
+use serde_json::{Value as Json, json};
+
+use crate::ctx::{Ctx, CtxError};
+use crate::hooks::{Alter, Hook, Lifecycle, LifecycleFn, On, PaletteEntry, SettingEntry};
+use crate::plugin::{BuildError, Plugin, PluginError, PluginInfo};
+use crate::services::{ServiceToken, Services};
+use crate::stories::{Story, StoryInfo};
+use crate::zones::{self, Block, DrawFn, ZoneInfo, ZoneTable, draw_chain};
+
+/// The main menu bar.
+pub const MENU_MAIN: MenuId = MenuId::from_static("app.main");
+pub const MENU_FILE: MenuId = MenuId::from_static("app.menu.file");
+pub const MENU_EDIT: MenuId = MenuId::from_static("app.menu.edit");
+pub const MENU_VIEW: MenuId = MenuId::from_static("app.menu.view");
+pub const MENU_HELP: MenuId = MenuId::from_static("app.menu.help");
+
+/// The framework's commands.
+pub const CMD_PALETTE: CommandId = CommandId::from_static("app.palette");
+pub const CMD_QUIT: CommandId = CommandId::from_static("app.quit");
+pub const CMD_UNDO: CommandId = CommandId::from_static("value.undo");
+pub const CMD_REDO: CommandId = CommandId::from_static("value.redo");
+pub const CMD_SAVE: CommandId = CommandId::from_static("app.save");
+
+/// The theme, as a service: read it, ask for another (installed between
+/// frames).
+#[derive(Debug)]
+pub struct ThemeService {
+    spec: Mutex<ThemeSpec>,
+    themes: Themes,
+}
+
+impl ThemeService {
+    pub fn spec(&self) -> ThemeSpec {
+        lock(&self.spec).clone()
+    }
+
+    /// Asks for a theme; installed before the next frame.
+    pub fn set(&self, spec: ThemeSpec) {
+        *lock(&self.spec) = spec;
+    }
+
+    /// Changes the theme in place.
+    pub fn update(&self, f: impl FnOnce(&mut ThemeSpec)) {
+        f(&mut lock(&self.spec));
+    }
+
+    pub fn themes(&self) -> &Themes {
+        &self.themes
+    }
+}
+
+/// The theme service's token.
+pub const THEME: ServiceToken<ThemeService> = ServiceToken::new("app.theme");
+
+/// What a command handler receives.
+#[derive(Debug)]
+pub struct Call<'a> {
+    pub args: &'a Json,
+    pub origin: &'a Origin,
+    pub app: &'a AppHandle,
+}
+
+/// A command handler.
+pub type CommandFn = Rc<dyn Fn(&Call<'_>) -> Result<Json, String>>;
+
+/// The registries plugins fill through `Ctx`.
+pub(crate) struct Registries {
+    pub commands: Commands<CommandFn>,
+    pub keymap: Keymap,
+    pub menus: Menus,
+    pub panels: Panels,
+    pub hooks: OwnedList<Hook>,
+    pub lifecycle: OwnedList<(On, LifecycleFn)>,
+    pub settings: Registry<SettingId, String>,
+}
+
+impl Registries {
+    fn new() -> Self {
+        Self {
+            commands: Commands::new(),
+            keymap: Keymap::new(),
+            menus: Menus::new(),
+            panels: Panels::new(),
+            hooks: OwnedList::new(),
+            lifecycle: OwnedList::new(),
+            settings: Registry::new(),
+        }
+    }
+
+    fn remove_owner(&mut self, owner: &OwnerId) {
+        self.commands.remove_owner(owner);
+        self.keymap.remove_owner(owner);
+        self.menus.remove_owner(owner);
+        self.panels.remove_owner(owner);
+        self.hooks.remove_owner(owner);
+        self.lifecycle.remove_owner(owner);
+        self.settings.remove_owner(owner);
+    }
+}
+
+/// Declarations derived from the registries, after the alter hooks.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct Derived {
+    pub menus: BTreeMap<MenuId, Vec<MenuItem>>,
+    pub palette: Vec<PaletteEntry>,
+    pub settings: Vec<SettingEntry>,
+    pub commands: Vec<(CommandSpec, OwnerId)>,
+}
+
+/// What a block or a handler asks of the application, done before the
+/// next frame.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Request {
+    Run {
+        command: CommandId,
+        args: Json,
+        origin: Origin,
+    },
+    Enable(PluginId, bool),
+}
+
+struct PanelView {
+    owner: OwnerId,
+    draw: Option<DrawFn>,
+}
+
+struct StoryEntry {
+    story: Story,
+}
+
+#[derive(Default)]
+struct UiState {
+    palette_open: bool,
+    palette_query: String,
+    palette_selected: usize,
+    hidden_panels: BTreeSet<PanelId>,
+}
+
+pub(crate) struct Shared {
+    ctx: Context,
+    store: SharedStore,
+    services: RefCell<Services>,
+    zones: RefCell<ZoneTable>,
+    panels: RefCell<BTreeMap<PanelId, PanelView>>,
+    stories: RefCell<Registry<StoryId, StoryEntry>>,
+    requests: RefCell<Vec<Request>>,
+    context: RefCell<WhenContext>,
+    ui: RefCell<UiState>,
+    diagnostics: RefCell<Diagnostics>,
+    derived: RefCell<Derived>,
+    plugins: RefCell<Vec<PluginInfo>>,
+    history: RefCell<Vec<Run>>,
+}
+
+/// The application at run time, cheap to clone: blocks, panels, stories
+/// and command handlers reach services, the store and the command runner
+/// through it.
+#[derive(Clone)]
+pub struct AppHandle(Rc<Shared>);
+
+impl fmt::Debug for AppHandle {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("AppHandle").finish_non_exhaustive()
+    }
+}
+
+impl AppHandle {
+    fn new(ctx: &Context, store: SharedStore) -> Self {
+        AppHandle(Rc::new(Shared {
+            ctx: ctx.clone(),
+            store,
+            services: RefCell::new(Services::default()),
+            zones: RefCell::new(ZoneTable::default()),
+            panels: RefCell::new(BTreeMap::new()),
+            stories: RefCell::new(Registry::new()),
+            requests: RefCell::new(Vec::new()),
+            context: RefCell::new(WhenContext::new()),
+            ui: RefCell::new(UiState::default()),
+            diagnostics: RefCell::new(Diagnostics::new()),
+            derived: RefCell::new(Derived::default()),
+            plugins: RefCell::new(Vec::new()),
+            history: RefCell::new(Vec::new()),
+        }))
+    }
+
+    /// The egui context.
+    pub fn egui(&self) -> &Context {
+        &self.0.ctx
+    }
+
+    /// The value store.
+    pub fn store(&self) -> SharedStore {
+        self.0.store.clone()
+    }
+
+    /// A service, typed.
+    pub fn service<T: Send + Sync + 'static>(&self, token: &ServiceToken<T>) -> Option<Arc<T>> {
+        self.0.services.borrow().get(token)
+    }
+
+    /// The theme service.
+    pub fn theme(&self) -> Arc<ThemeService> {
+        self.service(&THEME)
+            .expect("the framework provides the theme")
+    }
+
+    /// Asks for a command, run by the user before the next frame.
+    pub fn run(&self, command: CommandId, args: Json) {
+        self.run_as(command, args, Origin::User);
+    }
+
+    /// Asks for a command with an origin.
+    pub fn run_as(&self, command: CommandId, args: Json, origin: Origin) {
+        self.request(Request::Run {
+            command,
+            args,
+            origin,
+        });
+    }
+
+    /// Asks for a plugin to be connected or disconnected before the next
+    /// frame.
+    pub fn set_plugin_enabled(&self, plugin: PluginId, enabled: bool) {
+        self.request(Request::Enable(plugin, enabled));
+    }
+
+    fn request(&self, r: Request) {
+        self.0.requests.borrow_mut().push(r);
+        self.0.ctx.request_repaint();
+    }
+
+    /// Sets an application-wide context key (depth 0), for `when`
+    /// clauses.
+    pub fn set_context(&self, key: &str, value: &str) {
+        self.0.context.borrow_mut().set(key, value);
+    }
+
+    /// The application-wide context keys.
+    pub fn context(&self) -> WhenContext {
+        self.0.context.borrow().clone()
+    }
+
+    /// The context keys at this moment: application-wide, then the focus
+    /// chain's, the overlays'.
+    pub fn when_context(&self) -> WhenContext {
+        let mut base = self.context();
+        let ctx = &self.0.ctx;
+        let flag = |on: bool| if on { "true" } else { "false" };
+        base.set("overlayOpen", flag(!overlay::stack(ctx).is_empty()));
+        base.set("modalOpen", flag(overlay::modal_open(ctx)));
+        focus::when_context(ctx, &base)
+    }
+
+    /// The diagnostics collected (registration, zones, hooks).
+    pub fn diagnostics(&self) -> Vec<Diagnostic> {
+        self.0.diagnostics.borrow().all().to_vec()
+    }
+
+    /// A menu's items after the hooks.
+    pub fn menu(&self, menu: &MenuId) -> Vec<MenuItem> {
+        self.0
+            .derived
+            .borrow()
+            .menus
+            .get(menu)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    /// The palette's entries after the hooks.
+    pub fn palette(&self) -> Vec<PaletteEntry> {
+        self.0.derived.borrow().palette.clone()
+    }
+
+    /// The settings form's entries after the hooks.
+    pub fn settings(&self) -> Vec<SettingEntry> {
+        self.0.derived.borrow().settings.clone()
+    }
+
+    /// Every command (spec and owner).
+    pub fn commands(&self) -> Vec<(CommandSpec, OwnerId)> {
+        self.0.derived.borrow().commands.clone()
+    }
+
+    /// The last command runs, oldest first.
+    pub fn history(&self) -> Vec<Run> {
+        self.0.history.borrow().clone()
+    }
+
+    /// The plugins, in connection order.
+    pub fn plugins(&self) -> Vec<PluginInfo> {
+        self.0.plugins.borrow().clone()
+    }
+
+    /// The zones with their resolved blocks.
+    pub fn zones(&self) -> Vec<ZoneInfo> {
+        self.0.zones.borrow().infos()
+    }
+
+    /// The services: id, owner, type.
+    pub fn services(&self) -> Vec<(String, OwnerId, &'static str)> {
+        self.0
+            .services
+            .borrow()
+            .list()
+            .into_iter()
+            .map(|(i, o, t)| (i.to_string(), o, t))
+            .collect()
+    }
+
+    pub(crate) fn zones_mut(&self) -> RefMut<'_, ZoneTable> {
+        self.0.zones.borrow_mut()
+    }
+
+    pub(crate) fn services_mut(&self) -> RefMut<'_, Services> {
+        self.0.services.borrow_mut()
+    }
+
+    pub(crate) fn add_panel_view(&self, owner: &OwnerId, id: PanelId, draw: DrawFn) {
+        self.0.panels.borrow_mut().insert(
+            id,
+            PanelView {
+                owner: owner.clone(),
+                draw: Some(draw),
+            },
+        );
+    }
+
+    pub(crate) fn add_story(&self, owner: &OwnerId, story: Story) -> Result<(), CtxError> {
+        let id = story.id.clone();
+        self.0
+            .stories
+            .borrow_mut()
+            .insert(owner, id, StoryEntry { story })
+            .map_err(|t| CtxError::Story {
+                id: t.id.to_string(),
+                by: t.by,
+            })
+    }
+
+    /// Whether a zone has blocks to draw.
+    pub fn zone_has_blocks(&self, zone: &ZoneId) -> bool {
+        self.0
+            .zones
+            .borrow()
+            .resolved
+            .get(zone)
+            .is_some_and(|b| !b.is_empty())
+    }
+
+    /// Draws a zone's blocks, each in a fault boundary. A zone nobody
+    /// declared draws nothing (and was reported when zones were
+    /// resolved).
+    pub fn show_zone(&self, ui: &mut Ui, zone: &ZoneId) {
+        let plan: Vec<(usize, Vec<usize>, String)> = match self.0.zones.borrow().resolved.get(zone)
+        {
+            Some(blocks) => blocks
+                .iter()
+                .map(|r| (r.draw, r.wraps.clone(), r.id.to_string()))
+                .collect(),
+            None => return,
+        };
+        for (draw, wraps, id) in plan {
+            let taken = {
+                let mut z = self.0.zones.borrow_mut();
+                let base = z.contributions.get_mut(draw).and_then(|c| c.block.take());
+                let ws: Vec<(usize, Option<Block>)> = wraps
+                    .iter()
+                    .map(|&w| (w, z.contributions.get_mut(w).and_then(|c| c.block.take())))
+                    .collect();
+                (base, ws)
+            };
+            let (Some(mut base), ws) = taken else {
+                continue;
+            };
+            let mut wrap_blocks: Vec<(usize, Block)> = ws
+                .into_iter()
+                .filter_map(|(i, b)| b.map(|b| (i, b)))
+                .collect();
+            ui.push_id(("egui_pop_block", &id), |ui| {
+                fault::boundary(ui, "block", &id, |ui| {
+                    let draw_fn: &mut DrawFn = match &mut base {
+                        Block::Add { draw, .. }
+                        | Block::Replace { draw, .. }
+                        | Block::Extend { draw, .. } => draw,
+                        Block::Wrap { .. } => return,
+                    };
+                    let mut wrap_fns: Vec<zones::WrapFn> = Vec::new();
+                    // Move the wrappers out of their blocks for the call,
+                    // then put them back.
+                    for (_, b) in &mut wrap_blocks {
+                        if let Block::Wrap { wrap, .. } = b {
+                            wrap_fns.push(std::mem::replace(wrap, Box::new(|_, _, _| {})));
+                        }
+                    }
+                    draw_chain(ui, self, draw_fn, &mut wrap_fns);
+                    let mut back = wrap_fns.into_iter();
+                    for (_, b) in &mut wrap_blocks {
+                        if let Block::Wrap { wrap, .. } = b
+                            && let Some(f) = back.next()
+                        {
+                            *wrap = f;
+                        }
+                    }
+                });
+            });
+            let mut z = self.0.zones.borrow_mut();
+            if let Some(c) = z.contributions.get_mut(draw) {
+                c.block = Some(base);
+            }
+            for (i, b) in wrap_blocks {
+                if let Some(c) = z.contributions.get_mut(i) {
+                    c.block = Some(b);
+                }
+            }
+        }
+    }
+
+    /// The stories, by group then weight.
+    pub fn stories(&self) -> Vec<StoryInfo> {
+        let mut v: Vec<StoryInfo> = self
+            .0
+            .stories
+            .borrow()
+            .iter()
+            .map(|(_, s)| StoryInfo {
+                id: s.item.story.id.clone(),
+                title: s.item.story.title.clone(),
+                description: s.item.story.description.clone(),
+                group: s.item.story.group.clone(),
+                weight: s.item.story.weight,
+                has_playground: s.item.story.playground.is_some(),
+                owner: s.owner.clone(),
+            })
+            .collect();
+        v.sort_by(|a, b| (&a.group, a.weight, &a.title).cmp(&(&b.group, b.weight, &b.title)));
+        v
+    }
+
+    fn with_story(&self, id: &StoryId, playground: bool, ui: &mut Ui) -> bool {
+        let taken = {
+            let mut s = self.0.stories.borrow_mut();
+            s.get_mut(id).and_then(|e| {
+                if playground {
+                    e.story.playground.take()
+                } else {
+                    Some(std::mem::replace(&mut e.story.show, Box::new(|_, _| {})))
+                }
+            })
+        };
+        let Some(mut f) = taken else {
+            return false;
+        };
+        let title = id.to_string();
+        ui.push_id(("egui_pop_story", id.as_str(), playground), |ui| {
+            fault::boundary(ui, "story", &title, |ui| f(ui, self));
+        });
+        if let Some(e) = self.0.stories.borrow_mut().get_mut(id) {
+            if playground {
+                e.story.playground = Some(f);
+            } else {
+                e.story.show = f;
+            }
+        }
+        true
+    }
+
+    /// Draws a story; `false` when there is no such story.
+    pub fn show_story(&self, ui: &mut Ui, id: &StoryId) -> bool {
+        self.with_story(id, false, ui)
+    }
+
+    /// Draws a story's playground; `false` when it has none.
+    pub fn show_playground(&self, ui: &mut Ui, id: &StoryId) -> bool {
+        self.with_story(id, true, ui)
+    }
+
+    fn show_panel(&self, ui: &mut Ui, id: &PanelId, title: &str) {
+        let taken = self
+            .0
+            .panels
+            .borrow_mut()
+            .get_mut(id)
+            .and_then(|p| p.draw.take());
+        let Some(mut draw) = taken else {
+            return;
+        };
+        let scope = scope_name(id.as_str());
+        ui.push_id(("egui_pop_panel", id.as_str()), |ui| {
+            focus::scope(ui, &scope, &[], |ui| {
+                fault::boundary(ui, "panel", title, |ui| draw(ui, self));
+            });
+        });
+        if let Some(p) = self.0.panels.borrow_mut().get_mut(id) {
+            p.draw = Some(draw);
+        }
+    }
+
+    /// Whether the command palette is open.
+    pub fn palette_open(&self) -> bool {
+        self.0.ui.borrow().palette_open
+    }
+
+    fn set_palette_open(&self, open: bool) {
+        let mut u = self.0.ui.borrow_mut();
+        u.palette_open = open;
+        u.palette_query.clear();
+        u.palette_selected = 0;
+    }
+
+    /// Whether a panel is shown.
+    pub fn panel_visible(&self, id: &PanelId) -> bool {
+        !self.0.ui.borrow().hidden_panels.contains(id)
+    }
+
+    /// Shows or hides a panel.
+    pub fn set_panel_visible(&self, id: &PanelId, visible: bool) {
+        let mut u = self.0.ui.borrow_mut();
+        if visible {
+            u.hidden_panels.remove(id);
+        } else {
+            u.hidden_panels.insert(id.clone());
+        }
+    }
+}
+
+/// A focus scope name from an id: letters, digits, `_` and `.` only.
+fn scope_name(id: &str) -> String {
+    id.chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '.' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect()
+}
+
+struct Slot {
+    plugin: Box<dyn Plugin>,
+    id: PluginId,
+    owner: OwnerId,
+    connected: bool,
+    reason: Option<String>,
+}
+
+/// Builds an application.
+pub struct AppBuilder {
+    plugins: Vec<Box<dyn Plugin>>,
+    theme: ThemeSpec,
+    themes: Themes,
+    persist: Option<Persist>,
+    store: Option<SharedStore>,
+}
+
+impl fmt::Debug for AppBuilder {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("AppBuilder")
+            .field(
+                "plugins",
+                &self.plugins.iter().map(|p| p.id()).collect::<Vec<_>>(),
+            )
+            .field("theme", &self.theme)
+            .finish()
+    }
+}
+
+impl Default for AppBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl AppBuilder {
+    pub fn new() -> Self {
+        Self {
+            plugins: Vec::new(),
+            theme: ThemeSpec::default(),
+            themes: Themes::default(),
+            persist: None,
+            store: None,
+        }
+    }
+
+    /// Adds a plugin.
+    pub fn plugin(mut self, plugin: impl Plugin) -> Self {
+        self.plugins.push(Box::new(plugin));
+        self
+    }
+
+    /// Adds a boxed plugin.
+    pub fn boxed(mut self, plugin: Box<dyn Plugin>) -> Self {
+        self.plugins.push(plugin);
+        self
+    }
+
+    /// The theme at start-up.
+    pub fn theme(mut self, spec: ThemeSpec) -> Self {
+        self.theme = spec;
+        self
+    }
+
+    /// The themes to pick from (the built-in ones by default).
+    pub fn themes(mut self, themes: Themes) -> Self {
+        self.themes = themes;
+        self
+    }
+
+    /// Where settings and the user's keymap are saved.
+    pub fn persist(mut self, dir: impl Into<std::path::PathBuf>) -> Self {
+        self.persist = Some(Persist::new(dir));
+        self
+    }
+
+    /// Shares an existing store instead of a new one.
+    pub fn store(mut self, store: SharedStore) -> Self {
+        self.store = Some(store);
+        self
+    }
+
+    /// Sorts the plugins, connects them, installs the theme and resolves
+    /// the declarations, on a context.
+    pub fn build(self, ctx: &Context) -> Result<App, BuildError> {
+        let nodes: Vec<Node> = self
+            .plugins
+            .iter()
+            .map(|p| Node {
+                id: p.id(),
+                requires: p.requires(),
+                priority: p.priority(),
+            })
+            .collect();
+        let sorted = order(&nodes)?;
+        let mut plugins: Vec<Option<Box<dyn Plugin>>> =
+            self.plugins.into_iter().map(Some).collect();
+        let slots: Vec<Slot> = sorted
+            .into_iter()
+            .map(|i| {
+                let plugin = plugins[i].take().expect("each plugin once");
+                let id = plugin.id();
+                Slot {
+                    owner: OwnerId::from(&id),
+                    id,
+                    plugin,
+                    connected: false,
+                    reason: None,
+                }
+            })
+            .collect();
+        let store = self
+            .store
+            .unwrap_or_else(|| Arc::new(Mutex::new(Store::new())));
+        let handle = AppHandle::new(ctx, store);
+        let mut app = App {
+            handle,
+            plugins: slots,
+            reg: Registries::new(),
+            dispatcher: KeyDispatcher::new(),
+            dirty: true,
+            started: false,
+            installed: None,
+            persist: self.persist,
+        };
+        app.framework(self.theme, self.themes)
+            .expect("the framework's registrations are valid");
+        for i in 0..app.plugins.len() {
+            if let Err(error) = app.connect_slot(i) {
+                let plugin = app.plugins[i].id.clone();
+                return Err(BuildError::Connect { plugin, error });
+            }
+        }
+        app.load_documents();
+        app.rebuild();
+        app.install_theme();
+        app.emit(&Lifecycle::Started);
+        app.started = true;
+        Ok(app)
+    }
+
+    /// Builds and runs the application in a native window.
+    #[cfg(all(feature = "eframe", not(target_arch = "wasm32")))]
+    pub fn run_native(self, title: &str, options: eframe::NativeOptions) -> eframe::Result {
+        eframe::run_native(
+            title,
+            options,
+            Box::new(move |cc| {
+                let app = self
+                    .build(&cc.egui_ctx)
+                    .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
+                Ok(Box::new(app))
+            }),
+        )
+    }
+}
+
+/// A built application.
+pub struct App {
+    handle: AppHandle,
+    plugins: Vec<Slot>,
+    reg: Registries,
+    dispatcher: KeyDispatcher,
+    dirty: bool,
+    started: bool,
+    installed: Option<ThemeSpec>,
+    persist: Option<Persist>,
+}
+
+impl fmt::Debug for App {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("App")
+            .field(
+                "plugins",
+                &self
+                    .plugins
+                    .iter()
+                    .map(|p| (&p.id, p.connected))
+                    .collect::<Vec<_>>(),
+            )
+            .finish_non_exhaustive()
+    }
+}
+
+impl App {
+    /// Starts building an application.
+    pub fn builder() -> AppBuilder {
+        AppBuilder::new()
+    }
+
+    /// The application handle.
+    pub fn handle(&self) -> &AppHandle {
+        &self.handle
+    }
+
+    /// How many things each registry holds: what removal tests compare.
+    pub fn census(&self) -> BTreeMap<&'static str, usize> {
+        let h = &self.handle.0;
+        let store = lock(&h.store);
+        BTreeMap::from([
+            ("commands", self.reg.commands.len()),
+            ("bindings", self.reg.keymap.all().count()),
+            ("menu items", self.reg.menus.len()),
+            ("panels", self.reg.panels.all().len()),
+            ("panel views", h.panels.borrow().len()),
+            ("hooks", self.reg.hooks.len()),
+            ("lifecycle handlers", self.reg.lifecycle.len()),
+            ("settings", self.reg.settings.len()),
+            ("zones", h.zones.borrow().zones.len()),
+            ("blocks", h.zones.borrow().contributions.len()),
+            ("services", h.services.borrow().list().len()),
+            ("stories", h.stories.borrow().len()),
+            ("store paths", store.list("").len()),
+            ("store listeners", store.listeners().len()),
+        ])
+    }
+
+    /// The key dispatcher (its traces, a shortcut in progress).
+    pub fn dispatcher(&self) -> &KeyDispatcher {
+        &self.dispatcher
+    }
+
+    /// The keymap.
+    pub fn keymap(&self) -> &Keymap {
+        &self.reg.keymap
+    }
+
+    /// The framework's own registrations.
+    fn framework(&mut self, theme: ThemeSpec, themes: Themes) -> Result<(), CtxError> {
+        let owner = OwnerId::FRAMEWORK;
+        let handle = self.handle.clone();
+        let connected: Vec<PluginId> = Vec::new();
+        let mut ctx = Ctx {
+            owner: owner.clone(),
+            plugin: PluginId::from_static("framework"),
+            rank: 0,
+            reg: &mut self.reg,
+            app: &handle,
+            connected: &connected,
+        };
+        for (zone, title) in
+            zones::SHELL
+                .iter()
+                .zip(["Top bar", "Side bar", "Main", "Inspector", "Status bar"])
+        {
+            ctx.zone(zone.clone(), title)?;
+        }
+        for (i, (menu, label)) in [
+            (MENU_FILE, "File"),
+            (MENU_EDIT, "Edit"),
+            (MENU_VIEW, "View"),
+            (MENU_HELP, "Help"),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            ctx.submenu(MENU_MAIN, &format!("{i}"), 0, menu, label)?;
+        }
+        ctx.service(
+            &THEME,
+            ThemeService {
+                spec: Mutex::new(theme),
+                themes,
+            },
+        )?;
+        ctx.command(
+            CommandSpec::new(CMD_PALETTE, "Command palette", "View")
+                .description("Search and run any command.")
+                .key("Ctrl+Shift+P")
+                .key("F1")
+                .menu(MENU_VIEW, "0_palette", 0)
+                .hidden(),
+            |call| {
+                call.app.set_palette_open(!call.app.palette_open());
+                Ok(json!({ "open": call.app.palette_open() }))
+            },
+        )?;
+        ctx.command(
+            CommandSpec::new(CMD_UNDO, "Undo", "Edit")
+                .description("Undo the last change of values.")
+                .key("Ctrl+Z")
+                .when("!textInputFocus")
+                .menu(MENU_EDIT, "0_undo", 0),
+            |call| {
+                let undone = lock(&call.app.store())
+                    .undo(call.origin)
+                    .map_err(|r| r.to_string())?;
+                Ok(json!({ "undone": undone }))
+            },
+        )?;
+        ctx.command(
+            CommandSpec::new(CMD_REDO, "Redo", "Edit")
+                .description("Redo the last undone change of values.")
+                .key("Ctrl+Shift+Z")
+                .key("Ctrl+Y")
+                .when("!textInputFocus")
+                .menu(MENU_EDIT, "0_undo", 1),
+            |call| {
+                let redone = lock(&call.app.store())
+                    .redo(call.origin)
+                    .map_err(|r| r.to_string())?;
+                Ok(json!({ "redone": redone }))
+            },
+        )?;
+        ctx.command(
+            CommandSpec::new(CMD_QUIT, "Quit", "File")
+                .description("Close the application.")
+                .key("Ctrl+Q")
+                .menu(MENU_FILE, "9_quit", 0)
+                .no_agent(),
+            |call| {
+                call.app
+                    .egui()
+                    .send_viewport_cmd(egui::ViewportCommand::Close);
+                Ok(Json::Null)
+            },
+        )?;
+        let store = self.handle.store();
+        egui_pop_model::values::register_with(&mut self.reg.commands, &owner, store, |h| {
+            let f: CommandFn = Rc::new(move |call: &Call<'_>| h(call.args, call.origin));
+            f
+        })
+        .ok();
+        Ok(())
+    }
+
+    fn connected_ids(&self) -> Vec<PluginId> {
+        self.plugins
+            .iter()
+            .filter(|p| p.connected)
+            .map(|p| p.id.clone())
+            .collect()
+    }
+
+    /// Connects one plugin (its requirements must be connected). A
+    /// failure removes what it registered.
+    fn connect_slot(&mut self, i: usize) -> Result<(), PluginError> {
+        let connected = self.connected_ids();
+        let slot = &self.plugins[i];
+        if let Some(missing) = slot
+            .plugin
+            .requires()
+            .into_iter()
+            .find(|r| !connected.contains(r))
+        {
+            let reason = format!("its requirement `{missing}` is not connected");
+            self.handle.0.diagnostics.borrow_mut().warn(
+                "plugin-skipped",
+                Some(&slot.owner),
+                slot.id.as_str(),
+                format!("{reason}: it is not connected"),
+            );
+            self.plugins[i].reason = Some(reason);
+            self.update_plugin_infos();
+            return Ok(());
+        }
+        let handle = self.handle.clone();
+        let owner = slot.owner.clone();
+        let id = slot.id.clone();
+        let mut ctx = Ctx {
+            owner: owner.clone(),
+            plugin: id.clone(),
+            rank: i + 1,
+            reg: &mut self.reg,
+            app: &handle,
+            connected: &connected,
+        };
+        let slot = &mut self.plugins[i];
+        if !slot.plugin.enabled(&ctx) {
+            slot.reason = Some("it is disabled".into());
+            self.update_plugin_infos();
+            return Ok(());
+        }
+        match slot.plugin.connect(&mut ctx) {
+            Ok(()) => {
+                slot.connected = true;
+                slot.reason = None;
+                self.handle.zones_mut().set_rank(&owner, i + 1);
+                self.dirty = true;
+                self.update_plugin_infos();
+                if self.started {
+                    self.emit(&Lifecycle::Connected(id));
+                }
+                Ok(())
+            }
+            Err(e) => {
+                self.remove_owner(&owner);
+                let slot = &mut self.plugins[i];
+                slot.reason = Some(format!("it failed to connect: {e}"));
+                self.handle.0.diagnostics.borrow_mut().error(
+                    "connect-failed",
+                    Some(&owner),
+                    id.as_str(),
+                    format!("{e}: what it registered is removed"),
+                );
+                self.update_plugin_infos();
+                Err(e)
+            }
+        }
+    }
+
+    fn remove_owner(&mut self, owner: &OwnerId) {
+        self.reg.remove_owner(owner);
+        let h = &self.handle.0;
+        h.zones.borrow_mut().remove_owner(owner);
+        h.panels.borrow_mut().retain(|_, p| p.owner != *owner);
+        h.stories.borrow_mut().remove_owner(owner);
+        h.services.borrow_mut().remove_owner(owner);
+        lock(&h.store).remove_owner(owner);
+        h.diagnostics.borrow_mut().remove_owner(owner);
+        self.dirty = true;
+    }
+
+    fn update_plugin_infos(&self) {
+        *self.handle.0.plugins.borrow_mut() = self
+            .plugins
+            .iter()
+            .map(|s| PluginInfo {
+                id: s.id.clone(),
+                title: s.plugin.title(),
+                requires: s.plugin.requires(),
+                priority: s.plugin.priority(),
+                connected: s.connected,
+                reason: s.reason.clone(),
+            })
+            .collect();
+    }
+
+    /// Disconnects a plugin and those requiring it (dependents first);
+    /// everything they registered is removed. Returns the plugins
+    /// disconnected.
+    pub fn disconnect(&mut self, plugin: &PluginId) -> Vec<PluginId> {
+        let mut out = Vec::new();
+        let Some(i) = self.plugins.iter().position(|p| p.id == *plugin) else {
+            return out;
+        };
+        if !self.plugins[i].connected {
+            return out;
+        }
+        // Dependents first, latest first.
+        for j in (i + 1..self.plugins.len()).rev() {
+            if self.plugins[j].connected && self.plugins[j].plugin.requires().contains(plugin) {
+                let dep = self.plugins[j].id.clone();
+                out.extend(self.disconnect(&dep));
+            }
+        }
+        let handle = self.handle.clone();
+        let connected = self.connected_ids();
+        let slot = &mut self.plugins[i];
+        let owner = slot.owner.clone();
+        let mut ctx = Ctx {
+            owner: owner.clone(),
+            plugin: slot.id.clone(),
+            rank: i + 1,
+            reg: &mut self.reg,
+            app: &handle,
+            connected: &connected,
+        };
+        slot.plugin.disconnect(&mut ctx);
+        slot.connected = false;
+        slot.reason = Some("it was disconnected".into());
+        self.remove_owner(&owner);
+        self.update_plugin_infos();
+        self.emit(&Lifecycle::Disconnected(plugin.clone()));
+        out.push(plugin.clone());
+        out
+    }
+
+    /// Connects a plugin that is not (its requirements first).
+    pub fn connect(&mut self, plugin: &PluginId) -> Result<(), PluginError> {
+        let Some(i) = self.plugins.iter().position(|p| p.id == *plugin) else {
+            return Err(PluginError::Failed(format!("no plugin `{plugin}`")));
+        };
+        if self.plugins[i].connected {
+            return Ok(());
+        }
+        for r in self.plugins[i].plugin.requires() {
+            self.connect(&r)?;
+        }
+        self.connect_slot(i)
+    }
+
+    fn emit(&mut self, event: &Lifecycle) {
+        let handle = self.handle.clone();
+        // Handlers get the handle, not `Ctx`: the list cannot change
+        // while they run.
+        for slot in self.reg.lifecycle.iter_mut() {
+            let (on, f) = &mut slot.item;
+            if on.matches(event) {
+                f(&handle, event);
+            }
+        }
+    }
+
+    /// Rebuilds the derived declarations: menus, palette and settings
+    /// through their hooks, and the zones. Runs after plugins come or go,
+    /// never per frame.
+    pub fn rebuild(&mut self) {
+        let mut d = Diagnostics::new();
+        let reg = &self.reg;
+        // Hooks in order: `after` constraints, then priority.
+        let hooks: Vec<&Hook> = reg.hooks.iter().map(|s| &s.item).collect();
+        let nodes: Vec<Node> = hooks
+            .iter()
+            .map(|h| {
+                let id = egui_pop_model::ids::PluginId::new(h.id.as_str()).expect("same syntax");
+                let after = h
+                    .after
+                    .iter()
+                    .filter(|a| {
+                        let known = hooks.iter().any(|o| o.id == **a);
+                        if !known {
+                            d.warn(
+                                "dangling-after",
+                                None,
+                                h.id.as_str(),
+                                format!("hook `{}` runs after `{a}`, which is not registered: it runs by priority alone", h.id),
+                            );
+                        }
+                        known
+                    })
+                    .map(|a| PluginId::new(a.as_str()).expect("same syntax"))
+                    .collect();
+                Node {
+                    id,
+                    requires: after,
+                    priority: h.priority,
+                }
+            })
+            .collect();
+        let hook_order: Vec<usize> = match order(&nodes) {
+            Ok(o) => o,
+            Err(e) => {
+                d.error(
+                    "hook-order",
+                    None,
+                    "hooks",
+                    format!("{e}: hooks run in registration order"),
+                );
+                (0..hooks.len()).collect()
+            }
+        };
+        let mut derived = Derived::default();
+        for id in reg.menus.ids() {
+            let mut items = reg.menus.items(&id);
+            sort_items(&mut items);
+            derived.menus.insert(id, items);
+        }
+        derived.palette = reg
+            .commands
+            .specs()
+            .filter(|s| s.palette)
+            .map(|s| PaletteEntry {
+                command: s.id.clone(),
+                title: s.title.clone(),
+                category: s.category.clone(),
+                keys: reg
+                    .keymap
+                    .keys_for(&s.id)
+                    .iter()
+                    .map(|k| k.to_string())
+                    .collect(),
+            })
+            .collect();
+        derived
+            .palette
+            .sort_by(|a, b| (&a.category, &a.title).cmp(&(&b.category, &b.title)));
+        let titles: BTreeMap<OwnerId, String> = self
+            .plugins
+            .iter()
+            .map(|s| (s.owner.clone(), s.plugin.title()))
+            .collect();
+        let store = lock(&self.handle.0.store);
+        derived.settings = reg
+            .settings
+            .in_order()
+            .into_iter()
+            .filter_map(|(id, slot)| {
+                store.get(&slot.item).map(|e| SettingEntry {
+                    id: id.clone(),
+                    path: slot.item.clone(),
+                    owner: slot.owner.clone(),
+                    section: titles
+                        .get(&slot.owner)
+                        .cloned()
+                        .unwrap_or_else(|| slot.owner.to_string()),
+                    descriptor: e.descriptor.clone(),
+                })
+            })
+            .collect();
+        drop(store);
+        for &i in &hook_order {
+            match &hooks[i].alter {
+                Alter::Menu(menu, f) => {
+                    if let Some(items) = derived.menus.get_mut(menu) {
+                        f(items);
+                    } else {
+                        let mut items = Vec::new();
+                        f(&mut items);
+                        derived.menus.insert(menu.clone(), items);
+                    }
+                }
+                Alter::Palette(f) => f(&mut derived.palette),
+                Alter::Settings(f) => f(&mut derived.settings),
+            }
+        }
+        derived.commands = reg
+            .commands
+            .specs()
+            .map(|s| {
+                (
+                    s.clone(),
+                    reg.commands
+                        .owner(&s.id)
+                        .cloned()
+                        .unwrap_or(OwnerId::FRAMEWORK),
+                )
+            })
+            .collect();
+        // Menu items naming unknown commands are reported.
+        for (menu, items) in &derived.menus {
+            for it in items {
+                if let Item::Command { id, .. } = &it.item
+                    && reg.commands.spec(id).is_none()
+                {
+                    d.warn(
+                        "unknown-command",
+                        None,
+                        id.as_str(),
+                        format!("menu `{menu}` names command `{id}`, which is not declared: the item is shown greyed"),
+                    );
+                }
+            }
+        }
+        *self.handle.0.derived.borrow_mut() = derived;
+        self.handle.zones_mut().resolve(&mut d);
+        let mut all = self.handle.0.diagnostics.borrow_mut();
+        // Resolution diagnostics are recomputed each rebuild.
+        let kept: Vec<Diagnostic> = all
+            .take()
+            .into_iter()
+            .filter(|x| !RESOLUTION_CODES.contains(&x.code))
+            .collect();
+        for x in kept {
+            all.push_quiet(x);
+        }
+        all.extend(d.take());
+        drop(all);
+        self.dirty = false;
+        if self.started {
+            self.emit(&Lifecycle::Rebuilt);
+        }
+    }
+
+    fn load_documents(&mut self) {
+        let Some(p) = &self.persist else { return };
+        match p.load::<egui_pop_model::values::SettingsDoc>("settings", &settings_schema()) {
+            Ok(Some(read)) => {
+                let d = lock(&self.handle.0.store).import(&read.value, &Origin::User);
+                self.handle
+                    .0
+                    .diagnostics
+                    .borrow_mut()
+                    .extend(d.all().iter().cloned());
+            }
+            Ok(None) => {}
+            Err(e) => self.handle.0.diagnostics.borrow_mut().error(
+                "settings-unreadable",
+                None,
+                "settings",
+                format!("{e}: the defaults are used"),
+            ),
+        }
+        match p
+            .load::<egui_pop_model::keymap::KeymapDoc>("keymap", &egui_pop_model::keymap_schema())
+        {
+            Ok(Some(read)) => {
+                let d = self
+                    .reg
+                    .keymap
+                    .load(&OwnerId::USER, Layer::User, &read.value);
+                self.handle
+                    .0
+                    .diagnostics
+                    .borrow_mut()
+                    .extend(d.all().iter().cloned());
+            }
+            Ok(None) => {}
+            Err(e) => self.handle.0.diagnostics.borrow_mut().error(
+                "keymap-unreadable",
+                None,
+                "keymap",
+                format!("{e}: the default keys are used"),
+            ),
+        }
+    }
+
+    /// Saves the settings and the user's keymap (when a directory was
+    /// given).
+    pub fn save(&self) -> Result<(), egui_pop_core::persist::PersistError> {
+        let Some(p) = &self.persist else {
+            return Ok(());
+        };
+        let doc = lock(&self.handle.0.store).export("settings/");
+        p.save("settings", &settings_schema(), &doc)?;
+        let keymap = self.reg.keymap.export(&OwnerId::USER, Layer::User);
+        p.save("keymap", &egui_pop_model::keymap_schema(), &keymap)
+    }
+
+    fn install_theme(&mut self) {
+        let service = self.handle.theme();
+        let spec = service.spec();
+        if self.installed.as_ref() != Some(&spec) {
+            theme::install_with(&self.handle.0.ctx, service.themes(), &spec);
+            self.installed = Some(spec);
+        }
+    }
+
+    /// Runs a command now.
+    pub fn run(&mut self, command: &CommandId, args: Json, origin: Origin) -> Result<Json, String> {
+        let cx = self.handle.when_context();
+        let handler = match self.reg.commands.prepare(command, &cx) {
+            Ok(h) => h.clone(),
+            Err(e) => {
+                let msg = e.to_string();
+                if !matches!(e, egui_pop_model::commands::RunRefused::Unknown { .. }) {
+                    self.record(command, &args, &origin, Err(msg.clone()));
+                }
+                return Err(msg);
+            }
+        };
+        let result = handler(&Call {
+            args: &args,
+            origin: &origin,
+            app: &self.handle,
+        });
+        self.record(command, &args, &origin, result.clone());
+        result
+    }
+
+    fn record(
+        &mut self,
+        command: &CommandId,
+        args: &Json,
+        origin: &Origin,
+        result: Result<Json, String>,
+    ) {
+        let run = Run {
+            id: command.clone(),
+            args: args.clone(),
+            origin: origin.clone(),
+            result,
+        };
+        self.reg.commands.record(run.clone());
+        let mut h = self.handle.0.history.borrow_mut();
+        h.push(run);
+        let len = h.len();
+        if len > 64 {
+            h.drain(..len - 64);
+        }
+    }
+
+    /// Does what blocks and handlers asked for.
+    pub fn process_requests(&mut self) {
+        loop {
+            let requests: Vec<Request> = std::mem::take(&mut *self.handle.0.requests.borrow_mut());
+            if requests.is_empty() {
+                break;
+            }
+            for r in requests {
+                match r {
+                    Request::Run {
+                        command,
+                        args,
+                        origin,
+                    } => {
+                        if let Err(e) = self.run(&command, args, origin) {
+                            log::warn!(target: "egui_pop", "command `{command}`: {e}");
+                        }
+                    }
+                    Request::Enable(p, true) => {
+                        if let Err(e) = self.connect(&p) {
+                            log::warn!(target: "egui_pop", "plugin `{p}`: {e}");
+                        }
+                    }
+                    Request::Enable(p, false) => {
+                        self.disconnect(&p);
+                    }
+                }
+            }
+        }
+        if self.dirty {
+            self.rebuild();
+        }
+    }
+
+    /// Between frames: the theme asked for, requests, declarations.
+    pub fn logic(&mut self, _ctx: &Context) {
+        self.install_theme();
+        self.process_requests();
+    }
+
+    /// Draws the whole application in a `Ui` covering the window, after
+    /// dispatching this frame's keys.
+    pub fn show(&mut self, ui: &mut Ui) {
+        let ctx = ui.ctx().clone();
+        self.logic(&ctx);
+        overlay::begin_pass(&ctx);
+        let cx = self.handle.when_context();
+        for d in self.dispatcher.process(&ctx, &self.reg.keymap, &cx) {
+            if let Err(e) = self.run(&d.command, Json::Null, Origin::User) {
+                log::info!(target: "egui_pop", "{}: {e}", d.keys);
+            }
+        }
+        self.process_requests();
+        self.shell(ui);
+        self.palette(&ctx);
+        a11y::live_regions(ui);
+        self.process_requests();
+    }
+
+    fn shell(&mut self, ui: &mut Ui) {
+        let h = self.handle.clone();
+        let cx = h.when_context();
+        let panels: Vec<(PanelId, String, Area)> = self
+            .reg
+            .panels
+            .all()
+            .into_iter()
+            .filter(|p| h.panel_visible(&p.id))
+            .map(|p| (p.id.clone(), p.title.clone(), p.area))
+            .collect();
+        let in_area = |a: Area| {
+            panels
+                .iter()
+                .filter(|p| p.2 == a)
+                .cloned()
+                .collect::<Vec<_>>()
+        };
+        egui::Panel::top(Id::new("egui_pop.top")).show(ui, |ui| {
+            focus::scope(ui, "topBar", &[], |ui| {
+                egui::MenuBar::new().ui(ui, |ui| {
+                    self.menu_bar(ui, &cx);
+                    if h.zone_has_blocks(&zones::TOP_BAR) {
+                        ui.separator();
+                        h.show_zone(ui, &zones::TOP_BAR);
+                    }
+                });
+            });
+        });
+        if h.zone_has_blocks(&zones::STATUS_BAR) {
+            egui::Panel::bottom(Id::new("egui_pop.status")).show(ui, |ui| {
+                focus::scope(ui, "statusBar", &[], |ui| {
+                    ui.horizontal(|ui| h.show_zone(ui, &zones::STATUS_BAR));
+                });
+            });
+        }
+        let bottom = in_area(Area::Bottom);
+        if !bottom.is_empty() {
+            egui::Panel::bottom(Id::new("egui_pop.bottom"))
+                .resizable(true)
+                .show(ui, |ui| self.panel_tabs(ui, "bottom", &bottom));
+        }
+        let start = in_area(Area::StartSide);
+        if h.zone_has_blocks(&zones::SIDE_BAR) || !start.is_empty() {
+            egui::Panel::left(Id::new("egui_pop.side"))
+                .resizable(false)
+                .exact_size(170.0)
+                .show(ui, |ui| {
+                    focus::scope(ui, "sideBar", &[], |ui| h.show_zone(ui, &zones::SIDE_BAR));
+                    self.panel_tabs(ui, "start", &start);
+                });
+        }
+        let end = in_area(Area::EndSide);
+        if h.zone_has_blocks(&zones::INSPECTOR) || !end.is_empty() {
+            egui::Panel::right(Id::new("egui_pop.inspector"))
+                .resizable(false)
+                .exact_size(240.0)
+                .show(ui, |ui| {
+                    focus::scope(ui, "inspector", &[], |ui| {
+                        h.show_zone(ui, &zones::INSPECTOR)
+                    });
+                    self.panel_tabs(ui, "end", &end);
+                });
+        }
+        let center = in_area(Area::Center);
+        egui::CentralPanel::default().show(ui, |ui| {
+            if !center.is_empty() {
+                self.panel_tabs(ui, "center", &center);
+            }
+            focus::scope(ui, "main", &[], |ui| h.show_zone(ui, &zones::MAIN));
+        });
+    }
+
+    fn panel_tabs(&self, ui: &mut Ui, area: &str, panels: &[(PanelId, String, Area)]) {
+        if panels.is_empty() {
+            return;
+        }
+        let key = Id::new(("egui_pop.tab", area));
+        let mut active: usize = ui.ctx().data(|d| d.get_temp(key)).unwrap_or(0);
+        if active >= panels.len() {
+            active = 0;
+        }
+        if panels.len() > 1 {
+            ui.horizontal(|ui| {
+                for (i, (_, title, _)) in panels.iter().enumerate() {
+                    if ui.selectable_label(i == active, title).clicked() {
+                        active = i;
+                    }
+                }
+            });
+            ui.separator();
+        } else {
+            ui.strong(&panels[0].1);
+        }
+        ui.ctx().data_mut(|d| d.insert_temp(key, active));
+        let (id, title, _) = &panels[active];
+        self.handle.show_panel(ui, id, title);
+    }
+
+    fn menu_bar(&mut self, ui: &mut Ui, cx: &WhenContext) {
+        let items = self.handle.menu(&MENU_MAIN);
+        for shown in show_items(&items, cx) {
+            if let Shown::Item {
+                item: Item::Submenu { menu, label },
+                enabled,
+                ..
+            } = shown
+            {
+                ui.add_enabled_ui(enabled, |ui| {
+                    ui.menu_button(label, |ui| self.menu(ui, &menu, cx, 0));
+                });
+            }
+        }
+    }
+
+    fn menu(&mut self, ui: &mut Ui, menu: &MenuId, cx: &WhenContext, depth: u32) {
+        if depth > 8 {
+            return;
+        }
+        let items = self.handle.menu(menu);
+        if items.is_empty() {
+            ui.weak("(empty)");
+        }
+        for shown in show_items(&items, cx) {
+            match shown {
+                Shown::Separator => {
+                    ui.separator();
+                }
+                Shown::Item {
+                    item,
+                    enabled,
+                    checked,
+                } => match item {
+                    Item::Command { id, args } => {
+                        let applies = self.reg.commands.applies(&id, cx);
+                        let (title, known) = match self.reg.commands.spec(&id) {
+                            Some(s) => (s.title.clone(), true),
+                            None => (id.to_string(), false),
+                        };
+                        let keys = self.reg.keymap.keys_for(&id);
+                        let mut button = egui::Button::new(title).selected(checked);
+                        if let Some(k) = keys.first() {
+                            button = button.shortcut_text(k.to_string());
+                        }
+                        if ui
+                            .add_enabled(enabled && known && applies, button)
+                            .clicked()
+                        {
+                            self.handle.run(id, args);
+                            ui.close();
+                        }
+                    }
+                    Item::Submenu { menu: sub, label } => {
+                        ui.add_enabled_ui(enabled, |ui| {
+                            ui.menu_button(label, |ui| self.menu(ui, &sub, cx, depth + 1));
+                        });
+                    }
+                    Item::List { name } => {
+                        ui.weak(name);
+                    }
+                },
+            }
+        }
+    }
+
+    /// The command palette: the derived palette entries, filtered by what
+    /// applies here and the query; Enter runs the selected one.
+    fn palette(&mut self, ctx: &Context) {
+        let mut open = self.handle.palette_open();
+        if !open {
+            return;
+        }
+        let spec = OverlaySpec::new("egui_pop.palette", "Command palette", Kind::Modal);
+        let cx = self.handle.when_context();
+        let entries = self.handle.palette();
+        let mut run: Option<CommandId> = None;
+        overlay::show(ctx, &spec, &mut open, None, |ui| {
+            let mut u = self.handle.0.ui.borrow_mut();
+            let edit = ui.add(
+                egui::TextEdit::singleline(&mut u.palette_query)
+                    .hint_text("Type a command")
+                    .desired_width(f32::INFINITY),
+            );
+            edit.request_focus();
+            let words: Vec<String> = u
+                .palette_query
+                .split_whitespace()
+                .map(str::to_lowercase)
+                .collect();
+            let hits: Vec<&PaletteEntry> = entries
+                .iter()
+                .filter(|e| self.reg.commands.applies(&e.command, &cx))
+                .filter(|e| {
+                    let hay = format!("{} {} {}", e.category, e.title, e.command).to_lowercase();
+                    words.iter().all(|w| hay.contains(w))
+                })
+                .collect();
+            if ui.input(|i| i.key_pressed(egui::Key::ArrowDown)) {
+                u.palette_selected = (u.palette_selected + 1).min(hits.len().saturating_sub(1));
+            }
+            if ui.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
+                u.palette_selected = u.palette_selected.saturating_sub(1);
+            }
+            let selected = u.palette_selected.min(hits.len().saturating_sub(1));
+            if ui.input(|i| i.key_pressed(egui::Key::Enter))
+                && let Some(e) = hits.get(selected)
+            {
+                run = Some(e.command.clone());
+            }
+            ui.separator();
+            egui::ScrollArea::vertical()
+                .max_height(320.0)
+                .show(ui, |ui| {
+                    for (i, e) in hits.iter().enumerate() {
+                        let label = format!("{}: {}", e.category, e.title);
+                        let mut b = egui::Button::new(label)
+                            .selected(i == selected)
+                            .frame_when_inactive(false);
+                        if let Some(k) = e.keys.first() {
+                            b = b.shortcut_text(k.clone());
+                        }
+                        if ui.add_sized([ui.available_width(), 0.0], b).clicked() {
+                            run = Some(e.command.clone());
+                        }
+                    }
+                    if hits.is_empty() {
+                        ui.weak("No command matches.");
+                    }
+                });
+        });
+        if let Some(c) = run {
+            self.handle.set_palette_open(false);
+            overlay::close(ctx, spec.id);
+            self.handle.run(c, Json::Null);
+        } else if !open {
+            self.handle.set_palette_open(false);
+        }
+    }
+}
+
+/// Diagnostic codes recomputed by each rebuild.
+const RESOLUTION_CODES: &[&str] = &[
+    "unknown-zone",
+    "duplicate-block",
+    "dangling-replace",
+    "dangling-extend",
+    "dangling-wrap",
+    "dangling-after",
+    "hook-order",
+    "unknown-command",
+];
+
+#[cfg(feature = "eframe")]
+impl eframe::App for App {
+    fn logic(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
+        App::logic(self, ctx);
+    }
+
+    fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
+        self.show(ui);
+    }
+
+    fn on_exit(&mut self) {
+        if let Err(e) = App::save(self) {
+            log::error!(target: "egui_pop", "saving: {e}");
+        }
+    }
+}

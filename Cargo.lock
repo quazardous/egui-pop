@@ -853,10 +853,25 @@ name = "egui-pop"
 version = "0.0.1"
 dependencies = [
  "egui",
+ "egui-pop-api",
  "egui-pop-core",
  "egui-pop-model",
  "egui-pop-tokens",
  "egui_kittest",
+ "serde_json",
+]
+
+[[package]]
+name = "egui-pop-api"
+version = "0.0.1"
+dependencies = [
+ "eframe",
+ "egui",
+ "egui-pop-core",
+ "egui-pop-model",
+ "egui_kittest",
+ "log",
+ "serde",
  "serde_json",
 ]
 

@@ -1,0 +1,32 @@
+[package]
+name = "egui-pop-api"
+version = "0.0.1"
+description = "The application API of egui-pop: plugins that own what they register, an app builder over eframe (or headless), zones and blocks, hooks, services and gallery stories"
+keywords = ["egui", "gui", "plugins", "framework", "application"]
+categories = ["gui"]
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+default = ["eframe"]
+## Run applications in a native window or a browser through eframe.
+eframe = ["dep:eframe"]
+
+[dependencies]
+egui.workspace = true
+egui-pop-model.workspace = true
+egui-pop-core.workspace = true
+eframe = { workspace = true, optional = true, features = ["default_fonts", "wgpu", "accesskit", "wayland", "x11"] }
+log.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+egui = { workspace = true, features = ["default_fonts"] }
+egui_kittest = { workspace = true }

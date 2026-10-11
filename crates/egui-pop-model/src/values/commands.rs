@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use serde_json::{Value as Json, json};
 
 use super::{Change, Entry, Set, Store, Value};
-use crate::commands::{CommandSpec, Commands, Origin, RegisterError};
+use crate::commands::{CommandSpec, Commands, FnHandler, Origin, RegisterError};
 use crate::ids::{CommandId, OwnerId};
 
 fn describe(path: &str, e: &Entry) -> Json {
@@ -88,15 +88,26 @@ pub fn register(
     owner: &OwnerId,
     store: Arc<Mutex<Store>>,
 ) -> Result<(), RegisterError> {
+    register_with(commands, owner, store, |h| h)
+}
+
+/// As [`register`], on a registry with another handler type: `wrap`
+/// turns each plain handler into one.
+pub fn register_with<H>(
+    commands: &mut Commands<H>,
+    owner: &OwnerId,
+    store: Arc<Mutex<Store>>,
+    wrap: impl Fn(FnHandler) -> H,
+) -> Result<(), RegisterError> {
     let id = CommandId::from_static;
     let s = store.clone();
-    commands.register_fn(
+    commands.register(
         owner,
         CommandSpec::new(id("value.list"), "List values", "Values")
             .description("The values under a path prefix (`prefix`).")
             .args(json!({ "prefix": "settings/" }))
             .hidden(),
-        move |args, _| {
+        wrap(Box::new(move |args, _| {
             let prefix = args.get("prefix").and_then(Json::as_str).unwrap_or("");
             let store = s.lock().unwrap_or_else(PoisonError::into_inner);
             Ok(Json::Array(
@@ -106,26 +117,26 @@ pub fn register(
                     .map(|(p, e)| describe(p, e))
                     .collect(),
             ))
-        },
+        })),
     )?;
     let s = store.clone();
-    commands.register_fn(
+    commands.register(
         owner,
         CommandSpec::new(id("value.get"), "Read a value", "Values")
             .description("A value with its descriptor (`path`).")
             .args(json!({ "path": "settings/x" }))
             .hidden(),
-        move |args, _| {
+        wrap(Box::new(move |args, _| {
             let path = path_of(args)?;
             let store = s.lock().unwrap_or_else(PoisonError::into_inner);
             store
                 .get(path)
                 .map(|e| describe(path, e))
                 .ok_or_else(|| format!("no value at `{path}`"))
-        },
+        })),
     )?;
     let s = store.clone();
-    commands.register_fn(
+    commands.register(
         owner,
         CommandSpec::new(id("value.set"), "Set a value", "Values")
             .description(
@@ -133,44 +144,44 @@ pub fn register(
             )
             .args(json!({ "path": "settings/x", "value": 1 }))
             .hidden(),
-        move |args, origin| set(&s, args, origin, false),
+        wrap(Box::new(move |args, origin| set(&s, args, origin, false))),
     )?;
     let s = store.clone();
-    commands.register_fn(
+    commands.register(
         owner,
         CommandSpec::new(id("value.reset"), "Reset a value", "Values")
             .description("Back to its default (`path`).")
             .args(json!({ "path": "settings/x" }))
             .hidden(),
-        move |args, origin| set(&s, args, origin, true),
+        wrap(Box::new(move |args, origin| set(&s, args, origin, true))),
     )?;
     let s = store.clone();
-    commands.register_fn(
+    commands.register(
         owner,
         CommandSpec::new(id("value.undo"), "Undo", "Values")
             .description("Undo the last change of values."),
-        move |_, origin| {
+        wrap(Box::new(move |_, origin| {
             let undone = s
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner)
                 .undo(origin)
                 .map_err(|r| r.to_string())?;
             Ok(json!({ "undone": undone }))
-        },
+        })),
     )?;
     let s = store;
-    commands.register_fn(
+    commands.register(
         owner,
         CommandSpec::new(id("value.redo"), "Redo", "Values")
             .description("Redo the last undone change of values."),
-        move |_, origin| {
+        wrap(Box::new(move |_, origin| {
             let redone = s
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner)
                 .redo(origin)
                 .map_err(|r| r.to_string())?;
             Ok(json!({ "redone": redone }))
-        },
+        })),
     )?;
     Ok(())
 }

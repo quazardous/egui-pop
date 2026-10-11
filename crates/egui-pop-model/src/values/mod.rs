@@ -38,7 +38,7 @@
 mod commands;
 mod value;
 
-pub use commands::register;
+pub use commands::{register, register_with};
 pub use value::{Descriptor, PathHint, PathKind, Type, Value};
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};

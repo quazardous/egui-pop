@@ -33,6 +33,22 @@ egui minor.
   images, painted shapes); a persistence driver (atomic writes, one
   backup, migrations on load); fault boundaries showing an error card
   with Retry; plain, bound and watch-only value binding.
+- `egui-pop-api` (its own semver): plugins with requirements,
+  priority, `enabled`, `connect` and `disconnect`, sorted at start-up
+  with typed errors (missing, cycle, duplicate, failed connection), whose
+  registrations are all removed when they disconnect (dependents first);
+  one `Ctx` facade (`command`, `keybinding`, `menu_item`, `panel`,
+  `zone`, `block`, `setting`, `service`, `on`, `on_change`, `hook`,
+  `story`); a command declared once yields its key bindings, menu
+  entries, palette entry and agent surface; zones with blocks added,
+  replaced, extended or wrapped, resolved at build time with diagnostics
+  for what cannot apply; alter hooks over menus, the palette and settings
+  ordered by priority and `after`; lifecycle events; typed service
+  tokens; gallery stories; an `AppBuilder` over eframe or headless, with
+  a shell (menu bar, zones, panels in fault boundaries and focus scopes,
+  a command palette), the theme as a service, a settings form applied
+  live with per-field reset, settings and the user's keymap persisted.
+- `egui-pop` re-exports `model`, `core` and `api`, with a `prelude`.
 - A layering test reading `cargo metadata`: dependencies between
   workspace crates point down the layers of ADR 0001.
 - `egui-pop-tokens`: a DTCG 2025.10 token parser and resolver with no egui

@@ -61,6 +61,11 @@ impl Diagnostics {
         self.items.push(d);
     }
 
+    /// Records a diagnostic already logged (moved between lists).
+    pub fn push_quiet(&mut self, d: Diagnostic) {
+        self.items.push(d);
+    }
+
     /// Records a warning.
     pub fn warn(
         &mut self,
@@ -122,9 +127,8 @@ impl Diagnostics {
         self.items.retain(|d| d.owner.as_ref() != Some(owner));
     }
 
+    /// Records diagnostics already logged.
     pub fn extend(&mut self, other: impl IntoIterator<Item = Diagnostic>) {
-        for d in other {
-            self.push(d);
-        }
+        self.items.extend(other);
     }
 }

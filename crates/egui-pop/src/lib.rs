@@ -42,5 +42,26 @@ pub use egui_pop_model as model;
 /// strings, icons, persistence, fault boundaries, binding.
 pub use egui_pop_core as core;
 
+/// The application API: plugins, the app builder, zones and blocks,
+/// hooks, services, stories.
+pub use egui_pop_api as api;
+
 /// Themes: tokens into egui's style (from `egui-pop-core`).
 pub use egui_pop_core::theme;
+
+/// What most applications use.
+pub mod prelude {
+    pub use egui_pop_api::hooks::{Hook, On};
+    pub use egui_pop_api::services::ServiceToken;
+    pub use egui_pop_api::stories::Story;
+    pub use egui_pop_api::zones::{self, Block, Place};
+    pub use egui_pop_api::{App, AppBuilder, AppHandle, Call, Ctx, Plugin, PluginError};
+    pub use egui_pop_core::binding::{Binding, SharedStore};
+    pub use egui_pop_core::theme::{Density, ThemeSpec, Tokens};
+    pub use egui_pop_model::commands::{CommandSpec, Origin};
+    pub use egui_pop_model::ids::{
+        BlockId, CommandId, HookId, MenuId, PanelId, PluginId, ServiceId, SettingId, StoryId,
+        ZoneId,
+    };
+    pub use egui_pop_model::values::Descriptor;
+}

@@ -161,6 +161,10 @@ impl<T> OwnedList<T> {
         self.items.iter()
     }
 
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Slot<T>> {
+        self.items.iter_mut()
+    }
+
     pub fn retain(&mut self, f: impl FnMut(&Slot<T>) -> bool) {
         self.items.retain(f);
     }

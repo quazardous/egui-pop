@@ -14,11 +14,17 @@ authors.workspace = true
 [lints]
 workspace = true
 
+[features]
+default = ["eframe"]
+## Run applications through eframe (`App::run_native`, `eframe::App`).
+eframe = ["egui-pop-api/eframe"]
+
 [dependencies]
 egui.workspace = true
 egui-pop-tokens.workspace = true
 egui-pop-model.workspace = true
 egui-pop-core.workspace = true
+egui-pop-api.workspace = true
 
 [dev-dependencies]
 egui = { workspace = true, features = ["default_fonts"] }
