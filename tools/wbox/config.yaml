@@ -1,0 +1,19 @@
+# wbox workspace for the gallery: it runs in a nested compositor, offscreen,
+# so scripted runs (screenshots, keys, clicks) never open a window on the
+# desktop. See README.md.
+name: egui-pop-gallery-wbox
+compositor: labwc
+screen: 1280x800
+input_backend: hybrid
+headless: true
+keyboard_layout: us
+clipboard_bridge: false
+log:
+  dir: ./log
+  level: info
+screenshot_dir: ./screenshots
+timeouts:
+  app_render: 5
+  stop: 20
+app:
+  command: ./app.sh
