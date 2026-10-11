@@ -48,6 +48,15 @@ egui minor.
   a shell (menu bar, zones, panels in fault boundaries and focus scopes,
   a command palette), the theme as a service, a settings form applied
   live with per-field reset, settings and the user's keymap persisted.
+- A debug bridge (`egui-pop-core::debug`): collectors describe
+  themselves, snapshot as JSON and offer actions flagged `mutates`;
+  every call returns a feedback block. Core collectors: focus, overlays,
+  faults, announcements, theme, store; the app adds commands (with
+  `run`), keys (the last resolution traces), zones, plugins (with
+  `set_enabled`) and diagnostics.
+- `egui-pop-test`: harnesses for an app or a themed `Ui`, a check that
+  every interactive node has a name, an accessibility tree dump, and a
+  double click that registers.
 - `egui-pop` re-exports `model`, `core` and `api`, with a `prelude`.
 - A layering test reading `cargo metadata`: dependencies between
   workspace crates point down the layers of ADR 0001.

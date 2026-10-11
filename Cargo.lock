@@ -910,6 +910,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "egui-pop-test"
+version = "0.0.1"
+dependencies = [
+ "egui",
+ "egui-pop-api",
+ "egui-pop-core",
+ "egui-pop-model",
+ "egui_kittest",
+ "serde_json",
+]
+
+[[package]]
 name = "egui-pop-tokens"
 version = "0.0.1"
 dependencies = [

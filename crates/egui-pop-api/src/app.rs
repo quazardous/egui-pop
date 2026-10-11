@@ -6,11 +6,12 @@
 use std::cell::{RefCell, RefMut};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 use std::sync::{Arc, Mutex};
 
 use egui::{Context, Id, Ui};
 use egui_pop_core::binding::SharedStore;
+use egui_pop_core::debug::{DebugBridge, Feedback, FnCollector};
 use egui_pop_core::keys::KeyDispatcher;
 use egui_pop_core::overlay::{self, Kind, OverlaySpec};
 use egui_pop_core::persist::Persist;
@@ -21,7 +22,7 @@ use egui_pop_model::diagnostics::{Diagnostic, Diagnostics};
 use egui_pop_model::ids::{
     CommandId, MenuId, OwnerId, PanelId, PluginId, SettingId, StoryId, ZoneId,
 };
-use egui_pop_model::keymap::{Keymap, Layer};
+use egui_pop_model::keymap::{Keymap, Layer, Trace};
 use egui_pop_model::menus::{Item, MenuItem, Menus, Shown, show_items, sort_items};
 use egui_pop_model::order::{Node, order};
 use egui_pop_model::panels::{Area, Panels};
@@ -161,13 +162,16 @@ struct StoryEntry {
 #[derive(Default)]
 struct UiState {
     palette_open: bool,
+    /// The context when the palette opened: its commands are offered
+    /// and run there.
+    palette_context: WhenContext,
     palette_query: String,
     palette_selected: usize,
     hidden_panels: BTreeSet<PanelId>,
 }
 
 pub(crate) struct Shared {
-    ctx: Context,
+    ctx: RefCell<Context>,
     store: SharedStore,
     services: RefCell<Services>,
     zones: RefCell<ZoneTable>,
@@ -180,6 +184,9 @@ pub(crate) struct Shared {
     derived: RefCell<Derived>,
     plugins: RefCell<Vec<PluginInfo>>,
     history: RefCell<Vec<Run>>,
+    bridge: RefCell<DebugBridge>,
+    traces: RefCell<Vec<Trace>>,
+    pending_keys: RefCell<Option<String>>,
 }
 
 /// The application at run time, cheap to clone: blocks, panels, stories
@@ -197,7 +204,7 @@ impl fmt::Debug for AppHandle {
 impl AppHandle {
     fn new(ctx: &Context, store: SharedStore) -> Self {
         AppHandle(Rc::new(Shared {
-            ctx: ctx.clone(),
+            ctx: RefCell::new(ctx.clone()),
             store,
             services: RefCell::new(Services::default()),
             zones: RefCell::new(ZoneTable::default()),
@@ -210,12 +217,54 @@ impl AppHandle {
             derived: RefCell::new(Derived::default()),
             plugins: RefCell::new(Vec::new()),
             history: RefCell::new(Vec::new()),
+            bridge: RefCell::new(DebugBridge::with_core_collectors()),
+            traces: RefCell::new(Vec::new()),
+            pending_keys: RefCell::new(None),
         }))
     }
 
-    /// The egui context.
-    pub fn egui(&self) -> &Context {
-        &self.0.ctx
+    fn weak(&self) -> Weak<Shared> {
+        Rc::downgrade(&self.0)
+    }
+
+    /// The debug bridge's collectors, their descriptions and actions.
+    pub fn debug_describe(&self) -> Json {
+        self.0.bridge.borrow().describe()
+    }
+
+    /// Every collector's snapshot.
+    pub fn debug_snapshot(&self) -> Json {
+        self.0.bridge.borrow().snapshot(&self.egui())
+    }
+
+    /// Calls a collector's action; always returns a feedback block.
+    /// `commands.run` is queued here (the App runs it before the next
+    /// frame); `App::debug_call` runs it at once.
+    pub fn debug_call(&self, collector: &str, action: &str, args: &Json) -> Feedback {
+        self.0
+            .bridge
+            .borrow_mut()
+            .call(&self.egui(), collector, action, args)
+    }
+
+    /// The feedback blocks of the last bridge calls.
+    pub fn debug_log(&self) -> Vec<Feedback> {
+        self.0.bridge.borrow().log().cloned().collect()
+    }
+
+    /// The last key resolutions, oldest first.
+    pub fn key_traces(&self) -> Vec<Trace> {
+        self.0.traces.borrow().clone()
+    }
+
+    /// The chords of a shortcut in progress.
+    pub fn pending_keys(&self) -> Option<String> {
+        self.0.pending_keys.borrow().clone()
+    }
+
+    /// The egui context the application draws in.
+    pub fn egui(&self) -> Context {
+        self.0.ctx.borrow().clone()
     }
 
     /// The value store.
@@ -256,7 +305,7 @@ impl AppHandle {
 
     fn request(&self, r: Request) {
         self.0.requests.borrow_mut().push(r);
-        self.0.ctx.request_repaint();
+        self.egui().request_repaint();
     }
 
     /// Sets an application-wide context key (depth 0), for `when`
@@ -274,7 +323,7 @@ impl AppHandle {
     /// chain's, the overlays'.
     pub fn when_context(&self) -> WhenContext {
         let mut base = self.context();
-        let ctx = &self.0.ctx;
+        let ctx = &self.egui();
         let flag = |on: bool| if on { "true" } else { "false" };
         base.set("overlayOpen", flag(!overlay::stack(ctx).is_empty()));
         base.set("modalOpen", flag(overlay::modal_open(ctx)));
@@ -532,7 +581,13 @@ impl AppHandle {
     }
 
     fn set_palette_open(&self, open: bool) {
+        let cx = if open {
+            self.when_context()
+        } else {
+            WhenContext::new()
+        };
         let mut u = self.0.ui.borrow_mut();
+        u.palette_context = cx;
         u.palette_open = open;
         u.palette_query.clear();
         u.palette_selected = 0;
@@ -694,6 +749,7 @@ impl AppBuilder {
         };
         app.framework(self.theme, self.themes)
             .expect("the framework's registrations are valid");
+        app.install_collectors();
         for i in 0..app.plugins.len() {
             if let Err(error) = app.connect_slot(i) {
                 let plugin = app.plugins[i].id.clone();
@@ -891,6 +947,150 @@ impl App {
         })
         .ok();
         Ok(())
+    }
+
+    /// The api's collectors: commands, keys, zones, plugins, services,
+    /// diagnostics, the store.
+    fn install_collectors(&mut self) {
+        let h = &self.handle;
+        let up = |w: &Weak<Shared>| {
+            w.upgrade()
+                .map(AppHandle)
+                .ok_or_else(|| "the application is gone".to_string())
+        };
+        let mut b = h.0.bridge.borrow_mut();
+        let (w1, w2) = (h.weak(), h.weak());
+        b.register(
+            FnCollector::new("commands", "Every command: id, title, keys, where it applies, owner; the last runs.")
+                .snapshot(move |_| {
+                    let Ok(app) = up(&w1) else { return Json::Null };
+                    let cx = app.when_context();
+                    let palette = app.palette();
+                    json!({
+                        "commands": app.commands().iter().map(|(s, owner)| json!({
+                            "id": s.id,
+                            "title": s.title,
+                            "category": s.category,
+                            "description": s.description,
+                            "when": s.when,
+                            "keys": palette.iter().find(|e| e.command == s.id).map(|e| e.keys.clone()).unwrap_or_default(),
+                            "agent": s.agent,
+                            "args": s.args,
+                            "owner": owner,
+                        })).collect::<Vec<_>>(),
+                        "context": cx.iter().map(|(k, v, d)| json!({"key": k, "value": v, "depth": d})).collect::<Vec<_>>(),
+                        "history": app.history(),
+                    })
+                })
+                .action("run", "Runs a command offered to agents (`id`, `args`).", true, move |_, args| {
+                    let app = up(&w2)?;
+                    let id = args.get("id").and_then(Json::as_str).ok_or("`id` is missing")?;
+                    let id = CommandId::new(id).map_err(|e| e.to_string())?;
+                    let offered = app.commands().iter().any(|(s, _)| s.id == id && s.agent);
+                    if !offered {
+                        return Err(format!("`{id}` is not offered to agents"));
+                    }
+                    app.run_as(id, args.get("args").cloned().unwrap_or(Json::Null), Origin::Agent("debug-bridge".into()));
+                    Ok(json!({ "queued": true }))
+                })
+                .args(json!({ "id": "app.palette", "args": null })),
+        )
+        .expect("distinct names");
+        let w = h.weak();
+        b.register(
+            FnCollector::new(
+                "keys",
+                "The keymap's last resolutions, each binding considered and why it won or lost.",
+            )
+            .snapshot(move |_| {
+                let Ok(app) = up(&w) else { return Json::Null };
+                json!({ "pending": app.pending_keys(), "traces": app.key_traces() })
+            }),
+        )
+        .expect("distinct names");
+        let w = h.weak();
+        b.register(
+            FnCollector::new(
+                "zones",
+                "Every zone and its resolved blocks: owner, weight, what replaced or wrapped them.",
+            )
+            .snapshot(move |_| {
+                let Ok(app) = up(&w) else { return Json::Null };
+                json!(app.zones())
+            }),
+        )
+        .expect("distinct names");
+        let (w1, w2) = (h.weak(), h.weak());
+        b.register(
+            FnCollector::new("plugins", "The plugins in connection order, connected or why not; the services.")
+                .snapshot(move |_| {
+                    let Ok(app) = up(&w1) else { return Json::Null };
+                    json!({
+                        "plugins": app.plugins(),
+                        "services": app.services().iter().map(|(i, o, t)| json!({"id": i, "owner": o, "type": t})).collect::<Vec<_>>(),
+                    })
+                })
+                .action("set_enabled", "Connects or disconnects a plugin (`id`, `enabled`), before the next frame.", true, move |_, args| {
+                    let app = up(&w2)?;
+                    let id = args.get("id").and_then(Json::as_str).ok_or("`id` is missing")?;
+                    let id = PluginId::new(id).map_err(|e| e.to_string())?;
+                    if !app.plugins().iter().any(|p| p.id == id) {
+                        return Err(format!("no plugin `{id}`"));
+                    }
+                    let enabled = args.get("enabled").and_then(Json::as_bool).ok_or("`enabled` is missing")?;
+                    app.set_plugin_enabled(id, enabled);
+                    Ok(json!({ "queued": true }))
+                })
+                .args(json!({ "id": "plugin.id", "enabled": false })),
+        )
+        .expect("distinct names");
+        let w = h.weak();
+        b.register(
+            FnCollector::new(
+                "diagnostics",
+                "What registration ignored or changed, and what happens instead.",
+            )
+            .snapshot(move |_| {
+                let Ok(app) = up(&w) else { return Json::Null };
+                json!(app.diagnostics())
+            }),
+        )
+        .expect("distinct names");
+        b.register(egui_pop_core::debug::store_collector(h.store()))
+            .expect("distinct names");
+    }
+
+    /// Calls the debug bridge; `commands.run` runs at once and its result
+    /// is in the feedback.
+    pub fn debug_call(&mut self, collector: &str, action: &str, args: &Json) -> Feedback {
+        let feedback = self.handle.debug_call(collector, action, args);
+        if collector == "commands" && action == "run" && feedback.ok {
+            self.handle.0.requests.borrow_mut().pop();
+            let id = args
+                .get("id")
+                .and_then(Json::as_str)
+                .and_then(|i| CommandId::new(i).ok());
+            if let Some(id) = id {
+                let result = self.run(
+                    &id,
+                    args.get("args").cloned().unwrap_or(Json::Null),
+                    Origin::Agent("debug-bridge".into()),
+                );
+                return Feedback {
+                    ok: result.is_ok(),
+                    message: match &result {
+                        Ok(_) => format!("`{id}` ran; the application may have changed"),
+                        Err(e) => format!("`{id}` failed: {e}"),
+                    },
+                    data: result.unwrap_or(Json::Null),
+                    ..feedback
+                };
+            }
+        }
+        if feedback.ok && feedback.mutates {
+            self.process_requests();
+        }
+        feedback
     }
 
     fn connected_ids(&self) -> Vec<PluginId> {
@@ -1279,16 +1479,37 @@ impl App {
     fn install_theme(&mut self) {
         let service = self.handle.theme();
         let spec = service.spec();
-        if self.installed.as_ref() != Some(&spec) {
-            theme::install_with(&self.handle.0.ctx, service.themes(), &spec);
+        let ctx = self.handle.egui();
+        let marker = Id::new("egui_pop_api::theme_installed");
+        let here = ctx.data(|d| d.get_temp::<bool>(marker)).unwrap_or(false);
+        if !here || self.installed.as_ref() != Some(&spec) {
+            theme::install_with(&ctx, service.themes(), &spec);
+            ctx.data_mut(|d| d.insert_temp(marker, true));
             self.installed = Some(spec);
         }
     }
 
-    /// Runs a command now.
+    /// Draws in this context from now on (an application built on one
+    /// context and shown in another, as test harnesses do).
+    fn attach(&mut self, ctx: &Context) {
+        *self.handle.0.ctx.borrow_mut() = ctx.clone();
+    }
+
+    /// Runs a command now, in the current context.
     pub fn run(&mut self, command: &CommandId, args: Json, origin: Origin) -> Result<Json, String> {
         let cx = self.handle.when_context();
-        let handler = match self.reg.commands.prepare(command, &cx) {
+        self.run_in(command, args, origin, &cx)
+    }
+
+    /// Runs a command now, in a given context.
+    pub fn run_in(
+        &mut self,
+        command: &CommandId,
+        args: Json,
+        origin: Origin,
+        cx: &WhenContext,
+    ) -> Result<Json, String> {
+        let handler = match self.reg.commands.prepare(command, cx) {
             Ok(h) => h.clone(),
             Err(e) => {
                 let msg = e.to_string();
@@ -1364,7 +1585,8 @@ impl App {
     }
 
     /// Between frames: the theme asked for, requests, declarations.
-    pub fn logic(&mut self, _ctx: &Context) {
+    pub fn logic(&mut self, ctx: &Context) {
+        self.attach(ctx);
         self.install_theme();
         self.process_requests();
     }
@@ -1376,7 +1598,10 @@ impl App {
         self.logic(&ctx);
         overlay::begin_pass(&ctx);
         let cx = self.handle.when_context();
-        for d in self.dispatcher.process(&ctx, &self.reg.keymap, &cx) {
+        let dispatched = self.dispatcher.process(&ctx, &self.reg.keymap, &cx);
+        *self.handle.0.traces.borrow_mut() = self.dispatcher.traces().cloned().collect();
+        *self.handle.0.pending_keys.borrow_mut() = self.dispatcher.pending().map(|k| k.to_string());
+        for d in dispatched {
             if let Err(e) = self.run(&d.command, Json::Null, Origin::User) {
                 log::info!(target: "egui_pop", "{}: {e}", d.keys);
             }
@@ -1561,16 +1786,19 @@ impl App {
             return;
         }
         let spec = OverlaySpec::new("egui_pop.palette", "Command palette", Kind::Modal);
-        let cx = self.handle.when_context();
+        let cx = self.handle.0.ui.borrow().palette_context.clone();
         let entries = self.handle.palette();
         let mut run: Option<CommandId> = None;
         overlay::show(ctx, &spec, &mut open, None, |ui| {
             let mut u = self.handle.0.ui.borrow_mut();
-            let edit = ui.add(
-                egui::TextEdit::singleline(&mut u.palette_query)
-                    .hint_text("Type a command")
-                    .desired_width(f32::INFINITY),
-            );
+            let title = ui.strong("Command palette");
+            let edit = ui
+                .add(
+                    egui::TextEdit::singleline(&mut u.palette_query)
+                        .hint_text("Type a command")
+                        .desired_width(f32::INFINITY),
+                )
+                .labelled_by(title.id);
             edit.request_focus();
             let words: Vec<String> = u
                 .palette_query
@@ -1621,7 +1849,9 @@ impl App {
         if let Some(c) = run {
             self.handle.set_palette_open(false);
             overlay::close(ctx, spec.id);
-            self.handle.run(c, Json::Null);
+            if let Err(e) = self.run_in(&c, Json::Null, Origin::User, &cx) {
+                log::warn!(target: "egui_pop", "command `{c}`: {e}");
+            }
         } else if !open {
             self.handle.set_palette_open(false);
         }

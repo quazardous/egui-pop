@@ -15,10 +15,12 @@
 //! - [`persist`]: documents written atomically, with a backup and
 //!   migrations;
 //! - [`fault`]: fault boundaries showing an error card on panic;
-//! - [`binding`]: plain, bound and watch-only values.
+//! - [`binding`]: plain, bound and watch-only values;
+//! - [`debug`]: the debug bridge and its collectors.
 
 pub mod a11y;
 pub mod binding;
+pub mod debug;
 pub mod fault;
 pub mod focus;
 pub mod icon;

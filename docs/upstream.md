@@ -13,9 +13,9 @@ Reviewed at every egui bump: remove what upstream fixed, update the rest.
   because each queued event advances the clock by `step_dt` (0.25 s),
   beyond egui's 0.3 s double-click delay.
 - **Upstream**: <https://github.com/emilk/egui/issues/8697>
-- **Workaround**: `egui_pop_test::double_click(harness, node)` sets the
-  input time itself between the two clicks instead of relying on
-  `step_dt`.
+- **Workaround**: `egui_pop_test::double_click(harness, label)` (and
+  `double_click_at`) put the four button events in one frame, so egui
+  sees both clicks within its delay instead of `step_dt` apart.
 - **Remove when**: kittest ships a `double_click` helper or a per-step
   time.
 
