@@ -15,3 +15,9 @@ authors.workspace = true
 workspace = true
 
 [dependencies]
+egui.workspace = true
+egui-pop-tokens.workspace = true
+
+[dev-dependencies]
+egui = { workspace = true, features = ["default_fonts"] }
+egui_kittest = { workspace = true, features = ["wgpu"] }
