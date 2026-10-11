@@ -34,4 +34,13 @@ pub use egui;
 /// The token parser and resolver (no egui dependency).
 pub use egui_pop_tokens as tokens;
 
-pub mod theme;
+/// The logic without egui: ids, commands, keymap, menus, panels, layouts,
+/// the value store, documents.
+pub use egui_pop_model as model;
+
+/// The egui layer: focus, keys, overlays, placement, accessibility,
+/// strings, icons, persistence, fault boundaries, binding.
+pub use egui_pop_core as core;
+
+/// Themes: tokens into egui's style (from `egui-pop-core`).
+pub use egui_pop_core::theme;

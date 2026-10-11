@@ -1,0 +1,26 @@
+[package]
+name = "egui-pop-core"
+version = "0.0.1"
+description = "The egui layer of egui-pop: theme, focus scopes, a key dispatcher, overlays, placement, accessibility helpers, strings, icons, persistence, fault boundaries, value binding and a debug bridge"
+keywords = ["egui", "gui", "accessibility", "theme", "keyboard"]
+categories = ["gui"]
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+egui.workspace = true
+egui-pop-tokens.workspace = true
+egui-pop-model.workspace = true
+log.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+egui = { workspace = true, features = ["default_fonts"] }
+egui_kittest = { workspace = true, features = ["wgpu"] }

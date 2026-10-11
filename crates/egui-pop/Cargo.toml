@@ -17,6 +17,8 @@ workspace = true
 [dependencies]
 egui.workspace = true
 egui-pop-tokens.workspace = true
+egui-pop-model.workspace = true
+egui-pop-core.workspace = true
 
 [dev-dependencies]
 egui = { workspace = true, features = ["default_fonts"] }

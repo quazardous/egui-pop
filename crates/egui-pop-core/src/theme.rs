@@ -3,7 +3,7 @@
 //! [`Tokens`] set for custom widgets.
 //!
 //! ```
-//! use egui_pop::theme::{self, Density, ThemeSpec, Tokens};
+//! use egui_pop_core::theme::{self, Density, ThemeSpec, Tokens};
 //!
 //! let ctx = egui::Context::default();
 //! let tokens = theme::install(&ctx, &ThemeSpec::new("pop-light").density(Density::Compact));

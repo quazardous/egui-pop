@@ -22,6 +22,17 @@ egui minor.
   values kept for paths declared later) and its `value.*` commands;
   versioned documents with migrations (`layout` v2 renames the areas to
   start and end); plugin ordering with typed errors.
+- `egui-pop-core` (egui): focus scopes and a focus chain rebuilt each
+  pass, giving context keys their depth; a key dispatcher (chords with a
+  timeout, keys consumed when they resolve, the last traces kept); an
+  overlay stack (Escape closes the top only, outside clicks stop at a
+  modal, closing closes what is above, focus restored) and overlays drawn
+  as modals or placed popovers; placement with flip, shift and shrink;
+  accessible names and an announcer with live regions; a `Strings`
+  provider with English fallbacks; icons by role and tone (glyphs,
+  images, painted shapes); a persistence driver (atomic writes, one
+  backup, migrations on load); fault boundaries showing an error card
+  with Retry; plain, bound and watch-only value binding.
 - A layering test reading `cargo metadata`: dependencies between
   workspace crates point down the layers of ADR 0001.
 - `egui-pop-tokens`: a DTCG 2025.10 token parser and resolver with no egui
@@ -51,6 +62,9 @@ egui minor.
   lavapipe, cargo-deny, the web build and semver checks.
 
 ### Changed
+
+- `theme` moved to `egui-pop-core`; `egui-pop` is now the facade and
+  re-exports it at the same path, with `model` and `core`.
 
 - The repository is a Cargo workspace; the `egui-pop` crate moved to
   `crates/egui-pop`.
