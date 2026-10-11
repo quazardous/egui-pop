@@ -474,7 +474,9 @@ pub fn style(t: &Tokens, base: &Style) -> Style {
     sp.interact_size.y = t.size.control_height;
     sp.icon_width = t.size.icon_inline;
     sp.icon_width_inner = (t.size.icon_inline * 0.6).round();
-    sp.icon_spacing = 2.0 * s.xs;
+    // Below 4px a checkbox or radio reads as glued to its label, which the
+    // compact density's 2px small space would do.
+    sp.icon_spacing = s.s.max(4.0);
     sp.indent = t.size.icon_toolbar;
     style.animation_time = t.motion_duration;
     if t.motion_duration == 0.0 {
