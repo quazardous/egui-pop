@@ -1,0 +1,17 @@
+[package]
+name = "egui-pop"
+version = "0.0.1"
+description = "Themable, accessible, agent-drivable components for egui: design tokens, dialogs, menus, parameter widgets, a node graph view (not an official egui crate; early, nothing usable yet)"
+readme = "../../README.md"
+keywords = ["egui", "gui", "widgets", "design-system", "accessibility"]
+categories = ["gui"]
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
