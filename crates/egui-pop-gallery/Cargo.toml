@@ -1,0 +1,25 @@
+[package]
+name = "egui-pop-gallery"
+version = "0.0.0"
+description = "The egui-pop gallery: every component in every variant, state, theme, density and accent"
+publish = false
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+egui-pop.workspace = true
+egui = { workspace = true, features = ["default_fonts"] }
+eframe = { workspace = true, features = ["default_fonts", "wgpu", "accesskit", "wayland", "x11"] }
+serde_json.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen-futures = "0.4"
+
+[dev-dependencies]
+egui_kittest = { workspace = true, features = ["eframe", "wgpu", "snapshot"] }

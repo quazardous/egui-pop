@@ -1,1 +1,5 @@
 /target
+# egui_kittest output when a snapshot differs.
+*.new.png
+*.diff.png
+*.old.png

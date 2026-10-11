@@ -1,0 +1,2 @@
+# Snapshot images are binary: no text diffs, no line-ending conversion.
+*.png binary
