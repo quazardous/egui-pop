@@ -44,7 +44,7 @@ pub fn show(ui: &mut Ui, state: &mut State) {
         }
         ui.separator();
     }
-    let rows: Vec<_> = r
+    let mut rows: Vec<_> = r
         .iter()
         .filter(|tok| match tok.tier() {
             Tier::Reference => state.reference,
@@ -53,6 +53,7 @@ pub fn show(ui: &mut Ui, state: &mut State) {
         })
         .filter(|tok| tok.path.contains(state.filter.trim()))
         .collect();
+    rows.sort_by_cached_key(|tok| natural_key(&tok.path));
     ui.weak(format!("{} of {} tokens", rows.len(), r.len()));
     egui::ScrollArea::vertical()
         .auto_shrink([false, false])
@@ -88,4 +89,27 @@ pub fn show(ui: &mut Ui, state: &mut State) {
                     }
                 });
         });
+}
+
+/// Sort key reading numeric path segments as numbers, so `gray.2` comes
+/// before `gray.10`.
+fn natural_key(path: &str) -> Vec<(u64, String)> {
+    path.split('.')
+        .map(|seg| match seg.parse::<u64>() {
+            Ok(n) => (n, String::new()),
+            Err(_) => (u64::MAX, seg.to_owned()),
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::natural_key;
+
+    #[test]
+    fn numeric_segments_sort_as_numbers() {
+        let mut paths = ["gray.10", "gray.2", "gray.contrast", "amber.1"];
+        paths.sort_by_key(|p| natural_key(p));
+        assert_eq!(paths, ["amber.1", "gray.2", "gray.10", "gray.contrast"]);
+    }
 }

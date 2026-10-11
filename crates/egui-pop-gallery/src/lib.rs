@@ -160,7 +160,8 @@ impl Gallery {
         ui.horizontal_wrapped(|ui| {
             ui.strong(TITLE);
             ui.separator();
-            egui::ComboBox::new("theme", "Theme")
+            ui.label("Theme");
+            egui::ComboBox::from_id_salt("theme")
                 .selected_text(self.spec.base.clone())
                 .show_ui(ui, |ui| {
                     let names: Vec<String> = theme::BUILT_IN_THEMES
@@ -177,14 +178,16 @@ impl Gallery {
                         ui.selectable_value(&mut self.spec.base, name.clone(), name);
                     }
                 });
-            egui::ComboBox::new("density", "Density")
+            ui.label("Density");
+            egui::ComboBox::from_id_salt("density")
                 .selected_text(self.spec.density.name())
                 .show_ui(ui, |ui| {
                     for d in Density::ALL {
                         ui.selectable_value(&mut self.spec.density, d, d.name());
                     }
                 });
-            egui::ComboBox::new("accent", "Accent")
+            ui.label("Accent");
+            egui::ComboBox::from_id_salt("accent")
                 .selected_text(self.spec.accent.as_deref().unwrap_or("theme's own"))
                 .show_ui(ui, |ui| {
                     ui.selectable_value(&mut self.spec.accent, None, "theme's own");
