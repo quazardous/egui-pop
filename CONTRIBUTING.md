@@ -68,6 +68,31 @@ in the diff. Thresholds per operating system are in `kittest.toml`.
 CI also runs `cargo deny check`, builds the gallery for
 `wasm32-unknown-unknown` and runs `cargo semver-checks` on `egui-pop`.
 
+## Screenshots
+
+The images in `docs/screenshots/` (shown in the README and the tokens
+guide) are the gallery's real window, captured offscreen in a nested
+compositor with [wbox](tools/wbox). Regenerate them whenever the gallery
+changes visibly:
+
+```sh
+cargo build --release -p egui-pop-gallery
+GALLERY_THEME=pop-light GALLERY_DENSITY=comfortable GALLERY_PAGE=overview \
+  <driver> up tools/wbox/config.yaml
+<driver> click tools/wbox/config.yaml 1070 700   # focus, away from tooltips
+<driver> key tools/wbox/config.yaml ctrl+shift+p # optional: keys to press
+<driver> shot tools/wbox/config.yaml --name overview-pop-light
+<driver> down tools/wbox/config.yaml
+```
+
+`<driver>` is any wbox driver (the `wbox-mcp` server's tools, or a
+script calling the wbox library); none is shipped here. Crop the shot to
+the window and keep each PNG small (under 200 KB). The current set:
+`overview-pop-dark`, `overview-pop-light`, `overview-pop-high-contrast`,
+`builtins-pop-dark-compact`, `zones-pop-dark`, `zones-pop-light-off`
+(after `ctrl+e`), `debug-pop-dark` (after `alt+up alt+down`) and
+`palette-pop-dark` (after `ctrl+shift+p`).
+
 ## Upstream limits
 
 When you hit a limit of egui (or of another dependency), work around it

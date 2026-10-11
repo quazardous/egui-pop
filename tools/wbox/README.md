@@ -20,6 +20,13 @@ GALLERY_THEME=pop-light GALLERY_PAGE=builtins GALLERY_QUIT_AFTER=600 \
   <driver> up tools/wbox/config.yaml
 ```
 
+Keys go to the focused window: click an inert spot first (the
+inspector's empty area, `1070 700` at the default size), not the
+desktop, which opens the compositor's menu. Useful keys: `ctrl+shift+p`
+(command palette), `alt+down` / `alt+up` (next and previous page),
+`ctrl+shift+t` (next theme), `ctrl+e` on the zones page (switch the
+extender plugin).
+
 The gallery tells a driver it is up by printing one JSON line on stdout
 (`out/gallery.jsonl` through `app.sh`):
 
@@ -28,7 +35,9 @@ The gallery tells a driver it is up by printing one JSON line on stdout
 ```
 
 With `--quit-after <frames>` it closes itself after that many frames and
-prints `{"event":"quit","frames":...}` first. The window title is always
+prints `{"event":"quit","frames":...}` first; with `--dump-debug` too, it
+prints the debug bridge's snapshot (`{"event":"debug","snapshot":...}`)
+before, for a driver to read what the application saw. The window title is always
 `egui-pop gallery`. Run `egui-pop-gallery --help` for every option.
 
 `out/`, `log/` and `screenshots/` are not committed.

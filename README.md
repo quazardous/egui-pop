@@ -4,6 +4,8 @@ An application framework and component library for
 [egui](https://github.com/emilk/egui): themable, accessible, drivable by
 agents, easy to debug. Not an official egui crate.
 
+![The gallery, pop-dark: the theme overview](docs/screenshots/overview-pop-dark.png)
+
 **Status: phase 2, the framework.** Design tokens and themes (phase 1);
 plugins that own what they register, commands declared once, layered
 keymaps resolved by focus, zones and blocks, overlays, a value store with
@@ -49,6 +51,10 @@ fn draw(ui: &mut egui::Ui) {
 
 setup(&egui::Context::default());
 ```
+
+| `pop-dark` | `pop-light` | `pop-high-contrast` |
+|---|---|---|
+| ![pop-dark](docs/screenshots/overview-pop-dark.png) | ![pop-light](docs/screenshots/overview-pop-light.png) | ![pop-high-contrast](docs/screenshots/overview-pop-high-contrast.png) |
 
 Built-in themes: `pop-dark`, `pop-light` and `pop-high-contrast`;
 densities `comfortable` and `compact`; accents `gold`, `blue`, `green`,
@@ -117,7 +123,18 @@ assert_eq!(out, Ok(serde_json::json!(1)));
 Zones and blocks let a plugin add to, replace, extend or wrap what
 another drew ([ADR 0005](docs/adr/0005-zones-and-blocks.md)); what cannot
 apply is reported, never silently dropped
-([ADR 0003](docs/adr/0003-no-silent-no-op.md)).
+([ADR 0003](docs/adr/0003-no-silent-no-op.md)). In the gallery, one
+plugin replaces, extends and wraps another's blocks; switched off, the
+card is back as its owner made it:
+
+| Extender connected | Extender switched off (`pop-light`) |
+|---|---|
+| ![zones, extended](docs/screenshots/zones-pop-dark.png) | ![zones, as declared](docs/screenshots/zones-pop-light-off.png) |
+
+Every command is in the palette (`Ctrl+Shift+P` or `F1`), with the keys
+the keymap really binds:
+
+![the command palette](docs/screenshots/palette-pop-dark.png)
 
 ## Debugging
 
@@ -125,7 +142,9 @@ Every registry describes itself to the **debug bridge**: collectors for
 commands, key resolution traces, focus, overlays, zones, plugins, the
 store and diagnostics, each with a JSON snapshot and actions flagged
 `mutates`; every call returns a feedback block. The gallery's Debug page
-shows them.
+shows them, with the last key resolutions:
+
+![the debug page](docs/screenshots/debug-pop-dark.png)
 
 ```rust
 use egui_pop::egui;

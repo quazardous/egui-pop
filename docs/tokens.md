@@ -98,6 +98,17 @@ Not read yet: references inside composite values, JSON Pointer `$ref`,
 
 ## Composing a theme
 
+The three built-in themes, as the gallery's overview page shows them
+(captured headless; see CONTRIBUTING.md to regenerate):
+
+| `pop-dark` | `pop-light` | `pop-high-contrast` |
+|---|---|---|
+| ![pop-dark](screenshots/overview-pop-dark.png) | ![pop-light](screenshots/overview-pop-light.png) | ![pop-high-contrast](screenshots/overview-pop-high-contrast.png) |
+
+The compact density changes spacing and sizes only:
+
+![egui's widgets in pop-dark, compact](screenshots/builtins-pop-dark-compact.png)
+
 A theme is resolved from a `ThemeSpec`, in this order:
 
 1. the **base theme** (mode and contrast: `pop-dark`, `pop-light`,
