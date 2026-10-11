@@ -21,3 +21,4 @@ egui-pop-tokens.workspace = true
 [dev-dependencies]
 egui = { workspace = true, features = ["default_fonts"] }
 egui_kittest = { workspace = true, features = ["wgpu"] }
+serde_json.workspace = true

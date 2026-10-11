@@ -855,6 +855,7 @@ dependencies = [
  "egui",
  "egui-pop-tokens",
  "egui_kittest",
+ "serde_json",
 ]
 
 [[package]]
@@ -867,6 +868,15 @@ dependencies = [
  "egui_kittest",
  "serde_json",
  "wasm-bindgen-futures",
+]
+
+[[package]]
+name = "egui-pop-model"
+version = "0.0.1"
+dependencies = [
+ "log",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

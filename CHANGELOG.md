@@ -9,6 +9,21 @@ egui minor.
 
 ### Added
 
+- `egui-pop-model` (no egui): typed ids serialized as strings and checked
+  at compile time for literals; diagnostics that log and collect what
+  registration ignored or changed; owner-tagged registries removable by
+  owner; `when` clauses with focus depth; commands declared once (keys,
+  menus, palette, agent surface) with a bounded run history and a ranked
+  palette search; a layered keymap with chords, focus-depth precedence,
+  command removal (`"-id"`), key unbinding (`null`) and a resolution
+  trace; declared menus and panels; layouts and their repair; a value
+  store (descriptors, soft and hard ranges, steps, gestures, `if_seq`,
+  undo, change listeners, a journal, settings export and import with
+  values kept for paths declared later) and its `value.*` commands;
+  versioned documents with migrations (`layout` v2 renames the areas to
+  start and end); plugin ordering with typed errors.
+- A layering test reading `cargo metadata`: dependencies between
+  workspace crates point down the layers of ADR 0001.
 - `egui-pop-tokens`: a DTCG 2025.10 token parser and resolver with no egui
   dependency: groups, inherited `$type`, `$description` and `$extensions`
   kept, whole-value aliases, `$extends` between theme files, colours in

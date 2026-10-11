@@ -1,6 +1,11 @@
 [workspace]
 resolver = "3"
-members = ["crates/egui-pop-tokens", "crates/egui-pop", "crates/egui-pop-gallery"]
+members = [
+    "crates/egui-pop-tokens",
+    "crates/egui-pop-model",
+    "crates/egui-pop",
+    "crates/egui-pop-gallery",
+]
 
 [workspace.package]
 edition = "2024"
@@ -12,6 +17,9 @@ authors = ["The egui-pop contributors"]
 [workspace.dependencies]
 egui-pop-tokens = { version = "0.0.1", path = "crates/egui-pop-tokens" }
 serde_json = "1"
+serde = { version = "1", features = ["derive"] }
+log = "0.4"
+egui-pop-model = { version = "0.0.1", path = "crates/egui-pop-model" }
 egui = { version = "0.36", default-features = false }
 egui_kittest = "0.36"
 eframe = { version = "0.36", default-features = false }
