@@ -68,6 +68,14 @@ in the diff. Thresholds per operating system are in `kittest.toml`.
 CI also runs `cargo deny check`, builds the gallery for
 `wasm32-unknown-unknown` and runs `cargo semver-checks` on `egui-pop`.
 
+## Upstream limits
+
+When you hit a limit of egui (or of another dependency), work around it
+in egui-pop, file a focused upstream issue with a minimal reproduction
+after checking that none exists, and record it in
+[docs/upstream.md](docs/upstream.md) with an `// upstream:` comment at the
+code site. The register is reviewed at every egui bump.
+
 ## Reporting issues
 
 Give the egui-pop and egui versions, the operating system and the GPU (or
