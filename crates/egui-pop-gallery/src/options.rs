@@ -2,7 +2,7 @@
 
 use egui_pop::theme::{Density, FALLBACK_THEME};
 
-use crate::Page;
+use crate::PAGES;
 
 /// The usage text printed by `--help`.
 pub const USAGE: &str = "\
@@ -13,8 +13,11 @@ Options:
   --density <name>       comfortable or compact
   --accent <scale>       accent colour scale (gold, blue, green, amber, red)
   --reduced-motion       turn animations off
-  --page <name>          page shown first (overview, tokens, builtins)
+  --page <name>          page shown first (overview, tokens, builtins,
+                         zones, settings, debug)
   --quit-after <frames>  exit by itself after this many frames
+  --dump-debug           with --quit-after: print the debug bridge's
+                         snapshot (event \"debug\") before quitting
   --help                 this text
 
 At start-up one JSON line is printed on stdout (event \"ready\"), and one
@@ -27,11 +30,13 @@ pub struct Options {
     pub density: Density,
     pub accent: Option<String>,
     pub reduced_motion: bool,
-    pub page: Page,
+    pub page: String,
     /// Close the window after this many frames.
     pub quit_after: Option<u64>,
     /// Print the JSON start and quit lines on stdout.
     pub announce: bool,
+    /// Print the debug bridge's snapshot when quitting.
+    pub dump_debug: bool,
     pub help: bool,
 }
 
@@ -42,9 +47,10 @@ impl Default for Options {
             density: Density::default(),
             accent: None,
             reduced_motion: false,
-            page: Page::default(),
+            page: "overview".into(),
             quit_after: None,
             announce: false,
+            dump_debug: false,
             help: false,
         }
     }
@@ -66,7 +72,14 @@ impl Options {
                 "--density" => o.density = value("--density")?.parse()?,
                 "--accent" => o.accent = Some(value("--accent")?),
                 "--reduced-motion" => o.reduced_motion = true,
-                "--page" => o.page = value("--page")?.parse()?,
+                "--page" => {
+                    let page = value("--page")?;
+                    if !PAGES.contains(&page.as_str()) {
+                        return Err(format!("`{page}` is not a page ({})", PAGES.join(", ")));
+                    }
+                    o.page = page;
+                }
+                "--dump-debug" => o.dump_debug = true,
                 "--quit-after" => {
                     let v = value("--quit-after")?;
                     o.quit_after = Some(
@@ -104,7 +117,7 @@ mod tests {
         .unwrap();
         assert_eq!(o.theme, "pop-light");
         assert_eq!(o.density, Density::Compact);
-        assert_eq!(o.page, Page::Tokens);
+        assert_eq!(o.page, "tokens");
         assert_eq!(o.accent.as_deref(), Some("blue"));
         assert_eq!(o.quit_after, Some(30));
         assert!(o.reduced_motion);
@@ -128,5 +141,10 @@ mod tests {
         );
         assert!(Options::parse(["--quit-after", "x"]).is_err());
         assert!(Options::parse(["--bogus"]).unwrap_err().contains("--bogus"));
+        assert!(
+            Options::parse(["--page", "nope"])
+                .unwrap_err()
+                .contains("debug")
+        );
     }
 }

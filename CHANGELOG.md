@@ -57,6 +57,17 @@ egui minor.
 - `egui-pop-test`: harnesses for an app or a themed `Ui`, a check that
   every interactive node has a name, an accessibility tree dump, and a
   double click that registers.
+- The gallery is a plugin application: a shell plugin (page list, page,
+  playground, theme switchers, next and previous page on Alt+Down and
+  Alt+Up, next theme on Ctrl+Shift+T) and one plugin per page. New
+  pages: zones and blocks (one plugin replacing, extending and wrapping
+  another's blocks, switched with Ctrl+E), settings applied live with
+  per-field reset, and the debug bridge (collectors, key traces, a
+  popover, an announcement, a panel that panics). `--dump-debug` prints
+  the bridge's snapshot when quitting. Every page is checked for unnamed
+  interactive nodes.
+- `consumer-smoke` (not published) runs the README's code as doctests
+  against the `egui-pop` crate alone.
 - `egui-pop` re-exports `model`, `core` and `api`, with a `prelude`.
 - A layering test reading `cargo metadata`: dependencies between
   workspace crates point down the layers of ADR 0001.
@@ -88,6 +99,8 @@ egui minor.
 
 ### Changed
 
+- The gallery's combo boxes, text fields and sliders are labelled for
+  screen readers.
 - `theme` moved to `egui-pop-core`; `egui-pop` is now the facade and
   re-exports it at the same path, with `model` and `core`.
 

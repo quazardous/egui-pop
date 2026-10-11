@@ -5,7 +5,7 @@
 #   GALLERY_THEME       pop-dark | pop-light | pop-high-contrast
 #   GALLERY_DENSITY     comfortable | compact
 #   GALLERY_ACCENT      gold | blue | green | amber | red (default: the theme's)
-#   GALLERY_PAGE        overview | tokens | builtins
+#   GALLERY_PAGE        overview | tokens | builtins | zones | settings | debug
 #   GALLERY_QUIT_AFTER  frames before the gallery exits by itself (default: never)
 #   GALLERY_OUT         where its stdout (the JSON start and quit lines) and
 #                       stderr go (default: ./out)

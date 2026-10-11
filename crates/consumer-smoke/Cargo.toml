@@ -1,0 +1,17 @@
+[package]
+name = "consumer-smoke"
+version = "0.0.0"
+description = "Compiles and runs the README's code as a user of the egui-pop crate would"
+publish = false
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+egui-pop.workspace = true
+serde_json.workspace = true

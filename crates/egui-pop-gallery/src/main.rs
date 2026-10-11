@@ -26,7 +26,11 @@ fn main() -> eframe::Result {
     eframe::run_native(
         TITLE,
         native,
-        Box::new(move |cc| Ok(Box::new(Gallery::new(&cc.egui_ctx, options)))),
+        Box::new(move |cc| {
+            let gallery = Gallery::new(&cc.egui_ctx, options)
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
+            Ok(Box::new(gallery))
+        }),
     )
 }
 
@@ -49,7 +53,11 @@ fn main() {
             .start(
                 canvas,
                 eframe::WebOptions::default(),
-                Box::new(|cc| Ok(Box::new(Gallery::new(&cc.egui_ctx, Options::default())))),
+                Box::new(|cc| {
+                    let gallery = Gallery::new(&cc.egui_ctx, Options::default())
+                        .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
+                    Ok(Box::new(gallery))
+                }),
             )
             .await;
     });

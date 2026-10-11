@@ -8,6 +8,7 @@ members = [
     "crates/egui-pop-test",
     "crates/egui-pop",
     "crates/egui-pop-gallery",
+    "crates/consumer-smoke",
 ]
 
 [workspace.package]

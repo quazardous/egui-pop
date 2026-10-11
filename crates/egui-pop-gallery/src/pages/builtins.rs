@@ -41,8 +41,7 @@ const CHOICES: [&str; 3] = ["First", "Second", "Third"];
 
 pub fn playground(ui: &mut Ui, state: &mut State) {
     ui.checkbox(&mut state.enabled, "Enabled");
-    ui.label("Progress");
-    ui.add(egui::Slider::new(&mut state.progress, 0.0..=1.0));
+    ui.add(egui::Slider::new(&mut state.progress, 0.0..=1.0).text("Progress"));
     if ui.button("Reset values").clicked() {
         *state = State {
             enabled: state.enabled,
@@ -85,14 +84,19 @@ fn widgets(ui: &mut Ui, state: &mut State) {
     section(ui, "Values");
     ui.add(egui::Slider::new(&mut state.value, 0.0..=100.0).text("Slider"));
     ui.horizontal(|ui| {
-        ui.add(egui::DragValue::new(&mut state.count).range(0..=99));
-        ui.label("Drag value");
+        let value = ui.add(egui::DragValue::new(&mut state.count).range(0..=99));
+        let label = ui.label("Drag value");
+        value.labelled_by(label.id);
     });
     ui.add(egui::ProgressBar::new(state.progress).show_percentage());
 
     section(ui, "Text input");
-    ui.add(egui::TextEdit::singleline(&mut state.text).hint_text("Type here"));
-    ui.add(egui::TextEdit::multiline(&mut state.notes).desired_rows(3));
+    let label = ui.label("One line");
+    ui.add(egui::TextEdit::singleline(&mut state.text).hint_text("Type here"))
+        .labelled_by(label.id);
+    let label = ui.label("Several lines");
+    ui.add(egui::TextEdit::multiline(&mut state.notes).desired_rows(3))
+        .labelled_by(label.id);
 
     section(ui, "Choice");
     egui::ComboBox::new("builtins.combo", "Combo box")

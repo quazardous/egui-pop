@@ -1,135 +1,102 @@
 //! The egui-pop gallery: a catalogue application with no purpose of its
-//! own. It shows and exercises every component in every variant and state,
-//! under every theme, density and accent.
+//! own, built as an egui-pop plugin application. Every page is a plugin
+//! contributing a story; the shell plugin lists them in the side bar,
+//! draws the page in the main zone and its playground in the inspector,
+//! and puts the theme switchers in the top bar.
 //!
-//! Layout: a toolbar with the theme, density, accent and motion switchers;
-//! a sidebar listing the pages (one per component family); the page; and a
-//! playground beside it where the page's options are toggled live.
-//!
-//! Every page is a pair of plain functions (`show` and `playground`) over
-//! its own state, so tests (egui_kittest snapshots) and scripted runs reuse
-//! the very same pages as fixtures.
+//! Pages: the theme overview, the token table and egui's built-in
+//! widgets (plain functions reused by the snapshot tests); zones and
+//! blocks (one plugin replacing, extending and wrapping another's
+//! blocks); settings applied live; the debug bridge.
 
 use std::io::Write as _;
 
-use egui::{Id, Ui};
-use egui_pop::theme::{self, Density, ThemeSpec, Themes, Tokens};
+use egui::Ui;
+use egui_pop::api::{App, AppBuilder, BuildError};
+use egui_pop::model::ids::{PluginId, StoryId};
+use egui_pop::theme::ThemeSpec;
 
 mod options;
 pub mod pages;
+pub mod shell;
 
 pub use options::{Options, USAGE};
+
+use pages::story::PagePlugin;
 
 /// The window title, also printed in the start-up line.
 pub const TITLE: &str = "egui-pop gallery";
 
-/// A page of the gallery.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub enum Page {
-    /// The theme at a glance: surfaces, text, accents, spacing, contrast.
-    #[default]
-    Overview,
-    /// Every resolved token, by tier.
-    Tokens,
-    /// egui's own widgets, drawn with the theme.
-    Builtins,
+/// The pages, as named on the command line.
+pub const PAGES: [&str; 6] = [
+    "overview", "tokens", "builtins", "zones", "settings", "debug",
+];
+
+/// The gallery's plugins.
+pub fn builder(options: &Options) -> AppBuilder {
+    let mut spec = ThemeSpec::new(options.theme.clone())
+        .density(options.density)
+        .reduced_motion(options.reduced_motion);
+    spec.accent = options.accent.clone();
+    App::builder()
+        .theme(spec)
+        .plugin(shell::Shell {
+            first: StoryId::new(options.page.as_str()).unwrap_or(StoryId::from_static("overview")),
+        })
+        .plugin(PagePlugin {
+            plugin: PluginId::from_static("gallery.overview"),
+            story: StoryId::from_static("overview"),
+            title: "Theme overview",
+            description: "Surfaces, text, accents, status colours, spacing and the contrast checks of the current theme.",
+            group: "Theme",
+            weight: 0,
+            show: pages::overview::show,
+            playground: Some(pages::overview::playground),
+        })
+        .plugin(PagePlugin {
+            plugin: PluginId::from_static("gallery.tokens"),
+            story: StoryId::from_static("tokens"),
+            title: "Tokens table",
+            description: "Every token of the current theme: palette, roles and components.",
+            group: "Theme",
+            weight: 10,
+            show: pages::tokens::show,
+            playground: Some(pages::tokens::playground),
+        })
+        .plugin(PagePlugin {
+            plugin: PluginId::from_static("gallery.builtins"),
+            story: StoryId::from_static("builtins"),
+            title: "egui built-ins",
+            description: "egui's own widgets, styled from the theme's tokens with no per-widget code.",
+            group: "Theme",
+            weight: 20,
+            show: pages::builtins::show,
+            playground: Some(pages::builtins::playground),
+        })
+        .plugin(pages::zones::ZonesPage)
+        .plugin(pages::zones::Extender)
+        .plugin(pages::settings::SettingsPage)
+        .plugin(pages::debug::DebugPage)
 }
 
-impl Page {
-    pub const ALL: [Page; 3] = [Page::Overview, Page::Tokens, Page::Builtins];
-
-    /// The name used on the command line and in snapshot names.
-    pub fn name(self) -> &'static str {
-        match self {
-            Page::Overview => "overview",
-            Page::Tokens => "tokens",
-            Page::Builtins => "builtins",
-        }
-    }
-
-    pub fn title(self) -> &'static str {
-        match self {
-            Page::Overview => "Theme overview",
-            Page::Tokens => "Tokens table",
-            Page::Builtins => "egui built-ins",
-        }
-    }
-
-    pub fn description(self) -> &'static str {
-        match self {
-            Page::Overview => {
-                "Surfaces, text, accents, status colours, spacing and the contrast checks of the current theme."
-            }
-            Page::Tokens => "Every token of the current theme: palette, roles and components.",
-            Page::Builtins => {
-                "egui's own widgets, styled from the theme's tokens with no per-widget code."
-            }
-        }
-    }
-
-    /// Draws the page.
-    pub fn show(self, ui: &mut Ui, state: &mut PageState) {
-        match self {
-            Page::Overview => pages::overview::show(ui, &mut state.overview),
-            Page::Tokens => pages::tokens::show(ui, &mut state.tokens),
-            Page::Builtins => pages::builtins::show(ui, &mut state.builtins),
-        }
-    }
-
-    /// Draws the page's playground: its live options.
-    pub fn playground(self, ui: &mut Ui, state: &mut PageState) {
-        match self {
-            Page::Overview => pages::overview::playground(ui, &mut state.overview),
-            Page::Tokens => pages::tokens::playground(ui, &mut state.tokens),
-            Page::Builtins => pages::builtins::playground(ui, &mut state.builtins),
-        }
-    }
-}
-
-impl std::str::FromStr for Page {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Page::ALL
-            .into_iter()
-            .find(|p| p.name() == s)
-            .ok_or_else(|| format!("`{s}` is not a page (overview, tokens, builtins)"))
-    }
-}
-
-/// The state of every page's playground.
-#[derive(Clone, Debug, Default)]
-pub struct PageState {
-    pub overview: pages::overview::State,
-    pub tokens: pages::tokens::State,
-    pub builtins: pages::builtins::State,
-}
-
-/// The gallery application.
+/// The gallery application: the egui-pop app, and the options of a
+/// scripted run.
 #[derive(Debug)]
 pub struct Gallery {
-    themes: Themes,
-    /// The theme asked for; installed between frames when it changes.
-    pub spec: ThemeSpec,
-    installed: ThemeSpec,
-    pub page: Page,
-    pub pages: PageState,
+    pub app: App,
     frames: u64,
     quit_after: Option<u64>,
     announce: bool,
+    dump_debug: bool,
 }
 
 impl Gallery {
     /// The gallery on a context, its theme installed.
-    pub fn new(ctx: &egui::Context, options: Options) -> Gallery {
-        let mut spec = ThemeSpec::new(options.theme.clone())
-            .density(options.density)
-            .reduced_motion(options.reduced_motion);
-        spec.accent = options.accent.clone();
-        let themes = Themes::default();
-        theme::install_with(ctx, &themes, &spec);
+    pub fn new(ctx: &egui::Context, options: Options) -> Result<Gallery, BuildError> {
+        let app = builder(&options).build(ctx)?;
         if options.announce {
-            let line = serde_json::json!({
+            let spec = app.handle().theme().spec();
+            announce(&serde_json::json!({
                 "event": "ready",
                 "app": "egui-pop-gallery",
                 "version": env!("CARGO_PKG_VERSION"),
@@ -138,106 +105,47 @@ impl Gallery {
                 "density": spec.density.name(),
                 "accent": spec.accent,
                 "reduced_motion": spec.reduced_motion,
-                "page": options.page.name(),
+                "page": options.page,
                 "quit_after": options.quit_after,
-            });
-            announce(&line);
+                "plugins": app.handle().plugins().iter().map(|p| p.id.to_string()).collect::<Vec<_>>(),
+                "diagnostics": app.handle().diagnostics(),
+            }));
         }
-        Gallery {
-            themes,
-            installed: spec.clone(),
-            spec,
-            page: options.page,
-            pages: PageState::default(),
+        Ok(Gallery {
+            app,
             frames: 0,
             quit_after: options.quit_after,
             announce: options.announce,
-        }
+            dump_debug: options.dump_debug,
+        })
     }
 
-    /// The theme switchers.
-    fn toolbar(&mut self, ui: &mut Ui) {
-        ui.horizontal_wrapped(|ui| {
-            ui.strong(TITLE);
-            ui.separator();
-            ui.label("Theme");
-            egui::ComboBox::from_id_salt("theme")
-                .selected_text(self.spec.base.clone())
-                .show_ui(ui, |ui| {
-                    let names: Vec<String> = theme::BUILT_IN_THEMES
-                        .iter()
-                        .map(|s| s.to_string())
-                        .chain(
-                            self.themes
-                                .names()
-                                .filter(|n| !theme::BUILT_IN_THEMES.contains(n))
-                                .map(String::from),
-                        )
-                        .collect();
-                    for name in names {
-                        ui.selectable_value(&mut self.spec.base, name.clone(), name);
-                    }
-                });
-            ui.label("Density");
-            egui::ComboBox::from_id_salt("density")
-                .selected_text(self.spec.density.name())
-                .show_ui(ui, |ui| {
-                    for d in Density::ALL {
-                        ui.selectable_value(&mut self.spec.density, d, d.name());
-                    }
-                });
-            ui.label("Accent");
-            egui::ComboBox::from_id_salt("accent")
-                .selected_text(self.spec.accent.as_deref().unwrap_or("theme's own"))
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut self.spec.accent, None, "theme's own");
-                    for scale in self.themes.accents(&self.spec.base) {
-                        ui.selectable_value(&mut self.spec.accent, Some(scale.clone()), scale);
-                    }
-                });
-            ui.checkbox(&mut self.spec.reduced_motion, "Reduced motion");
-        });
-    }
-
-    fn sidebar(&mut self, ui: &mut Ui) {
-        ui.add_space(Tokens::of(ui.ctx()).space.s);
-        for page in Page::ALL {
-            ui.selectable_value(&mut self.page, page, page.title());
-        }
+    /// The page shown.
+    pub fn page(&self) -> StoryId {
+        self.app
+            .handle()
+            .service(&shell::NAV)
+            .map(|n| n.page())
+            .unwrap_or(StoryId::from_static("overview"))
     }
 
     /// Draws the whole gallery in a `Ui` covering the window.
     pub fn show(&mut self, ui: &mut Ui) {
-        egui::Panel::top(Id::new("gallery.toolbar")).show(ui, |ui| self.toolbar(ui));
-        egui::Panel::left(Id::new("gallery.pages"))
-            .resizable(false)
-            .exact_size(150.0)
-            .show(ui, |ui| self.sidebar(ui));
-        egui::Panel::right(Id::new("gallery.playground"))
-            .resizable(false)
-            .exact_size(220.0)
-            .show(ui, |ui| {
-                ui.heading("Playground");
-                ui.separator();
-                self.page.playground(ui, &mut self.pages);
-            });
-        egui::CentralPanel::default().show(ui, |ui| {
-            ui.heading(self.page.title());
-            ui.weak(self.page.description());
-            ui.separator();
-            self.page.show(ui, &mut self.pages);
-        });
+        self.app.show(ui);
     }
 
-    /// Between frames: installs a newly picked theme, counts frames.
+    /// Between frames: the app's logic, the frame count, quitting.
     pub fn logic(&mut self, ctx: &egui::Context) {
-        if self.spec != self.installed {
-            theme::install_with(ctx, &self.themes, &self.spec);
-            self.installed = self.spec.clone();
-        }
+        self.app.logic(ctx);
         self.frames += 1;
         if let Some(limit) = self.quit_after {
             if self.frames >= limit {
+                if self.dump_debug {
+                    announce(&serde_json::json!({
+                        "event": "debug",
+                        "snapshot": self.app.handle().debug_snapshot(),
+                    }));
+                }
                 if self.announce {
                     announce(&serde_json::json!({ "event": "quit", "frames": self.frames }));
                 }

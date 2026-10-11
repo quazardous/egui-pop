@@ -1,27 +1,34 @@
 # egui-pop
 
-Themable, accessible, agent-drivable components for
-[egui](https://github.com/emilk/egui). Not an official egui crate.
+An application framework and component library for
+[egui](https://github.com/emilk/egui): themable, accessible, drivable by
+agents, easy to debug. Not an official egui crate.
 
-**Status: phase 1, tokens and theme.** Design tokens, three built-in
-themes, densities and accents, generated into egui's own style, with
-contrast checks and a gallery. No components yet: they come next.
+**Status: phase 2, the framework.** Design tokens and themes (phase 1);
+plugins that own what they register, commands declared once, layered
+keymaps resolved by focus, zones and blocks, overlays, a value store with
+undo, persistence, a debug bridge and a test kit. Components come next.
 
 ## What is there
 
-| Crate | What it holds |
-|---|---|
-| [`egui-pop-tokens`](crates/egui-pop-tokens) | DTCG token files: parser, resolver (aliases, `$extends`, cycle and type errors, fallbacks), themes, densities, accents, the WCAG contrast checks. No egui dependency. |
-| [`egui-pop`](crates/egui-pop) | The crate to depend on. `theme`: resolved tokens into egui's `Visuals` and `Style`, installed in a `Context`, with a typed `Tokens` set for custom widgets. Re-exports `egui`. |
-| [`egui-pop-gallery`](crates/egui-pop-gallery) | A catalogue application (not published): every page under every theme, density and accent. Its pages are the snapshot fixtures. |
+| Crate | Layer | What it holds |
+|---|---|---|
+| [`egui-pop-tokens`](crates/egui-pop-tokens) | L0 | DTCG token files: parser, resolver, themes, densities, accents, contrast checks. No egui. |
+| [`egui-pop-model`](crates/egui-pop-model) | L1 | The logic without egui: typed ids, diagnostics, `when` clauses, commands, keymap (layers, chords, focus depth, traces), menus, panels, layouts, the value store, versioned documents, plugin ordering. |
+| [`egui-pop-core`](crates/egui-pop-core) | L2 | The egui layer: theme, focus scopes, key dispatcher, overlay stack, placement, accessibility, strings, icons, persistence, fault boundaries, value binding, the debug bridge. |
+| [`egui-pop-api`](crates/egui-pop-api) | L3 | The application API (its own semver): `Plugin`, `Ctx`, `AppBuilder` over eframe or headless, zones and blocks, hooks, services, stories. |
+| [`egui-pop-test`](crates/egui-pop-test) | L4 | Test kit: harnesses, "every interactive node has a name", accessibility tree dump. |
+| [`egui-pop`](crates/egui-pop) | L5 | The crate to depend on: re-exports the layers, `egui`, and a `prelude`. |
+| [`egui-pop-gallery`](crates/egui-pop-gallery) | app | The catalogue, itself a plugin application (not published). |
 
-Built-in themes: `pop-dark` (warm greys, a gold accent), `pop-light` and
-`pop-high-contrast`; densities `comfortable` and `compact`; accents `gold`,
-`blue`, `green`, `amber` and `red`; reduced motion. See
-[docs/tokens.md](docs/tokens.md) for the tiers, the naming rules and how to
-add a theme.
+Layers only depend downwards; a test reading `cargo metadata` keeps it so
+([ADR 0001](docs/adr/0001-layering.md)). Decisions are in
+[docs/adr](docs/adr), principles in [CREDO.md](CREDO.md).
+
+## A theme
 
 ```rust
+use egui_pop::egui;
 use egui_pop::theme::{self, Density, ThemeSpec, Tokens};
 
 fn setup(ctx: &egui::Context) {
@@ -39,34 +46,116 @@ fn draw(ui: &mut egui::Ui) {
     let tokens = Tokens::of(ui.ctx());
     ui.colored_label(tokens.status.success, "Saved");
 }
+
+setup(&egui::Context::default());
+```
+
+Built-in themes: `pop-dark`, `pop-light` and `pop-high-contrast`;
+densities `comfortable` and `compact`; accents `gold`, `blue`, `green`,
+`amber` and `red`; reduced motion. See [docs/tokens.md](docs/tokens.md).
+
+## A plugin application
+
+A plugin registers through `Ctx`; whatever it registers is removed when
+it is disconnected. A command is declared once: its key binding, menu
+entry, palette entry and agent surface are derived from it.
+
+```rust
+use egui_pop::api::app::MENU_VIEW;
+use egui_pop::egui;
+use egui_pop::prelude::*;
+
+struct Counter;
+
+const COUNT: SettingId = SettingId::from_static("counter.count");
+
+impl Plugin for Counter {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("counter")
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        ctx.setting(COUNT, Descriptor::int("Count", 0, 100, 0))?;
+        ctx.command(
+            CommandSpec::new(CommandId::from_static("counter.add"), "Add one", "Counter")
+                .key("Ctrl+Up")
+                .menu(MENU_VIEW, "5_counter", 0),
+            |call| {
+                let store = call.app.store();
+                let mut store = store.lock().unwrap();
+                let set = egui_pop::model::values::Set::new(
+                    "settings/counter.count",
+                    egui_pop::model::values::Change::Step(1),
+                    call.origin.clone(),
+                );
+                store.set(set).map(|a| a.value.to_json()).map_err(|e| e.to_string())
+            },
+        )?;
+        ctx.block(
+            zones::MAIN,
+            Block::add(BlockId::from_static("counter.view"), 0, |ui, app| {
+                let store = app.store();
+                let n: i64 = egui_pop::core::binding::read(&store, "settings/counter.count").unwrap_or(0);
+                ui.heading(format!("Count: {n}"));
+                if ui.button("Add one").clicked() {
+                    app.run(CommandId::from_static("counter.add"), serde_json::Value::Null);
+                }
+            }),
+        );
+        Ok(())
+    }
+}
+
+// Headless, as in tests; `.run_native("Counter", options)` opens a window.
+let ctx = egui::Context::default();
+let mut app = App::builder().plugin(Counter).build(&ctx).unwrap();
+assert!(app.handle().diagnostics().is_empty());
+let out = app.run(&CommandId::from_static("counter.add"), serde_json::Value::Null, Origin::User);
+assert_eq!(out, Ok(serde_json::json!(1)));
+```
+
+Zones and blocks let a plugin add to, replace, extend or wrap what
+another drew ([ADR 0005](docs/adr/0005-zones-and-blocks.md)); what cannot
+apply is reported, never silently dropped
+([ADR 0003](docs/adr/0003-no-silent-no-op.md)).
+
+## Debugging
+
+Every registry describes itself to the **debug bridge**: collectors for
+commands, key resolution traces, focus, overlays, zones, plugins, the
+store and diagnostics, each with a JSON snapshot and actions flagged
+`mutates`; every call returns a feedback block. The gallery's Debug page
+shows them.
+
+```rust
+use egui_pop::egui;
+use egui_pop::prelude::*;
+
+let ctx = egui::Context::default();
+let mut app = App::builder().build(&ctx).unwrap();
+let snapshot = app.handle().debug_snapshot();
+assert!(snapshot["commands"]["commands"].is_array());
+let feedback = app.debug_call("commands", "run", &serde_json::json!({ "id": "app.palette" }));
+assert!(feedback.ok && feedback.mutates);
 ```
 
 ## The gallery
 
 ```sh
-cargo run -p egui-pop-gallery -- --theme pop-light --page builtins
+cargo run -p egui-pop-gallery -- --theme pop-light --page zones
 cargo run -p egui-pop-gallery -- --help
 ```
 
-It also builds for the web (`wasm32-unknown-unknown`, with Trunk from
-`crates/egui-pop-gallery`), and runs offscreen in a nested compositor for
-scripted runs ([tools/wbox](tools/wbox)).
-
-## Where it is going
-
-- **Components**: a slider with a soft and a hard range, parameter
-  widgets, confirmations, forms, pickers, toasts, menus built from
-  declared commands, a panel strip with indicators, a node graph view.
-- **Plain or bound**: every widget works on a `&mut` value like egui's
-  own, or bound to an observable source of values.
-- **Accessible and agent-drivable**: roles, names, values and actions on
-  every widget, keyboard patterns, contrast checked per theme.
-- **Easy to debug**: an overlay with ids, bindings and resolved tokens.
-- **Tested headless** with egui_kittest, snapshots per theme and state.
+Pages: theme overview, tokens, egui's built-ins, zones and blocks,
+settings, the debug bridge. It also builds for the web
+(`wasm32-unknown-unknown`, with Trunk from `crates/egui-pop-gallery`), and
+runs offscreen in a nested compositor for scripted runs
+([tools/wbox](tools/wbox)).
 
 ## Versions
 
-One egui-pop minor per egui minor, released within days of it.
+egui-pop has its own 0.x version; one egui-pop minor per egui minor,
+released within days of it.
 
 | egui-pop | egui | Rust |
 |---|---|---|
@@ -74,7 +163,8 @@ One egui-pop minor per egui minor, released within days of it.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md), [AGENTS.md](AGENTS.md) and
+[CHANGELOG.md](CHANGELOG.md).
 
 ## License
 

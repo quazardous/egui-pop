@@ -1,12 +1,17 @@
-//! The gallery's pages. Each has a `State`, a `show` function drawing the
-//! page and a `playground` function drawing its live options.
+//! The gallery's pages, each a plugin contributing a story. The theme
+//! pages are plain functions over a state (`show` and `playground`),
+//! reused by the tests as fixtures.
 
 use egui::{Color32, CornerRadius, Sense, Stroke, Ui, vec2};
 use egui_pop::theme::Tokens;
 
 pub mod builtins;
+pub mod debug;
 pub mod overview;
+pub mod settings;
+pub mod story;
 pub mod tokens;
+pub mod zones;
 
 /// A section title with the theme's section spacing above it.
 pub(crate) fn section(ui: &mut Ui, title: &str) {
