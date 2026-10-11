@@ -129,6 +129,7 @@ impl<'a> Ctx<'a> {
         let menus = spec.menus.clone();
         let id = spec.id.clone();
         let when = spec.when.clone();
+        let checked = spec.checked.clone();
         self.reg
             .commands
             .register(&self.owner, spec, Rc::new(handler))
@@ -150,7 +151,9 @@ impl<'a> Ctx<'a> {
                 .menus
                 .contribute(
                     &self.owner,
-                    MenuItem::command(m.menu, &m.group, m.order, id.clone()).when(&when, true),
+                    MenuItem::command(m.menu, &m.group, m.order, id.clone())
+                        .when(&when, true)
+                        .checked(&checked),
                 )
                 .map_err(CtxError::Menu)?;
         }

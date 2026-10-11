@@ -43,5 +43,6 @@ Reviewed at every egui bump: remove what upstream fixed, update the rest.
 - **Workaround**: icons are named by role (`egui_pop_core::icon::Icon`)
   and drawn from the Phosphor icon font (`phosphor` feature), installed
   in a family of its own, or painted with lines and fills; widgets never
-  put symbols in text.
+  put symbols in text. egui's `SubMenuButton` arrow (`⏵`) is replaced
+  by a painted chevron in egui-pop's menus.
 - **Remove when**: egui-pop moves to egui 0.37.

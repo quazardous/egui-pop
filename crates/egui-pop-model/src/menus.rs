@@ -18,8 +18,14 @@ use crate::when::{When, WhenContext};
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum Item {
-    /// A command, with the arguments it runs with.
-    Command { id: CommandId, args: Json },
+    /// A command, with the arguments it runs with, and a label of its
+    /// own (else the command's title).
+    Command {
+        id: CommandId,
+        args: Json,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        label: Option<String>,
+    },
     /// Another menu, shown under a label.
     Submenu { menu: MenuId, label: String },
     /// Entries the application makes when the menu opens.
@@ -50,6 +56,7 @@ impl MenuItem {
             item: Item::Command {
                 id,
                 args: Json::Null,
+                label: None,
             },
             group: group.into(),
             order,
@@ -88,6 +95,15 @@ impl MenuItem {
         self
     }
 
+    /// Its own label (a command run with arguments: `50%`), instead of
+    /// the command's title.
+    pub fn label(mut self, label: &str) -> Self {
+        if let Item::Command { label: l, .. } = &mut self.item {
+            *l = Some(label.into());
+        }
+        self
+    }
+
     pub fn when(mut self, when: &str, grey: bool) -> Self {
         self.when = when.into();
         self.grey = grey;
@@ -108,6 +124,8 @@ pub enum Shown {
         item: Item,
         enabled: bool,
         checked: bool,
+        /// It has a `checked` clause: a toggle, ticked or not.
+        checkable: bool,
     },
     Separator,
 }
@@ -144,6 +162,7 @@ pub fn show_items(items: &[MenuItem], cx: &WhenContext) -> Vec<Shown> {
             item: i.item.clone(),
             enabled: applies,
             checked: !i.checked.is_empty() && holds(&i.checked),
+            checkable: !i.checked.is_empty(),
         });
     }
     out

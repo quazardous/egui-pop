@@ -23,7 +23,7 @@ use egui_pop_model::ids::{
     CommandId, MenuId, OwnerId, PanelId, PluginId, SettingId, StoryId, ZoneId,
 };
 use egui_pop_model::keymap::{Keymap, Layer, Trace};
-use egui_pop_model::menus::{Item, MenuItem, Menus, Shown, show_items, sort_items};
+use egui_pop_model::menus::{Item, MenuItem, Menus, sort_items};
 use egui_pop_model::order::{Node, order};
 use egui_pop_model::panels::{Area, Panels};
 use egui_pop_model::registry::{OwnedList, Registry};
@@ -136,6 +136,8 @@ pub(crate) struct Derived {
     pub palette: Vec<PaletteEntry>,
     pub settings: Vec<SettingEntry>,
     pub commands: Vec<(CommandSpec, OwnerId)>,
+    /// Each command's live key bindings, as shown.
+    pub keys: BTreeMap<CommandId, Vec<String>>,
 }
 
 /// What a block or a handler asks of the application, done before the
@@ -146,6 +148,13 @@ pub enum Request {
         command: CommandId,
         args: Json,
         origin: Origin,
+    },
+    /// A command run in a given context (a menu opened there).
+    RunIn {
+        command: CommandId,
+        args: Json,
+        origin: Origin,
+        context: WhenContext,
     },
     Enable(PluginId, bool),
 }
@@ -290,7 +299,7 @@ impl AppHandle {
 
     /// Asks for a command with an origin.
     pub fn run_as(&self, command: CommandId, args: Json, origin: Origin) {
-        self.request(Request::Run {
+        self.push_request(Request::Run {
             command,
             args,
             origin,
@@ -300,10 +309,10 @@ impl AppHandle {
     /// Asks for a plugin to be connected or disconnected before the next
     /// frame.
     pub fn set_plugin_enabled(&self, plugin: PluginId, enabled: bool) {
-        self.request(Request::Enable(plugin, enabled));
+        self.push_request(Request::Enable(plugin, enabled));
     }
 
-    fn request(&self, r: Request) {
+    pub(crate) fn push_request(&self, r: Request) {
         self.0.requests.borrow_mut().push(r);
         self.egui().request_repaint();
     }
@@ -354,6 +363,28 @@ impl AppHandle {
     /// The settings form's entries after the hooks.
     pub fn settings(&self) -> Vec<SettingEntry> {
         self.0.derived.borrow().settings.clone()
+    }
+
+    /// A command's declaration.
+    pub fn command(&self, id: &CommandId) -> Option<CommandSpec> {
+        self.0
+            .derived
+            .borrow()
+            .commands
+            .iter()
+            .find(|(s, _)| s.id == *id)
+            .map(|(s, _)| s.clone())
+    }
+
+    /// A command's live key bindings, as shown (`Ctrl+K Ctrl+S`).
+    pub fn keys_for(&self, id: &CommandId) -> Vec<String> {
+        self.0
+            .derived
+            .borrow()
+            .keys
+            .get(id)
+            .cloned()
+            .unwrap_or_default()
     }
 
     /// Every command (spec and owner).
@@ -1386,6 +1417,14 @@ impl App {
                 )
             })
             .collect();
+        derived.keys = reg
+            .commands
+            .specs()
+            .map(|s| {
+                let keys = reg.keymap.keys_for(&s.id);
+                (s.id.clone(), keys.iter().map(|k| k.to_string()).collect())
+            })
+            .collect();
         // Menu items naming unknown commands are reported.
         for (menu, items) in &derived.menus {
             for it in items {
@@ -1568,6 +1607,16 @@ impl App {
                             log::warn!(target: "egui_pop", "command `{command}`: {e}");
                         }
                     }
+                    Request::RunIn {
+                        command,
+                        args,
+                        origin,
+                        context,
+                    } => {
+                        if let Err(e) = self.run_in(&command, args, origin, &context) {
+                            log::warn!(target: "egui_pop", "command `{command}`: {e}");
+                        }
+                    }
                     Request::Enable(p, true) => {
                         if let Err(e) = self.connect(&p) {
                             log::warn!(target: "egui_pop", "plugin `{p}`: {e}");
@@ -1615,7 +1664,6 @@ impl App {
 
     fn shell(&mut self, ui: &mut Ui) {
         let h = self.handle.clone();
-        let cx = h.when_context();
         let panels: Vec<(PanelId, String, Area)> = self
             .reg
             .panels
@@ -1634,7 +1682,7 @@ impl App {
         egui::Panel::top(Id::new("egui_pop.top")).show(ui, |ui| {
             focus::scope(ui, "topBar", &[], |ui| {
                 egui::MenuBar::new().ui(ui, |ui| {
-                    self.menu_bar(ui, &cx);
+                    crate::menus::bar(ui, &h, &MENU_MAIN);
                     if h.zone_has_blocks(&zones::TOP_BAR) {
                         ui.separator();
                         h.show_zone(ui, &zones::TOP_BAR);
@@ -1710,72 +1758,6 @@ impl App {
         ui.ctx().data_mut(|d| d.insert_temp(key, active));
         let (id, title, _) = &panels[active];
         self.handle.show_panel(ui, id, title);
-    }
-
-    fn menu_bar(&mut self, ui: &mut Ui, cx: &WhenContext) {
-        let items = self.handle.menu(&MENU_MAIN);
-        for shown in show_items(&items, cx) {
-            if let Shown::Item {
-                item: Item::Submenu { menu, label },
-                enabled,
-                ..
-            } = shown
-            {
-                ui.add_enabled_ui(enabled, |ui| {
-                    ui.menu_button(label, |ui| self.menu(ui, &menu, cx, 0));
-                });
-            }
-        }
-    }
-
-    fn menu(&mut self, ui: &mut Ui, menu: &MenuId, cx: &WhenContext, depth: u32) {
-        if depth > 8 {
-            return;
-        }
-        let items = self.handle.menu(menu);
-        if items.is_empty() {
-            ui.weak("(empty)");
-        }
-        for shown in show_items(&items, cx) {
-            match shown {
-                Shown::Separator => {
-                    ui.separator();
-                }
-                Shown::Item {
-                    item,
-                    enabled,
-                    checked,
-                } => match item {
-                    Item::Command { id, args } => {
-                        let applies = self.reg.commands.applies(&id, cx);
-                        let (title, known) = match self.reg.commands.spec(&id) {
-                            Some(s) => (s.title.clone(), true),
-                            None => (id.to_string(), false),
-                        };
-                        let keys = self.reg.keymap.keys_for(&id);
-                        let mut button = egui::Button::new(title).selected(checked);
-                        if let Some(k) = keys.first() {
-                            button = button.shortcut_text(k.to_string());
-                        }
-                        if ui
-                            .add_enabled(enabled && known && applies, button)
-                            .clicked()
-                        {
-                            self.handle.run(id, args);
-                            ui.close();
-                        }
-                    }
-                    Item::Submenu { menu: sub, label } => {
-                        ui.add_enabled_ui(enabled, |ui| {
-                            ui.menu_button(label, |ui| self.menu(ui, &sub, cx, depth + 1));
-                        });
-                    }
-                    Item::List { name } => {
-                        ui.weak(name);
-                    }
-                },
-            }
-        }
     }
 
     /// The command palette: the derived palette entries, filtered by what

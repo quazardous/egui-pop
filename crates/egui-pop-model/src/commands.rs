@@ -71,6 +71,9 @@ pub struct CommandSpec {
     pub description: String,
     /// Where the command applies; empty: everywhere.
     pub when: String,
+    /// When its menu entries show ticked (a toggle that is on, the theme
+    /// in use); empty: never.
+    pub checked: String,
     /// Its default key bindings (`Ctrl+K`, `Ctrl+K Ctrl+S`).
     pub keys: Vec<String>,
     /// Its menu entries.
@@ -92,6 +95,7 @@ impl CommandSpec {
             category: category.into(),
             description: String::new(),
             when: String::new(),
+            checked: String::new(),
             keys: Vec::new(),
             menus: Vec::new(),
             palette: true,
@@ -102,6 +106,12 @@ impl CommandSpec {
 
     pub fn when(mut self, when: &str) -> Self {
         self.when = when.into();
+        self
+    }
+
+    /// Ticks its menu entries when the clause holds.
+    pub fn checked(mut self, clause: &str) -> Self {
+        self.checked = clause.into();
         self
     }
 
@@ -251,6 +261,10 @@ impl<H> Commands<H> {
         let when = When::parse(&spec.when).map_err(|error| RegisterError::BadWhen {
             id: spec.id.clone(),
             error,
+        })?;
+        When::parse(&spec.checked).map_err(|error| RegisterError::BadWhen {
+            id: spec.id.clone(),
+            error: format!("checked: {error}"),
         })?;
         let id = spec.id.clone();
         self.entries

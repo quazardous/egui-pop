@@ -14,7 +14,8 @@ Options:
   --accent <scale>       accent colour scale (gold, blue, green, amber, red)
   --reduced-motion       turn animations off
   --page <name>          page shown first (overview, tokens, builtins,
-                         icons, zones, settings, debug)
+                         icons, menus, zones, settings,
+                         debug)
   --quit-after <frames>  exit by itself after this many frames
   --dump-debug           with --quit-after: print the debug bridge's
                          snapshot (event \"debug\") before quitting

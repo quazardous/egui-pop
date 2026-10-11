@@ -54,6 +54,7 @@
 pub mod app;
 pub mod ctx;
 pub mod hooks;
+pub mod menus;
 pub mod plugin;
 pub mod services;
 pub mod settings;

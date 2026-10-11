@@ -9,6 +9,17 @@ egui minor.
 
 ### Added
 
+- Menus drawn from their declarations with egui's own menus
+  (`egui_pop_api::menus`): `bar` (the shell's menu bar), `show` (a
+  menu's items in place) and `context_menu` (a declared menu on a
+  secondary click, evaluated and run in the context of the moment it
+  opened). Items show the command's title (or their own label), its
+  first live key, a painted tick when their `checked` clause holds (and
+  a check-box role for screen readers), and are greyed with the reason
+  where the command does not apply; submenus open on hover with a
+  painted chevron. `CommandSpec::checked` ticks a command's menu
+  entries; `MenuItem::label` names an item running a command with
+  arguments. A gallery page shows the menu bar and a context menu.
 - Icons by role (`egui_pop_core::icon::Icon`: check, chevrons, close,
   search, settings, folder, warning, undo... 39 in all), never by
   codepoint. With the `phosphor` feature (on by default in `egui-pop`)

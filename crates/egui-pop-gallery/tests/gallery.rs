@@ -3,7 +3,7 @@
 //! Regenerate with `UPDATE_SNAPSHOTS=1 cargo test -p egui-pop-gallery`.
 
 use egui_kittest::Harness;
-use egui_kittest::kittest::Queryable as _;
+use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use egui_pop::model::ids::StoryId;
 use egui_pop::theme::{BUILT_IN_THEMES, Density, Tokens};
 use egui_pop_gallery::{Gallery, Options, PAGES};
@@ -187,4 +187,70 @@ fn quit_after_closes_the_window() {
         commands.contains(&egui::ViewportCommand::Close),
         "{commands:?}"
     );
+}
+
+fn context_key(h: &Harness<'_, Gallery>, key: &str) -> String {
+    h.state().app.handle().context().get(key).to_string()
+}
+
+#[test]
+fn menus_show_keys_ticks_and_greyed_items_and_run_commands() {
+    use egui::accesskit::{Role, Toggled};
+    let mut h = harness(options("pop-dark", Density::Comfortable, "menus"));
+    h.run();
+    // The View menu of the bar: a toggle, ticked, with its key.
+    h.get_by_label("View").click();
+    h.run();
+    // Drawn in place on the page, and in the open menu (the last one).
+    for grid in h.query_all_by_label("Show grid") {
+        assert_eq!(grid.accesskit_node().role(), Role::CheckBox);
+        assert_eq!(grid.accesskit_node().toggled(), Some(Toggled::True));
+    }
+    assert_eq!(
+        h.state()
+            .app
+            .handle()
+            .keys_for(&egui_pop_gallery::pages::menus::CMD_GRID),
+        ["Ctrl+Shift+G"]
+    );
+    h.query_all_by_label("Show grid").last().unwrap().click();
+    h.run();
+    assert_eq!(context_key(&h, "galleryGrid"), "false");
+    // Snapping needs the grid: greyed now, in the card's menu.
+    h.get_by_label("Card with a context menu").click_secondary();
+    h.run();
+    let snaps: Vec<_> = h.query_all_by_label("Snap to grid").collect();
+    assert!(snaps.iter().all(|n| n.accesskit_node().is_disabled()));
+    assert!(
+        h.query_all_by_label("Delete the card")
+            .all(|n| n.accesskit_node().is_disabled())
+    );
+    // The key toggles it back, whatever menu is open.
+    h.key_press_modifiers(
+        egui::Modifiers::COMMAND | egui::Modifiers::SHIFT,
+        egui::Key::G,
+    );
+    h.run();
+    assert_eq!(context_key(&h, "galleryGrid"), "true");
+    // A submenu: its items run the command with their arguments.
+    h.query_all_by_label("Zoom").last().unwrap().hover();
+    h.run();
+    h.query_all_by_label("200%").last().unwrap().click();
+    h.run();
+    assert_eq!(context_key(&h, "galleryZoom"), "200");
+    egui_pop_test::assert_all_named(&h);
+}
+
+#[test]
+fn menu_snapshots() {
+    let mut results = egui_kittest::SnapshotResults::new();
+    for theme in ["pop-dark", "pop-light"] {
+        let mut h = harness(options(theme, Density::Comfortable, "menus"));
+        h.run();
+        h.get_by_label("Card with a context menu").click_secondary();
+        h.run();
+        h.query_all_by_label("Zoom").last().unwrap().hover();
+        h.run();
+        results.add(h.try_snapshot(format!("menus-{theme}")));
+    }
 }
