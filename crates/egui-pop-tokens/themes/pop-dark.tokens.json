@@ -1,0 +1,222 @@
+{
+  "$description": "egui-pop's dark theme: warm neutral greys, a warm gold accent.",
+  "gray": {
+    "$type": "color",
+    "$description": "Warm neutral scale: 0 is the deepest background, 12 the strongest text.",
+    "0": {"$value": {"colorSpace": "oklch", "components": [0.165, 0.006, 75], "hex": "#100e0b"}},
+    "1": {"$value": {"colorSpace": "oklch", "components": [0.195, 0.006, 75], "hex": "#171512"}},
+    "2": {"$value": {"colorSpace": "oklch", "components": [0.215, 0.006, 75], "hex": "#1b1916"}},
+    "3": {"$value": {"colorSpace": "oklch", "components": [0.24, 0.006, 75], "hex": "#211f1c"}},
+    "4": {"$value": {"colorSpace": "oklch", "components": [0.265, 0.006, 75], "hex": "#272522"}},
+    "5": {"$value": {"colorSpace": "oklch", "components": [0.3, 0.006, 75], "hex": "#302d2b"}},
+    "6": {"$value": {"colorSpace": "oklch", "components": [0.34, 0.006, 75], "hex": "#3a3835"}},
+    "7": {"$value": {"colorSpace": "oklch", "components": [0.4, 0.006, 75], "hex": "#4a4744"}},
+    "8": {"$value": {"colorSpace": "oklch", "components": [0.5, 0.006, 75], "hex": "#65635f"}},
+    "9": {"$value": {"colorSpace": "oklch", "components": [0.64, 0.006, 75], "hex": "#8e8c88"}},
+    "10": {"$value": {"colorSpace": "oklch", "components": [0.76, 0.006, 75], "hex": "#b3b1ad"}},
+    "11": {"$value": {"colorSpace": "oklch", "components": [0.9, 0.006, 75], "hex": "#e0ddda"}},
+    "12": {"$value": {"colorSpace": "oklch", "components": [0.97, 0.006, 75], "hex": "#f7f5f1"}}
+  },
+  "gold": {
+    "$type": "color",
+    "1": {"$value": {"colorSpace": "oklch", "components": [0.19, 0.015, 80], "hex": "#17130c"}},
+    "2": {"$value": {"colorSpace": "oklch", "components": [0.22, 0.02, 80], "hex": "#201a10"}},
+    "3": {"$value": {"colorSpace": "oklch", "components": [0.27, 0.04, 80], "hex": "#31240e"}},
+    "4": {"$value": {"colorSpace": "oklch", "components": [0.31, 0.05, 80], "hex": "#3e2d10"}},
+    "5": {"$value": {"colorSpace": "oklch", "components": [0.35, 0.06, 80], "hex": "#4b3711"}},
+    "6": {"$value": {"colorSpace": "oklch", "components": [0.4, 0.07, 80], "hex": "#5b4315"}},
+    "7": {"$value": {"colorSpace": "oklch", "components": [0.47, 0.09, 80], "hex": "#755411"}},
+    "8": {"$value": {"colorSpace": "oklch", "components": [0.76, 0.12, 80], "hex": "#d9a850"}},
+    "9": {"$value": {"colorSpace": "oklch", "components": [0.832, 0.126, 83], "hex": "#f0c060"}},
+    "10": {"$value": {"colorSpace": "oklch", "components": [0.88, 0.12, 80], "hex": "#ffcf77"}},
+    "11": {"$value": {"colorSpace": "oklch", "components": [0.82, 0.096, 80], "hex": "#e5be7b"}},
+    "12": {"$value": {"colorSpace": "oklch", "components": [0.94, 0.042, 80], "hex": "#fae9cc"}},
+    "contrast": {"$value": "{gray.0}", "$description": "Text on step 9."}
+  },
+  "amber": {
+    "$type": "color",
+    "1": {"$value": {"colorSpace": "oklch", "components": [0.19, 0.015, 62], "hex": "#19120d"}},
+    "2": {"$value": {"colorSpace": "oklch", "components": [0.22, 0.02, 62], "hex": "#211911"}},
+    "3": {"$value": {"colorSpace": "oklch", "components": [0.27, 0.04, 62], "hex": "#342211"}},
+    "4": {"$value": {"colorSpace": "oklch", "components": [0.31, 0.05, 62], "hex": "#422a14"}},
+    "5": {"$value": {"colorSpace": "oklch", "components": [0.35, 0.06, 62], "hex": "#513317"}},
+    "6": {"$value": {"colorSpace": "oklch", "components": [0.4, 0.07, 62], "hex": "#623e1c"}},
+    "7": {"$value": {"colorSpace": "oklch", "components": [0.47, 0.09, 62], "hex": "#7e4e1e"}},
+    "8": {"$value": {"colorSpace": "oklch", "components": [0.71, 0.14, 62], "hex": "#df8b36"}},
+    "9": {"$value": {"colorSpace": "oklch", "components": [0.78, 0.14, 62], "hex": "#f6a14f"}},
+    "10": {"$value": {"colorSpace": "oklch", "components": [0.83, 0.14, 62], "hex": "#ffb160"}},
+    "11": {"$value": {"colorSpace": "oklch", "components": [0.82, 0.112, 62], "hex": "#f8b376"}},
+    "12": {"$value": {"colorSpace": "oklch", "components": [0.94, 0.049, 62], "hex": "#ffe5ca"}},
+    "contrast": {"$value": "{gray.0}", "$description": "Text on step 9."}
+  },
+  "red": {
+    "$type": "color",
+    "1": {"$value": {"colorSpace": "oklch", "components": [0.19, 0.015, 30], "hex": "#1a1110"}},
+    "2": {"$value": {"colorSpace": "oklch", "components": [0.22, 0.02, 30], "hex": "#231715"}},
+    "3": {"$value": {"colorSpace": "oklch", "components": [0.27, 0.04, 30], "hex": "#381f1b"}},
+    "4": {"$value": {"colorSpace": "oklch", "components": [0.31, 0.05, 30], "hex": "#462621"}},
+    "5": {"$value": {"colorSpace": "oklch", "components": [0.35, 0.06, 30], "hex": "#562e27"}},
+    "6": {"$value": {"colorSpace": "oklch", "components": [0.4, 0.07, 30], "hex": "#683831"}},
+    "7": {"$value": {"colorSpace": "oklch", "components": [0.47, 0.09, 30], "hex": "#86463c"}},
+    "8": {"$value": {"colorSpace": "oklch", "components": [0.61, 0.15, 30], "hex": "#cd5a4a"}},
+    "9": {"$value": {"colorSpace": "oklch", "components": [0.68, 0.15, 30], "hex": "#e6705f"}},
+    "10": {"$value": {"colorSpace": "oklch", "components": [0.73, 0.15, 30], "hex": "#f7806e"}},
+    "11": {"$value": {"colorSpace": "oklch", "components": [0.82, 0.12, 30], "hex": "#ffa696"}},
+    "12": {"$value": {"colorSpace": "oklch", "components": [0.94, 0.052, 30], "hex": "#ffdfd7"}},
+    "contrast": {"$value": "{gray.0}", "$description": "Text on step 9."}
+  },
+  "green": {
+    "$type": "color",
+    "1": {"$value": {"colorSpace": "oklch", "components": [0.19, 0.015, 145], "hex": "#101610"}},
+    "2": {"$value": {"colorSpace": "oklch", "components": [0.22, 0.02, 145], "hex": "#151d15"}},
+    "3": {"$value": {"colorSpace": "oklch", "components": [0.27, 0.04, 145], "hex": "#1a2c1a"}},
+    "4": {"$value": {"colorSpace": "oklch", "components": [0.31, 0.05, 145], "hex": "#1f3720"}},
+    "5": {"$value": {"colorSpace": "oklch", "components": [0.35, 0.06, 145], "hex": "#254326"}},
+    "6": {"$value": {"colorSpace": "oklch", "components": [0.4, 0.07, 145], "hex": "#2e522f"}},
+    "7": {"$value": {"colorSpace": "oklch", "components": [0.47, 0.09, 145], "hex": "#37683a"}},
+    "8": {"$value": {"colorSpace": "oklch", "components": [0.67, 0.12, 145], "hex": "#63a966"}},
+    "9": {"$value": {"colorSpace": "oklch", "components": [0.74, 0.12, 145], "hex": "#78bf7b"}},
+    "10": {"$value": {"colorSpace": "oklch", "components": [0.79, 0.12, 145], "hex": "#88cf8a"}},
+    "11": {"$value": {"colorSpace": "oklch", "components": [0.82, 0.096, 145], "hex": "#9dd59e"}},
+    "12": {"$value": {"colorSpace": "oklch", "components": [0.94, 0.042, 145], "hex": "#dbf3da"}},
+    "contrast": {"$value": "{gray.0}", "$description": "Text on step 9."}
+  },
+  "blue": {
+    "$type": "color",
+    "1": {"$value": {"colorSpace": "oklch", "components": [0.19, 0.015, 255], "hex": "#0f141b"}},
+    "2": {"$value": {"colorSpace": "oklch", "components": [0.22, 0.02, 255], "hex": "#141b24"}},
+    "3": {"$value": {"colorSpace": "oklch", "components": [0.27, 0.04, 255], "hex": "#19273a"}},
+    "4": {"$value": {"colorSpace": "oklch", "components": [0.31, 0.05, 255], "hex": "#1e3149"}},
+    "5": {"$value": {"colorSpace": "oklch", "components": [0.35, 0.06, 255], "hex": "#243c59"}},
+    "6": {"$value": {"colorSpace": "oklch", "components": [0.4, 0.07, 255], "hex": "#2d496d"}},
+    "7": {"$value": {"colorSpace": "oklch", "components": [0.47, 0.09, 255], "hex": "#365c8c"}},
+    "8": {"$value": {"colorSpace": "oklch", "components": [0.65, 0.12, 255], "hex": "#5a91d7"}},
+    "9": {"$value": {"colorSpace": "oklch", "components": [0.72, 0.12, 255], "hex": "#6fa7ee"}},
+    "10": {"$value": {"colorSpace": "oklch", "components": [0.77, 0.12, 255], "hex": "#7fb7ff"}},
+    "11": {"$value": {"colorSpace": "oklch", "components": [0.82, 0.096, 255], "hex": "#9ac7ff"}},
+    "12": {"$value": {"colorSpace": "oklch", "components": [0.94, 0.042, 255], "hex": "#d9edff"}},
+    "contrast": {"$value": "{gray.0}", "$description": "Text on step 9."}
+  },
+  "surface": {
+    "$type": "color",
+    "canvas": {"$value": "{gray.1}", "$description": "Behind documents, images and graphs."},
+    "panel": {"$value": "{gray.2}", "$description": "Panels and side bars: the default background."},
+    "raised": {"$value": "{gray.4}", "$description": "Controls at rest: buttons, combo boxes."},
+    "hover": {"$value": "{gray.5}", "$description": "A control under the pointer."},
+    "active": {"$value": "{gray.6}", "$description": "A control being pressed or dragged."},
+    "overlay": {"$value": "{gray.3}", "$description": "Windows, menus, popups and dialogs."},
+    "sunken": {"$value": "{gray.0}", "$description": "Text fields and wells: the deepest background."}
+  },
+  "text": {
+    "$type": "color",
+    "default": {"$value": "{gray.11}", "$description": "Ordinary text."},
+    "muted": {"$value": "{gray.10}", "$description": "Secondary text, hints, placeholders."},
+    "strong": {"$value": "{gray.12}", "$description": "Titles, emphasis, text under the pointer."},
+    "on-accent": {"$value": "{gold.contrast}", "$description": "Text on an accent fill."}
+  },
+  "border": {
+    "$type": "color",
+    "default": {"$value": "{gray.6}", "$description": "Outlines and separators (decorative)."},
+    "strong": {"$value": "{gray.9}", "$description": "Outlines that must be seen: 3:1 against panels."}
+  },
+  "accent": {
+    "$type": "color",
+    "default": {"$value": "{gold.9}", "$description": "Primary actions, checked and selected states, links."},
+    "hover": {"$value": "{gold.10}", "$description": "The accent under the pointer."},
+    "active": {"$value": "{gold.8}", "$description": "The accent being pressed."},
+    "subtle": {"$value": "{gold.3}", "$description": "A quiet accent background."}
+  },
+  "danger": {"$type": "color", "$value": "{red.11}", "$description": "Errors and destructive actions (readable as text)."},
+  "warning": {"$type": "color", "$value": "{amber.11}", "$description": "Warnings (readable as text)."},
+  "success": {"$type": "color", "$value": "{green.11}", "$description": "Success (readable as text)."},
+  "info": {"$type": "color", "$value": "{blue.11}", "$description": "Information (readable as text)."},
+  "focus": {
+    "$type": "color",
+    "ring": {"$value": "{accent.default}", "$description": "The keyboard focus outline."}
+  },
+  "selection": {"$type": "color", "$value": "{gold.5}", "$description": "Selected text and items, under ordinary text."},
+  "radius": {
+    "$type": "dimension",
+    "widget": {"$value": {"value": 4, "unit": "px"}, "$description": "Corner radius of controls."},
+    "window": {"$value": {"value": 8, "unit": "px"}, "$description": "Corner radius of windows, menus and dialogs."}
+  },
+  "space": {
+    "$type": "dimension",
+    "xs": {"$value": {"value": 2, "unit": "px"}, "$description": "Hairline gaps: between an icon and its label."},
+    "s": {"$value": {"value": 4, "unit": "px"}, "$description": "Inside controls; vertical gaps between items."},
+    "m": {"$value": {"value": 8, "unit": "px"}, "$description": "Between items in a row."},
+    "l": {"$value": {"value": 12, "unit": "px"}, "$description": "Padding of windows and dialogs."},
+    "xl": {"$value": {"value": 16, "unit": "px"}, "$description": "Between sections."}
+  },
+  "size": {
+    "$type": "dimension",
+    "control": {
+      "height": {"$value": {"value": 22, "unit": "px"}, "$description": "Height of buttons, fields and other one-line controls."}
+    },
+    "icon": {
+      "inline": {"$value": {"value": 14, "unit": "px"}},
+      "toolbar": {"$value": {"value": 18, "unit": "px"}},
+      "panel": {"$value": {"value": 24, "unit": "px"}}
+    },
+    "dialog": {
+      "width": {"$value": {"value": 440, "unit": "px"}}
+    },
+    "toast": {
+      "width": {"$value": {"value": 340, "unit": "px"}}
+    }
+  },
+  "font": {
+    "size": {
+      "$type": "dimension",
+      "small": {"$value": {"value": 10, "unit": "px"}, "$description": "Captions and small print."},
+      "body": {"$value": {"value": 13, "unit": "px"}, "$description": "Body text and buttons."},
+      "heading": {"$value": {"value": 18, "unit": "px"}, "$description": "Headings."},
+      "mono": {"$value": {"value": 12.5, "unit": "px"}, "$description": "Numbers and code."}
+    },
+    "family": {
+      "$type": "fontFamily",
+      "ui": {"$value": ["Ubuntu", "sans-serif"], "$description": "Interface text (informative until fonts are loaded from themes)."},
+      "mono": {"$value": ["Hack", "monospace"], "$description": "Numbers and code (informative until fonts are loaded from themes)."}
+    }
+  },
+  "motion": {
+    "duration": {"$type": "duration", "$value": {"value": 120, "unit": "ms"}, "$description": "Length of animations; 0 turns them off (reduced motion)."}
+  },
+  "button": {
+    "$description": "Push buttons; egui's own widgets are drawn with these.",
+    "background": {"$type": "color", "$value": "{surface.raised}"},
+    "background-hover": {"$type": "color", "$value": "{surface.hover}"},
+    "background-active": {"$type": "color", "$value": "{surface.active}"},
+    "text": {"$type": "color", "$value": "{text.default}"},
+    "border": {"$type": "color", "$value": "{border.default}"},
+    "radius": {"$type": "dimension", "$value": "{radius.widget}"}
+  },
+  "slider": {
+    "$type": "color",
+    "track": {"$value": "{border.default}"},
+    "fill": {"$value": "{accent.default}"},
+    "thumb": {"$value": "{text.strong}"}
+  },
+  "menu": {
+    "item": {
+      "$type": "color",
+      "background-hover": {"$value": "{surface.hover}"},
+      "text": {"$value": "{text.default}"},
+      "text-muted": {"$value": "{text.muted}"}
+    }
+  },
+  "dialog": {
+    "background": {"$type": "color", "$value": "{surface.overlay}"},
+    "border": {"$type": "color", "$value": "{border.default}"},
+    "radius": {"$type": "dimension", "$value": "{radius.window}"},
+    "padding": {"$type": "dimension", "$value": "{space.l}"},
+    "width": {"$type": "dimension", "$value": "{size.dialog.width}"}
+  },
+  "toast": {
+    "background": {"$type": "color", "$value": "{surface.overlay}"},
+    "border": {"$type": "color", "$value": "{border.strong}"},
+    "text": {"$type": "color", "$value": "{text.default}"},
+    "padding": {"$type": "dimension", "$value": "{space.m}"},
+    "width": {"$type": "dimension", "$value": "{size.toast.width}"}
+  }
+}

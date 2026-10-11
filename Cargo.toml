@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/egui-pop"]
+members = ["crates/egui-pop-tokens", "crates/egui-pop"]
 
 [workspace.package]
 edition = "2024"
@@ -10,6 +10,8 @@ repository = "https://github.com/quazardous/egui-pop"
 authors = ["The egui-pop contributors"]
 
 [workspace.dependencies]
+egui-pop-tokens = { version = "0.0.1", path = "crates/egui-pop-tokens" }
+serde_json = "1"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
