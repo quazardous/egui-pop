@@ -165,7 +165,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     egui::Grid::new("card.blocks")
         .num_columns(4)
         .striped(true)
-        .spacing([t.space.l, t.space.xs])
+        .spacing([t.space.m, t.space.xs])
         .show(ui, |ui| {
             for h in ["Block", "Owner", "Weight", "Applied"] {
                 ui.strong(h);

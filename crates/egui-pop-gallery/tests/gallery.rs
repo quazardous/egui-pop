@@ -157,7 +157,10 @@ fn the_debug_page_shows_key_traces_and_a_caught_panic() {
     h.key_press_modifiers(egui::Modifiers::ALT, egui::Key::ArrowDown);
     h.run();
     assert_eq!(h.state().page(), StoryId::from_static("debug"));
-    assert!(h.query_by_label_contains("Alt+Down -> Run").is_some());
+    assert!(
+        h.query_by_label_contains("Alt+Down: runs gallery.page.next")
+            .is_some()
+    );
     h.get_by_label("Make the box below panic").click();
     h.run();
     assert!(

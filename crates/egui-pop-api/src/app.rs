@@ -1833,7 +1833,7 @@ impl App {
                         let label = format!("{}: {}", e.category, e.title);
                         let mut b = egui::Button::new(label)
                             .selected(i == selected)
-                            .frame_when_inactive(false);
+                            .frame_when_inactive(i == selected);
                         if let Some(k) = e.keys.first() {
                             b = b.shortcut_text(k.clone());
                         }

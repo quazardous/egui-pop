@@ -7,6 +7,7 @@
 #   GALLERY_ACCENT      gold | blue | green | amber | red (default: the theme's)
 #   GALLERY_PAGE        overview | tokens | builtins | zones | settings | debug
 #   GALLERY_QUIT_AFTER  frames before the gallery exits by itself (default: never)
+#   GALLERY_DUMP_DEBUG  1: with GALLERY_QUIT_AFTER, print the debug snapshot before quitting
 #   GALLERY_OUT         where its stdout (the JSON start and quit lines) and
 #                       stderr go (default: ./out)
 #
@@ -21,4 +22,5 @@ args=(--theme "${GALLERY_THEME:-pop-dark}"
       --page "${GALLERY_PAGE:-overview}")
 [ -n "${GALLERY_ACCENT:-}" ] && args+=(--accent "$GALLERY_ACCENT")
 [ -n "${GALLERY_QUIT_AFTER:-}" ] && args+=(--quit-after "$GALLERY_QUIT_AFTER")
+[ "${GALLERY_DUMP_DEBUG:-}" = 1 ] && args+=(--dump-debug)
 exec "$bin" "${args[@]}" > "$out/gallery.jsonl" 2> "$out/gallery.log"

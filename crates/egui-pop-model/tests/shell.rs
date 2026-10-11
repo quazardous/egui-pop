@@ -294,7 +294,12 @@ fn the_binding_nearest_the_focus_wins_and_the_trace_says_why() {
             ("field", &Verdict::Won),
         ]
     );
-    assert!(trace.to_string().contains("field.clear"));
+    let text = trace.to_string();
+    assert!(text.starts_with("Escape: runs field.clear\n"), "{text}");
+    assert!(
+        text.contains("lost to field.clear (nearer the focus)"),
+        "{text}"
+    );
     let json = serde_json::to_value(&trace).unwrap();
     assert_eq!(
         json["resolution"],

@@ -306,7 +306,7 @@ impl ZoneTable {
                         out[p].id = id.clone();
                         out[p].owner = c[i].owner.clone();
                         out[p].draw = i;
-                        out[p].notes.push(format!("replaced `{target}` of `{old}`"));
+                        out[p].notes.push(format!("replaced `{target}` ({old})"));
                     }
                     None if taken(&out, id) => dup(d, i, id),
                     None => {
@@ -385,7 +385,7 @@ impl ZoneTable {
                 match out.iter_mut().find(|r| r.id == *target) {
                     Some(r) => {
                         r.wraps.push(i);
-                        r.notes.push(format!("wrapped by `{id}` of `{}`", c[i].owner));
+                        r.notes.push(format!("wrapped by `{id}` ({})", c[i].owner));
                     }
                     None => d.warn(
                         "dangling-wrap",

@@ -275,20 +275,56 @@ pub struct Trace {
     pub candidates: Vec<Candidate>,
 }
 
-impl fmt::Display for Trace {
+impl fmt::Display for Action {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "{} -> {:?}", self.keys, self.resolution)?;
+        match self {
+            Action::Run(c) => write!(f, "{c}"),
+            Action::Remove(c) => write!(f, "-{c}"),
+            Action::Unbind => write!(f, "(unbind)"),
+        }
+    }
+}
+
+impl fmt::Display for Resolution {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Resolution::Run(c) => write!(f, "runs {c}"),
+            Resolution::Pending => write!(f, "waits for the next chord"),
+            Resolution::Nothing => write!(f, "does nothing"),
+        }
+    }
+}
+
+impl fmt::Display for Verdict {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Verdict::Won => write!(f, "won"),
+            Verdict::Lost { to, because } => write!(f, "lost to {to} ({because})"),
+            Verdict::WhenFalse => write!(f, "its clause is false here"),
+            Verdict::RemovedBy { owner, layer } => {
+                write!(f, "removed by {owner} ({layer:?} layer)")
+            }
+            Verdict::UnboundBy { owner, layer } => {
+                write!(f, "unbound by {owner} ({layer:?} layer)")
+            }
+            Verdict::Prefix => write!(f, "longer: these keys start it"),
+        }
+    }
+}
+
+impl fmt::Display for Trace {
+    /// `Alt+Down: runs x`, then one line per binding considered.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}: {}", self.keys, self.resolution)?;
         for c in &self.candidates {
-            writeln!(
+            write!(f, "\n  {} {}", c.binding.keys, c.binding.action)?;
+            if !c.binding.when.is_empty() {
+                write!(f, " when {}", c.binding.when)?;
+            }
+            write!(
                 f,
-                "  {:?} {:?} when `{}` (layer {:?}, depth {}, by {}): {:?}",
-                c.binding.keys.to_string(),
-                c.binding.action,
-                c.binding.when,
-                c.binding.layer,
-                c.depth,
-                c.binding.owner,
-                c.verdict
+                " ({:?}, depth {}, by {}): {}",
+                c.binding.layer, c.depth, c.binding.owner, c.verdict
             )?;
         }
         Ok(())

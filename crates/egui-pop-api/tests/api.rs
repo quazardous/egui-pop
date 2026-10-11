@@ -419,7 +419,7 @@ fn blocks_are_added_replaced_extended_and_wrapped_in_order() {
         .into_iter()
         .find(|z| z.id == zones::MAIN)
         .unwrap();
-    assert_eq!(main.blocks[2].notes, ["replaced `b.two` of `owner`"]);
+    assert_eq!(main.blocks[2].notes, ["replaced `b.two` (owner)"]);
     // The other plugin goes: the zone is as its owner made it.
     h.state_mut().disconnect(&PluginId::from_static("other"));
     h.run();
