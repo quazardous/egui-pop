@@ -498,6 +498,7 @@ pub fn install_tokens(ctx: &Context, tokens: Tokens) -> Arc<Tokens> {
     });
     ctx.all_styles_mut(|s| *s = style(&tokens, s));
     ctx.data_mut(|d| d.insert_temp(tokens_id(), tokens.clone()));
+    crate::icon::install(ctx);
     tokens
 }
 

@@ -17,6 +17,8 @@ workspace = true
 default = ["eframe"]
 ## Run applications in a native window or a browser through eframe.
 eframe = ["dep:eframe"]
+## Icons from the Phosphor icon font (see `egui-pop-core`).
+phosphor = ["egui-pop-core/phosphor"]
 
 [dependencies]
 egui.workspace = true

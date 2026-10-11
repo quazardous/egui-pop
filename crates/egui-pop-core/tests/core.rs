@@ -405,15 +405,10 @@ fn announcements_reach_a_live_region() {
 
 #[test]
 fn icons_are_named_and_sized_by_role() {
-    use egui_pop_core::icon::{Icon, Role, Shape};
+    use egui_pop_core::icon::{Icon, Size};
     let mut h = Harness::new_ui(|ui| {
-        ui.add(
-            Icon::Shape(Shape::Close)
-                .role(Role::Toolbar)
-                .label("Close")
-                .sense_click(),
-        );
-        ui.add(Icon::Shape(Shape::Check).label("Done"));
+        ui.add(Icon::Close.size(Size::Toolbar).label("Close").sense_click());
+        ui.add(Icon::Check.label("Done"));
     });
     h.run();
     let t = egui_pop_core::theme::Tokens::of(&h.ctx);

@@ -72,7 +72,7 @@ fn every_interactive_node_of_every_page_has_a_name() {
 fn snapshots_per_theme() {
     let mut results = egui_kittest::SnapshotResults::new();
     for theme in BUILT_IN_THEMES {
-        for page in ["overview", "builtins"] {
+        for page in ["overview", "builtins", "icons"] {
             let mut h = harness(options(theme, Density::Comfortable, page));
             h.run();
             results.add(h.try_snapshot(format!("{page}-{theme}")));
@@ -81,6 +81,9 @@ fn snapshots_per_theme() {
     let mut h = harness(options("pop-dark", Density::Compact, "builtins"));
     h.run();
     results.add(h.try_snapshot("builtins-pop-dark-compact"));
+    let mut h = harness(options("pop-light", Density::Compact, "icons"));
+    h.run();
+    results.add(h.try_snapshot("icons-pop-light-compact"));
     for page in ["tokens", "zones", "settings", "debug"] {
         let mut h = harness(options("pop-dark", Density::Comfortable, page));
         h.run();

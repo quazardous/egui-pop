@@ -15,9 +15,12 @@ authors.workspace = true
 workspace = true
 
 [features]
-default = ["eframe"]
+default = ["eframe", "phosphor"]
 ## Run applications through eframe (`App::run_native`, `eframe::App`).
 eframe = ["egui-pop-api/eframe"]
+## Icons drawn from the Phosphor icon font (MIT, about 480 KB); without
+## it, icons are painted with lines and fills.
+phosphor = ["egui-pop-api/phosphor"]
 
 [dependencies]
 egui.workspace = true

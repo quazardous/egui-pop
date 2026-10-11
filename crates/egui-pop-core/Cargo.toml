@@ -13,8 +13,14 @@ authors.workspace = true
 [lints]
 workspace = true
 
+[features]
+## Draw icons from the Phosphor icon font (egui-phosphor), installed with
+## the theme; without it, icons are painted.
+phosphor = ["dep:egui-phosphor"]
+
 [dependencies]
 egui.workspace = true
+egui-phosphor = { workspace = true, optional = true }
 egui-pop-tokens.workspace = true
 egui-pop-model.workspace = true
 log.workspace = true

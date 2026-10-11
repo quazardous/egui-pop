@@ -29,6 +29,8 @@ egui-pop-api = { version = "0.0.1", path = "crates/egui-pop-api", default-featur
 egui-pop-test = { version = "0.0.1", path = "crates/egui-pop-test" }
 egui = { version = "0.36", default-features = false }
 egui_kittest = "0.36"
+# MIT OR Apache-2.0 (the Phosphor icons themselves are MIT).
+egui-phosphor = { version = "0.14", default-features = false, features = ["regular"] }
 eframe = { version = "0.36", default-features = false }
 egui-pop = { version = "0.0.1", path = "crates/egui-pop" }
 

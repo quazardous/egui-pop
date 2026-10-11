@@ -9,6 +9,13 @@ egui minor.
 
 ### Added
 
+- Icons by role (`egui_pop_core::icon::Icon`: check, chevrons, close,
+  search, settings, folder, warning, undo... 39 in all), never by
+  codepoint. With the `phosphor` feature (on by default in `egui-pop`)
+  they are drawn from the Phosphor icon font through `egui-phosphor`,
+  installed with the theme in a font family of its own; without it they
+  are painted with lines and fills. A gallery page shows them all, in a
+  size and a tone, next to their painted fallbacks.
 - `egui-pop-model` (no egui): typed ids serialized as strings and checked
   at compile time for literals; diagnostics that log and collect what
   registration ignored or changed; owner-tagged registries removable by
@@ -99,6 +106,9 @@ egui minor.
 
 ### Changed
 
+- `egui_pop_core::icon`: the former `Icon` (a glyph, an image or a
+  painted shape) is now `Source`, its size `Role` is now `Size`, and the
+  `Shape` enum is folded into the new `Icon` roles.
 - The gallery's combo boxes, text fields and sliders are labelled for
   screen readers.
 - `theme` moved to `egui-pop-core`; `egui-pop` is now the facade and
