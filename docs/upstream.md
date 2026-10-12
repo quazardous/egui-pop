@@ -62,3 +62,20 @@ Reviewed at every egui bump: remove what upstream fixed, update the rest.
   kept under 8192 points per side, past which the surface cannot be
   configured (<https://github.com/emilk/egui/issues/8361>).
 - **Remove when**: eframe tells the screens before the window is placed.
+
+## winit: no hit-test hook for a custom title bar on Windows
+
+- **Compensated**: Windows 11 shows its Snap Layouts flyout only when the
+  maximize button's area answers `HTMAXBUTTON` to `WM_NCHITTEST`; winit
+  has no hook to answer it, so a title bar drawn by the application loses
+  Snap Layouts.
+- **Upstream**: <https://github.com/rust-windowing/winit/issues/3884>
+  (open since 2024), <https://github.com/rust-windowing/winit/issues/2413>
+  (a `HitTest` event) and its pull request
+  <https://github.com/rust-windowing/winit/pull/3207>, not updated since
+  2024. Maintainers point to subclassing the window outside winit; a 2026
+  comment on the issue notes that subclassing does not help when a child
+  window covers the client area.
+- **Workaround**: applications that draw their own frame keep the
+  system's title bar on Windows; Helios does so until a hook exists.
+- **Remove when**: winit can answer a hit test for a point of the window.
