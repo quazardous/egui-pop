@@ -12,7 +12,11 @@
 //! - [`a11y_tree`]: the accessibility tree as indented text, for
 //!   assertions and for reading in a failure;
 //! - [`double_click`]: a double click that registers (see
-//!   `docs/upstream.md`).
+//!   `docs/upstream.md`);
+//! - [`SCALES`], [`app_at`], [`set_native_scale`], [`at_scales`],
+//!   [`rects_of`]: tests at several scales (1, 1.25, 1.5, 2), a window
+//!   moved to a screen of another scale, rectangles in points to compare
+//!   across scales.
 //!
 //! ```
 //! use egui_pop_test::{assert_all_named, themed};
@@ -42,6 +46,54 @@ pub fn app(builder: AppBuilder, size: Vec2) -> Harness<'static, App> {
     Harness::builder()
         .with_size(size)
         .build_ui_state(|ui, app: &mut App| app.show(ui), app)
+}
+
+/// The scales tests run at: whole and fractional (1.25 and 1.5 are where
+/// lines blur and rounding shows).
+pub const SCALES: [f32; 4] = [1.0, 1.25, 1.5, 2.0];
+
+/// As [`app`], on a screen of this native scale (physical pixels per
+/// point).
+pub fn app_at(builder: AppBuilder, size: Vec2, scale: f32) -> Harness<'static, App> {
+    let app = builder
+        .build(&egui::Context::default())
+        .unwrap_or_else(|e| panic!("the application does not build: {e}"));
+    Harness::builder()
+        .with_size(size)
+        .with_pixels_per_point(scale)
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app)
+}
+
+/// Moves the harness's window to a screen of another native scale, as
+/// winit's scale change does (the interface zoom is left alone, unlike
+/// `Harness::set_pixels_per_point`, which changes the zoom). Takes effect
+/// at the next step.
+// upstream: kittest has no way to change the native scale mid-run (see
+// docs/upstream.md).
+pub fn set_native_scale<S>(h: &mut Harness<'_, S>, scale: f32) {
+    h.input_mut()
+        .viewports
+        .entry(egui::ViewportId::ROOT)
+        .or_default()
+        .native_pixels_per_point = Some(scale);
+}
+
+/// Runs `f` at each of [`SCALES`], saying which one failed.
+#[track_caller]
+pub fn at_scales(mut f: impl FnMut(f32)) {
+    for s in SCALES {
+        let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(s)));
+        if let Err(e) = r {
+            eprintln!("failed at scale {s}");
+            std::panic::resume_unwind(e);
+        }
+    }
+}
+
+/// The rectangle, in points, of each node with this label (scale
+/// independent checks compare them across scales).
+pub fn rects_of<S>(h: &Harness<'_, S>, label: &str) -> Vec<egui::Rect> {
+    h.query_all_by_label(label).map(|n| n.rect()).collect()
 }
 
 /// A harness drawing a plugin in an application with the default

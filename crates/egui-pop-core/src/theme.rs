@@ -514,6 +514,29 @@ pub fn style(t: &Tokens, base: &Style) -> Style {
     style
 }
 
+/// Snaps a style's stroke widths to whole physical pixels at `ppp`
+/// (`scale::snap`), so 1 point borders stay one sharp pixel at 1.25 or
+/// 1.5. `install_tokens` does it for the scale of the window it runs in;
+/// egui-pop's application installs the theme again when that scale
+/// changes.
+pub fn snap_strokes(style: &mut Style, ppp: f32) {
+    let snap = |w: f32| crate::scale::snap(w, ppp);
+    let v = &mut style.visuals;
+    v.window_stroke.width = snap(v.window_stroke.width);
+    v.selection.stroke.width = snap(v.selection.stroke.width);
+    v.text_cursor.stroke.width = snap(v.text_cursor.stroke.width);
+    for w in [
+        &mut v.widgets.noninteractive,
+        &mut v.widgets.inactive,
+        &mut v.widgets.hovered,
+        &mut v.widgets.active,
+        &mut v.widgets.open,
+    ] {
+        w.bg_stroke.width = snap(w.bg_stroke.width);
+        w.fg_stroke.width = snap(w.fg_stroke.width);
+    }
+}
+
 /// Installs typed tokens into a context: egui's dark and light styles both
 /// become the theme's (so the system's light or dark preference does not
 /// swap it out), and [`Tokens::of`] returns them. Call it between frames
@@ -525,7 +548,11 @@ pub fn install_tokens(ctx: &Context, tokens: Tokens) -> Arc<Tokens> {
     } else {
         ThemePreference::Light
     });
-    ctx.all_styles_mut(|s| *s = style(&tokens, s));
+    let ppp = ctx.pixels_per_point();
+    ctx.all_styles_mut(|s| {
+        *s = style(&tokens, s);
+        snap_strokes(s, ppp);
+    });
     ctx.data_mut(|d| d.insert_temp(tokens_id(), tokens.clone()));
     crate::icon::install(ctx);
     tokens

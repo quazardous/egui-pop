@@ -547,13 +547,6 @@ impl<'a> TitleBar<'a> {
     }
 }
 
-/// A stroke `w` points wide that stays crisp: a whole number of physical
-/// pixels, at least one.
-fn crisp(ctx: &Context, w: f32) -> f32 {
-    let ppp = ctx.pixels_per_point();
-    (w * ppp).floor().max(1.0) / ppp
-}
-
 /// Draws a window button; says whether it was clicked.
 fn window_button(ui: &mut Ui, rect: Rect, which: Button, maximized: bool) -> bool {
     let name = match which {
@@ -581,7 +574,7 @@ fn window_button(ui: &mut Ui, rect: Rect, which: Button, maximized: bool) -> boo
         painter.round_to_pixel_center(c.y),
     );
     let s = 5.0;
-    let stroke = Stroke::new(crisp(ui.ctx(), 1.0), ink);
+    let stroke = Stroke::new(crate::scale::stroke(ui.ctx(), 1.0), ink);
     match which {
         Button::Minimize => {
             painter.line_segment([pos2(c.x - s, c.y), pos2(c.x + s, c.y)], stroke);

@@ -466,3 +466,23 @@ fn the_crate_ships_the_repositorys_notice() {
         "crates/egui-pop-tokens/NOTICE is a copy of NOTICE"
     );
 }
+
+#[test]
+fn control_and_icon_sizes_are_multiples_of_four_points() {
+    // Whole pixels at every quarter scale: 4 x 1.25 = 5, 4 x 1.75 = 7.
+    let themes = Themes::default();
+    for spec in all_specs() {
+        let r = themes.resolve(&spec);
+        for path in [
+            "size.control.height",
+            "size.icon.inline",
+            "size.icon.toolbar",
+            "size.icon.panel",
+            "size.titlebar.height",
+            "size.titlebar.button",
+        ] {
+            let v = r.dimension(path).expect(path);
+            assert_eq!(v % 4.0, 0.0, "{} {path}: {v}", spec.label());
+        }
+    }
+}

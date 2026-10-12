@@ -9,6 +9,17 @@ egui minor.
 
 ### Added
 
+- Scale per window (`egui_pop_core::scale`): `Scale::of` (native scale,
+  interface zoom, pixels per point of the window being drawn), `snap`,
+  `stroke` and `hairline` for lines that stay whole pixels at 1.25 or
+  1.5, and `changed`, the window's scale change once per pass. The theme
+  snaps its stroke widths for the scale and is installed again when it
+  changes; `scale.changed` is published on the journal. The interface
+  zoom (`egui_pop_api::zoom`): a setting in fixed steps (67 % to 200 %),
+  commands bound to `Ctrl+Alt+=`, `Ctrl+Alt+-` and `Ctrl+Alt+0`, the
+  `interface.zoom` step; egui's own zoom keys are turned off. Test kit:
+  `SCALES`, `app_at`, `set_native_scale`, `at_scales`, `rects_of`.
+  Gallery page: Scale and zoom, and an overview snapshot at 2x.
 - The window's own frame: `egui_pop_core::frame` draws a title bar
   (caption to drag, double click to maximize, minimize, maximize and
   close buttons, room for leading and trailing items) and resize edges
@@ -288,6 +299,9 @@ egui minor.
 
 ### Changed
 
+- Control heights and icon sizes are multiples of 4 points, so they
+  are whole pixels at every quarter scale: controls 24 (compact 20),
+  icons 16, 20 and 24 (compact 12, 16 and 20); a token test keeps it.
 - A broken token is reported once by the resolver, not again for each
   token aliasing it.
 - `zones::SHELL` holds the new `TITLE` zone, drawn above the menu bar

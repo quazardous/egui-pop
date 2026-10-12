@@ -151,11 +151,11 @@
   "size": {
     "$type": "dimension",
     "control": {
-      "height": {"$value": {"value": 22, "unit": "px"}, "$description": "Height of buttons, fields and other one-line controls."}
+      "height": {"$value": {"value": 24, "unit": "px"}, "$description": "Height of buttons, fields and other one-line controls."}
     },
     "icon": {
-      "inline": {"$value": {"value": 14, "unit": "px"}},
-      "toolbar": {"$value": {"value": 18, "unit": "px"}},
+      "inline": {"$value": {"value": 16, "unit": "px"}},
+      "toolbar": {"$value": {"value": 20, "unit": "px"}},
       "panel": {"$value": {"value": 24, "unit": "px"}}
     },
     "dialog": {

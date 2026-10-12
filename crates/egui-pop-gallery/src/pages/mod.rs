@@ -12,6 +12,7 @@ pub mod frame;
 pub mod icons;
 pub mod menus;
 pub mod overview;
+pub mod scale;
 pub mod settings;
 pub mod story;
 pub mod toasts;

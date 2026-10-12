@@ -19,6 +19,30 @@ Reviewed at every egui bump: remove what upstream fixed, update the rest.
 - **Remove when**: kittest ships a `double_click` helper or a per-step
   time.
 
+## egui_kittest: no way to move a window to a screen of another scale
+
+- **Compensated**: `Harness::set_pixels_per_point` changes egui's zoom
+  factor, not the window's native scale, so a test cannot simulate a
+  window moved to a screen of another scale (winit's scale change).
+- **Upstream**: not filed yet (a `Harness::set_native_pixels_per_point`
+  would do).
+- **Workaround**: `egui_pop_test::set_native_scale` writes the root
+  viewport's `native_pixels_per_point` in the harness's input before the
+  next step, as egui-winit does on a scale change.
+- **Remove when**: kittest has such a setter.
+
+## egui: keyboard zoom on by default
+
+- **Compensated**: `Options::zoom_with_keyboard` is on by default: Ctrl
+  and `+`, `-`, `0` change the zoom factor of every window, the keys an
+  application's content zoom (an image viewer's) uses too.
+- **Upstream**: a default, not a defect; nothing to file.
+- **Workaround**: egui-pop's application turns it off and owns the
+  interface zoom (`egui_pop_api::zoom`): a setting in fixed steps, and
+  commands bound by default to `Ctrl+Alt+=`, `Ctrl+Alt+-` and
+  `Ctrl+Alt+0`, rebindable like any command.
+- **Remove when**: never; this is egui-pop's design.
+
 ## egui_dock: no per-tab, per-destination drop veto
 
 - **Compensated**: egui_dock has no hook to refuse dropping a given tab

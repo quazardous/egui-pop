@@ -123,8 +123,12 @@ fn before_hooks_veto_or_redirect_a_run_hook_replaces_after_hooks_follow() {
     assert_eq!(trace.after, [OwnerId::new("watcher").unwrap()]);
     // The debug bridge lists the step and its hooks.
     let snap = h.debug_snapshot();
-    let step = &snap["steps"]["steps"][0];
-    assert_eq!(step["id"], "demo.close");
+    let step = snap["steps"]["steps"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["id"] == "demo.close")
+        .unwrap();
     let kinds: Vec<&str> = step["hooks"]
         .as_array()
         .unwrap()

@@ -1220,6 +1220,7 @@ impl App {
             modes.system_said()
         );
         ctx.setting(SETTING_FOCUS, focus)?;
+        crate::zoom::register(&mut ctx)?;
         ctx.service(&FOCUS_MODE, modes)?;
         ctx.command(
             CommandSpec::new(CMD_UNDO, "Undo", "Edit")
@@ -1925,6 +1926,12 @@ impl App {
     fn attach(&mut self, ctx: &Context) {
         *self.handle.0.ctx.borrow_mut() = ctx.clone();
         focus::install(ctx);
+        // egui-pop's interface zoom replaces egui's keys (`zoom`).
+        egui_pop_core::scale::disable_keyboard_zoom(ctx);
+        let zoom = crate::zoom::current(&self.handle);
+        if (ctx.zoom_factor() - zoom).abs() > 1e-3 {
+            ctx.set_zoom_factor(zoom);
+        }
         if self.waking.as_ref() != Some(ctx) {
             self.waking = Some(ctx.clone());
             let c = ctx.clone();
@@ -2160,6 +2167,17 @@ impl App {
     pub fn show(&mut self, ui: &mut Ui) {
         let ctx = ui.ctx().clone();
         self.logic(&ctx);
+        if let Some((from, to)) = egui_pop_core::scale::changed(&ctx) {
+            self.handle.publish(
+                "egui_pop",
+                None,
+                "scale.changed",
+                json!({ "viewport": "root", "from": from, "to": to }),
+            );
+            // Strokes are snapped for the scale: install the theme again.
+            self.installed = None;
+            self.install_theme();
+        }
         overlay::begin_pass(&ctx);
         let cx = self.handle.when_context();
         let dispatched = if self.handle.0.capturing.get() {
@@ -2199,8 +2217,11 @@ impl App {
                 .collect::<Vec<_>>()
         };
         if h.zone_has_blocks(&zones::TITLE) {
+            // No least height: a title zone whose blocks draw nothing (the
+            // system draws the frame) takes no room.
             egui::Panel::top(Id::new("egui_pop.title"))
                 .frame(egui::Frame::NONE)
+                .min_size(0.0)
                 .show(ui, |ui| {
                     focus::scope(ui, "titleBar", &[], |ui| h.show_zone(ui, &zones::TITLE));
                 });

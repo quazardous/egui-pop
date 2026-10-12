@@ -420,3 +420,36 @@ fn the_frame_page_draws_the_gallerys_own_frame_and_vetoes_closing() {
     assert!(trace.vetoed_by.is_some());
     results.add(h.try_snapshot("frame-own-pop-dark"));
 }
+
+#[test]
+fn the_scale_page_sets_the_interface_zoom_and_draws_at_twice_the_pixels() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "scale"));
+    h.run();
+    let mut results = egui_kittest::SnapshotResults::new();
+    results.add(h.try_snapshot("scale-pop-dark"));
+    h.get_by_label("125%").click();
+    h.run();
+    assert!((h.ctx.zoom_factor() - 1.25).abs() < 1e-4);
+    h.run();
+    let app = h.state().app.handle().clone();
+    assert!(
+        app.events_since(0)
+            .iter()
+            .any(|e| e.name == "scale.changed" && e.data["to"] == 1.25)
+    );
+    // The overview at a native scale of 2: the same layout, twice the
+    // pixels.
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(1100.0, 720.0))
+        .with_pixels_per_point(2.0)
+        .wgpu()
+        .build_eframe(|cc| {
+            Gallery::new(
+                &cc.egui_ctx,
+                options("pop-dark", Density::Comfortable, "overview"),
+            )
+            .expect("the gallery builds")
+        });
+    h.run();
+    results.add(h.try_snapshot("overview-pop-dark@2x"));
+}

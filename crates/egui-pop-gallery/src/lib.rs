@@ -28,9 +28,9 @@ use pages::story::PagePlugin;
 pub const TITLE: &str = "egui-pop gallery";
 
 /// The pages, as named on the command line.
-pub const PAGES: [&str; 13] = [
+pub const PAGES: [&str; 14] = [
     "overview", "tokens", "builtins", "icons", "values", "menus", "dialogs", "toasts", "viewport",
-    "zones", "frame", "settings", "debug",
+    "zones", "frame", "scale", "settings", "debug",
 ];
 
 /// The gallery's plugins.
@@ -94,6 +94,7 @@ pub fn builder(options: &Options) -> AppBuilder {
         .plugin(pages::zones::ZonesPage)
         .plugin(pages::zones::Extender)
         .plugin(pages::frame::FramePage)
+        .plugin(pages::scale::ScalePage)
         .plugin(pages::settings::SettingsPage)
         .plugin(pages::debug::DebugPage)
 }

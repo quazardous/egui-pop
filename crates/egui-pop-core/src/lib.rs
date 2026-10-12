@@ -16,6 +16,8 @@
 //! - [`slider`]: a darktable-style slider (soft and hard range, fine
 //!   and coarse, reset, typed entry);
 //! - [`placement`]: floating elements placed with flip and shift;
+//! - [`scale`]: the window's scales, crisp strokes, the scale-changed
+//!   signal, the interface zoom's steps;
 //! - [`a11y`]: accessible names and an announcer;
 //! - [`strings`]: the library's own strings, by key, with English
 //!   fallbacks;
@@ -39,6 +41,7 @@ pub mod overlay;
 pub mod param;
 pub mod persist;
 pub mod placement;
+pub mod scale;
 pub mod slider;
 pub mod strings;
 pub mod theme;

@@ -25,6 +25,7 @@
 //! - [`frame`]: the window's own title bar and edges, a plugin;
 //! - [`window`]: the window's place kept and repaired, full screen with
 //!   a way out, a plugin;
+//! - [`zoom`]: the interface zoom in steps, its commands and keys;
 //! - [`settings_window`]: the settings window (search, sections, form)
 //!   and the shortcuts editor, a plugin;
 //! - [`DefaultPlugins`] and [`MinimalPlugins`]: plugin groups for
@@ -84,6 +85,7 @@ pub mod stories;
 pub mod toasts;
 pub mod window;
 pub mod zones;
+pub mod zoom;
 
 pub use app::{
     App, AppBuilder, AppHandle, Call, FOCUS_MODE, Request, SETTING_FOCUS, THEME, ThemeService,

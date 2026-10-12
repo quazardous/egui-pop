@@ -11,7 +11,7 @@
   "size": {
     "$type": "dimension",
     "control": {
-      "height": {"$value": {"value": 18, "unit": "px"}}
+      "height": {"$value": {"value": 20, "unit": "px"}}
     },
     "icon": {
       "inline": {"$value": {"value": 12, "unit": "px"}},
