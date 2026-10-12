@@ -128,6 +128,14 @@ fn items(ui: &mut Ui, app: &AppHandle, menu: &MenuId, cx: &WhenContext, depth: u
                         }
                         None => (id.to_string(), Some(format!("No command `{id}`"))),
                     };
+                    // A run waiting for its result greys the item.
+                    let why = why.or_else(|| app.running(&id).then(|| "Running…".to_string()));
+                    let failed = app
+                        .history()
+                        .iter()
+                        .rev()
+                        .find(|r| r.id == id)
+                        .and_then(|r| r.result.clone().err());
                     let tick = Id::new(("egui_pop_menu_tick", menu.as_str(), id.as_str()));
                     let mut button = Button::new((Atom::custom(tick, vec2(side, side)), title));
                     if let Some(k) = app.keys_for(&id).first() {
@@ -159,6 +167,8 @@ fn items(ui: &mut Ui, app: &AppHandle, menu: &MenuId, cx: &WhenContext, depth: u
                     }
                     if let Some(why) = why {
                         response = response.on_disabled_hover_text(why);
+                    } else if let Some(e) = failed {
+                        response = response.on_hover_text(format!("Last run failed: {e}"));
                     } else if let Some(s) = spec.filter(|s| !s.description.is_empty()) {
                         response = response.on_hover_text(s.description);
                     }

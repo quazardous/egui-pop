@@ -34,6 +34,7 @@ use serde_json::{Value as Json, json};
 
 use crate::ctx::{Ctx, CtxError};
 use crate::hooks::{Alter, Hook, Lifecycle, LifecycleFn, On, PaletteEntry, SettingEntry};
+use crate::host::{Dispatch, Event, Host, LocalHost, Pending, Reply, Seq, Waker, source_of};
 use crate::plugin::{BuildError, Plugin, PluginError, PluginInfo};
 use crate::services::{ServiceToken, Services};
 use crate::stories::{Story, StoryInfo};
@@ -107,7 +108,8 @@ pub type CommandFn = Rc<dyn Fn(&Call<'_>) -> Result<Json, String>>;
 
 /// The registries plugins fill through `Ctx`.
 pub(crate) struct Registries {
-    pub commands: Commands<CommandFn>,
+    /// Declarations, each with its in-process handler if it has one.
+    pub commands: Commands<Option<CommandFn>>,
     pub keymap: Keymap,
     pub menus: Menus,
     pub panels: Panels,
@@ -184,6 +186,9 @@ struct UiState {
     hidden_panels: BTreeSet<PanelId>,
 }
 
+/// An event waiting for the host: source, cause, name, data.
+type Held = (String, Option<Seq>, String, Json);
+
 pub(crate) struct Shared {
     ctx: RefCell<Context>,
     store: SharedStore,
@@ -201,6 +206,12 @@ pub(crate) struct Shared {
     bridge: RefCell<DebugBridge>,
     traces: RefCell<Vec<Trace>>,
     pending_keys: RefCell<Option<String>>,
+    /// The host; out of its cell while it dispatches.
+    host: RefCell<Option<Box<dyn Host>>>,
+    /// Events published while the host was dispatching.
+    held: RefCell<Vec<Held>>,
+    /// Commands whose result is to come, by id: how many.
+    running: RefCell<BTreeMap<CommandId, usize>>,
 }
 
 /// The application at run time, cheap to clone: blocks, panels, stories
@@ -216,7 +227,8 @@ impl fmt::Debug for AppHandle {
 }
 
 impl AppHandle {
-    fn new(ctx: &Context, store: SharedStore) -> Self {
+    fn new(ctx: &Context, host: Box<dyn Host>) -> Self {
+        let store = host.store();
         AppHandle(Rc::new(Shared {
             ctx: RefCell::new(ctx.clone()),
             store,
@@ -234,6 +246,9 @@ impl AppHandle {
             bridge: RefCell::new(DebugBridge::with_core_collectors()),
             traces: RefCell::new(Vec::new()),
             pending_keys: RefCell::new(None),
+            host: RefCell::new(Some(host)),
+            held: RefCell::new(Vec::new()),
+            running: RefCell::new(BTreeMap::new()),
         }))
     }
 
@@ -284,6 +299,55 @@ impl AppHandle {
     /// The value store.
     pub fn store(&self) -> SharedStore {
         self.0.store.clone()
+    }
+
+    /// Appends an event to the host's journal (held until the host is
+    /// free when published from a command it is running).
+    pub fn publish(&self, source: &str, cause: Option<Seq>, name: &str, data: Json) {
+        match self.0.host.borrow_mut().as_mut() {
+            Some(h) => {
+                h.publish(source, cause, name, data);
+            }
+            None => self
+                .0
+                .held
+                .borrow_mut()
+                .push((source.into(), cause, name.into(), data)),
+        }
+    }
+
+    /// The journal's events after `seq` (empty while the host is
+    /// dispatching).
+    pub fn events_since(&self, seq: Seq) -> Vec<Event> {
+        self.0
+            .host
+            .borrow()
+            .as_ref()
+            .map(|h| h.since(seq))
+            .unwrap_or_default()
+    }
+
+    /// The journal's last sequence number.
+    pub fn last_event(&self) -> Seq {
+        self.0
+            .host
+            .borrow()
+            .as_ref()
+            .map_or(0, |h| h.journal().last())
+    }
+
+    /// Whether a run of this command waits for its result.
+    pub fn running(&self, id: &CommandId) -> bool {
+        self.0.running.borrow().get(id).is_some_and(|n| *n > 0)
+    }
+
+    fn publish_now(&self, source: &str, cause: Option<Seq>, name: &str, data: Json) -> Seq {
+        let mut host = self.0.host.borrow_mut();
+        let h = host.as_mut().expect("the host is free outside a dispatch");
+        for (s, c, n, d) in self.0.held.borrow_mut().drain(..) {
+            h.publish(&s, c, &n, d);
+        }
+        h.publish(source, cause, name, data)
     }
 
     /// A service, typed.
@@ -670,6 +734,7 @@ pub struct AppBuilder {
     themes: Themes,
     persist: Option<Persist>,
     store: Option<SharedStore>,
+    host: Option<Box<dyn Host>>,
     system_focus: Option<SystemFocus>,
 }
 
@@ -699,6 +764,7 @@ impl AppBuilder {
             themes: Themes::default(),
             persist: None,
             store: None,
+            host: None,
             system_focus: None,
         }
     }
@@ -739,7 +805,15 @@ impl AppBuilder {
         self
     }
 
-    /// Shares an existing store instead of a new one.
+    /// The application's kernel: runs the commands, keeps the journal
+    /// and the store (`LocalHost` by default, see `host`).
+    pub fn host(mut self, host: impl Host + 'static) -> Self {
+        self.host = Some(Box::new(host));
+        self
+    }
+
+    /// Shares an existing store instead of a new one (with the default
+    /// host; a host given to `host` brings its own).
     pub fn store(mut self, store: SharedStore) -> Self {
         self.store = Some(store);
         self
@@ -782,10 +856,13 @@ impl AppBuilder {
                 }
             })
             .collect();
-        let store = self
-            .store
-            .unwrap_or_else(|| Arc::new(Mutex::new(Store::new())));
-        let handle = AppHandle::new(ctx, store);
+        let host = self.host.unwrap_or_else(|| {
+            Box::new(LocalHost::new(
+                self.store
+                    .unwrap_or_else(|| Arc::new(Mutex::new(Store::new()))),
+            ))
+        });
+        let handle = AppHandle::new(ctx, host);
         let modes = FocusModes::new(self.system_focus.unwrap_or_default());
         let mut app = App {
             handle,
@@ -796,6 +873,8 @@ impl AppBuilder {
             started: false,
             installed: None,
             persist: self.persist,
+            in_flight: Vec::new(),
+            waking: None,
         };
         app.framework(self.theme, self.themes, modes)
             .expect("the framework's registrations are valid");
@@ -842,6 +921,19 @@ pub struct App {
     started: bool,
     installed: Option<ThemeSpec>,
     persist: Option<Persist>,
+    /// Results to come.
+    in_flight: Vec<InFlight>,
+    /// The context the host's waker wakes.
+    waking: Option<Context>,
+}
+
+/// A run waiting for its result.
+struct InFlight {
+    command: CommandId,
+    args: Json,
+    origin: Origin,
+    seq: Seq,
+    pending: Pending,
 }
 
 impl fmt::Debug for App {
@@ -1003,7 +1095,7 @@ impl App {
         let store = self.handle.store();
         egui_pop_model::values::register_with(&mut self.reg.commands, &owner, store, |h| {
             let f: CommandFn = Rc::new(move |call: &Call<'_>| h(call.args, call.origin));
-            f
+            Some(f)
         })
         .ok();
         Ok(())
@@ -1036,6 +1128,7 @@ impl App {
                             "keys": palette.iter().find(|e| e.command == s.id).map(|e| e.keys.clone()).unwrap_or_default(),
                             "agent": s.agent,
                             "args": s.args,
+                            "running": app.running(&s.id),
                             "owner": owner,
                         })).collect::<Vec<_>>(),
                         "context": cx.iter().map(|(k, v, d)| json!({"key": k, "value": v, "depth": d})).collect::<Vec<_>>(),
@@ -1054,6 +1147,25 @@ impl App {
                     Ok(json!({ "queued": true }))
                 })
                 .args(json!({ "id": "app.palette", "args": null })),
+        )
+        .expect("distinct names");
+        let (w1, w2) = (h.weak(), h.weak());
+        b.register(
+            FnCollector::new(
+                "journal",
+                "The host's event journal (sequence, source, cause, name, data): the last 64, or since a sequence number.",
+            )
+            .snapshot(move |_| {
+                let Ok(app) = up(&w1) else { return Json::Null };
+                let last = app.last_event();
+                json!({ "last": last, "events": app.events_since(last.saturating_sub(64)) })
+            })
+            .action("since", "The events after `seq`.", false, move |_, args| {
+                let app = up(&w2)?;
+                let seq = args.get("seq").and_then(Json::as_u64).unwrap_or(0);
+                Ok(json!(app.events_since(seq)))
+            })
+            .args(json!({ "seq": 0 })),
         )
         .expect("distinct names");
         let w = h.weak();
@@ -1131,11 +1243,18 @@ impl App {
                 .and_then(Json::as_str)
                 .and_then(|i| CommandId::new(i).ok());
             if let Some(id) = id {
-                let result = self.run(
+                let reply = self.run(
                     &id,
                     args.get("args").cloned().unwrap_or(Json::Null),
                     Origin::Agent("debug-bridge".into()),
                 );
+                let Some(result) = reply.now() else {
+                    return Feedback {
+                        message: format!("`{id}` is running; its result goes to the journal"),
+                        data: json!({ "pending": true }),
+                        ..feedback
+                    };
+                };
                 return Feedback {
                     ok: result.is_ok(),
                     message: match &result {
@@ -1563,6 +1682,13 @@ impl App {
     fn attach(&mut self, ctx: &Context) {
         *self.handle.0.ctx.borrow_mut() = ctx.clone();
         focus::install(ctx);
+        if self.waking.as_ref() != Some(ctx) {
+            self.waking = Some(ctx.clone());
+            let c = ctx.clone();
+            if let Some(h) = self.handle.0.host.borrow_mut().as_mut() {
+                h.set_waker(Waker::new(move || c.request_repaint()));
+            }
+        }
         if let Some(modes) = self.handle.service(&FOCUS_MODE) {
             let preference = lock(&self.handle.store())
                 .get(&format!("settings/{SETTING_FOCUS}"))
@@ -1573,20 +1699,21 @@ impl App {
         }
     }
 
-    /// Runs a command now, in the current context.
-    pub fn run(&mut self, command: &CommandId, args: Json, origin: Origin) -> Result<Json, String> {
+    /// Runs a command now, in the current context: its result, or a
+    /// result to come (`Reply::Later`, kept until it arrives).
+    pub fn run(&mut self, command: &CommandId, args: Json, origin: Origin) -> Reply {
         let cx = self.handle.when_context();
         self.run_in(command, args, origin, &cx)
     }
 
-    /// Runs a command now, in a given context.
+    /// Runs a command now, in a given context, through the host.
     pub fn run_in(
         &mut self,
         command: &CommandId,
         args: Json,
         origin: Origin,
         cx: &WhenContext,
-    ) -> Result<Json, String> {
+    ) -> Reply {
         let handler = match self.reg.commands.prepare(command, cx) {
             Ok(h) => h.clone(),
             Err(e) => {
@@ -1594,16 +1721,104 @@ impl App {
                 if !matches!(e, egui_pop_model::commands::RunRefused::Unknown { .. }) {
                     self.record(command, &args, &origin, Err(msg.clone()));
                 }
-                return Err(msg);
+                return Reply::Done(Err(msg));
             }
         };
-        let result = handler(&Call {
-            args: &args,
-            origin: &origin,
-            app: &self.handle,
+        let source = source_of(&origin);
+        let seq = self.handle.publish_now(
+            &source,
+            None,
+            "command.dispatched",
+            json!({ "command": command, "args": args }),
+        );
+        let mut host = self
+            .handle
+            .0
+            .host
+            .borrow_mut()
+            .take()
+            .expect("a command dispatched from inside a dispatch is queued (AppHandle::run)");
+        let reply = host.dispatch(&Dispatch::new(
+            command,
+            &args,
+            &origin,
+            cx,
+            seq,
+            &self.handle,
+            handler.as_ref(),
+        ));
+        *self.handle.0.host.borrow_mut() = Some(host);
+        match reply {
+            Reply::Done(result) => {
+                self.finish(command, &args, &origin, seq, result.clone());
+                Reply::Done(result)
+            }
+            Reply::Later(pending) => {
+                *self
+                    .handle
+                    .0
+                    .running
+                    .borrow_mut()
+                    .entry(command.clone())
+                    .or_default() += 1;
+                self.in_flight.push(InFlight {
+                    command: command.clone(),
+                    args,
+                    origin,
+                    seq,
+                    pending: pending.clone(),
+                });
+                Reply::Later(pending)
+            }
+        }
+    }
+
+    /// A result arrived: the history and the journal keep it.
+    fn finish(
+        &mut self,
+        command: &CommandId,
+        args: &Json,
+        origin: &Origin,
+        seq: Seq,
+        result: Result<Json, String>,
+    ) {
+        let (name, data) = match &result {
+            Ok(v) => ("command.done", json!({ "command": command, "result": v })),
+            Err(e) => ("command.failed", json!({ "command": command, "error": e })),
+        };
+        self.handle
+            .publish_now(&source_of(origin), Some(seq), name, data);
+        self.record(command, args, origin, result);
+    }
+
+    /// Takes the results that arrived (each frame does it before
+    /// drawing); returns how many.
+    pub fn settle(&mut self) -> usize {
+        let mut arrived = Vec::new();
+        self.in_flight.retain(|f| match f.pending.take() {
+            Some(r) => {
+                arrived.push((
+                    f.command.clone(),
+                    f.args.clone(),
+                    f.origin.clone(),
+                    f.seq,
+                    r,
+                ));
+                false
+            }
+            None => true,
         });
-        self.record(command, &args, &origin, result.clone());
-        result
+        let n = arrived.len();
+        for (command, args, origin, seq, result) in arrived {
+            if let Some(c) = self.handle.0.running.borrow_mut().get_mut(&command) {
+                *c = c.saturating_sub(1);
+            }
+            if let Err(e) = &result {
+                log::warn!(target: "egui_pop", "command `{command}`: {e}");
+            }
+            self.finish(&command, &args, &origin, seq, result);
+        }
+        n
     }
 
     fn record(
@@ -1642,7 +1857,7 @@ impl App {
                         args,
                         origin,
                     } => {
-                        if let Err(e) = self.run(&command, args, origin) {
+                        if let Reply::Done(Err(e)) = self.run(&command, args, origin) {
                             log::warn!(target: "egui_pop", "command `{command}`: {e}");
                         }
                     }
@@ -1652,7 +1867,7 @@ impl App {
                         origin,
                         context,
                     } => {
-                        if let Err(e) = self.run_in(&command, args, origin, &context) {
+                        if let Reply::Done(Err(e)) = self.run_in(&command, args, origin, &context) {
                             log::warn!(target: "egui_pop", "command `{command}`: {e}");
                         }
                     }
@@ -1676,6 +1891,7 @@ impl App {
     pub fn logic(&mut self, ctx: &Context) {
         self.attach(ctx);
         self.install_theme();
+        self.settle();
         self.process_requests();
     }
 
@@ -1690,7 +1906,7 @@ impl App {
         *self.handle.0.traces.borrow_mut() = self.dispatcher.traces().cloned().collect();
         *self.handle.0.pending_keys.borrow_mut() = self.dispatcher.pending().map(|k| k.to_string());
         for d in dispatched {
-            if let Err(e) = self.run(&d.command, Json::Null, Origin::User) {
+            if let Reply::Done(Err(e)) = self.run(&d.command, Json::Null, Origin::User) {
                 log::info!(target: "egui_pop", "{}: {e}", d.keys);
             }
         }

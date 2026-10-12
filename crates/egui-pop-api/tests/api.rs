@@ -315,8 +315,8 @@ fn a_command_declared_once_yields_its_key_menu_palette_and_agent_entries() {
             .any(|(s, o)| s.id == go && s.agent && o.as_str() == "demo")
     );
     assert_eq!(
-        app.run(&go, Json::Null, Origin::Agent("t".into())),
-        Ok(json!("went"))
+        app.run(&go, Json::Null, Origin::Agent("t".into())).now(),
+        Some(Ok(json!("went")))
     );
     assert_eq!(
         app.handle().history().last().unwrap().origin,

@@ -117,7 +117,8 @@ let ctx = egui::Context::default();
 let mut app = App::builder().plugin(Counter).build(&ctx).unwrap();
 assert!(app.handle().diagnostics().is_empty());
 let out = app.run(&CommandId::from_static("counter.add"), serde_json::Value::Null, Origin::User);
-assert_eq!(out, Ok(serde_json::json!(1)));
+// Run by the default host, in-process: the result is there now.
+assert_eq!(out.now(), Some(Ok(serde_json::json!(1))));
 ```
 
 Zones and blocks let a plugin add to, replace, extend or wrap what

@@ -12,6 +12,9 @@
 //!   wrapped (ADR 0005);
 //! - [`hooks`]: alter hooks over menus, the palette and settings, run at
 //!   build time; lifecycle events;
+//! - [`host`]: the application's kernel behind the interface: commands
+//!   run, an event journal, the store, a waker ([`host::LocalHost`] by
+//!   default);
 //! - [`services`]: typed service tokens;
 //! - [`stories`]: gallery stories as a contribution;
 //! - [`palette`]: the command palette, a plugin;
@@ -51,13 +54,14 @@
 //! assert!(app.handle().diagnostics().is_empty());
 //! let out = app.run(&CommandId::from_static("hello.greet"), serde_json::Value::Null,
 //!     egui_pop_model::commands::Origin::User);
-//! assert_eq!(out, Ok(serde_json::json!("hello")));
+//! assert_eq!(out.now(), Some(Ok(serde_json::json!("hello"))));
 //! ```
 
 pub mod app;
 pub mod ctx;
 mod groups;
 pub mod hooks;
+pub mod host;
 pub mod menus;
 pub mod palette;
 pub mod plugin;

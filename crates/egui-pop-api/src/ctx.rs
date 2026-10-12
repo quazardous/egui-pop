@@ -16,7 +16,7 @@ use egui_pop_model::panels::PanelSpec;
 use egui_pop_model::values::{DeclareError, Descriptor};
 use serde_json::Value as Json;
 
-use crate::app::{AppHandle, Call, Registries};
+use crate::app::{AppHandle, Call, CommandFn, Registries};
 use crate::hooks::{Hook, LifecycleFn, On};
 use crate::services::ServiceToken;
 use crate::stories::Story;
@@ -111,13 +111,30 @@ impl<'a> Ctx<'a> {
         self.connected.contains(plugin)
     }
 
-    /// Declares a command and everything derived from it: its default
+    /// Declares a command and everything derived from it (its default
     /// key bindings, its menu entries, its palette entry and its agent
-    /// surface.
+    /// surface), with an in-process handler: the default `LocalHost`
+    /// runs it on the interface thread.
     pub fn command(
         &mut self,
         spec: CommandSpec,
         handler: impl Fn(&Call<'_>) -> Result<Json, String> + 'static,
+    ) -> Result<&mut Self, CtxError> {
+        let handler: CommandFn = Rc::new(handler);
+        self.add_command(spec, Some(handler))
+    }
+
+    /// Declares a command the application's host runs (`AppBuilder::host`):
+    /// keys, menus, palette and traces as for [`Ctx::command`], no
+    /// handler here.
+    pub fn declare(&mut self, spec: CommandSpec) -> Result<&mut Self, CtxError> {
+        self.add_command(spec, None)
+    }
+
+    fn add_command(
+        &mut self,
+        spec: CommandSpec,
+        handler: Option<CommandFn>,
     ) -> Result<&mut Self, CtxError> {
         for k in &spec.keys {
             egui_pop_model::keymap::Keys::parse(&k.keys).map_err(|error| CtxError::Keys {
@@ -132,7 +149,7 @@ impl<'a> Ctx<'a> {
         let checked = spec.checked.clone();
         self.reg
             .commands
-            .register(&self.owner, spec, Rc::new(handler))
+            .register(&self.owner, spec, handler)
             .map_err(CtxError::Command)?;
         for k in keys {
             self.reg

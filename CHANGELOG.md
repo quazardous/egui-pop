@@ -9,6 +9,16 @@ egui minor.
 
 ### Added
 
+- A host contract (`egui_pop_api::host`, ADR 0010): the application's
+  kernel runs the commands (`Host::dispatch`, a result now or later from
+  any thread), keeps an event journal (sequence, source, cause; read
+  since a sequence number, and by the debug bridge's `journal`
+  collector), holds the store and wakes the interface from any thread.
+  `LocalHost` is the default and runs in-process handlers as before;
+  `AppBuilder::host` takes another, `Ctx::declare` declares a command it
+  runs. A command waiting for its result greys its menu items; a failed
+  one says so on hover. `AppHandle::running`, `events_since`,
+  `publish`; `App::settle` takes the results that arrived.
 - The command palette is a plugin (`egui_pop_api::palette::PalettePlugin`)
   with fuzzy ranking (`egui_pop_model::fuzzy`: word starts, runs,
   matched characters highlighted), the commands run lately first, and
@@ -158,6 +168,8 @@ egui minor.
 
 ### Changed
 
+- `App::run` and `App::run_in` return a `host::Reply` (`Reply::now()`
+  for a result that is already there), as commands may answer later.
 - The palette is no longer built into `App`: add `DefaultPlugins` (or
   `PalettePlugin`) to keep it; `AppHandle::palette_open` became
   `palette::is_open(app)`, and `CMD_PALETTE` moved to `palette`
