@@ -37,3 +37,6 @@ pub mod notifications {}
 
 #[doc = include_str!("../../../docs/tray.md")]
 pub mod tray {}
+
+#[doc = include_str!("../../../docs/global-shortcuts.md")]
+pub mod global_shortcuts {}

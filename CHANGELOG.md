@@ -75,6 +75,15 @@ egui minor.
   `tray.activate` step (by default the window comes to the front).
   `Simulated` records the menu and clicks for tests. Guide:
   docs/tray.md.
+- Global shortcuts (`platform::keys`, feature `platform-keys`):
+  `SystemKeysPlugin` registers the bindings of the system scope with the
+  desktop at start and after each change (a rebinding included), through
+  global-hotkey on Windows, macOS and X11 and the XDG GlobalShortcuts
+  portal on Wayland, and fills the `SYSTEM_KEYS` service the shortcuts
+  editor shows (registered, waiting, refused and why, or only in the
+  window and why). A press runs the `keys.system` step, whose default
+  runs the command. A sequence of chords is refused and said so.
+  Guide: docs/global-shortcuts.md.
 
 ### Changed
 

@@ -9,6 +9,8 @@
 //!   falling back to toasts (`notify.show`, `notify.action`).
 //! - [`tray`]: a tray icon whose menu is a declared egui-pop menu
 //!   (`tray.activate`).
+//! - [`keys`]: global shortcuts, the key bindings of the system scope
+//!   registered with the desktop (`keys.system`).
 //!
 //! Each service names its moments as steps (ADR 0011): a plugin may
 //! observe, veto or redirect, replace or extend them; the application's
@@ -22,6 +24,8 @@
 pub mod dirs;
 #[cfg(feature = "instance")]
 pub mod instance;
+#[cfg(feature = "keys")]
+pub mod keys;
 #[cfg(feature = "notify")]
 pub mod notify;
 #[cfg(feature = "tray")]
