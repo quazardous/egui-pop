@@ -7,6 +7,19 @@ egui minor.
 
 ## Unreleased
 
+### Changed
+
+- Strings (`egui_pop_core::strings`): keys are Fluent message ids
+  (`egui-pop-retry`, was `egui-pop.retry`) and placeholders are written
+  `{ $name }`, so a provider reads `.ftl` catalogues as they are.
+  `Strings::get_args` lets a provider format arguments itself (plurals,
+  numbers); `lookup` and `lookup_args` take any key, falling back to the
+  English, then to the key. What plugins declare is translated through
+  keys derived from stable ids (`command-<id>.title`, `panel-<id>.title`,
+  `menu-<id>.label`, `setting-<id>.label`, `plugin-<id>.title`,
+  `category-<english>`), with `command_title`, `panel_title` and their
+  siblings.
+
 ## 0.1.0 (prepared, not published)
 
 The first release: the tokens and themes, the framework (plugins,

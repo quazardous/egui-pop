@@ -371,7 +371,7 @@ fn strings_fall_back_to_english_and_fill_placeholders() {
         &ctx,
         Arc::new(
             strings::MapStrings::new("fr")
-                .with(strings::FAULT_TITLE.key, "{name} a cessé de fonctionner"),
+                .with(strings::FAULT_TITLE.key, "{ $name } a cessé de fonctionner"),
         ),
     );
     assert_eq!(
