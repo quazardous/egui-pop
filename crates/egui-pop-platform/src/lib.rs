@@ -15,6 +15,8 @@
 //!   with a level setting.
 //! - [`crash`]: crash reports written by a panic hook and offered on the
 //!   next start (`crash.report`); nothing is sent.
+//! - [`focus`]: the window manager's focus mode read in-process (the
+//!   Settings portal, `kwinrc`, the registry), followed while running.
 //!
 //! Each service names its moments as steps (ADR 0011): a plugin may
 //! observe, veto or redirect, replace or extend them; the application's
@@ -28,6 +30,8 @@
 #[cfg(feature = "crash")]
 pub mod crash;
 pub mod dirs;
+#[cfg(feature = "focus")]
+pub mod focus;
 #[cfg(feature = "instance")]
 pub mod instance;
 #[cfg(feature = "keys")]

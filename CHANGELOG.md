@@ -99,6 +99,12 @@ egui minor.
   step: a before-hook adds data, an after-hook may send it, the default
   writes it and offers it in a toast. Nothing is sent anywhere.
   `crash.reveal`, `crash.dismiss`, the `CRASHES` service.
+- The focus mode read in-process (`platform::focus`, feature
+  `platform-focus`): `focus::read` asks GNOME through the Settings
+  portal, reads KDE's `kwinrc` as a file and Windows' active window
+  tracking bit through the registry API, instead of running `gsettings`,
+  `kreadconfig` or `reg`; `FocusModePlugin` reads it again from a thread
+  each time the window gets the focus back. Guide: docs/focus-mode.md.
 
 ### Changed
 

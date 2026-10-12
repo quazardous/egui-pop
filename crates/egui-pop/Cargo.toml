@@ -37,6 +37,7 @@ platform = [
     "platform-keys",
     "platform-logs",
     "platform-crash",
+    "platform-focus",
 ]
 ## A single instance and deep links (`egui_pop::platform::instance`).
 platform-instance = ["dep:egui-pop-platform", "egui-pop-platform/instance"]
@@ -54,6 +55,9 @@ platform-logs = ["dep:egui-pop-platform", "egui-pop-platform/logs"]
 ## Crash reports written by a panic hook and offered on the next start
 ## (`egui_pop::platform::crash`).
 platform-crash = ["dep:egui-pop-platform", "egui-pop-platform/crash"]
+## The window manager's focus mode read in-process
+## (`egui_pop::platform::focus`).
+platform-focus = ["dep:egui-pop-platform", "egui-pop-platform/focus"]
 
 [dependencies]
 egui.workspace = true

@@ -43,3 +43,6 @@ pub mod global_shortcuts {}
 
 #[doc = include_str!("../../../docs/logs.md")]
 pub mod logs {}
+
+#[doc = include_str!("../../../docs/focus-mode.md")]
+pub mod focus_mode {}
