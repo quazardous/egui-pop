@@ -970,6 +970,7 @@ dependencies = [
 name = "egui-pop-viewport"
 version = "0.0.1"
 dependencies = [
+ "eframe",
  "egui",
  "egui-pop-core",
  "egui-pop-test",

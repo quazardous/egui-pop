@@ -13,6 +13,10 @@ authors.workspace = true
 [lints]
 workspace = true
 
+[[example]]
+name = "viewer"
+required-features = ["wgpu"]
+
 [features]
 default = ["wgpu"]
 ## The GPU path: scene tiles as half-float textures drawn by an
@@ -28,6 +32,7 @@ egui-pop-core.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
+eframe = { workspace = true, features = ["default_fonts", "wgpu", "wayland", "x11"] }
 egui = { workspace = true, features = ["default_fonts"] }
 egui_kittest = { workspace = true, features = ["wgpu", "snapshot"] }
 egui-pop-test = { workspace = true, features = ["viewport", "wgpu"] }

@@ -8,7 +8,7 @@
 | `crates/egui-pop-model` | L1, the logic without egui: ids, diagnostics, `when` clauses, commands, keymap, menus, panels, layouts, value store, documents and migrations, plugin ordering. |
 | `crates/egui-pop-core` | L2, egui: theme, focus scopes, key dispatcher, overlays, placement, accessibility, strings, icons, persistence, fault boundary, value binding, debug bridge. |
 | `crates/egui-pop-api` | L3, the application API: `Plugin`, `AppBuilder`, `App`, `Ctx`, zones and blocks, hooks, services, stories. |
-| `crates/egui-pop-viewport` | L3, a component on the egui layer: the image viewport (view model and mapping, gestures, hooks, debug collector). |
+| `crates/egui-pop-viewport` | L3, a component on the egui layer: the image viewport (view model and mapping, tile source and cache, GPU path, display transform, overlays, hooks, debug collector), thumbnails, the histogram; `examples/viewer.rs` implements a tile source. |
 | `crates/egui-pop-test` | L4, test kit: themed harness, "every interactive node has a name", accessibility tree dump. |
 | `crates/egui-pop` | L5, the facade users depend on. Holds the layering test. |
 | `crates/egui-pop-gallery` | The catalogue app, a plugin app; its pages are the snapshot fixtures. |

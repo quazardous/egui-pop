@@ -98,7 +98,8 @@ the window and keep each PNG small (under 200 KB). The current set:
 `ctrl+shift+p`), `values-pop-dark`, `dialogs-pop-dark` (after a click on
 "Export settings"), `toasts-pop-light` (after Warning, Error and
 "Success with an action"), `settings-window-pop-dark` (after `ctrl+comma`)
-and `shortcuts-pop-dark` (then "Keyboard shortcuts"). The window is
+and `shortcuts-pop-dark` (then "Keyboard shortcuts"), `viewport-pop-dark`
+(page `viewport`, once its tiles are in). The window is
 decorated in the compositor: crop to it (`89,26 1102x748` at the default
 size).
 

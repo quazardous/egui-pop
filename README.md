@@ -19,7 +19,7 @@ undo, persistence, a debug bridge and a test kit. Components come next.
 | [`egui-pop-model`](crates/egui-pop-model) | L1 | The logic without egui: typed ids, diagnostics, `when` clauses, commands, keymap (layers, chords, focus depth, traces), menus, panels, layouts, the value store, versioned documents, plugin ordering. |
 | [`egui-pop-core`](crates/egui-pop-core) | L2 | The egui layer: theme, focus scopes, key dispatcher, overlay stack, placement, accessibility, strings, icons, persistence, fault boundaries, value binding, the debug bridge. |
 | [`egui-pop-api`](crates/egui-pop-api) | L3 | The application API (its own semver): `Plugin`, `Ctx`, `AppBuilder` over eframe or headless, zones and blocks, hooks, services, stories. |
-| [`egui-pop-viewport`](crates/egui-pop-viewport) | L3 | A generic image viewport: zoom in physical pixels, the zoom ladder, one image-to-screen mapping, gestures as data, hooks and signals (feature `viewport` of the facade). |
+| [`egui-pop-viewport`](crates/egui-pop-viewport) | L3 | A generic image viewport (zoom in physical pixels, tiles from an asynchronous source, a display-transform hook, overlays with handles, before/after, a pixel readout), thumbnails and a histogram (feature `viewport` of the facade). |
 | [`egui-pop-test`](crates/egui-pop-test) | L4 | Test kit: harnesses, "every interactive node has a name", accessibility tree dump. |
 | [`egui-pop`](crates/egui-pop) | L5 | The crate to depend on: re-exports the layers, `egui`, and a `prelude`. |
 | [`egui-pop-gallery`](crates/egui-pop-gallery) | app | The catalogue, itself a plugin application (not published). |
@@ -160,6 +160,58 @@ settings window with its shortcuts editor, and the parameter widgets:
 | ![the settings window](docs/screenshots/settings-window-pop-dark.png) | ![the shortcuts editor](docs/screenshots/shortcuts-pop-dark.png) |
 
 ![sliders and parameter widgets](docs/screenshots/values-pop-dark.png)
+
+## An image viewport
+
+`egui-pop-viewport` (the facade's `viewport` feature) shows an image the
+application computes, in tiles: pan and zoom in physical pixels (100 %
+is one image pixel per screen pixel, in every window), a proxy first and
+exact tiles after, a display transform where colour management plugs in,
+overlays with handles, before and after, a pixel readout. The
+application implements the tile source; the viewport asks, never waits,
+and says what changed with signals.
+
+```rust
+use egui_pop::egui;
+use egui_pop::viewport::source::{Pixels, Tile, TileRequest, TileSink, TileSource};
+use egui_pop::viewport::{Signal, View, Viewport, ViewportState};
+
+/// A flat mid-grey image, answered at once (a real source works on a
+/// thread and delivers through the sink when done).
+struct Grey {
+    sink: TileSink,
+}
+
+impl TileSource for Grey {
+    fn size(&self) -> Option<[u32; 2]> {
+        Some([6000, 4000])
+    }
+
+    fn request(&self, requests: Vec<TileRequest>) {
+        for r in requests {
+            let n = r.size[0] as usize * r.size[1] as usize;
+            // Scene-referred floats: the display transform runs on them.
+            self.sink.deliver(Tile::answer(&r, Pixels::Scene(vec![0.18; n * 4])));
+        }
+    }
+}
+
+fn draw(ui: &mut egui::Ui, state: &mut ViewportState, view: &mut View, source: &Grey) {
+    let out = Viewport::new("main").source(source).readout(true).show(ui, state, view);
+    for signal in out.signals {
+        if let Signal::View { view, .. } = signal {
+            // Keep the view in the document, one undo step per gesture...
+            let _ = view;
+        }
+    }
+}
+
+let state = ViewportState::new();
+let source = Grey { sink: state.sink() };
+let _ = (draw, source);
+```
+
+![the viewport page: before and after, overlays](docs/screenshots/viewport-pop-dark.png)
 
 ## Start an application
 

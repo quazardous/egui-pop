@@ -173,6 +173,10 @@ egui minor.
   `histogram::Histogram`, filled curves from bins the application
   computed, linear or logarithmic. Component tokens `thumbnail.*` and
   `histogram.*`; an Image widgets page in the gallery.
+- `egui-pop-viewport`'s `viewer` example: an application implementing
+  `TileSource` (a Mandelbrot set computed on a thread, scene pixels,
+  the GPU path on eframe's wgpu device); the README shows a source in a
+  few lines, and a headless screenshot of the gallery's Viewport page.
 - Twelve editor-inspired built-in themes (`github-light`, `github-dark`,
   `github-light-high-contrast`, `github-dark-high-contrast`,
   `catppuccin-latte`, `catppuccin-mocha`, `one-light`, `one-dark-pro`,
