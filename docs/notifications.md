@@ -119,6 +119,11 @@ Gaps: a toast shows one action (the first). Each desktop notification
 waiting for an answer holds a thread until it is closed. Inside a
 Flatpak sandbox the notification server is reached through
 `--talk-name=org.freedesktop.Notifications` (the portal's notification
-interface is not used yet). Windows wants the application's
-AppUserModelID as its name and macOS its bundle identifier; see
-[Packaging](packaging.md#notifications).
+interface is not used yet).
+
+The desktop knows the application by its id, given with
+`NotifyPlugin::new("Viewer").backend(Desktop::new("Viewer").app_id("org.example.Viewer"))`:
+its desktop file's name on Linux (the `desktop-entry` hint, so the
+server shows its icon and its settings apply), its AppUserModelID on
+Windows (without one, notifications show as PowerShell's), its bundle
+identifier on macOS. See [Packaging](packaging.md#notifications).

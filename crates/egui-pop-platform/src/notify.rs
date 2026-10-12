@@ -203,17 +203,27 @@ pub trait Backend: Send + Sync + 'static {
 #[derive(Clone, Debug)]
 pub struct Desktop {
     app_name: String,
+    app_id: Option<String>,
 }
 
 impl Desktop {
     /// `app_name`: the application as the notification server shows it.
-    /// On Windows it is the application's AppUserModelID, set by its
-    /// installer; on macOS the bundle's identifier (see
-    /// `docs/packaging.md`).
     pub fn new(app_name: &str) -> Self {
         Self {
             app_name: app_name.into(),
+            app_id: None,
         }
+    }
+
+    /// The application's id, as the desktop knows it: its desktop file's
+    /// name on Linux (`org.example.Viewer`, the `desktop-entry` hint),
+    /// its AppUserModelID on Windows (set on its Start menu shortcut by
+    /// the installer; without one, notifications show as PowerShell's),
+    /// its bundle identifier on macOS (without one, as another
+    /// application's). See `docs/packaging.md`.
+    pub fn app_id(mut self, id: &str) -> Self {
+        self.app_id = Some(id.into());
+        self
     }
 }
 
@@ -259,6 +269,19 @@ impl Backend for Desktop {
     ) -> Result<(), String> {
         let mut out = notify_rust::Notification::new();
         out.appname(&self.app_name).summary(&n.title).body(&n.body);
+        if let Some(id) = &self.app_id {
+            #[cfg(all(unix, not(target_os = "macos")))]
+            out.hint(notify_rust::Hint::DesktopEntry(id.clone()));
+            #[cfg(windows)]
+            out.app_id(id);
+            #[cfg(target_os = "macos")]
+            {
+                static SET: std::sync::Once = std::sync::Once::new();
+                SET.call_once(|| {
+                    let _ = notify_rust::set_application(id);
+                });
+            }
+        }
         if let Some(icon) = &n.icon {
             out.icon(icon);
         }
@@ -648,7 +671,8 @@ impl std::fmt::Debug for NotifyPlugin {
 
 impl NotifyPlugin {
     /// With the desktop's notifications ([`Desktop`]), the application
-    /// named `app_name`.
+    /// named `app_name` (give its id with
+    /// `.backend(Desktop::new(name).app_id(id))`).
     pub fn new(app_name: &str) -> Self {
         Self {
             backend: Arc::new(Desktop::new(app_name)),

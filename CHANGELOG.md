@@ -66,6 +66,8 @@ egui minor.
   `notify.action` (runs the action's command; the toast's button goes
   through it too). `notify::show` from the interface thread,
   `Notifier::post` from any thread; `Simulated` records them for tests.
+  `Desktop::app_id` names the application to each desktop (the
+  `desktop-entry` hint, the AppUserModelID, the bundle identifier).
   Guide: docs/notifications.md.
 - A tray icon (`platform::tray`, feature `platform-tray`): `TrayPlugin`
   shows an icon through tray-icon (StatusNotifierItem through ksni on
