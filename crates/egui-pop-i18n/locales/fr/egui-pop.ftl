@@ -5,6 +5,10 @@ category-edit = Édition
 
 category-file = Fichier
 
+category-help = Aide
+
+category-notifications = Notifications
+
 category-values = Valeurs
 
 category-view = Affichage
@@ -47,6 +51,14 @@ command-app-window-minimize =
     .description = Réduit la fenêtre.
     .title = Réduire
 
+command-crash-dismiss =
+    .description = Supprime un rapport de plantage (`path`).
+    .title = Supprimer un rapport de plantage
+
+command-crash-reveal =
+    .description = Ouvre le fichier d’un rapport de plantage (`path`).
+    .title = Afficher un rapport de plantage
+
 command-edit-redo =
     .description = Rétablir la dernière modification annulée.
     .title = Rétablir
@@ -62,6 +74,14 @@ command-egui-pop-devtools-focus =
 command-egui-pop-devtools-toggle =
     .description = Rouvre Outils de développement où il était, ou le ferme.
     .title = Afficher ou masquer Outils de développement
+
+command-logs-reveal =
+    .description = Ouvre le dossier des fichiers journaux de l’application.
+    .title = Afficher le dossier des journaux
+
+command-notify-act =
+    .description = Exécute une action d’une notification (`id`, `action`), comme un clic dessus.
+    .title = Agir sur une notification
 
 command-value-get =
     .description = Une valeur avec son descripteur (`path`).
@@ -130,6 +150,10 @@ egui-pop-close = Fermer
 egui-pop-command-label = { $category } : { $title }
 
 egui-pop-command-with-change = { $title } { $change }
+
+egui-pop-crash-offer = { $app } s’est fermé de façon inattendue la dernière fois. Un rapport a été enregistré sur cet ordinateur ; rien n’a été envoyé.
+
+egui-pop-crash-show = Afficher le rapport
 
 egui-pop-devtools-arguments = Arguments
 
@@ -345,17 +369,32 @@ panel-egui-pop-devtools =
 plugin-egui-pop-arrangements =
     .title = Dispositions
 
+plugin-egui-pop-crash =
+    .title = Rapports de plantage
+
 plugin-egui-pop-devtools =
     .title = Développement
 
 plugin-egui-pop-dialogs =
     .title = Dialogues
 
+plugin-egui-pop-focus-mode =
+    .title = Mode de focus
+
 plugin-egui-pop-frame =
     .title = Cadre de la fenêtre
 
 plugin-egui-pop-i18n =
     .title = Langue
+
+plugin-egui-pop-instance =
+    .title = Instance unique
+
+plugin-egui-pop-logs =
+    .title = Journaux
+
+plugin-egui-pop-notify =
+    .title = Notifications
 
 plugin-egui-pop-palette =
     .title = Palette de commandes
@@ -366,8 +405,14 @@ plugin-egui-pop-settings =
 plugin-egui-pop-strips =
     .title = Bandes
 
+plugin-egui-pop-system-keys =
+    .title = Raccourcis globaux
+
 plugin-egui-pop-toasts =
     .title = Notifications
+
+plugin-egui-pop-tray =
+    .title = Icône de la zone de notification
 
 plugin-egui-pop-window =
     .title = Fenêtre
@@ -415,9 +460,33 @@ setting-developer-devtools =
     .description = Permet d’ouvrir le panneau des outils de développement (F12) : résolutions des touches, journal, étapes, focus, échelle et chaque collecteur de débogage.
     .label = Outils de développement
 
+setting-developer-log-level =
+    .description = Ce que l’application écrit dans son fichier journal : des seules erreurs jusqu’au moindre détail.
+    .label = Niveau de journalisation
+
+setting-developer-log-level-choice-debug = débogage
+
+setting-developer-log-level-choice-error = erreurs
+
+setting-developer-log-level-choice-info = informations
+
+setting-developer-log-level-choice-trace = traces
+
+setting-developer-log-level-choice-warn = avertissements
+
 setting-developer-show-keys =
     .description = Affiche la clé de traduction de chaque texte à la place du texte, pour trouver d’où il vient.
     .label = Afficher les clés de traduction
+
+setting-notifications-desktop =
+    .description = Où s’affichent les notifications : sur le bureau, sur le bureau seulement quand la fenêtre n’a pas le focus, ou dans la fenêtre.
+    .label = Notifications du bureau
+
+setting-notifications-desktop-choice-always = toujours
+
+setting-notifications-desktop-choice-never = jamais
+
+setting-notifications-desktop-choice-unfocused = hors focus
 
 setting-window-frame =
     .description = Qui dessine la barre de titre et les bords de la fenêtre : l’application (propre) ou le bureau (système).

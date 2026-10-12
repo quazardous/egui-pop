@@ -59,6 +59,7 @@ use egui_pop_api::steps::StepSpec;
 use egui_pop_api::toasts::{TOASTS, Toast};
 use egui_pop_api::{AppHandle, Ctx, Plugin, PluginError};
 use egui_pop_core::lock;
+use egui_pop_core::strings;
 use egui_pop_model::commands::CommandSpec;
 use egui_pop_model::ids::{CommandId, PluginId, StepId};
 use serde::{Deserialize, Serialize};
@@ -407,13 +408,20 @@ fn offer(app: &AppHandle, crashes: &Crashes, path: &Path) {
         let toasts = app
             .service(&TOASTS)
             .ok_or("no toasts to offer the report in")?;
-        let app_name = args["report"]["app"].as_str().unwrap_or("The application");
+        let app_name = args["report"]["app"].as_str().unwrap_or_default();
+        let ctx = app.egui();
         toasts.notify(
-            Toast::warning(&format!(
-                "{app_name} closed unexpectedly last time. A report was saved on this computer; nothing was sent."
+            Toast::warning(&strings::tr_args(
+                &ctx,
+                &crate::strings::CRASH_OFFER,
+                &[("app", app_name)],
             ))
             .sticky()
-            .action("Show the report", CMD_REVEAL, json!({ "path": path })),
+            .action(
+                &strings::tr(&ctx, &crate::strings::CRASH_SHOW),
+                CMD_REVEAL,
+                json!({ "path": path }),
+            ),
         );
         Ok(json!({ "offered": true, "path": path }))
     });

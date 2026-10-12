@@ -25,7 +25,8 @@
 //! `docs/packaging.md`.
 //!
 //! - [`dirs`]: where the application keeps its state and logs;
-//! - [`window`]: the main window brought to the front.
+//! - [`window`]: the main window brought to the front;
+//! - [`strings`]: the text the services show themselves.
 
 #[cfg(feature = "crash")]
 pub mod crash;
@@ -40,6 +41,7 @@ pub mod keys;
 pub mod logs;
 #[cfg(feature = "notify")]
 pub mod notify;
+pub mod strings;
 #[cfg(feature = "tray")]
 pub mod tray;
 pub mod window;

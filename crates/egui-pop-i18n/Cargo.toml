@@ -35,3 +35,6 @@ egui_kittest = { workspace = true }
 # Path only (left out when publishing): the catalogue test covers the
 # viewport's strings.
 egui-pop-viewport = { path = "../egui-pop-viewport", default-features = false }
+# Path only: the catalogue test covers the platform services' text and
+# declarations.
+egui-pop-platform = { path = "../egui-pop-platform" }

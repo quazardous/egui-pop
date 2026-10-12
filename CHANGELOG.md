@@ -28,6 +28,9 @@ egui minor.
 - egui-pop's own catalogues (`egui-pop-i18n/locales`): the English one
   generated from the interface's strings and the declarations of every
   egui-pop plugin (a test keeps it current), and a complete French one.
+  They cover the platform services too: their settings, commands,
+  plugin titles and the crash report's toast
+  (`egui_pop_platform::strings`).
 - Gallery: a Translations page (the language setting, egui-pop's strings
   and declared titles following it, plurals, numbers and dates, keys
   shown instead of text, the keys missing) and a `--lang` option

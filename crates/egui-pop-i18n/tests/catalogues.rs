@@ -31,10 +31,36 @@ fn strings(list: &[StrKey], origin: &str) -> Vec<Found> {
         .collect()
 }
 
+/// The platform services, on simulated desktops (nothing reaches this
+/// machine's), writing under `scratch`.
+fn platform(b: egui_pop_api::AppBuilder, scratch: &Path) -> egui_pop_api::AppBuilder {
+    use egui_pop_platform::{crash, focus, instance, keys, logs, notify, tray};
+    b.plugin(instance::InstancePlugin::new(instance::Instance::detached(
+        instance::Launch::default(),
+    )))
+    .plugin(notify::NotifyPlugin::new("egui-pop").backend(notify::Simulated::default()))
+    .plugin(tray::TrayPlugin::new("egui-pop").backend(tray::Simulated::default()))
+    .plugin(
+        keys::SystemKeysPlugin::new("org.egui_pop.catalogue").backend(keys::Simulated::default()),
+    )
+    .plugin(logs::LogsPlugin::new("egui-pop").logs(logs::Logs::new(scratch, "catalogue")))
+    .plugin(
+        crash::CrashPlugin::new("egui-pop", "0")
+            .dir(scratch.join("crashes"))
+            .hook(false),
+    )
+    .plugin(focus::FocusModePlugin::fixed(Default::default()))
+}
+
 /// Everything egui-pop shows, by key.
 fn messages() -> Messages {
+    // One directory per call: the tests run at once.
+    static CALLS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let call = CALLS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let scratch =
+        std::env::temp_dir().join(format!("egui-pop-catalogues-{}-{call}", std::process::id()));
     let ctx = egui::Context::default();
-    let app = App::builder()
+    let app = platform(App::builder(), &scratch)
         .plugins(egui_pop_api::DefaultPlugins)
         .plugin(egui_pop_api::devtools::DevtoolsPlugin::default())
         .plugin(egui_pop_api::frame::FramePlugin::system())
@@ -58,6 +84,12 @@ fn messages() -> Messages {
         egui_pop_viewport::strings::ALL,
         "egui-pop-viewport",
     ));
+    found.extend(strings(
+        egui_pop_platform::strings::ALL,
+        "egui-pop-platform",
+    ));
+    drop(app);
+    let _ = std::fs::remove_dir_all(&scratch);
     extract::messages(&found).expect("one English text per key")
 }
 

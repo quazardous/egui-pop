@@ -6,6 +6,10 @@ category-edit = Edit
 
 category-file = File
 
+category-help = Help
+
+category-notifications = Notifications
+
 category-values = Values
 
 category-view = View
@@ -48,6 +52,14 @@ command-app-window-minimize =
     .description = Minimizes the window.
     .title = Minimize
 
+command-crash-dismiss =
+    .description = Deletes a crash report (`path`).
+    .title = Delete a crash report
+
+command-crash-reveal =
+    .description = Opens a crash report's file (`path`).
+    .title = Show a crash report
+
 command-edit-redo =
     .description = Redo the last undone change.
     .title = Redo
@@ -63,6 +75,14 @@ command-egui-pop-devtools-focus =
 command-egui-pop-devtools-toggle =
     .description = Opens Devtools where it was, or closes it.
     .title = Show or hide Devtools
+
+command-logs-reveal =
+    .description = Opens the folder holding the application's log files.
+    .title = Show the log folder
+
+command-notify-act =
+    .description = Runs a notification's action (`id`, `action`), as a click on it does.
+    .title = Act on a notification
 
 command-value-get =
     .description = A value with its descriptor (`path`).
@@ -131,6 +151,10 @@ egui-pop-close = Close
 egui-pop-command-label = { $category }: { $title }
 
 egui-pop-command-with-change = { $title } { $change }
+
+egui-pop-crash-offer = { $app } closed unexpectedly last time. A report was saved on this computer; nothing was sent.
+
+egui-pop-crash-show = Show the report
 
 egui-pop-devtools-arguments = Arguments
 
@@ -346,17 +370,32 @@ panel-egui-pop-devtools =
 plugin-egui-pop-arrangements =
     .title = Arrangements
 
+plugin-egui-pop-crash =
+    .title = Crash reports
+
 plugin-egui-pop-devtools =
     .title = Developer
 
 plugin-egui-pop-dialogs =
     .title = Dialogs
 
+plugin-egui-pop-focus-mode =
+    .title = Focus mode
+
 plugin-egui-pop-frame =
     .title = Window frame
 
 plugin-egui-pop-i18n =
     .title = Language
+
+plugin-egui-pop-instance =
+    .title = Single instance
+
+plugin-egui-pop-logs =
+    .title = Logs
+
+plugin-egui-pop-notify =
+    .title = Notifications
 
 plugin-egui-pop-palette =
     .title = Command palette
@@ -367,8 +406,14 @@ plugin-egui-pop-settings =
 plugin-egui-pop-strips =
     .title = Strips
 
+plugin-egui-pop-system-keys =
+    .title = Global shortcuts
+
 plugin-egui-pop-toasts =
     .title = Toasts
+
+plugin-egui-pop-tray =
+    .title = Tray icon
 
 plugin-egui-pop-window =
     .title = Window
@@ -416,9 +461,33 @@ setting-developer-devtools =
     .description = Lets the devtools panel open (F12): key resolutions, the journal, steps, focus, scale and every debug collector.
     .label = Devtools
 
+setting-developer-log-level =
+    .description = How much the application writes to its log file: errors only, up to every detail.
+    .label = Log level
+
+setting-developer-log-level-choice-debug = debug
+
+setting-developer-log-level-choice-error = error
+
+setting-developer-log-level-choice-info = info
+
+setting-developer-log-level-choice-trace = trace
+
+setting-developer-log-level-choice-warn = warn
+
 setting-developer-show-keys =
     .description = Shows each text's translation key instead of the text, to find where it comes from.
     .label = Show translation keys
+
+setting-notifications-desktop =
+    .description = Where notifications show: on the desktop, on the desktop only while the window does not have the focus, or in the window.
+    .label = Desktop notifications
+
+setting-notifications-desktop-choice-always = always
+
+setting-notifications-desktop-choice-never = never
+
+setting-notifications-desktop-choice-unfocused = unfocused
 
 setting-window-frame =
     .description = Who draws the window's title bar and edges: the application (own), or the desktop (system).

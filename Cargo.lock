@@ -1025,6 +1025,7 @@ dependencies = [
  "egui-pop-api",
  "egui-pop-core",
  "egui-pop-model",
+ "egui-pop-platform",
  "egui-pop-viewport",
  "egui_kittest",
  "fluent-bundle",
