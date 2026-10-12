@@ -11,7 +11,8 @@ egui minor.
 
 - `docs/stability.md`: what a release promises, in three tiers (stable,
   supported, experimental); CI packages every published crate (a dry
-  run of `cargo publish`).
+  run of `cargo publish`). A workflow builds the gallery with Trunk and
+  deploys it to GitHub Pages (by hand until the repository enables it).
 - An application template for `cargo generate` (`template/`) and the
   `minimal` example it is made from (`cargo run -p egui-pop --example
   minimal`): one plugin with a panel, a setting and a command over

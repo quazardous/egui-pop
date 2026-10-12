@@ -3,3 +3,4 @@
 *.new.png
 *.diff.png
 *.old.png
+crates/egui-pop-gallery/dist/
