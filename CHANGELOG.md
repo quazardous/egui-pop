@@ -9,6 +9,17 @@ egui minor.
 
 ### Added
 
+- The settings window as a plugin
+  (`egui_pop_api::settings_window::SettingsPlugin`, in `DefaultPlugins`;
+  `Ctrl+,` or File > Settings): a search over a list of sections on one
+  side, the form on the other (each setting's editor bound to the store,
+  applied live, with its reset and description), and a shortcuts
+  editor: every command with its keys, changed by pressing the new ones
+  (the dispatcher stands aside meanwhile; Backspace: no key, Escape:
+  cancel), the conflicts said, each change taken back by its reset and
+  kept in the user's keymap. `Keymap::rebind`, `reset` and `rebound`;
+  `AppHandle::rebind`, `reset_keys`, `key_conflicts`, `capture_keys`;
+  `OverlaySpec::width` for a wider modal.
 - A darktable-style slider (`egui_pop_core::slider::Slider`): the label
   and the value inside the bar, a soft range the bar spans and a hard
   range a typed value may reach, drag (Shift: finer), arrows when

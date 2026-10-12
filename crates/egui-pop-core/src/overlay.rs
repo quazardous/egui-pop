@@ -42,6 +42,9 @@ pub struct OverlaySpec {
     pub kind: Kind,
     pub dismiss_on_escape: bool,
     pub dismiss_on_outside: bool,
+    /// A modal's width, when the dialog width token is too narrow (a
+    /// settings window).
+    pub width: Option<f32>,
 }
 
 impl OverlaySpec {
@@ -52,7 +55,14 @@ impl OverlaySpec {
             kind,
             dismiss_on_escape: true,
             dismiss_on_outside: kind != Kind::Modal,
+            width: None,
         }
+    }
+
+    /// A modal this wide (points; capped to the window).
+    pub fn width(mut self, width: f32) -> Self {
+        self.width = Some(width);
+        self
     }
 
     /// Escape does not close it (a modal waiting for an answer).
@@ -415,7 +425,13 @@ pub fn show<R>(
                         .inner_margin(tokens.dialog.padding),
                 )
                 .show(ctx, |ui| {
-                    ui.set_max_width(tokens.dialog.width);
+                    let width = spec.width.map_or(tokens.dialog.width, |w| {
+                        w.min(ctx.content_rect().width() - 4.0 * tokens.dialog.padding)
+                    });
+                    ui.set_max_width(width);
+                    if spec.width.is_some() {
+                        ui.set_min_width(width);
+                    }
                     add(ui)
                 });
             (r.inner, r.response.rect)

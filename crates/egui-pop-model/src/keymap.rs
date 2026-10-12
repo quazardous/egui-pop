@@ -792,6 +792,48 @@ impl Keymap {
         out
     }
 
+    /// Gives a command new keys in `layer` (the user's, from a shortcuts
+    /// editor): the owner's earlier rules there about the command go, the
+    /// command's bindings in the layers below are removed, and `keys`
+    /// (none: no key at all) run it, global, typing decided by the keys.
+    pub fn rebind(
+        &mut self,
+        owner: &OwnerId,
+        layer: Layer,
+        command: &CommandId,
+        keys: Option<&str>,
+    ) -> Result<(), String> {
+        let parsed = keys.map(Keys::parse).transpose()?;
+        self.reset(owner, layer, command);
+        let at = parsed.map_or_else(|| "Ctrl+Alt+Shift+F24".to_string(), |k| k.to_string());
+        self.bind(owner, layer, &at, Action::Remove(command.clone()), "")?;
+        if keys.is_some() {
+            self.bind(owner, layer, &at, Action::Run(command.clone()), "")?;
+        }
+        Ok(())
+    }
+
+    /// Takes back what [`Keymap::rebind`] did: the owner's rules in
+    /// `layer` running or removing the command go. Returns how many.
+    pub fn reset(&mut self, owner: &OwnerId, layer: Layer, command: &CommandId) -> usize {
+        let before = self.rules.iter().count();
+        self.rules.retain(|s| {
+            !(s.owner == *owner
+                && s.item.binding.layer == layer
+                && matches!(&s.item.binding.action, Action::Run(c) | Action::Remove(c) if c == command))
+        });
+        before - self.rules.iter().count()
+    }
+
+    /// Whether the owner changed the command's keys in `layer`.
+    pub fn rebound(&self, owner: &OwnerId, layer: Layer, command: &CommandId) -> bool {
+        self.rules.iter().any(|s| {
+            s.owner == *owner
+                && s.item.binding.layer == layer
+                && matches!(&s.item.binding.action, Action::Run(c) | Action::Remove(c) if c == command)
+        })
+    }
+
     /// Loads a saved keymap into a layer, owned by `owner`, replacing
     /// that owner's bindings there. Entries that do not parse are skipped
     /// and reported.

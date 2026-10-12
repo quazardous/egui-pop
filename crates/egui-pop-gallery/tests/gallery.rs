@@ -328,3 +328,20 @@ fn values_bind_in_three_modes_and_watch_follows() {
             .is_disabled()
     );
 }
+
+#[test]
+fn the_settings_window_searches_and_edits_shortcuts() {
+    let mut results = egui_kittest::SnapshotResults::new();
+    let mut h = harness(options("pop-dark", Density::Comfortable, "settings"));
+    h.run();
+    h.get_by_label("Open the settings window (Ctrl+,)").click();
+    h.run();
+    h.run();
+    egui_pop_test::assert_all_named(&h);
+    results.add(h.try_snapshot("settings-window-pop-dark"));
+    h.get_by_label("Keyboard shortcuts").click();
+    h.run();
+    h.run();
+    egui_pop_test::assert_all_named(&h);
+    results.add(h.try_snapshot("shortcuts-pop-dark"));
+}

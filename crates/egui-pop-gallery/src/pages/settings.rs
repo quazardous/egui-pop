@@ -61,6 +61,13 @@ impl Plugin for SettingsPage {
 
 fn show(ui: &mut Ui, app: &AppHandle) {
     let t = egui_pop::theme::Tokens::of(ui.ctx());
+    if ui.button("Open the settings window (Ctrl+,)").clicked() {
+        app.run(
+            egui_pop::api::settings_window::CMD_SETTINGS,
+            serde_json::json!({ "section": "" }),
+        );
+    }
+    ui.add_space(t.space.s);
     settings::form(ui, app);
     ui.add_space(t.space.l);
     ui.strong("Preview");

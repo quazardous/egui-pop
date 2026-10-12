@@ -23,7 +23,7 @@ use egui_pop_model::diagnostics::{Diagnostic, Diagnostics};
 use egui_pop_model::ids::{
     CommandId, MenuId, OwnerId, PanelId, PluginId, SettingId, StoryId, ZoneId,
 };
-use egui_pop_model::keymap::{Keymap, Layer, Trace};
+use egui_pop_model::keymap::{Binding, Keymap, Layer, Trace};
 use egui_pop_model::menus::{Item, MenuItem, Menus, sort_items};
 use egui_pop_model::order::{Node, order};
 use egui_pop_model::panels::{Area, Panels};
@@ -151,6 +151,10 @@ pub(crate) struct Derived {
     pub commands: Vec<(CommandSpec, OwnerId)>,
     /// Each command's live key bindings, as shown.
     pub keys: BTreeMap<CommandId, Vec<String>>,
+    /// Bindings losing to another on the same keys: loser, winner.
+    pub conflicts: Vec<(Binding, Binding)>,
+    /// Commands whose keys the user changed.
+    pub rebound: BTreeSet<CommandId>,
 }
 
 /// What a block or a handler asks of the application, done before the
@@ -170,6 +174,13 @@ pub enum Request {
         context: WhenContext,
     },
     Enable(PluginId, bool),
+    /// Gives a command the user's own keys (none: no key).
+    Rebind {
+        command: CommandId,
+        keys: Option<String>,
+    },
+    /// Gives a command back its default keys.
+    ResetKeys(CommandId),
 }
 
 struct PanelView {
@@ -214,6 +225,8 @@ pub(crate) struct Shared {
     running: RefCell<BTreeMap<CommandId, usize>>,
     /// Collectors added by plugins.
     collectors: RefCell<Vec<(OwnerId, String)>>,
+    /// A shortcuts editor waits for keys: the dispatcher stands aside.
+    capturing: std::cell::Cell<bool>,
 }
 
 /// The application at run time, cheap to clone: blocks, panels, stories
@@ -252,6 +265,7 @@ impl AppHandle {
             held: RefCell::new(Vec::new()),
             running: RefCell::new(BTreeMap::new()),
             collectors: RefCell::new(Vec::new()),
+            capturing: std::cell::Cell::new(false),
         }))
     }
 
@@ -457,6 +471,34 @@ impl AppHandle {
             .iter()
             .find(|(s, _)| s.id == *id)
             .map(|(s, _)| s.clone())
+    }
+
+    /// Asks for a command's keys to be the user's own (`None`: no key),
+    /// saved in the user's keymap; applied before the next frame.
+    pub fn rebind(&self, command: CommandId, keys: Option<String>) {
+        self.push_request(Request::Rebind { command, keys });
+    }
+
+    /// Asks for a command's default keys back.
+    pub fn reset_keys(&self, command: CommandId) {
+        self.push_request(Request::ResetKeys(command));
+    }
+
+    /// While on, key presses reach the interface instead of the key
+    /// dispatcher (a shortcuts editor capturing new keys).
+    pub fn capture_keys(&self, on: bool) {
+        self.0.capturing.set(on);
+    }
+
+    /// Bindings losing to another on the same keys (loser, winner): what
+    /// a shortcuts editor shows as conflicts.
+    pub fn key_conflicts(&self) -> Vec<(Binding, Binding)> {
+        self.0.derived.borrow().conflicts.clone()
+    }
+
+    /// Whether the user changed a command's keys.
+    pub fn rebound(&self, id: &CommandId) -> bool {
+        self.0.derived.borrow().rebound.contains(id)
     }
 
     /// Whether a command applies in a context (its `when` clause holds).
@@ -1594,6 +1636,13 @@ impl App {
                 (s.id.clone(), keys.iter().map(|k| k.to_string()).collect())
             })
             .collect();
+        derived.conflicts = reg.keymap.conflicts();
+        derived.rebound = reg
+            .commands
+            .specs()
+            .filter(|s| reg.keymap.rebound(&OwnerId::USER, Layer::User, &s.id))
+            .map(|s| s.id.clone())
+            .collect();
         // Menu items naming unknown commands are reported.
         for (menu, items) in &derived.menus {
             for it in items {
@@ -1899,6 +1948,23 @@ impl App {
                     Request::Enable(p, false) => {
                         self.disconnect(&p);
                     }
+                    Request::Rebind { command, keys } => {
+                        match self.reg.keymap.rebind(
+                            &OwnerId::USER,
+                            Layer::User,
+                            &command,
+                            keys.as_deref(),
+                        ) {
+                            Ok(()) => self.dirty = true,
+                            Err(e) => {
+                                log::warn!(target: "egui_pop", "keys for `{command}`: {e}");
+                            }
+                        }
+                    }
+                    Request::ResetKeys(command) => {
+                        self.reg.keymap.reset(&OwnerId::USER, Layer::User, &command);
+                        self.dirty = true;
+                    }
                 }
             }
         }
@@ -1922,7 +1988,11 @@ impl App {
         self.logic(&ctx);
         overlay::begin_pass(&ctx);
         let cx = self.handle.when_context();
-        let dispatched = self.dispatcher.process(&ctx, &self.reg.keymap, &cx);
+        let dispatched = if self.handle.0.capturing.get() {
+            Vec::new()
+        } else {
+            self.dispatcher.process(&ctx, &self.reg.keymap, &cx)
+        };
         *self.handle.0.traces.borrow_mut() = self.dispatcher.traces().cloned().collect();
         *self.handle.0.pending_keys.borrow_mut() = self.dispatcher.pending().map(|k| k.to_string());
         for d in dispatched {

@@ -193,3 +193,47 @@ fn bindings_of_different_scopes_do_not_conflict() {
         .unwrap();
     assert_eq!(k.conflicts().len(), 1);
 }
+
+#[test]
+fn a_rebinding_replaces_the_default_keys_and_a_reset_brings_them_back() {
+    let mut k = Keymap::new();
+    let user = OwnerId::USER;
+    let save = CommandId::from_static("doc.save");
+    k.bind(&FW, Layer::Default, "Ctrl+S", Action::run("doc.save"), "")
+        .unwrap();
+    k.bind(
+        &FW,
+        Layer::Default,
+        "Ctrl+Shift+S",
+        Action::run("doc.save_as"),
+        "",
+    )
+    .unwrap();
+    k.rebind(&user, Layer::User, &save, Some("Ctrl+Alt+S"))
+        .unwrap();
+    assert_eq!(k.keys_for(&save), [keys("Ctrl+Alt+S")]);
+    assert_eq!(k.resolve(&keys("Ctrl+S"), &chain(&[])), Resolution::Nothing);
+    assert!(k.rebound(&user, Layer::User, &save));
+    // Again: the earlier rebinding goes.
+    k.rebind(&user, Layer::User, &save, Some("F2")).unwrap();
+    assert_eq!(k.keys_for(&save), [keys("F2")]);
+    // Onto keys another command has: a conflict to show.
+    k.rebind(&user, Layer::User, &save, Some("Ctrl+Shift+S"))
+        .unwrap();
+    assert_eq!(k.conflicts().len(), 1);
+    assert!(k.rebind(&user, Layer::User, &save, Some("Ctrl+")).is_err());
+    // None: no key at all.
+    k.rebind(&user, Layer::User, &save, None).unwrap();
+    assert!(k.keys_for(&save).is_empty());
+    assert_eq!(k.reset(&user, Layer::User, &save), 1);
+    assert_eq!(k.keys_for(&save), [keys("Ctrl+S")]);
+    // It survives a saved keymap.
+    k.rebind(&user, Layer::User, &save, Some("F3")).unwrap();
+    let doc = k.export(&user, Layer::User);
+    let mut again = Keymap::new();
+    again
+        .bind(&FW, Layer::Default, "Ctrl+S", Action::run("doc.save"), "")
+        .unwrap();
+    assert!(again.load(&user, Layer::User, &doc).is_empty());
+    assert_eq!(again.keys_for(&save), [keys("F3")]);
+}
