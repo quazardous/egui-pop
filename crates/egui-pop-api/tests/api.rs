@@ -810,3 +810,29 @@ fn the_palette_asks_for_arguments_and_escape_steps_back() {
     h.run();
     assert!(!palette::is_open(h.state().handle()));
 }
+
+#[test]
+fn pass_handlers_run_at_every_logic_pass_and_go_with_their_plugin() {
+    let l = log();
+    let seen = Rc::new(RefCell::new(0));
+    let s = seen.clone();
+    let ctx = egui::Context::default();
+    let mut app = App::builder()
+        .plugin(P::new("ticker", &l, move |ctx| {
+            let s = s.clone();
+            ctx.on(On::Pass, move |_, e| {
+                assert_eq!(e, &Lifecycle::Pass);
+                *s.borrow_mut() += 1;
+            });
+            Ok(())
+        }))
+        .build(&ctx)
+        .unwrap();
+    // A hidden window runs the logic alone.
+    app.logic(&ctx);
+    app.logic(&ctx);
+    assert_eq!(*seen.borrow(), 2);
+    app.disconnect(&PluginId::from_static("ticker"));
+    app.logic(&ctx);
+    assert_eq!(*seen.borrow(), 2);
+}

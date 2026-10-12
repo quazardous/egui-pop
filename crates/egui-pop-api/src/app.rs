@@ -3151,6 +3151,7 @@ impl App {
         self.install_theme();
         self.settle();
         self.handle.feed_indicators();
+        self.emit(&Lifecycle::Pass);
         self.process_requests();
     }
 

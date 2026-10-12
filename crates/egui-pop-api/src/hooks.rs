@@ -118,6 +118,12 @@ pub enum Lifecycle {
     Disconnected(egui_pop_model::ids::PluginId),
     /// The declarations were rebuilt (menus, palette, settings, zones).
     Rebuilt,
+    /// A pass of the application's logic (`App::logic`): before each
+    /// frame, and also while the window is hidden or minimized when
+    /// something asked for a repaint (`egui::Context::request_repaint`,
+    /// from any thread). What a background thread hands over is taken
+    /// here; nothing may be drawn.
+    Pass,
 }
 
 impl Lifecycle {
@@ -128,6 +134,7 @@ impl Lifecycle {
             Lifecycle::Connected(_) => "connected",
             Lifecycle::Disconnected(_) => "disconnected",
             Lifecycle::Rebuilt => "rebuilt",
+            Lifecycle::Pass => "pass",
         }
     }
 }
@@ -140,6 +147,9 @@ pub enum On {
     Connected,
     Disconnected,
     Rebuilt,
+    /// Every pass of the logic, even while the window is hidden
+    /// ([`Lifecycle::Pass`]).
+    Pass,
 }
 
 impl On {
@@ -150,6 +160,7 @@ impl On {
                 | (On::Connected, Lifecycle::Connected(_))
                 | (On::Disconnected, Lifecycle::Disconnected(_))
                 | (On::Rebuilt, Lifecycle::Rebuilt)
+                | (On::Pass, Lifecycle::Pass)
         )
     }
 }

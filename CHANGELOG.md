@@ -32,6 +32,10 @@ egui minor.
   and declared titles following it, plurals, numbers and dates, keys
   shown instead of text, the keys missing) and a `--lang` option
   (English by default, so pictures do not depend on the machine).
+- `On::Pass` (`Lifecycle::Pass`): a handler run at every pass of the
+  application's logic, also while the window is hidden or minimized
+  when something asked for a repaint, so what a background thread hands
+  over (a second launch, a tray click) is taken without a frame.
 
 ### Changed
 
