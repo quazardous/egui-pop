@@ -14,6 +14,7 @@ use egui::epaint::{Mesh, Vertex, WHITE_UV};
 use egui::{
     Color32, Pos2, Response, Sense, Shape, Stroke, Ui, Vec2, Widget, WidgetInfo, WidgetType, vec2,
 };
+use egui_pop_core::strings;
 use egui_pop_core::theme::Tokens;
 
 /// One channel: its bins (any scale; they are normalised) and colour.
@@ -54,7 +55,7 @@ pub struct Histogram<'a> {
     channels: Vec<Channel<'a>>,
     log: bool,
     size: Option<Vec2>,
-    label: String,
+    label: Option<String>,
 }
 
 impl<'a> Histogram<'a> {
@@ -63,7 +64,7 @@ impl<'a> Histogram<'a> {
             channels: channels.into_iter().collect(),
             log: false,
             size: None,
-            label: "Histogram".into(),
+            label: None,
         }
     }
 
@@ -82,7 +83,7 @@ impl<'a> Histogram<'a> {
 
     /// The accessible name (default "Histogram").
     pub fn label(mut self, label: impl Into<String>) -> Histogram<'a> {
-        self.label = label.into();
+        self.label = Some(label.into());
         self
     }
 }
@@ -166,11 +167,18 @@ impl Widget for Histogram<'_> {
         }
         let names: Vec<&str> = self.channels.iter().map(|c| c.name).collect();
         let bins = self.channels.first().map_or(0, |c| c.bins.len());
-        let label = self.label.clone();
-        let value = format!(
-            "{} ({bins} bins{})",
-            names.join(", "),
-            if self.log { ", logarithmic" } else { "" }
+        let label = self
+            .label
+            .clone()
+            .unwrap_or_else(|| strings::tr(ui.ctx(), &crate::strings::HISTOGRAM));
+        let value = strings::tr_args(
+            ui.ctx(),
+            if self.log {
+                &crate::strings::HISTOGRAM_VALUE_LOG
+            } else {
+                &crate::strings::HISTOGRAM_VALUE
+            },
+            &[("channels", &names.join(", ")), ("bins", &bins.to_string())],
         );
         response.widget_info(move || {
             let mut info = WidgetInfo::labeled(WidgetType::Other, true, &label);

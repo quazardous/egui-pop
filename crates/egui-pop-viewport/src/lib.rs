@@ -22,6 +22,7 @@
 //! - [`hooks`]: the application's way into each step (veto, redirect,
 //!   replace, extend), traced;
 //! - [`debug`]: the `viewport` collector of the debug bridge;
+//! - [`strings`]: the text it shows, translatable;
 //! - [`tokens`]: the component tokens it draws with.
 //!
 //! Layer: a component crate on top of `egui-pop-core` (beside
@@ -50,6 +51,7 @@ pub mod histogram;
 pub mod hooks;
 pub mod overlay;
 pub mod source;
+pub mod strings;
 pub mod thumbnail;
 pub mod tiles;
 pub mod tokens;

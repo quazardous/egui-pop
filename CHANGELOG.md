@@ -24,6 +24,9 @@ egui minor.
   a bound widget's missing value (`NO_VALUE`).
   `param::param_shown` draws a parameter with its choices shown through
   a function (a translation), the value kept raw.
+- Viewport: its default accessible names and the histogram's value are
+  read through `egui_pop_core::strings`; `egui_pop_viewport::strings::ALL`
+  lists them.
 
 ## 0.1.0 (prepared, not published)
 

@@ -384,7 +384,7 @@ pub struct Viewport<'a> {
     id: Id,
     name: String,
     image_size: Option<[u32; 2]>,
-    label: String,
+    label: Option<String>,
     pixel_grid: bool,
     size: Option<Vec2>,
 }
@@ -461,7 +461,7 @@ impl<'a> Viewport<'a> {
             name: format!("{id_salt:?}").trim_matches('"').to_string(),
             id: Id::new(id_salt),
             image_size: None,
-            label: "Image viewport".into(),
+            label: None,
             pixel_grid: true,
             size: None,
         }
@@ -510,7 +510,7 @@ impl<'a> Viewport<'a> {
 
     /// The accessible name (default "Image viewport").
     pub fn label(mut self, label: impl Into<String>) -> Viewport<'a> {
-        self.label = label.into();
+        self.label = Some(label.into());
         self
     }
 
@@ -552,7 +552,7 @@ impl<'a> Viewport<'a> {
             .image_size
             .or_else(|| self.source.and_then(|s| s.size()));
         let Some(image) = size.map(|s| [f64::from(s[0]), f64::from(s[1])]) else {
-            name(&response, &self.label, None);
+            name(&response, self.label.as_deref(), None);
             state.last_mapping = None;
             return ViewportOutput {
                 response,
@@ -679,7 +679,7 @@ impl<'a> Viewport<'a> {
         {
             draw_readout(ui, &painter, rect, state, r);
         }
-        name(&response, &self.label, Some(mapping.zoom));
+        name(&response, self.label.as_deref(), Some(mapping.zoom));
         state.last_mapping = Some(mapping);
         debug::publish(ui.ctx(), &self.name, state, view, &mapping, &signals);
         ViewportOutput {
@@ -825,8 +825,11 @@ fn handle_keys(ui: &Ui, response: &Response, g: &Gestures, f: &mut Frame<'_>) {
 }
 
 /// The accessible name, with the zoom as the value.
-fn name(response: &Response, label: &str, zoom: Option<f64>) {
-    let label = label.to_string();
+fn name(response: &Response, label: Option<&str>, zoom: Option<f64>) {
+    let label = label.map_or_else(
+        || egui_pop_core::strings::tr(&response.ctx, &crate::strings::VIEWPORT),
+        str::to_string,
+    );
     response.widget_info(move || {
         let mut info = WidgetInfo::labeled(WidgetType::Other, true, &label);
         if let Some(z) = zoom {
