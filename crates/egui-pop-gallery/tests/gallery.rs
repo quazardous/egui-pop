@@ -7,11 +7,12 @@ use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use egui_pop::model::ids::StoryId;
 use egui_pop::theme::{BUILT_IN_THEMES, Density, POP_THEMES, Tokens};
 use egui_pop_gallery::{Gallery, Options, PAGES};
+use egui_pop_test::SharedGpu as _;
 
 fn harness(options: Options) -> Harness<'static, Gallery> {
     Harness::builder()
         .with_size(egui::vec2(1100.0, 720.0))
-        .wgpu()
+        .shared_wgpu()
         .build_eframe(move |cc| Gallery::new(&cc.egui_ctx, options).expect("the gallery builds"))
 }
 
@@ -442,7 +443,7 @@ fn the_scale_page_sets_the_interface_zoom_and_draws_at_twice_the_pixels() {
     let mut h = Harness::builder()
         .with_size(egui::vec2(1100.0, 720.0))
         .with_pixels_per_point(2.0)
-        .wgpu()
+        .shared_wgpu()
         .build_eframe(|cc| {
             Gallery::new(
                 &cc.egui_ctx,

@@ -6,6 +6,7 @@ use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
 use egui_pop::theme::{self, BUILT_IN_THEMES, Density, ThemeSpec, Tokens};
 use egui_pop::tokens::Themes;
+use egui_pop_test::SharedGpu as _;
 
 /// Whether a theme is, through its `$extends` chain, a light one.
 fn extends_pop_light(name: &str) -> bool {
@@ -148,7 +149,7 @@ fn egui_widgets_are_drawn_with_the_theme() {
         let spec = ThemeSpec::new(*base);
         let mut harness = Harness::builder()
             .with_size(egui::vec2(240.0, 120.0))
-            .wgpu()
+            .shared_wgpu()
             .build_ui_state(
                 |ui, panel: &mut egui::Rect| {
                     *panel = egui::CentralPanel::default()

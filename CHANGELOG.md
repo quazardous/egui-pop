@@ -9,6 +9,10 @@ egui minor.
 
 ### Added
 
+- Test kit: one wgpu device per test process (`SharedGpu::shared_wgpu`,
+  `gpu_lock`, feature `wgpu`); the gallery's and the facade's rendering
+  tests use it, as parallel device creation crashes the Vulkan loader
+  1.4.341 (`docs/testing.md`).
 - Scale per window (`egui_pop_core::scale`): `Scale::of` (native scale,
   interface zoom, pixels per point of the window being drawn), `snap`,
   `stroke` and `hairline` for lines that stay whole pixels at 1.25 or

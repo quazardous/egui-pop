@@ -15,11 +15,12 @@ workspace = true
 
 [features]
 ## Render with wgpu (snapshots).
-wgpu = ["egui_kittest/wgpu"]
+wgpu = ["egui_kittest/wgpu", "dep:egui-wgpu"]
 
 [dependencies]
 egui.workspace = true
 egui_kittest.workspace = true
+egui-wgpu = { workspace = true, optional = true }
 egui-pop-core.workspace = true
 egui-pop-api.workspace = true
 

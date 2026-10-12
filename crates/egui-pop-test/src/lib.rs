@@ -13,6 +13,8 @@
 //!   assertions and for reading in a failure;
 //! - [`double_click`]: a double click that registers (see
 //!   `docs/upstream.md`);
+//! - `SharedGpu::shared_wgpu` and `gpu_lock` (feature `wgpu`): one wgpu
+//!   device per test process (see `docs/testing.md`);
 //! - [`SCALES`], [`app_at`], [`set_native_scale`], [`at_scales`],
 //!   [`rects_of`]: tests at several scales (1, 1.25, 1.5, 2), a window
 //!   moved to a screen of another scale, rectangles in points to compare
@@ -28,6 +30,11 @@
 //! h.run();
 //! assert_all_named(&h);
 //! ```
+
+#[cfg(feature = "wgpu")]
+mod gpu;
+#[cfg(feature = "wgpu")]
+pub use gpu::{SharedGpu, gpu_lock, shared_renderer, shared_setup};
 
 use egui::accesskit::Role;
 use egui::{Event, Modifiers, PointerButton, Pos2, Vec2};
@@ -153,7 +160,7 @@ pub fn app_wgpu(builder: AppBuilder, size: Vec2) -> Harness<'static, App> {
         .unwrap_or_else(|e| panic!("the application does not build: {e}"));
     Harness::builder()
         .with_size(size)
-        .wgpu()
+        .shared_wgpu()
         .build_ui_state(|ui, app: &mut App| app.show(ui), app)
 }
 

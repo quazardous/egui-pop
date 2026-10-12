@@ -37,7 +37,7 @@ egui-pop-viewport = { workspace = true, optional = true }
 egui = { workspace = true, features = ["default_fonts"] }
 egui_kittest = { workspace = true, features = ["wgpu"] }
 serde_json.workspace = true
-egui-pop-test.workspace = true
+egui-pop-test = { workspace = true, features = ["wgpu"] }
 
 [[example]]
 name = "minimal"

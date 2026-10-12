@@ -23,4 +23,4 @@ wasm-bindgen-futures = "0.4"
 
 [dev-dependencies]
 egui_kittest = { workspace = true, features = ["eframe", "wgpu", "snapshot"] }
-egui-pop-test.workspace = true
+egui-pop-test = { workspace = true, features = ["wgpu"] }

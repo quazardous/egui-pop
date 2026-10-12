@@ -65,6 +65,10 @@ change, regenerate them with
 `UPDATE_SNAPSHOTS=1 cargo test -p egui-pop-gallery` and review the images
 in the diff. Thresholds per operating system are in `kittest.toml`.
 
+How tests are organised, and why every rendering test shares one GPU
+device per process (a Vulkan loader crash), is in
+[docs/testing.md](docs/testing.md).
+
 CI also runs `cargo deny check`, builds the gallery for
 `wasm32-unknown-unknown` and runs `cargo semver-checks` on `egui-pop`.
 
