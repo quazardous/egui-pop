@@ -26,7 +26,7 @@ use egui_pop_model::ids::{
 use egui_pop_model::keymap::{Binding, Keymap, Layer, Trace};
 use egui_pop_model::menus::{Item, MenuItem, Menus, sort_items};
 use egui_pop_model::order::{Node, order};
-use egui_pop_model::panels::{Area, Panels};
+use egui_pop_model::panels::{Area, PanelSpec, Panels};
 use egui_pop_model::registry::{OwnedList, Registry};
 use egui_pop_model::values::{Store, settings_schema};
 use egui_pop_model::when::WhenContext;
@@ -182,6 +182,8 @@ pub enum Request {
     },
     /// Gives a command back its default keys.
     ResetKeys(CommandId),
+    /// A workbench change asked for while the areas were drawn.
+    Workbench(crate::workbench::Change),
 }
 
 struct PanelView {
@@ -189,13 +191,11 @@ struct PanelView {
     draw: Option<DrawFn>,
 }
 
+/// The screens auxiliary windows may be on, until egui names monitors.
+pub(crate) const SCREENS: [&str; 1] = ["primary"];
+
 struct StoryEntry {
     story: Story,
-}
-
-#[derive(Default)]
-struct UiState {
-    hidden_panels: BTreeSet<PanelId>,
 }
 
 /// An event waiting for the host: source, cause, name, data.
@@ -210,7 +210,10 @@ pub(crate) struct Shared {
     stories: RefCell<Registry<StoryId, StoryEntry>>,
     requests: RefCell<Vec<Request>>,
     context: RefCell<WhenContext>,
-    ui: RefCell<UiState>,
+    workbench: RefCell<crate::workbench::Workbench>,
+    /// The areas are being drawn: workbench changes wait for the frame's
+    /// end.
+    drawing_areas: std::cell::Cell<bool>,
     diagnostics: RefCell<Diagnostics>,
     derived: RefCell<Derived>,
     plugins: RefCell<Vec<PluginInfo>>,
@@ -275,7 +278,8 @@ impl AppHandle {
             stories: RefCell::new(Registry::new()),
             requests: RefCell::new(Vec::new()),
             context: RefCell::new(WhenContext::new()),
-            ui: RefCell::new(UiState::default()),
+            workbench: RefCell::new(crate::workbench::Workbench::default()),
+            drawing_areas: std::cell::Cell::new(false),
             diagnostics: RefCell::new(Diagnostics::new()),
             derived: RefCell::new(Derived::default()),
             plugins: RefCell::new(Vec::new()),
@@ -825,7 +829,13 @@ impl AppHandle {
         self.with_story(id, true, ui)
     }
 
-    fn show_panel(&self, ui: &mut Ui, id: &PanelId, title: &str) {
+    /// Draws a panel's content, in its focus scope and fault boundary.
+    pub(crate) fn show_panel(&self, ui: &mut Ui, id: &PanelId) {
+        let title = self
+            .workbench_mut()
+            .spec(id)
+            .map_or_else(|| id.to_string(), |s| s.title.clone());
+        let title = title.as_str();
         let taken = self
             .0
             .panels
@@ -846,19 +856,93 @@ impl AppHandle {
         }
     }
 
-    /// Whether the command palette is open.
-    /// Whether a panel is shown.
-    pub fn panel_visible(&self, id: &PanelId) -> bool {
-        !self.0.ui.borrow().hidden_panels.contains(id)
+    pub(crate) fn workbench_mut(&self) -> RefMut<'_, crate::workbench::Workbench> {
+        self.0.workbench.borrow_mut()
     }
 
-    /// Shows or hides a panel.
+    pub(crate) fn set_drawing_areas(&self, on: bool) {
+        self.0.drawing_areas.set(on);
+    }
+
+    /// Whether a panel is shown (docked or detached, not closed).
+    pub fn panel_visible(&self, id: &PanelId) -> bool {
+        self.workbench_mut().shows(id)
+    }
+
+    /// Shows or closes a panel (the `workbench.show` and `workbench.hide`
+    /// steps).
     pub fn set_panel_visible(&self, id: &PanelId, visible: bool) {
-        let mut u = self.0.ui.borrow_mut();
-        if visible {
-            u.hidden_panels.remove(id);
+        let change = if visible {
+            crate::workbench::Change::Show(id.clone())
         } else {
-            u.hidden_panels.insert(id.clone());
+            crate::workbench::Change::Hide(id.clone())
+        };
+        self.change_workbench(change);
+    }
+
+    /// The workbench's layout as it stands: areas, tabs and splits,
+    /// detached panels, closed panels.
+    pub fn layout(&self) -> egui_pop_model::layout::Layout {
+        self.workbench_mut().layout()
+    }
+
+    /// Puts in a layout (loaded, or an arrangement), repaired against
+    /// today's panels and screens; says what the repair changed.
+    pub fn set_layout(&self, layout: egui_pop_model::layout::Layout) -> Vec<String> {
+        let notes = self.workbench_mut().set_layout(layout, &SCREENS);
+        self.egui().request_repaint();
+        notes
+    }
+
+    /// The declared panels.
+    pub fn panels(&self) -> Vec<egui_pop_model::panels::PanelSpec> {
+        self.workbench_mut().specs.clone()
+    }
+
+    /// The panel that last had the pointer pressed in it, or was focused.
+    pub fn focused_panel(&self) -> Option<PanelId> {
+        self.workbench_mut().focused.clone()
+    }
+
+    /// Changes the workbench through its step (ADR 0011): `None` when
+    /// asked while the areas are drawn (it is done at the frame's end).
+    pub fn change_workbench(&self, change: crate::workbench::Change) -> Option<Outcome> {
+        if self.0.drawing_areas.get() {
+            self.push_request(Request::Workbench(change));
+            return None;
+        }
+        let (step, args) = change.step();
+        let id = step.clone();
+        let out = self.step(&step, args, move |app, args| {
+            let c = crate::workbench::Change::from_args(&id, args)?;
+            app.workbench_mut().apply(&c)
+        });
+        self.egui().request_repaint();
+        Some(out)
+    }
+
+    /// Moves a panel to an area (`workbench.move`); refused when its
+    /// rules keep it out.
+    pub fn move_panel(&self, panel: &PanelId, area: Area) -> Option<Outcome> {
+        self.change_workbench(crate::workbench::Change::Move(panel.clone(), area))
+    }
+
+    /// Shows a panel and gives it the keyboard (`workbench.focus`).
+    pub fn focus_panel(&self, panel: &PanelId) -> Option<Outcome> {
+        self.change_workbench(crate::workbench::Change::Focus(panel.clone()))
+    }
+
+    /// A change the workbench refused: on the journal, and in a toast when
+    /// toasts are there.
+    pub(crate) fn workbench_refused(&self, panel: &PanelId, why: &str) {
+        self.publish(
+            "egui_pop",
+            None,
+            "workbench.refused",
+            json!({ "panel": panel, "reason": why }),
+        );
+        if let Some(t) = self.service(&crate::toasts::TOASTS) {
+            t.notify(crate::toasts::Toast::warning(why));
         }
     }
 }
@@ -1190,6 +1274,40 @@ impl App {
             "Overlays",
         ]) {
             ctx.zone(zone.clone(), title)?;
+        }
+        for (spec, zone, scope) in [
+            (
+                PanelSpec::new(
+                    crate::workbench::PANEL_SIDE_BAR,
+                    "Side bar",
+                    Area::StartSide,
+                )
+                .min_size(120.0)
+                .default_size(170.0),
+                zones::SIDE_BAR,
+                "sideBar",
+            ),
+            (
+                PanelSpec::new(crate::workbench::PANEL_MAIN, "Main", Area::Center),
+                zones::MAIN,
+                "main",
+            ),
+            (
+                PanelSpec::new(
+                    crate::workbench::PANEL_INSPECTOR,
+                    "Inspector",
+                    Area::EndSide,
+                )
+                .min_size(160.0)
+                .default_size(240.0),
+                zones::INSPECTOR,
+                "inspector",
+            ),
+        ] {
+            ctx.zone_panel(spec, zone, scope)?;
+        }
+        for spec in crate::workbench::steps() {
+            ctx.step(spec)?;
         }
         for (i, (menu, label)) in [
             (MENU_FILE, "File"),
@@ -1789,6 +1907,23 @@ impl App {
         *self.handle.0.derived.borrow_mut() = derived;
         self.check_steps(&mut d);
         self.handle.zones_mut().resolve(&mut d);
+        // The panels, but a zone shown as a panel only when it has blocks.
+        let zone_of = self.handle.workbench_mut().zone_of.clone();
+        let specs: Vec<egui_pop_model::panels::PanelSpec> = self
+            .reg
+            .panels
+            .all()
+            .into_iter()
+            .filter(|p| {
+                zone_of
+                    .get(&p.id)
+                    .is_none_or(|z| self.handle.zone_has_blocks(z))
+            })
+            .cloned()
+            .collect();
+        for note in self.handle.workbench_mut().refresh(specs, &SCREENS) {
+            log::info!(target: "egui_pop", "layout: {note}");
+        }
         let mut all = self.handle.0.diagnostics.borrow_mut();
         // Resolution diagnostics are recomputed each rebuild.
         let kept: Vec<Diagnostic> = all
@@ -1855,6 +1990,17 @@ impl App {
 
     fn load_documents(&mut self) {
         let Some(p) = &self.persist else { return };
+        match p.load::<egui_pop_model::layout::Layout>("layout", &egui_pop_model::layout::schema())
+        {
+            Ok(Some(read)) => self.handle.workbench_mut().layout = read.value,
+            Ok(None) => {}
+            Err(e) => self.handle.0.diagnostics.borrow_mut().error(
+                "layout-unreadable",
+                None,
+                "layout",
+                format!("{e}: the default layout is used"),
+            ),
+        }
         match p.load::<egui_pop_model::values::SettingsDoc>("settings", &settings_schema()) {
             Ok(Some(read)) => {
                 let d = lock(&self.handle.0.store).import(&read.value, &Origin::User);
@@ -1905,7 +2051,12 @@ impl App {
         let doc = lock(&self.handle.0.store).export("settings/");
         p.save("settings", &settings_schema(), &doc)?;
         let keymap = self.reg.keymap.export(&OwnerId::USER, Layer::User);
-        p.save("keymap", &egui_pop_model::keymap_schema(), &keymap)
+        p.save("keymap", &egui_pop_model::keymap_schema(), &keymap)?;
+        p.save(
+            "layout",
+            &egui_pop_model::layout::schema(),
+            &self.handle.layout(),
+        )
     }
 
     fn install_theme(&mut self) {
@@ -2146,6 +2297,17 @@ impl App {
                         self.reg.keymap.reset(&OwnerId::USER, Layer::User, &command);
                         self.dirty = true;
                     }
+                    Request::Workbench(change) => {
+                        let panel = match &change {
+                            crate::workbench::Change::Move(p, _)
+                            | crate::workbench::Change::Show(p)
+                            | crate::workbench::Change::Hide(p)
+                            | crate::workbench::Change::Focus(p) => p.clone(),
+                        };
+                        if let Some(Outcome::Done(Err(e))) = self.handle.change_workbench(change) {
+                            self.handle.workbench_refused(&panel, &e);
+                        }
+                    }
                 }
             }
         }
@@ -2201,21 +2363,6 @@ impl App {
 
     fn shell(&mut self, ui: &mut Ui) {
         let h = self.handle.clone();
-        let panels: Vec<(PanelId, String, Area)> = self
-            .reg
-            .panels
-            .all()
-            .into_iter()
-            .filter(|p| h.panel_visible(&p.id))
-            .map(|p| (p.id.clone(), p.title.clone(), p.area))
-            .collect();
-        let in_area = |a: Area| {
-            panels
-                .iter()
-                .filter(|p| p.2 == a)
-                .cloned()
-                .collect::<Vec<_>>()
-        };
         if h.zone_has_blocks(&zones::TITLE) {
             // No least height: a title zone whose blocks draw nothing (the
             // system draws the frame) takes no room.
@@ -2244,67 +2391,7 @@ impl App {
                 });
             });
         }
-        let bottom = in_area(Area::Bottom);
-        if !bottom.is_empty() {
-            egui::Panel::bottom(Id::new("egui_pop.bottom"))
-                .resizable(true)
-                .show(ui, |ui| self.panel_tabs(ui, "bottom", &bottom));
-        }
-        let start = in_area(Area::StartSide);
-        if h.zone_has_blocks(&zones::SIDE_BAR) || !start.is_empty() {
-            egui::Panel::left(Id::new("egui_pop.side"))
-                .resizable(false)
-                .exact_size(170.0)
-                .show(ui, |ui| {
-                    focus::scope(ui, "sideBar", &[], |ui| h.show_zone(ui, &zones::SIDE_BAR));
-                    self.panel_tabs(ui, "start", &start);
-                });
-        }
-        let end = in_area(Area::EndSide);
-        if h.zone_has_blocks(&zones::INSPECTOR) || !end.is_empty() {
-            egui::Panel::right(Id::new("egui_pop.inspector"))
-                .resizable(false)
-                .exact_size(240.0)
-                .show(ui, |ui| {
-                    focus::scope(ui, "inspector", &[], |ui| {
-                        h.show_zone(ui, &zones::INSPECTOR)
-                    });
-                    self.panel_tabs(ui, "end", &end);
-                });
-        }
-        let center = in_area(Area::Center);
-        egui::CentralPanel::default().show(ui, |ui| {
-            if !center.is_empty() {
-                self.panel_tabs(ui, "center", &center);
-            }
-            focus::scope(ui, "main", &[], |ui| h.show_zone(ui, &zones::MAIN));
-        });
-    }
-
-    fn panel_tabs(&self, ui: &mut Ui, area: &str, panels: &[(PanelId, String, Area)]) {
-        if panels.is_empty() {
-            return;
-        }
-        let key = Id::new(("egui_pop.tab", area));
-        let mut active: usize = ui.ctx().data(|d| d.get_temp(key)).unwrap_or(0);
-        if active >= panels.len() {
-            active = 0;
-        }
-        if panels.len() > 1 {
-            ui.horizontal(|ui| {
-                for (i, (_, title, _)) in panels.iter().enumerate() {
-                    if ui.selectable_label(i == active, title).clicked() {
-                        active = i;
-                    }
-                }
-            });
-            ui.separator();
-        } else {
-            ui.strong(&panels[0].1);
-        }
-        ui.ctx().data_mut(|d| d.insert_temp(key, active));
-        let (id, title, _) = &panels[active];
-        self.handle.show_panel(ui, id, title);
+        crate::workbench::show(&h, ui);
     }
 }
 

@@ -28,6 +28,7 @@ egui.workspace = true
 egui-pop-model.workspace = true
 egui-pop-core.workspace = true
 eframe = { workspace = true, optional = true, features = ["default_fonts", "wgpu", "accesskit", "wayland", "x11"] }
+egui_dock.workspace = true
 log.workspace = true
 serde.workspace = true
 rfd = { workspace = true, optional = true }

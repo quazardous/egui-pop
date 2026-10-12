@@ -44,6 +44,31 @@ impl Node {
         }
     }
 
+    /// Makes a panel the shown tab of its tabs; whether it is here.
+    fn activate(&mut self, panel: &PanelId) -> bool {
+        match self {
+            Node::Tabs { panels, active } => match panels.iter().position(|p| p == panel) {
+                Some(i) => {
+                    *active = i;
+                    true
+                }
+                None => false,
+            },
+            Node::Split { a, b, .. } => a.activate(panel) || b.activate(panel),
+        }
+    }
+
+    /// Adds a panel to the first tabs, shown.
+    fn push(&mut self, panel: PanelId) {
+        match self {
+            Node::Tabs { panels, active } => {
+                panels.push(panel);
+                *active = panels.len() - 1;
+            }
+            Node::Split { a, .. } => a.push(panel),
+        }
+    }
+
     /// Drops panels that are not in `keep`; `None` when nothing is left.
     fn retain(self, keep: &dyn Fn(&PanelId) -> bool) -> Option<Node> {
         match self {
@@ -129,7 +154,12 @@ impl Layout {
     /// Every declared panel in its default area, as tabs.
     pub fn default_for(panels: &Panels) -> Layout {
         let mut areas: Vec<(Area, Node)> = Vec::new();
+        let mut hidden = Vec::new();
         for p in panels.all() {
+            if !p.open {
+                hidden.push(p.id.clone());
+                continue;
+            }
             match areas.iter_mut().find(|(a, _)| *a == p.area) {
                 Some((_, Node::Tabs { panels, .. })) => panels.push(p.id.clone()),
                 _ => areas.push((p.area, Node::tab(p.id.clone()))),
@@ -139,7 +169,7 @@ impl Layout {
         Layout {
             areas,
             auxiliary: Vec::new(),
-            hidden: Vec::new(),
+            hidden,
         }
     }
 
@@ -156,6 +186,77 @@ impl Layout {
             .iter()
             .find(|(_, n)| n.panels().contains(&panel))
             .map(|(a, _)| *a)
+    }
+
+    /// Whether a panel is docked or detached, and not closed.
+    pub fn shows(&self, panel: &PanelId) -> bool {
+        !self.hidden.contains(panel) && self.placed().contains(&panel)
+    }
+
+    /// Takes a panel out of its area or its window (it stays known: not
+    /// closed). Whether it was placed.
+    pub fn remove(&mut self, panel: &PanelId) -> bool {
+        let before = self.placed().len();
+        let areas = std::mem::take(&mut self.areas);
+        self.areas = areas
+            .into_iter()
+            .filter_map(|(a, n)| n.retain(&|p: &PanelId| p != panel).map(|n| (a, n)))
+            .collect();
+        self.auxiliary.retain(|x| x.panel != *panel);
+        self.placed().len() != before
+    }
+
+    /// Docks a panel in an area (taken out of where it was), as the
+    /// shown tab of the area's first tabs.
+    pub fn place(&mut self, panel: &PanelId, area: Area) {
+        self.remove(panel);
+        self.hidden.retain(|h| h != panel);
+        match self.areas.iter_mut().find(|(a, _)| *a == area) {
+            Some((_, node)) => node.push(panel.clone()),
+            None => {
+                self.areas.push((area, Node::tab(panel.clone())));
+                self.areas.sort_by_key(|(a, _)| *a);
+            }
+        }
+    }
+
+    /// Closes a panel: out of its area or window, and kept closed.
+    pub fn hide(&mut self, panel: &PanelId) {
+        self.remove(panel);
+        if !self.hidden.contains(panel) {
+            self.hidden.push(panel.clone());
+        }
+    }
+
+    /// Makes a docked panel the shown tab of its tabs; whether it is
+    /// docked.
+    pub fn activate(&mut self, panel: &PanelId) -> bool {
+        self.areas.iter_mut().any(|(_, n)| n.activate(panel))
+    }
+
+    /// The shown panels of an area, in order (the shown tab of each
+    /// tabs node).
+    pub fn active_in(&self, area: Area) -> Vec<&PanelId> {
+        fn walk<'a>(n: &'a Node, out: &mut Vec<&'a PanelId>) {
+            match n {
+                Node::Tabs { panels, active } => {
+                    if let Some(p) = panels.get(*active) {
+                        out.push(p);
+                    }
+                }
+                Node::Split { a, b, .. } => {
+                    walk(a, out);
+                    walk(b, out);
+                }
+            }
+        }
+        let mut out = Vec::new();
+        for (a, n) in &self.areas {
+            if *a == area {
+                walk(n, &mut out);
+            }
+        }
+        out
     }
 
     /// Brings a saved layout in line with today's panels and screens:
@@ -209,6 +310,10 @@ impl Layout {
         let placed: Vec<PanelId> = layout.placed().into_iter().cloned().collect();
         for p in panels.all() {
             if placed.contains(&p.id) || hidden.contains(&p.id) {
+                continue;
+            }
+            if !p.open && !redock.contains(&p.id) {
+                layout.hidden.push(p.id.clone());
                 continue;
             }
             if !redock.contains(&p.id) {

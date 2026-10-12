@@ -496,3 +496,45 @@ fn the_image_widgets_page_selects_a_thumbnail() {
     assert!(h.query_by_label("Image 2000").is_none(), "virtualised");
     h.snapshot("images-pop-dark");
 }
+
+#[test]
+fn the_workbench_page_opens_moves_and_vetoes_panels() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "workbench"));
+    h.run();
+    h.get_by_label("Open the demonstration panels").click();
+    h.run();
+    h.run();
+    let app = h.state().app.handle().clone();
+    let outline = egui_pop::model::ids::PanelId::from_static("gallery.outline");
+    let console = egui_pop::model::ids::PanelId::from_static("gallery.console");
+    assert!(app.panel_visible(&outline));
+    assert!(h.query_by_label("Sections of the document.").is_some());
+    let mut results = egui_kittest::SnapshotResults::new();
+    results.add(h.try_snapshot("workbench-pop-dark"));
+    // The console stays in the bottom panel: refused.
+    h.get_by_label("Move Console to the start side").click();
+    h.run();
+    assert_eq!(
+        app.layout().area_of(&console),
+        Some(egui_pop::model::panels::Area::Bottom)
+    );
+    // Moves are vetoed while the box is ticked.
+    h.get_by_label("Veto moves (a before-hook on workbench.move)")
+        .click();
+    h.run();
+    h.get_by_label("Move Outline to the end side").click();
+    h.run();
+    assert_eq!(
+        app.layout().area_of(&outline),
+        Some(egui_pop::model::panels::Area::StartSide)
+    );
+    h.get_by_label("Veto moves (a before-hook on workbench.move)")
+        .click();
+    h.run();
+    h.get_by_label("Move Outline to the end side").click();
+    h.run();
+    assert_eq!(
+        app.layout().area_of(&outline),
+        Some(egui_pop::model::panels::Area::EndSide)
+    );
+}

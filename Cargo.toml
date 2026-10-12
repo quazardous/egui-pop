@@ -38,6 +38,8 @@ egui-phosphor = { version = "0.14", default-features = false, features = ["regul
 eframe = { version = "0.36", default-features = false }
 # MIT; the system's file chooser (xdg portal on Linux).
 rfd = "0.17"
+# MIT: docked tabs and splits for the workbench's areas.
+egui_dock = { version = "0.21", default-features = false }
 egui-pop = { version = "0.0.1", path = "crates/egui-pop" }
 
 [workspace.lints.rust]

@@ -46,6 +46,21 @@ pub struct PanelSpec {
     /// Command ids the panel contributes (its toggle and focus commands
     /// are added by the shell).
     pub commands: Vec<CommandId>,
+    /// The smallest size it may be given across its area (a side bar's
+    /// width, the bottom panel's height), in points.
+    pub min_size: f32,
+    /// The size it asks for across its area when it opens there.
+    pub default_size: Option<f32>,
+    /// Whether it may be detached into a window of its own.
+    pub detachable: bool,
+    /// The icon naming it in strips (an `egui_pop_core::icon::Icon`
+    /// name); empty: its title's first letter.
+    pub icon: String,
+    /// Drawn without a tab bar when it is alone in its area (the shell's
+    /// zones shown as panels).
+    pub bare: bool,
+    /// Placed in its area at first; `false`: closed until asked for.
+    pub open: bool,
 }
 
 impl PanelSpec {
@@ -56,7 +71,55 @@ impl PanelSpec {
             area,
             areas: Vec::new(),
             commands: Vec::new(),
+            min_size: 120.0,
+            default_size: None,
+            detachable: true,
+            icon: String::new(),
+            bare: false,
+            open: true,
         }
+    }
+
+    /// The smallest size across its area, in points.
+    pub fn min_size(mut self, points: f32) -> Self {
+        self.min_size = points.max(0.0);
+        self
+    }
+
+    /// The size it asks for across its area, in points.
+    pub fn default_size(mut self, points: f32) -> Self {
+        self.default_size = Some(points.max(self.min_size));
+        self
+    }
+
+    /// Whether it may be detached into a window of its own.
+    pub fn detachable(mut self, on: bool) -> Self {
+        self.detachable = on;
+        self
+    }
+
+    /// Its icon in strips, by name (`search`, `settings`...).
+    pub fn icon(mut self, name: &str) -> Self {
+        self.icon = name.into();
+        self
+    }
+
+    /// Closed until asked for (its command, a step): a new layout and a
+    /// repaired one keep it closed.
+    pub fn closed(mut self) -> Self {
+        self.open = false;
+        self
+    }
+
+    /// Drawn without a tab bar when alone in its area.
+    pub fn bare(mut self) -> Self {
+        self.bare = true;
+        self
+    }
+
+    /// Why it may not be in an area, if it may not.
+    pub fn refuses(&self, area: Area) -> Option<String> {
+        (!self.allows(area)).then(|| format!("{} stays out of {}", self.title, area.name()))
     }
 
     /// Restricts where it may go (its default area always allowed).

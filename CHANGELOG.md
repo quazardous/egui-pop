@@ -9,6 +9,21 @@ egui minor.
 
 ### Added
 
+- The workbench (`egui_pop_api::workbench`): panels in areas (centre,
+  start and end side bars, bottom) as tabs and splits over `egui_dock`,
+  projected from the versioned layout document and read back from it;
+  placement rules from each panel's declaration (`only_in`, `min_size`,
+  `default_size`, `closed`, `detachable`, `icon`); a tab dragged onto
+  another area moves there when its rules allow it, the drop hint says
+  why not, a refusal is reported (journal and toast). The layout changes
+  through the steps `workbench.move`, `workbench.show`, `workbench.hide`
+  and `workbench.focus` (`AppHandle::move_panel`, `focus_panel`,
+  `set_panel_visible`, `set_layout`, `layout`); each panel gets
+  `<id>.focus` and `<id>.toggle` commands; the layout is saved with the
+  settings and repaired at the next start. The shell's side bar, main and
+  inspector zones are panels of their areas (`app.side-bar`, `app.main`,
+  `app.inspector`), drawn without a tab bar when alone. Gallery page:
+  Workbench.
 - Test kit: one wgpu device per test process (`SharedGpu::shared_wgpu`,
   `gpu_lock`, feature `wgpu`); the gallery's and the facade's rendering
   tests use it, as parallel device creation crashes the Vulkan loader
@@ -344,6 +359,8 @@ egui minor.
 
 ### Changed
 
+- The shell's side bar and inspector are resizable workbench areas; a
+  panel's area is its default one, not where it must stay.
 - Control heights and icon sizes are multiples of 4 points, so they
   are whole pixels at every quarter scale: controls 24 (compact 20),
   icons 16, 20 and 24 (compact 12, 16 and 20); a token test keeps it.

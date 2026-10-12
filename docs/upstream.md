@@ -51,11 +51,12 @@ Reviewed at every egui bump: remove what upstream fixed, update the rest.
   in.
 - **Upstream**: <https://github.com/anhosh/egui_dock/issues/351> (related
   to #163 there).
-- **Workaround** (for the future workbench): validate the layout after a
-  drop and move the tab back to an allowed area, with a warning naming
-  the panel and the area (no silent no-op, ADR 0003). The model side
-  already exists: `Layout::repair` moves panels found in an area they may
-  not be in.
+- **Workaround**: each area is a dock of its own, its tabs never allowed
+  into egui_dock's windows; a tab dropped over another area is moved
+  there by the workbench (`egui_pop_api::workbench`) when the panel's
+  rules allow it, and refused otherwise, with the drop hint saying why
+  and the refusal reported (no silent no-op, ADR 0003). `Layout::repair`
+  moves panels found in an area they may not be in.
 - **Remove when**: the hook lands in egui_dock.
 
 ## egui: symbols missing from the default fonts

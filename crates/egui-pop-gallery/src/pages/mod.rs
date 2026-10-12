@@ -20,6 +20,7 @@ pub mod toasts;
 pub mod tokens;
 pub mod values;
 pub mod viewport;
+pub mod workbench;
 pub mod zones;
 
 /// A section title with the theme's section spacing above it.

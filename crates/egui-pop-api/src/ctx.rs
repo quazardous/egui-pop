@@ -269,19 +269,71 @@ impl<'a> Ctx<'a> {
         self.menu_item(MenuItem::submenu(parent, group, order, menu, label))
     }
 
-    /// Declares a panel and how to draw it; the shell places it in its
-    /// area, inside a fault boundary and a focus scope.
+    /// Declares a panel and how to draw it; the workbench places it in
+    /// its area (see `workbench`), inside a fault boundary and a focus
+    /// scope, and its commands `<id>.focus` and `<id>.toggle` are
+    /// declared with it.
     pub fn panel(
         &mut self,
         spec: PanelSpec,
         draw: impl FnMut(&mut Ui, &AppHandle) + 'static,
     ) -> Result<&mut Self, CtxError> {
         let id: PanelId = spec.id.clone();
+        let title = spec.title.clone();
         self.reg
             .panels
             .declare(&self.owner, spec)
             .map_err(CtxError::Panel)?;
-        self.app.add_panel_view(&self.owner, id, Box::new(draw));
+        self.app
+            .add_panel_view(&self.owner, id.clone(), Box::new(draw));
+        let command = |suffix: &str| {
+            CommandId::new(format!("{id}.{suffix}")).map_err(|e| CtxError::Panel(e.to_string()))
+        };
+        let (focus, toggle) = (id.clone(), id.clone());
+        self.command(
+            CommandSpec::new(command("focus")?, &format!("Focus {title}"), "View")
+                .description(&format!("Shows {title} and gives it the keyboard.")),
+            move |call| {
+                call.app.focus_panel(&focus);
+                Ok(Json::Null)
+            },
+        )?
+        .command(
+            CommandSpec::new(command("toggle")?, &format!("Show or hide {title}"), "View")
+                .description(&format!("Opens {title} where it was, or closes it.")),
+            move |call| {
+                let shown = call.app.panel_visible(&toggle);
+                call.app.set_panel_visible(&toggle, !shown);
+                Ok(serde_json::json!({ "shown": !shown }))
+            },
+        )?;
+        Ok(self)
+    }
+
+    /// Shows a zone as a panel (the shell's side bar, main and inspector
+    /// zones): no commands, drawn bare when alone in its area.
+    pub(crate) fn zone_panel(
+        &mut self,
+        spec: PanelSpec,
+        zone: ZoneId,
+        scope: &'static str,
+    ) -> Result<&mut Self, CtxError> {
+        let id = spec.id.clone();
+        self.reg
+            .panels
+            .declare(&self.owner, spec.bare())
+            .map_err(CtxError::Panel)?;
+        self.app
+            .workbench_mut()
+            .zone_of
+            .insert(id.clone(), zone.clone());
+        self.app.add_panel_view(
+            &self.owner,
+            id,
+            Box::new(move |ui, app| {
+                egui_pop_core::focus::scope(ui, scope, &[], |ui| app.show_zone(ui, &zone));
+            }),
+        );
         Ok(self)
     }
 

@@ -23,6 +23,8 @@
 //! - [`dialogs`]: confirmations, forms, choices and notices, a plugin;
 //! - [`toasts`]: notices in a corner, with actions, a plugin;
 //! - [`frame`]: the window's own title bar and edges, a plugin;
+//! - [`workbench`]: panels in areas over egui_dock, with placement
+//!   rules, changed by named steps;
 //! - [`window`]: the window's place kept and repaired, full screen with
 //!   a way out, a plugin;
 //! - [`zoom`]: the interface zoom in steps, its commands and keys;
@@ -84,6 +86,7 @@ pub mod steps;
 pub mod stories;
 pub mod toasts;
 pub mod window;
+pub mod workbench;
 pub mod zones;
 pub mod zoom;
 
