@@ -14,6 +14,10 @@ tabs and splits over [egui_dock](https://github.com/Adanos020/egui_dock),
 saves where the user put them and repairs that layout at the next start.
 The shell's side bar, main and inspector zones are panels of their areas.
 
+![The gallery's Workbench page: Outline beside the side bar, Properties
+beside the inspector, Console and Notes in the bottom
+panel](screenshots/workbench-pop-dark.png)
+
 ```rust
 use egui_pop::api::steps::Before;
 use egui_pop::api::workbench::STEP_MOVE;
