@@ -40,6 +40,9 @@ devtools; every feature's moments reachable as steps (ADR 0011).
 
 ## Reference
 
+- [Packaging](packaging.md): desktop files, AppStream, Flatpak, icons,
+  the Windows manifest and installers, the macOS bundle, and what each
+  platform service needs from the package.
 - [Testing](testing.md): how egui-pop is tested.
 - [API stability](stability.md): what each release promises.
 - [Upstream workarounds](upstream.md): what egui-pop compensates for in
@@ -71,8 +74,8 @@ Layers only depend downwards; a test reading `cargo metadata` keeps it so
 ## Code in these pages
 
 The Rust blocks of the README and of the getting started, themes,
-plugins, workbench, viewport, translations, platform services and
-debugging pages are
+plugins, workbench, viewport, translations, platform services,
+packaging and debugging pages are
 compiled and run as doctests by `crates/consumer-smoke`, against the
 `egui-pop` crate only, as a user depends on it: `cargo test -p
 consumer-smoke --doc`.

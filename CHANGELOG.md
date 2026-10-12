@@ -107,6 +107,11 @@ egui minor.
   tracking bit through the registry API, instead of running `gsettings`,
   `kreadconfig` or `reg`; `FocusModePlugin` reads it again from a thread
   each time the window gets the focus back. Guide: docs/focus-mode.md.
+- A packaging guide (docs/packaging.md): the desktop file, AppStream,
+  icons and Flatpak's permissions on Linux, the manifest, icon,
+  installers, AppUserModelID, URL protocol and code signing on Windows,
+  the bundle and notarisation on macOS, and what each platform service
+  needs from the package.
 
 ### Changed
 

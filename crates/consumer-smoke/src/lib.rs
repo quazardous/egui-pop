@@ -46,3 +46,6 @@ pub mod logs {}
 
 #[doc = include_str!("../../../docs/focus-mode.md")]
 pub mod focus_mode {}
+
+#[doc = include_str!("../../../docs/packaging.md")]
+pub mod packaging {}
