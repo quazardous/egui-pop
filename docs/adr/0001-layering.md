@@ -24,6 +24,7 @@ Crates are stacked; a crate depends only on crates of a lower layer:
 | L3 | `egui-pop-viewport`: the image viewport, thumbnails, the histogram (a component on the egui layer alone) | yes |
 | L4 | `egui-pop-test`: test kit (dev-dependency only) | yes |
 | L4 | `egui-pop-i18n`: translations, a plugin (a component on the application API) | yes |
+| L4 | `egui-pop-platform`: platform services (single instance, notifications, tray, global shortcuts, logs and crash reports, focus mode), opt-in plugins | yes |
 | L5 | `egui-pop`: the facade users depend on, re-exporting the layers | yes |
 | L6 | applications: the gallery, `consumer-smoke`, `xtask` | yes |
 

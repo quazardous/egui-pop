@@ -45,6 +45,17 @@ egui minor.
   whether the desktop takes global shortcuts and how each registration
   went; the shortcuts editor shows it next to each command, including
   when nothing registers them.
+- Platform services (`egui-pop-platform`, feature `platform` of the
+  facade, `egui_pop::platform`; one feature and one opt-in plugin per
+  service). A single instance and deep links: `instance::single`, at the
+  top of `main`, makes the first launch listen on a local socket and a
+  later one hand over its arguments, working directory and activation
+  token, then exit. `InstancePlugin` turns them into the
+  `instance.second_launch` step (the window comes to the front, links
+  in the plugin's schemes run `deeplink.open`) and `deeplink.open`
+  (runs the plugin's links command with `{ "url" }`), also for the
+  first launch's own links. `dirs` gives the state, log and crash
+  directories of each platform. Guide: docs/instance.md.
 
 ### Changed
 

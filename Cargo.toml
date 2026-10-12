@@ -7,6 +7,7 @@ members = [
     "crates/egui-pop-api",
     "crates/egui-pop-viewport",
     "crates/egui-pop-i18n",
+    "crates/egui-pop-platform",
     "crates/egui-pop-test",
     "crates/egui-pop",
     "crates/egui-pop-gallery",
@@ -32,6 +33,7 @@ egui-pop-api = { version = "0.1.0", path = "crates/egui-pop-api", default-featur
 egui-pop-test = { version = "0.1.0", path = "crates/egui-pop-test" }
 egui-pop-viewport = { version = "0.1.0", path = "crates/egui-pop-viewport" }
 egui-pop-i18n = { version = "0.1.0", path = "crates/egui-pop-i18n" }
+egui-pop-platform = { version = "0.1.0", path = "crates/egui-pop-platform", default-features = false }
 egui = { version = "0.36", default-features = false }
 egui_kittest = "0.36"
 # MIT OR Apache-2.0: the test kit shares one wgpu device per process.

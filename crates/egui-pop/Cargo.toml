@@ -28,6 +28,11 @@ viewport = ["dep:egui-pop-viewport"]
 ## formatting, the key extractor (`egui-pop-i18n`, re-exported as
 ## `egui_pop::i18n`).
 i18n = ["dep:egui-pop-i18n"]
+## Every platform service (`egui-pop-platform`, re-exported as
+## `egui_pop::platform`); `platform-<service>` picks one.
+platform = ["platform-instance"]
+## A single instance and deep links (`egui_pop::platform::instance`).
+platform-instance = ["dep:egui-pop-platform", "egui-pop-platform/instance"]
 
 [dependencies]
 egui.workspace = true
@@ -37,6 +42,7 @@ egui-pop-core.workspace = true
 egui-pop-api.workspace = true
 egui-pop-viewport = { workspace = true, optional = true }
 egui-pop-i18n = { workspace = true, optional = true }
+egui-pop-platform = { workspace = true, optional = true }
 
 [dev-dependencies]
 egui = { workspace = true, features = ["default_fonts"] }

@@ -1,0 +1,71 @@
+[package]
+name = "egui-pop-platform"
+version = "0.1.0"
+description = "Platform services for egui-pop applications, as opt-in plugins: a single instance with deep links, desktop notifications with actions, a tray icon with a declared menu, global shortcuts, logs and crash reports, the focus mode read in-process"
+keywords = ["egui", "tray", "notifications", "single-instance", "global-hotkey"]
+categories = ["gui"]
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+default = ["instance", "notify", "tray", "keys", "logs", "crash", "focus"]
+## A single instance: a second launch hands its arguments and links to
+## the running one (`instance`).
+instance = ["dep:interprocess"]
+## Desktop notifications with actions, falling back to toasts
+## (`notify`).
+notify = ["dep:notify-rust"]
+## A tray icon with a declared menu (`tray`).
+tray = ["dep:tray-icon"]
+## Global shortcuts: bindings in the system scope registered with the
+## desktop (`keys`).
+keys = ["dep:global-hotkey", "dep:ashpd", "dep:futures-lite", "dep:async-io"]
+## Logs to a rotating file, with a level setting (`logs`).
+logs = []
+## Crash reports written by a panic hook, offered on the next start
+## (`crash`).
+crash = ["logs"]
+## The focus mode read in-process (`focus`).
+focus = ["dep:ashpd", "dep:futures-lite", "dep:async-io", "dep:winreg"]
+
+[dependencies]
+egui.workspace = true
+egui-pop-model.workspace = true
+egui-pop-core.workspace = true
+egui-pop-api.workspace = true
+log.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# 0BSD OR Apache-2.0: local sockets (named pipes on Windows).
+interprocess = { version = "2.4", optional = true }
+# MIT OR Apache-2.0: XDG notifications over D-Bus, the macOS and Windows
+# notification centres.
+notify-rust = { version = "4.18", optional = true, default-features = false, features = ["z"] }
+# MIT OR Apache-2.0: the tray icon (StatusNotifierItem through ksni on
+# Linux, no GTK; Win32; AppKit). ksni is under the Unlicense.
+tray-icon = { version = "0.26", optional = true, default-features = false, features = ["ksni"] }
+# Apache-2.0 OR MIT: global shortcuts on Windows, macOS and X11.
+global-hotkey = { version = "0.8", optional = true }
+
+[target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", target_os = "dragonfly"))'.dependencies]
+# MIT: XDG desktop portals (global shortcuts on Wayland, the settings).
+ashpd = { version = "0.13", optional = true, default-features = false, features = ["async-io", "global_shortcuts", "settings"] }
+# Apache-2.0 OR MIT: waiting on the portals from a thread.
+futures-lite = { version = "2", optional = true }
+async-io = { version = "2", optional = true }
+
+[target.'cfg(windows)'.dependencies]
+# MIT: the registry, read in-process.
+winreg = { version = "0.55", optional = true }
+
+[dev-dependencies]
+egui = { workspace = true, features = ["default_fonts"] }
+egui_kittest = { workspace = true }

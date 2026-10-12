@@ -28,3 +28,6 @@ pub mod debugging {}
 
 #[doc = include_str!("../../../docs/i18n.md")]
 pub mod i18n {}
+
+#[doc = include_str!("../../../docs/instance.md")]
+pub mod instance {}

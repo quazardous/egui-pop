@@ -59,6 +59,11 @@ pub use egui_pop_viewport as viewport;
 #[cfg(feature = "i18n")]
 pub use egui_pop_i18n as i18n;
 
+/// Platform services as opt-in plugins: a single instance and deep
+/// links (feature `platform`, or `platform-<service>` for one).
+#[cfg(feature = "platform-instance")]
+pub use egui_pop_platform as platform;
+
 /// Themes: tokens into egui's style (from `egui-pop-core`).
 pub use egui_pop_core::theme;
 
