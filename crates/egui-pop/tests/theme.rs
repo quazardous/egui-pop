@@ -7,6 +7,19 @@ use egui_kittest::kittest::Queryable as _;
 use egui_pop::theme::{self, BUILT_IN_THEMES, Density, ThemeSpec, Tokens};
 use egui_pop::tokens::Themes;
 
+/// Whether a theme is, through its `$extends` chain, a light one.
+fn extends_pop_light(name: &str) -> bool {
+    let themes = Themes::default();
+    let mut at = Some(name.to_string());
+    while let Some(n) = at {
+        if n == "pop-light" {
+            return true;
+        }
+        at = themes.get(&n).and_then(|t| t.extends.clone());
+    }
+    false
+}
+
 #[test]
 fn installing_each_theme_sets_the_visuals_from_its_tokens() {
     for base in BUILT_IN_THEMES {
@@ -15,7 +28,7 @@ fn installing_each_theme_sets_the_visuals_from_its_tokens() {
         assert!(t.resolved().problems().is_empty(), "{base}");
         let style = ctx.global_style();
         let v = &style.visuals;
-        assert_eq!(v.dark_mode, *base != "pop-light", "{base}");
+        assert_eq!(v.dark_mode, !extends_pop_light(base), "{base}");
         assert_eq!(v.panel_fill, t.surface.panel, "{base}");
         assert_eq!(v.window_fill, t.surface.overlay, "{base}");
         assert_eq!(v.extreme_bg_color, t.surface.sunken, "{base}");

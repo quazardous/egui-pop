@@ -193,7 +193,7 @@ fn switchers(ui: &mut Ui, app: &AppHandle) {
     ui.separator();
     let label = ui.label("Theme");
     egui::ComboBox::from_id_salt("theme")
-        .selected_text(spec.base.clone())
+        .selected_text(theme::theme_label(&spec.base))
         .show_ui(ui, |ui| {
             let names: Vec<String> = theme::BUILT_IN_THEMES
                 .iter()
@@ -207,7 +207,8 @@ fn switchers(ui: &mut Ui, app: &AppHandle) {
                 )
                 .collect();
             for name in names {
-                ui.selectable_value(&mut spec.base, name.clone(), name);
+                let label = theme::theme_label(&name);
+                ui.selectable_value(&mut spec.base, name, label);
             }
         })
         .response

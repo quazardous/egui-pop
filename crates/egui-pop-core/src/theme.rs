@@ -48,7 +48,8 @@ use egui::{
     style::ScrollAnimation,
 };
 pub use egui_pop_tokens::{
-    BUILT_IN_ACCENTS, BUILT_IN_THEMES, Density, FALLBACK_THEME, ResolvedTokens, ThemeSpec, Themes,
+    BUILT_IN_ACCENTS, BUILT_IN_THEMES, Density, FALLBACK_THEME, POP_THEMES, ResolvedTokens,
+    ThemeSpec, Themes, theme_label,
 };
 
 /// A token colour as an egui colour.

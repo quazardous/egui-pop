@@ -5,7 +5,7 @@
 use egui_kittest::Harness;
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use egui_pop::model::ids::StoryId;
-use egui_pop::theme::{BUILT_IN_THEMES, Density, Tokens};
+use egui_pop::theme::{BUILT_IN_THEMES, Density, POP_THEMES, Tokens};
 use egui_pop_gallery::{Gallery, Options, PAGES};
 
 fn harness(options: Options) -> Harness<'static, Gallery> {
@@ -37,7 +37,7 @@ fn title(h: &Harness<'_, Gallery>, page: &str) -> String {
 
 #[test]
 fn every_page_renders_under_every_theme_and_density() {
-    for theme in BUILT_IN_THEMES {
+    for theme in POP_THEMES {
         for density in Density::ALL {
             for page in PAGES {
                 let mut h = harness(options(theme, density, page));
@@ -71,7 +71,7 @@ fn every_interactive_node_of_every_page_has_a_name() {
 #[test]
 fn snapshots_per_theme() {
     let mut results = egui_kittest::SnapshotResults::new();
-    for theme in BUILT_IN_THEMES {
+    for theme in POP_THEMES {
         for page in ["overview", "builtins", "icons"] {
             let mut h = harness(options(theme, Density::Comfortable, page));
             h.run();
@@ -350,4 +350,17 @@ fn the_settings_window_searches_and_edits_shortcuts() {
 fn the_gallerys_keymap_is_clean() {
     let h = harness(Options::default());
     egui_pop_test::assert_keymap_clean(&h.state().app);
+}
+
+#[test]
+fn every_editor_inspired_theme_draws_the_overview() {
+    let mut results = egui_kittest::SnapshotResults::new();
+    for theme in BUILT_IN_THEMES.iter().filter(|t| !POP_THEMES.contains(t)) {
+        let mut h = harness(options(theme, Density::Comfortable, "overview"));
+        h.run();
+        let tokens = Tokens::of(&h.ctx);
+        assert!(tokens.resolved().problems().is_empty(), "{theme}");
+        assert_eq!(tokens.resolved().spec().base, *theme);
+        results.add(h.try_snapshot(format!("overview-{theme}")));
+    }
 }

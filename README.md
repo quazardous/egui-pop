@@ -60,7 +60,10 @@ setup(&egui::Context::default());
 |---|---|---|
 | ![pop-dark](docs/screenshots/overview-pop-dark.png) | ![pop-light](docs/screenshots/overview-pop-light.png) | ![pop-high-contrast](docs/screenshots/overview-pop-high-contrast.png) |
 
-Built-in themes: `pop-dark`, `pop-light` and `pop-high-contrast`;
+Built-in themes: `pop-dark`, `pop-light` and `pop-high-contrast`, and
+twelve editor-inspired ones (GitHub, Catppuccin, One, Solarized and
+Gruvbox families, light and dark, and GitHub's high-contrast pair;
+sources and licences in [NOTICE](NOTICE));
 densities `comfortable` and `compact`; accents `gold`, `blue`, `green`,
 `amber` and `red`; reduced motion. See [docs/tokens.md](docs/tokens.md).
 

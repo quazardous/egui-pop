@@ -1,0 +1,133 @@
+{
+  "$extends": "pop-dark",
+  "$description": "Inspired by Gruvbox Dark (medium) by Pavel Pertsev (morhetz, MIT/X11 licence), as mapped to a workbench by the Gruvbox Theme for VS Code by jdinhlife (MIT).",
+  "$extensions": {
+    "org.egui-pop.source": {
+      "repository": "https://github.com/jdinhify/vscode-theme-gruvbox",
+      "file": "themes/gruvbox-dark-medium.json",
+      "version": "1.29.1",
+      "commit": "ca3b8ad203e84a884ca33fb84b5795cf43032709",
+      "license": "MIT",
+      "note": "Read from the published extension package (Open VSX jdinhlife.gruvbox 1.29.1).",
+      "palette": "https://github.com/morhetz/gruvbox (README palette, commit ef8864bb42bf244f0295d1c5a403b27e3d139695; licence stated as MIT/X11 in the README)"
+    }
+  },
+  "gray": {
+    "$type": "color",
+    "$description": "Gruvbox's dark backgrounds bg0_h to bg4 and inks fg4 to fg0.",
+    "0": {"$value": {"colorSpace": "oklch", "components": [0.2408, 0.0049, 219.67], "hex": "#1d2021"}, "$description": "bg0_h"},
+    "1": {"$value": {"colorSpace": "oklch", "components": [0.2596, 0.0037, 106.65], "hex": "#242422"}, "$description": "Interpolated in OKLCH between steps 0 and 2."},
+    "2": {"$value": {"colorSpace": "oklch", "components": [0.2768, 0.0, 0.0], "hex": "#282828"}, "$description": "bg0: editor.background, sideBar.background"},
+    "3": {"$value": {"colorSpace": "oklch", "components": [0.3109, 0.0034, 48.62], "hex": "#32302f"}, "$description": "bg0_s"},
+    "4": {"$value": {"colorSpace": "oklch", "components": [0.3441, 0.0066, 48.52], "hex": "#3c3836"}, "$description": "bg1: tab.activeBackground, borders"},
+    "5": {"$value": {"colorSpace": "oklch", "components": [0.411, 0.0115, 51.87], "hex": "#504945"}, "$description": "bg2"},
+    "6": {"$value": {"colorSpace": "oklch", "components": [0.4818, 0.0181, 61.04], "hex": "#665c54"}, "$description": "bg3"},
+    "7": {"$value": {"colorSpace": "oklch", "components": [0.5505, 0.0234, 62.57], "hex": "#7c6f64"}, "$description": "bg4"},
+    "8": {"$value": {"colorSpace": "oklch", "components": [0.6192, 0.0286, 67.26], "hex": "#928374"}, "$description": "gray"},
+    "9": {"$value": {"colorSpace": "oklch", "components": [0.6903, 0.0346, 76.31], "hex": "#a89984"}, "$description": "fg4"},
+    "10": {"$value": {"colorSpace": "oklch", "components": [0.7564, 0.041, 82.28], "hex": "#bdae93"}, "$description": "fg3"},
+    "11": {"$value": {"colorSpace": "oklch", "components": [0.8941, 0.0566, 89.24], "hex": "#ebdbb2"}, "$description": "fg1: foreground"},
+    "12": {"$value": {"colorSpace": "oklch", "components": [0.9555, 0.0555, 96.15], "hex": "#fbf1c7"}, "$description": "fg0"}
+  },
+  "gold": {
+    "$type": "color",
+    "$description": "Built around #fabd2f (bright yellow).",
+    "1": {"$value": {"colorSpace": "oklch", "components": [0.254, 0.014, 81.64], "hex": "#26221b"}, "$description": "egui-pop's step 1, in the hue of #fabd2f."},
+    "2": {"$value": {"colorSpace": "oklch", "components": [0.2828, 0.0205, 86.4], "hex": "#2e291e"}, "$description": "egui-pop's step 2, in the hue of #fabd2f."},
+    "3": {"$value": {"colorSpace": "oklch", "components": [0.3396, 0.0401, 82.88], "hex": "#42361f"}, "$description": "egui-pop's step 3, in the hue of #fabd2f."},
+    "4": {"$value": {"colorSpace": "oklch", "components": [0.3884, 0.0501, 82.08], "hex": "#524224"}, "$description": "egui-pop's step 4, in the hue of #fabd2f."},
+    "5": {"$value": {"colorSpace": "oklch", "components": [0.4607, 0.0605, 82.33], "hex": "#69552f"}, "$description": "egui-pop's step 5, in the hue of #fabd2f."},
+    "6": {"$value": {"colorSpace": "oklch", "components": [0.5428, 0.0699, 83.58], "hex": "#836c3e"}, "$description": "egui-pop's step 6, in the hue of #fabd2f."},
+    "7": {"$value": {"colorSpace": "oklch", "components": [0.6204, 0.0904, 82.65], "hex": "#a18142"}, "$description": "egui-pop's step 7, in the hue of #fabd2f."},
+    "8": {"$value": {"colorSpace": "oklch", "components": [0.7633, 0.157, 83.01], "hex": "#e2a700"}, "$description": "Step 9 pressed, in OKLCH."},
+    "9": {"$value": {"colorSpace": "oklch", "components": [0.8325, 0.1595, 82.99], "hex": "#fabd2f"}, "$description": "bright yellow"},
+    "10": {"$value": {"colorSpace": "oklch", "components": [0.8824, 0.1202, 82.85], "hex": "#ffd177"}, "$description": "Step 9 under the pointer, in OKLCH."},
+    "11": {"$value": {"colorSpace": "oklch", "components": [0.8325, 0.1595, 82.99], "hex": "#fabd2f"}, "$description": "bright yellow"},
+    "12": {"$value": {"colorSpace": "oklch", "components": [0.9393, 0.0419, 82.48], "hex": "#f9e9cc"}, "$description": "egui-pop's step 12, in the hue of the theme colour."},
+    "contrast": {"$value": "{gray.0}", "$description": "Text on step 9."}
+  },
+  "amber": {
+    "$type": "color",
+    "$description": "Built around #fe8019 (bright orange).",
+    "1": {"$value": {"colorSpace": "oklch", "components": [0.2553, 0.0154, 53.84], "hex": "#29211c"}, "$description": "egui-pop's step 1, in the hue of #fe8019."},
+    "2": {"$value": {"colorSpace": "oklch", "components": [0.2831, 0.0207, 54.15], "hex": "#322720"}, "$description": "egui-pop's step 2, in the hue of #fe8019."},
+    "3": {"$value": {"colorSpace": "oklch", "components": [0.3403, 0.04, 50.43], "hex": "#493225"}, "$description": "egui-pop's step 3, in the hue of #fe8019."},
+    "4": {"$value": {"colorSpace": "oklch", "components": [0.3884, 0.05, 52.56], "hex": "#5a3d2b"}, "$description": "egui-pop's step 4, in the hue of #fe8019."},
+    "5": {"$value": {"colorSpace": "oklch", "components": [0.4614, 0.0592, 52.18], "hex": "#734f39"}, "$description": "egui-pop's step 5, in the hue of #fe8019."},
+    "6": {"$value": {"colorSpace": "oklch", "components": [0.5409, 0.07, 50.77], "hex": "#906349"}, "$description": "egui-pop's step 6, in the hue of #fe8019."},
+    "7": {"$value": {"colorSpace": "oklch", "components": [0.6203, 0.0909, 51.35], "hex": "#b27652"}, "$description": "egui-pop's step 7, in the hue of #fe8019."},
+    "8": {"$value": {"colorSpace": "oklch", "components": [0.661, 0.1711, 51.52], "hex": "#e16d00"}, "$description": "Step 9 pressed, in OKLCH."},
+    "9": {"$value": {"colorSpace": "oklch", "components": [0.7311, 0.182, 51.69], "hex": "#fe8019"}, "$description": "bright orange"},
+    "10": {"$value": {"colorSpace": "oklch", "components": [0.7809, 0.1431, 51.46], "hex": "#ff9b5c"}, "$description": "Step 9 under the pointer, in OKLCH."},
+    "11": {"$value": {"colorSpace": "oklch", "components": [0.7311, 0.182, 51.69], "hex": "#fe8019"}, "$description": "bright orange"},
+    "12": {"$value": {"colorSpace": "oklch", "components": [0.9393, 0.0343, 50.21], "hex": "#ffe5d7"}, "$description": "egui-pop's step 12, in the hue of the theme colour."},
+    "contrast": {"$value": "{gray.0}", "$description": "Text on step 9."}
+  },
+  "red": {
+    "$type": "color",
+    "$description": "Built around #fb4934 (bright red: errorForeground).",
+    "1": {"$value": {"colorSpace": "oklch", "components": [0.2547, 0.016, 31.3], "hex": "#2a201e"}, "$description": "egui-pop's step 1, in the hue of #fb4934."},
+    "2": {"$value": {"colorSpace": "oklch", "components": [0.2828, 0.0205, 33.25], "hex": "#332623"}, "$description": "egui-pop's step 2, in the hue of #fb4934."},
+    "3": {"$value": {"colorSpace": "oklch", "components": [0.3404, 0.0405, 28.65], "hex": "#4b302c"}, "$description": "egui-pop's step 3, in the hue of #fb4934."},
+    "4": {"$value": {"colorSpace": "oklch", "components": [0.3905, 0.0497, 30.44], "hex": "#5d3b35"}, "$description": "egui-pop's step 4, in the hue of #fb4934."},
+    "5": {"$value": {"colorSpace": "oklch", "components": [0.4597, 0.0602, 29.68], "hex": "#764b44"}, "$description": "egui-pop's step 5, in the hue of #fb4934."},
+    "6": {"$value": {"colorSpace": "oklch", "components": [0.543, 0.07, 30.26], "hex": "#946057"}, "$description": "egui-pop's step 6, in the hue of #fb4934."},
+    "7": {"$value": {"colorSpace": "oklch", "components": [0.6198, 0.0901, 30.5], "hex": "#b67165"}, "$description": "egui-pop's step 7, in the hue of #fb4934."},
+    "8": {"$value": {"colorSpace": "oklch", "components": [0.6299, 0.1924, 30.29], "hex": "#e64d3a"}, "$description": "Step 9 pressed, in OKLCH."},
+    "9": {"$value": {"colorSpace": "oklch", "components": [0.6998, 0.1918, 30.34], "hex": "#ff6550"}, "$description": "bright red: errorForeground; adjusted from #fb4934 for contrast."},
+    "10": {"$value": {"colorSpace": "oklch", "components": [0.7491, 0.1519, 30.24], "hex": "#ff8572"}, "$description": "Step 9 under the pointer, in OKLCH."},
+    "11": {"$value": {"colorSpace": "oklch", "components": [0.7012, 0.1906, 30.35], "hex": "#ff6651"}, "$description": "bright red: errorForeground; adjusted from #fb4934 for contrast."},
+    "12": {"$value": {"colorSpace": "oklch", "components": [0.9395, 0.0306, 30.18], "hex": "#ffe4df"}, "$description": "egui-pop's step 12, in the hue of the theme colour."},
+    "contrast": {"$value": "{gray.0}", "$description": "Text on step 9."}
+  },
+  "green": {
+    "$type": "color",
+    "$description": "Built around #b8bb26 (bright green).",
+    "1": {"$value": {"colorSpace": "oklch", "components": [0.2533, 0.0145, 107.39], "hex": "#23231b"}, "$description": "egui-pop's step 1, in the hue of #b8bb26."},
+    "2": {"$value": {"colorSpace": "oklch", "components": [0.2813, 0.0193, 107.58], "hex": "#2a2a1f"}, "$description": "egui-pop's step 2, in the hue of #b8bb26."},
+    "3": {"$value": {"colorSpace": "oklch", "components": [0.3404, 0.0403, 110.32], "hex": "#393a21"}, "$description": "egui-pop's step 3, in the hue of #b8bb26."},
+    "4": {"$value": {"colorSpace": "oklch", "components": [0.3884, 0.0493, 110.04], "hex": "#464727"}, "$description": "egui-pop's step 4, in the hue of #b8bb26."},
+    "5": {"$value": {"colorSpace": "oklch", "components": [0.4625, 0.0604, 110.96], "hex": "#5a5c33"}, "$description": "egui-pop's step 5, in the hue of #b8bb26."},
+    "6": {"$value": {"colorSpace": "oklch", "components": [0.5417, 0.0695, 110.53], "hex": "#717342"}, "$description": "egui-pop's step 6, in the hue of #b8bb26."},
+    "7": {"$value": {"colorSpace": "oklch", "components": [0.6198, 0.0898, 110.27], "hex": "#898b48"}, "$description": "egui-pop's step 7, in the hue of #b8bb26."},
+    "8": {"$value": {"colorSpace": "oklch", "components": [0.6962, 0.1531, 111.08], "hex": "#a2a500"}, "$description": "Step 9 pressed, in OKLCH."},
+    "9": {"$value": {"colorSpace": "oklch", "components": [0.7652, 0.1581, 110.83], "hex": "#b8bb26"}, "$description": "bright green"},
+    "10": {"$value": {"colorSpace": "oklch", "components": [0.8148, 0.158, 110.65], "hex": "#c8cb3d"}, "$description": "Step 9 under the pointer, in OKLCH."},
+    "11": {"$value": {"colorSpace": "oklch", "components": [0.7652, 0.1581, 110.83], "hex": "#b8bb26"}, "$description": "bright green"},
+    "12": {"$value": {"colorSpace": "oklch", "components": [0.9393, 0.0421, 110.11], "hex": "#eceece"}, "$description": "egui-pop's step 12, in the hue of the theme colour."},
+    "contrast": {"$value": "{gray.0}", "$description": "Text on step 9."}
+  },
+  "blue": {
+    "$type": "color",
+    "$description": "Built around #83a598 (bright blue: textLink.foreground).",
+    "1": {"$value": {"colorSpace": "oklch", "components": [0.2546, 0.014, 172.88], "hex": "#1c2522"}, "$description": "egui-pop's step 1, in the hue of #83a598."},
+    "2": {"$value": {"colorSpace": "oklch", "components": [0.2834, 0.0199, 169.3], "hex": "#202d28"}, "$description": "egui-pop's step 2, in the hue of #83a598."},
+    "3": {"$value": {"colorSpace": "oklch", "components": [0.3413, 0.0396, 169.81], "hex": "#223f35"}, "$description": "egui-pop's step 3, in the hue of #83a598."},
+    "4": {"$value": {"colorSpace": "oklch", "components": [0.3886, 0.0417, 169.6], "hex": "#2d4c41"}, "$description": "egui-pop's step 4, in the hue of #83a598."},
+    "5": {"$value": {"colorSpace": "oklch", "components": [0.4606, 0.0417, 170.95], "hex": "#406055"}, "$description": "egui-pop's step 5, in the hue of #83a598."},
+    "6": {"$value": {"colorSpace": "oklch", "components": [0.5408, 0.0413, 169.64], "hex": "#57776b"}, "$description": "egui-pop's step 6, in the hue of #83a598."},
+    "7": {"$value": {"colorSpace": "oklch", "components": [0.621, 0.0419, 168.87], "hex": "#6e8f82"}, "$description": "egui-pop's step 7, in the hue of #83a598."},
+    "8": {"$value": {"colorSpace": "oklch", "components": [0.6237, 0.0428, 169.49], "hex": "#6e9083"}, "$description": "Step 9 pressed, in OKLCH."},
+    "9": {"$value": {"colorSpace": "oklch", "components": [0.6927, 0.042, 169.77], "hex": "#83a598"}, "$description": "bright blue: textLink.foreground"},
+    "10": {"$value": {"colorSpace": "oklch", "components": [0.7431, 0.043, 168.85], "hex": "#92b5a7"}, "$description": "Step 9 under the pointer, in OKLCH."},
+    "11": {"$value": {"colorSpace": "oklch", "components": [0.6927, 0.042, 169.77], "hex": "#83a598"}, "$description": "bright blue: textLink.foreground"},
+    "12": {"$value": {"colorSpace": "oklch", "components": [0.9406, 0.0418, 169.93], "hex": "#d1f5e7"}, "$description": "egui-pop's step 12, in the hue of the theme colour."},
+    "contrast": {"$value": "{gray.0}", "$description": "Text on step 9."}
+  },
+  "text": {
+    "$type": "color",
+    "on-accent": {"$value": "{blue.contrast}"}
+  },
+  "border": {
+    "$type": "color",
+    "default": {"$value": "{gray.5}"}
+  },
+  "accent": {
+    "$type": "color",
+    "default": {"$value": "{blue.9}"},
+    "hover": {"$value": "{blue.10}"},
+    "active": {"$value": "{blue.8}"},
+    "subtle": {"$value": "{blue.3}"}
+  },
+  "selection": {"$type": "color", "$value": "{blue.5}"}
+}

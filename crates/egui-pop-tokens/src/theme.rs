@@ -14,8 +14,64 @@ use crate::{Color, Error, Value};
 /// The theme everything falls back to.
 pub const FALLBACK_THEME: &str = "pop-dark";
 
-/// The built-in base themes, in the order a switcher shows them.
-pub const BUILT_IN_THEMES: &[&str] = &["pop-dark", "pop-light", "pop-high-contrast"];
+/// egui-pop's own base themes, in the order a switcher shows them.
+pub const POP_THEMES: &[&str] = &["pop-dark", "pop-light", "pop-high-contrast"];
+
+/// Every built-in theme, in the order a switcher shows them: egui-pop's
+/// own, then the editor-inspired ones by family, light before dark (their
+/// sources and licences are in `NOTICE`).
+pub const BUILT_IN_THEMES: &[&str] = &[
+    "pop-dark",
+    "pop-light",
+    "pop-high-contrast",
+    "github-light",
+    "github-dark",
+    "github-light-high-contrast",
+    "github-dark-high-contrast",
+    "catppuccin-latte",
+    "catppuccin-mocha",
+    "one-light",
+    "one-dark-pro",
+    "solarized-light",
+    "solarized-dark",
+    "gruvbox-light",
+    "gruvbox-dark",
+];
+
+/// The built-in themes' names for people (ids stay as they are): the
+/// editor-inspired ones say so, their names only describing where the
+/// colours come from.
+const BUILT_IN_LABELS: &[(&str, &str)] = &[
+    ("pop-dark", "Pop dark"),
+    ("pop-light", "Pop light"),
+    ("pop-high-contrast", "Pop high contrast"),
+    ("github-light", "GitHub-inspired Light"),
+    ("github-dark", "GitHub-inspired Dark"),
+    (
+        "github-light-high-contrast",
+        "GitHub-inspired Light High Contrast",
+    ),
+    (
+        "github-dark-high-contrast",
+        "GitHub-inspired Dark High Contrast",
+    ),
+    ("catppuccin-latte", "Catppuccin-inspired Latte"),
+    ("catppuccin-mocha", "Catppuccin-inspired Mocha"),
+    ("one-light", "One Light-inspired"),
+    ("one-dark-pro", "One Dark Pro-inspired"),
+    ("solarized-light", "Solarized-inspired Light"),
+    ("solarized-dark", "Solarized-inspired Dark"),
+    ("gruvbox-light", "Gruvbox-inspired Light"),
+    ("gruvbox-dark", "Gruvbox-inspired Dark"),
+];
+
+/// A theme's name for people: a built-in theme's label, else its id.
+pub fn theme_label(name: &str) -> String {
+    BUILT_IN_LABELS
+        .iter()
+        .find(|(id, _)| *id == name)
+        .map_or_else(|| name.to_string(), |(_, label)| (*label).to_string())
+}
 
 /// The built-in colour scales usable as an accent.
 pub const BUILT_IN_ACCENTS: &[&str] = &["gold", "blue", "green", "amber", "red"];
@@ -26,6 +82,51 @@ const BUILT_IN_FILES: &[(&str, &str)] = &[
     (
         "pop-high-contrast",
         include_str!("../themes/pop-high-contrast.tokens.json"),
+    ),
+    (
+        "github-light",
+        include_str!("../themes/github-light.tokens.json"),
+    ),
+    (
+        "github-dark",
+        include_str!("../themes/github-dark.tokens.json"),
+    ),
+    (
+        "github-light-high-contrast",
+        include_str!("../themes/github-light-high-contrast.tokens.json"),
+    ),
+    (
+        "github-dark-high-contrast",
+        include_str!("../themes/github-dark-high-contrast.tokens.json"),
+    ),
+    (
+        "catppuccin-latte",
+        include_str!("../themes/catppuccin-latte.tokens.json"),
+    ),
+    (
+        "catppuccin-mocha",
+        include_str!("../themes/catppuccin-mocha.tokens.json"),
+    ),
+    ("one-light", include_str!("../themes/one-light.tokens.json")),
+    (
+        "one-dark-pro",
+        include_str!("../themes/one-dark-pro.tokens.json"),
+    ),
+    (
+        "solarized-light",
+        include_str!("../themes/solarized-light.tokens.json"),
+    ),
+    (
+        "solarized-dark",
+        include_str!("../themes/solarized-dark.tokens.json"),
+    ),
+    (
+        "gruvbox-light",
+        include_str!("../themes/gruvbox-light.tokens.json"),
+    ),
+    (
+        "gruvbox-dark",
+        include_str!("../themes/gruvbox-dark.tokens.json"),
     ),
 ];
 

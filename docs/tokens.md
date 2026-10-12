@@ -68,6 +68,11 @@ Not read yet: references inside composite values, JSON Pointer `$ref`,
    keeps the same step meanings, so the system tier mostly aliases the same
    steps in both modes.
 
+   A theme may add hue scales of its own with the same steps (`1` to
+   `12` and `contrast`): any such scale is offered as an accent
+   (`Themes::accents`). The Catppuccin-inspired themes add `purple`
+   (Catppuccin's mauve) and use it as their accent.
+
 2. **System**: roles, what a value is for. These are the tokens widgets
    read, listed in `CONTRACT`:
    `surface.{canvas, panel, raised, hover, active, overlay, sunken}`,
@@ -95,6 +100,28 @@ Not read yet: references inside composite values, JSON Pointer `$ref`,
   sizes are `xs`, `s`, `m`, `l`, `xl`.
 - A component token points at a system token, a system token at the
   palette or another role, never the other way round (a test checks it).
+
+## The editor-inspired themes
+
+Twelve built-in themes take their colours from popular, permissively
+licensed editor themes (their workbench colours, not syntax): five
+families with a light and a dark member, and GitHub's high-contrast pair.
+Each extends `pop-light`, `pop-dark` or `pop-high-contrast` and gives
+its palette and the roles that differ; where an original colour missed a
+contrast pair, only its OKLCH lightness was moved. Ids keep the family
+names; the labels shown to people say "inspired" (`theme_label`).
+Sources and licences are in [NOTICE](../NOTICE).
+
+| id | label | extends |
+|---|---|---|
+| `github-light`, `github-dark` | GitHub-inspired Light, Dark | `pop-light`, `pop-dark` |
+| `github-light-high-contrast`, `github-dark-high-contrast` | GitHub-inspired Light, Dark High Contrast | `pop-light`, `pop-high-contrast` (7:1 text) |
+| `catppuccin-latte`, `catppuccin-mocha` | Catppuccin-inspired Latte, Mocha | `pop-light`, `pop-dark` (+ `purple`) |
+| `one-light`, `one-dark-pro` | One Light-, One Dark Pro-inspired | `pop-light`, `pop-dark` |
+| `solarized-light`, `solarized-dark` | Solarized-inspired Light, Dark | `pop-light`, `pop-dark` |
+| `gruvbox-light`, `gruvbox-dark` | Gruvbox-inspired Light, Dark | `pop-light`, `pop-dark` |
+
+![the editor-inspired themes](screenshots/themes.png)
 
 ## Composing a theme
 

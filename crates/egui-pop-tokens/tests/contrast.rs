@@ -35,8 +35,15 @@ fn every_accent_keeps_aa_contrast_in_every_theme() {
     let themes = Themes::default();
     let mut failures = Vec::new();
     for base in BUILT_IN_THEMES {
-        for accent in BUILT_IN_ACCENTS {
-            let spec = ThemeSpec::new(*base).accent(*accent);
+        // The five built-in scales, and a theme's own (Catppuccin's purple).
+        let mut accents: Vec<String> = BUILT_IN_ACCENTS.iter().map(|a| a.to_string()).collect();
+        for a in themes.accents(base) {
+            if !accents.contains(&a) {
+                accents.push(a);
+            }
+        }
+        for accent in accents {
+            let spec = ThemeSpec::new(*base).accent(accent);
             let tokens = themes.resolve(&spec);
             for f in contrast::check(&tokens, Level::Normal) {
                 failures.push(format!("{}: {f}", spec.label()));

@@ -51,7 +51,7 @@ pub use contract::{CONTRACT, Required, Tier};
 pub use error::Error;
 pub use file::{RawToken, TokenFile};
 pub use theme::{
-    BUILT_IN_ACCENTS, BUILT_IN_THEMES, Density, FALLBACK_THEME, ResolvedTokens, ThemeSpec, Themes,
-    Token,
+    BUILT_IN_ACCENTS, BUILT_IN_THEMES, Density, FALLBACK_THEME, POP_THEMES, ResolvedTokens,
+    ThemeSpec, Themes, Token, theme_label,
 };
 pub use value::{PX_PER_REM, Value};

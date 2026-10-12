@@ -1,0 +1,60 @@
+egui-pop
+Copyright (c) the egui-pop contributors. MIT licence (see LICENSE).
+
+Editor-inspired themes
+----------------------
+
+egui-pop's editor-inspired themes (crates/egui-pop-tokens/themes) reuse
+colour values from the following projects, under the MIT licence unless
+stated otherwise. The theme names are used only to describe where the
+colours come from; egui-pop is not affiliated with or endorsed by their
+authors. "GitHub" is a trademark of GitHub, Inc.
+
+- github-light, github-dark, github-light-high-contrast,
+  github-dark-high-contrast: GitHub's VS Code theme
+  (https://github.com/primer/github-vscode-theme), version 6.3.5,
+  Copyright (c) 2020 Primer.
+- catppuccin-latte, catppuccin-mocha: Catppuccin for VS Code and the
+  Catppuccin palette (https://github.com/catppuccin/vscode,
+  https://github.com/catppuccin/palette), version 3.19.0,
+  Copyright (c) 2021 Catppuccin.
+- one-light: Atom One Light for VS Code
+  (https://github.com/akamud/vscode-theme-onelight), version 2.3.0,
+  Copyright (c) 2015 Mahmoud Ali; after Atom's One Light (GitHub, MIT).
+- one-dark-pro: One Dark Pro (https://github.com/Binaryify/OneDark-Pro),
+  version 3.20.3, Copyright (c) 2013-2022 Binaryify; after Atom's One Dark
+  (GitHub, MIT).
+- solarized-light, solarized-dark: Solarized
+  (https://github.com/altercation/solarized), Copyright (c) 2011 Ethan
+  Schoonover; workbench mapping from Visual Studio Code's Solarized themes
+  (https://github.com/microsoft/vscode), Copyright (c) 2015 - present
+  Microsoft Corporation.
+- gruvbox-light, gruvbox-dark: Gruvbox by Pavel Pertsev
+  (https://github.com/morhetz/gruvbox), stated as MIT/X11 in its README
+  (the repository has no licence file); workbench mapping from Gruvbox
+  Theme for VS Code (https://github.com/jdinhify/vscode-theme-gruvbox),
+  MIT, Copyright (c) 2017 JD.
+
+Each theme file also records its source (repository, file, version,
+commit, licence) under "$extensions" -> "org.egui-pop.source".
+
+The MIT licence of each project above:
+
+  Permission is hereby granted, free of charge, to any person obtaining a
+  copy of this software and associated documentation files (the
+  "Software"), to deal in the Software without restriction, including
+  without limitation the rights to use, copy, modify, merge, publish,
+  distribute, sublicense, and/or sell copies of the Software, and to
+  permit persons to whom the Software is furnished to do so, subject to
+  the following conditions:
+
+  The above copyright notice and this permission notice shall be included
+  in all copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+  OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+  MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+  IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+  CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+  TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

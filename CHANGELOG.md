@@ -9,6 +9,18 @@ egui minor.
 
 ### Added
 
+- Twelve editor-inspired built-in themes (`github-light`, `github-dark`,
+  `github-light-high-contrast`, `github-dark-high-contrast`,
+  `catppuccin-latte`, `catppuccin-mocha`, `one-light`, `one-dark-pro`,
+  `solarized-light`, `solarized-dark`, `gruvbox-light`, `gruvbox-dark`),
+  extending the `pop-*` themes with the original editors' workbench
+  colours, moved in OKLCH lightness only where a contrast pair required
+  it; every one passes the contrast pairs in every density (7:1 for the
+  high-contrast pair) and with every accent. A theme may bring hue scales
+  of its own (Catppuccin's `purple`), offered as accents. `theme_label`
+  gives people's names ("GitHub-inspired Dark"); `POP_THEMES` lists
+  egui-pop's own. Sources and licences are in `NOTICE` (also shipped in
+  `egui-pop-tokens`). The gallery's picker lists them by label.
 - `docs/stability.md`: what a release promises, in three tiers (stable,
   supported, experimental); CI packages every published crate (a dry
   run of `cargo publish`). A workflow builds the gallery with Trunk and

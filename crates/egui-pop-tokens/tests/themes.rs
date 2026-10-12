@@ -2,8 +2,8 @@
 //! overlays touch what they should, problems fall back instead of breaking.
 
 use egui_pop_tokens::{
-    BUILT_IN_ACCENTS, BUILT_IN_THEMES, CONTRACT, Color, Density, Error, ThemeSpec, Themes, Tier,
-    TokenFile, Value,
+    BUILT_IN_ACCENTS, BUILT_IN_THEMES, CONTRACT, Color, Density, Error, POP_THEMES, ThemeSpec,
+    Themes, Tier, TokenFile, Value,
 };
 use serde_json::json;
 
@@ -274,7 +274,9 @@ fn the_comfortable_overlay_restates_the_base_values() {
 #[test]
 fn an_accent_re_aliases_the_accent_roles_only() {
     let themes = Themes::default();
-    for base in BUILT_IN_THEMES {
+    // egui-pop's own themes: gold is their accent and they have the five
+    // scales exactly (the editor-inspired ones are checked below).
+    for base in POP_THEMES {
         let plain = themes.resolve(&ThemeSpec::new(*base));
         let blue = themes.resolve(&ThemeSpec::new(*base).accent("blue"));
         assert!(blue.problems().is_empty(), "{:?}", blue.problems());
@@ -410,4 +412,57 @@ fn an_exported_theme_reads_back_the_same() {
             (x, y) => assert_eq!(x, y, "{}", token.path),
         }
     }
+}
+
+#[test]
+fn every_shipped_theme_resolves_from_its_own_files() {
+    let themes = Themes::default();
+    for base in BUILT_IN_THEMES {
+        for density in Density::ALL {
+            let spec = ThemeSpec::new(*base).density(density);
+            let t = themes.resolve(&spec);
+            assert!(
+                t.problems().is_empty(),
+                "{}: {:?}",
+                spec.label(),
+                t.problems()
+            );
+            for r in egui_pop_tokens::CONTRACT {
+                let token = t
+                    .get(r.path)
+                    .unwrap_or_else(|| panic!("{base}: no {}", r.path));
+                assert!(
+                    !token.fallback,
+                    "{base}: {} comes from the fallback",
+                    r.path
+                );
+            }
+        }
+        // Every built-in accent works in every theme, and the theme's own
+        // extra scales (Catppuccin's purple) are offered too.
+        let accents = themes.accents(base);
+        for a in BUILT_IN_ACCENTS {
+            assert!(accents.iter().any(|x| x == a), "{base}: no {a} accent");
+        }
+        for a in &accents {
+            let t = themes.resolve(&ThemeSpec::new(*base).accent(a.clone()));
+            assert!(t.problems().is_empty(), "{base} {a}: {:?}", t.problems());
+            assert_eq!(t.color("accent.default"), t.color(&format!("{a}.9")));
+        }
+    }
+    assert!(
+        themes
+            .accents("catppuccin-mocha")
+            .iter()
+            .any(|a| a == "purple")
+    );
+}
+
+#[test]
+fn the_crate_ships_the_repositorys_notice() {
+    assert_eq!(
+        include_str!("../NOTICE"),
+        include_str!("../../../NOTICE"),
+        "crates/egui-pop-tokens/NOTICE is a copy of NOTICE"
+    );
 }
