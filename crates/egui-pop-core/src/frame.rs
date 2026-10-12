@@ -549,12 +549,16 @@ impl<'a> TitleBar<'a> {
 
 /// Draws a window button; says whether it was clicked.
 fn window_button(ui: &mut Ui, rect: Rect, which: Button, maximized: bool) -> bool {
-    let name = match which {
-        Button::Minimize => "Minimize",
-        Button::Maximize if maximized => "Restore",
-        Button::Maximize => "Maximize",
-        Button::Close => "Close",
-    };
+    let name = crate::strings::tr(
+        ui.ctx(),
+        match which {
+            Button::Minimize => &crate::strings::MINIMIZE,
+            Button::Maximize if maximized => &crate::strings::RESTORE,
+            Button::Maximize => &crate::strings::MAXIMIZE,
+            Button::Close => &crate::strings::CLOSE,
+        },
+    );
+    let name = name.as_str();
     let id = ui.id().with(("egui_pop.window_button", which as u8));
     let response = ui.interact(rect, id, Sense::click());
     a11y::name(&response, WidgetType::Button, name);

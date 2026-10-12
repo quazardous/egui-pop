@@ -71,6 +71,17 @@ pub fn is_colour(d: &Descriptor) -> bool {
 
 /// Draws the editor `d` calls for.
 pub fn param(ui: &mut Ui, d: &Descriptor, mode: Mode<'_>) -> Response {
+    param_shown(ui, d, mode, &|c| c.to_string())
+}
+
+/// As [`param`], a choice's values shown through `shown` (a translation:
+/// `strings::setting_choice`); the value kept is the raw one.
+pub fn param_shown(
+    ui: &mut Ui,
+    d: &Descriptor,
+    mode: Mode<'_>,
+    shown: &dyn Fn(&str) -> String,
+) -> Response {
     match d.ty {
         Type::Float => with(ui, mode, |ui, v: &mut f64| {
             ui.add(Slider::from_descriptor(v, d))
@@ -86,10 +97,10 @@ pub fn param(ui: &mut Ui, d: &Descriptor, mode: Mode<'_>) -> Response {
             with(ui, mode, |ui, v: &mut Choice| {
                 let mut picked = v.0.clone();
                 let r = egui::ComboBox::from_id_salt(("egui_pop.param", &d.label))
-                    .selected_text(picked.as_str())
+                    .selected_text(shown(&picked))
                     .show_ui(ui, |ui| {
                         for c in &d.choices {
-                            ui.selectable_value(&mut picked, c.clone(), c);
+                            ui.selectable_value(&mut picked, c.clone(), shown(c));
                         }
                     })
                     .response;

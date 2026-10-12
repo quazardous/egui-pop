@@ -19,6 +19,11 @@ egui minor.
   `menu-<id>.label`, `setting-<id>.label`, `plugin-<id>.title`,
   `category-<english>`), with `command_title`, `panel_title` and their
   siblings.
+- Core widgets show their text through `egui_pop_core::strings`: the
+  window frame's buttons (`MINIMIZE`, `MAXIMIZE`, `RESTORE`, `CLOSE`) and
+  a bound widget's missing value (`NO_VALUE`).
+  `param::param_shown` draws a parameter with its choices shown through
+  a function (a translation), the value kept raw.
 
 ## 0.1.0 (prepared, not published)
 

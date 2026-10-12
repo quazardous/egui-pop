@@ -34,7 +34,7 @@ use egui_pop_model::commands::Origin;
 use egui_pop_model::values::{Change, GestureId, Set, Store, Value};
 
 use crate::state::lock;
-use crate::strings::{self, HELD_BY, READ_ONLY};
+use crate::strings::{self, HELD_BY, NO_VALUE, READ_ONLY};
 
 /// A store shared between the application, its widgets and its commands.
 pub type SharedStore = Arc<Mutex<Store>>;
@@ -178,7 +178,11 @@ pub fn edit<T: Bindable>(
                 let mut dummy = T::default();
                 let r = ui.add_enabled_ui(false, |ui| widget(ui, &mut dummy)).inner;
                 log::warn!(target: "egui_pop", "binding to `{path}`: no such value (or not this type); the widget is disabled");
-                return r.on_disabled_hover_text(format!("no value at `{path}`"));
+                return r.on_disabled_hover_text(strings::tr_args(
+                    ui.ctx(),
+                    &NO_VALUE,
+                    &[("path", path)],
+                ));
             };
             let before = v.clone();
             let mut r = widget(ui, &mut v);

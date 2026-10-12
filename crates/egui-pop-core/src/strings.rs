@@ -68,6 +68,12 @@ pub const FAULT_BODY: StrKey = StrKey::new(
 );
 pub const HELD_BY: StrKey = StrKey::new("egui-pop-value-held-by", "Being changed by { $origin }");
 pub const READ_ONLY: StrKey = StrKey::new("egui-pop-value-read-only", "Read only");
+/// A bound widget's tooltip when its path holds no value.
+pub const NO_VALUE: StrKey = StrKey::new("egui-pop-value-missing", "no value at `{ $path }`");
+/// The window frame's buttons (the close button says [`CLOSE`]).
+pub const MINIMIZE: StrKey = StrKey::new("egui-pop-frame-minimize", "Minimize");
+pub const MAXIMIZE: StrKey = StrKey::new("egui-pop-frame-maximize", "Maximize");
+pub const RESTORE: StrKey = StrKey::new("egui-pop-frame-restore", "Restore");
 
 /// Every string egui-pop core shows, for catalogues and tests.
 pub const ALL: &[StrKey] = &[
@@ -80,6 +86,10 @@ pub const ALL: &[StrKey] = &[
     FAULT_BODY,
     HELD_BY,
     READ_ONLY,
+    NO_VALUE,
+    MINIMIZE,
+    MAXIMIZE,
+    RESTORE,
 ];
 
 /// Gives the text of a key in the current language, if it has one.
@@ -326,6 +336,22 @@ mod tests {
         );
         assert_eq!(category_key("View"), "category-view");
         assert_eq!(slug("a b/é_c"), "a-b---c");
+    }
+
+    #[test]
+    fn every_key_is_a_unique_fluent_id() {
+        let mut seen = std::collections::BTreeSet::new();
+        for k in ALL {
+            assert!(seen.insert(k.key), "`{}` twice", k.key);
+            assert!(k.key.starts_with("egui-pop-"), "{}", k.key);
+            assert!(
+                k.key
+                    .chars()
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-'),
+                "{}",
+                k.key
+            );
+        }
     }
 
     #[test]
