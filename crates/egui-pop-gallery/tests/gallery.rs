@@ -378,6 +378,10 @@ fn the_viewport_page_zooms_through_commands_and_reports_signals() {
     assert!(h.query_by_label_contains("command once: 200.0 %").is_some());
     let snap = h.state().app.handle().debug_snapshot();
     assert_eq!(snap["viewport"]["viewports"]["gallery"]["zoom"], 2.0);
+    assert!(
+        h.query_by_label_contains("Display target: Srgb primaries")
+            .is_some()
+    );
     h.snapshot("viewport-pop-dark");
 }
 

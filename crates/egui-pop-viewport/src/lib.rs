@@ -7,6 +7,8 @@
 //!   image and screen that drawing, hit tests and the readout share;
 //! - [`gestures`]: the gestures as data, remappable per profile;
 //! - [`widget`]: the [`Viewport`] widget and the [`Signal`]s it emits;
+//! - [`display`]: the display target of each window and the display
+//!   transform hook where the application plugs its colour management;
 //! - [`hooks`]: the application's way into each step (veto, redirect,
 //!   replace, extend), traced;
 //! - [`debug`]: the `viewport` collector of the debug bridge;
@@ -29,6 +31,7 @@
 //! ```
 
 pub mod debug;
+pub mod display;
 pub mod gestures;
 pub mod hooks;
 pub mod tokens;

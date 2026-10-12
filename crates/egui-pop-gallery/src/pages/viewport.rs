@@ -98,7 +98,10 @@ pub fn show(ui: &mut Ui, page: &mut PageState) {
         .show(ui, &mut page.state, &mut page.view);
     page.hover = out.hover_pixel;
     for s in &out.signals {
-        let Signal::View { view, phase, cause } = s;
+        let Signal::View { view, phase, cause } = s else {
+            page.log.push(format!("{s:?}"));
+            continue;
+        };
         page.log.push(format!(
             "{} {}: {}",
             cause.name(),
@@ -122,10 +125,49 @@ pub fn show(ui: &mut Ui, page: &mut PageState) {
             None => "Pixel: outside the image".to_string(),
         });
     });
+    display_section(ui, page);
     section(ui, "Last signals");
     for l in &page.log {
         ui.weak(l);
     }
+}
+
+/// The display target and what the display transform makes of a ramp
+/// of scene values (the CPU path; the GPU path runs the same stage).
+fn display_section(ui: &mut Ui, page: &PageState) {
+    let target = page.state.display_target().unwrap_or_default();
+    section(ui, "Display");
+    ui.label(format!(
+        "Display target: {:?} primaries, {:?}, SDR white {} nits, headroom {}{}",
+        target.primaries,
+        target.transfer,
+        target.sdr_white_nits,
+        target.headroom,
+        if target.is_supported() {
+            ""
+        } else {
+            " (drawn as sRGB)"
+        }
+    ));
+    let scene: Vec<f32> = (0..16)
+        .flat_map(|i| {
+            let v = (i as f32 / 15.0).powi(2);
+            [v, v, v, 1.0]
+        })
+        .collect();
+    let mut out = vec![egui::Color32::BLACK; 16];
+    egui_pop::viewport::display::apply_cpu(
+        page.state.display_transform().as_ref(),
+        &target,
+        &scene,
+        &mut out,
+    );
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 0.0;
+        for c in out {
+            super::swatch(ui, c, vec2(18.0, 14.0));
+        }
+    });
 }
 
 /// The playground: a hook.

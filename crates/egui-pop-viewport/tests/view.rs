@@ -57,7 +57,10 @@ fn press(h: &mut Harness<'_, Scene>, pos: Pos2, pressed: bool, modifiers: Modifi
 fn phases(s: &Scene) -> Vec<Phase> {
     s.signals
         .iter()
-        .map(|Signal::View { phase, .. }| *phase)
+        .filter_map(|s| match s {
+            Signal::View { phase, .. } => Some(*phase),
+            _ => None,
+        })
         .collect()
 }
 
@@ -280,4 +283,26 @@ fn the_debug_bridge_sees_and_moves_the_viewport() {
     assert_eq!(h.state().view, View::actual([10.0, 20.0]));
     let snap = bridge.snapshot_of(&h.ctx, "viewport").unwrap();
     assert_eq!(snap["viewports"]["v"]["signals"][0]["cause"], "command");
+}
+
+#[test]
+fn a_new_display_target_is_signalled() {
+    use egui_pop_viewport::display::{self, DisplayTarget, Primaries, Transfer};
+    let mut h = harness(1.0, View::fit());
+    h.run();
+    assert_eq!(
+        h.state().state.display_target(),
+        Some(DisplayTarget::srgb())
+    );
+    let wide = DisplayTarget {
+        primaries: Primaries::DisplayP3,
+        transfer: Transfer::SrgbPiecewise,
+        ..DisplayTarget::srgb()
+    };
+    display::set_target(&h.ctx, egui::ViewportId::ROOT, wide);
+    h.run();
+    let last = h.state().signals.last().cloned();
+    assert_eq!(last, Some(Signal::Display { target: wide }));
+    // Not supported yet: drawn as sRGB.
+    assert!(!wide.is_supported());
 }

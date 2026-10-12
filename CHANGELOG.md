@@ -43,6 +43,16 @@ egui minor.
   redirect, replace or extend, and the `viewport` debug collector shows
   views, hook decisions and signals and moves a viewport. Component
   tokens `viewport.*`. A Viewport page in the gallery.
+- Viewport: the display-transform hook. `display::DisplayTarget` says
+  what a window's surface expects (primaries, transfer, SDR white,
+  headroom, surface format, where the description comes from), per
+  window (`display::set_target`); only sRGB is drawn faithfully for now,
+  other targets are drawn as sRGB, and the type is ready for wide gamut
+  and HDR. A `DisplayTransform` (the application's colour management,
+  `LinearSrgb` or `Matrix` built in) turns a target into a `Stage`
+  (matrix, clamp, transfer) the GPU path runs in its shader and the CPU
+  path runs with the same arithmetic. A new target is a
+  `Signal::Display`.
 - Twelve editor-inspired built-in themes (`github-light`, `github-dark`,
   `github-light-high-contrast`, `github-dark-high-contrast`,
   `catppuccin-latte`, `catppuccin-mocha`, `one-light`, `one-dark-pro`,

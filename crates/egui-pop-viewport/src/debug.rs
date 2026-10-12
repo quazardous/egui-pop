@@ -55,6 +55,11 @@ pub fn signal_json(signal: &Signal) -> Json {
             "cause": cause.name(),
             "view": view_json(view),
         }),
+        Signal::Display { target } => json!({
+            "signal": "display",
+            "target": format!("{target:?}"),
+            "supported": target.is_supported(),
+        }),
     }
 }
 
@@ -93,6 +98,8 @@ pub(crate) fn publish(
             "image": m.image,
             "in_gesture": state.in_gesture(),
             "hooks": state.hooks().names(),
+            "display": state.display_target().map(|t| format!("{t:?}")),
+            "transform": format!("{:?}", state.display_transform()),
             "trace": trace,
             "signals": all[keep..].to_vec(),
         }),

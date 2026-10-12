@@ -14,7 +14,10 @@ use egui::{
     Color32, Id, Key, Pos2, Response, Sense, Stroke, StrokeKind, Ui, Vec2, WidgetInfo, WidgetType,
 };
 
+use std::sync::Arc;
+
 use crate::debug;
+use crate::display::{self, DisplayTarget, DisplayTransform, LinearSrgb};
 use crate::gestures::{self, DoubleClick, Gestures, WheelAction};
 use crate::hooks::{Cause, Hooks, TRACE_KEPT, TraceEntry, Verdict, ViewChange};
 use crate::tokens::ViewportTokens;
@@ -57,12 +60,17 @@ pub enum Signal {
         phase: Phase,
         cause: Cause,
     },
+    /// The window's display target changed (another monitor, another
+    /// surface format); the viewport follows it.
+    Display { target: DisplayTarget },
 }
 
 /// What the widget keeps between frames. One per viewport; the
 /// application owns it.
 #[derive(Debug, Default)]
 pub struct ViewportState {
+    transform: Transform,
+    target: Option<DisplayTarget>,
     pan: Option<Pan>,
     /// The wheel landed on 100 % and is held there until it stops.
     detent: bool,
@@ -72,6 +80,16 @@ pub struct ViewportState {
     /// Signals from calls between frames, given with the next frame's.
     pending: Vec<Signal>,
     now: f64,
+}
+
+/// The display transform in use (the default: [`LinearSrgb`]).
+#[derive(Clone, Debug)]
+struct Transform(Arc<dyn DisplayTransform>);
+
+impl Default for Transform {
+    fn default() -> Self {
+        Transform(Arc::new(LinearSrgb))
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -93,6 +111,22 @@ impl ViewportState {
     /// Whether a gesture is in progress.
     pub fn in_gesture(&self) -> bool {
         self.pan.is_some()
+    }
+
+    /// Replaces the display transform (the application's colour
+    /// management; [`LinearSrgb`] by default).
+    pub fn set_display_transform(&mut self, transform: Arc<dyn DisplayTransform>) {
+        self.transform = Transform(transform);
+    }
+
+    /// The display transform in use.
+    pub fn display_transform(&self) -> &Arc<dyn DisplayTransform> {
+        &self.transform.0
+    }
+
+    /// The display target the last frame was drawn for.
+    pub fn display_target(&self) -> Option<DisplayTarget> {
+        self.target
     }
 
     /// The hooks, to set or remove.
@@ -312,6 +346,11 @@ impl Viewport {
         let ppp = ui.ctx().pixels_per_point();
         state.now = ui.input(|i| i.time);
         let mut signals = std::mem::take(&mut state.pending);
+        let target = display::target(ui.ctx());
+        if state.target.is_some_and(|t| t != target) {
+            signals.push(Signal::Display { target });
+        }
+        state.target = Some(target);
         ui.painter().rect_filled(rect, 0.0, tokens.background);
 
         let Some(image) = self.image_size.map(|s| [f64::from(s[0]), f64::from(s[1])]) else {
