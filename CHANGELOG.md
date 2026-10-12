@@ -369,6 +369,13 @@ egui minor.
 
 ### Changed
 
+- A host's journal is its own business: `Host::journal` and
+  `journal_mut` are optional (`Option`, `None` by default), and
+  `publish`, `since` and the new `last_seq` answer `None` when the host
+  keeps no journal, egui-pop then keeping one in memory as `LocalHost`
+  does. A host journaling on its own bus answers them from it, and
+  `AppHandle::last_event` reads the host's last sequence number instead
+  of an empty journal.
 - The application template's manifest is `template/Cargo.toml.liquid`
   (cargo-generate renders it to `Cargo.toml`): a workspace depending on
   egui-pop by git no longer reads a package named `{{project-name}}` and

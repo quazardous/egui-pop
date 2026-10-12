@@ -7,9 +7,13 @@
 //!
 //! - [`Host::dispatch`] runs a command, now or later ([`Reply`]), so a
 //!   long or remote command never holds a frame;
-//! - an event journal ([`Host::publish`], [`Host::since`]): each event
-//!   has a sequence number, a source and a cause, and tests and the debug
-//!   bridge read it since a sequence number instead of sleeping;
+//! - an event journal ([`Host::publish`], [`Host::since`],
+//!   [`Host::last_seq`]): each event has a sequence number, a source and
+//!   a cause, and tests and the debug bridge read it since a sequence
+//!   number instead of sleeping. A host keeps it in a [`Journal`] it
+//!   hands out ([`Host::journal`]), or on its own bus (it answers
+//!   `publish`, `since` and `last_seq` itself), or not at all: egui-pop
+//!   then keeps one in memory, as `LocalHost` does;
 //! - the value store holding settings ([`Host::store`]);
 //! - the application's history: [`Host::undo`] and [`Host::redo`], with
 //!   [`Host::can_undo`], [`Host::can_redo`] and the labels the menus show
@@ -52,8 +56,8 @@
 //!         .unwrap();
 //!         Reply::Later(pending)
 //!     }
-//!     fn journal(&self) -> &Journal { &self.journal }
-//!     fn journal_mut(&mut self) -> &mut Journal { &mut self.journal }
+//!     fn journal(&self) -> Option<&Journal> { Some(&self.journal) }
+//!     fn journal_mut(&mut self) -> Option<&mut Journal> { Some(&mut self.journal) }
 //!     fn store(&self) -> egui_pop_core::binding::SharedStore { self.store.clone() }
 //!     fn set_waker(&mut self, waker: Waker) { self.waker = waker; }
 //! }
@@ -316,18 +320,37 @@ pub trait Host {
     /// Runs a command (its `when` already holds in `d.context`).
     fn dispatch(&mut self, d: &Dispatch<'_>) -> Reply;
 
-    fn journal(&self) -> &Journal;
-
-    fn journal_mut(&mut self) -> &mut Journal;
-
-    /// Appends an event to the journal; returns its sequence number.
-    fn publish(&mut self, source: &str, cause: Option<Seq>, name: &str, data: Json) -> Seq {
-        self.journal_mut().publish(source, cause, name, data)
+    /// The host's journal, when it keeps one in memory (`LocalHost`
+    /// does). `None` (the default): the host answers `publish`, `since`
+    /// and `last_seq` from its own bus, or keeps no journal and egui-pop
+    /// keeps one.
+    fn journal(&self) -> Option<&Journal> {
+        None
     }
 
-    /// The events after `seq`, oldest first.
-    fn since(&self, seq: Seq) -> Vec<Event> {
-        self.journal().since(seq)
+    /// The host's journal, to append to.
+    fn journal_mut(&mut self) -> Option<&mut Journal> {
+        None
+    }
+
+    /// Appends an event to the host's journal; its sequence number, or
+    /// `None` when the host keeps no journal (egui-pop's in-memory one
+    /// keeps the event then).
+    fn publish(&mut self, source: &str, cause: Option<Seq>, name: &str, data: Json) -> Option<Seq> {
+        self.journal_mut()
+            .map(|j| j.publish(source, cause, name, data))
+    }
+
+    /// The events after `seq`, oldest first; `None` when the host keeps
+    /// no journal.
+    fn since(&self, seq: Seq) -> Option<Vec<Event>> {
+        self.journal().map(|j| j.since(seq))
+    }
+
+    /// The last sequence number given (0: none yet); `None` when the host
+    /// keeps no journal.
+    fn last_seq(&self) -> Option<Seq> {
+        self.journal().map(Journal::last)
     }
 
     /// The value store holding settings and values.
@@ -418,12 +441,12 @@ impl Host for LocalHost {
         )
     }
 
-    fn journal(&self) -> &Journal {
-        &self.journal
+    fn journal(&self) -> Option<&Journal> {
+        Some(&self.journal)
     }
 
-    fn journal_mut(&mut self) -> &mut Journal {
-        &mut self.journal
+    fn journal_mut(&mut self) -> Option<&mut Journal> {
+        Some(&mut self.journal)
     }
 
     fn store(&self) -> SharedStore {

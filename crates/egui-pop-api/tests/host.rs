@@ -44,12 +44,12 @@ impl Host for Later {
         Reply::Later(pending)
     }
 
-    fn journal(&self) -> &Journal {
-        &self.journal
+    fn journal(&self) -> Option<&Journal> {
+        Some(&self.journal)
     }
 
-    fn journal_mut(&mut self) -> &mut Journal {
-        &mut self.journal
+    fn journal_mut(&mut self) -> Option<&mut Journal> {
+        Some(&mut self.journal)
     }
 
     fn store(&self) -> SharedStore {
@@ -189,4 +189,95 @@ fn the_default_host_runs_declared_commands_nowhere_and_says_so() {
         app.run(&LOCAL, Json::Null, Origin::User).now(),
         Some(Ok(json!("here")))
     );
+}
+
+/// A host journaling on its own bus: an event list it numbers itself,
+/// from 100.
+#[derive(Default)]
+struct Bus {
+    events: Arc<Mutex<Vec<host::Event>>>,
+    store: SharedStore,
+}
+
+impl Host for Bus {
+    fn dispatch(&mut self, d: &Dispatch<'_>) -> Reply {
+        Reply::Done(d.run_local().unwrap_or(Err("no handler".into())))
+    }
+    fn publish(&mut self, source: &str, cause: Option<u64>, name: &str, data: Json) -> Option<u64> {
+        let mut e = self.events.lock().unwrap();
+        let seq = 100 + e.len() as u64;
+        e.push(host::Event {
+            seq,
+            source: source.into(),
+            cause,
+            name: name.into(),
+            data,
+        });
+        Some(seq)
+    }
+    fn since(&self, seq: u64) -> Option<Vec<host::Event>> {
+        Some(
+            self.events
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|e| e.seq > seq)
+                .cloned()
+                .collect(),
+        )
+    }
+    fn last_seq(&self) -> Option<u64> {
+        Some(self.events.lock().unwrap().last().map_or(0, |e| e.seq))
+    }
+    fn store(&self) -> SharedStore {
+        self.store.clone()
+    }
+    fn set_waker(&mut self, _: Waker) {}
+}
+
+/// A host keeping no journal at all.
+#[derive(Default)]
+struct Bare {
+    store: SharedStore,
+}
+
+impl Host for Bare {
+    fn dispatch(&mut self, d: &Dispatch<'_>) -> Reply {
+        Reply::Done(d.run_local().unwrap_or(Err("no handler".into())))
+    }
+    fn store(&self) -> SharedStore {
+        self.store.clone()
+    }
+    fn set_waker(&mut self, _: Waker) {}
+}
+
+#[test]
+fn a_host_on_its_own_bus_answers_the_journal_and_a_bare_host_gets_one() {
+    let bus = Bus::default();
+    let events = bus.events.clone();
+    let mut app = App::builder()
+        .host(bus)
+        .plugin(Doc)
+        .build(&egui::Context::default())
+        .unwrap();
+    app.run(&LOCAL, Json::Null, Origin::User);
+    let h = app.handle();
+    // The bus numbers them; egui-pop reads it back through the host.
+    assert_eq!(events.lock().unwrap().len(), 2);
+    assert_eq!(h.last_event(), 101);
+    let back = h.events_since(100);
+    assert_eq!(back.len(), 1);
+    assert_eq!(back[0].name, "command.done");
+    assert_eq!(back[0].cause, Some(100));
+
+    let mut app = App::builder()
+        .host(Bare::default())
+        .plugin(Doc)
+        .build(&egui::Context::default())
+        .unwrap();
+    app.run(&LOCAL, Json::Null, Origin::User);
+    let h = app.handle();
+    assert_eq!(h.last_event(), 2);
+    let names: Vec<String> = h.events_since(0).into_iter().map(|e| e.name).collect();
+    assert_eq!(names, ["command.dispatched", "command.done"]);
 }

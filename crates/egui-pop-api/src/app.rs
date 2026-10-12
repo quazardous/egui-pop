@@ -243,6 +243,8 @@ pub(crate) struct Shared {
     host: RefCell<Option<Box<dyn Host>>>,
     /// Events published while the host was dispatching.
     held: RefCell<Vec<Held>>,
+    /// The journal kept for a host that keeps none.
+    journal: RefCell<crate::host::Journal>,
     /// Commands whose result is to come, by id: how many.
     running: RefCell<BTreeMap<CommandId, usize>>,
     /// Collectors added by plugins.
@@ -307,6 +309,7 @@ impl AppHandle {
             pending_keys: RefCell::new(None),
             host: RefCell::new(Some(host)),
             held: RefCell::new(Vec::new()),
+            journal: RefCell::new(crate::host::Journal::default()),
             running: RefCell::new(BTreeMap::new()),
             collectors: RefCell::new(Vec::new()),
             capturing: std::cell::Cell::new(false),
@@ -370,7 +373,7 @@ impl AppHandle {
     pub fn publish(&self, source: &str, cause: Option<Seq>, name: &str, data: Json) {
         match self.0.host.borrow_mut().as_mut() {
             Some(h) => {
-                h.publish(source, cause, name, data);
+                self.publish_to(h.as_mut(), source, cause, name, data);
             }
             None => self
                 .0
@@ -380,14 +383,39 @@ impl AppHandle {
         }
     }
 
+    /// Publishes on the host's journal, or on egui-pop's when the host
+    /// keeps none.
+    fn publish_to(
+        &self,
+        h: &mut dyn Host,
+        source: &str,
+        cause: Option<Seq>,
+        name: &str,
+        data: Json,
+    ) -> Seq {
+        // The data goes to whichever keeps it: a host keeping no journal
+        // gets it back unused, so it is cloned only for the fallback.
+        match h.publish(source, cause, name, data.clone()) {
+            Some(seq) => seq,
+            None => self
+                .0
+                .journal
+                .borrow_mut()
+                .publish(source, cause, name, data),
+        }
+    }
+
     /// The journal's events after `seq` (empty while the host is
-    /// dispatching).
+    /// dispatching), read through the host.
     pub fn events_since(&self, seq: Seq) -> Vec<Event> {
         self.0
             .host
             .borrow()
             .as_ref()
-            .map(|h| h.since(seq))
+            .map(|h| {
+                h.since(seq)
+                    .unwrap_or_else(|| self.0.journal.borrow().since(seq))
+            })
             .unwrap_or_default()
     }
 
@@ -484,13 +512,12 @@ impl AppHandle {
         outcome
     }
 
-    /// The journal's last sequence number.
+    /// The journal's last sequence number, as the host says.
     pub fn last_event(&self) -> Seq {
-        self.0
-            .host
-            .borrow()
-            .as_ref()
-            .map_or(0, |h| h.journal().last())
+        self.0.host.borrow().as_ref().map_or(0, |h| {
+            h.last_seq()
+                .unwrap_or_else(|| self.0.journal.borrow().last())
+        })
     }
 
     pub(crate) fn add_collector(&self, owner: &OwnerId, c: FnCollector) -> Result<(), CtxError> {
@@ -589,9 +616,9 @@ impl AppHandle {
         let mut host = self.0.host.borrow_mut();
         let h = host.as_mut().expect("the host is free outside a dispatch");
         for (s, c, n, d) in self.0.held.borrow_mut().drain(..) {
-            h.publish(&s, c, &n, d);
+            self.publish_to(h.as_mut(), &s, c, &n, d);
         }
-        h.publish(source, cause, name, data)
+        self.publish_to(h.as_mut(), source, cause, name, data)
     }
 
     /// A service, typed.

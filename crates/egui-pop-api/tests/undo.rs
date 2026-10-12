@@ -39,11 +39,11 @@ impl Host for Kernel {
     fn dispatch(&mut self, d: &Dispatch<'_>) -> Reply {
         Reply::Done(d.run_local().unwrap_or(Err("no handler".into())))
     }
-    fn journal(&self) -> &Journal {
-        &self.journal
+    fn journal(&self) -> Option<&Journal> {
+        Some(&self.journal)
     }
-    fn journal_mut(&mut self) -> &mut Journal {
-        &mut self.journal
+    fn journal_mut(&mut self) -> Option<&mut Journal> {
+        Some(&mut self.journal)
     }
     fn store(&self) -> SharedStore {
         self.store.clone()
