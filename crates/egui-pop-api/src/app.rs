@@ -1533,6 +1533,7 @@ impl App {
     /// context and shown in another, as test harnesses do).
     fn attach(&mut self, ctx: &Context) {
         *self.handle.0.ctx.borrow_mut() = ctx.clone();
+        focus::install(ctx);
     }
 
     /// Runs a command now, in the current context.

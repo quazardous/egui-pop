@@ -9,6 +9,13 @@ egui minor.
 
 ### Added
 
+- Escape leaves a text input first: with the focus plugin
+  (`egui_pop_core::focus::install`, installed by the application), the
+  first Escape in a text field drops its focus and goes no further, and
+  the focus stays in the field's surface, so the second Escape reaches
+  that surface's own bindings or closes the overlay around it. The order
+  of Escape handlers (text input, drag, top overlay, key bindings from
+  the innermost surface out, widgets) is documented in `focus`.
 - Key bindings have a scope: `global`, or `surface:<name>` (a focus
   scope of that name, which must hold the focus, shown with a focus ring
   or not). The binding of the innermost focused surface wins over an

@@ -12,6 +12,25 @@
 //! focus between passes), so it is ready before this pass's widgets read
 //! the keyboard.
 //!
+//! # Escape, in order
+//!
+//! With the focus plugin [`install`]ed, one press of Escape goes to the
+//! first of these that takes it:
+//!
+//! 1. a focused **text input** lets go of the focus, which stays in the
+//!    input's surface (its scope still heads the focus chain); nothing
+//!    else sees that press;
+//! 2. egui aborts a **drag** in progress;
+//! 3. the **top overlay** closes, if it closes on Escape (popovers,
+//!    menus, dialogs: "Escape dismisses"), see `overlay::begin_pass`;
+//! 4. the **key bindings** of Escape, the innermost focused surface's
+//!    first, then the outer surfaces', then the global ones (ADR 0007);
+//! 5. what is left reaches egui's widgets.
+//!
+//! So in a text field of a panel, the first Escape leaves the field and
+//! the second reaches the panel's own Escape (cancelling a gesture,
+//! closing the panel's overlay).
+//!
 //! ```
 //! use egui_pop_core::focus;
 //!
@@ -52,8 +71,11 @@ struct State {
     /// The previous pass's scopes, the chain computed from them.
     last: Vec<ScopeRecord>,
     chain: Vec<usize>,
-    /// Where the pointer last pressed, on which layer.
+    /// Where the pointer last pressed, on which layer (or where the
+    /// focused widget was when Escape took its focus away).
     pressed: Option<(LayerId, Pos2)>,
+    /// The focus plugin is installed.
+    installed: bool,
 }
 
 fn state(ctx: &Context) -> std::sync::Arc<std::sync::Mutex<State>> {
@@ -147,6 +169,68 @@ pub fn scope<R>(
     }
     s.open.pop();
     inner
+}
+
+/// Installs the focus plugin on a context (once; later calls do
+/// nothing): Escape leaves a text input before anything else sees it,
+/// see [the order](self#escape-in-order).
+pub fn install(ctx: &Context) {
+    let st = state(ctx);
+    let mut s = lock(&st);
+    if !s.installed {
+        s.installed = true;
+        drop(s);
+        ctx.add_plugin(FocusPlugin);
+    }
+}
+
+/// Runs before egui reads each pass's input.
+#[derive(Debug)]
+struct FocusPlugin;
+
+impl egui::plugin::Plugin for FocusPlugin {
+    fn debug_name(&self) -> &'static str {
+        "egui_pop_core::focus"
+    }
+
+    fn input_hook(&mut self, ctx: &Context, input: &mut egui::RawInput) {
+        escape(ctx, input);
+    }
+}
+
+/// Whether an event is a press of Escape without modifiers.
+fn is_escape(e: &egui::Event) -> bool {
+    matches!(
+        e,
+        egui::Event::Key {
+            key: egui::Key::Escape,
+            pressed: true,
+            modifiers,
+            ..
+        } if !modifiers.any()
+    )
+}
+
+/// Step 1 of the Escape order: a focused text input lets go of the
+/// focus and swallows the press. Whatever had the focus, its place is
+/// kept for the focus chain (egui drops the focus on Escape before this
+/// pass draws), so the surface around it still gets the keys.
+fn escape(ctx: &Context, input: &mut egui::RawInput) {
+    let Some(at) = input.events.iter().position(is_escape) else {
+        return;
+    };
+    let Some(id) = ctx.memory(|m| m.focused()) else {
+        return;
+    };
+    if let Some(r) = ctx.read_response(id) {
+        let st = state(ctx);
+        lock(&st).pressed = Some((r.layer_id, r.interact_rect.center()));
+    }
+    if ctx.text_edit_focused() {
+        input.events.remove(at);
+        ctx.memory_mut(|m| m.surrender_focus(id));
+        log::debug!(target: "egui_pop", "Escape: left the text input {id:?}");
+    }
 }
 
 /// The scopes of the focus chain, outermost first.

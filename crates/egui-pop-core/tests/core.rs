@@ -418,3 +418,61 @@ fn icons_are_named_and_sized_by_role() {
     assert_eq!(h.get_by_label("Done").rect().width(), t.size.icon_inline);
     let _ = Value::Bool(true);
 }
+
+#[test]
+fn escape_leaves_a_text_input_then_reaches_the_surface() {
+    let mut h = keys_app();
+    focus::install(&h.ctx);
+    h.run();
+    h.get_by_role(egui::accesskit::Role::TextInput).focus();
+    h.run();
+    assert!(h.ctx.text_edit_focused());
+    h.key_press(Key::Escape);
+    h.run();
+    assert!(
+        !h.ctx.text_edit_focused(),
+        "the first Escape leaves the field"
+    );
+    assert!(h.state().ran.is_empty(), "and nothing else sees it");
+    assert_eq!(
+        focus::chain_names(&h.ctx),
+        ["outer", "inner"],
+        "the focus stays in the field's surface"
+    );
+    h.key_press(Key::Escape);
+    h.run();
+    assert_eq!(h.state().ran, ["inner.clear"], "the second reaches it");
+}
+
+struct Find {
+    open: bool,
+    text: String,
+}
+
+#[test]
+fn escape_in_a_popover_field_leaves_the_field_before_closing_it() {
+    let mut h = Harness::new_ui_state(
+        |ui, s: &mut Find| {
+            focus::install(ui.ctx());
+            overlay::begin_pass(ui.ctx());
+            let spec = OverlaySpec::new("find", "Find", Kind::Popover);
+            overlay::show(ui.ctx(), &spec, &mut s.open, None, |ui| {
+                ui.text_edit_singleline(&mut s.text);
+            });
+        },
+        Find {
+            open: true,
+            text: String::new(),
+        },
+    );
+    h.run();
+    h.get_by_role(egui::accesskit::Role::TextInput).focus();
+    h.run();
+    h.key_press(Key::Escape);
+    h.run();
+    assert!(h.state().open, "the first Escape leaves the field");
+    assert!(!h.ctx.text_edit_focused());
+    h.key_press(Key::Escape);
+    h.run();
+    assert!(!h.state().open, "the second closes the popover");
+}
