@@ -644,8 +644,11 @@ fn settings_persist_and_come_back_with_their_plugin() {
         })
     };
     let app = build(App::builder().persist(&dir).plugin(make(&l)));
-    assert_eq!(app.handle().settings().len(), 1);
-    assert_eq!(app.handle().settings()[0].section, "prefs");
+    // The framework's own (the focus mode) comes first.
+    let settings = app.handle().settings();
+    assert_eq!(settings.len(), 2);
+    assert_eq!(settings[0].id, egui_pop_api::SETTING_FOCUS);
+    assert_eq!(settings[1].section, "prefs");
     egui_pop_core::lock(&app.handle().store())
         .set(egui_pop_model::values::Set::new(
             "settings/prefs.size",
@@ -662,4 +665,49 @@ fn settings_persist_and_come_back_with_their_plugin() {
         .clone();
     assert_eq!(v, egui_pop_model::values::Value::Int(20));
     std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn the_focus_mode_follows_the_system_unless_the_setting_says_otherwise() {
+    use egui_pop_api::core::focus_mode::{self, FocusMode, SystemFocus};
+    use egui_pop_model::values::{Change, Set, Value};
+    let app = App::builder()
+        .system_focus(SystemFocus {
+            mode: FocusMode::Hover,
+            from: Some("test"),
+        })
+        .build(&egui::Context::default())
+        .unwrap();
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(600.0, 400.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+    h.run();
+    assert_eq!(focus_mode::mode(&h.ctx), FocusMode::Hover);
+    let modes = h
+        .state()
+        .handle()
+        .service(&egui_pop_api::FOCUS_MODE)
+        .unwrap();
+    assert_eq!(modes.report().from, Some("test"));
+    let setting = h
+        .state()
+        .handle()
+        .settings()
+        .into_iter()
+        .find(|s| s.id == egui_pop_api::SETTING_FOCUS)
+        .unwrap();
+    assert_eq!(setting.section, "Appearance");
+    assert!(setting.descriptor.description.contains("(test: hover)"));
+    egui_pop_api::core::lock(&h.state().handle().store())
+        .set(Set::new(
+            &setting.path,
+            Change::To(Value::Choice("click".into())),
+            Origin::User,
+        ))
+        .unwrap();
+    h.run();
+    assert_eq!(focus_mode::mode(&h.ctx), FocusMode::Click);
+    let snapshot = h.state().handle().debug_snapshot();
+    assert_eq!(snapshot["focus"]["mode"]["mode"], "click", "{snapshot}");
+    assert_eq!(snapshot["focus"]["mode"]["system"], "hover");
 }

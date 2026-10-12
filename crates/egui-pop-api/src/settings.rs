@@ -87,7 +87,9 @@ fn row(ui: &mut Ui, app: &AppHandle, entry: &SettingEntry) {
         }
         Type::Text => {
             binding::edit(ui, Binding::bound(&store, path), |ui, v: &mut String| {
-                named(ui.text_edit_singleline(v))
+                let r = named(ui.text_edit_singleline(v));
+                egui_pop_core::focus_mode::follow_pointer(&r);
+                r
             });
         }
         Type::Choice => {

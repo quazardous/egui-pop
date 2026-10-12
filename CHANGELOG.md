@@ -9,6 +9,18 @@ egui minor.
 
 ### Added
 
+- Keyboard focus that follows the system's focus mode
+  (`egui_pop_core::focus_mode`): in hover mode the surface under the
+  moving pointer gets the keys (a widget focused elsewhere lets go) and
+  text fields that call `focus_mode::follow_pointer` take the keyboard;
+  never while a button is held, a drag runs or an overlay is open. The
+  mode is read once from the desktop by `run_native` (GNOME
+  `focus-mode`, KDE `FocusPolicy`, Windows active window tracking;
+  click elsewhere), `EGUI_POP_FOCUS_MODE` (`click`, `hover`) stands in
+  for it, and the user overrides it with the `appearance.focus` setting
+  (`system`, `click`, `hover`, in the Appearance section). The
+  `FOCUS_MODE` service and the debug bridge's `focus` collector report
+  the mode and where it was read; `AppBuilder::system_focus` sets it.
 - Escape leaves a text input first: with the focus plugin
   (`egui_pop_core::focus::install`, installed by the application), the
   first Escape in a text field drops its focus and goes no further, and

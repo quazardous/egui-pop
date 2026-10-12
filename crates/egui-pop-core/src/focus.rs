@@ -8,6 +8,10 @@
 //! [`when_context`] built from it gives each scope's keys the scope's
 //! depth, so key resolution prefers the binding nearest the focus.
 //!
+//! In hover mode ([`focus_mode`](crate::focus_mode)), the place the
+//! pointer moved to stands for the place last clicked, and a widget
+//! focused in another scope lets go of the focus.
+//!
 //! The chain is computed from the previous pass's scopes (egui decides
 //! focus between passes), so it is ready before this pass's widgets read
 //! the keyboard.
@@ -92,6 +96,41 @@ fn target(ctx: &Context, pressed: Option<(LayerId, Pos2)>) -> Option<(LayerId, P
     pressed
 }
 
+/// The deepest scope drawn at a place.
+fn deepest(scopes: &[ScopeRecord], layer: LayerId, pos: Pos2) -> Option<usize> {
+    scopes
+        .iter()
+        .enumerate()
+        .filter(|(_, r)| r.layer == layer && r.rect.contains(pos))
+        .max_by_key(|(i, r)| (r.depth, *i))
+        .map(|(i, _)| i)
+}
+
+/// In hover mode (`focus_mode`), the surface under the moving pointer
+/// gets the keys: the chain points there, and a widget holding the
+/// focus in another surface lets go of it.
+fn follow_pointer(ctx: &Context, s: &mut State) {
+    if !crate::focus_mode::pointer_may_focus(ctx) {
+        return;
+    }
+    let Some(pos) = ctx.input(|i| i.pointer.hover_pos()) else {
+        return;
+    };
+    let Some(layer) = ctx.layer_id_at(pos) else {
+        return;
+    };
+    let Some(under) = deepest(&s.last, layer, pos) else {
+        return;
+    };
+    if let Some(id) = ctx.memory(|m| m.focused())
+        && let Some(r) = ctx.read_response(id)
+        && deepest(&s.last, r.layer_id, r.interact_rect.center()) != Some(under)
+    {
+        ctx.memory_mut(|m| m.surrender_focus(id));
+    }
+    s.pressed = Some((layer, pos));
+}
+
 fn rotate(ctx: &Context, s: &mut State) {
     let now = pass(ctx);
     if s.pass == now {
@@ -109,16 +148,10 @@ fn rotate(ctx: &Context, s: &mut State) {
     {
         s.pressed = Some((layer, pos));
     }
+    follow_pointer(ctx, s);
     s.chain.clear();
     if let Some((layer, pos)) = target(ctx, s.pressed) {
-        let deepest = s
-            .last
-            .iter()
-            .enumerate()
-            .filter(|(_, r)| r.layer == layer && r.rect.contains(pos))
-            .max_by_key(|(i, r)| (r.depth, *i))
-            .map(|(i, _)| i);
-        let mut at = deepest;
+        let mut at = deepest(&s.last, layer, pos);
         while let Some(i) = at {
             s.chain.push(i);
             at = s.last[i].parent;

@@ -476,3 +476,95 @@ fn escape_in_a_popover_field_leaves_the_field_before_closing_it() {
     h.run();
     assert!(!h.state().open, "the second closes the popover");
 }
+
+struct Sides {
+    text: String,
+}
+
+fn sides(preference: egui_pop_core::focus_mode::Preference) -> Harness<'static, Sides> {
+    let mut h = Harness::new_ui_state(
+        |ui, s: &mut Sides| {
+            focus::install(ui.ctx());
+            ui.horizontal(|ui| {
+                focus::scope(ui, "left", &[], |ui| {
+                    ui.vertical(|ui| {
+                        let _ = ui.button("Left button");
+                        ui.add_space(40.0);
+                    });
+                });
+                ui.add_space(40.0);
+                focus::scope(ui, "right", &[], |ui| {
+                    ui.vertical(|ui| {
+                        let _ = ui.button("Right button");
+                        let r = ui.text_edit_singleline(&mut s.text);
+                        egui_pop_core::focus_mode::follow_pointer(&r);
+                    });
+                });
+            });
+        },
+        Sides {
+            text: String::new(),
+        },
+    );
+    egui_pop_core::focus_mode::get(&h.ctx).set_preference(preference);
+    h.run();
+    h
+}
+
+fn move_to(h: &mut Harness<'_, Sides>, pos: egui::Pos2) {
+    h.event(egui::Event::PointerMoved(pos));
+    h.run();
+    // A second pass sees the chain egui settled on.
+    h.run();
+}
+
+#[test]
+fn in_hover_mode_the_pointer_moves_the_keyboard_between_surfaces() {
+    use egui_pop_core::focus_mode::Preference;
+    let mut h = sides(Preference::Hover);
+    let left = h.get_by_label("Left button").rect().center();
+    let right = h.get_by_label("Right button").rect().center();
+    move_to(&mut h, left);
+    assert_eq!(focus::chain_names(&h.ctx), ["left"]);
+    // The focused button lets go when the pointer moves to another surface.
+    h.get_by_label("Left button").focus();
+    h.run();
+    move_to(&mut h, right);
+    assert_eq!(focus::chain_names(&h.ctx), ["right"]);
+    assert!(focus::focused(&h.ctx).is_none());
+    // A text field takes the keyboard when the pointer moves over it.
+    let field = h
+        .get_by_role(egui::accesskit::Role::TextInput)
+        .rect()
+        .center();
+    move_to(&mut h, field);
+    assert!(h.ctx.text_edit_focused());
+    // Never while a button is held (a selection, a drag).
+    h.event(egui::Event::PointerButton {
+        pos: field,
+        button: egui::PointerButton::Primary,
+        pressed: true,
+        modifiers: Modifiers::NONE,
+    });
+    h.run();
+    move_to(&mut h, left);
+    assert_eq!(focus::chain_names(&h.ctx), ["right"]);
+    assert!(h.ctx.text_edit_focused());
+}
+
+#[test]
+fn in_click_mode_moving_the_pointer_changes_nothing() {
+    use egui_pop_core::focus_mode::Preference;
+    let mut h = sides(Preference::Click);
+    h.get_by_label("Left button").focus();
+    h.run();
+    let field = h
+        .get_by_role(egui::accesskit::Role::TextInput)
+        .rect()
+        .center();
+    move_to(&mut h, field);
+    assert_eq!(focus::chain_names(&h.ctx), ["left"]);
+    assert!(!h.ctx.text_edit_focused());
+    let report = egui_pop_core::focus_mode::get(&h.ctx).report();
+    assert_eq!(report.mode, egui_pop_core::focus_mode::FocusMode::Click);
+}

@@ -12,6 +12,7 @@ use std::sync::{Arc, Mutex};
 use egui::{Context, Id, Ui};
 use egui_pop_core::binding::SharedStore;
 use egui_pop_core::debug::{DebugBridge, Feedback, FnCollector};
+use egui_pop_core::focus_mode::{self, FocusModes, Preference, SystemFocus};
 use egui_pop_core::keys::KeyDispatcher;
 use egui_pop_core::overlay::{self, Kind, OverlaySpec};
 use egui_pop_core::persist::Persist;
@@ -82,6 +83,16 @@ impl ThemeService {
 
 /// The theme service's token.
 pub const THEME: ServiceToken<ThemeService> = ServiceToken::new("app.theme");
+
+/// The focus mode (click or hover, the system's way and the user's
+/// choice), as a service.
+pub const FOCUS_MODE: ServiceToken<FocusModes> = ServiceToken::new("app.focus_mode");
+
+/// The setting choosing the focus mode: `system`, `click`, `hover`.
+pub const SETTING_FOCUS: SettingId = SettingId::from_static("appearance.focus");
+
+/// The section the framework's settings are shown in.
+const FRAMEWORK_SECTION: &str = "Appearance";
 
 /// What a command handler receives.
 #[derive(Debug)]
@@ -668,6 +679,7 @@ pub struct AppBuilder {
     themes: Themes,
     persist: Option<Persist>,
     store: Option<SharedStore>,
+    system_focus: Option<SystemFocus>,
 }
 
 impl fmt::Debug for AppBuilder {
@@ -696,6 +708,7 @@ impl AppBuilder {
             themes: Themes::default(),
             persist: None,
             store: None,
+            system_focus: None,
         }
     }
 
@@ -735,6 +748,14 @@ impl AppBuilder {
         self
     }
 
+    /// The window manager's focus mode (`focus_mode::read_system()`
+    /// reads it). Not given, it is read by `run_native` and taken as
+    /// click elsewhere (tests stay the same on every desktop).
+    pub fn system_focus(mut self, system: SystemFocus) -> Self {
+        self.system_focus = Some(system);
+        self
+    }
+
     /// Sorts the plugins, connects them, installs the theme and resolves
     /// the declarations, on a context.
     pub fn build(self, ctx: &Context) -> Result<App, BuildError> {
@@ -768,6 +789,7 @@ impl AppBuilder {
             .store
             .unwrap_or_else(|| Arc::new(Mutex::new(Store::new())));
         let handle = AppHandle::new(ctx, store);
+        let modes = FocusModes::new(self.system_focus.unwrap_or_default());
         let mut app = App {
             handle,
             plugins: slots,
@@ -778,7 +800,7 @@ impl AppBuilder {
             installed: None,
             persist: self.persist,
         };
-        app.framework(self.theme, self.themes)
+        app.framework(self.theme, self.themes, modes)
             .expect("the framework's registrations are valid");
         app.install_collectors();
         for i in 0..app.plugins.len() {
@@ -797,7 +819,9 @@ impl AppBuilder {
 
     /// Builds and runs the application in a native window.
     #[cfg(all(feature = "eframe", not(target_arch = "wasm32")))]
-    pub fn run_native(self, title: &str, options: eframe::NativeOptions) -> eframe::Result {
+    pub fn run_native(mut self, title: &str, options: eframe::NativeOptions) -> eframe::Result {
+        self.system_focus
+            .get_or_insert_with(egui_pop_core::focus_mode::read_system);
         eframe::run_native(
             title,
             options,
@@ -882,7 +906,12 @@ impl App {
     }
 
     /// The framework's own registrations.
-    fn framework(&mut self, theme: ThemeSpec, themes: Themes) -> Result<(), CtxError> {
+    fn framework(
+        &mut self,
+        theme: ThemeSpec,
+        themes: Themes,
+        modes: FocusModes,
+    ) -> Result<(), CtxError> {
         let owner = OwnerId::FRAMEWORK;
         let handle = self.handle.clone();
         let connected: Vec<PluginId> = Vec::new();
@@ -919,6 +948,18 @@ impl App {
                 themes,
             },
         )?;
+        let mut focus = egui_pop_model::values::Descriptor::choice(
+            "Keyboard focus",
+            &Preference::CHOICES,
+            Preference::System.as_str(),
+        );
+        focus.description = format!(
+            "Whether moving the mouse over a panel or a field gives it the keyboard \
+             (hover), or only a click does (click). {}.",
+            modes.system_said()
+        );
+        ctx.setting(SETTING_FOCUS, focus)?;
+        ctx.service(&FOCUS_MODE, modes)?;
         ctx.command(
             CommandSpec::new(CMD_PALETTE, "Command palette", "View")
                 .description("Search and run any command.")
@@ -1370,6 +1411,7 @@ impl App {
             .plugins
             .iter()
             .map(|s| (s.owner.clone(), s.plugin.title()))
+            .chain([(OwnerId::FRAMEWORK, FRAMEWORK_SECTION.to_string())])
             .collect();
         let store = lock(&self.handle.0.store);
         derived.settings = reg
@@ -1534,6 +1576,14 @@ impl App {
     fn attach(&mut self, ctx: &Context) {
         *self.handle.0.ctx.borrow_mut() = ctx.clone();
         focus::install(ctx);
+        if let Some(modes) = self.handle.service(&FOCUS_MODE) {
+            let preference = lock(&self.handle.store())
+                .get(&format!("settings/{SETTING_FOCUS}"))
+                .and_then(|e| e.value.as_choice().and_then(Preference::parse))
+                .unwrap_or_default();
+            modes.set_preference(preference);
+            focus_mode::set(ctx, &modes);
+        }
     }
 
     /// Runs a command now, in the current context.

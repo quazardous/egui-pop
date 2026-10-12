@@ -61,7 +61,9 @@ pub mod settings;
 pub mod stories;
 pub mod zones;
 
-pub use app::{App, AppBuilder, AppHandle, Call, Request, THEME, ThemeService};
+pub use app::{
+    App, AppBuilder, AppHandle, Call, FOCUS_MODE, Request, SETTING_FOCUS, THEME, ThemeService,
+};
 pub use ctx::{Ctx, CtxError};
 pub use plugin::{BuildError, Plugin, PluginError, PluginInfo};
 

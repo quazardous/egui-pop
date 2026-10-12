@@ -329,6 +329,7 @@ pub fn core_collectors() -> Vec<FnCollector> {
             json!({
                 "focused": focus::focused(ctx).map(|id| format!("{id:?}")),
                 "chain": focus::chain_names(ctx),
+                "mode": crate::focus_mode::get(ctx).report(),
                 "scopes": focus::scopes(ctx),
                 "context": focus::when_context(ctx, &Default::default())
                     .iter()

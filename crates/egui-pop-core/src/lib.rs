@@ -4,6 +4,8 @@
 //! - [`theme`]: design tokens into egui's style, typed tokens in the
 //!   context;
 //! - [`focus`]: focus scopes and the focus chain, rebuilt each pass;
+//! - [`focus_mode`]: whether the pointer gives the keyboard (click or
+//!   hover, as the window manager does or as the user chose);
 //! - [`keys`]: the key dispatcher (chords, consumption, traces);
 //! - [`overlay`]: the overlay stack (top-layer dismissal, modality,
 //!   focus restore);
@@ -23,6 +25,7 @@ pub mod binding;
 pub mod debug;
 pub mod fault;
 pub mod focus;
+pub mod focus_mode;
 pub mod icon;
 pub mod keys;
 pub mod overlay;
