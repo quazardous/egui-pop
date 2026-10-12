@@ -60,13 +60,14 @@ pub use egui_pop_viewport as viewport;
 pub use egui_pop_i18n as i18n;
 
 /// Platform services as opt-in plugins: a single instance and deep
-/// links, notifications, a tray icon, global shortcuts (feature
+/// links, notifications, a tray icon, global shortcuts, logs (feature
 /// `platform`, or `platform-<service>` for one).
 #[cfg(any(
     feature = "platform-instance",
     feature = "platform-notify",
     feature = "platform-tray",
-    feature = "platform-keys"
+    feature = "platform-keys",
+    feature = "platform-logs"
 ))]
 pub use egui_pop_platform as platform;
 

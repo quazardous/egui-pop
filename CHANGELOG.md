@@ -84,6 +84,12 @@ egui minor.
   window and why). A press runs the `keys.system` step, whose default
   runs the command. A sequence of chords is refused and said so.
   Guide: docs/global-shortcuts.md.
+- Logs (`platform::logs`, feature `platform-logs`): `LogsPlugin` writes
+  the `log` facade to `<log dir>/<name>.log` (the platform's log
+  directory), rotated by size into numbered files, keeps a tail in
+  memory, and declares the `developer.log_level` setting, the
+  `logs.reveal` command and the `logs` debug collector; `Logs::write`
+  feeds lines from another logger. Guide: docs/logs.md.
 
 ### Changed
 

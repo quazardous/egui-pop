@@ -40,3 +40,6 @@ pub mod tray {}
 
 #[doc = include_str!("../../../docs/global-shortcuts.md")]
 pub mod global_shortcuts {}
+
+#[doc = include_str!("../../../docs/logs.md")]
+pub mod logs {}
