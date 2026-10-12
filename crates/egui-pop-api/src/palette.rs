@@ -26,6 +26,7 @@ use egui::text::LayoutJob;
 use egui::{Color32, FontId, Key, TextFormat, Ui};
 use egui_pop_core::lock;
 use egui_pop_core::overlay::{self, Kind, OverlaySpec};
+use egui_pop_core::strings;
 use egui_pop_model::commands::CommandSpec;
 use egui_pop_model::fuzzy::{self, Match};
 use egui_pop_model::ids::{BlockId, CommandId, PluginId};
@@ -36,6 +37,7 @@ use serde_json::{Map, Value as Json, json};
 use crate::app::{AppHandle, MENU_VIEW};
 use crate::hooks::PaletteEntry;
 use crate::services::ServiceToken;
+use crate::strings as txt;
 use crate::zones::{self, Block};
 use crate::{Ctx, Plugin, PluginError};
 
@@ -99,7 +101,7 @@ struct Prompt {
     at: usize,
     values: Map<String, Json>,
     input: String,
-    error: Option<String>,
+    error: Option<ArgError>,
 }
 
 #[derive(Debug, Default)]
@@ -228,8 +230,27 @@ fn arguments(spec: &CommandSpec) -> Vec<(String, Json)> {
     }
 }
 
+/// Why a typed answer was refused: it is not the type its example is.
+#[derive(Clone, Debug, PartialEq)]
+enum ArgError {
+    Bool(String),
+    Number(String),
+    Json(String),
+}
+
+impl ArgError {
+    /// As the prompt says it.
+    fn text(&self, ctx: &egui::Context) -> String {
+        match self {
+            ArgError::Bool(t) => strings::tr_args(ctx, &txt::PALETTE_NOT_BOOL, &[("input", t)]),
+            ArgError::Number(t) => strings::tr_args(ctx, &txt::PALETTE_NOT_NUMBER, &[("input", t)]),
+            ArgError::Json(e) => strings::tr_args(ctx, &txt::PALETTE_NOT_JSON, &[("error", e)]),
+        }
+    }
+}
+
 /// A typed answer, read as the example's type; empty: the example.
-fn parse_arg(input: &str, example: &Json) -> Result<Json, String> {
+fn parse_arg(input: &str, example: &Json) -> Result<Json, ArgError> {
     let t = input.trim();
     if t.is_empty() {
         return Ok(example.clone());
@@ -238,19 +259,19 @@ fn parse_arg(input: &str, example: &Json) -> Result<Json, String> {
         Json::Bool(_) => match t {
             "true" | "yes" | "on" => Ok(Json::Bool(true)),
             "false" | "no" | "off" => Ok(Json::Bool(false)),
-            _ => Err(format!("`{t}` is not true or false")),
+            _ => Err(ArgError::Bool(t.into())),
         },
         Json::Number(n) if n.is_f64() => t
             .parse::<f64>()
             .map(|v| json!(v))
-            .map_err(|_| format!("`{t}` is not a number")),
+            .map_err(|_| ArgError::Number(t.into())),
         Json::Number(_) => t
             .parse::<i64>()
             .map(|v| json!(v))
             .or_else(|_| t.parse::<f64>().map(|v| json!(v)))
-            .map_err(|_| format!("`{t}` is not a number")),
+            .map_err(|_| ArgError::Number(t.into())),
         Json::String(_) => Ok(Json::String(t.into())),
-        _ => serde_json::from_str(t).map_err(|e| format!("not JSON: {e}")),
+        _ => serde_json::from_str(t).map_err(|e| ArgError::Json(e.to_string())),
     }
 }
 
@@ -311,11 +332,11 @@ fn show(ui: &mut Ui, app: &AppHandle) {
             }
             return;
         }
-        let title = ui.strong("Command palette");
+        let title = ui.strong(strings::tr(&ctx, &txt::PALETTE_TITLE));
         let edit = ui
             .add(
                 egui::TextEdit::singleline(&mut s.query)
-                    .hint_text("Type a command")
+                    .hint_text(strings::tr(&ctx, &txt::PALETTE_HINT))
                     .desired_width(f32::INFINITY),
             )
             .labelled_by(title.id);
@@ -354,9 +375,13 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                         let mut keys = h.entry.keys.first().cloned().unwrap_or_default();
                         if h.recent && s.query.trim().is_empty() {
                             keys = if keys.is_empty() {
-                                "recent".into()
+                                strings::tr(&ctx, &txt::PALETTE_RECENT)
                             } else {
-                                format!("recent  {keys}")
+                                strings::tr_args(
+                                    &ctx,
+                                    &txt::PALETTE_RECENT_KEYS,
+                                    &[("keys", &keys)],
+                                )
                             };
                         }
                         if !keys.is_empty() {
@@ -371,7 +396,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                         }
                     }
                     if hits.is_empty() {
-                        ui.weak("No command matches.");
+                        ui.weak(strings::tr(&ctx, &txt::PALETTE_NO_MATCH));
                     }
                 });
             });
@@ -410,7 +435,12 @@ fn show(ui: &mut Ui, app: &AppHandle) {
 #[allow(clippy::option_option)]
 fn ask(ui: &mut Ui, prompt: &mut Prompt) -> Option<Option<Json>> {
     let (name, example) = prompt.args[prompt.at].clone();
-    let title = ui.strong(format!("{}: {name}", prompt.title));
+    let ctx = ui.ctx().clone();
+    let title = ui.strong(strings::tr_args(
+        &ctx,
+        &txt::PALETTE_ARGUMENT_TITLE,
+        &[("command", &prompt.title), ("argument", &name)],
+    ));
     let edit = ui
         .add(
             egui::TextEdit::singleline(&mut prompt.input)
@@ -420,13 +450,17 @@ fn ask(ui: &mut Ui, prompt: &mut Prompt) -> Option<Option<Json>> {
         .labelled_by(title.id);
     edit.request_focus();
     egui_pop_core::focus::escape_passes(ui.ctx(), edit.id);
-    ui.weak(format!(
-        "Argument {} of {}. Enter: next; empty: {example}; Escape: back.",
-        prompt.at + 1,
-        prompt.args.len()
+    ui.weak(strings::tr_args(
+        &ctx,
+        &txt::PALETTE_ARGUMENT_HELP,
+        &[
+            ("at", &(prompt.at + 1).to_string()),
+            ("count", &prompt.args.len().to_string()),
+            ("example", &example.to_string()),
+        ],
     ));
     if let Some(e) = &prompt.error {
-        ui.colored_label(ui.visuals().error_fg_color, e);
+        ui.colored_label(ui.visuals().error_fg_color, e.text(&ctx));
     }
     // Escape here goes back to the list instead of closing the palette.
     if ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, Key::Escape)) {

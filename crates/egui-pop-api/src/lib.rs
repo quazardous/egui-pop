@@ -36,6 +36,9 @@
 //! - [`zoom`]: the interface zoom in steps, its commands and keys;
 //! - [`settings_window`]: the settings window (search, sections, form)
 //!   and the shortcuts editor, a plugin;
+//! - [`strings`]: the interface's own text, by key with English
+//!   fallbacks, translated by the installed `egui_pop_core::strings`
+//!   provider;
 //! - [`DefaultPlugins`] and [`MinimalPlugins`]: plugin groups for
 //!   [`AppBuilder::plugins`];
 //! - [`AppBuilder`] and [`App`]: sorting, connecting, the shell (menu
@@ -92,6 +95,7 @@ pub mod settings;
 pub mod settings_window;
 pub mod steps;
 pub mod stories;
+pub mod strings;
 pub mod strips;
 pub mod toasts;
 pub mod window;

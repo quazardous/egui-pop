@@ -36,6 +36,7 @@ use egui_pop_core::a11y::{self, Politeness};
 use egui_pop_core::debug::FnCollector;
 use egui_pop_core::icon::{Icon, Size, Tone};
 use egui_pop_core::lock;
+use egui_pop_core::strings;
 use egui_pop_core::theme::Tokens;
 use egui_pop_model::commands::Origin;
 use egui_pop_model::ids::{BlockId, CommandId, PluginId};
@@ -44,6 +45,7 @@ use serde_json::{Value as Json, json};
 
 use crate::app::AppHandle;
 use crate::services::ServiceToken;
+use crate::strings as txt;
 use crate::zones::{self, Block};
 use crate::{Ctx, Plugin, PluginError};
 
@@ -342,12 +344,16 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                         ui.set_width(t.toast.width - 2.0 * t.toast.padding);
                         ui.horizontal(|ui| {
                             let (icon, tone) = shown.toast.level.icon();
-                            ui.add(icon.tone(tone).label(match shown.toast.level {
-                                Level::Info => "Information",
-                                Level::Success => "Done",
-                                Level::Warning => "Warning",
-                                Level::Error => "Error",
-                            }));
+                            let level = strings::tr(
+                                ui.ctx(),
+                                match shown.toast.level {
+                                    Level::Info => &txt::TOAST_INFO,
+                                    Level::Success => &txt::TOAST_SUCCESS,
+                                    Level::Warning => &txt::TOAST_WARNING,
+                                    Level::Error => &txt::TOAST_ERROR,
+                                },
+                            );
+                            ui.add(icon.tone(tone).label(&level));
                             // The text wraps in what the close button and
                             // the action leave.
                             let spacing = ui.spacing().item_spacing.x;
@@ -383,7 +389,11 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                                     let close = ui.add(
                                         Icon::Close
                                             .size(Size::Inline)
-                                            .label(&format!("Close: {}", shown.toast.text))
+                                            .label(&strings::tr_args(
+                                                ui.ctx(),
+                                                &txt::TOAST_CLOSE,
+                                                &[("text", &shown.toast.text)],
+                                            ))
                                             .sense_click(),
                                     );
                                     if close.clicked() {

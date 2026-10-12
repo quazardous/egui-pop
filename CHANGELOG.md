@@ -27,6 +27,13 @@ egui minor.
 - Viewport: its default accessible names and the histogram's value are
   read through `egui_pop_core::strings`; `egui_pop_viewport::strings::ALL`
   lists them.
+- The application interface's own text (the palette's prompt, the
+  settings window and the shortcuts editor, dialogs' and the file
+  picker's buttons, toasts, devtools, the workbench's tab menu, menus'
+  reasons, the frame's window menu, the way out of full screen) is read
+  through `egui_pop_core::strings`, by the keys of the new
+  `egui_pop_api::strings` module, whose `ALL` lists them for catalogues.
+  English is unchanged.
 
 ## 0.1.0 (prepared, not published)
 

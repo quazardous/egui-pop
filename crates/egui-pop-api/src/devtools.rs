@@ -17,6 +17,7 @@ use std::sync::{Arc, Mutex};
 
 use egui::Ui;
 use egui_pop_core::lock;
+use egui_pop_core::strings;
 use egui_pop_model::commands::CommandSpec;
 use egui_pop_model::ids::{CommandId, PanelId, PluginId, SettingId, StepId};
 use egui_pop_model::panels::{Area, PanelSpec};
@@ -25,6 +26,7 @@ use serde_json::{Value as Json, json};
 
 use crate::app::{AppHandle, MENU_VIEW};
 use crate::steps::StepSpec;
+use crate::strings as txt;
 use crate::{Ctx, Plugin, PluginError};
 
 /// The setting that lets devtools open.
@@ -37,7 +39,14 @@ pub const CMD_DEVTOOLS: CommandId = CommandId::from_static("app.devtools");
 pub const STEP_CALL: StepId = StepId::from_static("devtools.call");
 
 /// The tabs.
-pub const TABS: [&str; 6] = ["Keys", "Journal", "Steps", "Focus", "Scale", "Collectors"];
+pub const TABS: [&str; 6] = [
+    txt::DEVTOOLS_TAB_KEYS.fallback,
+    txt::DEVTOOLS_TAB_JOURNAL.fallback,
+    txt::DEVTOOLS_TAB_STEPS.fallback,
+    txt::DEVTOOLS_TAB_FOCUS.fallback,
+    txt::DEVTOOLS_TAB_SCALE.fallback,
+    txt::DEVTOOLS_TAB_COLLECTORS.fallback,
+];
 
 #[derive(Debug, Default)]
 struct State {
@@ -141,13 +150,14 @@ pub(crate) fn follow(app: &AppHandle) {
 fn show(ui: &mut Ui, app: &AppHandle, state: &Arc<Mutex<State>>) {
     follow(app);
     if !enabled(app) {
-        ui.weak("Devtools are off (Settings > Developer > Devtools).");
+        ui.weak(strings::tr(ui.ctx(), &txt::DEVTOOLS_OFF));
         return;
     }
     let mut s = lock(state);
     ui.horizontal(|ui| {
-        for (i, name) in TABS.iter().enumerate() {
-            if ui.selectable_label(s.tab == i, *name).clicked() {
+        for (i, name) in txt::DEVTOOLS_TABS.iter().enumerate() {
+            let name = strings::tr(ui.ctx(), name);
+            if ui.selectable_label(s.tab == i, name).clicked() {
                 s.tab = i;
             }
         }
@@ -168,11 +178,15 @@ fn show(ui: &mut Ui, app: &AppHandle, state: &Arc<Mutex<State>>) {
 
 fn keys(ui: &mut Ui, app: &AppHandle) {
     if let Some(p) = app.pending_keys() {
-        ui.strong(format!("Waiting for the next chord after {p}"));
+        ui.strong(strings::tr_args(
+            ui.ctx(),
+            &txt::DEVTOOLS_WAITING,
+            &[("keys", &p.to_string())],
+        ));
     }
     let traces = app.key_traces();
     if traces.is_empty() {
-        ui.weak("Press a key bound to a command: its resolution shows here.");
+        ui.weak(strings::tr(ui.ctx(), &txt::DEVTOOLS_PRESS_A_KEY));
     }
     for t in traces.iter().rev().take(16) {
         ui.monospace(t.to_string());
@@ -196,6 +210,7 @@ fn journal(ui: &mut Ui, app: &AppHandle) {
 }
 
 fn steps(ui: &mut Ui, app: &AppHandle) {
+    let ctx = ui.ctx().clone();
     egui::Grid::new("egui_pop.devtools.steps")
         .num_columns(2)
         .striped(true)
@@ -203,11 +218,17 @@ fn steps(ui: &mut Ui, app: &AppHandle) {
             for s in app.steps() {
                 ui.monospace(s.spec.id.as_str());
                 ui.label(if s.hooks.is_empty() {
-                    "no hooks".to_string()
+                    strings::tr(&ctx, &txt::DEVTOOLS_NO_HOOKS)
                 } else {
                     s.hooks
                         .iter()
-                        .map(|h| format!("{} by {}", h.kind, h.owner))
+                        .map(|h| {
+                            strings::tr_args(
+                                &ctx,
+                                &txt::DEVTOOLS_HOOK_BY,
+                                &[("kind", h.kind), ("owner", h.owner.as_str())],
+                            )
+                        })
                         .collect::<Vec<_>>()
                         .join(", ")
                 });
@@ -230,11 +251,11 @@ fn steps(ui: &mut Ui, app: &AppHandle) {
 
 fn focus(ui: &mut Ui, app: &AppHandle) {
     let snap = app.debug_snapshot();
-    ui.strong("Focus chain");
+    ui.strong(strings::tr(ui.ctx(), &txt::DEVTOOLS_FOCUS_CHAIN));
     ui.monospace(snap["focus"].to_string());
-    ui.strong("Overlays");
+    ui.strong(strings::tr(ui.ctx(), &txt::DEVTOOLS_OVERLAYS));
     ui.monospace(snap["overlays"].to_string());
-    ui.strong("Context keys");
+    ui.strong(strings::tr(ui.ctx(), &txt::DEVTOOLS_CONTEXT_KEYS));
     for (k, v, d) in app.when_context().iter() {
         ui.monospace(format!("{k} = {v} (depth {d})"));
     }
@@ -275,7 +296,7 @@ fn collectors(ui: &mut Ui, app: &AppHandle, s: &mut State) {
     ui.weak(c["description"].as_str().unwrap_or_default());
     if let Some(actions) = c["actions"].as_array().filter(|a| !a.is_empty()) {
         ui.horizontal(|ui| {
-            ui.label("Arguments");
+            ui.label(strings::tr(ui.ctx(), &txt::DEVTOOLS_ARGUMENTS));
             ui.add(egui::TextEdit::singleline(&mut s.args).desired_width(280.0));
         });
         ui.horizontal_wrapped(|ui| {
@@ -283,7 +304,7 @@ fn collectors(ui: &mut Ui, app: &AppHandle, s: &mut State) {
                 let name = a["name"].as_str().unwrap_or_default().to_string();
                 let mutates = a["mutates"].as_bool().unwrap_or(false);
                 let label = if mutates {
-                    format!("{name} (mutates)")
+                    strings::tr_args(ui.ctx(), &txt::DEVTOOLS_MUTATES, &[("action", &name)])
                 } else {
                     name.clone()
                 };

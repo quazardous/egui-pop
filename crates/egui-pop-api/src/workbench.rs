@@ -37,6 +37,7 @@ use std::collections::BTreeMap;
 
 use egui::{Id, Pos2, Rect, Ui, ViewportBuilder, ViewportId};
 use egui_dock::{DockArea, DockState, NodeIndex, Split, TabViewer};
+use egui_pop_core::strings;
 use egui_pop_model::ids::{PanelId, StepId, ZoneId};
 use egui_pop_model::layout::{Layout, Node};
 use egui_pop_model::panels::{Area, PanelSpec, Panels};
@@ -44,6 +45,7 @@ use serde_json::{Value as Json, json};
 
 use crate::app::AppHandle;
 use crate::steps::Outcome;
+use crate::strings as txt;
 use crate::window::WindowState;
 
 /// The shell's zones as panels.
@@ -516,7 +518,11 @@ pub(crate) fn windows(app: &AppHandle, ctx: &egui::Context, app_title: &str) {
         let title = if app_title.is_empty() {
             spec.title.clone()
         } else {
-            format!("{} — {app_title}", spec.title)
+            strings::tr_args(
+                ctx,
+                &txt::WORKBENCH_WINDOW_TITLE,
+                &[("panel", &spec.title), ("application", app_title)],
+            )
         };
         let mut builder = ViewportBuilder::default()
             .with_title(title.clone())
@@ -588,6 +594,30 @@ pub fn window_id(panel: &PanelId) -> ViewportId {
 pub(crate) fn dock_id(area: Area) -> Id {
     Id::new(("egui_pop.area", area_name(area)))
 }
+/// An area as the interface names it ("the start side bar").
+fn area_text(ctx: &egui::Context, area: Area) -> String {
+    strings::tr(
+        ctx,
+        match area {
+            Area::Center => &txt::AREA_CENTER,
+            Area::StartSide => &txt::AREA_START_SIDE,
+            Area::EndSide => &txt::AREA_END_SIDE,
+            Area::Bottom => &txt::AREA_BOTTOM,
+        },
+    )
+}
+
+/// Why a panel may not go to an area, as the interface says it.
+fn refusal(ctx: &egui::Context, spec: &PanelSpec, title: &str, area: Area) -> Option<String> {
+    (!spec.allows(area)).then(|| {
+        strings::tr_args(
+            ctx,
+            &txt::WORKBENCH_STAYS_OUT,
+            &[("panel", title), ("area", &area_text(ctx, area))],
+        )
+    })
+}
+
 /// An area's tree of tabs and splits as an `egui_dock` state. The
 /// layout document stays the saved form; the dock is how it is drawn
 /// and moved by hand.
@@ -834,25 +864,42 @@ impl TabViewer for Viewer<'_> {
     fn context_menu(&mut self, ui: &mut Ui, tab: &mut PanelId, _path: egui_dock::NodePath) {
         let spec = self.app.workbench_mut().spec(tab).cloned();
         let Some(spec) = spec else { return };
+        let ctx = ui.ctx().clone();
+        let title = spec.title.clone();
         for area in Area::ALL {
             let allowed = spec.allows(area);
             let r = ui
                 .add_enabled(
                     allowed,
-                    egui::Button::new(format!("Move to {}", area.name())),
+                    egui::Button::new(strings::tr_args(
+                        &ctx,
+                        &txt::WORKBENCH_MOVE_TO,
+                        &[("area", &area_text(&ctx, area))],
+                    )),
                 )
-                .on_disabled_hover_text(spec.refuses(area).unwrap_or_default());
+                .on_disabled_hover_text(refusal(&ctx, &spec, &title, area).unwrap_or_default());
             if r.clicked() {
                 self.app.change_workbench(Change::Move(tab.clone(), area));
                 ui.close();
             }
         }
         ui.separator();
-        if spec.detachable && ui.button("Detach into a window").clicked() {
+        if spec.detachable
+            && ui
+                .button(strings::tr(&ctx, &txt::WORKBENCH_DETACH))
+                .clicked()
+        {
             self.app.change_workbench(Change::Detach(tab.clone()));
             ui.close();
         }
-        if ui.button(format!("Close {}", spec.title)).clicked() {
+        if ui
+            .button(strings::tr_args(
+                &ctx,
+                &txt::WORKBENCH_CLOSE_PANEL,
+                &[("panel", &title)],
+            ))
+            .clicked()
+        {
             self.app.change_workbench(Change::Hide(tab.clone()));
             ui.close();
         }
@@ -916,7 +963,7 @@ fn drop_hint(app: &AppHandle, ctx: &egui::Context) {
         Id::new("egui_pop.workbench.drop"),
     ));
     let corner = t.radius.widget;
-    match spec.refuses(to) {
+    match refusal(ctx, &spec, &spec.title, to) {
         None => {
             painter.rect_filled(rect, corner, t.accent.subtle.gamma_multiply(0.5));
             painter.rect_stroke(

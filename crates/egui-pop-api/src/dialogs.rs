@@ -52,6 +52,7 @@ use egui::{Key, Response, Ui};
 use egui_pop_core::debug::FnCollector;
 use egui_pop_core::lock;
 use egui_pop_core::overlay::{self, Kind, OverlaySpec};
+use egui_pop_core::strings::{self, CANCEL, CLOSE};
 use egui_pop_core::theme::Tokens;
 use egui_pop_model::commands::Origin;
 use egui_pop_model::fuzzy;
@@ -64,6 +65,7 @@ use crate::app::AppHandle;
 use crate::host::source_of;
 use crate::services::ServiceToken;
 use crate::steps::{Outcome, StepSpec};
+use crate::strings as txt;
 use crate::zones::{self, Block};
 use crate::{Ctx, Plugin, PluginError};
 
@@ -767,7 +769,7 @@ fn body(ui: &mut Ui, o: &mut Open) -> Option<Answer> {
         Dialog::Info(i) => {
             ui.label(&i.text);
             ui.add_space(t.space.m);
-            let close = ui.button("Close");
+            let close = ui.button(strings::tr(ui.ctx(), &CLOSE));
             if first {
                 close.request_focus();
             }
@@ -790,7 +792,7 @@ fn body(ui: &mut Ui, o: &mut Open) -> Option<Answer> {
             let field = ui
                 .add(
                     egui::TextEdit::singleline(&mut o.filter)
-                        .hint_text("Filter")
+                        .hint_text(strings::tr(ui.ctx(), &txt::DIALOG_FILTER))
                         .desired_width(f32::INFINITY),
                 )
                 .labelled_by(heading.id);
@@ -831,14 +833,14 @@ fn body(ui: &mut Ui, o: &mut Open) -> Option<Answer> {
                         }
                     }
                     if shown.is_empty() {
-                        ui.weak("Nothing matches.");
+                        ui.weak(strings::tr(ui.ctx(), &txt::NOTHING_MATCHES));
                     }
                 });
             if enter && let Some(&i) = shown.get(o.highlight) {
                 answer = Some(Answer::Choose { index: i });
             }
             ui.add_space(t.space.m);
-            if ui.button("Cancel").clicked() {
+            if ui.button(strings::tr(ui.ctx(), &CANCEL)).clicked() {
                 answer = Some(Answer::Cancel);
             }
         }
@@ -911,7 +913,7 @@ fn footer(ui: &mut Ui, verb: &str, danger: bool, first: bool) -> Option<Answer> 
             egui::Button::new(verb)
         };
         let p = ui.add(primary);
-        let cancel = ui.button("Cancel");
+        let cancel = ui.button(strings::tr(ui.ctx(), &CANCEL));
         if first {
             if danger {
                 cancel.request_focus();
@@ -971,7 +973,9 @@ fn edit_field(
                 let r = ui.text_edit_singleline(v);
                 egui_pop_core::focus_mode::follow_pointer(&r);
                 if let Some(hint) = path
-                    && ui.button("Browse…").clicked()
+                    && ui
+                        .button(strings::tr(ui.ctx(), &txt::DIALOG_BROWSE))
+                        .clicked()
                 {
                     browse(v, &hint, &field.key, picking);
                 }
@@ -1063,7 +1067,7 @@ pub fn entries(dir: &Path, hint: &PathHint) -> Vec<(PathBuf, bool)> {
 fn picker(ui: &mut Ui, dir: &Path, hint: &PathHint) -> Picked {
     let mut out = Picked::Stay;
     ui.horizontal(|ui| {
-        if ui.button("Up").clicked()
+        if ui.button(strings::tr(ui.ctx(), &txt::PICKER_UP)).clicked()
             && let Some(p) = dir.parent()
         {
             out = Picked::Into(p.to_path_buf());
@@ -1090,10 +1094,17 @@ fn picker(ui: &mut Ui, dir: &Path, hint: &PathHint) -> Picked {
             }
         });
     ui.horizontal(|ui| {
-        if hint.kind == PathKind::Dir && ui.button("Choose this folder").clicked() {
+        if hint.kind == PathKind::Dir
+            && ui
+                .button(strings::tr(ui.ctx(), &txt::PICKER_CHOOSE_FOLDER))
+                .clicked()
+        {
             out = Picked::Chosen(dir.to_path_buf());
         }
-        if ui.button("Close the picker").clicked() {
+        if ui
+            .button(strings::tr(ui.ctx(), &txt::PICKER_CLOSE))
+            .clicked()
+        {
             out = Picked::Cancel;
         }
     });

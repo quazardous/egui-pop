@@ -26,6 +26,7 @@ use egui_pop_core::icon::{Icon, Size};
 use egui_pop_core::lock;
 use egui_pop_core::overlay::{self, Anchor, Kind, OverlaySpec};
 use egui_pop_core::placement::Side;
+use egui_pop_core::strings;
 use egui_pop_model::commands::CommandSpec;
 use egui_pop_model::ids::{BlockId, CommandId, MenuId, PluginId, SettingId, StepId};
 use egui_pop_model::values::Descriptor;
@@ -33,6 +34,7 @@ use serde_json::{Value as Json, json};
 
 use crate::app::{AppHandle, MENU_VIEW};
 use crate::steps::StepSpec;
+use crate::strings as txt;
 use crate::zones::{self, Block};
 use crate::{Ctx, Plugin, PluginError};
 
@@ -334,7 +336,7 @@ fn title_block(ui: &mut Ui, app: &AppHandle, name: &str) {
             let r = ui.add(
                 Icon::Menu
                     .size(Size::Toolbar)
-                    .label("Window menu")
+                    .label(&strings::tr(ui.ctx(), &txt::FRAME_WINDOW_MENU))
                     .sense_click(),
             );
             if r.clicked() {

@@ -11,6 +11,7 @@ use egui_pop_model::values::{Change, Descriptor, Set, Type, Value};
 
 use crate::app::AppHandle;
 use crate::hooks::SettingEntry;
+use crate::strings as txt;
 
 /// Draws the settings form.
 pub fn form(ui: &mut Ui, app: &AppHandle) {
@@ -127,10 +128,19 @@ fn row(ui: &mut Ui, app: &AppHandle, entry: &SettingEntry) {
         .get(path)
         .is_some_and(|e| e.value != e.descriptor.default);
     let reset = strings::tr(ui.ctx(), &RESET);
+    let setting = [("setting", d.label.as_str())];
     if ui
         .add_enabled(changed, egui::Button::new(&reset).small())
-        .on_hover_text(format!("{reset} {}", d.label))
-        .on_disabled_hover_text(format!("{} is at its default", d.label))
+        .on_hover_text(strings::tr_args(
+            ui.ctx(),
+            &txt::SETTINGS_RESET_SETTING,
+            &setting,
+        ))
+        .on_disabled_hover_text(strings::tr_args(
+            ui.ctx(),
+            &txt::SETTINGS_AT_DEFAULT,
+            &setting,
+        ))
         .clicked()
     {
         let _ = lock(&store).set(Set::new(path, Change::Reset, Origin::User));

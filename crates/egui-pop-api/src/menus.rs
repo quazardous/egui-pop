@@ -47,6 +47,7 @@ use std::rc::Rc;
 use egui::containers::menu::{MenuButton, MenuConfig, MenuState, SubMenu};
 use egui::{Atom, Button, Context, Id, Pos2, Rect, Response, Ui, vec2};
 use egui_pop_core::icon::Icon;
+use egui_pop_core::strings;
 use egui_pop_core::theme::Tokens;
 use egui_pop_model::commands::CommandSpec;
 use egui_pop_model::ids::{CommandId, MenuId, OwnerId, StepId};
@@ -57,6 +58,7 @@ use serde_json::{Map, Value as Json, json};
 
 use crate::app::{AppHandle, Request};
 use crate::steps::Outcome;
+use crate::strings as txt;
 
 /// How deep submenus may nest before the rest is cut (a menu naming
 /// itself as a submenu).
@@ -341,12 +343,16 @@ fn merge(item: &Json, extra: &Json) -> Json {
 
 fn items(ui: &mut Ui, app: &AppHandle, menu: &MenuId, cx: &WhenContext, args: &Json, depth: u32) {
     if depth > MAX_DEPTH {
-        ui.weak(format!("`{menu}` nests too deep"));
+        ui.weak(strings::tr_args(
+            ui.ctx(),
+            &txt::MENU_TOO_DEEP,
+            &[("menu", menu.as_str())],
+        ));
         return;
     }
     let list = app.menu(menu);
     if list.is_empty() {
-        ui.weak("(empty)");
+        ui.weak(strings::tr(ui.ctx(), &txt::MENU_EMPTY));
         return;
     }
     for shown in show_items(&list, cx) {
@@ -448,6 +454,7 @@ struct Row<'a> {
 /// Draws a command row; whether it was clicked.
 fn command_row(ui: &mut Ui, app: &AppHandle, cx: &WhenContext, row: Row<'_>) -> bool {
     let t = Tokens::of(ui.ctx());
+    let ctx = ui.ctx().clone();
     let side = t.size.icon_inline;
     let Row {
         menu,
@@ -463,14 +470,24 @@ fn command_row(ui: &mut Ui, app: &AppHandle, cx: &WhenContext, row: Row<'_>) -> 
         Some(s) => {
             let applies = s.when.is_empty() || When::parse(&s.when).is_ok_and(|w| w.eval(cx));
             let why = (!applies)
-                .then(|| format!("Does not apply here ({})", s.when))
-                .or_else(|| (!enabled).then(|| "Not available here".to_string()));
+                .then(|| strings::tr_args(&ctx, &txt::MENU_DOES_NOT_APPLY, &[("when", &s.when)]))
+                .or_else(|| (!enabled).then(|| strings::tr(&ctx, &txt::MENU_NOT_AVAILABLE)));
             (label.clone().unwrap_or_else(|| app.command_title(s)), why)
         }
-        None => (id.to_string(), Some(format!("No command `{id}`"))),
+        None => (
+            id.to_string(),
+            Some(strings::tr_args(
+                &ctx,
+                &txt::MENU_NO_COMMAND,
+                &[("id", id.as_str())],
+            )),
+        ),
     };
     // A run waiting for its result greys the item.
-    let why = why.or_else(|| app.running(id).then(|| "Running…".to_string()));
+    let why = why.or_else(|| {
+        app.running(id)
+            .then(|| strings::tr(&ctx, &txt::MENU_RUNNING))
+    });
     let failed = app
         .history()
         .iter()
@@ -507,7 +524,11 @@ fn command_row(ui: &mut Ui, app: &AppHandle, cx: &WhenContext, row: Row<'_>) -> 
     if let Some(why) = why {
         response = response.on_disabled_hover_text(why);
     } else if let Some(e) = failed {
-        response = response.on_hover_text(format!("Last run failed: {e}"));
+        response = response.on_hover_text(strings::tr_args(
+            &ctx,
+            &txt::MENU_LAST_RUN_FAILED,
+            &[("error", &e)],
+        ));
     } else if let Some(s) = spec.filter(|s| !s.description.is_empty()) {
         response = response.on_hover_text(s.description);
     }

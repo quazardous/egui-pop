@@ -15,6 +15,7 @@
 
 use egui::{Align2, Context, Id, Order, Pos2, Rect, Ui, Vec2, ViewportCommand};
 use egui_pop_core::lock;
+use egui_pop_core::strings;
 use egui_pop_core::theme::Tokens;
 use egui_pop_model::commands::{CommandSpec, Origin};
 use egui_pop_model::ids::{BlockId, CommandId, PluginId};
@@ -292,7 +293,8 @@ fn way_out(ctx: &Context, app: &AppHandle) {
                             if !title.is_empty() {
                                 ui.strong(title);
                             }
-                            if ui.button("Exit full screen (F11)").clicked() {
+                            let exit = strings::tr(ctx, &crate::strings::WINDOW_EXIT_FULLSCREEN);
+                            if ui.button(exit).clicked() {
                                 app.run(CMD_FULLSCREEN, json!(null));
                             }
                         });

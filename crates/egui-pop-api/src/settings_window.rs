@@ -32,6 +32,7 @@ use serde_json::json;
 use crate::app::{AppHandle, MENU_FILE};
 use crate::hooks::SettingEntry;
 use crate::services::ServiceToken;
+use crate::strings as txt;
 use crate::zones::{self, Block};
 use crate::{Ctx, Plugin, PluginError};
 
@@ -46,8 +47,9 @@ pub const SETTINGS_WINDOW: ServiceToken<SettingsWindow> = ServiceToken::new("app
 pub const CMD_VALUE_UNDO: CommandId = CommandId::from_static("value.undo");
 pub const CMD_VALUE_REDO: CommandId = CommandId::from_static("value.redo");
 
-/// The section holding the shortcuts editor.
-pub const SHORTCUTS: &str = "Keyboard shortcuts";
+/// The section holding the shortcuts editor, as [`SettingsWindow::open`]
+/// takes it (shown translated).
+pub const SHORTCUTS: &str = txt::SETTINGS_SHORTCUTS.fallback;
 
 #[derive(Debug, Default)]
 struct State {
@@ -156,6 +158,15 @@ fn sections(entries: &[SettingEntry]) -> Vec<String> {
     out
 }
 
+/// A section's title as shown.
+fn section_title(ctx: &egui::Context, sec: &str) -> String {
+    if sec == SHORTCUTS {
+        strings::tr(ctx, &txt::SETTINGS_SHORTCUTS)
+    } else {
+        sec.to_string()
+    }
+}
+
 /// Whether a setting matches the search (label, description, section).
 fn matches(e: &SettingEntry, filter: &str) -> bool {
     let text = format!(
@@ -192,11 +203,11 @@ fn show(ui: &mut Ui, app: &AppHandle) {
         let entries = app.settings();
         let mut s = lock(&w.0);
         ui.horizontal(|ui| {
-            let title = ui.heading("Settings");
+            let title = ui.heading(strings::tr(&ctx, &txt::SETTINGS_TITLE));
             let search = ui
                 .add(
                     egui::TextEdit::singleline(&mut s.filter)
-                        .hint_text("Search settings and shortcuts")
+                        .hint_text(strings::tr(&ctx, &txt::SETTINGS_SEARCH_HINT))
                         .desired_width(360.0),
                 )
                 .labelled_by(title.id);
@@ -239,7 +250,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                         enabled,
                         egui::Button::selectable(
                             filter.is_empty() && *sec == current,
-                            sec.as_str(),
+                            section_title(&ctx, sec),
                         ),
                     );
                     if r.clicked() {
@@ -260,7 +271,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                     // descriptions wrap.
                     ui.vertical(|ui| {
                         if filter.is_empty() {
-                            ui.strong(&current);
+                            ui.strong(section_title(&ctx, &current));
                             ui.add_space(t.space.s);
                             if current == SHORTCUTS {
                                 let st = &mut *s;
@@ -276,7 +287,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                                 if sec == SHORTCUTS {
                                     if !shortcut_rows(app, &filter, None).is_empty() {
                                         any = true;
-                                        ui.strong(sec);
+                                        ui.strong(section_title(&ctx, sec));
                                         let st = &mut *s;
                                         shortcuts(ui, app, st, &filter);
                                     }
@@ -290,14 +301,14 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                                     continue;
                                 }
                                 any = true;
-                                ui.strong(sec);
+                                ui.strong(section_title(&ctx, sec));
                                 for e in list {
                                     row(ui, app, e);
                                 }
                                 ui.add_space(t.space.m);
                             }
                             if !any {
-                                ui.weak("Nothing matches.");
+                                ui.weak(strings::tr(&ctx, &txt::NOTHING_MATCHES));
                             }
                         }
                     });
@@ -322,17 +333,35 @@ fn history(ui: &mut Ui, app: &AppHandle) {
             s.redo_steps().last().map(|st| st.label.clone()),
         )
     };
-    for (label, step, command) in [
-        ("Undo", undo, CMD_VALUE_UNDO),
-        ("Redo", redo, CMD_VALUE_REDO),
+    let ctx = ui.ctx().clone();
+    for (label, step, command, with_step, nothing, name) in [
+        (
+            &txt::SETTINGS_UNDO,
+            undo,
+            CMD_VALUE_UNDO,
+            &txt::SETTINGS_UNDO_STEP,
+            &txt::SETTINGS_NOTHING_TO_UNDO,
+            &txt::SETTINGS_UNDO_NAME,
+        ),
+        (
+            &txt::SETTINGS_REDO,
+            redo,
+            CMD_VALUE_REDO,
+            &txt::SETTINGS_REDO_STEP,
+            &txt::SETTINGS_NOTHING_TO_REDO,
+            &txt::SETTINGS_REDO_NAME,
+        ),
     ] {
         let r = ui
-            .add_enabled(step.is_some(), egui::Button::new(label).small())
+            .add_enabled(
+                step.is_some(),
+                egui::Button::new(strings::tr(&ctx, label)).small(),
+            )
             .on_hover_text(match &step {
-                Some(st) => format!("{label} {st} (the settings only)"),
-                None => format!("Nothing to {} in the settings", label.to_lowercase()),
+                Some(st) => strings::tr_args(&ctx, with_step, &[("change", st)]),
+                None => strings::tr(&ctx, nothing),
             });
-        a11y::name(&r, WidgetType::Button, &format!("{label} in the settings"));
+        a11y::name(&r, WidgetType::Button, &strings::tr(&ctx, name));
         if r.clicked() {
             app.run(command, serde_json::Value::Null);
         }
@@ -354,13 +383,18 @@ fn row(ui: &mut Ui, app: &AppHandle, e: &SettingEntry) {
             .get(&e.path)
             .is_some_and(|x| x.value != x.descriptor.default);
         let reset = strings::tr(ui.ctx(), &RESET);
+        let setting = [("setting", e.descriptor.label.as_str())];
         let r = ui
             .add_enabled(changed, egui::Button::new(&reset).small())
-            .on_disabled_hover_text(format!("{} is at its default", e.descriptor.label));
+            .on_disabled_hover_text(strings::tr_args(
+                ui.ctx(),
+                &txt::SETTINGS_AT_DEFAULT,
+                &setting,
+            ));
         a11y::name(
             &r,
             WidgetType::Button,
-            &format!("{reset} {}", e.descriptor.label),
+            &strings::tr_args(ui.ctx(), &txt::SETTINGS_RESET_SETTING, &setting),
         );
         if r.clicked() {
             let _ = lock(&store).set(Set::new(&e.path, Change::Reset, Origin::User));
@@ -419,12 +453,13 @@ fn pressed_keys(ui: &Ui) -> Option<(Key, egui::Modifiers)> {
 /// The shortcuts editor.
 fn shortcuts(ui: &mut Ui, app: &AppHandle, st: &mut State, filter: &str) {
     let t = Tokens::of(ui.ctx());
+    let ctx = ui.ctx().clone();
     // Search by key: the next keys pressed.
     ui.horizontal(|ui| {
         if st.capture_search {
             ui.colored_label(
                 t.accent.default,
-                "Press the keys to search for. Escape: cancel.",
+                strings::tr(&ctx, &txt::SHORTCUTS_PRESS_TO_SEARCH),
             );
             match pressed_keys(ui) {
                 Some((Key::Escape, m)) if !m.any() => st.capture_search = false,
@@ -438,13 +473,20 @@ fn shortcuts(ui: &mut Ui, app: &AppHandle, st: &mut State, filter: &str) {
                 i.events
                     .retain(|e| !matches!(e, egui::Event::Key { .. } | egui::Event::Text(_)))
             });
-        } else if ui.button("Search by key").clicked() {
+        } else if ui
+            .button(strings::tr(&ctx, &txt::SHORTCUTS_SEARCH_BY_KEY))
+            .clicked()
+        {
             st.capture_search = true;
             st.capture = None;
         }
         if let Some(k) = st.key_filter.clone() {
-            ui.label(format!("Bound to {k}"));
-            let clear = ui.small_button("Show every command");
+            ui.label(strings::tr_args(
+                &ctx,
+                &txt::SHORTCUTS_BOUND_TO,
+                &[("keys", &k)],
+            ));
+            let clear = ui.small_button(strings::tr(&ctx, &txt::SHORTCUTS_SHOW_ALL));
             if clear.clicked() {
                 st.key_filter = None;
             }
@@ -454,7 +496,7 @@ fn shortcuts(ui: &mut Ui, app: &AppHandle, st: &mut State, filter: &str) {
     let by_scope = app.key_conflicts_by_scope();
     if !by_scope.is_empty() {
         ui.add_space(t.space.s);
-        ui.strong("Conflicts");
+        ui.strong(strings::tr(&ctx, &txt::SHORTCUTS_CONFLICTS));
         for (scope, list) in &by_scope {
             for (lose, win) in list {
                 let name = |b: &egui_pop_model::keymap::Binding| match &b.action {
@@ -463,11 +505,15 @@ fn shortcuts(ui: &mut Ui, app: &AppHandle, st: &mut State, filter: &str) {
                 };
                 ui.colored_label(
                     t.status.warning,
-                    format!(
-                        "{} in {scope}: {} goes to {}",
-                        lose.keys,
-                        name(lose),
-                        name(win)
+                    strings::tr_args(
+                        &ctx,
+                        &txt::SHORTCUTS_CONFLICT_IN_SCOPE,
+                        &[
+                            ("keys", &lose.keys.to_string()),
+                            ("scope", &scope.to_string()),
+                            ("loser", &name(lose)),
+                            ("winner", &name(win)),
+                        ],
                     ),
                 );
             }
@@ -480,7 +526,7 @@ fn shortcuts(ui: &mut Ui, app: &AppHandle, st: &mut State, filter: &str) {
         let title = app.command(&c).map(|s| s.title).unwrap_or_default();
         ui.colored_label(
             t.accent.default,
-            format!("Press the new keys for {title}. Escape: cancel; Backspace: no key."),
+            strings::tr_args(&ctx, &txt::SHORTCUTS_PRESS_NEW_KEYS, &[("command", &title)]),
         );
         match pressed_keys(ui) {
             Some((Key::Escape, m)) if !m.any() => *capture = None,
@@ -526,9 +572,17 @@ fn shortcuts(ui: &mut Ui, app: &AppHandle, st: &mut State, filter: &str) {
                         _ => String::new(),
                     };
                     if mine(lose) {
-                        Some(format!("{} goes to {}", lose.keys, other(win)))
+                        Some(strings::tr_args(
+                            &ctx,
+                            &txt::SHORTCUTS_GOES_TO,
+                            &[("keys", &lose.keys.to_string()), ("command", &other(win))],
+                        ))
                     } else if mine(win) {
-                        Some(format!("{} also bound to {}", win.keys, other(lose)))
+                        Some(strings::tr_args(
+                            &ctx,
+                            &txt::SHORTCUTS_ALSO_BOUND,
+                            &[("keys", &win.keys.to_string()), ("command", &other(lose))],
+                        ))
                     } else {
                         None
                     }
@@ -542,21 +596,22 @@ fn shortcuts(ui: &mut Ui, app: &AppHandle, st: &mut State, filter: &str) {
                     }
                 }
                 ui.horizontal(|ui| {
-                    let change = ui.small_button("Change");
+                    let command = [("command", label.as_str())];
+                    let change = ui.small_button(strings::tr(&ctx, &txt::SHORTCUTS_CHANGE));
                     a11y::name(
                         &change,
                         WidgetType::Button,
-                        &format!("Change the keys of {label}"),
+                        &strings::tr_args(&ctx, &txt::SHORTCUTS_CHANGE_NAME, &command),
                     );
                     if change.clicked() {
                         *capture = Some(spec.id.clone());
                     }
                     if !keys.is_empty() {
-                        let none = ui.small_button("No key");
+                        let none = ui.small_button(strings::tr(&ctx, &txt::SHORTCUTS_NO_KEY));
                         a11y::name(
                             &none,
                             WidgetType::Button,
-                            &format!("Remove every key of {label}"),
+                            &strings::tr_args(&ctx, &txt::SHORTCUTS_NO_KEY_NAME, &command),
                         );
                         if none.clicked() {
                             app.rebind(spec.id.clone(), None);
@@ -567,7 +622,7 @@ fn shortcuts(ui: &mut Ui, app: &AppHandle, st: &mut State, filter: &str) {
                         a11y::name(
                             &reset,
                             WidgetType::Button,
-                            &format!("Default keys of {label}"),
+                            &strings::tr_args(&ctx, &txt::SHORTCUTS_DEFAULT_NAME, &command),
                         );
                         if reset.clicked() {
                             app.reset_keys(spec.id.clone());
