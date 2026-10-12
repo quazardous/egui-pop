@@ -25,7 +25,8 @@ undo, persistence, a debug bridge and a test kit. Components come next.
 
 Layers only depend downwards; a test reading `cargo metadata` keeps it so
 ([ADR 0001](docs/adr/0001-layering.md)). Decisions are in
-[docs/adr](docs/adr), principles in [CREDO.md](CREDO.md); the survey of
+[docs/adr](docs/adr), principles in [CREDO.md](CREDO.md), what each
+release promises in [docs/stability.md](docs/stability.md); the survey of
 advanced widgets and how egui-pop gets them is
 [docs/widgets.md](docs/widgets.md), and the plan for fonts
 [docs/fonts.md](docs/fonts.md).
