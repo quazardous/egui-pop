@@ -34,3 +34,6 @@ pub mod instance {}
 
 #[doc = include_str!("../../../docs/notifications.md")]
 pub mod notifications {}
+
+#[doc = include_str!("../../../docs/tray.md")]
+pub mod tray {}

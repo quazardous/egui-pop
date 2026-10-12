@@ -30,12 +30,14 @@ viewport = ["dep:egui-pop-viewport"]
 i18n = ["dep:egui-pop-i18n"]
 ## Every platform service (`egui-pop-platform`, re-exported as
 ## `egui_pop::platform`); `platform-<service>` picks one.
-platform = ["platform-instance", "platform-notify"]
+platform = ["platform-instance", "platform-notify", "platform-tray"]
 ## A single instance and deep links (`egui_pop::platform::instance`).
 platform-instance = ["dep:egui-pop-platform", "egui-pop-platform/instance"]
 ## Desktop notifications with actions, falling back to toasts
 ## (`egui_pop::platform::notify`).
 platform-notify = ["dep:egui-pop-platform", "egui-pop-platform/notify"]
+## A tray icon with a declared menu (`egui_pop::platform::tray`).
+platform-tray = ["dep:egui-pop-platform", "egui-pop-platform/tray"]
 
 [dependencies]
 egui.workspace = true

@@ -67,6 +67,14 @@ egui minor.
   through it too). `notify::show` from the interface thread,
   `Notifier::post` from any thread; `Simulated` records them for tests.
   Guide: docs/notifications.md.
+- A tray icon (`platform::tray`, feature `platform-tray`): `TrayPlugin`
+  shows an icon through tray-icon (StatusNotifierItem through ksni on
+  Linux, without GTK; Windows; macOS) whose menu is the declared menu
+  `MENU_TRAY`, kept current at each pass (titles, ticks, greying,
+  submenus, lists); a pick runs the command, a click runs the
+  `tray.activate` step (by default the window comes to the front).
+  `Simulated` records the menu and clicks for tests. Guide:
+  docs/tray.md.
 
 ### Changed
 

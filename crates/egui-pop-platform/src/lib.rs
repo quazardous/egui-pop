@@ -7,6 +7,8 @@
 //!   `deeplink.open`).
 //! - [`notify`]: desktop notifications with actions routed to commands,
 //!   falling back to toasts (`notify.show`, `notify.action`).
+//! - [`tray`]: a tray icon whose menu is a declared egui-pop menu
+//!   (`tray.activate`).
 //!
 //! Each service names its moments as steps (ADR 0011): a plugin may
 //! observe, veto or redirect, replace or extend them; the application's
@@ -22,4 +24,6 @@ pub mod dirs;
 pub mod instance;
 #[cfg(feature = "notify")]
 pub mod notify;
+#[cfg(feature = "tray")]
+pub mod tray;
 pub mod window;

@@ -32,7 +32,7 @@ devtools; every feature's moments reachable as steps (ADR 0011).
   keys.
 - Platform services, each an opt-in plugin of `egui-pop-platform`:
   [a single instance and deep links](instance.md),
-  [notifications](notifications.md).
+  [notifications](notifications.md), [the tray icon](tray.md).
 - [Debugging](debugging.md): the debug bridge and devtools.
 - [The gallery](gallery.md): the catalogue application and its options.
 
@@ -59,7 +59,7 @@ devtools; every feature's moments reachable as steps (ADR 0011).
 | [`egui-pop-viewport`](../crates/egui-pop-viewport) | L3 | A generic image viewport (zoom in physical pixels, tiles from an asynchronous source, a display-transform hook, overlays with handles, before/after, a pixel readout), thumbnails and a histogram (feature `viewport` of the facade). |
 | [`egui-pop-test`](../crates/egui-pop-test) | L4 | Test kit: harnesses, "every interactive node has a name", accessibility tree dump. |
 | [`egui-pop-i18n`](../crates/egui-pop-i18n) | L4 | Translations as a plugin: Fluent catalogues, fallback chains, the language setting, locale formatting, the `i18n.resolve` step, the key extractor and checks (feature `i18n` of the facade). |
-| [`egui-pop-platform`](../crates/egui-pop-platform) | L4 | Platform services as opt-in plugins: a single instance and deep links, notifications (feature `platform` of the facade). |
+| [`egui-pop-platform`](../crates/egui-pop-platform) | L4 | Platform services as opt-in plugins: a single instance and deep links, notifications, a tray icon (feature `platform` of the facade). |
 | [`egui-pop`](../crates/egui-pop) | L5 | The crate to depend on: re-exports the layers, `egui`, and a `prelude`. |
 | [`egui-pop-gallery`](../crates/egui-pop-gallery) | app | The catalogue, itself a plugin application (not published). |
 

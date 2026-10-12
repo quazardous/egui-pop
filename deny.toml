@@ -44,6 +44,12 @@ allow = ["BSL-1.0"]
 crate = "error-code"
 allow = ["BSL-1.0"]
 
+# The StatusNotifierItem client behind tray-icon on Linux (the tray of
+# egui-pop-platform), dedicated to the public domain.
+[[licenses.exceptions]]
+crate = "ksni"
+allow = ["Unlicense"]
+
 [licenses.private]
 # The gallery is not published.
 ignore = true
