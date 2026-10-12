@@ -216,6 +216,7 @@ fn everything(ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
         "Demo",
         "demo.",
     ))
+    .list_provider("demo.list", |_, _| Vec::new())
     .on(On::Rebuilt, |_, _| {})
     .on_change("settings/", |_| {})
     .block(

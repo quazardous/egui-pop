@@ -257,6 +257,25 @@ impl<'a> Ctx<'a> {
         Ok(self)
     }
 
+    /// Fills the lists named `name` (`MenuItem::list`) when their menu
+    /// opens: the entries `f` gives in the context of that moment (the
+    /// last plugin to provide a name wins).
+    pub fn list_provider(
+        &mut self,
+        name: &str,
+        f: impl Fn(&AppHandle, &egui_pop_model::when::WhenContext) -> Vec<crate::menus::ListItem>
+        + 'static,
+    ) -> &mut Self {
+        self.app.add_list_provider(
+            &self.owner,
+            crate::menus::Provider {
+                name: name.into(),
+                f: Rc::new(f),
+            },
+        );
+        self
+    }
+
     /// Declares a submenu under a menu (`app.menu.view`).
     pub fn submenu(
         &mut self,

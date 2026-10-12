@@ -285,6 +285,11 @@ pub(crate) struct Shared {
     steps: RefCell<Registry<StepId, StepSpec>>,
     step_hooks: RefCell<OwnedList<StepHook>>,
     step_traces: RefCell<std::collections::VecDeque<StepTrace>>,
+    /// List providers, by list name, and what each gave last.
+    lists: RefCell<OwnedList<crate::menus::Provider>>,
+    list_traces: RefCell<BTreeMap<String, crate::menus::ListTrace>>,
+    /// The menu open as a popup (`menus::popup_at`).
+    popup: RefCell<Option<crate::menus::Popup>>,
 }
 
 /// The application at run time, cheap to clone: blocks, panels, stories
@@ -348,6 +353,9 @@ impl AppHandle {
             steps: RefCell::new(Registry::new()),
             step_hooks: RefCell::new(OwnedList::new()),
             step_traces: RefCell::new(std::collections::VecDeque::new()),
+            lists: RefCell::new(OwnedList::new()),
+            list_traces: RefCell::new(BTreeMap::new()),
+            popup: RefCell::new(None),
         }))
     }
 
@@ -598,10 +606,18 @@ impl AppHandle {
                 .collect()
         });
         popups.sort_by_key(|a| a.0.value());
-        out.extend(popups.into_iter().map(|(id, rect)| OverlayRect {
-            kind: OverlayKind::Popup,
-            id: format!("popup:{}", id.short_debug_format()),
-            rect,
+        let menu = self.popup().map(|p| p.menu);
+        out.extend(popups.into_iter().map(|(id, rect)| match &menu {
+            Some(m) if id == crate::menus::popup_id() => OverlayRect {
+                kind: OverlayKind::Menu,
+                id: m.to_string(),
+                rect,
+            },
+            _ => OverlayRect {
+                kind: OverlayKind::Popup,
+                id: format!("popup:{}", id.short_debug_format()),
+                rect,
+            },
         }));
         out
     }
@@ -699,6 +715,63 @@ impl AppHandle {
             .step_hooks
             .borrow_mut()
             .push(owner, StepHook { step, f });
+    }
+
+    pub(crate) fn add_list_provider(&self, owner: &OwnerId, provider: crate::menus::Provider) {
+        self.0.lists.borrow_mut().push(owner, provider);
+    }
+
+    /// The entries of a list (`MenuItem::list`), asked of its provider (the
+    /// last registered for the name) in a context; empty without one.
+    /// Menus ask when they open; what it gave is kept for the `lists`
+    /// collector.
+    pub fn list_items(&self, name: &str, cx: &WhenContext) -> Vec<crate::menus::ListItem> {
+        let provider = self
+            .0
+            .lists
+            .borrow()
+            .iter()
+            .filter(|s| s.item.name == name)
+            .last()
+            .map(|s| (s.owner.clone(), s.item.f.clone()));
+        let Some((owner, f)) = provider else {
+            return Vec::new();
+        };
+        let items = f(self, cx);
+        self.0.list_traces.borrow_mut().insert(
+            name.to_string(),
+            crate::menus::ListTrace {
+                name: name.to_string(),
+                owner,
+                items: items.clone(),
+            },
+        );
+        items
+    }
+
+    /// The list providers (name, owner) and what each gave last.
+    pub fn lists(&self) -> Json {
+        let traces = self.0.list_traces.borrow();
+        json!(
+            self.0
+                .lists
+                .borrow()
+                .iter()
+                .map(|s| json!({
+                    "name": s.item.name,
+                    "owner": s.owner,
+                    "last": traces.get(&s.item.name).map(|t| &t.items),
+                }))
+                .collect::<Vec<_>>()
+        )
+    }
+
+    pub(crate) fn popup(&self) -> Option<crate::menus::Popup> {
+        self.0.popup.borrow().clone()
+    }
+
+    pub(crate) fn set_popup(&self, popup: Option<crate::menus::Popup>) {
+        *self.0.popup.borrow_mut() = popup;
     }
 
     /// Whether a run of this command waits for its result.
@@ -1527,6 +1600,7 @@ impl App {
             ("stories", h.stories.borrow().len()),
             ("steps", h.steps.borrow().len()),
             ("step hooks", h.step_hooks.borrow().len()),
+            ("list providers", h.lists.borrow().len()),
             ("indicators", h.indicators.borrow().len()),
             ("store paths", store.list("").len()),
             ("store listeners", store.listeners().len()),
@@ -1561,6 +1635,13 @@ impl App {
             app: &handle,
             connected: &connected,
         };
+        ctx.step(
+            StepSpec::new(
+                crate::menus::STEP_OPEN,
+                "A menu opens as a popup or a context menu; a veto keeps it closed, a redirect changes its arguments.",
+            )
+            .args(json!({ "menu": "app.menu.edit", "args": { "path": "node/exposure" }, "how": "context" })),
+        )?;
         for (zone, title) in zones::SHELL.iter().zip([
             "Title",
             "Top bar",
@@ -1833,6 +1914,18 @@ impl App {
         let w = h.weak();
         b.register(
             FnCollector::new(
+                "lists",
+                "The menus' list providers (name, owner) and the entries each gave when its menu last opened.",
+            )
+            .snapshot(move |_| {
+                let Ok(app) = up(&w) else { return Json::Null };
+                app.lists()
+            }),
+        )
+        .expect("distinct names");
+        let w = h.weak();
+        b.register(
+            FnCollector::new(
                 "history",
                 "What Edit > Undo and Redo would do, as the host says (the runs are in the `steps` collector).",
             )
@@ -1995,6 +2088,8 @@ impl App {
         h.stories.borrow_mut().remove_owner(owner);
         h.steps.borrow_mut().remove_owner(owner);
         h.step_hooks.borrow_mut().remove_owner(owner);
+        h.lists.borrow_mut().remove_owner(owner);
+        h.list_traces.borrow_mut().retain(|_, t| t.owner != *owner);
         h.indicators.borrow_mut().remove_owner(owner);
         h.workbench.borrow_mut().templates.retain(|t| t.0 != *owner);
         h.services.borrow_mut().remove_owner(owner);
@@ -2711,6 +2806,7 @@ impl App {
             .unwrap_or_default();
         crate::workbench::windows(&self.handle.clone(), &ctx, &title);
         self.handle.clone().show_zone(ui, &zones::OVERLAYS);
+        crate::menus::draw_popup(&ctx, &self.handle);
         a11y::live_regions(ui);
         self.process_requests();
     }

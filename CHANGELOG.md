@@ -17,6 +17,16 @@ egui minor.
   `arrangement.save`, `arrangement.switch`, `arrangement.reset`,
   `arrangement.delete`; commands under View. Gallery page:
   Arrangements.
+- Menus: list providers (`Ctx::list_provider`) fill a menu's lists
+  (`MenuItem::list`) when it opens, never on every frame, each entry
+  (`ListItem`: label, icon, command, arguments, tick) running its
+  command; the `lists` collector shows what each gave last.
+  `menus::popup_at` opens a declared menu as a popup under a rectangle
+  or at a point (a logo, `Alt+Space`), drawn until an item is chosen, a
+  click lands outside or Escape. `menus::context_menu_with` merges
+  arguments of the moment (the clicked row's path) into every item's
+  command and into the `when` context as `args.<key>`. Opening either
+  runs the `menu.open` step, which a plugin may veto or redirect.
 - Auxiliary windows: a panel detached into a window of its own (its own
   scale, the application's frame when it draws one), docked back, or its
   window closed, through the steps `workbench.detach`,
