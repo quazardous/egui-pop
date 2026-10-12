@@ -205,6 +205,11 @@ typed_id!(
     /// A gallery story.
     StoryId
 );
+typed_id!(
+    /// A step of a feature's life that plugins may watch, veto, replace
+    /// or extend: `frame.close`, `workbench.detach`.
+    StepId
+);
 
 impl OwnerId {
     /// The framework itself.

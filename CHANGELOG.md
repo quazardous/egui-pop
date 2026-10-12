@@ -9,6 +9,13 @@ egui minor.
 
 ### Added
 
+- Steps (ADR 0011, `egui_pop_api::steps`): a feature's moments
+  (`frame.close`, `workbench.detach`...) declared with `Ctx::step` and
+  run with `AppHandle::step`; plugins observe them on the journal, veto
+  or redirect them (`Ctx::before`), replace them (`Ctx::replace`) or
+  follow them (`Ctx::after`). The debug bridge's `steps` collector shows
+  each step's hooks and the last runs; hooks on unknown steps and two
+  replacements of one step are reported.
 - Twelve editor-inspired built-in themes (`github-light`, `github-dark`,
   `github-light-high-contrast`, `github-dark-high-contrast`,
   `catppuccin-latte`, `catppuccin-mocha`, `one-light`, `one-dark-pro`,

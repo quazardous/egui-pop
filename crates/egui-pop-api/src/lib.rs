@@ -15,6 +15,8 @@
 //! - [`host`]: the application's kernel behind the interface: commands
 //!   run, an event journal, the store, a waker ([`host::LocalHost`] by
 //!   default);
+//! - [`steps`]: the moments of a feature's life plugins may watch,
+//!   veto, replace or extend (ADR 0011);
 //! - [`services`]: typed service tokens;
 //! - [`stories`]: gallery stories as a contribution;
 //! - [`palette`]: the command palette, a plugin;
@@ -75,6 +77,7 @@ pub mod plugin;
 pub mod services;
 pub mod settings;
 pub mod settings_window;
+pub mod steps;
 pub mod stories;
 pub mod toasts;
 pub mod window;

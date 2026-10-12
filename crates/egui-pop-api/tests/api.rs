@@ -203,6 +203,14 @@ fn everything(ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
             ui.label("story");
         },
     ))?
+    .step(egui_pop_api::steps::StepSpec::new(
+        egui_pop_model::ids::StepId::from_static("demo.step"),
+        "A demo step.",
+    ))?
+    .after(
+        egui_pop_model::ids::StepId::from_static("demo.step"),
+        |_, _, _| {},
+    )
     .on(On::Rebuilt, |_, _| {})
     .on_change("settings/", |_| {})
     .block(

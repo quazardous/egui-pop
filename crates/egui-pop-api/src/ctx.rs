@@ -51,6 +51,11 @@ pub enum CtxError {
         id: String,
         by: OwnerId,
     },
+    /// The step is declared already.
+    Step {
+        id: String,
+        by: OwnerId,
+    },
     /// A debug bridge collector of that name exists.
     Collector(String),
 }
@@ -71,6 +76,7 @@ impl fmt::Display for CtxError {
                 write!(f, "story `{id}` is already contributed by `{by}`")
             }
             CtxError::Hook { id, by } => write!(f, "hook `{id}` is already registered by `{by}`"),
+            CtxError::Step { id, by } => write!(f, "step `{id}` is already declared by `{by}`"),
         }
     }
 }
@@ -377,6 +383,48 @@ impl<'a> Ctx<'a> {
         }
         self.reg.hooks.push(&self.owner, hook);
         Ok(self)
+    }
+
+    /// Declares a step of this plugin's features that other plugins may
+    /// watch, veto, replace or extend (ADR 0011).
+    pub fn step(&mut self, spec: crate::steps::StepSpec) -> Result<&mut Self, CtxError> {
+        self.app.declare_step(&self.owner, spec)?;
+        Ok(self)
+    }
+
+    /// Runs before a step: lets it go, vetoes it or changes its
+    /// arguments.
+    pub fn before(
+        &mut self,
+        step: egui_pop_model::ids::StepId,
+        f: impl Fn(&AppHandle, &Json) -> crate::steps::Before + 'static,
+    ) -> &mut Self {
+        self.app
+            .add_step_hook(&self.owner, step, crate::steps::HookFn::Before(Rc::new(f)));
+        self
+    }
+
+    /// Does a step instead of its default (the last plugin to replace a
+    /// step wins).
+    pub fn replace(
+        &mut self,
+        step: egui_pop_model::ids::StepId,
+        f: impl Fn(&AppHandle, &Json) -> Result<Json, String> + 'static,
+    ) -> &mut Self {
+        self.app
+            .add_step_hook(&self.owner, step, crate::steps::HookFn::Run(Rc::new(f)));
+        self
+    }
+
+    /// Runs after a step, with its arguments and result.
+    pub fn after(
+        &mut self,
+        step: egui_pop_model::ids::StepId,
+        f: impl Fn(&AppHandle, &Json, &Result<Json, String>) + 'static,
+    ) -> &mut Self {
+        self.app
+            .add_step_hook(&self.owner, step, crate::steps::HookFn::After(Rc::new(f)));
+        self
     }
 
     /// Contributes a gallery story.

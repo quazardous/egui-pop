@@ -21,7 +21,7 @@ use egui_pop_core::{a11y, fault, focus, lock};
 use egui_pop_model::commands::{CommandSpec, Commands, Origin, Run};
 use egui_pop_model::diagnostics::{Diagnostic, Diagnostics};
 use egui_pop_model::ids::{
-    CommandId, MenuId, OwnerId, PanelId, PluginId, SettingId, StoryId, ZoneId,
+    CommandId, MenuId, OwnerId, PanelId, PluginId, SettingId, StepId, StoryId, ZoneId,
 };
 use egui_pop_model::keymap::{Binding, Keymap, Layer, Trace};
 use egui_pop_model::menus::{Item, MenuItem, Menus, sort_items};
@@ -37,6 +37,7 @@ use crate::hooks::{Alter, Hook, Lifecycle, LifecycleFn, On, PaletteEntry, Settin
 use crate::host::{Dispatch, Event, Host, LocalHost, Pending, Reply, Seq, Waker, source_of};
 use crate::plugin::{BuildError, Plugin, PluginError, PluginInfo};
 use crate::services::{ServiceToken, Services};
+use crate::steps::{HookFn, HookInfo, Outcome, StepHook, StepInfo, StepSpec, StepTrace};
 use crate::stories::{Story, StoryInfo};
 use crate::zones::{self, Block, DrawFn, ZoneInfo, ZoneTable, draw_chain};
 
@@ -227,6 +228,10 @@ pub(crate) struct Shared {
     collectors: RefCell<Vec<(OwnerId, String)>>,
     /// A shortcuts editor waits for keys: the dispatcher stands aside.
     capturing: std::cell::Cell<bool>,
+    /// Declared steps (ADR 0011), their hooks, their last runs.
+    steps: RefCell<Registry<StepId, StepSpec>>,
+    step_hooks: RefCell<OwnedList<StepHook>>,
+    step_traces: RefCell<std::collections::VecDeque<StepTrace>>,
 }
 
 /// The application at run time, cheap to clone: blocks, panels, stories
@@ -266,6 +271,9 @@ impl AppHandle {
             running: RefCell::new(BTreeMap::new()),
             collectors: RefCell::new(Vec::new()),
             capturing: std::cell::Cell::new(false),
+            steps: RefCell::new(Registry::new()),
+            step_hooks: RefCell::new(OwnedList::new()),
+            step_traces: RefCell::new(std::collections::VecDeque::new()),
         }))
     }
 
@@ -362,6 +370,82 @@ impl AppHandle {
             .map_err(CtxError::Collector)?;
         self.0.collectors.borrow_mut().push((owner.clone(), name));
         Ok(())
+    }
+
+    /// Runs a step (ADR 0011): its before-hooks (veto, redirect), its
+    /// run-hook or `default`, its after-hooks; publishes the step on the
+    /// journal and keeps a trace. Hooks run without any registry
+    /// borrowed: they may run other steps or ask for commands.
+    pub fn step(
+        &self,
+        step: &StepId,
+        args: Json,
+        default: impl FnOnce(&AppHandle, &Json) -> Result<Json, String>,
+    ) -> Outcome {
+        let hooks: Vec<(OwnerId, HookFn)> = self
+            .0
+            .step_hooks
+            .borrow()
+            .iter()
+            .filter(|s| s.item.step == *step)
+            .map(|s| (s.owner.clone(), s.item.f.clone()))
+            .collect();
+        let declared = self.0.steps.borrow().contains(step);
+        let (outcome, trace) = crate::steps::run(self, step, args, hooks, declared, default);
+        let mut traces = self.0.step_traces.borrow_mut();
+        traces.push_back(trace);
+        while traces.len() > crate::steps::TRACES {
+            traces.pop_front();
+        }
+        outcome
+    }
+
+    /// The declared steps, with their hooks (owner, kind), in
+    /// declaration order.
+    pub fn steps(&self) -> Vec<StepInfo> {
+        let hooks = self.0.step_hooks.borrow();
+        self.0
+            .steps
+            .borrow()
+            .in_order()
+            .into_iter()
+            .map(|(id, slot)| StepInfo {
+                spec: slot.item.clone(),
+                owner: slot.owner.clone(),
+                hooks: hooks
+                    .iter()
+                    .filter(|h| h.item.step == *id)
+                    .map(|h| HookInfo {
+                        owner: h.owner.clone(),
+                        kind: h.item.f.kind(),
+                    })
+                    .collect(),
+            })
+            .collect()
+    }
+
+    /// The last runs of steps, oldest first.
+    pub fn step_traces(&self) -> Vec<StepTrace> {
+        self.0.step_traces.borrow().iter().cloned().collect()
+    }
+
+    pub(crate) fn declare_step(&self, owner: &OwnerId, spec: StepSpec) -> Result<(), CtxError> {
+        let id = spec.id.clone();
+        self.0
+            .steps
+            .borrow_mut()
+            .insert(owner, id, spec)
+            .map_err(|t| CtxError::Step {
+                id: t.id.to_string(),
+                by: t.by,
+            })
+    }
+
+    pub(crate) fn add_step_hook(&self, owner: &OwnerId, step: StepId, f: HookFn) {
+        self.0
+            .step_hooks
+            .borrow_mut()
+            .push(owner, StepHook { step, f });
     }
 
     /// Whether a run of this command waits for its result.
@@ -1044,6 +1128,8 @@ impl App {
             ("blocks", h.zones.borrow().contributions.len()),
             ("services", h.services.borrow().list().len()),
             ("stories", h.stories.borrow().len()),
+            ("steps", h.steps.borrow().len()),
+            ("step hooks", h.step_hooks.borrow().len()),
             ("store paths", store.list("").len()),
             ("store listeners", store.listeners().len()),
         ])
@@ -1293,6 +1379,18 @@ impl App {
             }),
         )
         .expect("distinct names");
+        let w = h.weak();
+        b.register(
+            FnCollector::new(
+                "steps",
+                "Every declared step with its hooks (before, replace, after), and the last runs: who redirected, vetoed, ran and followed.",
+            )
+            .snapshot(move |_| {
+                let Ok(app) = up(&w) else { return Json::Null };
+                json!({ "steps": app.steps(), "runs": app.step_traces() })
+            }),
+        )
+        .expect("distinct names");
         b.register(egui_pop_core::debug::store_collector(h.store()))
             .expect("distinct names");
     }
@@ -1418,6 +1516,8 @@ impl App {
         h.zones.borrow_mut().remove_owner(owner);
         h.panels.borrow_mut().retain(|_, p| p.owner != *owner);
         h.stories.borrow_mut().remove_owner(owner);
+        h.steps.borrow_mut().remove_owner(owner);
+        h.step_hooks.borrow_mut().remove_owner(owner);
         h.services.borrow_mut().remove_owner(owner);
         lock(&h.store).remove_owner(owner);
         h.diagnostics.borrow_mut().remove_owner(owner);
@@ -1668,6 +1768,7 @@ impl App {
             }
         }
         *self.handle.0.derived.borrow_mut() = derived;
+        self.check_steps(&mut d);
         self.handle.zones_mut().resolve(&mut d);
         let mut all = self.handle.0.diagnostics.borrow_mut();
         // Resolution diagnostics are recomputed each rebuild.
@@ -1684,6 +1785,52 @@ impl App {
         self.dirty = false;
         if self.started {
             self.emit(&Lifecycle::Rebuilt);
+        }
+    }
+
+    /// Hooks on steps nobody declared never run; two run-hooks on one
+    /// step: the last wins.
+    fn check_steps(&self, d: &mut Diagnostics) {
+        let steps = self.handle.0.steps.borrow();
+        let hooks = self.handle.0.step_hooks.borrow();
+        let mut replaced: BTreeMap<StepId, Vec<OwnerId>> = BTreeMap::new();
+        for h in hooks.iter() {
+            if !steps.contains(&h.item.step) {
+                d.warn(
+                    "unknown-step",
+                    Some(&h.owner),
+                    h.item.step.as_str(),
+                    format!(
+                        "a {} hook on step `{}`, which nobody declares: it never runs",
+                        h.item.f.kind(),
+                        h.item.step
+                    ),
+                );
+            }
+            if matches!(h.item.f, HookFn::Run(_)) {
+                replaced
+                    .entry(h.item.step.clone())
+                    .or_default()
+                    .push(h.owner.clone());
+            }
+        }
+        for (step, owners) in replaced {
+            if owners.len() > 1 {
+                let last = owners.last().expect("two or more");
+                d.warn(
+                    "step-replaced-twice",
+                    Some(last),
+                    step.as_str(),
+                    format!(
+                        "step `{step}` is replaced by {}: `{last}` (the last) runs it",
+                        owners
+                            .iter()
+                            .map(|o| format!("`{o}`"))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ),
+                );
+            }
         }
     }
 
@@ -2125,6 +2272,8 @@ const RESOLUTION_CODES: &[&str] = &[
     "dangling-after",
     "hook-order",
     "unknown-command",
+    "unknown-step",
+    "step-replaced-twice",
 ];
 
 #[cfg(feature = "eframe")]
