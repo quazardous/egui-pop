@@ -515,13 +515,14 @@ pub(crate) fn windows(app: &AppHandle, ctx: &egui::Context, app_title: &str) {
         }
         .repair(&[]);
         let own = crate::frame::own_frame(app);
+        let panel_title = strings::panel_title(ctx, spec.id.as_str(), &spec.title);
         let title = if app_title.is_empty() {
-            spec.title.clone()
+            panel_title
         } else {
             strings::tr_args(
                 ctx,
                 &txt::WORKBENCH_WINDOW_TITLE,
-                &[("panel", &spec.title), ("application", app_title)],
+                &[("panel", &panel_title), ("application", app_title)],
             )
         };
         let mut builder = ViewportBuilder::default()
@@ -836,11 +837,7 @@ impl TabViewer for Viewer<'_> {
     }
 
     fn title(&mut self, tab: &mut PanelId) -> egui::WidgetText {
-        self.app
-            .workbench_mut()
-            .spec(tab)
-            .map_or_else(|| tab.to_string(), |s| s.title.clone())
-            .into()
+        self.app.panel_title(&self.app.egui(), tab).into()
     }
 
     fn ui(&mut self, ui: &mut Ui, tab: &mut PanelId) {
@@ -853,11 +850,7 @@ impl TabViewer for Viewer<'_> {
 
     fn on_tab_button(&mut self, tab: &mut PanelId, response: &egui::Response) {
         // egui_dock's tab buttons carry no name: give them their panel's.
-        let title = self
-            .app
-            .workbench_mut()
-            .spec(tab)
-            .map_or_else(|| tab.to_string(), |s| s.title.clone());
+        let title = self.app.panel_title(&response.ctx, tab);
         egui_pop_core::a11y::name(response, egui::WidgetType::Button, &title);
     }
 
@@ -865,7 +858,7 @@ impl TabViewer for Viewer<'_> {
         let spec = self.app.workbench_mut().spec(tab).cloned();
         let Some(spec) = spec else { return };
         let ctx = ui.ctx().clone();
-        let title = spec.title.clone();
+        let title = strings::panel_title(&ctx, spec.id.as_str(), &spec.title);
         for area in Area::ALL {
             let allowed = spec.allows(area);
             let r = ui
@@ -963,7 +956,8 @@ fn drop_hint(app: &AppHandle, ctx: &egui::Context) {
         Id::new("egui_pop.workbench.drop"),
     ));
     let corner = t.radius.widget;
-    match refusal(ctx, &spec, &spec.title, to) {
+    let title = strings::panel_title(ctx, spec.id.as_str(), &spec.title);
+    match refusal(ctx, &spec, &title, to) {
         None => {
             painter.rect_filled(rect, corner, t.accent.subtle.gamma_multiply(0.5));
             painter.rect_stroke(

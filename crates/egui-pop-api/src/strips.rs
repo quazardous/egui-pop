@@ -231,10 +231,11 @@ fn activity_bar(ui: &mut Ui, app: &AppHandle) {
     ui.vertical_centered(|ui| {
         for p in panels {
             let icon = Icon::by_name(&p.icon);
+            let title = egui_pop_core::strings::panel_title(ui.ctx(), p.id.as_str(), &p.title);
             let on = !folded && shown.contains(&p.id);
             let side = t.size.icon_panel + 2.0 * t.space.s;
             let (rect, r) = ui.allocate_exact_size(vec2(side, side), Sense::click());
-            egui_pop_core::a11y::name(&r, egui::WidgetType::Button, &p.title);
+            egui_pop_core::a11y::name(&r, egui::WidgetType::Button, &title);
             if on {
                 ui.painter()
                     .rect_filled(rect, t.radius.widget, t.accent.subtle);
@@ -251,7 +252,7 @@ fn activity_bar(ui: &mut Ui, app: &AppHandle) {
             match icon {
                 Some(i) => egui_pop_core::icon::Source::from(i).paint(ui, inner, color),
                 None => {
-                    let letter = p.title.chars().next().unwrap_or('?').to_string();
+                    let letter = title.chars().next().unwrap_or('?').to_string();
                     ui.painter().text(
                         inner.center(),
                         egui::Align2::CENTER_CENTER,
@@ -261,7 +262,7 @@ fn activity_bar(ui: &mut Ui, app: &AppHandle) {
                     );
                 }
             }
-            let r = r.on_hover_text(&p.title);
+            let r = r.on_hover_text(&title);
             if r.clicked() {
                 if on {
                     app.fold_area(Area::StartSide, true);

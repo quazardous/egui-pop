@@ -1,8 +1,8 @@
 //! The command palette, as a plugin ([`PalettePlugin`], in
 //! `DefaultPlugins`): every palette command that applies where the
-//! palette opened, ranked by a fuzzy match of `Category: Title` (and the
-//! command's id), the commands run lately first. A command declaring
-//! arguments (an example object, `{"percent": 100}`) asks for each in
+//! palette opened, ranked by a fuzzy match of `Category: Title` as
+//! shown, in the interface's language (and the command's id), the
+//! commands run lately first. A command declaring arguments (an example object, `{"percent": 100}`) asks for each in
 //! turn, the example's value as the default; Enter runs it in the
 //! context the palette opened in.
 //!
@@ -184,12 +184,26 @@ pub fn rank(
     recent: &[CommandId],
     applies: impl Fn(&CommandId) -> bool,
 ) -> Vec<Ranked> {
+    rank_with(entries, query, recent, applies, |e| {
+        format!("{}: {}", e.category, e.title)
+    })
+}
+
+/// As [`rank`], each entry shown and matched as `label` gives it (the
+/// palette passes the label in the interface's language: [`shown`]).
+pub fn rank_with(
+    entries: &[PaletteEntry],
+    query: &str,
+    recent: &[CommandId],
+    applies: impl Fn(&CommandId) -> bool,
+    label: impl Fn(&PaletteEntry) -> String,
+) -> Vec<Ranked> {
     let mut out: Vec<(i32, usize, Ranked)> = Vec::new();
     for (i, e) in entries.iter().enumerate() {
         if !applies(&e.command) {
             continue;
         }
-        let label = format!("{}: {}", e.category, e.title);
+        let label = label(e);
         let by_label = fuzzy::score(query, &label);
         let by_id = fuzzy::score(query, e.command.as_str()).map(|m| Match {
             score: m.score - 16,
@@ -220,6 +234,22 @@ pub fn rank(
     }
     out.sort_by_key(|(s, i, _)| (std::cmp::Reverse(*s), *i));
     out.into_iter().map(|(_, _, r)| r).collect()
+}
+
+/// An entry as the palette shows it, `Category: Title` in the
+/// interface's language (the entry itself stays English).
+pub fn shown(ctx: &egui::Context, e: &PaletteEntry) -> String {
+    strings::tr_args(
+        ctx,
+        &txt::COMMAND_LABEL,
+        &[
+            ("category", &strings::category(ctx, &e.category)),
+            (
+                "title",
+                &strings::command_title(ctx, e.command.as_str(), &e.title),
+            ),
+        ],
+    )
 }
 
 /// The arguments a command asks for: the keys of its example object.
@@ -349,7 +379,13 @@ fn show(ui: &mut Ui, app: &AppHandle) {
             close = true;
             return;
         }
-        let hits = rank(&entries, &s.query, &recent, |c| app.applies(c, &cx));
+        let hits = rank_with(
+            &entries,
+            &s.query,
+            &recent,
+            |c| app.applies(c, &cx),
+            |e| shown(&ctx, e),
+        );
         if ui.input(|i| i.key_pressed(Key::ArrowDown)) {
             s.selected = (s.selected + 1).min(hits.len().saturating_sub(1));
         }
@@ -408,7 +444,9 @@ fn show(ui: &mut Ui, app: &AppHandle) {
             } else {
                 s.prompt = Some(Prompt {
                     command: c,
-                    title: spec.map(|s| s.title).unwrap_or_default(),
+                    title: spec
+                        .map(|s| strings::command_title(&ctx, s.id.as_str(), &s.title))
+                        .unwrap_or_default(),
                     args,
                     at: 0,
                     values: Map::new(),

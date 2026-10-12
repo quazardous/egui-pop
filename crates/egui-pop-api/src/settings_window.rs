@@ -158,20 +158,41 @@ fn sections(entries: &[SettingEntry]) -> Vec<String> {
     out
 }
 
-/// A section's title as shown.
-fn section_title(ctx: &egui::Context, sec: &str) -> String {
+/// A section's title as shown, in the interface's language.
+fn section_title(
+    ctx: &egui::Context,
+    app: &AppHandle,
+    entries: &[SettingEntry],
+    sec: &str,
+) -> String {
     if sec == SHORTCUTS {
-        strings::tr(ctx, &txt::SETTINGS_SHORTCUTS)
-    } else {
-        sec.to_string()
+        return strings::tr(ctx, &txt::SETTINGS_SHORTCUTS);
     }
+    entries.iter().find(|e| e.section == sec).map_or_else(
+        || sec.to_string(),
+        |e| app.section_title(ctx, &e.owner, sec),
+    )
 }
 
-/// Whether a setting matches the search (label, description, section).
-fn matches(e: &SettingEntry, filter: &str) -> bool {
+/// A setting's descriptor as shown: its label and description in the
+/// interface's language.
+fn shown(ctx: &egui::Context, e: &SettingEntry) -> egui_pop_model::values::Descriptor {
+    let mut d = e.descriptor.clone();
+    let id = e.id.as_str();
+    d.label = strings::setting_label(ctx, id, &d.label);
+    d.description = strings::setting_description(ctx, id, &d.description);
+    d
+}
+
+/// Whether a setting matches the search (label, description, section,
+/// as shown).
+fn matches(ctx: &egui::Context, app: &AppHandle, e: &SettingEntry, filter: &str) -> bool {
+    let d = shown(ctx, e);
     let text = format!(
         "{} {} {}",
-        e.section, e.descriptor.label, e.descriptor.description
+        app.section_title(ctx, &e.owner, &e.section),
+        d.label,
+        d.description
     );
     filter
         .split_whitespace()
@@ -235,13 +256,15 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                 for sec in &secs {
                     let hits = if sec == SHORTCUTS {
                         usize::from(
-                            filter.is_empty() || !shortcut_rows(app, &filter, None).is_empty(),
+                            filter.is_empty()
+                                || !shortcut_rows(&ctx, app, &filter, None).is_empty(),
                         )
                     } else {
                         entries
                             .iter()
                             .filter(|e| {
-                                &e.section == sec && (filter.is_empty() || matches(e, &filter))
+                                &e.section == sec
+                                    && (filter.is_empty() || matches(&ctx, app, e, &filter))
                             })
                             .count()
                     };
@@ -250,7 +273,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                         enabled,
                         egui::Button::selectable(
                             filter.is_empty() && *sec == current,
-                            section_title(&ctx, sec),
+                            section_title(&ctx, app, &entries, sec),
                         ),
                     );
                     if r.clicked() {
@@ -271,7 +294,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                     // descriptions wrap.
                     ui.vertical(|ui| {
                         if filter.is_empty() {
-                            ui.strong(section_title(&ctx, &current));
+                            ui.strong(section_title(&ctx, app, &entries, &current));
                             ui.add_space(t.space.s);
                             if current == SHORTCUTS {
                                 let st = &mut *s;
@@ -285,9 +308,9 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                             let mut any = false;
                             for sec in &secs {
                                 if sec == SHORTCUTS {
-                                    if !shortcut_rows(app, &filter, None).is_empty() {
+                                    if !shortcut_rows(&ctx, app, &filter, None).is_empty() {
                                         any = true;
-                                        ui.strong(section_title(&ctx, sec));
+                                        ui.strong(section_title(&ctx, app, &entries, sec));
                                         let st = &mut *s;
                                         shortcuts(ui, app, st, &filter);
                                     }
@@ -295,13 +318,13 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                                 }
                                 let list: Vec<&SettingEntry> = entries
                                     .iter()
-                                    .filter(|e| &e.section == sec && matches(e, &filter))
+                                    .filter(|e| &e.section == sec && matches(&ctx, app, e, &filter))
                                     .collect();
                                 if list.is_empty() {
                                     continue;
                                 }
                                 any = true;
-                                ui.strong(section_title(&ctx, sec));
+                                ui.strong(section_title(&ctx, app, &entries, sec));
                                 for e in list {
                                     row(ui, app, e);
                                 }
@@ -373,17 +396,24 @@ fn history(ui: &mut Ui, app: &AppHandle) {
 fn row(ui: &mut Ui, app: &AppHandle, e: &SettingEntry) {
     let store = app.store();
     let t = Tokens::of(ui.ctx());
+    let ctx = ui.ctx().clone();
+    let d = shown(&ctx, e);
     ui.horizontal(|ui| {
         let reset_width = 64.0;
+        let id = e.id.as_str();
         ui.allocate_ui(
             egui::vec2(ui.available_width() - reset_width - t.space.m, 0.0),
-            |ui| param::param(ui, &e.descriptor, Mode::Bound(&store, &e.path)),
+            |ui| {
+                param::param_shown(ui, &d, Mode::Bound(&store, &e.path), &|c| {
+                    strings::setting_choice(&ctx, id, c)
+                })
+            },
         );
         let changed = lock(&store)
             .get(&e.path)
             .is_some_and(|x| x.value != x.descriptor.default);
         let reset = strings::tr(ui.ctx(), &RESET);
-        let setting = [("setting", e.descriptor.label.as_str())];
+        let setting = [("setting", d.label.as_str())];
         let r = ui
             .add_enabled(changed, egui::Button::new(&reset).small())
             .on_disabled_hover_text(strings::tr_args(
@@ -400,23 +430,35 @@ fn row(ui: &mut Ui, app: &AppHandle, e: &SettingEntry) {
             let _ = lock(&store).set(Set::new(&e.path, Change::Reset, Origin::User));
         }
     });
-    if !e.descriptor.description.is_empty() {
-        ui.weak(&e.descriptor.description);
+    if !d.description.is_empty() {
+        ui.weak(&d.description);
     }
     ui.add_space(t.space.s);
 }
 
 /// The commands the shortcuts editor lists for a search (and, when
 /// searching by key, those bound to exactly these keys): visible ones and
-/// those with keys, as `Category: Title`.
-fn shortcut_rows(app: &AppHandle, filter: &str, keys: Option<&str>) -> Vec<(CommandSpec, String)> {
+/// those with keys, as `Category: Title` in the interface's language.
+fn shortcut_rows(
+    ctx: &egui::Context,
+    app: &AppHandle,
+    filter: &str,
+    keys: Option<&str>,
+) -> Vec<(CommandSpec, String)> {
     let mut rows: Vec<(CommandSpec, String)> = app
         .commands()
         .into_iter()
         .map(|(s, _)| s)
         .filter(|s| s.palette || !app.keys_for(&s.id).is_empty())
         .map(|s| {
-            let label = format!("{}: {}", s.category, s.title);
+            let label = strings::tr_args(
+                ctx,
+                &txt::COMMAND_LABEL,
+                &[
+                    ("category", &strings::category(ctx, &s.category)),
+                    ("title", &command_title(ctx, &s)),
+                ],
+            );
             (s, label)
         })
         .filter(|(s, _)| keys.is_none_or(|k| app.keys_for(&s.id).iter().any(|x| x == k)))
@@ -433,6 +475,17 @@ fn shortcut_rows(app: &AppHandle, filter: &str, keys: Option<&str>) -> Vec<(Comm
         .collect();
     rows.sort_by(|a, b| a.1.cmp(&b.1));
     rows
+}
+
+/// A command's title as shown.
+fn command_title(ctx: &egui::Context, spec: &CommandSpec) -> String {
+    strings::command_title(ctx, spec.id.as_str(), &spec.title)
+}
+
+/// A command's title as shown, by id (the id when not declared).
+fn title_of(ctx: &egui::Context, app: &AppHandle, id: &CommandId) -> String {
+    app.command(id)
+        .map_or_else(|| id.to_string(), |s| command_title(ctx, &s))
 }
 
 /// The first key pressed this frame, with its modifiers, as keys.
@@ -500,7 +553,7 @@ fn shortcuts(ui: &mut Ui, app: &AppHandle, st: &mut State, filter: &str) {
         for (scope, list) in &by_scope {
             for (lose, win) in list {
                 let name = |b: &egui_pop_model::keymap::Binding| match &b.action {
-                    Action::Run(c) => app.command(c).map_or(c.to_string(), |s| s.title),
+                    Action::Run(c) => title_of(&ctx, app, c),
                     _ => String::new(),
                 };
                 ui.colored_label(
@@ -523,7 +576,10 @@ fn shortcuts(ui: &mut Ui, app: &AppHandle, st: &mut State, filter: &str) {
     let capture = &mut st.capture;
     let key_filter = st.key_filter.clone();
     if let Some(c) = capture.clone() {
-        let title = app.command(&c).map(|s| s.title).unwrap_or_default();
+        let title = app
+            .command(&c)
+            .map(|s| command_title(&ctx, &s))
+            .unwrap_or_default();
         ui.colored_label(
             t.accent.default,
             strings::tr_args(&ctx, &txt::SHORTCUTS_PRESS_NEW_KEYS, &[("command", &title)]),
@@ -553,7 +609,7 @@ fn shortcuts(ui: &mut Ui, app: &AppHandle, st: &mut State, filter: &str) {
         .striped(true)
         .spacing([t.space.m, t.space.xs])
         .show(ui, |ui| {
-            for (spec, label) in shortcut_rows(app, filter, key_filter.as_deref()) {
+            for (spec, label) in shortcut_rows(&ctx, app, filter, key_filter.as_deref()) {
                 let name = ui.label(&label);
                 let keys = app.keys_for(&spec.id);
                 ui.monospace(if keys.is_empty() {
@@ -568,7 +624,7 @@ fn shortcuts(ui: &mut Ui, app: &AppHandle, st: &mut State, filter: &str) {
                         matches!(&b.action, Action::Run(c) if *c == spec.id)
                     };
                     let other = |b: &egui_pop_model::keymap::Binding| match &b.action {
-                        Action::Run(c) => app.command(c).map_or(c.to_string(), |s| s.title),
+                        Action::Run(c) => title_of(&ctx, app, c),
                         _ => String::new(),
                     };
                     if mine(lose) {

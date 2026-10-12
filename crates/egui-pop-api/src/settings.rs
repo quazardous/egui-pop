@@ -1,6 +1,8 @@
 //! The settings form: every declared setting, by section, applied live,
 //! each with its reset. A grid of label, editor and reset; every editor
-//! is labelled by its setting's label for screen readers.
+//! is labelled by its setting's label for screen readers. Sections,
+//! labels, descriptions and a choice's values are shown in the
+//! interface's language (`egui_pop_core::strings`).
 
 use egui::{Response, Ui};
 use egui_pop_core::binding::{self, Binding};
@@ -17,6 +19,7 @@ use crate::strings as txt;
 pub fn form(ui: &mut Ui, app: &AppHandle) {
     let entries = app.settings();
     let mut sections: Vec<(String, Vec<SettingEntry>)> = Vec::new();
+    let ctx = ui.ctx().clone();
     for e in entries {
         match sections.iter_mut().find(|(s, _)| *s == e.section) {
             Some((_, list)) => list.push(e),
@@ -25,7 +28,9 @@ pub fn form(ui: &mut Ui, app: &AppHandle) {
     }
     for (section, list) in sections {
         ui.add_space(ui.spacing().item_spacing.y * 2.0);
-        ui.strong(&section);
+        if let Some(first) = list.first() {
+            ui.strong(app.section_title(&ctx, &first.owner, &section));
+        }
         egui::Grid::new(("egui_pop.settings", &section))
             .num_columns(3)
             .spacing([
@@ -45,11 +50,14 @@ fn row(ui: &mut Ui, app: &AppHandle, entry: &SettingEntry) {
     let store = app.store();
     let d: &Descriptor = &entry.descriptor;
     let path = entry.path.as_str();
-    let label = ui.label(&d.label);
+    let ctx = ui.ctx().clone();
+    let id = entry.id.as_str();
+    let text = strings::setting_label(&ctx, id, &d.label);
+    let label = ui.label(&text);
     let label = if d.description.is_empty() {
         label
     } else {
-        label.on_hover_text(&d.description)
+        label.on_hover_text(strings::setting_description(&ctx, id, &d.description))
     };
     let named = |r: Response| r.labelled_by(label.id);
     ui.horizontal(|ui| match d.ty {
@@ -100,10 +108,14 @@ fn row(ui: &mut Ui, app: &AppHandle, entry: &SettingEntry) {
                 .unwrap_or_default();
             let mut picked = current.clone();
             let r = egui::ComboBox::from_id_salt(path)
-                .selected_text(&current)
+                .selected_text(strings::setting_choice(&ctx, id, &current))
                 .show_ui(ui, |ui| {
                     for c in &d.choices {
-                        ui.selectable_value(&mut picked, c.clone(), c);
+                        ui.selectable_value(
+                            &mut picked,
+                            c.clone(),
+                            strings::setting_choice(&ctx, id, c),
+                        );
                     }
                 })
                 .response;
@@ -128,7 +140,7 @@ fn row(ui: &mut Ui, app: &AppHandle, entry: &SettingEntry) {
         .get(path)
         .is_some_and(|e| e.value != e.descriptor.default);
     let reset = strings::tr(ui.ctx(), &RESET);
-    let setting = [("setting", d.label.as_str())];
+    let setting = [("setting", text.as_str())];
     if ui
         .add_enabled(changed, egui::Button::new(&reset).small())
         .on_hover_text(strings::tr_args(

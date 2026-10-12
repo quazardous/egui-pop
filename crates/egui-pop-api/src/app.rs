@@ -16,6 +16,7 @@ use egui_pop_core::focus_mode::{self, FocusModes, Preference, SystemFocus};
 use egui_pop_core::keys::KeyDispatcher;
 use egui_pop_core::overlay;
 use egui_pop_core::persist::Persist;
+use egui_pop_core::strings;
 use egui_pop_core::theme::{self, ThemeSpec, Themes};
 use egui_pop_core::{a11y, fault, focus, lock};
 use egui_pop_model::commands::{CommandSpec, Commands, Origin, Run};
@@ -199,6 +200,8 @@ pub(crate) struct Derived {
     pub menus: BTreeMap<MenuId, Vec<MenuItem>>,
     pub palette: Vec<PaletteEntry>,
     pub settings: Vec<SettingEntry>,
+    /// Each owner's section title, before the hooks (a plugin's title).
+    pub sections: BTreeMap<OwnerId, String>,
     pub commands: Vec<(CommandSpec, OwnerId)>,
     /// Each command's live key bindings, as shown.
     pub keys: BTreeMap<CommandId, Vec<String>>,
@@ -507,9 +510,12 @@ impl AppHandle {
         self.with_host(|h| h.redo_label()).flatten()
     }
 
-    /// A command's title as menus show it now: undo and redo name what
-    /// they would do ("Undo exposure change").
+    /// A command's title as menus show it now, in the interface's
+    /// language: undo and redo name what they would do ("Undo exposure
+    /// change").
     pub fn command_title(&self, spec: &CommandSpec) -> String {
+        let ctx = self.egui();
+        let title = strings::command_title(&ctx, spec.id.as_str(), &spec.title);
         let label = if spec.id == CMD_UNDO {
             self.undo_label()
         } else if spec.id == CMD_REDO {
@@ -518,8 +524,32 @@ impl AppHandle {
             None
         };
         match label.filter(|l| !l.is_empty()) {
-            Some(l) => format!("{} {l}", spec.title),
-            None => spec.title.clone(),
+            Some(l) => strings::tr_args(
+                &ctx,
+                &crate::strings::COMMAND_WITH_CHANGE,
+                &[("title", &title), ("change", &l)],
+            ),
+            None => title,
+        }
+    }
+
+    /// A settings section's title as shown: the owner's plugin title
+    /// translated (`plugin-<id>.title`), or the section as a hook named
+    /// it.
+    pub(crate) fn section_title(&self, ctx: &Context, owner: &OwnerId, section: &str) -> String {
+        let derived = self.0.derived.borrow();
+        match derived.sections.get(owner) {
+            Some(title) if title == section => strings::plugin_title(ctx, owner.as_str(), section),
+            _ => section.to_string(),
+        }
+    }
+
+    /// A panel's title as shown (its id when it is not declared).
+    pub(crate) fn panel_title(&self, ctx: &Context, id: &PanelId) -> String {
+        let title = self.workbench_mut().spec(id).map(|s| s.title.clone());
+        match title {
+            Some(t) => strings::panel_title(ctx, id.as_str(), &t),
+            None => id.to_string(),
         }
     }
 
@@ -1216,10 +1246,7 @@ impl AppHandle {
 
     /// Draws a panel's content, in its focus scope and fault boundary.
     pub(crate) fn show_panel(&self, ui: &mut Ui, id: &PanelId) {
-        let title = self
-            .workbench_mut()
-            .spec(id)
-            .map_or_else(|| id.to_string(), |s| s.title.clone());
+        let title = self.panel_title(ui.ctx(), id);
         let title = title.as_str();
         let taken = self
             .0
@@ -2442,6 +2469,7 @@ impl App {
             .chain([(OwnerId::FRAMEWORK, FRAMEWORK_SECTION.to_string())])
             .collect();
         let store = lock(&self.handle.0.store);
+        derived.sections.clone_from(&titles);
         derived.settings = reg
             .settings
             .in_order()

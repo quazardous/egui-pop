@@ -149,6 +149,7 @@ pub fn bar(ui: &mut Ui, app: &AppHandle, menu: &MenuId) {
             ..
         } = shown
         {
+            let label = strings::menu_label(ui.ctx(), sub.as_str(), &label);
             ui.add_enabled_ui(enabled, |ui| {
                 MenuButton::new(label).ui(ui, |ui| items(ui, app, &sub, &cx, &Json::Null, 0));
             });
@@ -386,6 +387,7 @@ fn items(ui: &mut Ui, app: &AppHandle, menu: &MenuId, cx: &WhenContext, args: &J
                     }
                 }
                 Item::Submenu { menu: sub, label } => {
+                    let label = strings::menu_label(ui.ctx(), sub.as_str(), &label);
                     ui.add_enabled_ui(enabled, |ui| {
                         submenu(ui, app, &sub, &label, cx, args, depth)
                     });
@@ -516,7 +518,10 @@ fn command_row(ui: &mut Ui, app: &AppHandle, cx: &WhenContext, row: Row<'_>) -> 
     }
     let mut response = r.response;
     if checkable {
-        let (on, name) = (why.is_none(), label.unwrap_or_else(|| title_of(&spec, id)));
+        let (on, name) = (
+            why.is_none(),
+            label.unwrap_or_else(|| title_of(&ctx, &spec, id)),
+        );
         response.widget_info(|| {
             egui::WidgetInfo::selected(egui::WidgetType::Checkbox, on, checked, &name)
         });
@@ -530,14 +535,21 @@ fn command_row(ui: &mut Ui, app: &AppHandle, cx: &WhenContext, row: Row<'_>) -> 
             &[("error", &e)],
         ));
     } else if let Some(s) = spec.filter(|s| !s.description.is_empty()) {
-        response = response.on_hover_text(s.description);
+        response = response.on_hover_text(strings::command_description(
+            &ctx,
+            s.id.as_str(),
+            &s.description,
+        ));
     }
     response.clicked()
 }
 
-fn title_of(spec: &Option<CommandSpec>, id: &CommandId) -> String {
-    spec.as_ref()
-        .map_or_else(|| id.to_string(), |s| s.title.clone())
+/// A command's title as shown, without undo's label.
+fn title_of(ctx: &Context, spec: &Option<CommandSpec>, id: &CommandId) -> String {
+    spec.as_ref().map_or_else(
+        || id.to_string(),
+        |s| strings::command_title(ctx, s.id.as_str(), &s.title),
+    )
 }
 
 /// A submenu button with a painted arrow, opening on hover as egui's

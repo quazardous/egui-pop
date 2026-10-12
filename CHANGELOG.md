@@ -34,6 +34,16 @@ egui minor.
   through `egui_pop_core::strings`, by the keys of the new
   `egui_pop_api::strings` module, whose `ALL` lists them for catalogues.
   English is unchanged.
+- What plugins declare is shown in the interface's language where it is
+  drawn, through the derived keys of `egui_pop_core::strings`: command
+  titles, descriptions and categories (menus, context menus, the palette,
+  the shortcuts editor, undo and redo labels through
+  `AppHandle::command_title`), submenu labels (the menu bar), panel titles
+  (tabs, the activity bar, detached windows, fault cards), settings'
+  labels, descriptions and choice values, and their sections (a plugin's
+  title). The palette ranks the label it shows (`palette::rank_with`,
+  `palette::shown`). Specs, palette entries, settings entries, stored
+  values, the journal and the debug bridge stay English.
 
 ## 0.1.0 (prepared, not published)
 
