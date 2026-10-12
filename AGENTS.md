@@ -12,7 +12,7 @@
 | `crates/egui-pop-test` | L4, test kit: themed harness, "every interactive node has a name", accessibility tree dump. |
 | `crates/egui-pop` | L5, the facade users depend on. Holds the layering test. |
 | `crates/egui-pop-gallery` | The catalogue app, a plugin app; its pages are the snapshot fixtures. |
-| `crates/consumer-smoke` | Compiles the README snippets (not published). |
+| `crates/consumer-smoke` | Compiles the README and guide snippets (not published). |
 | `docs/adr/` | Architecture decisions. Read them before changing a registry. |
 | `docs/tokens.md` | The token tiers and how to add a theme. |
 | `template/` | The `cargo generate` application template, identical to `crates/egui-pop/examples/minimal.rs` (a test checks it). |

@@ -1,7 +1,7 @@
 [package]
 name = "consumer-smoke"
 version = "0.0.0"
-description = "Compiles and runs the README's code as a user of the egui-pop crate would"
+description = "Compiles and runs the code of the README and the guides as a user of the egui-pop crate would"
 publish = false
 edition.workspace = true
 rust-version.workspace = true
