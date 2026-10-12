@@ -3,6 +3,7 @@
 use crate::Plugin;
 use crate::dialogs::DialogsPlugin;
 use crate::palette::PalettePlugin;
+use crate::toasts::ToastsPlugin;
 
 /// Plugins added together (`AppBuilder::plugins`).
 pub trait PluginGroup {
@@ -20,13 +21,17 @@ impl PluginGroup for MinimalPlugins {
     }
 }
 
-/// What most applications want: the command palette (and, as they come,
-/// the other components of the paved road).
+/// What most applications want: the command palette, dialogs and toasts
+/// (and the next components of the paved road as they come).
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DefaultPlugins;
 
 impl PluginGroup for DefaultPlugins {
     fn plugins(self) -> Vec<Box<dyn Plugin>> {
-        vec![Box::new(PalettePlugin), Box::new(DialogsPlugin)]
+        vec![
+            Box::new(PalettePlugin),
+            Box::new(DialogsPlugin),
+            Box::new(ToastsPlugin),
+        ]
     }
 }

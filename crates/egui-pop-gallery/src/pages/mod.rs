@@ -13,6 +13,7 @@ pub mod menus;
 pub mod overview;
 pub mod settings;
 pub mod story;
+pub mod toasts;
 pub mod tokens;
 pub mod zones;
 

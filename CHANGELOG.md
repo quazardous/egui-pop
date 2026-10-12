@@ -9,6 +9,15 @@ egui minor.
 
 ### Added
 
+- Toasts as a plugin (`egui_pop_api::toasts::ToastsPlugin`, in
+  `DefaultPlugins`): notices in the bottom-right corner that never take
+  the focus, by level (information and success go after 4 s, warnings
+  after 8 s, errors stay; the pointer over one holds it), with an
+  optional command action and a close button, four on screen and the
+  rest waiting. Screen readers hear them through the live region. The
+  queue and the history are data (`Toasts::shown`, `history`), shown and
+  dismissed through the debug bridge's `toasts` collector; each one is a
+  `toast.shown` event in the journal. A gallery page shows them.
 - Dialogs as a plugin (`egui_pop_api::dialogs::DialogsPlugin`, in
   `DefaultPlugins`): `Confirm` (named by its verb; `danger` styles it,
   starts the focus on Cancel and keeps Enter from accepting), `Form`

@@ -19,6 +19,7 @@
 //! - [`stories`]: gallery stories as a contribution;
 //! - [`palette`]: the command palette, a plugin;
 //! - [`dialogs`]: confirmations, forms, choices and notices, a plugin;
+//! - [`toasts`]: notices in a corner, with actions, a plugin;
 //! - [`DefaultPlugins`] and [`MinimalPlugins`]: plugin groups for
 //!   [`AppBuilder::plugins`];
 //! - [`AppBuilder`] and [`App`]: sorting, connecting, the shell (menu
@@ -70,6 +71,7 @@ pub mod plugin;
 pub mod services;
 pub mod settings;
 pub mod stories;
+pub mod toasts;
 pub mod zones;
 
 pub use app::{

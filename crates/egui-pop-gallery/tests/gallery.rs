@@ -276,3 +276,25 @@ fn dialogs_open_from_the_page_and_send_what_they_ran() {
         assert_eq!(context_key(&h, "galleryDialogSent"), r#"{"what":"delete"}"#);
     }
 }
+
+#[test]
+fn toasts_show_in_a_corner_and_their_action_runs() {
+    let mut results = egui_kittest::SnapshotResults::new();
+    for theme in ["pop-dark", "pop-light"] {
+        let mut h = harness(options(theme, Density::Comfortable, "toasts"));
+        h.run();
+        for b in ["Warning", "Error", "Success with an action"] {
+            h.get_by_label(b).click();
+            h.run();
+        }
+        egui_pop_test::assert_all_named(&h);
+        results.add(h.try_snapshot(format!("toasts-{theme}")));
+        h.get_by_label("Show").click();
+        h.run();
+        h.run();
+        assert_eq!(
+            context_key(&h, "galleryDialogSent"),
+            r#"{"what":"show the export"}"#
+        );
+    }
+}
