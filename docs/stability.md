@@ -50,6 +50,8 @@ Three tiers:
 - The focus mode and its system readers.
 - The slider's gestures as data (`slider::Gestures`): profiles of input
   are not designed yet.
+- The image viewport (`egui-pop-viewport`): its view model, mapping,
+  signals and hooks may still move while the first application adopts it.
 - Anything marked "experimental" in its documentation.
 
 ## Not covered

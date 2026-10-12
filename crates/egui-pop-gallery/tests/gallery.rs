@@ -364,3 +364,19 @@ fn every_editor_inspired_theme_draws_the_overview() {
         results.add(h.try_snapshot(format!("overview-{theme}")));
     }
 }
+
+#[test]
+fn the_viewport_page_zooms_through_commands_and_reports_signals() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "viewport"));
+    h.run();
+    h.get_by_label("100 %").click();
+    h.run();
+    assert!(h.query_by_label("100.0 %").is_some());
+    h.get_by_label("Zoom in").click();
+    h.run();
+    assert!(h.query_by_label("200.0 %").is_some());
+    assert!(h.query_by_label_contains("command once: 200.0 %").is_some());
+    let snap = h.state().app.handle().debug_snapshot();
+    assert_eq!(snap["viewport"]["viewports"]["gallery"]["zoom"], 2.0);
+    h.snapshot("viewport-pop-dark");
+}

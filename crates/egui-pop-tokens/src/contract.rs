@@ -175,6 +175,26 @@ pub const CONTRACT: &[Required] = &[
     comp("toast.text", "color", "a toast's text"),
     comp("toast.padding", "dimension", "a toast's padding"),
     comp("toast.width", "dimension", "a toast's width"),
+    comp(
+        "viewport.background",
+        "color",
+        "around the image in a viewport",
+    ),
+    comp("viewport.backdrop", "color", "under an image not drawn yet"),
+    comp("viewport.frame", "color", "the image's outline"),
+    comp("viewport.grid", "color", "the pixel grid at high zoom"),
+    comp("viewport.guide", "color", "overlay shapes and guides"),
+    comp("viewport.handle", "color", "a handle at rest"),
+    comp(
+        "viewport.handle-hover",
+        "color",
+        "a handle under the pointer",
+    ),
+    comp(
+        "viewport.handle-outline",
+        "color",
+        "the ring around a handle",
+    ),
 ];
 
 /// The contract entry for a path.

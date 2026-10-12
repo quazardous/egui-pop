@@ -1,0 +1,25 @@
+[package]
+name = "egui-pop-viewport"
+version = "0.0.1"
+description = "A generic tiled image viewport for egui-pop: pan and zoom in physical pixels, tiles from an asynchronous source (proxy then exact), a display-transform hook, overlays with handles, before/after, a pixel readout, thumbnails and a histogram"
+keywords = ["egui", "image", "viewport", "tiles", "zoom"]
+categories = ["gui", "multimedia::images"]
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+egui.workspace = true
+egui-pop-core.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+egui = { workspace = true, features = ["default_fonts"] }
+egui_kittest = { workspace = true, features = ["wgpu", "snapshot"] }
+egui-pop-test.workspace = true
+serde_json.workspace = true

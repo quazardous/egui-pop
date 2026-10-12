@@ -49,6 +49,11 @@ pub use egui_pop_core as core;
 /// hooks, services, stories.
 pub use egui_pop_api as api;
 
+/// The image viewport, thumbnails and the histogram (feature
+/// `viewport`).
+#[cfg(feature = "viewport")]
+pub use egui_pop_viewport as viewport;
+
 /// Themes: tokens into egui's style (from `egui-pop-core`).
 pub use egui_pop_core::theme;
 

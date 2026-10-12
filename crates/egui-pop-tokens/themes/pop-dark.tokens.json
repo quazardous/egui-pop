@@ -218,5 +218,17 @@
     "text": {"$type": "color", "$value": "{text.default}"},
     "padding": {"$type": "dimension", "$value": "{space.m}"},
     "width": {"$type": "dimension", "$value": "{size.toast.width}"}
+  },
+  "viewport": {
+    "$description": "The image viewport.",
+    "$type": "color",
+    "background": {"$value": "{surface.canvas}", "$description": "Around the image."},
+    "backdrop": {"$value": "{surface.sunken}", "$description": "Under the image where no tile has arrived yet."},
+    "frame": {"$value": "{border.default}", "$description": "The image's outline."},
+    "grid": {"$value": "{border.default}", "$description": "The pixel grid at high zoom."},
+    "guide": {"$value": "{text.strong}", "$description": "Overlay shapes and guides."},
+    "handle": {"$value": "{accent.default}", "$description": "A handle at rest."},
+    "handle-hover": {"$value": "{accent.hover}", "$description": "A handle under the pointer or dragged."},
+    "handle-outline": {"$value": "{surface.canvas}", "$description": "The ring around a handle."}
   }
 }

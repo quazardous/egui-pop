@@ -21,11 +21,15 @@ Crates are stacked; a crate depends only on crates of a lower layer:
 | L1 | `egui-pop-model`: commands, keymap, menus, panels, layouts, values, ids, diagnostics, documents | no |
 | L2 | `egui-pop-core`: theme, focus, keys, overlays, placement, accessibility, strings, icons, persistence, fault boundary, binding, debug bridge | yes |
 | L3 | `egui-pop-api`: plugins, the app builder, `Ctx`, zones and blocks, hooks, services, stories | yes |
+| L3 | `egui-pop-viewport`: the image viewport, thumbnails, the histogram (a component on the egui layer alone) | yes |
 | L4 | `egui-pop-test`: test kit (dev-dependency only) | yes |
 | L5 | `egui-pop`: the facade users depend on, re-exporting the layers | yes |
 | L6 | applications: the gallery, `consumer-smoke` | yes |
 
-Components, when they come, sit between L3 and the facade. A test
+Components sit between L3 and the facade. A component that needs only
+the egui layer (`egui-pop-viewport`) sits at L3 beside the application
+API, so the test kit (L4) can carry test doubles for it; one that needs
+plugins would sit above the API. A test
 (`crates/egui-pop/tests/layering.rs`) reads `cargo metadata` and fails on
 any dependency that points to the same or a higher layer, on any
 workspace crate missing from the table, and on L0 or L1 depending on

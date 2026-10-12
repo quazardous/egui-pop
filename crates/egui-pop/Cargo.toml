@@ -21,6 +21,9 @@ eframe = ["egui-pop-api/eframe"]
 ## Icons drawn from the Phosphor icon font (MIT, about 480 KB); without
 ## it, icons are painted with lines and fills.
 phosphor = ["egui-pop-api/phosphor"]
+## The image viewport, thumbnails and the histogram
+## (`egui-pop-viewport`, re-exported as `egui_pop::viewport`).
+viewport = ["dep:egui-pop-viewport"]
 
 [dependencies]
 egui.workspace = true
@@ -28,6 +31,7 @@ egui-pop-tokens.workspace = true
 egui-pop-model.workspace = true
 egui-pop-core.workspace = true
 egui-pop-api.workspace = true
+egui-pop-viewport = { workspace = true, optional = true }
 
 [dev-dependencies]
 egui = { workspace = true, features = ["default_fonts"] }

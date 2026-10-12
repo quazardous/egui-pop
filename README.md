@@ -19,6 +19,7 @@ undo, persistence, a debug bridge and a test kit. Components come next.
 | [`egui-pop-model`](crates/egui-pop-model) | L1 | The logic without egui: typed ids, diagnostics, `when` clauses, commands, keymap (layers, chords, focus depth, traces), menus, panels, layouts, the value store, versioned documents, plugin ordering. |
 | [`egui-pop-core`](crates/egui-pop-core) | L2 | The egui layer: theme, focus scopes, key dispatcher, overlay stack, placement, accessibility, strings, icons, persistence, fault boundaries, value binding, the debug bridge. |
 | [`egui-pop-api`](crates/egui-pop-api) | L3 | The application API (its own semver): `Plugin`, `Ctx`, `AppBuilder` over eframe or headless, zones and blocks, hooks, services, stories. |
+| [`egui-pop-viewport`](crates/egui-pop-viewport) | L3 | A generic image viewport: zoom in physical pixels, the zoom ladder, one image-to-screen mapping, gestures as data, hooks and signals (feature `viewport` of the facade). |
 | [`egui-pop-test`](crates/egui-pop-test) | L4 | Test kit: harnesses, "every interactive node has a name", accessibility tree dump. |
 | [`egui-pop`](crates/egui-pop) | L5 | The crate to depend on: re-exports the layers, `egui`, and a `prelude`. |
 | [`egui-pop-gallery`](crates/egui-pop-gallery) | app | The catalogue, itself a plugin application (not published). |
@@ -203,7 +204,7 @@ cargo run -p egui-pop-gallery -- --help
 ```
 
 Pages: theme overview, tokens, egui's built-ins, icons, values, menus, dialogs,
-toasts, zones and blocks, settings, the debug bridge. It also builds for the web
+toasts, the image viewport, zones and blocks, settings, the debug bridge. It also builds for the web
 (`wasm32-unknown-unknown`, with Trunk from `crates/egui-pop-gallery`), and
 runs offscreen in a nested compositor for scripted runs
 ([tools/wbox](tools/wbox)).

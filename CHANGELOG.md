@@ -16,6 +16,20 @@ egui minor.
   follow them (`Ctx::after`). The debug bridge's `steps` collector shows
   each step's hooks and the last runs; hooks on unknown steps and two
   replacements of one step are reported.
+- `egui-pop-viewport` (facade feature `viewport`), a generic image
+  viewport, first its view model: the zoom counts physical screen pixels
+  per image pixel, so 100 % is exactly `1.0` in every window whatever
+  its scale; `Mapping` is the one image-to-screen mapping (origin snapped
+  to whole physical pixels) that drawing, hit tests and the pixel readout
+  share; the zoom ladder (whole ratios first), fit, and a wheel that
+  stops at 100 % when it crosses it. Drag, Space-drag or middle-drag
+  pans as one gesture, Escape puts the view back, a double click fits,
+  keys walk the ladder; the gestures are data (`gestures::Gestures`).
+  Every change is a `Signal` with its phase and cause; `before_view`,
+  `on_double_click` and `after_paint` hooks let the application veto,
+  redirect, replace or extend, and the `viewport` debug collector shows
+  views, hook decisions and signals and moves a viewport. Component
+  tokens `viewport.*`. A Viewport page in the gallery.
 - Twelve editor-inspired built-in themes (`github-light`, `github-dark`,
   `github-light-high-contrast`, `github-dark-high-contrast`,
   `catppuccin-latte`, `catppuccin-mocha`, `one-light`, `one-dark-pro`,
