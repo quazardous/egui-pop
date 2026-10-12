@@ -1,0 +1,458 @@
+# Advanced widgets: a survey, and what egui-pop should have
+
+Status: **survey** (2026-10-12). It answers which advanced widgets
+egui-pop should have, progress bars and spinners first, and whether each
+one is egui's built-in, a crate to adopt or wrap, or our own. Crate
+versions were checked on crates.io on 2026-10-12. Unless said otherwise,
+each crate depends on egui 0.36, the version egui-pop uses, and is MIT
+and/or Apache-2.0.
+
+The first application is a photo editor: a darkroom (image viewport,
+parameter sliders, curves, scopes), a lighttable (tens of thousands of
+thumbnails, ratings, labels, tags, filters), a graph of modules, and long
+background jobs (renders, exports, imports, GPU work).
+
+**What decides**, as for the rest of egui-pop:
+
+- **Values live outside the widget.** A widget reads a value from the
+  store or the host and writes through a command (ADR 0009, ADR 0010).
+  Crates that keep their own model (a string queue, their own graph,
+  their own tree) are, at most, drawing helpers.
+- **Progress comes from the host as events.** egui-pop never polls a
+  job. The host publishes events, egui-pop builds a model from them and
+  draws it (ADR 0010).
+- **Everything can be inspected and driven.** Each widget is named for
+  AccessKit, shows up in the debug bridge, and gives the same result in
+  a headless test on every run.
+- **Theme tokens only.** Colours, sizes and motion come from tokens;
+  reduced motion is a theme setting already (`motion.duration` is 0).
+- **No silent no-op** (ADR 0003): a widget that cannot show what it was
+  given says so.
+
+## 1. Catalogues of other libraries
+
+Each line lists only what matters here. The names are the libraries' own.
+
+| Library | Progress and waiting | Other advanced widgets worth noting |
+|---|---|---|
+| **shadcn/ui** (on Radix primitives) | `Progress`, `Spinner`, `Skeleton`, `Sonner` (toasts with a promise state: loading, then success or error) | `Command` (palette), `Empty`, `Kbd`, `Item`, `ButtonGroup`, `InputGroup`, `Resizable`, `Toggle Group`, `Hover Card`, `Data Table` (TanStack), `Sidebar`, `Field` |
+| **MUI** (Material UI, MUI X) | `LinearProgress` (determinate, indeterminate, **buffer**, query), `CircularProgress`, `Skeleton`, `Backdrop`, the `loading` prop of `Button`, `Snackbar` | `Rating`, `Chip`, `Badge`, `Stepper`, `ToggleButtonGroup`, `Slider` (range, marks, vertical), `Transfer List`; MUI X has `DataGrid`, `TreeView`, date pickers and charts |
+| **Mantine** | `Progress` (**sections**, striped, animated), `RingProgress`, `SemiCircleProgress`, `Loader`, `LoadingOverlay`, `Skeleton`, `loading` prop on `Button`, notifications that update from loading to done | `SegmentedControl`, `Switch`, `Chip`, `Badge`, `Pill`, `TagsInput`, `Rating`, `ColorPicker`, `AngleSlider`, `RangeSlider`, `Tree`, `Stepper`, `Timeline`, `Indicator`, `Spoiler`, `Kbd` |
+| **Ant Design** | `Progress` (line, circle, dashboard, **steps**, a success segment), `Spin` with a **`delay`** (shows only after a delay, so there is no flicker), `Skeleton`, `Button loading`, `message.loading` | `Segmented`, `Rate`, `Tag`, `Badge`, `Empty`, `Result`, `Steps`, `Statistic` (countdown), `Splitter`, `Tree`, `TreeSelect`, `Cascader`, `Transfer`, `Tour`, `Descriptions`, `Upload` (per-file progress) |
+| **Blueprint** (data-dense, desktop-like) | `ProgressBar` (intent, stripes), `Spinner` (also **determinate**, with a value), progress inside a `Toast` (the documented upload example) | `NonIdealState` (empty or error state), `EditableText`, `TagInput`, `Breadcrumbs` (collapse into an overflow menu), `OverflowList`, `Tree`, `Table` (virtualized, frozen columns), `Omnibar`, `HotkeysDialog`, `SegmentedControl`, `MultiSlider`, `NumericInput`, `PanelStack2`, `MultistepDialog`, `EntityTitle` |
+| **Fluent UI v9** | `ProgressBar` (indeterminate when it has no value, thickness, validation state), `Spinner` (label and its position), `Skeleton`, `MessageBar`, `Toast` | `Tag`, `TagPicker`, `InteractionTag`, `Badge`, `CounterBadge`, `Rating`, `SwatchPicker`, `Tree`, `FlatTree`, `DataGrid`, `Toolbar`, `SearchBox`, `InfoLabel`, `TeachingPopover`, `Drawer`, `Nav`, `Field` |
+| **Carbon** (IBM) | `ProgressBar` (status: active, finished, error; helper text), **`InlineLoading`** (inactive, active, finished, error, with a description: for buttons and rows), `Loading` (overlay or small), `SkeletonText`, `SkeletonPlaceholder`; a written [loading pattern](https://carbondesignsystem.com/patterns/loading-pattern/) | `ProgressIndicator` (a stepper), `ContentSwitcher` (segmented), `Toggle`, `Tag` (dismissible, operational), `Notification` (inline, toast, actionable), `DataTable` (batch actions, expandable rows, toolbar search), `TreeView`, `FileUploader` |
+| **libadwaita / GTK4** | `GtkProgressBar` (fraction, or `pulse()` for indeterminate), `GtkLevelBar` (a meter with offsets), `AdwSpinner` (libadwaita 1.6), `AdwToast` with a button, `AdwBanner` | `AdwStatusPage` (empty state), `AdwToggleGroup` (segmented, 1.7), `AdwSplitButton`, rows (`AdwSwitchRow`, `AdwSpinRow`, `AdwEntryRow`, `AdwExpanderRow`), `AdwPreferencesDialog` with search, `AdwNavigationSplitView`, `AdwTabView`, `AdwTabOverview`, `AdwBottomSheet`, `AdwWrapBox`, `AdwShortcutsDialog`; GTK's `GtkListView`, `GtkGridView` and `GtkColumnView` recycle row widgets (virtualized), and `GtkScale` has marks and a fill level |
+| **Qt Widgets / QML** | `QProgressBar` (busy when min = max = 0), **`QProgressDialog`** (only shows when the operation will last longer than `minimumDuration`, 4 s by default), QML `BusyIndicator`, `ProgressBar` (indeterminate), **`DelayButton`** (fills while held); KDE's `KJob` and its job tracker gather the jobs of every application in one notification area | `QSplitter`, `QDockWidget`, model/view `QTreeView` and `QTableView` (virtualized), `QDial`, `QKeySequenceEdit`, `QUndoView`, `QCompleter`, `QColorDialog`; QML `RangeSlider`, `Switch`, `Tumbler`, `SplitView`, `TreeView`, `TableView` |
+| **Dear ImGui** | `ProgressBar` (a negative fraction animates it as indeterminate, since 1.90), no spinner built in; [imspinner](https://github.com/dalerank/imspinner) has dozens | Extensions: ImPlot, ImGuizmo (gizmo, `ImSequencer`, `ImCurveEdit`, `GraphEditor`), imnodes, thedmd's imgui-node-editor, imgui-knobs, imgui_toggle, ImGuiFileDialog, ImGuiColorTextEdit, imgui_markdown, the curve and gradient editor gists; Tracy's timeline as the reference for dense timelines |
+| **JetBrains IDEs** | Background tasks in the status bar: a small progress bar and a counter; a click opens the list of tasks, each with cancel (and pause for indexing). A modal task has a **"Background"** button that moves it to the status bar. A thin indeterminate line under a tool window's title | Tool windows (dock, float, split), Search Everywhere, the Notifications tool window (history), breadcrumbs, inline hints |
+| **VS Code** | `window.withProgress` locations: **Notification** (a toast with a bar and Cancel), **Window** (a status bar spinner), **SourceControl**, and a view's progress (a thin moving line under the view title, and a badge on its activity bar icon); the notification centre keeps a history | The status bar, the quick pick and palette, breadcrumbs, the minimap, peek views, tree views with inline actions, the activity bar with badges |
+| **Photo applications** (the domain's own references) | **Lightroom Classic**: an activity area at the top left stacks one bar per running task, each with a cancel cross. **Capture One**: an Activities window lists the process queue with its history. **darktable**: a "background jobs" module, one bar per job with cancel (its `dt_control_progress` API) | Filmstrip, navigator, histogram, curves, colour wheels, star ratings and colour labels on thumbnails, darktable's bauhaus sliders |
+
+Patterns that come back across libraries:
+
+- **Three ways to wait:** a spinner (indeterminate), a bar (determinate),
+  a skeleton (the content's shape). Carbon and Fluent write the rule
+  down: indeterminate when the length is unknown, determinate as soon as
+  it is known.
+- **Flicker control:** Ant's `Spin delay`, Qt's
+  `QProgressDialog::minimumDuration`, VS Code's internal progress
+  `delay`, and the web's "spin delay" idea (a delay before showing, then
+  a minimum time on screen). The thresholds come from
+  [Nielsen Norman Group](https://www.nngroup.com/articles/progress-indicators/):
+  nothing under about 1 s, a looped indicator from 2 to 10 s, a
+  percent-done bar beyond that.
+- **Busy controls:** the button or row that started the work shows it
+  (MUI, Mantine and Ant `loading`, Carbon `InlineLoading`). A modal can
+  be sent to the background (JetBrains).
+- **Jobs gathered in one place:** JetBrains background tasks, KDE's job
+  tracker, Lightroom's activity area, Capture One's Activities,
+  darktable's background jobs, and the VS Code and Fluent notification
+  centres for the history.
+- **Data-dense desktop libraries** (Blueprint, Qt, GTK, JetBrains)
+  matter more for us than marketing-site kits: tag input, editable text,
+  non-ideal state, virtualized trees and tables, multi-handle sliders,
+  overflow lists.
+
+## 2. The egui ecosystem
+
+### 2.1 What egui 0.36 has
+
+The latest egui release is 0.36.2 (2026-09-08); 0.37 has not been
+released.
+
+| Built in | What it does | Gaps for us |
+|---|---|---|
+| `ProgressBar` | A fraction, text or percentage, fill colour, corner radius. `animate(true)` pulses the fill and draws a spinning arc at its end. AccessKit role `ProgressIndicator`, with the percentage as its numeric value | **No indeterminate mode**: `animate` decorates a determinate bar. No tone (success, warning, error), no buffer or sections, no reduced motion. It asks for a repaint every frame while animated, and it reads `input.time`, so a snapshot depends on the clock |
+| `Spinner` | An arc spinning on `input.time`, size and colour, role `ProgressIndicator` | No label (so an unnamed node in our accessibility check), no delay, no reduced motion. It repaints every frame while visible |
+| `Slider`, `DragValue` | Logarithmic scale, clamping modes, step, trailing fill, a value shown with its prefix and suffix | No soft and hard range, no fine adjustment, no reset, no gradient track, no range (two handles). egui-pop's own slider covers the first three |
+| `color_picker`, `color_edit_button_*` | HSV picker, alpha | Not colour-managed; no wheels |
+| `Modal`, `Popup`, tooltips, menus, `ComboBox` | Already the base of egui-pop's overlays | (egui-pop's overlay stack) |
+| `ScrollArea::show_rows`, `show_viewport` | Virtualized scrolling | A grid and its selection are ours |
+| `Scene` | A container you can pan and zoom | A starting point for the graph view and the minimap |
+| `Image` | Shows a spinner while its loader works | A spinner per thumbnail is noise; we want a placeholder |
+| `selectable_value`, `toggle_value`, `Checkbox` | The building blocks of a segmented control | A toggle switch exists only as a demo (`egui_demo_lib`, `toggle_switch.rs`) |
+| egui_extras 0.36.2 | `TableBuilder`, `StripBuilder`, `DatePickerButton` (feature), image loaders, syntax highlighting | |
+
+### 2.2 Crates
+
+| Crate | Version | What | Verdict |
+|---|---|---|---|
+| egui_plot | 0.37.0 | Lines, bars, boxes | Debug panels only; our scopes are images fed by the engine |
+| egui_dock | 0.21.1 (MIT) | Docking, tabs, splits | **Adopted** already; it cannot veto a drop by destination (see `upstream.md`) |
+| egui_tiles | 0.17.1 | Rerun's tiling | Not needed next to egui_dock |
+| egui-notify | 0.23.0 (MIT) | Toasts | Ideas only (stacking, animation): it keeps a string queue, with no commands and no state to inspect |
+| egui-toast | 0.22.0 (MIT) | Toasts | Same as egui-notify |
+| egui-snarl | 0.12.0 | Node graph that owns `Snarl<T>` | Reference for wire and pin interaction; the graph view is **our own** |
+| egui_node_editor | 0.11.0 | Node editor | Too young (few downloads); reference at most |
+| egui_graph_edit | 0.9.1 (egui 0.36) | Node graphs | Same |
+| egui_graphs | 0.32.0 | A petgraph viewer | Not an editor |
+| egui_ltreeview | 0.9.0 (MIT) | Tree view: multi-select, keyboard, drag and drop, context menu; the caller keeps the data | **Adopt candidate** for collections, folders and tag hierarchies. Before adopting: check that it names nodes for AccessKit and that our keymap can take its keys |
+| egui_table | 0.10.0 | Rerun's virtualized table (sticky header, resizable columns) | **Adopt** for metadata and queue tables |
+| egui_virtual_list | 0.12.0 | Virtual list with rows of varying height | Useful for long lists with variable rows (history, logs) |
+| egui_infinite_scroll | 0.12.0 | Pages loaded on scroll | Ideas only: our fetches are windowed by the host |
+| egui_dnd | 0.17.0 | Reorder by drag and drop, animated | **Adopt** for reorderable lists (export targets, module order in a stack); the order is written back through a command |
+| egui-modal | 0.6.0 (egui 0.30) | Modals | **Dead**: egui's `Modal` replaces it |
+| catppuccin-egui | 5.7.0 (up to egui 0.33) | Themes | Stale; our tokens replace it |
+| egui_double_slider | 4.0.0 (**Apache-2.0** only) | A range slider | Reference for our range slider |
+| egui_knob | 0.6.3 | Knob | Skip (knobs fit audio, not photos) |
+| egui_colors | 0.13.0 | 12-step palettes | Theme work only |
+| egui_colorgradient | 0.2.3 (2025, older egui) | Gradient editor | Reference only |
+| egui-keyframe | 0.1.0 | Keyframes and curve editing | Reference for curve handles; too young |
+| egui_timeline | 0.3.0 (2025) | Timeline for media | Reference only |
+| egui_chip | 0.3.1 | Chips | Too small to depend on; ideas only |
+| egui-dropdown / egui_autocomplete | 0.16.0 / 15.0.0 | Autocomplete text fields | Ideas for the tag input; our palette's fuzzy matcher is enough |
+| egui-multiselect | 0.8.0 | Multiselect | Skip |
+| egui_suspense | 0.13.0 | Loading and error UIs for async data | Ideas only (the loading, error and retry triad); progress comes from the host |
+| egui_inbox | 0.13.0 | A channel that wakes egui | The host's `Waker` already does this |
+| egui-async | 0.7.0 | Async helpers | Skip: the host owns execution |
+| egui_animation | 0.13.0 | Easing and transitions | Optional; motion must follow tokens and reduced motion |
+| egui_flex, egui_taffy | 0.8.0, 0.14.0 | Flex or CSS layout | Skip for now (wrapping tag lists may want flex) |
+| egui-file-dialog | 0.15.0 | File dialog drawn in egui | **Wrap** as the fallback behind rfd (decided in Helios) |
+| egui_json_tree | 0.17.0 | JSON tree with search | **Adopt** for the debug bridge and the journal viewer |
+| egui_commonmark | 0.25.0 | Markdown | Later, for help and tips |
+| egui_logger, egui_tracing | 0.12.0, 0.3.0 (Unlicense) | Log views | Later; the journal viewer is ours |
+| egui-phosphor | 0.14.0 | Icons | **Adopted** |
+| egui_circular_progress_bar | 2.0.0 | Ring progress | **Skip: GPL-3.0** cannot go into an MIT library. A ring is a few lines of painting anyway |
+| egui-data-table | 0.11.0 | Editable data table | Skip: non-standard licence, little use |
+| re_ui | 0.38.1 (MIT/Apache, fonts OFL) | Rerun's UI kit: list items, design tokens | Ideas only (too coupled to Rerun) |
+
+**What we learn:** egui has the primitives (painting, `Popup`, `Modal`,
+virtual scrolling, `Scene`, AccessKit) and no advanced widgets that are
+maintained. The crates that are maintained and have no model of their
+own are egui_dock, egui_table, egui_ltreeview, egui_dnd, egui_json_tree
+and egui-file-dialog. Everything about progress is ours to build.
+
+## 3. Progress and waiting: design notes
+
+### 3.1 Where progress comes from
+
+egui-pop does not run jobs. The host publishes events on its journal
+(ADR 0010), and an L1 model with no egui (`egui-pop-model::jobs`) folds
+them into job states. Proposed events, which a host may map from its
+own bus:
+
+| Event | Data |
+|---|---|
+| `job.started` | `id`, `title`, `kind` (icon role), `source`, `parent` (for a batch), `total` (optional: no total means indeterminate), `cancellable`, `pausable`, `cause` (the command that started it) |
+| `job.progress` | `id`, `done` (and a new `total` if it changed), `item` (the current item's name), `phase` (decode, process, encode, write), `buffered` (optional, MUI's buffer) |
+| `job.item_failed` | `id`, `item`, `error` (the job goes on; it counts the failures) |
+| `job.paused`, `job.resumed`, `job.cancelling` | `id` |
+| `job.finished` | `id`, `outcome` (done, failed, cancelled), `error`, `actions` (commands such as "Show in folder", "Open in lighttable") |
+
+- **The model, not the widget, holds the state.** Each widget is a view
+  of a `JobId`. The model coalesces progress per frame: a thousand
+  `job.progress` events in a frame are one repaint. It reads
+  `Host::since(seq)` after each `Waker` call and never polls the host on
+  a timer.
+- **Cancel, pause and retry are commands** (`job.cancel {id}`,
+  `job.pause`, `job.retry`) sent to the host. A command that waits for
+  its result greys out like any other, and the job shows "cancelling"
+  until the host confirms.
+- **ETA and rate are computed in the model** with an exponential moving
+  average over the `done` timestamps. They are not shown before about
+  3 s, and not while the rate is unstable ("about 2 min", not
+  "1 min 57 s"). The clock is injected, so tests can fix it.
+- **"Wait until idle"** (a Helios rule): the model answers "are there
+  running jobs, which ones", and the debug bridge gets a `jobs`
+  collector, so an agent can wait on it and see what is running.
+- A job with no events for a long time (a timeout the host declares) is
+  shown as "not responding", never as frozen at 40%.
+
+### 3.2 Determinate and indeterminate
+
+- Indeterminate while `total` is unknown; determinate as soon as it is
+  known, and **never back** to indeterminate (Carbon's rule). If the
+  total grows (the import found more files), the bar may go back, and
+  the text says why ("312 of 1,204, still scanning").
+- A real indeterminate bar: a segment travelling along the track (MUI,
+  Fluent, GTK `pulse`), not egui's pulsing fill.
+- **Tones:** running (accent), paused (muted), done (success, then
+  fades out), failed (danger, stays), done with failures (warning:
+  "340 exported, 3 failed").
+- **Sizes:** a thin line (2 px, under a panel title or at the top of the
+  viewport, as JetBrains and VS Code do), a standard bar, a bar with a
+  label and text (title, n of m, ETA).
+
+### 3.3 Where progress shows
+
+1. **In the control that started it** (Carbon `InlineLoading`, MUI
+   `loading`). A button bound to a command shows the command's running
+   state: after the delay, a small spinner replaces its icon, its width
+   does not change, and the label stays readable (a screen reader keeps
+   the name). The failure shows on the button, as menus do already.
+2. **In a row** (the queue panel, export targets, a thumbnail): a small
+   ring or a thin bar inside the row, with the state as text.
+3. **In the status bar:** one summary for all jobs ("3 jobs, 42%", with
+   a thin bar for the overall progress). A click opens the jobs centre
+   as a popover, as JetBrains does.
+4. **In a toast:** a job started by the user that takes longer than a
+   few seconds can become a toast with a bar and Cancel (VS Code's
+   Notification location). It is still the same job in the model, and
+   closing the toast does not cancel it.
+5. **On the viewport:** a delayed "working" overlay that never blocks
+   (darktable's "working..." in the centre, Mantine's `LoadingOverlay`),
+   or better a thin line along the top while the image recomputes. The
+   old image stays visible until the new one arrives.
+6. **Later, outside the window:** taskbar or dock progress (Windows
+   `ITaskbarList3`, the macOS dock, Unity's `LauncherEntry` on Linux
+   docks) and a system notification when a long job ends while the window
+   is not focused. winit offers neither, so this is platform code.
+
+### 3.4 The jobs centre
+
+A panel (dockable, like any other) and the same content in the status
+bar's popover:
+
+- **Running:** title, icon by kind, a bar (stacked for a batch), "n of m",
+  the current item, the phase, the ETA, buttons for pause, cancel and
+  "show details". A batch's children fold under it.
+- **Queued:** with the position in the queue, and reordering if the host
+  allows it.
+- **History:** finished jobs with their outcome, their duration and their
+  result actions (commands); errors stay until dismissed; "clear
+  finished". It is kept for the session, and the host may keep more.
+- **Errors per item:** "3 failed" opens the list (item, error, retry this
+  one).
+- **Filters:** by kind (export, import, render, GPU) and by source (the
+  user, an agent, a schedule). An agent's job carries its origin like any
+  other write.
+- References: JetBrains' background tasks, KDE's job tracker,
+  Lightroom's activity area, Capture One's Activities, darktable's
+  background jobs module.
+
+### 3.5 Batches: stacked progress
+
+- One bar for the batch (n of m) with **sections** for done, failed and
+  skipped (Mantine `Progress` sections, Ant's success segment). An
+  optional second, thinner bar shows the current item when items are
+  long (a 100 MP render). The text gives the current item's name.
+- Phases (decode, process, encode, write) are text, not more bars.
+  Nested bars beyond two levels confuse users.
+- Concurrency: with 4 items at once, "n of m" counts finished items, and
+  the details list the items in progress.
+
+### 3.6 Delayed spinner, minimum duration
+
+- **Show nothing before 300 ms** (configurable token,
+  `motion.progress.delay`). Most commands return before that, and a
+  flash of spinner reads as a glitch.
+- **Once shown, keep it at least 500 ms** (`motion.progress.min`), so it
+  does not flash off.
+- A **determinate bar after about 1 s** if a total is known; a modal
+  operation offers "Run in background" after about 2 s (JetBrains).
+- The delay starts from the job's or command's start time in the model,
+  not from when the widget was first drawn, so a panel opened midway
+  shows the right state at once.
+- The delay needs no timer thread: the widget asks for
+  `request_repaint_after(remaining)` once, then draws on the next frame.
+
+### 3.7 Skeletons and placeholders
+
+- **Skeleton** (grey shapes in the content's layout) for panels that fill
+  progressively: metadata, the queue panel's rows, a module's parameters
+  while its manifest loads. This follows pitfall 20 (a panel opens in
+  one frame and fills progressively).
+- **Not for thumbnails:** use what is already known (the raw's embedded
+  preview, a thumbhash, the last cached thumbnail, or a flat tile in
+  the image's average colour), then the real thumbnail. A grid of
+  shimmering tiles is noise.
+- Skeletons do not shimmer when motion is reduced, and they do not
+  shimmer in tests.
+
+### 3.8 Accessibility
+
+- Role `ProgressIndicator`, with a **numeric value and a range** (0 to
+  `total`, or 0 to 100) for a determinate bar, and **no value** for an
+  indeterminate one. egui's `ProgressBar` sets the percentage but no
+  range; our widget sets both.
+- A name: "Exporting 340 images". The value text gives "12 of 340,
+  about 2 minutes left".
+- The region being refreshed gets AccessKit's **busy** flag while a
+  skeleton or overlay stands in for it.
+- **Announcements, sparingly**, through egui-pop's announcer (polite
+  live region): when a job starts after the delay, when it finishes or
+  fails, and never for each percent. At most one progress announcement
+  every 10 s, and only on request.
+- Cancel buttons are named with the job ("Cancel export of 340
+  images"). The jobs centre is a list with keyboard navigation.
+- Colour is never the only signal: the state is in the text too
+  ("failed", "paused").
+
+### 3.9 Reduced motion and repaint cost
+
+- Reduced motion (`motion.duration` is 0): spinners become a static
+  "busy" icon (Phosphor `hourglass` or `circle-notch`) or a slow 2 Hz
+  step, indeterminate bars become a striped static track, skeletons do
+  not shimmer, and toasts do not slide.
+- An animated widget repaints the whole frame. Limit it: an animation
+  runs only while the indicator is visible and the window is focused;
+  otherwise `request_repaint_after(250 ms)`. An event-driven bar repaints
+  only when the host wakes the interface.
+
+### 3.10 Deterministic headless tests
+
+- Animations read an egui-pop **motion clock** (a service), not
+  `input.time` directly. Tests freeze it, step it, or set "no motion",
+  so snapshots are the same on every run. In a kittest harness,
+  `input.time` moves with `step_dt`, which is deterministic but couples
+  snapshots to the number of frames.
+- The delay and minimum duration use the same clock, so a test can say
+  "advance 299 ms: no spinner; 301 ms: spinner".
+- A fake host (`egui-pop-test`) publishes scripted `job.*` events: a
+  test drives a job from start to failure without threads.
+- The `jobs` debug collector lets a test or an agent assert on the
+  model, not on pixels.
+
+## 4. Prioritized list
+
+**Must** = Helios needs it soon (the shell, the lighttable, the first
+darkroom, jobs). **Useful** = next, when the surface that needs it comes.
+**Later** = a real need, but not soon. **Skip** = not worth it.
+
+"Own" = written in egui-pop on egui primitives; "wrap" = a crate behind an
+egui-pop widget bound to values and commands; "adopt" = used as it is;
+"built-in" = egui as it is, styled by tokens.
+
+### Must
+
+| Widget | What it is | Others | egui status | Helios use | Notes |
+|---|---|---|---|---|---|
+| **Progress bar** | Determinate, indeterminate (a moving segment), tones, sizes (line, bar, labelled), sections for done, failed and skipped | MUI `LinearProgress`, Mantine `Progress`, Ant `Progress`, Blueprint `ProgressBar`, Fluent `ProgressBar`, Carbon `ProgressBar`, `GtkProgressBar`, `QProgressBar` | Built-in lacks indeterminate, tones, sections, a range for AccessKit and reduced motion: **own** (about 200 lines) | Exports, imports, renders, the status bar, rows | Reads a `JobId` or a plain fraction; motion clock; tokens `progress.*` |
+| **Spinner / busy indicator** | Indeterminate, small, with a label, a delay and a minimum duration | shadcn `Spinner`, MUI `CircularProgress`, Mantine `Loader`, Ant `Spin delay`, Fluent `Spinner`, `AdwSpinner`, QML `BusyIndicator`, imspinner | Built-in has no label, no delay, no reduced motion: **own**, painting like egui's | Buttons, rows, the viewport, panels | 300 ms delay, 500 ms minimum (tokens); static under reduced motion |
+| **Jobs model and jobs centre** | Jobs folded from host events; a status bar summary, a popover, a panel and the history | JetBrains background tasks, VS Code notifications and progress, KDE job tracker, Lightroom activity area, Capture One Activities, darktable background jobs | None: **own** (model in L1, views in L3, a `jobs` debug collector) | Every background job is named, cancellable and visible (Helios rule); "wait until idle" | The centre of this survey; section 3 |
+| **Busy state of a command-bound control** | A button or row showing that its command runs, then its outcome | Carbon `InlineLoading`, MUI/Mantine/Ant `loading`, QML `DelayButton` | **Own**, on the command running state egui-pop already tracks | "Export", "Import", "Apply style" buttons | Width stable, name kept, failure on hover |
+| **Toast with progress and actions** | The existing toast with a bar, Cancel and result actions | VS Code notifications with progress, Sonner promise toasts, Blueprint toast progress, `AdwToast` | **Own** (toasts exist in Helios; move them to egui-pop) | "Export finished: Show in folder" | A view of a job; closing it does not cancel the job |
+| **Status bar items** | Declared items (text, icon, progress, a command on click) placed left or right | VS Code status bar, JetBrains widgets | **Own** (a zone with declared items) | Job summary, profile, zoom, selection count | Needed by the jobs centre |
+| **Empty state** | An icon, a sentence, an action (a command) | Blueprint `NonIdealState`, `AdwStatusPage`, Ant `Empty` and `Result`, shadcn `Empty` | **Own** (small) | Empty queue panel, empty collection, no module selected | Also covers error with Retry (the fault boundary card already exists) |
+| **Slider family** | darktable-style slider (label in the bar, soft and hard range, fine adjustment, reset, typed entry, gradient track), range slider (two handles), logarithmic | darktable bauhaus, Blueprint `MultiSlider`, MUI and Mantine range `Slider`, `GtkScale` marks, egui_double_slider | egui `Slider` has logarithmic only: **own** (Helios has the bauhaus-style one; move it to egui-pop) | All module parameters; range filters (ISO, date, focal length) | Wheel only when focused or with a modifier (pitfall 7); a gradient track for hue and temperature |
+| **Virtualized thumbnail grid** | A grid of tens of thousands of cells, selection (click, Shift, Ctrl, rubber band), keyboard, placeholders, cell overlays | `GtkGridView`, Qt `QListView` icon mode, MUI X `DataGrid` virtualization | **Own** on `ScrollArea::show_viewport` (decided) | The lighttable, the filmstrip | Placeholders, not spinners; the host fetches windows |
+| **Rating stars and colour labels** | 0 to 5 stars, reject; five colour labels, toggled | MUI and Mantine `Rating`, Ant `Rate`, Fluent `Rating`; Lightroom and darktable thumbnails | **Own** (small, bound to values) | The lighttable, the darkroom | Keys 0 to 5 and F1 to F5 come from the keymap; labels need a shape or text besides colour |
+| **Tag chip and tag input** | Chips (dismissible, selectable) and a field that adds tags with completion | Blueprint `TagInput`, Mantine `TagsInput` and `Pill`, Fluent `TagPicker`, Carbon `Tag`, Ant `Tag` | **Own**; the completion uses egui-pop's fuzzy matcher | Keywords, filters, collections | Wraps onto several lines; hierarchical tags (`place|France|Paris`) |
+| **Search field with filters** | A text field with chips for active filters, a clear button and a menu of filters | VS Code search and filter boxes, Fluent `SearchBox`, Carbon table toolbar search | **Own**, on `TextEdit` | Lighttable filters, the panel and setting search | Its keys go through the focus rules (no shortcut fired while typing) |
+| **Segmented control and toggle switch** | Mutually exclusive options in one row; an on/off switch | Mantine `SegmentedControl`, Ant `Segmented`, Blueprint `SegmentedControl`, `AdwToggleGroup`, Carbon `ContentSwitcher`; MUI and Mantine `Switch`, `AdwSwitchRow` | **Own**, on `selectable_value` and the egui demo's switch | View modes, module blend modes, settings | Role radio group for the segmented control, switch for the toggle |
+| **Tree view** | Expand and collapse, multi-select, keyboard, drag and drop, context menu, lazy children | Blueprint `Tree`, Fluent `Tree`, Carbon `TreeView`, MUI X `TreeView`, `QTreeView` | **Wrap egui_ltreeview** (check AccessKit and keys first) | Folders, collections, tag hierarchy, the graph's outline | Lazy children come from the host |
+| **Data table** | Virtualized, sortable, resizable columns, sticky header | Blueprint `Table`, MUI X `DataGrid`, Carbon `DataTable`, Fluent `DataGrid` | **Adopt egui_table** (decided) | Metadata, the queue panel, the history of jobs | Sorting and selection are values |
+| **Dock, split panes and tabs** | Dockable panels, splits, editor tabs | JetBrains tool windows, VS Code, `QDockWidget`, `AdwTabView`, shadcn `Resizable`, Ant `Splitter` | **Adopt egui_dock** (decided) | The whole shell | Drop veto worked around (see `upstream.md`) |
+| **Histogram** | Draws supplied bins (per channel, log or linear), clipping markers | Lightroom, darktable, Capture One | **Own** (decided with the viewport) | The darkroom, the import preview | Data from the host; egui-pop only draws |
+| **Node graph editor** | Nodes with headers, pins, wires, semantic zoom, stacks | imgui-node-editor, imnodes, egui-snarl | **Own** (decided), snarl as reference | The graph view | A large item; the header shows the job state of each node (states and badges above) |
+
+### Useful
+
+| Widget | What it is | Others | egui status | Helios use | Notes |
+|---|---|---|---|---|---|
+| **Skeleton** | Grey shapes standing in for content | MUI, Mantine, Ant, Fluent `Skeleton`; Carbon `SkeletonText` | **Own** (small) | Metadata and queue panels, module parameters while loading | Not for thumbnails (section 3.7); no shimmer in tests |
+| **Badge and counter** | A small count or dot on an icon, tab or node | MUI and Mantine `Badge`, Mantine `Indicator`, Fluent `CounterBadge`, the VS Code activity bar | **Own** (small) | A stack's `+3`, queue counts, the jobs count on the status bar | Never colour only |
+| **Ring progress** | A small circular determinate progress | MUI `CircularProgress`, Mantine `RingProgress`, Ant `Progress` circle, Blueprint determinate `Spinner` | **Own** (do not use the GPL crate) | Per-thumbnail export or render state, node headers | 12 to 16 px |
+| **Meter / level bar** | A value against thresholds (not progress) | `GtkLevelBar`, Mantine `Progress` sections | **Own**, sharing the bar's painting | Disk space, GPU memory, cache use | Role meter, not progress |
+| **Viewport busy overlay** | A delayed, non-blocking "working" mark over a surface | Mantine `LoadingOverlay`, Carbon `Loading`, darktable's "working..." | **Own** | The darkroom while the pipeline recomputes | Old image stays; a thin line rather than a veil |
+| **Popover, hover card, rich tooltip** | Anchored floating content, with or without interaction | Radix `Popover` and `HoverCard`, Blueprint `Popover`, Fluent `TeachingPopover` | Built-in `Popup` and tooltips; **own** layer on egui-pop's overlay stack (exists) | Pixel readout, node details, a job's details | Delay and placement tokens |
+| **Inline editable label** | Text that becomes a field on double click or F2 | Blueprint `EditableText` | **Own** (small) | Rename presets, nodes, tabs, collections | Enter commits, Escape cancels, through a command |
+| **Breadcrumbs** | A path with an overflow menu | Blueprint `Breadcrumbs`, Ant `Breadcrumb`, VS Code breadcrumbs | **Own** | Folder paths, macro nesting in the graph | Collapse in the middle when too long (Blueprint `OverflowList`) |
+| **Zoom control** | Fit, fill, 100%, steps, a typed percentage | Every image and graph editor | **Own** | Viewport, graph | "100%" is one image pixel per physical pixel (pitfall 10) |
+| **Navigator / minimap** | A small view of the whole with the visible rectangle | Lightroom navigator, darktable navigation, VS Code minimap, node editor minimaps | **Own**, on the viewport's tile source and egui `Scene` | Darkroom, graph | |
+| **Filmstrip** | A one-row strip of thumbnails | Lightroom, darktable, Capture One | **Own**, the thumbnail grid with one row | Darkroom | Shares selection with the lighttable |
+| **Curve editor** | Control points, spline, per channel, a histogram behind | darktable tone curve and rgb curve, ImGuizmo `ImCurveEdit` | **Own** (decided) | Tone and RGB curves | Each point is a value; one drag is one undo step |
+| **Colour wheels and picker** | Hue-chroma wheels with a lightness slider; a swatch picker | darktable colour balance rgb, Lightroom colour grading, Fluent `SwatchPicker`, Mantine `ColorPicker` | Built-in picker for swatches; **own** wheels (decided) | Colour grading; labels and theme work | Colour-managed display through the host's display transform |
+| **Reorderable list** | Drag to reorder with keyboard alternatives | Mantine and Ant sortable lists, egui_dnd | **Adopt egui_dnd** | Export targets, a module stack, presets | The new order goes out as a command; Alt+Up and Alt+Down as keys |
+| **Split button** | A main action and a menu of variants | `AdwSplitButton`, Fluent and Ant dropdown buttons | **Own** on egui menus | "Export" with its presets | Entries are commands |
+| **Key display** | Keys drawn as caps | shadcn and Mantine `Kbd`, Blueprint `HotkeysDialog` | **Own** (small; menus and the palette show keys already) | Menus, the palette, tips, a shortcuts sheet | Text from the keymap, never typed by hand |
+| **JSON tree** | A collapsible view of structured data | egui_json_tree | **Adopt egui_json_tree** | The debug bridge, the event journal, `inspect` output | |
+| **Virtual list (variable rows)** | A long list whose rows differ in height | `GtkListView`, egui_virtual_list | **Adopt egui_virtual_list**, or our own if it gets in the way | History stack, log, journal | |
+
+### Later
+
+| Widget | What it is | Others | egui status | Helios use |
+|---|---|---|---|---|
+| Stepper / wizard | Numbered steps of a long form | MUI `Stepper`, Ant `Steps`, Carbon `ProgressIndicator`, Blueprint `MultistepDialog` | Own, on the normalized Form dialog | Import with options, first run, export setup |
+| Date picker and range | Calendar, range of dates | MUI X date pickers, egui_extras `DatePickerButton` | Wrap egui_extras | Date filters |
+| Timeline | Images or events over time, zoomable | darktable lighttable timeline, Tracy, egui_timeline | Own | Browse by capture date; job history over time |
+| Gradient editor | Stops on a track | ImGui gradient gists, egui_colorgradient | Own | Gradient masks, theme work |
+| Guided tour, teaching popover | Steps that point at parts of the interface | Ant `Tour`, Fluent `TeachingPopover` | Own on overlays | Tips (a Helios surface) |
+| Markdown view | Rich text for help | egui_commonmark | Adopt | Help, tips, release notes |
+| Log view | Filterable log lines | egui_logger, egui_tracing | Own on the virtual list | Diagnostics |
+| Taskbar and dock progress, system notifications | Outside the window | Windows `ITaskbarList3`, the macOS dock, Unity `LauncherEntry` | Platform code (winit has none) | Long exports while the window is hidden |
+| Shortcut editor | Captures a key chord | `QKeySequenceEdit`, VS Code keybindings editor | Own, on the keymap model | Keymap settings |
+| Transform gizmo, handles | Handles on image overlays | ImGuizmo | Own, with the viewport's overlays (decided) | Crop, masks |
+
+### Skip
+
+| Widget | Why |
+|---|---|
+| Knob / dial (egui_knob, `QDial`, imgui-knobs) | Audio idiom; a slider is faster and more precise for photos |
+| Carousel, speed dial, floating action button, watermark, QR code, transfer list, cascader, statistic and countdown | Web and mobile patterns with no use here |
+| Pull to refresh, infinite scroll by pages | The host windows the data; there is no "refresh" gesture on desktop |
+| egui_circular_progress_bar | GPL-3.0, not usable in an MIT library |
+| egui-modal, catppuccin-egui, egui-aesthetix | Dead or stuck on old egui |
+| Third-party toast crates as dependencies | String queues with no commands or inspectable state (ideas only) |
+| A generic form-from-struct crate (egui-probe, egui_struct) | Forms come from value descriptors |
+
+## 5. Suggested order for progress work
+
+1. `egui-pop-model::jobs`: the job events, the fold, ETA with an injected
+   clock, a fake host in `egui-pop-test`. No egui.
+2. The motion clock service and the tokens `motion.progress.delay` and
+   `motion.progress.min`.
+3. Progress bar, spinner (delayed), ring and meter, sharing one painting
+   module; gallery page "Progress" with every state, every theme and
+   reduced motion.
+4. Busy state on command-bound buttons; status bar items with the job
+   summary.
+5. The jobs centre (popover and panel) and the toast with progress.
+6. Skeleton and empty state, used by the queue panel.
+
+Each step: AccessKit names and ranges checked by `egui-pop-test`, a
+`jobs` debug collector, snapshots per theme with motion frozen.
+
+## Sources
+
+- shadcn/ui: <https://ui.shadcn.com/docs/components>; Radix:
+  <https://www.radix-ui.com/primitives>
+- MUI: <https://mui.com/material-ui/>, MUI X: <https://mui.com/x/>
+- Mantine: <https://mantine.dev/>
+- Ant Design: <https://ant.design/components/overview>, `Spin` delay:
+  <https://ant.design/components/spin>
+- Blueprint: <https://blueprintjs.com/docs/>
+- Fluent UI v9: <https://react.fluentui.dev/>
+- Carbon: <https://carbondesignsystem.com/components/overview/>, loading
+  pattern: <https://carbondesignsystem.com/patterns/loading-pattern/>
+- libadwaita: <https://gnome.pages.gitlab.gnome.org/libadwaita/doc/main/>;
+  GTK4: <https://docs.gtk.org/gtk4/>
+- Qt: `QProgressDialog` <https://doc.qt.io/qt-6/qprogressdialog.html>,
+  Qt Quick Controls <https://doc.qt.io/qt-6/qtquickcontrols-index.html>;
+  KDE KJob: <https://api.kde.org/frameworks/kcoreaddons/html/classKJob.html>
+- Dear ImGui: <https://github.com/ocornut/imgui>, its list of extensions:
+  <https://github.com/ocornut/imgui/wiki/Useful-Extensions>
+- VS Code progress API:
+  <https://code.visualstudio.com/api/references/vscode-api#window.withProgress>;
+  UX guidelines: <https://code.visualstudio.com/api/ux-guidelines/overview>
+- JetBrains UI guidelines, progress:
+  <https://plugins.jetbrains.com/docs/intellij/progress-indicators.html>
+- Nielsen Norman Group, progress indicators:
+  <https://www.nngroup.com/articles/progress-indicators/>
+- egui 0.36.2 source (`widgets/progress_bar.rs`, `widgets/spinner.rs`):
+  <https://github.com/emilk/egui>
+- crates.io pages of each crate named in section 2.2, checked on
+  2026-10-12.
+- darktable background jobs (`src/control/progress.c`) and bauhaus
+  sliders (`src/bauhaus/bauhaus.c`): <https://github.com/darktable-org/darktable>
