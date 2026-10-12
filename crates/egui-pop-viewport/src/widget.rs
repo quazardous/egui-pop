@@ -22,8 +22,9 @@ use egui::{
 use crate::debug;
 use crate::display::{self, DisplayTarget, DisplayTransform, LinearSrgb};
 use crate::gestures::{self, DoubleClick, Gestures, WheelAction};
-use crate::hooks::{Cause, Hooks, TRACE_KEPT, TraceEntry, Verdict, ViewChange};
-use crate::source::{Side, Stats, TileSink, TileSource};
+use crate::hooks::{Cause, HandleMove, Hooks, TRACE_KEPT, TraceEntry, Verdict, ViewChange};
+use crate::overlay::{self, Handle, HandleKind, HandleState, Overlay};
+use crate::source::{Readout, Side, Stats, TileSink, TileSource};
 use crate::tiles::{self, Texture, Tiles};
 use crate::tokens::ViewportTokens;
 use crate::view::{self, Mapping, View, Zoom};
@@ -68,6 +69,36 @@ pub enum Signal {
     /// The window's display target changed (another monitor, another
     /// surface format); the viewport follows it.
     Display { target: DisplayTarget },
+    /// A handle moved: `from` is where it was when the gesture began,
+    /// `at` where it is now (image pixels). On `Cancel`, put the shape
+    /// back as it was at `Begin`.
+    Handle {
+        overlay: String,
+        handle: u32,
+        kind: HandleKind,
+        phase: Phase,
+        from: [f64; 2],
+        at: [f64; 2],
+    },
+    /// A double click on a handle: reset what it adjusts.
+    HandleReset {
+        overlay: String,
+        handle: u32,
+        kind: HandleKind,
+    },
+    /// The wheel over a handle (points, positive up): adjust what the
+    /// handle adjusts, never the zoom.
+    HandleWheel {
+        overlay: String,
+        handle: u32,
+        kind: HandleKind,
+        delta: f32,
+    },
+    /// The comparison changed: the split moved, the "before" shown or
+    /// hidden.
+    Compare { compare: Compare, phase: Phase },
+    /// The source's values under the pointer arrived.
+    Readout(Readout),
     /// Tiles moved this frame: asked for, arrived, given up. `complete`
     /// when every tile wanted is on screen.
     Tiles {
@@ -76,6 +107,30 @@ pub enum Signal {
         cancelled: u64,
         complete: bool,
     },
+}
+
+/// Before and after: what the viewport shows of the "before" image.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum Compare {
+    /// The image only.
+    #[default]
+    Off,
+    /// "Before" left of the split (a fraction of the view's width),
+    /// "after" right of it; the split is dragged with its handle.
+    Split(f32),
+    /// "Before" only (a toggle, or held with the gestures' `before`
+    /// key).
+    Before,
+}
+
+/// A handle being dragged.
+#[derive(Clone, Debug)]
+struct HandleDrag {
+    overlay: String,
+    handle: Handle,
+    /// The pointer at the start, in image pixels.
+    press: [f64; 2],
+    at: [f64; 2],
 }
 
 /// What the widget keeps between frames. One per viewport; the
@@ -89,6 +144,11 @@ pub struct ViewportState {
     /// This state's GPU uniforms (0 until first drawn).
     slot: u64,
     last_counts: [u64; 3],
+    drag: Option<HandleDrag>,
+    split_drag: Option<f32>,
+    before_held: bool,
+    asked_readout: Option<(Side, [i64; 2])>,
+    signalled_readout: Option<(Side, [i64; 2])>,
     last_complete: bool,
     pan: Option<Pan>,
     /// The wheel landed on 100 % and is held there until it stops.
@@ -308,6 +368,8 @@ pub struct ViewportOutput {
     pub mapping: Option<Mapping>,
     /// The image pixel under the pointer, by the drawing's own rule.
     pub hover_pixel: Option<[i64; 2]>,
+    /// The source's values at that pixel, once they arrived.
+    pub readout: Option<Readout>,
     /// What changed this frame, in order.
     pub signals: Vec<Signal>,
 }
@@ -315,6 +377,10 @@ pub struct ViewportOutput {
 /// The viewport widget, built per frame.
 pub struct Viewport<'a> {
     source: Option<&'a dyn TileSource>,
+    before: Option<&'a dyn TileSource>,
+    compare: Compare,
+    overlays: &'a [Overlay],
+    readout: bool,
     id: Id,
     name: String,
     image_size: Option<[u32; 2]>,
@@ -388,6 +454,10 @@ impl<'a> Viewport<'a> {
     pub fn new(id_salt: impl egui::AsId) -> Viewport<'a> {
         Viewport {
             source: None,
+            before: None,
+            compare: Compare::Off,
+            overlays: &[],
+            readout: false,
             name: format!("{id_salt:?}").trim_matches('"').to_string(),
             id: Id::new(id_salt),
             image_size: None,
@@ -401,6 +471,34 @@ impl<'a> Viewport<'a> {
     /// [`Viewport::image_size`] says otherwise).
     pub fn source(mut self, source: &'a dyn TileSource) -> Viewport<'a> {
         self.source = Some(source);
+        self
+    }
+
+    /// The "before" image of a comparison (deliver to
+    /// [`ViewportState::before_sink`]).
+    pub fn before(mut self, source: &'a dyn TileSource) -> Viewport<'a> {
+        self.before = Some(source);
+        self
+    }
+
+    /// How "before" and "after" are shown (the application keeps it and
+    /// applies the `Compare` signals).
+    pub fn compare(mut self, compare: Compare) -> Viewport<'a> {
+        self.compare = compare;
+        self
+    }
+
+    /// Overlays in image coordinates, drawn over the image, their
+    /// handles dragged through `Handle` signals.
+    pub fn overlays(mut self, overlays: &'a [Overlay]) -> Viewport<'a> {
+        self.overlays = overlays;
+        self
+    }
+
+    /// Shows the source's values under the pointer in a corner (they
+    /// are in the output and signalled either way).
+    pub fn readout(mut self, on: bool) -> Viewport<'a> {
+        self.readout = on;
         self
     }
 
@@ -460,6 +558,7 @@ impl<'a> Viewport<'a> {
                 response,
                 mapping: None,
                 hover_pixel: None,
+                readout: None,
                 signals,
             };
         };
@@ -475,9 +574,17 @@ impl<'a> Viewport<'a> {
             f.change(to, Cause::Command, Phase::Once);
         }
         let pan_key = response.hovered() && ui.input(|i| i.key_down(g.pan_key));
-        handle_pan(ui, &response, &g, pan_key, &mut f);
-        handle_double_click(&response, &g, &mut f);
-        handle_wheel(ui, &response, &g, &mut f);
+        let compare = handle_compare(ui, &response, &g, self.compare, &mut f);
+        let captured = handle_overlays(ui, &response, &g, pan_key, self.overlays, compare, &mut f);
+        if !captured.drag {
+            handle_pan(ui, &response, &g, pan_key, &mut f);
+        }
+        if !captured.double_click {
+            handle_double_click(&response, &g, &mut f);
+        }
+        if !captured.wheel {
+            handle_wheel(ui, &response, &g, &mut f);
+        }
         handle_keys(ui, &response, &g, &mut f);
         if response.clicked() || response.drag_started() {
             response.request_focus();
@@ -494,11 +601,13 @@ impl<'a> Viewport<'a> {
         let image_rect = mapping.image_rect_to_screen([0.0, 0.0, image[0], image[1]]);
         let painter = ui.painter_at(rect);
         painter.rect_filled(image_rect, 0.0, tokens.backdrop);
+        let split_x = split_x(&mapping, compare);
         draw_tiles(
             ui,
             &painter,
             state,
-            self.source,
+            [self.source, self.before],
+            split_x,
             &mapping,
             &target,
             target_changed,
@@ -513,6 +622,35 @@ impl<'a> Viewport<'a> {
             Stroke::new(1.0 / ppp, tokens.frame),
             StrokeKind::Outside,
         );
+        for o in self.overlays {
+            overlay::paint_shape(&painter, &mapping, o, &tokens);
+        }
+        let hovered_handle = response
+            .hover_pos()
+            .filter(|_| state.drag.is_none())
+            .and_then(|p| overlay::hit(self.overlays, &mapping, p));
+        for o in self.overlays {
+            for h in &o.handles {
+                let active = state
+                    .drag
+                    .as_ref()
+                    .is_some_and(|d| d.overlay == o.id && d.handle.index == h.index);
+                let hover = hovered_handle
+                    .as_ref()
+                    .is_some_and(|(i, hh)| self.overlays[*i].id == o.id && hh.index == h.index);
+                let st = if active {
+                    HandleState::Active
+                } else if hover {
+                    HandleState::Hover
+                } else {
+                    HandleState::Rest
+                };
+                overlay::paint_handle(&painter, mapping.image_to_screen(h.at), h.kind, st, &tokens);
+            }
+        }
+        if let Some(x) = split_x {
+            draw_divider(&painter, rect, x, state.split_drag.is_some(), &tokens);
+        }
         if let Some(after) = state.hooks.after_paint.as_mut() {
             after(&painter, &mapping);
         }
@@ -527,6 +665,20 @@ impl<'a> Viewport<'a> {
         }
 
         let hover_pixel = response.hover_pos().and_then(|p| mapping.pixel_at(p));
+        let readout = handle_readout(
+            &response,
+            state,
+            hover_pixel,
+            split_x,
+            compare,
+            [self.source, self.before],
+            &mut signals,
+        );
+        if self.readout
+            && let Some(r) = &readout
+        {
+            draw_readout(ui, &painter, rect, state, r);
+        }
         name(&response, &self.label, Some(mapping.zoom));
         state.last_mapping = Some(mapping);
         debug::publish(ui.ctx(), &self.name, state, view, &mapping, &signals);
@@ -534,6 +686,7 @@ impl<'a> Viewport<'a> {
             response,
             mapping: Some(mapping),
             hover_pixel,
+            readout,
             signals,
         }
     }
@@ -716,15 +869,24 @@ pub fn zoom_percent(view: &View, mapping: Option<&Mapping>) -> f64 {
     }
 }
 
-/// Takes in what the source sent, asks for what is missing, draws the
-/// tiles (proxy, then exact), evicts past the budget, and signals what
-/// moved.
+/// Where the split falls on screen (points), when splitting.
+fn split_x(m: &Mapping, compare: Compare) -> Option<f32> {
+    match compare {
+        Compare::Split(t) => Some(m.rect.left() + m.rect.width() * t.clamp(0.0, 1.0)),
+        _ => None,
+    }
+}
+
+/// Takes in what the sources sent, asks for what is missing, draws the
+/// tiles (proxy, then exact) of each side shown, evicts past the budget,
+/// and signals what moved.
 #[allow(clippy::too_many_arguments)]
 fn draw_tiles(
     ui: &Ui,
     painter: &egui::Painter,
     state: &mut ViewportState,
-    source: Option<&dyn TileSource>,
+    sources: [Option<&dyn TileSource>; 2],
+    split_x: Option<f32>,
     mapping: &Mapping,
     target: &DisplayTarget,
     target_changed: bool,
@@ -737,32 +899,55 @@ fn draw_tiles(
         state.tiles.rebake();
     }
     if state.slot == 0 {
-        state.slot = NEXT_SLOT.fetch_add(1, Ordering::Relaxed);
+        state.slot = NEXT_SLOT.fetch_add(2, Ordering::Relaxed);
     }
     let device = tiles::device(ctx);
     state.tiles.receive(ctx, device, target, transform.as_ref());
-    let mut gpu: Vec<(u64, [f32; 4], [u32; 2])> = Vec::new();
-    if let Some(source) = source {
-        let settled = state.tiles.note_view(mapping, state.now);
-        if let Some(left) = state.tiles.settles_in(state.now) {
-            ctx.request_repaint_after(Duration::from_secs_f64(left));
+    let settled = state.tiles.note_view(mapping, state.now);
+    if let Some(left) = state.tiles.settles_in(state.now) {
+        ctx.request_repaint_after(Duration::from_secs_f64(left));
+    }
+    let [after, before] = sources;
+    let showing_before = state.before_held;
+    let rect = mapping.rect;
+    let mut sides: Vec<(Side, &dyn TileSource, Rect, u64)> = Vec::new();
+    match (before, split_x, showing_before) {
+        (Some(b), _, true) => sides.push((Side::Before, b, rect, state.slot + 1)),
+        (Some(b), Some(x), false) => {
+            if let Some(a) = after {
+                sides.push((
+                    Side::After,
+                    a,
+                    Rect::from_min_max(pos2(x, rect.top()), rect.max),
+                    state.slot,
+                ));
+            }
+            sides.push((
+                Side::Before,
+                b,
+                Rect::from_min_max(rect.min, pos2(x, rect.bottom())),
+                state.slot + 1,
+            ));
         }
-        let ppp = mapping.ppp;
-        for d in state.tiles.frame(Side::After, source, mapping, settled) {
+        _ => {
+            if let Some(a) = after {
+                sides.push((Side::After, a, rect, state.slot));
+            }
+        }
+    }
+    for (side, source, clip, slot) in sides {
+        let painter = painter.with_clip_rect(clip.intersect(painter.clip_rect()));
+        let mut gpu: Vec<(u64, [f32; 4], [u32; 2])> = Vec::new();
+        let ppp = f64::from(mapping.ppp);
+        for d in state.tiles.frame(side, source, mapping, settled) {
             let r = d.dst_px;
             match d.texture {
                 Texture::Egui(handle) => {
                     painter.image(
                         handle.id(),
                         Rect::from_min_max(
-                            pos2(
-                                (r[0] / f64::from(ppp)) as f32,
-                                (r[1] / f64::from(ppp)) as f32,
-                            ),
-                            pos2(
-                                (r[2] / f64::from(ppp)) as f32,
-                                (r[3] / f64::from(ppp)) as f32,
-                            ),
+                            pos2((r[0] / ppp) as f32, (r[1] / ppp) as f32),
+                            pos2((r[2] / ppp) as f32, (r[3] / ppp) as f32),
                         ),
                         Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
                         Color32::WHITE,
@@ -777,28 +962,29 @@ fn draw_tiles(
                 }
             }
         }
+        #[cfg(feature = "wgpu")]
+        if device.gpu {
+            let paint = crate::gpu::TilePaint {
+                slot,
+                queue: state.tiles.gpu.clone(),
+                draws: gpu
+                    .into_iter()
+                    .map(|(texture, dst, size)| crate::gpu::GpuDraw { texture, dst, size })
+                    .collect(),
+                stage: transform.stage(&target.effective()),
+            };
+            painter.add(egui_wgpu::Callback::new_paint_callback(rect, paint));
+        }
+        #[cfg(not(feature = "wgpu"))]
+        let _ = (gpu, slot);
     }
-    #[cfg(feature = "wgpu")]
-    if device.gpu {
-        let paint = crate::gpu::TilePaint {
-            slot: state.slot,
-            queue: state.tiles.gpu.clone(),
-            draws: gpu
-                .into_iter()
-                .map(|(texture, dst, size)| crate::gpu::GpuDraw { texture, dst, size })
-                .collect(),
-            stage: transform.stage(&target.effective()),
-        };
-        painter.add(egui_wgpu::Callback::new_paint_callback(mapping.rect, paint));
-    }
-    #[cfg(not(feature = "wgpu"))]
-    let _ = gpu;
     state.tiles.evict();
 
     let snap = state.tiles.stats.snapshot();
     let counts = [snap[0].1, snap[1].1, snap[3].1];
     let complete = state.tiles.complete();
-    if source.is_some() && (counts != state.last_counts || complete != state.last_complete) {
+    let any = after.is_some() || before.is_some();
+    if any && (counts != state.last_counts || complete != state.last_complete) {
         signals.push(Signal::Tiles {
             requested: counts[0] - state.last_counts[0],
             delivered: counts[1] - state.last_counts[1],
@@ -808,4 +994,297 @@ fn draw_tiles(
         state.last_counts = counts;
         state.last_complete = complete;
     }
+}
+
+/// What the overlays took of this frame's input.
+#[derive(Clone, Copy, Debug, Default)]
+struct Captured {
+    drag: bool,
+    double_click: bool,
+    wheel: bool,
+}
+
+/// The `before_handle` hook's answer for a handle move, traced.
+fn ask_handle(state: &mut ViewportState, mv: &HandleMove, m: &Mapping) -> Option<[f64; 2]> {
+    let Some(hook) = state.hooks.before_handle.as_mut() else {
+        return Some(mv.to);
+    };
+    match hook(mv, m) {
+        Verdict::Allow => Some(mv.to),
+        Verdict::Veto => {
+            state.record(
+                "before_handle",
+                "veto",
+                format!("{} {} to {:?}", mv.overlay, mv.handle, mv.to),
+            );
+            None
+        }
+        Verdict::Redirect(p) => {
+            state.record(
+                "before_handle",
+                "redirect",
+                format!("{} {} to {:?}, given {p:?}", mv.overlay, mv.handle, mv.to),
+            );
+            Some(p)
+        }
+    }
+}
+
+/// Handle drags (one gesture each, Escape cancels), double clicks and
+/// the wheel over a handle.
+fn handle_overlays(
+    ui: &Ui,
+    response: &Response,
+    g: &Gestures,
+    pan_key: bool,
+    overlays: &[Overlay],
+    compare: Compare,
+    f: &mut Frame<'_>,
+) -> Captured {
+    let mut captured = Captured::default();
+    let m = f.mapping;
+    // A drag on the split moves it.
+    if let Some(x) = split_x(&m, compare) {
+        let near = |p: Pos2| (p.x - x).abs() <= overlay::HIT_RADIUS;
+        if response.drag_started_by(g.pan_button)
+            && !pan_key
+            && ui.input(|i| i.pointer.press_origin()).is_some_and(near)
+        {
+            f.state.split_drag = Some(x);
+        }
+        if f.state.split_drag.is_some() {
+            captured.drag = true;
+            if let Some(p) = response.interact_pointer_pos() {
+                let t = ((p.x - m.rect.left()) / m.rect.width()).clamp(0.0, 1.0);
+                let phase = if response.drag_stopped() {
+                    Phase::End
+                } else {
+                    Phase::Update
+                };
+                f.signals.push(Signal::Compare {
+                    compare: Compare::Split(t),
+                    phase,
+                });
+            }
+            if response.drag_stopped() || !response.dragged() {
+                f.state.split_drag = None;
+            }
+        }
+    }
+    if overlays.is_empty() && f.state.drag.is_none() {
+        return captured;
+    }
+    let pointer = response.hover_pos();
+    let under = pointer.and_then(|p| overlay::hit(overlays, &m, p));
+    if response.drag_started_by(g.pan_button)
+        && !pan_key
+        && f.state.drag.is_none()
+        && let Some(origin) = ui.input(|i| i.pointer.press_origin())
+        && let Some((i, h)) = overlay::hit(overlays, &m, origin)
+    {
+        let d = HandleDrag {
+            overlay: overlays[i].id.clone(),
+            handle: h,
+            press: m.screen_to_image(origin),
+            at: h.at,
+        };
+        f.signals.push(Signal::Handle {
+            overlay: d.overlay.clone(),
+            handle: h.index,
+            kind: h.kind,
+            phase: Phase::Begin,
+            from: h.at,
+            at: h.at,
+        });
+        f.state.drag = Some(d);
+    }
+    if let Some(mut d) = f.state.drag.clone() {
+        captured.drag = true;
+        let signal = |phase, at| Signal::Handle {
+            overlay: d.overlay.clone(),
+            handle: d.handle.index,
+            kind: d.handle.kind,
+            phase,
+            from: d.handle.at,
+            at,
+        };
+        if ui.input(|i| i.key_pressed(g.cancel)) {
+            f.signals.push(signal(Phase::Cancel, d.handle.at));
+            f.state.drag = None;
+            return captured;
+        }
+        if let Some(p) = response.interact_pointer_pos()
+            && response.drag_delta() != Vec2::ZERO
+        {
+            let now = m.screen_to_image(p);
+            let to = [
+                d.handle.at[0] + now[0] - d.press[0],
+                d.handle.at[1] + now[1] - d.press[1],
+            ];
+            let mv = HandleMove {
+                overlay: d.overlay.clone(),
+                handle: d.handle.index,
+                kind: d.handle.kind,
+                from: d.at,
+                to,
+            };
+            if let Some(at) = ask_handle(f.state, &mv, &m) {
+                d.at = at;
+                f.signals.push(signal(Phase::Update, at));
+            }
+        }
+        if response.drag_stopped() || !response.dragged() {
+            f.signals.push(signal(Phase::End, d.at));
+            f.state.drag = None;
+        } else {
+            f.state.drag = Some(d);
+        }
+    }
+    if let Some((i, h)) = under {
+        if response.double_clicked() {
+            captured.double_click = true;
+            f.signals.push(Signal::HandleReset {
+                overlay: overlays[i].id.clone(),
+                handle: h.index,
+                kind: h.kind,
+            });
+        }
+        let scroll = ui.input(|i| i.smooth_scroll_delta.y);
+        if response.hovered() && scroll != 0.0 {
+            captured.wheel = true;
+            ui.ctx().input_mut(|i| i.smooth_scroll_delta = Vec2::ZERO);
+            f.signals.push(Signal::HandleWheel {
+                overlay: overlays[i].id.clone(),
+                handle: h.index,
+                kind: h.kind,
+                delta: scroll,
+            });
+        }
+    }
+    captured
+}
+
+/// The `before` key held shows the "before" image (a quasimode); the
+/// `before_compare` hook may veto or redirect a change. Returns the
+/// comparison to draw this frame.
+fn handle_compare(
+    ui: &Ui,
+    response: &Response,
+    g: &Gestures,
+    compare: Compare,
+    f: &mut Frame<'_>,
+) -> Compare {
+    let held = (response.hovered() || response.has_focus()) && ui.input(|i| i.key_down(g.before));
+    if held != f.state.before_held {
+        let proposed = if held { Compare::Before } else { compare };
+        let allowed = match f.state.hooks.before_compare.as_mut() {
+            None => Some(proposed),
+            Some(hook) => match hook(&compare, &proposed) {
+                Verdict::Allow => Some(proposed),
+                Verdict::Veto => None,
+                Verdict::Redirect(c) => Some(c),
+            },
+        };
+        if let Some(c) = allowed {
+            f.state.before_held = held && c == Compare::Before;
+            f.signals.push(Signal::Compare {
+                compare: c,
+                phase: if held { Phase::Begin } else { Phase::End },
+            });
+        }
+    }
+    if f.state.before_held {
+        Compare::Before
+    } else {
+        compare
+    }
+}
+
+/// Asks the source shown under the pointer for its values when the
+/// pointer moves to another pixel; gives back what arrived for it.
+fn handle_readout(
+    response: &Response,
+    state: &mut ViewportState,
+    pixel: Option<[i64; 2]>,
+    split_x: Option<f32>,
+    compare: Compare,
+    sources: [Option<&dyn TileSource>; 2],
+    signals: &mut Vec<Signal>,
+) -> Option<Readout> {
+    let pixel = pixel?;
+    let left = split_x
+        .zip(response.hover_pos())
+        .is_some_and(|(x, p)| p.x < x);
+    let side = if (compare == Compare::Before || state.before_held || left) && sources[1].is_some()
+    {
+        Side::Before
+    } else {
+        Side::After
+    };
+    let source = if side == Side::Before {
+        sources[1]
+    } else {
+        sources[0]
+    }?;
+    if state.asked_readout != Some((side, pixel)) {
+        state.asked_readout = Some((side, pixel));
+        source.readout(pixel);
+    }
+    let r = state
+        .tiles
+        .readout
+        .clone()
+        .filter(|r| r.side == side && r.pixel == pixel)?;
+    if state.signalled_readout != Some((side, pixel)) {
+        state.signalled_readout = Some((side, pixel));
+        signals.push(Signal::Readout(r.clone()));
+    }
+    Some(r)
+}
+
+/// The readout's text: the `on_readout` hook's, or the pixel and its
+/// values.
+pub fn readout_text(r: &Readout) -> String {
+    let mut s = format!("{}, {}", r.pixel[0], r.pixel[1]);
+    for (name, v) in &r.values {
+        s.push_str(&format!("  {name} {v:.3}"));
+    }
+    s
+}
+
+fn draw_readout(
+    ui: &Ui,
+    painter: &egui::Painter,
+    rect: Rect,
+    state: &mut ViewportState,
+    r: &Readout,
+) {
+    let text = match state.hooks.on_readout.as_mut() {
+        Some(hook) => hook(r),
+        None => readout_text(r),
+    };
+    let t = egui_pop_core::theme::Tokens::of(ui.ctx());
+    let font = egui::FontId::monospace(t.font.small);
+    let galley = painter.layout_no_wrap(text, font, t.text.default);
+    let pad = t.space.xs;
+    let at = pos2(
+        rect.left() + t.space.s,
+        rect.bottom() - t.space.s - galley.size().y - 2.0 * pad,
+    );
+    let bg = Rect::from_min_size(at, galley.size() + Vec2::splat(2.0 * pad));
+    painter.rect_filled(bg, t.radius.widget, t.surface.overlay);
+    painter.galley(at + Vec2::splat(pad), galley, t.text.default);
+}
+
+fn draw_divider(painter: &egui::Painter, rect: Rect, x: f32, active: bool, t: &ViewportTokens) {
+    let top = pos2(x, rect.top());
+    let bottom = pos2(x, rect.bottom());
+    painter.line_segment([top, bottom], Stroke::new(3.0, t.handle_outline));
+    painter.line_segment([top, bottom], Stroke::new(1.5, t.guide));
+    let st = if active {
+        HandleState::Active
+    } else {
+        HandleState::Rest
+    };
+    overlay::paint_handle(painter, pos2(x, rect.center().y), HandleKind::Edge, st, t);
 }

@@ -86,6 +86,21 @@ egui minor.
   Viewport page; `egui_pop_test::viewport::TestSource` (feature
   `viewport`) serves tests without threads or sleeps. Tests check that
   at 100 % every physical pixel shows its image pixel, on both paths.
+- Viewport: overlays in image coordinates with one handle kit
+  (`overlay::Overlay`, `Shape`: point, line, box, circle, path; handles
+  move, point, corner, edge, size, rotate, feather, drawn small with a
+  24-point hit target). A drag on a handle is one gesture (`Handle`
+  signals: begin, update, end, or cancel on Escape) and never pans;
+  Space-drag still pans over a handle; a double click on a handle asks
+  for its reset and the wheel over it adjusts it, never the zoom; the
+  `before_handle` hook vetoes or snaps a move; `Overlay::apply` follows
+  the signals for the standard shapes. Before and after
+  (`Viewport::before`, `Compare::Split` with a draggable divider,
+  `Compare::Before`, and the gestures' `before` key held as a
+  quasimode, through the `before_compare` hook). A pixel readout fed by
+  the source (`TileSource::readout`, answered through the sink, in the
+  output and as a `Readout` signal, drawn in a corner with
+  `Viewport::readout`, its text replaceable with the `on_readout` hook).
 - Twelve editor-inspired built-in themes (`github-light`, `github-dark`,
   `github-light-high-contrast`, `github-dark-high-contrast`,
   `catppuccin-latte`, `catppuccin-mocha`, `one-light`, `one-dark-pro`,

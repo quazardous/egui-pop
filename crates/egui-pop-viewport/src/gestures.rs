@@ -63,6 +63,8 @@ pub struct Gestures {
     pub double: Key,
     /// Held with the arrows: pan ten times further.
     pub coarse: Modifiers,
+    /// Held: shows the "before" image (a quasimode).
+    pub before: Key,
 }
 
 impl Default for Gestures {
@@ -81,6 +83,7 @@ impl Default for Gestures {
             actual: Key::Num1,
             double: Key::Num2,
             coarse: Modifiers::SHIFT,
+            before: Key::Backslash,
         }
     }
 }

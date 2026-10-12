@@ -16,6 +16,7 @@
 //! - `gpu` (feature `wgpu`): scene tiles as half-float textures, the
 //!   display transform in a shader;
 //! - [`demo`]: a procedural source for galleries and examples;
+//! - [`overlay`]: overlays in image coordinates and the handle kit;
 //! - [`hooks`]: the application's way into each step (veto, redirect,
 //!   replace, extend), traced;
 //! - [`debug`]: the `viewport` collector of the debug bridge;
@@ -44,6 +45,7 @@ pub mod gestures;
 #[cfg(feature = "wgpu")]
 pub mod gpu;
 pub mod hooks;
+pub mod overlay;
 pub mod source;
 pub mod tiles;
 pub mod tokens;
@@ -52,4 +54,4 @@ pub mod widget;
 
 pub use hooks::{Cause, Hooks, Verdict, ViewChange};
 pub use view::{Mapping, View, Zoom};
-pub use widget::{Phase, Signal, Viewport, ViewportOutput, ViewportState};
+pub use widget::{Compare, Phase, Signal, Viewport, ViewportOutput, ViewportState};

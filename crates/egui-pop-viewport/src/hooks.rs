@@ -20,7 +20,10 @@ use std::fmt;
 
 use egui::{Painter, Pos2};
 
+use crate::overlay::HandleKind;
+use crate::source::Readout;
 use crate::view::{Mapping, View};
+use crate::widget::Compare;
 
 /// What a *before* hook decides.
 #[derive(Clone, Debug, PartialEq)]
@@ -66,6 +69,21 @@ pub struct ViewChange {
     pub cause: Cause,
 }
 
+/// A handle move the widget proposes.
+#[derive(Clone, Debug, PartialEq)]
+pub struct HandleMove {
+    pub overlay: String,
+    pub handle: u32,
+    pub kind: HandleKind,
+    /// Where the handle is now (image pixels).
+    pub from: [f64; 2],
+    /// Where the pointer would put it.
+    pub to: [f64; 2],
+}
+
+type BeforeHandle = Box<dyn FnMut(&HandleMove, &Mapping) -> Verdict<[f64; 2]>>;
+type BeforeCompare = Box<dyn FnMut(&Compare, &Compare) -> Verdict<Compare>>;
+type OnReadout = Box<dyn FnMut(&Readout) -> String>;
 type BeforeView = Box<dyn FnMut(&ViewChange, &Mapping) -> Verdict<View>>;
 type RunDoubleClick =
     Box<dyn FnMut(Pos2, &Mapping, &mut dyn FnMut() -> Option<View>) -> Option<View>>;
@@ -84,6 +102,14 @@ pub struct Hooks {
     /// mapping and the default action (call it to get its view); returns
     /// the view to show, or `None` for no change.
     pub on_double_click: Option<RunDoubleClick>,
+    /// Before a handle moves: allow, veto (it stays) or redirect (snap
+    /// it to a grid, keep it inside the image).
+    pub before_handle: Option<BeforeHandle>,
+    /// Before the comparison changes (the current one, the proposed
+    /// one): allow, veto or redirect.
+    pub before_compare: Option<BeforeCompare>,
+    /// Replaces the readout's text.
+    pub on_readout: Option<OnReadout>,
     /// After the image and overlays are drawn: draw more, in image
     /// coordinates through the mapping.
     pub after_paint: Option<AfterPaint>,
@@ -94,6 +120,9 @@ impl fmt::Debug for Hooks {
         f.debug_struct("Hooks")
             .field("before_view", &self.before_view.is_some())
             .field("on_double_click", &self.on_double_click.is_some())
+            .field("before_handle", &self.before_handle.is_some())
+            .field("before_compare", &self.before_compare.is_some())
+            .field("on_readout", &self.on_readout.is_some())
             .field("after_paint", &self.after_paint.is_some())
             .finish()
     }
@@ -108,6 +137,15 @@ impl Hooks {
         }
         if self.on_double_click.is_some() {
             v.push("on_double_click");
+        }
+        if self.before_handle.is_some() {
+            v.push("before_handle");
+        }
+        if self.before_compare.is_some() {
+            v.push("before_compare");
+        }
+        if self.on_readout.is_some() {
+            v.push("on_readout");
         }
         if self.after_paint.is_some() {
             v.push("after_paint");

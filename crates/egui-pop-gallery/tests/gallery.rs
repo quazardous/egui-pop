@@ -385,7 +385,16 @@ fn the_viewport_page_zooms_through_commands_and_reports_signals() {
         h.query_by_label_contains("Display target: Srgb primaries")
             .is_some()
     );
+    // Fit, split before and after: the snapshot shows both, the
+    // overlays and their handles.
+    h.get_by_label("Fit").click();
+    h.get_by_label("Split").click();
     settle_viewport(&mut h);
+    let snap = h.state().app.handle().debug_snapshot();
+    assert_eq!(
+        snap["viewport"]["viewports"]["gallery"]["tiles"]["complete"],
+        true
+    );
     h.snapshot("viewport-pop-dark");
 }
 

@@ -55,6 +55,47 @@ pub fn signal_json(signal: &Signal) -> Json {
             "cause": cause.name(),
             "view": view_json(view),
         }),
+        Signal::Handle {
+            overlay,
+            handle,
+            kind,
+            phase,
+            from,
+            at,
+        } => json!({
+            "signal": "handle",
+            "overlay": overlay,
+            "handle": handle,
+            "kind": kind.name(),
+            "phase": phase.name(),
+            "from": from,
+            "at": at,
+        }),
+        Signal::HandleReset {
+            overlay,
+            handle,
+            kind,
+        } => {
+            json!({ "signal": "handle-reset", "overlay": overlay, "handle": handle, "kind": kind.name() })
+        }
+        Signal::HandleWheel {
+            overlay,
+            handle,
+            kind,
+            delta,
+        } => {
+            json!({ "signal": "handle-wheel", "overlay": overlay, "handle": handle, "kind": kind.name(), "delta": delta })
+        }
+        Signal::Compare { compare, phase } => json!({
+            "signal": "compare",
+            "compare": format!("{compare:?}"),
+            "phase": phase.name(),
+        }),
+        Signal::Readout(r) => json!({
+            "signal": "readout",
+            "pixel": r.pixel,
+            "values": r.values.iter().map(|(k, v)| json!([k, v])).collect::<Vec<_>>(),
+        }),
         Signal::Tiles {
             requested,
             delivered,

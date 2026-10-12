@@ -251,6 +251,7 @@ impl Tiles {
         transform: &dyn DisplayTransform,
     ) {
         self.frame += 1;
+        self.missing = 0;
         self.feed.set_context(ctx);
         let effective = self.wanted_size.min(device.max_texture_side).max(16);
         if effective != self.tile_size {
@@ -579,7 +580,7 @@ impl Tiles {
             Stats::add(&self.stats.requested, batch.len() as u64);
             source.request(batch);
         }
-        self.missing = exact_keys
+        self.missing += exact_keys
             .iter()
             .filter(|k| self.entries.get(&(side, **k)).is_none_or(|e| e.stale))
             .count()

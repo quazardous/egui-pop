@@ -13,8 +13,9 @@ use egui_pop::core::debug::FnCollector;
 use egui_pop::model::ids::{PluginId, StoryId};
 use egui_pop::viewport::demo::Procedural;
 use egui_pop::viewport::hooks::Verdict;
+use egui_pop::viewport::overlay::{Overlay, Shape};
 use egui_pop::viewport::view::Zoom;
-use egui_pop::viewport::{Signal, View, Viewport, ViewportState};
+use egui_pop::viewport::{Compare, Phase, Signal, View, Viewport, ViewportState};
 use serde_json::json;
 
 use super::section;
@@ -32,12 +33,33 @@ pub struct PageState {
     pub view: View,
     pub state: ViewportState,
     pub source: Option<Procedural>,
+    /// The "before" of the comparison: the image as it was (no shift).
+    pub before: Option<Procedural>,
+    pub compare: Compare,
+    pub overlays: Vec<Overlay>,
+    /// The shapes when the current handle gesture began.
+    pub starts: Vec<Shape>,
     pub log: Vec<String>,
     pub hover: Option<[i64; 2]>,
     /// The playground's "at most 800 %" hook.
     pub clamp: bool,
     /// The playground's hue shift.
     pub shift: f32,
+}
+
+/// The page's overlays: a crop box, a circle, a guide.
+pub fn overlays() -> Vec<Overlay> {
+    vec![
+        Overlay::new("crop", Shape::Rect([900.0, 700.0, 3200.0, 2400.0])).label("Crop"),
+        Overlay::new(
+            "spot",
+            Shape::Circle {
+                center: [2048.0, 1536.0],
+                radius: 300.0,
+            },
+        ),
+        Overlay::guide("horizon", Shape::Line([0.0, 1536.0], [4096.0, 1536.0])),
+    ]
 }
 
 impl PageState {
@@ -47,8 +69,20 @@ impl PageState {
         // Worker threads natively; computed on the interface thread on
         // the web, which has none.
         let workers = if cfg!(target_arch = "wasm32") { 0 } else { 2 };
-        self.source
-            .get_or_insert_with(|| Procedural::new(sink, IMAGE, workers))
+        if self.before.is_none() {
+            self.before = Some(Procedural::new(self.state.before_sink(), IMAGE, workers));
+        }
+        if self.overlays.is_empty() {
+            self.overlays = overlays();
+        }
+        if self.source.is_none() {
+            // "After": the hues moved, so the split shows a difference.
+            self.shift = 0.25;
+            let s = Procedural::new(sink, IMAGE, workers);
+            s.set_shift(self.shift);
+            self.source = Some(s);
+        }
+        self.source.as_ref().expect("made above")
     }
 }
 
@@ -113,7 +147,7 @@ impl Plugin for ViewportPage {
 
 /// The page, a plain function over its state.
 pub fn show(ui: &mut Ui, page: &mut PageState) {
-    ui.label("Drag or Space-drag to pan (Escape puts the view back), the wheel zooms around the pointer and stops at 100 %, a double click fits; when focused: + and - walk the ladder, 0 fits, 1 is 100 %, 2 is 200 %, the arrows pan.");
+    ui.label("Drag a handle to edit a shape (Escape puts it back), drag or Space-drag to pan (Escape puts the view back), the wheel zooms around the pointer and stops at 100 %, a double click fits; when focused: + and - walk the ladder, 0 fits, 1 is 100 %, 2 is 200 %, the arrows pan.");
     ui.horizontal(|ui| {
         if ui.button("Fit").clicked() {
             page.state.propose(&mut page.view, View::fit());
@@ -144,13 +178,41 @@ pub fn show(ui: &mut Ui, page: &mut PageState) {
         view,
         state,
         source,
+        before,
+        compare,
+        overlays,
         ..
     } = page;
-    let mut vp = Viewport::new("gallery").size(vec2(ui.available_width(), height));
+    let mut vp = Viewport::new("gallery")
+        .size(vec2(ui.available_width(), height))
+        .overlays(overlays)
+        .compare(*compare)
+        .readout(true);
     if let Some(s) = source.as_ref() {
         vp = vp.source(s);
     }
+    if let Some(b) = before.as_ref() {
+        vp = vp.before(b);
+    }
     let out = vp.show(ui, state, view);
+    for s in &out.signals {
+        match s {
+            Signal::Handle {
+                phase: Phase::Begin,
+                ..
+            } => page.starts = page.overlays.iter().map(|o| o.shape.clone()).collect(),
+            Signal::Handle { .. } => {
+                for (o, start) in page.overlays.iter_mut().zip(&page.starts) {
+                    o.apply(start, s);
+                }
+            }
+            Signal::Compare {
+                compare: Compare::Split(t),
+                ..
+            } => page.compare = Compare::Split(*t),
+            _ => {}
+        }
+    }
     page.hover = out.hover_pixel;
     for s in &out.signals {
         page.log.push(match s {
@@ -168,6 +230,20 @@ pub fn show(ui: &mut Ui, page: &mut PageState) {
                     ),
                 }
             ),
+            Signal::Handle {
+                overlay,
+                kind,
+                phase,
+                at,
+                ..
+            } => format!(
+                "{overlay} {} {}: ({:.0}, {:.0})",
+                kind.name(),
+                phase.name(),
+                at[0],
+                at[1]
+            ),
+            Signal::Readout(_) | Signal::Tiles { .. } => continue,
             other => format!("{other:?}"),
         });
     }
@@ -237,8 +313,27 @@ fn display_section(ui: &mut Ui, page: &PageState) {
     });
 }
 
-/// The playground: the source's parameter and a hook.
+/// The playground: the comparison, the source's parameter and a hook.
 pub fn playground(ui: &mut Ui, page: &mut PageState) {
+    ui.label("Before and after (hold \\ to see before)");
+    ui.horizontal(|ui| {
+        let split = matches!(page.compare, Compare::Split(_));
+        if ui
+            .selectable_label(page.compare == Compare::Off, "Off")
+            .clicked()
+        {
+            page.compare = Compare::Off;
+        }
+        if ui.selectable_label(split, "Split").clicked() && !split {
+            page.compare = Compare::Split(0.5);
+        }
+        if ui
+            .selectable_label(page.compare == Compare::Before, "Before")
+            .clicked()
+        {
+            page.compare = Compare::Before;
+        }
+    });
     let r = ui.add(egui::Slider::new(&mut page.shift, 0.0..=1.0).text("Hue shift"));
     if r.changed() {
         let shift = page.shift;
