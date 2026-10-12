@@ -90,6 +90,15 @@ egui minor.
   memory, and declares the `developer.log_level` setting, the
   `logs.reveal` command and the `logs` debug collector; `Logs::write`
   feeds lines from another logger. Guide: docs/logs.md.
+- Crash reports (`platform::crash`, feature `platform-crash`):
+  `CrashPlugin` marks the running session and installs a chained panic
+  hook writing the version, OS, thread, message, location, backtrace,
+  last log lines and journal tail; a clean exit leaves nothing. On the
+  next start a session that is gone becomes a report (its panics, or
+  that it ended without closing) offered through the `crash.report`
+  step: a before-hook adds data, an after-hook may send it, the default
+  writes it and offers it in a toast. Nothing is sent anywhere.
+  `crash.reveal`, `crash.dismiss`, the `CRASHES` service.
 
 ### Changed
 

@@ -36,6 +36,7 @@ platform = [
     "platform-tray",
     "platform-keys",
     "platform-logs",
+    "platform-crash",
 ]
 ## A single instance and deep links (`egui_pop::platform::instance`).
 platform-instance = ["dep:egui-pop-platform", "egui-pop-platform/instance"]
@@ -50,6 +51,9 @@ platform-keys = ["dep:egui-pop-platform", "egui-pop-platform/keys"]
 ## Logs to a rotating file with a level setting
 ## (`egui_pop::platform::logs`).
 platform-logs = ["dep:egui-pop-platform", "egui-pop-platform/logs"]
+## Crash reports written by a panic hook and offered on the next start
+## (`egui_pop::platform::crash`).
+platform-crash = ["dep:egui-pop-platform", "egui-pop-platform/crash"]
 
 [dependencies]
 egui.workspace = true

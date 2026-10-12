@@ -13,6 +13,8 @@
 //!   registered with the desktop (`keys.system`).
 //! - [`logs`]: logs to a rotating file in the platform's log directory,
 //!   with a level setting.
+//! - [`crash`]: crash reports written by a panic hook and offered on the
+//!   next start (`crash.report`); nothing is sent.
 //!
 //! Each service names its moments as steps (ADR 0011): a plugin may
 //! observe, veto or redirect, replace or extend them; the application's
@@ -23,6 +25,8 @@
 //! - [`dirs`]: where the application keeps its state and logs;
 //! - [`window`]: the main window brought to the front.
 
+#[cfg(feature = "crash")]
+pub mod crash;
 pub mod dirs;
 #[cfg(feature = "instance")]
 pub mod instance;
