@@ -87,5 +87,8 @@ pub use ctx::{Ctx, CtxError};
 pub use groups::{DefaultPlugins, MinimalPlugins, PluginGroup};
 pub use plugin::{BuildError, Plugin, PluginError, PluginInfo};
 
+/// eframe, with the `eframe` feature: the version `run_native` uses.
+#[cfg(feature = "eframe")]
+pub use eframe;
 pub use egui_pop_core as core;
 pub use egui_pop_model as model;

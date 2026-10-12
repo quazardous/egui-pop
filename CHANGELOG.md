@@ -9,6 +9,12 @@ egui minor.
 
 ### Added
 
+- An application template for `cargo generate` (`template/`) and the
+  `minimal` example it is made from (`cargo run -p egui-pop --example
+  minimal`): one plugin with a panel, a setting and a command over
+  `DefaultPlugins`; a test runs the example headless and keeps the
+  template identical to it. `egui_pop::eframe` re-exports the eframe
+  `run_native` uses.
 - Test kit: `harness_for(plugin)` runs a plugin in an application with
   the default plugins; `keymap_problems` and `assert_keymap_clean` find
   keys two commands claim in one scope and bindings running a command

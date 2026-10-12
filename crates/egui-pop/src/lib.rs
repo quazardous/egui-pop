@@ -31,6 +31,9 @@
 //! version egui-pop was built for (one egui-pop minor per egui minor).
 
 pub use egui;
+/// eframe (feature `eframe`): the version applications run with.
+#[cfg(feature = "eframe")]
+pub use egui_pop_api::eframe;
 /// The token parser and resolver (no egui dependency).
 pub use egui_pop_tokens as tokens;
 

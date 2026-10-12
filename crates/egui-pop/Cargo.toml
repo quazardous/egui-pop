@@ -33,3 +33,8 @@ egui-pop-api.workspace = true
 egui = { workspace = true, features = ["default_fonts"] }
 egui_kittest = { workspace = true, features = ["wgpu"] }
 serde_json.workspace = true
+egui-pop-test.workspace = true
+
+[[example]]
+name = "minimal"
+required-features = ["eframe"]

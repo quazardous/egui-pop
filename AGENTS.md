@@ -14,6 +14,7 @@
 | `crates/consumer-smoke` | Compiles the README snippets (not published). |
 | `docs/adr/` | Architecture decisions. Read them before changing a registry. |
 | `docs/tokens.md` | The token tiers and how to add a theme. |
+| `template/` | The `cargo generate` application template, identical to `crates/egui-pop/examples/minimal.rs` (a test checks it). |
 | `tools/wbox/` | Running the gallery offscreen in a nested compositor. |
 
 Principles: [CREDO.md](CREDO.md). Rules for contributions:

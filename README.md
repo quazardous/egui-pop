@@ -142,6 +142,19 @@ for them:
 
 ![the command palette](docs/screenshots/palette-pop-dark.png)
 
+## Start an application
+
+A [cargo-generate](https://github.com/cargo-generate/cargo-generate)
+template makes a new application: one plugin with a panel, a setting and
+a command, over `DefaultPlugins`.
+
+```sh
+cargo generate --git https://github.com/quazardous/egui-pop template
+```
+
+It is the `minimal` example (`cargo run -p egui-pop --example minimal`),
+kept identical to it by a test.
+
 ## Debugging
 
 Every registry describes itself to the **debug bridge**: collectors for
