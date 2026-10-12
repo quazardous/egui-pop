@@ -3,10 +3,13 @@
 egui-pop is an application framework and component library for egui:
 themable, accessible, drivable by agents, easy to debug.
 
-**Status: phase 2, the framework.** Design tokens and themes (phase 1);
+**Status: 0.1 prepared, not published.** Design tokens and themes;
 plugins that own what they register, commands declared once, layered
 keymaps resolved by focus, zones and blocks, overlays, a value store with
-undo, persistence, a debug bridge and a test kit. Components come next.
+undo, a host contract, persistence, a debug bridge and a test kit; the
+paved road's components; the workbench (the window's own frame, scale
+per window, panels in areas, strips, auxiliary windows, arrangements),
+devtools; every feature's moments reachable as steps (ADR 0011).
 
 ## Guides
 
@@ -18,9 +21,13 @@ undo, persistence, a debug bridge and a test kit. Components come next.
   accents, contrast checks, writing a theme.
 - [Plugins, commands and steps](plugins.md): what a plugin registers,
   commands and the host, zones and blocks, hooks, steps.
+- [The workbench](workbench.md): panels in areas with placement rules,
+  auxiliary windows, arrangements, strips and indicators, the window's
+  own frame, scale and the interface zoom, the keymap at run time, hooks
+  around the shell.
 - [The image viewport](viewport.md): tiles from a source the application
   implements.
-- [Debugging](debugging.md): the debug bridge.
+- [Debugging](debugging.md): the debug bridge and devtools.
 - [The gallery](gallery.md): the catalogue application and its options.
 
 ## Reference
@@ -54,6 +61,6 @@ Layers only depend downwards; a test reading `cargo metadata` keeps it so
 ## Code in these pages
 
 The Rust blocks of the README and of the getting started, themes,
-plugins, viewport and debugging pages are compiled and run as doctests
+plugins, workbench, viewport and debugging pages are compiled and run as doctests
 by `crates/consumer-smoke`, against the `egui-pop` crate only, as a user
 depends on it: `cargo test -p consumer-smoke --doc`.
