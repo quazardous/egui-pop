@@ -32,6 +32,8 @@ egui_kittest = "0.36"
 # MIT OR Apache-2.0 (the Phosphor icons themselves are MIT).
 egui-phosphor = { version = "0.14", default-features = false, features = ["regular"] }
 eframe = { version = "0.36", default-features = false }
+# MIT; the system's file chooser (xdg portal on Linux).
+rfd = "0.17"
 egui-pop = { version = "0.0.1", path = "crates/egui-pop" }
 
 [workspace.lints.rust]

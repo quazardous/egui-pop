@@ -51,6 +51,8 @@ pub enum CtxError {
         id: String,
         by: OwnerId,
     },
+    /// A debug bridge collector of that name exists.
+    Collector(String),
 }
 
 impl fmt::Display for CtxError {
@@ -61,6 +63,7 @@ impl fmt::Display for CtxError {
             CtxError::Menu(e) | CtxError::Panel(e) => write!(f, "{e}"),
             CtxError::Zone { zone, by } => write!(f, "zone `{zone}` is already declared by `{by}`"),
             CtxError::Setting(e) => write!(f, "{e}"),
+            CtxError::Collector(e) => write!(f, "{e}"),
             CtxError::Service { id, by } => {
                 write!(f, "service `{id}` is already provided by `{by}`")
             }
@@ -315,6 +318,15 @@ impl<'a> Ctx<'a> {
                     by: t.by,
                 })
             })?;
+        Ok(self)
+    }
+
+    /// Adds a collector to the debug bridge (removed with the plugin).
+    pub fn collector(
+        &mut self,
+        collector: egui_pop_core::debug::FnCollector,
+    ) -> Result<&mut Self, CtxError> {
+        self.app.add_collector(&self.owner, collector)?;
         Ok(self)
     }
 

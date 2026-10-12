@@ -254,3 +254,25 @@ fn menu_snapshots() {
         results.add(h.try_snapshot(format!("menus-{theme}")));
     }
 }
+
+#[test]
+fn dialogs_open_from_the_page_and_send_what_they_ran() {
+    let mut results = egui_kittest::SnapshotResults::new();
+    for theme in ["pop-dark", "pop-light"] {
+        let mut h = harness(options(theme, Density::Comfortable, "dialogs"));
+        h.run();
+        h.get_by_label("Export settings").click();
+        h.run();
+        egui_pop_test::assert_all_named(&h);
+        results.add(h.try_snapshot(format!("dialogs-{theme}")));
+        h.key_press(egui::Key::Escape);
+        h.run();
+        h.get_by_label("Delete three images").click();
+        h.run();
+        assert!(h.get_by_label("Cancel").is_focused());
+        h.get_by_label("Delete 3 images").click();
+        h.run();
+        h.run();
+        assert_eq!(context_key(&h, "galleryDialogSent"), r#"{"what":"delete"}"#);
+    }
+}

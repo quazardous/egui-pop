@@ -168,8 +168,8 @@ cargo run -p egui-pop-gallery -- --theme pop-light --page zones
 cargo run -p egui-pop-gallery -- --help
 ```
 
-Pages: theme overview, tokens, egui's built-ins, zones and blocks,
-settings, the debug bridge. It also builds for the web
+Pages: theme overview, tokens, egui's built-ins, icons, menus, dialogs,
+zones and blocks, settings, the debug bridge. It also builds for the web
 (`wasm32-unknown-unknown`, with Trunk from `crates/egui-pop-gallery`), and
 runs offscreen in a nested compositor for scripted runs
 ([tools/wbox](tools/wbox)).

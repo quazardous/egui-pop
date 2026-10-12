@@ -212,6 +212,8 @@ pub(crate) struct Shared {
     held: RefCell<Vec<Held>>,
     /// Commands whose result is to come, by id: how many.
     running: RefCell<BTreeMap<CommandId, usize>>,
+    /// Collectors added by plugins.
+    collectors: RefCell<Vec<(OwnerId, String)>>,
 }
 
 /// The application at run time, cheap to clone: blocks, panels, stories
@@ -249,6 +251,7 @@ impl AppHandle {
             host: RefCell::new(Some(host)),
             held: RefCell::new(Vec::new()),
             running: RefCell::new(BTreeMap::new()),
+            collectors: RefCell::new(Vec::new()),
         }))
     }
 
@@ -334,6 +337,17 @@ impl AppHandle {
             .borrow()
             .as_ref()
             .map_or(0, |h| h.journal().last())
+    }
+
+    pub(crate) fn add_collector(&self, owner: &OwnerId, c: FnCollector) -> Result<(), CtxError> {
+        let name = egui_pop_core::debug::Collector::name(&c).to_string();
+        self.0
+            .bridge
+            .borrow_mut()
+            .register(c)
+            .map_err(CtxError::Collector)?;
+        self.0.collectors.borrow_mut().push((owner.clone(), name));
+        Ok(())
     }
 
     /// Whether a run of this command waits for its result.
@@ -1356,6 +1370,12 @@ impl App {
         h.services.borrow_mut().remove_owner(owner);
         lock(&h.store).remove_owner(owner);
         h.diagnostics.borrow_mut().remove_owner(owner);
+        h.collectors.borrow_mut().retain(|(o, name)| {
+            if o == owner {
+                h.bridge.borrow_mut().unregister(name);
+            }
+            o != owner
+        });
         self.dirty = true;
     }
 

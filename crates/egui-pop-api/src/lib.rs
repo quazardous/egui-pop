@@ -18,6 +18,7 @@
 //! - [`services`]: typed service tokens;
 //! - [`stories`]: gallery stories as a contribution;
 //! - [`palette`]: the command palette, a plugin;
+//! - [`dialogs`]: confirmations, forms, choices and notices, a plugin;
 //! - [`DefaultPlugins`] and [`MinimalPlugins`]: plugin groups for
 //!   [`AppBuilder::plugins`];
 //! - [`AppBuilder`] and [`App`]: sorting, connecting, the shell (menu
@@ -59,6 +60,7 @@
 
 pub mod app;
 pub mod ctx;
+pub mod dialogs;
 mod groups;
 pub mod hooks;
 pub mod host;

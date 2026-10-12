@@ -200,6 +200,13 @@ impl DebugBridge {
         Ok(())
     }
 
+    /// Removes a collector; whether there was one.
+    pub fn unregister(&mut self, name: &str) -> bool {
+        let before = self.collectors.len();
+        self.collectors.retain(|c| c.name() != name);
+        self.collectors.len() != before
+    }
+
     pub fn names(&self) -> Vec<String> {
         self.collectors
             .iter()

@@ -1,6 +1,7 @@
 //! Plugin groups: what an application starts from.
 
 use crate::Plugin;
+use crate::dialogs::DialogsPlugin;
 use crate::palette::PalettePlugin;
 
 /// Plugins added together (`AppBuilder::plugins`).
@@ -26,6 +27,6 @@ pub struct DefaultPlugins;
 
 impl PluginGroup for DefaultPlugins {
     fn plugins(self) -> Vec<Box<dyn Plugin>> {
-        vec![Box::new(PalettePlugin)]
+        vec![Box::new(PalettePlugin), Box::new(DialogsPlugin)]
     }
 }

@@ -9,6 +9,18 @@ egui minor.
 
 ### Added
 
+- Dialogs as a plugin (`egui_pop_api::dialogs::DialogsPlugin`, in
+  `DefaultPlugins`): `Confirm` (named by its verb; `danger` styles it,
+  starts the focus on Cancel and keeps Enter from accepting), `Form`
+  (fields from value descriptors), `Choose` and `Info`, queued and shown
+  one at a time on egui's `Modal`. Accepting runs the dialog's command
+  with its arguments, the form's values or the choice merged in. A path
+  field has a Browse button: the system's chooser with the
+  `native-dialogs` feature (rfd), else an in-app picker of folders and
+  accepted files. The `dialogs` collector of the debug bridge shows the
+  open dialog and answers it as an agent; answers go to the journal.
+  `Ctx::collector` adds a plugin's own collector, removed with it. A
+  gallery page opens each kind.
 - A host contract (`egui_pop_api::host`, ADR 0010): the application's
   kernel runs the commands (`Host::dispatch`, a result now or later from
   any thread), keeps an event journal (sequence, source, cause; read
