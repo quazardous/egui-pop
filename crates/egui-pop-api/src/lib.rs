@@ -20,6 +20,8 @@
 //! - [`palette`]: the command palette, a plugin;
 //! - [`dialogs`]: confirmations, forms, choices and notices, a plugin;
 //! - [`toasts`]: notices in a corner, with actions, a plugin;
+//! - [`window`]: the window's place kept and repaired, full screen with
+//!   a way out, a plugin;
 //! - [`settings_window`]: the settings window (search, sections, form)
 //!   and the shortcuts editor, a plugin;
 //! - [`DefaultPlugins`] and [`MinimalPlugins`]: plugin groups for
@@ -75,6 +77,7 @@ pub mod settings;
 pub mod settings_window;
 pub mod stories;
 pub mod toasts;
+pub mod window;
 pub mod zones;
 
 pub use app::{

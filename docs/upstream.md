@@ -46,3 +46,19 @@ Reviewed at every egui bump: remove what upstream fixed, update the rest.
   put symbols in text. egui's `SubMenuButton` arrow (`⏵`) is replaced
   by a painted chevron in egui-pop's menus.
 - **Remove when**: egui-pop moves to egui 0.37.
+
+## eframe: no list of screens when a window is placed
+
+- **Compensated**: a window's place is restored before the window
+  exists, when eframe gives no list of the screens (only the current
+  monitor's size afterwards, with no origin), so a place on a screen that
+  is gone cannot be told from one on a second screen.
+- **Upstream**: related to <https://github.com/emilk/egui/issues/4073>
+  (choose the monitor at launch); a request for the screens' rectangles
+  in `ViewportInfo` is not filed yet.
+- **Workaround**: `egui_pop_api::window::WindowState::repair` takes the
+  screens when they are known (tested with sample layouts); at start-up
+  only the size is bounded and a position far away is dropped. Sizes are
+  kept under 8192 points per side, past which the surface cannot be
+  configured (<https://github.com/emilk/egui/issues/8361>).
+- **Remove when**: eframe tells the screens before the window is placed.

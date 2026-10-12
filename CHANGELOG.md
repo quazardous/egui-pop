@@ -9,6 +9,13 @@ egui minor.
 
 ### Added
 
+- The window's place as a plugin (`egui_pop_api::window::WindowPlugin`,
+  in `DefaultPlugins`): size, position, maximized and full screen kept in
+  the store (`settings/window.*`, saved with the settings, no undo step;
+  `Set::untracked`) and restored by `AppBuilder::run_native` after a
+  repair (`WindowState::repair`: back onto a screen, shrunk to it and
+  under 8192 points). Full screen (`F11`, View menu) shows a strip with
+  the title and "Exit full screen" when the pointer reaches the top edge.
 - The settings window as a plugin
   (`egui_pop_api::settings_window::SettingsPlugin`, in `DefaultPlugins`;
   `Ctrl+,` or File > Settings): a search over a list of sections on one

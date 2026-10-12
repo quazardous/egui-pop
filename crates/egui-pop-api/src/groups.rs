@@ -5,6 +5,7 @@ use crate::dialogs::DialogsPlugin;
 use crate::palette::PalettePlugin;
 use crate::settings_window::SettingsPlugin;
 use crate::toasts::ToastsPlugin;
+use crate::window::WindowPlugin;
 
 /// Plugins added together (`AppBuilder::plugins`).
 pub trait PluginGroup {
@@ -23,8 +24,8 @@ impl PluginGroup for MinimalPlugins {
 }
 
 /// What most applications want: the command palette, dialogs, toasts and
-/// the settings window with its shortcuts editor (and the next components
-/// of the paved road as they come).
+/// the settings window with its shortcuts editor, the window's place (and
+/// the next components of the paved road as they come).
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DefaultPlugins;
 
@@ -35,6 +36,7 @@ impl PluginGroup for DefaultPlugins {
             Box::new(DialogsPlugin),
             Box::new(ToastsPlugin),
             Box::new(SettingsPlugin),
+            Box::new(WindowPlugin),
         ]
     }
 }

@@ -91,6 +91,9 @@ pub struct Set {
     pub gesture: Option<GestureId>,
     /// Only if the value has not changed since this sequence number.
     pub if_seq: Option<u64>,
+    /// Not an undo step (state the application keeps for itself, such as
+    /// the window's place).
+    pub untracked: bool,
 }
 
 impl Set {
@@ -102,7 +105,14 @@ impl Set {
             force: false,
             gesture: None,
             if_seq: None,
+            untracked: false,
         }
+    }
+
+    /// Leaves no undo step.
+    pub fn untracked(mut self) -> Self {
+        self.untracked = true;
+        self
     }
 
     pub fn force(mut self) -> Self {
@@ -655,6 +665,7 @@ impl Store {
         let (old, seq) = self.write(&set.path, value.clone(), &set.origin);
         let change = (set.path.clone(), old, value.clone());
         match set.gesture.and_then(|g| self.gestures.get_mut(&g)) {
+            _ if set.untracked => {}
             Some(g) => {
                 g.paths.insert(set.path.clone());
                 g.changes.push(change);

@@ -951,9 +951,18 @@ impl AppBuilder {
 
     /// Builds and runs the application in a native window.
     #[cfg(all(feature = "eframe", not(target_arch = "wasm32")))]
-    pub fn run_native(mut self, title: &str, options: eframe::NativeOptions) -> eframe::Result {
+    pub fn run_native(mut self, title: &str, mut options: eframe::NativeOptions) -> eframe::Result {
         self.system_focus
             .get_or_insert_with(egui_pop_core::focus_mode::read_system);
+        // The window's place from the last run, repaired (the screens are
+        // not known before the window exists: only bounds are checked).
+        if let Some(p) = &self.persist
+            && let Ok(Some(read)) =
+                p.load::<egui_pop_model::values::SettingsDoc>("settings", &settings_schema())
+            && let Some(state) = crate::window::from_settings(&read.value)
+        {
+            crate::window::apply(&mut options, state.repair(&[]));
+        }
         eframe::run_native(
             title,
             options,
