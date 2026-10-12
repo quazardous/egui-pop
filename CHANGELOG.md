@@ -25,6 +25,9 @@ egui minor.
   declarations and writes or updates the English catalogue, and `check`
   reports coverage, missing, orphan and changed keys per locale. Guide:
   docs/i18n.md.
+- egui-pop's own catalogues (`egui-pop-i18n/locales`): the English one
+  generated from the interface's strings and the declarations of every
+  egui-pop plugin (a test keeps it current), and a complete French one.
 
 ### Changed
 

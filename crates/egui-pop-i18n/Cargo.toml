@@ -32,3 +32,6 @@ sys-locale = "0.3"
 [dev-dependencies]
 egui = { workspace = true, features = ["default_fonts"] }
 egui_kittest = { workspace = true }
+# Path only (left out when publishing): the catalogue test covers the
+# viewport's strings.
+egui-pop-viewport = { path = "../egui-pop-viewport", default-features = false }
