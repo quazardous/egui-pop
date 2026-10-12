@@ -1,6 +1,6 @@
 //! A parameter widget: the editor a value descriptor calls for, in any
 //! of the three binding modes (ADR 0009). A float or an int is a
-//! [`Slider`](crate::slider::Slider), a bool a check box, a choice a
+//! [`Slider`], a bool a check box, a choice a
 //! drop-down, three or four floats in `[0, 1]` a colour swatch, a text a
 //! field; every editor is named by the descriptor's label.
 //!
