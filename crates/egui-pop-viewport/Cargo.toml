@@ -35,5 +35,7 @@ serde_json.workspace = true
 eframe = { workspace = true, features = ["default_fonts", "wgpu", "wayland", "x11"] }
 egui = { workspace = true, features = ["default_fonts"] }
 egui_kittest = { workspace = true, features = ["wgpu", "snapshot"] }
-egui-pop-test = { workspace = true, features = ["viewport", "wgpu"] }
+# Path only: a dev-dependency without a version is left out when
+# publishing (the test kit depends on this crate).
+egui-pop-test = { path = "../egui-pop-test", features = ["viewport", "wgpu"] }
 serde_json.workspace = true
