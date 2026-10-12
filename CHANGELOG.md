@@ -211,6 +211,12 @@ egui minor.
 
 ### Changed
 
+- The slider follows the shared interaction grammar: Ctrl (Cmd) is
+  finer and Shift coarser for drags, arrows and the wheel alike; the
+  wheel scrolls the panel and steps a slider only when it has the focus
+  or Alt is held over it; Escape during a drag puts the value back with
+  no undo step (`Store::cancel`, `binding::cancel_gesture`). The keys
+  are data (`slider::Gestures`, `set_gestures`) a profile may remap.
 - `App::run` and `App::run_in` return a `host::Reply` (`Reply::now()`
   for a result that is already there), as commands may answer later.
 - The palette is no longer built into `App`: add `DefaultPlugins` (or

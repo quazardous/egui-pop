@@ -4,15 +4,21 @@
 //! value typed with its unit.
 //!
 //! - **Drag** anywhere on the bar: the value follows the pointer's
-//!   motion over the soft range (Shift: ten times finer). A drag is one
-//!   gesture (one undo step when bound to a store).
-//! - **Keys** when focused: the arrows step (Shift: coarse, Ctrl: a
-//!   tenth of a step), Home and End go to the soft ends, Enter opens the
-//!   typed entry; the **wheel** steps only when the slider has the focus,
-//!   so scrolling a panel never changes a value by accident.
+//!   motion over the soft range; a click never makes it jump. A drag is
+//!   one gesture (one undo step when bound to a store); Escape during it
+//!   puts the value back with no trace.
+//! - **Fine and coarse**: Ctrl (Cmd) ten times finer, Shift ten times
+//!   coarser, for drags, arrows and the wheel alike.
+//! - **Keys** when focused: the arrows step, Home and End go to the soft
+//!   ends, Enter opens the typed entry.
+//! - **Wheel**: it scrolls the panel; it steps a slider only when the
+//!   slider has the focus or Alt is held over it, so scrolling past
+//!   sliders never changes a value.
 //! - **Typed entry**: units after the number are ignored, a comma is a
 //!   point; a value past the soft range is kept up to the hard one.
 //! - **Double click**: back to the default.
+//!
+//! The keys are [`Gestures`], data a profile may remap.
 //!
 //! Owned: egui's `Slider` has no soft and hard range, no fine adjustment
 //! and no reset (see `docs/widgets.md`).
@@ -28,12 +34,60 @@
 use std::ops::RangeInclusive;
 
 use egui::{
-    Align2, CornerRadius, Id, Key, Response, Sense, Stroke, StrokeKind, TextEdit, Ui, Widget,
-    WidgetInfo, vec2,
+    Align2, CornerRadius, Id, Key, Modifiers, Response, Sense, Stroke, StrokeKind, TextEdit, Ui,
+    Widget, WidgetInfo, vec2,
 };
 use egui_pop_model::values::{Descriptor, Type};
 
 use crate::theme::Tokens;
+
+/// The slider's gestures, as data so a profile can remap them
+/// ([`set_gestures`]). The invariants hold whatever the keys: a click
+/// never makes the value jump, a drag is relative and one gesture, a
+/// modifier scales the step and never changes what is adjusted.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Gestures {
+    /// Held: ten times finer (drag, arrows, wheel).
+    pub fine: Modifiers,
+    /// Held: ten times coarser.
+    pub coarse: Modifiers,
+    /// Held over a slider without the focus: the wheel steps it (else
+    /// the wheel scrolls the panel).
+    pub wheel: Modifiers,
+    /// Opens the typed entry on a focused slider.
+    pub typed_entry: Key,
+    /// During a drag: puts the value back, no trace.
+    pub cancel: Key,
+    /// A double click resets to the default.
+    pub reset_on_double_click: bool,
+}
+
+impl Default for Gestures {
+    fn default() -> Self {
+        Self {
+            fine: Modifiers::COMMAND,
+            coarse: Modifiers::SHIFT,
+            wheel: Modifiers::ALT,
+            typed_entry: Key::Enter,
+            cancel: Key::Escape,
+            reset_on_double_click: true,
+        }
+    }
+}
+
+fn gestures_id() -> Id {
+    Id::new("egui_pop_core::slider::gestures")
+}
+
+/// The sliders' gestures in a context (the defaults until set).
+pub fn gestures(ctx: &egui::Context) -> Gestures {
+    ctx.data(|d| d.get_temp(gestures_id())).unwrap_or_default()
+}
+
+/// Remaps the sliders' gestures in a context (an input profile).
+pub fn set_gestures(ctx: &egui::Context, gestures: Gestures) {
+    ctx.data_mut(|d| d.insert_temp(gestures_id(), gestures));
+}
 
 /// A slider over an `f64`.
 #[derive(Debug)]
@@ -207,18 +261,29 @@ impl Widget for Slider<'_> {
                 ui.data_mut(|d| d.insert_temp(typing_id, text));
             }
         } else {
+            let g = gestures(ui.ctx());
+            let mods = ui.input(|i| i.modifiers);
+            let held = |m: Modifiers| m.any() && mods.matches_logically(m);
+            // Fine and coarse: the same modifiers for drags, keys and the
+            // wheel; they scale the step, never change what is adjusted.
+            let scale = if held(g.fine) {
+                0.1
+            } else if held(g.coarse) {
+                10.0
+            } else {
+                1.0
+            };
             // A drag accumulates exactly; only what is written is rounded.
             let acc_id = response.id.with("egui_pop_slider_acc");
+            let start_id = response.id.with("egui_pop_slider_start");
             if response.drag_started() {
-                ui.data_mut(|d| d.insert_temp(acc_id, *self.value));
+                ui.data_mut(|d| {
+                    d.insert_temp(acc_id, *self.value);
+                    d.insert_temp(start_id, *self.value);
+                });
             }
             if response.dragged() {
-                let fine = if ui.input(|i| i.modifiers.shift) {
-                    0.1
-                } else {
-                    1.0
-                };
-                let delta = f64::from(response.drag_delta().x / rect.width()) * (hi - lo) * fine;
+                let delta = f64::from(response.drag_delta().x / rect.width()) * (hi - lo) * scale;
                 if delta != 0.0 {
                     let acc: f64 = ui.data(|d| d.get_temp(acc_id)).unwrap_or(*self.value);
                     let next = (acc + delta).clamp(lo.min(acc), hi.max(acc));
@@ -226,24 +291,28 @@ impl Widget for Slider<'_> {
                     *self.value = self.settle(next, self.hard);
                 }
             }
-            if response.double_clicked()
+            // The cancel key during a drag puts the value back, with no
+            // trace (egui ends the drag on it).
+            if response.drag_stopped()
+                && ui.input(|i| i.key_pressed(g.cancel))
+                && let Some(start) = ui.data(|d| d.get_temp::<f64>(start_id))
+            {
+                *self.value = start;
+                crate::binding::cancel_gesture(ui.ctx(), response.id);
+            }
+            if g.reset_on_double_click
+                && response.double_clicked()
                 && let Some(d) = self.default
             {
                 *self.value = d;
             }
             if response.clicked() {
+                // A click focuses; it never makes the value jump.
                 response.request_focus();
             }
+            let step = self.step * scale.min(self.coarse / self.step);
+            let mut v = *self.value;
             if response.has_focus() {
-                let (shift, ctrl) = ui.input(|i| (i.modifiers.shift, i.modifiers.command));
-                let step = if shift {
-                    self.coarse
-                } else if ctrl {
-                    self.step / 10.0
-                } else {
-                    self.step
-                };
-                let mut v = *self.value;
                 ui.input(|i| {
                     if i.key_pressed(Key::ArrowRight) || i.key_pressed(Key::ArrowUp) {
                         v += step;
@@ -258,27 +327,38 @@ impl Widget for Slider<'_> {
                         v = hi;
                     }
                 });
+                if ui.input(|i| i.key_pressed(g.typed_entry)) {
+                    let text = format!("{:.*}", self.precision, *self.value * self.scale);
+                    ui.data_mut(|d| d.insert_temp(typing_id, text));
+                }
+            }
+            // The wheel: the panel scrolls, unless the slider has the focus
+            // or the wheel modifier is held over it; then it steps and the
+            // panel does not scroll.
+            if response.hovered() && (response.has_focus() || held(g.wheel)) {
                 let wheel: f32 = ui.input(|i| {
                     i.events
                         .iter()
                         .filter_map(|e| match e {
-                            egui::Event::MouseWheel { delta, .. } => Some(delta.y),
+                            egui::Event::MouseWheel { delta, .. } => Some(delta.y + delta.x),
                             _ => None,
                         })
                         .sum()
                 });
-                if response.hovered() && wheel != 0.0 {
+                if wheel != 0.0 {
                     v += step * f64::from(wheel.signum());
+                    ui.input_mut(|i| {
+                        i.smooth_scroll_delta = egui::Vec2::ZERO;
+                        i.events
+                            .retain(|e| !matches!(e, egui::Event::MouseWheel { .. }));
+                    });
                 }
-                if v != *self.value {
-                    // Keys stay in the soft range, unless already past it.
-                    let (a, b) = (lo.min(*self.value), hi.max(*self.value));
-                    *self.value = self.settle(v, (a, b));
-                }
-                if ui.input(|i| i.key_pressed(Key::Enter)) {
-                    let text = format!("{:.*}", self.precision, *self.value * self.scale);
-                    ui.data_mut(|d| d.insert_temp(typing_id, text));
-                }
+            }
+            if v != *self.value {
+                // Keys and the wheel stay in the soft range, unless already
+                // past it.
+                let (a, b) = (lo.min(*self.value), hi.max(*self.value));
+                *self.value = self.settle(v, (a, b));
             }
             // The bar: track, fill to the value, label and value inside.
             let painter = ui.painter_at(rect);

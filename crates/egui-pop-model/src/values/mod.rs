@@ -721,6 +721,21 @@ impl Store {
         true
     }
 
+    /// Cancels a gesture or a group: what it changed is put back as it
+    /// was (listeners are told), and no undo step is left. Cancelling one
+    /// that is not open is reported as `false`.
+    pub fn cancel(&mut self, id: GestureId) -> bool {
+        let Some(g) = self.gestures.remove(&id) else {
+            return false;
+        };
+        for (path, old, _) in g.changes.into_iter().rev() {
+            if self.entries.contains_key(&path) {
+                self.write(&path, old, &g.origin);
+            }
+        }
+        true
+    }
+
     /// The undo steps, oldest first.
     pub fn undo_steps(&self) -> &[Step] {
         &self.undo

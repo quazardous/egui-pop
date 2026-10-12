@@ -81,7 +81,7 @@ impl Plugin for ValuesPage {
 
 fn show(ui: &mut Ui, app: &AppHandle) {
     let store = app.store();
-    ui.label("Drag (Shift: finer), arrows when focused (Shift: coarse, Ctrl: finer), Enter to type a value with its unit, double click to reset.");
+    ui.label("Drag (Ctrl: finer, Shift: coarser; Escape puts the value back), arrows when focused, the wheel when focused or with Alt, Enter to type a value with its unit, double click to reset.");
     section(ui, "Bound to the store (a drag is one undo step)");
     for (path, d) in descriptors() {
         param::param(ui, &d, Mode::Bound(&store, path));

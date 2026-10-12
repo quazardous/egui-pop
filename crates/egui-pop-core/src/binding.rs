@@ -134,6 +134,17 @@ fn gesture_id(response: &Response) -> Id {
     response.id.with("egui_pop_gesture")
 }
 
+fn cancel_id(response_id: Id) -> Id {
+    response_id.with("egui_pop_cancel")
+}
+
+/// Tells the binding around a widget that its gesture is given up (the
+/// widget has put its value back): bound to a store, the gesture's
+/// writes are undone and leave no undo step.
+pub fn cancel_gesture(ctx: &egui::Context, response_id: Id) {
+    ctx.data_mut(|d| d.insert_temp(cancel_id(response_id), true));
+}
+
 fn error_id(response_id: Id) -> Id {
     response_id.with("egui_pop_refused")
 }
@@ -177,6 +188,19 @@ pub fn edit<T: Bindable>(
                 ui.ctx().data_mut(|d| d.insert_temp(gid, g.0));
             }
             let gesture = ui.ctx().data(|d| d.get_temp::<u64>(gid)).map(GestureId);
+            let cancelled = ui
+                .ctx()
+                .data_mut(|d| d.remove_temp::<bool>(cancel_id(r.id)))
+                .unwrap_or(false);
+            if cancelled {
+                // The widget gave the gesture up (Escape during a drag):
+                // the store puts the values back, no undo step is left.
+                if let Some(g) = gesture {
+                    lock(store).cancel(g);
+                    ui.ctx().data_mut(|d| d.remove::<u64>(gid));
+                }
+                return r;
+            }
             if v != before {
                 let mut set = Set::new(path, Change::To(v.to_value()), Origin::User);
                 set.gesture = gesture;
