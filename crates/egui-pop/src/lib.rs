@@ -55,7 +55,9 @@ pub mod prelude {
     pub use egui_pop_api::services::ServiceToken;
     pub use egui_pop_api::stories::Story;
     pub use egui_pop_api::zones::{self, Block, Place};
-    pub use egui_pop_api::{App, AppBuilder, AppHandle, Call, Ctx, Plugin, PluginError};
+    pub use egui_pop_api::{
+        App, AppBuilder, AppHandle, Call, Ctx, DefaultPlugins, MinimalPlugins, Plugin, PluginError,
+    };
     pub use egui_pop_core::binding::{Binding, SharedStore};
     pub use egui_pop_core::theme::{Density, ThemeSpec, Tokens};
     pub use egui_pop_model::commands::{CommandSpec, Origin};

@@ -70,7 +70,10 @@ fn an_app_harness_runs_an_application_on_its_context() {
 
 #[test]
 fn the_shell_and_its_palette_name_every_interactive_node() {
-    let mut h = egui_pop_test::app(egui_pop_api::App::builder(), egui::vec2(800.0, 500.0));
+    let mut h = egui_pop_test::app(
+        egui_pop_api::App::builder().plugins(egui_pop_api::DefaultPlugins),
+        egui::vec2(800.0, 500.0),
+    );
     h.run();
     assert_all_named(&h);
     h.key_press_modifiers(
@@ -78,6 +81,6 @@ fn the_shell_and_its_palette_name_every_interactive_node() {
         egui::Key::P,
     );
     h.run();
-    assert!(h.state().handle().palette_open());
+    assert!(egui_pop_api::palette::is_open(h.state().handle()));
     assert_all_named(&h);
 }

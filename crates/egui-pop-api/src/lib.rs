@@ -14,6 +14,9 @@
 //!   build time; lifecycle events;
 //! - [`services`]: typed service tokens;
 //! - [`stories`]: gallery stories as a contribution;
+//! - [`palette`]: the command palette, a plugin;
+//! - [`DefaultPlugins`] and [`MinimalPlugins`]: plugin groups for
+//!   [`AppBuilder::plugins`];
 //! - [`AppBuilder`] and [`App`]: sorting, connecting, the shell (menu
 //!   bar, zones, panels, the command palette), key dispatch; over eframe
 //!   or headless.
@@ -53,8 +56,10 @@
 
 pub mod app;
 pub mod ctx;
+mod groups;
 pub mod hooks;
 pub mod menus;
+pub mod palette;
 pub mod plugin;
 pub mod services;
 pub mod settings;
@@ -65,6 +70,7 @@ pub use app::{
     App, AppBuilder, AppHandle, Call, FOCUS_MODE, Request, SETTING_FOCUS, THEME, ThemeService,
 };
 pub use ctx::{Ctx, CtxError};
+pub use groups::{DefaultPlugins, MinimalPlugins, PluginGroup};
 pub use plugin::{BuildError, Plugin, PluginError, PluginInfo};
 
 pub use egui_pop_core as core;

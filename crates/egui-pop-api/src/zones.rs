@@ -26,8 +26,12 @@ pub const INSPECTOR: ZoneId = ZoneId::from_static("app.inspector");
 /// The status bar at the bottom.
 pub const STATUS_BAR: ZoneId = ZoneId::from_static("app.status-bar");
 
+/// Drawn after the shell, every frame: blocks there show overlays (the
+/// command palette, dialogs, toasts) when they have something to show.
+pub const OVERLAYS: ZoneId = ZoneId::from_static("app.overlays");
+
 /// The shell's zones, declared by the framework.
-pub const SHELL: [ZoneId; 5] = [TOP_BAR, SIDE_BAR, MAIN, INSPECTOR, STATUS_BAR];
+pub const SHELL: [ZoneId; 6] = [TOP_BAR, SIDE_BAR, MAIN, INSPECTOR, STATUS_BAR, OVERLAYS];
 
 /// Draws a block.
 pub type DrawFn = Box<dyn FnMut(&mut Ui, &AppHandle)>;

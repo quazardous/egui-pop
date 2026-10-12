@@ -281,6 +281,12 @@ pub fn begin_pass(ctx: &Context) -> bool {
     }
     s.pass = now;
     s.shown_last = std::mem::take(&mut s.shown);
+    // A closing is news only to an owner still showing its overlay: one
+    // left unseen would close the overlay the next time it opens.
+    let State {
+        closed, shown_last, ..
+    } = &mut *s;
+    closed.retain(|c| shown_last.contains(&c.id));
     // An overlay whose owner stopped showing it is closed.
     let gone: Vec<Id> = s
         .stack

@@ -6,6 +6,7 @@
 //! - [`registry`]: items tagged with their owner, removable by owner;
 //! - [`when`]: context clauses (`listFocus && !textInputFocus`);
 //! - [`commands`]: every action named, run the same way from anywhere;
+//! - [`fuzzy`]: fuzzy matching and ranking for search fields;
 //! - [`keymap`]: keys bound to commands in layers, resolved by focus
 //!   depth, with removal, unbinding and a resolution trace;
 //! - [`menus`]: menus declared by id, their items commands;
@@ -19,6 +20,7 @@
 pub mod commands;
 pub mod diagnostics;
 pub mod doc;
+pub mod fuzzy;
 pub mod ids;
 pub mod keymap;
 pub mod layout;

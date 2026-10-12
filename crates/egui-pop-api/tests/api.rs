@@ -601,7 +601,11 @@ fn keys_run_commands_through_the_shell_and_the_palette_lists_them() {
         .with_size(egui::vec2(800.0, 500.0))
         .build_ui_state(
             |ui, app: &mut App| app.show(ui),
-            build(App::builder().plugin(p)),
+            build(
+                App::builder()
+                    .plugins(egui_pop_api::DefaultPlugins)
+                    .plugin(p),
+            ),
         );
     h.run();
     h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::J);
@@ -613,7 +617,7 @@ fn keys_run_commands_through_the_shell_and_the_palette_lists_them() {
         egui::Key::P,
     );
     h.run();
-    assert!(h.state().handle().palette_open());
+    assert!(egui_pop_api::palette::is_open(h.state().handle()));
     h.get_by_role(egui::accesskit::Role::TextInput)
         .type_text("count");
     h.run();
@@ -621,7 +625,7 @@ fn keys_run_commands_through_the_shell_and_the_palette_lists_them() {
     h.key_press(egui::Key::Enter);
     h.run();
     assert_eq!(*ran.borrow(), 2);
-    assert!(!h.state().handle().palette_open());
+    assert!(!egui_pop_api::palette::is_open(h.state().handle()));
     let trace = h.state().dispatcher().traces().next().unwrap().clone();
     assert_eq!(trace.keys, "Ctrl+J");
     // The menu bar shows the framework's menus.
@@ -710,4 +714,83 @@ fn the_focus_mode_follows_the_system_unless_the_setting_says_otherwise() {
     let snapshot = h.state().handle().debug_snapshot();
     assert_eq!(snapshot["focus"]["mode"]["mode"], "click", "{snapshot}");
     assert_eq!(snapshot["focus"]["mode"]["system"], "hover");
+}
+
+#[test]
+fn the_palette_asks_for_arguments_and_escape_steps_back() {
+    use egui_pop_api::palette;
+    let got: Rc<RefCell<Vec<Json>>> = Rc::default();
+    let g = got.clone();
+    let l = log();
+    let p = P::new("zoom", &l, move |ctx| {
+        let g = g.clone();
+        ctx.command(
+            CommandSpec::new(CommandId::from_static("zoom.set"), "Set zoom", "View")
+                .args(json!({ "percent": 100 })),
+            move |call| {
+                g.borrow_mut().push(call.args.clone());
+                Ok(Json::Null)
+            },
+        )?;
+        Ok(())
+    });
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(800.0, 500.0))
+        .build_ui_state(
+            |ui, app: &mut App| app.show(ui),
+            build(
+                App::builder()
+                    .plugins(egui_pop_api::DefaultPlugins)
+                    .plugin(p),
+            ),
+        );
+    let open = |h: &mut Harness<'_, App>| {
+        h.key_press_modifiers(
+            egui::Modifiers::COMMAND | egui::Modifiers::SHIFT,
+            egui::Key::P,
+        );
+        h.run();
+    };
+    h.run();
+    open(&mut h);
+    h.get_by_role(egui::accesskit::Role::TextInput)
+        .type_text("szoom");
+    h.run();
+    h.key_press(egui::Key::Enter);
+    h.run();
+    // It asks for the argument; Escape goes back to the list.
+    assert!(h.query_by_label_contains("Set zoom: percent").is_some());
+    h.key_press(egui::Key::Escape);
+    h.run();
+    assert!(palette::is_open(h.state().handle()));
+    assert!(h.query_by_label_contains("Set zoom: percent").is_none());
+    h.key_press(egui::Key::Enter);
+    h.run();
+    h.get_by_role(egui::accesskit::Role::TextInput)
+        .type_text("lots");
+    h.run();
+    h.key_press(egui::Key::Enter);
+    h.run();
+    assert!(h.query_by_label_contains("is not a number").is_some());
+    for _ in 0..4 {
+        h.key_press(egui::Key::Backspace);
+    }
+    h.run();
+    h.get_by_role(egui::accesskit::Role::TextInput)
+        .type_text("50");
+    h.run();
+    h.key_press(egui::Key::Enter);
+    h.run();
+    h.run();
+    assert_eq!(*got.borrow(), [json!({ "percent": 50 })]);
+    assert!(!palette::is_open(h.state().handle()));
+    // Run lately: first in the list, marked recent; Escape closes.
+    open(&mut h);
+    assert!(palette::is_open(h.state().handle()));
+    let zoom = h.get_by_label_contains("View: Set zoom").rect();
+    let undo = h.get_by_label_contains("Edit: Undo").rect();
+    assert!(zoom.top() < undo.top(), "the recent command comes first");
+    h.key_press(egui::Key::Escape);
+    h.run();
+    assert!(!palette::is_open(h.state().handle()));
 }

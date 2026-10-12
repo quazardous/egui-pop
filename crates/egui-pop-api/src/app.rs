@@ -14,7 +14,7 @@ use egui_pop_core::binding::SharedStore;
 use egui_pop_core::debug::{DebugBridge, Feedback, FnCollector};
 use egui_pop_core::focus_mode::{self, FocusModes, Preference, SystemFocus};
 use egui_pop_core::keys::KeyDispatcher;
-use egui_pop_core::overlay::{self, Kind, OverlaySpec};
+use egui_pop_core::overlay;
 use egui_pop_core::persist::Persist;
 use egui_pop_core::theme::{self, ThemeSpec, Themes};
 use egui_pop_core::{a11y, fault, focus, lock};
@@ -23,7 +23,7 @@ use egui_pop_model::diagnostics::{Diagnostic, Diagnostics};
 use egui_pop_model::ids::{
     CommandId, MenuId, OwnerId, PanelId, PluginId, SettingId, StoryId, ZoneId,
 };
-use egui_pop_model::keymap::{BindOptions, Keymap, Layer, Trace};
+use egui_pop_model::keymap::{Keymap, Layer, Trace};
 use egui_pop_model::menus::{Item, MenuItem, Menus, sort_items};
 use egui_pop_model::order::{Node, order};
 use egui_pop_model::panels::{Area, Panels};
@@ -47,7 +47,7 @@ pub const MENU_VIEW: MenuId = MenuId::from_static("app.menu.view");
 pub const MENU_HELP: MenuId = MenuId::from_static("app.menu.help");
 
 /// The framework's commands.
-pub const CMD_PALETTE: CommandId = CommandId::from_static("app.palette");
+pub use crate::palette::CMD_PALETTE;
 pub const CMD_QUIT: CommandId = CommandId::from_static("app.quit");
 pub const CMD_UNDO: CommandId = CommandId::from_static("value.undo");
 pub const CMD_REDO: CommandId = CommandId::from_static("value.redo");
@@ -181,12 +181,6 @@ struct StoryEntry {
 
 #[derive(Default)]
 struct UiState {
-    palette_open: bool,
-    /// The context when the palette opened: its commands are offered
-    /// and run there.
-    palette_context: WhenContext,
-    palette_query: String,
-    palette_selected: usize,
     hidden_panels: BTreeSet<PanelId>,
 }
 
@@ -385,6 +379,20 @@ impl AppHandle {
             .iter()
             .find(|(s, _)| s.id == *id)
             .map(|(s, _)| s.clone())
+    }
+
+    /// Whether a command applies in a context (its `when` clause holds).
+    pub fn applies(&self, id: &CommandId, cx: &WhenContext) -> bool {
+        self.0
+            .derived
+            .borrow()
+            .commands
+            .iter()
+            .find(|(s, _)| s.id == *id)
+            .is_some_and(|(s, _)| {
+                s.when.is_empty()
+                    || egui_pop_model::when::When::parse(&s.when).is_ok_and(|w| w.eval(cx))
+            })
     }
 
     /// A command's live key bindings, as shown (`Ctrl+K Ctrl+S`).
@@ -618,23 +626,6 @@ impl AppHandle {
     }
 
     /// Whether the command palette is open.
-    pub fn palette_open(&self) -> bool {
-        self.0.ui.borrow().palette_open
-    }
-
-    fn set_palette_open(&self, open: bool) {
-        let cx = if open {
-            self.when_context()
-        } else {
-            WhenContext::new()
-        };
-        let mut u = self.0.ui.borrow_mut();
-        u.palette_context = cx;
-        u.palette_open = open;
-        u.palette_query.clear();
-        u.palette_selected = 0;
-    }
-
     /// Whether a panel is shown.
     pub fn panel_visible(&self, id: &PanelId) -> bool {
         !self.0.ui.borrow().hidden_panels.contains(id)
@@ -715,6 +706,12 @@ impl AppBuilder {
     /// Adds a plugin.
     pub fn plugin(mut self, plugin: impl Plugin) -> Self {
         self.plugins.push(Box::new(plugin));
+        self
+    }
+
+    /// Adds a group of plugins (`DefaultPlugins`, `MinimalPlugins`).
+    pub fn plugins(mut self, group: impl crate::PluginGroup) -> Self {
+        self.plugins.extend(group.plugins());
         self
     }
 
@@ -923,11 +920,14 @@ impl App {
             app: &handle,
             connected: &connected,
         };
-        for (zone, title) in
-            zones::SHELL
-                .iter()
-                .zip(["Top bar", "Side bar", "Main", "Inspector", "Status bar"])
-        {
+        for (zone, title) in zones::SHELL.iter().zip([
+            "Top bar",
+            "Side bar",
+            "Main",
+            "Inspector",
+            "Status bar",
+            "Overlays",
+        ]) {
             ctx.zone(zone.clone(), title)?;
         }
         for (i, (menu, label)) in [
@@ -960,19 +960,6 @@ impl App {
         );
         ctx.setting(SETTING_FOCUS, focus)?;
         ctx.service(&FOCUS_MODE, modes)?;
-        ctx.command(
-            CommandSpec::new(CMD_PALETTE, "Command palette", "View")
-                .description("Search and run any command.")
-                // Through modals: the palette is one, and closes on its key.
-                .key_with("Ctrl+Shift+P", BindOptions::global().through_modal())
-                .key_with("F1", BindOptions::global().through_modal())
-                .menu(MENU_VIEW, "0_palette", 0)
-                .hidden(),
-            |call| {
-                call.app.set_palette_open(!call.app.palette_open());
-                Ok(json!({ "open": call.app.palette_open() }))
-            },
-        )?;
         ctx.command(
             CommandSpec::new(CMD_UNDO, "Undo", "Edit")
                 .description("Undo the last change of values.")
@@ -1709,7 +1696,7 @@ impl App {
         }
         self.process_requests();
         self.shell(ui);
-        self.palette(&ctx);
+        self.handle.clone().show_zone(ui, &zones::OVERLAYS);
         a11y::live_regions(ui);
         self.process_requests();
     }
@@ -1810,85 +1797,6 @@ impl App {
         ui.ctx().data_mut(|d| d.insert_temp(key, active));
         let (id, title, _) = &panels[active];
         self.handle.show_panel(ui, id, title);
-    }
-
-    /// The command palette: the derived palette entries, filtered by what
-    /// applies here and the query; Enter runs the selected one.
-    fn palette(&mut self, ctx: &Context) {
-        let mut open = self.handle.palette_open();
-        if !open {
-            return;
-        }
-        let spec = OverlaySpec::new("egui_pop.palette", "Command palette", Kind::Modal);
-        let cx = self.handle.0.ui.borrow().palette_context.clone();
-        let entries = self.handle.palette();
-        let mut run: Option<CommandId> = None;
-        overlay::show(ctx, &spec, &mut open, None, |ui| {
-            let mut u = self.handle.0.ui.borrow_mut();
-            let title = ui.strong("Command palette");
-            let edit = ui
-                .add(
-                    egui::TextEdit::singleline(&mut u.palette_query)
-                        .hint_text("Type a command")
-                        .desired_width(f32::INFINITY),
-                )
-                .labelled_by(title.id);
-            edit.request_focus();
-            let words: Vec<String> = u
-                .palette_query
-                .split_whitespace()
-                .map(str::to_lowercase)
-                .collect();
-            let hits: Vec<&PaletteEntry> = entries
-                .iter()
-                .filter(|e| self.reg.commands.applies(&e.command, &cx))
-                .filter(|e| {
-                    let hay = format!("{} {} {}", e.category, e.title, e.command).to_lowercase();
-                    words.iter().all(|w| hay.contains(w))
-                })
-                .collect();
-            if ui.input(|i| i.key_pressed(egui::Key::ArrowDown)) {
-                u.palette_selected = (u.palette_selected + 1).min(hits.len().saturating_sub(1));
-            }
-            if ui.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
-                u.palette_selected = u.palette_selected.saturating_sub(1);
-            }
-            let selected = u.palette_selected.min(hits.len().saturating_sub(1));
-            if ui.input(|i| i.key_pressed(egui::Key::Enter))
-                && let Some(e) = hits.get(selected)
-            {
-                run = Some(e.command.clone());
-            }
-            ui.separator();
-            egui::ScrollArea::vertical()
-                .max_height(320.0)
-                .show(ui, |ui| {
-                    for (i, e) in hits.iter().enumerate() {
-                        let label = format!("{}: {}", e.category, e.title);
-                        let mut b = egui::Button::new(label)
-                            .selected(i == selected)
-                            .frame_when_inactive(i == selected);
-                        if let Some(k) = e.keys.first() {
-                            b = b.shortcut_text(k.clone());
-                        }
-                        if ui.add_sized([ui.available_width(), 0.0], b).clicked() {
-                            run = Some(e.command.clone());
-                        }
-                    }
-                    if hits.is_empty() {
-                        ui.weak("No command matches.");
-                    }
-                });
-        });
-        if let Some(c) = run {
-            self.handle.set_palette_open(false);
-            overlay::close(ctx, spec.id);
-            if let Err(e) = self.run_in(&c, Json::Null, Origin::User, &cx) {
-                log::warn!(target: "egui_pop", "command `{c}`: {e}");
-            }
-        } else if !open {
-            self.handle.set_palette_open(false);
-        }
     }
 }
 

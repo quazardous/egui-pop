@@ -131,8 +131,10 @@ card is back as its owner made it:
 |---|---|
 | ![zones, extended](docs/screenshots/zones-pop-dark.png) | ![zones, as declared](docs/screenshots/zones-pop-light-off.png) |
 
-Every command is in the palette (`Ctrl+Shift+P` or `F1`), with the keys
-the keymap really binds:
+Every command is in the palette (`Ctrl+Shift+P` or `F1`, a plugin in
+`DefaultPlugins`), ranked by a fuzzy match with the recent ones first,
+with the keys the keymap really binds; a command taking arguments asks
+for them:
 
 ![the command palette](docs/screenshots/palette-pop-dark.png)
 
@@ -151,7 +153,7 @@ use egui_pop::egui;
 use egui_pop::prelude::*;
 
 let ctx = egui::Context::default();
-let mut app = App::builder().build(&ctx).unwrap();
+let mut app = App::builder().plugins(DefaultPlugins).build(&ctx).unwrap();
 let snapshot = app.handle().debug_snapshot();
 assert!(snapshot["commands"]["commands"].is_array());
 let feedback = app.debug_call("commands", "run", &serde_json::json!({ "id": "app.palette" }));

@@ -23,7 +23,8 @@
 //!
 //! 1. a focused **text input** lets go of the focus, which stays in the
 //!    input's surface (its scope still heads the focus chain); nothing
-//!    else sees that press;
+//!    else sees that press (unless the input lets Escape through, see
+//!    [`escape_passes`]);
 //! 2. egui aborts a **drag** in progress;
 //! 3. the **top overlay** closes, if it closes on Escape (popovers,
 //!    menus, dialogs: "Escape dismisses"), see `overlay::begin_pass`;
@@ -80,6 +81,9 @@ struct State {
     pressed: Option<(LayerId, Pos2)>,
     /// The focus plugin is installed.
     installed: bool,
+    /// Text inputs that let Escape through, this pass and the previous.
+    passing: Vec<Id>,
+    passing_last: Vec<Id>,
 }
 
 fn state(ctx: &Context) -> std::sync::Arc<std::sync::Mutex<State>> {
@@ -138,6 +142,7 @@ fn rotate(ctx: &Context, s: &mut State) {
     }
     s.pass = now;
     s.last = std::mem::take(&mut s.building);
+    s.passing_last = std::mem::take(&mut s.passing);
     s.open.clear();
     if let Some(pos) = ctx.input(|i| {
         i.pointer
@@ -217,6 +222,17 @@ pub fn install(ctx: &Context) {
     }
 }
 
+/// Lets Escape through a text input (call it each pass it is drawn):
+/// Escape then goes on to the overlay around it, as for a search field
+/// that is the whole of a popup (the command palette), instead of
+/// leaving the field first.
+pub fn escape_passes(ctx: &Context, id: Id) {
+    let st = state(ctx);
+    let mut s = lock(&st);
+    rotate(ctx, &mut s);
+    s.passing.push(id);
+}
+
 /// Runs before egui reads each pass's input.
 #[derive(Debug)]
 struct FocusPlugin;
@@ -259,7 +275,12 @@ fn escape(ctx: &Context, input: &mut egui::RawInput) {
         let st = state(ctx);
         lock(&st).pressed = Some((r.layer_id, r.interact_rect.center()));
     }
-    if ctx.text_edit_focused() {
+    let passes = {
+        let st = state(ctx);
+        let s = lock(&st);
+        s.passing.contains(&id) || s.passing_last.contains(&id)
+    };
+    if ctx.text_edit_focused() && !passes {
         input.events.remove(at);
         ctx.memory_mut(|m| m.surrender_focus(id));
         log::debug!(target: "egui_pop", "Escape: left the text input {id:?}");

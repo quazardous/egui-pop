@@ -40,6 +40,7 @@ pub fn builder(options: &Options) -> AppBuilder {
     spec.accent = options.accent.clone();
     App::builder()
         .theme(spec)
+        .plugins(egui_pop::api::DefaultPlugins)
         .plugin(shell::Shell {
             first: StoryId::new(options.page.as_str()).unwrap_or(StoryId::from_static("overview")),
         })

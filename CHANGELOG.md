@@ -9,6 +9,16 @@ egui minor.
 
 ### Added
 
+- The command palette is a plugin (`egui_pop_api::palette::PalettePlugin`)
+  with fuzzy ranking (`egui_pop_model::fuzzy`: word starts, runs,
+  matched characters highlighted), the commands run lately first, and
+  prompts for a command's arguments (from its `args` example, the
+  example's value by default); Escape steps back from a prompt, then
+  closes. Plugin groups `DefaultPlugins` (the palette, and the next
+  components as they come) and `MinimalPlugins` go to
+  `AppBuilder::plugins`; a new `app.overlays` zone is drawn after the
+  shell for blocks showing overlays. `focus::escape_passes` lets Escape
+  through a search field that is a whole popup.
 - Keyboard focus that follows the system's focus mode
   (`egui_pop_core::focus_mode`): in hover mode the surface under the
   moving pointer gets the keys (a widget focused elsewhere lets go) and
@@ -148,6 +158,10 @@ egui minor.
 
 ### Changed
 
+- The palette is no longer built into `App`: add `DefaultPlugins` (or
+  `PalettePlugin`) to keep it; `AppHandle::palette_open` became
+  `palette::is_open(app)`, and `CMD_PALETTE` moved to `palette`
+  (re-exported from `app`).
 - `egui_pop_core::icon`: the former `Icon` (a glyph, an image or a
   painted shape) is now `Source`, its size `Role` is now `Size`, and the
   `Shape` enum is folded into the new `Icon` roles.
