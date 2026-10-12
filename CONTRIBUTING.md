@@ -77,34 +77,38 @@ CI also runs `cargo deny check`, builds the gallery for
 The images in `docs/screenshots/` (shown in the README and the guides
 in `docs/`) are the gallery's real window, captured offscreen in a nested
 compositor with [wbox](tools/wbox). Regenerate them whenever the gallery
-changes visibly. `cargo xtask screenshots` is meant to run the steps
-below for every shot, and to write the reduced copies the README and the
-themes page show (`docs/screenshots/thumbs/`, `docs/screenshots/themes/`);
-until it lands, by hand:
+changes visibly, with one command:
 
 ```sh
-cargo build --release -p egui-pop-gallery
-GALLERY_THEME=pop-light GALLERY_DENSITY=comfortable GALLERY_PAGE=overview \
-  <driver> up tools/wbox/config.yaml
-<driver> click tools/wbox/config.yaml 1070 700   # focus, away from tooltips
-<driver> key tools/wbox/config.yaml ctrl+shift+p # optional: keys to press
-<driver> shot tools/wbox/config.yaml --name overview-pop-light
-<driver> down tools/wbox/config.yaml
+cargo xtask screenshots              # every image
+cargo xtask screenshots palette      # only the shots whose name contains "palette"
+cargo xtask screenshots --list       # the shots' names
 ```
 
-`<driver>` is any wbox driver (the `wbox-mcp` server's tools, or a
-script calling the wbox library); none is shipped here. Crop the shot to
-the window and keep each PNG small (under 200 KB). The current set:
-`overview-pop-dark`, `overview-pop-light`, `overview-pop-high-contrast`,
-`builtins-pop-dark-compact`, `zones-pop-dark`, `zones-pop-light-off`
-(after `ctrl+e`), `debug-pop-dark` (after `alt+up alt+down`), `palette-pop-dark` (after
-`ctrl+shift+p`), `values-pop-dark`, `dialogs-pop-dark` (after a click on
-"Export settings"), `toasts-pop-light` (after Warning, Error and
-"Success with an action"), `settings-window-pop-dark` (after `ctrl+comma`)
-and `shortcuts-pop-dark` (then "Keyboard shortcuts"), `viewport-pop-dark`
-(page `viewport`, once its tiles are in). The window is
-decorated in the compositor: crop to it (`89,26 1102x748` at the default
-size).
+It needs wbox installed (`wbox-mcp` on `PATH`, or `WBOX_PYTHON` set to
+the Python that imports it) and replaces the manual steps: it builds the
+gallery in release mode, then for each shot starts the compositor
+(headless, 1280x800, scale 1) with the gallery at the shot's page, theme
+and density and its animations off (`--reduced-motion`), clicks an inert
+spot to focus it, plays the shot's keys and clicks, moves the pointer off
+the window, captures without the cursor and crops to the window (title
+bar included). The shots, their steps and their coordinates are in
+`xtask/src/main.rs`; the wbox side is `tools/wbox/shoot.py`.
+
+It writes:
+
+- `docs/screenshots/<name>.png`: the full images;
+- `docs/screenshots/thumbs/<name>.png`: the README's thumbnails, 400 px
+  wide (shown at 200);
+- `docs/screenshots/themes/<theme>.png`: the overview in every built-in
+  theme, at the same size (`docs/themes.md`);
+- `docs/screenshots/themes.png`: the editor-inspired themes on one sheet
+  (`docs/tokens.md`), rebuilt from the above.
+
+PNGs are indexed when they have 256 colours or fewer, and quantised to
+256 only when a file would exceed 200 KB. Look at the images in the diff
+before committing them; a shot whose button moved needs its coordinates
+updated.
 
 ## Upstream limits
 

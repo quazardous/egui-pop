@@ -12,7 +12,10 @@ into by a script or an agent without a window ever opening on the desktop.
 
 A wbox driver starts it with this config: the `wbox-mcp` server (its tools
 take the config path), or a small script calling the wbox library directly
-(up, screenshot, click, key, down). No driver is shipped here.
+(up, screenshot, click, key, down). `shoot.py` is such a script: given a
+plan of shots, it starts the compositor for each, plays its steps and
+captures it; `cargo xtask screenshots` runs it to refresh the
+documentation's images (see CONTRIBUTING.md).
 
 ```sh
 cargo build --release -p egui-pop-gallery

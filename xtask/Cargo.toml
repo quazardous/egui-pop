@@ -1,0 +1,28 @@
+[package]
+name = "xtask"
+version = "0.0.0"
+description = "Repository tasks: refreshing the documentation's screenshots"
+publish = false
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+# The theme list, read from the source.
+egui-pop-tokens.workspace = true
+serde_json.workspace = true
+# MIT OR Apache-2.0: decoding, cropping and resizing the captures.
+image = { version = "0.25", default-features = false, features = ["png"] }
+# MIT OR Apache-2.0: writing them, indexed when they allow it.
+png = "0.18"
+# MIT: the 256 colours of an image too large otherwise.
+color_quant = "1.1"
+# Apache-2.0: the labels of the themes sheet.
+ab_glyph = "0.2"
+# The labels' font, egui's own monospace (Hack, MIT and Bitstream Vera).
+epaint_default_fonts = "0.36"

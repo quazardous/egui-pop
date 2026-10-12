@@ -16,6 +16,7 @@ const LAYERS: &[(&str, u32)] = &[
     ("egui-pop", 5),
     ("egui-pop-gallery", 6),
     ("consumer-smoke", 6),
+    ("xtask", 6),
 ];
 
 /// Layers that must not depend on a GUI toolkit.
