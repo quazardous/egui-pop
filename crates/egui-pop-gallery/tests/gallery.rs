@@ -637,3 +637,29 @@ fn the_arrangements_page_switches_saves_and_vetoes() {
             .is_some()
     );
 }
+
+#[test]
+fn the_shortcuts_editor_searches_by_key_and_removes_every_key() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "settings"));
+    h.run();
+    h.get_by_label("Open the settings window (Ctrl+,)").click();
+    h.run();
+    h.get_by_label("Keyboard shortcuts").click();
+    h.run();
+    h.get_by_label("Search by key").click();
+    h.run();
+    h.key_press_modifiers(egui::Modifiers::ALT, egui::Key::ArrowDown);
+    h.run();
+    assert!(h.query_by_label("Bound to Alt+Down").is_some());
+    assert!(h.query_by_label("Gallery: Next page").is_some());
+    assert!(h.query_by_label("Gallery: Previous page").is_none());
+    h.get_by_label("Remove every key of Gallery: Next page")
+        .click();
+    h.run();
+    h.run();
+    let app = h.state().app.handle().clone();
+    let next = egui_pop::model::ids::CommandId::from_static("gallery.page.next");
+    assert!(app.keys_for(&next).is_empty());
+    let doc = app.export_keymap(egui_pop::model::keymap::Layer::User);
+    assert_eq!(doc.bindings[0].keys, "");
+}

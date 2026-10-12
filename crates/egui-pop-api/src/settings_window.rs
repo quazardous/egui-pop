@@ -57,6 +57,10 @@ struct State {
     section: Option<String>,
     /// The command whose new keys are awaited.
     capture: Option<CommandId>,
+    /// Waiting for keys to search by.
+    capture_search: bool,
+    /// The keys searched for (`Ctrl+K`), exactly.
+    key_filter: Option<String>,
 }
 
 /// Open or not, the search, the section shown.
@@ -81,6 +85,8 @@ impl SettingsWindow {
         let mut s = lock(&self.0);
         s.open = false;
         s.capture = None;
+        s.capture_search = false;
+        s.key_filter = None;
         s.filter.clear();
     }
 
@@ -178,7 +184,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     let mut close = false;
     overlay::show(&ctx, &spec, &mut open, None, |ui| {
         let t = Tokens::of(ui.ctx());
-        let capturing = w.capturing().is_some();
+        let capturing = w.capturing().is_some() || lock(&w.0).capture_search;
         if !capturing && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, Key::Escape)) {
             close = true;
             return;
@@ -217,7 +223,9 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                 ui.set_width(200.0);
                 for sec in &secs {
                     let hits = if sec == SHORTCUTS {
-                        usize::from(filter.is_empty() || !shortcut_rows(app, &filter).is_empty())
+                        usize::from(
+                            filter.is_empty() || !shortcut_rows(app, &filter, None).is_empty(),
+                        )
                     } else {
                         entries
                             .iter()
@@ -255,7 +263,8 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                             ui.strong(&current);
                             ui.add_space(t.space.s);
                             if current == SHORTCUTS {
-                                shortcuts(ui, app, &mut s.capture, "");
+                                let st = &mut *s;
+                                shortcuts(ui, app, st, "");
                             } else {
                                 for e in entries.iter().filter(|e| e.section == current) {
                                     row(ui, app, e);
@@ -265,10 +274,11 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                             let mut any = false;
                             for sec in &secs {
                                 if sec == SHORTCUTS {
-                                    if !shortcut_rows(app, &filter).is_empty() {
+                                    if !shortcut_rows(app, &filter, None).is_empty() {
                                         any = true;
                                         ui.strong(sec);
-                                        shortcuts(ui, app, &mut s.capture, &filter);
+                                        let st = &mut *s;
+                                        shortcuts(ui, app, st, &filter);
                                     }
                                     continue;
                                 }
@@ -293,7 +303,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                     });
                 });
         });
-        app.capture_keys(s.capture.is_some());
+        app.capture_keys(s.capture.is_some() || s.capture_search);
     });
     if close || !open {
         w.close();
@@ -362,9 +372,10 @@ fn row(ui: &mut Ui, app: &AppHandle, e: &SettingEntry) {
     ui.add_space(t.space.s);
 }
 
-/// The commands the shortcuts editor lists for a search: visible ones
-/// and those with keys, as `Category: Title`.
-fn shortcut_rows(app: &AppHandle, filter: &str) -> Vec<(CommandSpec, String)> {
+/// The commands the shortcuts editor lists for a search (and, when
+/// searching by key, those bound to exactly these keys): visible ones and
+/// those with keys, as `Category: Title`.
+fn shortcut_rows(app: &AppHandle, filter: &str, keys: Option<&str>) -> Vec<(CommandSpec, String)> {
     let mut rows: Vec<(CommandSpec, String)> = app
         .commands()
         .into_iter()
@@ -374,6 +385,7 @@ fn shortcut_rows(app: &AppHandle, filter: &str) -> Vec<(CommandSpec, String)> {
             let label = format!("{}: {}", s.category, s.title);
             (s, label)
         })
+        .filter(|(s, _)| keys.is_none_or(|k| app.keys_for(&s.id).iter().any(|x| x == k)))
         .filter(|(s, label)| {
             filter.is_empty()
                 || filter.split_whitespace().all(|w| {
@@ -389,28 +401,88 @@ fn shortcut_rows(app: &AppHandle, filter: &str) -> Vec<(CommandSpec, String)> {
     rows
 }
 
+/// The first key pressed this frame, with its modifiers, as keys.
+fn pressed_keys(ui: &Ui) -> Option<(Key, egui::Modifiers)> {
+    ui.input(|i| {
+        i.events.iter().find_map(|e| match e {
+            egui::Event::Key {
+                key,
+                pressed: true,
+                modifiers,
+                ..
+            } => Some((*key, *modifiers)),
+            _ => None,
+        })
+    })
+}
+
 /// The shortcuts editor.
-fn shortcuts(ui: &mut Ui, app: &AppHandle, capture: &mut Option<CommandId>, filter: &str) {
+fn shortcuts(ui: &mut Ui, app: &AppHandle, st: &mut State, filter: &str) {
     let t = Tokens::of(ui.ctx());
+    // Search by key: the next keys pressed.
+    ui.horizontal(|ui| {
+        if st.capture_search {
+            ui.colored_label(
+                t.accent.default,
+                "Press the keys to search for. Escape: cancel.",
+            );
+            match pressed_keys(ui) {
+                Some((Key::Escape, m)) if !m.any() => st.capture_search = false,
+                Some((key, modifiers)) => {
+                    st.key_filter = Some(Keys(vec![chord_of(key, modifiers)]).to_string());
+                    st.capture_search = false;
+                }
+                None => {}
+            }
+            ui.input_mut(|i| {
+                i.events
+                    .retain(|e| !matches!(e, egui::Event::Key { .. } | egui::Event::Text(_)))
+            });
+        } else if ui.button("Search by key").clicked() {
+            st.capture_search = true;
+            st.capture = None;
+        }
+        if let Some(k) = st.key_filter.clone() {
+            ui.label(format!("Bound to {k}"));
+            let clear = ui.small_button("Show every command");
+            if clear.clicked() {
+                st.key_filter = None;
+            }
+        }
+    });
+    // Conflicts, by scope.
+    let by_scope = app.key_conflicts_by_scope();
+    if !by_scope.is_empty() {
+        ui.add_space(t.space.s);
+        ui.strong("Conflicts");
+        for (scope, list) in &by_scope {
+            for (lose, win) in list {
+                let name = |b: &egui_pop_model::keymap::Binding| match &b.action {
+                    Action::Run(c) => app.command(c).map_or(c.to_string(), |s| s.title),
+                    _ => String::new(),
+                };
+                ui.colored_label(
+                    t.status.warning,
+                    format!(
+                        "{} in {scope}: {} goes to {}",
+                        lose.keys,
+                        name(lose),
+                        name(win)
+                    ),
+                );
+            }
+        }
+        ui.add_space(t.space.s);
+    }
+    let capture = &mut st.capture;
+    let key_filter = st.key_filter.clone();
     if let Some(c) = capture.clone() {
         let title = app.command(&c).map(|s| s.title).unwrap_or_default();
         ui.colored_label(
             t.accent.default,
             format!("Press the new keys for {title}. Escape: cancel; Backspace: no key."),
         );
-        // The first key pressed, with its modifiers.
-        let pressed = ui.input(|i| {
-            i.events.iter().find_map(|e| match e {
-                egui::Event::Key {
-                    key,
-                    pressed: true,
-                    modifiers,
-                    ..
-                } => Some((*key, *modifiers)),
-                _ => None,
-            })
-        });
-        match pressed {
+        match pressed_keys(ui) {
             Some((Key::Escape, m)) if !m.any() => *capture = None,
             Some((Key::Backspace, m)) if !m.any() => {
                 app.rebind(c, None);
@@ -435,7 +507,7 @@ fn shortcuts(ui: &mut Ui, app: &AppHandle, capture: &mut Option<CommandId>, filt
         .striped(true)
         .spacing([t.space.m, t.space.xs])
         .show(ui, |ui| {
-            for (spec, label) in shortcut_rows(app, filter) {
+            for (spec, label) in shortcut_rows(app, filter, key_filter.as_deref()) {
                 let name = ui.label(&label);
                 let keys = app.keys_for(&spec.id);
                 ui.monospace(if keys.is_empty() {
@@ -478,6 +550,17 @@ fn shortcuts(ui: &mut Ui, app: &AppHandle, capture: &mut Option<CommandId>, filt
                     );
                     if change.clicked() {
                         *capture = Some(spec.id.clone());
+                    }
+                    if !keys.is_empty() {
+                        let none = ui.small_button("No key");
+                        a11y::name(
+                            &none,
+                            WidgetType::Button,
+                            &format!("Remove every key of {label}"),
+                        );
+                        if none.clicked() {
+                            app.rebind(spec.id.clone(), None);
+                        }
                     }
                     if app.rebound(&spec.id) {
                         let reset = ui.small_button(strings::tr(ui.ctx(), &RESET));

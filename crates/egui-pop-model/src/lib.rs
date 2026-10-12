@@ -33,7 +33,9 @@ pub mod when;
 
 /// The `keymap` document's schema.
 pub fn keymap_schema() -> doc::Schema {
-    doc::Schema::new("keymap", 1).migration(0, doc::same)
+    doc::Schema::new("keymap", 2)
+        .migration(0, doc::same)
+        .migration(1, keymap::drop_placeholder_keys)
 }
 
 pub use serde_json;

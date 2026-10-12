@@ -41,6 +41,11 @@ use crate::steps::{HookFn, HookInfo, Outcome, StepHook, StepInfo, StepSpec, Step
 use crate::stories::{Story, StoryInfo};
 use crate::zones::{self, Block, DrawFn, ZoneInfo, ZoneTable, draw_chain};
 
+/// The user gives a command new keys, or none (`{ "command", "keys" }`).
+pub const STEP_REBIND: StepId = StepId::from_static("keys.rebind");
+/// A keymap document is loaded into a layer (`{ "layer", "bindings" }`).
+pub const STEP_LOAD_KEYMAP: StepId = StepId::from_static("keys.load");
+
 /// The main menu bar.
 pub const MENU_MAIN: MenuId = MenuId::from_static("app.main");
 pub const MENU_FILE: MenuId = MenuId::from_static("app.menu.file");
@@ -199,6 +204,8 @@ pub(crate) struct Derived {
     pub keys: BTreeMap<CommandId, Vec<String>>,
     /// Bindings losing to another on the same keys: loser, winner.
     pub conflicts: Vec<(Binding, Binding)>,
+    /// Each layer's bindings, as saved (what `export_keymap` gives).
+    pub layers: BTreeMap<Layer, egui_pop_model::keymap::KeymapDoc>,
     /// Commands whose keys the user changed.
     pub rebound: BTreeSet<CommandId>,
 }
@@ -227,6 +234,18 @@ pub enum Request {
     },
     /// Gives a command back its default keys.
     ResetKeys(CommandId),
+    /// Declares a command after build (`AppHandle::declare`).
+    Declare {
+        owner: OwnerId,
+        spec: CommandSpec,
+    },
+    /// Removes a command declared after build.
+    Undeclare(CommandId),
+    /// Loads a keymap document into a layer.
+    LoadKeymap {
+        doc: egui_pop_model::keymap::KeymapDoc,
+        layer: Layer,
+    },
     /// A workbench change asked for while the areas were drawn.
     Workbench(crate::workbench::Change),
 }
@@ -900,6 +919,62 @@ impl AppHandle {
     /// dispatcher (a shortcuts editor capturing new keys).
     pub fn capture_keys(&self, on: bool) {
         self.0.capturing.set(on);
+    }
+
+    /// [`AppHandle::key_conflicts`] by scope (`global`, `surface:<name>`).
+    pub fn key_conflicts_by_scope(&self) -> BTreeMap<String, Vec<(Binding, Binding)>> {
+        let mut out: BTreeMap<String, Vec<(Binding, Binding)>> = BTreeMap::new();
+        for (lose, win) in self.key_conflicts() {
+            out.entry(lose.options.scope.to_string())
+                .or_default()
+                .push((lose, win));
+        }
+        out
+    }
+
+    /// Declares a command after build, owned by `owner` (a host's own
+    /// registry changing at run time), with the rules and traces of
+    /// `Ctx::declare`: its keys, menus and palette entry follow before the
+    /// next frame, with no plugin reconnected. A refusal is logged and
+    /// published (`command.declare_failed`).
+    pub fn declare(&self, owner: &OwnerId, spec: CommandSpec) {
+        self.push_request(Request::Declare {
+            owner: owner.clone(),
+            spec,
+        });
+    }
+
+    /// Removes a command declared after build, with its keys and menu
+    /// items, before the next frame.
+    pub fn undeclare(&self, id: &CommandId) {
+        self.push_request(Request::Undeclare(id.clone()));
+    }
+
+    /// A layer's bindings, whoever declared them, as a keymap document
+    /// (scopes, `when` clauses, every key): a profile to save.
+    pub fn export_keymap(&self, layer: Layer) -> egui_pop_model::keymap::KeymapDoc {
+        self.0
+            .derived
+            .borrow()
+            .layers
+            .get(&layer)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    /// Loads a keymap document into the user's (or the workspace's)
+    /// layer, replacing what was loaded there, before the next frame
+    /// (the `keys.load` step). Returns what it will change against the
+    /// layer as it stands; conflicts are published once applied
+    /// (`keys.conflict`). `App::load_keymap` does it at once.
+    pub fn load_keymap(
+        &self,
+        doc: egui_pop_model::keymap::KeymapDoc,
+        layer: Layer,
+    ) -> egui_pop_model::keymap::KeymapDiff {
+        let diff = egui_pop_model::keymap::KeymapDiff::between(&self.export_keymap(layer), &doc);
+        self.push_request(Request::LoadKeymap { doc, layer });
+        diff
     }
 
     /// Bindings losing to another on the same keys (loser, winner): what
@@ -1720,6 +1795,20 @@ impl App {
         crate::zoom::register(&mut ctx)?;
         ctx.service(&FOCUS_MODE, modes)?;
         ctx.step(
+            crate::steps::StepSpec::new(
+                STEP_REBIND,
+                "The user gives a command new keys (`command`, `keys`; null: no key).",
+            )
+            .args(json!({ "command": "app.quit", "keys": "Ctrl+Q" })),
+        )?
+        .step(
+            crate::steps::StepSpec::new(
+                STEP_LOAD_KEYMAP,
+                "A keymap document is loaded into the user's or the workspace's layer.",
+            )
+            .args(json!({ "layer": "user", "bindings": 3 })),
+        )?;
+        ctx.step(
             StepSpec::new(
                 STEP_UNDO,
                 "Undoes the last change: the host's undo by default.",
@@ -2320,6 +2409,41 @@ impl App {
             })
             .collect();
         derived.conflicts = reg.keymap.conflicts();
+        derived.layers = [
+            Layer::Suggestion,
+            Layer::Default,
+            Layer::Workspace,
+            Layer::User,
+        ]
+        .into_iter()
+        .map(|l| (l, reg.keymap.export_layer(l)))
+        .collect();
+        // New conflicts are signalled once.
+        let before: Vec<String> = self
+            .handle
+            .0
+            .derived
+            .borrow()
+            .conflicts
+            .iter()
+            .map(|(l, w)| format!("{} {} {}", l.keys, l.action, w.action))
+            .collect();
+        for (lose, win) in &derived.conflicts {
+            let key = format!("{} {} {}", lose.keys, lose.action, win.action);
+            if self.started && !before.contains(&key) {
+                self.handle.publish(
+                    "egui_pop",
+                    None,
+                    "keys.conflict",
+                    json!({
+                        "keys": lose.keys.to_string(),
+                        "scope": lose.options.scope.to_string(),
+                        "loses": lose.action.to_string(),
+                        "wins": win.action.to_string(),
+                    }),
+                );
+            }
+        }
         derived.rebound = reg
             .commands
             .specs()
@@ -2494,6 +2618,94 @@ impl App {
             &egui_pop_model::layout::schema(),
             &self.handle.layout(),
         )
+    }
+
+    /// Declares a command now (see `AppHandle::declare`).
+    pub fn declare(&mut self, owner: &OwnerId, spec: CommandSpec) -> Result<(), CtxError> {
+        let id = spec.id.clone();
+        match crate::ctx::add_command(&mut self.reg, owner, spec, None) {
+            Ok(()) => {
+                self.rebuild();
+                Ok(())
+            }
+            Err(e) => {
+                self.handle.publish(
+                    "egui_pop",
+                    None,
+                    "command.declare_failed",
+                    json!({ "command": id, "owner": owner, "error": e.to_string() }),
+                );
+                Err(e)
+            }
+        }
+    }
+
+    /// Removes a command, its owner's keys and menu items for it; whether
+    /// it was declared.
+    pub fn undeclare(&mut self, id: &CommandId) -> bool {
+        let Some(owner) = self.reg.commands.remove(id) else {
+            return false;
+        };
+        self.reg.keymap.remove_command(&owner, id);
+        self.reg.menus.remove_command(&owner, id);
+        self.rebuild();
+        true
+    }
+
+    /// Loads a keymap document into the user's or the workspace's layer
+    /// now, through the `keys.load` step: what changed, what was skipped,
+    /// the conflicts after it.
+    pub fn load_keymap(
+        &mut self,
+        doc: &egui_pop_model::keymap::KeymapDoc,
+        layer: Layer,
+    ) -> Result<egui_pop_model::keymap::KeymapDiff, String> {
+        let owner = match layer {
+            Layer::User => OwnerId::USER,
+            Layer::Workspace => OwnerId::from_static("workspace"),
+            _ => return Err("only the user's and the workspace's layers load".into()),
+        };
+        let handle = self.handle.clone();
+        let keymap = &mut self.reg.keymap;
+        let mut diff = None;
+        let out = handle.step(
+            &STEP_LOAD_KEYMAP,
+            json!({ "layer": layer, "bindings": doc.bindings.len() }),
+            |_, _| {
+                let before = keymap.export(&owner, layer);
+                let d = keymap.load(&owner, layer, doc);
+                let mut diff_now = egui_pop_model::keymap::KeymapDiff::between(
+                    &before,
+                    &keymap.export(&owner, layer),
+                );
+                diff_now.skipped = d.all().iter().map(|x| x.message.clone()).collect();
+                diff_now.conflicts = keymap
+                    .conflicts()
+                    .iter()
+                    .map(|(l, w)| {
+                        format!(
+                            "{} ({}): {} loses to {}",
+                            l.keys, l.options.scope, l.action, w.action
+                        )
+                    })
+                    .collect();
+                let summary = json!({
+                    "added": diff_now.added.len(),
+                    "removed": diff_now.removed.len(),
+                    "changed": diff_now.changed.len(),
+                    "skipped": diff_now.skipped,
+                    "conflicts": diff_now.conflicts,
+                });
+                diff = Some(diff_now);
+                Ok(summary)
+            },
+        );
+        self.rebuild();
+        match out {
+            Outcome::Done(Ok(_)) => Ok(diff.unwrap_or_default()),
+            Outcome::Done(Err(e)) => Err(e),
+            Outcome::Vetoed { by, reason } => Err(format!("vetoed by {by}: {reason}")),
+        }
     }
 
     fn install_theme(&mut self) {
@@ -2730,16 +2942,43 @@ impl App {
                         self.disconnect(&p);
                     }
                     Request::Rebind { command, keys } => {
-                        match self.reg.keymap.rebind(
-                            &OwnerId::USER,
-                            Layer::User,
-                            &command,
-                            keys.as_deref(),
-                        ) {
-                            Ok(()) => self.dirty = true,
-                            Err(e) => {
-                                log::warn!(target: "egui_pop", "keys for `{command}`: {e}");
-                            }
+                        let handle = self.handle.clone();
+                        let keymap = &mut self.reg.keymap;
+                        let mut changed = false;
+                        let out = handle.step(
+                            &STEP_REBIND,
+                            json!({ "command": command, "keys": keys }),
+                            |_, args| {
+                                let command = args
+                                    .get("command")
+                                    .and_then(Json::as_str)
+                                    .and_then(|c| CommandId::new(c).ok())
+                                    .ok_or("`command` is missing")?;
+                                let keys = args.get("keys").and_then(Json::as_str);
+                                keymap.rebind(&OwnerId::USER, Layer::User, &command, keys)?;
+                                changed = true;
+                                Ok(json!({ "command": command, "keys": keys }))
+                            },
+                        );
+                        if changed {
+                            self.dirty = true;
+                        }
+                        if let Outcome::Done(Err(e)) = out {
+                            log::warn!(target: "egui_pop", "keys for `{command}`: {e}");
+                        }
+                    }
+                    Request::Declare { owner, spec } => {
+                        let id = spec.id.clone();
+                        if let Err(e) = self.declare(&owner, spec) {
+                            log::warn!(target: "egui_pop", "declaring `{id}`: {e}");
+                        }
+                    }
+                    Request::Undeclare(id) => {
+                        self.undeclare(&id);
+                    }
+                    Request::LoadKeymap { doc, layer } => {
+                        if let Err(e) = self.load_keymap(&doc, layer) {
+                            log::warn!(target: "egui_pop", "loading a keymap: {e}");
                         }
                     }
                     Request::ResetKeys(command) => {

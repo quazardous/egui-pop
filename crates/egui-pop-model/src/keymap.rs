@@ -482,6 +482,8 @@ pub struct KeymapDoc {
 /// A binding as saved.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct DocBinding {
+    /// Empty for a command's removal (`"-id"`), which needs no keys.
+    #[serde(default)]
     pub keys: String,
     /// `"id"`, `"-id"` to remove a command's bindings, `null` to unbind
     /// the keys.
@@ -534,7 +536,13 @@ impl Keymap {
         when: &str,
         options: BindOptions,
     ) -> Result<(), String> {
-        let parsed = Keys::parse(keys)?;
+        // A command's removal needs no keys: it takes every binding of the
+        // command in the layers below.
+        let parsed = if keys.trim().is_empty() && matches!(action, Action::Remove(_)) {
+            Keys(Vec::new())
+        } else {
+            Keys::parse(keys)?
+        };
         let w = When::parse(when).map_err(|e| format!("`{keys}`: {e}"))?;
         self.rules.push(
             owner,
@@ -792,10 +800,48 @@ impl Keymap {
         out
     }
 
+    /// [`Keymap::conflicts`], by scope (`global`, `surface:<name>`).
+    pub fn conflicts_by_scope(
+        &self,
+    ) -> std::collections::BTreeMap<String, Vec<(Binding, Binding)>> {
+        let mut out: std::collections::BTreeMap<String, Vec<(Binding, Binding)>> =
+            std::collections::BTreeMap::new();
+        for (lose, win) in self.conflicts() {
+            out.entry(lose.options.scope.to_string())
+                .or_default()
+                .push((lose, win));
+        }
+        out
+    }
+
+    /// Every binding of a layer, whoever declared it, as saved.
+    pub fn export_layer(&self, layer: Layer) -> KeymapDoc {
+        KeymapDoc {
+            bindings: self
+                .rules
+                .iter()
+                .filter(|s| s.item.binding.layer == layer)
+                .map(|s| doc_binding(&s.item.binding))
+                .collect(),
+        }
+    }
+
+    /// Removes an owner's bindings running a command, in every layer;
+    /// returns how many.
+    pub fn remove_command(&mut self, owner: &OwnerId, command: &CommandId) -> usize {
+        let before = self.rules.iter().count();
+        self.rules.retain(|s| {
+            !(s.owner == *owner
+                && matches!(&s.item.binding.action, Action::Run(c) | Action::Remove(c) if c == command))
+        });
+        before - self.rules.iter().count()
+    }
+
     /// Gives a command new keys in `layer` (the user's, from a shortcuts
     /// editor): the owner's earlier rules there about the command go, the
-    /// command's bindings in the layers below are removed, and `keys`
-    /// (none: no key at all) run it, global, typing decided by the keys.
+    /// command's bindings in the layers below are removed (a removal with
+    /// no keys), and `keys` (none: no key at all) run it, global, typing
+    /// decided by the keys.
     pub fn rebind(
         &mut self,
         owner: &OwnerId,
@@ -805,10 +851,15 @@ impl Keymap {
     ) -> Result<(), String> {
         let parsed = keys.map(Keys::parse).transpose()?;
         self.reset(owner, layer, command);
-        let at = parsed.map_or_else(|| "Ctrl+Alt+Shift+F24".to_string(), |k| k.to_string());
-        self.bind(owner, layer, &at, Action::Remove(command.clone()), "")?;
-        if keys.is_some() {
-            self.bind(owner, layer, &at, Action::Run(command.clone()), "")?;
+        self.bind(owner, layer, "", Action::Remove(command.clone()), "")?;
+        if let Some(k) = parsed {
+            self.bind(
+                owner,
+                layer,
+                &k.to_string(),
+                Action::Run(command.clone()),
+                "",
+            )?;
         }
         Ok(())
     }
@@ -869,22 +920,102 @@ impl Keymap {
                 .rules
                 .iter()
                 .filter(|s| s.owner == *owner && s.item.binding.layer == layer)
-                .map(|s| {
-                    let o = &s.item.binding.options;
-                    DocBinding {
-                        keys: s.item.binding.keys.to_string(),
-                        command: s.item.binding.action.to_file(),
-                        when: s.item.binding.when.clone(),
-                        scope: if o.scope.is_global() {
-                            String::new()
-                        } else {
-                            o.scope.to_string()
-                        },
-                        typing: o.typing,
-                        through_modal: o.through_modal,
-                    }
-                })
+                .map(|s| doc_binding(&s.item.binding))
                 .collect(),
         }
+    }
+}
+
+/// A binding as saved.
+fn doc_binding(b: &Binding) -> DocBinding {
+    let o = &b.options;
+    DocBinding {
+        keys: b.keys.to_string(),
+        command: b.action.to_file(),
+        when: b.when.clone(),
+        scope: if o.scope.is_global() {
+            String::new()
+        } else {
+            o.scope.to_string()
+        },
+        typing: o.typing,
+        through_modal: o.through_modal,
+    }
+}
+
+/// Version 1 of the keymap document gave a command's removal a
+/// placeholder key (`Ctrl+Alt+Shift+F24`); version 2 gives it none.
+pub fn drop_placeholder_keys(mut json: serde_json::Value) -> Result<serde_json::Value, String> {
+    if let Some(list) = json
+        .get_mut("bindings")
+        .and_then(serde_json::Value::as_array_mut)
+    {
+        for b in list {
+            let removal = b
+                .get("command")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|c| c.starts_with('-'));
+            if removal
+                && b.get("keys").and_then(serde_json::Value::as_str) == Some("Ctrl+Alt+Shift+F24")
+            {
+                b["keys"] = serde_json::Value::String(String::new());
+            }
+        }
+    }
+    Ok(json)
+}
+
+/// What loading a keymap document changes, against what was there.
+#[derive(Clone, Debug, Default, PartialEq, Serialize)]
+pub struct KeymapDiff {
+    /// Bindings the document adds.
+    pub added: Vec<DocBinding>,
+    /// Bindings it drops.
+    pub removed: Vec<DocBinding>,
+    /// Bindings on the same keys, scope and clause whose command changed:
+    /// before, after.
+    pub changed: Vec<(DocBinding, DocBinding)>,
+    /// Bindings that do not parse, skipped.
+    pub skipped: Vec<String>,
+    /// Keys two commands claim in one scope after the load: loser, winner.
+    pub conflicts: Vec<String>,
+}
+
+impl KeymapDiff {
+    /// Compares two documents of one layer.
+    pub fn between(before: &KeymapDoc, after: &KeymapDoc) -> KeymapDiff {
+        let key = |b: &DocBinding| (b.keys.clone(), b.scope.clone(), b.when.clone());
+        let mut added: Vec<DocBinding> = after
+            .bindings
+            .iter()
+            .filter(|b| !before.bindings.contains(b))
+            .cloned()
+            .collect();
+        let mut removed: Vec<DocBinding> = before
+            .bindings
+            .iter()
+            .filter(|b| !after.bindings.contains(b))
+            .cloned()
+            .collect();
+        let mut changed = Vec::new();
+        removed.retain(|r| match added.iter().position(|a| key(a) == key(r)) {
+            Some(i) => {
+                changed.push((r.clone(), added.remove(i)));
+                false
+            }
+            None => true,
+        });
+        KeymapDiff {
+            added,
+            removed,
+            changed,
+            skipped: Vec::new(),
+            conflicts: Vec::new(),
+        }
+    }
+
+    /// Whether nothing changes.
+    pub fn is_empty(&self) -> bool {
+        self.added.is_empty() && self.removed.is_empty() && self.changed.is_empty()
     }
 }

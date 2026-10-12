@@ -204,6 +204,16 @@ impl Menus {
         v
     }
 
+    /// Removes an owner's items running a command; returns how many.
+    pub fn remove_command(&mut self, owner: &OwnerId, command: &CommandId) -> usize {
+        let before = self.items.len();
+        self.items.retain(|s| {
+            !(s.owner == *owner
+                && matches!(&s.item.item, Item::Command { id, .. } if id == command))
+        });
+        before - self.items.len()
+    }
+
     /// Removes an owner's items; returns how many.
     pub fn remove_owner(&mut self, owner: &OwnerId) -> usize {
         self.items.remove_owner(owner)

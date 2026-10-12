@@ -145,48 +145,7 @@ impl<'a> Ctx<'a> {
         spec: CommandSpec,
         handler: Option<CommandFn>,
     ) -> Result<&mut Self, CtxError> {
-        for k in &spec.keys {
-            egui_pop_model::keymap::Keys::parse(&k.keys).map_err(|error| CtxError::Keys {
-                keys: k.keys.clone(),
-                error,
-            })?;
-        }
-        let keys = spec.keys.clone();
-        let menus = spec.menus.clone();
-        let id = spec.id.clone();
-        let when = spec.when.clone();
-        let checked = spec.checked.clone();
-        self.reg
-            .commands
-            .register(&self.owner, spec, handler)
-            .map_err(CtxError::Command)?;
-        for k in keys {
-            self.reg
-                .keymap
-                .bind_with(
-                    &self.owner,
-                    Layer::Default,
-                    &k.keys,
-                    Action::Run(id.clone()),
-                    &when,
-                    k.options,
-                )
-                .map_err(|error| CtxError::Keys {
-                    keys: k.keys,
-                    error,
-                })?;
-        }
-        for m in menus {
-            self.reg
-                .menus
-                .contribute(
-                    &self.owner,
-                    MenuItem::command(m.menu, &m.group, m.order, id.clone())
-                        .when(&when, true)
-                        .checked(&checked),
-                )
-                .map_err(CtxError::Menu)?;
-        }
+        add_command(self.reg, &self.owner, spec, handler)?;
         Ok(self)
     }
 
@@ -521,4 +480,54 @@ impl<'a> Ctx<'a> {
         self.app.add_story(&self.owner, story)?;
         Ok(self)
     }
+}
+
+/// Declares a command and what derives from it (keys, menu items), owned
+/// by `owner`: `Ctx::command`, `Ctx::declare` and `App::declare`.
+pub(crate) fn add_command(
+    reg: &mut Registries,
+    owner: &OwnerId,
+    spec: CommandSpec,
+    handler: Option<CommandFn>,
+) -> Result<(), CtxError> {
+    for k in &spec.keys {
+        egui_pop_model::keymap::Keys::parse(&k.keys).map_err(|error| CtxError::Keys {
+            keys: k.keys.clone(),
+            error,
+        })?;
+    }
+    let keys = spec.keys.clone();
+    let menus = spec.menus.clone();
+    let id = spec.id.clone();
+    let when = spec.when.clone();
+    let checked = spec.checked.clone();
+    reg.commands
+        .register(owner, spec, handler)
+        .map_err(CtxError::Command)?;
+    for k in keys {
+        reg.keymap
+            .bind_with(
+                owner,
+                Layer::Default,
+                &k.keys,
+                Action::Run(id.clone()),
+                &when,
+                k.options,
+            )
+            .map_err(|error| CtxError::Keys {
+                keys: k.keys,
+                error,
+            })?;
+    }
+    for m in menus {
+        reg.menus
+            .contribute(
+                owner,
+                MenuItem::command(m.menu, &m.group, m.order, id.clone())
+                    .when(&when, true)
+                    .checked(&checked),
+            )
+            .map_err(CtxError::Menu)?;
+    }
+    Ok(())
 }

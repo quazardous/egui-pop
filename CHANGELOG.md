@@ -9,6 +9,16 @@ egui minor.
 
 ### Added
 
+- The keymap at run time: `AppHandle::declare` and `undeclare` (a
+  command declared or removed after build, owned by a named owner, its
+  keys, menus and palette entry following with no plugin reconnected);
+  `AppHandle::export_keymap(layer)` and `load_keymap(doc, layer)` (and
+  `App::load_keymap`), a full keymap document with its scopes, `when`
+  clauses and every key, with a `KeymapDiff` (added, removed, changed,
+  skipped, conflicts). Steps `keys.rebind` and `keys.load`; the signal
+  `keys.conflict` for each new conflict. The shortcuts editor shows
+  conflicts by scope, searches by key and removes every key of a
+  command (`No key`).
 - Arrangements (`egui_pop_api::arrangements::ArrangementsPlugin`, in
   `DefaultPlugins`): named layouts of the workbench saved, switched and
   reset, kept in the host's store (`settings/workbench.arrangements`);
@@ -422,6 +432,9 @@ egui minor.
 
 ### Changed
 
+- Removing every key of a command needs no placeholder key: a removal
+  (`"-id"`) has empty keys; the keymap document is version 2 and older
+  ones migrate.
 - A toast's text wraps in the width its close button and action leave,
   no longer running under them (gallery: a long warning in English and
   a long error in French).

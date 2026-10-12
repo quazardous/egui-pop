@@ -389,6 +389,11 @@ impl<H> Commands<H> {
         self.history.iter()
     }
 
+    /// Removes one command; returns its owner.
+    pub fn remove(&mut self, id: &CommandId) -> Option<OwnerId> {
+        self.entries.remove(id).map(|slot| slot.owner)
+    }
+
     /// Removes an owner's commands; returns their ids.
     pub fn remove_owner(&mut self, owner: &OwnerId) -> Vec<CommandId> {
         self.entries
