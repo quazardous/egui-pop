@@ -298,3 +298,33 @@ fn toasts_show_in_a_corner_and_their_action_runs() {
         );
     }
 }
+
+#[test]
+fn values_bind_in_three_modes_and_watch_follows() {
+    let mut results = egui_kittest::SnapshotResults::new();
+    for theme in ["pop-dark", "pop-light"] {
+        let mut h = harness(options(theme, Density::Comfortable, "values"));
+        h.run();
+        egui_pop_test::assert_all_named(&h);
+        results.add(h.try_snapshot(format!("values-{theme}")));
+    }
+    let mut h = harness(options("pop-dark", Density::Comfortable, "values"));
+    h.run();
+    h.get_by_label("Exposure").click();
+    h.run();
+    h.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::ArrowRight);
+    h.run();
+    let store = h.state().app.handle().store();
+    let ev = egui_pop::core::lock(&store)
+        .get("gallery/values/exposure")
+        .unwrap()
+        .value
+        .as_f64()
+        .unwrap();
+    assert!((ev - 0.1).abs() < 1e-9, "{ev}");
+    assert!(
+        h.get_by_label("Exposure (watched)")
+            .accesskit_node()
+            .is_disabled()
+    );
+}

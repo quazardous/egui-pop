@@ -215,3 +215,29 @@ pub fn edit<T: Bindable>(
 pub fn read<T: Bindable>(store: &SharedStore, path: &str) -> Option<T> {
     lock(store).get(path).and_then(|e| T::from_value(&e.value))
 }
+
+/// One of a descriptor's choices, as a widget edits it (a `String` would
+/// be written as free text).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Choice(pub String);
+
+impl Bindable for Choice {
+    fn from_value(v: &Value) -> Option<Self> {
+        v.as_choice().map(|c| Choice(c.to_string()))
+    }
+    fn to_value(&self) -> Value {
+        Value::Choice(self.0.clone())
+    }
+}
+
+impl Bindable for Vec<f64> {
+    fn from_value(v: &Value) -> Option<Self> {
+        match v {
+            Value::Floats(f) => Some(f.clone()),
+            _ => None,
+        }
+    }
+    fn to_value(&self) -> Value {
+        Value::Floats(self.clone())
+    }
+}

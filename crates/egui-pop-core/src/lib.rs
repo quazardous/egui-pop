@@ -9,6 +9,10 @@
 //! - [`keys`]: the key dispatcher (chords, consumption, traces);
 //! - [`overlay`]: the overlay stack (top-layer dismissal, modality,
 //!   focus restore);
+//! - [`param`]: the editor a value descriptor calls for, in the three
+//!   binding modes;
+//! - [`slider`]: a darktable-style slider (soft and hard range, fine
+//!   and coarse, reset, typed entry);
 //! - [`placement`]: floating elements placed with flip and shift;
 //! - [`a11y`]: accessible names and an announcer;
 //! - [`strings`]: the library's own strings, by key, with English
@@ -29,8 +33,10 @@ pub mod focus_mode;
 pub mod icon;
 pub mod keys;
 pub mod overlay;
+pub mod param;
 pub mod persist;
 pub mod placement;
+pub mod slider;
 pub mod strings;
 pub mod theme;
 

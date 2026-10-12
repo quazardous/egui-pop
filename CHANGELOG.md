@@ -9,6 +9,17 @@ egui minor.
 
 ### Added
 
+- A darktable-style slider (`egui_pop_core::slider::Slider`): the label
+  and the value inside the bar, a soft range the bar spans and a hard
+  range a typed value may reach, drag (Shift: finer), arrows when
+  focused (Shift: coarse, Ctrl: finer), the wheel only when focused,
+  Enter to type a value with its unit (a comma is a point), a double
+  click to reset; built from a value descriptor with
+  `Slider::from_descriptor`. A parameter widget
+  (`egui_pop_core::param::param`) draws the editor a descriptor calls
+  for (slider, check box, drop-down, colour swatch, text) in the three
+  binding modes (`Mode::Plain`, `Bound`, `Watch`); `binding::Choice`
+  and `Vec<f64>` bind choices and colours. A gallery page shows them.
 - Toasts as a plugin (`egui_pop_api::toasts::ToastsPlugin`, in
   `DefaultPlugins`): notices in the bottom-right corner that never take
   the focus, by level (information and success go after 4 s, warnings
