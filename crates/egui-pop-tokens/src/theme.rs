@@ -589,7 +589,13 @@ impl Themes {
                         },
                     );
                 }
-                Err(e) => problems.push(e),
+                // A broken token is reported once, not again for each
+                // token aliasing it.
+                Err(e) => {
+                    if !problems.contains(&e) {
+                        problems.push(e);
+                    }
+                }
             }
         }
         for r in CONTRACT {

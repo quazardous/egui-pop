@@ -9,6 +9,19 @@ egui minor.
 
 ### Added
 
+- The window's own frame: `egui_pop_core::frame` draws a title bar
+  (caption to drag, double click to maximize, minimize, maximize and
+  close buttons, room for leading and trailing items) and resize edges
+  never thinner than 6 physical pixels, and publishes each window's hit
+  regions in physical pixels (`HitTable`, `HitRegions::hit`) for a
+  platform layer answering the system's hit tests (Windows Snap
+  Layouts). `egui_pop_api::frame::FramePlugin` (opt-in) puts it in the
+  new `TITLE` zone above the menu bar, with a system menu (`Alt+Space`,
+  `MENU_SYSTEM`), the `CAPTION` zone for the application's items, a
+  `window.frame` setting (own or system), the steps `frame.minimize`,
+  `frame.maximize`, `frame.close` and `frame.system_menu`, and a `frame`
+  debug collector. Titlebar tokens: `size.titlebar.{height, button}`,
+  `size.frame.grip`, `titlebar.*`. Gallery page: Window frame.
 - Steps (ADR 0011, `egui_pop_api::steps`): a feature's moments
   (`frame.close`, `workbench.detach`...) declared with `Ctx::step` and
   run with `AppHandle::step`; plugins observe them on the journal, veto
@@ -265,6 +278,10 @@ egui minor.
 
 ### Changed
 
+- A broken token is reported once by the resolver, not again for each
+  token aliasing it.
+- `zones::SHELL` holds the new `TITLE` zone, drawn above the menu bar
+  when it has blocks.
 - The slider follows the shared interaction grammar: Ctrl (Cmd) is
   finer and Shift coarser for drags, arrows and the wheel alike; the
   wheel scrolls the panel and steps a slider only when it has the focus

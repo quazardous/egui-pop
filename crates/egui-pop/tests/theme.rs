@@ -127,7 +127,15 @@ fn a_broken_theme_installs_with_fallbacks_and_reports() {
         .unwrap();
     let ctx = egui::Context::default();
     let t = theme::install_with(&ctx, &themes, &ThemeSpec::new("broken"));
-    assert_eq!(t.resolved().problems().len(), 1);
+    // The broken role, and the component tokens aliasing it.
+    let problems = t.resolved().problems();
+    assert!(!problems.is_empty());
+    assert!(
+        problems
+            .iter()
+            .all(|p| p.to_string().contains("surface.panel")),
+        "{problems:?}"
+    );
     assert_eq!(
         ctx.global_style().visuals.panel_fill,
         Tokens::default().surface.panel

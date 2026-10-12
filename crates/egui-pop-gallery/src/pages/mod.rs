@@ -8,6 +8,7 @@ use egui_pop::theme::Tokens;
 pub mod builtins;
 pub mod debug;
 pub mod dialogs;
+pub mod frame;
 pub mod icons;
 pub mod menus;
 pub mod overview;

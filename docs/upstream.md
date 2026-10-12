@@ -76,6 +76,11 @@ Reviewed at every egui bump: remove what upstream fixed, update the rest.
   2024. Maintainers point to subclassing the window outside winit; a 2026
   comment on the issue notes that subclassing does not help when a child
   window covers the client area.
-- **Workaround**: applications that draw their own frame keep the
-  system's title bar on Windows; Helios does so until a hook exists.
+- **Workaround**: egui-pop's frame (`egui_pop_core::frame`) publishes
+  each window's hit regions every frame, in physical client pixels
+  (`HitTable`, `HitRegions::hit` mapping a point to caption, minimize,
+  maximize, close or a resize edge), so that a small Windows-only layer
+  outside egui-pop (which forbids `unsafe`) can subclass the window and
+  answer `WM_NCHITTEST` itself. Until that layer exists, applications
+  drawing their own frame keep the system's title bar on Windows.
 - **Remove when**: winit can answer a hit test for a point of the window.

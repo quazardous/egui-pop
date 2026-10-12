@@ -130,6 +130,21 @@ pub const CONTRACT: &[Required] = &[
     sys("size.icon.panel", "dimension", "icons in panel strips"),
     sys("size.dialog.width", "dimension", "width of dialogs"),
     sys("size.toast.width", "dimension", "width of toasts"),
+    sys(
+        "size.titlebar.height",
+        "dimension",
+        "height of a window's own title bar",
+    ),
+    sys(
+        "size.titlebar.button",
+        "dimension",
+        "width of a title bar's window buttons",
+    ),
+    sys(
+        "size.frame.grip",
+        "dimension",
+        "width of a window's own resize edges",
+    ),
     sys("font.size.small", "dimension", "captions and small print"),
     sys("font.size.body", "dimension", "body text and buttons"),
     sys("font.size.heading", "dimension", "headings"),
@@ -195,6 +210,39 @@ pub const CONTRACT: &[Required] = &[
         "color",
         "the ring around a handle",
     ),
+    comp("titlebar.background", "color", "a window's own title bar"),
+    comp(
+        "titlebar.text",
+        "color",
+        "the title, a button's glyph under the pointer",
+    ),
+    comp(
+        "titlebar.text-muted",
+        "color",
+        "a window button's glyph at rest",
+    ),
+    comp(
+        "titlebar.button-hover",
+        "color",
+        "a window button under the pointer",
+    ),
+    comp(
+        "titlebar.close-hover",
+        "color",
+        "the close button under the pointer",
+    ),
+    comp(
+        "titlebar.close-text",
+        "color",
+        "the close button's glyph under the pointer",
+    ),
+    comp("titlebar.height", "dimension", "the title bar's height"),
+    comp(
+        "titlebar.button-width",
+        "dimension",
+        "a window button's width",
+    ),
+    comp("titlebar.grip", "dimension", "the resize edges' width"),
 ];
 
 /// The contract entry for a path.

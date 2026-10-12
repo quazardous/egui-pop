@@ -163,6 +163,13 @@
     },
     "toast": {
       "width": {"$value": {"value": 340, "unit": "px"}}
+    },
+    "titlebar": {
+      "height": {"$value": {"value": 32, "unit": "px"}, "$description": "Height of a window's own title bar."},
+      "button": {"$value": {"value": 44, "unit": "px"}, "$description": "Width of the minimize, maximize and close buttons."}
+    },
+    "frame": {
+      "grip": {"$value": {"value": 6, "unit": "px"}, "$description": "Width of a window's own resize edges (never under 6 physical pixels)."}
     }
   },
   "font": {
@@ -230,5 +237,17 @@
     "handle": {"$value": "{accent.default}", "$description": "A handle at rest."},
     "handle-hover": {"$value": "{accent.hover}", "$description": "A handle under the pointer or dragged."},
     "handle-outline": {"$value": "{surface.canvas}", "$description": "The ring around a handle."}
+  },
+  "titlebar": {
+    "$description": "A window's own title bar, when the application draws its frame.",
+    "background": {"$type": "color", "$value": "{surface.panel}"},
+    "text": {"$type": "color", "$value": "{text.default}"},
+    "text-muted": {"$type": "color", "$value": "{text.muted}"},
+    "button-hover": {"$type": "color", "$value": "{surface.hover}"},
+    "close-hover": {"$type": "color", "$value": "{danger}"},
+    "close-text": {"$type": "color", "$value": "{text.on-accent}"},
+    "height": {"$type": "dimension", "$value": "{size.titlebar.height}"},
+    "button-width": {"$type": "dimension", "$value": "{size.titlebar.button}"},
+    "grip": {"$type": "dimension", "$value": "{size.frame.grip}"}
   }
 }

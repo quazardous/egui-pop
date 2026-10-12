@@ -380,3 +380,39 @@ fn the_viewport_page_zooms_through_commands_and_reports_signals() {
     assert_eq!(snap["viewport"]["viewports"]["gallery"]["zoom"], 2.0);
     h.snapshot("viewport-pop-dark");
 }
+
+#[test]
+fn the_frame_page_draws_the_gallerys_own_frame_and_vetoes_closing() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "frame"));
+    h.run();
+    // The preview's buttons and regions, then the gallery's own frame.
+    assert!(h.query_by_label("Preview menu").is_some());
+    let mut results = egui_kittest::SnapshotResults::new();
+    results.add(h.try_snapshot("frame-pop-dark"));
+    let store = h.state().app.handle().store();
+    egui_pop::core::lock(&store)
+        .set(egui_pop::model::values::Set::new(
+            "settings/window.frame",
+            egui_pop::model::values::Change::To(egui_pop::model::values::Value::Choice(
+                "own".into(),
+            )),
+            egui_pop::model::commands::Origin::User,
+        ))
+        .unwrap();
+    h.run();
+    assert!(egui_pop::core::frame::regions(&h.ctx).is_some());
+    assert!(h.query_by_label("Window menu").is_some());
+    h.get_by_label("Veto closing the window (a before-hook on frame.close)")
+        .click();
+    h.run();
+    // The title bar's close button: the page's plugin vetoes it.
+    // The title bar's, then the preview's.
+    let closes: Vec<_> = h.query_all_by_label("Close").collect();
+    assert_eq!(closes.len(), 2);
+    closes[0].click();
+    h.run();
+    let trace = h.state().app.handle().step_traces().pop().unwrap();
+    assert_eq!(trace.step.as_str(), "frame.close");
+    assert!(trace.vetoed_by.is_some());
+    results.add(h.try_snapshot("frame-own-pop-dark"));
+}

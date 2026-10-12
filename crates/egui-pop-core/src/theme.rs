@@ -196,6 +196,22 @@ pub struct ToastTokens {
     pub width: f32,
 }
 
+/// A window's own title bar and frame.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct TitlebarTokens {
+    pub background: Color32,
+    pub text: Color32,
+    pub text_muted: Color32,
+    pub button_hover: Color32,
+    pub close_hover: Color32,
+    pub close_text: Color32,
+    pub height: f32,
+    pub button_width: f32,
+    /// The resize edges' width.
+    pub grip: f32,
+}
+
 /// The system and component tokens of a resolved theme, typed for egui.
 /// Custom widgets read it with [`Tokens::of`] instead of hard-coding a
 /// colour or a size.
@@ -220,6 +236,7 @@ pub struct Tokens {
     pub menu_item: MenuItemTokens,
     pub dialog: DialogTokens,
     pub toast: ToastTokens,
+    pub titlebar: TitlebarTokens,
     resolved: Arc<ResolvedTokens>,
 }
 
@@ -335,6 +352,17 @@ impl Tokens {
                 text: c("toast.text"),
                 padding: d("toast.padding"),
                 width: d("toast.width"),
+            },
+            titlebar: TitlebarTokens {
+                background: c("titlebar.background"),
+                text: c("titlebar.text"),
+                text_muted: c("titlebar.text-muted"),
+                button_hover: c("titlebar.button-hover"),
+                close_hover: c("titlebar.close-hover"),
+                close_text: c("titlebar.close-text"),
+                height: d("titlebar.height"),
+                button_width: d("titlebar.button-width"),
+                grip: d("titlebar.grip"),
             },
             resolved: Arc::new(resolved),
         }

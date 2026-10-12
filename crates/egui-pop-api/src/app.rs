@@ -246,7 +246,24 @@ impl fmt::Debug for AppHandle {
     }
 }
 
+/// A handle that does not keep the application alive (for collectors).
+#[derive(Clone)]
+pub(crate) struct WeakApp(Weak<Shared>);
+
+impl WeakApp {
+    pub(crate) fn get(&self) -> Result<AppHandle, String> {
+        self.0
+            .upgrade()
+            .map(AppHandle)
+            .ok_or_else(|| "the application is gone".to_string())
+    }
+}
+
 impl AppHandle {
+    pub(crate) fn downgrade(&self) -> WeakApp {
+        WeakApp(self.weak())
+    }
+
     fn new(ctx: &Context, host: Box<dyn Host>) -> Self {
         let store = host.store();
         AppHandle(Rc::new(Shared {
@@ -1164,6 +1181,7 @@ impl App {
             connected: &connected,
         };
         for (zone, title) in zones::SHELL.iter().zip([
+            "Title",
             "Top bar",
             "Side bar",
             "Main",
@@ -2180,6 +2198,13 @@ impl App {
                 .cloned()
                 .collect::<Vec<_>>()
         };
+        if h.zone_has_blocks(&zones::TITLE) {
+            egui::Panel::top(Id::new("egui_pop.title"))
+                .frame(egui::Frame::NONE)
+                .show(ui, |ui| {
+                    focus::scope(ui, "titleBar", &[], |ui| h.show_zone(ui, &zones::TITLE));
+                });
+        }
         egui::Panel::top(Id::new("egui_pop.top")).show(ui, |ui| {
             focus::scope(ui, "topBar", &[], |ui| {
                 egui::MenuBar::new().ui(ui, |ui| {

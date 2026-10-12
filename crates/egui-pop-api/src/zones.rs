@@ -15,6 +15,12 @@ use serde::Serialize;
 
 use crate::app::AppHandle;
 
+/// Above the menu bar, the whole window's width: a window's own title
+/// bar (`frame::FramePlugin`), or anything an application puts there.
+pub const TITLE: ZoneId = ZoneId::from_static("app.title");
+/// Items in the window's own title bar, before its buttons (declared by
+/// `frame::FramePlugin`).
+pub const CAPTION: ZoneId = ZoneId::from_static("app.caption");
 /// The top bar, after the main menu.
 pub const TOP_BAR: ZoneId = ZoneId::from_static("app.top-bar");
 /// The side bar at the start (left in left-to-right).
@@ -31,7 +37,9 @@ pub const STATUS_BAR: ZoneId = ZoneId::from_static("app.status-bar");
 pub const OVERLAYS: ZoneId = ZoneId::from_static("app.overlays");
 
 /// The shell's zones, declared by the framework.
-pub const SHELL: [ZoneId; 6] = [TOP_BAR, SIDE_BAR, MAIN, INSPECTOR, STATUS_BAR, OVERLAYS];
+pub const SHELL: [ZoneId; 7] = [
+    TITLE, TOP_BAR, SIDE_BAR, MAIN, INSPECTOR, STATUS_BAR, OVERLAYS,
+];
 
 /// Draws a block.
 pub type DrawFn = Box<dyn FnMut(&mut Ui, &AppHandle)>;
