@@ -344,32 +344,36 @@ fn show(ui: &mut Ui, app: &AppHandle) {
         egui::ScrollArea::vertical()
             .max_height(320.0)
             .show(ui, |ui| {
-                for (i, h) in hits.iter().enumerate() {
-                    let mut b = egui::Button::new(highlighted(ui, &h.label, &h.positions))
-                        .selected(i == selected)
-                        .frame_when_inactive(i == selected);
-                    let mut keys = h.entry.keys.first().cloned().unwrap_or_default();
-                    if h.recent && s.query.trim().is_empty() {
-                        keys = if keys.is_empty() {
-                            "recent".into()
-                        } else {
-                            format!("recent  {keys}")
-                        };
+                // Justified, left-aligned: a line without keys keeps its
+                // label at the start, as the others.
+                ui.with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
+                    for (i, h) in hits.iter().enumerate() {
+                        let mut b = egui::Button::new(highlighted(ui, &h.label, &h.positions))
+                            .selected(i == selected)
+                            .frame_when_inactive(i == selected);
+                        let mut keys = h.entry.keys.first().cloned().unwrap_or_default();
+                        if h.recent && s.query.trim().is_empty() {
+                            keys = if keys.is_empty() {
+                                "recent".into()
+                            } else {
+                                format!("recent  {keys}")
+                            };
+                        }
+                        if !keys.is_empty() {
+                            b = b.shortcut_text(keys);
+                        }
+                        let r = ui.add(b);
+                        if i == selected && edit.changed() {
+                            r.scroll_to_me(None);
+                        }
+                        if r.clicked() {
+                            chosen = Some(h.entry.command.clone());
+                        }
                     }
-                    if !keys.is_empty() {
-                        b = b.shortcut_text(keys);
+                    if hits.is_empty() {
+                        ui.weak("No command matches.");
                     }
-                    let r = ui.add_sized([ui.available_width(), 0.0], b);
-                    if i == selected && edit.changed() {
-                        r.scroll_to_me(None);
-                    }
-                    if r.clicked() {
-                        chosen = Some(h.entry.command.clone());
-                    }
-                }
-                if hits.is_empty() {
-                    ui.weak("No command matches.");
-                }
+                });
             });
         if let Some(c) = chosen {
             let spec = app.command(&c);
