@@ -51,8 +51,26 @@ pub const MENU_HELP: MenuId = MenuId::from_static("app.menu.help");
 /// The framework's commands.
 pub use crate::palette::CMD_PALETTE;
 pub const CMD_QUIT: CommandId = CommandId::from_static("app.quit");
-pub const CMD_UNDO: CommandId = CommandId::from_static("value.undo");
-pub const CMD_REDO: CommandId = CommandId::from_static("value.redo");
+/// Undo and redo: the keys, menu items and `when` checks are
+/// egui-pop's, what an undo does is the host's ([`Host::undo`]), each
+/// run going through the [`STEP_UNDO`] and [`STEP_REDO`] steps.
+pub const CMD_UNDO: CommandId = CommandId::from_static("edit.undo");
+pub const CMD_REDO: CommandId = CommandId::from_static("edit.redo");
+/// The steps of an undo and a redo (ADR 0011): a before-hook may veto
+/// one (a gesture in progress) or redirect it, a run-hook does it instead
+/// of the host, an after-hook follows. Their arguments: `label` (what it
+/// takes back, as the menu said) and `origin`. Their result:
+/// `{"undone": label}` (`{"redone": label}`), the label `null` when there
+/// was nothing. Besides the step's own signal, the journal says
+/// `edit.undone` / `edit.redone` with the label, or `edit.undo_failed` /
+/// `edit.redo_failed` with the error or the veto.
+pub const STEP_UNDO: StepId = StepId::from_static("edit.undo");
+pub const STEP_REDO: StepId = StepId::from_static("edit.redo");
+
+/// Commands that run in the interface rather than through the host's
+/// dispatch: their run calls the host itself (undo and redo call
+/// `Host::undo` and `Host::redo`, which a dispatch would hold).
+const IN_INTERFACE: [CommandId; 2] = [CMD_UNDO, CMD_REDO];
 pub const CMD_SAVE: CommandId = CommandId::from_static("app.save");
 
 /// The theme, as a service: read it, ask for another (installed between
@@ -373,6 +391,99 @@ impl AppHandle {
             .unwrap_or_default()
     }
 
+    /// Reads the host (`None` while it dispatches a command).
+    fn with_host<R>(&self, f: impl FnOnce(&dyn Host) -> R) -> Option<R> {
+        self.0.host.borrow().as_deref().map(f)
+    }
+
+    /// Whether there is something to undo, as the host says (`false`
+    /// while the host dispatches a command).
+    pub fn can_undo(&self) -> bool {
+        self.with_host(|h| h.can_undo()).unwrap_or(false)
+    }
+
+    /// Whether there is something to redo.
+    pub fn can_redo(&self) -> bool {
+        self.with_host(|h| h.can_redo()).unwrap_or(false)
+    }
+
+    /// What an undo would take back ("exposure change").
+    pub fn undo_label(&self) -> Option<String> {
+        self.with_host(|h| h.undo_label()).flatten()
+    }
+
+    /// What a redo would do again.
+    pub fn redo_label(&self) -> Option<String> {
+        self.with_host(|h| h.redo_label()).flatten()
+    }
+
+    /// A command's title as menus show it now: undo and redo name what
+    /// they would do ("Undo exposure change").
+    pub fn command_title(&self, spec: &CommandSpec) -> String {
+        let label = if spec.id == CMD_UNDO {
+            self.undo_label()
+        } else if spec.id == CMD_REDO {
+            self.redo_label()
+        } else {
+            None
+        };
+        match label.filter(|l| !l.is_empty()) {
+            Some(l) => format!("{} {l}", spec.title),
+            None => spec.title.clone(),
+        }
+    }
+
+    /// Undoes through the [`STEP_UNDO`] step: its hooks, then (unless a
+    /// run-hook replaces it) the host's undo; the journal says how it
+    /// went. What `edit.undo` runs.
+    pub fn undo(&self, origin: &Origin) -> Outcome {
+        self.history_step(false, origin)
+    }
+
+    /// Redoes through the [`STEP_REDO`] step.
+    pub fn redo(&self, origin: &Origin) -> Outcome {
+        self.history_step(true, origin)
+    }
+
+    fn history_step(&self, redo: bool, origin: &Origin) -> Outcome {
+        let (step, key, done, failed) = if redo {
+            (&STEP_REDO, "redone", "edit.redone", "edit.redo_failed")
+        } else {
+            (&STEP_UNDO, "undone", "edit.undone", "edit.undo_failed")
+        };
+        let label = if redo {
+            self.redo_label()
+        } else {
+            self.undo_label()
+        };
+        let args = json!({ "label": label, "origin": source_of(origin) });
+        let who = origin.clone();
+        let outcome = self.step(step, args, move |app, _| {
+            let mut host = app.0.host.borrow_mut();
+            let h = host.as_mut().ok_or("the host is dispatching a command")?;
+            let r = if redo { h.redo(&who) } else { h.undo(&who) }?;
+            Ok(json!({ key: r }))
+        });
+        let source = source_of(origin);
+        match &outcome {
+            Outcome::Done(Ok(v)) => {
+                if !v[key].is_null() {
+                    self.publish(&source, None, done, json!({ "label": v[key] }));
+                }
+            }
+            Outcome::Done(Err(e)) => {
+                self.publish(&source, None, failed, json!({ "label": label, "error": e }));
+            }
+            Outcome::Vetoed { by, reason } => self.publish(
+                &source,
+                None,
+                failed,
+                json!({ "label": label, "vetoed_by": by, "reason": reason }),
+            ),
+        }
+        outcome
+    }
+
     /// The journal's last sequence number.
     pub fn last_event(&self) -> Seq {
         self.0
@@ -538,6 +649,8 @@ impl AppHandle {
         let flag = |on: bool| if on { "true" } else { "false" };
         base.set("overlayOpen", flag(!overlay::stack(ctx).is_empty()));
         base.set("modalOpen", flag(overlay::modal_open(ctx)));
+        base.set("canUndo", flag(self.can_undo()));
+        base.set("canRedo", flag(self.can_redo()));
         focus::when_context(ctx, &base)
     }
 
@@ -947,6 +1060,14 @@ impl AppHandle {
     }
 }
 
+/// A step's outcome as a command's result.
+fn outcome_result(outcome: Outcome) -> Result<Json, String> {
+    match outcome {
+        Outcome::Done(r) => r,
+        Outcome::Vetoed { by, reason } => Err(format!("stopped by `{by}`: {reason}")),
+    }
+}
+
 /// A focus scope name from an id: letters, digits, `_` and `.` only.
 fn scope_name(id: &str) -> String {
     id.chars()
@@ -1340,32 +1461,36 @@ impl App {
         ctx.setting(SETTING_FOCUS, focus)?;
         crate::zoom::register(&mut ctx)?;
         ctx.service(&FOCUS_MODE, modes)?;
+        ctx.step(
+            StepSpec::new(
+                STEP_UNDO,
+                "Undoes the last change: the host's undo by default.",
+            )
+            .args(json!({ "label": "exposure change", "origin": "user" })),
+        )?;
+        ctx.step(
+            StepSpec::new(
+                STEP_REDO,
+                "Redoes the last undone change: the host's redo by default.",
+            )
+            .args(json!({ "label": "exposure change", "origin": "user" })),
+        )?;
         ctx.command(
             CommandSpec::new(CMD_UNDO, "Undo", "Edit")
-                .description("Undo the last change of values.")
+                .description("Undo the last change.")
                 .key("Ctrl+Z")
-                .when("!textInputFocus")
+                .when("!textInputFocus && canUndo")
                 .menu(MENU_EDIT, "0_undo", 0),
-            |call| {
-                let undone = lock(&call.app.store())
-                    .undo(call.origin)
-                    .map_err(|r| r.to_string())?;
-                Ok(json!({ "undone": undone }))
-            },
+            |call| outcome_result(call.app.undo(call.origin)),
         )?;
         ctx.command(
             CommandSpec::new(CMD_REDO, "Redo", "Edit")
-                .description("Redo the last undone change of values.")
+                .description("Redo the last undone change.")
                 .key("Ctrl+Shift+Z")
                 .key("Ctrl+Y")
-                .when("!textInputFocus")
+                .when("!textInputFocus && canRedo")
                 .menu(MENU_EDIT, "0_undo", 1),
-            |call| {
-                let redone = lock(&call.app.store())
-                    .redo(call.origin)
-                    .map_err(|r| r.to_string())?;
-                Ok(json!({ "redone": redone }))
-            },
+            |call| outcome_result(call.app.redo(call.origin)),
         )?;
         ctx.command(
             CommandSpec::new(CMD_QUIT, "Quit", "File")
@@ -1525,6 +1650,23 @@ impl App {
             .snapshot(move |_| {
                 let Ok(app) = up(&w) else { return Json::Null };
                 json!({ "steps": app.steps(), "runs": app.step_traces() })
+            }),
+        )
+        .expect("distinct names");
+        let w = h.weak();
+        b.register(
+            FnCollector::new(
+                "history",
+                "What Edit > Undo and Redo would do, as the host says (the runs are in the `steps` collector).",
+            )
+            .snapshot(move |_| {
+                let Ok(app) = up(&w) else { return Json::Null };
+                json!({
+                    "can_undo": app.can_undo(),
+                    "undo": app.undo_label(),
+                    "can_redo": app.can_redo(),
+                    "redo": app.redo_label(),
+                })
             }),
         )
         .expect("distinct names");
@@ -2132,6 +2274,18 @@ impl App {
             "command.dispatched",
             json!({ "command": command, "args": args }),
         );
+        if IN_INTERFACE.contains(command) {
+            let result = match &handler {
+                Some(h) => h(&Call {
+                    args: &args,
+                    origin: &origin,
+                    app: &self.handle,
+                }),
+                None => Err(format!("no handler for `{command}`")),
+            };
+            self.finish(command, &args, &origin, seq, result.clone());
+            return Reply::Done(result);
+        }
         let mut host = self
             .handle
             .0

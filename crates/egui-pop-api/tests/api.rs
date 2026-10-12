@@ -798,8 +798,8 @@ fn the_palette_asks_for_arguments_and_escape_steps_back() {
     open(&mut h);
     assert!(palette::is_open(h.state().handle()));
     let zoom = h.get_by_label_contains("View: Set zoom").rect();
-    let undo = h.get_by_label_contains("Edit: Undo").rect();
-    assert!(zoom.top() < undo.top(), "the recent command comes first");
+    let quit = h.get_by_label_contains("File: Quit").rect();
+    assert!(zoom.top() < quit.top(), "the recent command comes first");
     h.key_press(egui::Key::Escape);
     h.run();
     assert!(!palette::is_open(h.state().handle()));

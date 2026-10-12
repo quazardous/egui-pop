@@ -7,6 +7,10 @@
 //!
 //! `Ctrl+,` (or File > Settings) opens it; Escape closes it (or stops a
 //! capture of keys).
+//!
+//! The settings have an undo of their own, the store's (`value.undo`,
+//! `value.redo`), with its buttons in the window: Edit > Undo and
+//! `Ctrl+Z` undo the application's changes, through the host.
 
 use std::sync::{Arc, Mutex};
 
@@ -36,6 +40,11 @@ pub const CMD_SETTINGS: CommandId = CommandId::from_static("app.settings");
 
 /// The settings window's state, as a service.
 pub const SETTINGS_WINDOW: ServiceToken<SettingsWindow> = ServiceToken::new("app.settings_window");
+
+/// The store's own undo and redo, which the settings window's buttons
+/// run.
+pub const CMD_VALUE_UNDO: CommandId = CommandId::from_static("value.undo");
+pub const CMD_VALUE_REDO: CommandId = CommandId::from_static("value.redo");
 
 /// The section holding the shortcuts editor.
 pub const SHORTCUTS: &str = "Keyboard shortcuts";
@@ -188,6 +197,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
             if search.changed() {
                 s.capture = None;
             }
+            history(ui, app);
         });
         ui.separator();
         let secs = sections(&entries);
@@ -289,6 +299,33 @@ fn show(ui: &mut Ui, app: &AppHandle) {
         w.close();
         app.capture_keys(false);
         overlay::close(&ctx, spec.id);
+    }
+}
+
+/// The settings' own undo and redo: the store's, not the application's.
+fn history(ui: &mut Ui, app: &AppHandle) {
+    let (undo, redo) = {
+        let store = app.store();
+        let s = lock(&store);
+        (
+            s.undo_steps().last().map(|st| st.label.clone()),
+            s.redo_steps().last().map(|st| st.label.clone()),
+        )
+    };
+    for (label, step, command) in [
+        ("Undo", undo, CMD_VALUE_UNDO),
+        ("Redo", redo, CMD_VALUE_REDO),
+    ] {
+        let r = ui
+            .add_enabled(step.is_some(), egui::Button::new(label).small())
+            .on_hover_text(match &step {
+                Some(st) => format!("{label} {st} (the settings only)"),
+                None => format!("Nothing to {} in the settings", label.to_lowercase()),
+            });
+        a11y::name(&r, WidgetType::Button, &format!("{label} in the settings"));
+        if r.clicked() {
+            app.run(command, serde_json::Value::Null);
+        }
     }
 }
 

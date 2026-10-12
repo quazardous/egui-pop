@@ -39,6 +39,16 @@ egui minor.
   `interface.zoom` step; egui's own zoom keys are turned off. Test kit:
   `SCALES`, `app_at`, `set_native_scale`, `at_scales`, `rects_of`.
   Gallery page: Scale and zoom, and an overview snapshot at 2x.
+- Undo and redo through the host: `Host::undo`, `Host::redo`,
+  `can_undo`, `can_redo`, `undo_label` and `redo_label` (by default the
+  store's). The `edit.undo` and `edit.redo` commands (`Ctrl+Z`,
+  `Ctrl+Shift+Z`, `Ctrl+Y`) run the steps `edit.undo` and `edit.redo`,
+  which plugins can veto, redirect, replace or follow; their `when`
+  checks the new `canUndo` and `canRedo` context keys, their menu items
+  name the step ("Undo drag exposure"), and the journal says
+  `edit.undone`, `edit.redone`, `edit.undo_failed` or
+  `edit.redo_failed`. A `history` debug collector shows what they would
+  do.
 - The window's own frame: `egui_pop_core::frame` draws a title bar
   (caption to drag, double click to maximize, minimize, maximize and
   close buttons, room for leading and trailing items) and resize edges
@@ -364,6 +374,11 @@ egui minor.
 - Control heights and icon sizes are multiples of 4 points, so they
   are whole pixels at every quarter scale: controls 24 (compact 20),
   icons 16, 20 and 24 (compact 12, 16 and 20); a token test keeps it.
+- Edit > Undo and Redo are now `edit.undo` and `edit.redo` and undo the
+  application's history through its host, no longer the interface's
+  store directly. The settings window has its own Undo and Redo buttons
+  for the settings, running the store's `value.undo` and `value.redo`,
+  now hidden from the palette.
 - A broken token is reported once by the resolver, not again for each
   token aliasing it.
 - `zones::SHELL` holds the new `TITLE` zone, drawn above the menu bar

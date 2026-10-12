@@ -124,7 +124,7 @@ fn items(ui: &mut Ui, app: &AppHandle, menu: &MenuId, cx: &WhenContext, depth: u
                             let why = (!applies)
                                 .then(|| format!("Does not apply here ({})", s.when))
                                 .or_else(|| (!enabled).then(|| "Not available here".to_string()));
-                            (label.clone().unwrap_or_else(|| s.title.clone()), why)
+                            (label.clone().unwrap_or_else(|| app.command_title(s)), why)
                         }
                         None => (id.to_string(), Some(format!("No command `{id}`"))),
                     };

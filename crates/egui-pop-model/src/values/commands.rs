@@ -159,7 +159,8 @@ pub fn register_with<H>(
     commands.register(
         owner,
         CommandSpec::new(id("value.undo"), "Undo", "Values")
-            .description("Undo the last change of values."),
+            .description("Undo the last change of the store's values.")
+            .hidden(),
         wrap(Box::new(move |_, origin| {
             let undone = s
                 .lock()
@@ -173,7 +174,8 @@ pub fn register_with<H>(
     commands.register(
         owner,
         CommandSpec::new(id("value.redo"), "Redo", "Values")
-            .description("Redo the last undone change of values."),
+            .description("Redo the last undone change of the store's values.")
+            .hidden(),
         wrap(Box::new(move |_, origin| {
             let redone = s
                 .lock()
