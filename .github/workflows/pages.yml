@@ -41,6 +41,7 @@ jobs:
 
   deploy:
     needs: build
+    if: github.event_name == 'workflow_dispatch' || vars.PAGES == 'on'
     runs-on: ubuntu-24.04
     environment:
       name: github-pages
