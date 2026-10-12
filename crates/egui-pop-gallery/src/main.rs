@@ -16,10 +16,21 @@ fn main() -> eframe::Result {
         return Ok(());
     }
     options.announce = true;
+    if options.platform {
+        // One gallery at a time: a second launch hands its arguments
+        // (a gallery://page/<name> link) to the first.
+        match egui_pop::platform::instance::single(egui_pop_gallery::pages::platform::APP_ID) {
+            Ok(egui_pop::platform::instance::Single::Handed) => return Ok(()),
+            Ok(egui_pop::platform::instance::Single::First(first)) => {
+                egui_pop_gallery::set_instance(first);
+            }
+            Err(e) => eprintln!("single instance: {e}"),
+        }
+    }
     let native = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title(TITLE)
-            .with_app_id("egui-pop-gallery")
+            .with_app_id(egui_pop_gallery::pages::platform::APP_ID)
             .with_inner_size([1100.0, 720.0]),
         ..Default::default()
     };

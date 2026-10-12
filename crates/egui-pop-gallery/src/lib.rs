@@ -7,7 +7,8 @@
 //! Pages: the theme overview, the token table and egui's built-in
 //! widgets (plain functions reused by the snapshot tests); zones and
 //! blocks (one plugin replacing, extending and wrapping another's
-//! blocks); settings applied live; translations; the debug bridge.
+//! blocks); settings applied live; translations; the platform services
+//! (simulated unless `--platform`); the debug bridge.
 
 use std::io::Write as _;
 
@@ -28,7 +29,7 @@ use pages::story::PagePlugin;
 pub const TITLE: &str = "egui-pop gallery";
 
 /// The pages, as named on the command line.
-pub const PAGES: [&str; 19] = [
+pub const PAGES: [&str; 20] = [
     "overview",
     "tokens",
     "builtins",
@@ -45,6 +46,7 @@ pub const PAGES: [&str; 19] = [
     "strips",
     "frame",
     "scale",
+    "platform",
     "settings",
     "i18n",
     "debug",
@@ -56,7 +58,7 @@ pub fn builder(options: &Options) -> AppBuilder {
         .density(options.density)
         .reduced_motion(options.reduced_motion);
     spec.accent = options.accent.clone();
-    App::builder()
+    let builder = App::builder()
         .theme(spec)
         .plugins(egui_pop::api::DefaultPlugins)
         .plugin(egui_pop::api::frame::FramePlugin::system().name("egui-pop gallery"))
@@ -136,7 +138,26 @@ pub fn builder(options: &Options) -> AppBuilder {
         )
         .plugin(egui_pop::i18n::ShowKeys)
         .plugin(pages::i18n::I18nPage)
-        .plugin(pages::debug::DebugPage)
+        .plugin(pages::debug::DebugPage);
+    pages::platform::add(builder, options.platform, take_instance())
+}
+
+static INSTANCE: std::sync::Mutex<Option<egui_pop::platform::instance::Instance>> =
+    std::sync::Mutex::new(None);
+
+/// Gives the gallery the single instance `main` made (with
+/// `--platform`); the next build takes it.
+pub fn set_instance(instance: egui_pop::platform::instance::Instance) {
+    *INSTANCE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(instance);
+}
+
+fn take_instance() -> Option<egui_pop::platform::instance::Instance> {
+    INSTANCE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .take()
 }
 
 /// The gallery application: the egui-pop app, and the options of a

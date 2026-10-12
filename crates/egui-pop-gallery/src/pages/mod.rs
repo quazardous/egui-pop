@@ -15,6 +15,7 @@ pub mod icons;
 pub mod images;
 pub mod menus;
 pub mod overview;
+pub mod platform;
 pub mod scale;
 pub mod settings;
 pub mod story;

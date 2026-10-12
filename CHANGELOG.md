@@ -35,6 +35,13 @@ egui minor.
   and declared titles following it, plurals, numbers and dates, keys
   shown instead of text, the keys missing) and a `--lang` option
   (English by default, so pictures do not depend on the machine).
+- Gallery: a Platform services page (a second launch's link showing a
+  page, notifications with an action, the tray's declared menu, the
+  global shortcut Ctrl+Alt+G, the log's tail, a crash in a past session
+  offered, the focus mode), on a simulated desktop unless `--platform`
+  is given; with it, the gallery is a single instance answering
+  `gallery://page/<name>` links and its window's app id is
+  `org.egui_pop.Gallery`.
 - `On::Pass` (`Lifecycle::Pass`): a handler run at every pass of the
   application's logic, also while the window is hidden or minimized
   when something asked for a repaint, so what a background thread hands

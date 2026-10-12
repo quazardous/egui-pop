@@ -15,10 +15,14 @@ Options:
   --reduced-motion       turn animations off
   --page <name>          page shown first (overview, tokens, builtins,
                          icons, menus, zones, settings, i18n,
-                         debug)
+                         platform, debug)
   --lang <locale>        the language setting's default: en (the
                          default), fr, or system (EGUI_POP_LANG, then
                          the system's language)
+  --platform             the desktop's own services: a single instance,
+                         notifications, a tray icon, global shortcuts,
+                         logs and crash reports in the user's state
+                         directory (simulated otherwise)
   --quit-after <frames>  exit by itself after this many frames
   --dump-debug           with --quit-after: print the debug bridge's
                          snapshot (event \"debug\") before quitting
@@ -43,6 +47,8 @@ pub struct Options {
     pub announce: bool,
     /// Print the debug bridge's snapshot when quitting.
     pub dump_debug: bool,
+    /// The desktop's own platform services instead of simulated ones.
+    pub platform: bool,
     pub help: bool,
 }
 
@@ -58,6 +64,7 @@ impl Default for Options {
             quit_after: None,
             announce: false,
             dump_debug: false,
+            platform: false,
             help: false,
         }
     }
@@ -88,6 +95,7 @@ impl Options {
                 }
                 "--lang" => o.lang = value("--lang")?,
                 "--dump-debug" => o.dump_debug = true,
+                "--platform" => o.platform = true,
                 "--quit-after" => {
                     let v = value("--quit-after")?;
                     o.quit_after = Some(

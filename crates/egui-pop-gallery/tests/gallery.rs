@@ -727,3 +727,81 @@ fn the_translations_page_switches_language_and_shows_keys() {
     h.run();
     h.get_by_label("Retry");
 }
+
+/// Runs frames until `done` holds: the simulated desktop answers from
+/// threads.
+#[track_caller]
+fn run_until(h: &mut Harness<'_, Gallery>, done: impl Fn(&Harness<'_, Gallery>) -> bool) {
+    for _ in 0..200 {
+        let _ = h.run_ok();
+        if done(h) {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    panic!("timed out");
+}
+
+#[test]
+fn the_platform_page_plays_the_desktop_and_each_service_answers() {
+    use egui_pop::platform::crash::CRASHES;
+    use egui_pop::platform::notify::NOTIFIER;
+    let mut h = harness(options("pop-dark", Density::Comfortable, "platform"));
+    h.run();
+    egui_pop_test::assert_all_named(&h);
+    // A notification on the simulated desktop, its action clicked there.
+    h.get_by_label("Notify with an action").click();
+    run_until(&mut h, |h| h.query_by_label("Click Show").is_some());
+    let notifier = h.state().app.handle().service(&NOTIFIER).unwrap();
+    // The button works once the desktop's thread showed it.
+    run_until(&mut h, |h| {
+        if context_key(h, "galleryNotified").is_empty() {
+            if let Some(b) = h.query_by_label("Click Show") {
+                b.click();
+            }
+            false
+        } else {
+            true
+        }
+    });
+    assert_eq!(
+        context_key(&h, "galleryNotified"),
+        r#"{"what":"show the export"}"#
+    );
+    assert_eq!(notifier.history()[0].picked, ["show"]);
+    // The global shortcut, pressed outside the window, and from the tray.
+    h.get_by_label("Press Ctrl+Alt+G outside the window")
+        .click();
+    run_until(&mut h, |h| context_key(h, "galleryPings") == "1");
+    h.get_by_label("Pick Ping the gallery").click();
+    run_until(&mut h, |h| context_key(h, "galleryPings") == "2");
+    // A crash in a past session, offered in a toast.
+    h.get_by_label("Simulate a crash in a past session")
+        .scroll_to_me();
+    h.run();
+    h.get_by_label("Simulate a crash in a past session").click();
+    run_until(&mut h, |h| {
+        h.query_all_by_label_contains("closed unexpectedly last time")
+            .next()
+            .is_some()
+    });
+    let crashes = h.state().app.handle().service(&CRASHES).unwrap();
+    for r in crashes.reports() {
+        crashes.dismiss(&r).unwrap();
+    }
+    // A second launch's link shows the page it names.
+    h.get_by_label("Simulate a second launch with a link")
+        .scroll_to_me();
+    h.run();
+    h.get_by_label("Simulate a second launch with a link")
+        .click();
+    run_until(&mut h, |h| {
+        h.state()
+            .app
+            .handle()
+            .step_traces()
+            .iter()
+            .any(|t| t.step.as_str() == "deeplink.open")
+    });
+    run_until(&mut h, |h| h.state().page().as_str() == "tokens");
+}
