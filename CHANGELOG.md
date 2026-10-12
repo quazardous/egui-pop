@@ -449,6 +449,10 @@ egui minor.
 - Removing every key of a command needs no placeholder key: a removal
   (`"-id"`) has empty keys; the keymap document is version 2 and older
   ones migrate.
+- The README is short: a goal, a quickstart, four snippets, a gallery of
+  screenshots. The rest moved to guides in `docs/` (getting started,
+  themes, plugins and steps, the viewport, debugging, the gallery), listed
+  in `docs/README.md`; their Rust blocks are doctests in `consumer-smoke`.
 - A toast's text wraps in the width its close button and action leave,
   no longer running under them (gallery: a long warning in English and
   a long error in French).

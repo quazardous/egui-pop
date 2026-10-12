@@ -74,10 +74,13 @@ CI also runs `cargo deny check`, builds the gallery for
 
 ## Screenshots
 
-The images in `docs/screenshots/` (shown in the README and the tokens
-guide) are the gallery's real window, captured offscreen in a nested
+The images in `docs/screenshots/` (shown in the README and the guides
+in `docs/`) are the gallery's real window, captured offscreen in a nested
 compositor with [wbox](tools/wbox). Regenerate them whenever the gallery
-changes visibly:
+changes visibly. `cargo xtask screenshots` is meant to run the steps
+below for every shot, and to write the reduced copies the README and the
+themes page show (`docs/screenshots/thumbs/`, `docs/screenshots/themes/`);
+until it lands, by hand:
 
 ```sh
 cargo build --release -p egui-pop-gallery
