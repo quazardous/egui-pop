@@ -84,3 +84,47 @@ fn the_shell_and_its_palette_name_every_interactive_node() {
     assert!(egui_pop_api::palette::is_open(h.state().handle()));
     assert_all_named(&h);
 }
+
+struct Clash;
+
+impl egui_pop_api::Plugin for Clash {
+    fn id(&self) -> egui_pop_model::ids::PluginId {
+        egui_pop_model::ids::PluginId::from_static("clash")
+    }
+
+    fn connect(
+        &mut self,
+        ctx: &mut egui_pop_api::Ctx<'_>,
+    ) -> Result<(), egui_pop_api::PluginError> {
+        use egui_pop_model::commands::CommandSpec;
+        use egui_pop_model::ids::CommandId;
+        ctx.command(
+            CommandSpec::new(CommandId::from_static("clash.quit"), "Also quit", "Clash")
+                .key("Ctrl+Q"),
+            |_| Ok(serde_json::Value::Null),
+        )?;
+        ctx.keybinding(
+            "Ctrl+Alt+N",
+            CommandId::from_static("nobody.declares"),
+            "",
+            egui_pop_model::keymap::Layer::Default,
+        )?;
+        Ok(())
+    }
+}
+
+#[test]
+fn a_plugin_runs_with_the_defaults_and_its_keymap_is_checked() {
+    let mut h = egui_pop_test::harness_for(Clash);
+    h.run();
+    egui_pop_test::assert_all_named(&h);
+    let problems = egui_pop_test::keymap_problems(h.state());
+    assert_eq!(problems.len(), 2, "{problems:?}");
+    assert!(problems[0].contains("Ctrl+Q"), "{problems:?}");
+    assert!(problems[1].contains("nobody.declares"), "{problems:?}");
+    let clean = egui_pop_test::app(
+        egui_pop_api::App::builder().plugins(egui_pop_api::DefaultPlugins),
+        egui::vec2(800.0, 500.0),
+    );
+    egui_pop_test::assert_keymap_clean(clean.state());
+}

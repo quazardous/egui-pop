@@ -1,7 +1,11 @@
 //! A test kit for egui-pop applications (layer L4, a dev-dependency).
 //!
 //! - [`app`] and [`themed`]: egui_kittest harnesses with a theme
-//!   installed before the first frame;
+//!   installed before the first frame; [`harness_for`]: a plugin in an
+//!   application with the default plugins;
+//! - [`keymap_problems`] and [`assert_keymap_clean`]: no two commands
+//!   claim the same keys, no binding names a command that does not
+//!   exist;
 //! - [`unnamed_interactive`] and [`assert_all_named`]: every interactive
 //!   node (button, check box, slider, text input...) has a name a screen
 //!   reader can say;
@@ -38,6 +42,55 @@ pub fn app(builder: AppBuilder, size: Vec2) -> Harness<'static, App> {
     Harness::builder()
         .with_size(size)
         .build_ui_state(|ui, app: &mut App| app.show(ui), app)
+}
+
+/// A harness drawing a plugin in an application with the default
+/// plugins (palette, dialogs, toasts, settings, window), at a common
+/// window size.
+pub fn harness_for(plugin: impl egui_pop_api::Plugin) -> Harness<'static, App> {
+    app(
+        App::builder()
+            .plugins(egui_pop_api::DefaultPlugins)
+            .plugin(plugin),
+        Vec2::new(1024.0, 768.0),
+    )
+}
+
+/// What is wrong with an application's keymap: keys claimed by two
+/// commands in the same scope (one loses), bindings running a command
+/// nobody declared.
+pub fn keymap_problems(app: &App) -> Vec<String> {
+    use egui_pop_core::model::keymap::Action;
+    let handle = app.handle();
+    let mut out: Vec<String> = handle
+        .key_conflicts()
+        .iter()
+        .map(|(lose, win)| {
+            format!(
+                "`{}` ({}): {} loses to {}",
+                lose.keys, lose.options.scope, lose.action, win.action
+            )
+        })
+        .collect();
+    for b in app.keymap().all() {
+        if let Action::Run(c) = &b.action
+            && handle.command(c).is_none()
+        {
+            out.push(format!("`{}` runs `{c}`, which no plugin declares", b.keys));
+        }
+    }
+    out
+}
+
+/// Fails with the keymap's problems, if any.
+#[track_caller]
+pub fn assert_keymap_clean(app: &App) {
+    let problems = keymap_problems(app);
+    assert!(
+        problems.is_empty(),
+        "keymap problems:\n{}",
+        problems.join("\n")
+    );
 }
 
 /// As [`app`], rendering with wgpu (for snapshots).

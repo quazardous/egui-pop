@@ -345,3 +345,9 @@ fn the_settings_window_searches_and_edits_shortcuts() {
     egui_pop_test::assert_all_named(&h);
     results.add(h.try_snapshot("shortcuts-pop-dark"));
 }
+
+#[test]
+fn the_gallerys_keymap_is_clean() {
+    let h = harness(Options::default());
+    egui_pop_test::assert_keymap_clean(&h.state().app);
+}

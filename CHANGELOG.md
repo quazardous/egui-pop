@@ -9,6 +9,10 @@ egui minor.
 
 ### Added
 
+- Test kit: `harness_for(plugin)` runs a plugin in an application with
+  the default plugins; `keymap_problems` and `assert_keymap_clean` find
+  keys two commands claim in one scope and bindings running a command
+  nobody declares. The gallery's keymap is checked.
 - The window's place as a plugin (`egui_pop_api::window::WindowPlugin`,
   in `DefaultPlugins`): size, position, maximized and full screen kept in
   the store (`settings/window.*`, saved with the settings, no undo step;
