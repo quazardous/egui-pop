@@ -139,3 +139,17 @@ fn a_vetoed_second_launch_opens_nothing() {
     );
     assert!(!traces.iter().any(|t| t.step.as_str() == "deeplink.open"));
 }
+
+#[test]
+fn inside_flatpak_the_socket_is_in_the_apps_shared_runtime_directory() {
+    let env = |v: &str| match v {
+        "FLATPAK_ID" => Some("org.example.Viewer".to_string()),
+        "XDG_RUNTIME_DIR" => Some("/run/user/1000".to_string()),
+        _ => None,
+    };
+    assert_eq!(
+        instance::flatpak_socket_with("x.instance", env),
+        Some("/run/user/1000/app/org.example.Viewer/x.instance.sock".into())
+    );
+    assert_eq!(instance::flatpak_socket_with("x", |_| None), None);
+}

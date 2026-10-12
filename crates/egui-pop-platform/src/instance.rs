@@ -27,7 +27,9 @@
 //! packager's part: see `docs/packaging.md`.
 //!
 //! On Linux a connection from another user is refused (the abstract
-//! socket namespace is shared by the users of a machine). Elsewhere the
+//! socket namespace is shared by the users of a machine). Inside a
+//! Flatpak sandbox the socket is a file in the directory the
+//! application's sandboxes share ([`flatpak_socket`]). Elsewhere the
 //! socket or pipe is the user's own by its place (`/tmp` with the user's
 //! name in the socket's, a pipe in the user's session).
 //!
@@ -222,6 +224,29 @@ pub fn socket_name(app_id: &str) -> String {
     format!("{}.{}.instance", clean(app_id), clean(&user))
 }
 
+/// Inside a Flatpak sandbox, the socket's file in the directory every
+/// instance of the application shares (`$XDG_RUNTIME_DIR/app/<id>`):
+/// each sandbox may have a network namespace of its own, where abstract
+/// sockets are not seen.
+pub fn flatpak_socket(name: &str) -> Option<std::path::PathBuf> {
+    flatpak_socket_with(name, |v| std::env::var(v).ok())
+}
+
+/// [`flatpak_socket`] from the environment `env` gives.
+pub fn flatpak_socket_with(
+    name: &str,
+    env: impl Fn(&str) -> Option<String>,
+) -> Option<std::path::PathBuf> {
+    let id = env("FLATPAK_ID").filter(|i| !i.is_empty())?;
+    let run = env("XDG_RUNTIME_DIR").filter(|r| !r.is_empty())?;
+    Some(
+        std::path::Path::new(&run)
+            .join("app")
+            .join(id)
+            .join(format!("{name}.sock")),
+    )
+}
+
 /// Makes this launch the application's only instance, or hands it to the
 /// one running (see the module). `app_id`: a reverse-DNS id
 /// (`org.example.App`).
@@ -232,10 +257,16 @@ pub fn single(app_id: &str) -> io::Result<Single> {
 /// [`single`] with a launch of the caller's.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn single_with(app_id: &str, launch: Launch) -> io::Result<Single> {
-    use interprocess::local_socket::{GenericNamespaced, ListenerOptions, prelude::*};
+    use interprocess::local_socket::{
+        GenericFilePath, GenericNamespaced, ListenerOptions, prelude::*,
+    };
 
     let name = socket_name(app_id);
-    let ns = || name.as_str().to_ns_name::<GenericNamespaced>();
+    let in_sandbox = flatpak_socket(&name);
+    let ns = || match &in_sandbox {
+        Some(path) => path.as_path().to_fs_name::<GenericFilePath>(),
+        None => name.as_str().to_ns_name::<GenericNamespaced>(),
+    };
     if hand_over(ns()?, &launch).is_ok() {
         return Ok(Single::Handed);
     }
@@ -272,7 +303,10 @@ pub fn single_with(app_id: &str, launch: Launch) -> io::Result<Single> {
     Ok(Single::First(Instance {
         first: launch,
         launches,
-        name: Some(name),
+        name: Some(match in_sandbox {
+            Some(p) => p.to_string_lossy().into_owned(),
+            None => name,
+        }),
     }))
 }
 

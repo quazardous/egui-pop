@@ -41,9 +41,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 
 The socket is an abstract Unix socket on Linux (a connection from
-another user is refused), a named pipe on Windows, and a socket in
-`/tmp` on the other Unix systems; its name holds the application's id
-and the user's name. Nothing else is written.
+another user is refused), a file in `$XDG_RUNTIME_DIR/app/<id>` inside a
+Flatpak sandbox (the directory the application's sandboxes share, since
+each may have a network namespace of its own), a named pipe on Windows,
+and a socket in `/tmp` on the other Unix systems; its name holds the
+application's id and the user's name. Nothing else is written.
 
 ## The steps
 
