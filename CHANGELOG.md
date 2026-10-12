@@ -9,6 +9,13 @@ egui minor.
 
 ### Added
 
+- Application hooks around the shell: `AppBuilder::main_edge_to_edge`
+  (the centre without margins), `AppBuilder::wrap` (draws around the
+  whole application, `App::show_wrapped`), `AppBuilder::on_exit` and the
+  `app.exit` step whose default saves (`App::exit`, run by eframe's
+  `on_exit`), `AppBuilder::run_native_with` (the application's own
+  `eframe::App` around egui-pop's), and `window::restore`, the window's
+  kept place given to `NativeOptions`.
 - The keymap at run time: `AppHandle::declare` and `undeclare` (a
   command declared or removed after build, owned by a named owner, its
   keys, menus and palette entry following with no plugin reconnected);

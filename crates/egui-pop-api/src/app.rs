@@ -281,6 +281,8 @@ pub(crate) struct Shared {
     /// The areas are being drawn: workbench changes wait for the frame's
     /// end.
     drawing_areas: std::cell::Cell<bool>,
+    /// The centre drawn without margins.
+    edge_to_edge: std::cell::Cell<bool>,
     diagnostics: RefCell<Diagnostics>,
     derived: RefCell<Derived>,
     plugins: RefCell<Vec<PluginInfo>>,
@@ -356,6 +358,7 @@ impl AppHandle {
             indicators: RefCell::new(OwnedList::new()),
             indicators_seen: std::cell::Cell::new(0),
             drawing_areas: std::cell::Cell::new(false),
+            edge_to_edge: std::cell::Cell::new(false),
             diagnostics: RefCell::new(Diagnostics::new()),
             derived: RefCell::new(Derived::default()),
             plugins: RefCell::new(Vec::new()),
@@ -1242,6 +1245,11 @@ impl AppHandle {
         self.0.workbench.borrow_mut()
     }
 
+    /// Whether the centre is drawn edge to edge.
+    pub fn edge_to_edge(&self) -> bool {
+        self.0.edge_to_edge.get()
+    }
+
     pub(crate) fn set_drawing_areas(&self, on: bool) {
         self.0.drawing_areas.set(on);
     }
@@ -1421,7 +1429,23 @@ pub struct AppBuilder {
     store: Option<SharedStore>,
     host: Option<Box<dyn Host>>,
     system_focus: Option<SystemFocus>,
+    edge_to_edge: bool,
+    wrap: Option<WrapUi>,
+    on_exit: Vec<ExitFn>,
 }
+
+/// Draws around the whole application (`AppBuilder::wrap`): gets the
+/// `Ui`, the handle, and the application's drawing to call where it
+/// likes.
+pub type WrapUi = Box<dyn FnMut(&mut Ui, &AppHandle, &mut dyn FnMut(&mut Ui))>;
+/// Runs when the application closes (`AppBuilder::on_exit`), before the
+/// `app.exit` step.
+pub type ExitFn = Box<dyn FnMut(&AppHandle)>;
+
+/// The application closes: its default saves the settings, the keymap
+/// and the layout (when a directory was given). A plugin replaces it to
+/// save elsewhere, or follows it.
+pub const STEP_EXIT: StepId = StepId::from_static("app.exit");
 
 impl fmt::Debug for AppBuilder {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -1451,7 +1475,35 @@ impl AppBuilder {
             store: None,
             host: None,
             system_focus: None,
+            edge_to_edge: false,
+            wrap: None,
+            on_exit: Vec::new(),
         }
+    }
+
+    /// Draws the main area edge to edge: no margin around the centre's
+    /// panels (an image viewer, a canvas).
+    pub fn main_edge_to_edge(mut self, on: bool) -> Self {
+        self.edge_to_edge = on;
+        self
+    }
+
+    /// Draws around the whole application every frame (a custom frame,
+    /// a backdrop): `f` gets the `Ui`, the handle and the application's
+    /// drawing, to call where it likes.
+    pub fn wrap(
+        mut self,
+        f: impl FnMut(&mut Ui, &AppHandle, &mut dyn FnMut(&mut Ui)) + 'static,
+    ) -> Self {
+        self.wrap = Some(Box::new(f));
+        self
+    }
+
+    /// Runs `f` when the application closes, before the `app.exit` step
+    /// (which saves).
+    pub fn on_exit(mut self, f: impl FnMut(&AppHandle) + 'static) -> Self {
+        self.on_exit.push(Box::new(f));
+        self
     }
 
     /// Adds a plugin.
@@ -1560,7 +1612,10 @@ impl AppBuilder {
             persist: self.persist,
             in_flight: Vec::new(),
             waking: None,
+            wrap: self.wrap,
+            on_exit: self.on_exit,
         };
+        app.handle.0.edge_to_edge.set(self.edge_to_edge);
         app.framework(self.theme, self.themes, modes)
             .expect("the framework's registrations are valid");
         app.install_collectors();
@@ -1585,12 +1640,8 @@ impl AppBuilder {
             .get_or_insert_with(egui_pop_core::focus_mode::read_system);
         // The window's place from the last run, repaired (the screens are
         // not known before the window exists: only bounds are checked).
-        if let Some(p) = &self.persist
-            && let Ok(Some(read)) =
-                p.load::<egui_pop_model::values::SettingsDoc>("settings", &settings_schema())
-            && let Some(state) = crate::window::from_settings(&read.value)
-        {
-            crate::window::apply(&mut options, state.repair(&[]));
+        if let Some(p) = &self.persist {
+            crate::window::restore(p.dir(), &mut options);
         }
         eframe::run_native(
             title,
@@ -1600,6 +1651,34 @@ impl AppBuilder {
                     .build(&cc.egui_ctx)
                     .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
                 Ok(Box::new(app))
+            }),
+        )
+    }
+
+    /// As [`AppBuilder::run_native`], the built application handed to
+    /// `make`, which gives eframe the `eframe::App` to run: one of the
+    /// application's own around egui-pop's (it calls `App::logic`,
+    /// `App::show_wrapped` and `App::exit` from its own).
+    #[cfg(all(feature = "eframe", not(target_arch = "wasm32")))]
+    pub fn run_native_with(
+        mut self,
+        title: &str,
+        mut options: eframe::NativeOptions,
+        make: impl FnOnce(App, &eframe::CreationContext<'_>) -> Box<dyn eframe::App> + 'static,
+    ) -> eframe::Result {
+        self.system_focus
+            .get_or_insert_with(egui_pop_core::focus_mode::read_system);
+        if let Some(p) = &self.persist {
+            crate::window::restore(p.dir(), &mut options);
+        }
+        eframe::run_native(
+            title,
+            options,
+            Box::new(move |cc| {
+                let app = self
+                    .build(&cc.egui_ctx)
+                    .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
+                Ok(make(app, cc))
             }),
         )
     }
@@ -1619,6 +1698,8 @@ pub struct App {
     in_flight: Vec<InFlight>,
     /// The context the host's waker wakes.
     waking: Option<Context>,
+    wrap: Option<WrapUi>,
+    on_exit: Vec<ExitFn>,
 }
 
 /// A run waiting for its result.
@@ -1794,6 +1875,13 @@ impl App {
         ctx.setting(SETTING_FOCUS, focus)?;
         crate::zoom::register(&mut ctx)?;
         ctx.service(&FOCUS_MODE, modes)?;
+        ctx.step(
+            crate::steps::StepSpec::new(
+                STEP_EXIT,
+                "The application closes; the default saves the settings, keymap and layout.",
+            )
+            .args(json!({})),
+        )?;
         ctx.step(
             crate::steps::StepSpec::new(
                 STEP_REBIND,
@@ -2708,6 +2796,36 @@ impl App {
         }
     }
 
+    /// The application closes: the `on_exit` functions, then the
+    /// `app.exit` step, whose default saves (`App::save`).
+    pub fn exit(&mut self) -> Outcome {
+        let handle = self.handle.clone();
+        for f in &mut self.on_exit {
+            f(&handle);
+        }
+        let saved = self.save().map_err(|e| e.to_string());
+        let mut saved = Some(saved);
+        handle.step(&STEP_EXIT, json!({}), move |_, _| {
+            saved
+                .take()
+                .unwrap_or(Ok(()))
+                .map(|()| json!({ "saved": true }))
+        })
+    }
+
+    /// Draws the application, through the `wrap` given to the builder
+    /// when there is one.
+    pub fn show_wrapped(&mut self, ui: &mut Ui) {
+        match self.wrap.take() {
+            Some(mut wrap) => {
+                let handle = self.handle.clone();
+                wrap(ui, &handle, &mut |ui| self.show(ui));
+                self.wrap = Some(wrap);
+            }
+            None => self.show(ui),
+        }
+    }
+
     fn install_theme(&mut self) {
         let service = self.handle.theme();
         let spec = service.spec();
@@ -3105,12 +3223,16 @@ impl eframe::App for App {
     }
 
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
-        self.show(ui);
+        self.show_wrapped(ui);
     }
 
     fn on_exit(&mut self) {
-        if let Err(e) = App::save(self) {
-            log::error!(target: "egui_pop", "saving: {e}");
+        match self.exit() {
+            Outcome::Done(Err(e)) => log::error!(target: "egui_pop", "saving: {e}"),
+            Outcome::Vetoed { by, reason } => {
+                log::warn!(target: "egui_pop", "exit step vetoed by {by}: {reason}");
+            }
+            Outcome::Done(Ok(_)) => {}
         }
     }
 }

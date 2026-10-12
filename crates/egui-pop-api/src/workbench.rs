@@ -736,7 +736,11 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
             });
         app.workbench_mut().rects.insert(area, shown.response.rect);
     }
-    let shown = egui::CentralPanel::default().show(ui, |ui| {
+    let mut central = egui::CentralPanel::default();
+    if app.edge_to_edge() {
+        central = central.frame(egui::Frame::central_panel(ui.style()).inner_margin(0.0));
+    }
+    let shown = central.show(ui, |ui| {
         if areas.contains(&Area::Center) && visible_in(app, Area::Center) {
             draw_area(app, ui, Area::Center);
         }

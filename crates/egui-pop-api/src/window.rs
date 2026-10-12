@@ -130,6 +130,27 @@ pub fn from_settings(doc: &SettingsDoc) -> Option<WindowState> {
     WindowState::from_store(&rect, flag(PLACED), flag(MAXIMIZED), flag(FULLSCREEN))
 }
 
+/// Gives a native window the place kept in a settings directory (the
+/// one given to `AppBuilder::persist`), repaired: the screens are not
+/// known before the window exists, so only its size is bounded and a
+/// position far away dropped. Returns the place given, if one was kept.
+/// `AppBuilder::run_native` does it; an application running eframe
+/// itself calls it.
+#[cfg(all(feature = "eframe", not(target_arch = "wasm32")))]
+pub fn restore(
+    dir: impl Into<std::path::PathBuf>,
+    options: &mut eframe::NativeOptions,
+) -> Option<WindowState> {
+    let p = egui_pop_core::persist::Persist::new(dir);
+    let read = p
+        .load::<SettingsDoc>("settings", &egui_pop_model::values::settings_schema())
+        .ok()
+        .flatten()?;
+    let state = from_settings(&read.value)?.repair(&[]);
+    apply(options, state);
+    Some(state)
+}
+
 /// Puts a kept window place into a native window's options.
 #[cfg(all(feature = "eframe", not(target_arch = "wasm32")))]
 pub fn apply(options: &mut eframe::NativeOptions, state: WindowState) {
