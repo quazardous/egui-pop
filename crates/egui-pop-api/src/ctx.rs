@@ -10,7 +10,7 @@ use std::sync::Arc;
 use egui::Ui;
 use egui_pop_model::commands::{CommandSpec, RegisterError};
 use egui_pop_model::ids::{CommandId, MenuId, OwnerId, PanelId, PluginId, SettingId, ZoneId};
-use egui_pop_model::keymap::{Action, Layer};
+use egui_pop_model::keymap::{Action, BindOptions, Layer};
 use egui_pop_model::menus::MenuItem;
 use egui_pop_model::panels::PanelSpec;
 use egui_pop_model::values::{DeclareError, Descriptor};
@@ -120,8 +120,8 @@ impl<'a> Ctx<'a> {
         handler: impl Fn(&Call<'_>) -> Result<Json, String> + 'static,
     ) -> Result<&mut Self, CtxError> {
         for k in &spec.keys {
-            egui_pop_model::keymap::Keys::parse(k).map_err(|error| CtxError::Keys {
-                keys: k.clone(),
+            egui_pop_model::keymap::Keys::parse(&k.keys).map_err(|error| CtxError::Keys {
+                keys: k.keys.clone(),
                 error,
             })?;
         }
@@ -137,14 +137,18 @@ impl<'a> Ctx<'a> {
         for k in keys {
             self.reg
                 .keymap
-                .bind(
+                .bind_with(
                     &self.owner,
                     Layer::Default,
-                    &k,
+                    &k.keys,
                     Action::Run(id.clone()),
                     &when,
+                    k.options,
                 )
-                .map_err(|error| CtxError::Keys { keys: k, error })?;
+                .map_err(|error| CtxError::Keys {
+                    keys: k.keys,
+                    error,
+                })?;
         }
         for m in menus {
             self.reg
@@ -172,6 +176,33 @@ impl<'a> Ctx<'a> {
         self.reg
             .keymap
             .bind(&self.owner, layer, keys, Action::Run(command), when)
+            .map_err(|error| CtxError::Keys {
+                keys: keys.into(),
+                error,
+            })?;
+        Ok(self)
+    }
+
+    /// Binds keys to a command, listening as `options` say (on a
+    /// surface, while typing, through modals).
+    pub fn keybinding_with(
+        &mut self,
+        keys: &str,
+        command: CommandId,
+        when: &str,
+        layer: Layer,
+        options: BindOptions,
+    ) -> Result<&mut Self, CtxError> {
+        self.reg
+            .keymap
+            .bind_with(
+                &self.owner,
+                layer,
+                keys,
+                Action::Run(command),
+                when,
+                options,
+            )
             .map_err(|error| CtxError::Keys {
                 keys: keys.into(),
                 error,

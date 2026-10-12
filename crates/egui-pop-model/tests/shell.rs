@@ -3,7 +3,7 @@
 use egui_pop_model::commands::{CommandSpec, Commands, Origin};
 use egui_pop_model::ids::{CommandId, MenuId, OwnerId, PanelId};
 use egui_pop_model::keymap::{
-    Action, DocBinding, Keymap, KeymapDoc, Keys, Layer, Resolution, Verdict,
+    Action, BindOptions, DocBinding, Keymap, KeymapDoc, Keys, Layer, Resolution, Typing, Verdict,
 };
 use egui_pop_model::layout::{Auxiliary, Layout, Node};
 use egui_pop_model::panels::{Area, PanelSpec, Panels};
@@ -243,14 +243,25 @@ fn the_binding_nearest_the_focus_wins_and_the_trace_says_why() {
     let mut k = Keymap::new();
     let dialog = OwnerId::from_static("dialog");
     let field = OwnerId::from_static("field");
-    k.bind(&FW, Layer::Default, "Escape", Action::run("app.cancel"), "")
-        .unwrap();
-    k.bind(
+    // Bindings that fire while typing too (a plain key is otherwise
+    // left to a text input, see `scopes.rs`).
+    let always = || BindOptions::global().typing(Typing::Always);
+    k.bind_with(
+        &FW,
+        Layer::Default,
+        "Escape",
+        Action::run("app.cancel"),
+        "",
+        always(),
+    )
+    .unwrap();
+    k.bind_with(
         &dialog,
         Layer::Default,
         "Escape",
         Action::run("dialog.close"),
         "dialogFocus",
+        always(),
     )
     .unwrap();
     k.bind(
@@ -295,7 +306,10 @@ fn the_binding_nearest_the_focus_wins_and_the_trace_says_why() {
         ]
     );
     let text = trace.to_string();
-    assert!(text.starts_with("Escape: runs field.clear\n"), "{text}");
+    assert!(
+        text.starts_with("Escape: runs field.clear (global)\n"),
+        "{text}"
+    );
     assert!(
         text.contains("lost to field.clear (nearer the focus)"),
         "{text}"
@@ -328,16 +342,19 @@ fn null_unbinds_keys_and_minus_removes_a_command_from_the_layers_below() {
                 keys: "Ctrl+P".into(),
                 command: None,
                 when: String::new(),
+                ..DocBinding::default()
             },
             DocBinding {
                 keys: "Ctrl+K".into(),
                 command: Some("-app.palette".into()),
                 when: String::new(),
+                ..DocBinding::default()
             },
             DocBinding {
                 keys: "Ctrl+Q".into(),
                 command: Some("not an id".into()),
                 when: String::new(),
+                ..DocBinding::default()
             },
         ],
     };

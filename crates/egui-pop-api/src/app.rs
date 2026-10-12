@@ -22,7 +22,7 @@ use egui_pop_model::diagnostics::{Diagnostic, Diagnostics};
 use egui_pop_model::ids::{
     CommandId, MenuId, OwnerId, PanelId, PluginId, SettingId, StoryId, ZoneId,
 };
-use egui_pop_model::keymap::{Keymap, Layer, Trace};
+use egui_pop_model::keymap::{BindOptions, Keymap, Layer, Trace};
 use egui_pop_model::menus::{Item, MenuItem, Menus, sort_items};
 use egui_pop_model::order::{Node, order};
 use egui_pop_model::panels::{Area, Panels};
@@ -922,8 +922,9 @@ impl App {
         ctx.command(
             CommandSpec::new(CMD_PALETTE, "Command palette", "View")
                 .description("Search and run any command.")
-                .key("Ctrl+Shift+P")
-                .key("F1")
+                // Through modals: the palette is one, and closes on its key.
+                .key_with("Ctrl+Shift+P", BindOptions::global().through_modal())
+                .key_with("F1", BindOptions::global().through_modal())
                 .menu(MENU_VIEW, "0_palette", 0)
                 .hidden(),
             |call| {

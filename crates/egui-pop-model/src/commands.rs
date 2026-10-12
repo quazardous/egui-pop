@@ -31,6 +31,7 @@ use serde::Serialize;
 use serde_json::Value as Json;
 
 use crate::ids::{CommandId, MenuId, OwnerId};
+use crate::keymap::BindOptions;
 use crate::registry::Registry;
 use crate::when::{When, WhenContext};
 
@@ -59,6 +60,14 @@ pub struct MenuPlacement {
     pub order: i32,
 }
 
+/// One of a command's default key bindings: its keys and how it listens
+/// (global or on a surface, while typing, through modals).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct KeySpec {
+    pub keys: String,
+    pub options: BindOptions,
+}
+
 /// What a command declares.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[non_exhaustive]
@@ -75,7 +84,7 @@ pub struct CommandSpec {
     /// in use); empty: never.
     pub checked: String,
     /// Its default key bindings (`Ctrl+K`, `Ctrl+K Ctrl+S`).
-    pub keys: Vec<String>,
+    pub keys: Vec<KeySpec>,
     /// Its menu entries.
     pub menus: Vec<MenuPlacement>,
     /// Listed in the command palette.
@@ -120,9 +129,19 @@ impl CommandSpec {
         self
     }
 
-    /// Adds a default key binding.
-    pub fn key(mut self, keys: &str) -> Self {
-        self.keys.push(keys.into());
+    /// Adds a default global key binding (a text input keeps plain
+    /// keys, see `keymap::Typing`).
+    pub fn key(self, keys: &str) -> Self {
+        self.key_with(keys, BindOptions::global())
+    }
+
+    /// Adds a default key binding listening as `options` say: on a
+    /// surface, while typing, through modals.
+    pub fn key_with(mut self, keys: &str, options: BindOptions) -> Self {
+        self.keys.push(KeySpec {
+            keys: keys.into(),
+            options,
+        });
         self
     }
 

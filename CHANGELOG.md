@@ -9,6 +9,18 @@ egui minor.
 
 ### Added
 
+- Key bindings have a scope: `global`, or `surface:<name>` (a focus
+  scope of that name, which must hold the focus, shown with a focus ring
+  or not). The binding of the innermost focused surface wins over an
+  outer surface's, which wins over a global one. Each binding says
+  whether a text input keeps its key (`Typing`: `auto`, `always`,
+  `unless-typing`; `auto` leaves plain keys to the text input and
+  fires shortcuts with Ctrl, Alt or Meta and function keys), and a modal
+  blocks global bindings unless they go `through_modal`. Traces name the
+  winning scope and say why a binding did not fire (surface not
+  focused, left to typing, blocked by a modal). `CommandSpec::key_with`,
+  `Ctx::keybinding_with` and `Keymap::bind_with` take the options;
+  saved keymaps keep them.
 - Menus drawn from their declarations with egui's own menus
   (`egui_pop_api::menus`): `bar` (the shell's menu bar), `show` (a
   menu's items in place) and `context_menu` (a declared menu on a
