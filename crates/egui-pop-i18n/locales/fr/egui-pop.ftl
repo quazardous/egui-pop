@@ -195,6 +195,28 @@ egui-pop-fault-body = Le reste de l’application fonctionne. Réessayez, ou sig
 
 egui-pop-fault-title = { $name } a cessé de fonctionner
 
+egui-pop-files-all = Tous les fichiers
+
+egui-pop-files-bookmark = Ajouter ce dossier aux favoris
+
+egui-pop-files-bookmarks = Favoris
+
+egui-pop-files-filter = Filtrer, ou saisir un chemin
+
+egui-pop-files-hidden = Fichiers cachés
+
+egui-pop-files-home = Dossier personnel
+
+egui-pop-files-name = Nom du fichier, ou un chemin
+
+egui-pop-files-open = Ouvrir
+
+egui-pop-files-recent = Récents
+
+egui-pop-files-save = Enregistrer
+
+egui-pop-files-unbookmark = Retirer des favoris
+
 egui-pop-frame-maximize = Agrandir
 
 egui-pop-frame-minimize = Réduire
@@ -378,6 +400,9 @@ plugin-egui-pop-devtools =
 plugin-egui-pop-dialogs =
     .title = Dialogues
 
+plugin-egui-pop-files =
+    .title = Fichiers
+
 plugin-egui-pop-focus-mode =
     .title = Mode de focus
 
@@ -477,6 +502,10 @@ setting-developer-log-level-choice-warn = avertissements
 setting-developer-show-keys =
     .description = Affiche la clé de traduction de chaque texte à la place du texte, pour trouver d’où il vient.
     .label = Afficher les clés de traduction
+
+setting-files-native =
+    .description = Choisir les fichiers avec le sélecteur du système quand il y en a un ; désactivé, avec celui d’egui-pop.
+    .label = Utiliser le sélecteur de fichiers du système
 
 setting-notifications-desktop =
     .description = Où s’affichent les notifications : sur le bureau, sur le bureau seulement quand la fenêtre n’a pas le focus, ou dans la fenêtre.

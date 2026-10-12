@@ -113,11 +113,18 @@ fn a_form_edits_typed_fields_and_picks_a_path_in_the_app() {
     );
     h.run();
     h.get_by_label("Browse…").click();
-    h.run();
+    // The dialog grows with the picker and is placed again: a few frames.
+    for _ in 0..3 {
+        h.run();
+    }
     // Folders first, then the files the field accepts.
     assert!(h.query_by_label("sub/").is_some());
     assert!(h.query_by_label("photo.png").is_none());
+    // The file chooser's in-app picker: a click highlights, Open chooses.
     h.get_by_label("notes.txt").click();
+    h.run();
+    h.get_by_label("Open").click();
+    h.run();
     h.run();
     assert!(h.query_by_label("notes.txt").is_none(), "the picker closed");
     h.query_all_by_label("Export").last().unwrap().click();

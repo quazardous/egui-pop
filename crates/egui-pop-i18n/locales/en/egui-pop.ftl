@@ -196,6 +196,28 @@ egui-pop-fault-body = The rest of the application is fine. Retry, or report the 
 
 egui-pop-fault-title = { $name } stopped working
 
+egui-pop-files-all = All files
+
+egui-pop-files-bookmark = Bookmark this folder
+
+egui-pop-files-bookmarks = Bookmarks
+
+egui-pop-files-filter = Filter, or type a path
+
+egui-pop-files-hidden = Hidden files
+
+egui-pop-files-home = Home
+
+egui-pop-files-name = File name, or a path
+
+egui-pop-files-open = Open
+
+egui-pop-files-recent = Recent
+
+egui-pop-files-save = Save
+
+egui-pop-files-unbookmark = Remove the bookmark
+
 egui-pop-frame-maximize = Maximize
 
 egui-pop-frame-minimize = Minimize
@@ -379,6 +401,9 @@ plugin-egui-pop-devtools =
 plugin-egui-pop-dialogs =
     .title = Dialogs
 
+plugin-egui-pop-files =
+    .title = Files
+
 plugin-egui-pop-focus-mode =
     .title = Focus mode
 
@@ -478,6 +503,10 @@ setting-developer-log-level-choice-warn = warn
 setting-developer-show-keys =
     .description = Shows each text's translation key instead of the text, to find where it comes from.
     .label = Show translation keys
+
+setting-files-native =
+    .description = Choose files with the system's chooser when there is one; off, with egui-pop's own.
+    .label = Use the system's file chooser
 
 setting-notifications-desktop =
     .description = Where notifications show: on the desktop, on the desktop only while the window does not have the focus, or in the window.

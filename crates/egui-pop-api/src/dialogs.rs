@@ -12,8 +12,9 @@
 //! form's values and the choice merged in.
 //!
 //! A form's path field (a descriptor made with `Descriptor::path`) has a
-//! Browse button: the system's chooser with the `native-dialogs`
-//! feature, else an in-app picker of folders and files that tests drive.
+//! Browse button: the file chooser ([`crate::files`]: the system's, or
+//! the in-app picker), its result written into the field when it comes;
+//! without the files plugin, the in-app picker inside the dialog.
 //!
 //! Every open dialog is data: the debug bridge's `dialogs` collector
 //! shows the current one (a form's values also as a plain `values` map)
@@ -46,6 +47,7 @@
 
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
+
 use std::sync::{Arc, Mutex};
 
 use egui::{Key, Response, Ui};
@@ -62,6 +64,8 @@ use serde::Serialize;
 use serde_json::{Map, Value as Json, json};
 
 use crate::app::AppHandle;
+use crate::files::{self, FILES, FilePicker, FileRequest, PickerAnswer};
+use crate::host::Pending;
 use crate::host::source_of;
 use crate::services::ServiceToken;
 use crate::steps::{Outcome, StepSpec};
@@ -392,8 +396,14 @@ struct Open {
     dialog: Dialog,
     /// Focus placed on its first pass.
     focused: bool,
-    /// The in-app picker open for a field: its key and folder.
-    picking: Option<(String, PathBuf)>,
+    /// The in-app picker open inside the dialog for a field (without the
+    /// files plugin): its key and picker.
+    picking: Option<(String, FilePicker)>,
+    /// A field's Browse asked for a choice (started by the next frame).
+    browse: Option<(String, FileRequest)>,
+    /// A choice under way for a field: its key, the choice's id and
+    /// result to come.
+    choosing: Option<(String, u64, Pending)>,
     error: Option<String>,
     /// A choice's filter, and the option highlighted among those shown.
     filter: String,
@@ -425,6 +435,8 @@ impl Dialogs {
             dialog: dialog.into(),
             focused: false,
             picking: None,
+            browse: None,
+            choosing: None,
             error: None,
             filter: String::new(),
             highlight: 0,
@@ -696,7 +708,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     let mut open = true;
     let mut answer: Option<Answer> = None;
     overlay::show(&ctx, &spec, &mut open, None, |ui| {
-        answer = body(ui, &mut open_dialog);
+        answer = body(ui, app, &mut open_dialog);
     });
     if !open && answer.is_none() {
         answer = Some(Answer::Cancel);
@@ -715,6 +727,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
             }),
         );
     }
+    browse(app, &mut open_dialog);
     match answer {
         Some(a) => {
             if let Err(e) = answer_step(app, &d, a, Origin::User) {
@@ -745,7 +758,7 @@ fn values_of(fields: &[Field]) -> Map<String, Json> {
 }
 
 /// A dialog's content and footer; its answer when given.
-fn body(ui: &mut Ui, o: &mut Open) -> Option<Answer> {
+fn body(ui: &mut Ui, app: &AppHandle, o: &mut Open) -> Option<Answer> {
     let t = Tokens::of(ui.ctx());
     let first = !o.focused;
     o.focused = true;
@@ -845,37 +858,47 @@ fn body(ui: &mut Ui, o: &mut Open) -> Option<Answer> {
             }
         }
         Dialog::Form(f) => {
-            let picking = &mut o.picking;
+            let browse = &mut o.browse;
             egui::Grid::new(("egui_pop.form", &f.title))
                 .num_columns(2)
                 .spacing([t.space.m, t.space.s])
                 .show(ui, |ui| {
                     for (n, field) in f.fields.iter_mut().enumerate() {
                         let label = ui.label(&field.descriptor.label);
-                        let r = edit_field(ui, field, picking, label.id);
+                        let r = edit_field(ui, field, browse, label.id);
                         if first && n == 0 {
                             r.request_focus();
                         }
                         ui.end_row();
                     }
                 });
-            if let Some((key, dir)) = picking.clone()
-                && let Some(field) = f.fields.iter_mut().find(|x| x.key == key)
+            if let Some((key, picker)) = o.picking.as_mut()
+                && let Some(field) = f.fields.iter_mut().find(|x| x.key == *key)
             {
                 ui.separator();
-                let hint = field.descriptor.path.clone().unwrap_or(PathHint {
-                    kind: PathKind::File,
-                    extensions: Vec::new(),
-                });
-                match picker(ui, &dir, &hint) {
-                    Picked::Stay => {}
-                    Picked::Into(d) => *picking = Some((key, d)),
-                    Picked::Chosen(p) => {
-                        field.value = Value::Text(p.display().to_string());
-                        *picking = None;
+                match picker.show(
+                    ui,
+                    &files::Places {
+                        home: files::home(),
+                        ..Default::default()
+                    },
+                ) {
+                    Some(PickerAnswer::Chosen(p)) => {
+                        if let Some(p) = p.first() {
+                            field.value = Value::Text(p.display().to_string());
+                        }
+                        o.picking = None;
                     }
-                    Picked::Cancel => *picking = None,
+                    Some(PickerAnswer::Cancel) => o.picking = None,
+                    Some(PickerAnswer::Bookmark(..)) | None => {}
                 }
+            }
+            // The file chooser's in-app picker, inside the dialog.
+            if let Some(id) = o.choosing.as_ref().map(|(_, id, _)| *id)
+                && let Some(files) = app.service(&FILES)
+            {
+                ui.separator();
+                files.show_inline(ui, app, id);
             }
             let verb = f.verb.clone();
             if let Some(a) = footer(ui, &verb, false, false) {
@@ -885,7 +908,11 @@ fn body(ui: &mut Ui, o: &mut Open) -> Option<Answer> {
                     },
                     other => other,
                 });
-            } else if enter && !ui.ctx().text_edit_focused() && o.picking.is_none() {
+            } else if enter
+                && !ui.ctx().text_edit_focused()
+                && o.picking.is_none()
+                && o.choosing.is_none()
+            {
                 answer = Some(Answer::Accept {
                     values: values_of(&f.fields),
                 });
@@ -935,7 +962,7 @@ fn footer(ui: &mut Ui, verb: &str, danger: bool, first: bool) -> Option<Answer> 
 fn edit_field(
     ui: &mut Ui,
     field: &mut Field,
-    picking: &mut Option<(String, PathBuf)>,
+    browse: &mut Option<(String, FileRequest)>,
     label: egui::Id,
 ) -> Response {
     let d = &field.descriptor;
@@ -977,7 +1004,10 @@ fn edit_field(
                         .button(strings::tr(ui.ctx(), &txt::DIALOG_BROWSE))
                         .clicked()
                 {
-                    browse(v, &hint, &field.key, picking);
+                    *browse = Some((
+                        field.key.clone(),
+                        request_for(&field.descriptor.label, v, &hint),
+                    ));
                 }
                 r
             })
@@ -988,31 +1018,49 @@ fn edit_field(
     r.labelled_by(label)
 }
 
-/// The system's chooser when there is one (`native-dialogs`), else the
-/// in-app picker.
-// The system's chooser writes the value; the in-app picker does it later.
-#[allow(clippy::ptr_arg)]
-fn browse(value: &mut String, hint: &PathHint, key: &str, picking: &mut Option<(String, PathBuf)>) {
-    #[cfg(all(feature = "native-dialogs", not(target_arch = "wasm32")))]
-    {
-        let start = start_dir(value);
-        let mut d = rfd::FileDialog::new().set_directory(&start);
-        if !hint.extensions.is_empty() {
-            d = d.add_filter("", &hint.extensions);
-        }
-        let chosen = match hint.kind {
-            PathKind::Dir => d.pick_folder(),
-            PathKind::File => d.pick_file(),
-        };
-        if let Some(p) = chosen {
-            *value = p.display().to_string();
-        }
-        let _ = (key, picking);
+/// The choice a path field's Browse asks for.
+fn request_for(label: &str, value: &str, hint: &PathHint) -> FileRequest {
+    let mut r = match hint.kind {
+        PathKind::Dir => FileRequest::folder(label),
+        PathKind::File => FileRequest::open(label),
     }
-    #[cfg(not(all(feature = "native-dialogs", not(target_arch = "wasm32"))))]
-    {
-        let _ = hint;
-        *picking = Some((key.to_string(), start_dir(value)));
+    .directory(start_dir(value));
+    if !hint.extensions.is_empty() {
+        let exts: Vec<&str> = hint.extensions.iter().map(String::as_str).collect();
+        r = r.filter(&exts.join(", "), &exts);
+    }
+    r
+}
+
+/// Starts the choice a Browse asked for (through the files plugin, else
+/// the in-app picker inside the dialog), and writes a finished choice
+/// into its field.
+fn browse(app: &AppHandle, o: &mut Open) {
+    if let Some((key, request)) = o.browse.take() {
+        match app.service(&FILES) {
+            Some(f) => {
+                let (id, pending) = f.choose_inline(app, request);
+                o.choosing = Some((key, id, pending));
+            }
+            None => o.picking = Some((key, FilePicker::new(&request))),
+        }
+    }
+    let Some(result) = o.choosing.as_ref().and_then(|(_, _, p)| p.take()) else {
+        return;
+    };
+    let Some((key, ..)) = o.choosing.take() else {
+        return;
+    };
+    match files::chosen(&result) {
+        Ok(files::Chosen::Paths(paths)) => {
+            if let (Dialog::Form(f), Some(p)) = (&mut o.dialog, paths.first())
+                && let Some(field) = f.fields.iter_mut().find(|x| x.key == key)
+            {
+                field.value = Value::Text(p.display().to_string());
+            }
+        }
+        Ok(files::Chosen::Cancelled) => {}
+        Err(e) => o.error = Some(e),
     }
 }
 
@@ -1030,13 +1078,6 @@ fn start_dir(value: &str) -> PathBuf {
         .map(PathBuf::from)
         .filter(|d| d.is_dir())
         .unwrap_or_else(|| PathBuf::from("/"))
-}
-
-enum Picked {
-    Stay,
-    Into(PathBuf),
-    Chosen(PathBuf),
-    Cancel,
 }
 
 /// The entries of a folder a picker lists: folders, then the files the
@@ -1060,53 +1101,5 @@ pub fn entries(dir: &Path, hint: &PathHint) -> Vec<(PathBuf, bool)> {
         })
         .collect();
     out.sort_by(|a, b| (!a.1, &a.0).cmp(&(!b.1, &b.0)));
-    out
-}
-
-/// The in-app picker: the folder, its parent, its entries.
-fn picker(ui: &mut Ui, dir: &Path, hint: &PathHint) -> Picked {
-    let mut out = Picked::Stay;
-    ui.horizontal(|ui| {
-        if ui.button(strings::tr(ui.ctx(), &txt::PICKER_UP)).clicked()
-            && let Some(p) = dir.parent()
-        {
-            out = Picked::Into(p.to_path_buf());
-        }
-        ui.monospace(dir.display().to_string());
-    });
-    egui::ScrollArea::vertical()
-        .max_height(200.0)
-        .id_salt("egui_pop.picker")
-        .show(ui, |ui| {
-            for (p, is_dir) in entries(dir, hint) {
-                let name = p
-                    .file_name()
-                    .map(|n| n.to_string_lossy().into_owned())
-                    .unwrap_or_default();
-                let label = if is_dir { format!("{name}/") } else { name };
-                if ui.selectable_label(false, label).clicked() {
-                    out = if is_dir {
-                        Picked::Into(p)
-                    } else {
-                        Picked::Chosen(p)
-                    };
-                }
-            }
-        });
-    ui.horizontal(|ui| {
-        if hint.kind == PathKind::Dir
-            && ui
-                .button(strings::tr(ui.ctx(), &txt::PICKER_CHOOSE_FOLDER))
-                .clicked()
-        {
-            out = Picked::Chosen(dir.to_path_buf());
-        }
-        if ui
-            .button(strings::tr(ui.ctx(), &txt::PICKER_CLOSE))
-            .clicked()
-        {
-            out = Picked::Cancel;
-        }
-    });
     out
 }

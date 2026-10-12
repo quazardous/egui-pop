@@ -9,6 +9,20 @@ egui minor.
 
 ### Added
 
+- Choosing files (`egui_pop_api::files`, `FilesPlugin` in
+  `DefaultPlugins`): `Files::choose` returns a `Pending` and never holds
+  a frame. The system's chooser (feature `native-dialogs` of the facade,
+  through `rfd`; the xdg desktop portal on Linux) is made on the
+  interface thread and awaited on its own; without it, without a session
+  bus, or with the `files.native` setting off, an in-app picker answers:
+  keyboard navigation, a typed path with `Tab` completion, the choice
+  dialog's fuzzy filter, the request's filters, hidden files, recent
+  places and bookmarks kept in the host store. Steps `file.choose` (a
+  run-hook replaces the chooser) and `file.chosen` (veto or redirect);
+  the `files` collector shows and answers choices. `FilePicker` works on
+  its own in any `Ui`. A form's path field browses through it. The
+  gallery's `files` page opens each kind of choice. Guide: docs/files.md.
+
 - Windows hit testing for the window's own frame: `egui-pop-win32` (no
   egui dependency, the one crate allowed `unsafe`) subclasses a window
   and answers `WM_NCHITTEST` from the frame's hit regions; `FramePlugin`
@@ -155,6 +169,9 @@ egui minor.
 - `Keymap::rebind` keeps the scope of the binding it replaces (the
   highest layer's below): the user's new keys for a surface or system
   shortcut stay in that scope instead of becoming global.
+- A form's Browse button no longer opens the system's chooser on the
+  interface thread (it held the frame): it goes through the file
+  chooser, its in-app picker drawn inside the dialog.
 - `display::Matrix` maps the scene to linear sRGB, then to the target's
   primaries (the same as before for sRGB targets); `Stage` has a
   `white_nits` field (SDR white for PQ) and `Transfer` the `ExtSrgb`

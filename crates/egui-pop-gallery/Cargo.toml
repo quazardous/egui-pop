@@ -12,6 +12,11 @@ authors.workspace = true
 [lints]
 workspace = true
 
+[features]
+## The system's file chooser in the gallery (tests always use the in-app
+## picker, so this is off by default).
+native-dialogs = ["egui-pop/native-dialogs"]
+
 [dependencies]
 egui-pop = { workspace = true, features = ["viewport", "i18n", "platform"] }
 egui = { workspace = true, features = ["default_fonts"] }

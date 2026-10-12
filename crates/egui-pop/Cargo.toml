@@ -58,6 +58,9 @@ platform-crash = ["dep:egui-pop-platform", "egui-pop-platform/crash"]
 ## The window manager's focus mode read in-process
 ## (`egui_pop::platform::focus`).
 platform-focus = ["dep:egui-pop-platform", "egui-pop-platform/focus"]
+## The system's file chooser (through `rfd`: the xdg desktop portal on
+## Linux); without it, the in-app picker.
+native-dialogs = ["egui-pop-api/native-dialogs"]
 
 [dependencies]
 egui.workspace = true

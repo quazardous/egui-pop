@@ -97,6 +97,17 @@ egui-pop-dialog-browse 29d69453eb3f2c19
 egui-pop-dialog-filter 3a5e912c59d0059f
 egui-pop-fault-body 69dbeb00c37f33b6
 egui-pop-fault-title 7f46f8bee9c2261e
+egui-pop-files-all 45bed3078932475b
+egui-pop-files-bookmark 6b0e2a63b0284481
+egui-pop-files-bookmarks c1eb9494b4a5a554
+egui-pop-files-filter 629d424a814e621a
+egui-pop-files-hidden 98d3490afec5ff90
+egui-pop-files-home 4e79e04702088474
+egui-pop-files-name 777f8f9acd9d0f37
+egui-pop-files-open 41f71ad49a338131
+egui-pop-files-recent ab73b8f8d0246524
+egui-pop-files-save 835b5f8f6d37f13e
+egui-pop-files-unbookmark d71391bfffa763c4
 egui-pop-frame-maximize ec3ab8180de082b7
 egui-pop-frame-minimize e6356bcffe84c79d
 egui-pop-frame-restore eb78406341b90759
@@ -184,6 +195,7 @@ plugin-egui-pop-arrangements.title 82eceb9b2f1a7dae
 plugin-egui-pop-crash.title f483a6c35b26c923
 plugin-egui-pop-devtools.title 3bef768f6a95f10d
 plugin-egui-pop-dialogs.title 93177f9aec8337b4
+plugin-egui-pop-files.title 4058925ba5dd4dd6
 plugin-egui-pop-focus-mode.title bc53c8151e3fb3cc
 plugin-egui-pop-frame.title 48659a05a447c4ea
 plugin-egui-pop-i18n.title 3e94737db692401b
@@ -227,6 +239,8 @@ setting-developer-log-level.description ef2c9fed741aeec7
 setting-developer-log-level.label 43ff95a11c8936c3
 setting-developer-show-keys.description 3edf370057b38677
 setting-developer-show-keys.label 340776331e19a4a5
+setting-files-native.description ce2b615f40df8940
+setting-files-native.label f2b00b77262f7a75
 setting-notifications-desktop-choice-always 2f25054a585490a2
 setting-notifications-desktop-choice-never d5bfc6682132cc31
 setting-notifications-desktop-choice-unfocused 51e0695065fd9127

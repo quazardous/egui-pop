@@ -86,6 +86,7 @@ pub mod arrangements;
 pub mod ctx;
 pub mod devtools;
 pub mod dialogs;
+pub mod files;
 pub mod frame;
 mod groups;
 pub mod hooks;

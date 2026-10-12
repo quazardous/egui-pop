@@ -192,6 +192,21 @@ pub const PICKER_CHOOSE_FOLDER: StrKey =
     StrKey::new("egui-pop-picker-choose-folder", "Choose this folder");
 pub const PICKER_CLOSE: StrKey = StrKey::new("egui-pop-picker-close", "Close the picker");
 
+// Files.
+
+pub const FILES_FILTER: StrKey = StrKey::new("egui-pop-files-filter", "Filter, or type a path");
+pub const FILES_NAME: StrKey = StrKey::new("egui-pop-files-name", "File name, or a path");
+pub const FILES_BOOKMARK: StrKey = StrKey::new("egui-pop-files-bookmark", "Bookmark this folder");
+pub const FILES_UNBOOKMARK: StrKey =
+    StrKey::new("egui-pop-files-unbookmark", "Remove the bookmark");
+pub const FILES_HOME: StrKey = StrKey::new("egui-pop-files-home", "Home");
+pub const FILES_RECENT: StrKey = StrKey::new("egui-pop-files-recent", "Recent");
+pub const FILES_BOOKMARKS: StrKey = StrKey::new("egui-pop-files-bookmarks", "Bookmarks");
+pub const FILES_ALL: StrKey = StrKey::new("egui-pop-files-all", "All files");
+pub const FILES_HIDDEN: StrKey = StrKey::new("egui-pop-files-hidden", "Hidden files");
+pub const FILES_OPEN: StrKey = StrKey::new("egui-pop-files-open", "Open");
+pub const FILES_SAVE: StrKey = StrKey::new("egui-pop-files-save", "Save");
+
 // Toasts.
 
 pub const TOAST_INFO: StrKey = StrKey::new("egui-pop-toast-info", "Information");
@@ -330,6 +345,17 @@ pub const ALL: &[StrKey] = &[
     PICKER_UP,
     PICKER_CHOOSE_FOLDER,
     PICKER_CLOSE,
+    FILES_FILTER,
+    FILES_NAME,
+    FILES_BOOKMARK,
+    FILES_UNBOOKMARK,
+    FILES_HOME,
+    FILES_RECENT,
+    FILES_BOOKMARKS,
+    FILES_ALL,
+    FILES_HIDDEN,
+    FILES_OPEN,
+    FILES_SAVE,
     TOAST_INFO,
     TOAST_SUCCESS,
     TOAST_WARNING,

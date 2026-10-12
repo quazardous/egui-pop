@@ -826,3 +826,29 @@ fn the_display_page_says_why_a_wide_gamut_falls_back() {
     );
     h.snapshot("display-pop-dark");
 }
+
+#[test]
+fn the_files_page_chooses_with_the_in_app_picker() {
+    let root = egui_pop_gallery::pages::files::demo_folder();
+    let mut h = harness(options("pop-dark", Density::Comfortable, "files"));
+    h.run();
+    h.get_by_label("Open an image…").click();
+    h.run();
+    h.run();
+    assert!(h.query_by_label("harbour.png").is_some());
+    assert!(h.query_by_label("notes.txt").is_none(), "filtered out");
+    h.snapshot("files-pop-dark");
+    h.get_by_label("Filter, or type a path").type_text("light");
+    h.run();
+    h.key_press(egui::Key::Enter);
+    for _ in 0..4 {
+        h.run();
+    }
+    assert!(
+        h.query_by_label("Last choice: Photos/lighthouse.jpg")
+            .is_some(),
+        "{:?}",
+        h.state().app.handle().debug_snapshot()["files"]
+    );
+    assert!(egui_pop::api::files::recent(h.state().app.handle()).contains(&root.join("Photos")));
+}
