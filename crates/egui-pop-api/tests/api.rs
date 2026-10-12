@@ -211,6 +211,11 @@ fn everything(ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
         egui_pop_model::ids::StepId::from_static("demo.step"),
         |_, _, _| {},
     )
+    .indicator(egui_pop_api::strips::Indicator::new(
+        "demo.indicator",
+        "Demo",
+        "demo.",
+    ))
     .on(On::Rebuilt, |_, _| {})
     .on_change("settings/", |_| {})
     .block(

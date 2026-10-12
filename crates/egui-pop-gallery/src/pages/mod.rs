@@ -16,6 +16,7 @@ pub mod overview;
 pub mod scale;
 pub mod settings;
 pub mod story;
+pub mod strips;
 pub mod toasts;
 pub mod tokens;
 pub mod values;

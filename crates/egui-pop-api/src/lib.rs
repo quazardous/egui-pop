@@ -23,6 +23,8 @@
 //! - [`dialogs`]: confirmations, forms, choices and notices, a plugin;
 //! - [`toasts`]: notices in a corner, with actions, a plugin;
 //! - [`frame`]: the window's own title bar and edges, a plugin;
+//! - [`strips`]: the activity bar and status bar indicators fed by the
+//!   host's events, a plugin;
 //! - [`workbench`]: panels in areas over egui_dock, with placement
 //!   rules, changed by named steps;
 //! - [`window`]: the window's place kept and repaired, full screen with
@@ -84,6 +86,7 @@ pub mod settings;
 pub mod settings_window;
 pub mod steps;
 pub mod stories;
+pub mod strips;
 pub mod toasts;
 pub mod window;
 pub mod workbench;

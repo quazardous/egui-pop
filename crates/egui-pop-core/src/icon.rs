@@ -135,6 +135,11 @@ impl Icon {
         Icon::Home,
     ];
 
+    /// The icon of a name (`settings`), as [`Icon::name`] gives it.
+    pub fn by_name(name: &str) -> Option<Icon> {
+        Icon::ALL.iter().copied().find(|i| i.name() == name)
+    }
+
     /// Its name in kebab case (`chevron-right`): for the debug bridge and
     /// the gallery.
     pub fn name(self) -> &'static str {

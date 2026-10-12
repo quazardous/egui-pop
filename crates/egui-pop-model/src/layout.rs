@@ -119,6 +119,9 @@ pub struct Layout {
     /// Panels the user closed: not put back as new ones are.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub hidden: Vec<PanelId>,
+    /// Areas folded to their strip: their panels stay, unshown.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub folded: Vec<Area>,
 }
 
 /// The `layout` document. Version 2 named the areas by start and end
@@ -170,6 +173,7 @@ impl Layout {
             areas,
             auxiliary: Vec::new(),
             hidden,
+            folded: Vec::new(),
         }
     }
 
@@ -306,6 +310,7 @@ impl Layout {
             areas,
             auxiliary,
             hidden: hidden.clone(),
+            folded: self.folded,
         };
         let placed: Vec<PanelId> = layout.placed().into_iter().cloned().collect();
         for p in panels.all() {

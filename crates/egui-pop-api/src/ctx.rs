@@ -479,6 +479,13 @@ impl<'a> Ctx<'a> {
         self
     }
 
+    /// Adds an indicator to the status bar, fed by the journal's events
+    /// (shown by `strips::StripsPlugin`).
+    pub fn indicator(&mut self, indicator: crate::strips::Indicator) -> &mut Self {
+        self.app.add_indicator(&self.owner, indicator);
+        self
+    }
+
     /// Contributes a gallery story.
     pub fn story(&mut self, story: Story) -> Result<&mut Self, CtxError> {
         self.app.add_story(&self.owner, story)?;

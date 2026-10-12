@@ -50,6 +50,7 @@ pub const STEP_MOVE: StepId = StepId::from_static("workbench.move");
 pub const STEP_SHOW: StepId = StepId::from_static("workbench.show");
 pub const STEP_HIDE: StepId = StepId::from_static("workbench.hide");
 pub const STEP_FOCUS: StepId = StepId::from_static("workbench.focus");
+pub const STEP_FOLD: StepId = StepId::from_static("workbench.fold");
 
 /// The workbench's steps, as the framework declares them.
 pub(crate) fn steps() -> Vec<crate::steps::StepSpec> {
@@ -69,6 +70,11 @@ pub(crate) fn steps() -> Vec<crate::steps::StepSpec> {
             "A panel is shown and gets the keyboard (`panel`).",
         )
         .args(json!({ "panel": "app.inspector" })),
+        StepSpec::new(
+            STEP_FOLD,
+            "An area folds to its strip, or unfolds (`area`, `folded`).",
+        )
+        .args(json!({ "area": "start_side", "folded": true })),
     ]
 }
 
@@ -98,6 +104,8 @@ pub enum Change {
     Show(PanelId),
     Hide(PanelId),
     Focus(PanelId),
+    /// An area folded to its strip (`true`) or unfolded.
+    Fold(Area, bool),
 }
 
 impl Change {
@@ -107,11 +115,21 @@ impl Change {
             Change::Show(p) => (STEP_SHOW, json!({ "panel": p })),
             Change::Hide(p) => (STEP_HIDE, json!({ "panel": p })),
             Change::Focus(p) => (STEP_FOCUS, json!({ "panel": p })),
+            Change::Fold(a, f) => (STEP_FOLD, json!({ "area": area_name(*a), "folded": f })),
         }
     }
 
     /// The change a step's (possibly redirected) arguments ask for.
     pub(crate) fn from_args(step: &StepId, args: &Json) -> Result<Change, String> {
+        if *step == STEP_FOLD {
+            let name = args
+                .get("area")
+                .and_then(Json::as_str)
+                .ok_or("`area` is missing")?;
+            let area = area_from(name).ok_or_else(|| format!("no area `{name}`"))?;
+            let folded = args.get("folded").and_then(Json::as_bool).unwrap_or(true);
+            return Ok(Change::Fold(area, folded));
+        }
         let panel = args
             .get("panel")
             .and_then(Json::as_str)
@@ -285,7 +303,16 @@ impl Workbench {
                 }
                 self.layout.activate(p);
                 self.focused = Some(p.clone());
+                let area = self.layout.area_of(p);
+                self.layout.folded.retain(|a| Some(*a) != area);
                 json!({ "panel": p, "focused": true })
+            }
+            Change::Fold(area, folded) => {
+                self.layout.folded.retain(|a| a != area);
+                if *folded {
+                    self.layout.folded.push(*area);
+                }
+                json!({ "area": area_name(*area), "folded": folded })
             }
         };
         self.stale = true;
@@ -486,8 +513,20 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
         (wb.areas(), sizes)
     };
     app.set_drawing_areas(true);
+    if app.zone_has_blocks(&crate::zones::ACTIVITY_BAR) {
+        let t = egui_pop_core::theme::Tokens::of(&ctx);
+        egui::Panel::left(Id::new("egui_pop.activity_bar"))
+            .resizable(false)
+            .exact_size(t.size.icon_panel + 2.0 * t.space.s + 2.0 * t.space.xs)
+            .show(ui, |ui| {
+                egui_pop_core::focus::scope(ui, "activityBar", &[], |ui| {
+                    app.show_zone(ui, &crate::zones::ACTIVITY_BAR);
+                });
+            });
+    }
+    let folded = app.workbench_mut().layout.folded.clone();
     for area in [Area::Bottom, Area::StartSide, Area::EndSide] {
-        if !areas.contains(&area) || !visible_in(app, area) {
+        if !areas.contains(&area) || !visible_in(app, area) || folded.contains(&area) {
             continue;
         }
         let (min, default) = sizes[&area];
@@ -664,7 +703,7 @@ fn follow_drag(app: &AppHandle, ctx: &egui::Context) {
     if let Some(to) = to {
         let out = app.change_workbench(Change::Move(panel.clone(), to));
         if let Some(Outcome::Done(Err(e))) = &out {
-            app.workbench_refused(&panel, e);
+            app.workbench_refused(&format!("move {panel}"), e);
         }
     }
 }

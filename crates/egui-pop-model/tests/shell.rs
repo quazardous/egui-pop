@@ -499,6 +499,7 @@ fn a_panel_found_where_it_may_not_be_goes_back_to_its_default_area() {
         )],
         auxiliary: vec![],
         hidden: vec![],
+        folded: vec![],
     };
     let (fixed, notes) = saved.repair(&p, &[]);
     assert_eq!(
@@ -615,4 +616,34 @@ fn menus_are_declared_grouped_and_follow_the_context() {
     assert_eq!(m.ids(), std::slice::from_ref(&m_id));
     assert_eq!(m.remove_owner(&plugin), 1);
     assert_eq!(m.show(&m_id, &cx).len(), 4);
+}
+
+#[test]
+fn layout_operations_place_hide_activate_and_fold() {
+    let mut p = Panels::new();
+    for (id, area) in [("a.one", Area::Bottom), ("a.two", Area::Bottom)] {
+        p.declare(&FW, PanelSpec::new(pid(id), id, area)).unwrap();
+    }
+    p.declare(
+        &FW,
+        PanelSpec::new(pid("a.late"), "Late", Area::StartSide).closed(),
+    )
+    .unwrap();
+    let mut l = Layout::default_for(&p);
+    assert!(l.hidden.contains(&pid("a.late")), "closed at first");
+    assert_eq!(l.active_in(Area::Bottom), [&pid("a.one")]);
+    assert!(l.activate(&pid("a.two")));
+    assert_eq!(l.active_in(Area::Bottom), [&pid("a.two")]);
+    l.place(&pid("a.late"), Area::Bottom);
+    assert!(l.shows(&pid("a.late")) && !l.hidden.contains(&pid("a.late")));
+    assert_eq!(l.active_in(Area::Bottom), [&pid("a.late")]);
+    l.hide(&pid("a.one"));
+    assert!(!l.shows(&pid("a.one")));
+    assert!(l.remove(&pid("a.two")));
+    assert!(!l.remove(&pid("a.two")));
+    l.folded.push(Area::Bottom);
+    let (back, _) = Layout::from_json(&l.to_json()).unwrap().repair(&p, &[]);
+    assert_eq!(back.folded, [Area::Bottom]);
+    // A closed panel stays closed through a repair; a new one opens.
+    assert!(back.hidden.contains(&pid("a.one")));
 }

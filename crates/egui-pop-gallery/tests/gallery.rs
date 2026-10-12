@@ -538,3 +538,30 @@ fn the_workbench_page_opens_moves_and_vetoes_panels() {
         Some(egui_pop::model::panels::Area::EndSide)
     );
 }
+
+#[test]
+fn the_strips_page_feeds_an_indicator_and_folds_the_side_bar() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "strips"));
+    h.run();
+    assert!(h.query_by_label("No job").is_some());
+    h.get_by_label("Start").click();
+    h.run();
+    h.get_by_label("50%").click();
+    h.run();
+    h.run();
+    // In the status bar, and in the page's list.
+    assert_eq!(h.query_all_by_label_contains("Exporting 50").count(), 2);
+    let mut results = egui_kittest::SnapshotResults::new();
+    results.add(h.try_snapshot("strips-pop-dark"));
+    h.get_by_label("Fold the side bar (Ctrl+B)").click();
+    h.run();
+    let app = h.state().app.handle().clone();
+    assert!(
+        app.layout()
+            .folded
+            .contains(&egui_pop::model::panels::Area::StartSide)
+    );
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::B);
+    h.run();
+    assert!(app.layout().folded.is_empty());
+}

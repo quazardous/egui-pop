@@ -21,6 +21,9 @@ pub const TITLE: ZoneId = ZoneId::from_static("app.title");
 /// Items in the window's own title bar, before its buttons (declared by
 /// `frame::FramePlugin`).
 pub const CAPTION: ZoneId = ZoneId::from_static("app.caption");
+/// A strip along the start edge, beside the side bar (the activity bar
+/// of `strips::StripsPlugin`).
+pub const ACTIVITY_BAR: ZoneId = ZoneId::from_static("app.activity-bar");
 /// The top bar, after the main menu.
 pub const TOP_BAR: ZoneId = ZoneId::from_static("app.top-bar");
 /// The side bar at the start (left in left-to-right).
@@ -37,8 +40,15 @@ pub const STATUS_BAR: ZoneId = ZoneId::from_static("app.status-bar");
 pub const OVERLAYS: ZoneId = ZoneId::from_static("app.overlays");
 
 /// The shell's zones, declared by the framework.
-pub const SHELL: [ZoneId; 7] = [
-    TITLE, TOP_BAR, SIDE_BAR, MAIN, INSPECTOR, STATUS_BAR, OVERLAYS,
+pub const SHELL: [ZoneId; 8] = [
+    TITLE,
+    TOP_BAR,
+    ACTIVITY_BAR,
+    SIDE_BAR,
+    MAIN,
+    INSPECTOR,
+    STATUS_BAR,
+    OVERLAYS,
 ];
 
 /// Draws a block.

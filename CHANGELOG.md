@@ -9,6 +9,14 @@ egui minor.
 
 ### Added
 
+- Slim strips (`egui_pop_api::strips::StripsPlugin`, opt-in): the
+  activity bar (an icon per panel of the start side bar in the new
+  `ACTIVITY_BAR` zone: it shows its panel, or folds the side bar to its
+  strip; `Ctrl+B`), and status bar indicators fed by the host's journal
+  (`Indicator`, a reducer over the events of a prefix, `Ctx::indicator`;
+  text, tone, count, progress). Areas fold through the `workbench.fold`
+  step; `Layout::folded` keeps them. `Icon::by_name`. Gallery page:
+  Strips.
 - The workbench (`egui_pop_api::workbench`): panels in areas (centre,
   start and end side bars, bottom) as tabs and splits over `egui_dock`,
   projected from the versioned layout document and read back from it;

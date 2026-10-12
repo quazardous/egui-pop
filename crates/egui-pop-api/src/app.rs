@@ -229,6 +229,9 @@ pub(crate) struct Shared {
     requests: RefCell<Vec<Request>>,
     context: RefCell<WhenContext>,
     workbench: RefCell<crate::workbench::Workbench>,
+    /// Indicators fed by the journal, and the last event fed.
+    indicators: RefCell<OwnedList<(crate::strips::Indicator, crate::strips::IndicatorState)>>,
+    indicators_seen: std::cell::Cell<Seq>,
     /// The areas are being drawn: workbench changes wait for the frame's
     /// end.
     drawing_areas: std::cell::Cell<bool>,
@@ -299,6 +302,8 @@ impl AppHandle {
             requests: RefCell::new(Vec::new()),
             context: RefCell::new(WhenContext::new()),
             workbench: RefCell::new(crate::workbench::Workbench::default()),
+            indicators: RefCell::new(OwnedList::new()),
+            indicators_seen: std::cell::Cell::new(0),
             drawing_areas: std::cell::Cell::new(false),
             diagnostics: RefCell::new(Diagnostics::new()),
             derived: RefCell::new(Derived::default()),
@@ -1061,6 +1066,50 @@ impl AppHandle {
         Some(out)
     }
 
+    /// Folds an area to its strip, or unfolds it (`workbench.fold`).
+    pub fn fold_area(&self, area: Area, folded: bool) -> Option<Outcome> {
+        self.change_workbench(crate::workbench::Change::Fold(area, folded))
+    }
+
+    /// The indicators and their states, lightest first.
+    pub fn indicators(&self) -> Vec<(crate::strips::Indicator, crate::strips::IndicatorState)> {
+        let mut v: Vec<_> = self
+            .0
+            .indicators
+            .borrow()
+            .iter()
+            .map(|s| s.item.clone())
+            .collect();
+        v.sort_by_key(|(i, _)| i.weight);
+        v
+    }
+
+    pub(crate) fn add_indicator(&self, owner: &OwnerId, ind: crate::strips::Indicator) {
+        let state = ind.initial.clone();
+        self.0.indicators.borrow_mut().push(owner, (ind, state));
+    }
+
+    /// Feeds the journal's new events to the indicators.
+    pub(crate) fn feed_indicators(&self) {
+        let seen = self.0.indicators_seen.get();
+        let last = self.last_event();
+        if last <= seen {
+            return;
+        }
+        let events = self.events_since(seen);
+        let mut list = self.0.indicators.borrow_mut();
+        let mut items: Vec<_> = list.iter_mut().map(|s| &mut s.item).collect();
+        for e in &events {
+            for (ind, state) in items.iter_mut().map(|x| (&x.0, &mut x.1)) {
+                if e.name.starts_with(&ind.prefix) {
+                    (ind.reduce)(state, e);
+                    state.seq = e.seq;
+                }
+            }
+        }
+        self.0.indicators_seen.set(last);
+    }
+
     /// Moves a panel to an area (`workbench.move`); refused when its
     /// rules keep it out.
     pub fn move_panel(&self, panel: &PanelId, area: Area) -> Option<Outcome> {
@@ -1074,12 +1123,12 @@ impl AppHandle {
 
     /// A change the workbench refused: on the journal, and in a toast when
     /// toasts are there.
-    pub(crate) fn workbench_refused(&self, panel: &PanelId, why: &str) {
+    pub(crate) fn workbench_refused(&self, what: &str, why: &str) {
         self.publish(
             "egui_pop",
             None,
             "workbench.refused",
-            json!({ "panel": panel, "reason": why }),
+            json!({ "change": what, "reason": why }),
         );
         if let Some(t) = self.service(&crate::toasts::TOASTS) {
             t.notify(crate::toasts::Toast::warning(why));
@@ -1379,6 +1428,7 @@ impl App {
             ("stories", h.stories.borrow().len()),
             ("steps", h.steps.borrow().len()),
             ("step hooks", h.step_hooks.borrow().len()),
+            ("indicators", h.indicators.borrow().len()),
             ("store paths", store.list("").len()),
             ("store listeners", store.listeners().len()),
         ])
@@ -1415,6 +1465,7 @@ impl App {
         for (zone, title) in zones::SHELL.iter().zip([
             "Title",
             "Top bar",
+            "Activity bar",
             "Side bar",
             "Main",
             "Inspector",
@@ -1824,6 +1875,7 @@ impl App {
         h.stories.borrow_mut().remove_owner(owner);
         h.steps.borrow_mut().remove_owner(owner);
         h.step_hooks.borrow_mut().remove_owner(owner);
+        h.indicators.borrow_mut().remove_owner(owner);
         h.services.borrow_mut().remove_owner(owner);
         lock(&h.store).remove_owner(owner);
         h.diagnostics.borrow_mut().remove_owner(owner);
@@ -2479,14 +2531,9 @@ impl App {
                         self.dirty = true;
                     }
                     Request::Workbench(change) => {
-                        let panel = match &change {
-                            crate::workbench::Change::Move(p, _)
-                            | crate::workbench::Change::Show(p)
-                            | crate::workbench::Change::Hide(p)
-                            | crate::workbench::Change::Focus(p) => p.clone(),
-                        };
+                        let what = format!("{change:?}");
                         if let Some(Outcome::Done(Err(e))) = self.handle.change_workbench(change) {
-                            self.handle.workbench_refused(&panel, &e);
+                            self.handle.workbench_refused(&what, &e);
                         }
                     }
                 }
@@ -2502,6 +2549,7 @@ impl App {
         self.attach(ctx);
         self.install_theme();
         self.settle();
+        self.handle.feed_indicators();
         self.process_requests();
     }
 
