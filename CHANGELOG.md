@@ -369,6 +369,11 @@ egui minor.
 
 ### Changed
 
+- The application template's manifest is `template/Cargo.toml.liquid`
+  (cargo-generate renders it to `Cargo.toml`): a workspace depending on
+  egui-pop by git no longer reads a package named `{{project-name}}` and
+  says "invalid character `{` in package name" on every cargo run. A
+  test keeps placeholders out of the repository's manifests.
 - The shell's side bar and inspector are resizable workbench areas; a
   panel's area is its default one, not where it must stay.
 - Control heights and icon sizes are multiples of 4 points, so they

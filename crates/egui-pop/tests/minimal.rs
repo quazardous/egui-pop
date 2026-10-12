@@ -56,6 +56,36 @@ fn the_template_is_the_minimal_example() {
         filled, expected,
         "template/src/main.rs drifted from examples/minimal.rs"
     );
-    let manifest = std::fs::read_to_string(root.join("template/Cargo.toml")).unwrap();
+    // `.liquid`: cargo-generate renders it to `Cargo.toml`, and cargo
+    // never reads it as a package of the repository.
+    let manifest = std::fs::read_to_string(root.join("template/Cargo.toml.liquid")).unwrap();
     assert!(manifest.contains("egui-pop = \"{{egui_pop_version}}\""));
+}
+
+/// Cargo reads every `Cargo.toml` of a git dependency's repository: none
+/// may hold a template placeholder, or every dependent's cargo run says
+/// "invalid character `{` in package name".
+#[test]
+fn no_manifest_of_the_repository_holds_a_placeholder() {
+    fn walk(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+        for e in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+            let p = e.path();
+            let name = e.file_name();
+            if p.is_dir() {
+                if name != "target" && name != ".git" {
+                    walk(&p, out);
+                }
+            } else if name == "Cargo.toml" {
+                out.push(p);
+            }
+        }
+    }
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut manifests = Vec::new();
+    walk(&root, &mut manifests);
+    assert!(manifests.len() > 5, "{manifests:?}");
+    for m in manifests {
+        let text = std::fs::read_to_string(&m).unwrap();
+        assert!(!text.contains("{{"), "{} holds a placeholder", m.display());
+    }
 }
