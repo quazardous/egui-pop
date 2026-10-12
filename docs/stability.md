@@ -70,6 +70,10 @@ Three tiers:
   `main_edge_to_edge`, `on_exit`, `run_native_with`.
 - The image viewport (`egui-pop-viewport`): its view model, mapping,
   signals and hooks may still move while the first application adopts it.
+- The platform services (`egui-pop-platform`): their steps are kept;
+  their backends, services and the system scope's registration state
+  (`egui_pop_api::system_keys`) may move while the first applications
+  ship them.
 - Anything marked "experimental" in its documentation.
 
 ## Not covered
