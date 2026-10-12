@@ -143,6 +143,31 @@ pub const SHORTCUTS_ALSO_BOUND: StrKey = StrKey::new(
     "egui-pop-shortcuts-also-bound",
     "{ $keys } also bound to { $command }",
 );
+/// A command whose keys also work outside the window, registered.
+pub const SHORTCUTS_SYSTEM_ON: StrKey = StrKey::new(
+    "egui-pop-shortcuts-system-on",
+    "{ $keys } also works outside the window",
+);
+/// Registration asked, not answered yet.
+pub const SHORTCUTS_SYSTEM_PENDING: StrKey = StrKey::new(
+    "egui-pop-shortcuts-system-pending",
+    "{ $keys } outside the window: waiting for the desktop",
+);
+/// The desktop refused one binding.
+pub const SHORTCUTS_SYSTEM_FAILED: StrKey = StrKey::new(
+    "egui-pop-shortcuts-system-failed",
+    "{ $keys } does not work outside the window: { $reason }",
+);
+/// The desktop takes no global shortcuts.
+pub const SHORTCUTS_SYSTEM_UNAVAILABLE: StrKey = StrKey::new(
+    "egui-pop-shortcuts-system-unavailable",
+    "{ $keys } works only in the window: { $reason }",
+);
+/// Nothing registers system shortcuts.
+pub const SHORTCUTS_SYSTEM_NO_PLUGIN: StrKey = StrKey::new(
+    "egui-pop-shortcuts-system-no-plugin",
+    "{ $keys } works only in the window: no plugin registers global shortcuts",
+);
 pub const SHORTCUTS_CHANGE: StrKey = StrKey::new("egui-pop-shortcuts-change", "Change");
 pub const SHORTCUTS_CHANGE_NAME: StrKey = StrKey::new(
     "egui-pop-shortcuts-change-name",
@@ -290,6 +315,11 @@ pub const ALL: &[StrKey] = &[
     SHORTCUTS_PRESS_NEW_KEYS,
     SHORTCUTS_GOES_TO,
     SHORTCUTS_ALSO_BOUND,
+    SHORTCUTS_SYSTEM_ON,
+    SHORTCUTS_SYSTEM_PENDING,
+    SHORTCUTS_SYSTEM_FAILED,
+    SHORTCUTS_SYSTEM_UNAVAILABLE,
+    SHORTCUTS_SYSTEM_NO_PLUGIN,
     SHORTCUTS_CHANGE,
     SHORTCUTS_CHANGE_NAME,
     SHORTCUTS_NO_KEY,

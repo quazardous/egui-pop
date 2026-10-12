@@ -97,3 +97,81 @@ fn new_keys_are_captured_conflicts_said_and_a_reset_brings_the_defaults_back() {
     h.run();
     assert_eq!(handle.keys_for(&CMD_UNDO), ["Ctrl+Z"]);
 }
+
+/// A plugin with a command bound in the system scope, and the state of
+/// its registration when `support` is given.
+struct Player(Option<egui_pop_api::system_keys::Support>);
+
+impl egui_pop_api::Plugin for Player {
+    fn id(&self) -> egui_pop_model::ids::PluginId {
+        egui_pop_model::ids::PluginId::from_static("player")
+    }
+
+    fn connect(
+        &mut self,
+        ctx: &mut egui_pop_api::Ctx<'_>,
+    ) -> Result<(), egui_pop_api::PluginError> {
+        use egui_pop_api::system_keys::{KeyStatus, SYSTEM_KEYS, SystemKeys};
+        use egui_pop_model::commands::CommandSpec;
+        use egui_pop_model::ids::CommandId;
+        use egui_pop_model::keymap::BindOptions;
+        ctx.command(
+            CommandSpec::new(
+                CommandId::from_static("player.toggle"),
+                "Play or pause",
+                "Player",
+            )
+            .key_with("Ctrl+Alt+P", BindOptions::system()),
+            |_| Ok(serde_json::Value::Null),
+        )?;
+        if let Some(support) = self.0.clone() {
+            let keys = SystemKeys::default();
+            keys.set_support(support);
+            keys.set_status(
+                "Ctrl+Alt+P",
+                KeyStatus::Failed("taken by another application".into()),
+            );
+            ctx.service(&SYSTEM_KEYS, keys)?;
+        }
+        Ok(())
+    }
+}
+
+#[test]
+fn the_editor_says_where_system_shortcuts_work() {
+    use egui_pop_api::system_keys::Support;
+    let cases = [
+        (
+            None,
+            "Ctrl+Alt+P works only in the window: no plugin registers global shortcuts",
+        ),
+        (
+            Some(Support::Unavailable {
+                reason: "the compositor offers no global shortcuts".into(),
+            }),
+            "Ctrl+Alt+P works only in the window: the compositor offers no global shortcuts",
+        ),
+        (
+            Some(Support::Available {
+                backend: "x11".into(),
+            }),
+            "Ctrl+Alt+P does not work outside the window: taken by another application",
+        ),
+    ];
+    for (support, said) in cases {
+        let app = App::builder()
+            .plugins(DefaultPlugins)
+            .plugin(Player(support))
+            .build(&egui::Context::default())
+            .unwrap();
+        let mut h = Harness::builder()
+            .with_size(egui::vec2(1000.0, 700.0))
+            .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+        h.run();
+        open(&mut h);
+        h.get_by_label(SHORTCUTS).click();
+        h.run();
+        h.run();
+        assert!(h.query_by_label(said).is_some(), "{said}");
+    }
+}

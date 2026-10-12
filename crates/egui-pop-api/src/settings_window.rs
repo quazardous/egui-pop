@@ -488,6 +488,64 @@ fn title_of(ctx: &egui::Context, app: &AppHandle, id: &CommandId) -> String {
         .map_or_else(|| id.to_string(), |s| command_title(ctx, &s))
 }
 
+/// What the command's system-scope keys do outside the window, and
+/// whether that is as declared (`false`: they only work inside).
+fn system_note(ctx: &egui::Context, app: &AppHandle, id: &CommandId) -> Option<(String, bool)> {
+    use crate::system_keys::{KeyStatus, SYSTEM_KEYS, Support};
+    let keys: Vec<String> = app
+        .system_bindings()
+        .into_iter()
+        .filter(|b| matches!(&b.action, Action::Run(c) if c == id))
+        .map(|b| b.keys.to_string())
+        .collect();
+    if keys.is_empty() {
+        return None;
+    }
+    let shown = keys.join(", ");
+    let Some(service) = app.service(&SYSTEM_KEYS) else {
+        return Some((
+            strings::tr_args(ctx, &txt::SHORTCUTS_SYSTEM_NO_PLUGIN, &[("keys", &shown)]),
+            false,
+        ));
+    };
+    if let Support::Unavailable { reason } = service.support() {
+        return Some((
+            strings::tr_args(
+                ctx,
+                &txt::SHORTCUTS_SYSTEM_UNAVAILABLE,
+                &[("keys", &shown), ("reason", &reason)],
+            ),
+            false,
+        ));
+    }
+    // The first binding not registered says why; else all are.
+    for k in &keys {
+        match service.status(k) {
+            Some(KeyStatus::Registered) => {}
+            Some(KeyStatus::Failed(reason)) => {
+                return Some((
+                    strings::tr_args(
+                        ctx,
+                        &txt::SHORTCUTS_SYSTEM_FAILED,
+                        &[("keys", k), ("reason", &reason)],
+                    ),
+                    false,
+                ));
+            }
+            Some(KeyStatus::Pending) | None => {
+                return Some((
+                    strings::tr_args(ctx, &txt::SHORTCUTS_SYSTEM_PENDING, &[("keys", k)]),
+                    true,
+                ));
+            }
+        }
+    }
+    Some((
+        strings::tr_args(ctx, &txt::SHORTCUTS_SYSTEM_ON, &[("keys", &shown)]),
+        true,
+    ))
+}
+
 /// The first key pressed this frame, with its modifiers, as keys.
 fn pressed_keys(ui: &Ui) -> Option<(Key, egui::Modifiers)> {
     ui.input(|i| {
@@ -643,12 +701,24 @@ fn shortcuts(ui: &mut Ui, app: &AppHandle, st: &mut State, filter: &str) {
                         None
                     }
                 });
-                match clash {
-                    Some(c) => {
-                        ui.colored_label(t.status.warning, c);
-                    }
-                    None => {
+                let system = system_note(&ctx, app, &spec.id);
+                match (clash, system) {
+                    (None, None) => {
                         ui.label("");
+                    }
+                    (clash, system) => {
+                        ui.vertical(|ui| {
+                            if let Some(c) = clash {
+                                ui.colored_label(t.status.warning, c);
+                            }
+                            if let Some((text, ok)) = system {
+                                if ok {
+                                    ui.label(text);
+                                } else {
+                                    ui.colored_label(t.status.warning, text);
+                                }
+                            }
+                        });
                     }
                 }
                 ui.horizontal(|ui| {

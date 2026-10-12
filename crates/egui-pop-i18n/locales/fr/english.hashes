@@ -140,6 +140,11 @@ egui-pop-shortcuts-press-new-keys 1afe5776010207e8
 egui-pop-shortcuts-press-to-search 1514669ebb8c71f0
 egui-pop-shortcuts-search-by-key 10d5d8999e25bb21
 egui-pop-shortcuts-show-all 9a901f899be07fb0
+egui-pop-shortcuts-system-failed 01682a7786399072
+egui-pop-shortcuts-system-no-plugin d113e8842ff70329
+egui-pop-shortcuts-system-on 39a00562a9654c5c
+egui-pop-shortcuts-system-pending 8a654d656843108e
+egui-pop-shortcuts-system-unavailable 552221bb85492345
 egui-pop-toast-close 72005e84f54413f8
 egui-pop-toast-error 1e732d4d496b57f9
 egui-pop-toast-info 5d0c399e4eefe425

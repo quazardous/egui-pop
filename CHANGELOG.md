@@ -36,9 +36,21 @@ egui minor.
   application's logic, also while the window is hidden or minimized
   when something asked for a repaint, so what a background thread hands
   over (a second launch, a tray click) is taken without a frame.
+- Key bindings in the system scope (`BindOptions::system()`,
+  `KeyScope::System`, `system` in keymap files): global shortcuts that
+  also run their command while the application is not focused, once a
+  plugin registers them with the desktop (`Keymap::system_bindings`,
+  `AppHandle::system_bindings`). Inside the window they fire as global
+  bindings do. The `system_keys` module's `SYSTEM_KEYS` service says
+  whether the desktop takes global shortcuts and how each registration
+  went; the shortcuts editor shows it next to each command, including
+  when nothing registers them.
 
 ### Changed
 
+- `Keymap::rebind` keeps the scope of the binding it replaces (the
+  highest layer's below): the user's new keys for a surface or system
+  shortcut stay in that scope instead of becoming global.
 - Strings (`egui_pop_core::strings`): keys are Fluent message ids
   (`egui-pop-retry`, was `egui-pop.retry`) and placeholders are written
   `{ $name }`, so a provider reads `.ftl` catalogues as they are.

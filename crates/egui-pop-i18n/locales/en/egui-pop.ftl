@@ -282,6 +282,16 @@ egui-pop-shortcuts-search-by-key = Search by key
 
 egui-pop-shortcuts-show-all = Show every command
 
+egui-pop-shortcuts-system-failed = { $keys } does not work outside the window: { $reason }
+
+egui-pop-shortcuts-system-no-plugin = { $keys } works only in the window: no plugin registers global shortcuts
+
+egui-pop-shortcuts-system-on = { $keys } also works outside the window
+
+egui-pop-shortcuts-system-pending = { $keys } outside the window: waiting for the desktop
+
+egui-pop-shortcuts-system-unavailable = { $keys } works only in the window: { $reason }
+
 egui-pop-toast-close = Close: { $text }
 
 egui-pop-toast-error = Error

@@ -36,6 +36,9 @@
 //! - [`zoom`]: the interface zoom in steps, its commands and keys;
 //! - [`settings_window`]: the settings window (search, sections, form)
 //!   and the shortcuts editor, a plugin;
+//! - [`system_keys`]: how the shortcuts bound in the system scope (also
+//!   outside the window) are registered, as the shortcuts editor shows
+//!   it;
 //! - [`strings`]: the interface's own text, by key with English
 //!   fallbacks, translated by the installed `egui_pop_core::strings`
 //!   provider;
@@ -97,6 +100,7 @@ pub mod steps;
 pub mod stories;
 pub mod strings;
 pub mod strips;
+pub mod system_keys;
 pub mod toasts;
 pub mod window;
 pub mod workbench;

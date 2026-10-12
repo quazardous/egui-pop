@@ -269,6 +269,16 @@ egui-pop-shortcuts-default-name = Touches par défaut de { $command }
 
 egui-pop-shortcuts-goes-to = { $keys } va à { $command }
 
+egui-pop-shortcuts-system-failed = { $keys } ne fonctionne pas hors de la fenêtre : { $reason }
+
+egui-pop-shortcuts-system-no-plugin = { $keys } ne fonctionne que dans la fenêtre : aucun plugin n'enregistre de raccourcis globaux
+
+egui-pop-shortcuts-system-on = { $keys } fonctionne aussi hors de la fenêtre
+
+egui-pop-shortcuts-system-pending = { $keys } hors de la fenêtre : en attente du bureau
+
+egui-pop-shortcuts-system-unavailable = { $keys } ne fonctionne que dans la fenêtre : { $reason }
+
 egui-pop-shortcuts-no-key = Aucune touche
 
 egui-pop-shortcuts-no-key-name = Retirer toutes les touches de { $command }

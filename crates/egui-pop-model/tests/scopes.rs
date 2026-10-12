@@ -237,3 +237,48 @@ fn a_rebinding_replaces_the_default_keys_and_a_reset_brings_them_back() {
     assert!(again.load(&user, Layer::User, &doc).is_empty());
     assert_eq!(again.keys_for(&save), [keys("F3")]);
 }
+
+#[test]
+fn system_bindings_fire_in_the_window_and_keep_their_scope_when_rebound() {
+    let mut k = Keymap::new();
+    k.bind_with(
+        &FW,
+        Layer::Default,
+        "Ctrl+Alt+P",
+        Action::run("player.toggle"),
+        "",
+        BindOptions::system(),
+    )
+    .unwrap();
+    k.bind(&FW, Layer::Default, "Ctrl+S", Action::run("file.save"), "")
+        .unwrap();
+    assert_eq!(KeyScope::parse("system"), Ok(KeyScope::System));
+    assert_eq!(KeyScope::System.to_string(), "system");
+    assert!(KeyScope::System.is_global() && KeyScope::System.is_system());
+    // Inside the window it is a global binding.
+    let cx = WhenContext::new();
+    assert_eq!(k.resolve(&keys("Ctrl+Alt+P"), &cx), run("player.toggle"));
+    let system = k.system_bindings();
+    assert_eq!(system.len(), 1);
+    assert_eq!(system[0].keys, keys("Ctrl+Alt+P"));
+    // The user's new keys stay in the system scope.
+    let user = OwnerId::USER;
+    let id = CommandId::from_static("player.toggle");
+    k.rebind(&user, Layer::User, &id, Some("Ctrl+Alt+O"))
+        .unwrap();
+    let system = k.system_bindings();
+    assert_eq!(system.len(), 1);
+    assert_eq!(system[0].keys, keys("Ctrl+Alt+O"));
+    assert_eq!(system[0].layer, Layer::User);
+    // Saved with its scope, read back the same.
+    let doc = k.export_layer(Layer::User);
+    assert!(doc.bindings.iter().any(|b| b.scope == "system"));
+    // A global binding of the same keys conflicts with it.
+    k.bind(&FW, Layer::Default, "Ctrl+Alt+O", Action::run("other"), "")
+        .unwrap();
+    assert_eq!(k.conflicts().len(), 1);
+    // No keys: nothing to register.
+    k.rebind(&user, Layer::User, &id, None).unwrap();
+    assert!(k.system_bindings().is_empty());
+    let _ = KeymapDoc::default();
+}

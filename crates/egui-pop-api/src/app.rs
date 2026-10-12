@@ -207,6 +207,8 @@ pub(crate) struct Derived {
     pub keys: BTreeMap<CommandId, Vec<String>>,
     /// Bindings losing to another on the same keys: loser, winner.
     pub conflicts: Vec<(Binding, Binding)>,
+    /// The live bindings of the system scope (global shortcuts).
+    pub system: Vec<Binding>,
     /// Each layer's bindings, as saved (what `export_keymap` gives).
     pub layers: BTreeMap<Layer, egui_pop_model::keymap::KeymapDoc>,
     /// Commands whose keys the user changed.
@@ -1044,6 +1046,13 @@ impl AppHandle {
             .get(id)
             .cloned()
             .unwrap_or_default()
+    }
+
+    /// The live key bindings of the system scope (`BindOptions::system()`):
+    /// what a plugin registers with the desktop as global shortcuts,
+    /// current after each rebuild (`On::Rebuilt`).
+    pub fn system_bindings(&self) -> Vec<Binding> {
+        self.0.derived.borrow().system.clone()
     }
 
     /// Every command (spec and owner).
@@ -2525,6 +2534,7 @@ impl App {
             })
             .collect();
         derived.conflicts = reg.keymap.conflicts();
+        derived.system = reg.keymap.system_bindings();
         derived.layers = [
             Layer::Suggestion,
             Layer::Default,

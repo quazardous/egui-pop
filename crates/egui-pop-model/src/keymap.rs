@@ -214,6 +214,11 @@ pub enum KeyScope {
     /// Only while the surface (a focus scope of that name) holds the
     /// focus, shown with a focus ring or not.
     Surface(String),
+    /// Also while the application does not have the focus: the system
+    /// delivers the keys (a global shortcut, registered by a plugin that
+    /// reads [`Keymap::system_bindings`]). Inside the window it fires as
+    /// a [`KeyScope::Global`] binding does.
+    System,
 }
 
 impl KeyScope {
@@ -221,19 +226,30 @@ impl KeyScope {
         KeyScope::Surface(name.into())
     }
 
-    /// As in files and traces: `global`, `surface:<name>`.
+    /// As in files and traces: `global`, `surface:<name>`, `system`.
     pub fn parse(text: &str) -> Result<KeyScope, String> {
         match text.trim() {
             "" | "global" => Ok(KeyScope::Global),
+            "system" => Ok(KeyScope::System),
             t => match t.strip_prefix("surface:") {
                 Some(n) if !n.is_empty() => Ok(KeyScope::Surface(n.into())),
-                _ => Err(format!("`{t}` is neither `global` nor `surface:<name>`")),
+                _ => Err(format!(
+                    "`{t}` is neither `global`, `system` nor `surface:<name>`"
+                )),
             },
         }
     }
 
+    /// Whether it listens in the whole window (`global`, and `system`
+    /// inside the window).
     pub fn is_global(&self) -> bool {
-        matches!(self, KeyScope::Global)
+        matches!(self, KeyScope::Global | KeyScope::System)
+    }
+
+    /// Whether the system delivers it while the application is not
+    /// focused.
+    pub fn is_system(&self) -> bool {
+        matches!(self, KeyScope::System)
     }
 }
 
@@ -242,6 +258,7 @@ impl fmt::Display for KeyScope {
         match self {
             KeyScope::Global => write!(f, "global"),
             KeyScope::Surface(n) => write!(f, "surface:{n}"),
+            KeyScope::System => write!(f, "system"),
         }
     }
 }
@@ -311,6 +328,15 @@ impl BindOptions {
     pub fn surface(name: &str) -> BindOptions {
         BindOptions {
             scope: KeyScope::surface(name),
+            ..BindOptions::default()
+        }
+    }
+
+    /// Also while the application is not focused ([`KeyScope::System`]):
+    /// a global shortcut of the desktop.
+    pub fn system() -> BindOptions {
+        BindOptions {
+            scope: KeyScope::System,
             ..BindOptions::default()
         }
     }
@@ -602,7 +628,7 @@ impl Keymap {
     fn depth(r: &Rule, cx: &WhenContext) -> u32 {
         let surface = match &r.binding.options.scope {
             KeyScope::Surface(n) => cx.depth_of(&format!("{n}Focus")).unwrap_or(0),
-            KeyScope::Global => 0,
+            KeyScope::Global | KeyScope::System => 0,
         };
         surface.max(r.when.depth(cx))
     }
@@ -766,6 +792,22 @@ impl Keymap {
         (resolution, trace)
     }
 
+    /// The live bindings in the [`KeyScope::System`] scope: what a
+    /// plugin registers with the system as global shortcuts, each
+    /// command once per keys.
+    pub fn system_bindings(&self) -> Vec<Binding> {
+        let mut out: Vec<Binding> = Vec::new();
+        for (_, r) in self.live() {
+            let b = &r.binding;
+            if b.options.scope.is_system()
+                && !out.iter().any(|o| o.keys == b.keys && o.action == b.action)
+            {
+                out.push(b.clone());
+            }
+        }
+        out
+    }
+
     /// The keys bound to a command (what menus and tooltips show).
     pub fn keys_for(&self, command: &CommandId) -> Vec<Keys> {
         let mut keys: Vec<Keys> = self
@@ -786,8 +828,11 @@ impl Keymap {
         let mut out = Vec::new();
         for (i, (oa, a)) in live.iter().enumerate() {
             for (ob, b) in &live[i + 1..] {
+                // A system binding listens in the whole window too.
+                let same_scope = a.binding.options.scope == b.binding.options.scope
+                    || (a.binding.options.scope.is_global() && b.binding.options.scope.is_global());
                 if a.binding.keys == b.binding.keys
-                    && a.binding.options.scope == b.binding.options.scope
+                    && same_scope
                     && a.binding.action != b.binding.action
                 {
                     let ka = (a.binding.layer, a.when.specificity(), *oa);
@@ -840,8 +885,10 @@ impl Keymap {
     /// Gives a command new keys in `layer` (the user's, from a shortcuts
     /// editor): the owner's earlier rules there about the command go, the
     /// command's bindings in the layers below are removed (a removal with
-    /// no keys), and `keys` (none: no key at all) run it, global, typing
-    /// decided by the keys.
+    /// no keys), and `keys` (none: no key at all) run it, typing decided
+    /// by the keys, in the scope of the binding it replaces (the highest
+    /// layer's below; global when the command had none): a system
+    /// shortcut stays one.
     pub fn rebind(
         &mut self,
         owner: &OwnerId,
@@ -850,15 +897,29 @@ impl Keymap {
         keys: Option<&str>,
     ) -> Result<(), String> {
         let parsed = keys.map(Keys::parse).transpose()?;
+        let scope = self
+            .rules
+            .iter()
+            .filter(|s| {
+                s.item.binding.layer < layer
+                    && s.item.binding.action == Action::Run(command.clone())
+            })
+            .max_by_key(|s| s.item.binding.layer)
+            .map(|s| s.item.binding.options.scope.clone())
+            .unwrap_or_default();
         self.reset(owner, layer, command);
         self.bind(owner, layer, "", Action::Remove(command.clone()), "")?;
         if let Some(k) = parsed {
-            self.bind(
+            self.bind_with(
                 owner,
                 layer,
                 &k.to_string(),
                 Action::Run(command.clone()),
                 "",
+                BindOptions {
+                    scope,
+                    ..BindOptions::default()
+                },
             )?;
         }
         Ok(())
@@ -933,7 +994,7 @@ fn doc_binding(b: &Binding) -> DocBinding {
         keys: b.keys.to_string(),
         command: b.action.to_file(),
         when: b.when.clone(),
-        scope: if o.scope.is_global() {
+        scope: if o.scope == KeyScope::Global {
             String::new()
         } else {
             o.scope.to_string()
