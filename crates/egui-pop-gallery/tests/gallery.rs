@@ -44,7 +44,7 @@ fn every_page_renders_under_every_theme_and_density() {
         for density in Density::ALL {
             for page in PAGES {
                 let mut h = harness(options(theme, density, page));
-                h.run();
+                run_page(&mut h, page);
                 // In the side bar and as the page's heading.
                 let titles = h.query_all_by_label(&title(&h, page)).count();
                 assert_eq!(titles, 2, "{theme} {page}");
@@ -66,7 +66,7 @@ fn every_page_renders_under_every_theme_and_density() {
 fn every_interactive_node_of_every_page_has_a_name() {
     for page in PAGES {
         let mut h = harness(options("pop-dark", Density::Comfortable, page));
-        h.run();
+        run_page(&mut h, page);
         egui_pop_test::assert_all_named(&h);
     }
 }
@@ -383,10 +383,10 @@ fn the_viewport_page_zooms_through_commands_and_reports_signals() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "viewport"));
     settle_viewport(&mut h);
     h.get_by_label("100 %").click();
-    h.run();
+    settle_viewport(&mut h);
     assert!(h.query_by_label("100.0 %").is_some());
     h.get_by_label("Zoom in").click();
-    h.run();
+    settle_viewport(&mut h);
     assert!(h.query_by_label("200.0 %").is_some());
     assert!(h.query_by_label_contains("command once: 200.0 %").is_some());
     let snap = h.state().app.handle().debug_snapshot();
@@ -408,11 +408,24 @@ fn the_viewport_page_zooms_through_commands_and_reports_signals() {
     h.snapshot("viewport-pop-dark");
 }
 
+/// Runs a page until it settles: the viewport page until its tiles are
+/// all on screen (they arrive from worker threads, each asking for a
+/// frame), the others until they stop asking for frames.
+fn run_page(h: &mut Harness<'_, Gallery>, page: &str) {
+    if page == "viewport" {
+        settle_viewport(h);
+    } else {
+        h.run();
+    }
+}
+
 /// Runs until the viewport page's tiles are all on screen, waiting on the
 /// demo source's own signal (never sleeping).
 fn settle_viewport(h: &mut Harness<'_, Gallery>) {
     for _ in 0..40 {
-        h.run();
+        // Tiles arriving one by one keep asking for frames: past the
+        // harness's step limit, the loop goes on waiting on the source.
+        let _ = h.run_ok();
         let snap = h.state().app.handle().debug_snapshot();
         if snap["gallery.viewport"]["complete"] == true {
             return;
