@@ -990,6 +990,10 @@ egui minor.
   `scale::snap`, and so does a focused icon's ring, so lines stay crisp
   at 1x, 1.5x and 2x.
 
+- The viewport draws "before" alone when the application passes
+  `Compare::Before`; only the held `before` key did, and the "after"
+  image was drawn instead (`egui-pop-viewport`).
+
 ## 0.1.0 (prepared, not published)
 
 The first release: the tokens and themes, the framework (plugins,

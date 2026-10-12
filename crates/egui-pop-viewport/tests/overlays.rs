@@ -245,6 +245,25 @@ fn split_shows_before_on_the_left_and_its_divider_moves() {
 }
 
 #[test]
+fn before_chosen_by_the_application_shows_before_alone() {
+    let mut s = scene();
+    s.overlays.clear();
+    s.compare = Compare::Before;
+    let mut h = harness(s);
+    h.run();
+    assert!(
+        h.state().before.requested() > 0,
+        "the before image was asked for"
+    );
+    assert_eq!(
+        h.state().after.requested(),
+        0,
+        "the after image is not shown"
+    );
+    assert!(h.state().state.tiles_complete());
+}
+
+#[test]
 fn holding_the_before_key_shows_before() {
     let mut s = scene();
     s.overlays.clear();
