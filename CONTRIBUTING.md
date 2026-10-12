@@ -90,8 +90,13 @@ script calling the wbox library); none is shipped here. Crop the shot to
 the window and keep each PNG small (under 200 KB). The current set:
 `overview-pop-dark`, `overview-pop-light`, `overview-pop-high-contrast`,
 `builtins-pop-dark-compact`, `zones-pop-dark`, `zones-pop-light-off`
-(after `ctrl+e`), `debug-pop-dark` (after `alt+up alt+down`) and
-`palette-pop-dark` (after `ctrl+shift+p`).
+(after `ctrl+e`), `debug-pop-dark` (after `alt+up alt+down`), `palette-pop-dark` (after
+`ctrl+shift+p`), `values-pop-dark`, `dialogs-pop-dark` (after a click on
+"Export settings"), `toasts-pop-light` (after Warning, Error and
+"Success with an action"), `settings-window-pop-dark` (after `ctrl+comma`)
+and `shortcuts-pop-dark` (then "Keyboard shortcuts"). The window is
+decorated in the compositor: crop to it (`89,26 1102x748` at the default
+size).
 
 ## Upstream limits
 

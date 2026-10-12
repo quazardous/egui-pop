@@ -143,6 +143,20 @@ for them:
 
 ![the command palette](docs/screenshots/palette-pop-dark.png)
 
+The components of the paved road, each a plugin in `DefaultPlugins`:
+dialogs (here a form from value descriptors), toasts with actions, the
+settings window with its shortcuts editor, and the parameter widgets:
+
+| Dialogs | Toasts (`pop-light`) |
+|---|---|
+| ![a form dialog](docs/screenshots/dialogs-pop-dark.png) | ![toasts](docs/screenshots/toasts-pop-light.png) |
+
+| Settings | Shortcuts |
+|---|---|
+| ![the settings window](docs/screenshots/settings-window-pop-dark.png) | ![the shortcuts editor](docs/screenshots/shortcuts-pop-dark.png) |
+
+![sliders and parameter widgets](docs/screenshots/values-pop-dark.png)
+
 ## Start an application
 
 A [cargo-generate](https://github.com/cargo-generate/cargo-generate)
