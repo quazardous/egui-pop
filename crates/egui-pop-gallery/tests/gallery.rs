@@ -565,3 +565,27 @@ fn the_strips_page_feeds_an_indicator_and_folds_the_side_bar() {
     h.run();
     assert!(app.layout().folded.is_empty());
 }
+
+#[test]
+fn the_workbench_page_detaches_a_panel_into_its_own_window() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "workbench"));
+    h.run();
+    h.get_by_label("Open the demonstration panels").click();
+    h.run();
+    h.get_by_label("Detach Notes into a window").click();
+    h.run();
+    h.run();
+    let app = h.state().app.handle().clone();
+    let notes = egui_pop::model::ids::PanelId::from_static("gallery.notes");
+    assert_eq!(app.layout().auxiliary.len(), 1);
+    assert_eq!(app.layout().auxiliary[0].panel, notes);
+    assert!(h.query_by_label("Free notes.").is_some());
+    let mut results = egui_kittest::SnapshotResults::new();
+    results.add(h.try_snapshot("workbench-detached-pop-dark"));
+    // The window may cover the page's button (kittest draws it inside
+    // the main one): docked back through the handle.
+    app.attach_panel(&notes);
+    h.run();
+    assert!(app.layout().auxiliary.is_empty());
+    assert!(app.panel_visible(&notes));
+}

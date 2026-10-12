@@ -25,13 +25,17 @@
 //! | `workbench.show` | `{ "panel" }`: docks it back (its default area) and shows its tab |
 //! | `workbench.hide` | `{ "panel" }`: closes it (kept closed by the layout) |
 //! | `workbench.focus` | `{ "panel" }`: shows it and gives it the keyboard |
+//! | `workbench.fold` | `{ "area", "folded" }`: an area folded to its strip, or unfolded |
+//! | `workbench.detach` | `{ "panel" }`: into a window of its own (its own scale) |
+//! | `workbench.attach` | `{ "panel" }`: a detached panel docked back |
+//! | `workbench.close_window` | `{ "panel" }`: a detached panel's window closes; the default docks it back, a veto keeps the window |
 //!
 //! Each declared panel gets the commands `<panel>.focus` and
 //! `<panel>.toggle`.
 
 use std::collections::BTreeMap;
 
-use egui::{Id, Pos2, Rect, Ui};
+use egui::{Id, Pos2, Rect, Ui, ViewportBuilder, ViewportId};
 use egui_dock::{DockArea, DockState, NodeIndex, Split, TabViewer};
 use egui_pop_model::ids::{PanelId, StepId, ZoneId};
 use egui_pop_model::layout::{Layout, Node};
@@ -40,6 +44,7 @@ use serde_json::{Value as Json, json};
 
 use crate::app::AppHandle;
 use crate::steps::Outcome;
+use crate::window::WindowState;
 
 /// The shell's zones as panels.
 pub const PANEL_SIDE_BAR: PanelId = PanelId::from_static("app.side-bar");
@@ -51,6 +56,12 @@ pub const STEP_SHOW: StepId = StepId::from_static("workbench.show");
 pub const STEP_HIDE: StepId = StepId::from_static("workbench.hide");
 pub const STEP_FOCUS: StepId = StepId::from_static("workbench.focus");
 pub const STEP_FOLD: StepId = StepId::from_static("workbench.fold");
+pub const STEP_DETACH: StepId = StepId::from_static("workbench.detach");
+pub const STEP_ATTACH: StepId = StepId::from_static("workbench.attach");
+pub const STEP_CLOSE_WINDOW: StepId = StepId::from_static("workbench.close_window");
+
+/// Where a panel detached without a known place opens, and its size.
+pub const DETACHED: [f32; 4] = [80.0, 80.0, 480.0, 360.0];
 
 /// The workbench's steps, as the framework declares them.
 pub(crate) fn steps() -> Vec<crate::steps::StepSpec> {
@@ -75,6 +86,21 @@ pub(crate) fn steps() -> Vec<crate::steps::StepSpec> {
             "An area folds to its strip, or unfolds (`area`, `folded`).",
         )
         .args(json!({ "area": "start_side", "folded": true })),
+        StepSpec::new(
+            STEP_DETACH,
+            "A panel moves to a window of its own (`panel`).",
+        )
+        .args(json!({ "panel": "app.inspector" })),
+        StepSpec::new(
+            STEP_ATTACH,
+            "A detached panel docks back in its area (`panel`).",
+        )
+        .args(json!({ "panel": "app.inspector" })),
+        StepSpec::new(
+            STEP_CLOSE_WINDOW,
+            "A detached panel's window closes; by default the panel docks back (`panel`).",
+        )
+        .args(json!({ "panel": "app.inspector" })),
     ]
 }
 
@@ -106,6 +132,12 @@ pub enum Change {
     Focus(PanelId),
     /// An area folded to its strip (`true`) or unfolded.
     Fold(Area, bool),
+    /// A panel moved to a window of its own.
+    Detach(PanelId),
+    /// A detached panel docked back in its area.
+    Attach(PanelId),
+    /// A detached panel's window closed (by default: docked back).
+    CloseWindow(PanelId),
 }
 
 impl Change {
@@ -116,6 +148,9 @@ impl Change {
             Change::Hide(p) => (STEP_HIDE, json!({ "panel": p })),
             Change::Focus(p) => (STEP_FOCUS, json!({ "panel": p })),
             Change::Fold(a, f) => (STEP_FOLD, json!({ "area": area_name(*a), "folded": f })),
+            Change::Detach(p) => (STEP_DETACH, json!({ "panel": p })),
+            Change::Attach(p) => (STEP_ATTACH, json!({ "panel": p })),
+            Change::CloseWindow(p) => (STEP_CLOSE_WINDOW, json!({ "panel": p })),
         }
     }
 
@@ -145,6 +180,9 @@ impl Change {
                 Change::Move(panel, area)
             }
             "workbench.show" => Change::Show(panel),
+            "workbench.detach" => Change::Detach(panel),
+            "workbench.attach" => Change::Attach(panel),
+            "workbench.close_window" => Change::CloseWindow(panel),
             "workbench.hide" => Change::Hide(panel),
             _ => Change::Focus(panel),
         })
@@ -307,6 +345,44 @@ impl Workbench {
                 self.layout.folded.retain(|a| Some(*a) != area);
                 json!({ "panel": p, "focused": true })
             }
+            Change::Detach(p) => {
+                let spec = spec_of(p)?;
+                if !spec.detachable {
+                    return Err(format!("{} cannot be detached", spec.title));
+                }
+                if self.layout.auxiliary.iter().any(|a| a.panel == *p) {
+                    return Ok(json!({ "panel": p, "detached": true }));
+                }
+                // Where it was drawn, in the window's coordinates.
+                let rect = self
+                    .layout
+                    .area_of(p)
+                    .and_then(|a| self.rects.get(&a))
+                    .map_or(DETACHED, |r| {
+                        [
+                            r.min.x + 40.0,
+                            r.min.y + 40.0,
+                            r.width().max(320.0),
+                            r.height().max(240.0),
+                        ]
+                    });
+                self.layout.remove(p);
+                self.layout.hidden.retain(|h| h != p);
+                self.layout
+                    .auxiliary
+                    .push(egui_pop_model::layout::Auxiliary {
+                        panel: p.clone(),
+                        screen: crate::app::SCREENS[0].into(),
+                        rect,
+                    });
+                json!({ "panel": p, "detached": true })
+            }
+            Change::Attach(p) | Change::CloseWindow(p) => {
+                let spec = spec_of(p)?;
+                self.layout.auxiliary.retain(|a| a.panel != *p);
+                self.layout.place(p, spec.area);
+                json!({ "panel": p, "detached": false })
+            }
             Change::Fold(area, folded) => {
                 self.layout.folded.retain(|a| a != area);
                 if *folded {
@@ -403,6 +479,96 @@ impl Workbench {
             Area::Center => c,
         })
     }
+}
+
+/// Draws the detached panels, each in a window of its own (with its own
+/// scale, and the application's frame when it draws one). Closing such a
+/// window is the `workbench.close_window` step, whose default docks the
+/// panel back.
+pub(crate) fn windows(app: &AppHandle, ctx: &egui::Context, app_title: &str) {
+    let auxiliary = app.workbench_mut().layout.auxiliary.clone();
+    for aux in auxiliary {
+        let Some(spec) = app.workbench_mut().spec(&aux.panel).cloned() else {
+            continue;
+        };
+        let [x, y, w, h] = aux.rect;
+        let state = WindowState {
+            position: Some(egui::pos2(x, y)),
+            size: egui::vec2(w, h),
+            maximized: false,
+            fullscreen: false,
+        }
+        .repair(&[]);
+        let own = crate::frame::own_frame(app);
+        let title = if app_title.is_empty() {
+            spec.title.clone()
+        } else {
+            format!("{} — {app_title}", spec.title)
+        };
+        let mut builder = ViewportBuilder::default()
+            .with_title(title.clone())
+            .with_inner_size(state.size)
+            .with_decorations(!own);
+        if let Some(p) = state.position {
+            builder = builder.with_position(p);
+        }
+        let panel = aux.panel.clone();
+        ctx.show_viewport_immediate(window_id(&panel), builder, |ui, _| {
+            let vctx = ui.ctx().clone();
+            if let Some((from, to)) = egui_pop_core::scale::changed(&vctx) {
+                app.publish(
+                    "egui_pop",
+                    None,
+                    "scale.changed",
+                    json!({ "viewport": panel, "from": from, "to": to }),
+                );
+            }
+            if own {
+                egui_pop_core::frame::resize_edges(&vctx);
+                let out = egui::Panel::top(Id::new(("egui_pop.aux.title", panel.as_str())))
+                    .frame(egui::Frame::NONE)
+                    .show(ui, |ui| {
+                        egui_pop_core::frame::TitleBar::new(&title)
+                            .button(egui_pop_core::frame::Button::Minimize, false)
+                            .show(ui, |_| {}, |_| {})
+                    })
+                    .inner;
+                match out.request {
+                    Some(egui_pop_core::frame::FrameRequest::Close) => {
+                        app.change_workbench(Change::CloseWindow(panel.clone()));
+                    }
+                    Some(r) => crate::frame::request(app, &vctx, r),
+                    None => {}
+                }
+            }
+            egui::CentralPanel::default().show(ui, |ui| {
+                app.show_panel(ui, &panel);
+            });
+            if vctx.input(|i| i.viewport().close_requested()) {
+                // The step decides: the default docks the panel back.
+                let out = app.change_workbench(Change::CloseWindow(panel.clone()));
+                if matches!(out, Some(Outcome::Vetoed { .. })) {
+                    vctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+                }
+            }
+            // Its place, kept in the layout.
+            let info = vctx.input(|i| i.viewport().clone());
+            if let (Some(outer), Some(inner)) = (info.outer_rect, info.inner_rect) {
+                let rect = [outer.min.x, outer.min.y, inner.width(), inner.height()];
+                let mut wb = app.workbench_mut();
+                if let Some(a) = wb.layout.auxiliary.iter_mut().find(|a| a.panel == panel)
+                    && a.rect != rect
+                {
+                    a.rect = rect;
+                }
+            }
+        });
+    }
+}
+
+/// A detached panel's window id.
+pub fn window_id(panel: &PanelId) -> ViewportId {
+    ViewportId::from_hash_of(("egui_pop.aux", panel.as_str()))
 }
 
 /// An area's dock id.
@@ -665,6 +831,10 @@ impl TabViewer for Viewer<'_> {
             }
         }
         ui.separator();
+        if spec.detachable && ui.button("Detach into a window").clicked() {
+            self.app.change_workbench(Change::Detach(tab.clone()));
+            ui.close();
+        }
         if ui.button(format!("Close {}", spec.title)).clicked() {
             self.app.change_workbench(Change::Hide(tab.clone()));
             ui.close();

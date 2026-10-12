@@ -9,6 +9,14 @@ egui minor.
 
 ### Added
 
+- Auxiliary windows: a panel detached into a window of its own (its own
+  scale, the application's frame when it draws one), docked back, or its
+  window closed, through the steps `workbench.detach`,
+  `workbench.attach` and `workbench.close_window` (whose default docks
+  the panel back; a veto keeps the window open). Its place is kept in the
+  layout and repaired (`WindowState::repair`) before the window opens;
+  `scale.changed` names the window. `AppHandle::detach_panel`,
+  `attach_panel`; the tab menu offers Detach.
 - Slim strips (`egui_pop_api::strips::StripsPlugin`, opt-in): the
   activity bar (an icon per panel of the start side bar in the new
   `ACTIVITY_BAR` zone: it shows its panel, or folds the side bar to its

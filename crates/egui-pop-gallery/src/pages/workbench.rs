@@ -114,6 +114,12 @@ fn show(ui: &mut Ui, app: &AppHandle) {
         if ui.button("Move Console to the start side").clicked() {
             app.move_panel(&CONSOLE, Area::StartSide);
         }
+        if ui.button("Detach Notes into a window").clicked() {
+            app.detach_panel(&NOTES);
+        }
+        if ui.button("Dock Notes back").clicked() {
+            app.attach_panel(&NOTES);
+        }
     });
     let mut veto = app.context().get(VETO) == "true";
     if ui
@@ -172,6 +178,12 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                     .collect::<Vec<_>>()
                     .join(", "),
             );
+        });
+    }
+    for aux in &layout.auxiliary {
+        ui.horizontal(|ui| {
+            ui.strong("window");
+            ui.monospace(format!("{} on {} at {:?}", aux.panel, aux.screen, aux.rect));
         });
     }
     if !layout.hidden.is_empty() {

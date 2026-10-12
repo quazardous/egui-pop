@@ -1116,6 +1116,16 @@ impl AppHandle {
         self.change_workbench(crate::workbench::Change::Move(panel.clone(), area))
     }
 
+    /// Moves a panel to a window of its own (`workbench.detach`).
+    pub fn detach_panel(&self, panel: &PanelId) -> Option<Outcome> {
+        self.change_workbench(crate::workbench::Change::Detach(panel.clone()))
+    }
+
+    /// Docks a detached panel back in its area (`workbench.attach`).
+    pub fn attach_panel(&self, panel: &PanelId) -> Option<Outcome> {
+        self.change_workbench(crate::workbench::Change::Attach(panel.clone()))
+    }
+
     /// Shows a panel and gives it the keyboard (`workbench.focus`).
     pub fn focus_panel(&self, panel: &PanelId) -> Option<Outcome> {
         self.change_workbench(crate::workbench::Change::Focus(panel.clone()))
@@ -2585,6 +2595,10 @@ impl App {
         }
         self.process_requests();
         self.shell(ui);
+        let title = ctx
+            .input(|i| i.viewport().title.clone())
+            .unwrap_or_default();
+        crate::workbench::windows(&self.handle.clone(), &ctx, &title);
         self.handle.clone().show_zone(ui, &zones::OVERLAYS);
         a11y::live_regions(ui);
         self.process_requests();
