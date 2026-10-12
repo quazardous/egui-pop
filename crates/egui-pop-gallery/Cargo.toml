@@ -13,7 +13,7 @@ authors.workspace = true
 workspace = true
 
 [dependencies]
-egui-pop = { workspace = true, features = ["viewport"] }
+egui-pop = { workspace = true, features = ["viewport", "i18n"] }
 egui = { workspace = true, features = ["default_fonts"] }
 eframe = { workspace = true, features = ["default_fonts", "wgpu", "accesskit", "wayland", "x11"] }
 serde_json.workspace = true

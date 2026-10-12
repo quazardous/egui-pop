@@ -14,8 +14,11 @@ Options:
   --accent <scale>       accent colour scale (gold, blue, green, amber, red)
   --reduced-motion       turn animations off
   --page <name>          page shown first (overview, tokens, builtins,
-                         icons, menus, zones, settings,
+                         icons, menus, zones, settings, i18n,
                          debug)
+  --lang <locale>        the language setting's default: en (the
+                         default), fr, or system (EGUI_POP_LANG, then
+                         the system's language)
   --quit-after <frames>  exit by itself after this many frames
   --dump-debug           with --quit-after: print the debug bridge's
                          snapshot (event \"debug\") before quitting
@@ -32,6 +35,8 @@ pub struct Options {
     pub accent: Option<String>,
     pub reduced_motion: bool,
     pub page: String,
+    /// The language setting's default (`en`, `fr`, `system`).
+    pub lang: String,
     /// Close the window after this many frames.
     pub quit_after: Option<u64>,
     /// Print the JSON start and quit lines on stdout.
@@ -49,6 +54,7 @@ impl Default for Options {
             accent: None,
             reduced_motion: false,
             page: "overview".into(),
+            lang: "en".into(),
             quit_after: None,
             announce: false,
             dump_debug: false,
@@ -80,6 +86,7 @@ impl Options {
                     }
                     o.page = page;
                 }
+                "--lang" => o.lang = value("--lang")?,
                 "--dump-debug" => o.dump_debug = true,
                 "--quit-after" => {
                     let v = value("--quit-after")?;
@@ -114,6 +121,8 @@ mod tests {
             "--quit-after",
             "30",
             "--reduced-motion",
+            "--lang",
+            "fr",
         ])
         .unwrap();
         assert_eq!(o.theme, "pop-light");
@@ -122,6 +131,7 @@ mod tests {
         assert_eq!(o.accent.as_deref(), Some("blue"));
         assert_eq!(o.quit_after, Some(30));
         assert!(o.reduced_motion);
+        assert_eq!(o.lang, "fr");
         assert_eq!(
             Options::parse(Vec::<String>::new()).unwrap(),
             Options::default()

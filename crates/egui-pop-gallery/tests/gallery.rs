@@ -684,3 +684,46 @@ fn the_gallery_opens_devtools_once_its_setting_is_on() {
     let mut results = egui_kittest::SnapshotResults::new();
     results.add(h.try_snapshot("devtools-pop-dark"));
 }
+
+#[test]
+fn the_translations_page_switches_language_and_shows_keys() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "i18n"));
+    h.run();
+    let app = h.state().app.handle().clone();
+    h.get_by_label("Retry");
+    h.get_by_label("1 image selected");
+    h.get_by_label("Size: 1,234.6 MiB");
+    h.get_by_label("Taken on Monday, October 12, 2026");
+
+    h.get_by_label("Français").click();
+    h.run();
+    h.run();
+    h.get_by_label("Réessayer");
+    h.get_by_label("1 image sélectionnée");
+    h.get_by_label("Taille : 1\u{202f}234,6 Mio");
+    h.get_by_label("Prise le lundi 12 octobre 2026");
+    let changed = app
+        .events_since(0)
+        .into_iter()
+        .find(|e| e.name == "locale.changed")
+        .expect("the change is published");
+    assert_eq!(changed.data["from"], "en");
+    assert_eq!(changed.data["to"], "fr");
+    assert_eq!(egui_pop::i18n::plugin::of(&h.ctx).unwrap().locale(), "fr");
+
+    h.get_by_label("Afficher les clés de traduction").click();
+    for _ in 0..4 {
+        h.run();
+    }
+    h.get_by_label("egui-pop-retry");
+    h.get_by_label("gallery-i18n-show-keys").click();
+    for _ in 0..4 {
+        h.run();
+    }
+    h.get_by_label("Réessayer");
+
+    h.get_by_label("English").click();
+    h.run();
+    h.run();
+    h.get_by_label("Retry");
+}

@@ -7,7 +7,7 @@
 //! Pages: the theme overview, the token table and egui's built-in
 //! widgets (plain functions reused by the snapshot tests); zones and
 //! blocks (one plugin replacing, extending and wrapping another's
-//! blocks); settings applied live; the debug bridge.
+//! blocks); settings applied live; translations; the debug bridge.
 
 use std::io::Write as _;
 
@@ -28,7 +28,7 @@ use pages::story::PagePlugin;
 pub const TITLE: &str = "egui-pop gallery";
 
 /// The pages, as named on the command line.
-pub const PAGES: [&str; 18] = [
+pub const PAGES: [&str; 19] = [
     "overview",
     "tokens",
     "builtins",
@@ -46,6 +46,7 @@ pub const PAGES: [&str; 18] = [
     "frame",
     "scale",
     "settings",
+    "i18n",
     "debug",
 ];
 
@@ -127,6 +128,14 @@ pub fn builder(options: &Options) -> AppBuilder {
         .plugin(pages::frame::FramePage)
         .plugin(pages::scale::ScalePage)
         .plugin(pages::settings::SettingsPage)
+        .plugin(
+            egui_pop::i18n::I18nPlugin::new()
+                .catalogues(pages::i18n::CATALOGUES)
+                .language(&options.lang)
+                .env("EGUI_POP_LANG"),
+        )
+        .plugin(egui_pop::i18n::ShowKeys)
+        .plugin(pages::i18n::I18nPage)
         .plugin(pages::debug::DebugPage)
 }
 
