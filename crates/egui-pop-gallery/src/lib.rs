@@ -111,6 +111,18 @@ pub struct Gallery {
 }
 
 impl Gallery {
+    /// The gallery from eframe's creation context: [`Gallery::new`], and
+    /// the image viewport's GPU path on eframe's wgpu device.
+    pub fn from_creation_context(
+        cc: &eframe::CreationContext<'_>,
+        options: Options,
+    ) -> Result<Gallery, BuildError> {
+        if let Some(rs) = cc.wgpu_render_state.as_ref() {
+            egui_pop::viewport::gpu::install(&cc.egui_ctx, rs);
+        }
+        Gallery::new(&cc.egui_ctx, options)
+    }
+
     /// The gallery on a context, its theme installed.
     pub fn new(ctx: &egui::Context, options: Options) -> Result<Gallery, BuildError> {
         let app = builder(&options).build(ctx)?;

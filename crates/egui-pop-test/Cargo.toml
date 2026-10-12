@@ -14,10 +14,13 @@ authors.workspace = true
 workspace = true
 
 [features]
+## A tile source for the image viewport (`viewport::TestSource`).
+viewport = ["dep:egui-pop-viewport"]
 ## Render with wgpu (snapshots).
 wgpu = ["egui_kittest/wgpu", "dep:egui-wgpu"]
 
 [dependencies]
+egui-pop-viewport = { workspace = true, optional = true }
 egui.workspace = true
 egui_kittest.workspace = true
 egui-wgpu = { workspace = true, optional = true }

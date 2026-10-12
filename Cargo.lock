@@ -941,6 +941,7 @@ dependencies = [
  "egui-pop-api",
  "egui-pop-core",
  "egui-pop-model",
+ "egui-pop-viewport",
  "egui-wgpu",
  "egui_kittest",
  "serde_json",
@@ -960,7 +961,9 @@ dependencies = [
  "egui",
  "egui-pop-core",
  "egui-pop-test",
+ "egui-wgpu",
  "egui_kittest",
+ "half",
  "serde_json",
 ]
 

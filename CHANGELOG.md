@@ -68,6 +68,24 @@ egui minor.
   (matrix, clamp, transfer) the GPU path runs in its shader and the CPU
   path runs with the same arithmetic. A new target is a
   `Signal::Display`.
+- Viewport: tiles from an asynchronous, live `source::TileSource` the
+  application implements. The viewport asks for a proxy of the whole
+  image (a power of two at or below fit) and, once the view has settled,
+  the exact tiles of what is visible at the view's scale (one texel per
+  physical pixel below 100 %); requests no longer wanted are cancelled
+  through their token, late tiles dropped; the source delivers through a
+  `TileSink` from any thread and announces changed regions, whose tiles
+  stay on screen until replaced. A texture cache with a budget (never
+  evicting what is drawn), tiles within the device's largest texture
+  side. With `gpu::install` (feature `wgpu`, on by default) scene tiles
+  are `Rgba16Float` textures (`Rgba32Float` where half floats cannot be
+  sampled) drawn by a paint callback whose shader runs the display
+  transform's stage; without it, the CPU path. `Signal::Tiles`, the
+  counters in `Stats` and the debug collector show what moved.
+  `demo::Procedural` (worker threads, `wait_idle`) feeds the gallery's
+  Viewport page; `egui_pop_test::viewport::TestSource` (feature
+  `viewport`) serves tests without threads or sleeps. Tests check that
+  at 100 % every physical pixel shows its image pixel, on both paths.
 - Twelve editor-inspired built-in themes (`github-light`, `github-dark`,
   `github-light-high-contrast`, `github-dark-high-contrast`,
   `catppuccin-latte`, `catppuccin-mocha`, `one-light`, `one-dark-pro`,

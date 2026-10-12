@@ -13,7 +13,9 @@ fn harness(options: Options) -> Harness<'static, Gallery> {
     Harness::builder()
         .with_size(egui::vec2(1100.0, 720.0))
         .shared_wgpu()
-        .build_eframe(move |cc| Gallery::new(&cc.egui_ctx, options).expect("the gallery builds"))
+        .build_eframe(move |cc| {
+            Gallery::from_creation_context(cc, options).expect("the gallery builds")
+        })
 }
 
 fn options(theme: &str, density: Density, page: &str) -> Options {
@@ -369,7 +371,7 @@ fn every_editor_inspired_theme_draws_the_overview() {
 #[test]
 fn the_viewport_page_zooms_through_commands_and_reports_signals() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "viewport"));
-    h.run();
+    settle_viewport(&mut h);
     h.get_by_label("100 %").click();
     h.run();
     assert!(h.query_by_label("100.0 %").is_some());
@@ -383,7 +385,26 @@ fn the_viewport_page_zooms_through_commands_and_reports_signals() {
         h.query_by_label_contains("Display target: Srgb primaries")
             .is_some()
     );
+    settle_viewport(&mut h);
     h.snapshot("viewport-pop-dark");
+}
+
+/// Runs until the viewport page's tiles are all on screen, waiting on the
+/// demo source's own signal (never sleeping).
+fn settle_viewport(h: &mut Harness<'_, Gallery>) {
+    for _ in 0..40 {
+        h.run();
+        let snap = h.state().app.handle().debug_snapshot();
+        if snap["gallery.viewport"]["complete"] == true {
+            return;
+        }
+        let f =
+            h.state_mut()
+                .app
+                .debug_call("gallery.viewport", "wait_idle", &serde_json::json!(null));
+        assert!(f.ok, "{f:?}");
+    }
+    panic!("the viewport page's tiles never completed");
 }
 
 #[test]

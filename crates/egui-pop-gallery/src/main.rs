@@ -27,7 +27,7 @@ fn main() -> eframe::Result {
         TITLE,
         native,
         Box::new(move |cc| {
-            let gallery = Gallery::new(&cc.egui_ctx, options)
+            let gallery = Gallery::from_creation_context(cc, options)
                 .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
             Ok(Box::new(gallery))
         }),
@@ -54,7 +54,7 @@ fn main() {
                 canvas,
                 eframe::WebOptions::default(),
                 Box::new(|cc| {
-                    let gallery = Gallery::new(&cc.egui_ctx, Options::default())
+                    let gallery = Gallery::from_creation_context(cc, Options::default())
                         .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
                     Ok(Box::new(gallery))
                 }),

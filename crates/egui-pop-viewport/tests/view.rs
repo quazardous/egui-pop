@@ -282,7 +282,14 @@ fn the_debug_bridge_sees_and_moves_the_viewport() {
     h.run();
     assert_eq!(h.state().view, View::actual([10.0, 20.0]));
     let snap = bridge.snapshot_of(&h.ctx, "viewport").unwrap();
-    assert_eq!(snap["viewports"]["v"]["signals"][0]["cause"], "command");
+    let signals = snap["viewports"]["v"]["signals"]
+        .as_array()
+        .unwrap()
+        .clone();
+    assert!(
+        signals.iter().any(|s| s["cause"] == "command"),
+        "{signals:?}"
+    );
 }
 
 #[test]

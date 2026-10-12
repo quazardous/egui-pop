@@ -13,13 +13,22 @@ authors.workspace = true
 [lints]
 workspace = true
 
+[features]
+default = ["wgpu"]
+## The GPU path: scene tiles as half-float textures drawn by an
+## `egui_wgpu` paint callback that runs the display transform.
+wgpu = ["dep:egui-wgpu", "dep:half"]
+
 [dependencies]
 egui.workspace = true
+egui-wgpu = { version = "0.36", default-features = false, optional = true }
+# MIT OR Apache-2.0: f32 to half-float conversion for tile textures.
+half = { version = "2", optional = true }
 egui-pop-core.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
 egui = { workspace = true, features = ["default_fonts"] }
 egui_kittest = { workspace = true, features = ["wgpu", "snapshot"] }
-egui-pop-test.workspace = true
+egui-pop-test = { workspace = true, features = ["viewport", "wgpu"] }
 serde_json.workspace = true

@@ -9,17 +9,22 @@
 //! gesture, and a cancelled pan as nothing.
 
 use std::collections::VecDeque;
-
-use egui::{
-    Color32, Id, Key, Pos2, Response, Sense, Stroke, StrokeKind, Ui, Vec2, WidgetInfo, WidgetType,
-};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 
 use std::sync::Arc;
+
+use egui::{
+    Color32, Id, Key, Pos2, Rect, Response, Sense, Stroke, StrokeKind, Ui, Vec2, WidgetInfo,
+    WidgetType, pos2,
+};
 
 use crate::debug;
 use crate::display::{self, DisplayTarget, DisplayTransform, LinearSrgb};
 use crate::gestures::{self, DoubleClick, Gestures, WheelAction};
 use crate::hooks::{Cause, Hooks, TRACE_KEPT, TraceEntry, Verdict, ViewChange};
+use crate::source::{Side, Stats, TileSink, TileSource};
+use crate::tiles::{self, Texture, Tiles};
 use crate::tokens::ViewportTokens;
 use crate::view::{self, Mapping, View, Zoom};
 
@@ -63,6 +68,14 @@ pub enum Signal {
     /// The window's display target changed (another monitor, another
     /// surface format); the viewport follows it.
     Display { target: DisplayTarget },
+    /// Tiles moved this frame: asked for, arrived, given up. `complete`
+    /// when every tile wanted is on screen.
+    Tiles {
+        requested: u64,
+        delivered: u64,
+        cancelled: u64,
+        complete: bool,
+    },
 }
 
 /// What the widget keeps between frames. One per viewport; the
@@ -70,7 +83,13 @@ pub enum Signal {
 #[derive(Debug, Default)]
 pub struct ViewportState {
     transform: Transform,
+    transform_revision: u64,
     target: Option<DisplayTarget>,
+    tiles: Tiles,
+    /// This state's GPU uniforms (0 until first drawn).
+    slot: u64,
+    last_counts: [u64; 3],
+    last_complete: bool,
     pan: Option<Pan>,
     /// The wheel landed on 100 % and is held there until it stops.
     detent: bool,
@@ -127,6 +146,63 @@ impl ViewportState {
     /// The display target the last frame was drawn for.
     pub fn display_target(&self) -> Option<DisplayTarget> {
         self.target
+    }
+
+    /// Where the source delivers the image's tiles (give it to the
+    /// source when making it).
+    pub fn sink(&self) -> TileSink {
+        self.tiles.sink(Side::After)
+    }
+
+    /// Where a second source delivers the "before" image of a
+    /// comparison.
+    pub fn before_sink(&self) -> TileSink {
+        self.tiles.sink(Side::Before)
+    }
+
+    /// What happened to the tiles, counted.
+    pub fn stats(&self) -> &Arc<Stats> {
+        &self.tiles.stats
+    }
+
+    /// No request outstanding and every wanted exact tile on screen
+    /// (after the last frame).
+    pub fn tiles_complete(&self) -> bool {
+        self.tiles.complete()
+    }
+
+    /// Requests waiting for an answer.
+    pub fn outstanding(&self) -> usize {
+        self.tiles.outstanding()
+    }
+
+    /// Tiles held.
+    pub fn tile_count(&self) -> usize {
+        self.tiles.len()
+    }
+
+    /// Bytes of tile textures held.
+    pub fn texture_bytes(&self) -> usize {
+        self.tiles.used()
+    }
+
+    /// The side of a tile wanted, in pixels (256 by default; the device's
+    /// largest texture side at most).
+    pub fn set_tile_size(&mut self, side: u32) {
+        self.tiles.wanted_size = side.max(16);
+    }
+
+    /// The texture budget, in bytes (256 MB by default). Tiles drawn in
+    /// the current frame are never evicted, so a view larger than the
+    /// budget still shows whole.
+    pub fn set_texture_budget(&mut self, bytes: usize) {
+        self.tiles.budget = bytes;
+    }
+
+    /// How long the view stays still before exact tiles are asked for,
+    /// in seconds (0.1 by default; 0 asks at once).
+    pub fn set_settle(&mut self, seconds: f64) {
+        self.tiles.settle = seconds.max(0.0);
     }
 
     /// The hooks, to set or remove.
@@ -237,8 +313,8 @@ pub struct ViewportOutput {
 }
 
 /// The viewport widget, built per frame.
-#[derive(Debug)]
-pub struct Viewport {
+pub struct Viewport<'a> {
+    source: Option<&'a dyn TileSource>,
     id: Id,
     name: String,
     image_size: Option<[u32; 2]>,
@@ -246,6 +322,18 @@ pub struct Viewport {
     pixel_grid: bool,
     size: Option<Vec2>,
 }
+
+impl std::fmt::Debug for Viewport<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Viewport")
+            .field("name", &self.name)
+            .field("source", &self.source.is_some())
+            .field("image_size", &self.image_size)
+            .finish()
+    }
+}
+
+static NEXT_SLOT: AtomicU64 = AtomicU64::new(1);
 
 /// From this zoom up, the pixel grid shows (when enabled).
 pub const GRID_FROM_ZOOM: f64 = 8.0;
@@ -294,11 +382,12 @@ impl Frame<'_> {
     }
 }
 
-impl Viewport {
+impl<'a> Viewport<'a> {
     /// A viewport; `id_salt` tells it apart from others in the same `Ui`
     /// and names it in the debug bridge.
-    pub fn new(id_salt: impl egui::AsId) -> Viewport {
+    pub fn new(id_salt: impl egui::AsId) -> Viewport<'a> {
         Viewport {
+            source: None,
             name: format!("{id_salt:?}").trim_matches('"').to_string(),
             id: Id::new(id_salt),
             image_size: None,
@@ -308,26 +397,33 @@ impl Viewport {
         }
     }
 
+    /// Where the pixels come from (its size is the image's unless
+    /// [`Viewport::image_size`] says otherwise).
+    pub fn source(mut self, source: &'a dyn TileSource) -> Viewport<'a> {
+        self.source = Some(source);
+        self
+    }
+
     /// The image's size in pixels.
-    pub fn image_size(mut self, size: [u32; 2]) -> Viewport {
+    pub fn image_size(mut self, size: [u32; 2]) -> Viewport<'a> {
         self.image_size = Some(size);
         self
     }
 
     /// The accessible name (default "Image viewport").
-    pub fn label(mut self, label: impl Into<String>) -> Viewport {
+    pub fn label(mut self, label: impl Into<String>) -> Viewport<'a> {
         self.label = label.into();
         self
     }
 
     /// Draws the pixel grid from [`GRID_FROM_ZOOM`] up (default on).
-    pub fn pixel_grid(mut self, on: bool) -> Viewport {
+    pub fn pixel_grid(mut self, on: bool) -> Viewport<'a> {
         self.pixel_grid = on;
         self
     }
 
     /// The widget's size in points (default: all the space available).
-    pub fn size(mut self, size: Vec2) -> Viewport {
+    pub fn size(mut self, size: Vec2) -> Viewport<'a> {
         self.size = Some(size);
         self
     }
@@ -347,13 +443,17 @@ impl Viewport {
         state.now = ui.input(|i| i.time);
         let mut signals = std::mem::take(&mut state.pending);
         let target = display::target(ui.ctx());
-        if state.target.is_some_and(|t| t != target) {
+        let target_changed = state.target.is_some_and(|t| t != target);
+        if target_changed {
             signals.push(Signal::Display { target });
         }
         state.target = Some(target);
         ui.painter().rect_filled(rect, 0.0, tokens.background);
 
-        let Some(image) = self.image_size.map(|s| [f64::from(s[0]), f64::from(s[1])]) else {
+        let size = self
+            .image_size
+            .or_else(|| self.source.and_then(|s| s.size()));
+        let Some(image) = size.map(|s| [f64::from(s[0]), f64::from(s[1])]) else {
             name(&response, &self.label, None);
             state.last_mapping = None;
             return ViewportOutput {
@@ -394,6 +494,16 @@ impl Viewport {
         let image_rect = mapping.image_rect_to_screen([0.0, 0.0, image[0], image[1]]);
         let painter = ui.painter_at(rect);
         painter.rect_filled(image_rect, 0.0, tokens.backdrop);
+        draw_tiles(
+            ui,
+            &painter,
+            state,
+            self.source,
+            &mapping,
+            &target,
+            target_changed,
+            &mut signals,
+        );
         if self.pixel_grid && mapping.zoom >= GRID_FROM_ZOOM {
             draw_grid(&painter, &mapping, tokens.grid);
         }
@@ -603,5 +713,99 @@ pub fn zoom_percent(view: &View, mapping: Option<&Mapping>) -> f64 {
         (Zoom::Px(z), _) => z * 100.0,
         (Zoom::Fit, Some(m)) => m.zoom * 100.0,
         (Zoom::Fit, None) => 100.0,
+    }
+}
+
+/// Takes in what the source sent, asks for what is missing, draws the
+/// tiles (proxy, then exact), evicts past the budget, and signals what
+/// moved.
+#[allow(clippy::too_many_arguments)]
+fn draw_tiles(
+    ui: &Ui,
+    painter: &egui::Painter,
+    state: &mut ViewportState,
+    source: Option<&dyn TileSource>,
+    mapping: &Mapping,
+    target: &DisplayTarget,
+    target_changed: bool,
+    signals: &mut Vec<Signal>,
+) {
+    let ctx = ui.ctx();
+    let transform = state.transform.0.clone();
+    if target_changed || state.transform_revision != transform.revision() {
+        state.transform_revision = transform.revision();
+        state.tiles.rebake();
+    }
+    if state.slot == 0 {
+        state.slot = NEXT_SLOT.fetch_add(1, Ordering::Relaxed);
+    }
+    let device = tiles::device(ctx);
+    state.tiles.receive(ctx, device, target, transform.as_ref());
+    let mut gpu: Vec<(u64, [f32; 4], [u32; 2])> = Vec::new();
+    if let Some(source) = source {
+        let settled = state.tiles.note_view(mapping, state.now);
+        if let Some(left) = state.tiles.settles_in(state.now) {
+            ctx.request_repaint_after(Duration::from_secs_f64(left));
+        }
+        let ppp = mapping.ppp;
+        for d in state.tiles.frame(Side::After, source, mapping, settled) {
+            let r = d.dst_px;
+            match d.texture {
+                Texture::Egui(handle) => {
+                    painter.image(
+                        handle.id(),
+                        Rect::from_min_max(
+                            pos2(
+                                (r[0] / f64::from(ppp)) as f32,
+                                (r[1] / f64::from(ppp)) as f32,
+                            ),
+                            pos2(
+                                (r[2] / f64::from(ppp)) as f32,
+                                (r[3] / f64::from(ppp)) as f32,
+                            ),
+                        ),
+                        Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
+                        Color32::WHITE,
+                    );
+                }
+                Texture::Gpu(id) => {
+                    gpu.push((
+                        *id,
+                        [r[0] as f32, r[1] as f32, r[2] as f32, r[3] as f32],
+                        d.size,
+                    ));
+                }
+            }
+        }
+    }
+    #[cfg(feature = "wgpu")]
+    if device.gpu {
+        let paint = crate::gpu::TilePaint {
+            slot: state.slot,
+            queue: state.tiles.gpu.clone(),
+            draws: gpu
+                .into_iter()
+                .map(|(texture, dst, size)| crate::gpu::GpuDraw { texture, dst, size })
+                .collect(),
+            stage: transform.stage(&target.effective()),
+        };
+        painter.add(egui_wgpu::Callback::new_paint_callback(mapping.rect, paint));
+    }
+    #[cfg(not(feature = "wgpu"))]
+    let _ = gpu;
+    state.tiles.evict();
+
+    let snap = state.tiles.stats.snapshot();
+    let counts = [snap[0].1, snap[1].1, snap[3].1];
+    let complete = state.tiles.complete();
+    if source.is_some() && (counts != state.last_counts || complete != state.last_complete) {
+        signals.push(Signal::Tiles {
+            requested: counts[0] - state.last_counts[0],
+            delivered: counts[1] - state.last_counts[1],
+            cancelled: counts[2] - state.last_counts[2],
+            complete,
+        });
+        state.last_counts = counts;
+        state.last_complete = complete;
     }
 }

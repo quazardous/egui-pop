@@ -55,6 +55,18 @@ pub fn signal_json(signal: &Signal) -> Json {
             "cause": cause.name(),
             "view": view_json(view),
         }),
+        Signal::Tiles {
+            requested,
+            delivered,
+            cancelled,
+            complete,
+        } => json!({
+            "signal": "tiles",
+            "requested": requested,
+            "delivered": delivered,
+            "cancelled": cancelled,
+            "complete": complete,
+        }),
         Signal::Display { target } => json!({
             "signal": "display",
             "target": format!("{target:?}"),
@@ -97,6 +109,13 @@ pub(crate) fn publish(
             "rect_px": m.rect_px,
             "image": m.image,
             "in_gesture": state.in_gesture(),
+            "tiles": {
+                "held": state.tile_count(),
+                "bytes": state.texture_bytes(),
+                "outstanding": state.outstanding(),
+                "complete": state.tiles_complete(),
+                "stats": state.stats().snapshot().iter().map(|(k, v)| (k.to_string(), json!(v))).collect::<serde_json::Map<_, _>>(),
+            },
             "hooks": state.hooks().names(),
             "display": state.display_target().map(|t| format!("{t:?}")),
             "transform": format!("{:?}", state.display_transform()),

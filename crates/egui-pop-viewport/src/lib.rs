@@ -9,6 +9,13 @@
 //! - [`widget`]: the [`Viewport`] widget and the [`Signal`]s it emits;
 //! - [`display`]: the display target of each window and the display
 //!   transform hook where the application plugs its colour management;
+//! - [`source`]: the [`TileSource`](source::TileSource) an application
+//!   implements (asynchronous, live) and the sink it delivers to;
+//! - [`tiles`]: the tile cache (proxy then exact, cancellation, a
+//!   texture budget, tiles within the device's largest texture);
+//! - `gpu` (feature `wgpu`): scene tiles as half-float textures, the
+//!   display transform in a shader;
+//! - [`demo`]: a procedural source for galleries and examples;
 //! - [`hooks`]: the application's way into each step (veto, redirect,
 //!   replace, extend), traced;
 //! - [`debug`]: the `viewport` collector of the debug bridge;
@@ -31,9 +38,14 @@
 //! ```
 
 pub mod debug;
+pub mod demo;
 pub mod display;
 pub mod gestures;
+#[cfg(feature = "wgpu")]
+pub mod gpu;
 pub mod hooks;
+pub mod source;
+pub mod tiles;
 pub mod tokens;
 pub mod view;
 pub mod widget;

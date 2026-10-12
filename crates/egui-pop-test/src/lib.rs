@@ -18,7 +18,10 @@
 //! - [`SCALES`], [`app_at`], [`set_native_scale`], [`at_scales`],
 //!   [`rects_of`]: tests at several scales (1, 1.25, 1.5, 2), a window
 //!   moved to a screen of another scale, rectangles in points to compare
-//!   across scales.
+//!   across scales;
+//! - `viewport::TestSource` (feature `viewport`): a tile source for the
+//!   image viewport, every pixel its own colour, served when the test
+//!   says.
 //!
 //! ```
 //! use egui_pop_test::{assert_all_named, themed};
@@ -35,6 +38,9 @@
 mod gpu;
 #[cfg(feature = "wgpu")]
 pub use gpu::{SharedGpu, gpu_lock, shared_renderer, shared_setup};
+
+#[cfg(feature = "viewport")]
+pub mod viewport;
 
 use egui::accesskit::Role;
 use egui::{Event, Modifiers, PointerButton, Pos2, Vec2};
