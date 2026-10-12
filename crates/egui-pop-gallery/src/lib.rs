@@ -123,6 +123,7 @@ pub fn builder(options: &Options) -> AppBuilder {
         .plugin(pages::arrangements::ArrangementsPage::default())
         .plugin(egui_pop::api::strips::StripsPlugin::default())
         .plugin(pages::strips::StripsPage)
+        .plugin(egui_pop::api::devtools::DevtoolsPlugin::default())
         .plugin(pages::frame::FramePage)
         .plugin(pages::scale::ScalePage)
         .plugin(pages::settings::SettingsPage)

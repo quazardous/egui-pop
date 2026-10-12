@@ -20,6 +20,8 @@
 //! - [`services`]: typed service tokens;
 //! - [`stories`]: gallery stories as a contribution;
 //! - [`palette`]: the command palette, a plugin;
+//! - [`devtools`]: the debug bridge's collectors in the application, a
+//!   panel behind a setting, a plugin;
 //! - [`dialogs`]: confirmations, forms, choices and notices, a plugin;
 //! - [`toasts`]: notices in a corner, with actions, a plugin;
 //! - [`frame`]: the window's own title bar and edges, a plugin;
@@ -76,6 +78,7 @@
 pub mod app;
 pub mod arrangements;
 pub mod ctx;
+pub mod devtools;
 pub mod dialogs;
 pub mod frame;
 mod groups;

@@ -9,6 +9,13 @@ egui minor.
 
 ### Added
 
+- Devtools (`egui_pop_api::devtools::DevtoolsPlugin`, opt-in): the
+  debug bridge's collectors in the application, in a bottom panel behind
+  the `developer.devtools` setting (off by default) and `F12`: key
+  resolutions, the journal, steps and their hooks, focus and overlays,
+  each window's scale, and every collector as JSON with its actions,
+  run through the `devtools.call` step a plugin may veto. A core
+  `screen` collector gives each window's scale and rectangles.
 - Application hooks around the shell: `AppBuilder::main_edge_to_edge`
   (the centre without margins), `AppBuilder::wrap` (draws around the
   whole application, `App::show_wrapped`), `AppBuilder::on_exit` and the

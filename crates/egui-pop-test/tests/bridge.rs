@@ -95,7 +95,7 @@ fn calls_return_feedback_and_say_whether_they_change_things() {
     let app = h.state_mut();
     let f = app.debug_call("nope", "x", &json!(null));
     assert!(
-        !f.ok && f.message.contains("there are: focus"),
+        !f.ok && f.message.contains("there are: ") && f.message.contains("focus"),
         "{}",
         f.message
     );

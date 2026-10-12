@@ -329,6 +329,58 @@ impl DebugBridge {
 pub fn core_collectors() -> Vec<FnCollector> {
     vec![
         FnCollector::new(
+            "screen",
+            "Each window's scale (native, interface zoom, pixels per point), its rectangles in points and pixels, maximized and full screen.",
+        )
+        .snapshot(|ctx| {
+            // Read before `input`: the context is locked inside it.
+            let zoom = ctx.zoom_factor();
+            let windows: Vec<Json> = ctx.input(|i| {
+                i.raw
+                    .viewports
+                    .iter()
+                    .map(|(id, v)| {
+                        let native = v.native_pixels_per_point.unwrap_or(1.0);
+                        let ppp = native * zoom;
+                        let rect = |r: Option<egui::Rect>| {
+                            r.map(|r| {
+                                json!({
+                                    "points": [r.min.x, r.min.y, r.width(), r.height()],
+                                    "pixels": [r.min.x * ppp, r.min.y * ppp, r.width() * ppp, r.height() * ppp],
+                                })
+                            })
+                        };
+                        json!({
+                            "viewport": if *id == egui::ViewportId::ROOT { "root".to_string() } else { format!("{id:?}") },
+                            "title": v.title,
+                            "native": native,
+                            "pixels_per_point": ppp,
+                            "inner": rect(v.inner_rect),
+                            "outer": rect(v.outer_rect),
+                            "monitor": v.monitor_size.map(|s| [s.x, s.y]),
+                            "maximized": v.maximized,
+                            "fullscreen": v.fullscreen,
+                        })
+                    })
+                    .collect()
+            });
+            json!({ "zoom": zoom, "windows": windows })
+        })
+        .action(
+            "set_interface_zoom",
+            "Sets egui's zoom factor (`factor`); an egui-pop application's interface zoom setting takes it back at the next frame, so prefer its `interface.zoom` step.",
+            true,
+            |ctx, args| {
+                let f = args.get("factor").and_then(Json::as_f64).ok_or("`factor` is missing")? as f32;
+                if !(0.25..=4.0).contains(&f) {
+                    return Err(format!("{f} is outside 0.25 to 4"));
+                }
+                ctx.set_zoom_factor(f);
+                Ok(json!({ "zoom": f }))
+            },
+        )
+        .args(json!({ "factor": 1.25 })),
+        FnCollector::new(
             "focus",
             "The focused widget, the focus chain and the scopes drawn.",
         )

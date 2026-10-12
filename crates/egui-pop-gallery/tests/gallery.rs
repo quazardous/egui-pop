@@ -663,3 +663,24 @@ fn the_shortcuts_editor_searches_by_key_and_removes_every_key() {
     let doc = app.export_keymap(egui_pop::model::keymap::Layer::User);
     assert_eq!(doc.bindings[0].keys, "");
 }
+
+#[test]
+fn the_gallery_opens_devtools_once_its_setting_is_on() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "debug"));
+    h.run();
+    let app = h.state().app.handle().clone();
+    egui_pop::core::lock(&app.store())
+        .set(egui_pop::model::values::Set::new(
+            "settings/developer.devtools",
+            egui_pop::model::values::Change::To(egui_pop::model::values::Value::Bool(true)),
+            egui_pop::model::commands::Origin::User,
+        ))
+        .unwrap();
+    h.run();
+    h.key_press(egui::Key::F12);
+    h.run();
+    h.run();
+    assert!(app.panel_visible(&egui_pop::api::devtools::PANEL_DEVTOOLS));
+    let mut results = egui_kittest::SnapshotResults::new();
+    results.add(h.try_snapshot("devtools-pop-dark"));
+}
