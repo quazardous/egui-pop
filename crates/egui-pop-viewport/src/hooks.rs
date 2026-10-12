@@ -20,6 +20,7 @@ use std::fmt;
 
 use egui::{Painter, Pos2};
 
+use crate::display::{DisplayTarget, Resolution};
 use crate::overlay::HandleKind;
 use crate::source::Readout;
 use crate::view::{Mapping, View};
@@ -88,6 +89,7 @@ type BeforeView = Box<dyn FnMut(&ViewChange, &Mapping) -> Verdict<View>>;
 type RunDoubleClick =
     Box<dyn FnMut(Pos2, &Mapping, &mut dyn FnMut() -> Option<View>) -> Option<View>>;
 type AfterPaint = Box<dyn FnMut(&Painter, &Mapping)>;
+type BeforeDisplay = Box<dyn FnMut(&Resolution) -> Verdict<DisplayTarget>>;
 
 /// The hooks of one viewport (all optional). Set them on the
 /// [`ViewportState`](crate::ViewportState) with
@@ -113,6 +115,11 @@ pub struct Hooks {
     /// After the image and overlays are drawn: draw more, in image
     /// coordinates through the mapping.
     pub after_paint: Option<AfterPaint>,
+    /// Before the viewport draws for the target it resolved (what is
+    /// wanted against what the surface carries): allow, veto (draw
+    /// sRGB) or redirect (draw for another target the surface carries,
+    /// a soft proof for example). Asked when the resolution changes.
+    pub before_display: Option<BeforeDisplay>,
 }
 
 impl fmt::Debug for Hooks {
@@ -124,6 +131,7 @@ impl fmt::Debug for Hooks {
             .field("before_compare", &self.before_compare.is_some())
             .field("on_readout", &self.on_readout.is_some())
             .field("after_paint", &self.after_paint.is_some())
+            .field("before_display", &self.before_display.is_some())
             .finish()
     }
 }
@@ -149,6 +157,9 @@ impl Hooks {
         }
         if self.after_paint.is_some() {
             v.push("after_paint");
+        }
+        if self.before_display.is_some() {
+            v.push("before_display");
         }
         v
     }

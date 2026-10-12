@@ -159,6 +159,13 @@ pub(crate) fn publish(
             },
             "hooks": state.hooks().names(),
             "display": state.display_target().map(|t| format!("{t:?}")),
+            "display_resolution": state.display_resolution().map(|r| json!({
+                "wanted": r.wanted.describe(),
+                "surface": r.surface.describe(),
+                "drawn": r.drawn.describe(),
+                "faithful": r.faithful(),
+                "reason": r.reason(),
+            })),
             "transform": format!("{:?}", state.display_transform()),
             "trace": trace,
             "signals": all[keep..].to_vec(),

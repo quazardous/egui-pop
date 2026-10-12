@@ -9,6 +9,22 @@ egui minor.
 
 ### Added
 
+- Wide gamut and HDR in the viewport's display stage: Display P3 and
+  BT.2020 primaries (matrices from their chromaticities,
+  `Primaries::conversion`), the extended sRGB transfer, SMPTE ST 2084
+  (PQ) and BT.2100 HLG, on the CPU (`Stage::encode`,
+  `DisplayTransform::apply_f32`) and in the GPU shader; a `Linear`
+  transform for scene pixels in other primaries. An application wants a
+  target per window (`display::want`); the viewport draws for what the
+  surface carries (`display::resolve`, `ViewportState::display_resolution`)
+  and says why when that is less (`Fallback`), and the `before_display`
+  hook may veto or redirect it. `DisplayTarget::is_supported` and
+  `effective` now say whether a surface could be configured that way and
+  declared so. `gpu::install` records what eframe configured;
+  `gpu::install_for_surface` and `gpu::choose_surface` are for a host
+  configuring its own surface (formats and colour spaces from wgpu). The
+  gallery's `display` page shows it. Guide: docs/viewport.md.
+
 - Translations (`egui-pop-i18n`, feature `i18n` of the facade,
   `egui_pop::i18n`): `I18nPlugin` loads Fluent catalogues per locale
   (egui-pop's own, the application's, an override directory read at
@@ -128,6 +144,10 @@ egui minor.
 - `Keymap::rebind` keeps the scope of the binding it replaces (the
   highest layer's below): the user's new keys for a surface or system
   shortcut stay in that scope instead of becoming global.
+- `display::Matrix` maps the scene to linear sRGB, then to the target's
+  primaries (the same as before for sRGB targets); `Stage` has a
+  `white_nits` field (SDR white for PQ) and `Transfer` the `ExtSrgb`
+  variant; the GPU path's uniform grew by one vector.
 - Strings (`egui_pop_core::strings`): keys are Fluent message ids
   (`egui-pop-retry`, was `egui-pop.retry`) and placeholders are written
   `{ $name }`, so a provider reads `.ftl` catalogues as they are.

@@ -805,3 +805,24 @@ fn the_platform_page_plays_the_desktop_and_each_service_answers() {
     });
     run_until(&mut h, |h| h.state().page().as_str() == "tokens");
 }
+
+#[test]
+fn the_display_page_says_why_a_wide_gamut_falls_back() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "display"));
+    h.run();
+    h.get_by_label("Display P3").click();
+    h.run();
+    h.run();
+    // The test surface is 8-bit sRGB, as eframe configures it.
+    let reason = h
+        .query_all_by_label_contains("the Display P3 gamut cannot be shown")
+        .count();
+    assert!(reason >= 1);
+    let r = egui_pop::viewport::display::resolution(&h.ctx);
+    assert!(!r.faithful());
+    assert_eq!(
+        r.drawn.color_space(),
+        Some(egui_pop::viewport::display::ColorSpace::Srgb)
+    );
+    h.snapshot("display-pop-dark");
+}

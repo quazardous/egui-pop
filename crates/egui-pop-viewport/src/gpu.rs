@@ -22,7 +22,7 @@ use egui_wgpu::wgpu;
 /// egui-wgpu, the version the GPU path is built with.
 pub use egui_wgpu;
 
-use crate::display::Stage;
+use crate::display::{self, ColorSpace, DisplayTarget, Stage, SurfaceFormat, TargetSource};
 use crate::tiles::{Device, GpuQueue};
 
 /// What [`install`] found.
@@ -44,6 +44,7 @@ struct Draw {
     m1: vec4<f32>,
     m2: vec4<f32>,
     params: vec4<f32>,
+    extra: vec4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> d: Draw;
@@ -80,12 +81,42 @@ fn srgb_decode(v: f32) -> f32 {
     return pow((v + 0.055) / 1.055, 2.4);
 }
 
-fn encode(v: f32, code: u32) -> f32 {
+fn pq_encode(nits: f32) -> f32 {
+    let m1 = 2610.0 / 16384.0;
+    let m2 = 2523.0 / 4096.0 * 128.0;
+    let c1 = 3424.0 / 4096.0;
+    let c2 = 2413.0 / 4096.0 * 32.0;
+    let c3 = 2392.0 / 4096.0 * 32.0;
+    let y = pow(clamp(nits / 10000.0, 0.0, 1.0), m1);
+    return pow((c1 + c2 * y) / (1.0 + c3 * y), m2);
+}
+
+fn hlg_oetf(e: f32) -> f32 {
+    let x = clamp(e, 0.0, 1.0);
+    if x <= 1.0 / 12.0 {
+        return sqrt(3.0 * x);
+    }
+    let a = 0.17883277;
+    return a * log(12.0 * x - (1.0 - 4.0 * a)) + 0.5599107;
+}
+
+// The transfers of `display::Transfer`, by code; `white` is the nits of
+// SDR white (PQ is absolute).
+fn encode(v: f32, code: u32, white: f32) -> f32 {
     if code == 1u {
         return pow(max(v, 0.0), 1.0 / 2.2);
     }
     if code == 2u {
         return v;
+    }
+    if code == 3u {
+        return pq_encode(max(v, 0.0) * white);
+    }
+    if code == 4u {
+        return hlg_oetf(max(v, 0.0) * 0.26496256);
+    }
+    if code == 5u {
+        return sign(v) * srgb_encode(abs(v));
     }
     return srgb_encode(v);
 }
@@ -99,7 +130,8 @@ fn fs(v: V) -> @location(0) vec4<f32> {
     var rgb = vec3<f32>(dot(d.m0.xyz, s.rgb), dot(d.m1.xyz, s.rgb), dot(d.m2.xyz, s.rgb));
     rgb = clamp(rgb, vec3<f32>(d.params.x), vec3<f32>(d.params.y));
     let code = u32(d.params.z);
-    var out = vec3<f32>(encode(rgb.r, code), encode(rgb.g, code), encode(rgb.b, code));
+    let white = d.extra.x;
+    var out = vec3<f32>(encode(rgb.r, code, white), encode(rgb.g, code, white), encode(rgb.b, code, white));
     if d.params.w > 0.5 {
         // The surface encodes sRGB itself: hand it what decodes to `out`.
         out = vec3<f32>(srgb_decode(out.r), srgb_decode(out.g), srgb_decode(out.b));
@@ -109,7 +141,7 @@ fn fs(v: V) -> @location(0) vec4<f32> {
 "#;
 
 /// Bytes of one draw's uniform.
-const UNIFORM_SIZE: u64 = 6 * 16;
+const UNIFORM_SIZE: u64 = 7 * 16;
 
 struct Slot {
     buffer: wgpu::Buffer,
@@ -137,9 +169,159 @@ pub(crate) fn installed(ctx: &Context) -> Option<Device> {
     ctx.data(|d| d.get_temp::<Device>(device_id()))
 }
 
+/// The display stage's surface format for a wgpu one.
+pub fn surface_format(format: wgpu::TextureFormat) -> SurfaceFormat {
+    use wgpu::TextureFormat as F;
+    match format {
+        F::Rgba8UnormSrgb | F::Bgra8UnormSrgb => SurfaceFormat::Rgba8UnormSrgb,
+        F::Rgba8Unorm | F::Bgra8Unorm => SurfaceFormat::Rgba8Unorm,
+        F::Rgb10a2Unorm => SurfaceFormat::Rgb10a2Unorm,
+        F::Rgba16Float => SurfaceFormat::Rgba16Float,
+        _ => SurfaceFormat::Other,
+    }
+}
+
+/// The display stage's colour space for a wgpu one; `Auto` as wgpu
+/// resolves it (extended linear on half floats, sRGB otherwise).
+pub fn color_space(space: wgpu::SurfaceColorSpace, format: wgpu::TextureFormat) -> ColorSpace {
+    use wgpu::SurfaceColorSpace as S;
+    match space {
+        S::Auto if format == wgpu::TextureFormat::Rgba16Float => ColorSpace::ExtendedSrgbLinear,
+        S::ExtendedSrgbLinear => ColorSpace::ExtendedSrgbLinear,
+        S::ExtendedSrgb => ColorSpace::ExtendedSrgb,
+        S::DisplayP3 => ColorSpace::DisplayP3,
+        S::ExtendedDisplayP3 => ColorSpace::ExtendedDisplayP3,
+        S::Bt2100Pq => ColorSpace::Bt2100Pq,
+        S::Bt2100Hlg => ColorSpace::Bt2100Hlg,
+        _ => ColorSpace::Srgb,
+    }
+}
+
+fn to_wgpu(space: ColorSpace) -> wgpu::SurfaceColorSpace {
+    use wgpu::SurfaceColorSpace as S;
+    match space {
+        ColorSpace::Srgb => S::Srgb,
+        ColorSpace::ExtendedSrgbLinear => S::ExtendedSrgbLinear,
+        ColorSpace::ExtendedSrgb => S::ExtendedSrgb,
+        ColorSpace::DisplayP3 => S::DisplayP3,
+        ColorSpace::ExtendedDisplayP3 => S::ExtendedDisplayP3,
+        ColorSpace::Bt2100Pq => S::Bt2100Pq,
+        ColorSpace::Bt2100Hlg => S::Bt2100Hlg,
+    }
+}
+
+/// What a surface configured with `format` and `space` expects, as
+/// declared by wgpu's window system integration; `headroom` is the
+/// display's (wgpu's `DisplayHdrInfo`), 1.0 when unknown.
+pub fn surface_target(
+    format: wgpu::TextureFormat,
+    space: wgpu::SurfaceColorSpace,
+    headroom: f32,
+) -> DisplayTarget {
+    DisplayTarget::for_color_space(
+        color_space(space, format),
+        surface_format(format),
+        headroom,
+        TargetSource::Wsi,
+    )
+}
+
+/// Which surfaces a host may configure for a wanted target.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SurfacePolicy {
+    /// Only colour spaces egui's renderer draws the interface faithfully
+    /// on (sRGB, extended sRGB): the window holds egui's interface.
+    EguiCompatible,
+    /// Any colour space: the host composes the interface itself (or the
+    /// surface holds only the image).
+    Any,
+}
+
+/// The surface configuration path for a host that configures its own
+/// surface (eframe 0.36 configures 8-bit sRGB and offers no choice):
+/// the format and colour space to configure for `wanted`, among what the
+/// surface's capabilities offer, and what the viewport will draw for
+/// once configured. Prefers what carries the wanted gamut and headroom,
+/// then fewer bits.
+pub fn choose_surface(
+    caps: &wgpu::SurfaceCapabilities,
+    wanted: &DisplayTarget,
+    policy: SurfacePolicy,
+    headroom: f32,
+) -> Option<(wgpu::TextureFormat, wgpu::SurfaceColorSpace, DisplayTarget)> {
+    let mut best: Option<(u8, wgpu::TextureFormat, ColorSpace)> = None;
+    for &format in &caps.formats {
+        let supported = caps.color_spaces(format);
+        for space in ColorSpace::ALL {
+            if policy == SurfacePolicy::EguiCompatible && !space.egui_draws_faithfully() {
+                continue;
+            }
+            if !supported.contains(color_space_flag(space)) {
+                continue;
+            }
+            let target = DisplayTarget::for_color_space(
+                space,
+                surface_format(format),
+                headroom,
+                TargetSource::Wsi,
+            );
+            if !target.is_supported() {
+                continue;
+            }
+            // Carrying what is wanted first, then the narrowest format.
+            let score = if target.missing(wanted).is_none() {
+                100
+            } else {
+                0
+            } + (if space == ColorSpace::Srgb { 10 } else { 0 })
+                + (32 - surface_format(format).bits().min(32) / 2);
+            if best.is_none_or(|b| score > b.0) {
+                best = Some((score, format, space));
+            }
+        }
+    }
+    best.map(|(_, format, space)| {
+        let target = DisplayTarget::for_color_space(
+            space,
+            surface_format(format),
+            headroom,
+            TargetSource::Wsi,
+        );
+        (format, to_wgpu(space), target)
+    })
+}
+
+fn color_space_flag(space: ColorSpace) -> wgpu::SurfaceColorSpaces {
+    use wgpu::SurfaceColorSpaces as F;
+    match space {
+        ColorSpace::Srgb => F::SRGB,
+        ColorSpace::ExtendedSrgbLinear => F::EXTENDED_SRGB_LINEAR,
+        ColorSpace::ExtendedSrgb => F::EXTENDED_SRGB,
+        ColorSpace::DisplayP3 => F::DISPLAY_P3,
+        ColorSpace::ExtendedDisplayP3 => F::EXTENDED_DISPLAY_P3,
+        ColorSpace::Bt2100Pq => F::BT2100_PQ,
+        ColorSpace::Bt2100Hlg => F::BT2100_HLG,
+    }
+}
+
 /// Installs the GPU path on a render state; viewports in `ctx` use it
-/// from the next frame.
+/// from the next frame. Records what the surface expects for every
+/// window: eframe 0.36 configures `rs.target_format` with wgpu's default
+/// colour space (8-bit sRGB in practice). A host that configured its
+/// surface itself calls [`install_for_surface`].
 pub fn install(ctx: &Context, rs: &egui_wgpu::RenderState) -> GpuInfo {
+    install_for_surface(ctx, rs, wgpu::SurfaceColorSpace::Auto, 1.0)
+}
+
+/// [`install`], for a surface configured with `space` (and a display of
+/// `headroom`, 1.0 when unknown).
+pub fn install_for_surface(
+    ctx: &Context,
+    rs: &egui_wgpu::RenderState,
+    space: wgpu::SurfaceColorSpace,
+    headroom: f32,
+) -> GpuInfo {
+    display::set_default_target(ctx, surface_target(rs.target_format, space, headroom));
     let device = &rs.device;
     let half = rs
         .adapter
@@ -374,7 +556,7 @@ impl egui_wgpu::CallbackTrait for TilePaint {
         let [sw, sh] = screen.size_in_pixels;
         let m = &self.stage.matrix;
         for (i, d) in self.draws.iter().enumerate() {
-            let values: [f32; 24] = [
+            let values: [f32; 28] = [
                 d.dst[0],
                 d.dst[1],
                 d.dst[2],
@@ -399,6 +581,10 @@ impl egui_wgpu::CallbackTrait for TilePaint {
                 self.stage.clamp[1],
                 self.stage.transfer.code() as f32,
                 if r.target_is_srgb { 1.0 } else { 0.0 },
+                self.stage.white_nits,
+                0.0,
+                0.0,
+                0.0,
             ];
             let at = i * stride as usize;
             for (k, v) in values.iter().enumerate() {

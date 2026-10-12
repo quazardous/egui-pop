@@ -9,6 +9,7 @@ pub mod arrangements;
 pub mod builtins;
 pub mod debug;
 pub mod dialogs;
+pub mod display;
 pub mod frame;
 pub mod i18n;
 pub mod icons;

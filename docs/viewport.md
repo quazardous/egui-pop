@@ -64,3 +64,64 @@ a Mandelbrot set computed on a thread) and the gallery's `viewport` page
 show it in an application:
 
 ![the viewport page: before and after, overlays](screenshots/viewport-pop-dark.png)
+
+## Wide gamut and HDR
+
+A window's surface has an encoding (`display::DisplayTarget`: primaries,
+transfer, headroom, format); the viewport's display stage converts the
+scene into it, on the GPU (its shader) and on the CPU
+(`Stage::encode`): Display P3 and BT.2020 primaries (matrices computed
+from the chromaticities), the sRGB curve, extended linear (scRGB) and
+extended sRGB, SMPTE ST 2084 (PQ) and BT.2100 HLG.
+
+An application says what it wants for a window; the viewport draws for
+what the surface carries, and says why when that is less:
+
+```rust
+use egui_pop::egui;
+use egui_pop::viewport::display::{self, ColorSpace, DisplayTarget, SurfaceFormat, TargetSource};
+
+let ctx = egui::Context::default();
+display::want(&ctx, egui::ViewportId::ROOT, DisplayTarget::display_p3());
+
+// Under eframe the surface is 8-bit sRGB: sRGB is drawn, with the reason.
+let r = display::resolve(&DisplayTarget::display_p3(), &DisplayTarget::srgb(), true);
+assert!(!r.faithful());
+assert_eq!(r.drawn.color_space(), Some(ColorSpace::Srgb));
+println!("{}", r.reason().unwrap());
+
+// A host that configured an extended sRGB surface on half floats says so,
+// and P3 (or HDR) is drawn faithfully.
+let surface = DisplayTarget::for_color_space(
+    ColorSpace::ExtendedSrgb,
+    SurfaceFormat::Rgba16Float,
+    4.0,
+    TargetSource::Tagged,
+);
+display::set_target(&ctx, egui::ViewportId::ROOT, surface);
+assert!(display::resolve(&DisplayTarget::display_p3(), &surface, true).faithful());
+```
+
+What works where:
+
+| Surface | Who configures it | Wide gamut / HDR |
+|---|---|---|
+| 8-bit sRGB | eframe 0.36, every platform | no: sRGB drawn, the reason given |
+| extended sRGB, half floats | a host with its own surface (`gpu::choose_surface`), where wgpu offers it (Metal on macOS; Vulkan drivers exposing `EXTENDED_SRGB_NONLINEAR`) | yes, and egui's interface stays right |
+| scRGB, HDR10 (PQ), HLG | a host with its own surface (`SurfacePolicy::Any`): DX12 and Vulkan on Windows, Metal | the image yes; egui's interface is written sRGB-encoded, so the host composes it itself |
+| any, CPU path | (no GPU path installed) | no: tiles are 8-bit sRGB textures |
+
+- `gpu::install` records what eframe configured (its format, wgpu's
+  default colour space); `gpu::install_for_surface` is for a host that
+  configured its surface with another colour space, and
+  `gpu::choose_surface` picks the format and colour space to configure
+  for a wanted target among the surface's capabilities.
+- `ViewportState::display_resolution` gives what the last frame was
+  drawn for; the debug bridge's `viewport` collector shows it, and the
+  `before_display` hook may veto (draw sRGB) or redirect (a soft proof)
+  it.
+- Why eframe cannot do more today, and what is missing on Wayland, is
+  in [Upstream workarounds](upstream.md).
+
+The gallery's `display` page shows the resolution for each wish and
+surface, and the transfers' curves.

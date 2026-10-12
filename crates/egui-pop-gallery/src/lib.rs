@@ -29,7 +29,7 @@ use pages::story::PagePlugin;
 pub const TITLE: &str = "egui-pop gallery";
 
 /// The pages, as named on the command line.
-pub const PAGES: [&str; 20] = [
+pub const PAGES: [&str; 21] = [
     "overview",
     "tokens",
     "builtins",
@@ -40,6 +40,7 @@ pub const PAGES: [&str; 20] = [
     "toasts",
     "viewport",
     "images",
+    "display",
     "zones",
     "workbench",
     "arrangements",
@@ -119,6 +120,16 @@ pub fn builder(options: &Options) -> AppBuilder {
             weight: 75,
             show: pages::images::show,
             playground: Some(pages::images::playground),
+        })
+        .plugin(PagePlugin {
+            plugin: PluginId::from_static("gallery.display"),
+            story: StoryId::from_static("display"),
+            title: "Wide gamut and HDR",
+            description: "What a window draws for when the application wants Display P3 or HDR, what each surface carries, and the PQ and HLG curves.",
+            group: "Components",
+            weight: 77,
+            show: pages::display::show,
+            playground: None,
         })
         .plugin(pages::zones::ZonesPage)
         .plugin(pages::zones::Extender)

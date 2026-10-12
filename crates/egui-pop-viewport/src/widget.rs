@@ -140,6 +140,7 @@ pub struct ViewportState {
     transform: Transform,
     transform_revision: u64,
     target: Option<DisplayTarget>,
+    resolution: Option<display::Resolution>,
     tiles: Tiles,
     /// This state's GPU uniforms (0 until first drawn).
     slot: u64,
@@ -206,6 +207,12 @@ impl ViewportState {
     /// The display target the last frame was drawn for.
     pub fn display_target(&self) -> Option<DisplayTarget> {
         self.target
+    }
+
+    /// What the last frame was drawn for: the wanted target, the
+    /// surface's, the one drawn and why it carries less, if it does.
+    pub fn display_resolution(&self) -> Option<&display::Resolution> {
+        self.resolution.as_ref()
     }
 
     /// Where the source delivers the image's tiles (give it to the
@@ -540,12 +547,24 @@ impl<'a> Viewport<'a> {
         let ppp = ui.ctx().pixels_per_point();
         state.now = ui.input(|i| i.time);
         let mut signals = std::mem::take(&mut state.pending);
-        let target = display::target(ui.ctx());
-        let target_changed = state.target.is_some_and(|t| t != target);
-        if target_changed {
-            signals.push(Signal::Display { target });
+        let surface = display::target(ui.ctx());
+        if state.target.is_some_and(|t| t != surface) {
+            signals.push(Signal::Display { target: surface });
         }
-        state.target = Some(target);
+        state.target = Some(surface);
+        let resolved = display::resolution(ui.ctx());
+        let same = state
+            .resolution
+            .as_ref()
+            .is_some_and(|r| r.wanted == resolved.wanted && r.surface == resolved.surface);
+        let resolution = if same {
+            state.resolution.clone().unwrap_or(resolved)
+        } else {
+            resolve_hook(state, resolved)
+        };
+        let target = resolution.drawn;
+        let target_changed = state.resolution.as_ref().is_some_and(|r| r.drawn != target);
+        state.resolution = Some(resolution);
         ui.painter().rect_filled(rect, 0.0, tokens.background);
 
         let size = self
@@ -1201,6 +1220,30 @@ fn handle_compare(
     } else {
         compare
     }
+}
+
+/// The `before_display` hook on a new resolution.
+fn resolve_hook(state: &mut ViewportState, mut r: display::Resolution) -> display::Resolution {
+    let Some(hook) = state.hooks.before_display.as_mut() else {
+        return r;
+    };
+    let (verdict, to) = match hook(&r) {
+        Verdict::Allow => return r,
+        Verdict::Veto => (
+            "veto",
+            DisplayTarget {
+                surface_format: r.surface.surface_format,
+                source: r.surface.source,
+                ..DisplayTarget::srgb()
+            },
+        ),
+        Verdict::Redirect(t) => ("redirect", t.effective()),
+    };
+    let detail = format!("{} -> {}", r.drawn.describe(), to.describe());
+    r.drawn = to;
+    r.fallback = Some(display::Fallback::Hook);
+    state.record("before_display", verdict, detail);
+    r
 }
 
 /// Asks the source shown under the pointer for its values when the

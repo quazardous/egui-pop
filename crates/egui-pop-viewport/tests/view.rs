@@ -313,3 +313,44 @@ fn a_new_display_target_is_signalled() {
     // Not supported yet: drawn as sRGB.
     assert!(!wide.is_supported());
 }
+
+#[test]
+fn a_wanted_wide_gamut_falls_back_with_its_reason_and_hooks_decide() {
+    use egui_pop_viewport::display::{
+        self, ColorSpace, DisplayTarget, Fallback, SurfaceFormat, TargetSource,
+    };
+    let mut h = harness(1.0, View::fit());
+    display::want(&h.ctx, egui::ViewportId::ROOT, DisplayTarget::display_p3());
+    h.run();
+    let r = h.state().state.display_resolution().cloned().unwrap();
+    assert_eq!(r.drawn.color_space(), Some(ColorSpace::Srgb));
+    assert!(r.reason().unwrap().contains("Display P3"), "{r:?}");
+
+    // A surface configured as extended sRGB carries it, but this
+    // harness draws on the CPU path: sRGB, and why.
+    let ext = DisplayTarget::for_color_space(
+        ColorSpace::ExtendedSrgb,
+        SurfaceFormat::Rgba16Float,
+        4.0,
+        TargetSource::Tagged,
+    );
+    display::set_target(&h.ctx, egui::ViewportId::ROOT, ext);
+    h.run();
+    let r = h.state().state.display_resolution().cloned().unwrap();
+    assert_eq!(r.fallback, Some(Fallback::CpuPath));
+
+    // A hook redirects (a soft proof in sRGB), traced.
+    h.state_mut().state.hooks_mut().before_display =
+        Some(Box::new(|_| Verdict::Redirect(DisplayTarget::srgb())));
+    display::want(&h.ctx, egui::ViewportId::ROOT, DisplayTarget::hdr_pq(4.0));
+    h.run();
+    let s = &h.state().state;
+    assert_eq!(
+        s.display_resolution().unwrap().fallback,
+        Some(Fallback::Hook)
+    );
+    assert!(
+        s.trace()
+            .any(|t| t.hook == "before_display" && t.verdict == "redirect")
+    );
+}

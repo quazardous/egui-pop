@@ -26,7 +26,7 @@ devtools; every feature's moments reachable as steps (ADR 0011).
   own frame, scale and the interface zoom, the keymap at run time, hooks
   around the shell.
 - [The image viewport](viewport.md): tiles from a source the application
-  implements.
+  implements; wide gamut and HDR.
 - [Translations](i18n.md): Fluent catalogues, the language setting,
   numbers, dates and plurals, the lookup step, extracting and checking
   keys.

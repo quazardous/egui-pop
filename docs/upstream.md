@@ -109,3 +109,64 @@ Reviewed at every egui bump: remove what upstream fixed, update the rest.
   answer `WM_NCHITTEST` itself. Until that layer exists, applications
   drawing their own frame keep the system's title bar on Windows.
 - **Remove when**: winit can answer a hit test for a point of the window.
+
+## egui-wgpu: no surface format or colour space to choose
+
+- **Compensated**: wgpu 30 configures surfaces in any colour space the
+  platform offers (`SurfaceConfiguration::color_space`: extended sRGB,
+  scRGB, Display P3, BT.2100 PQ and HLG) and reports them per format
+  (`SurfaceCapabilities::color_spaces`) with the display's headroom
+  (`Surface::display_hdr_info`). eframe 0.36 does not let an application
+  use any of it: egui-wgpu picks the format itself
+  (`preferred_framebuffer_format`: `Rgba8Unorm` or `Bgra8Unorm`), and
+  configures the surface with wgpu's default colour space
+  (`configure_surface` builds on `get_default_config`); `WgpuConfiguration`
+  has no field for either. Its renderer also writes sRGB-encoded values
+  to every format that is not `*Srgb` (`fs_main_gamma_framebuffer`), so
+  the interface is right only on sRGB and extended sRGB surfaces.
+- **Upstream**: not filed yet. What would plug in: a preferred format
+  and colour space in `egui_wgpu::WgpuConfiguration` (used by
+  `RenderState::create` and `configure_surface`), and the renderer's
+  fragment entry chosen by the colour space's transfer (linear for scRGB,
+  an encoding pass for PQ and HLG) rather than by `is_srgb()`.
+- **Workaround**: none possible inside eframe. The viewport's display
+  stage implements every transfer and the P3 and BT.2020 primaries (CPU
+  and shader); it reports truthfully what an eframe window draws (sRGB,
+  with the reason, `display::Resolution`), and a host with its own
+  surface configures it with `egui_pop_viewport::gpu::choose_surface`
+  and declares it (`gpu::install_for_surface`, `display::set_target`).
+- **Remove when**: egui-wgpu takes a surface format and colour space;
+  then `gpu::install` reads them from the render state.
+
+## Wayland: no colour management through winit
+
+- **Compensated**: on Wayland, colour management is the
+  `wp_color_management_v1` protocol (staging, in wayland-protocols since
+  1.41): a surface gets an image description (primaries, transfer,
+  luminances), and the compositor gives each output's preferred one.
+  winit 0.30 binds none of it (no colour-management object, no event for
+  the output's description), and wgpu has no Wayland-specific path: on
+  Vulkan it relies on the driver's window system integration exposing
+  extra colour spaces through `VK_EXT_swapchain_colorspace` (recent Mesa
+  drivers do so on compositors with the protocol), and on GL it offers
+  sRGB only.
+- **Upstream**: winit has no issue for `wp_color_management_v1` that
+  egui-pop could find; it would sit with the other Wayland protocol
+  bindings of winit's Wayland backend (`platform_impl/linux/wayland`).
+- **Missing, and where it would plug in**:
+  - the surface's encoding: through wgpu's Vulkan colour spaces where
+    the driver offers them, then through egui-wgpu as above;
+    `gpu::install_for_surface` already takes the colour space;
+  - the output's preferred description (its primaries, its luminances
+    and so the headroom): winit would need to expose it per window and
+    signal its changes; egui-pop would turn it into
+    `DisplayTarget::sdr_white_nits` and `headroom` with
+    `TargetSource::Os`, set with `display::set_target`;
+  - without a Vulkan driver offering the colour spaces (GL, older
+    Mesa), an application would have to tag the surface itself through
+    the protocol (`TargetSource::Tagged`), which needs the
+    `wl_surface` winit gives and a protocol binding of its own.
+- **Workaround**: none: Wayland windows draw sRGB, and the viewport says
+  so (`display::Resolution::reason`).
+- **Remove when**: winit exposes the output's image description and
+  egui-wgpu takes a colour space.
