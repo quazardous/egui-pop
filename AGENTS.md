@@ -5,6 +5,7 @@
 | Path | What |
 |---|---|
 | `crates/egui-pop-tokens` | L0, design tokens (DTCG parser, themes, contrast). No egui. |
+| `crates/egui-pop-win32` | L0, the frame's Windows hit-test layer (`SetWindowSubclass`, `WM_NCHITTEST`); no egui, the only crate allowed `unsafe`, in its `sys` module. |
 | `crates/egui-pop-model` | L1, the logic without egui: ids, diagnostics, `when` clauses, commands, keymap, menus, panels, layouts, value store, documents and migrations, plugin ordering. |
 | `crates/egui-pop-core` | L2, egui: theme, focus scopes, key dispatcher, overlays, placement, accessibility, strings, icons, persistence, fault boundary, value binding, debug bridge. |
 | `crates/egui-pop-api` | L3, the application API: `Plugin`, `AppBuilder`, `App`, `Ctx`, zones and blocks, hooks, services, stories. |

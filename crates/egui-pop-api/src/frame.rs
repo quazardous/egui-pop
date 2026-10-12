@@ -19,6 +19,21 @@
 //! | `frame.maximize` | `{ "maximized": bool }` (the state asked for) | maximizes or restores |
 //! | `frame.close` | `{ "viewport": "root" }` | closes the window |
 //! | `frame.system_menu` | `{ "x", "y" }` (points) | opens the system menu there |
+//! | `frame.hit_test` | `{ "viewport": "root", "install": bool }` | on Windows, takes over the window's hit testing (or gives it back) |
+//!
+//! ## Windows: the system's hit test
+//!
+//! winit cannot answer `WM_NCHITTEST` (see `docs/upstream.md`), so on
+//! Windows, when the application draws the frame, the plugin subclasses
+//! the main window through `egui-pop-win32` and answers it from the
+//! published regions: the caption moves the window natively (Aero Snap),
+//! the maximize button shows Snap Layouts, the edges resize. Clicks on
+//! the buttons, a double click and a right click on the caption come back
+//! as the usual requests, so the steps above still run. The handle comes
+//! from eframe when the application is started with
+//! `AppBuilder::run_native` (or `run_native_with`); an application
+//! starting eframe itself gives it with [`set_native_window`]. Only the
+//! main window is subclassed for now.
 
 use egui::{Context, Id, Rect, Ui, Vec2, ViewportCommand};
 use egui_pop_core::frame::{FrameRequest, HitTable, TitleBar};
@@ -54,6 +69,7 @@ pub const STEP_MINIMIZE: StepId = StepId::from_static("frame.minimize");
 pub const STEP_MAXIMIZE: StepId = StepId::from_static("frame.maximize");
 pub const STEP_CLOSE: StepId = StepId::from_static("frame.close");
 pub const STEP_SYSTEM_MENU: StepId = StepId::from_static("frame.system_menu");
+pub const STEP_HIT_TEST: StepId = StepId::from_static("frame.hit_test");
 
 /// The plugin: `FramePlugin::own()` draws the frame by default,
 /// `FramePlugin::system()` leaves it to the system until the setting
@@ -191,6 +207,11 @@ impl Plugin for FramePlugin {
                 "The frame opens the system menu at a point (`x`, `y`).",
             )
             .args(json!({ "x": 8.0, "y": 32.0 })),
+            StepSpec::new(
+                STEP_HIT_TEST,
+                "On Windows, the frame takes over the window's hit testing (`install`: true) or gives it back (false); a veto keeps the system's.",
+            )
+            .args(json!({ "viewport": "root", "install": true })),
         ] {
             ctx.step(spec)?;
         }
@@ -274,6 +295,7 @@ impl Plugin for FramePlugin {
                 let table = HitTable::of(ctx);
                 json!({
                     "own": own_frame(&app),
+                    "hit_test": native::describe(ctx),
                     "windows": table.viewports().into_iter().map(|v| json!({
                         "viewport": if v == egui::ViewportId::ROOT { "root".to_string() } else { format!("{v:?}") },
                         "regions": table.get(v).map(|r| (*r).clone()),
@@ -308,6 +330,7 @@ fn follow_setting(ui: &Ui, app: &AppHandle) -> bool {
     app.set_context("windowOwnFrame", if own { "true" } else { "false" });
     let maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
     app.set_context("windowMaximized", if maximized { "true" } else { "false" });
+    native::follow(ctx, app, own);
     let key = Id::new(("egui_pop.frame.decorated", ctx.viewport_id()));
     let applied: Option<bool> = ctx.data(|d| d.get_temp(key));
     if applied != Some(own) {
@@ -359,6 +382,9 @@ fn title_block(ui: &mut Ui, app: &AppHandle, name: &str) {
     if let Some(at) = menu_at {
         request(app, &ctx, FrameRequest::SystemMenu(at));
     }
+    for r in native::requests(&ctx) {
+        request(app, &ctx, r);
+    }
     if let Some(r) = out.request {
         request(app, &ctx, r);
     }
@@ -391,5 +417,270 @@ fn edges(ui: &mut Ui, app: &AppHandle) {
     if !open || clicked {
         overlay::close(&ctx, spec.id);
         ctx.data_mut(|d| d.insert_temp::<Option<(egui::Pos2, u64)>>(menu_id(), None));
+    }
+}
+
+/// Records a window's native handle (an `HWND` on Windows), for the
+/// frame's hit testing. `AppBuilder::run_native` does it for the main
+/// window; an application starting eframe itself calls it from its
+/// creation context.
+pub fn set_native_window(ctx: &Context, viewport: egui::ViewportId, handle: isize) {
+    ctx.data_mut(|d| d.insert_temp(native::handle_id(viewport), handle));
+}
+
+/// Records the main window's handle from eframe's creation context.
+#[cfg(all(feature = "eframe", not(target_arch = "wasm32")))]
+pub(crate) fn record_native_window(cc: &eframe::CreationContext<'_>) {
+    #[cfg(windows)]
+    {
+        use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+        if let Ok(h) = cc.window_handle()
+            && let RawWindowHandle::Win32(w) = h.as_raw()
+        {
+            set_native_window(&cc.egui_ctx, egui::ViewportId::ROOT, w.hwnd.get());
+        }
+    }
+    #[cfg(not(windows))]
+    let _ = cc;
+}
+
+/// The frame's Windows layer: the hit-test handler over the published
+/// regions and the requests it hands back.
+mod native {
+    use std::sync::{Arc, Mutex};
+
+    use egui::{Context, Id, ViewportId};
+    use egui_pop_core::frame::{self as core_frame, Button, FrameRequest, Hit, HitTable};
+    use egui_pop_core::lock;
+    use egui_pop_win32::{Area, Handler, NcEvent, Subclassed};
+    use serde_json::{Value as Json, json};
+
+    use super::STEP_HIT_TEST;
+    use crate::app::AppHandle;
+
+    pub(super) fn handle_id(viewport: ViewportId) -> Id {
+        Id::new(("egui_pop.frame.native_window", viewport))
+    }
+
+    /// What the layer holds, shared with the window procedure.
+    #[derive(Clone, Debug, Default)]
+    struct Native {
+        installed: Arc<Mutex<Option<Subclassed>>>,
+        events: Arc<Mutex<Vec<NcEvent>>>,
+        error: Arc<Mutex<Option<String>>>,
+    }
+
+    fn native(ctx: &Context) -> Native {
+        let id = Id::new("egui_pop.frame.native");
+        if let Some(n) = ctx.data(|d| d.get_temp::<Native>(id)) {
+            return n;
+        }
+        let n = Native::default();
+        ctx.data_mut(|d| d.insert_temp(id, n.clone()));
+        n
+    }
+
+    /// Maps the frame's regions to the system's areas.
+    pub(super) fn area(hit: Hit) -> Area {
+        match hit {
+            Hit::Client => Area::Client,
+            Hit::Caption => Area::Caption,
+            Hit::Minimize => Area::Minimize,
+            Hit::Maximize => Area::Maximize,
+            Hit::Close => Area::Close,
+            Hit::Left => Area::Left,
+            Hit::Right => Area::Right,
+            Hit::Top => Area::Top,
+            Hit::Bottom => Area::Bottom,
+            Hit::TopLeft => Area::TopLeft,
+            Hit::TopRight => Area::TopRight,
+            Hit::BottomLeft => Area::BottomLeft,
+            Hit::BottomRight => Area::BottomRight,
+        }
+    }
+
+    /// Answers the window's hit tests from the published regions; hands
+    /// what the system saw back to the next frame.
+    #[derive(Debug)]
+    pub(super) struct Bridge {
+        pub(super) table: HitTable,
+        pub(super) viewport: ViewportId,
+        pub(super) ctx: Context,
+        pub(super) events: Arc<Mutex<Vec<NcEvent>>>,
+    }
+
+    impl Handler for Bridge {
+        fn hit(&self, x: i32, y: i32) -> Area {
+            self.table
+                .get(self.viewport)
+                .map_or(Area::Client, |r| area(r.hit(x, y)))
+        }
+
+        fn event(&self, event: NcEvent) {
+            lock(&self.events).push(event);
+            self.ctx.request_repaint_of(self.viewport);
+        }
+    }
+
+    /// Installs or removes the layer as the setting says, through the
+    /// `frame.hit_test` step (main window only).
+    pub(super) fn follow(ctx: &Context, app: &AppHandle, own: bool) {
+        if ctx.viewport_id() != ViewportId::ROOT {
+            return;
+        }
+        let Some(hwnd) = ctx.data(|d| d.get_temp::<isize>(handle_id(ViewportId::ROOT))) else {
+            return;
+        };
+        let n = native(ctx);
+        if lock(&n.installed).is_some() == own || (own && lock(&n.error).is_some()) {
+            return;
+        }
+        let (c, n2) = (ctx.clone(), n.clone());
+        app.step(
+            &STEP_HIT_TEST,
+            json!({ "viewport": "root", "install": own }),
+            move |_, args| {
+                let install = args["install"].as_bool().unwrap_or(own);
+                let mut slot = lock(&n2.installed);
+                if !install {
+                    if let Some(s) = slot.take() {
+                        s.remove();
+                    }
+                    core_frame::set_native_hover(&c, ViewportId::ROOT, None);
+                    return Ok(json!({ "installed": false }));
+                }
+                let bridge = Bridge {
+                    table: HitTable::of(&c),
+                    viewport: ViewportId::ROOT,
+                    ctx: c.clone(),
+                    events: n2.events.clone(),
+                };
+                match egui_pop_win32::install(hwnd, Arc::new(bridge)) {
+                    Ok(s) => {
+                        *slot = Some(s);
+                        Ok(json!({ "installed": true }))
+                    }
+                    Err(e) => {
+                        *lock(&n2.error) = Some(e.to_string());
+                        Err(e.to_string())
+                    }
+                }
+            },
+        );
+        if !own {
+            *lock(&n.error) = None;
+        }
+    }
+
+    /// The requests the system handed back since the last frame.
+    pub(super) fn requests(ctx: &Context) -> Vec<FrameRequest> {
+        let n = native(ctx);
+        let events = std::mem::take(&mut *lock(&n.events));
+        let ppp = ctx.pixels_per_point();
+        let mut out = Vec::new();
+        for e in events {
+            match e {
+                NcEvent::Hover(b) => {
+                    let b = b.and_then(|a| match a {
+                        Area::Minimize => Some(Button::Minimize),
+                        Area::Maximize => Some(Button::Maximize),
+                        Area::Close => Some(Button::Close),
+                        _ => None,
+                    });
+                    core_frame::set_native_hover(ctx, ViewportId::ROOT, b);
+                }
+                NcEvent::Press(_) => {}
+                NcEvent::Click(Area::Minimize) => out.push(FrameRequest::Minimize),
+                NcEvent::Click(Area::Maximize) | NcEvent::DoubleClick(_) => {
+                    out.push(FrameRequest::ToggleMaximize);
+                }
+                NcEvent::Click(Area::Close) => out.push(FrameRequest::Close),
+                NcEvent::Click(_) => {}
+                NcEvent::ContextMenu { x, y } => out.push(FrameRequest::SystemMenu(egui::pos2(
+                    x as f32 / ppp,
+                    y as f32 / ppp,
+                ))),
+            }
+        }
+        out
+    }
+
+    /// What the debug bridge shows.
+    pub(super) fn describe(ctx: &Context) -> Json {
+        let n = native(ctx);
+        json!({
+            "supported": egui_pop_win32::SUPPORTED,
+            "window": ctx.data(|d| d.get_temp::<isize>(handle_id(ViewportId::ROOT))).is_some(),
+            "installed": lock(&n.installed).is_some(),
+            "error": lock(&n.error).clone(),
+        })
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn the_bridge_answers_from_the_table_and_queues_requests() {
+            let ctx = Context::default();
+            let table = HitTable::of(&ctx);
+            let layout = core_frame::FrameLayout {
+                window: egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0)),
+                caption: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(800.0, 32.0),
+                )),
+                maximize: Some(egui::Rect::from_min_size(
+                    egui::pos2(712.0, 0.0),
+                    egui::vec2(44.0, 32.0),
+                )),
+                grip: 4.0,
+                resizable: true,
+                ..Default::default()
+            };
+            table.publish(
+                ViewportId::ROOT,
+                core_frame::HitRegions::measure(&layout, 1.5),
+            );
+            let events = native(&ctx).events;
+            let b = Bridge {
+                table,
+                viewport: ViewportId::ROOT,
+                ctx: ctx.clone(),
+                events: events.clone(),
+            };
+            assert_eq!(b.hit(600, 24), Area::Caption);
+            assert_eq!(b.hit((734.0 * 1.5) as i32, 24), Area::Maximize);
+            assert_eq!(b.hit(2, 400), Area::Left);
+            assert_eq!(b.hit(600, 400), Area::Client);
+            for e in [
+                NcEvent::Hover(Some(Area::Maximize)),
+                NcEvent::Click(Area::Maximize),
+                NcEvent::DoubleClick(Area::Caption),
+                NcEvent::ContextMenu { x: 30, y: 15 },
+                NcEvent::Click(Area::Close),
+            ] {
+                b.event(e);
+            }
+            let r = requests(&ctx);
+            assert_eq!(
+                r,
+                vec![
+                    FrameRequest::ToggleMaximize,
+                    FrameRequest::ToggleMaximize,
+                    FrameRequest::SystemMenu(egui::pos2(30.0, 15.0)),
+                    FrameRequest::Close,
+                ]
+            );
+            assert_eq!(
+                ctx.data(|d| d.get_temp::<Option<Button>>(Id::new((
+                    "egui_pop_core::frame::native_hover",
+                    ViewportId::ROOT
+                ))))
+                .flatten(),
+                Some(Button::Maximize)
+            );
+            assert!(requests(&ctx).is_empty());
+        }
     }
 }

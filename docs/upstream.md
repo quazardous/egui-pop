@@ -104,10 +104,20 @@ Reviewed at every egui bump: remove what upstream fixed, update the rest.
 - **Workaround**: egui-pop's frame (`egui_pop_core::frame`) publishes
   each window's hit regions every frame, in physical client pixels
   (`HitTable`, `HitRegions::hit` mapping a point to caption, minimize,
-  maximize, close or a resize edge), so that a small Windows-only layer
-  outside egui-pop (which forbids `unsafe`) can subclass the window and
-  answer `WM_NCHITTEST` itself. Until that layer exists, applications
-  drawing their own frame keep the system's title bar on Windows.
+  maximize, close or a resize edge). On Windows, `FramePlugin` (when the
+  application draws the frame) subclasses the main window through
+  `egui-pop-win32` (`SetWindowSubclass`, the one crate allowed `unsafe`,
+  with no egui dependency) and answers `WM_NCHITTEST` from them:
+  `HTCAPTION` (Windows moves the window, with Aero Snap), `HTMINBUTTON`,
+  `HTMAXBUTTON` (Snap Layouts) and `HTCLOSE`, the resize codes, else
+  `HTCLIENT`. The buttons' non-client clicks never reach winit, so the
+  layer swallows them and hands them back with hover, as are a double
+  click and a right click on the caption: the `frame.*` steps still run.
+  The layer is installed and removed through the `frame.hit_test` step.
+  Limits: only the main window (its handle comes from eframe's creation
+  context; auxiliary windows keep egui's own hit handling), and a child
+  window covering the client area would take the hit tests first (the
+  2026 comment above).
 - **Remove when**: winit can answer a hit test for a point of the window.
 
 ## egui-wgpu: no surface format or colour space to choose

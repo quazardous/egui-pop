@@ -547,6 +547,25 @@ impl<'a> TitleBar<'a> {
     }
 }
 
+fn native_hover_id(viewport: ViewportId) -> Id {
+    Id::new(("egui_pop_core::frame::native_hover", viewport))
+}
+
+/// Says which window button the pointer is over when the system, not
+/// egui, sees the pointer there (on Windows the buttons answer the
+/// system's hit test, so their hover never reaches egui): the button is
+/// drawn hot. `None` when the pointer left them.
+pub fn set_native_hover(ctx: &Context, viewport: ViewportId, button: Option<Button>) {
+    ctx.data_mut(|d| d.insert_temp(native_hover_id(viewport), button));
+    ctx.request_repaint_of(viewport);
+}
+
+/// The window button the system says the pointer is over.
+pub fn native_hover(ctx: &Context) -> Option<Button> {
+    ctx.data(|d| d.get_temp::<Option<Button>>(native_hover_id(ctx.viewport_id())))
+        .flatten()
+}
+
 /// Draws a window button; says whether it was clicked.
 fn window_button(ui: &mut Ui, rect: Rect, which: Button, maximized: bool) -> bool {
     let name = crate::strings::tr(
@@ -563,7 +582,9 @@ fn window_button(ui: &mut Ui, rect: Rect, which: Button, maximized: bool) -> boo
     let response = ui.interact(rect, id, Sense::click());
     a11y::name(&response, WidgetType::Button, name);
     let t = Tokens::of(ui.ctx());
-    let hot = response.hovered() || response.is_pointer_button_down_on();
+    let hot = response.hovered()
+        || response.is_pointer_button_down_on()
+        || native_hover(ui.ctx()) == Some(which);
     let (fill, ink) = match (which, hot) {
         (Button::Close, true) => (t.titlebar.close_hover, t.titlebar.close_text),
         (_, true) => (t.titlebar.button_hover, t.titlebar.text),

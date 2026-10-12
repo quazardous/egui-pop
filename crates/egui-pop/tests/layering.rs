@@ -8,6 +8,7 @@ use std::process::Command;
 /// Each workspace crate's layer.
 const LAYERS: &[(&str, u32)] = &[
     ("egui-pop-tokens", 0),
+    ("egui-pop-win32", 0),
     ("egui-pop-model", 1),
     ("egui-pop-core", 2),
     ("egui-pop-api", 3),

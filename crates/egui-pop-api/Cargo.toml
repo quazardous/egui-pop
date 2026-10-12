@@ -33,6 +33,13 @@ log.workspace = true
 serde.workspace = true
 rfd = { workspace = true, optional = true }
 serde_json.workspace = true
+# The Windows layer of the frame (stubs elsewhere).
+egui-pop-win32.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+# MIT OR Apache-2.0 OR Zlib: the window handle eframe gives, to subclass
+# the window for its hit tests.
+raw-window-handle = "0.6"
 
 [dev-dependencies]
 egui = { workspace = true, features = ["default_fonts"] }

@@ -9,6 +9,17 @@ egui minor.
 
 ### Added
 
+- Windows hit testing for the window's own frame: `egui-pop-win32` (no
+  egui dependency, the one crate allowed `unsafe`) subclasses a window
+  and answers `WM_NCHITTEST` from the frame's hit regions; `FramePlugin`
+  installs it on the main window when the application draws the frame
+  (step `frame.hit_test`), so the maximize button shows Snap Layouts and
+  the caption moves the window with Aero Snap, while button clicks and a
+  double or right click on the caption still run the `frame.*` steps.
+  `frame::set_native_window` for applications starting eframe
+  themselves; the `frame` collector shows the layer's state. Guide:
+  docs/workbench.md.
+
 - Wide gamut and HDR in the viewport's display stage: Display P3 and
   BT.2020 primaries (matrices from their chromaticities,
   `Primaries::conversion`), the extended sRGB transfer, SMPTE ST 2084

@@ -982,9 +982,11 @@ dependencies = [
  "egui",
  "egui-pop-core",
  "egui-pop-model",
+ "egui-pop-win32",
  "egui_dock",
  "egui_kittest",
  "log",
+ "raw-window-handle",
  "rfd",
  "serde",
  "serde_json",
@@ -1102,6 +1104,13 @@ dependencies = [
  "egui_kittest",
  "half",
  "serde_json",
+]
+
+[[package]]
+name = "egui-pop-win32"
+version = "0.1.0"
+dependencies = [
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

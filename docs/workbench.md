@@ -127,8 +127,64 @@ menu bar, and the window's resize edges, never thinner than 6 physical
 pixels; a setting gives the system's frame back. The frame publishes
 each window's hit regions in physical pixels (`egui_pop::core::frame`,
 `HitTable`, `HitRegions::hit`), what a platform layer needs to answer
-the system's hit tests itself (Windows Snap Layouts). Steps:
-`frame.minimize`, `frame.maximize`, `frame.close`, `frame.system_menu`.
+the system's hit tests itself. Steps: `frame.minimize`,
+`frame.maximize`, `frame.close`, `frame.system_menu`, `frame.hit_test`.
+
+### Windows: Snap Layouts and Aero Snap
+
+On Windows, when the application draws the frame, `FramePlugin`
+subclasses the main window (the `egui-pop-win32` crate) and answers the
+system's hit test from the published regions: the caption moves the
+window natively (Aero Snap, shake), the maximize button shows Snap
+Layouts, the edges resize. Clicks on the buttons and a double or right
+click on the caption still come back as the frame's requests, so their
+steps run. The window's handle comes from eframe when the application
+starts with `run_native` (or `run_native_with`); an application starting
+eframe itself passes it with `frame::set_native_window`. Elsewhere,
+nothing is installed. A plugin may keep the system's hit testing:
+
+```rust
+use egui_pop::api::frame::{FramePlugin, STEP_HIT_TEST};
+use egui_pop::core::frame::{FrameLayout, Hit, HitRegions};
+use egui_pop::egui;
+use egui_pop::prelude::*;
+
+struct KeepSystemHitTest;
+
+impl Plugin for KeepSystemHitTest {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("keep_hit_test")
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        ctx.before(STEP_HIT_TEST, |_, args| {
+            if args["install"] == true { Before::Veto("ours".into()) } else { Before::Go }
+        });
+        Ok(())
+    }
+}
+
+let app = App::builder()
+    .plugin(FramePlugin::own())
+    .plugin(KeepSystemHitTest)
+    .build(&egui::Context::default())
+    .unwrap();
+assert!(app.handle().diagnostics().is_empty());
+
+// What the layer answers is what the regions say (physical pixels).
+let bar = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 32.0));
+let layout = FrameLayout {
+    window: egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0)),
+    caption: Some(bar),
+    maximize: Some(egui::Rect::from_min_size(egui::pos2(712.0, 0.0), egui::vec2(44.0, 32.0))),
+    grip: 4.0,
+    resizable: true,
+    ..FrameLayout::default()
+};
+let regions = HitRegions::measure(&layout, 2.0);
+assert_eq!(regions.hit(1468, 30), Hit::Maximize);
+assert_eq!(regions.hit(800, 30), Hit::Caption);
+```
 
 ## Scale
 

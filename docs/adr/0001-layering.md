@@ -18,6 +18,7 @@ Crates are stacked; a crate depends only on crates of a lower layer:
 | Layer | Crate | Depends on egui |
 |---|---|---|
 | L0 | `egui-pop-tokens`: design tokens | no |
+| L0 | `egui-pop-win32`: the frame's Windows hit-test layer (amended 2026-10-12) | no |
 | L1 | `egui-pop-model`: commands, keymap, menus, panels, layouts, values, ids, diagnostics, documents | no |
 | L2 | `egui-pop-core`: theme, focus, keys, overlays, placement, accessibility, strings, icons, persistence, fault boundary, binding, debug bridge | yes |
 | L3 | `egui-pop-api`: plugins, the app builder, `Ctx`, zones and blocks, hooks, services, stories | yes |
@@ -32,7 +33,10 @@ Components sit between L3 and the facade. A component that needs only
 the egui layer (`egui-pop-viewport`) sits at L3 beside the application
 API, so the test kit (L4) can carry test doubles for it; one that needs
 plugins sits above the API, at L4 (`egui-pop-i18n`, amended
-2026-10-12), so the facade can re-export it. A test
+2026-10-12), so the facade can re-export it. A platform layer that
+must call the system (`egui-pop-win32`, amended 2026-10-12) knows
+nothing of egui: it sits at L0 as a leaf, is the only crate allowed
+`unsafe` (in one module), and the layer above maps its plain types. A test
 (`crates/egui-pop/tests/layering.rs`) reads `cargo metadata` and fails on
 any dependency that points to the same or a higher layer, on any
 workspace crate missing from the table, and on L0 or L1 depending on

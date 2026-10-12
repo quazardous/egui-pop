@@ -1683,6 +1683,7 @@ impl AppBuilder {
             title,
             options,
             Box::new(move |cc| {
+                crate::frame::record_native_window(cc);
                 let app = self
                     .build(&cc.egui_ctx)
                     .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
@@ -1711,6 +1712,7 @@ impl AppBuilder {
             title,
             options,
             Box::new(move |cc| {
+                crate::frame::record_native_window(cc);
                 let app = self
                     .build(&cc.egui_ctx)
                     .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
