@@ -1,6 +1,6 @@
 [package]
 name = "egui-pop-test"
-version = "0.0.1"
+version = "0.1.0"
 description = "Test kit for egui-pop applications: themed egui_kittest harnesses, a check that every interactive node has a name, an accessibility tree dump, a double click that registers, keymap checks"
 keywords = ["egui", "testing", "accessibility", "kittest"]
 categories = ["gui", "development-tools::testing"]

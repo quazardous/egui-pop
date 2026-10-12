@@ -1,6 +1,6 @@
 [package]
 name = "egui-pop-api"
-version = "0.0.1"
+version = "0.1.0"
 description = "The application API of egui-pop: plugins that own what they register, an app builder over eframe (or headless), zones and blocks, hooks, services and gallery stories"
 keywords = ["egui", "gui", "plugins", "framework", "application"]
 categories = ["gui"]

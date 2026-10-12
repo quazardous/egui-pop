@@ -880,7 +880,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "egui",
  "egui-pop-api",
@@ -895,7 +895,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop-api"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "eframe",
  "egui",
@@ -911,7 +911,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop-core"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "egui",
  "egui-phosphor",
@@ -938,7 +938,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop-model"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "log",
  "serde",
@@ -947,7 +947,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop-test"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "egui",
  "egui-pop-api",
@@ -961,14 +961,14 @@ dependencies = [
 
 [[package]]
 name = "egui-pop-tokens"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "serde_json",
 ]
 
 [[package]]
 name = "egui-pop-viewport"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "eframe",
  "egui",

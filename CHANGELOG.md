@@ -7,6 +7,12 @@ egui minor.
 
 ## Unreleased
 
+## 0.1.0 (prepared, not published)
+
+The first release: the tokens and themes, the framework (plugins,
+commands, keymaps, zones, the host), the components of the paved road
+and the workbench. Publishing is the owner's call.
+
 ### Added
 
 - Devtools (`egui_pop_api::devtools::DevtoolsPlugin`, opt-in): the

@@ -198,7 +198,7 @@ released within days of it.
 
 | egui-pop | egui | Rust |
 |---|---|---|
-| 0.0.x | 0.36 | 1.95 |
+| 0.1.x | 0.36 | 1.95 |
 
 ## Contributing
 

@@ -20,15 +20,15 @@ repository = "https://github.com/quazardous/egui-pop"
 authors = ["The egui-pop contributors"]
 
 [workspace.dependencies]
-egui-pop-tokens = { version = "0.0.1", path = "crates/egui-pop-tokens" }
+egui-pop-tokens = { version = "0.1.0", path = "crates/egui-pop-tokens" }
 serde_json = "1"
 serde = { version = "1", features = ["derive"] }
 log = "0.4"
-egui-pop-model = { version = "0.0.1", path = "crates/egui-pop-model" }
-egui-pop-core = { version = "0.0.1", path = "crates/egui-pop-core" }
-egui-pop-api = { version = "0.0.1", path = "crates/egui-pop-api", default-features = false }
-egui-pop-test = { version = "0.0.1", path = "crates/egui-pop-test" }
-egui-pop-viewport = { version = "0.0.1", path = "crates/egui-pop-viewport" }
+egui-pop-model = { version = "0.1.0", path = "crates/egui-pop-model" }
+egui-pop-core = { version = "0.1.0", path = "crates/egui-pop-core" }
+egui-pop-api = { version = "0.1.0", path = "crates/egui-pop-api", default-features = false }
+egui-pop-test = { version = "0.1.0", path = "crates/egui-pop-test" }
+egui-pop-viewport = { version = "0.1.0", path = "crates/egui-pop-viewport" }
 egui = { version = "0.36", default-features = false }
 egui_kittest = "0.36"
 # MIT OR Apache-2.0: the test kit shares one wgpu device per process.
@@ -40,7 +40,7 @@ eframe = { version = "0.36", default-features = false }
 rfd = "0.17"
 # MIT: docked tabs and splits for the workbench's areas.
 egui_dock = { version = "0.21", default-features = false }
-egui-pop = { version = "0.0.1", path = "crates/egui-pop" }
+egui-pop = { version = "0.1.0", path = "crates/egui-pop" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

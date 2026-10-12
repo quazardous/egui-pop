@@ -1,6 +1,6 @@
 [package]
 name = "egui-pop-core"
-version = "0.0.1"
+version = "0.1.0"
 description = "The egui layer of egui-pop: theme, focus scopes, a key dispatcher, overlays, placement, accessibility helpers, strings, icons, persistence, fault boundaries, value binding and a debug bridge"
 keywords = ["egui", "gui", "accessibility", "theme", "keyboard"]
 categories = ["gui"]

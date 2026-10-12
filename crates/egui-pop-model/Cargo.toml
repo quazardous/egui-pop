@@ -1,6 +1,6 @@
 [package]
 name = "egui-pop-model"
-version = "0.0.1"
+version = "0.1.0"
 description = "The logic of egui-pop applications without egui: typed ids, commands, when-clauses, keymaps, menus, panels, layouts, a value store, versioned documents, plugin ordering"
 keywords = ["egui", "gui", "commands", "keymap", "framework"]
 categories = ["gui"]

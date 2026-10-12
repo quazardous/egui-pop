@@ -29,7 +29,9 @@ Three tiers:
   (the three modes).
 - `egui-pop-api`: `Plugin`, `Ctx`, `AppBuilder`, `App`, `AppHandle`,
   zones and blocks, hooks, services, `DefaultPlugins` and
-  `MinimalPlugins`.
+  `MinimalPlugins`; steps (`steps`, ADR 0011): `Ctx::step`, `before`,
+  `replace`, `after`, `AppHandle::step`, and the names of the steps
+  egui-pop declares.
 - `egui-pop`: the facade's paths and its `prelude`.
 
 ## Supported
@@ -38,7 +40,15 @@ Three tiers:
   window and shortcuts editor, the window's place, menus, the slider and
   the parameter widget, icons. Their behaviour and commands are kept;
   their drawing follows the theme and may be refined.
-- The test kit (`egui-pop-test`): harnesses and checks.
+- The test kit (`egui-pop-test`): harnesses and checks, the helpers at
+  several scales, the shared GPU device.
+- The window's own frame (`egui_pop_core::frame`, `egui_pop_api::frame`)
+  and its published hit regions (`HitRegions`, `HitTable`): the shape
+  of the regions is what a platform layer reads.
+- Scale (`egui_pop_core::scale`) and the interface zoom
+  (`egui_pop_api::zoom`).
+- The keymap at run time: `AppHandle::declare`, `undeclare`,
+  `load_keymap`, `export_keymap`, `KeymapDiff`.
 - The debug bridge: collector names and snapshot shapes (agents read
   them).
 
@@ -50,6 +60,14 @@ Three tiers:
 - The focus mode and its system readers.
 - The slider's gestures as data (`slider::Gestures`): profiles of input
   are not designed yet.
+- The workbench (`egui_pop_api::workbench`): areas over egui_dock,
+  placement rules, auxiliary windows; arrangements
+  (`egui_pop_api::arrangements`); strips and indicators
+  (`egui_pop_api::strips`); devtools (`egui_pop_api::devtools`). Their
+  steps are kept; their API may move while the first applications
+  adopt them.
+- The shell's hooks for applications: `AppBuilder::wrap`,
+  `main_edge_to_edge`, `on_exit`, `run_native_with`.
 - The image viewport (`egui-pop-viewport`): its view model, mapping,
   signals and hooks may still move while the first application adopts it.
 - Anything marked "experimental" in its documentation.
