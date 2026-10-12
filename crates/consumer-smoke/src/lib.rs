@@ -31,3 +31,6 @@ pub mod i18n {}
 
 #[doc = include_str!("../../../docs/instance.md")]
 pub mod instance {}
+
+#[doc = include_str!("../../../docs/notifications.md")]
+pub mod notifications {}

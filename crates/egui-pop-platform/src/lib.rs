@@ -5,6 +5,8 @@
 //! - [`instance`]: a single instance; a second launch hands its
 //!   arguments and links to the running one (`instance.second_launch`,
 //!   `deeplink.open`).
+//! - [`notify`]: desktop notifications with actions routed to commands,
+//!   falling back to toasts (`notify.show`, `notify.action`).
 //!
 //! Each service names its moments as steps (ADR 0011): a plugin may
 //! observe, veto or redirect, replace or extend them; the application's
@@ -18,4 +20,6 @@
 pub mod dirs;
 #[cfg(feature = "instance")]
 pub mod instance;
+#[cfg(feature = "notify")]
+pub mod notify;
 pub mod window;

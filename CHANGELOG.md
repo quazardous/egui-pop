@@ -56,6 +56,17 @@ egui minor.
   (runs the plugin's links command with `{ "url" }`), also for the
   first launch's own links. `dirs` gives the state, log and crash
   directories of each platform. Guide: docs/instance.md.
+- Notifications (`platform::notify`, feature `platform-notify`):
+  `NotifyPlugin` shows a `Notification` (title, body, level, actions
+  running commands, a command for a click on its body) on the desktop
+  through notify-rust, or as a toast when the `notifications.desktop`
+  setting says so (`always`, `unfocused`, `never`), when the desktop has
+  no notification server, or when showing it fails (`notify.failed`).
+  Steps `notify.show` (the result says where it went) and
+  `notify.action` (runs the action's command; the toast's button goes
+  through it too). `notify::show` from the interface thread,
+  `Notifier::post` from any thread; `Simulated` records them for tests.
+  Guide: docs/notifications.md.
 
 ### Changed
 
