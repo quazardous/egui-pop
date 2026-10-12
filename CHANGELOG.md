@@ -7,6 +7,25 @@ egui minor.
 
 ## Unreleased
 
+### Added
+
+- Translations (`egui-pop-i18n`, feature `i18n` of the facade,
+  `egui_pop::i18n`): `I18nPlugin` loads Fluent catalogues per locale
+  (egui-pop's own, the application's, an override directory read at
+  start-up), negotiates a fallback chain (the locale, its parents, a
+  regional catalogue of its language, English, then the code's English,
+  then the key), and installs the interface's strings provider. The
+  `appearance.language` setting (`system` or a locale, each shown by its
+  own name) switches the language at run time and publishes
+  `locale.changed`; lookups are the `i18n.resolve` step, which `ShowKeys`
+  replaces to show keys (`developer.show_keys`); the `i18n` collector
+  lists the keys missing per locale. `t`, `text` and `tr!` look text up;
+  numbers, dates (`DATETIME`) and plurals follow the locale. For tools,
+  `extract` finds the keys of Rust sources and of a built application's
+  declarations and writes or updates the English catalogue, and `check`
+  reports coverage, missing, orphan and changed keys per locale. Guide:
+  docs/i18n.md.
+
 ### Changed
 
 - Strings (`egui_pop_core::strings`): keys are Fluent message ids

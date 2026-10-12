@@ -24,6 +24,10 @@ phosphor = ["egui-pop-api/phosphor"]
 ## The image viewport, thumbnails and the histogram
 ## (`egui-pop-viewport`, re-exported as `egui_pop::viewport`).
 viewport = ["dep:egui-pop-viewport"]
+## Translations over Fluent: catalogues, the language setting, locale
+## formatting, the key extractor (`egui-pop-i18n`, re-exported as
+## `egui_pop::i18n`).
+i18n = ["dep:egui-pop-i18n"]
 
 [dependencies]
 egui.workspace = true
@@ -32,6 +36,7 @@ egui-pop-model.workspace = true
 egui-pop-core.workspace = true
 egui-pop-api.workspace = true
 egui-pop-viewport = { workspace = true, optional = true }
+egui-pop-i18n = { workspace = true, optional = true }
 
 [dev-dependencies]
 egui = { workspace = true, features = ["default_fonts"] }

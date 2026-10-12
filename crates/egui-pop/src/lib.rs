@@ -54,6 +54,11 @@ pub use egui_pop_api as api;
 #[cfg(feature = "viewport")]
 pub use egui_pop_viewport as viewport;
 
+/// Translations: catalogues, the language setting, locale formatting,
+/// the key extractor (feature `i18n`).
+#[cfg(feature = "i18n")]
+pub use egui_pop_i18n as i18n;
+
 /// Themes: tokens into egui's style (from `egui-pop-core`).
 pub use egui_pop_core::theme;
 

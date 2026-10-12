@@ -1,0 +1,34 @@
+[package]
+name = "egui-pop-i18n"
+version = "0.1.0"
+description = "Translations for egui-pop applications, as a plugin: Fluent catalogues per locale with fallback chains, a language setting, locale-aware numbers, dates and plurals, a lookup step, a debug collector, and the key extractor and checks for tools"
+keywords = ["egui", "i18n", "fluent", "translation", "localization"]
+categories = ["gui", "internationalization", "localization"]
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+egui.workspace = true
+egui-pop-model.workspace = true
+egui-pop-core.workspace = true
+egui-pop-api.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+# Apache-2.0 OR MIT (fluent-bundle, fluent-syntax, fluent-pseudo,
+# intl-memoizer), MIT OR Apache-2.0 (unic-langid, sys-locale).
+fluent-bundle = "0.16"
+fluent-syntax = "0.12"
+fluent-pseudo = "0.3"
+intl-memoizer = "0.5"
+unic-langid = "0.9"
+sys-locale = "0.3"
+
+[dev-dependencies]
+egui = { workspace = true, features = ["default_fonts"] }
+egui_kittest = { workspace = true }

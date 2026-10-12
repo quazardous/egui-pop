@@ -25,3 +25,6 @@ pub mod workbench {}
 
 #[doc = include_str!("../../../docs/debugging.md")]
 pub mod debugging {}
+
+#[doc = include_str!("../../../docs/i18n.md")]
+pub mod i18n {}

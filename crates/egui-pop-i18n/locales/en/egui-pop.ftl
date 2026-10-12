@@ -1,0 +1,1 @@
+egui-pop-retry = Retry

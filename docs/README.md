@@ -27,6 +27,9 @@ devtools; every feature's moments reachable as steps (ADR 0011).
   around the shell.
 - [The image viewport](viewport.md): tiles from a source the application
   implements.
+- [Translations](i18n.md): Fluent catalogues, the language setting,
+  numbers, dates and plurals, the lookup step, extracting and checking
+  keys.
 - [Debugging](debugging.md): the debug bridge and devtools.
 - [The gallery](gallery.md): the catalogue application and its options.
 
@@ -52,6 +55,7 @@ devtools; every feature's moments reachable as steps (ADR 0011).
 | [`egui-pop-api`](../crates/egui-pop-api) | L3 | The application API (its own semver): `Plugin`, `Ctx`, `AppBuilder` over eframe or headless, zones and blocks, hooks, services, stories. |
 | [`egui-pop-viewport`](../crates/egui-pop-viewport) | L3 | A generic image viewport (zoom in physical pixels, tiles from an asynchronous source, a display-transform hook, overlays with handles, before/after, a pixel readout), thumbnails and a histogram (feature `viewport` of the facade). |
 | [`egui-pop-test`](../crates/egui-pop-test) | L4 | Test kit: harnesses, "every interactive node has a name", accessibility tree dump. |
+| [`egui-pop-i18n`](../crates/egui-pop-i18n) | L4 | Translations as a plugin: Fluent catalogues, fallback chains, the language setting, locale formatting, the `i18n.resolve` step, the key extractor and checks (feature `i18n` of the facade). |
 | [`egui-pop`](../crates/egui-pop) | L5 | The crate to depend on: re-exports the layers, `egui`, and a `prelude`. |
 | [`egui-pop-gallery`](../crates/egui-pop-gallery) | app | The catalogue, itself a plugin application (not published). |
 
@@ -61,6 +65,7 @@ Layers only depend downwards; a test reading `cargo metadata` keeps it so
 ## Code in these pages
 
 The Rust blocks of the README and of the getting started, themes,
-plugins, workbench, viewport and debugging pages are compiled and run as doctests
-by `crates/consumer-smoke`, against the `egui-pop` crate only, as a user
-depends on it: `cargo test -p consumer-smoke --doc`.
+plugins, workbench, viewport, translations and debugging pages are
+compiled and run as doctests by `crates/consumer-smoke`, against the
+`egui-pop` crate only, as a user depends on it: `cargo test -p
+consumer-smoke --doc`.
