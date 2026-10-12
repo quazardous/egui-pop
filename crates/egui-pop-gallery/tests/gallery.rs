@@ -484,3 +484,15 @@ fn the_scale_page_sets_the_interface_zoom_and_draws_at_twice_the_pixels() {
     h.run();
     results.add(h.try_snapshot("overview-pop-dark@2x"));
 }
+
+#[test]
+fn the_image_widgets_page_selects_a_thumbnail() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "images"));
+    h.run();
+    h.get_by_label("Image 3").click();
+    h.run();
+    assert!(h.query_by_label("Selected: Image 3").is_some());
+    assert!(h.query_by_label("Histogram").is_some());
+    assert!(h.query_by_label("Image 2000").is_none(), "virtualised");
+    h.snapshot("images-pop-dark");
+}

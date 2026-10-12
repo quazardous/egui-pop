@@ -17,6 +17,8 @@
 //!   display transform in a shader;
 //! - [`demo`]: a procedural source for galleries and examples;
 //! - [`overlay`]: overlays in image coordinates and the handle kit;
+//! - [`thumbnail`] and [`histogram`]: thumbnails in a virtualised grid
+//!   and a histogram, from images and bins the application supplies;
 //! - [`hooks`]: the application's way into each step (veto, redirect,
 //!   replace, extend), traced;
 //! - [`debug`]: the `viewport` collector of the debug bridge;
@@ -44,9 +46,11 @@ pub mod display;
 pub mod gestures;
 #[cfg(feature = "wgpu")]
 pub mod gpu;
+pub mod histogram;
 pub mod hooks;
 pub mod overlay;
 pub mod source;
+pub mod thumbnail;
 pub mod tiles;
 pub mod tokens;
 pub mod view;

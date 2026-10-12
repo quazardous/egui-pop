@@ -101,6 +101,14 @@ egui minor.
   the source (`TileSource::readout`, answered through the sink, in the
   output and as a `Readout` signal, drawn in a corner with
   `Viewport::readout`, its text replaceable with the `on_readout` hook).
+- Image widgets in `egui-pop-viewport`: `thumbnail::Thumbnail` (an
+  image supplied as a texture, fitted with its aspect, or a flat
+  placeholder in its average colour until it is there; selected, hover
+  and focus rings; named and selectable for screen readers) and
+  `thumbnail_grid`, virtualised (only the rows in view are built);
+  `histogram::Histogram`, filled curves from bins the application
+  computed, linear or logarithmic. Component tokens `thumbnail.*` and
+  `histogram.*`; an Image widgets page in the gallery.
 - Twelve editor-inspired built-in themes (`github-light`, `github-dark`,
   `github-light-high-contrast`, `github-dark-high-contrast`,
   `catppuccin-latte`, `catppuccin-mocha`, `one-light`, `one-dark-pro`,

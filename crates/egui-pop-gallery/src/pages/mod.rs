@@ -10,6 +10,7 @@ pub mod debug;
 pub mod dialogs;
 pub mod frame;
 pub mod icons;
+pub mod images;
 pub mod menus;
 pub mod overview;
 pub mod scale;

@@ -210,6 +210,23 @@ pub const CONTRACT: &[Required] = &[
         "color",
         "the ring around a handle",
     ),
+    comp(
+        "thumbnail.background",
+        "color",
+        "behind a thumbnail's image",
+    ),
+    comp("thumbnail.hover", "color", "a thumbnail under the pointer"),
+    comp(
+        "thumbnail.selected",
+        "color",
+        "a selected thumbnail's outline",
+    ),
+    comp(
+        "histogram.background",
+        "color",
+        "behind a histogram's curves",
+    ),
+    comp("histogram.grid", "color", "a histogram's quarter lines"),
     comp("titlebar.background", "color", "a window's own title bar"),
     comp(
         "titlebar.text",
