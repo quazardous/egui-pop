@@ -6,6 +6,8 @@ use std::rc::Rc;
 
 use egui_kittest::Harness;
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
+use egui_pop_api::app::OverlayKind;
+use egui_pop_api::dialogs;
 use egui_pop_api::toasts::{self, Toast};
 use egui_pop_api::{App, Ctx, DefaultPlugins, Plugin, PluginError};
 use egui_pop_model::commands::CommandSpec;
@@ -118,4 +120,56 @@ fn information_expires_errors_stay_and_the_queue_waits() {
     assert!(!t.shown().iter().any(|s| s.id == id));
     let snapshot = h.state().handle().debug_snapshot();
     assert_eq!(snapshot["toasts"]["history"].as_array().unwrap().len(), 3);
+}
+
+#[test]
+fn long_text_wraps_before_the_close_button_and_overlays_are_reported() {
+    let (mut h, _, t) = harness();
+    h.run();
+    let long =
+        "The export of 3 images failed: there is no space left on the destination disk you chose.";
+    t.notify(Toast::error(long).action("Retry", REVEAL, json!(null)));
+    h.run();
+    let text = h
+        .query_all_by_label(long)
+        .find(|n| n.accesskit_node().role() != egui::accesskit::Role::Status)
+        .unwrap()
+        .rect();
+    let close = h.get_by_label(&format!("Close: {long}")).rect();
+    let retry = h.get_by_label("Retry").rect();
+    assert!(text.right() <= retry.left(), "{text:?} then {retry:?}");
+    assert!(
+        retry.right() <= close.left() + 0.5,
+        "{retry:?} then {close:?}"
+    );
+    assert!(text.height() > close.height(), "it wrapped: {text:?}");
+    let app = h.state().handle().clone();
+    let toasts = app
+        .overlay_rects()
+        .into_iter()
+        .find(|o| o.kind == OverlayKind::Toasts)
+        .expect("the toasts are reported");
+    assert!(toasts.rect.contains_rect(close));
+    // A dialog over them: reported as the dialog, by its id.
+    let d = app.service(&dialogs::DIALOGS).unwrap();
+    let id = d.open(dialogs::Info::new("About", "A note."));
+    h.run();
+    let rects = app.overlay_rects();
+    let dialog = rects
+        .iter()
+        .find(|o| o.kind == OverlayKind::Dialog)
+        .expect("the dialog is reported");
+    assert_eq!(dialog.id, format!("dialog:{id}"));
+    assert!(dialog.rect.contains_rect(h.get_by_label("A note.").rect()));
+    let snapshot = app.debug_snapshot();
+    let kinds: Vec<&str> = snapshot["overlay_rects"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|o| o["kind"].as_str().unwrap())
+        .collect();
+    assert!(
+        kinds.contains(&"dialog") && kinds.contains(&"toasts"),
+        "{kinds:?}"
+    );
 }

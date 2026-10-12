@@ -281,6 +281,16 @@ fn dialogs_open_from_the_page_and_send_what_they_ran() {
 }
 
 #[test]
+fn long_toasts_wrap_before_their_buttons_in_two_languages() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "toasts"));
+    h.run();
+    h.get_by_label("Long text").click();
+    h.run();
+    egui_pop_test::assert_all_named(&h);
+    h.snapshot("toasts-long-pop-dark");
+}
+
+#[test]
 fn toasts_show_in_a_corner_and_their_action_runs() {
     let mut results = egui_kittest::SnapshotResults::new();
     for theme in ["pop-dark", "pop-light"] {

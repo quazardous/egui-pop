@@ -17,6 +17,11 @@ egui minor.
   layout and repaired (`WindowState::repair`) before the window opens;
   `scale.changed` names the window. `AppHandle::detach_panel`,
   `attach_panel`; the tab menu offers Detach.
+- `AppHandle::overlay_rects()`: every overlay on screen with where it
+  was drawn (dialogs by their id, other modals, popovers, menus, the
+  toast stack, egui's popups), and the same list in the debug bridge's
+  `overlay_rects` collector, so an application keeps its hit-testing
+  and pictures right without egui-pop's internal ids.
 - Slim strips (`egui_pop_api::strips::StripsPlugin`, opt-in): the
   activity bar (an icon per panel of the start side bar in the new
   `ACTIVITY_BAR` zone: it shows its panel, or folds the side bar to its
@@ -395,6 +400,9 @@ egui minor.
 
 ### Changed
 
+- A toast's text wraps in the width its close button and action leave,
+  no longer running under them (gallery: a long warning in English and
+  a long error in French).
 - `Choose::options` holds `ChooseOption`s, no longer strings, and a
   choice's command gets the option's value (`value`) besides `choice`
   and `label`.

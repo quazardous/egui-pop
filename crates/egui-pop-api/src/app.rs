@@ -73,6 +73,33 @@ pub const STEP_REDO: StepId = StepId::from_static("edit.redo");
 const IN_INTERFACE: [CommandId; 2] = [CMD_UNDO, CMD_REDO];
 pub const CMD_SAVE: CommandId = CommandId::from_static("app.save");
 
+/// What an overlay is, as [`AppHandle::overlay_rects`] reports it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum OverlayKind {
+    /// The dialog shown (`dialogs`).
+    Dialog,
+    /// Another modal overlay (the settings window, the palette).
+    Modal,
+    Popover,
+    /// A menu egui-pop opened as an overlay (`menus::popup_at`).
+    Menu,
+    /// The toast stack.
+    Toasts,
+    /// One of egui's popups: an open menu of the menu bar, a context
+    /// menu, a combo box.
+    Popup,
+}
+
+/// An overlay on screen: what it is, a name for it (`dialog:3`, the
+/// overlay's label, `toasts`), where it was drawn last, in points.
+#[derive(Clone, Debug, PartialEq)]
+pub struct OverlayRect {
+    pub kind: OverlayKind,
+    pub id: String,
+    pub rect: egui::Rect,
+}
+
 /// The theme, as a service: read it, ask for another (installed between
 /// frames).
 #[derive(Debug)]
@@ -515,6 +542,68 @@ impl AppHandle {
             ),
         }
         outcome
+    }
+
+    /// Every overlay on screen, bottom first, with where it was drawn
+    /// last: dialogs, modals, popovers and menus of the overlay stack,
+    /// the toast stack, then egui's popups. What an application keeps
+    /// its own hit-testing and pictures right with, without egui-pop's
+    /// internal ids.
+    pub fn overlay_rects(&self) -> Vec<OverlayRect> {
+        let ctx = self.egui();
+        let dialog = self
+            .service(&crate::dialogs::DIALOGS)
+            .and_then(|d| d.current())
+            .map(|(id, _)| id);
+        let mut known: Vec<Id> = Vec::new();
+        let mut out: Vec<OverlayRect> = overlay::rects(&ctx)
+            .into_iter()
+            .map(|(spec, rect)| {
+                known.push(spec.id);
+                let (kind, id) = match dialog {
+                    Some(n) if spec.id == crate::dialogs::overlay_id(n) => {
+                        (OverlayKind::Dialog, format!("dialog:{n}"))
+                    }
+                    _ => (
+                        match spec.kind {
+                            overlay::Kind::Modal => OverlayKind::Modal,
+                            overlay::Kind::Popover => OverlayKind::Popover,
+                            overlay::Kind::Menu => OverlayKind::Menu,
+                        },
+                        spec.label.clone(),
+                    ),
+                };
+                OverlayRect { kind, id, rect }
+            })
+            .collect();
+        let toasts = crate::toasts::area_id();
+        known.push(toasts);
+        if self
+            .service(&crate::toasts::TOASTS)
+            .is_some_and(|t| !t.shown().is_empty())
+            && let Some(rect) = ctx.memory(|m| m.area_rect(toasts))
+        {
+            out.push(OverlayRect {
+                kind: OverlayKind::Toasts,
+                id: "toasts".into(),
+                rect,
+            });
+        }
+        let mut popups: Vec<(Id, egui::Rect)> = ctx.memory(|m| {
+            m.areas()
+                .visible_layer_ids()
+                .into_iter()
+                .filter(|l| l.order == egui::Order::Foreground && !known.contains(&l.id))
+                .filter_map(|l| m.area_rect(l.id).map(|r| (l.id, r)))
+                .collect()
+        });
+        popups.sort_by_key(|a| a.0.value());
+        out.extend(popups.into_iter().map(|(id, rect)| OverlayRect {
+            kind: OverlayKind::Popup,
+            id: format!("popup:{}", id.short_debug_format()),
+            rect,
+        }));
+        out
     }
 
     /// The journal's last sequence number, as the host says.
@@ -1755,6 +1844,27 @@ impl App {
                     "can_redo": app.can_redo(),
                     "redo": app.redo_label(),
                 })
+            }),
+        )
+        .expect("distinct names");
+        let w = h.weak();
+        b.register(
+            FnCollector::new(
+                "overlay_rects",
+                "Every overlay on screen with where it was drawn last (points): dialogs, modals, popovers, menus, the toasts, egui's popups.",
+            )
+            .snapshot(move |_| {
+                let Ok(app) = up(&w) else { return Json::Null };
+                json!(
+                    app.overlay_rects()
+                        .iter()
+                        .map(|o| json!({
+                            "kind": o.kind,
+                            "id": o.id,
+                            "rect": [o.rect.min.x, o.rect.min.y, o.rect.max.x, o.rect.max.y],
+                        }))
+                        .collect::<Vec<_>>()
+                )
             }),
         )
         .expect("distinct names");

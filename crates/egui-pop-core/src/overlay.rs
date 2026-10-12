@@ -360,6 +360,18 @@ pub fn stack(ctx: &Context) -> Vec<OverlaySpec> {
     s.stack.specs().cloned().collect()
 }
 
+/// The open overlays with where they were last drawn, bottom first (an
+/// overlay not drawn yet is left out).
+pub fn rects(ctx: &Context) -> Vec<(OverlaySpec, Rect)> {
+    let st = state(ctx);
+    let s = lock(&st);
+    s.stack
+        .entries
+        .iter()
+        .filter_map(|e| e.rect.map(|r| (e.spec.clone(), r)))
+        .collect()
+}
+
 /// The overlays closed lately, oldest first.
 pub fn recently_closed(ctx: &Context) -> Vec<Closed> {
     let st = state(ctx);

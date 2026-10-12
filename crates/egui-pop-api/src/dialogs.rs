@@ -533,6 +533,11 @@ impl Plugin for DialogsPlugin {
     }
 }
 
+/// The overlay a dialog is drawn in.
+pub(crate) fn overlay_id(dialog: u64) -> egui::Id {
+    egui::Id::new(("egui_pop.dialog", dialog))
+}
+
 /// How many answers are remembered.
 const ANSWERED: usize = 16;
 
@@ -685,6 +690,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
         open_dialog.dialog.title(),
         Kind::Modal,
     );
+    debug_assert_eq!(spec.id, overlay_id(open_dialog.id));
     let mut open = true;
     let mut answer: Option<Answer> = None;
     overlay::show(&ctx, &spec, &mut open, None, |ui| {

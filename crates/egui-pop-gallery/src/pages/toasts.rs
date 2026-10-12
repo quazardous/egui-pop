@@ -64,6 +64,14 @@ fn show(ui: &mut Ui, app: &AppHandle) {
         if ui.button("Error").clicked() {
             t.notify(Toast::error("The export failed: no space left."));
         }
+        if ui.button("Long text").clicked() {
+            t.notify(Toast::warning(
+                "The export of 3 images was stopped: the destination folder on the external disk is read-only.",
+            ));
+            t.notify(Toast::error(
+                "L'export de 3 images a échoué : il ne reste plus de place sur le disque de destination choisi.",
+            ).action("Retry", CMD_DONE, json!({ "what": "retry the export" })));
+        }
     });
     section(ui, "Sent by the last action");
     let sent = app.context().get("galleryDialogSent").to_string();

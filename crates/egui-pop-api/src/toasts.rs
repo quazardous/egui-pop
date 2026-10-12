@@ -264,6 +264,11 @@ impl Plugin for ToastsPlugin {
     }
 }
 
+/// The area the toasts are drawn in.
+pub(crate) fn area_id() -> Id {
+    Id::new("egui_pop.toasts")
+}
+
 /// Draws the toasts in the bottom-right corner, newest at the bottom.
 fn show(ui: &mut Ui, app: &AppHandle) {
     let Some(toasts) = app.service(&TOASTS) else {
@@ -321,7 +326,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     let margin = t.space.l;
     let mut ended: Vec<(u64, &'static str)> = Vec::new();
     let mut hold: Vec<u64> = Vec::new();
-    egui::Area::new(Id::new("egui_pop.toasts"))
+    egui::Area::new(area_id())
         .order(Order::Foreground)
         .anchor(Align2::RIGHT_BOTTOM, egui::vec2(-margin, -margin))
         .interactable(true)
@@ -343,11 +348,34 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                                 Level::Warning => "Warning",
                                 Level::Error => "Error",
                             }));
-                            ui.add(
-                                egui::Label::new(
-                                    egui::RichText::new(&shown.toast.text).color(t.toast.text),
-                                )
-                                .wrap(),
+                            // The text wraps in what the close button and
+                            // the action leave.
+                            let spacing = ui.spacing().item_spacing.x;
+                            let mut reserved = t.size.icon_inline + spacing;
+                            if let Some(a) = &shown.toast.action {
+                                let galley = egui::WidgetText::from(a.label.as_str()).into_galley(
+                                    ui,
+                                    Some(egui::TextWrapMode::Extend),
+                                    f32::INFINITY,
+                                    egui::TextStyle::Button,
+                                );
+                                reserved +=
+                                    galley.size().x + 2.0 * ui.spacing().button_padding.x + spacing;
+                            }
+                            let width = (ui.available_width() - reserved).max(t.size.icon_inline);
+                            ui.allocate_ui_with_layout(
+                                egui::vec2(width, 0.0),
+                                egui::Layout::top_down(egui::Align::Min),
+                                |ui| {
+                                    ui.set_max_width(width);
+                                    ui.add(
+                                        egui::Label::new(
+                                            egui::RichText::new(&shown.toast.text)
+                                                .color(t.toast.text),
+                                        )
+                                        .wrap(),
+                                    );
+                                },
                             );
                             ui.with_layout(
                                 egui::Layout::right_to_left(egui::Align::Center),
