@@ -753,7 +753,7 @@ impl Plugin for NotifyPlugin {
         let backend = self.backend.clone();
         let waker = ctx.app().egui();
         let tx = events_tx;
-        std::thread::Builder::new()
+        let spawned = std::thread::Builder::new()
             .name("egui-pop notifications".into())
             .spawn(move || {
                 let wake = |tx: &Sender<Event>, e: Event| {
@@ -773,11 +773,19 @@ impl Plugin for NotifyPlugin {
                         wake(&tx, Event::Failed(id, e));
                     }
                 }
-            })
-            .map_err(|e| PluginError::Failed(e.to_string()))?;
+            });
+        // Without a thread (the web), toasts only.
+        let jobs = match spawned {
+            Ok(_) => Some(jobs_tx),
+            Err(e) => {
+                lock(&notifier.0).desktop =
+                    Some(Err(format!("no thread to show desktop notifications: {e}")));
+                None
+            }
+        };
         let shared = Shared {
             notifier: notifier.clone(),
-            jobs: Mutex::new(Some(jobs_tx)),
+            jobs: Mutex::new(jobs),
         };
         ctx.service(&SHARED, shared)?;
         ctx.service(&NOTIFIER, notifier.clone())?;

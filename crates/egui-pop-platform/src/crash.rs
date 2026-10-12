@@ -531,9 +531,13 @@ impl Plugin for CrashPlugin {
         )?;
         // This session runs: its marker says so until a clean exit.
         let report = Report::new(&self.app, &self.version);
-        std::fs::create_dir_all(&dir)
+        // Without a place to write (the web, a read-only home), panics
+        // still reach the hook before it, and nothing is offered.
+        if let Err(e) = std::fs::create_dir_all(&dir)
             .and_then(|()| write_json(&session_file(&dir, report.pid), &report))
-            .map_err(|e| PluginError::Failed(format!("{}: {e}", dir.display())))?;
+        {
+            log::warn!(target: "egui_pop", "crash reports: {}: {e}", dir.display());
+        }
         let state = Arc::new(Mutex::new(HookState {
             dir: Some(dir.clone()),
             report,
