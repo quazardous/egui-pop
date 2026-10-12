@@ -1,8 +1,9 @@
 //! Dialogs, as a plugin ([`DialogsPlugin`], in `DefaultPlugins`): a
 //! question before an action ([`Confirm`]), a form of typed fields
-//! ([`Form`], from value descriptors), a choice among options
-//! ([`Choose`]) and a notice to acknowledge ([`Info`]). They queue, one
-//! shown at a time, modal, drawn from the theme's tokens.
+//! ([`Form`], from value descriptors), a choice among options, each
+//! answering a value of its own, with a filter field ([`Choose`]), and a
+//! notice to acknowledge ([`Info`]). They queue, one shown at a time,
+//! modal, drawn from the theme's tokens.
 //!
 //! Rules: the primary button says what it does ("Delete 3 images", never
 //! "OK"); a dangerous one is styled as such and the focus starts on
@@ -15,8 +16,17 @@
 //! feature, else an in-app picker of folders and files that tests drive.
 //!
 //! Every open dialog is data: the debug bridge's `dialogs` collector
-//! shows the current one and answers it (`answer`), so an agent sees and
-//! answers what a person would, with its origin recorded.
+//! shows the current one (a form's values also as a plain `values` map)
+//! and answers it (`answer`), so an agent sees and answers what a person
+//! would, with its origin recorded.
+//!
+//! Steps (ADR 0011): `dialog.show` runs when a dialog comes up (a
+//! before-hook may veto it: it is cancelled), `dialog.answer` around each
+//! answer (a before-hook may veto it, the dialog staying open with the
+//! reason, or redirect it to another answer; a run-hook may answer its
+//! own way). The journal says `dialog.answered`, then `dialog.chosen`
+//! (the option's index, label and value) or `dialog.cancelled`, and
+//! `dialog.filtered` as a choice's filter changes.
 //!
 //! ```
 //! use egui_pop_api::dialogs::{self, Confirm};
@@ -44,7 +54,8 @@ use egui_pop_core::lock;
 use egui_pop_core::overlay::{self, Kind, OverlaySpec};
 use egui_pop_core::theme::Tokens;
 use egui_pop_model::commands::Origin;
-use egui_pop_model::ids::{BlockId, CommandId, PluginId};
+use egui_pop_model::fuzzy;
+use egui_pop_model::ids::{BlockId, CommandId, PluginId, StepId};
 use egui_pop_model::values::{Descriptor, PathHint, PathKind, Type, Value};
 use serde::Serialize;
 use serde_json::{Map, Value as Json, json};
@@ -52,11 +63,20 @@ use serde_json::{Map, Value as Json, json};
 use crate::app::AppHandle;
 use crate::host::source_of;
 use crate::services::ServiceToken;
+use crate::steps::{Outcome, StepSpec};
 use crate::zones::{self, Block};
 use crate::{Ctx, Plugin, PluginError};
 
 /// The dialogs, as a service.
 pub const DIALOGS: ServiceToken<Dialogs> = ServiceToken::new("app.dialogs");
+
+/// A dialog comes up: its arguments are its description; a veto cancels
+/// it.
+pub const STEP_SHOW: StepId = StepId::from_static("dialog.show");
+/// A dialog is answered: `{"dialog": description, "answer": answer,
+/// "origin": source}`; a veto keeps it open with the reason, a redirect
+/// changes the answer.
+pub const STEP_ANSWER: StepId = StepId::from_static("dialog.answer");
 
 /// A question before an action.
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -154,31 +174,104 @@ impl Form {
     }
 }
 
-/// One option among several; the command gets `choice` (its index) and
-/// `label`.
+/// One option of a [`Choose`]: what it shows and the value it answers.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct ChooseOption {
+    pub label: String,
+    /// What the command gets when it is chosen.
+    pub value: Json,
+    /// A second line, filtered on too (a path, a size).
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub hint: String,
+}
+
+impl ChooseOption {
+    pub fn new(label: &str, value: Json) -> Self {
+        Self {
+            label: label.into(),
+            value,
+            hint: String::new(),
+        }
+    }
+
+    pub fn hint(mut self, hint: &str) -> Self {
+        self.hint = hint.into();
+        self
+    }
+}
+
+/// One option among several, under a filter field; the command gets the
+/// option's value (under `value_key`, `value` by default), its index
+/// (`choice`) and its `label`, merged into `args`.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct Choose {
     pub title: String,
     pub detail: String,
-    pub options: Vec<String>,
+    pub options: Vec<ChooseOption>,
     pub command: CommandId,
     pub args: Json,
+    /// The argument the chosen value goes in.
+    pub value_key: String,
 }
 
 impl Choose {
+    /// Options by label, each answering its label.
     pub fn new(title: &str, options: &[&str], command: CommandId) -> Self {
+        Self::with_options(
+            title,
+            options
+                .iter()
+                .map(|o| ChooseOption::new(o, json!(o)))
+                .collect(),
+            command,
+        )
+    }
+
+    /// Options with values of their own.
+    pub fn with_options(title: &str, options: Vec<ChooseOption>, command: CommandId) -> Self {
         Self {
             title: title.into(),
             detail: String::new(),
-            options: options.iter().map(|o| o.to_string()).collect(),
+            options,
             command,
             args: Json::Null,
+            value_key: "value".into(),
         }
+    }
+
+    /// Adds an option.
+    pub fn option(mut self, option: ChooseOption) -> Self {
+        self.options.push(option);
+        self
     }
 
     pub fn detail(mut self, detail: &str) -> Self {
         self.detail = detail.into();
         self
+    }
+
+    /// Arguments the answer is merged into.
+    pub fn args(mut self, args: Json) -> Self {
+        self.args = args;
+        self
+    }
+
+    /// The argument the chosen value goes in (`value` by default).
+    pub fn value_key(mut self, key: &str) -> Self {
+        self.value_key = key.into();
+        self
+    }
+
+    /// The options a filter shows, best match first (all, in order,
+    /// without a filter): their indexes.
+    pub fn visible(&self, filter: &str) -> Vec<usize> {
+        if filter.trim().is_empty() {
+            return (0..self.options.len()).collect();
+        }
+        fuzzy::rank(&self.options, filter, |o| format!("{} {}", o.label, o.hint))
+            .into_iter()
+            .map(|(i, _)| i)
+            .collect()
     }
 }
 
@@ -256,13 +349,17 @@ pub enum Answer {
     Choose {
         index: usize,
     },
+    /// One of a choice's options, by its value.
+    Value {
+        value: Json,
+    },
     Cancel,
 }
 
 impl Answer {
     /// As the debug bridge sends it: `{"answer": "accept", "values":
-    /// {...}}`, `{"answer": "choose", "index": 1}`, `{"answer":
-    /// "cancel"}`.
+    /// {...}}`, `{"answer": "choose", "index": 1}` or `{"answer":
+    /// "choose", "value": ...}`, `{"answer": "cancel"}`.
     pub fn from_json(json: &Json) -> Result<Answer, String> {
         match json.get("answer").and_then(Json::as_str) {
             Some("accept") => Ok(Answer::Accept {
@@ -272,11 +369,14 @@ impl Answer {
                     .cloned()
                     .unwrap_or_default(),
             }),
-            Some("choose") => json
-                .get("index")
-                .and_then(Json::as_u64)
-                .map(|i| Answer::Choose { index: i as usize })
-                .ok_or_else(|| "`index` is missing".into()),
+            Some("choose" | "value") => match (json.get("value"), json.get("index")) {
+                (Some(v), _) => Ok(Answer::Value { value: v.clone() }),
+                (None, Some(i)) => i
+                    .as_u64()
+                    .map(|i| Answer::Choose { index: i as usize })
+                    .ok_or_else(|| "`index` is a number".into()),
+                (None, None) => Err("`value` or `index` is missing".into()),
+            },
             Some("cancel") => Ok(Answer::Cancel),
             _ => Err("`answer` is accept, choose or cancel".into()),
         }
@@ -293,6 +393,9 @@ struct Open {
     /// The in-app picker open for a field: its key and folder.
     picking: Option<(String, PathBuf)>,
     error: Option<String>,
+    /// A choice's filter, and the option highlighted among those shown.
+    filter: String,
+    highlight: usize,
 }
 
 #[derive(Debug, Default)]
@@ -321,6 +424,8 @@ impl Dialogs {
             focused: false,
             picking: None,
             error: None,
+            filter: String::new(),
+            highlight: 0,
         });
         id
     }
@@ -358,6 +463,15 @@ impl Dialogs {
                 let mut d = serde_json::to_value(&o.dialog).unwrap_or(Json::Null);
                 d["id"] = json!(o.id);
                 d["waiting"] = json!(s.queue.len() - 1);
+                match &o.dialog {
+                    // The typed values as they are, and plainly by key.
+                    Dialog::Form(f) => d["values"] = Json::Object(values_of(&f.fields)),
+                    Dialog::Choose(c) => {
+                        d["filter"] = json!(o.filter);
+                        d["shown"] = json!(c.visible(&o.filter));
+                    }
+                    _ => {}
+                }
                 d
             }
             None => Json::Null,
@@ -386,6 +500,17 @@ impl Plugin for DialogsPlugin {
     fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
         let dialogs = Dialogs::default();
         ctx.service(&DIALOGS, dialogs.clone())?;
+        ctx.step(
+            StepSpec::new(STEP_SHOW, "A dialog comes up; a veto cancels it.")
+                .args(json!({ "kind": "confirm", "id": 1, "title": "Delete 3 images?" })),
+        )?;
+        ctx.step(
+            StepSpec::new(
+                STEP_ANSWER,
+                "A dialog is answered; a veto keeps it open, a redirect changes the answer.",
+            )
+            .args(json!({ "dialog": { "kind": "choose", "id": 1 }, "answer": { "answer": "choose", "index": 0 }, "origin": "user" })),
+        )?;
         let (a, b) = (dialogs.clone(), dialogs);
         ctx.collector(
             FnCollector::new(
@@ -393,7 +518,7 @@ impl Plugin for DialogsPlugin {
                 "The dialog shown (kind, title, fields, verb, command) and how many wait; `answer` answers it as an agent.",
             )
             .snapshot(move |_| json!({ "current": a.describe(), "answered": a.answered() }))
-            .action("answer", "Answers the dialog shown: accept (with `values`), choose (`index`) or cancel.", true, move |_, args| {
+            .action("answer", "Answers the dialog shown: accept (with `values`), choose (`value` or `index`) or cancel.", true, move |_, args| {
                 let answer = Answer::from_json(args)?;
                 b.answer(answer, Origin::Agent("debug-bridge".into()))?;
                 Ok(json!({ "queued": true }))
@@ -437,17 +562,27 @@ fn apply(app: &AppHandle, d: &Dialogs, answer: Answer, origin: Origin) -> Result
             }
             Some((f.command.clone(), Json::Object(args)))
         }
-        (Dialog::Choose(c), Answer::Choose { index }) => {
-            let label = c
+        (Dialog::Choose(c), Answer::Choose { .. } | Answer::Value { .. }) => {
+            let index = match &answer {
+                Answer::Choose { index } => *index,
+                Answer::Value { value } => c
+                    .options
+                    .iter()
+                    .position(|o| o.value == *value)
+                    .ok_or_else(|| format!("no option of value {value}"))?,
+                _ => unreachable!("matched above"),
+            };
+            let option = c
                 .options
-                .get(*index)
+                .get(index)
                 .ok_or_else(|| format!("no option {index}"))?;
             let mut args = match &c.args {
                 Json::Object(m) => m.clone(),
                 _ => Map::new(),
             };
             args.insert("choice".into(), json!(index));
-            args.insert("label".into(), json!(label));
+            args.insert("label".into(), json!(option.label));
+            args.insert(c.value_key.clone(), option.value.clone());
             Some((c.command.clone(), Json::Object(args)))
         }
         (_, a) => return Err(format!("{a:?} does not answer this dialog")),
@@ -464,16 +599,56 @@ fn apply(app: &AppHandle, d: &Dialogs, answer: Answer, origin: Origin) -> Result
             origin.clone(),
         ));
     }
+    let source = source_of(&origin);
     app.publish(
-        &source_of(&origin),
+        &source,
         None,
         "dialog.answered",
         json!({ "title": open.dialog.title(), "answer": answer }),
     );
+    match (&open.dialog, &run) {
+        (_, None) if answer == Answer::Cancel => app.publish(
+            &source,
+            None,
+            "dialog.cancelled",
+            json!({ "id": open.id, "title": open.dialog.title() }),
+        ),
+        (Dialog::Choose(c), Some((_, args))) => app.publish(
+            &source,
+            None,
+            "dialog.chosen",
+            json!({
+                "id": open.id,
+                "title": c.title,
+                "index": args["choice"],
+                "label": args["label"],
+                "value": args[c.value_key.as_str()],
+            }),
+        ),
+        _ => {}
+    }
     if let Some((command, args)) = run {
         app.run_as(command, args, origin);
     }
     Ok(())
+}
+
+/// Answers the shown dialog through the [`STEP_ANSWER`] step: hooks may
+/// stop the answer (the reason is the error) or change it.
+fn answer_step(app: &AppHandle, d: &Dialogs, answer: Answer, origin: Origin) -> Result<(), String> {
+    let args = json!({
+        "dialog": d.describe(),
+        "answer": answer,
+        "origin": source_of(&origin),
+    });
+    let out = app.step(&STEP_ANSWER, args, |app, args| {
+        let answer = Answer::from_json(&args["answer"])?;
+        apply(app, d, answer, origin.clone()).map(|()| Json::Null)
+    });
+    match out {
+        Outcome::Done(r) => r.map(|_| ()),
+        Outcome::Vetoed { reason, .. } => Err(reason),
+    }
 }
 
 /// Draws the dialog shown, and applies the answers given meanwhile.
@@ -484,7 +659,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     let given: Vec<(u64, Answer, Origin)> = std::mem::take(&mut lock(&d.0).given);
     for (id, answer, origin) in given {
         if d.current().is_some_and(|(c, _)| c == id)
-            && let Err(e) = apply(app, &d, answer, origin)
+            && let Err(e) = answer_step(app, &d, answer, origin)
             && let Some(o) = lock(&d.0).queue.front_mut()
         {
             o.error = Some(e);
@@ -493,6 +668,17 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     let Some(mut open_dialog) = lock(&d.0).queue.front().cloned() else {
         return;
     };
+    if !open_dialog.focused {
+        // It comes up: hooks may stop it (it is cancelled).
+        let out = app.step(&STEP_SHOW, d.describe(), |_, _| Ok(Json::Null));
+        if out.vetoed().is_some() {
+            if let Err(e) = apply(app, &d, Answer::Cancel, Origin::User) {
+                log::warn!(target: "egui_pop", "dialog: {e}");
+            }
+            return;
+        }
+    }
+    let filter = open_dialog.filter.clone();
     let ctx = ui.ctx().clone();
     let spec = OverlaySpec::new(
         ("egui_pop.dialog", open_dialog.id),
@@ -507,9 +693,23 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     if !open && answer.is_none() {
         answer = Some(Answer::Cancel);
     }
+    if open_dialog.filter != filter
+        && let Dialog::Choose(c) = &open_dialog.dialog
+    {
+        app.publish(
+            "user",
+            None,
+            "dialog.filtered",
+            json!({
+                "id": open_dialog.id,
+                "filter": open_dialog.filter,
+                "shown": c.visible(&open_dialog.filter).len(),
+            }),
+        );
+    }
     match answer {
         Some(a) => {
-            if let Err(e) = apply(app, &d, a, Origin::User) {
+            if let Err(e) = answer_step(app, &d, a, Origin::User) {
                 open_dialog.error = Some(e);
                 if let Some(o) = lock(&d.0).queue.front_mut() {
                     *o = open_dialog;
@@ -542,7 +742,7 @@ fn body(ui: &mut Ui, o: &mut Open) -> Option<Answer> {
     let first = !o.focused;
     o.focused = true;
     let title = o.dialog.title().to_string();
-    ui.heading(&title);
+    let heading = ui.heading(&title);
     ui.add_space(t.space.s);
     let mut answer = None;
     let enter = ui.input(|i| i.key_pressed(Key::Enter));
@@ -574,14 +774,62 @@ fn body(ui: &mut Ui, o: &mut Open) -> Option<Answer> {
                 ui.label(&c.detail);
             }
             ui.add_space(t.space.s);
-            for (i, label) in c.options.iter().enumerate() {
-                let b = ui.add_sized([ui.available_width(), 0.0], egui::Button::new(label));
-                if first && i == 0 {
-                    b.request_focus();
-                }
-                if b.clicked() {
-                    answer = Some(Answer::Choose { index: i });
-                }
+            // Arrows move the highlight, typing filters, Enter chooses.
+            let (down, up) = ui.input_mut(|i| {
+                (
+                    i.consume_key(egui::Modifiers::NONE, Key::ArrowDown),
+                    i.consume_key(egui::Modifiers::NONE, Key::ArrowUp),
+                )
+            });
+            let field = ui
+                .add(
+                    egui::TextEdit::singleline(&mut o.filter)
+                        .hint_text("Filter")
+                        .desired_width(f32::INFINITY),
+                )
+                .labelled_by(heading.id);
+            if first {
+                field.request_focus();
+            }
+            let shown = c.visible(&o.filter);
+            if field.changed() {
+                o.highlight = 0;
+            }
+            if down {
+                o.highlight = (o.highlight + 1).min(shown.len().saturating_sub(1));
+            }
+            if up {
+                o.highlight = o.highlight.saturating_sub(1);
+            }
+            ui.add_space(t.space.s);
+            egui::ScrollArea::vertical()
+                .id_salt("egui_pop.choose")
+                .max_height(320.0)
+                .show(ui, |ui| {
+                    for (n, &i) in shown.iter().enumerate() {
+                        let option = &c.options[i];
+                        let text = if option.hint.is_empty() {
+                            egui::WidgetText::from(option.label.as_str())
+                        } else {
+                            egui::WidgetText::from(format!("{}  ·  {}", option.label, option.hint))
+                        };
+                        let b = ui.add_sized(
+                            [ui.available_width(), 0.0],
+                            egui::Button::selectable(n == o.highlight, text),
+                        );
+                        if n == o.highlight && (down || up) {
+                            b.scroll_to_me(None);
+                        }
+                        if b.clicked() {
+                            answer = Some(Answer::Choose { index: i });
+                        }
+                    }
+                    if shown.is_empty() {
+                        ui.weak("Nothing matches.");
+                    }
+                });
+            if enter && let Some(&i) = shown.get(o.highlight) {
+                answer = Some(Answer::Choose { index: i });
             }
             ui.add_space(t.space.m);
             if ui.button("Cancel").clicked() {

@@ -6,7 +6,8 @@ use std::rc::Rc;
 
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
-use egui_pop_api::dialogs::{self, Choose, Confirm, Form, Info};
+use egui_pop_api::dialogs::{self, Choose, ChooseOption, Confirm, Form, Info, STEP_ANSWER};
+use egui_pop_api::steps::Before;
 use egui_pop_api::{App, Ctx, DefaultPlugins, Plugin, PluginError};
 use egui_pop_model::commands::{CommandSpec, Origin};
 use egui_pop_model::ids::{CommandId, PluginId};
@@ -140,7 +141,10 @@ fn an_agent_sees_and_answers_what_a_person_would() {
     h.run();
     let snapshot = h.state().handle().debug_snapshot();
     assert_eq!(snapshot["dialogs"]["current"]["kind"], "choose");
-    assert_eq!(snapshot["dialogs"]["current"]["options"][1], "Right");
+    assert_eq!(
+        snapshot["dialogs"]["current"]["options"][1]["label"],
+        "Right"
+    );
     let feedback = h.state_mut().debug_call(
         "dialogs",
         "answer",
@@ -150,7 +154,10 @@ fn an_agent_sees_and_answers_what_a_person_would() {
     h.run();
     h.run();
     let (args, origin) = runs.borrow()[0].clone();
-    assert_eq!(args, json!({ "choice": 1, "label": "Right" }));
+    assert_eq!(
+        args,
+        json!({ "choice": 1, "label": "Right", "value": "Right" })
+    );
     assert_eq!(origin, Origin::Agent("debug-bridge".into()));
     // A wrong answer is refused, the dialog stays.
     d.open(Confirm::new("Sure?", "Go", GO));
@@ -160,4 +167,147 @@ fn an_agent_sees_and_answers_what_a_person_would() {
         .debug_call("dialogs", "answer", &json!({ "answer": "maybe" }));
     assert!(!feedback.ok);
     assert_eq!(d.len(), 1);
+}
+
+#[test]
+fn a_choice_answers_its_option_s_value_and_its_filter_narrows_the_list() {
+    let (mut h, runs, d) = harness();
+    d.open(
+        Choose::with_options(
+            "Open a profile",
+            vec![
+                ChooseOption::new("Studio", json!("/p/studio")).hint("studio.helios-profile"),
+                ChooseOption::new("Field", json!("/p/field")),
+                ChooseOption::new("Night", json!("/p/night")),
+            ],
+            GO,
+        )
+        .value_key("path"),
+    );
+    h.run();
+    let before = h.state().handle().last_event();
+    // The filter has the focus: typing narrows the list.
+    h.get_by_role(egui::accesskit::Role::TextInput)
+        .type_text("fld");
+    h.run();
+    assert!(h.query_by_label("Field").is_some());
+    assert!(h.query_by_label("Night").is_none());
+    assert!(h.query_by_label_contains("Studio").is_none());
+    let current = d.describe();
+    assert_eq!(current["filter"], "fld");
+    assert_eq!(current["shown"], json!([1]));
+    // Enter takes the first shown; the command gets its value.
+    h.key_press(egui::Key::Enter);
+    h.run();
+    h.run();
+    assert_eq!(
+        runs.borrow()[0].0,
+        json!({ "choice": 1, "label": "Field", "path": "/p/field" })
+    );
+    let events = h.state().handle().events_since(before);
+    let names: Vec<&str> = events.iter().map(|e| e.name.as_str()).collect();
+    assert!(names.contains(&"dialog.filtered"), "{names:?}");
+    let chosen = events.iter().find(|e| e.name == "dialog.chosen").unwrap();
+    assert_eq!(chosen.data["value"], "/p/field");
+    // Arrows move through what is shown.
+    d.open(Choose::new("Which side?", &["Left", "Right"], GO));
+    h.run();
+    h.key_press(egui::Key::ArrowDown);
+    h.run();
+    h.key_press(egui::Key::Enter);
+    h.run();
+    h.run();
+    assert_eq!(runs.borrow()[1].0["value"], "Right");
+}
+
+#[test]
+fn an_agent_answers_by_value_and_a_form_shows_its_values_plainly() {
+    let (mut h, runs, d) = harness();
+    d.open(
+        Form::new("Export", "Export", GO)
+            .field("quality", Descriptor::int("Quality", 1, 100, 90))
+            .field(
+                "format",
+                Descriptor::choice("Format", &["png", "jpeg"], "png"),
+            ),
+    );
+    h.run();
+    let current = d.describe();
+    assert_eq!(current["values"], json!({ "quality": 90, "format": "png" }));
+    assert!(
+        current["fields"][0]["value"].is_object(),
+        "typed values stay"
+    );
+    d.answer(dialogs::Answer::Cancel, Origin::User).unwrap();
+    h.run();
+    d.open(Choose::new("Which side?", &["Left", "Right"], GO));
+    h.run();
+    let feedback = h.state_mut().debug_call(
+        "dialogs",
+        "answer",
+        &json!({ "answer": "choose", "value": "Left" }),
+    );
+    assert!(feedback.ok, "{}", feedback.message);
+    h.run();
+    h.run();
+    assert_eq!(runs.borrow()[0].0["choice"], 0);
+}
+
+struct Gate;
+
+impl Plugin for Gate {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("gate")
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        ctx.before(STEP_ANSWER, |_, args| {
+            match args["answer"]["answer"].as_str() {
+                // A cancel becomes the first option; an acceptance waits.
+                Some("cancel") if args["dialog"]["kind"] == "choose" => {
+                    let mut a = args.clone();
+                    a["answer"] = json!({ "answer": "choose", "index": 0 });
+                    Before::Redirect(a)
+                }
+                Some("accept") => Before::Veto("not before saving".into()),
+                _ => Before::Go,
+            }
+        });
+        Ok(())
+    }
+}
+
+#[test]
+fn hooks_veto_or_redirect_an_answer() {
+    let runs: Runs = Rc::default();
+    let app = App::builder()
+        .plugins(DefaultPlugins)
+        .plugin(Doc(runs.clone()))
+        .plugin(Gate)
+        .build(&egui::Context::default())
+        .unwrap();
+    let d = (*app.handle().service(&dialogs::DIALOGS).unwrap()).clone();
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(800.0, 600.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+    d.open(Confirm::new("Export?", "Export", GO));
+    h.run();
+    h.get_by_label("Export").click();
+    h.run();
+    // Vetoed: the dialog stays, saying why.
+    assert_eq!(d.len(), 1);
+    assert!(h.query_by_label("not before saving").is_some());
+    assert!(runs.borrow().is_empty());
+    d.answer(dialogs::Answer::Cancel, Origin::User).unwrap();
+    h.run();
+    d.open(Choose::new("Which side?", &["Left", "Right"], GO));
+    h.run();
+    h.get_by_label("Cancel").click();
+    h.run();
+    h.run();
+    assert_eq!(
+        runs.borrow()[0].0["value"],
+        "Left",
+        "the cancel was redirected"
+    );
 }

@@ -17,6 +17,16 @@ egui minor.
   text, tone, count, progress). Areas fold through the `workbench.fold`
   step; `Layout::folded` keeps them. `Icon::by_name`. Gallery page:
   Strips.
+- Dialogs: a choice's options carry values of their own
+  (`ChooseOption { label, value, hint }`, `Choose::with_options`,
+  `value_key`), and the answer is the chosen value; a filter field above
+  them narrows the list as one types (fuzzy, on label and hint), arrows
+  move through it and Enter takes the highlighted one. An agent answers
+  by value (`{"answer": "choose", "value": ...}`). A form's description
+  adds its values as a plain map (`values`). The steps `dialog.show` and
+  `dialog.answer` let a plugin stop a dialog, stop or change an answer,
+  and the journal says `dialog.chosen`, `dialog.cancelled` and
+  `dialog.filtered`.
 - The workbench (`egui_pop_api::workbench`): panels in areas (centre,
   start and end side bars, bottom) as tabs and splits over `egui_dock`,
   projected from the versioned layout document and read back from it;
@@ -377,6 +387,9 @@ egui minor.
 
 ### Changed
 
+- `Choose::options` holds `ChooseOption`s, no longer strings, and a
+  choice's command gets the option's value (`value`) besides `choice`
+  and `label`.
 - A host's journal is its own business: `Host::journal` and
   `journal_mut` are optional (`Option`, `None` by default), and
   `publish`, `since` and the new `last_seq` answer `None` when the host
