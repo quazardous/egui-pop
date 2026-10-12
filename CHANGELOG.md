@@ -9,6 +9,14 @@ egui minor.
 
 ### Added
 
+- Arrangements (`egui_pop_api::arrangements::ArrangementsPlugin`, in
+  `DefaultPlugins`): named layouts of the workbench saved, switched and
+  reset, kept in the host's store (`settings/workbench.arrangements`);
+  templates offered by plugins (`Ctx::arrangement`), removed with them;
+  a saved layout is repaired when switched to. Steps
+  `arrangement.save`, `arrangement.switch`, `arrangement.reset`,
+  `arrangement.delete`; commands under View. Gallery page:
+  Arrangements.
 - Auxiliary windows: a panel detached into a window of its own (its own
   scale, the application's frame when it draws one), docked back, or its
   window closed, through the steps `workbench.detach`,

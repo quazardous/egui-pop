@@ -25,6 +25,8 @@
 //! - [`frame`]: the window's own title bar and edges, a plugin;
 //! - [`strips`]: the activity bar and status bar indicators fed by the
 //!   host's events, a plugin;
+//! - [`arrangements`]: named layouts saved, switched and reset through
+//!   the host's store, a plugin;
 //! - [`workbench`]: panels in areas over egui_dock, with placement
 //!   rules, changed by named steps;
 //! - [`window`]: the window's place kept and repaired, full screen with
@@ -72,6 +74,7 @@
 //! ```
 
 pub mod app;
+pub mod arrangements;
 pub mod ctx;
 pub mod dialogs;
 pub mod frame;

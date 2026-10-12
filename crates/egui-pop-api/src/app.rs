@@ -1996,6 +1996,7 @@ impl App {
         h.steps.borrow_mut().remove_owner(owner);
         h.step_hooks.borrow_mut().remove_owner(owner);
         h.indicators.borrow_mut().remove_owner(owner);
+        h.workbench.borrow_mut().templates.retain(|t| t.0 != *owner);
         h.services.borrow_mut().remove_owner(owner);
         lock(&h.store).remove_owner(owner);
         h.diagnostics.borrow_mut().remove_owner(owner);

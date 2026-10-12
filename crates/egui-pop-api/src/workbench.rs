@@ -209,6 +209,9 @@ pub(crate) struct Workbench {
     stale: bool,
     /// Docks taken out to be drawn: the layout is not read back then.
     taken: usize,
+    /// The application's named layouts (`Ctx::arrangement`): owner,
+    /// name, layout.
+    pub templates: Vec<(egui_pop_model::ids::OwnerId, String, Layout)>,
 }
 
 impl Default for Workbench {
@@ -224,11 +227,21 @@ impl Default for Workbench {
             focused: None,
             stale: true,
             taken: 0,
+            templates: Vec::new(),
         }
     }
 }
 
 impl Workbench {
+    /// A template by name (the last offered wins).
+    pub fn template(&self, name: &str) -> Option<Layout> {
+        self.templates
+            .iter()
+            .rev()
+            .find(|t| t.1 == name)
+            .map(|t| t.2.clone())
+    }
+
     pub fn spec(&self, id: &PanelId) -> Option<&PanelSpec> {
         self.specs.iter().find(|s| s.id == *id)
     }

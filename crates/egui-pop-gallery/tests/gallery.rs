@@ -599,3 +599,28 @@ fn the_workbench_page_detaches_a_panel_into_its_own_window() {
     assert!(app.layout().auxiliary.is_empty());
     assert!(app.panel_visible(&notes));
 }
+
+#[test]
+fn the_arrangements_page_switches_saves_and_vetoes() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "arrangements"));
+    h.run();
+    let app = h.state().app.handle().clone();
+    let outline = egui_pop::model::ids::PanelId::from_static("gallery.outline");
+    h.get_by_label("Writing").click();
+    h.run();
+    h.run();
+    assert!(app.panel_visible(&outline));
+    assert_eq!(egui_pop::api::arrangements::current(&app), "Writing");
+    let mut results = egui_kittest::SnapshotResults::new();
+    results.add(h.try_snapshot("arrangements-pop-dark"));
+    h.get_by_label("Veto switching (a before-hook on arrangement.switch)")
+        .click();
+    h.run();
+    h.get_by_label("Review").click();
+    h.run();
+    assert_eq!(egui_pop::api::arrangements::current(&app), "Writing");
+    assert!(
+        h.query_by_label_contains("vetoed by gallery.arrangements")
+            .is_some()
+    );
+}

@@ -486,6 +486,17 @@ impl<'a> Ctx<'a> {
         self
     }
 
+    /// Offers a named layout of the workbench (an arrangement template):
+    /// what switching to `name` starts from and what resetting it goes
+    /// back to (see `arrangements`).
+    pub fn arrangement(&mut self, name: &str, layout: egui_pop_model::layout::Layout) -> &mut Self {
+        self.app
+            .workbench_mut()
+            .templates
+            .push((self.owner.clone(), name.to_string(), layout));
+        self
+    }
+
     /// Contributes a gallery story.
     pub fn story(&mut self, story: Story) -> Result<&mut Self, CtxError> {
         self.app.add_story(&self.owner, story)?;

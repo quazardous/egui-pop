@@ -1,6 +1,7 @@
 //! Plugin groups: what an application starts from.
 
 use crate::Plugin;
+use crate::arrangements::ArrangementsPlugin;
 use crate::dialogs::DialogsPlugin;
 use crate::palette::PalettePlugin;
 use crate::settings_window::SettingsPlugin;
@@ -24,7 +25,8 @@ impl PluginGroup for MinimalPlugins {
 }
 
 /// What most applications want: the command palette, dialogs, toasts and
-/// the settings window with its shortcuts editor, the window's place (and
+/// the settings window with its shortcuts editor, the window's place,
+/// named arrangements of the workbench (and
 /// the next components of the paved road as they come).
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DefaultPlugins;
@@ -37,6 +39,7 @@ impl PluginGroup for DefaultPlugins {
             Box::new(ToastsPlugin),
             Box::new(SettingsPlugin),
             Box::new(WindowPlugin),
+            Box::new(ArrangementsPlugin),
         ]
     }
 }
