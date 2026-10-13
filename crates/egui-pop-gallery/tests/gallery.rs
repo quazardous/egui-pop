@@ -302,6 +302,55 @@ fn a_closable_dialog_closes_by_its_button_as_by_escape() {
 }
 
 #[test]
+fn a_movable_dialog_has_its_header_band_and_is_dragged_by_it() {
+    let mut results = egui_kittest::SnapshotResults::new();
+    for theme in ["pop-dark", "pop-light"] {
+        let mut h = harness(options(theme, Density::Comfortable, "dialogs"));
+        h.run();
+        h.get_by_label("Movable levels").click();
+        h.run();
+        egui_pop_test::assert_all_named(&h);
+        // Dragged by its band, up and to the left.
+        let a = h.get_by_label("Levels").rect().center();
+        let b = a + egui::vec2(-240.0, -120.0);
+        h.drag_at(a);
+        h.run();
+        for i in 1..=4 {
+            h.hover_at(a + (b - a) * (i as f32 / 4.0));
+            h.run();
+        }
+        h.drop_at(b);
+        h.run();
+        let moved = h.get_by_label("Levels").rect().center();
+        assert!(
+            moved.x < a.x - 150.0 && moved.y < a.y - 60.0,
+            "{a:?} {moved:?}"
+        );
+        results.add(h.try_snapshot(format!("dialogs-movable-{theme}")));
+        // Its close button is on the band.
+        h.query_all_by_role_and_label(egui::accesskit::Role::Button, "Close")
+            .last()
+            .unwrap()
+            .click();
+        h.run();
+        assert!(h.query_by_label("Levels").is_none());
+        // It comes back where it was left.
+        h.get_by_label("Movable levels").click();
+        h.run();
+        h.run();
+        let back = h.get_by_label("Levels").rect().center();
+        assert!((back - moved).length() < 2.0, "{back:?} {moved:?}");
+    }
+    // A clear backdrop: the page stays as it is behind the dialog.
+    let mut h = harness(options("pop-dark", Density::Comfortable, "dialogs"));
+    h.run();
+    h.get_by_label("Preview, clear backdrop").click();
+    h.run();
+    egui_pop_test::assert_all_named(&h);
+    results.add(h.try_snapshot("dialogs-clear-pop-dark"));
+}
+
+#[test]
 fn long_toasts_wrap_before_their_buttons_in_two_languages() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "toasts"));
     h.run();
