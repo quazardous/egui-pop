@@ -287,7 +287,7 @@ fn the_keyboard_moves_opens_closes_and_searches() {
         tree::Signal::Rename { key, from, to } if key == "b/1" && from == "File b1" && to == "Notes")));
 }
 
-fn drag(h: &mut Harness<'_, TreeApp>, from: &str, to: &str, at: f32) {
+fn drag<S>(h: &mut Harness<'_, S>, from: &str, to: &str, at: f32) {
     let a = h.get_by_label(from).rect().center();
     let r = h.get_by_label(to).rect();
     let b = egui::pos2(r.center().x, r.top() + r.height() * at);
@@ -444,6 +444,14 @@ impl TreeSource<String> for Decorated {
         self.0.asked.lock().unwrap().push(parent.cloned());
         sink.deliver(nodes);
     }
+
+    fn can_drop(&self, _: &[String], target: &String, position: Position) -> Result<(), String> {
+        if target == "b" && position == Position::Inside {
+            Err("b takes no more".into())
+        } else {
+            Ok(())
+        }
+    }
 }
 
 /// A tree whose rows carry an icon and their own widgets, and whose
@@ -476,6 +484,14 @@ fn rich_harness() -> Harness<'static, RichApp> {
                 let out = TreeView::<String>::new("rich")
                     .label("Rich")
                     .rename(true)
+                    .drag_drop(true)
+                    .can_drop(|_, target, position| {
+                        if target == "d" && position == Position::Inside {
+                            Err("d is full".into())
+                        } else {
+                            Ok(())
+                        }
+                    })
                     .icon(|n| Some(if n.branch { Icon::Folder } else { Icon::File }.into()))
                     .row_widgets(|ui, n| {
                         let on = hidden.contains(&n.key);
@@ -575,6 +591,30 @@ fn a_context_menu_is_for_the_row_clicked_not_the_selection() {
     assert_eq!(h.state().deleted, ["c"]);
     assert_eq!(h.state().state.selection().keys(), &["a"], "still Folder A");
     assert!(h.query_by_label("Delete Folder C").is_none(), "closed");
+}
+
+#[test]
+fn drops_are_refused_by_the_call_site_and_by_the_source() {
+    let mut h = rich_harness();
+    h.run();
+    let vetoed = |h: &Harness<'_, RichApp>, why: &str| {
+        h.state().signals.iter().any(|s| {
+            matches!(s,
+            tree::Signal::Vetoed { step, reason } if *step == TREE_DROP && reason == why)
+        })
+    };
+    // Beside `d` is fine, into it the call site refuses.
+    drag(&mut h, "Folder A", "Folder D", 0.5);
+    assert!(vetoed(&h, "d is full"));
+    assert_eq!(h.state().state.model().parent(&"a".into()), Some(None));
+    // Into `b` the source refuses.
+    drag(&mut h, "Folder A", "Folder B", 0.5);
+    assert!(vetoed(&h, "b takes no more"));
+    assert_eq!(h.state().state.model().parent(&"a".into()), Some(None));
+    // After `d`: both allow it.
+    drag(&mut h, "Folder A", "Folder D", 0.9);
+    let roots = h.state().state.model().loaded(None).unwrap().to_vec();
+    assert_eq!(roots, ["b", "c", "d", "a", "e"]);
 }
 
 struct Rows(Vec<(u32, String, u32)>);

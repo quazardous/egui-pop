@@ -85,6 +85,16 @@ pub trait TreeSource<K: Key> {
     /// through `sink` now or later, from any thread. Not called again
     /// for that branch until it is reloaded.
     fn load(&self, parent: Option<&K>, sink: Sink<K>);
+
+    /// Whether `keys` may be dropped `position` of `target`: `Err` with
+    /// the reason refuses it. Asked while dragging (a refused target is
+    /// marked so) and by `tree.drop`'s default, after the step's hooks;
+    /// the view's own veto ([`TreeView::can_drop`]) is asked too. By
+    /// default every drop is allowed.
+    fn can_drop(&self, keys: &[K], target: &K, position: Position) -> Result<(), String> {
+        let _ = (keys, target, position);
+        Ok(())
+    }
 }
 
 struct Inbox<K> {
@@ -213,7 +223,8 @@ struct Renaming<K> {
 #[derive(Clone, Debug)]
 struct Drag<K> {
     keys: Vec<K>,
-    /// The drop the pointer points at, if allowed.
+    /// The drop the pointer points at (refused ones too: their step
+    /// says why).
     target: Option<(K, Position)>,
 }
 
@@ -461,6 +472,10 @@ enum Action<K> {
 
 /// What draws a row's icon.
 type IconFn<'a, K> = Box<dyn Fn(&Node<K>) -> Option<Source> + 'a>;
+/// What allows a drop, or refuses it with the reason.
+type Allows<'a, K> = dyn Fn(&[K], &K, Position) -> Result<(), String> + 'a;
+/// What refuses a drop at the call site.
+type DropFn<'a, K> = Box<Allows<'a, K>>;
 /// What adds a row's widgets, or fills its context menu.
 type RowFn<'a, K> = Box<dyn FnMut(&mut Ui, &Node<K>) + 'a>;
 
@@ -484,6 +499,7 @@ pub struct TreeView<'a, K: Key> {
     icon: Option<IconFn<'a, K>>,
     row_widgets: Option<RowFn<'a, K>>,
     context: Option<ContextMenu<'a, K>>,
+    can_drop: Option<DropFn<'a, K>>,
 }
 
 impl<K: Key> std::fmt::Debug for TreeView<'_, K> {
@@ -499,6 +515,7 @@ impl<K: Key> std::fmt::Debug for TreeView<'_, K> {
             .field("icon", &self.icon.is_some())
             .field("row_widgets", &self.row_widgets.is_some())
             .field("context", &self.context.is_some())
+            .field("can_drop", &self.can_drop.is_some())
             .finish()
     }
 }
@@ -517,6 +534,7 @@ impl<'a, K: Key> TreeView<'a, K> {
             icon: None,
             row_widgets: None,
             context: None,
+            can_drop: None,
         }
     }
 
@@ -541,6 +559,34 @@ impl<'a, K: Key> TreeView<'a, K> {
     pub fn drag_drop(mut self, on: bool) -> Self {
         self.drag_drop = on;
         self
+    }
+
+    /// Refuses drops here, in addition to the source's
+    /// ([`TreeSource::can_drop`]) and to `tree.drop`'s hooks: `Err` with
+    /// the reason. A refused target is marked while dragging; dropped
+    /// there, `tree.drop`'s default refuses it and the output carries
+    /// [`Signal::Vetoed`] with the reason.
+    pub fn can_drop(
+        mut self,
+        allow: impl Fn(&[K], &K, Position) -> Result<(), String> + 'a,
+    ) -> Self {
+        self.can_drop = Some(Box::new(allow));
+        self
+    }
+
+    /// Whether the source and the view allow a drop.
+    fn allows(
+        &self,
+        source: &dyn TreeSource<K>,
+        keys: &[K],
+        target: &K,
+        position: Position,
+    ) -> Result<(), String> {
+        source.can_drop(keys, target, position)?;
+        match &self.can_drop {
+            Some(allow) => allow(keys, target, position),
+            None => Ok(()),
+        }
     }
 
     /// Nodes may be renamed in place (F2).
@@ -862,7 +908,10 @@ impl<'a, K: Key> TreeView<'a, K> {
                     }
                 }
                 if let Some(d) = drag.as_mut() {
-                    dragging(ui, d, model, &visible, pointer, indent, row_h);
+                    let allows = |keys: &[K], target: &K, position: Position| {
+                        self.allows(source, keys, target, position)
+                    };
+                    dragging(ui, d, model, &visible, pointer, indent, row_h, &allows);
                 }
             },
         );
@@ -1110,6 +1159,9 @@ impl<'a, K: Key> TreeView<'a, K> {
             Action::Drop(keys, target, position) => {
                 let mut done = (keys.clone(), target.clone(), position);
                 let model = &mut state.model;
+                let allows = |keys: &[K], target: &K, position: Position| {
+                    self.allows(source, keys, target, position)
+                };
                 let outcome = steps::run(
                     self.app,
                     &TREE_DROP,
@@ -1118,6 +1170,7 @@ impl<'a, K: Key> TreeView<'a, K> {
                         let keys: Vec<K> = parse(&args["keys"])?;
                         let target: K = parse(&args["target"])?;
                         let position: Position = parse(&args["position"])?;
+                        allows(&keys, &target, position)?;
                         drop_into(model, &keys, &target, position)?;
                         done = (keys, target, position);
                         Ok(json!(done.0.len()))
@@ -1252,7 +1305,10 @@ fn drop_into<K: Key>(
     Ok(())
 }
 
-/// Tracks the drop target under the pointer and marks it.
+/// Tracks the drop target under the pointer and marks it: in the accent
+/// colour, or in the danger colour with a "not allowed" pointer when the
+/// source or the view refuses it.
+#[allow(clippy::too_many_arguments)]
 fn dragging<K: Key>(
     ui: &Ui,
     d: &mut Drag<K>,
@@ -1261,6 +1317,7 @@ fn dragging<K: Key>(
     pointer: Option<egui::Pos2>,
     indent: f32,
     row_h: f32,
+    allows: &Allows<'_, K>,
 ) {
     d.target = None;
     let Some(p) = pointer else { return };
@@ -1293,7 +1350,13 @@ fn dragging<K: Key>(
     } else {
         Position::After
     };
-    let color = Tokens::of(ui.ctx()).accent.default;
+    let tokens = Tokens::of(ui.ctx());
+    let color = if allows(&d.keys, key, position).is_ok() {
+        tokens.accent.default
+    } else {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::NotAllowed);
+        tokens.status.danger
+    };
     let x = rect.left() + (*depth as f32 + 1.0) * indent;
     let stroke = Stroke::new(2.0, color);
     match position {

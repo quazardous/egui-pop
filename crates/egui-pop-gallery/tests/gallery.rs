@@ -957,6 +957,11 @@ fn the_tree_page_loads_lazily_follows_changes_and_vetoes_a_drop() {
         h.query_by_label("Could not load: the drive is not connected")
             .is_some()
     });
+    // Into a locked folder: refused at the call site.
+    drag_to(&mut h, "cover.jpg", "2023", 0.5);
+    let t = last_step(&h, "tree.drop").expect("ran");
+    assert_eq!(t.result, Some(Err("2023 is locked".to_string())), "{t:?}");
+    assert!(h.query_by_label("cover.jpg").is_some(), "still in Photos");
     // A drop into Archive, vetoed while the box is ticked.
     h.get_by_label("Veto drops into Archive (a before-hook on tree.drop)")
         .click();

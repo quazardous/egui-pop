@@ -1,6 +1,7 @@
 //! The tree page: a live tree over a simulated drive the page owns,
 //! answered from a thread after a delay; edits made while branches are
-//! open; drag and drop with a veto; rename in place, from a name apart
+//! open; drag and drop with vetoes (a hook, the source, the call site);
+//! rename in place, from a name apart
 //! from a decorated label; icons and per-row toggles; a context menu
 //! for the row right-clicked; a selection set before its branch loaded;
 //! a branch of 100 000 files.
@@ -107,6 +108,15 @@ pub struct Demo {
 }
 
 impl TreeSource<String> for Demo {
+    /// The drive refuses what it cannot take.
+    fn can_drop(&self, _: &[String], target: &String, position: Position) -> Result<(), String> {
+        if target == "offline" && position == Position::Inside {
+            Err("the drive is not connected".into())
+        } else {
+            Ok(())
+        }
+    }
+
     fn load(&self, parent: Option<&String>, sink: Sink<String>) {
         let drive = self.drive.clone();
         let parent = parent.cloned();
@@ -314,7 +324,7 @@ impl Plugin for TreePage {
             Story::new(StoryId::from_static("tree"), "Tree", move |ui, app| {
                 show(ui, app, &mut page.borrow_mut())
             })
-            .description("A live tree over a source the application implements: branches loaded on demand from a thread, edits at any time, selection, keyboard, drag and drop with a veto, rename in place, 100 000 nodes.")
+            .description("A live tree over a source the application implements: branches loaded on demand from a thread, edits at any time, selection, keyboard, icons and toggles on rows, a menu per row, drag and drop with vetoes, rename in place, 100 000 nodes.")
             .group("Components", 76),
         )?;
         Ok(())
@@ -322,7 +332,7 @@ impl Plugin for TreePage {
 }
 
 fn show(ui: &mut Ui, app: &AppHandle, p: &mut PageState) {
-    ui.label("Open a folder: its files come from a thread after 0.3 s. Drag files between folders, F2 renames, letters jump to a name. The eye and the lock at a row's end act on that row without selecting it, and so does a row's context menu.");
+    ui.label("Open a folder: its files come from a thread after 0.3 s. Drag files between folders, F2 renames, letters jump to a name. The eye and the lock at a row's end act on that row without selecting it, and so does a row's context menu. A locked node does not move or take drops.");
     ui.horizontal_wrapped(|ui| {
         let handle = p.tree.handle();
         if ui.button("Add a photo to Photos").clicked() {
@@ -386,6 +396,7 @@ fn show(ui: &mut Ui, app: &AppHandle, p: &mut PageState) {
         .icon(|n| Some(if n.branch { Icon::Folder } else { Icon::File }.into()))
         .row_widgets(|ui, n| row_toggles(ui, &marks, &n.key, &n.label))
         .context_menu(app, ROW_MENU)
+        .can_drop(|keys, target, position| locked(&marks.borrow(), keys, target, position))
         .show(ui, &mut p.tree, &p.source);
     for s in out.signals {
         match &s {
@@ -424,6 +435,23 @@ fn show(ui: &mut Ui, app: &AppHandle, p: &mut PageState) {
     for line in &p.log[skip..] {
         ui.monospace(line);
     }
+}
+
+/// The page's own veto on drops: a locked node stays where it is, and
+/// takes nothing inside.
+fn locked(
+    marks: &Marks,
+    keys: &[String],
+    target: &String,
+    position: Position,
+) -> Result<(), String> {
+    if let Some(k) = keys.iter().find(|k| marks.locked.contains(*k)) {
+        return Err(format!("{k} is locked"));
+    }
+    if position == Position::Inside && marks.locked.contains(target) {
+        return Err(format!("{target} is locked"));
+    }
+    Ok(())
 }
 
 /// A row's eye and lock, right to left: they change the page's marks,

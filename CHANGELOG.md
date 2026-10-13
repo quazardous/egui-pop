@@ -9,6 +9,14 @@ egui minor.
 
 ### Added
 
+- Tree drops refused by the source (`TreeSource::can_drop`, allowing
+  everything by default) and at the call site (`TreeView::can_drop`),
+  besides `tree.drop`'s hooks: asked while dragging, where a refused
+  target is marked in the danger colour under a "not allowed" pointer,
+  and by `tree.drop`'s default, whose refusal comes back as
+  `Signal::Vetoed` with the reason. The gallery's tree page refuses
+  drops into its offline drive and moves of locked nodes.
+
 - `TreeState::set_selection` queues the nodes the tree has not loaded
   yet: the selection takes each as its branch loads, then brings the
   cursor's row into view; the user selecting drops what is queued, and

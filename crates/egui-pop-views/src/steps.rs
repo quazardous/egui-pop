@@ -16,7 +16,7 @@
 //! | `tree.load` | `tree`, `key` (`null`: the roots) | asks the source for the branch's children |
 //! | `tree.expand` | `tree`, `key`, `expanded` | opens or closes the branch (loading it the first time) |
 //! | `tree.select` | `tree`, `keys`, `cursor` | sets the selection |
-//! | `tree.drop` | `tree`, `keys`, `target`, `position` (`before`, `after`, `inside`) | moves the nodes in the view |
+//! | `tree.drop` | `tree`, `keys`, `target`, `position` (`before`, `after`, `inside`) | asks the source and the view (`can_drop`), then moves the nodes in the view |
 //! | `tree.rename` | `tree`, `key`, `from`, `to` | renames the node in the view |
 //! | `tree.activate` | `tree`, `key` | nothing: the application opens the leaf |
 //! | `tree.context` | `tree`, `key` | opens the row's context menu, for that row |

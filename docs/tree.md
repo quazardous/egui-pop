@@ -230,6 +230,50 @@ A click on the triangle or a double click opens a branch. With
 is in it) are dragged before, after or inside a node; a node never goes
 into itself, and the view scrolls near its edges.
 
+A drop is refused, with its reason, in three places: by the source
+(`TreeSource::can_drop`, what the data cannot take), at the call site
+(`TreeView::can_drop`, what this view does not allow: a locked node),
+and by a plugin's before-hook on `tree.drop` (below). The first two are
+asked while dragging, where a refused target is marked in the danger
+colour under a "not allowed" pointer, and again by `tree.drop`'s
+default (after the hooks, so a redirected drop is checked too); a drop
+they refuse leaves the nodes where they were and comes back as
+`Signal::Vetoed` with the reason.
+
+```rust
+use std::collections::HashSet;
+
+use egui_pop::egui;
+use egui_pop::views::tree::{Position, Sink, TreeSource, TreeState, TreeView};
+
+struct Layers;
+
+impl TreeSource<String> for Layers {
+    fn load(&self, _: Option<&String>, sink: Sink<String>) {
+        sink.deliver(Vec::new());
+    }
+
+    /// The data's own rule: a layer holds no layers.
+    fn can_drop(&self, _: &[String], target: &String, position: Position) -> Result<(), String> {
+        match position {
+            Position::Inside if !target.starts_with("group") => Err("only groups hold layers".into()),
+            _ => Ok(()),
+        }
+    }
+}
+
+fn layers(ui: &mut egui::Ui, state: &mut TreeState<String>, locked: &HashSet<String>) {
+    TreeView::new("layers")
+        .drag_drop(true)
+        // This view's rule: a locked layer stays where it is.
+        .can_drop(|keys: &[String], _: &String, _| match keys.iter().find(|k| locked.contains(*k)) {
+            Some(k) => Err(format!("{k} is locked")),
+            None => Ok(()),
+        })
+        .show(ui, state, &Layers);
+}
+```
+
 ## Steps and signals
 
 Each moment is a step ([ADR 0011](adr/0011-lifecycle-steps.md)) when
@@ -243,7 +287,7 @@ same moments come back as `Signal`s in `TreeOutput::signals`, with
 | `tree.load` | `tree`, `key` (`null`: the roots) | asks the source; vetoed, the branch shows the reason |
 | `tree.expand` | `tree`, `key`, `expanded` | opens or closes the branch |
 | `tree.select` | `tree`, `keys`, `cursor` | sets the selection |
-| `tree.drop` | `tree`, `keys`, `target`, `position` (`before`, `after`, `inside`) | moves the nodes in the view |
+| `tree.drop` | `tree`, `keys`, `target`, `position` (`before`, `after`, `inside`) | asks the source and the view (`can_drop`), then moves the nodes in the view |
 | `tree.rename` | `tree`, `key`, `from`, `to` | renames the node in the view |
 | `tree.activate` | `tree`, `key` | nothing: the application opens the leaf |
 | `tree.context` | `tree`, `key` | opens the row's context menu, for that row (a redirect changes the node it is for) |
@@ -291,8 +335,8 @@ assert_eq!(out.vetoed(), Some("the archive is read-only"));
 ```
 
 The gallery's `tree` page shows a simulated drive answered from a
-thread, edits made while branches are open, a veto on drops into one
-folder, icons and an eye and a lock on every row, a context menu
+thread, edits made while branches are open, drops refused by a hook,
+by the source and by the page (a locked node), icons and an eye and a lock on every row, a context menu
 acting on the row right-clicked, files named apart from their decorated
 labels, a photo selected before its folder loads, and a branch of
 100 000 files.
