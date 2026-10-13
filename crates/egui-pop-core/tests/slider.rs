@@ -278,13 +278,19 @@ fn the_wheel_scrolls_past_sliders_and_steps_a_focused_one_or_with_alt() {
     );
     let moved = h.get_by_label("Value 1").rect().center();
     assert!(moved.y < at.y, "the panel scrolled");
-    // With Alt over a slider, the wheel steps it.
+    // With Alt over a slider, the wheel steps it, and the panel does
+    // not drift with what is left of the notch's scroll.
     let at = h.get_by_label("Value 3").rect().center();
     wheel(&mut h, at, Modifiers::ALT);
     assert!(
         (h.state().values[3] - 0.4).abs() < 1e-9,
         "{:?}",
         h.state().values
+    );
+    assert_eq!(
+        h.get_by_label("Value 3").rect().center(),
+        at,
+        "the panel stayed"
     );
     // A focused slider steps under the wheel.
     h.get_by_label("Value 4").click();

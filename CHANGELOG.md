@@ -214,6 +214,10 @@ egui minor.
 
 ### Changed
 
+- The slider no longer lets the panel drift after the wheel stepped it:
+  while it holds the wheel (focused, or Alt held over it) it eats what
+  is left of a notch's smoothed scroll every frame, not only the frame
+  of the notch.
 - `AppBuilder::run_native_with` takes a fallible `make`: it returns
   `Result<Box<dyn eframe::App>, MakeError>`. An error is logged,
   published on the journal as `app.make_failed` and returned as eframe's

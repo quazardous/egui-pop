@@ -333,8 +333,9 @@ impl Widget for Slider<'_> {
                 }
             }
             // The wheel: the panel scrolls, unless the slider has the focus
-            // or the wheel modifier is held over it; then it steps and the
-            // panel does not scroll.
+            // or the wheel modifier is held over it; then each notch (a
+            // touchpad's stream as one per frame) steps it and the panel
+            // does not scroll.
             if response.hovered() && (response.has_focus() || held(g.wheel)) {
                 let wheel: f32 = ui.input(|i| {
                     i.events
@@ -347,12 +348,15 @@ impl Widget for Slider<'_> {
                 });
                 if wheel != 0.0 {
                     v += step * f64::from(wheel.signum());
-                    ui.input_mut(|i| {
-                        i.smooth_scroll_delta = egui::Vec2::ZERO;
-                        i.events
-                            .retain(|e| !matches!(e, egui::Event::MouseWheel { .. }));
-                    });
                 }
+                // egui spreads a notch's scroll over the next frames: what
+                // is left of it is eaten too, every frame the slider holds
+                // the wheel, so the panel never drifts after the step.
+                ui.input_mut(|i| {
+                    i.smooth_scroll_delta = egui::Vec2::ZERO;
+                    i.events
+                        .retain(|e| !matches!(e, egui::Event::MouseWheel { .. }));
+                });
             }
             if v != *self.value {
                 // Keys and the wheel stay in the soft range, unless already
