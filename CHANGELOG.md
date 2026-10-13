@@ -207,6 +207,10 @@ egui minor.
 
 ### Changed
 
+- `AppBuilder::run_native_with` takes a fallible `make`: it returns
+  `Result<Box<dyn eframe::App>, MakeError>`. An error is logged,
+  published on the journal as `app.make_failed` and returned as eframe's
+  `Error::AppCreation`. An infallible `make` wraps its result in `Ok`.
 - A panel's commands (`<panel>.focus`, `<panel>.toggle`) no longer carry
   the English panel title in their translated texts: they read the
   shared `egui-pop-panel-focus-title`, `-focus-description`,

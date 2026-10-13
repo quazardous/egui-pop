@@ -109,7 +109,8 @@ pub mod zones;
 pub mod zoom;
 
 pub use app::{
-    App, AppBuilder, AppHandle, Call, FOCUS_MODE, Request, SETTING_FOCUS, THEME, ThemeService,
+    App, AppBuilder, AppHandle, Call, FOCUS_MODE, MakeError, Request, SETTING_FOCUS, THEME,
+    ThemeService,
 };
 pub use ctx::{Ctx, CtxError};
 pub use groups::{DefaultPlugins, MinimalPlugins, PluginGroup};

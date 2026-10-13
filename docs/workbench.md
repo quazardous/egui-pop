@@ -237,5 +237,7 @@ loading `keys.load`; each new conflict is a `keys.conflict` signal.
 `AppBuilder::wrap` draws around the whole application,
 `main_edge_to_edge` drops the centre's margins, `on_exit` runs before the
 `app.exit` step (whose default saves), `run_native_with` hands the built
-application to an `eframe::App` of the application's own, and
+application to an `eframe::App` of the application's own (its `make`
+returns a `Result`: an error is logged, published as `app.make_failed`
+and returned by eframe), and
 `window::restore` gives `NativeOptions` the window's kept place.

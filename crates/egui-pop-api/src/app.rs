@@ -1726,13 +1726,17 @@ impl AppBuilder {
     /// As [`AppBuilder::run_native`], the built application handed to
     /// `make`, which gives eframe the `eframe::App` to run: one of the
     /// application's own around egui-pop's (it calls `App::logic`,
-    /// `App::show_wrapped` and `App::exit` from its own).
+    /// `App::show_wrapped` and `App::exit` from its own). `make` may fail
+    /// (its kernel does not start, a file is missing): the error is
+    /// logged, published on the journal as `app.make_failed` and returned
+    /// as eframe's `Error::AppCreation`.
     #[cfg(all(feature = "eframe", not(target_arch = "wasm32")))]
     pub fn run_native_with(
         mut self,
         title: &str,
         mut options: eframe::NativeOptions,
-        make: impl FnOnce(App, &eframe::CreationContext<'_>) -> Box<dyn eframe::App> + 'static,
+        make: impl FnOnce(App, &eframe::CreationContext<'_>) -> Result<Box<dyn eframe::App>, MakeError>
+        + 'static,
     ) -> eframe::Result {
         self.system_focus
             .get_or_insert_with(egui_pop_core::focus_mode::read_system);
@@ -1747,10 +1751,26 @@ impl AppBuilder {
                 let app = self
                     .build(&cc.egui_ctx)
                     .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
-                Ok(make(app, cc))
+                let handle = app.handle().clone();
+                make(app, cc).inspect_err(|e| report_make_error(&handle, e.as_ref()))
             }),
         )
     }
+}
+
+/// Why `make` (of `AppBuilder::run_native_with`) gave no application.
+pub type MakeError = Box<dyn std::error::Error + Send + Sync>;
+
+/// Says why `make` failed: in the log and on the journal
+/// (`app.make_failed`, with the error).
+pub(crate) fn report_make_error(app: &AppHandle, e: &(dyn std::error::Error + Send + Sync)) {
+    log::error!(target: "egui_pop", "the application could not be made: {e}");
+    app.publish(
+        "egui_pop",
+        None,
+        "app.make_failed",
+        json!({ "error": e.to_string() }),
+    );
 }
 
 /// A built application.
@@ -3342,5 +3362,35 @@ impl eframe::App for App {
             }
             Outcome::Done(Ok(_)) => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod make_tests {
+    use super::*;
+
+    #[test]
+    fn a_failed_make_is_logged_and_published() {
+        let app = App::builder().build(&Context::default()).unwrap();
+        let h = app.handle().clone();
+        let mark = h.last_event();
+        let e: MakeError = "the kernel did not start".into();
+        report_make_error(&h, e.as_ref());
+        let events = h.events_since(mark);
+        let ev = events.last().expect("published");
+        assert_eq!(ev.name, "app.make_failed");
+        assert_eq!(ev.data["error"], "the kernel did not start");
+    }
+
+    /// `make` may fail; it compiles with an error of any kind.
+    #[cfg(all(feature = "eframe", not(target_arch = "wasm32")))]
+    #[allow(dead_code)]
+    fn fallible_make(b: AppBuilder) -> eframe::Result {
+        b.run_native_with("demo", eframe::NativeOptions::default(), |app, _| {
+            if app.handle().panels().is_empty() {
+                return Err("nothing to show".into());
+            }
+            Ok(Box::new(app))
+        })
     }
 }
