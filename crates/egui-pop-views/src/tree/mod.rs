@@ -229,6 +229,10 @@ pub struct TreeState<K: Key> {
     drag: Option<Drag<K>>,
     /// The row last right-clicked, and the node its menu is for.
     context: Option<(K, K)>,
+    /// A selection waiting for nodes not loaded yet.
+    pending: Option<(Vec<K>, Option<K>)>,
+    /// A node to bring into view at the next pass.
+    reveal: Option<K>,
 }
 
 impl<K: Key> Default for TreeState<K> {
@@ -245,6 +249,8 @@ impl<K: Key> Default for TreeState<K> {
             renaming: None,
             drag: None,
             context: None,
+            pending: None,
+            reveal: None,
         }
     }
 }
@@ -276,9 +282,23 @@ impl<K: Key> TreeState<K> {
     }
 
     /// Sets the selection without running a step (restoring a saved
-    /// state).
+    /// state, following another view). Nodes the view has not loaded yet
+    /// (under a branch not opened, or still loading) are queued: the
+    /// selection takes each as it loads, and once all have come the
+    /// cursor's row is brought into view. Open their ancestors
+    /// ([`TreeState::set_expanded`]) so that they load. The user
+    /// selecting, or another call, drops what was queued.
     pub fn set_selection(&mut self, keys: impl IntoIterator<Item = K>, cursor: Option<K>) {
-        self.selection.set(keys, cursor);
+        self.pending = Some((keys.into_iter().collect(), cursor));
+        self.settle(false);
+    }
+
+    /// The selection queued by [`TreeState::set_selection`] for nodes
+    /// not loaded yet.
+    pub fn pending_selection(&self) -> Option<(&[K], Option<&K>)> {
+        self.pending
+            .as_ref()
+            .map(|(k, c)| (k.as_slice(), c.as_ref()))
     }
 
     /// What the view knows: nodes, children, expansion, rows.
@@ -309,6 +329,26 @@ impl<K: Key> TreeState<K> {
         self.renaming.as_ref().map(|r| &r.key)
     }
 
+    /// Selects what is known of the queued selection; once all of it
+    /// is known, it is no longer queued (and its cursor is brought into
+    /// view if `reveal`).
+    fn settle(&mut self, reveal: bool) {
+        let Some((keys, cursor)) = &self.pending else {
+            return;
+        };
+        let model = &self.model;
+        let known: Vec<K> = keys.iter().filter(|k| model.contains(k)).cloned().collect();
+        let at = cursor.clone().filter(|c| model.contains(c));
+        let complete = known.len() == keys.len() && at.is_some() == cursor.is_some();
+        self.selection.set(known, at.clone());
+        if complete {
+            self.pending = None;
+            if reveal {
+                self.reveal = at;
+            }
+        }
+    }
+
     /// Applies the edits waiting; returns whether there were any.
     fn drain(&mut self) -> bool {
         let edits = std::mem::take(&mut self.inbox.lock().unwrap_or_else(|e| e.into_inner()).edits);
@@ -325,6 +365,9 @@ impl<K: Key> TreeState<K> {
             let model = &self.model;
             let had_cursor = self.selection.cursor().is_some();
             self.selection.retain(|k| model.contains(k));
+            // Nodes a queued selection waited for may have come.
+            let queued = self.pending.is_some();
+            self.settle(true);
             if self
                 .renaming
                 .as_ref()
@@ -333,7 +376,7 @@ impl<K: Key> TreeState<K> {
                 self.renaming = None;
             }
             // The cursor's node went: the cursor stays where it was.
-            if had_cursor && self.selection.cursor().is_none() {
+            if had_cursor && !queued && self.selection.cursor().is_none() {
                 let rows = self.model.rows();
                 let near = (0..rows.len())
                     .map(|d| cursor_at.saturating_sub(d).min(rows.len() - 1))
@@ -582,6 +625,10 @@ impl<'a, K: Key> TreeView<'a, K> {
             self.keys(ui, state, row_h, &mut actions);
         }
 
+        if let Some(key) = state.reveal.take() {
+            state.model.rows();
+            state.scroll.reveal = state.row_of(&key);
+        }
         let label = self.label.clone().unwrap_or_else(|| tr(ui.ctx(), &s::TREE));
         let icon = self.icon.take();
         let mut row_widgets = self.row_widgets.take();
@@ -1042,6 +1089,8 @@ impl<'a, K: Key> TreeView<'a, K> {
                 )
             }
             Action::Select(p) => {
+                // The user's selection wins over one still queued.
+                state.pending = None;
                 let mut done = p.clone();
                 let selection = &mut state.selection;
                 let outcome = steps::run(self.app, &TREE_SELECT, p.args("tree", tree), |args| {

@@ -206,6 +206,25 @@ let node = Node::leaf("notes".to_string(), "notes.txt · 2 KB").with_name("notes
 assert_eq!(node.name(), "notes.txt");
 ```
 
+`TreeState::set_selection` sets the selection without a step (a saved
+state, another view following this one). Nodes the view has not loaded
+yet are **queued**: the selection takes each as its branch loads, then
+brings the cursor's row into view. Open the ancestors so that they
+load; the user selecting drops what is queued, and
+`TreeState::pending_selection` tells what still waits.
+
+```rust
+use egui_pop::views::tree::TreeState;
+
+let mut state = TreeState::<String>::new();
+// "2024/0005.raw" is under "photos/2024", not loaded yet.
+state.set_expanded(&"photos".into(), true);
+state.set_expanded(&"2024".into(), true);
+state.set_selection(["2024/0005.raw".to_string()], Some("2024/0005.raw".to_string()));
+assert!(state.selection().is_empty());
+assert!(state.pending_selection().is_some());
+```
+
 A click on the triangle or a double click opens a branch. With
 `TreeView::drag_drop(true)`, nodes (the selection, when the dragged node
 is in it) are dragged before, after or inside a node; a node never goes
@@ -275,4 +294,5 @@ The gallery's `tree` page shows a simulated drive answered from a
 thread, edits made while branches are open, a veto on drops into one
 folder, icons and an eye and a lock on every row, a context menu
 acting on the row right-clicked, files named apart from their decorated
-labels, and a branch of 100 000 files.
+labels, a photo selected before its folder loads, and a branch of
+100 000 files.

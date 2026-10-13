@@ -389,6 +389,42 @@ fn a_hundred_thousand_nodes_build_a_screenful() {
     );
 }
 
+#[test]
+fn a_selection_of_nodes_not_loaded_waits_for_their_branch() {
+    let (tx, rx) = mpsc::channel();
+    let mut h = tree_harness(Some(tx));
+    h.run();
+    // `b/2` is under a branch never opened: queued.
+    let s = &mut h.state_mut().state;
+    s.set_expanded(&"b".into(), true);
+    s.set_selection(["a".to_string(), "b/2".to_string()], Some("b/2".into()));
+    assert_eq!(s.selection().keys(), &["a"], "what is known, at once");
+    h.run();
+    let sink = rx.try_recv().expect("b asked for");
+    // Other edits come first: still queued.
+    h.state()
+        .state
+        .handle()
+        .rename("c".into(), "Folder C renamed");
+    h.run();
+    assert!(h.state().state.pending_selection().is_some());
+    sink.deliver(children(Some(&"b".into())));
+    h.run();
+    let s = &h.state().state;
+    assert_eq!(s.selection().keys(), &["a", "b/2"]);
+    assert_eq!(s.selection().cursor().map(String::as_str), Some("b/2"));
+    assert!(s.pending_selection().is_none());
+    // The user's selection drops what is queued.
+    h.state_mut()
+        .state
+        .set_selection(["d/1".to_string()], Some("d/1".into()));
+    h.get_by_label("Folder E").click();
+    h.run();
+    let s = &h.state().state;
+    assert!(s.pending_selection().is_none());
+    assert_eq!(s.selection().keys(), &["e"]);
+}
+
 /// Files labelled with their size, named apart.
 struct Decorated(Source);
 

@@ -9,6 +9,13 @@ egui minor.
 
 ### Added
 
+- `TreeState::set_selection` queues the nodes the tree has not loaded
+  yet: the selection takes each as its branch loads, then brings the
+  cursor's row into view; the user selecting drops what is queued, and
+  `TreeState::pending_selection` tells what still waits. Before, such
+  nodes left the selection at the next edit. The gallery's tree page
+  selects a photo before its folder loads.
+
 - A tree row's context menu, for the row right-clicked whatever is
   selected: `TreeView::context_menu(app, menu)` opens a declared menu
   whose commands get `{"tree", "key"}` merged into their arguments,

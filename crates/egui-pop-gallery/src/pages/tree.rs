@@ -2,7 +2,8 @@
 //! answered from a thread after a delay; edits made while branches are
 //! open; drag and drop with a veto; rename in place, from a name apart
 //! from a decorated label; icons and per-row toggles; a context menu
-//! for the row right-clicked; a branch of 100 000 files.
+//! for the row right-clicked; a selection set before its branch loaded;
+//! a branch of 100 000 files.
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -349,6 +350,14 @@ fn show(ui: &mut Ui, app: &AppHandle, p: &mut PageState) {
         }
         if ui.button("Reload everything").clicked() {
             handle.reload(None);
+        }
+        // Its folders may not be loaded yet: the selection waits for
+        // them.
+        if ui.button("Select a 2024 photo").clicked() {
+            p.tree.set_expanded(&"photos".into(), true);
+            p.tree.set_expanded(&"2024".into(), true);
+            let key = "2024/0005.raw".to_string();
+            p.tree.set_selection([key.clone()], Some(key));
         }
     });
     let mut veto = app.context().get(VETO) == "true";

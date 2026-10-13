@@ -985,6 +985,18 @@ fn the_tree_page_loads_lazily_follows_changes_and_vetoes_a_drop() {
 }
 
 #[test]
+fn the_tree_page_selects_a_photo_before_its_folder_loads() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "tree"));
+    run_until(&mut h, |h| h.query_by_label("Photos").is_some());
+    h.get_by_label("Select a 2024 photo").click();
+    h.run();
+    assert!(h.query_by_label("Selected: nothing").is_some(), "queued");
+    run_until(&mut h, |h| {
+        h.query_by_label("Selected: IMG_2024_0005.raw").is_some()
+    });
+}
+
+#[test]
 fn the_tree_page_opens_a_hundred_thousand_files() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "tree"));
     run_until(&mut h, |h| h.query_by_label("Many files").is_some());
