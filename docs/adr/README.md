@@ -18,6 +18,7 @@ after the fact except to mark it superseded by a later one.
 | [0010](0010-host.md) | egui-pop wraps the application's kernel through a host | 2026-10-12 |
 | [0011](0011-lifecycle-steps.md) | Every feature's life is reachable: observe, veto, replace, extend | 2026-10-12 |
 | [0012](0012-context-stack.md) | The context stack: owned by the kernel, projected by the interface ([analysis](0012-context-stack-analysis.md)) | 2026-10-13 |
+| [0013](0013-mount-contract.md) | The mount contract: components declare needs, hosts declare offers (proposed; [analysis](0013-mount-contract-analysis.md)) | 2026-10-14 |
 | [0015](0015-clipboard.md) | The clipboard: typed items owned by the kernel, offered in several formats, hooked at each boundary (proposed; [analysis](0015-clipboard-analysis.md)) | 2026-10-18 |
 
 Template: copy any of them; keep it to half a page.
