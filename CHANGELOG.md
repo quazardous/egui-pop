@@ -9,6 +9,13 @@ egui minor.
 
 ### Added
 
+- The `slider.change` step (`egui_pop_api::sliders`): a slider's
+  finished change (a drag's release, a key, a wheel notch, a typed
+  value, a reset) runs through the application when the slider's hook is
+  `sliders::hook(app, name)`. A before-hook vetoes it or redirects it
+  (snap, clamp), a run-hook gives the value, and the journal gets
+  `slider.change`; a drag's frames are not steps.
+
 - The slider family, after darktable's bauhaus sliders
   (`egui_pop_core::slider`):
   - typed entries take an expression (`x * 2`, `(1 + 2) / 4`, `^`,

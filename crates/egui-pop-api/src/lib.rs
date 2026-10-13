@@ -34,6 +34,8 @@
 //! - [`window`]: the window's place kept and repaired, full screen with
 //!   a way out, a plugin;
 //! - [`zoom`]: the interface zoom in steps, its commands and keys;
+//! - [`sliders`]: the `slider.change` step, and the hook that runs it
+//!   from egui-pop's sliders;
 //! - [`settings_window`]: the settings window (search, sections, form)
 //!   and the shortcuts editor, a plugin;
 //! - [`system_keys`]: how the shortcuts bound in the system scope (also
@@ -97,6 +99,7 @@ pub mod plugin;
 pub mod services;
 pub mod settings;
 pub mod settings_window;
+pub mod sliders;
 pub mod steps;
 pub mod stories;
 pub mod strings;

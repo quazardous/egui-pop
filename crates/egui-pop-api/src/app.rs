@@ -2008,6 +2008,7 @@ impl App {
         );
         ctx.setting(SETTING_FOCUS, focus)?;
         crate::zoom::register(&mut ctx)?;
+        crate::sliders::register(&mut ctx)?;
         ctx.setting(
             crate::workbench::SETTING_PANEL_ALIGNMENT,
             egui_pop_model::values::Descriptor::choice(
