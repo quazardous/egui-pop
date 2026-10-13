@@ -113,6 +113,11 @@ egui minor.
   The `jobs` debug collector, and `egui_pop_test::jobs::FakeHost` to
   script jobs in tests. Gallery page `jobs`. Guide: `docs/progress.md`.
 
+- `egui-pop-imaging`: the `cursor.resolve` step. `imaging::cursor`
+  gives a viewport's `on_cursor` hook that asks the step each time the
+  situation under the pointer changes; plugins give another cursor
+  with a run-hook (or a redirect of `default`), a veto keeps the
+  default.
 - Cursors over the viewport (`viewport::cursor`): `Viewport::tool`
   picks a tool (pan, zoom, picker, crosshair, move, rotate, brush,
   eraser, mask, disabled, or one of the application's) and the viewport

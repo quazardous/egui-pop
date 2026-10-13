@@ -2,9 +2,12 @@
 
 use egui_pop_api::steps::Before;
 use egui_pop_api::{App, Ctx, Plugin, PluginError};
-use egui_pop_imaging::{ImagingPlugin, STEP_CURVE, STEP_HISTOGRAM, STEP_WHEEL, STEP_ZOOM};
+use egui_pop_imaging::{
+    ImagingPlugin, STEP_CURSOR, STEP_CURVE, STEP_HISTOGRAM, STEP_WHEEL, STEP_ZOOM,
+};
 use egui_pop_model::ids::PluginId;
 use egui_pop_viewport::change::{Cause, Change, Verdict};
+use egui_pop_viewport::cursor::{Cursor, CursorQuery, Tool, ToolCursor};
 use egui_pop_viewport::histogram::Drag;
 use egui_pop_viewport::wheel::WheelValue;
 use egui_pop_viewport::{View, Zoom};
@@ -116,4 +119,67 @@ fn finished_changes_run_their_step_and_frames_go_through() {
         Verdict::Redirect(v) => assert_eq!(v.zoom, Zoom::Px(1.0)),
         v => panic!("{v:?}"),
     }
+}
+
+/// Shows a crosshair for the picker, and refuses to decide for the
+/// `locked` viewport.
+struct Crosshairs;
+
+impl Plugin for Crosshairs {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("crosshairs")
+    }
+
+    fn requires(&self) -> Vec<PluginId> {
+        vec![egui_pop_imaging::IMAGING_PLUGIN]
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        ctx.before(STEP_CURSOR, |_, args| {
+            if args["viewport"] == "locked" {
+                Before::Veto("locked".into())
+            } else {
+                Before::Go
+            }
+        });
+        ctx.replace(STEP_CURSOR, |_, args| {
+            if args["query"]["tool"] == "picker" {
+                Ok(json!({ "tool": "crosshair" }))
+            } else {
+                Ok(args["default"].clone())
+            }
+        });
+        Ok(())
+    }
+}
+
+#[test]
+fn the_cursor_resolves_through_its_step() {
+    let app = App::builder()
+        .plugin(ImagingPlugin)
+        .plugin(Crosshairs)
+        .build(&egui::Context::default())
+        .unwrap();
+    let h = app.handle();
+    assert!(h.diagnostics().is_empty(), "{:?}", h.diagnostics());
+    let picker = CursorQuery::new(Tool::Picker);
+    let default = Cursor::Tool(ToolCursor::Picker);
+    assert_eq!(
+        egui_pop_imaging::cursor(h, "main")(&picker, default.clone()),
+        Cursor::Tool(ToolCursor::Crosshair)
+    );
+    let trace = h.step_traces().pop().unwrap();
+    assert_eq!(trace.step, STEP_CURSOR);
+    assert_eq!(trace.asked["viewport"], "main");
+    assert_eq!(trace.asked["default"], json!({ "tool": "picker" }));
+    // Other tools keep their cursor; a veto keeps the default.
+    let zoom = CursorQuery::new(Tool::Zoom);
+    assert_eq!(
+        egui_pop_imaging::cursor(h, "main")(&zoom, Cursor::Tool(ToolCursor::ZoomIn)),
+        Cursor::Tool(ToolCursor::ZoomIn)
+    );
+    assert_eq!(
+        egui_pop_imaging::cursor(h, "locked")(&picker, default.clone()),
+        default
+    );
 }

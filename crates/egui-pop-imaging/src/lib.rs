@@ -15,11 +15,17 @@
 //! | `curve.change` | `curve`, `from`, `to` (`[[x, y], ...]`), `cause` (`drag`, `add`, `delete`, `reset`, `key`, `pick`, `access`) | writes `to` |
 //! | `wheel.change` | `wheel`, `from`, `to` (`{hue, chroma, luminance}`), `cause` | writes `to` |
 //! | `zoom.change` | `viewport`, `from`, `to` (`{zoom: "fit" or a number, center: [x, y]}`), `cause` (`command`, `drag`, `click`, `wheel`, `key`, `reset`) | writes `to` |
+//! | `cursor.resolve` | `viewport`, `query` (`{tool, modifiers, dragging, panning, handle, over_image, brush}`), `default` (`{system}`, `{tool}`, `{image}` or `{brush}`) | gives `default` |
 //!
 //! A before-hook vetoes the change (the tool keeps, or goes back to,
 //! `from`) or redirects it (another `to`); a run-hook gives the value to
 //! write (its result); an after-hook follows it. [`ImagingPlugin`]
 //! declares the steps.
+//!
+//! `cursor.resolve` is not a change: a viewport asks it which cursor to
+//! show each time the situation under the pointer changes (the tool, the
+//! keys held, a drag, a handle). A run-hook (or a redirect of `default`)
+//! gives another cursor; a veto shows the default.
 //!
 //! ```
 //! use egui_pop_api::AppHandle;
@@ -37,6 +43,7 @@ use egui_pop_api::{AppHandle, Ctx, Plugin, PluginError};
 use egui_pop_model::ids::{PluginId, StepId};
 use egui_pop_viewport::View;
 use egui_pop_viewport::change::{Change, StepValue, Verdict};
+use egui_pop_viewport::cursor::{Cursor, CursorQuery};
 use egui_pop_viewport::histogram::Drag;
 use egui_pop_viewport::wheel::WheelValue;
 use serde_json::json;
@@ -49,6 +56,8 @@ pub const STEP_CURVE: StepId = StepId::from_static("curve.change");
 pub const STEP_WHEEL: StepId = StepId::from_static("wheel.change");
 /// A zoom control or a navigator changes a viewport's view.
 pub const STEP_ZOOM: StepId = StepId::from_static("zoom.change");
+/// A viewport asks which cursor to show.
+pub const STEP_CURSOR: StepId = StepId::from_static("cursor.resolve");
 
 /// The plugin's id.
 pub const IMAGING_PLUGIN: PluginId = PluginId::from_static("egui_pop.imaging");
@@ -95,6 +104,15 @@ pub fn specs() -> Vec<StepSpec> {
             "from": { "zoom": "fit", "center": [0.0, 0.0] },
             "to": { "zoom": 1.0, "center": [3000.0, 2000.0] },
             "cause": "command",
+        })),
+        StepSpec::new(
+            STEP_CURSOR,
+            "A viewport asks which cursor to show when the situation under the pointer changes (`viewport`, `query`: {tool, modifiers, dragging, panning, handle, over_image, brush}, `default`: egui-pop's cursor); a run-hook or a redirect of `default` gives another ({system}, {tool}, {image} or {brush}), a veto shows the default.",
+        )
+        .args(json!({
+            "viewport": "main",
+            "query": CursorQuery::new(egui_pop_viewport::cursor::Tool::Zoom).to_json(),
+            "default": { "tool": "zoom-in" },
         })),
     ]
 }
@@ -189,4 +207,25 @@ pub fn zoom<'a>(
     name: &'a str,
 ) -> impl FnMut(&Change<View>) -> Verdict<View> + 'a {
     hook(app, STEP_ZOOM, "viewport", name)
+}
+
+/// A viewport's cursor hook ([`Viewport::on_cursor`](egui_pop_viewport::Viewport::on_cursor))
+/// running each new situation as the `cursor.resolve` step, the viewport
+/// named `name`: plugins give another cursor for a tool, a key held, a
+/// handle. An answer that is not a cursor keeps the default.
+pub fn cursor<'a>(
+    app: &'a AppHandle,
+    name: &'a str,
+) -> impl FnMut(&CursorQuery, Cursor) -> Cursor + 'a {
+    move |q: &CursorQuery, default: Cursor| {
+        let args = json!({
+            "viewport": name,
+            "query": q.to_json(),
+            "default": default.to_json(),
+        });
+        match app.step(&STEP_CURSOR, args, |_, args| Ok(args["default"].clone())) {
+            Outcome::Done(Ok(v)) => Cursor::from_json(&v).unwrap_or(default),
+            Outcome::Done(Err(_)) | Outcome::Vetoed { .. } => default,
+        }
+    }
 }
