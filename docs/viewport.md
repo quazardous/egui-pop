@@ -170,3 +170,110 @@ What works where:
 
 The gallery's `display` page shows the resolution for each wish and
 surface, and the transfers' curves.
+
+### Wide gamut on Wayland
+
+On Wayland, the image can get a surface of its own while the interface
+stays the 8-bit sRGB eframe configures (`image_surface`, feature
+`wayland`, on by default; the research behind it is in
+[wayland-colour.md](wayland-colour.md)). The viewport draws its image
+into a subsurface **below** the main window, presented just before the
+window in the same compositor frame, and punches a transparent hole in
+the interface where the image is: overlays, menus and tooltips are drawn
+over it as before. The subsurface is tagged through
+`wp_color_management_v1` with the wanted encoding (BT.2020 with a 2.2
+power, the encoding a compositor maps to its screen), or presented in a
+colour space the driver declares when the driver holds the surface's
+colour itself.
+
+```rust
+use egui_pop::egui;
+use egui_pop::viewport::display::{self, DisplayTarget, Primaries, Transfer};
+use egui_pop::viewport::gpu::{self, egui_wgpu};
+use egui_pop::viewport::image_surface::{self, Offer, Route, raw_window_handle as rwh};
+
+/// At start-up: `window` is eframe's creation context, its main window
+/// built with `ViewportBuilder::with_transparent(true)`.
+fn wide_gamut(
+    ctx: &egui::Context,
+    rs: &egui_wgpu::RenderState,
+    window: &(impl rwh::HasWindowHandle + rwh::HasDisplayHandle),
+) {
+    gpu::install(ctx, rs);
+    let offer = image_surface::install(
+        ctx,
+        rs,
+        window,
+        image_surface::Options { transparent_window: true },
+    );
+    if let Some(why) = offer.unavailable {
+        eprintln!("no image surface: {why}");
+    }
+    let rec2020 = DisplayTarget {
+        primaries: Primaries::Bt2020,
+        transfer: Transfer::Gamma22,
+        ..DisplayTarget::srgb()
+    };
+    display::want(ctx, egui::ViewportId::ROOT, rec2020);
+}
+
+// Where the image goes is plain code, tested with fake compositors.
+let rec2020 = DisplayTarget {
+    primaries: Primaries::Bt2020,
+    transfer: Transfer::Gamma22,
+    ..DisplayTarget::srgb()
+};
+let x11 = Offer::unavailable("not a Wayland window (X11 or another system)");
+assert_eq!(image_surface::negotiate(&rec2020, &x11).route, Route::Window);
+```
+
+| Compositor (Mesa Vulkan driver) | The image | Why |
+|---|---|---|
+| KWin 6.3+, sway (wlroots 0.19+), Weston 15+ with colour management | tagged by egui-pop: BT.2020, gamma 2.2 (10 bits when offered) | the compositor does not announce the `srgb` transfer, so the driver leaves the subsurface's colour alone |
+| GNOME 48+, Hyprland 0.48+ | Display P3, declared by the driver | the compositor announces `srgb` + `srgb` to the driver, which then holds every surface's colour-management object; a second one is a fatal protocol error, so egui-pop does not tag |
+| without `wp_color_manager_v1`, X11, Windows, macOS | sRGB, on the window | said by `display::Resolution::reason` |
+| an opaque window, a secondary window | sRGB, on the window | said |
+
+- `image_surface::negotiate` decides from an `Offer` (the colour
+  manager's announcements, the subsurface's formats and colour spaces);
+  `display::target` then answers the image surface's target, and
+  `Fallback::Unavailable` carries why the image stayed sRGB.
+- The `viewport` collector's `image_surface` field shows the route, the
+  compositor's announcements, each image surface (its place, tag and
+  configuration) and the compositor's preferred image description for
+  the window (its primaries, transfer, luminances and target volume),
+  re-read when the window moves to another screen.
+- `EGUI_POP_IMAGE_SURFACE=off` turns it off; `=no-tag` keeps the
+  driver's colour spaces only (for a driver that would hold the colour
+  of surfaces beyond Mesa's rule).
+- Limits: the main window only; a transparent window; the subsurface is
+  placed on whole logical pixels (at a fractional scale its pixels may
+  sit up to one pixel off the interface's); the perceptual intent (the
+  one every compositor takes).
+
+Checking it on a screen (automation has no colour-managed Wayland
+session):
+
+1. In a Wayland session with colour management (KWin 6.3 or later is
+   the reference: the tagged route), on a wide-gamut screen with its
+   profile set in the display settings, run
+   `cargo run -p egui-pop-gallery -- --wide-gamut --page viewport`.
+   A missing image surface is printed on stderr at start-up.
+2. Open the `display` page: "Image surface" shows the route (`tagged`
+   on KWin, `wsi` on GNOME), the image's encoding, why when less, what
+   the compositor announces and its preferred description. Back on the
+   `viewport` page, the image must look exactly as it does without
+   `--wide-gamut` (the demo's colours are within sRGB: the compositor
+   maps the BT.2020 encoding back to them), with no seam or offset at
+   its edges, and overlays, the before/after split and menus drawn over
+   it. Pan, zoom and resize the window: the image follows in the same
+   frame as the interface.
+3. `WAYLAND_DEBUG=1 cargo run -p egui-pop-gallery -- --wide-gamut --page viewport 2>&1 | grep -E 'wp_color|wl_subsurface|set_image_description'`
+   shows one subsurface per viewport, `set_primaries_named(6)` (BT.2020)
+   and `set_tf_named(2)` (gamma 2.2), and `set_image_description` on the
+   subsurface (not on the window's surface).
+4. In Helios, `helios doctor display` prints what the compositor
+   announces; it should agree with the display page. With the
+   Wide-gamut preview setting on, a test chart with colours outside
+   sRGB (a saturated P3 or BT.2020 green) shows them distinct where
+   the sRGB preview clips them.

@@ -179,7 +179,9 @@ The protocol names a target by named primaries (`srgb`, `display_p3`,
 
 No wide-gamut Wayland session is available to automation: the
 negotiation is tested headless, the rest is checked by hand on a
-colour-managed compositor.
+colour-managed compositor, as
+[viewport.md](viewport.md#wide-gamut-on-wayland) describes (the gallery
+with `--wide-gamut`, `WAYLAND_DEBUG`, `helios doctor display`).
 
 ## Sources
 

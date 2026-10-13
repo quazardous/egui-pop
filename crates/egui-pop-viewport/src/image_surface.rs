@@ -170,6 +170,8 @@ fn tag(
     if !offer.may_tag {
         return Err(format!("tagging is turned off ({VARIABLE}=no-tag)"));
     }
+    // upstream: Mesa holds the colour object of sRGB swapchains and wgpu
+    // has no pass-through colour space (docs/upstream.md, Wayland).
     if caps.wsi_claims_srgb_surfaces() {
         return Err(
             "the compositor announces sRGB with the sRGB transfer, so the driver's \
@@ -411,6 +413,8 @@ fn id() -> Id {
 /// main window's handles (eframe's creation context). Returns what the
 /// platform offers; viewports in the main window use it from the next
 /// frame.
+// upstream: winit binds no colour management and egui-wgpu takes no
+// colour space, hence a surface of the image's own (docs/upstream.md).
 pub fn install(
     ctx: &Context,
     rs: &egui_wgpu::RenderState,

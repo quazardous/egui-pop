@@ -152,12 +152,15 @@ Reviewed at every egui bump: remove what upstream fixed, update the rest.
   `RenderState::create` and `configure_surface`), and the renderer's
   fragment entry chosen by the colour space's transfer (linear for scRGB,
   an encoding pass for PQ and HLG) rather than by `is_srgb()`.
-- **Workaround**: none possible inside eframe. The viewport's display
-  stage implements every transfer and the P3 and BT.2020 primaries (CPU
-  and shader); it reports truthfully what an eframe window draws (sRGB,
-  with the reason, `display::Resolution`), and a host with its own
-  surface configures it with `egui_pop_viewport::gpu::choose_surface`
-  and declares it (`gpu::install_for_surface`, `display::set_target`).
+- **Workaround**: none possible inside eframe for the window's own
+  surface. The viewport's display stage implements every transfer and
+  the P3 and BT.2020 primaries (CPU and shader); it reports truthfully
+  what an eframe window draws (sRGB, with the reason,
+  `display::Resolution`); a host with its own surface configures it with
+  `egui_pop_viewport::gpu::choose_surface` and declares it
+  (`gpu::install_for_surface`, `display::set_target`); on Wayland the
+  image gets a surface of its own (next entry). The issue text is
+  drafted below, under the Wayland entry.
 - **Remove when**: egui-wgpu takes a surface format and colour space;
   then `gpu::install` reads them from the render state.
 
@@ -166,30 +169,121 @@ Reviewed at every egui bump: remove what upstream fixed, update the rest.
 - **Compensated**: on Wayland, colour management is the
   `wp_color_management_v1` protocol (staging, in wayland-protocols since
   1.41): a surface gets an image description (primaries, transfer,
-  luminances), and the compositor gives each output's preferred one.
+  luminances), and the compositor gives each surface's preferred one.
   winit 0.30 binds none of it (no colour-management object, no event for
-  the output's description), and wgpu has no Wayland-specific path: on
-  Vulkan it relies on the driver's window system integration exposing
-  extra colour spaces through `VK_EXT_swapchain_colorspace` (recent Mesa
-  drivers do so on compositors with the protocol), and on GL it offers
-  sRGB only.
-- **Upstream**: winit has no issue for `wp_color_management_v1` that
-  egui-pop could find; it would sit with the other Wayland protocol
-  bindings of winit's Wayland backend (`platform_impl/linux/wayland`).
-- **Missing, and where it would plug in**:
-  - the surface's encoding: through wgpu's Vulkan colour spaces where
-    the driver offers them, then through egui-wgpu as above;
-    `gpu::install_for_surface` already takes the colour space;
-  - the output's preferred description (its primaries, its luminances
-    and so the headroom): winit would need to expose it per window and
-    signal its changes; egui-pop would turn it into
-    `DisplayTarget::sdr_white_nits` and `headroom` with
-    `TargetSource::Os`, set with `display::set_target`;
-  - without a Vulkan driver offering the colour spaces (GL, older
-    Mesa), an application would have to tag the surface itself through
-    the protocol (`TargetSource::Tagged`), which needs the
-    `wl_surface` winit gives and a protocol binding of its own.
-- **Workaround**: none: Wayland windows draw sRGB, and the viewport says
-  so (`display::Resolution::reason`).
-- **Remove when**: winit exposes the output's image description and
-  egui-wgpu takes a colour space.
+  the preferred description), eframe configures every window 8-bit sRGB
+  (above), and wgpu's Vulkan path relies on the driver: Mesa's Wayland
+  window system integration (25.1 and later) maps some
+  `VkColorSpaceKHR` to the protocol, none of them BT.2020 with a 2.2
+  power, and holds the colour-management object of every swapchain's
+  surface when the compositor announces the `srgb` transfer to it
+  (research: [wayland-colour.md](wayland-colour.md)).
+- **Upstream**: winit's
+  <https://github.com/rust-windowing/winit/issues/4131> (colour
+  management getters and events, open); the wgpu, egui-wgpu and Mesa
+  requests below are not filed yet.
+- **Workaround**: the image gets a surface of its own
+  (`egui_pop_viewport::image_surface`, `// upstream:` in
+  `image_surface.rs`): `egui-pop-wayland` joins winit's connection from
+  the window's raw handles, makes a subsurface below the window, tags it
+  through the protocol (or lets the driver declare a colour space where
+  it holds the surface), and reads the preferred description through
+  `get_surface_feedback`; the viewport renders into it with wgpu and
+  punches a hole in the interface. It needs a transparent window and
+  serves the main window only.
+- **Remove when**: egui-wgpu takes a surface colour space and wgpu
+  offers one for the wanted encoding (or a pass-through one an
+  application can tag), and winit exposes the preferred description;
+  then the window's own surface carries the image, and the interface is
+  encoded for it.
+
+### Drafted requests (not filed)
+
+**wgpu: a pass-through surface colour space, and BT.2020 linear.**
+
+> Title: `SurfaceColorSpace::PassThrough` and `Bt2020Linear` on Vulkan
+>
+> wgpu 30 configures a surface's colour space (`SurfaceConfiguration::color_space`,
+> #9658), mapping `SRGB_NONLINEAR`, `EXTENDED_SRGB_LINEAR`,
+> `EXTENDED_SRGB_NONLINEAR`, `DISPLAY_P3_NONLINEAR`, `HDR10_ST2084` and
+> `HDR10_HLG` (`wgpu-hal/src/vulkan/conv.rs`); the others a driver
+> reports are dropped (`unknown_color_spaces_are_dropped`). Two of them
+> matter on Wayland:
+>
+> - `VK_COLOR_SPACE_PASS_THROUGH_EXT`: Mesa's Wayland WSI then leaves
+>   the surface's `wp_color_management_surface_v1` alone. With any other
+>   colour space, Mesa creates that object (one is allowed per
+>   `wl_surface`) on compositors announcing the `srgb` transfer, even for
+>   plain sRGB, so an application that describes its surface itself
+>   through the protocol (an ICC profile, BT.2020 with a 2.2 power,
+>   custom primaries) cannot use a wgpu swapchain there: tagging it is a
+>   fatal `surface_exists` error.
+> - `VK_COLOR_SPACE_BT2020_LINEAR_EXT`: Mesa maps it to `bt2020` +
+>   `ext_linear` wherever the compositor announces both (GNOME and sway
+>   included, which offer no scRGB), a wide SDR encoding.
+>
+> Proposal: `SurfaceColorSpace::PassThrough` (documented as "the
+> presentation engine applies no colour management; the application
+> describes the surface by other means") and `Bt2020Linear`, with their
+> `SurfaceColorSpaces` flags, mapped on Vulkan only and reported from
+> `vkGetPhysicalDeviceSurfaceFormatsKHR` as the others are.
+
+PR idea: two variants in `wgpu-types/src/surface.rs` and their flags,
+the two arms in `wgpu-hal/src/vulkan/conv.rs` both ways, a line in the
+`03_hdr_surface` example's list.
+
+**egui-wgpu / eframe: a surface colour space** (see also the entry
+above).
+
+> Title: Let `WgpuConfiguration` choose the surface format and colour space
+>
+> egui-wgpu picks the surface format (`preferred_framebuffer_format`) and
+> configures wgpu's default colour space (`configure_surface` builds on
+> `get_default_config`); an application cannot ask for a wide-gamut or
+> HDR surface, which wgpu 30 supports (`SurfaceConfiguration::color_space`,
+> `SurfaceCapabilities::format_capabilities`). The renderer also picks
+> its output encoding from `format.is_srgb()` (`fs_main_linear_framebuffer`
+> or `fs_main_gamma_framebuffer`), so on a linear half-float surface
+> (scRGB) the interface would be written gamma-encoded.
+>
+> Proposal: `WgpuConfiguration::surface_format` and `surface_color_space`
+> as callbacks over the surface's capabilities (`Fn(&SurfaceCapabilities)
+> -> Option<(TextureFormat, SurfaceColorSpace)>`, default: today's
+> choice), used by `RenderState::create` and `configure_surface`; the
+> chosen colour space exposed in `RenderState`; the renderer's output
+> transfer chosen from it (linear for scRGB and the linear spaces,
+> sRGB-encoded otherwise), with a hook for a matrix and transfer
+> (Display P3, PQ) later.
+
+PR idea: the two fields and their default in `egui-wgpu/src/lib.rs`,
+their use in `winit.rs` (`configure_surface`) and `RenderState::create`,
+and a `Renderer` option for the output transfer replacing the
+`is_srgb()` test; eframe passes them through `NativeOptions::wgpu_options`.
+
+**winit: the preferred image description** (a comment on
+rust-windowing/winit#4131 rather than a new issue).
+
+> On Wayland, `wp_color_manager_v1.get_surface_feedback` gives a
+> window's preferred image description (primaries, transfer,
+> luminances, the display's target volume) and `preferred_changed` its
+> changes, which is what an application needs to choose an encoding and
+> an HDR headroom per window. A `Window::preferred_color_description()`
+> (a plain struct of those values) and a `WindowEvent::ColorDescriptionChanged`
+> would cover it; binding the manager in winit's Wayland backend and one
+> feedback object per window is enough. Today an application binds it on
+> winit's connection through the raw handles (as egui-pop does).
+
+**Mesa (Wayland WSI): leave sRGB surfaces untouched** (for the record;
+Mesa's call).
+
+> `needs_color_surface()` creates a `wp_color_management_surface_v1`
+> for `VK_COLOR_SPACE_SRGB_NONLINEAR_KHR` when the compositor announces
+> the `srgb` primaries and transfer, but `wsi_wl_swapchain_update_colorspace`
+> never sets a description for it. The object only takes the surface's
+> single slot, so a client describing the surface itself (a subsurface
+> with an ICC profile, for one) cannot. Creating it lazily, when a
+> description is set, would leave sRGB swapchains untouched. Separately,
+> `SRGB_NONLINEAR` and `DISPLAY_P3_NONLINEAR` map to the `srgb` transfer,
+> deprecated in version 2 and not announced by KWin, wlroots or Weston,
+> so Display P3 is offered only on GNOME and Hyprland; `gamma22` (or
+> `compound_power_2_4` on version 2) would offer it everywhere.
