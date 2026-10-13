@@ -86,7 +86,9 @@ Not read yet: references inside composite values, JSON Pointer `$ref`,
 
 3. **Component**: one component's tokens, each an alias of a system token:
    `button.*`, `slider.{track, fill, thumb}`, `menu.item.*`, `dialog.*`,
-   `toast.*`. A theme may re-alias a component token (high contrast
+   `toast.*`, `editor.*` and `syntax.*` (one colour per kind of code:
+   keywords on the accent, strings on `success`, numbers on `warning`,
+   comments muted...). A theme may re-alias a component token (high contrast
    outlines every button: `button.border` is `{border.strong}`).
 
 ## Naming rules

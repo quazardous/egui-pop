@@ -9,6 +9,12 @@ egui minor.
 
 ### Added
 
+- Theme tokens for editors: `editor.*` (background, gutter, line
+  numbers, the cursor's line, selection, cursor, guides, brackets,
+  search matches, folds, breakpoints, diagnostics, diff) and `syntax.*`
+  (one per kind of code), each an alias of a system token, with their
+  contrast pairs.
+
 - Tree drops refused by the source (`TreeSource::can_drop`, allowing
   everything by default) and at the call site (`TreeView::can_drop`),
   besides `tree.drop`'s hooks: asked while dragging, where a refused
