@@ -28,6 +28,9 @@
 //! keys held, a drag, a handle). A run-hook (or a redirect of `default`)
 //! gives another cursor; a veto shows the default.
 //!
+//! [`preview`] opens a preview dialog: an image viewport in a custom
+//! dialog over a clear backdrop (ADR 0013).
+//!
 //! ```
 //! use egui_pop_api::AppHandle;
 //! use egui_pop_viewport::curve::CurveEditor;
@@ -40,6 +43,7 @@
 //! ```
 
 pub mod graph;
+pub mod preview;
 
 pub use graph::{GRAPHS, Graphs, show_graph};
 

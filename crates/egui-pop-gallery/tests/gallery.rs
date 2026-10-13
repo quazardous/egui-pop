@@ -758,6 +758,11 @@ fn the_viewport_page_zooms_through_commands_and_reports_signals() {
 fn run_page(h: &mut Harness<'_, Gallery>, page: &str) {
     if page == "viewport" {
         settle_viewport(h);
+    } else if page == "preview" {
+        // Its tiles are computed when asked: a few frames' work.
+        for _ in 0..8 {
+            let _ = h.run_ok();
+        }
     } else {
         h.run();
     }
@@ -2233,4 +2238,35 @@ fn the_tips_page_dismisses_a_tip_and_remembers_it_in_the_settings() {
     h.run();
     h.run();
     assert!(h.query_by_label("Go through the pages").is_some());
+}
+
+#[test]
+fn the_preview_page_opens_an_image_viewport_in_a_custom_dialog() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "preview"));
+    run_page(&mut h, "preview");
+    h.get_by_label("Preview the export").click();
+    for _ in 0..10 {
+        let _ = h.run_ok();
+    }
+    assert!(egui_pop::core::overlay::modal_open(&h.ctx));
+    assert!(h.query_by_label("Export preview").is_some());
+    assert!(h.query_by_label("Image behind the preview").is_some());
+    egui_pop_test::assert_all_named(&h);
+    // The body is mounted in the custom dialog, sRGB first.
+    let mounts = h.state().app.handle().mounts();
+    let m = mounts
+        .iter()
+        .find(|m| m.component == "viewport")
+        .expect("the preview's viewport is mounted");
+    assert_eq!(m.host, "dialog.custom");
+    assert_eq!(m.fit.cell(), "if c3 c9");
+    h.snapshot("preview-dialog-pop-dark");
+    // Enter exports, with the view the preview was left at.
+    h.key_press(egui::Key::Enter);
+    let _ = h.run_ok();
+    let _ = h.run_ok();
+    assert!(!egui_pop::core::overlay::modal_open(&h.ctx));
+    let sent = context_key(&h, "galleryPreviewSent");
+    assert!(sent.contains(r#""format":"png""#), "{sent}");
+    assert!(sent.contains(r#""view""#), "{sent}");
 }

@@ -30,6 +30,7 @@ pub mod overview;
 pub mod palettes;
 pub mod placeholders;
 pub mod platform;
+pub mod preview;
 pub mod progress;
 pub mod scale;
 pub mod settings;
