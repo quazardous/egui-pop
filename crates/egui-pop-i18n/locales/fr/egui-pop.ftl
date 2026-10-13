@@ -531,6 +531,10 @@ egui-pop-viewport-histogram-value-log = { $channels } ({ $bins } classes, logari
 
 egui-pop-viewport-label = Visionneuse d’image
 
+egui-pop-viewport-wheel-luminance = Luminance { $wheel }
+
+egui-pop-viewport-wheel-value = teinte { $hue }°, chroma { $chroma } %, luminance { $luminance }
+
 egui-pop-views-empty = Vide
 
 egui-pop-views-failed = Chargement impossible : { $reason }

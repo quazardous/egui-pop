@@ -23,6 +23,8 @@
 //! - [`curve`]: a curve editor (points added, moved and deleted, a
 //!   spline the application supplies, a histogram behind, the value
 //!   picked in the image);
+//! - [`wheel`]: colour wheels (lift, gamma, gain) and a hue and
+//!   saturation picker, each with a luminance slider;
 //! - [`change`]: what the image tools share, the change they propose
 //!   and the hook that sees it (a veto, a redirect), and the form their
 //!   values take in a step;
@@ -65,6 +67,7 @@ pub mod thumbnail;
 pub mod tiles;
 pub mod tokens;
 pub mod view;
+pub mod wheel;
 pub mod widget;
 
 pub use hooks::{Cause, Hooks, Verdict, ViewChange};

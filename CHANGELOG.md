@@ -9,6 +9,15 @@ egui minor.
 
 ### Added
 
+- Colour wheels (`viewport::wheel::ColorWheel`): `offset` for the lift,
+  gamma and gain wheels of colour grading (neutral at the centre,
+  relative drags, a signed luminance) and `picker` for hue and
+  saturation (a press picks, a luminance from 0 to 1), each with a
+  luminance slider from egui-pop's slider family. The value
+  (`WheelValue`: hue, chroma, luminance) is the application's; every
+  change, of the puck or of the luminance, goes through the wheel's
+  hook. Keys move the puck, a double click resets; the disc is an
+  AccessKit slider on the chroma.
 - Movable dialogs: `DialogSpec::movable(true)`, or the `dialogs.movable`
   setting for every dialog, gives a dialog a header band (its own tone,
   a separator, the move cursor, the ✕ when closable) to drag it by,

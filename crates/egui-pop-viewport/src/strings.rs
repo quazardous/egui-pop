@@ -37,6 +37,14 @@ pub const CURVE_VALUE_SELECTED: StrKey = StrKey::new(
     "egui-pop-viewport-curve-value-selected",
     "point { $point } of { $points }: input { $input } %, output { $output } %",
 );
+/// A colour wheel's accessible value.
+pub const WHEEL_VALUE: StrKey = StrKey::new(
+    "egui-pop-viewport-wheel-value",
+    "hue { $hue }°, chroma { $chroma } %, luminance { $luminance }",
+);
+/// The name of a colour wheel's luminance slider.
+pub const WHEEL_LUMINANCE: StrKey =
+    StrKey::new("egui-pop-viewport-wheel-luminance", "{ $wheel } luminance");
 
 /// Every string the viewport shows, for catalogues and tests.
 pub const ALL: &[StrKey] = &[
@@ -48,6 +56,8 @@ pub const ALL: &[StrKey] = &[
     HISTOGRAM_CLIPPED_HIGHLIGHTS,
     CURVE_VALUE,
     CURVE_VALUE_SELECTED,
+    WHEEL_VALUE,
+    WHEEL_LUMINANCE,
 ];
 
 #[cfg(test)]

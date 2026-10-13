@@ -265,6 +265,8 @@ egui-pop-viewport-histogram-label 957634470d7a6999
 egui-pop-viewport-histogram-value dde5fc725374c2d0
 egui-pop-viewport-histogram-value-log c8d4f5366b1933e5
 egui-pop-viewport-label 51f6d59dcf87b88e
+egui-pop-viewport-wheel-luminance 3c4cae8e63a22ee6
+egui-pop-viewport-wheel-value ee809a237d899180
 egui-pop-views-empty 43004eaa0e260734
 egui-pop-views-failed 2648f0a77a9febff
 egui-pop-views-list 52d27082aa325209
