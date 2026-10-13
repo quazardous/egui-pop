@@ -202,6 +202,8 @@ pub trait Backend: Send + Sync + 'static {
 /// The desktop's notifications, through notify-rust.
 #[derive(Clone, Debug)]
 pub struct Desktop {
+    // notify-rust is not built for the web, so nothing reads it there
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     app_name: String,
     app_id: Option<String>,
 }

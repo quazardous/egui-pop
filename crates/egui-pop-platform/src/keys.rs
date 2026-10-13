@@ -157,7 +157,9 @@ pub struct HotKeys {
     #[cfg(not(target_arch = "wasm32"))]
     registered: Vec<global_hotkey::hotkey::HotKey>,
     /// Keys by hotkey id, read by the event handler.
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     ids: Arc<Mutex<BTreeMap<u32, String>>>,
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     status: Option<Arc<SystemKeys>>,
 }
 
