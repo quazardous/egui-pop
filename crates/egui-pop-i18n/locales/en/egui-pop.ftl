@@ -4,6 +4,8 @@
 
 category-edit = Edit
 
+category-editor = Editor
+
 category-file = File
 
 category-help = Help
@@ -52,6 +54,42 @@ command-app-window-minimize =
     .description = Minimizes the window.
     .title = Minimize
 
+command-code-actions =
+    .description = Asks the assist provider for code actions and quick fixes at the cursor.
+    .title = Code actions
+
+command-code-complete =
+    .description = Asks the assist provider for completions at the cursor.
+    .title = Suggest completions
+
+command-code-definition =
+    .description = Asks the assist provider where the symbol at the cursor is defined, and goes there.
+    .title = Go to definition
+
+command-code-fold =
+    .description = Folds the block at the cursor (or at `line`, from 0).
+    .title = Fold
+
+command-code-hover =
+    .description = Asks the assist provider about the symbol at the cursor, as hovering does.
+    .title = Show hover
+
+command-code-set-diagnostics =
+    .description = Replaces a code editor's diagnostics through the `code.diagnostics` step.
+    .title = Set the diagnostics
+
+command-code-toggle-breakpoint =
+    .description = Sets or clears a breakpoint on the cursor's line (or `line`, from 0).
+    .title = Toggle breakpoint
+
+command-code-unfold =
+    .description = Unfolds the fold at the cursor (or at `line`, from 0).
+    .title = Unfold
+
+command-code-unfold-all =
+    .description = Unfolds every fold.
+    .title = Unfold all
+
 command-crash-dismiss =
     .description = Deletes a crash report (`path`).
     .title = Delete a crash report
@@ -67,6 +105,50 @@ command-edit-redo =
 command-edit-undo =
     .description = Undo the last change.
     .title = Undo
+
+command-editor-find =
+    .description = Opens the search bar; with `query` (and `case_sensitive`, `whole_word`, `regex`), searches and selects the first match after the cursor.
+    .title = Find
+
+command-editor-find-next =
+    .description = Selects the next match of the search.
+    .title = Find next
+
+command-editor-find-previous =
+    .description = Selects the previous match of the search.
+    .title = Find previous
+
+command-editor-goto-line =
+    .description = Opens the go-to-line field; with `line` (from 1), puts the cursor there.
+    .title = Go to line
+
+command-editor-read =
+    .description = The editor's text (or lines `from_line` to `to_line`, from 0, end excluded), with its version, selection and state.
+    .title = Read the text
+
+command-editor-redo =
+    .description = Redoes the editor's last undone edit.
+    .title = Redo in the editor
+
+command-editor-replace =
+    .description = Opens the search bar with replace; with `query` and `replacement`, replaces the match at the cursor (or every match with `all`).
+    .title = Replace
+
+command-editor-save =
+    .description = Saves the editor's text through the `edit.save` step.
+    .title = Save
+
+command-editor-select =
+    .description = Selects from `anchor` to `head` (`{"{"}line, col{"}"}` from 0; `head` alone puts the cursor there).
+    .title = Select
+
+command-editor-undo =
+    .description = Undoes the editor's last edit (its own history, as Ctrl+Z in the editor).
+    .title = Undo in the editor
+
+command-editor-write =
+    .description = Changes the text through `edit.change`: the whole `text`; or `text` between `from` and `to` (`{"{"}line, col{"}"}` from 0); or a list of `changes`. One undo step.
+    .title = Write the text
 
 command-logs-reveal =
     .description = Opens the folder holding the application's log files.
@@ -183,6 +265,40 @@ egui-pop-devtools-waiting = Waiting for the next chord after { $keys }
 egui-pop-dialog-browse = Browse…
 
 egui-pop-dialog-filter = Filter
+
+egui-pop-editors-close = Close the search
+
+egui-pop-editors-code = Code editor
+
+egui-pop-editors-count = { $current } of { $total }
+
+egui-pop-editors-find = Find
+
+egui-pop-editors-goto = Go to line
+
+egui-pop-editors-match-case = Match case
+
+egui-pop-editors-next = Next match
+
+egui-pop-editors-no-results = No results
+
+egui-pop-editors-position = Line { $line }, column { $col }
+
+egui-pop-editors-previous = Previous match
+
+egui-pop-editors-regex = Regular expression
+
+egui-pop-editors-replace = Replace with
+
+egui-pop-editors-replace-all = Replace all
+
+egui-pop-editors-replace-one = Replace
+
+egui-pop-editors-text = Text editor
+
+egui-pop-editors-toggle-replace = Show replace
+
+egui-pop-editors-whole-word = Whole word
 
 egui-pop-fault-body = The rest of the application is fine. Retry, or report the message below.
 
@@ -418,6 +534,9 @@ plugin-egui-pop-devtools =
 
 plugin-egui-pop-dialogs =
     .title = Dialogs
+
+plugin-egui-pop-editors =
+    .title = Editors
 
 plugin-egui-pop-files =
     .title = Files

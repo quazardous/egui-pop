@@ -3,6 +3,8 @@
 
 category-edit = Édition
 
+category-editor = Éditeur
+
 category-file = Fichier
 
 category-help = Aide
@@ -51,6 +53,42 @@ command-app-window-minimize =
     .description = Réduit la fenêtre.
     .title = Réduire
 
+command-code-actions =
+    .description = Demande au fournisseur d’assistance les actions et corrections rapides au curseur.
+    .title = Actions sur le code
+
+command-code-complete =
+    .description = Demande au fournisseur d’assistance des complétions au curseur.
+    .title = Proposer des complétions
+
+command-code-definition =
+    .description = Demande au fournisseur d’assistance où est défini le symbole sous le curseur, et y va.
+    .title = Aller à la définition
+
+command-code-fold =
+    .description = Replie le bloc au curseur (ou à `line`, à partir de 0).
+    .title = Replier
+
+command-code-hover =
+    .description = Demande au fournisseur d’assistance ce qu’est le symbole sous le curseur, comme le survol.
+    .title = Afficher le survol
+
+command-code-set-diagnostics =
+    .description = Remplace les diagnostics d’un éditeur de code par l’étape `code.diagnostics`.
+    .title = Définir les diagnostics
+
+command-code-toggle-breakpoint =
+    .description = Pose ou retire un point d’arrêt sur la ligne du curseur (ou `line`, à partir de 0).
+    .title = Basculer le point d’arrêt
+
+command-code-unfold =
+    .description = Déplie le repli au curseur (ou à `line`, à partir de 0).
+    .title = Déplier
+
+command-code-unfold-all =
+    .description = Déplie tous les replis.
+    .title = Tout déplier
+
 command-crash-dismiss =
     .description = Supprime un rapport de plantage (`path`).
     .title = Supprimer un rapport de plantage
@@ -66,6 +104,50 @@ command-edit-redo =
 command-edit-undo =
     .description = Annuler la dernière modification.
     .title = Annuler
+
+command-editor-find =
+    .description = Ouvre la barre de recherche ; avec `query` (et `case_sensitive`, `whole_word`, `regex`), cherche et sélectionne la première occurrence après le curseur.
+    .title = Rechercher
+
+command-editor-find-next =
+    .description = Sélectionne l’occurrence suivante de la recherche.
+    .title = Occurrence suivante
+
+command-editor-find-previous =
+    .description = Sélectionne l’occurrence précédente de la recherche.
+    .title = Occurrence précédente
+
+command-editor-goto-line =
+    .description = Ouvre le champ « aller à la ligne » ; avec `line` (à partir de 1), y place le curseur.
+    .title = Aller à la ligne
+
+command-editor-read =
+    .description = Le texte de l’éditeur (ou les lignes `from_line` à `to_line`, à partir de 0, fin exclue), avec sa version, sa sélection et son état.
+    .title = Lire le texte
+
+command-editor-redo =
+    .description = Rétablit la dernière modification annulée de l’éditeur.
+    .title = Rétablir dans l’éditeur
+
+command-editor-replace =
+    .description = Ouvre la barre de recherche avec le remplacement ; avec `query` et `replacement`, remplace l’occurrence au curseur (ou toutes avec `all`).
+    .title = Remplacer
+
+command-editor-save =
+    .description = Enregistre le texte de l’éditeur par l’étape `edit.save`.
+    .title = Enregistrer
+
+command-editor-select =
+    .description = Sélectionne de `anchor` à `head` (`{"{"}line, col{"}"}` à partir de 0 ; `head` seul y place le curseur).
+    .title = Sélectionner
+
+command-editor-undo =
+    .description = Annule la dernière modification de l’éditeur (son propre historique, comme Ctrl+Z dans l’éditeur).
+    .title = Annuler dans l’éditeur
+
+command-editor-write =
+    .description = Modifie le texte par `edit.change` : tout le `text` ; ou `text` entre `from` et `to` (`{"{"}line, col{"}"}` à partir de 0) ; ou une liste de `changes`. Une seule étape d’annulation.
+    .title = Écrire le texte
 
 command-logs-reveal =
     .description = Ouvre le dossier des fichiers journaux de l’application.
@@ -182,6 +264,40 @@ egui-pop-devtools-waiting = En attente de l’accord suivant après { $keys }
 egui-pop-dialog-browse = Parcourir…
 
 egui-pop-dialog-filter = Filtrer
+
+egui-pop-editors-close = Fermer la recherche
+
+egui-pop-editors-code = Éditeur de code
+
+egui-pop-editors-count = { $current } sur { $total }
+
+egui-pop-editors-find = Rechercher
+
+egui-pop-editors-goto = Aller à la ligne
+
+egui-pop-editors-match-case = Respecter la casse
+
+egui-pop-editors-next = Occurrence suivante
+
+egui-pop-editors-no-results = Aucun résultat
+
+egui-pop-editors-position = Ligne { $line }, colonne { $col }
+
+egui-pop-editors-previous = Occurrence précédente
+
+egui-pop-editors-regex = Expression régulière
+
+egui-pop-editors-replace = Remplacer par
+
+egui-pop-editors-replace-all = Tout remplacer
+
+egui-pop-editors-replace-one = Remplacer
+
+egui-pop-editors-text = Éditeur de texte
+
+egui-pop-editors-toggle-replace = Afficher le remplacement
+
+egui-pop-editors-whole-word = Mot entier
 
 egui-pop-fault-body = Le reste de l’application fonctionne. Réessayez, ou signalez le message ci-dessous.
 
@@ -417,6 +533,9 @@ plugin-egui-pop-devtools =
 
 plugin-egui-pop-dialogs =
     .title = Dialogues
+
+plugin-egui-pop-editors =
+    .title = Éditeurs
 
 plugin-egui-pop-files =
     .title = Fichiers

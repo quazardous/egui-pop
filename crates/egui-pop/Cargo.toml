@@ -27,6 +27,11 @@ viewport = ["dep:egui-pop-viewport"]
 ## Data views: a live tree, a list and a data table
 ## (`egui-pop-views`, re-exported as `egui_pop::views`).
 views = ["dep:egui-pop-views"]
+## Text and code editors, with syntect highlighting (`egui-pop-editors`,
+## re-exported as `egui_pop::editors`).
+editors = ["dep:egui-pop-editors", "egui-pop-editors/syntect"]
+## The code editor's tree-sitter highlighter (compiles C).
+editors-tree-sitter = ["editors", "egui-pop-editors/tree-sitter"]
 ## Translations over Fluent: catalogues, the language setting, locale
 ## formatting, the key extractor (`egui-pop-i18n`, re-exported as
 ## `egui_pop::i18n`).
@@ -74,6 +79,7 @@ egui-pop-api.workspace = true
 egui-pop-viewport = { workspace = true, optional = true }
 egui-pop-i18n = { workspace = true, optional = true }
 egui-pop-views = { workspace = true, optional = true }
+egui-pop-editors = { workspace = true, optional = true }
 egui-pop-platform = { workspace = true, optional = true }
 
 [dev-dependencies]

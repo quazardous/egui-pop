@@ -9,6 +9,30 @@ egui minor.
 
 ### Added
 
+- Text and code editors, a new crate `egui-pop-editors` (L4, feature
+  `editors` of the facade): `TextSurface` and `CodeEditor` over a shared
+  `EditorState` (a line buffer, the selection, the editor's own
+  history, marks, folds, search), virtualised (100 000 lines cost a
+  screenful), text inputs for the focus rules (Escape leaves), their
+  shortcuts commands bound on the `editor` surface. Search and replace
+  (case, whole word, regular expressions), go to line. The code editor
+  adds line numbers, a gutter of diagnostics, breakpoints and diff
+  marks the application pushes, the cursor's line, matching brackets,
+  indentation guides, folding by indentation, and highlighting behind
+  the `Highlighter` trait: syntect by default (feature `syntect`),
+  tree-sitter behind `editors-tree-sitter`. Code assist through
+  `AssistProvider` (completion, hover, signature help, code actions, go
+  to definition, inline suggestions; asynchronous, with request ids and
+  cancellation), the completion list, the hover and signature cards
+  and ghost text drawn from the theme; `WordCompletion` by default.
+  Steps `edit.change`, `edit.save`, `code.diagnostics`,
+  `code.insert_completion` and `code.accept_suggestion`, journal events
+  `code.cursor_moved`, `code.selection_changed`,
+  `code.completion_requested` and `code.completion_accepted`,
+  collectors `edit_changes`, `edit_saves` and `code_diagnostics`, and
+  commands an agent reads and writes the buffer with (`editor.read`,
+  `editor.write`, ...). Translated in French. Guide: `docs/editors.md`.
+
 - Theme tokens for editors: `editor.*` (background, gutter, line
   numbers, the cursor's line, selection, cursor, guides, brackets,
   search matches, folds, breakpoints, diagnostics, diff) and `syntax.*`

@@ -58,6 +58,10 @@ pub use egui_pop_viewport as viewport;
 #[cfg(feature = "views")]
 pub use egui_pop_views as views;
 
+/// Text and code editors (feature `editors`).
+#[cfg(feature = "editors")]
+pub use egui_pop_editors as editors;
+
 /// Translations: catalogues, the language setting, locale formatting,
 /// the key extractor (feature `i18n`).
 #[cfg(feature = "i18n")]

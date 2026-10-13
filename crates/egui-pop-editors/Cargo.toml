@@ -1,0 +1,41 @@
+[package]
+name = "egui-pop-editors"
+version = "0.1.0"
+description = "Text and code editors for egui-pop: virtualised, themed, highlighted through a pluggable highlighter (syntect by default), every edit a step an application can veto, rewrite or follow"
+keywords = ["egui", "editor", "code", "syntax", "highlighting"]
+categories = ["gui", "text-editors"]
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+default = ["syntect"]
+## Highlighting through syntect's bundled Sublime Text grammars (pure
+## Rust regular expressions, so it builds for the web).
+syntect = ["dep:syntect"]
+## A highlighter over tree-sitter grammars the application brings
+## (tree-sitter compiles C: off by default).
+tree-sitter = ["dep:tree-sitter-highlight"]
+
+[dependencies]
+egui.workspace = true
+egui-pop-model.workspace = true
+egui-pop-core.workspace = true
+egui-pop-api.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+# MIT OR Apache-2.0: search and replace.
+regex = "1"
+# MIT: Sublime Text grammars (the fancy-regex engine, no C).
+syntect = { version = "5.3", default-features = false, features = ["default-syntaxes", "regex-fancy"], optional = true }
+# MIT: tree-sitter highlight queries.
+tree-sitter-highlight = { version = "0.27", optional = true }
+
+[dev-dependencies]
+egui = { workspace = true, features = ["default_fonts"] }
+egui_kittest = { workspace = true }
