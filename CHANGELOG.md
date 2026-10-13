@@ -241,6 +241,11 @@ egui minor.
 
 ### Changed
 
+- An application's catalogue defining a key egui-pop's own catalogue has
+  overrides it with a warning (`I18n::overridden`, an `i18n.overridden`
+  event) instead of failing the plugin; egui-pop's catalogues are base
+  catalogues (`Catalogue::as_base`, `Catalog::add_base`). A key the
+  application defines twice is still refused.
 - Two bindings of one key whose `when` clauses can never both hold
   (`view == 'masks'` and `view == 'lighttable'`, `x` and `!x`) are no
   longer a conflict (`Keymap::conflicts`, the shortcuts editor);

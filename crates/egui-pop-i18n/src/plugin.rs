@@ -244,6 +244,15 @@ impl Plugin for I18nPlugin {
             if let Some(dir) = &self.dir {
                 i18n.add_dir(dir).map_err(PluginError::Failed)?;
             }
+            // An application's text over egui-pop's: kept, and said.
+            for (locale, key) in i18n.overridden() {
+                ctx.app().publish(
+                    "egui_pop.i18n",
+                    None,
+                    "i18n.overridden",
+                    serde_json::json!({ "locale": locale, "key": key }),
+                );
+            }
         }
         let offered = i18n.offered();
         // Each language shows by its own name, whatever the locale.

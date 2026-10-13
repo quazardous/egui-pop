@@ -61,6 +61,11 @@ pub struct Catalog {
     bundles: BTreeMap<String, Bundle>,
     /// The message ids each locale defines.
     ids: BTreeMap<String, BTreeSet<String>>,
+    /// The ids of each locale an application's catalogue may override
+    /// (egui-pop's own, see [`Catalog::add_base`]).
+    base: BTreeMap<String, BTreeSet<String>>,
+    /// What an application's catalogue overrode: (locale, id).
+    overridden: Vec<(String, String)>,
     locale: String,
     chain: Vec<String>,
 }
@@ -80,6 +85,8 @@ impl Catalog {
         let mut c = Self {
             bundles: BTreeMap::new(),
             ids: BTreeMap::new(),
+            base: BTreeMap::new(),
+            overridden: Vec::new(),
             locale: String::new(),
             chain: Vec::new(),
         };
@@ -115,9 +122,32 @@ impl Catalog {
     }
 
     /// Adds Fluent source to a locale's catalogue. Refused, with nothing
-    /// added, when it does not parse or defines a message already there.
+    /// added, when it does not parse or defines a message already there,
+    /// unless that message came from a base catalogue
+    /// ([`Catalog::add_base`]): the new text overrides it, and
+    /// [`Catalog::overridden`] says so.
     pub fn add(&mut self, tag: &str, source: &str) -> Result<(), String> {
         self.add_with(tag, source, None, false)
+    }
+
+    /// Adds a base catalogue (egui-pop's own): an application's catalogue
+    /// added after it may override its messages, with a warning.
+    pub fn add_base(&mut self, tag: &str, source: &str) -> Result<(), String> {
+        self.add_with(tag, source, None, false)?;
+        let tag = locale::normalize(tag).unwrap_or_default();
+        let resource = FluentResource::try_new(source.to_string()).map_err(|_| "parsed above")?;
+        let ids = resource.entries().filter_map(|e| match e {
+            Entry::Message(m) => Some(m.id.name.to_string()),
+            _ => None,
+        });
+        self.base.entry(tag).or_default().extend(ids);
+        Ok(())
+    }
+
+    /// The base messages an application's catalogue overrode: (locale,
+    /// id), in order.
+    pub fn overridden(&self) -> &[(String, String)] {
+        &self.overridden
     }
 
     /// Adds Fluent source whose messages replace those already there (an
@@ -152,6 +182,8 @@ impl Catalog {
             .bundles
             .entry(tag.clone())
             .or_insert_with(|| new_bundle(&tag));
+        let base = self.base.get(&tag);
+        let mut overrides = Vec::new();
         for entry in resource.entries() {
             if let Entry::Message(m) = entry {
                 let id = m.id.name;
@@ -159,10 +191,22 @@ impl Catalog {
                     return Err(format!("`{id}` does not belong to `{owner}`"));
                 }
                 if !overriding && bundle.has_message(id) {
-                    return Err(format!("`{id}` is already defined for {tag}"));
+                    if base.is_some_and(|b| b.contains(id)) {
+                        overrides.push(id.to_string());
+                    } else {
+                        return Err(format!("`{id}` is already defined for {tag}"));
+                    }
                 }
             }
         }
+        let overriding = overriding || !overrides.is_empty();
+        if let Some(b) = self.base.get_mut(&tag) {
+            for id in &overrides {
+                b.remove(id);
+            }
+        }
+        self.overridden
+            .extend(overrides.into_iter().map(|id| (tag.clone(), id)));
         let ids: Vec<String> = resource
             .entries()
             .filter_map(|e| match e {

@@ -18,6 +18,9 @@ pub struct Catalogue {
     pub locale: &'static str,
     pub name: &'static str,
     pub source: &'static str,
+    /// A base catalogue (egui-pop's own): one added after it may override
+    /// its messages, with a warning, instead of being refused.
+    pub base: bool,
 }
 
 impl Catalogue {
@@ -26,7 +29,14 @@ impl Catalogue {
             locale,
             name,
             source,
+            base: false,
         }
+    }
+
+    /// As a base catalogue (see [`Catalogue::base`]).
+    pub const fn as_base(mut self) -> Self {
+        self.base = true;
+        self
     }
 }
 
@@ -37,12 +47,14 @@ pub const EGUI_POP: &[Catalogue] = &[
         "en",
         "egui-pop.ftl",
         include_str!("../locales/en/egui-pop.ftl"),
-    ),
+    )
+    .as_base(),
     Catalogue::new(
         "fr",
         "egui-pop.ftl",
         include_str!("../locales/fr/egui-pop.ftl"),
-    ),
+    )
+    .as_base(),
 ];
 
 /// A lookup waiting for the `i18n.resolve` step, or its answer.
@@ -208,10 +220,22 @@ impl I18n {
     /// Adds catalogues built into the application.
     pub fn add_catalogues(&self, catalogues: &[Catalogue]) -> Result<(), String> {
         for c in catalogues {
-            self.add(c.locale, c.source)
-                .map_err(|e| format!("{}/{}: {e}", c.locale, c.name))?;
+            self.write(|cat| {
+                if c.base {
+                    cat.add_base(c.locale, c.source)
+                } else {
+                    cat.add(c.locale, c.source)
+                }
+            })
+            .map_err(|e| format!("{}/{}: {e}", c.locale, c.name))?;
         }
         Ok(())
+    }
+
+    /// egui-pop's messages an application's catalogue overrode: (locale,
+    /// id). The plugin publishes each as an `i18n.overridden` warning.
+    pub fn overridden(&self) -> Vec<(String, String)> {
+        self.read(|c| c.overridden().to_vec())
     }
 
     /// Reads `dir/<locale>/*.ftl` over what is loaded: their messages
@@ -497,6 +521,29 @@ images-selected =
             i.text("images-selected", english, &args![count = 0]),
             "0 images selected"
         );
+    }
+
+    #[test]
+    fn an_applications_catalogue_overrides_egui_pops_and_says_so() {
+        static APP: &[Catalogue] = &[Catalogue::new(
+            "fr",
+            "app.ftl",
+            "egui-pop-cancel = Laisser tomber\napp-hello = Salut\n",
+        )];
+        let i = I18n::with_egui_pop("fr");
+        assert!(i.overridden().is_empty());
+        i.add_catalogues(APP).unwrap();
+        assert_eq!(i.t("egui-pop-cancel", &[]), "Laisser tomber");
+        assert_eq!(i.t("app-hello", &[]), "Salut");
+        assert_eq!(
+            i.overridden(),
+            vec![("fr".to_string(), "egui-pop-cancel".to_string())]
+        );
+        // The application's own keys, twice: still refused.
+        let e = i.add("fr", "app-hello = Encore\n").unwrap_err();
+        assert!(e.contains("already defined"), "{e}");
+        let e = i.add("fr", "egui-pop-cancel = Encore\n").unwrap_err();
+        assert!(e.contains("already defined"), "{e}");
     }
 
     #[test]
