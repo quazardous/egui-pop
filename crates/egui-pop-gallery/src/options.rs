@@ -25,6 +25,9 @@ Options:
                          directory (simulated otherwise)
   --size <W>x<H>         the window's inner size in points (default:
                          1100x720)
+  --wide-gamut           a transparent window whose image viewports get
+                         a surface of their own on Wayland, BT.2020 with
+                         a 2.2 power wanted (see the display page)
   --quit-after <frames>  exit by itself after this many frames
   --dump-debug           with --quit-after: print the debug bridge's
                          snapshot (event \"debug\") before quitting
@@ -56,6 +59,9 @@ pub struct Options {
     pub dump_debug: bool,
     /// The desktop's own platform services instead of simulated ones.
     pub platform: bool,
+    /// A transparent window, image surfaces installed and BT.2020 with a
+    /// 2.2 power wanted.
+    pub wide_gamut: bool,
     pub help: bool,
 }
 
@@ -73,6 +79,7 @@ impl Default for Options {
             announce: false,
             dump_debug: false,
             platform: false,
+            wide_gamut: false,
             help: false,
         }
     }
@@ -105,6 +112,7 @@ impl Options {
                 "--size" => o.size = parse_size(&value("--size")?)?,
                 "--dump-debug" => o.dump_debug = true,
                 "--platform" => o.platform = true,
+                "--wide-gamut" => o.wide_gamut = true,
                 "--quit-after" => {
                     let v = value("--quit-after")?;
                     o.quit_after = Some(
@@ -154,6 +162,7 @@ mod tests {
             "fr",
             "--size",
             "1280x800",
+            "--wide-gamut",
         ])
         .unwrap();
         assert_eq!(o.theme, "pop-light");
@@ -164,6 +173,7 @@ mod tests {
         assert!(o.reduced_motion);
         assert_eq!(o.lang, "fr");
         assert_eq!(o.size, [1280.0, 800.0]);
+        assert!(o.wide_gamut);
         assert_eq!(
             Options::parse(Vec::<String>::new()).unwrap(),
             Options::default()

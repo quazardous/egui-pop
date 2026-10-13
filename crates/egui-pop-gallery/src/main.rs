@@ -31,7 +31,9 @@ fn main() -> eframe::Result {
         viewport: egui::ViewportBuilder::default()
             .with_title(TITLE)
             .with_app_id(egui_pop_gallery::pages::platform::APP_ID)
-            .with_inner_size(options.size),
+            .with_inner_size(options.size)
+            // The image surface shows through a hole in the interface.
+            .with_transparent(options.wide_gamut),
         ..Default::default()
     };
     eframe::run_native(

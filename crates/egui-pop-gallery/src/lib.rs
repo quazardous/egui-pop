@@ -216,6 +216,26 @@ impl Gallery {
     ) -> Result<Gallery, BuildError> {
         if let Some(rs) = cc.wgpu_render_state.as_ref() {
             egui_pop::viewport::gpu::install(&cc.egui_ctx, rs);
+            #[cfg(not(target_arch = "wasm32"))]
+            if options.wide_gamut {
+                use egui_pop::viewport::{display, image_surface};
+                let offer = image_surface::install(
+                    &cc.egui_ctx,
+                    rs,
+                    cc,
+                    image_surface::Options {
+                        transparent_window: true,
+                    },
+                );
+                if let Some(why) = offer.unavailable {
+                    eprintln!("wide gamut: no image surface: {why}");
+                }
+                display::want(
+                    &cc.egui_ctx,
+                    egui::ViewportId::ROOT,
+                    pages::display::Wanted::Rec2020.target(),
+                );
+            }
         }
         Gallery::new(&cc.egui_ctx, options)
     }

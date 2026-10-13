@@ -27,6 +27,11 @@ egui minor.
   Wayland side is a new crate, `egui-pop-wayland`. Guides:
   docs/viewport.md, docs/wayland-colour.md.
 
+- The gallery's `--wide-gamut` option: a transparent window, image
+  surfaces installed and BT.2020 with a 2.2 power wanted; the display
+  page offers that wish and shows where the image goes and why, what the
+  compositor announces and its preferred description.
+
 - An image tools guide (`docs/image-tools.md`): the histogram, the curve
   editor and the targeted adjustment, the colour wheels, the zoom
   control and the navigator, their hooks and steps, accessibility and

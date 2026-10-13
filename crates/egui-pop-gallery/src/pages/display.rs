@@ -1,6 +1,6 @@
 //! The display page: what a window draws for when the application wants
-//! wide gamut or HDR, what each surface carries, and the transfers'
-//! curves.
+//! wide gamut or HDR, what each surface carries, the image's own surface
+//! (with `--wide-gamut`, on Wayland), and the transfers' curves.
 
 use egui::{Color32, Sense, Stroke, Ui, pos2, vec2};
 use egui_pop::theme::Tokens;
@@ -17,22 +17,31 @@ pub enum Wanted {
     #[default]
     Srgb,
     DisplayP3,
+    /// BT.2020 primaries with a 2.2 power: what a Wayland compositor maps
+    /// to its screen (an image surface tagged `bt2020` + `gamma22`).
+    Rec2020,
     Pq,
     Hlg,
 }
 
 impl Wanted {
-    const ALL: [(Wanted, &'static str); 4] = [
+    const ALL: [(Wanted, &'static str); 5] = [
         (Wanted::Srgb, "sRGB"),
         (Wanted::DisplayP3, "Display P3"),
+        (Wanted::Rec2020, "BT.2020, gamma 2.2"),
         (Wanted::Pq, "HDR (PQ, headroom 4)"),
         (Wanted::Hlg, "HDR (HLG)"),
     ];
 
-    fn target(self) -> DisplayTarget {
+    pub fn target(self) -> DisplayTarget {
         match self {
             Wanted::Srgb => DisplayTarget::srgb(),
             Wanted::DisplayP3 => DisplayTarget::display_p3(),
+            Wanted::Rec2020 => DisplayTarget {
+                primaries: Primaries::Bt2020,
+                transfer: Transfer::Gamma22,
+                ..DisplayTarget::srgb()
+            },
             Wanted::Pq => DisplayTarget::hdr_pq(4.0),
             Wanted::Hlg => DisplayTarget::hdr_hlg(),
         }
@@ -83,18 +92,21 @@ pub fn show(ui: &mut Ui, s: &mut DisplayState) {
     let ctx = ui.ctx().clone();
     ui.label("An application wants a target for a window; the viewport draws for what the window's surface carries, and says why when that is less.");
     section(ui, "This window");
+    // What the window wants may come from elsewhere (--wide-gamut).
+    let current = display::wanted(&ctx);
+    if let Some((w, _)) = Wanted::ALL.iter().find(|(w, _)| w.target() == current) {
+        s.wanted = *w;
+    }
     ui.horizontal_wrapped(|ui| {
         ui.label("Wanted:");
         for (w, name) in Wanted::ALL {
             if ui.selectable_label(s.wanted == w, name).clicked() {
                 s.wanted = w;
+                display::want(&ctx, ctx.viewport_id(), w.target());
             }
         }
     });
     let wanted = s.wanted.target();
-    if display::wanted(&ctx) != wanted {
-        display::want(&ctx, ctx.viewport_id(), wanted);
-    }
     let r = display::resolution(&ctx);
     egui::Grid::new("gallery.display.window")
         .num_columns(2)
@@ -113,6 +125,7 @@ pub fn show(ui: &mut Ui, s: &mut DisplayState) {
     if let Some(reason) = r.reason() {
         ui.colored_label(t.status.warning, reason);
     }
+    image_surface(ui);
 
     section(ui, "Surfaces");
     ui.label(
@@ -149,6 +162,47 @@ pub fn show(ui: &mut Ui, s: &mut DisplayState) {
         display::pq_encode(1000.0),
         Transfer::Hlg.encode(1.0)
     ));
+}
+
+/// The image's own surface, when installed (`--wide-gamut`): where the
+/// viewports' image goes, what the compositor announces and prefers.
+fn image_surface(ui: &mut Ui) {
+    let report = egui_pop::viewport::image_surface::report(ui.ctx());
+    if report["installed"] != true {
+        return;
+    }
+    let t = Tokens::of(ui.ctx());
+    section(ui, "Image surface");
+    ui.label("With --wide-gamut, the image viewports draw into a surface of their own below the interface, tagged for the compositor where it allows (Wayland); the viewport page shows it.");
+    let text = |v: &serde_json::Value| match v {
+        serde_json::Value::Null => "none".to_string(),
+        serde_json::Value::String(s) => s.clone(),
+        other => other.to_string(),
+    };
+    let n = &report["negotiated"];
+    let cm = &report["colour_management"];
+    let preferred = &report["surfaces"]["preferred"];
+    let rows = [
+        ("Unavailable", text(&report["unavailable"])),
+        ("Route", text(&n["route"])),
+        ("Image drawn in", text(&n["target"])),
+        ("Why", text(&n["why"])),
+        ("Failure", text(&report["failure"])),
+        ("Primaries", text(&cm["primaries"])),
+        ("Transfers", text(&cm["transfers"])),
+        ("Features", text(&cm["features"])),
+        ("Preferred", text(preferred)),
+    ];
+    egui::Grid::new("gallery.display.image_surface")
+        .num_columns(2)
+        .spacing([t.space.l, t.space.xs])
+        .show(ui, |ui| {
+            for (name, value) in rows {
+                ui.label(name);
+                ui.add(egui::Label::new(egui::RichText::new(value).monospace()).wrap());
+                ui.end_row();
+            }
+        });
 }
 
 /// The transfers' curves over 0..4 times SDR white.
