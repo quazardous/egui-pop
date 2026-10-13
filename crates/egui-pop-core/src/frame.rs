@@ -283,6 +283,18 @@ pub fn publish(ctx: &Context) -> HitRegions {
     regions
 }
 
+/// Says the current window shows no title bar this pass (full screen):
+/// its caption and buttons are left out of the next [`publish`].
+pub fn hide_title_bar(ctx: &Context) {
+    update_pending(ctx, |l| {
+        l.caption = None;
+        l.holes.clear();
+        l.minimize = None;
+        l.maximize = None;
+        l.close = None;
+    });
+}
+
 /// The current window's published regions.
 pub fn regions(ctx: &Context) -> Option<Arc<HitRegions>> {
     HitTable::of(ctx).get(ctx.viewport_id())

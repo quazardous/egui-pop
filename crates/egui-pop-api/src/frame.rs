@@ -11,7 +11,8 @@
 //! of the [`zones::CAPTION`] zone (the application's buttons) and the
 //! minimize, maximize and close buttons. Its hit regions are published
 //! per window ([`egui_pop_core::frame::HitTable`]) and shown by the debug
-//! bridge's `frame` collector.
+//! bridge's `frame` collector. In full screen the bar is not drawn and
+//! publishes no caption.
 //!
 //! An application puts its logo at the start of the bar by replacing the
 //! menu block; the bar itself ([`BLOCK_TITLE`]) still follows the
@@ -380,6 +381,11 @@ fn follow_setting(ui: &Ui, app: &AppHandle) -> bool {
     own
 }
 
+/// Whether the current window is in full screen.
+fn full_screen(ctx: &Context) -> bool {
+    ctx.input(|i| i.viewport().fullscreen.unwrap_or(false))
+}
+
 /// The button opening the system menu (the [`BLOCK_MENU`] block draws
 /// it); an application replacing that block calls it to keep the menu.
 /// A click asks for the menu through the `frame.system_menu` step.
@@ -400,7 +406,7 @@ pub fn menu_button(ui: &mut Ui, app: &AppHandle) -> egui::Response {
     r
 }
 
-/// The title bar, in the title zone.
+/// The title bar, in the title zone; not drawn in full screen.
 fn title_block(ui: &mut Ui, app: &AppHandle) {
     if !follow_setting(ui, app) {
         return;
@@ -408,6 +414,10 @@ fn title_block(ui: &mut Ui, app: &AppHandle) {
     let ctx = ui.ctx().clone();
     for r in native::requests(&ctx) {
         request(app, &ctx, r);
+    }
+    if full_screen(&ctx) {
+        egui_pop_core::frame::hide_title_bar(&ctx);
+        return;
     }
     let title = ctx
         .input(|i| i.viewport().title.clone())

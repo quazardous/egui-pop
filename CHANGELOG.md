@@ -201,6 +201,9 @@ egui minor.
 
 ### Changed
 
+- The window's own title bar is not drawn in full screen (`F11`), in the
+  main window and in a detached panel's; it publishes no caption then,
+  so the system's hit test sees only the client area.
 - `Keymap::rebind` keeps the scope of the binding it replaces (the
   highest layer's below): the user's new keys for a surface or system
   shortcut stay in that scope instead of becoming global.

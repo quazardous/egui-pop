@@ -136,6 +136,7 @@ and the application's name; an application puts its logo there by
 replacing that block, and keeps the menu with `frame::menu_button`. The
 bar itself (`frame::BLOCK_TITLE`) keeps following the setting. The
 `CAPTION` zone holds the application's buttons, before the window's.
+In full screen the bar is not drawn and publishes no caption.
 
 ```rust
 use egui_pop::api::frame;

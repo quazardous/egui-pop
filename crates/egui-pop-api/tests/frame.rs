@@ -203,3 +203,27 @@ fn the_start_of_the_bar_is_a_zone_an_application_replaces() {
     assert!(h.query_by_label("Logo").is_none());
     assert!(frame::regions(&h.ctx).is_none());
 }
+
+#[test]
+fn the_title_bar_is_not_drawn_in_full_screen() {
+    let mut h = harness(1.0);
+    assert!(h.query_by_label("Close").is_some());
+    h.input_mut()
+        .viewports
+        .entry(egui::ViewportId::ROOT)
+        .or_default()
+        .fullscreen = Some(true);
+    h.run();
+    assert!(h.query_by_label("Close").is_none());
+    assert!(h.query_by_label("Demo").is_none());
+    let r = frame::regions(&h.ctx).expect("still published");
+    assert!(r.caption.is_none() && r.close.is_none(), "{r:?}");
+    assert_eq!(r.hit(400, 10), Hit::Client);
+    h.input_mut()
+        .viewports
+        .entry(egui::ViewportId::ROOT)
+        .or_default()
+        .fullscreen = Some(false);
+    h.run();
+    assert!(h.query_by_label("Close").is_some());
+}
