@@ -98,6 +98,62 @@ impl TokenFile {
     }
 }
 
+impl TokenFile {
+    /// The file as DTCG JSON: `$description`, `$extends` and
+    /// `$extensions` at the root, then each token nested in groups by
+    /// its path, with its `$type`, `$value`, `$description` and
+    /// `$extensions`. [`TokenFile::parse`] reads it back as it was.
+    pub fn to_json(&self) -> Json {
+        let mut root = Map::new();
+        if let Some(d) = &self.description {
+            root.insert("$description".into(), Json::String(d.clone()));
+        }
+        if let Some(e) = &self.extends {
+            root.insert("$extends".into(), Json::String(e.clone()));
+        }
+        if let Some(x) = &self.extensions {
+            root.insert("$extensions".into(), x.clone());
+        }
+        for (path, token) in &self.tokens {
+            let parts: Vec<&str> = path.split('.').collect();
+            let Some((leaf, groups)) = parts.split_last() else {
+                continue;
+            };
+            let mut node = &mut root;
+            for part in groups {
+                let child = node
+                    .entry((*part).to_string())
+                    .or_insert_with(|| Json::Object(Map::new()));
+                if !child.is_object() {
+                    *child = Json::Object(Map::new());
+                }
+                let Json::Object(map) = child else {
+                    unreachable!("made an object above")
+                };
+                node = map;
+            }
+            let mut entry = Map::new();
+            if let Some(ty) = &token.ty {
+                entry.insert("$type".into(), Json::String(ty.clone()));
+            }
+            entry.insert("$value".into(), token.value.clone());
+            if let Some(d) = &token.description {
+                entry.insert("$description".into(), Json::String(d.clone()));
+            }
+            if let Some(x) = &token.extensions {
+                entry.insert("$extensions".into(), x.clone());
+            }
+            node.insert((*leaf).to_string(), Json::Object(entry));
+        }
+        Json::Object(root)
+    }
+
+    /// [`TokenFile::to_json`], indented for people.
+    pub fn to_json_pretty(&self) -> String {
+        serde_json::to_string_pretty(&self.to_json()).unwrap_or_default()
+    }
+}
+
 fn walk(
     file: &str,
     obj: &Map<String, Json>,
@@ -202,6 +258,23 @@ mod tests {
             TokenFile::parse("t", r#"{ "a.b": { "$value": 1 } }"#),
             Err(Error::Malformed { .. })
         ));
+    }
+
+    #[test]
+    fn a_file_written_out_reads_back_the_same() {
+        let text = r##"{
+          "$description": "edited",
+          "$extends": "pop-dark",
+          "$extensions": { "org.example": { "version": 1 } },
+          "surface": { "$type": "color", "panel": { "$value": "#101010", "$description": "panels" } },
+          "radius": { "widget": { "$type": "dimension", "$value": { "value": 2, "unit": "px" } } },
+          "focus": { "ring": { "$type": "color", "$value": "{blue.9}" } }
+        }"##;
+        let f = TokenFile::parse("t", text).unwrap();
+        let back = TokenFile::parse("t", &f.to_json_pretty()).unwrap();
+        assert_eq!(back, f);
+        assert_eq!(back.extends.as_deref(), Some("pop-dark"));
+        assert_eq!(back.tokens["focus.ring"].alias(), Some("blue.9"));
     }
 
     #[test]

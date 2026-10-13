@@ -32,6 +32,10 @@
 //! assert!(contrast::contrast_ratio(text, panel) >= 4.5);
 //! ```
 //!
+//! A theme being edited is a [`ThemeDraft`]: a base theme, the tokens
+//! changed over it and their history, saved as a token file that
+//! `$extends` the base.
+//!
 //! Types read: `color` (DTCG colour objects in `srgb`, `srgb-linear`,
 //! `oklch` or `oklab`, any other space through its `hex` fallback, and
 //! `#rrggbb[aa]` strings), `dimension` (`px` or `rem`), `number`,
@@ -41,6 +45,7 @@
 mod color;
 pub mod contract;
 pub mod contrast;
+mod draft;
 mod error;
 mod file;
 mod theme;
@@ -48,6 +53,7 @@ mod value;
 
 pub use color::Color;
 pub use contract::{CONTRACT, Required, Tier};
+pub use draft::{DRAFT_EXTENSION, DRAFT_VERSION, ThemeDraft, TokenEdit};
 pub use error::Error;
 pub use file::{RawToken, TokenFile};
 pub use theme::{

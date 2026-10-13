@@ -9,6 +9,13 @@ egui minor.
 
 ### Added
 
+- Theme drafts in `egui-pop-tokens` (`ThemeDraft`, `TokenEdit`): a base
+  theme, the tokens changed over it and their history (undo, redo),
+  values checked against the token's type and aliases against loops,
+  exported as a token file stamped with the editor's version and
+  imported back. `TokenFile::to_json` writes a token file out as DTCG
+  JSON.
+
 - A node graph editor (`viewport::graph`) over a graph the application
   keeps (`GraphModel`: nodes, typed ports coloured from tokens, wires,
   groups, parameters, kinds to add), drawn on egui's `Scene`: pan and
