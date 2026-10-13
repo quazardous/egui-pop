@@ -73,6 +73,10 @@ egui minor.
   branch of 100 000 files) and a Lists and tables page (10 000 photos
   sorted and resized through the value store, stars drawn by the page,
   a veto on one sort, a list of keywords).
+- Guides for the tree (docs/tree.md) and for lists and tables
+  (docs/table.md), their code run as doctests; the widgets survey
+  records the decisions: the tree is egui-pop's own, the table wraps
+  egui_table, egui_extras' `TableBuilder` is not used.
 - Translations (`egui-pop-i18n`, feature `i18n` of the facade,
   `egui_pop::i18n`): `I18nPlugin` loads Fluent catalogues per locale
   (egui-pop's own, the application's, an override directory read at

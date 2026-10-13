@@ -107,8 +107,9 @@ released.
 | egui_node_editor | 0.11.0 | Node editor | Too young (few downloads); reference at most |
 | egui_graph_edit | 0.9.1 (egui 0.36) | Node graphs | Same |
 | egui_graphs | 0.32.0 | A petgraph viewer | Not an editor |
-| egui_ltreeview | 0.9.0 (MIT) | Tree view: multi-select, keyboard, drag and drop, context menu; the caller keeps the data | **Adopt candidate** for collections, folders and tag hierarchies. Before adopting: check that it names nodes for AccessKit and that our keymap can take its keys |
-| egui_table | 0.10.0 | Rerun's virtualized table (sticky header, resizable columns) | **Adopt** for metadata and queue tables |
+| egui_ltreeview | 0.9.0 (MIT) | Tree view: multi-select, keyboard, drag and drop, context menu; the caller keeps the data | **Own** (decided 2026-10-13, see "Data views" below); the drop zones (before, inside, after) follow its idea |
+| egui_table | 0.10.0 (MIT OR Apache-2.0) | Rerun's virtualized table (sticky header, resizable columns) | **Wrap** (decided 2026-10-13): `egui-pop-views`' data table |
+| egui_extras `TableBuilder` | 0.36 (MIT OR Apache-2.0) | egui's own table: rows in view, resizable columns, striped | **Skip** (2026-10-13): widths only in egui's memory, no sticky columns |
 | egui_virtual_list | 0.12.0 | Virtual list with rows of varying height | Useful for long lists with variable rows (history, logs) |
 | egui_infinite_scroll | 0.12.0 | Pages loaded on scroll | Ideas only: our fetches are windowed by the host |
 | egui_dnd | 0.17.0 | Reorder by drag and drop, animated | **Adopt** for reorderable lists (export targets, module order in a stack); the order is written back through a command |
@@ -142,6 +143,33 @@ virtual scrolling, `Scene`, AccessKit) and no advanced widgets that are
 maintained. The crates that are maintained and have no model of their
 own are egui_dock, egui_table, egui_ltreeview, egui_dnd, egui_json_tree
 and egui-file-dialog. Everything about progress is ours to build.
+
+### Data views: what was checked (2026-10-13)
+
+The tree, the list and the table were checked against what egui-pop's
+views must do: branches loaded on demand and asynchronously, edits from
+the application at any time, keyboard navigation with type-ahead, drag
+and drop gated by a step, rename in place, AccessKit names, 100 000
+rows, and every moment a step.
+
+- **egui_ltreeview 0.9 (own).** Its builder is fed every open node on
+  every pass (fast, but the caller walks the whole open tree each
+  frame), it has no loading state, no rename, no Home/End or
+  type-ahead, reads its arrow keys directly from the input, and gives
+  its rows no AccessKit names. Wrapping it would leave most of the work
+  outside it; the tree is egui-pop's own, a cache flattened once per
+  change and drawn from a scroll area that builds only the rows in
+  view.
+- **egui_table 0.10 (wrap).** Rows in view only, a sticky header,
+  resizable columns, horizontal scrolling and prefetch hints; it leaves
+  selection, sorting and keys to its delegate, and keeps the widths in
+  egui's memory, where the wrapper writes the store's widths and reads
+  back the result of a resize. Two things are compensated: the
+  resize handles get names, and a row is drawn twice when a sticky
+  region is empty (the empty one is skipped).
+- **egui_extras `TableBuilder` (skip).** Virtualised and resizable, but
+  its widths can only be reset, not set, and it has no sticky columns:
+  egui_table does more for the same weight.
 
 ## 3. Progress and waiting: design notes
 
@@ -351,8 +379,8 @@ egui-pop widget bound to values and commands; "adopt" = used as it is;
 | **Tag chip and tag input** | Chips (dismissible, selectable) and a field that adds tags with completion | Blueprint `TagInput`, Mantine `TagsInput` and `Pill`, Fluent `TagPicker`, Carbon `Tag`, Ant `Tag` | **Own**; the completion uses egui-pop's fuzzy matcher | Keywords, filters, collections | Wraps onto several lines; hierarchical tags (`place|France|Paris`) |
 | **Search field with filters** | A text field with chips for active filters, a clear button and a menu of filters | VS Code search and filter boxes, Fluent `SearchBox`, Carbon table toolbar search | **Own**, on `TextEdit` | Lighttable filters, the panel and setting search | Its keys go through the focus rules (no shortcut fired while typing) |
 | **Segmented control and toggle switch** | Mutually exclusive options in one row; an on/off switch | Mantine `SegmentedControl`, Ant `Segmented`, Blueprint `SegmentedControl`, `AdwToggleGroup`, Carbon `ContentSwitcher`; MUI and Mantine `Switch`, `AdwSwitchRow` | **Own**, on `selectable_value` and the egui demo's switch | View modes, module blend modes, settings | Role radio group for the segmented control, switch for the toggle |
-| **Tree view** | Expand and collapse, multi-select, keyboard, drag and drop, context menu, lazy children | Blueprint `Tree`, Fluent `Tree`, Carbon `TreeView`, MUI X `TreeView`, `QTreeView` | **Wrap egui_ltreeview** (check AccessKit and keys first) | Folders, collections, tag hierarchy, the graph's outline | Lazy children come from the host |
-| **Data table** | Virtualized, sortable, resizable columns, sticky header | Blueprint `Table`, MUI X `DataGrid`, Carbon `DataTable`, Fluent `DataGrid` | **Adopt egui_table** (decided) | Metadata, the queue panel, the history of jobs | Sorting and selection are values |
+| **Tree view** | Expand and collapse, multi-select, keyboard, drag and drop, context menu, lazy children | Blueprint `Tree`, Fluent `Tree`, Carbon `TreeView`, MUI X `TreeView`, `QTreeView` | **Own** (done: `egui-pop-views`, docs/tree.md) | Folders, collections, tag hierarchy, the graph's outline | Lazy children come from the host |
+| **Data table** | Virtualized, sortable, resizable columns, sticky header | Blueprint `Table`, MUI X `DataGrid`, Carbon `DataTable`, Fluent `DataGrid` | **Wrap egui_table** (done: `egui-pop-views`, docs/table.md) | Metadata, the queue panel, the history of jobs | Sorting and widths are values; selection by key |
 | **Dock, split panes and tabs** | Dockable panels, splits, editor tabs | JetBrains tool windows, VS Code, `QDockWidget`, `AdwTabView`, shadcn `Resizable`, Ant `Splitter` | **Adopt egui_dock** (decided) | The whole shell | Drop veto worked around (see `upstream.md`) |
 | **Histogram** | Draws supplied bins (per channel, log or linear), clipping markers | Lightroom, darktable, Capture One | **Own** (decided with the viewport) | The darkroom, the import preview | Data from the host; egui-pop only draws |
 | **Node graph editor** | Nodes with headers, pins, wires, semantic zoom, stacks | imgui-node-editor, imnodes, egui-snarl | **Own** (decided), snarl as reference | The graph view | A large item; the header shows the job state of each node (states and badges above) |

@@ -30,6 +30,11 @@ devtools; every feature's moments reachable as steps (ADR 0011).
 - [Choosing files](files.md): the system's chooser off the interface
   thread, the in-app picker (keyboard, typed paths, places, filters),
   the `file.choose` and `file.chosen` steps.
+- [The tree](tree.md): a live tree over a lazy, asynchronous source,
+  edits at any time, selection, keyboard, drag and drop, rename, steps.
+- [Lists and tables](table.md): a list and a data table, virtualised,
+  sorting and widths in the value store, cells drawn by the
+  application, steps.
 - [Translations](i18n.md): Fluent catalogues, the language setting,
   numbers, dates and plurals, the lookup step, extracting and checking
   keys.
@@ -79,8 +84,8 @@ Layers only depend downwards; a test reading `cargo metadata` keeps it so
 ## Code in these pages
 
 The Rust blocks of the README and of the getting started, themes,
-plugins, workbench, viewport, files, translations, platform services,
-packaging and debugging pages are
+plugins, workbench, viewport, files, tree, lists and tables,
+translations, platform services, packaging and debugging pages are
 compiled and run as doctests by `crates/consumer-smoke`, against the
 `egui-pop` crate only, as a user depends on it: `cargo test -p
 consumer-smoke --doc`.
