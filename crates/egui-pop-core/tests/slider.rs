@@ -395,6 +395,88 @@ fn a_typed_expression_uses_the_current_value() {
     assert!((ev(&h) - 0.75).abs() < 1e-9);
 }
 
+#[derive(Default)]
+struct Two {
+    values: [f64; 2],
+    ids: Vec<egui::Id>,
+}
+
+fn focus_report(h: &Harness<'_, Two>) -> String {
+    let ids = &h.state().ids;
+    format!(
+        "focused {:?}; first {:?}, second {:?}, first's entry {:?}",
+        h.ctx.memory(|m| m.focused()),
+        ids[0],
+        ids[1],
+        egui_pop_core::slider::typing_id(ids[0]).with("edit")
+    )
+}
+
+#[test]
+fn leaving_the_typed_entry_commits_it_and_the_keyboard_goes_where_it_was_sent() {
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(420.0, 120.0))
+        .build_ui_state(
+            |ui, p: &mut Two| {
+                let [a, b] = &mut p.values;
+                let first = ui.add(Slider::new(a, "First", 0.0..=1.0).step(0.1));
+                let second = ui.add(Slider::new(b, "Second", 0.0..=1.0).step(0.1));
+                p.ids = vec![first.id, second.id];
+            },
+            Two::default(),
+        );
+    h.run();
+    h.get_by_label("First").click();
+    h.run();
+    h.key_press(Key::Enter);
+    h.run();
+    assert_eq!(
+        h.ctx.memory(|m| m.focused()),
+        Some(egui_pop_core::slider::typing_id(h.state().ids[0]).with("edit")),
+        "the entry takes the keyboard when it opens: {}",
+        focus_report(&h)
+    );
+    for _ in 0..6 {
+        h.key_press(Key::Backspace);
+    }
+    h.get_by_role(egui::accesskit::Role::TextInput)
+        .type_text("0.3");
+    h.run();
+    // A click on another widget: the entry commits and closes, and does
+    // not take the keyboard back.
+    h.get_by_label("Second").click();
+    h.run();
+    assert_eq!(h.state().values[0], 0.3, "committed");
+    assert!(
+        h.query_by_role(egui::accesskit::Role::TextInput).is_none(),
+        "closed"
+    );
+    assert_eq!(
+        h.ctx.memory(|m| m.focused()),
+        Some(h.state().ids[1]),
+        "the keyboard went to the other slider: {}",
+        focus_report(&h)
+    );
+    h.key_press(Key::ArrowRight);
+    h.run();
+    assert!(
+        (h.state().values[1] - 0.1).abs() < 1e-9,
+        "{:?}",
+        h.state().values
+    );
+    assert_eq!(h.state().values[0], 0.3);
+    // Escape still leaves the entry with nothing.
+    h.key_press(Key::Enter);
+    h.run();
+    h.get_by_role(egui::accesskit::Role::TextInput)
+        .type_text("9");
+    h.run();
+    h.key_press(Key::Escape);
+    h.run();
+    assert!((h.state().values[1] - 0.1).abs() < 1e-9);
+    assert!(h.query_by_role(egui::accesskit::Role::TextInput).is_none());
+}
+
 #[test]
 fn the_bar_tells_assistive_technologies_its_range_step_and_text() {
     let mut h = slider();

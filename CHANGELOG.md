@@ -808,6 +808,11 @@ egui minor.
 
 ### Fixed
 
+- A slider's typed entry takes the keyboard only when it opens: a click
+  on another widget (or Tab) now commits the value typed, closes the
+  entry and leaves the keyboard there, where the entry used to take it
+  back on the next frame. Escape still closes it with nothing.
+
 - A plugin's own title key (`plugin-<id>`) counts as owned by the plugin,
   so `add_owned` accepts it.
 

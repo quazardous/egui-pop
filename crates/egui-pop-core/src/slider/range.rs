@@ -15,7 +15,8 @@ use egui::{Rect, Response, Sense, Ui, Widget, WidgetInfo, pos2, vec2};
 
 use super::{
     Cause, Change, Drag, Hook, SliderOutput, Spec, Thumb, Verdict, access, decide, drag, gestures,
-    keys_wheel_access, modifier_scale, paint_bar, spec_builders, typed_entry, typing_id,
+    keep_auto_ids, keys_wheel_access, modifier_scale, open_typed_entry, paint_bar, spec_builders,
+    typed_entry, typing_id,
 };
 use crate::strings::{self, SLIDER_MAXIMUM, SLIDER_MINIMUM};
 
@@ -113,15 +114,20 @@ impl<'a> RangeSlider<'a> {
             let tid = typing_id(response.id);
             if let Some(text) = ui.data(|d| d.get_temp::<String>(tid)) {
                 typing = true;
-                if let Some(v) = typed_entry(ui, bar, tid, text, &spec, *value) {
-                    let to = spec.settle(v, hard);
-                    if to != *value {
-                        apply(change(*value, to, Cause::Typed, true), value);
+                if let Some(end) = typed_entry(ui, bar, tid, text, &spec, *value) {
+                    if let Some(v) = end.value {
+                        let to = spec.settle(v, hard);
+                        if to != *value {
+                            apply(change(*value, to, Cause::Typed, true), value);
+                        }
                     }
-                    response.request_focus();
+                    if end.refocus {
+                        response.request_focus();
+                    }
                 }
                 continue;
             }
+            keep_auto_ids(ui);
             let g = gestures(ui.ctx());
             let scale = modifier_scale(ui, &g);
             match drag(ui, response, &spec, *value, bounds, scale, bar.width()) {
@@ -156,8 +162,7 @@ impl<'a> RangeSlider<'a> {
                 }
             }
             if response.has_focus() && ui.input(|i| i.key_pressed(g.typed_entry)) {
-                let text = spec.number(ui.ctx(), *value);
-                ui.data_mut(|d| d.insert_temp(tid, text));
+                open_typed_entry(ui, tid, spec.number(ui.ctx(), *value));
             }
         }
         let g = gestures(ui.ctx());

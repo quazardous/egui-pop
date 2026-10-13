@@ -25,7 +25,9 @@
 //!   sliders never changes a value.
 //! - **Typed entry**: a number or an expression ([`expr`]: `x * 2`,
 //!   `1,5 EV`); units after it are ignored; a value past the soft range
-//!   is kept up to the hard one.
+//!   is kept up to the hard one. Enter or leaving the entry (a click
+//!   elsewhere, Tab) commits it; Escape closes it with nothing. It takes
+//!   the keyboard when it opens, never after.
 //! - **Double click**: back to the default.
 //!
 //! The keys are [`Gestures`], data a profile may remap. The value text
@@ -594,14 +596,19 @@ impl<'a> Slider<'a> {
         };
         let typing_id = typing_id(id);
         if let Some(text) = ui.data(|d| d.get_temp::<String>(typing_id)) {
-            if let Some(v) = typed_entry(ui, bar, typing_id, text, &spec, *value) {
-                let to = spec.settle(v, spec.hard);
-                if to != *value {
-                    apply(change(*value, to, Cause::Typed, true), value);
+            if let Some(end) = typed_entry(ui, bar, typing_id, text, &spec, *value) {
+                if let Some(v) = end.value {
+                    let to = spec.settle(v, spec.hard);
+                    if to != *value {
+                        apply(change(*value, to, Cause::Typed, true), value);
+                    }
                 }
-                response.request_focus();
+                if end.refocus {
+                    response.request_focus();
+                }
             }
         } else {
+            keep_auto_ids(ui);
             let g = gestures(ui.ctx());
             let scale = modifier_scale(ui, &g);
             match drag(ui, &response, &spec, *value, spec.soft, scale, bar.width()) {
@@ -643,8 +650,7 @@ impl<'a> Slider<'a> {
                 }
             }
             if response.has_focus() && ui.input(|i| i.key_pressed(g.typed_entry)) {
-                let text = spec.number(ui.ctx(), *value);
-                ui.data_mut(|d| d.insert_temp(typing_id, text));
+                open_typed_entry(ui, typing_id, spec.number(ui.ctx(), *value));
             }
             let text = spec.text(ui.ctx(), *value);
             let past = *value < spec.soft.0 || *value > spec.soft.1;
@@ -905,8 +911,36 @@ pub(crate) fn keys_wheel_access(
     cause.map(|c| (v, c))
 }
 
-/// The typed entry over the bar: the value typed once Enter is pressed;
-/// Escape or leaving it closes it with nothing.
+/// Opens the typed entry with `text`. The entry takes the keyboard on
+/// the frame it first shows, and only then: a click elsewhere keeps it.
+pub(crate) fn open_typed_entry(ui: &Ui, typing_id: Id, text: String) {
+    ui.data_mut(|d| {
+        d.insert_temp(typing_id, text);
+        d.insert_temp(typing_id.with("focus"), true);
+    });
+    ui.ctx().request_repaint();
+}
+
+/// Takes the auto id an open typed entry takes, so the widgets after a
+/// slider keep their ids whether its entry is open or not: a click on
+/// one of them while the entry is open must still find it on the next
+/// frame (its focus would otherwise go to an id gone with the entry).
+pub(crate) fn keep_auto_ids(ui: &mut Ui) {
+    ui.skip_ahead_auto_ids(1);
+}
+
+/// How a typed entry closed.
+pub(crate) struct TypedEnd {
+    /// The value typed (`None` when cancelled or not a value).
+    pub value: Option<f64>,
+    /// Closed by Enter: the keyboard goes back to the slider. Closed by
+    /// leaving it (a click elsewhere, Tab), the keyboard stays where it
+    /// went.
+    pub refocus: bool,
+}
+
+/// The typed entry over the bar, open until it closes: Enter or leaving
+/// it commits the value typed, Escape closes it with nothing.
 pub(crate) fn typed_entry(
     ui: &mut Ui,
     bar: Rect,
@@ -914,26 +948,36 @@ pub(crate) fn typed_entry(
     mut text: String,
     spec: &Spec,
     current: f64,
-) -> Option<f64> {
-    let edit = ui.put(
+) -> Option<TypedEnd> {
+    // Placed over the bar without moving the cursor; it takes one auto
+    // id, which a slider without its entry skips (`keep_auto_ids`).
+    let edit = ui.place(
         bar,
         TextEdit::singleline(&mut text)
             .id(typing_id.with("edit"))
             .horizontal_align(egui::Align::Center),
     );
-    edit.request_focus();
-    let done = ui.input(|i| i.key_pressed(Key::Enter));
-    let cancel = ui.input(|i| i.key_pressed(Key::Escape)) || edit.lost_focus() && !done;
-    if done {
-        ui.data_mut(|d| d.remove::<String>(typing_id));
-        return spec.parse(&text, current);
+    if ui
+        .data_mut(|d| d.remove_temp::<bool>(typing_id.with("focus")))
+        .is_some()
+    {
+        edit.request_focus();
     }
-    if cancel {
-        ui.data_mut(|d| d.remove::<String>(typing_id));
-    } else {
+    let cancel = ui.input(|i| i.key_pressed(Key::Escape));
+    let enter = ui.input(|i| i.key_pressed(Key::Enter));
+    if !cancel && !enter && edit.has_focus() {
         ui.data_mut(|d| d.insert_temp(typing_id, text));
+        return None;
     }
-    None
+    ui.data_mut(|d| d.remove::<String>(typing_id));
+    Some(TypedEnd {
+        value: if cancel {
+            None
+        } else {
+            spec.parse(&text, current)
+        },
+        refocus: enter && !cancel,
+    })
 }
 
 /// The bar: the track, the fill (or the gradient), the thumbs, the label

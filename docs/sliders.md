@@ -33,7 +33,7 @@ fn exposure(ui: &mut egui::Ui, ev: &mut f64, on: &mut bool) {
 | Escape during a drag | Puts the value back, with no trace |
 | Arrows, Page Up, Page Down | One step, one coarse step (when focused) |
 | Home, End | The soft range's ends |
-| Enter | The typed entry: a number or an expression, then Enter (Escape leaves it) |
+| Enter | The typed entry: a number or an expression, then Enter or a click elsewhere commits it (Escape leaves it with nothing) |
 | Wheel | Scrolls the panel; steps the slider only when it has the focus or Alt is held over it |
 | Double click | Back to the default |
 
