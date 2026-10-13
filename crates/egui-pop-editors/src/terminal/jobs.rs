@@ -44,18 +44,25 @@ struct JobConsole {
     fed: u64,
 }
 
-/// The consoles, by job.
+/// The consoles, by job and by place: the panel or the page (`false`),
+/// the popover or a toast over them (`true`). A terminal is drawn once a
+/// frame, and the same job's console may show in both places at once.
 #[derive(Debug, Default)]
-struct Consoles(Mutex<HashMap<String, JobConsole>>);
+struct Consoles(Mutex<HashMap<(String, bool), JobConsole>>);
 
 impl Consoles {
-    /// The job's console, given the lines it has not had yet.
-    fn feed(&self, app: &AppHandle, job: &Job) -> TerminalState {
+    /// The job's console in a place, given the lines it has not had yet.
+    fn feed(&self, app: &AppHandle, job: &Job, overlay: bool) -> TerminalState {
         let mut map = lock(&self.0);
-        let c = map.entry(job.id.clone()).or_insert_with(|| {
+        let c = map.entry((job.id.clone(), overlay)).or_insert_with(|| {
             let console = Console::new();
+            let id = if overlay {
+                format!("job:{}:over", job.id)
+            } else {
+                format!("job:{}", job.id)
+            };
             JobConsole {
-                terminal: TerminalState::new(format!("job:{}", job.id), console.clone()),
+                terminal: TerminalState::new(id, console.clone()),
                 console,
                 fed: 0,
             }
@@ -90,7 +97,8 @@ impl Plugin for JobConsolesPlugin {
         ctx.service(
             &JOB_LOG_VIEW,
             JobLogView::new(move |ui: &mut Ui, app: &AppHandle, job: &Job| {
-                let terminal = consoles.feed(app, job);
+                let overlay = ui.layer_id().order != egui::Order::Background;
+                let terminal = consoles.feed(app, job, overlay);
                 let label = egui_pop_core::strings::tr_args(
                     ui.ctx(),
                     &crate::strings::JOB_LOG,
