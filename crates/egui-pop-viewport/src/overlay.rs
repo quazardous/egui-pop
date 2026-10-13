@@ -22,6 +22,18 @@ pub const HIT_RADIUS: f32 = 12.0;
 /// The radius a handle is drawn with, in points.
 pub const DRAWN_RADIUS: f32 = 5.0;
 
+/// A shape's line, its dark outline under it, a handle's outline, in
+/// points before snapping: each is drawn as whole physical pixels at the
+/// window's scale (`scale::stroke`), so it never blurs at 125 % or 150 %.
+pub const LINE_WIDTH: f32 = 1.5;
+pub const UNDER_WIDTH: f32 = 3.0;
+pub const OUTLINE_WIDTH: f32 = 1.5;
+
+/// A width of `w` points, snapped to whole pixels where `painter` draws.
+fn snapped(painter: &Painter, w: f32) -> f32 {
+    egui_pop_core::scale::stroke(painter.ctx(), w)
+}
+
 /// What a handle adjusts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum HandleKind {
@@ -286,7 +298,8 @@ pub fn paint_handle(
     } else {
         DRAWN_RADIUS + 1.5
     };
-    let outline = Stroke::new(1.5, t.handle_outline);
+    let w = |x: f32| snapped(painter, x);
+    let outline = Stroke::new(w(OUTLINE_WIDTH), t.handle_outline);
     match kind {
         HandleKind::Move => {
             painter.circle(pos, r, fill, outline);
@@ -297,12 +310,17 @@ pub fn paint_handle(
             painter.rect(rect, 0.0, fill, outline, StrokeKind::Middle);
         }
         HandleKind::Rotate => {
-            painter.circle(pos, r, Color32::TRANSPARENT, Stroke::new(2.5, fill));
+            painter.circle(pos, r, Color32::TRANSPARENT, Stroke::new(w(2.5), fill));
             painter.circle_stroke(pos, r + 1.5, outline);
         }
         HandleKind::Feather => {
-            painter.circle(pos, r, Color32::TRANSPARENT, Stroke::new(1.5, fill));
-            painter.circle_stroke(pos, r * 0.5, Stroke::new(1.5, fill));
+            painter.circle(
+                pos,
+                r,
+                Color32::TRANSPARENT,
+                Stroke::new(w(LINE_WIDTH), fill),
+            );
+            painter.circle_stroke(pos, r * 0.5, Stroke::new(w(LINE_WIDTH), fill));
         }
         HandleKind::Point | HandleKind::Size => {
             painter.circle(pos, r, fill, outline);
@@ -313,8 +331,8 @@ pub fn paint_handle(
 /// Draws an overlay's shape (and its label) through a mapping.
 pub fn paint_shape(painter: &Painter, m: &Mapping, o: &Overlay, t: &ViewportTokens) {
     let s = |p: [f64; 2]| m.image_to_screen(p);
-    let under = Stroke::new(3.0, t.handle_outline);
-    let over = Stroke::new(1.5, t.guide);
+    let under = Stroke::new(snapped(painter, UNDER_WIDTH), t.handle_outline);
+    let over = Stroke::new(snapped(painter, LINE_WIDTH), t.guide);
     let line = |pts: Vec<Pos2>, closed: bool| {
         for stroke in [under, over] {
             if closed {

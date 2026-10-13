@@ -294,3 +294,52 @@ fn the_readout_comes_from_the_source_for_the_pixel_under_the_pointer() {
     );
     assert_eq!(h.state().after.readouts(), vec![[423, 345]]);
 }
+
+/// Every stroke width drawn, in points.
+fn stroke_widths(shapes: &[egui::epaint::ClippedShape]) -> Vec<f32> {
+    fn walk(s: &egui::Shape, out: &mut Vec<f32>) {
+        match s {
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+            egui::Shape::LineSegment { stroke, .. } => out.push(stroke.width),
+            egui::Shape::Path(p) => out.push(p.stroke.width),
+            egui::Shape::Circle(c) => out.push(c.stroke.width),
+            egui::Shape::Rect(r) => out.push(r.stroke.width),
+            _ => {}
+        }
+    }
+    let mut out = Vec::new();
+    for c in shapes {
+        walk(&c.shape, &mut out);
+    }
+    out.retain(|w| *w > 0.0);
+    out
+}
+
+#[test]
+fn overlay_strokes_and_handle_outlines_are_whole_pixels_at_any_scale() {
+    for ppp in [1.0, 1.25, 1.5, 2.0] {
+        let mut s = scene();
+        s.overlays.push(Overlay::new(
+            "spot",
+            Shape::Circle {
+                center: [500.0, 400.0],
+                radius: 40.0,
+            },
+        ));
+        s.compare = Compare::Split(0.5);
+        let mut h = Harness::builder()
+            .with_size(vec2(400.0, 300.0))
+            .with_pixels_per_point(ppp)
+            .build_ui_state(draw, s);
+        h.run();
+        let widths = stroke_widths(&h.output().shapes);
+        assert!(widths.len() > 10, "{ppp}: {widths:?}");
+        for w in widths {
+            let px = w * ppp;
+            assert!(
+                (px - px.round()).abs() < 1e-3,
+                "a {w}-point stroke is {px} pixels at {ppp}x"
+            );
+        }
+    }
+}

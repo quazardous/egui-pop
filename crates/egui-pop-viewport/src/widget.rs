@@ -678,7 +678,7 @@ impl<'a> Viewport<'a> {
             painter.rect_stroke(
                 rect.shrink(1.0),
                 0.0,
-                Stroke::new(2.0, t.focus_ring),
+                Stroke::new(egui_pop_core::scale::stroke(ui.ctx(), 2.0), t.focus_ring),
                 StrokeKind::Inside,
             );
         }
@@ -1325,8 +1325,12 @@ fn draw_readout(
 fn draw_divider(painter: &egui::Painter, rect: Rect, x: f32, active: bool, t: &ViewportTokens) {
     let top = pos2(x, rect.top());
     let bottom = pos2(x, rect.bottom());
-    painter.line_segment([top, bottom], Stroke::new(3.0, t.handle_outline));
-    painter.line_segment([top, bottom], Stroke::new(1.5, t.guide));
+    let w = |x: f32| egui_pop_core::scale::stroke(painter.ctx(), x);
+    painter.line_segment(
+        [top, bottom],
+        Stroke::new(w(overlay::UNDER_WIDTH), t.handle_outline),
+    );
+    painter.line_segment([top, bottom], Stroke::new(w(overlay::LINE_WIDTH), t.guide));
     let st = if active {
         HandleState::Active
     } else {

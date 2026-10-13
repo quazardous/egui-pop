@@ -229,6 +229,12 @@ egui minor.
 
 ### Changed
 
+- Viewport overlays: shape lines (1.5 points over a 3-point outline),
+  handle outlines, the comparison's divider and the focus ring are
+  snapped to whole physical pixels with `scale::stroke`, so they no
+  longer blur at 125 % and 150 % (at 100 % the line is one pixel).
+  `overlay::LINE_WIDTH`, `UNDER_WIDTH` and `OUTLINE_WIDTH` name the
+  widths before snapping.
 - The slider no longer lets the panel drift after the wheel stepped it:
   while it holds the wheel (focused, or Alt held over it) it eats what
   is left of a notch's smoothed scroll every frame, not only the frame

@@ -65,6 +65,19 @@ show it in an application:
 
 ![the viewport page: before and after, overlays](screenshots/viewport-pop-dark.png)
 
+## Overlays
+
+The application owns its overlays (`overlay::Overlay`: a shape in image
+pixels, its handles, a label) and gives them to the viewport each frame
+(`Viewport::overlays`). Dragging a handle is one gesture
+(`Signal::Handle`, begin, update, end, or cancel on Escape), which the
+application applies to its own data (`Overlay::apply` does it for the
+standard shapes); a double click resets (`Signal::HandleReset`), the
+wheel adjusts (`Signal::HandleWheel`). The `before_handle` hook may veto
+or snap a move. Lines and handle outlines are drawn in whole physical
+pixels at the window's scale (`scale::stroke`), so they stay sharp at
+125 % and 150 %.
+
 ## Wide gamut and HDR
 
 A window's surface has an encoding (`display::DisplayTarget`: primaries,
