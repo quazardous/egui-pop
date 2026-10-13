@@ -29,11 +29,12 @@ use pages::story::PagePlugin;
 pub const TITLE: &str = "egui-pop gallery";
 
 /// The pages, as named on the command line.
-pub const PAGES: [&str; 32] = [
+pub const PAGES: [&str; 33] = [
     "overview",
     "tokens",
     "builtins",
     "icons",
+    "motion",
     "values",
     "sliders",
     "menus",
@@ -118,6 +119,16 @@ pub fn builder(options: &Options) -> AppBuilder {
             weight: 30,
             show: pages::icons::show,
             playground: Some(pages::icons::playground),
+        })
+        .plugin(PagePlugin {
+            plugin: PluginId::from_static("gallery.motion"),
+            story: StoryId::from_static("motion"),
+            title: "Motion",
+            description: "The motion clock (frozen in tests, still under reduced motion), the motion tokens and the busy delay.",
+            group: "Progress and jobs",
+            weight: 131,
+            show: pages::motion::show,
+            playground: None,
         })
         .plugin(pages::values::ValuesPage)
         .plugin(pages::sliders::SlidersPage)

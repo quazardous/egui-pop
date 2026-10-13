@@ -14,6 +14,9 @@ fn harness(options: Options) -> Harness<'static, Gallery> {
         .with_size(egui::vec2(1100.0, 720.0))
         .shared_wgpu()
         .build_eframe(move |cc| {
+            // Motion moves only when a test says: the same frames on
+            // every run.
+            egui_pop::core::motion::freeze(&cc.egui_ctx, 0.0);
             Gallery::from_creation_context(cc, options).expect("the gallery builds")
         })
 }
@@ -1383,6 +1386,43 @@ fn the_code_editor_page_marks_completes_saves_and_holds_a_hundred_thousand_lines
         h.query_by_label_contains("const C99999").is_none(),
         "virtualised"
     );
+}
+
+#[test]
+fn the_motion_page_shows_the_busy_indicator_after_its_delay_for_its_minimum() {
+    use egui_pop::core::motion;
+    let mut h = harness(options("pop-dark", Density::Comfortable, "motion"));
+    h.run();
+    let at = |h: &mut Harness<'_, Gallery>, seconds: f64| {
+        motion::freeze(&h.ctx, seconds);
+        h.run();
+    };
+    assert!(h.query_by_label_contains("a given clock").is_some());
+    h.get_by_label("Work for 1 s").click();
+    h.run();
+    at(&mut h, 0.2);
+    assert!(
+        h.query_by_label_contains("Busy indicator: hidden")
+            .is_some()
+    );
+    at(&mut h, 0.35);
+    assert!(h.query_by_label_contains("Busy indicator: shown").is_some());
+    // The work ended at 1 s; shown since 0.35 s, the minimum is met.
+    at(&mut h, 1.2);
+    assert!(
+        h.query_by_label_contains("Busy indicator: hidden")
+            .is_some()
+    );
+    // Short work never shows it.
+    h.get_by_label("Work for 0.2 s").click();
+    h.run();
+    for t in [1.3, 1.45, 2.0] {
+        at(&mut h, t);
+        assert!(
+            h.query_by_label_contains("(shown 1 times)").is_some(),
+            "{t}"
+        );
+    }
 }
 
 #[test]

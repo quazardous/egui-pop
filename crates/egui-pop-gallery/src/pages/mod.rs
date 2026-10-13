@@ -19,6 +19,7 @@ pub mod icons;
 pub mod images;
 pub mod jobs;
 pub mod menus;
+pub mod motion;
 pub mod navigator;
 pub mod overview;
 pub mod palettes;

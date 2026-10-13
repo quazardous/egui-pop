@@ -9,6 +9,8 @@
 //! - [`focus_mode`]: whether the pointer gives the keyboard (click or
 //!   hover, as the window manager does or as the user chose);
 //! - [`keys`]: the key dispatcher (chords, consumption, traces);
+//! - [`motion`]: the motion clock (frozen in tests, still under reduced
+//!   motion) and the delayed busy indicator;
 //! - [`overlay`]: the overlay stack (top-layer dismissal, modality,
 //!   focus restore);
 //! - [`band`]: the header band a movable dialog or a palette is dragged
@@ -42,6 +44,7 @@ pub mod focus_mode;
 pub mod frame;
 pub mod icon;
 pub mod keys;
+pub mod motion;
 pub mod overlay;
 pub mod param;
 pub mod persist;

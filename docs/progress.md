@@ -45,8 +45,9 @@ progress is reset, its log kept, its finished children forgotten.
 
 Time left (`Job::eta`) follows the rate of that fraction (a moving
 average over the times events arrived), never before 3 seconds, never
-while paused. "Now" comes from the plugin's clock: the interface's time
-by default, a `ManualClock` in tests (`JobsPlugin::clock`).
+while paused. "Now" comes from the plugin's clock: the motion clock by
+default (below), a `ManualClock` of the test's own if it wants
+(`JobsPlugin::clock`).
 
 ```rust
 use egui_pop::api::App;
@@ -141,6 +142,53 @@ host.answer(Answer::Later);
 let mut app = App::builder().host(host.clone()).plugin(JobsPlugin::default())
     .build(&ctx).unwrap();
 host.job("export").start("Export", Some(4)).item(1, "a.raw").fail("disk full");
+```
+
+## The motion clock
+
+Spinners, travelling bars, shimmer and the busy delay read the motion
+clock (`egui_pop::core::motion`), not the input's time directly:
+
+- `motion::now(ctx)`: the interface's time, or a clock the application
+  or a test gives (`set_clock`, `freeze`). A given clock moves only when
+  told: a test freezes motion, steps it, and gets the same frames on
+  every run. The jobs model reads the same clock, so a job's start and a
+  busy indicator's delay agree;
+- `motion::phase(ctx, period, still)`: where a looping animation is (0
+  to 1); `still` under reduced motion (`motion.duration` is 0), so
+  animated widgets give still frames;
+- `motion::animate(ctx)`: asks for the next frame of an animation on
+  screen, never at once (a headless harness settles), four a second
+  while the window is not focused, never under reduced motion or a given
+  clock;
+- `motion::Busy`: the delayed busy indicator. Nothing shows before
+  `motion.spinner.delay` (300 ms): most work ends sooner, and a flash of
+  spinner reads as a glitch. Once shown it stays `motion.spinner.min`
+  (500 ms), so it does not flash off. The delay counts from when the
+  work started (a job's or a command's start), not from when the widget
+  was first drawn, so a panel opened midway shows the right state at
+  once; the frame where the indicator appears is asked for, no timer
+  thread runs.
+
+| Token | Default | What |
+|---|---|---|
+| `motion.spinner.delay` | 300 ms | work shorter than this shows no busy indicator |
+| `motion.spinner.min` | 500 ms | a busy indicator, once shown, stays this long |
+| `motion.spinner.turn` | 900 ms | one turn of a spinner |
+| `motion.progress.travel` | 1500 ms | an indeterminate bar's segment crossing its track |
+| `motion.skeleton.shimmer` | 1600 ms | a skeleton's shimmer crossing it |
+
+```rust
+use egui_pop::core::motion::{self, Busy};
+
+let ctx = egui_pop::egui::Context::default();
+// In a test: motion stands still until told.
+let clock = motion::freeze(&ctx, 0.0);
+let busy = Busy::new(egui_pop::egui::Id::new("export"), 0.0);
+clock.set(0.2);
+assert!(!busy.visible(&ctx, true));
+clock.set(0.4);
+assert!(busy.visible(&ctx, true));
 ```
 
 ## Gaps

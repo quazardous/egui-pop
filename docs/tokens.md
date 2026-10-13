@@ -82,7 +82,10 @@ Not read yet: references inside composite values, JSON Pointer `$ref`,
    `space.{xs, s, m, l, xl}`, `size.control.height`,
    `size.icon.{inline, toolbar, panel}`, `size.dialog.width`, `size.magnet`,
    `size.toast.width`, `font.size.{small, body, heading, mono}`,
-   `font.family.{ui, mono}`, `motion.duration`, `opacity.scrim`.
+   `font.family.{ui, mono}`, `motion.duration`,
+   `motion.spinner.{delay, min, turn}` (300 ms before a busy indicator
+   shows, 500 ms at least once shown, a spinner's turn),
+   `motion.progress.travel`, `motion.skeleton.shimmer`, `opacity.scrim`.
 
 3. **Component**: one component's tokens, each an alias of a system token:
    `button.*`, `slider.{track, fill, thumb}`, `menu.item.*`, `dialog.*`, `palette.*`,

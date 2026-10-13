@@ -214,6 +214,24 @@ pub struct PaletteTokens {
     pub magnet: f32,
 }
 
+/// Times of motion, in seconds (see `motion`).
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct MotionTokens {
+    /// Nothing shows before work ran this long (`motion.spinner.delay`).
+    pub spinner_delay: f32,
+    /// A busy indicator, once shown, stays this long
+    /// (`motion.spinner.min`).
+    pub spinner_min: f32,
+    /// One turn of a spinner (`motion.spinner.turn`).
+    pub spinner_turn: f32,
+    /// An indeterminate bar's segment crossing the track
+    /// (`motion.progress.travel`).
+    pub progress_travel: f32,
+    /// A skeleton's shimmer crossing it (`motion.skeleton.shimmer`).
+    pub skeleton_shimmer: f32,
+}
+
 /// A window's own title bar and frame.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
@@ -249,6 +267,8 @@ pub struct Tokens {
     pub font: Font,
     /// `motion.duration` in seconds; zero when motion is reduced.
     pub motion_duration: f32,
+    /// The other times of motion.
+    pub motion: MotionTokens,
     pub button: ButtonTokens,
     pub slider: SliderTokens,
     pub menu_item: MenuItemTokens,
@@ -340,6 +360,16 @@ impl Tokens {
                 family_mono: f("font.family.mono"),
             },
             motion_duration: r.duration_ms("motion.duration").unwrap_or(0.0).max(0.0) / 1000.0,
+            motion: {
+                let s = |path: &str| r.duration_ms(path).unwrap_or(0.0).max(0.0) / 1000.0;
+                MotionTokens {
+                    spinner_delay: s("motion.spinner.delay"),
+                    spinner_min: s("motion.spinner.min"),
+                    spinner_turn: s("motion.spinner.turn"),
+                    progress_travel: s("motion.progress.travel"),
+                    skeleton_shimmer: s("motion.skeleton.shimmer"),
+                }
+            },
             button: ButtonTokens {
                 background: c("button.background"),
                 background_hover: c("button.background-hover"),

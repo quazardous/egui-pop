@@ -192,7 +192,19 @@
     "scrim": {"$value": 0.392, "$description": "How much the backdrop behind a modal hides the interface, 0 to 1 (egui's own: 100 of 255)."}
   },
   "motion": {
-    "duration": {"$type": "duration", "$value": {"value": 120, "unit": "ms"}, "$description": "Length of animations; 0 turns them off (reduced motion)."}
+    "duration": {"$type": "duration", "$value": {"value": 120, "unit": "ms"}, "$description": "Length of animations; 0 turns them off (reduced motion)."},
+    "spinner": {
+      "$type": "duration",
+      "delay": {"$value": {"value": 300, "unit": "ms"}, "$description": "Work shorter than this shows no busy indicator: a flash of spinner reads as a glitch."},
+      "min": {"$value": {"value": 500, "unit": "ms"}, "$description": "A busy indicator, once shown, stays at least this long, so it does not flash off."},
+      "turn": {"$value": {"value": 900, "unit": "ms"}, "$description": "One turn of a spinner (still under reduced motion)."}
+    },
+    "progress": {
+      "travel": {"$type": "duration", "$value": {"value": 1500, "unit": "ms"}, "$description": "An indeterminate bar's segment crossing its track (a still striped track under reduced motion)."}
+    },
+    "skeleton": {
+      "shimmer": {"$type": "duration", "$value": {"value": 1600, "unit": "ms"}, "$description": "A skeleton's shimmer crossing it (none under reduced motion)."}
+    }
   },
   "button": {
     "$description": "Push buttons; egui's own widgets are drawn with these.",

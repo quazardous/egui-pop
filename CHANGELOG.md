@@ -40,6 +40,18 @@ egui minor.
   lock. They compile to nothing unless a profiler backend is enabled
   (`profiling/profile-with-tracing`, `-with-puffin`...); the gallery's
   `threading` example measures them (`docs/threading.md`).
+- The motion clock (`egui_pop_core::motion`): spinners, travelling
+  bars, shimmer and busy delays read it instead of the input's time; a
+  test freezes and steps it (`freeze`, `set_clock`), reduced motion
+  gives still frames (`phase`), and animations ask for their next frame
+  without ever repainting at once (`animate`). `Busy`: nothing before
+  `motion.spinner.delay` (300 ms), then shown at least
+  `motion.spinner.min` (500 ms), counted from when the work started.
+  New system tokens `motion.spinner.{delay, min, turn}`,
+  `motion.progress.travel` and `motion.skeleton.shimmer`
+  (`Tokens::motion`). The jobs model reads the same clock. Gallery
+  page `motion`; the gallery's tests freeze it.
+
 - Jobs: `JobsPlugin` (opt-in) folds the host's `job.*` events
   (`started`, `progress`, `item_failed`, `paused`, `resumed`,
   `cancelling`, `failed`, `finished`, `cancelled`, `log`) into the

@@ -166,6 +166,27 @@ pub const CONTRACT: &[Required] = &[
         "duration",
         "length of animations, 0 for none",
     ),
+    sys(
+        "motion.spinner.delay",
+        "duration",
+        "how long work runs before a busy indicator shows",
+    ),
+    sys(
+        "motion.spinner.min",
+        "duration",
+        "how long a busy indicator stays once shown",
+    ),
+    sys("motion.spinner.turn", "duration", "one turn of a spinner"),
+    sys(
+        "motion.progress.travel",
+        "duration",
+        "an indeterminate bar's segment crossing its track",
+    ),
+    sys(
+        "motion.skeleton.shimmer",
+        "duration",
+        "a skeleton's shimmer crossing it",
+    ),
     comp("button.background", "color", "a button at rest"),
     comp(
         "button.background-hover",

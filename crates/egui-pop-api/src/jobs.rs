@@ -18,8 +18,9 @@
 //!   gives ([`JobsPlugin::run_locally`]). [`ask`] runs one and marks the
 //!   job as waiting until the host answers.
 //! - Time left comes from the plugin's clock ([`JobsPlugin::clock`]),
-//!   the interface's time by default; tests give a
-//!   [`ManualClock`](egui_pop_model::clock::ManualClock).
+//!   the motion clock by default (`egui_pop_core::motion`, frozen in
+//!   tests); tests may give a
+//!   [`ManualClock`](egui_pop_model::clock::ManualClock) of their own.
 //! - The debug bridge's `jobs` collector shows every job (state,
 //!   fraction, counts, time left, the end of its log) and whether the
 //!   application is idle; its actions ask the host as the buttons do.
@@ -93,7 +94,7 @@ struct State {
     jobs: Jobs,
     /// The last event folded.
     seen: Seq,
-    /// The interface's time at the last pass.
+    /// The motion clock's time at the last pass.
     now: f64,
     /// The jobs whose log console is open.
     expanded: BTreeSet<String>,
@@ -125,7 +126,8 @@ impl JobsService {
         }
     }
 
-    /// Now, by the plugin's clock (the interface's time by default).
+    /// Now, by the plugin's clock (the motion clock by default:
+    /// `egui_pop_core::motion`, frozen in tests).
     pub fn now(&self) -> f64 {
         match &self.clock {
             Some(c) => c.now(),
@@ -224,7 +226,7 @@ impl JobsService {
 
     /// Folds the journal's new events; the jobs that moved.
     fn feed(&self, app: &AppHandle) -> BTreeSet<String> {
-        let time = app.egui().input(|i| i.time);
+        let time = egui_pop_core::motion::now(&app.egui());
         let seen = {
             let mut s = lock(&self.state);
             s.now = time;
@@ -285,8 +287,8 @@ impl fmt::Debug for JobsPlugin {
 }
 
 impl JobsPlugin {
-    /// Where time left and durations take "now" from (the interface's
-    /// time by default).
+    /// Where time left and durations take "now" from (the motion clock
+    /// by default).
     pub fn clock(mut self, clock: SharedClock) -> Self {
         self.clock = Some(clock);
         self

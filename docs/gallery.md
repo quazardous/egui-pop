@@ -20,7 +20,7 @@ directory; without it they are simulated and nothing reaches the
 desktop).
 
 Pages: `overview` (the theme overview), `tokens`, `builtins` (egui's
-built-ins), `icons`, `values`, `sliders`, `menus`, `dialogs`, `toasts`, `viewport`
+built-ins), `icons`, `motion` (the motion clock), `values`, `sliders`, `menus`, `dialogs`, `toasts`, `viewport`
 (the image viewport), `navigator` (the zoom control and the navigator),
 `images`, `grading` (curves and colour wheels), `tree` (the live tree), `table` (lists
 and tables), `text-editor`, `code-editor`, `terminal`, `zones` (zones and blocks), `workbench`, `palettes`,
