@@ -14,6 +14,8 @@ cargo add egui-pop --features editors
 - `EditorState`: the text, the selection, the history, the marks, the
   search, as a handle the application, the widget and the commands an
   agent runs share.
+- [`Terminal`](#the-terminal): a terminal over a `TerminalState`, fed
+  by a program in a pseudo-terminal or by a read-only console of logs.
 
 Both are **virtualised** (only the lines in view are laid out: 100 000
 lines cost a screenful), take their colours from the theme
@@ -34,6 +36,14 @@ Checked on 2026-10-13 against egui 0.36.
 | `syntect` 5.3 | MIT | Sublime Text grammars and their bundled syntaxes; a line-by-line parser with a state per line | **Wrapped** as the default highlighter, with the `regex-fancy` engine (pure Rust: the gallery builds for the web); its scopes map to egui-pop's token kinds, never to its themes |
 | `tree-sitter` / `tree-sitter-highlight` 0.27 | MIT | Incremental parsers (grammars in C) and highlight queries | **Wrapped** behind the `tree-sitter` feature (off: it compiles C, and the application brings the grammar crate) |
 | `ropey` 2 (beta) | MIT OR Apache-2.0 | A rope | **Not used**: a vector of lines is enough for the sizes targeted (an edit touches the lines it changes) and keeps line access trivial |
+| `egui_term` 0.1 | MIT | A terminal widget for egui over alacritty_terminal, with its own PTY backend | **Not used**: one release, pinned to egui 0.31 (egui-pop is on 0.36), its own colour scheme rather than tokens, no source trait (the PTY is the only backend), no steps; reference for its key bindings only |
+| `alacritty_terminal` 0.26 | Apache-2.0 | Alacritty's emulator: grid, scrollback, selection, search, its own PTY and event loop | **Not used**: its PTY layer and event loop (polling, signal-hook, rustix) come along and do not build for the web, where the gallery and a log console must run; more than the widget needs |
+| `vt100` 0.16 | MIT (its parser `vte`: Apache-2.0 OR MIT) | A parser and a screen: cells with colours and attributes, scrollback, the modes programs set (application cursor, bracketed paste, alternate screen, mouse) | **Wrapped** as the emulator: pure Rust, builds for the web; selection, links, drawing and keys are egui-pop's |
+| `portable-pty` 0.9 | MIT | WezTerm's pseudo-terminals: Unix PTYs and Windows ConPTY, spawn, resize | **Wrapped** as `PtySource`, behind the `pty` feature (`editors-pty` on the facade): not for the web |
+
+For the terminal, egui-pop **owns** the widget (drawing from tokens,
+key routing and encoding, selection, links, steps) and the source
+trait, and **wraps** `vt100` and `portable-pty`.
 
 So egui-pop **owns** the editing surface (input, selection, drawing,
 gutter, folding, search) and **wraps** the highlighters behind its own
@@ -355,6 +365,168 @@ let read = app.run(&CMD_READ, serde_json::json!({ "editor": "notes" }), agent())
 assert_eq!(read["text"], "hello world");
 ```
 
+## The terminal
+
+`Terminal` draws a `TerminalState`: an emulator (vt100's screen, its
+scrollback, the modes the program sets) fed by a `TerminalSource` the
+**application picks**, and owns:
+
+- `PtySource` (feature `pty`, `editors-pty` on the facade): a program in
+  a pseudo-terminal, the user's shell by default; ConPTY on Windows,
+  not for the web. Dropping it, or closing the session, kills the
+  program;
+- `Console`: a **read-only** source the application writes to from any
+  thread: build logs, a job's output, an agent's transcript (a later
+  jobs console reuses it). What is written before a terminal starts it
+  is kept and shown then; a lone `\n` becomes `\r\n`; `finish` ends it;
+- its own: a source starts (giving its output to a `Sink`, from any
+  thread), takes input, is resized and stopped. An application whose
+  kernel runs programs elsewhere replaces `terminal.spawn` and
+  `terminal.input` (below) and feeds the output with
+  `TerminalState::feed`, the end with `TerminalState::finished`.
+
+```rust
+use egui_pop::editors::terminal::{Console, Terminal, TerminalState};
+
+let log = Console::new();
+log.line("\x1b[1;32mCompiling\x1b[0m demo v0.1.0");
+let term = TerminalState::new("build-log", log.clone());
+
+fn ui(ui: &mut egui_pop::egui::Ui, app: &egui_pop::api::AppHandle, term: &TerminalState) {
+    Terminal::new().label("Build log").app(app).height(240.0).show(ui, term);
+}
+
+// From any thread, while the build runs:
+log.line("\x1b[1;33mwarning\x1b[0m: unused variable");
+log.finish(Some(0));
+# let _ = term;
+```
+
+```rust,ignore
+// Feature `editors-pty`: a shell, or a program.
+use egui_pop::editors::terminal::{CommandLine, PtySource, TerminalState};
+
+let shell = TerminalState::new("shell", PtySource::shell());
+let tests = TerminalState::new(
+    "tests",
+    PtySource::new(CommandLine::new("cargo").arg("test").cwd("/path/to/project")),
+);
+```
+
+**Drawing.** The 16 ANSI colours are the theme's `terminal.ansi.0` to
+`terminal.ansi.15` (0 the colour furthest from the text, 7 the text's,
+1 to 6 the status roles and the accent, a bold 0 to 7 their stronger
+form); the 256-colour cube and RGB colours are the program's own.
+Bold, dim, italics, underline and inverse are drawn; the cursor is a
+block while focused, an outline otherwise (none for a read-only source).
+The terminal fills the width it is given and the height asked
+(`height`), and tells the source its rows and columns as they change
+(a PTY tells the program: `SIGWINCH`).
+
+**Scrollback.** 10 000 lines by default (`TerminalState::scrollback`);
+the wheel and Shift+Page Up, Shift+Page Down scroll back, typing comes
+back to the screen. Output keeps the view where it is while scrolled
+back.
+
+**Selection, copy and links.** Dragging selects (a double click a word,
+paths and addresses included; a triple click a line); Ctrl+Shift+C, or
+Ctrl+C while something is selected, copies (soft-wrapped lines joined).
+`http://`, `https://` and `file://` addresses are links: underlined
+under the pointer, opened by Ctrl+click.
+
+**Keys and focus (decided 2026-10-13).** A program in a terminal needs
+Escape (vi, less, readline) and Tab (completion), so the terminal does
+not follow the text inputs' rule that Escape leaves:
+
+| Key | Goes to |
+|---|---|
+| Every key, Escape and Tab included, Ctrl and Alt chords | the program, encoded as xterm does (application cursor mode honoured; Alt sends Escape first) |
+| **Shift+Escape** | leaves the terminal: the focus stays in its surface (`terminalFocus`), as for a text input after Escape; then Tab moves on |
+| Ctrl+Shift chords (but Ctrl+Shift+C), Command chords on macOS | the application's keymap: a terminal cannot tell Ctrl+Shift+K from Ctrl+K, so nothing is lost. `terminal.clear` is bound to Ctrl+Shift+K on the `terminal` surface |
+| Ctrl+C | copies when text is selected, else interrupts the program |
+| Ctrl+V, Shift+Insert (the platform's paste) | pastes (bracketed when the program asked) |
+| Shift+Page Up, Shift+Page Down | scroll back |
+
+The keys are taken before the application's key dispatcher reads them
+(an input hook), so global shortcuts do not fire while a terminal has
+the focus; the application's own escape hatch is a Ctrl+Shift chord.
+
+### Steps, collectors and commands
+
+Connect `TerminalPlugin` and give the terminal the application
+(`.app(&app)`): its moments become steps, it registers for the
+commands, and a program that ends runs `terminal.exit` even in a
+terminal not drawn.
+
+| Step | Arguments | Default |
+|---|---|---|
+| `terminal.spawn` | `terminal`, `source`, `command` (`{program, args, cwd, env}` or `null`), `rows`, `cols`, `origin` | starts the source with `command` |
+| `terminal.input` | `terminal`, `text`, `kind` (`keys`, `paste`, `agent`), `origin` | writes `text` to the source |
+| `terminal.exit` | `terminal`, `reason` (`exited`: the program ended; `close`: asked), `code`, `origin`, `notice`, `restart` | `close` stops the source; both write `notice` dimmed, and start again when `restart` |
+
+A before-hook on `terminal.spawn` refuses a program (the terminal shows
+why) or redirects its `command`; on `terminal.input` it refuses input
+or rewrites `text`; on `terminal.exit` it keeps a session open (`close`)
+or, for `exited`, changes the notice or sets `restart`. A run-hook does
+the step its own way (the application's kernel runs the program).
+
+```rust
+use egui_pop::prelude::*;
+use egui_pop::editors::TerminalPlugin;
+use egui_pop::editors::terminal::steps::{TERMINAL_INPUT, TERMINAL_SPAWN};
+
+struct Policy;
+
+impl Plugin for Policy {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("terminal_policy")
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        // Shells only in the "dev" terminal.
+        ctx.before(TERMINAL_SPAWN, |_, args| {
+            if args["source"] == "pty" && args["terminal"] != "dev" {
+                Before::Veto("shells run in the dev terminal".into())
+            } else {
+                Before::Go
+            }
+        });
+        // An agent's commands are logged before they run.
+        ctx.after(TERMINAL_INPUT, |_, args, _| {
+            if args["kind"] == "agent" {
+                let _ = &args["text"];
+            }
+        });
+        Ok(())
+    }
+}
+
+let app = App::builder()
+    .plugin(TerminalPlugin)
+    .plugin(Policy)
+    .build(&egui_pop::egui::Context::default())
+    .unwrap();
+# let _ = app;
+```
+
+Collectors on the debug bridge: `terminal_sessions` (each terminal: its
+source, size, session, cursor, scrollback, title, modes, and its last 20
+lines) and `terminal_io` (the last runs of the three steps).
+
+**Driving a terminal (agents).** `terminal` names one; without it, the
+terminal that last had the focus:
+
+| Command | Arguments | Result |
+|---|---|---|
+| `terminal.read` | `terminal`, `from_line`, `to_line` (from 0, end excluded), or `screen` | `text` (scrollback then screen, one line per row), `lines`, `cursor`, `rows`, `cols`, `running`, `exit_code`... |
+| `terminal.send` | `terminal`, `text`, `enter` | `bytes` (through `terminal.input`, `kind` `agent`: hooks apply) |
+| `terminal.clear` | `terminal` | clears the screen and the scrollback (Ctrl+Shift+K) |
+| `terminal.copy` | `terminal` | `copied`: the selection, put on the clipboard |
+| `terminal.close`, `terminal.restart` | `terminal` | the state (through `terminal.exit`, `terminal.spawn`) |
+
+The same from code: `TerminalState::text`, `lines`, `screen_text`,
+`send`, `clear`, `close`, `restart`, `describe`.
+
 ## Gaps
 
 - **No language server client yet**: the assist traits are shaped for
@@ -376,3 +548,12 @@ assert_eq!(read["text"], "hello world");
 - The cursor does not blink (steady, as with reduced motion).
 - Edit > Undo in the menus undoes the application's history, not the
   focused editor's (the editor's Ctrl+Z does).
+- The terminal does not report the mouse to programs (mouse modes are
+  read but not sent: vim and htop see no clicks; in the alternate
+  screen the wheel does nothing), has no hyperlinks set by programs
+  (OSC 8) nor images (sixel, kitty), and draws no IME composition. Its
+  selection is anchored to lines and drifts once the scrollback is full
+  and drops its oldest lines. Alt is always Meta (on macOS, Option does
+  not compose characters in a terminal). The leave chord is fixed
+  (Shift+Escape). No screenshots of the terminal page in
+  `docs/screenshots/` yet.

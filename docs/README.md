@@ -41,7 +41,9 @@ devtools; every feature's moments reachable as steps (ADR 0011).
 - [Text and code editors](editors.md): a text editor and a code
   editor, virtualised, search and replace, a gutter of markers, folding,
   highlighting behind a trait (syntect, tree-sitter), code assist
-  providers, steps and agent commands; the survey behind them.
+  providers, steps and agent commands; a terminal over a
+  pseudo-terminal or a log console, its keys and focus rules; the survey
+  behind them.
 - [Translations](i18n.md): Fluent catalogues, the language setting,
   numbers, dates and plurals, the lookup step, extracting and checking
   keys.
