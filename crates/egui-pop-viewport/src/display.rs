@@ -429,8 +429,10 @@ pub enum TargetSource {
     /// Declared by the driver's window system integration (the surface
     /// configured through wgpu).
     Wsi,
-    /// Declared by the application itself (a compositor protocol, or a
-    /// surface it configured itself).
+    /// Declared by the application itself: through a compositor
+    /// protocol (Wayland's `wp_color_management_v1`, any primaries and
+    /// transfer the protocol names, no surface colour space needed), or
+    /// on a surface it configured itself.
     Tagged,
     /// Read from the operating system.
     Os,
@@ -463,7 +465,8 @@ impl Default for DisplayTarget {
 pub enum Fallback {
     /// Nobody configured the surface for it (its source is `Assumed`).
     NotConfigured,
-    /// No surface colour space has these primaries and this transfer.
+    /// No surface colour space has these primaries and this transfer
+    /// (nor the compositor protocol, for a tagged target).
     NoColorSpace,
     /// The format cannot carry the transfer (8 bits for PQ, unsigned
     /// values for an extended range).
@@ -486,7 +489,7 @@ impl std::fmt::Display for Fallback {
                 f.write_str("the window's surface is not configured for it (nothing declared it)")
             }
             Fallback::NoColorSpace => {
-                f.write_str("no surface colour space has these primaries and this transfer")
+                f.write_str("no surface colour space or compositor encoding has these primaries and this transfer")
             }
             Fallback::Format(format) => write!(f, "a {format:?} surface cannot carry it"),
             Fallback::HeadroomOnSdr => {
@@ -596,7 +599,9 @@ impl DisplayTarget {
     /// Why the viewport cannot draw this encoding faithfully, if it
     /// cannot: it must be a colour space a surface can be configured
     /// with, on a format that carries it, declared by whoever configured
-    /// the surface (an `Assumed` target is sRGB).
+    /// the surface (an `Assumed` target is sRGB). A `Tagged` target needs
+    /// no colour space: the compositor protocol names its primaries and
+    /// transfer ([`DisplayTarget::untaggable`]).
     pub fn unsupported(&self) -> Option<Fallback> {
         let srgb = self.primaries == Primaries::Srgb
             && matches!(self.transfer, Transfer::SrgbPiecewise | Transfer::Gamma22);
@@ -605,6 +610,14 @@ impl DisplayTarget {
         }
         if srgb {
             return None;
+        }
+        if self.source == TargetSource::Tagged {
+            let tag = self.untaggable()?;
+            // A surface the application configured in a colour space.
+            return match self.color_space() {
+                Some(space) if space.needs().contains(&self.surface_format) => None,
+                _ => Some(tag),
+            };
         }
         let Some(space) = self.color_space() else {
             return Some(Fallback::NoColorSpace);
@@ -616,6 +629,26 @@ impl DisplayTarget {
             return Some(Fallback::NotConfigured);
         }
         None
+    }
+
+    /// Why a surface tagged through the compositor protocol cannot carry
+    /// this encoding, if it cannot: the protocol names the sRGB, Display
+    /// P3 and BT.2020 primaries (not custom ones) and every transfer but
+    /// extended sRGB; the format must carry the transfer (half floats for
+    /// extended linear, at least 10 bits for PQ and HLG).
+    pub fn untaggable(&self) -> Option<Fallback> {
+        if matches!(self.primaries, Primaries::Custom { .. }) || self.transfer == Transfer::ExtSrgb
+        {
+            return Some(Fallback::NoColorSpace);
+        }
+        let carries = match self.transfer {
+            Transfer::ExtLinear | Transfer::ExtSrgb => self.surface_format.is_float(),
+            Transfer::Pq | Transfer::Hlg => self.surface_format.bits() >= 10,
+            Transfer::SrgbPiecewise | Transfer::Gamma22 => {
+                self.surface_format != SurfaceFormat::Other
+            }
+        };
+        (!carries).then_some(Fallback::Format(self.surface_format))
     }
 
     /// Whether the viewport draws this target faithfully. The stage
@@ -1115,11 +1148,94 @@ mod tests {
             eight.unsupported(),
             Some(Fallback::Format(SurfaceFormat::Rgba8Unorm))
         );
+        // No wgpu colour space is Display P3 with PQ.
         let odd = DisplayTarget {
             primaries: Primaries::DisplayP3,
-            ..tagged
+            ..tagged.with_source(TargetSource::Wsi)
         };
         assert_eq!(odd.unsupported(), Some(Fallback::NoColorSpace));
+    }
+
+    #[test]
+    fn tagged_targets_need_no_surface_colour_space() {
+        // BT.2020 with a 2.2 power: no wgpu colour space, a protocol
+        // encoding (bt2020 + gamma22).
+        let rec2020 = DisplayTarget {
+            primaries: Primaries::Bt2020,
+            transfer: Transfer::Gamma22,
+            surface_format: SurfaceFormat::Rgb10a2Unorm,
+            ..DisplayTarget::srgb()
+        };
+        assert_eq!(rec2020.color_space(), None);
+        assert_eq!(rec2020.unsupported(), Some(Fallback::NoColorSpace));
+        assert_eq!(rec2020.effective().primaries, Primaries::Srgb);
+        let tagged = rec2020.with_source(TargetSource::Tagged);
+        assert!(tagged.is_supported());
+        assert_eq!(tagged.effective(), tagged);
+        // The stage encodes a 2.2 power into BT.2020: sRGB white stays
+        // white, pure sRGB red is inside BT.2020.
+        let s = LinearSrgb.stage(&tagged);
+        assert_eq!(s.transfer, Transfer::Gamma22);
+        for v in s.encode([1.0, 1.0, 1.0]) {
+            assert!(close(v, 1.0, 1e-5), "{v}");
+        }
+        let red = s.encode([1.0, 0.0, 0.0]);
+        assert!(red[0] < 1.0 && red[1] > 0.0 && red[2] > 0.0, "{red:?}");
+        // Eight bits carry an SDR transfer.
+        let eight = DisplayTarget {
+            surface_format: SurfaceFormat::Rgba8Unorm,
+            ..tagged
+        };
+        assert!(eight.is_supported());
+        // Display P3 with PQ is a protocol encoding, on 10 bits.
+        let p3_pq = DisplayTarget {
+            primaries: Primaries::DisplayP3,
+            transfer: Transfer::Pq,
+            sdr_white_nits: HDR_REFERENCE_WHITE,
+            headroom: 4.0,
+            ..tagged
+        };
+        assert!(p3_pq.is_supported());
+        assert_eq!(
+            DisplayTarget {
+                surface_format: SurfaceFormat::Rgba8Unorm,
+                ..p3_pq
+            }
+            .unsupported(),
+            Some(Fallback::Format(SurfaceFormat::Rgba8Unorm))
+        );
+        // Not tagged: custom primaries, extended sRGB, extended linear
+        // on 10 bits.
+        let custom = DisplayTarget {
+            primaries: Primaries::Custom {
+                r: [0.7, 0.3],
+                g: [0.2, 0.7],
+                b: [0.15, 0.05],
+                w: D65,
+            },
+            ..tagged
+        };
+        assert_eq!(custom.unsupported(), Some(Fallback::NoColorSpace));
+        let ext = DisplayTarget {
+            transfer: Transfer::ExtSrgb,
+            ..tagged
+        };
+        assert_eq!(ext.unsupported(), Some(Fallback::NoColorSpace));
+        let linear = DisplayTarget {
+            transfer: Transfer::ExtLinear,
+            ..tagged
+        };
+        assert_eq!(
+            linear.unsupported(),
+            Some(Fallback::Format(SurfaceFormat::Rgb10a2Unorm))
+        );
+        // Wanted BT.2020 on a tagged BT.2020 surface: faithful on the
+        // GPU path.
+        assert!(resolve(&rec2020, &tagged, true).faithful());
+        assert_eq!(
+            resolve(&rec2020, &tagged, false).fallback,
+            Some(Fallback::CpuPath)
+        );
     }
 
     #[test]

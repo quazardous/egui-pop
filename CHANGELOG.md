@@ -512,6 +512,12 @@ egui minor.
 
 ### Changed
 
+- A display target declared `TargetSource::Tagged` needs no wgpu colour
+  space: any sRGB, Display P3 or BT.2020 primaries with a transfer the
+  Wayland colour-management protocol names (BT.2020 with a 2.2 power,
+  for one), on a format that carries it, is drawn faithfully
+  (`DisplayTarget::untaggable` says why not).
+
 - The gallery page (`docs/gallery.md`) shows every snapshot the gallery's
   tests keep, page by page; a test keeps it complete.
 
