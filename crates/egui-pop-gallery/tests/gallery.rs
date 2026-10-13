@@ -1386,6 +1386,53 @@ fn the_code_editor_page_marks_completes_saves_and_holds_a_hundred_thousand_lines
 }
 
 #[test]
+fn the_jobs_page_folds_a_pretend_hosts_jobs() {
+    use egui_pop::api::jobs::JOBS;
+    use egui_pop::model::jobs::JobState;
+    let mut h = harness(options("pop-dark", Density::Comfortable, "jobs"));
+    h.run();
+    h.get_by_label("Start the demo jobs").click();
+    h.run();
+    for _ in 0..2 {
+        h.get_by_label("Advance one step").click();
+        h.run();
+    }
+    // The application estimates the scan while it cannot.
+    h.get_by_label("Estimate the scan (a hook on jobs.estimate)")
+        .click();
+    h.run();
+    h.get_by_label("Advance one step").click();
+    h.run();
+    let app = h.state().app.handle().clone();
+    let jobs = app.service(&JOBS).unwrap();
+    let fraction = |id: &str| jobs.job(id).unwrap().fraction;
+    // 3 of 12 exported.
+    assert_eq!(fraction("gallery-export"), Some(0.25));
+    // Decode done (1), a quarter of process (3 x 0.25), of 5.
+    assert!((fraction("gallery-render").unwrap() - 0.35).abs() < 1e-9);
+    // The scan does not know its size yet: 90 folders of about 500.
+    assert!((fraction("gallery-scan").unwrap() - 90.0 / 500.0).abs() < 1e-9);
+    // The first folder 3 of 4, two more to come.
+    assert_eq!(fraction("gallery-import"), Some(0.25));
+    assert_eq!(jobs.job("gallery-upload").unwrap().state, JobState::Failed);
+    assert!(h.query_by_label_contains("connection reset").is_some());
+    h.get_by_label("Cancel Export 12 images").click();
+    h.run();
+    assert_eq!(
+        jobs.job("gallery-export").unwrap().state,
+        JobState::Cancelled
+    );
+    h.get_by_label("Retry Upload to the server").click();
+    h.run();
+    let upload = jobs.job("gallery-upload").unwrap();
+    assert_eq!((upload.state, upload.attempts), (JobState::Running, 2));
+    // Once the scan knows its total, the model's own estimate is back.
+    h.get_by_label("Advance one step").click();
+    h.run();
+    assert_eq!(fraction("gallery-scan"), Some(0.2));
+}
+
+#[test]
 fn the_terminal_page_shows_a_log_and_routes_keys_through_hooks_and_the_keymap() {
     use egui::{Key, Modifiers};
     use egui_pop::editors::terminal::steps::CMD_READ;

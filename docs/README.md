@@ -48,6 +48,9 @@ devtools; every feature's moments reachable as steps (ADR 0011).
   providers, steps and agent commands; a terminal over a
   pseudo-terminal or a log console, its keys and focus rules; the survey
   behind them.
+- [Jobs and progress](progress.md): the host's background jobs folded
+  from its journal, each with an estimated overall percentage, their
+  commands, the `jobs.estimate` step, a fake host for tests.
 - [Translations](i18n.md): Fluent catalogues, the language setting,
   numbers, dates and plurals, the lookup step, extracting and checking
   keys.

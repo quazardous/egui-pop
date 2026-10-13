@@ -5,6 +5,7 @@
 //! - [`diagnostics`]: what registration ignored or changed, said out loud;
 //! - [`registry`]: items tagged with their owner, removable by owner;
 //! - [`when`]: context clauses (`listFocus && !textInputFocus`);
+//! - [`clock`]: where "now" comes from, injected so tests fix it;
 //! - [`commands`]: every action named, run the same way from anywhere;
 //! - [`fuzzy`]: fuzzy matching and ranking for search fields;
 //! - [`keymap`]: keys bound to commands in layers, resolved by focus
@@ -15,13 +16,17 @@
 //! - [`values`]: the value store (descriptors, writes with origins,
 //!   gestures, undo, listeners, settings);
 //! - [`doc`]: versioned documents and their migrations;
+//! - [`jobs`]: the host's background jobs, folded from its `job.*`
+//!   events, each with an estimated overall fraction;
 //! - [`order`]: plugin ordering.
 
+pub mod clock;
 pub mod commands;
 pub mod diagnostics;
 pub mod doc;
 pub mod fuzzy;
 pub mod ids;
+pub mod jobs;
 pub mod keymap;
 pub mod layout;
 pub mod menus;

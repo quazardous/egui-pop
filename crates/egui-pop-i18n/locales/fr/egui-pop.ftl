@@ -11,6 +11,8 @@ category-file = Fichier
 
 category-help = Aide
 
+category-jobs = Tâches
+
 category-notifications = Notifications
 
 category-terminal = Terminal
@@ -156,6 +158,22 @@ command-editor-undo =
 command-editor-write =
     .description = Modifie le texte par `edit.change` : tout le `text` ; ou `text` entre `from` et `to` (`{"{"}line, col{"}"}` à partir de 0) ; ou une liste de `changes`. Une seule étape d’annulation.
     .title = Écrire le texte
+
+command-job-cancel =
+    .description = Demande à l’hôte d’annuler la tâche `id` ; elle apparaît en cours d’annulation jusqu’à ce que l’hôte confirme.
+    .title = Annuler une tâche
+
+command-job-pause =
+    .description = Demande à l’hôte de mettre en pause la tâche `id`.
+    .title = Mettre une tâche en pause
+
+command-job-resume =
+    .description = Demande à l’hôte de reprendre la tâche `id` mise en pause.
+    .title = Reprendre une tâche
+
+command-job-retry =
+    .description = Demande à l’hôte de relancer la tâche `id` échouée ou annulée.
+    .title = Relancer une tâche
 
 command-logs-reveal =
     .description = Ouvre le dossier des fichiers journaux de l’application.
@@ -641,6 +659,9 @@ plugin-egui-pop-i18n =
 
 plugin-egui-pop-instance =
     .title = Instance unique
+
+plugin-egui-pop-jobs =
+    .title = Tâches
 
 plugin-egui-pop-logs =
     .title = Journaux

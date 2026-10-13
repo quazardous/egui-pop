@@ -40,6 +40,20 @@ egui minor.
   lock. They compile to nothing unless a profiler backend is enabled
   (`profiling/profile-with-tracing`, `-with-puffin`...); the gallery's
   `threading` example measures them (`docs/threading.md`).
+- Jobs: `JobsPlugin` (opt-in) folds the host's `job.*` events
+  (`started`, `progress`, `item_failed`, `paused`, `resumed`,
+  `cancelling`, `failed`, `finished`, `cancelled`, `log`) into the
+  `egui_pop_model::jobs::Jobs` model behind the `JOBS` service, from the
+  journal and never by polling. Every job carries an estimated overall
+  percentage: declared steps and child jobs roll up weighted by their
+  estimates, a job that cannot estimate is indeterminate until it can,
+  and a hook on the new `jobs.estimate` step refines it. Time left from
+  an injected clock (`egui_pop_model::clock`). Cancel, pause, resume and
+  retry are commands the host runs (`job.cancel`...), or a runner the
+  application gives; a job shows what it asked until the host answers.
+  The `jobs` debug collector, and `egui_pop_test::jobs::FakeHost` to
+  script jobs in tests. Gallery page `jobs`. Guide: `docs/progress.md`.
+
 - An image tools guide (`docs/image-tools.md`): the histogram, the curve
   editor and the targeted adjustment, the colour wheels, the zoom
   control and the navigator, their hooks and steps, accessibility and

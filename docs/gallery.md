@@ -23,10 +23,8 @@ Pages: `overview` (the theme overview), `tokens`, `builtins` (egui's
 built-ins), `icons`, `values`, `sliders`, `menus`, `dialogs`, `toasts`, `viewport`
 (the image viewport), `navigator` (the zoom control and the navigator),
 `images`, `grading` (curves and colour wheels), `tree` (the live tree), `table` (lists
-and tables), `text-editor`, `code-editor`, `terminal`, `zones` (zones and blocks), `workbench`,
-(the image viewport), `images`, `tree` (the live tree), `table` (lists
 and tables), `text-editor`, `code-editor`, `terminal`, `zones` (zones and blocks), `workbench`, `palettes`,
-`arrangements`, `strips`, `frame`, `scale`, `platform` (the platform
+`arrangements`, `strips`, `jobs` (a pretend host's background jobs), `frame`, `scale`, `platform` (the platform
 services), `settings`, `i18n` (translations) and `debug` (the debug
 bridge). `Alt+Down` and `Alt+Up` go to the next and previous page,
 `Ctrl+Shift+T` to the next theme.

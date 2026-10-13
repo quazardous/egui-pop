@@ -29,7 +29,7 @@ use pages::story::PagePlugin;
 pub const TITLE: &str = "egui-pop gallery";
 
 /// The pages, as named on the command line.
-pub const PAGES: [&str; 31] = [
+pub const PAGES: [&str; 32] = [
     "overview",
     "tokens",
     "builtins",
@@ -55,6 +55,7 @@ pub const PAGES: [&str; 31] = [
     "palettes",
     "arrangements",
     "strips",
+    "jobs",
     "frame",
     "scale",
     "platform",
@@ -69,6 +70,7 @@ pub fn builder(options: &Options) -> AppBuilder {
         .density(options.density)
         .reduced_motion(options.reduced_motion);
     spec.accent = options.accent.clone();
+    let jobs_sim = pages::jobs::Sim::default();
     let builder = App::builder()
         .name("egui-pop gallery")
         .theme(spec)
@@ -162,6 +164,8 @@ pub fn builder(options: &Options) -> AppBuilder {
         .plugin(pages::arrangements::ArrangementsPage::default())
         .plugin(egui_pop::api::strips::StripsPlugin::default())
         .plugin(pages::strips::StripsPage)
+        .plugin(jobs_plugin(&jobs_sim))
+        .plugin(pages::jobs::JobsPage { sim: jobs_sim })
         .plugin(egui_pop::api::devtools::DevtoolsPlugin::default())
         .plugin(pages::frame::FramePage)
         .plugin(pages::scale::ScalePage)
@@ -176,6 +180,14 @@ pub fn builder(options: &Options) -> AppBuilder {
         .plugin(pages::i18n::I18nPage)
         .plugin(pages::debug::DebugPage);
     pages::platform::add(builder, options.platform, take_instance())
+}
+
+/// The jobs plugin, its commands answered by the jobs page's pretend
+/// host.
+fn jobs_plugin(sim: &pages::jobs::Sim) -> egui_pop::api::jobs::JobsPlugin {
+    let sim = sim.clone();
+    egui_pop::api::jobs::JobsPlugin::default()
+        .run_locally(move |app, request, id| sim.answer(app, request, id))
 }
 
 static INSTANCE: std::sync::Mutex<Option<egui_pop::platform::instance::Instance>> =

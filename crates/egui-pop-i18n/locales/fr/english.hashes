@@ -5,6 +5,7 @@ category-edit 329d5a4f3eb93fa9
 category-editor 1506bdc27aacc0ce
 category-file 181d912a9545ccc3
 category-help dd64739b1d2f8ca8
+category-jobs 61eef857facc40ad
 category-notifications 0e1b1762c20eed77
 category-terminal d3fbfb901d4c6c19
 category-values 0e9206c70dea46eb
@@ -78,6 +79,14 @@ command-editor-undo.description 5dde22e4b03efa03
 command-editor-undo.title ddfb37209e42e01c
 command-editor-write.description b3b0d1d3ff5c1123
 command-editor-write.title 3445f8530fb91884
+command-job-cancel.description d258f5baadf3fd81
+command-job-cancel.title ec63fa3499246b13
+command-job-pause.description 2199ca98c09b0278
+command-job-pause.title 9d947c0ee5f45901
+command-job-resume.description 082d4c2898ba2cbd
+command-job-resume.title 457e9fda1a98e094
+command-job-retry.description 3000163a273fd8a2
+command-job-retry.title 7e243047da6f055d
 command-logs-reveal.description 7fef58bb3796ef0e
 command-logs-reveal.title ef702f33080fcf4f
 command-notify-act.description 323a821111878eab
@@ -313,6 +322,7 @@ plugin-egui-pop-focus-mode.title bc53c8151e3fb3cc
 plugin-egui-pop-frame.title 48659a05a447c4ea
 plugin-egui-pop-i18n.title 3e94737db692401b
 plugin-egui-pop-instance.title f7cc366957d3fa5e
+plugin-egui-pop-jobs.title 61eef857facc40ad
 plugin-egui-pop-logs.title 1d707293a52c1edc
 plugin-egui-pop-notify.title 0e1b1762c20eed77
 plugin-egui-pop-palette.title f9e5c255cb220019

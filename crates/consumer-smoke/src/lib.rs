@@ -35,6 +35,9 @@ pub mod table {}
 #[doc = include_str!("../../../docs/editors.md")]
 pub mod editors {}
 
+#[doc = include_str!("../../../docs/progress.md")]
+pub mod progress {}
+
 #[doc = include_str!("../../../docs/workbench.md")]
 pub mod workbench {}
 

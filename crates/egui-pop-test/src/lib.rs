@@ -19,6 +19,8 @@
 //!   [`rects_of`]: tests at several scales (1, 1.25, 1.5, 2), a window
 //!   moved to a screen of another scale, rectangles in points to compare
 //!   across scales;
+//! - [`jobs::FakeHost`]: a host whose jobs a test scripts, event by
+//!   event, answering the job commands now, later or never;
 //! - `viewport::TestSource` (feature `viewport`): a tile source for the
 //!   image viewport, every pixel its own colour, served when the test
 //!   says.
@@ -39,6 +41,7 @@ mod gpu;
 #[cfg(feature = "wgpu")]
 pub use gpu::{SharedGpu, gpu_lock, shared_renderer, shared_setup};
 
+pub mod jobs;
 #[cfg(feature = "viewport")]
 pub mod viewport;
 

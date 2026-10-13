@@ -12,6 +12,8 @@ category-file = File
 
 category-help = Help
 
+category-jobs = Jobs
+
 category-notifications = Notifications
 
 category-terminal = Terminal
@@ -157,6 +159,22 @@ command-editor-undo =
 command-editor-write =
     .description = Changes the text through `edit.change`: the whole `text`; or `text` between `from` and `to` (`{"{"}line, col{"}"}` from 0); or a list of `changes`. One undo step.
     .title = Write the text
+
+command-job-cancel =
+    .description = Asks the host to cancel the job `id`; it shows as cancelling until the host says it is cancelled.
+    .title = Cancel a job
+
+command-job-pause =
+    .description = Asks the host to pause the job `id`.
+    .title = Pause a job
+
+command-job-resume =
+    .description = Asks the host to resume the paused job `id`.
+    .title = Resume a job
+
+command-job-retry =
+    .description = Asks the host to run the failed or cancelled job `id` again.
+    .title = Retry a job
 
 command-logs-reveal =
     .description = Opens the folder holding the application's log files.
@@ -642,6 +660,9 @@ plugin-egui-pop-i18n =
 
 plugin-egui-pop-instance =
     .title = Single instance
+
+plugin-egui-pop-jobs =
+    .title = Jobs
 
 plugin-egui-pop-logs =
     .title = Logs
