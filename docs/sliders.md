@@ -50,7 +50,10 @@ kept up to the hard one, and shown in the warning colour.
 **Values in the interface's language.** The value is written by
 `egui_pop_core::strings::number`, which asks the installed strings
 provider: with the `egui-pop-i18n` plugin, French reads `1,50 EV` and
-`1 234 K`. The typed entry starts from that text and reads it back.
+`1 234 K`. The space before the unit is the language's too
+(`egui_pop_core::strings::quantity`): a narrow no-break space (U+202F)
+in French, a plain space in English. The typed entry starts from the
+number and reads it back.
 
 **The quad button.** `quad(icon, label)` adds a square button at the
 bar's end (a colour picker: `Icon::Picker`), whose click is in

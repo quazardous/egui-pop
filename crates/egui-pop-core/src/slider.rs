@@ -31,7 +31,8 @@
 //! - **Double click**: back to the default.
 //!
 //! The keys are [`Gestures`], data a profile may remap. The value text
-//! is written in the interface's language ([`crate::strings::number`]).
+//! is written in the interface's language ([`crate::strings::number`]),
+//! and so is the space before its unit ([`crate::strings::quantity`]).
 //!
 //! **Hooks.** [`Slider::on_change`] sees every change before it is
 //! written, as a [`Change`] (which thumb, from, to, the [`Cause`], and
@@ -385,15 +386,13 @@ impl Spec {
 
     /// The number with its unit.
     pub(crate) fn text(&self, ctx: &egui::Context, v: f64) -> String {
-        self.with_unit(self.number(ctx, v))
+        self.with_unit(ctx, &self.number(ctx, v))
     }
 
-    pub(crate) fn with_unit(&self, n: String) -> String {
-        if self.unit.is_empty() {
-            n
-        } else {
-            format!("{n} {}", self.unit)
-        }
+    /// A number written with the unit after it, spaced as the
+    /// interface's language does ([`crate::strings::quantity`]).
+    pub(crate) fn with_unit(&self, ctx: &egui::Context, n: &str) -> String {
+        crate::strings::quantity(ctx, n, &self.unit)
     }
 
     /// A typed text's value (in the slider's units), `x` being `current`.

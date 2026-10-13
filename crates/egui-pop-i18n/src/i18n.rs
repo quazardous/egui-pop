@@ -464,6 +464,10 @@ impl egui_pop_core::strings::Strings for Provider {
         };
         Some(crate::format::number_with(&self.language, value, &options))
     }
+
+    fn quantity(&self, number: &str, unit: &str) -> Option<String> {
+        Some(crate::format::quantity(&self.language, number, unit))
+    }
 }
 
 #[cfg(test)]
@@ -516,6 +520,9 @@ images-selected =
         assert_eq!(fr.number(-0.26, 1).as_deref(), Some("-0,3"));
         let en = Provider::new(I18n::new("en"));
         assert_eq!(en.number(1234.6, 0).as_deref(), Some("1,235"));
+        // The space before a unit is the locale's too.
+        assert_eq!(fr.quantity("1,50", "EV").as_deref(), Some("1,50\u{202f}EV"));
+        assert_eq!(en.quantity("50", "%").as_deref(), Some("50 %"));
     }
 
     #[test]

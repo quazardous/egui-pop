@@ -189,11 +189,14 @@ impl<'a> RangeSlider<'a> {
             std::mem::swap(low, high);
         }
         if !typing {
-            let text = spec.with_unit(format!(
-                "{} – {}",
-                spec.number(ui.ctx(), *low),
-                spec.number(ui.ctx(), *high)
-            ));
+            let text = spec.with_unit(
+                ui.ctx(),
+                &format!(
+                    "{} – {}",
+                    spec.number(ui.ctx(), *low),
+                    spec.number(ui.ctx(), *high)
+                ),
+            );
             let past = *low < spec.soft.0 || *high > spec.soft.1;
             paint_bar(ui, bar, &[&lo_r, &hi_r], &spec, &[*low, *high], &text, past);
         }

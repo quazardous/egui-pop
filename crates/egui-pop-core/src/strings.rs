@@ -130,6 +130,15 @@ pub trait Strings: Send + Sync {
         let _ = (value, decimals);
         None
     }
+
+    /// A number already written (by [`Strings::number`]) followed by its
+    /// unit (`EV`, `px`, `%`), with the space the language puts between
+    /// them: French puts a narrow no-break space. `None` puts a plain
+    /// space, as English does.
+    fn quantity(&self, number: &str, unit: &str) -> Option<String> {
+        let _ = (number, unit);
+        None
+    }
 }
 
 /// No translations: every string is its English fallback.
@@ -199,6 +208,24 @@ pub fn number(ctx: &Context, value: f64, decimals: usize) -> String {
     provider(ctx)
         .number(value, decimals)
         .unwrap_or_else(|| format!("{value:.decimals$}"))
+}
+
+/// A number already written followed by its unit, in the interface's
+/// language: [`Strings::quantity`], else with a plain space between
+/// them. An empty unit gives the number alone.
+///
+/// ```
+/// let ctx = egui::Context::default();
+/// assert_eq!(egui_pop_core::strings::quantity(&ctx, "1.50", "EV"), "1.50 EV");
+/// assert_eq!(egui_pop_core::strings::quantity(&ctx, "3", ""), "3");
+/// ```
+pub fn quantity(ctx: &Context, number: &str, unit: &str) -> String {
+    if unit.is_empty() {
+        return number.to_string();
+    }
+    provider(ctx)
+        .quantity(number, unit)
+        .unwrap_or_else(|| format!("{number} {unit}"))
 }
 
 /// The English shown when a provider has nothing: the fallback, else

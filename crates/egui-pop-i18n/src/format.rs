@@ -42,6 +42,9 @@ pub struct Separators {
     pub group: &'static str,
     /// What goes between a number and `%`.
     pub percent: &'static str,
+    /// What goes between a number and its unit (`1,5 EV`, `12 px`, a
+    /// slider's `50 %`).
+    pub unit: &'static str,
 }
 
 /// The separators of a locale (English's for a language not known).
@@ -61,10 +64,14 @@ pub fn separators(locale: &str) -> Separators {
             _ => (".", ",", ""),
         },
     };
+    // French typography puts a narrow no-break space before a unit;
+    // other languages keep a plain space.
+    let unit = if language(locale) == "fr" { NNBSP } else { " " };
     Separators {
         decimal,
         group,
         percent,
+        unit,
     }
 }
 
@@ -134,6 +141,23 @@ pub fn number_with(locale: &str, value: f64, options: &FluentNumberOptions) -> S
         out.push('%');
     }
     out
+}
+
+/// A number already written followed by its unit, with the locale's
+/// space between them (the number alone when `unit` is empty).
+///
+/// ```
+/// use egui_pop_i18n::format;
+///
+/// assert_eq!(format::quantity("fr", "1,5", "EV"), "1,5\u{202f}EV");
+/// assert_eq!(format::quantity("en", "50", "%"), "50 %");
+/// ```
+pub fn quantity(locale: &str, number: &str, unit: &str) -> String {
+    if unit.is_empty() {
+        number.to_string()
+    } else {
+        format!("{number}{}{unit}", separators(locale).unit)
+    }
 }
 
 /// A calendar date, with an optional time of day.
@@ -435,6 +459,16 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(number_with("en", 1234.5, &min), "1234.50");
+    }
+
+    #[test]
+    fn a_unit_is_spaced_as_the_locale_does() {
+        assert_eq!(quantity("fr", "1,50", "EV"), "1,50\u{202f}EV");
+        assert_eq!(quantity("fr-CA", "50", "%"), "50\u{202f}%");
+        assert_eq!(quantity("en", "1.50", "EV"), "1.50 EV");
+        assert_eq!(quantity("en-US", "50", "%"), "50 %");
+        assert_eq!(quantity("de", "12", "px"), "12 px");
+        assert_eq!(quantity("fr", "3", ""), "3");
     }
 
     #[test]

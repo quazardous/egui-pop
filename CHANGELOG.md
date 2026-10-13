@@ -808,6 +808,13 @@ egui minor.
 
 ### Fixed
 
+- The space between a slider's value and its unit (`EV`, `%`, `px`) is
+  the interface language's: French puts a narrow no-break space
+  (U+202F), English keeps a plain space. New `Strings::quantity` (a
+  provider's say, a plain space by default) and
+  `egui_pop_core::strings::quantity`; `egui_pop_i18n::format::quantity`
+  and `Separators::unit` give the locale's.
+
 - A slider's typed entry takes the keyboard only when it opens: a click
   on another widget (or Tab) now commits the value typed, closes the
   entry and leaves the keyboard there, where the entry used to take it
