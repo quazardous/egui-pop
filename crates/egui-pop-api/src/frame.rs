@@ -4,12 +4,32 @@
 //! does. A setting (`window.frame`) switches between the application's
 //! frame and the system's; the system's comes back at once.
 //!
-//! The bar holds a button opening the system menu (also `Alt+Space` and
-//! a right click on the caption), the application's name, the window's
-//! title, the blocks of the [`zones::CAPTION`] zone (the application's
-//! buttons) and the minimize, maximize and close buttons. Its hit
-//! regions are published per window ([`egui_pop_core::frame::HitTable`])
-//! and shown by the debug bridge's `frame` collector.
+//! The bar holds, from the start edge, the blocks of the
+//! [`zones::CAPTION_START`] zone (by default [`BLOCK_MENU`]: a button
+//! opening the system menu, also `Alt+Space` and a right click on the
+//! caption, and the application's name), the window's title, the blocks
+//! of the [`zones::CAPTION`] zone (the application's buttons) and the
+//! minimize, maximize and close buttons. Its hit regions are published
+//! per window ([`egui_pop_core::frame::HitTable`]) and shown by the debug
+//! bridge's `frame` collector.
+//!
+//! An application puts its logo at the start of the bar by replacing the
+//! menu block; the bar itself ([`BLOCK_TITLE`]) still follows the
+//! setting:
+//!
+//! ```no_run
+//! # use egui_pop_api::{Ctx, zones::{self, Block}, frame};
+//! # use egui_pop_model::ids::BlockId;
+//! # fn connect(ctx: &mut Ctx<'_>) {
+//! ctx.block(
+//!     zones::CAPTION_START,
+//!     Block::replace(frame::BLOCK_MENU, BlockId::from_static("app.logo"), |ui, app| {
+//!         frame::menu_button(ui, app);
+//!         ui.strong("My app");
+//!     }),
+//! );
+//! # }
+//! ```
 //!
 //! Steps (ADR 0011), each with a default a plugin may veto or replace:
 //!
@@ -70,6 +90,14 @@ pub const STEP_MAXIMIZE: StepId = StepId::from_static("frame.maximize");
 pub const STEP_CLOSE: StepId = StepId::from_static("frame.close");
 pub const STEP_SYSTEM_MENU: StepId = StepId::from_static("frame.system_menu");
 pub const STEP_HIT_TEST: StepId = StepId::from_static("frame.hit_test");
+
+/// The title bar, in the [`zones::TITLE`] zone: it keeps the window's
+/// decorations in line with the setting, so it is better wrapped or
+/// extended than replaced.
+pub const BLOCK_TITLE: BlockId = BlockId::from_static("egui_pop.frame");
+/// The start of the title bar, in the [`zones::CAPTION_START`] zone: the
+/// system menu button and the application's name.
+pub const BLOCK_MENU: BlockId = BlockId::from_static("egui_pop.frame.menu");
 
 /// The plugin: `FramePlugin::own()` draws the frame by default,
 /// `FramePlugin::system()` leaves it to the system until the setting
@@ -216,6 +244,7 @@ impl Plugin for FramePlugin {
             ctx.step(spec)?;
         }
         ctx.zone(zones::CAPTION, "Title bar items")?;
+        ctx.zone(zones::CAPTION_START, "Title bar start")?;
         ctx.command(
             CommandSpec::new(CMD_MINIMIZE, "Minimize", "Window")
                 .description("Minimizes the window.")
@@ -268,10 +297,18 @@ impl Plugin for FramePlugin {
             },
         )?;
         let name = self.name.clone();
+        ctx.block(zones::TITLE, Block::add(BLOCK_TITLE, 0, title_block));
         ctx.block(
-            zones::TITLE,
-            Block::add(BlockId::from_static("egui_pop.frame"), 0, move |ui, app| {
-                title_block(ui, app, &name);
+            zones::CAPTION_START,
+            Block::add(BLOCK_MENU, 0, move |ui, app| {
+                menu_button(ui, app);
+                if !name.is_empty() {
+                    ui.add(
+                        egui::Label::new(egui::RichText::new(&name).strong())
+                            .selectable(false)
+                            .sense(egui::Sense::hover()),
+                    );
+                }
             }),
         );
         ctx.block(
@@ -343,34 +380,43 @@ fn follow_setting(ui: &Ui, app: &AppHandle) -> bool {
     own
 }
 
+/// The button opening the system menu (the [`BLOCK_MENU`] block draws
+/// it); an application replacing that block calls it to keep the menu.
+/// A click asks for the menu through the `frame.system_menu` step.
+pub fn menu_button(ui: &mut Ui, app: &AppHandle) -> egui::Response {
+    let r = ui.add(
+        Icon::Menu
+            .size(Size::Toolbar)
+            .label(&strings::tr(ui.ctx(), &txt::FRAME_WINDOW_MENU))
+            .sense_click(),
+    );
+    if r.clicked() {
+        request(
+            app,
+            ui.ctx(),
+            FrameRequest::SystemMenu(r.rect.left_bottom()),
+        );
+    }
+    r
+}
+
 /// The title bar, in the title zone.
-fn title_block(ui: &mut Ui, app: &AppHandle, name: &str) {
+fn title_block(ui: &mut Ui, app: &AppHandle) {
     if !follow_setting(ui, app) {
         return;
     }
     let ctx = ui.ctx().clone();
+    for r in native::requests(&ctx) {
+        request(app, &ctx, r);
+    }
     let title = ctx
         .input(|i| i.viewport().title.clone())
         .unwrap_or_default();
-    let mut menu_at = None;
     let out = TitleBar::new(&title).show(
         ui,
         |ui| {
-            let r = ui.add(
-                Icon::Menu
-                    .size(Size::Toolbar)
-                    .label(&strings::tr(ui.ctx(), &txt::FRAME_WINDOW_MENU))
-                    .sense_click(),
-            );
-            if r.clicked() {
-                menu_at = Some(r.rect.left_bottom());
-            }
-            if !name.is_empty() {
-                ui.add(
-                    egui::Label::new(egui::RichText::new(name).strong())
-                        .selectable(false)
-                        .sense(egui::Sense::hover()),
-                );
+            if app.zone_has_blocks(&zones::CAPTION_START) {
+                app.show_zone(ui, &zones::CAPTION_START);
             }
         },
         |ui| {
@@ -379,12 +425,6 @@ fn title_block(ui: &mut Ui, app: &AppHandle, name: &str) {
             }
         },
     );
-    if let Some(at) = menu_at {
-        request(app, &ctx, FrameRequest::SystemMenu(at));
-    }
-    for r in native::requests(&ctx) {
-        request(app, &ctx, r);
-    }
     if let Some(r) = out.request {
         request(app, &ctx, r);
     }

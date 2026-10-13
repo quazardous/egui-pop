@@ -21,6 +21,11 @@ pub const TITLE: ZoneId = ZoneId::from_static("app.title");
 /// Items in the window's own title bar, before its buttons (declared by
 /// `frame::FramePlugin`).
 pub const CAPTION: ZoneId = ZoneId::from_static("app.caption");
+/// The start of the window's own title bar (declared by
+/// `frame::FramePlugin`): by default the `egui_pop.frame.menu` block (the
+/// system menu button and the application's name); an application puts
+/// its logo there by replacing that block.
+pub const CAPTION_START: ZoneId = ZoneId::from_static("app.caption-start");
 /// A strip along the start edge, beside the side bar (the activity bar
 /// of `strips::StripsPlugin`).
 pub const ACTIVITY_BAR: ZoneId = ZoneId::from_static("app.activity-bar");

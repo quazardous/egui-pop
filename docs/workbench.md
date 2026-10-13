@@ -130,6 +130,28 @@ each window's hit regions in physical pixels (`egui_pop::core::frame`,
 the system's hit tests itself. Steps: `frame.minimize`,
 `frame.maximize`, `frame.close`, `frame.system_menu`, `frame.hit_test`.
 
+The bar starts with the `CAPTION_START` zone, whose default block
+(`frame::BLOCK_MENU`, `egui_pop.frame.menu`) is the system menu button
+and the application's name; an application puts its logo there by
+replacing that block, and keeps the menu with `frame::menu_button`. The
+bar itself (`frame::BLOCK_TITLE`) keeps following the setting. The
+`CAPTION` zone holds the application's buttons, before the window's.
+
+```rust
+use egui_pop::api::frame;
+use egui_pop::prelude::*;
+
+# fn connect(ctx: &mut Ctx<'_>) {
+ctx.block(
+    zones::CAPTION_START,
+    Block::replace(frame::BLOCK_MENU, BlockId::from_static("app.logo"), |ui, app| {
+        frame::menu_button(ui, app);
+        ui.strong("My app");
+    }),
+);
+# }
+```
+
 ### Windows: Snap Layouts and Aero Snap
 
 On Windows, when the application draws the frame, `FramePlugin`

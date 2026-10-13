@@ -4,11 +4,14 @@
 
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
-use egui_pop_api::frame::{FramePlugin, MENU_SYSTEM, STEP_CLOSE, STEP_MAXIMIZE};
+use egui_pop_api::frame::{
+    BLOCK_MENU, FramePlugin, MENU_SYSTEM, STEP_CLOSE, STEP_MAXIMIZE, STEP_SYSTEM_MENU,
+};
 use egui_pop_api::steps::Before;
+use egui_pop_api::zones::{self, Block};
 use egui_pop_api::{App, Ctx, DefaultPlugins, Plugin, PluginError};
 use egui_pop_core::frame::{self, Hit};
-use egui_pop_model::ids::PluginId;
+use egui_pop_model::ids::{BlockId, PluginId};
 use egui_pop_model::values::{Change, Set, Value};
 
 struct Guard;
@@ -30,13 +33,43 @@ impl Plugin for Guard {
     }
 }
 
+/// Puts a logo at the start of the title bar, keeping the menu button.
+struct Logo;
+
+impl Plugin for Logo {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("logo")
+    }
+
+    fn requires(&self) -> Vec<PluginId> {
+        vec![PluginId::from_static("egui_pop.frame")]
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        ctx.block(
+            zones::CAPTION_START,
+            Block::replace(BLOCK_MENU, BlockId::from_static("logo"), |ui, app| {
+                egui_pop_api::frame::menu_button(ui, app);
+                ui.strong("Logo");
+            }),
+        );
+        Ok(())
+    }
+}
+
 fn harness(ppp: f32) -> Harness<'static, App> {
-    let app = App::builder()
+    harness_with(ppp, false)
+}
+
+fn harness_with(ppp: f32, logo: bool) -> Harness<'static, App> {
+    let mut b = App::builder()
         .plugins(DefaultPlugins)
         .plugin(FramePlugin::own().name("Demo"))
-        .plugin(Guard)
-        .build(&egui::Context::default())
-        .unwrap();
+        .plugin(Guard);
+    if logo {
+        b = b.plugin(Logo);
+    }
+    let app = b.build(&egui::Context::default()).unwrap();
     let mut h = Harness::builder()
         .with_size(egui::vec2(800.0, 600.0))
         .with_pixels_per_point(ppp)
@@ -138,5 +171,35 @@ fn alt_space_opens_the_system_menu_and_the_setting_gives_the_system_frame_back()
         .unwrap();
     h.run();
     assert!(h.query_by_label("Minimize").is_none());
+    assert!(frame::regions(&h.ctx).is_none());
+}
+
+#[test]
+fn the_start_of_the_bar_is_a_zone_an_application_replaces() {
+    let mut h = harness_with(1.0, true);
+    assert!(h.query_by_label("Logo").is_some());
+    assert!(
+        h.query_by_label("Demo").is_none(),
+        "the default block is replaced"
+    );
+    // The kept menu button still asks for the system menu, as a step.
+    h.get_by_label("Window menu").click();
+    h.run();
+    let trace = h.state().handle().step_traces().pop().unwrap();
+    assert_eq!(trace.step, STEP_SYSTEM_MENU);
+    assert!(h.query_by_label("Close window").is_some());
+    h.key_press(egui::Key::Escape);
+    h.run();
+    // The bar still follows the setting.
+    let store = h.state().handle().store();
+    egui_pop_core::lock(&store)
+        .set(Set::new(
+            "settings/window.frame",
+            Change::To(Value::Choice("system".into())),
+            egui_pop_model::commands::Origin::User,
+        ))
+        .unwrap();
+    h.run();
+    assert!(h.query_by_label("Logo").is_none());
     assert!(frame::regions(&h.ctx).is_none());
 }

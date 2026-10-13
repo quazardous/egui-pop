@@ -9,6 +9,14 @@ egui minor.
 
 ### Added
 
+- The start of the window's own title bar is a zone,
+  `zones::CAPTION_START`, declared by `FramePlugin`: its default block
+  `frame::BLOCK_MENU` (`egui_pop.frame.menu`) is the system menu button
+  and the application's name. An application puts its logo there with
+  `Block::replace(BLOCK_MENU, …)` and keeps the menu with
+  `frame::menu_button`, while the bar (`frame::BLOCK_TITLE`) still
+  follows the `window.frame` setting. The gallery shows its logo there.
+
 - Choosing files (`egui_pop_api::files`, `FilesPlugin` in
   `DefaultPlugins`): `Files::choose` returns a `Pending` and never holds
   a frame. The system's chooser (feature `native-dialogs` of the facade,

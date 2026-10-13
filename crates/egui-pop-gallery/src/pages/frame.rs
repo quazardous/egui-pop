@@ -6,10 +6,11 @@ use egui::{Color32, Rect, Sense, Stroke, Ui, vec2};
 use egui_pop::api::frame::{self, STEP_CLOSE};
 use egui_pop::api::steps::Before;
 use egui_pop::api::stories::Story;
+use egui_pop::api::zones::{self, Block};
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
 use egui_pop::core::frame::{FrameLayout, HitRegions, TitleBar};
 use egui_pop::core::param::{self, Mode};
-use egui_pop::model::ids::{PluginId, StoryId};
+use egui_pop::model::ids::{BlockId, PluginId, StoryId};
 use egui_pop::theme::Tokens;
 
 use super::section;
@@ -45,6 +46,20 @@ impl Plugin for FramePage {
                 Before::Go
             }
         });
+        // The gallery's logo at the start of its own title bar, the
+        // system menu button kept.
+        ctx.block(
+            zones::CAPTION_START,
+            Block::replace(
+                frame::BLOCK_MENU,
+                BlockId::from_static("gallery.frame.logo"),
+                |ui, app| {
+                    frame::menu_button(ui, app);
+                    logo(ui);
+                    ui.strong("egui-pop gallery");
+                },
+            ),
+        );
         ctx.story(
             Story::new(StoryId::from_static("frame"), "Title bar and frame", show)
                 .description("A title bar and resize edges drawn by the application, publishing their hit regions in physical pixels; closing, minimizing and maximizing are steps other plugins may veto or replace.")
@@ -52,6 +67,16 @@ impl Plugin for FramePage {
         )?;
         Ok(())
     }
+}
+
+/// The gallery's logo: an accent disc with a ring.
+fn logo(ui: &mut Ui) {
+    let t = Tokens::of(ui.ctx());
+    let side = t.size.icon_toolbar;
+    let (r, _) = ui.allocate_exact_size(vec2(side, side), Sense::hover());
+    let p = ui.painter();
+    p.circle_filled(r.center(), side * 0.45, t.accent.default);
+    p.circle_stroke(r.center(), side * 0.25, Stroke::new(1.5, t.surface.panel));
 }
 
 fn show(ui: &mut Ui, app: &AppHandle) {
@@ -67,7 +92,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
             Mode::Bound(&store, &format!("settings/{}", frame::SETTING_FRAME)),
         );
     }
-    ui.weak("`own`: the gallery draws its title bar above the menu bar, and its edges resize the window.");
+    ui.weak("`own`: the gallery draws its title bar above the menu bar, with its logo at the start (a block replacing `egui_pop.frame.menu` in the `app.caption-start` zone), and its edges resize the window.");
     let mut veto = app.context().get(VETO) == "true";
     if ui
         .checkbox(
