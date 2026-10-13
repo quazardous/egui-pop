@@ -852,3 +852,172 @@ fn the_files_page_chooses_with_the_in_app_picker() {
     );
     assert!(egui_pop::api::files::recent(h.state().app.handle()).contains(&root.join("Photos")));
 }
+
+/// Drags from one node to a point of another (`at`: how far down it).
+fn drag_to(h: &mut Harness<'_, Gallery>, from: &str, to: &str, at: f32) {
+    let a = h.get_by_label(from).rect().center();
+    let r = h.get_by_label(to).rect();
+    let b = egui::pos2(r.center().x, r.top() + r.height() * at);
+    h.drag_at(a);
+    h.run();
+    for i in 1..=4 {
+        h.hover_at(a + (b - a) * (i as f32 / 4.0));
+        h.run();
+    }
+    h.drop_at(b);
+    h.run();
+}
+
+/// The last run of a step: its arguments, or why it was vetoed.
+fn last_step(h: &Harness<'_, Gallery>, step: &str) -> Option<egui_pop::api::steps::StepTrace> {
+    h.state()
+        .app
+        .handle()
+        .step_traces()
+        .into_iter()
+        .rev()
+        .find(|t| t.step.as_str() == step)
+}
+
+#[test]
+fn the_tree_page_loads_lazily_follows_changes_and_vetoes_a_drop() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "tree"));
+    run_until(&mut h, |h| h.query_by_label("Photos").is_some());
+    // Lazy: a branch's files come from a thread once it is opened.
+    egui_pop_test::double_click(&mut h, "Photos");
+    h.run();
+    assert!(h.query_by_label("Loading…").is_some());
+    run_until(&mut h, |h| h.query_by_label("cover.jpg").is_some());
+    assert!(
+        h.query_by_label("IMG_2023_0001.raw").is_none(),
+        "2023 is not open"
+    );
+    // A change made under the open branch: the selection stays.
+    h.get_by_label("cover.jpg").click();
+    h.run();
+    h.get_by_label("Add a photo to Photos").click();
+    h.run();
+    assert!(h.query_by_label("new-1.jpg").is_some());
+    assert!(h.query_by_label("Selected: cover.jpg").is_some());
+    // The keyboard (the button took the focus: back to the tree): up to
+    // the new photo, End, Home, type-ahead.
+    h.get_by_label("cover.jpg").click();
+    h.run();
+    // Above cover.jpg: 2024, 2023, then the new photo first.
+    for _ in 0..3 {
+        h.key_press(egui::Key::ArrowUp);
+        h.run();
+    }
+    assert!(h.query_by_label("Selected: new-1.jpg").is_some());
+    h.key_press(egui::Key::End);
+    h.run();
+    assert!(h.query_by_label("Selected: Offline drive").is_some());
+    h.key_press(egui::Key::Home);
+    h.run();
+    assert!(h.query_by_label("Selected: Photos").is_some());
+    h.event(egui::Event::Text("ar".into()));
+    h.run();
+    assert!(h.query_by_label("Selected: Archive").is_some());
+    // A failing branch says why.
+    egui_pop_test::double_click(&mut h, "Offline drive");
+    run_until(&mut h, |h| {
+        h.query_by_label("Could not load: the drive is not connected")
+            .is_some()
+    });
+    // A drop into Archive, vetoed while the box is ticked.
+    h.get_by_label("Veto drops into Archive (a before-hook on tree.drop)")
+        .click();
+    h.run();
+    drag_to(&mut h, "cover.jpg", "Archive", 0.5);
+    let t = last_step(&h, "tree.drop").expect("ran");
+    assert!(t.vetoed_by.is_some(), "{t:?}");
+    assert!(
+        h.query_by_label("cover.jpg").is_some(),
+        "still under Photos"
+    );
+    h.get_by_label("Veto drops into Archive (a before-hook on tree.drop)")
+        .click();
+    h.run();
+    drag_to(&mut h, "cover.jpg", "Archive", 0.5);
+    let t = last_step(&h, "tree.drop").expect("ran");
+    assert_eq!(t.args["target"], "archive");
+    assert!(t.vetoed_by.is_none(), "{t:?}");
+    assert!(
+        h.query_by_label("cover.jpg").is_none(),
+        "into Archive, closed"
+    );
+    h.remove_cursor();
+    h.run();
+    h.snapshot("tree-pop-dark");
+}
+
+#[test]
+fn the_tree_page_opens_a_hundred_thousand_files() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "tree"));
+    run_until(&mut h, |h| h.query_by_label("Many files").is_some());
+    egui_pop_test::double_click(&mut h, "Many files");
+    run_until(&mut h, |h| h.query_by_label("file-000000.dat").is_some());
+    let built = h.query_all_by_label_contains("file-").count();
+    assert!(built < 40, "{built} rows built");
+}
+
+#[test]
+fn the_table_page_sorts_through_the_store_and_vetoes_one_sort() {
+    use egui::accesskit::Role;
+    let mut h = harness(options("pop-dark", Density::Comfortable, "table"));
+    h.run();
+    assert!(
+        h.query_by_role_and_label(Role::Button, "IMG_00000.raw")
+            .is_some()
+    );
+    assert!(
+        h.query_by_role_and_label(Role::Button, "IMG_09999.raw")
+            .is_none(),
+        "virtualised"
+    );
+    h.get_by_label("Name").click();
+    h.run();
+    h.get_by_label("Name, sorted ascending").click();
+    h.run();
+    assert!(h.query_by_label("Name, sorted descending").is_some());
+    let store = h.state().app.handle().store();
+    assert_eq!(
+        store
+            .lock()
+            .unwrap()
+            .get("gallery/photos/sort")
+            .unwrap()
+            .value,
+        egui_pop::model::values::Value::Text("-name".into())
+    );
+    assert!(
+        h.query_by_role_and_label(Role::Button, "IMG_09999.raw")
+            .is_some()
+    );
+    // The keyboard from a clicked row.
+    h.get_by_role_and_label(Role::Button, "IMG_09999.raw")
+        .click();
+    h.run();
+    h.key_press(egui::Key::ArrowDown);
+    h.run();
+    let t = last_step(&h, "table.select").expect("ran");
+    assert_eq!(t.args["keys"], serde_json::json!([9998]));
+    // Sorting by rating, vetoed while the box is ticked.
+    h.get_by_label("Veto sorting by rating (a before-hook on table.sort)")
+        .click();
+    h.run();
+    h.get_by_label("Rating").click();
+    h.run();
+    assert!(last_step(&h, "table.sort").unwrap().vetoed_by.is_some());
+    assert!(h.query_by_label("Name, sorted descending").is_some());
+    // The list: a click, then type-ahead.
+    h.get_by_label("beach").click();
+    h.run();
+    h.event(egui::Event::Text("s".into()));
+    h.run();
+    let t = last_step(&h, "list.select").expect("ran");
+    assert_eq!(t.args["cursor"], serde_json::json!(23), "snow");
+    h.remove_cursor();
+    h.run();
+    h.snapshot("table-pop-dark");
+}

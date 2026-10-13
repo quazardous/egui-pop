@@ -29,7 +29,7 @@ use pages::story::PagePlugin;
 pub const TITLE: &str = "egui-pop gallery";
 
 /// The pages, as named on the command line.
-pub const PAGES: [&str; 22] = [
+pub const PAGES: [&str; 24] = [
     "overview",
     "tokens",
     "builtins",
@@ -42,6 +42,8 @@ pub const PAGES: [&str; 22] = [
     "viewport",
     "images",
     "display",
+    "tree",
+    "table",
     "zones",
     "workbench",
     "arrangements",
@@ -133,6 +135,9 @@ pub fn builder(options: &Options) -> AppBuilder {
             show: pages::display::show,
             playground: None,
         })
+        .plugin(egui_pop::views::ViewsPlugin)
+        .plugin(pages::tree::TreePage)
+        .plugin(pages::table::TablePage)
         .plugin(pages::zones::ZonesPage)
         .plugin(pages::zones::Extender)
         .plugin(pages::workbench::WorkbenchPage)

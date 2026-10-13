@@ -21,7 +21,8 @@ desktop).
 
 Pages: `overview` (the theme overview), `tokens`, `builtins` (egui's
 built-ins), `icons`, `values`, `menus`, `dialogs`, `toasts`, `viewport`
-(the image viewport), `images`, `zones` (zones and blocks), `workbench`,
+(the image viewport), `images`, `tree` (the live tree), `table` (lists
+and tables), `zones` (zones and blocks), `workbench`,
 `arrangements`, `strips`, `frame`, `scale`, `platform` (the platform
 services), `settings`, `i18n` (translations) and `debug` (the debug
 bridge). `Alt+Down` and `Alt+Up` go to the next and previous page,

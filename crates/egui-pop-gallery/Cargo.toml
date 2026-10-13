@@ -18,7 +18,7 @@ workspace = true
 native-dialogs = ["egui-pop/native-dialogs"]
 
 [dependencies]
-egui-pop = { workspace = true, features = ["viewport", "i18n", "platform"] }
+egui-pop = { workspace = true, features = ["viewport", "views", "i18n", "platform"] }
 egui = { workspace = true, features = ["default_fonts"] }
 eframe = { workspace = true, features = ["default_fonts", "wgpu", "accesskit", "wayland", "x11"] }
 serde_json.workspace = true

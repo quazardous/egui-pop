@@ -68,6 +68,11 @@ egui minor.
   `tree.drop`, `tree.rename`, `tree.activate`, `list.select`,
   `table.select`, `table.sort`, `table.resize`) and a signal in the
   view's output. Their strings are in egui-pop's catalogues.
+- Gallery: a Tree page (a simulated drive answered from a thread,
+  edits while branches are open, a veto on drops into one folder, a
+  branch of 100 000 files) and a Lists and tables page (10 000 photos
+  sorted and resized through the value store, stars drawn by the page,
+  a veto on one sort, a list of keywords).
 - Translations (`egui-pop-i18n`, feature `i18n` of the facade,
   `egui_pop::i18n`): `I18nPlugin` loads Fluent catalogues per locale
   (egui-pop's own, the application's, an override directory read at
