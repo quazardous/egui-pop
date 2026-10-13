@@ -1024,6 +1024,7 @@ dependencies = [
  "egui_dock",
  "egui_kittest",
  "log",
+ "profiling",
  "raw-window-handle",
  "rfd",
  "serde",
@@ -1054,6 +1055,7 @@ dependencies = [
  "egui-pop-model",
  "egui_kittest",
  "portable-pty",
+ "profiling",
  "regex",
  "serde",
  "serde_json",
@@ -1173,6 +1175,7 @@ dependencies = [
  "egui-wgpu",
  "egui_kittest",
  "half",
+ "profiling",
  "serde_json",
 ]
 

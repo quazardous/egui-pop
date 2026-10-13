@@ -3247,6 +3247,7 @@ impl App {
     /// Takes the results that arrived (each frame does it before
     /// drawing); returns how many.
     pub fn settle(&mut self) -> usize {
+        profiling::scope!("pop.app.settle");
         let mut arrived = Vec::new();
         self.in_flight.retain(|f| match f.pending.take() {
             Some(r) => {
@@ -3298,6 +3299,7 @@ impl App {
 
     /// Does what blocks and handlers asked for.
     pub fn process_requests(&mut self) {
+        profiling::scope!("pop.app.requests");
         loop {
             let requests: Vec<Request> = std::mem::take(&mut *self.handle.0.requests.borrow_mut());
             if requests.is_empty() {
@@ -3392,6 +3394,7 @@ impl App {
 
     /// Between frames: the theme asked for, requests, declarations.
     pub fn logic(&mut self, ctx: &Context) {
+        profiling::scope!("pop.app.logic");
         self.attach(ctx);
         self.install_theme();
         self.settle();
@@ -3403,6 +3406,7 @@ impl App {
     /// Draws the whole application in a `Ui` covering the window, after
     /// dispatching this frame's keys.
     pub fn show(&mut self, ui: &mut Ui) {
+        profiling::scope!("pop.app.show");
         let ctx = ui.ctx().clone();
         self.logic(&ctx);
         if let Some((from, to)) = egui_pop_core::scale::changed(&ctx) {

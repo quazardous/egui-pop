@@ -283,6 +283,7 @@ impl EditorState {
     }
 
     pub(crate) fn lock(&self) -> MutexGuard<'_, Model> {
+        profiling::scope!("pop.editor.lock");
         lock(&self.0)
     }
 

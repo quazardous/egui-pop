@@ -527,6 +527,9 @@ impl TilePaint {
         queue: &wgpu::Queue,
         r: &mut Resources,
     ) {
+        // On the render thread: the f16 conversion and one texture per
+        // tile uploaded.
+        profiling::scope!("pop.tiles.gpu_prepare");
         let (uploads, frees) = {
             let mut q = self
                 .queue

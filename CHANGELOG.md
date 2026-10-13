@@ -32,6 +32,14 @@ egui minor.
   page offers that wish and shows where the image goes and why, what the
   compositor announces and its preferred description.
 
+- Profiling scopes (the `profiling` crate egui and wgpu already use) on
+  the interface thread's heavy moments and on the locks a worker thread
+  shares with it: the app's logic, settle and requests, the viewport's
+  tile intake, uploads and GPU preparation, the terminal's painting,
+  output and model lock, the editor's text area, highlighting and model
+  lock. They compile to nothing unless a profiler backend is enabled
+  (`profiling/profile-with-tracing`, `-with-puffin`...); the gallery's
+  `threading` example measures them (`docs/threading.md`).
 - An image tools guide (`docs/image-tools.md`): the histogram, the curve
   editor and the targeted adjustment, the colour wheels, the zoom
   control and the navigator, their hooks and steps, accessibility and

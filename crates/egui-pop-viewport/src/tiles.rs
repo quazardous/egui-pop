@@ -250,6 +250,8 @@ impl Tiles {
         target: &DisplayTarget,
         transform: &dyn DisplayTransform,
     ) {
+        // Every tile that arrived since the last frame, uploaded now.
+        profiling::scope!("pop.tiles.receive");
         self.frame += 1;
         self.missing = 0;
         self.feed.set_context(ctx);
@@ -321,6 +323,7 @@ impl Tiles {
                 (Texture::Gpu(id), bytes)
             }
             pixels => {
+                profiling::scope!("pop.tiles.upload");
                 let image = match pixels {
                     Pixels::Display(bytes) => ColorImage::from_rgba_unmultiplied(
                         [tile.size[0] as usize, tile.size[1] as usize],
@@ -494,6 +497,7 @@ impl Tiles {
         m: &Mapping,
         settled: bool,
     ) -> Vec<Draw<'_>> {
+        profiling::scope!("pop.tiles.frame");
         let Some(size) = source.size() else {
             self.clear_side(side);
             return Vec::new();

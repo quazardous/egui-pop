@@ -24,6 +24,7 @@ native-dialogs = ["dep:rfd"]
 phosphor = ["egui-pop-core/phosphor"]
 
 [dependencies]
+profiling.workspace = true
 egui.workspace = true
 egui-pop-model.workspace = true
 egui-pop-core.workspace = true

@@ -303,6 +303,7 @@ fn text_area(
     id: Id,
     signals: &mut Vec<Signal>,
 ) -> Response {
+    profiling::scope!("pop.editor.text_area");
     let ctx = ui.ctx().clone();
     // Seen by egui and egui-pop as a text input: Escape leaves it, keys
     // that type stay with it, the IME is on.
@@ -444,7 +445,10 @@ fn area(
                 buffer,
                 ..
             } = &mut *m;
-            let got = highlighter.highlight(buffer, range, o.budget);
+            let got = {
+                profiling::scope!("pop.editor.highlight");
+                highlighter.highlight(buffer, range, o.budget)
+            };
             pending |= got.iter().any(Option::is_none);
             runs.extend(got);
             i = j;

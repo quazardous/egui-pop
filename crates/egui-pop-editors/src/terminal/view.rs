@@ -521,6 +521,8 @@ fn paint(
     focused: bool,
     link: Option<&(u16, Link)>,
 ) {
+    // Holds the model from its lock to the end: a source's thread waits.
+    profiling::scope!("pop.terminal.paint");
     let painter = ui.painter_at(rect);
     let border = if focused {
         tokens.focus_ring

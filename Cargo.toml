@@ -45,6 +45,9 @@ egui-pop-views = { version = "0.1.0", path = "crates/egui-pop-views" }
 egui-pop-editors = { version = "0.1.0", path = "crates/egui-pop-editors", default-features = false }
 egui-pop-imaging = { version = "0.1.0", path = "crates/egui-pop-imaging" }
 egui = { version = "0.36", default-features = false }
+# MIT OR Apache-2.0: the scopes egui, egui-wgpu and wgpu already use;
+# compiled out unless a profiler backend is chosen (docs/threading.md).
+profiling = { version = "1", default-features = false }
 egui_kittest = "0.36"
 # MIT OR Apache-2.0: the test kit shares one wgpu device per process.
 egui-wgpu = { version = "0.36", default-features = false }

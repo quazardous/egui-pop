@@ -131,6 +131,7 @@ impl Model {
 
     /// Feeds output to the emulator.
     pub fn process(&mut self, bytes: &[u8]) {
+        profiling::scope!("pop.terminal.process");
         self.parser.process(bytes);
         self.version += 1;
         self.wake();
@@ -362,6 +363,9 @@ impl TerminalState {
     }
 
     pub(crate) fn lock(&self) -> MutexGuard<'_, Model> {
+        // The wait for the model, which a source's thread holds while
+        // the emulator takes its output.
+        profiling::scope!("pop.terminal.lock");
         lock(&self.model)
     }
 

@@ -26,6 +26,7 @@ tree-sitter = ["dep:tree-sitter-highlight"]
 pty = ["dep:portable-pty"]
 
 [dependencies]
+profiling.workspace = true
 egui.workspace = true
 egui-pop-model.workspace = true
 egui-pop-core.workspace = true

@@ -163,7 +163,10 @@ impl Sink {
         let Some(m) = self.model.upgrade() else {
             return false;
         };
-        let mut m = lock(&m);
+        let mut m = {
+            profiling::scope!("pop.terminal.sink_lock");
+            lock(&m)
+        };
         if m.session != self.session {
             return false;
         }

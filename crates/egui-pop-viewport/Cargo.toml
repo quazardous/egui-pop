@@ -28,6 +28,7 @@ wgpu = ["dep:egui-wgpu", "dep:half"]
 wayland = ["wgpu", "dep:egui-pop-wayland"]
 
 [dependencies]
+profiling.workspace = true
 egui.workspace = true
 egui-wgpu = { version = "0.36", default-features = false, optional = true }
 # MIT OR Apache-2.0: f32 to half-float conversion for tile textures.
