@@ -276,6 +276,8 @@ egui-pop-area-end-side = the end side bar
 
 egui-pop-area-start-side = the start side bar
 
+egui-pop-busy = Busy
+
 egui-pop-cancel = Cancel
 
 egui-pop-close = Close

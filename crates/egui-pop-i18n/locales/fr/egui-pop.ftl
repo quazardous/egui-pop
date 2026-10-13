@@ -275,6 +275,8 @@ egui-pop-area-end-side = la barre latérale de fin
 
 egui-pop-area-start-side = la barre latérale de début
 
+egui-pop-busy = Occupé
+
 egui-pop-cancel = Annuler
 
 egui-pop-close = Fermer

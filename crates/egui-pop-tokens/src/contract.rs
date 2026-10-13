@@ -201,6 +201,23 @@ pub const CONTRACT: &[Required] = &[
     comp("button.text", "color", "a button's label"),
     comp("button.border", "color", "a button's outline"),
     comp("button.radius", "dimension", "a button's corners"),
+    comp("progress.track", "color", "a progress bar's track"),
+    comp(
+        "progress.fill",
+        "color",
+        "a progress bar's fill while running",
+    ),
+    comp("progress.height", "dimension", "a progress bar's thickness"),
+    comp(
+        "progress.line",
+        "dimension",
+        "a thin progress line's thickness",
+    ),
+    comp(
+        "progress.ring",
+        "dimension",
+        "a progress ring's and a spinner's diameter",
+    ),
     comp("slider.track", "color", "the slider's rail"),
     comp("slider.fill", "color", "the rail up to the value"),
     comp("slider.thumb", "color", "the handle"),

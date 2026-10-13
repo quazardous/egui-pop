@@ -1389,6 +1389,63 @@ fn the_code_editor_page_marks_completes_saves_and_holds_a_hundred_thousand_lines
 }
 
 #[test]
+fn the_progress_page_gives_values_and_ranges_and_still_frames() {
+    use egui::accesskit::Role;
+    let mut results = egui_kittest::SnapshotResults::new();
+    for theme in ["pop-dark", "pop-light"] {
+        let mut h = harness(options(theme, Density::Comfortable, "progress"));
+        h.run();
+        results.add(h.try_snapshot(format!("progress-{theme}")));
+    }
+    let mut h = harness(Options {
+        reduced_motion: true,
+        ..options("pop-dark", Density::Comfortable, "progress")
+    });
+    h.run();
+    results.add(h.try_snapshot("progress-reduced-pop-dark"));
+    let node = |h: &Harness<'_, Gallery>, role: Role, label: &str| {
+        let n = h.get_by_role_and_label(role, label);
+        let a = n.accesskit_node();
+        (
+            a.numeric_value(),
+            a.min_numeric_value(),
+            a.max_numeric_value(),
+        )
+    };
+    let p = Role::ProgressIndicator;
+    assert_eq!(
+        node(&h, p, "Exporting 12 images"),
+        (Some(42.0), Some(0.0), Some(100.0))
+    );
+    assert_eq!(
+        node(&h, p, "Importing photos"),
+        (Some(340.0), Some(0.0), Some(1204.0))
+    );
+    // Indeterminate: no value.
+    assert_eq!(node(&h, p, "Scanning the library"), (None, None, None));
+    assert_eq!(node(&h, p, "Waiting for the GPU"), (None, None, None));
+    assert_eq!(
+        node(&h, p, "Rendering, a quarter"),
+        (Some(25.0), Some(0.0), Some(100.0))
+    );
+    assert_eq!(
+        node(&h, Role::Meter, "GPU memory"),
+        (Some(95.0), Some(0.0), Some(100.0))
+    );
+    // The delayed spinner: nothing before 300 ms.
+    let spinner =
+        |h: &Harness<'_, Gallery>| h.query_by_role_and_label(p, "Loading thumbnails").is_some();
+    h.get_by_label("Load for 2 s").click();
+    h.run();
+    egui_pop::core::motion::freeze(&h.ctx, 0.25);
+    h.run();
+    assert!(!spinner(&h));
+    egui_pop::core::motion::freeze(&h.ctx, 0.35);
+    h.run();
+    assert!(spinner(&h));
+}
+
+#[test]
 fn the_motion_page_shows_the_busy_indicator_after_its_delay_for_its_minimum() {
     use egui_pop::core::motion;
     let mut h = harness(options("pop-dark", Density::Comfortable, "motion"));

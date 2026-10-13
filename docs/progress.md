@@ -191,6 +191,45 @@ clock.set(0.4);
 assert!(busy.visible(&ctx, true));
 ```
 
+## Progress widgets
+
+`egui_pop::core::progress` draws progress from a fraction; the jobs
+centre and the status bar feed them a job's estimate. They share the
+`progress.*` tokens (`track`, `fill`, `height`, `line`, `ring`) and the
+motion clock.
+
+| Widget | What |
+|---|---|
+| `ProgressBar` | determinate (`new(Some(f))`, `counts(done, total)`) or indeterminate (`new(None)`: a segment travelling along the track; a still striped track under reduced motion); tones (`Tone::Accent` while running, `Info`, `Success`, `Warning`, `Danger`, `Muted` when paused); stacked `section`s after the fill (failed, skipped); `line()` for the thin line; `caption(true)` draws the name and the value text above it |
+| `Ring` | a small circle: an arc from the top, or a turning arc when indeterminate |
+| `Meter` | a value against thresholds (disk space, memory), its tone the highest threshold reached; AccessKit role `Meter` |
+| `Spinner` | a turning arc with a label; `delayed(id, since, busy)` shows it only after `motion.spinner.delay` and keeps it `motion.spinner.min`, its space kept while hidden |
+
+Each is an AccessKit `ProgressIndicator` with its name (`label`); a
+determinate one has a numeric value and its range (0 to the total with
+`counts`, otherwise 0 to 100) and a value text ("340 of 1,204", or the
+`text` given); an indeterminate one has no value. Colour is never the
+only signal: the state is in the name or the text.
+
+```rust
+use egui_pop::core::progress::{ProgressBar, Spinner, Tone};
+
+fn ui(ui: &mut egui_pop::egui::Ui, started: f64, loading: bool) {
+    ui.add(
+        ProgressBar::counts(340, 1204)
+            .label("Importing photos")
+            .section(61.0 / 1204.0, Tone::Danger, "failed")
+            .text("340 of 1,204, 61 failed")
+            .caption(true),
+    );
+    ui.add(
+        Spinner::new()
+            .label("Loading thumbnails")
+            .delayed(egui_pop::egui::Id::new("thumbnails"), started, loading),
+    );
+}
+```
+
 ## Gaps
 
 - A job with no event for a long time is not shown as "not responding"

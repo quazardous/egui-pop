@@ -78,6 +78,9 @@ pub const RESTORE: StrKey = StrKey::new("egui-pop-frame-restore", "Restore");
 pub const SLIDER_MINIMUM: StrKey = StrKey::new("egui-pop-slider-minimum", "{ $label }, minimum");
 pub const SLIDER_MAXIMUM: StrKey = StrKey::new("egui-pop-slider-maximum", "{ $label }, maximum");
 
+/// A busy indicator without a label of its own.
+pub const BUSY: StrKey = StrKey::new("egui-pop-busy", "Busy");
+
 /// Every string egui-pop core shows, for catalogues and tests.
 pub const ALL: &[StrKey] = &[
     OK,
@@ -95,6 +98,7 @@ pub const ALL: &[StrKey] = &[
     RESTORE,
     SLIDER_MINIMUM,
     SLIDER_MAXIMUM,
+    BUSY,
 ];
 
 /// Gives the text of a key in the current language, if it has one.

@@ -40,6 +40,18 @@ egui minor.
   lock. They compile to nothing unless a profiler backend is enabled
   (`profiling/profile-with-tracing`, `-with-puffin`...); the gallery's
   `threading` example measures them (`docs/threading.md`).
+- Progress widgets (`egui_pop_core::progress`): `ProgressBar`
+  (determinate or indeterminate, a travelling segment that stands still
+  as stripes under reduced motion; tones; stacked sections for failed
+  and skipped items; a thin line; a caption), `Ring`, `Meter` (a value
+  against thresholds, AccessKit role `Meter`) and `Spinner` (with a
+  label; `delayed` waits `motion.spinner.delay` and stays
+  `motion.spinner.min`). Each is a named AccessKit progress indicator,
+  with a numeric value and its range when determinate and none when
+  indeterminate. New component tokens `progress.{track, fill, height,
+  line, ring}` with their contrast pair. Gallery page `progress`, its
+  snapshots in two themes and under reduced motion.
+
 - The motion clock (`egui_pop_core::motion`): spinners, travelling
   bars, shimmer and busy delays read it instead of the input's time; a
   test freezes and steps it (`freeze`, `set_clock`), reduced motion

@@ -21,6 +21,8 @@
 //!   and coarse, reset, typed expressions, a quad button), logarithmic,
 //!   on a gradient track, or a range with two thumbs; a hook on every
 //!   change;
+//! - [`progress`]: progress bars, rings, meters and spinners (delayed),
+//!   on the motion clock, named for assistive technologies;
 //! - [`placement`]: floating elements placed with flip and shift;
 //! - [`scale`]: the window's scales, crisp strokes, the scale-changed
 //!   signal, the interface zoom's steps;
@@ -49,6 +51,7 @@ pub mod overlay;
 pub mod param;
 pub mod persist;
 pub mod placement;
+pub mod progress;
 pub mod scale;
 pub mod slider;
 pub mod strings;

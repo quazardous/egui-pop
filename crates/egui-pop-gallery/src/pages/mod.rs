@@ -24,6 +24,7 @@ pub mod navigator;
 pub mod overview;
 pub mod palettes;
 pub mod platform;
+pub mod progress;
 pub mod scale;
 pub mod settings;
 pub mod sliders;

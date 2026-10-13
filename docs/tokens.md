@@ -88,7 +88,9 @@ Not read yet: references inside composite values, JSON Pointer `$ref`,
    `motion.progress.travel`, `motion.skeleton.shimmer`, `opacity.scrim`.
 
 3. **Component**: one component's tokens, each an alias of a system token:
-   `button.*`, `slider.{track, fill, thumb}`, `menu.item.*`, `dialog.*`, `palette.*`,
+   `button.*`, `slider.{track, fill, thumb}`,
+   `progress.{track, fill, height, line, ring}` (bars, rings, meters and
+   spinners), `menu.item.*`, `dialog.*`, `palette.*`,
    `toast.*`, `editor.*` and `syntax.*` (one colour per kind of code:
    keywords on the accent, strings on `success`, numbers on `warning`,
    comments muted...), `terminal.*` (its text, cursor, selection, links,

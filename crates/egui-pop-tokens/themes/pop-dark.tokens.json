@@ -215,6 +215,14 @@
     "border": {"$type": "color", "$value": "{border.default}"},
     "radius": {"$type": "dimension", "$value": "{radius.widget}"}
   },
+  "progress": {
+    "$description": "Progress bars, rings, meters and spinners.",
+    "track": {"$type": "color", "$value": "{border.default}", "$description": "The track under the fill."},
+    "fill": {"$type": "color", "$value": "{accent.default}", "$description": "The fill while running (tones replace it: success, warning, danger)."},
+    "height": {"$type": "dimension", "$value": "{space.m}", "$description": "A bar's thickness."},
+    "line": {"$type": "dimension", "$value": "{space.xs}", "$description": "A thin line's thickness (under a title, along a viewport's top)."},
+    "ring": {"$type": "dimension", "$value": "{size.icon.inline}", "$description": "A ring's and a spinner's diameter."}
+  },
   "slider": {
     "$type": "color",
     "track": {"$value": "{border.default}"},
