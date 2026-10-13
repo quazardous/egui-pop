@@ -27,7 +27,7 @@ use crate::hooks::{Cause, HandleMove, Hooks, TRACE_KEPT, TraceEntry, Verdict, Vi
 use crate::loupe::{self, Loupe, LoupeFrame};
 use crate::overlay::{self, Handle, HandleKind, HandleState, Overlay};
 use crate::source::{Readout, Side, Stats, TileSink, TileSource};
-use crate::tiles::{self, Texture, Tiles};
+use crate::tiles::{self, Texture, Tiles, UploadBudget, UploadReport};
 use crate::tokens::ViewportTokens;
 use crate::view::{self, Mapping, View, Zoom};
 
@@ -318,6 +318,38 @@ impl ViewportState {
     /// budget still shows whole.
     pub fn set_texture_budget(&mut self, bytes: usize) {
         self.tiles.budget = bytes;
+    }
+
+    /// How much one frame uploads at most ([`UploadBudget::UNLIMITED`] by
+    /// default). Tiles over it wait for the next frames, the visible
+    /// area's first, and are kept when the view moves.
+    pub fn set_upload_budget(&mut self, budget: UploadBudget) {
+        self.tiles.upload_budget = budget;
+    }
+
+    /// The upload budget.
+    pub fn upload_budget(&self) -> UploadBudget {
+        self.tiles.upload_budget
+    }
+
+    /// Converts tiles on the thread that delivers them (the source's
+    /// worker) instead of the interface thread: the display transform
+    /// of the CPU path, the half-float texels of the GPU path. Off by
+    /// default. The source's thread then runs the display transform
+    /// ([`DisplayTransform`] is
+    /// `Send + Sync`).
+    pub fn set_prepare_on_worker(&mut self, on: bool) {
+        self.tiles.prepare_on_worker = on;
+    }
+
+    /// Whether tiles are converted on the delivering thread.
+    pub fn prepare_on_worker(&self) -> bool {
+        self.tiles.prepare_on_worker
+    }
+
+    /// What the last frame uploaded, and what waits.
+    pub fn upload_report(&self) -> UploadReport {
+        self.tiles.report
     }
 
     /// How long the view stays still before exact tiles are asked for,
@@ -1131,7 +1163,9 @@ fn draw_tiles(
         state.slot = NEXT_SLOT.fetch_add(3, Ordering::Relaxed);
     }
     let device = tiles::device(ctx);
-    state.tiles.receive(ctx, device, target, transform.as_ref());
+    state
+        .tiles
+        .receive(ctx, device, target, &transform, mapping);
     let settled = state.tiles.note_view(mapping, state.now);
     if let Some(left) = state.tiles.settles_in(state.now) {
         ctx.request_repaint_after(Duration::from_secs_f64(left));

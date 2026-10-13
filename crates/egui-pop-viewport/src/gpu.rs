@@ -23,7 +23,7 @@ use egui_wgpu::wgpu;
 pub use egui_wgpu;
 
 use crate::display::{self, ColorSpace, DisplayTarget, Stage, SurfaceFormat, TargetSource};
-use crate::tiles::{Device, GpuQueue};
+use crate::tiles::{Device, GpuData, GpuQueue};
 
 /// What [`install`] found.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -185,9 +185,18 @@ fn device_id() -> egui::Id {
     egui::Id::new("egui_pop_viewport::gpu::device")
 }
 
+fn half_id() -> egui::Id {
+    egui::Id::new("egui_pop_viewport::gpu::half_float")
+}
+
 /// The GPU path's device, when installed in `ctx`.
 pub(crate) fn installed(ctx: &Context) -> Option<Device> {
     ctx.data(|d| d.get_temp::<Device>(device_id()))
+}
+
+/// Whether the GPU path installed in `ctx` takes half-float texels.
+pub(crate) fn half_float(ctx: &Context) -> bool {
+    ctx.data(|d| d.get_temp::<bool>(half_id())).unwrap_or(false)
 }
 
 /// The display stage's surface format for a wgpu one.
@@ -427,6 +436,7 @@ pub fn install_for_surface(
                 gpu: true,
             },
         );
+        d.insert_temp(half_id(), half);
     });
     GpuInfo {
         max_texture_side,
@@ -509,16 +519,6 @@ pub(crate) struct TilePaint {
     pub stage: Stage,
 }
 
-fn texture_bytes(format: wgpu::TextureFormat, data: &[f32]) -> Vec<u8> {
-    if format == wgpu::TextureFormat::Rgba16Float {
-        data.iter()
-            .flat_map(|v| half::f16::from_f32(*v).to_bits().to_le_bytes())
-            .collect()
-    } else {
-        data.iter().flat_map(|v| v.to_le_bytes()).collect()
-    }
-}
-
 impl TilePaint {
     /// Takes in the tiles uploaded and freed since the last frame.
     pub(crate) fn sync_textures(
@@ -527,8 +527,8 @@ impl TilePaint {
         queue: &wgpu::Queue,
         r: &mut Resources,
     ) {
-        // On the render thread: the f16 conversion and one texture per
-        // tile uploaded.
+        // On the render thread: one texture per tile uploaded, and the
+        // f16 conversion of tiles not prepared by the delivering thread.
         profiling::scope!("pop.tiles.gpu_prepare");
         let (uploads, frees) = {
             let mut q = self
@@ -541,6 +541,17 @@ impl TilePaint {
             r.textures.remove(&id);
         }
         for (id, size, data) in uploads {
+            let half = r.format == wgpu::TextureFormat::Rgba16Float;
+            let bpp: u32 = if half { 8 } else { 16 };
+            let bytes = match data {
+                GpuData::Scene(data) => crate::source::texels(&data, half),
+                GpuData::Texels(bytes) => bytes,
+            };
+            // Prepared for another format (cannot happen while the
+            // device stays): left out, the tile is not drawn.
+            if bytes.len() != size[0] as usize * size[1] as usize * bpp as usize {
+                continue;
+            }
             let extent = wgpu::Extent3d {
                 width: size[0],
                 height: size[1],
@@ -556,14 +567,9 @@ impl TilePaint {
                 usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
                 view_formats: &[],
             });
-            let bpp = if r.format == wgpu::TextureFormat::Rgba16Float {
-                8
-            } else {
-                16
-            };
             queue.write_texture(
                 texture.as_image_copy(),
-                &texture_bytes(r.format, &data),
+                &bytes,
                 wgpu::TexelCopyBufferLayout {
                     offset: 0,
                     bytes_per_row: Some(size[0] * bpp),

@@ -19,11 +19,21 @@
 //!   source applied its own display transform on the CPU) or
 //!   scene-referred ([`Pixels::Scene`], linear floats the viewport passes
 //!   through the display transform, on the GPU when it can).
+//! - **Where the pixels are converted**: by default the viewport turns
+//!   each tile into a texture on the interface thread when it takes it
+//!   in. With [`ViewportState::set_prepare_on_worker`](crate::ViewportState::set_prepare_on_worker),
+//!   the sink converts on the thread that delivers (the display
+//!   transform on the CPU path, the half-float texels on the GPU path),
+//!   so tiles arrive ready to upload.
 
 use std::fmt;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex};
+
+use egui::{Color32, ColorImage};
+
+use crate::display::{self, DisplayTarget, DisplayTransform};
 
 /// A tile's quality.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -196,10 +206,112 @@ pub struct Readout {
 }
 
 pub(crate) enum Message {
-    Tile(Side, Tile),
+    Tile(Side, Arrival),
     Changed(Side, Option<[f64; 4]>),
     Failed(Side, RequestId, String),
     Readout(Readout),
+}
+
+/// What the delivering thread needs to convert a tile: the display
+/// transform and target of the last frame, and the GPU path's texel
+/// format. `stamp` changes with any of them.
+#[derive(Clone, Debug)]
+pub(crate) struct Prep {
+    pub stamp: u64,
+    pub transform: Arc<dyn DisplayTransform>,
+    pub target: DisplayTarget,
+    /// The GPU path is installed; `true` for half-float texels.
+    pub gpu: Option<bool>,
+}
+
+/// A tile's pixels as they reach the interface thread.
+#[derive(Debug)]
+pub(crate) enum Body {
+    /// As the source made them: converted on the interface thread.
+    Raw(Pixels),
+    /// Ready for an egui texture; `baked` when made from scene pixels
+    /// through the transform of `stamp`.
+    Image {
+        image: ColorImage,
+        baked: bool,
+        stamp: u64,
+    },
+    /// Ready for a GPU path texture: texels in the format of `stamp`.
+    Texels { data: Vec<u8>, stamp: u64 },
+}
+
+impl Body {
+    /// Bytes the upload copies.
+    pub(crate) fn upload_bytes(&self, size: [u32; 2], gpu: bool) -> usize {
+        let n = size[0] as usize * size[1] as usize;
+        match self {
+            Body::Raw(Pixels::Scene(_)) if gpu => n * 8,
+            Body::Raw(_) | Body::Image { .. } => n * 4,
+            Body::Texels { data, .. } => data.len(),
+        }
+    }
+}
+
+/// A tile delivered, as the viewport takes it in.
+#[derive(Debug)]
+pub(crate) struct Arrival {
+    pub request: RequestId,
+    pub key: TileKey,
+    pub size: [u32; 2],
+    pub body: Body,
+}
+
+/// The GPU path's texels for scene pixels: half floats, else 32-bit
+/// floats, little endian.
+pub(crate) fn texels(data: &[f32], half_float: bool) -> Vec<u8> {
+    #[cfg(feature = "wgpu")]
+    if half_float {
+        return data
+            .iter()
+            .flat_map(|v| half::f16::from_f32(*v).to_bits().to_le_bytes())
+            .collect();
+    }
+    let _ = half_float;
+    data.iter().flat_map(|v| v.to_le_bytes()).collect()
+}
+
+impl Prep {
+    /// Converts a tile's pixels on the calling thread; the pixels back
+    /// when their size is wrong (the interface thread reports it).
+    fn convert(&self, size: [u32; 2], pixels: Pixels) -> Body {
+        // On the delivering thread: what the interface thread did when
+        // taking the tile in.
+        profiling::scope!("pop.tiles.prepare");
+        let n = size[0] as usize * size[1] as usize;
+        let ok = match &pixels {
+            Pixels::Display(v) => v.len() == n * 4,
+            Pixels::Scene(v) => v.len() == n * 4,
+        };
+        if !ok || n == 0 {
+            return Body::Raw(pixels);
+        }
+        let dims = [size[0] as usize, size[1] as usize];
+        match (pixels, self.gpu) {
+            (Pixels::Scene(data), Some(half)) => Body::Texels {
+                data: texels(&data, half),
+                stamp: self.stamp,
+            },
+            (Pixels::Scene(data), None) => {
+                let mut out = vec![Color32::BLACK; n];
+                display::apply_cpu(self.transform.as_ref(), &self.target, &data, &mut out);
+                Body::Image {
+                    image: ColorImage::new(dims, out),
+                    baked: true,
+                    stamp: self.stamp,
+                }
+            }
+            (Pixels::Display(bytes), _) => Body::Image {
+                image: ColorImage::from_rgba_unmultiplied(dims, &bytes),
+                baked: false,
+                stamp: self.stamp,
+            },
+        }
+    }
 }
 
 /// What a source does with the sink, counted; [`Stats::snapshot`] for
@@ -258,6 +370,7 @@ pub struct TileSink {
     side: Side,
     tx: Sender<Message>,
     waker: Arc<Waker>,
+    prep: Arc<Mutex<Option<Prep>>>,
 }
 
 impl fmt::Debug for TileSink {
@@ -276,9 +389,27 @@ impl TileSink {
         }
     }
 
-    /// Delivers a tile.
+    /// Delivers a tile. When the viewport prepares on the worker side,
+    /// the pixels are converted here, on the calling thread.
     pub fn deliver(&self, tile: Tile) {
-        self.send(Message::Tile(self.side, tile));
+        let prep = self
+            .prep
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        let body = match prep {
+            Some(p) => p.convert(tile.size, tile.pixels),
+            None => Body::Raw(tile.pixels),
+        };
+        self.send(Message::Tile(
+            self.side,
+            Arrival {
+                request: tile.request,
+                key: tile.key,
+                size: tile.size,
+                body,
+            },
+        ));
     }
 
     /// The image changed in `region` (`[x0, y0, x1, y1]`, image pixels),
@@ -307,6 +438,8 @@ pub(crate) struct Feed {
     tx: Sender<Message>,
     pub(crate) rx: Receiver<Message>,
     waker: Arc<Waker>,
+    /// Set when tiles are converted by the delivering thread.
+    pub(crate) prep: Arc<Mutex<Option<Prep>>>,
 }
 
 impl Default for Feed {
@@ -316,6 +449,7 @@ impl Default for Feed {
             tx,
             rx,
             waker: Arc::default(),
+            prep: Arc::default(),
         }
     }
 }
@@ -332,7 +466,17 @@ impl Feed {
             side,
             tx: self.tx.clone(),
             waker: self.waker.clone(),
+            prep: self.prep.clone(),
         }
+    }
+
+    /// What the delivering threads convert with, or `None` to leave
+    /// the conversion to the interface thread.
+    pub(crate) fn set_prep(&self, prep: Option<Prep>) {
+        *self
+            .prep
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = prep;
     }
 
     pub(crate) fn set_context(&self, ctx: &egui::Context) {

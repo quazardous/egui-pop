@@ -9,6 +9,16 @@ egui minor.
 
 ### Added
 
+- The viewport's tile intake off the interface thread, opt-in:
+  `ViewportState::set_prepare_on_worker` converts each tile on the
+  thread that delivers it (the display transform on the CPU path, the
+  half-float texels on the GPU path), and
+  `ViewportState::set_upload_budget` (`tiles::UploadBudget`, tiles or
+  bytes a frame) uploads at most that much per frame, the visible
+  area's tiles first; what is left waits for the next frames and is
+  kept when the view moves. `ViewportState::upload_report` says what
+  the last frame uploaded and what waits. See docs/threading.md.
+
 - The image on a surface of its own on Wayland (`image_surface`, feature
   `wayland` of `egui-pop-viewport`, on by default): after
   `image_surface::install` (eframe's creation context, a transparent main

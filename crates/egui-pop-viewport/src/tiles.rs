@@ -4,7 +4,11 @@
 //! Each frame, for each side shown:
 //!
 //! 1. take what the source delivered (a tile answering a request no
-//!    longer wanted is dropped, a changed region marks its tiles stale);
+//!    longer wanted is dropped, a changed region marks its tiles stale)
+//!    and upload it, within the upload budget when one is set: the
+//!    tiles of the visible area first (proxy, then the view's scale,
+//!    then other scales), then the others nearest the view's centre;
+//!    the rest waits for the next frame, kept when the view moves;
 //! 2. want the proxy (the whole image at a power of two at or below the
 //!    fit scale) and, once the view has settled, the exact tiles of what
 //!    is visible at the view's scale (`min(zoom, 1)`, so below 100 % one
@@ -27,8 +31,8 @@ use egui::{Color32, ColorImage, Context, TextureHandle, TextureOptions};
 
 use crate::display::{self, DisplayTarget, DisplayTransform};
 use crate::source::{
-    CancelToken, Feed, Message, Pixels, Quality, Readout, RequestId, Scale, Side, Stats, Tile,
-    TileKey, TileRequest, TileSink, TileSource,
+    Arrival, Body, CancelToken, Feed, Message, Pixels, Prep, Quality, Readout, RequestId, Scale,
+    Side, Stats, TileKey, TileRequest, TileSink, TileSource,
 };
 use crate::view::{Mapping, fit_zoom};
 
@@ -72,6 +76,8 @@ struct Entry {
     size: [u32; 2],
     bytes: usize,
     last_used: u64,
+    /// The frame it was uploaded in.
+    born: u64,
     stale: bool,
     /// Scene pixels transformed on the CPU: redone when the display
     /// target or transform changes.
@@ -94,11 +100,86 @@ pub(crate) struct Draw<'a> {
     pub dst_px: [f64; 4],
 }
 
+/// A GPU path tile's pixels: scene floats (converted at the paint) or
+/// texels prepared by the delivering thread.
+#[derive(Debug)]
+pub(crate) enum GpuData {
+    Scene(Vec<f32>),
+    Texels(Vec<u8>),
+}
+
 /// The GPU path's uploads and releases, waiting for the next paint.
 #[derive(Debug, Default)]
 pub(crate) struct GpuQueue {
-    pub uploads: Vec<(u64, [u32; 2], Vec<f32>)>,
+    pub uploads: Vec<(u64, [u32; 2], GpuData)>,
     pub frees: Vec<u64>,
+}
+
+/// How much a frame uploads at most: tiles and bytes (whichever is
+/// reached first; at least one tile a frame). What is left waits for the
+/// next frame, never dropped.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct UploadBudget {
+    pub tiles: usize,
+    pub bytes: usize,
+}
+
+impl UploadBudget {
+    /// No limit: every tile arrived is uploaded in the frame that takes
+    /// it in (the default).
+    pub const UNLIMITED: UploadBudget = UploadBudget {
+        tiles: usize::MAX,
+        bytes: usize::MAX,
+    };
+
+    /// At most `n` tiles a frame.
+    pub fn tiles(n: usize) -> UploadBudget {
+        UploadBudget {
+            tiles: n.max(1),
+            bytes: usize::MAX,
+        }
+    }
+
+    /// At most `n` bytes a frame (and at least one tile).
+    pub fn bytes(n: usize) -> UploadBudget {
+        UploadBudget {
+            tiles: usize::MAX,
+            bytes: n,
+        }
+    }
+
+    /// Whether it limits anything.
+    pub fn is_limited(&self) -> bool {
+        *self != UploadBudget::UNLIMITED
+    }
+}
+
+impl Default for UploadBudget {
+    fn default() -> Self {
+        UploadBudget::UNLIMITED
+    }
+}
+
+/// A tile taken in and not uploaded yet.
+#[derive(Debug)]
+struct Pending {
+    size: [u32; 2],
+    body: Body,
+    /// Arrival order, to keep it among equals.
+    seq: u64,
+}
+
+/// What the uploads of the last frame did.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct UploadReport {
+    /// Tiles uploaded.
+    pub tiles: usize,
+    /// Bytes they copy.
+    pub bytes: usize,
+    /// Tiles left for the next frames.
+    pub waiting: usize,
+    /// Exact tiles of the view uploaded in that frame and drawn.
+    pub fresh_exact_drawn: usize,
 }
 
 /// What the device allows, from the GPU path's install (or egui's
@@ -149,6 +230,29 @@ pub(crate) struct Tiles {
     /// The last error a source reported.
     pub last_error: Option<String>,
     pub gpu: Arc<std::sync::Mutex<GpuQueue>>,
+    /// Tiles taken in, waiting for their upload.
+    pending: HashMap<(Side, TileKey), Pending>,
+    next_seq: u64,
+    pub upload_budget: UploadBudget,
+    /// Tiles converted by the delivering thread.
+    pub prepare_on_worker: bool,
+    /// What the delivering threads convert with, and its stamp.
+    prep_key: Option<PrepKey>,
+    prep_stamp: u64,
+    pub report: UploadReport,
+}
+
+/// A waiting tile's upload order: its class, its distance to the view's
+/// centre, its arrival.
+type Rank = (u8, f64, u64);
+
+/// What a preparation depends on.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct PrepKey {
+    transform: usize,
+    revision: u64,
+    target: DisplayTarget,
+    gpu: Option<bool>,
 }
 
 impl Default for Tiles {
@@ -172,6 +276,13 @@ impl Default for Tiles {
             readout: None,
             last_error: None,
             gpu: Arc::default(),
+            pending: HashMap::new(),
+            next_seq: 0,
+            upload_budget: UploadBudget::UNLIMITED,
+            prepare_on_worker: false,
+            prep_key: None,
+            prep_stamp: 0,
+            report: UploadReport::default(),
         }
     }
 }
@@ -210,9 +321,10 @@ impl Tiles {
         self.feed.sink(side)
     }
 
-    /// No request outstanding and every wanted exact tile on screen.
+    /// No request outstanding, nothing waiting for its upload, and every
+    /// wanted exact tile on screen.
     pub fn complete(&self) -> bool {
-        self.asked.is_empty() && self.missing == 0
+        self.asked.is_empty() && self.pending.is_empty() && self.missing == 0
     }
 
     /// Requests still waiting for an answer.
@@ -242,29 +354,74 @@ impl Tiles {
         ]
     }
 
-    /// Starts a frame: takes in what the sources sent.
+    /// Tells the delivering threads what to convert with (or that the
+    /// interface thread converts), when it changed.
+    fn update_prep(
+        &mut self,
+        ctx: &Context,
+        device: Device,
+        target: &DisplayTarget,
+        transform: &Arc<dyn DisplayTransform>,
+    ) {
+        if !self.prepare_on_worker {
+            if self.prep_key.take().is_some() {
+                self.feed.set_prep(None);
+            }
+            return;
+        }
+        #[cfg(feature = "wgpu")]
+        let gpu = device.gpu.then(|| crate::gpu::half_float(ctx));
+        #[cfg(not(feature = "wgpu"))]
+        let gpu = {
+            let _ = (ctx, device);
+            None
+        };
+        let key = PrepKey {
+            transform: Arc::as_ptr(transform).cast::<()>() as usize,
+            revision: transform.revision(),
+            target: *target,
+            gpu,
+        };
+        if self.prep_key == Some(key) {
+            return;
+        }
+        self.prep_key = Some(key);
+        self.prep_stamp += 1;
+        self.feed.set_prep(Some(Prep {
+            stamp: self.prep_stamp,
+            transform: transform.clone(),
+            target: *target,
+            gpu,
+        }));
+    }
+
+    /// Starts a frame: takes in what the sources sent and uploads it,
+    /// within the upload budget, the view's tiles first (`view`: the
+    /// mapping of this frame).
     pub fn receive(
         &mut self,
         ctx: &Context,
         device: Device,
         target: &DisplayTarget,
-        transform: &dyn DisplayTransform,
+        transform: &Arc<dyn DisplayTransform>,
+        view: &Mapping,
     ) {
-        // Every tile that arrived since the last frame, uploaded now.
+        // Every tile that arrived since the last frame, uploaded now (or
+        // within the budget).
         profiling::scope!("pop.tiles.receive");
         self.frame += 1;
         self.missing = 0;
+        self.report = UploadReport::default();
         self.feed.set_context(ctx);
         let effective = self.wanted_size.min(device.max_texture_side).max(16);
         if effective != self.tile_size {
             self.tile_size = effective;
             self.clear_all();
         }
+        self.update_prep(ctx, device, target, transform);
         while let Ok(m) = self.feed.rx.try_recv() {
             match m {
-                Message::Tile(side, tile) => {
-                    self.arrived(ctx, device, target, transform, side, tile)
-                }
+                Message::Tile(side, tile) => self.take(side, tile),
                 Message::Failed(side, id, error) => {
                     self.last_error = Some(error);
                     let k = self
@@ -284,6 +441,109 @@ impl Tiles {
                 Message::Readout(r) => self.readout = Some(r),
             }
         }
+        self.upload(ctx, device, target, transform.as_ref(), view);
+    }
+
+    /// A tile delivered: kept for its upload when still wanted.
+    fn take(&mut self, side: Side, tile: Arrival) {
+        let k = (side, tile.key);
+        if self.asked.get(&k).is_none_or(|a| a.id != tile.request) {
+            Stats::add(&self.stats.dropped, 1);
+            return;
+        }
+        self.asked.remove(&k);
+        self.next_seq += 1;
+        self.pending.insert(
+            k,
+            Pending {
+                size: tile.size,
+                body: tile.body,
+                seq: self.next_seq,
+            },
+        );
+    }
+
+    /// The upload order of a waiting tile: the visible area first (the
+    /// proxy, then the view's scale, then other scales), then the rest;
+    /// nearest the view's centre first within each.
+    fn priority(&self, key: &TileKey, view: &Mapping) -> (u8, f64) {
+        let r = self.tile_rect(key);
+        let centre = [(r[0] + r[2]) / 2.0, (r[1] + r[3]) / 2.0];
+        let Some(visible) = view.visible() else {
+            return (3, 0.0);
+        };
+        let c = [
+            (visible[0] + visible[2]) / 2.0,
+            (visible[1] + visible[3]) / 2.0,
+        ];
+        let d = (centre[0] - c[0]).powi(2) + (centre[1] - c[1]).powi(2);
+        let scale = key.scale.get();
+        let class = if !rects_meet(r, visible) {
+            3
+        } else if scale == proxy_scale(view) {
+            0
+        } else if scale == exact_scale(view) {
+            1
+        } else {
+            2
+        };
+        (class, d)
+    }
+
+    /// Uploads what waits, within the budget; asks for another frame
+    /// when some is left.
+    fn upload(
+        &mut self,
+        ctx: &Context,
+        device: Device,
+        target: &DisplayTarget,
+        transform: &dyn DisplayTransform,
+        view: &Mapping,
+    ) {
+        if self.pending.is_empty() {
+            return;
+        }
+        let budget = self.upload_budget;
+        let mut order: Vec<(Rank, (Side, TileKey))> = self
+            .pending
+            .iter()
+            .map(|(k, p)| {
+                let (class, d) = if budget.is_limited() {
+                    self.priority(&k.1, view)
+                } else {
+                    (0, 0.0)
+                };
+                ((class, d, p.seq), *k)
+            })
+            .collect();
+        order.sort_by(|a, b| {
+            a.0.0
+                .cmp(&b.0.0)
+                .then(a.0.1.total_cmp(&b.0.1))
+                .then(a.0.2.cmp(&b.0.2))
+        });
+        let (mut tiles, mut bytes) = (0usize, 0usize);
+        for (_, k) in order {
+            let Some(p) = self.pending.get(&k) else {
+                continue;
+            };
+            let cost = p.body.upload_bytes(p.size, device.gpu);
+            if tiles > 0 && (tiles >= budget.tiles || bytes.saturating_add(cost) > budget.bytes) {
+                break;
+            }
+            let Some(p) = self.pending.remove(&k) else {
+                continue;
+            };
+            tiles += 1;
+            bytes += cost;
+            self.arrived(ctx, device, target, transform, k, p);
+        }
+        self.report.tiles = tiles;
+        self.report.bytes = bytes;
+        self.report.waiting = self.pending.len();
+        if !self.pending.is_empty() {
+            ctx.request_repaint();
+        }
     }
 
     fn arrived(
@@ -292,38 +552,66 @@ impl Tiles {
         device: Device,
         target: &DisplayTarget,
         transform: &dyn DisplayTransform,
-        side: Side,
-        tile: Tile,
+        k: (Side, TileKey),
+        tile: Pending,
     ) {
-        let k = (side, tile.key);
-        if self.asked.get(&k).is_none_or(|a| a.id != tile.request) {
-            Stats::add(&self.stats.dropped, 1);
-            return;
-        }
-        self.asked.remove(&k);
         let n = tile.size[0] as usize * tile.size[1] as usize;
-        let ok = match &tile.pixels {
-            Pixels::Display(v) => v.len() == n * 4,
-            Pixels::Scene(v) => v.len() == n * 4,
+        let ok = match &tile.body {
+            Body::Raw(Pixels::Display(v)) => v.len() == n * 4,
+            Body::Raw(Pixels::Scene(v)) => v.len() == n * 4,
+            Body::Image { image, .. } => image.pixels.len() == n,
+            Body::Texels { .. } => true,
         };
         if !ok || n == 0 {
             Stats::add(&self.stats.failed, 1);
             return;
         }
         let id = NEXT_TEXTURE.fetch_add(1, Ordering::Relaxed);
-        let baked = matches!(tile.pixels, Pixels::Scene(_)) && !device.gpu;
-        let (texture, bytes) = match tile.pixels {
-            Pixels::Scene(data) if device.gpu => {
-                let bytes = n * 8;
+        let current = self.prep_stamp;
+        let load = |image: ColorImage| {
+            ctx.load_texture(
+                format!("egui-pop-viewport-tile-{id}"),
+                image,
+                TextureOptions::NEAREST,
+            )
+        };
+        let (texture, bytes, baked, stale) = match tile.body {
+            Body::Raw(Pixels::Scene(data)) if device.gpu => {
                 self.gpu
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .uploads
-                    .push((id, tile.size, data));
-                (Texture::Gpu(id), bytes)
+                    .push((id, tile.size, GpuData::Scene(data)));
+                (Texture::Gpu(id), n * 8, false, false)
             }
-            pixels => {
+            Body::Texels { data, stamp } => {
+                if stamp != current || !device.gpu {
+                    // Prepared for a device since replaced: asked for
+                    // again.
+                    Stats::add(&self.stats.dropped, 1);
+                    return;
+                }
+                self.gpu
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .uploads
+                    .push((id, tile.size, GpuData::Texels(data)));
+                (Texture::Gpu(id), n * 8, false, false)
+            }
+            Body::Image {
+                image,
+                baked,
+                stamp,
+            } => {
                 profiling::scope!("pop.tiles.upload");
+                // Transformed with a transform since replaced: shown
+                // until its replacement arrives.
+                let stale = baked && stamp != current;
+                (Texture::Egui(load(image)), n * 4, baked, stale)
+            }
+            Body::Raw(pixels) => {
+                profiling::scope!("pop.tiles.upload");
+                let baked = matches!(pixels, Pixels::Scene(_));
                 let image = match pixels {
                     Pixels::Display(bytes) => ColorImage::from_rgba_unmultiplied(
                         [tile.size[0] as usize, tile.size[1] as usize],
@@ -335,12 +623,7 @@ impl Tiles {
                         ColorImage::new([tile.size[0] as usize, tile.size[1] as usize], out)
                     }
                 };
-                let handle = ctx.load_texture(
-                    format!("egui-pop-viewport-tile-{id}"),
-                    image,
-                    TextureOptions::NEAREST,
-                );
-                (Texture::Egui(handle), n * 4)
+                (Texture::Egui(load(image)), n * 4, baked, false)
             }
         };
         Stats::add(&self.stats.delivered, 1);
@@ -355,7 +638,8 @@ impl Tiles {
                 size: tile.size,
                 bytes,
                 last_used: self.frame,
-                stale: false,
+                born: self.frame,
+                stale,
                 baked,
             },
         );
@@ -385,6 +669,20 @@ impl Tiles {
 
     fn invalidate(&mut self, side: Side, region: Option<[f64; 4]>) {
         let hit = |r: [f64; 4]| region.is_none_or(|reg| rects_meet(r, reg));
+        // Waiting tiles there show the image as it was: dropped, asked
+        // for again.
+        let waiting: Vec<_> = self
+            .pending
+            .keys()
+            .filter(|k| k.0 == side)
+            .copied()
+            .collect();
+        for k in waiting {
+            if hit(self.tile_rect(&k.1)) {
+                self.pending.remove(&k);
+                Stats::add(&self.stats.dropped, 1);
+            }
+        }
         let keys: Vec<_> = self
             .entries
             .keys()
@@ -410,6 +708,7 @@ impl Tiles {
     }
 
     fn clear_side(&mut self, side: Side) {
+        self.pending.retain(|k, _| k.0 != side);
         let keys: Vec<_> = self
             .entries
             .keys()
@@ -550,7 +849,7 @@ impl Tiles {
         for (key, quality) in &wanted {
             let k = (side, *key);
             let fresh = self.entries.get(&k).is_some_and(|e| !e.stale);
-            if fresh || self.asked.contains_key(&k) {
+            if fresh || self.asked.contains_key(&k) || self.pending.contains_key(&k) {
                 continue;
             }
             let full = scaled(key.scale.get());
@@ -605,9 +904,13 @@ impl Tiles {
                 draws_keys.push((side, key));
             }
         }
+        let exact = Scale::new(s);
         for k in &draws_keys {
             if let Some(e) = self.entries.get_mut(k) {
                 e.last_used = frame;
+                if e.born == frame && k.1.scale == exact {
+                    self.report.fresh_exact_drawn += 1;
+                }
             }
         }
         let tile = f64::from(self.tile_size);

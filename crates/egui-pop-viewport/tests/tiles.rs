@@ -1,5 +1,6 @@
 //! Tiles through the widget: proxy then exact, cancellation, live
-//! changes, the budget, the texture limit, and pixels drawn 1:1 on the
+//! changes, the budget, the upload budget and the conversion on the
+//! delivering thread, the texture limit, and pixels drawn 1:1 on the
 //! CPU and the GPU paths. Nothing sleeps: the test source serves when
 //! told, and the procedural source is waited on through its own signal.
 
@@ -8,6 +9,7 @@ use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
 use egui_pop_test::viewport::TestSource;
 use egui_pop_viewport::source::Quality;
+use egui_pop_viewport::tiles::UploadBudget;
 use egui_pop_viewport::{Signal, View, Viewport, ViewportState};
 
 struct Scene {
@@ -179,6 +181,59 @@ fn the_budget_evicts_tiles_not_drawn() {
     }
     let st = h.state().state.stats().snapshot();
     assert!(st[5].1 > 0, "{st:?}");
+}
+
+#[test]
+fn leftover_tiles_survive_a_pan() {
+    let mut s = scene(View::at(1.0, [200.0, 150.0]), true, true);
+    s.state.set_upload_budget(UploadBudget::tiles(1));
+    s.state.set_prepare_on_worker(true);
+    let mut h = harness(s, 1.0);
+    h.step();
+    let asked = h.state().source.pending().len();
+    assert!(asked >= 3, "{asked}");
+    // Everything arrives at once (converted on this, the delivering,
+    // thread); one tile a frame goes up.
+    assert_eq!(h.state().source.deliver_all(), asked);
+    h.step();
+    let report = h.state().state.upload_report();
+    assert_eq!((report.tiles, report.waiting), (1, asked - 1));
+    // Far away: none of the waiting exact tiles is visible any more.
+    h.state_mut().view = View::at(1.0, [800.0, 650.0]);
+    for _ in 0..asked {
+        h.step();
+        if h.state().state.upload_report().waiting == 0 {
+            break;
+        }
+    }
+    assert_eq!(h.state().state.upload_report().waiting, 0);
+    // None was dropped: the old view's tiles went up after the pan.
+    let st = h.state().state.stats().snapshot();
+    assert_eq!(st[1], ("delivered", asked as u64), "{st:?}");
+    assert_eq!(st[2], ("dropped", 0), "{st:?}");
+    assert!(h.state().state.tile_count() >= asked);
+    // The new view's tiles, asked for meanwhile, come in turn.
+    for _ in 0..20 {
+        h.state().source.deliver_all();
+        h.step();
+        if h.state().state.tiles_complete() {
+            break;
+        }
+    }
+    assert!(h.state().state.tiles_complete());
+}
+
+#[test]
+fn tiles_converted_on_the_delivering_thread_draw_the_same_pixels() {
+    for scene_pixels in [false, true] {
+        let mut s = scene(View::actual([300.3, 200.7]), false, scene_pixels);
+        s.state.set_prepare_on_worker(true);
+        // About two tiles a frame.
+        s.state.set_upload_budget(UploadBudget::bytes(600_000));
+        let mut h = wgpu_harness(s, 1.0, false);
+        settle(&mut h);
+        assert_one_to_one(&mut h, 1.0, i32::from(scene_pixels));
+    }
 }
 
 #[test]
