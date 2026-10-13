@@ -521,8 +521,52 @@ notice of the application's own that has no Cancel button, or in an
 application that follows the web's convention throughout (then turn
 the setting on, rather than mixing dialogs with and without it).
 
-**Later, not built:** a header band, only for movable dialogs, where it
-is the handle to drag them by; the title row is where it would go.
+**Movable dialogs: `DialogSpec::new(dialog).movable(true)`**, or the
+`dialogs.movable` setting for every dialog. A dialog that hides what it
+acts on (levels over an image, a find dialog over a text) can be moved
+out of the way.
+
+- **The header band.** Only a movable dialog has one: its title row on
+  a tone of its own (`dialog.header`, the title in
+  `dialog.header-text`), a separator below it, the move cursor over it.
+  It carries the ✕ when the dialog is closable. A dialog that is not
+  movable keeps its plain title row: no band means "this does not
+  move".
+- **Dragging.** Dragging the band moves the dialog, kept inside the
+  window, and kept inside again when the window is resized. The title
+  is not selectable there, so a press on it drags too. A double click
+  on the band centres the dialog again.
+- **The keyboard.** The `dialogs.move` command (Alt+F7, the move key of
+  several desktops, rebindable, live while a modal is open) starts a
+  move: the arrow keys move the dialog by `space.m`, Shift+arrow by
+  eight times that, Enter keeps the place, Escape puts it back where
+  the move started (and only then, a second Escape cancels the dialog
+  as usual). The band itself is not in the Tab order.
+- **Where it comes up.** Centred, every time, unless it was opened with
+  `.remember_position(key)`: then where it was last left, kept per key
+  in the host's store (`ui/dialogs/<key>`, an offset from the window's
+  centre, written without an undo step) and clamped to the window it
+  opens in.
+- **Hooks (ADR 0011).** Each finished move (a drop, an arrow key, a
+  return to the centre) runs the `dialog.move` step with
+  `{id, title, key, how, from, to}`: a before-hook may veto it (the
+  dialog goes back) or redirect it (its own `to`); a run-hook may place
+  it its own way. The journal then says `dialog.moved`. The positions
+  in between, while the pointer drags, are not steps: the dialog
+  follows the pointer, and the drop decides.
+
+**The backdrop: `DialogSpec::backdrop(Backdrop::Dim | Backdrop::Clear)`.**
+A dialog is modal either way: the interface behind it takes no input,
+and a click on the backdrop never closes the dialog (an answer comes
+from its buttons, Enter or Escape; a stray click must not lose what
+was typed).
+
+- `Dim`, the default, darkens the interface by the `dialog.backdrop`
+  token (an alias of the system `opacity.scrim`, a number from 0 to 1).
+  While a movable dialog is dragged the dim fades to about a third, so
+  the user sees where to put it; it comes back on the drop.
+- `Clear` leaves the interface untouched, for a dialog previewing its
+  effect (a curve applied to the image behind it).
 
 Sources:
 
@@ -533,7 +577,7 @@ Sources:
 - WCAG working group's list, ✕ or Cancel in a modal (SC 3.2.4):
   <https://lists.w3.org/Archives/Public/w3c-wai-gl/2017OctDec/0897.html>
 - Inside Macintosh, Macintosh Toolbox Essentials, kinds of dialog
-  boxes:
+  boxes (movable modal dialog boxes have a title bar to drag them by):
   <https://developer.apple.com/library/archive/documentation/mac/Toolbox/Toolbox-373.html>
 
 ## Sources

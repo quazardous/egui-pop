@@ -102,6 +102,20 @@ panel alignment does: `center` (between the side bars, which go down to
 the bottom), `start` (under the start side bar) or `end` (under the end
 one); `AppBuilder::panel_alignment` gives the default.
 
+## Palettes and toolboxes: never modal
+
+Decided on 2026-10-13: a toolbox, a colour palette or a navigator
+floating over the canvas is **non-modal, always**. It never blocks the
+interface, never takes the keyboard unless clicked into, and gives the
+focus back to the canvas on Escape. Anything that must block until it
+is answered is a dialog (`egui_pop::api::dialogs`, movable when it
+hides what it acts on), never a palette.
+
+The palettes themselves (a floating panel kind sharing the movable
+dialogs' header band and drag code, roll-up and pin, docking onto the
+workbench's areas with the drop hint, snapping, the Tab toggle) are
+planned, not built yet.
+
 ## Where the layout is kept
 
 With a persistence directory (`AppBuilder::persist`), the layout is
