@@ -16,7 +16,8 @@
 # Build first: cargo build --release -p egui-pop-gallery
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
-bin="$here/../../target/release/egui-pop-gallery"
+# the build cargo made: CARGO_TARGET_DIR when set (a bench box job)
+bin="${CARGO_TARGET_DIR:-$here/../../target}/release/egui-pop-gallery"
 out="${GALLERY_OUT:-$here/out}"
 mkdir -p "$out"
 args=(--theme "${GALLERY_THEME:-pop-dark}"
