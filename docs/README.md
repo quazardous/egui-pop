@@ -67,6 +67,9 @@ devtools; every feature's moments reachable as steps (ADR 0011).
 - [Testing](testing.md): how egui-pop is tested.
 - [Threading](threading.md): what egui allows on which thread, egui-pop's
   threads, the kernel on its own thread, delegated displays.
+- [Threading survey](threading-survey.md): how darktable, vkdt, GIMP,
+  Krita, Blender and others split work between threads, and the
+  patterns that fit egui-pop.
 - [API stability](stability.md): what each release promises.
 - [Upstream workarounds](upstream.md): what egui-pop compensates for in
   its dependencies.
