@@ -65,6 +65,8 @@ devtools; every feature's moments reachable as steps (ADR 0011).
   the Windows manifest and installers, the macOS bundle, and what each
   platform service needs from the package.
 - [Testing](testing.md): how egui-pop is tested.
+- [Threading](threading.md): what egui allows on which thread, egui-pop's
+  threads, the kernel on its own thread, delegated displays.
 - [API stability](stability.md): what each release promises.
 - [Upstream workarounds](upstream.md): what egui-pop compensates for in
   its dependencies.

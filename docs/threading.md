@@ -1,0 +1,574 @@
+# Threading
+
+What runs on which thread in an egui-pop application, what egui allows,
+what egui-pop could move off the interface thread, and at what cost.
+This is an analysis: it changes no behaviour. The decisions it asks for
+are listed at the end.
+
+**In short.**
+
+- egui builds each frame on **one thread**: the thread running the
+  window's event loop, which is the process's main thread (on macOS it
+  must be; on Linux and Windows it may be another one, opted into).
+  That thread builds the frame, tessellates it and renders it with
+  wgpu, in that order, every frame. No egui API builds parts of one
+  frame on several threads.
+- egui's `Context` itself is `Send + Sync`: any thread may ask for a
+  repaint, upload or replace a texture, or read the context. So work
+  can run anywhere; only **drawing it into the frame** happens on the
+  interface thread.
+- **The application's kernel can already live on another thread**: the
+  host contract (ADR 0010) was made for it (results later, from any
+  thread; a journal; a waker). What cannot move is egui-pop's own
+  interface state (commands, keymap, steps and hooks, zones, the
+  workbench): it is built with `Rc` and `RefCell` and is used while the
+  frame is drawn. Moving it would cost a frame of latency on every
+  interaction and make hooks asynchronous; it is not recommended.
+- **Technical displays can be delegated**: a worker renders into a
+  texture (on the CPU, or on the GPU with its own wgpu work on the
+  shared device), the interface thread only draws the texture. egui-pop
+  could offer this as a component ("a delegated surface").
+- The measurements below show where the interface thread actually
+  loses time under background load today, and the fixes are cheap:
+  budgets on what a frame takes in, coalesced wakeups, and no parsing
+  under a lock the frame needs.
+
+## 1. egui's constraints
+
+All references are to the crates.io sources of egui, eframe, egui-wgpu,
+epaint and egui-winit 0.36.2, winit 0.30.13 and wgpu 30.0.1 (the version
+egui-wgpu 0.36.2 depends on).
+
+### 1.1 Which thread builds the frame
+
+eframe 0.36's `App` has `logic(&mut self, ctx, frame)` (a default body)
+and `ui(&mut self, ui, frame)` (`eframe/src/epi.rs`). eframe calls both
+from winit's `RedrawRequested` handler: `run_ui_and_paint`
+(`eframe/src/native/run.rs`) calls `integration.update`
+(`native/wgpu_integration.rs`, with the comment "make sure we hold no
+locks here!"), which runs `egui_ctx.run_ui(raw_input, |ui| { app.logic(..);
+app.ui(ui, ..) })` (`native/epi_integration.rs`). The glow backend
+does the same. All of it runs inside `event_loop.run_app`: **on the
+thread that created the winit event loop.** eframe's own state there is
+`Rc<RefCell<..>>`: single-threaded by design.
+
+Which thread may create the event loop is winit's rule
+(`winit/src/event_loop.rs`): "the `EventLoop` must be created on the
+main thread, and only once per application". On Linux and Windows,
+creating it elsewhere panics unless `with_any_thread(true)` is set
+(`platform/x11.rs`, `platform/wayland.rs`, `platform/windows.rs`); on
+**macOS there is no way around it** (`platform_impl/macos/event_loop.rs`:
+"on macOS, `EventLoop` must be created on the main thread!").
+
+eframe has no option for it, but `NativeOptions::event_loop_builder`
+(a hook given the `EventLoopBuilder`) lets an application call
+`with_any_thread(true)`: the interface then runs on a thread of the
+application's choosing on X11, Wayland and Windows. That moves the
+interface thread; it does not give the interface two threads.
+
+**In plain words:** one thread draws the window, and on a Mac it is
+always the process's first thread. "The interface thread" below is
+that thread.
+
+### 1.2 Is `Context` shareable, and what locks it takes
+
+`pub struct Context(Arc<RwLock<ContextImpl>>)` (`egui/src/context.rs`),
+a `parking_lot` lock behind epaint's wrapper; a test asserts
+`Context: Send + Sync`. The lock is **not held for the whole frame**:
+`run_ui` takes it briefly to begin the pass, runs the application's
+code unlocked, and takes it again to end the pass. Every widget call
+takes it for a moment. Another thread can therefore use the context
+while a frame is being built, between those moments.
+
+What a worker may do with a cloned `Context`:
+
+- `request_repaint()` / `request_repaint_after(d)`: documented for
+  this: "If called from outside the UI thread, the UI thread will wake
+  up and run" (eframe installs the callback). It targets the viewport
+  on top of the context's viewport stack; a worker should prefer
+  `request_repaint_of(ViewportId::ROOT)` when several windows exist;
+- `load_texture`, `TextureHandle::set`, `tex_manager()`: the texture
+  manager has its own lock (`Arc<RwLock<TextureManager>>`); the change
+  is picked up at the next end of pass (`take_delta`). It does not wake
+  the interface: call `request_repaint` too;
+- read input or memory: possible, but it reads whatever state the
+  frame in progress left, and `input()` and `memory_mut()` take the
+  **write** lock.
+
+What a worker must not do: call the context from inside a closure
+given to the context (`ctx.input(|i| ctx.request_repaint())`): the
+lock is not reentrant ("you may NOT recursively lock the same Context,
+as that can lead to a deadlock"). Note also that `tessellate` holds the
+write lock for the whole tessellation, so a worker calling the context
+then waits that long.
+
+### 1.3 Viewports (several windows)
+
+- **Immediate** viewports (`show_viewport_immediate`): the callback is
+  called at once, "This may only be called on the main thread"; the
+  renderer for them is a thread-local eframe installs.
+- **Deferred** viewports (`show_viewport_deferred`): the callback must
+  be `Fn(&mut Ui, ViewportClass) + Send + Sync + 'static` and is
+  "called by the integration at a later time, perhaps multiple times".
+  In eframe it is called **on the same event-loop thread**, when that
+  window needs a repaint. `Send + Sync` is required of the callback's
+  type; no other thread runs it.
+
+Neither kind draws in parallel. A second window costs the interface
+thread its own frame build, tessellation and render.
+
+### 1.4 Textures from other threads
+
+eframe gathers the frame's `TexturesDelta` and hands it to egui-wgpu's
+`Painter::paint_and_update_textures`, which takes
+`renderer.write()` and calls `Renderer::update_texture` for each
+change (`egui-wgpu/src/winit.rs`): **the GPU upload happens on the
+interface thread, during the render**, for every texture a worker set.
+
+To avoid that copy, a texture can be made outside egui:
+`RenderState { device, queue, renderer: Arc<RwLock<Renderer>>, .. }` is
+`Clone`, reachable from `CreationContext::wgpu_render_state` or
+`Frame::wgpu_render_state()`. wgpu's `Device` and `Queue` are
+`Send + Sync` on native (asserted in `wgpu/src/api/device.rs` and
+`queue.rs`), so **a worker can create textures, write them and submit
+its own command buffers**. To show one in egui, register its view once
+with `Renderer::register_native_texture` (an `Rgba8Unorm` view) or swap
+it with `update_egui_texture_from_wgpu_texture`; both need
+`renderer.write()`, the lock the render holds, so a worker does it
+rarely (registering a few textures once and then writing into them is
+the pattern).
+
+### 1.5 Drawing off the interface thread
+
+- **Paint callbacks** (`egui_wgpu::CallbackTrait: Send + Sync`):
+  `prepare` and `finish_prepare` run inside `Renderer::update_buffers`
+  under `renderer.write()`, and `paint` inside `Renderer::render` under
+  `renderer.read()`, both **on the interface thread during the
+  render**; their command buffers go in egui's submit. A callback is
+  GPU work recorded on the interface thread, not work done elsewhere.
+  Shared resources live in `callback_resources`, a concurrent type map.
+- **Rendering to a texture on a worker** is allowed: a worker with the
+  shared `Device` and `Queue` records and submits its own passes into a
+  texture it owns (two textures, or a ring, so the one being shown is
+  never the one being written), then tells the interface which one is
+  ready; the interface draws it as an image or samples it in a paint
+  callback. wgpu orders submissions on one queue, so the texture is
+  complete when the interface's frame samples it, if the worker
+  submitted before the frame's submit. This is how a technical
+  viewport can be "delegated".
+- **On the CPU**, a worker fills pixels and calls
+  `TextureHandle::set`; the upload still happens on the interface
+  thread at the next render (1.4).
+
+### 1.6 Where egui-wgpu renders
+
+Synchronously, on the interface thread, after the frame is built:
+`run_ui_and_paint` builds the frame, then tessellates it
+(`Context::tessellate`), then calls `paint_and_update_textures`, which
+uploads textures, prepares callbacks and buffers, renders, submits and
+presents. With the default surface configuration (`AutoVsync`, at most
+one frame in flight) the thread can **block on the display** in
+`get_current_texture` and `present` (egui-wgpu times them as "vsync").
+Tessellation runs in parallel only with epaint's `rayon` feature (off
+in egui's and eframe's defaults) and only splits large shapes.
+
+### 1.7 Repaint plumbing
+
+eframe sets `set_request_repaint_callback` to send a `RequestRepaint`
+user event through winit's `EventLoopProxy` (behind a `Mutex`); the
+loop drops requests made obsolete by a frame that already ran, and
+throttles invisible windows to 100 ms. A zero-delay request asks for
+two passes. The callback is called **while the context's write lock
+is held**. `Context::repaint_causes()` says why the last pass asked for
+another ("helpful in debugging why egui is constantly repainting");
+each `request_repaint` records its caller's file and line.
+
+egui_kittest runs `run_ui` on the test's own thread, with no event
+loop: everything egui-pop tests headless runs on one thread.
+
+### 1.8 What this means
+
+| Wish | With egui |
+|---|---|
+| Build the frame on two threads | No. One thread builds, tessellates and renders. |
+| Move the interface off the main thread | Linux and Windows only (`event_loop_builder` + `with_any_thread`); never on macOS. |
+| Compute anything on a worker | Yes: the context and wgpu's device and queue are shareable. |
+| Upload pixels from a worker | Set on a worker, copied to the GPU on the interface thread; or written by the worker into its own wgpu texture, no copy on the interface thread. |
+| Render a technical view on a worker | Yes, into a texture (CPU or wgpu), presented by the interface thread. |
+| A second window drawn in parallel | No: deferred viewports run on the same thread. |
+
+## 2. egui-pop's threads today
+
+### 2.1 On the interface thread
+
+Each frame, in this order:
+
+1. `App::logic`: attach the context, install the theme if asked,
+   **settle** (poll every command result in flight), feed the strips'
+   indicators from the journal, the pass lifecycle, process the
+   requests (commands queued by blocks and handlers, enabling plugins,
+   rebinding keys, workbench changes). eframe calls it through
+   `eframe::App::logic`, then `App::show` calls it **a second time**.
+2. `App::show`: key dispatch (commands run synchronously through the
+   host), the shell (title, menu bar, status bar, the workbench and
+   its panels), auxiliary windows, overlays, popups, live regions,
+   the requests again.
+3. Inside the panels, the components: the viewport takes in every tile
+   that arrived and uploads it (CPU path: display transform per pixel,
+   then `load_texture`); the terminal locks its model and paints the
+   grid; the editor locks its model, highlights up to 500 lines a pass
+   and lays out the visible lines; code assist calls the provider; the
+   tree applies the edits its source sent; the platform plugins drain
+   their queues.
+4. eframe tessellates and renders (1.6). On the GPU path, the
+   viewport's paint callback converts each new tile from f32 to f16 and
+   uploads it, in `prepare`, on this thread.
+
+Steps and hooks (ADR 0011), command handlers of `LocalHost`, store
+listeners and writes, persistence of documents, and the default code
+assist provider (`WordCompletion`, which scans up to 5,000 lines around
+the cursor) all run here, synchronously.
+
+### 2.2 Threads egui-pop starts
+
+| Thread | Crate | Lives | Returns results through |
+|---|---|---|---|
+| `egui-pop-file-chooser` | api | one per system file dialog | an `Arc<Mutex<Option<Answer>>>` polled each frame, then a repaint |
+| `egui-pop terminal input` | editors (`pty`) | a PTY session | an unbounded channel from the interface |
+| `egui-pop terminal output` | editors (`pty`) | a PTY session | **feeds the emulator itself**, under the terminal's model lock, then a repaint per read (16 KiB at most) |
+| `egui-pop terminal wait` | editors (`pty`) | until the child exits | the model (`pending_exit`) |
+| `egui-pop-viewport-demo-N` | viewport (demo source) | the source | the tile sink (a channel), a repaint per tile |
+| `egui-pop instance` | platform | the process | an `Arc<Mutex>` inbox, a repaint per launch |
+| `egui-pop global shortcuts` | platform (portal) | the plugin | a channel, a repaint per press |
+| `egui-pop notifications` | platform | the plugin | a channel, a repaint per event |
+| `egui-pop notification` | platform | one per shown actionable notification (no limit) | the same channel |
+| `egui-pop focus mode` | platform | one read at a time | an `Arc<Mutex>`, a repaint |
+
+Libraries add their own (global-hotkey's handler thread, ksni's D-Bus,
+rfd's portal). Applications add theirs behind the traits below: a tile
+source's workers, a tree source's loader, a terminal source, an assist
+provider's thread, the host's kernel.
+
+All of them post the same way: a queue (a channel or a vector behind a
+mutex) and `request_repaint()`. The interface drains the queue at its
+next pass. **None of the queues is bounded and none is drained with a
+budget**, except the editor's highlighting (500 lines a pass).
+
+### 2.3 What is shared
+
+- The **value store**, `SharedStore = Arc<Mutex<Store>>`: bound widgets
+  lock it every frame to read, each change locks it again; listeners
+  run while it is locked, on whatever thread wrote.
+- Command results: `Pending`/`Resolver`, an `Arc<Mutex<Option<..>>>`
+  slot, polled by `settle`; the `Waker` (`Arc<dyn Fn() + Send + Sync>`)
+  calls `request_repaint`.
+- Services (`Arc<dyn Any + Send + Sync>`) and the plugins' states
+  (toasts, dialogs, files, devtools: `Arc<Mutex<State>>`).
+- The terminal's model (`Arc<Mutex<Model>>`): the source's thread
+  parses into it, the interface paints from it.
+- The editor's model (`Arc<Mutex<Model>>`): the interface highlights
+  and paints under it; an assist provider's thread reading the text
+  through `Request::state` locks it too.
+- The viewport's tile channel, its GPU upload queue (`Arc<Mutex>`), its
+  cancel tokens (atomics).
+
+Everything else of the application layer is **not shareable**:
+`AppHandle` is `Rc<Shared>` with about thirty `RefCell` fields;
+command handlers, step hooks, list providers and reducers are `Rc<dyn
+Fn>`; blocks are `Box<dyn FnMut>` without `Send`; the `Host` trait has
+no `Send` bound and lives in a `RefCell`.
+
+### 2.4 The `Send` and `Sync` contract
+
+| What the application implements | Bound | Called on |
+|---|---|---|
+| `Host` | none | the interface thread (`dispatch` must return at once) |
+| command handler (`Ctx::command`) | none (`Rc`) | the interface thread |
+| step hooks (`before`, `replace`, `after`) | none (`Rc`) | the interface thread |
+| store listener | `FnMut + Send` | the writer's thread, store locked |
+| `TileSource` | none | the interface thread (`request` must return at once) |
+| `DisplayTransform` | `Send + Sync` | the interface thread (CPU path) |
+| `TreeSource` | none | the interface thread (`load` must return at once) |
+| `TerminalSource` | `Send` | the interface thread (`start`, `write`); output from any thread |
+| `AssistProvider` | `Send` | the interface thread (every request must return at once) |
+| `Highlighter` | `Send` | the interface thread, editor locked |
+| notification `Backend` | `Send + Sync` | its own thread (may block) |
+| shortcuts and tray `Backend` | none | the interface thread |
+
+What the application gets to answer from any thread: `Resolver`,
+`Waker`, `TileSink`, the tree's `Sink`, the terminal's `Sink` and
+`Console`, the assist `Reply`, `Notifier`, `Launches`.
+
+The rule the traits follow today, "the interface asks, never waits; the
+answer comes from anywhere", is the right one. It is written in each
+trait's documentation, not checked: a source that computes inside
+`request`, or a provider that answers inside `complete`, stalls the
+frame (measured below).
+
+## 3. The kernel on another thread
+
+### 3.1 What it would mean
+
+"The kernel" here is two different things:
+
+1. **The application's kernel**: its documents, engine, commands,
+   undo history, its bus. ADR 0010 already puts it behind `Host`.
+2. **egui-pop's interface kernel**: the registries (commands, keymap,
+   menus, panels, zones), the `when` context, steps and hooks, the
+   workbench, the requests queue, the journal fallback, the value
+   store.
+
+(1) can run on its own thread today. `dispatch` returns
+`Reply::Later(pending)` and the kernel resolves it from its thread;
+the kernel publishes on its own bus and egui-pop reads it through
+`since`; the kernel wakes the interface with the `Waker`. What is
+missing is convenience, not possibility: `Journal` is not thread-safe
+(a kernel keeps it behind its own lock, as the `threading` example's
+`LockedHost` does), and `Host::store()` hands out an
+`Arc<Mutex<Store>>` the interface locks every frame, so a kernel
+writing the store from its thread contends with the frame (briefly).
+
+(2) cannot move as it is, and should not.
+
+### 3.2 What assumes the same thread
+
+- **`Rc` and `RefCell` everywhere** in `egui-pop-api`: `AppHandle`,
+  every handler and hook type, every block. Making them `Send` means
+  `Arc<Mutex>` for each and `Send` bounds on every closure an
+  application writes, a breaking change to the whole API.
+- **Synchronous steps feeding the frame**: `AppHandle::step` returns an
+  `Outcome` the caller uses at once (the workbench applies a dock
+  change, the palette drag reads the result in the same frame, the
+  file chooser resolves). A hook may veto or redirect, and the drawing
+  code acts on that in the same frame.
+- **`&mut` during the frame**: the keymap is borrowed mutably inside
+  the rebind step's default; the workbench is borrowed mutably while
+  areas are drawn (changes made while drawing are deferred, which
+  already shows how much the frame depends on owning it).
+- **Commands from keys run in the frame that saw the key**, and their
+  `when` context is computed from the focus of that frame.
+- **The host is taken out of its cell while it dispatches**; reads made
+  meanwhile (`can_undo`, `events_since`) return defaults.
+
+### 3.3 What a split would cost
+
+- **Latency.** Input is read by the interface thread. If the kernel
+  that decides what a key does runs elsewhere, the key's effect appears
+  one frame later at best (the kernel answers before the next frame),
+  two in practice (intent sent during frame N, applied by the kernel,
+  snapshot visible at frame N+1 or N+2). At 60 Hz that is 17 to 33 ms
+  added to every interaction: noticeable on drags and typing, where
+  egui's immediate mode is otherwise zero-latency.
+- **Consistency.** The frame draws a snapshot; the user acts on what
+  was drawn. Two intents built from the same stale snapshot can
+  conflict (two drags, a menu item greyed by a `when` that was true a
+  frame ago). Every intent needs a version or a precondition, and a
+  refusal path.
+- **Hooks become asynchronous.** A before-hook that vetoes `frame.close`
+  must answer before the window decides to close; with the kernel
+  elsewhere the close waits a round trip, or the veto arrives after the
+  fact. ADR 0011's promise ("observe, veto, replace, extend at the
+  moment it happens") would weaken to "at the next frame".
+- **Undo.** Undo is already the host's (`Host::undo`): it moves with the
+  application's kernel without change. The store's undo groups gestures
+  by drag start and end on the interface thread; across threads a
+  gesture's begin and end must travel with their writes, in order.
+- **Gain.** The interface kernel's own work per frame is small (see
+  the measurements: `pop.app.logic` and `pop.app.requests`); the heavy
+  work is in components and in the application's kernel, which can
+  already move.
+
+### 3.4 Two designs
+
+**A. Message-passing kernel.** The interface thread keeps egui and a
+view model; the kernel thread owns the state. The interface sends
+intents (a command and its arguments, a gesture's begin, changes and
+end, a key that resolved to a command) over a channel; the kernel
+applies them in order, publishes events, and posts a new view model
+(or diffs) back, then wakes the interface.
+
+```text
+ interface thread                       kernel thread
+ ----------------                       -------------
+ input -> keymap -> intent  --chan-->   apply, validate, journal
+ draw(view model vN)        <--chan--   view model vN+1 (or diffs)
+ settle: take latest vN+1   <--wake--
+```
+
+- Pros: the kernel never waits on the frame, the frame never waits on
+  the kernel; the journal is the log of intents and results; testable
+  without egui; matches a kernel in another process.
+- Cons: one to two frames of latency per interaction; every piece of
+  interface state the kernel decides must be in the view model; steps
+  and hooks either stay on the interface thread (then they are not the
+  kernel's) or become asynchronous.
+
+**B. Double-buffered state.** The kernel writes into a back buffer;
+at the start of each frame the interface swaps (or the kernel
+publishes an `Arc` of an immutable snapshot, swapped atomically, as
+`arc-swap` does). The interface reads the front snapshot without locks
+and writes nothing to it; its changes go back as intents, as in A.
+
+- Pros: reads in the frame are lock-free and consistent (one version
+  per frame); cheap when the state is a persistent structure (clone an
+  `Arc` per frame).
+- Cons: same latency as A for writes; a big state must be persistent
+  (structural sharing) or the copy dominates; the interface sees a
+  snapshot up to a frame old.
+
+Both are a **kernel pattern for the application**, and egui-pop's part
+is small: a thread-safe journal, a `Host` adapter over a channel, and
+a snapshot service the blocks read. Neither requires moving egui-pop's
+interface kernel.
+
+### 3.5 Assessment
+
+- **The application's kernel on its own thread: yes, today**, through
+  `Host` with `Reply::Later`, its own journal behind a lock, and the
+  waker. Cost: commands it runs complete a frame later (they already
+  show as running), and its state is read through snapshots or the
+  store. egui-pop can make this the paved road (follow-ups 5 and 6).
+- **egui-pop's interface kernel on its own thread: possible only by
+  rewriting `egui-pop-api` around `Send` types and asynchronous steps**,
+  for a gain the measurements do not show: the interface kernel's own
+  per-frame work is a small part of a frame. Not recommended; the
+  owner decides.
+
+## 4. Delegated display
+
+A technical view (the image viewport, a node graph, histograms,
+waveforms, scopes) is drawn by a worker into a texture and only shown
+by the interface thread. With egui and wgpu:
+
+- **CPU rendering on a worker** (histograms, scopes, a small graph):
+  the worker renders pixels, calls `TextureHandle::set` (or sends the
+  pixels), asks for a repaint; the interface draws the texture as an
+  image. Cost on the interface thread: the upload during the render
+  (1.4), proportional to the pixels changed. This is the viewport's
+  CPU path today, except that its display transform runs on the
+  interface thread at tile arrival.
+- **GPU rendering on a worker**: the worker holds clones of `Device` and
+  `Queue`, owns two or three textures it renders into (a ring), and
+  registers each once with egui-wgpu (`register_native_texture`, under
+  the renderer's write lock, once). Per frame it submits its passes and
+  posts "texture k is ready"; the interface draws texture k. Nothing
+  heavy runs on the interface thread. The worker must not take the
+  renderer's lock per frame, and must keep a texture alive while the
+  interface may still sample it (the ring's size covers the frames in
+  flight).
+- **GPU work recorded on the interface thread** (paint callbacks): what
+  the viewport does today. Right for cheap draws (one quad per tile),
+  wrong for heavy passes, which belong on a worker's submission.
+
+What egui-pop would provide, as a component of the viewport crate:
+
+- a `Surface` (a delegated display): a ring of textures registered
+  with egui-wgpu, a `SurfaceSink` a worker renders into (`begin` gives
+  a free texture and the device and queue, `present` marks it ready
+  and wakes the interface), the widget that draws the latest ready
+  texture with the viewport's mapping, and a CPU fallback (pixels set
+  through a texture handle) for kittest and the web;
+- the viewport's own tile path moved to it: f32 to f16 conversion and
+  texture creation on the tile source's side (the sink converts on the
+  worker's thread), the interface only binding ready textures;
+- a frame budget for uploads (tiles per frame, bytes per frame), with
+  the rest carried to the next frame and a repaint asked.
+
+## 5. Measurements
+
+The `threading` example of the gallery
+(`crates/egui-pop-gallery/examples/threading.rs`, feature `trace`)
+builds frames headless on its main thread at 60 Hz, as eframe would,
+with no GPU (it measures the interface thread up to tessellation, not
+the render), while worker threads load it. A minimal `tracing`
+subscriber records egui-pop's profiling scopes per thread. It runs on
+the bench box as a timing job (the machine alone, its frequency capped).
+
+The numbers are pending the first run of the timing job; this section
+will list them per scenario (frame build and tessellation percentiles,
+frames over budget, uploads per frame, wakeups per second, time in the
+scopes on the interface thread and on the workers).
+
+## 6. Proposal: a threading model for egui-pop
+
+### 6.1 Rules
+
+1. **The interface thread draws and decides; it never computes what can
+   be computed elsewhere.** Never on it: decoding, parsing a program's
+   output, highlighting a whole file, scanning a document, display
+   transforms per pixel, f32 to f16 conversion, file I/O beyond a small
+   settings document, waiting on a lock a worker holds while working.
+2. **Every call egui-pop makes into application code from the frame
+   returns at once** (`Host::dispatch`, `TileSource::request`,
+   `TreeSource::load`, `AssistProvider::*`, `TerminalSource::write`):
+   the trait documentation says so already; egui-pop adds a debug
+   check (a call over a threshold is reported through the debug bridge
+   and the log, with the trait and the method).
+3. **Results come back through a queue egui-pop drains with a budget**:
+   the queue is drained at the start of the frame, up to a budget (count
+   or bytes or time), the rest stays queued and asks for another frame.
+4. **One wakeup per queue per frame**: a producer wakes the interface
+   only when its queue goes from empty to non-empty (an atomic flag the
+   drain clears), not per item.
+5. **No work under a lock the frame takes.** A worker prepares its
+   result outside any shared lock and swaps it in (a short lock, or a
+   channel); the frame copies what it draws under a short lock, or
+   reads a snapshot.
+
+### 6.2 Cancellation and back-pressure
+
+- Every request has a cancel token (the viewport and assist have one;
+  the tree source and file chooser do not yet); egui-pop cancels what
+  the view no longer needs and drops stale answers (all components
+  check versions already).
+- Queues are bounded where a producer can outrun the interface: the
+  terminal (a byte budget per frame, the reader blocking when the
+  backlog is full, as a PTY's kernel buffer would), the viewport's
+  tiles (the source's queue ordered by priority, cancelled jobs
+  removed rather than skipped later), the tree's edits.
+- Unbounded thread creation goes: actionable notifications share one
+  waiting thread; a provider's slow requests share a pool.
+
+### 6.3 The kernel-thread option
+
+The application's kernel on its own thread is the supported path
+(ADR 0010), made easier by egui-pop: a thread-safe journal, a
+channel-backed `Host` and snapshot reads (follow-ups 5 and 6).
+egui-pop's interface kernel stays on the interface thread; moving it is
+a rewrite of the application API for a small gain (section 3.5). **For
+the owner to decide.**
+
+### 6.4 Delegated viewports
+
+The viewport gets a delegated surface (section 4): its tiles converted
+and uploaded by the source's workers into GPU textures, the interface
+only drawing them; the same surface offered to applications for
+graphs, scopes and histograms.
+
+## 7. Follow-ups, by gain against cost
+
+1. Coalesce wakeups: one repaint per queue per frame (terminal sink,
+   tile sink, tree sink, assist reply). Small, local.
+2. Terminal: feed the emulator on the interface thread from a bounded
+   byte queue with a per-frame budget, or parse on the reader thread
+   into a snapshot swapped under a short lock; never parse under the
+   lock the painting holds.
+3. Viewport: an upload budget per frame (tiles and bytes), the rest
+   carried over; the CPU display transform and the f32 to f16
+   conversion moved to the sink's (worker) side.
+4. `App::logic` runs twice per eframe frame (from `eframe::App::logic`
+   and again from `App::show`): run it once.
+5. A thread-safe journal (`SharedJournal`) and a channel-backed `Host`
+   adapter, so a kernel on its own thread is the paved road.
+6. A snapshot service (an `Arc` swapped per version) for state a kernel
+   publishes and blocks read lock-free.
+7. A debug check for calls into application code that do not return
+   at once (dispatch, request, load, assist), reported through the
+   debug bridge.
+8. Bounded queues and cancellation where missing: the demo source's
+   queue (drop cancelled jobs), the tree's inbox, PTY input, one
+   waiting thread for actionable notifications.
+9. The delegated surface (section 4) in the viewport crate, then the
+   viewport's tiles on it.
+10. egui-pop's interface kernel on its own thread: not recommended
+    (section 3.5); for the owner to decide.
