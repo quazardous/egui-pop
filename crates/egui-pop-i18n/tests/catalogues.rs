@@ -67,6 +67,7 @@ fn messages() -> Messages {
         .plugin(egui_pop_api::strips::StripsPlugin::default())
         .plugin(egui_pop_i18n::I18nPlugin::new())
         .plugin(egui_pop_i18n::ShowKeys)
+        .plugin(egui_pop_views::ViewsPlugin)
         .build(&ctx)
         .expect("egui-pop's plugins build");
     let mut found = extract::declarations(app.handle(), &[]);
@@ -88,6 +89,7 @@ fn messages() -> Messages {
         egui_pop_platform::strings::ALL,
         "egui-pop-platform",
     ));
+    found.extend(strings(egui_pop_views::strings::ALL, "egui-pop-views"));
     drop(app);
     let _ = std::fs::remove_dir_all(&scratch);
     extract::messages(&found).expect("one English text per key")

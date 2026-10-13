@@ -69,6 +69,7 @@ devtools; every feature's moments reachable as steps (ADR 0011).
 | [`egui-pop-test`](../crates/egui-pop-test) | L4 | Test kit: harnesses, "every interactive node has a name", accessibility tree dump. |
 | [`egui-pop-i18n`](../crates/egui-pop-i18n) | L4 | Translations as a plugin: Fluent catalogues, fallback chains, the language setting, locale formatting, the `i18n.resolve` step, the key extractor and checks (feature `i18n` of the facade). |
 | [`egui-pop-platform`](../crates/egui-pop-platform) | L4 | Platform services as opt-in plugins: a single instance and deep links, notifications, a tray icon, global shortcuts, logs and crash reports, the focus mode (feature `platform` of the facade). |
+| [`egui-pop-views`](../crates/egui-pop-views) | L4 | Data views: a live tree over a lazy, asynchronous source, a list and a data table (on `egui_table`), virtualised, keyboard-driven, every moment a step (feature `views` of the facade). |
 | [`egui-pop`](../crates/egui-pop) | L5 | The crate to depend on: re-exports the layers, `egui`, and a `prelude`. |
 | [`egui-pop-gallery`](../crates/egui-pop-gallery) | app | The catalogue, itself a plugin application (not published). |
 

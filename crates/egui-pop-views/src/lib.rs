@@ -1,0 +1,33 @@
+//! Data views for egui-pop: a live tree, a list and a data table.
+//!
+//! - [`tree`]: a tree over a source the application implements, with
+//!   lazy, asynchronous branches and edits at any time;
+//! - [`list`]: a list of rows the application draws;
+//! - [`table`]: a data table (on `egui_table`), sorted and resized
+//!   through the host's value store, cells drawn by the application;
+//! - [`select`]: the selection by key they share;
+//! - [`steps`]: their moments as steps, and [`ViewsPlugin`] that
+//!   declares them;
+//! - [`strings`]: the text they show, translatable.
+//!
+//! All three are virtualised (only the rows in view are built), take
+//! the keyboard focus as a whole (arrows, Page Up/Down, Home/End,
+//! type-ahead), and report what happened as signals in their output and
+//! as steps a plugin may veto, replace or extend (ADR 0011). The
+//! application owns its data: the views show it and say what the user
+//! asked for.
+//!
+//! Layer: a component on the application API (L4, ADR 0001).
+
+pub mod list;
+mod nav;
+mod rows;
+pub mod select;
+pub mod steps;
+pub mod strings;
+pub mod table;
+pub mod tree;
+
+pub use nav::TYPE_AHEAD_DELAY;
+pub use select::{Mode, Selection};
+pub use steps::ViewsPlugin;

@@ -50,6 +50,24 @@ egui minor.
   configuring its own surface (formats and colour spaces from wgpu). The
   gallery's `display` page shows it. Guide: docs/viewport.md.
 
+- Data views (`egui-pop-views`, feature `views` of the facade,
+  `egui_pop::views`), virtualised, each taking the keyboard focus as a
+  whole (arrows, Page Up/Down, Home/End, Space, Ctrl+A, type-ahead),
+  with a selection by key (single or multiple) that survives the rows
+  changing. `TreeView` shows a tree the application implements
+  (`TreeSource`): branches load on demand, from any thread, with a
+  loading row and a retry on failure; a `TreeHandle` inserts, removes,
+  moves, renames or reloads nodes at any time, keeping the selection
+  and the expansion; drag and drop before, after or inside a node;
+  rename in place (F2); 100 000 nodes cost a screenful. `ListView`
+  shows rows the application draws. `DataTable` wraps `egui_table`
+  (sticky header, resizable columns) with sorting from the header,
+  the sort and the widths kept in the value store (`table::declare`),
+  cells drawn by the application. Every moment is a step declared by
+  `ViewsPlugin` (`tree.load`, `tree.expand`, `tree.select`,
+  `tree.drop`, `tree.rename`, `tree.activate`, `list.select`,
+  `table.select`, `table.sort`, `table.resize`) and a signal in the
+  view's output. Their strings are in egui-pop's catalogues.
 - Translations (`egui-pop-i18n`, feature `i18n` of the facade,
   `egui_pop::i18n`): `I18nPlugin` loads Fluent catalogues per locale
   (egui-pop's own, the application's, an override directory read at

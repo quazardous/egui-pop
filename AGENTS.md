@@ -12,6 +12,7 @@
 | `crates/egui-pop-viewport` | L3, a component on the egui layer: the image viewport (view model and mapping, tile source and cache, GPU path, display transform, overlays, hooks, debug collector), thumbnails, the histogram; `examples/viewer.rs` implements a tile source. |
 | `crates/egui-pop-i18n` | L4, a plugin on the application API: translations over Fluent (catalogues and their fallback chains, the language setting, locale formatting, the `i18n.resolve` step, the key extractor and checks); egui-pop's own catalogues in `locales/`. |
 | `crates/egui-pop-platform` | L4, plugins on the application API: platform services (a single instance and deep links, notifications, a tray icon, global shortcuts, logs and crash reports, the focus mode read in-process), each a Cargo feature and an opt-in plugin. |
+| `crates/egui-pop-views` | L4, a component on the application API: data views (a live tree over a lazy, asynchronous source; a list; a data table wrapping `egui_table`), virtualised, keyboard-driven, every moment a step. |
 | `crates/egui-pop-test` | L4, test kit: themed harness, "every interactive node has a name", accessibility tree dump. |
 | `crates/egui-pop` | L5, the facade users depend on. Holds the layering test. |
 | `crates/egui-pop-gallery` | The catalogue app, a plugin app; its pages are the snapshot fixtures. |

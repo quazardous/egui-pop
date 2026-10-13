@@ -180,6 +180,15 @@ egui-pop-viewport-histogram-label 957634470d7a6999
 egui-pop-viewport-histogram-value dde5fc725374c2d0
 egui-pop-viewport-histogram-value-log c8d4f5366b1933e5
 egui-pop-viewport-label 51f6d59dcf87b88e
+egui-pop-views-empty 43004eaa0e260734
+egui-pop-views-failed 2648f0a77a9febff
+egui-pop-views-list 52d27082aa325209
+egui-pop-views-loading 06346d0bdf25c589
+egui-pop-views-rename ed0b5cd95191e800
+egui-pop-views-sorted-down 26c3550025343606
+egui-pop-views-sorted-up 3e593b33e0ce2cba
+egui-pop-views-table 7d631a7bf18ade47
+egui-pop-views-tree 7df8572525d939c5
 egui-pop-window-exit-fullscreen c8686af758ef9bc1
 egui-pop-workbench-close-panel d48094548e62ca0f
 egui-pop-workbench-detach f12827392b3d10f9
@@ -208,6 +217,7 @@ plugin-egui-pop-strips.title bfc6f37ce6abc72c
 plugin-egui-pop-system-keys.title 7f2d7968d75f4dc5
 plugin-egui-pop-toasts.title cc96fc899cce2811
 plugin-egui-pop-tray.title cca4f6a2e19dbb7c
+plugin-egui-pop-views.title 260aa6928752872b
 plugin-egui-pop-window.title 091ff0a5b7d5ed9d
 setting-appearance-focus-choice-click 7ae7bb8dfc94d7b7
 setting-appearance-focus-choice-hover 96f62e3744de980d

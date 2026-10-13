@@ -38,3 +38,5 @@ egui-pop-viewport = { path = "../egui-pop-viewport", default-features = false }
 # Path only: the catalogue test covers the platform services' text and
 # declarations.
 egui-pop-platform = { path = "../egui-pop-platform" }
+# Path only: the catalogue test covers the views' text.
+egui-pop-views = { path = "../egui-pop-views" }

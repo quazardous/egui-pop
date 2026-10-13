@@ -54,6 +54,10 @@ pub use egui_pop_api as api;
 #[cfg(feature = "viewport")]
 pub use egui_pop_viewport as viewport;
 
+/// Data views: a live tree, a list and a data table (feature `views`).
+#[cfg(feature = "views")]
+pub use egui_pop_views as views;
+
 /// Translations: catalogues, the language setting, locale formatting,
 /// the key extractor (feature `i18n`).
 #[cfg(feature = "i18n")]

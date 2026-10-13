@@ -361,6 +361,24 @@ egui-pop-viewport-histogram-value-log = { $channels } ({ $bins } classes, logari
 
 egui-pop-viewport-label = Visionneuse d’image
 
+egui-pop-views-empty = Vide
+
+egui-pop-views-failed = Chargement impossible : { $reason }
+
+egui-pop-views-list = Liste
+
+egui-pop-views-loading = Chargement…
+
+egui-pop-views-rename = Renommer { $name }
+
+egui-pop-views-sorted-down = { $column }, tri décroissant
+
+egui-pop-views-sorted-up = { $column }, tri croissant
+
+egui-pop-views-table = Tableau
+
+egui-pop-views-tree = Arborescence
+
 egui-pop-window-exit-fullscreen = Quitter le plein écran (F11)
 
 egui-pop-workbench-close-panel = Fermer { $panel }
@@ -438,6 +456,9 @@ plugin-egui-pop-toasts =
 
 plugin-egui-pop-tray =
     .title = Icône de la zone de notification
+
+plugin-egui-pop-views =
+    .title = Vues de données
 
 plugin-egui-pop-window =
     .title = Fenêtre

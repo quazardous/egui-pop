@@ -362,6 +362,24 @@ egui-pop-viewport-histogram-value-log = { $channels } ({ $bins } bins, logarithm
 
 egui-pop-viewport-label = Image viewport
 
+egui-pop-views-empty = Empty
+
+egui-pop-views-failed = Could not load: { $reason }
+
+egui-pop-views-list = List
+
+egui-pop-views-loading = Loading…
+
+egui-pop-views-rename = Rename { $name }
+
+egui-pop-views-sorted-down = { $column }, sorted descending
+
+egui-pop-views-sorted-up = { $column }, sorted ascending
+
+egui-pop-views-table = Table
+
+egui-pop-views-tree = Tree
+
 egui-pop-window-exit-fullscreen = Exit full screen (F11)
 
 egui-pop-workbench-close-panel = Close { $panel }
@@ -439,6 +457,9 @@ plugin-egui-pop-toasts =
 
 plugin-egui-pop-tray =
     .title = Tray icon
+
+plugin-egui-pop-views =
+    .title = Data views
 
 plugin-egui-pop-window =
     .title = Window
