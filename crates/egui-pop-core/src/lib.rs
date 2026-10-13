@@ -11,6 +11,8 @@
 //! - [`keys`]: the key dispatcher (chords, consumption, traces);
 //! - [`overlay`]: the overlay stack (top-layer dismissal, modality,
 //!   focus restore);
+//! - [`band`]: the header band a movable dialog or a palette is dragged
+//!   by;
 //! - [`param`]: the editor a value descriptor calls for, in the three
 //!   binding modes;
 //! - [`slider`]: darktable-style sliders (soft and hard range, fine
@@ -31,6 +33,7 @@
 //! - [`debug`]: the debug bridge and its collectors.
 
 pub mod a11y;
+pub mod band;
 pub mod binding;
 pub mod debug;
 pub mod fault;

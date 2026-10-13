@@ -76,7 +76,8 @@ use std::path::{Path, PathBuf};
 
 use std::sync::{Arc, Mutex};
 
-use egui::{Key, Modifiers, Rect, Response, Ui, Vec2, WidgetType};
+use egui::{Key, Modifiers, Response, Ui, Vec2, WidgetType};
+use egui_pop_core::band;
 use egui_pop_core::debug::FnCollector;
 use egui_pop_core::icon::Icon;
 use egui_pop_core::overlay::{self, Kind, OverlaySpec};
@@ -1238,55 +1239,31 @@ fn body(ui: &mut Ui, app: &AppHandle, o: &mut Open, header: Header<'_>) -> Optio
     answer
 }
 
-/// A movable dialog's header band: what the pointer did to it this pass,
-/// and where it is painted.
-#[derive(Debug, Default)]
-struct Band {
-    /// Its memory id (its size from the last pass).
-    id: Option<egui::Id>,
-    /// The fill painted once the dialog's width is known.
-    shape: Option<egui::layers::ShapeIdx>,
-    top: f32,
-    bottom: f32,
-    dragging: bool,
-    double_clicked: bool,
-    delta: Vec2,
+/// The style of a dialog's header band.
+fn band_style(t: &Tokens) -> band::BandStyle {
+    band::BandStyle {
+        fill: t.dialog.header,
+        separator: t.dialog.border,
+        radius: t.dialog.radius,
+        padding: t.dialog.padding,
+        gap: t.space.m,
+    }
 }
 
 /// The header band: the title and the ✕ (when closable) on a tone of
-/// their own, above a separator, under the move cursor. It is registered
-/// before the ✕, which stays on top of it; its size is the last pass's.
+/// their own, above a separator, under the move cursor
+/// ([`egui_pop_core::band`]).
 fn header_band(
     ui: &mut Ui,
     title: &str,
     closable: bool,
     closed: &mut bool,
-    band: &mut Band,
+    out: &mut Band,
 ) -> Response {
     let t = Tokens::of(ui.ctx());
-    let pad = t.dialog.padding;
-    let id = ui.id().with("egui_pop.dialog.band");
     let side = close_side(ui);
-    let top_left = ui.max_rect().min - egui::vec2(pad, pad);
-    let size = ui
-        .ctx()
-        .data(|d| d.get_temp::<Vec2>(id))
-        .unwrap_or(egui::vec2(
-            ui.available_width() + 2.0 * pad,
-            pad + side + t.space.m,
-        ));
-    // Not focusable: the keyboard moves it through the `dialogs.move`
-    // command.
-    let response = ui.interact(
-        Rect::from_min_size(top_left, size),
-        id,
-        egui::Sense::CLICK | egui::Sense::DRAG,
-    );
-    band.id = Some(id);
-    band.shape = Some(ui.painter().add(egui::Shape::Noop));
-    band.top = top_left.y;
-    let heading = ui
-        .horizontal_top(|ui| {
+    let (heading, b) = band::begin(ui, &band_style(&t), |ui| {
+        ui.horizontal_top(|ui| {
             let room = if closable {
                 (ui.available_width() - side - ui.spacing().item_spacing.x).max(0.0)
             } else {
@@ -1315,50 +1292,22 @@ fn header_band(
             }
             heading
         })
-        .inner;
-    band.bottom = ui.min_rect().bottom() + t.space.m;
-    ui.add_space(2.0 * t.space.m);
-    band.dragging = response.dragged();
-    band.delta = response.drag_delta();
-    band.double_clicked = response.double_clicked();
-    if response.hovered() || response.dragged() {
-        ui.ctx().set_cursor_icon(egui::CursorIcon::Move);
-    }
+        .inner
+    });
+    *out = Band(Some(b));
     heading
 }
 
-/// Paints the header band across the dialog's width (known once its
-/// content is laid out), with the separator below it.
-fn paint_band(ui: &Ui, band: &Band) {
-    let (Some(id), Some(shape)) = (band.id, band.shape) else {
-        return;
-    };
-    let t = Tokens::of(ui.ctx());
-    let pad = t.dialog.padding;
-    let content = ui.min_rect();
-    let rect = Rect::from_min_max(
-        egui::pos2(content.left() - pad, band.top),
-        egui::pos2(content.right() + pad, band.bottom),
-    );
-    // Inside the frame's outline: its corners, less the stroke.
-    let r = (t.dialog.radius - 1.0).clamp(0.0, 255.0) as u8;
-    let corners = egui::CornerRadius {
-        nw: r,
-        ne: r,
-        sw: 0,
-        se: 0,
-    };
-    ui.painter().set(
-        shape,
-        egui::Shape::rect_filled(rect, corners, t.dialog.header),
-    );
-    ui.painter().hline(
-        rect.x_range(),
-        rect.bottom(),
-        egui::Stroke::new(1.0, t.dialog.border),
-    );
-    ui.ctx().data_mut(|d| d.insert_temp(id, rect.size()));
+/// Paints the header band, when there is one.
+fn paint_band(ui: &Ui, b: &Band) {
+    if let Some(b) = &b.0 {
+        band::paint(ui, b, &band_style(&Tokens::of(ui.ctx())));
+    }
 }
+
+/// A movable dialog's header band as laid out this pass.
+#[derive(Debug, Default)]
+struct Band(Option<band::Band>);
 
 /// Whether a boolean setting is on.
 fn setting(app: &AppHandle, id: SettingId) -> bool {
@@ -1382,6 +1331,9 @@ fn clamp(ctx: &egui::Context, id: egui::Id, offset: Vec2) -> Vec2 {
 /// (clamped), the drop goes through the move step; a double click
 /// centres it again.
 fn drag(app: &AppHandle, ctx: &egui::Context, id: egui::Id, o: &mut Open, band: &Band) {
+    let Some(band) = &band.0 else {
+        return;
+    };
     if band.double_clicked {
         o.drag_from = None;
         o.moving = None;
