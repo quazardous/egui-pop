@@ -32,6 +32,13 @@
 //!
 //! Each declared panel gets the commands `<panel>.focus` and
 //! `<panel>.toggle`.
+//!
+//! A panel may also float over the interface: a palette
+//! (`PanelSpec::palette`) does when it opens, any floatable panel when
+//! asked (its tab menu's Float). Floating panels are drawn by
+//! [`crate::palettes`], with steps of their own (`palette.open`,
+//! `palette.float`, `palette.dock`, `palette.move`, `palette.roll`,
+//! `palette.pin`).
 
 use std::collections::BTreeMap;
 
@@ -39,7 +46,7 @@ use egui::{Id, Pos2, Rect, Ui, ViewportBuilder, ViewportId};
 use egui_dock::{DockArea, DockState, NodeIndex, Split, TabViewer};
 use egui_pop_core::strings;
 use egui_pop_model::ids::{PanelId, StepId, ZoneId};
-use egui_pop_model::layout::{Layout, Node};
+use egui_pop_model::layout::{Floating, Layout, Node};
 use egui_pop_model::panels::{Area, PanelSpec, Panels};
 use serde_json::{Value as Json, json};
 
@@ -225,6 +232,35 @@ pub enum Change {
     Attach(PanelId),
     /// A detached panel's window closed (by default: docked back).
     CloseWindow(PanelId),
+    /// A palette opens: floating (where it was, or cascaded), or docked
+    /// when it may not float.
+    OpenPalette(PanelId),
+    /// A panel floats over the interface, its top-left at a place (in
+    /// points from the workbench's top-left).
+    Float(PanelId, [f32; 2]),
+    /// A floating panel docks in an area.
+    Dock(PanelId, Area),
+    /// A floating panel moves.
+    MovePalette(PanelId, [f32; 2]),
+    /// A floating panel rolls up to its header band (`true`) or down.
+    Roll(PanelId, bool),
+    /// A floating panel is pinned (`true`) or unpinned.
+    Pin(PanelId, bool),
+}
+
+/// `[x, y]` as a place.
+fn pos_of(args: &Json) -> Result<[f32; 2], String> {
+    let a = args
+        .get("pos")
+        .and_then(Json::as_array)
+        .ok_or("`pos` is missing")?;
+    match a.as_slice() {
+        [x, y] => Ok([
+            x.as_f64().ok_or("`pos` holds numbers")? as f32,
+            y.as_f64().ok_or("`pos` holds numbers")? as f32,
+        ]),
+        _ => Err("`pos` is `[x, y]`".into()),
+    }
 }
 
 impl Change {
@@ -238,7 +274,41 @@ impl Change {
             Change::Detach(p) => (STEP_DETACH, json!({ "panel": p })),
             Change::Attach(p) => (STEP_ATTACH, json!({ "panel": p })),
             Change::CloseWindow(p) => (STEP_CLOSE_WINDOW, json!({ "panel": p })),
+            Change::OpenPalette(p) => (crate::palettes::STEP_OPEN, json!({ "panel": p })),
+            Change::Float(p, pos) => (
+                crate::palettes::STEP_FLOAT,
+                json!({ "panel": p, "pos": pos }),
+            ),
+            Change::Dock(p, a) => (
+                crate::palettes::STEP_DOCK,
+                json!({ "panel": p, "area": area_name(*a) }),
+            ),
+            Change::MovePalette(p, pos) => (
+                crate::palettes::STEP_MOVE,
+                json!({ "panel": p, "pos": pos }),
+            ),
+            Change::Roll(p, on) => (
+                crate::palettes::STEP_ROLL,
+                json!({ "panel": p, "rolled": on }),
+            ),
+            Change::Pin(p, on) => (
+                crate::palettes::STEP_PIN,
+                json!({ "panel": p, "pinned": on }),
+            ),
         }
+    }
+
+    /// The event a palette's change publishes once done.
+    pub(crate) fn event(&self) -> Option<&'static str> {
+        Some(match self {
+            Change::OpenPalette(_) => "palette.opened",
+            Change::Float(..) => "palette.floated",
+            Change::Dock(..) => "palette.docked",
+            Change::MovePalette(..) => "palette.moved",
+            Change::Roll(..) => "palette.rolled",
+            Change::Pin(..) => "palette.pinned",
+            _ => return None,
+        })
     }
 
     /// The change a step's (possibly redirected) arguments ask for.
@@ -257,14 +327,24 @@ impl Change {
             .and_then(Json::as_str)
             .ok_or("`panel` is missing")?;
         let panel = PanelId::new(panel).map_err(|e| e.to_string())?;
+        let flag = |key: &str| args.get(key).and_then(Json::as_bool).unwrap_or(true);
         Ok(match step.as_str() {
-            "workbench.move" => {
+            "palette.open" => Change::OpenPalette(panel),
+            "palette.float" => Change::Float(panel, pos_of(args)?),
+            "palette.move" => Change::MovePalette(panel, pos_of(args)?),
+            "palette.roll" => Change::Roll(panel, flag("rolled")),
+            "palette.pin" => Change::Pin(panel, flag("pinned")),
+            "workbench.move" | "palette.dock" => {
                 let name = args
                     .get("area")
                     .and_then(Json::as_str)
                     .ok_or("`area` is missing")?;
                 let area = area_from(name).ok_or_else(|| format!("no area `{name}`"))?;
-                Change::Move(panel, area)
+                if step.as_str() == "palette.dock" {
+                    Change::Dock(panel, area)
+                } else {
+                    Change::Move(panel, area)
+                }
             }
             "workbench.show" => Change::Show(panel),
             "workbench.detach" => Change::Detach(panel),
@@ -301,6 +381,11 @@ pub(crate) struct Workbench {
     /// The application's named layouts (`Ctx::arrangement`): owner,
     /// name, layout.
     pub templates: Vec<(egui_pop_model::ids::OwnerId, String, Layout)>,
+    /// A palette being dragged: its panel, its place when the drag
+    /// started, the pointer.
+    pub palette_drag: Option<(PanelId, [f32; 2], Pos2)>,
+    /// Where each floating panel was drawn last frame.
+    pub palette_rects: BTreeMap<PanelId, Rect>,
 }
 
 impl Default for Workbench {
@@ -318,6 +403,8 @@ impl Default for Workbench {
             stale: true,
             taken: 0,
             templates: Vec::new(),
+            palette_drag: None,
+            palette_rects: BTreeMap::new(),
         }
     }
 }
@@ -404,6 +491,17 @@ impl Workbench {
         self.layout.shows(panel)
     }
 
+    /// Puts a closed panel back: a palette floating (cascaded), any other
+    /// in its area.
+    fn reopen(&mut self, spec: &PanelSpec) {
+        if spec.palette {
+            let n = self.layout.floating.len();
+            self.layout.float(&spec.id, Floating::cascade(n));
+        } else {
+            self.layout.place(&spec.id, spec.area);
+        }
+    }
+
     /// Applies a change; refused when the panel's rules do not allow it.
     pub fn apply(&mut self, change: &Change) -> Result<Json, String> {
         self.read_back();
@@ -413,7 +511,7 @@ impl Workbench {
                 .ok_or_else(|| format!("no panel `{p}`"))
         };
         let out = match change {
-            Change::Move(p, area) => {
+            Change::Move(p, area) | Change::Dock(p, area) => {
                 let spec = spec_of(p)?;
                 if let Some(why) = spec.refuses(*area) {
                     return Err(why);
@@ -424,7 +522,7 @@ impl Workbench {
             Change::Show(p) => {
                 let spec = spec_of(p)?;
                 if !self.layout.shows(p) {
-                    self.layout.place(p, spec.area);
+                    self.reopen(&spec);
                 }
                 self.layout.activate(p);
                 json!({ "panel": p, "shown": true })
@@ -440,7 +538,7 @@ impl Workbench {
             Change::Focus(p) => {
                 let spec = spec_of(p)?;
                 if !self.layout.shows(p) {
-                    self.layout.place(p, spec.area);
+                    self.reopen(&spec);
                 }
                 self.layout.activate(p);
                 self.focused = Some(p.clone());
@@ -485,6 +583,52 @@ impl Workbench {
                 self.layout.auxiliary.retain(|a| a.panel != *p);
                 self.layout.place(p, spec.area);
                 json!({ "panel": p, "detached": false })
+            }
+            Change::OpenPalette(p) => {
+                let spec = spec_of(p)?;
+                if !self.layout.shows(p) {
+                    if spec.floatable {
+                        let n = self.layout.floating.len();
+                        self.layout.float(p, Floating::cascade(n));
+                    } else {
+                        self.reopen(&spec);
+                    }
+                }
+                self.layout.activate(p);
+                let floating = self.layout.floating_of(p).is_some();
+                json!({ "panel": p, "shown": true, "floating": floating })
+            }
+            Change::Float(p, pos) => {
+                let spec = spec_of(p)?;
+                if !spec.floatable {
+                    return Err(format!("{} cannot float", spec.title));
+                }
+                self.layout.float(p, *pos);
+                json!({ "panel": p, "pos": pos })
+            }
+            Change::MovePalette(p, pos) => {
+                let f = self
+                    .layout
+                    .floating_mut(p)
+                    .ok_or_else(|| format!("`{p}` does not float"))?;
+                f.pos = *pos;
+                json!({ "panel": p, "pos": pos })
+            }
+            Change::Roll(p, on) => {
+                let f = self
+                    .layout
+                    .floating_mut(p)
+                    .ok_or_else(|| format!("`{p}` does not float"))?;
+                f.rolled = *on;
+                json!({ "panel": p, "rolled": on })
+            }
+            Change::Pin(p, on) => {
+                let f = self
+                    .layout
+                    .floating_mut(p)
+                    .ok_or_else(|| format!("`{p}` does not float"))?;
+                f.pinned = *on;
+                json!({ "panel": p, "pinned": on })
             }
             Change::Fold(area, folded) => {
                 self.layout.folded.retain(|a| a != area);
@@ -570,6 +714,31 @@ impl Workbench {
                     .filter(|r| r.contains(at))
                     .map(|_| Area::Center)
             })
+    }
+
+    /// The area a palette dropped at `at` docks in: a side or bottom area
+    /// drawn there, or a closed one when the pointer is within `edge` of
+    /// the areas' edges (narrower than for tabs: a palette snapped to an
+    /// edge must not dock); `None` over the centre (it floats there).
+    pub fn dock_at(&self, at: Pos2, edge: f32) -> Option<Area> {
+        let shown = |a: Area| self.docks.contains_key(&a);
+        let c = self.content;
+        if c.is_positive() {
+            if !shown(Area::StartSide) && at.x < c.left() + edge {
+                return Some(Area::StartSide);
+            }
+            if !shown(Area::EndSide) && at.x > c.right() - edge {
+                return Some(Area::EndSide);
+            }
+            if !shown(Area::Bottom) && at.y > c.bottom() - edge {
+                return Some(Area::Bottom);
+            }
+        }
+        self.rects
+            .iter()
+            .filter(|(a, _)| **a != Area::Center)
+            .find(|(_, r)| r.contains(at))
+            .map(|(a, _)| *a)
     }
 
     /// Where a drop hint for `area` is drawn.
@@ -870,6 +1039,7 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
     app.workbench_mut()
         .rects
         .insert(Area::Center, shown.response.rect);
+    crate::palettes::show(app, &ctx);
     follow_drag(app, &ctx);
     drop_hint(app, &ctx);
 }
@@ -967,6 +1137,25 @@ impl TabViewer for Viewer<'_> {
             }
         }
         ui.separator();
+        if spec.floatable
+            && ui
+                .button(strings::tr(&ctx, &txt::WORKBENCH_FLOAT))
+                .clicked()
+        {
+            // Floats where its area is, a little in.
+            let pos = {
+                let wb = self.app.workbench_mut();
+                let at = wb
+                    .layout
+                    .area_of(tab)
+                    .and_then(|a| wb.rects.get(&a))
+                    .map_or(wb.content.min, |r| r.min);
+                let off = at - wb.content.min;
+                [off.x + 24.0, off.y + 24.0]
+            };
+            self.app.change_workbench(Change::Float(tab.clone(), pos));
+            ui.close();
+        }
         if spec.detachable
             && ui
                 .button(strings::tr(&ctx, &txt::WORKBENCH_DETACH))
@@ -1030,10 +1219,16 @@ fn follow_drag(app: &AppHandle, ctx: &egui::Context) {
 fn drop_hint(app: &AppHandle, ctx: &egui::Context) {
     let mut wb = app.workbench_mut();
     wb.hint = None;
-    let Some((panel, from, at)) = wb.dragging.clone() else {
-        return;
+    // A tab over another area, or a palette over an area it docks in.
+    let target = if let Some((panel, from, at)) = wb.dragging.clone() {
+        wb.area_at(at).filter(|a| *a != from).map(|to| (panel, to))
+    } else if let Some((panel, _, at)) = wb.palette_drag.clone() {
+        let edge = egui_pop_core::theme::Tokens::of(ctx).palette.magnet;
+        wb.dock_at(at, edge).map(|to| (panel, to))
+    } else {
+        None
     };
-    let Some(to) = wb.area_at(at).filter(|a| *a != from) else {
+    let Some((panel, to)) = target else {
         return;
     };
     let Some(spec) = wb.spec(&panel).cloned() else {

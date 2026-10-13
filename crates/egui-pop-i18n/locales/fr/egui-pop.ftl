@@ -165,6 +165,14 @@ command-notify-act =
     .description = Exécute une action d’une notification (`id`, `action`), comme un clic dessus.
     .title = Agir sur une notification
 
+command-palettes-reset =
+    .description = Remet les palettes flottantes là où elles s’ouvrent d’abord, déroulées.
+    .title = Réinitialiser les palettes
+
+command-palettes-toggle =
+    .description = Masque les palettes qui ne sont pas épinglées, ou les affiche de nouveau.
+    .title = Masquer ou afficher les palettes
+
 command-value-get =
     .description = Une valeur avec son descripteur (`path`).
     .title = Lire une valeur
@@ -397,6 +405,8 @@ egui-pop-palette-argument-help = Argument { $at } sur { $count }. Entrée : suiv
 
 egui-pop-palette-argument-title = { $command } : { $argument }
 
+egui-pop-palette-close = Fermer { $palette }
+
 egui-pop-palette-hint = Tapez une commande
 
 egui-pop-palette-no-match = Aucune commande ne correspond.
@@ -407,11 +417,19 @@ egui-pop-palette-not-json = pas du JSON : { $error }
 
 egui-pop-palette-not-number = `{ $input }` n’est pas un nombre
 
+egui-pop-palette-pin = Épingler { $palette }
+
 egui-pop-palette-recent = récent
 
 egui-pop-palette-recent-keys = récent  { $keys }
 
+egui-pop-palette-roll-down = Dérouler { $palette }
+
+egui-pop-palette-roll-up = Enrouler { $palette }
+
 egui-pop-palette-title = Palette de commandes
+
+egui-pop-palette-unpin = Désépingler { $palette }
 
 egui-pop-panel-focus-description = Affiche le panneau { $panel } et lui donne le clavier.
 
@@ -570,6 +588,8 @@ egui-pop-window-exit-fullscreen = Quitter le plein écran (F11)
 egui-pop-workbench-close-panel = Fermer { $panel }
 
 egui-pop-workbench-detach = Détacher dans une fenêtre
+
+egui-pop-workbench-float = Faire flotter
 
 egui-pop-workbench-move-to = Déplacer vers { $area }
 
@@ -737,6 +757,14 @@ setting-notifications-desktop-choice-always = toujours
 setting-notifications-desktop-choice-never = jamais
 
 setting-notifications-desktop-choice-unfocused = hors focus
+
+setting-palettes-fade-on-stroke =
+    .description = Les palettes s’estompent pendant un tracé sur le canevas.
+    .label = Estomper les palettes pendant le dessin
+
+setting-palettes-idle-opacity =
+    .description = L’opacité d’une palette quand le pointeur est ailleurs ; 1 la garde opaque.
+    .label = Opacité des palettes loin du pointeur
 
 setting-window-frame =
     .description = Qui dessine la barre de titre et les bords de la fenêtre : l’application (propre) ou le bureau (système).

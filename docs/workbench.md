@@ -107,14 +107,79 @@ one); `AppBuilder::panel_alignment` gives the default.
 Decided on 2026-10-13: a toolbox, a colour palette or a navigator
 floating over the canvas is **non-modal, always**. It never blocks the
 interface, never takes the keyboard unless clicked into, and gives the
-focus back to the canvas on Escape. Anything that must block until it
-is answered is a dialog (`egui_pop::api::dialogs`, movable when it
-hides what it acts on), never a palette.
+keyboard back on Escape. Anything that must block until it is answered
+is a dialog (`egui_pop::api::dialogs`, movable when it hides what it
+acts on), never a palette.
 
-The palettes themselves (a floating panel kind sharing the movable
-dialogs' header band and drag code, roll-up and pin, docking onto the
-workbench's areas with the drop hint, snapping, the Tab toggle) are
-planned, not built yet.
+**One model, two placements.** A palette is a panel declared with
+`PanelSpec::palette()`: it opens floating over the workbench, and its
+area is where it docks. Any panel declared `floatable(true)` may float
+too. The layout keeps floating panels next to the docked and detached
+ones (`Layout::floating`: place, rolled up, pinned), saved and repaired
+with them.
+
+```rust
+use egui_pop::egui;
+use egui_pop::model::ids::PanelId;
+use egui_pop::model::panels::{Area, PanelSpec};
+use egui_pop::prelude::*;
+
+const TOOLS: PanelId = PanelId::from_static("demo.tools");
+
+struct Demo;
+
+impl Plugin for Demo {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("demo")
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        // Floats when it opens; docks in the start side bar.
+        ctx.panel(
+            PanelSpec::new(TOOLS, "Tools", Area::StartSide).palette(),
+            |ui, _| {
+                ui.label("Brush");
+            },
+        )?;
+        Ok(())
+    }
+}
+
+let app = App::builder().plugin(Demo).build(&egui::Context::default()).unwrap();
+assert!(app.handle().layout().floating_of(&TOOLS).is_some());
+```
+
+- **The band.** A palette has the movable dialogs' header band
+  (`egui_pop_core::band`): its title, then Pin, Roll up and Close.
+  Rolled up, only the band is left (a double click on the band does
+  it too). Pinned, it stays where it is, in sight and opaque.
+- **Dragging.** The band drags the palette, kept inside the workbench
+  (again when the window is resized) and snapping to the workbench's
+  edges and to the other palettes within the `palette.magnet` token.
+  Dropped on a side bar or the bottom panel (or a closed one's edge),
+  with the drop hint the tabs use, it docks there. A docked floatable
+  panel floats again from its tab menu (Float).
+- **Tab** (`palettes.toggle`, rebindable) hides and shows the unpinned
+  palettes. It is the toggle only while some panel floats, no widget
+  has the keyboard and no overlay is open; otherwise Tab moves the
+  keyboard to the next widget, as always.
+- **Strokes and the pointer.** `palettes::set_stroke(app, true)` says
+  a stroke is in progress: with the `palettes.fade_on_stroke` setting
+  on, the palettes fade until it ends. `palettes.idle_opacity` makes
+  them translucent while the pointer is elsewhere.
+- **Reset.** `palettes.reset` puts them back where they first open,
+  rolled down and shown.
+- **Steps** (ADR 0011): `palette.open`, `palette.float`, `palette.dock`,
+  `palette.move` (once a drag is dropped: a veto puts the palette back,
+  a redirect places it elsewhere), `palette.roll`, `palette.pin`; once
+  done, the journal says `palette.opened`, `palette.floated`,
+  `palette.docked`, `palette.moved`, `palette.rolled` or
+  `palette.pinned`.
+
+Not built yet: a palette outside the main window, as a native utility
+window. egui's viewports have no owner window (only "always on top" of
+every application), so such a window would float above other
+applications too.
 
 ## Where the layout is kept
 

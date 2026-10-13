@@ -166,6 +166,14 @@ command-notify-act =
     .description = Runs a notification's action (`id`, `action`), as a click on it does.
     .title = Act on a notification
 
+command-palettes-reset =
+    .description = Puts the floating palettes back where they first open, rolled down.
+    .title = Reset palettes
+
+command-palettes-toggle =
+    .description = Hides the palettes that are not pinned, or shows them again.
+    .title = Hide or show palettes
+
 command-terminal-clear =
     .description = Clears the screen and the scrollback (the program goes on).
     .title = Clear the terminal
@@ -398,6 +406,8 @@ egui-pop-palette-argument-help = Argument { $at } of { $count }. Enter: next; em
 
 egui-pop-palette-argument-title = { $command }: { $argument }
 
+egui-pop-palette-close = Close { $palette }
+
 egui-pop-palette-hint = Type a command
 
 egui-pop-palette-no-match = No command matches.
@@ -408,11 +418,19 @@ egui-pop-palette-not-json = not JSON: { $error }
 
 egui-pop-palette-not-number = `{ $input }` is not a number
 
+egui-pop-palette-pin = Pin { $palette }
+
 egui-pop-palette-recent = recent
 
 egui-pop-palette-recent-keys = recent  { $keys }
 
+egui-pop-palette-roll-down = Roll down { $palette }
+
+egui-pop-palette-roll-up = Roll up { $palette }
+
 egui-pop-palette-title = Command palette
+
+egui-pop-palette-unpin = Unpin { $palette }
 
 egui-pop-panel-focus-description = Shows { $panel } and gives it the keyboard.
 
@@ -571,6 +589,8 @@ egui-pop-window-exit-fullscreen = Exit full screen (F11)
 egui-pop-workbench-close-panel = Close { $panel }
 
 egui-pop-workbench-detach = Detach into a window
+
+egui-pop-workbench-float = Float
 
 egui-pop-workbench-move-to = Move to { $area }
 
@@ -738,6 +758,14 @@ setting-notifications-desktop-choice-always = always
 setting-notifications-desktop-choice-never = never
 
 setting-notifications-desktop-choice-unfocused = unfocused
+
+setting-palettes-fade-on-stroke =
+    .description = Palettes fade while a stroke is in progress on the canvas.
+    .label = Fade palettes while drawing
+
+setting-palettes-idle-opacity =
+    .description = How opaque a palette is while the pointer is elsewhere; 1 keeps it opaque.
+    .label = Palette opacity away from the pointer
 
 setting-window-frame =
     .description = Who draws the window's title bar and edges: the application (own), or the desktop (system).

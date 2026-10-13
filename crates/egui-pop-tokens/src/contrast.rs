@@ -102,6 +102,7 @@ pub const PAIRS: &[Pair] = &[
     text("menu.item.text-muted", "surface.overlay"),
     text("toast.text", "toast.background"),
     text("dialog.header-text", "dialog.header"),
+    text("palette.header-text", "palette.header"),
     // Editors: code over its background, line numbers over the gutter.
     text("editor.line-number", "editor.gutter"),
     text("editor.line-number-active", "editor.gutter"),

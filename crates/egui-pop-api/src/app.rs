@@ -1331,9 +1331,13 @@ impl AppHandle {
     }
 
     /// Shows or closes a panel (the `workbench.show` and `workbench.hide`
-    /// steps).
+    /// steps; a palette opens through `palette.open`).
     pub fn set_panel_visible(&self, id: &PanelId, visible: bool) {
-        let change = if visible {
+        let palette = self.workbench_mut().spec(id).is_some_and(|s| s.palette);
+        let change = if visible && palette {
+            // A palette opens through its own step, floating.
+            crate::workbench::Change::OpenPalette(id.clone())
+        } else if visible {
             crate::workbench::Change::Show(id.clone())
         } else {
             crate::workbench::Change::Hide(id.clone())
@@ -1383,6 +1387,10 @@ impl AppHandle {
             let c = crate::workbench::Change::from_args(&id, args)?;
             app.workbench_mut().apply(&c)
         });
+        // A palette's change, once done, is news.
+        if let (Some(event), Outcome::Done(Ok(result))) = (change.event(), &out) {
+            self.publish("egui_pop", None, event, result.clone());
+        }
         self.egui().request_repaint();
         Some(out)
     }
@@ -1978,6 +1986,7 @@ impl App {
         for spec in crate::workbench::steps() {
             ctx.step(spec)?;
         }
+        crate::palettes::declare(&mut ctx)?;
         for (i, (menu, label)) in [
             (MENU_FILE, "File"),
             (MENU_EDIT, "Edit"),

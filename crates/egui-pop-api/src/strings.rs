@@ -238,6 +238,16 @@ pub const WORKBENCH_DETACH: StrKey =
     StrKey::new("egui-pop-workbench-detach", "Detach into a window");
 pub const WORKBENCH_CLOSE_PANEL: StrKey =
     StrKey::new("egui-pop-workbench-close-panel", "Close { $panel }");
+pub const WORKBENCH_FLOAT: StrKey = StrKey::new("egui-pop-workbench-float", "Float");
+
+// Palettes.
+
+pub const PALETTE_ROLL_UP: StrKey = StrKey::new("egui-pop-palette-roll-up", "Roll up { $palette }");
+pub const PALETTE_ROLL_DOWN: StrKey =
+    StrKey::new("egui-pop-palette-roll-down", "Roll down { $palette }");
+pub const PALETTE_CLOSE: StrKey = StrKey::new("egui-pop-palette-close", "Close { $palette }");
+pub const PALETTE_PIN: StrKey = StrKey::new("egui-pop-palette-pin", "Pin { $palette }");
+pub const PALETTE_UNPIN: StrKey = StrKey::new("egui-pop-palette-unpin", "Unpin { $palette }");
 /// A detached panel's window title, with the application's.
 pub const WORKBENCH_WINDOW_TITLE: StrKey = StrKey::new(
     "egui-pop-workbench-window-title",
@@ -384,6 +394,12 @@ pub const ALL: &[StrKey] = &[
     WORKBENCH_STAYS_OUT,
     WORKBENCH_DETACH,
     WORKBENCH_CLOSE_PANEL,
+    WORKBENCH_FLOAT,
+    PALETTE_CLOSE,
+    PALETTE_ROLL_UP,
+    PALETTE_ROLL_DOWN,
+    PALETTE_PIN,
+    PALETTE_UNPIN,
     WORKBENCH_WINDOW_TITLE,
     PANEL_FOCUS_TITLE,
     PANEL_FOCUS_DESCRIPTION,

@@ -663,16 +663,20 @@ fn settings_persist_and_come_back_with_their_plugin() {
     };
     let app = build(App::builder().persist(&dir).plugin(make(&l)));
     // The framework's own (the focus mode, the interface zoom, the
-    // panel's alignment) come first.
+    // panel's alignment, the palettes') come first.
     let settings = app.handle().settings();
-    assert_eq!(settings.len(), 4);
-    assert_eq!(settings[0].id, egui_pop_api::SETTING_FOCUS);
-    assert_eq!(settings[1].id, egui_pop_api::zoom::SETTING_ZOOM);
-    assert_eq!(
-        settings[2].id,
-        egui_pop_api::workbench::SETTING_PANEL_ALIGNMENT
-    );
-    assert_eq!(settings[3].section, "prefs");
+    let ids: Vec<_> = settings.iter().map(|s| s.id.clone()).collect();
+    assert_eq!(settings.len(), 6, "{ids:?}");
+    for id in [
+        egui_pop_api::SETTING_FOCUS,
+        egui_pop_api::zoom::SETTING_ZOOM,
+        egui_pop_api::workbench::SETTING_PANEL_ALIGNMENT,
+        egui_pop_api::palettes::SETTING_FADE,
+        egui_pop_api::palettes::SETTING_IDLE_OPACITY,
+    ] {
+        assert!(ids[..5].contains(&id), "{ids:?}");
+    }
+    assert_eq!(settings[5].section, "prefs");
     egui_pop_core::lock(&app.handle().store())
         .set(egui_pop_model::values::Set::new(
             "settings/prefs.size",

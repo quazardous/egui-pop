@@ -131,6 +131,11 @@ pub const CONTRACT: &[Required] = &[
     sys("size.dialog.width", "dimension", "width of dialogs"),
     sys("size.toast.width", "dimension", "width of toasts"),
     sys(
+        "size.magnet",
+        "dimension",
+        "how close a dragged palette snaps to an edge",
+    ),
+    sys(
         "opacity.scrim",
         "number",
         "how much a backdrop behind a modal hides (0 to 1)",
@@ -191,6 +196,20 @@ pub const CONTRACT: &[Required] = &[
     comp("dialog.padding", "dimension", "a dialog's padding"),
     comp("dialog.width", "dimension", "a dialog's width"),
     comp("dialog.header", "color", "a movable dialog's header band"),
+    comp("palette.background", "color", "a palette's fill"),
+    comp("palette.border", "color", "a palette's outline"),
+    comp("palette.header", "color", "a palette's header band"),
+    comp(
+        "palette.header-text",
+        "color",
+        "the title on a palette's header band",
+    ),
+    comp("palette.padding", "dimension", "a palette's padding"),
+    comp(
+        "palette.magnet",
+        "dimension",
+        "how close a palette snaps to an edge or another palette",
+    ),
     comp(
         "dialog.header-text",
         "color",

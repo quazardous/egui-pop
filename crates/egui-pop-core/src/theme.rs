@@ -201,6 +201,19 @@ pub struct ToastTokens {
     pub width: f32,
 }
 
+/// Palettes and toolboxes floating over the interface.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct PaletteTokens {
+    pub background: Color32,
+    pub border: Color32,
+    pub header: Color32,
+    pub header_text: Color32,
+    pub padding: f32,
+    /// How close a dragged palette snaps to an edge.
+    pub magnet: f32,
+}
+
 /// A window's own title bar and frame.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
@@ -242,6 +255,7 @@ pub struct Tokens {
     pub dialog: DialogTokens,
     pub toast: ToastTokens,
     pub titlebar: TitlebarTokens,
+    pub palette: PaletteTokens,
     resolved: Arc<ResolvedTokens>,
 }
 
@@ -360,6 +374,14 @@ impl Tokens {
                 text: c("toast.text"),
                 padding: d("toast.padding"),
                 width: d("toast.width"),
+            },
+            palette: PaletteTokens {
+                background: c("palette.background"),
+                border: c("palette.border"),
+                header: c("palette.header"),
+                header_text: c("palette.header-text"),
+                padding: d("palette.padding"),
+                magnet: d("palette.magnet"),
             },
             titlebar: TitlebarTokens {
                 background: c("titlebar.background"),

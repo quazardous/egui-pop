@@ -44,6 +44,24 @@ egui minor.
   change, of the puck or of the luminance, goes through the wheel's
   hook. Keys move the puck, a double click resets; the disc is an
   AccessKit slider on the chroma.
+- Palettes (`egui_pop_api::palettes`): toolboxes and palettes floating
+  over the workbench, never modal. A panel declared `palette()` opens
+  floating; dragged by the movable dialogs' header band, clamped inside
+  the workbench and snapping to its edges and to the other palettes
+  (the `palette.magnet` token, from the new `size.magnet`), it docks
+  when dropped on a side bar or the bottom panel, with the drop hint,
+  and floats again from its tab menu (Float). Its band has Pin, Roll up
+  and Close. It takes the keyboard only when clicked into, and Escape
+  gives it back. `palettes.toggle` (Tab, while some panel floats and no
+  widget has the keyboard) hides and shows the unpinned palettes;
+  `palettes.reset` puts them back; `set_stroke` fades them during a
+  stroke with `palettes.fade_on_stroke`; `palettes.idle_opacity` makes
+  them translucent away from the pointer. Steps `palette.open`,
+  `palette.float`, `palette.dock`, `palette.move`, `palette.roll` and
+  `palette.pin`, each published once done (`palette.moved`...); the
+  workbench's `Change` gains the matching variants. Tokens
+  `palette.*`.
+
 - Floating panels in the layout: `PanelSpec::palette()` declares a
   panel that floats over the interface when it opens (its area is where
   it docks), `floatable(true)` lets any panel float. `Layout::floating`

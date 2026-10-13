@@ -168,6 +168,7 @@
       "height": {"$value": {"value": 32, "unit": "px"}, "$description": "Height of a window's own title bar."},
       "button": {"$value": {"value": 44, "unit": "px"}, "$description": "Width of the minimize, maximize and close buttons."}
     },
+    "magnet": {"$value": {"value": 12, "unit": "px"}, "$description": "How close a dragged palette snaps to the window's edges and to other palettes."},
     "frame": {
       "grip": {"$value": {"value": 6, "unit": "px"}, "$description": "Width of a window's own resize edges (never under 6 physical pixels)."}
     }
@@ -225,6 +226,15 @@
     "header": {"$type": "color", "$value": "{surface.raised}", "$description": "A movable dialog's header band, the handle it is dragged by."},
     "header-text": {"$type": "color", "$value": "{text.default}"},
     "backdrop": {"$type": "number", "$value": "{opacity.scrim}", "$description": "The backdrop's opacity behind a modal dialog."}
+  },
+  "palette": {
+    "$description": "Palettes and toolboxes floating over the interface, never modal.",
+    "background": {"$type": "color", "$value": "{surface.overlay}"},
+    "border": {"$type": "color", "$value": "{border.default}"},
+    "header": {"$type": "color", "$value": "{surface.raised}"},
+    "header-text": {"$type": "color", "$value": "{text.default}"},
+    "padding": {"$type": "dimension", "$value": "{space.s}"},
+    "magnet": {"$type": "dimension", "$value": "{size.magnet}"}
   },
   "toast": {
     "background": {"$type": "color", "$value": "{surface.overlay}"},

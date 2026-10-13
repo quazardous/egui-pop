@@ -80,12 +80,12 @@ Not read yet: references inside composite values, JSON Pointer `$ref`,
    `accent.{default, hover, active, subtle}`, `danger`, `warning`,
    `success`, `info`, `focus.ring`, `selection`, `radius.{widget, window}`,
    `space.{xs, s, m, l, xl}`, `size.control.height`,
-   `size.icon.{inline, toolbar, panel}`, `size.dialog.width`,
+   `size.icon.{inline, toolbar, panel}`, `size.dialog.width`, `size.magnet`,
    `size.toast.width`, `font.size.{small, body, heading, mono}`,
    `font.family.{ui, mono}`, `motion.duration`, `opacity.scrim`.
 
 3. **Component**: one component's tokens, each an alias of a system token:
-   `button.*`, `slider.{track, fill, thumb}`, `menu.item.*`, `dialog.*`,
+   `button.*`, `slider.{track, fill, thumb}`, `menu.item.*`, `dialog.*`, `palette.*`,
    `toast.*`, `editor.*` and `syntax.*` (one colour per kind of code:
    keywords on the accent, strings on `success`, numbers on `warning`,
    comments muted...), `terminal.*` (its text, cursor, selection, links,

@@ -20,6 +20,8 @@
 //! - [`services`]: typed service tokens;
 //! - [`stories`]: gallery stories as a contribution;
 //! - [`palette`]: the command palette, a plugin;
+//! - [`palettes`]: toolboxes and palettes floating over the interface,
+//!   never modal, docking in the workbench's areas;
 //! - [`devtools`]: the debug bridge's collectors in the application, a
 //!   panel behind a setting, a plugin;
 //! - [`dialogs`]: confirmations, forms, choices and notices, a plugin;
@@ -95,6 +97,7 @@ pub mod hooks;
 pub mod host;
 pub mod menus;
 pub mod palette;
+pub mod palettes;
 pub mod plugin;
 pub mod services;
 pub mod settings;
