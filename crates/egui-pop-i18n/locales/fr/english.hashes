@@ -33,10 +33,6 @@ command-edit-redo.description b786327d06875b47
 command-edit-redo.title ef2842c65cf40641
 command-edit-undo.description 73aea46b70356964
 command-edit-undo.title cc7022a2d9050a57
-command-egui-pop-devtools-focus.description 62fc665342bca7f1
-command-egui-pop-devtools-focus.title a0bb3109638bbb2b
-command-egui-pop-devtools-toggle.description 2cc51522705ff206
-command-egui-pop-devtools-toggle.title f1b05f4068b68fe3
 command-logs-reveal.description 7fef58bb3796ef0e
 command-logs-reveal.title ef702f33080fcf4f
 command-notify-act.description 323a821111878eab
@@ -131,6 +127,10 @@ egui-pop-palette-not-number 6f78de18f695be64
 egui-pop-palette-recent 34d258ba4ca0ac84
 egui-pop-palette-recent-keys 07aa9f65e8fcb96a
 egui-pop-palette-title f9e5c255cb220019
+egui-pop-panel-focus-description 2271b1974b5ef7a5
+egui-pop-panel-focus-title b1fd5f71e11c4d4f
+egui-pop-panel-toggle-description 240b7cf014fa3086
+egui-pop-panel-toggle-title 632204d791e1cb37
 egui-pop-picker-choose-folder f258551f0b05ddae
 egui-pop-picker-close 3762a97fc7449858
 egui-pop-picker-up 88fc2a2a643f7d56

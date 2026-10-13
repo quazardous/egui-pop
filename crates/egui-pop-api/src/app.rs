@@ -288,6 +288,9 @@ pub(crate) struct Shared {
     drawing_areas: std::cell::Cell<bool>,
     /// The centre drawn without margins.
     edge_to_edge: std::cell::Cell<bool>,
+    /// The panels' commands and their shared texts, installed on each
+    /// context drawing the application.
+    pub(crate) panel_commands: RefCell<strings::PanelCommands>,
     diagnostics: RefCell<Diagnostics>,
     derived: RefCell<Derived>,
     plugins: RefCell<Vec<PluginInfo>>,
@@ -364,6 +367,7 @@ impl AppHandle {
             indicators_seen: std::cell::Cell::new(0),
             drawing_areas: std::cell::Cell::new(false),
             edge_to_edge: std::cell::Cell::new(false),
+            panel_commands: RefCell::default(),
             diagnostics: RefCell::new(Diagnostics::new()),
             derived: RefCell::new(Derived::default()),
             plugins: RefCell::new(Vec::new()),
@@ -428,6 +432,18 @@ impl AppHandle {
     /// The egui context the application draws in.
     pub fn egui(&self) -> Context {
         self.0.ctx.borrow().clone()
+    }
+
+    /// Records commands derived from a panel (see
+    /// `strings::PanelCommand`), installed on the current context now and
+    /// on each context the application is drawn in.
+    pub(crate) fn add_panel_commands(
+        &self,
+        entries: impl IntoIterator<Item = (String, strings::PanelCommand)>,
+    ) {
+        let mut all = self.0.panel_commands.borrow_mut();
+        Arc::make_mut(&mut all).extend(entries);
+        strings::set_panel_commands(&self.egui(), all.clone());
     }
 
     /// The value store.
@@ -2883,6 +2899,10 @@ impl App {
     /// context and shown in another, as test harnesses do).
     fn attach(&mut self, ctx: &Context) {
         *self.handle.0.ctx.borrow_mut() = ctx.clone();
+        let commands = self.handle.0.panel_commands.borrow().clone();
+        if !strings::panel_commands(ctx).is_some_and(|c| Arc::ptr_eq(&c, &commands)) {
+            strings::set_panel_commands(ctx, commands);
+        }
         focus::install(ctx);
         // egui-pop's interface zoom replaces egui's keys (`zoom`).
         egui_pop_core::scale::disable_keyboard_zoom(ctx);

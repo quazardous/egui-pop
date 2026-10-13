@@ -33,6 +33,12 @@ fn french() -> MapStrings {
         .with(txt::PALETTE_TITLE.key, "Palette de commandes")
         .with(txt::DEVTOOLS_TAB_JOURNAL.key, "Historique")
         .with(txt::SETTINGS_RESET_SETTING.key, "Rétablir { $setting }")
+        // The panels' commands, one text for every panel.
+        .with(txt::PANEL_FOCUS_TITLE.key, "Aller à { $panel }")
+        .with(
+            txt::PANEL_TOGGLE_DESCRIPTION.key,
+            "Rouvre le panneau { $panel } à sa place, ou le ferme.",
+        )
 }
 
 fn harness() -> Harness<'static, App> {
@@ -62,6 +68,45 @@ fn the_helpers_translate_by_derived_keys() {
         "Steps",
         "a key without a translation shows its English"
     );
+}
+
+#[test]
+fn a_panels_commands_fill_the_shared_texts_with_its_translated_title() {
+    let h = harness();
+    let app = h.state().handle();
+    let focus = app
+        .command(&egui_pop_model::ids::CommandId::from_static(
+            "egui_pop.devtools.focus",
+        ))
+        .unwrap();
+    // The spec keeps the English, the panel's title filled in.
+    assert_eq!(focus.title, "Focus Devtools");
+    assert_eq!(
+        focus.description,
+        "Shows Devtools and gives it the keyboard."
+    );
+    assert_eq!(app.command_title(&focus), "Aller à Outils");
+    // A shared text without a translation: its English, still filled
+    // with the translated title.
+    assert_eq!(
+        strings::command_description(&h.ctx, focus.id.as_str(), &focus.description),
+        "Shows Outils and gives it the keyboard."
+    );
+    let toggle = app
+        .command(&egui_pop_model::ids::CommandId::from_static(
+            "egui_pop.devtools.toggle",
+        ))
+        .unwrap();
+    assert_eq!(
+        strings::command_description(&h.ctx, toggle.id.as_str(), &toggle.description),
+        "Rouvre le panneau Outils à sa place, ou le ferme."
+    );
+    // A translation under the command's own key wins.
+    strings::install(
+        &h.ctx,
+        Arc::new(french().with("command-egui-pop-devtools-focus.title", "Ouvrir les outils")),
+    );
+    assert_eq!(app.command_title(&focus), "Ouvrir les outils");
 }
 
 #[test]

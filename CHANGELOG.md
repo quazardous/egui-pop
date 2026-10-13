@@ -201,6 +201,14 @@ egui minor.
 
 ### Changed
 
+- A panel's commands (`<panel>.focus`, `<panel>.toggle`) no longer carry
+  the English panel title in their translated texts: they read the
+  shared `egui-pop-panel-focus-title`, `-focus-description`,
+  `-toggle-title` and `-toggle-description` texts, whose `{ $panel }` is
+  the panel's title in the interface's language
+  (`strings::PanelCommand`). The extractor leaves their own keys out;
+  a translation under them still wins. The English and French
+  catalogues have the shared texts.
 - The window's own title bar is not drawn in full screen (`F11`), in the
   main window and in a detached panel's; it publishes no caption then,
   so the system's hit test sees only the client area.

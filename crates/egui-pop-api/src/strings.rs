@@ -243,6 +243,19 @@ pub const WORKBENCH_WINDOW_TITLE: StrKey = StrKey::new(
     "egui-pop-workbench-window-title",
     "{ $panel } — { $application }",
 );
+/// The commands every panel gets (`<panel>.focus`, `<panel>.toggle`):
+/// one text for every panel, its title filled in.
+pub const PANEL_FOCUS_TITLE: StrKey = StrKey::new("egui-pop-panel-focus-title", "Focus { $panel }");
+pub const PANEL_FOCUS_DESCRIPTION: StrKey = StrKey::new(
+    "egui-pop-panel-focus-description",
+    "Shows { $panel } and gives it the keyboard.",
+);
+pub const PANEL_TOGGLE_TITLE: StrKey =
+    StrKey::new("egui-pop-panel-toggle-title", "Show or hide { $panel }");
+pub const PANEL_TOGGLE_DESCRIPTION: StrKey = StrKey::new(
+    "egui-pop-panel-toggle-description",
+    "Opens { $panel } where it was, or closes it.",
+);
 
 // Devtools.
 
@@ -372,6 +385,10 @@ pub const ALL: &[StrKey] = &[
     WORKBENCH_DETACH,
     WORKBENCH_CLOSE_PANEL,
     WORKBENCH_WINDOW_TITLE,
+    PANEL_FOCUS_TITLE,
+    PANEL_FOCUS_DESCRIPTION,
+    PANEL_TOGGLE_TITLE,
+    PANEL_TOGGLE_DESCRIPTION,
     DEVTOOLS_OFF,
     DEVTOOLS_TAB_KEYS,
     DEVTOOLS_TAB_JOURNAL,

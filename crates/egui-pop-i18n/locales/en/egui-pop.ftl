@@ -68,14 +68,6 @@ command-edit-undo =
     .description = Undo the last change.
     .title = Undo
 
-command-egui-pop-devtools-focus =
-    .description = Shows Devtools and gives it the keyboard.
-    .title = Focus Devtools
-
-command-egui-pop-devtools-toggle =
-    .description = Opens Devtools where it was, or closes it.
-    .title = Show or hide Devtools
-
 command-logs-reveal =
     .description = Opens the folder holding the application's log files.
     .title = Show the log folder
@@ -263,6 +255,14 @@ egui-pop-palette-recent = recent
 egui-pop-palette-recent-keys = recent  { $keys }
 
 egui-pop-palette-title = Command palette
+
+egui-pop-panel-focus-description = Shows { $panel } and gives it the keyboard.
+
+egui-pop-panel-focus-title = Focus { $panel }
+
+egui-pop-panel-toggle-description = Opens { $panel } where it was, or closes it.
+
+egui-pop-panel-toggle-title = Show or hide { $panel }
 
 egui-pop-picker-choose-folder = Choose this folder
 

@@ -253,8 +253,66 @@ pub fn declared(ctx: &Context, kind: &str, id: &str, attr: Option<&str>, english
     lookup(ctx, &declared_key(kind, id, attr), english)
 }
 
+/// A command derived from a panel (`<panel>.focus`, `<panel>.toggle`):
+/// its title and description are shared texts with a `{ $panel }`
+/// placeholder, filled with the panel's title in the interface's
+/// language, so a catalogue translates them once for every panel. A
+/// translation under the command's own keys still wins.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PanelCommand {
+    pub title: StrKey,
+    pub description: StrKey,
+    /// The panel's id.
+    pub panel: String,
+    /// The panel's English title.
+    pub panel_title: String,
+}
+
+/// The commands derived from panels, by command id.
+pub type PanelCommands = Arc<BTreeMap<String, PanelCommand>>;
+
+fn panel_commands_id() -> Id {
+    Id::new("egui_pop_core::strings::panel_commands")
+}
+
+/// Installs the commands derived from panels for a context (see
+/// [`PanelCommand`]); the application does it for each context it is
+/// drawn in.
+pub fn set_panel_commands(ctx: &Context, commands: PanelCommands) {
+    ctx.data_mut(|d| d.insert_temp(panel_commands_id(), commands));
+}
+
+/// The commands derived from panels installed for a context.
+pub fn panel_commands(ctx: &Context) -> Option<PanelCommands> {
+    ctx.data(|d| d.get_temp::<PanelCommands>(panel_commands_id()))
+}
+
+/// The panel a command is derived from, with its shared texts.
+pub fn panel_command(ctx: &Context, command: &str) -> Option<PanelCommand> {
+    panel_commands(ctx).and_then(|m| m.get(command).cloned())
+}
+
+/// A panel command's text: its own key when translated, else the shared
+/// text, `{ $panel }` filled.
+fn panel_command_text(
+    ctx: &Context,
+    id: &str,
+    attr: &str,
+    shared: &StrKey,
+    p: &PanelCommand,
+) -> String {
+    let panel = panel_title(ctx, &p.panel, &p.panel_title);
+    let args = [("panel", panel.as_str())];
+    provider(ctx)
+        .get_args(&declared_key(kind::COMMAND, id, Some(attr)), &args)
+        .unwrap_or_else(|| tr_args(ctx, shared, &args))
+}
+
 /// A command's title.
 pub fn command_title(ctx: &Context, id: &str, english: &str) -> String {
+    if let Some(p) = panel_command(ctx, id) {
+        return panel_command_text(ctx, id, "title", &p.title, &p);
+    }
     declared(ctx, kind::COMMAND, id, Some("title"), english)
 }
 
@@ -262,6 +320,9 @@ pub fn command_title(ctx: &Context, id: &str, english: &str) -> String {
 pub fn command_description(ctx: &Context, id: &str, english: &str) -> String {
     if english.is_empty() {
         return String::new();
+    }
+    if let Some(p) = panel_command(ctx, id) {
+        return panel_command_text(ctx, id, "description", &p.description, &p);
     }
     declared(ctx, kind::COMMAND, id, Some("description"), english)
 }

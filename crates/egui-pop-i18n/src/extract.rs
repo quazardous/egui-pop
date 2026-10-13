@@ -408,7 +408,8 @@ fn walk(dir: &Path, out: &mut Vec<std::path::PathBuf>) -> io::Result<()> {
 
 /// What a built application declares, under the keys
 /// `egui_pop_core::strings` derives: commands (title, description,
-/// category), panels, submenus (from the main menu and `menus`),
+/// category; a panel's `focus` and `toggle` commands only their
+/// category, their texts being shared), panels, submenus (from the main menu and `menus`),
 /// settings (label, description, each choice) and plugins (title).
 pub fn declarations(app: &AppHandle, menus: &[MenuId]) -> Vec<Found> {
     let mut out = Vec::new();
@@ -421,19 +422,24 @@ pub fn declarations(app: &AppHandle, menus: &[MenuId]) -> Vec<Found> {
             });
         }
     };
+    let ctx = app.egui();
     for (spec, _) in app.commands() {
         let id = spec.id.as_str();
         let origin = format!("command {id}");
-        push(
-            strings::declared_key(kind::COMMAND, id, Some("title")),
-            &spec.title,
-            origin.clone(),
-        );
-        push(
-            strings::declared_key(kind::COMMAND, id, Some("description")),
-            &spec.description,
-            origin.clone(),
-        );
+        // A panel's commands read texts shared by every panel (egui-pop's
+        // catalogue has them): nothing of their own to translate.
+        if strings::panel_command(&ctx, id).is_none() {
+            push(
+                strings::declared_key(kind::COMMAND, id, Some("title")),
+                &spec.title,
+                origin.clone(),
+            );
+            push(
+                strings::declared_key(kind::COMMAND, id, Some("description")),
+                &spec.description,
+                origin.clone(),
+            );
+        }
         push(
             strings::category_key(&spec.category),
             &spec.category,

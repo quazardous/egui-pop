@@ -67,14 +67,6 @@ command-edit-undo =
     .description = Annuler la dernière modification.
     .title = Annuler
 
-command-egui-pop-devtools-focus =
-    .description = Affiche Outils de développement et lui donne le clavier.
-    .title = Aller à Outils de développement
-
-command-egui-pop-devtools-toggle =
-    .description = Rouvre Outils de développement où il était, ou le ferme.
-    .title = Afficher ou masquer Outils de développement
-
 command-logs-reveal =
     .description = Ouvre le dossier des fichiers journaux de l’application.
     .title = Afficher le dossier des journaux
@@ -262,6 +254,14 @@ egui-pop-palette-recent = récent
 egui-pop-palette-recent-keys = récent  { $keys }
 
 egui-pop-palette-title = Palette de commandes
+
+egui-pop-panel-focus-description = Affiche le panneau { $panel } et lui donne le clavier.
+
+egui-pop-panel-focus-title = Aller à { $panel }
+
+egui-pop-panel-toggle-description = Rouvre le panneau { $panel } à sa place, ou le ferme.
+
+egui-pop-panel-toggle-title = Afficher ou masquer { $panel }
 
 egui-pop-picker-choose-folder = Choisir ce dossier
 

@@ -8,6 +8,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use egui::Ui;
+use egui_pop_core::strings::{self, StrKey};
 use egui_pop_model::commands::{CommandSpec, RegisterError};
 use egui_pop_model::ids::{CommandId, MenuId, OwnerId, PanelId, PluginId, SettingId, ZoneId};
 use egui_pop_model::keymap::{Action, BindOptions, Layer};
@@ -20,6 +21,7 @@ use crate::app::{AppHandle, Call, CommandFn, Registries};
 use crate::hooks::{Hook, LifecycleFn, On};
 use crate::services::ServiceToken;
 use crate::stories::Story;
+use crate::strings as txt;
 use crate::zones::Block;
 
 /// A registration refused.
@@ -268,17 +270,46 @@ impl<'a> Ctx<'a> {
             CommandId::new(format!("{id}.{suffix}")).map_err(|e| CtxError::Panel(e.to_string()))
         };
         let (focus, toggle) = (id.clone(), id.clone());
+        let fill = |key: &StrKey| strings::fill(key.fallback, &[("panel", &title)]);
+        let (focus_id, toggle_id) = (command("focus")?, command("toggle")?);
+        // The texts are shared by every panel, the title filled in the
+        // interface's language; the specs keep the English.
+        self.app.add_panel_commands(
+            [
+                (
+                    &focus_id,
+                    txt::PANEL_FOCUS_TITLE,
+                    txt::PANEL_FOCUS_DESCRIPTION,
+                ),
+                (
+                    &toggle_id,
+                    txt::PANEL_TOGGLE_TITLE,
+                    txt::PANEL_TOGGLE_DESCRIPTION,
+                ),
+            ]
+            .map(|(cmd, title_key, description)| {
+                (
+                    cmd.to_string(),
+                    strings::PanelCommand {
+                        title: title_key,
+                        description,
+                        panel: id.to_string(),
+                        panel_title: title.clone(),
+                    },
+                )
+            }),
+        );
         self.command(
-            CommandSpec::new(command("focus")?, &format!("Focus {title}"), "View")
-                .description(&format!("Shows {title} and gives it the keyboard.")),
+            CommandSpec::new(focus_id, &fill(&txt::PANEL_FOCUS_TITLE), "View")
+                .description(&fill(&txt::PANEL_FOCUS_DESCRIPTION)),
             move |call| {
                 call.app.focus_panel(&focus);
                 Ok(Json::Null)
             },
         )?
         .command(
-            CommandSpec::new(command("toggle")?, &format!("Show or hide {title}"), "View")
-                .description(&format!("Opens {title} where it was, or closes it.")),
+            CommandSpec::new(toggle_id, &fill(&txt::PANEL_TOGGLE_TITLE), "View")
+                .description(&fill(&txt::PANEL_TOGGLE_DESCRIPTION)),
             move |call| {
                 let shown = call.app.panel_visible(&toggle);
                 call.app.set_panel_visible(&toggle, !shown);
