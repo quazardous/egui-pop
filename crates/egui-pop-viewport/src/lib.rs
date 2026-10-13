@@ -18,7 +18,11 @@
 //! - [`demo`]: a procedural source for galleries and examples;
 //! - [`overlay`]: overlays in image coordinates and the handle kit;
 //! - [`thumbnail`] and [`histogram`]: thumbnails in a virtualised grid
-//!   and a histogram, from images and bins the application supplies;
+//!   and a histogram, from images and bins the application supplies
+//!   (with clipping markers, and a drag handed back to the application);
+//! - [`change`]: what the image tools share, the change they propose
+//!   and the hook that sees it (a veto, a redirect), and the form their
+//!   values take in a step;
 //! - [`hooks`]: the application's way into each step (veto, redirect,
 //!   replace, extend), traced;
 //! - [`debug`]: the `viewport` collector of the debug bridge;
@@ -41,6 +45,7 @@
 //! }
 //! ```
 
+pub mod change;
 pub mod debug;
 pub mod demo;
 pub mod display;

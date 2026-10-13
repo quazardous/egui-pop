@@ -516,6 +516,10 @@ egui-pop-value-missing = no value at `{ $path }`
 
 egui-pop-value-read-only = Read only
 
+egui-pop-viewport-histogram-clipped-highlights = highlights clipped: { $percent } %
+
+egui-pop-viewport-histogram-clipped-shadows = shadows clipped: { $percent } %
+
 egui-pop-viewport-histogram-label = Histogram
 
 egui-pop-viewport-histogram-value = { $channels } ({ $bins } bins)

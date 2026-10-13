@@ -257,6 +257,8 @@ egui-pop-toast-warning b31f78108878cdd7
 egui-pop-value-held-by 7acdb4232cdf0e35
 egui-pop-value-missing 552a23e8857a94ff
 egui-pop-value-read-only d8b53ec0b19db359
+egui-pop-viewport-histogram-clipped-highlights 022a51566af10ebf
+egui-pop-viewport-histogram-clipped-shadows bca10bca4de55469
 egui-pop-viewport-histogram-label 957634470d7a6999
 egui-pop-viewport-histogram-value dde5fc725374c2d0
 egui-pop-viewport-histogram-value-log c8d4f5366b1933e5

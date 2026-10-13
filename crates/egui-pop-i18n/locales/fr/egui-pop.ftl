@@ -515,6 +515,10 @@ egui-pop-value-missing = aucune valeur à `{ $path }`
 
 egui-pop-value-read-only = Lecture seule
 
+egui-pop-viewport-histogram-clipped-highlights = hautes lumières écrêtées : { $percent } %
+
+egui-pop-viewport-histogram-clipped-shadows = ombres écrêtées : { $percent } %
+
 egui-pop-viewport-histogram-label = Histogramme
 
 egui-pop-viewport-histogram-value = { $channels } ({ $bins } classes)

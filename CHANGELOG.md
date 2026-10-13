@@ -36,6 +36,15 @@ egui minor.
   components `dialog.backdrop`, `dialog.header` and
   `dialog.header-text` (with its contrast pair).
 
+- Histogram: clipping markers (`Histogram::clipping`, lit in a bottom
+  corner when shadows or highlights are clipped, and said to screen
+  readers) and a drag handed back to the application
+  (`Histogram::draggable`, `on_change`, `show` returning the changes):
+  the histogram becomes an AccessKit slider whose drag, arrows and
+  increment and decrement actions move a value the application owns,
+  such as the exposure. `viewport::change` holds what the image tools
+  share: `Change`, the `Cause`, the hook's `Verdict`, and `StepValue`,
+  a value's form in a step.
 - Component tokens for the image tools: `histogram.clip-shadows` and
   `histogram.clip-highlights` (the clipping markers), `curve.*` (the
   curve editor: background, grid, identity, line, point, selected point,

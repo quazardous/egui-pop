@@ -20,8 +20,26 @@ pub const HISTOGRAM_VALUE_LOG: StrKey = StrKey::new(
     "{ $channels } ({ $bins } bins, logarithmic)",
 );
 
+/// Added to the histogram's value when shadows are clipped.
+pub const HISTOGRAM_CLIPPED_SHADOWS: StrKey = StrKey::new(
+    "egui-pop-viewport-histogram-clipped-shadows",
+    "shadows clipped: { $percent } %",
+);
+/// Added to the histogram's value when highlights are clipped.
+pub const HISTOGRAM_CLIPPED_HIGHLIGHTS: StrKey = StrKey::new(
+    "egui-pop-viewport-histogram-clipped-highlights",
+    "highlights clipped: { $percent } %",
+);
+
 /// Every string the viewport shows, for catalogues and tests.
-pub const ALL: &[StrKey] = &[VIEWPORT, HISTOGRAM, HISTOGRAM_VALUE, HISTOGRAM_VALUE_LOG];
+pub const ALL: &[StrKey] = &[
+    VIEWPORT,
+    HISTOGRAM,
+    HISTOGRAM_VALUE,
+    HISTOGRAM_VALUE_LOG,
+    HISTOGRAM_CLIPPED_SHADOWS,
+    HISTOGRAM_CLIPPED_HIGHLIGHTS,
+];
 
 #[cfg(test)]
 mod tests {
