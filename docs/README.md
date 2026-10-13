@@ -35,6 +35,10 @@ devtools; every feature's moments reachable as steps (ADR 0011).
 - [Lists and tables](table.md): a list and a data table, virtualised,
   sorting and widths in the value store, cells drawn by the
   application, steps.
+- [Text and code editors](editors.md): a text editor and a code
+  editor, virtualised, search and replace, a gutter of markers, folding,
+  highlighting behind a trait (syntect, tree-sitter), code assist
+  providers, steps and agent commands; the survey behind them.
 - [Translations](i18n.md): Fluent catalogues, the language setting,
   numbers, dates and plurals, the lookup step, extracting and checking
   keys.

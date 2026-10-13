@@ -165,6 +165,9 @@ full image; every built-in theme is in [Themes](docs/themes.md#the-built-in-them
     <td align="center"><a href="docs/screenshots/viewport-pop-dark.png"><img src="docs/screenshots/thumbs/viewport-pop-dark.png" width="200" alt="The image viewport"></a><br>Image viewport</td>
     <td align="center"><a href="docs/screenshots/debug-pop-dark.png"><img src="docs/screenshots/thumbs/debug-pop-dark.png" width="200" alt="The debug page"></a><br>Debug bridge</td>
   </tr>
+  <tr>
+    <td align="center"><a href="docs/screenshots/code-editor-pop-dark.png"><img src="docs/screenshots/thumbs/code-editor-pop-dark.png" width="200" alt="The code editor"></a><br>Code editor</td>
+  </tr>
 </table>
 
 ## Refreshing the screenshots

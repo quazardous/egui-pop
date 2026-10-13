@@ -26,6 +26,9 @@ pub mod tree {}
 #[doc = include_str!("../../../docs/table.md")]
 pub mod table {}
 
+#[doc = include_str!("../../../docs/editors.md")]
+pub mod editors {}
+
 #[doc = include_str!("../../../docs/workbench.md")]
 pub mod workbench {}
 
