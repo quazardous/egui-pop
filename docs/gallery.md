@@ -20,7 +20,7 @@ directory; without it they are simulated and nothing reaches the
 desktop).
 
 Pages: `overview` (the theme overview), `tokens`, `builtins` (egui's
-built-ins), `icons`, `values`, `menus`, `dialogs`, `toasts`, `viewport`
+built-ins), `icons`, `values`, `sliders`, `menus`, `dialogs`, `toasts`, `viewport`
 (the image viewport), `images`, `tree` (the live tree), `table` (lists
 and tables), `text-editor`, `code-editor`, `zones` (zones and blocks), `workbench`,
 `arrangements`, `strips`, `frame`, `scale`, `platform` (the platform
@@ -89,7 +89,7 @@ Themes, design tokens, icons and scaling.
 
 ### Widgets
 
-Egui's built-ins in egui-pop's style, values, menus, dialogs, file choosing and toasts.
+Egui's built-ins in egui-pop's style, values, sliders, menus, dialogs, file choosing and toasts.
 
 <table>
   <tr>
@@ -115,6 +115,8 @@ Egui's built-ins in egui-pop's style, values, menus, dialogs, file choosing and 
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/toasts-long-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/toasts-long-pop-dark.png" width="200" alt="toasts-long-pop-dark"></a><br>toasts-long-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/toasts-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/toasts-pop-dark.png" width="200" alt="toasts-pop-dark"></a><br>toasts-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/toasts-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/toasts-pop-light.png" width="200" alt="toasts-pop-light"></a><br>toasts-pop-light</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/sliders-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/sliders-pop-dark.png" width="200" alt="sliders-pop-dark"></a><br>sliders-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/sliders-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/sliders-pop-light.png" width="200" alt="sliders-pop-light"></a><br>sliders-pop-light</td>
   </tr>
 </table>
 

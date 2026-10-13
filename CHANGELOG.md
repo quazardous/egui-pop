@@ -9,6 +9,11 @@ egui minor.
 
 ### Added
 
+- The gallery's sliders page: the compact row (soft and hard range,
+  signed values, a quad toggle and a picker), a logarithmic bar, hue and
+  temperature tracks, range sliders, and the `slider.change` step, which
+  the page's plugin hooks to snap one slider to halves.
+
 - The `slider.change` step (`egui_pop_api::sliders`): a slider's
   finished change (a drag's release, a key, a wheel notch, a typed
   value, a reset) runs through the application when the slider's hook is

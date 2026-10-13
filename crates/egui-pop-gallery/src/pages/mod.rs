@@ -21,6 +21,7 @@ pub mod overview;
 pub mod platform;
 pub mod scale;
 pub mod settings;
+pub mod sliders;
 pub mod story;
 pub mod strips;
 pub mod table;

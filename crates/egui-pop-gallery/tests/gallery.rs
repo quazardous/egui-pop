@@ -334,6 +334,45 @@ fn toasts_show_in_a_corner_and_their_action_runs() {
 }
 
 #[test]
+fn sliders_run_their_step_and_a_plugin_snaps_one() {
+    let mut results = egui_kittest::SnapshotResults::new();
+    for theme in ["pop-dark", "pop-light"] {
+        let mut h = harness(options(theme, Density::Comfortable, "sliders"));
+        h.run();
+        egui_pop_test::assert_all_named(&h);
+        results.add(h.try_snapshot(format!("sliders-{theme}")));
+    }
+    let mut h = harness(options("pop-dark", Density::Comfortable, "sliders"));
+    h.run();
+    h.get_by_label("Snapped to halves").click();
+    h.run();
+    h.key_press(egui::Key::Enter);
+    h.run();
+    for _ in 0..8 {
+        h.key_press(egui::Key::Backspace);
+    }
+    h.get_by_role(egui::accesskit::Role::TextInput)
+        .type_text("7.3");
+    h.run();
+    h.key_press(egui::Key::Enter);
+    h.run();
+    let snapped = h.get_by_label("Snapped to halves");
+    assert_eq!(snapped.accesskit_node().numeric_value(), Some(7.5));
+    let trace = h.state().app.handle().step_traces().pop().unwrap();
+    assert_eq!(trace.step.as_str(), "slider.change");
+    assert_eq!(trace.args["to"], 7.5);
+    assert_eq!(trace.redirected_by.len(), 1);
+    assert!(
+        h.query_by_label("Last change: value from 5.0 to 7.5 by typed")
+            .is_some()
+    );
+    // The quad toggle and the picker.
+    h.get_by_label("Pick the black level").click();
+    h.run();
+    assert!(h.query_by_label("Picker clicked 1 times").is_some());
+}
+
+#[test]
 fn values_bind_in_three_modes_and_watch_follows() {
     let mut results = egui_kittest::SnapshotResults::new();
     for theme in ["pop-dark", "pop-light"] {
