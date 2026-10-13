@@ -680,6 +680,39 @@ fn the_curves_and_wheels_page_runs_their_steps_and_caps_the_gain() {
 }
 
 #[test]
+fn the_cursors_page_shows_a_brush_outline_and_the_loupe() {
+    let mut results = egui_kittest::SnapshotResults::new();
+    for theme in ["pop-dark", "pop-light"] {
+        let mut h = harness(options(theme, Density::Comfortable, "cursors"));
+        h.run();
+        egui_pop_test::assert_all_named(&h);
+        let r = h.get_by_label("Image viewport").rect();
+        // Low and left, so the loupe has room above and to the right.
+        h.hover_at(r.left_bottom() + egui::vec2(r.width() * 0.3, -r.height() * 0.25));
+        h.run();
+        h.run();
+        let snap = h.state().app.handle().debug_snapshot();
+        let vp = &snap["viewport"]["viewports"]["cursors-demo"];
+        assert!(
+            vp["cursor_shown"]
+                .as_str()
+                .unwrap_or("")
+                .starts_with("Outline"),
+            "{vp}"
+        );
+        assert!(
+            vp["loupe"]["shown"]["tiles"].as_u64().unwrap_or(0) > 0,
+            "{vp}"
+        );
+        assert_eq!(vp["loupe"]["shown"]["gpu"], true, "the GPU path");
+        let t = last_trace_of(&h, "cursor.resolve");
+        assert_eq!(t.args["viewport"], "gallery");
+        assert_eq!(t.args["query"]["tool"], "brush");
+        results.add(h.try_snapshot(format!("cursors-{theme}")));
+    }
+}
+
+#[test]
 fn the_navigator_page_zooms_through_its_step_and_a_plugin_caps_it() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "navigator"));
     h.run();

@@ -23,6 +23,10 @@ Pages: `overview` (the theme overview), `tokens`, `builtins` (egui's
 built-ins), `icons`, `motion` (the motion clock), `values`, `sliders`, `menus`, `dialogs`, `toasts`, `progress`, `placeholders` (skeletons and empty states), `viewport`
 (the image viewport), `navigator` (the zoom control and the navigator),
 `images`, `grading` (curves and colour wheels), `tree` (the live tree), `table` (lists
+`images`, `grading` (curves and colour wheels), `cursors` (tool
+cursors, brush outlines and the loupe), `tree` (the live tree), `table` (lists
+and tables), `text-editor`, `code-editor`, `terminal`, `zones` (zones and blocks), `workbench`,
+(the image viewport), `images`, `tree` (the live tree), `table` (lists
 and tables), `text-editor`, `code-editor`, `terminal`, `zones` (zones and blocks), `workbench`, `palettes`,
 `arrangements`, `strips`, `jobs` (a pretend host's background jobs), `frame`, `scale`, `platform` (the platform
 services), `settings`, `i18n` (translations) and `debug` (the debug
@@ -159,7 +163,7 @@ The text editor, the code editor and the terminal.
 ### Images
 
 The tiled image viewport, its zoom control and navigator, images,
-curves and colour wheels, and the display.
+curves and colour wheels, cursors and the loupe, and the display.
 
 <table>
   <tr>
@@ -171,6 +175,8 @@ curves and colour wheels, and the display.
   <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/grading-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/grading-pop-dark.png" width="200" alt="grading-pop-dark"></a><br>grading-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/grading-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/grading-pop-light.png" width="200" alt="grading-pop-light"></a><br>grading-pop-light</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/cursors-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/cursors-pop-dark.png" width="200" alt="cursors-pop-dark"></a><br>cursors-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/cursors-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/cursors-pop-light.png" width="200" alt="cursors-pop-light"></a><br>cursors-pop-light</td>
   </tr>
 </table>
 

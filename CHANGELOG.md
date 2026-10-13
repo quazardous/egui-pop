@@ -123,6 +123,15 @@ egui minor.
   settings and accessibility, the loupe; its survey (winit's custom
   cursors, eframe 0.36, egui's cursor icons, GIMP, Krita and darktable,
   crates.io) and why the cursors and the loupe are egui-pop's own.
+- Gallery: a Cursors and loupe page (the tool cursors, a viewport whose
+  tool, brush, loupe and cursor settings are picked in the playground;
+  the page's plugin shows a not-allowed cursor for the brushes outside
+  the image through `cursor.resolve`).
+- `egui-pop-imaging`: the `cursor.resolve` step. `imaging::cursor`
+  gives a viewport's `on_cursor` hook that asks the step each time the
+  situation under the pointer changes; plugins give another cursor
+  with a run-hook (or a redirect of `default`), a veto keeps the
+  default.
 - Cursors over the viewport (`viewport::cursor`): `Viewport::tool`
   picks a tool (pan, zoom, picker, crosshair, move, rotate, brush,
   eraser, mask, disabled, or one of the application's) and the viewport
