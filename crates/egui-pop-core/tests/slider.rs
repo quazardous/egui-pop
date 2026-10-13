@@ -788,3 +788,130 @@ fn a_range_resets_both_thumbs_and_its_wheel_follows_the_rules() {
     h.run();
     assert_eq!((h.state().low, h.state().high), (10.0, 90.0));
 }
+
+/// A host that reads the keys before its widgets are drawn: egui-pop's
+/// key dispatcher (with or without the focus plugin), or a greedy one
+/// that takes Escape whatever owns the keyboard.
+struct Host {
+    keymap: egui_pop_model::keymap::Keymap,
+    dispatcher: egui_pop_core::keys::KeyDispatcher,
+    ran: Vec<String>,
+    value: f64,
+    plugin: bool,
+    greedy: bool,
+}
+
+fn host(plugin: bool, greedy: bool) -> Harness<'static, Host> {
+    use egui_pop_model::keymap::{Action, Keymap, Layer};
+    let mut keymap = Keymap::new();
+    for (keys, cmd, when) in [
+        ("Escape", "app.cancel", ""),
+        ("Enter", "app.ok", "textInputFocus"),
+    ] {
+        keymap
+            .bind(
+                &OwnerId::FRAMEWORK,
+                Layer::Default,
+                keys,
+                Action::Run(cmd.parse().unwrap()),
+                when,
+            )
+            .unwrap();
+    }
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(420.0, 80.0))
+        .build_ui_state(
+            |ui, s: &mut Host| {
+                use egui_pop_core::focus;
+                if s.plugin {
+                    focus::install(ui.ctx());
+                }
+                if s.greedy {
+                    if ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape)) {
+                        s.ran.push("greedy.escape".into());
+                    }
+                } else {
+                    let base = egui_pop_model::when::WhenContext::new();
+                    let cx = focus::when_context(ui.ctx(), &base);
+                    for d in s.dispatcher.process(ui.ctx(), &s.keymap, &cx) {
+                        s.ran.push(d.command.to_string());
+                    }
+                }
+                ui.add(
+                    Slider::new(&mut s.value, "Exposure", -2.0..=2.0)
+                        .hard(-10.0..=10.0)
+                        .step(0.01),
+                );
+            },
+            Host {
+                keymap,
+                dispatcher: egui_pop_core::keys::KeyDispatcher::new(),
+                ran: Vec::new(),
+                value: 0.0,
+                plugin,
+                greedy,
+            },
+        );
+    h.run();
+    h
+}
+
+/// Focuses the slider, opens its entry and types `text` in it.
+fn open_and_type(h: &mut Harness<'_, Host>, text: &str) {
+    h.get_by_label("Exposure").click();
+    h.run();
+    h.key_press(Key::Enter);
+    h.run();
+    for _ in 0..12 {
+        h.key_press(Key::Backspace);
+    }
+    h.get_by_role(egui::accesskit::Role::TextInput)
+        .type_text(text);
+    h.run();
+}
+
+#[test]
+fn the_typed_entry_owns_escape_and_enter_in_a_host_that_dispatches_keys_first() {
+    for plugin in [false, true] {
+        let mut h = host(plugin, false);
+        open_and_type(&mut h, "1,5");
+        assert!(
+            egui_pop_core::focus::text_input_owns_keyboard(&h.ctx),
+            "the open entry owns the keyboard (plugin {plugin})"
+        );
+        h.key_press(Key::Escape);
+        h.run();
+        assert_eq!(h.state().value, 0.0, "Escape cancels (plugin {plugin})");
+        assert!(
+            h.query_by_role(egui::accesskit::Role::TextInput).is_none(),
+            "and closes the entry (plugin {plugin})"
+        );
+        assert!(
+            h.state().ran.is_empty(),
+            "no binding saw Escape (plugin {plugin}): {:?}",
+            h.state().ran
+        );
+        open_and_type(&mut h, "1,5");
+        h.key_press(Key::Enter);
+        h.run();
+        assert_eq!(h.state().value, 1.5, "Enter commits (plugin {plugin})");
+        assert!(
+            h.state().ran.is_empty(),
+            "no binding saw Enter (plugin {plugin}): {:?}",
+            h.state().ran
+        );
+        // Closed, the keys are the bindings' again.
+        h.key_press(Key::Escape);
+        h.run();
+        assert_eq!(h.state().ran, ["app.cancel"], "plugin {plugin}");
+    }
+    // A host that takes Escape before the widgets, whatever owns the
+    // keyboard: the entry still cancels rather than commits.
+    let mut h = host(false, true);
+    open_and_type(&mut h, "1,5");
+    h.key_press(Key::Escape);
+    h.run();
+    assert_eq!(h.state().ran, ["greedy.escape"]);
+    assert_eq!(h.state().value, 0.0, "cancelled, not committed");
+    assert!(h.query_by_role(egui::accesskit::Role::TextInput).is_none());
+}

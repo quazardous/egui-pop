@@ -27,7 +27,9 @@
 //!   `1,5 EV`); units after it are ignored; a value past the soft range
 //!   is kept up to the hard one. Enter or leaving the entry (a click
 //!   elsewhere, Tab) commits it; Escape closes it with nothing. It takes
-//!   the keyboard when it opens, never after.
+//!   the keyboard when it opens, never after. While open it owns Escape
+//!   and Enter ([`crate::focus::text_input_owns_keyboard`]): key
+//!   dispatchers leave them to it.
 //! - **Double click**: back to the default.
 //!
 //! The keys are [`Gestures`], data a profile may remap. The value text
@@ -939,7 +941,9 @@ pub(crate) struct TypedEnd {
 }
 
 /// The typed entry over the bar, open until it closes: Enter or leaving
-/// it commits the value typed, Escape closes it with nothing.
+/// it commits the value typed, Escape closes it with nothing. While open
+/// it claims the keyboard ([`crate::focus::claim_keyboard`]), so a key
+/// dispatcher leaves Escape and Enter to it.
 pub(crate) fn typed_entry(
     ui: &mut Ui,
     bar: Rect,
@@ -962,13 +966,25 @@ pub(crate) fn typed_entry(
     {
         edit.request_focus();
     }
-    let cancel = ui.input(|i| i.key_pressed(Key::Escape));
-    let enter = ui.input(|i| i.key_pressed(Key::Enter));
+    // Escape and Enter are the entry's: read as pressed even when a host
+    // took them before the entry was drawn, or when the focus plugin
+    // swallowed Escape on its way out of the field.
+    let (cancel, enter) = ui.input(|i| (pressed(i, Key::Escape), pressed(i, Key::Enter)));
+    let cancel = cancel || crate::focus::escape_left(ui.ctx(), edit.id);
     if !cancel && !enter && edit.has_focus() {
+        // Open: key dispatchers leave Escape and Enter to it.
+        crate::focus::claim_keyboard(ui.ctx(), edit.id);
         ui.data_mut(|d| d.insert_temp(typing_id, text));
         return None;
     }
     ui.data_mut(|d| d.remove::<String>(typing_id));
+    if cancel || enter {
+        // Spent here: nothing drawn after the entry acts on them.
+        ui.input_mut(|i| {
+            i.consume_key(Modifiers::NONE, Key::Escape);
+            i.consume_key(Modifiers::NONE, Key::Enter);
+        });
+    }
     Some(TypedEnd {
         value: if cancel {
             None
@@ -977,6 +993,16 @@ pub(crate) fn typed_entry(
         },
         refocus: enter && !cancel,
     })
+}
+
+/// Whether `key` was pressed this pass, in the events left or in the
+/// input as it came (a host may have consumed it).
+fn pressed(i: &egui::InputState, key: Key) -> bool {
+    i.key_pressed(key)
+        || i.raw
+            .events
+            .iter()
+            .any(|e| matches!(e, egui::Event::Key { key: k, pressed: true, .. } if *k == key))
 }
 
 /// The bar: the track, the fill (or the gradient), the thumbs, the label

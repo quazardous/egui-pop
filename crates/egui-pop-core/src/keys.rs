@@ -2,6 +2,13 @@
 //! through the keymap in the focus chain's context (ADR 0007), and the
 //! keys that resolve are consumed before widgets see them.
 //!
+//! While a text input owns the keyboard
+//! ([`crate::focus::text_input_owns_keyboard`]: a text field has the
+//! focus, or an open input such as a slider's typed entry claimed it),
+//! Escape and Enter without Ctrl or Alt are left to the input: they
+//! resolve nothing and stay in the input. A host with a dispatcher of its
+//! own should ask the same before it reads those keys.
+//!
 //! On macOS the Command key counts as `Ctrl` in chords, so one keymap
 //! serves every platform (as egui's `Modifiers::command`).
 
@@ -36,6 +43,16 @@ pub fn key_of(chord: &Chord) -> Option<(Modifiers, Key)> {
         command: chord.ctrl,
     };
     Some((modifiers, key))
+}
+
+/// Whether a key press is left to a text input that owns the keyboard:
+/// Escape and Enter, without Ctrl or Alt.
+pub fn left_to_input(key: Key, modifiers: Modifiers) -> bool {
+    matches!(key, Key::Escape | Key::Enter)
+        && !modifiers.ctrl
+        && !modifiers.alt
+        && !modifiers.command
+        && !modifiers.mac_cmd
 }
 
 /// A command a key asked for.
@@ -101,6 +118,7 @@ impl KeyDispatcher {
         if !self.pending.is_empty() && now - self.pending_since > self.timeout {
             self.pending.clear();
         }
+        let owned = crate::focus::text_input_owns_keyboard(ctx);
         let presses: Vec<(usize, Key, Modifiers)> = ctx.input(|i| {
             i.events
                 .iter()
@@ -115,6 +133,7 @@ impl KeyDispatcher {
                     } => Some((n, *key, *modifiers)),
                     _ => None,
                 })
+                .filter(|(_, key, modifiers)| !(owned && left_to_input(*key, *modifiers)))
                 .collect()
         });
         let mut out = Vec::new();

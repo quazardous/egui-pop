@@ -895,6 +895,17 @@ egui minor.
 - A plugin's own title key (`plugin-<id>`) counts as owned by the plugin,
   so `add_owned` accepts it.
 
+- A slider's typed entry owns Escape and Enter while it is open:
+  Escape cancels it and Enter commits it even in a host whose key
+  dispatcher reads the keys before the widgets are drawn, and no key
+  binding runs. With the focus plugin, Escape used to take the focus
+  from the entry, which then committed what was typed. New
+  `focus::claim_keyboard`, `focus::text_input_owns_keyboard` (a text
+  field focused, or an open input's claim) and `focus::escape_left`;
+  egui-pop's key dispatcher leaves Escape and Enter (without Ctrl or
+  Alt) to a text input that owns the keyboard, and a host with its own
+  dispatcher asks `text_input_owns_keyboard` the same way.
+
 ## 0.1.0 (prepared, not published)
 
 The first release: the tokens and themes, the framework (plugins,

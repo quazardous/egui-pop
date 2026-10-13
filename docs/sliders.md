@@ -33,12 +33,21 @@ fn exposure(ui: &mut egui::Ui, ev: &mut f64, on: &mut bool) {
 | Escape during a drag | Puts the value back, with no trace |
 | Arrows, Page Up, Page Down | One step, one coarse step (when focused) |
 | Home, End | The soft range's ends |
-| Enter | The typed entry: a number or an expression, then Enter or a click elsewhere commits it (Escape leaves it with nothing) |
+| Enter | The typed entry: a number or an expression, then Enter or a click elsewhere commits it (Escape leaves it with nothing). While open it owns Escape and Enter: key bindings never see them |
 | Wheel | Scrolls the panel; steps the slider only when it has the focus or Alt is held over it |
 | Double click | Back to the default |
 
 The keys are data (`slider::Gestures`, `slider::set_gestures`), for input
 profiles.
+
+**Hosts with a key dispatcher of their own.** egui-pop's dispatcher
+leaves Escape and Enter to a text input that owns the keyboard. A host
+that reads keys before its widgets are drawn asks
+`egui_pop_core::focus::text_input_owns_keyboard(ctx)` first: it is true
+while a text field has the focus and while a typed entry is open (the
+entry claims the keyboard each frame, and egui lets go of the focus on
+Escape before the frame is drawn, so the claim is what still holds on
+that frame).
 
 **Typed values.** A number or an expression: `+ - * /`, `^`,
 parentheses, a sign, and `x`, the current value (`x * 2`, `x - 0.5`).

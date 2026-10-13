@@ -24,7 +24,8 @@
 //! 1. a focused **text input** lets go of the focus, which stays in the
 //!    input's surface (its scope still heads the focus chain); nothing
 //!    else sees that press (unless the input lets Escape through, see
-//!    [`escape_passes`]);
+//!    [`escape_passes`]); an input that cancels on Escape (a slider's
+//!    typed entry) learns of that press through [`escape_left`];
 //! 2. egui aborts a **drag** in progress;
 //! 3. the **top overlay** closes, if it closes on Escape (popovers,
 //!    menus, dialogs: "Escape dismisses"), see `overlay::begin_pass`;
@@ -35,6 +36,10 @@
 //! So in a text field of a panel, the first Escape leaves the field and
 //! the second reaches the panel's own Escape (cancelling a gesture,
 //! closing the panel's overlay).
+//!
+//! While a text input owns the keyboard ([`text_input_owns_keyboard`]:
+//! a text field has the focus, or an open input claimed it with
+//! [`claim_keyboard`]), the key dispatcher leaves Escape and Enter to it.
 //!
 //! ```
 //! use egui_pop_core::focus;
@@ -84,6 +89,11 @@ struct State {
     /// Text inputs that let Escape through, this pass and the previous.
     passing: Vec<Id>,
     passing_last: Vec<Id>,
+    /// Text inputs that claimed the keyboard, with the pass of their
+    /// last claim ([`claim_keyboard`]).
+    claims: Vec<(Id, u64)>,
+    /// The text input Escape took the focus from, and in which pass.
+    escaped: Option<(Id, u64)>,
 }
 
 fn state(ctx: &Context) -> std::sync::Arc<std::sync::Mutex<State>> {
@@ -233,6 +243,59 @@ pub fn escape_passes(ctx: &Context, id: Id) {
     s.passing.push(id);
 }
 
+/// Claims the keyboard for an open text input (call it each pass it
+/// stays open): while it is claimed, [`text_input_owns_keyboard`] is
+/// true, so key dispatchers leave Escape and Enter to the input. The
+/// claim holds for the pass it is made in and the next one, since a
+/// dispatcher runs before the input is drawn. A slider's typed entry
+/// claims it: Escape cancels the entry, Enter commits it, and neither
+/// runs a key binding.
+pub fn claim_keyboard(ctx: &Context, id: Id) {
+    let now = pass(ctx);
+    let st = state(ctx);
+    let mut s = lock(&st);
+    s.claims.retain(|(c, p)| *c != id && p + 1 >= now);
+    s.claims.push((id, now));
+}
+
+/// Whether a text input owns the keyboard: a text field has the focus,
+/// or an open input claimed it ([`claim_keyboard`]) this pass or the
+/// last. egui-pop's key dispatcher then leaves Escape and Enter (without
+/// Ctrl or Alt) to the input; a host with a dispatcher of its own, or
+/// one that reads Escape before the widgets are drawn, should ask this
+/// first and do the same.
+///
+/// The claim matters for Escape: egui lets go of the focus when Escape
+/// is pressed, before the pass is drawn, so on that pass no text field
+/// has the focus any more.
+pub fn text_input_owns_keyboard(ctx: &Context) -> bool {
+    if ctx.text_edit_focused() {
+        return true;
+    }
+    let now = pass(ctx);
+    let st = state(ctx);
+    let s = lock(&st);
+    s.claims.iter().any(|(_, p)| p + 1 >= now)
+}
+
+/// Whether Escape just took the focus from this text input (the focus
+/// plugin swallows that press, see [the order](self#escape-in-order)):
+/// an input that cancels on Escape reads it here, since the key itself
+/// is gone. Answered once: the press is spent by the first call that
+/// sees it.
+pub fn escape_left(ctx: &Context, id: Id) -> bool {
+    let now = pass(ctx);
+    let st = state(ctx);
+    let mut s = lock(&st);
+    match s.escaped {
+        Some((e, p)) if e == id && p + 1 >= now => {
+            s.escaped = None;
+            true
+        }
+        _ => false,
+    }
+}
+
 /// Runs before egui reads each pass's input.
 #[derive(Debug)]
 struct FocusPlugin;
@@ -283,6 +346,7 @@ fn escape(ctx: &Context, input: &mut egui::RawInput) {
     if ctx.text_edit_focused() && !passes {
         input.events.remove(at);
         ctx.memory_mut(|m| m.surrender_focus(id));
+        lock(&state(ctx)).escaped = Some((id, pass(ctx)));
         log::debug!(target: "egui_pop", "Escape: left the text input {id:?}");
     }
 }
