@@ -158,6 +158,8 @@ egui minor.
   is given; with it, the gallery is a single instance answering
   `gallery://page/<name>` links and its window's app id is
   `org.egui_pop.Gallery`.
+- Gallery: a `--size <W>x<H>` option, the window's inner size in points
+  (1100x720 by default; `GALLERY_SIZE` through wbox's `app.sh`).
 - `On::Pass` (`Lifecycle::Pass`): a handler run at every pass of the
   application's logic, also while the window is hidden or minimized
   when something asked for a repaint, so what a background thread hands

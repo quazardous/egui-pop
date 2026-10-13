@@ -6,6 +6,7 @@
 #   GALLERY_DENSITY     comfortable | compact
 #   GALLERY_ACCENT      gold | blue | green | amber | red (default: the theme's)
 #   GALLERY_REDUCED_MOTION  1: animations off (--reduced-motion)
+#   GALLERY_SIZE        the window's inner size, WxH in points (default: 1100x720)
 #   GALLERY_PAGE        a page id: overview | tokens | builtins | viewport | images | zones | settings | debug ...
 #   GALLERY_QUIT_AFTER  frames before the gallery exits by itself (default: never)
 #   GALLERY_DUMP_DEBUG  1: with GALLERY_QUIT_AFTER, print the debug snapshot before quitting
@@ -22,6 +23,7 @@ args=(--theme "${GALLERY_THEME:-pop-dark}"
       --density "${GALLERY_DENSITY:-comfortable}"
       --page "${GALLERY_PAGE:-overview}")
 [ -n "${GALLERY_ACCENT:-}" ] && args+=(--accent "$GALLERY_ACCENT")
+[ -n "${GALLERY_SIZE:-}" ] && args+=(--size "$GALLERY_SIZE")
 [ "${GALLERY_REDUCED_MOTION:-}" = 1 ] && args+=(--reduced-motion)
 [ -n "${GALLERY_QUIT_AFTER:-}" ] && args+=(--quit-after "$GALLERY_QUIT_AFTER")
 [ "${GALLERY_DUMP_DEBUG:-}" = 1 ] && args+=(--dump-debug)

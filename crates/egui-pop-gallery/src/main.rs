@@ -31,7 +31,7 @@ fn main() -> eframe::Result {
         viewport: egui::ViewportBuilder::default()
             .with_title(TITLE)
             .with_app_id(egui_pop_gallery::pages::platform::APP_ID)
-            .with_inner_size([1100.0, 720.0]),
+            .with_inner_size(options.size),
         ..Default::default()
     };
     eframe::run_native(
