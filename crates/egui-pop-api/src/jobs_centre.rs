@@ -37,8 +37,11 @@ use crate::strings as txt;
 /// The jobs panel.
 pub const PANEL_JOBS: PanelId = PanelId::from_static("egui_pop.jobs");
 
-/// How a job's log console is drawn: `f(ui, app, job)`.
-pub struct JobLogView(Box<dyn Fn(&mut Ui, &AppHandle, &Job) + Send + Sync>);
+/// Draws a job's log console: `f(ui, app, job)`.
+pub type DrawLog = Box<dyn Fn(&mut Ui, &AppHandle, &Job) + Send + Sync>;
+
+/// How a job's log console is drawn.
+pub struct JobLogView(DrawLog);
 
 impl JobLogView {
     pub fn new(f: impl Fn(&mut Ui, &AppHandle, &Job) + Send + Sync + 'static) -> Self {
