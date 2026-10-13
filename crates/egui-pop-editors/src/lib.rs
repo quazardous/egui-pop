@@ -13,6 +13,7 @@
 //!   program in a pseudo-terminal behind the `pty` feature, or a
 //!   read-only [`Console`](terminal::Console) for logs), its steps,
 //!   commands and [`TerminalPlugin`];
+//! - [`mounts`]: what they need (the mount contract, ADR 0013);
 //! - [`steps`]: `edit.change`, `edit.save` and `code.diagnostics`, the
 //!   editors' commands and collectors, and [`EditorsPlugin`].
 //!
@@ -34,6 +35,7 @@ pub mod highlight;
 pub mod history;
 pub mod markers;
 pub mod model;
+pub mod mounts;
 pub mod search;
 pub mod selection;
 pub mod steps;

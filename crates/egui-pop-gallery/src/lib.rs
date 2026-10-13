@@ -87,6 +87,7 @@ pub fn builder(options: &Options) -> AppBuilder {
         .name("egui-pop gallery")
         .theme(spec)
         .plugins(egui_pop::api::DefaultPlugins)
+        .plugin(egui_pop::mounts::MountsPlugin)
         .plugin(egui_pop::api::frame::FramePlugin::system())
         .plugin(shell::Shell {
             first: StoryId::new(options.page.as_str()).unwrap_or(StoryId::from_static("overview")),
