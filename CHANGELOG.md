@@ -39,6 +39,10 @@ egui minor.
   (one per kind of code), each an alias of a system token, with their
   contrast pairs.
 
+- Gallery: Text editor and Code editor pages (a veto on the title line;
+  diagnostics, breakpoints, diff marks, 100 000 lines on demand, and a
+  demo assist provider answering from a thread).
+
 - Tree drops refused by the source (`TreeSource::can_drop`, allowing
   everything by default) and at the call site (`TreeView::can_drop`),
   besides `tree.drop`'s hooks: asked while dragging, where a refused

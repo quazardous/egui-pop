@@ -189,6 +189,27 @@ fn shots() -> Vec<Shot> {
             false,
         ),
         shot("values-pop-dark", "values", "pop-dark", &[], false),
+        shot(
+            "text-editor-pop-dark",
+            "text-editor",
+            "pop-dark",
+            &[Wait(0.5)],
+            false,
+        ),
+        shot(
+            "code-editor-pop-dark",
+            "code-editor",
+            "pop-dark",
+            &[Wait(1.0)],
+            true,
+        ),
+        shot(
+            "code-editor-pop-light",
+            "code-editor",
+            "pop-light",
+            &[Wait(1.0)],
+            false,
+        ),
         shot("zones-pop-dark", "zones", "pop-dark", &[], true),
         // The extender plugin switched off.
         shot(

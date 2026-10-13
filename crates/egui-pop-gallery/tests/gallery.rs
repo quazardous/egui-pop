@@ -1071,3 +1071,94 @@ fn the_table_page_sorts_through_the_store_and_vetoes_one_sort() {
     h.run();
     h.snapshot("table-pop-dark");
 }
+
+#[test]
+fn the_text_editor_page_edits_searches_through_the_keymap_and_vetoes_the_title() {
+    use egui::{Key, Modifiers};
+    let mut h = harness(options("pop-dark", Density::Comfortable, "text-editor"));
+    h.run();
+    h.get_by_label("Notes").click();
+    h.run();
+    h.key_press_modifiers(Modifiers::COMMAND, Key::End);
+    h.event(egui::Event::Text("\n- archive".into()));
+    h.run();
+    assert!(h.query_by_label_contains("version 1, modified").is_some());
+    // Ctrl+F is the `editor.find` command, bound on the editor surface.
+    h.key_press_modifiers(Modifiers::COMMAND, Key::F);
+    h.run();
+    let k = h.state().app.handle().key_traces();
+    let last = k.last().expect("a trace");
+    assert_eq!(last.scope.as_deref(), Some("surface:editor"), "{last:?}");
+    assert!(format!("{last:?}").contains("editor.find"), "{last:?}");
+    h.get_by_label("Find").type_text("mill");
+    h.run();
+    assert!(h.query_by_label("1 of 2").is_some());
+    // The title line, locked by a before-hook on edit.change.
+    h.get_by_label("Lock the title line (a before-hook on edit.change)")
+        .click();
+    h.run();
+    h.get_by_label("Notes").click();
+    h.run();
+    h.key_press_modifiers(Modifiers::COMMAND, Key::Home);
+    h.event(egui::Event::Text("X".into()));
+    h.run();
+    let t = last_step(&h, "edit.change").expect("ran");
+    assert!(t.vetoed_by.is_some(), "{t:?}");
+    assert!(
+        h.query_by_label("edit.change refused: the title is locked")
+            .is_some()
+    );
+    h.remove_cursor();
+    h.run();
+    h.snapshot("text-editor-pop-dark");
+}
+
+#[test]
+fn the_code_editor_page_marks_completes_saves_and_holds_a_hundred_thousand_lines() {
+    use egui::{Key, Modifiers};
+    let mut h = harness(options("pop-dark", Density::Comfortable, "code-editor"));
+    h.run();
+    h.get_by_label("Run the checker").click();
+    h.run();
+    let snapshot = h.state().app.handle().debug_snapshot();
+    assert_eq!(
+        snapshot["code_diagnostics"]["gallery.main.rs"][0]["message"],
+        "unused variable: `unused`"
+    );
+    h.get_by_label("main.rs").click();
+    h.run();
+    h.key_press_modifiers(Modifiers::COMMAND, Key::End);
+    h.key_press(Key::Enter);
+    h.event(egui::Event::Text("hi".into()));
+    run_until(&mut h, |h| h.query_by_label("highlights").is_some());
+    h.key_press(Key::Enter);
+    h.run();
+    let text = h.state().app.handle().debug_snapshot()["edit_changes"]["changes"]
+        .as_array()
+        .unwrap()
+        .last()
+        .unwrap()
+        .clone();
+    assert_eq!(text["kind"], "completion", "{text}");
+    // F9 and Ctrl+S through the keymap, on the editor surface.
+    h.key_press(Key::F9);
+    h.key_press_modifiers(Modifiers::COMMAND, Key::S);
+    h.run();
+    let t = last_step(&h, "edit.save").expect("saved");
+    assert_eq!(t.args["editor"], "gallery.main.rs");
+    let editors = &h.state().app.handle().debug_snapshot()["edit_changes"]["editors"];
+    assert_eq!(
+        editors[0]["breakpoints"],
+        serde_json::json!([13, 18]),
+        "{editors}"
+    );
+    h.remove_cursor();
+    h.run();
+    h.snapshot("code-editor-pop-dark");
+    h.get_by_label("Load 100 000 lines").click();
+    h.run();
+    assert!(
+        h.query_by_label_contains("const C99999").is_none(),
+        "virtualised"
+    );
+}

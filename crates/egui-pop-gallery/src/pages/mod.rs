@@ -10,6 +10,7 @@ pub mod builtins;
 pub mod debug;
 pub mod dialogs;
 pub mod display;
+pub mod editors;
 pub mod files;
 pub mod frame;
 pub mod i18n;
