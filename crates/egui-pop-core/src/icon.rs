@@ -93,6 +93,8 @@ pub enum Icon {
     Lock,
     /// Unlocked: free to change.
     Unlock,
+    /// An eyedropper: pick a value or a colour from the image.
+    Picker,
 }
 
 impl Icon {
@@ -139,6 +141,7 @@ impl Icon {
         Icon::Home,
         Icon::Lock,
         Icon::Unlock,
+        Icon::Picker,
     ];
 
     /// The icon of a name (`settings`), as [`Icon::name`] gives it.
@@ -191,6 +194,7 @@ impl Icon {
             Icon::Home => "home",
             Icon::Lock => "lock",
             Icon::Unlock => "unlock",
+            Icon::Picker => "picker",
         }
     }
 
@@ -277,6 +281,7 @@ fn glyph(icon: Icon) -> Option<&'static str> {
         Icon::Home => p::HOUSE,
         Icon::Lock => p::LOCK_SIMPLE,
         Icon::Unlock => p::LOCK_SIMPLE_OPEN,
+        Icon::Picker => p::EYEDROPPER,
     })
 }
 
@@ -611,6 +616,15 @@ pub fn paint_fallback(p: &Painter, icon: Icon, rect: Rect, color: Color32) {
             p.line(arc(PI, 2.0 * PI, len * 0.26, top), stroke);
             p.line_segment([at(0.24, 0.25 - lift), at(0.24, 0.45 - lift)], stroke);
             p.line_segment([at(0.76, 0.25 - lift), at(0.76, right - lift)], stroke);
+        }
+        Icon::Picker => {
+            // The tube down to its tip, the collar across it, the bulb.
+            p.line_segment([at(0.05, 0.95), at(0.6, 0.4)], stroke);
+            p.line_segment([at(0.42, 0.3), at(0.7, 0.58)], stroke);
+            p.line_segment(
+                [at(0.62, 0.38), at(0.85, 0.15)],
+                Stroke::new(w * 2.6, color),
+            );
         }
     }
 }

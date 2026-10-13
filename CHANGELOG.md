@@ -9,6 +9,9 @@ egui minor.
 
 ### Added
 
+- `Icon::Picker`, an eyedropper (Phosphor's, or painted as a tube, a
+  collar and a bulb): a slider's colour picker needs it.
+
 - A close button on dialogs, off by default (Cancel and Escape are the
   way out): `DialogSpec::new(dialog).closable(true)`, or the
   `dialogs.closable` setting for every dialog, puts a ✕ at the right end
