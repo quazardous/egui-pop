@@ -25,6 +25,12 @@ egui minor.
   and wires begun, made or refused are announced. New tokens `graph.*`
   and strings with their French. Guide: docs/node-graph.md.
 
+- The node graph editor in an application (`imaging::show_graph`): each
+  edit runs a step (`graph.connect`, `graph.disconnect`, `graph.move`,
+  `graph.delete`, `graph.add`), the selection, the level and refused
+  wires go on the journal, and agents read and edit a graph through the
+  `graph.read`, `graph.edit`, `graph.select` and `graph.view` commands.
+
 - The viewport's tile intake off the interface thread, opt-in:
   `ViewportState::set_prepare_on_worker` converts each tile on the
   thread that delivers it (the display transform on the CPU path, the

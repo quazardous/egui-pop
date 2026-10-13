@@ -16,6 +16,7 @@
 //! | `wheel.change` | `wheel`, `from`, `to` (`{hue, chroma, luminance}`), `cause` | writes `to` |
 //! | `zoom.change` | `viewport`, `from`, `to` (`{zoom: "fit" or a number, center: [x, y]}`), `cause` (`command`, `drag`, `click`, `wheel`, `key`, `reset`) | writes `to` |
 //! | `cursor.resolve` | `viewport`, `query` (`{tool, modifiers, dragging, panning, handle, over_image, brush}`), `default` (`{system}`, `{tool}`, `{image}` or `{brush}`) | gives `default` |
+//! | `graph.connect`, `graph.disconnect`, `graph.move`, `graph.delete`, `graph.add` | `graph`, the edit's fields, `cause` | hands the edit to the application ([`graph`]) |
 //!
 //! A before-hook vetoes the change (the tool keeps, or goes back to,
 //! `from`) or redirects it (another `to`); a run-hook gives the value to
@@ -37,6 +38,10 @@
 //!         .show(ui);
 //! }
 //! ```
+
+pub mod graph;
+
+pub use graph::{GRAPHS, Graphs, show_graph};
 
 use egui_pop_api::steps::{Outcome, StepSpec};
 use egui_pop_api::{AppHandle, Ctx, Plugin, PluginError};
@@ -64,6 +69,13 @@ pub const IMAGING_PLUGIN: PluginId = PluginId::from_static("egui_pop.imaging");
 
 /// The steps, as [`ImagingPlugin`] declares them.
 pub fn specs() -> Vec<StepSpec> {
+    let mut specs = tool_specs();
+    specs.extend(graph::specs());
+    specs
+}
+
+/// The image tools' steps.
+fn tool_specs() -> Vec<StepSpec> {
     vec![
         StepSpec::new(
             STEP_HISTOGRAM,
@@ -117,7 +129,8 @@ pub fn specs() -> Vec<StepSpec> {
     ]
 }
 
-/// Declares the image tools' steps.
+/// Declares the image tools' steps, and the node editors' steps,
+/// registry ([`GRAPHS`]) and agent commands.
 #[derive(Debug, Default)]
 pub struct ImagingPlugin;
 
@@ -134,6 +147,7 @@ impl Plugin for ImagingPlugin {
         for spec in specs() {
             ctx.step(spec)?;
         }
+        graph::connect(ctx)?;
         Ok(())
     }
 }
