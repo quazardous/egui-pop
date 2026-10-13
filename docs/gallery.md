@@ -20,16 +20,17 @@ directory; without it they are simulated and nothing reaches the
 desktop).
 
 Pages: `overview` (the theme overview), `tokens`, `builtins` (egui's
-built-ins), `icons`, `motion` (the motion clock), `values`, `sliders`, `menus`, `dialogs`, `toasts`, `progress`, `placeholders` (skeletons and empty states), `viewport`
-(the image viewport), `navigator` (the zoom control and the navigator),
-`images`, `grading` (curves and colour wheels), `tree` (the live tree), `table` (lists
-`images`, `grading` (curves and colour wheels), `cursors` (tool
-cursors, brush outlines and the loupe), `tree` (the live tree), `table` (lists
-and tables), `text-editor`, `code-editor`, `terminal`, `zones` (zones and blocks), `workbench`,
-(the image viewport), `images`, `tree` (the live tree), `table` (lists
-and tables), `text-editor`, `code-editor`, `terminal`, `zones` (zones and blocks), `workbench`, `palettes`,
-`arrangements`, `strips`, `jobs` (a pretend host's background jobs), `frame`, `scale`, `platform` (the platform
-services), `settings`, `i18n` (translations) and `debug` (the debug
+built-ins), `icons`, `motion` (the motion clock), `values`, `sliders`,
+`menus`, `dialogs`, `files` (the file chooser), `toasts`, `progress`,
+`placeholders` (skeletons and empty states), `viewport` (the image
+viewport), `navigator` (the zoom control and the navigator), `images`,
+`grading` (curves and colour wheels), `cursors` (tool cursors, brush
+outlines and the loupe), `display` (wide gamut and HDR surfaces), `tree`
+(the live tree), `table` (lists and tables), `text-editor`,
+`code-editor`, `terminal`, `zones` (zones and blocks), `workbench`,
+`palettes`, `arrangements`, `strips`, `jobs` (a pretend host's
+background jobs), `frame`, `scale`, `platform` (the platform services),
+`settings`, `i18n` (translations) and `debug` (the debug
 bridge). `Alt+Down` and `Alt+Up` go to the next and previous page,
 `Ctrl+Shift+T` to the next theme.
 
@@ -119,19 +120,21 @@ Egui's built-ins in egui-pop's style, values, sliders, menus, dialogs (movable o
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/dialogs-movable-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/dialogs-movable-pop-dark.png" width="200" alt="dialogs-movable-pop-dark"></a><br>dialogs-movable-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/dialogs-movable-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/dialogs-movable-pop-light.png" width="200" alt="dialogs-movable-pop-light"></a><br>dialogs-movable-pop-light</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/dialogs-clear-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/dialogs-clear-pop-dark.png" width="200" alt="dialogs-clear-pop-dark"></a><br>dialogs-clear-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/files-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/files-pop-dark.png" width="200" alt="files-pop-dark"></a><br>files-pop-dark</td>
   </tr>
   <tr>
-    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/files-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/files-pop-dark.png" width="200" alt="files-pop-dark"></a><br>files-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/toasts-long-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/toasts-long-pop-dark.png" width="200" alt="toasts-long-pop-dark"></a><br>toasts-long-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/toasts-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/toasts-pop-dark.png" width="200" alt="toasts-pop-dark"></a><br>toasts-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/toasts-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/toasts-pop-light.png" width="200" alt="toasts-pop-light"></a><br>toasts-pop-light</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/sliders-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/sliders-pop-dark.png" width="200" alt="sliders-pop-dark"></a><br>sliders-pop-dark</td>
-    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/sliders-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/sliders-pop-light.png" width="200" alt="sliders-pop-light"></a><br>sliders-pop-light</td>
   </tr>
   <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/sliders-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/sliders-pop-light.png" width="200" alt="sliders-pop-light"></a><br>sliders-pop-light</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/progress-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/progress-pop-dark.png" width="200" alt="progress-pop-dark"></a><br>progress-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/progress-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/progress-pop-light.png" width="200" alt="progress-pop-light"></a><br>progress-pop-light</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/progress-reduced-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/progress-reduced-pop-dark.png" width="200" alt="progress-reduced-pop-dark"></a><br>progress-reduced-pop-dark</td>
+  </tr>
+  <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/progress-busy-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/progress-busy-pop-dark.png" width="200" alt="progress-busy-pop-dark"></a><br>progress-busy-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/placeholders-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/placeholders-pop-dark.png" width="200" alt="placeholders-pop-dark"></a><br>placeholders-pop-dark</td>
   </tr>
@@ -207,14 +210,12 @@ Settings, shortcuts, platform services, translations, the developer tools, and t
   <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/jobs-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/jobs-pop-dark.png" width="200" alt="jobs-pop-dark"></a><br>jobs-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/jobs-popover-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/jobs-popover-pop-dark.png" width="200" alt="jobs-popover-pop-dark"></a><br>jobs-popover-pop-dark</td>
-  </tr>
-  <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/settings-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/settings-pop-dark.png" width="200" alt="settings-pop-dark"></a><br>settings-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/settings-window-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/settings-window-pop-dark.png" width="200" alt="settings-window-pop-dark"></a><br>settings-window-pop-dark</td>
-    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/shortcuts-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/shortcuts-pop-dark.png" width="200" alt="shortcuts-pop-dark"></a><br>shortcuts-pop-dark</td>
-    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/debug-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/debug-pop-dark.png" width="200" alt="debug-pop-dark"></a><br>debug-pop-dark</td>
   </tr>
   <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/shortcuts-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/shortcuts-pop-dark.png" width="200" alt="shortcuts-pop-dark"></a><br>shortcuts-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/debug-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/debug-pop-dark.png" width="200" alt="debug-pop-dark"></a><br>debug-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/devtools-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/devtools-pop-dark.png" width="200" alt="devtools-pop-dark"></a><br>devtools-pop-dark</td>
   </tr>
 </table>
