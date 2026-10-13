@@ -614,6 +614,66 @@ egui-pop-viewport-curve-value = { $points } points
 
 egui-pop-viewport-curve-value-selected = point { $point } of { $points }: input { $input } %, output { $output } %
 
+egui-pop-viewport-graph-add-node = Add a node
+
+egui-pop-viewport-graph-collapse = Collapse { $node }
+
+egui-pop-viewport-graph-connected = { $from } connected to { $to }
+
+egui-pop-viewport-graph-delete = Delete
+
+egui-pop-viewport-graph-disconnect = Disconnect
+
+egui-pop-viewport-graph-duplicate = Duplicate
+
+egui-pop-viewport-graph-exists = the wire is already there
+
+egui-pop-viewport-graph-expand = Expand { $node }
+
+egui-pop-viewport-graph-fold = Fold { $group }
+
+egui-pop-viewport-graph-label = Node graph
+
+egui-pop-viewport-graph-level-detail = detail
+
+egui-pop-viewport-graph-level-overview = overview
+
+egui-pop-viewport-graph-level-ports = ports
+
+egui-pop-viewport-graph-minimap-label = Graph overview
+
+egui-pop-viewport-graph-minimap-value = zoom { $zoom } %
+
+egui-pop-viewport-graph-node-value = { $inputs } inputs, { $outputs } outputs, { $wires } wires
+
+egui-pop-viewport-graph-port-input = { $node }, input { $port }
+
+egui-pop-viewport-graph-port-output = { $node }, output { $port }
+
+egui-pop-viewport-graph-port-value = { $type }, { $wires } wires
+
+egui-pop-viewport-graph-refused = { $to } refuses { $from }: { $reason }
+
+egui-pop-viewport-graph-role-input = input port
+
+egui-pop-viewport-graph-role-node = node
+
+egui-pop-viewport-graph-role-output = output port
+
+egui-pop-viewport-graph-role-stack = stack
+
+egui-pop-viewport-graph-same-node = a node cannot feed itself
+
+egui-pop-viewport-graph-same-side = two inputs or two outputs
+
+egui-pop-viewport-graph-types-differ = the types differ ({ $from }, { $to })
+
+egui-pop-viewport-graph-unfold = Unfold { $group } ({ $count } nodes)
+
+egui-pop-viewport-graph-value = { $nodes } nodes, { $wires } wires, { $level }
+
+egui-pop-viewport-graph-wire-started = Wire from { $port }: choose a port
+
 egui-pop-viewport-histogram-clipped-highlights = highlights clipped: { $percent } %
 
 egui-pop-viewport-histogram-clipped-shadows = shadows clipped: { $percent } %

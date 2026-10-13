@@ -9,6 +9,22 @@ egui minor.
 
 ### Added
 
+- A node graph editor (`viewport::graph`) over a graph the application
+  keeps (`GraphModel`: nodes, typed ports coloured from tokens, wires,
+  groups, parameters, kinds to add), drawn on egui's `Scene`: pan and
+  zoom, a minimap sharing its state (`GraphMinimap`), nodes with a slot
+  in the title bar and a collapsed state, groups framed or folded into
+  stacks, bezier wires checked against the ports' types while they are
+  drawn, a rubber band, moves snapped to a grid, delete and duplicate.
+  The zoom picks the level: an overview of compact nodes, the ports, and
+  a detail view where parameters are egui-pop sliders edited inline.
+  Every edit comes back as a request (`Edit`) through an `on_edit` hook
+  (allow, veto, redirect); the editor never changes the graph. A
+  keyboard path goes through nodes and ports and connects them; nodes,
+  ports, groups and stacks are AccessKit nodes with roles and values,
+  and wires begun, made or refused are announced. New tokens `graph.*`
+  and strings with their French. Guide: docs/node-graph.md.
+
 - The viewport's tile intake off the interface thread, opt-in:
   `ViewportState::set_prepare_on_worker` converts each tile on the
   thread that delivers it (the display transform on the CPU path, the

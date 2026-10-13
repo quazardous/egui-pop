@@ -35,6 +35,9 @@
 //!   saturation picker, each with a luminance slider;
 //! - [`navigator`]: a zoom control and a navigator (a minimap), sharing
 //!   the viewport's state;
+//! - [`graph`]: a node graph editor over an application's graph (typed
+//!   ports, wires, groups, an overview and a detail view with inline
+//!   sliders), every edit handed back as a request, with its minimap;
 //! - [`change`]: what the image tools share, the change they propose
 //!   and the hook that sees it (a veto, a redirect), and the form their
 //!   values take in a step;
@@ -69,6 +72,7 @@ pub mod display;
 pub mod gestures;
 #[cfg(feature = "wgpu")]
 pub mod gpu;
+pub mod graph;
 pub mod histogram;
 pub mod hooks;
 #[cfg(feature = "wayland")]

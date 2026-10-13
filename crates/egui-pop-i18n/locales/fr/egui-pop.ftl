@@ -613,6 +613,66 @@ egui-pop-viewport-curve-value = { $points } points
 
 egui-pop-viewport-curve-value-selected = point { $point } sur { $points } : entrée { $input } %, sortie { $output } %
 
+egui-pop-viewport-graph-add-node = Ajouter un nœud
+
+egui-pop-viewport-graph-collapse = Replier { $node }
+
+egui-pop-viewport-graph-connected = { $from } relié à { $to }
+
+egui-pop-viewport-graph-delete = Supprimer
+
+egui-pop-viewport-graph-disconnect = Déconnecter
+
+egui-pop-viewport-graph-duplicate = Dupliquer
+
+egui-pop-viewport-graph-exists = le lien existe déjà
+
+egui-pop-viewport-graph-expand = Déplier { $node }
+
+egui-pop-viewport-graph-fold = Empiler { $group }
+
+egui-pop-viewport-graph-label = Graphe de nœuds
+
+egui-pop-viewport-graph-level-detail = détail
+
+egui-pop-viewport-graph-level-overview = vue d’ensemble
+
+egui-pop-viewport-graph-level-ports = ports
+
+egui-pop-viewport-graph-minimap-label = Vue d’ensemble du graphe
+
+egui-pop-viewport-graph-minimap-value = zoom { $zoom } %
+
+egui-pop-viewport-graph-node-value = { $inputs } entrées, { $outputs } sorties, { $wires } liens
+
+egui-pop-viewport-graph-port-input = { $node }, entrée { $port }
+
+egui-pop-viewport-graph-port-output = { $node }, sortie { $port }
+
+egui-pop-viewport-graph-port-value = { $type }, { $wires } liens
+
+egui-pop-viewport-graph-refused = { $to } refuse { $from } : { $reason }
+
+egui-pop-viewport-graph-role-input = port d’entrée
+
+egui-pop-viewport-graph-role-node = nœud
+
+egui-pop-viewport-graph-role-output = port de sortie
+
+egui-pop-viewport-graph-role-stack = pile
+
+egui-pop-viewport-graph-same-node = un nœud ne peut pas s’alimenter lui-même
+
+egui-pop-viewport-graph-same-side = deux entrées ou deux sorties
+
+egui-pop-viewport-graph-types-differ = les types diffèrent ({ $from }, { $to })
+
+egui-pop-viewport-graph-unfold = Déplier { $group } ({ $count } nœuds)
+
+egui-pop-viewport-graph-value = { $nodes } nœuds, { $wires } liens, { $level }
+
+egui-pop-viewport-graph-wire-started = Lien depuis { $port } : choisissez un port
+
 egui-pop-viewport-histogram-clipped-highlights = hautes lumières écrêtées : { $percent } %
 
 egui-pop-viewport-histogram-clipped-shadows = ombres écrêtées : { $percent } %

@@ -19,6 +19,29 @@ Reviewed at every egui bump: remove what upstream fixed, update the rest.
 - **Remove when**: kittest ships a `double_click` helper or a per-step
   time.
 
+## egui: AccessKit bounds ignore layer transforms
+
+- **Compensated**: a widget in a transformed layer (egui's `Scene`)
+  reports its rectangle to AccessKit in the layer's coordinates, before
+  the transform: screen readers (and kittest, which clicks at a node's
+  bounds) place it where it is not.
+- **Upstream**: not filed yet.
+- **Workaround**: the node graph editor sets the bounds of its nodes,
+  ports, chevrons, groups, stacks and sliders to their rectangles on
+  screen (`graph::Cx::bounds`, `// upstream:`).
+- **Remove when**: egui applies the layer's transform to the bounds it
+  reports.
+
+## egui: text blurs in a Scene zoomed past 100 %
+
+- **Compensated**: egui draws text at its size and scales the layer, so
+  a `Scene` zoomed in shows blurred glyphs.
+- **Upstream**: <https://github.com/emilk/egui/issues/4813>
+- **Workaround**: the node graph editor stops at 150 % by default
+  (`GraphEditor::zoom_range`), and its overview draws titles at a few
+  larger sizes rather than scaling small ones.
+- **Remove when**: egui lays text out at the layer's scale.
+
 ## eframe: no custom cursor on the web or in immediate viewports
 
 - **Compensated**: `Context::set_cursor_image` reaches winit only where
