@@ -299,6 +299,35 @@
     "punctuation": {"$value": "{text.muted}", "$description": "Punctuation."},
     "invalid": {"$value": "{danger}", "$description": "Text the grammar rejects."}
   },
+  "terminal": {
+    "$description": "The terminal: its text, cursor and selection, and the 16 ANSI colours programs ask for by number (the 256-colour cube and RGB colours are the programs' own).",
+    "$type": "color",
+    "background": {"$value": "{surface.sunken}", "$description": "Behind the text."},
+    "foreground": {"$value": "{text.default}", "$description": "Text in the default colour."},
+    "bold": {"$value": "{text.strong}", "$description": "Bold text in the default colour."},
+    "cursor": {"$value": "{text.strong}", "$description": "The cursor."},
+    "selection": {"$value": "{selection}", "$description": "Selected text's background."},
+    "link": {"$value": "{accent.default}", "$description": "A link's underline under the pointer."},
+    "ansi": {
+      "$description": "The 16 ANSI colours, by number; each slot keeps its protocol name in its description.",
+      "0": {"$value": "{surface.active}", "$description": "ANSI colour 0 (black): the colour furthest from the text."},
+      "1": {"$value": "{danger}", "$description": "ANSI colour 1 (red)."},
+      "2": {"$value": "{success}", "$description": "ANSI colour 2 (green)."},
+      "3": {"$value": "{warning}", "$description": "ANSI colour 3 (yellow)."},
+      "4": {"$value": "{info}", "$description": "ANSI colour 4 (blue)."},
+      "5": {"$value": "{accent.default}", "$description": "ANSI colour 5 (magenta)."},
+      "6": {"$value": "{info}", "$description": "ANSI colour 6 (cyan)."},
+      "7": {"$value": "{text.default}", "$description": "ANSI colour 7 (white): the text's colour."},
+      "8": {"$value": "{border.strong}", "$description": "ANSI colour 8 (bright black)."},
+      "9": {"$value": "{danger}", "$description": "ANSI colour 9 (bright red)."},
+      "10": {"$value": "{success}", "$description": "ANSI colour 10 (bright green)."},
+      "11": {"$value": "{warning}", "$description": "ANSI colour 11 (bright yellow)."},
+      "12": {"$value": "{info}", "$description": "ANSI colour 12 (bright blue)."},
+      "13": {"$value": "{accent.hover}", "$description": "ANSI colour 13 (bright magenta)."},
+      "14": {"$value": "{info}", "$description": "ANSI colour 14 (bright cyan)."},
+      "15": {"$value": "{text.strong}", "$description": "ANSI colour 15 (bright white): the strongest ink."}
+    }
+  },
   "titlebar": {
     "$description": "A window's own title bar, when the application draws its frame.",
     "background": {"$type": "color", "$value": "{surface.panel}"},

@@ -119,6 +119,10 @@ pub const PAIRS: &[Pair] = &[
     ui("editor.error", "editor.gutter"),
     ui("editor.warning", "editor.gutter"),
     ui("editor.breakpoint", "editor.gutter"),
+    // The terminal: its text over its background and the selection.
+    text("terminal.foreground", "terminal.background"),
+    text("terminal.foreground", "terminal.selection"),
+    ui("terminal.cursor", "terminal.background"),
     // Things that must be seen.
     ui("border.strong", "surface.panel"),
     ui("border.strong", "surface.raised"),

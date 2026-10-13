@@ -115,6 +115,11 @@ egui minor.
   commands an agent reads and writes the buffer with (`editor.read`,
   `editor.write`, ...). Translated in French. Guide: `docs/editors.md`.
 
+- Theme tokens for the terminal: `terminal.*` (background, text, bold
+  text, cursor, selection, links) and the 16 ANSI colours by number
+  (`terminal.ansi.0` to `terminal.ansi.15`), each an alias of a system
+  token, with their contrast pairs.
+
 - Theme tokens for editors: `editor.*` (background, gutter, line
   numbers, the cursor's line, selection, cursor, guides, brackets,
   search matches, folds, breakpoints, diagnostics, diff) and `syntax.*`

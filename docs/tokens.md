@@ -88,7 +88,11 @@ Not read yet: references inside composite values, JSON Pointer `$ref`,
    `button.*`, `slider.{track, fill, thumb}`, `menu.item.*`, `dialog.*`,
    `toast.*`, `editor.*` and `syntax.*` (one colour per kind of code:
    keywords on the accent, strings on `success`, numbers on `warning`,
-   comments muted...). A theme may re-alias a component token (high contrast
+   comments muted...), `terminal.*` (its text, cursor, selection, links,
+   and `terminal.ansi.0` to `terminal.ansi.15`, the 16 colours programs
+   ask for by number: 0 is the colour furthest from the text, 7 the
+   text's own, 1 to 6 the status roles and the accent, 8 to 15 their
+   stronger forms). A theme may re-alias a component token (high contrast
    outlines every button: `button.border` is `{border.strong}`).
 
 ## Naming rules
