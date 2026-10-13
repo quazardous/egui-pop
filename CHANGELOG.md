@@ -9,6 +9,9 @@ egui minor.
 
 ### Added
 
+- Icons: `Icon::Lock` and `Icon::Unlock` (a padlock closed and open),
+  from the Phosphor font or painted.
+
 - Viewport overlays, for editing masks: a style per overlay
   (`overlay::Style`: `Emphasis::Selected` or `Faint`, a dashed line;
   `Overlay::selected`, `faint`, `dashed`), an ellipse shape

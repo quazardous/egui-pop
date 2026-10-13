@@ -89,6 +89,10 @@ pub enum Icon {
     /// Recent items.
     History,
     Home,
+    /// Locked: not to be changed.
+    Lock,
+    /// Unlocked: free to change.
+    Unlock,
 }
 
 impl Icon {
@@ -133,6 +137,8 @@ impl Icon {
         Icon::Hidden,
         Icon::History,
         Icon::Home,
+        Icon::Lock,
+        Icon::Unlock,
     ];
 
     /// The icon of a name (`settings`), as [`Icon::name`] gives it.
@@ -183,6 +189,8 @@ impl Icon {
             Icon::Hidden => "hidden",
             Icon::History => "history",
             Icon::Home => "home",
+            Icon::Lock => "lock",
+            Icon::Unlock => "unlock",
         }
     }
 
@@ -267,6 +275,8 @@ fn glyph(icon: Icon) -> Option<&'static str> {
         Icon::Hidden => p::EYE_SLASH,
         Icon::History => p::CLOCK_COUNTER_CLOCKWISE,
         Icon::Home => p::HOUSE,
+        Icon::Lock => p::LOCK_SIMPLE,
+        Icon::Unlock => p::LOCK_SIMPLE_OPEN,
     })
 }
 
@@ -588,6 +598,19 @@ pub fn paint_fallback(p: &Painter, icon: Icon, rect: Rect, color: Color32) {
                 ],
                 stroke,
             );
+        }
+        Icon::Lock | Icon::Unlock => {
+            frame(at(0.1, 0.45), at(0.9, 0.98));
+            // The shackle: closed into the body, or lifted and open.
+            let (lift, right) = if icon == Icon::Lock {
+                (0.0, 0.45)
+            } else {
+                (0.12, 0.3)
+            };
+            let top = at(0.5, 0.25 - lift);
+            p.line(arc(PI, 2.0 * PI, len * 0.26, top), stroke);
+            p.line_segment([at(0.24, 0.25 - lift), at(0.24, 0.45 - lift)], stroke);
+            p.line_segment([at(0.76, 0.25 - lift), at(0.76, right - lift)], stroke);
         }
     }
 }
