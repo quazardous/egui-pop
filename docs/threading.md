@@ -484,10 +484,40 @@ the render), while worker threads load it. A minimal `tracing`
 subscriber records egui-pop's profiling scopes per thread. It runs on
 the bench box as a timing job (the machine alone, its frequency capped).
 
-The numbers are pending the first run of the timing job; this section
-will list them per scenario (frame build and tessellation percentiles,
-frames over budget, uploads per frame, wakeups per second, time in the
-scopes on the interface thread and on the workers).
+First run (2026-10-13, comparable conditions, 360 frames per scenario,
+budget 16.7 ms). Frame build time on the interface thread, in ms:
+
+| scenario | p50 | p95 | p99 | max | frames over budget | textures per frame | wakeups/s |
+|---|---|---|---|---|---|---|---|
+| idle | 1.02 | 1.03 | 1.05 | 1.26 | 0 | 0 | 0 |
+| terminal, steady | 0.62 | 0.64 | 0.93 | 1.43 | 0 | 0 | 33 |
+| terminal, flood | 3.61 | 6.12 | 7.12 | 8.07 | 0 | 0 | 60 |
+| assist on a thread | 0.32 | 8.01 | 8.16 | 8.34 | 0 | 1 | 23 |
+| assist on the interface thread | 0.31 | 38.33 | 38.50 | 38.58 | 60 | 1 | 23 |
+| tile storm | 0.32 | 21.56 | 69.02 | 102.22 | 24 | 19 | 53 |
+| jobs from the host | 0.29 | 0.42 | 0.49 | 0.84 | 0 | 1 | 60 |
+| all three | 0.77 | 23.49 | 36.68 | 60.59 | 24 | 9 | 60 |
+| idle, after | 0.54 | 0.55 | 0.59 | 0.95 | 0 | 0 | 0 |
+
+What the scopes show:
+- **Tiles are the real problem.** `pop.tiles.receive` takes up to 102 ms
+  in one frame: every arrived tile is taken in, converted and uploaded
+  on the interface thread, up to 19 textures (4.7 MB) in a frame. An
+  upload budget per frame and the conversion on the worker side are
+  the first fix (follow-ups 3 and 9).
+- **The terminal flood costs the paint lock**, not the paint:
+  `pop.terminal.lock` waits up to 7 ms while the reader parses under
+  it. Parsing outside the lock removes it (follow-up 2).
+- **Highlighting** spends up to 8 ms of a frame in its line budget
+  (`pop.editor.highlight`); the budget holds, but a smaller one, or the
+  highlighter on a worker, would halve the tail.
+- **An assist provider answering on the interface thread** blocks it
+  (38 ms frames): the documented rule ("never answer on the interface
+  thread") matters, and a debug check would catch it (follow-up 7).
+- **The jobs journal is cheap** on the interface thread (0.5 ms p99);
+  its lock is contended on the worker side only.
+- Wakeups reach 60 per second under load (one per frame), so coalescing
+  them (follow-up 1) matters for power, not for frame time.
 
 ## 6. Proposal: a threading model for egui-pop
 
