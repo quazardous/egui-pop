@@ -36,6 +36,16 @@ egui minor.
   components `dialog.backdrop`, `dialog.header` and
   `dialog.header-text` (with its contrast pair).
 
+- A curve editor (`viewport::curve::CurveEditor`): points added on the
+  curve, dragged between their neighbours, deleted by a double or right
+  click, and the whole curve reset by a double click elsewhere; the
+  spline is the application's (`Spline`, with `MonotoneCubic` and
+  `Linear` supplied); a histogram behind; the keys (next and previous
+  point, arrows, Insert, Delete, R, remappable as `CurveKeys`); and the
+  targeted adjustment, where the value picked under the pointer in the
+  image selects or adds the point the application's drag then moves.
+  Every change goes through its hook; it is an AccessKit slider on the
+  selected point's output.
 - Histogram: clipping markers (`Histogram::clipping`, lit in a bottom
   corner when shadows or highlights are clipped, and said to screen
   readers) and a drag handed back to the application

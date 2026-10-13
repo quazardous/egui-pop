@@ -30,6 +30,13 @@ pub const HISTOGRAM_CLIPPED_HIGHLIGHTS: StrKey = StrKey::new(
     "egui-pop-viewport-histogram-clipped-highlights",
     "highlights clipped: { $percent } %",
 );
+/// A curve editor's accessible value, no point selected.
+pub const CURVE_VALUE: StrKey = StrKey::new("egui-pop-viewport-curve-value", "{ $points } points");
+/// A curve editor's accessible value, with the selected point.
+pub const CURVE_VALUE_SELECTED: StrKey = StrKey::new(
+    "egui-pop-viewport-curve-value-selected",
+    "point { $point } of { $points }: input { $input } %, output { $output } %",
+);
 
 /// Every string the viewport shows, for catalogues and tests.
 pub const ALL: &[StrKey] = &[
@@ -39,6 +46,8 @@ pub const ALL: &[StrKey] = &[
     HISTOGRAM_VALUE_LOG,
     HISTOGRAM_CLIPPED_SHADOWS,
     HISTOGRAM_CLIPPED_HIGHLIGHTS,
+    CURVE_VALUE,
+    CURVE_VALUE_SELECTED,
 ];
 
 #[cfg(test)]

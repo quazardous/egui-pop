@@ -20,6 +20,9 @@
 //! - [`thumbnail`] and [`histogram`]: thumbnails in a virtualised grid
 //!   and a histogram, from images and bins the application supplies
 //!   (with clipping markers, and a drag handed back to the application);
+//! - [`curve`]: a curve editor (points added, moved and deleted, a
+//!   spline the application supplies, a histogram behind, the value
+//!   picked in the image);
 //! - [`change`]: what the image tools share, the change they propose
 //!   and the hook that sees it (a veto, a redirect), and the form their
 //!   values take in a step;
@@ -46,6 +49,7 @@
 //! ```
 
 pub mod change;
+pub mod curve;
 pub mod debug;
 pub mod demo;
 pub mod display;

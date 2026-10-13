@@ -516,6 +516,10 @@ egui-pop-value-missing = no value at `{ $path }`
 
 egui-pop-value-read-only = Read only
 
+egui-pop-viewport-curve-value = { $points } points
+
+egui-pop-viewport-curve-value-selected = point { $point } of { $points }: input { $input } %, output { $output } %
+
 egui-pop-viewport-histogram-clipped-highlights = highlights clipped: { $percent } %
 
 egui-pop-viewport-histogram-clipped-shadows = shadows clipped: { $percent } %
