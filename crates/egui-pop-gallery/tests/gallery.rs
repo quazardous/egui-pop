@@ -740,6 +740,51 @@ fn the_workbench_page_opens_moves_and_vetoes_panels() {
 }
 
 #[test]
+fn the_palettes_page_floats_a_toolbox_a_colour_palette_and_a_navigator() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "palettes"));
+    h.run();
+    let app = h.state().app.handle().clone();
+    let toolbox = egui_pop::model::ids::PanelId::from_static("gallery.toolbox");
+    let navigator = egui_pop::model::ids::PanelId::from_static("gallery.navigator");
+    assert!(
+        !app.panel_visible(&toolbox),
+        "closed until the page opens it"
+    );
+    h.get_by_label("Open the palettes").click();
+    h.run();
+    h.run();
+    assert!(app.layout().floating_of(&toolbox).is_some());
+    assert!(app.layout().floating_of(&navigator).is_some());
+    h.get_by_label("Brush").click();
+    h.run();
+    h.get_by_label("Blue").click();
+    h.run();
+    h.remove_cursor();
+    h.run();
+    egui_pop_test::assert_all_named(&h);
+    assert!(h.query_by_label_contains("Tool: Brush").is_some());
+    let mut results = egui_kittest::SnapshotResults::new();
+    results.add(h.try_snapshot("palettes-pop-dark"));
+    // The navigator, dropped on the playground's side bar, docks there.
+    let a = h.get_by_label("Navigator").rect().center();
+    let b = h.get_by_label("Playground").rect().center();
+    h.drag_at(a);
+    h.run();
+    for i in 1..=4 {
+        h.hover_at(a + (b - a) * (i as f32 / 4.0));
+        h.run();
+    }
+    h.drop_at(b);
+    h.run();
+    h.run();
+    assert!(app.layout().floating_of(&navigator).is_none());
+    assert_eq!(
+        app.layout().area_of(&navigator),
+        Some(egui_pop::model::panels::Area::EndSide)
+    );
+}
+
+#[test]
 fn the_strips_page_feeds_an_indicator_and_folds_the_side_bar() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "strips"));
     h.run();

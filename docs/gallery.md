@@ -24,6 +24,8 @@ built-ins), `icons`, `values`, `sliders`, `menus`, `dialogs`, `toasts`, `viewpor
 (the image viewport), `navigator` (the zoom control and the navigator),
 `images`, `grading` (curves and colour wheels), `tree` (the live tree), `table` (lists
 and tables), `text-editor`, `code-editor`, `terminal`, `zones` (zones and blocks), `workbench`,
+(the image viewport), `images`, `tree` (the live tree), `table` (lists
+and tables), `text-editor`, `code-editor`, `terminal`, `zones` (zones and blocks), `workbench`, `palettes`,
 `arrangements`, `strips`, `frame`, `scale`, `platform` (the platform
 services), `settings`, `i18n` (translations) and `debug` (the debug
 bridge). `Alt+Down` and `Alt+Up` go to the next and previous page,
@@ -169,7 +171,7 @@ curves and colour wheels, and the display.
 
 ### Layout
 
-Zones and blocks, the workbench, arrangements, strips and the window frame.
+Zones and blocks, the workbench, palettes, arrangements, strips and the window frame.
 
 <table>
   <tr>
@@ -182,6 +184,7 @@ Zones and blocks, the workbench, arrangements, strips and the window frame.
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/strips-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/strips-pop-dark.png" width="200" alt="strips-pop-dark"></a><br>strips-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/frame-own-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/frame-own-pop-dark.png" width="200" alt="frame-own-pop-dark"></a><br>frame-own-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/frame-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/frame-pop-dark.png" width="200" alt="frame-pop-dark"></a><br>frame-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/palettes-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/palettes-pop-dark.png" width="200" alt="palettes-pop-dark"></a><br>palettes-pop-dark</td>
   </tr>
 </table>
 

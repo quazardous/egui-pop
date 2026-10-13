@@ -20,6 +20,7 @@ pub mod images;
 pub mod menus;
 pub mod navigator;
 pub mod overview;
+pub mod palettes;
 pub mod platform;
 pub mod scale;
 pub mod settings;
