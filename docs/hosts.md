@@ -1,7 +1,7 @@
 # Hosts and components: what can live where
 
 Status: **first version, written by hand from the code** (2026-10-14).
-[ADR 0013](adr/0013-mount-contract.md) (proposed) replaces this hand-written page with one generated
+[ADR 0013](adr/0013-mount-contract.md) (accepted) replaces this hand-written page with one generated
 from the declarations of a mount contract: components declare what they
 need, hosts what they offer, and each cell below becomes the verdict of
 matching the two. Until then this page is the reference, and every cell
