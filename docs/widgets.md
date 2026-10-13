@@ -508,6 +508,14 @@ egui-pop widget bound to values and commands; "adopt" = used as it is;
 Each step: AccessKit names and ranges checked by `egui-pop-test`, a
 `jobs` debug collector, snapshots per theme with motion frozen.
 
+Done (2026-10-13), as described in [Jobs and progress](progress.md):
+the tokens are named `motion.spinner.delay` and `motion.spinner.min`;
+every job carries an estimated overall percentage (steps and child jobs
+rolled up, refined by the `jobs.estimate` step); each job of the jobs
+centre opens a log console, a pseudo-terminal when `egui-pop-editors`
+provides it. Not yet: queued jobs, "not responding", taskbar progress,
+the viewport's busy overlay, announcements of a job's start and end.
+
 ## 6. Dialogs
 
 Decided on 2026-10-13, built in `egui_pop::api::dialogs`.
