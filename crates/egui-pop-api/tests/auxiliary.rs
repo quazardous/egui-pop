@@ -105,3 +105,29 @@ fn a_saved_window_place_is_repaired_before_it_opens() {
     assert!(h.query_by_label("log body").is_some());
     assert_eq!(workbench::window_id(&LOG), workbench::window_id(&LOG));
 }
+
+#[test]
+fn a_detached_window_is_titled_with_the_application_name_not_the_main_title() {
+    let app = App::builder()
+        .name("Demo")
+        .plugin(Demo)
+        .build(&egui::Context::default())
+        .unwrap();
+    assert_eq!(app.handle().name(), "Demo");
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(900.0, 600.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+    // The main window's title names a document as well.
+    h.input_mut()
+        .viewports
+        .entry(egui::ViewportId::ROOT)
+        .or_default()
+        .title = Some("notes.txt — Demo".into());
+    h.run();
+    let app = h.state().handle().clone();
+    assert!(app.detach_panel(&LOG).unwrap().ok());
+    h.run();
+    // kittest embeds the window in the main one, titled as its own.
+    assert!(h.query_by_label("Log — Demo").is_some());
+    assert!(h.query_by_label_contains("notes.txt").is_none());
+}

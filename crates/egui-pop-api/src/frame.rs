@@ -123,7 +123,8 @@ impl FramePlugin {
         Self::default()
     }
 
-    /// The application's name, shown after the system menu button.
+    /// The name shown after the system menu button; without one, the
+    /// application's (`AppBuilder::name`).
     pub fn name(mut self, name: &str) -> Self {
         self.name = name.into();
         self
@@ -303,6 +304,11 @@ impl Plugin for FramePlugin {
             zones::CAPTION_START,
             Block::add(BLOCK_MENU, 0, move |ui, app| {
                 menu_button(ui, app);
+                let name = if name.is_empty() {
+                    app.name()
+                } else {
+                    name.clone()
+                };
                 if !name.is_empty() {
                     ui.add(
                         egui::Label::new(egui::RichText::new(&name).strong())

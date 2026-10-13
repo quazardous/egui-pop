@@ -294,6 +294,8 @@ pub(crate) struct Shared {
     /// The panels' commands and their shared texts, installed on each
     /// context drawing the application.
     pub(crate) panel_commands: RefCell<strings::PanelCommands>,
+    /// The application's name (`AppBuilder::name`).
+    name: RefCell<String>,
     diagnostics: RefCell<Diagnostics>,
     derived: RefCell<Derived>,
     plugins: RefCell<Vec<PluginInfo>>,
@@ -371,6 +373,7 @@ impl AppHandle {
             drawing_areas: std::cell::Cell::new(false),
             edge_to_edge: std::cell::Cell::new(false),
             panel_commands: RefCell::default(),
+            name: RefCell::default(),
             diagnostics: RefCell::new(Diagnostics::new()),
             derived: RefCell::new(Derived::default()),
             plugins: RefCell::new(Vec::new()),
@@ -447,6 +450,12 @@ impl AppHandle {
         let mut all = self.0.panel_commands.borrow_mut();
         Arc::make_mut(&mut all).extend(entries);
         strings::set_panel_commands(&self.egui(), all.clone());
+    }
+
+    /// The application's name (`AppBuilder::name`); empty when none was
+    /// given.
+    pub fn name(&self) -> String {
+        self.0.name.borrow().clone()
     }
 
     /// The value store.
@@ -1499,6 +1508,7 @@ pub struct AppBuilder {
     edge_to_edge: bool,
     wrap: Option<WrapUi>,
     on_exit: Vec<ExitFn>,
+    name: Option<String>,
 }
 
 /// Draws around the whole application (`AppBuilder::wrap`): gets the
@@ -1545,7 +1555,18 @@ impl AppBuilder {
             edge_to_edge: false,
             wrap: None,
             on_exit: Vec::new(),
+            name: None,
         }
+    }
+
+    /// The application's name ("Helios"), apart from its window's title
+    /// ("photo.raw — Helios"): a detached panel's window says it
+    /// (`{ $application }`), and the frame shows it when `FramePlugin`
+    /// has no name of its own. `run_native` takes its `app_name` when
+    /// none is given.
+    pub fn name(mut self, name: &str) -> Self {
+        self.name = Some(name.into());
+        self
     }
 
     /// Draws the main area edge to edge: no margin around the centre's
@@ -1683,6 +1704,7 @@ impl AppBuilder {
             on_exit: self.on_exit,
         };
         app.handle.0.edge_to_edge.set(self.edge_to_edge);
+        *app.handle.0.name.borrow_mut() = self.name.unwrap_or_default();
         app.framework(self.theme, self.themes, modes)
             .expect("the framework's registrations are valid");
         app.install_collectors();
@@ -1705,6 +1727,7 @@ impl AppBuilder {
     pub fn run_native(mut self, title: &str, mut options: eframe::NativeOptions) -> eframe::Result {
         self.system_focus
             .get_or_insert_with(egui_pop_core::focus_mode::read_system);
+        self.name.get_or_insert_with(|| title.to_string());
         // The window's place from the last run, repaired (the screens are
         // not known before the window exists: only bounds are checked).
         if let Some(p) = &self.persist {
@@ -1740,6 +1763,7 @@ impl AppBuilder {
     ) -> eframe::Result {
         self.system_focus
             .get_or_insert_with(egui_pop_core::focus_mode::read_system);
+        self.name.get_or_insert_with(|| title.to_string());
         if let Some(p) = &self.persist {
             crate::window::restore(p.dir(), &mut options);
         }
@@ -3286,10 +3310,14 @@ impl App {
         }
         self.process_requests();
         self.shell(ui);
-        let title = ctx
-            .input(|i| i.viewport().title.clone())
-            .unwrap_or_default();
-        crate::workbench::windows(&self.handle.clone(), &ctx, &title);
+        let name = self.handle.name();
+        let name = if name.is_empty() {
+            ctx.input(|i| i.viewport().title.clone())
+                .unwrap_or_default()
+        } else {
+            name
+        };
+        crate::workbench::windows(&self.handle.clone(), &ctx, &name);
         self.handle.clone().show_zone(ui, &zones::OVERLAYS);
         crate::menus::draw_popup(&ctx, &self.handle);
         a11y::live_regions(ui);

@@ -525,7 +525,7 @@ impl Workbench {
 /// scale, and the application's frame when it draws one). Closing such a
 /// window is the `workbench.close_window` step, whose default docks the
 /// panel back.
-pub(crate) fn windows(app: &AppHandle, ctx: &egui::Context, app_title: &str) {
+pub(crate) fn windows(app: &AppHandle, ctx: &egui::Context, app_name: &str) {
     let auxiliary = app.workbench_mut().layout.auxiliary.clone();
     for aux in auxiliary {
         let Some(spec) = app.workbench_mut().spec(&aux.panel).cloned() else {
@@ -541,13 +541,13 @@ pub(crate) fn windows(app: &AppHandle, ctx: &egui::Context, app_title: &str) {
         .repair(&[]);
         let own = crate::frame::own_frame(app);
         let panel_title = strings::panel_title(ctx, spec.id.as_str(), &spec.title);
-        let title = if app_title.is_empty() {
+        let title = if app_name.is_empty() {
             panel_title
         } else {
             strings::tr_args(
                 ctx,
                 &txt::WORKBENCH_WINDOW_TITLE,
-                &[("panel", &panel_title), ("application", app_title)],
+                &[("panel", &panel_title), ("application", app_name)],
             )
         };
         let mut builder = ViewportBuilder::default()

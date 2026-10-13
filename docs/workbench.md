@@ -92,7 +92,9 @@ and the application's frame when it draws one
 (`AppHandle::detach_panel`, `attach_panel`; the tab menu offers
 Detach). Closing that window is the `workbench.close_window` step: its
 default docks the panel back, a veto keeps the window open. Its place is
-kept in the layout and repaired before the window opens.
+kept in the layout and repaired before the window opens. The window is
+titled with the panel and the application's name (`AppBuilder::name`,
+"Filmstrip — Helios"), not the main window's whole title.
 
 ## Arrangements
 

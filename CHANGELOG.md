@@ -9,6 +9,13 @@ egui minor.
 
 ### Added
 
+- `AppBuilder::name` gives the application's name apart from its main
+  window's title (`AppHandle::name`): a detached panel's window is titled
+  `{ $panel } — { $application }` with it, no longer with the whole main
+  title (which may name a document). `run_native` takes its `app_name`
+  when none is given, and `FramePlugin` shows it when it has no name of
+  its own.
+
 - The workbench's drop hint is published: `AppHandle::drop_hint` (the
   dragged panel, the area, the rect, the refusal), `overlay_rects`
   (`OverlayKind::DropHint`, named `drop:<panel>:<area>`), and a new
