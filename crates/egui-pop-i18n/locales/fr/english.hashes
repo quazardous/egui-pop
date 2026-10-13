@@ -135,6 +135,12 @@ command-theme-start.description 7a8471dba9dff36a
 command-theme-start.title 31865e83bfbcaaaf
 command-theme-undo.description 8eb02d797194f055
 command-theme-undo.title 5d111b431d6414f7
+command-tips-dismiss.description 9035d941d49af25c
+command-tips-dismiss.title 00667a626208f915
+command-tips-list.description 8e370940407b5106
+command-tips-list.title 7dd9d7846d9549a6
+command-tips-reset.description 7b37c8ad4abb99da
+command-tips-reset.title 34a8b22df69aae1c
 command-value-get.description db35160877838d62
 command-value-get.title 2bc8ed82ac514527
 command-value-list.description f3c82ce02da10d41
@@ -367,6 +373,14 @@ egui-pop-theme-editor-type 612aee2a1a58cb37
 egui-pop-theme-editor-undo cc7022a2d9050a57
 egui-pop-theme-editor-value 2c5f8334d5a96db8
 egui-pop-theme-editor-value-of 8544c6c31a0dce7a
+egui-pop-tips-at ab0dec5f39d2e5de
+egui-pop-tips-dont-show e69eab44b6dab17c
+egui-pop-tips-got-it b9e7842258705158
+egui-pop-tips-got-it-name 892ed2f75c300680
+egui-pop-tips-hint 8add0f0e5b9ab738
+egui-pop-tips-next dfd523ad69df5d65
+egui-pop-tips-of-the-day b922a5a3fcdc2a3c
+egui-pop-tips-previous 4f2c21c1597a5b05
 egui-pop-toast-close 72005e84f54413f8
 egui-pop-toast-error 1e732d4d496b57f9
 egui-pop-toast-info 5d0c399e4eefe425
@@ -498,6 +512,7 @@ plugin-egui-pop-strips.title bfc6f37ce6abc72c
 plugin-egui-pop-system-keys.title 7f2d7968d75f4dc5
 plugin-egui-pop-terminal.title d3fbfb901d4c6c19
 plugin-egui-pop-theme-editor.title 3cf4b14fef58503f
+plugin-egui-pop-tips.title 8f302965a6ea2b6b
 plugin-egui-pop-toasts.title cc96fc899cce2811
 plugin-egui-pop-tray.title cca4f6a2e19dbb7c
 plugin-egui-pop-views.title 260aa6928752872b
@@ -547,6 +562,10 @@ setting-palettes-fade-on-stroke.description 6d53e3e1c84a3787
 setting-palettes-fade-on-stroke.label 3e65b9c0e11ad0b4
 setting-palettes-idle-opacity.description 14885068f85151a7
 setting-palettes-idle-opacity.label 879b9200f95c0625
+setting-tips-dismissed.description 2b34e2b61c0b5dba
+setting-tips-dismissed.label ccc55079cec42fca
+setting-tips-show.description 6ac695b23e031d9c
+setting-tips-show.label 9332093cf4e2a7ec
 setting-window-frame-choice-own f03cb24f9dff8cb7
 setting-window-frame-choice-system 86937a88d8b574ba
 setting-window-frame.description 9bbf4a376a8d1015

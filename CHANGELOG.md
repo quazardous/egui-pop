@@ -23,6 +23,15 @@ egui minor.
   `theme.export` and `theme.import`. Strings with their French. Guide:
   docs/theme-editor.md.
 
+- Tips (`api::tips`, `TipsPlugin`): plugins register tips, shown as a
+  tip of the day (`tip_of_the_day`: previous, next, "Don't show
+  again", close) or as a hint where the application asks
+  (`hint`: "Got it"). A dismissed tip is remembered in the settings
+  (`tips.dismissed`, `tips.show` turns them off) through the
+  `tips.dismiss` step; `tips.reset` shows them all again. Titles and
+  texts are translated by keys derived from the tip's id. Guide:
+  docs/tips.md.
+
 - Theme drafts in `egui-pop-tokens` (`ThemeDraft`, `TokenEdit`): a base
   theme, the tokens changed over it and their history (undo, redo),
   values checked against the token's type and aliases against loops,

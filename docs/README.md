@@ -77,6 +77,8 @@ devtools; every feature's moments reachable as steps (ADR 0011).
   [notifications](notifications.md), [the tray icon](tray.md),
   [global shortcuts](global-shortcuts.md), [logs and crash reports](logs.md),
   [the focus mode read in-process](focus-mode.md).
+- [Tips](tips.md): a tip of the day and contextual hints, registered
+  by plugins, translated, dismissed for good through the settings.
 - [Debugging](debugging.md): the debug bridge and devtools.
 - [Extensions](extensions.md): the known extensions in three tiers
   (official, community, featured), the entry format, how to get listed

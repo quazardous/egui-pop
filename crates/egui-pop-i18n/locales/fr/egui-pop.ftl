@@ -247,6 +247,18 @@ command-theme-undo =
     .description = Annule la dernière modification de l’éditeur de thème, par l’étape theme.token.
     .title = Annuler une modification du thème
 
+command-tips-dismiss =
+    .description = Écarte une astuce pour de bon (`tip`, son id), par l’étape tips.dismiss.
+    .title = Écarter une astuce
+
+command-tips-list =
+    .description = Toutes les astuces enregistrées : leur id, leur titre et leur texte en anglais, si elles sont contextuelles et si elles ont été écartées.
+    .title = Lister les astuces
+
+command-tips-reset =
+    .description = Oublie quelles astuces ont été écartées.
+    .title = Afficher de nouveau toutes les astuces
+
 command-value-get =
     .description = Une valeur avec son descripteur (`path`).
     .title = Lire une valeur
@@ -735,6 +747,22 @@ egui-pop-theme-editor-value = Valeur
 
 egui-pop-theme-editor-value-of = Valeur de { $token }
 
+egui-pop-tips-at = { $at } sur { $count }
+
+egui-pop-tips-dont-show = Ne plus afficher
+
+egui-pop-tips-got-it = Compris
+
+egui-pop-tips-got-it-name = Compris : ne plus afficher { $tip }
+
+egui-pop-tips-hint = Astuce
+
+egui-pop-tips-next = Astuce suivante
+
+egui-pop-tips-of-the-day = Astuce du jour
+
+egui-pop-tips-previous = Astuce précédente
+
 egui-pop-toast-close = Fermer : { $text }
 
 egui-pop-toast-error = Erreur
@@ -1024,6 +1052,9 @@ plugin-egui-pop-terminal =
 plugin-egui-pop-theme-editor =
     .title = Éditeur de thème
 
+plugin-egui-pop-tips =
+    .title = Astuces
+
 plugin-egui-pop-toasts =
     .title = Notifications
 
@@ -1126,6 +1157,14 @@ setting-palettes-fade-on-stroke =
 setting-palettes-idle-opacity =
     .description = L’opacité d’une palette quand le pointeur est ailleurs ; 1 la garde opaque.
     .label = Opacité des palettes loin du pointeur
+
+setting-tips-dismissed =
+    .description = Les astuces à ne plus afficher, par id ; vide pour toutes les afficher de nouveau.
+    .label = Astuces écartées
+
+setting-tips-show =
+    .description = L’astuce du jour et les conseils à côté de ce qu’ils concernent.
+    .label = Afficher les astuces
 
 setting-window-frame =
     .description = Qui dessine la barre de titre et les bords de la fenêtre : l’application (propre) ou le bureau (système).

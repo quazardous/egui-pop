@@ -272,6 +272,18 @@ command-theme-undo =
     .description = Takes the theme editor's last change back, through the theme.token step.
     .title = Undo a theme change
 
+command-tips-dismiss =
+    .description = Dismisses a tip for good (`tip`, its id), through the tips.dismiss step.
+    .title = Dismiss a tip
+
+command-tips-list =
+    .description = Every tip registered: its id, English title and text, whether it is contextual and whether it was dismissed.
+    .title = List the tips
+
+command-tips-reset =
+    .description = Forgets which tips were dismissed.
+    .title = Show every tip again
+
 command-value-get =
     .description = A value with its descriptor (`path`).
     .title = Read a value
@@ -736,6 +748,22 @@ egui-pop-theme-editor-value = Value
 
 egui-pop-theme-editor-value-of = Value of { $token }
 
+egui-pop-tips-at = { $at } of { $count }
+
+egui-pop-tips-dont-show = Don't show again
+
+egui-pop-tips-got-it = Got it
+
+egui-pop-tips-got-it-name = Got it: do not show { $tip } again
+
+egui-pop-tips-hint = Tip
+
+egui-pop-tips-next = Next tip
+
+egui-pop-tips-of-the-day = Tip of the day
+
+egui-pop-tips-previous = Previous tip
+
 egui-pop-toast-close = Close: { $text }
 
 egui-pop-toast-error = Error
@@ -1025,6 +1053,9 @@ plugin-egui-pop-terminal =
 plugin-egui-pop-theme-editor =
     .title = Theme editor
 
+plugin-egui-pop-tips =
+    .title = Tips
+
 plugin-egui-pop-toasts =
     .title = Toasts
 
@@ -1127,6 +1158,14 @@ setting-palettes-fade-on-stroke =
 setting-palettes-idle-opacity =
     .description = How opaque a palette is while the pointer is elsewhere; 1 keeps it opaque.
     .label = Palette opacity away from the pointer
+
+setting-tips-dismissed =
+    .description = The tips not to show again, by id; empty to show them all again.
+    .label = Dismissed tips
+
+setting-tips-show =
+    .description = The tip of the day and the hints beside what they are about.
+    .label = Show tips
 
 setting-window-frame =
     .description = Who draws the window's title bar and edges: the application (own), or the desktop (system).

@@ -445,6 +445,20 @@ pub const THEME_EDITOR_SKIPPED: StrKey =
 pub const THEME_EDITOR_PROBLEMS: StrKey =
     StrKey::new("egui-pop-theme-editor-problems", "Problems in this theme");
 
+// Tips.
+
+pub const TIPS_OF_THE_DAY: StrKey = StrKey::new("egui-pop-tips-of-the-day", "Tip of the day");
+pub const TIPS_HINT: StrKey = StrKey::new("egui-pop-tips-hint", "Tip");
+pub const TIPS_PREVIOUS: StrKey = StrKey::new("egui-pop-tips-previous", "Previous tip");
+pub const TIPS_NEXT: StrKey = StrKey::new("egui-pop-tips-next", "Next tip");
+pub const TIPS_AT: StrKey = StrKey::new("egui-pop-tips-at", "{ $at } of { $count }");
+pub const TIPS_DONT_SHOW: StrKey = StrKey::new("egui-pop-tips-dont-show", "Don't show again");
+pub const TIPS_GOT_IT: StrKey = StrKey::new("egui-pop-tips-got-it", "Got it");
+pub const TIPS_GOT_IT_NAME: StrKey = StrKey::new(
+    "egui-pop-tips-got-it-name",
+    "Got it: do not show { $tip } again",
+);
+
 /// Every string of this module, for catalogues and tests.
 pub const ALL: &[StrKey] = &[
     COMMAND_LABEL,
@@ -626,6 +640,14 @@ pub const ALL: &[StrKey] = &[
     THEME_EDITOR_IMPORTED,
     THEME_EDITOR_SKIPPED,
     THEME_EDITOR_PROBLEMS,
+    TIPS_OF_THE_DAY,
+    TIPS_HINT,
+    TIPS_PREVIOUS,
+    TIPS_NEXT,
+    TIPS_AT,
+    TIPS_DONT_SHOW,
+    TIPS_GOT_IT,
+    TIPS_GOT_IT_NAME,
 ];
 
 #[cfg(test)]
