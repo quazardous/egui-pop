@@ -77,6 +77,14 @@ egui minor.
   kept when the view moves. `ViewportState::upload_report` says what
   the last frame uploaded and what waits. See docs/threading.md.
 
+- A prototype of tiles rendered on the GPU by the source:
+  `TileSink::deliver_texture` (feature `wgpu`) hands the viewport a
+  scene-referred texture the source's worker rendered on the GPU path's
+  device; nothing is copied, the interface thread only binds it. The
+  viewport crate's `gpu_tiles` example times the tile intakes (on the
+  workers, on the interface thread, rendered on the GPU) on a real
+  device, offscreen; docs/threading.md has the numbers.
+
 - A photo library's widgets (`egui_pop::views::library`): a virtualised
   thumbnail grid and a filmstrip sharing its selection, over images the
   application lists (`LibraryItems`) and thumbnails it supplies

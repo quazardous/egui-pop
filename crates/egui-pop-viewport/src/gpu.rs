@@ -482,6 +482,19 @@ fn render_pipeline(
 }
 
 impl Resources {
+    /// A tile texture's bind group.
+    fn bind_tile(&self, device: &wgpu::Device, texture: &wgpu::Texture) -> wgpu::BindGroup {
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("egui-pop-viewport.tile"),
+            layout: &self.texture_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&view),
+            }],
+        })
+    }
+
     /// The tile pipeline for an image surface's format.
     pub(crate) fn image_pipeline(
         &mut self,
@@ -546,6 +559,15 @@ impl TilePaint {
             let bytes = match data {
                 GpuData::Scene(data) => crate::source::texels(&data, half),
                 GpuData::Texels(bytes) => bytes,
+                GpuData::Texture(texture) => {
+                    // Rendered by the source: bound as it is. Another
+                    // format is left out (the tile is not drawn).
+                    if texture.format() == r.format {
+                        let group = r.bind_tile(device, &texture);
+                        r.textures.insert(id, group);
+                    }
+                    continue;
+                }
             };
             // Prepared for another format (cannot happen while the
             // device stays): left out, the tile is not drawn.
@@ -577,15 +599,7 @@ impl TilePaint {
                 },
                 extent,
             );
-            let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-            let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("egui-pop-viewport.tile"),
-                layout: &r.texture_layout,
-                entries: &[wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&view),
-                }],
-            });
+            let group = r.bind_tile(device, &texture);
             r.textures.insert(id, group);
         }
     }

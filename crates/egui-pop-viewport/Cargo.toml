@@ -17,6 +17,10 @@ workspace = true
 name = "viewer"
 required-features = ["wgpu"]
 
+[[example]]
+name = "gpu_tiles"
+required-features = ["wgpu"]
+
 [features]
 default = ["wgpu", "wayland"]
 ## The GPU path: scene tiles as half-float textures drawn by an

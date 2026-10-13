@@ -239,6 +239,10 @@ pub(crate) enum Body {
     },
     /// Ready for a GPU path texture: texels in the format of `stamp`.
     Texels { data: Vec<u8>, stamp: u64 },
+    /// Already on the GPU, rendered by the source on the GPU path's
+    /// device ([`TileSink::deliver_texture`]): nothing to copy.
+    #[cfg(feature = "wgpu")]
+    Texture(egui_wgpu::wgpu::Texture),
 }
 
 impl Body {
@@ -249,6 +253,8 @@ impl Body {
             Body::Raw(Pixels::Scene(_)) if gpu => n * 8,
             Body::Raw(_) | Body::Image { .. } => n * 4,
             Body::Texels { data, .. } => data.len(),
+            #[cfg(feature = "wgpu")]
+            Body::Texture(_) => 0,
         }
     }
 }
@@ -409,6 +415,30 @@ impl TileSink {
                 key: tile.key,
                 size: tile.size,
                 body,
+            },
+        ));
+    }
+
+    /// Delivers a tile the source rendered on the GPU (feature `wgpu`;
+    /// a prototype, measured in docs/threading.md): `texture` holds
+    /// scene-referred pixels as [`Pixels::Scene`] does, in the GPU
+    /// path's format (`Rgba16Float` when [`GpuInfo::half_float`], else
+    /// `Rgba32Float`), at least `request.size`, with `TEXTURE_BINDING`
+    /// usage; it was created on the device the GPU path was installed
+    /// with, and the work writing it was submitted to that device's
+    /// queue before this call. Nothing is copied: the interface thread
+    /// only binds it. Without the GPU path, the tile fails.
+    ///
+    /// [`GpuInfo::half_float`]: crate::gpu::GpuInfo::half_float
+    #[cfg(feature = "wgpu")]
+    pub fn deliver_texture(&self, request: &TileRequest, texture: egui_wgpu::wgpu::Texture) {
+        self.send(Message::Tile(
+            self.side,
+            Arrival {
+                request: request.id,
+                key: request.key,
+                size: request.size,
+                body: Body::Texture(texture),
             },
         ));
     }

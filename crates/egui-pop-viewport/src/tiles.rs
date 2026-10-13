@@ -106,6 +106,9 @@ pub(crate) struct Draw<'a> {
 pub(crate) enum GpuData {
     Scene(Vec<f32>),
     Texels(Vec<u8>),
+    /// Rendered by the source on the device: bound, not copied.
+    #[cfg(feature = "wgpu")]
+    Texture(egui_wgpu::wgpu::Texture),
 }
 
 /// The GPU path's uploads and releases, waiting for the next paint.
@@ -572,6 +575,8 @@ impl Tiles {
             Body::Raw(Pixels::Scene(v)) => v.len() == n * 4,
             Body::Image { image, .. } => image.pixels.len() == n,
             Body::Texels { .. } => true,
+            #[cfg(feature = "wgpu")]
+            Body::Texture(t) => t.width() >= tile.size[0] && t.height() >= tile.size[1],
         };
         if !ok || n == 0 {
             Stats::add(&self.stats.failed, 1);
@@ -607,6 +612,20 @@ impl Tiles {
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .uploads
                     .push((id, tile.size, GpuData::Texels(data)));
+                (Texture::Gpu(id), n * 8, false, false)
+            }
+            #[cfg(feature = "wgpu")]
+            Body::Texture(texture) => {
+                if !device.gpu {
+                    // No GPU path to bind it to.
+                    Stats::add(&self.stats.failed, 1);
+                    return;
+                }
+                self.gpu
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .uploads
+                    .push((id, tile.size, GpuData::Texture(texture)));
                 (Texture::Gpu(id), n * 8, false, false)
             }
             Body::Image {
