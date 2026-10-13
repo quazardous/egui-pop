@@ -9,6 +9,8 @@
 //! - the frame's build time (`run_ui`: egui-pop's logic and drawing) and
 //!   its tessellation, as percentiles, and the frames over budget;
 //! - the textures uploaded per frame (count and bytes);
+//! - for the viewport, the latency from a view change to its first
+//!   full-resolution tile on screen, and to every wanted tile on screen;
 //! - the wakeups egui would send to the event loop (its repaint
 //!   callback) and the frames asking for another one at once;
 //! - the time spent in egui-pop's profiling scopes, on this thread (`ui`)
@@ -41,6 +43,7 @@ use egui_pop::editors::assist::{AssistProvider, CompletionItem, Reply as AssistR
 use egui_pop::editors::terminal::Console;
 use egui_pop::editors::{CodeEditor, EditorState, Terminal, TerminalState};
 use egui_pop::viewport::View;
+use egui_pop::viewport::tiles::UploadBudget;
 use egui_pop_gallery::pages::viewport::{PageState, show as show_viewport};
 use egui_pop_gallery::{Gallery, Options};
 use serde_json::{Value as Json, json};
@@ -428,20 +431,56 @@ impl Scenario for Assist {
     }
 }
 
+/// How the viewport takes tiles in: as by default (converted and
+/// uploaded on the interface thread, all at once), converted on the
+/// source's workers, within an upload budget, or both.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Intake {
+    Default,
+    Worker,
+    Budget,
+    Delegated,
+}
+
+/// The upload budget of the budgeted scenarios: 1 MiB a frame, four
+/// 256-pixel tiles.
+const UPLOAD_BUDGET: usize = 1 << 20;
+
 /// The viewport over the gallery's procedural source (two worker
-/// threads), the view moving every few frames: a storm of tiles.
+/// threads), the view moving every `period` frames: a storm of tiles
+/// (every 8 frames), or views held long enough to fill (every 30).
 struct Tiles {
     app: Option<App>,
     page: PageState,
     moving: bool,
+    period: usize,
+    /// When the current view was set, and whether it got its first
+    /// full-resolution tile and all its tiles yet.
+    since: Option<(Instant, bool, bool)>,
+    views: usize,
+    first_exact: Vec<Duration>,
+    complete: Vec<Duration>,
 }
 
 impl Tiles {
-    fn new(ctx: &Context, own: bool) -> Tiles {
+    fn new(ctx: &Context, own: bool, period: usize, intake: Intake) -> Tiles {
+        let mut page = PageState::default();
+        if matches!(intake, Intake::Worker | Intake::Delegated) {
+            page.state.set_prepare_on_worker(true);
+        }
+        if matches!(intake, Intake::Budget | Intake::Delegated) {
+            page.state
+                .set_upload_budget(UploadBudget::bytes(UPLOAD_BUDGET));
+        }
         Tiles {
             app: app(ctx, own),
-            page: PageState::default(),
+            page,
             moving: true,
+            period,
+            since: None,
+            views: 0,
+            first_exact: Vec::new(),
+            complete: Vec::new(),
         }
     }
 }
@@ -449,24 +488,49 @@ impl Tiles {
 impl Scenario for Tiles {
     fn frame(&mut self, ui: &mut Ui, n: usize) {
         logic(&mut self.app, ui);
-        if self.moving && n % 8 == 0 {
+        if self.moving && n % self.period == 0 {
             const ZOOMS: [f64; 4] = [0.25, 0.5, 1.0, 2.0];
-            let step = (n / 8) as f64;
-            let zoom = ZOOMS[(n / 8) % ZOOMS.len()];
+            let step = (n / self.period) as f64;
+            let zoom = ZOOMS[(n / self.period) % ZOOMS.len()];
             let center = [
                 2048.0 + 1500.0 * (step * 0.7).sin(),
                 1536.0 + 1100.0 * (step * 0.45).cos(),
             ];
             self.page.view = View::at(zoom, center);
+            self.since = Some((Instant::now(), false, false));
+            self.views += 1;
         }
         show_viewport(ui, &mut self.page);
+        if let Some((at, exact, complete)) = &mut self.since {
+            if !*exact && self.page.state.upload_report().fresh_exact_drawn > 0 {
+                *exact = true;
+                self.first_exact.push(at.elapsed());
+            }
+            if !*complete && self.page.state.tiles_complete() {
+                *complete = true;
+                self.complete.push(at.elapsed());
+            }
+        }
     }
     fn stop(&mut self) {
         self.moving = false;
+        self.since = None;
     }
     fn finish(&mut self) -> Json {
         let (served, skipped) = self.page.source.as_ref().map_or((0, 0), |s| s.counts());
-        json!({ "tiles_served": served, "requests_skipped": skipped })
+        // Each latency in ms; `views_*`: how many views got there before
+        // the next one.
+        json!({
+            "tiles_served": served,
+            "requests_skipped": skipped,
+            "latency": {
+                "views": self.views,
+                "views_with_first_exact": self.first_exact.len(),
+                "views_complete": self.complete.len(),
+                "first_exact": summary(std::mem::take(&mut self.first_exact)),
+                "complete": summary(std::mem::take(&mut self.complete)),
+            },
+        })
     }
 }
 
@@ -638,17 +702,36 @@ impl Scenario for All {
     }
 }
 
-const SCENARIOS: [&str; 9] = [
+const SCENARIOS: [&str; 15] = [
     "idle",
     "terminal-steady",
     "terminal-flood",
     "assist-thread",
     "assist-inline",
     "tiles",
+    "tiles-worker",
+    "tiles-budget",
+    "tiles-delegated",
+    "tiles-views",
+    "tiles-views-delegated",
     "jobs",
     "all",
+    "all-delegated",
     "idle-after",
 ];
+
+/// The tile scenarios: the period between view changes and the intake.
+fn tiles_of(name: &str) -> Option<(usize, Intake)> {
+    Some(match name {
+        "tiles" => (8, Intake::Default),
+        "tiles-worker" => (8, Intake::Worker),
+        "tiles-budget" => (8, Intake::Budget),
+        "tiles-delegated" => (8, Intake::Delegated),
+        "tiles-views" => (30, Intake::Default),
+        "tiles-views-delegated" => (30, Intake::Delegated),
+        _ => return None,
+    })
+}
 
 fn make(name: &str, ctx: &Context) -> Box<dyn Scenario> {
     match name {
@@ -660,12 +743,24 @@ fn make(name: &str, ctx: &Context) -> Box<dyn Scenario> {
         "terminal-flood" => Box::new(Flood::new(ctx, None, true)),
         "assist-thread" => Box::new(Assist::new(ctx, false, Duration::from_millis(300))),
         "assist-inline" => Box::new(Assist::new(ctx, true, Duration::from_millis(30))),
-        "tiles" => Box::new(Tiles::new(ctx, true)),
+        tiles if tiles_of(tiles).is_some() => {
+            let (period, intake) = tiles_of(tiles).expect("matched");
+            Box::new(Tiles::new(ctx, true, period, intake))
+        }
         "jobs" => Box::new(Jobs::new(ctx)),
         // One app (the jobs' host's) for the three parts.
-        "all" | "idle-after" => Box::new(All {
+        "all" | "all-delegated" | "idle-after" => Box::new(All {
             flood: Flood::new(ctx, Some(256 * 1024), false),
-            tiles: Tiles::new(ctx, false),
+            tiles: Tiles::new(
+                ctx,
+                false,
+                8,
+                if name == "all-delegated" {
+                    Intake::Delegated
+                } else {
+                    Intake::Default
+                },
+            ),
             jobs: Jobs::new(ctx),
         }),
         other => panic!("unknown scenario `{other}`; known: {SCENARIOS:?}"),
