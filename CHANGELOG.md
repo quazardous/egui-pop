@@ -9,6 +9,12 @@ egui minor.
 
 ### Added
 
+- An image tools guide (`docs/image-tools.md`): the histogram, the curve
+  editor and the targeted adjustment, the colour wheels, the zoom
+  control and the navigator, their hooks and steps, accessibility and
+  tokens; the widget survey records what was checked (egui_plot,
+  egui's colour picker, colour, curve and minimap crates) and why the
+  tools are egui-pop's own.
 - Gallery: a Curves and wheels page (a tone curve over a histogram,
   with the targeted adjustment on a grey ramp, the lift, gamma and gain
   wheels and a picker; the page's plugin caps the gain's chroma through

@@ -202,6 +202,31 @@ bar, AccessKit roles and values, and every finished change a step.
   evalexpr is AGPL-3.0 in its current releases and does far more;
   meval (0.2, 2017) is unmaintained. A small parser of about 150 lines is egui-pop's own.
 
+### Image tools: what was checked (2026-10-13)
+
+The image tools were checked against what photo editors have: a
+histogram drawn from the application's bins with clipping markers and
+a drag handed back (darktable drags the exposure on it); a curve editor
+whose spline is the application's, with points added, moved and
+deleted, keys, and the targeted adjustment (a value picked in the
+image); lift, gamma and gain wheels and a hue and saturation picker
+with a luminance slider; a zoom control and a navigator on the
+viewport's own state; AccessKit roles and values, and every finished
+change a step.
+
+| Crate | Version, licence | What it has | Decision |
+|---|---|---|---|
+| egui_plot | 0.37, MIT OR Apache-2.0, egui 0.36 | Plots: lines, bar charts, its own axes, grid, legend, pan and zoom, box zoom | **Own** the histogram: a plot widget brings axes and its own pan and zoom, while the histogram is a compact strip whose drag belongs to the application; filling the bins takes a mesh of a few dozen lines (kept from the first histogram) |
+| egui's colour picker | egui 0.36, MIT OR Apache-2.0 | A saturation and value square with a hue bar (`color_picker_hsva_2d`), colour buttons | **Own** the wheels: no wheel, no relative drag around a neutral centre, no hook; the swatch button stays egui's |
+| egui_oklch_color_picker | 0.1, MIT, egui 0.33 | An OKLCH picker | Skip: one release, an older egui, no grading wheels |
+| egui-keyframe | 0.1, MIT OR Apache-2.0, egui 0.33 | Keyframes and animation curves on a timeline | Skip: curves of time, not tone curves; no application spline, no pick |
+| egui-colorgradient | 0.2, MIT, egui 0.32 | A gradient editor (stops along a bar) | Skip: the slider's gradient track covers what is needed |
+| egui_minimap | 0.4, MIT OR Apache-2.0, egui 0.35 | A scrolling minimap of rows (text, hex bytes) | Skip: not an image navigator; the navigator draws the application's proxy and shares the viewport's state |
+| rsplot | 0.5, MIT OR Apache-2.0, egui 0.34 | Scientific plots on wgpu | Skip: an older egui, far more than a histogram |
+
+No code was taken from any of them. The curve's default spline, a
+monotone cubic, follows Fritsch and Carlson's published method.
+
 ## 3. Progress and waiting: design notes
 
 ### 3.1 Where progress comes from
@@ -413,7 +438,7 @@ egui-pop widget bound to values and commands; "adopt" = used as it is;
 | **Tree view** | Expand and collapse, multi-select, keyboard, drag and drop, context menu, lazy children | Blueprint `Tree`, Fluent `Tree`, Carbon `TreeView`, MUI X `TreeView`, `QTreeView` | **Own** (done: `egui-pop-views`, docs/tree.md) | Folders, collections, tag hierarchy, the graph's outline | Lazy children come from the host |
 | **Data table** | Virtualized, sortable, resizable columns, sticky header | Blueprint `Table`, MUI X `DataGrid`, Carbon `DataTable`, Fluent `DataGrid` | **Wrap egui_table** (done: `egui-pop-views`, docs/table.md) | Metadata, the queue panel, the history of jobs | Sorting and widths are values; selection by key |
 | **Dock, split panes and tabs** | Dockable panels, splits, editor tabs | JetBrains tool windows, VS Code, `QDockWidget`, `AdwTabView`, shadcn `Resizable`, Ant `Splitter` | **Adopt egui_dock** (decided) | The whole shell | Drop veto worked around (see `upstream.md`) |
-| **Histogram** | Draws supplied bins (per channel, log or linear), clipping markers | Lightroom, darktable, Capture One | **Own** (decided with the viewport) | The darkroom, the import preview | Data from the host; egui-pop only draws |
+| **Histogram** | Draws supplied bins (per channel, log or linear), clipping markers | Lightroom, darktable, Capture One | **Own**, done (`viewport::histogram`, clipping and drag 2026-10-13) | The darkroom, the import preview | Data from the host; egui-pop only draws |
 | **Node graph editor** | Nodes with headers, pins, wires, semantic zoom, stacks | imgui-node-editor, imnodes, egui-snarl | **Own** (decided), snarl as reference | The graph view | A large item; the header shows the job state of each node (states and badges above) |
 
 ### Useful
@@ -429,10 +454,10 @@ egui-pop widget bound to values and commands; "adopt" = used as it is;
 | **Inline editable label** | Text that becomes a field on double click or F2 | Blueprint `EditableText` | **Own** (small) | Rename presets, nodes, tabs, collections | Enter commits, Escape cancels, through a command |
 | **Breadcrumbs** | A path with an overflow menu | Blueprint `Breadcrumbs`, Ant `Breadcrumb`, VS Code breadcrumbs | **Own** | Folder paths, macro nesting in the graph | Collapse in the middle when too long (Blueprint `OverflowList`) |
 | **Zoom control** | Fit, fill, 100%, steps, a typed percentage | Every image and graph editor | **Own** | Viewport, graph | "100%" is one image pixel per physical pixel (pitfall 10) |
-| **Navigator / minimap** | A small view of the whole with the visible rectangle | Lightroom navigator, darktable navigation, VS Code minimap, node editor minimaps | **Own**, on the viewport's tile source and egui `Scene` | Darkroom, graph | |
+| **Navigator / minimap** | A small view of the whole with the visible rectangle | Lightroom navigator, darktable navigation, VS Code minimap, node editor minimaps | **Own**, done for images (`viewport::navigator`, 2026-10-13); the graph's later | Darkroom, graph | |
 | **Filmstrip** | A one-row strip of thumbnails | Lightroom, darktable, Capture One | **Own**, the thumbnail grid with one row | Darkroom | Shares selection with the lighttable |
-| **Curve editor** | Control points, spline, per channel, a histogram behind | darktable tone curve and rgb curve, ImGuizmo `ImCurveEdit` | **Own** (decided) | Tone and RGB curves | Each point is a value; one drag is one undo step |
-| **Colour wheels and picker** | Hue-chroma wheels with a lightness slider; a swatch picker | darktable colour balance rgb, Lightroom colour grading, Fluent `SwatchPicker`, Mantine `ColorPicker` | Built-in picker for swatches; **own** wheels (decided) | Colour grading; labels and theme work | Colour-managed display through the host's display transform |
+| **Curve editor** | Control points, spline, per channel, a histogram behind | darktable tone curve and rgb curve, ImGuizmo `ImCurveEdit` | **Own**, done (`viewport::curve`, 2026-10-13) | Tone and RGB curves | Each point is a value; one drag is one undo step |
+| **Colour wheels and picker** | Hue-chroma wheels with a lightness slider; a swatch picker | darktable colour balance rgb, Lightroom colour grading, Fluent `SwatchPicker`, Mantine `ColorPicker` | Built-in picker for swatches; **own** wheels, done (`viewport::wheel`, 2026-10-13) | Colour grading; labels and theme work | Colour-managed display through the host's display transform |
 | **Reorderable list** | Drag to reorder with keyboard alternatives | Mantine and Ant sortable lists, egui_dnd | **Adopt egui_dnd** | Export targets, a module stack, presets | The new order goes out as a command; Alt+Up and Alt+Down as keys |
 | **Split button** | A main action and a menu of variants | `AdwSplitButton`, Fluent and Ant dropdown buttons | **Own** on egui menus | "Export" with its presets | Entries are commands |
 | **Key display** | Keys drawn as caps | shadcn and Mantine `Kbd`, Blueprint `HotkeysDialog` | **Own** (small; menus and the palette show keys already) | Menus, the palette, tips, a shortcuts sheet | Text from the keymap, never typed by hand |

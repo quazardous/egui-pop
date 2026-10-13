@@ -6,7 +6,9 @@ pan and zoom in physical pixels (100 % is one image pixel per screen
 pixel, in every window), a proxy first and exact tiles after, a display
 transform where colour management plugs in, overlays with handles,
 before and after, a pixel readout. The crate also has thumbnails in a
-virtualised grid and a histogram.
+virtualised grid and the image tools: a histogram, a curve editor,
+colour wheels, a zoom control and a navigator (see
+[Image tools](image-tools.md)).
 
 ```sh
 cargo add egui-pop --features viewport

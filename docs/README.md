@@ -27,6 +27,10 @@ devtools; every feature's moments reachable as steps (ADR 0011).
   around the shell.
 - [The image viewport](viewport.md): tiles from a source the application
   implements; wide gamut and HDR.
+- [Image tools](image-tools.md): a histogram with clipping markers and
+  a drag handed back, a curve editor (an application's spline, the
+  targeted adjustment), colour wheels, a zoom control and a navigator,
+  their steps.
 - [Choosing files](files.md): the system's chooser off the interface
   thread, the in-app picker (keyboard, typed paths, places, filters),
   the `file.choose` and `file.chosen` steps.
