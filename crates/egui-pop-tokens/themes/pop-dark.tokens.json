@@ -335,6 +335,28 @@
     "grid": {"$value": "{border.default}", "$description": "The lines between the pixels."},
     "marker": {"$value": "{accent.default}", "$description": "The square around the centre pixel."}
   },
+  "graph": {
+    "$description": "Node graph editors: nodes, ports, wires and groups on a canvas.",
+    "$type": "color",
+    "background": {"$value": "{surface.canvas}", "$description": "The canvas behind the nodes."},
+    "grid": {"$value": "{border.default}", "$description": "The canvas's grid lines."},
+    "node": {"$value": "{surface.raised}", "$description": "A node's body."},
+    "node-header": {"$value": "{surface.overlay}", "$description": "A node's title bar."},
+    "node-border": {"$value": "{border.default}", "$description": "A node's outline."},
+    "node-selected": {"$value": "{accent.default}", "$description": "A selected node's outline."},
+    "wire": {"$value": "{border.strong}", "$description": "A wire whose type has no colour."},
+    "wire-preview": {"$value": "{accent.default}", "$description": "The wire being drawn."},
+    "wire-refused": {"$value": "{danger}", "$description": "The wire being drawn over a port that refuses it."},
+    "group": {"$value": "{accent.subtle}", "$description": "Behind a group of nodes."},
+    "group-border": {"$value": "{border.default}", "$description": "A group's outline."},
+    "band": {"$value": "{accent.default}", "$description": "The rubber band selecting nodes."},
+    "type-1": {"$value": "{accent.default}", "$description": "A port type's colour, the first of six."},
+    "type-2": {"$value": "{info}", "$description": "A port type's colour, the second of six."},
+    "type-3": {"$value": "{success}", "$description": "A port type's colour, the third of six."},
+    "type-4": {"$value": "{warning}", "$description": "A port type's colour, the fourth of six."},
+    "type-5": {"$value": "{danger}", "$description": "A port type's colour, the fifth of six."},
+    "type-6": {"$value": "{text.muted}", "$description": "A port type's colour, the sixth of six."}
+  },
   "editor": {
     "$description": "Text and code editors.",
     "$type": "color",

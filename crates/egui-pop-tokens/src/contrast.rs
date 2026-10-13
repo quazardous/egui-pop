@@ -142,6 +142,8 @@ pub const PAIRS: &[Pair] = &[
     // A curve and its points over the curve editor's background.
     ui("curve.line", "curve.background"),
     ui("curve.point", "curve.background"),
+    // A selected node's outline over the node.
+    ui("graph.node-selected", "graph.node"),
 ];
 
 /// A pair under its required ratio, or with a token missing.
