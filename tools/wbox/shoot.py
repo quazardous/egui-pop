@@ -10,8 +10,10 @@ given as its argument:
                 "env": {"GALLERY_THEME": "pop-dark", ...},
                 "steps": [{"click": [x, y]}, {"key": "ctrl+shift+p"},
                           {"move": [x, y]}, {"wait": 0.5}],
+                "screen": "1280x800",
                 "out": "/abs/path/palette-pop-dark.png"}]}
 
+A shot's optional "screen" replaces the config's output size for its run.
 For each shot it starts the compositor with the gallery inside, waits for
 the gallery's "ready" line, plays the steps, captures the whole output
 with grim (no cursor) and stops the compositor. It prints one JSON line
@@ -50,6 +52,8 @@ def shoot(cfg: dict, shot: dict, settle: float) -> dict:
     jsonl = out_dir / "gallery.jsonl"
     if jsonl.exists():
         jsonl.unlink()
+    if "screen" in shot:
+        cfg = {**cfg, "screen": shot["screen"]}
     comp = build_compositor(cfg)
     comp.state.screenshot_dir = resolve_dir(cfg, "screenshot_dir", "./screenshots")
     if hasattr(comp, "set_log_dir"):

@@ -4,8 +4,9 @@
 //! it builds the gallery in release mode, captures each shot headless
 //! through wbox (`tools/wbox/shoot.py`, one nested compositor per shot),
 //! crops each capture to the window and writes `docs/screenshots/`, the
-//! README's thumbnails (`thumbs/`), the themes gallery (`themes/`) and
-//! the editor-inspired themes' sheet (`themes.png`).
+//! README's thumbnails (`thumbs/`), the themes gallery (`themes/`, at
+//! full size in a larger window) and the editor-inspired themes' sheet
+//! (`themes.png`).
 
 use std::collections::HashMap;
 use std::fs;
@@ -30,9 +31,24 @@ Environment:
   WBOX_PYTHON            the Python with the wbox library (default: the
                          interpreter of `wbox-mcp` found on PATH)";
 
-/// The README's thumbnails and the themes gallery: 400 px wide, shown
-/// at 200 so they stay crisp on a high-density screen.
+/// The README's thumbnails: 400 px wide, shown at 200 so they stay
+/// crisp on a high-density screen.
 const THUMB_WIDTH: u32 = 400;
+
+/// The compositor's output and the gallery's window (inner size, in
+/// points; one point is one pixel) for most shots: the coordinates of
+/// their steps are measured in it.
+const SCREEN: (i32, i32) = (1280, 800);
+const WINDOW: (i32, i32) = (1100, 720);
+
+/// The themes gallery's window, larger so its shots are read at full
+/// size, never reduced; its steps need none of the measured coordinates.
+const THEME_SCREEN: (i32, i32) = (1440, 900);
+const THEME_WINDOW: (i32, i32) = (1280, 800);
+
+/// What the compositor adds around the window's inner size: the border,
+/// and the title bar above.
+const DECORATION: (i32, i32) = (2, 28);
 
 /// A cell of the themes sheet, as `docs/tokens.md` shows it.
 const SHEET_CELL: u32 = 360;
@@ -40,14 +56,25 @@ const SHEET_GAP: u32 = 8;
 const SHEET_LABEL: u32 = 22;
 const SHEET_COLUMNS: u32 = 4;
 
-/// Where the focusing click goes, in the compositor's 1280x800 output:
-/// the inspector's empty area, inert on every page (a click on the
-/// desktop would open the compositor's menu).
-const FOCUS: Step = Step::Click(1070, 700);
+/// Where the focusing click goes: the inspector's empty area, inert on
+/// every page (a click on the desktop would open the compositor's
+/// menu), this far from the window's bottom right corner. In the
+/// default 1280x800 output, at 1070,700.
+const FOCUS_FROM_CORNER: (i32, i32) = (121, 74);
+
+/// The focusing click, for a window of `window` points centred in a
+/// `screen` output.
+fn focus(screen: (i32, i32), window: (i32, i32)) -> Step {
+    let right = (screen.0 + window.0 + DECORATION.0) / 2;
+    let bottom = (screen.1 + window.1 + DECORATION.1) / 2;
+    Step::Click(right - FOCUS_FROM_CORNER.0, bottom - FOCUS_FROM_CORNER.1)
+}
 
 /// Where the pointer rests while the shot is taken: on the desktop, off
 /// the window, so nothing is hovered. grim leaves the cursor out.
-const AWAY: Step = Step::Move(1275, 795);
+fn away(screen: (i32, i32)) -> Step {
+    Step::Move(screen.0 - 5, screen.1 - 5)
+}
 
 /// One input played before the capture, in output coordinates (the
 /// window is centred: its top-left corner, title bar included, is at
@@ -71,15 +98,6 @@ impl Step {
     }
 }
 
-/// What a capture becomes.
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum Output {
-    /// `docs/screenshots/<name>.png`, and its thumbnail if `thumb`.
-    Full { thumb: bool },
-    /// `docs/screenshots/<name>.png` reduced (the themes gallery).
-    Reduced,
-}
-
 #[derive(Clone, Debug)]
 struct Shot {
     name: String,
@@ -87,7 +105,10 @@ struct Shot {
     theme: String,
     density: &'static str,
     steps: Vec<Step>,
-    output: Output,
+    /// `docs/screenshots/<name>.png` is followed by its thumbnail.
+    thumb: bool,
+    screen: (i32, i32),
+    window: (i32, i32),
 }
 
 fn shot(name: &str, page: &'static str, theme: &str, steps: &[Step], thumb: bool) -> Shot {
@@ -97,7 +118,19 @@ fn shot(name: &str, page: &'static str, theme: &str, steps: &[Step], thumb: bool
         theme: theme.into(),
         density: "comfortable",
         steps: steps.to_vec(),
-        output: Output::Full { thumb },
+        thumb,
+        screen: SCREEN,
+        window: WINDOW,
+    }
+}
+
+/// A shot of the themes gallery: the overview, full size, in a larger
+/// window.
+fn theme_shot(theme: &str) -> Shot {
+    Shot {
+        screen: THEME_SCREEN,
+        window: THEME_WINDOW,
+        ..shot(&format!("themes/{theme}"), "overview", theme, &[], false)
     }
 }
 
@@ -198,12 +231,11 @@ fn shots() -> Vec<Shot> {
             false,
         ),
     ];
-    for theme in egui_pop_tokens::BUILT_IN_THEMES {
-        all.push(Shot {
-            output: Output::Reduced,
-            ..shot(&format!("themes/{theme}"), "overview", theme, &[], false)
-        });
-    }
+    all.extend(
+        egui_pop_tokens::BUILT_IN_THEMES
+            .iter()
+            .map(|t| theme_shot(t)),
+    );
     all
 }
 
@@ -292,18 +324,20 @@ fn screenshots(args: &[String]) -> Result<(), String> {
         "config": root.join("tools/wbox/config.yaml"),
         "settle": 1.5,
         "shots": selected.iter().map(|s| {
-            let mut steps = vec![FOCUS.to_json()];
+            let mut steps = vec![focus(s.screen, s.window).to_json()];
             steps.extend(s.steps.iter().map(|st| st.to_json()));
-            steps.push(AWAY.to_json());
+            steps.push(away(s.screen).to_json());
             json!({
                 "name": s.name,
                 "env": {
                     "GALLERY_THEME": s.theme,
                     "GALLERY_DENSITY": s.density,
                     "GALLERY_PAGE": s.page,
+                    "GALLERY_SIZE": format!("{}x{}", s.window.0, s.window.1),
                     "GALLERY_REDUCED_MOTION": "1",
                 },
                 "steps": steps,
+                "screen": format!("{}x{}", s.screen.0, s.screen.1),
                 "out": raw.join(format!("{}.png", s.name.replace('/', "-"))),
             })
         }).collect::<Vec<_>>(),
@@ -339,21 +373,13 @@ fn screenshots(args: &[String]) -> Result<(), String> {
         };
         let capture = raw.join(format!("{}.png", name.replace('/', "-")));
         let window = crop_to_window(&capture)?;
-        match s.output {
-            Output::Full { thumb } => {
-                written.push(save(&window, &docs.join(format!("{name}.png")))?);
-                if thumb {
-                    let small = reduce(&window, THUMB_WIDTH);
-                    written.push(save(&small, &docs.join(format!("thumbs/{name}.png")))?);
-                }
-            }
-            Output::Reduced => {
-                let small = reduce(&window, THUMB_WIDTH);
-                written.push(save(&small, &docs.join(format!("{name}.png")))?);
-                if sheet_themes().iter().any(|t| name == format!("themes/{t}")) {
-                    sheet_dirty = true;
-                }
-            }
+        written.push(save(&window, &docs.join(format!("{name}.png")))?);
+        if s.thumb {
+            let small = reduce(&window, THUMB_WIDTH);
+            written.push(save(&small, &docs.join(format!("thumbs/{name}.png")))?);
+        }
+        if sheet_themes().iter().any(|t| name == format!("themes/{t}")) {
+            sheet_dirty = true;
         }
         eprintln!("  {name}: done");
     }
@@ -550,7 +576,7 @@ fn encode(
     Ok(bytes)
 }
 
-/// `themes.png`: the editor-inspired themes' reduced overviews, four a
+/// `themes.png`: the editor-inspired themes' overviews reduced, four a
 /// row, each named under its picture.
 fn sheet(docs: &Path) -> Result<(PathBuf, u64), String> {
     let themes = sheet_themes();

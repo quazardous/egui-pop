@@ -88,12 +88,13 @@ cargo xtask screenshots --list       # the shots' names
 It needs wbox installed (`wbox-mcp` on `PATH`, or `WBOX_PYTHON` set to
 the Python that imports it) and replaces the manual steps: it builds the
 gallery in release mode, then for each shot starts the compositor
-(headless, 1280x800, scale 1) with the gallery at the shot's page, theme
-and density and its animations off (`--reduced-motion`), clicks an inert
-spot to focus it, plays the shot's keys and clicks, moves the pointer off
-the window, captures without the cursor and crops to the window (title
-bar included). The shots, their steps and their coordinates are in
-`xtask/src/main.rs`; the wbox side is `tools/wbox/shoot.py`.
+(headless, 1280x800 unless the shot says otherwise, scale 1) with the
+gallery at the shot's page, theme and density and its animations off
+(`--reduced-motion`), clicks an inert spot to focus it, plays the shot's
+keys and clicks, moves the pointer off the window, captures without the
+cursor and crops to the window (title bar included). The shots, their
+steps and their coordinates are in `xtask/src/main.rs`; the wbox side is
+`tools/wbox/shoot.py`.
 
 It writes:
 
@@ -101,7 +102,9 @@ It writes:
 - `docs/screenshots/thumbs/<name>.png`: the README's thumbnails, 400 px
   wide (shown at 200);
 - `docs/screenshots/themes/<theme>.png`: the overview in every built-in
-  theme, at the same size (`docs/themes.md`);
+  theme, at full size and never reduced, in a larger window (1280x800
+  points in a 1440x900 output, `GALLERY_SIZE`) so its widgets read at
+  1:1 (`docs/themes.md`);
 - `docs/screenshots/themes.png`: the editor-inspired themes on one sheet
   (`docs/tokens.md`), rebuilt from the above.
 
