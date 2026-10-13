@@ -78,6 +78,30 @@ pub fn signal_json(signal: &Signal) -> Json {
         } => {
             json!({ "signal": "handle-reset", "overlay": overlay, "handle": handle, "kind": kind.name() })
         }
+        Signal::HandleClick {
+            overlay,
+            handle,
+            kind,
+            modifiers,
+        } => json!({
+            "signal": "handle-click",
+            "overlay": overlay,
+            "handle": handle,
+            "kind": kind.name(),
+            "modifiers": format!("{modifiers:?}"),
+        }),
+        Signal::EdgeClick {
+            overlay,
+            segment,
+            at,
+            modifiers,
+        } => json!({
+            "signal": "edge-click",
+            "overlay": overlay,
+            "segment": segment,
+            "at": at,
+            "modifiers": format!("{modifiers:?}"),
+        }),
         Signal::HandleWheel {
             overlay,
             handle,

@@ -10,7 +10,8 @@
 //! - **replace**: a *run* hook takes the place of the default action and
 //!   may call it ([`Hooks::on_double_click`]);
 //! - **extend**: an *after* hook adds to what was done
-//!   ([`Hooks::after_paint`] draws over the image).
+//!   ([`Hooks::under_overlays`] draws over the image and under the
+//!   overlays, [`Hooks::after_paint`] over everything).
 //!
 //! Every hook is optional; without one the default applies. What hooks
 //! decided is kept in the state's [`trace`](crate::ViewportState::trace)
@@ -76,10 +77,15 @@ pub struct HandleMove {
     pub overlay: String,
     pub handle: u32,
     pub kind: HandleKind,
+    /// Where the handle was when the gesture began (image pixels).
+    pub start: [f64; 2],
     /// Where the handle is now (image pixels).
     pub from: [f64; 2],
     /// Where the pointer would put it.
     pub to: [f64; 2],
+    /// The keys held (Shift to keep a direction, Alt to move a control
+    /// alone...).
+    pub modifiers: egui::Modifiers,
 }
 
 type BeforeHandle = Box<dyn FnMut(&HandleMove, &Mapping) -> Verdict<[f64; 2]>>;
@@ -112,8 +118,12 @@ pub struct Hooks {
     pub before_compare: Option<BeforeCompare>,
     /// Replaces the readout's text.
     pub on_readout: Option<OnReadout>,
-    /// After the image and overlays are drawn: draw more, in image
-    /// coordinates through the mapping.
+    /// After the image, before the overlays: draw between them (a
+    /// mask's tint, a selection's veil), in image coordinates through
+    /// the mapping; the overlays and their handles stay on top.
+    pub under_overlays: Option<AfterPaint>,
+    /// After the image, the overlays and their handles are drawn: draw
+    /// more on top, in image coordinates through the mapping.
     pub after_paint: Option<AfterPaint>,
     /// Before the viewport draws for the target it resolved (what is
     /// wanted against what the surface carries): allow, veto (draw
@@ -130,6 +140,7 @@ impl fmt::Debug for Hooks {
             .field("before_handle", &self.before_handle.is_some())
             .field("before_compare", &self.before_compare.is_some())
             .field("on_readout", &self.on_readout.is_some())
+            .field("under_overlays", &self.under_overlays.is_some())
             .field("after_paint", &self.after_paint.is_some())
             .field("before_display", &self.before_display.is_some())
             .finish()
@@ -154,6 +165,9 @@ impl Hooks {
         }
         if self.on_readout.is_some() {
             v.push("on_readout");
+        }
+        if self.under_overlays.is_some() {
+            v.push("under_overlays");
         }
         if self.after_paint.is_some() {
             v.push("after_paint");

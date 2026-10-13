@@ -13,7 +13,7 @@ use egui_pop::core::debug::FnCollector;
 use egui_pop::model::ids::{PluginId, StoryId};
 use egui_pop::viewport::demo::Procedural;
 use egui_pop::viewport::hooks::Verdict;
-use egui_pop::viewport::overlay::{Overlay, Shape};
+use egui_pop::viewport::overlay::{Emphasis, Overlay, Shape};
 use egui_pop::viewport::view::Zoom;
 use egui_pop::viewport::{Compare, Phase, Signal, View, Viewport, ViewportState};
 use serde_json::json;
@@ -47,7 +47,8 @@ pub struct PageState {
     pub shift: f32,
 }
 
-/// The page's overlays: a crop box, a circle, a guide.
+/// The page's overlays: a crop box, a circle, a dashed ellipse, a
+/// guide.
 pub fn overlays() -> Vec<Overlay> {
     vec![
         Overlay::new("crop", Shape::Rect([900.0, 700.0, 3200.0, 2400.0])).label("Crop"),
@@ -58,6 +59,15 @@ pub fn overlays() -> Vec<Overlay> {
                 radius: 300.0,
             },
         ),
+        Overlay::new(
+            "vignette",
+            Shape::Ellipse {
+                center: [2250.0, 1400.0],
+                radii: [1500.0, 950.0],
+                rotation: 0.2,
+            },
+        )
+        .dashed(),
         Overlay::guide("horizon", Shape::Line([0.0, 1536.0], [4096.0, 1536.0])),
     ]
 }
@@ -147,7 +157,7 @@ impl Plugin for ViewportPage {
 
 /// The page, a plain function over its state.
 pub fn show(ui: &mut Ui, page: &mut PageState) {
-    ui.label("Drag a handle to edit a shape (Escape puts it back), drag or Space-drag to pan (Escape puts the view back), the wheel zooms around the pointer and stops at 100 %, a double click fits; when focused: + and - walk the ladder, 0 fits, 1 is 100 %, 2 is 200 %, the arrows pan.");
+    ui.label("Drag a handle to edit a shape (Escape puts it back; the shape touched is selected), drag or Space-drag to pan (Escape puts the view back), the wheel zooms around the pointer and stops at 100 %, a double click fits; when focused: + and - walk the ladder, 0 fits, 1 is 100 %, 2 is 200 %, the arrows pan.");
     ui.horizontal(|ui| {
         if ui.button("Fit").clicked() {
             page.state.propose(&mut page.view, View::fit());
@@ -199,8 +209,20 @@ pub fn show(ui: &mut Ui, page: &mut PageState) {
         match s {
             Signal::Handle {
                 phase: Phase::Begin,
+                overlay,
                 ..
-            } => page.starts = page.overlays.iter().map(|o| o.shape.clone()).collect(),
+            }
+            | Signal::HandleClick { overlay, .. } => {
+                // The overlay touched is the selected one.
+                for o in &mut page.overlays {
+                    o.style.emphasis = if o.id == *overlay {
+                        Emphasis::Selected
+                    } else {
+                        Emphasis::Normal
+                    };
+                }
+                page.starts = page.overlays.iter().map(|o| o.shape.clone()).collect();
+            }
             Signal::Handle { .. } => {
                 for (o, start) in page.overlays.iter_mut().zip(&page.starts) {
                     o.apply(start, s);

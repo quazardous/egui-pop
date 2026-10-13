@@ -9,6 +9,18 @@ egui minor.
 
 ### Added
 
+- Viewport overlays, for editing masks: a style per overlay
+  (`overlay::Style`: `Emphasis::Selected` or `Faint`, a dashed line;
+  `Overlay::selected`, `faint`, `dashed`), an ellipse shape
+  (`Shape::Ellipse`, its radii and rotation on handles), handles of an
+  overlay's own (`Overlay::handles`) with a Bézier control kind
+  (`HandleKind::Control`), a click on a handle (`Signal::HandleClick`)
+  and on an outline away from the handles (`Signal::EdgeClick`, with
+  `overlay::hit_edge`'s segment and the nearest point), and the
+  `under_overlays` paint hook between the image and the overlays
+  (`after_paint` stays above the handles). The gallery's viewport page
+  shows a dashed ellipse and selects the shape touched.
+
 - The bottom panel's alignment, as VS Code's: the
   `workbench.panel_alignment` setting (`justify`, the whole width, by
   default; `center`, `start`, `end`), `workbench::PanelAlignment`, and
@@ -229,6 +241,9 @@ egui minor.
 
 ### Changed
 
+- `viewport::HandleMove` (what `before_handle` gets) carries where the
+  handle was when the gesture began (`start`) and the keys held
+  (`modifiers`).
 - Viewport overlays: shape lines (1.5 points over a 3-point outline),
   handle outlines, the comparison's divider and the focus ring are
   snapped to whole physical pixels with `scale::stroke`, so they no

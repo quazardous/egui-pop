@@ -74,9 +74,39 @@ pixels, its handles, a label) and gives them to the viewport each frame
 application applies to its own data (`Overlay::apply` does it for the
 standard shapes); a double click resets (`Signal::HandleReset`), the
 wheel adjusts (`Signal::HandleWheel`). The `before_handle` hook may veto
-or snap a move. Lines and handle outlines are drawn in whole physical
-pixels at the window's scale (`scale::stroke`), so they stay sharp at
-125 % and 150 %.
+or snap a move; it gets where the handle was when the gesture began
+(`HandleMove::start`), where it is, where the pointer would put it and
+the keys held (`modifiers`). A click on a handle is
+`Signal::HandleClick` (select its shape), a click on an outline away
+from the handles `Signal::EdgeClick` with the segment and the nearest
+point (add a point there; `overlay::hit_edge` numbers the segments).
+Lines and handle outlines are drawn in whole physical pixels at the
+window's scale (`scale::stroke`), so they stay sharp at 125 % and 150 %.
+
+Shapes are points, lines, boxes, circles, ellipses (`Shape::Ellipse`,
+sized along its axes and turned by its handles) and paths. Each overlay
+has a style: `selected()` (a heavier line in the handle colour),
+`faint()` (half-transparent, handles included) and `dashed()`. An
+overlay may carry handles of its own (`Overlay::handles`), among them
+`HandleKind::Control`, a Bézier control drawn as a small diamond, whose
+moves the application applies. Two paint hooks extend the drawing:
+`under_overlays` between the image and the overlays (a mask's tint),
+`after_paint` above the handles.
+
+```rust
+use egui_pop::viewport::overlay::{Overlay, Shape};
+
+let overlays = vec![
+    Overlay::new("crop", Shape::Rect([100.0, 100.0, 900.0, 700.0])).selected(),
+    Overlay::new(
+        "vignette",
+        Shape::Ellipse { center: [500.0, 400.0], radii: [400.0, 250.0], rotation: 0.0 },
+    )
+    .dashed()
+    .faint(),
+];
+# let _ = overlays;
+```
 
 ## Wide gamut and HDR
 

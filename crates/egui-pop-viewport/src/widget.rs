@@ -86,6 +86,23 @@ pub enum Signal {
         handle: u32,
         kind: HandleKind,
     },
+    /// A click on a handle (pressed and released without moving): select
+    /// what it belongs to, toggle a point's corner.
+    HandleClick {
+        overlay: String,
+        handle: u32,
+        kind: HandleKind,
+        modifiers: egui::Modifiers,
+    },
+    /// A click on an overlay's outline away from its handles: `segment`
+    /// as `overlay::hit_edge` numbers it, `at` the nearest point of the
+    /// outline (image pixels), to add a point there.
+    EdgeClick {
+        overlay: String,
+        segment: u32,
+        at: [f64; 2],
+        modifiers: egui::Modifiers,
+    },
     /// The wheel over a handle (points, positive up): adjust what the
     /// handle adjusts, never the zoom.
     HandleWheel {
@@ -641,6 +658,9 @@ impl<'a> Viewport<'a> {
             Stroke::new(1.0 / ppp, tokens.frame),
             StrokeKind::Outside,
         );
+        if let Some(under) = state.hooks.under_overlays.as_mut() {
+            under(&painter, &mapping);
+        }
         for o in self.overlays {
             overlay::paint_shape(&painter, &mapping, o, &tokens);
         }
@@ -664,7 +684,14 @@ impl<'a> Viewport<'a> {
                 } else {
                     HandleState::Rest
                 };
-                overlay::paint_handle(&painter, mapping.image_to_screen(h.at), h.kind, st, &tokens);
+                overlay::paint_handle_styled(
+                    &painter,
+                    mapping.image_to_screen(h.at),
+                    h.kind,
+                    st,
+                    o.style.emphasis,
+                    &tokens,
+                );
             }
         }
         if let Some(x) = split_x {
@@ -1147,8 +1174,10 @@ fn handle_overlays(
                 overlay: d.overlay.clone(),
                 handle: d.handle.index,
                 kind: d.handle.kind,
+                start: d.handle.at,
                 from: d.at,
                 to,
+                modifiers: ui.input(|i| i.modifiers),
             };
             if let Some(at) = ask_handle(f.state, &mv, &m) {
                 d.at = at;
@@ -1160,6 +1189,28 @@ fn handle_overlays(
             f.state.drag = None;
         } else {
             f.state.drag = Some(d);
+        }
+    }
+    // A click (no drag) on a handle, else on an outline.
+    if response.clicked_by(g.pan_button)
+        && !pan_key
+        && let Some(p) = response.interact_pointer_pos().or(pointer)
+    {
+        let modifiers = ui.input(|i| i.modifiers);
+        if let Some((i, h)) = overlay::hit(overlays, &m, p) {
+            f.signals.push(Signal::HandleClick {
+                overlay: overlays[i].id.clone(),
+                handle: h.index,
+                kind: h.kind,
+                modifiers,
+            });
+        } else if let Some((i, segment, at)) = overlay::hit_edge(overlays, &m, p) {
+            f.signals.push(Signal::EdgeClick {
+                overlay: overlays[i].id.clone(),
+                segment,
+                at,
+                modifiers,
+            });
         }
     }
     if let Some((i, h)) = under {

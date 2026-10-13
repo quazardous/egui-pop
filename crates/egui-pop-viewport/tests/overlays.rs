@@ -343,3 +343,226 @@ fn overlay_strokes_and_handle_outlines_are_whole_pixels_at_any_scale() {
         }
     }
 }
+
+fn click(h: &mut Harness<'_, Scene>, at: Pos2, modifiers: Modifiers) {
+    h.hover_at(at);
+    h.input_mut()
+        .events
+        .push(Event::ModifiersChanged(modifiers));
+    h.step();
+    for pressed in [true, false] {
+        h.input_mut().events.push(Event::PointerButton {
+            pos: at,
+            button: PointerButton::Primary,
+            pressed,
+            modifiers,
+        });
+        h.step();
+    }
+    h.input_mut()
+        .events
+        .push(Event::ModifiersChanged(Modifiers::NONE));
+    h.run();
+}
+
+#[test]
+fn a_click_on_a_handle_or_an_outline_is_a_signal() {
+    let mut h = harness(scene());
+    h.run();
+    let corner = screen(&h, [600.0, 300.0]);
+    click(&mut h, corner, Modifiers::NONE);
+    assert!(h.state().signals.iter().any(|s| matches!(
+        s,
+        Signal::HandleClick {
+            overlay,
+            handle: 1,
+            kind: HandleKind::Corner,
+            ..
+        } if overlay == "crop"
+    )));
+    // On the top edge, away from its handles: where to add a point.
+    let edge = screen(&h, [450.0, 300.0]) + vec2(0.0, 3.0);
+    click(&mut h, edge, Modifiers::SHIFT);
+    let (segment, at, modifiers) = h
+        .state()
+        .signals
+        .iter()
+        .find_map(|s| match s {
+            Signal::EdgeClick {
+                segment,
+                at,
+                modifiers,
+                ..
+            } => Some((*segment, *at, *modifiers)),
+            _ => None,
+        })
+        .expect("an edge click");
+    assert_eq!(segment, 0, "the box's top edge");
+    assert!(
+        (at[0] - 450.0).abs() < 1.0 && (at[1] - 300.0).abs() < 1e-6,
+        "{at:?}"
+    );
+    assert!(modifiers.shift);
+    // Away from everything: nothing.
+    let n = h.state().signals.len();
+    let away = screen(&h, [500.0, 350.0]) + vec2(0.0, 13.0);
+    click(&mut h, away, Modifiers::NONE);
+    assert!(
+        !h.state().signals[n..]
+            .iter()
+            .any(|s| matches!(s, Signal::HandleClick { .. } | Signal::EdgeClick { .. }))
+    );
+    // Nothing moved.
+    assert_eq!(
+        h.state().overlays[0].shape,
+        Shape::Rect([400.0, 300.0, 600.0, 500.0])
+    );
+}
+
+#[test]
+fn a_handle_move_carries_the_gestures_start_and_the_keys_held() {
+    let seen = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+    let mut s = scene();
+    let rec = seen.clone();
+    s.state.hooks_mut().before_handle = Some(Box::new(move |mv, _| {
+        rec.borrow_mut().push(mv.clone());
+        Verdict::Allow
+    }));
+    let mut h = harness(s);
+    h.run();
+    let corner = screen(&h, [600.0, 500.0]);
+    h.hover_at(corner);
+    h.step();
+    h.input_mut()
+        .events
+        .push(Event::ModifiersChanged(Modifiers::SHIFT));
+    button(&mut h, corner, true);
+    h.step();
+    for k in 1..=4 {
+        h.hover_at(corner + vec2(5.0 * k as f32, 0.0));
+        h.step();
+    }
+    button(&mut h, corner + vec2(20.0, 0.0), false);
+    h.run();
+    let seen = seen.borrow();
+    let last = seen.last().expect("moves asked");
+    assert_eq!(last.start, [600.0, 500.0], "where the gesture began");
+    assert!(last.from[0] > 600.0, "where it is now");
+    assert!(last.modifiers.shift);
+}
+
+#[test]
+fn styles_ellipses_and_bezier_controls() {
+    use egui_pop_viewport::overlay::{Emphasis, Handle};
+    let mut s = scene();
+    s.overlays = vec![
+        Overlay::new("crop", Shape::Rect([400.0, 300.0, 600.0, 500.0])).faint(),
+        Overlay::new(
+            "spot",
+            Shape::Ellipse {
+                center: [500.0, 400.0],
+                radii: [60.0, 30.0],
+                rotation: 0.0,
+            },
+        )
+        .selected()
+        .dashed(),
+        Overlay::new(
+            "curve",
+            Shape::Path {
+                points: vec![[420.0, 480.0], [580.0, 480.0]],
+                closed: false,
+            },
+        )
+        .handles(vec![
+            Handle {
+                index: 0,
+                kind: HandleKind::Point,
+                at: [420.0, 480.0],
+            },
+            Handle {
+                index: 1,
+                kind: HandleKind::Control,
+                at: [460.0, 440.0],
+            },
+            Handle {
+                index: 2,
+                kind: HandleKind::Point,
+                at: [580.0, 480.0],
+            },
+        ]),
+    ];
+    s.starts = s.overlays.iter().map(|o| o.shape.clone()).collect();
+    assert_eq!(s.overlays[0].style.emphasis, Emphasis::Faint);
+    assert!(s.overlays[1].style.dashed);
+    let mut h = harness(s);
+    h.run();
+    // The dashed ellipse is many short segments.
+    let segments = h
+        .output()
+        .shapes
+        .iter()
+        .filter(|c| matches!(c.shape, egui::Shape::LineSegment { .. }))
+        .count();
+    assert!(segments > 20, "{segments}");
+    // The ellipse's second radius, then its rotation, from their handles.
+    let minor = screen(&h, [500.0, 430.0]);
+    drag(&mut h, minor, minor + vec2(0.0, 10.0), false);
+    let Shape::Ellipse { radii, .. } = h.state().overlays[1].shape else {
+        panic!()
+    };
+    assert!((radii[1] - 40.0).abs() < 1.0, "{radii:?}");
+    // The Bézier control is a handle like the others.
+    let control = screen(&h, [460.0, 440.0]);
+    drag(&mut h, control, control + vec2(8.0, 0.0), false);
+    assert!(h.state().signals.iter().any(|s| matches!(
+        s,
+        Signal::Handle {
+            kind: HandleKind::Control,
+            handle: 1,
+            ..
+        }
+    )));
+}
+
+#[test]
+fn the_under_overlays_hook_paints_between_the_image_and_the_overlays() {
+    let mut s = scene();
+    let tint = egui::Color32::from_rgb(1, 2, 3);
+    s.state.hooks_mut().under_overlays = Some(Box::new(move |p, m| {
+        p.rect_filled(
+            m.image_rect_to_screen([450.0, 350.0, 550.0, 450.0]),
+            0.0,
+            tint,
+        );
+    }));
+    s.state.hooks_mut().after_paint = Some(Box::new(|p, m| {
+        p.circle_filled(
+            m.image_to_screen([500.0, 400.0]),
+            2.0,
+            egui::Color32::from_rgb(4, 5, 6),
+        );
+    }));
+    let mut h = harness(s);
+    h.run();
+    let shapes: Vec<&egui::Shape> = h.output().shapes.iter().map(|c| &c.shape).collect();
+    let tinted = shapes
+        .iter()
+        .position(|s| matches!(s, egui::Shape::Rect(r) if r.fill == tint))
+        .expect("the hook drew");
+    let first_overlay = shapes
+        .iter()
+        .position(|s| matches!(s, egui::Shape::Path(_)))
+        .expect("the crop box");
+    let after = shapes
+        .iter()
+        .position(
+            |s| matches!(s, egui::Shape::Circle(c) if c.fill == egui::Color32::from_rgb(4, 5, 6)),
+        )
+        .expect("after_paint drew");
+    assert!(tinted < first_overlay && first_overlay < after);
+    assert_eq!(
+        h.state().state.hooks().names(),
+        vec!["under_overlays", "after_paint"]
+    );
+}
