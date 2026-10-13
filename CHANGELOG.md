@@ -761,6 +761,19 @@ egui minor.
 
 ### Changed
 
+- The viewport takes tiles in off the interface thread by default:
+  `ViewportState` converts each tile on the thread that delivers it
+  (`set_prepare_on_worker` is on) and uploads at most
+  `UploadBudget::DEFAULT` (8 MiB) a frame, the visible area first; the
+  rest goes up in the next frames. `UploadBudget::default()` is that
+  budget. Opting out: `set_prepare_on_worker(false)` and
+  `set_upload_budget(UploadBudget::UNLIMITED)`. A source delivering a
+  whole view at once may now take a few more frames to show it; tests
+  stepping a fixed number of frames may need more. The gallery's
+  viewport page shows the tiles waiting for their upload, and the
+  `threading` example measures the old intake as `tiles-ui`,
+  `tiles-views-ui` and `all-ui`.
+
 - A display target declared `TargetSource::Tagged` needs no wgpu colour
   space: any sRGB, Display P3 or BT.2020 primaries with a transfer the
   Wayland colour-management protocol names (BT.2020 with a 2.2 power,

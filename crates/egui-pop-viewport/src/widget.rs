@@ -320,9 +320,11 @@ impl ViewportState {
         self.tiles.budget = bytes;
     }
 
-    /// How much one frame uploads at most ([`UploadBudget::UNLIMITED`] by
-    /// default). Tiles over it wait for the next frames, the visible
-    /// area's first, and are kept when the view moves.
+    /// How much one frame uploads at most ([`UploadBudget::DEFAULT`], 8
+    /// MiB, by default). Tiles over it wait for the next frames, the
+    /// visible area's first, and are kept when the view moves.
+    /// [`UploadBudget::UNLIMITED`] opts out: every tile arrived goes up
+    /// in the frame that takes it in.
     pub fn set_upload_budget(&mut self, budget: UploadBudget) {
         self.tiles.upload_budget = budget;
     }
@@ -334,10 +336,15 @@ impl ViewportState {
 
     /// Converts tiles on the thread that delivers them (the source's
     /// worker) instead of the interface thread: the display transform
-    /// of the CPU path, the half-float texels of the GPU path. Off by
-    /// default. The source's thread then runs the display transform
-    /// ([`DisplayTransform`] is
-    /// `Send + Sync`).
+    /// of the CPU path, the half-float texels of the GPU path. **On by
+    /// default**: the source's thread runs the display transform
+    /// ([`DisplayTransform`] is `Send + Sync`), and a tile converted
+    /// with a transform replaced meanwhile is shown, marked stale and
+    /// asked for again. `false` opts out: the interface thread converts
+    /// each tile when it takes it in, for a source whose threads must
+    /// not run the transform, or one delivering from the interface
+    /// thread anyway (the conversion then happens there either way).
+    /// See docs/threading.md for the measurements.
     pub fn set_prepare_on_worker(&mut self, on: bool) {
         self.tiles.prepare_on_worker = on;
     }

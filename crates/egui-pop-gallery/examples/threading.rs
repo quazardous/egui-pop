@@ -431,12 +431,15 @@ impl Scenario for Assist {
     }
 }
 
-/// How the viewport takes tiles in: as by default (converted and
-/// uploaded on the interface thread, all at once), converted on the
-/// source's workers, within an upload budget, or both.
+/// How the viewport takes tiles in: as by default (converted on the
+/// source's workers, uploaded within `UploadBudget::DEFAULT`), as it did
+/// before (converted and uploaded on the interface thread, all at once),
+/// converted on the workers with no budget, on the interface thread
+/// within a 1 MiB budget, or on the workers within 1 MiB.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Intake {
     Default,
+    Interface,
     Worker,
     Budget,
     Delegated,
@@ -465,13 +468,15 @@ struct Tiles {
 impl Tiles {
     fn new(ctx: &Context, own: bool, period: usize, intake: Intake) -> Tiles {
         let mut page = PageState::default();
-        if matches!(intake, Intake::Worker | Intake::Delegated) {
-            page.state.set_prepare_on_worker(true);
-        }
-        if matches!(intake, Intake::Budget | Intake::Delegated) {
-            page.state
-                .set_upload_budget(UploadBudget::bytes(UPLOAD_BUDGET));
-        }
+        let (on_worker, budget) = match intake {
+            Intake::Default => (true, UploadBudget::DEFAULT),
+            Intake::Interface => (false, UploadBudget::UNLIMITED),
+            Intake::Worker => (true, UploadBudget::UNLIMITED),
+            Intake::Budget => (false, UploadBudget::bytes(UPLOAD_BUDGET)),
+            Intake::Delegated => (true, UploadBudget::bytes(UPLOAD_BUDGET)),
+        };
+        page.state.set_prepare_on_worker(on_worker);
+        page.state.set_upload_budget(budget);
         Tiles {
             app: app(ctx, own),
             page,
@@ -702,21 +707,22 @@ impl Scenario for All {
     }
 }
 
-const SCENARIOS: [&str; 15] = [
+const SCENARIOS: [&str; 16] = [
     "idle",
     "terminal-steady",
     "terminal-flood",
     "assist-thread",
     "assist-inline",
     "tiles",
+    "tiles-ui",
     "tiles-worker",
     "tiles-budget",
     "tiles-delegated",
     "tiles-views",
-    "tiles-views-delegated",
+    "tiles-views-ui",
     "jobs",
     "all",
-    "all-delegated",
+    "all-ui",
     "idle-after",
 ];
 
@@ -724,11 +730,12 @@ const SCENARIOS: [&str; 15] = [
 fn tiles_of(name: &str) -> Option<(usize, Intake)> {
     Some(match name {
         "tiles" => (8, Intake::Default),
+        "tiles-ui" => (8, Intake::Interface),
         "tiles-worker" => (8, Intake::Worker),
         "tiles-budget" => (8, Intake::Budget),
         "tiles-delegated" => (8, Intake::Delegated),
         "tiles-views" => (30, Intake::Default),
-        "tiles-views-delegated" => (30, Intake::Delegated),
+        "tiles-views-ui" => (30, Intake::Interface),
         _ => return None,
     })
 }
@@ -749,14 +756,14 @@ fn make(name: &str, ctx: &Context) -> Box<dyn Scenario> {
         }
         "jobs" => Box::new(Jobs::new(ctx)),
         // One app (the jobs' host's) for the three parts.
-        "all" | "all-delegated" | "idle-after" => Box::new(All {
+        "all" | "all-ui" | "idle-after" => Box::new(All {
             flood: Flood::new(ctx, Some(256 * 1024), false),
             tiles: Tiles::new(
                 ctx,
                 false,
                 8,
-                if name == "all-delegated" {
-                    Intake::Delegated
+                if name == "all-ui" {
+                    Intake::Interface
                 } else {
                     Intake::Default
                 },

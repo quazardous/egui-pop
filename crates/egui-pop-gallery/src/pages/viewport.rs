@@ -1,7 +1,8 @@
 //! The viewport page: the generic image viewport over a procedural
 //! image computed on worker threads, its zoom ladder and fit, pan, the
-//! tiles (proxy then exact), the display transform, the signals it emits
-//! and the hooks an application sets.
+//! tiles (proxy then exact, converted on the workers and uploaded within
+//! the default budget), the display transform, the signals it emits and
+//! the hooks an application sets.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -125,6 +126,9 @@ impl Plugin for ViewportPage {
                         "started": p.source.is_some(),
                         "complete": p.state.tiles_complete(),
                         "outstanding": p.state.outstanding(),
+                        "prepare_on_worker": p.state.prepare_on_worker(),
+                        "upload_budget_bytes": p.state.upload_budget().bytes,
+                        "upload_waiting": p.state.upload_report().waiting,
                     })
                 })
                 .action(
@@ -278,11 +282,18 @@ pub fn show(ui: &mut Ui, page: &mut PageState) {
         });
         ui.separator();
         let st = &page.state;
+        let uploads = st.upload_report().waiting;
         ui.label(format!(
-            "Tiles: {} held ({:.1} MB), {} waiting{}",
+            "Tiles: {} held ({:.1} MB), {} waiting{}{}",
             st.tile_count(),
             st.texture_bytes() as f64 / 1e6,
             st.outstanding(),
+            // Over the frame's upload budget: they go up next frames.
+            if uploads > 0 {
+                format!(", {uploads} to upload")
+            } else {
+                String::new()
+            },
             if st.tiles_complete() {
                 ", complete"
             } else {

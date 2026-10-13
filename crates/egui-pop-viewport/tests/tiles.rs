@@ -187,7 +187,6 @@ fn the_budget_evicts_tiles_not_drawn() {
 fn leftover_tiles_survive_a_pan() {
     let mut s = scene(View::at(1.0, [200.0, 150.0]), true, true);
     s.state.set_upload_budget(UploadBudget::tiles(1));
-    s.state.set_prepare_on_worker(true);
     let mut h = harness(s, 1.0);
     h.step();
     let asked = h.state().source.pending().len();
@@ -224,15 +223,31 @@ fn leftover_tiles_survive_a_pan() {
 }
 
 #[test]
-fn tiles_converted_on_the_delivering_thread_draw_the_same_pixels() {
-    for scene_pixels in [false, true] {
-        let mut s = scene(View::actual([300.3, 200.7]), false, scene_pixels);
-        s.state.set_prepare_on_worker(true);
-        // About two tiles a frame.
-        s.state.set_upload_budget(UploadBudget::bytes(600_000));
-        let mut h = wgpu_harness(s, 1.0, false);
-        settle(&mut h);
-        assert_one_to_one(&mut h, 1.0, i32::from(scene_pixels));
+fn tiles_are_converted_on_the_delivering_thread_within_a_budget_by_default() {
+    let state = ViewportState::new();
+    assert!(state.prepare_on_worker());
+    assert_eq!(state.upload_budget(), UploadBudget::DEFAULT);
+    assert_eq!(UploadBudget::default(), UploadBudget::DEFAULT);
+    assert!(UploadBudget::DEFAULT.is_limited());
+}
+
+#[test]
+fn tiles_draw_the_same_pixels_wherever_they_are_converted() {
+    // The default (the delivering thread, a budget of about two tiles a
+    // frame here) and the opt-out (the interface thread, no budget).
+    for on_worker in [true, false] {
+        for scene_pixels in [false, true] {
+            let mut s = scene(View::actual([300.3, 200.7]), false, scene_pixels);
+            if on_worker {
+                s.state.set_upload_budget(UploadBudget::bytes(600_000));
+            } else {
+                s.state.set_prepare_on_worker(false);
+                s.state.set_upload_budget(UploadBudget::UNLIMITED);
+            }
+            let mut h = wgpu_harness(s, 1.0, false);
+            settle(&mut h);
+            assert_one_to_one(&mut h, 1.0, i32::from(scene_pixels));
+        }
     }
 }
 

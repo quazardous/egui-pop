@@ -117,7 +117,8 @@ pub(crate) struct GpuQueue {
 
 /// How much a frame uploads at most: tiles and bytes (whichever is
 /// reached first; at least one tile a frame). What is left waits for the
-/// next frame, never dropped.
+/// next frame, never dropped. [`UploadBudget::DEFAULT`] (8 MiB a frame)
+/// unless the viewport is told otherwise.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct UploadBudget {
     pub tiles: usize,
@@ -125,8 +126,18 @@ pub struct UploadBudget {
 }
 
 impl UploadBudget {
+    /// The default: 8 MiB a frame, sixteen 256-pixel tiles of the GPU
+    /// path's half floats or thirty-two of 8-bit RGBA. It bounds the
+    /// copy to the GPU at the render when a fast source (a cache, a GPU
+    /// pipeline) delivers a whole view at once; a source on worker
+    /// threads rarely reaches it.
+    pub const DEFAULT: UploadBudget = UploadBudget {
+        tiles: usize::MAX,
+        bytes: 8 << 20,
+    };
+
     /// No limit: every tile arrived is uploaded in the frame that takes
-    /// it in (the default).
+    /// it in (the behaviour before the budget existed).
     pub const UNLIMITED: UploadBudget = UploadBudget {
         tiles: usize::MAX,
         bytes: usize::MAX,
@@ -156,7 +167,7 @@ impl UploadBudget {
 
 impl Default for UploadBudget {
     fn default() -> Self {
-        UploadBudget::UNLIMITED
+        UploadBudget::DEFAULT
     }
 }
 
@@ -278,8 +289,8 @@ impl Default for Tiles {
             gpu: Arc::default(),
             pending: HashMap::new(),
             next_seq: 0,
-            upload_budget: UploadBudget::UNLIMITED,
-            prepare_on_worker: false,
+            upload_budget: UploadBudget::DEFAULT,
+            prepare_on_worker: true,
             prep_key: None,
             prep_stamp: 0,
             report: UploadReport::default(),

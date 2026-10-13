@@ -19,12 +19,13 @@
 //!   source applied its own display transform on the CPU) or
 //!   scene-referred ([`Pixels::Scene`], linear floats the viewport passes
 //!   through the display transform, on the GPU when it can).
-//! - **Where the pixels are converted**: by default the viewport turns
-//!   each tile into a texture on the interface thread when it takes it
-//!   in. With [`ViewportState::set_prepare_on_worker`](crate::ViewportState::set_prepare_on_worker),
-//!   the sink converts on the thread that delivers (the display
-//!   transform on the CPU path, the half-float texels on the GPU path),
-//!   so tiles arrive ready to upload.
+//! - **Where the pixels are converted**: by default the sink converts
+//!   each tile on the thread that delivers it (the display transform on
+//!   the CPU path, the half-float texels on the GPU path), so tiles
+//!   arrive ready to upload and the interface thread only hands them to
+//!   the GPU, within an upload budget per frame. With
+//!   [`ViewportState::set_prepare_on_worker`](crate::ViewportState::set_prepare_on_worker)`(false)`,
+//!   the interface thread converts each tile when it takes it in.
 
 use std::fmt;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
