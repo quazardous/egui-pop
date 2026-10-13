@@ -9,6 +9,18 @@ egui minor.
 
 ### Added
 
+- The mount contract in the application (`api::mounts`): the offers
+  of the hosts `egui-pop-api` builds (docked panel, floating palette,
+  auxiliary window, the four-kind dialog, raw modal, popover, line
+  zone, status bar, gallery story) and the needs of its components and
+  `egui-pop-core`'s (sliders, forms, progress, the jobs centre, the
+  theme editor, tips). `AppHandle::where_can` gives every host's
+  verdict for a component, `AppHandle::mount` records a mount with its
+  conditions or refuses it with its rule (reported as `mount-refused`),
+  `Ctx::mountable` and `Ctx::host_offer` declare a plugin's own, and
+  the debug bridge's `mounts` collector shows them and answers
+  `where_can` and `check`.
+
 - The mount contract (ADR 0013) in `egui-pop-model` (`model::mount`):
   a component declares what it needs (`Mountable`: keyboard and claimed
   keys, pointer, workers, display, size, instances, view state, the
@@ -859,6 +871,12 @@ egui minor.
   viewport page shows the tiles waiting for their upload, and the
   `threading` example measures the old intake as `tiles-ui`,
   `tiles-views-ui` and `all-ui`.
+
+- `PanelSpec::refuses` takes a host (`PanelHost`: an area, floating
+  or a window, with the host's offer) instead of an area, and a panel
+  may declare its content's needs (`PanelSpec::content`): moving,
+  floating or detaching a panel is refused, with the rule, when its
+  content does not fit the host (ADR 0013).
 
 - A display target declared `TargetSource::Tagged` needs no wgpu colour
   space: any sRGB, Display P3 or BT.2020 primaries with a transfer the

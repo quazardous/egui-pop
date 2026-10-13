@@ -114,10 +114,7 @@ fn code_list(s: &str) -> String {
 }
 
 fn keys(keys: &[ClaimKey]) -> String {
-    keys.iter()
-        .map(|k| k.name())
-        .collect::<Vec<_>>()
-        .join(", ")
+    keys.iter().map(|k| k.name()).collect::<Vec<_>>().join(", ")
 }
 
 /// An offer in one line.
@@ -503,7 +500,11 @@ fn codes(o: &mut String) {
     }
     o.push_str("\n## Reasons\n\n### By design\n\n| Code | Rule | Do instead |\n|---|---|---|\n");
     for c in CODES.iter().filter(|c| c.kind == CodeKind::Design) {
-        let _ = writeln!(o, "| {} | **{}.** {} | {} |", c.code, c.title, c.text, c.then);
+        let _ = writeln!(
+            o,
+            "| {} | **{}.** {} | {} |",
+            c.code, c.title, c.text, c.then
+        );
     }
     o.push_str(
         "
@@ -518,7 +519,11 @@ draws a second choice inline.
 ",
     );
     for c in CODES.iter().filter(|c| c.kind == CodeKind::Limit) {
-        let _ = writeln!(o, "| {} | **{}.** {} | {} |", c.code, c.title, c.text, c.then);
+        let _ = writeln!(
+            o,
+            "| {} | **{}.** {} | {} |",
+            c.code, c.title, c.text, c.then
+        );
     }
     o.push_str(
         "
@@ -532,7 +537,11 @@ yet, not as refused cells.
 ",
     );
     for c in CODES.iter().filter(|c| c.kind == CodeKind::Upstream) {
-        let _ = writeln!(o, "| {} | **{}.** {} | {} |", c.code, c.title, c.text, c.then);
+        let _ = writeln!(
+            o,
+            "| {} | **{}.** {} | {} |",
+            c.code, c.title, c.text, c.then
+        );
     }
     o.push_str(
         "
@@ -598,9 +607,18 @@ mod tests {
         ];
         let page = render(&components, &hosts);
         assert!(page.contains("| **P** | Docked panel | `Ctx::panel`, `workbench` |"));
-        assert!(page.contains("| Image viewport | `yes` | `if c1` | `yes*` |"), "{page}");
-        assert!(page.contains("| Terminal | `yes` | `D3` | `yes*` |"), "{page}");
-        assert!(page.contains("| does not fit, by design (`D3` 1) | 1 |"), "{page}");
+        assert!(
+            page.contains("| Image viewport | `yes` | `if c1` | `yes*` |"),
+            "{page}"
+        );
+        assert!(
+            page.contains("| Terminal | `yes` | `D3` | `yes*` |"),
+            "{page}"
+        );
+        assert!(
+            page.contains("| does not fit, by design (`D3` 1) | 1 |"),
+            "{page}"
+        );
         assert!(page.contains("| **total** (2 components by 3 hosts) | 6 |"));
         assert!(page.contains("2 are not tried"));
         assert!(page.contains("| R11 | dialog content |"));

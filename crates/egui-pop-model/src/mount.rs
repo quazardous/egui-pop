@@ -976,7 +976,13 @@ impl Refusal {
                 c.text,
                 c.then
             ),
-            Some(c) => format!("{} ({}, {}): {}", c.title, self.rule.number(), c.code, c.text),
+            Some(c) => format!(
+                "{} ({}, {}): {}",
+                c.title,
+                self.rule.number(),
+                c.code,
+                c.text
+            ),
             None => format!("{} ({})", self.rule.name(), self.code),
         }
     }
@@ -988,7 +994,9 @@ impl Refusal {
 pub enum Fit {
     Yes,
     /// Fits, under every one of these conditions.
-    Under { conditions: Vec<Condition> },
+    Under {
+        conditions: Vec<Condition>,
+    },
     /// Does not fit: the first refusal, and the others found.
     No {
         refusal: Refusal,
@@ -1046,7 +1054,11 @@ impl Found {
     }
 
     fn refuse(&mut self, rule: Rule, code: &'static str, kind: CodeKind) {
-        if !self.refusals.iter().any(|r| r.code == code && r.rule == rule) {
+        if !self
+            .refusals
+            .iter()
+            .any(|r| r.code == code && r.rule == rule)
+        {
             self.refusals.push(Refusal { rule, code, kind });
         }
     }
@@ -1058,8 +1070,8 @@ impl Found {
 pub fn check(m: &Mountable, h: &HostOffer) -> Fit {
     let mut f = Found::default();
     ui(m, h, &mut f);
-    application(m, h, &mut f);
     dialog_content(m, h, &mut f);
+    application(m, h, &mut f);
     size(m, h, &mut f);
     keyboard(m, h, &mut f);
     session(m, h, &mut f);
@@ -1142,8 +1154,7 @@ fn keyboard(m: &Mountable, h: &HostOffer, f: &mut Found) {
         } else {
             f.condition(Rule::Keyboard, "c4");
         }
-    } else if m.keyboard == Keyboard::Exclusive && !h.owns_keys.is_empty() && !h.honours_claims
-    {
+    } else if m.keyboard == Keyboard::Exclusive && !h.owns_keys.is_empty() && !h.honours_claims {
         f.condition(Rule::Keyboard, "c4");
     }
     if m.keymap && !h.keymap {
@@ -1325,7 +1336,10 @@ mod tests {
     fn r4_only_a_modal_asks() {
         let q = Mountable::new("question", "Question").asks();
         assert_eq!(check(&q, &panel()).cell(), "D4");
-        assert_eq!(check(&q, &popover()).refusal().unwrap().rule, Rule::Question);
+        assert_eq!(
+            check(&q, &popover()).refusal().unwrap().rule,
+            Rule::Question
+        );
         assert!(check(&q, &modal()).fits());
         assert!(check(&q, &custom_dialog()).fits());
     }
@@ -1368,7 +1382,10 @@ mod tests {
         }
         // A host with a Ui but no application.
         let bare = panel().gives_app(false);
-        assert_eq!(check(&app, &bare).refusal().unwrap().rule, Rule::Application);
+        assert_eq!(
+            check(&app, &bare).refusal().unwrap().rule,
+            Rule::Application
+        );
         assert!(check(&plain, &bare).fits());
     }
 

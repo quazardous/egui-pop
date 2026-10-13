@@ -5,6 +5,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::ids::{CommandId, OwnerId, PanelId};
+use crate::mount::{self, HostOffer, Mountable};
 use crate::registry::Registry;
 
 /// The shell's areas. Start and end, not left and right: ready for
@@ -66,6 +67,27 @@ pub struct PanelSpec {
     pub palette: bool,
     /// Whether it may float over the interface (a palette always may).
     pub floatable: bool,
+    /// What its content needs (ADR 0013): checked against each host it
+    /// is put in. `None`: a plain widget, any host of a panel.
+    pub content: Option<Mountable>,
+}
+
+/// Where a panel is put: one of the shell's areas, floating over the
+/// interface as a palette, or detached into a window of its own.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Place {
+    Area(Area),
+    Floating,
+    Window,
+}
+
+/// A host a panel may be put in: the place, and what the host offers
+/// there (ADR 0013).
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct PanelHost {
+    pub place: Place,
+    pub offer: HostOffer,
 }
 
 impl PanelSpec {
@@ -84,7 +106,14 @@ impl PanelSpec {
             open: true,
             palette: false,
             floatable: false,
+            content: None,
         }
+    }
+
+    /// What its content needs: a host refusing it refuses the panel.
+    pub fn content(mut self, needs: Mountable) -> Self {
+        self.content = Some(needs);
+        self
     }
 
     /// The smallest size across its area, in points.
@@ -138,9 +167,30 @@ impl PanelSpec {
         self
     }
 
-    /// Why it may not be in an area, if it may not.
-    pub fn refuses(&self, area: Area) -> Option<String> {
-        (!self.allows(area)).then(|| format!("{} stays out of {}", self.title, area.name()))
+    /// Why it may not be put in a host, if it may not: an area it stays
+    /// out of, floating or a window it is not allowed, or a host its
+    /// content does not fit (with the rule, ADR 0013).
+    pub fn refuses(&self, host: &PanelHost) -> Option<String> {
+        let place = match host.place {
+            Place::Area(area) => {
+                (!self.allows(area)).then(|| format!("{} stays out of {}", self.title, area.name()))
+            }
+            Place::Floating => (!self.floatable).then(|| format!("{} cannot float", self.title)),
+            Place::Window => {
+                (!self.detachable).then(|| format!("{} cannot be detached", self.title))
+            }
+        };
+        place.or_else(|| {
+            let needs = self.content.as_ref()?;
+            let fit = mount::check(needs, &host.offer);
+            let refusal = fit.refusal()?;
+            Some(format!(
+                "{} cannot go in {}: {}",
+                self.title,
+                host.offer.name.to_lowercase(),
+                refusal.reason()
+            ))
+        })
     }
 
     /// Restricts where it may go (its default area always allowed).
@@ -224,5 +274,55 @@ impl Panels {
             })
             .filter_map(|(id, t)| id.ok().map(|id| (id, t)))
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::mount::{HostSize, Mountable};
+
+    fn host(place: Place) -> PanelHost {
+        PanelHost {
+            place,
+            offer: HostOffer::new("panel", "P", "Docked panel"),
+        }
+    }
+
+    #[test]
+    fn a_panel_refuses_areas_floating_and_windows_it_is_not_allowed() {
+        let id = PanelId::new("demo.log").unwrap();
+        let spec = PanelSpec::new(id, "Log", Area::Bottom)
+            .only_in(&[Area::Center])
+            .detachable(false);
+        assert_eq!(spec.refuses(&host(Place::Area(Area::Bottom))), None);
+        assert_eq!(
+            spec.refuses(&host(Place::Area(Area::StartSide))).as_deref(),
+            Some("Log stays out of the start side bar")
+        );
+        assert_eq!(
+            spec.refuses(&host(Place::Floating)).as_deref(),
+            Some("Log cannot float")
+        );
+        assert_eq!(
+            spec.refuses(&host(Place::Window)).as_deref(),
+            Some("Log cannot be detached")
+        );
+    }
+
+    #[test]
+    fn a_panel_refuses_a_host_its_content_does_not_fit() {
+        let id = PanelId::new("demo.view").unwrap();
+        let spec = PanelSpec::new(id, "View", Area::Center)
+            .floatable(true)
+            .content(Mountable::new("viewport", "Viewport").fills());
+        let row = PanelHost {
+            place: Place::Floating,
+            offer: HostOffer::new("line", "L", "Line zone").size(HostSize::Row),
+        };
+        let why = spec.refuses(&row).unwrap();
+        assert!(why.starts_with("View cannot go in line zone: "), "{why}");
+        assert!(why.contains("R1, D1"), "{why}");
+        assert_eq!(spec.refuses(&host(Place::Floating)), None);
     }
 }
