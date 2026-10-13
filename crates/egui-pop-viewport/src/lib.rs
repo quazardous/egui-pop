@@ -44,6 +44,8 @@
 //! - [`hooks`]: the application's way into each step (veto, redirect,
 //!   replace, extend), traced;
 //! - [`debug`]: the `viewport` collector of the debug bridge;
+//! - [`mounts`]: what its components need and what its overlays offer
+//!   (the mount contract, ADR 0013);
 //! - [`strings`]: the text it shows, translatable;
 //! - [`tokens`]: the component tokens it draws with.
 //!
@@ -78,6 +80,7 @@ pub mod hooks;
 #[cfg(feature = "wayland")]
 pub mod image_surface;
 pub mod loupe;
+pub mod mounts;
 pub mod navigator;
 pub mod overlay;
 pub mod source;

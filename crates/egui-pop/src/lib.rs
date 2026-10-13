@@ -91,6 +91,8 @@ pub use egui_pop_platform as platform;
 /// Themes: tokens into egui's style (from `egui-pop-core`).
 pub use egui_pop_core::theme;
 
+pub mod mounts;
+
 /// What most applications use.
 pub mod prelude {
     pub use egui_pop_api::hooks::{Hook, On};

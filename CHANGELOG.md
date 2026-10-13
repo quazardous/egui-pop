@@ -9,6 +9,15 @@ egui minor.
 
 ### Added
 
+- Every component declares what it needs (`mounts` in
+  `egui-pop-viewport`, `egui-pop-views` and `egui-pop-editors`: the
+  image viewport, navigator, node graph, curves, wheels, histogram,
+  thumbnail, library grid, filmstrip, compare view, tree, table, text
+  and code editors, terminal), and the viewport's overlays declare
+  their offer (data, no `Ui`). The facade gathers them
+  (`egui_pop::mounts::components`, `hosts`, `page`), and
+  `egui_pop::mounts::MountsPlugin` declares them to an application.
+
 - The mount contract in the application (`api::mounts`): the offers
   of the hosts `egui-pop-api` builds (docked panel, floating palette,
   auxiliary window, the four-kind dialog, raw modal, popover, line
