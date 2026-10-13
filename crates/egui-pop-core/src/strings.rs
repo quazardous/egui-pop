@@ -109,6 +109,15 @@ pub trait Strings: Send + Sync {
     fn language(&self) -> &str {
         "en"
     }
+
+    /// A number as the language writes it, with exactly `decimals`
+    /// digits after the separator and its thousands grouped; `None`
+    /// writes it as Rust does (`1234.50`). A provider that knows the
+    /// locale's separators overrides it.
+    fn number(&self, value: f64, decimals: usize) -> Option<String> {
+        let _ = (value, decimals);
+        None
+    }
 }
 
 /// No translations: every string is its English fallback.
@@ -165,6 +174,19 @@ pub fn install(ctx: &Context, strings: Arc<dyn Strings>) {
 pub fn provider(ctx: &Context) -> Arc<dyn Strings> {
     ctx.data(|d| d.get_temp::<Arc<dyn Strings>>(id()))
         .unwrap_or_else(|| Arc::new(English))
+}
+
+/// A number in the interface's language, with exactly `decimals` digits
+/// after the separator (slider values, readouts):
+/// [`Strings::number`], else as Rust writes it.
+///
+/// ```
+/// assert_eq!(egui_pop_core::strings::number(&egui::Context::default(), 1234.5, 2), "1234.50");
+/// ```
+pub fn number(ctx: &Context, value: f64, decimals: usize) -> String {
+    provider(ctx)
+        .number(value, decimals)
+        .unwrap_or_else(|| format!("{value:.decimals$}"))
 }
 
 /// The English shown when a provider has nothing: the fallback, else

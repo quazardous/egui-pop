@@ -9,6 +9,12 @@ egui minor.
 
 ### Added
 
+- Numbers in the interface's language for widgets: `Strings::number`
+  (a provider writes a value with a fixed number of decimals, its
+  thousands grouped) and `strings::number(ctx, value, decimals)`, which
+  falls back to Rust's formatting. The i18n plugin's provider writes
+  them with the locale's separators (`1 234,50` in French).
+
 - `Icon::Picker`, an eyedropper (Phosphor's, or painted as a tube, a
   collar and a bulb): a slider's colour picker needs it.
 

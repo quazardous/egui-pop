@@ -455,6 +455,15 @@ impl egui_pop_core::strings::Strings for Provider {
     fn language(&self) -> &str {
         &self.language
     }
+
+    fn number(&self, value: f64, decimals: usize) -> Option<String> {
+        let options = fluent_bundle::types::FluentNumberOptions {
+            minimum_fraction_digits: Some(decimals),
+            maximum_fraction_digits: Some(decimals),
+            ..Default::default()
+        };
+        Some(crate::format::number_with(&self.language, value, &options))
+    }
 }
 
 #[cfg(test)]
@@ -497,6 +506,16 @@ images-selected =
         assert!(missing["fr"].contains("nowhere"));
         assert!(!missing["fr"].contains("panel-graph.title"));
         assert!(missing["de"].contains("panel-graph.title"));
+    }
+
+    #[test]
+    fn the_provider_writes_numbers_as_the_locale_does() {
+        use egui_pop_core::strings::Strings as _;
+        let fr = Provider::new(I18n::new("fr"));
+        assert_eq!(fr.number(1234.5, 2).as_deref(), Some("1\u{202f}234,50"));
+        assert_eq!(fr.number(-0.26, 1).as_deref(), Some("-0,3"));
+        let en = Provider::new(I18n::new("en"));
+        assert_eq!(en.number(1234.6, 0).as_deref(), Some("1,235"));
     }
 
     #[test]
