@@ -1806,6 +1806,7 @@ pub type MakeError = Box<dyn std::error::Error + Send + Sync>;
 
 /// Says why `make` failed: in the log and on the journal
 /// (`app.make_failed`, with the error).
+#[cfg(any(test, all(feature = "eframe", not(target_arch = "wasm32"))))]
 pub(crate) fn report_make_error(app: &AppHandle, e: &(dyn std::error::Error + Send + Sync)) {
     log::error!(target: "egui_pop", "the application could not be made: {e}");
     app.publish(
