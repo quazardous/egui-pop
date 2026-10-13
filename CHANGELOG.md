@@ -9,6 +9,18 @@ egui minor.
 
 ### Added
 
+- A custom dialog (`Dialog::Custom`, opened with
+  `Dialogs::open_custom`): a body of its own, drawn by a closure kept
+  on the application's side, in a size of its own, a `dialog` focus
+  scope and a fault boundary, every frame. It keeps the dialog rules
+  (a primary button saying what it does, Cancel, Enter and Escape,
+  steps, the debug bridge, movable, closable, a kept place, the
+  backdrop); keys its body claims go to it first (Ctrl+Enter accepts
+  when it claims Enter; Escape goes to it while it has something to
+  cancel). A body declaring its needs is checked against the custom
+  dialog's offer (`dialogs::custom_host`) and recorded as a mount.
+  Guide: docs/widgets.md, section 6.
+
 - Every component declares what it needs (`mounts` in
   `egui-pop-viewport`, `egui-pop-views` and `egui-pop-editors`: the
   image viewport, navigator, node graph, curves, wheels, histogram,

@@ -42,6 +42,9 @@ pub const PALETTE: &str = "palette";
 pub const WINDOW: &str = "window";
 /// A dialog of the four kinds (`Confirm`, `Form`, `Choose`, `Info`).
 pub const DIALOG: &str = "dialog";
+/// A custom dialog: a body of its own, the dialog rules kept
+/// ([`crate::dialogs::Custom`]).
+pub const CUSTOM_DIALOG: &str = "dialog.custom";
 /// A raw modal overlay, drawn from a block of the `OVERLAYS` zone.
 pub const MODAL: &str = "modal";
 /// A popover anchored to something.
@@ -168,6 +171,7 @@ pub fn hosts() -> Vec<HostOffer> {
         palette(),
         window(),
         dialog(),
+        crate::dialogs::custom_host(),
         modal(),
         popover(),
         line(),
@@ -383,6 +387,16 @@ impl AppHandle {
                 return Err(e);
             }
         };
+        self.record_mount(component, host, fit)
+    }
+
+    /// Mounts a component by its needs in a host by its offer, declared
+    /// or not (a custom dialog's body): recorded, or refused, reported.
+    pub(crate) fn mount_needs(&self, needs: &Mountable, host: &HostOffer) -> Result<Fit, String> {
+        self.record_mount(&needs.id, &host.id, mount::check(needs, host))
+    }
+
+    fn record_mount(&self, component: &str, host: &str, fit: Fit) -> Result<Fit, String> {
         if let Some(refusal) = fit.refusal() {
             let reason = refusal.reason();
             self.report(Diagnostic {
