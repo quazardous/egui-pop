@@ -1,0 +1,337 @@
+# Node graph editor
+
+`egui_pop::viewport::graph` (the facade's `viewport` feature) is a node
+graph editor over a graph the **application keeps**: it describes its
+nodes, typed ports, wires and groups through a trait, the editor draws
+them on egui's `Scene` (pan and zoom) and hands back what the user did
+as edits, which the application applies, or not. The editor never owns
+the graph.
+
+![the node graph page](../crates/egui-pop-gallery/tests/snapshots/node-graph-pop-dark.png)
+
+## The model
+
+```rust
+use egui_pop::viewport::graph::{Edge, GraphModel, Group, Kind, Node, Param, Port, PortType};
+
+struct Pipeline {
+    nodes: Vec<Node>,
+    edges: Vec<Edge>,
+    radius: f64,
+}
+
+impl GraphModel for Pipeline {
+    fn nodes(&self) -> Vec<Node> {
+        self.nodes.clone()
+    }
+
+    fn edges(&self) -> Vec<Edge> {
+        self.edges.clone()
+    }
+
+    fn groups(&self) -> Vec<Group> {
+        vec![Group::new("detail", "Detail")]
+    }
+
+    // Shown in the detail view, edited inline with egui-pop's sliders.
+    fn params(&self, node: &str) -> Vec<Param> {
+        match node {
+            "blur" => vec![Param::new("radius", "Radius", self.radius, 0.0..=20.0).step(0.1).unit("px")],
+            _ => Vec::new(),
+        }
+    }
+
+    // What the canvas's menu (a secondary click) offers to add.
+    fn kinds(&self) -> Vec<Kind> {
+        vec![Kind::new("blur", "Blur")]
+    }
+}
+
+let image = || PortType::new("image");
+let _graph = Pipeline {
+    nodes: vec![
+        Node::new("load", "load", "Load", [0.0, 0.0]).output(Port::new("image", "Image", image())),
+        Node::new("blur", "blur", "Blur", [240.0, 0.0])
+            .input(Port::new("image", "Image", image()))
+            .output(Port::new("image", "Image", image()))
+            .group("detail"),
+    ],
+    edges: Vec::new(),
+    radius: 2.0,
+};
+```
+
+- **Ids** are the application's strings: a node's `id`, a port's `id`
+  within its node, a group's, a kind's. Steps, commands and the debug
+  bridge show them.
+- **Positions** are the application's too (`Node::pos`, the top-left
+  corner in graph units, points at 100 %): a drag hands back a move.
+- **Types**: a `PortType` has a name and a colour token. By default the
+  colour is one of `graph.type-1` to `graph.type-6`, picked from the
+  name (the same name, the same colour); `.color("my.token")` takes any
+  token of the theme. An output feeds any number of inputs; an input
+  takes one wire (a new one replaces it) unless it is `.multiple()`.
+- **Checks**: `GraphModel::can_connect` says whether an output may feed
+  an input; the default (`graph::check`) wants the same type and two
+  different nodes. Its `Refusal` is shown and announced.
+
+## The editor
+
+```rust
+use egui_pop::egui;
+use egui_pop::viewport::change::{Cause, Verdict};
+use egui_pop::viewport::graph::{Edge, Edit, GraphEditor, GraphMinimap, GraphModel, GraphState, Node};
+
+struct Pipeline {
+    nodes: Vec<Node>,
+    edges: Vec<Edge>,
+}
+
+impl GraphModel for Pipeline {
+    fn nodes(&self) -> Vec<Node> {
+        self.nodes.clone()
+    }
+
+    fn edges(&self) -> Vec<Edge> {
+        self.edges.clone()
+    }
+}
+
+fn graph_panel(ui: &mut egui::Ui, graph: &mut Pipeline, state: &mut GraphState) {
+    let out = GraphEditor::new(&*graph, state)
+        .snap(Some(10.0))
+        // A slot in each title bar, the application's.
+        .header(|ui, _node| {
+            ui.small("on");
+        })
+        // Sees every edit first: allow, veto, or redirect.
+        .on_edit(|edit, _cause: Cause| match edit {
+            Edit::Delete { nodes, .. } if nodes.iter().any(|n| n == "output") => Verdict::Veto,
+            _ => Verdict::Allow,
+        })
+        .show(ui);
+    for edit in &out.edits {
+        match edit {
+            Edit::Connect { from, to, replaces } => {
+                graph.edges.retain(|e| !replaces.contains(e));
+                graph.edges.push(Edge::new(from.clone(), to.clone()));
+            }
+            Edit::Disconnect { edges } => graph.edges.retain(|e| !edges.contains(e)),
+            Edit::Move { moves } => {
+                for m in moves {
+                    if let Some(n) = graph.nodes.iter_mut().find(|n| n.id == m.node) {
+                        n.pos = m.to;
+                    }
+                }
+            }
+            Edit::Delete { nodes, edges } => {
+                graph.nodes.retain(|n| !nodes.contains(&n.id));
+                graph.edges.retain(|e| !edges.contains(e));
+            }
+            Edit::Add { .. } | Edit::Param { .. } => {}
+        }
+    }
+    // The minimap shares the editor's state, like the image navigator.
+    GraphMinimap::new(state).show(ui);
+}
+```
+
+`GraphState` is the view: the part of the graph in view (`view`), the
+selection, the collapsed nodes and the folded groups, all for the
+application to keep; `request` asks for something at the next frame
+(`Request::Fit`, `Level`, `Select`, `Focus`, or an `Edit` as if the user
+made it). `GraphOutput` gives the edits after the hook, the `events`
+(`Selection`, `Level`, `Refused`), the `level` and the `zoom`.
+
+### Edits
+
+| Edit | When | Fields |
+|---|---|---|
+| `Connect` | a wire dropped on a port that accepts it, two ports clicked, Enter on two ports | `from` (an output), `to` (an input), `replaces`: the wires it takes the place of |
+| `Disconnect` | a wire dragged off an input and dropped nowhere, Delete on a port, a port's menu | `edges` |
+| `Move` | the end of a drag of nodes, a stack or a group's title; Shift and the arrows | `moves`: each node's `from` and `to` (snapped with `snap`) |
+| `Delete` | Delete or Backspace, a node's menu | `nodes`, and the `edges` touching them |
+| `Add` | the canvas's menu (at the pointer), Ctrl+D (copies, `copy_of`) | `nodes`: `kind`, `at`, `copy_of` |
+| `Param` | a parameter's slider in the detail view | `node`, `param`, `from`, `to`, `done` (a drag's frames are not done) |
+
+A drag never writes: the nodes follow the pointer in the editor, and
+one `Move` comes at the end (Escape during the drag drops it).
+
+### Gestures
+
+| Gesture | What it does |
+|---|---|
+| Wheel | Pans |
+| Ctrl (Cmd) and the wheel, a pinch | Zooms around the pointer |
+| Drag with the middle or secondary button, or with Space held | Pans |
+| Drag on the canvas | A rubber band: selects the nodes it touches (Shift or Ctrl adds) |
+| Click on the canvas | Clears the selection, drops a wire begun with a click |
+| Double click on the canvas | Fits the graph |
+| Click on a node | Selects it (Shift or Ctrl adds or removes it) |
+| Drag a node | Moves the selection |
+| Double click on a title, or its chevron | Collapses the node to its title |
+| Drag from a port | Draws a wire, checked as it goes: ports that accept it are ringed, others dimmed, the wire turns to the refusal colour over a port that refuses it |
+| Drag from a connected input | Takes its wire along: dropped nowhere, it disconnects |
+| Click a port, then another | Connects them |
+| A group's title | Folds the group into a stack; a click on the stack unfolds it; dragging either moves the group |
+| Secondary click | The canvas's menu (add a node), a node's (duplicate, delete), a port's (disconnect) |
+
+### Overview and detail
+
+The zoom picks the level (`Level`), with `levels(overview_below,
+detail_from)` (0.55 and 0.9 by default):
+
+- **Overview**: compact nodes with their titles at a size readable at
+  that zoom, groups folded into stacks (`+12`), wires between boxes;
+  nodes still select and move.
+- **Ports**: every node with its ports and their labels, the wires
+  between ports.
+- **Detail**: also each node's parameters, egui-pop sliders edited
+  inline (the arrows, a typed value, a double click to the default).
+
+A group folded at the ports or detail level stays folded
+(`GraphState::folded`); in the overview, groups are folded unless
+unfolded there (`GraphState::unfolded`).
+
+### Keyboard
+
+| Key | Where | What it does |
+|---|---|---|
+| Tab, Shift+Tab | anywhere | Through the canvas, each node, its chevron, its ports and its sliders |
+| Arrows | the canvas | To the node nearest the centre of the view |
+| Arrows | a node | To the nearest node that way |
+| Shift + arrows | a node | Moves the selection by a grid step (`Move`) |
+| Enter, Space | a node | Selects it |
+| Arrows | a port | To the node's other ports |
+| Enter, Space | a port | Begins a wire there; on a second port, connects (or says why not) |
+| Delete, Backspace | a port | Disconnects it |
+| Escape | a port | Drops the wire begun, else back to the node |
+| Delete, Backspace | a node, the canvas | Deletes the selection (the focused node when it is not selected) |
+| Ctrl+D | a node, the canvas | Duplicates the selection |
+| Ctrl+A | a node, the canvas | Selects every node |
+| Home | a node, the canvas | Fits the graph |
+
+The keys are data (`graph::GraphKeys`, `graph::set_keys`). The view
+follows the focus: a node or port brought into focus out of view is
+brought into it.
+
+## Steps
+
+`egui_pop::imaging::show_graph` shows an editor as part of the
+application (ADR 0011): each edit runs its step, the events go on the
+journal, agents' requests reach it.
+
+| Step | Arguments | Default |
+|---|---|---|
+| `graph.connect` | `graph`, `from`, `to` (`{node, port}`), `replaces`, `cause` | hands the edit to the application |
+| `graph.disconnect` | `graph`, `edges` (`[{from, to}]`), `cause` | hands the edit to the application |
+| `graph.move` | `graph`, `moves` (`[{node, from, to}]`), `cause` | hands the edit to the application |
+| `graph.delete` | `graph`, `nodes`, `edges`, `cause` | hands the edit to the application |
+| `graph.add` | `graph`, `nodes` (`[{kind, at, copy_of}]`), `cause` | hands the edit to the application |
+
+A before-hook vetoes the edit (it never reaches the application) or
+redirects it (another place, another kind); a run-hook's result is the
+edit handed back; an after-hook follows it. A parameter's slider is not
+a step. `cause` is `drag`, `click`, `key`, `command`...
+
+Events on the journal: `graph.selection_changed` (`graph`, `nodes`),
+`graph.level_changed` (`graph`, `level`), `graph.refused` (`graph`,
+`from`, `to`, `reason`).
+
+```rust
+use egui_pop::egui;
+use egui_pop::api::steps::Before;
+use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
+use egui_pop::imaging::{self, graph::STEP_GRAPH_DELETE};
+use egui_pop::model::ids::PluginId;
+use egui_pop::viewport::graph::{GraphEditor, GraphModel, GraphState};
+
+/// The output node stays.
+struct KeepOutput;
+
+impl Plugin for KeepOutput {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("keep_output")
+    }
+
+    fn requires(&self) -> Vec<PluginId> {
+        vec![imaging::IMAGING_PLUGIN]
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        ctx.before(STEP_GRAPH_DELETE, |_, args| {
+            if args["nodes"].as_array().is_some_and(|n| n.iter().any(|n| n == "output")) {
+                Before::Veto("the output stays".into())
+            } else {
+                Before::Go
+            }
+        });
+        Ok(())
+    }
+}
+
+fn panel(ui: &mut egui::Ui, app: &AppHandle, graph: &dyn GraphModel, state: &mut GraphState) {
+    let out = imaging::show_graph(app, "main", GraphEditor::new(graph, state), ui);
+    for _edit in out.edits {
+        // Apply it to the graph.
+    }
+}
+
+let _ = (KeepOutput, panel);
+```
+
+### Commands for agents
+
+`ImagingPlugin` declares them (hidden from the palette); `graph` names
+an editor shown with `show_graph` (without it, the only one). Edits
+asked by a command are done at the editor's next frame, as the user's:
+a connection is type-checked, then the edit runs its step.
+
+| Command | Arguments | Result |
+|---|---|---|
+| `graph.read` | `graph` | the graph as drawn: `nodes` (place, ports, group, collapsed, selected, parameters), `edges`, `groups`, `kinds`, `selection`, `level`, `zoom`, `visible` |
+| `graph.edit` | `graph`, `edit` (`connect`, `disconnect`, `move`, `delete`, `add`) and the edit's fields | `queued` |
+| `graph.select` | `graph`, `nodes` | `queued` |
+| `graph.view` | `graph`, and `fit: true`, `level` or `focus` (a node) | `queued` |
+
+## Accessibility
+
+| Part | Role | Name | Value |
+|---|---|---|---|
+| The canvas | group | its label ("Node graph") | nodes, wires and the level |
+| A node | group, described as "node", selected or not | its title | its inputs, outputs and wires |
+| A port | button, described as "input port" or "output port" | "Blur, input Image" | its type and wires |
+| The chevron | button | "Collapse Blur", "Expand Blur" | |
+| A group's title | button | "Fold Detail" | |
+| A stack | button, described as "stack" | "Unfold Detail (12 nodes)" | |
+| A parameter | slider | its label | its value |
+| The minimap | scroll view | "Graph overview" | the zoom |
+
+A wire begun, made or refused is announced (a live region). The
+editor's widgets sit in the `Scene`'s transformed layer, whose
+AccessKit bounds egui reports untransformed: the editor sets them
+itself (see [upstream](upstream.md)).
+
+## Tokens
+
+`graph.*`: `background`, `grid`, `node`, `node-header`, `node-border`,
+`node-selected`, `wire` (a type with no colour), `wire-preview`,
+`wire-refused`, `group`, `group-border`, `band`, and `type-1` to
+`type-6` (the port types' colours, aliases of the accent and the
+status colours). The minimap draws with `navigator.*`. The selected
+outline is contrast-checked against the node.
+
+## Why its own (2026-10-13)
+
+| Crate | Licence | egui | What it does | Why not |
+|---|---|---|---|---|
+| egui's `Scene` | MIT OR Apache-2.0 | 0.36 | A pan and zoom container (a transformed layer) | **Adopted**: the editor is drawn in it |
+| egui-snarl 0.12 | MIT OR Apache-2.0 | 0.36 | A node graph widget with a viewer trait | It owns the graph (`Snarl<T>` keeps nodes, positions and wires; the viewer's callbacks change it in place), so edits cannot come back as requests to veto; no AccessKit nodes for nodes and ports, no keyboard path, no levels of detail, styled outside the tokens |
+| egui_node_graph 0.4 | MIT | 0.2x | The first node graph editor for egui | Unmaintained since 2022 |
+| egui_node_graph2 0.7, egui-graph-edit 0.9 | MIT | 0.29, 0.35 | Its forks | Own the editor's graph state (a slotmap); not on egui 0.36 |
+| egui_graphs 0.32 | MIT | 0.36 | Shows a petgraph graph, with force layouts | A viewer of the application's petgraph, not an editor of typed ports |
+
+Decision: **own**, built on egui's `Scene`. The application's graph,
+requests run as steps, levels of detail and the keyboard and screen
+reader paths are what egui-pop needs and none of the editors offers;
+no code is taken from them.

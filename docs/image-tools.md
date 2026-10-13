@@ -3,7 +3,8 @@
 The image tools of `egui-pop-viewport` (the facade's `viewport`
 feature) are the controls of a photo editor's develop panels: a
 histogram, a curve editor, colour wheels, a zoom control and a
-navigator. They follow one rule: **the application computes, egui-pop
+navigator. The node graph editor, for processing networks, has its own
+guide: [Node graph editor](node-graph.md). They follow one rule: **the application computes, egui-pop
 draws and handles the interaction**. The histogram's bins, the curve's
 maths, what a wheel's value means and the image itself are the
 application's; the widgets draw them, take the gestures and hand back
@@ -197,6 +198,7 @@ decides.
 | `curve.change` | `curve`, `from`, `to` (`[[x, y], ...]`), `cause` (`drag`, `add`, `delete`, `reset`, `key`, `pick`, `access`) | writes `to` |
 | `wheel.change` | `wheel`, `from`, `to` (`{hue, chroma, luminance}`), `cause` | writes `to` |
 | `zoom.change` | `viewport`, `from`, `to` (`{zoom: "fit" or a number, center}`), `cause` | writes `to` |
+| `graph.connect`, `graph.disconnect`, `graph.move`, `graph.delete`, `graph.add` | `graph`, the edit, `cause` | hands the edit to the application ([Node graph editor](node-graph.md)) |
 
 A before-hook vetoes the change (the tool keeps, or goes back to,
 `from`) or redirects it; a run-hook gives the value to write; an

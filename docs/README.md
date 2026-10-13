@@ -31,6 +31,11 @@ devtools; every feature's moments reachable as steps (ADR 0011).
   a drag handed back, a curve editor (an application's spline, the
   targeted adjustment), colour wheels, a zoom control and a navigator,
   their steps.
+- [Node graph editor](node-graph.md): an application's graph of typed
+  ports on egui's `Scene`, edits handed back as requests and run as
+  steps, an overview and a detail view with inline sliders, a minimap,
+  the keyboard and screen reader paths, agent commands; the survey
+  behind it.
 - [Cursors and the loupe](cursors.md): tool cursors drawn at the
   window's scale, a brush outline that follows the zoom, the
   `cursor.resolve` step, a GPU loupe on the displayed pixels; the

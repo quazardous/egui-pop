@@ -29,6 +29,9 @@ pub mod image_tools {}
 #[doc = include_str!("../../../docs/cursors.md")]
 pub mod cursors {}
 
+#[doc = include_str!("../../../docs/node-graph.md")]
+pub mod node_graph {}
+
 #[doc = include_str!("../../../docs/tree.md")]
 pub mod tree {}
 
