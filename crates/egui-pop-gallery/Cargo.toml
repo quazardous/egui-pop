@@ -23,6 +23,10 @@ egui = { workspace = true, features = ["default_fonts"] }
 eframe = { workspace = true, features = ["default_fonts", "wgpu", "accesskit", "wayland", "x11"] }
 serde_json.workspace = true
 
+# A shell in the terminal page, on the desktop.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+egui-pop = { workspace = true, features = ["editors-pty"] }
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen-futures = "0.4"
 

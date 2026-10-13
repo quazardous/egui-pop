@@ -22,7 +22,7 @@ desktop).
 Pages: `overview` (the theme overview), `tokens`, `builtins` (egui's
 built-ins), `icons`, `values`, `sliders`, `menus`, `dialogs`, `toasts`, `viewport`
 (the image viewport), `images`, `tree` (the live tree), `table` (lists
-and tables), `text-editor`, `code-editor`, `zones` (zones and blocks), `workbench`,
+and tables), `text-editor`, `code-editor`, `terminal`, `zones` (zones and blocks), `workbench`,
 `arrangements`, `strips`, `frame`, `scale`, `platform` (the platform
 services), `settings`, `i18n` (translations) and `debug` (the debug
 bridge). `Alt+Down` and `Alt+Up` go to the next and previous page,
@@ -138,12 +138,13 @@ The live tree, lists and tables.
 
 ### Editors
 
-The text editor and the code editor.
+The text editor, the code editor and the terminal.
 
 <table>
   <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/text-editor-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/text-editor-pop-dark.png" width="200" alt="text-editor-pop-dark"></a><br>text-editor-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/code-editor-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/code-editor-pop-dark.png" width="200" alt="code-editor-pop-dark"></a><br>code-editor-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/terminal-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/terminal-pop-dark.png" width="200" alt="terminal-pop-dark"></a><br>terminal-pop-dark</td>
   </tr>
 </table>
 

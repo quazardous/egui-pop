@@ -1271,3 +1271,57 @@ fn the_code_editor_page_marks_completes_saves_and_holds_a_hundred_thousand_lines
         "virtualised"
     );
 }
+
+#[test]
+fn the_terminal_page_shows_a_log_and_routes_keys_through_hooks_and_the_keymap() {
+    use egui::{Key, Modifiers};
+    use egui_pop::editors::terminal::steps::CMD_READ;
+    use egui_pop::model::commands::Origin;
+    let mut h = harness(options("pop-dark", Density::Comfortable, "terminal"));
+    h.run();
+    h.remove_cursor();
+    h.run();
+    h.snapshot("terminal-pop-dark");
+    let read = |h: &mut Harness<'_, Gallery>, id: &str| {
+        h.state_mut()
+            .app
+            .run(
+                &CMD_READ,
+                serde_json::json!({ "terminal": id }),
+                Origin::Agent("test".into()),
+            )
+            .now()
+            .expect("answered now")
+            .expect("read")
+    };
+    let log = read(&mut h, "gallery.build-log");
+    assert!(
+        log["text"].as_str().unwrap().contains("Compiling exposure"),
+        "{log}"
+    );
+    assert_eq!(log["writable"], false);
+    // A redirect on terminal.input upper-cases the demo program's input.
+    h.get_by_label("Upper-case the input (a redirect on terminal.input)")
+        .click();
+    h.run();
+    h.get_by_label("Echo").click();
+    h.run();
+    h.event(egui::Event::Text("hi".into()));
+    h.key_press(Key::Enter);
+    h.run();
+    let t = last_step(&h, "terminal.input").expect("ran");
+    assert!(!t.redirected_by.is_empty(), "{t:?}");
+    let echo = read(&mut h, "gallery.echo");
+    assert!(
+        echo["text"].as_str().unwrap().contains("you said: HI"),
+        "{echo}"
+    );
+    // Ctrl+Shift chords stay the keymap's: terminal.clear, on the
+    // terminal surface.
+    h.key_press_modifiers(Modifiers::CTRL | Modifiers::SHIFT, Key::K);
+    h.run();
+    let k = h.state().app.handle().key_traces();
+    let last = k.last().expect("a trace");
+    assert_eq!(last.scope.as_deref(), Some("surface:terminal"), "{last:?}");
+    assert_eq!(read(&mut h, "gallery.echo")["text"], "");
+}

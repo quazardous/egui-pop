@@ -25,6 +25,7 @@ pub mod sliders;
 pub mod story;
 pub mod strips;
 pub mod table;
+pub mod terminal;
 pub mod toasts;
 pub mod tokens;
 pub mod tree;
