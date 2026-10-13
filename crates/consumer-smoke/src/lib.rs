@@ -20,6 +20,9 @@ pub mod plugins {}
 #[doc = include_str!("../../../docs/viewport.md")]
 pub mod viewport {}
 
+#[doc = include_str!("../../../docs/sliders.md")]
+pub mod sliders {}
+
 #[doc = include_str!("../../../docs/tree.md")]
 pub mod tree {}
 

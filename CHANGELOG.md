@@ -9,6 +9,10 @@ egui minor.
 
 ### Added
 
+- A sliders guide (`docs/sliders.md`): the gestures, typed expressions,
+  the variants, hooks and the `slider.change` step, accessibility; the
+  widget survey records why the family is egui-pop's own.
+
 - The gallery's sliders page: the compact row (soft and hard range,
   signed values, a quad toggle and a picker), a logarithmic bar, hue and
   temperature tracks, range sliders, and the `slider.change` step, which

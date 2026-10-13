@@ -85,7 +85,7 @@ released.
 |---|---|---|
 | `ProgressBar` | A fraction, text or percentage, fill colour, corner radius. `animate(true)` pulses the fill and draws a spinning arc at its end. AccessKit role `ProgressIndicator`, with the percentage as its numeric value | **No indeterminate mode**: `animate` decorates a determinate bar. No tone (success, warning, error), no buffer or sections, no reduced motion. It asks for a repaint every frame while animated, and it reads `input.time`, so a snapshot depends on the clock |
 | `Spinner` | An arc spinning on `input.time`, size and colour, role `ProgressIndicator` | No label (so an unnamed node in our accessibility check), no delay, no reduced motion. It repaints every frame while visible |
-| `Slider`, `DragValue` | Logarithmic scale, clamping modes, step, trailing fill, a value shown with its prefix and suffix | No soft and hard range, no fine adjustment, no reset, no gradient track, no range (two handles). egui-pop's own slider covers the first three |
+| `Slider`, `DragValue` | Logarithmic scale, clamping modes, step, trailing fill, a value shown with its prefix and suffix | No soft and hard range, no fine adjustment, no reset, no gradient track, no range (two handles). **Own** (2026-10-13): egui-pop's slider family covers them all (see "Sliders" below) |
 | `color_picker`, `color_edit_button_*` | HSV picker, alpha | Not colour-managed; no wheels |
 | `Modal`, `Popup`, tooltips, menus, `ComboBox` | Already the base of egui-pop's overlays | (egui-pop's overlay stack) |
 | `ScrollArea::show_rows`, `show_viewport` | Virtualized scrolling | A grid and its selection are ours |
@@ -115,7 +115,8 @@ released.
 | egui_dnd | 0.17.0 | Reorder by drag and drop, animated | **Adopt** for reorderable lists (export targets, module order in a stack); the order is written back through a command |
 | egui-modal | 0.6.0 (egui 0.30) | Modals | **Dead**: egui's `Modal` replaces it |
 | catppuccin-egui | 5.7.0 (up to egui 0.33) | Themes | Stale; our tokens replace it |
-| egui_double_slider | 4.0.0 (**Apache-2.0** only) | A range slider | Reference for our range slider |
+| egui_double_slider | 4.0.0 (**Apache-2.0** only) | A range slider | **Skip** (2026-10-13): ideas only for the range slider (see "Sliders" below) |
+| egui_fader | 0.1.2 (MIT) | An audio fader | **Skip** (2026-10-13): a vertical audio idiom, no soft range or typed entry |
 | egui_knob | 0.6.3 | Knob | Skip (knobs fit audio, not photos) |
 | egui_colors | 0.13.0 | 12-step palettes | Theme work only |
 | egui_colorgradient | 0.2.3 (2025, older egui) | Gradient editor | Reference only |
@@ -170,6 +171,36 @@ rows, and every moment a step.
 - **egui_extras `TableBuilder` (skip).** Virtualised and resizable, but
   its widths can only be reset, not set, and it has no sticky columns:
   egui_table does more for the same weight.
+
+### Sliders: what was checked (2026-10-13)
+
+The slider family was checked against darktable's bauhaus slider, the
+reference: the label and the value inside one compact row, a soft range
+for dragging and a hard range for typed values, a typed value or
+expression, fine and coarse modifiers, a double click back to the
+default, a quad button (a colour picker or a toggle), a wheel that
+scrolls the panel unless the slider has the focus, and a gradient track
+for hue and temperature; plus a range (two thumbs) and a logarithmic
+bar, AccessKit roles and values, and every finished change a step.
+
+- **egui `Slider` and `DragValue` (own).** `Slider` has a logarithmic
+  scale, steps, clamping and AccessKit (role, range, step, increment and
+  decrement); `DragValue` has typed entry and drag. Neither has a soft
+  and a hard range, a label inside the bar, fine adjustment by modifier,
+  a reset, a quad button, a gradient, two thumbs, a wheel that leaves
+  the panel alone, or a hook to veto or redirect a change. Wrapping
+  them would mean replacing their input handling and their painting:
+  egui-pop's slider is its own, and keeps egui's AccessKit properties
+  (range, step, increment, decrement, set value).
+- **egui_double_slider 4.0 (skip).** A range slider with two handles
+  and a filled span, Apache-2.0 only, with no soft range, typed entry or
+  hook. The span drawn between the thumbs is the idea kept; none of its
+  code is used.
+- **egui_fader 0.1 (skip).** A vertical audio fader.
+- **Expression evaluators (own).** A typed value takes `+ - * / ^`,
+  parentheses and `x` (the current value), in either decimal separator.
+  evalexpr is AGPL-3.0 in its current releases and does far more;
+  meval (0.2, 2017) is unmaintained. A small parser of about 150 lines is egui-pop's own.
 
 ## 3. Progress and waiting: design notes
 
@@ -373,7 +404,7 @@ egui-pop widget bound to values and commands; "adopt" = used as it is;
 | **Toast with progress and actions** | The existing toast with a bar, Cancel and result actions | VS Code notifications with progress, Sonner promise toasts, Blueprint toast progress, `AdwToast` | **Own** (toasts exist in Helios; move them to egui-pop) | "Export finished: Show in folder" | A view of a job; closing it does not cancel the job |
 | **Status bar items** | Declared items (text, icon, progress, a command on click) placed left or right | VS Code status bar, JetBrains widgets | **Own** (a zone with declared items) | Job summary, profile, zoom, selection count | Needed by the jobs centre |
 | **Empty state** | An icon, a sentence, an action (a command) | Blueprint `NonIdealState`, `AdwStatusPage`, Ant `Empty` and `Result`, shadcn `Empty` | **Own** (small) | Empty queue panel, empty collection, no module selected | Also covers error with Retry (the fault boundary card already exists) |
-| **Slider family** | darktable-style slider (label in the bar, soft and hard range, fine adjustment, reset, typed entry, gradient track), range slider (two handles), logarithmic | darktable bauhaus, Blueprint `MultiSlider`, MUI and Mantine range `Slider`, `GtkScale` marks, egui_double_slider | egui `Slider` has logarithmic only: **own** (Helios has the bauhaus-style one; move it to egui-pop) | All module parameters; range filters (ISO, date, focal length) | Wheel only when focused or with a modifier (pitfall 7); a gradient track for hue and temperature |
+| **Slider family** | darktable-style slider (label in the bar, soft and hard range, fine adjustment, reset, typed entry, gradient track), range slider (two handles), logarithmic | darktable bauhaus, Blueprint `MultiSlider`, MUI and Mantine range `Slider`, `GtkScale` marks, egui_double_slider | egui `Slider` has logarithmic only: **own** (decided 2026-10-13: `egui_pop_core::slider`) | All module parameters; range filters (ISO, date, focal length) | Wheel only when focused or with a modifier (pitfall 7); a gradient track for hue and temperature |
 | **Virtualized thumbnail grid** | A grid of tens of thousands of cells, selection (click, Shift, Ctrl, rubber band), keyboard, placeholders, cell overlays | `GtkGridView`, Qt `QListView` icon mode, MUI X `DataGrid` virtualization | **Own** on `ScrollArea::show_viewport` (decided) | The lighttable, the filmstrip | Placeholders, not spinners; the host fetches windows |
 | **Rating stars and colour labels** | 0 to 5 stars, reject; five colour labels, toggled | MUI and Mantine `Rating`, Ant `Rate`, Fluent `Rating`; Lightroom and darktable thumbnails | **Own** (small, bound to values) | The lighttable, the darkroom | Keys 0 to 5 and F1 to F5 come from the keymap; labels need a shape or text besides colour |
 | **Tag chip and tag input** | Chips (dismissible, selectable) and a field that adds tags with completion | Blueprint `TagInput`, Mantine `TagsInput` and `Pill`, Fluent `TagPicker`, Carbon `Tag`, Ant `Tag` | **Own**; the completion uses egui-pop's fuzzy matcher | Keywords, filters, collections | Wraps onto several lines; hierarchical tags (`place|France|Paris`) |

@@ -30,6 +30,9 @@ devtools; every feature's moments reachable as steps (ADR 0011).
 - [Choosing files](files.md): the system's chooser off the interface
   thread, the in-app picker (keyboard, typed paths, places, filters),
   the `file.choose` and `file.chosen` steps.
+- [Sliders](sliders.md): darktable-style sliders (soft and hard range,
+  typed expressions, fine and coarse, reset, a quad button), logarithmic,
+  gradient tracks, range sliders, the `slider.change` step.
 - [The tree](tree.md): a live tree over a lazy, asynchronous source,
   edits at any time, selection, keyboard, drag and drop, rename, steps.
 - [Lists and tables](table.md): a list and a data table, virtualised,
