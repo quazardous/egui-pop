@@ -19,6 +19,19 @@ Reviewed at every egui bump: remove what upstream fixed, update the rest.
 - **Remove when**: kittest ships a `double_click` helper or a per-step
   time.
 
+## egui_table: unnamed resize handles, rows drawn per region
+
+- **Compensated**: the column resize handles are interactive widgets
+  without an accessible name; `TableDelegate::row_ui` and
+  `header_cell_ui` are called once per region (sticky and scrolled
+  columns), also for the sticky region when there are no sticky columns.
+- **Upstream**: not filed yet (a name for the handles, and no call for
+  an empty region, would do).
+- **Workaround**: `egui-pop-views`' data table names each handle after
+  its column once the table is drawn, and skips the rows and header
+  cells of an empty region (`table.rs`, `// upstream:`).
+- **Remove when**: egui_table names its handles and skips empty regions.
+
 ## egui_kittest: no way to move a window to a screen of another scale
 
 - **Compensated**: `Harness::set_pixels_per_point` changes egui's zoom

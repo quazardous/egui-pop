@@ -473,7 +473,8 @@ impl<'a> DataTable<'a> {
         if take_focus {
             response.request_focus();
         }
-        // Resize handles get a name.
+        // upstream: egui_table's resize handles have no name (see
+        // docs/upstream.md).
         for (i, c) in columns.iter().enumerate() {
             if let Some(r) = ui
                 .ctx()
@@ -611,6 +612,11 @@ impl<K: Key> TableDelegate for Delegate<'_, K> {
     }
 
     fn header_cell_ui(&mut self, ui: &mut Ui, cell: &HeaderCellInfo) {
+        // upstream: called for an empty sticky region too (see
+        // docs/upstream.md).
+        if ui.clip_rect().width() <= 0.0 {
+            return;
+        }
         let Some(c) = self.columns.get(cell.col_range.start) else {
             return;
         };
@@ -663,6 +669,8 @@ impl<K: Key> TableDelegate for Delegate<'_, K> {
 
     fn row_ui(&mut self, ui: &mut Ui, row_nr: u64) {
         let row = row_nr as usize;
+        // upstream: called for an empty sticky region too (see
+        // docs/upstream.md).
         if ui.clip_rect().width() <= 0.0 || row >= self.len {
             return;
         }
