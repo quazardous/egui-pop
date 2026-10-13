@@ -452,6 +452,59 @@ egui-pop widget bound to values and commands; "adopt" = used as it is;
 Each step: AccessKit names and ranges checked by `egui-pop-test`, a
 `jobs` debug collector, snapshots per theme with motion frozen.
 
+## 6. Dialogs
+
+Decided on 2026-10-13, built in `egui_pop::api::dialogs`.
+
+**The default: no header band and no ✕.** A dialog is its title, its
+content and its footer. The way out is the Cancel button and Escape;
+an acknowledgement (`Info`) has its own Close button.
+
+**Why.**
+
+- **The desktop convention.** Desktop dialogs that ask something end
+  with their buttons: in the classic Mac OS guidelines, modal dialog
+  boxes have no close box (even movable ones), the user answers
+  through the buttons, and Cancel revokes what was done; WinUI's
+  `ContentDialog` dismisses through its `CloseButtonText` button (and
+  Escape), not a title-bar ✕. The ✕ in a header is the web's
+  convention (the ARIA practices' modal dialog example has one).
+- **No duplicate controls.** A ✕ next to Cancel is two controls for one
+  action: one more thing to read, to reach by Tab, and to name for a
+  screen reader.
+- **One consistent rule.** Every dialog gets out the same way, so the
+  user learns it once. Asked on the WCAG working group's list whether a
+  modal should have a ✕, Cancel or both, the answer pointed to SC 3.2.4
+  (consistent identification): choose one approach and use it
+  consistently throughout the application; Escape acts as Cancel.
+
+**The option: `DialogSpec::new(dialog).closable(true)`**, or the
+`dialogs.closable` setting for every dialog. It puts a ✕ at the right
+end of the title row, still with no band behind it. The ✕ is Escape and
+nothing else: the same cancel, through the same `dialog.answer` step and
+hooks, refused exactly when Escape is (a hook vetoing the cancel keeps
+the dialog open either way). It is named "Close" (translated), is a
+target of at least 24 points (WCAG 2.5.8) and is never focused when the
+dialog opens: the focus goes where it would without it. Use it for a
+notice of the application's own that has no Cancel button, or in an
+application that follows the web's convention throughout (then turn
+the setting on, rather than mixing dialogs with and without it).
+
+**Later, not built:** a header band, only for movable dialogs, where it
+is the handle to drag them by; the title row is where it would go.
+
+Sources:
+
+- WAI-ARIA Authoring Practices, modal dialog example:
+  <https://w3.org/WAI/ARIA/apg/patterns/dialog-modal/examples/dialog>
+- WinUI `ContentDialog.CloseButtonText`:
+  <https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.xaml.controls.contentdialog.closebuttontext>
+- WCAG working group's list, ✕ or Cancel in a modal (SC 3.2.4):
+  <https://lists.w3.org/Archives/Public/w3c-wai-gl/2017OctDec/0897.html>
+- Inside Macintosh, Macintosh Toolbox Essentials, kinds of dialog
+  boxes:
+  <https://developer.apple.com/library/archive/documentation/mac/Toolbox/Toolbox-373.html>
+
 ## Sources
 
 - shadcn/ui: <https://ui.shadcn.com/docs/components>; Radix:
