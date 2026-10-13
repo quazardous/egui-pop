@@ -19,6 +19,29 @@ Reviewed at every egui bump: remove what upstream fixed, update the rest.
 - **Remove when**: kittest ships a `double_click` helper or a per-step
   time.
 
+## eframe: no custom cursor on the web or in immediate viewports
+
+- **Compensated**: `Context::set_cursor_image` reaches winit only where
+  egui-winit has the event loop (eframe's root and deferred viewports);
+  immediate viewports and the web drop the bitmap.
+- **Upstream**: the web integration carries a TODO for CSS `url(...)`
+  cursors; not filed yet for immediate viewports.
+- **Workaround**: every bitmap cursor is shown with a system cursor as
+  its fallback (`cursor::apply`, `// upstream:`): the tool cursor's
+  nearest system cursor, or a registered image's own fallback.
+- **Remove when**: the bitmap reaches the system everywhere.
+
+## winit: no system cursor size
+
+- **Compensated**: winit does not say how large the system's cursors
+  are, so tool cursors could not match them.
+- **Upstream**: not filed yet.
+- **Workaround**: `cursor::system_size` reads `XCURSOR_SIZE` (X11 and
+  Wayland desktops), else 24 points; `CursorSettings::size` overrides
+  it.
+- **Remove when**: winit reports the cursor size (Windows'
+  `SM_CXCURSOR`, the desktop's cursor theme size).
+
 ## egui_table: unnamed resize handles, rows drawn per region
 
 - **Compensated**: the column resize handles are interactive widgets

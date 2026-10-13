@@ -504,6 +504,7 @@ pub fn set_settings(ctx: &Context, settings: CursorSettings) {
 /// The system's cursor size, in points: `XCURSOR_SIZE` where it is set
 /// (X11 and Wayland desktops), else [`DEFAULT_SIZE`].
 pub fn system_size() -> f32 {
+    // upstream: winit does not report the cursor size (docs/upstream.md).
     parse_size(std::env::var("XCURSOR_SIZE").ok().as_deref())
 }
 
@@ -719,6 +720,9 @@ pub fn apply(ctx: &Context, painter: &Painter, pos: Pos2, shown: &Shown) -> bool
             false
         }
         Shown::Tool(t) => {
+            // upstream: the bitmap is dropped on the web and in immediate
+            // viewports; the system cursor below stands in there
+            // (docs/upstream.md).
             ctx.set_cursor_image(Some(tool_image(ctx, *t)));
             ctx.set_cursor_icon(t.system());
             true

@@ -118,6 +118,11 @@ egui minor.
   situation under the pointer changes; plugins give another cursor
   with a run-hook (or a redirect of `default`), a veto keeps the
   default.
+- A cursors and loupe guide (`docs/cursors.md`): the cursor model, the
+  tools' defaults, the `cursor.resolve` step, the brush outline,
+  settings and accessibility, the loupe; its survey (winit's custom
+  cursors, eframe 0.36, egui's cursor icons, GIMP, Krita and darktable,
+  crates.io) and why the cursors and the loupe are egui-pop's own.
 - Cursors over the viewport (`viewport::cursor`): `Viewport::tool`
   picks a tool (pan, zoom, picker, crosshair, move, rotate, brush,
   eraser, mask, disabled, or one of the application's) and the viewport

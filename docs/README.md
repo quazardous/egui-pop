@@ -31,6 +31,10 @@ devtools; every feature's moments reachable as steps (ADR 0011).
   a drag handed back, a curve editor (an application's spline, the
   targeted adjustment), colour wheels, a zoom control and a navigator,
   their steps.
+- [Cursors and the loupe](cursors.md): tool cursors drawn at the
+  window's scale, a brush outline that follows the zoom, the
+  `cursor.resolve` step, a GPU loupe on the displayed pixels; the
+  survey behind them.
 - [Choosing files](files.md): the system's chooser off the interface
   thread, the in-app picker (keyboard, typed paths, places, filters),
   the `file.choose` and `file.chosen` steps.

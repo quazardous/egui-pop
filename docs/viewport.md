@@ -8,7 +8,8 @@ transform where colour management plugs in, overlays with handles,
 before and after, a pixel readout. The crate also has thumbnails in a
 virtualised grid and the image tools: a histogram, a curve editor,
 colour wheels, a zoom control and a navigator (see
-[Image tools](image-tools.md)).
+[Image tools](image-tools.md)), and the tools' cursors and a loupe (see
+[Cursors and the loupe](cursors.md)).
 
 ```sh
 cargo add egui-pop --features viewport
