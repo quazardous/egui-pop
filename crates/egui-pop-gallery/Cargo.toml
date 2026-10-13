@@ -16,12 +16,22 @@ workspace = true
 ## The system's file chooser in the gallery (tests always use the in-app
 ## picker, so this is off by default).
 native-dialogs = ["egui-pop/native-dialogs"]
+## egui-pop's and egui's profiling scopes as `tracing` spans, for the
+## `threading` example (docs/threading.md).
+trace = ["dep:tracing", "dep:profiling", "profiling/profile-with-tracing"]
+
+[[example]]
+name = "threading"
+required-features = ["trace"]
 
 [dependencies]
 egui-pop = { workspace = true, features = ["viewport", "imaging", "views", "editors", "i18n", "platform"] }
 egui = { workspace = true, features = ["default_fonts"] }
 eframe = { workspace = true, features = ["default_fonts", "wgpu", "accesskit", "wayland", "x11"] }
 serde_json.workspace = true
+profiling = { workspace = true, optional = true }
+# MIT: the spans the `threading` example measures.
+tracing = { version = "0.1", optional = true }
 
 # A shell in the terminal page, on the desktop.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
