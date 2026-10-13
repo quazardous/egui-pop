@@ -135,6 +135,9 @@ pub const PAIRS: &[Pair] = &[
     ui("slider.fill", "slider.track"),
     ui("slider.thumb", "slider.track"),
     ui("toast.border", "surface.panel"),
+    // A curve and its points over the curve editor's background.
+    ui("curve.line", "curve.background"),
+    ui("curve.point", "curve.background"),
 ];
 
 /// A pair under its required ratio, or with a token missing.

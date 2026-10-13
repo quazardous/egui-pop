@@ -256,7 +256,34 @@
     "$description": "Histograms of supplied bins.",
     "$type": "color",
     "background": {"$value": "{surface.sunken}", "$description": "Behind the curves."},
-    "grid": {"$value": "{border.default}", "$description": "The quarter lines."}
+    "grid": {"$value": "{border.default}", "$description": "The quarter lines."},
+    "clip-shadows": {"$value": "{info}", "$description": "The marker lit when shadows are clipped."},
+    "clip-highlights": {"$value": "{danger}", "$description": "The marker lit when highlights are clipped."}
+  },
+  "curve": {
+    "$description": "Curve editors (tone curves).",
+    "$type": "color",
+    "background": {"$value": "{surface.sunken}", "$description": "Behind the graph."},
+    "grid": {"$value": "{border.default}", "$description": "The quarter lines."},
+    "identity": {"$value": "{border.default}", "$description": "The diagonal where output equals input."},
+    "line": {"$value": "{text.default}", "$description": "The curve."},
+    "point": {"$value": "{text.default}", "$description": "A point of the curve."},
+    "point-selected": {"$value": "{accent.default}", "$description": "The selected point, or the one picked."},
+    "pick": {"$value": "{warning}", "$description": "The value picked under the pointer in the image."}
+  },
+  "wheel": {
+    "$description": "Colour wheels and the hue and saturation picker.",
+    "$type": "color",
+    "ring": {"$value": "{border.strong}", "$description": "The disc's outline."},
+    "puck": {"$value": "{text.strong}", "$description": "The puck."},
+    "puck-outline": {"$value": "{surface.canvas}", "$description": "The ring around the puck, so it reads on any colour."}
+  },
+  "navigator": {
+    "$description": "The navigator: the whole image and the part in view.",
+    "$type": "color",
+    "background": {"$value": "{surface.sunken}", "$description": "Behind the image."},
+    "frame": {"$value": "{accent.default}", "$description": "The outline of the part in view."},
+    "veil": {"$value": "{surface.canvas}", "$description": "Over the part out of view, half transparent."}
   },
   "editor": {
     "$description": "Text and code editors.",

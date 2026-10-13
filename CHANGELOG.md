@@ -36,6 +36,12 @@ egui minor.
   components `dialog.backdrop`, `dialog.header` and
   `dialog.header-text` (with its contrast pair).
 
+- Component tokens for the image tools: `histogram.clip-shadows` and
+  `histogram.clip-highlights` (the clipping markers), `curve.*` (the
+  curve editor: background, grid, identity, line, point, selected point,
+  pick), `wheel.*` (colour wheels: ring, puck, puck outline) and
+  `navigator.*` (background, frame, veil). The curve and its points are
+  contrast-checked against the editor's background.
 - A sliders guide (`docs/sliders.md`): the gestures, typed expressions,
   the variants, hooks and the `slider.change` step, accessibility; the
   widget survey records why the family is egui-pop's own.
