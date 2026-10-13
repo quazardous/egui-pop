@@ -1446,6 +1446,33 @@ fn the_progress_page_gives_values_and_ranges_and_still_frames() {
 }
 
 #[test]
+fn a_command_the_host_answers_later_keeps_its_button_busy() {
+    use egui_pop::core::motion;
+    use egui_pop_gallery::pages::progress::CMD_SLOW_EXPORT;
+    let mut h = harness(options("pop-dark", Density::Comfortable, "progress"));
+    h.run();
+    h.get_by_label("Export").click();
+    h.run();
+    let app = h.state().app.handle().clone();
+    assert!(app.running(&CMD_SLOW_EXPORT));
+    let button = h.get_by_label("Export");
+    assert!(button.accesskit_node().is_disabled());
+    assert!(button.accesskit_node().is_busy());
+    // After the delay, a spinner in the icon's place.
+    motion::freeze(&h.ctx, 0.4);
+    h.run();
+    h.snapshot("progress-busy-pop-dark");
+    h.get_by_label("Refuse them").click();
+    h.run();
+    assert!(!app.running(&CMD_SLOW_EXPORT));
+    assert_eq!(
+        app.history().last().unwrap().result,
+        Err("the export folder is read-only".to_string())
+    );
+    assert!(!h.get_by_label("Export").accesskit_node().is_busy());
+}
+
+#[test]
 fn the_motion_page_shows_the_busy_indicator_after_its_delay_for_its_minimum() {
     use egui_pop::core::motion;
     let mut h = harness(options("pop-dark", Density::Comfortable, "motion"));

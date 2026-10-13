@@ -230,6 +230,36 @@ fn ui(ui: &mut egui_pop::egui::Ui, started: f64, loading: bool) {
 }
 ```
 
+## Busy controls and the status bar
+
+A command the host answers later (`Reply::Later`) shows as running
+until its result arrives (`AppHandle::running`, and
+`AppHandle::running_since`, by the motion clock). Controls bound to it
+show it:
+
+- `egui_pop::api::busy::CommandButton`: a button running a command,
+  greyed while it waits; after `motion.spinner.delay` a spinner takes
+  its icon's place for at least `motion.spinner.min`. Its width and its
+  name stay, AccessKit's `busy` flag is set, and a failed run says why
+  on hover;
+- menu items bound to the command do the same;
+- a status bar indicator (`strips::IndicatorState::busy`, the time the
+  work started) shows a delayed spinner before its text;
+- `JobsPlugin` adds the status bar's jobs item: a ring with the jobs'
+  overall estimate (turning while one cannot estimate), "Jobs: 3
+  (42%)", and "Failed: 1"; nothing while there is nothing to say.
+
+```rust
+use egui_pop::api::AppHandle;
+use egui_pop::api::busy::CommandButton;
+use egui_pop::core::icon::Icon;
+use egui_pop::model::ids::CommandId;
+
+fn toolbar(ui: &mut egui_pop::egui::Ui, app: &AppHandle) {
+    ui.add(CommandButton::new(app, CommandId::from_static("doc.export")).icon(Icon::Save));
+}
+```
+
 ## Gaps
 
 - A job with no event for a long time is not shown as "not responding"

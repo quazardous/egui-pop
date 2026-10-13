@@ -71,8 +71,12 @@ pub struct IndicatorState {
     pub tone: Tone,
     /// A count, shown as a badge.
     pub count: Option<u64>,
-    /// Progress from 0 to 1, shown as a bar under the text.
+    /// Progress from 0 to 1, shown as a thin bar under the text.
     pub progress: Option<f32>,
+    /// Busy since (motion clock seconds, `egui_pop_core::motion::now`):
+    /// a spinner before the text after `motion.spinner.delay`, kept
+    /// `motion.spinner.min`.
+    pub busy: Option<f64>,
     /// A tooltip.
     pub detail: String,
     /// The last event that changed it.
@@ -300,12 +304,29 @@ fn indicators(ui: &mut Ui, app: &AppHandle) {
             let r = ui.add(
                 egui::Button::new(egui::RichText::new(&text).color(color).small()).frame(false),
             );
+            // Right to left: the spinner comes after the button in code,
+            // before it on screen.
+            let busy = egui_pop_core::motion::Busy::new(
+                egui::Id::new(("egui_pop_indicator_busy", &ind.id)),
+                state.busy.unwrap_or(0.0),
+            )
+            .visible(ui.ctx(), state.busy.is_some());
+            if busy {
+                let side = t.size.icon_inline;
+                let (rect, _) = ui.allocate_exact_size(vec2(side, side), Sense::hover());
+                egui_pop_core::progress::paint_spinner(ui, rect, color);
+            }
             if let Some(p) = state.progress {
-                let bar = egui::Rect::from_min_size(
-                    egui::pos2(r.rect.left(), r.rect.bottom() - 2.0),
-                    vec2(r.rect.width() * p.clamp(0.0, 1.0), 2.0),
+                // The button carries the text; the line is drawn only.
+                let tokens = egui_pop_core::progress::ProgressTokens::of(ui.ctx());
+                let track = egui::Rect::from_min_size(
+                    egui::pos2(r.rect.left(), r.rect.bottom() - tokens.line),
+                    vec2(r.rect.width(), tokens.line),
                 );
-                ui.painter().rect_filled(bar, 0.0, color);
+                ui.painter().rect_filled(track, 0.0, tokens.track);
+                let mut fill = track;
+                fill.set_width(track.width() * p.clamp(0.0, 1.0));
+                ui.painter().rect_filled(fill, 0.0, color);
             }
             let r = if state.detail.is_empty() {
                 r

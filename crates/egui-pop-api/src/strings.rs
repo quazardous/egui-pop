@@ -309,6 +309,18 @@ pub const DEVTOOLS_ARGUMENTS: StrKey = StrKey::new("egui-pop-devtools-arguments"
 pub const DEVTOOLS_MUTATES: StrKey =
     StrKey::new("egui-pop-devtools-mutates", "{ $action } (mutates)");
 
+// Jobs.
+
+/// The status bar's jobs item: how many go on.
+pub const JOBS_ACTIVE: StrKey = StrKey::new("egui-pop-jobs-active", "Jobs: { $count }");
+/// ... and their overall estimate.
+pub const JOBS_ACTIVE_PERCENT: StrKey = StrKey::new(
+    "egui-pop-jobs-active-percent",
+    "Jobs: { $count } ({ $percent }%)",
+);
+/// How many failed.
+pub const JOBS_FAILED: StrKey = StrKey::new("egui-pop-jobs-failed", "Failed: { $count }");
+
 /// Every string of this module, for catalogues and tests.
 pub const ALL: &[StrKey] = &[
     COMMAND_LABEL,
@@ -384,6 +396,9 @@ pub const ALL: &[StrKey] = &[
     TOAST_WARNING,
     TOAST_ERROR,
     TOAST_CLOSE,
+    JOBS_ACTIVE,
+    JOBS_ACTIVE_PERCENT,
+    JOBS_FAILED,
     FRAME_WINDOW_MENU,
     WINDOW_EXIT_FULLSCREEN,
     AREA_CENTER,

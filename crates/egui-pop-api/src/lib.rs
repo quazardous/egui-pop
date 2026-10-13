@@ -19,6 +19,8 @@
 //!   veto, replace or extend (ADR 0011);
 //! - [`services`]: typed service tokens;
 //! - [`stories`]: gallery stories as a contribution;
+//! - [`busy`]: a button bound to a command, showing its busy state (a
+//!   delayed spinner while the host has not answered);
 //! - [`palette`]: the command palette, a plugin;
 //! - [`palettes`]: toolboxes and palettes floating over the interface,
 //!   never modal, docking in the workbench's areas;
@@ -90,6 +92,7 @@
 
 pub mod app;
 pub mod arrangements;
+pub mod busy;
 pub mod ctx;
 pub mod devtools;
 pub mod dialogs;

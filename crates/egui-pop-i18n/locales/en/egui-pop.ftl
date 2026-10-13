@@ -404,6 +404,12 @@ egui-pop-frame-restore = Restore
 
 egui-pop-frame-window-menu = Window menu
 
+egui-pop-jobs-active = Jobs: { $count }
+
+egui-pop-jobs-active-percent = Jobs: { $count } ({ $percent }%)
+
+egui-pop-jobs-failed = Failed: { $count }
+
 egui-pop-menu-does-not-apply = Does not apply here ({ $when })
 
 egui-pop-menu-empty = (empty)

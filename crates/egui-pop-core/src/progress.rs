@@ -431,6 +431,38 @@ fn arc(center: Pos2, radius: f32, start: f32, sweep: f32) -> Vec<Pos2> {
         .collect()
 }
 
+/// Paints a ring in `rect`: an arc from the top for `fraction`, a
+/// turning arc when none (still under reduced motion). For a ring that
+/// is part of another widget; [`Ring`] is the widget.
+pub fn paint_ring(ui: &Ui, rect: Rect, fraction: Option<f32>, color: Color32) {
+    let ctx = ui.ctx();
+    let t = Tokens::of(ctx);
+    let p = ProgressTokens::of(ctx);
+    let side = rect.width().min(rect.height());
+    let width = (side / 7.0).max(1.5);
+    let radius = side / 2.0 - width / 2.0;
+    let painter = ui.painter();
+    painter.circle_stroke(rect.center(), radius, Stroke::new(width, p.track));
+    let top = -TAU / 4.0;
+    match fraction {
+        Some(f) if f > 0.0 => {
+            painter.line(
+                arc(rect.center(), radius, top, f.min(1.0) * TAU),
+                Stroke::new(width, color),
+            );
+        }
+        Some(_) => {}
+        None => {
+            let phase = motion::phase(ctx, f64::from(t.motion.spinner_turn), 0.125);
+            painter.line(
+                arc(rect.center(), radius, top + phase * TAU, TAU / 4.0),
+                Stroke::new(width, color),
+            );
+            motion::animate(ctx);
+        }
+    }
+}
+
 /// A small circular progress: determinate (an arc from the top) or
 /// indeterminate (a turning arc).
 #[derive(Clone, Debug)]
@@ -472,34 +504,11 @@ impl Ring {
 impl Widget for Ring {
     fn ui(self, ui: &mut Ui) -> Response {
         let ctx = ui.ctx().clone();
-        let t = Tokens::of(&ctx);
         let p = ProgressTokens::of(&ctx);
         let side = self.size.unwrap_or(p.ring);
         let (rect, response) = ui.allocate_exact_size(vec2(side, side), Sense::hover());
         if ui.is_rect_visible(rect) {
-            let width = (side / 7.0).max(1.5);
-            let radius = side / 2.0 - width / 2.0;
-            let painter = ui.painter();
-            painter.circle_stroke(rect.center(), radius, Stroke::new(width, p.track));
-            let color = self.tone.color(&ctx);
-            let top = -TAU / 4.0;
-            match self.fraction {
-                Some(f) if f > 0.0 => {
-                    painter.line(
-                        arc(rect.center(), radius, top, f * TAU),
-                        Stroke::new(width, color),
-                    );
-                }
-                Some(_) => {}
-                None => {
-                    let phase = motion::phase(&ctx, f64::from(t.motion.spinner_turn), 0.125);
-                    painter.line(
-                        arc(rect.center(), radius, top + phase * TAU, TAU / 4.0),
-                        Stroke::new(width, color),
-                    );
-                    motion::animate(&ctx);
-                }
-            }
+            paint_ring(ui, rect, self.fraction, self.tone.color(&ctx));
         }
         let value = self.fraction.map(|f| Value {
             value: (f64::from(f) * 100.0).round(),

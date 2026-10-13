@@ -40,6 +40,18 @@ egui minor.
   lock. They compile to nothing unless a profiler backend is enabled
   (`profiling/profile-with-tracing`, `-with-puffin`...); the gallery's
   `threading` example measures them (`docs/threading.md`).
+- Busy state of command-bound controls: `busy::CommandButton` runs a
+  command and, while the host has not answered, greys, shows a spinner
+  in its icon's place after the delay (keeping its width and its name,
+  AccessKit's `busy` flag set) and says why a failed run failed; menu
+  items do the same. `AppHandle::running_since` (the motion clock's time
+  a waiting run started). Status bar indicators show a delayed spinner
+  while busy (`IndicatorState::busy`), their progress line on the
+  `progress.*` tokens; `JobsPlugin` adds the jobs item (a ring with the
+  overall estimate, how many jobs go on, how many failed). Translated in
+  French. The gallery's host answers `gallery.slow.*` commands when the
+  progress page says so.
+
 - Progress widgets (`egui_pop_core::progress`): `ProgressBar`
   (determinate or indeterminate, a travelling segment that stands still
   as stripes under reduced motion; tones; stacked sections for failed

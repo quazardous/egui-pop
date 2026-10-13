@@ -1,13 +1,31 @@
 //! The progress page: bars (determinate, indeterminate, toned, with
 //! stacked sections, a thin line), rings, meters against thresholds,
-//! and spinners, one of them delayed. Motion is frozen in the tests, so
-//! the indeterminate ones are the snapshots' fixtures too.
+//! spinners, one of them delayed, and controls bound to a command the
+//! host answers later, busy until it does. Motion is frozen in the
+//! tests, so the indeterminate ones are the snapshots' fixtures too.
+
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use egui::Ui;
+use egui_pop::api::busy::CommandButton;
+use egui_pop::api::stories::Story;
+use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
+use egui_pop::core::icon::Icon;
 use egui_pop::core::motion;
 use egui_pop::core::progress::{Meter, ProgressBar, Ring, Spinner, Tone};
+use egui_pop::model::commands::CommandSpec;
+use egui_pop::model::ids::{CommandId, PluginId, StoryId};
+use serde_json::json;
 
 use super::section;
+use crate::host::Waiting;
+use crate::shell::SHELL;
+
+pub const PROGRESS_PAGE: PluginId = PluginId::from_static("gallery.progress");
+
+/// A command the gallery's host answers later.
+pub const CMD_SLOW_EXPORT: CommandId = CommandId::from_static("gallery.slow.export");
 
 /// The width of the bars.
 const BAR: f32 = 320.0;
@@ -18,9 +36,69 @@ pub struct State {
     load: Option<(f64, f64)>,
 }
 
-pub fn show(ui: &mut Ui, state: &mut State) {
+/// The progress page, and the commands its host answers later.
+#[derive(Debug, Default)]
+pub struct ProgressPage {
+    pub waiting: Waiting,
+}
+
+impl Plugin for ProgressPage {
+    fn id(&self) -> PluginId {
+        PROGRESS_PAGE
+    }
+
+    fn title(&self) -> String {
+        "Progress".into()
+    }
+
+    fn requires(&self) -> Vec<PluginId> {
+        vec![SHELL]
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        ctx.declare(
+            CommandSpec::new(CMD_SLOW_EXPORT, "Export", "Gallery")
+                .description(
+                    "Exports the demo images; the gallery's host answers later, when told.",
+                )
+                .hidden()
+                .no_agent(),
+        )?;
+        let state = Rc::new(RefCell::new(State::default()));
+        let waiting = self.waiting.clone();
+        ctx.story(
+            Story::new(StoryId::from_static("progress"), "Progress", move |ui, app| {
+                show(ui, app, &mut state.borrow_mut(), &waiting)
+            })
+            .description("Progress bars (determinate, indeterminate, toned, with sections, a thin line), rings, meters and spinners, one delayed; controls busy while the host has not answered.")
+            .group("Progress and jobs", 132),
+        )?;
+        Ok(())
+    }
+}
+
+pub fn show(ui: &mut Ui, app: &AppHandle, state: &mut State, waiting: &Waiting) {
     let ctx = ui.ctx().clone();
     ui.label("Every one is an AccessKit progress indicator with a name; a determinate one has a value and its range, an indeterminate one none. Under reduced motion the indeterminate ones stand still.");
+    section(ui, "Busy controls");
+    ui.label("The host answers this command later: its button greys at once, shows a spinner in its icon's place after 300 ms, and keeps its width and its name.");
+    ui.horizontal_wrapped(|ui| {
+        ui.add(CommandButton::new(app, CMD_SLOW_EXPORT).icon(Icon::Save));
+        let n = waiting.len();
+        if ui
+            .add_enabled(n > 0, egui::Button::new("Answer the host's commands"))
+            .clicked()
+        {
+            waiting.answer(&Ok(json!({ "exported": 3 })));
+        }
+        if ui
+            .add_enabled(n > 0, egui::Button::new("Refuse them"))
+            .clicked()
+        {
+            waiting.answer(&Err("the export folder is read-only".into()));
+        }
+    });
+    ui.weak("Menu items bound to such a command do the same, and a status bar indicator shows a delayed spinner while busy (the strips page's job).");
     section(ui, "Spinners");
     ui.add(Spinner::new().label("Loading previews"));
     let now = motion::now(&ctx);

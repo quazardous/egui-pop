@@ -311,6 +311,8 @@ pub(crate) struct Shared {
     journal: RefCell<crate::host::Journal>,
     /// Commands whose result is to come, by id: how many.
     running: RefCell<BTreeMap<CommandId, usize>>,
+    /// When each running command's oldest run started (motion clock).
+    running_since: RefCell<BTreeMap<CommandId, f64>>,
     /// Collectors added by plugins.
     collectors: RefCell<Vec<(OwnerId, String)>>,
     /// A shortcuts editor waits for keys: the dispatcher stands aside.
@@ -385,6 +387,7 @@ impl AppHandle {
             held: RefCell::new(Vec::new()),
             journal: RefCell::new(crate::host::Journal::default()),
             running: RefCell::new(BTreeMap::new()),
+            running_since: RefCell::new(BTreeMap::new()),
             collectors: RefCell::new(Vec::new()),
             capturing: std::cell::Cell::new(false),
             steps: RefCell::new(Registry::new()),
@@ -866,6 +869,13 @@ impl AppHandle {
     /// Whether a run of this command waits for its result.
     pub fn running(&self, id: &CommandId) -> bool {
         self.0.running.borrow().get(id).is_some_and(|n| *n > 0)
+    }
+
+    /// When the command's waiting runs started, by the motion clock
+    /// (`egui_pop_core::motion::now`): what a busy indicator's delay
+    /// counts from. `None` when no run waits.
+    pub fn running_since(&self, id: &CommandId) -> Option<f64> {
+        self.0.running_since.borrow().get(id).copied()
     }
 
     fn publish_now(&self, source: &str, cause: Option<Seq>, name: &str, data: Json) -> Seq {
@@ -3207,13 +3217,20 @@ impl App {
                 Reply::Done(result)
             }
             Reply::Later(pending) => {
-                *self
-                    .handle
-                    .0
-                    .running
-                    .borrow_mut()
-                    .entry(command.clone())
-                    .or_default() += 1;
+                let waiting = {
+                    let mut running = self.handle.0.running.borrow_mut();
+                    let n = running.entry(command.clone()).or_default();
+                    *n += 1;
+                    *n
+                };
+                if waiting == 1 {
+                    let now = egui_pop_core::motion::now(&self.handle.egui());
+                    self.handle
+                        .0
+                        .running_since
+                        .borrow_mut()
+                        .insert(command.clone(), now);
+                }
                 self.in_flight.push(InFlight {
                     command: command.clone(),
                     args,
@@ -3266,6 +3283,9 @@ impl App {
         for (command, args, origin, seq, result) in arrived {
             if let Some(c) = self.handle.0.running.borrow_mut().get_mut(&command) {
                 *c = c.saturating_sub(1);
+                if *c == 0 {
+                    self.handle.0.running_since.borrow_mut().remove(&command);
+                }
             }
             if let Err(e) = &result {
                 log::warn!(target: "egui_pop", "command `{command}`: {e}");

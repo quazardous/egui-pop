@@ -504,13 +504,21 @@ fn command_row(ui: &mut Ui, app: &AppHandle, cx: &WhenContext, row: Row<'_>) -> 
     let r = ui
         .add_enabled_ui(why.is_none(), |ui| button.atom_ui(ui))
         .inner;
+    // A run waiting for the host: a spinner in the icon's place, after
+    // the delay.
+    let busy = crate::busy::busy_shown(app, &ctx, tick, id);
+    if app.running(id) {
+        ctx.accesskit_node_builder(r.response.id, |node| node.set_busy());
+    }
     if let Some(rect) = r.rect(tick) {
         let color = if why.is_none() {
             t.text.default
         } else {
             t.text.muted
         };
-        if checked {
+        if busy {
+            egui_pop_core::progress::paint_spinner(ui, rect, color);
+        } else if checked {
             Icon::Check.paint(ui.painter(), rect, color);
         } else if let Some(i) = icon {
             i.paint(ui.painter(), rect, color);

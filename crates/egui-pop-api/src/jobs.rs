@@ -49,11 +49,15 @@ use std::fmt;
 use std::rc::Rc;
 use std::sync::Mutex;
 
+use egui::Ui;
 use egui_pop_core::debug::FnCollector;
 use egui_pop_core::lock;
+use egui_pop_core::progress::{Tone, paint_ring};
+use egui_pop_core::strings;
+use egui_pop_core::theme::Tokens;
 use egui_pop_model::clock::SharedClock;
 use egui_pop_model::commands::CommandSpec;
-use egui_pop_model::ids::{CommandId, PluginId, StepId};
+use egui_pop_model::ids::{BlockId, CommandId, PluginId, StepId};
 use egui_pop_model::jobs::{Incoming, Job, Jobs, Request, Summary};
 use serde_json::{Value as Json, json};
 
@@ -62,6 +66,8 @@ use crate::hooks::On;
 use crate::host::Seq;
 use crate::services::ServiceToken;
 use crate::steps::StepSpec;
+use crate::strings as txt;
+use crate::zones::{self, Block};
 use crate::{Ctx, Plugin, PluginError};
 
 /// The jobs, as a service.
@@ -341,6 +347,65 @@ fn spec(request: Request) -> CommandSpec {
         .hidden()
 }
 
+/// What the status bar's jobs item says: how many go on (with their
+/// overall estimate), and how many failed.
+pub fn status_text(ctx: &egui::Context, summary: &Summary) -> (String, Option<String>) {
+    let count = summary.active.to_string();
+    let active = match summary.fraction {
+        Some(f) => strings::tr_args(
+            ctx,
+            &txt::JOBS_ACTIVE_PERCENT,
+            &[
+                ("count", &count),
+                ("percent", &strings::number(ctx, (f * 100.0).round(), 0)),
+            ],
+        ),
+        None => strings::tr_args(ctx, &txt::JOBS_ACTIVE, &[("count", &count)]),
+    };
+    let failed = (summary.failed > 0).then(|| {
+        strings::tr_args(
+            ctx,
+            &txt::JOBS_FAILED,
+            &[("count", &summary.failed.to_string())],
+        )
+    });
+    (active, failed)
+}
+
+/// The status bar's jobs item: a ring with the jobs' overall estimate
+/// (turning while one cannot estimate), how many go on and how many
+/// failed; nothing when there is nothing to say.
+fn status_item(ui: &mut Ui, app: &AppHandle) {
+    let Some(jobs) = app.service(&JOBS) else {
+        return;
+    };
+    let summary = jobs.summary();
+    if summary.active == 0 && summary.failed == 0 {
+        return;
+    }
+    let ctx = ui.ctx().clone();
+    let t = Tokens::of(&ctx);
+    let (active, failed) = status_text(&ctx, &summary);
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = t.space.s;
+        if summary.active > 0 {
+            // The ring is drawn only: the text names the item.
+            let side = t.size.icon_inline;
+            let (rect, _) = ui.allocate_exact_size(egui::vec2(side, side), egui::Sense::hover());
+            paint_ring(
+                ui,
+                rect,
+                summary.fraction.map(|f| f as f32),
+                Tone::Accent.color(&ctx),
+            );
+            ui.label(egui::RichText::new(&active).small());
+        }
+        if let Some(failed) = failed {
+            ui.label(egui::RichText::new(failed).small().color(t.status.danger));
+        }
+    });
+}
+
 /// Whether a plugin hooks `jobs.estimate`.
 fn estimate_hooked(app: &AppHandle) -> bool {
     app.steps()
@@ -495,6 +560,14 @@ impl Plugin for JobsPlugin {
             Ok(Json::Null)
         });
         ctx.collector(collector)?;
+        ctx.block(
+            zones::STATUS_BAR,
+            Block::add(
+                BlockId::from_static("egui_pop.jobs.status"),
+                900,
+                status_item,
+            ),
+        );
         Ok(())
     }
 }

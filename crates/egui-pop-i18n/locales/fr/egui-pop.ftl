@@ -403,6 +403,12 @@ egui-pop-frame-restore = Restaurer
 
 egui-pop-frame-window-menu = Menu de la fenêtre
 
+egui-pop-jobs-active = Tâches : { $count }
+
+egui-pop-jobs-active-percent = Tâches : { $count } ({ $percent } %)
+
+egui-pop-jobs-failed = Échecs : { $count }
+
 egui-pop-menu-does-not-apply = Ne s’applique pas ici ({ $when })
 
 egui-pop-menu-empty = (vide)

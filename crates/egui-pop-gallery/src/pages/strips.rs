@@ -40,6 +40,9 @@ impl Plugin for StripsPage {
                         state.text = "Exporting".into();
                         state.tone = Tone::Active;
                         state.progress = Some(0.0);
+                        // Busy since the job started: a spinner after
+                        // the delay.
+                        state.busy = event.data["at"].as_f64();
                     }
                     "gallery.job.progress" => {
                         let p = event.data["progress"].as_f64().unwrap_or(0.0) as f32;
@@ -50,6 +53,7 @@ impl Plugin for StripsPage {
                         state.text = "Exported".into();
                         state.tone = Tone::Success;
                         state.progress = None;
+                        state.busy = None;
                     }
                     _ => {}
                 }
@@ -69,7 +73,12 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     section(ui, "A job, as the host would publish it");
     ui.horizontal_wrapped(|ui| {
         if ui.button("Start").clicked() {
-            app.publish("gallery", None, "gallery.job.started", json!({}));
+            app.publish(
+                "gallery",
+                None,
+                "gallery.job.started",
+                json!({ "at": egui_pop::core::motion::now(ui.ctx()) }),
+            );
         }
         for p in [0.25, 0.5, 0.75] {
             if ui.button(format!("{}%", p * 100.0)).clicked() {

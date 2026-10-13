@@ -17,6 +17,7 @@ use egui_pop::api::{App, AppBuilder, BuildError};
 use egui_pop::model::ids::{PluginId, StoryId};
 use egui_pop::theme::ThemeSpec;
 
+pub mod host;
 mod options;
 pub mod pages;
 pub mod shell;
@@ -73,7 +74,9 @@ pub fn builder(options: &Options) -> AppBuilder {
         .reduced_motion(options.reduced_motion);
     spec.accent = options.accent.clone();
     let jobs_sim = pages::jobs::Sim::default();
+    let waiting = host::Waiting::default();
     let builder = App::builder()
+        .host(host::GalleryHost::new(waiting.clone()))
         .name("egui-pop gallery")
         .theme(spec)
         .plugins(egui_pop::api::DefaultPlugins)
@@ -137,15 +140,8 @@ pub fn builder(options: &Options) -> AppBuilder {
         .plugin(pages::dialogs::DialogsPage)
         .plugin(pages::files::FilesPage)
         .plugin(pages::toasts::ToastsPage)
-        .plugin(PagePlugin {
-            plugin: PluginId::from_static("gallery.progress"),
-            story: StoryId::from_static("progress"),
-            title: "Progress",
-            description: "Progress bars (determinate, indeterminate, toned, with sections, a thin line), rings, meters and spinners, one delayed.",
-            group: "Progress and jobs",
-            weight: 132,
-            show: pages::progress::show,
-            playground: None,
+        .plugin(pages::progress::ProgressPage {
+            waiting: waiting.clone(),
         })
         .plugin(pages::viewport::ViewportPage)
         .plugin(egui_pop::imaging::ImagingPlugin)
