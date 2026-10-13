@@ -6,6 +6,10 @@
 //! - [`table`]: a data table (on `egui_table`), sorted and resized
 //!   through the host's value store, cells drawn by the application;
 //! - [`select`]: the selection by key they share;
+//! - [`library`]: a photo library's widgets: a thumbnail grid and a
+//!   filmstrip, ratings, colour labels and flags, a comparison, tag
+//!   chips and input, a search field with filter chips, their steps and
+//!   commands;
 //! - [`steps`]: their moments as steps, and [`ViewsPlugin`] that
 //!   declares them;
 //! - [`strings`]: the text they show, translatable.
@@ -19,6 +23,7 @@
 //!
 //! Layer: a component on the application API (L4, ADR 0001).
 
+pub mod library;
 pub mod list;
 mod nav;
 mod rows;

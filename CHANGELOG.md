@@ -45,6 +45,22 @@ egui minor.
   kept when the view moves. `ViewportState::upload_report` says what
   the last frame uploaded and what waits. See docs/threading.md.
 
+- A photo library's widgets (`egui_pop::views::library`): a virtualised
+  thumbnail grid and a filmstrip sharing its selection, over images the
+  application lists (`LibraryItems`) and thumbnails it supplies
+  asynchronously (`ThumbSource`, placeholders until they arrive), with
+  keyboard navigation, the thumbnails' size by zoom, multi-selection
+  (Shift, Ctrl, a rubber band), overlays (rating, colour labels, pick or
+  reject flag, badges) and stacks collapsed or expanded; Lightroom's
+  culling keys with auto-advance (`CullKeymap`); rating stars, colour
+  label and flag toggles; a comparison of two to four images with zoom
+  and pan synced and a "best" marker; tag chips and a tag input with
+  completion; a search field with filter chips giving a structured
+  `Filter`. Every change runs a step (`library.select`, `.rate`,
+  `.label`, `.flag`, `.tag`, `.stack`, `.filter`) and agents have
+  commands for them, declared by `LibraryPlugin`. Guide:
+  docs/library.md; gallery page `library`.
+
 - The image on a surface of its own on Wayland (`image_surface`, feature
   `wayland` of `egui-pop-viewport`, on by default): after
   `image_surface::install` (eframe's creation context, a transparent main

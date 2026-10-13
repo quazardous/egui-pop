@@ -14,6 +14,8 @@ category-help = Help
 
 category-jobs = Jobs
 
+category-library = Library
+
 category-notifications = Notifications
 
 category-terminal = Terminal
@@ -175,6 +177,30 @@ command-job-resume =
 command-job-retry =
     .description = Asks the host to run the failed or cancelled job `id` again.
     .title = Retry a job
+
+command-library-filter =
+    .description = Sets a library's filter (`filter`: `text`, `min_rating`, `labels`, `flags`, `tags`, `from`, `to`; `{"{"}{"}"}` clears it), through its search field's `library.filter` step.
+    .title = Filter images
+
+command-library-flag =
+    .description = Picks, rejects or unflags images (`flag`: pick, reject, none): `keys`, else the selection; through `library.flag`.
+    .title = Flag images
+
+command-library-label =
+    .description = Puts a colour label (`label`: red, yellow, green, blue, purple) on images or takes it off (`on`; else toggled from the cursor's image): `keys`, else the selection; through `library.label`.
+    .title = Label images
+
+command-library-rate =
+    .description = Rates images (`rating`, 0 to 5) of a library: `keys`, else its selection; through its `library.rate` step.
+    .title = Rate images
+
+command-library-select =
+    .description = Selects images of a library by key (`keys`, the cursor on `cursor` or the last key), through its `library.select` step.
+    .title = Select images
+
+command-library-tag =
+    .description = Adds tags (`add`) to images and takes others off (`remove`): `keys`, else the selection; through `library.tag`.
+    .title = Tag images
 
 command-logs-reveal =
     .description = Opens the folder holding the application's log files.
@@ -708,15 +734,73 @@ egui-pop-viewport-zoom-in = Zoom in
 
 egui-pop-viewport-zoom-out = Zoom out
 
+egui-pop-views-add-filter = Add a filter
+
+egui-pop-views-add-tag = Add a tag
+
+egui-pop-views-blue = Blue
+
+egui-pop-views-clear-filters = Clear the search
+
+egui-pop-views-collapse-stack = Collapse the stack of { $count }
+
+egui-pop-views-compare = Compare
+
 egui-pop-views-empty = Empty
 
+egui-pop-views-expand-stack = Expand the stack of { $count }
+
 egui-pop-views-failed = Could not load: { $reason }
+
+egui-pop-views-filmstrip = Filmstrip
+
+egui-pop-views-filter-dates = { $from } to { $to }
+
+egui-pop-views-filter-flag = Flag: { $flag }
+
+egui-pop-views-filter-from = From { $from }
+
+egui-pop-views-filter-label = Label: { $label }
+
+egui-pop-views-filter-rating = Rating ≥ { $rating }
+
+egui-pop-views-filter-tag = Tag: { $tag }
+
+egui-pop-views-filter-to = Until { $to }
+
+egui-pop-views-flag = Flag
+
+egui-pop-views-green = Green
+
+egui-pop-views-label = Label
+
+egui-pop-views-label-toggle = { $label } label
+
+egui-pop-views-library = Library
 
 egui-pop-views-list = List
 
 egui-pop-views-loading = Loading…
 
+egui-pop-views-mark-best = Best of the comparison
+
+egui-pop-views-pick = Pick
+
+egui-pop-views-purple = Purple
+
+egui-pop-views-rate-stars = Rate { $stars } of 5
+
+egui-pop-views-rating = Rating
+
+egui-pop-views-red = Red
+
+egui-pop-views-reject = Reject
+
+egui-pop-views-remove = Remove { $item }
+
 egui-pop-views-rename = Rename { $name }
+
+egui-pop-views-search = Search
 
 egui-pop-views-sorted-down = { $column }, sorted descending
 
@@ -725,6 +809,10 @@ egui-pop-views-sorted-up = { $column }, sorted ascending
 egui-pop-views-table = Table
 
 egui-pop-views-tree = Tree
+
+egui-pop-views-unflagged = Unflagged
+
+egui-pop-views-yellow = Yellow
 
 egui-pop-window-exit-fullscreen = Exit full screen (F11)
 
@@ -793,6 +881,9 @@ plugin-egui-pop-job-consoles =
 
 plugin-egui-pop-jobs =
     .title = Jobs
+
+plugin-egui-pop-library =
+    .title = Photo library
 
 plugin-egui-pop-logs =
     .title = Logs

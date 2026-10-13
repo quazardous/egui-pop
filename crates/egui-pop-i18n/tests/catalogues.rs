@@ -69,6 +69,7 @@ fn messages() -> Messages {
         .plugin(egui_pop_i18n::I18nPlugin::new())
         .plugin(egui_pop_i18n::ShowKeys)
         .plugin(egui_pop_views::ViewsPlugin)
+        .plugin(egui_pop_views::library::LibraryPlugin)
         .plugin(egui_pop_editors::EditorsPlugin)
         .plugin(egui_pop_editors::TerminalPlugin)
         .plugin(egui_pop_editors::JobConsolesPlugin)

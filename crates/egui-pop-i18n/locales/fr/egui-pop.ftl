@@ -13,6 +13,8 @@ category-help = Aide
 
 category-jobs = Tâches
 
+category-library = Photothèque
+
 category-notifications = Notifications
 
 category-terminal = Terminal
@@ -174,6 +176,30 @@ command-job-resume =
 command-job-retry =
     .description = Demande à l’hôte de relancer la tâche `id` échouée ou annulée.
     .title = Relancer une tâche
+
+command-library-filter =
+    .description = Règle le filtre d’une photothèque (`filter` : `text`, `min_rating`, `labels`, `flags`, `tags`, `from`, `to` ; `{"{"}{"}"}` l’efface), par l’étape `library.filter` de son champ de recherche.
+    .title = Filtrer des images
+
+command-library-flag =
+    .description = Retient, rejette ou démarque des images (`flag` : pick, reject, none) : `keys`, sinon la sélection ; par `library.flag`.
+    .title = Marquer des images
+
+command-library-label =
+    .description = Pose une étiquette de couleur (`label` : red, yellow, green, blue, purple) sur des images ou l’enlève (`on` ; sinon inversée d’après l’image du curseur) : `keys`, sinon la sélection ; par `library.label`.
+    .title = Étiqueter des images
+
+command-library-rate =
+    .description = Note des images (`rating`, de 0 à 5) d’une photothèque : `keys`, sinon sa sélection ; par son étape `library.rate`.
+    .title = Noter des images
+
+command-library-select =
+    .description = Sélectionne des images d’une photothèque par clé (`keys`, le curseur sur `cursor` ou la dernière clé), par son étape `library.select`.
+    .title = Sélectionner des images
+
+command-library-tag =
+    .description = Ajoute des mots-clés (`add`) à des images et en enlève d’autres (`remove`) : `keys`, sinon la sélection ; par `library.tag`.
+    .title = Indexer des images
 
 command-logs-reveal =
     .description = Ouvre le dossier des fichiers journaux de l’application.
@@ -707,15 +733,73 @@ egui-pop-viewport-zoom-in = Zoom avant
 
 egui-pop-viewport-zoom-out = Zoom arrière
 
+egui-pop-views-add-filter = Ajouter un filtre
+
+egui-pop-views-add-tag = Ajouter un mot-clé
+
+egui-pop-views-blue = Bleu
+
+egui-pop-views-clear-filters = Effacer la recherche
+
+egui-pop-views-collapse-stack = Replier la pile de { $count }
+
+egui-pop-views-compare = Comparaison
+
 egui-pop-views-empty = Vide
 
+egui-pop-views-expand-stack = Déplier la pile de { $count }
+
 egui-pop-views-failed = Chargement impossible : { $reason }
+
+egui-pop-views-filmstrip = Bande de vignettes
+
+egui-pop-views-filter-dates = Du { $from } au { $to }
+
+egui-pop-views-filter-flag = Marque : { $flag }
+
+egui-pop-views-filter-from = Depuis le { $from }
+
+egui-pop-views-filter-label = Étiquette : { $label }
+
+egui-pop-views-filter-rating = Note ≥ { $rating }
+
+egui-pop-views-filter-tag = Mot-clé : { $tag }
+
+egui-pop-views-filter-to = Jusqu’au { $to }
+
+egui-pop-views-flag = Marque
+
+egui-pop-views-green = Vert
+
+egui-pop-views-label = Étiquette
+
+egui-pop-views-label-toggle = Étiquette { $label }
+
+egui-pop-views-library = Photothèque
 
 egui-pop-views-list = Liste
 
 egui-pop-views-loading = Chargement…
 
+egui-pop-views-mark-best = Meilleure de la comparaison
+
+egui-pop-views-pick = Retenue
+
+egui-pop-views-purple = Violet
+
+egui-pop-views-rate-stars = Noter { $stars } sur 5
+
+egui-pop-views-rating = Note
+
+egui-pop-views-red = Rouge
+
+egui-pop-views-reject = Rejetée
+
+egui-pop-views-remove = Retirer { $item }
+
 egui-pop-views-rename = Renommer { $name }
+
+egui-pop-views-search = Rechercher
 
 egui-pop-views-sorted-down = { $column }, tri décroissant
 
@@ -724,6 +808,10 @@ egui-pop-views-sorted-up = { $column }, tri croissant
 egui-pop-views-table = Tableau
 
 egui-pop-views-tree = Arborescence
+
+egui-pop-views-unflagged = Sans marque
+
+egui-pop-views-yellow = Jaune
 
 egui-pop-window-exit-fullscreen = Quitter le plein écran (F11)
 
@@ -792,6 +880,9 @@ plugin-egui-pop-job-consoles =
 
 plugin-egui-pop-jobs =
     .title = Tâches
+
+plugin-egui-pop-library =
+    .title = Photothèque
 
 plugin-egui-pop-logs =
     .title = Journaux
