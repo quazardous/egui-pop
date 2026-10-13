@@ -1791,3 +1791,58 @@ fn the_terminal_page_shows_a_log_and_routes_keys_through_hooks_and_the_keymap() 
     assert_eq!(last.scope.as_deref(), Some("surface:terminal"), "{last:?}");
     assert_eq!(read(&mut h, "gallery.echo")["text"], "");
 }
+
+#[test]
+fn the_library_page_culls_filters_and_compares() {
+    use egui::accesskit::Role;
+    let mut h = harness(options("pop-dark", Density::Comfortable, "library"));
+    h.run();
+    assert_eq!(
+        h.query_all_by_label("DSC_00000").count(),
+        2,
+        "in the grid and the filmstrip"
+    );
+    assert!(
+        h.query_all_by_label("DSC_09999").next().is_none(),
+        "virtualised"
+    );
+    // A click, then a rating key: the step runs for that image.
+    h.query_all_by_label("DSC_00001").next().unwrap().click();
+    h.run();
+    h.key_press(egui::Key::Num4);
+    h.run();
+    let t = last_step(&h, "library.rate").expect("ran");
+    assert_eq!(t.args["rating"], serde_json::json!(4));
+    assert_eq!(t.args["keys"], serde_json::json!([1]));
+    // A criterion typed in the search field, then a chip.
+    h.get_by_role_and_label(Role::TextInput, "Search images")
+        .click();
+    h.run();
+    h.event(egui::Event::Text("rating>=5".into()));
+    h.run();
+    let t = last_step(&h, "library.filter").expect("ran");
+    assert_eq!(t.args["filter"]["min_rating"], serde_json::json!(5));
+    h.key_press(egui::Key::Enter);
+    h.run();
+    assert!(h.query_by_label("Rating ≥ 5").is_some());
+    h.get_by_label("Remove Rating ≥ 5").click();
+    h.run();
+    assert_eq!(
+        last_step(&h, "library.filter").unwrap().args["filter"],
+        serde_json::json!({})
+    );
+    h.remove_cursor();
+    h.run();
+    h.snapshot("library-pop-dark");
+    // The comparison: the first three images, one marked the best.
+    h.get_by_label("Compare").click();
+    h.run();
+    h.query_all_by_label("Best of the comparison")
+        .next()
+        .unwrap()
+        .click();
+    h.run();
+    h.remove_cursor();
+    h.run();
+    h.snapshot("library-compare-pop-dark");
+}

@@ -19,6 +19,7 @@ pub mod i18n;
 pub mod icons;
 pub mod images;
 pub mod jobs;
+pub mod library;
 pub mod menus;
 pub mod motion;
 pub mod navigator;

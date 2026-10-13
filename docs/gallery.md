@@ -26,7 +26,8 @@ built-ins), `icons`, `motion` (the motion clock), `values`, `sliders`,
 viewport), `navigator` (the zoom control and the navigator), `images`,
 `grading` (curves and colour wheels), `cursors` (tool cursors, brush
 outlines and the loupe), `node-graph` (the node graph editor), `display` (wide gamut and HDR surfaces), `tree`
-(the live tree), `table` (lists and tables), `text-editor`,
+(the live tree), `table` (lists and tables), `library` (the photo
+library), `text-editor`,
 `code-editor`, `terminal`, `zones` (zones and blocks), `workbench`,
 `palettes`, `arrangements`, `strips`, `jobs` (a pretend host's
 background jobs), `frame`, `scale`, `platform` (the platform services),
@@ -142,12 +143,15 @@ Egui's built-ins in egui-pop's style, values, sliders, menus, dialogs (movable o
 
 ### Data views
 
-The live tree, lists and tables.
+The live tree, lists and tables, and the photo library (a thumbnail grid
+and filmstrip, marks, filter chips, a comparison).
 
 <table>
   <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/tree-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/tree-pop-dark.png" width="200" alt="tree-pop-dark"></a><br>tree-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/table-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/table-pop-dark.png" width="200" alt="table-pop-dark"></a><br>table-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/library-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/library-pop-dark.png" width="200" alt="library-pop-dark"></a><br>library-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/library-compare-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/library-compare-pop-dark.png" width="200" alt="library-compare-pop-dark"></a><br>library-compare-pop-dark</td>
   </tr>
 </table>
 
