@@ -6,8 +6,9 @@ use egui::{Event, Key, Modifiers, PointerButton, Pos2};
 use egui_kittest::Harness;
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use egui_pop_core::binding::SharedStore;
+use egui_pop_core::icon::Icon;
 use egui_pop_core::param::{self, Mode};
-use egui_pop_core::slider::Slider;
+use egui_pop_core::slider::{Cause, Change, RangeSlider, Slider, Thumb, Verdict};
 use egui_pop_model::ids::OwnerId;
 use egui_pop_model::values::{Descriptor, Store, Value};
 
@@ -363,4 +364,345 @@ fn escape_during_a_drag_puts_the_value_back_with_no_undo_step() {
     let s = store.lock().unwrap();
     assert_eq!(s.get("p/gain").unwrap().value, Value::Float(1.0));
     assert!(s.undo_steps().is_empty(), "no trace");
+}
+
+fn type_value(h: &mut Harness<'_, f64>, text: &str) {
+    h.key_press(Key::Enter);
+    h.run();
+    for _ in 0..12 {
+        h.key_press(Key::Backspace);
+    }
+    h.get_by_role(egui::accesskit::Role::TextInput)
+        .type_text(text);
+    h.run();
+    h.key_press(Key::Enter);
+    h.run();
+}
+
+#[test]
+fn a_typed_expression_uses_the_current_value() {
+    let mut h = slider();
+    h.get_by_label("Exposure").click();
+    h.run();
+    h.key_press(Key::ArrowUp);
+    h.run();
+    type_value(&mut h, "x * 100 + 0,5");
+    assert!((ev(&h) - 1.5).abs() < 1e-9, "{}", ev(&h));
+    type_value(&mut h, "(1 + 2) / 4 EV");
+    assert!((ev(&h) - 0.75).abs() < 1e-9, "{}", ev(&h));
+    // Not a value: nothing changes.
+    type_value(&mut h, "EV");
+    assert!((ev(&h) - 0.75).abs() < 1e-9);
+}
+
+#[test]
+fn the_bar_tells_assistive_technologies_its_range_step_and_text() {
+    let mut h = slider();
+    *h.state_mut() = -0.001;
+    h.run();
+    let node = h.get_by_label("Exposure");
+    let a = node.accesskit_node();
+    assert_eq!(a.min_numeric_value(), Some(-2.0));
+    assert_eq!(a.max_numeric_value(), Some(2.0));
+    assert_eq!(a.numeric_value_step(), Some(0.01));
+    assert_eq!(a.value().as_deref(), Some("0.00 EV"), "never -0.00");
+    // Increment and decrement as an assistive technology asks.
+    let (target_node, target_tree) = a.locate();
+    for action in [
+        egui::accesskit::Action::Increment,
+        egui::accesskit::Action::Increment,
+        egui::accesskit::Action::Decrement,
+    ] {
+        h.event(Event::AccessKitActionRequest(
+            egui::accesskit::ActionRequest {
+                action,
+                target_node,
+                target_tree,
+                data: None,
+            },
+        ));
+        h.run();
+    }
+    assert!((ev(&h) - 0.009).abs() < 1e-9, "{}", ev(&h));
+    // Page Up: a coarse step.
+    h.get_by_label("Exposure").click();
+    h.run();
+    h.key_press(Key::PageUp);
+    h.run();
+    assert!((ev(&h) - 0.109).abs() < 1e-9, "{}", ev(&h));
+}
+
+/// A number provider writing a comma, as a French interface does.
+struct Comma;
+
+impl egui_pop_core::strings::Strings for Comma {
+    fn get(&self, _key: &str) -> Option<String> {
+        None
+    }
+
+    fn language(&self) -> &str {
+        "fr"
+    }
+
+    fn number(&self, value: f64, decimals: usize) -> Option<String> {
+        Some(format!("{value:.decimals$}").replace('.', ","))
+    }
+}
+
+#[test]
+fn the_value_is_written_in_the_interfaces_language() {
+    let mut h = slider();
+    egui_pop_core::strings::install(&h.ctx, Arc::new(Comma));
+    *h.state_mut() = 1.25;
+    h.run();
+    let a = h.get_by_label("Exposure").accesskit_node().value();
+    assert_eq!(a.as_deref(), Some("1,25 EV"));
+    // The typed entry starts from the same text, and reads it back.
+    h.get_by_label("Exposure").click();
+    h.run();
+    h.key_press(Key::Enter);
+    h.run();
+    h.key_press(Key::Enter);
+    h.run();
+    assert_eq!(ev(&h), 1.25);
+}
+
+#[derive(Default)]
+struct Hooked {
+    value: f64,
+    on: bool,
+    log: Vec<Change>,
+    picks: usize,
+}
+
+fn hooked() -> Harness<'static, Hooked> {
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(420.0, 80.0))
+        .build_ui_state(
+            |ui, s: &mut Hooked| {
+                let log = &mut s.log;
+                let out = Slider::new(&mut s.value, "Gain", 0.0..=1.0)
+                    .step(0.01)
+                    .quad_toggle(Icon::Visible, "Gain on", &mut s.on)
+                    .on_change(|c| {
+                        log.push(*c);
+                        match (c.cause, c.done) {
+                            // A drag is refused at its end.
+                            (Cause::Drag, true) => Verdict::Veto,
+                            // Typed values snap to tenths.
+                            (Cause::Typed, _) => Verdict::Redirect((c.to * 10.0).round() / 10.0),
+                            _ => Verdict::Go,
+                        }
+                    })
+                    .show(ui);
+                if out.quad.as_ref().is_some_and(|q| q.clicked()) {
+                    s.picks += 1;
+                }
+            },
+            Hooked {
+                value: 0.5,
+                ..Hooked::default()
+            },
+        );
+    h.run();
+    h
+}
+
+#[test]
+fn a_hook_sees_each_change_and_vetoes_or_redirects_it() {
+    let mut h = hooked();
+    let bar = h.get_by_label("Gain").rect();
+    let from = bar.center();
+    h.event(Event::PointerMoved(from));
+    h.event(Event::PointerButton {
+        pos: from,
+        button: PointerButton::Primary,
+        pressed: true,
+        modifiers: Modifiers::NONE,
+    });
+    h.step();
+    for i in 1..=4 {
+        h.event(Event::PointerMoved(
+            from + egui::vec2(bar.width() / 16.0 * i as f32, 0.0),
+        ));
+        h.step();
+    }
+    assert!(
+        h.state().value > 0.7,
+        "the drag follows: {}",
+        h.state().value
+    );
+    h.event(Event::PointerButton {
+        pos: from + egui::vec2(bar.width() / 4.0, 0.0),
+        button: PointerButton::Primary,
+        pressed: false,
+        modifiers: Modifiers::NONE,
+    });
+    h.run();
+    assert_eq!(h.state().value, 0.5, "vetoed at the release");
+    let log = &h.state().log;
+    assert!(log.iter().any(|c| !c.done && c.cause == Cause::Drag));
+    let end = log.iter().find(|c| c.done).unwrap();
+    assert_eq!((end.thumb, end.from), (Thumb::Value, 0.5));
+    // A typed value is redirected.
+    h.get_by_label("Gain").click();
+    h.run();
+    h.key_press(Key::Enter);
+    h.run();
+    for _ in 0..8 {
+        h.key_press(Key::Backspace);
+    }
+    h.get_by_role(egui::accesskit::Role::TextInput)
+        .type_text("0.33");
+    h.run();
+    h.key_press(Key::Enter);
+    h.run();
+    assert!((h.state().value - 0.3).abs() < 1e-9, "{}", h.state().value);
+}
+
+#[test]
+fn the_quad_button_toggles_and_is_named() {
+    let mut h = hooked();
+    let quad = h.get_by_label("Gain on");
+    assert_eq!(
+        quad.accesskit_node().role(),
+        egui::accesskit::Role::CheckBox
+    );
+    quad.click();
+    h.run();
+    assert!(h.state().on);
+    assert_eq!(h.state().picks, 1);
+    assert_eq!(h.state().value, 0.5, "the bar did not move");
+}
+
+#[test]
+fn a_logarithmic_drag_moves_by_ratios() {
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(420.0, 80.0))
+        .build_ui_state(
+            |ui, v: &mut f64| {
+                ui.add(Slider::new(v, "ISO", 100.0..=6400.0).logarithmic());
+            },
+            100.0,
+        );
+    h.run();
+    let bar = h.get_by_label("ISO").rect();
+    drag(&mut h, bar.center(), bar.width() / 2.0, Modifiers::NONE);
+    assert!(
+        (ev(&h) - 800.0).abs() < 25.0,
+        "half the bar: x8, {}",
+        ev(&h)
+    );
+}
+
+struct Range {
+    low: f64,
+    high: f64,
+}
+
+fn range() -> Harness<'static, Range> {
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(420.0, 80.0))
+        .build_ui_state(
+            |ui, r: &mut Range| {
+                ui.add(
+                    RangeSlider::new(&mut r.low, &mut r.high, "Focal", 0.0..=100.0)
+                        .step(1.0)
+                        .unit("mm")
+                        .default(10.0, 90.0),
+                );
+            },
+            Range {
+                low: 20.0,
+                high: 80.0,
+            },
+        );
+    h.run();
+    h
+}
+
+#[test]
+fn a_range_has_two_named_thumbs_that_never_cross() {
+    let mut h = range();
+    let low = h.get_by_label("Focal, minimum");
+    assert_eq!(low.accesskit_node().role(), egui::accesskit::Role::Slider);
+    assert_eq!(low.accesskit_node().max_numeric_value(), Some(80.0));
+    let high = h.get_by_label("Focal, maximum");
+    assert_eq!(high.accesskit_node().min_numeric_value(), Some(20.0));
+    // Keys on the high thumb, down past the low one: it stops there.
+    high.click();
+    h.run();
+    for _ in 0..7 {
+        h.key_press_modifiers(Modifiers::SHIFT, Key::ArrowLeft);
+        h.run();
+    }
+    assert_eq!((h.state().low, h.state().high), (20.0, 20.0));
+    h.key_press(Key::End);
+    h.run();
+    assert_eq!(h.state().high, 100.0);
+    // A drag from the left of the bar moves the low thumb.
+    let bar_left = h.get_by_label("Focal, minimum").rect();
+    let from = bar_left.left_center() + egui::vec2(10.0, 0.0);
+    h.event(Event::PointerMoved(from));
+    h.event(Event::PointerButton {
+        pos: from,
+        button: PointerButton::Primary,
+        pressed: true,
+        modifiers: Modifiers::NONE,
+    });
+    h.step();
+    let width = bar_left.width() + h.get_by_label("Focal, maximum").rect().width();
+    for i in 1..=4 {
+        h.event(Event::PointerMoved(
+            from + egui::vec2(width * 0.1 * i as f32, 0.0),
+        ));
+        h.step();
+    }
+    h.event(Event::PointerButton {
+        pos: from + egui::vec2(width * 0.4, 0.0),
+        button: PointerButton::Primary,
+        pressed: false,
+        modifiers: Modifiers::NONE,
+    });
+    h.run();
+    assert!(
+        (h.state().low - 60.0).abs() < 1.5,
+        "40% of the bar: {}",
+        h.state().low
+    );
+    assert_eq!(h.state().high, 100.0);
+}
+
+#[test]
+fn a_range_resets_both_thumbs_and_its_wheel_follows_the_rules() {
+    let mut h = range();
+    // Alt and the wheel over the low thumb's half.
+    let at = h.get_by_label("Focal, minimum").rect().center();
+    h.event(Event::PointerMoved(at));
+    h.event(Event::ModifiersChanged(Modifiers::ALT));
+    h.event(Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Line,
+        phase: egui::TouchPhase::Move,
+        delta: egui::vec2(0.0, 1.0),
+        modifiers: Modifiers::ALT,
+    });
+    h.run();
+    h.event(Event::ModifiersChanged(Modifiers::NONE));
+    h.run();
+    assert_eq!((h.state().low, h.state().high), (21.0, 80.0));
+    let pos = h.get_by_label("Focal, maximum").rect().center();
+    let events = &mut h.input_mut().events;
+    events.push(Event::PointerMoved(pos));
+    for _ in 0..2 {
+        for pressed in [true, false] {
+            events.push(Event::PointerButton {
+                pos,
+                button: PointerButton::Primary,
+                pressed,
+                modifiers: Modifiers::NONE,
+            });
+        }
+    }
+    h.run();
+    assert_eq!((h.state().low, h.state().high), (10.0, 90.0));
 }

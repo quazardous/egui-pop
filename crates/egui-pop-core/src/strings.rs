@@ -74,6 +74,9 @@ pub const NO_VALUE: StrKey = StrKey::new("egui-pop-value-missing", "no value at 
 pub const MINIMIZE: StrKey = StrKey::new("egui-pop-frame-minimize", "Minimize");
 pub const MAXIMIZE: StrKey = StrKey::new("egui-pop-frame-maximize", "Maximize");
 pub const RESTORE: StrKey = StrKey::new("egui-pop-frame-restore", "Restore");
+/// A range slider's thumbs, as assistive technologies name them.
+pub const SLIDER_MINIMUM: StrKey = StrKey::new("egui-pop-slider-minimum", "{ $label }, minimum");
+pub const SLIDER_MAXIMUM: StrKey = StrKey::new("egui-pop-slider-maximum", "{ $label }, maximum");
 
 /// Every string egui-pop core shows, for catalogues and tests.
 pub const ALL: &[StrKey] = &[
@@ -90,6 +93,8 @@ pub const ALL: &[StrKey] = &[
     MINIMIZE,
     MAXIMIZE,
     RESTORE,
+    SLIDER_MINIMUM,
+    SLIDER_MAXIMUM,
 ];
 
 /// Gives the text of a key in the current language, if it has one.

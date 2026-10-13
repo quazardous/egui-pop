@@ -226,6 +226,8 @@ egui-pop-shortcuts-system-no-plugin d113e8842ff70329
 egui-pop-shortcuts-system-on 39a00562a9654c5c
 egui-pop-shortcuts-system-pending 8a654d656843108e
 egui-pop-shortcuts-system-unavailable 552221bb85492345
+egui-pop-slider-maximum c0721adb004bac87
+egui-pop-slider-minimum acae05dcb02987f1
 egui-pop-toast-close 72005e84f54413f8
 egui-pop-toast-error 1e732d4d496b57f9
 egui-pop-toast-info 5d0c399e4eefe425

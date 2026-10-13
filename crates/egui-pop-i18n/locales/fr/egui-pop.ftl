@@ -453,6 +453,10 @@ egui-pop-shortcuts-search-by-key = Chercher par touche
 
 egui-pop-shortcuts-show-all = Afficher toutes les commandes
 
+egui-pop-slider-maximum = { $label }, maximum
+
+egui-pop-slider-minimum = { $label }, minimum
+
 egui-pop-toast-close = Fermer : { $text }
 
 egui-pop-toast-error = Erreur

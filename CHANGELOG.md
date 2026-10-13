@@ -9,6 +9,27 @@ egui minor.
 
 ### Added
 
+- The slider family, after darktable's bauhaus sliders
+  (`egui_pop_core::slider`):
+  - typed entries take an expression (`x * 2`, `(1 + 2) / 4`, `^`,
+    `x` the current value) with either decimal separator and grouped
+    thousands (`slider::expr::eval`);
+  - the value text is written in the interface's language
+    (`strings::number`), with an optional sign (`signed`: `+1.50 EV`);
+  - a quad button at the bar's end: `quad(icon, label)` (a picker, its
+    click in `SliderOutput::quad_clicked`) or `quad_toggle(icon, label,
+    &mut on)`;
+  - `logarithmic()` bars, gradient tracks (`gradient(Gradient::hue())`,
+    `Gradient::temperature(from, to)`, any `Gradient::new`), and
+    `RangeSlider`, two thumbs on one bar that never cross, each its own
+    focusable, named AccessKit slider ("ISO, minimum");
+  - `on_change` sees every change before it is written (thumb, from, to,
+    cause, whether the gesture is done) and answers go, veto or
+    redirect; `show(ui)` returns the changes written in the frame;
+  - Page Up and Page Down take coarse steps; the AccessKit node carries
+    the range, the step, the value text and the increment, decrement and
+    set-value actions.
+
 - Numbers in the interface's language for widgets: `Strings::number`
   (a provider writes a value with a fixed number of decimals, its
   thousands grouped) and `strings::number(ctx, value, decimals)`, which

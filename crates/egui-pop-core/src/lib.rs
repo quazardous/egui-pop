@@ -13,8 +13,10 @@
 //!   focus restore);
 //! - [`param`]: the editor a value descriptor calls for, in the three
 //!   binding modes;
-//! - [`slider`]: a darktable-style slider (soft and hard range, fine
-//!   and coarse, reset, typed entry);
+//! - [`slider`]: darktable-style sliders (soft and hard range, fine
+//!   and coarse, reset, typed expressions, a quad button), logarithmic,
+//!   on a gradient track, or a range with two thumbs; a hook on every
+//!   change;
 //! - [`placement`]: floating elements placed with flip and shift;
 //! - [`scale`]: the window's scales, crisp strokes, the scale-changed
 //!   signal, the interface zoom's steps;

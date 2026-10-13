@@ -454,6 +454,10 @@ egui-pop-shortcuts-system-pending = { $keys } outside the window: waiting for th
 
 egui-pop-shortcuts-system-unavailable = { $keys } works only in the window: { $reason }
 
+egui-pop-slider-maximum = { $label }, maximum
+
+egui-pop-slider-minimum = { $label }, minimum
+
 egui-pop-toast-close = Close: { $text }
 
 egui-pop-toast-error = Error
