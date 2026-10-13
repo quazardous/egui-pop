@@ -44,6 +44,14 @@ egui minor.
   change, of the puck or of the luminance, goes through the wheel's
   hook. Keys move the puck, a double click resets; the disc is an
   AccessKit slider on the chroma.
+- Floating panels in the layout: `PanelSpec::palette()` declares a
+  panel that floats over the interface when it opens (its area is where
+  it docks), `floatable(true)` lets any panel float. `Layout::floating`
+  keeps each floating panel's place, rolled-up and pinned state
+  (`Floating`), saved with the layout and repaired with it (a panel
+  that may no longer float docks back); `Layout::float`,
+  `floating_of`, `floating_mut`.
+
 - Movable dialogs: `DialogSpec::movable(true)`, or the `dialogs.movable`
   setting for every dialog, gives a dialog a header band (its own tone,
   a separator, the move cursor, the ✕ when closable) to drag it by,

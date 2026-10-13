@@ -5,7 +5,7 @@ use egui_pop_model::ids::{CommandId, MenuId, OwnerId, PanelId};
 use egui_pop_model::keymap::{
     Action, BindOptions, DocBinding, Keymap, KeymapDoc, Keys, Layer, Resolution, Typing, Verdict,
 };
-use egui_pop_model::layout::{Auxiliary, Layout, Node};
+use egui_pop_model::layout::{Auxiliary, Floating, Layout, Node};
 use egui_pop_model::panels::{Area, PanelSpec, Panels};
 use egui_pop_model::when::WhenContext;
 use serde_json::{Value, json};
@@ -500,6 +500,7 @@ fn a_panel_found_where_it_may_not_be_goes_back_to_its_default_area() {
         auxiliary: vec![],
         hidden: vec![],
         folded: vec![],
+        floating: vec![],
     };
     let (fixed, notes) = saved.repair(&p, &[]);
     assert_eq!(
@@ -646,4 +647,73 @@ fn layout_operations_place_hide_activate_and_fold() {
     assert_eq!(back.folded, [Area::Bottom]);
     // A closed panel stays closed through a repair; a new one opens.
     assert!(back.hidden.contains(&pid("a.one")));
+}
+
+#[test]
+fn a_palette_floats_from_the_start_and_is_kept_floating() {
+    let mut p = Panels::new();
+    p.declare(&FW, PanelSpec::new(pid("app.log"), "Log", Area::Bottom))
+        .unwrap();
+    p.declare(
+        &FW,
+        PanelSpec::new(pid("app.tools"), "Tools", Area::StartSide).palette(),
+    )
+    .unwrap();
+    let layout = Layout::default_for(&p);
+    assert_eq!(layout.area_of(&pid("app.log")), Some(Area::Bottom));
+    let tools = layout.floating_of(&pid("app.tools")).unwrap();
+    assert_eq!(tools.pos, Floating::cascade(0));
+    assert!(layout.shows(&pid("app.tools")));
+    assert_eq!(layout.area_of(&pid("app.tools")), None);
+    // Saved and read back, floating still.
+    let read = Layout::from_json(&layout.to_json()).unwrap();
+    assert_eq!(read, layout);
+    let (same, notes) = read.repair(&p, &[]);
+    assert_eq!((same, notes.len()), (layout.clone(), 0));
+    // Docked, then floated again: one model, two placements.
+    let mut l = layout;
+    l.place(&pid("app.tools"), Area::StartSide);
+    assert!(l.floating_of(&pid("app.tools")).is_none());
+    assert_eq!(l.area_of(&pid("app.tools")), Some(Area::StartSide));
+    l.float(&pid("app.tools"), [200.0, 100.0]);
+    assert_eq!(l.area_of(&pid("app.tools")), None);
+    assert_eq!(
+        l.floating_of(&pid("app.tools")).unwrap().pos,
+        [200.0, 100.0]
+    );
+    l.floating_mut(&pid("app.tools")).unwrap().rolled = true;
+    l.float(&pid("app.tools"), [10.0, 20.0]);
+    assert!(l.floating_of(&pid("app.tools")).unwrap().rolled, "kept");
+    // Closed: no longer placed, and kept closed.
+    l.hide(&pid("app.tools"));
+    assert!(!l.shows(&pid("app.tools")));
+    assert!(l.floating.is_empty());
+}
+
+#[test]
+fn a_floating_panel_that_may_no_longer_float_is_docked_back() {
+    let mut p = Panels::new();
+    p.declare(&FW, PanelSpec::new(pid("app.log"), "Log", Area::Bottom))
+        .unwrap();
+    let saved = Layout {
+        floating: vec![
+            Floating {
+                panel: pid("app.log"),
+                pos: [40.0, 40.0],
+                rolled: false,
+                pinned: true,
+            },
+            Floating {
+                panel: pid("app.gone"),
+                pos: [0.0, 0.0],
+                rolled: false,
+                pinned: false,
+            },
+        ],
+        ..Layout::default()
+    };
+    let (fixed, notes) = saved.repair(&p, &[]);
+    assert!(fixed.floating.is_empty());
+    assert_eq!(fixed.area_of(&pid("app.log")), Some(Area::Bottom));
+    assert_eq!(notes.len(), 2, "{notes:?}");
 }

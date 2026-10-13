@@ -111,6 +111,34 @@ pub struct Auxiliary {
     pub rect: [f32; 4],
 }
 
+/// A panel floating over the interface: a palette.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Floating {
+    pub panel: PanelId,
+    /// Its top-left corner, in points from the workbench's top-left.
+    pub pos: [f32; 2],
+    /// Rolled up to its header band.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub rolled: bool,
+    /// Pinned: it stays where it is and in sight (not dragged, not
+    /// hidden with the others, not faded).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub pinned: bool,
+}
+
+fn is_false(b: &bool) -> bool {
+    !*b
+}
+
+impl Floating {
+    /// Where the `n`th palette opens when it has no place yet: down and
+    /// right from the workbench's top-left, one step each.
+    pub fn cascade(n: usize) -> [f32; 2] {
+        let at = 16.0 + 28.0 * (n % 8) as f32;
+        [at, at]
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Layout {
     pub areas: Vec<(Area, Node)>,
@@ -122,6 +150,9 @@ pub struct Layout {
     /// Areas folded to their strip: their panels stay, unshown.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub folded: Vec<Area>,
+    /// Panels floating over the interface (palettes).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub floating: Vec<Floating>,
 }
 
 /// The `layout` document. Version 2 named the areas by start and end
@@ -158,9 +189,19 @@ impl Layout {
     pub fn default_for(panels: &Panels) -> Layout {
         let mut areas: Vec<(Area, Node)> = Vec::new();
         let mut hidden = Vec::new();
+        let mut floating = Vec::new();
         for p in panels.all() {
             if !p.open {
                 hidden.push(p.id.clone());
+                continue;
+            }
+            if p.palette {
+                floating.push(Floating {
+                    panel: p.id.clone(),
+                    pos: Floating::cascade(floating.len()),
+                    rolled: false,
+                    pinned: false,
+                });
                 continue;
             }
             match areas.iter_mut().find(|(a, _)| *a == p.area) {
@@ -174,14 +215,44 @@ impl Layout {
             auxiliary: Vec::new(),
             hidden,
             folded: Vec::new(),
+            floating,
         }
     }
 
-    /// Every panel placed, docked or detached.
+    /// Every panel placed, docked, detached or floating.
     pub fn placed(&self) -> Vec<&PanelId> {
         let mut v: Vec<&PanelId> = self.areas.iter().flat_map(|(_, n)| n.panels()).collect();
         v.extend(self.auxiliary.iter().map(|a| &a.panel));
+        v.extend(self.floating.iter().map(|f| &f.panel));
         v
+    }
+
+    /// A floating panel's place, if it floats.
+    pub fn floating_of(&self, panel: &PanelId) -> Option<&Floating> {
+        self.floating.iter().find(|f| f.panel == *panel)
+    }
+
+    /// A floating panel's place, to change it.
+    pub fn floating_mut(&mut self, panel: &PanelId) -> Option<&mut Floating> {
+        self.floating.iter_mut().find(|f| f.panel == *panel)
+    }
+
+    /// Floats a panel over the interface at `pos` (taken out of where it
+    /// was, opened if it was closed); a panel floating already moves
+    /// there, keeping its state.
+    pub fn float(&mut self, panel: &PanelId, pos: [f32; 2]) {
+        if let Some(f) = self.floating_mut(panel) {
+            f.pos = pos;
+            return;
+        }
+        self.remove(panel);
+        self.hidden.retain(|h| h != panel);
+        self.floating.push(Floating {
+            panel: panel.clone(),
+            pos,
+            rolled: false,
+            pinned: false,
+        });
     }
 
     /// The area a panel is docked in, if it is.
@@ -197,8 +268,8 @@ impl Layout {
         !self.hidden.contains(panel) && self.placed().contains(&panel)
     }
 
-    /// Takes a panel out of its area or its window (it stays known: not
-    /// closed). Whether it was placed.
+    /// Takes a panel out of its area, its window or its float (it stays
+    /// known: not closed). Whether it was placed.
     pub fn remove(&mut self, panel: &PanelId) -> bool {
         let before = self.placed().len();
         let areas = std::mem::take(&mut self.areas);
@@ -207,6 +278,7 @@ impl Layout {
             .filter_map(|(a, n)| n.retain(&|p: &PanelId| p != panel).map(|n| (a, n)))
             .collect();
         self.auxiliary.retain(|x| x.panel != *panel);
+        self.floating.retain(|x| x.panel != *panel);
         self.placed().len() != before
     }
 
@@ -285,6 +357,20 @@ impl Layout {
                 auxiliary.push(a);
             }
         }
+        let mut floating = Vec::new();
+        for f in self.floating {
+            match panels.get(f.panel.as_str()) {
+                None => notes.push(format!("panel `{}` no longer exists", f.panel)),
+                Some(spec) if !spec.floatable => {
+                    notes.push(format!(
+                        "`{}` no longer floats: docked in its default area",
+                        f.panel
+                    ));
+                    redock.push(f.panel);
+                }
+                Some(_) => floating.push(f),
+            }
+        }
         let mut areas: Vec<(Area, Node)> = Vec::new();
         for (area, node) in self.areas {
             for p in node.panels() {
@@ -311,6 +397,7 @@ impl Layout {
             auxiliary,
             hidden: hidden.clone(),
             folded: self.folded,
+            floating,
         };
         let placed: Vec<PanelId> = layout.placed().into_iter().cloned().collect();
         for p in panels.all() {
@@ -322,6 +409,12 @@ impl Layout {
                 continue;
             }
             if !redock.contains(&p.id) {
+                if p.palette {
+                    notes.push(format!("new palette `{}` floats", p.id));
+                    let pos = Floating::cascade(layout.floating.len());
+                    layout.float(&p.id, pos);
+                    continue;
+                }
                 notes.push(format!("new panel `{}` placed in its default area", p.id));
             }
             match layout.areas.iter_mut().find(|(a, _)| *a == p.area) {

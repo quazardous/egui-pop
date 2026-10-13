@@ -61,6 +61,11 @@ pub struct PanelSpec {
     pub bare: bool,
     /// Placed in its area at first; `false`: closed until asked for.
     pub open: bool,
+    /// A palette: it floats over the interface when it opens (a
+    /// toolbox, a navigator); it may still be docked in its areas.
+    pub palette: bool,
+    /// Whether it may float over the interface (a palette always may).
+    pub floatable: bool,
 }
 
 impl PanelSpec {
@@ -77,6 +82,8 @@ impl PanelSpec {
             icon: String::new(),
             bare: false,
             open: true,
+            palette: false,
+            floatable: false,
         }
     }
 
@@ -108,6 +115,20 @@ impl PanelSpec {
     /// repaired one keep it closed.
     pub fn closed(mut self) -> Self {
         self.open = false;
+        self
+    }
+
+    /// A palette: floats over the interface when it opens, never modal;
+    /// its area is where it docks.
+    pub fn palette(mut self) -> Self {
+        self.palette = true;
+        self.floatable = true;
+        self
+    }
+
+    /// Whether it may float over the interface.
+    pub fn floatable(mut self, on: bool) -> Self {
+        self.floatable = on || self.palette;
         self
     }
 
