@@ -134,7 +134,7 @@ fn frame(app: &App, model: &Pipeline, state: &mut GraphState) -> GraphOutput {
         ..Default::default()
     };
     let mut out = None;
-    let _ = ctx.run_ui(input, |ui| {
+    let mut full = ctx.run_ui(input, |ui| {
         out = Some(egui_pop_imaging::show_graph(
             app.handle(),
             "main",
@@ -142,6 +142,8 @@ fn frame(app: &App, model: &Pipeline, state: &mut GraphState) -> GraphOutput {
             ui,
         ));
     });
+    // no renderer here: the font atlas upload is dropped on purpose
+    full.textures_delta.clear();
     out.expect("drawn")
 }
 
