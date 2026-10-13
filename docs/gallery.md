@@ -21,7 +21,8 @@ desktop).
 
 Pages: `overview` (the theme overview), `tokens`, `builtins` (egui's
 built-ins), `icons`, `values`, `sliders`, `menus`, `dialogs`, `toasts`, `viewport`
-(the image viewport), `images`, `tree` (the live tree), `table` (lists
+(the image viewport), `navigator` (the zoom control and the navigator),
+`images`, `grading` (curves and colour wheels), `tree` (the live tree), `table` (lists
 and tables), `text-editor`, `code-editor`, `terminal`, `zones` (zones and blocks), `workbench`,
 `arrangements`, `strips`, `frame`, `scale`, `platform` (the platform
 services), `settings`, `i18n` (translations) and `debug` (the debug
@@ -150,13 +151,19 @@ The text editor, the code editor and the terminal.
 
 ### Images
 
-The tiled image viewport, images and the display.
+The tiled image viewport, its zoom control and navigator, images,
+curves and colour wheels, and the display.
 
 <table>
   <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/viewport-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/viewport-pop-dark.png" width="200" alt="viewport-pop-dark"></a><br>viewport-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/navigator-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/navigator-pop-dark.png" width="200" alt="navigator-pop-dark"></a><br>navigator-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/images-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/images-pop-dark.png" width="200" alt="images-pop-dark"></a><br>images-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/display-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/display-pop-dark.png" width="200" alt="display-pop-dark"></a><br>display-pop-dark</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/grading-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/grading-pop-dark.png" width="200" alt="grading-pop-dark"></a><br>grading-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/grading-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/grading-pop-light.png" width="200" alt="grading-pop-light"></a><br>grading-pop-light</td>
   </tr>
 </table>
 

@@ -9,6 +9,13 @@ egui minor.
 
 ### Added
 
+- Gallery: a Curves and wheels page (a tone curve over a histogram,
+  with the targeted adjustment on a grey ramp, the lift, gamma and gain
+  wheels and a picker; the page's plugin caps the gain's chroma through
+  `wheel.change`) and a Zoom and navigator page (a viewport, its zoom
+  control and its navigator on one state; the page's plugin keeps the
+  zoom at 400 % at most through `zoom.change`). The Image widgets
+  page's histogram shows its clipping and its drag adjusts an exposure.
 - `egui-pop-imaging` (the facade's `imaging` feature,
   `egui_pop::imaging`): the image tools' changes as steps of an
   application. `histogram`, `curve`, `wheel` and `zoom` give a tool's

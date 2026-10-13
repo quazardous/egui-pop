@@ -1,10 +1,11 @@
 //! The image widgets page: thumbnails (an image, or its placeholder
 //! until it is there) in a virtualised grid, and a histogram from bins
-//! the application computed.
+//! the application computed, with its clipping markers and a drag
+//! adjusting an exposure.
 
 use egui::{Color32, ColorImage, TextureHandle, TextureOptions, Ui, vec2};
 use egui_pop::viewport::demo;
-use egui_pop::viewport::histogram::{Channel, Histogram};
+use egui_pop::viewport::histogram::{Channel, Clipping, Histogram};
 use egui_pop::viewport::thumbnail::{Thumbnail, thumbnail_grid};
 
 use super::section;
@@ -20,6 +21,8 @@ pub struct State {
     bins: Option<[Vec<f32>; 3]>,
     pub selected: usize,
     pub log: bool,
+    /// What the histogram's drag adjusts, in stops.
+    pub exposure: f64,
 }
 
 impl std::fmt::Debug for State {
@@ -83,16 +86,24 @@ pub fn show(ui: &mut Ui, state: &mut State) {
     }
     let bins = state.bins.get_or_insert_with(bins);
     section(ui, "Histogram (bins supplied by the application)");
-    let [r, g, b] = bins;
-    ui.add(
-        Histogram::new([
-            Channel::new("Red", r, Color32::from_rgb(220, 70, 60)),
-            Channel::new("Green", g, Color32::from_rgb(80, 190, 90)),
-            Channel::new("Blue", b, Color32::from_rgb(70, 120, 230)),
-        ])
-        .log(state.log)
-        .size(vec2(ui.available_width().min(480.0), 140.0)),
-    );
+    let [r, g, b] = &*bins;
+    let clipping = clipping(&[r, g, b]);
+    let out = Histogram::new([
+        Channel::new("Red", r, Color32::from_rgb(220, 70, 60)),
+        Channel::new("Green", g, Color32::from_rgb(80, 190, 90)),
+        Channel::new("Blue", b, Color32::from_rgb(70, 120, 230)),
+    ])
+    .log(state.log)
+    .clipping(clipping)
+    .draggable(true)
+    .size(vec2(ui.available_width().min(480.0), 140.0))
+    .show(ui);
+    // Four stops per width of the histogram.
+    state.exposure += f64::from(out.moved()) * 4.0;
+    ui.label(format!(
+        "Drag the histogram (or focus it and use the arrows): exposure {:+.2} EV",
+        state.exposure
+    ));
     section(
         ui,
         &format!("Thumbnails: {COUNT} in a virtualised grid (placeholders where no image yet)"),
@@ -112,6 +123,21 @@ pub fn show(ui: &mut Ui, state: &mut State) {
             *selected = i;
         }
     });
+}
+
+/// The share of samples in the first and the last bin, over every
+/// channel: what is clipped.
+fn clipping(channels: &[&Vec<f32>]) -> Clipping {
+    let total: f32 = channels.iter().flat_map(|c| c.iter()).sum();
+    if total <= 0.0 {
+        return Clipping::default();
+    }
+    let first: f32 = channels.iter().filter_map(|c| c.first()).sum();
+    let last: f32 = channels.iter().filter_map(|c| c.last()).sum();
+    Clipping {
+        shadows: first / total,
+        highlights: last / total,
+    }
 }
 
 /// The average colour standing in for a thumbnail not there yet.

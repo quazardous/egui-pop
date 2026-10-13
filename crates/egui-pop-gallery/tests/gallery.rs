@@ -629,6 +629,74 @@ fn the_image_widgets_page_selects_a_thumbnail() {
     h.snapshot("images-pop-dark");
 }
 
+/// The last trace of a step, by its id.
+fn last_trace_of(h: &Harness<'_, Gallery>, step: &str) -> egui_pop::api::steps::StepTrace {
+    h.state()
+        .app
+        .handle()
+        .step_traces()
+        .into_iter()
+        .rev()
+        .find(|t| t.step.as_str() == step)
+        .unwrap_or_else(|| panic!("no {step} step ran"))
+}
+
+#[test]
+fn the_curves_and_wheels_page_runs_their_steps_and_caps_the_gain() {
+    let mut results = egui_kittest::SnapshotResults::new();
+    for theme in ["pop-dark", "pop-light"] {
+        let mut h = harness(options(theme, Density::Comfortable, "grading"));
+        h.run();
+        egui_pop_test::assert_all_named(&h);
+        results.add(h.try_snapshot(format!("grading-{theme}")));
+    }
+    let mut h = harness(options("pop-dark", Density::Comfortable, "grading"));
+    h.run();
+    // R resets the focused curve: one curve.change step.
+    h.get_by_label("Tone curve").click_accesskit();
+    h.run();
+    h.key_press(egui::Key::R);
+    h.run();
+    let t = last_trace_of(&h, "curve.change");
+    assert_eq!(t.args["curve"], "tone");
+    assert_eq!(t.args["cause"], "reset");
+    assert_eq!(t.args["to"], serde_json::json!([[0.0, 0.0], [1.0, 1.0]]));
+    // Shift and the arrows push the gain's puck out: the page's plugin
+    // keeps its chroma under the cap.
+    h.get_by_label("Gain").click_accesskit();
+    h.run();
+    for _ in 0..8 {
+        h.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::ArrowRight);
+        h.run();
+    }
+    let t = last_trace_of(&h, "wheel.change");
+    assert_eq!(t.args["wheel"], "gain");
+    assert_eq!(t.redirected_by.len(), 1);
+    let chroma = t.args["to"]["chroma"].as_f64().unwrap();
+    assert!(chroma <= 0.6 + 1e-6, "{chroma}");
+}
+
+#[test]
+fn the_navigator_page_zooms_through_its_step_and_a_plugin_caps_it() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "navigator"));
+    h.run();
+    egui_pop_test::assert_all_named(&h);
+    assert!(h.query_by_label("Navigator").is_some());
+    for _ in 0..12 {
+        h.get_by_label("Zoom in").click();
+        h.run();
+    }
+    let t = last_trace_of(&h, "zoom.change");
+    assert_eq!(t.args["viewport"], "gallery");
+    assert_eq!(t.args["to"]["zoom"], 4.0, "capped at 400 %");
+    h.get_by_label("Fit").click();
+    h.run();
+    assert_eq!(last_trace_of(&h, "zoom.change").args["to"]["zoom"], "fit");
+    h.get_by_label("Zoom in").click();
+    h.run();
+    h.snapshot("navigator-pop-dark");
+}
+
 #[test]
 fn the_workbench_page_opens_moves_and_vetoes_panels() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "workbench"));

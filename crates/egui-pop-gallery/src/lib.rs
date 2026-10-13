@@ -29,7 +29,7 @@ use pages::story::PagePlugin;
 pub const TITLE: &str = "egui-pop gallery";
 
 /// The pages, as named on the command line.
-pub const PAGES: [&str; 28] = [
+pub const PAGES: [&str; 30] = [
     "overview",
     "tokens",
     "builtins",
@@ -41,7 +41,9 @@ pub const PAGES: [&str; 28] = [
     "files",
     "toasts",
     "viewport",
+    "navigator",
     "images",
+    "grading",
     "display",
     "tree",
     "table",
@@ -121,11 +123,14 @@ pub fn builder(options: &Options) -> AppBuilder {
         .plugin(pages::files::FilesPage)
         .plugin(pages::toasts::ToastsPage)
         .plugin(pages::viewport::ViewportPage)
+        .plugin(egui_pop::imaging::ImagingPlugin)
+        .plugin(pages::navigator::NavigatorPage)
+        .plugin(pages::grading::GradingPage)
         .plugin(PagePlugin {
             plugin: PluginId::from_static("gallery.images"),
             story: StoryId::from_static("images"),
             title: "Image widgets",
-            description: "Thumbnails in a virtualised grid (an image, or its average colour until it is there) and a histogram from supplied bins.",
+            description: "Thumbnails in a virtualised grid (an image, or its average colour until it is there) and a histogram from supplied bins, with clipping markers and a drag adjusting an exposure.",
             group: "Components",
             weight: 75,
             show: pages::images::show,
