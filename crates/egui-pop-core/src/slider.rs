@@ -26,10 +26,12 @@
 //! - **Typed entry**: a number or an expression ([`expr`]: `x * 2`,
 //!   `1,5 EV`); units after it are ignored; a value past the soft range
 //!   is kept up to the hard one. Enter or leaving the entry (a click
-//!   elsewhere, Tab) commits it; Escape closes it with nothing. It takes
-//!   the keyboard when it opens, never after. While open it owns Escape
-//!   and Enter ([`crate::focus::text_input_owns_keyboard`]): key
-//!   dispatchers leave them to it.
+//!   elsewhere, Tab, the focus taken by another widget) commits it;
+//!   Escape closes it with nothing. It takes the keyboard when it opens,
+//!   and after only when nobody holds the focus for a frame (a panel
+//!   redrawn), which does not commit it. While open it owns Escape and
+//!   Enter ([`crate::focus::text_input_owns_keyboard`]): key dispatchers
+//!   leave them to it.
 //! - **Double click**: back to the default.
 //!
 //! The keys are [`Gestures`], data a profile may remap. The value text
@@ -971,12 +973,13 @@ pub(crate) fn typed_entry(
     // swallowed Escape on its way out of the field.
     let (cancel, enter) = ui.input(|i| (pressed(i, Key::Escape), pressed(i, Key::Enter)));
     let cancel = cancel || crate::focus::escape_left(ui.ctx(), edit.id);
-    if !cancel && !enter && edit.has_focus() {
+    if !cancel && !enter && (edit.has_focus() || held(ui, edit.id, typing_id)) {
         // Open: key dispatchers leave Escape and Enter to it.
         crate::focus::claim_keyboard(ui.ctx(), edit.id);
         ui.data_mut(|d| d.insert_temp(typing_id, text));
         return None;
     }
+    ui.data_mut(|d| d.remove::<u64>(typing_id.with("held")));
     ui.data_mut(|d| d.remove::<String>(typing_id));
     if cancel || enter {
         // Spent here: nothing drawn after the entry acts on them.
@@ -993,6 +996,30 @@ pub(crate) fn typed_entry(
         },
         refocus: enter && !cancel,
     })
+}
+
+/// Whether an entry without the focus stays open: only when nobody took
+/// the focus, which a panel redrawn for another writer's change can
+/// cause for one frame (the focused field not drawn on a pass drops the
+/// focus). The entry then takes the focus back and waits one frame; a
+/// real blur commits it: a press or a click elsewhere, Tab, or another
+/// widget holding the focus, or the focus still gone on the next frame.
+fn held(ui: &Ui, edit: Id, typing_id: Id) -> bool {
+    let moved = ui
+        .input(|i| i.pointer.any_pressed() || i.pointer.any_released() || i.key_pressed(Key::Tab));
+    let elsewhere = ui.memory(|m| m.focused()).is_some_and(|f| f != edit);
+    let key = typing_id.with("held");
+    let now = ui.ctx().cumulative_pass_nr();
+    let held_last = ui
+        .data(|d| d.get_temp::<u64>(key))
+        .is_some_and(|p| p + 1 == now);
+    if moved || elsewhere || held_last {
+        return false;
+    }
+    ui.data_mut(|d| d.insert_temp(key, now));
+    ui.memory_mut(|m| m.request_focus(edit));
+    ui.ctx().request_repaint();
+    true
 }
 
 /// Whether `key` was pressed this pass, in the events left or in the

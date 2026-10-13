@@ -906,6 +906,12 @@ egui minor.
   Alt) to a text input that owns the keyboard, and a host with its own
   dispatcher asks `text_input_owns_keyboard` the same way.
 
+- A slider's typed entry commits only on a real blur: a click elsewhere,
+  Tab, or the focus taken by another widget. A frame where nobody holds
+  the focus (a panel redrawn for another writer's change, the field not
+  drawn for a pass) no longer commits it: the entry takes the focus
+  back and waits a frame, and commits if the focus is still gone.
+
 ## 0.1.0 (prepared, not published)
 
 The first release: the tokens and themes, the framework (plugins,

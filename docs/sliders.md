@@ -33,7 +33,7 @@ fn exposure(ui: &mut egui::Ui, ev: &mut f64, on: &mut bool) {
 | Escape during a drag | Puts the value back, with no trace |
 | Arrows, Page Up, Page Down | One step, one coarse step (when focused) |
 | Home, End | The soft range's ends |
-| Enter | The typed entry: a number or an expression, then Enter or a click elsewhere commits it (Escape leaves it with nothing). While open it owns Escape and Enter: key bindings never see them |
+| Enter | The typed entry: a number or an expression, then Enter or a click elsewhere commits it (Escape leaves it with nothing). While open it owns Escape and Enter: key bindings never see them. Only a real blur commits it (a click elsewhere, Tab, the focus taken by another widget), not a frame where the panel is redrawn and nobody holds the focus |
 | Wheel | Scrolls the panel; steps the slider only when it has the focus or Alt is held over it |
 | Double click | Back to the default |
 

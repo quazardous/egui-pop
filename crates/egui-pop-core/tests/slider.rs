@@ -915,3 +915,70 @@ fn the_typed_entry_owns_escape_and_enter_in_a_host_that_dispatches_keys_first() 
     assert_eq!(h.state().value, 0.0, "cancelled, not committed");
     assert!(h.query_by_role(egui::accesskit::Role::TextInput).is_none());
 }
+
+struct Redrawn {
+    value: f64,
+    /// The panel skips its slider for a pass, as when another writer's
+    /// change rebuilds it.
+    skip: bool,
+    id: Option<egui::Id>,
+}
+
+#[test]
+fn a_panel_redrawn_while_typing_keeps_the_entry_open_and_a_real_blur_commits() {
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(420.0, 120.0))
+        .build_ui_state(
+            |ui, s: &mut Redrawn| {
+                if std::mem::take(&mut s.skip) {
+                    ui.label("Rebuilding");
+                    return;
+                }
+                let r = ui.add(Slider::new(&mut s.value, "Gain", 0.0..=1.0).step(0.01));
+                s.id = Some(r.id);
+                let _ = ui.button("Other");
+            },
+            Redrawn {
+                value: 0.0,
+                skip: false,
+                id: None,
+            },
+        );
+    h.run();
+    h.get_by_label("Gain").click();
+    h.run();
+    h.key_press(Key::Enter);
+    h.run();
+    for _ in 0..6 {
+        h.key_press(Key::Backspace);
+    }
+    h.get_by_role(egui::accesskit::Role::TextInput)
+        .type_text("0.4");
+    h.run();
+    // One pass without the slider: egui drops the focus of a field not
+    // drawn. The entry takes it back instead of committing.
+    h.state_mut().skip = true;
+    h.step();
+    h.run();
+    let edit = egui_pop_core::slider::typing_id(h.state().id.unwrap()).with("edit");
+    assert_eq!(h.state().value, 0.0, "not committed by the redraw");
+    assert_eq!(
+        h.ctx.memory(|m| m.focused()),
+        Some(edit),
+        "the entry has the keyboard again"
+    );
+    // Typing goes on where it was.
+    h.get_by_role(egui::accesskit::Role::TextInput)
+        .type_text("5");
+    h.run();
+    // Tab: a real blur, which commits; the keyboard moves on.
+    h.key_press(Key::Tab);
+    h.run();
+    assert!(
+        (h.state().value - 0.45).abs() < 1e-9,
+        "committed on the blur: {}",
+        h.state().value
+    );
+    assert!(h.query_by_role(egui::accesskit::Role::TextInput).is_none());
+    assert_ne!(h.ctx.memory(|m| m.focused()), Some(edit));
+}
