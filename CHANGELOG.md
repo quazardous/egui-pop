@@ -9,6 +9,17 @@ egui minor.
 
 ### Added
 
+- The mount contract (ADR 0013) in `egui-pop-model` (`model::mount`):
+  a component declares what it needs (`Mountable`: keyboard and claimed
+  keys, pointer, workers, display, size, instances, view state, the
+  application, a question, a session, popups), a host what it offers
+  (`HostOffer`: size, focus policy and owned keys, what dismisses it,
+  lifetime, window, keymap reach, projection, what it keeps and gives,
+  display), and `check` matches them with eleven named rules: it fits,
+  fits under named conditions, or does not fit with a reason by design,
+  an egui-pop limit or an upstream limit, each written once (`CODES`).
+  `mount::page::render` writes `docs/hosts.md` from the declarations.
+
 - The context stack (ADR 0012, guide: docs/contexts.md): places
   (drill-downs, shown as a breadcrumb) and modes (global states, one
   per group, set or pushed, shown as chips) on one stack owned by the
