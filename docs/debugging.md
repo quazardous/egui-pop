@@ -2,7 +2,9 @@
 
 Every registry describes itself to the **debug bridge**: collectors for
 commands, key resolution traces, focus, overlays, zones, plugins, steps,
-the workbench, the store, the journal and diagnostics, each with a JSON snapshot and
+the workbench, the store, the journal, diagnostics and the mount
+contract (`mounts`: every component and host declared, what is mounted
+where, `where_can` and `check`, see [hosts.md](hosts.md)), each with a JSON snapshot and
 actions flagged `mutates`; every call returns a feedback block. A person
 reads it in the gallery, an agent or a test reads the same data as JSON.
 
