@@ -90,6 +90,49 @@ node stays selected; a removed one leaves the selection (the cursor
 stays where it was). A node inserted or moved under a branch that was
 never loaded is left out: it comes with the branch.
 
+## What a row shows
+
+A row is its triangle, an icon, its label and widgets of the
+application's at its right end. `TreeView::icon` gives each node's icon
+(an `Icon` by role, a glyph or an image, `egui_pop::core::icon::Source`),
+drawn in the row's text colour. `TreeView::row_widgets` adds widgets
+right to left in the row (a visibility toggle, a lock): they act on
+their row and never select it, and the label is cut before them. Both
+are called for the rows in view only.
+
+```rust
+use std::collections::HashSet;
+
+use egui_pop::egui;
+use egui_pop::core::icon::Icon;
+use egui_pop::views::tree::{Node, Sink, TreeSource, TreeState, TreeView};
+
+struct Layers;
+
+impl TreeSource<String> for Layers {
+    fn load(&self, _: Option<&String>, sink: Sink<String>) {
+        sink.deliver(vec![Node::leaf("sky".into(), "Sky"), Node::leaf("ground".into(), "Ground")]);
+    }
+}
+
+fn layers(ui: &mut egui::Ui, state: &mut TreeState<String>, hidden: &mut HashSet<String>) {
+    TreeView::<String>::new("layers")
+        .icon(|_| Some(Icon::File.into()))
+        .row_widgets(|ui, node| {
+            let shown = !hidden.contains(&node.key);
+            let icon = if shown { Icon::Visible } else { Icon::Hidden };
+            let name = format!("{} {}", if shown { "Hide" } else { "Show" }, node.label);
+            if ui.add(icon.label(&name).sense_click()).clicked() && !hidden.remove(&node.key) {
+                hidden.insert(node.key.clone());
+            }
+        })
+        .show(ui, state, &Layers);
+}
+```
+
+The closures take the node: name the key's type (`TreeView::<String>`)
+when the builder comes before `show`.
+
 ## Selection, keys, pointer
 
 `TreeView::mode` sets the selection: `Mode::Single` (the default),
@@ -174,4 +217,5 @@ assert_eq!(out.vetoed(), Some("the archive is read-only"));
 
 The gallery's `tree` page shows a simulated drive answered from a
 thread, edits made while branches are open, a veto on drops into one
-folder, and a branch of 100 000 files.
+folder, icons and an eye and a lock on every row, and a branch of
+100 000 files.

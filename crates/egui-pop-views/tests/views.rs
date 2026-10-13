@@ -9,6 +9,7 @@ use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
 use egui_pop_api::steps::Before;
 use egui_pop_api::{App, AppHandle, Ctx, Plugin, PluginError};
+use egui_pop_core::icon::Icon;
 use egui_pop_model::ids::{OwnerId, PluginId};
 use egui_pop_views::list::{ListRows, ListState, ListView};
 use egui_pop_views::steps::{TABLE_SORT, TREE_DROP};
@@ -386,6 +387,76 @@ fn a_hundred_thousand_nodes_build_a_screenful() {
         per < std::time::Duration::from_millis(100),
         "{per:?} a pass"
     );
+}
+
+/// A tree whose rows carry an icon and their own widgets.
+struct RichApp {
+    state: TreeState<String>,
+    source: Source,
+    hidden: std::collections::HashSet<String>,
+    signals: Vec<tree::Signal<String>>,
+}
+
+fn rich_harness() -> Harness<'static, RichApp> {
+    let app = RichApp {
+        state: TreeState::new(),
+        source: Source {
+            asked: Arc::default(),
+            slow: None,
+        },
+        hidden: Default::default(),
+        signals: Vec::new(),
+    };
+    Harness::builder()
+        .with_size(egui::vec2(400.0, 600.0))
+        .build_ui_state(
+            |ui, t: &mut RichApp| {
+                let hidden = &mut t.hidden;
+                let out = TreeView::<String>::new("rich")
+                    .label("Rich")
+                    .icon(|n| Some(if n.branch { Icon::Folder } else { Icon::File }.into()))
+                    .row_widgets(|ui, n| {
+                        let on = hidden.contains(&n.key);
+                        let name = format!("Hide {}", n.label);
+                        let r = ui.add(egui::Button::selectable(
+                            on,
+                            if on { "hidden" } else { "shown" },
+                        ));
+                        r.widget_info(|| {
+                            egui::WidgetInfo::selected(egui::WidgetType::Checkbox, true, on, &name)
+                        });
+                        if r.clicked() && !hidden.remove(&n.key) {
+                            hidden.insert(n.key.clone());
+                        }
+                    })
+                    .show(ui, &mut t.state, &t.source);
+                t.signals.extend(out.signals);
+            },
+            app,
+        )
+}
+
+#[test]
+fn row_widgets_act_on_their_row_without_selecting_it() {
+    let mut h = rich_harness();
+    h.run();
+    h.get_by_label("Folder A").click();
+    h.run();
+    h.get_by_label("Hide Folder C").click();
+    h.run();
+    assert!(h.state().hidden.contains("c"));
+    assert_eq!(h.state().state.selection().keys(), &["a"], "still Folder A");
+    assert!(!h.state().signals.iter().any(
+        |s| matches!(s, tree::Signal::Select { keys, .. } if keys.contains(&"c".to_string()))
+    ));
+    // The label is cut before the widgets: the toggle stays clickable
+    // and the row's name stays the label.
+    let label = h.get_by_label("Folder C").rect();
+    let toggle = h.get_by_label("Hide Folder C").rect();
+    assert!(toggle.right() <= label.right() + 0.5 && toggle.left() > label.left());
+    h.get_by_label("Hide Folder C").click();
+    h.run();
+    assert!(h.state().hidden.is_empty());
 }
 
 struct Rows(Vec<(u32, String, u32)>);

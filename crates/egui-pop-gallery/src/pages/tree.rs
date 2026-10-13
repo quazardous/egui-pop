@@ -1,10 +1,10 @@
 //! The tree page: a live tree over a simulated drive the page owns,
 //! answered from a thread after a delay; edits made while branches are
-//! open; drag and drop with a veto; rename in place; a branch of
-//! 100 000 files.
+//! open; drag and drop with a veto; rename in place; icons and per-row
+//! toggles; a branch of 100 000 files.
 
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -13,6 +13,7 @@ use egui::Ui;
 use egui_pop::api::steps::Before;
 use egui_pop::api::stories::Story;
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
+use egui_pop::core::icon::{Icon, Tone};
 use egui_pop::model::ids::{PluginId, StoryId};
 use egui_pop::views::Mode;
 use egui_pop::views::steps::TREE_DROP;
@@ -171,12 +172,28 @@ fn rename_in_drive(drive: &Drive, key: &str, to: &str) {
     }
 }
 
+/// What the rows' toggles set: the page's own marks on nodes.
+#[derive(Debug, Default)]
+pub struct Marks {
+    pub hidden: HashSet<String>,
+    pub locked: HashSet<String>,
+}
+
+impl Marks {
+    fn toggle(set: &mut HashSet<String>, key: &str) {
+        if !set.remove(key) {
+            set.insert(key.to_string());
+        }
+    }
+}
+
 /// The page's state.
 #[derive(Debug)]
 pub struct PageState {
     pub tree: TreeState<String>,
     pub source: Demo,
     pub log: Vec<String>,
+    pub marks: Rc<RefCell<Marks>>,
     added: usize,
 }
 
@@ -189,6 +206,7 @@ impl Default for PageState {
                 delay: Duration::from_millis(300),
             },
             log: Vec::new(),
+            marks: Rc::default(),
             added: 0,
         }
     }
@@ -232,7 +250,7 @@ impl Plugin for TreePage {
 }
 
 fn show(ui: &mut Ui, app: &AppHandle, p: &mut PageState) {
-    ui.label("Open a folder: its files come from a thread after 0.3 s. Drag files between folders, F2 renames, letters jump to a name.");
+    ui.label("Open a folder: its files come from a thread after 0.3 s. Drag files between folders, F2 renames, letters jump to a name. The eye and the lock at a row's end act on that row without selecting it.");
     ui.horizontal_wrapped(|ui| {
         let handle = p.tree.handle();
         if ui.button("Add a photo to Photos").clicked() {
@@ -273,13 +291,16 @@ fn show(ui: &mut Ui, app: &AppHandle, p: &mut PageState) {
         app.set_context(VETO, if veto { "true" } else { "false" });
     }
     section(ui, "Files");
-    let out = TreeView::new("gallery.files")
+    let marks = p.marks.clone();
+    let out = TreeView::<String>::new("gallery.files")
         .label("Files")
         .mode(Mode::Multiple)
         .drag_drop(true)
         .rename(true)
         .app(app)
         .height(300.0)
+        .icon(|n| Some(if n.branch { Icon::Folder } else { Icon::File }.into()))
+        .row_widgets(|ui, n| row_toggles(ui, &marks, &n.key, &n.label))
         .show(ui, &mut p.tree, &p.source);
     for s in out.signals {
         match &s {
@@ -313,6 +334,33 @@ fn show(ui: &mut Ui, app: &AppHandle, p: &mut PageState) {
     let skip = p.log.len().saturating_sub(5);
     for line in &p.log[skip..] {
         ui.monospace(line);
+    }
+}
+
+/// A row's eye and lock, right to left: they change the page's marks,
+/// not the selection.
+fn row_toggles(ui: &mut Ui, marks: &RefCell<Marks>, key: &str, label: &str) {
+    let (hidden, locked) = {
+        let m = marks.borrow();
+        (m.hidden.contains(key), m.locked.contains(key))
+    };
+    let (icon, name) = if hidden {
+        (Icon::Hidden, format!("Show {label}"))
+    } else {
+        (Icon::Visible, format!("Hide {label}"))
+    };
+    let tone = if hidden { Tone::Muted } else { Tone::Default };
+    if ui.add(icon.tone(tone).label(&name).sense_click()).clicked() {
+        Marks::toggle(&mut marks.borrow_mut().hidden, key);
+    }
+    let (icon, name) = if locked {
+        (Icon::Lock, format!("Unlock {label}"))
+    } else {
+        (Icon::Unlock, format!("Lock {label}"))
+    };
+    let tone = if locked { Tone::Warning } else { Tone::Muted };
+    if ui.add(icon.tone(tone).label(&name).sense_click()).clicked() {
+        Marks::toggle(&mut marks.borrow_mut().locked, key);
     }
 }
 

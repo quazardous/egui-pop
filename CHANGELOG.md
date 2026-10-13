@@ -9,6 +9,14 @@ egui minor.
 
 ### Added
 
+- Tree rows carry an icon and widgets of the application's:
+  `TreeView::icon` gives each node's icon (`icon::Source`), drawn
+  between the triangle and the label; `TreeView::row_widgets` adds
+  widgets at the row's right end (a visibility toggle, a lock) that act
+  on their row without selecting it, the label cut before them.
+  `TreeView` now names the key's type (`TreeView<'a, K>`). The
+  gallery's tree page shows an eye and a lock on every row.
+
 - Icons: `Icon::Lock` and `Icon::Unlock` (a padlock closed and open),
   from the Phosphor font or painted.
 

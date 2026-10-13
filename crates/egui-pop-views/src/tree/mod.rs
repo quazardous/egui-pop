@@ -12,6 +12,9 @@
 //!   Page Up/Down, Home/End, Left/Right to close, open or move to the
 //!   parent, Space, Ctrl+A, Enter, F2, type-ahead), **drag and drop**
 //!   (before, after or inside a node), **rename in place**.
+//! - **Rows** carry an icon ([`TreeView::icon`]) and widgets of the
+//!   application's at their right end ([`TreeView::row_widgets`]) that
+//!   act on their row without selecting it.
 //! - **Virtualised**: rows are flattened once per change and only the
 //!   rows in view are built, so 100 000 nodes cost a screenful.
 //! - Each moment is a step (`tree.load`, `tree.expand`, `tree.select`,
@@ -59,6 +62,7 @@ use egui::{
 };
 use egui_pop_api::AppHandle;
 use egui_pop_api::steps::Outcome;
+use egui_pop_core::icon::{Size, Source};
 use egui_pop_core::strings::{self, tr, tr_args};
 use egui_pop_core::theme::Tokens;
 use egui_pop_model::ids::StepId;
@@ -400,9 +404,13 @@ enum Action<K> {
     Activate(K),
 }
 
+/// What draws a row's icon.
+type IconFn<'a, K> = Box<dyn Fn(&Node<K>) -> Option<Source> + 'a>;
+/// What adds a row's widgets.
+type RowFn<'a, K> = Box<dyn FnMut(&mut Ui, &Node<K>) + 'a>;
+
 /// The tree widget.
-#[derive(Debug)]
-pub struct TreeView<'a> {
+pub struct TreeView<'a, K: Key> {
     id: String,
     label: Option<String>,
     mode: Mode,
@@ -410,9 +418,27 @@ pub struct TreeView<'a> {
     drag_drop: bool,
     rename: bool,
     height: Option<f32>,
+    icon: Option<IconFn<'a, K>>,
+    row_widgets: Option<RowFn<'a, K>>,
 }
 
-impl<'a> TreeView<'a> {
+impl<K: Key> std::fmt::Debug for TreeView<'_, K> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TreeView")
+            .field("id", &self.id)
+            .field("label", &self.label)
+            .field("mode", &self.mode)
+            .field("app", &self.app.is_some())
+            .field("drag_drop", &self.drag_drop)
+            .field("rename", &self.rename)
+            .field("height", &self.height)
+            .field("icon", &self.icon.is_some())
+            .field("row_widgets", &self.row_widgets.is_some())
+            .finish()
+    }
+}
+
+impl<'a, K: Key> TreeView<'a, K> {
     /// A tree named `id` in steps and signals.
     pub fn new(id: impl Into<String>) -> Self {
         Self {
@@ -423,6 +449,8 @@ impl<'a> TreeView<'a> {
             drag_drop: false,
             rename: false,
             height: None,
+            icon: None,
+            row_widgets: None,
         }
     }
 
@@ -461,9 +489,26 @@ impl<'a> TreeView<'a> {
         self
     }
 
+    /// Each row's icon, between the triangle and the label (`None`: no
+    /// icon on that row), drawn in the row's text colour at the inline
+    /// icon size.
+    pub fn icon(mut self, icon: impl Fn(&Node<K>) -> Option<Source> + 'a) -> Self {
+        self.icon = Some(Box::new(icon));
+        self
+    }
+
+    /// Widgets at each row's right end, added right to left (a
+    /// visibility toggle, a lock): they act on their row without
+    /// selecting it, and the label is cut before them. Called for the
+    /// rows in view only, in an `Ui` whose ids are the row's own.
+    pub fn row_widgets(mut self, widgets: impl FnMut(&mut Ui, &Node<K>) + 'a) -> Self {
+        self.row_widgets = Some(Box::new(widgets));
+        self
+    }
+
     /// Draws the tree; runs what the user did as steps.
-    pub fn show<K: Key>(
-        self,
+    pub fn show(
+        mut self,
         ui: &mut Ui,
         state: &mut TreeState<K>,
         source: &dyn TreeSource<K>,
@@ -497,6 +542,8 @@ impl<'a> TreeView<'a> {
         }
 
         let label = self.label.clone().unwrap_or_else(|| tr(ui.ctx(), &s::TREE));
+        let icon = self.icon.take();
+        let mut row_widgets = self.row_widgets.take();
         state.model.rows();
         let TreeState {
             model,
@@ -532,21 +579,49 @@ impl<'a> TreeView<'a> {
                             let r = ui.interact(rect, id.with(("row", &key)), rows::ROW_SENSE);
                             let selected = selection.contains(&key);
                             let cursor = focused && selection.cursor() == Some(&key);
-                            rows::paint(ui, rect, selected, r.hovered() && drag.is_none(), cursor);
+                            let hovered = r.contains_pointer() && drag.is_none();
+                            rows::paint(ui, rect, selected, hovered, cursor);
+                            let color = rows::text_color(ui, selected);
                             let toggle = Rect::from_min_size(
                                 pos2(x, rect.top()),
                                 vec2(indent, rect.height()),
                             );
                             if node.branch {
-                                disclosure(
-                                    ui,
-                                    toggle,
-                                    model.is_expanded(&key),
-                                    rows::text_color(ui, selected),
-                                );
+                                disclosure(ui, toggle, model.is_expanded(&key), color);
                             }
-                            let text_rect =
-                                Rect::from_min_max(pos2(toggle.right(), rect.top()), rect.max);
+                            let mut left = toggle.right();
+                            if let Some(source) = icon.as_ref().and_then(|f| f(&node)) {
+                                let side = Size::Inline.points(&Tokens::of(ui.ctx()));
+                                let at = Rect::from_center_size(
+                                    pos2(left + side / 2.0, rect.center().y),
+                                    vec2(side, side),
+                                );
+                                source.paint(ui, at, color);
+                                left += side + ui.spacing().icon_spacing;
+                            }
+                            // The row's widgets, from the right end; the
+                            // label stops before them.
+                            let mut right = rect.right();
+                            if let Some(add) = row_widgets.as_mut() {
+                                let mut child = ui.new_child(
+                                    UiBuilder::new()
+                                        .id_salt(("row_widgets", &key))
+                                        .max_rect(Rect::from_min_max(
+                                            pos2(left, rect.top()),
+                                            rect.max,
+                                        ))
+                                        .layout(egui::Layout::right_to_left(egui::Align::Center)),
+                                );
+                                add(&mut child, &node);
+                                let used = child.min_rect();
+                                if used.width() > 0.0 {
+                                    right = used.left() - ui.spacing().item_spacing.x;
+                                }
+                            }
+                            let text_rect = Rect::from_min_max(
+                                pos2(left, rect.top()),
+                                pos2(right.max(left), rect.bottom()),
+                            );
                             let editing = renaming.as_ref().is_some_and(|r| r.key == key);
                             if editing {
                                 let ren = renaming.as_mut().expect("renaming");
@@ -576,13 +651,15 @@ impl<'a> TreeView<'a> {
                                     take_focus = true;
                                 }
                             } else {
-                                ui.painter().text(
-                                    pos2(text_rect.left(), text_rect.center().y),
-                                    egui::Align2::LEFT_CENTER,
-                                    &node.label,
-                                    egui::TextStyle::Body.resolve(ui.style()),
-                                    rows::text_color(ui, selected),
-                                );
+                                ui.painter()
+                                    .with_clip_rect(text_rect.intersect(ui.clip_rect()))
+                                    .text(
+                                        pos2(text_rect.left(), text_rect.center().y),
+                                        egui::Align2::LEFT_CENTER,
+                                        &node.label,
+                                        egui::TextStyle::Body.resolve(ui.style()),
+                                        color,
+                                    );
                             }
                             let name = node.label.clone();
                             r.widget_info(move || {
@@ -716,13 +793,7 @@ impl<'a> TreeView<'a> {
     }
 
     /// The keys of a focused tree.
-    fn keys<K: Key>(
-        &self,
-        ui: &Ui,
-        state: &mut TreeState<K>,
-        row_h: f32,
-        actions: &mut Vec<Action<K>>,
-    ) {
+    fn keys(&self, ui: &Ui, state: &mut TreeState<K>, row_h: f32, actions: &mut Vec<Action<K>>) {
         let keys = nav::read(ui);
         if keys.is_empty() {
             return;
@@ -837,7 +908,7 @@ impl<'a> TreeView<'a> {
     }
 
     /// Runs one action as its step.
-    fn run<K: Key>(
+    fn run(
         &self,
         state: &mut TreeState<K>,
         source: &dyn TreeSource<K>,

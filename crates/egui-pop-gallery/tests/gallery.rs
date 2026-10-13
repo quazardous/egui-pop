@@ -899,6 +899,14 @@ fn the_tree_page_loads_lazily_follows_changes_and_vetoes_a_drop() {
     h.run();
     assert!(h.query_by_label("new-1.jpg").is_some());
     assert!(h.query_by_label("Selected: cover.jpg").is_some());
+    // A row's toggles act on that row, the selection stays.
+    h.get_by_label("Hide Photos").click();
+    h.run();
+    h.get_by_label("Lock 2023").click();
+    h.run();
+    assert!(h.query_by_label("Show Photos").is_some());
+    assert!(h.query_by_label("Unlock 2023").is_some());
+    assert!(h.query_by_label("Selected: cover.jpg").is_some());
     // The keyboard (the button took the focus: back to the tree): up to
     // the new photo, End, Home, type-ahead.
     h.get_by_label("cover.jpg").click();
