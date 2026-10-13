@@ -25,7 +25,7 @@ built-ins), `icons`, `motion` (the motion clock), `values`, `sliders`,
 `placeholders` (skeletons and empty states), `viewport` (the image
 viewport), `navigator` (the zoom control and the navigator), `images`,
 `grading` (curves and colour wheels), `cursors` (tool cursors, brush
-outlines and the loupe), `display` (wide gamut and HDR surfaces), `tree`
+outlines and the loupe), `node-graph` (the node graph editor), `display` (wide gamut and HDR surfaces), `tree`
 (the live tree), `table` (lists and tables), `text-editor`,
 `code-editor`, `terminal`, `zones` (zones and blocks), `workbench`,
 `palettes`, `arrangements`, `strips`, `jobs` (a pretend host's
@@ -166,7 +166,8 @@ The text editor, the code editor and the terminal.
 ### Images
 
 The tiled image viewport, its zoom control and navigator, images,
-curves and colour wheels, cursors and the loupe, and the display.
+curves and colour wheels, cursors and the loupe, the node graph editor,
+and the display.
 
 <table>
   <tr>
@@ -180,6 +181,10 @@ curves and colour wheels, cursors and the loupe, and the display.
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/grading-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/grading-pop-light.png" width="200" alt="grading-pop-light"></a><br>grading-pop-light</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/cursors-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/cursors-pop-dark.png" width="200" alt="cursors-pop-dark"></a><br>cursors-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/cursors-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/cursors-pop-light.png" width="200" alt="cursors-pop-light"></a><br>cursors-pop-light</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/node-graph-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/node-graph-pop-dark.png" width="200" alt="node-graph-pop-dark"></a><br>node-graph-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/node-graph-detail-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/node-graph-detail-pop-dark.png" width="200" alt="node-graph-detail-pop-dark"></a><br>node-graph-detail-pop-dark</td>
   </tr>
 </table>
 

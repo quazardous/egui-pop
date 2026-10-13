@@ -734,6 +734,73 @@ fn the_navigator_page_zooms_through_its_step_and_a_plugin_caps_it() {
 }
 
 #[test]
+fn the_node_graph_page_shows_fifty_nodes_and_edits_through_its_steps() {
+    use egui_pop::imaging::graph::{CMD_GRAPH_EDIT, CMD_GRAPH_READ, CMD_GRAPH_VIEW};
+    use egui_pop::model::commands::Origin;
+    let agent = || Origin::Agent("test".into());
+    let mut h = harness(options("pop-dark", Density::Comfortable, "node-graph"));
+    h.run();
+    egui_pop_test::assert_all_named(&h);
+    assert!(h.query_by_label("Processing graph").is_some());
+    assert!(h.query_by_label("Graph overview").is_some());
+    let read = |h: &mut Harness<'_, Gallery>| {
+        h.state_mut()
+            .app
+            .run(
+                &CMD_GRAPH_READ,
+                serde_json::json!({ "graph": "gallery" }),
+                agent(),
+            )
+            .now()
+            .expect("answered now")
+            .expect("read")
+    };
+    let graph = read(&mut h);
+    assert_eq!(graph["nodes"].as_array().map(Vec::len), Some(50));
+    assert_eq!(
+        graph["level"], "overview",
+        "fitted, fifty nodes are an overview"
+    );
+    // Groups fold into stacks in the overview.
+    assert!(h.query_by_label("Unfold Tone (12 nodes)").is_some());
+    let mut results = egui_kittest::SnapshotResults::new();
+    results.add(h.try_snapshot("node-graph-pop-dark"));
+
+    // The page's plugin keeps the output.
+    let _ = h.state_mut().app.run(
+        &CMD_GRAPH_EDIT,
+        serde_json::json!({ "graph": "gallery", "edit": "delete", "nodes": ["output"] }),
+        agent(),
+    );
+    h.run();
+    h.run();
+    let t = last_trace_of(&h, "graph.delete");
+    assert!(t.vetoed_by.is_some(), "{t:?}");
+    assert_eq!(read(&mut h)["nodes"].as_array().map(Vec::len), Some(50));
+
+    // The detail view: each node's parameters, edited inline.
+    for args in [
+        serde_json::json!({ "graph": "gallery", "level": "detail" }),
+        serde_json::json!({ "graph": "gallery", "focus": "exposure-1" }),
+    ] {
+        let _ = h.state_mut().app.run(&CMD_GRAPH_VIEW, args, agent());
+    }
+    h.run();
+    h.run();
+    assert_eq!(read(&mut h)["level"], "detail");
+    // Every exposure node's slider (the first in view).
+    let sliders: Vec<_> = h.query_all_by_label("Exposure").collect();
+    assert!(!sliders.is_empty());
+    assert!(
+        sliders
+            .iter()
+            .all(|n| n.accesskit_node().role() == egui::accesskit::Role::Slider)
+    );
+    egui_pop_test::assert_all_named(&h);
+    results.add(h.try_snapshot("node-graph-detail-pop-dark"));
+}
+
+#[test]
 fn the_workbench_page_opens_moves_and_vetoes_panels() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "workbench"));
     h.run();

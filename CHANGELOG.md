@@ -31,6 +31,10 @@ egui minor.
   wires go on the journal, and agents read and edit a graph through the
   `graph.read`, `graph.edit`, `graph.select` and `graph.view` commands.
 
+- The gallery's node graph page: fifty nodes from six sources to one
+  output, with groups, masks and blends, the minimap, and a plugin
+  refusing to delete the output.
+
 - The viewport's tile intake off the interface thread, opt-in:
   `ViewportState::set_prepare_on_worker` converts each tile on the
   thread that delivers it (the display transform on the CPU path, the

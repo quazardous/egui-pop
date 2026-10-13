@@ -22,6 +22,7 @@ pub mod jobs;
 pub mod menus;
 pub mod motion;
 pub mod navigator;
+pub mod node_graph;
 pub mod overview;
 pub mod palettes;
 pub mod placeholders;
