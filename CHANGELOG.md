@@ -9,6 +9,15 @@ egui minor.
 
 ### Added
 
+- The layout's document comes from the host: `Host::layout_document`
+  (`layout` by default, a workspace's own such as
+  `workspaces/photos/layout`, or `None` when the host keeps the layout
+  itself; `LocalHost::with_layout_document`). `App::load_layout` loads
+  it again (switching workspaces), `App::save_layout` saves it; both run
+  the new `layout.load` and `layout.save` steps (`{ "document" }`), which
+  a plugin may redirect, veto or replace. `Persist` makes the folders of
+  a document name holding `/`.
+
 - `AppBuilder::name` gives the application's name apart from its main
   window's title (`AppHandle::name`): a detached panel's window is titled
   `{ $panel } — { $application }` with it, no longer with the whole main

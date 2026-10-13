@@ -255,3 +255,81 @@ fn the_drop_hint_is_published_with_its_rect_and_name() {
     assert!(app.drop_hint().is_none());
     assert_eq!(area_of(&h, &LOG), Some(Area::Bottom), "refused");
 }
+
+/// A host keeping one layout per workspace, or none.
+struct Workspaces {
+    inner: egui_pop_api::host::LocalHost,
+    document: std::sync::Arc<std::sync::Mutex<Option<String>>>,
+}
+
+impl egui_pop_api::host::Host for Workspaces {
+    fn dispatch(&mut self, d: &egui_pop_api::host::Dispatch<'_>) -> egui_pop_api::host::Reply {
+        self.inner.dispatch(d)
+    }
+    fn journal(&self) -> Option<&egui_pop_api::host::Journal> {
+        self.inner.journal()
+    }
+    fn journal_mut(&mut self) -> Option<&mut egui_pop_api::host::Journal> {
+        self.inner.journal_mut()
+    }
+    fn store(&self) -> egui_pop_core::binding::SharedStore {
+        self.inner.store()
+    }
+    fn set_waker(&mut self, waker: egui_pop_api::host::Waker) {
+        self.inner.set_waker(waker);
+    }
+    fn layout_document(&self) -> Option<String> {
+        self.document.lock().unwrap().clone()
+    }
+}
+
+#[test]
+fn the_host_names_the_layouts_document_per_workspace_or_keeps_it() {
+    use egui_pop_api::host::Host as _;
+    let dir = std::env::temp_dir().join(format!("egui-pop-workspaces-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let document = std::sync::Arc::new(std::sync::Mutex::new(Some(
+        "workspaces/photos/layout".to_string(),
+    )));
+    let host = || Workspaces {
+        inner: egui_pop_api::host::LocalHost::default(),
+        document: document.clone(),
+    };
+    let mut h = harness(builder(false).persist(&dir).host(host()));
+    h.state().handle().move_panel(&TREE, Area::EndSide);
+    h.state().save().unwrap();
+    assert!(dir.join("workspaces/photos/layout.json").exists());
+    assert!(!dir.join("layout.json").exists(), "no global layout");
+    let trace = h.state().handle().step_traces().pop().unwrap();
+    assert_eq!(trace.step, egui_pop_api::app::STEP_LAYOUT_SAVE);
+    // Another workspace: its own document, the tree back where declared.
+    *document.lock().unwrap() = Some("workspaces/maps/layout".into());
+    h.state().handle().move_panel(&TREE, Area::StartSide);
+    h.state().save().unwrap();
+    // Back to the first: loaded from its document.
+    *document.lock().unwrap() = Some("workspaces/photos/layout".into());
+    let out = h.state_mut().load_layout().unwrap();
+    assert!(out.ok(), "{out:?}");
+    h.run();
+    assert_eq!(area_of(&h, &TREE), Some(Area::EndSide));
+    // The next start reads the workspace the host names.
+    let h = harness(builder(false).persist(&dir).host(host()));
+    assert_eq!(area_of(&h, &TREE), Some(Area::EndSide));
+    // A host keeping the layout itself: nothing loaded or written.
+    *document.lock().unwrap() = None;
+    let _ = std::fs::remove_dir_all(&dir);
+    let mut h = harness(builder(false).persist(&dir).host(host()));
+    assert!(h.state_mut().load_layout().is_none());
+    assert!(h.state().save_layout().is_none());
+    h.state().save().unwrap();
+    assert!(!dir.join("layout.json").exists());
+    assert!(host().layout_document().is_none());
+    // The local host opts out the same way.
+    assert!(
+        egui_pop_api::host::LocalHost::default()
+            .with_layout_document(None)
+            .layout_document()
+            .is_none()
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

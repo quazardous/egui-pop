@@ -96,6 +96,19 @@ kept in the layout and repaired before the window opens. The window is
 titled with the panel and the application's name (`AppBuilder::name`,
 "Filmstrip — Helios"), not the main window's whole title.
 
+## Where the layout is kept
+
+With a persistence directory (`AppBuilder::persist`), the layout is
+loaded at the start and saved by `App::save` (so at exit) in the
+document the host names, `Host::layout_document`: `layout` by default,
+a workspace's own (`workspaces/photos/layout`, asked again at each load
+and save), or `None` for a host keeping the layout itself through
+`AppHandle::layout` and `set_layout` (`LocalHost::with_layout_document`
+opts out the same way). An application switching workspaces calls
+`App::load_layout` once its host names the new one. Both are steps,
+`layout.load` and `layout.save` (`{ "document" }`): a plugin may
+redirect the document, veto, or load and save elsewhere.
+
 ## Arrangements
 
 Named layouts saved, switched and reset, kept in the host's store

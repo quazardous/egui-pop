@@ -111,9 +111,12 @@ impl Persist {
 
     /// Writes a document's text atomically, keeping the previous one as
     /// the backup.
+    /// A name may hold `/` (`workspaces/photos/layout`): its folders are
+    /// made.
     pub fn save_text(&self, name: &str, text: &str) -> Result<(), PersistError> {
-        fs::create_dir_all(&self.dir).map_err(io_err(&self.dir))?;
         let path = self.path(name);
+        let dir = path.parent().unwrap_or(&self.dir).to_path_buf();
+        fs::create_dir_all(&dir).map_err(io_err(&dir))?;
         let tmp = self.dir.join(format!("{name}.json.tmp"));
         {
             let mut f = fs::File::create(&tmp).map_err(io_err(&tmp))?;

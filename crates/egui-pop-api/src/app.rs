@@ -1523,6 +1523,15 @@ pub type ExitFn = Box<dyn FnMut(&AppHandle)>;
 /// and the layout (when a directory was given). A plugin replaces it to
 /// save elsewhere, or follows it.
 pub const STEP_EXIT: StepId = StepId::from_static("app.exit");
+/// The workbench's layout is loaded (`{ "document" }`, from
+/// `Host::layout_document`): at the start, and on `App::load_layout`. A
+/// before-hook may redirect the document or veto; a run-hook loads it
+/// from elsewhere (and calls `AppHandle::set_layout`).
+pub const STEP_LAYOUT_LOAD: StepId = StepId::from_static("layout.load");
+/// The workbench's layout is saved (`{ "document" }`): by `App::save`
+/// (so at exit) and `App::save_layout`. A before-hook may redirect or
+/// veto; a run-hook saves it elsewhere (`AppHandle::layout`).
+pub const STEP_LAYOUT_SAVE: StepId = StepId::from_static("layout.save");
 
 impl fmt::Debug for AppBuilder {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -1994,6 +2003,20 @@ impl App {
                 "The application closes; the default saves the settings, keymap and layout.",
             )
             .args(json!({})),
+        )?;
+        ctx.step(
+            crate::steps::StepSpec::new(
+                STEP_LAYOUT_LOAD,
+                "The workbench's layout is loaded from a document (`document`, as the host names it).",
+            )
+            .args(json!({ "document": crate::host::LAYOUT_DOCUMENT })),
+        )?
+        .step(
+            crate::steps::StepSpec::new(
+                STEP_LAYOUT_SAVE,
+                "The workbench's layout is saved to a document (`document`, as the host names it).",
+            )
+            .args(json!({ "document": crate::host::LAYOUT_DOCUMENT })),
         )?;
         ctx.step(
             crate::steps::StepSpec::new(
@@ -2785,18 +2808,18 @@ impl App {
     }
 
     fn load_documents(&mut self) {
-        let Some(p) = &self.persist else { return };
-        match p.load::<egui_pop_model::layout::Layout>("layout", &egui_pop_model::layout::schema())
-        {
-            Ok(Some(read)) => self.handle.workbench_mut().layout = read.value,
-            Ok(None) => {}
-            Err(e) => self.handle.0.diagnostics.borrow_mut().error(
+        if self.persist.is_none() {
+            return;
+        }
+        if let Some(Outcome::Done(Err(e))) = self.load_layout() {
+            self.handle.0.diagnostics.borrow_mut().error(
                 "layout-unreadable",
                 None,
                 "layout",
                 format!("{e}: the default layout is used"),
-            ),
+            );
         }
+        let Some(p) = &self.persist else { return };
         match p.load::<egui_pop_model::values::SettingsDoc>("settings", &settings_schema()) {
             Ok(Some(read)) => {
                 let d = lock(&self.handle.0.store).import(&read.value, &Origin::User);
@@ -2838,8 +2861,8 @@ impl App {
         }
     }
 
-    /// Saves the settings and the user's keymap (when a directory was
-    /// given).
+    /// Saves the settings, the user's keymap (when a directory was
+    /// given) and the layout ([`App::save_layout`]).
     pub fn save(&self) -> Result<(), egui_pop_core::persist::PersistError> {
         let Some(p) = &self.persist else {
             return Ok(());
@@ -2848,11 +2871,77 @@ impl App {
         p.save("settings", &settings_schema(), &doc)?;
         let keymap = self.reg.keymap.export(&OwnerId::USER, Layer::User);
         p.save("keymap", &egui_pop_model::keymap_schema(), &keymap)?;
-        p.save(
-            "layout",
-            &egui_pop_model::layout::schema(),
-            &self.handle.layout(),
-        )
+        match self.save_layout() {
+            Some(Outcome::Done(Err(e))) => Err(egui_pop_core::persist::PersistError::Io {
+                path: p.dir().to_path_buf(),
+                error: std::io::Error::other(e),
+            }),
+            _ => Ok(()),
+        }
+    }
+
+    /// The document the layout is kept in now, as the host says
+    /// (`Host::layout_document`); `None`: the host keeps it.
+    pub fn layout_document(&self) -> Option<String> {
+        self.handle.with_host(|h| h.layout_document()).flatten()
+    }
+
+    /// Loads the layout from the host's document, through the
+    /// `layout.load` step (an application switching workspaces calls it
+    /// once its host names the new one). `None` when the host keeps the
+    /// layout; a document not written yet keeps the layout as it is.
+    pub fn load_layout(&mut self) -> Option<Outcome> {
+        let document = self.layout_document()?;
+        let persist = self.persist.clone();
+        let started = self.started;
+        Some(self.handle.step(
+            &STEP_LAYOUT_LOAD,
+            json!({ "document": document }),
+            move |app, args| {
+                let document = args["document"].as_str().ok_or("`document` is missing")?;
+                let Some(p) = persist else {
+                    return Ok(json!({ "document": document, "loaded": false }));
+                };
+                let read = p
+                    .load::<egui_pop_model::layout::Layout>(
+                        document,
+                        &egui_pop_model::layout::schema(),
+                    )
+                    .map_err(|e| e.to_string())?;
+                let Some(read) = read else {
+                    return Ok(json!({ "document": document, "loaded": false }));
+                };
+                let notes = if started {
+                    app.set_layout(read.value)
+                } else {
+                    // Repaired against the panels when the application is
+                    // first resolved.
+                    app.workbench_mut().layout = read.value;
+                    Vec::new()
+                };
+                Ok(json!({ "document": document, "loaded": true, "repaired": notes }))
+            },
+        ))
+    }
+
+    /// Saves the layout to the host's document, through the
+    /// `layout.save` step. `None` when the host keeps the layout.
+    pub fn save_layout(&self) -> Option<Outcome> {
+        let document = self.layout_document()?;
+        let persist = self.persist.clone();
+        Some(self.handle.step(
+            &STEP_LAYOUT_SAVE,
+            json!({ "document": document }),
+            move |app, args| {
+                let document = args["document"].as_str().ok_or("`document` is missing")?;
+                let Some(p) = persist else {
+                    return Ok(json!({ "document": document, "saved": false }));
+                };
+                p.save(document, &egui_pop_model::layout::schema(), &app.layout())
+                    .map_err(|e| e.to_string())?;
+                Ok(json!({ "document": document, "saved": true }))
+            },
+        ))
     }
 
     /// Declares a command now (see `AppHandle::declare`).

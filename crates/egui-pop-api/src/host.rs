@@ -21,7 +21,10 @@
 //!   the steps around them (`edit.undo`, `edit.redo`, ADR 0011); the host
 //!   says what an undo is. The default undoes the store;
 //! - a [`Waker`] the host calls from any thread when something changed
-//!   ([`Host::set_waker`]).
+//!   ([`Host::set_waker`]);
+//! - where the workbench's layout is kept ([`Host::layout_document`]):
+//!   one document by default, a workspace's own, or none (the host keeps
+//!   it).
 //!
 //! [`LocalHost`] is the default: commands run in-process on the
 //! interface thread (their handlers given to `Ctx::command`), the journal
@@ -400,7 +403,21 @@ pub trait Host {
     /// How to wake the interface; the host calls it from any thread when
     /// a result or an event arrives.
     fn set_waker(&mut self, waker: Waker);
+
+    /// The document the workbench's layout is kept in, under the
+    /// application's persistence directory (`AppBuilder::persist`):
+    /// [`LAYOUT_DOCUMENT`] by default, a workspace's own
+    /// (`workspaces/photos/layout`), asked again at each load and save.
+    /// `None`: egui-pop neither loads nor saves the layout; the host keeps
+    /// it (`AppHandle::layout`, `AppHandle::set_layout`). Loading and
+    /// saving are the `layout.load` and `layout.save` steps.
+    fn layout_document(&self) -> Option<String> {
+        Some(LAYOUT_DOCUMENT.into())
+    }
 }
+
+/// The layout's document when the host names none of its own.
+pub const LAYOUT_DOCUMENT: &str = "layout";
 
 /// The default host: commands run in-process with their handlers, the
 /// journal is in memory.
@@ -409,6 +426,7 @@ pub struct LocalHost {
     journal: Journal,
     store: SharedStore,
     waker: Waker,
+    layout: Option<String>,
 }
 
 impl Default for LocalHost {
@@ -424,7 +442,15 @@ impl LocalHost {
             journal: Journal::default(),
             store,
             waker: Waker::default(),
+            layout: Some(LAYOUT_DOCUMENT.into()),
         }
+    }
+
+    /// Where the layout is kept (see [`Host::layout_document`]); `None`:
+    /// the application keeps it itself.
+    pub fn with_layout_document(mut self, document: Option<&str>) -> Self {
+        self.layout = document.map(Into::into);
+        self
     }
 
     /// The waker the application gave (to wake it from a thread).
@@ -455,6 +481,10 @@ impl Host for LocalHost {
 
     fn set_waker(&mut self, waker: Waker) {
         self.waker = waker;
+    }
+
+    fn layout_document(&self) -> Option<String> {
+        self.layout.clone()
     }
 }
 
