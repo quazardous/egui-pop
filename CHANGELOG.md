@@ -243,6 +243,9 @@ egui minor.
 
 ### Changed
 
+- The gallery page (`docs/gallery.md`) shows every snapshot the gallery's
+  tests keep, page by page; a test keeps it complete.
+
 - An application's catalogue defining a key egui-pop's own catalogue has
   overrides it with a warning (`I18n::overridden`, an `i18n.overridden`
   event) instead of failing the plugin; egui-pop's catalogues are base
