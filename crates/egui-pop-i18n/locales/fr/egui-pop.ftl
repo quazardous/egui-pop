@@ -335,6 +335,8 @@ egui-pop-editors-find = Rechercher
 
 egui-pop-editors-goto = Aller à la ligne
 
+egui-pop-editors-job-log = Journal de { $job }
+
 egui-pop-editors-match-case = Respecter la casse
 
 egui-pop-editors-next = Occurrence suivante
@@ -403,11 +405,57 @@ egui-pop-frame-restore = Restaurer
 
 egui-pop-frame-window-menu = Menu de la fenêtre
 
+egui-pop-job-action-name = { $action } : { $job }
+
+egui-pop-job-asked = { $state }, en attente de l’hôte
+
+egui-pop-job-cancelled = annulée
+
+egui-pop-job-cancelling = annulation en cours
+
+egui-pop-job-dismiss = Retirer
+
+egui-pop-job-done = terminée
+
+egui-pop-job-eta-minutes = environ { $n } min restantes
+
+egui-pop-job-eta-seconds = environ { $n } s restantes
+
+egui-pop-job-failed = échouée
+
+egui-pop-job-hide-log = Masquer le journal de { $job }
+
+egui-pop-job-no-log = Pas encore de journal.
+
+egui-pop-job-of = { $done } sur { $total }
+
+egui-pop-job-pause = Pause
+
+egui-pop-job-paused = en pause
+
+egui-pop-job-refused = Refusé : { $error }
+
+egui-pop-job-resume = Reprendre
+
+egui-pop-job-running = en cours
+
+egui-pop-job-show-log = Afficher le journal de { $job }
+
 egui-pop-jobs-active = Tâches : { $count }
 
 egui-pop-jobs-active-percent = Tâches : { $count } ({ $percent } %)
 
+egui-pop-jobs-clear = Effacer les terminées
+
 egui-pop-jobs-failed = Échecs : { $count }
+
+egui-pop-jobs-history = Historique
+
+egui-pop-jobs-none = Aucune tâche.
+
+egui-pop-jobs-open-panel = Ouvrir le panneau
+
+egui-pop-jobs-title = Tâches
 
 egui-pop-menu-does-not-apply = Ne s’applique pas ici ({ $when })
 
@@ -638,6 +686,9 @@ menu-app-menu-view =
 panel-egui-pop-devtools =
     .title = Outils de développement
 
+panel-egui-pop-jobs =
+    .title = Tâches
+
 plugin-egui-pop-arrangements =
     .title = Dispositions
 
@@ -667,6 +718,9 @@ plugin-egui-pop-i18n =
 
 plugin-egui-pop-instance =
     .title = Instance unique
+
+plugin-egui-pop-job-consoles =
+    .title = Consoles des tâches
 
 plugin-egui-pop-jobs =
     .title = Tâches

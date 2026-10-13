@@ -104,6 +104,10 @@ pub struct Toast {
     /// Seconds before it goes (the level's by default); none: until
     /// closed.
     pub lifetime: Option<f64>,
+    /// A job whose progress it carries (`jobs`): its bar, Cancel while
+    /// it goes on, its first action once ended. It stays while the job
+    /// goes on; closing it does not cancel the job.
+    pub job: Option<String>,
 }
 
 impl Toast {
@@ -113,6 +117,7 @@ impl Toast {
             text: text.into(),
             action: None,
             lifetime: level.lifetime(),
+            job: None,
         }
     }
 
@@ -139,6 +144,12 @@ impl Toast {
             command,
             args,
         });
+        self
+    }
+
+    /// Carries a job's progress (see [`Toast::job`]'s field).
+    pub fn job(mut self, id: &str) -> Self {
+        self.job = Some(id.into());
         self
     }
 
@@ -293,11 +304,22 @@ fn show(ui: &mut Ui, app: &AppHandle) {
             json!({ "id": t.id, "level": t.toast.level, "text": t.toast.text }),
         );
     }
-    // Start the clocks of the toasts on screen; end the expired ones.
+    // Start the clocks of the toasts on screen (a job's once the job
+    // ended); end the expired ones.
+    let jobs = app.service(&crate::jobs::JOBS);
+    let job_goes_on = |toast: &Toast| {
+        toast
+            .job
+            .as_ref()
+            .and_then(|id| jobs.as_ref()?.job(id))
+            .is_some_and(|j| j.active())
+    };
     let on_screen: Vec<Shown> = {
         let mut s = lock(&toasts.0);
         for t in s.queue.iter_mut().take(SHOWN) {
-            if t.until.is_none() {
+            if job_goes_on(&t.toast) {
+                t.until = None;
+            } else if t.until.is_none() {
                 t.until = t.toast.lifetime.map(|l| now + l);
             }
         }
@@ -408,6 +430,9 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                                 },
                             );
                         });
+                        if let Some(id) = &shown.toast.job {
+                            crate::jobs_centre::toast_part(ui, app, id);
+                        }
                     });
                 if frame.response.contains_pointer() {
                     hold.push(shown.id);

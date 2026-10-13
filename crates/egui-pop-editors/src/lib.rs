@@ -46,6 +46,7 @@ mod view;
 pub use code::CodeEditor;
 pub use model::EditorState;
 pub use steps::EditorsPlugin;
+pub use terminal::jobs::JobConsolesPlugin;
 pub use terminal::{Terminal, TerminalPlugin, TerminalState};
 pub use text::TextSurface;
 pub use view::{EditorOutput, Signal};

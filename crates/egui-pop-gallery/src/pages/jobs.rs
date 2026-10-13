@@ -7,11 +7,13 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use egui::Ui;
-use egui_pop::api::jobs::{self as api_jobs, JOBS, STEP_ESTIMATE};
+use egui_pop::api::jobs::{JOBS, STEP_ESTIMATE};
+use egui_pop::api::jobs_centre::PANEL_JOBS;
 use egui_pop::api::stories::Story;
+use egui_pop::api::toasts::{TOASTS, Toast};
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
 use egui_pop::model::ids::{PluginId, StoryId};
-use egui_pop::model::jobs::{Job, JobState, Request};
+use egui_pop::model::jobs::{Job, Request};
 use serde_json::{Value as Json, json};
 
 use super::dialogs::CMD_DONE;
@@ -341,10 +343,10 @@ pub fn estimate(job: &Job) -> String {
 }
 
 fn show(ui: &mut Ui, app: &AppHandle, sim: &Sim) {
-    let Some(jobs) = app.service(&JOBS) else {
+    if app.service(&JOBS).is_none() {
         ui.weak("The jobs plugin is not connected.");
         return;
-    };
+    }
     ui.label("A pretend host publishes job.* events on the journal; the model folds them, nothing polls. Step the demo by hand, or let it run.");
     section(ui, "The demo host");
     ui.horizontal_wrapped(|ui| {
@@ -387,79 +389,17 @@ fn show(ui: &mut Ui, app: &AppHandle, sim: &Sim) {
         ui.ctx()
             .request_repaint_after(std::time::Duration::from_secs_f64(AUTO_STEP));
     }
-    section(ui, "The model");
-    let now = jobs.now();
-    let roots = jobs.roots();
-    if roots.is_empty() {
-        ui.weak("No job yet.");
-    }
-    egui::Grid::new("gallery.jobs.model")
-        .num_columns(5)
-        .striped(true)
-        .show(ui, |ui| {
-            for job in &roots {
-                row(ui, app, job, now, 0);
-                for child in jobs.children(&job.id) {
-                    row(ui, app, &child, now, 1);
-                }
-            }
-        });
-}
-
-fn row(ui: &mut Ui, app: &AppHandle, job: &Job, now: f64, depth: usize) {
-    let indent = "    ".repeat(depth);
-    ui.label(format!("{indent}{}", job.title));
-    let mut state = job.state.name().to_string();
-    if let Some(r) = job.requested {
-        state = format!("{state} ({} asked)", api_jobs::command_of(r));
-    }
-    ui.label(state);
-    ui.label(estimate(job));
-    let mut detail = Vec::new();
-    if let Some(t) = job.total {
-        detail.push(format!("{} of {t}", job.done));
-    }
-    if let Some(step) = &job.step {
-        detail.push(format!("step {step}"));
-    }
-    if let Some(item) = &job.item {
-        detail.push(item.clone());
-    }
-    if job.failed > 0 {
-        detail.push(format!("{} failed", job.failed));
-    }
-    if let Some(e) = &job.error {
-        detail.push(format!("error: {e}"));
-    }
-    if let Some(eta) = job.eta(now) {
-        detail.push(format!("{eta:.0} s left"));
-    }
-    ui.label(detail.join(", "));
-    ui.horizontal(|ui| {
-        let ask = |ui: &mut Ui, label: &str, request: Request| {
-            let r = ui.small_button(label);
-            egui_pop::core::a11y::name(
-                &r,
-                egui::WidgetType::Button,
-                &format!("{label} {}", job.title),
-            );
-            if r.clicked() {
-                api_jobs::ask(app, &job.id, request);
-            }
-        };
-        if job.active() && job.parent.is_none() {
-            if job.pausable && job.state == JobState::Running {
-                ask(ui, "Pause", Request::Pause);
-            }
-            if job.state == JobState::Paused {
-                ask(ui, "Resume", Request::Resume);
-            }
-            if job.cancellable {
-                ask(ui, "Cancel", Request::Cancel);
-            }
-        } else if job.retryable && job.parent.is_none() && !job.active() {
-            ask(ui, "Retry", Request::Retry);
+    section(ui, "The jobs centre");
+    ui.horizontal_wrapped(|ui| {
+        if ui.button("Show the export as a toast").clicked()
+            && let Some(toasts) = app.service(&TOASTS)
+        {
+            toasts.notify(Toast::info("Exporting 12 images").job(EXPORT));
+        }
+        if ui.button("Open the Jobs panel").clicked() {
+            app.focus_panel(&PANEL_JOBS);
         }
     });
-    ui.end_row();
+    ui.weak("The same list as the status bar's popover and the Jobs panel. The chevron before a job opens its log console, remembered per job.");
+    egui_pop::api::jobs_centre::show(ui, app);
 }

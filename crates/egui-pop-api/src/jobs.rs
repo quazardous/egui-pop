@@ -59,6 +59,7 @@ use egui_pop_model::clock::SharedClock;
 use egui_pop_model::commands::CommandSpec;
 use egui_pop_model::ids::{BlockId, CommandId, PluginId, StepId};
 use egui_pop_model::jobs::{Incoming, Job, Jobs, Request, Summary};
+use egui_pop_model::panels::{Area, PanelSpec};
 use serde_json::{Value as Json, json};
 
 use crate::app::AppHandle;
@@ -273,12 +274,25 @@ pub fn ask(app: &AppHandle, id: &str, request: Request) {
 pub type Runner = Rc<dyn Fn(&AppHandle, Request, &str) -> Result<Json, String>>;
 
 /// The plugin.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct JobsPlugin {
     clock: Option<SharedClock>,
     runner: Option<Runner>,
     log_lines: Option<usize>,
     history: Option<usize>,
+    panel: bool,
+}
+
+impl Default for JobsPlugin {
+    fn default() -> Self {
+        Self {
+            clock: None,
+            runner: None,
+            log_lines: None,
+            history: None,
+            panel: true,
+        }
+    }
 }
 
 impl fmt::Debug for JobsPlugin {
@@ -288,6 +302,7 @@ impl fmt::Debug for JobsPlugin {
             .field("runner", &self.runner.is_some())
             .field("log_lines", &self.log_lines)
             .field("history", &self.history)
+            .field("panel", &self.panel)
             .finish()
     }
 }
@@ -314,6 +329,12 @@ impl JobsPlugin {
     /// ([`LOG_LINES`](egui_pop_model::jobs::LOG_LINES) by default).
     pub fn log_lines(mut self, lines: usize) -> Self {
         self.log_lines = Some(lines);
+        self
+    }
+
+    /// Without the jobs panel (the status bar's popover stays).
+    pub fn without_panel(mut self) -> Self {
+        self.panel = false;
         self
     }
 
@@ -388,8 +409,9 @@ fn status_item(ui: &mut Ui, app: &AppHandle) {
     let (active, failed) = status_text(&ctx, &summary);
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = t.space.s;
+        let mut text = active;
         if summary.active > 0 {
-            // The ring is drawn only: the text names the item.
+            // The ring is drawn only: the button's text names the item.
             let side = t.size.icon_inline;
             let (rect, _) = ui.allocate_exact_size(egui::vec2(side, side), egui::Sense::hover());
             paint_ring(
@@ -398,11 +420,31 @@ fn status_item(ui: &mut Ui, app: &AppHandle) {
                 summary.fraction.map(|f| f as f32),
                 Tone::Accent.color(&ctx),
             );
-            ui.label(egui::RichText::new(&active).small());
+        } else {
+            text.clear();
         }
-        if let Some(failed) = failed {
-            ui.label(egui::RichText::new(failed).small().color(t.status.danger));
+        let mut label = egui::text::LayoutJob::default();
+        let small = egui::TextFormat {
+            font_id: egui::FontId::proportional(t.font.small),
+            color: t.text.default,
+            ..Default::default()
+        };
+        label.append(&text, 0.0, small.clone());
+        if let Some(failed) = &failed {
+            if !text.is_empty() {
+                label.append("  ", 0.0, small.clone());
+            }
+            label.append(
+                failed,
+                0.0,
+                egui::TextFormat {
+                    color: t.status.danger,
+                    ..small
+                },
+            );
         }
+        let response = ui.add(egui::Button::new(label).frame(false));
+        crate::jobs_centre::popover(ui, app, &response);
     });
 }
 
@@ -568,6 +610,20 @@ impl Plugin for JobsPlugin {
                 status_item,
             ),
         );
+        if self.panel {
+            ctx.panel(
+                PanelSpec::new(crate::jobs_centre::PANEL_JOBS, "Jobs", Area::Bottom)
+                    .min_size(120.0)
+                    .default_size(240.0)
+                    .icon("history")
+                    .closed(),
+                |ui, app| {
+                    egui::ScrollArea::vertical()
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| crate::jobs_centre::show(ui, app));
+                },
+            )?;
+        }
         Ok(())
     }
 }

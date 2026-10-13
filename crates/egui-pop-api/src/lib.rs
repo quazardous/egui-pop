@@ -30,7 +30,8 @@
 //! - [`toasts`]: notices in a corner, with actions, a plugin;
 //! - [`jobs`]: the host's background jobs followed from its journal
 //!   (each with an estimated overall fraction), their commands and the
-//!   `jobs` collector, a plugin;
+//!   `jobs` collector, a plugin; [`jobs_centre`]: the jobs as a panel
+//!   and a popover, each with its log console;
 //! - [`frame`]: the window's own title bar and edges, a plugin;
 //! - [`strips`]: the activity bar and status bar indicators fed by the
 //!   host's events, a plugin;
@@ -102,6 +103,7 @@ mod groups;
 pub mod hooks;
 pub mod host;
 pub mod jobs;
+pub mod jobs_centre;
 pub mod menus;
 pub mod palette;
 pub mod palettes;

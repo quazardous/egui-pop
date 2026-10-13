@@ -15,8 +15,11 @@
 //! - steps `terminal.spawn`, `terminal.input` and `terminal.exit`,
 //!   commands for agents (`terminal.read`, `terminal.send`,
 //!   `terminal.clear`...) and collectors, declared by
-//!   [`TerminalPlugin`].
+//!   [`TerminalPlugin`];
+//! - each job's log console in the jobs centre, as a terminal
+//!   ([`jobs::JobConsolesPlugin`]).
 
+pub mod jobs;
 mod keys;
 pub mod links;
 #[cfg(feature = "pty")]

@@ -40,6 +40,22 @@ egui minor.
   lock. They compile to nothing unless a profiler backend is enabled
   (`profiling/profile-with-tracing`, `-with-puffin`...); the gallery's
   `threading` example measures them (`docs/threading.md`).
+- The jobs centre (`egui_pop_api::jobs_centre`): every job as a panel
+  (`Jobs`, closed until asked for) and as a popover from the status
+  bar's jobs item, the same list in both: the estimated percentage as a
+  bar (failed and skipped items stacked), "n of m", the step, the item,
+  the time left, errors and refusals, Pause, Resume, Cancel, Retry and
+  Dismiss, a batch's children folded under it, and the history. A
+  chevron on each job opens its log console, collapsed by default and
+  remembered per job everywhere. The console draws plain lines in the
+  application layer; `egui-pop-editors`' `JobConsolesPlugin` makes it a
+  pseudo-terminal (`Terminal` over a `Console` per job) through the new
+  `JOB_LOG_VIEW` service, the layering keeping the editors above.
+  `Toast::job` carries a job's progress and its Cancel or its first
+  action, staying while the job runs. Translated in French. The
+  gallery's jobs page shows the centre, its snapshots with a console
+  open and with the popover.
+
 - Busy state of command-bound controls: `busy::CommandButton` runs a
   command and, while the host has not answered, greys, shows a spinner
   in its icon's place after the delay (keeping its width and its name,

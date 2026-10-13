@@ -260,6 +260,57 @@ fn toolbar(ui: &mut egui_pop::egui::Ui, app: &AppHandle) {
 }
 ```
 
+## The jobs centre
+
+`egui_pop::api::jobs_centre` draws every job the host runs, the same
+list in two places: the **Jobs panel** (declared by `JobsPlugin`,
+closed until asked for; `without_panel()` leaves it out) and a
+**popover** from the status bar's jobs item.
+
+- Each job: a chevron, its title and state, a bar of its estimated
+  overall percentage (failed and skipped items stacked after the fill),
+  the percentage, "n of m", the current step and item, the time left,
+  the reason it failed or why the host refused a request, its failed
+  items (folded), and buttons asking the host: Pause, Resume, Cancel,
+  Retry; Dismiss forgets a finished one, its actions ("Show") run their
+  commands. A batch's children fold under it. Finished jobs go to the
+  history, cleared by hand ("Clear finished").
+- **The chevron opens the job's log console**, collapsed by default and
+  remembered per job (`JobsService::expanded`), so the panel, the
+  popover and a toast agree. The console streams the job's `job.log`
+  lines.
+- Buttons are named with their job for assistive technologies ("Cancel:
+  Export 12 images"); the chevron says what it does ("Show the log of
+  Export 12 images").
+- **A toast can carry a job** (`Toast::info("Exporting").job(id)`): its
+  bar, Cancel while it runs, its first action once it ended. It stays
+  while the job goes on; closing it does not cancel the job.
+
+**Where the console comes from (layering).** The jobs centre is part of
+the application API (L3), which sits below `egui-pop-editors` (L4,
+ADR 0001), so it cannot use the editors' `Terminal`. It draws plain
+lines (ANSI escapes dropped) by itself, and looks for a `JOB_LOG_VIEW`
+service first: `egui_pop::editors::JobConsolesPlugin` provides one, a
+`Terminal` over a `Console` source per job, fed the job's new lines as
+they come (colours, scrollback, selection, copy; with `TerminalPlugin`,
+agents read it as the terminal `job:<id>`). The facade offers it with
+its `editors` feature; an application without the editors keeps the
+plain console.
+
+```rust
+use egui_pop::prelude::*;
+use egui_pop::api::jobs::JobsPlugin;
+use egui_pop::editors::{JobConsolesPlugin, TerminalPlugin};
+
+let app = App::builder()
+    .plugin(JobsPlugin::default())
+    .plugin(TerminalPlugin)
+    .plugin(JobConsolesPlugin)
+    .build(&egui_pop::egui::Context::default())
+    .unwrap();
+# let _ = app;
+```
+
 ## Gaps
 
 - A job with no event for a long time is not shown as "not responding"

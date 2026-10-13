@@ -194,9 +194,13 @@ Zones and blocks, the workbench, palettes, arrangements, strips and the window f
 
 ### Application services
 
-Settings, shortcuts, platform services, translations and the developer tools.
+Settings, shortcuts, platform services, translations, the developer tools, and the jobs centre (a job's log console open, in the page and in the status bar's popover).
 
 <table>
+  <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/jobs-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/jobs-pop-dark.png" width="200" alt="jobs-pop-dark"></a><br>jobs-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/jobs-popover-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/jobs-popover-pop-dark.png" width="200" alt="jobs-popover-pop-dark"></a><br>jobs-popover-pop-dark</td>
+  </tr>
   <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/settings-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/settings-pop-dark.png" width="200" alt="settings-pop-dark"></a><br>settings-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/settings-window-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/settings-window-pop-dark.png" width="200" alt="settings-window-pop-dark"></a><br>settings-window-pop-dark</td>

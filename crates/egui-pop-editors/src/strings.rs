@@ -54,6 +54,9 @@ pub const TERMINAL_REFUSED: StrKey = StrKey::new(
     "Not started: { $reason }",
 );
 
+/// A job's log console's accessible name.
+pub const JOB_LOG: StrKey = StrKey::new("egui-pop-editors-job-log", "Log of { $job }");
+
 /// Every string the editors show, for catalogues and tests.
 pub const ALL: &[StrKey] = &[
     TEXT,
@@ -78,6 +81,7 @@ pub const ALL: &[StrKey] = &[
     TERMINAL_ENDED,
     TERMINAL_CLOSED,
     TERMINAL_REFUSED,
+    JOB_LOG,
 ];
 
 #[cfg(test)]

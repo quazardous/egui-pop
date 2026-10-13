@@ -321,6 +321,43 @@ pub const JOBS_ACTIVE_PERCENT: StrKey = StrKey::new(
 /// How many failed.
 pub const JOBS_FAILED: StrKey = StrKey::new("egui-pop-jobs-failed", "Failed: { $count }");
 
+/// The jobs centre's title.
+pub const JOBS_TITLE: StrKey = StrKey::new("egui-pop-jobs-title", "Jobs");
+pub const JOBS_NONE: StrKey = StrKey::new("egui-pop-jobs-none", "No jobs.");
+/// Finished jobs.
+pub const JOBS_HISTORY: StrKey = StrKey::new("egui-pop-jobs-history", "History");
+pub const JOBS_CLEAR: StrKey = StrKey::new("egui-pop-jobs-clear", "Clear finished");
+/// From the popover to the jobs panel.
+pub const JOBS_OPEN_PANEL: StrKey = StrKey::new("egui-pop-jobs-open-panel", "Open the panel");
+/// A job's state.
+pub const JOB_RUNNING: StrKey = StrKey::new("egui-pop-job-running", "running");
+pub const JOB_PAUSED: StrKey = StrKey::new("egui-pop-job-paused", "paused");
+pub const JOB_CANCELLING: StrKey = StrKey::new("egui-pop-job-cancelling", "cancelling");
+pub const JOB_DONE: StrKey = StrKey::new("egui-pop-job-done", "done");
+pub const JOB_FAILED: StrKey = StrKey::new("egui-pop-job-failed", "failed");
+pub const JOB_CANCELLED: StrKey = StrKey::new("egui-pop-job-cancelled", "cancelled");
+/// A request sent, not answered yet.
+pub const JOB_ASKED: StrKey = StrKey::new("egui-pop-job-asked", "{ $state }, waiting for the host");
+/// Items done of all.
+pub const JOB_OF: StrKey = StrKey::new("egui-pop-job-of", "{ $done } of { $total }");
+/// Time left.
+pub const JOB_ETA_SECONDS: StrKey = StrKey::new("egui-pop-job-eta-seconds", "about { $n } s left");
+pub const JOB_ETA_MINUTES: StrKey =
+    StrKey::new("egui-pop-job-eta-minutes", "about { $n } min left");
+/// Buttons asking the host (Cancel and Retry are core's).
+pub const JOB_PAUSE: StrKey = StrKey::new("egui-pop-job-pause", "Pause");
+pub const JOB_RESUME: StrKey = StrKey::new("egui-pop-job-resume", "Resume");
+pub const JOB_DISMISS: StrKey = StrKey::new("egui-pop-job-dismiss", "Dismiss");
+/// A job's button as assistive technologies name it.
+pub const JOB_ACTION_NAME: StrKey =
+    StrKey::new("egui-pop-job-action-name", "{ $action }: { $job }");
+/// The chevron opening a job's log console.
+pub const JOB_SHOW_LOG: StrKey = StrKey::new("egui-pop-job-show-log", "Show the log of { $job }");
+pub const JOB_HIDE_LOG: StrKey = StrKey::new("egui-pop-job-hide-log", "Hide the log of { $job }");
+/// Why the host refused a request.
+pub const JOB_REFUSED: StrKey = StrKey::new("egui-pop-job-refused", "Refused: { $error }");
+pub const JOB_NO_LOG: StrKey = StrKey::new("egui-pop-job-no-log", "No log yet.");
+
 /// Every string of this module, for catalogues and tests.
 pub const ALL: &[StrKey] = &[
     COMMAND_LABEL,
@@ -399,6 +436,29 @@ pub const ALL: &[StrKey] = &[
     JOBS_ACTIVE,
     JOBS_ACTIVE_PERCENT,
     JOBS_FAILED,
+    JOBS_TITLE,
+    JOBS_NONE,
+    JOBS_HISTORY,
+    JOBS_CLEAR,
+    JOBS_OPEN_PANEL,
+    JOB_RUNNING,
+    JOB_PAUSED,
+    JOB_CANCELLING,
+    JOB_DONE,
+    JOB_FAILED,
+    JOB_CANCELLED,
+    JOB_ASKED,
+    JOB_OF,
+    JOB_ETA_SECONDS,
+    JOB_ETA_MINUTES,
+    JOB_PAUSE,
+    JOB_RESUME,
+    JOB_DISMISS,
+    JOB_ACTION_NAME,
+    JOB_SHOW_LOG,
+    JOB_HIDE_LOG,
+    JOB_REFUSED,
+    JOB_NO_LOG,
     FRAME_WINDOW_MENU,
     WINDOW_EXIT_FULLSCREEN,
     AREA_CENTER,

@@ -174,6 +174,7 @@ pub fn builder(options: &Options) -> AppBuilder {
         .plugin(pages::editors::TextPage)
         .plugin(pages::editors::CodeEditorPage)
         .plugin(egui_pop::editors::TerminalPlugin)
+        .plugin(egui_pop::editors::JobConsolesPlugin)
         .plugin(pages::terminal::TerminalPage)
         .plugin(pages::zones::ZonesPage)
         .plugin(pages::zones::Extender)

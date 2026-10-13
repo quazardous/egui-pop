@@ -1540,13 +1540,15 @@ fn the_jobs_page_folds_a_pretend_hosts_jobs() {
     assert_eq!(fraction("gallery-import"), Some(0.25));
     assert_eq!(jobs.job("gallery-upload").unwrap().state, JobState::Failed);
     assert!(h.query_by_label_contains("connection reset").is_some());
-    h.get_by_label("Cancel Export 12 images").click();
+    // The jobs centre's buttons, named with their job.
+    h.get_by_label("Cancel: Export 12 images").click_accesskit();
     h.run();
     assert_eq!(
         jobs.job("gallery-export").unwrap().state,
         JobState::Cancelled
     );
-    h.get_by_label("Retry Upload to the server").click();
+    h.get_by_label("Retry: Upload to the server")
+        .click_accesskit();
     h.run();
     let upload = jobs.job("gallery-upload").unwrap();
     assert_eq!((upload.state, upload.attempts), (JobState::Running, 2));
@@ -1554,6 +1556,54 @@ fn the_jobs_page_folds_a_pretend_hosts_jobs() {
     h.get_by_label("Advance one step").click();
     h.run();
     assert_eq!(fraction("gallery-scan"), Some(0.2));
+}
+
+#[test]
+fn the_jobs_centre_opens_a_jobs_log_console_in_the_page_and_the_popover() {
+    use egui::accesskit::Role;
+    use egui_pop::api::jobs::JOBS;
+    let mut h = harness(options("pop-dark", Density::Comfortable, "jobs"));
+    h.run();
+    h.get_by_label("Start the demo jobs").click();
+    h.run();
+    for _ in 0..3 {
+        h.get_by_label("Advance one step").click();
+        h.run();
+    }
+    let app = h.state().app.handle().clone();
+    let jobs = app.service(&JOBS).unwrap();
+    // The chevron opens the export's console: a terminal over its log.
+    h.get_by_label("Show the log of Export 12 images")
+        .click_accesskit();
+    h.run();
+    assert!(jobs.expanded("gallery-export"));
+    let console = h.get_by_label("Log of Export 12 images");
+    assert_eq!(console.accesskit_node().role(), Role::Terminal);
+    h.snapshot("jobs-pop-dark");
+    // The status bar's item opens the same list; the console is open
+    // there too, its state remembered per job.
+    h.get_by_label_contains("Jobs: ").click();
+    h.run();
+    assert_eq!(
+        h.query_all_by_label("Hide the log of Export 12 images")
+            .count(),
+        2
+    );
+    h.snapshot("jobs-popover-pop-dark");
+    // Closed from the popover, closed everywhere.
+    h.query_all_by_label("Hide the log of Export 12 images")
+        .last()
+        .unwrap()
+        .click_accesskit();
+    h.run();
+    assert!(!jobs.expanded("gallery-export"));
+    // A toast carries the export's progress and stays while it runs.
+    h.get_by_label("Show the export as a toast")
+        .click_accesskit();
+    h.run();
+    assert!(h.query_by_label("Exporting 12 images").is_some());
+    let toasts = app.service(&egui_pop::api::toasts::TOASTS).unwrap();
+    assert_eq!(toasts.shown().len(), 1);
 }
 
 #[test]

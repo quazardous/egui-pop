@@ -336,6 +336,8 @@ egui-pop-editors-find = Find
 
 egui-pop-editors-goto = Go to line
 
+egui-pop-editors-job-log = Log of { $job }
+
 egui-pop-editors-match-case = Match case
 
 egui-pop-editors-next = Next match
@@ -404,11 +406,57 @@ egui-pop-frame-restore = Restore
 
 egui-pop-frame-window-menu = Window menu
 
+egui-pop-job-action-name = { $action }: { $job }
+
+egui-pop-job-asked = { $state }, waiting for the host
+
+egui-pop-job-cancelled = cancelled
+
+egui-pop-job-cancelling = cancelling
+
+egui-pop-job-dismiss = Dismiss
+
+egui-pop-job-done = done
+
+egui-pop-job-eta-minutes = about { $n } min left
+
+egui-pop-job-eta-seconds = about { $n } s left
+
+egui-pop-job-failed = failed
+
+egui-pop-job-hide-log = Hide the log of { $job }
+
+egui-pop-job-no-log = No log yet.
+
+egui-pop-job-of = { $done } of { $total }
+
+egui-pop-job-pause = Pause
+
+egui-pop-job-paused = paused
+
+egui-pop-job-refused = Refused: { $error }
+
+egui-pop-job-resume = Resume
+
+egui-pop-job-running = running
+
+egui-pop-job-show-log = Show the log of { $job }
+
 egui-pop-jobs-active = Jobs: { $count }
 
 egui-pop-jobs-active-percent = Jobs: { $count } ({ $percent }%)
 
+egui-pop-jobs-clear = Clear finished
+
 egui-pop-jobs-failed = Failed: { $count }
+
+egui-pop-jobs-history = History
+
+egui-pop-jobs-none = No jobs.
+
+egui-pop-jobs-open-panel = Open the panel
+
+egui-pop-jobs-title = Jobs
 
 egui-pop-menu-does-not-apply = Does not apply here ({ $when })
 
@@ -639,6 +687,9 @@ menu-app-menu-view =
 panel-egui-pop-devtools =
     .title = Devtools
 
+panel-egui-pop-jobs =
+    .title = Jobs
+
 plugin-egui-pop-arrangements =
     .title = Arrangements
 
@@ -668,6 +719,9 @@ plugin-egui-pop-i18n =
 
 plugin-egui-pop-instance =
     .title = Single instance
+
+plugin-egui-pop-job-consoles =
+    .title = Job consoles
 
 plugin-egui-pop-jobs =
     .title = Jobs
