@@ -194,6 +194,13 @@ The [docs index](docs/README.md) lists every page: getting started,
 themes and tokens, plugins and steps, the image viewport, debugging, the
 gallery, testing, API stability and the design decisions.
 
+## Extensions
+
+Extensions add components and plugins through the same API: start one
+from the [extension template](templates/extension)
+(`cargo generate --git https://github.com/quazardous/egui-pop templates/extension`),
+and list it in the [registry of extensions](docs/extensions.md).
+
 ## Versions
 
 egui-pop has its own 0.x version; one egui-pop minor per egui minor,

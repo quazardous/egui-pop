@@ -74,6 +74,10 @@ devtools; every feature's moments reachable as steps (ADR 0011).
   [global shortcuts](global-shortcuts.md), [logs and crash reports](logs.md),
   [the focus mode read in-process](focus-mode.md).
 - [Debugging](debugging.md): the debug bridge and devtools.
+- [Extensions](extensions.md): the known extensions in three tiers
+  (official, community, featured), the entry format, how to get listed
+  and the checks an entry passes; the extension template
+  (`templates/extension`).
 - [The gallery](gallery.md): the catalogue application and its options.
 
 ## Reference

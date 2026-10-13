@@ -707,6 +707,18 @@ egui minor.
   installers, AppUserModelID, URL protocol and code signing on Windows,
   the bundle and notarisation on macOS, and what each platform service
   needs from the package.
+- An extension template (`templates/extension`): a minimal third-party
+  crate with a plugin, a component drawn from component tokens with
+  system tokens as fallbacks, its strings in English and French, a
+  gallery story, a step, a command for agents and headless kittest
+  tests. A workspace member, so every commit builds it; start from it
+  with `cargo generate --git https://github.com/quazardous/egui-pop
+  templates/extension`.
+- A registry of extensions (docs/extensions.md): official, community
+  and featured tiers with a promotion path, the entry format, how to get
+  listed and the checks an entry passes (licence, versions, plugin
+  rules, token contract, accessibility, strings), and the applications
+  built with egui-pop.
 
 ### Changed
 
