@@ -287,6 +287,20 @@ impl When {
         }
     }
 
+    /// Whether no context makes both expressions hold (`view == 'a'`
+    /// and `view == 'b'`, `listFocus` and `!listFocus`): two bindings of
+    /// one key under such clauses never compete. Conservative: `false`
+    /// when it cannot tell.
+    pub fn excludes(&self, other: &When) -> bool {
+        let (Some(a), Some(b)) = (dnf(self, false), dnf(other, false)) else {
+            return false;
+        };
+        a.iter().all(|x| {
+            b.iter()
+                .all(|y| x.iter().any(|l| y.iter().any(|m| l.contradicts(m))))
+        })
+    }
+
     /// How deep in the focus chain the expression applies: the deepest
     /// depth among the keys it tests that are set (0 when none is).
     pub fn depth(&self, cx: &WhenContext) -> u32 {
@@ -298,9 +312,89 @@ impl When {
     }
 }
 
+/// One test of a key, as the disjunctive form holds it.
+#[derive(Clone, Debug, PartialEq)]
+enum Lit {
+    Truthy(String),
+    Falsy(String),
+    Eq(String, String),
+    Ne(String, String),
+}
+
+impl Lit {
+    fn contradicts(&self, other: &Lit) -> bool {
+        let truthy = |v: &str| !v.is_empty() && v != "false";
+        let one = |a: &Lit, b: &Lit| match (a, b) {
+            (Lit::Truthy(k), Lit::Falsy(j)) => k == j,
+            (Lit::Eq(k, v), Lit::Eq(j, w)) => k == j && v != w,
+            (Lit::Eq(k, v), Lit::Ne(j, w)) => k == j && v == w,
+            (Lit::Eq(k, v), Lit::Falsy(j)) => k == j && truthy(v),
+            (Lit::Eq(k, v), Lit::Truthy(j)) => k == j && !truthy(v),
+            _ => false,
+        };
+        one(self, other) || one(other, self)
+    }
+}
+
+/// The largest disjunctive form [`When::excludes`] works through.
+const DNF_LIMIT: usize = 64;
+
+/// The expression (negated when `neg`) as alternatives of conjunctions;
+/// `None` past [`DNF_LIMIT`] terms.
+fn dnf(w: &When, neg: bool) -> Option<Vec<Vec<Lit>>> {
+    let cross = |a: Vec<Vec<Lit>>, b: Vec<Vec<Lit>>| -> Option<Vec<Vec<Lit>>> {
+        if a.len() * b.len() > DNF_LIMIT {
+            return None;
+        }
+        Some(
+            a.iter()
+                .flat_map(|x| {
+                    b.iter().map(move |y| {
+                        let mut t = x.clone();
+                        t.extend(y.iter().cloned());
+                        t
+                    })
+                })
+                .collect(),
+        )
+    };
+    let union = |mut a: Vec<Vec<Lit>>, b: Vec<Vec<Lit>>| {
+        a.extend(b);
+        (a.len() <= DNF_LIMIT).then_some(a)
+    };
+    match (w, neg) {
+        (When::Always, false) => Some(vec![vec![]]),
+        (When::Always, true) => Some(vec![]),
+        (When::Key(k), false) => Some(vec![vec![Lit::Truthy(k.clone())]]),
+        (When::Key(k), true) => Some(vec![vec![Lit::Falsy(k.clone())]]),
+        (When::Eq(k, v), false) | (When::Ne(k, v), true) => {
+            Some(vec![vec![Lit::Eq(k.clone(), v.clone())]])
+        }
+        (When::Ne(k, v), false) | (When::Eq(k, v), true) => {
+            Some(vec![vec![Lit::Ne(k.clone(), v.clone())]])
+        }
+        (When::Not(x), n) => dnf(x, !n),
+        (When::And(a, b), false) | (When::Or(a, b), true) => cross(dnf(a, neg)?, dnf(b, neg)?),
+        (When::Or(a, b), false) | (When::And(a, b), true) => union(dnf(a, neg)?, dnf(b, neg)?),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn clauses_that_never_hold_together_exclude_each_other() {
+        let p = |s: &str| When::parse(s).unwrap();
+        assert!(p("view == 'a'").excludes(&p("view == 'b'")));
+        assert!(p("listFocus").excludes(&p("!listFocus")));
+        assert!(p("view == 'a' && x").excludes(&p("view != 'a'")));
+        assert!(p("mode == 'edit' || mode == 'draw'").excludes(&p("mode == 'view'")));
+        assert!(p("!(a || b)").excludes(&p("b")));
+        assert!(!p("a").excludes(&p("b")));
+        assert!(!p("").excludes(&p("a")), "always holds with a");
+        assert!(!p("a || c").excludes(&p("!a")));
+    }
 
     #[test]
     fn expressions_evaluate_against_the_context() {

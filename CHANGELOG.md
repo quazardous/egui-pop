@@ -241,6 +241,10 @@ egui minor.
 
 ### Changed
 
+- Two bindings of one key whose `when` clauses can never both hold
+  (`view == 'masks'` and `view == 'lighttable'`, `x` and `!x`) are no
+  longer a conflict (`Keymap::conflicts`, the shortcuts editor);
+  `When::excludes` tells, conservatively.
 - `viewport::HandleMove` (what `before_handle` gets) carries where the
   handle was when the gesture began (`start`) and the keys held
   (`modifiers`).

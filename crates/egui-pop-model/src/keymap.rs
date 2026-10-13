@@ -822,7 +822,8 @@ impl Keymap {
 
     /// Bindings sharing keys with another of the same or a higher layer
     /// that wins over them (ignoring focus depth, which only the moment
-    /// decides): what a shortcuts editor shows as conflicts.
+    /// decides): what a shortcuts editor shows as conflicts. Two whose
+    /// `when` clauses can never both hold (`When::excludes`) are none.
     pub fn conflicts(&self) -> Vec<(Binding, Binding)> {
         let live: Vec<(u64, &Rule)> = self.live().collect();
         let mut out = Vec::new();
@@ -831,9 +832,11 @@ impl Keymap {
                 // A system binding listens in the whole window too.
                 let same_scope = a.binding.options.scope == b.binding.options.scope
                     || (a.binding.options.scope.is_global() && b.binding.options.scope.is_global());
+                // Clauses that never hold together never compete.
                 if a.binding.keys == b.binding.keys
                     && same_scope
                     && a.binding.action != b.binding.action
+                    && !a.when.excludes(&b.when)
                 {
                     let ka = (a.binding.layer, a.when.specificity(), *oa);
                     let kb = (b.binding.layer, b.when.specificity(), *ob);

@@ -251,7 +251,10 @@ A host whose registry changes declares commands after build
 follow. A profile is a whole keymap document: `export_keymap(layer)` and
 `load_keymap(doc, layer)` keep scopes, `when` clauses and every key, and
 report what changed (`KeymapDiff`). Rebinding is the `keys.rebind` step,
-loading `keys.load`; each new conflict is a `keys.conflict` signal.
+loading `keys.load`; each new conflict is a `keys.conflict` signal. Two
+bindings of one key whose `when` clauses can never both hold
+(`view == 'masks'` and `view == 'lighttable'`, `When::excludes`) are no
+conflict.
 
 ## Around the shell
 

@@ -282,3 +282,29 @@ fn system_bindings_fire_in_the_window_and_keep_their_scope_when_rebound() {
     assert!(k.system_bindings().is_empty());
     let _ = KeymapDoc::default();
 }
+
+#[test]
+fn bindings_whose_clauses_never_hold_together_do_not_conflict() {
+    let mut k = Keymap::new();
+    k.bind(
+        &FW,
+        Layer::Default,
+        "Delete",
+        Action::run("mask.delete"),
+        "view == 'masks'",
+    )
+    .unwrap();
+    k.bind(
+        &FW,
+        Layer::Default,
+        "Delete",
+        Action::run("image.reject"),
+        "view == 'lighttable'",
+    )
+    .unwrap();
+    assert!(k.conflicts().is_empty());
+    // One that may hold with either: a conflict again.
+    k.bind(&FW, Layer::User, "Delete", Action::run("other"), "editing")
+        .unwrap();
+    assert_eq!(k.conflicts().len(), 2);
+}
