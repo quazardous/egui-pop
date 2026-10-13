@@ -321,12 +321,16 @@ pub fn font_ready(ctx: &Context) -> bool {
         })
 }
 
-/// Paints an icon's fallback shape, whatever the fonts.
+/// Paints an icon's fallback shape, whatever the fonts. Its strokes are
+/// whole physical pixels at the painter's scale.
 pub fn paint_fallback(p: &Painter, icon: Icon, rect: Rect, color: Color32) {
     let r = rect.shrink(rect.width() * 0.16);
     let len = r.width();
+    // The weight shapes are drawn to; strokes snap it to whole physical
+    // pixels at the painter's scale, so lines stay crisp.
     let w = (rect.width() / 11.0).max(1.25);
-    let stroke = Stroke::new(w, color);
+    let ppp = p.pixels_per_point();
+    let stroke = Stroke::new(crate::scale::snap(w, ppp), color);
     let at = |x: f32, y: f32| -> Pos2 { pos2(r.left() + x * len, r.top() + y * r.height()) };
     let arc = |from: f32, to: f32, radius: f32, centre: Pos2| -> Vec<Pos2> {
         (0..=16)
@@ -623,7 +627,7 @@ pub fn paint_fallback(p: &Painter, icon: Icon, rect: Rect, color: Color32) {
             p.line_segment([at(0.42, 0.3), at(0.7, 0.58)], stroke);
             p.line_segment(
                 [at(0.62, 0.38), at(0.85, 0.15)],
-                Stroke::new(w * 2.6, color),
+                Stroke::new(crate::scale::snap(w * 2.6, ppp), color),
             );
         }
     }
@@ -795,7 +799,7 @@ impl Widget for IconWidget {
                 ui.painter().rect_stroke(
                     rect.expand(1.0),
                     t.radius.widget,
-                    Stroke::new(1.5, t.focus_ring),
+                    Stroke::new(crate::scale::stroke(ui.ctx(), 1.5), t.focus_ring),
                     StrokeKind::Outside,
                 );
             }

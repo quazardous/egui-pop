@@ -912,6 +912,12 @@ egui minor.
   drawn for a pass) no longer commits it: the entry takes the focus
   back and waits a frame, and commits if the focus is still gone.
 
+- Icon strokes are whole physical pixels at the window's scale: the
+  painted shapes (`icon::paint_fallback`, and `Icon::paint` without the
+  icon font) snap their stroke width (`max(side / 11, 1.25)` points) with
+  `scale::snap`, and so does a focused icon's ring, so lines stay crisp
+  at 1x, 1.5x and 2x.
+
 ## 0.1.0 (prepared, not published)
 
 The first release: the tokens and themes, the framework (plugins,

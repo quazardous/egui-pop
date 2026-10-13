@@ -419,6 +419,71 @@ fn icons_are_named_and_sized_by_role() {
     let _ = Value::Bool(true);
 }
 
+/// The stroke widths in shapes, in points.
+fn stroke_widths(shapes: &[egui::epaint::ClippedShape]) -> Vec<f32> {
+    use egui::Shape;
+    fn walk(s: &Shape, out: &mut Vec<f32>) {
+        let w = match s {
+            Shape::Vec(v) => {
+                v.iter().for_each(|s| walk(s, out));
+                return;
+            }
+            Shape::Circle(c) => c.stroke.width,
+            Shape::Ellipse(e) => e.stroke.width,
+            Shape::LineSegment { stroke, .. } => stroke.width,
+            Shape::Rect(r) => r.stroke.width,
+            Shape::Path(p) => p.stroke.width,
+            _ => return,
+        };
+        if w > 0.0 {
+            out.push(w);
+        }
+    }
+    let mut out = Vec::new();
+    for c in shapes {
+        walk(&c.shape, &mut out);
+    }
+    out
+}
+
+#[test]
+fn icon_strokes_are_whole_physical_pixels_at_every_scale() {
+    use egui_pop_core::icon::{Icon, paint_fallback};
+    for ppp in [1.0, 1.5, 2.0] {
+        let mut h = Harness::builder()
+            .with_pixels_per_point(ppp)
+            .with_size(egui::vec2(400.0, 1200.0))
+            // Painted on a layer of their own; the panel around draws no
+            // stroke.
+            .build_ui(|ui| {
+                let painter = ui.ctx().layer_painter(egui::LayerId::new(
+                    egui::Order::Foreground,
+                    egui::Id::new("icons"),
+                ));
+                for (row, icon) in Icon::ALL.iter().enumerate() {
+                    for (col, side) in [12.0, 13.5, 16.0, 20.0, 24.0].into_iter().enumerate() {
+                        let min = egui::pos2(col as f32 * 30.0, row as f32 * 26.0);
+                        let rect = egui::Rect::from_min_size(min, egui::vec2(side, side));
+                        paint_fallback(&painter, *icon, rect, egui::Color32::WHITE);
+                        let beside = rect.translate(egui::vec2(160.0, 0.0));
+                        icon.paint(&painter, beside, egui::Color32::WHITE);
+                    }
+                }
+            });
+        h.run();
+        let widths = stroke_widths(&h.output().shapes);
+        assert!(!widths.is_empty(), "strokes drawn at {ppp}");
+        let blurred: Vec<f32> = widths
+            .into_iter()
+            .filter(|w| ((w * ppp) - (w * ppp).round()).abs() > 1e-3)
+            .collect();
+        assert!(
+            blurred.is_empty(),
+            "widths not whole pixels at {ppp}x: {blurred:?}"
+        );
+    }
+}
+
 #[test]
 fn escape_leaves_a_text_input_then_reaches_the_surface() {
     let mut h = keys_app();
