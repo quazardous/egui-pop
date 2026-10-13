@@ -78,7 +78,12 @@ Each panel gets `<id>.focus` and `<id>.toggle` commands. The layout
 changes through the steps `workbench.move`, `workbench.show`,
 `workbench.hide`, `workbench.focus` and `workbench.fold`
 (`egui_pop::api::workbench`). A tab dragged onto another area moves
-there when its rules allow it; otherwise the drop hint says why.
+there when its rules allow it; otherwise the drop hint says why. The
+hint is published like an overlay: `AppHandle::drop_hint` (panel,
+area, rect, refusal), `overlay_rects` (kind `DropHint`, named
+`drop:<panel>:<area>`), and the debug bridge's `workbench` collector,
+which also shows the layout, each area's rect, the focused panel and
+the tab being dragged.
 
 ## Auxiliary windows
 

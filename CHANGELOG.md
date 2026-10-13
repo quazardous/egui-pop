@@ -9,6 +9,12 @@ egui minor.
 
 ### Added
 
+- The workbench's drop hint is published: `AppHandle::drop_hint` (the
+  dragged panel, the area, the rect, the refusal), `overlay_rects`
+  (`OverlayKind::DropHint`, named `drop:<panel>:<area>`), and a new
+  `workbench` collector on the debug bridge (the layout, each area's
+  rect, the focused panel, the dragged tab, the drop hint).
+
 - The start of the window's own title bar is a zone,
   `zones::CAPTION_START`, declared by `FramePlugin`: its default block
   `frame::BLOCK_MENU` (`egui_pop.frame.menu`) is the system menu button

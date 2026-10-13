@@ -2,7 +2,7 @@
 
 Every registry describes itself to the **debug bridge**: collectors for
 commands, key resolution traces, focus, overlays, zones, plugins, steps,
-the store, the journal and diagnostics, each with a JSON snapshot and
+the workbench, the store, the journal and diagnostics, each with a JSON snapshot and
 actions flagged `mutates`; every call returns a feedback block. A person
 reads it in the gallery, an agent or a test reads the same data as JSON.
 

@@ -196,3 +196,62 @@ fn a_plugin_gone_takes_its_panels_and_coming_back_puts_them_back() {
         .unwrap();
     assert!(matches!(&bottom.1, Node::Tabs { panels, .. } if panels.contains(&LOG)));
 }
+
+#[test]
+fn the_drop_hint_is_published_with_its_rect_and_name() {
+    let mut h = harness(builder(false));
+    let app = h.state().handle().clone();
+    assert!(app.drop_hint().is_none());
+    // Drag the Log tab (bottom only) over the start side bar.
+    let from = h.get_by_label("Log").rect().center();
+    let to = h.get_by_label("tree body").rect().center();
+    let pointer = |h: &mut Harness<'_, App>, e: egui::Event| {
+        h.input_mut().events.push(e);
+        h.step();
+    };
+    pointer(&mut h, egui::Event::PointerMoved(from));
+    pointer(
+        &mut h,
+        egui::Event::PointerButton {
+            pos: from,
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: egui::Modifiers::NONE,
+        },
+    );
+    for i in 1..=8 {
+        let at = from + (to - from) * (i as f32 / 8.0);
+        pointer(&mut h, egui::Event::PointerMoved(at));
+    }
+    h.step();
+    let hint = app.drop_hint().expect("a hint while dragging");
+    assert_eq!(hint.panel, LOG);
+    assert_eq!(hint.area, "start_side");
+    assert!(hint.refusal.is_some(), "the log stays in the bottom panel");
+    assert!(hint.rect.contains(to));
+    let rects = app.overlay_rects();
+    let shown = rects
+        .iter()
+        .find(|o| o.kind == egui_pop_api::app::OverlayKind::DropHint)
+        .expect("among the overlays");
+    assert_eq!(shown.id, "drop:demo.log:start_side");
+    assert_eq!(shown.rect, hint.rect);
+    let snap = app.debug_snapshot();
+    assert_eq!(
+        snap["workbench"]["drop_hint"]["name"],
+        "drop:demo.log:start_side"
+    );
+    assert!(snap["workbench"]["rects"]["bottom"].is_array());
+    pointer(
+        &mut h,
+        egui::Event::PointerButton {
+            pos: to,
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: egui::Modifiers::NONE,
+        },
+    );
+    h.run();
+    assert!(app.drop_hint().is_none());
+    assert_eq!(area_of(&h, &LOG), Some(Area::Bottom), "refused");
+}

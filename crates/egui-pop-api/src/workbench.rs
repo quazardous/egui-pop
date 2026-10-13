@@ -125,6 +125,28 @@ pub fn area_from(name: &str) -> Option<Area> {
     Area::ALL.into_iter().find(|a| area_name(*a) == name)
 }
 
+/// The drop hint shown while a tab is dragged over another area: what
+/// [`AppHandle::drop_hint`], `overlay_rects` (`drop:<panel>:<area>`) and
+/// the `workbench` collector report.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DropHint {
+    pub panel: PanelId,
+    /// The area the tab would go to (`area_name`).
+    pub area: &'static str,
+    /// Where the hint is drawn, in points.
+    pub rect: Rect,
+    /// Why the panel may not go there, as the hint says it; `None` when
+    /// it may.
+    pub refusal: Option<String>,
+}
+
+impl DropHint {
+    /// Its name among the overlays: `drop:<panel>:<area>`.
+    pub fn name(&self) -> String {
+        format!("drop:{}:{}", self.panel, self.area)
+    }
+}
+
 /// A change of the workbench, as a step runs it.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Change {
@@ -206,6 +228,8 @@ pub(crate) struct Workbench {
     pub content: Rect,
     /// A tab being dragged: its panel, its area, the pointer.
     pub dragging: Option<(PanelId, Area, Pos2)>,
+    /// The drop hint drawn last frame.
+    pub hint: Option<DropHint>,
     pub focused: Option<PanelId>,
     /// The layout changed outside the docks: project it again.
     stale: bool,
@@ -226,6 +250,7 @@ impl Default for Workbench {
             rects: BTreeMap::new(),
             content: Rect::NOTHING,
             dragging: None,
+            hint: None,
             focused: None,
             stale: true,
             taken: 0,
@@ -940,7 +965,8 @@ fn follow_drag(app: &AppHandle, ctx: &egui::Context) {
 /// While a tab is dragged over another area, shows whether it may go
 /// there.
 fn drop_hint(app: &AppHandle, ctx: &egui::Context) {
-    let wb = app.workbench_mut();
+    let mut wb = app.workbench_mut();
+    wb.hint = None;
     let Some((panel, from, at)) = wb.dragging.clone() else {
         return;
     };
@@ -951,6 +977,14 @@ fn drop_hint(app: &AppHandle, ctx: &egui::Context) {
         return;
     };
     let rect = wb.hint_rect(to);
+    let title = strings::panel_title(ctx, spec.id.as_str(), &spec.title);
+    let why = refusal(ctx, &spec, &title, to);
+    wb.hint = Some(DropHint {
+        panel,
+        area: area_name(to),
+        rect,
+        refusal: why.clone(),
+    });
     drop(wb);
     let t = egui_pop_core::theme::Tokens::of(ctx);
     let painter = ctx.layer_painter(egui::LayerId::new(
@@ -958,8 +992,7 @@ fn drop_hint(app: &AppHandle, ctx: &egui::Context) {
         Id::new("egui_pop.workbench.drop"),
     ));
     let corner = t.radius.widget;
-    let title = strings::panel_title(ctx, spec.id.as_str(), &spec.title);
-    match refusal(ctx, &spec, &title, to) {
+    match why {
         None => {
             painter.rect_filled(rect, corner, t.accent.subtle.gamma_multiply(0.5));
             painter.rect_stroke(

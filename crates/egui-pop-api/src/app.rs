@@ -92,6 +92,9 @@ pub enum OverlayKind {
     Menu,
     /// The toast stack.
     Toasts,
+    /// The workbench's drop hint, while a tab is dragged over another
+    /// area (named `drop:<panel>:<area>`).
+    DropHint,
     /// One of egui's popups: an open menu of the menu bar, a context
     /// menu, a combo box.
     Popup,
@@ -654,6 +657,13 @@ impl AppHandle {
                 OverlayRect { kind, id, rect }
             })
             .collect();
+        if let Some(hint) = self.drop_hint() {
+            out.push(OverlayRect {
+                kind: OverlayKind::DropHint,
+                id: hint.name(),
+                rect: hint.rect,
+            });
+        }
         let toasts = crate::toasts::area_id();
         known.push(toasts);
         if self
@@ -1339,6 +1349,11 @@ impl AppHandle {
     /// The declared panels.
     pub fn panels(&self) -> Vec<egui_pop_model::panels::PanelSpec> {
         self.workbench_mut().specs.clone()
+    }
+
+    /// The drop hint on screen, while a tab is dragged over another area.
+    pub fn drop_hint(&self) -> Option<crate::workbench::DropHint> {
+        self.workbench_mut().hint.clone()
     }
 
     /// The panel that last had the pointer pressed in it, or was focused.
@@ -2189,6 +2204,38 @@ impl App {
                         }))
                         .collect::<Vec<_>>()
                 )
+            }),
+        )
+        .expect("distinct names");
+        let w = h.weak();
+        b.register(
+            FnCollector::new(
+                "workbench",
+                "The workbench: the layout (areas, folded, closed and detached panels), where each area was drawn (points), the focused panel, the tab being dragged and the drop hint (its rect, name and refusal).",
+            )
+            .snapshot(move |_| {
+                let Ok(app) = up(&w) else { return Json::Null };
+                let layout = app.layout();
+                let wb = app.workbench_mut();
+                json!({
+                    "layout": layout,
+                    "rects": wb.rects.iter().map(|(a, r)| (
+                        crate::workbench::area_name(*a),
+                        [r.min.x, r.min.y, r.max.x, r.max.y],
+                    )).collect::<BTreeMap<_, _>>(),
+                    "focused": wb.focused,
+                    "dragging": wb.dragging.as_ref().map(|(p, a, _)| json!({
+                        "panel": p,
+                        "from": crate::workbench::area_name(*a),
+                    })),
+                    "drop_hint": wb.hint.as_ref().map(|h| json!({
+                        "name": h.name(),
+                        "panel": h.panel,
+                        "area": h.area,
+                        "rect": [h.rect.min.x, h.rect.min.y, h.rect.max.x, h.rect.max.y],
+                        "refusal": h.refusal,
+                    })),
+                })
             }),
         )
         .expect("distinct names");
