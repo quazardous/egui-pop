@@ -4,8 +4,8 @@
 //! draws the page in the main zone and its playground in the inspector,
 //! and puts the theme switchers in the top bar.
 //!
-//! Pages: the theme overview, the token table and egui's built-in
-//! widgets (plain functions reused by the snapshot tests); zones and
+//! Pages: the theme overview, the token table, the theme editor and
+//! egui's built-in widgets (plain functions reused by the snapshot tests); zones and
 //! blocks (one plugin replacing, extending and wrapping another's
 //! blocks); settings applied live; translations; the platform services
 //! (simulated unless `--platform`); the debug bridge.
@@ -30,10 +30,11 @@ use pages::story::PagePlugin;
 pub const TITLE: &str = "egui-pop gallery";
 
 /// The pages, as named on the command line.
-pub const PAGES: [&str; 38] = [
+pub const PAGES: [&str; 40] = [
     "overview",
     "tokens",
     "builtins",
+    "theme-editor",
     "icons",
     "motion",
     "values",
@@ -42,6 +43,7 @@ pub const PAGES: [&str; 38] = [
     "dialogs",
     "files",
     "toasts",
+    "tips",
     "progress",
     "placeholders",
     "viewport",
@@ -144,6 +146,10 @@ pub fn builder(options: &Options) -> AppBuilder {
         .plugin(pages::dialogs::DialogsPage)
         .plugin(pages::files::FilesPage)
         .plugin(pages::toasts::ToastsPage)
+        .plugin(egui_pop::api::theme_editor::ThemeEditorPlugin)
+        .plugin(pages::theme_editor::ThemeEditorPage)
+        .plugin(egui_pop::api::tips::TipsPlugin)
+        .plugin(pages::tips::TipsPage)
         .plugin(PagePlugin {
             plugin: PluginId::from_static("gallery.placeholders"),
             story: StoryId::from_static("placeholders"),

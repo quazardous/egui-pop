@@ -36,6 +36,8 @@ pub mod story;
 pub mod strips;
 pub mod table;
 pub mod terminal;
+pub mod theme_editor;
+pub mod tips;
 pub mod toasts;
 pub mod tokens;
 pub mod tree;

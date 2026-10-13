@@ -20,8 +20,9 @@ directory; without it they are simulated and nothing reaches the
 desktop).
 
 Pages: `overview` (the theme overview), `tokens`, `builtins` (egui's
-built-ins), `icons`, `motion` (the motion clock), `values`, `sliders`,
-`menus`, `dialogs`, `files` (the file chooser), `toasts`, `progress`,
+built-ins), `theme-editor` (the theme editor), `icons`, `motion` (the motion clock), `values`, `sliders`,
+`menus`, `dialogs`, `files` (the file chooser), `toasts`, `tips` (tips of the day and
+hints), `progress`,
 `placeholders` (skeletons and empty states), `viewport` (the image
 viewport), `navigator` (the zoom control and the navigator), `images`,
 `grading` (curves and colour wheels), `cursors` (tool cursors, brush
@@ -48,7 +49,7 @@ the current state. Click one for its full size.
 
 ### Look and feel
 
-Themes, design tokens, icons and scaling.
+Themes, design tokens, the theme editor, icons and scaling.
 
 <table>
   <tr>
@@ -66,6 +67,8 @@ Themes, design tokens, icons and scaling.
   <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/icons-pop-light-compact.png"><img src="../crates/egui-pop-gallery/tests/snapshots/icons-pop-light-compact.png" width="200" alt="icons-pop-light-compact"></a><br>icons-pop-light-compact</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/scale-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/scale-pop-dark.png" width="200" alt="scale-pop-dark"></a><br>scale-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/theme-editor-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/theme-editor-pop-dark.png" width="200" alt="theme-editor-pop-dark"></a><br>theme-editor-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/theme-editor-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/theme-editor-pop-light.png" width="200" alt="theme-editor-pop-light"></a><br>theme-editor-pop-light</td>
   </tr>
 </table>
 
@@ -213,7 +216,7 @@ Zones and blocks, the workbench, palettes, arrangements, strips and the window f
 
 ### Application services
 
-Settings, shortcuts, platform services, translations, the developer tools, and the jobs centre (a job's log console open, in the page and in the status bar's popover).
+Settings, shortcuts, tips, platform services, translations, the developer tools, and the jobs centre (a job's log console open, in the page and in the status bar's popover).
 
 <table>
   <tr>
@@ -226,6 +229,7 @@ Settings, shortcuts, platform services, translations, the developer tools, and t
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/shortcuts-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/shortcuts-pop-dark.png" width="200" alt="shortcuts-pop-dark"></a><br>shortcuts-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/debug-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/debug-pop-dark.png" width="200" alt="debug-pop-dark"></a><br>debug-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/devtools-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/devtools-pop-dark.png" width="200" alt="devtools-pop-dark"></a><br>devtools-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/tips-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/tips-pop-dark.png" width="200" alt="tips-pop-dark"></a><br>tips-pop-dark</td>
   </tr>
 </table>
 

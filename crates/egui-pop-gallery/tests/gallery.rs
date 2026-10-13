@@ -1846,3 +1846,93 @@ fn the_library_page_culls_filters_and_compares() {
     h.run();
     h.snapshot("library-compare-pop-dark");
 }
+
+#[test]
+fn the_theme_editor_page_edits_a_token_measures_it_and_undoes() {
+    use egui_pop::api::theme_editor::{
+        CMD_THEME_READ, CMD_THEME_SET, CMD_THEME_UNDO, THEME_EDITOR,
+    };
+    use egui_pop::model::commands::Origin;
+    let agent = || Origin::Agent("test".into());
+    let mut results = egui_kittest::SnapshotResults::new();
+    for (theme, token) in [
+        ("pop-dark", "accent.default"),
+        ("pop-light", "surface.panel"),
+    ] {
+        let mut h = harness(options(theme, Density::Comfortable, "theme-editor"));
+        h.run();
+        let editor = h.state().app.handle().service(&THEME_EDITOR).unwrap();
+        editor.select(token);
+        h.run();
+        egui_pop_test::assert_all_named(&h);
+        assert!(h.query_by_label(&format!("Value of {token}")).is_some());
+        results.add(h.try_snapshot(format!("theme-editor-{theme}")));
+    }
+
+    let mut h = harness(options("pop-dark", Density::Comfortable, "theme-editor"));
+    h.run();
+    // Accent fills as dark as the label on them: refused by the pairs.
+    let on_accent = Tokens::of(&h.ctx)
+        .resolved()
+        .color("text.on-accent")
+        .unwrap();
+    let out = h
+        .state_mut()
+        .app
+        .run(
+            &CMD_THEME_SET,
+            serde_json::json!({ "path": "accent.default", "value": on_accent.to_hex() }),
+            agent(),
+        )
+        .now()
+        .unwrap()
+        .unwrap();
+    assert_eq!(out["changed"], true);
+    h.run();
+    let read = |h: &mut Harness<'_, Gallery>| {
+        h.state_mut()
+            .app
+            .run(&CMD_THEME_READ, serde_json::json!({}), agent())
+            .now()
+            .unwrap()
+            .unwrap()
+    };
+    let failing = read(&mut h)["failing"].to_string();
+    assert!(
+        failing.contains("text.on-accent on accent.default"),
+        "{failing}"
+    );
+    assert_eq!(
+        Tokens::of(&h.ctx).color("accent.default"),
+        Some(egui_pop::theme::color32(on_accent))
+    );
+    let _ = h
+        .state_mut()
+        .app
+        .run(&CMD_THEME_UNDO, serde_json::json!({}), agent());
+    h.run();
+    assert!(read(&mut h)["failing"].as_array().unwrap().is_empty());
+    assert!(h.state().app.handle().theme().spec().overrides.is_empty());
+}
+
+#[test]
+fn the_tips_page_dismisses_a_tip_and_remembers_it_in_the_settings() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "tips"));
+    h.run();
+    egui_pop_test::assert_all_named(&h);
+    assert!(h.query_by_label("Go through the pages").is_some());
+    let mut results = egui_kittest::SnapshotResults::new();
+    results.add(h.try_snapshot("tips-pop-dark"));
+    h.get_by_label("Don't show again").click();
+    h.run();
+    assert!(h.query_by_label("Go through the pages").is_none());
+    let store = h.state().app.handle().store();
+    let dismissed = egui_pop::core::lock(&store)
+        .get("settings/tips.dismissed")
+        .and_then(|e| e.value.as_text().map(str::to_string));
+    assert_eq!(dismissed.as_deref(), Some("gallery.next-page"));
+    h.get_by_label("Show every tip again").click();
+    h.run();
+    h.run();
+    assert!(h.query_by_label("Go through the pages").is_some());
+}
