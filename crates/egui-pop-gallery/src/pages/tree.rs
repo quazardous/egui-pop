@@ -1,8 +1,8 @@
 //! The tree page: a live tree over a simulated drive the page owns,
 //! answered from a thread after a delay; edits made while branches are
 //! open; drag and drop with a veto; rename in place, from a name apart
-//! from a decorated label; icons and per-row toggles; a branch of
-//! 100 000 files.
+//! from a decorated label; icons and per-row toggles; a context menu
+//! for the row right-clicked; a branch of 100 000 files.
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -15,7 +15,8 @@ use egui_pop::api::steps::Before;
 use egui_pop::api::stories::Story;
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
 use egui_pop::core::icon::{Icon, Tone};
-use egui_pop::model::ids::{PluginId, StoryId};
+use egui_pop::model::commands::CommandSpec;
+use egui_pop::model::ids::{CommandId, MenuId, PluginId, StoryId};
 use egui_pop::views::Mode;
 use egui_pop::views::steps::TREE_DROP;
 use egui_pop::views::tree::{Node, Position, Signal, Sink, TreeSource, TreeState, TreeView};
@@ -24,6 +25,13 @@ use super::section;
 use crate::shell::SHELL;
 
 pub const TREE_PAGE: PluginId = PluginId::from_static("gallery.tree");
+
+/// A row's context menu, with its commands: they act on the row
+/// right-clicked (`args.key`), not on the selection.
+pub const ROW_MENU: MenuId = MenuId::from_static("gallery.tree.row");
+pub const CMD_HIDE: CommandId = CommandId::from_static("gallery.tree.hide");
+pub const CMD_LOCK: CommandId = CommandId::from_static("gallery.tree.lock");
+pub const CMD_RENAME: CommandId = CommandId::from_static("gallery.tree.rename");
 
 /// The context key the drop veto reads.
 const VETO: &str = "galleryVetoArchive";
@@ -187,6 +195,8 @@ fn rename_in_drive(drive: &Drive, key: &str, to: &str) -> Option<Node<String>> {
 pub struct Marks {
     pub hidden: HashSet<String>,
     pub locked: HashSet<String>,
+    /// A rename the row menu asked for, started at the next pass.
+    pub rename: Option<String>,
 }
 
 impl Marks {
@@ -248,6 +258,57 @@ impl Plugin for TreePage {
             }
         });
         let page = Rc::new(RefCell::new(PageState::default()));
+        let marks = page.borrow().marks.clone();
+        let row_command = |id: CommandId, title: &str, description: &str, order: i32| {
+            CommandSpec::new(id, title, "Tree")
+                .description(description)
+                .args(serde_json::json!({ "key": "photos" }))
+                .hidden()
+                .menu(ROW_MENU, "1_row", order)
+        };
+        let key_of = |call: &egui_pop::api::Call<'_>| -> Result<String, String> {
+            call.args["key"]
+                .as_str()
+                .map(str::to_string)
+                .ok_or_else(|| "`key` names no node".to_string())
+        };
+        let m = marks.clone();
+        ctx.command(
+            row_command(
+                CMD_HIDE,
+                "Hide or show",
+                "Hides the row's node, or shows it again.",
+                0,
+            ),
+            move |call| {
+                let key = key_of(call)?;
+                Marks::toggle(&mut m.borrow_mut().hidden, &key);
+                Ok(serde_json::json!({ "key": key }))
+            },
+        )?;
+        let m = marks.clone();
+        ctx.command(
+            row_command(
+                CMD_LOCK,
+                "Lock or unlock",
+                "Locks the row's node, or unlocks it.",
+                1,
+            ),
+            move |call| {
+                let key = key_of(call)?;
+                Marks::toggle(&mut m.borrow_mut().locked, &key);
+                Ok(serde_json::json!({ "key": key }))
+            },
+        )?;
+        let m = marks;
+        ctx.command(
+            row_command(CMD_RENAME, "Rename…", "Renames the row's node in place.", 2),
+            move |call| {
+                let key = key_of(call)?;
+                m.borrow_mut().rename = Some(key.clone());
+                Ok(serde_json::json!({ "key": key }))
+            },
+        )?;
         ctx.story(
             Story::new(StoryId::from_static("tree"), "Tree", move |ui, app| {
                 show(ui, app, &mut page.borrow_mut())
@@ -260,7 +321,7 @@ impl Plugin for TreePage {
 }
 
 fn show(ui: &mut Ui, app: &AppHandle, p: &mut PageState) {
-    ui.label("Open a folder: its files come from a thread after 0.3 s. Drag files between folders, F2 renames, letters jump to a name. The eye and the lock at a row's end act on that row without selecting it.");
+    ui.label("Open a folder: its files come from a thread after 0.3 s. Drag files between folders, F2 renames, letters jump to a name. The eye and the lock at a row's end act on that row without selecting it, and so does a row's context menu.");
     ui.horizontal_wrapped(|ui| {
         let handle = p.tree.handle();
         if ui.button("Add a photo to Photos").clicked() {
@@ -302,6 +363,10 @@ fn show(ui: &mut Ui, app: &AppHandle, p: &mut PageState) {
     }
     section(ui, "Files");
     let marks = p.marks.clone();
+    let asked = marks.borrow_mut().rename.take();
+    if let Some(key) = asked {
+        p.tree.rename(&key);
+    }
     let out = TreeView::<String>::new("gallery.files")
         .label("Files")
         .mode(Mode::Multiple)
@@ -311,6 +376,7 @@ fn show(ui: &mut Ui, app: &AppHandle, p: &mut PageState) {
         .height(300.0)
         .icon(|n| Some(if n.branch { Icon::Folder } else { Icon::File }.into()))
         .row_widgets(|ui, n| row_toggles(ui, &marks, &n.key, &n.label))
+        .context_menu(app, ROW_MENU)
         .show(ui, &mut p.tree, &p.source);
     for s in out.signals {
         match &s {
@@ -390,6 +456,7 @@ fn describe(s: &Signal<String>) -> String {
         } => format!("tree.drop {} {position:?} {target}", keys.join(", ")),
         Signal::Rename { from, to, .. } => format!("tree.rename {from} -> {to}"),
         Signal::Activate { key } => format!("tree.activate {key}"),
+        Signal::Context { key } => format!("tree.context {key}"),
         Signal::Vetoed { step, reason } => format!("{step} vetoed: {reason}"),
     }
 }

@@ -19,6 +19,7 @@
 //! | `tree.drop` | `tree`, `keys`, `target`, `position` (`before`, `after`, `inside`) | moves the nodes in the view |
 //! | `tree.rename` | `tree`, `key`, `from`, `to` | renames the node in the view |
 //! | `tree.activate` | `tree`, `key` | nothing: the application opens the leaf |
+//! | `tree.context` | `tree`, `key` | opens the row's context menu, for that row |
 //! | `list.select` | `list`, `keys`, `cursor` | sets the selection |
 //! | `table.select` | `table`, `keys`, `cursor` | sets the selection |
 //! | `table.sort` | `table`, `column` (`null`: unsorted), `descending` | writes the sort to the store |
@@ -35,6 +36,7 @@ pub const TREE_SELECT: StepId = StepId::from_static("tree.select");
 pub const TREE_DROP: StepId = StepId::from_static("tree.drop");
 pub const TREE_RENAME: StepId = StepId::from_static("tree.rename");
 pub const TREE_ACTIVATE: StepId = StepId::from_static("tree.activate");
+pub const TREE_CONTEXT: StepId = StepId::from_static("tree.context");
 pub const LIST_SELECT: StepId = StepId::from_static("list.select");
 pub const TABLE_SELECT: StepId = StepId::from_static("table.select");
 pub const TABLE_SORT: StepId = StepId::from_static("table.sort");
@@ -67,6 +69,11 @@ pub fn specs() -> Vec<StepSpec> {
             .args(json!({ "tree": "folders", "key": "photos", "from": "Photos", "to": "Pictures" })),
         StepSpec::new(TREE_ACTIVATE, "A tree leaf is opened (Enter, double click).")
             .args(json!({ "tree": "folders", "key": "photos/1.jpg" })),
+        StepSpec::new(
+            TREE_CONTEXT,
+            "A tree row is right-clicked: its context menu opens for that row, whatever is selected; a veto keeps it closed.",
+        )
+        .args(json!({ "tree": "folders", "key": "photos/1.jpg" })),
         StepSpec::new(LIST_SELECT, "A list's selection changes.")
             .args(json!({ "list": "recent", "keys": [3], "cursor": 3 })),
         StepSpec::new(TABLE_SELECT, "A table's selection changes.")

@@ -133,6 +133,48 @@ fn layers(ui: &mut egui::Ui, state: &mut TreeState<String>, hidden: &mut HashSet
 The closures take the node: name the key's type (`TreeView::<String>`)
 when the builder comes before `show`.
 
+A right click opens a row's context menu **for that row**, whatever is
+selected (the selection does not change; the row is outlined while its
+menu is open). `TreeView::context_menu(app, menu)` opens a declared
+menu (`Ctx::menu_item` or `CommandSpec::menu`): `{"tree": id, "key":
+key}` is merged into its commands' arguments, so a command acts on
+`args.key`. `TreeView::context_ui` opens a menu the application draws,
+given the row's node. Either way the `tree.context` step runs first
+(a veto keeps the menu closed) and `Signal::Context` names the node.
+
+```rust
+use egui_pop::egui;
+use egui_pop::prelude::*;
+use egui_pop::views::tree::{Sink, TreeSource, TreeState, TreeView};
+
+const ROW: MenuId = MenuId::from_static("files.row");
+const DELETE: CommandId = CommandId::from_static("files.delete");
+
+struct Files;
+
+impl TreeSource<String> for Files {
+    fn load(&self, _: Option<&String>, sink: Sink<String>) {
+        sink.deliver(Vec::new());
+    }
+}
+
+/// Declares the row menu's command: it deletes `args.key`.
+fn connect(ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+    ctx.command(
+        CommandSpec::new(DELETE, "Delete", "Files").hidden().menu(ROW, "9_edit", 0),
+        |call| {
+            let key = call.args["key"].as_str().ok_or("no row")?;
+            Ok(serde_json::json!({ "deleted": key }))
+        },
+    )?;
+    Ok(())
+}
+
+fn files(ui: &mut egui::Ui, app: &AppHandle, state: &mut TreeState<String>) {
+    TreeView::new("files").app(app).context_menu(app, ROW).show(ui, state, &Files);
+}
+```
+
 ## Selection, keys, pointer
 
 `TreeView::mode` sets the selection: `Mode::Single` (the default),
@@ -185,6 +227,7 @@ same moments come back as `Signal`s in `TreeOutput::signals`, with
 | `tree.drop` | `tree`, `keys`, `target`, `position` (`before`, `after`, `inside`) | moves the nodes in the view |
 | `tree.rename` | `tree`, `key`, `from`, `to` | renames the node in the view |
 | `tree.activate` | `tree`, `key` | nothing: the application opens the leaf |
+| `tree.context` | `tree`, `key` | opens the row's context menu, for that row (a redirect changes the node it is for) |
 
 The view changes what it shows; the application changes its data, from
 the signals or from an after-hook. A before-hook refuses what the
@@ -230,5 +273,6 @@ assert_eq!(out.vetoed(), Some("the archive is read-only"));
 
 The gallery's `tree` page shows a simulated drive answered from a
 thread, edits made while branches are open, a veto on drops into one
-folder, icons and an eye and a lock on every row, files named apart
-from their decorated labels, and a branch of 100 000 files.
+folder, icons and an eye and a lock on every row, a context menu
+acting on the row right-clicked, files named apart from their decorated
+labels, and a branch of 100 000 files.

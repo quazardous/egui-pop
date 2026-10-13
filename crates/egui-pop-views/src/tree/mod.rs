@@ -14,11 +14,12 @@
 //!   (before, after or inside a node), **rename in place**.
 //! - **Rows** carry an icon ([`TreeView::icon`]) and widgets of the
 //!   application's at their right end ([`TreeView::row_widgets`]) that
-//!   act on their row without selecting it.
+//!   act on their row without selecting it, and a context menu for the
+//!   row clicked ([`TreeView::context_menu`], [`TreeView::context_ui`]).
 //! - **Virtualised**: rows are flattened once per change and only the
 //!   rows in view are built, so 100 000 nodes cost a screenful.
 //! - Each moment is a step (`tree.load`, `tree.expand`, `tree.select`,
-//!   `tree.drop`, `tree.rename`, `tree.activate`, see
+//!   `tree.drop`, `tree.rename`, `tree.activate`, `tree.context`, see
 //!   [`crate::steps`]) and a [`Signal`] in the output.
 //!
 //! ```
@@ -60,12 +61,12 @@ use egui::{
     Context, Id, Modifiers, Rect, Response, Shape, Stroke, TextEdit, Ui, UiBuilder, WidgetInfo,
     WidgetType, pos2, vec2,
 };
-use egui_pop_api::AppHandle;
 use egui_pop_api::steps::Outcome;
+use egui_pop_api::{AppHandle, menus};
 use egui_pop_core::icon::{Size, Source};
 use egui_pop_core::strings::{self, tr, tr_args};
 use egui_pop_core::theme::Tokens;
-use egui_pop_model::ids::StepId;
+use egui_pop_model::ids::{MenuId, StepId};
 use serde_json::{Value as Json, json};
 
 pub use model::{Children, Edit, Model, Node, Position, Row};
@@ -74,7 +75,7 @@ use crate::nav::{self, Nav, TypeAhead};
 use crate::rows::{self, Scroll};
 use crate::select::{Key, Mode, Proposal, Selection};
 use crate::steps::{
-    self, TREE_ACTIVATE, TREE_DROP, TREE_EXPAND, TREE_LOAD, TREE_RENAME, TREE_SELECT,
+    self, TREE_ACTIVATE, TREE_CONTEXT, TREE_DROP, TREE_EXPAND, TREE_LOAD, TREE_RENAME, TREE_SELECT,
 };
 use crate::strings as s;
 
@@ -226,6 +227,8 @@ pub struct TreeState<K: Key> {
     type_ahead: TypeAhead,
     renaming: Option<Renaming<K>>,
     drag: Option<Drag<K>>,
+    /// The row last right-clicked, and the node its menu is for.
+    context: Option<(K, K)>,
 }
 
 impl<K: Key> Default for TreeState<K> {
@@ -241,6 +244,7 @@ impl<K: Key> Default for TreeState<K> {
             type_ahead: TypeAhead::default(),
             renaming: None,
             drag: None,
+            context: None,
         }
     }
 }
@@ -383,6 +387,11 @@ pub enum Signal<K> {
     Activate {
         key: K,
     },
+    /// A row's context menu opened (a right click), for that node; the
+    /// selection is left as it is.
+    Context {
+        key: K,
+    },
     /// A step was vetoed.
     Vetoed {
         step: StepId,
@@ -409,8 +418,16 @@ enum Action<K> {
 
 /// What draws a row's icon.
 type IconFn<'a, K> = Box<dyn Fn(&Node<K>) -> Option<Source> + 'a>;
-/// What adds a row's widgets.
+/// What adds a row's widgets, or fills its context menu.
 type RowFn<'a, K> = Box<dyn FnMut(&mut Ui, &Node<K>) + 'a>;
+
+/// A row's context menu.
+enum ContextMenu<'a, K> {
+    /// Declared, with its commands.
+    Declared(&'a AppHandle, MenuId),
+    /// Drawn by the application.
+    Ui(RowFn<'a, K>),
+}
 
 /// The tree widget.
 pub struct TreeView<'a, K: Key> {
@@ -423,6 +440,7 @@ pub struct TreeView<'a, K: Key> {
     height: Option<f32>,
     icon: Option<IconFn<'a, K>>,
     row_widgets: Option<RowFn<'a, K>>,
+    context: Option<ContextMenu<'a, K>>,
 }
 
 impl<K: Key> std::fmt::Debug for TreeView<'_, K> {
@@ -437,6 +455,7 @@ impl<K: Key> std::fmt::Debug for TreeView<'_, K> {
             .field("height", &self.height)
             .field("icon", &self.icon.is_some())
             .field("row_widgets", &self.row_widgets.is_some())
+            .field("context", &self.context.is_some())
             .finish()
     }
 }
@@ -454,6 +473,7 @@ impl<'a, K: Key> TreeView<'a, K> {
             height: None,
             icon: None,
             row_widgets: None,
+            context: None,
         }
     }
 
@@ -509,6 +529,24 @@ impl<'a, K: Key> TreeView<'a, K> {
         self
     }
 
+    /// A declared menu (`Ctx::menu_item`, commands) opened on a row's
+    /// right click, for that row: `{"tree": id, "key": key}` is merged
+    /// into its commands' arguments and seen by their `when` clauses as
+    /// `args.key`, whatever is selected. It runs `tree.context`, then
+    /// `menu.open`.
+    pub fn context_menu(mut self, app: &'a AppHandle, menu: MenuId) -> Self {
+        self.context = Some(ContextMenu::Declared(app, menu));
+        self
+    }
+
+    /// A context menu the application draws, opened on a row's right
+    /// click and given that row's node, whatever is selected. It runs
+    /// `tree.context`.
+    pub fn context_ui(mut self, menu: impl FnMut(&mut Ui, &Node<K>) + 'a) -> Self {
+        self.context = Some(ContextMenu::Ui(Box::new(menu)));
+        self
+    }
+
     /// Draws the tree; runs what the user did as steps.
     pub fn show(
         mut self,
@@ -547,6 +585,9 @@ impl<'a, K: Key> TreeView<'a, K> {
         let label = self.label.clone().unwrap_or_else(|| tr(ui.ctx(), &s::TREE));
         let icon = self.icon.take();
         let mut row_widgets = self.row_widgets.take();
+        let mut context_menu = self.context.take();
+        let tree = self.id.as_str();
+        let app = self.app;
         state.model.rows();
         let TreeState {
             model,
@@ -554,6 +595,7 @@ impl<'a, K: Key> TreeView<'a, K> {
             scroll,
             renaming,
             drag,
+            context,
             ..
         } = state;
         let count = model.rows_now().len();
@@ -580,8 +622,33 @@ impl<'a, K: Key> TreeView<'a, K> {
                                 None => continue,
                             };
                             let r = ui.interact(rect, id.with(("row", &key)), rows::ROW_SENSE);
+                            if r.secondary_clicked() {
+                                *context = open_context(app, tree, &key, &mut signals);
+                            }
+                            // The menu, for the node the step settled on.
+                            if let Some((_, target)) =
+                                context.as_ref().filter(|(row, _)| *row == key)
+                            {
+                                match context_menu.as_mut() {
+                                    Some(ContextMenu::Declared(app, menu)) => {
+                                        menus::context_menu_with(
+                                            &r,
+                                            app,
+                                            menu,
+                                            json!({ "tree": tree, "key": target }),
+                                        );
+                                    }
+                                    Some(ContextMenu::Ui(add)) => {
+                                        if let Some(n) = model.node(target) {
+                                            r.context_menu(|ui| add(ui, n));
+                                        }
+                                    }
+                                    None => {}
+                                }
+                            }
                             let selected = selection.contains(&key);
-                            let cursor = focused && selection.cursor() == Some(&key);
+                            let cursor = (focused && selection.cursor() == Some(&key))
+                                || r.context_menu_opened();
                             let hovered = r.contains_pointer() && drag.is_none();
                             rows::paint(ui, rect, selected, hovered, cursor);
                             let color = rows::text_color(ui, selected);
@@ -1071,6 +1138,41 @@ impl<'a, K: Key> TreeView<'a, K> {
             Outcome::Done(Err(reason)) | Outcome::Vetoed { reason, .. } => {
                 signals.push(Signal::Vetoed { step, reason })
             }
+        }
+    }
+}
+
+/// Runs `tree.context` for a right-clicked row: the row and the node
+/// its menu is for, unless vetoed.
+fn open_context<K: Key>(
+    app: Option<&AppHandle>,
+    tree: &str,
+    key: &K,
+    signals: &mut Vec<Signal<K>>,
+) -> Option<(K, K)> {
+    let mut target = key.clone();
+    let outcome = steps::run(
+        app,
+        &TREE_CONTEXT,
+        json!({ "tree": tree, "key": key }),
+        |args| {
+            target = parse(&args["key"])?;
+            Ok(Json::Bool(true))
+        },
+    );
+    match outcome {
+        Outcome::Done(Ok(_)) => {
+            signals.push(Signal::Context {
+                key: target.clone(),
+            });
+            Some((key.clone(), target))
+        }
+        Outcome::Done(Err(reason)) | Outcome::Vetoed { reason, .. } => {
+            signals.push(Signal::Vetoed {
+                step: TREE_CONTEXT,
+                reason,
+            });
+            None
         }
     }
 }

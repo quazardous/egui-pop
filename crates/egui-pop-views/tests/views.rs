@@ -416,6 +416,7 @@ struct RichApp {
     state: TreeState<String>,
     source: Decorated,
     hidden: std::collections::HashSet<String>,
+    deleted: Vec<String>,
     signals: Vec<tree::Signal<String>>,
 }
 
@@ -427,6 +428,7 @@ fn rich_harness() -> Harness<'static, RichApp> {
             slow: None,
         }),
         hidden: Default::default(),
+        deleted: Vec::new(),
         signals: Vec::new(),
     };
     Harness::builder()
@@ -434,6 +436,7 @@ fn rich_harness() -> Harness<'static, RichApp> {
         .build_ui_state(
             |ui, t: &mut RichApp| {
                 let hidden = &mut t.hidden;
+                let deleted = &mut t.deleted;
                 let out = TreeView::<String>::new("rich")
                     .label("Rich")
                     .rename(true)
@@ -450,6 +453,12 @@ fn rich_harness() -> Harness<'static, RichApp> {
                         });
                         if r.clicked() && !hidden.remove(&n.key) {
                             hidden.insert(n.key.clone());
+                        }
+                    })
+                    .context_ui(|ui, n| {
+                        if ui.button(format!("Delete {}", n.label)).clicked() {
+                            deleted.push(n.key.clone());
+                            ui.close();
                         }
                     })
                     .show(ui, &mut t.state, &t.source);
@@ -513,6 +522,23 @@ fn a_rename_starts_from_the_name_not_the_decorated_label() {
         h.state().state.selection().cursor().map(String::as_str),
         Some("a/3")
     );
+}
+
+#[test]
+fn a_context_menu_is_for_the_row_clicked_not_the_selection() {
+    let mut h = rich_harness();
+    h.run();
+    h.get_by_label("Folder A").click();
+    h.run();
+    h.get_by_label("Folder C").click_secondary();
+    h.run();
+    assert!(h.state().signals.iter().any(|s| matches!(s,
+        tree::Signal::Context { key } if key == "c")));
+    h.get_by_label("Delete Folder C").click();
+    h.run();
+    assert_eq!(h.state().deleted, ["c"]);
+    assert_eq!(h.state().state.selection().keys(), &["a"], "still Folder A");
+    assert!(h.query_by_label("Delete Folder C").is_none(), "closed");
 }
 
 struct Rows(Vec<(u32, String, u32)>);
@@ -728,6 +754,7 @@ fn every_step_is_declared() {
         "tree.drop",
         "tree.rename",
         "tree.activate",
+        "tree.context",
         "list.select",
         "table.select",
         "table.sort",

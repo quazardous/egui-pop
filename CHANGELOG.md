@@ -9,6 +9,14 @@ egui minor.
 
 ### Added
 
+- A tree row's context menu, for the row right-clicked whatever is
+  selected: `TreeView::context_menu(app, menu)` opens a declared menu
+  whose commands get `{"tree", "key"}` merged into their arguments,
+  `TreeView::context_ui` one the application draws, given the node.
+  The new `tree.context` step runs first (a veto keeps the menu
+  closed), and `Signal::Context` names the node. The gallery's tree
+  page hides, locks or renames a row from its menu.
+
 - A tree node's plain name apart from its label (`Node::with_name`,
   `Node::name`), for labels with decorations: a rename starts from the
   name, type-ahead searches names, and `tree.rename` and
