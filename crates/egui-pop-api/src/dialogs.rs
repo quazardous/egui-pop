@@ -1,9 +1,26 @@
 //! Dialogs, as a plugin ([`DialogsPlugin`], in `DefaultPlugins`): a
 //! question before an action ([`Confirm`]), a form of typed fields
 //! ([`Form`], from value descriptors), a choice among options, each
-//! answering a value of its own, with a filter field ([`Choose`]), and a
-//! notice to acknowledge ([`Info`]). They queue, one shown at a time,
-//! modal, drawn from the theme's tokens.
+//! answering a value of its own, with a filter field ([`Choose`]), a
+//! notice to acknowledge ([`Info`]), and a dialog with a body of its own
+//! ([`Custom`], opened with [`Dialogs::open_custom`]). They queue, one
+//! shown at a time, modal, drawn from the theme's tokens.
+//!
+//! A custom dialog is a host of the mount contract (ADR 0013): its body
+//! is drawn by a closure kept on the application's side (the queue
+//! stays `Clone` and `Send`), in a size of the dialog's own, in a
+//! `dialog` focus scope and a fault boundary, every frame (the body's
+//! components keep draining their workers' queues). It keeps every
+//! dialog rule: the primary button says what it does, Enter accepts and
+//! Escape cancels, steps, the debug bridge, movable, closable, the
+//! backdrop. Keys the body claims ([`Custom::claims`], from its
+//! component's `Mountable`) go to it first: when it claims Enter,
+//! Ctrl+Enter accepts; when it claims Escape, Escape goes to the body
+//! while it has something to cancel ([`CustomPass::claim_escape`], a
+//! drag), and cancels the dialog otherwise. Its values
+//! ([`CustomPass::value`]) are merged into the command's arguments; the
+//! `dialogs` collector shows its description ([`CustomPass::describe`])
+//! and answers it as a form.
 //!
 //! Rules: the primary button says what it does ("Delete 3 images", never
 //! "OK"); a dangerous one is styled as such and the focus starts on
@@ -88,6 +105,9 @@ use egui_pop_model::commands::{CommandSpec, Origin};
 use egui_pop_model::fuzzy;
 use egui_pop_model::ids::{BlockId, CommandId, OwnerId, PluginId, SettingId, StepId};
 use egui_pop_model::keymap::BindOptions;
+use egui_pop_model::mount::{
+    ClaimKey, Dismiss, FocusPolicy, HostOffer, HostSize, Keep, Lifetime, Mountable,
+};
 use egui_pop_model::values::{Change, Descriptor, PathHint, PathKind, Set, Type, Value};
 use serde::Serialize;
 use serde_json::{Map, Value as Json, json};
@@ -348,6 +368,217 @@ impl Info {
     }
 }
 
+/// A dialog with a body of its own (ADR 0013), drawn by a closure
+/// given to [`Dialogs::open_custom`]: a preview, a viewport, a curve.
+///
+/// ```
+/// use egui_pop_api::dialogs::Custom;
+/// use egui_pop_model::ids::CommandId;
+/// use egui_pop_model::mount::ClaimKey;
+///
+/// let preview = Custom::new("Export preview", "Export 3 images", CommandId::from_static("doc.export"))
+///     .share(0.7)
+///     .claims(&[ClaimKey::Escape]);
+/// assert_eq!(preview.verb, "Export 3 images");
+/// assert!(preview.claims_key(ClaimKey::Escape));
+/// ```
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct Custom {
+    pub title: String,
+    /// The primary button: what it does ("Export 3 images"); empty with
+    /// no command: a Close button only.
+    pub verb: String,
+    /// Destructive: the danger style, the focus starts on Cancel, no key
+    /// accepts.
+    pub danger: bool,
+    /// What accepting runs, with `args` and the body's values merged in;
+    /// `None`: accepting closes the dialog.
+    pub command: Option<CommandId>,
+    pub args: Json,
+    /// The body's size in points (capped to the window); `None`: a
+    /// share of the window.
+    pub size: Option<[f32; 2]>,
+    /// The share of the window the body takes without a size.
+    pub share: f32,
+    /// Keys the body claims: Enter (Ctrl+Enter then accepts), Escape (it
+    /// goes to the body first).
+    pub claims: Vec<ClaimKey>,
+    /// What the body's component needs: checked against the custom
+    /// dialog's offer when it opens (a refusal opens nothing), and
+    /// recorded as a mount while it is open.
+    pub needs: Option<Mountable>,
+}
+
+impl Custom {
+    /// The share of the window a body takes by default.
+    pub const SHARE: f32 = 0.7;
+
+    /// A dialog whose primary button says what it does and runs
+    /// `command`.
+    pub fn new(title: &str, verb: &str, command: CommandId) -> Self {
+        Self {
+            title: title.into(),
+            verb: verb.into(),
+            danger: false,
+            command: Some(command),
+            args: Json::Null,
+            size: None,
+            share: Self::SHARE,
+            claims: Vec::new(),
+            needs: None,
+        }
+    }
+
+    /// A dialog that only closes (a Close button).
+    pub fn closing(title: &str) -> Self {
+        Self {
+            title: title.into(),
+            verb: String::new(),
+            danger: false,
+            command: None,
+            args: Json::Null,
+            size: None,
+            share: Self::SHARE,
+            claims: Vec::new(),
+            needs: None,
+        }
+    }
+
+    pub fn danger(mut self) -> Self {
+        self.danger = true;
+        self
+    }
+
+    /// Arguments the values are merged into.
+    pub fn args(mut self, args: Json) -> Self {
+        self.args = args;
+        self
+    }
+
+    /// The body's size, in points.
+    pub fn size(mut self, width: f32, height: f32) -> Self {
+        self.size = Some([width.max(1.0), height.max(1.0)]);
+        self
+    }
+
+    /// The share of the window the body takes (0.2 to 1).
+    pub fn share(mut self, share: f32) -> Self {
+        self.share = share.clamp(0.2, 1.0);
+        self
+    }
+
+    /// Keys the body takes first.
+    pub fn claims(mut self, keys: &[ClaimKey]) -> Self {
+        for k in keys {
+            if !self.claims.contains(k) {
+                self.claims.push(*k);
+            }
+        }
+        self
+    }
+
+    /// What the body's component needs: its claimed keys become the
+    /// dialog's, and it is checked against the custom dialog's offer.
+    pub fn needs(mut self, needs: Mountable) -> Self {
+        let claims = needs.claims.clone();
+        self.needs = Some(needs);
+        self.claims(&claims)
+    }
+
+    /// Whether the body claims a key.
+    pub fn claims_key(&self, key: ClaimKey) -> bool {
+        self.claims.contains(&key)
+    }
+
+    /// The body's size in a window of `room` points.
+    pub fn body_size(&self, room: Vec2) -> Vec2 {
+        let size = match self.size {
+            Some([w, h]) => egui::vec2(w.min(room.x - 64.0), h.min(room.y - 160.0)),
+            None => egui::vec2(room.x * self.share, room.y * self.share - 120.0),
+        };
+        size.max(egui::vec2(120.0, 80.0))
+    }
+}
+
+/// What the custom dialog offers its body (ADR 0013): a size of its
+/// own, modal, transient, Enter and Escape given to a body claiming
+/// them, a focus scope and a fault boundary, the main window, sRGB first
+/// (decided 2026-10-14), outside the context stack's projection.
+pub fn custom_host() -> HostOffer {
+    HostOffer::new(crate::mounts::CUSTOM_DIALOG, "C", "Custom dialog")
+        .source("dialogs: Dialog::Custom, Dialogs::open_custom")
+        .size(HostSize::Given)
+        .focus(FocusPolicy::ModalExclusive)
+        .owns_keys(&[ClaimKey::Enter, ClaimKey::Escape])
+        .honours_claims()
+        .dismissed_by(&[Dismiss::Answer, Dismiss::Escape])
+        .lifetime(Lifetime::Transient)
+        .keeps(&[Keep::Place])
+}
+
+/// What a custom dialog's body says during a pass: its values, whether
+/// the primary action is possible, its description, an Escape it
+/// takes, an answer of its own.
+#[derive(Debug, Default)]
+pub struct CustomPass {
+    values: Map<String, Json>,
+    ready: bool,
+    describe: Json,
+    escape: bool,
+    answer: Option<Answer>,
+}
+
+impl CustomPass {
+    /// A value merged into the command's arguments when accepted (kept
+    /// from pass to pass).
+    pub fn value(&mut self, key: &str, value: Json) {
+        self.values.insert(key.into(), value);
+    }
+
+    /// The values so far.
+    pub fn values(&self) -> &Map<String, Json> {
+        &self.values
+    }
+
+    /// Whether the primary action is possible now (kept from pass to
+    /// pass; possible at first).
+    pub fn ready(&mut self, ready: bool) {
+        self.ready = ready;
+    }
+
+    /// What the debug bridge shows of the body (the `dialogs`
+    /// collector's `body`).
+    pub fn describe(&mut self, description: Json) {
+        self.describe = description;
+    }
+
+    /// This pass's Escape is the body's: it has something to cancel (a
+    /// drag, a selection, a popup). Only for a body claiming Escape.
+    pub fn claim_escape(&mut self) {
+        self.escape = true;
+    }
+
+    /// Accepts the dialog, as its primary button.
+    pub fn accept(&mut self) {
+        self.answer = Some(Answer::Accept {
+            values: self.values.clone(),
+        });
+    }
+
+    /// Cancels the dialog.
+    pub fn cancel(&mut self) {
+        self.answer = Some(Answer::Cancel);
+    }
+}
+
+/// A custom dialog's body.
+type BodyFn = Box<dyn FnMut(&mut Ui, &AppHandle, &mut CustomPass)>;
+
+/// The bodies of the custom dialogs, by dialog id, on the application's
+/// side.
+#[derive(Default)]
+struct Bodies(std::cell::RefCell<std::collections::BTreeMap<u64, BodyFn>>);
+
 /// A dialog.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
@@ -356,6 +587,13 @@ pub enum Dialog {
     Form(Form),
     Choose(Choose),
     Info(Info),
+    Custom(Box<Custom>),
+}
+
+impl From<Custom> for Dialog {
+    fn from(d: Custom) -> Self {
+        Dialog::Custom(Box::new(d))
+    }
 }
 
 impl From<Confirm> for Dialog {
@@ -389,6 +627,7 @@ impl Dialog {
             Dialog::Form(d) => &d.title,
             Dialog::Choose(d) => &d.title,
             Dialog::Info(d) => &d.title,
+            Dialog::Custom(d) => &d.title,
         }
     }
 }
@@ -509,6 +748,12 @@ impl From<Info> for DialogSpec {
     }
 }
 
+impl From<Custom> for DialogSpec {
+    fn from(d: Custom) -> Self {
+        Self::new(d)
+    }
+}
+
 /// An answer.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(tag = "answer", rename_all = "lowercase")]
@@ -588,6 +833,11 @@ struct Open {
     /// A choice's filter, and the option highlighted among those shown.
     filter: String,
     highlight: usize,
+    /// A custom dialog's values, readiness and description, as its body
+    /// left them.
+    values: Map<String, Json>,
+    ready: bool,
+    body: Json,
 }
 
 #[derive(Debug, Default)]
@@ -628,8 +878,41 @@ impl Dialogs {
             error: None,
             filter: String::new(),
             highlight: 0,
+            values: Map::new(),
+            ready: true,
+            body: Json::Null,
         });
         id
+    }
+
+    /// Queues a dialog with a body of its own ([`Custom`]): the body is
+    /// kept on the application's side and drawn every frame the dialog
+    /// is shown. When the dialog says what its body needs
+    /// ([`Custom::needs`]), the need is checked against the custom
+    /// dialog's offer first: a refusal is reported with its rule and
+    /// opens nothing (ADR 0003, ADR 0013).
+    pub fn open_custom(
+        &self,
+        app: &AppHandle,
+        spec: impl Into<DialogSpec>,
+        body: impl FnMut(&mut Ui, &AppHandle, &mut CustomPass) + 'static,
+    ) -> Result<u64, String> {
+        let spec = spec.into();
+        let Dialog::Custom(custom) = &spec.dialog else {
+            return Err(format!(
+                "`{}` is not a custom dialog: open it with `open`",
+                spec.dialog.title()
+            ));
+        };
+        if let Some(needs) = &custom.needs {
+            app.mount_needs(needs, &custom_host())?;
+        }
+        let id = self.open(spec);
+        app.local::<Bodies>()
+            .0
+            .borrow_mut()
+            .insert(id, Box::new(body));
+        Ok(id)
     }
 
     /// The dialog shown, with its id.
@@ -685,6 +968,11 @@ impl Dialogs {
                     Dialog::Choose(c) => {
                         d["filter"] = json!(o.filter);
                         d["shown"] = json!(c.visible(&o.filter));
+                    }
+                    Dialog::Custom(_) => {
+                        d["values"] = Json::Object(o.values.clone());
+                        d["ready"] = json!(o.ready);
+                        d["body"] = o.body.clone();
                     }
                     _ => {}
                 }
@@ -806,6 +1094,20 @@ fn apply(app: &AppHandle, d: &Dialogs, answer: Answer, origin: Origin) -> Result
         (_, Answer::Cancel) => None,
         (Dialog::Confirm(c), Answer::Accept { .. }) => Some((c.command.clone(), c.args.clone())),
         (Dialog::Info(_), Answer::Accept { .. }) => None,
+        (Dialog::Custom(c), Answer::Accept { values }) => {
+            if !open.ready {
+                return Err(format!("{} cannot be accepted yet", c.title));
+            }
+            c.command.as_ref().map(|command| {
+                let mut args = match &c.args {
+                    Json::Object(m) => m.clone(),
+                    _ => Map::new(),
+                };
+                args.extend(open.values.clone());
+                args.extend(values.clone());
+                (command.clone(), Json::Object(args))
+            })
+        }
         (Dialog::Form(f), Answer::Accept { values }) => {
             let mut args = match &f.args {
                 Json::Object(m) => m.clone(),
@@ -846,6 +1148,12 @@ fn apply(app: &AppHandle, d: &Dialogs, answer: Answer, origin: Origin) -> Result
         }
         (_, a) => return Err(format!("{a:?} does not answer this dialog")),
     };
+    if let Dialog::Custom(c) = &open.dialog {
+        app.local::<Bodies>().0.borrow_mut().remove(&open.id);
+        if let Some(needs) = &c.needs {
+            app.unmount(&needs.id, crate::mounts::CUSTOM_DIALOG);
+        }
+    }
     {
         let mut s = lock(&d.0);
         s.queue.pop_front();
@@ -979,6 +1287,13 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     let mut answer: Option<Answer> = None;
     // The ✕ is shown only where Escape works.
     let closable = closable && spec.dismiss_on_escape;
+    if let Dialog::Custom(c) = &open_dialog.dialog {
+        spec = spec.width(c.body_size(ctx.content_rect().size()).x);
+        if c.claims_key(ClaimKey::Escape) {
+            // The body sees Escape first; the dialog cancels after it.
+            spec = spec.keep_on_escape();
+        }
+    }
     if open_dialog.moving.is_some() {
         // Escape puts the dialog back instead of closing it.
         spec = spec.keep_on_escape();
@@ -1065,6 +1380,116 @@ fn choice_row(ui: &mut Ui, selected: bool, text: egui::WidgetText) -> egui::Resp
         )
     })
     .inner
+}
+
+/// A custom dialog's state between passes, as its body left it.
+struct CustomState<'a> {
+    id: u64,
+    values: &'a mut Map<String, Json>,
+    ready: &'a mut bool,
+    describe: &'a mut Json,
+}
+
+/// A custom dialog's body, its footer and its keys; its answer when
+/// given.
+fn custom_body(
+    ui: &mut Ui,
+    app: &AppHandle,
+    c: &Custom,
+    state: CustomState<'_>,
+    first: bool,
+) -> Option<Answer> {
+    let CustomState {
+        id,
+        values,
+        ready,
+        describe,
+    } = state;
+    let (enter, ctrl_enter) = ui.input(|i| {
+        let pressed = i.key_pressed(Key::Enter);
+        let command = i.modifiers.command || i.modifiers.ctrl;
+        (pressed && !command && !i.modifiers.alt, pressed && command)
+    });
+    let size = c.body_size(ui.ctx().content_rect().size());
+    let mut pass = CustomPass {
+        values: std::mem::take(values),
+        ready: *ready,
+        describe: std::mem::take(describe),
+        escape: false,
+        answer: None,
+    };
+    let bodies = app.local::<Bodies>();
+    let taken = bodies.0.borrow_mut().remove(&id);
+    match taken {
+        Some(mut draw) => {
+            ui.allocate_ui_with_layout(size, egui::Layout::top_down(egui::Align::Min), |ui| {
+                ui.set_min_size(size);
+                ui.set_max_size(size);
+                egui_pop_core::focus::scope(ui, "dialog", &[], |ui| {
+                    egui_pop_core::fault::boundary(
+                        ui,
+                        ("egui_pop.dialog.body", id),
+                        &c.title,
+                        |ui| draw(ui, app, &mut pass),
+                    );
+                });
+            });
+            bodies.0.borrow_mut().insert(id, draw);
+        }
+        None => {
+            log::warn!(target: "egui_pop", "dialog `{}`: its body is gone", c.title);
+            ui.allocate_space(size);
+        }
+    }
+    // Escape after the body: the body's when it claims Escape and has
+    // something to cancel, the dialog's otherwise (without a claim, the
+    // overlay closed the dialog on Escape before the body saw it).
+    let escape =
+        c.claims_key(ClaimKey::Escape) && !pass.escape && ui.input(|i| i.key_pressed(Key::Escape));
+    let mut answer = pass.answer.take();
+    *values = std::mem::take(&mut pass.values);
+    *ready = pass.ready;
+    *describe = std::mem::take(&mut pass.describe);
+    // A body claiming Enter keeps the focus: a focused button would take
+    // Enter from it.
+    let focus_button = first && !c.claims_key(ClaimKey::Enter);
+    if c.command.is_none() && c.verb.is_empty() {
+        let t = Tokens::of(ui.ctx());
+        ui.add_space(t.space.m);
+        let close = ui.button(strings::tr(ui.ctx(), &CLOSE));
+        if focus_button {
+            close.request_focus();
+        }
+        if close.clicked() {
+            answer = Some(Answer::Accept {
+                values: values.clone(),
+            });
+        }
+    } else if let Some(a) = footer(ui, &c.verb, c.danger, focus_button) {
+        answer = Some(match a {
+            Answer::Accept { .. } => Answer::Accept {
+                values: values.clone(),
+            },
+            other => other,
+        });
+    }
+    // Enter accepts, unless the body claims it (Ctrl+Enter does then) or
+    // a text input owns the keyboard (a text field, or an open typed
+    // entry, which commits on Enter); no key accepts a danger.
+    let by_key = if c.claims_key(ClaimKey::Enter) {
+        ctrl_enter
+    } else {
+        ctrl_enter || (enter && !egui_pop_core::focus::text_input_owns_keyboard(ui.ctx()))
+    };
+    if answer.is_none() && by_key && !c.danger && *ready {
+        answer = Some(Answer::Accept {
+            values: values.clone(),
+        });
+    }
+    if answer.is_none() && escape {
+        answer = Some(Answer::Cancel);
+    }
+    answer
 }
 
 /// The values of a form's fields, by key.
@@ -1198,6 +1623,15 @@ fn body(ui: &mut Ui, app: &AppHandle, o: &mut Open, header: Header<'_>) -> Optio
             if ui.button(strings::tr(ui.ctx(), &CANCEL)).clicked() {
                 answer = Some(Answer::Cancel);
             }
+        }
+        Dialog::Custom(c) => {
+            let state = CustomState {
+                id: o.id,
+                values: &mut o.values,
+                ready: &mut o.ready,
+                describe: &mut o.body,
+            };
+            answer = custom_body(ui, app, c, state, first);
         }
         Dialog::Form(f) => {
             let browse = &mut o.browse;

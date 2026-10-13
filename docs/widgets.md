@@ -632,6 +632,34 @@ was typed).
 - `Clear` leaves the interface untouched, for a dialog previewing its
   effect (a curve applied to the image behind it).
 
+**A body of its own: `Dialog::Custom`** (decided 2026-10-14, ADR 0013),
+opened with `Dialogs::open_custom(app, spec, body)`. The four kinds are
+drawn from data; a custom dialog draws a closure (a viewport, a curve,
+a preview), kept on the application's side so the queue stays `Clone`
+and `Send`. It keeps every rule above: a primary button that says what
+it does (or a Close button only), Cancel, steps, the debug bridge
+(its body says what agents see with `CustomPass::describe`, and its
+values are merged into the command's arguments), movable, closable, a
+kept place, the backdrop. Its body has a size of the dialog's own (a
+share of the window by default), a `dialog` focus scope and a fault
+boundary, and is drawn every frame.
+
+- **Keys the body claims** (`Custom::claims`, or its component's
+  `Mountable` through `Custom::needs`) go to it first. A body claiming
+  Enter keeps it, and Ctrl+Enter accepts; a body claiming Escape gets
+  it while it has something to cancel (`CustomPass::claim_escape`, a
+  drag of a viewport), and the next Escape cancels the dialog.
+- **What it holds is checked.** A body declaring its needs is checked
+  against the custom dialog's offer when it opens (a body requiring
+  wide gamut is refused: sRGB first), and recorded as a mount while
+  the dialog is open.
+- **One dialog at a time** still: a body draws a second choice inline.
+
+`egui_pop::imaging::preview` is the first use: an export preview, an
+image viewport over a `Clear` backdrop, movable and kept in place; the
+interface behind, its own viewport included, keeps drawing while the
+dialog is modal.
+
 Sources:
 
 - WAI-ARIA Authoring Practices, modal dialog example:
