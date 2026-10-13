@@ -531,9 +531,21 @@ egui-pop-viewport-histogram-value-log = { $channels } ({ $bins } classes, logari
 
 egui-pop-viewport-label = Visionneuse d’image
 
+egui-pop-viewport-navigator-label = Navigateur
+
+egui-pop-viewport-navigator-value = zoom { $zoom } %, centre { $x }, { $y }
+
 egui-pop-viewport-wheel-luminance = Luminance { $wheel }
 
 egui-pop-viewport-wheel-value = teinte { $hue }°, chroma { $chroma } %, luminance { $luminance }
+
+egui-pop-viewport-zoom-actual = 100 %
+
+egui-pop-viewport-zoom-fit = Ajuster
+
+egui-pop-viewport-zoom-in = Zoom avant
+
+egui-pop-viewport-zoom-out = Zoom arrière
 
 egui-pop-views-empty = Vide
 

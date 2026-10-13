@@ -25,6 +25,8 @@
 //!   picked in the image);
 //! - [`wheel`]: colour wheels (lift, gamma, gain) and a hue and
 //!   saturation picker, each with a luminance slider;
+//! - [`navigator`]: a zoom control and a navigator (a minimap), sharing
+//!   the viewport's state;
 //! - [`change`]: what the image tools share, the change they propose
 //!   and the hook that sees it (a veto, a redirect), and the form their
 //!   values take in a step;
@@ -60,6 +62,7 @@ pub mod gestures;
 pub mod gpu;
 pub mod histogram;
 pub mod hooks;
+pub mod navigator;
 pub mod overlay;
 pub mod source;
 pub mod strings;

@@ -45,6 +45,21 @@ pub const WHEEL_VALUE: StrKey = StrKey::new(
 /// The name of a colour wheel's luminance slider.
 pub const WHEEL_LUMINANCE: StrKey =
     StrKey::new("egui-pop-viewport-wheel-luminance", "{ $wheel } luminance");
+/// The navigator's accessible name, unless the application gives one.
+pub const NAVIGATOR: StrKey = StrKey::new("egui-pop-viewport-navigator-label", "Navigator");
+/// The navigator's accessible value: the zoom and the centre in view.
+pub const NAVIGATOR_VALUE: StrKey = StrKey::new(
+    "egui-pop-viewport-navigator-value",
+    "zoom { $zoom } %, centre { $x }, { $y }",
+);
+/// The zoom control's button one ladder step down.
+pub const ZOOM_OUT: StrKey = StrKey::new("egui-pop-viewport-zoom-out", "Zoom out");
+/// The zoom control's button one ladder step up.
+pub const ZOOM_IN: StrKey = StrKey::new("egui-pop-viewport-zoom-in", "Zoom in");
+/// The zoom control's button fitting the image.
+pub const ZOOM_FIT: StrKey = StrKey::new("egui-pop-viewport-zoom-fit", "Fit");
+/// The zoom control's button showing one image pixel per screen pixel.
+pub const ZOOM_ACTUAL: StrKey = StrKey::new("egui-pop-viewport-zoom-actual", "100 %");
 
 /// Every string the viewport shows, for catalogues and tests.
 pub const ALL: &[StrKey] = &[
@@ -58,6 +73,12 @@ pub const ALL: &[StrKey] = &[
     CURVE_VALUE_SELECTED,
     WHEEL_VALUE,
     WHEEL_LUMINANCE,
+    NAVIGATOR,
+    NAVIGATOR_VALUE,
+    ZOOM_OUT,
+    ZOOM_IN,
+    ZOOM_FIT,
+    ZOOM_ACTUAL,
 ];
 
 #[cfg(test)]

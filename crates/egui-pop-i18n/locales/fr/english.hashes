@@ -265,8 +265,14 @@ egui-pop-viewport-histogram-label 957634470d7a6999
 egui-pop-viewport-histogram-value dde5fc725374c2d0
 egui-pop-viewport-histogram-value-log c8d4f5366b1933e5
 egui-pop-viewport-label 51f6d59dcf87b88e
+egui-pop-viewport-navigator-label 8a16ed40ed2d7514
+egui-pop-viewport-navigator-value d55c9d4d71c145d0
 egui-pop-viewport-wheel-luminance 3c4cae8e63a22ee6
 egui-pop-viewport-wheel-value ee809a237d899180
+egui-pop-viewport-zoom-actual 2740820b77106913
+egui-pop-viewport-zoom-fit d584f3a86901a72a
+egui-pop-viewport-zoom-in 4bacd41ea7477971
+egui-pop-viewport-zoom-out b9ce99e5b371d7f8
 egui-pop-views-empty 43004eaa0e260734
 egui-pop-views-failed 2648f0a77a9febff
 egui-pop-views-list 52d27082aa325209

@@ -9,6 +9,13 @@ egui minor.
 
 ### Added
 
+- A zoom control and a navigator (`viewport::navigator`), sharing a
+  viewport's state: `ZoomControl` steps the zoom ladder, fits and shows
+  100 %; `Navigator` shows the whole image (the application's proxy)
+  with a frame around the part in view, which a drag pans, a press
+  elsewhere centres, the wheel zooms and a double click fits, with keys
+  when focused. Their changes go through their hook, then the
+  viewport's `before_view`, and come out as the viewport's signals.
 - Colour wheels (`viewport::wheel::ColorWheel`): `offset` for the lift,
   gamma and gain wheels of colour grading (neutral at the centre,
   relative drags, a signed luminance) and `picker` for hue and
