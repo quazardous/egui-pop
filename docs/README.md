@@ -33,6 +33,9 @@ devtools; every feature's moments reachable as steps (ADR 0011).
   auxiliary windows, arrangements, strips and indicators, the window's
   own frame, scale and the interface zoom, the keymap at run time, hooks
   around the shell.
+- [Hosts and components](hosts.md): what can live where (panels,
+  palettes, auxiliary windows, dialogs, overlays, the status bar), and
+  why a combination is not supported.
 - [The image viewport](viewport.md): tiles from a source the application
   implements; wide gamut and HDR.
 - [Image tools](image-tools.md): a histogram with clipping markers and
