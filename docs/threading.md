@@ -519,6 +519,93 @@ What the scopes show:
 - Wakeups reach 60 per second under load (one per frame), so coalescing
   them (follow-up 1) matters for power, not for frame time.
 
+### 5.1 The tile intake off the interface thread (proof of concept)
+
+Follow-up 3, as two opt-in settings of `ViewportState` (the default is
+unchanged):
+
+- `set_prepare_on_worker(true)`: the tile sink converts each tile on
+  the thread that delivers it, the source's worker (the display
+  transform on the CPU path, the f32 to f16 texels on the GPU path).
+  The interface thread only hands a ready image to egui (or ready
+  texels to the paint callback). A tile converted with a display
+  transform replaced meanwhile is shown, marked stale and asked for
+  again.
+- `set_upload_budget(UploadBudget::bytes(n))` (or `::tiles(n)`): a frame
+  uploads at most that much (at least one tile). Tiles wait in a queue
+  ordered as GIMP orders its work: the visible area first (the proxy,
+  then the view's scale, then other scales), then the rest nearest the
+  view's centre. When the view pans or zooms the order changes, and
+  nothing waiting is dropped (a test, "leftover tiles survive a pan",
+  holds it); only a changed region drops the waiting tiles it covers.
+
+The `threading` example runs the tile storm in four variants (the
+default, conversion on the workers, a 1 MiB budget, both), views held
+for 30 frames so they can fill, and the combined load with both. It
+also measures the cost side: the time from a view change to the first
+full-resolution tile uploaded and drawn for it, and to every wanted
+tile on screen (a view moved on before that is not counted; with a
+0.1 s settle before exact tiles are asked for, 100 ms of each latency
+is the settle).
+
+Second run (2026-10-13, comparable conditions, the same job and
+machine, all rows from one run). Frame build time on the interface
+thread, in ms; uploads are textures handed to egui in one frame:
+
+| scenario | p50 | p95 | p99 | max | over budget | uploads/frame (max) | MB/frame (max) | first full-res p50 / max | views with one | all tiles p50 / max | tiles served |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| tiles (documented baseline, first run) | 0.32 | 21.56 | 69.02 | 102.22 | 24 | 19 | 4.7 | | | | |
+| tiles (default) | 0.32 | 20.17 | 41.52 | 61.69 | 23 | 10 | 2.6 | 141 / 159 | 22 / 49 | 125 / 185 | 224 |
+| tiles, budget 1 MiB | 0.32 | 22.31 | 24.82 | 25.86 | 27 | 5 | 1.0 | 140 / 157 | 22 / 49 | 125 / 156 | 226 |
+| tiles, conversion on workers | 0.32 | 0.44 | 0.48 | 0.51 | 0 | 4 | 0.8 | 119 / 119 | 23 / 49 | 102 / 120 | 163 |
+| tiles, both | 0.32 | 0.42 | 0.47 | 0.58 | 0 | 4 | 1.0 | 119 / 119 | 23 / 49 | 102 / 119 | 162 |
+| views held (default) | 0.32 | 11.72 | 28.49 | 50.75 | 9 | 9 | 2.1 | 146 / 151 | 10 / 13 | 165 / 300 | 104 |
+| views held, both | 0.31 | 0.39 | 0.44 | 0.48 | 0 | 4 | 1.0 | 135 / 136 | 10 / 13 | 170 / 337 | 104 |
+| all (default) | 0.80 | 17.35 | 25.91 | 31.83 | 20 | 5 | 1.3 | 141 / 157 | 20 / 49 | 124 / 157 | 157 |
+| all, both | 0.79 | 1.04 | 1.12 | 1.42 | 0 | 3 | 0.5 | 118 / 118 | 22 / 49 | 101 / 118 | 125 |
+
+The default storm measured lower this run than the first (p99 42
+against 69 ms): the same code, another run; compare rows of one run.
+
+What the scopes show: `pop.tiles.receive` on the interface thread goes
+from 61 ms at most to 0.013 ms; the work moves to the workers
+(`pop.tiles.prepare`, 6.5 ms per tile at most), where it lengthens each
+tile's computation.
+
+**Verdict.**
+
+- **Keep the conversion on the workers.** It removes the tile storm
+  from the interface thread entirely (p99 42 to 0.5 ms, no frame over
+  budget, the combined load from 26 to 1.1 ms p99), and the first
+  full-resolution tile shows sooner (141 to 119 ms after a view
+  change, 146 to 135 ms with views held), since the interface no
+  longer stalls the frame that draws it. Its cost is on the workers:
+  in the storm they serve about a quarter fewer tiles (224 to 163)
+  and more requests are cancelled before being served, so fewer views
+  fill completely before the next move (21 to 9 of 49); with views
+  held, a view fills slightly later (170 against 165 ms at the
+  median). A source with spare workers does not see it. It should
+  become the default once a source can opt out (one that already
+  delivers display pixels from a GPU has nothing to convert).
+- **The upload budget alone is not enough**: it caps the spike (max
+  102 or 62 ms to 26 ms) but each tile still costs its conversion on
+  the interface thread, so frames stay over budget. With the
+  conversion on the workers, it no longer limits anything in this
+  harness (the workers deliver at most four tiles a frame here): the
+  headless harness has no GPU, so the cost it bounds, the copy to the
+  GPU at the render, is not measured. Keep it, off by default, as the
+  guard for fast sources (a cache, a GPU pipeline) and slow uploads;
+  its price is latency to fill a view (a 1 MiB budget is about 32
+  frames for a 4K view in 8-bit RGBA), which the visible-first order
+  keeps away from what the user looks at.
+- **Not done: a worker rendering the composed view into its own wgpu
+  texture** (follow-up 9). This harness builds frames without a GPU and
+  cannot measure it; it needs a timing job with a device (the box's GPU
+  job) and the delegated surface of section 4. With the conversion on
+  the workers, the interface thread's remaining tile work is the
+  texture copy at the render; the next measure should be that copy on
+  a real device before building the surface.
+
 ## 6. Proposal: a threading model for egui-pop
 
 ### 6.1 Rules
@@ -585,7 +672,9 @@ graphs, scopes and histograms.
    lock the painting holds.
 3. Viewport: an upload budget per frame (tiles and bytes), the rest
    carried over; the CPU display transform and the f32 to f16
-   conversion moved to the sink's (worker) side.
+   conversion moved to the sink's (worker) side. Done as an opt-in
+   proof of concept (section 5.1): keep the conversion on the workers
+   and make it the default; keep the budget as an opt-in guard.
 4. `App::logic` runs twice per eframe frame (from `eframe::App::logic`
    and again from `App::show`): run it once.
 5. A thread-safe journal (`SharedJournal`) and a channel-backed `Host`
@@ -599,6 +688,7 @@ graphs, scopes and histograms.
    queue (drop cancelled jobs), the tree's inbox, PTY input, one
    waiting thread for actionable notifications.
 9. The delegated surface (section 4) in the viewport crate, then the
-   viewport's tiles on it.
+   viewport's tiles on it. First measure the texture copy at the render on a real
+   device (section 5.1).
 10. egui-pop's interface kernel on its own thread: not recommended
     (section 3.5); for the owner to decide.
