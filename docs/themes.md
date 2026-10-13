@@ -57,41 +57,72 @@ app.handle().theme().set(ThemeSpec::new("gruvbox-dark").accent("amber"));
 See [Design tokens](tokens.md) for the order a theme is resolved in and
 how to write a theme of your own.
 
-| `pop-dark` | `pop-light` | `pop-high-contrast` |
-|---|---|---|
-| ![pop-dark](screenshots/overview-pop-dark.png) | ![pop-light](screenshots/overview-pop-light.png) | ![pop-high-contrast](screenshots/overview-pop-high-contrast.png) |
+Every built-in theme is shown at full size [below](#the-built-in-themes).
 
 ## The built-in themes
 
-Each one as the gallery's overview page shows it, reduced.
+Each one as the gallery's overview page shows it, at full size (a
+1280x800 window, one pixel per point); click an image to open it alone.
 
-<table>
-  <tr>
-    <td align="center"><img src="screenshots/themes/pop-dark.png" width="200" alt="pop-dark"><br><code>pop-dark</code></td>
-    <td align="center"><img src="screenshots/themes/pop-light.png" width="200" alt="pop-light"><br><code>pop-light</code></td>
-    <td align="center"><img src="screenshots/themes/pop-high-contrast.png" width="200" alt="pop-high-contrast"><br><code>pop-high-contrast</code></td>
-  </tr>
-  <tr>
-    <td align="center"><img src="screenshots/themes/github-light.png" width="200" alt="github-light"><br><code>github-light</code></td>
-    <td align="center"><img src="screenshots/themes/github-dark.png" width="200" alt="github-dark"><br><code>github-dark</code></td>
-    <td align="center"><img src="screenshots/themes/github-light-high-contrast.png" width="200" alt="github-light-high-contrast"><br><code>github-light-high-contrast</code></td>
-  </tr>
-  <tr>
-    <td align="center"><img src="screenshots/themes/github-dark-high-contrast.png" width="200" alt="github-dark-high-contrast"><br><code>github-dark-high-contrast</code></td>
-    <td align="center"><img src="screenshots/themes/catppuccin-latte.png" width="200" alt="catppuccin-latte"><br><code>catppuccin-latte</code></td>
-    <td align="center"><img src="screenshots/themes/catppuccin-mocha.png" width="200" alt="catppuccin-mocha"><br><code>catppuccin-mocha</code></td>
-  </tr>
-  <tr>
-    <td align="center"><img src="screenshots/themes/one-light.png" width="200" alt="one-light"><br><code>one-light</code></td>
-    <td align="center"><img src="screenshots/themes/one-dark-pro.png" width="200" alt="one-dark-pro"><br><code>one-dark-pro</code></td>
-    <td align="center"><img src="screenshots/themes/solarized-light.png" width="200" alt="solarized-light"><br><code>solarized-light</code></td>
-  </tr>
-  <tr>
-    <td align="center"><img src="screenshots/themes/solarized-dark.png" width="200" alt="solarized-dark"><br><code>solarized-dark</code></td>
-    <td align="center"><img src="screenshots/themes/gruvbox-light.png" width="200" alt="gruvbox-light"><br><code>gruvbox-light</code></td>
-    <td align="center"><img src="screenshots/themes/gruvbox-dark.png" width="200" alt="gruvbox-dark"><br><code>gruvbox-dark</code></td>
-  </tr>
-</table>
+### `pop-dark`
+
+<a href="screenshots/themes/pop-dark.png"><img src="screenshots/themes/pop-dark.png" width="100%" alt="The gallery's overview in pop-dark"></a>
+
+### `pop-light`
+
+<a href="screenshots/themes/pop-light.png"><img src="screenshots/themes/pop-light.png" width="100%" alt="The gallery's overview in pop-light"></a>
+
+### `pop-high-contrast`
+
+<a href="screenshots/themes/pop-high-contrast.png"><img src="screenshots/themes/pop-high-contrast.png" width="100%" alt="The gallery's overview in pop-high-contrast"></a>
+
+### `github-light`
+
+<a href="screenshots/themes/github-light.png"><img src="screenshots/themes/github-light.png" width="100%" alt="The gallery's overview in github-light"></a>
+
+### `github-dark`
+
+<a href="screenshots/themes/github-dark.png"><img src="screenshots/themes/github-dark.png" width="100%" alt="The gallery's overview in github-dark"></a>
+
+### `github-light-high-contrast`
+
+<a href="screenshots/themes/github-light-high-contrast.png"><img src="screenshots/themes/github-light-high-contrast.png" width="100%" alt="The gallery's overview in github-light-high-contrast"></a>
+
+### `github-dark-high-contrast`
+
+<a href="screenshots/themes/github-dark-high-contrast.png"><img src="screenshots/themes/github-dark-high-contrast.png" width="100%" alt="The gallery's overview in github-dark-high-contrast"></a>
+
+### `catppuccin-latte`
+
+<a href="screenshots/themes/catppuccin-latte.png"><img src="screenshots/themes/catppuccin-latte.png" width="100%" alt="The gallery's overview in catppuccin-latte"></a>
+
+### `catppuccin-mocha`
+
+<a href="screenshots/themes/catppuccin-mocha.png"><img src="screenshots/themes/catppuccin-mocha.png" width="100%" alt="The gallery's overview in catppuccin-mocha"></a>
+
+### `one-light`
+
+<a href="screenshots/themes/one-light.png"><img src="screenshots/themes/one-light.png" width="100%" alt="The gallery's overview in one-light"></a>
+
+### `one-dark-pro`
+
+<a href="screenshots/themes/one-dark-pro.png"><img src="screenshots/themes/one-dark-pro.png" width="100%" alt="The gallery's overview in one-dark-pro"></a>
+
+### `solarized-light`
+
+<a href="screenshots/themes/solarized-light.png"><img src="screenshots/themes/solarized-light.png" width="100%" alt="The gallery's overview in solarized-light"></a>
+
+### `solarized-dark`
+
+<a href="screenshots/themes/solarized-dark.png"><img src="screenshots/themes/solarized-dark.png" width="100%" alt="The gallery's overview in solarized-dark"></a>
+
+### `gruvbox-light`
+
+<a href="screenshots/themes/gruvbox-light.png"><img src="screenshots/themes/gruvbox-light.png" width="100%" alt="The gallery's overview in gruvbox-light"></a>
+
+### `gruvbox-dark`
+
+<a href="screenshots/themes/gruvbox-dark.png"><img src="screenshots/themes/gruvbox-dark.png" width="100%" alt="The gallery's overview in gruvbox-dark"></a>
 
 The images are refreshed with the others (`cargo xtask screenshots`, see
 the [README](../README.md#refreshing-the-screenshots)).

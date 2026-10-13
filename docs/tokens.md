@@ -121,16 +121,16 @@ Sources and licences are in [NOTICE](../NOTICE).
 | `solarized-light`, `solarized-dark` | Solarized-inspired Light, Dark | `pop-light`, `pop-dark` |
 | `gruvbox-light`, `gruvbox-dark` | Gruvbox-inspired Light, Dark | `pop-light`, `pop-dark` |
 
-![the editor-inspired themes](screenshots/themes.png)
+[![the editor-inspired themes](screenshots/themes.png)](themes.md#the-built-in-themes)
+
+Each one at full size: [the built-in themes](themes.md#the-built-in-themes).
 
 ## Composing a theme
 
-The three built-in themes, as the gallery's overview page shows them
-(captured headless; see CONTRIBUTING.md to regenerate):
-
-| `pop-dark` | `pop-light` | `pop-high-contrast` |
-|---|---|---|
-| ![pop-dark](screenshots/overview-pop-dark.png) | ![pop-light](screenshots/overview-pop-light.png) | ![pop-high-contrast](screenshots/overview-pop-high-contrast.png) |
+The three base themes, `pop-dark`, `pop-light` and `pop-high-contrast`,
+are shown at full size with the others in
+[the built-in themes](themes.md#the-built-in-themes) (captured headless;
+see CONTRIBUTING.md to regenerate).
 
 The compact density changes spacing and sizes only:
 

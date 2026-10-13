@@ -280,6 +280,10 @@ egui minor.
 - The window's own title bar is not drawn in full screen (`F11`), in the
   main window and in a detached panel's; it publishes no caption then,
   so the system's hit test sees only the client area.
+- The built-in themes' screenshots (docs/themes.md) are full size, 1282
+  px wide at one pixel per point, each shown at the page's width and
+  linked to its image; they were reduced to 400 px. docs/tokens.md
+  points to them instead of three squeezed overviews.
 - `Keymap::rebind` keeps the scope of the binding it replaces (the
   highest layer's below): the user's new keys for a surface or system
   shortcut stay in that scope instead of becoming global.

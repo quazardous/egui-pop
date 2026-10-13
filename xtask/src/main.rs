@@ -140,14 +140,6 @@ fn shots() -> Vec<Shot> {
     let settings_window = [Key("ctrl+comma"), Wait(0.5)];
     let mut all = vec![
         shot("overview-pop-dark", "overview", "pop-dark", &[], true),
-        shot("overview-pop-light", "overview", "pop-light", &[], false),
-        shot(
-            "overview-pop-high-contrast",
-            "overview",
-            "pop-high-contrast",
-            &[],
-            false,
-        ),
         Shot {
             density: "compact",
             ..shot(
