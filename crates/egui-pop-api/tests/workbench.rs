@@ -333,3 +333,61 @@ fn the_host_names_the_layouts_document_per_workspace_or_keeps_it() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn the_bottom_panel_lines_up_with_the_side_bars_as_the_setting_says() {
+    use egui_pop_api::workbench::{PanelAlignment, SETTING_PANEL_ALIGNMENT};
+    let set = |h: &mut Harness<'_, App>, a: PanelAlignment| {
+        egui_pop_core::lock(&h.state().handle().store())
+            .set(egui_pop_model::values::Set::new(
+                &format!("settings/{SETTING_PANEL_ALIGNMENT}"),
+                egui_pop_model::values::Change::To(egui_pop_model::values::Value::Choice(
+                    a.as_str().into(),
+                )),
+                Origin::User,
+            ))
+            .unwrap();
+        h.run();
+        h.run();
+    };
+    let rects = |h: &Harness<'_, App>| {
+        let snap = h.state().handle().debug_snapshot();
+        let r = |a: &str| {
+            let v: Vec<f32> = snap["workbench"]["rects"][a]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|x| x.as_f64().unwrap() as f32)
+                .collect();
+            egui::Rect::from_min_max(egui::pos2(v[0], v[1]), egui::pos2(v[2], v[3]))
+        };
+        (r("start_side"), r("end_side"), r("bottom"))
+    };
+    let mut h = harness(builder(false));
+    assert_eq!(
+        egui_pop_api::workbench::panel_alignment(h.state().handle()),
+        PanelAlignment::Justify,
+        "the default keeps the whole width"
+    );
+    let (start, end, bottom) = rects(&h);
+    assert!(bottom.left() <= start.left() && bottom.right() >= end.right());
+    assert!(start.bottom() <= bottom.top() + 1.0);
+    set(&mut h, PanelAlignment::Center);
+    let (start, end, bottom) = rects(&h);
+    assert!(bottom.left() >= start.right() - 1.0 && bottom.right() <= end.left() + 1.0);
+    assert!(start.bottom() > bottom.top(), "the side bars go down");
+    set(&mut h, PanelAlignment::Start);
+    let (start, end, bottom) = rects(&h);
+    assert!(bottom.left() <= start.left() && bottom.right() <= end.left() + 1.0);
+    assert!(end.bottom() > bottom.top());
+    set(&mut h, PanelAlignment::End);
+    let (start, end, bottom) = rects(&h);
+    assert!(bottom.left() >= start.right() - 1.0 && bottom.right() >= end.right());
+    assert!(start.bottom() > bottom.top());
+    // A builder's default.
+    let h = harness(builder(false).panel_alignment(PanelAlignment::Center));
+    assert_eq!(
+        egui_pop_api::workbench::panel_alignment(h.state().handle()),
+        PanelAlignment::Center
+    );
+}

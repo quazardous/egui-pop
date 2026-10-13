@@ -1509,6 +1509,7 @@ pub struct AppBuilder {
     wrap: Option<WrapUi>,
     on_exit: Vec<ExitFn>,
     name: Option<String>,
+    panel_alignment: crate::workbench::PanelAlignment,
 }
 
 /// Draws around the whole application (`AppBuilder::wrap`): gets the
@@ -1565,7 +1566,16 @@ impl AppBuilder {
             wrap: None,
             on_exit: Vec::new(),
             name: None,
+            panel_alignment: crate::workbench::PanelAlignment::Justify,
         }
+    }
+
+    /// The bottom panel's alignment by default (the
+    /// `workbench.panel_alignment` setting's default; `Justify`, the
+    /// whole width, unless given).
+    pub fn panel_alignment(mut self, alignment: crate::workbench::PanelAlignment) -> Self {
+        self.panel_alignment = alignment;
+        self
     }
 
     /// The application's name ("Helios"), apart from its window's title
@@ -1714,7 +1724,7 @@ impl AppBuilder {
         };
         app.handle.0.edge_to_edge.set(self.edge_to_edge);
         *app.handle.0.name.borrow_mut() = self.name.unwrap_or_default();
-        app.framework(self.theme, self.themes, modes)
+        app.framework(self.theme, self.themes, modes, self.panel_alignment)
             .expect("the framework's registrations are valid");
         app.install_collectors();
         for i in 0..app.plugins.len() {
@@ -1901,6 +1911,7 @@ impl App {
         theme: ThemeSpec,
         themes: Themes,
         modes: FocusModes,
+        panel_alignment: crate::workbench::PanelAlignment,
     ) -> Result<(), CtxError> {
         let owner = OwnerId::FRAMEWORK;
         let handle = self.handle.clone();
@@ -1996,6 +2007,17 @@ impl App {
         );
         ctx.setting(SETTING_FOCUS, focus)?;
         crate::zoom::register(&mut ctx)?;
+        ctx.setting(
+            crate::workbench::SETTING_PANEL_ALIGNMENT,
+            egui_pop_model::values::Descriptor::choice(
+                "Panel alignment",
+                &crate::workbench::PanelAlignment::CHOICES,
+                panel_alignment.as_str(),
+            )
+            .description(
+                "How the bottom panel lines up with the side bars: the whole width (justify), between them (center), under the start one (start) or under the end one (end).",
+            ),
+        )?;
         ctx.service(&FOCUS_MODE, modes)?;
         ctx.step(
             crate::steps::StepSpec::new(

@@ -96,6 +96,12 @@ kept in the layout and repaired before the window opens. The window is
 titled with the panel and the application's name (`AppBuilder::name`,
 "Filmstrip — Helios"), not the main window's whole title.
 
+The bottom panel spans the window's whole width by default. The
+`workbench.panel_alignment` setting lines it up otherwise, as VS Code's
+panel alignment does: `center` (between the side bars, which go down to
+the bottom), `start` (under the start side bar) or `end` (under the end
+one); `AppBuilder::panel_alignment` gives the default.
+
 ## Where the layout is kept
 
 With a persistence directory (`AppBuilder::persist`), the layout is

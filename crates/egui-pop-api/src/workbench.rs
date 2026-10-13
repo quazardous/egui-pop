@@ -62,6 +62,69 @@ pub const STEP_DETACH: StepId = StepId::from_static("workbench.detach");
 pub const STEP_ATTACH: StepId = StepId::from_static("workbench.attach");
 pub const STEP_CLOSE_WINDOW: StepId = StepId::from_static("workbench.close_window");
 
+/// The setting: how the bottom panel lines up with the side bars, as
+/// VS Code's panel alignment (see [`PanelAlignment`]).
+pub const SETTING_PANEL_ALIGNMENT: egui_pop_model::ids::SettingId =
+    egui_pop_model::ids::SettingId::from_static("workbench.panel_alignment");
+
+/// How the bottom panel lines up with the side bars.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum PanelAlignment {
+    /// The window's whole width, under both side bars (the default).
+    #[default]
+    Justify,
+    /// Between the side bars, which go down to the bottom.
+    Center,
+    /// From the start edge, under the start side bar, to the end side bar.
+    Start,
+    /// From the start side bar to the end edge, under the end side bar.
+    End,
+}
+
+impl PanelAlignment {
+    /// The setting's choices, in order.
+    pub const CHOICES: [&'static str; 4] = ["justify", "center", "start", "end"];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            PanelAlignment::Justify => "justify",
+            PanelAlignment::Center => "center",
+            PanelAlignment::Start => "start",
+            PanelAlignment::End => "end",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<PanelAlignment> {
+        [
+            PanelAlignment::Justify,
+            PanelAlignment::Center,
+            PanelAlignment::Start,
+            PanelAlignment::End,
+        ]
+        .into_iter()
+        .find(|a| a.as_str() == s)
+    }
+
+    /// The order the side and bottom areas are drawn in: an area drawn
+    /// earlier spans the whole height (a side bar) or width (the bottom).
+    fn order(self) -> [Area; 3] {
+        match self {
+            PanelAlignment::Justify => [Area::Bottom, Area::StartSide, Area::EndSide],
+            PanelAlignment::Center => [Area::StartSide, Area::EndSide, Area::Bottom],
+            PanelAlignment::Start => [Area::EndSide, Area::Bottom, Area::StartSide],
+            PanelAlignment::End => [Area::StartSide, Area::Bottom, Area::EndSide],
+        }
+    }
+}
+
+/// The bottom panel's alignment, as the setting says now.
+pub fn panel_alignment(app: &AppHandle) -> PanelAlignment {
+    egui_pop_core::lock(&app.store())
+        .get(&format!("settings/{SETTING_PANEL_ALIGNMENT}"))
+        .and_then(|e| e.value.as_choice().and_then(PanelAlignment::parse))
+        .unwrap_or_default()
+}
+
 /// Where a panel detached without a known place opens, and its size.
 pub const DETACHED: [f32; 4] = [80.0, 80.0, 480.0, 360.0];
 
@@ -762,7 +825,7 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
             });
     }
     let folded = app.workbench_mut().layout.folded.clone();
-    for area in [Area::Bottom, Area::StartSide, Area::EndSide] {
+    for area in panel_alignment(app).order() {
         if !areas.contains(&area) || !visible_in(app, area) || folded.contains(&area) {
             continue;
         }

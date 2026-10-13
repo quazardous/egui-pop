@@ -9,6 +9,12 @@ egui minor.
 
 ### Added
 
+- The bottom panel's alignment, as VS Code's: the
+  `workbench.panel_alignment` setting (`justify`, the whole width, by
+  default; `center`, `start`, `end`), `workbench::PanelAlignment`, and
+  `AppBuilder::panel_alignment` for another default. The gallery's
+  workbench page sets it. Translated in French.
+
 - The layout's document comes from the host: `Host::layout_document`
   (`layout` by default, a workspace's own such as
   `workspaces/photos/layout`, or `None` when the host keeps the layout

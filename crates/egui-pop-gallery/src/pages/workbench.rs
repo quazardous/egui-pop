@@ -129,6 +129,15 @@ fn show(ui: &mut Ui, app: &AppHandle) {
         app.set_context(VETO, if veto { "true" } else { "false" });
     }
     ui.weak("Drag a tab onto another area: it goes there when its rules allow it; the drop hint says why not.");
+    // The bottom panel's alignment, a setting (as VS Code's).
+    let store = app.store();
+    let path = format!("settings/{}", workbench::SETTING_PANEL_ALIGNMENT);
+    let descriptor = egui_pop::core::lock(&store)
+        .get(&path)
+        .map(|e| e.descriptor.clone());
+    if let Some(d) = descriptor {
+        egui_pop::core::param::param(ui, &d, egui_pop::core::param::Mode::Bound(&store, &path));
+    }
 
     section(ui, "Placement rules");
     egui::Grid::new("gallery.workbench.rules")

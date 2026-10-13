@@ -545,3 +545,15 @@ setting-window-frame =
 setting-window-frame-choice-own = propre
 
 setting-window-frame-choice-system = système
+
+setting-workbench-panel-alignment =
+    .description = Comment le panneau du bas s’aligne sur les barres latérales : toute la largeur (justifié), entre elles (centré), sous celle du début (début) ou sous celle de la fin (fin).
+    .label = Alignement du panneau
+
+setting-workbench-panel-alignment-choice-center = centré
+
+setting-workbench-panel-alignment-choice-end = fin
+
+setting-workbench-panel-alignment-choice-justify = justifié
+
+setting-workbench-panel-alignment-choice-start = début

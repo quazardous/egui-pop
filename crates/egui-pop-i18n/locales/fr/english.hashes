@@ -260,3 +260,9 @@ setting-window-frame-choice-own f03cb24f9dff8cb7
 setting-window-frame-choice-system 86937a88d8b574ba
 setting-window-frame.description 9bbf4a376a8d1015
 setting-window-frame.label 48659a05a447c4ea
+setting-workbench-panel-alignment-choice-center 2eafed7b6be1f092
+setting-workbench-panel-alignment-choice-end a7a6f78472f64cd8
+setting-workbench-panel-alignment-choice-justify bde531151896fcb7
+setting-workbench-panel-alignment-choice-start 1c7249d10be859d7
+setting-workbench-panel-alignment.description e4d1d1a4e48451a1
+setting-workbench-panel-alignment.label 64c1815d9c3ca57e

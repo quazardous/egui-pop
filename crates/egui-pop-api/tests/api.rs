@@ -662,13 +662,17 @@ fn settings_persist_and_come_back_with_their_plugin() {
         })
     };
     let app = build(App::builder().persist(&dir).plugin(make(&l)));
-    // The framework's own (the focus mode, the interface zoom) come
-    // first.
+    // The framework's own (the focus mode, the interface zoom, the
+    // panel's alignment) come first.
     let settings = app.handle().settings();
-    assert_eq!(settings.len(), 3);
+    assert_eq!(settings.len(), 4);
     assert_eq!(settings[0].id, egui_pop_api::SETTING_FOCUS);
     assert_eq!(settings[1].id, egui_pop_api::zoom::SETTING_ZOOM);
-    assert_eq!(settings[2].section, "prefs");
+    assert_eq!(
+        settings[2].id,
+        egui_pop_api::workbench::SETTING_PANEL_ALIGNMENT
+    );
+    assert_eq!(settings[3].section, "prefs");
     egui_pop_core::lock(&app.handle().store())
         .set(egui_pop_model::values::Set::new(
             "settings/prefs.size",

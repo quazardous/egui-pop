@@ -546,3 +546,15 @@ setting-window-frame =
 setting-window-frame-choice-own = own
 
 setting-window-frame-choice-system = system
+
+setting-workbench-panel-alignment =
+    .description = How the bottom panel lines up with the side bars: the whole width (justify), between them (center), under the start one (start) or under the end one (end).
+    .label = Panel alignment
+
+setting-workbench-panel-alignment-choice-center = center
+
+setting-workbench-panel-alignment-choice-end = end
+
+setting-workbench-panel-alignment-choice-justify = justify
+
+setting-workbench-panel-alignment-choice-start = start
