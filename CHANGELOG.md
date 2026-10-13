@@ -9,6 +9,12 @@ egui minor.
 
 ### Added
 
+- `egui-pop-imaging` (the facade's `imaging` feature,
+  `egui_pop::imaging`): the image tools' changes as steps of an
+  application. `histogram`, `curve`, `wheel` and `zoom` give a tool's
+  hook that runs each finished change as `histogram.drag`,
+  `curve.change`, `wheel.change` or `zoom.change`, where plugins veto,
+  redirect, replace or follow it; `ImagingPlugin` declares them.
 - A zoom control and a navigator (`viewport::navigator`), sharing a
   viewport's state: `ZoomControl` steps the zoom ladder, fits and shows
   100 %; `Navigator` shows the whole image (the application's proxy)

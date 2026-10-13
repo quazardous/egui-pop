@@ -24,6 +24,10 @@ phosphor = ["egui-pop-api/phosphor"]
 ## The image viewport, thumbnails and the histogram
 ## (`egui-pop-viewport`, re-exported as `egui_pop::viewport`).
 viewport = ["dep:egui-pop-viewport"]
+## The image tools' steps: the histogram's drag, curves, colour wheels,
+## the zoom control and navigator, each change a step of the application
+## (`egui-pop-imaging`, re-exported as `egui_pop::imaging`).
+imaging = ["viewport", "dep:egui-pop-imaging"]
 ## Data views: a live tree, a list and a data table
 ## (`egui-pop-views`, re-exported as `egui_pop::views`).
 views = ["dep:egui-pop-views"]
@@ -80,6 +84,7 @@ egui-pop-model.workspace = true
 egui-pop-core.workspace = true
 egui-pop-api.workspace = true
 egui-pop-viewport = { workspace = true, optional = true }
+egui-pop-imaging = { workspace = true, optional = true }
 egui-pop-i18n = { workspace = true, optional = true }
 egui-pop-views = { workspace = true, optional = true }
 egui-pop-editors = { workspace = true, optional = true }

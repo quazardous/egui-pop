@@ -54,6 +54,12 @@ pub use egui_pop_api as api;
 #[cfg(feature = "viewport")]
 pub use egui_pop_viewport as viewport;
 
+/// The image tools' steps: each change of the histogram's drag, a
+/// curve, a colour wheel, the zoom control or the navigator runs as a
+/// step of the application (feature `imaging`).
+#[cfg(feature = "imaging")]
+pub use egui_pop_imaging as imaging;
+
 /// Data views: a live tree, a list and a data table (feature `views`).
 #[cfg(feature = "views")]
 pub use egui_pop_views as views;
