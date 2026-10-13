@@ -9,6 +9,12 @@ egui minor.
 
 ### Added
 
+- A tree node's plain name apart from its label (`Node::with_name`,
+  `Node::name`), for labels with decorations: a rename starts from the
+  name, type-ahead searches names, and `tree.rename` and
+  `Signal::Rename` carry names. The gallery's tree page decorates its
+  documents with their size.
+
 - Tree rows carry an icon and widgets of the application's:
   `TreeView::icon` gives each node's icon (`icon::Source`), drawn
   between the triangle and the label; `TreeView::row_widgets` adds

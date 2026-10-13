@@ -926,6 +926,21 @@ fn the_tree_page_loads_lazily_follows_changes_and_vetoes_a_drop() {
     h.event(egui::Event::Text("ar".into()));
     h.run();
     assert!(h.query_by_label("Selected: Archive").is_some());
+    // A rename starts from the name; the decoration stays.
+    egui_pop_test::double_click(&mut h, "Documents");
+    run_until(&mut h, |h| h.query_by_label("notes.txt · 2 KB").is_some());
+    h.get_by_label("notes.txt · 2 KB").click();
+    h.run();
+    h.key_press(egui::Key::F2);
+    h.run();
+    h.key_press(egui::Key::Home);
+    h.event(egui::Event::Text("my-".into()));
+    h.key_press(egui::Key::Enter);
+    h.run();
+    h.run();
+    assert!(h.query_by_label("my-notes.txt · 2 KB").is_some());
+    egui_pop_test::double_click(&mut h, "Documents");
+    h.run();
     // A failing branch says why.
     egui_pop_test::double_click(&mut h, "Offline drive");
     run_until(&mut h, |h| {

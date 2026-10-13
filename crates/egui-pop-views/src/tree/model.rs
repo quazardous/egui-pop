@@ -17,10 +17,16 @@ use crate::select::Key;
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Node<K> {
     pub key: K,
+    /// What the row shows, decorations included.
     pub label: String,
     /// Whether it may have children (they are loaded when it is first
     /// expanded).
     pub branch: bool,
+    /// The plain name a rename starts from and type-ahead searches,
+    /// when the label carries more (a count, a state); `None`: the
+    /// label.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
 }
 
 impl<K> Node<K> {
@@ -29,6 +35,7 @@ impl<K> Node<K> {
             key,
             label: label.into(),
             branch: false,
+            name: None,
         }
     }
 
@@ -37,7 +44,19 @@ impl<K> Node<K> {
             key,
             label: label.into(),
             branch: true,
+            name: None,
         }
+    }
+
+    /// With a plain name apart from its label.
+    pub fn with_name(mut self, name: impl Into<String>) -> Self {
+        self.name = Some(name.into());
+        self
+    }
+
+    /// The plain name: the one given, else the label.
+    pub fn name(&self) -> &str {
+        self.name.as_deref().unwrap_or(&self.label)
     }
 }
 
@@ -136,7 +155,7 @@ pub enum Edit<K> {
         key: K,
         label: String,
     },
-    /// A node's label and kind.
+    /// A node's label, name and kind.
     Update(Node<K>),
     /// A branch to load again (`None`: the roots).
     Reload(Option<K>),

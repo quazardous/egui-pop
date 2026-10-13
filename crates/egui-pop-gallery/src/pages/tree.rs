@@ -1,7 +1,8 @@
 //! The tree page: a live tree over a simulated drive the page owns,
 //! answered from a thread after a delay; edits made while branches are
-//! open; drag and drop with a veto; rename in place; icons and per-row
-//! toggles; a branch of 100 000 files.
+//! open; drag and drop with a veto; rename in place, from a name apart
+//! from a decorated label; icons and per-row toggles; a branch of
+//! 100 000 files.
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -69,12 +70,14 @@ fn drive() -> Drive {
                 .collect(),
         );
     }
+    // Labels decorated with a size, named apart: a rename starts from
+    // the name.
     d.insert(
         Some("documents".into()),
         vec![
             b("letters", "Letters"),
-            f("notes.txt", "notes.txt"),
-            f("report.pdf", "report.pdf"),
+            f("notes.txt", "notes.txt · 2 KB").with_name("notes.txt"),
+            f("report.pdf", "report.pdf · 18 pages").with_name("report.pdf"),
         ],
     );
     d.insert(
@@ -163,13 +166,20 @@ fn move_in_drive(drive: &Drive, keys: &[String], target: &str, position: Positio
     list.splice(at..at, moved);
 }
 
-fn rename_in_drive(drive: &Drive, key: &str, to: &str) {
+/// Renames a node in the drive, its label's decoration kept; returns
+/// the node as it is now.
+fn rename_in_drive(drive: &Drive, key: &str, to: &str) -> Option<Node<String>> {
     let mut d = drive.lock().unwrap_or_else(|e| e.into_inner());
-    for n in d.values_mut().flatten() {
-        if n.key == key {
-            n.label = to.to_string();
+    let n = d.values_mut().flatten().find(|n| n.key == key)?;
+    match n.name.take() {
+        Some(name) => {
+            let decoration = n.label.strip_prefix(&name).unwrap_or("").to_string();
+            n.label = format!("{to}{decoration}");
+            n.name = Some(to.to_string());
         }
+        None => n.label = to.to_string(),
     }
+    Some(n.clone())
 }
 
 /// What the rows' toggles set: the page's own marks on nodes.
@@ -309,7 +319,11 @@ fn show(ui: &mut Ui, app: &AppHandle, p: &mut PageState) {
                 target,
                 position,
             } => move_in_drive(&p.source.drive, keys, target, *position),
-            Signal::Rename { key, to, .. } => rename_in_drive(&p.source.drive, key, to),
+            Signal::Rename { key, to, .. } => {
+                if let Some(node) = rename_in_drive(&p.source.drive, key, to) {
+                    p.tree.handle().update(node);
+                }
+            }
             _ => {}
         }
         p.log.push(describe(&s));

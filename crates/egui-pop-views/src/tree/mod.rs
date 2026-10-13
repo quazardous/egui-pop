@@ -147,7 +147,7 @@ impl<K> TreeHandle<K> {
         });
     }
 
-    /// A node's label and kind.
+    /// A node's label, name and kind.
     pub fn update(&self, node: Node<K>) {
         self.push(Edit::Update(node));
     }
@@ -288,12 +288,13 @@ impl<K: Key> TreeState<K> {
         self.model.set_expanded(key, expanded);
     }
 
-    /// Starts renaming a node in place.
+    /// Starts renaming a node in place, from its plain name
+    /// ([`Node::name`]).
     pub fn rename(&mut self, key: &K) {
         if let Some(n) = self.model.node(key) {
             self.renaming = Some(Renaming {
                 key: key.clone(),
-                text: n.label.clone(),
+                text: n.name().to_string(),
                 focus: true,
             });
         }
@@ -369,7 +370,9 @@ pub enum Signal<K> {
         target: K,
         position: Position,
     },
-    /// A node renamed; the view shows the new name, the application
+    /// A node renamed (`from` and `to` are plain names, [`Node::name`]);
+    /// the view shows the new name (a node with a name of its own keeps
+    /// its label until the application updates it), the application
     /// renames it in its data.
     Rename {
         key: K,
@@ -638,7 +641,7 @@ impl<'a, K: Key> TreeView<'a, K> {
                                 egui_pop_core::a11y::name(
                                     &edit,
                                     WidgetType::TextEdit,
-                                    &tr_args(ui.ctx(), &s::RENAME, &[("name", &node.label)]),
+                                    &tr_args(ui.ctx(), &s::RENAME, &[("name", node.name())]),
                                 );
                                 if ren.focus {
                                     edit.request_focus();
@@ -884,7 +887,7 @@ impl<'a, K: Key> TreeView<'a, K> {
                     {
                         state.renaming = Some(Renaming {
                             key: n.key.clone(),
-                            text: n.label.clone(),
+                            text: n.name().to_string(),
                             focus: true,
                         });
                         return;
@@ -895,7 +898,7 @@ impl<'a, K: Key> TreeView<'a, K> {
                     let label_at = |j: usize| {
                         model
                             .node(&key_at(j))
-                            .map(|n| n.label.clone())
+                            .map(|n| n.name().to_string())
                             .unwrap_or_default()
                     };
                     if let Some(j) = nav::find(&search, cursor, nodes.len(), &label_at) {
@@ -1015,11 +1018,10 @@ impl<'a, K: Key> TreeView<'a, K> {
                 )
             }
             Action::Rename(key, to) => {
-                let from = state
-                    .model
-                    .node(&key)
-                    .map(|n| n.label.clone())
-                    .unwrap_or_default();
+                let Some(node) = state.model.node(&key).cloned() else {
+                    return;
+                };
+                let from = node.name().to_string();
                 if to.trim().is_empty() || to == from {
                     return;
                 }
@@ -1031,10 +1033,15 @@ impl<'a, K: Key> TreeView<'a, K> {
                     json!({ "tree": tree, "key": key, "from": from, "to": to }),
                     |args| {
                         let to = args["to"].as_str().ok_or("`to` is not a text")?.to_string();
-                        model.apply(Edit::Rename {
-                            key: key.clone(),
-                            label: to.clone(),
-                        });
+                        // A node with a name of its own keeps its label
+                        // (decorations the application rebuilds) until
+                        // the application updates it.
+                        let mut renamed = node;
+                        match &mut renamed.name {
+                            Some(name) => *name = to.clone(),
+                            None => renamed.label = to.clone(),
+                        }
+                        model.apply(Edit::Update(renamed));
                         done = to;
                         Ok(json!(done))
                     },

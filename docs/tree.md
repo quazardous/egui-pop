@@ -151,6 +151,19 @@ runs the command):
 | F2 | Rename in place (with `TreeView::rename(true)`); Enter keeps, Escape cancels |
 | Letters | Type-ahead: the next node whose name starts with what was typed in the last second |
 
+A label may carry decorations (a size, a count, a state): the source
+then gives the node its plain name apart, `Node::with_name`. A rename
+starts from the name and type-ahead searches names; `tree.rename` and
+`Signal::Rename` carry names, and the view keeps the decorated label
+until the application sends the node again (`TreeHandle::update`).
+
+```rust
+use egui_pop::views::tree::Node;
+
+let node = Node::leaf("notes".to_string(), "notes.txt · 2 KB").with_name("notes.txt");
+assert_eq!(node.name(), "notes.txt");
+```
+
 A click on the triangle or a double click opens a branch. With
 `TreeView::drag_drop(true)`, nodes (the selection, when the dragged node
 is in it) are dragged before, after or inside a node; a node never goes
@@ -217,5 +230,5 @@ assert_eq!(out.vetoed(), Some("the archive is read-only"));
 
 The gallery's `tree` page shows a simulated drive answered from a
 thread, edits made while branches are open, a veto on drops into one
-folder, icons and an eye and a lock on every row, and a branch of
-100 000 files.
+folder, icons and an eye and a lock on every row, files named apart
+from their decorated labels, and a branch of 100 000 files.

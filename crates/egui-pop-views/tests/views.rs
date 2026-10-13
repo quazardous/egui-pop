@@ -389,10 +389,32 @@ fn a_hundred_thousand_nodes_build_a_screenful() {
     );
 }
 
-/// A tree whose rows carry an icon and their own widgets.
+/// Files labelled with their size, named apart.
+struct Decorated(Source);
+
+impl TreeSource<String> for Decorated {
+    fn load(&self, parent: Option<&String>, sink: Sink<String>) {
+        let nodes = children(parent)
+            .into_iter()
+            .map(|n| {
+                if n.branch {
+                    n
+                } else {
+                    let name = n.label.clone();
+                    Node::leaf(n.key, format!("{name} · 2 KB")).with_name(name)
+                }
+            })
+            .collect();
+        self.0.asked.lock().unwrap().push(parent.cloned());
+        sink.deliver(nodes);
+    }
+}
+
+/// A tree whose rows carry an icon and their own widgets, and whose
+/// files are decorated.
 struct RichApp {
     state: TreeState<String>,
-    source: Source,
+    source: Decorated,
     hidden: std::collections::HashSet<String>,
     signals: Vec<tree::Signal<String>>,
 }
@@ -400,10 +422,10 @@ struct RichApp {
 fn rich_harness() -> Harness<'static, RichApp> {
     let app = RichApp {
         state: TreeState::new(),
-        source: Source {
+        source: Decorated(Source {
             asked: Arc::default(),
             slow: None,
-        },
+        }),
         hidden: Default::default(),
         signals: Vec::new(),
     };
@@ -414,6 +436,7 @@ fn rich_harness() -> Harness<'static, RichApp> {
                 let hidden = &mut t.hidden;
                 let out = TreeView::<String>::new("rich")
                     .label("Rich")
+                    .rename(true)
                     .icon(|n| Some(if n.branch { Icon::Folder } else { Icon::File }.into()))
                     .row_widgets(|ui, n| {
                         let on = hidden.contains(&n.key);
@@ -457,6 +480,39 @@ fn row_widgets_act_on_their_row_without_selecting_it() {
     h.get_by_label("Hide Folder C").click();
     h.run();
     assert!(h.state().hidden.is_empty());
+}
+
+#[test]
+fn a_rename_starts_from_the_name_not_the_decorated_label() {
+    let mut h = rich_harness();
+    h.run();
+    h.state_mut().state.set_expanded(&"a".into(), true);
+    h.run();
+    h.get_by_label("File a1 · 2 KB").click();
+    h.run();
+    h.key_press(Key::F2);
+    h.run();
+    h.key_press(Key::End);
+    h.event(egui::Event::Text("0".into()));
+    h.key_press(Key::Enter);
+    h.run();
+    assert!(h.state().signals.iter().any(|s| matches!(s,
+        tree::Signal::Rename { key, from, to } if key == "a/1" && from == "File a1" && to == "File a10")));
+    let node = h.state().state.model().node(&"a/1".into()).unwrap().clone();
+    assert_eq!(node.name(), "File a10");
+    assert_eq!(
+        node.label, "File a1 · 2 KB",
+        "until the application updates it"
+    );
+    // Type-ahead searches names.
+    h.get_by_label("Folder A").click();
+    h.run();
+    h.event(egui::Event::Text("file a3".into()));
+    h.run();
+    assert_eq!(
+        h.state().state.selection().cursor().map(String::as_str),
+        Some("a/3")
+    );
 }
 
 struct Rows(Vec<(u32, String, u32)>);
