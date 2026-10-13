@@ -124,6 +124,8 @@ pub const PAIRS: &[Pair] = &[
     text("terminal.foreground", "terminal.background"),
     text("terminal.foreground", "terminal.selection"),
     ui("terminal.cursor", "terminal.background"),
+    // A cursor's strokes against the ring that carries them over images.
+    ui("cursor.fill", "cursor.outline"),
     // Things that must be seen.
     ui("border.strong", "surface.panel"),
     ui("border.strong", "surface.raised"),

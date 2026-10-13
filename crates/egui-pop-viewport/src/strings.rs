@@ -52,6 +52,12 @@ pub const NAVIGATOR_VALUE: StrKey = StrKey::new(
     "egui-pop-viewport-navigator-value",
     "zoom { $zoom } %, centre { $x }, { $y }",
 );
+/// The loupe's readout: the values as displayed.
+pub const LOUPE_DISPLAY: StrKey = StrKey::new("egui-pop-viewport-loupe-display", "display");
+/// The loupe's readout: the values the source gave.
+pub const LOUPE_SCENE: StrKey = StrKey::new("egui-pop-viewport-loupe-scene", "scene");
+/// The loupe's readout when there is no value to show.
+pub const LOUPE_NONE: StrKey = StrKey::new("egui-pop-viewport-loupe-none", "no value");
 /// The zoom control's button one ladder step down.
 pub const ZOOM_OUT: StrKey = StrKey::new("egui-pop-viewport-zoom-out", "Zoom out");
 /// The zoom control's button one ladder step up.
@@ -75,6 +81,9 @@ pub const ALL: &[StrKey] = &[
     WHEEL_LUMINANCE,
     NAVIGATOR,
     NAVIGATOR_VALUE,
+    LOUPE_DISPLAY,
+    LOUPE_SCENE,
+    LOUPE_NONE,
     ZOOM_OUT,
     ZOOM_IN,
     ZOOM_FIT,

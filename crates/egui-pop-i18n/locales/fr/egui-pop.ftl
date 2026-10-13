@@ -625,6 +625,12 @@ egui-pop-viewport-histogram-value-log = { $channels } ({ $bins } classes, logari
 
 egui-pop-viewport-label = Visionneuse d’image
 
+egui-pop-viewport-loupe-display = affichage
+
+egui-pop-viewport-loupe-none = aucune valeur
+
+egui-pop-viewport-loupe-scene = scène
+
 egui-pop-viewport-navigator-label = Navigateur
 
 egui-pop-viewport-navigator-value = zoom { $zoom } %, centre { $x }, { $y }

@@ -19,10 +19,12 @@ use egui::{
     WidgetType, pos2,
 };
 
+use crate::cursor::{self, Cursor, CursorQuery, Shown, Tool};
 use crate::debug;
-use crate::display::{self, DisplayTarget, DisplayTransform, LinearSrgb};
+use crate::display::{self, DisplayTarget, DisplayTransform, LinearSrgb, Stage};
 use crate::gestures::{self, DoubleClick, Gestures, WheelAction};
 use crate::hooks::{Cause, HandleMove, Hooks, TRACE_KEPT, TraceEntry, Verdict, ViewChange};
+use crate::loupe::{self, Loupe, LoupeFrame};
 use crate::overlay::{self, Handle, HandleKind, HandleState, Overlay};
 use crate::source::{Readout, Side, Stats, TileSink, TileSource};
 use crate::tiles::{self, Texture, Tiles};
@@ -116,6 +118,8 @@ pub enum Signal {
     Compare { compare: Compare, phase: Phase },
     /// The source's values under the pointer arrived.
     Readout(Readout),
+    /// The loupe was turned on or off with its key.
+    Loupe { on: bool },
     /// Tiles moved this frame: asked for, arrived, given up. `complete`
     /// when every tile wanted is on screen.
     Tiles {
@@ -177,6 +181,39 @@ pub struct ViewportState {
     /// Signals from calls between frames, given with the next frame's.
     pending: Vec<Signal>,
     now: f64,
+    cursor: CursorState,
+    loupe: Loupe,
+    loupe_frame: Option<LoupeFrame>,
+    /// The tiles drawn this frame, for the loupe.
+    tile_draws: Vec<TileDraw>,
+    /// The display stage drawn with this frame.
+    stage: Option<Stage>,
+}
+
+/// The cursor between frames: the last query and what it resolved to,
+/// what was shown, whether a bitmap was handed to the integration.
+#[derive(Debug, Default)]
+struct CursorState {
+    last: Option<(CursorQuery, Cursor)>,
+    shown: Option<Shown>,
+    image_set: bool,
+}
+
+/// A tile's texture, as the loupe draws it again.
+#[derive(Clone, Copy, Debug)]
+enum TileTexture {
+    Egui(egui::TextureId),
+    Gpu(u64),
+}
+
+/// A tile drawn this frame: its side, texture, size and where it landed
+/// (window physical pixels).
+#[derive(Clone, Copy, Debug)]
+struct TileDraw {
+    side: Side,
+    texture: TileTexture,
+    size: [u32; 2],
+    dst_px: [f64; 4],
 }
 
 /// The display transform in use (the default: [`LinearSrgb`]).
@@ -287,6 +324,44 @@ impl ViewportState {
     /// in seconds (0.1 by default; 0 asks at once).
     pub fn set_settle(&mut self, seconds: f64) {
         self.tiles.settle = seconds.max(0.0);
+    }
+
+    /// The loupe's settings.
+    pub fn loupe(&self) -> &Loupe {
+        &self.loupe
+    }
+
+    /// The loupe's settings, to change (turn it on for a tool, change its
+    /// magnification).
+    pub fn loupe_mut(&mut self) -> &mut Loupe {
+        &mut self.loupe
+    }
+
+    /// What the loupe showed in the last frame, if it showed.
+    pub fn loupe_frame(&self) -> Option<&LoupeFrame> {
+        self.loupe_frame.as_ref()
+    }
+
+    /// The cursor resolved for the pointer in the last frame (after the
+    /// `on_cursor` hook), while the pointer is over the viewport.
+    pub fn cursor(&self) -> Option<&Cursor> {
+        self.cursor
+            .shown
+            .as_ref()
+            .and_then(|_| self.cursor.last.as_ref().map(|(_, c)| c))
+    }
+
+    /// What the cursor showed in the last frame, while the pointer is
+    /// over the viewport.
+    pub fn cursor_shown(&self) -> Option<&Shown> {
+        self.cursor.shown.as_ref()
+    }
+
+    /// Forgets the cursor resolved, so the next frame asks the
+    /// `on_cursor` hook again (its answer changed for the same
+    /// situation).
+    pub fn refresh_cursor(&mut self) {
+        self.cursor.last = None;
     }
 
     /// The hooks, to set or remove.
@@ -411,7 +486,13 @@ pub struct Viewport<'a> {
     label: Option<String>,
     pixel_grid: bool,
     size: Option<Vec2>,
+    tool: Tool,
+    on_cursor: Option<OnCursor<'a>>,
 }
+
+/// A cursor hook: the situation and the default, the cursor to show.
+type CursorHook<'a> = dyn FnMut(&CursorQuery, Cursor) -> Cursor + 'a;
+type OnCursor<'a> = Box<CursorHook<'a>>;
 
 impl std::fmt::Debug for Viewport<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -488,7 +569,30 @@ impl<'a> Viewport<'a> {
             label: None,
             pixel_grid: true,
             size: None,
+            tool: Tool::None,
+            on_cursor: None,
         }
+    }
+
+    /// Decides the cursor: gets the situation (the tool, the keys held, a
+    /// drag, a handle under the pointer) and egui-pop's default for it,
+    /// returns the cursor to show. Asked again only when the situation
+    /// changes (or after [`ViewportState::refresh_cursor`]);
+    /// `egui-pop-imaging`'s `cursor` runs it as the `cursor.resolve`
+    /// step.
+    pub fn on_cursor(
+        mut self,
+        hook: impl FnMut(&CursorQuery, Cursor) -> Cursor + 'a,
+    ) -> Viewport<'a> {
+        self.on_cursor = Some(Box::new(hook));
+        self
+    }
+
+    /// The tool active over the viewport, which decides the cursor
+    /// (default: none, the system's arrow).
+    pub fn tool(mut self, tool: Tool) -> Viewport<'a> {
+        self.tool = tool;
+        self
     }
 
     /// Where the pixels come from (its size is the image's unless
@@ -632,6 +736,15 @@ impl<'a> Viewport<'a> {
             handle_wheel(ui, &response, &g, &mut f);
         }
         handle_keys(ui, &response, &g, &mut f);
+        if let Some(k) = f.state.loupe.key
+            && (response.hovered() || response.has_focus())
+            && ui.input(|i| i.key_pressed(k))
+        {
+            f.state.loupe.on = !f.state.loupe.on;
+            f.signals.push(Signal::Loupe {
+                on: f.state.loupe.on,
+            });
+        }
         if response.clicked() || response.drag_started() {
             response.request_focus();
         }
@@ -737,6 +850,49 @@ impl<'a> Viewport<'a> {
         {
             draw_readout(ui, &painter, rect, state, r);
         }
+        let pointer = (response.hovered() || response.dragged())
+            .then(|| ui.input(|i| i.pointer.hover_pos()))
+            .flatten();
+        state.loupe_frame = None;
+        if state.loupe.on
+            && let Some(p) = pointer.filter(|p| rect.contains(*p))
+        {
+            let before = state.tile_draws.iter().any(|d| d.side == Side::Before)
+                && (state.before_held || split_x.is_some_and(|x| p.x < x));
+            let side = if before { Side::Before } else { Side::After };
+            draw_loupe(
+                ui,
+                &painter,
+                state,
+                &mapping,
+                p,
+                side,
+                readout.as_ref(),
+                &tokens,
+            );
+        }
+        let query = CursorQuery {
+            tool: self.tool.clone(),
+            modifiers: ui.input(|i| i.modifiers),
+            dragging: response.dragged() || state.pan.is_some() || state.drag.is_some(),
+            panning: state.pan.is_some() || pan_key,
+            handle: state
+                .drag
+                .as_ref()
+                .map(|d| d.handle.kind)
+                .or(hovered_handle.as_ref().map(|(_, h)| h.kind)),
+            over_image: hover_pixel.is_some(),
+        };
+        let mut on_cursor = self.on_cursor;
+        update_cursor(
+            ui.ctx(),
+            &painter,
+            state,
+            query,
+            on_cursor.as_deref_mut(),
+            pointer,
+            &mapping,
+        );
         name(&response, self.label.as_deref(), Some(mapping.zoom));
         state.last_mapping = Some(mapping);
         debug::publish(ui.ctx(), &self.name, state, view, &mapping, &signals);
@@ -971,7 +1127,8 @@ fn draw_tiles(
         state.tiles.rebake();
     }
     if state.slot == 0 {
-        state.slot = NEXT_SLOT.fetch_add(2, Ordering::Relaxed);
+        // Three slots: the image, the "before" image, the loupe.
+        state.slot = NEXT_SLOT.fetch_add(3, Ordering::Relaxed);
     }
     let device = tiles::device(ctx);
     state.tiles.receive(ctx, device, target, transform.as_ref());
@@ -980,6 +1137,9 @@ fn draw_tiles(
         ctx.request_repaint_after(Duration::from_secs_f64(left));
     }
     let [after, before] = sources;
+    let stage = transform.stage(&target.effective());
+    state.stage = Some(stage);
+    let mut drawn: Vec<TileDraw> = Vec::new();
     let showing_before = state.before_held;
     let rect = mapping.rect;
     let mut sides: Vec<(Side, &dyn TileSource, Rect, u64)> = Vec::new();
@@ -1016,6 +1176,15 @@ fn draw_tiles(
         let ppp = f64::from(mapping.ppp);
         for d in state.tiles.frame(side, source, mapping, settled) {
             let r = d.dst_px;
+            drawn.push(TileDraw {
+                side,
+                texture: match d.texture {
+                    Texture::Egui(handle) => TileTexture::Egui(handle.id()),
+                    Texture::Gpu(id) => TileTexture::Gpu(*id),
+                },
+                size: d.size,
+                dst_px: r,
+            });
             match d.texture {
                 Texture::Egui(handle) => {
                     painter.image(
@@ -1046,7 +1215,7 @@ fn draw_tiles(
                     .into_iter()
                     .map(|(texture, dst, size)| crate::gpu::GpuDraw { texture, dst, size })
                     .collect(),
-                stage: transform.stage(&target.effective()),
+                stage,
             };
             paints.push((paint, clip));
         }
@@ -1099,6 +1268,7 @@ fn draw_tiles(
             .add(egui_wgpu::Callback::new_paint_callback(rect, paint));
     }
     state.tiles.evict();
+    state.tile_draws = drawn;
 
     let snap = state.tiles.stats.snapshot();
     let counts = [snap[0].1, snap[1].1, snap[3].1];
@@ -1459,4 +1629,211 @@ fn draw_divider(painter: &egui::Painter, rect: Rect, x: f32, active: bool, t: &V
         HandleState::Rest
     };
     overlay::paint_handle(painter, pos2(x, rect.center().y), HandleKind::Edge, st, t);
+}
+
+/// Resolves the cursor when the query changed (the default, then the
+/// `on_cursor` hook), and shows it; clears a bitmap cursor once the
+/// pointer has left.
+fn update_cursor(
+    ctx: &egui::Context,
+    painter: &egui::Painter,
+    state: &mut ViewportState,
+    query: CursorQuery,
+    hook: Option<&mut CursorHook<'_>>,
+    pointer: Option<Pos2>,
+    mapping: &Mapping,
+) {
+    let Some(p) = pointer else {
+        if state.cursor.image_set {
+            cursor::clear_image(ctx);
+            state.cursor.image_set = false;
+        }
+        state.cursor.shown = None;
+        return;
+    };
+    let cached = state
+        .cursor
+        .last
+        .as_ref()
+        .filter(|(q, _)| *q == query)
+        .map(|(_, c)| c.clone());
+    let resolved = match cached {
+        Some(c) => c,
+        None => {
+            let default = cursor::default_cursor(&query);
+            let given = hook.map(|hook| hook(&query, default.clone()));
+            let c = match given {
+                Some(c) if c != default => {
+                    state.record(
+                        "on_cursor",
+                        "redirect",
+                        format!("{} {} to {}", query.tool.name(), default.name(), c.name()),
+                    );
+                    c
+                }
+                _ => default,
+            };
+            state.cursor.last = Some((query, c.clone()));
+            c
+        }
+    };
+    let shown = cursor::shown(ctx, &resolved, mapping.zoom, mapping.ppp);
+    let image = cursor::apply(ctx, painter, p, &shown);
+    if !image && state.cursor.image_set {
+        cursor::clear_image(ctx);
+    }
+    state.cursor.image_set = image;
+    state.cursor.shown = Some(shown);
+}
+
+/// Draws the loupe beside the pointer: the side's tiles again through
+/// the magnifying sampling (a second paint callback on the GPU path, the
+/// same egui textures on the CPU path), its grid, its marker and its
+/// readout.
+#[allow(clippy::too_many_arguments)]
+fn draw_loupe(
+    ui: &Ui,
+    painter: &egui::Painter,
+    state: &mut ViewportState,
+    mapping: &Mapping,
+    pointer: Pos2,
+    side: Side,
+    readout: Option<&Readout>,
+    tokens: &ViewportTokens,
+) {
+    let l = state.loupe;
+    let ctx = ui.ctx();
+    let ppp = mapping.ppp;
+    let t = egui_pop_core::theme::Tokens::of(ctx);
+    let tr = |k: &egui_pop_core::strings::StrKey| egui_pop_core::strings::tr(ctx, k);
+    let labels = [
+        tr(&crate::strings::LOUPE_DISPLAY),
+        tr(&crate::strings::LOUPE_SCENE),
+        tr(&crate::strings::LOUPE_NONE),
+    ];
+    let lines = loupe::readout_lines(
+        mapping.pixel_at(pointer),
+        readout,
+        l.values,
+        state.stage.as_ref(),
+        [&labels[0], &labels[1], &labels[2]],
+    );
+    let galley = (!lines.is_empty()).then(|| {
+        painter.layout_no_wrap(
+            lines.join("\n"),
+            egui::FontId::monospace(t.font.small),
+            t.text.default,
+        )
+    });
+    let pad = egui_pop_core::scale::snap_size(t.space.xs, ppp);
+    let picture = loupe::picture_size(&l, ppp);
+    let text_h = galley.as_ref().map_or(0.0, |g| g.size().y + pad);
+    let size = egui_pop_core::scale::snap_size(picture.x + 2.0 * pad, ppp);
+    let size = Vec2::new(
+        size.max(galley.as_ref().map_or(0.0, |g| g.size().x + 2.0 * pad)),
+        picture.y + 2.0 * pad + text_h,
+    );
+    let placed = loupe::place(pointer, size, mapping.rect, l.offset);
+    let snap = |v: f32| (v * ppp).round() / ppp;
+    let rect = Rect::from_min_size(pos2(snap(placed.min.x), snap(placed.min.y)), size);
+    let pic = Rect::from_min_size(rect.min + Vec2::splat(pad), picture);
+    painter.rect_filled(rect, 0.0, tokens.loupe_background);
+    painter.rect_filled(pic, 0.0, tokens.background);
+    let s = loupe::Sampling::new(mapping, pointer, l.magnification(), pic.center());
+    let clip = pic.intersect(painter.clip_rect());
+    let lp = painter.with_clip_rect(clip);
+    let a = mapping.image_to_px([0.0, 0.0]);
+    let b = mapping.image_to_px(mapping.image);
+    lp.rect_filled(
+        loupe::to_points(s.map_rect([a[0], a[1], b[0], b[1]]), ppp),
+        0.0,
+        tokens.backdrop,
+    );
+    let mut gpu: Vec<(u64, [f64; 4], [u32; 2])> = Vec::new();
+    let mut tiles = 0;
+    let whole = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
+    for d in state.tile_draws.iter().filter(|d| d.side == side) {
+        tiles += 1;
+        let dst = s.map_rect(d.dst_px);
+        match d.texture {
+            TileTexture::Egui(id) => {
+                lp.image(id, loupe::to_points(dst, ppp), whole, Color32::WHITE);
+            }
+            TileTexture::Gpu(id) => gpu.push((id, dst, d.size)),
+        }
+    }
+    let on_gpu = !gpu.is_empty();
+    #[cfg(feature = "wgpu")]
+    if let (true, Some(stage)) = (on_gpu, state.stage) {
+        let paint = crate::gpu::TilePaint {
+            slot: state.slot + 2,
+            queue: state.tiles.gpu.clone(),
+            draws: gpu
+                .into_iter()
+                .map(|(texture, dst, size)| crate::gpu::GpuDraw {
+                    texture,
+                    dst: dst.map(|v| v as f32),
+                    size,
+                })
+                .collect(),
+            stage,
+        };
+        lp.add(egui_wgpu::Callback::new_paint_callback(clip, paint));
+    }
+    #[cfg(not(feature = "wgpu"))]
+    let _ = gpu;
+    let p = f64::from(ppp);
+    let pic_px = [
+        f64::from(pic.left()) * p,
+        f64::from(pic.top()) * p,
+        f64::from(pic.right()) * p,
+        f64::from(pic.bottom()) * p,
+    ];
+    if l.grid {
+        // Hairlines centred on the physical pixel past each edge.
+        let stroke = Stroke::new(1.0 / ppp, tokens.loupe_grid.gamma_multiply(0.8));
+        let half = 0.5 / ppp;
+        let (xs, ys) = s.grid_lines(pic_px);
+        for x in xs {
+            let x = (x / p) as f32 + half;
+            lp.line_segment([pos2(x, pic.top()), pos2(x, pic.bottom())], stroke);
+        }
+        for y in ys {
+            let y = (y / p) as f32 + half;
+            lp.line_segment([pos2(pic.left(), y), pos2(pic.right(), y)], stroke);
+        }
+    }
+    let w = |x: f32| egui_pop_core::scale::stroke(ctx, x);
+    if l.marker {
+        let r = loupe::to_points(s.center_block(), ppp);
+        lp.rect_stroke(
+            r,
+            0.0,
+            Stroke::new(w(3.0), tokens.cursor_outline),
+            StrokeKind::Outside,
+        );
+        lp.rect_stroke(
+            r,
+            0.0,
+            Stroke::new(w(1.0), tokens.loupe_marker),
+            StrokeKind::Outside,
+        );
+    }
+    painter.rect_stroke(
+        rect,
+        0.0,
+        Stroke::new(w(1.0), tokens.loupe_frame),
+        StrokeKind::Inside,
+    );
+    if let Some(g) = galley {
+        painter.galley(pos2(pic.left(), pic.bottom() + pad), g, t.text.default);
+    }
+    state.loupe_frame = Some(LoupeFrame {
+        rect,
+        picture: pic,
+        sampling: s,
+        tiles,
+        gpu: on_gpu,
+        lines,
+    });
 }

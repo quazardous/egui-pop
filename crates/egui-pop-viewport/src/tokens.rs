@@ -23,6 +23,18 @@ pub struct ViewportTokens {
     pub handle_hover: Color32,
     /// The ring around a handle, so it reads on any image.
     pub handle_outline: Color32,
+    /// Tool cursors' strokes and a brush outline's line.
+    pub cursor_fill: Color32,
+    /// The ring around a cursor's strokes, so it reads on any image.
+    pub cursor_outline: Color32,
+    /// Around the loupe's picture and behind its readout.
+    pub loupe_background: Color32,
+    /// The loupe's outline.
+    pub loupe_frame: Color32,
+    /// The loupe's pixel grid.
+    pub loupe_grid: Color32,
+    /// The square around the loupe's centre pixel.
+    pub loupe_marker: Color32,
 }
 
 impl ViewportTokens {
@@ -39,6 +51,12 @@ impl ViewportTokens {
             handle: c("viewport.handle", t.accent.default),
             handle_hover: c("viewport.handle-hover", t.accent.hover),
             handle_outline: c("viewport.handle-outline", t.surface.canvas),
+            cursor_fill: c("cursor.fill", t.text.strong),
+            cursor_outline: c("cursor.outline", t.surface.canvas),
+            loupe_background: c("loupe.background", t.surface.overlay),
+            loupe_frame: c("loupe.frame", t.border.strong),
+            loupe_grid: c("loupe.grid", t.border.default),
+            loupe_marker: c("loupe.marker", t.accent.default),
         }
     }
 }

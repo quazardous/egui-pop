@@ -321,6 +321,20 @@
     "frame": {"$value": "{accent.default}", "$description": "The outline of the part in view."},
     "veil": {"$value": "{surface.canvas}", "$description": "Over the part out of view, half transparent."}
   },
+  "cursor": {
+    "$description": "Tool cursors and brush outlines over the image.",
+    "$type": "color",
+    "fill": {"$value": "{text.strong}", "$description": "A tool cursor's strokes, a brush outline's line."},
+    "outline": {"$value": "{surface.canvas}", "$description": "The ring around them, so they read on any image."}
+  },
+  "loupe": {
+    "$description": "The loupe: the pixels under the pointer, magnified.",
+    "$type": "color",
+    "background": {"$value": "{surface.overlay}", "$description": "Around the picture and behind the readout."},
+    "frame": {"$value": "{border.strong}", "$description": "The outline."},
+    "grid": {"$value": "{border.default}", "$description": "The lines between the pixels."},
+    "marker": {"$value": "{accent.default}", "$description": "The square around the centre pixel."}
+  },
   "editor": {
     "$description": "Text and code editors.",
     "$type": "color",

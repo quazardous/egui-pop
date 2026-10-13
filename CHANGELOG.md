@@ -113,6 +113,29 @@ egui minor.
   The `jobs` debug collector, and `egui_pop_test::jobs::FakeHost` to
   script jobs in tests. Gallery page `jobs`. Guide: `docs/progress.md`.
 
+- Cursors over the viewport (`viewport::cursor`): `Viewport::tool`
+  picks a tool (pan, zoom, picker, crosshair, move, rotate, brush,
+  eraser, mask, disabled, or one of the application's) and the viewport
+  shows its cursor, resolved again when the keys held, a drag or a
+  handle under the pointer change it (Alt zooms out, a hand closes
+  while dragging); `Viewport::on_cursor` gives another. Thirteen tool
+  cursors drawn as bitmaps at the cursor size and the window's scale,
+  in the theme's colours (`cursor.fill`, `cursor.outline`), handed to
+  the system through egui's custom cursor image with a system cursor
+  as the fallback; an application's bitmaps by name, at several sizes,
+  with a dark variant and frames (still when motion is reduced); a
+  brush outline sized in image pixels, with its hardness ring, the
+  system cursor hidden, a crosshair when too small. `CursorSettings`
+  turns painted cursors off and sets the size, which follows
+  `XCURSOR_SIZE` by default.
+- A loupe in the viewport (`viewport::loupe`): the displayed pixels
+  under the pointer at 4 to 16 points each, with a grid, a marker on
+  the centre pixel and a readout (RGB and Lab as displayed, or the
+  source's values), beside the pointer and flipped at the edges. It
+  draws the viewport's own tiles again: a second paint callback on the
+  GPU path, with no read back, and the same egui textures on the CPU
+  path. On from `ViewportState::loupe_mut` or a key
+  (`Signal::Loupe`); tokens `loupe.*`.
 - An image tools guide (`docs/image-tools.md`): the histogram, the curve
   editor and the targeted adjustment, the colour wheels, the zoom
   control and the navigator, their hooks and steps, accessibility and

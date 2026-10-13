@@ -7,6 +7,11 @@
 //!   image and screen that drawing, hit tests and the readout share;
 //! - [`gestures`]: the gestures as data, remappable per profile;
 //! - [`widget`]: the [`Viewport`] widget and the [`Signal`]s it emits;
+//! - [`cursor`]: what the active tool shows under the pointer (system
+//!   cursors, tool cursors drawn at the window's scale, an
+//!   application's bitmaps, a brush outline that follows the zoom);
+//! - [`loupe`]: the pixels under the pointer, magnified, with a grid
+//!   and their values;
 //! - [`display`]: the display target of each window and the display
 //!   transform hook where the application plugs its colour management;
 //! - [`source`]: the [`TileSource`](source::TileSource) an application
@@ -56,6 +61,7 @@
 //! ```
 
 pub mod change;
+pub mod cursor;
 pub mod curve;
 pub mod debug;
 pub mod demo;
@@ -67,6 +73,7 @@ pub mod histogram;
 pub mod hooks;
 #[cfg(feature = "wayland")]
 pub mod image_surface;
+pub mod loupe;
 pub mod navigator;
 pub mod overlay;
 pub mod source;

@@ -626,6 +626,12 @@ egui-pop-viewport-histogram-value-log = { $channels } ({ $bins } bins, logarithm
 
 egui-pop-viewport-label = Image viewport
 
+egui-pop-viewport-loupe-display = display
+
+egui-pop-viewport-loupe-none = no value
+
+egui-pop-viewport-loupe-scene = scene
+
 egui-pop-viewport-navigator-label = Navigator
 
 egui-pop-viewport-navigator-value = zoom { $zoom } %, centre { $x }, { $y }

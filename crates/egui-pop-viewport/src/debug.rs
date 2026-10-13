@@ -132,6 +132,10 @@ pub fn signal_json(signal: &Signal) -> Json {
             "cancelled": cancelled,
             "complete": complete,
         }),
+        Signal::Loupe { on } => json!({
+            "signal": "loupe",
+            "on": on,
+        }),
         Signal::Display { target } => json!({
             "signal": "display",
             "target": format!("{target:?}"),
@@ -192,6 +196,19 @@ pub(crate) fn publish(
             })),
             "transform": format!("{:?}", state.display_transform()),
             "image_surface": image_surface(ctx),
+            "cursor": state.cursor().map(crate::cursor::Cursor::name),
+            "cursor_shown": state.cursor_shown().map(|s| format!("{s:?}")),
+            "loupe": {
+                "on": state.loupe().on,
+                "magnification": state.loupe().magnification(),
+                "values": state.loupe().values.name(),
+                "shown": state.loupe_frame().map(|f| json!({
+                    "pixel": f.sampling.pixel,
+                    "tiles": f.tiles,
+                    "gpu": f.gpu,
+                    "lines": f.lines,
+                })),
+            },
             "trace": trace,
             "signals": all[keep..].to_vec(),
         }),
