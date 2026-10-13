@@ -11,6 +11,12 @@
 //! runs the dialog's command (through the host) with its arguments, the
 //! form's values and the choice merged in.
 //!
+//! No header band and no close button by default: Cancel and Escape are
+//! the way out. A dialog opened as [`DialogSpec::closable()`] (or every
+//! dialog, with the `dialogs.closable` setting) has a ✕ at the right end
+//! of its title row, named "Close", which is Escape: the same cancel,
+//! through the same step and hooks, refused when Escape is.
+//!
 //! A form's path field (a descriptor made with `Descriptor::path`) has a
 //! Browse button: the file chooser ([`crate::files`]: the system's, or
 //! the in-app picker), its result written into the field when it comes;
@@ -50,15 +56,16 @@ use std::path::{Path, PathBuf};
 
 use std::sync::{Arc, Mutex};
 
-use egui::{Key, Response, Ui};
+use egui::{Key, Response, Ui, WidgetType};
 use egui_pop_core::debug::FnCollector;
-use egui_pop_core::lock;
+use egui_pop_core::icon::Icon;
 use egui_pop_core::overlay::{self, Kind, OverlaySpec};
 use egui_pop_core::strings::{self, CANCEL, CLOSE};
 use egui_pop_core::theme::Tokens;
+use egui_pop_core::{a11y, lock};
 use egui_pop_model::commands::Origin;
 use egui_pop_model::fuzzy;
-use egui_pop_model::ids::{BlockId, CommandId, PluginId, StepId};
+use egui_pop_model::ids::{BlockId, CommandId, PluginId, SettingId, StepId};
 use egui_pop_model::values::{Descriptor, PathHint, PathKind, Type, Value};
 use serde::Serialize;
 use serde_json::{Map, Value as Json, json};
@@ -83,6 +90,9 @@ pub const STEP_SHOW: StepId = StepId::from_static("dialog.show");
 /// "origin": source}`; a veto keeps it open with the reason, a redirect
 /// changes the answer.
 pub const STEP_ANSWER: StepId = StepId::from_static("dialog.answer");
+/// The setting: every dialog has the close button, as if opened
+/// [`DialogSpec::closable()`].
+pub const SETTING_CLOSABLE: SettingId = SettingId::from_static("dialogs.closable");
 
 /// A question before an action.
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -342,6 +352,71 @@ impl Dialog {
     }
 }
 
+/// A dialog and how it is presented around its content: what
+/// [`Dialogs::open`] takes (any dialog converts into one, presented by
+/// default).
+///
+/// ```
+/// use egui_pop_api::dialogs::{DialogSpec, Info};
+///
+/// let spec = DialogSpec::new(Info::new("Saved", "The document was saved.")).closable(true);
+/// assert!(spec.closable);
+/// ```
+#[derive(Clone, Debug, PartialEq)]
+pub struct DialogSpec {
+    pub dialog: Dialog,
+    /// A ✕ at the right end of the title row, doing what Escape does
+    /// (off by default; the [`SETTING_CLOSABLE`] setting turns it on for
+    /// every dialog).
+    pub closable: bool,
+}
+
+impl DialogSpec {
+    pub fn new(dialog: impl Into<Dialog>) -> Self {
+        Self {
+            dialog: dialog.into(),
+            closable: false,
+        }
+    }
+
+    /// With the close button (a notice without Cancel, an application
+    /// following the web's convention).
+    pub fn closable(mut self, closable: bool) -> Self {
+        self.closable = closable;
+        self
+    }
+}
+
+impl From<Dialog> for DialogSpec {
+    fn from(d: Dialog) -> Self {
+        Self::new(d)
+    }
+}
+
+impl From<Confirm> for DialogSpec {
+    fn from(d: Confirm) -> Self {
+        Self::new(d)
+    }
+}
+
+impl From<Form> for DialogSpec {
+    fn from(d: Form) -> Self {
+        Self::new(d)
+    }
+}
+
+impl From<Choose> for DialogSpec {
+    fn from(d: Choose) -> Self {
+        Self::new(d)
+    }
+}
+
+impl From<Info> for DialogSpec {
+    fn from(d: Info) -> Self {
+        Self::new(d)
+    }
+}
+
 /// An answer.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(tag = "answer", rename_all = "lowercase")]
@@ -394,6 +469,8 @@ impl Answer {
 struct Open {
     id: u64,
     dialog: Dialog,
+    /// Opened with the close button.
+    closable: bool,
     /// Focus placed on its first pass.
     focused: bool,
     /// The in-app picker open inside the dialog for a field (without the
@@ -425,14 +502,16 @@ struct State {
 pub struct Dialogs(Arc<Mutex<State>>);
 
 impl Dialogs {
-    /// Queues a dialog; returns its id.
-    pub fn open(&self, dialog: impl Into<Dialog>) -> u64 {
+    /// Queues a dialog (or a [`DialogSpec`]); returns its id.
+    pub fn open(&self, dialog: impl Into<DialogSpec>) -> u64 {
+        let spec = dialog.into();
         let mut s = lock(&self.0);
         s.next += 1;
         let id = s.next;
         s.queue.push_back(Open {
             id,
-            dialog: dialog.into(),
+            dialog: spec.dialog,
+            closable: spec.closable,
             focused: false,
             picking: None,
             browse: None,
@@ -476,6 +555,7 @@ impl Dialogs {
             Some(o) => {
                 let mut d = serde_json::to_value(&o.dialog).unwrap_or(Json::Null);
                 d["id"] = json!(o.id);
+                d["closable"] = json!(o.closable);
                 d["waiting"] = json!(s.queue.len() - 1);
                 match &o.dialog {
                     // The typed values as they are, and plainly by key.
@@ -514,6 +594,12 @@ impl Plugin for DialogsPlugin {
     fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
         let dialogs = Dialogs::default();
         ctx.service(&DIALOGS, dialogs.clone())?;
+        ctx.setting(
+            SETTING_CLOSABLE,
+            Descriptor::bool("Close button on every dialog", false).description(
+                "A ✕ at the right end of each dialog's title row, doing what Escape does.",
+            ),
+        )?;
         ctx.step(
             StepSpec::new(STEP_SHOW, "A dialog comes up; a veto cancels it.")
                 .args(json!({ "kind": "confirm", "id": 1, "title": "Delete 3 images?" })),
@@ -698,6 +784,11 @@ fn show(ui: &mut Ui, app: &AppHandle) {
         }
     }
     let filter = open_dialog.filter.clone();
+    let closable = open_dialog.closable
+        || lock(&app.store())
+            .get(&format!("settings/{SETTING_CLOSABLE}"))
+            .and_then(|e| e.value.as_bool())
+            .unwrap_or(false);
     let ctx = ui.ctx().clone();
     let spec = OverlaySpec::new(
         ("egui_pop.dialog", open_dialog.id),
@@ -707,9 +798,18 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     debug_assert_eq!(spec.id, overlay_id(open_dialog.id));
     let mut open = true;
     let mut answer: Option<Answer> = None;
+    // The ✕ is shown only where Escape works.
+    let closable = closable && spec.dismiss_on_escape;
+    let mut closed = false;
     overlay::show(&ctx, &spec, &mut open, None, |ui| {
-        answer = body(ui, app, &mut open_dialog);
+        answer = body(ui, app, &mut open_dialog, closable, &mut closed);
     });
+    // The ✕ is Escape: the overlay dismissed, whatever else the pass
+    // said (Enter on the ✕ included), answered as a cancel below.
+    if closed {
+        open = false;
+        answer = None;
+    }
     if !open && answer.is_none() {
         answer = Some(Answer::Cancel);
     }
@@ -757,13 +857,20 @@ fn values_of(fields: &[Field]) -> Map<String, Json> {
         .collect()
 }
 
-/// A dialog's content and footer; its answer when given.
-fn body(ui: &mut Ui, app: &AppHandle, o: &mut Open) -> Option<Answer> {
+/// A dialog's content and footer; its answer when given. `closed` says
+/// whether its ✕ (shown when `closable`) was pressed.
+fn body(
+    ui: &mut Ui,
+    app: &AppHandle,
+    o: &mut Open,
+    closable: bool,
+    closed: &mut bool,
+) -> Option<Answer> {
     let t = Tokens::of(ui.ctx());
     let first = !o.focused;
     o.focused = true;
     let title = o.dialog.title().to_string();
-    let heading = ui.heading(&title);
+    let heading = title_row(ui, &title, closable, closed);
     ui.add_space(t.space.s);
     let mut answer = None;
     let enter = ui.input(|i| i.key_pressed(Key::Enter));
@@ -923,6 +1030,74 @@ fn body(ui: &mut Ui, app: &AppHandle, o: &mut Open) -> Option<Answer> {
         ui.colored_label(t.status.danger, e);
     }
     answer
+}
+
+/// The title row: the title, and the ✕ at its right end when the dialog
+/// is closable. No band behind it: a movable dialog's header band would
+/// be drawn here, around the same row.
+fn title_row(ui: &mut Ui, title: &str, closable: bool, closed: &mut bool) -> Response {
+    if !closable {
+        return ui.heading(title);
+    }
+    let side = close_side(ui);
+    ui.horizontal_top(|ui| {
+        // The title wraps before the ✕.
+        let room = (ui.available_width() - side - ui.spacing().item_spacing.x).max(0.0);
+        let heading = ui
+            .allocate_ui(egui::vec2(room, side), |ui| {
+                ui.add(egui::Label::new(egui::RichText::new(title).heading()).wrap())
+            })
+            .inner;
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+            if close_button(ui, side).clicked() {
+                *closed = true;
+            }
+        });
+        heading
+    })
+    .inner
+}
+
+/// The close button's side: a target of at least 24 points (WCAG 2.5.8),
+/// as tall as a control.
+fn close_side(ui: &Ui) -> f32 {
+    Tokens::of(ui.ctx()).size.control_height.max(24.0)
+}
+
+/// The ✕: an icon in a square target, named "Close". Never focused when
+/// the dialog opens (nothing asks it to be).
+fn close_button(ui: &mut Ui, side: f32) -> Response {
+    let t = Tokens::of(ui.ctx());
+    let (rect, response) = ui.allocate_exact_size(egui::vec2(side, side), egui::Sense::click());
+    if ui.is_rect_visible(rect) {
+        let visuals = ui.style().interact(&response);
+        if response.hovered() || response.has_focus() {
+            ui.painter()
+                .rect_filled(rect, t.radius.widget, visuals.weak_bg_fill);
+        }
+        if response.has_focus() {
+            ui.painter().rect_stroke(
+                rect,
+                t.radius.widget,
+                egui::Stroke::new(1.5, t.focus_ring),
+                egui::StrokeKind::Inside,
+            );
+        }
+        let color = if response.hovered() {
+            t.text.strong
+        } else {
+            t.text.default
+        };
+        let icon = t.size.icon_inline;
+        Icon::Close.paint(
+            ui.painter(),
+            egui::Rect::from_center_size(rect.center(), egui::vec2(icon, icon)),
+            color,
+        );
+    }
+    let name = strings::tr(ui.ctx(), &CLOSE);
+    a11y::name(&response, WidgetType::Button, &name);
+    response.on_hover_text(name)
 }
 
 /// Cancel and the primary button, right-aligned.

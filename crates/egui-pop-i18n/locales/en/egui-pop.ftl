@@ -644,6 +644,10 @@ setting-developer-show-keys =
     .description = Shows each text's translation key instead of the text, to find where it comes from.
     .label = Show translation keys
 
+setting-dialogs-closable =
+    .description = A ✕ at the right end of each dialog's title row, doing what Escape does.
+    .label = Close button on every dialog
+
 setting-files-native =
     .description = Choose files with the system's chooser when there is one; off, with egui-pop's own.
     .label = Use the system's file chooser

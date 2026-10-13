@@ -643,6 +643,10 @@ setting-developer-show-keys =
     .description = Affiche la clé de traduction de chaque texte à la place du texte, pour trouver d’où il vient.
     .label = Afficher les clés de traduction
 
+setting-dialogs-closable =
+    .description = Un ✕ au bout de la ligne de titre de chaque dialogue, qui fait ce que fait Échap.
+    .label = Bouton de fermeture sur chaque dialogue
+
 setting-files-native =
     .description = Choisir les fichiers avec le sélecteur du système quand il y en a un ; désactivé, avec celui d’egui-pop.
     .label = Utiliser le sélecteur de fichiers du système

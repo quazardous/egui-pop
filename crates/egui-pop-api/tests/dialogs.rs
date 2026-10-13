@@ -1,17 +1,21 @@
 //! Dialogs: confirmations (verbs, danger), forms from descriptors with
-//! the in-app path picker, choices, answers from an agent.
+//! the in-app path picker, choices, answers from an agent, the close
+//! button.
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use egui::accesskit::Role;
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
-use egui_pop_api::dialogs::{self, Choose, ChooseOption, Confirm, Form, Info, STEP_ANSWER};
+use egui_pop_api::dialogs::{
+    self, Choose, ChooseOption, Confirm, DialogSpec, Form, Info, SETTING_CLOSABLE, STEP_ANSWER,
+};
 use egui_pop_api::steps::Before;
 use egui_pop_api::{App, Ctx, DefaultPlugins, Plugin, PluginError};
 use egui_pop_model::commands::{CommandSpec, Origin};
 use egui_pop_model::ids::{CommandId, PluginId};
-use egui_pop_model::values::{Descriptor, PathKind};
+use egui_pop_model::values::{Change, Descriptor, PathKind, Set, Value};
 use serde_json::{Value as Json, json};
 
 const GO: CommandId = CommandId::from_static("doc.go");
@@ -317,4 +321,102 @@ fn hooks_veto_or_redirect_an_answer() {
         "Left",
         "the cancel was redirected"
     );
+}
+
+/// Refuses every cancel: a dialog that must be answered.
+struct NoCancel;
+
+impl Plugin for NoCancel {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("no_cancel")
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        ctx.before(STEP_ANSWER, |_, args| {
+            if args["answer"]["answer"] == "cancel" {
+                Before::Veto("answer it first".into())
+            } else {
+                Before::Go
+            }
+        });
+        Ok(())
+    }
+}
+
+/// What dismissing a closable confirmation did, by the ✕ or by Escape:
+/// the dialogs left, the answers recorded, the commands run, whether the
+/// refusal shows.
+fn dismiss(refuse: bool, by_close: bool) -> (usize, String, usize, bool) {
+    let runs: Runs = Rc::default();
+    let mut builder = App::builder()
+        .plugins(DefaultPlugins)
+        .plugin(Doc(runs.clone()));
+    if refuse {
+        builder = builder.plugin(NoCancel);
+    }
+    let app = builder.build(&egui::Context::default()).unwrap();
+    let d = (*app.handle().service(&dialogs::DIALOGS).unwrap()).clone();
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(800.0, 600.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+    d.open(DialogSpec::new(Confirm::new("Export?", "Export", GO)).closable(true));
+    h.run();
+    assert!(
+        !h.get_by_role_and_label(Role::Button, "Close").is_focused(),
+        "the close button is never focused when the dialog opens"
+    );
+    assert!(h.get_by_label("Export").is_focused());
+    if by_close {
+        h.get_by_role_and_label(Role::Button, "Close").click();
+    } else {
+        h.key_press(egui::Key::Escape);
+    }
+    h.run();
+    h.run();
+    let refused = h.query_by_label("answer it first").is_some();
+    let answered = format!("{:?}", d.answered());
+    let ran = runs.borrow().len();
+    (d.len(), answered, ran, refused)
+}
+
+#[test]
+fn the_close_button_is_escape_even_when_refused() {
+    for refuse in [false, true] {
+        let by_escape = dismiss(refuse, false);
+        let by_close = dismiss(refuse, true);
+        assert_eq!(by_close, by_escape, "refused: {refuse}");
+        if refuse {
+            assert_eq!(by_close.0, 1, "the dialog stays");
+            assert!(by_close.3, "saying why");
+        } else {
+            assert_eq!(by_close.0, 0, "cancelled");
+            assert!(by_close.1.contains("Cancel"));
+        }
+        assert_eq!(by_close.2, 0, "nothing ran");
+    }
+}
+
+#[test]
+fn the_close_button_is_opt_in_or_set_for_every_dialog() {
+    let (mut h, _, d) = harness();
+    d.open(Confirm::new("Export?", "Export", GO));
+    h.run();
+    assert!(
+        h.query_by_role_and_label(Role::Button, "Close").is_none(),
+        "no close button by default"
+    );
+    assert_eq!(d.describe()["closable"], false);
+    h.key_press(egui::Key::Escape);
+    h.run();
+    let store = h.state().handle().store();
+    egui_pop_core::lock(&store)
+        .set(Set::new(
+            &format!("settings/{SETTING_CLOSABLE}"),
+            Change::To(Value::Bool(true)),
+            Origin::User,
+        ))
+        .unwrap();
+    d.open(Confirm::new("Export?", "Export", GO));
+    h.run();
+    assert!(h.query_by_role_and_label(Role::Button, "Close").is_some());
 }

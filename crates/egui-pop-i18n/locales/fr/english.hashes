@@ -308,6 +308,8 @@ setting-developer-log-level.description ef2c9fed741aeec7
 setting-developer-log-level.label 43ff95a11c8936c3
 setting-developer-show-keys.description 3edf370057b38677
 setting-developer-show-keys.label 340776331e19a4a5
+setting-dialogs-closable.description 52ace4aa7a7b8027
+setting-dialogs-closable.label 38b89c3e7eeca6cb
 setting-files-native.description ce2b615f40df8940
 setting-files-native.label f2b00b77262f7a75
 setting-notifications-desktop-choice-always 2f25054a585490a2

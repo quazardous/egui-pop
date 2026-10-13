@@ -9,6 +9,15 @@ egui minor.
 
 ### Added
 
+- A close button on dialogs, off by default (Cancel and Escape are the
+  way out): `DialogSpec::new(dialog).closable(true)`, or the
+  `dialogs.closable` setting for every dialog, puts a ✕ at the right end
+  of the title row, with no header band. It is Escape: the same cancel
+  through `dialog.answer` and its hooks, refused when Escape is. Named
+  "Close" (translated), a target of at least 24 points, never focused
+  when the dialog opens. `Dialogs::open` takes a `DialogSpec`, which
+  every dialog converts into.
+
 - Text and code editors, a new crate `egui-pop-editors` (L4, feature
   `editors` of the facade): `TextSurface` and `CodeEditor` over a shared
   `EditorState` (a line buffer, the selection, the editor's own
