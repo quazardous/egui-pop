@@ -9,6 +9,23 @@ egui minor.
 
 ### Added
 
+- Movable dialogs: `DialogSpec::movable(true)`, or the `dialogs.movable`
+  setting for every dialog, gives a dialog a header band (its own tone,
+  a separator, the move cursor, the ✕ when closable) to drag it by,
+  kept inside the window and again when the window is resized; a
+  double click on the band centres it again. The `dialogs.move` command
+  (Alt+F7) moves it with the arrow keys (Shift for bigger steps), Enter
+  keeping the place and Escape putting it back. A dialog comes up
+  centred unless `remember_position(key)` keeps its place, in the
+  host's store under `ui/dialogs/<key>`. `DialogSpec::backdrop` takes
+  `Backdrop::Dim` (the default, from the `dialog.backdrop` token,
+  fading while the dialog is dragged) or `Backdrop::Clear` (modal still,
+  the interface untouched, for a dialog previewing on the image); a
+  click on the backdrop never closes a dialog. The `dialog.move` step
+  (veto or redirect a drop, a key move or a return to the centre) and
+  the `dialog.moved` event; `Dialogs::offset`; the bridge's `dialogs`
+  collector shows `movable`, `backdrop`, `offset` and `moving`.
+
 - Modal overlays can be moved and keep their backdrop to a token:
   `OverlaySpec::offset` places a modal away from the window's centre,
   `OverlaySpec::dim` sets how much of the backdrop it shows (0: none,

@@ -1,6 +1,7 @@
 //! Dialogs: confirmations (verbs, danger), forms from descriptors with
 //! the in-app path picker, choices, answers from an agent, the close
-//! button.
+//! button, movable dialogs (drag, clamp, recentre, keyboard move, kept
+//! places) and their backdrops.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -9,7 +10,8 @@ use egui::accesskit::Role;
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
 use egui_pop_api::dialogs::{
-    self, Choose, ChooseOption, Confirm, DialogSpec, Form, Info, SETTING_CLOSABLE, STEP_ANSWER,
+    self, Backdrop, Choose, ChooseOption, Confirm, DialogSpec, Form, Info, SETTING_CLOSABLE,
+    SETTING_MOVABLE, STEP_ANSWER, STEP_MOVE,
 };
 use egui_pop_api::steps::Before;
 use egui_pop_api::{App, Ctx, DefaultPlugins, Plugin, PluginError};
@@ -419,4 +421,345 @@ fn the_close_button_is_opt_in_or_set_for_every_dialog() {
     d.open(Confirm::new("Export?", "Export", GO));
     h.run();
     assert!(h.query_by_role_and_label(Role::Button, "Close").is_some());
+}
+
+/// A movable confirmation.
+fn movable(title: &str) -> DialogSpec {
+    DialogSpec::new(Confirm::new(title, "Export", GO)).movable(true)
+}
+
+/// Drags from a point by an amount, in four moves.
+fn drag_by(h: &mut Harness<'static, App>, from: egui::Pos2, by: egui::Vec2) {
+    h.drag_at(from);
+    h.run();
+    for i in 1..=4 {
+        h.hover_at(from + by * (i as f32 / 4.0));
+        h.run();
+    }
+    h.drop_at(from + by);
+    h.run();
+}
+
+/// A double click in one frame.
+fn double_click_at(h: &mut Harness<'static, App>, pos: egui::Pos2) {
+    let events = &mut h.input_mut().events;
+    events.push(egui::Event::PointerMoved(pos));
+    for _ in 0..2 {
+        for pressed in [true, false] {
+            events.push(egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: egui::Modifiers::NONE,
+            });
+        }
+    }
+    h.run();
+}
+
+fn offset(d: &dialogs::Dialogs) -> egui::Vec2 {
+    d.offset().expect("a dialog is shown")
+}
+
+fn inside(h: &Harness<'static, App>, label: &str, size: egui::Vec2) -> bool {
+    let r = h.get_by_label(label).rect();
+    r.min.x >= 0.0 && r.min.y >= 0.0 && r.max.x <= size.x && r.max.y <= size.y
+}
+
+#[test]
+fn a_movable_dialog_is_dragged_by_its_band_and_stays_inside_the_window() {
+    let (mut h, runs, d) = harness();
+    d.open(Confirm::new("Plain?", "Export", GO));
+    h.run();
+    // Not movable: dragging its title moves nothing.
+    let title = h.get_by_label("Plain?").rect().center();
+    drag_by(&mut h, title, egui::vec2(80.0, 40.0));
+    assert_eq!(offset(&d), egui::Vec2::ZERO);
+    assert_eq!(d.describe()["movable"], false);
+    d.answer(dialogs::Answer::Cancel, Origin::User).unwrap();
+    h.run();
+
+    d.open(movable("Export?"));
+    h.run();
+    assert_eq!(d.describe()["movable"], true);
+    let before = h.state().handle().last_event();
+    let title = h.get_by_label("Export?").rect().center();
+    drag_by(&mut h, title, egui::vec2(80.0, 40.0));
+    let moved = offset(&d);
+    assert!(moved.x > 40.0 && moved.y > 20.0, "{moved:?}");
+    let after = h.get_by_label("Export?").rect().center();
+    assert!(
+        (after - title - moved).length() < 1.0,
+        "the dialog followed"
+    );
+    let events = h.state().handle().events_since(before);
+    let names: Vec<&str> = events.iter().map(|e| e.name.as_str()).collect();
+    assert!(names.contains(&"dialog.move"), "{names:?}");
+    let done = events.iter().find(|e| e.name == "dialog.moved").unwrap();
+    assert_eq!(done.data["how"], "drag");
+    // Far away: kept inside the window.
+    let size = egui::vec2(800.0, 600.0);
+    let title = h.get_by_label("Export?").rect().center();
+    drag_by(&mut h, title, egui::vec2(2000.0, 2000.0));
+    h.run();
+    assert!(inside(&h, "Export", size), "clamped");
+    assert!(inside(&h, "Export?", size));
+    // Again when the window shrinks.
+    let small = egui::vec2(560.0, 400.0);
+    h.set_size(small);
+    h.run();
+    h.run();
+    assert!(inside(&h, "Export", small), "clamped again");
+    // Moving answered nothing.
+    assert_eq!(d.len(), 1);
+    assert!(runs.borrow().is_empty());
+}
+
+#[test]
+fn a_double_click_on_the_band_centres_the_dialog_again() {
+    let (mut h, _, d) = harness();
+    d.open(movable("Export?"));
+    h.run();
+    let centred = h.get_by_label("Export?").rect().center();
+    drag_by(&mut h, centred, egui::vec2(-120.0, 60.0));
+    assert_ne!(offset(&d), egui::Vec2::ZERO);
+    let title = h.get_by_label("Export?").rect().center();
+    let before = h.state().handle().last_event();
+    double_click_at(&mut h, title);
+    h.run();
+    assert_eq!(offset(&d), egui::Vec2::ZERO);
+    assert!((h.get_by_label("Export?").rect().center() - centred).length() < 1.0);
+    let events = h.state().handle().events_since(before);
+    let done = events.iter().find(|e| e.name == "dialog.moved").unwrap();
+    assert_eq!(done.data["how"], "recentre");
+}
+
+#[test]
+fn the_keyboard_moves_a_dialog_enter_keeps_the_place_escape_puts_it_back() {
+    let (mut h, runs, d) = harness();
+    d.open(movable("Export?"));
+    h.run();
+    h.key_press_modifiers(egui::Modifiers::ALT, egui::Key::F7);
+    h.run();
+    assert_eq!(d.describe()["moving"], true);
+    h.key_press(egui::Key::ArrowRight);
+    h.run();
+    h.key_press(egui::Key::ArrowRight);
+    h.run();
+    h.key_press(egui::Key::ArrowUp);
+    h.run();
+    let step = egui_pop_core::theme::Tokens::of(&h.ctx).space.m;
+    assert_eq!(offset(&d), egui::vec2(2.0 * step, -step));
+    // Enter keeps the place: nothing is accepted.
+    h.key_press(egui::Key::Enter);
+    h.run();
+    assert_eq!(d.describe()["moving"], false);
+    assert_eq!(d.len(), 1);
+    assert!(runs.borrow().is_empty());
+    let kept = offset(&d);
+    // Shift moves farther; Escape puts it back, the dialog stays.
+    h.key_press_modifiers(egui::Modifiers::ALT, egui::Key::F7);
+    h.run();
+    h.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::ArrowDown);
+    h.run();
+    assert!(offset(&d).y > kept.y + step);
+    h.key_press(egui::Key::Escape);
+    h.run();
+    h.run();
+    assert_eq!(offset(&d), kept);
+    assert_eq!(d.len(), 1, "Escape ended the move, not the dialog");
+    // Escape again cancels the dialog.
+    h.key_press(egui::Key::Escape);
+    h.run();
+    h.run();
+    assert!(d.is_empty());
+    // A dialog that is not movable is not moved by the keys.
+    d.open(Confirm::new("Plain?", "Export", GO));
+    h.run();
+    h.key_press_modifiers(egui::Modifiers::ALT, egui::Key::F7);
+    h.run();
+    h.key_press(egui::Key::ArrowRight);
+    h.run();
+    assert_eq!(offset(&d), egui::Vec2::ZERO);
+    assert_eq!(d.describe()["moving"], false);
+}
+
+#[test]
+fn a_dialog_reopens_centred_unless_it_keeps_its_place() {
+    let (mut h, _, d) = harness();
+    let open = |d: &dialogs::Dialogs, remember: bool| {
+        let spec = movable("Levels");
+        d.open(if remember {
+            spec.remember_position("levels")
+        } else {
+            spec
+        });
+    };
+    open(&d, true);
+    h.run();
+    let title = h.get_by_label("Levels").rect().center();
+    drag_by(&mut h, title, egui::vec2(100.0, -60.0));
+    let left = offset(&d);
+    assert_ne!(left, egui::Vec2::ZERO);
+    h.key_press(egui::Key::Escape);
+    h.run();
+    h.run();
+    assert!(d.is_empty());
+    // Kept in the host's store, by key.
+    let store = h.state().handle().store();
+    let kept = egui_pop_core::lock(&store)
+        .get("ui/dialogs/levels")
+        .map(|e| e.value.clone());
+    assert_eq!(
+        kept,
+        Some(Value::Floats(vec![f64::from(left.x), f64::from(left.y)]))
+    );
+    open(&d, true);
+    h.run();
+    h.run();
+    assert_eq!(offset(&d), left, "where it was left");
+    assert_eq!(d.describe()["remember"], "levels");
+    h.key_press(egui::Key::Escape);
+    h.run();
+    h.run();
+    open(&d, false);
+    h.run();
+    assert_eq!(offset(&d), egui::Vec2::ZERO, "centred");
+}
+
+/// The dim the dialog shown asks of the overlay layer.
+fn dim(h: &Harness<'static, App>) -> f32 {
+    egui_pop_core::overlay::stack(&h.ctx)
+        .last()
+        .map(|s| s.dim)
+        .expect("an overlay is open")
+}
+
+#[test]
+fn a_backdrop_dims_or_stays_clear_and_a_click_on_it_never_closes() {
+    let (mut h, runs, d) = harness();
+    d.open(movable("Export?"));
+    h.run();
+    assert_eq!(dim(&h), 1.0, "dimmed by default");
+    assert_eq!(d.describe()["backdrop"], "dim");
+    // The dim fades while the dialog is dragged.
+    let title = h.get_by_label("Export?").rect().center();
+    h.drag_at(title);
+    h.run();
+    for i in 1..=3 {
+        h.hover_at(title + egui::vec2(20.0 * i as f32, 0.0));
+        h.run();
+    }
+    assert!(dim(&h) < 1.0, "faded: {}", dim(&h));
+    h.drop_at(title + egui::vec2(60.0, 0.0));
+    h.run();
+    h.run();
+    assert_eq!(dim(&h), 1.0, "back once dropped");
+    // A click on the backdrop leaves the dialog open.
+    h.event(egui::Event::PointerMoved(egui::pos2(8.0, 590.0)));
+    h.event(egui::Event::PointerButton {
+        pos: egui::pos2(8.0, 590.0),
+        button: egui::PointerButton::Primary,
+        pressed: true,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.event(egui::Event::PointerButton {
+        pos: egui::pos2(8.0, 590.0),
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.run();
+    h.run();
+    assert_eq!(d.len(), 1);
+    d.answer(dialogs::Answer::Cancel, Origin::User).unwrap();
+    h.run();
+    // Clear: modal still, nothing dimmed.
+    d.open(DialogSpec::new(Confirm::new("Preview?", "Apply", GO)).backdrop(Backdrop::Clear));
+    h.run();
+    assert_eq!(dim(&h), 0.0);
+    assert_eq!(d.describe()["backdrop"], "clear");
+    assert!(egui_pop_core::overlay::modal_open(&h.ctx));
+    h.event(egui::Event::PointerButton {
+        pos: egui::pos2(8.0, 590.0),
+        button: egui::PointerButton::Primary,
+        pressed: true,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.event(egui::Event::PointerButton {
+        pos: egui::pos2(8.0, 590.0),
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.run();
+    h.run();
+    assert_eq!(d.len(), 1, "a clear backdrop does not close it either");
+    assert!(runs.borrow().is_empty());
+}
+
+#[test]
+fn every_dialog_is_movable_with_the_setting() {
+    let (mut h, _, d) = harness();
+    let store = h.state().handle().store();
+    egui_pop_core::lock(&store)
+        .set(Set::new(
+            &format!("settings/{SETTING_MOVABLE}"),
+            Change::To(Value::Bool(true)),
+            Origin::User,
+        ))
+        .unwrap();
+    d.open(Confirm::new("Export?", "Export", GO));
+    h.run();
+    let title = h.get_by_label("Export?").rect().center();
+    drag_by(&mut h, title, egui::vec2(80.0, 40.0));
+    assert_ne!(offset(&d), egui::Vec2::ZERO);
+}
+
+/// Refuses moves by the keys, sends every drop to one place.
+struct Pin;
+
+impl Plugin for Pin {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("pin")
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        ctx.before(STEP_MOVE, |_, args| match args["how"].as_str() {
+            Some("keys") => Before::Veto("not by the keys".into()),
+            Some("drag") => {
+                let mut a = args.clone();
+                a["to"] = json!([10.0, 20.0]);
+                Before::Redirect(a)
+            }
+            _ => Before::Go,
+        });
+        Ok(())
+    }
+}
+
+#[test]
+fn hooks_veto_or_redirect_a_move() {
+    let app = App::builder()
+        .plugins(DefaultPlugins)
+        .plugin(Pin)
+        .build(&egui::Context::default())
+        .unwrap();
+    let d = (*app.handle().service(&dialogs::DIALOGS).unwrap()).clone();
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(800.0, 600.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+    d.open(movable("Export?"));
+    h.run();
+    h.key_press_modifiers(egui::Modifiers::ALT, egui::Key::F7);
+    h.run();
+    h.key_press(egui::Key::ArrowRight);
+    h.run();
+    assert_eq!(offset(&d), egui::Vec2::ZERO, "vetoed");
+    h.key_press(egui::Key::Enter);
+    h.run();
+    let title = h.get_by_label("Export?").rect().center();
+    drag_by(&mut h, title, egui::vec2(150.0, 90.0));
+    h.run();
+    assert_eq!(offset(&d), egui::vec2(10.0, 20.0), "redirected");
 }

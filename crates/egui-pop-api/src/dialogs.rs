@@ -17,6 +17,23 @@
 //! of its title row, named "Close", which is Escape: the same cancel,
 //! through the same step and hooks, refused when Escape is.
 //!
+//! A dialog opened as [`DialogSpec::movable()`] (or every dialog, with
+//! the `dialogs.movable` setting) has a header band instead of its title
+//! row: its own tone, a separator, the move cursor, the ✕ when it is
+//! closable. Dragging the band moves the dialog, kept inside the window
+//! (again when the window is resized); a double click on it centres it
+//! again; the `dialogs.move` command (Alt+F7) moves it with the arrow
+//! keys (Shift for bigger steps), Enter keeping the place and Escape
+//! putting it back. A dialog comes up centred, or where it was left when
+//! opened with [`DialogSpec::remember_position()`] (kept per key in the
+//! host's store, under `ui/dialogs/<key>`).
+//!
+//! Its backdrop ([`Backdrop`]) dims the interface (`Dim`, the
+//! `dialog.backdrop` token's strength, fading while the dialog is
+//! dragged) or leaves it untouched (`Clear`, for a dialog previewing its
+//! effect on the image); the dialog stays modal either way, and a click
+//! on the backdrop never closes it.
+//!
 //! A form's path field (a descriptor made with `Descriptor::path`) has a
 //! Browse button: the file chooser ([`crate::files`]: the system's, or
 //! the in-app picker), its result written into the field when it comes;
@@ -31,9 +48,12 @@
 //! before-hook may veto it: it is cancelled), `dialog.answer` around each
 //! answer (a before-hook may veto it, the dialog staying open with the
 //! reason, or redirect it to another answer; a run-hook may answer its
-//! own way). The journal says `dialog.answered`, then `dialog.chosen`
-//! (the option's index, label and value) or `dialog.cancelled`, and
-//! `dialog.filtered` as a choice's filter changes.
+//! own way), `dialog.move` when a dialog is dropped, moved by a key or
+//! centred again (a before-hook may veto it, the dialog going back, or
+//! redirect it elsewhere). The journal says `dialog.answered`, then
+//! `dialog.chosen` (the option's index, label and value) or
+//! `dialog.cancelled`, `dialog.filtered` as a choice's filter changes,
+//! and `dialog.moved` once a move is done.
 //!
 //! ```
 //! use egui_pop_api::dialogs::{self, Confirm};
@@ -56,17 +76,18 @@ use std::path::{Path, PathBuf};
 
 use std::sync::{Arc, Mutex};
 
-use egui::{Key, Response, Ui, WidgetType};
+use egui::{Key, Modifiers, Rect, Response, Ui, Vec2, WidgetType};
 use egui_pop_core::debug::FnCollector;
 use egui_pop_core::icon::Icon;
 use egui_pop_core::overlay::{self, Kind, OverlaySpec};
 use egui_pop_core::strings::{self, CANCEL, CLOSE};
 use egui_pop_core::theme::Tokens;
 use egui_pop_core::{a11y, lock};
-use egui_pop_model::commands::Origin;
+use egui_pop_model::commands::{CommandSpec, Origin};
 use egui_pop_model::fuzzy;
-use egui_pop_model::ids::{BlockId, CommandId, PluginId, SettingId, StepId};
-use egui_pop_model::values::{Descriptor, PathHint, PathKind, Type, Value};
+use egui_pop_model::ids::{BlockId, CommandId, OwnerId, PluginId, SettingId, StepId};
+use egui_pop_model::keymap::BindOptions;
+use egui_pop_model::values::{Change, Descriptor, PathHint, PathKind, Set, Type, Value};
 use serde::Serialize;
 use serde_json::{Map, Value as Json, json};
 
@@ -93,6 +114,25 @@ pub const STEP_ANSWER: StepId = StepId::from_static("dialog.answer");
 /// The setting: every dialog has the close button, as if opened
 /// [`DialogSpec::closable()`].
 pub const SETTING_CLOSABLE: SettingId = SettingId::from_static("dialogs.closable");
+/// A dialog is moved: dropped after a drag, moved by a key, centred
+/// again. `{"id", "title", "key", "how": "drag" | "keys" | "recentre",
+/// "from": [x, y], "to": [x, y]}`, offsets from the window's centre in
+/// points; a veto puts it back where it was, a redirect places it at its
+/// own `to`.
+pub const STEP_MOVE: StepId = StepId::from_static("dialog.move");
+/// The setting: every dialog is movable, as if opened
+/// [`DialogSpec::movable()`].
+pub const SETTING_MOVABLE: SettingId = SettingId::from_static("dialogs.movable");
+/// Moves the dialog shown with the arrow keys (Alt+F7): Shift for bigger
+/// steps, Enter keeps the place, Escape puts it back.
+pub const CMD_MOVE: CommandId = CommandId::from_static("dialogs.move");
+
+/// The plugin's id, owner of the positions it keeps.
+const PLUGIN: PluginId = PluginId::from_static("egui_pop.dialogs");
+/// What is left of the backdrop while a dialog is dragged.
+const DRAG_DIM: f32 = 0.35;
+/// How many arrow steps one Shift+arrow press moves.
+const BIG_STEP: f32 = 8.0;
 
 /// A question before an action.
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -352,15 +392,34 @@ impl Dialog {
     }
 }
 
+/// What a modal dialog does to the interface behind it. Either way the
+/// interface is blocked while the dialog is open, and a click on it never
+/// closes the dialog.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Backdrop {
+    /// Dimmed, as much as the `dialog.backdrop` token says (less while
+    /// the dialog is dragged).
+    #[default]
+    Dim,
+    /// Left untouched: for a dialog previewing its effect on the image.
+    Clear,
+}
+
 /// A dialog and how it is presented around its content: what
 /// [`Dialogs::open`] takes (any dialog converts into one, presented by
 /// default).
 ///
 /// ```
-/// use egui_pop_api::dialogs::{DialogSpec, Info};
+/// use egui_pop_api::dialogs::{Backdrop, DialogSpec, Info};
 ///
 /// let spec = DialogSpec::new(Info::new("Saved", "The document was saved.")).closable(true);
 /// assert!(spec.closable);
+/// let spec = DialogSpec::new(Info::new("Levels", "Drag to adjust."))
+///     .movable(true)
+///     .backdrop(Backdrop::Clear)
+///     .remember_position("levels");
+/// assert_eq!(spec.remember.as_deref(), Some("levels"));
 /// ```
 #[derive(Clone, Debug, PartialEq)]
 pub struct DialogSpec {
@@ -369,6 +428,14 @@ pub struct DialogSpec {
     /// (off by default; the [`SETTING_CLOSABLE`] setting turns it on for
     /// every dialog).
     pub closable: bool,
+    /// A header band to drag the dialog by (off by default; the
+    /// [`SETTING_MOVABLE`] setting turns it on for every dialog).
+    pub movable: bool,
+    /// What the dialog does to the interface behind it.
+    pub backdrop: Backdrop,
+    /// The key the dialog's place is kept under: it comes up where it
+    /// was left instead of centred.
+    pub remember: Option<String>,
 }
 
 impl DialogSpec {
@@ -376,6 +443,9 @@ impl DialogSpec {
         Self {
             dialog: dialog.into(),
             closable: false,
+            movable: false,
+            backdrop: Backdrop::Dim,
+            remember: None,
         }
     }
 
@@ -383,6 +453,27 @@ impl DialogSpec {
     /// following the web's convention).
     pub fn closable(mut self, closable: bool) -> Self {
         self.closable = closable;
+        self
+    }
+
+    /// With a header band to drag it by (a dialog hiding what it acts
+    /// on).
+    pub fn movable(mut self, movable: bool) -> Self {
+        self.movable = movable;
+        self
+    }
+
+    /// What it does to the interface behind it ([`Backdrop::Dim`] by
+    /// default).
+    pub fn backdrop(mut self, backdrop: Backdrop) -> Self {
+        self.backdrop = backdrop;
+        self
+    }
+
+    /// Comes up where it was last left, kept under `key` (letters,
+    /// digits, `. _ - :`) in the host's store; otherwise centred.
+    pub fn remember_position(mut self, key: &str) -> Self {
+        self.remember = Some(key.into());
         self
     }
 }
@@ -471,6 +562,17 @@ struct Open {
     dialog: Dialog,
     /// Opened with the close button.
     closable: bool,
+    /// Opened movable.
+    movable: bool,
+    backdrop: Backdrop,
+    /// The key its place is kept under.
+    remember: Option<String>,
+    /// Where it is: its offset from the window's centre, in points.
+    offset: Vec2,
+    /// Moved by the keys: where it was when that started.
+    moving: Option<Vec2>,
+    /// Dragged: where it was when the drag started.
+    drag_from: Option<Vec2>,
     /// Focus placed on its first pass.
     focused: bool,
     /// The in-app picker open inside the dialog for a field (without the
@@ -512,6 +614,12 @@ impl Dialogs {
             id,
             dialog: spec.dialog,
             closable: spec.closable,
+            movable: spec.movable,
+            backdrop: spec.backdrop,
+            remember: spec.remember,
+            offset: Vec2::ZERO,
+            moving: None,
+            drag_from: None,
             focused: false,
             picking: None,
             browse: None,
@@ -529,6 +637,12 @@ impl Dialogs {
             .queue
             .front()
             .map(|o| (o.id, o.dialog.clone()))
+    }
+
+    /// Where the dialog shown is: its offset from the window's centre, in
+    /// points (zero: centred).
+    pub fn offset(&self) -> Option<Vec2> {
+        lock(&self.0).queue.front().map(|o| o.offset)
     }
 
     /// How many dialogs wait, the shown one included.
@@ -556,6 +670,13 @@ impl Dialogs {
                 let mut d = serde_json::to_value(&o.dialog).unwrap_or(Json::Null);
                 d["id"] = json!(o.id);
                 d["closable"] = json!(o.closable);
+                d["movable"] = json!(o.movable);
+                d["backdrop"] = json!(o.backdrop);
+                d["offset"] = json!([o.offset.x, o.offset.y]);
+                d["moving"] = json!(o.moving.is_some());
+                if let Some(key) = &o.remember {
+                    d["remember"] = json!(key);
+                }
                 d["waiting"] = json!(s.queue.len() - 1);
                 match &o.dialog {
                     // The typed values as they are, and plainly by key.
@@ -584,7 +705,7 @@ pub struct DialogsPlugin;
 
 impl Plugin for DialogsPlugin {
     fn id(&self) -> PluginId {
-        PluginId::from_static("egui_pop.dialogs")
+        PLUGIN
     }
 
     fn title(&self) -> String {
@@ -599,6 +720,38 @@ impl Plugin for DialogsPlugin {
             Descriptor::bool("Close button on every dialog", false).description(
                 "A ✕ at the right end of each dialog's title row, doing what Escape does.",
             ),
+        )?;
+        ctx.setting(
+            SETTING_MOVABLE,
+            Descriptor::bool("Movable dialogs", false).description(
+                "Every dialog has a header band to drag it by; Alt+F7 moves it with the arrow keys.",
+            ),
+        )?;
+        let moved = dialogs.clone();
+        ctx.command(
+            CommandSpec::new(CMD_MOVE, "Move dialog", "Dialogs")
+                .description("Moves the dialog shown with the arrow keys; Enter keeps the place, Escape puts it back.")
+                .when("modalOpen")
+                .key_with("Alt+F7", BindOptions::global().through_modal()),
+            move |call| {
+                let all = setting(call.app, SETTING_MOVABLE);
+                let mut s = lock(&moved.0);
+                let o = s.queue.front_mut().ok_or("no dialog is open")?;
+                if !(o.movable || all) {
+                    return Err("the dialog shown is not movable".into());
+                }
+                o.moving = Some(o.offset);
+                o.drag_from = None;
+                call.app.egui().request_repaint();
+                Ok(json!({ "id": o.id }))
+            },
+        )?;
+        ctx.step(
+            StepSpec::new(
+                STEP_MOVE,
+                "A dialog is moved (dropped, moved by a key, centred again); a veto puts it back, a redirect places it elsewhere.",
+            )
+            .args(json!({ "id": 1, "title": "Levels", "key": "levels", "how": "drag", "from": [0.0, 0.0], "to": [120.0, -40.0] })),
         )?;
         ctx.step(
             StepSpec::new(STEP_SHOW, "A dialog comes up; a veto cancels it.")
@@ -773,6 +926,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     let Some(mut open_dialog) = lock(&d.0).queue.front().cloned() else {
         return;
     };
+    let ctx = ui.ctx().clone();
     if !open_dialog.focused {
         // It comes up: hooks may stop it (it is cancelled).
         let out = app.step(&STEP_SHOW, d.describe(), |_, _| Ok(Json::Null));
@@ -782,28 +936,66 @@ fn show(ui: &mut Ui, app: &AppHandle) {
             }
             return;
         }
+        // Where it was left, when it keeps its place; centred otherwise.
+        if let Some(key) = &open_dialog.remember {
+            open_dialog.offset = remembered(app, key).unwrap_or(Vec2::ZERO);
+        }
     }
     let filter = open_dialog.filter.clone();
-    let closable = open_dialog.closable
-        || lock(&app.store())
-            .get(&format!("settings/{SETTING_CLOSABLE}"))
-            .and_then(|e| e.value.as_bool())
-            .unwrap_or(false);
-    let ctx = ui.ctx().clone();
-    let spec = OverlaySpec::new(
+    let closable = open_dialog.closable || setting(app, SETTING_CLOSABLE);
+    let movable = open_dialog.movable || setting(app, SETTING_MOVABLE);
+    let id = overlay_id(open_dialog.id);
+    if movable {
+        // Inside the window, again when the window was resized.
+        open_dialog.offset = clamp(&ctx, id, open_dialog.offset);
+        if let Some(start) = open_dialog.moving {
+            move_by_keys(app, &ctx, &mut open_dialog, start);
+        }
+    } else {
+        open_dialog.offset = Vec2::ZERO;
+        open_dialog.moving = None;
+        open_dialog.drag_from = None;
+    }
+    // The dim fades while the dialog is dragged.
+    let dragged = ctx.animate_bool_with_time(
+        id.with("dragged"),
+        open_dialog.drag_from.is_some(),
+        Tokens::of(&ctx).motion_duration,
+    );
+    let dim = match open_dialog.backdrop {
+        Backdrop::Dim => 1.0 - (1.0 - DRAG_DIM) * dragged,
+        Backdrop::Clear => 0.0,
+    };
+    let mut spec = OverlaySpec::new(
         ("egui_pop.dialog", open_dialog.id),
         open_dialog.dialog.title(),
         Kind::Modal,
-    );
-    debug_assert_eq!(spec.id, overlay_id(open_dialog.id));
+    )
+    .offset(open_dialog.offset)
+    .dim(dim);
+    debug_assert_eq!(spec.id, id);
     let mut open = true;
     let mut answer: Option<Answer> = None;
     // The ✕ is shown only where Escape works.
     let closable = closable && spec.dismiss_on_escape;
+    if open_dialog.moving.is_some() {
+        // Escape puts the dialog back instead of closing it.
+        spec = spec.keep_on_escape();
+    }
     let mut closed = false;
+    let mut band = Band::default();
     overlay::show(&ctx, &spec, &mut open, None, |ui| {
-        answer = body(ui, app, &mut open_dialog, closable, &mut closed);
+        let header = Header {
+            closable,
+            movable,
+            closed: &mut closed,
+            band: &mut band,
+        };
+        answer = body(ui, app, &mut open_dialog, header);
     });
+    if movable {
+        drag(app, &ctx, id, &mut open_dialog, &band);
+    }
     // The ✕ is Escape: the overlay dismissed, whatever else the pass
     // said (Enter on the ✕ included), answered as a cancel below.
     if closed {
@@ -857,20 +1049,33 @@ fn values_of(fields: &[Field]) -> Map<String, Json> {
         .collect()
 }
 
-/// A dialog's content and footer; its answer when given. `closed` says
-/// whether its ✕ (shown when `closable`) was pressed.
-fn body(
-    ui: &mut Ui,
-    app: &AppHandle,
-    o: &mut Open,
+/// What a dialog's head shows, and what happened to it.
+struct Header<'a> {
     closable: bool,
-    closed: &mut bool,
-) -> Option<Answer> {
+    movable: bool,
+    /// Its ✕ was pressed.
+    closed: &'a mut bool,
+    /// Its header band (when movable).
+    band: &'a mut Band,
+}
+
+/// A dialog's content and footer; its answer when given.
+fn body(ui: &mut Ui, app: &AppHandle, o: &mut Open, header: Header<'_>) -> Option<Answer> {
     let t = Tokens::of(ui.ctx());
     let first = !o.focused;
     o.focused = true;
     let title = o.dialog.title().to_string();
-    let heading = title_row(ui, &title, closable, closed);
+    let Header {
+        closable,
+        movable,
+        closed,
+        band,
+    } = header;
+    let heading = if movable {
+        header_band(ui, &title, closable, closed, band)
+    } else {
+        title_row(ui, &title, closable, closed)
+    };
     ui.add_space(t.space.s);
     let mut answer = None;
     let enter = ui.input(|i| i.key_pressed(Key::Enter));
@@ -1029,12 +1234,321 @@ fn body(
     if let Some(e) = &o.error {
         ui.colored_label(t.status.danger, e);
     }
+    paint_band(ui, band);
     answer
 }
 
+/// A movable dialog's header band: what the pointer did to it this pass,
+/// and where it is painted.
+#[derive(Debug, Default)]
+struct Band {
+    /// Its memory id (its size from the last pass).
+    id: Option<egui::Id>,
+    /// The fill painted once the dialog's width is known.
+    shape: Option<egui::layers::ShapeIdx>,
+    top: f32,
+    bottom: f32,
+    dragging: bool,
+    double_clicked: bool,
+    delta: Vec2,
+}
+
+/// The header band: the title and the ✕ (when closable) on a tone of
+/// their own, above a separator, under the move cursor. It is registered
+/// before the ✕, which stays on top of it; its size is the last pass's.
+fn header_band(
+    ui: &mut Ui,
+    title: &str,
+    closable: bool,
+    closed: &mut bool,
+    band: &mut Band,
+) -> Response {
+    let t = Tokens::of(ui.ctx());
+    let pad = t.dialog.padding;
+    let id = ui.id().with("egui_pop.dialog.band");
+    let side = close_side(ui);
+    let top_left = ui.max_rect().min - egui::vec2(pad, pad);
+    let size = ui
+        .ctx()
+        .data(|d| d.get_temp::<Vec2>(id))
+        .unwrap_or(egui::vec2(
+            ui.available_width() + 2.0 * pad,
+            pad + side + t.space.m,
+        ));
+    // Not focusable: the keyboard moves it through the `dialogs.move`
+    // command.
+    let response = ui.interact(
+        Rect::from_min_size(top_left, size),
+        id,
+        egui::Sense::CLICK | egui::Sense::DRAG,
+    );
+    band.id = Some(id);
+    band.shape = Some(ui.painter().add(egui::Shape::Noop));
+    band.top = top_left.y;
+    let heading = ui
+        .horizontal_top(|ui| {
+            let room = if closable {
+                (ui.available_width() - side - ui.spacing().item_spacing.x).max(0.0)
+            } else {
+                ui.available_width()
+            };
+            // Not selectable: a press on the title drags the dialog.
+            let heading = ui
+                .allocate_ui(egui::vec2(room, side), |ui| {
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(title)
+                                .heading()
+                                .color(t.dialog.header_text),
+                        )
+                        .wrap()
+                        .selectable(false),
+                    )
+                })
+                .inner;
+            if closable {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+                    if close_button(ui, side).clicked() {
+                        *closed = true;
+                    }
+                });
+            }
+            heading
+        })
+        .inner;
+    band.bottom = ui.min_rect().bottom() + t.space.m;
+    ui.add_space(2.0 * t.space.m);
+    band.dragging = response.dragged();
+    band.delta = response.drag_delta();
+    band.double_clicked = response.double_clicked();
+    if response.hovered() || response.dragged() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::Move);
+    }
+    heading
+}
+
+/// Paints the header band across the dialog's width (known once its
+/// content is laid out), with the separator below it.
+fn paint_band(ui: &Ui, band: &Band) {
+    let (Some(id), Some(shape)) = (band.id, band.shape) else {
+        return;
+    };
+    let t = Tokens::of(ui.ctx());
+    let pad = t.dialog.padding;
+    let content = ui.min_rect();
+    let rect = Rect::from_min_max(
+        egui::pos2(content.left() - pad, band.top),
+        egui::pos2(content.right() + pad, band.bottom),
+    );
+    // Inside the frame's outline: its corners, less the stroke.
+    let r = (t.dialog.radius - 1.0).clamp(0.0, 255.0) as u8;
+    let corners = egui::CornerRadius {
+        nw: r,
+        ne: r,
+        sw: 0,
+        se: 0,
+    };
+    ui.painter().set(
+        shape,
+        egui::Shape::rect_filled(rect, corners, t.dialog.header),
+    );
+    ui.painter().hline(
+        rect.x_range(),
+        rect.bottom(),
+        egui::Stroke::new(1.0, t.dialog.border),
+    );
+    ui.ctx().data_mut(|d| d.insert_temp(id, rect.size()));
+}
+
+/// Whether a boolean setting is on.
+fn setting(app: &AppHandle, id: SettingId) -> bool {
+    lock(&app.store())
+        .get(&format!("settings/{id}"))
+        .and_then(|e| e.value.as_bool())
+        .unwrap_or(false)
+}
+
+/// An offset keeping the dialog inside the window (its size is the last
+/// pass's; unchanged before it was drawn).
+fn clamp(ctx: &egui::Context, id: egui::Id, offset: Vec2) -> Vec2 {
+    let Some(rect) = overlay::rect(ctx, id) else {
+        return offset;
+    };
+    let room = ((ctx.content_rect().size() - rect.size()) / 2.0).max(Vec2::ZERO);
+    offset.clamp(-room, room)
+}
+
+/// What the pointer did to the band: a drag moves the dialog freely
+/// (clamped), the drop goes through the move step; a double click
+/// centres it again.
+fn drag(app: &AppHandle, ctx: &egui::Context, id: egui::Id, o: &mut Open, band: &Band) {
+    if band.double_clicked {
+        o.drag_from = None;
+        o.moving = None;
+        let from = o.offset;
+        move_to(app, o, "recentre", from, Vec2::ZERO);
+        return;
+    }
+    if band.dragging && o.drag_from.is_none() {
+        o.drag_from = Some(o.offset);
+        o.moving = None;
+    }
+    if band.dragging && band.delta != Vec2::ZERO {
+        o.offset = clamp(ctx, id, o.offset + band.delta);
+        ctx.request_repaint();
+    }
+    // Dropped (or the drag lost): the move step decides.
+    if !band.dragging
+        && let Some(from) = o.drag_from.take()
+    {
+        let to = o.offset;
+        move_to(app, o, "drag", from, to);
+        ctx.request_repaint();
+    }
+}
+
+/// Moving by the keys: an arrow moves it one step (Shift: bigger ones),
+/// Enter keeps the place, Escape puts it back where it was.
+fn move_by_keys(app: &AppHandle, ctx: &egui::Context, o: &mut Open, start: Vec2) {
+    let step = Tokens::of(ctx).space.m;
+    let (by, enter, escape) = ctx.input_mut(|i| {
+        let mut by = Vec2::ZERO;
+        for (key, dir) in [
+            (Key::ArrowLeft, egui::vec2(-1.0, 0.0)),
+            (Key::ArrowRight, egui::vec2(1.0, 0.0)),
+            (Key::ArrowUp, egui::vec2(0.0, -1.0)),
+            (Key::ArrowDown, egui::vec2(0.0, 1.0)),
+        ] {
+            // Shift first: a plain match ignores an extra Shift.
+            while i.consume_key(Modifiers::SHIFT, key) {
+                by += dir * step * BIG_STEP;
+            }
+            while i.consume_key(Modifiers::NONE, key) {
+                by += dir * step;
+            }
+        }
+        (
+            by,
+            i.consume_key(Modifiers::NONE, Key::Enter),
+            i.consume_key(Modifiers::NONE, Key::Escape),
+        )
+    });
+    let id = overlay_id(o.id);
+    if by != Vec2::ZERO {
+        let from = o.offset;
+        let to = clamp(ctx, id, from + by);
+        move_to(app, o, "keys", from, to);
+    }
+    if escape {
+        let from = o.offset;
+        move_to(app, o, "keys", from, start);
+        o.moving = None;
+    } else if enter {
+        o.moving = None;
+    }
+}
+
+/// Moves the dialog through the [`STEP_MOVE`] step: a veto leaves it
+/// where it was, a redirect places it elsewhere. Done, it is published
+/// (`dialog.moved`) and its place kept when it keeps one.
+fn move_to(app: &AppHandle, o: &mut Open, how: &str, from: Vec2, to: Vec2) {
+    if from == to {
+        o.offset = to;
+        return;
+    }
+    let args = json!({
+        "id": o.id,
+        "title": o.dialog.title(),
+        "key": o.remember,
+        "how": how,
+        "from": [from.x, from.y],
+        "to": [to.x, to.y],
+    });
+    let out = app.step(&STEP_MOVE, args, |_, args| Ok(json!({ "to": args["to"] })));
+    let placed = match out {
+        Outcome::Done(Ok(result)) => vec2_of(&result["to"]),
+        Outcome::Done(Err(e)) => {
+            log::info!(target: "egui_pop", "dialog.move: {e}");
+            None
+        }
+        Outcome::Vetoed { .. } => None,
+    };
+    let Some(at) = placed else {
+        o.offset = from;
+        return;
+    };
+    o.offset = at;
+    app.publish(
+        "user",
+        None,
+        "dialog.moved",
+        json!({ "id": o.id, "title": o.dialog.title(), "how": how, "offset": [at.x, at.y] }),
+    );
+    if let Some(key) = &o.remember {
+        remember(app, key, at);
+    }
+}
+
+/// `[x, y]` as a vector.
+fn vec2_of(json: &Json) -> Option<Vec2> {
+    let a = json.as_array()?;
+    match a.as_slice() {
+        [x, y] => Some(egui::vec2(x.as_f64()? as f32, y.as_f64()? as f32)),
+        _ => None,
+    }
+}
+
+/// Where a dialog's place is kept, declared in the host's store (a value
+/// saved before is picked up then).
+fn position_path(app: &AppHandle, key: &str) -> Option<String> {
+    let path = format!("ui/dialogs/{key}");
+    let store = app.store();
+    let mut s = lock(&store);
+    if s.get(&path).is_none()
+        && let Err(e) = s.declare(
+            &OwnerId::from(&PLUGIN),
+            &path,
+            Descriptor::floats("Dialog position", 2, -1.0e6, 1.0e6, &[0.0, 0.0])
+                .description("A dialog's offset from the window's centre, in points."),
+        )
+    {
+        log::warn!(target: "egui_pop", "dialog position `{key}`: {e}");
+        return None;
+    }
+    Some(path)
+}
+
+/// The place kept for a dialog.
+fn remembered(app: &AppHandle, key: &str) -> Option<Vec2> {
+    let path = position_path(app, key)?;
+    match &lock(&app.store()).get(&path)?.value {
+        Value::Floats(v) if v.len() == 2 => Some(egui::vec2(v[0] as f32, v[1] as f32)),
+        _ => None,
+    }
+}
+
+/// Keeps a dialog's place (no undo step).
+fn remember(app: &AppHandle, key: &str, offset: Vec2) {
+    let Some(path) = position_path(app, key) else {
+        return;
+    };
+    let set = Set::new(
+        &path,
+        Change::To(Value::Floats(vec![
+            f64::from(offset.x),
+            f64::from(offset.y),
+        ])),
+        Origin::User,
+    )
+    .untracked();
+    if let Err(e) = lock(&app.store()).set(set) {
+        log::warn!(target: "egui_pop", "dialog position `{key}`: {e:?}");
+    }
+}
+
 /// The title row: the title, and the ✕ at its right end when the dialog
-/// is closable. No band behind it: a movable dialog's header band would
-/// be drawn here, around the same row.
+/// is closable. No band behind it: a movable dialog has its header band
+/// instead ([`header_band`]).
 fn title_row(ui: &mut Ui, title: &str, closable: bool, closed: &mut bool) -> Response {
     if !closable {
         return ui.heading(title);

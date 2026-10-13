@@ -1,6 +1,8 @@
 # Le texte d’egui-pop et ce que déclarent ses plugins, en français.
 # Traduction de ../en/egui-pop.ftl, sous les mêmes clés.
 
+category-dialogs = Dialogues
+
 category-edit = Édition
 
 category-editor = Éditeur
@@ -96,6 +98,10 @@ command-crash-dismiss =
 command-crash-reveal =
     .description = Ouvre le fichier d’un rapport de plantage (`path`).
     .title = Afficher un rapport de plantage
+
+command-dialogs-move =
+    .description = Déplace le dialogue affiché avec les flèches ; Entrée garde la place, Échap le remet où il était.
+    .title = Déplacer le dialogue
 
 command-edit-redo =
     .description = Rétablir la dernière modification annulée.
@@ -650,6 +656,10 @@ setting-developer-show-keys =
 setting-dialogs-closable =
     .description = Un ✕ au bout de la ligne de titre de chaque dialogue, qui fait ce que fait Échap.
     .label = Bouton de fermeture sur chaque dialogue
+
+setting-dialogs-movable =
+    .description = Chaque dialogue a un bandeau de titre par lequel le faire glisser ; Alt+F7 le déplace avec les flèches.
+    .label = Dialogues déplaçables
 
 setting-files-native =
     .description = Choisir les fichiers avec le sélecteur du système quand il y en a un ; désactivé, avec celui d’egui-pop.

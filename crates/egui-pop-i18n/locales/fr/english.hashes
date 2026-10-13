@@ -1,5 +1,6 @@
 # The hash of the English text each key was translated from: a key
 # whose English changed since is reported by the catalogue check.
+category-dialogs 93177f9aec8337b4
 category-edit 329d5a4f3eb93fa9
 category-editor 1506bdc27aacc0ce
 category-file 181d912a9545ccc3
@@ -48,6 +49,8 @@ command-crash-dismiss.description b5df35a904ab206d
 command-crash-dismiss.title 8d7a524d19b27a4a
 command-crash-reveal.description e039b5328a31627c
 command-crash-reveal.title fc7f6a28bfaf4aa8
+command-dialogs-move.description dcf98be63ecae961
+command-dialogs-move.title a273c065a7d7359a
 command-edit-redo.description b786327d06875b47
 command-edit-redo.title ef2842c65cf40641
 command-edit-undo.description 73aea46b70356964
@@ -312,6 +315,8 @@ setting-developer-show-keys.description 3edf370057b38677
 setting-developer-show-keys.label 340776331e19a4a5
 setting-dialogs-closable.description 52ace4aa7a7b8027
 setting-dialogs-closable.label 38b89c3e7eeca6cb
+setting-dialogs-movable.description 29f0049b1a088e5d
+setting-dialogs-movable.label 94438e9752d4ed0a
 setting-files-native.description ce2b615f40df8940
 setting-files-native.label f2b00b77262f7a75
 setting-notifications-desktop-choice-always 2f25054a585490a2
