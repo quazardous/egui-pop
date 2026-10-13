@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sys
 import time
 from pathlib import Path
@@ -85,7 +86,9 @@ def shoot(cfg: dict, shot: dict, settle: float) -> dict:
         if "error" in taken:
             return {"error": f"screenshot: {taken['error']}"}
         Path(shot["out"]).parent.mkdir(parents=True, exist_ok=True)
-        os.replace(taken["path"], shot["out"])
+        # wbox may capture on another filesystem (a bench box job), where
+        # a rename fails
+        shutil.move(taken["path"], shot["out"])
         return {"ok": True}
     finally:
         comp.stop()
