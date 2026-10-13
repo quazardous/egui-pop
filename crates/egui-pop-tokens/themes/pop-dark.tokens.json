@@ -186,6 +186,10 @@
       "mono": {"$value": ["Hack", "monospace"], "$description": "Numbers and code (informative until fonts are loaded from themes)."}
     }
   },
+  "opacity": {
+    "$type": "number",
+    "scrim": {"$value": 0.392, "$description": "How much the backdrop behind a modal hides the interface, 0 to 1 (egui's own: 100 of 255)."}
+  },
   "motion": {
     "duration": {"$type": "duration", "$value": {"value": 120, "unit": "ms"}, "$description": "Length of animations; 0 turns them off (reduced motion)."}
   },
@@ -217,7 +221,10 @@
     "border": {"$type": "color", "$value": "{border.default}"},
     "radius": {"$type": "dimension", "$value": "{radius.window}"},
     "padding": {"$type": "dimension", "$value": "{space.l}"},
-    "width": {"$type": "dimension", "$value": "{size.dialog.width}"}
+    "width": {"$type": "dimension", "$value": "{size.dialog.width}"},
+    "header": {"$type": "color", "$value": "{surface.raised}", "$description": "A movable dialog's header band, the handle it is dragged by."},
+    "header-text": {"$type": "color", "$value": "{text.default}"},
+    "backdrop": {"$type": "number", "$value": "{opacity.scrim}", "$description": "The backdrop's opacity behind a modal dialog."}
   },
   "toast": {
     "background": {"$type": "color", "$value": "{surface.overlay}"},

@@ -45,6 +45,14 @@ pub struct OverlaySpec {
     /// A modal's width, when the dialog width token is too narrow (a
     /// settings window).
     pub width: Option<f32>,
+    /// A modal's offset from the window's centre, in points (a dialog
+    /// moved by the user).
+    #[serde(skip)]
+    pub offset: egui::Vec2,
+    /// How much of the theme's backdrop a modal dims the interface with
+    /// (`dialog.backdrop`): 1 by default, 0 for none (the interface stays
+    /// as it is, still blocked).
+    pub dim: f32,
 }
 
 impl OverlaySpec {
@@ -56,7 +64,22 @@ impl OverlaySpec {
             dismiss_on_escape: true,
             dismiss_on_outside: kind != Kind::Modal,
             width: None,
+            offset: egui::Vec2::ZERO,
+            dim: 1.0,
         }
+    }
+
+    /// A modal this far from the window's centre (points).
+    pub fn offset(mut self, offset: egui::Vec2) -> Self {
+        self.offset = offset;
+        self
+    }
+
+    /// A modal dimming the interface with this share of the theme's
+    /// backdrop (0 to 1).
+    pub fn dim(mut self, dim: f32) -> Self {
+        self.dim = dim.clamp(0.0, 1.0);
+        self
     }
 
     /// A modal this wide (points; capped to the window).
@@ -134,6 +157,18 @@ impl OverlayStack {
             rect: None,
         });
         (Opened::New, Vec::new())
+    }
+
+    /// Replaces an open overlay's declaration where it is (its Escape
+    /// rule, its offset), closing nothing; whether it is open.
+    pub fn update(&mut self, spec: OverlaySpec) -> bool {
+        match self.position(spec.id) {
+            Some(i) => {
+                self.entries[i].spec = spec;
+                true
+            }
+            None => false,
+        }
     }
 
     fn position(&self, id: Id) -> Option<usize> {
@@ -378,6 +413,17 @@ pub fn recently_closed(ctx: &Context) -> Vec<Closed> {
     lock(&st).history.clone()
 }
 
+/// Where an open overlay was last drawn.
+pub fn rect(ctx: &Context, id: Id) -> Option<Rect> {
+    let st = state(ctx);
+    let s = lock(&st);
+    s.stack
+        .entries
+        .iter()
+        .find(|e| e.spec.id == id)
+        .and_then(|e| e.rect)
+}
+
 /// Whether a modal overlay is open.
 pub fn modal_open(ctx: &Context) -> bool {
     let st = state(ctx);
@@ -393,8 +439,8 @@ pub struct Anchor {
 
 /// Shows an overlay while `*open`; sets `*open` to false when it closes
 /// (Escape, a click outside, or [`close`]), restoring the focus. A modal
-/// is centred with a backdrop; other kinds are placed next to `anchor`
-/// (or at the pointer).
+/// is centred (moved by its `offset`) over a backdrop (`dim`); other
+/// kinds are placed next to `anchor` (or at the pointer).
 pub fn show<R>(
     ctx: &Context,
     spec: &OverlaySpec,
@@ -423,13 +469,24 @@ pub fn show<R>(
             let focused = ctx.memory(|m| m.focused());
             let (_, closed) = s.stack.open(spec.clone(), focused);
             settle(ctx, &mut s, closed);
+        } else if s.stack.specs().any(|o| o.id == spec.id && o != spec) {
+            // Declared differently this pass (Escape kept, moved).
+            s.stack.update(spec.clone());
         }
         s.shown.push(spec.id);
     }
     let tokens = crate::theme::Tokens::of(ctx);
     let (inner, rect) = match spec.kind {
         Kind::Modal => {
+            let alpha = (tokens.dialog.backdrop * spec.dim).clamp(0.0, 1.0);
             let r = egui::Modal::new(spec.id)
+                .area(
+                    egui::Modal::default_area(spec.id)
+                        .anchor(egui::Align2::CENTER_CENTER, spec.offset),
+                )
+                .backdrop_color(egui::Color32::from_black_alpha(
+                    (alpha * 255.0).round() as u8
+                ))
                 .frame(
                     egui::Frame::window(&ctx.global_style())
                         .fill(tokens.dialog.background)
@@ -507,6 +564,24 @@ mod tests {
         assert!(s.escape().is_empty(), "nothing left");
         s.open(spec("ask", Kind::Modal).keep_on_escape(), None);
         assert!(s.escape().is_empty(), "it stays");
+    }
+
+    #[test]
+    fn an_overlay_declared_again_changes_in_place() {
+        let mut s = OverlayStack::new();
+        s.open(spec("dialog", Kind::Modal), Some(Id::new("field")));
+        s.open(spec("menu", Kind::Menu), None);
+        // Escape kept for a while (a dialog moved by the keys): nothing
+        // above it closes.
+        assert!(s.update(spec("dialog", Kind::Modal).keep_on_escape()));
+        assert_eq!(s.len(), 2);
+        assert_eq!(labels(&s.escape()), ["menu"]);
+        assert!(s.escape().is_empty(), "the dialog keeps Escape");
+        assert!(s.update(spec("dialog", Kind::Modal)));
+        let c = s.escape();
+        assert_eq!(labels(&c), ["dialog"]);
+        assert_eq!(c[0].restore_focus, Some(Id::new("field")));
+        assert!(!s.update(spec("ghost", Kind::Modal)));
     }
 
     #[test]

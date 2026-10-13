@@ -9,6 +9,16 @@ egui minor.
 
 ### Added
 
+- Modal overlays can be moved and keep their backdrop to a token:
+  `OverlaySpec::offset` places a modal away from the window's centre,
+  `OverlaySpec::dim` sets how much of the backdrop it shows (0: none,
+  the interface still blocked), `overlay::rect` says where an overlay
+  was drawn, and `OverlayStack::update` changes an open overlay's
+  declaration in place (its Escape rule). New tokens: the system
+  `opacity.scrim` (a number, egui's own backdrop by default) and the
+  components `dialog.backdrop`, `dialog.header` and
+  `dialog.header-text` (with its contrast pair).
+
 - A sliders guide (`docs/sliders.md`): the gestures, typed expressions,
   the variants, hooks and the `slider.change` step, accessibility; the
   widget survey records why the family is egui-pop's own.

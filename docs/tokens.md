@@ -82,7 +82,7 @@ Not read yet: references inside composite values, JSON Pointer `$ref`,
    `space.{xs, s, m, l, xl}`, `size.control.height`,
    `size.icon.{inline, toolbar, panel}`, `size.dialog.width`,
    `size.toast.width`, `font.size.{small, body, heading, mono}`,
-   `font.family.{ui, mono}`, `motion.duration`.
+   `font.family.{ui, mono}`, `motion.duration`, `opacity.scrim`.
 
 3. **Component**: one component's tokens, each an alias of a system token:
    `button.*`, `slider.{track, fill, thumb}`, `menu.item.*`, `dialog.*`,

@@ -184,6 +184,11 @@ pub struct DialogTokens {
     pub radius: f32,
     pub padding: f32,
     pub width: f32,
+    /// A movable dialog's header band, and its title.
+    pub header: Color32,
+    pub header_text: Color32,
+    /// How opaque the backdrop behind a modal dialog is (0 to 1).
+    pub backdrop: f32,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -345,6 +350,9 @@ impl Tokens {
                 radius: d("dialog.radius"),
                 padding: d("dialog.padding"),
                 width: d("dialog.width"),
+                header: c("dialog.header"),
+                header_text: c("dialog.header-text"),
+                backdrop: d("dialog.backdrop").clamp(0.0, 1.0),
             },
             toast: ToastTokens {
                 background: c("toast.background"),

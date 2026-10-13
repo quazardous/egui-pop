@@ -131,6 +131,11 @@ pub const CONTRACT: &[Required] = &[
     sys("size.dialog.width", "dimension", "width of dialogs"),
     sys("size.toast.width", "dimension", "width of toasts"),
     sys(
+        "opacity.scrim",
+        "number",
+        "how much a backdrop behind a modal hides (0 to 1)",
+    ),
+    sys(
         "size.titlebar.height",
         "dimension",
         "height of a window's own title bar",
@@ -185,6 +190,17 @@ pub const CONTRACT: &[Required] = &[
     comp("dialog.radius", "dimension", "a dialog's corners"),
     comp("dialog.padding", "dimension", "a dialog's padding"),
     comp("dialog.width", "dimension", "a dialog's width"),
+    comp("dialog.header", "color", "a movable dialog's header band"),
+    comp(
+        "dialog.header-text",
+        "color",
+        "the title on a movable dialog's header band",
+    ),
+    comp(
+        "dialog.backdrop",
+        "number",
+        "the backdrop's opacity behind a modal dialog",
+    ),
     comp("toast.background", "color", "a toast's fill"),
     comp("toast.border", "color", "a toast's outline"),
     comp("toast.text", "color", "a toast's text"),
