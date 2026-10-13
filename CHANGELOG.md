@@ -9,6 +9,20 @@ egui minor.
 
 ### Added
 
+- A theme editor (`api::theme_editor`, `ThemeEditorPlugin`, drawn by
+  `theme_editor::show` in any `Ui`): the application's theme edited
+  live, its tokens grouped by role (surfaces, text, accent, states,
+  borders, shape and space, components, the palette), egui's colour
+  picker and a value field taking a value or an alias, the contrast of
+  every pair a token takes part in (AA, AAA, and 7:1 text in high
+  contrast), starting from any built-in theme, undo and redo, export
+  and import as a `.tokens.json` file that `$extends` its base. Each
+  change runs the `theme.token` step (undo and redo too), a start or an
+  import `theme.load`; agents read and set tokens through `theme.read`,
+  `theme.set`, `theme.undo`, `theme.redo`, `theme.start`,
+  `theme.export` and `theme.import`. Strings with their French. Guide:
+  docs/theme-editor.md.
+
 - Theme drafts in `egui-pop-tokens` (`ThemeDraft`, `TokenEdit`): a base
   theme, the tokens changed over it and their history (undo, redo),
   values checked against the token's type and aliases against loops,

@@ -49,6 +49,9 @@
 //! - [`system_keys`]: how the shortcuts bound in the system scope (also
 //!   outside the window) are registered, as the shortcuts editor shows
 //!   it;
+//! - [`theme_editor`]: a theme's tokens edited live, by role, with
+//!   colour pickers, contrast readouts, undo, export and import, a
+//!   plugin;
 //! - [`strings`]: the interface's own text, by key with English
 //!   fallbacks, translated by the installed `egui_pop_core::strings`
 //!   provider;
@@ -117,6 +120,7 @@ pub mod stories;
 pub mod strings;
 pub mod strips;
 pub mod system_keys;
+pub mod theme_editor;
 pub mod toasts;
 pub mod window;
 pub mod workbench;

@@ -19,6 +19,10 @@ devtools; every feature's moments reachable as steps (ADR 0011).
   theme.
 - [Design tokens](tokens.md): the token format, resolution, densities,
   accents, contrast checks, writing a theme.
+- [The theme editor](theme-editor.md): a theme's tokens edited live by
+  role, colour pickers, contrast readouts (AA, AAA), undo, export and
+  import as a token file, steps and agent commands; the survey behind
+  it.
 - [Plugins, commands and steps](plugins.md): what a plugin registers,
   commands and the host, zones and blocks, hooks, steps.
 - [The workbench](workbench.md): panels in areas with placement rules,

@@ -14,6 +14,9 @@ pub mod getting_started {}
 #[doc = include_str!("../../../docs/themes.md")]
 pub mod themes {}
 
+#[doc = include_str!("../../../docs/theme-editor.md")]
+pub mod theme_editor {}
+
 #[doc = include_str!("../../../docs/plugins.md")]
 pub mod plugins {}
 

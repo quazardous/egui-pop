@@ -19,6 +19,8 @@ category-notifications = Notifications
 
 category-terminal = Terminal
 
+category-theme = Thème
+
 category-values = Valeurs
 
 category-view = Affichage
@@ -216,6 +218,34 @@ command-palettes-reset =
 command-palettes-toggle =
     .description = Masque les palettes qui ne sont pas épinglées, ou les affiche de nouveau.
     .title = Masquer ou afficher les palettes
+
+command-theme-export =
+    .description = Le thème en cours d’édition comme fichier .tokens.json (`name`) : $extends sa base, les jetons modifiés avec leur type.
+    .title = Exporter le thème
+
+command-theme-import =
+    .description = Charge un fichier .tokens.json (`text`) dans l’éditeur de thème, par l’étape theme.load ; dit quels jetons ont été laissés de côté.
+    .title = Importer un thème
+
+command-theme-read =
+    .description = Le thème en cours d’édition : sa base, les jetons modifiés, l’historique et les paires de contraste en échec ; avec `path`, un seul jeton, sa valeur, son alias et ses mesures de contraste.
+    .title = Lire le thème
+
+command-theme-redo =
+    .description = Rétablit la dernière modification annulée de l’éditeur de thème.
+    .title = Rétablir une modification du thème
+
+command-theme-set =
+    .description = Donne une valeur à un jeton du thème en cours d’édition (`path`, `value` : une valeur DTCG brute ou l’alias d’un autre jeton, null pour celle du thème de base), par l’étape theme.token ; annulable.
+    .title = Modifier un jeton du thème
+
+command-theme-start =
+    .description = Repart d’un thème (`base`) dans l’éditeur de thème, son historique vidé, par l’étape theme.load.
+    .title = Partir d’un thème
+
+command-theme-undo =
+    .description = Annule la dernière modification de l’éditeur de thème, par l’étape theme.token.
+    .title = Annuler une modification du thème
 
 command-value-get =
     .description = Une valeur avec son descripteur (`path`).
@@ -619,6 +649,92 @@ egui-pop-slider-maximum = { $label }, maximum
 
 egui-pop-slider-minimum = { $label }, minimum
 
+egui-pop-theme-editor-accent = Accent et focus
+
+egui-pop-theme-editor-adjust-of = Ajuster { $token }
+
+egui-pop-theme-editor-alias-of = Alias de { $token }
+
+egui-pop-theme-editor-borders = Bordures
+
+egui-pop-theme-editor-change-of = La modification de { $token }
+
+egui-pop-theme-editor-changed-count = Jetons modifiés : { $count }
+
+egui-pop-theme-editor-components = Composants
+
+egui-pop-theme-editor-contrast = Contraste
+
+egui-pop-theme-editor-edited = modifié
+
+egui-pop-theme-editor-export = Exporter
+
+egui-pop-theme-editor-fail = échec
+
+egui-pop-theme-editor-file = Exporter et importer
+
+egui-pop-theme-editor-file-text = Fichier de thème (.tokens.json)
+
+egui-pop-theme-editor-filter = Filtrer les jetons
+
+egui-pop-theme-editor-from = Comme dans { $theme }
+
+egui-pop-theme-editor-import = Importer
+
+egui-pop-theme-editor-imported = Importé sur { $theme }.
+
+egui-pop-theme-editor-missing = Le plugin de l’éditeur de thème n’est pas branché.
+
+egui-pop-theme-editor-name = Nom du thème
+
+egui-pop-theme-editor-no-pairs = Aucune paire de contraste n’utilise ce jeton.
+
+egui-pop-theme-editor-not-a-value = Ni une valeur de type { $type }, ni l’alias d’un jeton
+
+egui-pop-theme-editor-not-applicable = s.o.
+
+egui-pop-theme-editor-own = Modifié dans ce thème
+
+egui-pop-theme-editor-pair = Paire
+
+egui-pop-theme-editor-pair-on = { $foreground } sur { $background }
+
+egui-pop-theme-editor-palette = Palette
+
+egui-pop-theme-editor-pass = réussi
+
+egui-pop-theme-editor-pick = Choisissez un jeton dans la liste.
+
+egui-pop-theme-editor-problems = Problèmes dans ce thème
+
+egui-pop-theme-editor-ratio = Rapport
+
+egui-pop-theme-editor-redo = Rétablir
+
+egui-pop-theme-editor-reset = Revenir à { $theme }
+
+egui-pop-theme-editor-shape = Forme, espace, texte et mouvement
+
+egui-pop-theme-editor-skipped = Laissés de côté : { $tokens }.
+
+egui-pop-theme-editor-start = Partir de
+
+egui-pop-theme-editor-states = États
+
+egui-pop-theme-editor-surfaces = Surfaces
+
+egui-pop-theme-editor-text = Texte
+
+egui-pop-theme-editor-theme-needs = Ce thème exige
+
+egui-pop-theme-editor-type = Type : { $type }
+
+egui-pop-theme-editor-undo = Annuler
+
+egui-pop-theme-editor-value = Valeur
+
+egui-pop-theme-editor-value-of = Valeur de { $token }
+
 egui-pop-toast-close = Fermer : { $text }
 
 egui-pop-toast-error = Erreur
@@ -904,6 +1020,9 @@ plugin-egui-pop-system-keys =
 
 plugin-egui-pop-terminal =
     .title = Terminal
+
+plugin-egui-pop-theme-editor =
+    .title = Éditeur de thème
 
 plugin-egui-pop-toasts =
     .title = Notifications

@@ -66,6 +66,7 @@ fn messages() -> Messages {
         .plugin(egui_pop_api::frame::FramePlugin::system())
         .plugin(egui_pop_api::strips::StripsPlugin::default())
         .plugin(egui_pop_api::jobs::JobsPlugin::default())
+        .plugin(egui_pop_api::theme_editor::ThemeEditorPlugin)
         .plugin(egui_pop_i18n::I18nPlugin::new())
         .plugin(egui_pop_i18n::ShowKeys)
         .plugin(egui_pop_views::ViewsPlugin)

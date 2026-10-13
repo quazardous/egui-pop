@@ -20,6 +20,8 @@ category-notifications = Notifications
 
 category-terminal = Terminal
 
+category-theme = Theme
+
 category-values = Values
 
 category-view = View
@@ -241,6 +243,34 @@ command-terminal-restart =
 command-terminal-send =
     .description = Sends `text` to the program through `terminal.input` (with `enter`, followed by Enter).
     .title = Send input
+
+command-theme-export =
+    .description = The theme being edited as a .tokens.json file (`name`): $extends its base, the tokens changed with their types.
+    .title = Export the theme
+
+command-theme-import =
+    .description = Loads a .tokens.json file (`text`) into the theme editor, through the theme.load step; says which tokens were left out.
+    .title = Import a theme
+
+command-theme-read =
+    .description = The theme being edited: its base, the tokens changed, the history and the failing contrast pairs; with `path`, one token, its value, alias and contrast readouts.
+    .title = Read the theme
+
+command-theme-redo =
+    .description = Makes the theme editor's last undone change again.
+    .title = Redo a theme change
+
+command-theme-set =
+    .description = Sets a token of the theme being edited (`path`, `value`: a raw DTCG value or an alias of another token, null for the base theme's), through the theme.token step; undoable.
+    .title = Set a theme token
+
+command-theme-start =
+    .description = Starts the theme editor again from a theme (`base`), its history emptied, through the theme.load step.
+    .title = Start a theme from
+
+command-theme-undo =
+    .description = Takes the theme editor's last change back, through the theme.token step.
+    .title = Undo a theme change
 
 command-value-get =
     .description = A value with its descriptor (`path`).
@@ -620,6 +650,92 @@ egui-pop-slider-maximum = { $label }, maximum
 
 egui-pop-slider-minimum = { $label }, minimum
 
+egui-pop-theme-editor-accent = Accent and focus
+
+egui-pop-theme-editor-adjust-of = Adjust { $token }
+
+egui-pop-theme-editor-alias-of = Alias of { $token }
+
+egui-pop-theme-editor-borders = Borders
+
+egui-pop-theme-editor-change-of = The change of { $token }
+
+egui-pop-theme-editor-changed-count = Tokens changed: { $count }
+
+egui-pop-theme-editor-components = Components
+
+egui-pop-theme-editor-contrast = Contrast
+
+egui-pop-theme-editor-edited = changed
+
+egui-pop-theme-editor-export = Export
+
+egui-pop-theme-editor-fail = fail
+
+egui-pop-theme-editor-file = Export and import
+
+egui-pop-theme-editor-file-text = Theme file (.tokens.json)
+
+egui-pop-theme-editor-filter = Filter tokens
+
+egui-pop-theme-editor-from = As in { $theme }
+
+egui-pop-theme-editor-import = Import
+
+egui-pop-theme-editor-imported = Imported over { $theme }.
+
+egui-pop-theme-editor-missing = The theme editor plugin is not connected.
+
+egui-pop-theme-editor-name = Theme name
+
+egui-pop-theme-editor-no-pairs = No contrast pair uses this token.
+
+egui-pop-theme-editor-not-a-value = Not a { $type } value, nor an alias of a token
+
+egui-pop-theme-editor-not-applicable = n/a
+
+egui-pop-theme-editor-own = Changed in this theme
+
+egui-pop-theme-editor-pair = Pair
+
+egui-pop-theme-editor-pair-on = { $foreground } on { $background }
+
+egui-pop-theme-editor-palette = Palette
+
+egui-pop-theme-editor-pass = pass
+
+egui-pop-theme-editor-pick = Pick a token in the list.
+
+egui-pop-theme-editor-problems = Problems in this theme
+
+egui-pop-theme-editor-ratio = Ratio
+
+egui-pop-theme-editor-redo = Redo
+
+egui-pop-theme-editor-reset = Reset to { $theme }
+
+egui-pop-theme-editor-shape = Shape, space, type and motion
+
+egui-pop-theme-editor-skipped = Left out: { $tokens }.
+
+egui-pop-theme-editor-start = Start from
+
+egui-pop-theme-editor-states = States
+
+egui-pop-theme-editor-surfaces = Surfaces
+
+egui-pop-theme-editor-text = Text
+
+egui-pop-theme-editor-theme-needs = This theme needs
+
+egui-pop-theme-editor-type = Type: { $type }
+
+egui-pop-theme-editor-undo = Undo
+
+egui-pop-theme-editor-value = Value
+
+egui-pop-theme-editor-value-of = Value of { $token }
+
 egui-pop-toast-close = Close: { $text }
 
 egui-pop-toast-error = Error
@@ -905,6 +1021,9 @@ plugin-egui-pop-system-keys =
 
 plugin-egui-pop-terminal =
     .title = Terminal
+
+plugin-egui-pop-theme-editor =
+    .title = Theme editor
 
 plugin-egui-pop-toasts =
     .title = Toasts

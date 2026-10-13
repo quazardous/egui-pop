@@ -55,7 +55,8 @@ app.handle().theme().set(ThemeSpec::new("gruvbox-dark").accent("amber"));
 - **Any token**, overridden by its path (`override_token`).
 
 See [Design tokens](tokens.md) for the order a theme is resolved in and
-how to write a theme of your own.
+how to write a theme of your own, and [the theme editor](theme-editor.md)
+to edit one live and export it.
 
 Every built-in theme is shown at full size [below](#the-built-in-themes).
 

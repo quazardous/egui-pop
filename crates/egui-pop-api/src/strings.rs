@@ -358,6 +358,93 @@ pub const JOB_HIDE_LOG: StrKey = StrKey::new("egui-pop-job-hide-log", "Hide the 
 pub const JOB_REFUSED: StrKey = StrKey::new("egui-pop-job-refused", "Refused: { $error }");
 pub const JOB_NO_LOG: StrKey = StrKey::new("egui-pop-job-no-log", "No log yet.");
 
+// The theme editor.
+
+pub const THEME_EDITOR_MISSING: StrKey = StrKey::new(
+    "egui-pop-theme-editor-missing",
+    "The theme editor plugin is not connected.",
+);
+pub const THEME_EDITOR_START: StrKey = StrKey::new("egui-pop-theme-editor-start", "Start from");
+pub const THEME_EDITOR_UNDO: StrKey = StrKey::new("egui-pop-theme-editor-undo", "Undo");
+pub const THEME_EDITOR_REDO: StrKey = StrKey::new("egui-pop-theme-editor-redo", "Redo");
+pub const THEME_EDITOR_CHANGE_OF: StrKey = StrKey::new(
+    "egui-pop-theme-editor-change-of",
+    "The change of { $token }",
+);
+pub const THEME_EDITOR_CHANGED_COUNT: StrKey = StrKey::new(
+    "egui-pop-theme-editor-changed-count",
+    "Tokens changed: { $count }",
+);
+pub const THEME_EDITOR_FILTER: StrKey =
+    StrKey::new("egui-pop-theme-editor-filter", "Filter tokens");
+pub const THEME_EDITOR_SURFACES: StrKey = StrKey::new("egui-pop-theme-editor-surfaces", "Surfaces");
+pub const THEME_EDITOR_TEXT: StrKey = StrKey::new("egui-pop-theme-editor-text", "Text");
+pub const THEME_EDITOR_ACCENT: StrKey =
+    StrKey::new("egui-pop-theme-editor-accent", "Accent and focus");
+pub const THEME_EDITOR_STATES: StrKey = StrKey::new("egui-pop-theme-editor-states", "States");
+pub const THEME_EDITOR_BORDERS: StrKey = StrKey::new("egui-pop-theme-editor-borders", "Borders");
+pub const THEME_EDITOR_SHAPE: StrKey = StrKey::new(
+    "egui-pop-theme-editor-shape",
+    "Shape, space, type and motion",
+);
+pub const THEME_EDITOR_COMPONENTS: StrKey =
+    StrKey::new("egui-pop-theme-editor-components", "Components");
+pub const THEME_EDITOR_PALETTE: StrKey = StrKey::new("egui-pop-theme-editor-palette", "Palette");
+pub const THEME_EDITOR_EDITED: StrKey = StrKey::new("egui-pop-theme-editor-edited", "changed");
+pub const THEME_EDITOR_PICK: StrKey =
+    StrKey::new("egui-pop-theme-editor-pick", "Pick a token in the list.");
+pub const THEME_EDITOR_TYPE: StrKey = StrKey::new("egui-pop-theme-editor-type", "Type: { $type }");
+pub const THEME_EDITOR_OWN: StrKey =
+    StrKey::new("egui-pop-theme-editor-own", "Changed in this theme");
+pub const THEME_EDITOR_FROM: StrKey = StrKey::new("egui-pop-theme-editor-from", "As in { $theme }");
+pub const THEME_EDITOR_ALIAS_OF: StrKey =
+    StrKey::new("egui-pop-theme-editor-alias-of", "Alias of { $token }");
+pub const THEME_EDITOR_VALUE: StrKey = StrKey::new("egui-pop-theme-editor-value", "Value");
+pub const THEME_EDITOR_VALUE_OF: StrKey =
+    StrKey::new("egui-pop-theme-editor-value-of", "Value of { $token }");
+pub const THEME_EDITOR_ADJUST_OF: StrKey =
+    StrKey::new("egui-pop-theme-editor-adjust-of", "Adjust { $token }");
+pub const THEME_EDITOR_NOT_A_VALUE: StrKey = StrKey::new(
+    "egui-pop-theme-editor-not-a-value",
+    "Not a { $type } value, nor an alias of a token",
+);
+pub const THEME_EDITOR_RESET: StrKey =
+    StrKey::new("egui-pop-theme-editor-reset", "Reset to { $theme }");
+pub const THEME_EDITOR_CONTRAST: StrKey = StrKey::new("egui-pop-theme-editor-contrast", "Contrast");
+pub const THEME_EDITOR_NO_PAIRS: StrKey = StrKey::new(
+    "egui-pop-theme-editor-no-pairs",
+    "No contrast pair uses this token.",
+);
+pub const THEME_EDITOR_PAIR: StrKey = StrKey::new("egui-pop-theme-editor-pair", "Pair");
+pub const THEME_EDITOR_PAIR_ON: StrKey = StrKey::new(
+    "egui-pop-theme-editor-pair-on",
+    "{ $foreground } on { $background }",
+);
+pub const THEME_EDITOR_RATIO: StrKey = StrKey::new("egui-pop-theme-editor-ratio", "Ratio");
+pub const THEME_EDITOR_THEME_NEEDS: StrKey =
+    StrKey::new("egui-pop-theme-editor-theme-needs", "This theme needs");
+pub const THEME_EDITOR_PASS: StrKey = StrKey::new("egui-pop-theme-editor-pass", "pass");
+pub const THEME_EDITOR_FAIL: StrKey = StrKey::new("egui-pop-theme-editor-fail", "fail");
+pub const THEME_EDITOR_NOT_APPLICABLE: StrKey =
+    StrKey::new("egui-pop-theme-editor-not-applicable", "n/a");
+pub const THEME_EDITOR_FILE: StrKey =
+    StrKey::new("egui-pop-theme-editor-file", "Export and import");
+pub const THEME_EDITOR_NAME: StrKey = StrKey::new("egui-pop-theme-editor-name", "Theme name");
+pub const THEME_EDITOR_EXPORT: StrKey = StrKey::new("egui-pop-theme-editor-export", "Export");
+pub const THEME_EDITOR_IMPORT: StrKey = StrKey::new("egui-pop-theme-editor-import", "Import");
+pub const THEME_EDITOR_FILE_TEXT: StrKey = StrKey::new(
+    "egui-pop-theme-editor-file-text",
+    "Theme file (.tokens.json)",
+);
+pub const THEME_EDITOR_IMPORTED: StrKey = StrKey::new(
+    "egui-pop-theme-editor-imported",
+    "Imported over { $theme }.",
+);
+pub const THEME_EDITOR_SKIPPED: StrKey =
+    StrKey::new("egui-pop-theme-editor-skipped", "Left out: { $tokens }.");
+pub const THEME_EDITOR_PROBLEMS: StrKey =
+    StrKey::new("egui-pop-theme-editor-problems", "Problems in this theme");
+
 /// Every string of this module, for catalogues and tests.
 pub const ALL: &[StrKey] = &[
     COMMAND_LABEL,
@@ -496,6 +583,49 @@ pub const ALL: &[StrKey] = &[
     DEVTOOLS_CONTEXT_KEYS,
     DEVTOOLS_ARGUMENTS,
     DEVTOOLS_MUTATES,
+    THEME_EDITOR_MISSING,
+    THEME_EDITOR_START,
+    THEME_EDITOR_UNDO,
+    THEME_EDITOR_REDO,
+    THEME_EDITOR_CHANGE_OF,
+    THEME_EDITOR_CHANGED_COUNT,
+    THEME_EDITOR_FILTER,
+    THEME_EDITOR_SURFACES,
+    THEME_EDITOR_TEXT,
+    THEME_EDITOR_ACCENT,
+    THEME_EDITOR_STATES,
+    THEME_EDITOR_BORDERS,
+    THEME_EDITOR_SHAPE,
+    THEME_EDITOR_COMPONENTS,
+    THEME_EDITOR_PALETTE,
+    THEME_EDITOR_EDITED,
+    THEME_EDITOR_PICK,
+    THEME_EDITOR_TYPE,
+    THEME_EDITOR_OWN,
+    THEME_EDITOR_FROM,
+    THEME_EDITOR_ALIAS_OF,
+    THEME_EDITOR_VALUE,
+    THEME_EDITOR_VALUE_OF,
+    THEME_EDITOR_ADJUST_OF,
+    THEME_EDITOR_NOT_A_VALUE,
+    THEME_EDITOR_RESET,
+    THEME_EDITOR_CONTRAST,
+    THEME_EDITOR_NO_PAIRS,
+    THEME_EDITOR_PAIR,
+    THEME_EDITOR_PAIR_ON,
+    THEME_EDITOR_RATIO,
+    THEME_EDITOR_THEME_NEEDS,
+    THEME_EDITOR_PASS,
+    THEME_EDITOR_FAIL,
+    THEME_EDITOR_NOT_APPLICABLE,
+    THEME_EDITOR_FILE,
+    THEME_EDITOR_NAME,
+    THEME_EDITOR_EXPORT,
+    THEME_EDITOR_IMPORT,
+    THEME_EDITOR_FILE_TEXT,
+    THEME_EDITOR_IMPORTED,
+    THEME_EDITOR_SKIPPED,
+    THEME_EDITOR_PROBLEMS,
 ];
 
 #[cfg(test)]
