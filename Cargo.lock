@@ -1065,6 +1065,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "egui-pop-extension-template"
+version = "0.1.0"
+dependencies = [
+ "egui",
+ "egui-pop",
+ "egui-pop-test",
+ "egui_kittest",
+ "serde_json",
+]
+
+[[package]]
 name = "egui-pop-gallery"
 version = "0.0.0"
 dependencies = [

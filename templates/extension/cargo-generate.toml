@@ -1,0 +1,17 @@
+[template]
+cargo_generate_version = ">=0.21"
+# The repository's own manifest (a workspace member) stays behind;
+# `Cargo.toml.liquid` becomes the new crate's `Cargo.toml`.
+ignore = ["Cargo.toml"]
+# Rust and Fluent sources are copied as they are, never rendered.
+exclude = ["src/**", "locales/**"]
+
+[placeholders.egui_pop_version]
+type = "string"
+prompt = "Which egui-pop version?"
+default = "0.1"
+
+[placeholders.egui_version]
+type = "string"
+prompt = "Which egui version does that egui-pop use?"
+default = "0.36"

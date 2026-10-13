@@ -31,7 +31,7 @@ Crates are stacked; a crate depends only on crates of a lower layer:
 | L4 | `egui-pop-editors`: text and code editors, a component on the application API (amended 2026-10-13) | yes |
 | L4 | `egui-pop-imaging`: the steps of the viewport's image tools (histogram, curves, colour wheels, zoom and navigator), on the application API (amended 2026-10-13) | yes |
 | L5 | `egui-pop`: the facade users depend on, re-exporting the layers | yes |
-| L6 | applications: the gallery, `consumer-smoke`, `xtask` | yes |
+| L6 | applications: the gallery, `consumer-smoke`, `xtask`; third-party extensions, as `templates/extension` (amended 2026-10-13) | yes |
 
 Components sit between L3 and the facade. A component that needs only
 the egui layer (`egui-pop-viewport`) sits at L3 beside the application

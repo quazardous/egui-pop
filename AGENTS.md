@@ -23,6 +23,7 @@
 | `docs/adr/` | Architecture decisions. Read them before changing a registry. |
 | `docs/tokens.md` | The token tiers and how to add a theme. |
 | `template/` | The `cargo generate` application template, identical to `crates/egui-pop/examples/minimal.rs` (a test checks it). |
+| `templates/extension` | The extension template: a third-party crate (a plugin, a component with tokens and strings, a story, a step, an agent command, kittest tests), a workspace member so the gate keeps it building; `cargo generate` writes its `Cargo.toml.liquid`. |
 | `tools/wbox/` | Running the gallery offscreen in a nested compositor. |
 
 Principles: [CREDO.md](CREDO.md). Rules for contributions:

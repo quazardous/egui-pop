@@ -1,0 +1,27 @@
+# The extension template as the repository builds it: a workspace member,
+# so the gate compiles and tests it against the egui-pop of the same
+# commit. `cargo generate` writes `Cargo.toml.liquid` in its place (this
+# file is ignored, see `cargo-generate.toml`); keep the two in step (a
+# test checks their dependencies match).
+[package]
+name = "egui-pop-extension-template"
+version = "0.1.0"
+description = "A minimal third-party extension of egui-pop: a plugin, a component with its tokens and strings, a gallery story, a step and an agent command"
+publish = false
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+egui-pop = { workspace = true, features = ["i18n"] }
+serde_json.workspace = true
+
+[dev-dependencies]
+egui = { workspace = true, features = ["default_fonts"] }
+egui_kittest.workspace = true
+egui-pop-test.workspace = true

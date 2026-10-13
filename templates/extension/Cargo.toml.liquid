@@ -1,0 +1,18 @@
+[package]
+name = "{{project-name}}"
+version = "0.1.0"
+description = "An egui-pop extension"
+edition = "2024"
+rust-version = "1.95"
+license = "MIT"
+keywords = ["egui", "egui-pop"]
+categories = ["gui"]
+
+[dependencies]
+egui-pop = { version = "{{egui_pop_version}}", features = ["i18n"] }
+serde_json = "1"
+
+[dev-dependencies]
+egui = { version = "{{egui_version}}", features = ["default_fonts"] }
+egui_kittest = "{{egui_version}}"
+egui-pop-test = "{{egui_pop_version}}"
