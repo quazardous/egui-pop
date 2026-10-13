@@ -212,7 +212,8 @@ released within days of it.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md), [AGENTS.md](AGENTS.md) and
+See [CONTRIBUTING.md](CONTRIBUTING.md) (with a section for extension
+authors), [GOVERNANCE.md](GOVERNANCE.md), [AGENTS.md](AGENTS.md) and
 [CHANGELOG.md](CHANGELOG.md).
 
 ## License

@@ -719,6 +719,13 @@ egui minor.
   listed and the checks an entry passes (licence, versions, plugin
   rules, token contract, accessibility, strings), and the applications
   built with egui-pop.
+- Governance (GOVERNANCE.md): who decides, decisions recorded as ADRs
+  with a request for comments for the extension contract and
+  `egui-pop-api`, what counts as breaking for an extension (the host
+  contract, tokens, steps, commands, strings, the debug bridge), and
+  deprecation windows of one minor (one egui cycle). CONTRIBUTING.md has
+  a section for extension authors; docs/upstream.md says how a limit of
+  egui is handled, from the workaround to its removal.
 
 ### Changed
 

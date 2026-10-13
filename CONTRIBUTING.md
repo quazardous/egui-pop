@@ -115,11 +115,39 @@ updated.
 
 ## Upstream limits
 
-When you hit a limit of egui (or of another dependency), work around it
+How upstream limits are handled, from the workaround to its removal, is
+in [docs/upstream.md](docs/upstream.md#how-a-limit-is-handled). In
+short: when you hit a limit of egui (or of another dependency), work around it
 in egui-pop, file a focused upstream issue with a minimal reproduction
 after checking that none exists, and record it in
 [docs/upstream.md](docs/upstream.md) with an `// upstream:` comment at the
 code site. The register is reviewed at every egui bump.
+
+## Extensions
+
+An extension lives in its own repository, under its own licence; you do
+not need to contribute it here to use or publish it.
+
+- Start from the [extension template](templates/extension): copy it, or
+  `cargo generate --git https://github.com/quazardous/egui-pop templates/extension`.
+  Rename its ids after your plugin's id first.
+- Depend on the `egui-pop` facade alone, and use `egui_pop::egui`: one
+  copy of egui in the tree.
+- Follow the rules components follow here: tokens, never literals (your
+  component tokens read by path, a system token as fallback); a role, a
+  name and a value on every interactive widget; text by key with an
+  English fallback, in catalogues carrying your plugin's id; state
+  changes as steps; tests with egui_kittest finding widgets by role and
+  label.
+- To be listed, open a pull request adding your entry to
+  [docs/extensions.md](docs/extensions.md); the checks it must pass are
+  there.
+- What egui-pop treats as breaking for you, and how long a deprecated
+  item keeps working, is in [GOVERNANCE.md](GOVERNANCE.md). A change you
+  need in egui-pop's API is proposed as an ADR (a request for comments).
+- A limit of egui you work around in your extension is worth an entry
+  in [docs/upstream.md](docs/upstream.md) when egui-pop could compensate
+  for everyone.
 
 ## Reporting issues
 

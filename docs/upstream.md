@@ -7,6 +7,28 @@ comment pointing here) and when the workaround can go.
 
 Reviewed at every egui bump: remove what upstream fixed, update the rest.
 
+## How a limit is handled
+
+1. **Work around it in egui-pop**, at the narrowest place, with an
+   `// upstream:` comment at the code site. An application or an
+   extension never has to carry the workaround itself.
+2. **Search upstream** (egui's issues and pull requests, or the
+   dependency's) for the same limit. If none exists, **file a focused
+   issue** with a minimal reproduction, written against upstream's code
+   alone; a fix, when it is small and clear, goes with it as a pull
+   request.
+3. **Record it here**: what is compensated, where it is tracked
+   upstream ("not filed yet" says it must be), the workaround, and when
+   it can go.
+4. **At every egui bump**, review the register: remove the workarounds
+   upstream fixed (and their entries), update the rest.
+
+An extension author who meets a limit egui-pop could compensate for
+everyone opens an issue here, or a pull request adding the entry and
+its workaround. Workarounds are not part of the extension contract
+([GOVERNANCE.md](../GOVERNANCE.md)): they go when upstream fixes the
+limit.
+
 ## egui_kittest: no double click from queued events
 
 - **Compensated**: a double click made of queued events never registers,

@@ -5,6 +5,9 @@ follows [Semantic Versioning](https://semver.org/) with one egui-pop
 minor per egui minor; before 1.0 a minor may break the API, and does when
 the result is cleaner (the changelog says how to move). Within a minor,
 patch releases only add or fix.
+How long a deprecated item keeps working, and what counts as breaking
+for an extension (tokens, steps, commands, strings, the host contract),
+is in [GOVERNANCE.md](../GOVERNANCE.md).
 
 Three tiers:
 

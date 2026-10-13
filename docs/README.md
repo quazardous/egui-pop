@@ -92,8 +92,10 @@ devtools; every feature's moments reachable as steps (ADR 0011).
   Krita, Blender and others split work between threads, and the
   patterns that fit egui-pop.
 - [API stability](stability.md): what each release promises.
+- [Governance](../GOVERNANCE.md): who decides, decisions as ADRs and
+  requests for comments, what breaks an extension, deprecation windows.
 - [Upstream workarounds](upstream.md): what egui-pop compensates for in
-  its dependencies.
+  its dependencies, and how a limit is handled.
 - [Architecture decisions](adr/README.md): one page per decision.
 - [Advanced widgets](widgets.md): a survey of advanced widgets and how
   egui-pop gets them.
