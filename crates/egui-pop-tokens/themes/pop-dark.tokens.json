@@ -223,6 +223,12 @@
     "line": {"$type": "dimension", "$value": "{space.xs}", "$description": "A thin line's thickness (under a title, along a viewport's top)."},
     "ring": {"$type": "dimension", "$value": "{size.icon.inline}", "$description": "A ring's and a spinner's diameter."}
   },
+  "skeleton": {
+    "$description": "Skeletons standing in for content that loads.",
+    "$type": "color",
+    "fill": {"$value": "{surface.active}", "$description": "The grey shapes."},
+    "shimmer": {"$value": "{surface.hover}", "$description": "The lighter band crossing them (none under reduced motion)."}
+  },
   "slider": {
     "$type": "color",
     "track": {"$value": "{border.default}"},

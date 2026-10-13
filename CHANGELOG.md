@@ -40,6 +40,13 @@ egui minor.
   lock. They compile to nothing unless a profiler backend is enabled
   (`profiling/profile-with-tracing`, `-with-puffin`...); the gallery's
   `threading` example measures them (`docs/threading.md`).
+- Skeletons and empty states (`egui_pop_core::placeholder`): `Skeleton`
+  stands in for content that loads, in its layout (a paragraph, list
+  rows), with a shimmer that stops under reduced motion and in tests,
+  its region busy for assistive technologies; `EmptyState` gives an
+  icon, a title, a sentence and an action. New component tokens
+  `skeleton.{fill, shimmer}`. Gallery page `placeholders`.
+
 - The jobs centre (`egui_pop_api::jobs_centre`): every job as a panel
   (`Jobs`, closed until asked for) and as a popover from the status
   bar's jobs item, the same list in both: the estimated percentage as a

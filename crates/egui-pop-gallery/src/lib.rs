@@ -30,7 +30,7 @@ use pages::story::PagePlugin;
 pub const TITLE: &str = "egui-pop gallery";
 
 /// The pages, as named on the command line.
-pub const PAGES: [&str; 34] = [
+pub const PAGES: [&str; 35] = [
     "overview",
     "tokens",
     "builtins",
@@ -43,6 +43,7 @@ pub const PAGES: [&str; 34] = [
     "files",
     "toasts",
     "progress",
+    "placeholders",
     "viewport",
     "navigator",
     "images",
@@ -140,6 +141,16 @@ pub fn builder(options: &Options) -> AppBuilder {
         .plugin(pages::dialogs::DialogsPage)
         .plugin(pages::files::FilesPage)
         .plugin(pages::toasts::ToastsPage)
+        .plugin(PagePlugin {
+            plugin: PluginId::from_static("gallery.placeholders"),
+            story: StoryId::from_static("placeholders"),
+            title: "Placeholders",
+            description: "Skeletons standing in for loading content (no shimmer in tests nor under reduced motion), and empty states with their actions.",
+            group: "Progress and jobs",
+            weight: 133,
+            show: pages::placeholders::show,
+            playground: None,
+        })
         .plugin(pages::progress::ProgressPage {
             waiting: waiting.clone(),
         })

@@ -1473,6 +1473,27 @@ fn a_command_the_host_answers_later_keeps_its_button_busy() {
 }
 
 #[test]
+fn skeletons_are_busy_until_the_content_loads_and_empty_states_act() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "placeholders"));
+    h.run();
+    h.snapshot("placeholders-pop-dark");
+    let queue = h.get_by_label("Loading the queue");
+    assert!(queue.accesskit_node().is_busy());
+    h.get_by_label("Import images").click();
+    h.run();
+    h.get_by_label("Retry").click();
+    h.run();
+    assert!(
+        h.query_by_label_contains("import 1 times, retry 1 times")
+            .is_some()
+    );
+    h.get_by_label("Loaded").click();
+    h.run();
+    assert!(h.query_by_label("Loading the queue").is_none());
+    assert!(h.query_by_label("IMG_0001.raw").is_some());
+}
+
+#[test]
 fn the_motion_page_shows_the_busy_indicator_after_its_delay_for_its_minimum() {
     use egui_pop::core::motion;
     let mut h = harness(options("pop-dark", Density::Comfortable, "motion"));

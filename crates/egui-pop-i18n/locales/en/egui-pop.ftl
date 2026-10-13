@@ -458,6 +458,8 @@ egui-pop-jobs-open-panel = Open the panel
 
 egui-pop-jobs-title = Jobs
 
+egui-pop-loading = Loading
+
 egui-pop-menu-does-not-apply = Does not apply here ({ $when })
 
 egui-pop-menu-empty = (empty)

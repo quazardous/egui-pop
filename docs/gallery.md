@@ -20,7 +20,7 @@ directory; without it they are simulated and nothing reaches the
 desktop).
 
 Pages: `overview` (the theme overview), `tokens`, `builtins` (egui's
-built-ins), `icons`, `motion` (the motion clock), `values`, `sliders`, `menus`, `dialogs`, `toasts`, `progress`, `viewport`
+built-ins), `icons`, `motion` (the motion clock), `values`, `sliders`, `menus`, `dialogs`, `toasts`, `progress`, `placeholders` (skeletons and empty states), `viewport`
 (the image viewport), `navigator` (the zoom control and the navigator),
 `images`, `grading` (curves and colour wheels), `tree` (the live tree), `table` (lists
 and tables), `text-editor`, `code-editor`, `terminal`, `zones` (zones and blocks), `workbench`, `palettes`,
@@ -129,6 +129,7 @@ Egui's built-ins in egui-pop's style, values, sliders, menus, dialogs (movable o
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/progress-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/progress-pop-light.png" width="200" alt="progress-pop-light"></a><br>progress-pop-light</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/progress-reduced-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/progress-reduced-pop-dark.png" width="200" alt="progress-reduced-pop-dark"></a><br>progress-reduced-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/progress-busy-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/progress-busy-pop-dark.png" width="200" alt="progress-busy-pop-dark"></a><br>progress-busy-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/placeholders-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/placeholders-pop-dark.png" width="200" alt="placeholders-pop-dark"></a><br>placeholders-pop-dark</td>
   </tr>
 </table>
 

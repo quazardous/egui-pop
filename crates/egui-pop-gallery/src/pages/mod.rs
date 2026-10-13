@@ -23,6 +23,7 @@ pub mod motion;
 pub mod navigator;
 pub mod overview;
 pub mod palettes;
+pub mod placeholders;
 pub mod platform;
 pub mod progress;
 pub mod scale;

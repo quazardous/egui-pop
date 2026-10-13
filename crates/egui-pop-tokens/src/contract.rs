@@ -218,6 +218,16 @@ pub const CONTRACT: &[Required] = &[
         "dimension",
         "a progress ring's and a spinner's diameter",
     ),
+    comp(
+        "skeleton.fill",
+        "color",
+        "the grey shapes standing in for loading content",
+    ),
+    comp(
+        "skeleton.shimmer",
+        "color",
+        "the shimmer crossing a skeleton",
+    ),
     comp("slider.track", "color", "the slider's rail"),
     comp("slider.fill", "color", "the rail up to the value"),
     comp("slider.thumb", "color", "the handle"),

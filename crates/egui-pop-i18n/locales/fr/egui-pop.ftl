@@ -457,6 +457,8 @@ egui-pop-jobs-open-panel = Ouvrir le panneau
 
 egui-pop-jobs-title = Tâches
 
+egui-pop-loading = Chargement
+
 egui-pop-menu-does-not-apply = Ne s’applique pas ici ({ $when })
 
 egui-pop-menu-empty = (vide)

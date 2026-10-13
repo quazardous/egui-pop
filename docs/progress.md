@@ -311,6 +311,48 @@ let app = App::builder()
 # let _ = app;
 ```
 
+## Skeletons and empty states
+
+`egui_pop::core::placeholder`:
+
+- `Skeleton` stands in for content that fills progressively, in its
+  layout: `Skeleton::text(lines)` for a paragraph, `Skeleton::rows(n)`
+  for list rows (a block and two lines each). Shapes in `skeleton.fill`,
+  a shimmer crossing them in `skeleton.shimmer` every
+  `motion.skeleton.shimmer`; no shimmer under reduced motion nor under a
+  given motion clock, so tests get still frames. Its region carries
+  AccessKit's `busy` flag and a name ("Loading the metadata", "Loading"
+  by default). Not for thumbnails: show what is known instead (an
+  embedded preview, an average colour, as the thumbnail grid does).
+- `EmptyState` says why a place is empty and what to do: an icon, a
+  title, a sentence, an action (`show` returns whether it was clicked;
+  the application runs its command), `danger()` when something went
+  wrong.
+
+```rust
+use egui_pop::core::icon::Icon;
+use egui_pop::core::placeholder::{EmptyState, Skeleton};
+
+fn queue(ui: &mut egui_pop::egui::Ui, rows: Option<&[String]>) -> bool {
+    match rows {
+        None => {
+            ui.add(Skeleton::rows(4).label("Loading the queue"));
+            false
+        }
+        Some([]) => EmptyState::new(Icon::Folder, "The queue is empty")
+            .text("Export images to fill it.")
+            .action("Export")
+            .show(ui),
+        Some(rows) => {
+            for r in rows {
+                ui.label(r);
+            }
+            false
+        }
+    }
+}
+```
+
 ## Gaps
 
 - A job with no event for a long time is not shown as "not responding"

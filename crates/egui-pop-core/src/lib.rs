@@ -23,6 +23,8 @@
 //!   change;
 //! - [`progress`]: progress bars, rings, meters and spinners (delayed),
 //!   on the motion clock, named for assistive technologies;
+//! - [`placeholder`]: skeletons standing in for loading content, and
+//!   empty states;
 //! - [`placement`]: floating elements placed with flip and shift;
 //! - [`scale`]: the window's scales, crisp strokes, the scale-changed
 //!   signal, the interface zoom's steps;
@@ -50,6 +52,7 @@ pub mod motion;
 pub mod overlay;
 pub mod param;
 pub mod persist;
+pub mod placeholder;
 pub mod placement;
 pub mod progress;
 pub mod scale;

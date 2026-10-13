@@ -80,6 +80,8 @@ pub const SLIDER_MAXIMUM: StrKey = StrKey::new("egui-pop-slider-maximum", "{ $la
 
 /// A busy indicator without a label of its own.
 pub const BUSY: StrKey = StrKey::new("egui-pop-busy", "Busy");
+/// A skeleton standing in for content that loads.
+pub const LOADING: StrKey = StrKey::new("egui-pop-loading", "Loading");
 
 /// Every string egui-pop core shows, for catalogues and tests.
 pub const ALL: &[StrKey] = &[
@@ -99,6 +101,7 @@ pub const ALL: &[StrKey] = &[
     SLIDER_MINIMUM,
     SLIDER_MAXIMUM,
     BUSY,
+    LOADING,
 ];
 
 /// Gives the text of a key in the current language, if it has one.
