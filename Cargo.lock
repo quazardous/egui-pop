@@ -1190,6 +1190,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "egui-pop-wayland"
+version = "0.1.0"
+dependencies = [
+ "raw-window-handle",
+ "wayland-backend",
+ "wayland-client",
+ "wayland-protocols",
+]
+
+[[package]]
 name = "egui-pop-win32"
 version = "0.1.0"
 dependencies = [

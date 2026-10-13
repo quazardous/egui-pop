@@ -1,0 +1,32 @@
+[package]
+name = "egui-pop-wayland"
+version = "0.1.0"
+description = "The Wayland layer of egui-pop's image viewport: a subsurface under a window, tagged through wp_color_management_v1, and the compositor's preferred image description, with no egui dependency"
+keywords = ["wayland", "color-management", "wide-gamut", "hdr", "subsurface"]
+categories = ["gui", "graphics"]
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+# The workspace forbids `unsafe`; this crate takes a window's raw Wayland
+# handles, so it only denies it and allows it in its `sys` module.
+[lints.rust]
+unsafe_code = "deny"
+missing_debug_implementations = "warn"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+
+[dependencies]
+# MIT OR Apache-2.0 OR Zlib: the window handles eframe gives and wgpu takes.
+raw-window-handle = "0.6"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# MIT: the Wayland client, on the connection winit opened (libwayland,
+# loaded at run time as winit does).
+wayland-client = "0.31"
+wayland-backend = { version = "0.3", features = ["client_system", "dlopen"] }
+# MIT: the colour-management (staging) and viewporter protocols.
+wayland-protocols = { version = "0.32", features = ["client", "staging"] }

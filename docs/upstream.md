@@ -119,7 +119,7 @@ Reviewed at every egui bump: remove what upstream fixed, update the rest.
   (`HitTable`, `HitRegions::hit` mapping a point to caption, minimize,
   maximize, close or a resize edge). On Windows, `FramePlugin` (when the
   application draws the frame) subclasses the main window through
-  `egui-pop-win32` (`SetWindowSubclass`, the one crate allowed `unsafe`,
+  `egui-pop-win32` (`SetWindowSubclass`, `unsafe` in one module,
   with no egui dependency) and answers `WM_NCHITTEST` from them:
   `HTCAPTION` (Windows moves the window, with Aero Snap), `HTMINBUTTON`,
   `HTMAXBUTTON` (Snap Layouts) and `HTCLOSE`, the resize codes, else

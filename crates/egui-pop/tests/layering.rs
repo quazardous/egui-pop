@@ -9,6 +9,7 @@ use std::process::Command;
 const LAYERS: &[(&str, u32)] = &[
     ("egui-pop-tokens", 0),
     ("egui-pop-win32", 0),
+    ("egui-pop-wayland", 0),
     ("egui-pop-model", 1),
     ("egui-pop-core", 2),
     ("egui-pop-api", 3),
