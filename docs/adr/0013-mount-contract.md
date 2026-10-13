@@ -1,6 +1,6 @@
 # 0013: The mount contract: components declare needs, hosts declare offers
 
-Date: 2026-10-14. Status: **proposed**.
+Date: 2026-10-14. Status: **accepted**.
 
 The analysis behind it (what egui-pop has, the contract in detail, the
 survey, the free-content dialog, the steps, the risks and the open
@@ -26,7 +26,7 @@ vocabulary in which a component says what it needs and a place says
 what it offers, so that "can this go there, and if not, why not" is
 computed, tested and documented from one source.
 
-## Decision (proposed)
+## Decision
 
 **Components declare needs** (`Mountable`, in `egui-pop-model`, no
 egui): keyboard (none, while hovered, when focused, or exclusive) and
@@ -107,3 +107,30 @@ each declare an offer.
   tickets, each a rule whose verdict changes from "egui-pop limit" to
   "fits".
 - Declarations can lie; the mount tests are what keeps them honest.
+
+## Answers to the open questions (2026-10-14)
+
+The owner accepted the proposed defaults of the analysis (section 6):
+
+1. **The free-content dialog** is a new kind, `Dialog::Custom`; the
+   other four kinds keep taking no free content.
+2. **Claims of Enter and Escape** in a dialog: a focused component may
+   take them when its declaration claims them. When the content claims
+   Enter, Ctrl+Enter accepts; Escape still cancels the dialog unless the
+   content claims it and has something to cancel.
+3. **Auxiliary windows** get the keymap and overlays of their own (E3,
+   E4): a detached viewport is meant to be a real window. Each is its
+   own piece of work, not part of this decision's first steps.
+4. **Palettes become resizable** (E2), their size remembered; also its
+   own piece of work.
+5. **Several instances of a panel** become possible, opt-in per panel.
+6. **No edit session in a popover** (D3) is confirmed, by design.
+7. **The preview dialog is sRGB first**; two overlapping wide-gamut
+   image surfaces come later, once tried.
+8. **The generated page is committed**, and a test fails when it is
+   stale.
+9. **Dialogs stay outside the context stack's projection** (ADR 0012):
+   a modal tool that must come back after a restart is a transient
+   frame of the stack instead.
+10. **A heads-up host over the viewport** comes later, as its own piece
+    of work, when a component needs it.

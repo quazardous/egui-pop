@@ -1,7 +1,8 @@
 # 0013, appendix: the analysis behind the mount contract
 
 The analysis that led to [ADR 0013](0013-mount-contract.md), kept for
-the reasons it gives. Where it differs from the ADR, the ADR wins. The
+the reasons it gives. Where it differs from the ADR, the ADR wins; the
+open questions of section 6 are answered there. The
 matrix it starts from, written by hand from the code, is
 [hosts.md](../hosts.md); the codes used below (c1, D1, E1, U1...) are
 that page's.
