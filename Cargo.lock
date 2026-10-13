@@ -1169,6 +1169,7 @@ dependencies = [
  "egui",
  "egui-pop-core",
  "egui-pop-test",
+ "egui-pop-wayland",
  "egui-wgpu",
  "egui_kittest",
  "half",

@@ -138,6 +138,21 @@ fn fs(v: V) -> @location(0) vec4<f32> {
     }
     return vec4<f32>(out, 1.0);
 }
+
+// A triangle over the whole target, for the hole an image surface below
+// the window shows through (the scissor keeps it to the image).
+@vertex
+fn vs_full(@builtin(vertex_index) i: u32) -> V {
+    var corners = array<vec2<f32>, 3>(vec2<f32>(-1.0, -1.0), vec2<f32>(3.0, -1.0), vec2<f32>(-1.0, 3.0));
+    var out: V;
+    out.pos = vec4<f32>(corners[i], 0.0, 1.0);
+    return out;
+}
+
+@fragment
+fn fs_hole() -> @location(0) vec4<f32> {
+    return vec4<f32>(0.0, 0.0, 0.0, 0.0);
+}
 "#;
 
 /// Bytes of one draw's uniform.
@@ -149,8 +164,14 @@ struct Slot {
     capacity: usize,
 }
 
-struct Resources {
+pub(crate) struct Resources {
     pipeline: wgpu::RenderPipeline,
+    /// Writes transparent black over the image, in the window's format.
+    hole: wgpu::RenderPipeline,
+    shader: wgpu::ShaderModule,
+    layout: wgpu::PipelineLayout,
+    /// The tile pipeline for each image surface format.
+    image_pipelines: HashMap<wgpu::TextureFormat, wgpu::RenderPipeline>,
     uniform_layout: wgpu::BindGroupLayout,
     texture_layout: wgpu::BindGroupLayout,
     stride: u64,
@@ -197,7 +218,7 @@ pub fn color_space(space: wgpu::SurfaceColorSpace, format: wgpu::TextureFormat) 
     }
 }
 
-fn to_wgpu(space: ColorSpace) -> wgpu::SurfaceColorSpace {
+pub(crate) fn to_wgpu(space: ColorSpace) -> wgpu::SurfaceColorSpace {
     use wgpu::SurfaceColorSpace as S;
     match space {
         ColorSpace::Srgb => S::Srgb,
@@ -291,7 +312,7 @@ pub fn choose_surface(
     })
 }
 
-fn color_space_flag(space: ColorSpace) -> wgpu::SurfaceColorSpaces {
+pub(crate) fn color_space_flag(space: ColorSpace) -> wgpu::SurfaceColorSpaces {
     use wgpu::SurfaceColorSpaces as F;
     match space {
         ColorSpace::Srgb => F::SRGB,
@@ -368,37 +389,28 @@ pub fn install_for_surface(
         bind_group_layouts: &[Some(&uniform_layout), Some(&texture_layout)],
         ..Default::default()
     });
-    let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some("egui-pop-viewport"),
-        layout: Some(&layout),
-        vertex: wgpu::VertexState {
-            module: &shader,
-            entry_point: Some("vs"),
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
-            buffers: &[],
-        },
-        fragment: Some(wgpu::FragmentState {
-            module: &shader,
-            entry_point: Some("fs"),
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
-            targets: &[Some(wgpu::ColorTargetState {
-                format: rs.target_format,
-                blend: None,
-                write_mask: wgpu::ColorWrites::ALL,
-            })],
-        }),
-        primitive: wgpu::PrimitiveState::default(),
-        depth_stencil: None,
-        multisample: wgpu::MultisampleState::default(),
-        multiview_mask: None,
-        cache: None,
+    let pipeline = render_pipeline(device, &shader, &layout, ["vs", "fs"], rs.target_format);
+    let empty = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("egui-pop-viewport.hole"),
+        ..Default::default()
     });
+    let hole = render_pipeline(
+        device,
+        &shader,
+        &empty,
+        ["vs_full", "fs_hole"],
+        rs.target_format,
+    );
     let align = u64::from(device.limits().min_uniform_buffer_offset_alignment);
     let stride = UNIFORM_SIZE.div_ceil(align) * align;
     let max_texture_side = device.limits().max_texture_dimension_2d;
     let target_is_srgb = rs.target_format.is_srgb();
     rs.renderer.write().callback_resources.insert(Resources {
         pipeline,
+        hole,
+        shader,
+        layout,
+        image_pipelines: HashMap::new(),
         uniform_layout,
         texture_layout,
         stride,
@@ -420,6 +432,63 @@ pub fn install_for_surface(
         max_texture_side,
         half_float: half,
         target_is_srgb,
+    }
+}
+
+/// A pipeline of the viewport's shader, its `[vertex, fragment]` entry
+/// points, writing `format` without blending.
+fn render_pipeline(
+    device: &wgpu::Device,
+    shader: &wgpu::ShaderModule,
+    layout: &wgpu::PipelineLayout,
+    [vertex, fragment]: [&str; 2],
+    format: wgpu::TextureFormat,
+) -> wgpu::RenderPipeline {
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("egui-pop-viewport"),
+        layout: Some(layout),
+        vertex: wgpu::VertexState {
+            module: shader,
+            entry_point: Some(vertex),
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            buffers: &[],
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: shader,
+            entry_point: Some(fragment),
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            targets: &[Some(wgpu::ColorTargetState {
+                format,
+                blend: None,
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+        }),
+        primitive: wgpu::PrimitiveState::default(),
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        multiview_mask: None,
+        cache: None,
+    })
+}
+
+impl Resources {
+    /// The tile pipeline for an image surface's format.
+    pub(crate) fn image_pipeline(
+        &mut self,
+        device: &wgpu::Device,
+        format: wgpu::TextureFormat,
+    ) -> &wgpu::RenderPipeline {
+        let (shader, layout) = (&self.shader, &self.layout);
+        self.image_pipelines
+            .entry(format)
+            .or_insert_with(|| render_pipeline(device, shader, layout, ["vs", "fs"], format))
+    }
+
+    /// Draws the hole an image surface below the window shows through.
+    pub(crate) fn draw_hole(&self, pass: &mut wgpu::RenderPass<'_>, screen: [u32; 2]) {
+        pass.set_viewport(0.0, 0.0, screen[0] as f32, screen[1] as f32, 0.0, 1.0);
+        pass.set_pipeline(&self.hole);
+        pass.draw(0..3, 0..1);
     }
 }
 
@@ -450,18 +519,14 @@ fn texture_bytes(format: wgpu::TextureFormat, data: &[f32]) -> Vec<u8> {
     }
 }
 
-impl egui_wgpu::CallbackTrait for TilePaint {
-    fn prepare(
+impl TilePaint {
+    /// Takes in the tiles uploaded and freed since the last frame.
+    pub(crate) fn sync_textures(
         &self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        screen: &egui_wgpu::ScreenDescriptor,
-        _encoder: &mut wgpu::CommandEncoder,
-        resources: &mut egui_wgpu::CallbackResources,
-    ) -> Vec<wgpu::CommandBuffer> {
-        let Some(r) = resources.get_mut::<Resources>() else {
-            return Vec::new();
-        };
+        r: &mut Resources,
+    ) {
         let (uploads, frees) = {
             let mut q = self
                 .queue
@@ -514,8 +579,22 @@ impl egui_wgpu::CallbackTrait for TilePaint {
             });
             r.textures.insert(id, group);
         }
+    }
+
+    /// Writes the draws' uniforms for a target of `size` pixels whose
+    /// top left is `origin` in window pixels; `false` when there is
+    /// nothing to draw.
+    pub(crate) fn write_uniforms(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        r: &mut Resources,
+        size: [f32; 2],
+        origin: [f32; 2],
+        target_is_srgb: bool,
+    ) -> bool {
         if self.draws.is_empty() {
-            return Vec::new();
+            return false;
         }
         let stride = r.stride;
         let needed = self.draws.len();
@@ -550,19 +629,19 @@ impl egui_wgpu::CallbackTrait for TilePaint {
             );
         }
         let Some(slot) = r.slots.get(&self.slot) else {
-            return Vec::new();
+            return false;
         };
         let mut bytes = vec![0u8; stride as usize * needed];
-        let [sw, sh] = screen.size_in_pixels;
+        let [sw, sh] = size;
         let m = &self.stage.matrix;
         for (i, d) in self.draws.iter().enumerate() {
             let values: [f32; 28] = [
-                d.dst[0],
-                d.dst[1],
-                d.dst[2],
-                d.dst[3],
-                sw as f32,
-                sh as f32,
+                d.dst[0] - origin[0],
+                d.dst[1] - origin[1],
+                d.dst[2] - origin[0],
+                d.dst[3] - origin[1],
+                sw,
+                sh,
                 d.size[0] as f32,
                 d.size[1] as f32,
                 m[0][0],
@@ -580,7 +659,7 @@ impl egui_wgpu::CallbackTrait for TilePaint {
                 self.stage.clamp[0],
                 self.stage.clamp[1],
                 self.stage.transfer.code() as f32,
-                if r.target_is_srgb { 1.0 } else { 0.0 },
+                if target_is_srgb { 1.0 } else { 0.0 },
                 self.stage.white_nits,
                 0.0,
                 0.0,
@@ -592,6 +671,41 @@ impl egui_wgpu::CallbackTrait for TilePaint {
             }
         }
         queue.write_buffer(&slot.buffer, 0, &bytes);
+        true
+    }
+
+    /// Records the draws (the pipeline and viewport set by the caller).
+    pub(crate) fn draw(&self, pass: &mut wgpu::RenderPass<'_>, r: &Resources) {
+        let Some(slot) = r.slots.get(&self.slot) else {
+            return;
+        };
+        for (i, d) in self.draws.iter().enumerate() {
+            let Some(texture) = r.textures.get(&d.texture) else {
+                continue;
+            };
+            pass.set_bind_group(0, &slot.group, &[(i as u64 * r.stride) as u32]);
+            pass.set_bind_group(1, texture, &[]);
+            pass.draw(0..6, 0..1);
+        }
+    }
+}
+
+impl egui_wgpu::CallbackTrait for TilePaint {
+    fn prepare(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        screen: &egui_wgpu::ScreenDescriptor,
+        _encoder: &mut wgpu::CommandEncoder,
+        resources: &mut egui_wgpu::CallbackResources,
+    ) -> Vec<wgpu::CommandBuffer> {
+        let Some(r) = resources.get_mut::<Resources>() else {
+            return Vec::new();
+        };
+        self.sync_textures(device, queue, r);
+        let [w, h] = screen.size_in_pixels;
+        let srgb = r.target_is_srgb;
+        self.write_uniforms(device, queue, r, [w as f32, h as f32], [0.0, 0.0], srgb);
         Vec::new()
     }
 
@@ -604,20 +718,10 @@ impl egui_wgpu::CallbackTrait for TilePaint {
         let Some(r) = resources.get::<Resources>() else {
             return;
         };
-        let Some(slot) = r.slots.get(&self.slot) else {
-            return;
-        };
         // Positions are in window pixels; the scissor keeps the clip.
         let [sw, sh] = info.screen_size_px;
         pass.set_viewport(0.0, 0.0, sw as f32, sh as f32, 0.0, 1.0);
         pass.set_pipeline(&r.pipeline);
-        for (i, d) in self.draws.iter().enumerate() {
-            let Some(texture) = r.textures.get(&d.texture) else {
-                continue;
-            };
-            pass.set_bind_group(0, &slot.group, &[(i as u64 * r.stride) as u32]);
-            pass.set_bind_group(1, texture, &[]);
-            pass.draw(0..6, 0..1);
-        }
+        self.draw(pass, r);
     }
 }

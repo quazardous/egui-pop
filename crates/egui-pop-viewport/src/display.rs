@@ -476,6 +476,13 @@ pub enum Fallback {
     /// The surface carries less than wanted (its encoding, and what is
     /// missing).
     Surface { surface: String, missing: String },
+    /// As `Surface`, and the image could not get a surface of its own
+    /// (why: no colour management on the compositor, an X11 window...).
+    Unavailable {
+        surface: String,
+        missing: String,
+        why: String,
+    },
     /// The CPU path draws 8-bit sRGB textures.
     CpuPath,
     /// The application's hook chose so.
@@ -498,6 +505,14 @@ impl std::fmt::Display for Fallback {
             Fallback::Surface { surface, missing } => {
                 write!(f, "the surface is {surface}: {missing} cannot be shown")
             }
+            Fallback::Unavailable {
+                surface,
+                missing,
+                why,
+            } => write!(
+                f,
+                "the surface is {surface}: {missing} cannot be shown ({why})"
+            ),
             Fallback::CpuPath => f.write_str(
                 "the CPU path draws 8-bit sRGB textures (the GPU path draws wide gamut and HDR)",
             ),
@@ -815,19 +830,58 @@ fn default_surface_id() -> Id {
     Id::new("egui_pop_viewport::display::default_surface")
 }
 
+fn image_id(viewport: ViewportId) -> Id {
+    Id::new(("egui_pop_viewport::display::image", viewport))
+}
+
 /// What the surface of the window being drawn expects: what was set for
 /// it, else what the GPU path found when installed, else sRGB.
 pub fn target(ctx: &Context) -> DisplayTarget {
     target_of(ctx, ctx.viewport_id())
 }
 
-/// What a window's surface expects.
+/// What a window's image is drawn into: the image's own surface when it
+/// has one ([`set_image_surface`]), else the window's surface.
 pub fn target_of(ctx: &Context, viewport: ViewportId) -> DisplayTarget {
     ctx.data(|d| {
-        d.get_temp(target_id(viewport))
+        d.get_temp::<ImageSurface>(image_id(viewport))
+            .and_then(|i| i.target)
+            .or_else(|| d.get_temp(target_id(viewport)))
             .or_else(|| d.get_temp(default_surface_id()))
     })
     .unwrap_or_default()
+}
+
+/// The image's own surface in a window, as the image surface layer
+/// decided it (`image_surface`, Wayland).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ImageSurface {
+    /// What the image's surface expects, when the image has one (it then
+    /// overrides the window's surface for the image).
+    pub target: Option<DisplayTarget>,
+    /// Why the image has no surface of its own, or one carrying less than
+    /// wanted.
+    pub why: Option<String>,
+}
+
+/// Sets what a window's image is drawn into when it has a surface of
+/// its own, and why not (or why less than wanted); viewports in that
+/// window follow on the next frame.
+pub fn set_image_surface(ctx: &Context, viewport: ViewportId, image: ImageSurface) {
+    let changed = ctx.data_mut(|d| {
+        let id = image_id(viewport);
+        let changed = d.get_temp::<ImageSurface>(id).as_ref() != Some(&image);
+        d.insert_temp(id, image);
+        changed
+    });
+    if changed {
+        ctx.request_repaint_of(viewport);
+    }
+}
+
+/// What was set with [`set_image_surface`] for a window.
+pub fn image_surface_of(ctx: &Context, viewport: ViewportId) -> Option<ImageSurface> {
+    ctx.data(|d| d.get_temp(image_id(viewport)))
 }
 
 /// Sets what a window's surface expects (for example when its surface
@@ -865,7 +919,16 @@ pub fn want(ctx: &Context, viewport: ViewportId, wanted: DisplayTarget) {
 /// its surface expects, on the GPU path when it is installed (as a
 /// viewport resolves it, before its `before_display` hook).
 pub fn resolution(ctx: &Context) -> Resolution {
-    resolve(&wanted(ctx), &target(ctx), crate::tiles::device(ctx).gpu)
+    let mut r = resolve(&wanted(ctx), &target(ctx), crate::tiles::device(ctx).gpu);
+    let why = image_surface_of(ctx, ctx.viewport_id()).and_then(|i| i.why);
+    if let (Some(why), Some(Fallback::Surface { surface, missing })) = (why, r.fallback.clone()) {
+        r.fallback = Some(Fallback::Unavailable {
+            surface,
+            missing,
+            why,
+        });
+    }
+    r
 }
 
 /// The arithmetic of a display transform for one target, as the shader

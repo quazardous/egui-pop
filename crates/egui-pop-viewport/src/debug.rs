@@ -191,10 +191,22 @@ pub(crate) fn publish(
                 "reason": r.reason(),
             })),
             "transform": format!("{:?}", state.display_transform()),
+            "image_surface": image_surface(ctx),
             "trace": trace,
             "signals": all[keep..].to_vec(),
         }),
     );
+}
+
+/// The image surfaces' report (feature `wayland`).
+#[cfg(feature = "wayland")]
+fn image_surface(ctx: &Context) -> Json {
+    crate::image_surface::report(ctx)
+}
+
+#[cfg(not(feature = "wayland"))]
+fn image_surface(_: &Context) -> Json {
+    Json::Null
 }
 
 pub(crate) fn take_commands(ctx: &Context, name: &str) -> Vec<View> {

@@ -18,10 +18,14 @@ name = "viewer"
 required-features = ["wgpu"]
 
 [features]
-default = ["wgpu"]
+default = ["wgpu", "wayland"]
 ## The GPU path: scene tiles as half-float textures drawn by an
 ## `egui_wgpu` paint callback that runs the display transform.
 wgpu = ["dep:egui-wgpu", "dep:half"]
+## The image on a surface of its own on Wayland (`image_surface`): a
+## subsurface tagged through `wp_color_management_v1` for wide gamut,
+## below egui's sRGB interface; sRGB elsewhere, with the reason.
+wayland = ["wgpu", "dep:egui-pop-wayland"]
 
 [dependencies]
 egui.workspace = true
@@ -29,6 +33,7 @@ egui-wgpu = { version = "0.36", default-features = false, optional = true }
 # MIT OR Apache-2.0: f32 to half-float conversion for tile textures.
 half = { version = "2", optional = true }
 egui-pop-core.workspace = true
+egui-pop-wayland = { workspace = true, optional = true }
 serde_json.workspace = true
 
 [dev-dependencies]

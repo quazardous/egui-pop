@@ -9,6 +9,24 @@ egui minor.
 
 ### Added
 
+- The image on a surface of its own on Wayland (`image_surface`, feature
+  `wayland` of `egui-pop-viewport`, on by default): after
+  `image_surface::install` (eframe's creation context, a transparent main
+  window), the main window's viewports draw their image into a subsurface
+  below the interface, tagged through `wp_color_management_v1` with the
+  wanted encoding (BT.2020 with a 2.2 power, Display P3, PQ; KWin, sway,
+  Weston), or presented in a colour space the driver declares where the
+  driver holds the surface's colour itself (Display P3 on GNOME and
+  Hyprland); the interface stays sRGB and is drawn over the image. The
+  negotiation (`image_surface::negotiate`) is plain code tested with
+  fake compositors; without the protocol, on X11 or another system the
+  image stays sRGB and `display::Resolution::reason` says why
+  (`Fallback::Unavailable`). The `viewport` collector reports it, with
+  the compositor's preferred image description for the window; the
+  `EGUI_POP_IMAGE_SURFACE` variable turns it `off` or `no-tag`. The
+  Wayland side is a new crate, `egui-pop-wayland`. Guides:
+  docs/viewport.md, docs/wayland-colour.md.
+
 - An image tools guide (`docs/image-tools.md`): the histogram, the curve
   editor and the targeted adjustment, the colour wheels, the zoom
   control and the navigator, their hooks and steps, accessibility and

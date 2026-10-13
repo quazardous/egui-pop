@@ -25,6 +25,9 @@
 
 use std::fmt;
 
+/// The raw window handles [`Display::attach`] takes.
+pub use raw_window_handle;
+
 #[cfg(target_os = "linux")]
 mod client;
 #[cfg(target_os = "linux")]

@@ -15,6 +15,9 @@
 //!   texture budget, tiles within the device's largest texture);
 //! - `gpu` (feature `wgpu`): scene tiles as half-float textures, the
 //!   display transform in a shader;
+//! - `image_surface` (feature `wayland`): the image on a surface of its
+//!   own, tagged with a wide encoding through the Wayland compositor,
+//!   below an sRGB interface;
 //! - [`demo`]: a procedural source for galleries and examples;
 //! - [`overlay`]: overlays in image coordinates and the handle kit;
 //! - [`thumbnail`] and [`histogram`]: thumbnails in a virtualised grid
@@ -62,6 +65,8 @@ pub mod gestures;
 pub mod gpu;
 pub mod histogram;
 pub mod hooks;
+#[cfg(feature = "wayland")]
+pub mod image_surface;
 pub mod navigator;
 pub mod overlay;
 pub mod source;

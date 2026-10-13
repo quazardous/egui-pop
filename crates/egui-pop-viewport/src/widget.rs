@@ -564,6 +564,16 @@ impl<'a> Viewport<'a> {
         let ppp = ui.ctx().pixels_per_point();
         state.now = ui.input(|i| i.time);
         let mut signals = std::mem::take(&mut state.pending);
+        // The image's own surface, when the platform gives it one: the
+        // target below is then that surface's.
+        #[cfg(feature = "wayland")]
+        let image_route = if tiles::device(ui.ctx()).gpu {
+            crate::image_surface::frame(ui.ctx())
+        } else {
+            None
+        };
+        #[cfg(not(feature = "wayland"))]
+        let image_route: ImageRoute = ();
         let surface = display::target(ui.ctx());
         if state.target.is_some_and(|t| t != surface) {
             signals.push(Signal::Display { target: surface });
@@ -648,6 +658,8 @@ impl<'a> Viewport<'a> {
             &target,
             target_changed,
             &mut signals,
+            image_route,
+            tokens.backdrop,
         );
         if self.pixel_grid && mapping.zoom >= GRID_FROM_ZOOM {
             draw_grid(&painter, &mapping, tokens.grid);
@@ -926,6 +938,15 @@ fn split_x(m: &Mapping, compare: Compare) -> Option<f32> {
     }
 }
 
+/// The image's own surface for a frame, when it has one.
+#[cfg(feature = "wayland")]
+type ImageRoute = Option<(
+    crate::image_surface::ImageSurfaces,
+    crate::image_surface::Route,
+)>;
+#[cfg(not(feature = "wayland"))]
+type ImageRoute = ();
+
 /// Takes in what the sources sent, asks for what is missing, draws the
 /// tiles (proxy, then exact) of each side shown, evicts past the budget,
 /// and signals what moved.
@@ -940,6 +961,8 @@ fn draw_tiles(
     target: &DisplayTarget,
     target_changed: bool,
     signals: &mut Vec<Signal>,
+    image: ImageRoute,
+    backdrop: Color32,
 ) {
     let ctx = ui.ctx();
     let transform = state.transform.0.clone();
@@ -984,8 +1007,11 @@ fn draw_tiles(
             }
         }
     }
+    #[cfg(feature = "wgpu")]
+    let mut paints: Vec<(crate::gpu::TilePaint, Rect)> = Vec::new();
     for (side, source, clip, slot) in sides {
-        let painter = painter.with_clip_rect(clip.intersect(painter.clip_rect()));
+        let clip = clip.intersect(painter.clip_rect());
+        let painter = painter.with_clip_rect(clip);
         let mut gpu: Vec<(u64, [f32; 4], [u32; 2])> = Vec::new();
         let ppp = f64::from(mapping.ppp);
         for d in state.tiles.frame(side, source, mapping, settled) {
@@ -1022,10 +1048,55 @@ fn draw_tiles(
                     .collect(),
                 stage: transform.stage(&target.effective()),
             };
-            painter.add(egui_wgpu::Callback::new_paint_callback(rect, paint));
+            paints.push((paint, clip));
         }
         #[cfg(not(feature = "wgpu"))]
         let _ = (gpu, slot);
+    }
+    // The image goes to its own surface when it has one for what is
+    // drawn (a hook may have redirected it), else to the window.
+    #[cfg(feature = "wayland")]
+    let paints = match image {
+        Some((surfaces, route)) if route.target() == Some(*target) => {
+            let visible = mapping
+                .image_rect_to_screen([0.0, 0.0, mapping.image[0], mapping.image[1]])
+                .intersect(painter.clip_rect());
+            let px = |r: Rect| {
+                [
+                    r.min.x * mapping.ppp,
+                    r.min.y * mapping.ppp,
+                    r.max.x * mapping.ppp,
+                    r.max.y * mapping.ppp,
+                ]
+            };
+            if visible.is_positive() {
+                let paint = crate::image_surface::ImagePaint {
+                    ctx: ctx.clone(),
+                    surfaces,
+                    route,
+                    key: state.slot,
+                    pass: ctx.cumulative_pass_nr(),
+                    rect_px: px(visible),
+                    scale: ctx.native_pixels_per_point().unwrap_or(mapping.ppp),
+                    background: crate::image_surface::clear_colour(backdrop, target),
+                    sides: paints.into_iter().map(|(p, clip)| (p, px(clip))).collect(),
+                    shown: std::sync::atomic::AtomicBool::new(false),
+                };
+                painter
+                    .with_clip_rect(visible)
+                    .add(egui_wgpu::Callback::new_paint_callback(visible, paint));
+            }
+            Vec::new()
+        }
+        _ => paints,
+    };
+    #[cfg(not(feature = "wayland"))]
+    let _ = (image, backdrop);
+    #[cfg(feature = "wgpu")]
+    for (paint, clip) in paints {
+        painter
+            .with_clip_rect(clip)
+            .add(egui_wgpu::Callback::new_paint_callback(rect, paint));
     }
     state.tiles.evict();
 
