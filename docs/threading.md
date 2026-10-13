@@ -2,8 +2,9 @@
 
 What runs on which thread in an egui-pop application, what egui allows,
 what egui-pop could move off the interface thread, and at what cost.
-This is an analysis: it changes no behaviour. The decisions it asks for
-are listed at the end.
+It began as an analysis that changed no behaviour; the decisions it
+asks for are listed at the end, and the one taken since (the viewport's
+tile intake) is recorded in section 5.3.
 
 **In short.**
 
@@ -213,16 +214,18 @@ Each frame, in this order:
    host), the shell (title, menu bar, status bar, the workbench and
    its panels), auxiliary windows, overlays, popups, live regions,
    the requests again.
-3. Inside the panels, the components: the viewport takes in every tile
-   that arrived and uploads it (CPU path: display transform per pixel,
-   then `load_texture`); the terminal locks its model and paints the
+3. Inside the panels, the components: the viewport takes in the tiles
+   that arrived, already converted by the source's workers (the default
+   since section 5.3), and hands them to egui within an upload budget;
+   the terminal locks its model and paints the
    grid; the editor locks its model, highlights up to 500 lines a pass
    and lays out the visible lines; code assist calls the provider; the
    tree applies the edits its source sent; the platform plugins drain
    their queues.
 4. eframe tessellates and renders (1.6). On the GPU path, the
-   viewport's paint callback converts each new tile from f32 to f16 and
-   uploads it, in `prepare`, on this thread.
+   viewport's paint callback creates a texture for each new tile and
+   copies its half-float texels into it, in `prepare`, on this thread
+   (section 5.2 measures it).
 
 Steps and hooks (ADR 0011), command handlers of `LocalHost`, store
 listeners and writes, persistence of documents, and the default code
@@ -521,8 +524,8 @@ What the scopes show:
 
 ### 5.1 The tile intake off the interface thread (proof of concept)
 
-Follow-up 3, as two opt-in settings of `ViewportState` (the default is
-unchanged):
+Follow-up 3, as two settings of `ViewportState`, opt-in when measured
+here and the default since (section 5.3):
 
 - `set_prepare_on_worker(true)`: the tile sink converts each tile on
   the thread that delivers it, the source's worker (the display
@@ -598,13 +601,107 @@ tile's computation.
   its price is latency to fill a view (a 1 MiB budget is about 32
   frames for a 4K view in 8-bit RGBA), which the visible-first order
   keeps away from what the user looks at.
-- **Not done: a worker rendering the composed view into its own wgpu
-  texture** (follow-up 9). This harness builds frames without a GPU and
-  cannot measure it; it needs a timing job with a device (the box's GPU
-  job) and the delegated surface of section 4. With the conversion on
-  the workers, the interface thread's remaining tile work is the
-  texture copy at the render; the next measure should be that copy on
-  a real device before building the surface.
+- **A worker rendering into its own wgpu texture** (follow-up 9) could
+  not be measured by this headless harness; section 5.2 measures it on
+  a GPU.
+
+### 5.2 On a real GPU
+
+The viewport crate's `gpu_tiles` example
+(`crates/egui-pop-viewport/examples/gpu_tiles.rs`) measures what the
+headless harness cannot: the render. It builds frames at 60 Hz as
+eframe would, tessellates them, renders them with egui-wgpu into an
+offscreen target, submits, then waits for the GPU (as a present at most
+one frame ahead does). The view jumps every 8 frames (a storm) or every
+30 (views held), over zooms 25 % to 200 % of a 4096 × 3072 image whose
+tiles come from two worker threads. Each intake runs in its own process:
+
+- `gpu-ui`: the GPU path, as the old default: scene floats converted to
+  half floats and copied into a new texture per tile, in the paint
+  callback's `prepare`, on the interface thread, all in one frame;
+- `gpu-worker`: the GPU path, the new default: half floats made on the
+  source's workers, the texture created and filled in `prepare`, within
+  the upload budget;
+- `gpu-render`: the source's workers render each tile on the GPU, into a
+  texture of their own, with the demo image's function ported to WGSL,
+  and hand it over (`TileSink::deliver_texture`, a prototype): no pixel
+  crosses the CPU, the interface thread only binds the texture;
+- `cpu-ui`, `cpu-worker`: the same without the GPU path installed (the
+  display transform on the CPU, egui textures), old and new default.
+
+"Interface thread" is the frame's build, tessellation, and the render's
+recording and submit (texture uploads included), not the wait for the
+GPU, which stays under 2.1 ms at p99 everywhere. Latencies are from the
+view change; 100 ms of each is the settle before exact tiles are asked
+for. Memory: the tile textures the viewport holds at most, and the
+process's peak resident memory.
+
+First run (2026-10-13, the box's timing job `egui-pop-gpu-tiles` on an
+NVIDIA GeForce RTX 3070 through Vulkan, CPU frequency capped at 65 %,
+conditions comparable; all rows from one run):
+
+| intake | interface p50 / p95 / p99 / max (ms) | over 16.7 ms | uploads/frame max | first full-res p50 / max (ms) | views complete | tile textures max (MB) | peak RSS (MB) |
+|---|---|---|---|---|---|---|---|
+| storm, `gpu-ui` (old default) | 0.38 / 14.28 / 14.92 / 18.12 | 4 | 5 (2.6 MB) | 133 / 136 | 18 of 45 | 91 | 199 |
+| storm, `gpu-worker` (default) | 0.38 / 11.93 / 12.06 / 12.65 | 0 | 4 (2.1 MB) | 131 / 133 | 18 of 45 | 90 | 167 |
+| storm, `gpu-render` | 0.40 / 0.57 / 0.65 / 1.69 | 0 | 24 (no copy) | 120 / 121 | 45 of 45 | 115 | 208 |
+| storm, `cpu-ui` (old default) | 0.36 / 26.37 / 49.49 / 76.86 | 26 | 10 (2.6 MB) | 147 / 156 | 25 of 45 | 49 | 179 |
+| storm, `cpu-worker` (default) | 0.37 / 3.33 / 3.45 / 6.05 | 0 | 4 (1.0 MB) | 122 / 123 | 14 of 45 | 34 | 168 |
+| held, `gpu-ui` | 0.38 / 7.49 / 14.41 / 15.17 | 0 | 4 | 135 / 144 | 12 of 12, p50 157 ms | 63 | 173 |
+| held, `gpu-worker` | 0.38 / 6.15 / 12.15 / 14.95 | 0 | 5 | 132 / 143 | 12 of 12, p50 158 ms | 63 | 170 |
+| held, `gpu-render` | 0.38 / 0.47 / 0.68 / 1.81 | 0 | 24 (no copy) | 120 / 121 | 12 of 12, p50 120 ms | 63 | 172 |
+| held, `cpu-ui` | 0.37 / 14.20 / 44.27 / 76.60 | 10 | 10 | 149 / 152 | 12 of 12, p50 161 ms | 32 | 179 |
+| held, `cpu-worker` | 0.38 / 3.20 / 6.09 / 7.10 | 0 | 4 | 123 / 139 | 12 of 12, p50 172 ms | 32 | 168 |
+
+wgpu's allocator report gave the same 201 MB reserved for every run (a
+block reservation, not a measure of use); the tile textures held are the
+better measure of GPU memory.
+
+What the rows show:
+
+- **On the CPU path, the conversion on the workers is the whole gain**:
+  p99 49.5 to 3.5 ms in the storm, 26 frames over budget to none, the
+  first full-resolution tile 25 ms sooner (147 to 122 ms). What is left
+  on the interface thread is egui's texture copy at the render (3 ms at
+  p95 for 1 MB a frame).
+- **On the GPU path, the copy is the cost, not the conversion**: moving
+  the f32 to f16 conversion to the workers saves 2 to 3 ms (p99 14.9 to
+  12.1 ms) and the frames over budget, but the interface thread still
+  spends up to 12 ms a frame in `prepare`, creating one texture per
+  tile and copying 2 MB of half floats into it. The upload budget does
+  not bite here (8 MiB; the workers deliver at most 2.6 MB a frame).
+- **Tiles rendered on the GPU by the workers take the tiles off the
+  interface thread entirely**: p99 0.65 ms, flat whatever the load, the
+  first full-resolution tile sooner (120 ms, that is 20 ms after the
+  settle), and every view of the storm filled (45 of 45, against 14 to
+  25): the GPU computes a tile far faster than two CPU workers. It costs
+  more texture memory in the storm (115 against 90 MB: more tiles
+  arrive, and the budget does not hold them back), and it needs a
+  source whose pixels are on the GPU already.
+
+### 5.3 Decision (2026-10-13)
+
+- **The default is the conversion on the source's workers, with the
+  upload budget** (`ViewportState::new`: `prepare_on_worker` on,
+  `UploadBudget::DEFAULT`, 8 MiB a frame). It removes every frame over
+  budget in both paths and shows the first full-resolution tile sooner
+  (2 to 25 ms), for the same memory or less. Its cost is on the
+  workers (section 5.1: fewer tiles served in a storm). The opt-out
+  stays: `set_prepare_on_worker(false)`, `UploadBudget::UNLIMITED`.
+- **A source whose pixels are on the GPU hands over textures**
+  (`TileSink::deliver_texture`): no copy, the interface thread only
+  binds, the best of the three by an order of magnitude. This is the
+  path for an application whose pipeline renders on the GPU (Helios's
+  processing): its output should reach the viewport as textures on
+  the shared device, not as floats read back and uploaded again. The
+  prototype stays experimental until such a source uses it; the
+  delegated surface of section 4 generalises it.
+- **Next, for CPU sources on the GPU path**: the 12 ms left in
+  `prepare` is the texture creation and the copy. The workers can do
+  both (wgpu's device and queue are shareable): the sink, given the
+  device, creates and fills the texture on the delivering thread and
+  hands it over as `deliver_texture` does. A pool of tile textures
+  reused instead of created would cut it further.
 
 ## 6. Proposal: a threading model for egui-pop
 
@@ -672,9 +769,9 @@ graphs, scopes and histograms.
    lock the painting holds.
 3. Viewport: an upload budget per frame (tiles and bytes), the rest
    carried over; the CPU display transform and the f32 to f16
-   conversion moved to the sink's (worker) side. Done as an opt-in
-   proof of concept (section 5.1): keep the conversion on the workers
-   and make it the default; keep the budget as an opt-in guard.
+   conversion moved to the sink's (worker) side. Done, and the default
+   since 2026-10-13 (sections 5.1 to 5.3); next, the GPU path's texture
+   creation and copy on the workers too (section 5.3).
 4. `App::logic` runs twice per eframe frame (from `eframe::App::logic`
    and again from `App::show`): run it once.
 5. A thread-safe journal (`SharedJournal`) and a channel-backed `Host`
@@ -688,7 +785,8 @@ graphs, scopes and histograms.
    queue (drop cancelled jobs), the tree's inbox, PTY input, one
    waiting thread for actionable notifications.
 9. The delegated surface (section 4) in the viewport crate, then the
-   viewport's tiles on it. First measure the texture copy at the render on a real
-   device (section 5.1).
+   viewport's tiles on it. Measured first as tiles rendered on the GPU
+   by the source (`TileSink::deliver_texture`, section 5.2): the
+   interface thread's tile cost goes from 12 ms to under 1 ms at p99.
 10. egui-pop's interface kernel on its own thread: not recommended
     (section 3.5); for the owner to decide.
