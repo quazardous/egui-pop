@@ -1622,9 +1622,20 @@ fn the_jobs_centre_opens_a_jobs_log_console_in_the_page_and_the_popover() {
     h.get_by_label("Show the export as a toast")
         .click_accesskit();
     h.run();
-    assert!(h.query_by_label("Exporting 12 images").is_some());
+    // On screen and in the live region screen readers hear.
+    assert!(h.query_all_by_label("Exporting 12 images").count() >= 1);
     let toasts = app.service(&egui_pop::api::toasts::TOASTS).unwrap();
     assert_eq!(toasts.shown().len(), 1);
+    assert_eq!(
+        toasts.shown()[0].toast.job.as_deref(),
+        Some("gallery-export")
+    );
+    // Its bar is the export's, named after the job, beside the centre's.
+    assert!(
+        h.query_all_by_role_and_label(Role::ProgressIndicator, "Export 12 images")
+            .count()
+            >= 2
+    );
 }
 
 #[test]
