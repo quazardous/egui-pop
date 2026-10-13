@@ -25,14 +25,17 @@ pub fn split_key(key: &str) -> (&str, Option<&str>) {
 const AREAS: [&str; 6] = ["command", "panel", "menu", "setting", "plugin", "param"];
 
 /// Whether a message belongs to `owner` (a plugin, by its stable id):
-/// `<owner>-…` for its free messages, or `<area>-<owner>-…` for its
-/// commands, panels, menus, settings and parameters.
+/// `<owner>-…` for its free messages, `<area>-<owner>-…` for its
+/// commands, panels, menus, settings and parameters, or `<area>-<owner>`
+/// itself (`plugin-<owner>`, the plugin's title).
 ///
 /// ```
 /// use egui_pop_i18n::catalog::owned_by;
 ///
 /// assert!(owned_by("acme", "acme-greeting"));
 /// assert!(owned_by("acme.denoise", "command-acme-denoise-run"));
+/// assert!(owned_by("acme", "plugin-acme"));
+/// assert!(!owned_by("acme", "plugin-acmex"));
 /// assert!(!owned_by("acme", "acmex-greeting"));
 /// assert!(!owned_by("acme", "panel-helios-acme"));
 /// ```
@@ -47,7 +50,7 @@ pub fn owned_by(owner: &str, message: &str) -> bool {
             message
                 .strip_prefix(area)
                 .and_then(|r| r.strip_prefix('-'))
-                .is_some_and(prefixed)
+                .is_some_and(|r| r == owner || prefixed(r))
         })
 }
 

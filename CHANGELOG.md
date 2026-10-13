@@ -333,6 +333,11 @@ egui minor.
   `palette::shown`). Specs, palette entries, settings entries, stored
   values, the journal and the debug bridge stay English.
 
+### Fixed
+
+- A plugin's own title key (`plugin-<id>`) counts as owned by the plugin,
+  so `add_owned` accepts it.
+
 ## 0.1.0 (prepared, not published)
 
 The first release: the tokens and themes, the framework (plugins,
