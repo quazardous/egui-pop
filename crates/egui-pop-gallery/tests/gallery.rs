@@ -281,6 +281,27 @@ fn dialogs_open_from_the_page_and_send_what_they_ran() {
 }
 
 #[test]
+fn a_closable_dialog_closes_by_its_button_as_by_escape() {
+    let mut results = egui_kittest::SnapshotResults::new();
+    for theme in ["pop-dark", "pop-light"] {
+        let mut h = harness(options(theme, Density::Comfortable, "dialogs"));
+        h.run();
+        h.get_by_label("Confirm, with a close button").click();
+        h.run();
+        egui_pop_test::assert_all_named(&h);
+        assert!(h.get_by_label("Share").is_focused());
+        results.add(h.try_snapshot(format!("dialogs-closable-{theme}")));
+        // The dialog's, above anything else named so.
+        h.query_all_by_role_and_label(egui::accesskit::Role::Button, "Close")
+            .last()
+            .unwrap()
+            .click();
+        h.run();
+        assert!(h.query_by_label("Share the page?").is_none());
+    }
+}
+
+#[test]
 fn long_toasts_wrap_before_their_buttons_in_two_languages() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "toasts"));
     h.run();

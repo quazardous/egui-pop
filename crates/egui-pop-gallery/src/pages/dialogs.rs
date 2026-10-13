@@ -1,9 +1,9 @@
 //! The dialogs page: a confirmation, a dangerous one, a form with a path
-//! field, a choice and a notice, each opened by a button; what the
-//! accepted ones ran shows below.
+//! field, a choice, a notice and a confirmation with a close button, each
+//! opened by a button; what the accepted ones ran shows below.
 
 use egui::Ui;
-use egui_pop::api::dialogs::{Choose, Confirm, DIALOGS, Form, Info};
+use egui_pop::api::dialogs::{Choose, Confirm, DIALOGS, DialogSpec, Form, Info};
 use egui_pop::api::stories::Story;
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
 use egui_pop::model::commands::CommandSpec;
@@ -48,7 +48,7 @@ impl Plugin for DialogsPage {
         )?;
         ctx.story(
             Story::new(StoryId::from_static("dialogs"), "Dialogs", show)
-                .description("Confirmations named by their verb, a dangerous one, a form from descriptors with a path picker, a choice, a notice.")
+                .description("Confirmations named by their verb, a dangerous one, a form from descriptors with a path picker, a choice, a notice, a close button.")
                 .group("Components", 50),
         )?;
         Ok(())
@@ -98,6 +98,16 @@ fn show(ui: &mut Ui, app: &AppHandle) {
         }
         if ui.button("Show a notice").clicked() {
             d.open(Info::new("Saved", "The document was saved."));
+        }
+        if ui.button("Confirm, with a close button").clicked() {
+            d.open(
+                DialogSpec::new(
+                    Confirm::new("Share the page?", "Share", CMD_DONE)
+                        .detail("A link to the page goes to the clipboard.")
+                        .args(json!({ "what": "share" })),
+                )
+                .closable(true),
+            );
         }
     });
     section(ui, "Sent by the last accepted dialog");
