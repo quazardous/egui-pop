@@ -26,7 +26,8 @@ hints), `progress`,
 `placeholders` (skeletons and empty states), `viewport` (the image
 viewport), `navigator` (the zoom control and the navigator), `images`,
 `grading` (curves and colour wheels), `cursors` (tool cursors, brush
-outlines and the loupe), `node-graph` (the node graph editor), `display` (wide gamut and HDR surfaces), `tree`
+outlines and the loupe), `node-graph` (the node graph editor), `display` (wide gamut and HDR surfaces),
+`preview` (a custom dialog previewing an export in a viewport), `tree`
 (the live tree), `table` (lists and tables), `library` (the photo
 library), `text-editor`,
 `code-editor`, `terminal`, `zones` (zones and blocks), `workbench`,
@@ -174,7 +175,7 @@ The text editor, the code editor and the terminal.
 
 The tiled image viewport, its zoom control and navigator, images,
 curves and colour wheels, cursors and the loupe, the node graph editor,
-and the display.
+the display, and a preview dialog (a custom dialog holding a viewport).
 
 <table>
   <tr>
@@ -192,6 +193,7 @@ and the display.
   <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/node-graph-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/node-graph-pop-dark.png" width="200" alt="node-graph-pop-dark"></a><br>node-graph-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/node-graph-detail-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/node-graph-detail-pop-dark.png" width="200" alt="node-graph-detail-pop-dark"></a><br>node-graph-detail-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/preview-dialog-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/preview-dialog-pop-dark.png" width="200" alt="preview-dialog-pop-dark"></a><br>preview-dialog-pop-dark</td>
   </tr>
 </table>
 

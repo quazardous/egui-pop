@@ -9,6 +9,13 @@ egui minor.
 
 ### Added
 
+- A preview dialog (`imaging::preview`): an image viewport in a custom
+  dialog over a `Clear` backdrop, movable and kept in place, sRGB
+  first; Enter runs its command with the view it was left at, Escape
+  cancels it except during a drag of its view. The interface behind,
+  its own viewport included, keeps receiving and drawing tiles while
+  the dialog is modal. Gallery page: `preview`.
+
 - A custom dialog (`Dialog::Custom`, opened with
   `Dialogs::open_custom`): a body of its own, drawn by a closure kept
   on the application's side, in a size of its own, a `dialog` focus
