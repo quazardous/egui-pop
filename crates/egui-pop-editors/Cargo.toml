@@ -1,8 +1,8 @@
 [package]
 name = "egui-pop-editors"
 version = "0.1.0"
-description = "Text and code editors for egui-pop: virtualised, themed, highlighted through a pluggable highlighter (syntect by default), every edit a step an application can veto, rewrite or follow"
-keywords = ["egui", "editor", "code", "syntax", "highlighting"]
+description = "Text and code editors and a terminal for egui-pop: virtualised, themed, highlighted through a pluggable highlighter (syntect by default), a terminal over a PTY or a log console, every edit and session moment a step an application can veto, rewrite or follow"
+keywords = ["egui", "editor", "code", "terminal", "highlighting"]
 categories = ["gui", "text-editors"]
 edition.workspace = true
 rust-version.workspace = true
@@ -21,6 +21,9 @@ syntect = ["dep:syntect"]
 ## A highlighter over tree-sitter grammars the application brings
 ## (tree-sitter compiles C: off by default).
 tree-sitter = ["dep:tree-sitter-highlight"]
+## The terminal's pseudo-terminal source, `PtySource`: a real shell or
+## program (Unix PTYs, ConPTY on Windows; not for the web).
+pty = ["dep:portable-pty"]
 
 [dependencies]
 egui.workspace = true
@@ -35,6 +38,10 @@ regex = "1"
 syntect = { version = "5.3", default-features = false, features = ["default-syntaxes", "regex-fancy"], optional = true }
 # MIT: tree-sitter highlight queries.
 tree-sitter-highlight = { version = "0.27", optional = true }
+# MIT: the terminal's emulator (its parser, vte, is Apache-2.0 OR MIT).
+vt100 = "0.16"
+# MIT: pseudo-terminals (Unix PTYs, Windows ConPTY), from WezTerm.
+portable-pty = { version = "0.9", optional = true }
 
 [dev-dependencies]
 egui = { workspace = true, features = ["default_fonts"] }

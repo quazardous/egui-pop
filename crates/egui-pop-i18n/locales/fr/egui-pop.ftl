@@ -13,6 +13,8 @@ category-help = Aide
 
 category-notifications = Notifications
 
+category-terminal = Terminal
+
 category-values = Valeurs
 
 category-view = Affichage
@@ -195,6 +197,30 @@ command-view-interface-zoom-out =
     .description = Réduit toute l’interface d’un cran.
     .title = Réduire l’interface
 
+command-terminal-clear =
+    .description = Efface l’écran et l’historique (le programme continue).
+    .title = Effacer le terminal
+
+command-terminal-close =
+    .description = Termine la session du terminal par `terminal.exit` (le programme est arrêté).
+    .title = Fermer la session
+
+command-terminal-copy =
+    .description = Copie la sélection du terminal dans le presse-papiers.
+    .title = Copier la sélection
+
+command-terminal-read =
+    .description = Le texte du terminal : son historique et son écran (ou les lignes `from_line` à `to_line`, à partir de 0, fin exclue ; `screen` pour l’écran seul), avec le curseur, la taille et l’état de la session.
+    .title = Lire le terminal
+
+command-terminal-restart =
+    .description = Relance le programme du terminal par `terminal.spawn` (en fermant d’abord celui qui tourne).
+    .title = Redémarrer
+
+command-terminal-send =
+    .description = Envoie `text` au programme par `terminal.input` (avec `enter`, suivi d’Entrée).
+    .title = Envoyer une saisie
+
 command-view-interface-zoom-reset =
     .description = Rend à l’interface sa taille normale.
     .title = Taille normale de l’interface
@@ -298,6 +324,16 @@ egui-pop-editors-replace = Remplacer par
 egui-pop-editors-replace-all = Tout remplacer
 
 egui-pop-editors-replace-one = Remplacer
+
+egui-pop-editors-terminal = Terminal
+
+egui-pop-editors-terminal-closed = Session fermée
+
+egui-pop-editors-terminal-ended = Processus terminé
+
+egui-pop-editors-terminal-exited = Processus terminé avec le code { $code }
+
+egui-pop-editors-terminal-refused = Non démarré : { $reason }
 
 egui-pop-editors-text = Éditeur de texte
 
@@ -579,6 +615,9 @@ plugin-egui-pop-strips =
 
 plugin-egui-pop-system-keys =
     .title = Raccourcis globaux
+
+plugin-egui-pop-terminal =
+    .title = Terminal
 
 plugin-egui-pop-toasts =
     .title = Notifications

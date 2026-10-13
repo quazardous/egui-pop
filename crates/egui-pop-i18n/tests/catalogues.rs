@@ -69,6 +69,7 @@ fn messages() -> Messages {
         .plugin(egui_pop_i18n::ShowKeys)
         .plugin(egui_pop_views::ViewsPlugin)
         .plugin(egui_pop_editors::EditorsPlugin)
+        .plugin(egui_pop_editors::TerminalPlugin)
         .build(&ctx)
         .expect("egui-pop's plugins build");
     let mut found = extract::declarations(app.handle(), &[]);

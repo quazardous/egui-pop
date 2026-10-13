@@ -14,6 +14,8 @@ category-help = Help
 
 category-notifications = Notifications
 
+category-terminal = Terminal
+
 category-values = Values
 
 category-view = View
@@ -164,6 +166,30 @@ command-notify-act =
     .description = Runs a notification's action (`id`, `action`), as a click on it does.
     .title = Act on a notification
 
+command-terminal-clear =
+    .description = Clears the screen and the scrollback (the program goes on).
+    .title = Clear the terminal
+
+command-terminal-close =
+    .description = Ends the terminal's session through `terminal.exit` (the program is stopped).
+    .title = Close the session
+
+command-terminal-copy =
+    .description = Copies the terminal's selection to the clipboard.
+    .title = Copy the selection
+
+command-terminal-read =
+    .description = The terminal's text: its scrollback and screen (or lines `from_line` to `to_line`, from 0, end excluded; `screen` alone for the screen), with the cursor, the size and the session's state.
+    .title = Read the terminal
+
+command-terminal-restart =
+    .description = Starts the terminal's program again through `terminal.spawn` (closing the running one first).
+    .title = Restart
+
+command-terminal-send =
+    .description = Sends `text` to the program through `terminal.input` (with `enter`, followed by Enter).
+    .title = Send input
+
 command-value-get =
     .description = A value with its descriptor (`path`).
     .title = Read a value
@@ -299,6 +325,16 @@ egui-pop-editors-replace = Replace with
 egui-pop-editors-replace-all = Replace all
 
 egui-pop-editors-replace-one = Replace
+
+egui-pop-editors-terminal = Terminal
+
+egui-pop-editors-terminal-closed = Session closed
+
+egui-pop-editors-terminal-ended = Process ended
+
+egui-pop-editors-terminal-exited = Process exited with code { $code }
+
+egui-pop-editors-terminal-refused = Not started: { $reason }
 
 egui-pop-editors-text = Text editor
 
@@ -580,6 +616,9 @@ plugin-egui-pop-strips =
 
 plugin-egui-pop-system-keys =
     .title = Global shortcuts
+
+plugin-egui-pop-terminal =
+    .title = Terminal
 
 plugin-egui-pop-toasts =
     .title = Toasts

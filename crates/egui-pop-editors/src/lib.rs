@@ -8,6 +8,11 @@
 //!   indentation guides;
 //! - [`EditorState`]: the text, selection, history, marks and search,
 //!   a handle shared with the application and the commands agents run;
+//! - [`Terminal`]: a terminal over a
+//!   [`TerminalState`] fed by a source (a
+//!   program in a pseudo-terminal behind the `pty` feature, or a
+//!   read-only [`Console`](terminal::Console) for logs), its steps,
+//!   commands and [`TerminalPlugin`];
 //! - [`steps`]: `edit.change`, `edit.save` and `code.diagnostics`, the
 //!   editors' commands and collectors, and [`EditorsPlugin`].
 //!
@@ -33,6 +38,7 @@ pub mod search;
 pub mod selection;
 pub mod steps;
 pub mod strings;
+pub mod terminal;
 pub mod text;
 pub mod tokens;
 mod view;
@@ -40,5 +46,6 @@ mod view;
 pub use code::CodeEditor;
 pub use model::EditorState;
 pub use steps::EditorsPlugin;
+pub use terminal::{Terminal, TerminalPlugin, TerminalState};
 pub use text::TextSurface;
 pub use view::{EditorOutput, Signal};

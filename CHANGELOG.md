@@ -115,6 +115,23 @@ egui minor.
   commands an agent reads and writes the buffer with (`editor.read`,
   `editor.write`, ...). Translated in French. Guide: `docs/editors.md`.
 
+- A terminal in `egui-pop-editors`: `Terminal` draws a `TerminalState`
+  (vt100's emulator: ANSI colours from the theme's `terminal.*` tokens,
+  the 256-colour cube and RGB, bold, dim, italics, underline, inverse,
+  the cursor) fed by a `TerminalSource` the application picks: a
+  program in a pseudo-terminal (`PtySource`, portable-pty, ConPTY on
+  Windows; feature `pty`, `editors-pty` on the facade) or a read-only
+  `Console` it writes logs and agent output to. Scrollback (wheel,
+  Shift+Page Up and Down), selection and copy, links (Ctrl+click), the
+  program told its size. While focused every key goes to the program,
+  Escape and Tab included; Shift+Escape leaves, Ctrl+Shift chords stay
+  the application's. Steps `terminal.spawn`, `terminal.input` and
+  `terminal.exit` (veto, redirect, replace), collectors
+  `terminal_sessions` and `terminal_io`, and commands for agents
+  (`terminal.read`, `terminal.send`, `terminal.clear`,
+  `terminal.copy`, `terminal.close`, `terminal.restart`) from
+  `TerminalPlugin`. Translated in French.
+
 - Theme tokens for the terminal: `terminal.*` (background, text, bold
   text, cursor, selection, links) and the 16 ANSI colours by number
   (`terminal.ansi.0` to `terminal.ansi.15`), each an alias of a system

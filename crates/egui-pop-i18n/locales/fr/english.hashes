@@ -6,6 +6,7 @@ category-editor 1506bdc27aacc0ce
 category-file 181d912a9545ccc3
 category-help dd64739b1d2f8ca8
 category-notifications 0e1b1762c20eed77
+category-terminal d3fbfb901d4c6c19
 category-values 0e9206c70dea46eb
 category-view 9cb14957d0a66a9e
 category-window 091ff0a5b7d5ed9d
@@ -81,6 +82,18 @@ command-logs-reveal.description 7fef58bb3796ef0e
 command-logs-reveal.title ef702f33080fcf4f
 command-notify-act.description 323a821111878eab
 command-notify-act.title 5d6bcab13fa1a124
+command-terminal-clear.description 0b290a35fb6042b3
+command-terminal-clear.title a0c2715e684e1ceb
+command-terminal-close.description e447937e00a4b090
+command-terminal-close.title f714f8584453bd22
+command-terminal-copy.description 7b2a7674855db713
+command-terminal-copy.title 783e3754bc51d76d
+command-terminal-read.description e0255e043c2e1bb6
+command-terminal-read.title 4d225887e6ad01c4
+command-terminal-restart.description 3796a12979078705
+command-terminal-restart.title dd9376da594b35fa
+command-terminal-send.description b0c13a2d9a1ef58a
+command-terminal-send.title d5c665cd57bab733
 command-value-get.description db35160877838d62
 command-value-get.title 2bc8ed82ac514527
 command-value-list.description f3c82ce02da10d41
@@ -149,6 +162,11 @@ egui-pop-editors-regex 3806469ad08f4aab
 egui-pop-editors-replace 26fade9bd5ff7a4d
 egui-pop-editors-replace-all 8f6e7afa19ede756
 egui-pop-editors-replace-one 9ba5b7f30958fca3
+egui-pop-editors-terminal d3fbfb901d4c6c19
+egui-pop-editors-terminal-closed 9f607140fdedc855
+egui-pop-editors-terminal-ended fd0b068b2547b068
+egui-pop-editors-terminal-exited 85b90743c7e9f9d1
+egui-pop-editors-terminal-refused a6e6e43c11ffb249
 egui-pop-editors-text 7c172d47e4e4264b
 egui-pop-editors-toggle-replace bc1c6bf6ca52327a
 egui-pop-editors-whole-word a4a39a882a6f6852
@@ -279,6 +297,7 @@ plugin-egui-pop-palette.title f9e5c255cb220019
 plugin-egui-pop-settings.title 3b5b172596a8843e
 plugin-egui-pop-strips.title bfc6f37ce6abc72c
 plugin-egui-pop-system-keys.title 7f2d7968d75f4dc5
+plugin-egui-pop-terminal.title d3fbfb901d4c6c19
 plugin-egui-pop-toasts.title cc96fc899cce2811
 plugin-egui-pop-tray.title cca4f6a2e19dbb7c
 plugin-egui-pop-views.title 260aa6928752872b

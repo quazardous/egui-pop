@@ -36,6 +36,24 @@ pub const POSITION: StrKey = StrKey::new(
     "Line { $line }, column { $col }",
 );
 
+/// A terminal's accessible name, unless the application gives one.
+pub const TERMINAL: StrKey = StrKey::new("egui-pop-editors-terminal", "Terminal");
+/// The terminal's notice when its program ended with a code.
+pub const TERMINAL_EXITED: StrKey = StrKey::new(
+    "egui-pop-editors-terminal-exited",
+    "Process exited with code { $code }",
+);
+/// The terminal's notice when its program ended without a code.
+pub const TERMINAL_ENDED: StrKey = StrKey::new("egui-pop-editors-terminal-ended", "Process ended");
+/// The terminal's notice when its session was closed.
+pub const TERMINAL_CLOSED: StrKey =
+    StrKey::new("egui-pop-editors-terminal-closed", "Session closed");
+/// The terminal's notice when its program was not started.
+pub const TERMINAL_REFUSED: StrKey = StrKey::new(
+    "egui-pop-editors-terminal-refused",
+    "Not started: { $reason }",
+);
+
 /// Every string the editors show, for catalogues and tests.
 pub const ALL: &[StrKey] = &[
     TEXT,
@@ -55,6 +73,11 @@ pub const ALL: &[StrKey] = &[
     NO_RESULTS,
     GOTO,
     POSITION,
+    TERMINAL,
+    TERMINAL_EXITED,
+    TERMINAL_ENDED,
+    TERMINAL_CLOSED,
+    TERMINAL_REFUSED,
 ];
 
 #[cfg(test)]

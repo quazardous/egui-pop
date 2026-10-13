@@ -32,6 +32,9 @@ views = ["dep:egui-pop-views"]
 editors = ["dep:egui-pop-editors", "egui-pop-editors/syntect"]
 ## The code editor's tree-sitter highlighter (compiles C).
 editors-tree-sitter = ["editors", "egui-pop-editors/tree-sitter"]
+## The terminal's pseudo-terminal source (a real shell; Unix PTYs,
+## Windows ConPTY; not for the web).
+editors-pty = ["editors", "egui-pop-editors/pty"]
 ## Translations over Fluent: catalogues, the language setting, locale
 ## formatting, the key extractor (`egui-pop-i18n`, re-exported as
 ## `egui_pop::i18n`).
