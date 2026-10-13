@@ -206,6 +206,8 @@ pub(crate) struct Derived {
     /// Each owner's section title, before the hooks (a plugin's title).
     pub sections: BTreeMap<OwnerId, String>,
     pub commands: Vec<(CommandSpec, OwnerId)>,
+    /// Every declared panel with its owner, in declaration order.
+    pub panels: Vec<(egui_pop_model::panels::PanelSpec, OwnerId)>,
     /// Each command's live key bindings, as shown.
     pub keys: BTreeMap<CommandId, Vec<String>>,
     /// Bindings losing to another on the same keys: loser, winner.
@@ -1372,6 +1374,17 @@ impl AppHandle {
     /// The declared panels.
     pub fn panels(&self) -> Vec<egui_pop_model::panels::PanelSpec> {
         self.workbench_mut().specs.clone()
+    }
+
+    /// Every declared panel with the plugin that declared it (its
+    /// [`OwnerId`]), in declaration order: the application's panels and
+    /// those of the plugins it connected, egui-pop's among them (the
+    /// jobs centre, `egui_pop.jobs`; the devtools). A host that checks
+    /// layouts or templates against its own panels accepts these too, so
+    /// a template may place a plugin's panel. Unlike [`Self::panels`], a
+    /// zone shown as a panel is listed even while it has no blocks.
+    pub fn declared_panels(&self) -> Vec<(egui_pop_model::panels::PanelSpec, OwnerId)> {
+        self.0.derived.borrow().panels.clone()
     }
 
     /// The drop hint on screen, while a tab is dragged over another area.
@@ -2707,6 +2720,12 @@ impl App {
                 let keys = reg.keymap.keys_for(&s.id);
                 (s.id.clone(), keys.iter().map(|k| k.to_string()).collect())
             })
+            .collect();
+        derived.panels = reg
+            .panels
+            .owned()
+            .into_iter()
+            .map(|(spec, owner)| (spec.clone(), owner.clone()))
             .collect();
         derived.conflicts = reg.keymap.conflicts();
         derived.system = reg.keymap.system_bindings();

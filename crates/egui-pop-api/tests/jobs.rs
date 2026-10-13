@@ -195,3 +195,59 @@ fn the_collector_asks_the_host_and_forgets_finished_jobs() {
     assert!(app.debug_call("jobs", "dismiss", &json!({ "id": "e" })).ok);
     assert!(jobs.job("e").is_none());
 }
+
+/// A host's plugin with a panel of its own.
+struct Library;
+
+impl Plugin for Library {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("host.library")
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        use egui_pop_model::ids::PanelId;
+        use egui_pop_model::panels::{Area, PanelSpec};
+        ctx.panel(
+            PanelSpec::new(PanelId::from_static("host.grid"), "Grid", Area::Center),
+            |ui, _| {
+                ui.label("grid");
+            },
+        )?;
+        Ok(())
+    }
+}
+
+#[test]
+fn the_jobs_centre_is_a_declared_panel_with_its_plugin_as_owner() {
+    use egui_pop_model::ids::OwnerId;
+    let mut app = App::builder()
+        .plugin(Library)
+        .plugin(JobsPlugin::default())
+        .build(&egui::Context::default())
+        .unwrap();
+    pass(&mut app);
+    let declared = app.handle().declared_panels();
+    let owner_of = |id: &str| {
+        declared
+            .iter()
+            .find(|(spec, _)| spec.id.as_str() == id)
+            .map(|(spec, owner)| (spec.title.clone(), owner.clone()))
+    };
+    let host = OwnerId::from(&PluginId::from_static("host.library"));
+    assert_eq!(owner_of("host.grid"), Some(("Grid".into(), host.clone())));
+    let (title, owner) = owner_of(egui_pop_api::jobs_centre::PANEL_JOBS.as_str())
+        .expect("the jobs centre is declared");
+    assert_eq!(title, "Jobs");
+    assert_eq!(
+        owner,
+        OwnerId::from(&PluginId::from_static("egui_pop.jobs"))
+    );
+    // What a host's template check accepts besides its own panels.
+    let plugins: Vec<&str> = declared
+        .iter()
+        .filter(|(_, o)| *o != host)
+        .map(|(s, _)| s.id.as_str())
+        .collect();
+    assert!(plugins.contains(&"egui_pop.jobs"), "{plugins:?}");
+    assert!(!plugins.contains(&"host.grid"));
+}

@@ -41,6 +41,11 @@ egui minor.
 
 - The gallery's `theme-editor` and `tips` pages.
 
+- `AppHandle::declared_panels`: every declared panel with the plugin
+  that declared it (`Panels::owner`, `Panels::owned` in the model), so a
+  host's layout or template check accepts the panels egui-pop's plugins
+  declare, the jobs centre among them.
+
 - A node graph editor (`viewport::graph`) over a graph the application
   keeps (`GraphModel`: nodes, typed ports coloured from tokens, wires,
   groups, parameters, kinds to add), drawn on egui's `Scene`: pan and

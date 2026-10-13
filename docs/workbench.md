@@ -85,6 +85,13 @@ area, rect, refusal), `overlay_rects` (kind `DropHint`, named
 which also shows the layout, each area's rect, the focused panel and
 the tab being dragged.
 
+Plugins declare panels too: egui-pop's jobs centre (`egui_pop.jobs`)
+and devtools are panels like the application's.
+`AppHandle::declared_panels` lists every declared panel with the plugin
+that declared it (its `OwnerId`), so a host that checks layouts or
+templates against its own panels can accept those of the plugins it
+connected, and a template may place the jobs centre.
+
 ## Auxiliary windows
 
 A detachable panel moves to an OS window of its own, with its own scale

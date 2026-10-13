@@ -186,6 +186,21 @@ impl Panels {
             .collect()
     }
 
+    /// Who declared a panel: the application's own plugin, or a plugin
+    /// of a library (egui-pop's jobs centre).
+    pub fn owner(&self, id: &PanelId) -> Option<&OwnerId> {
+        self.specs.owner(id)
+    }
+
+    /// Every panel with its owner, in declaration order.
+    pub fn owned(&self) -> Vec<(&PanelSpec, &OwnerId)> {
+        self.specs
+            .in_order()
+            .into_iter()
+            .map(|(_, s)| (&s.item, &s.owner))
+            .collect()
+    }
+
     pub fn remove_owner(&mut self, owner: &OwnerId) -> Vec<PanelId> {
         self.specs
             .remove_owner(owner)
