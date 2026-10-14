@@ -733,6 +733,12 @@ egui-pop-shortcuts-conflicts = Conflits
 
 egui-pop-shortcuts-default-name = Touches par défaut de { $command }
 
+egui-pop-shortcuts-from-user = utilisateur
+
+egui-pop-shortcuts-from-workspace = espace de travail
+
+egui-pop-shortcuts-key-from = { $keys } ({ $source })
+
 egui-pop-shortcuts-goes-to = { $keys } va à { $command }
 
 egui-pop-shortcuts-system-failed = { $keys } ne fonctionne pas hors de la fenêtre : { $reason }
@@ -744,6 +750,12 @@ egui-pop-shortcuts-system-on = { $keys } fonctionne aussi hors de la fenêtre
 egui-pop-shortcuts-system-pending = { $keys } hors de la fenêtre : en attente du bureau
 
 egui-pop-shortcuts-system-unavailable = { $keys } ne fonctionne que dans la fenêtre : { $reason }
+
+egui-pop-shortcuts-target = Les touches changées ici valent pour
+
+egui-pop-shortcuts-target-user = tous les espaces de travail (vos touches)
+
+egui-pop-shortcuts-target-workspace = cet espace de travail
 
 egui-pop-shortcuts-no-key = Aucune touche
 

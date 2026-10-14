@@ -366,7 +366,10 @@ egui-pop-shortcuts-change-name c784fd50dba0b68e
 egui-pop-shortcuts-conflict-in-scope b9414dcbc041a701
 egui-pop-shortcuts-conflicts c21440118166b982
 egui-pop-shortcuts-default-name ceea5e681817a45a
+egui-pop-shortcuts-from-user 7c1015e324534020
+egui-pop-shortcuts-from-workspace 03c22c9a1e72a85c
 egui-pop-shortcuts-goes-to c8356e3ae2ee2b67
+egui-pop-shortcuts-key-from fd5ae90de64af563
 egui-pop-shortcuts-no-key 63b265a9e486b5c5
 egui-pop-shortcuts-no-key-name 01b0fb6f60b3da3f
 egui-pop-shortcuts-press-new-keys 1afe5776010207e8
@@ -378,6 +381,9 @@ egui-pop-shortcuts-system-no-plugin d113e8842ff70329
 egui-pop-shortcuts-system-on 39a00562a9654c5c
 egui-pop-shortcuts-system-pending 8a654d656843108e
 egui-pop-shortcuts-system-unavailable 552221bb85492345
+egui-pop-shortcuts-target 96e09f26bab6e030
+egui-pop-shortcuts-target-user d7c4f12fbf94b7a8
+egui-pop-shortcuts-target-workspace 229d7a8b8907536e
 egui-pop-slider-maximum c0721adb004bac87
 egui-pop-slider-minimum acae05dcb02987f1
 egui-pop-theme-editor-accent 1572a6c93868539c

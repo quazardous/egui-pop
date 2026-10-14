@@ -219,6 +219,23 @@ impl Registries {
     }
 }
 
+/// Who owns the workspace's layer of keys (`AppHandle::load_keymap`,
+/// `AppHandle::rebind_in`).
+const WORKSPACE_KEYS: OwnerId = OwnerId::from_static("workspace");
+
+/// The owner of the keys a layer loads or changes: the user's or the
+/// workspace's; `None` for the others.
+fn layer_owner(layer: Layer) -> Option<OwnerId> {
+    match layer {
+        Layer::User => Some(OwnerId::USER),
+        Layer::Workspace => Some(WORKSPACE_KEYS),
+        Layer::Suggestion | Layer::Default => None,
+    }
+}
+
+/// How the host names where a binding comes from.
+type KeySourceNames = Rc<dyn Fn(&Binding) -> Option<String>>;
+
 /// Declarations derived from the registries, after the alter hooks.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct Derived {
@@ -232,6 +249,8 @@ pub(crate) struct Derived {
     pub panels: Vec<(egui_pop_model::panels::PanelSpec, OwnerId)>,
     /// Each command's live key bindings, as shown.
     pub keys: BTreeMap<CommandId, Vec<String>>,
+    /// Each command's live bindings, with the layer each comes from.
+    pub sources: BTreeMap<CommandId, Vec<Binding>>,
     /// Bindings losing to another on the same keys: loser, winner.
     pub conflicts: Vec<(Binding, Binding)>,
     /// The live bindings of the system scope (global shortcuts).
@@ -240,6 +259,8 @@ pub(crate) struct Derived {
     pub layers: BTreeMap<Layer, egui_pop_model::keymap::KeymapDoc>,
     /// Commands whose keys the user changed.
     pub rebound: BTreeSet<CommandId>,
+    /// Commands whose keys were changed for the workspace.
+    pub rebound_workspace: BTreeSet<CommandId>,
 }
 
 /// What a block or a handler asks of the application, done before the
@@ -259,13 +280,19 @@ pub enum Request {
         context: WhenContext,
     },
     Enable(PluginId, bool),
-    /// Gives a command the user's own keys (none: no key).
+    /// Gives a command keys of its own in a layer, the user's or the
+    /// workspace's (none: no key).
     Rebind {
         command: CommandId,
         keys: Option<String>,
+        layer: Layer,
     },
-    /// Gives a command back its default keys.
-    ResetKeys(CommandId),
+    /// Takes back what a layer (the user's or the workspace's) changed
+    /// of a command's keys.
+    ResetKeys {
+        command: CommandId,
+        layer: Layer,
+    },
     /// Declares a command after build (`AppHandle::declare`).
     Declare {
         owner: OwnerId,
@@ -345,6 +372,10 @@ pub(crate) struct Shared {
     collectors: RefCell<Vec<(OwnerId, String)>>,
     /// A shortcuts editor waits for keys: the dispatcher stands aside.
     capturing: std::cell::Cell<bool>,
+    /// The shortcuts editor offers to change keys for the workspace.
+    workspace_keys: std::cell::Cell<bool>,
+    /// How the host names where a binding comes from.
+    key_source_names: RefCell<Option<KeySourceNames>>,
     /// Declared steps (ADR 0011), their hooks, their last runs.
     steps: RefCell<Registry<StepId, StepSpec>>,
     step_hooks: RefCell<OwnedList<StepHook>>,
@@ -427,6 +458,8 @@ impl AppHandle {
             running_since: RefCell::new(BTreeMap::new()),
             collectors: RefCell::new(Vec::new()),
             capturing: std::cell::Cell::new(false),
+            workspace_keys: std::cell::Cell::new(false),
+            key_source_names: RefCell::new(None),
             steps: RefCell::new(Registry::new()),
             step_hooks: RefCell::new(OwnedList::new()),
             step_traces: RefCell::new(std::collections::VecDeque::new()),
@@ -1119,12 +1152,88 @@ impl AppHandle {
     /// Asks for a command's keys to be the user's own (`None`: no key),
     /// saved in the user's keymap; applied before the next frame.
     pub fn rebind(&self, command: CommandId, keys: Option<String>) {
-        self.push_request(Request::Rebind { command, keys });
+        self.rebind_in(Layer::User, command, keys);
+    }
+
+    /// Asks for a command's keys in `layer`: the user's (saved in the
+    /// user's keymap) or the workspace's (kept by the application, which
+    /// reads it back with [`AppHandle::export_keymap`]); applied before
+    /// the next frame, through the `keys.rebind` step. Another layer is
+    /// refused there.
+    pub fn rebind_in(&self, layer: Layer, command: CommandId, keys: Option<String>) {
+        self.push_request(Request::Rebind {
+            command,
+            keys,
+            layer,
+        });
     }
 
     /// Asks for a command's default keys back.
     pub fn reset_keys(&self, command: CommandId) {
-        self.push_request(Request::ResetKeys(command));
+        self.reset_keys_in(Layer::User, command);
+    }
+
+    /// Takes back what `layer` (the user's or the workspace's) changed
+    /// of a command's keys, before the next frame.
+    pub fn reset_keys_in(&self, layer: Layer, command: CommandId) {
+        self.push_request(Request::ResetKeys { command, layer });
+    }
+
+    /// Whether `layer` (the user's or the workspace's) changed a
+    /// command's keys.
+    pub fn rebound_in(&self, layer: Layer, id: &CommandId) -> bool {
+        let d = self.0.derived.borrow();
+        match layer {
+            Layer::User => d.rebound.contains(id),
+            Layer::Workspace => d.rebound_workspace.contains(id),
+            _ => false,
+        }
+    }
+
+    /// A command's live bindings, each with the layer it comes from.
+    pub fn key_sources(&self, id: &CommandId) -> Vec<Binding> {
+        self.0
+            .derived
+            .borrow()
+            .sources
+            .get(id)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    /// Whether the shortcuts editor offers to change keys for the
+    /// workspace as well as for the user (off by default: an application
+    /// with workspaces turns it on, and keeps the workspace's layer).
+    pub fn offer_workspace_keys(&self, on: bool) {
+        self.0.workspace_keys.set(on);
+    }
+
+    /// Whether the shortcuts editor offers the workspace's keys.
+    pub fn workspace_keys_offered(&self) -> bool {
+        self.0.workspace_keys.get()
+    }
+
+    /// How the shortcuts editor names where a binding comes from: `f`
+    /// gives a name, in the interface's language, or `None` for the
+    /// default one ([`AppHandle::key_source_name`]).
+    pub fn name_key_sources(&self, f: impl Fn(&Binding) -> Option<String> + 'static) {
+        *self.0.key_source_names.borrow_mut() = Some(Rc::new(f));
+    }
+
+    /// Where a binding comes from, as the shortcuts editor says it after
+    /// its keys: the host's name for it, else `workspace` or `user`;
+    /// nothing for the application's defaults.
+    pub fn key_source_name(&self, ctx: &Context, binding: &Binding) -> Option<String> {
+        let named = self.0.key_source_names.borrow().clone();
+        if let Some(name) = named.and_then(|f| f(binding)) {
+            return Some(name);
+        }
+        let key = match binding.layer {
+            Layer::Suggestion | Layer::Default => return None,
+            Layer::Workspace => &crate::strings::SHORTCUTS_FROM_WORKSPACE,
+            Layer::User => &crate::strings::SHORTCUTS_FROM_USER,
+        };
+        Some(strings::tr(ctx, key))
     }
 
     /// While on, key presses reach the interface instead of the key
@@ -3073,6 +3182,12 @@ impl App {
                 (s.id.clone(), keys.iter().map(|k| k.to_string()).collect())
             })
             .collect();
+        derived.sources = reg
+            .commands
+            .specs()
+            .map(|s| (s.id.clone(), reg.keymap.sources_for(&s.id)))
+            .filter(|(_, b)| !b.is_empty())
+            .collect();
         derived.panels = reg
             .panels
             .owned()
@@ -3120,6 +3235,12 @@ impl App {
             .commands
             .specs()
             .filter(|s| reg.keymap.rebound(&OwnerId::USER, Layer::User, &s.id))
+            .map(|s| s.id.clone())
+            .collect();
+        derived.rebound_workspace = reg
+            .commands
+            .specs()
+            .filter(|s| reg.keymap.rebound(&WORKSPACE_KEYS, Layer::Workspace, &s.id))
             .map(|s| s.id.clone())
             .collect();
         // Menu items naming unknown commands are reported.
@@ -3532,11 +3653,7 @@ impl App {
         doc: &egui_pop_model::keymap::KeymapDoc,
         layer: Layer,
     ) -> Result<egui_pop_model::keymap::KeymapDiff, String> {
-        let owner = match layer {
-            Layer::User => OwnerId::USER,
-            Layer::Workspace => OwnerId::from_static("workspace"),
-            _ => return Err("only the user's and the workspace's layers load".into()),
-        };
+        let owner = layer_owner(layer).ok_or("only the user's and the workspace's layers load")?;
         let handle = self.handle.clone();
         let keymap = &mut self.reg.keymap;
         let mut diff = None;
@@ -3864,13 +3981,17 @@ impl App {
                     Request::Enable(p, false) => {
                         self.disconnect(&p);
                     }
-                    Request::Rebind { command, keys } => {
+                    Request::Rebind {
+                        command,
+                        keys,
+                        layer,
+                    } => {
                         let handle = self.handle.clone();
                         let keymap = &mut self.reg.keymap;
                         let mut changed = false;
                         let out = handle.step(
                             &STEP_REBIND,
-                            json!({ "command": command, "keys": keys }),
+                            json!({ "command": command, "keys": keys, "layer": layer }),
                             |_, args| {
                                 let command = args
                                     .get("command")
@@ -3878,9 +3999,17 @@ impl App {
                                     .and_then(|c| CommandId::new(c).ok())
                                     .ok_or("`command` is missing")?;
                                 let keys = args.get("keys").and_then(Json::as_str);
-                                keymap.rebind(&OwnerId::USER, Layer::User, &command, keys)?;
+                                let layer: Layer = args
+                                    .get("layer")
+                                    .cloned()
+                                    .map_or(Ok(Layer::User), serde_json::from_value)
+                                    .map_err(|e| format!("`layer`: {e}"))?;
+                                let owner = layer_owner(layer).ok_or(
+                                    "keys change in the user's or the workspace's layer only",
+                                )?;
+                                keymap.rebind(&owner, layer, &command, keys)?;
                                 changed = true;
-                                Ok(json!({ "command": command, "keys": keys }))
+                                Ok(json!({ "command": command, "keys": keys, "layer": layer }))
                             },
                         );
                         if changed {
@@ -3904,9 +4033,11 @@ impl App {
                             log::warn!(target: "egui_pop", "loading a keymap: {e}");
                         }
                     }
-                    Request::ResetKeys(command) => {
-                        self.reg.keymap.reset(&OwnerId::USER, Layer::User, &command);
-                        self.dirty = true;
+                    Request::ResetKeys { command, layer } => {
+                        if let Some(owner) = layer_owner(layer) {
+                            self.reg.keymap.reset(&owner, layer, &command);
+                            self.dirty = true;
+                        }
                     }
                     Request::Workbench(change) => {
                         let what = format!("{change:?}");

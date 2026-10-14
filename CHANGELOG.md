@@ -12,6 +12,15 @@ publishes.
 
 ### Added
 
+- Keys changed for the workspace (egui-pop-api): `AppHandle::rebind_in` and
+  `reset_keys_in` change a command's keys in the user's or the
+  workspace's layer (the `keys.rebind` step says which, `layer`),
+  `rebound_in` says whether one did, `key_sources` gives each live
+  binding with its layer. The shortcuts editor offers to change keys for
+  the workspace once the application asks (`offer_workspace_keys`), and
+  says where each key comes from (workspace, user, or the application's
+  own name, `name_key_sources`).
+
 - Micro-indicators (`egui-pop-core`, `core::indicator`), drawn by the
   kit like every component: dots and LEDs (off, on, busy, warning,
   error, each a shape of its own), count badges capped at `99+` (zero
@@ -53,6 +62,9 @@ publishes.
   shapes, so colour never carries a state alone.
 
 ### Changed
+
+- `Request::Rebind` carries the layer changed, and `Request::ResetKeys`
+  is a struct with its command and layer (egui-pop-api).
 
 - One tone for every mark (`egui-pop-core`, `egui-pop-api`,
   `egui-pop-views`, breaking): `kit::Tone` gains `Record` (recording,

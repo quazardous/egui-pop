@@ -25,7 +25,7 @@ use egui_pop_core::theme::Tokens;
 use egui_pop_model::commands::{CommandSpec, Origin};
 use egui_pop_model::fuzzy;
 use egui_pop_model::ids::{BlockId, CommandId, PluginId};
-use egui_pop_model::keymap::{Action, Keys};
+use egui_pop_model::keymap::{Action, Keys, Layer};
 use egui_pop_model::values::{Change, Set};
 use serde_json::json;
 
@@ -63,6 +63,9 @@ struct State {
     capture_search: bool,
     /// The keys searched for (`Ctrl+K`), exactly.
     key_filter: Option<String>,
+    /// Where keys changed go: the user's layer, or the workspace's when
+    /// the application offers it.
+    workspace_target: bool,
 }
 
 /// Open or not, the search, the section shown.
@@ -631,6 +634,31 @@ fn shortcuts(ui: &mut Ui, app: &AppHandle, st: &mut State, filter: &str) {
         }
         ui.add_space(t.space.s);
     }
+    // Where the keys changed go, when the application keeps a
+    // workspace's keys.
+    if app.workspace_keys_offered() {
+        ui.horizontal(|ui| {
+            ui.label(strings::tr(&ctx, &txt::SHORTCUTS_TARGET));
+            ui.radio_value(
+                &mut st.workspace_target,
+                false,
+                strings::tr(&ctx, &txt::SHORTCUTS_TARGET_USER),
+            );
+            ui.radio_value(
+                &mut st.workspace_target,
+                true,
+                strings::tr(&ctx, &txt::SHORTCUTS_TARGET_WORKSPACE),
+            );
+        });
+        ui.add_space(t.space.s);
+    } else {
+        st.workspace_target = false;
+    }
+    let target = if st.workspace_target {
+        Layer::Workspace
+    } else {
+        Layer::User
+    };
     let capture = &mut st.capture;
     let key_filter = st.key_filter.clone();
     if let Some(c) = capture.clone() {
@@ -645,12 +673,12 @@ fn shortcuts(ui: &mut Ui, app: &AppHandle, st: &mut State, filter: &str) {
         match pressed_keys(ui) {
             Some((Key::Escape, m)) if !m.any() => *capture = None,
             Some((Key::Backspace, m)) if !m.any() => {
-                app.rebind(c, None);
+                app.rebind_in(target, c, None);
                 *capture = None;
             }
             Some((key, modifiers)) => {
                 let keys = Keys(vec![chord_of(key, modifiers)]).to_string();
-                app.rebind(c, Some(keys));
+                app.rebind_in(target, c, Some(keys));
                 *capture = None;
             }
             None => {}
@@ -670,10 +698,24 @@ fn shortcuts(ui: &mut Ui, app: &AppHandle, st: &mut State, filter: &str) {
             for (spec, label) in shortcut_rows(&ctx, app, filter, key_filter.as_deref()) {
                 let name = ui.label(&label);
                 let keys = app.keys_for(&spec.id);
-                ui.monospace(if keys.is_empty() {
+                // Each key with where it comes from when it is not a default
+                // (workspace, user, or the application's own names).
+                let sources = app.key_sources(&spec.id);
+                ui.monospace(if sources.is_empty() {
                     "—".to_string()
                 } else {
-                    keys.join(", ")
+                    sources
+                        .iter()
+                        .map(|b| match app.key_source_name(&ctx, b) {
+                            Some(source) => strings::tr_args(
+                                &ctx,
+                                &txt::SHORTCUTS_KEY_FROM,
+                                &[("keys", &b.keys.to_string()), ("source", &source)],
+                            ),
+                            None => b.keys.to_string(),
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", ")
                 })
                 .labelled_by(name.id);
                 // A binding of this command losing to another, or beating one.
@@ -740,10 +782,10 @@ fn shortcuts(ui: &mut Ui, app: &AppHandle, st: &mut State, filter: &str) {
                             &strings::tr_args(&ctx, &txt::SHORTCUTS_NO_KEY_NAME, &command),
                         );
                         if none.clicked() {
-                            app.rebind(spec.id.clone(), None);
+                            app.rebind_in(target, spec.id.clone(), None);
                         }
                     }
-                    if app.rebound(&spec.id) {
+                    if app.rebound_in(target, &spec.id) {
                         let reset = ui.small_button(strings::tr(ui.ctx(), &RESET));
                         a11y::name(
                             &reset,
@@ -751,7 +793,7 @@ fn shortcuts(ui: &mut Ui, app: &AppHandle, st: &mut State, filter: &str) {
                             &strings::tr_args(&ctx, &txt::SHORTCUTS_DEFAULT_NAME, &command),
                         );
                         if reset.clicked() {
-                            app.reset_keys(spec.id.clone());
+                            app.reset_keys_in(target, spec.id.clone());
                         }
                     }
                 });

@@ -820,6 +820,19 @@ impl Keymap {
         keys
     }
 
+    /// The live bindings running a command, with the layer each comes
+    /// from (what a shortcuts editor shows as their source), by keys.
+    pub fn sources_for(&self, command: &CommandId) -> Vec<Binding> {
+        let mut out: Vec<Binding> = self
+            .live()
+            .filter(|(_, r)| r.binding.action.command() == Some(command))
+            .map(|(_, r)| r.binding.clone())
+            .collect();
+        out.sort_by(|a, b| a.keys.cmp(&b.keys).then(b.layer.cmp(&a.layer)));
+        out.dedup_by(|b, a| a.keys == b.keys);
+        out
+    }
+
     /// Bindings sharing keys with another of the same or a higher layer
     /// that wins over them (ignoring focus depth, which only the moment
     /// decides): what a shortcuts editor shows as conflicts. Two whose

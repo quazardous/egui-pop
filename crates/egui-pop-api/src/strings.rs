@@ -182,6 +182,20 @@ pub const SHORTCUTS_DEFAULT_NAME: StrKey = StrKey::new(
     "egui-pop-shortcuts-default-name",
     "Default keys of { $command }",
 );
+/// Where a binding comes from, after its keys.
+pub const SHORTCUTS_FROM_WORKSPACE: StrKey =
+    StrKey::new("egui-pop-shortcuts-from-workspace", "workspace");
+pub const SHORTCUTS_FROM_USER: StrKey = StrKey::new("egui-pop-shortcuts-from-user", "user");
+/// A key and where it comes from.
+pub const SHORTCUTS_KEY_FROM: StrKey =
+    StrKey::new("egui-pop-shortcuts-key-from", "{ $keys } ({ $source })");
+/// The layer the keys changed go to.
+pub const SHORTCUTS_TARGET: StrKey =
+    StrKey::new("egui-pop-shortcuts-target", "Keys changed here apply to");
+pub const SHORTCUTS_TARGET_USER: StrKey =
+    StrKey::new("egui-pop-shortcuts-target-user", "every workspace (yours)");
+pub const SHORTCUTS_TARGET_WORKSPACE: StrKey =
+    StrKey::new("egui-pop-shortcuts-target-workspace", "this workspace");
 
 // Dialogs.
 
@@ -540,6 +554,12 @@ pub const ALL: &[StrKey] = &[
     SHORTCUTS_NO_KEY,
     SHORTCUTS_NO_KEY_NAME,
     SHORTCUTS_DEFAULT_NAME,
+    SHORTCUTS_FROM_WORKSPACE,
+    SHORTCUTS_FROM_USER,
+    SHORTCUTS_KEY_FROM,
+    SHORTCUTS_TARGET,
+    SHORTCUTS_TARGET_USER,
+    SHORTCUTS_TARGET_WORKSPACE,
     DIALOG_FILTER,
     DIALOG_BROWSE,
     PICKER_UP,

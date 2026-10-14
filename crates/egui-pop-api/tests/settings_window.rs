@@ -1,5 +1,6 @@
 //! The settings window: search, sections, live form with resets, and the
-//! shortcuts editor (capture, conflicts, reset).
+//! shortcuts editor (capture, conflicts, reset, the layer keys go to and
+//! where each comes from).
 
 use egui::{Key, Modifiers};
 use egui_kittest::Harness;
@@ -174,4 +175,45 @@ fn the_editor_says_where_system_shortcuts_work() {
         h.run();
         assert!(h.query_by_label(said).is_some(), "{said}");
     }
+}
+
+#[test]
+fn keys_go_to_the_workspace_when_asked_and_each_says_where_it_comes_from() {
+    use egui_pop_model::keymap::Layer;
+    let mut h = harness();
+    let handle = h.state().handle().clone();
+    // Not offered: no choice, keys go to the user.
+    open(&mut h);
+    h.get_by_label(SHORTCUTS).click();
+    h.run();
+    h.run();
+    assert!(h.query_by_label("this workspace").is_none());
+    handle.offer_workspace_keys(true);
+    handle.name_key_sources(|b| (b.layer == Layer::Workspace).then(|| "the template's".into()));
+    h.run();
+    h.get_by_label("this workspace").click();
+    h.run();
+    h.get_by_label("Change the keys of Edit: Undo").click();
+    h.run();
+    h.key_press_modifiers(Modifiers::COMMAND, Key::J);
+    h.run();
+    h.run();
+    assert_eq!(handle.keys_for(&CMD_UNDO), ["Ctrl+J"]);
+    assert!(handle.rebound_in(Layer::Workspace, &CMD_UNDO));
+    assert!(!handle.rebound(&CMD_UNDO));
+    // The host's name for it.
+    assert!(h.query_by_label("Ctrl+J (the template's)").is_some());
+    // Back to the user's: changed there, said so, and its reset.
+    h.get_by_label("every workspace (yours)").click();
+    h.run();
+    h.get_by_label("Change the keys of Edit: Undo").click();
+    h.run();
+    h.key_press_modifiers(Modifiers::COMMAND, Key::K);
+    h.run();
+    h.run();
+    assert!(h.query_by_label("Ctrl+K (user)").is_some());
+    h.get_by_label("Default keys of Edit: Undo").click();
+    h.run();
+    h.run();
+    assert_eq!(handle.keys_for(&CMD_UNDO), ["Ctrl+J"]);
 }
