@@ -211,6 +211,17 @@ typed_id!(
     StepId
 );
 
+typed_id!(
+    /// A frame of the context stack (ADR 0012): a place (`demo.album`)
+    /// or a mode (`demo.orientation.culling`).
+    FrameId
+);
+typed_id!(
+    /// A group of modes, one active at a time (`orientation`): the
+    /// context key `mode.<group>`, so letters, digits, `_` and `.`.
+    GroupId
+);
+
 impl OwnerId {
     /// The framework itself.
     pub const FRAMEWORK: OwnerId = OwnerId::from_static("framework");

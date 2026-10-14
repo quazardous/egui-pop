@@ -7,6 +7,8 @@
 //! - [`when`]: context clauses (`listFocus && !textInputFocus`);
 //! - [`clock`]: where "now" comes from, injected so tests fix it;
 //! - [`commands`]: every action named, run the same way from anywhere;
+//! - [`context`]: the context stack (places and modes, ADR 0012): its
+//!   frames, its state, a pure `apply` and `restore`, its documents;
 //! - [`fuzzy`]: fuzzy matching and ranking for search fields;
 //! - [`keymap`]: keys bound to commands in layers, resolved by focus
 //!   depth, with removal, unbinding and a resolution trace;
@@ -22,6 +24,7 @@
 
 pub mod clock;
 pub mod commands;
+pub mod context;
 pub mod diagnostics;
 pub mod doc;
 pub mod fuzzy;
