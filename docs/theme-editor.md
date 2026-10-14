@@ -259,6 +259,11 @@ and what the file loaded with as `warnings`) and `theme.generate`
 its `edits`, `seeds` and `skipped` proposed, or, with `apply: true`,
 written as one change, `changed` back).
 
+The editor is a focus surface of its own (`themeEditor`): while it has
+the focus, Ctrl+Z runs `theme.undo` and Ctrl+Shift+Z or Ctrl+Y
+`theme.redo`, ahead of the application's Edit > Undo; a text field of
+the editor keeps its own undo while it is being typed in.
+
 ## Keyboard and screen readers
 
 Every control is reached with Tab and used with Enter or Space: the
