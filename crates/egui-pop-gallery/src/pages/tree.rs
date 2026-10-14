@@ -466,7 +466,7 @@ fn row_toggles(ui: &mut Ui, marks: &RefCell<Marks>, key: &str, label: &str) {
     } else {
         (Icon::Visible, format!("Hide {label}"))
     };
-    let tone = if hidden { Tone::Muted } else { Tone::Default };
+    let tone = if hidden { Tone::Muted } else { Tone::Neutral };
     if ui.add(icon.tone(tone).label(&name).sense_click()).clicked() {
         Marks::toggle(&mut marks.borrow_mut().hidden, key);
     }

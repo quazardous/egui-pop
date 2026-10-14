@@ -706,36 +706,8 @@ impl Size {
     }
 }
 
-/// Its colour, by meaning.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum Tone {
-    #[default]
-    Default,
-    Muted,
-    Strong,
-    Accent,
-    OnAccent,
-    Danger,
-    Warning,
-    Success,
-    Info,
-}
-
-impl Tone {
-    pub fn color(self, t: &Tokens) -> Color32 {
-        match self {
-            Tone::Default => t.text.default,
-            Tone::Muted => t.text.muted,
-            Tone::Strong => t.text.strong,
-            Tone::Accent => t.accent.default,
-            Tone::OnAccent => t.text.on_accent,
-            Tone::Danger => t.status.danger,
-            Tone::Warning => t.status.warning,
-            Tone::Success => t.status.success,
-            Tone::Info => t.status.info,
-        }
-    }
-}
+/// Its colour, by meaning: the shared [`crate::tone::Tone`].
+pub use crate::tone::Tone;
 
 /// An icon as a widget.
 #[derive(Clone, Debug)]
@@ -753,7 +725,7 @@ impl IconWidget {
         Self {
             source: source.into(),
             size: Size::Inline,
-            tone: Tone::Default,
+            tone: Tone::Neutral,
             label: None,
             sense: Sense::hover(),
         }

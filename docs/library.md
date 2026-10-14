@@ -146,7 +146,7 @@ Over each thumbnail (from 64 points up): the flag (a pennant, or a
 cross, the image dimmed when rejected) in the top left corner, the
 labels in the top right one, the stars in the bottom left one (empty
 stars under the pointer), the badges (`Badge::new("RAW")`, toned with
-`Tone`) in the bottom right one. Colour labels have a shape each
+`Tone`, the shared tone of `core::tone`) in the bottom right one. Colour labels have a shape each
 (circle, triangle, square, diamond, hexagon), so they never read by
 colour alone.
 

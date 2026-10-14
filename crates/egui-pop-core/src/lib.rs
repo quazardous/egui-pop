@@ -31,6 +31,8 @@
 //! - [`a11y`]: accessible names and an announcer;
 //! - [`strings`]: the library's own strings, by key, with English
 //!   fallbacks;
+//! - [`tone`]: one set of tones (what a colour says) for icons,
+//!   progress, status items, badges and indicators;
 //! - [`icon`]: icons by role, sized and coloured from tokens;
 //! - [`persist`]: documents written atomically, with a backup and
 //!   migrations;
@@ -59,6 +61,7 @@ pub mod scale;
 pub mod slider;
 pub mod strings;
 pub mod theme;
+pub mod tone;
 
 mod state;
 

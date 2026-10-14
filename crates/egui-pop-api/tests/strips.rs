@@ -42,7 +42,7 @@ impl Plugin for Demo {
                 }
                 let n = state.count.unwrap_or(0);
                 state.text = if n == 0 { "Idle".into() } else { "Jobs".into() };
-                state.tone = if n == 0 { Tone::Quiet } else { Tone::Active };
+                state.tone = if n == 0 { Tone::Neutral } else { Tone::Accent };
             }),
         );
         Ok(())
@@ -117,7 +117,7 @@ fn indicators_follow_the_hosts_events() {
         .into_iter()
         .find(|(i, _)| i.id == "demo.jobs")
         .unwrap();
-    assert_eq!(state.tone, Tone::Active);
+    assert_eq!(state.tone, Tone::Accent);
     app.publish("host", None, "job.done", json!({}));
     app.publish("host", None, "job.done", json!({}));
     h.run();

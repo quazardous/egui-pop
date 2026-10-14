@@ -36,32 +36,17 @@ use egui::{
 use crate::motion::{self, Busy};
 use crate::theme::Tokens;
 
-/// What a bar's colour says.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum Tone {
-    /// Running: the accent (`progress.fill`).
-    #[default]
-    Accent,
-    Info,
-    Success,
-    Warning,
-    Danger,
-    /// Paused, skipped: muted.
-    Muted,
-}
+/// What a bar's colour says: the shared [`crate::tone::Tone`]. A bar,
+/// a ring, a meter and a spinner are `Accent` by default, drawn in
+/// `progress.fill`.
+pub use crate::tone::Tone;
 
-impl Tone {
-    /// Its colour in the theme.
-    pub fn color(self, ctx: &Context) -> Color32 {
-        let t = Tokens::of(ctx);
-        match self {
-            Tone::Accent => ProgressTokens::of(ctx).fill,
-            Tone::Info => t.status.info,
-            Tone::Success => t.status.success,
-            Tone::Warning => t.status.warning,
-            Tone::Danger => t.status.danger,
-            Tone::Muted => t.text.muted,
-        }
+/// A tone's colour on a bar, a ring or a spinner: `Accent` is
+/// `progress.fill`, the others their colour in the theme.
+pub fn tone_color(ctx: &Context, tone: Tone) -> Color32 {
+    match tone {
+        Tone::Accent => ProgressTokens::of(ctx).fill,
+        other => other.color(&Tokens::of(ctx)),
     }
 }
 
@@ -350,14 +335,14 @@ impl Widget for ProgressBar {
             let track = Rect::from_min_max(pos2(rect.left(), rect.bottom() - thick), rect.max);
             let r = thick / 2.0;
             painter.rect_filled(track, corners(r, true, true), p.track);
-            let tone = self.tone.color(&ctx);
+            let tone = tone_color(&ctx, self.tone);
             match self.fraction {
                 Some(f) => {
                     let mut parts = vec![(f, tone)];
                     parts.extend(
                         self.sections
                             .iter()
-                            .map(|s| (s.fraction, s.tone.color(&ctx))),
+                            .map(|s| (s.fraction, tone_color(&ctx, s.tone))),
                     );
                     let mut x = track.left();
                     for (share, color) in parts {
@@ -508,7 +493,7 @@ impl Widget for Ring {
         let side = self.size.unwrap_or(p.ring);
         let (rect, response) = ui.allocate_exact_size(vec2(side, side), Sense::hover());
         if ui.is_rect_visible(rect) {
-            paint_ring(ui, rect, self.fraction, self.tone.color(&ctx));
+            paint_ring(ui, rect, self.fraction, tone_color(&ctx, self.tone));
         }
         let value = self.fraction.map(|f| Value {
             value: (f64::from(f) * 100.0).round(),
@@ -622,7 +607,7 @@ impl Widget for Meter {
                 painter.rect_filled(
                     fill,
                     corners(r, true, x >= rect.right() - 0.5),
-                    self.tone().color(&ctx),
+                    tone_color(&ctx, self.tone()),
                 );
             }
             for (v, _) in &self.thresholds {
@@ -752,7 +737,7 @@ impl Widget for Spinner {
                 pos2(rect.left() + side / 2.0, rect.center().y),
                 vec2(side, side),
             );
-            paint_spinner(ui, icon, self.tone.color(&ctx));
+            paint_spinner(ui, icon, tone_color(&ctx, self.tone));
             if let Some(g) = galley {
                 let at = pos2(icon.right() + t.space.s, rect.center().y - g.size().y / 2.0);
                 ui.painter().galley(at, g, t.text.muted);

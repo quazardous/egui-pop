@@ -52,7 +52,7 @@ use std::sync::Mutex;
 use egui::Ui;
 use egui_pop_core::debug::FnCollector;
 use egui_pop_core::lock;
-use egui_pop_core::progress::{Tone, paint_ring};
+use egui_pop_core::progress::{Tone, paint_ring, tone_color};
 use egui_pop_core::strings;
 use egui_pop_core::theme::Tokens;
 use egui_pop_model::clock::SharedClock;
@@ -418,7 +418,7 @@ fn status_item(ui: &mut Ui, app: &AppHandle) {
                 ui,
                 rect,
                 summary.fraction.map(|f| f as f32),
-                Tone::Accent.color(&ctx),
+                tone_color(&ctx, Tone::Accent),
             );
         } else {
             text.clear();

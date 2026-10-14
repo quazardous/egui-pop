@@ -22,8 +22,8 @@ const SIZES: [(Size, &str); 3] = [
     (Size::Panel, "Panel"),
 ];
 
-const TONES: [(Tone, &str); 9] = [
-    (Tone::Default, "Default"),
+const TONES: [(Tone, &str); 10] = [
+    (Tone::Neutral, "Neutral"),
     (Tone::Muted, "Muted"),
     (Tone::Strong, "Strong"),
     (Tone::Accent, "Accent"),
@@ -32,6 +32,7 @@ const TONES: [(Tone, &str); 9] = [
     (Tone::Warning, "Warning"),
     (Tone::Success, "Success"),
     (Tone::Info, "Info"),
+    (Tone::Record, "Record"),
 ];
 
 pub fn playground(ui: &mut Ui, state: &mut State) {

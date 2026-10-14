@@ -22,7 +22,7 @@
 //!         _ => {}
 //!     }
 //!     state.text = format!("{} running", state.count.unwrap_or(0));
-//!     state.tone = if state.count == Some(0) { Tone::Quiet } else { Tone::Active };
+//!     state.tone = if state.count == Some(0) { Tone::Neutral } else { Tone::Accent };
 //! });
 //! # let _ = jobs;
 //! ```
@@ -50,19 +50,10 @@ use crate::{Ctx, Plugin, PluginError};
 /// Folds or unfolds the start side bar.
 pub const CMD_TOGGLE_SIDE_BAR: CommandId = CommandId::from_static("view.side_bar.toggle");
 
-/// How an indicator looks.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Tone {
-    /// Nothing to say: drawn muted.
-    #[default]
-    Quiet,
-    /// Something is going on.
-    Active,
-    Success,
-    Warning,
-    Error,
-}
+/// How an indicator looks: the shared [`egui_pop_core::tone::Tone`].
+/// `Neutral` (nothing to say) is drawn muted in the status bar;
+/// `Accent` says something is going on.
+pub use egui_pop_core::tone::Tone;
 
 /// What an indicator shows.
 #[derive(Clone, Debug, Default, PartialEq, Serialize)]
@@ -291,11 +282,8 @@ fn indicators(ui: &mut Ui, app: &AppHandle) {
     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
         for (ind, state) in list {
             let color = match state.tone {
-                Tone::Quiet => t.text.muted,
-                Tone::Active => t.accent.default,
-                Tone::Success => t.status.success,
-                Tone::Warning => t.status.warning,
-                Tone::Error => t.status.danger,
+                Tone::Neutral => t.text.muted,
+                tone => tone.color(&t),
             };
             let mut text = state.text.clone();
             if let Some(n) = state.count {

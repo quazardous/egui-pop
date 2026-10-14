@@ -127,16 +127,10 @@ pub struct Stack<K> {
     pub count: usize,
 }
 
-/// A badge's tone.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum Tone {
-    #[default]
-    Neutral,
-    Info,
-    Success,
-    Warning,
-    Danger,
-}
+/// A badge's tone: the shared [`egui_pop_core::tone::Tone`]. `Neutral`,
+/// `Info`, `Success`, `Warning` and `Danger` take the library's colours
+/// (`library.overlay` for neutral); the others fill with their colour.
+pub use egui_pop_core::tone::Tone;
 
 /// A short text in a corner of a cell: `RAW`, `HDR`, `2×`, an edit mark.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1500,6 +1494,7 @@ fn overlay(
             Tone::Success => (lt.tones[2], t.text.on_accent),
             Tone::Warning => (lt.tones[3], t.text.on_accent),
             Tone::Danger => (lt.tones[4], t.text.on_accent),
+            other => (other.color(t), t.surface.panel),
         };
         let r = paint::pill(
             painter,

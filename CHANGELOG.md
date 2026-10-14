@@ -805,6 +805,17 @@ egui minor.
 
 ### Changed
 
+- One `Tone` for every mark (`core::tone::Tone`): the four enums of
+  `core::icon`, `core::progress`, `api::strips` and
+  `views::library` are now re-exports of it. Its tones are `Neutral`
+  (the default), `Muted`, `Strong`, `Accent`, `OnAccent`, `Info`,
+  `Success`, `Warning`, `Danger` and a new `Record` (recording, the
+  danger colour unless a theme tells them apart). Renamed: the icon's
+  `Default` is `Neutral`; the status bar's `Quiet` is `Neutral` (still
+  drawn muted there), `Active` is `Accent`, `Error` is `Danger`, and
+  its state serializes the new names. `progress::Tone::color(ctx)` is
+  `progress::tone_color(ctx, tone)`; `Tone::color` takes the tokens.
+
 - The viewport takes tiles in off the interface thread by default:
   `ViewportState` converts each tile on the thread that delivers it
   (`set_prepare_on_worker` is on) and uploads at most
