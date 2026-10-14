@@ -459,6 +459,31 @@ pub const TIPS_GOT_IT_NAME: StrKey = StrKey::new(
     "Got it: do not show { $tip } again",
 );
 
+// The context stack.
+
+/// The breadcrumb's first crumb, the root.
+pub const CONTEXT_ROOT: StrKey = StrKey::new("egui-pop-context-root", "Home");
+/// A mode chip's button turning the mode off.
+pub const CONTEXT_LEAVE_MODE: StrKey =
+    StrKey::new("egui-pop-context-leave-mode", "Leave { $mode }");
+/// A mode switch's choice of no mode of the group.
+pub const CONTEXT_NO_MODE: StrKey = StrKey::new("egui-pop-context-no-mode", "None");
+/// A transition refused, as a toast says it.
+pub const CONTEXT_REFUSED: StrKey = StrKey::new("egui-pop-context-refused", "Not now: { $reason }");
+/// What screen readers hear after a transition.
+pub const CONTEXT_NOW_IN: StrKey = StrKey::new("egui-pop-context-now-in", "Now in { $place }");
+/// An undo made in another place than the one shown.
+pub const CONTEXT_UNDONE_IN: StrKey =
+    StrKey::new("egui-pop-context-undone-in", "Undone in { $place }");
+/// A redo made in another place than the one shown.
+pub const CONTEXT_REDONE_IN: StrKey =
+    StrKey::new("egui-pop-context-redone-in", "Redone in { $place }");
+/// The toast's action going to where an undo or a redo happened.
+pub const CONTEXT_GO_THERE: StrKey = StrKey::new("egui-pop-context-go-there", "Go there");
+/// Frames of the saved stack that could not come back at start.
+pub const CONTEXT_DROPPED: StrKey =
+    StrKey::new("egui-pop-context-dropped", "Not restored: { $frames }");
+
 /// Every string of this module, for catalogues and tests.
 pub const ALL: &[StrKey] = &[
     COMMAND_LABEL,
@@ -648,6 +673,15 @@ pub const ALL: &[StrKey] = &[
     TIPS_DONT_SHOW,
     TIPS_GOT_IT,
     TIPS_GOT_IT_NAME,
+    CONTEXT_ROOT,
+    CONTEXT_LEAVE_MODE,
+    CONTEXT_NO_MODE,
+    CONTEXT_REFUSED,
+    CONTEXT_NOW_IN,
+    CONTEXT_UNDONE_IN,
+    CONTEXT_REDONE_IN,
+    CONTEXT_GO_THERE,
+    CONTEXT_DROPPED,
 ];
 
 #[cfg(test)]

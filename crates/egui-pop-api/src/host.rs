@@ -24,7 +24,9 @@
 //!   ([`Host::set_waker`]);
 //! - where the workbench's layout is kept ([`Host::layout_document`]):
 //!   one document by default, a workspace's own, or none (the host keeps
-//!   it).
+//!   it);
+//! - the owner of the context stack ([`Host::contexts`]): the kernel's,
+//!   or egui-pop's `LocalContexts` by default.
 //!
 //! [`LocalHost`] is the default: commands run in-process on the
 //! interface thread (their handlers given to `Ctx::command`), the journal
@@ -413,6 +415,15 @@ pub trait Host {
     /// saving are the `layout.load` and `layout.save` steps.
     fn layout_document(&self) -> Option<String> {
         Some(LAYOUT_DOCUMENT.into())
+    }
+
+    /// The owner of the context stack (places and modes, ADR 0012), when
+    /// the application's kernel keeps it. `None` (the default): egui-pop's
+    /// own [`LocalContexts`](crate::contexts::LocalContexts), kept by
+    /// `ContextsPlugin`. The interface only reads it and asks it for
+    /// transitions; it never writes the stack.
+    fn contexts(&mut self) -> Option<&mut dyn crate::contexts::Contexts> {
+        None
     }
 }
 

@@ -16,6 +16,8 @@ category-jobs = Jobs
 
 category-library = Library
 
+category-navigation = Navigation
+
 category-notifications = Notifications
 
 category-terminal = Terminal
@@ -99,6 +101,30 @@ command-code-unfold =
 command-code-unfold-all =
     .description = Unfolds every fold.
     .title = Unfold all
+
+command-context-go =
+    .description = Goes to a place path (`places`: each `frame` with its `payload`).
+    .title = Go to a place
+
+command-context-hold =
+    .description = Holds groups of the stack (`groups`, empty: all of it; `place` for places) with a `reason`: transitions touching them are refused until released. Its token.
+    .title = Hold the context stack
+
+command-context-read =
+    .description = The places and modes on, their revision, the holds and the frames declared.
+    .title = Read the context stack
+
+command-context-release =
+    .description = Releases a hold of the context stack (`token`).
+    .title = Release a hold
+
+command-context-request =
+    .description = Asks the owner for a transition (`request`: `op` enter, leave, jump, go, set_mode, push_mode, pop_mode, clear_mode or back), checked against `if_rev`, applied unless `dry_run`.
+    .title = Ask for a context transition
+
+command-context-set-mode =
+    .description = Sets a mode (`mode`), or pushes it (`push`: true); with `group` and no mode, turns the group off.
+    .title = Set a mode
 
 command-crash-dismiss =
     .description = Deletes a crash report (`path`).
@@ -207,6 +233,18 @@ command-library-tag =
 command-logs-reveal =
     .description = Opens the folder holding the application's log files.
     .title = Show the log folder
+
+command-nav-back =
+    .description = Pops the last pushed mode, else leaves the place shown for its parent.
+    .title = Back
+
+command-nav-enter =
+    .description = Enters a place under the one shown (`frame`, `payload`).
+    .title = Enter a place
+
+command-nav-up =
+    .description = Leaves the place shown for its parent.
+    .title = Up to the parent place
 
 command-notify-act =
     .description = Runs a notification's action (`id`, `action`), as a click on it does.
@@ -353,6 +391,24 @@ egui-pop-close = Close
 egui-pop-command-label = { $category }: { $title }
 
 egui-pop-command-with-change = { $title } { $change }
+
+egui-pop-context-dropped = Not restored: { $frames }
+
+egui-pop-context-go-there = Go there
+
+egui-pop-context-leave-mode = Leave { $mode }
+
+egui-pop-context-no-mode = None
+
+egui-pop-context-now-in = Now in { $place }
+
+egui-pop-context-redone-in = Redone in { $place }
+
+egui-pop-context-refused = Not now: { $reason }
+
+egui-pop-context-root = Home
+
+egui-pop-context-undone-in = Undone in { $place }
 
 egui-pop-crash-offer = { $app } closed unexpectedly last time. A report was saved on this computer; nothing was sent.
 
@@ -992,6 +1048,9 @@ panel-egui-pop-jobs =
 
 plugin-egui-pop-arrangements =
     .title = Arrangements
+
+plugin-egui-pop-contexts =
+    .title = Context stack
 
 plugin-egui-pop-crash =
     .title = Crash reports

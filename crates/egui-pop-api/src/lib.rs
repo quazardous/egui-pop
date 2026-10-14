@@ -17,6 +17,9 @@
 //!   default);
 //! - [`steps`]: the moments of a feature's life plugins may watch,
 //!   veto, replace or extend (ADR 0011);
+//! - [`contexts`]: the context stack (places and modes, ADR 0012): its
+//!   owner behind the host, the projection, the breadcrumb and mode
+//!   chips, the `nav.*` and `context.*` commands, a plugin;
 //! - [`services`]: typed service tokens;
 //! - [`stories`]: gallery stories as a contribution;
 //! - [`busy`]: a button bound to a command, showing its busy state (a
@@ -99,6 +102,7 @@
 pub mod app;
 pub mod arrangements;
 pub mod busy;
+pub mod contexts;
 pub mod ctx;
 pub mod devtools;
 pub mod dialogs;

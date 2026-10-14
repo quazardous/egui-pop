@@ -9,6 +9,30 @@ egui minor.
 
 ### Added
 
+- The context stack (ADR 0012, guide: docs/contexts.md): places
+  (drill-downs, shown as a breadcrumb) and modes (global states, one
+  per group, set or pushed, shown as chips) on one stack owned by the
+  application's kernel. `egui_pop_model::context`: frames
+  (`FrameSpec`, guards, transient frames), the state with its
+  revision, the pure `apply` and `restore`, the `context` and `view`
+  documents. `egui_pop_api::contexts`: the `Contexts` contract
+  (`Host::contexts`), `LocalContexts` by default (the stack written
+  inside each transition), `ContextsPlugin`; every transition is the
+  `context.request` step, the owner publishes `context.changed`,
+  `context.entered`, `context.left`, `context.refused`,
+  `context.restored`, `context.held`, `context.released`. The
+  projection keeps a layout, the focus and view values per place and
+  mode (`view_value`, `scroll_area`), and sets the context keys
+  `place`, `placeDepth`, `modePushed` and `mode.<group>`;
+  `Ctx::frame` and `Ctx::frame_keybinding` (a frame's own keys). The
+  breadcrumb, mode chips, a mode switch and a toggle; the commands
+  `nav.back` (Alt+Left, Escape while a mode is pushed), `nav.up`
+  (Alt+Shift+Up), `nav.enter`, `context.read`, `context.request`
+  (`if_rev`, `dry_run`), `context.go`, `context.set_mode`,
+  `context.hold`, `context.release`; the `contexts` collector; an
+  undo made out of sight says where, with "Go there". Strings with
+  their French. Gallery page: `contexts`.
+
 - A debounced document writer (`egui_pop_core::persist::Writer`,
   about a second after the last change, at most five): the settings,
   the user's keymap and the layout (through `layout.save`) are written

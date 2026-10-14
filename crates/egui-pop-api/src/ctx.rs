@@ -60,6 +60,9 @@ pub enum CtxError {
     },
     /// A debug bridge collector of that name exists.
     Collector(String),
+    /// A frame of the context stack the owner refused (its id is taken,
+    /// a mode has no group, no context stack).
+    Frame(String),
 }
 
 impl fmt::Display for CtxError {
@@ -70,7 +73,7 @@ impl fmt::Display for CtxError {
             CtxError::Menu(e) | CtxError::Panel(e) => write!(f, "{e}"),
             CtxError::Zone { zone, by } => write!(f, "zone `{zone}` is already declared by `{by}`"),
             CtxError::Setting(e) => write!(f, "{e}"),
-            CtxError::Collector(e) => write!(f, "{e}"),
+            CtxError::Collector(e) | CtxError::Frame(e) => write!(f, "{e}"),
             CtxError::Service { id, by } => {
                 write!(f, "service `{id}` is already provided by `{by}`")
             }

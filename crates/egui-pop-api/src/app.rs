@@ -75,8 +75,21 @@ pub const STEP_REDO: StepId = StepId::from_static("edit.redo");
 
 /// Commands that run in the interface rather than through the host's
 /// dispatch: their run calls the host itself (undo and redo call
-/// `Host::undo` and `Host::redo`, which a dispatch would hold).
-const IN_INTERFACE: [CommandId; 2] = [CMD_UNDO, CMD_REDO];
+/// `Host::undo` and `Host::redo`, the context stack's commands
+/// `Host::contexts`, which a dispatch would hold).
+const IN_INTERFACE: &[CommandId] = &[
+    CMD_UNDO,
+    CMD_REDO,
+    crate::contexts::CMD_BACK,
+    crate::contexts::CMD_UP,
+    crate::contexts::CMD_ENTER,
+    crate::contexts::CMD_READ,
+    crate::contexts::CMD_REQUEST,
+    crate::contexts::CMD_GO,
+    crate::contexts::CMD_SET_MODE,
+    crate::contexts::CMD_HOLD,
+    crate::contexts::CMD_RELEASE,
+];
 pub const CMD_SAVE: CommandId = CommandId::from_static("app.save");
 
 /// What an overlay is, as [`AppHandle::overlay_rects`] reports it.
@@ -582,6 +595,15 @@ impl AppHandle {
     /// Reads the host (`None` while it dispatches a command).
     fn with_host<R>(&self, f: impl FnOnce(&dyn Host) -> R) -> Option<R> {
         self.0.host.borrow().as_deref().map(f)
+    }
+
+    /// Changes the host (`None` while it dispatches a command).
+    pub(crate) fn with_host_mut<R>(
+        &self,
+        f: impl FnOnce(&mut (dyn Host + 'static)) -> R,
+    ) -> Option<R> {
+        let mut host = self.0.host.borrow_mut();
+        host.as_mut().map(|h| f(h.as_mut()))
     }
 
     /// Whether there is something to undo, as the host says (`false`
@@ -1395,6 +1417,12 @@ impl AppHandle {
 
     pub(crate) fn set_drawing_areas(&self, on: bool) {
         self.0.drawing_areas.set(on);
+    }
+
+    /// Whether the workbench's areas are being drawn (their layout must
+    /// not change under them).
+    pub(crate) fn drawing_areas(&self) -> bool {
+        self.0.drawing_areas.get()
     }
 
     /// Whether a panel is shown (docked or detached, not closed).

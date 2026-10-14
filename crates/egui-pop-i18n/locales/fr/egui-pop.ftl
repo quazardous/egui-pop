@@ -15,6 +15,8 @@ category-jobs = Tâches
 
 category-library = Photothèque
 
+category-navigation = Navigation
+
 category-notifications = Notifications
 
 category-terminal = Terminal
@@ -98,6 +100,30 @@ command-code-unfold =
 command-code-unfold-all =
     .description = Déplie tous les replis.
     .title = Tout déplier
+
+command-context-go =
+    .description = Va à un chemin de lieux (`places` : chaque `frame` avec son `payload`).
+    .title = Aller à un lieu
+
+command-context-hold =
+    .description = Retient des groupes de la pile (`groups`, vide : toute la pile ; `place` pour les lieux) avec une raison (`reason`) : les transitions qui les touchent sont refusées jusqu’à leur libération. Rend son jeton.
+    .title = Retenir la pile de contextes
+
+command-context-read =
+    .description = Les lieux et les modes actifs, leur révision, les retenues et les cadres déclarés.
+    .title = Lire la pile de contextes
+
+command-context-release =
+    .description = Libère une retenue de la pile de contextes (`token`).
+    .title = Libérer une retenue
+
+command-context-request =
+    .description = Demande une transition au propriétaire (`request` : `op` enter, leave, jump, go, set_mode, push_mode, pop_mode, clear_mode ou back), vérifiée contre `if_rev`, appliquée sauf avec `dry_run`.
+    .title = Demander une transition de contexte
+
+command-context-set-mode =
+    .description = Active un mode (`mode`), ou l’empile (`push` : true) ; avec `group` et sans mode, désactive le groupe.
+    .title = Activer un mode
 
 command-crash-dismiss =
     .description = Supprime un rapport de plantage (`path`).
@@ -206,6 +232,18 @@ command-library-tag =
 command-logs-reveal =
     .description = Ouvre le dossier des fichiers journaux de l’application.
     .title = Afficher le dossier des journaux
+
+command-nav-back =
+    .description = Dépile le dernier mode empilé, sinon quitte le lieu affiché pour son parent.
+    .title = Retour
+
+command-nav-enter =
+    .description = Entre dans un lieu sous celui affiché (`frame`, `payload`).
+    .title = Entrer dans un lieu
+
+command-nav-up =
+    .description = Quitte le lieu affiché pour son parent.
+    .title = Remonter au lieu parent
 
 command-notify-act =
     .description = Exécute une action d’une notification (`id`, `action`), comme un clic dessus.
@@ -352,6 +390,24 @@ egui-pop-close = Fermer
 egui-pop-command-label = { $category } : { $title }
 
 egui-pop-command-with-change = { $title } { $change }
+
+egui-pop-context-dropped = Non restauré : { $frames }
+
+egui-pop-context-go-there = Y aller
+
+egui-pop-context-leave-mode = Quitter { $mode }
+
+egui-pop-context-no-mode = Aucun
+
+egui-pop-context-now-in = Maintenant dans { $place }
+
+egui-pop-context-redone-in = Rétabli dans { $place }
+
+egui-pop-context-refused = Pas maintenant : { $reason }
+
+egui-pop-context-root = Accueil
+
+egui-pop-context-undone-in = Annulé dans { $place }
 
 egui-pop-crash-offer = { $app } s’est fermé de façon inattendue la dernière fois. Un rapport a été enregistré sur cet ordinateur ; rien n’a été envoyé.
 
@@ -991,6 +1047,9 @@ panel-egui-pop-jobs =
 
 plugin-egui-pop-arrangements =
     .title = Dispositions
+
+plugin-egui-pop-contexts =
+    .title = Pile de contextes
 
 plugin-egui-pop-crash =
     .title = Rapports de plantage
