@@ -182,3 +182,48 @@ fn an_old_keymap_document_with_the_placeholder_key_migrates() {
         .unwrap();
     assert_eq!(read.value.bindings[0].keys, "");
 }
+
+#[test]
+fn keys_change_in_the_workspace_s_layer_and_each_binding_says_where_it_comes_from() {
+    let mut app = app();
+    let h = app.handle().clone();
+    let layers = |h: &egui_pop_api::AppHandle| -> Vec<(String, Layer)> {
+        h.key_sources(&GO)
+            .into_iter()
+            .map(|b| (b.keys.to_string(), b.layer))
+            .collect()
+    };
+    assert_eq!(layers(&h), [("Ctrl+G".to_string(), Layer::Default)]);
+    // The workspace's keys: in its layer, which the application exports.
+    h.rebind_in(Layer::Workspace, GO, Some("Ctrl+J".into()));
+    app.process_requests();
+    assert_eq!(layers(&h), [("Ctrl+J".to_string(), Layer::Workspace)]);
+    assert!(h.rebound_in(Layer::Workspace, &GO));
+    assert!(!h.rebound_in(Layer::User, &GO));
+    let doc = h.export_keymap(Layer::Workspace);
+    assert!(
+        doc.bindings
+            .iter()
+            .any(|b| b.keys == "Ctrl+J" && b.command.as_deref() == Some("demo.go"))
+    );
+    assert!(h.export_keymap(Layer::User).bindings.is_empty());
+    let t = h.step_traces().pop().unwrap();
+    assert_eq!(
+        (t.step, t.args["layer"].clone()),
+        (STEP_REBIND, "workspace".into())
+    );
+    // The user's keys win over the workspace's.
+    h.rebind(GO, Some("Ctrl+K".into()));
+    app.process_requests();
+    assert_eq!(layers(&h), [("Ctrl+K".to_string(), Layer::User)]);
+    h.reset_keys(GO);
+    app.process_requests();
+    assert_eq!(layers(&h), [("Ctrl+J".to_string(), Layer::Workspace)]);
+    h.reset_keys_in(Layer::Workspace, GO);
+    app.process_requests();
+    assert_eq!(layers(&h), [("Ctrl+G".to_string(), Layer::Default)]);
+    // The defaults are not changed this way.
+    h.rebind_in(Layer::Default, GO, Some("Ctrl+L".into()));
+    app.process_requests();
+    assert_eq!(h.keys_for(&GO), ["Ctrl+G"]);
+}

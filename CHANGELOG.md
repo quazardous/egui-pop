@@ -803,8 +803,19 @@ egui minor.
   a section for extension authors; docs/upstream.md says how a limit of
   egui is handled, from the workaround to its removal.
 
+- Keys changed for the workspace: `AppHandle::rebind_in` and
+  `reset_keys_in` change a command's keys in the user's or the
+  workspace's layer (the `keys.rebind` step says which, `layer`),
+  `rebound_in` says whether one did, `key_sources` gives each live
+  binding with its layer. The shortcuts editor offers to change keys for
+  the workspace once the application asks (`offer_workspace_keys`), and
+  says where each key comes from (workspace, user, or the application's
+  own name, `name_key_sources`).
+
 ### Changed
 
+- `Request::Rebind` carries the layer changed, and `Request::ResetKeys`
+  is a struct with its command and layer.
 - The viewport takes tiles in off the interface thread by default:
   `ViewportState` converts each tile on the thread that delivers it
   (`set_prepare_on_worker` is on) and uploads at most

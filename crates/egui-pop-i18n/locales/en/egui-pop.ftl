@@ -690,7 +690,13 @@ egui-pop-shortcuts-conflicts = Conflicts
 
 egui-pop-shortcuts-default-name = Default keys of { $command }
 
+egui-pop-shortcuts-from-user = user
+
+egui-pop-shortcuts-from-workspace = workspace
+
 egui-pop-shortcuts-goes-to = { $keys } goes to { $command }
+
+egui-pop-shortcuts-key-from = { $keys } ({ $source })
 
 egui-pop-shortcuts-no-key = No key
 
@@ -713,6 +719,12 @@ egui-pop-shortcuts-system-on = { $keys } also works outside the window
 egui-pop-shortcuts-system-pending = { $keys } outside the window: waiting for the desktop
 
 egui-pop-shortcuts-system-unavailable = { $keys } works only in the window: { $reason }
+
+egui-pop-shortcuts-target = Keys changed here apply to
+
+egui-pop-shortcuts-target-user = every workspace (yours)
+
+egui-pop-shortcuts-target-workspace = this workspace
 
 egui-pop-slider-maximum = { $label }, maximum
 

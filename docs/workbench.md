@@ -337,7 +337,16 @@ A host whose registry changes declares commands after build
 follow. A profile is a whole keymap document: `export_keymap(layer)` and
 `load_keymap(doc, layer)` keep scopes, `when` clauses and every key, and
 report what changed (`KeymapDiff`). Rebinding is the `keys.rebind` step,
-loading `keys.load`; each new conflict is a `keys.conflict` signal. Two
+loading `keys.load`; each new conflict is a `keys.conflict` signal.
+
+Keys change in the user's layer (`rebind`, `reset_keys`, saved with the
+interface's settings) or in the workspace's (`rebind_in`,
+`reset_keys_in` with `Layer::Workspace`), which the application keeps
+and reads back with `export_keymap`. The shortcuts editor offers the
+choice once the application asks (`offer_workspace_keys`), the user's
+by default, and says after each key where it comes from
+(`key_sources`): `workspace` or `user`, nothing for a default, or the
+application's own name for it (`name_key_sources`). Two
 bindings of one key whose `when` clauses can never both hold
 (`view == 'masks'` and `view == 'lighttable'`, `When::excludes`) are no
 conflict.
