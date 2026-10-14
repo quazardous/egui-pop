@@ -61,6 +61,16 @@ egui minor.
   Tab cycles inside a modal scope, F6 and Shift+F6 move between panel
   scopes, back to the stop focused there last.
 
+- The decorated input (`core::input::Input`, for text, numbers, paths
+  and search): a placeholder, leading and trailing icons, prefix,
+  suffix and unit, a clear button reachable by Tab (one undo step when
+  bound to a store), a reset arrow, attached buttons, split buttons
+  (also on their own: `input::split_button`) and a dropdown of choices;
+  a number field reads expressions as a slider's typed entry. The
+  gallery's new "Inputs" page shows every decorator, every state and
+  the Tab order (a form, two panels, a modal). The survey behind it is
+  in docs/widgets.md.
+
 - A theme editor (`api::theme_editor`, `ThemeEditorPlugin`, drawn by
   `theme_editor::show` in any `Ui`): the application's theme edited
   live, its tokens grouped by role (surfaces, text, accent, states,

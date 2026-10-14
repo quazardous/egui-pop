@@ -20,7 +20,7 @@ directory; without it they are simulated and nothing reaches the
 desktop).
 
 Pages: `overview` (the theme overview), `tokens`, `builtins` (egui's
-built-ins), `theme-editor` (the theme editor), `icons`, `motion` (the motion clock), `values`, `sliders`,
+built-ins), `theme-editor` (the theme editor), `icons`, `motion` (the motion clock), `values`, `sliders`, `inputs` (decorated inputs, field states and Tab order),
 `menus`, `dialogs`, `files` (the file chooser), `toasts`, `tips` (tips of the day and
 hints), `progress`,
 `placeholders` (skeletons and empty states), `viewport` (the image
@@ -99,7 +99,7 @@ Themes, design tokens, the theme editor, icons and scaling.
 
 ### Widgets
 
-Egui's built-ins in egui-pop's style, values, sliders, menus, dialogs (movable ones, a clear backdrop), file choosing, toasts, and progress (bars, rings, meters, spinners; still under reduced motion).
+Egui's built-ins in egui-pop's style, values, sliders, inputs (decorators, field states, Tab order), menus, dialogs (movable ones, a clear backdrop), file choosing, toasts, and progress (bars, rings, meters, spinners; still under reduced motion).
 
 <table>
   <tr>
@@ -137,6 +137,12 @@ Egui's built-ins in egui-pop's style, values, sliders, menus, dialogs (movable o
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/progress-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/progress-pop-dark.png" width="200" alt="progress-pop-dark"></a><br>progress-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/progress-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/progress-pop-light.png" width="200" alt="progress-pop-light"></a><br>progress-pop-light</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/progress-reduced-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/progress-reduced-pop-dark.png" width="200" alt="progress-reduced-pop-dark"></a><br>progress-reduced-pop-dark</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/inputs-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/inputs-pop-dark.png" width="200" alt="inputs-pop-dark"></a><br>inputs-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/inputs-pop-dark-compact.png"><img src="../crates/egui-pop-gallery/tests/snapshots/inputs-pop-dark-compact.png" width="200" alt="inputs-pop-dark-compact"></a><br>inputs-pop-dark-compact</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/inputs-pop-high-contrast.png"><img src="../crates/egui-pop-gallery/tests/snapshots/inputs-pop-high-contrast.png" width="200" alt="inputs-pop-high-contrast"></a><br>inputs-pop-high-contrast</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/inputs-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/inputs-pop-light.png" width="200" alt="inputs-pop-light"></a><br>inputs-pop-light</td>
   </tr>
   <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/progress-busy-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/progress-busy-pop-dark.png" width="200" alt="progress-busy-pop-dark"></a><br>progress-busy-pop-dark</td>

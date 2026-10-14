@@ -82,6 +82,12 @@ pub const SLIDER_MAXIMUM: StrKey = StrKey::new("egui-pop-slider-maximum", "{ $la
 pub const BUSY: StrKey = StrKey::new("egui-pop-busy", "Busy");
 /// A skeleton standing in for content that loads.
 pub const LOADING: StrKey = StrKey::new("egui-pop-loading", "Loading");
+/// A decorated input's clear button.
+pub const INPUT_CLEAR: StrKey = StrKey::new("egui-pop-input-clear", "Clear { $label }");
+/// A decorated input's dropdown chevron.
+pub const INPUT_CHOICES: StrKey = StrKey::new("egui-pop-input-choices", "{ $label }, choices");
+/// A split button's chevron.
+pub const INPUT_MORE: StrKey = StrKey::new("egui-pop-input-more", "{ $label }, more");
 /// A field's states, as markers and assistive technologies say them.
 pub const FIELD_REQUIRED: StrKey = StrKey::new("egui-pop-field-required", "Required");
 pub const FIELD_MODIFIED_SAVED: StrKey =
@@ -114,6 +120,9 @@ pub const ALL: &[StrKey] = &[
     SLIDER_MAXIMUM,
     BUSY,
     LOADING,
+    INPUT_CLEAR,
+    INPUT_CHOICES,
+    INPUT_MORE,
     FIELD_REQUIRED,
     FIELD_MODIFIED_SAVED,
     FIELD_MODIFIED_DEFAULT,

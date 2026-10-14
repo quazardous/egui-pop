@@ -17,6 +17,8 @@
 //!   by;
 //! - [`field`]: a field's state (modified, required, invalid, disabled
 //!   with a reason, read-only, pending) drawn, announced and reported;
+//! - [`input`]: the decorated input (placeholder, slots, clear, attached
+//!   and split buttons, a dropdown) and the split button;
 //! - [`tab`]: Tab order in focus scopes (reading order, indices,
 //!   groups; cycling in a modal) and F6 between panels;
 //! - [`param`]: the editor a value descriptor calls for, in the three
@@ -52,6 +54,7 @@ pub mod focus;
 pub mod focus_mode;
 pub mod frame;
 pub mod icon;
+pub mod input;
 pub mod keys;
 pub mod motion;
 pub mod overlay;

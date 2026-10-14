@@ -542,6 +542,12 @@ egui-pop-frame-restore = Restore
 
 egui-pop-frame-window-menu = Window menu
 
+egui-pop-input-choices = { $label }, choices
+
+egui-pop-input-clear = Clear { $label }
+
+egui-pop-input-more = { $label }, more
+
 egui-pop-job-action-name = { $action }: { $job }
 
 egui-pop-job-asked = { $state }, waiting for the host

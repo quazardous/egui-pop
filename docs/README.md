@@ -54,6 +54,12 @@ devtools; every feature's moments reachable as steps (ADR 0011).
 - [Sliders](sliders.md): darktable-style sliders (soft and hard range,
   typed expressions, fine and coarse, reset, a quad button), logarithmic,
   gradient tracks, range sliders, the `slider.change` step.
+- [Inputs, field states and Tab order](inputs.md): the decorated
+  input (placeholder, icons, prefix and suffix, a clear button, attached
+  and split buttons, a dropdown), the field states every input shows
+  (modified, required, invalid, disabled with a reason, read-only,
+  pending), Tab order per focus scope and F6 between panels; the survey
+  behind them.
 - [The tree](tree.md): a live tree over a lazy, asynchronous source,
   edits at any time, selection, keyboard, drag and drop, rename, steps.
 - [Lists and tables](table.md): a list and a data table, virtualised,

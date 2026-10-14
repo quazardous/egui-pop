@@ -425,6 +425,238 @@ fn sliders_run_their_step_and_a_plugin_snaps_one() {
 }
 
 #[test]
+fn the_inputs_page_shows_every_decorator_and_state() {
+    let mut results = egui_kittest::SnapshotResults::new();
+    for theme in ["pop-dark", "pop-light", "pop-high-contrast"] {
+        let mut h = harness(options(theme, Density::Comfortable, "inputs"));
+        h.run();
+        egui_pop_test::assert_all_named(&h);
+        results.add(h.try_snapshot(format!("inputs-{theme}")));
+    }
+    let mut h = harness(options("pop-dark", Density::Compact, "inputs"));
+    h.run();
+    results.add(h.try_snapshot("inputs-pop-dark-compact"));
+}
+
+fn text_input<'h>(h: &'h Harness<'_, Gallery>, label: &'h str) -> egui_kittest::Node<'h> {
+    h.get_by_role_and_label(egui::accesskit::Role::TextInput, label)
+}
+
+#[test]
+fn an_input_shows_its_placeholder_and_clears_by_click_and_by_keys() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "inputs"));
+    h.run();
+    assert_eq!(
+        text_input(&h, "Search")
+            .accesskit_node()
+            .data()
+            .placeholder(),
+        Some("Search photos")
+    );
+    assert_eq!(text_input(&h, "Search").value().as_deref(), Some("harbour"));
+    h.get_by_label("Clear Search").click();
+    h.run();
+    assert_eq!(text_input(&h, "Search").value().as_deref(), Some(""));
+    assert!(
+        h.query_by_label("Clear Search").is_none(),
+        "no clear button without a value"
+    );
+    assert!(text_input(&h, "Search").is_focused(), "back in the field");
+    // By keys: Tab from the field reaches the ✕, Space presses it.
+    text_input(&h, "Search").type_text("dunes");
+    h.run();
+    assert_eq!(text_input(&h, "Search").value().as_deref(), Some("dunes"));
+    h.key_press(egui::Key::Tab);
+    h.run();
+    assert!(h.get_by_label("Clear Search").is_focused());
+    h.key_press(egui::Key::Space);
+    h.run();
+    assert_eq!(text_input(&h, "Search").value().as_deref(), Some(""));
+}
+
+#[test]
+fn clearing_a_bound_input_is_one_undo_step() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "inputs"));
+    h.run();
+    let store = h.state().app.handle().store();
+    let steps = || egui_pop::core::lock(&store).undo_steps().len();
+    let before = steps();
+    h.get_by_label("Clear Caption").click();
+    h.run();
+    assert_eq!(text_input(&h, "Caption").value().as_deref(), Some(""));
+    assert_eq!(steps(), before + 1, "one step for the clear");
+    egui_pop::core::lock(&store)
+        .undo(&egui_pop::model::commands::Origin::User)
+        .unwrap();
+    h.run();
+    assert_eq!(text_input(&h, "Caption").value().as_deref(), Some("Sunset"));
+}
+
+#[test]
+fn field_states_reach_assistive_technologies_tooltips_and_agents() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "inputs"));
+    h.run();
+    let keyword = text_input(&h, "Keyword");
+    assert!(keyword.accesskit_node().is_required());
+    assert!(keyword.accesskit_node().data().invalid().is_some());
+    let image = text_input(&h, "Image");
+    assert!(image.accesskit_node().is_disabled());
+    assert!(
+        image
+            .accesskit_node()
+            .description()
+            .is_some_and(|d| d.contains("Needs an open image")),
+        "{:?}",
+        image.accesskit_node().description()
+    );
+    assert!(
+        text_input(&h, "Camera")
+            .accesskit_node()
+            .data()
+            .is_read_only()
+    );
+    assert!(text_input(&h, "Collection").accesskit_node().is_busy());
+    // The modified title offers its reset, which puts the default back.
+    text_input(&h, "Title").focus();
+    h.run();
+    text_input(&h, "Title").type_text("!");
+    h.run();
+    h.get_by_label("Reset Title to default").click();
+    h.run();
+    assert_eq!(text_input(&h, "Title").value().as_deref(), Some("Sunset"));
+    assert!(h.query_by_label("Reset Title to default").is_none());
+    // The disabled reason as the tooltip.
+    text_input(&h, "Image").hover();
+    // Past egui's tooltip delay.
+    h.run_steps(45);
+    assert!(
+        h.query_by_label("Unavailable: Needs an open image")
+            .is_some(),
+        "the reason shows on hover"
+    );
+    // Agents read every field's state, the sliders' too.
+    let snap = h.state().app.handle().debug_snapshot();
+    let fields = snap["fields"]["fields"].as_array().unwrap();
+    let field = |label: &str| {
+        fields
+            .iter()
+            .find(|f| f["label"] == label)
+            .unwrap_or_else(|| panic!("{label} in {fields:?}"))
+    };
+    assert_eq!(field("Image")["disabled_reason"], "Needs an open image");
+    assert_eq!(field("Image")["focusable"], false);
+    assert_eq!(field("Album")["invalid"], "At least three characters");
+    assert_eq!(field("Camera")["editable"], false);
+    assert_eq!(field("Camera")["focusable"], true);
+    assert_eq!(field("Denoise")["kind"], "slider");
+    assert_eq!(field("Denoise")["disabled_reason"], "Only for raw files");
+    assert_eq!(field("White balance")["marks"][0], "read-only");
+}
+
+#[test]
+fn a_read_only_slider_takes_the_focus_and_refuses_changes() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "inputs"));
+    h.run();
+    h.get_by_label("White balance").focus();
+    h.run();
+    assert!(h.get_by_label("White balance").is_focused());
+    h.key_press(egui::Key::ArrowRight);
+    h.run();
+    assert_eq!(
+        h.get_by_label("White balance")
+            .accesskit_node()
+            .numeric_value(),
+        Some(5600.0)
+    );
+    assert!(h.get_by_label("Denoise").accesskit_node().is_disabled());
+}
+
+/// Presses a key (with Shift when `back`) and lets the focus settle.
+fn tab(h: &mut Harness<'_, Gallery>, key: egui::Key, back: bool) {
+    if back {
+        h.key_press_modifiers(egui::Modifiers::SHIFT, key);
+    } else {
+        h.key_press(key);
+    }
+    h.run();
+}
+
+fn focused_label(h: &Harness<'_, Gallery>, labels: &[&str]) -> String {
+    labels
+        .iter()
+        .find(|l| h.query_all_by_label(l).any(|n| n.is_focused()))
+        .map_or_else(|| "nothing".to_string(), |l| l.to_string())
+}
+
+#[test]
+fn tab_follows_reading_order_and_groups_and_f6_moves_between_panels() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "inputs"));
+    h.run();
+    let all = [
+        "Street",
+        "City",
+        "Postcode",
+        "Country",
+        "Tags",
+        "Quality",
+        "Size",
+        "Open the form in a modal",
+    ];
+    text_input(&h, "Street").focus();
+    h.run();
+    let mut seen = vec![focused_label(&h, &all)];
+    for _ in 0..3 {
+        tab(&mut h, egui::Key::Tab, false);
+        seen.push(focused_label(&h, &all));
+    }
+    assert_eq!(seen, ["Street", "City", "Postcode", "Country"]);
+    tab(&mut h, egui::Key::Tab, true);
+    assert_eq!(focused_label(&h, &all), "Postcode");
+    // F6: the other panel, its first stop; the group keeps Tags and
+    // Quality together.
+    tab(&mut h, egui::Key::F6, false);
+    let mut seen = vec![focused_label(&h, &all)];
+    for _ in 0..3 {
+        tab(&mut h, egui::Key::Tab, false);
+        seen.push(focused_label(&h, &all));
+    }
+    assert_eq!(
+        seen,
+        ["Tags", "Quality", "Size", "Open the form in a modal"]
+    );
+    // F6 again: back to the address, where the focus was.
+    tab(&mut h, egui::Key::F6, false);
+    assert_eq!(focused_label(&h, &all), "Postcode");
+    let order = egui_pop::core::tab::order(&h.ctx, "inputs-options");
+    assert_eq!(order.len(), 4, "one stop per field and the button");
+}
+
+#[test]
+fn tab_cycles_inside_a_modal() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "inputs"));
+    h.run();
+    h.get_by_label("Open the form in a modal").click();
+    h.run();
+    let all = ["Book title", "Author", "OK", "Cancel"];
+    text_input(&h, "Book title").focus();
+    h.run();
+    let mut seen = vec![focused_label(&h, &all)];
+    for _ in 0..4 {
+        tab(&mut h, egui::Key::Tab, false);
+        seen.push(focused_label(&h, &all));
+    }
+    assert_eq!(seen, ["Book title", "Author", "OK", "Cancel", "Book title"]);
+    tab(&mut h, egui::Key::Tab, true);
+    assert_eq!(focused_label(&h, &all), "Cancel");
+    // F6 does not leave a modal.
+    tab(&mut h, egui::Key::F6, false);
+    assert_eq!(focused_label(&h, &all), "Cancel");
+    h.key_press(egui::Key::Enter);
+    h.run();
+    assert!(h.query_by_label("Modal answered: cancelled").is_some());
+}
+
+#[test]
 fn values_bind_in_three_modes_and_watch_follows() {
     let mut results = egui_kittest::SnapshotResults::new();
     for theme in ["pop-dark", "pop-light"] {

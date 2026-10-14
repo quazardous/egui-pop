@@ -541,6 +541,12 @@ egui-pop-frame-restore = Restaurer
 
 egui-pop-frame-window-menu = Menu de la fenêtre
 
+egui-pop-input-choices = { $label }, choix
+
+egui-pop-input-clear = Effacer { $label }
+
+egui-pop-input-more = { $label }, plus
+
 egui-pop-job-action-name = { $action } : { $job }
 
 egui-pop-job-asked = { $state }, en attente de l’hôte
