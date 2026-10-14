@@ -49,6 +49,13 @@ egui minor.
   `settings/workbench.arrangement`, so existing settings files read the
   same. `arrangements::arranged_frame`, `by_frame` and `layout_of`.
 
+- A plugin setting the context stack's own keys by hand (`place`,
+  `placeDepth`, `modePushed`, `mode.<group>`, through
+  `AppHandle::set_context`) is reported: a diagnostic the first time
+  per key (`context-key-by-hand`) and the `contexts` collector's
+  `warnings` (`ContextService::hand_writes`: the value, how many
+  times, the command running and its plugin). `contexts::is_stack_key`.
+
 - A debounced document writer (`egui_pop_core::persist::Writer`,
   about a second after the last change, at most five): the settings,
   the user's keymap and the layout (through `layout.save`) are written

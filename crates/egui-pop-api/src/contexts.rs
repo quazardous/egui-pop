@@ -468,6 +468,8 @@ pub struct ContextService {
     /// The host owns the stack.
     custom: AtomicBool,
     pending: Mutex<Vec<(Pending, Origin)>>,
+    /// The stack's keys written by hand, by key.
+    hand_writes: Mutex<Vec<HandWrite>>,
     /// The root crumb's title (`None`: "Home", translated).
     root: Option<String>,
     valid: Option<Validator>,
@@ -501,6 +503,97 @@ impl ContextService {
     /// The projection key shown.
     pub fn key(&self) -> String {
         lock(&self.projection).key()
+    }
+
+    /// The stack's own context keys written by hand, by key (see
+    /// [`is_stack_key`]).
+    pub fn hand_writes(&self) -> Vec<HandWrite> {
+        lock(&self.hand_writes).clone()
+    }
+}
+
+/// Whether a context key is the stack's own: `place`, `placeDepth`,
+/// `modePushed`, `mode.<group>`. Only the projection sets them; a plugin
+/// declares frames and reads them.
+pub fn is_stack_key(key: &str) -> bool {
+    matches!(key, "place" | "placeDepth" | "modePushed") || key.starts_with("mode.")
+}
+
+/// One of the stack's own context keys, set by hand (`AppHandle::set_context`)
+/// instead of by the projection: two truths, and the projection's
+/// overwrites the plugin's at the next transition.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct HandWrite {
+    pub key: String,
+    /// The value written last.
+    pub value: String,
+    /// How many times.
+    pub times: u64,
+    /// The command running at the last write, when one was.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub command: Option<CommandId>,
+    /// Who declared that command.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub owner: Option<OwnerId>,
+}
+
+impl fmt::Display for HandWrite {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "`{}` set by hand to `{}` ({} time{}",
+            self.key,
+            self.value,
+            self.times,
+            if self.times == 1 { "" } else { "s" }
+        )?;
+        if let Some(c) = &self.command {
+            write!(f, ", last by the command `{c}`")?;
+            if let Some(o) = &self.owner {
+                write!(f, " of `{o}`")?;
+            }
+        }
+        write!(
+            f,
+            "): the context stack owns this key; declare a frame (`Ctx::frame`) and read the key instead"
+        )
+    }
+}
+
+/// Records a write of a stack key by hand; the first one of a key is a
+/// diagnostic (`context-key-by-hand`). Nothing without the plugin.
+pub(crate) fn written_by_hand(app: &AppHandle, key: &str, value: &str) {
+    let Some(svc) = app.service(&CONTEXTS) else {
+        return;
+    };
+    let (command, owner) = app
+        .running_command()
+        .map_or((None, None), |(c, o)| (Some(c), o));
+    let first = {
+        let mut writes = lock(&svc.hand_writes);
+        match writes.iter_mut().find(|w| w.key == key) {
+            Some(w) => {
+                w.value = value.into();
+                w.times += 1;
+                w.command = command;
+                w.owner = owner;
+                None
+            }
+            None => {
+                let w = HandWrite {
+                    key: key.into(),
+                    value: value.into(),
+                    times: 1,
+                    command,
+                    owner,
+                };
+                writes.push(w.clone());
+                Some(w)
+            }
+        }
+    };
+    if let Some(w) = first {
+        app.warn("context-key-by-hand", w.owner.as_ref(), key, w.to_string());
     }
 }
 
@@ -834,10 +927,10 @@ fn project(app: &AppHandle, svc: &ContextService, new: State, registry: FrameReg
     let doc = p.doc();
     drop(p);
     for k in stale {
-        app.set_context(&k, "");
+        app.set_stack_context(&k, "");
     }
     for (k, v) in &keys {
-        app.set_context(k, v);
+        app.set_stack_context(k, v);
     }
     if let Some(l) = target
         && l != current
@@ -1320,8 +1413,12 @@ fn describe(app: &AppHandle) -> Json {
         .into_iter()
         .filter(|e| e.name.starts_with("context."))
         .collect();
+    let hand_writes = svc.hand_writes();
+    let warnings: Vec<String> = hand_writes.iter().map(ToString::to_string).collect();
     json!({
         "owner": owner,
+        "warnings": warnings,
+        "hand_writes": hand_writes,
         "host_owns": svc.custom.load(Ordering::Relaxed),
         "switching": svc.switching(),
         "projection": projection,
@@ -1393,6 +1490,7 @@ impl Plugin for ContextsPlugin {
                 projection: Mutex::new(Projection::default()),
                 custom: AtomicBool::new(false),
                 pending: Mutex::new(Vec::new()),
+                hand_writes: Mutex::new(Vec::new()),
                 root: self.root.clone(),
                 valid: self.valid.clone(),
             },
@@ -1515,7 +1613,7 @@ impl Plugin for ContextsPlugin {
         ctx.collector(
             FnCollector::new(
                 "contexts",
-                "The context stack: the owner's state (places, modes, revision), its holds and frames; the projection (its key, the context keys it set, the layouts and view states kept); the last context events. `request` asks for a transition as an agent; `hold` and `release`.",
+                "The context stack: the owner's state (places, modes, revision), its holds and frames; the projection (its key, the context keys it set, the layouts and view states kept); the last context events; warnings: the stack's own keys set by hand (`hand_writes`). `request` asks for a transition as an agent; `hold` and `release`.",
             )
             .snapshot(move |_| match w1.get() {
                 Ok(app) => describe(&app),
