@@ -75,7 +75,9 @@ mod yaml_trap;
 pub use color::Color;
 pub use contract::{CONTRACT_VERSION, RENAME_WINDOW, RENAMED, Renamed, Required, Tier, contract};
 #[allow(deprecated)]
-pub use draft::{DRAFT_EXTENSION, DRAFT_VERSION, GeneratedVariant, ThemeDraft, TokenEdit};
+pub use draft::{
+    DRAFT_EXTENSION, DRAFT_HISTORY_CAP, DRAFT_VERSION, GeneratedVariant, ThemeDraft, TokenEdit,
+};
 pub use error::Error;
 pub use file::{RawToken, TOKENS_COMPILER, TokenFile};
 pub use format::{FORMAT_EXTENSION, FORMAT_VERSION, FormatStamp, Warning};

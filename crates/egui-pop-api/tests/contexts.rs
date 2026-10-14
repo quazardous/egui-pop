@@ -361,6 +361,66 @@ fn assert_no_key_conflicts(h: &Harness<'_, App>) {
 }
 
 #[test]
+fn the_places_of_undo_steps_follow_the_oldest_dropped_by_the_cap() {
+    let mut h = harness(builder());
+    let app = h.state().handle().clone();
+    let set = |n: i64| {
+        lock(&app.store())
+            .set(Set::new(
+                "settings/demo.n",
+                Change::To(Value::Int(n)),
+                Origin::User,
+            ))
+            .unwrap();
+    };
+    lock(&app.store()).set_history_cap(2);
+    // A step in Photo 3, then two at the root: the cap drops the first.
+    assert!(contexts::enter(&app, ALBUM, Json::Null).ok());
+    assert!(contexts::enter(&app, PHOTO, json!(3)).ok());
+    h.run();
+    set(5);
+    h.run();
+    assert!(contexts::jump(&app, 0).ok());
+    h.run();
+    set(6);
+    h.run();
+    set(7);
+    h.run();
+    assert_eq!(lock(&app.store()).undo_steps().len(), 2);
+    // Both steps left were made here: no toast says otherwise.
+    let toasts = app.service(&TOASTS).unwrap();
+    for _ in 0..2 {
+        assert!(app.undo(&Origin::User).ok());
+        h.run();
+    }
+    let shown = toasts.shown();
+    assert!(
+        !shown.iter().any(|t| t.toast.text.starts_with("Undone in")),
+        "{shown:?}"
+    );
+    // A lower cap drops the oldest stamps too: one step in Photo 3, one
+    // at the root, then a cap of one keeps the root's.
+    assert!(contexts::enter(&app, ALBUM, Json::Null).ok());
+    assert!(contexts::enter(&app, PHOTO, json!(3)).ok());
+    h.run();
+    set(8);
+    h.run();
+    assert!(contexts::jump(&app, 0).ok());
+    h.run();
+    set(9);
+    h.run();
+    lock(&app.store()).set_history_cap(1);
+    h.run();
+    assert!(app.undo(&Origin::User).ok());
+    h.run();
+    let shown = toasts.shown();
+    assert!(
+        !shown.iter().any(|t| t.toast.text.starts_with("Undone in")),
+        "{shown:?}"
+    );
+}
+
+#[test]
 fn an_undo_out_of_sight_says_where_and_goes_there() {
     let mut h = harness(builder());
     let app = h.state().handle().clone();

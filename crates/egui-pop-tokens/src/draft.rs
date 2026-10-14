@@ -55,6 +55,10 @@ pub const DRAFT_VERSION: u64 = LEGACY_VERSION;
 const LEGACY_EXTENSION: &str = "org.egui-pop.theme-editor";
 const LEGACY_VERSION: u64 = 1;
 
+/// How many edits a draft's history keeps by default, the oldest
+/// dropped first ([`ThemeDraft::set_history_cap`]).
+pub const DRAFT_HISTORY_CAP: usize = 500;
+
 /// One change of one token: from a value to another. `None` is the
 /// value the base theme gives (no override).
 #[derive(Clone, Debug, PartialEq)]
@@ -148,6 +152,8 @@ pub struct ThemeDraft {
     /// Whether the variant edited is the pair's second, the counterpart
     /// of the theme named first.
     second: bool,
+    /// How many edits the history keeps ([`ThemeDraft::set_history_cap`]).
+    cap: usize,
 }
 
 impl Default for ThemeDraft {
@@ -169,6 +175,7 @@ impl ThemeDraft {
             seeds: BTreeMap::new(),
             other: None,
             second: false,
+            cap: DRAFT_HISTORY_CAP,
         }
     }
 
@@ -468,6 +475,7 @@ impl ThemeDraft {
         self.joined_undo.push(joined);
         self.redo.clear();
         self.joined_redo.clear();
+        self.trim_history();
     }
 
     /// How many edits the next undo takes back as one change: 1, or the
@@ -492,6 +500,41 @@ impl ThemeDraft {
             .skip(1)
             .take_while(|j| **j)
             .count()
+    }
+
+    /// How many edits the history keeps ([`DRAFT_HISTORY_CAP`] by default).
+    pub fn history_cap(&self) -> usize {
+        self.cap
+    }
+
+    /// Keeps at most `cap` edits to undo (and as many to redo), for this
+    /// variant and a pair's other one, dropping the oldest now and
+    /// whenever a new edit goes over it. Edits recorded together
+    /// ([`ThemeDraft::record_joined`]) go as one: the oldest change goes
+    /// whole, and the newest stays whole even when it alone is over the
+    /// cap (a generated scale). 0 keeps none.
+    pub fn set_history_cap(&mut self, cap: usize) {
+        self.cap = cap;
+        self.trim_history();
+        if let Some(other) = self.other.as_deref_mut() {
+            other.set_history_cap(cap);
+        }
+    }
+
+    fn trim_history(&mut self) {
+        let cap = self.cap;
+        // `undo` runs oldest first, each change a `false` then its joined
+        // `true`s; `redo` runs farthest first, each change its `true`s then
+        // its `false`.
+        trim(&mut self.undo, &mut self.joined_undo, cap, |j| {
+            j.iter()
+                .skip(1)
+                .position(|j| !*j)
+                .map_or(j.len(), |n| n + 1)
+        });
+        trim(&mut self.redo, &mut self.joined_redo, cap, |j| {
+            j.iter().position(|j| !*j).map_or(j.len(), |n| n + 1)
+        });
     }
 
     /// Makes an edit and records it (the same as [`ThemeDraft::record`],
@@ -844,6 +887,25 @@ impl ThemeDraft {
 
 /// A draft's overrides as raw tokens (their types from the tokens they
 /// override).
+/// Drops the oldest changes of a history until it holds at most `cap`
+/// edits, each change whole: `first` gives where the oldest change ends.
+/// The newest change stays, even over the cap, unless the cap is 0.
+fn trim(
+    edits: &mut Vec<TokenEdit>,
+    joined: &mut Vec<bool>,
+    cap: usize,
+    first: impl Fn(&[bool]) -> usize,
+) {
+    while edits.len() > cap {
+        let end = first(joined).min(edits.len());
+        if end == edits.len() && cap > 0 {
+            break;
+        }
+        edits.drain(..end);
+        joined.drain(..end.min(joined.len()));
+    }
+}
+
 fn own_tokens(overrides: &BTreeMap<String, Json>) -> BTreeMap<String, RawToken> {
     overrides
         .iter()
@@ -948,6 +1010,67 @@ mod tests {
         let c = d.edit(&t, "text.default", Some(json!("#eeeeee"))).unwrap();
         d.apply(c.unwrap());
         assert!(!d.can_redo());
+    }
+
+    #[test]
+    fn the_history_keeps_its_newest_edits_up_to_its_cap() {
+        let t = themes();
+        let mut d = ThemeDraft::new("pop-dark");
+        assert_eq!(d.history_cap(), DRAFT_HISTORY_CAP);
+        let grey = |n: usize| json!(format!("#{n:06x}"));
+        for n in 1..=DRAFT_HISTORY_CAP + 5 {
+            let e = d.edit(&t, "surface.panel", Some(grey(n))).unwrap();
+            d.apply(e.unwrap());
+        }
+        assert_eq!(
+            d.history().len(),
+            DRAFT_HISTORY_CAP,
+            "the oldest five dropped"
+        );
+        assert_eq!(d.history()[0].to, Some(grey(6)));
+        d.undo();
+        d.set_history_cap(2);
+        assert_eq!(d.history().len(), 2);
+        assert!(d.can_redo());
+        d.undo();
+        d.undo();
+        assert!(!d.can_undo());
+        assert_eq!(d.value("surface.panel"), Some(&grey(DRAFT_HISTORY_CAP + 2)));
+    }
+
+    #[test]
+    fn the_cap_drops_and_keeps_joined_edits_as_one_change() {
+        let edit = |path: &str| TokenEdit {
+            path: path.to_string(),
+            from: None,
+            to: Some(json!("#000000")),
+        };
+        let mut d = ThemeDraft::pair("pop-dark", "pop-light");
+        d.record(edit("a"));
+        d.record(edit("b"));
+        d.record(edit("g1"));
+        d.record_joined(edit("g2"));
+        d.record_joined(edit("g3"));
+        // A cap of two drops `a` and `b`, and keeps the newest change
+        // whole although it alone is over the cap.
+        d.set_history_cap(2);
+        assert_eq!(d.history().len(), 3);
+        assert_eq!(d.undo_group(), 3);
+        assert_eq!(d.counterpart().unwrap().history_cap(), 2);
+        // The redo list, farthest first: c, then the joined change.
+        d.set_history_cap(10);
+        d.record(edit("c"));
+        for _ in 0..4 {
+            d.undo();
+        }
+        assert_eq!(d.redo_group(), 3);
+        d.set_history_cap(3);
+        assert_eq!(d.redo_group(), 3);
+        assert_eq!(d.redo_edit().unwrap().path, "g1");
+        d.set_history_cap(1);
+        assert_eq!(d.redo_group(), 3, "the nearest change stays whole");
+        d.set_history_cap(0);
+        assert!(!d.can_undo() && !d.can_redo());
     }
 
     #[test]

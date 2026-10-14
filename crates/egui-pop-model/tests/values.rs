@@ -637,3 +637,39 @@ fn an_undo_never_writes_into_a_drag_still_going() {
     );
     assert_eq!(gain(&store), 2.0);
 }
+
+#[test]
+fn the_undo_history_keeps_its_newest_five_hundred_steps_or_the_hosts_cap() {
+    let mut store = mixer();
+    for i in 0..510 {
+        store
+            .set(Set::new(GAIN, to(f64::from(i) / 100.0), Origin::User))
+            .unwrap();
+    }
+    let steps = store.undo_steps();
+    assert_eq!(steps.len(), 500, "the oldest nine dropped");
+    // The oldest kept is the eleventh write: from 0.09 to 0.10.
+    assert_eq!(steps[0].changes[0].1, Value::Float(0.09));
+    assert_eq!(steps[499].changes[0].2, Value::Float(5.09));
+    assert_eq!(store.history_cap(), HISTORY_CAP);
+    assert_eq!(store.dropped_steps(), (9, 0));
+    // A host keeps fewer: the oldest go now, the redo list as well.
+    store.undo(&Origin::User).unwrap();
+    store.set_history_cap(3);
+    assert_eq!(store.history_cap(), 3);
+    assert_eq!(store.undo_steps().len(), 3);
+    assert_eq!(store.redo_steps().len(), 1);
+    assert_eq!(store.dropped_steps(), (505, 0));
+    assert_eq!(store.undo_steps()[2].changes[0].2, Value::Float(5.08));
+    for _ in 0..3 {
+        assert!(store.undo(&Origin::User).unwrap().is_some());
+    }
+    assert_eq!(store.undo(&Origin::User).unwrap(), None);
+    assert_eq!(gain(&store), 5.05);
+    // And new steps keep to it.
+    for v in [1.0, 2.0, 3.0, 4.0] {
+        store.set(Set::new(GAIN, to(v), Origin::User)).unwrap();
+    }
+    assert_eq!(store.undo_steps().len(), 3);
+    assert!(store.redo_steps().is_empty());
+}

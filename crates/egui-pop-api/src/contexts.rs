@@ -429,6 +429,8 @@ struct Projection {
     stamps: Vec<Vec<Entry>>,
     redo_stamps: Vec<Vec<Entry>>,
     undo_len: Option<usize>,
+    /// The store's dropped steps when last followed.
+    dropped: (u64, u64),
 }
 
 impl Projection {
@@ -1563,10 +1565,14 @@ pub fn mode_toggle(ui: &mut Ui, app: &AppHandle, mode: &FrameId) -> egui::Respon
 /// Follows the store's undo and redo histories: each new step is stamped
 /// with the place path it was made in.
 fn track_undo(app: &AppHandle, svc: &ContextService) {
-    let (undo, redo) = {
+    let (undo, redo, dropped) = {
         let store = app.store();
         let s = lock(&store);
-        (s.undo_steps().len(), s.redo_steps().len())
+        (
+            s.undo_steps().len(),
+            s.redo_steps().len(),
+            s.dropped_steps(),
+        )
     };
     let mut p = lock(&svc.projection);
     let here = p
@@ -1574,6 +1580,16 @@ fn track_undo(app: &AppHandle, svc: &ContextService) {
         .as_ref()
         .map(|s| s.places.clone())
         .unwrap_or_default();
+    // The steps the store's cap dropped went from the front of its lists:
+    // their stamps go the same way, so the others stay beside their steps.
+    let gone = |n: u64| usize::try_from(n).unwrap_or(usize::MAX);
+    let (undo_gone, redo_gone) = (gone(dropped.0 - p.dropped.0), gone(dropped.1 - p.dropped.1));
+    p.dropped = dropped;
+    let n = p.stamps.len().min(undo_gone);
+    p.stamps.drain(..n);
+    let n = p.redo_stamps.len().min(redo_gone);
+    p.redo_stamps.drain(..n);
+    p.undo_len = p.undo_len.map(|l| l.saturating_sub(undo_gone));
     if p.undo_len.is_some_and(|n| undo > n) && redo == 0 {
         p.redo_stamps.clear();
     }

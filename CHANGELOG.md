@@ -312,6 +312,16 @@ publishes.
 
 ### Changed
 
+- Undo histories are capped: the value store keeps its newest 500
+  steps (`values::HISTORY_CAP`), the theme editor's draft its newest
+  500 edits (`DRAFT_HISTORY_CAP`), the oldest dropped first, where they
+  grew without end; edits recorded together (a generated scale) are
+  dropped or kept as one change. A host sets another cap with
+  `Store::set_history_cap` (`ThemeDraft::set_history_cap` for a draft
+  and its pair); `Store::dropped_steps` counts what the cap dropped, so
+  the context stack drops the places it kept beside those steps and
+  "Undone in" keeps naming the right one.
+
 - Palette groups follow the classic docking conventions (egui-pop-api),
   as in Photoshop, Krita, GIMP, Qt docks and VS Code. The group's band
   has a menu with Close group, a menu entry rather than a button, run
