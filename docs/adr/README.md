@@ -18,5 +18,6 @@ after the fact except to mark it superseded by a later one.
 | [0010](0010-host.md) | egui-pop wraps the application's kernel through a host | 2026-10-12 |
 | [0011](0011-lifecycle-steps.md) | Every feature's life is reachable: observe, veto, replace, extend | 2026-10-12 |
 | [0012](0012-context-stack.md) | The context stack: owned by the kernel, projected by the interface ([analysis](0012-context-stack-analysis.md)) | 2026-10-13 |
+| [0014](0014-undo.md) | Undo: histories owned by the kernel, routed by focus, projected by the interface ([analysis](0014-undo-analysis.md)) | 2026-10-14 |
 
 Template: copy any of them; keep it to half a page.
