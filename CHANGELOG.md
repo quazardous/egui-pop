@@ -50,6 +50,12 @@ egui minor.
   disabled reason in the debug bridge's `fields` collector. Strings with
   their French. Guide: docs/inputs.md.
 
+- Tab order per focus scope (`core::tab`, `model::tab`): reading order
+  (rows, then left to right) whatever the drawing order, explicit
+  indices and groups, disabled fields skipped and read-only ones kept;
+  Tab cycles inside a modal scope, F6 and Shift+F6 move between panel
+  scopes, back to the stop focused there last.
+
 - A theme editor (`api::theme_editor`, `ThemeEditorPlugin`, drawn by
   `theme_editor::show` in any `Ui`): the application's theme edited
   live, its tokens grouped by role (surfaces, text, accent, states,

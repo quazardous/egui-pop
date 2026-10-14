@@ -22,7 +22,9 @@
 //! - [`doc`]: versioned documents and their migrations;
 //! - [`jobs`]: the host's background jobs, folded from its `job.*`
 //!   events, each with an estimated overall fraction;
-//! - [`order`]: plugin ordering.
+//! - [`order`]: plugin ordering;
+//! - [`tab`]: the Tab order of a focus scope (reading order, indices,
+//!   groups).
 
 pub mod clock;
 pub mod commands;
@@ -39,6 +41,7 @@ pub mod menus;
 pub mod order;
 pub mod panels;
 pub mod registry;
+pub mod tab;
 pub mod values;
 pub mod when;
 

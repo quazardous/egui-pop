@@ -31,7 +31,7 @@ use serde_json::{Value as Json, json};
 
 use crate::binding::SharedStore;
 use crate::state::lock;
-use crate::{a11y, fault, field, focus, overlay, theme};
+use crate::{a11y, fault, field, focus, overlay, tab, theme};
 
 /// An action a collector offers.
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -432,11 +432,12 @@ pub fn core_collectors() -> Vec<FnCollector> {
         ),
         FnCollector::new(
             "fields",
-            "Every input drawn in the last pass: its label, kind and state (modified, required, invalid with its message, disabled with its reason, read-only, pending).",
+            "Every input drawn in the last pass: its label, kind and state (modified, required, invalid with its message, disabled with its reason, read-only, pending), and the Tab scopes with their order.",
         )
         .snapshot(|ctx| {
             json!({
                 "fields": field::describe(ctx),
+                "tab_scopes": tab::scopes(ctx),
             })
         }),
         FnCollector::new("faults", "Panels and blocks showing an error card.")
