@@ -202,6 +202,37 @@ bar, AccessKit roles and values, and every finished change a step.
   evalexpr is AGPL-3.0 in its current releases and does far more;
   meval (0.2, 2017) is unmaintained. A small parser of about 150 lines is egui-pop's own.
 
+### Inputs and forms: what was checked (2026-10-14)
+
+The inputs were checked against what desktop and web toolkits put
+around a field (shadcn/ui's `InputGroup` and `Field`, Fluent's
+`SearchBox` and `Field`, Blueprint's `InputGroup` and `NumericInput`,
+Carbon's text input states, GTK's entry icons, Qt's `QLineEdit` clear
+button): a placeholder; leading and trailing icons, prefix, suffix and
+unit; a clear button; attached buttons, a dropdown and a split button;
+one state model for every field (modified, required, invalid with a
+message, disabled with a reason, read-only, pending) drawn from tokens
+with an icon per state, given to AccessKit and to agents; Tab order by
+reading order, explicit indices and groups, scopes cycling in a modal,
+F6 between panels. Licences are MIT or Apache-2.0 unless said.
+
+| Crate | Version, licence | What it has | Decision |
+|---|---|---|---|
+| egui's `TextEdit` | 0.36, MIT OR Apache-2.0 | The field: editing, selection, undo, IME, a hint text (AccessKit placeholder), its own prefix and suffix, a frame it can drop | **Wrap**: it is the field inside the decorated input, without its frame; the slots, buttons and states are drawn around it |
+| egui's focus | 0.36 | Tab in drawing order; a modal layer keeps the focus inside it | **Own** the order on top: reading order, indices and groups per scope, F6; egui's order stays for widgets outside a scope |
+| egui_form | 0.10, MIT, egui 0.36 | Validation through `garde` or `validator`: a field wrapper turning red with its message after it loses the focus, and the focus sent to the first invalid field on submit | **Ideas** for the formal form layout (errors after leaving a field, focus to the first error); its validation reports stay the application's, and it has no required or disabled state, no tokens, no Tab order |
+| egui-dropdown | 0.16, MIT, egui 0.36 | A text box with a list of matches under it | **Skip**: the dropdown chevron opens the input's choices; matching as one types is the tag input's and the palette's (the fuzzy matcher) |
+| egui_autocomplete | 15.0, MIT, egui 0.36 | Completion under a text box | **Skip**, for the same reason |
+| egui-typed-input | 0.1, MIT OR Apache-2.0, egui 0.32 to 0.33 | Parsed text inputs that refuse what does not parse | **Ideas** only (an older egui); a number field reads what a slider's typed entry reads |
+| egui-probe, egui_struct, egui_field_editor | 0.13 MIT OR Apache-2.0; 0.4 MIT (2024); 0.6 MIT | Forms derived from structs | **Skip**: forms come from value descriptors (as the `Form` dialog) |
+| kylig-ui, functora-egui, egui-antd | 0.3, 0.1, 0.1 (MIT; egui 0.36, 0.36, 0.34) | Kits with inputs, selects and buttons in their own style | **Skip**: young, styled outside the tokens, without field states or AccessKit for them |
+| egui-modal | 0.6, MIT, egui 0.30 | Modals | **Dead** (as in section 2.2): egui's `Modal` keeps the focus in its layer |
+| egui_path_picker | 0.2, **GPL-3.0** | A path field with a browse button | **Skip: GPL** cannot go into an MIT library; the path input with an attached Browse button covers it |
+
+**Decision: own** the decorated input, the field states and the Tab
+order, around egui's `TextEdit`; no dependency is added. No code was
+taken from any of them.
+
 ### Image tools: what was checked (2026-10-13)
 
 The image tools were checked against what photo editors have: a
