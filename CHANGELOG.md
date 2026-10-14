@@ -56,6 +56,13 @@ egui minor.
   `warnings` (`ContextService::hand_writes`: the value, how many
   times, the command running and its plugin). `contexts::is_stack_key`.
 
+- Two frames of the context stack that can be on together (a place and
+  a mode, modes of different groups) binding the same keys are
+  reported instead of the later one winning silently:
+  `contexts::frame_clashes`, a diagnostic at start
+  (`context-frame-key-clash`), the `contexts` collector, and the keymap
+  check of `egui-pop-test` (`keymap_problems`), which names the frames.
+
 - A debounced document writer (`egui_pop_core::persist::Writer`,
   about a second after the last change, at most five): the settings,
   the user's keymap and the layout (through `layout.save`) are written

@@ -560,6 +560,89 @@ impl fmt::Display for HandWrite {
     }
 }
 
+/// Two frames that can be on together (a place and a mode, two modes of
+/// different groups) binding the same keys to different commands
+/// (`Ctx::frame_keybinding`): while both are on, one wins (the later
+/// declared, between equals) and the other never fires.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct FrameClash {
+    pub keys: String,
+    /// The frame whose binding loses, and its command.
+    pub loser: (FrameId, String),
+    /// The frame whose binding wins, and its command.
+    pub winner: (FrameId, String),
+    /// Why it wins: `declared later`, `higher layer`, `more specific
+    /// clause`.
+    pub because: &'static str,
+}
+
+impl fmt::Display for FrameClash {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "`{}`: the frames `{}` and `{}` can be on together and both bind it; while they are, `{}` ({}) wins over `{}` ({}), {}",
+            self.keys,
+            self.loser.0,
+            self.winner.0,
+            self.winner.1,
+            self.winner.0,
+            self.loser.1,
+            self.loser.0,
+            self.because
+        )
+    }
+}
+
+/// The keymap's frame clashes (see [`FrameClash`]): the key conflicts
+/// (`AppHandle::key_conflicts`) between two frames' own bindings.
+pub fn frame_clashes(app: &AppHandle) -> Vec<FrameClash> {
+    let Some(registry) = with_owner(app, |c| c.registry()) else {
+        return Vec::new();
+    };
+    let frame_of = |clause: &str| {
+        registry
+            .iter()
+            .find(|f| f.clause() == clause)
+            .map(|f| f.id.clone())
+    };
+    app.key_conflicts()
+        .into_iter()
+        .filter_map(|(lose, win)| {
+            let (lf, wf) = (frame_of(&lose.when)?, frame_of(&win.when)?);
+            if lf == wf {
+                return None;
+            }
+            let because = if lose.layer != win.layer {
+                "higher layer"
+            } else {
+                "declared later"
+            };
+            Some(FrameClash {
+                keys: lose.keys.to_string(),
+                loser: (lf, lose.action.to_string()),
+                winner: (wf, win.action.to_string()),
+                because,
+            })
+        })
+        .collect()
+}
+
+/// Says each frame clash once, as a diagnostic (`context-frame-key-clash`).
+fn report_clashes(app: &AppHandle) {
+    let said: BTreeSet<String> = app
+        .diagnostics()
+        .into_iter()
+        .filter(|d| d.code == "context-frame-key-clash")
+        .map(|d| d.message)
+        .collect();
+    for c in frame_clashes(app) {
+        let text = c.to_string();
+        if !said.contains(&text) {
+            app.warn("context-frame-key-clash", None, &c.keys, text);
+        }
+    }
+}
+
 /// Records a write of a stack key by hand; the first one of a key is a
 /// diagnostic (`context-key-by-hand`). Nothing without the plugin.
 pub(crate) fn written_by_hand(app: &AppHandle, key: &str, value: &str) {
@@ -1414,11 +1497,17 @@ fn describe(app: &AppHandle) -> Json {
         .filter(|e| e.name.starts_with("context."))
         .collect();
     let hand_writes = svc.hand_writes();
-    let warnings: Vec<String> = hand_writes.iter().map(ToString::to_string).collect();
+    let clashes = frame_clashes(app);
+    let warnings: Vec<String> = hand_writes
+        .iter()
+        .map(ToString::to_string)
+        .chain(clashes.iter().map(ToString::to_string))
+        .collect();
     json!({
         "owner": owner,
         "warnings": warnings,
         "hand_writes": hand_writes,
+        "clashes": clashes,
         "host_owns": svc.custom.load(Ordering::Relaxed),
         "switching": svc.switching(),
         "projection": projection,
@@ -1613,7 +1702,7 @@ impl Plugin for ContextsPlugin {
         ctx.collector(
             FnCollector::new(
                 "contexts",
-                "The context stack: the owner's state (places, modes, revision), its holds and frames; the projection (its key, the context keys it set, the layouts and view states kept); the last context events; warnings: the stack's own keys set by hand (`hand_writes`). `request` asks for a transition as an agent; `hold` and `release`.",
+                "The context stack: the owner's state (places, modes, revision), its holds and frames; the projection (its key, the context keys it set, the layouts and view states kept); the last context events; warnings: the stack's own keys set by hand (`hand_writes`), frames that can be on together binding the same keys (`clashes`). `request` asks for a transition as an agent; `hold` and `release`.",
             )
             .snapshot(move |_| match w1.get() {
                 Ok(app) => describe(&app),
@@ -1652,20 +1741,24 @@ impl Plugin for ContextsPlugin {
             })
             .args(json!({ "token": 1 })),
         )?;
-        ctx.on(On::Started, |app, _| start(app))
-            .on(On::Pass, |app, _| pass(app))
-            .on(On::Rebuilt, |app, _| {
-                if let (Some(svc), Some(reg)) =
-                    (app.service(&CONTEXTS), with_owner(app, |c| c.registry()))
-                {
-                    lock(&svc.projection).registry = reg;
-                }
-            })
-            .on(On::Disconnected, |app, ev| {
-                if let Lifecycle::Disconnected(p) = ev {
-                    with_owner(app, |c| c.remove_owner(&OwnerId::from(p)));
-                }
-            });
+        ctx.on(On::Started, |app, _| {
+            start(app);
+            report_clashes(app);
+        })
+        .on(On::Pass, |app, _| pass(app))
+        .on(On::Rebuilt, |app, _| {
+            if let (Some(svc), Some(reg)) =
+                (app.service(&CONTEXTS), with_owner(app, |c| c.registry()))
+            {
+                lock(&svc.projection).registry = reg;
+            }
+            report_clashes(app);
+        })
+        .on(On::Disconnected, |app, ev| {
+            if let Lifecycle::Disconnected(p) = ev {
+                with_owner(app, |c| c.remove_owner(&OwnerId::from(p)));
+            }
+        });
         ctx.after(STEP_UNDO, |app, _, result| undone(app, false, result))
             .after(STEP_REDO, |app, _, result| undone(app, true, result));
         Ok(())

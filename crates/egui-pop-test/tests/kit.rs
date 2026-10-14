@@ -128,3 +128,93 @@ fn a_plugin_runs_with_the_defaults_and_its_keymap_is_checked() {
     );
     egui_pop_test::assert_keymap_clean(clean.state());
 }
+
+/// Two frames of the context stack that can be on together, each
+/// binding Z.
+struct FrameClash;
+
+impl egui_pop_api::Plugin for FrameClash {
+    fn id(&self) -> egui_pop_model::ids::PluginId {
+        egui_pop_model::ids::PluginId::from_static("frame_clash")
+    }
+
+    fn requires(&self) -> Vec<egui_pop_model::ids::PluginId> {
+        vec![egui_pop_api::contexts::PLUGIN]
+    }
+
+    fn connect(
+        &mut self,
+        ctx: &mut egui_pop_api::Ctx<'_>,
+    ) -> Result<(), egui_pop_api::PluginError> {
+        use egui_pop_api::contexts::FrameSpec;
+        use egui_pop_model::commands::CommandSpec;
+        use egui_pop_model::ids::{CommandId, FrameId, GroupId};
+        let culling = FrameSpec::mode(
+            FrameId::from_static("clash.culling"),
+            GroupId::from_static("orientation"),
+            "Culling",
+        );
+        let review = FrameSpec::mode(
+            FrameId::from_static("clash.review"),
+            GroupId::from_static("orientation"),
+            "Review",
+        );
+        let compare = FrameSpec::mode(
+            FrameId::from_static("clash.compare"),
+            GroupId::from_static("compare"),
+            "Compare",
+        );
+        for (id, title) in [
+            ("clash.pick", "Pick"),
+            ("clash.approve", "Approve"),
+            ("clash.zoom", "Zoom"),
+        ] {
+            ctx.command(
+                CommandSpec::new(CommandId::from_static(id), title, "Clash"),
+                |_| Ok(serde_json::Value::Null),
+            )?;
+        }
+        // Culling and review are one group: their Z never compete. Compare
+        // is another group: on with either, its Z takes theirs.
+        ctx.frame_keybinding(&culling, "Z", CommandId::from_static("clash.pick"))?
+            .frame_keybinding(&review, "Z", CommandId::from_static("clash.approve"))?
+            .frame_keybinding(&compare, "Z", CommandId::from_static("clash.zoom"))?;
+        ctx.frame(culling)?.frame(review)?.frame(compare)?;
+        Ok(())
+    }
+}
+
+#[test]
+fn frames_binding_one_key_while_both_on_are_a_keymap_problem() {
+    let mut h = egui_pop_test::app(
+        egui_pop_api::App::builder()
+            .plugins(egui_pop_api::DefaultPlugins)
+            .plugin(egui_pop_api::contexts::ContextsPlugin::default())
+            .plugin(FrameClash),
+        egui::vec2(800.0, 500.0),
+    );
+    h.run();
+    let problems = egui_pop_test::keymap_problems(h.state());
+    assert_eq!(problems.len(), 2, "{problems:?}");
+    for (mode, command) in [
+        ("clash.culling", "clash.pick"),
+        ("clash.review", "clash.approve"),
+    ] {
+        assert!(
+            problems.iter().any(|p| p.contains(mode)
+                && p.contains("clash.compare")
+                && p.contains(command)
+                && p.contains("can be on together")),
+            "{problems:?}"
+        );
+    }
+    // Said at start too, as a diagnostic, without waiting for a test.
+    let said = h
+        .state()
+        .handle()
+        .diagnostics()
+        .into_iter()
+        .filter(|d| d.code == "context-frame-key-clash")
+        .count();
+    assert_eq!(said, 2);
+}
