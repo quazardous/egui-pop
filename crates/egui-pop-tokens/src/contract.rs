@@ -231,6 +231,44 @@ pub const CONTRACT: &[Required] = &[
     comp("slider.track", "color", "the slider's rail"),
     comp("slider.fill", "color", "the rail up to the value"),
     comp("slider.thumb", "color", "the handle"),
+    comp("field.background", "color", "an input field's fill"),
+    comp(
+        "field.background-read-only",
+        "color",
+        "a read-only input field's fill",
+    ),
+    comp("field.text", "color", "an input field's value"),
+    comp(
+        "field.placeholder",
+        "color",
+        "the hint an empty input field shows",
+    ),
+    comp("field.border", "color", "an input field's outline"),
+    comp(
+        "field.border-hover",
+        "color",
+        "an input field's outline under the pointer",
+    ),
+    comp(
+        "field.modified",
+        "color",
+        "the edge and marker of a field changed from its saved or default value",
+    ),
+    comp(
+        "field.required",
+        "color",
+        "the marker of a field that must be given",
+    ),
+    comp(
+        "field.invalid",
+        "color",
+        "the edge, icon and message of a refused value",
+    ),
+    comp(
+        "field.pending",
+        "color",
+        "the edge and icon of a value being checked",
+    ),
     comp(
         "menu.item.background-hover",
         "color",

@@ -15,6 +15,8 @@
 //!   focus restore);
 //! - [`band`]: the header band a movable dialog or a palette is dragged
 //!   by;
+//! - [`field`]: a field's state (modified, required, invalid, disabled
+//!   with a reason, read-only, pending) drawn, announced and reported;
 //! - [`param`]: the editor a value descriptor calls for, in the three
 //!   binding modes;
 //! - [`slider`]: darktable-style sliders (soft and hard range, fine
@@ -43,6 +45,7 @@ pub mod band;
 pub mod binding;
 pub mod debug;
 pub mod fault;
+pub mod field;
 pub mod focus;
 pub mod focus_mode;
 pub mod frame;

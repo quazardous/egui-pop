@@ -9,6 +9,8 @@
 //! - [`commands`]: every action named, run the same way from anywhere;
 //! - [`context`]: the context stack (places and modes, ADR 0012): its
 //!   frames, its state, a pure `apply` and `restore`, its documents;
+//! - [`field`]: a field's state (modified, required, invalid, disabled
+//!   with a reason, read-only, pending);
 //! - [`fuzzy`]: fuzzy matching and ranking for search fields;
 //! - [`keymap`]: keys bound to commands in layers, resolved by focus
 //!   depth, with removal, unbinding and a resolution trace;
@@ -27,6 +29,7 @@ pub mod commands;
 pub mod context;
 pub mod diagnostics;
 pub mod doc;
+pub mod field;
 pub mod fuzzy;
 pub mod ids;
 pub mod jobs;

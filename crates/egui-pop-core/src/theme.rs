@@ -168,6 +168,22 @@ pub struct SliderTokens {
     pub thumb: Color32,
 }
 
+/// `field.*`: input fields and the states every field shows.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct FieldTokens {
+    pub background: Color32,
+    pub background_read_only: Color32,
+    pub text: Color32,
+    pub placeholder: Color32,
+    pub border: Color32,
+    pub border_hover: Color32,
+    pub modified: Color32,
+    pub required: Color32,
+    pub invalid: Color32,
+    pub pending: Color32,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub struct MenuItemTokens {
@@ -271,6 +287,7 @@ pub struct Tokens {
     pub motion: MotionTokens,
     pub button: ButtonTokens,
     pub slider: SliderTokens,
+    pub field: FieldTokens,
     pub menu_item: MenuItemTokens,
     pub dialog: DialogTokens,
     pub toast: ToastTokens,
@@ -382,6 +399,18 @@ impl Tokens {
                 track: c("slider.track"),
                 fill: c("slider.fill"),
                 thumb: c("slider.thumb"),
+            },
+            field: FieldTokens {
+                background: c("field.background"),
+                background_read_only: c("field.background-read-only"),
+                text: c("field.text"),
+                placeholder: c("field.placeholder"),
+                border: c("field.border"),
+                border_hover: c("field.border-hover"),
+                modified: c("field.modified"),
+                required: c("field.required"),
+                invalid: c("field.invalid"),
+                pending: c("field.pending"),
             },
             menu_item: MenuItemTokens {
                 background_hover: c("menu.item.background-hover"),

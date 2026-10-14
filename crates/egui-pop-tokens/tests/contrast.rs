@@ -66,9 +66,10 @@ fn a_theme_with_a_poor_pair_fails_the_check() {
     let failures = contrast::check(&tokens, Level::Normal);
     assert!(!failures.is_empty());
     assert!(
-        // The muted text, and the editor tokens aliasing it.
+        // The muted text, and the editor and field tokens aliasing it.
         failures.iter().all(|f| f.pair.foreground.contains("muted")
-            || ["editor.line-number", "syntax.comment"].contains(&f.pair.foreground)),
+            || ["editor.line-number", "syntax.comment", "field.placeholder"]
+                .contains(&f.pair.foreground)),
         "{failures:?}"
     );
     assert!(

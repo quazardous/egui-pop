@@ -40,6 +40,16 @@ egui minor.
   `AppHandle::save_later`, `flush_documents`, `pending_documents` and
   `persist` for a plugin's own documents.
 
+- Field states (`model::field::FieldState`, drawn by `core::field`): one
+  model for every input, modified (against the saved or the default
+  value, with "reset to default"), required, invalid with a message,
+  disabled with a reason, read-only, pending. Each state has an edge
+  colour from the new `field.*` tokens and a marker icon, never colour
+  alone; assistive technologies get required, invalid, disabled with
+  its reason, read-only and busy; agents read every field's state and
+  disabled reason in the debug bridge's `fields` collector. Strings with
+  their French. Guide: docs/inputs.md.
+
 - A theme editor (`api::theme_editor`, `ThemeEditorPlugin`, drawn by
   `theme_editor::show` in any `Ui`): the application's theme edited
   live, its tokens grouped by role (surfaces, text, accent, states,

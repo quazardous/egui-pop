@@ -89,6 +89,9 @@ Not read yet: references inside composite values, JSON Pointer `$ref`,
 
 3. **Component**: one component's tokens, each an alias of a system token:
    `button.*`, `slider.{track, fill, thumb}`,
+   `field.*` (input fields: their fill, read-only fill, text,
+   placeholder and borders, and the colour of each field state:
+   `modified`, `required`, `invalid`, `pending`),
    `progress.{track, fill, height, line, ring}` (bars, rings, meters and
    spinners), `skeleton.{fill, shimmer}`, `menu.item.*`, `dialog.*`, `palette.*`,
    `toast.*`, `editor.*` and `syntax.*` (one colour per kind of code:

@@ -235,6 +235,20 @@
     "fill": {"$value": "{accent.default}"},
     "thumb": {"$value": "{text.strong}"}
   },
+  "field": {
+    "$description": "Input fields: text, numbers, paths, search, and the states every field shows (sliders included).",
+    "$type": "color",
+    "background": {"$value": "{surface.sunken}"},
+    "background-read-only": {"$value": "{surface.panel}", "$description": "A read-only field: selectable, not editable."},
+    "text": {"$value": "{text.default}"},
+    "placeholder": {"$value": "{text.muted}", "$description": "The hint an empty field shows."},
+    "border": {"$value": "{border.default}"},
+    "border-hover": {"$value": "{border.strong}"},
+    "modified": {"$value": "{accent.default}", "$description": "Changed from the saved or default value: an edge and a dot."},
+    "required": {"$value": "{warning}", "$description": "Must be given: an asterisk by the field."},
+    "invalid": {"$value": "{danger}", "$description": "A refused value: an edge, an icon and its message."},
+    "pending": {"$value": "{info}", "$description": "A value being checked: an edge and a clock."}
+  },
   "menu": {
     "item": {
       "$type": "color",
