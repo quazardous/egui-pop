@@ -50,6 +50,11 @@ egui minor.
   disabled reason in the debug bridge's `fields` collector. Strings with
   their French. Guide: docs/inputs.md.
 
+- Sliders and range sliders take a field state (`.state(..)`): the
+  edge and markers on the bar; a read-only slider keeps the focus and
+  refuses every change, a disabled one is greyed, skipped by Tab and
+  says its reason on hover. Without a state they are unchanged.
+
 - Tab order per focus scope (`core::tab`, `model::tab`): reading order
   (rows, then left to right) whatever the drawing order, explicit
   indices and groups, disabled fields skipped and read-only ones kept;

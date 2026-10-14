@@ -15,8 +15,8 @@ use egui::{Rect, Response, Sense, Ui, Widget, WidgetInfo, pos2, vec2};
 
 use super::{
     Cause, Change, Drag, Hook, SliderOutput, Spec, Thumb, Verdict, access, decide, drag, gestures,
-    keep_auto_ids, keys_wheel_access, modifier_scale, open_typed_entry, paint_bar, spec_builders,
-    typed_entry, typing_id,
+    keep_auto_ids, keys_wheel_access, modifier_scale, open_typed_entry, paint_bar, paint_state,
+    spec_builders, state_of, typed_entry, typing_id,
 };
 use crate::strings::{self, SLIDER_MAXIMUM, SLIDER_MINIMUM};
 
@@ -65,6 +65,18 @@ impl<'a> RangeSlider<'a> {
 
     /// Draws the range slider; says what changed.
     pub fn show(self, ui: &mut Ui) -> SliderOutput {
+        if self.spec.state.is_disabled() {
+            return ui
+                .scope(|ui| {
+                    ui.disable();
+                    self.draw(ui)
+                })
+                .inner;
+        }
+        self.draw(ui)
+    }
+
+    fn draw(self, ui: &mut Ui) -> SliderOutput {
         let RangeSlider {
             low,
             high,
@@ -161,7 +173,10 @@ impl<'a> RangeSlider<'a> {
                     apply(change(*value, to, cause, true), value);
                 }
             }
-            if response.has_focus() && ui.input(|i| i.key_pressed(g.typed_entry)) {
+            if response.has_focus()
+                && spec.state.is_editable()
+                && ui.input(|i| i.key_pressed(g.typed_entry))
+            {
                 open_typed_entry(ui, tid, spec.number(ui.ctx(), *value));
             }
         }
@@ -199,6 +214,7 @@ impl<'a> RangeSlider<'a> {
             );
             let past = *low < spec.soft.0 || *high > spec.soft.1;
             paint_bar(ui, bar, &[&lo_r, &hi_r], &spec, &[*low, *high], &text, past);
+            paint_state(ui, bar, &spec);
         }
         let enabled = ui.is_enabled();
         for (r, v, before, key) in [
@@ -213,8 +229,10 @@ impl<'a> RangeSlider<'a> {
         }
         access(ui, lo_r.id, &spec, *low, (spec.soft.0, *high));
         access(ui, hi_r.id, &spec, *high, (*low, spec.soft.1));
+        state_of(ui, &[&lo_r, &hi_r], &spec, "range");
+        let response = crate::field::hover(ui, &(lo_r | hi_r), &spec.state);
         SliderOutput {
-            response: lo_r | hi_r,
+            response,
             changes,
             quad: None,
         }

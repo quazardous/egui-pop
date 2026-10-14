@@ -80,6 +80,7 @@ use egui::{
 };
 use egui_pop_model::values::{Descriptor, Type};
 
+use crate::field::FieldState;
 use crate::icon::Icon;
 use crate::theme::Tokens;
 
@@ -222,8 +223,12 @@ impl fmt::Debug for Hook<'_> {
     }
 }
 
-/// The change as the hook leaves it; `None` when vetoed.
+/// The change as the hook leaves it; `None` when vetoed, or when the
+/// field's state refuses changes (read-only, disabled).
 fn decide(hook: &mut Option<Hook<'_>>, change: Change, spec: &Spec) -> Option<Change> {
+    if !spec.state.is_editable() {
+        return None;
+    }
     match hook.as_mut().map_or(Verdict::Go, |h| (h.0)(&change)) {
         Verdict::Go => Some(change),
         Verdict::Veto => None,
@@ -277,6 +282,8 @@ pub(crate) struct Spec {
     pub signed: bool,
     pub curve: Curve,
     pub gradient: Option<Gradient>,
+    /// The field's state ([`crate::field`]).
+    pub state: FieldState,
 }
 
 impl Spec {
@@ -296,6 +303,7 @@ impl Spec {
             signed: false,
             curve: Curve::Linear,
             gradient: None,
+            state: FieldState::default(),
         }
     }
 
@@ -483,6 +491,15 @@ macro_rules! spec_builders {
             self.spec.gradient = Some(gradient);
             self
         }
+
+        /// The field's state, drawn and announced as every field's
+        /// ([`crate::field`]): a read-only slider takes the focus and
+        /// refuses changes, a disabled one is greyed and skipped by Tab,
+        /// with its reason as the tooltip.
+        pub fn state(mut self, state: $crate::field::FieldState) -> Self {
+            self.spec.state = state;
+            self
+        }
     };
 }
 pub(crate) use spec_builders;
@@ -565,6 +582,18 @@ impl<'a> Slider<'a> {
 
     /// Draws the slider; says what changed.
     pub fn show(self, ui: &mut Ui) -> SliderOutput {
+        if self.spec.state.is_disabled() {
+            return ui
+                .scope(|ui| {
+                    ui.disable();
+                    self.draw(ui)
+                })
+                .inner;
+        }
+        self.draw(ui)
+    }
+
+    fn draw(self, ui: &mut Ui) -> SliderOutput {
         let Slider {
             value,
             spec,
@@ -652,12 +681,16 @@ impl<'a> Slider<'a> {
                     apply(change(*value, to, cause, true), value);
                 }
             }
-            if response.has_focus() && ui.input(|i| i.key_pressed(g.typed_entry)) {
+            if response.has_focus()
+                && spec.state.is_editable()
+                && ui.input(|i| i.key_pressed(g.typed_entry))
+            {
                 open_typed_entry(ui, typing_id, spec.number(ui.ctx(), *value));
             }
             let text = spec.text(ui.ctx(), *value);
             let past = *value < spec.soft.0 || *value > spec.soft.1;
             paint_bar(ui, bar, &[&response], &spec, &[*value], &text, past);
+            paint_state(ui, bar, &spec);
         }
         if *value != before {
             response.mark_changed();
@@ -666,6 +699,8 @@ impl<'a> Slider<'a> {
         let v = *value;
         response.widget_info(|| WidgetInfo::slider(enabled, v, &spec.label));
         access(ui, response.id, &spec, v, spec.soft);
+        state_of(ui, &[&response], &spec, "slider");
+        let response = crate::field::hover(ui, &response, &spec.state);
         SliderOutput {
             response,
             changes,
@@ -1118,6 +1153,50 @@ pub(crate) fn paint_bar(
             t.text.default
         },
     );
+}
+
+/// Paints the field state on the bar: the edge, and the markers after
+/// the label.
+pub(crate) fn paint_state(ui: &Ui, bar: Rect, spec: &Spec) {
+    if spec.state.is_plain() || !ui.is_rect_visible(bar) {
+        return;
+    }
+    crate::field::paint_edge(ui, bar, &spec.state);
+    let t = Tokens::of(ui.ctx());
+    let font = egui::TextStyle::Button.resolve(ui.style());
+    let label = ui
+        .painter()
+        .layout_no_wrap(spec.label.clone(), font.clone(), t.text.default)
+        .size()
+        .x;
+    let side = font.size * 0.8;
+    crate::field::paint_markers(
+        ui,
+        pos2(bar.left() + t.space.s + label + t.space.xs, bar.center().y),
+        side,
+        t.space.xs / 2.0,
+        &spec.state,
+    );
+}
+
+/// The field state given to assistive technologies, reported to agents,
+/// and the bar's place in the Tab order (one group for a range's two
+/// thumbs).
+pub(crate) fn state_of(ui: &Ui, responses: &[&Response], spec: &Spec, kind: &str) {
+    let group = format!("{:?}", responses.first().map(|r| r.id));
+    for r in responses {
+        crate::field::access(ui.ctx(), r.id, &spec.state);
+        crate::tab::stop(
+            ui,
+            r,
+            crate::tab::TabStop::new()
+                .group(group.clone())
+                .skip(!spec.state.is_focusable()),
+        );
+    }
+    if let Some(r) = responses.first() {
+        crate::field::record(ui.ctx(), r.id, &spec.label, kind, &spec.state);
+    }
 }
 
 /// The AccessKit node beyond egui's slider info: the range, the step,
