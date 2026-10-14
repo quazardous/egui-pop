@@ -25,6 +25,10 @@ devtools; every feature's moments reachable as steps (ADR 0011).
   it.
 - [Plugins, commands and steps](plugins.md): what a plugin registers,
   commands and the host, zones and blocks, hooks, steps.
+- [The context stack](contexts.md): places (a drill-down and its
+  breadcrumb) and modes (global states and their chips) owned by the
+  kernel and projected by the interface, kernel state and view state,
+  how a plugin reacts.
 - [The workbench](workbench.md): panels in areas with placement rules,
   auxiliary windows, arrangements, strips and indicators, the window's
   own frame, scale and the interface zoom, the keymap at run time, hooks

@@ -23,6 +23,9 @@ pub mod tips {}
 #[doc = include_str!("../../../docs/plugins.md")]
 pub mod plugins {}
 
+#[doc = include_str!("../../../docs/contexts.md")]
+pub mod contexts {}
+
 #[doc = include_str!("../../../docs/viewport.md")]
 pub mod viewport {}
 
