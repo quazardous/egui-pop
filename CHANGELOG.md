@@ -441,6 +441,11 @@ publishes.
   of a dropped `ViewportState` at the next paint of any viewport on the
   same renderer, and a tile replaced before its first paint is no
   longer bound and kept.
+- An undo or a redo can no longer write into a drag the user still has
+  in progress: the value store refuses it (`Refused::Held`) while a
+  gesture holds a value the step would change, the user's own gesture
+  included, as it already did for another origin's.
+
 - The key extractor reads a path-qualified constructor (egui-pop-i18n):
   a pattern such as `Message::new` now takes `app_core::Message::new(…)`,
   `crate::strings::Message::new(…)` and `::app::Message::new(…)`, the
