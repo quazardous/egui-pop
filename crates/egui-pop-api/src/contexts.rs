@@ -132,9 +132,12 @@ pub const CMD_HOLD: CommandId = CommandId::from_static("context.hold");
 /// Releases a hold (`token`).
 pub const CMD_RELEASE: CommandId = CommandId::from_static("context.release");
 
-/// The document `LocalContexts` writes the stack to.
+/// The document `LocalContexts` writes the stack to, beside the
+/// layout's (`workspaces/photos/context` when the host keeps the layout
+/// in `workspaces/photos/layout`; see [`documents`]).
 pub const CONTEXT_DOCUMENT: &str = "context";
-/// The document the projection writes its layouts and view states to.
+/// The document the projection writes its layouts and view states to,
+/// beside the layout's too.
 pub const VIEW_DOCUMENT: &str = "view";
 
 const NO_STACK: &str = "no context stack: the ContextsPlugin is not connected";
@@ -470,6 +473,9 @@ pub struct ContextService {
     pending: Mutex<Vec<(Pending, Origin)>>,
     /// The stack's keys written by hand, by key.
     hand_writes: Mutex<Vec<HandWrite>>,
+    /// The documents the stack and its view are kept in (see
+    /// [`documents`]), as read at start or at the last [`reload`].
+    documents: Mutex<(String, String)>,
     /// The root crumb's title (`None`: "Home", translated).
     root: Option<String>,
     valid: Option<Validator>,
@@ -1039,7 +1045,10 @@ fn save_view(app: &AppHandle, doc: &ViewDoc) {
     }
     match model::view_schema().save(doc) {
         Ok(text) => {
-            app.save_later(VIEW_DOCUMENT, text);
+            let document = app
+                .service(&CONTEXTS)
+                .map_or_else(|| VIEW_DOCUMENT.into(), |s| lock(&s.documents).1.clone());
+            app.save_later(&document, text);
         }
         Err(e) => log::warn!(target: "egui_pop", "the view document: {e}"),
     }
@@ -1405,12 +1414,57 @@ fn pass(app: &AppHandle) {
     track_undo(app, &svc);
 }
 
+/// The documents the stack (`LocalContexts`) and its view are kept in:
+/// [`CONTEXT_DOCUMENT`] and [`VIEW_DOCUMENT`] beside the layout's
+/// document as the host names it (`Host::layout_document`), so a host
+/// keeping a layout per workspace keeps a stack per workspace too; at the
+/// top when it names none.
+pub fn documents(app: &AppHandle) -> (String, String) {
+    let layout = app.with_host_mut(|h| h.layout_document()).flatten();
+    match layout.as_deref().and_then(|l| l.rsplit_once('/')) {
+        Some((dir, _)) => (
+            format!("{dir}/{CONTEXT_DOCUMENT}"),
+            format!("{dir}/{VIEW_DOCUMENT}"),
+        ),
+        None => (CONTEXT_DOCUMENT.into(), VIEW_DOCUMENT.into()),
+    }
+}
+
+/// Reads the stack and its view again from [`documents`], as at start:
+/// after the host changed where they are (another workspace opened in
+/// the same window). What was shown is forgotten (its view was written
+/// already); what the documents hold, checked against today's frames,
+/// is projected.
+pub fn reload(app: &AppHandle) {
+    let Some(svc) = app.service(&CONTEXTS) else {
+        return;
+    };
+    {
+        let mut p = lock(&svc.projection);
+        p.applied = None;
+        p.layouts.clear();
+        p.views.clear();
+    }
+    if !svc.custom.load(Ordering::Relaxed) {
+        let mut l = lock(&svc.local);
+        // Without a document the stack starts empty, its revision kept.
+        let rev = l.state.rev;
+        l.state = State {
+            rev,
+            ..State::default()
+        };
+    }
+    start(app);
+}
+
 /// At start: the owner's stack restored (`LocalContexts` from its
 /// document), the view document loaded, the first projection.
 fn start(app: &AppHandle) {
     let Some(svc) = app.service(&CONTEXTS) else {
         return;
     };
+    let (context_document, view_document) = documents(app);
+    *lock(&svc.documents) = (context_document.clone(), view_document.clone());
     let custom = app
         .with_host_mut(|h| h.contexts().is_some())
         .unwrap_or(false);
@@ -1423,7 +1477,7 @@ fn start(app: &AppHandle) {
         let valid = svc.valid.clone();
         let (restored, events) = {
             let mut l = lock(&svc.local);
-            l.set_persist(Some(persist.clone()), CONTEXT_DOCUMENT);
+            l.set_persist(Some(persist.clone()), &context_document);
             let r = match &valid {
                 Some(v) => l.restore(&**v),
                 None => l.restore(&|_, _| None),
@@ -1452,10 +1506,10 @@ fn start(app: &AppHandle) {
             Err(e) => log::warn!(target: "egui_pop", "the context stack could not be read: {e}"),
         }
     }
-    match persist.load::<ViewDoc>(VIEW_DOCUMENT, &model::view_schema()) {
+    match persist.load::<ViewDoc>(&view_document, &model::view_schema()) {
         Ok(Some(read)) => {
             if let Ok(text) = model::view_schema().save(&read.value) {
-                app.saved_already(VIEW_DOCUMENT, &text);
+                app.saved_already(&view_document, &text);
             }
             let mut p = lock(&svc.projection);
             p.layouts = read.value.layouts;
@@ -1580,6 +1634,7 @@ impl Plugin for ContextsPlugin {
                 custom: AtomicBool::new(false),
                 pending: Mutex::new(Vec::new()),
                 hand_writes: Mutex::new(Vec::new()),
+                documents: Mutex::new((CONTEXT_DOCUMENT.into(), VIEW_DOCUMENT.into())),
                 root: self.root.clone(),
                 valid: self.valid.clone(),
             },

@@ -141,6 +141,13 @@ the view state, the layout, the settings and the keymap a second after
 they change (the debounced writer of `egui_pop_core::persist`). A crash
 loses at most that second; a vetoed exit loses nothing.
 
+The `context` and `view` documents sit beside the layout's, as the
+host names it (`Host::layout_document`): a host keeping a layout per
+workspace (`workspaces/photos/layout`) keeps a stack and a view per
+workspace too (`workspaces/photos/context`, `.../view`;
+`contexts::documents`). When the host opens another workspace in the
+same window, `contexts::reload` reads them again.
+
 At start the saved stack comes back against today's frames: an
 unknown or transient frame, or a place whose payload is gone
 (`ContextsPlugin::valid`), is dropped, a place with the places under

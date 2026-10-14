@@ -680,3 +680,78 @@ fn a_plugin_setting_the_stacks_keys_by_hand_is_reported() {
     assert_eq!(key(&h, "place"), "demo.album");
     assert_eq!(svc.hand_writes().len(), 2);
 }
+
+/// A host keeping one layout per workspace.
+struct Workspaces {
+    inner: egui_pop_api::host::LocalHost,
+    document: std::sync::Arc<std::sync::Mutex<Option<String>>>,
+}
+
+impl egui_pop_api::host::Host for Workspaces {
+    fn dispatch(&mut self, d: &egui_pop_api::host::Dispatch<'_>) -> egui_pop_api::host::Reply {
+        self.inner.dispatch(d)
+    }
+    fn journal(&self) -> Option<&egui_pop_api::host::Journal> {
+        self.inner.journal()
+    }
+    fn journal_mut(&mut self) -> Option<&mut egui_pop_api::host::Journal> {
+        self.inner.journal_mut()
+    }
+    fn store(&self) -> egui_pop_core::binding::SharedStore {
+        self.inner.store()
+    }
+    fn set_waker(&mut self, waker: egui_pop_api::host::Waker) {
+        self.inner.set_waker(waker);
+    }
+    fn layout_document(&self) -> Option<String> {
+        self.document.lock().unwrap().clone()
+    }
+}
+
+#[test]
+fn each_workspace_keeps_its_own_stack_beside_its_layout() {
+    let dir = std::env::temp_dir().join(format!("egui-pop-contexts-ws-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let document = std::sync::Arc::new(std::sync::Mutex::new(Some(
+        "workspaces/a/layout".to_string(),
+    )));
+    let host = || Workspaces {
+        inner: egui_pop_api::host::LocalHost::default(),
+        document: document.clone(),
+    };
+    let mut h = harness(builder().persist(&dir).host(host()));
+    let app = h.state().handle().clone();
+    assert_eq!(
+        contexts::documents(&app),
+        (
+            "workspaces/a/context".to_string(),
+            "workspaces/a/view".to_string()
+        )
+    );
+    assert!(contexts::enter(&app, ALBUM, json!("a")).ok());
+    assert!(contexts::set_mode(&app, CULLING).ok());
+    h.run();
+    assert!(dir.join("workspaces/a/context.json").exists());
+    // Another workspace in the same window: its own stack, empty.
+    *document.lock().unwrap() = Some("workspaces/b/layout".into());
+    contexts::reload(&app);
+    h.run();
+    assert_eq!(key(&h, "place"), "root");
+    assert_eq!(key(&h, "mode.orientation"), "");
+    assert!(contexts::enter(&app, PHOTO, json!(7)).ok());
+    h.run();
+    h.state().save().unwrap();
+    // Back to the first: its stack as it was left.
+    *document.lock().unwrap() = Some("workspaces/a/layout".into());
+    contexts::reload(&app);
+    h.run();
+    assert_eq!(key(&h, "place"), "demo.album");
+    assert_eq!(key(&h, "mode.orientation"), "demo.culling");
+    drop(h);
+    // And after a restart, each its own.
+    *document.lock().unwrap() = Some("workspaces/b/layout".into());
+    let h = harness(builder().persist(&dir).host(host()));
+    assert_eq!(key(&h, "place"), "demo.photo");
+    assert_eq!(key(&h, "mode.orientation"), "");
+    let _ = std::fs::remove_dir_all(&dir);
+}

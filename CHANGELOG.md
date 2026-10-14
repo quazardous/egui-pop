@@ -1010,6 +1010,12 @@ time. On egui 0.36.
   (`context-frame-key-clash`), the `contexts` collector, and the keymap
   check of `egui-pop-test` (`keymap_problems`), which names the frames.
 
+- The context stack's `context` and `view` documents are kept beside
+  the layout's document as the host names it, so a host with a layout
+  per workspace has a stack per workspace (`contexts::documents`);
+  `contexts::reload` reads them again when the host opens another
+  workspace in the same window.
+
 - A debounced document writer (`egui_pop_core::persist::Writer`,
   about a second after the last change, at most five): the settings,
   the user's keymap and the layout (through `layout.save`) are written
