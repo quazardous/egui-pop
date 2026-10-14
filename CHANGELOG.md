@@ -9,6 +9,13 @@ egui minor.
 
 ### Added
 
+- A debounced document writer (`egui_pop_core::persist::Writer`,
+  about a second after the last change, at most five): the settings,
+  the user's keymap and the layout (through `layout.save`) are written
+  while the application runs, not only at exit;
+  `AppHandle::save_later`, `flush_documents`, `pending_documents` and
+  `persist` for a plugin's own documents.
+
 - A theme editor (`api::theme_editor`, `ThemeEditorPlugin`, drawn by
   `theme_editor::show` in any `Ui`): the application's theme edited
   live, its tokens grouped by role (surfaces, text, accent, states,
@@ -884,6 +891,11 @@ egui minor.
   values, the journal and the debug bridge stay English.
 
 ### Fixed
+
+- A vetoed exit no longer saves: `App::save` ran before the `app.exit`
+  step, whatever its hooks decided. The step's default now writes what
+  is still waiting, and what changed was written a second after it
+  changed, so saving no longer depends on the exit.
 
 - The space between a slider's value and its unit (`EV`, `%`, `px`) is
   the interface language's: French puts a narrow no-break space

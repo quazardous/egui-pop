@@ -120,3 +120,57 @@ fn the_windows_place_is_restored_from_the_settings_directory() {
     assert!(egui_pop_api::window::restore(dir.join("none"), &mut options).is_none());
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn saving_does_not_wait_for_the_exit_and_a_vetoed_exit_writes_nothing() {
+    use egui_pop_core::motion;
+    use egui_pop_model::values::{Change, Set, Value};
+    let dir = std::env::temp_dir().join(format!("egui-pop-autosave-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    struct Stay;
+    impl Plugin for Stay {
+        fn id(&self) -> PluginId {
+            PluginId::from_static("stay")
+        }
+        fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+            ctx.before(STEP_EXIT, |_, _| {
+                egui_pop_api::steps::Before::Veto("not now".into())
+            });
+            Ok(())
+        }
+    }
+    let ctx = egui::Context::default();
+    motion::freeze(&ctx, 0.0);
+    let mut app = App::builder()
+        .plugin(Main)
+        .plugin(Stay)
+        .persist(&dir)
+        .build(&ctx)
+        .unwrap();
+    // Nothing changed: nothing written.
+    app.logic(&ctx);
+    assert!(!dir.join("settings.json").exists());
+    egui_pop_core::lock(&app.handle().store())
+        .set(Set::new(
+            &format!("settings/{}", egui_pop_api::SETTING_FOCUS),
+            Change::To(Value::Choice("hover".into())),
+            egui_pop_model::commands::Origin::User,
+        ))
+        .unwrap();
+    // A second after the change, the debounced writer has written it.
+    for t in [0.0, 0.5] {
+        motion::freeze(&ctx, t);
+        app.logic(&ctx);
+        assert!(!dir.join("settings.json").exists(), "at {t}");
+    }
+    motion::freeze(&ctx, 1.5);
+    app.logic(&ctx);
+    let text = std::fs::read_to_string(dir.join("settings.json")).unwrap();
+    assert!(text.contains("hover"), "{text}");
+    // The exit is vetoed: it writes nothing more.
+    std::fs::remove_file(dir.join("settings.json")).unwrap();
+    let out = app.exit();
+    assert_eq!(out.vetoed(), Some("not now"));
+    assert!(!dir.join("settings.json").exists());
+    let _ = std::fs::remove_dir_all(&dir);
+}

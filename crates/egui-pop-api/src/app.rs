@@ -15,7 +15,7 @@ use egui_pop_core::debug::{DebugBridge, Feedback, FnCollector};
 use egui_pop_core::focus_mode::{self, FocusModes, Preference, SystemFocus};
 use egui_pop_core::keys::KeyDispatcher;
 use egui_pop_core::overlay;
-use egui_pop_core::persist::Persist;
+use egui_pop_core::persist::{Persist, PersistError, Writer};
 use egui_pop_core::strings;
 use egui_pop_core::theme::{self, ThemeSpec, Themes};
 use egui_pop_core::{a11y, fault, focus, lock};
@@ -328,6 +328,9 @@ pub(crate) struct Shared {
     list_traces: RefCell<BTreeMap<String, crate::menus::ListTrace>>,
     /// The menu open as a popup (`menus::popup_at`).
     popup: RefCell<Option<crate::menus::Popup>>,
+    /// Documents written a short while after their last change, when a
+    /// persistence directory was given.
+    writer: RefCell<Option<Writer>>,
 }
 
 /// The application at run time, cheap to clone: blocks, panels, stories
@@ -398,6 +401,7 @@ impl AppHandle {
             lists: RefCell::new(OwnedList::new()),
             list_traces: RefCell::new(BTreeMap::new()),
             popup: RefCell::new(None),
+            writer: RefCell::new(None),
         }))
     }
 
@@ -466,6 +470,62 @@ impl AppHandle {
     /// The value store.
     pub fn store(&self) -> SharedStore {
         self.0.store.clone()
+    }
+
+    /// The persistence directory (`AppBuilder::persist`), if one was
+    /// given.
+    pub fn persist(&self) -> Option<Persist> {
+        self.0.writer.borrow().as_ref().map(|w| w.persist().clone())
+    }
+
+    /// Writes a document under the persistence directory about a second
+    /// after its last change (the debounced writer of
+    /// `egui_pop_core::persist`): offering the same text again does
+    /// nothing, a new one moves the deadline. `false` without a
+    /// directory. Pending documents are written at the deadline, by
+    /// [`AppHandle::flush_documents`] and by `App::save`.
+    pub fn save_later(&self, name: &str, text: String) -> bool {
+        let ctx = self.egui();
+        let now = egui_pop_core::motion::now(&ctx);
+        let mut w = self.0.writer.borrow_mut();
+        let Some(w) = w.as_mut() else {
+            return false;
+        };
+        if w.offer(name, text, now) {
+            ctx.request_repaint_after(std::time::Duration::from_secs_f64(
+                egui_pop_core::persist::DEBOUNCE,
+            ));
+        }
+        true
+    }
+
+    /// Records that a document's text is on disk (just loaded):
+    /// [`AppHandle::save_later`] writes it again only once it changes.
+    pub fn saved_already(&self, name: &str, text: &str) {
+        if let Some(w) = self.0.writer.borrow_mut().as_mut() {
+            w.written(name, text);
+        }
+    }
+
+    /// Writes every document waiting in the debounced writer now; what
+    /// was written and how it went.
+    pub fn flush_documents(&self) -> Vec<(String, Result<(), PersistError>)> {
+        self.0
+            .writer
+            .borrow_mut()
+            .as_mut()
+            .map(Writer::flush)
+            .unwrap_or_default()
+    }
+
+    /// The documents waiting in the debounced writer.
+    pub fn pending_documents(&self) -> Vec<String> {
+        self.0
+            .writer
+            .borrow()
+            .as_ref()
+            .map(|w| w.pending().into_iter().map(str::to_string).collect())
+            .unwrap_or_default()
     }
 
     /// Appends an event to the host's journal (held until the host is
@@ -1551,9 +1611,12 @@ pub type WrapUi = Box<dyn FnMut(&mut Ui, &AppHandle, &mut dyn FnMut(&mut Ui))>;
 /// `app.exit` step.
 pub type ExitFn = Box<dyn FnMut(&AppHandle)>;
 
-/// The application closes: its default saves the settings, the keymap
-/// and the layout (when a directory was given). A plugin replaces it to
-/// save elsewhere, or follows it.
+/// The application closes: its default writes what is still waiting
+/// (the settings, the keymap, the layout and the documents plugins
+/// offered, when a directory was given). A plugin replaces it to save
+/// elsewhere, or follows it; a veto writes nothing more. Saving does not
+/// wait for the exit: what changes is written about a second later
+/// (`AppHandle::save_later`).
 pub const STEP_EXIT: StepId = StepId::from_static("app.exit");
 /// The workbench's layout is loaded (`{ "document" }`, from
 /// `Host::layout_document`): at the start, and on `App::load_layout`. A
@@ -1752,7 +1815,13 @@ impl AppBuilder {
             waking: None,
             wrap: self.wrap,
             on_exit: self.on_exit,
+            autosave: AutoSave::default(),
+            rebuilds: 0,
         };
+        *app.handle.0.writer.borrow_mut() = app
+            .persist
+            .clone()
+            .map(|p| Writer::new(p, egui_pop_core::persist::DEBOUNCE));
         app.handle.0.edge_to_edge.set(self.edge_to_edge);
         *app.handle.0.name.borrow_mut() = self.name.unwrap_or_default();
         app.framework(self.theme, self.themes, modes, self.panel_alignment)
@@ -1766,6 +1835,7 @@ impl AppBuilder {
         }
         app.load_documents();
         app.rebuild();
+        app.autosave_baseline();
         app.install_theme();
         app.emit(&Lifecycle::Started);
         app.started = true;
@@ -1864,6 +1934,35 @@ pub struct App {
     waking: Option<Context>,
     wrap: Option<WrapUi>,
     on_exit: Vec<ExitFn>,
+    /// What the debounced saving last saw and wrote.
+    autosave: AutoSave,
+    /// Rebuilds so far (the keymap may have changed).
+    rebuilds: u64,
+}
+
+/// What the debounced saving of the settings, the keymap and the layout
+/// last saw.
+#[derive(Debug, Default)]
+struct AutoSave {
+    /// The store's sequence number last offered.
+    store_seq: std::cell::Cell<Option<u64>>,
+    /// The rebuild count when the keymap was last offered.
+    rebuilds: std::cell::Cell<Option<u64>>,
+    /// The layout's document and fingerprint, as last saved (or loaded).
+    layout_saved: RefCell<Option<(String, u64)>>,
+    /// The layout's fingerprint unsaved: when it first changed, when it
+    /// last did.
+    layout_seen: std::cell::Cell<Option<(u64, f64, f64)>>,
+}
+
+/// A layout's fingerprint.
+fn layout_print(layout: &egui_pop_model::layout::Layout) -> u64 {
+    use std::hash::{Hash as _, Hasher as _};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    serde_json::to_string(layout)
+        .unwrap_or_default()
+        .hash(&mut h);
+    h.finish()
 }
 
 /// A run waiting for its result.
@@ -2818,6 +2917,7 @@ impl App {
         all.extend(d.take());
         drop(all);
         self.dirty = false;
+        self.rebuilds += 1;
         if self.started {
             self.emit(&Lifecycle::Rebuilt);
         }
@@ -2923,22 +3023,145 @@ impl App {
         }
     }
 
-    /// Saves the settings, the user's keymap (when a directory was
-    /// given) and the layout ([`App::save_layout`]).
+    /// Saves now the settings, the user's keymap (when a directory was
+    /// given), the layout ([`App::save_layout`]) and every document
+    /// waiting in the debounced writer.
     pub fn save(&self) -> Result<(), egui_pop_core::persist::PersistError> {
         let Some(p) = &self.persist else {
             return Ok(());
         };
-        let doc = lock(&self.handle.0.store).export("settings/");
-        p.save("settings", &settings_schema(), &doc)?;
-        let keymap = self.reg.keymap.export(&OwnerId::USER, Layer::User);
-        p.save("keymap", &egui_pop_model::keymap_schema(), &keymap)?;
-        match self.save_layout() {
+        let (settings, keymap) = self.document_texts()?;
+        p.save_text("settings", &settings)?;
+        self.handle.saved_already("settings", &settings);
+        p.save_text("keymap", &keymap)?;
+        self.handle.saved_already("keymap", &keymap);
+        let layout = match self.save_layout() {
             Some(Outcome::Done(Err(e))) => Err(egui_pop_core::persist::PersistError::Io {
                 path: p.dir().to_path_buf(),
                 error: std::io::Error::other(e),
             }),
             _ => Ok(()),
+        };
+        let mut flushed = Ok(());
+        for (_, r) in self.handle.flush_documents() {
+            if let Err(e) = r {
+                flushed = Err(e);
+            }
+        }
+        layout.and(flushed)
+    }
+
+    /// The settings' and the user keymap's documents as they stand.
+    fn document_texts(&self) -> Result<(String, String), PersistError> {
+        let doc_error = |name: &str, error| PersistError::Doc {
+            path: std::path::PathBuf::from(name),
+            error,
+            backup: None,
+        };
+        let doc = lock(&self.handle.0.store).export("settings/");
+        let settings = settings_schema()
+            .save(&doc)
+            .map_err(|e| doc_error("settings", e))?;
+        let keymap = self.reg.keymap.export(&OwnerId::USER, Layer::User);
+        let keymap = egui_pop_model::keymap_schema()
+            .save(&keymap)
+            .map_err(|e| doc_error("keymap", e))?;
+        Ok((settings, keymap))
+    }
+
+    /// What was loaded is what is on disk: the debounced saving writes
+    /// only what changes from now on.
+    fn autosave_baseline(&mut self) {
+        if self.persist.is_none() {
+            return;
+        }
+        if let Ok((settings, keymap)) = self.document_texts() {
+            self.handle.saved_already("settings", &settings);
+            self.handle.saved_already("keymap", &keymap);
+        }
+        self.autosave
+            .store_seq
+            .set(Some(lock(&self.handle.0.store).seq()));
+        self.autosave.rebuilds.set(Some(self.rebuilds));
+        self.layout_baseline();
+    }
+
+    /// The layout as it stands is the one on disk (just loaded or saved).
+    fn layout_baseline(&self) {
+        let document = self.layout_document();
+        let print = layout_print(&self.handle.layout());
+        *self.autosave.layout_saved.borrow_mut() = document.map(|d| (d, print));
+        self.autosave.layout_seen.set(None);
+    }
+
+    /// Saves what changed a short while after it changed: the settings,
+    /// the user's keymap, the layout (through `layout.save`, to the
+    /// document the host names now) and the documents plugins offered.
+    /// Saving never waits for the exit, so a crash loses at most the
+    /// last second.
+    fn autosave(&mut self, ctx: &Context) {
+        if self.persist.is_none() {
+            return;
+        }
+        let now = egui_pop_core::motion::now(ctx);
+        let seq = lock(&self.handle.0.store).seq();
+        let keymap_may_change = self.autosave.rebuilds.get() != Some(self.rebuilds);
+        if self.autosave.store_seq.get() != Some(seq) || keymap_may_change {
+            self.autosave.store_seq.set(Some(seq));
+            self.autosave.rebuilds.set(Some(self.rebuilds));
+            if let Ok((settings, keymap)) = self.document_texts() {
+                self.handle.save_later("settings", settings);
+                self.handle.save_later("keymap", keymap);
+            }
+        }
+        let mut wake: Option<f64> = None;
+        if let Some(document) = self.layout_document() {
+            let print = layout_print(&self.handle.layout());
+            let saved = self.autosave.layout_saved.borrow().clone();
+            match saved {
+                // Another document (the host switched workspaces): what
+                // is shown is not a change of this one.
+                Some((d, _)) if d != document => self.layout_baseline(),
+                Some((_, p)) if p == print => self.autosave.layout_seen.set(None),
+                None => self.layout_baseline(),
+                Some(_) => {
+                    let delay = egui_pop_core::persist::DEBOUNCE;
+                    let (since, last) = match self.autosave.layout_seen.get() {
+                        Some((p, since, last)) if p == print => (since, last),
+                        Some((_, since, _)) => (since, now),
+                        None => (now, now),
+                    };
+                    self.autosave.layout_seen.set(Some((print, since, last)));
+                    let due = (last + delay).min(since + 5.0 * delay);
+                    if now >= due {
+                        if let Some(Outcome::Done(Err(e))) = self.save_layout() {
+                            log::warn!(target: "egui_pop", "saving the layout: {e}");
+                        }
+                        self.layout_baseline();
+                    } else {
+                        wake = Some(due);
+                    }
+                }
+            }
+        }
+        let due = {
+            let mut w = self.handle.0.writer.borrow_mut();
+            match w.as_mut() {
+                Some(w) => {
+                    for (name, r) in w.tick(now) {
+                        if let Err(e) = r {
+                            log::warn!(target: "egui_pop", "saving `{name}`: {e}");
+                        }
+                    }
+                    w.next_due()
+                }
+                None => None,
+            }
+        };
+        for d in [due, wake].into_iter().flatten() {
+            if d > now {
+                ctx.request_repaint_after(std::time::Duration::from_secs_f64((d - now).max(0.05)));
+            }
         }
     }
 
@@ -2984,6 +3207,11 @@ impl App {
                 Ok(json!({ "document": document, "loaded": true, "repaired": notes }))
             },
         ))
+        .inspect(|o| {
+            if o.ok() && self.started {
+                self.layout_baseline();
+            }
+        })
     }
 
     /// Saves the layout to the host's document, through the
@@ -3004,6 +3232,11 @@ impl App {
                 Ok(json!({ "document": document, "saved": true }))
             },
         ))
+        .inspect(|o| {
+            if o.ok() {
+                self.layout_baseline();
+            }
+        })
     }
 
     /// Declares a command now (see `AppHandle::declare`).
@@ -3095,19 +3328,19 @@ impl App {
     }
 
     /// The application closes: the `on_exit` functions, then the
-    /// `app.exit` step, whose default saves (`App::save`).
+    /// `app.exit` step, whose default writes what is still waiting
+    /// (`App::save`). A vetoed exit writes nothing more: what changed was
+    /// written already, a second after it changed.
     pub fn exit(&mut self) -> Outcome {
         let handle = self.handle.clone();
         for f in &mut self.on_exit {
             f(&handle);
         }
-        let saved = self.save().map_err(|e| e.to_string());
-        let mut saved = Some(saved);
-        handle.step(&STEP_EXIT, json!({}), move |_, _| {
-            saved
-                .take()
-                .unwrap_or(Ok(()))
+        let this: &App = self;
+        handle.step(&STEP_EXIT, json!({}), |_, _| {
+            this.save()
                 .map(|()| json!({ "saved": true }))
+                .map_err(|e| e.to_string())
         })
     }
 
@@ -3440,6 +3673,7 @@ impl App {
         self.handle.feed_indicators();
         self.emit(&Lifecycle::Pass);
         self.process_requests();
+        self.autosave(ctx);
     }
 
     /// Draws the whole application in a `Ui` covering the window, after
