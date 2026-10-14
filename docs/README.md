@@ -109,6 +109,9 @@ devtools; every feature's moments reachable as steps (ADR 0011).
 - [Architecture decisions](adr/README.md): one page per decision.
 - [Advanced widgets](widgets.md): a survey of advanced widgets and how
   egui-pop gets them.
+- [Micro-indicators](design/indicators.md): a design note (proposed)
+  for dots, badges, activity pips, dynamic icons, flags and swatches,
+  passive or interactive; the survey behind it.
 - [Fonts](fonts.md): the plan for proportional and monospace fonts.
 - [CREDO.md](../CREDO.md): the principles.
 
