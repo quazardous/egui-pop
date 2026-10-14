@@ -162,7 +162,12 @@ projection sets, in `when` clauses:
 - **Commands, menus, toolboxes**: `when: "mode.orientation == 'photos.culling'"`.
 - **Keys**: `Ctx::frame_keybinding(&culling, "P", PICK)` binds keys in
   the frame's own layer, through its clause; the same key can do
-  something else in another mode without a conflict.
+  something else in another mode of the same group without a conflict.
+  Two frames that can be on together (a place and a mode, modes of two
+  groups) binding the same keys clash: while both are on, one never
+  fires. `contexts::frame_clashes` lists them, the keymap check of
+  `egui-pop-test` (`keymap_problems`) and the `contexts` collector say
+  them, and each is a diagnostic at start (`context-frame-key-clash`).
 - **Panels**: `FrameSpec::show` and `hide` for a mode, an arrangement
   for a place or a mode; or a panel reads the keys and draws differently.
 - **Events**: the journal says `context.changed` (with the whole new

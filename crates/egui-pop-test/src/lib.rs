@@ -130,14 +130,25 @@ pub fn harness_for(plugin: impl egui_pop_api::Plugin) -> Harness<'static, App> {
 }
 
 /// What is wrong with an application's keymap: keys claimed by two
-/// commands in the same scope (one loses), bindings running a command
+/// commands in the same scope (one loses), said as a clash of frames
+/// when both are frames of the context stack that can be on together
+/// (`egui_pop_api::contexts::frame_clashes`); bindings running a command
 /// nobody declared.
 pub fn keymap_problems(app: &App) -> Vec<String> {
+    use egui_pop_api::contexts;
     use egui_pop_core::model::keymap::Action;
     let handle = app.handle();
+    let clashes = contexts::frame_clashes(handle);
     let mut out: Vec<String> = handle
         .key_conflicts()
         .iter()
+        .filter(|(lose, win)| {
+            !clashes.iter().any(|c| {
+                c.keys == lose.keys.to_string()
+                    && c.loser.1 == lose.action.to_string()
+                    && c.winner.1 == win.action.to_string()
+            })
+        })
         .map(|(lose, win)| {
             format!(
                 "`{}` ({}): {} loses to {}",
@@ -145,6 +156,7 @@ pub fn keymap_problems(app: &App) -> Vec<String> {
             )
         })
         .collect();
+    out.extend(clashes.iter().map(ToString::to_string));
     for b in app.keymap().all() {
         if let Action::Run(c) = &b.action
             && handle.command(c).is_none()
