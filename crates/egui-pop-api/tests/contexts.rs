@@ -463,3 +463,40 @@ fn the_stack_and_its_view_come_back_after_a_restart() {
     assert!(app.service(&CONTEXTS).is_some());
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn frame_titles_are_translated_like_other_declarations() {
+    use egui_pop_core::strings::{self, MapStrings};
+    let mut h = harness(builder());
+    let app = h.state().handle().clone();
+    strings::install(
+        &app.egui(),
+        std::sync::Arc::new(
+            MapStrings::new("fr")
+                .with("egui-pop-context-root", "Accueil")
+                .with("frame-demo-album.title", "Album photo")
+                .with("frame-demo-culling.title", "Tri")
+                .with("egui-pop-context-leave-mode", "Quitter { $mode }"),
+        ),
+    );
+    assert!(contexts::enter(&app, ALBUM, json!("Vacances")).ok());
+    assert!(contexts::set_mode(&app, CULLING).ok());
+    h.run();
+    // The crumb and the chip read the catalogue, under keys derived from
+    // the frames' ids; the payload stays as it is.
+    assert!(h.query_all_by_label("Accueil").next().is_some());
+    assert!(
+        h.query_all_by_label("Album photo Vacances")
+            .next()
+            .is_some()
+    );
+    assert!(h.query_all_by_label("Quitter Tri").next().is_some());
+    // A frame without a translation keeps its English.
+    assert!(contexts::push_mode(&app, COMPARE).ok());
+    h.run();
+    assert!(h.query_all_by_label("Quitter Compare").next().is_some());
+    assert_eq!(
+        strings::frame_title(&app.egui(), "demo.album", "Album"),
+        "Album photo"
+    );
+}

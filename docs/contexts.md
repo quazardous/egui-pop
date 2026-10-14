@@ -78,6 +78,12 @@ tool).
 Modes are global to the stack: an orientation set at the root stays on
 in a sub-place. All windows of the application show the same stack.
 
+A frame's title (`FrameSpec::place(id, "Album")`) is English; crumbs,
+chips and switches translate it like every other declaration, under
+the key derived from its id: `frame-<id>.title` (`photos.album` gives
+`frame-photos-album.title`). The extractor of `egui-pop-i18n` lists
+them with the commands and panels.
+
 ## Kernel state and view state
 
 The stack has an owner, and only the owner changes it:

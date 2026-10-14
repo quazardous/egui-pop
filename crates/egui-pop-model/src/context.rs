@@ -112,7 +112,9 @@ pub struct FrameSpec {
     pub kind: Kind,
     /// A mode's group (one mode of a group at a time); none for a place.
     pub group: Option<GroupId>,
-    /// For the breadcrumb and the mode chips.
+    /// For the breadcrumb and the mode chips, in English; the interface
+    /// translates it through the key derived from the id,
+    /// `frame-<id>.title` (`egui_pop_core::strings::frame_title`).
     pub title: String,
     /// An icon's name, for the chips and crumbs (`egui_pop_core::icon`).
     #[serde(skip_serializing_if = "Option::is_none")]

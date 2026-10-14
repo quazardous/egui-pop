@@ -9,7 +9,8 @@
 //! them from `.ftl` catalogues as they are. Placeholders are written as
 //! Fluent writes them, `{ $name }`, and filled by [`tr_args`].
 //!
-//! What plugins declare (commands, panels, menus, settings, plugins) is
+//! What plugins declare (commands, panels, menus, settings, plugins,
+//! the context stack's frames) is
 //! translated through keys derived from its stable id, never from its
 //! English, so rewording English keeps the translations:
 //!
@@ -22,6 +23,7 @@
 //! | a setting's label, description | `setting-<id>.label`, `.description` |
 //! | one value of a choice setting | `setting-<id>-choice-<value>` |
 //! | a plugin's title (a settings section) | `plugin-<id>.title` |
+//! | a frame's title (a crumb, a mode chip) | `frame-<id>.title` |
 //!
 //! where every id is written with [`slug`] (a category's English in
 //! lower case).
@@ -366,6 +368,8 @@ pub mod kind {
     pub const MENU: &str = "menu";
     pub const SETTING: &str = "setting";
     pub const PLUGIN: &str = "plugin";
+    /// A frame of the context stack: a place or a mode.
+    pub const FRAME: &str = "frame";
 }
 
 /// The key of a declaration's text: `<kind>-<slug(id)>`, then
@@ -527,6 +531,11 @@ pub fn setting_choice(ctx: &Context, id: &str, value: &str) -> String {
 /// A plugin's title (the settings form's section).
 pub fn plugin_title(ctx: &Context, id: &str, english: &str) -> String {
     declared(ctx, kind::PLUGIN, id, Some("title"), english)
+}
+
+/// A frame's title (a place's crumb, a mode's chip): `frame-<id>.title`.
+pub fn frame_title(ctx: &Context, id: &str, english: &str) -> String {
+    declared(ctx, kind::FRAME, id, Some("title"), english)
 }
 
 #[cfg(test)]

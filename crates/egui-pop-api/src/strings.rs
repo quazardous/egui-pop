@@ -6,7 +6,7 @@
 //! Retry buttons use core's keys ([`egui_pop_core::strings::ALL`]).
 //!
 //! What plugins declare (command titles, categories, panel titles,
-//! submenu labels, settings, plugin titles) is not here: it is
+//! submenu labels, settings, plugin titles, frame titles) is not here: it is
 //! translated where it is drawn, through keys derived from its id
 //! (`egui_pop_core::strings::command_title` and its siblings).
 //!
