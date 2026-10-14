@@ -916,6 +916,11 @@ egui minor.
 
 ### Fixed
 
+- An undo or a redo can no longer write into a drag the user still has
+  in progress: the value store refuses it (`Refused::Held`) while a
+  gesture holds a value the step would change, the user's own gesture
+  included, as it already did for another origin's.
+
 - A vetoed exit no longer saves: `App::save` ran before the `app.exit`
   step, whatever its hooks decided. The step's default now writes what
   is still waiting, and what changed was written a second after it

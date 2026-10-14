@@ -17,7 +17,9 @@
 //!   short journal ([`Changed`]: path, old, new, origin, sequence); a write
 //!   equal to the value changes nothing and tells nothing, so a change
 //!   never loops back.
-//! - Undo: one step per gesture or group, else one per write.
+//! - Undo: one step per gesture or group, else one per write. An undo or
+//!   a redo never writes into a drag still going, the dragger's own
+//!   included.
 //! - Paths are owned: a plugin's settings and listeners go with it.
 //!
 //! ```
@@ -777,7 +779,9 @@ impl Store {
                 .get(path)
                 .map(|e| e.value.clone())
                 .ok_or_else(|| Refused::Unknown { path: path.clone() })?;
-            if let Some(by) = self.holder(path, origin, None) {
+            // A drag still going holds its paths against every undo and
+            // redo, the dragger's own included: its step is not made yet.
+            if let Some(by) = self.held_by(path) {
                 return Err(Refused::Held {
                     current,
                     by: by.clone(),

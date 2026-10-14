@@ -474,3 +474,47 @@ fn a_path_hint_says_what_a_text_names() {
     let text = serde_json::to_value(Descriptor::text("name", "")).unwrap();
     assert!(text.get("path").is_none());
 }
+
+#[test]
+fn an_undo_never_writes_into_a_drag_still_going() {
+    let mut store = mixer();
+    store.set(Set::new(GAIN, to(1.0), Origin::User)).unwrap();
+    let drag = store.begin_gesture(Origin::User, "drag gain");
+    store
+        .set(Set::new(GAIN, to(2.0), Origin::User).gesture(drag))
+        .unwrap();
+    // The user's own Ctrl+Z, in the middle of the user's own drag.
+    let r = store.undo(&Origin::User).unwrap_err();
+    assert_eq!(
+        r,
+        Refused::Held {
+            current: Value::Float(2.0),
+            by: Origin::User
+        }
+    );
+    assert_eq!(gain(&store), 2.0, "the drag keeps its value");
+    assert_eq!(store.undo_steps().len(), 1, "the step is still there");
+    // Once the drag ends, its step is the one undone.
+    assert!(store.end(drag));
+    assert_eq!(
+        store.undo(&Origin::User).unwrap().as_deref(),
+        Some("drag gain")
+    );
+    assert_eq!(gain(&store), 1.0);
+    // A redo waits for a new drag on the same value too.
+    let drag = store.begin_gesture(Origin::User, "drag gain");
+    store
+        .set(Set::new(GAIN, to(0.5), Origin::User).gesture(drag))
+        .unwrap();
+    assert!(matches!(
+        store.redo(&Origin::User),
+        Err(Refused::Held { .. })
+    ));
+    assert_eq!(gain(&store), 0.5);
+    assert!(store.cancel(drag));
+    assert_eq!(
+        store.redo(&Origin::User).unwrap().as_deref(),
+        Some("drag gain")
+    );
+    assert_eq!(gain(&store), 2.0);
+}
