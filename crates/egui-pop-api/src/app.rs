@@ -392,6 +392,30 @@ pub(crate) struct Shared {
     /// neither `Send` nor a service (custom dialogs' bodies, the mount
     /// registry).
     locals: RefCell<BTreeMap<std::any::TypeId, Rc<dyn std::any::Any>>>,
+    /// The context stack's projection is writing its keys.
+    stack_writing: std::cell::Cell<bool>,
+    /// The commands running now, innermost last, with their owners.
+    running_commands: RefCell<Vec<(CommandId, Option<OwnerId>)>>,
+}
+
+/// Marks a command as running while it lives (what reports name, as
+/// the context stack's hand writes).
+struct RunningCommand(AppHandle);
+
+impl RunningCommand {
+    fn new(app: &AppHandle, command: &CommandId, owner: Option<&OwnerId>) -> Self {
+        app.0
+            .running_commands
+            .borrow_mut()
+            .push((command.clone(), owner.cloned()));
+        RunningCommand(app.clone())
+    }
+}
+
+impl Drop for RunningCommand {
+    fn drop(&mut self) {
+        self.0.0.running_commands.borrow_mut().pop();
+    }
 }
 
 /// The application at run time, cheap to clone: blocks, panels, stories
@@ -468,6 +492,8 @@ impl AppHandle {
             popup: RefCell::new(None),
             writer: RefCell::new(None),
             locals: RefCell::new(BTreeMap::new()),
+            stack_writing: std::cell::Cell::new(false),
+            running_commands: RefCell::new(Vec::new()),
         }))
     }
 
@@ -1089,9 +1115,41 @@ impl AppHandle {
     }
 
     /// Sets an application-wide context key (depth 0), for `when`
-    /// clauses.
+    /// clauses. The context stack's own keys (`place`, `placeDepth`,
+    /// `modePushed`, `mode.*`) are its projection's: a plugin setting one
+    /// by hand is reported (`contexts::hand_writes`, a diagnostic) while
+    /// the stack is connected.
     pub fn set_context(&self, key: &str, value: &str) {
+        if !self.0.stack_writing.get() && crate::contexts::is_stack_key(key) {
+            crate::contexts::written_by_hand(self, key, value);
+        }
         self.0.context.borrow_mut().set(key, value);
+    }
+
+    /// Sets a context key as the context stack's projection.
+    pub(crate) fn set_stack_context(&self, key: &str, value: &str) {
+        self.0.stack_writing.set(true);
+        self.0.context.borrow_mut().set(key, value);
+        self.0.stack_writing.set(false);
+    }
+
+    /// The command running now (the innermost), with its owner.
+    pub(crate) fn running_command(&self) -> Option<(CommandId, Option<OwnerId>)> {
+        self.0.running_commands.borrow().last().cloned()
+    }
+
+    /// Records a warning among the diagnostics (logged).
+    pub(crate) fn warn(
+        &self,
+        code: &'static str,
+        owner: Option<&OwnerId>,
+        subject: &str,
+        message: String,
+    ) {
+        self.0
+            .diagnostics
+            .borrow_mut()
+            .warn(code, owner, subject, message);
     }
 
     /// The application-wide context keys.
@@ -3857,6 +3915,7 @@ impl App {
             }
         };
         let source = source_of(&origin);
+        let _running = RunningCommand::new(&self.handle, command, self.reg.commands.owner(command));
         let seq = self.handle.publish_now(
             &source,
             None,

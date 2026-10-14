@@ -598,3 +598,85 @@ fn a_settings_file_written_before_keeps_its_arrangement_as_the_roots() {
     assert!(text.contains("workbench.arrangement.frames"), "{text}");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+const CHEAT: CommandId = CommandId::from_static("cheat.photo");
+
+/// Sets the stack's keys by hand instead of declaring frames.
+struct Cheat;
+
+impl Plugin for Cheat {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("cheat")
+    }
+
+    fn requires(&self) -> Vec<PluginId> {
+        vec![contexts::PLUGIN]
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        ctx.command(
+            CommandSpec::new(CHEAT, "Pretend a photo", "Cheat"),
+            |call| {
+                call.app.set_context("place", "demo.photo");
+                Ok(Json::Null)
+            },
+        )?;
+        Ok(())
+    }
+}
+
+#[test]
+fn a_plugin_setting_the_stacks_keys_by_hand_is_reported() {
+    let mut h = harness(builder().plugin(Cheat));
+    let app = h.state().handle().clone();
+    let svc = app.service(&CONTEXTS).unwrap();
+    // The projection's own writes are not.
+    assert!(contexts::enter(&app, ALBUM, Json::Null).ok());
+    assert!(contexts::set_mode(&app, CULLING).ok());
+    h.run();
+    assert!(svc.hand_writes().is_empty());
+    // A command of the plugin, then a write from anywhere.
+    let reply = h.state_mut().run(&CHEAT, Json::Null, Origin::User);
+    assert!(matches!(reply, egui_pop_api::host::Reply::Done(Ok(_))));
+    app.set_context("mode.orientation", "demo.review");
+    app.set_context("mode.orientation", "demo.review");
+    let writes = svc.hand_writes();
+    assert_eq!(writes.len(), 2, "{writes:?}");
+    assert_eq!(writes[0].key, "place");
+    assert_eq!(writes[0].command, Some(CHEAT));
+    assert!(
+        writes[0]
+            .owner
+            .as_ref()
+            .is_some_and(|o| o.to_string().contains("cheat")),
+        "{writes:?}"
+    );
+    assert_eq!(writes[1].key, "mode.orientation");
+    assert_eq!(writes[1].times, 2);
+    assert_eq!(writes[1].command, None);
+    // A diagnostic per key, and the collector's warnings.
+    let said: Vec<_> = app
+        .diagnostics()
+        .into_iter()
+        .filter(|d| d.code == "context-key-by-hand")
+        .collect();
+    assert_eq!(said.len(), 2, "{said:?}");
+    assert!(said[0].message.contains("declare a frame"), "{said:?}");
+    let read = h
+        .state_mut()
+        .run(&contexts::CMD_READ, Json::Null, Origin::User);
+    let egui_pop_api::host::Reply::Done(Ok(read)) = read else {
+        panic!("{read:?}");
+    };
+    let warnings = read["warnings"].as_array().unwrap();
+    assert_eq!(warnings.len(), 2, "{read}");
+    assert!(
+        warnings[0].as_str().unwrap().contains("cheat.photo"),
+        "{read}"
+    );
+    // The next transition puts the stack's truth back.
+    assert!(contexts::set_mode(&app, REVIEW).ok());
+    h.run();
+    assert_eq!(key(&h, "place"), "demo.album");
+    assert_eq!(svc.hand_writes().len(), 2);
+}

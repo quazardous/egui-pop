@@ -173,6 +173,14 @@ projection sets, in `when` clauses:
 - **Undo**: undo steps remember the place they were made in. An undo
   of a change made out of sight says where in a toast, with "Go there".
 
+The stack's own keys (`place`, `placeDepth`, `modePushed`,
+`mode.<group>`) are the projection's alone: a plugin setting one by
+hand (`AppHandle::set_context`) makes two truths, and the projection
+overwrites it at the next transition. Each such write is reported: a
+diagnostic the first time per key (`context-key-by-hand`), and the
+`contexts` collector's `warnings` (`hand_writes`: the key, the value,
+how many times, the command running and its plugin).
+
 Agents use the same path as the user: `context.read`,
 `context.request` (any transition, with `if_rev` and `dry_run`),
 `context.go`, `context.set_mode`, `context.hold` and `context.release`;
