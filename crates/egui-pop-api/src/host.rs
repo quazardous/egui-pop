@@ -391,8 +391,10 @@ pub trait Host {
 
     /// Undoes the last step of the application's history: the label of
     /// what was undone, `None` when there was nothing. The default undoes
-    /// the store. egui-pop calls it from the `edit.undo` step's default
-    /// run, outside any dispatch.
+    /// the store, which keeps its newest `HISTORY_CAP` (500) steps; a
+    /// host keeps more or fewer with `Store::set_history_cap`. egui-pop
+    /// calls it from the `edit.undo` step's default run, outside any
+    /// dispatch.
     fn undo(&mut self, origin: &Origin) -> Result<Option<String>, String> {
         lock(&self.store()).undo(origin).map_err(|r| r.to_string())
     }

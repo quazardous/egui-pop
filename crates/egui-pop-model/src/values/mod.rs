@@ -17,9 +17,10 @@
 //!   short journal ([`Changed`]: path, old, new, origin, sequence); a write
 //!   equal to the value changes nothing and tells nothing, so a change
 //!   never loops back.
-//! - Undo: one step per gesture or group, else one per write. An undo or
-//!   a redo never writes into a drag still going, the dragger's own
-//!   included.
+//! - Undo: one step per gesture or group, else one per write; the newest
+//!   [`HISTORY_CAP`] steps are kept unless the host sets another cap. An
+//!   undo or a redo never writes into a drag still going, the dragger's
+//!   own included.
 //! - Paths are owned: a plugin's settings and listeners go with it.
 //!
 //! ```
@@ -278,6 +279,10 @@ pub struct Step {
 /// How many changes the journal keeps.
 pub const JOURNAL: usize = 1024;
 
+/// How many undo steps a store keeps by default, the oldest dropped
+/// first ([`Store::set_history_cap`]).
+pub const HISTORY_CAP: usize = 500;
+
 /// The store.
 #[derive(Default)]
 pub struct Store {
@@ -288,6 +293,10 @@ pub struct Store {
     next_gesture: u64,
     undo: Vec<Step>,
     redo: Vec<Step>,
+    /// The host's cap on the undo history; [`HISTORY_CAP`] when unset.
+    history_cap: Option<usize>,
+    /// Undo and redo steps the cap dropped so far.
+    dropped: (u64, u64),
     listeners: BTreeMap<ListenerId, ListenerSlot>,
     next_listener: u64,
     journal: VecDeque<Changed>,
@@ -689,6 +698,40 @@ impl Store {
     fn push_step(&mut self, step: Step) {
         self.undo.push(step);
         self.redo.clear();
+        self.trim_history();
+    }
+
+    /// How many undo steps the store keeps: [`HISTORY_CAP`] unless the
+    /// host set another cap.
+    pub fn history_cap(&self) -> usize {
+        self.history_cap.unwrap_or(HISTORY_CAP)
+    }
+
+    /// Keeps at most `cap` undo steps (and as many redo steps), dropping
+    /// the oldest now and whenever a new step goes over it. 0 keeps none.
+    pub fn set_history_cap(&mut self, cap: usize) {
+        self.history_cap = Some(cap);
+        self.trim_history();
+    }
+
+    fn trim_history(&mut self) {
+        let cap = self.history_cap();
+        for (steps, dropped) in [
+            (&mut self.undo, &mut self.dropped.0),
+            (&mut self.redo, &mut self.dropped.1),
+        ] {
+            // The oldest undo step and the farthest redo step come first.
+            let over = steps.len().saturating_sub(cap);
+            steps.drain(..over);
+            *dropped += over as u64;
+        }
+    }
+
+    /// How many undo steps and redo steps the cap dropped since the store
+    /// began, each from the front of its list: what a reader keeping
+    /// something beside each step (its place) drops too.
+    pub fn dropped_steps(&self) -> (u64, u64) {
+        self.dropped
     }
 
     fn open(&mut self, origin: Origin, label: &str, holds: bool) -> GestureId {

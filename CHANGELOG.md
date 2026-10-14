@@ -805,6 +805,15 @@ egui minor.
 
 ### Changed
 
+- Undo histories are capped: the value store keeps its newest 500
+  steps (`values::HISTORY_CAP`), the theme editor's draft its newest
+  500 edits (`DRAFT_HISTORY_CAP`), the oldest dropped first, where they
+  grew without end. A host sets another cap with
+  `Store::set_history_cap` (`ThemeDraft::set_history_cap` for a
+  draft); `Store::dropped_steps` counts what the cap dropped, so the
+  context stack drops the places it kept beside those steps and "Undone
+  in" keeps naming the right one.
+
 - The viewport takes tiles in off the interface thread by default:
   `ViewportState` converts each tile on the thread that delivers it
   (`set_prepare_on_worker` is on) and uploads at most

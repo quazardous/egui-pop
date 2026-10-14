@@ -38,6 +38,10 @@ pub const DRAFT_EXTENSION: &str = "org.egui-pop.theme-editor";
 /// it, for migrations to come.
 pub const DRAFT_VERSION: u64 = 1;
 
+/// How many edits a draft's history keeps by default, the oldest
+/// dropped first ([`ThemeDraft::set_history_cap`]).
+pub const DRAFT_HISTORY_CAP: usize = 500;
+
 /// One change of one token: from a value to another. `None` is the
 /// value the base theme gives (no override).
 #[derive(Clone, Debug, PartialEq)]
@@ -70,6 +74,7 @@ pub struct ThemeDraft {
     overrides: BTreeMap<String, Json>,
     undo: Vec<TokenEdit>,
     redo: Vec<TokenEdit>,
+    cap: usize,
 }
 
 impl Default for ThemeDraft {
@@ -86,6 +91,7 @@ impl ThemeDraft {
             overrides: BTreeMap::new(),
             undo: Vec::new(),
             redo: Vec::new(),
+            cap: DRAFT_HISTORY_CAP,
         }
     }
 
@@ -163,6 +169,26 @@ impl ThemeDraft {
         self.preview(&edit.path.clone(), edit.to.clone());
         self.undo.push(edit);
         self.redo.clear();
+        self.trim_history();
+    }
+
+    /// How many edits the history keeps ([`DRAFT_HISTORY_CAP`] by default).
+    pub fn history_cap(&self) -> usize {
+        self.cap
+    }
+
+    /// Keeps at most `cap` edits to undo (and as many to redo), dropping
+    /// the oldest now and whenever a new edit goes over it.
+    pub fn set_history_cap(&mut self, cap: usize) {
+        self.cap = cap;
+        self.trim_history();
+    }
+
+    fn trim_history(&mut self) {
+        for edits in [&mut self.undo, &mut self.redo] {
+            let over = edits.len().saturating_sub(self.cap);
+            edits.drain(..over);
+        }
     }
 
     /// Makes an edit and records it (the same as [`ThemeDraft::record`],
@@ -371,6 +397,32 @@ mod tests {
         let c = d.edit(&t, "text.default", Some(json!("#eeeeee"))).unwrap();
         d.apply(c.unwrap());
         assert!(!d.can_redo());
+    }
+
+    #[test]
+    fn the_history_keeps_its_newest_edits_up_to_its_cap() {
+        let t = themes();
+        let mut d = ThemeDraft::new("pop-dark");
+        assert_eq!(d.history_cap(), DRAFT_HISTORY_CAP);
+        let grey = |n: usize| json!(format!("#{n:06x}"));
+        for n in 1..=DRAFT_HISTORY_CAP + 5 {
+            let e = d.edit(&t, "surface.panel", Some(grey(n))).unwrap();
+            d.apply(e.unwrap());
+        }
+        assert_eq!(
+            d.history().len(),
+            DRAFT_HISTORY_CAP,
+            "the oldest five dropped"
+        );
+        assert_eq!(d.history()[0].to, Some(grey(6)));
+        d.undo();
+        d.set_history_cap(2);
+        assert_eq!(d.history().len(), 2);
+        assert!(d.can_redo());
+        d.undo();
+        d.undo();
+        assert!(!d.can_undo());
+        assert_eq!(d.value("surface.panel"), Some(&grey(DRAFT_HISTORY_CAP + 2)));
     }
 
     #[test]
