@@ -717,7 +717,11 @@ fn show_panel(app: &AppHandle, layout: &mut Layout, panel: &PanelId) {
     }
 }
 
-/// The layout of a projection key seen for the first time.
+/// The layout of a projection key seen for the first time: the arranged
+/// frame's arrangement when it changed (a mode declaring one, else the
+/// place; see `arrangements::arranged_frame`), the place's layout as it
+/// was left, or the layout shown; then the modes' panels shown and
+/// hidden.
 fn derive(
     app: &AppHandle,
     p: &Projection,
@@ -727,43 +731,49 @@ fn derive(
     current: &Layout,
 ) -> Layout {
     let same_place = old.is_some_and(|o| o.path_key() == new.path_key());
-    let mut layout = if same_place {
-        let mut l = current.clone();
-        // The modes left take back what they did.
-        if let Some(o) = old {
-            for m in o.modes.iter().filter(|m| !new.is_on(&m.frame)) {
-                if let Some(spec) = registry.get(&m.frame) {
-                    for panel in &spec.show {
-                        l.hide(panel);
-                    }
-                    for panel in &spec.hide {
-                        show_panel(app, &mut l, panel);
+    let arranged = crate::arrangements::arranged_in(new, registry);
+    let was_arranged = old.and_then(|o| crate::arrangements::arranged_in(o, registry));
+    let arrangement = |frame: &FrameId, declared: Option<String>| {
+        crate::arrangements::of_frame(app, frame, declared)
+            .and_then(|name| crate::arrangements::layout_of(app, &name))
+    };
+    let mut layout =
+        if same_place && arranged.as_ref().map(|a| &a.0) == was_arranged.as_ref().map(|a| &a.0) {
+            let mut l = current.clone();
+            // The modes left take back what they did.
+            if let Some(o) = old {
+                for m in o.modes.iter().filter(|m| !new.is_on(&m.frame)) {
+                    if let Some(spec) = registry.get(&m.frame) {
+                        for panel in &spec.show {
+                            l.hide(panel);
+                        }
+                        for panel in &spec.hide {
+                            show_panel(app, &mut l, panel);
+                        }
                     }
                 }
             }
-        }
-        l
-    } else {
-        let arrangement = new
-            .places
-            .last()
-            .and_then(|e| registry.get(&e.frame))
-            .and_then(|s| s.arrangement.clone())
-            .and_then(|name| {
-                crate::arrangements::saved(app)
-                    .remove(&name)
-                    .or_else(|| app.workbench_mut().template(&name))
-            });
-        let base = State {
-            modes: Vec::new(),
-            ..new.clone()
-        };
-        p.layouts
-            .get(&base.projection_key())
-            .cloned()
-            .or(arrangement)
+            l
+        } else {
+            let base = State {
+                modes: Vec::new(),
+                ..new.clone()
+            };
+            let place = new.places.last().map(|e| &e.frame);
+            match arranged {
+                // A mode with an arrangement of its own.
+                Some((frame, declared)) if Some(&frame) != place => arrangement(&frame, declared),
+                // The place: as it was left, else its arrangement.
+                Some((frame, declared)) => p
+                    .layouts
+                    .get(&base.projection_key())
+                    .cloned()
+                    .or_else(|| arrangement(&frame, declared)),
+                // The root, as it was left.
+                None => p.layouts.get(&base.projection_key()).cloned(),
+            }
             .unwrap_or_else(|| current.clone())
-    };
+        };
     for m in &new.modes {
         if let Some(spec) = registry.get(&m.frame) {
             for panel in &spec.show {

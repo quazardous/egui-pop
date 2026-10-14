@@ -32,6 +32,8 @@ const CULLING: FrameId = FrameId::from_static("demo.culling");
 const REVIEW: FrameId = FrameId::from_static("demo.review");
 const COMPARE: FrameId = FrameId::from_static("demo.compare");
 const AGENT: FrameId = FrameId::from_static("demo.agent");
+/// A mode with an arrangement of its own.
+const FOCUS: FrameId = FrameId::from_static("demo.focus");
 const ORIENTATION: GroupId = GroupId::from_static("orientation");
 
 const PICK: CommandId = CommandId::from_static("demo.pick");
@@ -98,6 +100,8 @@ impl Plugin for Demo {
         let compare =
             FrameSpec::mode(COMPARE, GroupId::from_static("compare"), "Compare").show(SECOND);
         let agent = FrameSpec::mode(AGENT, GroupId::from_static("driver"), "Agent").transient();
+        let focus = FrameSpec::mode(FOCUS, GroupId::from_static("focus"), "Focus")
+            .arrangement("Album view");
         ctx.command(CommandSpec::new(PICK, "Pick", "Demo"), |call| {
             call.app.set_context("demoLast", "pick");
             Ok(Json::Null)
@@ -115,7 +119,8 @@ impl Plugin for Demo {
             .frame(culling)?
             .frame(review)?
             .frame(compare)?
-            .frame(agent)?;
+            .frame(agent)?
+            .frame(focus)?;
         // The interface's own guard: unsaved typed input keeps the user
         // where they are.
         ctx.before(STEP_REQUEST, |app, _| {
@@ -499,4 +504,97 @@ fn frame_titles_are_translated_like_other_declarations() {
         strings::frame_title(&app.egui(), "demo.album", "Album"),
         "Album photo"
     );
+}
+
+#[test]
+fn the_current_arrangement_belongs_to_the_place_shown() {
+    use egui_pop_api::arrangements;
+    let mut h = harness(builder());
+    let app = h.state().handle().clone();
+    // The root's arrangement, saved by the user.
+    app.move_panel(&TREE, Area::EndSide);
+    assert!(arrangements::save(&app, "Mine").ok());
+    assert_eq!(arrangements::current(&app), "Mine");
+    // A place the user never arranged: the arrangement it declares.
+    assert!(contexts::enter(&app, ALBUM, json!(1)).ok());
+    h.run();
+    assert_eq!(arrangements::current(&app), "Album view");
+    assert!(!app.panel_visible(&TREE));
+    // Switched there: the place's, not the root's.
+    assert!(arrangements::switch(&app, arrangements::DEFAULT).ok());
+    h.run();
+    assert!(app.panel_visible(&TREE));
+    assert_eq!(
+        arrangements::by_frame(&app)
+            .get("demo.album")
+            .map(String::as_str),
+        Some(arrangements::DEFAULT)
+    );
+    assert!(contexts::back(&app).ok());
+    h.run();
+    assert_eq!(arrangements::current(&app), "Mine");
+    assert_eq!(app.layout().area_of(&TREE), Some(Area::EndSide));
+    // Another album starts from the album's arrangement as the user chose it.
+    assert!(contexts::enter(&app, ALBUM, json!(2)).ok());
+    h.run();
+    assert_eq!(arrangements::current(&app), arrangements::DEFAULT);
+    assert_eq!(app.layout().area_of(&TREE), Some(Area::StartSide));
+    assert!(contexts::back(&app).ok());
+    h.run();
+    // A mode with an arrangement of its own: shown while it is on, gone
+    // when it is left.
+    assert!(contexts::push_mode(&app, FOCUS).ok());
+    h.run();
+    assert_eq!(arrangements::current(&app), "Album view");
+    assert!(!app.panel_visible(&TREE));
+    assert!(contexts::back(&app).ok());
+    h.run();
+    assert_eq!(arrangements::current(&app), "Mine");
+    assert_eq!(app.layout().area_of(&TREE), Some(Area::EndSide));
+    // Deleting an arrangement a frame was on puts the frame back on what
+    // it declares.
+    assert!(contexts::enter(&app, ALBUM, json!(3)).ok());
+    assert!(arrangements::save(&app, "Album mine").ok());
+    assert_eq!(arrangements::current(&app), "Album mine");
+    assert!(arrangements::delete(&app, "Album mine").ok());
+    assert_eq!(arrangements::current(&app), "Album view");
+}
+
+#[test]
+fn a_settings_file_written_before_keeps_its_arrangement_as_the_roots() {
+    use egui_pop_api::arrangements;
+    use egui_pop_model::values::{SettingsDoc, settings_schema};
+    let dir = std::env::temp_dir().join(format!("egui-pop-contexts-arr-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    // Written before arrangements were kept per place: one flat name.
+    let mut doc = SettingsDoc::default();
+    doc.values
+        .insert(arrangements::CURRENT.into(), json!("Album view"));
+    std::fs::write(
+        dir.join("settings.json"),
+        settings_schema().save(&doc).unwrap(),
+    )
+    .unwrap();
+    let mut h = harness(builder().persist(&dir));
+    let app = h.state().handle().clone();
+    assert_eq!(arrangements::current(&app), "Album view");
+    assert!(arrangements::by_frame(&app).is_empty());
+    // Places start from their own.
+    assert!(contexts::enter(&app, PHOTO, Json::Null).ok());
+    h.run();
+    assert_eq!(arrangements::current(&app), arrangements::DEFAULT);
+    assert!(arrangements::switch(&app, "Album view").ok());
+    h.state().save().unwrap();
+    drop(h);
+    // Both come back: the root's in its flat setting, the photo's by frame.
+    let h = harness(builder().persist(&dir));
+    let app = h.state().handle().clone();
+    assert_eq!(key(&h, "place"), "demo.photo");
+    assert_eq!(arrangements::current(&app), "Album view");
+    assert!(contexts::back(&app).ok());
+    assert_eq!(arrangements::current(&app), "Album view");
+    let text = std::fs::read_to_string(dir.join("settings.json")).unwrap();
+    assert!(text.contains("workbench.arrangement.frames"), "{text}");
+    let _ = std::fs::remove_dir_all(&dir);
 }

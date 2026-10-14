@@ -125,8 +125,10 @@ pub struct FrameSpec {
     /// active mode's).
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub keys: Vec<(String, String)>,
-    /// A place: the arrangement (a template or a saved name) its
-    /// projection starts from the first time.
+    /// The arrangement (a template or a saved name) the frame's
+    /// projection starts from the first time, until the user picks
+    /// another there: a place's, or a mode's, which wins over the place's
+    /// while it is on.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub arrangement: Option<String>,
     /// A mode: panels it shows while on.
@@ -201,7 +203,8 @@ impl FrameSpec {
         self
     }
 
-    /// The arrangement a place's projection starts from.
+    /// The arrangement the frame's projection starts from (a place's, or
+    /// a mode's, which wins over the place's while it is on).
     pub fn arrangement(mut self, name: &str) -> Self {
         self.arrangement = Some(name.into());
         self

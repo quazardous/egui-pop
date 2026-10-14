@@ -64,7 +64,7 @@ a guard that refuses.
 | Shown as | a crumb of the breadcrumb (`contexts::breadcrumb`) | a chip with a way out (`contexts::mode_chips`), a switch (`mode_switch`), a toggle (`mode_toggle`) |
 | Moves | `enter` (with a payload: which group, which mask), `leave`, `jump` to a level, `go` to a path | `set_mode` (sticky), `push_mode` (temporary), `pop_mode`, `clear_mode` |
 | How many | a path from the root | one per group; groups combine |
-| The projection | the place's arrangement the first time, then the layout it was left with | the panels it shows or hides; a layout change made in a mode is the mode's, gone when it is left |
+| The projection | the place's arrangement the first time, then the layout it was left with | the panels it shows or hides, or an arrangement of its own; a layout change made in a mode is the mode's, gone when it is left |
 | Back (`nav.back`, Alt+Left) | leaves it | a pushed mode pops (Escape too), putting back what it replaced; a set mode stays |
 
 Use a place when the user goes *somewhere* and expects to come back to
@@ -83,6 +83,29 @@ chips and switches translate it like every other declaration, under
 the key derived from its id: `frame-<id>.title` (`photos.album` gives
 `frame-photos-album.title`). The extractor of `egui-pop-i18n` lists
 them with the commands and panels.
+
+## Arrangements by place and mode
+
+The current arrangement (the View menu's switch, save and reset) is
+the one of where the user is: the **arranged frame**, the last active
+mode that declares an arrangement (`FrameSpec::arrangement`), else the
+top place, else the root. A frame starts from the arrangement it
+declares; when the user switches or saves there, the choice is that
+frame's, kept in `settings/workbench.arrangement.frames` (frame id to
+name), and every later entry of the frame (another album, another
+photo) starts from it. The root's stays in
+`settings/workbench.arrangement`, where it always was: a settings file
+written before places had their own reads the same, its name the
+root's. Deleting an arrangement puts the frames that were on it back on
+what they declare.
+
+| Where | The current arrangement |
+|---|---|
+| the root | `settings/workbench.arrangement` |
+| a place | its entry in `settings/workbench.arrangement.frames`, else its `arrangement` |
+| a mode declaring an arrangement, on | the same, for the mode; it wins over the place while it is on |
+
+`arrangements::arranged_frame` says which frame it is.
 
 ## Kernel state and view state
 
@@ -141,7 +164,7 @@ projection sets, in `when` clauses:
   the frame's own layer, through its clause; the same key can do
   something else in another mode without a conflict.
 - **Panels**: `FrameSpec::show` and `hide` for a mode, an arrangement
-  for a place; or a panel reads the keys and draws differently.
+  for a place or a mode; or a panel reads the keys and draws differently.
 - **Events**: the journal says `context.changed` (with the whole new
   state and its revision), then `context.left` and `context.entered`
   per frame, `context.refused` with the reason, `context.restored`,
