@@ -987,6 +987,15 @@ time. On egui 0.36.
   frames not restored read the catalogue; the extractor lists them.
   The gallery's frames with their French.
 
+- The current arrangement belongs to where the user is in the context
+  stack: the last active mode declaring an arrangement (a mode may now
+  declare one, `FrameSpec::arrangement`, shown while it is on), else
+  the top place, else the root. Switching or saving in a place keeps
+  the choice for that place (`settings/workbench.arrangement.frames`),
+  and the next entry of the place starts from it; the root's stays in
+  `settings/workbench.arrangement`, so existing settings files read the
+  same. `arrangements::arranged_frame`, `by_frame` and `layout_of`.
+
 - A debounced document writer (`egui_pop_core::persist::Writer`,
   about a second after the last change, at most five): the settings,
   the user's keymap and the layout (through `layout.save`) are written
