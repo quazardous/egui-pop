@@ -1,7 +1,7 @@
 # Micro-indicators: survey, places of use and the `indicator` module
 
-Status: **design note, proposed** (2026-10-14). Nothing here is
-implemented yet. Decisions marked "not decided" wait for the owner.
+Status: **design note, accepted** (2026-10-14). The owner settled the
+open questions on 2026-10-14 (section 5).
 
 Micro-indicators are the small marks that say a state in very little
 space, attached to something else: a dot or LED, a count badge, an
@@ -314,9 +314,9 @@ Component tokens aliasing system tokens, as `progress.*` and
   `indicator.swatch.radius`, `indicator.target` (24 px), and the corner
   offset `indicator.offset`;
 - colours by **one shared tone set**: `neutral`, `accent`, `info`,
-  `success`, `warning`, `danger`, plus `recording` and `attention`
-  (alias `status.danger` and `accent.default` by default, but separate
-  so a theme can tell recording from an error);
+  `success`, `warning`, `danger`, plus `record` (alias `status.danger`
+  by default, but separate so a theme can tell recording from an error;
+  decided 2026-10-14);
   `indicator.badge.<tone>` (fill) and `indicator.badge.<tone>-text`;
   `indicator.led.off`; `indicator.outline` (the ring that separates a
   badge or swatch from what it sits on, alias of the surface);
@@ -329,7 +329,7 @@ Component tokens aliasing system tokens, as `progress.*` and
   outline against the badge fill.
 
 The tone set is the occasion to settle the four existing `Tone`
-enums (section 5, question 2).
+enums: they merge into one (section 5, decision 2).
 
 ### 3.4 Anchoring
 
@@ -348,10 +348,9 @@ change its host's size or layout unless placed inline.
 - **On a response**: `response.with_indicator(indicator, Anchor)`
   (an extension trait), which also merges a passive indicator's state
   into the response's AccessKit description.
-- The painter layer is the host's, so clipping follows the host; an
-  overhanging badge is drawn on the host's layer with clipping widened
-  by `indicator.offset` (not decided: a separate foreground layer is the
-  alternative).
+- An overhanging badge is drawn on a foreground layer above its host's
+  layer, with no clipping (decided 2026-10-14), so a badge on an icon at
+  the edge of a panel is never cut.
 
 ### 3.5 Pulse and reduced motion
 
@@ -368,8 +367,8 @@ change its host's size or layout unless placed inline.
 - Screen readers: a change of state is announced politely once (the
   AccessKit live region of the host, or egui-pop's announcement
   channel), not on every count update; counts coalesce.
-- A user can silence a noisy indicator (not decided: a per-indicator
-  setting in the value store, or only for status bar items).
+- A user can silence status bar items only (decided 2026-10-14); other
+  indicators cannot be muted.
 
 ### 3.6 State visible to agents and tests
 
@@ -507,7 +506,26 @@ library and tree moved onto them; then, after the mount contract, the
 status bar items; then, after the registry, the dynamic icon's named
 icons and the menu placement. Helios adopts in the same order.
 
-## 5. Open questions for the owner
+## 5. Decisions
+
+The owner settled the questions below on 2026-10-14:
+
+1. **The name.** `indicator` names the new module; `strips::Indicator`
+   becomes `StatusItem`. The rename waits for the mount contract branch
+   to land; until then only the new module is added.
+2. **One tone.** The four `Tone` enums merge into one shared `Tone` in
+   core before 0.1 (`egui_pop_core::tone::Tone`), as a commit of its own.
+3. **Badge cap.** A badge reads `99+` past its cap; the cap stays a
+   parameter.
+4. **Recording** has its own tone, `record`, which defaults to the
+   danger colour.
+5. **Overhanging badges** draw on a foreground layer above their host,
+   with no clipping.
+6. **Silencing.** The user can mute only status bar items.
+7. **Workbench tabs** get the modified dot, which turns into the close
+   button on hover.
+
+The questions as they were asked:
 
 1. **The name.** `strips::Indicator` already names a status bar item.
    Keep `indicator` for the new module and rename the status bar's to
