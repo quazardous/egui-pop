@@ -435,22 +435,29 @@ impl Projection {
         }
     }
 
-    fn title(&self, frame: &FrameId) -> String {
-        self.registry
-            .get(frame)
-            .map_or_else(|| frame.to_string(), |s| s.title.clone())
+    fn title(&self, ctx: &egui::Context, frame: &FrameId) -> String {
+        title_in(ctx, &self.registry, frame)
     }
 
     /// A place as its crumb says it: its title, and its payload when it
     /// is a text or a number (`Album Holidays`, `Photo 3`).
-    fn crumb(&self, e: &Entry) -> String {
-        let title = self.title(&e.frame);
+    fn crumb(&self, ctx: &egui::Context, e: &Entry) -> String {
+        let title = self.title(ctx, &e.frame);
         match &e.payload {
             Json::String(s) if !s.is_empty() => format!("{title} {s}"),
             Json::Number(n) => format!("{title} {n}"),
             _ => title,
         }
     }
+}
+
+/// A frame's title in the interface's language (`frame-<id>.title`,
+/// else its English); its id when it is not declared.
+fn title_in(ctx: &egui::Context, registry: &FrameRegistry, frame: &FrameId) -> String {
+    registry.get(frame).map_or_else(
+        || frame.to_string(),
+        |s| strings::frame_title(ctx, s.id.as_str(), &s.title),
+    )
 }
 
 /// The context stack in the application: the default owner, the
@@ -810,8 +817,9 @@ fn project(app: &AppHandle, svc: &ContextService, new: State, registry: FrameReg
     p.keys = keys.iter().map(|(k, _)| k.clone()).collect();
     p.registry = registry;
     p.applied = Some(new.clone());
+    let ctx = app.egui();
     let path: Vec<String> = std::iter::once(root_title(app, svc))
-        .chain(new.places.iter().map(|e| p.crumb(e)))
+        .chain(new.places.iter().map(|e| p.crumb(&ctx, e)))
         .collect();
     let doc = p.doc();
     drop(p);
@@ -833,7 +841,6 @@ fn project(app: &AppHandle, svc: &ContextService, new: State, registry: FrameReg
     }
     save_view(app, &doc);
     if moved && old.is_some() {
-        let ctx = app.egui();
         let text = strings::tr_args(&ctx, &txt::CONTEXT_NOW_IN, &[("place", &path.join(" › "))]);
         a11y::announce(&ctx, text, Politeness::Polite);
     }
@@ -930,7 +937,7 @@ pub fn breadcrumb(ui: &mut Ui, app: &AppHandle) {
         let p = lock(&svc.projection);
         let state = p.applied.clone().unwrap_or_default();
         std::iter::once(root_title(app, &svc))
-            .chain(state.places.iter().map(|e| p.crumb(e)))
+            .chain(state.places.iter().map(|e| p.crumb(ui.ctx(), e)))
             .collect()
     };
     let mut jump_to = None;
@@ -971,7 +978,13 @@ pub fn mode_chips(ui: &mut Ui, app: &AppHandle) {
             .modes
             .iter()
             .enumerate()
-            .map(|(i, m)| (p.title(&m.frame), m.clone(), Some(i) == last_pushed))
+            .map(|(i, m)| {
+                (
+                    p.title(ui.ctx(), &m.frame),
+                    m.clone(),
+                    Some(i) == last_pushed,
+                )
+            })
             .collect()
     };
     let mut leave = None;
@@ -1010,7 +1023,12 @@ pub fn mode_switch(ui: &mut Ui, app: &AppHandle, group: &GroupId, none: bool) {
             .get(group)
             .map(|v| {
                 v.iter()
-                    .map(|s| (s.id.clone(), s.title.clone()))
+                    .map(|s| {
+                        (
+                            s.id.clone(),
+                            strings::frame_title(ui.ctx(), s.id.as_str(), &s.title),
+                        )
+                    })
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();
@@ -1064,7 +1082,7 @@ pub fn mode_toggle(ui: &mut Ui, app: &AppHandle, mode: &FrameId) -> egui::Respon
                 .rev()
                 .find(|m| m.life == Life::Pushed)
                 .is_some_and(|m| m.frame == *mode);
-            (p.title(mode), entry, last)
+            (p.title(ui.ctx(), mode), entry, last)
         }
         None => (mode.to_string(), None, false),
     };
@@ -1143,7 +1161,10 @@ fn undone(app: &AppHandle, redo: bool, result: &Result<Json, String>) {
             .as_ref()
             .map(|s| s.places.clone())
             .unwrap_or_default();
-        let title = stamp.as_ref().and_then(|s| s.last()).map(|e| p.crumb(e));
+        let title = stamp
+            .as_ref()
+            .and_then(|s| s.last())
+            .map(|e| p.crumb(&app.egui(), e));
         (stamp, here, title)
     };
     let Some(stamp) = stamp else { return };
@@ -1227,9 +1248,11 @@ fn start(app: &AppHandle) {
         match restored {
             Ok(dropped) if !dropped.is_empty() => {
                 if let Some(t) = app.service(&crate::toasts::TOASTS) {
+                    let registry = lock(&svc.local).registry();
+                    let ctx = app.egui();
                     let frames = dropped
                         .iter()
-                        .map(|d| format!("{} ({})", d.frame, d.why))
+                        .map(|d| format!("{} ({})", title_in(&ctx, &registry, &d.frame), d.why))
                         .collect::<Vec<_>>()
                         .join(", ");
                     t.notify(crate::toasts::Toast::warning(&strings::tr_args(

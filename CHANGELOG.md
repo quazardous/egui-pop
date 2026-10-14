@@ -33,6 +33,13 @@ egui minor.
   undo made out of sight says where, with "Go there". Strings with
   their French. Gallery page: `contexts`.
 
+- Context stack frame titles are translated like other declarations,
+  under the key derived from the frame's id (`frame-<id>.title`,
+  `egui_pop_core::strings::frame_title`): the breadcrumb, the mode
+  chips and switches, the screen reader's "Now in" and the toast of
+  frames not restored read the catalogue; the extractor lists them.
+  The gallery's frames with their French.
+
 - A debounced document writer (`egui_pop_core::persist::Writer`,
   about a second after the last change, at most five): the settings,
   the user's keymap and the layout (through `layout.save`) are written

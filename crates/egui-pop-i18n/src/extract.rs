@@ -410,7 +410,8 @@ fn walk(dir: &Path, out: &mut Vec<std::path::PathBuf>) -> io::Result<()> {
 /// `egui_pop_core::strings` derives: commands (title, description,
 /// category; a panel's `focus` and `toggle` commands only their
 /// category, their texts being shared), panels, submenus (from the main menu and `menus`),
-/// settings (label, description, each choice) and plugins (title).
+/// settings (label, description, each choice), plugins (title) and the
+/// context stack's frames (title).
 pub fn declarations(app: &AppHandle, menus: &[MenuId]) -> Vec<Found> {
     let mut out = Vec::new();
     let mut push = |key: String, text: &str, origin: String| {
@@ -493,6 +494,14 @@ pub fn declarations(app: &AppHandle, menus: &[MenuId]) -> Vec<Found> {
             strings::declared_key(kind::PLUGIN, p.id.as_str(), Some("title")),
             &p.title,
             format!("plugin {}", p.id),
+        );
+    }
+    let frames = egui_pop_api::contexts::with_owner(app, |c| c.registry()).unwrap_or_default();
+    for f in frames.iter() {
+        push(
+            strings::declared_key(kind::FRAME, f.id.as_str(), Some("title")),
+            &f.title,
+            format!("frame {}", f.id),
         );
     }
     out
@@ -848,6 +857,60 @@ mod tests {
         let again = update(&u.source, &m, "# h\n", false);
         assert_eq!(again.source, u.source);
         assert!(again.added.is_empty() && again.changed.is_empty());
+    }
+
+    #[test]
+    fn the_context_stack_frames_are_declarations() {
+        use egui_pop_api::contexts::{self, ContextsPlugin, FrameSpec};
+        use egui_pop_api::{Ctx, Plugin, PluginError};
+        use egui_pop_model::ids::{FrameId, GroupId, PluginId};
+        struct Frames;
+        impl Plugin for Frames {
+            fn id(&self) -> PluginId {
+                PluginId::from_static("demo")
+            }
+            fn requires(&self) -> Vec<PluginId> {
+                vec![contexts::PLUGIN]
+            }
+            fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+                ctx.frame(FrameSpec::place(
+                    FrameId::from_static("demo.album"),
+                    "Album",
+                ))?
+                .frame(FrameSpec::mode(
+                    FrameId::from_static("demo.culling"),
+                    GroupId::from_static("orientation"),
+                    "Culling",
+                ))?;
+                Ok(())
+            }
+        }
+        let app = egui_pop_api::App::builder()
+            .plugin(ContextsPlugin::default())
+            .plugin(Frames)
+            .build(&egui::Context::default())
+            .unwrap();
+        let found = declarations(app.handle(), &[]);
+        let frames: Vec<(&str, &English, &str)> = found
+            .iter()
+            .filter(|f| f.key.starts_with("frame-"))
+            .map(|f| (f.key.as_str(), &f.english, f.origin.as_str()))
+            .collect();
+        assert_eq!(
+            frames,
+            [
+                (
+                    "frame-demo-album.title",
+                    &English::Plain("Album".into()),
+                    "frame demo.album"
+                ),
+                (
+                    "frame-demo-culling.title",
+                    &English::Plain("Culling".into()),
+                    "frame demo.culling"
+                ),
+            ]
+        );
     }
 
     #[test]
