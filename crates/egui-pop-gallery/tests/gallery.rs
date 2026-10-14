@@ -964,6 +964,72 @@ fn the_arrangements_page_switches_saves_and_vetoes() {
 }
 
 #[test]
+fn the_context_stack_page_drills_down_switches_modes_and_comes_back() {
+    use egui_pop_gallery::pages::contexts::{RATINGS, SECOND};
+    let mut h = harness(options("pop-dark", Density::Comfortable, "contexts"));
+    h.run();
+    let app = h.state().app.handle().clone();
+    assert_eq!(context_key(&h, "place"), "root");
+    // Three levels down; the breadcrumb follows.
+    h.get_by_label("Open the album Holidays").click();
+    h.run();
+    h.get_by_label("Open photo 3").click();
+    h.run();
+    assert_eq!(context_key(&h, "place"), "gallery.photo");
+    assert_eq!(context_key(&h, "placeDepth"), "2");
+    assert!(h.query_by_label("Album Holidays").is_some());
+    assert!(h.query_by_label("Photo 3").is_some());
+    // An orientation set: its panel shows, its keys work.
+    h.get_by_label("Culling").click();
+    h.run();
+    assert_eq!(context_key(&h, "mode.orientation"), "gallery.culling");
+    assert!(app.panel_visible(&RATINGS));
+    h.key_press(egui::Key::P);
+    h.run();
+    assert_eq!(context_key(&h, "galleryContextKey"), "picked");
+    // A compare pushed on top.
+    h.get_by_label("Compare").click();
+    h.run();
+    h.run();
+    assert!(app.panel_visible(&SECOND));
+    let mut results = egui_kittest::SnapshotResults::new();
+    results.add(h.try_snapshot("contexts-pop-dark"));
+    // Escape pops it: its panel goes, the orientation stays.
+    h.key_press(egui::Key::Escape);
+    h.run();
+    assert!(!app.panel_visible(&SECOND));
+    assert_eq!(context_key(&h, "mode.orientation"), "gallery.culling");
+    // Reviewing: the same key approves.
+    h.get_by_label("Review").click();
+    h.run();
+    assert!(!app.panel_visible(&RATINGS));
+    h.key_press(egui::Key::P);
+    h.run();
+    assert_eq!(context_key(&h, "galleryContextKey"), "approved");
+    // A locked photo: its guard refuses, nothing moves.
+    h.get_by_label("Lock the photos (their guard refuses to leave)")
+        .click();
+    h.run();
+    h.key_press_modifiers(egui::Modifiers::ALT, egui::Key::ArrowLeft);
+    h.run();
+    assert_eq!(context_key(&h, "place"), "gallery.photo");
+    assert!(
+        h.query_all_by_label_contains("the photo is locked")
+            .next()
+            .is_some()
+    );
+    h.get_by_label("Lock the photos (their guard refuses to leave)")
+        .click();
+    h.run();
+    // The root crumb jumps back up.
+    h.get_by_label("All photos").click();
+    h.run();
+    assert_eq!(context_key(&h, "place"), "root");
+    assert_eq!(context_key(&h, "mode.orientation"), "gallery.review");
+    egui_pop_test::assert_all_named(&h);
+}
+
+#[test]
 fn the_shortcuts_editor_searches_by_key_and_removes_every_key() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "settings"));
     h.run();

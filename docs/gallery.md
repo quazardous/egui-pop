@@ -30,7 +30,7 @@ outlines and the loupe), `node-graph` (the node graph editor), `display` (wide g
 (the live tree), `table` (lists and tables), `library` (the photo
 library), `text-editor`,
 `code-editor`, `terminal`, `zones` (zones and blocks), `workbench`,
-`palettes`, `arrangements`, `strips`, `jobs` (a pretend host's
+`palettes`, `arrangements`, `contexts` (the context stack: places and modes), `strips`, `jobs` (a pretend host's
 background jobs), `frame`, `scale`, `platform` (the platform services),
 `settings`, `i18n` (translations) and `debug` (the debug
 bridge). `Alt+Down` and `Alt+Up` go to the next and previous page,
@@ -197,7 +197,7 @@ and the display.
 
 ### Layout
 
-Zones and blocks, the workbench, palettes, arrangements, strips and the window frame.
+Zones and blocks, the workbench, palettes, arrangements, the context stack, strips and the window frame.
 
 <table>
   <tr>
@@ -211,6 +211,9 @@ Zones and blocks, the workbench, palettes, arrangements, strips and the window f
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/frame-own-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/frame-own-pop-dark.png" width="200" alt="frame-own-pop-dark"></a><br>frame-own-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/frame-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/frame-pop-dark.png" width="200" alt="frame-pop-dark"></a><br>frame-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/palettes-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/palettes-pop-dark.png" width="200" alt="palettes-pop-dark"></a><br>palettes-pop-dark</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/contexts-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/contexts-pop-dark.png" width="200" alt="contexts-pop-dark"></a><br>contexts-pop-dark</td>
   </tr>
 </table>
 
