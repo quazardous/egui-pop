@@ -30,12 +30,13 @@ use pages::story::PagePlugin;
 pub const TITLE: &str = "egui-pop gallery";
 
 /// The pages, as named on the command line.
-pub const PAGES: [&str; 41] = [
+pub const PAGES: [&str; 42] = [
     "overview",
     "tokens",
     "builtins",
     "theme-editor",
     "icons",
+    "indicators",
     "motion",
     "values",
     "sliders",
@@ -130,6 +131,16 @@ pub fn builder(options: &Options) -> AppBuilder {
             weight: 30,
             show: pages::icons::show,
             playground: Some(pages::icons::playground),
+        })
+        .plugin(PagePlugin {
+            plugin: PluginId::from_static("gallery.indicators"),
+            story: StoryId::from_static("indicators"),
+            title: "Indicators",
+            description: "Micro-indicators: dots and LEDs, badges, activity pips, flags, swatches and icons by state, passive or interactive, inline or on a widget.",
+            group: "Components",
+            weight: 31,
+            show: pages::indicators::show,
+            playground: Some(pages::indicators::playground),
         })
         .plugin(PagePlugin {
             plugin: PluginId::from_static("gallery.motion"),

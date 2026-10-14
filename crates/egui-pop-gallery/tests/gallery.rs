@@ -1555,6 +1555,81 @@ fn the_code_editor_page_marks_completes_saves_and_holds_a_hundred_thousand_lines
 }
 
 #[test]
+fn the_indicators_page_in_every_pop_theme_and_still_under_reduced_motion() {
+    let mut results = egui_kittest::SnapshotResults::new();
+    for theme in POP_THEMES {
+        let mut h = harness(options(theme, Density::Comfortable, "indicators"));
+        h.run();
+        results.add(h.try_snapshot(format!("indicators-{theme}")));
+    }
+    let mut h = harness(Options {
+        reduced_motion: true,
+        ..options("pop-dark", Density::Comfortable, "indicators")
+    });
+    h.run();
+    results.add(h.try_snapshot("indicators-reduced-pop-dark"));
+    // The busy LED keeps its state, drawn still.
+    let node = egui_pop::core::indicator::find(&h.ctx, "led.busy").unwrap();
+    assert!(node.pulsing);
+}
+
+#[test]
+fn the_indicators_page_names_its_marks_and_answers_like_buttons() {
+    use egui::accesskit::{Role, Toggled};
+    let mut h = harness(options("pop-dark", Density::Comfortable, "indicators"));
+    h.run();
+    // A passive badge joins its host's name and adds no node.
+    let host = h.get_by_label("Notifications, 12");
+    assert_eq!(host.accesskit_node().role(), Role::Button);
+    assert!(h.query_by_label("12").is_none());
+    // An interactive dot is a button: a click, then the keyboard.
+    h.get_by_label("Reset exposure").click();
+    h.run();
+    assert!(h.query_by_label("Exposure resets: 1").is_some());
+    h.get_by_label("Reset exposure").focus();
+    h.run();
+    h.key_press(egui::Key::Enter);
+    h.run();
+    assert!(h.query_by_label("Exposure resets: 2").is_some());
+    assert!(
+        h.get_by_label("Reset contrast")
+            .accesskit_node()
+            .is_disabled()
+    );
+    // A toggle is a check box.
+    let mask = h.get_by_label("Mask visible");
+    assert_eq!(mask.accesskit_node().role(), Role::CheckBox);
+    assert_eq!(mask.accesskit_node().toggled(), Some(Toggled::True));
+    mask.click();
+    h.run();
+    assert_eq!(
+        h.get_by_label("Mask visible").accesskit_node().toggled(),
+        Some(Toggled::False)
+    );
+    // Agents read the states through the debug bridge.
+    egui_pop_test::assert_indicator(&h, "led.busy", "busy");
+    egui_pop_test::assert_indicator(&h, "flag.modified", "modified");
+    egui_pop_test::assert_indicator(&h, "mask.visible", "off");
+    let snap = h.state().app.handle().debug_snapshot();
+    let ids: Vec<&str> = snap["indicators"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["id"].as_str().unwrap())
+        .collect();
+    for id in [
+        "status.node",
+        "status.record",
+        "status.unread",
+        "on.notifications",
+    ] {
+        assert!(ids.contains(&id), "{id} in {ids:?}");
+    }
+    let record = egui_pop::core::indicator::find(&h.ctx, "status.record").unwrap();
+    assert_eq!(record.tone, egui_pop::core::tone::Tone::Record);
+}
+
+#[test]
 fn the_progress_page_gives_values_and_ranges_and_still_frames() {
     use egui::accesskit::Role;
     let mut results = egui_kittest::SnapshotResults::new();

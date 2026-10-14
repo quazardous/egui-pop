@@ -31,7 +31,7 @@ use serde_json::{Value as Json, json};
 
 use crate::binding::SharedStore;
 use crate::state::lock;
-use crate::{a11y, fault, focus, overlay, theme};
+use crate::{a11y, fault, focus, indicator, overlay, theme};
 
 /// An action a collector offers.
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -181,8 +181,8 @@ impl DebugBridge {
         Self::default()
     }
 
-    /// A bridge with the collectors of this crate: focus, overlays,
-    /// faults, announcements and theme.
+    /// A bridge with the collectors of this crate: screen, focus,
+    /// overlays, faults, announcements, indicators and theme.
     pub fn with_core_collectors() -> Self {
         let mut b = Self::new();
         for c in core_collectors() {
@@ -451,6 +451,11 @@ pub fn core_collectors() -> Vec<FnCollector> {
             },
         )
         .args(json!({ "text": "Hello" })),
+        FnCollector::new(
+            "indicators",
+            "The micro-indicators with an id drawn in the last pass: kind, state, value, text, tone, meaning, host, whether interactive, shown and pulsing.",
+        )
+        .snapshot(|ctx| json!(indicator::drawn(ctx))),
         FnCollector::new("theme", "The installed theme and its problems.").snapshot(|ctx| {
             let t = theme::Tokens::of(ctx);
             let r = t.resolved();

@@ -19,6 +19,7 @@ pub mod grading;
 pub mod i18n;
 pub mod icons;
 pub mod images;
+pub mod indicators;
 pub mod jobs;
 pub mod library;
 pub mod menus;

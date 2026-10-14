@@ -223,6 +223,38 @@
     "line": {"$type": "dimension", "$value": "{space.xs}", "$description": "A thin line's thickness (under a title, along a viewport's top)."},
     "ring": {"$type": "dimension", "$value": "{size.icon.inline}", "$description": "A ring's and a spinner's diameter."}
   },
+  "indicator": {
+    "$description": "Micro-indicators: dots and LEDs, badges, pips, flags and swatches on or beside another widget.",
+    "dot": {
+      "size": {"$type": "dimension", "$value": {"value": 8, "unit": "px"}, "$description": "A dot's or an LED's diameter."}
+    },
+    "led": {
+      "ring": {"$type": "dimension", "$value": {"value": 1.5, "unit": "px"}, "$description": "The ring of an LED that is off, and the still ring that stands for a pulse under reduced motion."},
+      "off": {"$type": "color", "$value": "{border.strong}", "$description": "An LED that is off: a hollow ring."}
+    },
+    "record": {"$type": "color", "$value": "{danger}", "$description": "The recording tone; a theme may tell it from an error."},
+    "badge": {
+      "height": {"$type": "dimension", "$value": {"value": 16, "unit": "px"}, "$description": "A badge's height; it is at least as wide, a pill as it grows."},
+      "padding": {"$type": "dimension", "$value": "{space.s}", "$description": "Either side of a badge's text."},
+      "font": {"$type": "dimension", "$value": "{font.size.small}", "$description": "A badge's text size."},
+      "text": {"$type": "color", "$value": "{surface.panel}", "$description": "A badge's text on every tone: the tones are legible on the panel, so the panel is legible on them."}
+    },
+    "outline": {"$type": "color", "$value": "{surface.panel}", "$description": "The ring that separates a badge or a dot from the widget it overhangs."},
+    "flag": {
+      "size": {"$type": "dimension", "$value": {"value": 8, "unit": "px"}, "$description": "A flag's size (a corner triangle's legs)."}
+    },
+    "swatch": {
+      "size": {"$type": "dimension", "$value": "{size.icon.inline}", "$description": "A swatch's side."},
+      "radius": {"$type": "dimension", "$value": {"value": 2, "unit": "px"}, "$description": "A swatch's corners."},
+      "border": {"$type": "color", "$value": "{border.strong}", "$description": "A swatch's outline, so a colour close to the surface still shows."}
+    },
+    "target": {"$type": "dimension", "$value": {"value": 24, "unit": "px"}, "$description": "The smallest target of an interactive mark (WCAG 2.5.8)."},
+    "offset": {"$type": "dimension", "$value": "{space.xs}", "$description": "How far a mark on a corner sits in from it."},
+    "pulse": {
+      "period": {"$type": "duration", "$value": {"value": 1200, "unit": "ms"}, "$description": "One pulse (none under reduced motion: a still ring instead)."},
+      "count": {"$type": "number", "$value": 3, "$description": "How many times a mark calling attention pulses before it stays still."}
+    }
+  },
   "skeleton": {
     "$description": "Skeletons standing in for content that loads.",
     "$type": "color",

@@ -90,7 +90,10 @@ Not read yet: references inside composite values, JSON Pointer `$ref`,
 3. **Component**: one component's tokens, each an alias of a system token:
    `button.*`, `slider.{track, fill, thumb}`,
    `progress.{track, fill, height, line, ring}` (bars, rings, meters and
-   spinners), `skeleton.{fill, shimmer}`, `menu.item.*`, `dialog.*`, `palette.*`,
+   spinners), `indicator.*` (dots and LEDs, badges, flags and swatches:
+   sizes, the badge text on every tone, the outline, the record tone,
+   the interactive target, the pulse; see [indicators](indicators.md)),
+   `skeleton.{fill, shimmer}`, `menu.item.*`, `dialog.*`, `palette.*`,
    `toast.*`, `editor.*` and `syntax.*` (one colour per kind of code:
    keywords on the accent, strings on `success`, numbers on `warning`,
    comments muted...), `terminal.*` (its text, cursor, selection, links,

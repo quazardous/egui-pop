@@ -70,6 +70,10 @@ devtools; every feature's moments reachable as steps (ADR 0011).
   providers, steps and agent commands; a terminal over a
   pseudo-terminal or a log console, its keys and focus rules; the survey
   behind them.
+- [Micro-indicators](indicators.md): dots and LEDs, count badges,
+  activity pips, flags, swatches and icons by state, passive (their
+  meaning in their host's name) or buttons, inline or on a widget's
+  corner, a pulse still under reduced motion, their states for agents.
 - [Jobs and progress](progress.md): the host's background jobs folded
   from its journal, each with an estimated overall percentage, their
   commands, the `jobs.estimate` step, a fake host for tests.
@@ -109,9 +113,10 @@ devtools; every feature's moments reachable as steps (ADR 0011).
 - [Architecture decisions](adr/README.md): one page per decision.
 - [Advanced widgets](widgets.md): a survey of advanced widgets and how
   egui-pop gets them.
-- [Micro-indicators](design/indicators.md): a design note (proposed)
-  for dots, badges, activity pips, dynamic icons, flags and swatches,
-  passive or interactive; the survey behind it.
+- [Micro-indicators, the design](design/indicators.md): the note
+  behind the indicator module (accepted, with the owner's decisions):
+  the survey, the places of use, what waits for the mount contract and
+  the icon registry.
 - [Fonts](fonts.md): the plan for proportional and monospace fonts.
 - [CREDO.md](../CREDO.md): the principles.
 
@@ -141,7 +146,8 @@ Layers only depend downwards; a test reading `cargo metadata` keeps it so
 
 The Rust blocks of the README and of the getting started, themes,
 plugins, workbench, viewport, files, tree, lists and tables,
-translations, platform services, packaging and debugging pages are
+translations, platform services, packaging, debugging and
+micro-indicators pages are
 compiled and run as doctests by `crates/consumer-smoke`, against the
 `egui-pop` crate only, as a user depends on it: `cargo test -p
 consumer-smoke --doc`.

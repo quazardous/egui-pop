@@ -83,6 +83,22 @@ pub const BUSY: StrKey = StrKey::new("egui-pop-busy", "Busy");
 /// A skeleton standing in for content that loads.
 pub const LOADING: StrKey = StrKey::new("egui-pop-loading", "Loading");
 
+/// What an indicator means, when the application gives it no name of
+/// its own: an LED's state, a flag, a pip, a swatch.
+pub const INDICATOR_OFF: StrKey = StrKey::new("egui-pop-indicator-off", "Off");
+pub const INDICATOR_ON: StrKey = StrKey::new("egui-pop-indicator-on", "On");
+pub const INDICATOR_WARNING: StrKey = StrKey::new("egui-pop-indicator-warning", "Warning");
+pub const INDICATOR_ERROR: StrKey = StrKey::new("egui-pop-indicator-error", "Error");
+pub const INDICATOR_MODIFIED: StrKey = StrKey::new("egui-pop-indicator-modified", "Modified");
+pub const INDICATOR_PINNED: StrKey = StrKey::new("egui-pop-indicator-pinned", "Pinned");
+pub const INDICATOR_REQUIRED: StrKey = StrKey::new("egui-pop-indicator-required", "Required");
+pub const INDICATOR_INVALID: StrKey = StrKey::new("egui-pop-indicator-invalid", "Invalid");
+pub const INDICATOR_DONE: StrKey = StrKey::new("egui-pop-indicator-done", "Done");
+pub const INDICATOR_FAILED: StrKey = StrKey::new("egui-pop-indicator-failed", "Failed");
+pub const INDICATOR_PERCENT: StrKey = StrKey::new("egui-pop-indicator-percent", "{ $percent }%");
+pub const INDICATOR_NO_COLOR: StrKey = StrKey::new("egui-pop-indicator-no-color", "No colour");
+pub const INDICATOR_MIXED: StrKey = StrKey::new("egui-pop-indicator-mixed", "Mixed");
+
 /// Every string egui-pop core shows, for catalogues and tests.
 pub const ALL: &[StrKey] = &[
     OK,
@@ -102,6 +118,19 @@ pub const ALL: &[StrKey] = &[
     SLIDER_MAXIMUM,
     BUSY,
     LOADING,
+    INDICATOR_OFF,
+    INDICATOR_ON,
+    INDICATOR_WARNING,
+    INDICATOR_ERROR,
+    INDICATOR_MODIFIED,
+    INDICATOR_PINNED,
+    INDICATOR_REQUIRED,
+    INDICATOR_INVALID,
+    INDICATOR_DONE,
+    INDICATOR_FAILED,
+    INDICATOR_PERCENT,
+    INDICATOR_NO_COLOR,
+    INDICATOR_MIXED,
 ];
 
 /// Gives the text of a key in the current language, if it has one.

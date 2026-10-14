@@ -219,6 +219,63 @@ pub const CONTRACT: &[Required] = &[
         "a progress ring's and a spinner's diameter",
     ),
     comp(
+        "indicator.dot.size",
+        "dimension",
+        "a dot's or an LED's diameter",
+    ),
+    comp(
+        "indicator.led.ring",
+        "dimension",
+        "the ring of an LED that is off, busy or calling attention",
+    ),
+    comp("indicator.led.off", "color", "an LED that is off"),
+    comp(
+        "indicator.record",
+        "color",
+        "the recording tone (a dot, a badge)",
+    ),
+    comp("indicator.badge.height", "dimension", "a badge's height"),
+    comp(
+        "indicator.badge.padding",
+        "dimension",
+        "a badge's padding either side of its text",
+    ),
+    comp("indicator.badge.font", "dimension", "a badge's text size"),
+    comp(
+        "indicator.badge.text",
+        "color",
+        "a badge's text, on every tone",
+    ),
+    comp(
+        "indicator.outline",
+        "color",
+        "the ring separating a mark from the widget it sits on",
+    ),
+    comp("indicator.flag.size", "dimension", "a flag's size"),
+    comp("indicator.swatch.size", "dimension", "a swatch's side"),
+    comp("indicator.swatch.radius", "dimension", "a swatch's corners"),
+    comp("indicator.swatch.border", "color", "a swatch's outline"),
+    comp(
+        "indicator.target",
+        "dimension",
+        "the smallest target of an interactive mark",
+    ),
+    comp(
+        "indicator.offset",
+        "dimension",
+        "how far a mark on a corner sits in from it",
+    ),
+    comp(
+        "indicator.pulse.period",
+        "duration",
+        "one pulse of a busy LED or a mark calling attention",
+    ),
+    comp(
+        "indicator.pulse.count",
+        "number",
+        "how many times a mark calling attention pulses",
+    ),
+    comp(
         "skeleton.fill",
         "color",
         "the grey shapes standing in for loading content",

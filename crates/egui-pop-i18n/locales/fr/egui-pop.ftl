@@ -529,6 +529,32 @@ egui-pop-frame-restore = Restaurer
 
 egui-pop-frame-window-menu = Menu de la fenêtre
 
+egui-pop-indicator-done = Terminé
+
+egui-pop-indicator-error = Erreur
+
+egui-pop-indicator-failed = Échec
+
+egui-pop-indicator-invalid = Non valide
+
+egui-pop-indicator-mixed = Mixte
+
+egui-pop-indicator-modified = Modifié
+
+egui-pop-indicator-no-color = Aucune couleur
+
+egui-pop-indicator-off = Éteint
+
+egui-pop-indicator-on = Allumé
+
+egui-pop-indicator-percent = { $percent } %
+
+egui-pop-indicator-pinned = Épinglé
+
+egui-pop-indicator-required = Obligatoire
+
+egui-pop-indicator-warning = Avertissement
+
 egui-pop-job-action-name = { $action } : { $job }
 
 egui-pop-job-asked = { $state }, en attente de l’hôte

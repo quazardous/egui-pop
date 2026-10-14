@@ -34,6 +34,9 @@
 //! - [`tone`]: one set of tones (what a colour says) for icons,
 //!   progress, status items, badges and indicators;
 //! - [`icon`]: icons by role, sized and coloured from tokens;
+//! - [`indicator`]: micro-indicators (dots and LEDs, badges, pips,
+//!   flags, swatches, icons by state), passive or buttons, inline or on
+//!   a widget, recorded for agents;
 //! - [`persist`]: documents written atomically, with a backup and
 //!   migrations;
 //! - [`fault`]: fault boundaries showing an error card on panic;
@@ -49,6 +52,7 @@ pub mod focus;
 pub mod focus_mode;
 pub mod frame;
 pub mod icon;
+pub mod indicator;
 pub mod keys;
 pub mod motion;
 pub mod overlay;

@@ -1,7 +1,12 @@
 # Micro-indicators: survey, places of use and the `indicator` module
 
 Status: **design note, accepted** (2026-10-14). The owner settled the
-open questions on 2026-10-14 (section 5).
+open questions on 2026-10-14 (section 5). The first step is
+implemented: the tokens, the dot, badge, pip, flag and swatch kinds,
+the icon kind for built-in icons, the gallery page and the tests; the
+guide is [indicators.md](../indicators.md). The workbench tab's
+modified dot (decision 7) is not in it: panels have no modified state
+yet and `egui_dock` has no slot for a tab's decoration.
 
 Micro-indicators are the small marks that say a state in very little
 space, attached to something else: a dot or LED, a count badge, an

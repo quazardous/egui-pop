@@ -52,6 +52,7 @@ fn every_collector_describes_and_snapshots_itself() {
         "focus",
         "overlays",
         "faults",
+        "indicators",
         "announcements",
         "theme",
         "commands",
