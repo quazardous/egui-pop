@@ -925,6 +925,11 @@ egui minor.
 
 ### Fixed
 
+- Ctrl+Z in the theme editor undoes the editor's last change instead of
+  an unrelated step of the value store: the editor is a focus surface
+  (`theme_editor::SURFACE`), where `theme.undo` takes Ctrl+Z and
+  `theme.redo` Ctrl+Shift+Z and Ctrl+Y.
+
 - An undo or a redo can no longer write into a drag the user still has
   in progress: the value store refuses it (`Refused::Held`) while a
   gesture holds a value the step would change, the user's own gesture

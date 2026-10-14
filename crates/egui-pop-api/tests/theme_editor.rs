@@ -232,3 +232,64 @@ fn the_theme_switched_elsewhere_restarts_the_editor() {
     assert_eq!(read["overrides"], json!({}));
     assert_eq!(read["can_undo"], false);
 }
+
+#[test]
+fn ctrl_z_in_the_editor_undoes_its_own_change_not_a_store_step() {
+    use egui_pop_model::values::{Change, Descriptor, Set, Value};
+    let mut h = harness(ThemeSpec::new("pop-dark"));
+    let handle = h.state().handle().clone();
+    // An unrelated value of the application, changed by the user: a step
+    // of the store, what Edit > Undo takes back.
+    let store = handle.store();
+    egui_pop_core::lock(&store)
+        .declare(
+            &egui_pop_model::ids::OwnerId::USER,
+            "settings/level",
+            Descriptor::float("Level", 0.0, 1.0, 0.0),
+        )
+        .unwrap();
+    egui_pop_core::lock(&store)
+        .set(Set::new(
+            "settings/level",
+            Change::To(Value::Float(0.5)),
+            Origin::User,
+        ))
+        .unwrap();
+    h.run();
+    let editor = handle.service(&THEME_EDITOR).unwrap();
+    editor
+        .set(
+            &handle,
+            "accent.default",
+            Some(json!("#2060c0")),
+            Cause::Edit,
+        )
+        .unwrap();
+    h.run();
+    // The focus in the editor: a token picked in its list.
+    h.get_by_label("text.default").click();
+    h.run();
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::Z);
+    h.run();
+    h.run();
+    assert!(
+        handle.theme().spec().overrides.is_empty(),
+        "the editor's change is undone"
+    );
+    let s = egui_pop_core::lock(&store);
+    assert_eq!(
+        s.get("settings/level").unwrap().value,
+        Value::Float(0.5),
+        "the store's step is left alone"
+    );
+    assert_eq!(s.undo_steps().len(), 1);
+    drop(s);
+    // And Ctrl+Shift+Z makes it again.
+    h.key_press_modifiers(
+        egui::Modifiers::COMMAND | egui::Modifiers::SHIFT,
+        egui::Key::Z,
+    );
+    h.run();
+    h.run();
+    assert_eq!(handle.theme().spec().overrides.len(), 1);
+}

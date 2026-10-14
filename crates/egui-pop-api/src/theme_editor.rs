@@ -58,7 +58,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 
 use egui::{Id, RichText, Ui, WidgetInfo, WidgetType};
-use egui_pop_core::lock;
 use egui_pop_core::strings;
 use egui_pop_core::theme::{Tokens, color32};
 use egui_pop_core::tokens::contract::{self, Tier};
@@ -66,8 +65,10 @@ use egui_pop_core::tokens::contrast::{self, Level, Pair, PairKind};
 use egui_pop_core::tokens::{
     BUILT_IN_THEMES, Color, ResolvedTokens, ThemeDraft, ThemeSpec, TokenEdit, Value, theme_label,
 };
-use egui_pop_model::commands::CommandSpec;
+use egui_pop_core::{focus, lock};
+use egui_pop_model::commands::{CommandSpec, Origin};
 use egui_pop_model::ids::{CommandId, PluginId, StepId};
+use egui_pop_model::keymap::BindOptions;
 use serde_json::{Value as Json, json};
 
 use crate::app::AppHandle;
@@ -75,6 +76,10 @@ use crate::services::ServiceToken;
 use crate::steps::{Outcome, StepSpec};
 use crate::strings as txt;
 use crate::{Ctx, Plugin, PluginError};
+
+/// The focus surface the editor is drawn in (`themeEditorFocus`): its
+/// keys listen there.
+pub const SURFACE: &str = "themeEditor";
 
 /// The plugin's id.
 pub const THEME_EDITOR_PLUGIN: PluginId = PluginId::from_static("egui_pop.theme_editor");
@@ -568,34 +573,46 @@ impl Plugin for ThemeEditorPlugin {
                 }))
             },
         )?;
-        for (id, title, description, redo) in [
+        // The editor's own undo keys while it has the focus: a binding on
+        // its surface outranks the application's Edit > Undo (ADR 0014).
+        let surface = || BindOptions::surface(SURFACE);
+        for (id, title, description, redo, keys) in [
             (
                 CMD_THEME_UNDO,
                 "Undo a theme change",
                 "Takes the theme editor's last change back, through the theme.token step.",
                 false,
+                &["Ctrl+Z"][..],
             ),
             (
                 CMD_THEME_REDO,
                 "Redo a theme change",
                 "Makes the theme editor's last undone change again.",
                 true,
+                &["Ctrl+Shift+Z", "Ctrl+Y"][..],
             ),
         ] {
-            ctx.command(
-                CommandSpec::new(id, title, CAT)
-                    .description(description)
-                    .hidden(),
-                move |call| {
-                    let e = editor(call)?;
-                    let made = if redo {
-                        e.redo(call.app, Cause::Agent)?
-                    } else {
-                        e.undo(call.app, Cause::Agent)?
-                    };
-                    Ok(made.map_or(Json::Null, |m| m.to_json()))
-                },
-            )?;
+            let mut spec = CommandSpec::new(id, title, CAT)
+                .description(description)
+                .when("!textInputFocus")
+                .hidden();
+            for k in keys {
+                spec = spec.key_with(k, surface());
+            }
+            ctx.command(spec, move |call| {
+                let e = editor(call)?;
+                let cause = match (call.origin, redo) {
+                    (Origin::User, false) => Cause::Undo,
+                    (Origin::User, true) => Cause::Redo,
+                    _ => Cause::Agent,
+                };
+                let made = if redo {
+                    e.redo(call.app, cause)?
+                } else {
+                    e.undo(call.app, cause)?
+                };
+                Ok(made.map_or(Json::Null, |m| m.to_json()))
+            })?;
         }
         ctx.command(
             CommandSpec::new(CMD_THEME_START, "Start a theme from", CAT)
@@ -764,22 +781,27 @@ pub fn show(ui: &mut Ui, app: &AppHandle) {
         ui.weak(strings::tr(ui.ctx(), &txt::THEME_EDITOR_MISSING));
         return;
     };
+    // A surface of its own: Ctrl+Z there undoes the editor's changes.
+    focus::scope(ui, SURFACE, &[], |ui| editor_ui(ui, app, &editor));
+}
+
+fn editor_ui(ui: &mut Ui, app: &AppHandle, editor: &ThemeEditor) {
     editor.sync(app);
     let ctx = ui.ctx().clone();
     let tokens = editor.resolved(app);
-    toolbar(ui, app, &editor);
+    toolbar(ui, app, editor);
     ui.separator();
     ui.horizontal_top(|ui| {
         let list_width = (ui.available_width() * 0.38).clamp(200.0, 320.0);
         ui.vertical(|ui| {
             ui.set_width(list_width);
-            list(ui, &editor, &tokens);
+            list(ui, editor, &tokens);
         });
         ui.separator();
         ui.vertical(|ui| {
             let selected = lock(&editor.state).selected.clone();
             match selected.as_deref().and_then(|p| tokens.get(p)) {
-                Some(t) => detail(ui, app, &editor, &tokens, t),
+                Some(t) => detail(ui, app, editor, &tokens, t),
                 None => {
                     ui.weak(strings::tr(&ctx, &txt::THEME_EDITOR_PICK));
                 }
@@ -787,7 +809,7 @@ pub fn show(ui: &mut Ui, app: &AppHandle) {
         });
     });
     ui.separator();
-    file(ui, app, &editor);
+    file(ui, app, editor);
     let problems = tokens.problems();
     if !problems.is_empty() {
         let t = Tokens::of(&ctx);
@@ -799,7 +821,7 @@ pub fn show(ui: &mut Ui, app: &AppHandle) {
             ui.colored_label(t.status.warning, p.to_string());
         }
     }
-    finish_gesture(ui, app, &editor);
+    finish_gesture(ui, app, editor);
 }
 
 fn toolbar(ui: &mut Ui, app: &AppHandle, editor: &ThemeEditor) {
