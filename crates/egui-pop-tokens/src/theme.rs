@@ -79,43 +79,29 @@ pub const BUILT_IN_ACCENTS: &[&str] = &["gold", "blue", "green", "amber", "red"]
 /// The default kit's components (`docs/kit.md`), one file each, layered
 /// into `pop-dark` (and so into every theme extending it). One line per
 /// component, in alphabetical order.
+#[rustfmt::skip]
 const KIT_FILES: &[(&str, &str)] = &[
     ("glyph", include_str!("../themes/kit/glyph.tokens.json")),
-    (
-        "list-row",
-        include_str!("../themes/kit/list-row.tokens.json"),
-    ),
-    (
-        "list-view",
-        include_str!("../themes/kit/list-view.tokens.json"),
-    ),
+    ("list-row", include_str!("../themes/kit/list-row.tokens.json")),
+    ("list-view", include_str!("../themes/kit/list-view.tokens.json")),
+    ("meter", include_str!("../themes/kit/meter.tokens.json")),
+    ("meter-tick", include_str!("../themes/kit/meter-tick.tokens.json")),
+    ("progress-bar", include_str!("../themes/kit/progress-bar.tokens.json")),
+    ("progress-caption", include_str!("../themes/kit/progress-caption.tokens.json")),
+    ("progress-fill", include_str!("../themes/kit/progress-fill.tokens.json")),
+    ("progress-line", include_str!("../themes/kit/progress-line.tokens.json")),
+    ("progress-ring", include_str!("../themes/kit/progress-ring.tokens.json")),
+    ("spinner", include_str!("../themes/kit/spinner.tokens.json")),
+    ("status-indicator", include_str!("../themes/kit/status-indicator.tokens.json")),
     ("tab", include_str!("../themes/kit/tab.tokens.json")),
     ("tab-bar", include_str!("../themes/kit/tab-bar.tokens.json")),
-    (
-        "table-header-cell",
-        include_str!("../themes/kit/table-header-cell.tokens.json"),
-    ),
-    (
-        "table-stripe",
-        include_str!("../themes/kit/table-stripe.tokens.json"),
-    ),
-    (
-        "title-bar",
-        include_str!("../themes/kit/title-bar.tokens.json"),
-    ),
-    (
-        "tree-drop-marker",
-        include_str!("../themes/kit/tree-drop-marker.tokens.json"),
-    ),
+    ("table-header-cell", include_str!("../themes/kit/table-header-cell.tokens.json")),
+    ("table-stripe", include_str!("../themes/kit/table-stripe.tokens.json")),
+    ("title-bar", include_str!("../themes/kit/title-bar.tokens.json")),
+    ("tree-drop-marker", include_str!("../themes/kit/tree-drop-marker.tokens.json")),
     ("window", include_str!("../themes/kit/window.tokens.json")),
-    (
-        "window-button",
-        include_str!("../themes/kit/window-button.tokens.json"),
-    ),
-    (
-        "window-close",
-        include_str!("../themes/kit/window-close.tokens.json"),
-    ),
+    ("window-button", include_str!("../themes/kit/window-button.tokens.json")),
+    ("window-close", include_str!("../themes/kit/window-close.tokens.json")),
 ];
 
 const BUILT_IN_FILES: &[(&str, &str)] = &[

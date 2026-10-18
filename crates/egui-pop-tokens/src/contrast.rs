@@ -136,7 +136,7 @@ pub const PAIRS: &[Pair] = &[
     ui("focus.ring", "surface.sunken"),
     ui("accent.default", "surface.raised"),
     ui("slider.fill", "slider.track"),
-    ui("progress.fill", "progress.track"),
+    ui("progress-fill.rest.fill", "progress-bar.rest.fill"),
     ui("slider.thumb", "slider.track"),
     ui("toast.border", "surface.panel"),
     // A curve and its points over the curve editor's background.

@@ -209,23 +209,6 @@ const CORE: &[Required] = &[
     comp("button.text", "color", "a button's label"),
     comp("button.border", "color", "a button's outline"),
     comp("button.radius", "dimension", "a button's corners"),
-    comp("progress.track", "color", "a progress bar's track"),
-    comp(
-        "progress.fill",
-        "color",
-        "a progress bar's fill while running",
-    ),
-    comp("progress.height", "dimension", "a progress bar's thickness"),
-    comp(
-        "progress.line",
-        "dimension",
-        "a thin progress line's thickness",
-    ),
-    comp(
-        "progress.ring",
-        "dimension",
-        "a progress ring's and a spinner's diameter",
-    ),
     comp(
         "skeleton.fill",
         "color",
@@ -513,6 +496,31 @@ pub const RENAMED: &[(&str, &[&str])] = &[
         &["window-button.width", "window-close.width"],
     ),
     ("titlebar.grip", &["window.grip"]),
+    (
+        "progress.track",
+        &[
+            "progress-bar.rest.fill",
+            "progress-line.rest.fill",
+            "meter.rest.fill",
+            "progress-ring.rest.fill",
+            "spinner.rest.fill",
+            "status-indicator.rest.border-color",
+        ],
+    ),
+    (
+        "progress.fill",
+        &[
+            "progress-fill.rest.fill",
+            "progress-fill.tone.accent.fill",
+            "progress-ring.rest.indicator-color",
+            "progress-ring.tone.accent.indicator-color",
+            "spinner.rest.indicator-color",
+            "spinner.tone.accent.indicator-color",
+        ],
+    ),
+    ("progress.height", &["progress-bar.height", "meter.height"]),
+    ("progress.line", &["progress-line.height"]),
+    ("progress.ring", &["progress-ring.width", "spinner.width"]),
 ];
 
 mod kit;
