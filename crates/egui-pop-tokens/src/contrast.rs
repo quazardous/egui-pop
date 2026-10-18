@@ -103,6 +103,10 @@ pub const PAIRS: &[Pair] = &[
     text("toast.rest.text", "toast.rest.fill"),
     text("dialog.header-text", "dialog.header"),
     text("palette.header-text", "palette.header"),
+    text("field.rest.text", "field.rest.fill"),
+    text("field.rest.text", "field.tone.muted.fill"),
+    text("field.tone.muted.text", "field.rest.fill"),
+    text("field.tone.danger.border-color", "surface.panel"),
     // Editors: code over its background, line numbers over the gutter.
     text("editor.line-number", "editor.gutter"),
     text("editor.line-number-active", "editor.gutter"),
@@ -138,6 +142,11 @@ pub const PAIRS: &[Pair] = &[
     ui("slider.fill", "slider.track"),
     ui("progress-fill.rest.fill", "progress-bar.rest.fill"),
     ui("slider.thumb", "slider.track"),
+    // Input fields: the state edges and markers over the field.
+    ui("field.tone.accent.border-color", "field.rest.fill"),
+    ui("field.tone.warning.border-color", "field.rest.fill"),
+    ui("field.tone.danger.border-color", "field.rest.fill"),
+    ui("field.tone.info.border-color", "field.rest.fill"),
     ui("toast.rest.border-color", "surface.panel"),
     // A curve and its points over the curve editor's background.
     ui("curve.line", "curve.background"),

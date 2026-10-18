@@ -499,6 +499,18 @@ egui-pop-fault-body = Le reste de l’application fonctionne. Réessayez, ou sig
 
 egui-pop-fault-title = { $name } a cessé de fonctionner
 
+egui-pop-field-disabled = Indisponible : { $reason }
+
+egui-pop-field-modified-default = Modifié par rapport à la valeur par défaut
+
+egui-pop-field-modified-saved = Modifié depuis l’enregistrement
+
+egui-pop-field-pending = En cours de vérification
+
+egui-pop-field-required = Obligatoire
+
+egui-pop-field-reset = Rétablir { $label } par défaut
+
 egui-pop-files-all = Tous les fichiers
 
 egui-pop-files-bookmark = Ajouter ce dossier aux favoris
@@ -528,6 +540,12 @@ egui-pop-frame-minimize = Réduire
 egui-pop-frame-restore = Restaurer
 
 egui-pop-frame-window-menu = Menu de la fenêtre
+
+egui-pop-input-choices = { $label }, choix
+
+egui-pop-input-clear = Effacer { $label }
+
+egui-pop-input-more = { $label }, plus
 
 egui-pop-job-action-name = { $action } : { $job }
 

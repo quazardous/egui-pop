@@ -161,6 +161,37 @@ egui minor.
   `AppHandle::save_later`, `flush_documents`, `pending_documents` and
   `persist` for a plugin's own documents.
 
+- Field states (`model::field::FieldState`, drawn by `core::field`): one
+  model for every input, modified (against the saved or the default
+  value, with "reset to default"), required, invalid with a message,
+  disabled with a reason, read-only, pending. Each state has an edge
+  colour from the new `field.*` tokens and a marker icon, never colour
+  alone; assistive technologies get required, invalid, disabled with
+  its reason, read-only and busy; agents read every field's state and
+  disabled reason in the debug bridge's `fields` collector. Strings with
+  their French. Guide: docs/inputs.md.
+
+- Sliders and range sliders take a field state (`.state(..)`): the
+  edge and markers on the bar; a read-only slider keeps the focus and
+  refuses every change, a disabled one is greyed, skipped by Tab and
+  says its reason on hover. Without a state they are unchanged.
+
+- Tab order per focus scope (`core::tab`, `model::tab`): reading order
+  (rows, then left to right) whatever the drawing order, explicit
+  indices and groups, disabled fields skipped and read-only ones kept;
+  Tab cycles inside a modal scope, F6 and Shift+F6 move between panel
+  scopes, back to the stop focused there last.
+
+- The decorated input (`core::input::Input`, for text, numbers, paths
+  and search): a placeholder, leading and trailing icons, prefix,
+  suffix and unit, a clear button reachable by Tab (one undo step when
+  bound to a store), a reset arrow, attached buttons, split buttons
+  (also on their own: `input::split_button`) and a dropdown of choices;
+  a number field reads expressions as a slider's typed entry. The
+  gallery's new "Inputs" page shows every decorator, every state and
+  the Tab order (a form, two panels, a modal). The survey behind it is
+  in docs/widgets.md.
+
 - A theme editor (`api::theme_editor`, `ThemeEditorPlugin`, drawn by
   `theme_editor::show` in any `Ui`): the application's theme edited
   live, its tokens grouped by role (surfaces, text, accent, states,
@@ -926,6 +957,12 @@ egui minor.
 
 ### Changed
 
+- The input fields' tokens are the kit's `field` component: `field.rest.fill`,
+  `field.rest.text`, `field.rest.border-color`, `field.hover.border-color`,
+  and its tones for the states every field shows (`muted`: read-only fill
+  and placeholder; `accent`: modified; `warning`: required; `danger`:
+  invalid; `info`: pending). The flat names (`field.background`...) still
+  work, each reported.
 - The title bar's line is the kit's (`title-bar.rest.border-width`, 1 in
   the default kit): egui's panel line is no longer drawn under it, nor
   room kept for it when the title zone draws nothing.
@@ -1113,6 +1150,10 @@ egui minor.
   icon font) snap their stroke width (`max(side / 11, 1.25)` points) with
   `scale::snap`, and so does a focused icon's ring, so lines stay crisp
   at 1x, 1.5x and 2x.
+
+- The viewport draws "before" alone when the application passes
+  `Compare::Before`; only the held `before` key did, and the "after"
+  image was drawn instead (`egui-pop-viewport`).
 
 ## 0.1.0 (prepared, not published)
 

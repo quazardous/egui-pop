@@ -442,6 +442,16 @@ const CORE: &[Required] = &[
 /// moved to the new names (unless the theme gives them), with a reported
 /// problem. Aliases to an old name are not followed.
 pub const RENAMED: &[(&str, &[&str])] = &[
+    ("field.background", &["field.rest.fill"]),
+    ("field.background-read-only", &["field.tone.muted.fill"]),
+    ("field.text", &["field.rest.text"]),
+    ("field.placeholder", &["field.tone.muted.text"]),
+    ("field.border", &["field.rest.border-color"]),
+    ("field.border-hover", &["field.hover.border-color"]),
+    ("field.modified", &["field.tone.accent.border-color"]),
+    ("field.required", &["field.tone.warning.border-color"]),
+    ("field.invalid", &["field.tone.danger.border-color"]),
+    ("field.pending", &["field.tone.info.border-color"]),
     ("menu.item.background-hover", &["menu-item.hover.fill"]),
     ("menu.item.text", &["menu-item.rest.text"]),
     ("menu.item.text-muted", &["menu-item.tone.muted.text"]),

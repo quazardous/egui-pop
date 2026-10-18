@@ -82,6 +82,24 @@ pub const SLIDER_MAXIMUM: StrKey = StrKey::new("egui-pop-slider-maximum", "{ $la
 pub const BUSY: StrKey = StrKey::new("egui-pop-busy", "Busy");
 /// A skeleton standing in for content that loads.
 pub const LOADING: StrKey = StrKey::new("egui-pop-loading", "Loading");
+/// A decorated input's clear button.
+pub const INPUT_CLEAR: StrKey = StrKey::new("egui-pop-input-clear", "Clear { $label }");
+/// A decorated input's dropdown chevron.
+pub const INPUT_CHOICES: StrKey = StrKey::new("egui-pop-input-choices", "{ $label }, choices");
+/// A split button's chevron.
+pub const INPUT_MORE: StrKey = StrKey::new("egui-pop-input-more", "{ $label }, more");
+/// A field's states, as markers and assistive technologies say them.
+pub const FIELD_REQUIRED: StrKey = StrKey::new("egui-pop-field-required", "Required");
+pub const FIELD_MODIFIED_SAVED: StrKey =
+    StrKey::new("egui-pop-field-modified-saved", "Changed since saved");
+pub const FIELD_MODIFIED_DEFAULT: StrKey = StrKey::new(
+    "egui-pop-field-modified-default",
+    "Changed from the default",
+);
+pub const FIELD_RESET: StrKey = StrKey::new("egui-pop-field-reset", "Reset { $label } to default");
+pub const FIELD_PENDING: StrKey = StrKey::new("egui-pop-field-pending", "Being checked");
+pub const FIELD_DISABLED: StrKey =
+    StrKey::new("egui-pop-field-disabled", "Unavailable: { $reason }");
 
 /// Every string egui-pop core shows, for catalogues and tests.
 pub const ALL: &[StrKey] = &[
@@ -102,6 +120,15 @@ pub const ALL: &[StrKey] = &[
     SLIDER_MAXIMUM,
     BUSY,
     LOADING,
+    INPUT_CLEAR,
+    INPUT_CHOICES,
+    INPUT_MORE,
+    FIELD_REQUIRED,
+    FIELD_MODIFIED_SAVED,
+    FIELD_MODIFIED_DEFAULT,
+    FIELD_RESET,
+    FIELD_PENDING,
+    FIELD_DISABLED,
 ];
 
 /// Gives the text of a key in the current language, if it has one.

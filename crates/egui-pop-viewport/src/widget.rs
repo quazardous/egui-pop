@@ -806,6 +806,7 @@ impl<'a> Viewport<'a> {
             state,
             [self.source, self.before],
             split_x,
+            compare == Compare::Before,
             &mapping,
             &target,
             target_changed,
@@ -1152,6 +1153,7 @@ fn draw_tiles(
     state: &mut ViewportState,
     sources: [Option<&dyn TileSource>; 2],
     split_x: Option<f32>,
+    before_only: bool,
     mapping: &Mapping,
     target: &DisplayTarget,
     target_changed: bool,
@@ -1181,7 +1183,8 @@ fn draw_tiles(
     let stage = transform.stage(&target.effective());
     state.stage = Some(stage);
     let mut drawn: Vec<TileDraw> = Vec::new();
-    let showing_before = state.before_held;
+    // "Before" alone: the application's choice, or the key held.
+    let showing_before = before_only;
     let rect = mapping.rect;
     let mut sides: Vec<(Side, &dyn TileSource, Rect, u64)> = Vec::new();
     match (before, split_x, showing_before) {

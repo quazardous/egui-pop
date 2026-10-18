@@ -500,6 +500,18 @@ egui-pop-fault-body = The rest of the application is fine. Retry, or report the 
 
 egui-pop-fault-title = { $name } stopped working
 
+egui-pop-field-disabled = Unavailable: { $reason }
+
+egui-pop-field-modified-default = Changed from the default
+
+egui-pop-field-modified-saved = Changed since saved
+
+egui-pop-field-pending = Being checked
+
+egui-pop-field-required = Required
+
+egui-pop-field-reset = Reset { $label } to default
+
 egui-pop-files-all = All files
 
 egui-pop-files-bookmark = Bookmark this folder
@@ -529,6 +541,12 @@ egui-pop-frame-minimize = Minimize
 egui-pop-frame-restore = Restore
 
 egui-pop-frame-window-menu = Window menu
+
+egui-pop-input-choices = { $label }, choices
+
+egui-pop-input-clear = Clear { $label }
+
+egui-pop-input-more = { $label }, more
 
 egui-pop-job-action-name = { $action }: { $job }
 

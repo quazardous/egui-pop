@@ -31,7 +31,7 @@ use serde_json::{Value as Json, json};
 
 use crate::binding::SharedStore;
 use crate::state::lock;
-use crate::{a11y, fault, focus, overlay, theme};
+use crate::{a11y, fault, field, focus, overlay, tab, theme};
 
 /// An action a collector offers.
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -181,8 +181,8 @@ impl DebugBridge {
         Self::default()
     }
 
-    /// A bridge with the collectors of this crate: focus, overlays,
-    /// faults, announcements and theme.
+    /// A bridge with the collectors of this crate: screen, focus,
+    /// overlays, fields, faults, announcements and theme.
     pub fn with_core_collectors() -> Self {
         let mut b = Self::new();
         for c in core_collectors() {
@@ -430,6 +430,16 @@ pub fn core_collectors() -> Vec<FnCollector> {
                 }
             },
         ),
+        FnCollector::new(
+            "fields",
+            "Every input drawn in the last pass: its label, kind and state (modified, required, invalid with its message, disabled with its reason, read-only, pending), and the Tab scopes with their order.",
+        )
+        .snapshot(|ctx| {
+            json!({
+                "fields": field::describe(ctx),
+                "tab_scopes": tab::scopes(ctx),
+            })
+        }),
         FnCollector::new("faults", "Panels and blocks showing an error card.")
             .snapshot(|ctx| json!(fault::faults(ctx))),
         FnCollector::new(

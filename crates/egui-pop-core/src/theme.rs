@@ -171,6 +171,23 @@ pub struct SliderTokens {
     pub thumb: Color32,
 }
 
+/// The kit's `field` component, read as plain colours: input fields and
+/// the states every field shows (its tones).
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct FieldTokens {
+    pub background: Color32,
+    pub background_read_only: Color32,
+    pub text: Color32,
+    pub placeholder: Color32,
+    pub border: Color32,
+    pub border_hover: Color32,
+    pub modified: Color32,
+    pub required: Color32,
+    pub invalid: Color32,
+    pub pending: Color32,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub struct MenuItemTokens {
@@ -274,6 +291,7 @@ pub struct Tokens {
     pub motion: MotionTokens,
     pub button: ButtonTokens,
     pub slider: SliderTokens,
+    pub field: FieldTokens,
     pub menu_item: MenuItemTokens,
     pub dialog: DialogTokens,
     pub toast: ToastTokens,
@@ -385,6 +403,18 @@ impl Tokens {
                 track: c("slider.track"),
                 fill: c("slider.fill"),
                 thumb: c("slider.thumb"),
+            },
+            field: FieldTokens {
+                background: c("field.rest.fill"),
+                background_read_only: c("field.tone.muted.fill"),
+                text: c("field.rest.text"),
+                placeholder: c("field.tone.muted.text"),
+                border: c("field.rest.border-color"),
+                border_hover: c("field.hover.border-color"),
+                modified: c("field.tone.accent.border-color"),
+                required: c("field.tone.warning.border-color"),
+                invalid: c("field.tone.danger.border-color"),
+                pending: c("field.tone.info.border-color"),
             },
             menu_item: MenuItemTokens {
                 background_hover: c("menu-item.hover.fill"),

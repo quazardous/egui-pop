@@ -35,6 +35,9 @@ pub mod viewport {}
 #[doc = include_str!("../../../docs/sliders.md")]
 pub mod sliders {}
 
+#[doc = include_str!("../../../docs/inputs.md")]
+pub mod inputs {}
+
 #[doc = include_str!("../../../docs/image-tools.md")]
 pub mod image_tools {}
 

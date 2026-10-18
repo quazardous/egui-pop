@@ -91,6 +91,15 @@ Both slider types share the builder methods (`hard`, `step`, `coarse`,
 `logarithmic`, `gradient`). `Slider::from_descriptor` reads a value
 descriptor, and the parameter widget (`egui_pop_core::param`) uses it.
 
+## Field states
+
+`.state(FieldState)` gives a slider (or a range) the state every input
+shows ([inputs](inputs.md#field-states)): modified, required, invalid,
+pending, read-only or disabled with a reason. The bar gets the state's
+edge and markers after its label, and assistive technologies the state.
+A read-only slider keeps the focus and refuses every change; a disabled
+one is greyed, skipped by Tab, and says its reason on hover.
+
 ## Hooks and the `slider.change` step
 
 `on_change` sees every change before it is written: a `Change` (the

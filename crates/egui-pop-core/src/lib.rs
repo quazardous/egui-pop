@@ -15,6 +15,12 @@
 //!   focus restore);
 //! - [`band`]: the header band a movable dialog or a palette is dragged
 //!   by;
+//! - [`field`]: a field's state (modified, required, invalid, disabled
+//!   with a reason, read-only, pending) drawn, announced and reported;
+//! - [`input`]: the decorated input (placeholder, slots, clear, attached
+//!   and split buttons, a dropdown) and the split button;
+//! - [`tab`]: Tab order in focus scopes (reading order, indices,
+//!   groups; cycling in a modal) and F6 between panels;
 //! - [`param`]: the editor a value descriptor calls for, in the three
 //!   binding modes;
 //! - [`slider`]: darktable-style sliders (soft and hard range, fine
@@ -43,12 +49,14 @@ pub mod band;
 pub mod binding;
 pub mod debug;
 pub mod fault;
+pub mod field;
 pub mod focus;
 pub mod focus_mode;
 pub mod fonts;
 pub mod frame;
 pub mod icon;
 pub mod icon_set;
+pub mod input;
 pub mod keys;
 pub mod kit;
 pub mod motion;
@@ -61,6 +69,7 @@ pub mod progress;
 pub mod scale;
 pub mod slider;
 pub mod strings;
+pub mod tab;
 pub mod theme;
 
 mod state;

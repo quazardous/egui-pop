@@ -51,6 +51,7 @@ fn every_collector_describes_and_snapshots_itself() {
     for expected in [
         "focus",
         "overlays",
+        "fields",
         "faults",
         "announcements",
         "theme",
