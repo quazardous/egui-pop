@@ -592,6 +592,9 @@ components! {
     /// The frame of an editor's code assist popups (completions,
     /// actions, hover cards).
     assist_card: "assist-card" => "card",
+    /// A push button. egui's own widgets take their states from it:
+    /// rest, hover, active, and selected for an open menu or combo box.
+    button: "button" => "box",
     /// What dims the interface behind a modal dialog: its `fill` at
     /// `opacity` (egui paints it).
     backdrop: "backdrop" => "plain",
@@ -600,6 +603,8 @@ components! {
     /// The frame around a text or code editor; `focus` while it has the
     /// keyboard.
     editor_frame: "editor-frame" => "card",
+    /// A text field. egui's text fields take their background from it.
+    field: "field" => "box",
     /// The card standing in for a part that panicked.
     fault_card: "fault-card" => "card",
     /// An editor's find and replace bar.
@@ -746,6 +751,7 @@ impl Kit {
         };
         let mut kit = Kit::compile_components(component, Glyphs::default(), Vec::new());
         kit.glyphs = Glyphs::compile(t, &mut problems);
+        problems.extend(egui_losses(&kit));
         kit.problems = problems;
         kit
     }
@@ -763,6 +769,42 @@ impl Kit {
         }
         install(ctx, &Tokens::of(ctx))
     }
+}
+
+/// What egui's own widgets, drawn from `button` and `field`
+/// (`theme::visuals_with`), cannot show of them: a kit giving it is told,
+/// rather than seeing it dropped in silence.
+fn egui_losses(kit: &Kit) -> Vec<String> {
+    let mut lost = Vec::new();
+    for (state, name) in [
+        (State::REST, "rest"),
+        (State::HOVER, "hover"),
+        (State::ACTIVE, "active"),
+        (State::SELECTED, "selected"),
+    ] {
+        let b = kit.button.style(state);
+        if b.indicator_size > 0.0 && b.indicator_color.a() > 0 {
+            lost.push(format!(
+                "button.{name}: egui's widgets draw no indicator (kept for egui-pop's own buttons)"
+            ));
+        }
+        if b.ring_width > 0.0 && b.ring_color.a() > 0 {
+            lost.push(format!(
+                "button.{name}: egui's widgets draw no focus ring (kept for egui-pop's own buttons)"
+            ));
+        }
+    }
+    let (f, b) = (kit.field.style(State::REST), kit.button.style(State::REST));
+    if (f.border_color, f.border_width, f.radius) != (b.border_color, b.border_width, b.radius) {
+        lost.push(
+            "field.rest: egui's text fields take their outline from `button` (egui shares widget states)"
+                .into(),
+        );
+    }
+    if f.text != b.text {
+        lost.push("field.rest.text: egui's text fields take the button's text colour".into());
+    }
+    lost
 }
 
 /// Compiles the kit of `tokens` with the registered handlers and
@@ -1026,6 +1068,53 @@ mod tests {
         assert_eq!(kit.progress_ring.style(State::REST).indicator_color, green);
         assert_eq!(kit.progress_bar.data.height, 12.0);
         assert_eq!(kit.meter.data.height, 12.0);
+    }
+
+    #[test]
+    fn egui_s_widgets_take_their_states_from_the_kit_s_button() {
+        let t = tokens_with(
+            r##"{ "$extends": "pop-dark",
+                 "button": { "hover": { "fill": {"$type": "color", "$value": "#123456"} },
+                             "rest": { "radius": {"$type": "dimension", "$value": {"value": 9, "unit": "px"}} } },
+                 "field": { "rest": { "fill": {"$type": "color", "$value": "#0a0b0c"} } } }"##,
+        );
+        let ctx = Context::default();
+        crate::theme::install_tokens(&ctx, t);
+        let v = ctx.global_style().visuals.clone();
+        assert_eq!(
+            v.widgets.hovered.bg_fill,
+            Color32::from_rgb(0x12, 0x34, 0x56)
+        );
+        assert_eq!(
+            v.widgets.inactive.corner_radius,
+            egui::CornerRadius::same(9)
+        );
+        assert_eq!(
+            v.text_edit_bg_color,
+            Some(Color32::from_rgb(0x0a, 0x0b, 0x0c))
+        );
+        // What egui cannot draw: the field's radius differs from the button's.
+        let kit = Kit::of(&ctx);
+        assert!(
+            kit.problems
+                .iter()
+                .any(|p| p.starts_with("field.rest: egui's text fields")),
+            "{:?}",
+            kit.problems
+        );
+    }
+
+    #[test]
+    fn a_button_indicator_is_reported_as_beyond_egui_s_widgets() {
+        let t = tokens_with(
+            r#"{ "$extends": "pop-dark",
+                 "button": { "selected": {
+                   "indicator-color": {"$type": "color", "$value": "{accent.default}"},
+                   "indicator-size": {"$type": "dimension", "$value": {"value": 2, "unit": "px"}} } } }"#,
+        );
+        let kit = Kit::compile(&t, &Shapes::default());
+        assert_eq!(kit.problems.len(), 1, "{:?}", kit.problems);
+        assert!(kit.problems[0].starts_with("button.selected: egui's widgets draw no indicator"));
     }
 
     #[test]

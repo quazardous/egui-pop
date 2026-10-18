@@ -200,20 +200,6 @@ const CORE: &[Required] = &[
         "duration",
         "a skeleton's shimmer crossing it",
     ),
-    comp("button.background", "color", "a button at rest"),
-    comp(
-        "button.background-hover",
-        "color",
-        "a button under the pointer",
-    ),
-    comp(
-        "button.background-active",
-        "color",
-        "a button being pressed",
-    ),
-    comp("button.text", "color", "a button's label"),
-    comp("button.border", "color", "a button's outline"),
-    comp("button.radius", "dimension", "a button's corners"),
     comp(
         "skeleton.fill",
         "color",
@@ -463,6 +449,15 @@ const CORE: &[Required] = &[
 /// moved to the new names (unless the theme gives them), with a reported
 /// problem. Aliases to an old name are not followed.
 pub const RENAMED: &[(&str, &[&str])] = &[
+    ("button.background", &["button.rest.fill"]),
+    (
+        "button.background-hover",
+        &["button.hover.fill", "button.selected.fill"],
+    ),
+    ("button.background-active", &["button.active.fill"]),
+    ("button.text", &["button.rest.text"]),
+    ("button.border", &["button.rest.border-color"]),
+    ("button.radius", &["button.rest.radius"]),
     ("titlebar.background", &["title-bar.rest.fill"]),
     (
         "titlebar.text",

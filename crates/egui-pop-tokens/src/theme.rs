@@ -84,9 +84,11 @@ pub const BUILT_IN_ACCENTS: &[&str] = &["gold", "blue", "green", "amber", "red"]
 pub(crate) const KIT_FILES: &[(&str, &str)] = &[
     ("assist-card", include_str!("../themes/kit/assist-card.tokens.json")),
     ("backdrop", include_str!("../themes/kit/backdrop.tokens.json")),
+    ("button", include_str!("../themes/kit/button.tokens.json")),
     ("dialog", include_str!("../themes/kit/dialog.tokens.json")),
     ("editor-frame", include_str!("../themes/kit/editor-frame.tokens.json")),
     ("fault-card", include_str!("../themes/kit/fault-card.tokens.json")),
+    ("field", include_str!("../themes/kit/field.tokens.json")),
     ("find-bar", include_str!("../themes/kit/find-bar.tokens.json")),
     ("fullscreen-exit", include_str!("../themes/kit/fullscreen-exit.tokens.json")),
     ("glyph", include_str!("../themes/kit/glyph.tokens.json")),

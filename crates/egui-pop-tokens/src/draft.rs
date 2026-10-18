@@ -418,7 +418,7 @@ mod tests {
         for (path, v) in [
             ("accent.default", json!("#2060c0")),
             ("radius.widget", json!({ "value": 2, "unit": "px" })),
-            ("button.border", json!("{border.strong}")),
+            ("button.rest.border-color", json!("{border.strong}")),
         ] {
             let e = d.edit(&t, path, Some(v)).unwrap().unwrap();
             d.apply(e);

@@ -137,7 +137,10 @@
   },
   "selection": {"$type": "color", "$value": "{blue.5}"},
   "button": {
-    "border": {"$type": "color", "$value": "{border.strong}", "$description": "Every control outlined."}
+    "rest": {"border-color": {"$type": "color", "$value": "{border.strong}", "$description": "Every control outlined."}}
+  },
+  "field": {
+    "rest": {"border-color": {"$type": "color", "$value": "{border.strong}", "$description": "Every control outlined."}}
   },
   "font": {
     "size": {

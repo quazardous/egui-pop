@@ -48,6 +48,8 @@ use egui::{
     Color32, Context, CornerRadius, Id, Margin, Stroke, Style, TextStyle, ThemePreference, Visuals,
     style::ScrollAnimation,
 };
+
+use crate::kit::{Kit, Shapes, State};
 pub use egui_pop_tokens::{
     BUILT_IN_ACCENTS, BUILT_IN_THEMES, Density, FALLBACK_THEME, POP_THEMES, ResolvedTokens,
     ThemeSpec, Themes, theme_label,
@@ -372,12 +374,12 @@ impl Tokens {
                 }
             },
             button: ButtonTokens {
-                background: c("button.background"),
-                background_hover: c("button.background-hover"),
-                background_active: c("button.background-active"),
-                text: c("button.text"),
-                border: c("button.border"),
-                radius: d("button.radius"),
+                background: c("button.rest.fill"),
+                background_hover: c("button.hover.fill"),
+                background_active: c("button.active.fill"),
+                text: c("button.rest.text"),
+                border: c("button.rest.border-color"),
+                radius: d("button.rest.radius"),
             },
             slider: SliderTokens {
                 track: c("slider.track"),
@@ -472,6 +474,14 @@ fn margin(points: f32) -> Margin {
 
 /// egui's visuals for a theme.
 pub fn visuals(t: &Tokens) -> Visuals {
+    visuals_with(t, &Kit::compile(t, &Shapes::default()))
+}
+
+/// egui's visuals for a theme and its compiled kit: egui's widget states
+/// come from the kit's `button` (rest, hover, active, and selected for
+/// an open menu), text fields' background from its `field`. What egui
+/// cannot draw is in the kit's problems (`Kit::compile`).
+pub fn visuals_with(t: &Tokens, kit: &Kit) -> Visuals {
     let mut v = if t.dark_mode() {
         Visuals::dark()
     } else {
@@ -480,7 +490,7 @@ pub fn visuals(t: &Tokens) -> Visuals {
     v.panel_fill = t.surface.panel;
     v.window_fill = t.surface.overlay;
     v.extreme_bg_color = t.surface.sunken;
-    v.text_edit_bg_color = Some(t.surface.sunken);
+    v.text_edit_bg_color = Some(kit.field.style(State::REST).fill);
     v.faint_bg_color = t.surface.raised;
     v.code_bg_color = t.surface.raised;
     v.window_stroke = Stroke::new(1.0, t.border.default);
@@ -495,46 +505,25 @@ pub fn visuals(t: &Tokens) -> Visuals {
     v.text_cursor.stroke = Stroke::new(2.0, t.text.strong);
     v.text_cursor.blink = t.motion_duration > 0.0;
 
-    let b = &t.button;
     let w = &mut v.widgets;
+    let rest = kit.button.style(State::REST);
     w.noninteractive.bg_fill = t.surface.panel;
     w.noninteractive.weak_bg_fill = t.surface.panel;
-    w.noninteractive.bg_stroke = Stroke::new(1.0, t.border.default);
+    w.noninteractive.bg_stroke = Stroke::new(rest.border_width, t.border.default);
     w.noninteractive.fg_stroke = Stroke::new(1.0, t.text.default);
-    for (state, fill, border, text) in [
-        (&mut w.inactive, b.background, b.border, b.text),
-        (
-            &mut w.hovered,
-            b.background_hover,
-            t.border.strong,
-            t.text.strong,
-        ),
-        (
-            &mut w.active,
-            b.background_active,
-            t.focus_ring,
-            t.text.strong,
-        ),
-        (
-            &mut w.open,
-            b.background_hover,
-            t.border.default,
-            t.text.default,
-        ),
+    w.noninteractive.corner_radius = radius(rest.radius);
+    for (widget, state) in [
+        (&mut w.inactive, State::REST),
+        (&mut w.hovered, State::HOVER),
+        (&mut w.active, State::ACTIVE),
+        (&mut w.open, State::SELECTED),
     ] {
-        state.bg_fill = fill;
-        state.weak_bg_fill = fill;
-        state.bg_stroke = Stroke::new(1.0, border);
-        state.fg_stroke = Stroke::new(1.0, text);
-    }
-    for state in [
-        &mut w.noninteractive,
-        &mut w.inactive,
-        &mut w.hovered,
-        &mut w.active,
-        &mut w.open,
-    ] {
-        state.corner_radius = radius(b.radius);
+        let b = kit.button.style(state);
+        widget.bg_fill = b.fill;
+        widget.weak_bg_fill = b.fill;
+        widget.bg_stroke = Stroke::new(b.border_width, b.border_color);
+        widget.fg_stroke = Stroke::new(1.0, b.text);
+        widget.corner_radius = radius(b.radius);
     }
     v
 }
@@ -542,8 +531,13 @@ pub fn visuals(t: &Tokens) -> Visuals {
 /// egui's style for a theme, built over `base` (whose settings the theme
 /// does not decide are kept).
 pub fn style(t: &Tokens, base: &Style) -> Style {
+    style_with(t, &Kit::compile(t, &Shapes::default()), base)
+}
+
+/// [`style`] with a compiled kit (the one installed with the theme).
+pub fn style_with(t: &Tokens, kit: &Kit, base: &Style) -> Style {
     let mut style = base.clone();
-    style.visuals = visuals(t);
+    style.visuals = visuals_with(t, kit);
     for (text_style, size) in [
         (TextStyle::Small, t.font.small),
         (TextStyle::Body, t.font.body),
@@ -609,15 +603,16 @@ pub fn install_tokens(ctx: &Context, tokens: Tokens) -> Arc<Tokens> {
     } else {
         ThemePreference::Light
     });
+    // The kit first: egui's style is drawn from it.
+    let kit = crate::kit::install(ctx, &tokens);
     let ppp = ctx.pixels_per_point();
     ctx.all_styles_mut(|s| {
-        *s = style(&tokens, s);
+        *s = style_with(&tokens, &kit, s);
         snap_strokes(s, ppp);
     });
     ctx.data_mut(|d| d.insert_temp(tokens_id(), tokens.clone()));
     crate::fonts::install(ctx, &tokens.font.family_ui, &tokens.font.family_mono);
     crate::icon_set::install(ctx, &tokens);
-    crate::kit::install(ctx, &tokens);
     tokens
 }
 

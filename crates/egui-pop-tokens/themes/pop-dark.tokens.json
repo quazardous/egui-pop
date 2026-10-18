@@ -210,15 +210,6 @@
       "shimmer": {"$type": "duration", "$value": {"value": 1600, "unit": "ms"}, "$description": "A skeleton's shimmer crossing it (none under reduced motion)."}
     }
   },
-  "button": {
-    "$description": "Push buttons; egui's own widgets are drawn with these.",
-    "background": {"$type": "color", "$value": "{surface.raised}"},
-    "background-hover": {"$type": "color", "$value": "{surface.hover}"},
-    "background-active": {"$type": "color", "$value": "{surface.active}"},
-    "text": {"$type": "color", "$value": "{text.default}"},
-    "border": {"$type": "color", "$value": "{border.default}"},
-    "radius": {"$type": "dimension", "$value": "{radius.widget}"}
-  },
   "skeleton": {
     "$description": "Skeletons standing in for content that loads.",
     "$type": "color",
