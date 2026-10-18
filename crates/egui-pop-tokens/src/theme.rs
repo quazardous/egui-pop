@@ -7,7 +7,7 @@ use std::str::FromStr;
 
 use serde_json::{Map, Value as Json, json};
 
-use crate::contract::{CONTRACT, Tier, required};
+use crate::contract::{Tier, contract, required};
 use crate::file::{RawToken, TokenFile, alias_target};
 use crate::{Color, Error, Value};
 
@@ -75,6 +75,27 @@ pub fn theme_label(name: &str) -> String {
 
 /// The built-in colour scales usable as an accent.
 pub const BUILT_IN_ACCENTS: &[&str] = &["gold", "blue", "green", "amber", "red"];
+
+/// The default kit's components (`docs/kit.md`), one file each, layered
+/// into `pop-dark` (and so into every theme extending it). One line per
+/// component, in alphabetical order.
+const KIT_FILES: &[(&str, &str)] = &[
+    ("tab", include_str!("../themes/kit/tab.tokens.json")),
+    ("tab-bar", include_str!("../themes/kit/tab-bar.tokens.json")),
+    (
+        "title-bar",
+        include_str!("../themes/kit/title-bar.tokens.json"),
+    ),
+    ("window", include_str!("../themes/kit/window.tokens.json")),
+    (
+        "window-button",
+        include_str!("../themes/kit/window-button.tokens.json"),
+    ),
+    (
+        "window-close",
+        include_str!("../themes/kit/window-close.tokens.json"),
+    ),
+];
 
 const BUILT_IN_FILES: &[(&str, &str)] = &[
     ("pop-dark", include_str!("../themes/pop-dark.tokens.json")),
@@ -411,7 +432,18 @@ impl Default for Themes {
                 .collect(),
         };
         for (name, text) in BUILT_IN_FILES {
-            themes.add(TokenFile::parse(name, text).expect("built-in themes parse"));
+            let mut file = TokenFile::parse(name, text).expect("built-in themes parse");
+            if *name == FALLBACK_THEME {
+                for (component, text) in KIT_FILES {
+                    let part = TokenFile::parse(&format!("kit/{component}"), text)
+                        .expect("the default kit's files parse");
+                    for (path, token) in part.tokens {
+                        let clash = file.tokens.insert(path.clone(), token);
+                        assert!(clash.is_none(), "kit/{component} repeats {path}");
+                    }
+                }
+            }
+            themes.add(file);
         }
         themes
     }
@@ -499,8 +531,7 @@ impl Themes {
     /// `pop-dark` value.
     pub fn resolve(&self, spec: &ThemeSpec) -> ResolvedTokens {
         let mut resolved = self.resolve_without_fallback(spec);
-        let missing: Vec<&str> = CONTRACT
-            .iter()
+        let missing: Vec<&str> = contract()
             .filter(|r| resolved.tokens.get(r.path).is_none_or(|t| t.ty != r.ty))
             .map(|r| r.path)
             .collect();
@@ -598,7 +629,7 @@ impl Themes {
                 }
             }
         }
-        for r in CONTRACT {
+        for r in contract() {
             if !raw.contains_key(r.path) {
                 problems.push(Error::Missing {
                     path: r.path.to_string(),

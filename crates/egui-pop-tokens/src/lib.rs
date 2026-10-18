@@ -12,7 +12,7 @@
 //! scales such as `gray.0`..`gray.12`), the **system** roles widgets read
 //! (`surface.panel`, `text.muted`) and **component** tokens
 //! (`slider.fill`), each tier aliasing the one below. Every theme answers
-//! the same [`CONTRACT`]; a theme missing a token, or giving it the wrong
+//! the same [`contract()`]; a theme missing a token, or giving it the wrong
 //! type, gets the built-in `pop-dark` value for it and a reported problem.
 //! Resolving never panics.
 //!
@@ -52,7 +52,7 @@ mod theme;
 mod value;
 
 pub use color::Color;
-pub use contract::{CONTRACT, RENAMED, Required, Tier};
+pub use contract::{RENAMED, Required, Tier, contract};
 pub use draft::{DRAFT_EXTENSION, DRAFT_VERSION, ThemeDraft, TokenEdit};
 pub use error::Error;
 pub use file::{RawToken, TokenFile};

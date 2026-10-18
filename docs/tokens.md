@@ -74,7 +74,7 @@ Not read yet: references inside composite values, JSON Pointer `$ref`,
    (Catppuccin's mauve) and use it as their accent.
 
 2. **System**: roles, what a value is for. These are the tokens widgets
-   read, listed in `CONTRACT`:
+   read, listed in `contract()`:
    `surface.{canvas, panel, raised, hover, active, overlay, sunken}`,
    `text.{default, muted, strong, on-accent}`, `border.{default, strong}`,
    `accent.{default, hover, active, subtle}`, `danger`, `warning`,
@@ -222,7 +222,10 @@ shows the same table live.
 
 For a new **built-in** theme: add the file under `themes/`, list it in
 `BUILT_IN_FILES` and `BUILT_IN_THEMES`, and the contrast and contract tests
-cover it at once. Add its snapshots to the gallery tests
+cover it at once. The default kit's component tokens are not in
+`pop-dark.tokens.json`: they live in `themes/kit/<component>.tokens.json`
+and are layered into `pop-dark` at load (`docs/kit.md`). Add its
+snapshots to the gallery tests
 (`UPDATE_SNAPSHOTS=1 cargo test -p egui-pop-gallery`).
 
 ## Into egui

@@ -1,0 +1,30 @@
+{
+  "$description": "The `tab` component of the default kit (docs/kit.md), layered into pop-dark.",
+  "tab": {
+    "$description": "A tab of the workbench's tab bars (a kit component, docs/kit.md): per state, only what differs from rest.",
+    "shape": {"$type": "string", "$value": "box", "$description": "The handler that draws it: box (joined to its panel) or underline."},
+    "padding-x": {"$type": "dimension", "$value": "{space.m}"},
+    "height": {"$type": "dimension", "$value": "{size.control.height}"},
+    "indicator-side": {"$type": "string", "$value": "bottom"},
+    "align": {"$type": "string", "$value": "centre"},
+    "rest": {
+      "fill": {"$type": "color", "$value": "{surface.canvas}"},
+      "border-color": {"$type": "color", "$value": "{border.default}"},
+      "border-width": {"$type": "dimension", "$value": {"value": 1, "unit": "px"}},
+      "radius": {"$type": "dimension", "$value": "{radius.widget}"},
+      "text": {"$type": "color", "$value": "{text.default}"},
+      "indicator-color": {"$type": "color", "$value": "{accent.default}"},
+      "indicator-size": {"$type": "dimension", "$value": {"value": 0, "unit": "px"}}
+    },
+    "selected": {
+      "fill": {"$type": "color", "$value": "{surface.overlay}"}
+    },
+    "hover": {
+      "border-color": {"$type": "color", "$value": "{border.strong}"},
+      "text": {"$type": "color", "$value": "{text.strong}"}
+    },
+    "focus": {
+      "text": {"$type": "color", "$value": "{text.strong}"}
+    }
+  }
+}

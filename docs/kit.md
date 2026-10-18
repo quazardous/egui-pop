@@ -52,6 +52,7 @@ does not change with the state.
 | `padding-x` | | between the label and the sides |
 | `height` | | the component's height, when it has a fixed one |
 | `indicator-side` | | `top`, `bottom`, `left` or `right` |
+| `ring-color`, `ring-width`, `ring-offset` | ✓ | the focus ring, usually given by `focus` only: an outline `ring-offset` points outside the box (inside when negative), following its corners; none at width 0 |
 | `align` | | where the label goes: `start`, `centre` (on the part's centre, moved into its room when it does not fit) or `end` |
 | `width` | | the component's width, when it has a fixed one |
 
@@ -82,6 +83,29 @@ with `align`, `kit::paint_label`). `KitCx` is the painter and
 the pixels per point. A shape a theme names is a handler registered under
 that name: egui-pop ships some, an application adds its own with
 `kit::register_tab_shape` before installing a theme that names them.
+
+## Adding a component
+
+Each step touches its own file, plus one line in a list kept in
+alphabetical order, so changes adding different components can be made
+in parallel (the lanes of the umbrella issue):
+
+1. **Its tokens** in `crates/egui-pop-tokens/themes/kit/<component>.tokens.json`
+   (aliases of system tokens, `rest` complete, other states only what
+   differs), plus one line in `KIT_FILES` (`src/theme.rs`).
+2. **Its contract** in `crates/egui-pop-tokens/src/contract/kit/<component>.rs`
+   (`shape`, the component terms and every `rest` term), plus one line in
+   `GROUPS` (`contract/kit/mod.rs`).
+3. **The component** in the kit: one line in `components!`
+   (`crates/egui-pop-core/src/kit/mod.rs`): its field, token name and
+   default handler.
+4. **Its handlers**, if `plain` is not enough: a module under
+   `kit/shapes/` and one line each in `shapes::built_in`.
+5. **The widget**: computes its state with `State::from_response` (plus
+   what only it knows, `SELECTED`), paints with `Kit::of(ctx).<component>`
+   (`paint`, its own content, `paint_label`), and no longer reads colours
+   from `Tokens` for that part.
+6. **Its snapshots**: only the gallery snapshots of that component change.
 
 ## Compiled once
 

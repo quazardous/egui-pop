@@ -619,12 +619,10 @@ fn window_button(ui: &mut Ui, rect: Rect, which: Button, maximized: bool) -> boo
     let response = ui.interact(rect, id, Sense::click());
     a11y::name(&response, WidgetType::Button, name);
     let kit = Kit::of(ui.ctx());
-    let hot = response.hovered()
-        || response.is_pointer_button_down_on()
-        || native_hover(ui.ctx()) == Some(which);
-    let state = State::REST
-        .with(State::HOVER, hot)
-        .with(State::ACTIVE, response.is_pointer_button_down_on());
+    // On Windows the system, not egui, may see the pointer over the
+    // button (its hit test answers for it): drawn as hovered then.
+    let state =
+        State::from_response(&response).with(State::HOVER, native_hover(ui.ctx()) == Some(which));
     let component = match which {
         Button::Close => &kit.window_close,
         _ => &kit.window_button,

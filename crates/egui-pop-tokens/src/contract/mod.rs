@@ -41,7 +41,11 @@ const fn sys(path: &'static str, ty: &'static str, description: &'static str) ->
     }
 }
 
-const fn comp(path: &'static str, ty: &'static str, description: &'static str) -> Required {
+pub(crate) const fn comp(
+    path: &'static str,
+    ty: &'static str,
+    description: &'static str,
+) -> Required {
     Required {
         path,
         ty,
@@ -50,10 +54,9 @@ const fn comp(path: &'static str, ty: &'static str, description: &'static str) -
     }
 }
 
-/// Every token a theme must provide: the system tier and the component
-/// tier. A theme missing one, or giving one of another type, gets the
-/// built-in `pop-dark` value for it and a reported problem.
-pub const CONTRACT: &[Required] = &[
+/// The system tier and the components outside kits ([`contract`] adds
+/// the kit's).
+const CORE: &[Required] = &[
     sys(
         "transparent",
         "color",
@@ -485,137 +488,6 @@ pub const CONTRACT: &[Required] = &[
     ),
     comp("terminal.ansi.14", "color", "ANSI colour 14 (bright cyan)"),
     comp("terminal.ansi.15", "color", "ANSI colour 15 (bright white)"),
-    comp("tab.shape", "string", "the handler drawing a tab"),
-    comp(
-        "tab.padding-x",
-        "dimension",
-        "between a tab's label and its sides",
-    ),
-    comp("tab.height", "dimension", "a tab's height"),
-    comp(
-        "tab.indicator-side",
-        "string",
-        "the side of a tab's indicator bar",
-    ),
-    comp("tab.rest.fill", "color", "a tab at rest"),
-    comp("tab.rest.border-color", "color", "a tab's border at rest"),
-    comp("tab.rest.border-width", "dimension", "a tab's border width"),
-    comp("tab.rest.radius", "dimension", "a tab's corner radius"),
-    comp("tab.rest.text", "color", "a tab's label at rest"),
-    comp("tab.rest.indicator-color", "color", "a tab's indicator bar"),
-    comp(
-        "tab.rest.indicator-size",
-        "dimension",
-        "a tab's indicator bar thickness",
-    ),
-    comp("tab-bar.shape", "string", "the handler drawing a tab bar"),
-    comp("tab-bar.height", "dimension", "a tab bar's height"),
-    comp(
-        "tab-bar.indicator-side",
-        "string",
-        "the side of a tab bar's line",
-    ),
-    comp("tab-bar.rest.fill", "color", "behind a row of tabs"),
-    comp(
-        "tab-bar.rest.border-color",
-        "color",
-        "the line along a tab bar",
-    ),
-    comp("tab-bar.rest.border-width", "dimension", "the line's width"),
-    comp(
-        "title-bar.shape",
-        "string",
-        "the handler drawing a window's own title bar",
-    ),
-    comp("title-bar.height", "dimension", "the title bar's height"),
-    comp(
-        "title-bar.padding-x",
-        "dimension",
-        "between the title and the bar's items",
-    ),
-    comp(
-        "title-bar.align",
-        "string",
-        "where the title goes: start, centre or end",
-    ),
-    comp(
-        "title-bar.indicator-side",
-        "string",
-        "the side of the title bar's line",
-    ),
-    comp("title-bar.rest.fill", "color", "a window's own title bar"),
-    comp("title-bar.rest.text", "color", "the window's title"),
-    comp(
-        "title-bar.rest.border-color",
-        "color",
-        "the line along the title bar",
-    ),
-    comp(
-        "title-bar.rest.border-width",
-        "dimension",
-        "the line's width (0: none)",
-    ),
-    comp(
-        "window-button.shape",
-        "string",
-        "the handler drawing minimize and maximize",
-    ),
-    comp(
-        "window-button.width",
-        "dimension",
-        "a window button's width",
-    ),
-    comp(
-        "window-button.rest.fill",
-        "color",
-        "a window button at rest",
-    ),
-    comp(
-        "window-button.rest.text",
-        "color",
-        "a window button's glyph at rest",
-    ),
-    comp(
-        "window-button.hover.fill",
-        "color",
-        "a window button under the pointer",
-    ),
-    comp(
-        "window-button.hover.text",
-        "color",
-        "its glyph under the pointer",
-    ),
-    comp(
-        "window-close.shape",
-        "string",
-        "the handler drawing the close button",
-    ),
-    comp(
-        "window-close.width",
-        "dimension",
-        "the close button's width",
-    ),
-    comp(
-        "window-close.rest.fill",
-        "color",
-        "the close button at rest",
-    ),
-    comp(
-        "window-close.rest.text",
-        "color",
-        "the close button's glyph at rest",
-    ),
-    comp(
-        "window-close.hover.fill",
-        "color",
-        "the close button under the pointer",
-    ),
-    comp(
-        "window-close.hover.text",
-        "color",
-        "its glyph under the pointer",
-    ),
-    comp("window.grip", "dimension", "the resize edges' width"),
 ];
 
 /// Tokens renamed into the kit's grid (`component.state.term`,
@@ -643,7 +515,17 @@ pub const RENAMED: &[(&str, &[&str])] = &[
     ("titlebar.grip", &["window.grip"]),
 ];
 
+mod kit;
+
+/// Every token a theme must provide: the system tier, the component tier
+/// and the default kit's components. A theme missing one, or giving one
+/// of another type, gets the built-in `pop-dark` value for it and a
+/// reported problem.
+pub fn contract() -> impl Iterator<Item = &'static Required> {
+    CORE.iter().chain(kit::GROUPS.iter().flat_map(|g| g.iter()))
+}
+
 /// The contract entry for a path.
 pub fn required(path: &str) -> Option<&'static Required> {
-    CONTRACT.iter().find(|r| r.path == path)
+    contract().find(|r| r.path == path)
 }

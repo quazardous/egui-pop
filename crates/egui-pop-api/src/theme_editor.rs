@@ -656,8 +656,7 @@ struct Group {
 /// the palette.
 fn groups(tokens: &ResolvedTokens) -> Vec<Group> {
     let system = |test: &dyn Fn(&str) -> bool| -> Vec<String> {
-        contract::CONTRACT
-            .iter()
+        contract::contract()
             .filter(|r| r.tier == Tier::System && test(r.path))
             .map(|r| r.path.to_string())
             .collect()
@@ -702,8 +701,7 @@ fn groups(tokens: &ResolvedTokens) -> Vec<Group> {
         },
         Group {
             title: &txt::THEME_EDITOR_COMPONENTS,
-            paths: contract::CONTRACT
-                .iter()
+            paths: contract::contract()
                 .filter(|r| r.tier == Tier::Component)
                 .map(|r| r.path.to_string())
                 .collect(),

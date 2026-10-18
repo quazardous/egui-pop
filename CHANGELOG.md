@@ -23,6 +23,9 @@ egui minor.
 - The title bar and window buttons are kit components (`title-bar`,
   `window-button`, `window-close`); `title-bar.align: start` puts the
   title after the bar's leading items instead of centring it.
+- Kit vocabulary: the focus ring as data (`ring-color`, `ring-width`,
+  `ring-offset`, drawn by every shipped handler) and
+  `kit::State::from_response`, the state egui sees on a response.
 - Renamed tokens: a theme giving a former name still works, its value
   moved to the new name, with a reported problem (`RENAMED`). New system
   token `transparent`.
@@ -837,6 +840,10 @@ egui minor.
 
 ### Changed
 
+- `egui_pop_tokens::CONTRACT` is replaced by `contract()`: the default
+  kit's components keep their contract and their tokens in one file each
+  (`contract/kit/`, `themes/kit/`), so components can be added
+  independently (`docs/kit.md`, "Adding a component").
 - The `titlebar.*` tokens are renamed into the kit's grid:
   `title-bar.rest.fill`, `title-bar.rest.text`, `title-bar.height`,
   `window-button.{rest,hover}.{fill,text}`, `window-close.*`,

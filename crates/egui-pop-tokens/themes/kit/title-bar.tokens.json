@@ -1,0 +1,17 @@
+{
+  "$description": "The `title-bar` component of the default kit (docs/kit.md), layered into pop-dark.",
+  "title-bar": {
+    "$description": "A window's own title bar, when the application draws its frame (a kit component, docs/kit.md).",
+    "shape": {"$type": "string", "$value": "plain"},
+    "height": {"$type": "dimension", "$value": "{size.titlebar.height}"},
+    "padding-x": {"$type": "dimension", "$value": "{space.m}"},
+    "align": {"$type": "string", "$value": "centre", "$description": "Where the title goes: start (after the leading items), centre (on the bar, when there is room) or end."},
+    "indicator-side": {"$type": "string", "$value": "bottom"},
+    "rest": {
+      "fill": {"$type": "color", "$value": "{surface.panel}"},
+      "text": {"$type": "color", "$value": "{text.default}"},
+      "border-color": {"$type": "color", "$value": "{border.default}"},
+      "border-width": {"$type": "dimension", "$value": {"value": 0, "unit": "px"}}
+    }
+  }
+}

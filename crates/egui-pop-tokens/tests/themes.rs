@@ -2,8 +2,8 @@
 //! overlays touch what they should, problems fall back instead of breaking.
 
 use egui_pop_tokens::{
-    BUILT_IN_ACCENTS, BUILT_IN_THEMES, CONTRACT, Color, Density, Error, POP_THEMES, ThemeSpec,
-    Themes, Tier, TokenFile, Value,
+    BUILT_IN_ACCENTS, BUILT_IN_THEMES, Color, Density, Error, POP_THEMES, ThemeSpec, Themes, Tier,
+    TokenFile, Value, contract,
 };
 use serde_json::json;
 
@@ -26,7 +26,7 @@ fn built_in_themes_answer_the_whole_contract_cleanly() {
             spec.label(),
             r.problems()
         );
-        for req in CONTRACT {
+        for req in contract() {
             let t = r
                 .get(req.path)
                 .unwrap_or_else(|| panic!("{}: {}", spec.label(), req.path));
@@ -41,7 +41,7 @@ fn built_in_themes_answer_the_whole_contract_cleanly() {
 fn system_and_component_tokens_are_aliases_of_the_tier_below() {
     let themes = Themes::default();
     let r = themes.resolve(&ThemeSpec::default());
-    for req in CONTRACT.iter().filter(|r| r.ty == "color") {
+    for req in contract().filter(|r| r.ty == "color") {
         let token = r.get(req.path).unwrap();
         let target = token
             .alias
@@ -165,7 +165,7 @@ fn extends_problems_fall_back_to_pop_dark() {
     // Every contract token still has a value: from pop-dark, but for the
     // density overlay's own.
     assert!(cycle.get("surface.panel").is_some_and(|t| t.fallback));
-    for req in CONTRACT {
+    for req in contract() {
         assert!(cycle.get(req.path).is_some(), "{}", req.path);
     }
 
@@ -205,7 +205,7 @@ fn missing_or_mistyped_contract_tokens_fall_back_and_say_why() {
         dark.dimension("radius.widget")
     );
     assert_eq!(r.color("text.default"), dark.color("text.default"));
-    for req in CONTRACT {
+    for req in contract() {
         assert_eq!(
             r.get(req.path).map(|t| t.ty.as_str()),
             Some(req.ty),
@@ -427,7 +427,7 @@ fn every_shipped_theme_resolves_from_its_own_files() {
                 spec.label(),
                 t.problems()
             );
-            for r in egui_pop_tokens::CONTRACT {
+            for r in egui_pop_tokens::contract() {
                 let token = t
                     .get(r.path)
                     .unwrap_or_else(|| panic!("{base}: no {}", r.path));

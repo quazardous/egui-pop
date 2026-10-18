@@ -1,0 +1,7 @@
+{
+  "$description": "The `window` component of the default kit (docs/kit.md), layered into pop-dark.",
+  "window": {
+    "$description": "A window drawn by the application.",
+    "grip": {"$type": "dimension", "$value": "{size.frame.grip}", "$description": "Width of the resize edges."}
+  }
+}

@@ -26,11 +26,15 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use egui::epaint::{CornerRadius, StrokeKind};
-use egui::{Color32, Context, Galley, Id, Painter, Pos2, Rect, Stroke, Vec2, pos2};
+use egui::{Color32, Context, Galley, Id, Painter, Pos2, Rect, Response, Vec2};
 use egui_pop_tokens::Value;
 
 use crate::theme::Tokens;
+
+mod paint;
+mod shapes;
+
+pub use paint::{Corners, label_rect, paint_box, paint_indicator, paint_label, paint_ring};
 
 /// The states a part can be in, combined (a selected tab under the
 /// pointer is `SELECTED | HOVER`). No flag is the resting state.
@@ -58,6 +62,18 @@ impl State {
 
     pub fn contains(self, other: State) -> bool {
         self.0 & other.0 == other.0
+    }
+
+    /// The state egui sees on a response: `HOVER` under the pointer,
+    /// `ACTIVE` while pressed, `FOCUS` with the keyboard focus, `DISABLED`
+    /// when not enabled. What only the widget knows (`SELECTED`) it adds
+    /// with [`State::with`].
+    pub fn from_response(r: &Response) -> State {
+        State::REST
+            .with(State::HOVER, r.hovered())
+            .with(State::ACTIVE, r.is_pointer_button_down_on())
+            .with(State::FOCUS, r.has_focus())
+            .with(State::DISABLED, !r.enabled())
     }
 
     /// `self` with `other` added when `on`.
@@ -131,6 +147,12 @@ pub struct BoxStyle {
     /// none when its size is zero or its colour transparent.
     pub indicator_color: Color32,
     pub indicator_size: f32,
+    /// The focus ring (usually given by the `focus` state only): an
+    /// outline `ring_offset` points outside the box (inside when
+    /// negative), none when its width is zero.
+    pub ring_color: Color32,
+    pub ring_width: f32,
+    pub ring_offset: f32,
 }
 
 /// The terms of a box, as a state gives them: only what differs.
@@ -143,6 +165,9 @@ struct BoxPatch {
     text: Option<Color32>,
     indicator_color: Option<Color32>,
     indicator_size: Option<f32>,
+    ring_color: Option<Color32>,
+    ring_width: Option<f32>,
+    ring_offset: Option<f32>,
 }
 
 impl BoxPatch {
@@ -158,6 +183,9 @@ impl BoxPatch {
             text: c("text"),
             indicator_color: c("indicator-color"),
             indicator_size: d("indicator-size"),
+            ring_color: c("ring-color"),
+            ring_width: d("ring-width"),
+            ring_offset: d("ring-offset"),
         }
     }
 
@@ -170,6 +198,9 @@ impl BoxPatch {
             text,
             indicator_color,
             indicator_size,
+            ring_color,
+            ring_width,
+            ring_offset,
         } = *self;
         b.fill = fill.unwrap_or(b.fill);
         b.border_color = border_color.unwrap_or(b.border_color);
@@ -178,6 +209,9 @@ impl BoxPatch {
         b.text = text.unwrap_or(b.text);
         b.indicator_color = indicator_color.unwrap_or(b.indicator_color);
         b.indicator_size = indicator_size.unwrap_or(b.indicator_size);
+        b.ring_color = ring_color.unwrap_or(b.ring_color);
+        b.ring_width = ring_width.unwrap_or(b.ring_width);
+        b.ring_offset = ring_offset.unwrap_or(b.ring_offset);
     }
 }
 
@@ -360,22 +394,50 @@ impl std::fmt::Debug for Component {
     }
 }
 
-/// A compiled kit: every component egui-pop draws through one.
-#[derive(Clone, Debug)]
-pub struct Kit {
+/// Declares the kit's components: the `Kit` struct's fields, the
+/// [`COMPONENTS`] list (token name and default handler) and their
+/// compilation. One line per component, in alphabetical order, so that
+/// changes adding different components do not touch the same lines.
+macro_rules! components {
+    ($($(#[$doc:meta])* $field:ident: $name:literal => $default:literal,)*) => {
+        /// A compiled kit: every component egui-pop draws through one.
+        #[derive(Clone, Debug)]
+        pub struct Kit {
+            $($(#[$doc])* pub $field: Component,)*
+            /// What could not be compiled as written (an unknown shape, a
+            /// bad side): fallbacks were used.
+            pub problems: Vec<String>,
+        }
+
+        /// The components a kit has (their token name), with the handler
+        /// drawn when a theme names none it knows.
+        pub const COMPONENTS: &[(&str, &str)] = &[$(($name, $default),)*];
+
+        impl Kit {
+            fn compile_components(
+                mut component: impl FnMut(&str, &str) -> Component,
+                problems: Vec<String>,
+            ) -> Kit {
+                Kit {
+                    $($field: component($name, $default),)*
+                    problems,
+                }
+            }
+        }
+    };
+}
+
+components! {
     /// A tab of the workbench's tab bars.
-    pub tab: Component,
+    tab: "tab" => "box",
     /// The bar behind a row of tabs.
-    pub tab_bar: Component,
+    tab_bar: "tab-bar" => "plain",
     /// A window's own title bar; its label is the window's title.
-    pub title_bar: Component,
+    title_bar: "title-bar" => "plain",
     /// Minimize and maximize (the glyph is drawn in the box's `text`).
-    pub window_button: Component,
+    window_button: "window-button" => "plain",
     /// The close button.
-    pub window_close: Component,
-    /// What could not be compiled as written (an unknown shape, a bad
-    /// side): fallbacks were used.
-    pub problems: Vec<String>,
+    window_close: "window-close" => "plain",
 }
 
 type Handlers = BTreeMap<String, Arc<dyn Primitive<ComponentKit>>>;
@@ -384,29 +446,31 @@ type Handlers = BTreeMap<String, Arc<dyn Primitive<ComponentKit>>>;
 #[derive(Clone)]
 pub struct Shapes(BTreeMap<String, Handlers>);
 
-/// The components a kit has, with the handler drawn when a theme names
-/// none it knows.
-pub const COMPONENTS: [(&str, &str); 5] = [
-    ("tab", "box"),
-    ("tab-bar", "plain"),
-    ("title-bar", "plain"),
-    ("window-button", "plain"),
-    ("window-close", "plain"),
-];
-
 impl Default for Shapes {
-    /// The handlers egui-pop ships.
+    /// The handlers egui-pop ships: `plain` for every component, and each
+    /// handler module's own ([`shapes::built_in`]).
     fn default() -> Self {
-        let mut map: BTreeMap<String, Handlers> = BTreeMap::new();
+        let mut shapes = Shapes(BTreeMap::new());
         for (component, _) in COMPONENTS {
-            let mut h: Handlers = BTreeMap::new();
-            h.insert("plain".into(), Arc::new(Plain));
-            map.insert(component.into(), h);
+            shapes.insert(component, "plain", Arc::new(shapes::Plain));
         }
-        let tab = map.get_mut("tab").expect("a component");
-        tab.insert("box".into(), Arc::new(BoxTab));
-        tab.insert("underline".into(), Arc::new(UnderlineTab));
-        Shapes(map)
+        shapes::built_in(&mut shapes);
+        shapes
+    }
+}
+
+impl Shapes {
+    /// Adds a handler for a component under a name.
+    pub fn insert(
+        &mut self,
+        component: &str,
+        name: &str,
+        handler: Arc<dyn Primitive<ComponentKit>>,
+    ) {
+        self.0
+            .entry(component.into())
+            .or_default()
+            .insert(name.into(), handler);
     }
 }
 
@@ -438,10 +502,7 @@ pub fn register_shape(
 ) {
     ctx.data_mut(|d| {
         d.get_temp_mut_or_insert_with(shapes_id(), Shapes::default)
-            .0
-            .entry(component.into())
-            .or_default()
-            .insert(name.into(), handler);
+            .insert(component, name, handler);
     });
 }
 
@@ -461,7 +522,7 @@ impl Kit {
     /// Compiles the kit a theme describes, with the handlers given.
     pub fn compile(t: &Tokens, shapes: &Shapes) -> Kit {
         let mut problems = Vec::new();
-        let mut component = |name: &str, default: &str| {
+        let component = |name: &str, default: &str| {
             let handlers = &shapes.0[name];
             let data = ComponentKit::compile(t, name, &mut problems);
             let asked = string(t, &format!("{name}.shape")).unwrap_or_else(|| default.into());
@@ -481,16 +542,9 @@ impl Kit {
                 handler,
             }
         };
-        let [tab, tab_bar, title_bar, window_button, window_close] =
-            COMPONENTS.map(|(name, default)| component(name, default));
-        Kit {
-            tab,
-            tab_bar,
-            title_bar,
-            window_button,
-            window_close,
-            problems,
-        }
+        let mut kit = Kit::compile_components(component, Vec::new());
+        kit.problems = problems;
+        kit
     }
 
     /// The kit installed in a context, or the one of the installed
@@ -515,189 +569,10 @@ pub fn install(ctx: &Context, tokens: &Tokens) -> Arc<Kit> {
     kit
 }
 
-/// Paints a box: its fill and border with `corners` rounded by its
-/// radius, and its indicator on `side`. Strokes are whole physical
-/// pixels.
-pub fn paint_box(cx: &KitCx<'_>, rect: Rect, b: &BoxStyle, corners: Corners, side: Side) {
-    let r = b.radius.round().clamp(0.0, 255.0) as u8;
-    let radius = corners.radius(r);
-    if b.fill.a() > 0 {
-        cx.painter.rect_filled(rect, radius, b.fill);
-    }
-    if b.border_width > 0.0 && b.border_color.a() > 0 {
-        let w = crate::scale::snap(b.border_width, cx.ppp);
-        cx.painter.rect_stroke(
-            rect,
-            radius,
-            Stroke::new(w, b.border_color),
-            StrokeKind::Inside,
-        );
-    }
-    paint_indicator(cx, rect, b, side);
-}
-
-fn paint_indicator(cx: &KitCx<'_>, rect: Rect, b: &BoxStyle, side: Side) {
-    if b.indicator_size <= 0.0 || b.indicator_color.a() == 0 {
-        return;
-    }
-    let s = crate::scale::snap_size(b.indicator_size, cx.ppp);
-    let bar = match side {
-        Side::Top => Rect::from_min_max(rect.min, pos2(rect.max.x, rect.min.y + s)),
-        Side::Bottom => Rect::from_min_max(pos2(rect.min.x, rect.max.y - s), rect.max),
-        Side::Left => Rect::from_min_max(rect.min, pos2(rect.min.x + s, rect.max.y)),
-        Side::Right => Rect::from_min_max(pos2(rect.max.x - s, rect.min.y), rect.max),
-    };
-    cx.painter.rect_filled(bar, 0.0, b.indicator_color);
-}
-
-/// Which corners of a box are rounded.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Corners {
-    All,
-    Top,
-    None,
-}
-
-impl Corners {
-    fn radius(self, r: u8) -> CornerRadius {
-        match self {
-            Corners::All => CornerRadius::same(r),
-            Corners::Top => CornerRadius {
-                nw: r,
-                ne: r,
-                sw: 0,
-                se: 0,
-            },
-            Corners::None => CornerRadius::ZERO,
-        }
-    }
-}
-
-/// Where a label of `size` goes in a part: along it by the component's
-/// `align`, inside its room less the padding, centred across; on whole
-/// physical pixels is the painter's business.
-pub fn label_rect(data: &ComponentKit, part: &Part<'_>, size: Vec2) -> Rect {
-    let inner = part.room.shrink2(Vec2::new(data.padding_x, 0.0));
-    let x = match data.align {
-        Align::Start => inner.left(),
-        Align::End => inner.right() - size.x,
-        Align::Centre => (part.rect.center().x - size.x / 2.0)
-            .clamp(inner.left(), (inner.right() - size.x).max(inner.left())),
-    };
-    let y = part.rect.center().y - size.y / 2.0;
-    Rect::from_min_size(pos2(x, y), size)
-}
-
-/// Paints a part's label where [`label_rect`] puts it, in its state's
-/// `text`, on whole physical pixels. What handlers do unless they draw
-/// labels their own way.
-pub fn paint_label(cx: &KitCx<'_>, data: &ComponentKit, part: &Part<'_>) {
-    let Some(galley) = part.label else { return };
-    let b = data.states.get(part.state);
-    let at = label_rect(data, part, galley.size()).min;
-    let pos = pos2(
-        (at.x * cx.ppp).round() / cx.ppp,
-        (at.y * cx.ppp).round() / cx.ppp,
-    );
-    cx.painter.galley(pos, galley.clone(), b.text);
-}
-
-/// A tab as a box joined to the panel under it: rounded top corners, a
-/// border on three sides, the bottom left open.
-struct BoxTab;
-
-impl Primitive<ComponentKit> for BoxTab {
-    fn measure(&self, data: &ComponentKit, label: Vec2) -> Vec2 {
-        Vec2::new(label.x + 2.0 * data.padding_x, data.height.max(label.y))
-    }
-
-    fn paint(&self, cx: &KitCx<'_>, data: &ComponentKit, part: &Part<'_>) {
-        let b = data.states.get(part.state);
-        let rect = part.rect;
-        let r = Corners::Top.radius(b.radius.round().clamp(0.0, 255.0) as u8);
-        if b.fill.a() > 0 {
-            cx.painter.rect_filled(rect, r, b.fill);
-        }
-        if b.border_width > 0.0 && b.border_color.a() > 0 {
-            // The outline of a box one line taller, cut at the tab's
-            // bottom: three sides drawn, the bottom left open. egui's
-            // rectangle, not a path: nothing computed per frame.
-            let w = crate::scale::snap(b.border_width, cx.ppp);
-            let taller = Rect::from_min_max(rect.min, pos2(rect.max.x, rect.max.y + w));
-            cx.painter
-                .with_clip_rect(rect.intersect(cx.painter.clip_rect()))
-                .rect_stroke(
-                    taller,
-                    r,
-                    Stroke::new(w, b.border_color),
-                    StrokeKind::Inside,
-                );
-        }
-        paint_indicator(cx, rect, b, data.indicator_side);
-    }
-
-    fn paint_label(&self, cx: &KitCx<'_>, data: &ComponentKit, part: &Part<'_>) {
-        paint_label(cx, data, part);
-    }
-}
-
-/// A tab as its label over an indicator bar (usually on the selected tab
-/// only), its box rounded all around.
-struct UnderlineTab;
-
-impl Primitive<ComponentKit> for UnderlineTab {
-    fn measure(&self, data: &ComponentKit, label: Vec2) -> Vec2 {
-        Vec2::new(label.x + 2.0 * data.padding_x, data.height.max(label.y))
-    }
-
-    fn paint(&self, cx: &KitCx<'_>, data: &ComponentKit, part: &Part<'_>) {
-        let b = data.states.get(part.state);
-        paint_box(cx, part.rect, b, Corners::All, data.indicator_side);
-    }
-
-    fn paint_label(&self, cx: &KitCx<'_>, data: &ComponentKit, part: &Part<'_>) {
-        paint_label(cx, data, part);
-    }
-}
-
-/// A box with square corners: its fill, its border on the indicator
-/// side only (the line under a bar) and its indicator. Bars and window
-/// buttons.
-struct Plain;
-
-impl Primitive<ComponentKit> for Plain {
-    fn measure(&self, data: &ComponentKit, label: Vec2) -> Vec2 {
-        Vec2::new(
-            data.width.max(label.x + 2.0 * data.padding_x),
-            data.height.max(label.y),
-        )
-    }
-
-    fn paint_label(&self, cx: &KitCx<'_>, data: &ComponentKit, part: &Part<'_>) {
-        paint_label(cx, data, part);
-    }
-
-    fn paint(&self, cx: &KitCx<'_>, data: &ComponentKit, part: &Part<'_>) {
-        let b = data.states.get(part.state);
-        if b.fill.a() > 0 {
-            cx.painter.rect_filled(part.rect, 0.0, b.fill);
-        }
-        if b.border_width > 0.0 && b.border_color.a() > 0 {
-            let w = crate::scale::snap(b.border_width, cx.ppp);
-            let line = BoxStyle {
-                indicator_color: b.border_color,
-                indicator_size: w,
-                ..BoxStyle::default()
-            };
-            paint_indicator(cx, part.rect, &line, data.indicator_side);
-        }
-        paint_indicator(cx, part.rect, b, data.indicator_side);
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use egui::pos2;
     use egui_pop_tokens::{ThemeSpec, Themes};
 
     fn tokens_with(json: &str) -> Tokens {
@@ -783,6 +658,24 @@ mod tests {
             centred.title_bar.label_rect(&narrow, size).left(),
             500.0 + pad
         );
+    }
+
+    #[test]
+    fn a_focus_ring_is_data_of_the_focus_state() {
+        let t = tokens_with(
+            r#"{ "$extends": "pop-dark",
+                 "tab": { "focus": {
+                   "ring-color": {"$type": "color", "$value": "{focus.ring}"},
+                   "ring-width": {"$type": "dimension", "$value": {"value": 2, "unit": "px"}},
+                   "ring-offset": {"$type": "dimension", "$value": {"value": 1, "unit": "px"}} } } }"#,
+        );
+        let kit = Kit::compile(&t, &Shapes::default());
+        assert!(kit.problems.is_empty(), "{:?}", kit.problems);
+        let s = &kit.tab.data.states;
+        assert_eq!(s.get(State::REST).ring_width, 0.0);
+        let focus = s.get(State::FOCUS | State::HOVER);
+        assert_eq!((focus.ring_width, focus.ring_offset), (2.0, 1.0));
+        assert_eq!(focus.ring_color, t.focus_ring);
     }
 
     #[test]
