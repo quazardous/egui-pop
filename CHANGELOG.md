@@ -13,6 +13,13 @@ egui minor.
   `$extensions: {org.egui-pop.alpha: 0.85}`, the aliased colour with its
   alpha multiplied (`docs/tokens.md`); a value outside 0 to 1, or on a
   token that is not a colour, is a reported problem.
+- Kits: the photo library and the viewport's widgets are drawn by the kit
+  (`thumb-cell`, `thumb-layer`, `thumb-overlay-badge`, `pill`, `tag-chip`,
+  `mark-toggle`, `search-field`, `compare-pane`, `thumbnail`, `readout`,
+  `viewport-focus`; a `pill` handler with round ends); the default look
+  is unchanged. The library's search field shows a focus ring while its
+  text has the keyboard, and a focused thumbnail's ring is no longer
+  clipped away.
 - Kits: the window buttons' glyphs are glyph roles (`glyph.window-minimize`,
   `window-maximize`, `window-restore`, `window-close`), so a kit can draw
   them with its own icons, `indicator-size` across.
@@ -925,6 +932,13 @@ egui minor.
 
 ### Changed
 
+- `LibraryTokens` keeps the marks' colours only (stars, flags, labels,
+  the rubber band) and `ThumbnailTokens` is gone: the boxes are the
+  kit's. The `thumbnail.background`, `hover` and `selected` tokens and
+  the optional `library.overlay`, `overlay-text`, `selected-background`,
+  `dim`, `stack`, `best`, `chip` and `chip-text` were renamed into the
+  kit (`egui_pop_tokens::RENAMED`): a theme giving them still works,
+  with a reported problem.
 - The title bar's line is the kit's (`title-bar.rest.border-width`, 1 in
   the default kit): egui's panel line is no longer drawn under it, nor
   room kept for it when the title zone draws nothing.

@@ -1,0 +1,50 @@
+$description: "The `thumb-cell` component of the default kit (docs/kit.md), layered into pop-dark."
+thumb-cell:
+  $description: "A cell of the library's grid and filmstrip (a kit component): selected, under the pointer (never while selected), the cursor of a focused grid (`focus`). Its `text` is the caption's."
+  shape:
+    $type: "string"
+    $value: "box"
+  rest:
+    fill:
+      $type: "color"
+      $value: "{surface.raised}"
+    border-color:
+      $type: "color"
+      $value: "{border.strong}"
+    border-width:
+      $type: "dimension"
+      $value: {value: 0, unit: "px"}
+    radius:
+      $type: "dimension"
+      $value: "{radius.widget}"
+    text:
+      $type: "color"
+      $value: "{text.default}"
+  selected:
+    fill:
+      $type: "color"
+      $value: "{accent.subtle}"
+    border-color:
+      $type: "color"
+      $value: "{accent.default}"
+    border-width:
+      $type: "dimension"
+      $value: {value: 2, unit: "px"}
+  hover:
+    fill:
+      $type: "color"
+      $value: "{border.strong}"
+      $extensions: {org.egui-pop.alpha: 0.35}
+    border-width:
+      $type: "dimension"
+      $value: {value: 1, unit: "px"}
+  focus:
+    ring-color:
+      $type: "color"
+      $value: "{focus.ring}"
+    ring-width:
+      $type: "dimension"
+      $value: {value: 1, unit: "px"}
+    ring-offset:
+      $type: "dimension"
+      $value: {value: 1, unit: "px"}

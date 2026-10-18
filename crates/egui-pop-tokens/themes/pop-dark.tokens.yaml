@@ -448,18 +448,6 @@ viewport:
   handle-outline:
     $value: "{surface.canvas}"
     $description: "The ring around a handle."
-thumbnail:
-  $description: "Thumbnails of images."
-  $type: "color"
-  background:
-    $value: "{surface.raised}"
-    $description: "Behind the image."
-  hover:
-    $value: "{border.strong}"
-    $description: "The outline under the pointer."
-  selected:
-    $value: "{accent.default}"
-    $description: "The outline of a selected thumbnail."
 histogram:
   $description: "Histograms of supplied bins."
   $type: "color"

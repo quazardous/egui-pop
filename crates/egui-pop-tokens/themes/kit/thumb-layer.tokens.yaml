@@ -1,0 +1,44 @@
+$description: "The `thumb-layer` component of the default kit (docs/kit.md), layered into pop-dark."
+thumb-layer:
+  $description: "What a library cell lays over its image (a kit component), by tone: `muted` the veil over a rejected image, `accent` the bar beside an expanded stack's member (its indicator). Its `text` is a failed image's icon."
+  shape:
+    $type: "string"
+    $value: "box"
+  indicator-side:
+    $type: "string"
+    $value: "left"
+  rest:
+    fill:
+      $type: "color"
+      $value: "{transparent}"
+    border-color:
+      $type: "color"
+      $value: "{border.default}"
+    border-width:
+      $type: "dimension"
+      $value: {value: 0, unit: "px"}
+    radius:
+      $type: "dimension"
+      $value: {value: 0, unit: "px"}
+    text:
+      $type: "color"
+      $value: "{text.muted}"
+    indicator-color:
+      $type: "color"
+      $value: "{transparent}"
+    indicator-size:
+      $type: "dimension"
+      $value: {value: 0, unit: "px"}
+  tone:
+    muted:
+      fill:
+        $type: "color"
+        $value: "{surface.canvas}"
+        $extensions: {org.egui-pop.alpha: 0.6}
+    accent:
+      indicator-color:
+        $type: "color"
+        $value: "{accent.subtle}"
+      indicator-size:
+        $type: "dimension"
+        $value: {value: 3, unit: "px"}

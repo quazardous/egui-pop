@@ -696,3 +696,36 @@ fn an_override_replaces_the_alpha_modifier_with_its_value() {
     assert!(r.problems().is_empty(), "{:?}", r.problems());
     assert_eq!(r.color("veil"), Color::from_hex("#102030"));
 }
+
+#[test]
+fn the_library_and_thumbnail_tokens_renamed_into_the_kit_keep_working() {
+    let mut themes = Themes::default();
+    themes
+        .add_text(
+            "old-library",
+            r##"
+            $extends: "pop-dark"
+            thumbnail:
+              background: {$type: "color", $value: "#123456"}
+            library:
+              overlay: {$type: "color", $value: "#20202080"}
+            "##,
+        )
+        .unwrap();
+    let r = themes.resolve(&ThemeSpec::new("old-library"));
+    for path in [
+        "thumbnail.rest.fill",
+        "thumb-cell.rest.fill",
+        "compare-pane.rest.fill",
+    ] {
+        assert_eq!(r.color(path).unwrap().to_hex(), "#123456", "{path}");
+    }
+    // The old value as it was: the default's alpha modifier is not kept.
+    assert_eq!(r.color("pill.rest.fill").unwrap().to_hex(), "#20202080");
+    let said: Vec<String> = r.problems().iter().map(ToString::to_string).collect();
+    assert!(
+        said.iter()
+            .any(|p| p.starts_with("`library.overlay` is now `pill.rest.fill`")),
+        "{said:?}"
+    );
+}

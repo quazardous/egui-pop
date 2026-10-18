@@ -16,15 +16,15 @@
 //! ```
 
 use egui::{
-    Align2, CornerRadius, Id, Key as EKey, Modifiers, Order, Response, Sense, Stroke, StrokeKind,
-    TextEdit, TextStyle, Ui, WidgetInfo, WidgetType, vec2,
+    Color32, Id, Key as EKey, Modifiers, Order, Response, Sense, TextEdit, TextStyle, Ui,
+    WidgetInfo, WidgetType, vec2,
 };
 use egui_pop_core::icon::Icon;
+use egui_pop_core::kit::{Kit, KitCx, Part, State};
 use egui_pop_core::strings::{tr, tr_args};
 use egui_pop_core::theme::Tokens;
 use egui_pop_model::fuzzy;
 
-use super::paint::LibraryTokens;
 use crate::strings as s;
 
 /// Where completions come from: the application's known tags.
@@ -111,51 +111,37 @@ impl TagChip {
 
     pub fn show(self, ui: &mut Ui) -> ChipResponse {
         let t = Tokens::of(ui.ctx());
-        let lt = LibraryTokens::of(ui.ctx());
+        let kit = Kit::of(ui.ctx());
+        let chip = &kit.tag_chip;
         let font = TextStyle::Body.resolve(ui.style());
         let galley = ui
             .painter()
-            .layout_no_wrap(self.text.clone(), font, lt.chip_text);
+            .layout_no_wrap(self.text.clone(), font, Color32::PLACEHOLDER);
         let h = (t.size.control_height * 0.8).max(galley.size().y + 2.0);
         let x = if self.removable { h * 0.8 } else { 0.0 };
-        let pad = t.space.s;
+        let pad = chip.data.padding_x;
         let size = vec2(galley.size().x + pad * 2.0 + x, h);
         let (rect, response) = ui.allocate_exact_size(size, Sense::click());
-        let radius = CornerRadius::same((h / 2.0) as u8);
         let mut removed = false;
         if ui.is_rect_visible(rect) {
-            let painter = ui.painter();
-            let fill = if self.selected {
-                t.accent.subtle
-            } else if response.hovered() {
-                t.surface.hover
-            } else {
-                lt.chip
-            };
-            painter.rect_filled(rect, radius, fill);
-            if self.selected {
-                painter.rect_stroke(
+            // A selected chip is not hovered: its fill stays under the
+            // pointer.
+            let state = State::REST
+                .with(State::SELECTED, self.selected)
+                .with(State::HOVER, response.hovered() && !self.selected)
+                .with(State::FOCUS, response.has_focus());
+            chip.paint_part(
+                &KitCx {
+                    painter: ui.painter(),
+                    ppp: ui.ctx().pixels_per_point(),
+                },
+                &Part {
                     rect,
-                    radius,
-                    Stroke::new(1.0, t.accent.default),
-                    StrokeKind::Inside,
-                );
-            }
-            painter.galley(
-                Align2::LEFT_CENTER
-                    .anchor_size(rect.left_center() + vec2(pad, 0.0), galley.size())
-                    .min,
-                galley,
-                lt.chip_text,
+                    room: rect,
+                    state,
+                    label: Some(&galley),
+                },
             );
-            if response.has_focus() {
-                painter.rect_stroke(
-                    rect.expand(1.0),
-                    radius,
-                    Stroke::new(1.0, t.focus_ring),
-                    StrokeKind::Outside,
-                );
-            }
         }
         if self.removable {
             let b = egui::Rect::from_center_size(

@@ -263,8 +263,36 @@ compiled at install.
 - **Progress and status by tone** (`progress-bar`, `progress-line`,
   `progress-fill`, `progress-caption`, `meter`, `meter-tick`,
   `progress-ring`, `spinner`, `status-indicator`), handlers `track`,
-  `span` and `tick`. The library's pills are not migrated: their neutral
-  fill is a surface at 85 % opacity, which an alias cannot express yet.
+  `span` and `tick`.
+- **The photo library** (`thumb-cell`, `thumb-layer`,
+  `thumb-overlay-badge`, `pill`, `tag-chip`, `mark-toggle`,
+  `search-field`, `compare-pane`). A cell is `selected`, `hover` (never
+  while selected) and `focus` for the cursor of a focused grid; its
+  caption is its `text`. What it lays over its image is `thumb-layer` by
+  tone: `muted` a rejected image's veil, `accent` the bar beside an
+  expanded stack's member (its indicator, the cell's outline painted again
+  over it); a failed image's icon is the layer's `text`. A pending image
+  stays a skeleton (`skeleton.fill`). The flag, labels and stars sit on
+  `thumb-overlay-badge`s. Badges and a stack's count are `pill`s, badges
+  by tone (`info`, `success`, `warning`, `danger`); the `pill` handler
+  caps the radius at half the height, so a large radius gives round ends.
+  The neutral pill's fill is the overlay surface at 85 %, an alias with
+  the alpha modifier (`docs/tokens.md`). Tag and filter chips are
+  `tag-chip`s (`pill` too), the pick, reject and colour label buttons
+  `mark-toggle`s (`selected` while on), the search field a `card` whose
+  `focus` ring shows while its text has the keyboard. A comparison's pane
+  is `compare-pane`, `selected` for the best image, its ring painted
+  again over the image; the best star is that ring's colour. Stars, flags
+  and colour labels are content and keep their `library.*` colours. The
+  `library-kit` snapshot restyles them with data only.
+- **The viewport's widgets** (`thumbnail`, `readout`, `viewport-focus`):
+  a thumbnail is `selected`, `hover` and `focus` (its ring, clipped away
+  before, now shows); the pixel readout is a `card` with its text as
+  label; the viewport's focus outline is `viewport-focus`'s ring, inside
+  its edges (`ring-offset` -3). The former `thumbnail.background`,
+  `hover` and `selected` system tokens and the library's optional
+  `library.overlay`, `overlay-text`, `selected-background`, `dim`,
+  `stack`, `best`, `chip` and `chip-text` are in `RENAMED`.
 - **Glyphs by role** (`kit::Glyph`, `glyph.<role>` tokens): the small
   marks widgets draw, named by what they mean and mapped by the kit to
   an icon of its set, compiled into a table read by index. The vocabulary

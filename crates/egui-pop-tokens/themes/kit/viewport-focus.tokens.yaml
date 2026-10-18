@@ -1,0 +1,20 @@
+$description: "The `viewport-focus` component of the default kit (docs/kit.md), layered into pop-dark."
+viewport-focus:
+  $description: "An image viewport's outline while it has the keyboard focus (a kit component), inside its edges. Its fill stays transparent."
+  shape:
+    $type: "string"
+    $value: "plain"
+  rest:
+    fill:
+      $type: "color"
+      $value: "{transparent}"
+  focus:
+    ring-color:
+      $type: "color"
+      $value: "{focus.ring}"
+    ring-width:
+      $type: "dimension"
+      $value: {value: 2, unit: "px"}
+    ring-offset:
+      $type: "dimension"
+      $value: {value: -3, unit: "px"}

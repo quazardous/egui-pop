@@ -101,6 +101,8 @@ pub const PAIRS: &[Pair] = &[
     text("menu-item.rest.text", "menu-item.hover.fill"),
     text("menu-item.tone.muted.text", "surface.overlay"),
     text("toast.rest.text", "toast.rest.fill"),
+    text("pill.rest.text", "pill.rest.fill"),
+    text("readout.rest.text", "readout.rest.fill"),
     text("dialog.header-text", "dialog.header"),
     text("palette.header-text", "palette.header"),
     // Editors: code over its background, line numbers over the gutter.

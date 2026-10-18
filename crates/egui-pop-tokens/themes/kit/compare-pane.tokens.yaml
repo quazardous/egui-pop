@@ -1,0 +1,32 @@
+$description: "The `compare-pane` component of the default kit (docs/kit.md), layered into pop-dark."
+compare-pane:
+  $description: "A pane of the library's comparison (a kit component): `selected` for the best image, its ring over the image. Its `text` is the image's name."
+  shape:
+    $type: "string"
+    $value: "box"
+  rest:
+    fill:
+      $type: "color"
+      $value: "{surface.raised}"
+    border-color:
+      $type: "color"
+      $value: "{border.default}"
+    border-width:
+      $type: "dimension"
+      $value: {value: 0, unit: "px"}
+    radius:
+      $type: "dimension"
+      $value: "{radius.widget}"
+    text:
+      $type: "color"
+      $value: "{text.strong}"
+  selected:
+    ring-color:
+      $type: "color"
+      $value: "{success}"
+    ring-width:
+      $type: "dimension"
+      $value: {value: 3, unit: "px"}
+    ring-offset:
+      $type: "dimension"
+      $value: {value: -3, unit: "px"}
