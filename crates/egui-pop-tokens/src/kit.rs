@@ -91,6 +91,7 @@ pub const COMPONENT_TERMS: &[(&str, &str)] = &[
     ("opacity", "number"),
     ("buttons-side", "string"),
     ("buttons-hover", "string"),
+    ("corners", "string"),
 ];
 
 /// The tones a component may give (`component.tone.<tone>.<term>` and

@@ -1,6 +1,6 @@
 //! What a window drawn by the application takes from the kit beside its
-//! components' boxes: where its title bar puts the window buttons and
-//! which of them show the hover state.
+//! components' boxes: where its title bar puts the window buttons, which
+//! of them show the hover state, and the corners the system is asked for.
 //! Compiled with the kit, read as plain fields.
 
 use super::{Tokens, string};
@@ -28,11 +28,36 @@ pub enum ButtonsHover {
     Group,
 }
 
+/// The corners asked of the system for a window drawn by the application
+/// (`window.corners`), where it can round them (Windows 11).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum WindowCorners {
+    /// The system's rounded corners. The default.
+    #[default]
+    Round,
+    /// The system's small rounded corners.
+    Small,
+    /// Square corners.
+    Square,
+}
+
+impl WindowCorners {
+    /// The token's value.
+    pub fn name(self) -> &'static str {
+        match self {
+            WindowCorners::Round => "round",
+            WindowCorners::Small => "small",
+            WindowCorners::Square => "square",
+        }
+    }
+}
+
 /// The window's terms of a kit.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct WindowKit {
     pub buttons_side: ButtonsSide,
     pub buttons_hover: ButtonsHover,
+    pub corners: WindowCorners,
 }
 
 /// Reads a string token among `choices`; what is not one of them is a
@@ -75,6 +100,49 @@ impl WindowKit {
                 &[("own", ButtonsHover::Own), ("group", ButtonsHover::Group)],
                 problems,
             ),
+            corners: choice(
+                t,
+                "window.corners",
+                &[
+                    ("round", WindowCorners::Round),
+                    ("small", WindowCorners::Small),
+                    ("square", WindowCorners::Square),
+                ],
+                problems,
+            ),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use egui_pop_tokens::{ThemeSpec, Themes};
+
+    fn kit(json: &str) -> crate::kit::Kit {
+        let mut themes = Themes::default();
+        themes
+            .add_json("window-test", json)
+            .expect("test theme reads");
+        let t = Tokens::new(themes.resolve(&ThemeSpec::new("window-test")));
+        crate::kit::Kit::compile(&t, &crate::kit::Shapes::default())
+    }
+
+    #[test]
+    fn corners_are_round_by_default_and_read_from_the_theme() {
+        let default = kit(r#"{ "$extends": "pop-dark" }"#);
+        assert_eq!(default.window, WindowKit::default());
+        assert_eq!(default.window.corners, WindowCorners::Round);
+        let square = kit(r#"{ "$extends": "pop-dark",
+            "window": { "corners": {"$type": "string", "$value": "square"} } }"#);
+        assert_eq!(square.window.corners, WindowCorners::Square);
+        assert!(square.problems.is_empty(), "{:?}", square.problems);
+        let bad = kit(r#"{ "$extends": "pop-dark",
+            "window": { "corners": {"$type": "string", "$value": "oval"} } }"#);
+        assert_eq!(bad.window.corners, WindowCorners::Round);
+        assert_eq!(
+            bad.problems,
+            ["window.corners: `oval` is not round, small or square"]
+        );
     }
 }
