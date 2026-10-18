@@ -317,6 +317,8 @@ pub(crate) struct Shared {
     edge_to_edge: std::cell::Cell<bool>,
     /// The main menu drawn as a bar under the title.
     menu_bar: std::cell::Cell<bool>,
+    /// The shell panels' starting sizes (`AppBuilder::shell_panel_size`).
+    shell_sizes: RefCell<Vec<(PanelId, f32)>>,
     /// The panels' commands and their shared texts, installed on each
     /// context drawing the application.
     pub(crate) panel_commands: RefCell<strings::PanelCommands>,
@@ -404,6 +406,7 @@ impl AppHandle {
             drawing_areas: std::cell::Cell::new(false),
             edge_to_edge: std::cell::Cell::new(false),
             menu_bar: std::cell::Cell::new(true),
+            shell_sizes: RefCell::default(),
             panel_commands: RefCell::default(),
             name: RefCell::default(),
             diagnostics: RefCell::new(Diagnostics::new()),
@@ -1524,6 +1527,12 @@ impl AppHandle {
         Some(out)
     }
 
+    /// Where an area was drawn in the last pass (none while it is not
+    /// shown, folded included).
+    pub fn area_rect(&self, area: Area) -> Option<egui::Rect> {
+        self.workbench_mut().rects.get(&area).copied()
+    }
+
     /// Folds an area to its strip, or unfolds it (`workbench.fold`).
     pub fn fold_area(&self, area: Area, folded: bool) -> Option<Outcome> {
         self.change_workbench(crate::workbench::Change::Fold(area, folded))
@@ -1644,6 +1653,8 @@ pub struct AppBuilder {
     system_focus: Option<SystemFocus>,
     edge_to_edge: bool,
     menu_bar: bool,
+    shell_sizes: Vec<(PanelId, f32)>,
+    folded: Vec<Area>,
     wrap: Option<WrapUi>,
     on_exit: Vec<ExitFn>,
     name: Option<String>,
@@ -1707,6 +1718,8 @@ impl AppBuilder {
             system_focus: None,
             edge_to_edge: false,
             menu_bar: true,
+            shell_sizes: Vec::new(),
+            folded: Vec::new(),
             wrap: None,
             on_exit: Vec::new(),
             name: None,
@@ -1747,6 +1760,23 @@ impl AppBuilder {
     /// top bar's zone is then drawn only when it has blocks.
     pub fn menu_bar(mut self, on: bool) -> Self {
         self.menu_bar = on;
+        self
+    }
+
+    /// The size a shell panel starts at (`workbench::PANEL_SIDE_BAR`,
+    /// `PANEL_INSPECTOR`: their width), instead of egui-pop's; its
+    /// smallest size follows when it is larger. The user's resizing and a
+    /// saved layout still win.
+    pub fn shell_panel_size(mut self, panel: PanelId, size: f32) -> Self {
+        self.shell_sizes.retain(|(p, _)| *p != panel);
+        self.shell_sizes.push((panel, size));
+        self
+    }
+
+    /// Areas folded to their strip when the application starts with no
+    /// saved layout (a saved one, the user's choice, wins).
+    pub fn folded(mut self, areas: &[Area]) -> Self {
+        self.folded = areas.to_vec();
         self
     }
 
@@ -1928,6 +1958,8 @@ impl AppBuilder {
             .map(|p| Writer::new(p, egui_pop_core::persist::DEBOUNCE));
         app.handle.0.edge_to_edge.set(self.edge_to_edge);
         app.handle.0.menu_bar.set(self.menu_bar);
+        *app.handle.0.shell_sizes.borrow_mut() = self.shell_sizes;
+        app.handle.workbench_mut().layout.folded = self.folded;
         *app.handle.0.name.borrow_mut() = self.name.unwrap_or_default();
         let mut themes = self.themes;
         let mut kits = self.kits;
@@ -2240,6 +2272,20 @@ impl App {
                 "inspector",
             ),
         ] {
+            let size = handle
+                .0
+                .shell_sizes
+                .borrow()
+                .iter()
+                .find(|(p, _)| *p == spec.id)
+                .map(|(_, s)| *s);
+            let spec = match size {
+                Some(s) => {
+                    let min = spec.min_size.min(s);
+                    spec.min_size(min).default_size(s)
+                }
+                None => spec,
+            };
             ctx.zone_panel(spec, zone, scope)?;
         }
         for spec in crate::workbench::steps() {

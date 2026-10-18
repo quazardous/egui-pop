@@ -391,3 +391,24 @@ fn the_bottom_panel_lines_up_with_the_side_bars_as_the_setting_says() {
         PanelAlignment::Center
     );
 }
+
+#[test]
+fn an_application_sizes_the_shell_panels_and_starts_with_an_area_folded() {
+    // The demo's tree is on the start side: there is something to fold.
+    let builder = builder(false)
+        .shell_panel_size(PANEL_INSPECTOR, 428.0)
+        .folded(&[Area::StartSide]);
+    let app = builder.build(&egui::Context::default()).unwrap();
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(1280.0, 800.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+    h.run();
+    let handle = h.state().handle().clone();
+    assert_eq!(handle.layout().folded, vec![Area::StartSide]);
+    // The folded side bar is its strip, named for assistive technology.
+    assert!(h.query_by_label("Unfold the start side bar").is_some());
+    let inspector = handle
+        .area_rect(Area::EndSide)
+        .expect("the inspector is shown");
+    assert!((inspector.width() - 428.0).abs() < 2.0, "{inspector:?}");
+}

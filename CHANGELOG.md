@@ -23,6 +23,9 @@ egui minor.
 - The title bar and window buttons are kit components (`title-bar`,
   `window-button`, `window-close`); `title-bar.align: start` puts the
   title after the bar's leading items instead of centring it.
+- `AppBuilder::shell_panel_size` (the side bar's and inspector's
+  starting size) and `AppBuilder::folded` (areas folded at the first
+  start; a saved layout wins); `AppHandle::area_rect`.
 - Side areas: a folded side area shows a strip (the kit's `area-strip`,
   12 px, the drag-handle glyph) whose click unfolds it, instead of
   vanishing; an open side area can show a resize grip at the middle of
