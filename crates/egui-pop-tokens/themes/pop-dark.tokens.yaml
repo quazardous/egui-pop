@@ -385,15 +385,6 @@ motion:
       $type: "duration"
       $value: {value: 1600, unit: "ms"}
       $description: "A skeleton's shimmer crossing it (none under reduced motion)."
-skeleton:
-  $description: "Skeletons standing in for content that loads."
-  $type: "color"
-  fill:
-    $value: "{surface.active}"
-    $description: "The grey shapes."
-  shimmer:
-    $value: "{surface.hover}"
-    $description: "The lighter band crossing them (none under reduced motion)."
 dialog:
   header:
     $type: "color"

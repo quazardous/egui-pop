@@ -612,6 +612,10 @@ components! {
     /// A side area of the workbench: egui draws it and its separator line
     /// (none when `border-width` is 0).
     side_area: "side-area" => "plain",
+    /// A shape of a skeleton standing in for loading content.
+    skeleton: "skeleton" => "box",
+    /// The band crossing a skeleton's shapes, painted where they meet.
+    skeleton_shimmer: "skeleton-shimmer" => "box",
     /// A slider's bar: its track and its label; `hover`, `active` while
     /// dragged, `focus`. A range slider's bar is in the states of both
     /// its thumbs.
@@ -650,6 +654,10 @@ components! {
     /// The frame around a text or code editor; `focus` while it has the
     /// keyboard.
     editor_frame: "editor-frame" => "card",
+    /// An empty place: its box (none in the default kit) around the
+    /// icon, title, sentence and action; the icon and the sentence in
+    /// `text`, the icon in the `danger` tone when something went wrong.
+    empty_state: "empty-state" => "card",
     /// A text field. egui's text fields take their background from it.
     field: "field" => "box",
     /// The card standing in for a part that panicked.
@@ -1108,6 +1116,40 @@ mod tests {
         assert_eq!(
             (focus.ring_color, focus.ring_width, focus.ring_offset),
             (t.focus_ring, 1.5, 1.0)
+        );
+    }
+
+    #[test]
+    fn the_default_placeholders_alias_the_system_tokens() {
+        let t = Tokens::default();
+        let kit = Kit::compile(&t, &Shapes::default());
+        assert_eq!(kit.skeleton.style(State::REST).fill, t.surface.active);
+        assert_eq!(kit.skeleton.style(State::REST).radius, t.radius.widget);
+        assert_eq!(
+            kit.skeleton_shimmer.style(State::REST).fill,
+            t.surface.hover
+        );
+        let empty = &kit.empty_state;
+        assert_eq!(empty.shape, "card");
+        assert_eq!(empty.data.padding_y, t.space.l);
+        assert_eq!(empty.style(State::REST).fill, Color32::TRANSPARENT);
+        assert_eq!(empty.style(State::REST).text, t.text.muted);
+        assert_eq!(
+            empty.style_toned(Tone::Danger, State::REST).text,
+            t.status.danger
+        );
+        // The former names still work.
+        let t = tokens_with(
+            r##"
+            $extends: "pop-dark"
+            skeleton:
+              fill: {$type: "color", $value: "#102030"}
+            "##,
+        );
+        let kit = Kit::compile(&t, &Shapes::default());
+        assert_eq!(
+            kit.skeleton.style(State::REST).fill,
+            Color32::from_rgb(0x10, 0x20, 0x30)
         );
     }
 

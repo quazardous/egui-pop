@@ -25,6 +25,8 @@ pub(super) fn built_in(shapes: &mut Shapes) {
     shapes.insert("icon-button", "box", Arc::new(cell::BoxCell));
     shapes.insert("list-row", "box", Arc::new(cell::BoxCell));
     shapes.insert("menu-item", "box", Arc::new(cell::BoxCell));
+    shapes.insert("skeleton", "box", Arc::new(cell::BoxCell));
+    shapes.insert("skeleton-shimmer", "box", Arc::new(cell::BoxCell));
     shapes.insert("slider", "box", Arc::new(cell::BoxCell));
     shapes.insert("slider-toggle", "box", Arc::new(cell::BoxCell));
     shapes.insert("table-header-cell", "box", Arc::new(cell::BoxCell));

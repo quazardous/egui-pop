@@ -200,16 +200,6 @@ const CORE: &[Required] = &[
         "duration",
         "a skeleton's shimmer crossing it",
     ),
-    comp(
-        "skeleton.fill",
-        "color",
-        "the grey shapes standing in for loading content",
-    ),
-    comp(
-        "skeleton.shimmer",
-        "color",
-        "the shimmer crossing a skeleton",
-    ),
     comp("dialog.header", "color", "a movable dialog's header band"),
     comp("palette.header", "color", "a palette's header band"),
     comp(
@@ -530,6 +520,8 @@ pub const RENAMED: &[(&str, &[&str])] = &[
         &["slider-fill.rest.fill", "slider-toggle.selected.text"],
     ),
     ("slider.thumb", &["slider-thumb.rest.fill"]),
+    ("skeleton.fill", &["skeleton.rest.fill"]),
+    ("skeleton.shimmer", &["skeleton-shimmer.rest.fill"]),
 ];
 
 mod kit;

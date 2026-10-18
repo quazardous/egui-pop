@@ -11,6 +11,7 @@ mod backdrop;
 mod button;
 mod dialog;
 mod editor_frame;
+mod empty_state;
 mod fault_card;
 mod field;
 mod find_bar;
@@ -31,6 +32,8 @@ mod progress_fill;
 mod progress_line;
 mod progress_ring;
 mod side_area;
+mod skeleton;
+mod skeleton_shimmer;
 mod slider;
 mod slider_fill;
 mod slider_thumb;
@@ -60,6 +63,7 @@ pub(super) const GROUPS: &[&[Required]] = &[
     button::CONTRACT,
     dialog::CONTRACT,
     editor_frame::CONTRACT,
+    empty_state::CONTRACT,
     fault_card::CONTRACT,
     field::CONTRACT,
     find_bar::CONTRACT,
@@ -80,6 +84,8 @@ pub(super) const GROUPS: &[&[Required]] = &[
     progress_line::CONTRACT,
     progress_ring::CONTRACT,
     side_area::CONTRACT,
+    skeleton::CONTRACT,
+    skeleton_shimmer::CONTRACT,
     slider::CONTRACT,
     slider_fill::CONTRACT,
     slider_thumb::CONTRACT,

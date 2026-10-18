@@ -9,6 +9,11 @@ egui minor.
 
 ### Added
 
+- Kits: placeholders (`skeleton`, `skeleton-shimmer`, `empty-state`): a
+  skeleton's shapes and the band crossing them are drawn by the kit; an
+  empty state's box (none in the default kit), its `padding-y`, and its
+  icon and sentence colour (`text`, the `danger` tone when something
+  went wrong) come from it. The default look is unchanged.
 - Kits: icon buttons (`icon-button`): an `IconWidget` made clickable is
   drawn by the kit, its icon in the box's `text` per state (hover,
   focus ring, disabled) and by tone (the icon's tone, except `Strong`
@@ -999,7 +1004,9 @@ egui minor.
   `Neutral`.
 - Renamed into the kit's grid, the former names still working with a
   reported problem: `slider.track` (`slider.rest.fill`), `slider.fill`
-  (`slider-fill.rest.fill`), `slider.thumb` (`slider-thumb.rest.fill`).
+  (`slider-fill.rest.fill`), `slider.thumb` (`slider-thumb.rest.fill`),
+  `skeleton.fill` (`skeleton.rest.fill`), `skeleton.shimmer`
+  (`skeleton-shimmer.rest.fill`).
 - `egui_pop_core::kit::paint_ring`: a ring inside its box follows its
   corners.
 - `egui_pop_tokens::CONTRACT` is replaced by `contract()`: the default
