@@ -776,7 +776,7 @@ pub struct Shapes(BTreeMap<String, Handlers>);
 
 impl Default for Shapes {
     /// The handlers egui-pop ships: `plain` for every component, and each
-    /// handler module's own ([`shapes::built_in`]).
+    /// handler module's own (`shapes::built_in`).
     fn default() -> Self {
         let mut shapes = Shapes(BTreeMap::new());
         for (component, _) in COMPONENTS {

@@ -37,7 +37,7 @@
 //! `$extends` the base.
 //!
 //! A kit's tokens, fonts and licence come as a folder or embedded in the
-//! binary ([`kit`], [`kit!`]).
+//! binary ([`kit`](mod@kit), [`kit!`]).
 //!
 //! Types read: `color` (DTCG colour objects in `srgb`, `srgb-linear`,
 //! `oklch` or `oklab`, any other space through its `hex` fallback, and
