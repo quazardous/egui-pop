@@ -4,6 +4,13 @@
 //! whose `publish` is not `false`), so a crate added to the workspace is
 //! published without editing anything here.
 //!
+//! Each crate has its own version: only the crates whose version is not
+//! on crates.io yet are published. A crate whose version is already
+//! there but whose folder changed since the commit it was published from
+//! is reported: its version was not raised. That commit is read from the
+//! published crate itself (`cargo publish` records it in
+//! `.cargo_vcs_info.json`), so no tag is needed.
+//!
 //! crates.io limits how many new crates an account publishes in a short
 //! time (HTTP 429). A refused crate is tried again after `--interval`
 //! seconds; any other failure stops the run. Running it again resumes
@@ -11,6 +18,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{BufRead as _, BufReader};
+use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
@@ -21,6 +29,8 @@ use std::time::Duration;
 struct Package {
     name: String,
     version: String,
+    /// The crate's folder, relative to the workspace's root.
+    dir: String,
     needs: BTreeSet<String>,
 }
 
@@ -46,8 +56,12 @@ pub fn publish(args: &[String]) -> Result<(), String> {
         "{} crates, in the order of their dependencies:",
         order.len()
     );
+    let mut stale = Vec::new();
     for p in &order {
         let state = if published(&p.name, &p.version)? {
+            if let Some(why) = changed_since_published(p) {
+                stale.push(format!("{} ({why})", p.name));
+            }
             "on crates.io, skipped"
         } else if dry_run {
             "to publish"
@@ -57,7 +71,71 @@ pub fn publish(args: &[String]) -> Result<(), String> {
         };
         println!("  {} {}: {state}", p.name, p.version);
     }
+    if !stale.is_empty() {
+        println!(
+            "version not raised, though the crate changed: {}",
+            stale.join(", ")
+        );
+    }
     Ok(())
+}
+
+/// Why the crate's folder may differ from what crates.io has for its
+/// version: changed since the commit it was published from, or that
+/// commit unknown here. `None` when unchanged, or when crates.io does not
+/// say (an old crate, a download failing).
+fn changed_since_published(p: &Package) -> Option<String> {
+    if p.dir.is_empty() {
+        return None;
+    }
+    let url = format!(
+        "https://static.crates.io/crates/{0}/{0}-{1}.crate",
+        p.name, p.version
+    );
+    let download = Command::new("curl")
+        .args(["-sfL", "-A", "egui-pop xtask publish"])
+        .arg(&url)
+        .stdout(Stdio::piped())
+        .spawn()
+        .ok()?;
+    let info = Command::new("tar")
+        .args([
+            "-xzO",
+            &format!("{}-{}/.cargo_vcs_info.json", p.name, p.version),
+        ])
+        .stdin(download.stdout?)
+        .stderr(Stdio::null())
+        .output()
+        .ok()?;
+    let (commit, dirty) = vcs_commit(&String::from_utf8_lossy(&info.stdout))?;
+    if dirty {
+        return Some(format!("published from uncommitted changes on {commit:.8}"));
+    }
+    let git = |args: &[&str]| {
+        Command::new("git")
+            .args(args)
+            .current_dir(super::root())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .is_ok_and(|s| s.success())
+    };
+    if !git(&["cat-file", "-e", &format!("{commit}^{{commit}}")]) {
+        return Some(format!("published from {commit:.8}, not in this clone"));
+    }
+    (!git(&["diff", "--quiet", &commit, "HEAD", "--", &p.dir]))
+        .then(|| format!("changed since {commit:.8}"))
+}
+
+/// The commit a crate was published from, and whether the tree had
+/// uncommitted changes, from its `.cargo_vcs_info.json`.
+fn vcs_commit(info: &str) -> Option<(String, bool)> {
+    let info: serde_json::Value = serde_json::from_str(info).ok()?;
+    let git = &info["git"];
+    Some((
+        git["sha1"].as_str()?.to_string(),
+        git["dirty"].as_bool().unwrap_or(false),
+    ))
 }
 
 fn cargo() -> String {
@@ -87,6 +165,7 @@ fn packages() -> Result<Vec<Package>, String> {
                 .as_array()
                 .is_some_and(|r| r.iter().any(|r| r == "crates-io"))
     };
+    let root = super::root();
     let names: BTreeSet<String> = all
         .iter()
         .filter(|p| publishable(p))
@@ -98,6 +177,11 @@ fn packages() -> Result<Vec<Package>, String> {
         .map(|p| Package {
             name: p["name"].as_str().unwrap_or_default().to_string(),
             version: p["version"].as_str().unwrap_or_default().to_string(),
+            dir: Path::new(p["manifest_path"].as_str().unwrap_or_default())
+                .parent()
+                .and_then(|d| d.strip_prefix(&root).ok())
+                .map(|d| d.to_string_lossy().into_owned())
+                .unwrap_or_default(),
             needs: p["dependencies"]
                 .as_array()
                 .into_iter()
@@ -202,6 +286,7 @@ mod tests {
         Package {
             name: name.into(),
             version: "0.1.0".into(),
+            dir: format!("crates/{name}"),
             needs: needs.iter().map(|n| n.to_string()).collect(),
         }
     }
@@ -228,6 +313,15 @@ mod tests {
     fn a_cycle_is_an_error_naming_its_crates() {
         let all = [pkg("a", &["b"]), pkg("b", &["a"]), pkg("c", &[])];
         assert_eq!(order(&all).unwrap_err(), "a dependency cycle between a, b");
+    }
+
+    #[test]
+    fn the_published_commit_is_read_from_the_vcs_info() {
+        let info = r#"{"git": {"sha1": "7a70147"}, "path_in_vcs": "crates/a"}"#;
+        assert_eq!(vcs_commit(info), Some(("7a70147".into(), false)));
+        let dirty = r#"{"git": {"sha1": "7a70147", "dirty": true}}"#;
+        assert_eq!(vcs_commit(dirty), Some(("7a70147".into(), true)));
+        assert_eq!(vcs_commit(""), None);
     }
 
     #[test]

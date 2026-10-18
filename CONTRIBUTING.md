@@ -126,11 +126,16 @@ updated.
 
 ## Releasing
 
-Publishing is the owner's call. Once `CHANGELOG.md`'s entries are a
-dated version and the versions in the manifests follow:
+Publishing is the owner's call. Each crate has its own version
+([API stability](docs/stability.md#versions-of-the-crates)): raise the
+version of each crate that changed since it was last published (and of
+the crates above it when the change breaks), raise a requirement in
+`[workspace.dependencies]` when a crate needs the newer version, and
+date `CHANGELOG.md`'s entries as a release listing those versions.
+Then:
 
 ```sh
-cargo xtask publish --dry-run     # the plan: each crate, published or not
+cargo xtask publish --dry-run     # the plan, and crates changed but not raised
 cargo xtask publish               # publish what is not on crates.io yet
 ```
 
@@ -139,7 +144,12 @@ The crates come from `cargo metadata` (every package not marked
 crates.io is skipped. crates.io limits how many new crates an account
 publishes at once: a refused crate is tried again after `--interval`
 seconds (600 by default), and running the task again resumes where it
-stopped. Tag the release (`vX.Y.Z`) on the commit it was published from.
+stopped. The dry run also names each crate whose folder changed since
+the commit its current version was published from (which crates.io
+keeps in the published crate): its version still needs raising.
+
+Only a minor release of the `egui-pop` crate is tagged, `vX.Y.0`, on the
+commit it was published from; the other releases need no tag.
 
 ## Upstream limits
 
