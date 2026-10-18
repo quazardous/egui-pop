@@ -3,13 +3,15 @@
 egui-pop is an application framework and component library for egui:
 themable, accessible, drivable by agents, easy to debug.
 
-**Status: 0.1 prepared, not published.** Design tokens and themes;
-plugins that own what they register, commands declared once, layered
-keymaps resolved by focus, zones and blocks, overlays, a value store with
-undo, a host contract, persistence, a debug bridge and a test kit; the
-paved road's components; the workbench (the window's own frame, scale
-per window, panels in areas, strips, auxiliary windows, arrangements),
-devtools; every feature's moments reachable as steps (ADR 0011).
+**Status: 0.1 prepared, not published.** Design tokens (YAML, compiled
+at build time) and themes; visual kits, every themable component drawn
+from data per state and tone; plugins that own what they register,
+commands declared once, layered keymaps resolved by focus, zones and
+blocks, overlays, a value store with undo, a host contract, persistence,
+a debug bridge and a test kit; the paved road's components; the
+workbench (the window's own frame, scale per window, panels in areas,
+strips, auxiliary windows, arrangements), devtools; every feature's
+moments reachable as steps (ADR 0011).
 
 ## Guides
 
@@ -125,7 +127,8 @@ devtools; every feature's moments reachable as steps (ADR 0011).
 - [Architecture decisions](adr/README.md): one page per decision.
 - [Advanced widgets](widgets.md): a survey of advanced widgets and how
   egui-pop gets them.
-- [Fonts](fonts.md): the plan for proportional and monospace fonts.
+- [Fonts](fonts.md): font families from the theme at four weights, the
+  size scale (built), and the design for the rest.
 - [CREDO.md](../CREDO.md): the principles.
 
 ## The crates

@@ -2,13 +2,17 @@
 
 ![The egui-pop gallery in pop-dark: the theme overview](docs/screenshots/overview-pop-dark.png)
 
-egui-pop is a thin layer over [egui](https://github.com/emilk/egui) for
-desktop applications. It wraps your application's kernel through a host
-contract and gives it design tokens and themes, commands with shortcuts,
-a workbench of panels, and hooks at every step of its life: observe,
-veto, replace, extend. It is for people building a real tool on egui (an
-editor, a viewer, a control panel) who want that plumbing done once.
-Not an official egui crate.
+egui-pop is an application framework and component library on
+[egui](https://github.com/emilk/egui) for desktop applications. It wraps
+your application's kernel through a host contract and gives it design
+tokens, themes and visual kits, commands with shortcuts, a workbench of
+panels, components (dialogs, palettes, sliders and inputs, trees and
+tables, text and code editors, an image viewport), and hooks at every
+step of its life: observe, veto, replace, extend. Your egui code keeps
+working inside it: egui-pop lays out and draws around it, and styles
+egui's own widgets from the theme. It is for people building a real tool
+on egui (an editor, a viewer, a control panel) who want that plumbing
+done once. Not an official egui crate.
 
 ## Quickstart
 
@@ -90,6 +94,34 @@ let app = App::builder().theme(spec).build(&egui::Context::default()).unwrap();
 
 // Later, from a command or a settings page: installed before the next frame.
 app.handle().theme().set(ThemeSpec::new("pop-light"));
+```
+
+## A visual kit
+
+What a component looks like is data: a box per state (rest, hover,
+active, focus, selected, disabled) and per tone, and the handler that
+draws it, compiled once when the theme is installed. A kit changes it
+with tokens alone, or brings handlers of its own. More in
+[Visual kits](docs/kit.md) and [Kits as packages](docs/kit-packages.md).
+
+```rust
+use egui_pop::egui;
+use egui_pop::prelude::*;
+use egui_pop::tokens::kit::KitData;
+
+// The workbench's tabs underlined instead of boxed.
+let kit = KitData::from_text(
+    "underline",
+    r#"
+    tab:
+      shape: {$type: "string", $value: "underline"}
+      selected:
+        indicator-color: {$type: "color", $value: "{accent.default}"}
+    "#,
+);
+let ctx = egui::Context::default();
+let _app = App::builder().kit(kit).theme(ThemeSpec::new("underline")).build(&ctx).unwrap();
+assert_eq!(egui_pop::core::kit::Kit::of(&ctx).tab.shape, "underline");
 ```
 
 ## A hook on a step
