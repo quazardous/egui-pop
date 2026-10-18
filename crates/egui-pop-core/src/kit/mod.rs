@@ -33,8 +33,10 @@ use crate::theme::Tokens;
 
 mod paint;
 mod shapes;
+mod tone;
 
 pub use paint::{Corners, label_rect, paint_box, paint_indicator, paint_label, paint_ring};
+pub use tone::Tone;
 
 /// The states a part can be in, combined (a selected tab under the
 /// pointer is `SELECTED | HOVER`). No flag is the resting state.
@@ -216,9 +218,10 @@ impl BoxPatch {
 }
 
 /// A component's boxes for every combination of states, merged when the
-/// kit is compiled.
+/// kit is compiled, and per tone when its tokens give tones
+/// ([`Tone`], `kit/tone.rs`).
 #[derive(Clone, Debug, PartialEq)]
-pub struct States([BoxStyle; 32]);
+pub struct States([BoxStyle; 32], Option<Box<tone::Tones>>);
 
 impl States {
     fn compile(t: &Tokens, component: &str) -> States {
@@ -238,12 +241,18 @@ impl States {
             }
             b
         });
-        States(boxes)
+        let tones = tone::compile(t, component, &rest, &patches);
+        States(boxes, tones)
     }
 
-    /// The box of a state.
+    /// The box of a state, in the tone it carries ([`State::toned`]).
     pub fn get(&self, state: State) -> &BoxStyle {
-        &self.0[usize::from(state.0 & 31)]
+        tone::get(&self.0, self.1.as_deref(), state)
+    }
+
+    /// Whether the component's tokens give tones.
+    pub fn toned(&self) -> bool {
+        self.1.is_some()
     }
 }
 
@@ -375,9 +384,14 @@ impl Component {
         label_rect(&self.data, part, size)
     }
 
-    /// The box of a state.
+    /// The box of a state (in the tone it carries).
     pub fn style(&self, state: State) -> &BoxStyle {
         self.data.states.get(state)
+    }
+
+    /// The box of a state in a tone.
+    pub fn style_toned(&self, tone: Tone, state: State) -> &BoxStyle {
+        self.data.states.get(state.toned(tone))
     }
 
     pub fn hit(&self, rect: Rect, pos: Pos2) -> bool {
@@ -676,6 +690,63 @@ mod tests {
         let focus = s.get(State::FOCUS | State::HOVER);
         assert_eq!((focus.ring_width, focus.ring_offset), (2.0, 1.0));
         assert_eq!(focus.ring_color, t.focus_ring);
+    }
+
+    #[test]
+    fn tones_merge_after_rest_and_states_keep_what_they_give() {
+        let t = tokens_with(
+            r##"{
+              "$extends": "pop-dark",
+              "tab": {
+                "rest": { "fill": {"$type": "color", "$value": "#101010"} },
+                "hover": { "fill": {"$type": "color", "$value": "#202020"} },
+                "disabled": { "text": {"$type": "color", "$value": "#303030"} },
+                "tone": {
+                  "danger": {
+                    "fill": {"$type": "color", "$value": "#ff0000"},
+                    "text": {"$type": "color", "$value": "#ffffff"},
+                    "hover": { "fill": {"$type": "color", "$value": "#ff4040"} }
+                  }
+                }
+              }
+            }"##,
+        );
+        let kit = Kit::compile(&t, &Shapes::default());
+        let hex = |c: Color32| format!("#{:02x}{:02x}{:02x}", c.r(), c.g(), c.b());
+        let tab = &kit.tab;
+        assert!(tab.data.states.toned());
+        let danger = |s: State| tab.style_toned(Tone::Danger, s);
+        assert_eq!(hex(danger(State::REST).fill), "#ff0000");
+        // The tone's own hover wins over the component's hover.
+        assert_eq!(hex(danger(State::HOVER).fill), "#ff4040");
+        // A state the tone does not give still applies over it.
+        assert_eq!(hex(danger(State::DISABLED).text), "#303030");
+        assert_eq!(hex(danger(State::DISABLED).fill), "#ff0000");
+        // A tone the component does not give is its own box.
+        assert_eq!(
+            tab.style_toned(Tone::Info, State::HOVER),
+            tab.style(State::HOVER)
+        );
+        assert_eq!(
+            tab.style_toned(Tone::Neutral, State::REST),
+            tab.style(State::REST)
+        );
+        // The tone travels in the state: handlers honour it unchanged.
+        let s = State::HOVER.toned(Tone::Danger);
+        assert_eq!(s.tone(), Tone::Danger);
+        assert!(s.contains(State::HOVER));
+        assert_eq!(tab.style(s), danger(State::HOVER));
+        assert_eq!(s.toned(Tone::Neutral), State::HOVER);
+    }
+
+    #[test]
+    fn a_component_without_tones_has_no_table() {
+        let kit = Kit::compile(&Tokens::default(), &Shapes::default());
+        assert!(!kit.tab.data.states.toned());
+        assert_eq!(
+            kit.tab.style_toned(Tone::Danger, State::HOVER),
+            kit.tab.style(State::HOVER)
+        );
     }
 
     #[test]
