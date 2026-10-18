@@ -1,0 +1,8 @@
+{
+  "tab": {
+    "padding-x": {"$type": "dimension", "$value": {"value": 14, "unit": "px"}},
+    "rest": {
+      "radius": {"$type": "dimension", "$value": {"value": 6, "unit": "px"}}
+    }
+  }
+}

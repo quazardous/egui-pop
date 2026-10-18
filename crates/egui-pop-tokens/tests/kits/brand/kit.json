@@ -1,0 +1,16 @@
+{
+  "$description": "A test kit: boxed tabs with a wide padding, Inter for the interface.",
+  "$extends": "pop-light",
+  "$extensions": {
+    "org.egui-pop.kit": {
+      "name": "brand",
+      "label": "Brand",
+      "fonts": [{"file": "InterVariable-subset.ttf", "family": "Inter", "weight": 400}]
+    }
+  },
+  "font": {
+    "family": {
+      "ui": {"$type": "fontFamily", "$value": ["Inter", "sans-serif"]}
+    }
+  }
+}

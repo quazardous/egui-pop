@@ -36,6 +36,9 @@
 //! changed over it and their history, saved as a token file that
 //! `$extends` the base.
 //!
+//! A kit's tokens, fonts and licence come as a folder or embedded in the
+//! binary ([`kit`], [`kit!`]).
+//!
 //! Types read: `color` (DTCG colour objects in `srgb`, `srgb-linear`,
 //! `oklch` or `oklab`, any other space through its `hex` fallback, and
 //! `#rrggbb[aa]` strings), `dimension` (`px` or `rem`), `number`,
@@ -48,6 +51,7 @@ pub mod contrast;
 mod draft;
 mod error;
 mod file;
+pub mod kit;
 mod theme;
 mod value;
 

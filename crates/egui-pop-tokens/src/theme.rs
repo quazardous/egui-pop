@@ -78,8 +78,9 @@ pub const BUILT_IN_ACCENTS: &[&str] = &["gold", "blue", "green", "amber", "red"]
 
 /// The default kit's components (`docs/kit.md`), one file each, layered
 /// into `pop-dark` (and so into every theme extending it). One line per
-/// component, in alphabetical order.
-const KIT_FILES: &[(&str, &str)] = &[
+/// component, in alphabetical order. `themes/kit/` is a kit folder
+/// (`crate::kit`): a test checks this list holds each of its files.
+pub(crate) const KIT_FILES: &[(&str, &str)] = &[
     ("tab", include_str!("../themes/kit/tab.tokens.json")),
     ("tab-bar", include_str!("../themes/kit/tab-bar.tokens.json")),
     (
@@ -434,13 +435,20 @@ impl Default for Themes {
         for (name, text) in BUILT_IN_FILES {
             let mut file = TokenFile::parse(name, text).expect("built-in themes parse");
             if *name == FALLBACK_THEME {
-                for (component, text) in KIT_FILES {
-                    let part = TokenFile::parse(&format!("kit/{component}"), text)
-                        .expect("the default kit's files parse");
-                    for (path, token) in part.tokens {
-                        let clash = file.tokens.insert(path.clone(), token);
-                        assert!(clash.is_none(), "kit/{component} repeats {path}");
+                // The default kit, read as any kit folder is; its tokens
+                // are `pop-dark`'s own.
+                let kit = crate::kit::built_in(KIT_FILES);
+                for p in kit.problems() {
+                    if matches!(
+                        p,
+                        crate::kit::Problem::Tokens(_) | crate::kit::Problem::Repeated { .. }
+                    ) {
+                        panic!("the default kit: {p}");
                     }
+                }
+                for (path, token) in kit.theme.tokens {
+                    let clash = file.tokens.insert(path.clone(), token);
+                    assert!(clash.is_none(), "the default kit repeats {path}");
                 }
             }
             themes.add(file);
