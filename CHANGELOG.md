@@ -7,6 +7,8 @@ egui minor.
 
 ## Unreleased
 
+## 0.1.1 (2026-10-18)
+
 ### Added
 
 - Every published sub-crate has a README on crates.io (what it holds,
@@ -15,6 +17,12 @@ egui minor.
 - `cargo xtask publish` publishes the workspace's crates in the order of
   their dependencies, skipping versions already on crates.io and waiting
   out its rate limit (`--dry-run`, `--interval SECS`).
+
+### Fixed
+
+- The `egui-pop` page on crates.io shows its images and its links work:
+  the README links absolutely, since crates.io resolves relative links
+  from the crate's folder; a test keeps every published README so.
 
 ## 0.1.0 (2026-10-18)
 

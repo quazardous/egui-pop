@@ -2,7 +2,7 @@
 
 [![crates.io](https://img.shields.io/crates/v/egui-pop.svg)](https://crates.io/crates/egui-pop)
 
-![The egui-pop gallery in pop-dark: the theme overview](docs/screenshots/overview-pop-dark.png)
+![The egui-pop gallery in pop-dark: the theme overview](https://github.com/quazardous/egui-pop/raw/main/docs/screenshots/overview-pop-dark.png)
 
 egui-pop is an application framework and component library on
 [egui](https://github.com/emilk/egui) for desktop applications. It wraps
@@ -50,12 +50,12 @@ fn main() -> eframe::Result {
 `DefaultPlugins` brings the command palette, dialogs, toasts, the
 settings window, the window's place and saved layouts. For a fuller
 start (a panel, a setting, a command), see
-[Getting started](docs/getting-started.md).
+[Getting started](https://github.com/quazardous/egui-pop/blob/main/docs/getting-started.md).
 
 ## A command with a shortcut
 
 Declared once: its key, menu entry, palette entry and agent surface come
-from it. More in [Plugins, commands and steps](docs/plugins.md).
+from it. More in [Plugins, commands and steps](https://github.com/quazardous/egui-pop/blob/main/docs/plugins.md).
 
 ```rust
 use egui_pop::egui;
@@ -81,7 +81,7 @@ assert_eq!(out.now(), Some(Ok(serde_json::json!("hello"))));
 ## A theme
 
 Fifteen built-in themes, two densities, five accents, any token
-overridden. More in [Themes](docs/themes.md).
+overridden. More in [Themes](https://github.com/quazardous/egui-pop/blob/main/docs/themes.md).
 
 ```rust
 use egui_pop::egui;
@@ -104,7 +104,7 @@ What a component looks like is data: a box per state (rest, hover,
 active, focus, selected, disabled) and per tone, and the handler that
 draws it, compiled once when the theme is installed. A kit changes it
 with tokens alone, or brings handlers of its own. More in
-[Visual kits](docs/kit.md) and [Kits as packages](docs/kit-packages.md).
+[Visual kits](https://github.com/quazardous/egui-pop/blob/main/docs/kit.md) and [Kits as packages](https://github.com/quazardous/egui-pop/blob/main/docs/kit-packages.md).
 
 ```rust
 use egui_pop::egui;
@@ -131,9 +131,9 @@ assert_eq!(egui_pop::core::kit::Kit::of(&ctx).tab.shape, "underline");
 egui-pop names the moments of each feature's life (`frame.close`,
 `workbench.detach`, `arrangement.switch`...). A plugin may observe,
 veto, replace or extend any of them
-([ADR 0011](docs/adr/0011-lifecycle-steps.md)). Here a plugin keeps the
+([ADR 0011](https://github.com/quazardous/egui-pop/blob/main/docs/adr/0011-lifecycle-steps.md)). Here a plugin keeps the
 window open while work is unsaved (`frame.close` is run by
-`FramePlugin`). More in [Plugins, commands and steps](docs/plugins.md).
+`FramePlugin`). More in [Plugins, commands and steps](https://github.com/quazardous/egui-pop/blob/main/docs/plugins.md).
 
 ```rust
 use egui_pop::api::frame::STEP_CLOSE;
@@ -158,7 +158,7 @@ impl Plugin for Guard {
 
 The `viewport` feature shows an image your application computes, in
 tiles, zoomed in physical pixels. You implement the tile source. More in
-[The image viewport](docs/viewport.md).
+[The image viewport](https://github.com/quazardous/egui-pop/blob/main/docs/viewport.md).
 
 ```rust
 use egui_pop::viewport::ViewportState;
@@ -183,31 +183,31 @@ let _source = Grey(state.sink());
 
 ## Screenshots
 
-Captured from [the gallery](docs/gallery.md). Click a thumbnail for the
-full image; every built-in theme is in [Themes](docs/themes.md#the-built-in-themes).
+Captured from [the gallery](https://github.com/quazardous/egui-pop/blob/main/docs/gallery.md). Click a thumbnail for the
+full image; every built-in theme is in [Themes](https://github.com/quazardous/egui-pop/blob/main/docs/themes.md#the-built-in-themes).
 
 <table>
   <tr>
-    <td align="center"><a href="docs/screenshots/overview-pop-dark.png"><img src="docs/screenshots/thumbs/overview-pop-dark.png" width="200" alt="The theme overview"></a><br>Theme overview</td>
-    <td align="center"><a href="docs/screenshots/palette-pop-dark.png"><img src="docs/screenshots/thumbs/palette-pop-dark.png" width="200" alt="The command palette"></a><br>Command palette</td>
-    <td align="center"><a href="docs/screenshots/settings-window-pop-dark.png"><img src="docs/screenshots/thumbs/settings-window-pop-dark.png" width="200" alt="The settings window"></a><br>Settings window</td>
-    <td align="center"><a href="docs/screenshots/dialogs-pop-dark.png"><img src="docs/screenshots/thumbs/dialogs-pop-dark.png" width="200" alt="A form dialog"></a><br>Dialogs</td>
+    <td align="center"><a href="https://github.com/quazardous/egui-pop/raw/main/docs/screenshots/overview-pop-dark.png"><img src="https://github.com/quazardous/egui-pop/raw/main/docs/screenshots/thumbs/overview-pop-dark.png" width="200" alt="The theme overview"></a><br>Theme overview</td>
+    <td align="center"><a href="https://github.com/quazardous/egui-pop/raw/main/docs/screenshots/palette-pop-dark.png"><img src="https://github.com/quazardous/egui-pop/raw/main/docs/screenshots/thumbs/palette-pop-dark.png" width="200" alt="The command palette"></a><br>Command palette</td>
+    <td align="center"><a href="https://github.com/quazardous/egui-pop/raw/main/docs/screenshots/settings-window-pop-dark.png"><img src="https://github.com/quazardous/egui-pop/raw/main/docs/screenshots/thumbs/settings-window-pop-dark.png" width="200" alt="The settings window"></a><br>Settings window</td>
+    <td align="center"><a href="https://github.com/quazardous/egui-pop/raw/main/docs/screenshots/dialogs-pop-dark.png"><img src="https://github.com/quazardous/egui-pop/raw/main/docs/screenshots/thumbs/dialogs-pop-dark.png" width="200" alt="A form dialog"></a><br>Dialogs</td>
   </tr>
   <tr>
-    <td align="center"><a href="docs/screenshots/shortcuts-pop-dark.png"><img src="docs/screenshots/thumbs/shortcuts-pop-dark.png" width="200" alt="The shortcuts editor"></a><br>Shortcuts editor</td>
-    <td align="center"><a href="docs/screenshots/zones-pop-dark.png"><img src="docs/screenshots/thumbs/zones-pop-dark.png" width="200" alt="Zones and blocks"></a><br>Zones and blocks</td>
-    <td align="center"><a href="docs/screenshots/viewport-pop-dark.png"><img src="docs/screenshots/thumbs/viewport-pop-dark.png" width="200" alt="The image viewport"></a><br>Image viewport</td>
-    <td align="center"><a href="docs/screenshots/debug-pop-dark.png"><img src="docs/screenshots/thumbs/debug-pop-dark.png" width="200" alt="The debug page"></a><br>Debug bridge</td>
+    <td align="center"><a href="https://github.com/quazardous/egui-pop/raw/main/docs/screenshots/shortcuts-pop-dark.png"><img src="https://github.com/quazardous/egui-pop/raw/main/docs/screenshots/thumbs/shortcuts-pop-dark.png" width="200" alt="The shortcuts editor"></a><br>Shortcuts editor</td>
+    <td align="center"><a href="https://github.com/quazardous/egui-pop/raw/main/docs/screenshots/zones-pop-dark.png"><img src="https://github.com/quazardous/egui-pop/raw/main/docs/screenshots/thumbs/zones-pop-dark.png" width="200" alt="Zones and blocks"></a><br>Zones and blocks</td>
+    <td align="center"><a href="https://github.com/quazardous/egui-pop/raw/main/docs/screenshots/viewport-pop-dark.png"><img src="https://github.com/quazardous/egui-pop/raw/main/docs/screenshots/thumbs/viewport-pop-dark.png" width="200" alt="The image viewport"></a><br>Image viewport</td>
+    <td align="center"><a href="https://github.com/quazardous/egui-pop/raw/main/docs/screenshots/debug-pop-dark.png"><img src="https://github.com/quazardous/egui-pop/raw/main/docs/screenshots/thumbs/debug-pop-dark.png" width="200" alt="The debug page"></a><br>Debug bridge</td>
   </tr>
   <tr>
-    <td align="center"><a href="docs/screenshots/code-editor-pop-dark.png"><img src="docs/screenshots/thumbs/code-editor-pop-dark.png" width="200" alt="The code editor"></a><br>Code editor</td>
+    <td align="center"><a href="https://github.com/quazardous/egui-pop/raw/main/docs/screenshots/code-editor-pop-dark.png"><img src="https://github.com/quazardous/egui-pop/raw/main/docs/screenshots/thumbs/code-editor-pop-dark.png" width="200" alt="The code editor"></a><br>Code editor</td>
   </tr>
 </table>
 
 ## Refreshing the screenshots
 
 Every screenshot is the gallery's real window, captured headless in a
-nested compositor with [wbox](tools/wbox). Nobody opens the gallery on a
+nested compositor with [wbox](https://github.com/quazardous/egui-pop/blob/main/tools/wbox). Nobody opens the gallery on a
 desktop to capture it. One command refreshes the full images, their
 thumbnails and the themes gallery:
 
@@ -220,20 +220,20 @@ It builds the gallery in release mode, runs each page and theme in wbox,
 presses the keys a shot needs, crops to the window, writes
 `docs/screenshots/` and the reduced copies beside it. Review the images
 in the diff before committing. The steps it automates are in
-[CONTRIBUTING.md](CONTRIBUTING.md#screenshots).
+[CONTRIBUTING.md](https://github.com/quazardous/egui-pop/blob/main/CONTRIBUTING.md#screenshots).
 
 ## Documentation
 
-The [docs index](docs/README.md) lists every page: getting started,
+The [docs index](https://github.com/quazardous/egui-pop/blob/main/docs/README.md) lists every page: getting started,
 themes and tokens, plugins and steps, the image viewport, debugging, the
 gallery, testing, API stability and the design decisions.
 
 ## Extensions
 
 Extensions add components and plugins through the same API: start one
-from the [extension template](templates/extension)
+from the [extension template](https://github.com/quazardous/egui-pop/blob/main/templates/extension)
 (`cargo generate --git https://github.com/quazardous/egui-pop templates/extension`),
-and list it in the [registry of extensions](docs/extensions.md).
+and list it in the [registry of extensions](https://github.com/quazardous/egui-pop/blob/main/docs/extensions.md).
 
 ## Versions
 
@@ -246,10 +246,10 @@ released within days of it.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) (with a section for extension
-authors), [GOVERNANCE.md](GOVERNANCE.md), [AGENTS.md](AGENTS.md) and
-[CHANGELOG.md](CHANGELOG.md).
+See [CONTRIBUTING.md](https://github.com/quazardous/egui-pop/blob/main/CONTRIBUTING.md) (with a section for extension
+authors), [GOVERNANCE.md](https://github.com/quazardous/egui-pop/blob/main/GOVERNANCE.md), [AGENTS.md](https://github.com/quazardous/egui-pop/blob/main/AGENTS.md) and
+[CHANGELOG.md](https://github.com/quazardous/egui-pop/blob/main/CHANGELOG.md).
 
 ## License
 
-MIT, see [LICENSE](LICENSE).
+MIT, see [LICENSE](https://github.com/quazardous/egui-pop/blob/main/LICENSE).

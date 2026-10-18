@@ -3,7 +3,7 @@
 egui-pop is an application framework and component library for egui:
 themable, accessible, drivable by agents, easy to debug.
 
-**Status: 0.1.0 (2026-10-18), on egui 0.36.** Design tokens (YAML,
+**Status: 0.1.1 (2026-10-18), on egui 0.36.** Design tokens (YAML,
 compiled at build time) and themes; visual kits, every themable
 component drawn from data per state and tone; plugins that own what they
 register, commands declared once, layered keymaps resolved by focus,
