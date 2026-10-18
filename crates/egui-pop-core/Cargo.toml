@@ -20,12 +20,17 @@ phosphor = ["dep:egui-phosphor"]
 ## Find the families a theme names among the system's fonts (fontdb:
 ## scans the font directories, reads fontconfig's files, no C library).
 system-fonts = ["dep:fontdb"]
+## An application's own icons from SVG files (`icon_set`), rasterised
+## with resvg when the theme is installed.
+svg = ["dep:resvg"]
 
 [dependencies]
 egui.workspace = true
 egui-phosphor = { workspace = true, optional = true }
 # MIT: the system's fonts by family and weight (feature `system-fonts`).
 fontdb = { version = "0.23", optional = true }
+# MIT OR Apache-2.0: SVG icons (feature `svg`); no text, no raster images.
+resvg = { version = "0.46", optional = true, default-features = false }
 egui-pop-tokens.workspace = true
 egui-pop-model.workspace = true
 log.workspace = true

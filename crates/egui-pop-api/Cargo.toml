@@ -24,6 +24,8 @@ native-dialogs = ["dep:rfd"]
 phosphor = ["egui-pop-core/phosphor"]
 ## The families a theme names, found among the system's fonts.
 system-fonts = ["egui-pop-core/system-fonts"]
+## An application's own SVG icons.
+svg = ["egui-pop-core/svg"]
 
 [dependencies]
 profiling.workspace = true

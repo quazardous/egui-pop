@@ -48,6 +48,7 @@ pub mod focus_mode;
 pub mod fonts;
 pub mod frame;
 pub mod icon;
+pub mod icon_set;
 pub mod keys;
 pub mod kit;
 pub mod motion;
