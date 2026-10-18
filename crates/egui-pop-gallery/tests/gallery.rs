@@ -2005,40 +2005,17 @@ fn the_tips_page_dismisses_a_tip_and_remembers_it_in_the_settings() {
 
 #[test]
 fn a_kit_redraws_the_workbench_tabs_from_the_theme_alone() {
-    // A theme that only changes the tab component's data and shape: no
-    // code, the `underline` handler egui-pop ships.
+    // A kit folder that only changes the tab component's data and shape:
+    // no code, the `underline` handler egui-pop ships.
+    let kit = egui_pop::tokens::kit!("../../../examples/kits/underline-tabs");
+    assert!(egui_pop::tokens::kit::check(&kit).is_empty());
     let mut themes = egui_pop::tokens::Themes::default();
-    themes
-        .add_json(
-            "kit-underline",
-            r##"{
-              "$extends": "pop-dark",
-              "tab": {
-                "shape": {"$type": "string", "$value": "underline"},
-                "padding-x": {"$type": "dimension", "$value": {"value": 12, "unit": "px"}},
-                "rest": {
-                  "fill": {"$type": "color", "$value": "{surface.sunken}"},
-                  "border-width": {"$type": "dimension", "$value": {"value": 0, "unit": "px"}},
-                  "text": {"$type": "color", "$value": "{text.muted}"}
-                },
-                "hover": {
-                  "fill": {"$type": "color", "$value": "{surface.hover}"},
-                  "text": {"$type": "color", "$value": "{text.default}"}
-                },
-                "selected": {
-                  "fill": {"$type": "color", "$value": "{surface.sunken}"},
-                  "text": {"$type": "color", "$value": "{text.strong}"},
-                  "indicator-size": {"$type": "dimension", "$value": {"value": 2, "unit": "px"}}
-                }
-              }
-            }"##,
-        )
-        .expect("the test theme reads");
+    themes.add_kit(&kit);
     let mut h = harness(options("pop-dark", Density::Comfortable, "workbench"));
     h.run();
     h.get_by_label("Open the demonstration panels").click();
     h.run();
-    let tokens = Tokens::new(themes.resolve(&egui_pop::tokens::ThemeSpec::new("kit-underline")));
+    let tokens = Tokens::new(themes.resolve(&egui_pop::tokens::ThemeSpec::new("underline-tabs")));
     egui_pop::core::theme::install_tokens(&h.ctx, tokens);
     let kit = egui_pop::core::kit::Kit::of(&h.ctx);
     assert_eq!(kit.tab.shape, "underline");
