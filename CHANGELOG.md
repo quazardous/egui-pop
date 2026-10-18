@@ -14,9 +14,9 @@ publishes.
 
 - Each crate has its own version and is published only when it changes;
   the `egui-pop` facade keeps one minor per egui minor.
-  `cargo xtask publish` tags each crate it publishes, `<crate>-vX.Y.Z`,
-  and names the crates that changed since their release tag without a
-  new version.
+  `cargo xtask publish --dry-run` names the crates changed since the
+  commit their version was published from, whose version is still to
+  raise. Only the facade's minor releases are tagged.
 
 ## 0.1.1 (2026-10-18)
 

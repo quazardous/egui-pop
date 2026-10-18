@@ -144,8 +144,12 @@ The crates come from `cargo metadata` (every package not marked
 crates.io is skipped. crates.io limits how many new crates an account
 publishes at once: a refused crate is tried again after `--interval`
 seconds (600 by default), and running the task again resumes where it
-stopped. Each crate it publishes gets a local tag, `<crate>-vX.Y.Z`, on
-the commit it was published from; push them (`git push --tags`).
+stopped. The dry run also names each crate whose folder changed since
+the commit its current version was published from (which crates.io
+keeps in the published crate): its version still needs raising.
+
+Only a minor release of the `egui-pop` crate is tagged, `vX.Y.0`, on the
+commit it was published from; the other releases need no tag.
 
 ## Upstream limits
 

@@ -5,10 +5,11 @@
 //! published without editing anything here.
 //!
 //! Each crate has its own version: only the crates whose version is not
-//! on crates.io yet are published, and each gets a local tag,
-//! `<crate>-vX.Y.Z`, on the commit it was published from. A crate whose
-//! version is already on crates.io but whose folder changed since that
-//! tag is reported: its version was not raised.
+//! on crates.io yet are published. A crate whose version is already
+//! there but whose folder changed since the commit it was published from
+//! is reported: its version was not raised. That commit is read from the
+//! published crate itself (`cargo publish` records it in
+//! `.cargo_vcs_info.json`), so no tag is needed.
 //!
 //! crates.io limits how many new crates an account publishes in a short
 //! time (HTTP 429). A refused crate is tried again after `--interval`
@@ -55,19 +56,17 @@ pub fn publish(args: &[String]) -> Result<(), String> {
         "{} crates, in the order of their dependencies:",
         order.len()
     );
-    let mut tags = Vec::new();
     let mut stale = Vec::new();
     for p in &order {
         let state = if published(&p.name, &p.version)? {
-            if let Some(since) = changed_since_release(p) {
-                stale.push(format!("{} (changed since {since})", p.name));
+            if let Some(why) = changed_since_published(p) {
+                stale.push(format!("{} ({why})", p.name));
             }
             "on crates.io, skipped"
         } else if dry_run {
             "to publish"
         } else {
             publish_one(p, interval)?;
-            tags.push(tag(p)?);
             "published"
         };
         println!("  {} {}: {state}", p.name, p.version);
@@ -78,21 +77,39 @@ pub fn publish(args: &[String]) -> Result<(), String> {
             stale.join(", ")
         );
     }
-    if !tags.is_empty() {
-        println!(
-            "tagged {}; push them with `git push --tags`",
-            tags.join(", ")
-        );
-    }
     Ok(())
 }
 
-/// The release tag of the crate's current version when its folder has
-/// changed since: `<crate>-vX.Y.Z`, or `vX.Y.Z` from the releases that
-/// tagged the whole workspace. `None` when unchanged or never tagged.
-fn changed_since_release(p: &Package) -> Option<String> {
+/// Why the crate's folder may differ from what crates.io has for its
+/// version: changed since the commit it was published from, or that
+/// commit unknown here. `None` when unchanged, or when crates.io does not
+/// say (an old crate, a download failing).
+fn changed_since_published(p: &Package) -> Option<String> {
     if p.dir.is_empty() {
         return None;
+    }
+    let url = format!(
+        "https://static.crates.io/crates/{0}/{0}-{1}.crate",
+        p.name, p.version
+    );
+    let download = Command::new("curl")
+        .args(["-sfL", "-A", "egui-pop xtask publish"])
+        .arg(&url)
+        .stdout(Stdio::piped())
+        .spawn()
+        .ok()?;
+    let info = Command::new("tar")
+        .args([
+            "-xzO",
+            &format!("{}-{}/.cargo_vcs_info.json", p.name, p.version),
+        ])
+        .stdin(download.stdout?)
+        .stderr(Stdio::null())
+        .output()
+        .ok()?;
+    let (commit, dirty) = vcs_commit(&String::from_utf8_lossy(&info.stdout))?;
+    if dirty {
+        return Some(format!("published from uncommitted changes on {commit:.8}"));
     }
     let git = |args: &[&str]| {
         Command::new("git")
@@ -101,40 +118,24 @@ fn changed_since_release(p: &Package) -> Option<String> {
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .status()
-            .ok()
+            .is_ok_and(|s| s.success())
     };
-    let version_tag = format!("v{}", p.version);
-    let tag = [tag_name(p), version_tag].into_iter().find(|t| {
-        git(&[
-            "rev-parse",
-            "--verify",
-            "--quiet",
-            &format!("refs/tags/{t}"),
-        ])
-        .is_some_and(|s| s.success())
-    })?;
-    let unchanged = git(&["diff", "--quiet", &tag, "HEAD", "--", &p.dir])?;
-    (!unchanged.success()).then_some(tag)
-}
-
-/// A crate's release tag, `<crate>-vX.Y.Z`.
-fn tag_name(p: &Package) -> String {
-    format!("{}-v{}", p.name, p.version)
-}
-
-/// Tags the commit a crate was just published from.
-fn tag(p: &Package) -> Result<String, String> {
-    let name = tag_name(p);
-    let status = Command::new("git")
-        .args(["tag", "-a", &name, "-m"])
-        .arg(format!("{} {}", p.name, p.version))
-        .current_dir(super::root())
-        .status()
-        .map_err(|e| format!("git tag: {e}"))?;
-    if !status.success() {
-        return Err(format!("git tag {name} failed ({status})"));
+    if !git(&["cat-file", "-e", &format!("{commit}^{{commit}}")]) {
+        return Some(format!("published from {commit:.8}, not in this clone"));
     }
-    Ok(name)
+    (!git(&["diff", "--quiet", &commit, "HEAD", "--", &p.dir]))
+        .then(|| format!("changed since {commit:.8}"))
+}
+
+/// The commit a crate was published from, and whether the tree had
+/// uncommitted changes, from its `.cargo_vcs_info.json`.
+fn vcs_commit(info: &str) -> Option<(String, bool)> {
+    let info: serde_json::Value = serde_json::from_str(info).ok()?;
+    let git = &info["git"];
+    Some((
+        git["sha1"].as_str()?.to_string(),
+        git["dirty"].as_bool().unwrap_or(false),
+    ))
 }
 
 fn cargo() -> String {
@@ -315,8 +316,12 @@ mod tests {
     }
 
     #[test]
-    fn a_tag_names_the_crate_and_its_version() {
-        assert_eq!(tag_name(&pkg("egui-pop-core", &[])), "egui-pop-core-v0.1.0");
+    fn the_published_commit_is_read_from_the_vcs_info() {
+        let info = r#"{"git": {"sha1": "7a70147"}, "path_in_vcs": "crates/a"}"#;
+        assert_eq!(vcs_commit(info), Some(("7a70147".into(), false)));
+        let dirty = r#"{"git": {"sha1": "7a70147", "dirty": true}}"#;
+        assert_eq!(vcs_commit(dirty), Some(("7a70147".into(), true)));
+        assert_eq!(vcs_commit(""), None);
     }
 
     #[test]
