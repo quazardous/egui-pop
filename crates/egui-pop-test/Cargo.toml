@@ -2,12 +2,14 @@
 name = "egui-pop-test"
 version = "0.1.0"
 description = "Test kit for egui-pop applications: themed egui_kittest harnesses, a check that every interactive node has a name, an accessibility tree dump, a double click that registers, keymap checks"
+readme = "README.md"
 keywords = ["egui", "testing", "accessibility", "kittest"]
 categories = ["gui", "development-tools::testing"]
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
 authors.workspace = true
 
 [lints]

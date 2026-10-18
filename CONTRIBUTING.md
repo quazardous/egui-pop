@@ -124,6 +124,23 @@ PNGs are indexed when they have 256 colours or fewer, and quantised to
 before committing them; a shot whose button moved needs its coordinates
 updated.
 
+## Releasing
+
+Publishing is the owner's call. Once `CHANGELOG.md`'s entries are a
+dated version and the versions in the manifests follow:
+
+```sh
+cargo xtask publish --dry-run     # the plan: each crate, published or not
+cargo xtask publish               # publish what is not on crates.io yet
+```
+
+The crates come from `cargo metadata` (every package not marked
+`publish = false`), ordered by their dependencies; a version already on
+crates.io is skipped. crates.io limits how many new crates an account
+publishes at once: a refused crate is tried again after `--interval`
+seconds (600 by default), and running the task again resumes where it
+stopped. Tag the release (`vX.Y.Z`) on the commit it was published from.
+
 ## Upstream limits
 
 How upstream limits are handled, from the workaround to its removal, is

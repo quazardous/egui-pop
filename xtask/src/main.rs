@@ -3,6 +3,9 @@
 //! `hosts` writes `docs/hosts.md` from the mount declarations (ADR
 //! 0013), through the page's own test.
 //!
+//! `publish` publishes the workspace's crates to crates.io in the order
+//! of their dependencies, skipping what is already there (`publish.rs`).
+//!
 //! `screenshots [filter]` refreshes every image of the documentation:
 //! it builds the gallery in release mode, captures each shot headless
 //! through wbox (`tools/wbox/shoot.py`, one nested compositor per shot),
@@ -16,6 +19,8 @@ use std::fs;
 use std::io::{BufRead as _, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
+
+mod publish;
 
 use ab_glyph::{Font as _, FontRef, PxScale, ScaleFont as _};
 use image::imageops::{self, FilterType as Resize};
@@ -31,6 +36,11 @@ Tasks:
                          name contains it (`--list` prints the names)
   hosts                  write docs/hosts.md from the mount declarations
                          (ADR 0013); a test fails when it is stale
+  publish [--dry-run] [--interval SECS]
+                         publish the workspace's crates to crates.io in the
+                         order of their dependencies, skipping the versions
+                         already there; on crates.io's rate limit, try again
+                         after SECS (default 600); --dry-run prints the plan
 
 Environment:
   WBOX_PYTHON            the Python with the wbox library (default: the
@@ -271,6 +281,7 @@ fn main() -> ExitCode {
     let result = match args.first().map(String::as_str) {
         Some("screenshots") => screenshots(&args[1..]),
         Some("hosts") => hosts(),
+        Some("publish") => publish::publish(&args[1..]),
         Some("-h" | "--help") => {
             println!("{USAGE}");
             Ok(())

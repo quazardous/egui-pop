@@ -2,12 +2,14 @@
 name = "egui-pop-i18n"
 version = "0.1.0"
 description = "Translations for egui-pop applications, as a plugin: Fluent catalogues per locale with fallback chains, a language setting, locale-aware numbers, dates and plurals, a lookup step, a debug collector, and the key extractor and checks for tools"
+readme = "README.md"
 keywords = ["egui", "i18n", "fluent", "translation", "localization"]
 categories = ["gui", "internationalization", "localization"]
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
 authors.workspace = true
 
 [lints]
