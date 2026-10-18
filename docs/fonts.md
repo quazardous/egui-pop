@@ -1,6 +1,10 @@
 # Fonts in egui-pop: proportional and monospace, done properly
 
-Status: design note, **not decided** (2026-10-12). Nothing here is built.
+Status: design note, **not decided** (2026-10-12). Built so far
+(2026-10-18): families from the tokens at four static weights, from
+registered faces, egui's bundled ones and the system's (fontdb behind
+`system-fonts`, not fontique: no per-script fallback yet), reported
+problems (`egui_pop_core::fonts`). The rest below is still a design.
 
 The ask: "good font management, fixed-width and variable-width". Concretely,
 egui-pop should load real families for interface text (proportional) and

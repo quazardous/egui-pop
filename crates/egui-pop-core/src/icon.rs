@@ -311,6 +311,25 @@ pub fn install(ctx: &Context) {
     let _ = ctx;
 }
 
+/// Puts the icon font, in its family, into font definitions being built
+/// (`fonts::install` replaces egui's definitions and keeps it this way).
+/// Does nothing without the `phosphor` feature.
+pub fn insert(defs: &mut egui::FontDefinitions) {
+    #[cfg(feature = "phosphor")]
+    {
+        defs.font_data.insert(
+            FAMILY.into(),
+            std::sync::Arc::new(egui::FontData::from_static(
+                egui_phosphor::Variant::Regular.font_bytes(),
+            )),
+        );
+        defs.families
+            .insert(FontFamily::Name(FAMILY.into()), vec![FAMILY.into()]);
+    }
+    #[cfg(not(feature = "phosphor"))]
+    let _ = defs;
+}
+
 /// Whether the icon font is in use in this context.
 pub fn font_ready(ctx: &Context) -> bool {
     cfg!(feature = "phosphor")

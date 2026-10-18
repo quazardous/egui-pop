@@ -17,10 +17,15 @@ workspace = true
 ## Draw icons from the Phosphor icon font (egui-phosphor), installed with
 ## the theme; without it, icons are painted.
 phosphor = ["dep:egui-phosphor"]
+## Find the families a theme names among the system's fonts (fontdb:
+## scans the font directories, reads fontconfig's files, no C library).
+system-fonts = ["dep:fontdb"]
 
 [dependencies]
 egui.workspace = true
 egui-phosphor = { workspace = true, optional = true }
+# MIT: the system's fonts by family and weight (feature `system-fonts`).
+fontdb = { version = "0.23", optional = true }
 egui-pop-tokens.workspace = true
 egui-pop-model.workspace = true
 log.workspace = true

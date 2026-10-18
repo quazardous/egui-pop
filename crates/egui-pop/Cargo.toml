@@ -21,6 +21,10 @@ eframe = ["egui-pop-api/eframe"]
 ## Icons drawn from the Phosphor icon font (MIT, about 480 KB); without
 ## it, icons are painted with lines and fills.
 phosphor = ["egui-pop-api/phosphor"]
+## The families a theme names (`font.family.ui`, `font.family.mono`)
+## found among the system's fonts, not only among the faces the
+## application registers (`egui_pop::core::fonts`).
+system-fonts = ["egui-pop-api/system-fonts"]
 ## The image viewport, thumbnails and the histogram
 ## (`egui-pop-viewport`, re-exported as `egui_pop::viewport`).
 viewport = ["dep:egui-pop-viewport"]

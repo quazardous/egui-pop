@@ -9,6 +9,14 @@ egui minor.
 
 ### Added
 
+- Fonts from the theme (`egui_pop_core::fonts`): the families named by
+  `font.family.ui` and `font.family.mono` become egui's fonts, at four
+  weights each (`fonts::family(role, weight)`, `fonts::font_id`), egui's
+  `Proportional` and `Monospace` being the regular ones. Names are looked
+  for among faces the application registers (`fonts::register`), egui's
+  bundled faces, and the system's fonts (feature `system-fonts`, through
+  fontdb); a name found nowhere or a missing weight is in
+  `fonts::report`, and egui's bundled fonts stay last in every chain.
 - `AppBuilder::menu_bar(false)`: an application without a menu bar
   (its menus stay in the palette, under their keys and in menus it
   opens itself); the top bar's zone is then drawn only when it has

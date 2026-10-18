@@ -30,8 +30,9 @@
 //! fill with the selection fill; the `slider.*` tokens are for egui-pop's
 //! own slider.
 //!
-//! Font families (`font.family.*`) are not applied yet: egui's bundled
-//! fonts stay until fonts are loaded from themes.
+//! Font families (`font.family.*`) become egui's fonts at several weights
+//! (`fonts`): faces the application registers, the system's (feature
+//! `system-fonts`), then egui's bundled fonts.
 //!
 //! # Never per widget
 //!
@@ -614,7 +615,7 @@ pub fn install_tokens(ctx: &Context, tokens: Tokens) -> Arc<Tokens> {
         snap_strokes(s, ppp);
     });
     ctx.data_mut(|d| d.insert_temp(tokens_id(), tokens.clone()));
-    crate::icon::install(ctx);
+    crate::fonts::install(ctx, &tokens.font.family_ui, &tokens.font.family_mono);
     tokens
 }
 

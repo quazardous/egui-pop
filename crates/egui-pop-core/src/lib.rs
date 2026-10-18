@@ -45,6 +45,7 @@ pub mod debug;
 pub mod fault;
 pub mod focus;
 pub mod focus_mode;
+pub mod fonts;
 pub mod frame;
 pub mod icon;
 pub mod keys;
