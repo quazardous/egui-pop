@@ -62,7 +62,7 @@ fn aliases_follow_through_extends_chains() {
     let mut themes = Themes::default();
     // A third level: mine → pop-light → pop-dark.
     themes
-        .add_json(
+        .add_text(
             "mine",
             r##"{ "$extends": "pop-light", "gray": { "$type": "color", "2": { "$value": "#ffffff" } } }"##,
         )
@@ -89,7 +89,7 @@ fn aliases_follow_through_extends_chains() {
 fn an_alias_cycle_is_reported_and_falls_back() {
     let mut themes = Themes::default();
     themes
-        .add_json(
+        .add_text(
             "loop",
             r#"{ "$extends": "pop-dark",
                  "text": { "$type": "color",
@@ -117,7 +117,7 @@ fn an_alias_cycle_is_reported_and_falls_back() {
 fn an_unknown_alias_is_reported_with_its_target() {
     let mut themes = Themes::default();
     themes
-        .add_json(
+        .add_text(
             "typo",
             r#"{ "$extends": "pop-dark", "danger": { "$type": "color", "$value": "{redd.11}" } }"#,
         )
@@ -144,10 +144,10 @@ fn an_unknown_alias_is_reported_with_its_target() {
 fn extends_problems_fall_back_to_pop_dark() {
     let mut themes = Themes::default();
     themes
-        .add_json("orphan", r##"{ "$extends": "nowhere", "gray": { "$type": "color", "0": { "$value": "#000000" } } }"##)
+        .add_text("orphan", r##"{ "$extends": "nowhere", "gray": { "$type": "color", "0": { "$value": "#000000" } } }"##)
         .unwrap();
-    themes.add_json("a", r#"{ "$extends": "b" }"#).unwrap();
-    themes.add_json("b", r#"{ "$extends": "a" }"#).unwrap();
+    themes.add_text("a", r#"{ "$extends": "b" }"#).unwrap();
+    themes.add_text("b", r#"{ "$extends": "a" }"#).unwrap();
 
     let orphan = themes.resolve(&ThemeSpec::new("orphan"));
     assert_eq!(
@@ -183,7 +183,7 @@ fn extends_problems_fall_back_to_pop_dark() {
 fn missing_or_mistyped_contract_tokens_fall_back_and_say_why() {
     let mut themes = Themes::default();
     themes
-        .add_json(
+        .add_text(
             "bare",
             r##"{ "surface": { "$type": "color", "panel": { "$value": "#102030" } },
                   "radius": { "widget": { "$type": "color", "$value": "#ffffff" } } }"##,
@@ -359,7 +359,7 @@ fn reduced_motion_zeroes_the_duration() {
 fn extensions_and_descriptions_are_preserved() {
     let mut themes = Themes::default();
     themes
-        .add_json(
+        .add_text(
             "ext",
             r##"{ "$extends": "pop-dark",
                   "$extensions": { "org.example.tool": { "id": 7 } },
@@ -400,7 +400,7 @@ fn an_exported_theme_reads_back_the_same() {
     let r = themes.resolve(&spec);
     let mut again = Themes::default();
     again
-        .add_json("exported", &r.to_dtcg().to_string())
+        .add_text("exported", &r.to_dtcg().to_string())
         .unwrap();
     // Read back without the compact overlay: the file already holds its values.
     let mut no_density = again.clone();
@@ -496,7 +496,7 @@ fn control_and_icon_sizes_are_multiples_of_four_points() {
 fn a_renamed_token_still_works_under_its_new_name_and_is_reported() {
     let mut themes = Themes::default();
     themes
-        .add_json(
+        .add_text(
             "old-names",
             r##"{ "$extends": "pop-dark",
                   "titlebar": { "background": {"$type": "color", "$value": "#123456"},
@@ -519,7 +519,7 @@ fn a_renamed_token_still_works_under_its_new_name_and_is_reported() {
 fn a_frame_token_renamed_into_the_kit_keeps_working() {
     let mut themes = Themes::default();
     themes
-        .add_json(
+        .add_text(
             "old-dialog",
             r##"{ "$extends": "pop-dark",
                   "dialog": { "background": {"$type": "color", "$value": "#123456"},

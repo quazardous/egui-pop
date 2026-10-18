@@ -8,38 +8,38 @@ when the kit draws shapes of its own.
 
 ```text
 underline-tabs/
-  kit.json          a DTCG token file, like a theme
-  *.tokens.json     optional: more token files (one per component)
+  kit.yaml          a DTCG token file, like a theme (kit.json is read too)
+  *.tokens.yaml     optional: more token files (one per component;
+                    .tokens.json is read too)
   fonts/            optional: .ttf, .otf or .ttc faces
   LICENSE           optional: the kit's licence and its fonts'
   icons/            reserved for SVG icons, not read yet (reported)
 ```
 
-`kit.json` is a theme file: `$description`, `$extends` (`pop-dark` when
+`kit.yaml` is a theme file, in YAML or JSON ([tokens.md](tokens.md#yaml-or-json)): `$description`, `$extends` (`pop-dark` when
 not given) and tokens in the vocabulary of [kit.md](kit.md)
 (`tab.shape`, `tab.hover.fill`), plus any system or palette token a
-theme can give. Other `*.tokens.json` files of the folder are read in
+theme can give. Other `*.tokens.yaml` (or `.json`) files of the folder are read in
 name order and merged into it; a token given twice keeps its first
-value, and only `kit.json` says what the kit extends.
+value, and only `kit.yaml` says what the kit extends.
 
-The manifest lives in `kit.json`'s root `$extensions`, so the file stays
+The manifest lives in `kit.yaml`'s root `$extensions`, so the file stays
 plain DTCG:
 
-```json
-{
-  "$description": "Our product's look.",
-  "$extends": "pop-dark",
-  "$extensions": {
-    "org.egui-pop.kit": {
-      "name": "brand",
-      "label": "Brand",
-      "fonts": [
-        {"file": "JetBrainsMono-Regular.ttf", "family": "JetBrains Mono", "weight": 400}
-      ]
-    }
-  },
-  "font": {"family": {"mono": {"$type": "fontFamily", "$value": ["JetBrains Mono", "monospace"]}}}
-}
+```yaml
+$description: "Our product's look."
+$extends: "pop-dark"
+$extensions:
+  org.egui-pop.kit:
+    name: "brand"
+    label: "Brand"
+    fonts:
+      - {file: "JetBrainsMono-Regular.ttf", family: "JetBrains Mono", weight: 400}
+font:
+  family:
+    mono:
+      $type: "fontFamily"
+      $value: ["JetBrains Mono", "monospace"]
 ```
 
 Every key is optional. `name` is the kit's theme name (the folder's name
@@ -65,15 +65,16 @@ system.
 | | |
 |---|---|
 | `KitData::load(dir)` | a folder at run time |
-| `kit!("dir", tokens = [..], fonts = [..], license = "LICENSE")` | embedded in the binary (`include_str!`/`include_bytes!`, the path relative to the calling file); only `kit.json` is implied, the other files are listed |
-| `KitData::from_json(name, text)` | a data-only kit from its `kit.json` text |
-| `kit::discover(dir)` | each sub-folder holding a `kit.json` |
+| `kit!("dir", tokens = [..], fonts = [..], license = "LICENSE")` | embedded in the binary (`include_str!`/`include_bytes!`, the path relative to the calling file); only `kit.yaml` is implied (`kit = "kit.json"` names another), the other files are listed |
+| `KitData::from_text(name, text)` | a data-only kit from its `kit.yaml` (or JSON) text |
+| `kit::discover(dir)` | each sub-folder holding a `kit.yaml`, `kit.yml` or `kit.json` |
 | `kit::check(&kit)` | every problem: reading it, and resolving its theme |
 
 What is wrong is in `KitData::problems()`, and the kit is usable anyway
 (ADR 0003):
 
-- `kit.json` unreadable or not JSON: the kit is its base theme under its
+- `kit.yaml` unreadable, not YAML or JSON, or holding an unquoted
+  `#colour` or `{alias}`: the kit is its base theme under its
   name; another token file that cannot be read is left out;
 - a token of a kit component outside the vocabulary (a misspelt term or
   state, a per-state term without its state, a term of the wrong type),
@@ -116,7 +117,7 @@ installed (at start-up, never per frame). Pick it as any theme:
 use egui_pop::egui;
 use egui_pop::prelude::*;
 
-let kit = egui_pop::tokens::kit::KitData::from_json(
+let kit = egui_pop::tokens::kit::KitData::from_text(
     "underline",
     r#"{ "tab": { "shape": { "$type": "string", "$value": "underline" } } }"#,
 );
@@ -162,7 +163,7 @@ steps.
 
 `AppBuilder::user_kits(true)` also reads the data-only kit folders the
 user put under the persistence directory (`AppBuilder::persist`):
-`<persist>/kits/<kit>/kit.json`. They come after the application's own
+`<persist>/kits/<kit>/kit.yaml`. They come after the application's own
 kits (a user kit of the same name replaces it) and are listed by
 `ThemeService::kits()` with their folder as origin. A user kit is data
 only: code comes only from crates the application links.
@@ -170,7 +171,7 @@ only: code comes only from crates the application links.
 ## The default kit
 
 egui-pop's own look is a kit folder too: `crates/egui-pop-tokens/themes/kit/`
-(a `kit.json` and one token file per component), read by the same code
+(a `kit.yaml` and one token file per component), read by the same code
 as any embedded kit and layered into `pop-dark`, which every built-in
 theme extends. It is not a theme of its own, because it is the base all
 others fall back to. A test reads that folder with `KitData::load` and

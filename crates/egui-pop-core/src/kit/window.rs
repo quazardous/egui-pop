@@ -122,7 +122,7 @@ mod tests {
     fn kit(json: &str) -> crate::kit::Kit {
         let mut themes = Themes::default();
         themes
-            .add_json("window-test", json)
+            .add_text("window-test", json)
             .expect("test theme reads");
         let t = Tokens::new(themes.resolve(&ThemeSpec::new("window-test")));
         crate::kit::Kit::compile(&t, &crate::kit::Shapes::default())

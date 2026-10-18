@@ -296,7 +296,7 @@ mod tests {
         let ring = register("test-kit-ring", RING, Paint::Mono).unwrap();
         let mut themes = egui_pop_tokens::Themes::default();
         themes
-            .add_json(
+            .add_text(
                 "ring-check",
                 r#"{ "$extends": "pop-dark",
                      "glyph": { "check": {"$type": "string", "$value": "test-kit-ring"} } }"#,

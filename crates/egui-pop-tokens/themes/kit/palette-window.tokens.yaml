@@ -1,0 +1,25 @@
+$description: "The `palette-window` component of the default kit (docs/kit.md), layered into pop-dark."
+palette-window:
+  $description: "A floating palette's window (a kit component)."
+  shape:
+    $type: "string"
+    $value: "card"
+  padding-x:
+    $type: "dimension"
+    $value: "{space.s}"
+  padding-y:
+    $type: "dimension"
+    $value: "{space.s}"
+  rest:
+    fill:
+      $type: "color"
+      $value: "{surface.overlay}"
+    border-color:
+      $type: "color"
+      $value: "{border.default}"
+    border-width:
+      $type: "dimension"
+      $value: {value: 1, unit: "px"}
+    radius:
+      $type: "dimension"
+      $value: "{radius.window}"

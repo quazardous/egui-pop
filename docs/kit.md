@@ -119,8 +119,8 @@ frame). Shadows are egui's (`Visuals`).
 
 ## Kits as packages
 
-A kit ships as a folder: `kit.json` (a DTCG token file with a manifest
-under `$extensions."org.egui-pop.kit"`), more `*.tokens.json`, faces
+A kit ships as a folder: `kit.yaml` (a DTCG token file with a manifest
+under `$extensions."org.egui-pop.kit"`, YAML or JSON), more `*.tokens.yaml`, faces
 under `fonts/` and a `LICENSE`. It is read at run time
 (`KitData::load`) or embedded (`kit!`), checked by `kit::check` (in an
 application's tests) or the `kit-check` example, and added with one
@@ -138,7 +138,7 @@ Each step touches its own file, plus one line in a list kept in
 alphabetical order, so changes adding different components can be made
 in parallel (the lanes of the umbrella issue):
 
-1. **Its tokens** in `crates/egui-pop-tokens/themes/kit/<component>.tokens.json`
+1. **Its tokens** in `crates/egui-pop-tokens/themes/kit/<component>.tokens.yaml`
    (aliases of system tokens, `rest` complete, other states only what
    differs), plus one line in `KIT_FILES` (`src/theme.rs`).
 2. **Its contract** in `crates/egui-pop-tokens/src/contract/kit/<component>.rs`

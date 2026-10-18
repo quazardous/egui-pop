@@ -1,6 +1,0 @@
-{
-  "$description": "egui-pop's default kit: its look, layered into pop-dark (and so into every theme extending it). One file per component next to this one (docs/kit.md).",
-  "$extensions": {
-    "org.egui-pop.kit": {"name": "pop", "label": "Pop"}
-  }
-}

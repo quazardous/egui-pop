@@ -9,6 +9,11 @@ egui minor.
 
 ### Added
 
+- Token and kit files may be written in YAML, for comments
+  (`docs/tokens.md`): `TokenFile::parse` reads JSON when the text starts
+  with `{` and YAML otherwise. An unquoted `#colour` (a YAML comment) or
+  `{alias}` (a YAML map) is refused with its line instead of being lost.
+  JSON is still read, and is what egui-pop writes.
 - Visual kits, first component (`egui_pop_core::kit`, `docs/kit.md`): the
   workbench's tabs and tab bars are drawn by the kit, from `tab.*` and
   `tab-bar.*` tokens per state (`rest`, `hover`, `active`, `focus`,
@@ -909,6 +914,10 @@ egui minor.
 
 ### Changed
 
+- The shipped themes, densities and default kit are `.tokens.yaml`
+  files; a kit folder's file is `kit.yaml` (`kit.yml` and `kit.json`
+  are read too). `Themes::add_json` is now `Themes::add_text` and
+  `KitData::from_json` is `KitData::from_text`: both read YAML or JSON.
 - Renamed into the kit's grid: `button.{background, background-hover,
   background-active, text, border, radius}` (`button.rest.fill`...),
   `menu.item.*` (`menu-item.hover.fill`, `menu-item.rest.text`,

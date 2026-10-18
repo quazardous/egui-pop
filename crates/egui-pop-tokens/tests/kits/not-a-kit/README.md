@@ -1,1 +1,1 @@
-A folder without kit.json: not a kit.
+A folder without kit.yaml: not a kit.

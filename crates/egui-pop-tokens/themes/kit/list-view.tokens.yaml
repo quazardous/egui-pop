@@ -1,0 +1,20 @@
+$description: "The `list-view` component of the default kit (docs/kit.md), layered into pop-dark."
+list-view:
+  $description: "A tree, a list, a table or a library grid as a whole (a kit component): its outline while it has the keyboard focus. Painted over the rows: its fill stays transparent."
+  shape:
+    $type: "string"
+    $value: "plain"
+  rest:
+    fill:
+      $type: "color"
+      $value: "{transparent}"
+  focus:
+    ring-color:
+      $type: "color"
+      $value: "{focus.ring}"
+    ring-width:
+      $type: "dimension"
+      $value: {value: 1, unit: "px"}
+    ring-offset:
+      $type: "dimension"
+      $value: {value: -1, unit: "px"}

@@ -864,7 +864,7 @@ mod tests {
 
     fn tokens_with(json: &str) -> Tokens {
         let mut themes = Themes::default();
-        themes.add_json("kit-test", json).expect("test theme reads");
+        themes.add_text("kit-test", json).expect("test theme reads");
         Tokens::new(themes.resolve(&ThemeSpec::new("kit-test")))
     }
 

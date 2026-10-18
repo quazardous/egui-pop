@@ -433,7 +433,7 @@ mod tests {
         assert_eq!(back.overrides(), d.overrides());
         // The file resolves as a theme like any other.
         let mut with = t.clone();
-        with.add_json("mine", &text).unwrap();
+        with.add_text("mine", &text).unwrap();
         let r = with.resolve(&ThemeSpec::new("mine"));
         assert!(r.problems().is_empty(), "{:?}", r.problems());
         assert_eq!(r.color("accent.default"), crate::Color::from_hex("#2060c0"));

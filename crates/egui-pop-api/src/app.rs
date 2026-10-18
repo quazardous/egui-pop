@@ -1839,7 +1839,7 @@ impl AppBuilder {
     /// use egui_pop_core::theme::ThemeSpec;
     /// use egui_pop_core::tokens::kit::KitData;
     ///
-    /// let kit = KitData::from_json(
+    /// let kit = KitData::from_text(
     ///     "underline",
     ///     r#"{ "tab": { "shape": { "$type": "string", "$value": "underline" } } }"#,
     /// );

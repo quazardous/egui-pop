@@ -1,0 +1,11 @@
+$description: "The `window` component of the default kit (docs/kit.md), layered into pop-dark."
+window:
+  $description: "A window drawn by the application."
+  grip:
+    $type: "dimension"
+    $value: "{size.frame.grip}"
+    $description: "Width of the resize edges."
+  corners:
+    $type: "string"
+    $value: "round"
+    $description: "The window's corners where the system can round a window drawn by the application (Windows 11): round, small or square."

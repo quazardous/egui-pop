@@ -1,0 +1,49 @@
+$description: "The `menu-item` component of the default kit (docs/kit.md), layered into pop-dark."
+menu-item:
+  $description: "An item of a menu: a command, a check item, a submenu (selected while open). Its shortcut is in the muted tone."
+  shape:
+    $type: "string"
+    $value: "box"
+  rest:
+    fill:
+      $type: "color"
+      $value: "{transparent}"
+    border-color:
+      $type: "color"
+      $value: "{transparent}"
+    border-width:
+      $type: "dimension"
+      $value: {value: 0, unit: "px"}
+    radius:
+      $type: "dimension"
+      $value: "{radius.widget}"
+    text:
+      $type: "color"
+      $value: "{text.default}"
+  hover:
+    fill:
+      $type: "color"
+      $value: "{surface.hover}"
+    text:
+      $type: "color"
+      $value: "{text.strong}"
+  active:
+    fill:
+      $type: "color"
+      $value: "{surface.active}"
+    text:
+      $type: "color"
+      $value: "{text.strong}"
+  selected:
+    fill:
+      $type: "color"
+      $value: "{surface.hover}"
+  disabled:
+    text:
+      $type: "color"
+      $value: "{text.muted}"
+  tone:
+    muted:
+      text:
+        $type: "color"
+        $value: "{text.muted}"

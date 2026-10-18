@@ -65,7 +65,7 @@ impl Primitive<ComponentKit> for Notch {
 
 /// What a kit crate exposes.
 fn notched_kit() -> KitSource {
-    let data = KitData::from_json(
+    let data = KitData::from_text(
         "notched",
         r#"{ "tab": { "shape": { "$type": "string", "$value": "notch" } } }"#,
     );
@@ -127,11 +127,11 @@ fn user_kits_are_read_from_the_persistence_directory() {
 #[test]
 fn a_later_kit_of_the_same_name_replaces_an_earlier_one() {
     let ctx = egui::Context::default();
-    let first = KitData::from_json(
+    let first = KitData::from_text(
         "k",
         r#"{ "$extensions": { "org.egui-pop.kit": { "label": "First" } } }"#,
     );
-    let second = KitData::from_json(
+    let second = KitData::from_text(
         "k",
         r#"{ "$extensions": { "org.egui-pop.kit": { "label": "Second" } } }"#,
     );

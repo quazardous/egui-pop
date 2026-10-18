@@ -32,6 +32,8 @@ authors = ["The egui-pop contributors"]
 egui-pop-tokens = { version = "0.1.0", path = "crates/egui-pop-tokens" }
 serde_json = "1"
 serde = { version = "1", features = ["derive"] }
+# MIT OR Apache-2.0: token and kit files may be written in YAML (comments).
+serde-saphyr = { version = "2", default-features = false, features = ["deserialize"] }
 log = "0.4"
 egui-pop-model = { version = "0.1.0", path = "crates/egui-pop-model" }
 egui-pop-core = { version = "0.1.0", path = "crates/egui-pop-core" }

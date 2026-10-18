@@ -57,7 +57,7 @@ fn every_accent_keeps_aa_contrast_in_every_theme() {
 fn a_theme_with_a_poor_pair_fails_the_check() {
     let mut themes = Themes::default();
     themes
-        .add_json(
+        .add_text(
             "murky",
             r##"{ "$extends": "pop-dark", "text": { "$type": "color", "muted": { "$value": "#3a3a3a" } } }"##,
         )

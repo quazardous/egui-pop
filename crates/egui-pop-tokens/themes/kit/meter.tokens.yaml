@@ -1,0 +1,17 @@
+$description: "The `meter` component of the default kit (docs/kit.md), layered into pop-dark."
+meter:
+  $description: "A value against thresholds (disk space, memory): its track (a kit component). Its fill is a `progress-fill`, its thresholds `meter-tick`."
+  shape:
+    $type: "string"
+    $value: "track"
+    $description: "The handler that draws it: track (rounded by its radius)."
+  height:
+    $type: "dimension"
+    $value: "{space.m}"
+  rest:
+    fill:
+      $type: "color"
+      $value: "{border.default}"
+    radius:
+      $type: "dimension"
+      $value: "{meter.height}"

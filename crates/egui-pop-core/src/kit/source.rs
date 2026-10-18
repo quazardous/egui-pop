@@ -25,7 +25,7 @@
 //!
 //! /// The kit's crate: `pub fn kit() -> KitSource`.
 //! pub fn kit() -> KitSource {
-//!     let data = egui_pop_tokens::kit::KitData::from_json(
+//!     let data = egui_pop_tokens::kit::KitData::from_text(
 //!         "notched",
 //!         r#"{ "tab": { "shape": { "$type": "string", "$value": "notch" } } }"#,
 //!     );
@@ -163,7 +163,7 @@ mod tests {
 
     #[test]
     fn a_kit_registers_its_faces_and_its_theme_names_them() {
-        let mut data = KitData::from_json(
+        let mut data = KitData::from_text(
             "inter",
             r#"{ "font": { "family": { "ui": { "$type": "fontFamily", "$value": ["Inter", "sans-serif"] } } } }"#,
         );
@@ -192,7 +192,7 @@ mod tests {
 
     #[test]
     fn a_handler_for_no_component_is_reported() {
-        let source = KitSource::new(KitData::from_json("k", "{}")).shape(
+        let source = KitSource::new(KitData::from_text("k", "{}")).shape(
             "tabz",
             "x",
             Arc::new(super::super::shapes::Plain),

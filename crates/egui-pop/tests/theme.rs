@@ -121,7 +121,7 @@ fn tokens_are_read_back_from_the_context() {
 fn a_broken_theme_installs_with_fallbacks_and_reports() {
     let mut themes = Themes::default();
     themes
-        .add_json(
+        .add_text(
             "broken",
             r#"{ "$extends": "pop-dark", "surface": { "$type": "color", "panel": { "$value": "{nope}" } } }"#,
         )

@@ -4,33 +4,38 @@
 //!
 //! ```text
 //! underline-tabs/
-//!   kit.json            a DTCG token file, like a theme (`$extends`, tokens)
-//!   *.tokens.json       optional: more tokens, one file per component
+//!   kit.yaml            a DTCG token file, like a theme (`$extends`, tokens);
+//!                       `kit.json` is read too
+//!   *.tokens.yaml       optional: more tokens, one file per component
+//!                       (`.tokens.json` is read too)
 //!   fonts/*.ttf|otf     optional: faces for the families the tokens name
 //!   LICENSE             optional: the kit's licence (and its fonts')
 //!   icons/              reserved: not read yet
 //! ```
 //!
-//! `kit.json` is a theme: its name is the folder's, unless its manifest
+//! `kit.yaml` is a theme: its name is the folder's, unless its manifest
 //! (`$extensions."org.egui-pop.kit"`) gives one, and it extends `pop-dark`
 //! unless it says otherwise. A face's family and weight come from its
 //! file name (`Inter-SemiBold.ttf` is `Inter` at 600), or from the
 //! manifest when given:
 //!
-//! ```json
-//! { "$extends": "pop-dark",
-//!   "$extensions": { "org.egui-pop.kit": {
-//!     "name": "brand", "label": "Brand",
-//!     "fonts": [ { "file": "JetBrainsMono-Regular.ttf", "family": "JetBrains Mono", "weight": 400 } ] } } }
+//! ```yaml
+//! $extends: "pop-dark"
+//! $extensions:
+//!   org.egui-pop.kit:
+//!     name: "brand"
+//!     label: "Brand"
+//!     fonts:
+//!       - {file: "JetBrainsMono-Regular.ttf", family: "JetBrains Mono", weight: 400}
 //! ```
 //!
-//! Reading a kit never fails: what is wrong (bad JSON, a term outside the
+//! Reading a kit never fails: what is wrong (bad YAML or JSON, a term outside the
 //! vocabulary, a font file missing) is in [`KitData::problems`], and the
-//! kit is still usable with fallbacks (a kit whose `kit.json` cannot be
+//! kit is still usable with fallbacks (a kit whose `kit.yaml` cannot be
 //! read is `pop-dark` under the kit's name).
 //!
 //! ```
-//! let kit = egui_pop_tokens::kit::KitData::from_json(
+//! let kit = egui_pop_tokens::kit::KitData::from_text(
 //!     "underline",
 //!     r#"{ "tab": { "shape": { "$type": "string", "$value": "underline" } } }"#,
 //! );
@@ -52,9 +57,15 @@ use crate::theme::{BUILT_IN_THEMES, FALLBACK_THEME, ThemeSpec, Themes};
 use crate::{Error, TokenFile};
 
 /// The file every kit folder has.
-pub const KIT_FILE: &str = "kit.json";
+pub const KIT_FILE: &str = "kit.yaml";
 
-/// Where a kit's manifest lives in `kit.json`'s root `$extensions`.
+/// The names a kit folder's [`KIT_FILE`] may have, the first found read.
+pub const KIT_FILES: &[&str] = &["kit.yaml", "kit.yml", "kit.json"];
+
+/// The endings of a kit's other token files.
+pub const TOKEN_FILE_ENDINGS: &[&str] = &[".tokens.yaml", ".tokens.yml", ".tokens.json"];
+
+/// Where a kit's manifest lives in `kit.yaml`'s root `$extensions`.
 pub const KIT_EXTENSION: &str = "org.egui-pop.kit";
 
 /// The folder under an application's configuration directory where the
@@ -142,14 +153,15 @@ pub enum Origin {
 pub enum Problem {
     /// A file could not be read.
     Io { file: String, message: String },
-    /// A token file is not valid JSON or not a token file: its tokens are
-    /// left out (all of them for `kit.json`: the kit is its base theme).
+    /// A token file is not valid YAML or JSON, or not a token file: its
+    /// tokens are left out (all of them for `kit.yaml`: the kit is its
+    /// base theme).
     Tokens(Error),
     /// Two of the kit's files give the same token: the first one read
-    /// (`kit.json`, then the others by name) is kept.
+    /// (`kit.yaml`, then the others by name) is kept.
     Repeated { path: String, file: String },
-    /// A token file other than `kit.json` says what it extends: only
-    /// `kit.json` does.
+    /// A token file other than `kit.yaml` says what it extends: only
+    /// `kit.yaml` does.
     Extends { file: String },
     /// A token of a kit component with a term outside the vocabulary
     /// (`docs/kit.md`): no component reads it.
@@ -188,7 +200,7 @@ impl fmt::Display for Problem {
             }
             Problem::Extends { file } => write!(
                 f,
-                "`{file}` has `$extends`: only kit.json says what the kit extends, ignored"
+                "`{file}` has `$extends`: only the kit file says what the kit extends, ignored"
             ),
             Problem::UnknownTerm { path, reason } => {
                 write!(f, "`{path}`: {reason}; nothing reads it")
@@ -225,7 +237,7 @@ impl std::error::Error for Problem {}
 pub struct Embedded {
     /// The folder, as the macro named it.
     pub dir: &'static str,
-    /// `kit.json`.
+    /// `kit.yaml` (or `kit.json`).
     pub kit: &'static str,
     /// Other token files: their name and text.
     pub tokens: Vec<(String, &'static str)>,
@@ -265,7 +277,7 @@ impl KitData {
                 message: e.to_string(),
             })
         };
-        let kit = read(&dir.join(KIT_FILE));
+        let kit = read(&kit_file(dir).unwrap_or_else(|| dir.join(KIT_FILE)));
         let mut tokens = Vec::new();
         let mut fonts = Vec::new();
         let mut license = None;
@@ -278,7 +290,7 @@ impl KitData {
                     .collect();
                 names.sort();
                 for (name, path) in names {
-                    if name.ends_with(".tokens.json") {
+                    if TOKEN_FILE_ENDINGS.iter().any(|e| name.ends_with(e)) {
                         tokens.push((name, read(&path)));
                     } else if license.is_none()
                         && matches!(name.as_str(), "LICENSE" | "LICENSE.txt" | "LICENSE.md")
@@ -361,13 +373,13 @@ impl KitData {
         )
     }
 
-    /// A data-only kit from the text of its `kit.json`, under a name (the
-    /// manifest's wins).
-    pub fn from_json(name: &str, kit_json: &str) -> KitData {
+    /// A data-only kit from the text of its `kit.yaml` (or `kit.json`),
+    /// under a name (the manifest's wins).
+    pub fn from_text(name: &str, kit_text: &str) -> KitData {
         assemble(
             name,
             Origin::Embedded(""),
-            Ok(kit_json.to_string()),
+            Ok(kit_text.to_string()),
             Vec::new(),
             Vec::new(),
             None,
@@ -404,7 +416,7 @@ pub struct KitInfo {
     /// The theme's name, for `ThemeSpec::new`.
     pub name: String,
     pub label: String,
-    /// `kit.json`'s `$description`.
+    /// `kit.yaml`'s `$description`.
     pub description: Option<String>,
     pub origin: Origin,
     /// How many problems reading it met.
@@ -425,7 +437,7 @@ impl Themes {
 /// since [`kit!`](crate::kit!) checks nothing when compiling:
 ///
 /// ```
-/// let kit = egui_pop_tokens::kit::KitData::from_json(
+/// let kit = egui_pop_tokens::kit::KitData::from_text(
 ///     "k",
 ///     r##"{ "tab": { "rest": { "fil": { "$type": "color", "$value": "#000000" } } } }"##,
 /// );
@@ -452,7 +464,7 @@ pub fn check(kit: &KitData) -> Vec<Problem> {
     problems
 }
 
-/// The kits found in a folder: each sub-folder holding a `kit.json`, by
+/// The kits found in a folder: each sub-folder holding a `kit.yaml`, by
 /// name (anything else is not a kit and is skipped). An application's
 /// user kits are in `<config>/kits` ([`USER_KITS_DIR`]); a folder that
 /// does not exist has none.
@@ -463,7 +475,7 @@ pub fn discover(dir: impl AsRef<Path>) -> Vec<KitData> {
     let mut dirs: Vec<PathBuf> = entries
         .filter_map(Result::ok)
         .map(|e| e.path())
-        .filter(|p| p.join(KIT_FILE).is_file())
+        .filter(|p| kit_file(p).is_some())
         .collect();
     dirs.sort();
     dirs.iter().map(KitData::load).collect()
@@ -474,14 +486,23 @@ pub fn discover(dir: impl AsRef<Path>) -> Vec<KitData> {
 pub(crate) fn built_in(files: &[(&str, &'static str)]) -> KitData {
     KitData::embedded(Embedded {
         dir: "themes/kit",
-        kit: include_str!("../themes/kit/kit.json"),
+        kit: include_str!("../themes/kit/kit.yaml"),
         tokens: files
             .iter()
-            .map(|(component, text)| (format!("{component}.tokens.json"), *text))
+            .map(|(component, text)| (format!("{component}.tokens.yaml"), *text))
             .collect(),
         fonts: Vec::new(),
         license: None,
     })
+}
+
+/// A kit folder's [`KIT_FILE`], under the first of [`KIT_FILES`] found.
+pub fn kit_file(dir: impl AsRef<Path>) -> Option<PathBuf> {
+    let dir = dir.as_ref();
+    KIT_FILES
+        .iter()
+        .map(|name| dir.join(name))
+        .find(|p| p.is_file())
 }
 
 fn is_font_file(name: &str) -> bool {
@@ -850,27 +871,37 @@ fn vocabulary(theme: &TokenFile) -> Vec<Problem> {
     problems
 }
 
-/// Embeds a kit folder in the binary: `kit.json`, and the token files,
+/// Embeds a kit folder in the binary: `kit.yaml` (or the kit file
+/// `kit = "kit.json"` names), and the token files,
 /// faces (under `fonts/`) and licence it is given. The path is relative
 /// to the file calling the macro, as `include_str!`'s. Nothing is checked
 /// when compiling: call [`kit::check`](crate::kit::check) from a test.
 ///
 /// ```ignore
 /// let kit = egui_pop_tokens::kit!("../kits/brand",
-///     tokens = ["tab.tokens.json"],
+///     tokens = ["tab.tokens.yaml"],
 ///     fonts = ["Inter-Regular.ttf", "Inter-Bold.ttf"],
 ///     license = "LICENSE");
 /// ```
 #[macro_export]
 macro_rules! kit {
-    ($dir:literal
+    ($dir:literal $(, tokens = [$($part:literal),* $(,)?])?
+        $(, fonts = [$($font:literal),* $(,)?])?
+        $(, license = $license:literal)?
+        $(,)?) => {
+        $crate::kit!($dir, kit = "kit.yaml"
+            $(, tokens = [$($part),*])?
+            $(, fonts = [$($font),*])?
+            $(, license = $license)?)
+    };
+    ($dir:literal, kit = $kit:literal
         $(, tokens = [$($part:literal),* $(,)?])?
         $(, fonts = [$($font:literal),* $(,)?])?
         $(, license = $license:literal)?
         $(,)?) => {
         $crate::kit::KitData::embedded($crate::kit::Embedded {
             dir: $dir,
-            kit: include_str!(concat!($dir, "/kit.json")),
+            kit: include_str!(concat!($dir, "/", $kit)),
             tokens: vec![$($((
                 ::std::string::String::from($part),
                 include_str!(concat!($dir, "/", $part)),
@@ -913,7 +944,7 @@ mod tests {
 
     #[test]
     fn terms_outside_the_vocabulary_are_reported() {
-        let kit = KitData::from_json(
+        let kit = KitData::from_text(
             "k",
             r##"{
               "tab": {
@@ -939,7 +970,7 @@ mod tests {
 
     #[test]
     fn tones_are_in_the_vocabulary() {
-        let kit = KitData::from_json(
+        let kit = KitData::from_text(
             "k",
             r##"{
               "window-button": { "tone": {
@@ -967,7 +998,7 @@ mod tests {
 
     #[test]
     fn a_kit_extends_pop_dark_and_keeps_built_in_names() {
-        let kit = KitData::from_json("pop-light", "{}");
+        let kit = KitData::from_text("pop-light", "{}");
         assert_eq!(kit.name, "pop-light-kit");
         assert_eq!(kit.theme.extends.as_deref(), Some(FALLBACK_THEME));
         assert!(matches!(kit.problems()[0], Problem::Name { .. }));
@@ -975,7 +1006,7 @@ mod tests {
 
     #[test]
     fn bad_json_gives_the_base_theme_under_the_kit_name() {
-        let kit = KitData::from_json("broken", "{ nope");
+        let kit = KitData::from_text("broken", "{ nope");
         assert!(matches!(
             kit.problems()[0],
             Problem::Tokens(Error::Json { .. })

@@ -3,7 +3,7 @@
 //! default kit is a kit folder.
 
 use egui_pop_tokens::kit::{self, KitData, Origin, Problem};
-use egui_pop_tokens::{ThemeSpec, Themes};
+use egui_pop_tokens::{Error, ThemeSpec, Themes};
 
 fn fixture(name: &str) -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -18,7 +18,7 @@ fn a_kit_folder_reads_its_tokens_fonts_and_licence() {
     assert_eq!(kit.name, "brand");
     assert_eq!(kit.display_name(), "Brand");
     assert_eq!(kit.theme.extends.as_deref(), Some("pop-light"));
-    // kit.json and tab.tokens.json, merged.
+    // kit.yaml and tab.tokens.json (JSON is read too), merged.
     assert!(kit.theme.tokens.contains_key("font.family.ui"));
     assert!(kit.theme.tokens.contains_key("tab.padding-x"));
     assert_eq!(kit.fonts.len(), 1);
@@ -75,7 +75,17 @@ fn a_broken_kit_reports_each_problem_and_still_installs() {
     let kit = KitData::load(fixture("broken"));
     let text: Vec<String> = kit.problems().iter().map(ToString::to_string).collect();
     let has = |f: fn(&Problem) -> bool| kit.problems().iter().any(f);
-    assert!(has(|p| matches!(p, Problem::Tokens(_))), "{text:#?}");
+    assert!(
+        has(|p| matches!(p, Problem::Tokens(Error::Json { .. }))),
+        "{text:#?}"
+    );
+    // An unquoted `#colour` in YAML is refused, not read as nothing.
+    assert!(
+        has(
+            |p| matches!(p, Problem::Tokens(Error::Yaml { message, .. }) if message.contains("line 6"))
+        ),
+        "{text:#?}"
+    );
     assert!(has(
         |p| matches!(p, Problem::UnknownTerm { path, .. } if path == "tab.rest.fil")
     ));
@@ -86,7 +96,7 @@ fn a_broken_kit_reports_each_problem_and_still_installs() {
         |p| matches!(p, Problem::Font { file, .. } if file == "Fake-Bold.ttf")
     ));
     assert!(has(|p| matches!(p, Problem::NotRead { .. })));
-    assert_eq!(kit.problems().len(), 5, "{text:#?}");
+    assert_eq!(kit.problems().len(), 6, "{text:#?}");
     assert!(kit.fonts.is_empty());
     // Usable: its theme resolves, the contract filled.
     let mut themes = Themes::default();
@@ -103,7 +113,7 @@ fn a_missing_folder_is_a_problem_not_a_panic() {
 }
 
 #[test]
-fn user_kits_are_the_folders_holding_a_kit_json() {
+fn user_kits_are_the_folders_holding_a_kit_file() {
     let found = kit::discover(fixture(""));
     let names: Vec<&str> = found.iter().map(|k| k.name.as_str()).collect();
     assert_eq!(names, ["brand", "broken"]);

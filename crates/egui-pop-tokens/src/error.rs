@@ -12,6 +12,9 @@ use std::fmt;
 pub enum Error {
     /// The file is not valid JSON.
     Json { file: String, message: String },
+    /// The file is not valid YAML, or holds a value YAML misreads (an
+    /// unquoted `#colour` or `{alias}`).
+    Yaml { file: String, message: String },
     /// The file is valid JSON but not a token file.
     Malformed {
         file: String,
@@ -74,6 +77,7 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Error::Json { file, message } => write!(f, "`{file}`: not valid JSON: {message}"),
+            Error::Yaml { file, message } => write!(f, "`{file}`: not valid YAML: {message}"),
             Error::Malformed { file, path, reason } => {
                 write!(f, "`{file}`: `{path}`: {reason}")
             }

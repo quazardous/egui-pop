@@ -192,18 +192,55 @@ contrast; and every accent in every theme at 4.5:1 and 3:1. Decorative
 borders (`border.default`) are not checked. The gallery's overview page
 shows the same table live.
 
+## YAML or JSON
+
+A token file is the DTCG tree, written in YAML (`.tokens.yaml`, the
+shipped files) or in JSON (`.tokens.json`): `TokenFile::parse` reads JSON
+when the text starts with `{`, YAML otherwise, into the same tree. YAML
+is there for comments. JSON stays the exchange format: what egui-pop
+writes (the theme editor's export, `to_dtcg`) is DTCG JSON, which other
+token tools read.
+
+In YAML, **every string is quoted**, colours and aliases first. Left
+bare, YAML reads them as something else, and a parser would take them
+silently, so egui-pop refuses them, with the line:
+
+| Written | YAML reads | Write |
+|---|---|---|
+| `$value: #0a0a0a` | a comment: the value is lost | `$value: "#0a0a0a"` |
+| `$value: {surface.panel}` | a map with one key | `$value: "{surface.panel}"` |
+
+(The same rule as every YAML colour format, Asciidoctor's themes or
+DESIGN.md's tokens among them.) Numbers stay bare
+(`$value: {value: 1, unit: "px"}`), and DTCG's colour objects need no
+quotes but their strings':
+
+```yaml
+accent:
+  default:
+    $type: "color"
+    # gold, kept in OKLCH so the light theme can derive its shades
+    $value: {colorSpace: "oklch", components: [0.832, 0.126, 83], hex: "#f0c060"}
+```
+
+A colour is `"#rgb"`, `"#rrggbb"`, `"#rrggbbaa"`, or a DTCG object
+(`colorSpace` `srgb`, `srgb-linear`, `oklch` or `oklab`; another space
+is read from its `hex` fallback).
+
 ## Adding a theme
 
-1. Write `my-theme.tokens.json`. The shortest way is to extend a built-in
+1. Write `my-theme.tokens.yaml`. The shortest way is to extend a built-in
    theme and change what differs:
 
-   ```json
-   {
-     "$extends": "pop-dark",
-     "$description": "Cooler greys",
-     "gray": { "$type": "color", "2": { "$value": "#171a1f" } },
-     "surface": { "$type": "color", "canvas": { "$value": "#000000" } }
-   }
+   ```yaml
+   $extends: "pop-dark"
+   $description: "Cooler greys"
+   gray:
+     $type: "color"
+     "2": {$value: "#171a1f"}   # a key that is a number is quoted too
+   surface:
+     $type: "color"
+     canvas: {$value: "#000000"}
    ```
 
    A theme may also stand alone (no `$extends`): it must then give every
@@ -213,7 +250,7 @@ shows the same table live.
 
    ```rust
    let mut themes = egui_pop::tokens::Themes::default();
-   themes.add_json("my-theme", include_str!("my-theme.tokens.json"))?;
+   themes.add_text("my-theme", include_str!("my-theme.tokens.yaml"))?;
    let tokens = egui_pop::theme::install_with(ctx, &themes, &ThemeSpec::new("my-theme"));
    assert!(tokens.resolved().problems().is_empty());
    ```
@@ -224,7 +261,7 @@ shows the same table live.
 For a new **built-in** theme: add the file under `themes/`, list it in
 `BUILT_IN_FILES` and `BUILT_IN_THEMES`, and the contrast and contract tests
 cover it at once. The default kit's component tokens are not in
-`pop-dark.tokens.json`: they live in `themes/kit/<component>.tokens.json`
+`pop-dark.tokens.yaml`: they live in `themes/kit/<component>.tokens.yaml`
 and are layered into `pop-dark` at load (`docs/kit.md`). Add its
 snapshots to the gallery tests
 (`UPDATE_SNAPSHOTS=1 cargo test -p egui-pop-gallery`).

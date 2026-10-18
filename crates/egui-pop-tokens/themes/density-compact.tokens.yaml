@@ -1,0 +1,31 @@
+$description: "Density overlay. Tighter spacing and smaller controls, for dense tool panels. Touches space and size tokens only."
+space:
+  $type: "dimension"
+  xs:
+    $value: {value: 1, unit: "px"}
+  s:
+    $value: {value: 2, unit: "px"}
+  m:
+    $value: {value: 4, unit: "px"}
+  l:
+    $value: {value: 8, unit: "px"}
+  xl:
+    $value: {value: 12, unit: "px"}
+size:
+  $type: "dimension"
+  control:
+    height:
+      $value: {value: 20, unit: "px"}
+  icon:
+    inline:
+      $value: {value: 12, unit: "px"}
+    toolbar:
+      $value: {value: 16, unit: "px"}
+    panel:
+      $value: {value: 20, unit: "px"}
+  dialog:
+    width:
+      $value: {value: 400, unit: "px"}
+  toast:
+    width:
+      $value: {value: 300, unit: "px"}

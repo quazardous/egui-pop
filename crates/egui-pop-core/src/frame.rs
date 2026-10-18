@@ -811,7 +811,7 @@ mod tests {
     ) {
         let mut themes = egui_pop_tokens::Themes::default();
         themes
-            .add_json("frame-test", json)
+            .add_text("frame-test", json)
             .expect("test theme reads");
         let tokens = Tokens::new(themes.resolve(&egui_pop_tokens::ThemeSpec::new("frame-test")));
         let ctx = Context::default();

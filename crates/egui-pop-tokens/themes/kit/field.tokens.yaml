@@ -1,0 +1,22 @@
+$description: "The `field` component of the default kit (docs/kit.md), layered into pop-dark."
+field:
+  $description: "A text field. egui's text fields take their background from it; their outline follows the button's states (egui shares them)."
+  shape:
+    $type: "string"
+    $value: "box"
+  rest:
+    fill:
+      $type: "color"
+      $value: "{surface.sunken}"
+    border-color:
+      $type: "color"
+      $value: "{border.default}"
+    border-width:
+      $type: "dimension"
+      $value: {value: 1, unit: "px"}
+    radius:
+      $type: "dimension"
+      $value: "{radius.widget}"
+    text:
+      $type: "color"
+      $value: "{text.default}"

@@ -2034,7 +2034,7 @@ fn a_kit_restyles_the_rows_of_a_table() {
     use egui::accesskit::Role;
     let mut themes = egui_pop::tokens::Themes::default();
     themes
-        .add_json(
+        .add_text(
             "kit-rows",
             r##"{
               "$extends": "pop-dark",
@@ -2088,7 +2088,7 @@ fn a_kit_puts_the_title_at_the_start_of_the_title_bar() {
     // Data only: `title-bar.align` and the bar's colours, as tvty draws it.
     let mut themes = egui_pop::tokens::Themes::default();
     themes
-        .add_json(
+        .add_text(
             "kit-title-start",
             r##"{
               "$extends": "pop-dark",
@@ -2145,7 +2145,7 @@ fn a_kit_restyles_a_dialogs_frame_from_the_theme_alone() {
     // and a darker backdrop; the `card` handler egui-pop ships.
     let mut themes = egui_pop::tokens::Themes::default();
     themes
-        .add_json(
+        .add_text(
             "kit-dialog-square",
             r##"{
               "$extends": "pop-dark",
@@ -2188,7 +2188,7 @@ fn a_kit_restyles_menu_items_from_the_theme_alone() {
     // under the pointer and of an open submenu.
     let mut themes = egui_pop::tokens::Themes::default();
     themes
-        .add_json(
+        .add_text(
             "kit-menu-bar",
             r##"{
               "$extends": "pop-dark",

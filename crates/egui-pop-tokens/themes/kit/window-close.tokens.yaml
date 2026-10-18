@@ -1,0 +1,23 @@
+$description: "The `window-close` component of the default kit (docs/kit.md), layered into pop-dark."
+window-close:
+  $description: "The close button (a kit component)."
+  shape:
+    $type: "string"
+    $value: "plain"
+  width:
+    $type: "dimension"
+    $value: "{size.titlebar.button}"
+  rest:
+    fill:
+      $type: "color"
+      $value: "{transparent}"
+    text:
+      $type: "color"
+      $value: "{text.muted}"
+  hover:
+    fill:
+      $type: "color"
+      $value: "{danger}"
+    text:
+      $type: "color"
+      $value: "{text.on-accent}"

@@ -82,99 +82,99 @@ pub const BUILT_IN_ACCENTS: &[&str] = &["gold", "blue", "green", "amber", "red"]
 /// (`crate::kit`): a test checks this list holds each of its files.
 #[rustfmt::skip]
 pub(crate) const KIT_FILES: &[(&str, &str)] = &[
-    ("area-grip", include_str!("../themes/kit/area-grip.tokens.json")),
-    ("area-strip", include_str!("../themes/kit/area-strip.tokens.json")),
-    ("assist-card", include_str!("../themes/kit/assist-card.tokens.json")),
-    ("backdrop", include_str!("../themes/kit/backdrop.tokens.json")),
-    ("button", include_str!("../themes/kit/button.tokens.json")),
-    ("dialog", include_str!("../themes/kit/dialog.tokens.json")),
-    ("editor-frame", include_str!("../themes/kit/editor-frame.tokens.json")),
-    ("fault-card", include_str!("../themes/kit/fault-card.tokens.json")),
-    ("field", include_str!("../themes/kit/field.tokens.json")),
-    ("find-bar", include_str!("../themes/kit/find-bar.tokens.json")),
-    ("fullscreen-exit", include_str!("../themes/kit/fullscreen-exit.tokens.json")),
-    ("glyph", include_str!("../themes/kit/glyph.tokens.json")),
-    ("job-log", include_str!("../themes/kit/job-log.tokens.json")),
-    ("list-row", include_str!("../themes/kit/list-row.tokens.json")),
-    ("list-view", include_str!("../themes/kit/list-view.tokens.json")),
-    ("menu-item", include_str!("../themes/kit/menu-item.tokens.json")),
-    ("meter", include_str!("../themes/kit/meter.tokens.json")),
-    ("meter-tick", include_str!("../themes/kit/meter-tick.tokens.json")),
-    ("palette-window", include_str!("../themes/kit/palette-window.tokens.json")),
-    ("popover", include_str!("../themes/kit/popover.tokens.json")),
-    ("progress-bar", include_str!("../themes/kit/progress-bar.tokens.json")),
-    ("progress-caption", include_str!("../themes/kit/progress-caption.tokens.json")),
-    ("progress-fill", include_str!("../themes/kit/progress-fill.tokens.json")),
-    ("progress-line", include_str!("../themes/kit/progress-line.tokens.json")),
-    ("progress-ring", include_str!("../themes/kit/progress-ring.tokens.json")),
-    ("side-area", include_str!("../themes/kit/side-area.tokens.json")),
-    ("spinner", include_str!("../themes/kit/spinner.tokens.json")),
-    ("status-indicator", include_str!("../themes/kit/status-indicator.tokens.json")),
-    ("tab", include_str!("../themes/kit/tab.tokens.json")),
-    ("tab-bar", include_str!("../themes/kit/tab-bar.tokens.json")),
-    ("table-header-cell", include_str!("../themes/kit/table-header-cell.tokens.json")),
-    ("table-stripe", include_str!("../themes/kit/table-stripe.tokens.json")),
-    ("terminal-frame", include_str!("../themes/kit/terminal-frame.tokens.json")),
-    ("tip-card", include_str!("../themes/kit/tip-card.tokens.json")),
-    ("title-bar", include_str!("../themes/kit/title-bar.tokens.json")),
-    ("toast", include_str!("../themes/kit/toast.tokens.json")),
-    ("tree-drop-marker", include_str!("../themes/kit/tree-drop-marker.tokens.json")),
-    ("window", include_str!("../themes/kit/window.tokens.json")),
-    ("window-button", include_str!("../themes/kit/window-button.tokens.json")),
-    ("window-close", include_str!("../themes/kit/window-close.tokens.json")),
+    ("area-grip", include_str!("../themes/kit/area-grip.tokens.yaml")),
+    ("area-strip", include_str!("../themes/kit/area-strip.tokens.yaml")),
+    ("assist-card", include_str!("../themes/kit/assist-card.tokens.yaml")),
+    ("backdrop", include_str!("../themes/kit/backdrop.tokens.yaml")),
+    ("button", include_str!("../themes/kit/button.tokens.yaml")),
+    ("dialog", include_str!("../themes/kit/dialog.tokens.yaml")),
+    ("editor-frame", include_str!("../themes/kit/editor-frame.tokens.yaml")),
+    ("fault-card", include_str!("../themes/kit/fault-card.tokens.yaml")),
+    ("field", include_str!("../themes/kit/field.tokens.yaml")),
+    ("find-bar", include_str!("../themes/kit/find-bar.tokens.yaml")),
+    ("fullscreen-exit", include_str!("../themes/kit/fullscreen-exit.tokens.yaml")),
+    ("glyph", include_str!("../themes/kit/glyph.tokens.yaml")),
+    ("job-log", include_str!("../themes/kit/job-log.tokens.yaml")),
+    ("list-row", include_str!("../themes/kit/list-row.tokens.yaml")),
+    ("list-view", include_str!("../themes/kit/list-view.tokens.yaml")),
+    ("menu-item", include_str!("../themes/kit/menu-item.tokens.yaml")),
+    ("meter", include_str!("../themes/kit/meter.tokens.yaml")),
+    ("meter-tick", include_str!("../themes/kit/meter-tick.tokens.yaml")),
+    ("palette-window", include_str!("../themes/kit/palette-window.tokens.yaml")),
+    ("popover", include_str!("../themes/kit/popover.tokens.yaml")),
+    ("progress-bar", include_str!("../themes/kit/progress-bar.tokens.yaml")),
+    ("progress-caption", include_str!("../themes/kit/progress-caption.tokens.yaml")),
+    ("progress-fill", include_str!("../themes/kit/progress-fill.tokens.yaml")),
+    ("progress-line", include_str!("../themes/kit/progress-line.tokens.yaml")),
+    ("progress-ring", include_str!("../themes/kit/progress-ring.tokens.yaml")),
+    ("side-area", include_str!("../themes/kit/side-area.tokens.yaml")),
+    ("spinner", include_str!("../themes/kit/spinner.tokens.yaml")),
+    ("status-indicator", include_str!("../themes/kit/status-indicator.tokens.yaml")),
+    ("tab", include_str!("../themes/kit/tab.tokens.yaml")),
+    ("tab-bar", include_str!("../themes/kit/tab-bar.tokens.yaml")),
+    ("table-header-cell", include_str!("../themes/kit/table-header-cell.tokens.yaml")),
+    ("table-stripe", include_str!("../themes/kit/table-stripe.tokens.yaml")),
+    ("terminal-frame", include_str!("../themes/kit/terminal-frame.tokens.yaml")),
+    ("tip-card", include_str!("../themes/kit/tip-card.tokens.yaml")),
+    ("title-bar", include_str!("../themes/kit/title-bar.tokens.yaml")),
+    ("toast", include_str!("../themes/kit/toast.tokens.yaml")),
+    ("tree-drop-marker", include_str!("../themes/kit/tree-drop-marker.tokens.yaml")),
+    ("window", include_str!("../themes/kit/window.tokens.yaml")),
+    ("window-button", include_str!("../themes/kit/window-button.tokens.yaml")),
+    ("window-close", include_str!("../themes/kit/window-close.tokens.yaml")),
 ];
 
 const BUILT_IN_FILES: &[(&str, &str)] = &[
-    ("pop-dark", include_str!("../themes/pop-dark.tokens.json")),
-    ("pop-light", include_str!("../themes/pop-light.tokens.json")),
+    ("pop-dark", include_str!("../themes/pop-dark.tokens.yaml")),
+    ("pop-light", include_str!("../themes/pop-light.tokens.yaml")),
     (
         "pop-high-contrast",
-        include_str!("../themes/pop-high-contrast.tokens.json"),
+        include_str!("../themes/pop-high-contrast.tokens.yaml"),
     ),
     (
         "github-light",
-        include_str!("../themes/github-light.tokens.json"),
+        include_str!("../themes/github-light.tokens.yaml"),
     ),
     (
         "github-dark",
-        include_str!("../themes/github-dark.tokens.json"),
+        include_str!("../themes/github-dark.tokens.yaml"),
     ),
     (
         "github-light-high-contrast",
-        include_str!("../themes/github-light-high-contrast.tokens.json"),
+        include_str!("../themes/github-light-high-contrast.tokens.yaml"),
     ),
     (
         "github-dark-high-contrast",
-        include_str!("../themes/github-dark-high-contrast.tokens.json"),
+        include_str!("../themes/github-dark-high-contrast.tokens.yaml"),
     ),
     (
         "catppuccin-latte",
-        include_str!("../themes/catppuccin-latte.tokens.json"),
+        include_str!("../themes/catppuccin-latte.tokens.yaml"),
     ),
     (
         "catppuccin-mocha",
-        include_str!("../themes/catppuccin-mocha.tokens.json"),
+        include_str!("../themes/catppuccin-mocha.tokens.yaml"),
     ),
-    ("one-light", include_str!("../themes/one-light.tokens.json")),
+    ("one-light", include_str!("../themes/one-light.tokens.yaml")),
     (
         "one-dark-pro",
-        include_str!("../themes/one-dark-pro.tokens.json"),
+        include_str!("../themes/one-dark-pro.tokens.yaml"),
     ),
     (
         "solarized-light",
-        include_str!("../themes/solarized-light.tokens.json"),
+        include_str!("../themes/solarized-light.tokens.yaml"),
     ),
     (
         "solarized-dark",
-        include_str!("../themes/solarized-dark.tokens.json"),
+        include_str!("../themes/solarized-dark.tokens.yaml"),
     ),
     (
         "gruvbox-light",
-        include_str!("../themes/gruvbox-light.tokens.json"),
+        include_str!("../themes/gruvbox-light.tokens.yaml"),
     ),
     (
         "gruvbox-dark",
-        include_str!("../themes/gruvbox-dark.tokens.json"),
+        include_str!("../themes/gruvbox-dark.tokens.yaml"),
     ),
 ];
 
@@ -212,8 +212,8 @@ impl Density {
     /// The built-in overlay file of this density.
     pub fn built_in_file(self) -> TokenFile {
         let text = match self {
-            Density::Comfortable => include_str!("../themes/density-comfortable.tokens.json"),
-            Density::Compact => include_str!("../themes/density-compact.tokens.json"),
+            Density::Comfortable => include_str!("../themes/density-comfortable.tokens.yaml"),
+            Density::Compact => include_str!("../themes/density-compact.tokens.yaml"),
         };
         TokenFile::parse(&format!("density-{}", self.name()), text)
             .expect("built-in density files parse")
@@ -489,8 +489,9 @@ impl Themes {
         self.themes.insert(theme.name.clone(), theme)
     }
 
-    /// Reads a theme file and adds it under `name`.
-    pub fn add_json(&mut self, name: &str, text: &str) -> Result<(), Error> {
+    /// Reads a theme file (YAML or JSON, `TokenFile::parse`) and adds it
+    /// under `name`.
+    pub fn add_text(&mut self, name: &str, text: &str) -> Result<(), Error> {
         self.add(TokenFile::parse(name, text)?);
         Ok(())
     }

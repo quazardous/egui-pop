@@ -786,7 +786,7 @@ mod native {
             // A theme asking for square corners is asked again.
             let mut themes = egui_pop_core::theme::Themes::default();
             themes
-                .add_json(
+                .add_text(
                     "square",
                     r#"{ "$extends": "pop-dark",
                          "window": { "corners": {"$type": "string", "$value": "square"} } }"#,
