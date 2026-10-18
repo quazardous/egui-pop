@@ -33,8 +33,10 @@ use crate::theme::Tokens;
 
 mod paint;
 mod shapes;
+mod source;
 
 pub use paint::{Corners, label_rect, paint_box, paint_indicator, paint_label, paint_ring};
+pub use source::KitSource;
 
 /// The states a part can be in, combined (a selected tab under the
 /// pointer is `SELECTED | HOVER`). No flag is the resting state.
