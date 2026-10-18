@@ -1,7 +1,7 @@
 # Design tokens
 
-egui-pop's look comes from design tokens: named, typed values in JSON files
-in the format of the W3C Design Tokens Community Group (DTCG 2025.10). No
+egui-pop's look comes from design tokens: named, typed values in YAML files
+(JSON is read too) in the format of the W3C Design Tokens Community Group (DTCG 2025.10). No
 widget hard-codes a colour or a size; it reads a token.
 
 The files live in [`crates/egui-pop-tokens/themes`](../crates/egui-pop-tokens/themes).
@@ -10,20 +10,20 @@ The files live in [`crates/egui-pop-tokens/themes`](../crates/egui-pop-tokens/th
 
 ## The format, as read here
 
-```json
-{
-  "$description": "A theme",
-  "$extends": "pop-dark",
-  "gray": {
-    "$type": "color",
-    "2": { "$value": { "colorSpace": "oklch", "components": [0.215, 0.006, 75], "hex": "#1b1916" } }
-  },
-  "surface": {
-    "$type": "color",
-    "panel": { "$value": "{gray.2}", "$description": "Panels and side bars." }
-  },
-  "radius": { "widget": { "$type": "dimension", "$value": { "value": 4, "unit": "px" } } }
-}
+```yaml
+$description: "A theme"
+$extends: "pop-dark"
+gray:
+  $type: "color"
+  "2":
+    $value: {colorSpace: "oklch", components: [0.215, 0.006, 75], hex: "#1b1916"}
+surface:
+  $type: "color"
+  panel:
+    $value: "{gray.2}"
+    $description: "Panels and side bars."
+radius:
+  widget: {$type: "dimension", $value: {value: 4, unit: "px"}}
 ```
 
 - A **token** is an object with `$value`; anything else not starting with

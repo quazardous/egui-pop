@@ -37,7 +37,10 @@
 //! ```
 //! let kit = egui_pop_tokens::kit::KitData::from_text(
 //!     "underline",
-//!     r#"{ "tab": { "shape": { "$type": "string", "$value": "underline" } } }"#,
+//!     r#"
+//!     tab:
+//!       shape: {$type: "string", $value: "underline"}
+//!     "#,
 //! );
 //! assert!(egui_pop_tokens::kit::check(&kit).is_empty());
 //! let mut themes = egui_pop_tokens::Themes::default();
@@ -439,7 +442,11 @@ impl Themes {
 /// ```
 /// let kit = egui_pop_tokens::kit::KitData::from_text(
 ///     "k",
-///     r##"{ "tab": { "rest": { "fil": { "$type": "color", "$value": "#000000" } } } }"##,
+///     r##"
+///     tab:
+///       rest:
+///         fil: {$type: "color", $value: "#000000"}
+///     "##,
 /// );
 /// let problems = egui_pop_tokens::kit::check(&kit);
 /// assert_eq!(problems.len(), 1, "{problems:?}");
@@ -946,16 +953,21 @@ mod tests {
     fn terms_outside_the_vocabulary_are_reported() {
         let kit = KitData::from_text(
             "k",
-            r##"{
-              "tab": {
-                "rest": { "fil": {"$type": "color", "$value": "#000000"} },
-                "pressed": { "fill": {"$type": "color", "$value": "#000000"} },
-                "fill": {"$type": "color", "$value": "#000000"},
-                "hover": { "radius": {"$type": "color", "$value": "#000000"} }
-              },
-              "tabz": { "hover": { "fill": {"$type": "color", "$value": "#000000"} } },
-              "gray": { "1": {"$type": "color", "$value": "#000000"} }
-            }"##,
+            r##"
+            tab:
+              rest:
+                fil: {$type: "color", $value: "#000000"}
+              pressed:
+                fill: {$type: "color", $value: "#000000"}
+              fill: {$type: "color", $value: "#000000"}
+              hover:
+                radius: {$type: "color", $value: "#000000"}
+            tabz:
+              hover:
+                fill: {$type: "color", $value: "#000000"}
+            gray:
+              "1": {$type: "color", $value: "#000000"}
+            "##,
         );
         let p = kit.problems();
         assert_eq!(p.len(), 5, "{p:?}");
@@ -972,15 +984,20 @@ mod tests {
     fn tones_are_in_the_vocabulary() {
         let kit = KitData::from_text(
             "k",
-            r##"{
-              "window-button": { "tone": {
-                "warning": { "fill": {"$type": "color", "$value": "#ffbb00"},
-                             "active": { "fill": {"$type": "color", "$value": "#cc9900"} } },
-                "amber": { "fill": {"$type": "color", "$value": "#ffbb00"} },
-                "danger": { "glow": {"$type": "color", "$value": "#ff0000"} }
-              } },
-              "title-bar": { "buttons-side": {"$type": "string", "$value": "start"} }
-            }"##,
+            r##"
+            window-button:
+              tone:
+                warning:
+                  fill: {$type: "color", $value: "#ffbb00"}
+                  active:
+                    fill: {$type: "color", $value: "#cc9900"}
+                amber:
+                  fill: {$type: "color", $value: "#ffbb00"}
+                danger:
+                  glow: {$type: "color", $value: "#ff0000"}
+            title-bar:
+              buttons-side: {$type: "string", $value: "start"}
+            "##,
         );
         let p = kit.problems();
         assert_eq!(p.len(), 2, "{p:?}");

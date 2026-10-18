@@ -59,7 +59,12 @@ fn a_theme_with_a_poor_pair_fails_the_check() {
     themes
         .add_text(
             "murky",
-            r##"{ "$extends": "pop-dark", "text": { "$type": "color", "muted": { "$value": "#3a3a3a" } } }"##,
+            r##"
+            $extends: "pop-dark"
+            text:
+              $type: "color"
+              muted: {$value: "#3a3a3a"}
+            "##,
         )
         .unwrap();
     let tokens = themes.resolve(&ThemeSpec::new("murky"));

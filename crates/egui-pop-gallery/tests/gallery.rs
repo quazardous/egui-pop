@@ -2036,36 +2036,30 @@ fn a_kit_restyles_the_rows_of_a_table() {
     themes
         .add_text(
             "kit-rows",
-            r##"{
-              "$extends": "pop-dark",
-              "list-row": {
-                "indicator-side": {"$type": "string", "$value": "left"},
-                "rest": {
-                  "radius": {"$type": "dimension", "$value": {"value": 4, "unit": "px"}}
-                },
-                "selected": {
-                  "fill": {"$type": "color", "$value": "{accent.subtle}"},
-                  "indicator-color": {"$type": "color", "$value": "{accent.default}"},
-                  "indicator-size": {"$type": "dimension", "$value": {"value": 3, "unit": "px"}}
-                },
-                "focus": {
-                  "ring-color": {"$type": "color", "$value": "{border.strong}"}
-                }
-              },
-              "table-stripe": {
-                "rest": { "fill": {"$type": "color", "$value": "{transparent}"} }
-              },
-              "table-header-cell": {
-                "shape": {"$type": "string", "$value": "plain"},
-                "indicator-side": {"$type": "string", "$value": "bottom"},
-                "rest": {
-                  "fill": {"$type": "color", "$value": "{surface.sunken}"},
-                  "text": {"$type": "color", "$value": "{text.muted}"},
-                  "border-color": {"$type": "color", "$value": "{accent.default}"},
-                  "border-width": {"$type": "dimension", "$value": {"value": 1, "unit": "px"}}
-                }
-              }
-            }"##,
+            r#"
+            $extends: "pop-dark"
+            list-row:
+              indicator-side: {$type: "string", $value: "left"}
+              rest:
+                radius: {$type: "dimension", $value: {value: 4, unit: "px"}}
+              selected:
+                fill: {$type: "color", $value: "{accent.subtle}"}
+                indicator-color: {$type: "color", $value: "{accent.default}"}
+                indicator-size: {$type: "dimension", $value: {value: 3, unit: "px"}}
+              focus:
+                ring-color: {$type: "color", $value: "{border.strong}"}
+            table-stripe:
+              rest:
+                fill: {$type: "color", $value: "{transparent}"}
+            table-header-cell:
+              shape: {$type: "string", $value: "plain"}
+              indicator-side: {$type: "string", $value: "bottom"}
+              rest:
+                fill: {$type: "color", $value: "{surface.sunken}"}
+                text: {$type: "color", $value: "{text.muted}"}
+                border-color: {$type: "color", $value: "{accent.default}"}
+                border-width: {$type: "dimension", $value: {value: 1, unit: "px"}}
+            "#,
         )
         .expect("the test theme reads");
     let mut h = harness(options("pop-dark", Density::Comfortable, "table"));
@@ -2090,16 +2084,14 @@ fn a_kit_puts_the_title_at_the_start_of_the_title_bar() {
     themes
         .add_text(
             "kit-title-start",
-            r##"{
-              "$extends": "pop-dark",
-              "title-bar": {
-                "align": {"$type": "string", "$value": "start"},
-                "rest": {
-                  "text": {"$type": "color", "$value": "{text.muted}"},
-                  "border-width": {"$type": "dimension", "$value": {"value": 1, "unit": "px"}}
-                }
-              }
-            }"##,
+            r#"
+            $extends: "pop-dark"
+            title-bar:
+              align: {$type: "string", $value: "start"}
+              rest:
+                text: {$type: "color", $value: "{text.muted}"}
+                border-width: {$type: "dimension", $value: {value: 1, unit: "px"}}
+            "#,
         )
         .expect("the test theme reads");
     let mut h = harness(options("pop-dark", Density::Comfortable, "frame"));
@@ -2147,22 +2139,19 @@ fn a_kit_restyles_a_dialogs_frame_from_the_theme_alone() {
     themes
         .add_text(
             "kit-dialog-square",
-            r##"{
-              "$extends": "pop-dark",
-              "dialog": {
-                "padding-x": {"$type": "dimension", "$value": {"value": 24, "unit": "px"}},
-                "padding-y": {"$type": "dimension", "$value": {"value": 20, "unit": "px"}},
-                "rest": {
-                  "fill": {"$type": "color", "$value": "{surface.panel}"},
-                  "border-color": {"$type": "color", "$value": "{accent.default}"},
-                  "border-width": {"$type": "dimension", "$value": {"value": 2, "unit": "px"}},
-                  "radius": {"$type": "dimension", "$value": {"value": 0, "unit": "px"}}
-                }
-              },
-              "backdrop": {
-                "opacity": {"$type": "number", "$value": 0.7}
-              }
-            }"##,
+            r#"
+            $extends: "pop-dark"
+            dialog:
+              padding-x: {$type: "dimension", $value: {value: 24, unit: "px"}}
+              padding-y: {$type: "dimension", $value: {value: 20, unit: "px"}}
+              rest:
+                fill: {$type: "color", $value: "{surface.panel}"}
+                border-color: {$type: "color", $value: "{accent.default}"}
+                border-width: {$type: "dimension", $value: {value: 2, unit: "px"}}
+                radius: {$type: "dimension", $value: {value: 0, unit: "px"}}
+            backdrop:
+              opacity: {$type: "number", $value: 0.7}
+            "#,
         )
         .expect("the test theme reads");
     let mut h = harness(options("pop-dark", Density::Comfortable, "dialogs"));
@@ -2190,18 +2179,20 @@ fn a_kit_restyles_menu_items_from_the_theme_alone() {
     themes
         .add_text(
             "kit-menu-bar",
-            r##"{
-              "$extends": "pop-dark",
-              "menu-item": {
-                "indicator-side": {"$type": "string", "$value": "left"},
-                "rest": { "radius": {"$type": "dimension", "$value": {"value": 0, "unit": "px"}},
-                          "indicator-color": {"$type": "color", "$value": "{accent.default}"} },
-                "hover": { "fill": {"$type": "color", "$value": "{accent.subtle}"},
-                           "indicator-size": {"$type": "dimension", "$value": {"value": 3, "unit": "px"}} },
-                "selected": { "fill": {"$type": "color", "$value": "{accent.subtle}"},
-                              "indicator-size": {"$type": "dimension", "$value": {"value": 3, "unit": "px"}} }
-              }
-            }"##,
+            r#"
+            $extends: "pop-dark"
+            menu-item:
+              indicator-side: {$type: "string", $value: "left"}
+              rest:
+                radius: {$type: "dimension", $value: {value: 0, unit: "px"}}
+                indicator-color: {$type: "color", $value: "{accent.default}"}
+              hover:
+                fill: {$type: "color", $value: "{accent.subtle}"}
+                indicator-size: {$type: "dimension", $value: {value: 3, unit: "px"}}
+              selected:
+                fill: {$type: "color", $value: "{accent.subtle}"}
+                indicator-size: {$type: "dimension", $value: {value: 3, unit: "px"}}
+            "#,
         )
         .expect("the test theme reads");
     let mut h = harness(options("pop-dark", Density::Comfortable, "menus"));

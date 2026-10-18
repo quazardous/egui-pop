@@ -67,7 +67,10 @@ impl Primitive<ComponentKit> for Notch {
 fn notched_kit() -> KitSource {
     let data = KitData::from_text(
         "notched",
-        r#"{ "tab": { "shape": { "$type": "string", "$value": "notch" } } }"#,
+        r#"
+        tab:
+          shape: {$type: "string", $value: "notch"}
+        "#,
     );
     KitSource::new(data).shape("tab", "notch", Arc::new(Notch))
 }
@@ -91,9 +94,14 @@ fn user_kits_are_read_from_the_persistence_directory() {
     let kit_dir = dir.join("kits/quiet");
     std::fs::create_dir_all(&kit_dir).unwrap();
     std::fs::write(
-        kit_dir.join("kit.json"),
-        r#"{ "$extensions": { "org.egui-pop.kit": { "label": "Quiet" } },
-             "tab": { "rest": { "fil": { "$type": "color", "$value": "{surface.panel}" } } } }"#,
+        kit_dir.join("kit.yaml"),
+        r#"
+        $extensions:
+          org.egui-pop.kit: {label: "Quiet"}
+        tab:
+          rest:
+            fil: {$type: "color", $value: "{surface.panel}"}
+        "#,
     )
     .unwrap();
     let ctx = egui::Context::default();

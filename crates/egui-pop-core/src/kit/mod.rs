@@ -889,15 +889,17 @@ mod tests {
     #[test]
     fn states_merge_in_order_and_only_what_they_give() {
         let t = tokens_with(
-            r##"{
-              "$extends": "pop-dark",
-              "tab": {
-                "rest": { "fill": {"$type": "color", "$value": "#101010"},
-                          "text": {"$type": "color", "$value": "#808080"} },
-                "selected": { "text": {"$type": "color", "$value": "#ffffff"} },
-                "hover": { "fill": {"$type": "color", "$value": "#202020"} }
-              }
-            }"##,
+            r##"
+            $extends: "pop-dark"
+            tab:
+              rest:
+                fill: {$type: "color", $value: "#101010"}
+                text: {$type: "color", $value: "#808080"}
+              selected:
+                text: {$type: "color", $value: "#ffffff"}
+              hover:
+                fill: {$type: "color", $value: "#202020"}
+            "##,
         );
         let kit = Kit::compile(&t, &Shapes::default());
         let s = &kit.tab.data.states;
@@ -916,8 +918,11 @@ mod tests {
     #[test]
     fn a_label_goes_where_align_says_inside_the_room() {
         let t = tokens_with(
-            r#"{ "$extends": "pop-dark",
-                 "title-bar": { "align": {"$type": "string", "$value": "start"} } }"#,
+            r#"
+            $extends: "pop-dark"
+            title-bar:
+              align: {$type: "string", $value: "start"}
+            "#,
         );
         let kit = Kit::compile(&t, &Shapes::default());
         assert_eq!(kit.title_bar.data.align, Align::Start);
@@ -950,11 +955,14 @@ mod tests {
     #[test]
     fn a_focus_ring_is_data_of_the_focus_state() {
         let t = tokens_with(
-            r#"{ "$extends": "pop-dark",
-                 "tab": { "focus": {
-                   "ring-color": {"$type": "color", "$value": "{focus.ring}"},
-                   "ring-width": {"$type": "dimension", "$value": {"value": 2, "unit": "px"}},
-                   "ring-offset": {"$type": "dimension", "$value": {"value": 1, "unit": "px"}} } } }"#,
+            r#"
+            $extends: "pop-dark"
+            tab:
+              focus:
+                ring-color: {$type: "color", $value: "{focus.ring}"}
+                ring-width: {$type: "dimension", $value: {value: 2, unit: "px"}}
+                ring-offset: {$type: "dimension", $value: {value: 1, unit: "px"}}
+            "#,
         );
         let kit = Kit::compile(&t, &Shapes::default());
         assert!(kit.problems.is_empty(), "{:?}", kit.problems);
@@ -977,9 +985,12 @@ mod tests {
     #[test]
     fn a_kit_remaps_a_glyph_and_an_unknown_icon_is_reported() {
         let t = tokens_with(
-            r#"{ "$extends": "pop-dark",
-                 "glyph": { "disclosure-closed": {"$type": "string", "$value": "chevron-right"},
-                            "check": {"$type": "string", "$value": "tick-mark"} } }"#,
+            r#"
+            $extends: "pop-dark"
+            glyph:
+              disclosure-closed: {$type: "string", $value: "chevron-right"}
+              check: {$type: "string", $value: "tick-mark"}
+            "#,
         );
         let kit = Kit::compile(&t, &Shapes::default());
         assert_eq!(kit.glyph(Glyph::DisclosureClosed), Icon::ChevronRight);
@@ -1021,21 +1032,22 @@ mod tests {
     #[test]
     fn tones_merge_after_rest_and_states_keep_what_they_give() {
         let t = tokens_with(
-            r##"{
-              "$extends": "pop-dark",
-              "tab": {
-                "rest": { "fill": {"$type": "color", "$value": "#101010"} },
-                "hover": { "fill": {"$type": "color", "$value": "#202020"} },
-                "disabled": { "text": {"$type": "color", "$value": "#303030"} },
-                "tone": {
-                  "danger": {
-                    "fill": {"$type": "color", "$value": "#ff0000"},
-                    "text": {"$type": "color", "$value": "#ffffff"},
-                    "hover": { "fill": {"$type": "color", "$value": "#ff4040"} }
-                  }
-                }
-              }
-            }"##,
+            r##"
+            $extends: "pop-dark"
+            tab:
+              rest:
+                fill: {$type: "color", $value: "#101010"}
+              hover:
+                fill: {$type: "color", $value: "#202020"}
+              disabled:
+                text: {$type: "color", $value: "#303030"}
+              tone:
+                danger:
+                  fill: {$type: "color", $value: "#ff0000"}
+                  text: {$type: "color", $value: "#ffffff"}
+                  hover:
+                    fill: {$type: "color", $value: "#ff4040"}
+            "##,
         );
         let kit = Kit::compile(&t, &Shapes::default());
         let hex = |c: Color32| format!("#{:02x}{:02x}{:02x}", c.r(), c.g(), c.b());
@@ -1088,9 +1100,12 @@ mod tests {
     #[test]
     fn a_theme_giving_the_former_progress_tokens_still_works() {
         let t = tokens_with(
-            r##"{ "$extends": "pop-dark",
-                  "progress": { "fill": {"$type": "color", "$value": "#00ff00"},
-                                "height": {"$type": "dimension", "$value": {"value": 12, "unit": "px"}} } }"##,
+            r##"
+            $extends: "pop-dark"
+            progress:
+              fill: {$type: "color", $value: "#00ff00"}
+              height: {$type: "dimension", $value: {value: 12, unit: "px"}}
+            "##,
         );
         let kit = Kit::compile(&t, &Shapes::default());
         let green = Color32::from_rgb(0, 255, 0);
@@ -1109,10 +1124,17 @@ mod tests {
     #[test]
     fn egui_s_widgets_take_their_states_from_the_kit_s_button() {
         let t = tokens_with(
-            r##"{ "$extends": "pop-dark",
-                 "button": { "hover": { "fill": {"$type": "color", "$value": "#123456"} },
-                             "rest": { "radius": {"$type": "dimension", "$value": {"value": 9, "unit": "px"}} } },
-                 "field": { "rest": { "fill": {"$type": "color", "$value": "#0a0b0c"} } } }"##,
+            r##"
+            $extends: "pop-dark"
+            button:
+              hover:
+                fill: {$type: "color", $value: "#123456"}
+              rest:
+                radius: {$type: "dimension", $value: {value: 9, unit: "px"}}
+            field:
+              rest:
+                fill: {$type: "color", $value: "#0a0b0c"}
+            "##,
         );
         let ctx = Context::default();
         crate::theme::install_tokens(&ctx, t);
@@ -1143,10 +1165,13 @@ mod tests {
     #[test]
     fn a_button_indicator_is_reported_as_beyond_egui_s_widgets() {
         let t = tokens_with(
-            r#"{ "$extends": "pop-dark",
-                 "button": { "selected": {
-                   "indicator-color": {"$type": "color", "$value": "{accent.default}"},
-                   "indicator-size": {"$type": "dimension", "$value": {"value": 2, "unit": "px"}} } } }"#,
+            r#"
+            $extends: "pop-dark"
+            button:
+              selected:
+                indicator-color: {$type: "color", $value: "{accent.default}"}
+                indicator-size: {$type: "dimension", $value: {value: 2, unit: "px"}}
+            "#,
         );
         let kit = Kit::compile(&t, &Shapes::default());
         assert_eq!(kit.problems.len(), 1, "{:?}", kit.problems);
@@ -1156,8 +1181,11 @@ mod tests {
     #[test]
     fn a_bad_align_is_reported() {
         let t = tokens_with(
-            r#"{ "$extends": "pop-dark",
-                 "title-bar": { "align": {"$type": "string", "$value": "middle"} } }"#,
+            r#"
+            $extends: "pop-dark"
+            title-bar:
+              align: {$type: "string", $value: "middle"}
+            "#,
         );
         let kit = Kit::compile(&t, &Shapes::default());
         assert_eq!(kit.title_bar.data.align, Align::Centre);
@@ -1171,8 +1199,11 @@ mod tests {
     #[test]
     fn an_unknown_shape_is_reported_and_the_default_drawn() {
         let t = tokens_with(
-            r#"{ "$extends": "pop-dark",
-                 "tab": { "shape": {"$type": "string", "$value": "zigzag"} } }"#,
+            r#"
+            $extends: "pop-dark"
+            tab:
+              shape: {$type: "string", $value: "zigzag"}
+            "#,
         );
         let kit = Kit::compile(&t, &Shapes::default());
         assert_eq!(kit.tab.shape, "box");
@@ -1229,8 +1260,11 @@ mod tests {
         let ctx = Context::default();
         register_shape(&ctx, "dialog", "blot", Arc::new(Blot));
         let t = tokens_with(
-            r#"{ "$extends": "pop-dark",
-                 "dialog": { "shape": {"$type": "string", "$value": "blot"} } }"#,
+            r#"
+            $extends: "pop-dark"
+            dialog:
+              shape: {$type: "string", $value: "blot"}
+            "#,
         );
         let kit = install(&ctx, &t);
         assert!(kit.problems.is_empty(), "{:?}", kit.problems);
@@ -1266,8 +1300,11 @@ mod tests {
         let ctx = Context::default();
         register_tab_shape(&ctx, "dot", Arc::new(Dot));
         let t = tokens_with(
-            r#"{ "$extends": "pop-dark",
-                 "tab": { "shape": {"$type": "string", "$value": "dot"} } }"#,
+            r#"
+            $extends: "pop-dark"
+            tab:
+              shape: {$type: "string", $value: "dot"}
+            "#,
         );
         let kit = install(&ctx, &t);
         assert_eq!(kit.tab.shape, "dot");

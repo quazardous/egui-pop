@@ -788,8 +788,11 @@ mod native {
             themes
                 .add_text(
                     "square",
-                    r#"{ "$extends": "pop-dark",
-                         "window": { "corners": {"$type": "string", "$value": "square"} } }"#,
+                    r#"
+                    $extends: "pop-dark"
+                    window:
+                      corners: {$type: "string", $value: "square"}
+                    "#,
                 )
                 .unwrap();
             egui_pop_core::theme::install_tokens(

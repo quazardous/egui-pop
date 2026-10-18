@@ -1841,7 +1841,10 @@ impl AppBuilder {
     ///
     /// let kit = KitData::from_text(
     ///     "underline",
-    ///     r#"{ "tab": { "shape": { "$type": "string", "$value": "underline" } } }"#,
+    ///     r#"
+    ///     tab:
+    ///       shape: {$type: "string", $value: "underline"}
+    ///     "#,
     /// );
     /// let ctx = egui::Context::default();
     /// let app = App::builder()

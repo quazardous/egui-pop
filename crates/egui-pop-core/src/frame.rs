@@ -855,8 +855,11 @@ mod tests {
         (out.expect("the bar was drawn"), lead, ctx, shapes)
     }
 
-    const START: &str = r#"{ "$extends": "pop-dark",
-        "title-bar": { "buttons-side": {"$type": "string", "$value": "start"} } }"#;
+    const START: &str = r#"
+                        $extends: "pop-dark"
+                        title-bar:
+                          buttons-side: {$type: "string", $value: "start"}
+                        "#;
 
     #[test]
     fn buttons_at_the_start_come_first_and_the_title_stays_centred() {
@@ -892,7 +895,12 @@ mod tests {
 
     #[test]
     fn the_default_kit_keeps_the_buttons_at_the_end() {
-        let (out, lead, _, _) = bar_with(r#"{ "$extends": "pop-dark" }"#, None);
+        let (out, lead, _, _) = bar_with(
+            r#"
+                                         $extends: "pop-dark"
+                                         "#,
+            None,
+        );
         let l = &out.layout;
         assert_eq!(l.close.unwrap().right(), 800.0);
         assert_eq!(l.maximize.unwrap().right(), l.close.unwrap().left());
@@ -903,8 +911,11 @@ mod tests {
     #[test]
     fn a_bad_buttons_side_is_reported() {
         let (out, _, ctx, _) = bar_with(
-            r#"{ "$extends": "pop-dark",
-                 "title-bar": { "buttons-side": {"$type": "string", "$value": "left"} } }"#,
+            r#"
+            $extends: "pop-dark"
+            title-bar:
+              buttons-side: {$type: "string", $value: "left"}
+            "#,
             None,
         );
         let kit = Kit::of(&ctx);
@@ -920,11 +931,17 @@ mod tests {
     fn grouped_buttons_hover_together() {
         // A close glyph shown only on hover. With `group`, the pointer
         // over minimize draws the three hovered: the close glyph shows.
-        let json = r##"{ "$extends": "pop-dark",
-            "title-bar": { "buttons-side": {"$type": "string", "$value": "start"},
-                           "buttons-hover": {"$type": "string", "$value": "group"} },
-            "window-close": { "rest": { "text": {"$type": "color", "$value": "#00000000"} },
-                              "hover": { "text": {"$type": "color", "$value": "#ff00ff"} } } }"##;
+        let json = r##"
+                   $extends: "pop-dark"
+                   title-bar:
+                     buttons-side: {$type: "string", $value: "start"}
+                     buttons-hover: {$type: "string", $value: "group"}
+                   window-close:
+                     rest:
+                       text: {$type: "color", $value: "#00000000"}
+                     hover:
+                       text: {$type: "color", $value: "#ff00ff"}
+                   "##;
         let magenta = Color32::from_rgb(255, 0, 255);
         let close_glyph = |pointer| {
             let (out, _, ctx, shapes) = bar_with(json, pointer);

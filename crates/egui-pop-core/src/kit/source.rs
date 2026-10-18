@@ -27,7 +27,10 @@
 //! pub fn kit() -> KitSource {
 //!     let data = egui_pop_tokens::kit::KitData::from_text(
 //!         "notched",
-//!         r#"{ "tab": { "shape": { "$type": "string", "$value": "notch" } } }"#,
+//!         r#"
+//!         tab:
+//!           shape: {$type: "string", $value: "notch"}
+//!         "#,
 //!     );
 //!     KitSource::new(data).shape("tab", "notch", Arc::new(Notch))
 //! }
@@ -165,7 +168,11 @@ mod tests {
     fn a_kit_registers_its_faces_and_its_theme_names_them() {
         let mut data = KitData::from_text(
             "inter",
-            r#"{ "font": { "family": { "ui": { "$type": "fontFamily", "$value": ["Inter", "sans-serif"] } } } }"#,
+            r#"
+            font:
+              family:
+                ui: {$type: "fontFamily", $value: ["Inter", "sans-serif"]}
+            "#,
         );
         data.fonts.push(KitFont {
             file: "Inter.ttf".into(),

@@ -64,7 +64,12 @@ fn aliases_follow_through_extends_chains() {
     themes
         .add_text(
             "mine",
-            r##"{ "$extends": "pop-light", "gray": { "$type": "color", "2": { "$value": "#ffffff" } } }"##,
+            r##"
+            $extends: "pop-light"
+            gray:
+              $type: "color"
+              "2": {$value: "#ffffff"}
+            "##,
         )
         .unwrap();
     let mine = themes.resolve(&ThemeSpec::new("mine"));
@@ -91,10 +96,13 @@ fn an_alias_cycle_is_reported_and_falls_back() {
     themes
         .add_text(
             "loop",
-            r#"{ "$extends": "pop-dark",
-                 "text": { "$type": "color",
-                           "default": { "$value": "{text.muted}" },
-                           "muted": { "$value": "{text.default}" } } }"#,
+            r#"
+            $extends: "pop-dark"
+            text:
+              $type: "color"
+              default: {$value: "{text.muted}"}
+              muted: {$value: "{text.default}"}
+            "#,
         )
         .unwrap();
     let r = themes.resolve(&ThemeSpec::new("loop"));
@@ -119,7 +127,10 @@ fn an_unknown_alias_is_reported_with_its_target() {
     themes
         .add_text(
             "typo",
-            r#"{ "$extends": "pop-dark", "danger": { "$type": "color", "$value": "{redd.11}" } }"#,
+            r#"
+            $extends: "pop-dark"
+            danger: {$type: "color", $value: "{redd.11}"}
+            "#,
         )
         .unwrap();
     let r = themes.resolve(&ThemeSpec::new("typo"));
@@ -144,10 +155,32 @@ fn an_unknown_alias_is_reported_with_its_target() {
 fn extends_problems_fall_back_to_pop_dark() {
     let mut themes = Themes::default();
     themes
-        .add_text("orphan", r##"{ "$extends": "nowhere", "gray": { "$type": "color", "0": { "$value": "#000000" } } }"##)
+        .add_text(
+            "orphan",
+            r##"
+                            $extends: "nowhere"
+                            gray:
+                              $type: "color"
+                              "0": {$value: "#000000"}
+                            "##,
+        )
         .unwrap();
-    themes.add_text("a", r#"{ "$extends": "b" }"#).unwrap();
-    themes.add_text("b", r#"{ "$extends": "a" }"#).unwrap();
+    themes
+        .add_text(
+            "a",
+            r#"
+                         $extends: "b"
+                         "#,
+        )
+        .unwrap();
+    themes
+        .add_text(
+            "b",
+            r#"
+                         $extends: "a"
+                         "#,
+        )
+        .unwrap();
 
     let orphan = themes.resolve(&ThemeSpec::new("orphan"));
     assert_eq!(
@@ -185,8 +218,13 @@ fn missing_or_mistyped_contract_tokens_fall_back_and_say_why() {
     themes
         .add_text(
             "bare",
-            r##"{ "surface": { "$type": "color", "panel": { "$value": "#102030" } },
-                  "radius": { "widget": { "$type": "color", "$value": "#ffffff" } } }"##,
+            r##"
+            surface:
+              $type: "color"
+              panel: {$value: "#102030"}
+            radius:
+              widget: {$type: "color", $value: "#ffffff"}
+            "##,
         )
         .unwrap();
     let r = themes.resolve(&ThemeSpec::new("bare"));
@@ -361,10 +399,12 @@ fn extensions_and_descriptions_are_preserved() {
     themes
         .add_text(
             "ext",
-            r##"{ "$extends": "pop-dark",
-                  "$extensions": { "org.example.tool": { "id": 7 } },
-                  "danger": { "$type": "color", "$value": "#ff0000",
-                              "$extensions": { "org.example.tool": { "locked": true } } } }"##,
+            r##"
+            $extends: "pop-dark"
+            $extensions:
+              org.example.tool: {id: 7}
+            danger: {$type: "color", $value: "#ff0000", $extensions: {org.example.tool: {locked: true}}}
+            "##,
         )
         .unwrap();
     assert_eq!(
@@ -498,9 +538,12 @@ fn a_renamed_token_still_works_under_its_new_name_and_is_reported() {
     themes
         .add_text(
             "old-names",
-            r##"{ "$extends": "pop-dark",
-                  "titlebar": { "background": {"$type": "color", "$value": "#123456"},
-                                "button-width": {"$type": "dimension", "$value": {"value": 30, "unit": "px"}} } }"##,
+            r##"
+            $extends: "pop-dark"
+            titlebar:
+              background: {$type: "color", $value: "#123456"}
+              button-width: {$type: "dimension", $value: {value: 30, unit: "px"}}
+            "##,
         )
         .unwrap();
     let r = themes.resolve(&ThemeSpec::new("old-names"));
@@ -521,11 +564,15 @@ fn a_frame_token_renamed_into_the_kit_keeps_working() {
     themes
         .add_text(
             "old-dialog",
-            r##"{ "$extends": "pop-dark",
-                  "dialog": { "background": {"$type": "color", "$value": "#123456"},
-                              "padding": {"$type": "dimension", "$value": {"value": 20, "unit": "px"}},
-                              "backdrop": {"$type": "number", "$value": 0.5} },
-                  "editor": { "background": {"$type": "color", "$value": "#654321"} } }"##,
+            r##"
+            $extends: "pop-dark"
+            dialog:
+              background: {$type: "color", $value: "#123456"}
+              padding: {$type: "dimension", $value: {value: 20, unit: "px"}}
+              backdrop: {$type: "number", $value: 0.5}
+            editor:
+              background: {$type: "color", $value: "#654321"}
+            "##,
         )
         .unwrap();
     let r = themes.resolve(&ThemeSpec::new("old-dialog"));

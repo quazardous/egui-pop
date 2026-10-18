@@ -143,15 +143,23 @@ mod tests {
 
     #[test]
     fn corners_are_round_by_default_and_read_from_the_theme() {
-        let default = kit(r#"{ "$extends": "pop-dark" }"#);
+        let default = kit(r#"
+                          $extends: "pop-dark"
+                          "#);
         assert_eq!(default.window, WindowKit::default());
         assert_eq!(default.window.corners, WindowCorners::Round);
-        let square = kit(r#"{ "$extends": "pop-dark",
-            "window": { "corners": {"$type": "string", "$value": "square"} } }"#);
+        let square = kit(r#"
+                         $extends: "pop-dark"
+                         window:
+                           corners: {$type: "string", $value: "square"}
+                         "#);
         assert_eq!(square.window.corners, WindowCorners::Square);
         assert!(square.problems.is_empty(), "{:?}", square.problems);
-        let bad = kit(r#"{ "$extends": "pop-dark",
-            "window": { "corners": {"$type": "string", "$value": "oval"} } }"#);
+        let bad = kit(r#"
+                      $extends: "pop-dark"
+                      window:
+                        corners: {$type: "string", $value: "oval"}
+                      "#);
         assert_eq!(bad.window.corners, WindowCorners::Round);
         assert_eq!(
             bad.problems,

@@ -298,8 +298,11 @@ mod tests {
         themes
             .add_text(
                 "ring-check",
-                r#"{ "$extends": "pop-dark",
-                     "glyph": { "check": {"$type": "string", "$value": "test-kit-ring"} } }"#,
+                r#"
+                $extends: "pop-dark"
+                glyph:
+                  check: {$type: "string", $value: "test-kit-ring"}
+                "#,
             )
             .unwrap();
         let t = Tokens::new(themes.resolve(&egui_pop_tokens::ThemeSpec::new("ring-check")));
