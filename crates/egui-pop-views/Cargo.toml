@@ -1,6 +1,6 @@
 [package]
 name = "egui-pop-views"
-version = "0.1.0"
+version = "0.1.1"
 description = "Data views for egui-pop: a live tree over a lazy, asynchronous source, a list and a data table, and a photo library (thumbnail grid, culling, comparison), virtualised, keyboard-driven, every moment a step an application can veto, replace or extend"
 readme = "README.md"
 keywords = ["egui", "tree", "table", "list", "virtualized"]

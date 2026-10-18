@@ -7,6 +7,8 @@ egui minor.
 
 ## Unreleased
 
+## 0.1.1 (2026-10-18)
+
 ### Added
 
 - Every published sub-crate has a README on crates.io (what it holds,
