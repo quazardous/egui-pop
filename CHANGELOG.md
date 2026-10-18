@@ -16,6 +16,12 @@ egui minor.
   their dependencies, skipping versions already on crates.io and waiting
   out its rate limit (`--dry-run`, `--interval SECS`).
 
+### Fixed
+
+- The `egui-pop` page on crates.io shows its images and its links work:
+  the README links absolutely, since crates.io resolves relative links
+  from the crate's folder; a test keeps every published README so.
+
 ## 0.1.0 (2026-10-18)
 
 The first release: the tokens and themes, the framework (plugins,
