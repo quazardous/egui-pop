@@ -947,6 +947,9 @@ egui minor.
 
 ### Fixed
 
+- The `Choose` dialog's rows keep their size as the pointer moves over
+  them (the dialog no longer changes height by a few pixels), and their
+  text is left-aligned and wraps, a single-line row included.
 - A vetoed exit no longer saves: `App::save` ran before the `app.exit`
   step, whatever its hooks decided. The step's default now writes what
   is still waiting, and what changed was written a second after it

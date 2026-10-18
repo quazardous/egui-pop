@@ -1042,6 +1042,31 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     }
 }
 
+/// One row of a choice: a selectable button of the same size whether it
+/// is at rest, hovered or highlighted.
+///
+/// upstream: a selectable button drops its frame at rest, and its margin
+/// then is the padding plus the expansion minus the stroke width, while
+/// the framed one comes to the padding (docs/upstream.md). With the
+/// theme's 1 px stroke at rest, a row grew by 2 px under the pointer and
+/// its text could wrap differently. The frame stays on in every state,
+/// invisible at rest unless the row is highlighted.
+fn choice_row(ui: &mut Ui, selected: bool, text: egui::WidgetText) -> egui::Response {
+    ui.scope(|ui| {
+        if !selected {
+            let rest = &mut ui.visuals_mut().widgets.inactive;
+            rest.weak_bg_fill = egui::Color32::TRANSPARENT;
+            rest.bg_stroke.color = egui::Color32::TRANSPARENT;
+        }
+        ui.add(
+            egui::Button::selectable(selected, text)
+                .frame_when_inactive(true)
+                .wrap(),
+        )
+    })
+    .inner
+}
+
 /// The values of a form's fields, by key.
 fn values_of(fields: &[Field]) -> Map<String, Json> {
     fields
@@ -1140,24 +1165,28 @@ fn body(ui: &mut Ui, app: &AppHandle, o: &mut Open, header: Header<'_>) -> Optio
                 .id_salt("egui_pop.choose")
                 .max_height(320.0)
                 .show(ui, |ui| {
-                    for (n, &i) in shown.iter().enumerate() {
-                        let option = &c.options[i];
-                        let text = if option.hint.is_empty() {
-                            egui::WidgetText::from(option.label.as_str())
-                        } else {
-                            egui::WidgetText::from(format!("{}  ·  {}", option.label, option.hint))
-                        };
-                        let b = ui.add_sized(
-                            [ui.available_width(), 0.0],
-                            egui::Button::selectable(n == o.highlight, text),
-                        );
-                        if n == o.highlight && (down || up) {
-                            b.scroll_to_me(None);
+                    // Full-width rows, their text left-aligned and wrapped.
+                    let rows = egui::Layout::top_down_justified(egui::Align::Min);
+                    ui.with_layout(rows, |ui| {
+                        for (n, &i) in shown.iter().enumerate() {
+                            let option = &c.options[i];
+                            let text = if option.hint.is_empty() {
+                                egui::WidgetText::from(option.label.as_str())
+                            } else {
+                                egui::WidgetText::from(format!(
+                                    "{}  ·  {}",
+                                    option.label, option.hint
+                                ))
+                            };
+                            let b = choice_row(ui, n == o.highlight, text);
+                            if n == o.highlight && (down || up) {
+                                b.scroll_to_me(None);
+                            }
+                            if b.clicked() {
+                                answer = Some(Answer::Choose { index: i });
+                            }
                         }
-                        if b.clicked() {
-                            answer = Some(Answer::Choose { index: i });
-                        }
-                    }
+                    });
                     if shown.is_empty() {
                         ui.weak(strings::tr(ui.ctx(), &txt::NOTHING_MATCHES));
                     }

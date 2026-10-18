@@ -763,3 +763,81 @@ fn hooks_veto_or_redirect_a_move() {
     h.run();
     assert_eq!(offset(&d), egui::vec2(10.0, 20.0), "redirected");
 }
+
+/// Where every line of each text starting with one of `labels` begins,
+/// as drawn in the last pass.
+fn line_starts(h: &Harness<'_, App>, labels: &[&str]) -> Vec<(String, f32)> {
+    fn walk(shape: &egui::Shape, labels: &[&str], out: &mut Vec<(String, f32)>) {
+        match shape {
+            egui::Shape::Vec(shapes) => shapes.iter().for_each(|s| walk(s, labels, out)),
+            egui::Shape::Text(t) => {
+                let text = t.galley.text();
+                if labels.iter().any(|l| text.starts_with(l)) {
+                    for row in &t.galley.rows {
+                        out.push((text.to_string(), t.pos.x + row.rect().min.x));
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut out = Vec::new();
+    for c in &h.output().shapes {
+        walk(&c.shape, labels, &mut out);
+    }
+    out
+}
+
+#[test]
+fn a_choice_s_rows_keep_their_size_under_the_pointer_and_line_up() {
+    let (mut h, _, d) = harness();
+    let long = "a hint long enough to wrap onto a second line inside the dialog, \
+                and even onto a third one when the dialog is narrow";
+    let labels = ["Studio", "Field", "Night", "Archive"];
+    d.open(Choose::with_options(
+        "Open a profile",
+        vec![
+            ChooseOption::new("Studio", json!(0)).hint(long),
+            ChooseOption::new("Field", json!(1)).hint(long),
+            ChooseOption::new("Night", json!(2)),
+            ChooseOption::new("Archive", json!(3)).hint("short"),
+        ],
+        GO,
+    ));
+    for _ in 0..3 {
+        h.run();
+    }
+    let dialog = |h: &Harness<'_, App>| {
+        let rects = egui_pop_core::overlay::rects(&h.ctx);
+        rects.last().map(|(_, r)| *r).unwrap()
+    };
+    let rows = |h: &Harness<'_, App>| -> Vec<egui::Rect> {
+        labels
+            .iter()
+            .map(|l| h.get_by_label_contains(l).rect())
+            .collect()
+    };
+    let rect = dialog(&h);
+    let sizes: Vec<egui::Vec2> = rows(&h).iter().map(|r| r.size()).collect();
+    assert!(sizes[1].y > sizes[2].y, "the long hint wraps: {sizes:?}");
+    // Each row's text starts at the same x, wrapped lines included.
+    let starts = line_starts(&h, &labels);
+    assert!(starts.len() > labels.len(), "{starts:?}");
+    let x = starts[0].1;
+    for (text, sx) in &starts {
+        assert!((sx - x).abs() < 0.5, "{text:?} starts at {sx}, not {x}");
+    }
+    // Hovering a row changes neither the dialog nor any row's size.
+    for n in 0..labels.len() {
+        let center = rows(&h)[n].center();
+        h.hover_at(center);
+        h.run();
+        h.run();
+        assert_eq!(dialog(&h), rect, "the dialog moved hovering {}", labels[n]);
+        let now: Vec<egui::Vec2> = rows(&h).iter().map(|r| r.size()).collect();
+        assert_eq!(now, sizes, "rows resized hovering {}", labels[n]);
+        for (text, sx) in line_starts(&h, &labels) {
+            assert!((sx - x).abs() < 0.5, "{text:?} starts at {sx}, not {x}");
+        }
+    }
+}
