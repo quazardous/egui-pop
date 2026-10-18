@@ -429,18 +429,20 @@ impl Component {
         self.handler.hit(&self.data, rect, pos)
     }
 
-    /// The box of a state as an egui [`Frame`]: its fill, border and
-    /// corner radius, the padding (`padding-x`, `padding-y`) as its inner
+    /// The box of a state as an egui [`Frame`] at `ppp` physical pixels
+    /// per point: its fill, its border (its width snapped to whole
+    /// physical pixels, as the kit's own painting does) and corner
+    /// radius, the padding (`padding-x`, `padding-y`) as its inner
     /// margin. No shadow: egui's own, from `Visuals`, is the caller's to
     /// add. For a container that takes a frame; a part egui lays out
     /// around its content is better shown with [`Component::show`],
     /// which also paints the focus ring and honours a handler of the
     /// theme's.
-    pub fn frame(&self, state: State) -> Frame {
+    pub fn frame(&self, state: State, ppp: f32) -> Frame {
         let b = self.style(state);
         let m = |p: f32| p.round().clamp(-128.0, 127.0) as i8;
         let stroke = if b.border_width > 0.0 {
-            Stroke::new(b.border_width, b.border_color)
+            Stroke::new(crate::scale::snap(b.border_width, ppp), b.border_color)
         } else {
             Stroke::NONE
         };
@@ -472,7 +474,7 @@ impl Component {
         let ppp = ui.ctx().pixels_per_point();
         let b = *self.style(state);
         if self.egui_frame {
-            let r = self.frame(state).shadow(shadow).show(ui, add);
+            let r = self.frame(state, ppp).shadow(shadow).show(ui, add);
             let cx = KitCx {
                 painter: ui.painter(),
                 ppp,
@@ -482,10 +484,10 @@ impl Component {
         }
         let slot = ui.painter().add(Shape::Noop);
         // The box's room kept (padding and border), nothing painted.
-        let r = self
-            .frame(state)
+        let frame = self.frame(state, ppp);
+        let r = frame
             .fill(Color32::TRANSPARENT)
-            .stroke(Stroke::new(b.border_width.max(0.0), Color32::TRANSPARENT))
+            .stroke(Stroke::new(frame.stroke.width, Color32::TRANSPARENT))
             .show(ui, add);
         let rect = r.response.rect;
         let shadow = (shadow != Shadow::NONE).then(|| Shape::from(shadow.as_shape(rect, b.radius)));
@@ -507,13 +509,17 @@ impl Component {
     /// before the widget drew its content: the box ends up under the
     /// content although it is painted after it, once the part's
     /// rectangle and state are known. `first` goes under the box (a
-    /// shadow). One allocation per part and frame.
+    /// shadow). One allocation per part and frame. The `ui`'s opacity (a
+    /// disabled or fading `ui`) applies once, when the box is set into
+    /// its slot.
     pub fn paint_under(&self, ui: &Ui, slot: ShapeIdx, part: &Part<'_>, first: Option<Shape>) {
         let layer = ui.layer_id();
         let start = ui.ctx().graphics_mut(|g| g.entry(layer).next_idx());
+        let mut painter = ui.painter().clone();
+        painter.set_opacity(1.0);
         self.paint(
             &KitCx {
-                painter: ui.painter(),
+                painter: &painter,
                 ppp: ui.ctx().pixels_per_point(),
             },
             part,
@@ -1219,9 +1225,11 @@ mod tests {
         let t = Tokens::default();
         let kit = Kit::compile(&t, &Shapes::default());
         assert_eq!(kit.dialog.shape, "card");
-        let f = kit.dialog.frame(State::REST);
+        let f = kit.dialog.frame(State::REST, 1.0);
         assert_eq!(f.fill, t.surface.overlay);
         assert_eq!(f.stroke, Stroke::new(1.0, t.border.default));
+        // Its border is whole physical pixels: one at 1.25, not 1.25.
+        assert_eq!(kit.dialog.frame(State::REST, 1.25).stroke.width, 0.8);
         assert_eq!(f.corner_radius, egui::CornerRadius::from(t.radius.window));
         assert_eq!(f.inner_margin, Margin::from(t.space.l));
         assert_eq!(kit.dialog.data.width, t.size.dialog_width);
@@ -1284,6 +1292,38 @@ mod tests {
             })
             .collect();
         assert_eq!(kinds, ["box", "text"]);
+        out.textures_delta.clear();
+    }
+
+    #[test]
+    fn a_box_painted_under_fades_once_with_its_ui() {
+        let ctx = Context::default();
+        let kit = install(&ctx, &Tokens::default());
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            ui.multiply_opacity(0.5);
+            let slot = ui.painter().add(Shape::Noop);
+            let rect = Rect::from_min_size(Pos2::ZERO, Vec2::splat(20.0));
+            let part = Part {
+                rect,
+                room: rect,
+                state: State::REST,
+                label: None,
+            };
+            kit.button.paint_under(ui, slot, &part, None);
+        });
+        let fill = out
+            .shapes
+            .iter()
+            .find_map(|c| match &c.shape {
+                Shape::Vec(v) => v.iter().find_map(|s| match s {
+                    Shape::Rect(r) if r.fill.a() > 0 => Some(r.fill),
+                    _ => None,
+                }),
+                _ => None,
+            })
+            .expect("the box is painted");
+        let rest = kit.button.style(State::REST).fill;
+        assert_eq!(fill, rest.gamma_multiply(0.5));
         out.textures_delta.clear();
     }
 

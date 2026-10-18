@@ -109,8 +109,9 @@ their geometry in code and read their colours from the kit.
 
 ## Frames
 
-`Component::frame(state)` gives a state's box as an egui `Frame` (fill,
-border, radius, `padding-x`/`padding-y` as inner margin), and
+`Component::frame(state, ppp)` gives a state's box as an egui `Frame`
+(fill, border snapped to whole physical pixels, radius,
+`padding-x`/`padding-y` as inner margin), and
 `Component::show(ui, state, shadow, add)` lays content out in it, then
 paints the state's ring. With the shipped `card` handler egui draws the
 box (no extra cost); another handler paints once the content is laid

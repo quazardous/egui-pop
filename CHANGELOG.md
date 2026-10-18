@@ -1061,6 +1061,11 @@ egui minor.
 
 ### Fixed
 
+- Kits: a frame egui lays out (`Component::frame`, now given the pixels
+  per point, and `Component::show`) has its border snapped to whole
+  physical pixels, as the kit's own painting does, instead of a blurred
+  fraction at scales like 1.25; a box painted under a fading or disabled
+  `ui` (`Component::paint_under`) fades once, not twice.
 - An application icon drawn at a size the theme does not list (15 points,
   a kit's `indicator-size`) is rasterised at that size instead of scaled
   from the next one, which blurred it.
