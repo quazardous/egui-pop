@@ -55,6 +55,9 @@ does not change with the state.
 | `ring-color`, `ring-width`, `ring-offset` | ✓ | the focus ring, usually given by `focus` only: an outline `ring-offset` points outside the box (inside when negative), following its corners; none at width 0 |
 | `padding-y` | | between the content and the part's top and bottom edges |
 | `opacity` | | how much the part hides what is behind it, 0 to 1 (a backdrop) |
+| `buttons-side` | | on `title-bar`: `end` or `start`, where the window buttons go, close outermost |
+| `buttons-hover` | | on `title-bar`: `own` or `group`, whether the three buttons are hovered together |
+| `corners` | | on `window`: `round`, `small` or `square`, the corners asked of the system (Windows 11 only) |
 | `align` | | where the label goes: `start`, `centre` (on the part's centre, moved into its room when it does not fit) or `end` |
 | `width` | | the component's width, when it has a fixed one |
 
@@ -213,6 +216,14 @@ compiled at install.
   and `outline` (a border only; a part with no height is a line between
   rows). The kit is fetched once per view and pass. The gallery's
   `table-kit-rows` snapshot restyles rows and headers with data only.
+- **Window buttons per platform flavour.** The buttons go where
+  `title-bar.buttons-side` says; each carries a tone (minimize
+  `warning`, maximize `success`, close `danger`) that a kit may give;
+  `traffic-light` draws them as circles, and with `buttons-hover: group`
+  their glyphs show together. `examples/kits/flavour-macos` is the macOS
+  flavour, data only (`frame-kit-macos`). `window.corners` is asked of
+  Windows 11 when the application draws the frame; elsewhere there is no
+  portable request.
 - **egui's own widgets** (`button`, `field`). egui's style is built from
   the kit when a theme is installed (`theme::style_with`): `button`'s
   rest, hover, active and selected are egui's inactive, hovered, active

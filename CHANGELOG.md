@@ -23,6 +23,15 @@ egui minor.
 - The title bar and window buttons are kit components (`title-bar`,
   `window-button`, `window-close`); `title-bar.align: start` puts the
   title after the bar's leading items instead of centring it.
+- Window buttons per platform flavour: `title-bar.buttons-side`
+  (`start`/`end`) puts them at the start of the title bar, close first,
+  the title still centred, Snap Layouts following them; a
+  `traffic-light` handler and `title-bar.buttons-hover: group`; window
+  buttons carry tones (minimize `warning`, maximize `success`, close
+  `danger`). An example data-only kit, `examples/kits/flavour-macos`.
+- On Windows 11, a window drawn by the application gets the system's
+  rounded corners, chosen by `window.corners` (`round`, `small`,
+  `square`); the outcome is in the `frame` debug collector.
 - Kits: `button` and `field`; egui's own widgets (every egui and
   third-party widget) take their states from the kit's `button` (rest,
   hover, active, selected for an open menu) and text fields their
