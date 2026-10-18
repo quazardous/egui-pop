@@ -25,6 +25,7 @@
 //! ```
 
 use egui::{Key as EKey, Response, Sense, Ui, WidgetInfo, WidgetType, vec2};
+use egui_pop_core::kit::{Kit, KitCx, Part, State};
 use egui_pop_core::strings::{StrKey, tr, tr_args};
 use egui_pop_core::theme::Tokens;
 use serde::{Deserialize, Serialize};
@@ -520,42 +521,35 @@ impl FlagToggle {
     }
 }
 
-/// A square toggle button drawn by `paint`.
+/// A square toggle button (the kit's `mark-toggle`), its mark drawn by
+/// `paint`.
 fn toggle(
     ui: &mut Ui,
     side: f32,
     on: bool,
     paint: impl FnOnce(&egui::Painter, egui::Rect),
 ) -> Response {
-    let t = Tokens::of(ui.ctx());
     let (rect, r) = ui.allocate_exact_size(vec2(side, side), Sense::click());
     if ui.is_rect_visible(rect) {
         let painter = ui.painter();
-        let fill = if on {
-            t.surface.active
-        } else if r.hovered() {
-            t.surface.hover
-        } else {
-            t.surface.raised
-        };
-        painter.rect_filled(rect, t.radius.widget, fill);
-        if on {
-            painter.rect_stroke(
+        // On wins over the pointer: its fill stays under it.
+        let state = State::REST
+            .with(State::SELECTED, on)
+            .with(State::HOVER, r.hovered() && !on)
+            .with(State::FOCUS, r.has_focus());
+        Kit::of(ui.ctx()).mark_toggle.paint(
+            &KitCx {
+                painter,
+                ppp: ui.ctx().pixels_per_point(),
+            },
+            &Part {
                 rect,
-                t.radius.widget,
-                egui::Stroke::new(1.0, t.border.strong),
-                egui::StrokeKind::Inside,
-            );
-        }
+                room: rect,
+                state,
+                label: None,
+            },
+        );
         paint(painter, rect);
-        if r.has_focus() {
-            painter.rect_stroke(
-                rect.expand(1.0),
-                t.radius.widget,
-                egui::Stroke::new(1.0, t.focus_ring),
-                egui::StrokeKind::Outside,
-            );
-        }
     }
     r
 }

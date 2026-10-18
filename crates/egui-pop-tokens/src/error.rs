@@ -44,6 +44,9 @@ pub enum Error {
         ty: String,
         reason: String,
     },
+    /// A modifier in a token's `$extensions` that cannot apply (an alpha
+    /// outside 0 to 1, or on a token that is not a colour).
+    InvalidModifier { path: String, reason: String },
     /// A token of the contract is not given by the theme.
     Missing { path: String },
     /// An override names a token the theme does not have.
@@ -64,6 +67,7 @@ impl Error {
             | Error::MissingType { path }
             | Error::TypeMismatch { path, .. }
             | Error::InvalidValue { path, .. }
+            | Error::InvalidModifier { path, .. }
             | Error::Missing { path }
             | Error::UnknownOverride { path } => Some(path),
             Error::Renamed { old, .. } => Some(old),
@@ -102,6 +106,7 @@ impl fmt::Display for Error {
             Error::InvalidValue { path, ty, reason } => {
                 write!(f, "`{path}` is not a valid {ty}: {reason}")
             }
+            Error::InvalidModifier { path, reason } => write!(f, "`{path}`: {reason}"),
             Error::Missing { path } => write!(f, "`{path}` is missing"),
             Error::UnknownOverride { path } => {
                 write!(f, "override `{path}`: the theme has no such token")

@@ -13,6 +13,7 @@ mod band_icon_button;
 mod button;
 mod command_button;
 mod command_palette_row;
+mod compare_pane;
 mod dialog;
 mod dialog_header;
 mod dock_preview;
@@ -29,16 +30,20 @@ mod icon_button;
 mod job_log;
 mod list_row;
 mod list_view;
+mod mark_toggle;
 mod menu_item;
 mod meter;
 mod meter_tick;
 mod palette_window;
+mod pill;
 mod popover;
 mod progress_bar;
 mod progress_caption;
 mod progress_fill;
 mod progress_line;
 mod progress_ring;
+mod readout;
+mod search_field;
 mod side_area;
 mod skeleton;
 mod skeleton_shimmer;
@@ -53,11 +58,17 @@ mod tab;
 mod tab_bar;
 mod table_header_cell;
 mod table_stripe;
+mod tag_chip;
 mod terminal_frame;
+mod thumb_cell;
+mod thumb_layer;
+mod thumb_overlay_badge;
+mod thumbnail;
 mod tip_card;
 mod title_bar;
 mod toast;
 mod tree_drop_marker;
+mod viewport_focus;
 mod window;
 mod window_button;
 mod window_close;
@@ -73,6 +84,7 @@ pub(super) const GROUPS: &[&[Required]] = &[
     button::CONTRACT,
     command_button::CONTRACT,
     command_palette_row::CONTRACT,
+    compare_pane::CONTRACT,
     dialog::CONTRACT,
     dialog_header::CONTRACT,
     dock_preview::CONTRACT,
@@ -89,16 +101,20 @@ pub(super) const GROUPS: &[&[Required]] = &[
     job_log::CONTRACT,
     list_row::CONTRACT,
     list_view::CONTRACT,
+    mark_toggle::CONTRACT,
     menu_item::CONTRACT,
     meter::CONTRACT,
     meter_tick::CONTRACT,
     palette_window::CONTRACT,
+    pill::CONTRACT,
     popover::CONTRACT,
     progress_bar::CONTRACT,
     progress_caption::CONTRACT,
     progress_fill::CONTRACT,
     progress_line::CONTRACT,
     progress_ring::CONTRACT,
+    readout::CONTRACT,
+    search_field::CONTRACT,
     side_area::CONTRACT,
     skeleton::CONTRACT,
     skeleton_shimmer::CONTRACT,
@@ -113,11 +129,17 @@ pub(super) const GROUPS: &[&[Required]] = &[
     tab_bar::CONTRACT,
     table_header_cell::CONTRACT,
     table_stripe::CONTRACT,
+    tag_chip::CONTRACT,
     terminal_frame::CONTRACT,
+    thumb_cell::CONTRACT,
+    thumb_layer::CONTRACT,
+    thumb_overlay_badge::CONTRACT,
+    thumbnail::CONTRACT,
     tip_card::CONTRACT,
     title_bar::CONTRACT,
     toast::CONTRACT,
     tree_drop_marker::CONTRACT,
+    viewport_focus::CONTRACT,
     window::CONTRACT,
     window_button::CONTRACT,
     window_close::CONTRACT,

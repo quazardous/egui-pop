@@ -1,0 +1,28 @@
+$description: "The `readout` component of the default kit (docs/kit.md), layered into pop-dark."
+readout:
+  $description: "A viewport's pixel readout, in its bottom left corner (a kit component); its label is the readout's text."
+  shape:
+    $type: "string"
+    $value: "card"
+  padding-x:
+    $type: "dimension"
+    $value: "{space.xs}"
+  padding-y:
+    $type: "dimension"
+    $value: "{space.xs}"
+  rest:
+    fill:
+      $type: "color"
+      $value: "{surface.overlay}"
+    border-color:
+      $type: "color"
+      $value: "{border.default}"
+    border-width:
+      $type: "dimension"
+      $value: {value: 0, unit: "px"}
+    radius:
+      $type: "dimension"
+      $value: "{radius.widget}"
+    text:
+      $type: "color"
+      $value: "{text.default}"

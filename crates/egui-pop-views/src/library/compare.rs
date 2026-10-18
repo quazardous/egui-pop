@@ -29,10 +29,11 @@
 //! ```
 
 use egui::{
-    Align2, Color32, Id, Pos2, Rect, Response, Sense, Stroke, StrokeKind, TextStyle, Ui, Vec2,
-    WidgetInfo, WidgetType, pos2, vec2,
+    Align2, Color32, Id, Pos2, Rect, Response, Sense, TextStyle, Ui, Vec2, WidgetInfo, WidgetType,
+    pos2, vec2,
 };
 use egui_pop_core::icon::Icon;
+use egui_pop_core::kit::{self, Corners, Kit, KitCx, Part, State};
 use egui_pop_core::placeholder::SkeletonTokens;
 use egui_pop_core::strings::tr;
 use egui_pop_core::theme::Tokens;
@@ -171,6 +172,7 @@ impl<K: Key> CompareView<K> {
     ) -> CompareOutput<K> {
         let t = Tokens::of(ui.ctx());
         let lt = LibraryTokens::of(ui.ctx());
+        let kit = Kit::of(ui.ctx());
         let id = Id::new(("egui_pop_views::compare", &self.id));
         let panes = &panes[..panes.len().min(MAX_PANES)];
         let height = self
@@ -199,7 +201,22 @@ impl<K: Key> CompareView<K> {
                 vec2(pw, ph),
             );
             let painter = ui.painter_at(area);
-            painter.rect_filled(area, t.radius.widget, lt.cell);
+            let is_best = self.best.as_ref() == Some(&pane.key);
+            let cx = KitCx {
+                painter: &painter,
+                ppp: ui.ctx().pixels_per_point(),
+            };
+            let pane_state = State::REST.with(State::SELECTED, is_best);
+            kit.compare_pane.paint(
+                &cx,
+                &Part {
+                    rect: area,
+                    room: area,
+                    state: pane_state,
+                    label: None,
+                },
+            );
+            let pane_box = *kit.compare_pane.style(pane_state);
             let px = (area.width().max(area.height()) * ui.ctx().pixels_per_point()) as u32;
             let thumb = source.thumb(&pane.key, px);
             let size = match thumb {
@@ -258,13 +275,12 @@ impl<K: Key> CompareView<K> {
                     );
                 }
             }
-            let is_best = self.best.as_ref() == Some(&pane.key);
             painter.text(
                 area.left_bottom() + vec2(t.space.s, -t.space.s),
                 Align2::LEFT_BOTTOM,
                 &pane.label,
                 small.clone(),
-                t.text.strong,
+                pane_box.text,
             );
             // The best marker: a button in the corner, the outline when set.
             let b = Rect::from_min_size(
@@ -272,14 +288,25 @@ impl<K: Key> CompareView<K> {
                 vec2(28.0, 28.0),
             );
             let br = ui.interact(b, id.with(("best", i)), Sense::click());
-            painter.rect_filled(b, t.radius.widget, lt.overlay);
+            let badge = &kit.thumb_overlay_badge;
+            badge.paint(
+                &cx,
+                &Part {
+                    rect: b,
+                    room: b,
+                    state: State::REST,
+                    label: None,
+                },
+            );
+            // The best image's star is its pane's ring colour.
+            let best_color = kit.compare_pane.style(State::SELECTED).ring_color;
             paint::star(
                 &painter,
                 b.center(),
                 9.0,
-                is_best.then_some(lt.best),
+                is_best.then_some(best_color),
                 if br.hovered() {
-                    lt.overlay_text
+                    badge.style(State::REST).text
                 } else {
                     lt.star_empty
                 },
@@ -291,14 +318,8 @@ impl<K: Key> CompareView<K> {
             if br.clicked() && !is_best {
                 best = Some(pane.key.clone());
             }
-            if is_best {
-                painter.rect_stroke(
-                    area,
-                    t.radius.widget,
-                    Stroke::new(3.0, lt.best),
-                    StrokeKind::Inside,
-                );
-            }
+            // The ring again, over the image.
+            kit::paint_ring(&cx, area, &pane_box, Corners::All);
         }
         CompareOutput { response, best }
     }

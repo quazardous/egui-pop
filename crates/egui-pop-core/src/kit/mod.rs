@@ -669,6 +669,9 @@ components! {
     /// dialog's close), its icon in `text`; `selected` for a pinned
     /// palette.
     band_icon_button: "band-icon-button" => "box",
+    /// A pane of the library's comparison: `selected` for the best
+    /// image, its ring painted again over the image.
+    compare_pane: "compare-pane" => "box",
     /// A dialog's frame.
     dialog: "dialog" => "card",
     /// A dialog's title row, colours only: its title in `text`, on the
@@ -702,10 +705,19 @@ components! {
     icon_button: "icon-button" => "box",
     /// A job's log console, as plain lines.
     job_log: "job-log" => "card",
+    /// A pick, reject or colour label toggle: `selected` while on.
+    mark_toggle: "mark-toggle" => "box",
     /// A floating palette's window.
     palette_window: "palette-window" => "card",
+    /// A pill over a thumbnail: a badge (by tone) or a stack's count.
+    pill: "pill" => "pill",
     /// A popover's or a menu's surface.
     popover: "popover" => "card",
+    /// A viewport's pixel readout; its label is the readout's text.
+    readout: "readout" => "card",
+    /// The library's search field: `focus` while its text has the
+    /// keyboard.
+    search_field: "search-field" => "card",
     /// A tab of the workbench's tab bars.
     tab: "tab" => "box",
     /// The bar behind a row of tabs.
@@ -715,6 +727,18 @@ components! {
     table_header_cell: "table-header-cell" => "box",
     /// Behind every other row of a data table.
     table_stripe: "table-stripe" => "plain",
+    /// A tag or filter chip: selected, hover, focus.
+    tag_chip: "tag-chip" => "pill",
+    /// A cell of the library's grid: `selected`, `hover` (never while
+    /// selected), `focus` for the cursor of a focused grid.
+    thumb_cell: "thumb-cell" => "box",
+    /// What a library cell lays over its image, by tone: `muted` a
+    /// rejected image's veil, `accent` a stack member's bar.
+    thumb_layer: "thumb-layer" => "box",
+    /// The box behind a cell's flag, labels and stars.
+    thumb_overlay_badge: "thumb-overlay-badge" => "box",
+    /// A thumbnail of the viewport crate: selected, hover, focus.
+    thumbnail: "thumbnail" => "box",
     /// A window's own title bar; its label is the window's title.
     title_bar: "title-bar" => "plain",
     /// Where a drag over a tree drops: around the target row, or a line
@@ -728,6 +752,8 @@ components! {
     /// A toast's frame (its level's tone is its icon's); its `text` is
     /// the message's.
     toast: "toast" => "card",
+    /// An image viewport's outline while it has the keyboard focus.
+    viewport_focus: "viewport-focus" => "plain",
     /// Minimize and maximize (the glyph is drawn in the box's `text`),
     /// in the tones `warning` and `success`; `traffic-light` draws
     /// circles.

@@ -2148,6 +2148,64 @@ fn the_library_page_culls_filters_and_compares() {
 }
 
 #[test]
+fn a_kit_restyles_the_library() {
+    // Data only: square cells with a bar under the selected one, square
+    // pills and badges with an outline, mark toggles and the search field
+    // square.
+    let mut themes = egui_pop::tokens::Themes::default();
+    themes
+        .add_text(
+            "kit-library",
+            r#"
+            $extends: "pop-dark"
+            thumb-cell:
+              indicator-side: {$type: "string", $value: "bottom"}
+              rest:
+                radius: {$type: "dimension", $value: {value: 0, unit: "px"}}
+              selected:
+                fill: {$type: "color", $value: "{surface.raised}"}
+                border-width: {$type: "dimension", $value: {value: 0, unit: "px"}}
+                indicator-color: {$type: "color", $value: "{accent.default}"}
+                indicator-size: {$type: "dimension", $value: {value: 4, unit: "px"}}
+            pill:
+              shape: {$type: "string", $value: "box"}
+              rest:
+                fill: {$type: "color", $value: "{surface.canvas}", $extensions: {org.egui-pop.alpha: 0.6}}
+                border-color: {$type: "color", $value: "{border.strong}"}
+                border-width: {$type: "dimension", $value: {value: 1, unit: "px"}}
+                radius: {$type: "dimension", $value: {value: 0, unit: "px"}}
+            thumb-overlay-badge:
+              rest:
+                fill: {$type: "color", $value: "{surface.canvas}", $extensions: {org.egui-pop.alpha: 0.6}}
+                radius: {$type: "dimension", $value: {value: 0, unit: "px"}}
+            mark-toggle:
+              rest:
+                radius: {$type: "dimension", $value: {value: 0, unit: "px"}}
+              selected:
+                border-color: {$type: "color", $value: "{accent.default}"}
+            search-field:
+              rest:
+                radius: {$type: "dimension", $value: {value: 0, unit: "px"}}
+                border-color: {$type: "color", $value: "{accent.default}"}
+            "#,
+        )
+        .expect("the test theme reads");
+    let mut h = harness(options("pop-dark", Density::Comfortable, "library"));
+    h.run();
+    let tokens = Tokens::new(themes.resolve(&egui_pop::tokens::ThemeSpec::new("kit-library")));
+    assert!(tokens.resolved().problems().is_empty());
+    egui_pop::core::theme::install_tokens(&h.ctx, tokens);
+    let kit = egui_pop::core::kit::Kit::of(&h.ctx);
+    assert_eq!(kit.pill.shape, "box");
+    assert!(kit.problems.is_empty(), "{:?}", kit.problems);
+    h.query_all_by_label("DSC_00001").next().unwrap().click();
+    h.run();
+    h.remove_cursor();
+    h.run();
+    h.snapshot("library-kit");
+}
+
+#[test]
 fn the_theme_editor_page_edits_a_token_measures_it_and_undoes() {
     use egui_pop::api::theme_editor::{
         CMD_THEME_READ, CMD_THEME_SET, CMD_THEME_UNDO, THEME_EDITOR,

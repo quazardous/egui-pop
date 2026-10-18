@@ -226,17 +226,6 @@ const CORE: &[Required] = &[
         "the ring around a handle",
     ),
     comp(
-        "thumbnail.background",
-        "color",
-        "behind a thumbnail's image",
-    ),
-    comp("thumbnail.hover", "color", "a thumbnail under the pointer"),
-    comp(
-        "thumbnail.selected",
-        "color",
-        "a selected thumbnail's outline",
-    ),
-    comp(
         "histogram.background",
         "color",
         "behind a histogram's curves",
@@ -514,6 +503,45 @@ pub const RENAMED: &[(&str, &[&str])] = &[
     ("slider.thumb", &["slider-thumb.rest.fill"]),
     ("skeleton.fill", &["skeleton.rest.fill"]),
     ("skeleton.shimmer", &["skeleton-shimmer.rest.fill"]),
+    (
+        "thumbnail.background",
+        &[
+            "thumbnail.rest.fill",
+            "thumb-cell.rest.fill",
+            "compare-pane.rest.fill",
+        ],
+    ),
+    (
+        "thumbnail.hover",
+        &[
+            "thumbnail.rest.border-color",
+            "thumb-cell.rest.border-color",
+        ],
+    ),
+    (
+        "thumbnail.selected",
+        &[
+            "thumbnail.selected.border-color",
+            "thumb-cell.selected.border-color",
+        ],
+    ),
+    ("library.selected-background", &["thumb-cell.selected.fill"]),
+    (
+        "library.overlay",
+        &["pill.rest.fill", "thumb-overlay-badge.rest.fill"],
+    ),
+    (
+        "library.overlay-text",
+        &["pill.rest.text", "thumb-overlay-badge.rest.text"],
+    ),
+    ("library.dim", &["thumb-layer.tone.muted.fill"]),
+    (
+        "library.stack",
+        &["thumb-layer.tone.accent.indicator-color"],
+    ),
+    ("library.best", &["compare-pane.selected.ring-color"]),
+    ("library.chip", &["tag-chip.rest.fill"]),
+    ("library.chip-text", &["tag-chip.rest.text"]),
 ];
 
 mod kit;

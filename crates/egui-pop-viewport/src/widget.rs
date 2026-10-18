@@ -18,6 +18,7 @@ use egui::{
     Color32, Id, Key, Pos2, Rect, Response, Sense, Stroke, StrokeKind, Ui, Vec2, WidgetInfo,
     WidgetType, pos2,
 };
+use egui_pop_core::kit::{Kit, KitCx, Part, State};
 
 use crate::cursor::{self, Cursor, CursorQuery, Shown, Tool};
 use crate::debug;
@@ -866,12 +867,17 @@ impl<'a> Viewport<'a> {
             after(&painter, &mapping);
         }
         if response.has_focus() {
-            let t = egui_pop_core::theme::Tokens::of(ui.ctx());
-            painter.rect_stroke(
-                rect.shrink(1.0),
-                0.0,
-                Stroke::new(egui_pop_core::scale::stroke(ui.ctx(), 2.0), t.focus_ring),
-                StrokeKind::Inside,
+            Kit::of(ui.ctx()).viewport_focus.paint(
+                &KitCx {
+                    painter: &painter,
+                    ppp: ui.ctx().pixels_per_point(),
+                },
+                &Part {
+                    rect,
+                    room: rect,
+                    state: State::FOCUS,
+                    label: None,
+                },
             );
         }
 
@@ -1647,15 +1653,23 @@ fn draw_readout(
     };
     let t = egui_pop_core::theme::Tokens::of(ui.ctx());
     let font = egui::FontId::monospace(t.font.small);
-    let galley = painter.layout_no_wrap(text, font, t.text.default);
-    let pad = t.space.xs;
-    let at = pos2(
-        rect.left() + t.space.s,
-        rect.bottom() - t.space.s - galley.size().y - 2.0 * pad,
+    let galley = painter.layout_no_wrap(text, font, Color32::PLACEHOLDER);
+    let kit = Kit::of(ui.ctx());
+    let size = kit.readout.measure(galley.size());
+    let at = pos2(rect.left() + t.space.s, rect.bottom() - t.space.s - size.y);
+    let bg = Rect::from_min_size(at, size);
+    kit.readout.paint_part(
+        &KitCx {
+            painter,
+            ppp: ui.ctx().pixels_per_point(),
+        },
+        &Part {
+            rect: bg,
+            room: bg,
+            state: State::REST,
+            label: Some(&galley),
+        },
     );
-    let bg = Rect::from_min_size(at, galley.size() + Vec2::splat(2.0 * pad));
-    painter.rect_filled(bg, t.radius.widget, t.surface.overlay);
-    painter.galley(at + Vec2::splat(pad), galley, t.text.default);
 }
 
 fn draw_divider(painter: &egui::Painter, rect: Rect, x: f32, active: bool, t: &ViewportTokens) {

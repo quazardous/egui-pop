@@ -45,6 +45,33 @@ radius:
 Not read yet: references inside composite values, JSON Pointer `$ref`,
 `$deprecated`, group-level `$extends`.
 
+### A colour at another opacity
+
+DTCG has no way to say "this colour, translucent". egui-pop reads one
+modifier, in the spirit of Tokens Studio's `modify`, kept under
+`$extensions` so the file stays plain DTCG (another tool reads the
+alias and ignores the modifier):
+
+```yaml
+pill:
+  rest:
+    fill:
+      $type: "color"
+      $value: "{surface.overlay}"
+      # the overlay at 85 %: its alpha multiplied by 0.85
+      $extensions: {org.egui-pop.alpha: 0.85}
+```
+
+`org.egui-pop.alpha` (`egui_pop_tokens::ALPHA_EXTENSION`) is a number
+from 0 to 1 the colour's alpha is multiplied by, once its alias is
+followed. A token aliasing a modified token gets the modified colour,
+and its own modifier multiplies again. A value outside 0 to 1, or a
+modifier on a token that is not a colour, is a reported problem, and the
+token is treated as broken. The modifier belongs to the value it is
+written with: a theme giving the token again, an override and the theme
+editor's export replace both, and `to_dtcg` writes the resulting colour
+without it.
+
 ## Three tiers
 
 1. **Reference**: the palette, named by what a value is. Each base theme
@@ -179,7 +206,7 @@ let tokens = Themes::default().resolve(&spec);
 
 Resolving never panics. Problems (an unknown theme, an `$extends` cycle,
 an alias cycle, an unknown alias, a wrong type, an unreadable value, a
-missing contract token, an unknown override or accent) are listed in
+modifier that cannot apply, a missing contract token, an unknown override or accent) are listed in
 `tokens.problems()`, and every contract token with a problem takes the
 built-in `pop-dark` value.
 

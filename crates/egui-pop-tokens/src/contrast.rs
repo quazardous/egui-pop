@@ -112,6 +112,8 @@ pub const PAIRS: &[Pair] = &[
         "command-palette-row.rest.text",
         "command-palette-row.selected.fill",
     ),
+    text("pill.rest.text", "pill.rest.fill"),
+    text("readout.rest.text", "readout.rest.fill"),
     // Editors: code over its background, line numbers over the gutter.
     text("editor.line-number", "editor.gutter"),
     text("editor.line-number-active", "editor.gutter"),

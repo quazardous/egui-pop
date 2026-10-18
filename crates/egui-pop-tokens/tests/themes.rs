@@ -591,3 +591,141 @@ fn a_frame_token_renamed_into_the_kit_keeps_working() {
         "{said:?}"
     );
 }
+
+#[test]
+fn an_alpha_modifier_multiplies_the_aliased_colours_alpha() {
+    let mut themes = Themes::default();
+    themes
+        .add_text(
+            "alpha",
+            r##"
+            $extends: "pop-dark"
+            veil:
+              $type: "color"
+              plain: {$value: "{surface.overlay}", $extensions: {org.egui-pop.alpha: 0.85}}
+              half: {$value: "#ff000080", $extensions: {org.egui-pop.alpha: 0.5}}
+              # an alias of a modified alias keeps its modifier, and adds its own
+              through: {$value: "{veil.plain}"}
+              twice: {$value: "{veil.plain}", $extensions: {org.egui-pop.alpha: 0.5, org.example: 1}}
+            "##,
+        )
+        .unwrap();
+    let r = themes.resolve(&ThemeSpec::new("alpha"));
+    assert!(r.problems().is_empty(), "{:?}", r.problems());
+    let overlay = r.color("surface.overlay").unwrap();
+    let plain = r.color("veil.plain").unwrap();
+    assert_eq!(
+        (plain.r, plain.g, plain.b),
+        (overlay.r, overlay.g, overlay.b)
+    );
+    assert!((plain.a - 0.85 * overlay.a).abs() < 1e-6);
+    assert_eq!(
+        r.get("veil.plain").unwrap().alias.as_deref(),
+        Some("surface.overlay")
+    );
+    assert!((r.color("veil.half").unwrap().a - 0.25).abs() < 0.01);
+    assert_eq!(r.color("veil.through"), Some(plain));
+    assert!((r.color("veil.twice").unwrap().a - 0.425 * overlay.a).abs() < 1e-6);
+    // Exported, the value holds the alpha and the modifier is gone (it
+    // would apply twice); other extensions stay.
+    let out = r.to_dtcg();
+    assert_eq!(out["veil"]["plain"].get("$extensions"), None);
+    assert_eq!(
+        out["veil"]["twice"]["$extensions"],
+        json!({"org.example": 1})
+    );
+    let mut again = Themes::default();
+    again.add_text("back", &out.to_string()).unwrap();
+    let back = again.resolve(&ThemeSpec::new("back"));
+    assert_eq!(
+        back.color("veil.twice").unwrap().to_hex(),
+        r.color("veil.twice").unwrap().to_hex()
+    );
+}
+
+#[test]
+fn a_bad_alpha_modifier_is_reported() {
+    let mut themes = Themes::default();
+    themes
+        .add_text(
+            "bad-alpha",
+            r##"
+            $extends: "pop-dark"
+            veil:
+              over: {$type: "color", $value: "{surface.overlay}", $extensions: {org.egui-pop.alpha: 1.5}}
+              word: {$type: "color", $value: "{surface.overlay}", $extensions: {org.egui-pop.alpha: "half"}}
+              wide: {$type: "dimension", $value: "{radius.widget}", $extensions: {org.egui-pop.alpha: 0.5}}
+              after: {$type: "color", $value: "{veil.over}"}
+            "##,
+        )
+        .unwrap();
+    let r = themes.resolve(&ThemeSpec::new("bad-alpha"));
+    let said: Vec<String> = r.problems().iter().map(ToString::to_string).collect();
+    for path in ["veil.over", "veil.word", "veil.wide"] {
+        assert!(
+            r.problems()
+                .iter()
+                .any(|p| matches!(p, Error::InvalidModifier { path: p, .. } if p == path)),
+            "{path}: {said:?}"
+        );
+        assert!(r.get(path).is_none(), "{path}");
+    }
+    // Reported once, not again for what aliases it.
+    assert_eq!(said.len(), 3, "{said:?}");
+    assert!(r.get("veil.after").is_none());
+    assert!(said.iter().any(|p| p.contains("not a number from 0 to 1")));
+    assert!(
+        said.iter()
+            .any(|p| p.contains("is for colours, this is a dimension"))
+    );
+}
+
+#[test]
+fn an_override_replaces_the_alpha_modifier_with_its_value() {
+    let mut themes = Themes::default();
+    themes
+        .add_text(
+            "veiled",
+            r##"
+            $extends: "pop-dark"
+            veil: {$type: "color", $value: "{surface.overlay}", $extensions: {org.egui-pop.alpha: 0.5}}
+            "##,
+        )
+        .unwrap();
+    let r = themes.resolve(&ThemeSpec::new("veiled").override_token("veil", json!("#102030")));
+    assert!(r.problems().is_empty(), "{:?}", r.problems());
+    assert_eq!(r.color("veil"), Color::from_hex("#102030"));
+}
+
+#[test]
+fn the_library_and_thumbnail_tokens_renamed_into_the_kit_keep_working() {
+    let mut themes = Themes::default();
+    themes
+        .add_text(
+            "old-library",
+            r##"
+            $extends: "pop-dark"
+            thumbnail:
+              background: {$type: "color", $value: "#123456"}
+            library:
+              overlay: {$type: "color", $value: "#20202080"}
+            "##,
+        )
+        .unwrap();
+    let r = themes.resolve(&ThemeSpec::new("old-library"));
+    for path in [
+        "thumbnail.rest.fill",
+        "thumb-cell.rest.fill",
+        "compare-pane.rest.fill",
+    ] {
+        assert_eq!(r.color(path).unwrap().to_hex(), "#123456", "{path}");
+    }
+    // The old value as it was: the default's alpha modifier is not kept.
+    assert_eq!(r.color("pill.rest.fill").unwrap().to_hex(), "#20202080");
+    let said: Vec<String> = r.problems().iter().map(ToString::to_string).collect();
+    assert!(
+        said.iter()
+            .any(|p| p.starts_with("`library.overlay` is now `pill.rest.fill`")),
+        "{said:?}"
+    );
+}
