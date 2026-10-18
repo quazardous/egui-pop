@@ -9,6 +9,10 @@ egui minor.
 
 ### Added
 
+- Tokens: a colour token aliasing another may carry
+  `$extensions: {org.egui-pop.alpha: 0.85}`, the aliased colour with its
+  alpha multiplied (`docs/tokens.md`); a value outside 0 to 1, or on a
+  token that is not a colour, is a reported problem.
 - Kits: the window buttons' glyphs are glyph roles (`glyph.window-minimize`,
   `window-maximize`, `window-restore`, `window-close`), so a kit can draw
   them with its own icons, `indicator-size` across.

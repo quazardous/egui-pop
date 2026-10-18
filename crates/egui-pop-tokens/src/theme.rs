@@ -14,6 +14,13 @@ use crate::{Color, Error, Value};
 /// The theme everything falls back to.
 pub const FALLBACK_THEME: &str = "pop-dark";
 
+/// The `$extensions` key of the alpha modifier: on a colour token, a
+/// number from 0 to 1 the colour's alpha is multiplied by, after its
+/// alias is followed (`{"$value": "{surface.overlay}", "$extensions":
+/// {"org.egui-pop.alpha": 0.85}}`, the overlay at 85 %). Every modifier
+/// met along a chain of aliases applies.
+pub const ALPHA_EXTENSION: &str = "org.egui-pop.alpha";
+
 /// egui-pop's own base themes, in the order a switcher shows them.
 pub const POP_THEMES: &[&str] = &["pop-dark", "pop-light", "pop-high-contrast"];
 
@@ -432,8 +439,10 @@ impl ResolvedTokens {
             if let Some(d) = &token.description {
                 entry.insert("$description".into(), json!(d));
             }
-            if let Some(e) = &token.extensions {
-                entry.insert("$extensions".into(), e.clone());
+            // The alpha modifier is in the value already: kept, it would
+            // apply twice when the file is read back.
+            if let Some(e) = without_alpha(token.extensions.as_ref()) {
+                entry.insert("$extensions".into(), e);
             }
             node.insert(leaf.to_string(), Json::Object(entry));
         }
@@ -624,7 +633,12 @@ impl Themes {
         }
         for (path, value) in &spec.overrides {
             match raw.get_mut(path) {
-                Some(token) => token.value = value.clone(),
+                // An override is the value as wanted: the alpha modifier
+                // of the value it replaces goes with it.
+                Some(token) => {
+                    token.value = value.clone();
+                    token.extensions = without_alpha(token.extensions.as_ref());
+                }
                 None => problems.push(Error::UnknownOverride { path: path.clone() }),
             }
         }
@@ -727,13 +741,46 @@ fn is_accent_scale(raw: &BTreeMap<String, RawToken>, scale: &str) -> bool {
         .all(|(_, step)| raw.contains_key(&format!("{scale}.{step}")))
 }
 
-/// A token's type and value, aliases followed.
+/// `$extensions` without the alpha modifier, `None` when nothing else
+/// is left.
+fn without_alpha(extensions: Option<&Json>) -> Option<Json> {
+    let mut e = extensions?.clone();
+    if let Some(map) = e.as_object_mut() {
+        map.remove(ALPHA_EXTENSION);
+        if map.is_empty() {
+            return None;
+        }
+    }
+    Some(e)
+}
+
+/// A token's alpha modifier ([`ALPHA_EXTENSION`]), if it carries one.
+fn alpha_of(path: &str, token: &RawToken) -> Result<Option<f32>, Error> {
+    let Some(a) = token
+        .extensions
+        .as_ref()
+        .and_then(|e| e.get(ALPHA_EXTENSION))
+    else {
+        return Ok(None);
+    };
+    match a.as_f64() {
+        Some(a) if (0.0..=1.0).contains(&a) => Ok(Some(a as f32)),
+        _ => Err(Error::InvalidModifier {
+            path: path.to_string(),
+            reason: format!("`{ALPHA_EXTENSION}` is {a}, not a number from 0 to 1"),
+        }),
+    }
+}
+
+/// A token's type and value, aliases followed, alpha modifiers applied.
 fn resolve_one(raw: &BTreeMap<String, RawToken>, path: &str) -> Result<(String, Value), Error> {
     let mut chain = vec![path.to_string()];
     let mut declared = raw.get(path).and_then(|t| t.ty.clone());
     let mut at = raw.get(path).ok_or_else(|| Error::Missing {
         path: path.to_string(),
     })?;
+    // The alpha to multiply by, and the first token asking for it.
+    let mut alpha = alpha_of(path, at)?.map(|a| (a, path.to_string()));
     while let Some(target) = alias_target(&at.value) {
         if chain.iter().any(|c| c == target) {
             chain.push(target.to_string());
@@ -753,16 +800,33 @@ fn resolve_one(raw: &BTreeMap<String, RawToken>, path: &str) -> Result<(String, 
             });
         }
         declared = declared.or_else(|| next.ty.clone());
+        if let Some(a) = alpha_of(target, next)? {
+            alpha = Some(match alpha {
+                Some((b, carrier)) => (a * b, carrier),
+                None => (a, target.to_string()),
+            });
+        }
         chain.push(target.to_string());
         at = next;
     }
     let ty = declared.ok_or_else(|| Error::MissingType {
         path: path.to_string(),
     })?;
-    let value = Value::parse(&ty, &at.value).map_err(|reason| Error::InvalidValue {
+    let mut value = Value::parse(&ty, &at.value).map_err(|reason| Error::InvalidValue {
         path: path.to_string(),
         ty: ty.clone(),
         reason,
     })?;
+    if let Some((a, carrier)) = alpha {
+        match &mut value {
+            Value::Color(c) => c.a *= a,
+            _ => {
+                return Err(Error::InvalidModifier {
+                    path: carrier,
+                    reason: format!("`{ALPHA_EXTENSION}` is for colours, this is a {ty}"),
+                });
+            }
+        }
+    }
     Ok((ty, value))
 }
