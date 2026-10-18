@@ -1,0 +1,10 @@
+{
+  "$description": "The `side-area` component of the default kit (docs/kit.md), layered into pop-dark.",
+  "side-area": {
+    "$description": "A side area of the workbench. egui draws its separator line, in the theme's border colour, unless `border-width` is 0.",
+    "shape": {"$type": "string", "$value": "plain"},
+    "rest": {
+      "border-width": {"$type": "dimension", "$value": {"value": 1, "unit": "px"}}
+    }
+  }
+}

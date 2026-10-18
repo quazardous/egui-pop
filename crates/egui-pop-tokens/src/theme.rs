@@ -107,6 +107,7 @@ pub(crate) const KIT_FILES: &[(&str, &str)] = &[
     ("progress-fill", include_str!("../themes/kit/progress-fill.tokens.json")),
     ("progress-line", include_str!("../themes/kit/progress-line.tokens.json")),
     ("progress-ring", include_str!("../themes/kit/progress-ring.tokens.json")),
+    ("side-area", include_str!("../themes/kit/side-area.tokens.json")),
     ("spinner", include_str!("../themes/kit/spinner.tokens.json")),
     ("status-indicator", include_str!("../themes/kit/status-indicator.tokens.json")),
     ("tab", include_str!("../themes/kit/tab.tokens.json")),

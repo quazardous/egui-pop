@@ -58,6 +58,7 @@ does not change with the state.
 | `buttons-side` | | on `title-bar`: `end` or `start`, where the window buttons go, close outermost |
 | `buttons-hover` | | on `title-bar`: `own` or `group`, whether the three buttons are hovered together |
 | `corners` | | on `window`: `round`, `small` or `square`, the corners asked of the system (Windows 11 only) |
+| `offset` | | how far the part sits from the edge it is drawn on, towards the outside (a side area's grip) |
 | `align` | | where the label goes: `start`, `centre` (on the part's centre, moved into its room when it does not fit) or `end` |
 | `width` | | the component's width, when it has a fixed one |
 

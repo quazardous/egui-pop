@@ -29,6 +29,7 @@ mod progress_caption;
 mod progress_fill;
 mod progress_line;
 mod progress_ring;
+mod side_area;
 mod spinner;
 mod status_indicator;
 mod tab;
@@ -71,6 +72,7 @@ pub(super) const GROUPS: &[&[Required]] = &[
     progress_fill::CONTRACT,
     progress_line::CONTRACT,
     progress_ring::CONTRACT,
+    side_area::CONTRACT,
     spinner::CONTRACT,
     status_indicator::CONTRACT,
     tab::CONTRACT,

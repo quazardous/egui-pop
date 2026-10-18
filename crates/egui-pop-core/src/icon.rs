@@ -704,8 +704,8 @@ pub fn paint_fallback(p: &Painter, icon: Icon, rect: Rect, color: Color32) {
         }
         Icon::Grip => {
             let c = rect.center();
-            let d = (rect.height() * 0.2).max(2.0);
-            let dot = (rect.width() * 0.09).max(1.0);
+            let d = (rect.height() * 0.4).max(2.0);
+            let dot = (rect.width() * 0.2).max(1.0);
             p.circle_filled(pos2(c.x, c.y - d), dot, color);
             p.circle_filled(pos2(c.x, c.y + d), dot, color);
         }

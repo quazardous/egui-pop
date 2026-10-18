@@ -1026,6 +1026,7 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
             _ => egui::Panel::bottom(id),
         };
         let shown = panel
+            .show_separator_line(kit.side_area.style(State::REST).border_width > 0.0)
             .resizable(true)
             .default_size(default)
             .min_size(min.max(48.0))
@@ -1107,7 +1108,7 @@ fn strip(app: &AppHandle, ui: &mut Ui, kit: &Kit, area: Area) {
             };
             paint_indicator(&cx, rect, &line, inner);
             let at = Rect::from_center_size(
-                egui::pos2(rect.center().x, rect.top() + width + 2.0),
+                egui::pos2(rect.center().x, rect.top() + width * 1.25),
                 egui::vec2(width, width),
             );
             kit.glyph(Glyph::DragHandle).paint(ui.painter(), at, b.text);
@@ -1128,11 +1129,20 @@ fn grip(ctx: &egui::Context, kit: &Kit, area: Area, rect: Rect) {
     {
         return;
     }
-    let (w, h) = (g.data.width, g.data.height);
+    let (w, h, off) = (g.data.width, g.data.height, g.data.offset);
     let (centre, size) = match area {
-        Area::StartSide => (egui::pos2(rect.right(), rect.center().y), egui::vec2(w, h)),
-        Area::EndSide => (egui::pos2(rect.left(), rect.center().y), egui::vec2(w, h)),
-        _ => (egui::pos2(rect.center().x, rect.top()), egui::vec2(h, w)),
+        Area::StartSide => (
+            egui::pos2(rect.right() + off, rect.center().y),
+            egui::vec2(w, h),
+        ),
+        Area::EndSide => (
+            egui::pos2(rect.left() - off, rect.center().y),
+            egui::vec2(w, h),
+        ),
+        _ => (
+            egui::pos2(rect.center().x, rect.top() - off),
+            egui::vec2(h, w),
+        ),
     };
     let reach = ctx.global_style().interaction.resize_grab_radius_side;
     let near = ctx.pointer_hover_pos().is_some_and(|p| match area {

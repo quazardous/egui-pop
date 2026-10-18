@@ -26,6 +26,9 @@ egui minor.
 - `AppBuilder::shell_panel_size` (the side bar's and inspector's
   starting size) and `AppBuilder::folded` (areas folded at the first
   start; a saved layout wins); `AppHandle::area_rect`.
+- Kits: a `side-area` component (`border-width` 0: no separator line
+  along the area) and a vocabulary term `offset` (how far a part sits
+  from the edge it is drawn on: a side area's grip, off its edge).
 - Side areas: a folded side area shows a strip (the kit's `area-strip`,
   12 px, the drag-handle glyph) whose click unfolds it, instead of
   vanishing; an open side area can show a resize grip at the middle of

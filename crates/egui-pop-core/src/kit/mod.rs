@@ -318,6 +318,9 @@ pub struct ComponentKit {
     pub height: f32,
     /// Points; zero when the component has no fixed width.
     pub width: f32,
+    /// Points: how far the part sits from the edge it is drawn on,
+    /// towards the outside (a side area's grip, off its area's edge).
+    pub offset: f32,
     pub indicator_side: Side,
     pub align: Align,
     /// How opaque the whole part is, 0 to 1 (1 when not given): a
@@ -355,6 +358,7 @@ impl ComponentKit {
         ComponentKit {
             states: States::compile(t, component),
             width: r.dimension(&format!("{component}.width")).unwrap_or(0.0),
+            offset: r.dimension(&format!("{component}.offset")).unwrap_or(0.0),
             align,
             padding_x: r
                 .dimension(&format!("{component}.padding-x"))
@@ -605,6 +609,9 @@ components! {
     /// A progress ring, colours only (its arc is drawn by egui-pop): the
     /// track in `fill`, the arc in `indicator-color`, by tone.
     progress_ring: "progress-ring" => "plain",
+    /// A side area of the workbench: egui draws it and its separator line
+    /// (none when `border-width` is 0).
+    side_area: "side-area" => "plain",
     /// A spinner, colours only like `progress-ring`; its label in `text`.
     spinner: "spinner" => "plain",
     /// A status bar indicator, colours only: its text by tone, its
