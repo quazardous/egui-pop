@@ -157,6 +157,29 @@ compiled at install.
   (the default) or `start`, after the leading items (the gallery's
   `frame-kit-title-start` snapshot). The glyphs are still drawn by
   egui-pop, in the box's `text`.
+- **Data views** (`list-row`, `list-view`, `table-header-cell`,
+  `table-stripe`, `tree-drop-marker`). One function paints the rows of
+  the tree, the list and the table. A row is `selected`, `hover` (never
+  while selected, so the selection stays under the pointer) and `focus`
+  for the cursor, whose ring sits inside the row (`ring-offset` -2). The
+  view's outline is `list-view`'s focus ring, painted over the rows, so
+  its fill stays transparent. A header is `hover` when its column sorts
+  and `selected` when the table is sorted by it. A refused drop is the
+  marker's `disabled` state. Two handlers: `box` (a free-standing box)
+  and `outline` (a border only; a part with no height is a line between
+  rows). The kit is fetched once per view and pass. The gallery's
+  `table-kit-rows` snapshot restyles rows and headers with data only.
+- **Glyphs by role** (`kit::Glyph`, `glyph.<role>` tokens): the small
+  marks widgets draw, named by what they mean and mapped by the kit to
+  an icon of its set, compiled into a table read by index. The vocabulary
+  is fixed: disclosure open and closed, sort ascending and descending,
+  check, radio, indeterminate, bullet, submenu, chevron start and end,
+  close, more, expand, collapse. The tree, the menus and the find bar
+  ask for roles; the table's sort arrows still use characters (next).
+- **Application icons** (`icon_set`, feature `svg`): SVG files
+  registered by name, single-colour (a white mask tinted at draw) or
+  full-colour, rasterised at install for the theme's icon sizes and the
+  window's scale; a kit's glyph may name them.
 - The default kit is these components' tokens in `pop-dark`, which every
   built-in theme extends. The former `titlebar.*` tokens were renamed into
   the grid (`titlebar.background` is `title-bar.rest.fill`,

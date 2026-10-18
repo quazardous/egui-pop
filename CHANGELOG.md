@@ -23,6 +23,22 @@ egui minor.
 - The title bar and window buttons are kit components (`title-bar`,
   `window-button`, `window-close`); `title-bar.align: start` puts the
   title after the bar's leading items instead of centring it.
+- Kits: the rows of trees, lists and tables (`list-row`), a focused
+  view's outline (`list-view`), a table's header cells
+  (`table-header-cell`) and stripes (`table-stripe`) and the tree's drop
+  marker (`tree-drop-marker`) are drawn by the kit, from the theme; the
+  default look is unchanged. Two handlers: `box` (a free-standing box)
+  and `outline` (a border only).
+- Kits: glyphs by role (`kit::Glyph`: disclosure, sort, check, radio,
+  bullet, submenu, chevrons, close, more, expand, collapse), each mapped
+  by the kit to an icon (`glyph.<role>` tokens). The tree's disclosure,
+  the menus' check and submenu marks and the find bar's toggle ask for a
+  role. New painted icons `triangle-right`, `triangle-down`,
+  `triangle-up`.
+- An application's own icons (`egui_pop::core::icon_set`, feature
+  `svg`): SVG files registered by name, single-colour (tinted) or
+  full-colour, rasterised with resvg when the theme is installed, drawn
+  as textures; usable as `Icon::Custom` and by a kit's glyphs.
 - Kit vocabulary: the focus ring as data (`ring-color`, `ring-width`,
   `ring-offset`, drawn by every shipped handler) and
   `kit::State::from_response`, the state egui sees on a response.
