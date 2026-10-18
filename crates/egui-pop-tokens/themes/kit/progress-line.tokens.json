@@ -1,0 +1,12 @@
+{
+  "$description": "The `progress-line` component of the default kit (docs/kit.md), layered into pop-dark.",
+  "progress-line": {
+    "$description": "A thin progress line's track, under a title or along a viewport's top (a kit component).",
+    "shape": {"$type": "string", "$value": "track"},
+    "height": {"$type": "dimension", "$value": "{space.xs}"},
+    "rest": {
+      "fill": {"$type": "color", "$value": "{border.default}"},
+      "radius": {"$type": "dimension", "$value": "{progress-line.height}"}
+    }
+  }
+}

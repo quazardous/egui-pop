@@ -242,7 +242,12 @@ fn a_density_overlay_only_touches_space_and_size() {
                     "{base}: {} changed",
                     token.path
                 );
-                let root = token.alias.as_deref().unwrap_or(&token.path);
+                // Followed to the end of its aliases (a kit radius is its
+                // height, which is {space.m}).
+                let mut root = token.path.as_str();
+                while let Some(next) = comfortable.get(root).and_then(|t| t.alias.as_deref()) {
+                    root = next;
+                }
                 assert!(
                     root.starts_with("space.")
                         || root.starts_with("size.")

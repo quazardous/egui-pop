@@ -194,9 +194,12 @@ assert!(busy.visible(&ctx, true));
 ## Progress widgets
 
 `egui_pop::core::progress` draws progress from a fraction; the jobs
-centre and the status bar feed them a job's estimate. They share the
-`progress.*` tokens (`track`, `fill`, `height`, `line`, `ring`) and the
-motion clock.
+centre and the status bar feed them a job's estimate. They are drawn by
+the kit ([kit.md](kit.md)): `progress-bar` and `progress-line` (the
+tracks), `progress-fill` (fills and sections, by tone),
+`progress-caption`, `meter` and `meter-tick`, `progress-ring` and
+`spinner` (colours only), on the motion clock. The former `progress.*`
+tokens are renamed into these (a theme giving them still works).
 
 | Widget | What |
 |---|---|

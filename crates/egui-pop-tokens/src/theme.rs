@@ -80,6 +80,36 @@ pub const BUILT_IN_ACCENTS: &[&str] = &["gold", "blue", "green", "amber", "red"]
 /// into `pop-dark` (and so into every theme extending it). One line per
 /// component, in alphabetical order.
 const KIT_FILES: &[(&str, &str)] = &[
+    ("meter", include_str!("../themes/kit/meter.tokens.json")),
+    (
+        "meter-tick",
+        include_str!("../themes/kit/meter-tick.tokens.json"),
+    ),
+    (
+        "progress-bar",
+        include_str!("../themes/kit/progress-bar.tokens.json"),
+    ),
+    (
+        "progress-caption",
+        include_str!("../themes/kit/progress-caption.tokens.json"),
+    ),
+    (
+        "progress-fill",
+        include_str!("../themes/kit/progress-fill.tokens.json"),
+    ),
+    (
+        "progress-line",
+        include_str!("../themes/kit/progress-line.tokens.json"),
+    ),
+    (
+        "progress-ring",
+        include_str!("../themes/kit/progress-ring.tokens.json"),
+    ),
+    ("spinner", include_str!("../themes/kit/spinner.tokens.json")),
+    (
+        "status-indicator",
+        include_str!("../themes/kit/status-indicator.tokens.json"),
+    ),
     ("tab", include_str!("../themes/kit/tab.tokens.json")),
     ("tab-bar", include_str!("../themes/kit/tab-bar.tokens.json")),
     (

@@ -35,6 +35,9 @@ use std::rc::Rc;
 
 use egui::{Sense, Ui, vec2};
 use egui_pop_core::icon::Icon;
+use egui_pop_core::kit::{
+    BoxStyle, Kit, KitCx, Side, State as KitState, Tone as KitTone, paint_indicator,
+};
 use egui_pop_core::theme::Tokens;
 use egui_pop_model::commands::CommandSpec;
 use egui_pop_model::ids::{BlockId, CommandId, PluginId};
@@ -288,15 +291,22 @@ fn indicators(ui: &mut Ui, app: &AppHandle) {
         return;
     }
     let t = Tokens::of(ui.ctx());
+    let kit = Kit::of(ui.ctx());
     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
         for (ind, state) in list {
-            let color = match state.tone {
-                Tone::Quiet => t.text.muted,
-                Tone::Active => t.accent.default,
-                Tone::Success => t.status.success,
-                Tone::Warning => t.status.warning,
-                Tone::Error => t.status.danger,
-            };
+            // The kit's `status-indicator`, colours only: quiet is its own
+            // box, the others its tones.
+            let box_ = kit.status_indicator.style_toned(
+                match state.tone {
+                    Tone::Quiet => KitTone::Neutral,
+                    Tone::Active => KitTone::Accent,
+                    Tone::Success => KitTone::Success,
+                    Tone::Warning => KitTone::Warning,
+                    Tone::Error => KitTone::Danger,
+                },
+                KitState::REST,
+            );
+            let color = box_.text;
             let mut text = state.text.clone();
             if let Some(n) = state.count {
                 text = format!("{text} ({n})");
@@ -317,16 +327,21 @@ fn indicators(ui: &mut Ui, app: &AppHandle) {
                 egui_pop_core::progress::paint_spinner(ui, rect, color);
             }
             if let Some(p) = state.progress {
-                // The button carries the text; the line is drawn only.
-                let tokens = egui_pop_core::progress::ProgressTokens::of(ui.ctx());
-                let track = egui::Rect::from_min_size(
-                    egui::pos2(r.rect.left(), r.rect.bottom() - tokens.line),
-                    vec2(r.rect.width(), tokens.line),
-                );
-                ui.painter().rect_filled(track, 0.0, tokens.track);
-                let mut fill = track;
-                fill.set_width(track.width() * p.clamp(0.0, 1.0));
-                ui.painter().rect_filled(fill, 0.0, color);
+                // The button carries the text; the line is drawn only:
+                // the track in `border-color`, the fill in
+                // `indicator-color`, along the bottom.
+                let cx = KitCx {
+                    painter: ui.painter(),
+                    ppp: ui.ctx().pixels_per_point(),
+                };
+                let track = BoxStyle {
+                    indicator_color: box_.border_color,
+                    ..*box_
+                };
+                paint_indicator(&cx, r.rect, &track, Side::Bottom);
+                let mut fill = r.rect;
+                fill.set_width(r.rect.width() * p.clamp(0.0, 1.0));
+                paint_indicator(&cx, fill, box_, Side::Bottom);
             }
             let r = if state.detail.is_empty() {
                 r

@@ -442,6 +442,27 @@ macro_rules! components {
 }
 
 components! {
+    /// A meter's track (its fill is a `progress-fill`).
+    meter: "meter" => "track",
+    /// A meter's threshold, a line across its track.
+    meter_tick: "meter-tick" => "tick",
+    /// A progress bar's track (its fill and sections are `progress-fill`).
+    progress_bar: "progress-bar" => "track",
+    /// A bar's caption: its name, and its value text in the `muted` tone.
+    progress_caption: "progress-caption" => "plain",
+    /// A stretch of a track, by tone: a bar's fill and sections, a
+    /// meter's fill, an indeterminate bar's segment.
+    progress_fill: "progress-fill" => "span",
+    /// A thin progress line's track (under a title, along a viewport).
+    progress_line: "progress-line" => "track",
+    /// A progress ring, colours only (its arc is drawn by egui-pop): the
+    /// track in `fill`, the arc in `indicator-color`, by tone.
+    progress_ring: "progress-ring" => "plain",
+    /// A spinner, colours only like `progress-ring`; its label in `text`.
+    spinner: "spinner" => "plain",
+    /// A status bar indicator, colours only: its text by tone, its
+    /// progress line (`border-color` the track, `indicator-*` the fill).
+    status_indicator: "status-indicator" => "plain",
     /// A tab of the workbench's tab bars.
     tab: "tab" => "box",
     /// The bar behind a row of tabs.
@@ -747,6 +768,37 @@ mod tests {
             kit.tab.style_toned(Tone::Danger, State::HOVER),
             kit.tab.style(State::HOVER)
         );
+        // The default kit's toned components alias the status tokens.
+        let t = Tokens::default();
+        let fill = |tone| kit.progress_fill.style_toned(tone, State::REST).fill;
+        assert_eq!(fill(Tone::Neutral), t.accent.default);
+        assert_eq!(fill(Tone::Accent), t.accent.default);
+        assert_eq!(fill(Tone::Info), t.status.info);
+        assert_eq!(fill(Tone::Success), t.status.success);
+        assert_eq!(fill(Tone::Warning), t.status.warning);
+        assert_eq!(fill(Tone::Danger), t.status.danger);
+        assert_eq!(fill(Tone::Muted), t.text.muted);
+    }
+
+    #[test]
+    fn a_theme_giving_the_former_progress_tokens_still_works() {
+        let t = tokens_with(
+            r##"{ "$extends": "pop-dark",
+                  "progress": { "fill": {"$type": "color", "$value": "#00ff00"},
+                                "height": {"$type": "dimension", "$value": {"value": 12, "unit": "px"}} } }"##,
+        );
+        let kit = Kit::compile(&t, &Shapes::default());
+        let green = Color32::from_rgb(0, 255, 0);
+        assert_eq!(kit.progress_fill.style(State::REST).fill, green);
+        assert_eq!(
+            kit.progress_fill
+                .style_toned(Tone::Accent, State::REST)
+                .fill,
+            green
+        );
+        assert_eq!(kit.progress_ring.style(State::REST).indicator_color, green);
+        assert_eq!(kit.progress_bar.data.height, 12.0);
+        assert_eq!(kit.meter.data.height, 12.0);
     }
 
     #[test]
