@@ -168,10 +168,36 @@ const CORE: &[Required] = &[
         "dimension",
         "width of a window's own resize edges",
     ),
-    sys("font.size.small", "dimension", "captions and small print"),
-    sys("font.size.body", "dimension", "body text and buttons"),
-    sys("font.size.heading", "dimension", "headings"),
-    sys("font.size.mono", "dimension", "numbers and code"),
+    sys(
+        "font.size.xs",
+        "dimension",
+        "the size scale's smallest step",
+    ),
+    sys("font.size.s", "dimension", "the size scale's small step"),
+    sys(
+        "font.size.m",
+        "dimension",
+        "the size scale's middle step (body text)",
+    ),
+    sys("font.size.l", "dimension", "the size scale's large step"),
+    sys("font.size.xl", "dimension", "the size scale's largest step"),
+    sys(
+        "font.text-style.small",
+        "dimension",
+        "egui's small text: captions and small print",
+    ),
+    sys("font.text-style.body", "dimension", "egui's body text"),
+    sys(
+        "font.text-style.button",
+        "dimension",
+        "egui's button labels",
+    ),
+    sys("font.text-style.heading", "dimension", "egui's headings"),
+    sys(
+        "font.text-style.monospace",
+        "dimension",
+        "egui's monospace text: numbers and code",
+    ),
     sys("font.family.ui", "fontFamily", "interface text"),
     sys("font.family.mono", "fontFamily", "numbers and code"),
     sys(
@@ -438,7 +464,8 @@ const CORE: &[Required] = &[
 ];
 
 /// Tokens renamed into the kit's grid (`component.state.term`,
-/// `docs/kit.md`): a theme giving an old name still works, its value
+/// `docs/kit.md`), and the former font sizes moved onto egui's text
+/// styles (`font.text-style.*`, steps of the `font.size.*` scale): a theme giving an old name still works, its value
 /// moved to the new names (unless the theme gives them), with a reported
 /// problem. Aliases to an old name are not followed.
 pub const RENAMED: &[(&str, &[&str])] = &[
@@ -514,6 +541,13 @@ pub const RENAMED: &[(&str, &[&str])] = &[
     ("toast.padding", &["toast.padding-x", "toast.padding-y"]),
     ("editor.background", &["editor-frame.rest.fill"]),
     ("terminal.background", &["terminal-frame.rest.fill"]),
+    ("font.size.small", &["font.text-style.small"]),
+    (
+        "font.size.body",
+        &["font.text-style.body", "font.text-style.button"],
+    ),
+    ("font.size.heading", &["font.text-style.heading"]),
+    ("font.size.mono", &["font.text-style.monospace"]),
 ];
 
 mod kit;

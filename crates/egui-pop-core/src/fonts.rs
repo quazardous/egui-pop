@@ -17,7 +17,8 @@
 //!
 //! egui's `FontId` has no weight: each weight of [`WEIGHTS`] is an egui
 //! family of its own, [`family`]`(role, weight)`, and [`font_id`] gives
-//! the `FontId` to draw with. A variable face (a `wght` axis) serves
+//! the `FontId` to draw with ([`font_at`] at a [`Step`] of the theme's
+//! size scale). A variable face (a `wght` axis) serves
 //! every weight its axis covers, set on the face (`FontTweak::coords`);
 //! a static face serves its own weight, and a weight a family lacks takes
 //! its nearest one, said in the report. egui's `Proportional` and `Monospace` families are
@@ -93,6 +94,48 @@ pub fn family(role: Role, weight: Weight) -> FontFamily {
 /// The font to draw a role's text at a weight and a size (points).
 pub fn font_id(role: Role, weight: Weight, size: f32) -> FontId {
     FontId::new(size, family(role, weight))
+}
+
+/// A step of the theme's size scale (`font.size.xs` to `font.size.xl`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Step {
+    Xs,
+    S,
+    M,
+    L,
+    Xl,
+}
+
+impl Step {
+    pub const ALL: [Step; 5] = [Step::Xs, Step::S, Step::M, Step::L, Step::Xl];
+
+    /// Its name in the tokens (`xs`, `s`, `m`, `l`, `xl`).
+    pub fn name(self) -> &'static str {
+        match self {
+            Step::Xs => "xs",
+            Step::S => "s",
+            Step::M => "m",
+            Step::L => "l",
+            Step::Xl => "xl",
+        }
+    }
+
+    /// Its token (`font.size.m`).
+    pub fn token(self) -> &'static str {
+        match self {
+            Step::Xs => "font.size.xs",
+            Step::S => "font.size.s",
+            Step::M => "font.size.m",
+            Step::L => "font.size.l",
+            Step::Xl => "font.size.xl",
+        }
+    }
+}
+
+/// The font to draw a role's text at a weight and a step of the theme's
+/// size scale ([`font_id`] at the step's size).
+pub fn font_at(tokens: &crate::theme::Tokens, role: Role, weight: Weight, step: Step) -> FontId {
+    font_id(role, weight, tokens.font.scale.get(step))
 }
 
 /// A font face the application gives: its family name (as a theme names
@@ -450,6 +493,28 @@ mod tests {
 
     fn names(list: &[&str]) -> Vec<String> {
         list.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn a_step_of_the_scale_gives_its_size_and_egui_styles_sit_on_steps() {
+        let t = crate::theme::Tokens::default();
+        let sizes: Vec<f32> = Step::ALL.iter().map(|s| t.font.scale.get(*s)).collect();
+        assert!(sizes.windows(2).all(|w| w[0] < w[1]), "{sizes:?}");
+        let f = font_at(&t, Role::Mono, Weight::BOLD, Step::L);
+        assert_eq!(f.size, t.font.scale.l);
+        assert_eq!(f.family, family(Role::Mono, Weight::BOLD));
+        assert_eq!(Step::Xl.token(), format!("font.size.{}", Step::Xl.name()));
+        // egui's text styles are steps of the scale.
+        assert_eq!(t.font.small, t.font.scale.xs);
+        assert_eq!(t.font.body, t.font.scale.m);
+        assert_eq!(t.font.button, t.font.scale.m);
+        assert_eq!(t.font.heading, t.font.scale.xl);
+        assert_eq!(t.font.mono, t.font.scale.s);
+        let style = crate::theme::style(&t, &egui::Style::default());
+        assert_eq!(
+            style.text_styles[&egui::TextStyle::Button].size,
+            t.font.button
+        );
     }
 
     #[test]

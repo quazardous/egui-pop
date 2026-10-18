@@ -81,7 +81,9 @@ Not read yet: references inside composite values, JSON Pointer `$ref`,
    `success`, `info`, `focus.ring`, `selection`, `radius.{widget, window}`,
    `space.{xs, s, m, l, xl}`, `size.control.height`,
    `size.icon.{inline, toolbar, panel}`, `size.dialog.width`, `size.magnet`,
-   `size.toast.width`, `font.size.{small, body, heading, mono}`,
+   `size.toast.width`, `font.size.{xs, s, m, l, xl}` (the size scale)
+   and `font.text-style.{small, body, button, heading, monospace}`
+   (egui's text styles, each an alias of a step),
    `font.family.{ui, mono}`, `motion.duration`,
    `motion.spinner.{delay, min, turn}` (300 ms before a busy indicator
    shows, 500 ms at least once shown, a spinner's turn),
@@ -99,7 +101,9 @@ Not read yet: references inside composite values, JSON Pointer `$ref`,
    text's own, 1 to 6 the status roles and the accent, 8 to 15 their
    stronger forms). A theme may re-alias a component token (high contrast
    outlines every button and field: `button.rest.border-color` and
-   `field.rest.border-color` are `{border.strong}`).
+   `field.rest.border-color` are `{border.strong}`). A component's text
+   size aliases a step of the size scale (`"{font.size.l}"`), never a
+   number of its own.
 
 ## Naming rules
 

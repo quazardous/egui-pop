@@ -9,6 +9,13 @@ egui minor.
 
 ### Added
 
+- Typography: a size scale in tokens, `font.size.xs`, `s`, `m`, `l`
+  and `xl`, that egui's five text styles sit on
+  (`font.text-style.small`, `body`, `button`, `heading`, `monospace`,
+  aliases of a step) and component tokens may alias; built-in themes
+  keep their sizes. `fonts::font_at(tokens, role, weight, step)` gives
+  the `FontId` of a step (`fonts::Step`), `Tokens::font.scale` its sizes.
+
 - Kits: the window buttons' glyphs are glyph roles (`glyph.window-minimize`,
   `window-maximize`, `window-restore`, `window-close`), so a kit can draw
   them with its own icons, `indicator-size` across.
@@ -921,6 +928,10 @@ egui minor.
 
 ### Changed
 
+- Tokens: `font.size.small`, `body`, `heading` and `mono` became
+  `font.text-style.small`, `body` (and `button`), `heading` and
+  `monospace`; a theme still giving an old name works, with a reported
+  problem (`RENAMED`).
 - The title bar's line is the kit's (`title-bar.rest.border-width`, 1 in
   the default kit): egui's panel line is no longer drawn under it, nor
   room kept for it when the title zone draws nothing.

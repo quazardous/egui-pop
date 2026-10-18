@@ -334,18 +334,40 @@ size:
 font:
   size:
     $type: "dimension"
-    small:
+    $description: "The size scale: text everywhere takes one of its steps."
+    xs:
       $value: {value: 10, unit: "px"}
       $description: "Captions and small print."
-    body:
+    s:
+      $value: {value: 12.5, unit: "px"}
+      $description: "Secondary text, numbers and code (a monospace face at this size matches the body's x-height)."
+    m:
       $value: {value: 13, unit: "px"}
       $description: "Body text and buttons."
-    heading:
+    l:
+      $value: {value: 15, unit: "px"}
+      $description: "Emphasised text, small headings."
+    xl:
       $value: {value: 18, unit: "px"}
       $description: "Headings."
-    mono:
-      $value: {value: 12.5, unit: "px"}
-      $description: "Numbers and code."
+  text-style:
+    $type: "dimension"
+    $description: "egui's text styles, each a step of the size scale."
+    small:
+      $value: "{font.size.xs}"
+      $description: "egui's `Small`: captions and small print."
+    body:
+      $value: "{font.size.m}"
+      $description: "egui's `Body`: body text."
+    button:
+      $value: "{font.size.m}"
+      $description: "egui's `Button`: button labels."
+    heading:
+      $value: "{font.size.xl}"
+      $description: "egui's `Heading`: headings."
+    monospace:
+      $value: "{font.size.s}"
+      $description: "egui's `Monospace`: numbers and code."
   family:
     $type: "fontFamily"
     ui:

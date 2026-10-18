@@ -21,7 +21,8 @@
 //! widget strokes, `border.*` outlines and separators, `focus.ring` the
 //! stroke of a focused or pressed widget, `selection` the fill behind
 //! selected text and items, `space.*` and `size.*` the spacing,
-//! `font.size.*` the text styles and `motion.duration` the animation time.
+//! `font.text-style.*` (steps of the `font.size.*` scale) egui's text
+//! styles and `motion.duration` the animation time.
 //!
 //! egui uses one colour (`selection.stroke`) for both the text of a
 //! selected label and the frame of a focused text field: egui-pop gives it
@@ -140,16 +141,46 @@ pub struct Size {
     pub toast_width: f32,
 }
 
-/// Font sizes in points and families, the first preferred.
+/// Font sizes in points and families, the first preferred. `small`,
+/// `body`, `button`, `heading` and `mono` are egui's text styles
+/// (`font.text-style.*`), each a step of the `scale` (`font.size.*`).
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub struct Font {
     pub small: f32,
     pub body: f32,
+    pub button: f32,
     pub heading: f32,
     pub mono: f32,
+    /// The size scale, `xs` to `xl` (`fonts::Step`).
+    pub scale: FontScale,
     pub family_ui: Vec<String>,
     pub family_mono: Vec<String>,
+}
+
+/// The size scale's five steps, in points (`font.size.xs` to `xl`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct FontScale {
+    pub xs: f32,
+    pub s: f32,
+    pub m: f32,
+    pub l: f32,
+    pub xl: f32,
+}
+
+impl FontScale {
+    /// A step's size in points.
+    pub fn get(&self, step: crate::fonts::Step) -> f32 {
+        use crate::fonts::Step;
+        match step {
+            Step::Xs => self.xs,
+            Step::S => self.s,
+            Step::M => self.m,
+            Step::L => self.l,
+            Step::Xl => self.xl,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -355,10 +386,18 @@ impl Tokens {
                 toast_width: d("size.toast.width"),
             },
             font: Font {
-                small: d("font.size.small"),
-                body: d("font.size.body"),
-                heading: d("font.size.heading"),
-                mono: d("font.size.mono"),
+                small: d("font.text-style.small"),
+                body: d("font.text-style.body"),
+                button: d("font.text-style.button"),
+                heading: d("font.text-style.heading"),
+                mono: d("font.text-style.monospace"),
+                scale: FontScale {
+                    xs: d("font.size.xs"),
+                    s: d("font.size.s"),
+                    m: d("font.size.m"),
+                    l: d("font.size.l"),
+                    xl: d("font.size.xl"),
+                },
                 family_ui: f("font.family.ui"),
                 family_mono: f("font.family.mono"),
             },
@@ -541,7 +580,7 @@ pub fn style_with(t: &Tokens, kit: &Kit, base: &Style) -> Style {
     for (text_style, size) in [
         (TextStyle::Small, t.font.small),
         (TextStyle::Body, t.font.body),
-        (TextStyle::Button, t.font.body),
+        (TextStyle::Button, t.font.button),
         (TextStyle::Heading, t.font.heading),
         (TextStyle::Monospace, t.font.mono),
     ] {

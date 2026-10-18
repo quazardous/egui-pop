@@ -45,9 +45,11 @@ field:
 font:
   size:
     $type: "dimension"
-    body:
-      $value: {value: 15, unit: "px"}
-    mono:
-      $value: {value: 14, unit: "px"}
-    small:
+    xs:
       $value: {value: 12, unit: "px"}
+    s:
+      $value: {value: 14, unit: "px"}
+    m:
+      $value: {value: 15, unit: "px"}
+    l:
+      $value: {value: 16, unit: "px"}
