@@ -35,13 +35,13 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 use egui::{
-    Color32, Context, CursorIcon, Id, Pos2, Rect, ResizeDirection, Sense, Stroke, Ui, Vec2,
+    Color32, Context, CursorIcon, Id, Pos2, Rect, ResizeDirection, Sense, Ui, Vec2,
     ViewportCommand, ViewportId, WidgetType, pos2, vec2,
 };
 use serde::Serialize;
 
 use crate::a11y;
-use crate::kit::{ButtonsHover, ButtonsSide, Kit, KitCx, Part, State, Tone};
+use crate::kit::{ButtonsHover, ButtonsSide, Glyph, Kit, KitCx, Part, State, Tone};
 use crate::state::lock;
 use crate::theme::Tokens;
 
@@ -487,6 +487,9 @@ impl<'a> TitleBar<'a> {
             ButtonsSide::End => [Button::Close, Button::Maximize, Button::Minimize],
             ButtonsSide::Start => [Button::Close, Button::Minimize, Button::Maximize],
         };
+        // The buttons and the items are centred above the bar's line.
+        let line = kit.title_bar.style(State::REST).border_width;
+        let inner = bar.with_max_y(bar.bottom() - line);
         let mut slots: [Option<Rect>; 3] = [None; 3];
         let mut x = match side {
             ButtonsSide::End => bar.right(),
@@ -509,8 +512,8 @@ impl<'a> TitleBar<'a> {
                 ButtonsSide::Start => x1,
             };
             slots[which as usize] = Some(Rect::from_min_max(
-                pos2(x0, bar.top()),
-                pos2(x1, bar.bottom()),
+                pos2(x0, inner.top()),
+                pos2(x1, inner.bottom()),
             ));
         }
         // `buttons-hover: group`: all three are hovered while the pointer
@@ -545,7 +548,7 @@ impl<'a> TitleBar<'a> {
         };
         let gap = t.space.m;
         // The application's items, at the end of that room.
-        let end = Rect::from_min_max(pos2(lo, bar.top()), pos2(hi - gap, bar.bottom()));
+        let end = Rect::from_min_max(pos2(lo, inner.top()), pos2(hi - gap, inner.bottom()));
         let mut child = ui.new_child(
             egui::UiBuilder::new()
                 .max_rect(end)
@@ -558,8 +561,8 @@ impl<'a> TitleBar<'a> {
         }
         // Leading items, at its start.
         let start = Rect::from_min_max(
-            pos2(lo + gap, bar.top()),
-            pos2(trailing_rect.left().min(hi) - gap, bar.bottom()),
+            pos2(lo + gap, inner.top()),
+            pos2(trailing_rect.left().min(hi) - gap, inner.bottom()),
         );
         let mut child = ui.new_child(
             egui::UiBuilder::new()
@@ -575,8 +578,8 @@ impl<'a> TitleBar<'a> {
         // the items. Named for assistive technology and tests; takes no
         // click, so the bar still drags under it.
         let room = Rect::from_min_max(
-            pos2(leading_rect.right().max(lo), bar.top()),
-            pos2(trailing_rect.left().min(hi), bar.bottom()),
+            pos2(leading_rect.right().max(lo), inner.top()),
+            pos2(trailing_rect.left().min(hi), inner.bottom()),
         );
         let width = room.width() - 2.0 * kit.title_bar.data.padding_x;
         let mut title_rect = None;
@@ -705,47 +708,33 @@ fn window_button(ui: &mut Ui, rect: Rect, which: Button, maximized: bool, group:
         },
     );
     let b = component.style(state);
-    let ink = b.text;
-    // Behind the restore glyph's front square: the button's fill, or the
-    // bar's where the button paints none.
-    let behind = if b.fill.a() > 0 {
-        b.fill
-    } else {
-        kit.title_bar.style(State::REST).fill
-    };
-    // Glyphs a multiple of 4 points wide, on the pixel grid.
-    let c = rect.center();
-    let c = pos2(
-        painter.round_to_pixel_center(c.x),
-        painter.round_to_pixel_center(c.y),
-    );
-    // Ten points across, or half the button's own size when the kit
-    // gives it one (`height`: a traffic light's circle).
+    let glyph = kit.glyph(match which {
+        Button::Minimize => Glyph::WindowMinimize,
+        Button::Maximize if maximized => Glyph::WindowRestore,
+        Button::Maximize => Glyph::WindowMaximize,
+        Button::Close => Glyph::WindowClose,
+    });
+    // The state's `indicator-size` when the kit gives one; else ten
+    // points across, or half the button's own size when it has one
+    // (`height`: a traffic light's circle).
     let h = component.data.height;
-    let s = if h > 0.0 { (h / 4.0).max(2.0) } else { 5.0 };
-    let stroke = Stroke::new(crate::scale::stroke(ui.ctx(), 1.0), ink);
-    match which {
-        _ if ink.a() == 0 => {}
-        Button::Minimize => {
-            painter.line_segment([pos2(c.x - s, c.y), pos2(c.x + s, c.y)], stroke);
-        }
-        Button::Maximize if maximized => {
-            let back =
-                Rect::from_min_size(pos2(c.x - s + 2.0, c.y - s), Vec2::splat(2.0 * s - 2.0));
-            let front =
-                Rect::from_min_size(pos2(c.x - s, c.y - s + 2.0), Vec2::splat(2.0 * s - 2.0));
-            painter.rect_stroke(back, 0.0, stroke, egui::StrokeKind::Inside);
-            painter.rect_filled(front, 0.0, behind);
-            painter.rect_stroke(front, 0.0, stroke, egui::StrokeKind::Inside);
-        }
-        Button::Maximize => {
-            let r = Rect::from_center_size(c, Vec2::splat(2.0 * s));
-            painter.rect_stroke(r, 0.0, stroke, egui::StrokeKind::Inside);
-        }
-        Button::Close => {
-            painter.line_segment([pos2(c.x - s, c.y - s), pos2(c.x + s, c.y + s)], stroke);
-            painter.line_segment([pos2(c.x + s, c.y - s), pos2(c.x - s, c.y + s)], stroke);
-        }
+    let size = if b.indicator_size > 0.0 {
+        b.indicator_size
+    } else if h > 0.0 {
+        (h / 2.0).max(4.0)
+    } else {
+        10.0
+    };
+    if b.text.a() > 0 {
+        // On the pixel grid: an icon's texture drawn between pixels blurs.
+        let ppp = ui.ctx().pixels_per_point();
+        let min = rect.center() - Vec2::splat(size / 2.0);
+        let min = pos2((min.x * ppp).round() / ppp, (min.y * ppp).round() / ppp);
+        glyph.paint(
+            &painter,
+            Rect::from_min_size(min, Vec2::splat(size)),
+            b.text,
+        );
     }
     response.on_hover_text(name).clicked()
 }

@@ -102,11 +102,17 @@ pub enum Icon {
     TriangleDown,
     /// A filled triangle pointing up: an ascending sort.
     TriangleUp,
-    /// An icon the application registered (`icon_set::register`): an SVG
-    /// file, drawn from textures made when the theme is installed.
     /// Two dots one above the other: something to grab or to open (a
     /// folded area's strip); always painted.
     Grip,
+    /// A window's buttons, drawn by the application: a line, a square,
+    /// two squares, a cross, on the pixel grid; always painted.
+    WindowMinimize,
+    WindowMaximize,
+    WindowRestore,
+    WindowClose,
+    /// An icon the application registered (`icon_set::register`): an SVG
+    /// file, drawn from textures made when the theme is installed.
     Custom(crate::icon_set::CustomIcon),
 }
 
@@ -159,6 +165,10 @@ impl Icon {
         Icon::TriangleDown,
         Icon::TriangleUp,
         Icon::Grip,
+        Icon::WindowMinimize,
+        Icon::WindowMaximize,
+        Icon::WindowRestore,
+        Icon::WindowClose,
     ];
 
     /// The icon of a name (`settings`), as [`Icon::name`] gives it:
@@ -221,6 +231,10 @@ impl Icon {
             Icon::TriangleDown => "triangle-down",
             Icon::TriangleUp => "triangle-up",
             Icon::Grip => "grip",
+            Icon::WindowMinimize => "window-minimize",
+            Icon::WindowMaximize => "window-maximize",
+            Icon::WindowRestore => "window-restore",
+            Icon::WindowClose => "window-close",
             Icon::Custom(c) => crate::icon_set::name(c),
         }
     }
@@ -287,6 +301,10 @@ fn glyph(icon: Icon) -> Option<&'static str> {
         | Icon::TriangleDown
         | Icon::TriangleUp
         | Icon::Grip
+        | Icon::WindowMinimize
+        | Icon::WindowMaximize
+        | Icon::WindowRestore
+        | Icon::WindowClose
         | Icon::Custom(_) => return None,
         Icon::Search => p::MAGNIFYING_GLASS,
         Icon::Settings => p::GEAR_SIX,
@@ -709,6 +727,9 @@ pub fn paint_fallback(p: &Painter, icon: Icon, rect: Rect, color: Color32) {
             p.circle_filled(pos2(c.x, c.y - d), dot, color);
             p.circle_filled(pos2(c.x, c.y + d), dot, color);
         }
+        Icon::WindowMinimize | Icon::WindowMaximize | Icon::WindowRestore | Icon::WindowClose => {
+            paint_window_button(p, icon, rect, color);
+        }
         // Drawn from its textures (`Icon::paint`): no fallback shape.
         Icon::Custom(_) => {}
         Icon::Picker => {
@@ -719,6 +740,56 @@ pub fn paint_fallback(p: &Painter, icon: Icon, rect: Rect, color: Color32) {
                 [at(0.62, 0.38), at(0.85, 0.15)],
                 Stroke::new(crate::scale::snap(w * 2.6, ppp), color),
             );
+        }
+    }
+}
+
+/// A window button's glyph across the square, centred on a pixel, its
+/// strokes one physical pixel: the restore glyph's back square shows only
+/// where the front one does not cover it.
+fn paint_window_button(p: &Painter, icon: Icon, rect: Rect, color: Color32) {
+    let c = pos2(
+        p.round_to_pixel_center(rect.center().x),
+        p.round_to_pixel_center(rect.center().y),
+    );
+    let s = rect.width().min(rect.height()) / 2.0;
+    let stroke = Stroke::new(crate::scale::stroke(p.ctx(), 1.0), color);
+    match icon {
+        Icon::WindowMinimize => {
+            p.line_segment([pos2(c.x - s, c.y), pos2(c.x + s, c.y)], stroke);
+        }
+        Icon::WindowMaximize => {
+            let r = Rect::from_center_size(c, vec2(2.0 * s, 2.0 * s));
+            p.rect_stroke(r, 0.0, stroke, StrokeKind::Inside);
+        }
+        Icon::WindowRestore => {
+            let front = Rect::from_min_size(
+                pos2(c.x - s, c.y - s + 2.0),
+                vec2(2.0 * s - 2.0, 2.0 * s - 2.0),
+            );
+            p.rect_stroke(front, 0.0, stroke, StrokeKind::Inside);
+            // The back square's top and end edges, offset by 2.
+            let h = stroke.width / 2.0;
+            let (l, t, r, b) = (
+                c.x - s + 2.0 + h,
+                c.y - s + h,
+                c.x + s - h,
+                c.y + s - 2.0 - h,
+            );
+            p.line(
+                vec![
+                    pos2(l, front.top()),
+                    pos2(l, t),
+                    pos2(r, t),
+                    pos2(r, b),
+                    pos2(front.right(), b),
+                ],
+                stroke,
+            );
+        }
+        _ => {
+            p.line_segment([pos2(c.x - s, c.y - s), pos2(c.x + s, c.y + s)], stroke);
+            p.line_segment([pos2(c.x + s, c.y - s), pos2(c.x - s, c.y + s)], stroke);
         }
     }
 }

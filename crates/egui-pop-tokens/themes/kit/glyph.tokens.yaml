@@ -34,3 +34,11 @@ glyph:
     $value: "plus"
   collapse:
     $value: "minus"
+  window-minimize:
+    $value: "window-minimize"
+  window-maximize:
+    $value: "window-maximize"
+  window-restore:
+    $value: "window-restore"
+  window-close:
+    $value: "window-close"

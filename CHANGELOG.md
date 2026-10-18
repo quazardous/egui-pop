@@ -9,6 +9,9 @@ egui minor.
 
 ### Added
 
+- Kits: the window buttons' glyphs are glyph roles (`glyph.window-minimize`,
+  `window-maximize`, `window-restore`, `window-close`), so a kit can draw
+  them with its own icons, `indicator-size` across.
 - Kits: `window.rest.border-width` and `border-color`, a line around a
   window the application draws, inside its edges (none in the default
   kit; not drawn when maximized or full screen).
@@ -1058,6 +1061,11 @@ egui minor.
 
 ### Fixed
 
+- An application icon drawn at a size the theme does not list (15 points,
+  a kit's `indicator-size`) is rasterised at that size instead of scaled
+  from the next one, which blurred it.
+- The title bar's buttons and items are centred above its line, not on
+  the line's row as well.
 - A vetoed exit no longer saves: `App::save` ran before the `app.exit`
   step, whatever its hooks decided. The step's default now writes what
   is still waiting, and what changed was written a second after it

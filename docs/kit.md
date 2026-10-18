@@ -203,8 +203,12 @@ compiled at install.
 - **The title bar and window buttons** (`title-bar`, `window-button`,
   `window-close`). The title goes where `title-bar.align` says: `centre`
   (the default) or `start`, after the leading items (the gallery's
-  `frame-kit-title-start` snapshot). The glyphs are still drawn by
-  egui-pop, in the box's `text`.
+  `frame-kit-title-start` snapshot). The buttons' glyphs are the
+  `window-minimize`, `window-maximize`, `window-restore` and
+  `window-close` glyph roles (egui-pop's painted marks by default, any
+  icon of the set otherwise), in the box's `text`, `indicator-size`
+  across (10 by default). Buttons and items are centred above the bar's
+  line (`title-bar.rest.border-width`).
 - **Data views** (`list-row`, `list-view`, `table-header-cell`,
   `table-stripe`, `tree-drop-marker`). One function paints the rows of
   the tree, the list and the table. A row is `selected`, `hover` (never
@@ -266,12 +270,13 @@ compiled at install.
   an icon of its set, compiled into a table read by index. The vocabulary
   is fixed: disclosure open and closed, sort ascending and descending,
   check, radio, indeterminate, bullet, submenu, chevron start and end,
-  close, more, expand, collapse. The tree, the menus and the find bar
+  close, more, expand, collapse, and the window buttons'. The tree, the menus and the find bar
   ask for roles, and so do the table's sort arrows.
 - **Application icons** (`icon_set`, feature `svg`): SVG files
   registered by name, single-colour (a white mask tinted at draw) or
   full-colour, rasterised at install for the theme's icon sizes and the
-  window's scale; a kit's glyph may name them.
+  window's scale, and at any other size the first time it is drawn (a
+  scaled texture blurs); a kit's glyph may name them.
 - The default kit is these components' tokens in `pop-dark`, which every
   built-in theme extends. The former `titlebar.*` tokens were renamed into
   the grid (`titlebar.background` is `title-bar.rest.fill`,

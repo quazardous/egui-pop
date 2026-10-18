@@ -70,6 +70,14 @@ glyphs! {
     Expand: "expand" => Plus,
     /// Collapses, removes a level.
     Collapse: "collapse" => Minus,
+    /// A window's minimize button (drawn by the application).
+    WindowMinimize: "window-minimize" => WindowMinimize,
+    /// A window's maximize button.
+    WindowMaximize: "window-maximize" => WindowMaximize,
+    /// A maximized window's restore button.
+    WindowRestore: "window-restore" => WindowRestore,
+    /// A window's close button.
+    WindowClose: "window-close" => WindowClose,
 }
 
 /// The icon of each role, compiled from the kit's tokens: read by index

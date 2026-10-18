@@ -55,4 +55,24 @@ pub(crate) const CONTRACT: &[Required] = &[
         "string",
         "the icon of the `collapse` glyph",
     ),
+    comp(
+        "glyph.window-minimize",
+        "string",
+        "the icon of the `window-minimize` glyph",
+    ),
+    comp(
+        "glyph.window-maximize",
+        "string",
+        "the icon of the `window-maximize` glyph",
+    ),
+    comp(
+        "glyph.window-restore",
+        "string",
+        "the icon of the `window-restore` glyph",
+    ),
+    comp(
+        "glyph.window-close",
+        "string",
+        "the icon of the `window-close` glyph",
+    ),
 ];

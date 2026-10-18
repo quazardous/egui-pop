@@ -6,15 +6,18 @@
 //! colour a widget gives, like the built-in icons) or full-colour
 //! ([`Paint::Colour`], an application's logo, drawn as it is).
 //!
-//! Nothing is done while drawing: [`install`] (run with the theme,
-//! `theme::install_tokens`) rasterises every registered icon at the icon
-//! sizes of the theme (`size.icon.*`) and the window's pixels per point,
-//! as textures; drawing picks the nearest size and paints one image.
+//! [`install`] (run with the theme, `theme::install_tokens`) rasterises
+//! every registered icon at the icon sizes of the theme (`size.icon.*`)
+//! and the window's pixels per point, as textures; drawing paints one
+//! image. An icon drawn at another size (a kit's `indicator-size`, an
+//! application's 15 points) is rasterised at that size the first time it
+//! is drawn, then kept: scaling a texture would blur it.
 //! A single-colour icon is a white mask, so one texture serves every
 //! colour. Rasterising needs the `svg` feature (resvg); without it,
 //! [`register`] refuses.
 
-use std::sync::{Arc, RwLock};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex, RwLock};
 
 use egui::{Color32, Context, Id, Painter, Rect, TextureHandle};
 
@@ -136,6 +139,32 @@ struct Installed {
     icons: Vec<Rasters>,
 }
 
+/// Textures made while drawing, for sizes [`install`] did not make: by
+/// icon and side in physical pixels (`None`: the SVG did not rasterise).
+type Textures = HashMap<(u16, u32), Option<TextureHandle>>;
+
+#[derive(Clone, Default)]
+struct Extra(Arc<Mutex<Textures>>);
+
+fn extra_id() -> Id {
+    Id::new("egui_pop_core::icon_set::extra")
+}
+
+/// The texture of an icon at a side no install made, made on first use.
+fn extra(ctx: &Context, icon: CustomIcon, px: u32, paint: Paint) -> Option<TextureHandle> {
+    let cache = ctx.data_mut(|d| d.get_temp_mut_or_default::<Extra>(extra_id()).clone());
+    let mut map = cache.0.lock().unwrap_or_else(|e| e.into_inner());
+    map.entry((icon.0, px))
+        .or_insert_with(|| {
+            let set = SET.read().unwrap_or_else(|e| e.into_inner());
+            let e = set.get(usize::from(icon.0))?;
+            let image = rasterise(&e.svg, px, paint)?;
+            let name = format!("egui_pop.icon.{}.{px}", e.name);
+            Some(ctx.load_texture(name, image, egui::TextureOptions::LINEAR))
+        })
+        .clone()
+}
+
 fn installed_id() -> Id {
     Id::new("egui_pop_core::icon_set::installed")
 }
@@ -227,21 +256,23 @@ pub(crate) fn paint(painter: &Painter, icon: CustomIcon, rect: Rect, color: Colo
     let Some(r) = installed.icons.get(usize::from(icon.0)) else {
         return;
     };
-    let want = (rect.width().min(rect.height()) * installed.ppp).round() as u32;
-    let Some((px, texture)) = r
-        .sizes
-        .iter()
-        .find(|(px, _)| *px >= want)
-        .or_else(|| r.sizes.last())
-    else {
-        return;
+    let want = (rect.width().min(rect.height()) * installed.ppp)
+        .round()
+        .max(1.0) as u32;
+    // Its texture at that side: an installed one, or one made now.
+    let made;
+    let texture = match r.sizes.iter().find(|(px, _)| *px == want) {
+        Some((_, t)) => t,
+        None => match extra(painter.ctx(), icon, want, r.paint) {
+            Some(t) => {
+                made = t;
+                &made
+            }
+            None => return,
+        },
     };
-    // Drawn at its own pixel size when it fits, on the pixel grid: crisp.
-    let side = if *px <= want + 1 {
-        *px as f32 / installed.ppp
-    } else {
-        rect.width().min(rect.height())
-    };
+    // Drawn at its own pixel size, on the pixel grid: crisp.
+    let side = want as f32 / installed.ppp;
     let min = rect.center() - egui::Vec2::splat(side / 2.0);
     let min = egui::pos2(
         (min.x * installed.ppp).round() / installed.ppp,
@@ -324,5 +355,24 @@ mod tests {
         sides.dedup();
         let at = names().iter().position(|n| *n == "test-dot").unwrap();
         assert_eq!(installed.icons[at].sizes.len(), sides.len());
+    }
+
+    #[test]
+    fn a_size_no_install_made_is_rasterised_once_at_that_size() {
+        let ring = register("test-odd-ring", RING, Paint::Mono).unwrap();
+        let Icon::Custom(c) = ring else {
+            panic!("an application icon")
+        };
+        let ctx = Context::default();
+        install(&ctx, &Tokens::default());
+        let painter = Painter::new(ctx.clone(), egui::LayerId::background(), Rect::EVERYTHING);
+        let square = Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(15.0, 15.0));
+        ring.paint(&painter, square, Color32::WHITE);
+        ring.paint(&painter, square, Color32::WHITE);
+        let cache = ctx.data_mut(|d| d.get_temp_mut_or_default::<Extra>(extra_id()).clone());
+        let map = cache.0.lock().unwrap();
+        let made: Vec<_> = map.keys().filter(|(i, _)| *i == c.0).collect();
+        assert_eq!(made, [&(c.0, 15)]);
+        assert_eq!(map[&(c.0, 15)].as_ref().unwrap().size(), [15, 15]);
     }
 }
