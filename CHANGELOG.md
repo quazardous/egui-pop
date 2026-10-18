@@ -950,6 +950,15 @@ egui minor.
 - The `Choose` dialog's rows keep their size as the pointer moves over
   them (the dialog no longer changes height by a few pixels), and their
   text is left-aligned and wraps, a single-line row included.
+
+- Menus, context menus, command buttons, the tray and global shortcuts
+  show a command's title without the trailing hint of its arguments
+  (``Open a workspace (`path`)`` reads `Open a workspace`), in every
+  language: the hint is dropped after translation, so an application no
+  longer passes an English label to hide it. The palette keeps it. New
+  `egui_pop_core::strings::without_argument_hint` and
+  `AppHandle::command_menu_title`.
+
 - A vetoed exit no longer saves: `App::save` ran before the `app.exit`
   step, whatever its hooks decided. The step's default now writes what
   is still waiting, and what changed was written a second after it

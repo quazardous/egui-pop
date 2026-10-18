@@ -781,7 +781,7 @@ fn shortcuts(app: &AppHandle) -> (Vec<Shortcut>, Vec<(String, String)>) {
         }
         let description = app
             .command(command)
-            .map(|s| app.command_title(&s))
+            .map(|s| app.command_menu_title(&s))
             .unwrap_or_else(|| command.to_string());
         ok.push(Shortcut {
             keys,

@@ -650,6 +650,14 @@ impl AppHandle {
         }
     }
 
+    /// A command's title as a menu, a toolbar or the tray shows it: its
+    /// [`command_title`](Self::command_title) without the trailing hint of
+    /// its arguments, which the palette keeps
+    /// ([`strings::without_argument_hint`]).
+    pub fn command_menu_title(&self, spec: &CommandSpec) -> String {
+        strings::without_argument_hint(&self.command_title(spec)).to_string()
+    }
+
     /// A settings section's title as shown: the owner's plugin title
     /// translated (`plugin-<id>.title`), or the section as a hook named
     /// it.

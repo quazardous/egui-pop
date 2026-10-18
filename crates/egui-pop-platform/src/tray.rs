@@ -515,7 +515,7 @@ fn menu_entries(
                 let on = checked
                     || (!spec.checked.is_empty()
                         && When::parse(&spec.checked).is_ok_and(|w| w.eval(cx)));
-                let label = label.unwrap_or_else(|| app.command_title(&spec));
+                let label = label.unwrap_or_else(|| app.command_menu_title(&spec));
                 let enabled = enabled && applies && !app.running(&id);
                 out.push(add(
                     targets,

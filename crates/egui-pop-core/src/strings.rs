@@ -404,6 +404,25 @@ pub fn command_title(ctx: &Context, id: &str, english: &str) -> String {
     declared(ctx, kind::COMMAND, id, Some("title"), english)
 }
 
+/// A command's title as a menu, a toolbar or a tray shows it: without the
+/// trailing hint of its arguments (``Open a workspace (`path`)`` reads
+/// `Open a workspace`), which only the palette, where arguments are
+/// typed, keeps. It works on a translated title as on the English one.
+///
+/// ```
+/// use egui_pop_core::strings::without_argument_hint;
+///
+/// assert_eq!(without_argument_hint("Open a workspace (`path`)"), "Open a workspace");
+/// assert_eq!(without_argument_hint("Ouvrir (`chemin` : un dossier)"), "Ouvrir");
+/// assert_eq!(without_argument_hint("Zoom (fit)"), "Zoom (fit)");
+/// ```
+pub fn without_argument_hint(title: &str) -> &str {
+    match title.find(" (`") {
+        Some(i) if title.ends_with(')') => &title[..i],
+        _ => title,
+    }
+}
+
 /// A command's description (empty stays empty).
 pub fn command_description(ctx: &Context, id: &str, english: &str) -> String {
     if english.is_empty() {
@@ -514,5 +533,18 @@ mod tests {
         );
         assert_eq!(category(&ctx, "View"), "View");
         assert_eq!(command_description(&ctx, "x", ""), "");
+    }
+
+    #[test]
+    fn only_a_trailing_argument_hint_is_stripped() {
+        assert_eq!(without_argument_hint("Open (`path`)"), "Open");
+        assert_eq!(without_argument_hint("Open (`a`, `b` (opt))"), "Open");
+        assert_eq!(
+            without_argument_hint("Open (`path`) now"),
+            "Open (`path`) now"
+        );
+        assert_eq!(without_argument_hint("Fit (100%)"), "Fit (100%)");
+        assert_eq!(without_argument_hint("(`x`)"), "(`x`)");
+        assert_eq!(without_argument_hint(""), "");
     }
 }

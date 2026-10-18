@@ -178,3 +178,67 @@ fn the_settings_window_shows_translated_settings_and_stores_raw_values() {
     assert_eq!(value, Value::Choice("hover".into()));
     assert!(h.query_by_label("Rétablir Focus clavier").is_some());
 }
+
+/// A plugin whose command takes an argument, its title ending in the
+/// argument's hint.
+struct Opener;
+
+impl egui_pop_api::Plugin for Opener {
+    fn id(&self) -> egui_pop_model::ids::PluginId {
+        egui_pop_model::ids::PluginId::from_static("opener")
+    }
+
+    fn connect(
+        &mut self,
+        ctx: &mut egui_pop_api::Ctx<'_>,
+    ) -> Result<(), egui_pop_api::PluginError> {
+        ctx.command(
+            egui_pop_model::commands::CommandSpec::new(
+                egui_pop_model::ids::CommandId::from_static("opener.open"),
+                "Open a folder (`path`)",
+                "File",
+            )
+            .menu(egui_pop_api::app::MENU_FILE, "1_open", 0),
+            |_| Ok(serde_json::Value::Null),
+        )?;
+        Ok(())
+    }
+}
+
+#[test]
+fn a_menu_shows_the_translated_title_without_its_argument_hint() {
+    let app = App::builder()
+        .plugins(DefaultPlugins)
+        .plugin(Opener)
+        .build(&egui::Context::default())
+        .unwrap();
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(1000.0, 700.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+    strings::install(
+        &h.ctx,
+        Arc::new(french().with(
+            "command-opener-open.title",
+            "Ouvrir un dossier (`path` : son chemin)",
+        )),
+    );
+    h.run();
+    h.get_by_label("Fichier…").click();
+    h.run();
+    // The menu: the French title, its hint dropped.
+    assert!(h.query_by_label("Ouvrir un dossier").is_some());
+    assert!(h.query_by_label_contains("(`path`").is_none());
+    assert!(h.query_by_label_contains("Open a folder").is_none());
+    h.key_press(Key::Escape);
+    h.run();
+    // The palette keeps the hint, where the argument is typed.
+    h.key_press_modifiers(Modifiers::COMMAND | Modifiers::SHIFT, Key::P);
+    h.run();
+    h.get_by_role(egui::accesskit::Role::TextInput)
+        .type_text("ouvrir");
+    h.run();
+    assert!(
+        h.query_by_label_contains("Ouvrir un dossier (`path` : son chemin)")
+            .is_some()
+    );
+}
