@@ -1,0 +1,15 @@
+{
+  "$description": "The `tree-drop-marker` component of the default kit (docs/kit.md), layered into pop-dark.",
+  "tree-drop-marker": {
+    "$description": "Where a drag over a tree would drop (a kit component): an outline inside the target row, or a line between rows; `disabled` when the drop is refused.",
+    "shape": {"$type": "string", "$value": "outline", "$description": "The handler that draws it: outline (its border, around a row or along a line) or plain."},
+    "rest": {
+      "border-color": {"$type": "color", "$value": "{accent.default}"},
+      "border-width": {"$type": "dimension", "$value": {"value": 2, "unit": "px"}},
+      "radius": {"$type": "dimension", "$value": {"value": 2, "unit": "px"}}
+    },
+    "disabled": {
+      "border-color": {"$type": "color", "$value": "{danger}"}
+    }
+  }
+}

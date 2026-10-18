@@ -58,12 +58,13 @@ pub mod model;
 use std::sync::{Arc, Mutex};
 
 use egui::{
-    Context, Id, Modifiers, Rect, Response, Stroke, TextEdit, Ui, UiBuilder, WidgetInfo,
-    WidgetType, pos2, vec2,
+    Context, Id, Modifiers, Rect, Response, TextEdit, Ui, UiBuilder, WidgetInfo, WidgetType, pos2,
+    vec2,
 };
 use egui_pop_api::steps::Outcome;
 use egui_pop_api::{AppHandle, menus};
 use egui_pop_core::icon::{Size, Source};
+use egui_pop_core::kit::{KitCx, Part, State};
 use egui_pop_core::strings::{self, tr, tr_args};
 use egui_pop_core::theme::Tokens;
 use egui_pop_model::ids::{MenuId, StepId};
@@ -749,8 +750,9 @@ impl<'a, K: Key> TreeView<'a, K> {
                             let cursor = (focused && selection.cursor() == Some(&key))
                                 || r.context_menu_opened();
                             let hovered = r.contains_pointer() && drag.is_none();
-                            rows::paint(ui, rect, selected, hovered, cursor);
-                            let color = rows::text_color(ui, selected);
+                            let row_state = rows::state(selected, hovered, cursor);
+                            rows::paint(ui, &visible.kit.list_row, rect, row_state);
+                            let color = rows::text_color(&visible.kit.list_row, row_state);
                             let toggle = Rect::from_min_size(
                                 pos2(x, rect.top()),
                                 vec2(indent, rect.height()),
@@ -1316,9 +1318,9 @@ fn drop_into<K: Key>(
     Ok(())
 }
 
-/// Tracks the drop target under the pointer and marks it: in the accent
-/// colour, or in the danger colour with a "not allowed" pointer when the
-/// source or the view refuses it.
+/// Tracks the drop target under the pointer and marks it with the kit's
+/// `tree-drop-marker`, `disabled` and with a "not allowed" pointer when
+/// the source or the view refuses it.
 #[allow(clippy::too_many_arguments)]
 fn dragging<K: Key>(
     ui: &Ui,
@@ -1361,27 +1363,29 @@ fn dragging<K: Key>(
     } else {
         Position::After
     };
-    let tokens = Tokens::of(ui.ctx());
-    let color = if allows(&d.keys, key, position).is_ok() {
-        tokens.accent.default
-    } else {
+    let refused = allows(&d.keys, key, position).is_err();
+    if refused {
         ui.ctx().set_cursor_icon(egui::CursorIcon::NotAllowed);
-        tokens.status.danger
-    };
-    let x = rect.left() + (*depth as f32 + 1.0) * indent;
-    let stroke = Stroke::new(2.0, color);
-    match position {
-        Position::Inside => {
-            ui.painter()
-                .rect_stroke(rect.shrink(1.0), 2.0, stroke, egui::StrokeKind::Inside);
-        }
-        Position::Before => {
-            ui.painter().hline(x..=rect.right(), rect.top(), stroke);
-        }
-        Position::After => {
-            ui.painter().hline(x..=rect.right(), rect.bottom(), stroke);
-        }
     }
+    let x = rect.left() + (*depth as f32 + 1.0) * indent;
+    // Around the row, or a line (a part with no height) between rows.
+    let at = match position {
+        Position::Inside => rect.shrink(1.0),
+        Position::Before => Rect::from_min_max(pos2(x, rect.top()), rect.right_top()),
+        Position::After => Rect::from_min_max(pos2(x, rect.bottom()), rect.max),
+    };
+    visible.kit.tree_drop_marker.paint(
+        &KitCx {
+            painter: ui.painter(),
+            ppp: ui.ctx().pixels_per_point(),
+        },
+        &Part {
+            rect: at,
+            room: at,
+            state: State::REST.with(State::DISABLED, refused),
+            label: None,
+        },
+    );
     d.target = Some((key.clone(), position));
 }
 

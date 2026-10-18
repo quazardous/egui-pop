@@ -81,11 +81,31 @@ pub const BUILT_IN_ACCENTS: &[&str] = &["gold", "blue", "green", "amber", "red"]
 /// component, in alphabetical order.
 const KIT_FILES: &[(&str, &str)] = &[
     ("glyph", include_str!("../themes/kit/glyph.tokens.json")),
+    (
+        "list-row",
+        include_str!("../themes/kit/list-row.tokens.json"),
+    ),
+    (
+        "list-view",
+        include_str!("../themes/kit/list-view.tokens.json"),
+    ),
     ("tab", include_str!("../themes/kit/tab.tokens.json")),
     ("tab-bar", include_str!("../themes/kit/tab-bar.tokens.json")),
     (
+        "table-header-cell",
+        include_str!("../themes/kit/table-header-cell.tokens.json"),
+    ),
+    (
+        "table-stripe",
+        include_str!("../themes/kit/table-stripe.tokens.json"),
+    ),
+    (
         "title-bar",
         include_str!("../themes/kit/title-bar.tokens.json"),
+    ),
+    (
+        "tree-drop-marker",
+        include_str!("../themes/kit/tree-drop-marker.tokens.json"),
     ),
     ("window", include_str!("../themes/kit/window.tokens.json")),
     (

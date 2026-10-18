@@ -41,6 +41,7 @@ use egui::{Id, Response, Sense, Ui, WidgetInfo, WidgetType};
 use egui_pop_api::AppHandle;
 use egui_pop_api::steps::Outcome;
 use egui_pop_core::binding::SharedStore;
+use egui_pop_core::kit::{Kit, KitCx, Part, State};
 use egui_pop_core::strings::{tr, tr_args};
 use egui_pop_model::commands::Origin;
 use egui_pop_model::ids::OwnerId;
@@ -422,6 +423,7 @@ impl<'a> DataTable<'a> {
             page: state.page,
             take_focus: false,
             row_h,
+            kit: Kit::of(ui.ctx()),
         };
         let widths = &state.widths;
         let given = &mut state.given;
@@ -603,6 +605,8 @@ struct Delegate<'a, K: Key> {
     page: usize,
     take_focus: bool,
     row_h: f32,
+    /// Fetched once per pass, for every row and header.
+    kit: std::sync::Arc<Kit>,
 }
 
 impl<K: Key> TableDelegate for Delegate<'_, K> {
@@ -621,22 +625,12 @@ impl<K: Key> TableDelegate for Delegate<'_, K> {
             return;
         };
         let rect = ui.max_rect();
-        ui.painter()
-            .rect_filled(rect, 0.0, ui.visuals().widgets.noninteractive.weak_bg_fill);
         let sorted = self.sort.filter(|s| s.column == c.id);
         let arrow = match sorted {
             Some(s) if s.descending => " ⏷",
             Some(_) => " ⏶",
             None => "",
         };
-        let font = egui::TextStyle::Body.resolve(ui.style());
-        ui.painter().text(
-            egui::pos2(rect.left() + ui.spacing().item_spacing.x, rect.center().y),
-            egui::Align2::LEFT_CENTER,
-            format!("{}{arrow}", c.title),
-            font,
-            ui.visuals().strong_text_color(),
-        );
         let name = match sorted {
             Some(s) if s.descending => tr_args(ui.ctx(), &s::SORTED_DOWN, &[("column", &c.title)]),
             Some(_) => tr_args(ui.ctx(), &s::SORTED_UP, &[("column", &c.title)]),
@@ -654,14 +648,29 @@ impl<K: Key> TableDelegate for Delegate<'_, K> {
             WidgetType::Label
         };
         r.widget_info(move || WidgetInfo::labeled(kind, true, &name));
-        if c.sortable && r.hovered() {
-            ui.painter().rect_stroke(
-                rect.shrink(1.0),
-                0.0,
-                ui.visuals().widgets.hovered.bg_stroke,
-                egui::StrokeKind::Inside,
-            );
-        }
+        let state = State::REST
+            .with(State::HOVER, c.sortable && r.hovered())
+            .with(State::ACTIVE, c.sortable && r.is_pointer_button_down_on())
+            .with(State::SELECTED, sorted.is_some());
+        let font = egui::TextStyle::Body.resolve(ui.style());
+        let galley = ui.painter().layout_no_wrap(
+            format!("{}{arrow}", c.title),
+            font,
+            egui::Color32::PLACEHOLDER,
+        );
+        let cell = &self.kit.table_header_cell;
+        cell.paint_part(
+            &KitCx {
+                painter: ui.painter(),
+                ppp: ui.ctx().pixels_per_point(),
+            },
+            &Part {
+                rect,
+                room: rect,
+                state,
+                label: Some(&galley),
+            },
+        );
         if c.sortable && r.clicked() {
             self.sort_to = Some(Sort::next(self.sort, &c.id));
         }
@@ -679,13 +688,25 @@ impl<K: Key> TableDelegate for Delegate<'_, K> {
         let r = ui.interact(rect, ui.id().with("select"), Sense::CLICK);
         let selected = self.selection.contains(&key);
         let cursor = self.focused && self.selection.cursor() == Some(&key);
+        let state = rows::state(selected, r.hovered(), cursor);
         if row % 2 == 1 && !selected {
-            ui.painter()
-                .rect_filled(rect, 0.0, ui.visuals().faint_bg_color);
+            self.kit.table_stripe.paint(
+                &KitCx {
+                    painter: ui.painter(),
+                    ppp: ui.ctx().pixels_per_point(),
+                },
+                &Part {
+                    rect,
+                    room: rect,
+                    state: State::REST,
+                    label: None,
+                },
+            );
         }
-        rows::paint(ui, rect, selected, r.hovered(), cursor);
+        rows::paint(ui, &self.kit.list_row, rect, state);
         if selected {
-            ui.visuals_mut().override_text_color = Some(rows::text_color(ui, true));
+            ui.visuals_mut().override_text_color =
+                Some(rows::text_color(&self.kit.list_row, state));
         }
         let name = self.rows.label(row);
         r.widget_info(move || {

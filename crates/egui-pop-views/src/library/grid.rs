@@ -75,9 +75,9 @@ use serde_json::{Value as Json, json};
 use super::marks::{ColorLabel, CullAction, CullKeymap, Flag, MAX_RATING, Marks};
 use super::paint::{self, LibraryTokens};
 use super::plugin::{self as lib, LIBRARIES, Request};
-use crate::nav;
 use crate::select::{self, Key, Mode, Proposal, Selection};
 use crate::strings as s;
+use crate::{nav, rows};
 
 /// The smallest and largest thumbnails, in points.
 pub const MIN_SIZE: f32 = 48.0;
@@ -1004,13 +1004,13 @@ impl<'a> ThumbGrid<'a> {
                     },
                 )
             });
-            ui.painter().rect_stroke(
-                out.inner_rect,
-                0.0,
-                Stroke::new(1.0, t.focus_ring),
-                StrokeKind::Inside,
-            );
         }
+        rows::paint_view(
+            ui,
+            &egui_pop_core::kit::Kit::of(ui.ctx()),
+            out.inner_rect,
+            response.has_focus(),
+        );
         // Zoom: Ctrl and the wheel over a grid.
         if grid && ui.rect_contains_pointer(out.inner_rect) {
             let z = ui.input(|i| i.zoom_delta());

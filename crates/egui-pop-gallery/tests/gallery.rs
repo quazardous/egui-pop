@@ -2049,6 +2049,62 @@ fn a_kit_redraws_the_workbench_tabs_from_the_theme_alone() {
 }
 
 #[test]
+fn a_kit_restyles_the_rows_of_a_table() {
+    // Data only: rounded rows with a bar on the selected one, no stripes,
+    // and headers drawn as a line by the `plain` handler.
+    use egui::accesskit::Role;
+    let mut themes = egui_pop::tokens::Themes::default();
+    themes
+        .add_json(
+            "kit-rows",
+            r##"{
+              "$extends": "pop-dark",
+              "list-row": {
+                "indicator-side": {"$type": "string", "$value": "left"},
+                "rest": {
+                  "radius": {"$type": "dimension", "$value": {"value": 4, "unit": "px"}}
+                },
+                "selected": {
+                  "fill": {"$type": "color", "$value": "{accent.subtle}"},
+                  "indicator-color": {"$type": "color", "$value": "{accent.default}"},
+                  "indicator-size": {"$type": "dimension", "$value": {"value": 3, "unit": "px"}}
+                },
+                "focus": {
+                  "ring-color": {"$type": "color", "$value": "{border.strong}"}
+                }
+              },
+              "table-stripe": {
+                "rest": { "fill": {"$type": "color", "$value": "{transparent}"} }
+              },
+              "table-header-cell": {
+                "shape": {"$type": "string", "$value": "plain"},
+                "indicator-side": {"$type": "string", "$value": "bottom"},
+                "rest": {
+                  "fill": {"$type": "color", "$value": "{surface.sunken}"},
+                  "text": {"$type": "color", "$value": "{text.muted}"},
+                  "border-color": {"$type": "color", "$value": "{accent.default}"},
+                  "border-width": {"$type": "dimension", "$value": {"value": 1, "unit": "px"}}
+                }
+              }
+            }"##,
+        )
+        .expect("the test theme reads");
+    let mut h = harness(options("pop-dark", Density::Comfortable, "table"));
+    h.run();
+    let tokens = Tokens::new(themes.resolve(&egui_pop::tokens::ThemeSpec::new("kit-rows")));
+    egui_pop::core::theme::install_tokens(&h.ctx, tokens);
+    let kit = egui_pop::core::kit::Kit::of(&h.ctx);
+    assert_eq!(kit.table_header_cell.shape, "plain");
+    assert!(kit.problems.is_empty(), "{:?}", kit.problems);
+    h.get_by_role_and_label(Role::Button, "IMG_00002.raw")
+        .click();
+    h.run();
+    h.remove_cursor();
+    h.run();
+    h.snapshot("table-kit-rows");
+}
+
+#[test]
 fn a_kit_puts_the_title_at_the_start_of_the_title_bar() {
     // Data only: `title-bar.align` and the bar's colours, as tvty draws it.
     let mut themes = egui_pop::tokens::Themes::default();
