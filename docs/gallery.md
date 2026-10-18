@@ -156,6 +156,9 @@ and filmstrip, marks, filter chips, a comparison).
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/library-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/library-pop-dark.png" width="200" alt="library-pop-dark"></a><br>library-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/library-compare-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/library-compare-pop-dark.png" width="200" alt="library-compare-pop-dark"></a><br>library-compare-pop-dark</td>
   </tr>
+  <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/table-kit-rows.png"><img src="../crates/egui-pop-gallery/tests/snapshots/table-kit-rows.png" width="200" alt="table-kit-rows"></a><br>table-kit-rows</td>
+  </tr>
 </table>
 
 ### Editors
