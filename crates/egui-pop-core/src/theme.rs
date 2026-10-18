@@ -616,6 +616,7 @@ pub fn install_tokens(ctx: &Context, tokens: Tokens) -> Arc<Tokens> {
     });
     ctx.data_mut(|d| d.insert_temp(tokens_id(), tokens.clone()));
     crate::fonts::install(ctx, &tokens.font.family_ui, &tokens.font.family_mono);
+    crate::icon_set::install(ctx, &tokens);
     crate::kit::install(ctx, &tokens);
     tokens
 }

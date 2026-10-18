@@ -35,6 +35,28 @@ fn toggle(ui: &mut Ui, on: &mut bool, text: &str, label: &str) -> bool {
     false
 }
 
+/// A toggle showing a kit glyph (the replace row's disclosure) in a
+/// one-character monospace cell, like the text toggles next to it.
+fn glyph_toggle(ui: &mut Ui, on: &mut bool, glyph: Icon, label: &str) -> bool {
+    let r = ui
+        .selectable_label(*on, egui::RichText::new(" ").monospace())
+        .on_hover_text(label);
+    let side = r.rect.height() * 0.6;
+    let at = egui::Rect::from_center_size(r.rect.center(), egui::vec2(side, side));
+    let color = ui.style().interact_selectable(&r, *on).text_color();
+    glyph.paint(ui.painter(), at, color);
+    let lab = label.to_string();
+    let value = *on;
+    r.widget_info(move || {
+        egui::WidgetInfo::selected(egui::WidgetType::Checkbox, true, value, &lab)
+    });
+    if r.clicked() {
+        *on = !*on;
+        return true;
+    }
+    false
+}
+
 fn icon_button(ui: &mut Ui, icon: Icon, label: &str) -> bool {
     let size = ui.spacing().interact_size.y;
     let (rect, r) = ui.allocate_exact_size(egui::vec2(size, size), egui::Sense::click());
@@ -110,8 +132,13 @@ pub(crate) fn show(
             let mut close = false;
             let mut show_replace = replace_open;
             ui.horizontal(|ui| {
-                let arrow = if show_replace { "▾" } else { "▸" };
-                if toggle(ui, &mut show_replace, arrow, &tr(&ctx, &s::TOGGLE_REPLACE)) {
+                let kit = egui_pop_core::kit::Kit::of(&ctx);
+                let glyph = kit.glyph(if show_replace {
+                    egui_pop_core::kit::Glyph::DisclosureOpen
+                } else {
+                    egui_pop_core::kit::Glyph::DisclosureClosed
+                });
+                if glyph_toggle(ui, &mut show_replace, glyph, &tr(&ctx, &s::TOGGLE_REPLACE)) {
                     state.lock().find.replace = show_replace;
                 }
                 let id = editor.with("find");

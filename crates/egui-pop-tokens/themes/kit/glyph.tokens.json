@@ -1,0 +1,22 @@
+{
+  "$description": "The default kit's glyphs (docs/kit.md): the icon drawn for each role, layered into pop-dark.",
+  "glyph": {
+    "$type": "string",
+    "$description": "The icon of each glyph role, by its name in the kit's icon set.",
+    "disclosure-open": {"$value": "triangle-down"},
+    "disclosure-closed": {"$value": "triangle-right"},
+    "sort-ascending": {"$value": "triangle-up"},
+    "sort-descending": {"$value": "triangle-down"},
+    "check": {"$value": "check"},
+    "radio": {"$value": "dot"},
+    "indeterminate": {"$value": "minus"},
+    "bullet": {"$value": "dot"},
+    "submenu": {"$value": "chevron-right"},
+    "chevron-start": {"$value": "chevron-left"},
+    "chevron-end": {"$value": "chevron-right"},
+    "close": {"$value": "close"},
+    "more": {"$value": "more"},
+    "expand": {"$value": "plus"},
+    "collapse": {"$value": "minus"}
+  }
+}

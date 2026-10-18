@@ -95,6 +95,16 @@ pub enum Icon {
     Unlock,
     /// An eyedropper: pick a value or a colour from the image.
     Picker,
+    /// A filled triangle pointing to the end: a closed branch (always
+    /// painted, like the dot).
+    TriangleRight,
+    /// A filled triangle pointing down: an open branch, a descending sort.
+    TriangleDown,
+    /// A filled triangle pointing up: an ascending sort.
+    TriangleUp,
+    /// An icon the application registered (`icon_set::register`): an SVG
+    /// file, drawn from textures made when the theme is installed.
+    Custom(crate::icon_set::CustomIcon),
 }
 
 impl Icon {
@@ -142,11 +152,19 @@ impl Icon {
         Icon::Lock,
         Icon::Unlock,
         Icon::Picker,
+        Icon::TriangleRight,
+        Icon::TriangleDown,
+        Icon::TriangleUp,
     ];
 
-    /// The icon of a name (`settings`), as [`Icon::name`] gives it.
+    /// The icon of a name (`settings`), as [`Icon::name`] gives it:
+    /// egui-pop's, then the application's (`icon_set::register`).
     pub fn by_name(name: &str) -> Option<Icon> {
-        Icon::ALL.iter().copied().find(|i| i.name() == name)
+        Icon::ALL
+            .iter()
+            .copied()
+            .find(|i| i.name() == name)
+            .or_else(|| crate::icon_set::by_name(name))
     }
 
     /// Its name in kebab case (`chevron-right`): for the debug bridge and
@@ -195,11 +213,16 @@ impl Icon {
             Icon::Lock => "lock",
             Icon::Unlock => "unlock",
             Icon::Picker => "picker",
+            Icon::TriangleRight => "triangle-right",
+            Icon::TriangleDown => "triangle-down",
+            Icon::TriangleUp => "triangle-up",
+            Icon::Custom(c) => crate::icon_set::name(c),
         }
     }
 
     /// Its glyph in the icon font; `None` without the `phosphor` feature,
-    /// and for the marks that are always painted (dot, diamond).
+    /// and for the marks that are always painted (dot, diamond, the
+    /// triangles).
     pub fn glyph(self) -> Option<&'static str> {
         glyph(self)
     }
@@ -222,6 +245,10 @@ impl Icon {
     /// Paints the icon in a square: the font's glyph when the icon font
     /// is installed in this context, else the painted shape.
     pub fn paint(self, painter: &Painter, rect: Rect, color: Color32) {
+        if let Icon::Custom(c) = self {
+            crate::icon_set::paint(painter, c, rect, color);
+            return;
+        }
         match self.glyph() {
             Some(g) if font_ready(painter.ctx()) => {
                 painter.text(
@@ -249,7 +276,12 @@ fn glyph(icon: Icon) -> Option<&'static str> {
         Icon::Close => p::X,
         Icon::Plus => p::PLUS,
         Icon::Minus => p::MINUS,
-        Icon::Dot | Icon::Diamond => return None,
+        Icon::Dot
+        | Icon::Diamond
+        | Icon::TriangleRight
+        | Icon::TriangleDown
+        | Icon::TriangleUp
+        | Icon::Custom(_) => return None,
         Icon::Search => p::MAGNIFYING_GLASS,
         Icon::Settings => p::GEAR_SIX,
         Icon::Folder => p::FOLDER,
@@ -640,6 +672,32 @@ pub fn paint_fallback(p: &Painter, icon: Icon, rect: Rect, color: Color32) {
             p.line_segment([at(0.24, 0.25 - lift), at(0.24, 0.45 - lift)], stroke);
             p.line_segment([at(0.76, 0.25 - lift), at(0.76, right - lift)], stroke);
         }
+        Icon::TriangleRight | Icon::TriangleDown | Icon::TriangleUp => {
+            // Sized on the square, not on the stroke box: a small solid
+            // mark that stays legible in a row's indent.
+            let c = rect.center();
+            let r = (rect.height().min(rect.width()) * 0.18).max(3.0);
+            let points = match icon {
+                Icon::TriangleDown => vec![
+                    pos2(c.x - r, c.y - r * 0.6),
+                    pos2(c.x + r, c.y - r * 0.6),
+                    pos2(c.x, c.y + r * 0.8),
+                ],
+                Icon::TriangleUp => vec![
+                    pos2(c.x - r, c.y + r * 0.6),
+                    pos2(c.x, c.y - r * 0.8),
+                    pos2(c.x + r, c.y + r * 0.6),
+                ],
+                _ => vec![
+                    pos2(c.x - r * 0.6, c.y - r),
+                    pos2(c.x + r * 0.8, c.y),
+                    pos2(c.x - r * 0.6, c.y + r),
+                ],
+            };
+            p.add(egui::Shape::convex_polygon(points, color, Stroke::NONE));
+        }
+        // Drawn from its textures (`Icon::paint`): no fallback shape.
+        Icon::Custom(_) => {}
         Icon::Picker => {
             // The tube down to its tip, the collar across it, the bulb.
             p.line_segment([at(0.05, 0.95), at(0.6, 0.4)], stroke);
