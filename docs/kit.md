@@ -52,6 +52,8 @@ does not change with the state.
 | `padding-x` | | between the label and the sides |
 | `height` | | the component's height, when it has a fixed one |
 | `indicator-side` | | `top`, `bottom`, `left` or `right` |
+| `align` | | where the label goes: `start`, `centre` (on the part's centre, moved into its room when it does not fit) or `end` |
+| `width` | | the component's width, when it has a fixed one |
 
 States are always the same six. `rest` gives every term (the contract
 requires it); each other state gives only what differs. A part in several
@@ -71,8 +73,12 @@ trait Primitive<D>: Send + Sync {
 }
 ```
 
-`Part` is the rectangle, the state and the label (laid out without a
-colour; the handler gives the state's `text`). `KitCx` is the painter and
+`Part` is the rectangle, the room the label may take (less than the
+rectangle when the widget puts things on it: a title bar's items), the
+state and the label (laid out without a colour; the handler gives the
+state's `text`). A part is painted box first (`paint`), then the widget's
+own content, then the label (`paint_label`, which by default places it
+with `align`, `kit::paint_label`). `KitCx` is the painter and
 the pixels per point. A shape a theme names is a handler registered under
 that name: egui-pop ships some, an application adds its own with
 `kit::register_tab_shape` before installing a theme that names them.
@@ -122,8 +128,18 @@ compiled at install.
   panel, the default, close to egui_dock's own look), `underline`, and
   `plain` for the bar. The gallery's `workbench-kit-underline` snapshot
   is a theme that switches to `underline` with data only.
-- The default kit is the `tab.*` and `tab-bar.*` tokens of `pop-dark`,
-  which every built-in theme extends.
+- **The title bar and window buttons** (`title-bar`, `window-button`,
+  `window-close`). The title goes where `title-bar.align` says: `centre`
+  (the default) or `start`, after the leading items (the gallery's
+  `frame-kit-title-start` snapshot). The glyphs are still drawn by
+  egui-pop, in the box's `text`.
+- The default kit is these components' tokens in `pop-dark`, which every
+  built-in theme extends. The former `titlebar.*` tokens were renamed into
+  the grid (`titlebar.background` is `title-bar.rest.fill`,
+  `titlebar.button-hover` is `window-button.hover.fill`...): a theme still
+  giving an old name works, with a reported problem
+  (`egui_pop_tokens::RENAMED`). A `transparent` system token says "paint
+  nothing" (window buttons at rest).
 
 Known limits of this first step:
 

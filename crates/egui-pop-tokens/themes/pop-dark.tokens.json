@@ -97,6 +97,8 @@
     "12": {"$value": {"colorSpace": "oklch", "components": [0.94, 0.042, 255], "hex": "#d9edff"}},
     "contrast": {"$value": "{gray.0}", "$description": "Text on step 9."}
   },
+  "clear": {"$type": "color", "$value": "#00000000", "$description": "No colour at all."},
+  "transparent": {"$type": "color", "$value": "{clear}", "$description": "Nothing painted: a part that shows what is behind it."},
   "surface": {
     "$type": "color",
     "canvas": {"$value": "{gray.1}", "$description": "Behind documents, images and graphs."},
@@ -433,6 +435,7 @@
     "padding-x": {"$type": "dimension", "$value": "{space.m}"},
     "height": {"$type": "dimension", "$value": "{size.control.height}"},
     "indicator-side": {"$type": "string", "$value": "bottom"},
+    "align": {"$type": "string", "$value": "centre"},
     "rest": {
       "fill": {"$type": "color", "$value": "{surface.canvas}"},
       "border-color": {"$type": "color", "$value": "{border.default}"},
@@ -464,16 +467,48 @@
       "border-width": {"$type": "dimension", "$value": {"value": 1, "unit": "px"}}
     }
   },
-  "titlebar": {
-    "$description": "A window's own title bar, when the application draws its frame.",
-    "background": {"$type": "color", "$value": "{surface.panel}"},
-    "text": {"$type": "color", "$value": "{text.default}"},
-    "text-muted": {"$type": "color", "$value": "{text.muted}"},
-    "button-hover": {"$type": "color", "$value": "{surface.hover}"},
-    "close-hover": {"$type": "color", "$value": "{danger}"},
-    "close-text": {"$type": "color", "$value": "{text.on-accent}"},
+  "title-bar": {
+    "$description": "A window's own title bar, when the application draws its frame (a kit component, docs/kit.md).",
+    "shape": {"$type": "string", "$value": "plain"},
     "height": {"$type": "dimension", "$value": "{size.titlebar.height}"},
-    "button-width": {"$type": "dimension", "$value": "{size.titlebar.button}"},
-    "grip": {"$type": "dimension", "$value": "{size.frame.grip}"}
+    "padding-x": {"$type": "dimension", "$value": "{space.m}"},
+    "align": {"$type": "string", "$value": "centre", "$description": "Where the title goes: start (after the leading items), centre (on the bar, when there is room) or end."},
+    "indicator-side": {"$type": "string", "$value": "bottom"},
+    "rest": {
+      "fill": {"$type": "color", "$value": "{surface.panel}"},
+      "text": {"$type": "color", "$value": "{text.default}"},
+      "border-color": {"$type": "color", "$value": "{border.default}"},
+      "border-width": {"$type": "dimension", "$value": {"value": 0, "unit": "px"}}
+    }
+  },
+  "window-button": {
+    "$description": "Minimize and maximize (a kit component).",
+    "shape": {"$type": "string", "$value": "plain"},
+    "width": {"$type": "dimension", "$value": "{size.titlebar.button}"},
+    "rest": {
+      "fill": {"$type": "color", "$value": "{transparent}"},
+      "text": {"$type": "color", "$value": "{text.muted}"}
+    },
+    "hover": {
+      "fill": {"$type": "color", "$value": "{surface.hover}"},
+      "text": {"$type": "color", "$value": "{text.default}"}
+    }
+  },
+  "window-close": {
+    "$description": "The close button (a kit component).",
+    "shape": {"$type": "string", "$value": "plain"},
+    "width": {"$type": "dimension", "$value": "{size.titlebar.button}"},
+    "rest": {
+      "fill": {"$type": "color", "$value": "{transparent}"},
+      "text": {"$type": "color", "$value": "{text.muted}"}
+    },
+    "hover": {
+      "fill": {"$type": "color", "$value": "{danger}"},
+      "text": {"$type": "color", "$value": "{text.on-accent}"}
+    }
+  },
+  "window": {
+    "$description": "A window drawn by the application.",
+    "grip": {"$type": "dimension", "$value": "{size.frame.grip}", "$description": "Width of the resize edges."}
   }
 }

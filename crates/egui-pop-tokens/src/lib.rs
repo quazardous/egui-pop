@@ -52,7 +52,7 @@ mod theme;
 mod value;
 
 pub use color::Color;
-pub use contract::{CONTRACT, Required, Tier};
+pub use contract::{CONTRACT, RENAMED, Required, Tier};
 pub use draft::{DRAFT_EXTENSION, DRAFT_VERSION, ThemeDraft, TokenEdit};
 pub use error::Error;
 pub use file::{RawToken, TokenFile};

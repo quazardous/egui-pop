@@ -55,6 +55,11 @@ const fn comp(path: &'static str, ty: &'static str, description: &'static str) -
 /// built-in `pop-dark` value for it and a reported problem.
 pub const CONTRACT: &[Required] = &[
     sys(
+        "transparent",
+        "color",
+        "nothing painted (a part that shows what is behind it)",
+    ),
+    sys(
         "surface.canvas",
         "color",
         "behind documents, images and graphs",
@@ -517,39 +522,125 @@ pub const CONTRACT: &[Required] = &[
         "the line along a tab bar",
     ),
     comp("tab-bar.rest.border-width", "dimension", "the line's width"),
-    comp("titlebar.background", "color", "a window's own title bar"),
     comp(
-        "titlebar.text",
-        "color",
-        "the title, a button's glyph under the pointer",
+        "title-bar.shape",
+        "string",
+        "the handler drawing a window's own title bar",
+    ),
+    comp("title-bar.height", "dimension", "the title bar's height"),
+    comp(
+        "title-bar.padding-x",
+        "dimension",
+        "between the title and the bar's items",
     ),
     comp(
-        "titlebar.text-muted",
+        "title-bar.align",
+        "string",
+        "where the title goes: start, centre or end",
+    ),
+    comp(
+        "title-bar.indicator-side",
+        "string",
+        "the side of the title bar's line",
+    ),
+    comp("title-bar.rest.fill", "color", "a window's own title bar"),
+    comp("title-bar.rest.text", "color", "the window's title"),
+    comp(
+        "title-bar.rest.border-color",
+        "color",
+        "the line along the title bar",
+    ),
+    comp(
+        "title-bar.rest.border-width",
+        "dimension",
+        "the line's width (0: none)",
+    ),
+    comp(
+        "window-button.shape",
+        "string",
+        "the handler drawing minimize and maximize",
+    ),
+    comp(
+        "window-button.width",
+        "dimension",
+        "a window button's width",
+    ),
+    comp(
+        "window-button.rest.fill",
+        "color",
+        "a window button at rest",
+    ),
+    comp(
+        "window-button.rest.text",
         "color",
         "a window button's glyph at rest",
     ),
     comp(
-        "titlebar.button-hover",
+        "window-button.hover.fill",
         "color",
         "a window button under the pointer",
     ),
     comp(
-        "titlebar.close-hover",
+        "window-button.hover.text",
+        "color",
+        "its glyph under the pointer",
+    ),
+    comp(
+        "window-close.shape",
+        "string",
+        "the handler drawing the close button",
+    ),
+    comp(
+        "window-close.width",
+        "dimension",
+        "the close button's width",
+    ),
+    comp(
+        "window-close.rest.fill",
+        "color",
+        "the close button at rest",
+    ),
+    comp(
+        "window-close.rest.text",
+        "color",
+        "the close button's glyph at rest",
+    ),
+    comp(
+        "window-close.hover.fill",
         "color",
         "the close button under the pointer",
     ),
     comp(
-        "titlebar.close-text",
+        "window-close.hover.text",
         "color",
-        "the close button's glyph under the pointer",
+        "its glyph under the pointer",
     ),
-    comp("titlebar.height", "dimension", "the title bar's height"),
-    comp(
+    comp("window.grip", "dimension", "the resize edges' width"),
+];
+
+/// Tokens renamed into the kit's grid (`component.state.term`,
+/// `docs/kit.md`): a theme giving an old name still works, its value
+/// moved to the new names (unless the theme gives them), with a reported
+/// problem. Aliases to an old name are not followed.
+pub const RENAMED: &[(&str, &[&str])] = &[
+    ("titlebar.background", &["title-bar.rest.fill"]),
+    (
+        "titlebar.text",
+        &["title-bar.rest.text", "window-button.hover.text"],
+    ),
+    (
+        "titlebar.text-muted",
+        &["window-button.rest.text", "window-close.rest.text"],
+    ),
+    ("titlebar.button-hover", &["window-button.hover.fill"]),
+    ("titlebar.close-hover", &["window-close.hover.fill"]),
+    ("titlebar.close-text", &["window-close.hover.text"]),
+    ("titlebar.height", &["title-bar.height"]),
+    (
         "titlebar.button-width",
-        "dimension",
-        "a window button's width",
+        &["window-button.width", "window-close.width"],
     ),
-    comp("titlebar.grip", "dimension", "the resize edges' width"),
+    ("titlebar.grip", &["window.grip"]),
 ];
 
 /// The contract entry for a path.

@@ -470,7 +470,7 @@ impl Themes {
         let mut tokens = BTreeMap::new();
         for n in chain.iter().rev() {
             if let Some(theme) = self.themes.get(n) {
-                layer(&mut tokens, &theme.tokens);
+                layer(&mut tokens, &renamed(&theme.tokens, problems));
             }
         }
         tokens
@@ -615,6 +615,33 @@ impl Themes {
 
 /// Lays `over` on `under`: values replace, a token without a type keeps the
 /// type it had.
+/// A theme's tokens with the renamed ones under their new names
+/// ([`crate::contract::RENAMED`]); a new name the theme gives itself wins.
+fn renamed<'a>(
+    tokens: &'a BTreeMap<String, RawToken>,
+    problems: &mut Vec<Error>,
+) -> std::borrow::Cow<'a, BTreeMap<String, RawToken>> {
+    let olds: Vec<&(&str, &[&str])> = crate::contract::RENAMED
+        .iter()
+        .filter(|(old, _)| tokens.contains_key(*old))
+        .collect();
+    if olds.is_empty() {
+        return std::borrow::Cow::Borrowed(tokens);
+    }
+    let mut out = tokens.clone();
+    for (old, new) in olds {
+        let token = out.remove(*old).expect("filtered on presence");
+        for n in *new {
+            out.entry((*n).to_string()).or_insert_with(|| token.clone());
+        }
+        problems.push(Error::Renamed {
+            old: (*old).to_string(),
+            new: new.iter().map(|n| (*n).to_string()).collect(),
+        });
+    }
+    std::borrow::Cow::Owned(out)
+}
+
 fn layer(under: &mut BTreeMap<String, RawToken>, over: &BTreeMap<String, RawToken>) {
     for (path, token) in over {
         let mut token = token.clone();

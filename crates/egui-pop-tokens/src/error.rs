@@ -47,6 +47,9 @@ pub enum Error {
     UnknownOverride { path: String },
     /// An accent names no usable colour scale.
     UnknownAccent { name: String },
+    /// A theme gives a token by a name that was renamed: its value was
+    /// moved to the new names.
+    Renamed { old: String, new: Vec<String> },
 }
 
 impl Error {
@@ -60,6 +63,7 @@ impl Error {
             | Error::InvalidValue { path, .. }
             | Error::Missing { path }
             | Error::UnknownOverride { path } => Some(path),
+            Error::Renamed { old, .. } => Some(old),
             Error::AliasCycle { chain } => chain.first().map(String::as_str),
             _ => None,
         }
@@ -98,6 +102,14 @@ impl fmt::Display for Error {
             Error::UnknownOverride { path } => {
                 write!(f, "override `{path}`: the theme has no such token")
             }
+            Error::Renamed { old, new } => write!(
+                f,
+                "`{old}` is now {}: the old name still works for now",
+                new.iter()
+                    .map(|n| format!("`{n}`"))
+                    .collect::<Vec<_>>()
+                    .join(" and ")
+            ),
             Error::UnknownAccent { name } => write!(
                 f,
                 "accent `{name}`: no colour scale of that name with steps 3, 5, 8, 9, 10 and `contrast`"

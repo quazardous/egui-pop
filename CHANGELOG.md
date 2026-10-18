@@ -20,6 +20,13 @@ egui minor.
   measured) and again only when the theme, the scale, the language or a
   panel's title changes: a frame of the workbench costs no more than with
   egui_dock's own tabs (measured, `docs/kit.md`).
+- The title bar and window buttons are kit components (`title-bar`,
+  `window-button`, `window-close`); `title-bar.align: start` puts the
+  title after the bar's leading items instead of centring it.
+- Renamed tokens: a theme giving a former name still works, its value
+  moved to the new name, with a reported problem (`RENAMED`). New system
+  token `transparent`.
+
 - Fonts from the theme (`egui_pop_core::fonts`): the families named by
   `font.family.ui` and `font.family.mono` become egui's fonts, at four
   weights each (`fonts::family(role, weight)`, `fonts::font_id`), egui's
@@ -830,6 +837,10 @@ egui minor.
 
 ### Changed
 
+- The `titlebar.*` tokens are renamed into the kit's grid:
+  `title-bar.rest.fill`, `title-bar.rest.text`, `title-bar.height`,
+  `window-button.{rest,hover}.{fill,text}`, `window-close.*`,
+  `window-button.width`, `window.grip`.
 - The viewport takes tiles in off the interface thread by default:
   `ViewportState` converts each tile on the thread that delivers it
   (`set_prepare_on_worker` is on) and uploads at most

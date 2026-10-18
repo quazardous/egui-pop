@@ -1247,6 +1247,7 @@ fn paint_tabs(
             &cx,
             &Part {
                 rect: bar,
+                room: bar,
                 state: State::REST,
                 label: None,
             },
@@ -1273,13 +1274,14 @@ fn paint_tabs(
         let Some(prep) = prepared.get(&tab.panel) else {
             continue;
         };
-        kit.tab.paint(
+        kit.tab.paint_part(
             &KitCx {
                 painter: &painter,
                 ppp,
             },
             &Part {
                 rect: tab.rect,
+                room: tab.rect,
                 state,
                 label: Some(&prep.label),
             },

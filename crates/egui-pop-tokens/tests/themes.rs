@@ -486,3 +486,26 @@ fn control_and_icon_sizes_are_multiples_of_four_points() {
         }
     }
 }
+
+#[test]
+fn a_renamed_token_still_works_under_its_new_name_and_is_reported() {
+    let mut themes = Themes::default();
+    themes
+        .add_json(
+            "old-names",
+            r##"{ "$extends": "pop-dark",
+                  "titlebar": { "background": {"$type": "color", "$value": "#123456"},
+                                "button-width": {"$type": "dimension", "$value": {"value": 30, "unit": "px"}} } }"##,
+        )
+        .unwrap();
+    let r = themes.resolve(&ThemeSpec::new("old-names"));
+    assert_eq!(r.color("title-bar.rest.fill").unwrap().to_hex(), "#123456");
+    assert_eq!(r.dimension("window-button.width"), Some(30.0));
+    assert_eq!(r.dimension("window-close.width"), Some(30.0));
+    let said: Vec<String> = r.problems().iter().map(ToString::to_string).collect();
+    assert!(
+        said.iter()
+            .any(|p| p.starts_with("`titlebar.background` is now `title-bar.rest.fill`")),
+        "{said:?}"
+    );
+}

@@ -83,6 +83,29 @@ pub enum Side {
     Right,
 }
 
+/// Where a label goes along its part.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Align {
+    /// After the start padding.
+    Start,
+    /// On the part's centre, moved into its room when it does not fit
+    /// there.
+    Centre,
+    /// Before the end padding.
+    End,
+}
+
+impl Align {
+    fn parse(s: &str) -> Option<Align> {
+        Some(match s {
+            "start" => Align::Start,
+            "centre" | "center" => Align::Centre,
+            "end" => Align::End,
+            _ => return None,
+        })
+    }
+}
+
 impl Side {
     fn parse(s: &str) -> Option<Side> {
         Some(match s {
@@ -194,6 +217,9 @@ impl States {
 #[derive(Debug)]
 pub struct Part<'a> {
     pub rect: Rect,
+    /// Where its label may go: the part's rectangle, or less when the
+    /// widget puts other things on it (a title bar's items).
+    pub room: Rect,
     pub state: State,
     /// Its label, laid out without a colour (the box's `text` is given at
     /// paint).
@@ -213,8 +239,10 @@ pub struct KitCx<'a> {
 pub trait Primitive<D>: Send + Sync {
     /// The size of a part around a label of size `label`.
     fn measure(&self, data: &D, label: Vec2) -> Vec2;
-    /// Paints a part.
+    /// Paints a part's box (everything but its label).
     fn paint(&self, cx: &KitCx<'_>, data: &D, part: &Part<'_>);
+    /// Paints a part's label, after the widget's own content.
+    fn paint_label(&self, cx: &KitCx<'_>, data: &D, part: &Part<'_>);
     /// Whether `pos` hits the part (a part that is not a rectangle).
     fn hit(&self, _data: &D, rect: Rect, pos: Pos2) -> bool {
         rect.contains(pos)
@@ -230,7 +258,10 @@ pub struct ComponentKit {
     pub padding_x: f32,
     /// Points; zero when the component has no fixed height.
     pub height: f32,
+    /// Points; zero when the component has no fixed width.
+    pub width: f32,
     pub indicator_side: Side,
+    pub align: Align,
 }
 
 impl ComponentKit {
@@ -248,8 +279,22 @@ impl ComponentKit {
                 Side::Bottom
             }
         };
+        let align_asked = string(t, &format!("{component}.align"));
+        let align = match align_asked.as_deref().map(Align::parse) {
+            None => Align::Centre,
+            Some(Some(a)) => a,
+            Some(None) => {
+                problems.push(format!(
+                    "{component}.align: `{}` is not start, centre or end",
+                    align_asked.unwrap_or_default()
+                ));
+                Align::Centre
+            }
+        };
         ComponentKit {
             states: States::compile(t, component),
+            width: r.dimension(&format!("{component}.width")).unwrap_or(0.0),
+            align,
             padding_x: r
                 .dimension(&format!("{component}.padding-x"))
                 .unwrap_or(0.0),
@@ -273,8 +318,32 @@ impl Component {
         self.handler.measure(&self.data, label)
     }
 
+    /// Paints a part's box.
     pub fn paint(&self, cx: &KitCx<'_>, part: &Part<'_>) {
         self.handler.paint(cx, &self.data, part);
+    }
+
+    /// Paints a part's label.
+    pub fn paint_label(&self, cx: &KitCx<'_>, part: &Part<'_>) {
+        self.handler.paint_label(cx, &self.data, part);
+    }
+
+    /// Paints a part, box then label (a widget with nothing of its own
+    /// between them).
+    pub fn paint_part(&self, cx: &KitCx<'_>, part: &Part<'_>) {
+        self.paint(cx, part);
+        self.paint_label(cx, part);
+    }
+
+    /// Where the default label painting puts a label of `size`
+    /// ([`label_rect`]): a widget gives it to assistive technology.
+    pub fn label_rect(&self, part: &Part<'_>, size: Vec2) -> Rect {
+        label_rect(&self.data, part, size)
+    }
+
+    /// The box of a state.
+    pub fn style(&self, state: State) -> &BoxStyle {
+        self.data.states.get(state)
     }
 
     pub fn hit(&self, rect: Rect, pos: Pos2) -> bool {
@@ -298,36 +367,56 @@ pub struct Kit {
     pub tab: Component,
     /// The bar behind a row of tabs.
     pub tab_bar: Component,
+    /// A window's own title bar; its label is the window's title.
+    pub title_bar: Component,
+    /// Minimize and maximize (the glyph is drawn in the box's `text`).
+    pub window_button: Component,
+    /// The close button.
+    pub window_close: Component,
     /// What could not be compiled as written (an unknown shape, a bad
     /// side): fallbacks were used.
     pub problems: Vec<String>,
 }
 
-/// The handlers a kit's `shape` tokens can name.
+type Handlers = BTreeMap<String, Arc<dyn Primitive<ComponentKit>>>;
+
+/// The handlers a kit's `shape` tokens can name, per component.
 #[derive(Clone)]
-pub struct Shapes {
-    tab: BTreeMap<String, Arc<dyn Primitive<ComponentKit>>>,
-    tab_bar: BTreeMap<String, Arc<dyn Primitive<ComponentKit>>>,
-}
+pub struct Shapes(BTreeMap<String, Handlers>);
+
+/// The components a kit has, with the handler drawn when a theme names
+/// none it knows.
+pub const COMPONENTS: [(&str, &str); 5] = [
+    ("tab", "box"),
+    ("tab-bar", "plain"),
+    ("title-bar", "plain"),
+    ("window-button", "plain"),
+    ("window-close", "plain"),
+];
 
 impl Default for Shapes {
     /// The handlers egui-pop ships.
     fn default() -> Self {
-        let mut tab: BTreeMap<String, Arc<dyn Primitive<ComponentKit>>> = BTreeMap::new();
+        let mut map: BTreeMap<String, Handlers> = BTreeMap::new();
+        for (component, _) in COMPONENTS {
+            let mut h: Handlers = BTreeMap::new();
+            h.insert("plain".into(), Arc::new(Plain));
+            map.insert(component.into(), h);
+        }
+        let tab = map.get_mut("tab").expect("a component");
         tab.insert("box".into(), Arc::new(BoxTab));
         tab.insert("underline".into(), Arc::new(UnderlineTab));
-        let mut tab_bar: BTreeMap<String, Arc<dyn Primitive<ComponentKit>>> = BTreeMap::new();
-        tab_bar.insert("plain".into(), Arc::new(PlainBar));
-        Shapes { tab, tab_bar }
+        Shapes(map)
     }
 }
 
 impl std::fmt::Debug for Shapes {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Shapes")
-            .field("tab", &self.tab.keys().collect::<Vec<_>>())
-            .field("tab_bar", &self.tab_bar.keys().collect::<Vec<_>>())
-            .finish()
+        let mut m = f.debug_map();
+        for (c, h) in &self.0 {
+            m.entry(c, &h.keys().collect::<Vec<_>>());
+        }
+        m.finish()
     }
 }
 
@@ -339,14 +428,26 @@ fn kit_id() -> Id {
     Id::new("egui_pop::kit::Kit")
 }
 
-/// Registers a tab handler under a name a theme's `tab.shape` can give.
-/// In use from the next theme install.
-pub fn register_tab_shape(ctx: &Context, name: &str, handler: Arc<dyn Primitive<ComponentKit>>) {
+/// Registers a handler for a component (one of [`COMPONENTS`]) under a
+/// name its `shape` token can give. In use from the next theme install.
+pub fn register_shape(
+    ctx: &Context,
+    component: &str,
+    name: &str,
+    handler: Arc<dyn Primitive<ComponentKit>>,
+) {
     ctx.data_mut(|d| {
         d.get_temp_mut_or_insert_with(shapes_id(), Shapes::default)
-            .tab
+            .0
+            .entry(component.into())
+            .or_default()
             .insert(name.into(), handler);
     });
+}
+
+/// Registers a tab handler ([`register_shape`] for `tab`).
+pub fn register_tab_shape(ctx: &Context, name: &str, handler: Arc<dyn Primitive<ComponentKit>>) {
+    register_shape(ctx, "tab", name, handler);
 }
 
 fn string(t: &Tokens, path: &str) -> Option<String> {
@@ -360,9 +461,8 @@ impl Kit {
     /// Compiles the kit a theme describes, with the handlers given.
     pub fn compile(t: &Tokens, shapes: &Shapes) -> Kit {
         let mut problems = Vec::new();
-        let mut component = |name: &str,
-                             handlers: &BTreeMap<String, Arc<dyn Primitive<ComponentKit>>>,
-                             default: &str| {
+        let mut component = |name: &str, default: &str| {
+            let handlers = &shapes.0[name];
             let data = ComponentKit::compile(t, name, &mut problems);
             let asked = string(t, &format!("{name}.shape")).unwrap_or_else(|| default.into());
             let (shape, handler) = match handlers.get(&asked) {
@@ -381,11 +481,14 @@ impl Kit {
                 handler,
             }
         };
-        let tab = component("tab", &shapes.tab, "box");
-        let tab_bar = component("tab-bar", &shapes.tab_bar, "plain");
+        let [tab, tab_bar, title_bar, window_button, window_close] =
+            COMPONENTS.map(|(name, default)| component(name, default));
         Kit {
             tab,
             tab_bar,
+            title_bar,
+            window_button,
+            window_close,
             problems,
         }
     }
@@ -470,14 +573,31 @@ impl Corners {
     }
 }
 
-fn label_at(cx: &KitCx<'_>, data: &ComponentKit, part: &Part<'_>, b: &BoxStyle) {
+/// Where a label of `size` goes in a part: along it by the component's
+/// `align`, inside its room less the padding, centred across; on whole
+/// physical pixels is the painter's business.
+pub fn label_rect(data: &ComponentKit, part: &Part<'_>, size: Vec2) -> Rect {
+    let inner = part.room.shrink2(Vec2::new(data.padding_x, 0.0));
+    let x = match data.align {
+        Align::Start => inner.left(),
+        Align::End => inner.right() - size.x,
+        Align::Centre => (part.rect.center().x - size.x / 2.0)
+            .clamp(inner.left(), (inner.right() - size.x).max(inner.left())),
+    };
+    let y = part.rect.center().y - size.y / 2.0;
+    Rect::from_min_size(pos2(x, y), size)
+}
+
+/// Paints a part's label where [`label_rect`] puts it, in its state's
+/// `text`, on whole physical pixels. What handlers do unless they draw
+/// labels their own way.
+pub fn paint_label(cx: &KitCx<'_>, data: &ComponentKit, part: &Part<'_>) {
     let Some(galley) = part.label else { return };
-    let inner = part.rect.shrink2(Vec2::new(data.padding_x, 0.0));
-    let pos = inner.center() - galley.size() / 2.0;
-    // Whole physical pixels: text stays sharp.
+    let b = data.states.get(part.state);
+    let at = label_rect(data, part, galley.size()).min;
     let pos = pos2(
-        (pos.x * cx.ppp).round() / cx.ppp,
-        (pos.y * cx.ppp).round() / cx.ppp,
+        (at.x * cx.ppp).round() / cx.ppp,
+        (at.y * cx.ppp).round() / cx.ppp,
     );
     cx.painter.galley(pos, galley.clone(), b.text);
 }
@@ -514,7 +634,10 @@ impl Primitive<ComponentKit> for BoxTab {
                 );
         }
         paint_indicator(cx, rect, b, data.indicator_side);
-        label_at(cx, data, part, b);
+    }
+
+    fn paint_label(&self, cx: &KitCx<'_>, data: &ComponentKit, part: &Part<'_>) {
+        paint_label(cx, data, part);
     }
 }
 
@@ -530,17 +653,28 @@ impl Primitive<ComponentKit> for UnderlineTab {
     fn paint(&self, cx: &KitCx<'_>, data: &ComponentKit, part: &Part<'_>) {
         let b = data.states.get(part.state);
         paint_box(cx, part.rect, b, Corners::All, data.indicator_side);
-        label_at(cx, data, part, b);
+    }
+
+    fn paint_label(&self, cx: &KitCx<'_>, data: &ComponentKit, part: &Part<'_>) {
+        paint_label(cx, data, part);
     }
 }
 
-/// A bar as a box with square corners: its fill, and its border on the
-/// indicator side only (the line under the tabs).
-struct PlainBar;
+/// A box with square corners: its fill, its border on the indicator
+/// side only (the line under a bar) and its indicator. Bars and window
+/// buttons.
+struct Plain;
 
-impl Primitive<ComponentKit> for PlainBar {
+impl Primitive<ComponentKit> for Plain {
     fn measure(&self, data: &ComponentKit, label: Vec2) -> Vec2 {
-        Vec2::new(label.x, data.height.max(label.y))
+        Vec2::new(
+            data.width.max(label.x + 2.0 * data.padding_x),
+            data.height.max(label.y),
+        )
+    }
+
+    fn paint_label(&self, cx: &KitCx<'_>, data: &ComponentKit, part: &Part<'_>) {
+        paint_label(cx, data, part);
     }
 
     fn paint(&self, cx: &KitCx<'_>, data: &ComponentKit, part: &Part<'_>) {
@@ -618,6 +752,55 @@ mod tests {
     }
 
     #[test]
+    fn a_label_goes_where_align_says_inside_the_room() {
+        let t = tokens_with(
+            r#"{ "$extends": "pop-dark",
+                 "title-bar": { "align": {"$type": "string", "$value": "start"} } }"#,
+        );
+        let kit = Kit::compile(&t, &Shapes::default());
+        assert_eq!(kit.title_bar.data.align, Align::Start);
+        let bar = Rect::from_min_size(Pos2::ZERO, Vec2::new(800.0, 32.0));
+        let room = Rect::from_min_max(pos2(100.0, 0.0), pos2(600.0, 32.0));
+        let part = Part {
+            rect: bar,
+            room,
+            state: State::REST,
+            label: None,
+        };
+        let pad = kit.title_bar.data.padding_x;
+        let size = Vec2::new(120.0, 16.0);
+        // Start: right after the leading items and the padding.
+        assert_eq!(kit.title_bar.label_rect(&part, size).left(), 100.0 + pad);
+        // Centre (the default kit): on the bar's centre, which fits here...
+        let centred = Kit::compile(&Tokens::default(), &Shapes::default());
+        assert_eq!(centred.title_bar.label_rect(&part, size).center().x, 400.0);
+        // ...and moved into the room when it does not.
+        let narrow = Part {
+            room: Rect::from_min_max(pos2(500.0, 0.0), pos2(780.0, 32.0)),
+            ..part
+        };
+        assert_eq!(
+            centred.title_bar.label_rect(&narrow, size).left(),
+            500.0 + pad
+        );
+    }
+
+    #[test]
+    fn a_bad_align_is_reported() {
+        let t = tokens_with(
+            r#"{ "$extends": "pop-dark",
+                 "title-bar": { "align": {"$type": "string", "$value": "middle"} } }"#,
+        );
+        let kit = Kit::compile(&t, &Shapes::default());
+        assert_eq!(kit.title_bar.data.align, Align::Centre);
+        assert!(
+            kit.problems[0].starts_with("title-bar.align: `middle`"),
+            "{:?}",
+            kit.problems
+        );
+    }
+
+    #[test]
     fn an_unknown_shape_is_reported_and_the_default_drawn() {
         let t = tokens_with(
             r#"{ "$extends": "pop-dark",
@@ -640,6 +823,7 @@ mod tests {
                 label
             }
             fn paint(&self, _: &KitCx<'_>, _: &ComponentKit, _: &Part<'_>) {}
+            fn paint_label(&self, _: &KitCx<'_>, _: &ComponentKit, _: &Part<'_>) {}
         }
         let ctx = Context::default();
         register_tab_shape(&ctx, "dot", Arc::new(Dot));

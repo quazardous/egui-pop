@@ -41,6 +41,7 @@ use egui::{
 use serde::Serialize;
 
 use crate::a11y;
+use crate::kit::{Kit, KitCx, Part, State};
 use crate::state::lock;
 use crate::theme::Tokens;
 
@@ -426,11 +427,25 @@ impl<'a> TitleBar<'a> {
     ) -> TitleBarOutput {
         let ctx = ui.ctx().clone();
         let t = Tokens::of(&ctx);
-        let height = t.titlebar.height;
+        let kit = Kit::of(&ctx);
+        let height = kit.title_bar.data.height;
         let maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
         let full = ui.max_rect();
         let bar = Rect::from_min_size(full.min, vec2(full.width(), height));
-        ui.painter().rect_filled(bar, 0.0, t.titlebar.background);
+        let ppp = ctx.pixels_per_point();
+        // The bar's box first; its label (the title) after the items.
+        kit.title_bar.paint(
+            &KitCx {
+                painter: ui.painter(),
+                ppp,
+            },
+            &Part {
+                rect: bar,
+                room: bar,
+                state: State::REST,
+                label: None,
+            },
+        );
         // The caption: drag, double click, right click. Widgets on the
         // bar are drawn after it and take their clicks first.
         let drag = ui.interact(
@@ -453,7 +468,6 @@ impl<'a> TitleBar<'a> {
         };
         // The buttons, from the end edge.
         let mut x = bar.right();
-        let w = t.titlebar.button_width;
         for (which, shown) in [Button::Close, Button::Maximize, Button::Minimize]
             .into_iter()
             .zip([self.buttons[2], self.buttons[1], self.buttons[0]])
@@ -461,6 +475,10 @@ impl<'a> TitleBar<'a> {
             if !shown {
                 continue;
             }
+            let w = match which {
+                Button::Close => kit.window_close.data.width,
+                _ => kit.window_button.data.width,
+            };
             let r = Rect::from_min_max(pos2(x - w, bar.top()), pos2(x, bar.bottom()));
             x -= w;
             if window_button(ui, r, which, maximized) {
@@ -504,32 +522,39 @@ impl<'a> TitleBar<'a> {
         if leading_rect.width() > 0.0 {
             layout.holes.push(leading_rect);
         }
-        // The title, centred on the bar when there is room, between the
-        // items otherwise. A label (assistive technology and tests read
-        // it) that takes no click, so the bar still drags under it.
+        // The title, where the kit's `title-bar.align` puts it, between
+        // the items. Named for assistive technology and tests; takes no
+        // click, so the bar still drags under it.
         let room = Rect::from_min_max(
-            pos2(leading_rect.right().max(bar.left()) + gap, bar.top()),
-            pos2(trailing_rect.left().min(x) - gap, bar.bottom()),
+            pos2(leading_rect.right().max(bar.left()), bar.top()),
+            pos2(trailing_rect.left().min(x), bar.bottom()),
         );
-        if room.width() > 0.0 {
-            let galley =
-                egui::WidgetText::from(egui::RichText::new(self.title).color(t.titlebar.text))
-                    .into_galley(
-                        ui,
-                        Some(egui::TextWrapMode::Truncate),
-                        room.width(),
-                        egui::TextStyle::Body,
-                    );
-            let size = galley.size();
-            let mut at = bar.center().x - size.x / 2.0;
-            at = at.clamp(room.left(), (room.right() - size.x).max(room.left()));
-            let r = Rect::from_min_size(pos2(at, bar.center().y - size.y / 2.0), size);
-            ui.put(
-                r,
-                egui::Label::new(egui::RichText::new(self.title).color(t.titlebar.text))
-                    .truncate()
-                    .selectable(false)
-                    .sense(Sense::hover()),
+        let width = room.width() - 2.0 * kit.title_bar.data.padding_x;
+        if width > 0.0 && !self.title.is_empty() {
+            let font = egui::TextStyle::Body.resolve(ui.style());
+            let mut job = egui::text::LayoutJob::simple_singleline(
+                self.title.into(),
+                font,
+                Color32::PLACEHOLDER,
+            );
+            job.wrap = egui::text::TextWrapping::truncate_at_width(width);
+            let galley = ui.fonts_mut(|f| f.layout_job(job));
+            let part = Part {
+                rect: bar,
+                room,
+                state: State::REST,
+                label: Some(&galley),
+            };
+            let at = kit.title_bar.label_rect(&part, galley.size());
+            let title = self.title;
+            ui.interact(at, ui.id().with("egui_pop.title"), Sense::hover())
+                .widget_info(|| egui::WidgetInfo::labeled(WidgetType::Label, true, title));
+            kit.title_bar.paint_label(
+                &KitCx {
+                    painter: ui.painter(),
+                    ppp,
+                },
+                &part,
             );
         }
         if !self.publish {
@@ -593,17 +618,39 @@ fn window_button(ui: &mut Ui, rect: Rect, which: Button, maximized: bool) -> boo
     let id = ui.id().with(("egui_pop.window_button", which as u8));
     let response = ui.interact(rect, id, Sense::click());
     a11y::name(&response, WidgetType::Button, name);
-    let t = Tokens::of(ui.ctx());
+    let kit = Kit::of(ui.ctx());
     let hot = response.hovered()
         || response.is_pointer_button_down_on()
         || native_hover(ui.ctx()) == Some(which);
-    let (fill, ink) = match (which, hot) {
-        (Button::Close, true) => (t.titlebar.close_hover, t.titlebar.close_text),
-        (_, true) => (t.titlebar.button_hover, t.titlebar.text),
-        (_, false) => (Color32::TRANSPARENT, t.titlebar.text_muted),
+    let state = State::REST
+        .with(State::HOVER, hot)
+        .with(State::ACTIVE, response.is_pointer_button_down_on());
+    let component = match which {
+        Button::Close => &kit.window_close,
+        _ => &kit.window_button,
     };
     let painter = ui.painter_at(rect);
-    painter.rect_filled(rect, 0.0, fill);
+    component.paint(
+        &KitCx {
+            painter: &painter,
+            ppp: ui.ctx().pixels_per_point(),
+        },
+        &Part {
+            rect,
+            room: rect,
+            state,
+            label: None,
+        },
+    );
+    let b = component.style(state);
+    let ink = b.text;
+    // Behind the restore glyph's front square: the button's fill, or the
+    // bar's where the button paints none.
+    let behind = if b.fill.a() > 0 {
+        b.fill
+    } else {
+        kit.title_bar.style(State::REST).fill
+    };
     // Glyphs a multiple of 4 points wide, on the pixel grid.
     let c = rect.center();
     let c = pos2(
@@ -622,7 +669,7 @@ fn window_button(ui: &mut Ui, rect: Rect, which: Button, maximized: bool) -> boo
             let front =
                 Rect::from_min_size(pos2(c.x - s, c.y - s + 2.0), Vec2::splat(2.0 * s - 2.0));
             painter.rect_stroke(back, 0.0, stroke, egui::StrokeKind::Inside);
-            painter.rect_filled(front, 0.0, if hot { fill } else { t.titlebar.background });
+            painter.rect_filled(front, 0.0, behind);
             painter.rect_stroke(front, 0.0, stroke, egui::StrokeKind::Inside);
         }
         Button::Maximize => {

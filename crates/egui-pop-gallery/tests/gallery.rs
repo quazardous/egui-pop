@@ -2047,3 +2047,33 @@ fn a_kit_redraws_the_workbench_tabs_from_the_theme_alone() {
     h.run();
     h.snapshot("workbench-kit-underline");
 }
+
+#[test]
+fn a_kit_puts_the_title_at_the_start_of_the_title_bar() {
+    // Data only: `title-bar.align` and the bar's colours, as tvty draws it.
+    let mut themes = egui_pop::tokens::Themes::default();
+    themes
+        .add_json(
+            "kit-title-start",
+            r##"{
+              "$extends": "pop-dark",
+              "title-bar": {
+                "align": {"$type": "string", "$value": "start"},
+                "rest": {
+                  "text": {"$type": "color", "$value": "{text.muted}"},
+                  "border-width": {"$type": "dimension", "$value": {"value": 1, "unit": "px"}}
+                }
+              }
+            }"##,
+        )
+        .expect("the test theme reads");
+    let mut h = harness(options("pop-dark", Density::Comfortable, "frame"));
+    h.run();
+    let tokens = Tokens::new(themes.resolve(&egui_pop::tokens::ThemeSpec::new("kit-title-start")));
+    egui_pop::core::theme::install_tokens(&h.ctx, tokens);
+    let kit = egui_pop::core::kit::Kit::of(&h.ctx);
+    assert_eq!(kit.title_bar.data.align, egui_pop::core::kit::Align::Start);
+    h.run();
+    h.run();
+    h.snapshot("frame-kit-title-start");
+}
