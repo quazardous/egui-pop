@@ -107,6 +107,11 @@ pub const COMPONENT_TERMS: &[(&str, &str)] = &[
     ("buttons-side", "string"),
     ("buttons-hover", "string"),
     ("corners", "string"),
+    ("shadow-offset-x", "dimension"),
+    ("shadow-offset-y", "dimension"),
+    ("shadow-blur", "dimension"),
+    ("shadow-spread", "dimension"),
+    ("shadow-color", "color"),
 ];
 
 /// The tones a component may give (`component.tone.<tone>.<term>` and

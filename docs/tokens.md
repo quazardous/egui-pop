@@ -79,6 +79,10 @@ Not read yet: references inside composite values, JSON Pointer `$ref`,
    `text.{default, muted, strong, on-accent}`, `border.{default, strong}`,
    `accent.{default, hover, active, subtle}`, `danger`, `warning`,
    `success`, `info`, `focus.ring`, `selection`, `radius.{widget, window}`,
+   `shadow.{popup, window, side}.{offset-x, offset-y, blur, spread, color}`
+   (egui's popup and window shadows, and a side area lying over the
+   centre; their colours alias the `shade.10` and `shade.38` palette
+   tokens, black at 10 % and 38 %),
    `space.{xs, s, m, l, xl}`, `size.control.height`,
    `size.icon.{inline, toolbar, panel}`, `size.dialog.width`, `size.magnet`,
    `size.toast.width`, `font.size.{xs, s, m, l, xl}` (the size scale)

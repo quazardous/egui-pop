@@ -68,6 +68,81 @@ const CORE: &[Required] = &[
         "what a backdrop dims the interface with (at opacity.scrim)",
     ),
     sys(
+        "shadow.popup.offset-x",
+        "dimension",
+        "a menu's or popover's shadow: offset to the right",
+    ),
+    sys(
+        "shadow.popup.offset-y",
+        "dimension",
+        "a menu's or popover's shadow: offset down",
+    ),
+    sys(
+        "shadow.popup.blur",
+        "dimension",
+        "a menu's or popover's shadow: penumbra width",
+    ),
+    sys(
+        "shadow.popup.spread",
+        "dimension",
+        "a menu's or popover's shadow: growth on every side",
+    ),
+    sys(
+        "shadow.popup.color",
+        "color",
+        "a menu's or popover's shadow: colour",
+    ),
+    sys(
+        "shadow.window.offset-x",
+        "dimension",
+        "a dialog's or palette's shadow: offset to the right",
+    ),
+    sys(
+        "shadow.window.offset-y",
+        "dimension",
+        "a dialog's or palette's shadow: offset down",
+    ),
+    sys(
+        "shadow.window.blur",
+        "dimension",
+        "a dialog's or palette's shadow: penumbra width",
+    ),
+    sys(
+        "shadow.window.spread",
+        "dimension",
+        "a dialog's or palette's shadow: growth on every side",
+    ),
+    sys(
+        "shadow.window.color",
+        "color",
+        "a dialog's or palette's shadow: colour",
+    ),
+    sys(
+        "shadow.side.offset-x",
+        "dimension",
+        "the shadow of a side area lying over the centre: offset towards the centre",
+    ),
+    sys(
+        "shadow.side.offset-y",
+        "dimension",
+        "the shadow of a side area lying over the centre: offset down",
+    ),
+    sys(
+        "shadow.side.blur",
+        "dimension",
+        "the shadow of a side area lying over the centre: penumbra width",
+    ),
+    sys(
+        "shadow.side.spread",
+        "dimension",
+        "the shadow of a side area lying over the centre: growth on every side",
+    ),
+    sys(
+        "shadow.side.color",
+        "color",
+        "the shadow of a side area lying over the centre: colour",
+    ),
+    sys(
         "surface.canvas",
         "color",
         "behind documents, images and graphs",

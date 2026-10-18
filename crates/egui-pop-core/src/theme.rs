@@ -22,7 +22,8 @@
 //! stroke of a focused or pressed widget, `selection` the fill behind
 //! selected text and items, `space.*` and `size.*` the spacing,
 //! `font.text-style.*` (steps of the `font.size.*` scale) egui's text
-//! styles and `motion.duration` the animation time.
+//! styles, `shadow.window` and `shadow.popup` egui's window and popup
+//! shadows, and `motion.duration` the animation time.
 //!
 //! egui uses one colour (`selection.stroke`) for both the text of a
 //! selected label and the frame of a focused text field: egui-pop gives it
@@ -46,8 +47,8 @@
 use std::sync::Arc;
 
 use egui::{
-    Color32, Context, CornerRadius, Id, Margin, Stroke, Style, TextStyle, ThemePreference, Visuals,
-    style::ScrollAnimation,
+    Color32, Context, CornerRadius, Id, Margin, Shadow, Stroke, Style, TextStyle, ThemePreference,
+    Visuals, style::ScrollAnimation,
 };
 
 use crate::kit::{Kit, Shapes, State};
@@ -266,6 +267,37 @@ pub struct MotionTokens {
     pub skeleton_shimmer: f32,
 }
 
+/// Shadows under what lies over the interface (`shadow.*`), as egui's.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct ShadowTokens {
+    /// Menus, popovers, tooltips (egui's `popup_shadow`).
+    pub popup: Shadow,
+    /// Dialogs and palettes (egui's `window_shadow`).
+    pub window: Shadow,
+    /// A side area lying over the centre, its `offset` towards the
+    /// centre as for the start side.
+    pub side: Shadow,
+}
+
+/// The shadow a group of tokens gives (`<prefix>offset-x`, `offset-y`,
+/// `blur`, `spread` and `color`; `shadow.window.` or a component's
+/// `side-area.shadow-`), as egui's [`Shadow`], rounded to its whole
+/// points; `None` when the colour is missing. egui's spread cannot be
+/// negative: below 0 it is 0.
+pub fn shadow(r: &ResolvedTokens, prefix: &str) -> Option<Shadow> {
+    let color = r.color(&format!("{prefix}color"))?;
+    let d = |t: &str| r.dimension(&format!("{prefix}{t}")).unwrap_or(0.0);
+    let offset = |v: f32| v.round().clamp(-128.0, 127.0) as i8;
+    let size = |v: f32| v.round().clamp(0.0, 255.0) as u8;
+    Some(Shadow {
+        offset: [offset(d("offset-x")), offset(d("offset-y"))],
+        blur: size(d("blur")),
+        spread: size(d("spread")),
+        color: color32(color),
+    })
+}
+
 /// A window's own title bar and frame.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
@@ -299,6 +331,7 @@ pub struct Tokens {
     pub space: Space,
     pub size: Size,
     pub font: Font,
+    pub shadow: ShadowTokens,
     /// `motion.duration` in seconds; zero when motion is reduced.
     pub motion_duration: f32,
     /// The other times of motion.
@@ -400,6 +433,14 @@ impl Tokens {
                 },
                 family_ui: f("font.family.ui"),
                 family_mono: f("font.family.mono"),
+            },
+            shadow: {
+                let sh = |g: &str| shadow(r, &format!("shadow.{g}.")).unwrap_or(Shadow::NONE);
+                ShadowTokens {
+                    popup: sh("popup"),
+                    window: sh("window"),
+                    side: sh("side"),
+                }
             },
             motion_duration: r.duration_ms("motion.duration").unwrap_or(0.0).max(0.0) / 1000.0,
             motion: {
@@ -533,6 +574,8 @@ pub fn visuals_with(t: &Tokens, kit: &Kit) -> Visuals {
     v.faint_bg_color = t.surface.raised;
     v.code_bg_color = t.surface.raised;
     v.window_stroke = Stroke::new(1.0, t.border.default);
+    v.window_shadow = t.shadow.window;
+    v.popup_shadow = t.shadow.popup;
     v.window_corner_radius = radius(t.radius.window);
     v.menu_corner_radius = radius(t.radius.window);
     v.hyperlink_color = t.accent.default;

@@ -9,6 +9,13 @@ egui minor.
 
 ### Added
 
+- Shadows from tokens: `shadow.popup`, `shadow.window` and `shadow.side`
+  (`offset-x`, `offset-y`, `blur`, `spread`, `color`) become egui's
+  popup and window shadows (menus, popovers, dialogs, palettes) with
+  egui's values by default; kit components cast one through the
+  `shadow-*` terms (`ComponentKit::shadow`), `side-area` aliasing
+  `shadow.side`; `theme::shadow` reads a group as egui's `Shadow`.
+
 - Typography: a size scale in tokens, `font.size.xs`, `s`, `m`, `l`
   and `xl`, that egui's five text styles sit on
   (`font.text-style.small`, `body`, `button`, `heading`, `monospace`,

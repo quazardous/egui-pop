@@ -189,6 +189,36 @@ scrim:
   $type: "color"
   $value: "{black}"
   $description: "What a backdrop dims the interface with, at opacity.scrim."
+shade:
+  $type: "color"
+  $description: "Black at an opacity (percent), for shadows."
+  "10":
+    $value: "#00000019"
+  "38":
+    $value: "#00000060"
+shadow:
+  $description: "Shadows under what lies over the interface: an offset (right and down), a blur (the penumbra's width), a spread (grown on every side) and the colour of the opaque centre. egui's own values by default."
+  popup:
+    $description: "Menus, popovers, tooltips and completion lists."
+    offset-x: {$type: "dimension", $value: {value: 6, unit: "px"}}
+    offset-y: {$type: "dimension", $value: {value: 10, unit: "px"}}
+    blur: {$type: "dimension", $value: {value: 8, unit: "px"}}
+    spread: {$type: "dimension", $value: {value: 0, unit: "px"}}
+    color: {$type: "color", $value: "{shade.38}"}
+  window:
+    $description: "Dialogs and palettes."
+    offset-x: {$type: "dimension", $value: {value: 10, unit: "px"}}
+    offset-y: {$type: "dimension", $value: {value: 20, unit: "px"}}
+    blur: {$type: "dimension", $value: {value: 15, unit: "px"}}
+    spread: {$type: "dimension", $value: {value: 0, unit: "px"}}
+    color: {$type: "color", $value: "{shade.38}"}
+  side:
+    $description: "A side area lying over the centre; `offset-x` points towards the centre."
+    offset-x: {$type: "dimension", $value: {value: 4, unit: "px"}}
+    offset-y: {$type: "dimension", $value: {value: 0, unit: "px"}}
+    blur: {$type: "dimension", $value: {value: 24, unit: "px"}}
+    spread: {$type: "dimension", $value: {value: 0, unit: "px"}}
+    color: {$type: "color", $value: "{shade.38}"}
 surface:
   $type: "color"
   canvas:

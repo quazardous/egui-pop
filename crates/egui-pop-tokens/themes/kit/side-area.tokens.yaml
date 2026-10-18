@@ -11,6 +11,23 @@ side-area:
   shape:
     $type: "string"
     $value: "plain"
+  # The shadow it casts while it lies over the centre (`offset-x` towards
+  # the centre).
+  shadow-offset-x:
+    $type: "dimension"
+    $value: "{shadow.side.offset-x}"
+  shadow-offset-y:
+    $type: "dimension"
+    $value: "{shadow.side.offset-y}"
+  shadow-blur:
+    $type: "dimension"
+    $value: "{shadow.side.blur}"
+  shadow-spread:
+    $type: "dimension"
+    $value: "{shadow.side.spread}"
+  shadow-color:
+    $type: "color"
+    $value: "{shadow.side.color}"
   rest:
     border-width:
       $type: "dimension"
