@@ -1941,6 +1941,11 @@ impl AppBuilder {
                     .map(KitSource::new),
             );
         }
+        // A kit of the same name as an earlier one replaces it.
+        let mut seen = std::collections::BTreeSet::new();
+        kits.reverse();
+        kits.retain(|k| seen.insert(k.name().to_string()));
+        kits.reverse();
         {
             let mut d = app.handle.0.diagnostics.borrow_mut();
             for kit in &kits {

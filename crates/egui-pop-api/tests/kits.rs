@@ -123,3 +123,20 @@ fn user_kits_are_read_from_the_persistence_directory() {
     assert!(app.handle().theme().kits().is_empty());
     std::fs::remove_dir_all(&dir).unwrap();
 }
+
+#[test]
+fn a_later_kit_of_the_same_name_replaces_an_earlier_one() {
+    let ctx = egui::Context::default();
+    let first = KitData::from_json(
+        "k",
+        r#"{ "$extensions": { "org.egui-pop.kit": { "label": "First" } } }"#,
+    );
+    let second = KitData::from_json(
+        "k",
+        r#"{ "$extensions": { "org.egui-pop.kit": { "label": "Second" } } }"#,
+    );
+    let app = App::builder().kit(first).kit(second).build(&ctx).unwrap();
+    let kits = app.handle().theme().kits().to_vec();
+    assert_eq!(kits.len(), 1);
+    assert_eq!(kits[0].label, "Second");
+}
