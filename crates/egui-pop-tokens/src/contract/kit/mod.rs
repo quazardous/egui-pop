@@ -4,6 +4,7 @@
 
 use super::Required;
 
+mod glyph;
 mod tab;
 mod tab_bar;
 mod title_bar;
@@ -13,6 +14,7 @@ mod window_close;
 
 /// Each component's contract.
 pub(super) const GROUPS: &[&[Required]] = &[
+    glyph::CONTRACT,
     tab::CONTRACT,
     tab_bar::CONTRACT,
     title_bar::CONTRACT,

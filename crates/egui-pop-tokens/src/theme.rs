@@ -80,6 +80,7 @@ pub const BUILT_IN_ACCENTS: &[&str] = &["gold", "blue", "green", "amber", "red"]
 /// into `pop-dark` (and so into every theme extending it). One line per
 /// component, in alphabetical order.
 const KIT_FILES: &[(&str, &str)] = &[
+    ("glyph", include_str!("../themes/kit/glyph.tokens.json")),
     ("tab", include_str!("../themes/kit/tab.tokens.json")),
     ("tab-bar", include_str!("../themes/kit/tab-bar.tokens.json")),
     (

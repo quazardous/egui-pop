@@ -58,7 +58,7 @@ pub mod model;
 use std::sync::{Arc, Mutex};
 
 use egui::{
-    Context, Id, Modifiers, Rect, Response, Shape, Stroke, TextEdit, Ui, UiBuilder, WidgetInfo,
+    Context, Id, Modifiers, Rect, Response, Stroke, TextEdit, Ui, UiBuilder, WidgetInfo,
     WidgetType, pos2, vec2,
 };
 use egui_pop_api::steps::Outcome;
@@ -665,6 +665,12 @@ impl<'a, K: Key> TreeView<'a, K> {
         }
 
         let focused = ui.memory(|m| m.has_focus(id));
+        // The kit's disclosure glyphs, read once for every row.
+        let kit = egui_pop_core::kit::Kit::of(ui.ctx());
+        let (open_glyph, closed_glyph) = (
+            kit.glyph(egui_pop_core::kit::Glyph::DisclosureOpen),
+            kit.glyph(egui_pop_core::kit::Glyph::DisclosureClosed),
+        );
         let mut actions = Vec::new();
         let row_h = rows::height(ui);
         if focused && state.renaming.is_none() {
@@ -750,7 +756,12 @@ impl<'a, K: Key> TreeView<'a, K> {
                                 vec2(indent, rect.height()),
                             );
                             if node.branch {
-                                disclosure(ui, toggle, model.is_expanded(&key), color);
+                                let glyph = if model.is_expanded(&key) {
+                                    open_glyph
+                                } else {
+                                    closed_glyph
+                                };
+                                glyph.paint(ui.painter(), toggle, color);
                             }
                             let mut left = toggle.right();
                             if let Some(source) = icon.as_ref().and_then(|f| f(&node)) {
@@ -1382,25 +1393,4 @@ fn pseudo(ui: &mut Ui, rect: Rect, x: f32, add: impl FnOnce(&mut Ui)) {
             .layout(egui::Layout::left_to_right(egui::Align::Center)),
     );
     add(&mut child);
-}
-
-/// The open or closed triangle of a branch.
-fn disclosure(ui: &Ui, rect: Rect, open: bool, color: egui::Color32) {
-    let c = rect.center();
-    let r = (rect.height().min(rect.width()) * 0.18).max(3.0);
-    let points = if open {
-        vec![
-            pos2(c.x - r, c.y - r * 0.6),
-            pos2(c.x + r, c.y - r * 0.6),
-            pos2(c.x, c.y + r * 0.8),
-        ]
-    } else {
-        vec![
-            pos2(c.x - r * 0.6, c.y - r),
-            pos2(c.x + r * 0.8, c.y),
-            pos2(c.x - r * 0.6, c.y + r),
-        ]
-    };
-    ui.painter()
-        .add(Shape::convex_polygon(points, color, Stroke::NONE));
 }

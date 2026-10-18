@@ -41,6 +41,7 @@
 //! }
 //! ```
 
+use egui_pop_core::kit::{Glyph, Kit};
 use std::fmt;
 use std::rc::Rc;
 
@@ -519,7 +520,9 @@ fn command_row(ui: &mut Ui, app: &AppHandle, cx: &WhenContext, row: Row<'_>) -> 
         if busy {
             egui_pop_core::progress::paint_spinner(ui, rect, color);
         } else if checked {
-            Icon::Check.paint(ui.painter(), rect, color);
+            Kit::of(&ctx)
+                .glyph(Glyph::Check)
+                .paint(ui.painter(), rect, color);
         } else if let Some(i) = icon {
             i.paint(ui.painter(), rect, color);
         }
@@ -588,7 +591,11 @@ fn submenu(
     let r = button.atom_ui(ui);
     ui.style_mut().visuals.widgets.inactive = inactive;
     if let Some(rect) = r.rect(arrow) {
-        Icon::ChevronRight.paint(ui.painter(), rect.shrink(rect.width() * 0.15), t.text.muted);
+        Kit::of(ui.ctx()).glyph(Glyph::Submenu).paint(
+            ui.painter(),
+            rect.shrink(rect.width() * 0.15),
+            t.text.muted,
+        );
     }
     SubMenu::default()
         .config(MenuConfig::find(ui))

@@ -31,8 +31,11 @@ use egui_pop_tokens::Value;
 
 use crate::theme::Tokens;
 
+mod glyph;
 mod paint;
 mod shapes;
+
+pub use glyph::{Glyph, Glyphs};
 
 pub use paint::{Corners, label_rect, paint_box, paint_indicator, paint_label, paint_ring};
 
@@ -404,6 +407,8 @@ macro_rules! components {
         #[derive(Clone, Debug)]
         pub struct Kit {
             $($(#[$doc])* pub $field: Component,)*
+            /// The icon of each glyph role (`glyph.*`).
+            pub glyphs: Glyphs,
             /// What could not be compiled as written (an unknown shape, a
             /// bad side): fallbacks were used.
             pub problems: Vec<String>,
@@ -416,10 +421,12 @@ macro_rules! components {
         impl Kit {
             fn compile_components(
                 mut component: impl FnMut(&str, &str) -> Component,
+                glyphs: Glyphs,
                 problems: Vec<String>,
             ) -> Kit {
                 Kit {
                     $($field: component($name, $default),)*
+                    glyphs,
                     problems,
                 }
             }
@@ -542,9 +549,15 @@ impl Kit {
                 handler,
             }
         };
-        let mut kit = Kit::compile_components(component, Vec::new());
+        let mut kit = Kit::compile_components(component, Glyphs::default(), Vec::new());
+        kit.glyphs = Glyphs::compile(t, &mut problems);
         kit.problems = problems;
         kit
+    }
+
+    /// The icon a kit draws for a glyph role.
+    pub fn glyph(&self, glyph: Glyph) -> crate::icon::Icon {
+        self.glyphs.get(glyph)
     }
 
     /// The kit installed in a context, or the one of the installed
@@ -572,6 +585,7 @@ pub fn install(ctx: &Context, tokens: &Tokens) -> Arc<Kit> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::icon::Icon;
     use egui::pos2;
     use egui_pop_tokens::{ThemeSpec, Themes};
 
@@ -676,6 +690,29 @@ mod tests {
         let focus = s.get(State::FOCUS | State::HOVER);
         assert_eq!((focus.ring_width, focus.ring_offset), (2.0, 1.0));
         assert_eq!(focus.ring_color, t.focus_ring);
+    }
+
+    #[test]
+    fn every_glyph_role_has_its_default_icon_in_the_default_kit() {
+        let kit = Kit::compile(&Tokens::default(), &Shapes::default());
+        for g in Glyph::ALL {
+            assert_eq!(kit.glyph(*g), g.default_icon(), "{}", g.name());
+        }
+        assert_eq!(kit.glyph(Glyph::DisclosureClosed), Icon::TriangleRight);
+    }
+
+    #[test]
+    fn a_kit_remaps_a_glyph_and_an_unknown_icon_is_reported() {
+        let t = tokens_with(
+            r#"{ "$extends": "pop-dark",
+                 "glyph": { "disclosure-closed": {"$type": "string", "$value": "chevron-right"},
+                            "check": {"$type": "string", "$value": "tick-mark"} } }"#,
+        );
+        let kit = Kit::compile(&t, &Shapes::default());
+        assert_eq!(kit.glyph(Glyph::DisclosureClosed), Icon::ChevronRight);
+        assert_eq!(kit.glyph(Glyph::Check), Icon::Check);
+        assert_eq!(kit.problems.len(), 1, "{:?}", kit.problems);
+        assert!(kit.problems[0].starts_with("glyph.check: no icon named `tick-mark`"));
     }
 
     #[test]

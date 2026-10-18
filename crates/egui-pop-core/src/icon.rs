@@ -95,6 +95,13 @@ pub enum Icon {
     Unlock,
     /// An eyedropper: pick a value or a colour from the image.
     Picker,
+    /// A filled triangle pointing to the end: a closed branch (always
+    /// painted, like the dot).
+    TriangleRight,
+    /// A filled triangle pointing down: an open branch, a descending sort.
+    TriangleDown,
+    /// A filled triangle pointing up: an ascending sort.
+    TriangleUp,
 }
 
 impl Icon {
@@ -142,6 +149,9 @@ impl Icon {
         Icon::Lock,
         Icon::Unlock,
         Icon::Picker,
+        Icon::TriangleRight,
+        Icon::TriangleDown,
+        Icon::TriangleUp,
     ];
 
     /// The icon of a name (`settings`), as [`Icon::name`] gives it.
@@ -195,11 +205,15 @@ impl Icon {
             Icon::Lock => "lock",
             Icon::Unlock => "unlock",
             Icon::Picker => "picker",
+            Icon::TriangleRight => "triangle-right",
+            Icon::TriangleDown => "triangle-down",
+            Icon::TriangleUp => "triangle-up",
         }
     }
 
     /// Its glyph in the icon font; `None` without the `phosphor` feature,
-    /// and for the marks that are always painted (dot, diamond).
+    /// and for the marks that are always painted (dot, diamond, the
+    /// triangles).
     pub fn glyph(self) -> Option<&'static str> {
         glyph(self)
     }
@@ -249,7 +263,9 @@ fn glyph(icon: Icon) -> Option<&'static str> {
         Icon::Close => p::X,
         Icon::Plus => p::PLUS,
         Icon::Minus => p::MINUS,
-        Icon::Dot | Icon::Diamond => return None,
+        Icon::Dot | Icon::Diamond | Icon::TriangleRight | Icon::TriangleDown | Icon::TriangleUp => {
+            return None;
+        }
         Icon::Search => p::MAGNIFYING_GLASS,
         Icon::Settings => p::GEAR_SIX,
         Icon::Folder => p::FOLDER,
@@ -639,6 +655,30 @@ pub fn paint_fallback(p: &Painter, icon: Icon, rect: Rect, color: Color32) {
             p.line(arc(PI, 2.0 * PI, len * 0.26, top), stroke);
             p.line_segment([at(0.24, 0.25 - lift), at(0.24, 0.45 - lift)], stroke);
             p.line_segment([at(0.76, 0.25 - lift), at(0.76, right - lift)], stroke);
+        }
+        Icon::TriangleRight | Icon::TriangleDown | Icon::TriangleUp => {
+            // Sized on the square, not on the stroke box: a small solid
+            // mark that stays legible in a row's indent.
+            let c = rect.center();
+            let r = (rect.height().min(rect.width()) * 0.18).max(3.0);
+            let points = match icon {
+                Icon::TriangleDown => vec![
+                    pos2(c.x - r, c.y - r * 0.6),
+                    pos2(c.x + r, c.y - r * 0.6),
+                    pos2(c.x, c.y + r * 0.8),
+                ],
+                Icon::TriangleUp => vec![
+                    pos2(c.x - r, c.y + r * 0.6),
+                    pos2(c.x, c.y - r * 0.8),
+                    pos2(c.x + r, c.y + r * 0.6),
+                ],
+                _ => vec![
+                    pos2(c.x - r * 0.6, c.y - r),
+                    pos2(c.x + r * 0.8, c.y),
+                    pos2(c.x - r * 0.6, c.y + r),
+                ],
+            };
+            p.add(egui::Shape::convex_polygon(points, color, Stroke::NONE));
         }
         Icon::Picker => {
             // The tube down to its tip, the collar across it, the bulb.
