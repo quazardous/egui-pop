@@ -1,0 +1,15 @@
+{
+  "$description": "The `assist-card` component of the default kit (docs/kit.md), layered into pop-dark.",
+  "assist-card": {
+    "$description": "The frame of an editor's code assist popups: completions, actions, hover cards (a kit component).",
+    "shape": {"$type": "string", "$value": "card"},
+    "padding-x": {"$type": "dimension", "$value": "{space.xs}"},
+    "padding-y": {"$type": "dimension", "$value": "{space.xs}"},
+    "rest": {
+      "fill": {"$type": "color", "$value": "{surface.overlay}"},
+      "border-color": {"$type": "color", "$value": "{border.strong}"},
+      "border-width": {"$type": "dimension", "$value": {"value": 1, "unit": "px"}},
+      "radius": {"$type": "dimension", "$value": "{radius.widget}"}
+    }
+  }
+}

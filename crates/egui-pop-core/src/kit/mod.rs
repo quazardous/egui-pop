@@ -539,13 +539,21 @@ macro_rules! components {
 }
 
 components! {
+    /// The frame of an editor's code assist popups (completions,
+    /// actions, hover cards).
+    assist_card: "assist-card" => "card",
     /// What dims the interface behind a modal dialog: its `fill` at
     /// `opacity` (egui paints it).
     backdrop: "backdrop" => "plain",
     /// A dialog's frame.
     dialog: "dialog" => "card",
+    /// The frame around a text or code editor; `focus` while it has the
+    /// keyboard.
+    editor_frame: "editor-frame" => "card",
     /// The card standing in for a part that panicked.
     fault_card: "fault-card" => "card",
+    /// An editor's find and replace bar.
+    find_bar: "find-bar" => "card",
     /// The strip at the top of a full screen window, its way out.
     fullscreen_exit: "fullscreen-exit" => "card",
     /// A job's log console, as plain lines.
@@ -558,6 +566,9 @@ components! {
     tab: "tab" => "box",
     /// The bar behind a row of tabs.
     tab_bar: "tab-bar" => "plain",
+    /// The frame around a terminal's grid; `focus` while it has the
+    /// keyboard. Its fill is the grid's default background.
+    terminal_frame: "terminal-frame" => "card",
     /// A tip's card.
     tip_card: "tip-card" => "card",
     /// A window's own title bar; its label is the window's title.
@@ -853,6 +864,23 @@ mod tests {
         assert_eq!(f.inner_margin, Margin::from(t.space.l));
         assert_eq!(kit.dialog.data.width, t.size.dialog_width);
         assert!((kit.backdrop.data.opacity - 0.392).abs() < 1e-6);
+    }
+
+    #[test]
+    fn the_editor_and_terminal_frames_show_the_focus() {
+        let t = Tokens::default();
+        let kit = Kit::compile(&t, &Shapes::default());
+        let editor = &kit.editor_frame.data.states;
+        assert_eq!(editor.get(State::REST).ring_width, 0.0);
+        let focus = editor.get(State::FOCUS);
+        assert_eq!(
+            (focus.ring_color, focus.ring_width, focus.ring_offset),
+            (t.focus_ring, 1.0, -1.0)
+        );
+        let terminal = &kit.terminal_frame.data.states;
+        assert_eq!(terminal.get(State::REST).border_color, t.border.default);
+        assert_eq!(terminal.get(State::FOCUS).border_color, t.focus_ring);
+        assert_eq!(terminal.get(State::REST).fill, t.surface.sunken);
     }
 
     #[test]

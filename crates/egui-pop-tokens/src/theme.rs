@@ -81,13 +81,25 @@ pub const BUILT_IN_ACCENTS: &[&str] = &["gold", "blue", "green", "amber", "red"]
 /// component, in alphabetical order.
 const KIT_FILES: &[(&str, &str)] = &[
     (
+        "assist-card",
+        include_str!("../themes/kit/assist-card.tokens.json"),
+    ),
+    (
         "backdrop",
         include_str!("../themes/kit/backdrop.tokens.json"),
     ),
     ("dialog", include_str!("../themes/kit/dialog.tokens.json")),
     (
+        "editor-frame",
+        include_str!("../themes/kit/editor-frame.tokens.json"),
+    ),
+    (
         "fault-card",
         include_str!("../themes/kit/fault-card.tokens.json"),
+    ),
+    (
+        "find-bar",
+        include_str!("../themes/kit/find-bar.tokens.json"),
     ),
     (
         "fullscreen-exit",
@@ -101,6 +113,10 @@ const KIT_FILES: &[(&str, &str)] = &[
     ("popover", include_str!("../themes/kit/popover.tokens.json")),
     ("tab", include_str!("../themes/kit/tab.tokens.json")),
     ("tab-bar", include_str!("../themes/kit/tab-bar.tokens.json")),
+    (
+        "terminal-frame",
+        include_str!("../themes/kit/terminal-frame.tokens.json"),
+    ),
     (
         "tip-card",
         include_str!("../themes/kit/tip-card.tokens.json"),

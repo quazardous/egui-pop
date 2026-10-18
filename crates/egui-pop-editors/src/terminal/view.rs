@@ -5,13 +5,13 @@
 use egui::accesskit::Role;
 use egui::text::{LayoutJob, TextFormat};
 use egui::{
-    Color32, CornerRadius, CursorIcon, Event, EventFilter, FontId, Id, ImeEvent, Key, Pos2, Rect,
-    Response, Sense, Stroke, StrokeKind, Ui, WidgetInfo, WidgetType, pos2, vec2,
+    Color32, CursorIcon, Event, EventFilter, FontId, Id, ImeEvent, Key, Pos2, Rect, Response,
+    Sense, Stroke, StrokeKind, Ui, WidgetInfo, WidgetType, pos2, vec2,
 };
 use egui_pop_api::AppHandle;
 use egui_pop_core::focus;
+use egui_pop_core::kit::{Kit, KitCx, Part, State};
 use egui_pop_core::strings::tr;
-use egui_pop_core::theme::Tokens;
 use egui_pop_model::ids::StepId;
 
 use super::keys;
@@ -184,7 +184,6 @@ impl<'a> Terminal<'a> {
     ) -> Response {
         let ctx = ui.ctx().clone();
         let t = TerminalTokens::of(&ctx);
-        let tokens = Tokens::of(&ctx);
         let font = egui::TextStyle::Monospace.resolve(ui.style());
         let (cell_w, row_h) = ctx.fonts_mut(|f| {
             (
@@ -192,15 +191,17 @@ impl<'a> Terminal<'a> {
                 f.row_height(&font).ceil().max(1.0),
             )
         });
-        let pad = tokens.space.s;
-        let width = ui.available_width().max(cell_w * 4.0 + 2.0 * pad);
+        // The grid inside the frame's padding.
+        let frame = &Kit::of(&ctx).terminal_frame.data;
+        let pad = vec2(frame.padding_x, frame.padding_y);
+        let width = ui.available_width().max(cell_w * 4.0 + 2.0 * pad.x);
         let height = self
             .height
             .unwrap_or_else(|| ui.available_height())
-            .max(row_h * 3.0 + 2.0 * pad);
+            .max(row_h * 3.0 + 2.0 * pad.y);
         let (rect, _) = ui.allocate_exact_size(vec2(width, height), Sense::hover());
         let response = ui.interact(rect, id, Sense::click_and_drag());
-        let inner = rect.shrink(pad);
+        let inner = rect.shrink2(pad);
         let g = Geometry {
             inner,
             font,
@@ -237,7 +238,7 @@ impl<'a> Terminal<'a> {
         }
         wheel(ui, state, &response, &g);
         let link = self.pointer(ui, state, &response, &g, signals);
-        paint(ui, state, &g, &t, &tokens, rect, focused, link.as_ref());
+        paint(ui, state, &g, &t, rect, focused, link.as_ref());
         if focused {
             let (row, col) = state.cursor();
             let cursor = Rect::from_min_size(pos2(g.x(col), g.y(row)), vec2(1.0, g.row_h));
@@ -516,7 +517,6 @@ fn paint(
     state: &TerminalState,
     g: &Geometry,
     t: &TerminalTokens,
-    tokens: &Tokens,
     rect: Rect,
     focused: bool,
     link: Option<&(u16, Link)>,
@@ -524,17 +524,19 @@ fn paint(
     // Holds the model from its lock to the end: a source's thread waits.
     profiling::scope!("pop.terminal.paint");
     let painter = ui.painter_at(rect);
-    let border = if focused {
-        tokens.focus_ring
-    } else {
-        tokens.border.default
-    };
-    painter.rect(
-        rect,
-        CornerRadius::same(tokens.radius.widget.round() as u8),
-        t.background,
-        Stroke::new(1.0, border),
-        StrokeKind::Inside,
+    // The frame: the kit's box, its border the focus ring's colour while
+    // focused (the default kit).
+    Kit::of(ui.ctx()).terminal_frame.paint(
+        &KitCx {
+            painter: &painter,
+            ppp: ui.ctx().pixels_per_point(),
+        },
+        &Part {
+            rect,
+            room: rect,
+            state: State::REST.with(State::FOCUS, focused),
+            label: None,
+        },
     );
     let mut m = state.lock();
     let base = m.history() - m.offset();

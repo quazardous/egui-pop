@@ -348,7 +348,6 @@
   "editor": {
     "$description": "Text and code editors.",
     "$type": "color",
-    "background": {"$value": "{surface.panel}", "$description": "Behind the text."},
     "gutter": {"$value": "{surface.panel}", "$description": "Behind the line numbers and markers."},
     "line-number": {"$value": "{text.muted}", "$description": "A line number."},
     "line-number-active": {"$value": "{text.strong}", "$description": "The cursor line's number."},
@@ -389,7 +388,6 @@
   "terminal": {
     "$description": "The terminal: its text, cursor and selection, and the 16 ANSI colours programs ask for by number (the 256-colour cube and RGB colours are the programs' own).",
     "$type": "color",
-    "background": {"$value": "{surface.sunken}", "$description": "Behind the text."},
     "foreground": {"$value": "{text.default}", "$description": "Text in the default colour."},
     "bold": {"$value": "{text.strong}", "$description": "Bold text in the default colour."},
     "cursor": {"$value": "{text.strong}", "$description": "The cursor."},

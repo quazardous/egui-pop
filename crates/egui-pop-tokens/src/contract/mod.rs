@@ -384,7 +384,6 @@ const CORE: &[Required] = &[
     comp("graph.type-4", "color", "a port type's colour (4 of 6)"),
     comp("graph.type-5", "color", "a port type's colour (5 of 6)"),
     comp("graph.type-6", "color", "a port type's colour (6 of 6)"),
-    comp("editor.background", "color", "behind an editor's text"),
     comp("editor.gutter", "color", "behind an editor's line numbers"),
     comp("editor.line-number", "color", "a line number"),
     comp(
@@ -433,7 +432,6 @@ const CORE: &[Required] = &[
     comp("syntax.operator", "color", "operators"),
     comp("syntax.punctuation", "color", "punctuation"),
     comp("syntax.invalid", "color", "text the grammar rejects"),
-    comp("terminal.background", "color", "behind a terminal's text"),
     comp(
         "terminal.foreground",
         "color",
@@ -515,6 +513,8 @@ pub const RENAMED: &[(&str, &[&str])] = &[
     ("toast.border", &["toast.rest.border-color"]),
     ("toast.text", &["toast.rest.text"]),
     ("toast.padding", &["toast.padding-x", "toast.padding-y"]),
+    ("editor.background", &["editor-frame.rest.fill"]),
+    ("terminal.background", &["terminal-frame.rest.fill"]),
 ];
 
 mod kit;

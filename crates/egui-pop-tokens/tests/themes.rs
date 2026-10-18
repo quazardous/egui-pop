@@ -519,7 +519,8 @@ fn a_frame_token_renamed_into_the_kit_keeps_working() {
             r##"{ "$extends": "pop-dark",
                   "dialog": { "background": {"$type": "color", "$value": "#123456"},
                               "padding": {"$type": "dimension", "$value": {"value": 20, "unit": "px"}},
-                              "backdrop": {"$type": "number", "$value": 0.5} } }"##,
+                              "backdrop": {"$type": "number", "$value": 0.5} },
+                  "editor": { "background": {"$type": "color", "$value": "#654321"} } }"##,
         )
         .unwrap();
     let r = themes.resolve(&ThemeSpec::new("old-dialog"));
@@ -527,6 +528,10 @@ fn a_frame_token_renamed_into_the_kit_keeps_working() {
     assert_eq!(r.dimension("dialog.padding-x"), Some(20.0));
     assert_eq!(r.dimension("dialog.padding-y"), Some(20.0));
     assert_eq!(r.dimension("backdrop.opacity"), Some(0.5));
+    assert_eq!(
+        r.color("editor-frame.rest.fill").unwrap().to_hex(),
+        "#654321"
+    );
     let said: Vec<String> = r.problems().iter().map(ToString::to_string).collect();
     assert!(
         said.iter()

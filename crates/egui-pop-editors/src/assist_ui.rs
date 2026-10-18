@@ -6,6 +6,7 @@
 use egui::text::{LayoutJob, TextFormat};
 use egui::{Align2, Id, Key, Order, Pos2, RichText, Stroke, Ui, vec2};
 use egui_pop_api::AppHandle;
+use egui_pop_core::kit::{Kit, State};
 use egui_pop_core::theme::Tokens;
 use serde_json::json;
 
@@ -566,15 +567,13 @@ pub(crate) fn ghost_job(text: &str, font: egui::FontId, color: egui::Color32) ->
     job
 }
 
-/// A themed card (the popups' frame).
-fn card(ui: &Ui) -> egui::Frame {
-    let t = Tokens::of(ui.ctx());
-    egui::Frame::new()
-        .fill(t.surface.overlay)
-        .stroke(Stroke::new(1.0, t.border.strong))
-        .corner_radius(t.radius.widget)
-        .inner_margin(t.space.xs)
-        .shadow(ui.visuals().popup_shadow)
+/// Shows `add` in the popups' frame: the kit's `assist-card`, with
+/// egui's popup shadow.
+fn card<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> egui::InnerResponse<R> {
+    let shadow = ui.visuals().popup_shadow;
+    Kit::of(ui.ctx())
+        .assist_card
+        .show(ui, State::REST, shadow, add)
 }
 
 /// Draws the completion list, the actions list, and the cards.
@@ -611,7 +610,7 @@ pub(crate) fn surfaces(
                 .order(Order::Foreground)
                 .fixed_pos(below)
                 .show(&ctx, |ui| {
-                    card(ui).show(ui, |ui| {
+                    card(ui, |ui| {
                         ui.set_min_width(220.0);
                         egui::ScrollArea::vertical()
                             .max_height(ui.spacing().interact_size.y * 8.0)
@@ -646,7 +645,7 @@ pub(crate) fn surfaces(
                 .order(Order::Foreground)
                 .fixed_pos(below)
                 .show(&ctx, |ui| {
-                    card(ui).show(ui, |ui| {
+                    card(ui, |ui| {
                         for (k, title) in titles.iter().enumerate() {
                             if ui.selectable_label(k == selected, title).clicked() {
                                 run_action = Some(items[k].clone());
@@ -696,7 +695,7 @@ pub(crate) fn surfaces(
             .fixed_pos(above)
             .interactable(false)
             .show(&ctx, |ui| {
-                card(ui).show(ui, |ui| {
+                card(ui, |ui| {
                     ui.label(job);
                     if !doc.is_empty() {
                         ui.weak(doc);
@@ -714,7 +713,7 @@ pub(crate) fn surfaces(
             .fixed_pos(pos)
             .interactable(false)
             .show(&ctx, |ui| {
-                card(ui).show(ui, |ui| {
+                card(ui, |ui| {
                     ui.set_max_width(420.0);
                     if let Some(c) = code {
                         ui.label(RichText::new(c).font(font.clone()));
