@@ -7,6 +7,8 @@
     "padding-x": {"$type": "dimension", "$value": "{space.m}"},
     "align": {"$type": "string", "$value": "centre", "$description": "Where the title goes: start (after the leading items), centre (on the bar, when there is room) or end."},
     "indicator-side": {"$type": "string", "$value": "bottom"},
+    "buttons-side": {"$type": "string", "$value": "end", "$description": "Where the window buttons go: end (after the items, close last) or start (before them, close first)."},
+    "buttons-hover": {"$type": "string", "$value": "own", "$description": "Which window buttons show the hover state: own (the one under the pointer) or group (all three when any is)."},
     "rest": {
       "fill": {"$type": "color", "$value": "{surface.panel}"},
       "text": {"$type": "color", "$value": "{text.default}"},

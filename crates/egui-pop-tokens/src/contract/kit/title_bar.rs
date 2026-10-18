@@ -24,6 +24,16 @@ pub(crate) const CONTRACT: &[Required] = &[
         "string",
         "the side of the title bar's line",
     ),
+    comp(
+        "title-bar.buttons-side",
+        "string",
+        "where the window buttons go: end or start",
+    ),
+    comp(
+        "title-bar.buttons-hover",
+        "string",
+        "which window buttons hover: own or group",
+    ),
     comp("title-bar.rest.fill", "color", "a window's own title bar"),
     comp("title-bar.rest.text", "color", "the window's title"),
     comp(

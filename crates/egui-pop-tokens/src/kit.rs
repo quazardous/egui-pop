@@ -89,6 +89,8 @@ pub const COMPONENT_TERMS: &[(&str, &str)] = &[
     ("indicator-side", "string"),
     ("align", "string"),
     ("opacity", "number"),
+    ("buttons-side", "string"),
+    ("buttons-hover", "string"),
 ];
 
 /// The tones a component may give (`component.tone.<tone>.<term>` and
@@ -943,7 +945,8 @@ mod tests {
                              "active": { "fill": {"$type": "color", "$value": "#cc9900"} } },
                 "amber": { "fill": {"$type": "color", "$value": "#ffbb00"} },
                 "danger": { "glow": {"$type": "color", "$value": "#ff0000"} }
-              } }
+              } },
+              "title-bar": { "buttons-side": {"$type": "string", "$value": "start"} }
             }"##,
         );
         let p = kit.problems();

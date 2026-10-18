@@ -41,12 +41,14 @@ mod paint;
 mod shapes;
 mod source;
 mod tone;
+mod window;
 
 pub use glyph::{Glyph, Glyphs};
 
 pub use paint::{Corners, label_rect, paint_box, paint_indicator, paint_label, paint_ring};
 pub use source::KitSource;
 pub use tone::Tone;
+pub use window::{ButtonsHover, ButtonsSide, WindowKit};
 
 /// The states a part can be in, combined (a selected tab under the
 /// pointer is `SELECTED | HOVER`). No flag is the resting state.
@@ -536,6 +538,9 @@ macro_rules! components {
             $($(#[$doc])* pub $field: Component,)*
             /// The icon of each glyph role (`glyph.*`).
             pub glyphs: Glyphs,
+            /// The window's own terms (`title-bar.buttons-side`,
+            /// `title-bar.buttons-hover`).
+            pub window: WindowKit,
             /// What could not be compiled as written (an unknown shape, a
             /// bad side): fallbacks were used.
             pub problems: Vec<String>,
@@ -554,6 +559,7 @@ macro_rules! components {
                 Kit {
                     $($field: component($name, $default),)*
                     glyphs,
+                    window: WindowKit::default(),
                     problems,
                 }
             }
@@ -634,9 +640,11 @@ components! {
     /// A toast's frame (its level's tone is its icon's); its `text` is
     /// the message's.
     toast: "toast" => "card",
-    /// Minimize and maximize (the glyph is drawn in the box's `text`).
+    /// Minimize and maximize (the glyph is drawn in the box's `text`),
+    /// in the tones `warning` and `success`; `traffic-light` draws
+    /// circles.
     window_button: "window-button" => "plain",
-    /// The close button.
+    /// The close button, in the tone `danger`.
     window_close: "window-close" => "plain",
 }
 
@@ -746,6 +754,7 @@ impl Kit {
         };
         let mut kit = Kit::compile_components(component, Glyphs::default(), Vec::new());
         kit.glyphs = Glyphs::compile(t, &mut problems);
+        kit.window = WindowKit::compile(t, &mut problems);
         kit.problems = problems;
         kit
     }

@@ -172,4 +172,7 @@ fn the_example_kits_are_clean() {
         kit::check(&underline)
     );
     assert_eq!(underline.name, "underline-tabs");
+    let macos = egui_pop_tokens::kit!("../../../examples/kits/flavour-macos");
+    assert!(kit::check(&macos).is_empty(), "{:?}", kit::check(&macos));
+    assert_eq!(macos.name, "flavour-macos");
 }

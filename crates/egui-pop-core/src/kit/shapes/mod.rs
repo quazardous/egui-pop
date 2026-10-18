@@ -11,6 +11,7 @@ mod outline;
 mod plain;
 mod progress;
 mod tab;
+mod traffic_light;
 
 pub(crate) use card::CARD;
 pub(crate) use plain::Plain;
@@ -31,4 +32,14 @@ pub(super) fn built_in(shapes: &mut Shapes) {
     shapes.insert("tab", "box", Arc::new(tab::BoxTab));
     shapes.insert("tab", "underline", Arc::new(tab::UnderlineTab));
     shapes.insert("tree-drop-marker", "outline", Arc::new(outline::Outline));
+    shapes.insert(
+        "window-button",
+        "traffic-light",
+        Arc::new(traffic_light::TrafficLight),
+    );
+    shapes.insert(
+        "window-close",
+        "traffic-light",
+        Arc::new(traffic_light::TrafficLight),
+    );
 }
