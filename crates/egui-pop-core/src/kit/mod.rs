@@ -34,11 +34,13 @@ use crate::theme::Tokens;
 mod glyph;
 mod paint;
 mod shapes;
+mod source;
 mod tone;
 
 pub use glyph::{Glyph, Glyphs};
 
 pub use paint::{Corners, label_rect, paint_box, paint_indicator, paint_label, paint_ring};
+pub use source::KitSource;
 pub use tone::Tone;
 
 /// The states a part can be in, combined (a selected tab under the

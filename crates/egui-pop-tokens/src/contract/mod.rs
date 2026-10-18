@@ -533,6 +533,13 @@ pub fn contract() -> impl Iterator<Item = &'static Required> {
     CORE.iter().chain(kit::GROUPS.iter().flat_map(|g| g.iter()))
 }
 
+/// The default kit's components' part of the [`contract`] (`tab.*`,
+/// `title-bar.*`...): their first path segment names the components a kit
+/// can describe.
+pub fn kit_contract() -> impl Iterator<Item = &'static Required> {
+    kit::GROUPS.iter().flat_map(|g| g.iter())
+}
+
 /// The contract entry for a path.
 pub fn required(path: &str) -> Option<&'static Required> {
     contract().find(|r| r.path == path)
