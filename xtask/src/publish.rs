@@ -6,7 +6,9 @@
 //!
 //! Each crate has its own version: only the crates whose version is not
 //! on crates.io yet are published, and each gets a local tag,
-//! `<crate>-vX.Y.Z`, on the commit it was published from.
+//! `<crate>-vX.Y.Z`, on the commit it was published from. A crate whose
+//! version is already on crates.io but whose folder changed since that
+//! tag is reported: its version was not raised.
 //!
 //! crates.io limits how many new crates an account publishes in a short
 //! time (HTTP 429). A refused crate is tried again after `--interval`
@@ -15,6 +17,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{BufRead as _, BufReader};
+use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
@@ -25,6 +28,8 @@ use std::time::Duration;
 struct Package {
     name: String,
     version: String,
+    /// The crate's folder, relative to the workspace's root.
+    dir: String,
     needs: BTreeSet<String>,
 }
 
@@ -51,8 +56,12 @@ pub fn publish(args: &[String]) -> Result<(), String> {
         order.len()
     );
     let mut tags = Vec::new();
+    let mut stale = Vec::new();
     for p in &order {
         let state = if published(&p.name, &p.version)? {
+            if let Some(since) = changed_since_release(p) {
+                stale.push(format!("{} (changed since {since})", p.name));
+            }
             "on crates.io, skipped"
         } else if dry_run {
             "to publish"
@@ -63,6 +72,12 @@ pub fn publish(args: &[String]) -> Result<(), String> {
         };
         println!("  {} {}: {state}", p.name, p.version);
     }
+    if !stale.is_empty() {
+        println!(
+            "version not raised, though the crate changed: {}",
+            stale.join(", ")
+        );
+    }
     if !tags.is_empty() {
         println!(
             "tagged {}; push them with `git push --tags`",
@@ -70,6 +85,36 @@ pub fn publish(args: &[String]) -> Result<(), String> {
         );
     }
     Ok(())
+}
+
+/// The release tag of the crate's current version when its folder has
+/// changed since: `<crate>-vX.Y.Z`, or `vX.Y.Z` from the releases that
+/// tagged the whole workspace. `None` when unchanged or never tagged.
+fn changed_since_release(p: &Package) -> Option<String> {
+    if p.dir.is_empty() {
+        return None;
+    }
+    let git = |args: &[&str]| {
+        Command::new("git")
+            .args(args)
+            .current_dir(super::root())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .ok()
+    };
+    let version_tag = format!("v{}", p.version);
+    let tag = [tag_name(p), version_tag].into_iter().find(|t| {
+        git(&[
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            &format!("refs/tags/{t}"),
+        ])
+        .is_some_and(|s| s.success())
+    })?;
+    let unchanged = git(&["diff", "--quiet", &tag, "HEAD", "--", &p.dir])?;
+    (!unchanged.success()).then_some(tag)
 }
 
 /// A crate's release tag, `<crate>-vX.Y.Z`.
@@ -119,6 +164,7 @@ fn packages() -> Result<Vec<Package>, String> {
                 .as_array()
                 .is_some_and(|r| r.iter().any(|r| r == "crates-io"))
     };
+    let root = super::root();
     let names: BTreeSet<String> = all
         .iter()
         .filter(|p| publishable(p))
@@ -130,6 +176,11 @@ fn packages() -> Result<Vec<Package>, String> {
         .map(|p| Package {
             name: p["name"].as_str().unwrap_or_default().to_string(),
             version: p["version"].as_str().unwrap_or_default().to_string(),
+            dir: Path::new(p["manifest_path"].as_str().unwrap_or_default())
+                .parent()
+                .and_then(|d| d.strip_prefix(&root).ok())
+                .map(|d| d.to_string_lossy().into_owned())
+                .unwrap_or_default(),
             needs: p["dependencies"]
                 .as_array()
                 .into_iter()
@@ -234,6 +285,7 @@ mod tests {
         Package {
             name: name.into(),
             version: "0.1.0".into(),
+            dir: format!("crates/{name}"),
             needs: needs.iter().map(|n| n.to_string()).collect(),
         }
     }

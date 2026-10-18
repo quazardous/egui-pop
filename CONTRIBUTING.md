@@ -135,7 +135,7 @@ date `CHANGELOG.md`'s entries as a release listing those versions.
 Then:
 
 ```sh
-cargo xtask publish --dry-run     # the plan: each crate, published or not
+cargo xtask publish --dry-run     # the plan, and crates changed but not raised
 cargo xtask publish               # publish what is not on crates.io yet
 ```
 
