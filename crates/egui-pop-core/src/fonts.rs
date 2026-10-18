@@ -15,10 +15,12 @@
 //! bundled fonts. A name found nowhere is a problem in the [`Report`]
 //! (ADR 0003), never replaced in silence.
 //!
-//! egui has no weight axis: each weight of [`WEIGHTS`] is an egui family
-//! of its own, [`family`]`(role, weight)`, and [`font_id`] gives the
-//! `FontId` to draw with. A weight a family lacks takes its nearest one,
-//! said in the report. egui's `Proportional` and `Monospace` families are
+//! egui's `FontId` has no weight: each weight of [`WEIGHTS`] is an egui
+//! family of its own, [`family`]`(role, weight)`, and [`font_id`] gives
+//! the `FontId` to draw with. A variable face (a `wght` axis) serves
+//! every weight its axis covers, set on the face (`FontTweak::coords`);
+//! a static face serves its own weight, and a weight a family lacks takes
+//! its nearest one, said in the report. egui's `Proportional` and `Monospace` families are
 //! the regular weight of `ui` and `mono`, so egui's own widgets follow the
 //! theme too.
 //!
@@ -242,12 +244,15 @@ fn find(
         .collect();
     if let Some(w) = nearest(weight, own.iter().map(|f| f.weight)) {
         let face = own.iter().find(|f| f.weight == w)?;
-        return Some(Found {
-            key: format!("pop:{}:{}", face.family, w.0),
-            data: face.data.clone(),
-            weight: w,
-            source: "registered",
-        });
+        return Some(on_axis(
+            Found {
+                key: format!("pop:{}:{}", face.family, w.0),
+                data: face.data.clone(),
+                weight: w,
+                source: "registered",
+            },
+            weight,
+        ));
     }
     // egui's faces have one weight each: the others draw it.
     let lower = name.to_ascii_lowercase();
@@ -264,7 +269,34 @@ fn find(
             source: "bundled",
         });
     }
-    system.find(name, weight)
+    system.find(name, weight).map(|f| on_axis(f, weight))
+}
+
+/// A face drawn at `weight` through its `wght` axis when it has one that
+/// covers it and is not already at that weight: the same bytes, with the
+/// axis set on the face, under a key of their own. Owned bytes are
+/// copied per weight (`FontData` holds them in a `Cow`), at install only.
+fn on_axis(found: Found, weight: Weight) -> Found {
+    if found.weight == weight {
+        return found;
+    }
+    let target = f32::from(weight.0);
+    let covers = found
+        .data
+        .variation_axes()
+        .iter()
+        .any(|a| a.tag.to_be_bytes() == *b"wght" && a.range.contains(target));
+    if !covers {
+        return found;
+    }
+    let mut data = (*found.data).clone();
+    data.tweak.coords.push(b"wght", target);
+    Found {
+        key: format!("{}@wght{}", found.key, weight.0),
+        data: Arc::new(data),
+        weight,
+        source: found.source,
+    }
 }
 
 fn nearest(weight: Weight, among: impl Iterator<Item = Weight>) -> Option<Weight> {
@@ -448,6 +480,60 @@ mod tests {
         );
         // A generic name is the bundled fonts: no problem said.
         assert!(!report.problems.iter().any(|p| p.contains("monospace")));
+    }
+
+    static INTER_VAR: &[u8] = include_bytes!("../tests/fonts/InterVariable-subset.ttf");
+
+    #[test]
+    fn a_variable_face_serves_every_weight_through_its_axis() {
+        let faces = vec![Face::from_static("Inter", Weight::REGULAR, INTER_VAR)];
+        let (defs, report) = definitions(&faces, &names(&["Inter"]), &[], &System::none());
+        assert!(report.problems.is_empty(), "{report:?}");
+        assert_eq!(defs.families[&FontFamily::Proportional][0], "pop:Inter:400");
+        let bold = &defs.families[&family(Role::Ui, Weight::BOLD)][0];
+        assert_eq!(bold, "pop:Inter:400@wght700");
+        assert!(format!("{:?}", defs.font_data[bold].tweak.coords).contains("700"));
+    }
+
+    #[test]
+    fn a_variable_face_draws_heavier_at_a_heavier_weight() {
+        let ctx = Context::default();
+        register(&ctx, Face::from_static("Inter", Weight::REGULAR, INTER_VAR));
+        install(&ctx, &names(&["Inter"]), &[]);
+        // Fonts change at the next pass.
+        ctx.run_ui(egui::RawInput::default(), |_| {})
+            .textures_delta
+            .clear();
+        let width = |w: Weight| {
+            ctx.fonts_mut(|f| {
+                f.layout_no_wrap(
+                    "Hamburgefonstiv".into(),
+                    font_id(Role::Ui, w, 20.0),
+                    egui::Color32::WHITE,
+                )
+                .size()
+                .x
+            })
+        };
+        let (regular, bold) = (width(Weight::REGULAR), width(Weight::BOLD));
+        assert!(bold > regular + 1.0, "regular {regular}, bold {bold}");
+    }
+
+    #[test]
+    fn a_static_face_keeps_its_weight() {
+        // Hack has no axis: asked at 700, it stays itself (and says so).
+        let hack = FontDefinitions::default().font_data["Hack"].clone();
+        let found = on_axis(
+            Found {
+                key: "Hack".into(),
+                data: hack,
+                weight: Weight::REGULAR,
+                source: "bundled",
+            },
+            Weight::BOLD,
+        );
+        assert_eq!(found.key, "Hack");
+        assert_eq!(found.weight, Weight::REGULAR);
     }
 
     #[test]

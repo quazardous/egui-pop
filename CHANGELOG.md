@@ -17,6 +17,8 @@ egui minor.
   bundled faces, and the system's fonts (feature `system-fonts`, through
   fontdb); a name found nowhere or a missing weight is in
   `fonts::report`, and egui's bundled fonts stay last in every chain.
+  A variable face draws every weight its `wght` axis covers, instead of
+  its one registered weight.
 - `AppBuilder::menu_bar(false)`: an application without a menu bar
   (its menus stay in the palette, under their keys and in menus it
   opens itself); the top bar's zone is then drawn only when it has
