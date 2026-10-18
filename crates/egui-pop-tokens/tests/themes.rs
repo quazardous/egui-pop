@@ -82,7 +82,7 @@ fn aliases_follow_through_extends_chains() {
         light.color("surface.overlay")
     );
     // Component → system → reference, across files.
-    assert_eq!(mine.color("button.background"), light.color("gray.4"));
+    assert_eq!(mine.color("button.rest.fill"), light.color("gray.4"));
 }
 
 #[test]
@@ -110,7 +110,7 @@ fn an_alias_cycle_is_reported_and_falls_back() {
     assert_eq!(r.color("text.default"), dark.color("text.default"));
     assert!(r.get("text.default").unwrap().fallback);
     // Something aliasing into the cycle is broken too, and falls back.
-    assert!(r.get("button.text").unwrap().fallback);
+    assert!(r.get("button.rest.text").unwrap().fallback);
 }
 
 #[test]

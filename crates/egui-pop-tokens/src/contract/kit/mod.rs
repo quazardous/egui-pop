@@ -6,15 +6,18 @@ use super::Required;
 
 mod assist_card;
 mod backdrop;
+mod button;
 mod dialog;
 mod editor_frame;
 mod fault_card;
+mod field;
 mod find_bar;
 mod fullscreen_exit;
 mod glyph;
 mod job_log;
 mod list_row;
 mod list_view;
+mod menu_item;
 mod meter;
 mod meter_tick;
 mod palette_window;
@@ -43,15 +46,18 @@ mod window_close;
 pub(super) const GROUPS: &[&[Required]] = &[
     assist_card::CONTRACT,
     backdrop::CONTRACT,
+    button::CONTRACT,
     dialog::CONTRACT,
     editor_frame::CONTRACT,
     fault_card::CONTRACT,
+    field::CONTRACT,
     find_bar::CONTRACT,
     fullscreen_exit::CONTRACT,
     glyph::CONTRACT,
     job_log::CONTRACT,
     list_row::CONTRACT,
     list_view::CONTRACT,
+    menu_item::CONTRACT,
     meter::CONTRACT,
     meter_tick::CONTRACT,
     palette_window::CONTRACT,

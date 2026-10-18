@@ -97,9 +97,9 @@ pub const PAIRS: &[Pair] = &[
     text("info", "surface.panel"),
     text("info", "surface.overlay"),
     // Components.
-    text("button.text", "button.background"),
-    text("menu.item.text", "menu.item.background-hover"),
-    text("menu.item.text-muted", "surface.overlay"),
+    text("button.rest.text", "button.rest.fill"),
+    text("menu-item.rest.text", "menu-item.hover.fill"),
+    text("menu-item.tone.muted.text", "surface.overlay"),
     text("toast.rest.text", "toast.rest.fill"),
     text("dialog.header-text", "dialog.header"),
     text("palette.header-text", "palette.header"),

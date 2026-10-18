@@ -2155,3 +2155,38 @@ fn a_kit_restyles_a_dialogs_frame_from_the_theme_alone() {
     h.run();
     h.snapshot("dialogs-kit-square");
 }
+
+#[test]
+fn a_kit_restyles_menu_items_from_the_theme_alone() {
+    // Data only: square items, an accent bar on the side of the item
+    // under the pointer and of an open submenu.
+    let mut themes = egui_pop::tokens::Themes::default();
+    themes
+        .add_json(
+            "kit-menu-bar",
+            r##"{
+              "$extends": "pop-dark",
+              "menu-item": {
+                "indicator-side": {"$type": "string", "$value": "left"},
+                "rest": { "radius": {"$type": "dimension", "$value": {"value": 0, "unit": "px"}},
+                          "indicator-color": {"$type": "color", "$value": "{accent.default}"} },
+                "hover": { "fill": {"$type": "color", "$value": "{accent.subtle}"},
+                           "indicator-size": {"$type": "dimension", "$value": {"value": 3, "unit": "px"}} },
+                "selected": { "fill": {"$type": "color", "$value": "{accent.subtle}"},
+                              "indicator-size": {"$type": "dimension", "$value": {"value": 3, "unit": "px"}} }
+              }
+            }"##,
+        )
+        .expect("the test theme reads");
+    let mut h = harness(options("pop-dark", Density::Comfortable, "menus"));
+    h.run();
+    let tokens = Tokens::new(themes.resolve(&egui_pop::tokens::ThemeSpec::new("kit-menu-bar")));
+    egui_pop::core::theme::install_tokens(&h.ctx, tokens);
+    assert!(egui_pop::core::kit::Kit::of(&h.ctx).problems.is_empty());
+    h.run();
+    h.get_by_label("Card with a context menu").click_secondary();
+    h.run();
+    h.query_all_by_label("Zoom").last().unwrap().hover();
+    h.run();
+    h.snapshot("menus-kit-bar");
+}

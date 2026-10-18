@@ -1,0 +1,27 @@
+{
+  "$description": "The `button` component of the default kit (docs/kit.md), layered into pop-dark. egui's own widgets take their states from it.",
+  "button": {
+    "$description": "Push buttons. egui's widgets are drawn with these: rest, hover, active, and selected for an open menu or combo box.",
+    "shape": {"$type": "string", "$value": "box"},
+    "rest": {
+      "fill": {"$type": "color", "$value": "{surface.raised}"},
+      "border-color": {"$type": "color", "$value": "{border.default}"},
+      "border-width": {"$type": "dimension", "$value": {"value": 1, "unit": "px"}},
+      "radius": {"$type": "dimension", "$value": "{radius.widget}"},
+      "text": {"$type": "color", "$value": "{text.default}"}
+    },
+    "hover": {
+      "fill": {"$type": "color", "$value": "{surface.hover}"},
+      "border-color": {"$type": "color", "$value": "{border.strong}"},
+      "text": {"$type": "color", "$value": "{text.strong}"}
+    },
+    "active": {
+      "fill": {"$type": "color", "$value": "{surface.active}"},
+      "border-color": {"$type": "color", "$value": "{focus.ring}"},
+      "text": {"$type": "color", "$value": "{text.strong}"}
+    },
+    "selected": {
+      "fill": {"$type": "color", "$value": "{surface.hover}"}
+    }
+  }
+}

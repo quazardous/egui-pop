@@ -90,7 +90,7 @@ Not read yet: references inside composite values, JSON Pointer `$ref`,
 3. **Component**: one component's tokens, each an alias of a system token:
    `button.*`, `slider.{track, fill, thumb}`,
    `progress.{track, fill, height, line, ring}` (bars, rings, meters and
-   spinners), `skeleton.{fill, shimmer}`, `menu.item.*`, `dialog.*`, `palette.*`,
+   spinners), `skeleton.{fill, shimmer}`, `dialog.*`, `palette.*`,
    `toast.*`, `editor.*` and `syntax.*` (one colour per kind of code:
    keywords on the accent, strings on `success`, numbers on `warning`,
    comments muted...), `terminal.*` (its text, cursor, selection, links,
@@ -98,7 +98,8 @@ Not read yet: references inside composite values, JSON Pointer `$ref`,
    ask for by number: 0 is the colour furthest from the text, 7 the
    text's own, 1 to 6 the status roles and the accent, 8 to 15 their
    stronger forms). A theme may re-alias a component token (high contrast
-   outlines every button: `button.border` is `{border.strong}`).
+   outlines every button and field: `button.rest.border-color` and
+   `field.rest.border-color` are `{border.strong}`).
 
 ## Naming rules
 
@@ -107,7 +108,7 @@ Not read yet: references inside composite values, JSON Pointer `$ref`,
 - Path segments are lowercase, words joined by hyphens:
   `background-hover`, `on-accent`. Dots separate groups, so a segment never
   contains `.`, `{` or `}`.
-- States are suffixes of the thing they modify (`button.background-hover`),
+- States are suffixes of the thing they modify (`button.hover.fill`, the kit's grid: `docs/kit.md`),
   sizes are `xs`, `s`, `m`, `l`, `xl`.
 - A component token points at a system token, a system token at the
   palette or another role, never the other way round (a test checks it).
