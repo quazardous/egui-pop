@@ -45,6 +45,7 @@ use std::collections::BTreeMap;
 use egui::{Id, Key, Modifiers, Pos2, Rect, Response, Ui, Vec2, WidgetType};
 use egui_pop_core::band::{self, BandStyle};
 use egui_pop_core::icon::Icon;
+use egui_pop_core::kit::{Kit, State};
 use egui_pop_core::strings;
 use egui_pop_core::theme::Tokens;
 use egui_pop_core::{a11y, lock};
@@ -367,28 +368,28 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
             .constrain(false)
             .show(ctx, |ui| {
                 ui.multiply_opacity(opacity);
+                let kit = Kit::of(ui.ctx());
+                let window = &kit.palette_window;
+                let b = window.style(State::REST);
                 let style = BandStyle {
                     fill: t.palette.header,
-                    separator: t.palette.border,
-                    radius: t.radius.window,
-                    padding: t.palette.padding,
+                    separator: b.border_color,
+                    radius: b.radius,
+                    padding: window.data.padding_x,
                     gap: t.space.xs,
                 };
-                egui::Frame::window(ui.style())
-                    .fill(t.palette.background)
-                    .stroke(egui::Stroke::new(1.0, t.palette.border))
-                    .inner_margin(t.palette.padding)
-                    .show(ui, |ui| {
-                        ui.set_min_width(spec.min_size);
-                        ui.set_max_width(spec.default_size.unwrap_or(320.0).max(spec.min_size));
-                        let (_, b) =
-                            band::begin(ui, &style, |ui| band_row(ui, &t, &title, &f, &mut asked));
-                        if !f.rolled {
-                            app.show_panel(ui, &f.panel);
-                        }
-                        band::paint(ui, &b, &style);
-                        moved = Some(b);
-                    });
+                let shadow = ui.visuals().window_shadow;
+                window.show(ui, State::REST, shadow, |ui| {
+                    ui.set_min_width(spec.min_size);
+                    ui.set_max_width(spec.default_size.unwrap_or(320.0).max(spec.min_size));
+                    let (_, b) =
+                        band::begin(ui, &style, |ui| band_row(ui, &t, &title, &f, &mut asked));
+                    if !f.rolled {
+                        app.show_panel(ui, &f.panel);
+                    }
+                    band::paint(ui, &b, &style);
+                    moved = Some(b);
+                });
             });
         let rect = shown.response.rect;
         rects.insert(f.panel.clone(), rect);

@@ -2112,3 +2112,46 @@ fn a_kit_puts_the_title_at_the_start_of_the_title_bar() {
     h.run();
     h.snapshot("frame-kit-title-start");
 }
+
+#[test]
+fn a_kit_restyles_a_dialogs_frame_from_the_theme_alone() {
+    // Data only: the dialog's box (square, an accent border, more room)
+    // and a darker backdrop; the `card` handler egui-pop ships.
+    let mut themes = egui_pop::tokens::Themes::default();
+    themes
+        .add_json(
+            "kit-dialog-square",
+            r##"{
+              "$extends": "pop-dark",
+              "dialog": {
+                "padding-x": {"$type": "dimension", "$value": {"value": 24, "unit": "px"}},
+                "padding-y": {"$type": "dimension", "$value": {"value": 20, "unit": "px"}},
+                "rest": {
+                  "fill": {"$type": "color", "$value": "{surface.panel}"},
+                  "border-color": {"$type": "color", "$value": "{accent.default}"},
+                  "border-width": {"$type": "dimension", "$value": {"value": 2, "unit": "px"}},
+                  "radius": {"$type": "dimension", "$value": {"value": 0, "unit": "px"}}
+                }
+              },
+              "backdrop": {
+                "opacity": {"$type": "number", "$value": 0.7}
+              }
+            }"##,
+        )
+        .expect("the test theme reads");
+    let mut h = harness(options("pop-dark", Density::Comfortable, "dialogs"));
+    h.run();
+    let tokens =
+        Tokens::new(themes.resolve(&egui_pop::tokens::ThemeSpec::new("kit-dialog-square")));
+    egui_pop::core::theme::install_tokens(&h.ctx, tokens);
+    let kit = egui_pop::core::kit::Kit::of(&h.ctx);
+    assert!(kit.problems.is_empty(), "{:?}", kit.problems);
+    assert_eq!(
+        kit.dialog.style(egui_pop::core::kit::State::REST).radius,
+        0.0
+    );
+    h.get_by_label("Export settings").click();
+    h.run();
+    h.run();
+    h.snapshot("dialogs-kit-square");
+}

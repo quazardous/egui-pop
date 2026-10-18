@@ -9,6 +9,7 @@ use crate::highlight::Kind;
 /// The editors' colours, from the installed theme.
 #[derive(Clone, Debug, PartialEq)]
 pub struct EditorTokens {
+    /// Behind the text: the editor frame's fill (`editor-frame.rest.fill`).
     pub background: Color32,
     pub gutter: Color32,
     pub line_number: Color32,
@@ -39,7 +40,7 @@ impl EditorTokens {
         let c = |path: &str, fallback: Color32| t.color(path).unwrap_or(fallback);
         let syntax = Kind::ALL.map(|k| c(&format!("syntax.{}", k.token()), t.text.default));
         EditorTokens {
-            background: c("editor.background", t.surface.panel),
+            background: c("editor-frame.rest.fill", t.surface.panel),
             gutter: c("editor.gutter", t.surface.panel),
             line_number: c("editor.line-number", t.text.muted),
             line_number_active: c("editor.line-number-active", t.text.strong),

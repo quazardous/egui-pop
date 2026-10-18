@@ -7,6 +7,8 @@ use egui_pop_core::theme::Tokens;
 /// The terminal's colours, from the installed theme.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TerminalTokens {
+    /// Behind the text: the terminal frame's fill
+    /// (`terminal-frame.rest.fill`).
     pub background: Color32,
     pub foreground: Color32,
     pub bold: Color32,
@@ -45,7 +47,7 @@ impl TerminalTokens {
             *slot = c(&format!("terminal.ansi.{i}"), fallbacks[i]);
         }
         TerminalTokens {
-            background: c("terminal.background", t.surface.sunken),
+            background: c("terminal-frame.rest.fill", t.surface.sunken),
             foreground: c("terminal.foreground", t.text.default),
             bold: c("terminal.bold", t.text.strong),
             cursor: c("terminal.cursor", t.text.strong),

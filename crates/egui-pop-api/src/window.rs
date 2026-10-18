@@ -14,9 +14,9 @@
 //! (Wayland), only the size and the states are kept.
 
 use egui::{Align2, Context, Id, Order, Pos2, Rect, Ui, Vec2, ViewportCommand};
+use egui_pop_core::kit::{Kit, State};
 use egui_pop_core::lock;
 use egui_pop_core::strings;
-use egui_pop_core::theme::Tokens;
 use egui_pop_model::commands::{CommandSpec, Origin};
 use egui_pop_model::ids::{BlockId, CommandId, PluginId};
 use egui_pop_model::values::{Change, Descriptor, Set, SettingsDoc, Value};
@@ -276,16 +276,16 @@ fn way_out(ctx: &Context, app: &AppHandle) {
         .is_some_and(|p| p.y <= screen.top() + 4.0);
     let id = Id::new("egui_pop.window.way_out");
     let shown_before = ctx.data(|d| d.get_temp::<bool>(id)).unwrap_or(false);
-    let t = Tokens::of(ctx);
     let mut keep = near_top;
     if near_top || shown_before {
         let r = egui::Area::new(id)
             .order(Order::Foreground)
             .anchor(Align2::CENTER_TOP, Vec2::ZERO)
             .show(ctx, |ui| {
-                egui::Frame::popup(ui.style())
-                    .fill(t.surface.overlay)
-                    .show(ui, |ui| {
+                let shadow = ui.visuals().popup_shadow;
+                Kit::of(ctx)
+                    .fullscreen_exit
+                    .show(ui, State::REST, shadow, |ui| {
                         ui.horizontal(|ui| {
                             let title = ctx
                                 .input(|i| i.viewport().title.clone())

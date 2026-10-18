@@ -35,6 +35,7 @@ use egui::{Align2, Id, Order, Ui};
 use egui_pop_core::a11y::{self, Politeness};
 use egui_pop_core::debug::FnCollector;
 use egui_pop_core::icon::{Icon, Size, Tone};
+use egui_pop_core::kit::{self, Kit};
 use egui_pop_core::lock;
 use egui_pop_core::strings;
 use egui_pop_core::theme::Tokens;
@@ -355,85 +356,79 @@ fn show(ui: &mut Ui, app: &AppHandle) {
         .anchor(Align2::RIGHT_BOTTOM, egui::vec2(-margin, -margin))
         .interactable(true)
         .show(&ctx, |ui| {
-            ui.set_max_width(t.toast.width);
+            let style = Kit::of(ui.ctx());
+            let toast = &style.toast;
+            let text = toast.style(kit::State::REST).text;
+            ui.set_max_width(toast.data.width);
             for shown in &on_screen {
-                let frame = egui::Frame::new()
-                    .fill(t.toast.background)
-                    .stroke(egui::Stroke::new(1.0, t.toast.border))
-                    .corner_radius(t.radius.widget)
-                    .inner_margin(t.toast.padding)
-                    .show(ui, |ui| {
-                        ui.set_width(t.toast.width - 2.0 * t.toast.padding);
-                        ui.horizontal(|ui| {
-                            let (icon, tone) = shown.toast.level.icon();
-                            let level = strings::tr(
-                                ui.ctx(),
-                                match shown.toast.level {
-                                    Level::Info => &txt::TOAST_INFO,
-                                    Level::Success => &txt::TOAST_SUCCESS,
-                                    Level::Warning => &txt::TOAST_WARNING,
-                                    Level::Error => &txt::TOAST_ERROR,
-                                },
+                let frame = toast.show(ui, kit::State::REST, egui::Shadow::NONE, |ui| {
+                    ui.set_width(toast.data.width - 2.0 * toast.data.padding_x);
+                    ui.horizontal(|ui| {
+                        let (icon, tone) = shown.toast.level.icon();
+                        let level = strings::tr(
+                            ui.ctx(),
+                            match shown.toast.level {
+                                Level::Info => &txt::TOAST_INFO,
+                                Level::Success => &txt::TOAST_SUCCESS,
+                                Level::Warning => &txt::TOAST_WARNING,
+                                Level::Error => &txt::TOAST_ERROR,
+                            },
+                        );
+                        ui.add(icon.tone(tone).label(&level));
+                        // The text wraps in what the close button and
+                        // the action leave.
+                        let spacing = ui.spacing().item_spacing.x;
+                        let mut reserved = t.size.icon_inline + spacing;
+                        if let Some(a) = &shown.toast.action {
+                            let galley = egui::WidgetText::from(a.label.as_str()).into_galley(
+                                ui,
+                                Some(egui::TextWrapMode::Extend),
+                                f32::INFINITY,
+                                egui::TextStyle::Button,
                             );
-                            ui.add(icon.tone(tone).label(&level));
-                            // The text wraps in what the close button and
-                            // the action leave.
-                            let spacing = ui.spacing().item_spacing.x;
-                            let mut reserved = t.size.icon_inline + spacing;
-                            if let Some(a) = &shown.toast.action {
-                                let galley = egui::WidgetText::from(a.label.as_str()).into_galley(
-                                    ui,
-                                    Some(egui::TextWrapMode::Extend),
-                                    f32::INFINITY,
-                                    egui::TextStyle::Button,
-                                );
-                                reserved +=
-                                    galley.size().x + 2.0 * ui.spacing().button_padding.x + spacing;
-                            }
-                            let width = (ui.available_width() - reserved).max(t.size.icon_inline);
-                            ui.allocate_ui_with_layout(
-                                egui::vec2(width, 0.0),
-                                egui::Layout::top_down(egui::Align::Min),
-                                |ui| {
-                                    ui.set_max_width(width);
-                                    ui.add(
-                                        egui::Label::new(
-                                            egui::RichText::new(&shown.toast.text)
-                                                .color(t.toast.text),
-                                        )
-                                        .wrap(),
-                                    );
-                                },
-                            );
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    let close = ui.add(
-                                        Icon::Close
-                                            .size(Size::Inline)
-                                            .label(&strings::tr_args(
-                                                ui.ctx(),
-                                                &txt::TOAST_CLOSE,
-                                                &[("text", &shown.toast.text)],
-                                            ))
-                                            .sense_click(),
-                                    );
-                                    if close.clicked() {
-                                        ended.push((shown.id, "closed"));
-                                    }
-                                    if let Some(a) = &shown.toast.action
-                                        && ui.small_button(&a.label).clicked()
-                                    {
-                                        app.run_as(a.command.clone(), a.args.clone(), Origin::User);
-                                        ended.push((shown.id, "action"));
-                                    }
-                                },
-                            );
-                        });
-                        if let Some(id) = &shown.toast.job {
-                            crate::jobs_centre::toast_part(ui, app, id);
+                            reserved +=
+                                galley.size().x + 2.0 * ui.spacing().button_padding.x + spacing;
                         }
+                        let width = (ui.available_width() - reserved).max(t.size.icon_inline);
+                        ui.allocate_ui_with_layout(
+                            egui::vec2(width, 0.0),
+                            egui::Layout::top_down(egui::Align::Min),
+                            |ui| {
+                                ui.set_max_width(width);
+                                ui.add(
+                                    egui::Label::new(
+                                        egui::RichText::new(&shown.toast.text).color(text),
+                                    )
+                                    .wrap(),
+                                );
+                            },
+                        );
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            let close = ui.add(
+                                Icon::Close
+                                    .size(Size::Inline)
+                                    .label(&strings::tr_args(
+                                        ui.ctx(),
+                                        &txt::TOAST_CLOSE,
+                                        &[("text", &shown.toast.text)],
+                                    ))
+                                    .sense_click(),
+                            );
+                            if close.clicked() {
+                                ended.push((shown.id, "closed"));
+                            }
+                            if let Some(a) = &shown.toast.action
+                                && ui.small_button(&a.label).clicked()
+                            {
+                                app.run_as(a.command.clone(), a.args.clone(), Origin::User);
+                                ended.push((shown.id, "action"));
+                            }
+                        });
                     });
+                    if let Some(id) = &shown.toast.job {
+                        crate::jobs_centre::toast_part(ui, app, id);
+                    }
+                });
                 if frame.response.contains_pointer() {
                     hold.push(shown.id);
                 }

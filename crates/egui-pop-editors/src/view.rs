@@ -6,13 +6,14 @@ use std::sync::Arc;
 use egui::accesskit::Role;
 use egui::text::{CCursor, LayoutJob, TextFormat};
 use egui::{
-    Align2, Color32, CornerRadius, Event, EventFilter, FontId, Galley, Id, ImeEvent, Key,
-    Modifiers, Painter, Pos2, Rect, Response, ScrollArea, Sense, Shape, Stroke, StrokeKind, Ui,
-    WidgetInfo, WidgetType, pos2, vec2,
+    Align2, Color32, Event, EventFilter, FontId, Galley, Id, ImeEvent, Key, Modifiers, Painter,
+    Pos2, Rect, Response, ScrollArea, Sense, Shape, Stroke, StrokeKind, Ui, WidgetInfo, WidgetType,
+    pos2, vec2,
 };
 use egui_pop_api::AppHandle;
 use egui_pop_core::focus;
 use egui_pop_core::icon::Icon;
+use egui_pop_core::kit::{Kit, State};
 use egui_pop_core::strings::{tr, tr_args};
 use egui_pop_core::theme::Tokens;
 use egui_pop_model::ids::StepId;
@@ -95,14 +96,12 @@ pub(crate) fn show(ui: &mut Ui, state: &EditorState, o: &Options<'_>) -> EditorO
         assist_ui::poll(state, &mut signals);
     }
     let response = focus::scope(ui, SURFACE, &[("editorKind", kind)], |ui| {
-        let t = EditorTokens::of(ui.ctx());
-        let tokens = Tokens::of(ui.ctx());
-        egui::Frame::new()
-            .fill(t.background)
-            .stroke(Stroke::new(1.0, tokens.border.default))
-            .corner_radius(CornerRadius::same(tokens.radius.widget.round() as u8))
-            .inner_margin(1.0)
-            .show(ui, |ui| {
+        // The kit's frame, its focus ring while the text has the keyboard.
+        let focused = ui.memory(|m| m.has_focus(id));
+        let look = State::REST.with(State::FOCUS, focused);
+        Kit::of(ui.ctx())
+            .editor_frame
+            .show(ui, look, egui::Shadow::NONE, |ui| {
                 ui.spacing_mut().item_spacing.y = 0.0;
                 if state.lock().find.open {
                     find_bar::show(ui, state, o.app, id, &mut signals);

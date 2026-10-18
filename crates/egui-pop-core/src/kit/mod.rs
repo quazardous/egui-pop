@@ -26,7 +26,12 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use egui::{Color32, Context, Galley, Id, Painter, Pos2, Rect, Response, Vec2};
+use egui::epaint::{Shadow, Shape};
+use egui::layers::ShapeIdx;
+use egui::{
+    Color32, Context, Frame, Galley, Id, InnerResponse, Margin, Painter, Pos2, Rect, Response,
+    Stroke, Ui, Vec2,
+};
 use egui_pop_tokens::Value;
 
 use crate::theme::Tokens;
@@ -304,12 +309,18 @@ pub struct ComponentKit {
     pub states: States,
     /// Points between the label and the part's side edges.
     pub padding_x: f32,
+    /// Points between the content and the part's top and bottom edges
+    /// (a frame around content, [`Component::show`]).
+    pub padding_y: f32,
     /// Points; zero when the component has no fixed height.
     pub height: f32,
     /// Points; zero when the component has no fixed width.
     pub width: f32,
     pub indicator_side: Side,
     pub align: Align,
+    /// How opaque the whole part is, 0 to 1 (1 when not given): a
+    /// backdrop's strength.
+    pub opacity: f32,
 }
 
 impl ComponentKit {
@@ -346,8 +357,14 @@ impl ComponentKit {
             padding_x: r
                 .dimension(&format!("{component}.padding-x"))
                 .unwrap_or(0.0),
+            padding_y: r
+                .dimension(&format!("{component}.padding-y"))
+                .unwrap_or(0.0),
             height: r.dimension(&format!("{component}.height")).unwrap_or(0.0),
             indicator_side,
+            opacity: r
+                .dimension(&format!("{component}.opacity"))
+                .map_or(1.0, |o| o.clamp(0.0, 1.0)),
         }
     }
 }
@@ -359,6 +376,9 @@ pub struct Component {
     /// The handler's name (`tab.shape`).
     pub shape: String,
     handler: Arc<dyn Primitive<ComponentKit>>,
+    /// Whether the handler is the built-in `card`, which egui's own
+    /// [`Frame`] draws exactly ([`Component::show`]).
+    egui_frame: bool,
 }
 
 impl Component {
@@ -401,6 +421,97 @@ impl Component {
 
     pub fn hit(&self, rect: Rect, pos: Pos2) -> bool {
         self.handler.hit(&self.data, rect, pos)
+    }
+
+    /// The box of a state as an egui [`Frame`]: its fill, border and
+    /// corner radius, the padding (`padding-x`, `padding-y`) as its inner
+    /// margin. No shadow: egui's own, from `Visuals`, is the caller's to
+    /// add. For a container that takes a frame; a part egui lays out
+    /// around its content is better shown with [`Component::show`],
+    /// which also paints the focus ring and honours a handler of the
+    /// theme's.
+    pub fn frame(&self, state: State) -> Frame {
+        let b = self.style(state);
+        let m = |p: f32| p.round().clamp(-128.0, 127.0) as i8;
+        let stroke = if b.border_width > 0.0 {
+            Stroke::new(b.border_width, b.border_color)
+        } else {
+            Stroke::NONE
+        };
+        Frame::new()
+            .fill(b.fill)
+            .stroke(stroke)
+            .corner_radius(b.radius)
+            .inner_margin(Margin::symmetric(
+                m(self.data.padding_x),
+                m(self.data.padding_y),
+            ))
+    }
+
+    /// Shows `add` inside the component's box in `state`, laid out by egui
+    /// (the part is as large as its content and padding), with egui's
+    /// `shadow` under it ([`Shadow::NONE`] for none).
+    ///
+    /// The built-in `card` handler is egui's [`Frame`] of the box, then
+    /// the state's focus ring. Another handler paints once the content is
+    /// laid out, its shapes moved under the content: what it draws needs
+    /// one allocation per part and frame, which `card` does not.
+    pub fn show<R>(
+        &self,
+        ui: &mut Ui,
+        state: State,
+        shadow: Shadow,
+        add: impl FnOnce(&mut Ui) -> R,
+    ) -> InnerResponse<R> {
+        let ppp = ui.ctx().pixels_per_point();
+        let b = *self.style(state);
+        if self.egui_frame {
+            let r = self.frame(state).shadow(shadow).show(ui, add);
+            let cx = KitCx {
+                painter: ui.painter(),
+                ppp,
+            };
+            paint_ring(&cx, r.response.rect, &b, Corners::All);
+            return r;
+        }
+        let slot = ui.painter().add(Shape::Noop);
+        // The box's room kept (padding and border), nothing painted.
+        let r = self
+            .frame(state)
+            .fill(Color32::TRANSPARENT)
+            .stroke(Stroke::new(b.border_width.max(0.0), Color32::TRANSPARENT))
+            .show(ui, add);
+        let rect = r.response.rect;
+        let layer = ui.layer_id();
+        let start = ui.ctx().graphics_mut(|g| g.entry(layer).next_idx());
+        let part = Part {
+            rect,
+            room: rect,
+            state,
+            label: None,
+        };
+        self.paint(
+            &KitCx {
+                painter: ui.painter(),
+                ppp,
+            },
+            &part,
+        );
+        let mut shapes = Vec::new();
+        if shadow != Shadow::NONE {
+            shapes.push(Shape::from(shadow.as_shape(rect, b.radius)));
+        }
+        ui.ctx().graphics_mut(|g| {
+            let list = g.entry(layer);
+            let end = list.next_idx().0;
+            for i in start.0..end {
+                list.mutate_shape(ShapeIdx(i), |c| {
+                    shapes.push(std::mem::replace(&mut c.shape, Shape::Noop));
+                });
+            }
+        });
+        ui.painter().set(slot, Shape::Vec(shapes));
+        r
     }
 }
 
@@ -478,6 +589,29 @@ components! {
     /// A status bar indicator, colours only: its text by tone, its
     /// progress line (`border-color` the track, `indicator-*` the fill).
     status_indicator: "status-indicator" => "plain",
+    /// The frame of an editor's code assist popups (completions,
+    /// actions, hover cards).
+    assist_card: "assist-card" => "card",
+    /// What dims the interface behind a modal dialog: its `fill` at
+    /// `opacity` (egui paints it).
+    backdrop: "backdrop" => "plain",
+    /// A dialog's frame.
+    dialog: "dialog" => "card",
+    /// The frame around a text or code editor; `focus` while it has the
+    /// keyboard.
+    editor_frame: "editor-frame" => "card",
+    /// The card standing in for a part that panicked.
+    fault_card: "fault-card" => "card",
+    /// An editor's find and replace bar.
+    find_bar: "find-bar" => "card",
+    /// The strip at the top of a full screen window, its way out.
+    fullscreen_exit: "fullscreen-exit" => "card",
+    /// A job's log console, as plain lines.
+    job_log: "job-log" => "card",
+    /// A floating palette's window.
+    palette_window: "palette-window" => "card",
+    /// A popover's or a menu's surface.
+    popover: "popover" => "card",
     /// A tab of the workbench's tab bars.
     tab: "tab" => "box",
     /// The bar behind a row of tabs.
@@ -492,6 +626,14 @@ components! {
     /// Where a drag over a tree drops: around the target row, or a line
     /// between rows (a part with no height); `disabled` when refused.
     tree_drop_marker: "tree-drop-marker" => "outline",
+    /// The frame around a terminal's grid; `focus` while it has the
+    /// keyboard. Its fill is the grid's default background.
+    terminal_frame: "terminal-frame" => "card",
+    /// A tip's card.
+    tip_card: "tip-card" => "card",
+    /// A toast's frame (its level's tone is its icon's); its `text` is
+    /// the message's.
+    toast: "toast" => "card",
     /// Minimize and maximize (the glyph is drawn in the box's `text`).
     window_button: "window-button" => "plain",
     /// The close button.
@@ -594,10 +736,12 @@ impl Kit {
                     (default.to_string(), handlers[default].clone())
                 }
             };
+            let egui_frame = Arc::ptr_eq(&handler, &shapes::CARD);
             Component {
                 data,
                 shape,
                 handler,
+                egui_frame,
             }
         };
         let mut kit = Kit::compile_components(component, Glyphs::default(), Vec::new());
@@ -912,6 +1056,76 @@ mod tests {
             "{:?}",
             kit.problems
         );
+    }
+
+    #[test]
+    fn a_frame_is_the_box_as_egui_draws_it() {
+        let t = Tokens::default();
+        let kit = Kit::compile(&t, &Shapes::default());
+        assert_eq!(kit.dialog.shape, "card");
+        let f = kit.dialog.frame(State::REST);
+        assert_eq!(f.fill, t.surface.overlay);
+        assert_eq!(f.stroke, Stroke::new(1.0, t.border.default));
+        assert_eq!(f.corner_radius, egui::CornerRadius::from(t.radius.window));
+        assert_eq!(f.inner_margin, Margin::from(t.space.l));
+        assert_eq!(kit.dialog.data.width, t.size.dialog_width);
+        assert!((kit.backdrop.data.opacity - 0.392).abs() < 1e-6);
+    }
+
+    #[test]
+    fn the_editor_and_terminal_frames_show_the_focus() {
+        let t = Tokens::default();
+        let kit = Kit::compile(&t, &Shapes::default());
+        let editor = &kit.editor_frame.data.states;
+        assert_eq!(editor.get(State::REST).ring_width, 0.0);
+        let focus = editor.get(State::FOCUS);
+        assert_eq!(
+            (focus.ring_color, focus.ring_width, focus.ring_offset),
+            (t.focus_ring, 1.0, -1.0)
+        );
+        let terminal = &kit.terminal_frame.data.states;
+        assert_eq!(terminal.get(State::REST).border_color, t.border.default);
+        assert_eq!(terminal.get(State::FOCUS).border_color, t.focus_ring);
+        assert_eq!(terminal.get(State::REST).fill, t.surface.sunken);
+    }
+
+    #[test]
+    fn a_frame_handler_of_its_own_paints_under_the_content() {
+        struct Blot;
+        impl Primitive<ComponentKit> for Blot {
+            fn measure(&self, _: &ComponentKit, label: Vec2) -> Vec2 {
+                label
+            }
+            fn paint(&self, cx: &KitCx<'_>, _: &ComponentKit, part: &Part<'_>) {
+                cx.painter.rect_filled(part.rect, 0.0, Color32::RED);
+            }
+            fn paint_label(&self, _: &KitCx<'_>, _: &ComponentKit, _: &Part<'_>) {}
+        }
+        let ctx = Context::default();
+        register_shape(&ctx, "dialog", "blot", Arc::new(Blot));
+        let t = tokens_with(
+            r#"{ "$extends": "pop-dark",
+                 "dialog": { "shape": {"$type": "string", "$value": "blot"} } }"#,
+        );
+        let kit = install(&ctx, &t);
+        assert!(kit.problems.is_empty(), "{:?}", kit.problems);
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            kit.dialog.show(ui, State::REST, egui::Shadow::NONE, |ui| {
+                ui.label("content")
+            });
+        });
+        let kinds: Vec<&str> = out
+            .shapes
+            .iter()
+            .filter_map(|c| match &c.shape {
+                Shape::Vec(v) if !v.is_empty() => Some("box"),
+                Shape::Text(_) => Some("text"),
+                Shape::Rect(r) if r.fill == Color32::RED => Some("box drawn over"),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(kinds, ["box", "text"]);
+        out.textures_delta.clear();
     }
 
     #[test]

@@ -63,6 +63,11 @@ const CORE: &[Required] = &[
         "nothing painted (a part that shows what is behind it)",
     ),
     sys(
+        "scrim",
+        "color",
+        "what a backdrop dims the interface with (at opacity.scrim)",
+    ),
+    sys(
         "surface.canvas",
         "color",
         "behind documents, images and graphs",
@@ -229,21 +234,13 @@ const CORE: &[Required] = &[
     ),
     comp("menu.item.text", "color", "a menu item's label"),
     comp("menu.item.text-muted", "color", "a menu item's shortcut"),
-    comp("dialog.background", "color", "a dialog's fill"),
-    comp("dialog.border", "color", "a dialog's outline"),
-    comp("dialog.radius", "dimension", "a dialog's corners"),
-    comp("dialog.padding", "dimension", "a dialog's padding"),
-    comp("dialog.width", "dimension", "a dialog's width"),
     comp("dialog.header", "color", "a movable dialog's header band"),
-    comp("palette.background", "color", "a palette's fill"),
-    comp("palette.border", "color", "a palette's outline"),
     comp("palette.header", "color", "a palette's header band"),
     comp(
         "palette.header-text",
         "color",
         "the title on a palette's header band",
     ),
-    comp("palette.padding", "dimension", "a palette's padding"),
     comp(
         "palette.magnet",
         "dimension",
@@ -254,16 +251,6 @@ const CORE: &[Required] = &[
         "color",
         "the title on a movable dialog's header band",
     ),
-    comp(
-        "dialog.backdrop",
-        "number",
-        "the backdrop's opacity behind a modal dialog",
-    ),
-    comp("toast.background", "color", "a toast's fill"),
-    comp("toast.border", "color", "a toast's outline"),
-    comp("toast.text", "color", "a toast's text"),
-    comp("toast.padding", "dimension", "a toast's padding"),
-    comp("toast.width", "dimension", "a toast's width"),
     comp(
         "viewport.background",
         "color",
@@ -380,7 +367,6 @@ const CORE: &[Required] = &[
     comp("graph.type-4", "color", "a port type's colour (4 of 6)"),
     comp("graph.type-5", "color", "a port type's colour (5 of 6)"),
     comp("graph.type-6", "color", "a port type's colour (6 of 6)"),
-    comp("editor.background", "color", "behind an editor's text"),
     comp("editor.gutter", "color", "behind an editor's line numbers"),
     comp("editor.line-number", "color", "a line number"),
     comp(
@@ -429,7 +415,6 @@ const CORE: &[Required] = &[
     comp("syntax.operator", "color", "operators"),
     comp("syntax.punctuation", "color", "punctuation"),
     comp("syntax.invalid", "color", "text the grammar rejects"),
-    comp("terminal.background", "color", "behind a terminal's text"),
     comp(
         "terminal.foreground",
         "color",
@@ -521,6 +506,23 @@ pub const RENAMED: &[(&str, &[&str])] = &[
     ("progress.height", &["progress-bar.height", "meter.height"]),
     ("progress.line", &["progress-line.height"]),
     ("progress.ring", &["progress-ring.width", "spinner.width"]),
+    ("dialog.background", &["dialog.rest.fill"]),
+    ("dialog.border", &["dialog.rest.border-color"]),
+    ("dialog.radius", &["dialog.rest.radius"]),
+    ("dialog.padding", &["dialog.padding-x", "dialog.padding-y"]),
+    ("dialog.backdrop", &["backdrop.opacity"]),
+    ("palette.background", &["palette-window.rest.fill"]),
+    ("palette.border", &["palette-window.rest.border-color"]),
+    (
+        "palette.padding",
+        &["palette-window.padding-x", "palette-window.padding-y"],
+    ),
+    ("toast.background", &["toast.rest.fill"]),
+    ("toast.border", &["toast.rest.border-color"]),
+    ("toast.text", &["toast.rest.text"]),
+    ("toast.padding", &["toast.padding-x", "toast.padding-y"]),
+    ("editor.background", &["editor-frame.rest.fill"]),
+    ("terminal.background", &["terminal-frame.rest.fill"]),
 ];
 
 mod kit;

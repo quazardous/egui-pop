@@ -1,0 +1,16 @@
+{
+  "$description": "The `dialog` component of the default kit (docs/kit.md), layered into pop-dark.",
+  "dialog": {
+    "$description": "A dialog's frame (a kit component).",
+    "shape": {"$type": "string", "$value": "card"},
+    "padding-x": {"$type": "dimension", "$value": "{space.l}"},
+    "padding-y": {"$type": "dimension", "$value": "{space.l}"},
+    "width": {"$type": "dimension", "$value": "{size.dialog.width}"},
+    "rest": {
+      "fill": {"$type": "color", "$value": "{surface.overlay}"},
+      "border-color": {"$type": "color", "$value": "{border.default}"},
+      "border-width": {"$type": "dimension", "$value": {"value": 1, "unit": "px"}},
+      "radius": {"$type": "dimension", "$value": "{radius.window}"}
+    }
+  }
+}

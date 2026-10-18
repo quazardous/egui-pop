@@ -23,6 +23,7 @@
 use egui::{RichText, Ui};
 use egui_pop_core::a11y;
 use egui_pop_core::icon::{Icon, Size};
+use egui_pop_core::kit::{Kit, State};
 use egui_pop_core::progress::{ProgressBar, Tone};
 use egui_pop_core::strings;
 use egui_pop_core::theme::Tokens;
@@ -197,13 +198,10 @@ fn plain(line: &str) -> String {
 /// The log console as plain lines (no pseudo-terminal provided).
 fn plain_log(ui: &mut Ui, jobs: &JobsService, job: &Job) {
     let ctx = ui.ctx().clone();
-    let t = Tokens::of(&ctx);
     let lines = jobs.log_from(&job.id, 0);
-    egui::Frame::new()
-        .fill(t.surface.sunken)
-        .corner_radius(t.radius.widget)
-        .inner_margin(t.space.s)
-        .show(ui, |ui| {
+    Kit::of(&ctx)
+        .job_log
+        .show(ui, State::REST, egui::Shadow::NONE, |ui| {
             egui::ScrollArea::vertical()
                 .id_salt(("egui_pop_job_log", &job.id))
                 .max_height(LOG_HEIGHT)

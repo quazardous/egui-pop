@@ -83,10 +83,12 @@ pub const STATE_TERMS: &[(&str, &str)] = &[
 pub const COMPONENT_TERMS: &[(&str, &str)] = &[
     ("shape", "string"),
     ("padding-x", "dimension"),
+    ("padding-y", "dimension"),
     ("height", "dimension"),
     ("width", "dimension"),
     ("indicator-side", "string"),
     ("align", "string"),
+    ("opacity", "number"),
 ];
 
 /// A font file's bytes: embedded in the binary or read at run time.

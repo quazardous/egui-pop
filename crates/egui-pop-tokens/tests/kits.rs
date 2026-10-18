@@ -138,8 +138,23 @@ fn the_default_kit_is_a_kit_folder() {
     let components: Vec<&str> = egui_pop_tokens::contract::kit_contract()
         .filter_map(|r| r.path.split('.').next())
         .collect();
+    // Only the vocabulary's tokens: a component's other tokens (the
+    // dialog's header band, `dialog.header`) are not kit tokens yet.
+    let states = [
+        "rest", "hover", "active", "focus", "selected", "disabled", "tone",
+    ];
+    let in_vocabulary = |path: &str| {
+        let mut parts = path.split('.');
+        let (component, second) = (parts.next().unwrap(), parts.next().unwrap_or(""));
+        components.contains(&component)
+            && (states.contains(&second)
+                || egui_pop_tokens::kit::COMPONENT_TERMS
+                    .iter()
+                    .any(|(t, _)| *t == second)
+                || component == "glyph")
+    };
     for path in pop_dark.tokens.keys() {
-        if components.contains(&path.split('.').next().unwrap()) {
+        if in_vocabulary(path) {
             assert!(
                 kit.theme.tokens.contains_key(path),
                 "{path} is not in themes/kit/"

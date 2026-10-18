@@ -49,9 +49,9 @@ pub fn paint_ring(cx: &KitCx<'_>, rect: Rect, b: &BoxStyle, corners: Corners) {
         return;
     }
     let w = crate::scale::snap(b.ring_width, cx.ppp);
-    let r = (b.radius + b.ring_offset.max(0.0))
-        .round()
-        .clamp(0.0, 255.0) as u8;
+    // The outline's corners keep the box's centre: larger outside it,
+    // smaller inside (a ring over the border has the border's corners).
+    let r = (b.radius + b.ring_offset).round().clamp(0.0, 255.0) as u8;
     cx.painter.rect_stroke(
         rect.expand(b.ring_offset),
         corners.radius(r),

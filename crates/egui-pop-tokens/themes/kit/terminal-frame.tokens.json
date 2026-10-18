@@ -1,0 +1,18 @@
+{
+  "$description": "The `terminal-frame` component of the default kit (docs/kit.md), layered into pop-dark.",
+  "terminal-frame": {
+    "$description": "The frame around a terminal's grid (a kit component).",
+    "shape": {"$type": "string", "$value": "card"},
+    "padding-x": {"$type": "dimension", "$value": "{space.s}"},
+    "padding-y": {"$type": "dimension", "$value": "{space.s}"},
+    "rest": {
+      "fill": {"$type": "color", "$value": "{surface.sunken}"},
+      "border-color": {"$type": "color", "$value": "{border.default}"},
+      "border-width": {"$type": "dimension", "$value": {"value": 1, "unit": "px"}},
+      "radius": {"$type": "dimension", "$value": "{radius.widget}"}
+    },
+    "focus": {
+      "border-color": {"$type": "color", "$value": "{focus.ring}"}
+    }
+  }
+}

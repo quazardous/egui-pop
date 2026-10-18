@@ -1,0 +1,15 @@
+{
+  "$description": "The `popover` component of the default kit (docs/kit.md), layered into pop-dark.",
+  "popover": {
+    "$description": "A popover's or a menu's surface (a kit component).",
+    "shape": {"$type": "string", "$value": "card"},
+    "padding-x": {"$type": "dimension", "$value": "{space.m}"},
+    "padding-y": {"$type": "dimension", "$value": "{space.m}"},
+    "rest": {
+      "fill": {"$type": "color", "$value": "{surface.overlay}"},
+      "border-color": {"$type": "color", "$value": "{border.default}"},
+      "border-width": {"$type": "dimension", "$value": {"value": 1, "unit": "px"}},
+      "radius": {"$type": "dimension", "$value": "{radius.window}"}
+    }
+  }
+}

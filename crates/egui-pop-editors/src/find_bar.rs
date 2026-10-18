@@ -4,6 +4,7 @@
 use egui::{Id, Key, Ui};
 use egui_pop_api::AppHandle;
 use egui_pop_core::icon::Icon;
+use egui_pop_core::kit::{Kit, State};
 use egui_pop_core::strings::{tr, tr_args};
 use egui_pop_core::theme::Tokens;
 
@@ -86,9 +87,9 @@ pub(crate) fn show(
         (m.find.goto.clone(), std::mem::take(&mut m.find.focus))
     };
     let field_w = 220.0;
-    egui::Frame::new()
-        .inner_margin(egui::Margin::symmetric(t.space.s as i8, t.space.xs as i8))
-        .show(ui, |ui| {
+    Kit::of(&ctx)
+        .find_bar
+        .show(ui, State::REST, egui::Shadow::NONE, |ui| {
             ui.spacing_mut().item_spacing = egui::vec2(t.space.xs, t.space.xs);
             if let Some(mut text) = goto {
                 ui.horizontal(|ui| {
