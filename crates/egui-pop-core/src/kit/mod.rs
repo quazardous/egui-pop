@@ -658,6 +658,9 @@ components! {
     find_bar: "find-bar" => "card",
     /// The strip at the top of a full screen window, its way out.
     fullscreen_exit: "fullscreen-exit" => "card",
+    /// A button made of an icon alone (`IconWidget::sense_click`), its
+    /// icon in `text`, by tone; `selected` while it is on.
+    icon_button: "icon-button" => "box",
     /// A job's log console, as plain lines.
     job_log: "job-log" => "card",
     /// A floating palette's window.
@@ -1079,6 +1082,33 @@ mod tests {
         assert_eq!(toggle.style(State::REST).text, t.text.default);
         assert_eq!(toggle.style(State::SELECTED).text, t.accent.default);
         assert_eq!(t.slider.track, t.border.default);
+    }
+
+    #[test]
+    fn an_icon_button_s_states_win_over_its_tone() {
+        let t = Tokens::default();
+        let kit = Kit::compile(&t, &Shapes::default());
+        let b = &kit.icon_button;
+        assert_eq!(b.style(State::REST).fill, Color32::TRANSPARENT);
+        assert_eq!(b.style(State::REST).text, t.text.default);
+        assert_eq!(
+            b.style_toned(Tone::Danger, State::REST).text,
+            t.status.danger
+        );
+        assert_eq!(
+            b.style_toned(Tone::Danger, State::HOVER).text,
+            t.text.strong
+        );
+        assert_eq!(
+            b.style_toned(Tone::Accent, State::DISABLED).text,
+            t.text.muted
+        );
+        assert_eq!(b.style(State::SELECTED).text, t.accent.default);
+        let focus = b.style(State::FOCUS);
+        assert_eq!(
+            (focus.ring_color, focus.ring_width, focus.ring_offset),
+            (t.focus_ring, 1.5, 1.0)
+        );
     }
 
     #[test]

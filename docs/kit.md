@@ -276,6 +276,12 @@ compiled at install.
   the `warning` tone past the soft range. The square button at the end
   is `selected` while its toggle is on, its icon in `text`. The
   `sliders-kit-flat` snapshot restyles them with data only.
+- **Icon buttons** (`icon-button`). An `IconWidget` made clickable is a
+  box (transparent in the default kit) with its icon in `text`: `hover`,
+  `focus` (a ring one point outside), `disabled`, and `selected` for a
+  toggle (`IconWidget::selected`). The icon's tone is the part's tone;
+  `Strong` and `OnAccent`, which are not tones, keep their colour at
+  rest. An icon that is not clickable is content and keeps its colour.
 - **Glyphs by role** (`kit::Glyph`, `glyph.<role>` tokens): the small
   marks widgets draw, named by what they mean and mapped by the kit to
   an icon of its set, compiled into a table read by index. The vocabulary

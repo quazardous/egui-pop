@@ -27,6 +27,7 @@ use egui::{
     Stroke, StrokeKind, Ui, Widget, WidgetInfo, WidgetType, pos2, vec2,
 };
 
+use crate::kit::{KitCx, Part, State};
 use crate::theme::Tokens;
 
 /// The family the icon font is installed under (`phosphor` feature).
@@ -883,6 +884,21 @@ pub enum Tone {
 }
 
 impl Tone {
+    /// The kit's tone it is drawn in on a button; `Default`, `Strong`
+    /// and `OnAccent` are the button's own box.
+    pub fn kit_tone(self) -> crate::kit::Tone {
+        use crate::kit::Tone as K;
+        match self {
+            Tone::Default | Tone::Strong | Tone::OnAccent => K::Neutral,
+            Tone::Muted => K::Muted,
+            Tone::Accent => K::Accent,
+            Tone::Danger => K::Danger,
+            Tone::Warning => K::Warning,
+            Tone::Success => K::Success,
+            Tone::Info => K::Info,
+        }
+    }
+
     pub fn color(self, t: &Tokens) -> Color32 {
         match self {
             Tone::Default => t.text.default,
@@ -907,6 +923,7 @@ pub struct IconWidget {
     tone: Tone,
     label: Option<String>,
     sense: Sense,
+    selected: Option<bool>,
 }
 
 impl IconWidget {
@@ -917,6 +934,7 @@ impl IconWidget {
             tone: Tone::Default,
             label: None,
             sense: Sense::hover(),
+            selected: None,
         }
     }
 
@@ -942,6 +960,15 @@ impl IconWidget {
         self.sense = Sense::click();
         self
     }
+
+    /// Clickable and on or off (a toggle made of the icon alone): drawn
+    /// in the kit's `icon-button.selected` while on, announced as
+    /// toggled.
+    pub fn selected(mut self, selected: bool) -> Self {
+        self.sense = Sense::click();
+        self.selected = Some(selected);
+        self
+    }
 }
 
 impl Widget for IconWidget {
@@ -950,21 +977,41 @@ impl Widget for IconWidget {
         let side = self.size.points(&t);
         let (rect, response) = ui.allocate_exact_size(vec2(side, side), self.sense);
         if ui.is_rect_visible(rect) {
-            let mut color = self.tone.color(&t);
-            if !ui.is_enabled() {
-                color = t.text.muted;
-            } else if self.sense.senses_click() && response.hovered() {
-                color = t.text.strong;
+            if self.sense.senses_click() {
+                // A button: drawn by the kit's `icon-button`.
+                let kit = crate::kit::Kit::of(ui.ctx());
+                let button = &kit.icon_button;
+                let state = State::from_response(&response)
+                    .with(State::SELECTED, self.selected == Some(true));
+                let part = Part {
+                    rect,
+                    room: rect,
+                    state: state.toned(self.tone.kit_tone()),
+                    label: None,
+                };
+                let cx = KitCx {
+                    painter: ui.painter(),
+                    ppp: ui.ctx().pixels_per_point(),
+                };
+                button.paint(&cx, &part);
+                // Strong and on-accent are no tones: their colour holds
+                // while nothing else (hover, selected, disabled) does.
+                let plain = !state.contains(State::HOVER)
+                    && !state.contains(State::SELECTED)
+                    && !state.contains(State::DISABLED);
+                let color = match self.tone {
+                    Tone::Strong | Tone::OnAccent if plain => self.tone.color(&t),
+                    _ => button.style(part.state).text,
+                };
+                self.source.paint(ui, rect, color);
+            } else {
+                let color = if ui.is_enabled() {
+                    self.tone.color(&t)
+                } else {
+                    t.text.muted
+                };
+                self.source.paint(ui, rect, color);
             }
-            if response.has_focus() {
-                ui.painter().rect_stroke(
-                    rect.expand(1.0),
-                    t.radius.widget,
-                    Stroke::new(crate::scale::stroke(ui.ctx(), 1.5), t.focus_ring),
-                    StrokeKind::Outside,
-                );
-            }
-            self.source.paint(ui, rect, color);
         }
         let kind = if self.sense.senses_click() {
             WidgetType::Button
@@ -973,7 +1020,10 @@ impl Widget for IconWidget {
         };
         let enabled = ui.is_enabled();
         let label = self.label.clone().unwrap_or_default();
-        response.widget_info(|| WidgetInfo::labeled(kind, enabled, &label));
+        match self.selected {
+            Some(on) => response.widget_info(|| WidgetInfo::selected(kind, enabled, on, &label)),
+            None => response.widget_info(|| WidgetInfo::labeled(kind, enabled, &label)),
+        }
         match self.label {
             Some(l) if self.sense.senses_click() => response.on_hover_text(l),
             _ => response,

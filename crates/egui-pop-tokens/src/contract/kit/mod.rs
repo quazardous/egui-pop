@@ -16,6 +16,7 @@ mod field;
 mod find_bar;
 mod fullscreen_exit;
 mod glyph;
+mod icon_button;
 mod job_log;
 mod list_row;
 mod list_view;
@@ -64,6 +65,7 @@ pub(super) const GROUPS: &[&[Required]] = &[
     find_bar::CONTRACT,
     fullscreen_exit::CONTRACT,
     glyph::CONTRACT,
+    icon_button::CONTRACT,
     job_log::CONTRACT,
     list_row::CONTRACT,
     list_view::CONTRACT,

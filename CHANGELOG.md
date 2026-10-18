@@ -9,6 +9,13 @@ egui minor.
 
 ### Added
 
+- Kits: icon buttons (`icon-button`): an `IconWidget` made clickable is
+  drawn by the kit, its icon in the box's `text` per state (hover,
+  focus ring, disabled) and by tone (the icon's tone, except `Strong`
+  and `OnAccent`, which keep their colour at rest).
+  `IconWidget::selected` makes it a toggle, `selected` while on and
+  announced as toggled. The focus ring follows the box's corners (one
+  point rounder than before).
 - Kits: sliders (`slider`, `slider-fill`, `slider-thumb`,
   `slider-value`, `slider-toggle`): the bar, its fill strip (`height`,
   15 % of the bar by default), its thumbs, its value (the `warning` tone

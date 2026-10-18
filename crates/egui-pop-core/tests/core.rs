@@ -419,6 +419,23 @@ fn icons_are_named_and_sized_by_role() {
     let _ = Value::Bool(true);
 }
 
+#[test]
+fn an_icon_toggle_is_announced_on_or_off() {
+    use egui_pop_core::icon::Icon;
+    let mut h = Harness::new_ui(|ui| {
+        ui.add(Icon::Check.label("Pinned").selected(true));
+        ui.add(Icon::Visible.label("Shown").selected(false));
+    });
+    h.run();
+    let pinned = h.get_by_label("Pinned").accesskit_node();
+    assert_eq!(pinned.role(), egui::accesskit::Role::Button);
+    assert_eq!(pinned.toggled(), Some(egui::accesskit::Toggled::True));
+    assert_eq!(
+        h.get_by_label("Shown").accesskit_node().toggled(),
+        Some(egui::accesskit::Toggled::False)
+    );
+}
+
 /// The stroke widths in shapes, in points.
 fn stroke_widths(shapes: &[egui::epaint::ClippedShape]) -> Vec<f32> {
     use egui::Shape;
