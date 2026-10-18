@@ -23,6 +23,15 @@ egui minor.
 - The title bar and window buttons are kit components (`title-bar`,
   `window-button`, `window-close`); `title-bar.align: start` puts the
   title after the bar's leading items instead of centring it.
+- Kits: `button` and `field`; egui's own widgets (every egui and
+  third-party widget) take their states from the kit's `button` (rest,
+  hover, active, selected for an open menu) and text fields their
+  background from `field` (`theme::style_with`). What egui cannot draw
+  (an indicator or a ring on a button, a field outline other than the
+  button's) is reported in the kit's problems.
+- Kits: menu items (`menu-item`): egui lays them out and draws their
+  label, the kit paints their box under it (`Component::paint_under`);
+  the shortcut is the muted tone. The look is unchanged.
 - Kits: dialogs, popovers and menus, toasts, palettes, tip, fault and
   job-log cards, the full screen strip, the editor, terminal, find bar
   and code assist frames are kit components (`dialog.rest.fill`,
@@ -880,6 +889,11 @@ egui minor.
 
 ### Changed
 
+- Renamed into the kit's grid: `button.{background, background-hover,
+  background-active, text, border, radius}` (`button.rest.fill`...),
+  `menu.item.*` (`menu-item.hover.fill`, `menu-item.rest.text`,
+  `menu-item.tone.muted.text`). The high-contrast themes outline text
+  fields as well as buttons.
 - Renamed into the kit's grid, the former names still working with a
   reported problem: `progress.*` (`progress.track` is
   `progress-bar.rest.fill`...), `dialog.{background, border, radius,

@@ -213,6 +213,20 @@ compiled at install.
   and `outline` (a border only; a part with no height is a line between
   rows). The kit is fetched once per view and pass. The gallery's
   `table-kit-rows` snapshot restyles rows and headers with data only.
+- **egui's own widgets** (`button`, `field`). egui's style is built from
+  the kit when a theme is installed (`theme::style_with`): `button`'s
+  rest, hover, active and selected are egui's inactive, hovered, active
+  and open widget states, `field`'s rest fill is text fields'
+  background. egui shares one set of states for every widget, so a
+  field's outline and text follow the button's; what egui cannot draw
+  (an indicator or a ring on a button, a field outline of its own) is
+  listed in the kit's problems.
+- **Menu items** (`menu-item`). egui lays each item out, takes its clicks
+  and draws its label, its own frame transparent; the kit paints the box
+  under it (`Component::paint_under`: a slot reserved before egui draws,
+  filled once the rectangle and state are known), in the state egui's
+  button draws with, `selected` while a submenu is open; the shortcut is
+  the `muted` tone. `menus-kit-bar` restyles items with data only.
 - **Frames** (`dialog`, `backdrop`, `popover`, `fault-card`, `toast`,
   `palette-window`, `tip-card`, `job-log`, `fullscreen-exit`,
   `editor-frame`, `terminal-frame`, `find-bar`, `assist-card`), handler
