@@ -31,6 +31,17 @@ Keep each commit building and passing its tests, with a message saying what
 changed and why. Add an entry to the `Unreleased` section of
 [CHANGELOG.md](CHANGELOG.md) for anything a user of the crates would notice.
 
+## Tic and toc
+
+Work alternates. A **tic** is an active refactor: it moves fast and may
+leave bridges so that everything keeps working meanwhile (an old token
+name kept as an alias in `RENAMED`, a typed shim next to a new
+vocabulary, an adapter that loses part of what it translates). A
+**toc** is the consolidation that follows: it regularises the notation
+and removes the bridges. A tic records each bridge it leaves in the
+current toc issue (labelled `toc`), so the toc has its list; a bridge
+nobody wrote down is a bridge nobody removes.
+
 ## Components come with tests and a gallery page
 
 Every component arrives with:
