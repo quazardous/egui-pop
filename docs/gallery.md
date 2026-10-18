@@ -220,6 +220,7 @@ Zones and blocks, the workbench, palettes, arrangements, the context stack, stri
   </tr>
   <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/frame-kit-title-start.png"><img src="../crates/egui-pop-gallery/tests/snapshots/frame-kit-title-start.png" width="200" alt="frame-kit-title-start"></a><br>frame-kit-title-start</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/frame-kit-macos.png"><img src="../crates/egui-pop-gallery/tests/snapshots/frame-kit-macos.png" width="200" alt="frame-kit-macos"></a><br>frame-kit-macos</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/palettes-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/palettes-pop-dark.png" width="200" alt="palettes-pop-dark"></a><br>palettes-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/contexts-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/contexts-pop-dark.png" width="200" alt="contexts-pop-dark"></a><br>contexts-pop-dark</td>
   </tr>

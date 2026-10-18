@@ -1,0 +1,57 @@
+{
+  "$description": "The macOS flavour of the window buttons, data only: red, yellow and green circles at the start of the title bar (the `traffic-light` handler egui-pop ships), their glyphs shown while the pointer is over any of them. Everything else is pop-dark's.",
+  "$extends": "pop-dark",
+  "$extensions": {
+    "org.egui-pop.kit": {"name": "flavour-macos", "label": "macOS window buttons"}
+  },
+  "title-bar": {
+    "buttons-side": {"$type": "string", "$value": "start"},
+    "buttons-hover": {"$type": "string", "$value": "group"}
+  },
+  "window-button": {
+    "shape": {"$type": "string", "$value": "traffic-light"},
+    "width": {"$type": "dimension", "$value": {"value": 20, "unit": "px"}},
+    "height": {"$type": "dimension", "$value": {"value": 12, "unit": "px"}},
+    "rest": {
+      "fill": {"$type": "color", "$value": "#8e8e93"},
+      "text": {"$type": "color", "$value": "{transparent}"},
+      "border-width": {"$type": "dimension", "$value": {"value": 0.5, "unit": "px"}},
+      "border-color": {"$type": "color", "$value": "#00000033"}
+    },
+    "hover": {
+      "text": {"$type": "color", "$value": "#00000099"}
+    },
+    "tone": {
+      "warning": {
+        "fill": {"$type": "color", "$value": "#febc2e"},
+        "border-color": {"$type": "color", "$value": "#e1a116"},
+        "hover": { "fill": {"$type": "color", "$value": "#febc2e"} },
+        "active": { "fill": {"$type": "color", "$value": "#d89f1f"} }
+      },
+      "success": {
+        "fill": {"$type": "color", "$value": "#28c840"},
+        "border-color": {"$type": "color", "$value": "#1aab29"},
+        "hover": { "fill": {"$type": "color", "$value": "#28c840"} },
+        "active": { "fill": {"$type": "color", "$value": "#1f9f33"} }
+      }
+    }
+  },
+  "window-close": {
+    "shape": {"$type": "string", "$value": "traffic-light"},
+    "width": {"$type": "dimension", "$value": {"value": 20, "unit": "px"}},
+    "height": {"$type": "dimension", "$value": {"value": 12, "unit": "px"}},
+    "rest": {
+      "fill": {"$type": "color", "$value": "#ff5f57"},
+      "text": {"$type": "color", "$value": "{transparent}"},
+      "border-width": {"$type": "dimension", "$value": {"value": 0.5, "unit": "px"}},
+      "border-color": {"$type": "color", "$value": "#e2463f"}
+    },
+    "hover": {
+      "fill": {"$type": "color", "$value": "#ff5f57"},
+      "text": {"$type": "color", "$value": "#00000099"}
+    },
+    "active": {
+      "fill": {"$type": "color", "$value": "#d9493f"}
+    }
+  }
+}

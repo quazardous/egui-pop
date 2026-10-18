@@ -2114,6 +2114,32 @@ fn a_kit_puts_the_title_at_the_start_of_the_title_bar() {
 }
 
 #[test]
+fn a_kit_gives_the_window_buttons_the_macos_flavour() {
+    // A kit folder, data only: `traffic-light` circles at the start of
+    // the bar, every glyph shown while the pointer is over one of them.
+    let kit = egui_pop::tokens::kit!("../../../examples/kits/flavour-macos");
+    assert!(egui_pop::tokens::kit::check(&kit).is_empty());
+    let mut themes = egui_pop::tokens::Themes::default();
+    themes.add_kit(&kit);
+    let mut h = harness(options("pop-dark", Density::Comfortable, "frame"));
+    h.run();
+    let tokens = Tokens::new(themes.resolve(&egui_pop::tokens::ThemeSpec::new("flavour-macos")));
+    egui_pop::core::theme::install_tokens(&h.ctx, tokens);
+    let kit = egui_pop::core::kit::Kit::of(&h.ctx);
+    assert!(kit.problems.is_empty(), "{:?}", kit.problems);
+    assert_eq!(kit.window_close.shape, "traffic-light");
+    assert_eq!(
+        kit.window.buttons_side,
+        egui_pop::core::kit::ButtonsSide::Start
+    );
+    h.run();
+    h.get_by_label("Minimize").hover();
+    h.run();
+    h.run();
+    h.snapshot("frame-kit-macos");
+}
+
+#[test]
 fn a_kit_restyles_a_dialogs_frame_from_the_theme_alone() {
     // Data only: the dialog's box (square, an accent border, more room)
     // and a darker backdrop; the `card` handler egui-pop ships.

@@ -55,6 +55,19 @@
 //! `AppBuilder::run_native` (or `run_native_with`); an application
 //! starting eframe itself gives it with [`set_native_window`]. Only the
 //! main window is subclassed for now.
+//!
+//! ## Corners
+//!
+//! A window without the system's decorations has square corners on
+//! Windows 11; the plugin asks the system for the kit's `window.corners`
+//! (`round`, `small` or `square`) when it draws the frame, again when
+//! the theme changes it, and gives the system's default back with the
+//! system's frame. Windows 10 refuses, harmlessly. The outcome is in the
+//! `frame` collector (`corners`), never silent. Elsewhere nothing is
+//! asked: no other system has a portable request for a window's
+//! corners (Wayland and X11 leave them to the compositor or the window
+//! manager, macOS rounds its own windows), and drawing them would need
+//! a transparent window.
 
 use egui::{Context, Id, Rect, Ui, Vec2, ViewportCommand};
 use egui_pop_core::frame::{FrameRequest, HitTable, TitleBar};
@@ -340,6 +353,7 @@ impl Plugin for FramePlugin {
                 json!({
                     "own": own_frame(&app),
                     "hit_test": native::describe(ctx),
+                    "corners": native::describe_corners(ctx),
                     "windows": table.viewports().into_iter().map(|v| json!({
                         "viewport": if v == egui::ViewportId::ROOT { "root".to_string() } else { format!("{v:?}") },
                         "regions": table.get(v).map(|r| (*r).clone()),
@@ -375,6 +389,7 @@ fn follow_setting(ui: &Ui, app: &AppHandle) -> bool {
     let maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
     app.set_context("windowMaximized", if maximized { "true" } else { "false" });
     native::follow(ctx, app, own);
+    native::corners(ctx, own);
     let key = Id::new(("egui_pop.frame.decorated", ctx.viewport_id()));
     let applied: Option<bool> = ctx.data(|d| d.get_temp(key));
     if applied != Some(own) {
@@ -507,8 +522,9 @@ mod native {
 
     use egui::{Context, Id, ViewportId};
     use egui_pop_core::frame::{self as core_frame, Button, FrameRequest, Hit, HitTable};
+    use egui_pop_core::kit::{Kit, WindowCorners};
     use egui_pop_core::lock;
-    use egui_pop_win32::{Area, Handler, NcEvent, Subclassed};
+    use egui_pop_win32::{Area, Corners, Handler, NcEvent, Subclassed};
     use serde_json::{Value as Json, json};
 
     use super::STEP_HIT_TEST;
@@ -524,7 +540,12 @@ mod native {
         installed: Arc<Mutex<Option<Subclassed>>>,
         events: Arc<Mutex<Vec<NcEvent>>>,
         error: Arc<Mutex<Option<String>>>,
+        /// The corners last asked for, and what the system said.
+        corners: Arc<Mutex<Option<Asked>>>,
     }
+
+    /// Corners asked for, and the system's answer.
+    type Asked = (Corners, Result<(), String>);
 
     fn native(ctx: &Context) -> Native {
         let id = Id::new("egui_pop.frame.native");
@@ -628,6 +649,78 @@ mod native {
         }
     }
 
+    /// The system's corners for the kit's `window.corners`.
+    pub(super) fn corners_of(c: WindowCorners) -> Corners {
+        match c {
+            WindowCorners::Round => Corners::Round,
+            WindowCorners::Small => Corners::Small,
+            WindowCorners::Square => Corners::Square,
+        }
+    }
+
+    fn corners_name(c: Corners) -> &'static str {
+        match c {
+            Corners::System => "system",
+            Corners::Square => "square",
+            Corners::Round => "round",
+            Corners::Small => "small",
+        }
+    }
+
+    /// Asks the system for the kit's corners while the application draws
+    /// the frame, and for its own default when it no longer does; again
+    /// only when that changes (a theme naming other corners). Main window
+    /// only. What is asked and answered is kept for the debug bridge and
+    /// logged.
+    pub(super) fn corners(ctx: &Context, own: bool) {
+        if ctx.viewport_id() != ViewportId::ROOT {
+            return;
+        }
+        let wanted = if own {
+            corners_of(Kit::of(ctx).window.corners)
+        } else {
+            Corners::System
+        };
+        let n = native(ctx);
+        let mut last = lock(&n.corners);
+        match last.as_ref() {
+            Some((asked, _)) if *asked == wanted => return,
+            // Never asked, and the system's frame: nothing to give back.
+            None if !own => return,
+            _ => {}
+        }
+        let hwnd = ctx.data(|d| d.get_temp::<isize>(handle_id(ViewportId::ROOT)));
+        let outcome = match hwnd {
+            _ if !egui_pop_win32::SUPPORTED => Err(
+                "not asked: only Windows rounds the corners of a window drawn by the application on request"
+                    .to_string(),
+            ),
+            None => Err("not asked: the window's handle is unknown (see `set_native_window`)".into()),
+            Some(h) => egui_pop_win32::set_corners(h, wanted).map_err(|e| e.to_string()),
+        };
+        match &outcome {
+            Ok(()) => {
+                log::info!(target: "egui_pop", "frame: corners `{}` applied", corners_name(wanted))
+            }
+            Err(e) => {
+                log::info!(target: "egui_pop", "frame: corners `{}`: {e}", corners_name(wanted))
+            }
+        }
+        *last = Some((wanted, outcome));
+    }
+
+    /// The corners asked for and the answer, for the debug bridge.
+    pub(super) fn describe_corners(ctx: &Context) -> Json {
+        match lock(&native(ctx).corners).as_ref() {
+            None => json!({ "asked": Json::Null }),
+            Some((asked, outcome)) => json!({
+                "asked": corners_name(*asked),
+                "applied": outcome.is_ok(),
+                "error": outcome.as_ref().err(),
+            }),
+        }
+    }
+
     /// The requests the system handed back since the last frame.
     pub(super) fn requests(ctx: &Context) -> Vec<FrameRequest> {
         let n = native(ctx);
@@ -675,6 +768,43 @@ mod native {
     #[cfg(test)]
     mod tests {
         use super::*;
+
+        #[test]
+        fn the_kit_corners_are_asked_once_and_reported() {
+            let ctx = Context::default();
+            assert_eq!(describe_corners(&ctx), json!({ "asked": null }));
+            // The system's frame, never the application's: nothing asked.
+            corners(&ctx, false);
+            assert_eq!(describe_corners(&ctx)["asked"], Json::Null);
+            corners(&ctx, true);
+            let d = describe_corners(&ctx);
+            assert_eq!(d["asked"], "round");
+            if !egui_pop_win32::SUPPORTED {
+                assert_eq!(d["applied"], false);
+                assert!(d["error"].as_str().unwrap().starts_with("not asked"));
+            }
+            // A theme asking for square corners is asked again.
+            let mut themes = egui_pop_core::theme::Themes::default();
+            themes
+                .add_json(
+                    "square",
+                    r#"{ "$extends": "pop-dark",
+                         "window": { "corners": {"$type": "string", "$value": "square"} } }"#,
+                )
+                .unwrap();
+            egui_pop_core::theme::install_tokens(
+                &ctx,
+                egui_pop_core::theme::Tokens::new(
+                    themes.resolve(&egui_pop_core::theme::ThemeSpec::new("square")),
+                ),
+            );
+            corners(&ctx, true);
+            assert_eq!(describe_corners(&ctx)["asked"], "square");
+            // The system's frame again: its default is given back.
+            corners(&ctx, false);
+            assert_eq!(describe_corners(&ctx)["asked"], "system");
+            assert_eq!(corners_of(WindowCorners::Small), Corners::Small);
+        }
 
         #[test]
         fn the_bridge_answers_from_the_table_and_queues_requests() {
