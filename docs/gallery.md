@@ -204,15 +204,16 @@ Zones and blocks, the workbench, palettes, arrangements, the context stack, stri
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/zones-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/zones-pop-dark.png" width="200" alt="zones-pop-dark"></a><br>zones-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/workbench-detached-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/workbench-detached-pop-dark.png" width="200" alt="workbench-detached-pop-dark"></a><br>workbench-detached-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/workbench-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/workbench-pop-dark.png" width="200" alt="workbench-pop-dark"></a><br>workbench-pop-dark</td>
-    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/arrangements-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/arrangements-pop-dark.png" width="200" alt="arrangements-pop-dark"></a><br>arrangements-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/workbench-kit-underline.png"><img src="../crates/egui-pop-gallery/tests/snapshots/workbench-kit-underline.png" width="200" alt="workbench-kit-underline"></a><br>workbench-kit-underline</td>
   </tr>
   <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/arrangements-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/arrangements-pop-dark.png" width="200" alt="arrangements-pop-dark"></a><br>arrangements-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/strips-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/strips-pop-dark.png" width="200" alt="strips-pop-dark"></a><br>strips-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/frame-own-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/frame-own-pop-dark.png" width="200" alt="frame-own-pop-dark"></a><br>frame-own-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/frame-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/frame-pop-dark.png" width="200" alt="frame-pop-dark"></a><br>frame-pop-dark</td>
-    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/palettes-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/palettes-pop-dark.png" width="200" alt="palettes-pop-dark"></a><br>palettes-pop-dark</td>
   </tr>
   <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/palettes-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/palettes-pop-dark.png" width="200" alt="palettes-pop-dark"></a><br>palettes-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/contexts-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/contexts-pop-dark.png" width="200" alt="contexts-pop-dark"></a><br>contexts-pop-dark</td>
   </tr>
 </table>

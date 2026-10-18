@@ -41,9 +41,11 @@
 //! `palette.pin`).
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
-use egui::{Id, Pos2, Rect, Ui, ViewportBuilder, ViewportId};
+use egui::{Color32, Id, Pos2, Rect, Ui, ViewportBuilder, ViewportId};
 use egui_dock::{DockArea, DockState, NodeIndex, Split, TabViewer};
+use egui_pop_core::kit::{Kit, KitCx, Part, State};
 use egui_pop_core::strings;
 use egui_pop_model::ids::{PanelId, StepId, ZoneId};
 use egui_pop_model::layout::{Floating, Layout, Node};
@@ -1073,20 +1075,132 @@ fn draw_area(app: &AppHandle, ui: &mut Ui, area: Area) {
         let id = drawable_tabs[0].clone();
         app.show_panel(ui, &id);
     } else {
-        let mut viewer = Viewer { app };
+        let kit = Kit::of(ui.ctx());
+        let mut viewer = Viewer {
+            app,
+            kit: kit.clone(),
+            seen: Vec::new(),
+        };
         DockArea::new(&mut dock)
             .id(dock_id(area))
+            .style(dock_style(ui.style(), &kit))
             .show_close_buttons(false)
             .show_add_buttons(false)
             .show_leaf_close_all_buttons(false)
             .show_leaf_collapse_buttons(false)
             .show_inside(ui, &mut viewer);
+        let seen = std::mem::take(&mut viewer.seen);
+        paint_tabs(app, ui, &dock, &kit, &seen);
     }
     app.workbench_mut().put_dock(area, dock);
 }
 
 struct Viewer<'a> {
     app: &'a AppHandle,
+    kit: Arc<Kit>,
+    /// The tabs egui_dock laid out this pass, for the kit to paint.
+    seen: Vec<SeenTab>,
+}
+
+/// A tab egui_dock laid out and took the input of: where, on which layer
+/// (a dragged tab floats), and its interaction.
+struct SeenTab {
+    panel: PanelId,
+    rect: Rect,
+    layer: egui::LayerId,
+    hovered: bool,
+    pressed: bool,
+    focused: bool,
+}
+
+/// egui_dock lays the tabs out and takes their input; the kit paints them
+/// (`egui_pop_core::kit`). Its own tab painting is made invisible, and
+/// each tab is as wide as the kit measures it.
+fn dock_style(style: &egui::Style, kit: &Kit) -> egui_dock::Style {
+    let mut s = egui_dock::Style::from_egui(style);
+    let clear = Color32::TRANSPARENT;
+    s.tab_bar.bg_fill = clear;
+    s.tab_bar.hline_color = clear;
+    s.tab_bar.height = kit.tab_bar.data.height.max(kit.tab.data.height);
+    for t in [
+        &mut s.tab.active,
+        &mut s.tab.inactive,
+        &mut s.tab.focused,
+        &mut s.tab.hovered,
+        &mut s.tab.active_with_kb_focus,
+        &mut s.tab.inactive_with_kb_focus,
+        &mut s.tab.focused_with_kb_focus,
+    ] {
+        t.bg_fill = clear;
+        t.outline_color = clear;
+        t.text_color = clear;
+    }
+    s
+}
+
+/// A tab's label, laid out with no colour: the kit gives it its state's.
+fn tab_label(ctx: &egui::Context, title: String) -> Arc<egui::Galley> {
+    let font = egui::TextStyle::Button.resolve(&ctx.global_style());
+    ctx.fonts_mut(|f| f.layout_no_wrap(title, font, Color32::PLACEHOLDER))
+}
+
+/// Paints the tab bars and the tabs of an area with the kit, over what
+/// egui_dock laid out.
+fn paint_tabs(app: &AppHandle, ui: &Ui, dock: &DockState<PanelId>, kit: &Kit, seen: &[SeenTab]) {
+    let ctx = ui.ctx();
+    let ppp = ctx.pixels_per_point();
+    let height = kit.tab_bar.data.height.max(kit.tab.data.height);
+    let mut bars: Vec<(Rect, Option<&PanelId>, &[PanelId])> = Vec::new();
+    for (_, leaf) in dock.iter_leaves() {
+        if leaf.tabs.is_empty() || leaf.tab_bar_hidden {
+            continue;
+        }
+        let bar = Rect::from_min_size(leaf.rect.min, egui::vec2(leaf.rect.width(), height));
+        bars.push((bar, leaf.tabs.get(leaf.active.0), &leaf.tabs));
+        let cx = KitCx {
+            painter: ui.painter(),
+            ppp,
+        };
+        kit.tab_bar.paint(
+            &cx,
+            &Part {
+                rect: bar,
+                state: State::REST,
+                label: None,
+            },
+        );
+    }
+    for tab in seen {
+        let Some((bar, active, _)) = bars.iter().find(|(_, _, tabs)| tabs.contains(&tab.panel))
+        else {
+            continue;
+        };
+        let painter = ctx.layer_painter(tab.layer);
+        // In the bar, tabs scrolled out of it are cut; a dragged tab
+        // floats free.
+        let painter = if tab.layer == ui.layer_id() {
+            painter.with_clip_rect(*bar)
+        } else {
+            painter
+        };
+        let state = State::REST
+            .with(State::SELECTED, *active == Some(&tab.panel))
+            .with(State::HOVER, tab.hovered)
+            .with(State::ACTIVE, tab.pressed)
+            .with(State::FOCUS, tab.focused);
+        let label = tab_label(ctx, app.panel_title(ctx, &tab.panel));
+        kit.tab.paint(
+            &KitCx {
+                painter: &painter,
+                ppp,
+            },
+            &Part {
+                rect: tab.rect,
+                state,
+                label: Some(&label),
+            },
+        );
+    }
 }
 
 impl TabViewer for Viewer<'_> {
@@ -1112,6 +1226,27 @@ impl TabViewer for Viewer<'_> {
         // egui_dock's tab buttons carry no name: give them their panel's.
         let title = self.app.panel_title(&response.ctx, tab);
         egui_pop_core::a11y::name(response, egui::WidgetType::Button, &title);
+        self.seen.push(SeenTab {
+            panel: tab.clone(),
+            rect: response.rect,
+            layer: response.layer_id,
+            hovered: response.hovered(),
+            pressed: response.is_pointer_button_down_on(),
+            focused: response.has_focus(),
+        });
+    }
+
+    fn tab_style_override(
+        &self,
+        tab: &PanelId,
+        global: &egui_dock::TabStyle,
+    ) -> Option<egui_dock::TabStyle> {
+        let ctx = self.app.egui();
+        let label = tab_label(&ctx, self.app.panel_title(&ctx, tab));
+        Some(egui_dock::TabStyle {
+            minimum_width: Some(self.kit.tab.measure(label.size()).x),
+            ..global.clone()
+        })
     }
 
     fn context_menu(&mut self, ui: &mut Ui, tab: &mut PanelId, _path: egui_dock::NodePath) {

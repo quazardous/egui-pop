@@ -49,6 +49,7 @@ pub mod fonts;
 pub mod frame;
 pub mod icon;
 pub mod keys;
+pub mod kit;
 pub mod motion;
 pub mod overlay;
 pub mod param;

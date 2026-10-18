@@ -9,6 +9,14 @@ egui minor.
 
 ### Added
 
+- Visual kits, first component (`egui_pop_core::kit`, `docs/kit.md`): the
+  workbench's tabs and tab bars are drawn by the kit, from `tab.*` and
+  `tab-bar.*` tokens per state (`rest`, `hover`, `active`, `focus`,
+  `selected`, `disabled`) and a `shape` naming the handler that draws them
+  (`box`, the default, or `underline`; applications register their own
+  with `kit::register_tab_shape`). The kit is compiled when the theme is
+  installed: drawing resolves nothing. egui_dock keeps the layout and
+  docking.
 - Fonts from the theme (`egui_pop_core::fonts`): the families named by
   `font.family.ui` and `font.family.mono` become egui's fonts, at four
   weights each (`fonts::family(role, weight)`, `fonts::font_id`), egui's
