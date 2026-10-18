@@ -2,12 +2,14 @@
 name = "egui-pop-tokens"
 version = "0.1.0"
 description = "Design tokens for egui-pop: a DTCG parser and resolver with themes, densities, accents and contrast checks (no egui dependency)"
+readme = "README.md"
 keywords = ["design-tokens", "dtcg", "theme", "egui", "accessibility"]
 categories = ["gui", "parser-implementations"]
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
 authors.workspace = true
 
 [lints]

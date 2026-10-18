@@ -2,12 +2,14 @@
 name = "egui-pop-views"
 version = "0.1.0"
 description = "Data views for egui-pop: a live tree over a lazy, asynchronous source, a list and a data table, and a photo library (thumbnail grid, culling, comparison), virtualised, keyboard-driven, every moment a step an application can veto, replace or extend"
+readme = "README.md"
 keywords = ["egui", "tree", "table", "list", "virtualized"]
 categories = ["gui"]
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
 authors.workspace = true
 
 [lints]

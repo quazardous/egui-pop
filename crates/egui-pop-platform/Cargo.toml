@@ -2,12 +2,14 @@
 name = "egui-pop-platform"
 version = "0.1.0"
 description = "Platform services for egui-pop applications, as opt-in plugins: a single instance with deep links, desktop notifications with actions, a tray icon with a declared menu, global shortcuts, logs and crash reports, the focus mode read in-process"
+readme = "README.md"
 keywords = ["egui", "tray", "notifications", "single-instance", "global-hotkey"]
 categories = ["gui"]
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
 authors.workspace = true
 
 [lints]

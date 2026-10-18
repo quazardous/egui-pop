@@ -2,12 +2,14 @@
 name = "egui-pop-wayland"
 version = "0.1.0"
 description = "The Wayland layer of egui-pop's image viewport: a subsurface under a window, tagged through wp_color_management_v1, and the compositor's preferred image description, with no egui dependency"
+readme = "README.md"
 keywords = ["wayland", "color-management", "wide-gamut", "hdr", "subsurface"]
 categories = ["gui", "graphics"]
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
 authors.workspace = true
 
 # The workspace forbids `unsafe`; this crate takes a window's raw Wayland

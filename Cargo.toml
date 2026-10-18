@@ -26,6 +26,7 @@ edition = "2024"
 rust-version = "1.95"
 license = "MIT"
 repository = "https://github.com/quazardous/egui-pop"
+homepage = "https://github.com/quazardous/egui-pop"
 authors = ["The egui-pop contributors"]
 
 # Debuginfo filled 21 GB of target/debug on a full test run: egui-pop's

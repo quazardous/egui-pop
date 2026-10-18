@@ -2,12 +2,14 @@
 name = "egui-pop-imaging"
 version = "0.1.0"
 description = "The image tools of egui-pop in an application: the histogram's drag, the curve editor, the colour wheels and the zoom control and navigator, and the node graph editor, each finished change a step an application can veto, redirect, replace or follow"
+readme = "README.md"
 keywords = ["egui", "histogram", "curves", "color-grading", "navigator"]
 categories = ["gui", "multimedia::images"]
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
 authors.workspace = true
 
 [lints]

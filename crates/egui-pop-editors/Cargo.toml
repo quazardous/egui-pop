@@ -2,12 +2,14 @@
 name = "egui-pop-editors"
 version = "0.1.0"
 description = "Text and code editors and a terminal for egui-pop: virtualised, themed, highlighted through a pluggable highlighter (syntect by default), a terminal over a PTY or a log console, every edit and session moment a step an application can veto, rewrite or follow"
+readme = "README.md"
 keywords = ["egui", "editor", "code", "terminal", "highlighting"]
 categories = ["gui", "text-editors"]
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
 authors.workspace = true
 
 [lints]
