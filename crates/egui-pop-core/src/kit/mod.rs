@@ -428,12 +428,26 @@ macro_rules! components {
 }
 
 components! {
+    /// A row of a tree, a list or a table: `selected`, `hover`, and
+    /// `focus` for the cursor of a focused view.
+    list_row: "list-row" => "box",
+    /// A data view as a whole (tree, list, table, library grid): its
+    /// outline while it has the keyboard focus, painted over its rows.
+    list_view: "list-view" => "plain",
     /// A tab of the workbench's tab bars.
     tab: "tab" => "box",
     /// The bar behind a row of tabs.
     tab_bar: "tab-bar" => "plain",
+    /// A column's header in a data table: `hover` when the column sorts,
+    /// `selected` when the table is sorted by it.
+    table_header_cell: "table-header-cell" => "box",
+    /// Behind every other row of a data table.
+    table_stripe: "table-stripe" => "plain",
     /// A window's own title bar; its label is the window's title.
     title_bar: "title-bar" => "plain",
+    /// Where a drag over a tree drops: around the target row, or a line
+    /// between rows (a part with no height); `disabled` when refused.
+    tree_drop_marker: "tree-drop-marker" => "outline",
     /// Minimize and maximize (the glyph is drawn in the box's `text`).
     window_button: "window-button" => "plain",
     /// The close button.
@@ -676,6 +690,36 @@ mod tests {
         let focus = s.get(State::FOCUS | State::HOVER);
         assert_eq!((focus.ring_width, focus.ring_offset), (2.0, 1.0));
         assert_eq!(focus.ring_color, t.focus_ring);
+    }
+
+    #[test]
+    fn the_default_rows_alias_the_system_tokens() {
+        let t = Tokens::default();
+        let kit = Kit::compile(&t, &Shapes::default());
+        let row = &kit.list_row;
+        assert_eq!(row.shape, "box");
+        assert_eq!(row.style(State::REST).fill, Color32::TRANSPARENT);
+        assert_eq!(row.style(State::REST).text, t.text.default);
+        let selected = row.style(State::SELECTED);
+        assert_eq!((selected.fill, selected.text), (t.selection, t.text.strong));
+        assert_eq!(row.style(State::HOVER).fill, t.surface.hover);
+        // The cursor: a ring one pixel inside the row's edge.
+        let cursor = row.style(State::SELECTED | State::FOCUS);
+        assert_eq!(cursor.fill, t.selection);
+        assert_eq!(
+            (cursor.ring_color, cursor.ring_width, cursor.ring_offset),
+            (t.focus_ring, 1.0, -2.0)
+        );
+        let view = kit.list_view.style(State::FOCUS);
+        assert_eq!((view.ring_width, view.ring_offset), (1.0, -1.0));
+        assert_eq!(kit.list_view.style(State::REST).ring_width, 0.0);
+        assert_eq!(kit.tree_drop_marker.shape, "outline");
+        assert_eq!(
+            kit.tree_drop_marker.style(State::DISABLED).border_color,
+            t.status.danger
+        );
+        assert_eq!(kit.table_stripe.style(State::REST).fill, t.surface.raised);
+        assert_eq!(kit.table_header_cell.data.align, Align::Start);
     }
 
     #[test]

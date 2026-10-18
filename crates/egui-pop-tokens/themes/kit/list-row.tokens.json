@@ -1,0 +1,26 @@
+{
+  "$description": "The `list-row` component of the default kit (docs/kit.md), layered into pop-dark.",
+  "list-row": {
+    "$description": "A row of a tree, a list or a table (a kit component): selected, under the pointer, the cursor of a focused view (`focus`).",
+    "shape": {"$type": "string", "$value": "box", "$description": "The handler that draws it: box (fill, border, radius, ring) or plain."},
+    "rest": {
+      "fill": {"$type": "color", "$value": "{transparent}"},
+      "border-color": {"$type": "color", "$value": "{border.default}"},
+      "border-width": {"$type": "dimension", "$value": {"value": 0, "unit": "px"}},
+      "radius": {"$type": "dimension", "$value": {"value": 0, "unit": "px"}},
+      "text": {"$type": "color", "$value": "{text.default}"}
+    },
+    "selected": {
+      "fill": {"$type": "color", "$value": "{selection}"},
+      "text": {"$type": "color", "$value": "{text.strong}"}
+    },
+    "hover": {
+      "fill": {"$type": "color", "$value": "{surface.hover}"}
+    },
+    "focus": {
+      "ring-color": {"$type": "color", "$value": "{focus.ring}"},
+      "ring-width": {"$type": "dimension", "$value": {"value": 1, "unit": "px"}},
+      "ring-offset": {"$type": "dimension", "$value": {"value": -2, "unit": "px"}}
+    }
+  }
+}
