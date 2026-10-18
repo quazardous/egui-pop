@@ -427,8 +427,8 @@ impl Tokens {
                 radius: d("dialog.rest.radius"),
                 padding: d("dialog.padding-x"),
                 width: d("dialog.width"),
-                header: c("dialog.header"),
-                header_text: c("dialog.header-text"),
+                header: c("header-band.rest.fill"),
+                header_text: c("dialog-header.rest.text"),
                 backdrop: d("backdrop.opacity").clamp(0.0, 1.0),
             },
             toast: ToastTokens {
@@ -441,8 +441,8 @@ impl Tokens {
             palette: PaletteTokens {
                 background: c("palette-window.rest.fill"),
                 border: c("palette-window.rest.border-color"),
-                header: c("palette.header"),
-                header_text: c("palette.header-text"),
+                header: c("header-band.rest.fill"),
+                header_text: c("header-band.rest.text"),
                 padding: d("palette-window.padding-x"),
                 magnet: d("palette.magnet"),
             },

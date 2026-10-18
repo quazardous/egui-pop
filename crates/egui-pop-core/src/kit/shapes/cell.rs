@@ -6,9 +6,9 @@ use crate::kit::{
     ComponentKit, Corners, KitCx, Part, Primitive, paint_box, paint_label, paint_ring,
 };
 
-/// A box on its own: its fill, its border all around, every corner
-/// rounded by its radius, its indicator and its ring. Rows of the data
-/// views and a table's header cells.
+/// A box on its own: its fill (at the component's `opacity`), its border
+/// all around, every corner rounded by its radius, its indicator and its
+/// ring. Rows of the data views, a table's header cells, buttons.
 pub(crate) struct BoxCell;
 
 impl Primitive<ComponentKit> for BoxCell {
@@ -20,9 +20,12 @@ impl Primitive<ComponentKit> for BoxCell {
     }
 
     fn paint(&self, cx: &KitCx<'_>, data: &ComponentKit, part: &Part<'_>) {
-        let b = data.states.get(part.state);
-        paint_box(cx, part.rect, b, Corners::All, data.indicator_side);
-        paint_ring(cx, part.rect, b, Corners::All);
+        let mut b = *data.states.get(part.state);
+        if data.opacity < 1.0 {
+            b.fill = b.fill.gamma_multiply(data.opacity);
+        }
+        paint_box(cx, part.rect, &b, Corners::All, data.indicator_side);
+        paint_ring(cx, part.rect, &b, Corners::All);
     }
 
     fn paint_label(&self, cx: &KitCx<'_>, data: &ComponentKit, part: &Part<'_>) {

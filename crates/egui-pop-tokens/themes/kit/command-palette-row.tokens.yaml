@@ -1,0 +1,52 @@
+$description: "The `command-palette-row` component of the default kit (docs/kit.md), layered into pop-dark."
+command-palette-row:
+  $description: "A command in the command palette's list: egui lays it out and takes its clicks, the kit paints its box under it; `selected` for the one Enter runs (never `hover` then). Its matched characters are in the `accent` tone, its keys in the `muted` tone."
+  shape:
+    $type: "string"
+    $value: "box"
+  rest:
+    fill:
+      $type: "color"
+      $value: "{transparent}"
+    border-color:
+      $type: "color"
+      $value: "{transparent}"
+    border-width:
+      $type: "dimension"
+      $value: {value: 1, unit: "px"}
+    radius:
+      $type: "dimension"
+      $value: "{radius.widget}"
+    text:
+      $type: "color"
+      $value: "{text.default}"
+  selected:
+    fill:
+      $type: "color"
+      $value: "{selection}"
+    border-color:
+      $type: "color"
+      $value: "{border.default}"
+  hover:
+    fill:
+      $type: "color"
+      $value: "{surface.hover}"
+    border-color:
+      $type: "color"
+      $value: "{border.strong}"
+  active:
+    fill:
+      $type: "color"
+      $value: "{surface.active}"
+    border-color:
+      $type: "color"
+      $value: "{focus.ring}"
+  tone:
+    accent:
+      text:
+        $type: "color"
+        $value: "{text.strong}"
+    muted:
+      text:
+        $type: "color"
+        $value: "{text.muted}"

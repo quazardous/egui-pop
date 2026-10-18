@@ -402,22 +402,8 @@ slider:
     $value: "{accent.default}"
   thumb:
     $value: "{text.strong}"
-dialog:
-  header:
-    $type: "color"
-    $value: "{surface.raised}"
-    $description: "A movable dialog's header band, the handle it is dragged by."
-  header-text:
-    $type: "color"
-    $value: "{text.default}"
 palette:
   $description: "Palettes and toolboxes floating over the interface, never modal."
-  header:
-    $type: "color"
-    $value: "{surface.raised}"
-  header-text:
-    $type: "color"
-    $value: "{text.default}"
   magnet:
     $type: "dimension"
     $value: "{size.magnet}"

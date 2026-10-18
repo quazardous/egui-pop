@@ -4,18 +4,26 @@
 
 use super::Required;
 
+mod activity_bar_item;
 mod area_grip;
 mod area_strip;
 mod assist_card;
 mod backdrop;
+mod band_icon_button;
 mod button;
+mod command_button;
+mod command_palette_row;
 mod dialog;
+mod dialog_header;
+mod dock_preview;
 mod editor_frame;
 mod fault_card;
 mod field;
 mod find_bar;
+mod find_bar_button;
 mod fullscreen_exit;
 mod glyph;
+mod header_band;
 mod job_log;
 mod list_row;
 mod list_view;
@@ -47,18 +55,26 @@ mod window_close;
 
 /// Each component's contract.
 pub(super) const GROUPS: &[&[Required]] = &[
+    activity_bar_item::CONTRACT,
     area_grip::CONTRACT,
     area_strip::CONTRACT,
     assist_card::CONTRACT,
     backdrop::CONTRACT,
+    band_icon_button::CONTRACT,
     button::CONTRACT,
+    command_button::CONTRACT,
+    command_palette_row::CONTRACT,
     dialog::CONTRACT,
+    dialog_header::CONTRACT,
+    dock_preview::CONTRACT,
     editor_frame::CONTRACT,
     fault_card::CONTRACT,
     field::CONTRACT,
     find_bar::CONTRACT,
+    find_bar_button::CONTRACT,
     fullscreen_exit::CONTRACT,
     glyph::CONTRACT,
+    header_band::CONTRACT,
     job_log::CONTRACT,
     list_row::CONTRACT,
     list_view::CONTRACT,

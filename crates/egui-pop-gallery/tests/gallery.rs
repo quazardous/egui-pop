@@ -2404,6 +2404,50 @@ fn a_kit_restyles_a_dialogs_frame_from_the_theme_alone() {
 }
 
 #[test]
+fn a_kit_restyles_the_palettes_bands_from_the_theme_alone() {
+    // Data only: an accent band with a thicker line, filled while the
+    // pointer is over it, and square, outlined icon buttons on it.
+    let mut themes = egui_pop::tokens::Themes::default();
+    themes
+        .add_text(
+            "kit-band-accent",
+            r#"
+            $extends: "pop-dark"
+            header-band:
+              rest:
+                fill: {$type: "color", $value: "{accent.subtle}"}
+                border-color: {$type: "color", $value: "{accent.default}"}
+                border-width: {$type: "dimension", $value: {value: 2, unit: "px"}}
+                text: {$type: "color", $value: "{text.strong}"}
+              hover:
+                fill: {$type: "color", $value: "{accent.default}"}
+                text: {$type: "color", $value: "{text.on-accent}"}
+            band-icon-button:
+              rest:
+                radius: {$type: "dimension", $value: {value: 0, unit: "px"}}
+                border-color: {$type: "color", $value: "{border.strong}"}
+                border-width: {$type: "dimension", $value: {value: 1, unit: "px"}}
+            "#,
+        )
+        .expect("the test theme reads");
+    let mut h = harness(options("pop-dark", Density::Comfortable, "palettes"));
+    h.run();
+    let tokens = Tokens::new(themes.resolve(&egui_pop::tokens::ThemeSpec::new("kit-band-accent")));
+    egui_pop::core::theme::install_tokens(&h.ctx, tokens);
+    let kit = egui_pop::core::kit::Kit::of(&h.ctx);
+    assert!(kit.problems.is_empty(), "{:?}", kit.problems);
+    assert_eq!(kit.header_band.shape, "band");
+    h.get_by_label("Open the palettes").click();
+    h.run();
+    h.run();
+    // The pointer over the toolbox's title: its band is hovered.
+    h.query_all_by_label("Toolbox").last().unwrap().hover();
+    h.run();
+    h.run();
+    h.snapshot("palettes-kit-band");
+}
+
+#[test]
 fn a_kit_restyles_menu_items_from_the_theme_alone() {
     // Data only: square items, an accent bar on the side of the item
     // under the pointer and of an open submenu.

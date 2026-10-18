@@ -14,6 +14,16 @@ egui minor.
   and an unquoted `#colour` or `{alias}` in them fails the build. A
   component's token file is found by the build; `KIT_FILES` is no longer
   kept by hand.
+- Kits: the application's chrome is drawn by the kit, with tokens per
+  state: `header-band` (a movable dialog's and a palette's band, `hover`
+  under the pointer and `active` while dragged, which a kit may now
+  show), `dialog-header` (a dialog's title), `band-icon-button` (the
+  band's buttons, `selected` for a pinned palette, with a focus ring),
+  `find-bar-button`, `activity-bar-item` (now with a focus ring),
+  `dock-preview` (`disabled` where a panel may not dock),
+  `command-button` and `command-palette-row`. The close buttons draw
+  the `close` glyph role. The gallery's `palettes-kit-band` snapshot
+  restyles the bands with data only.
 - Kits: the window buttons' glyphs are glyph roles (`glyph.window-minimize`,
   `window-maximize`, `window-restore`, `window-close`), so a kit can draw
   them with its own icons, `indicator-size` across.
@@ -963,6 +973,15 @@ egui minor.
   and placeholder; `accent`: modified; `warning`: required; `danger`:
   invalid; `info`: pending). The flat names (`field.background`...) still
   work, each reported.
+- The `dialog.header`, `dialog.header-text`, `palette.header` and
+  `palette.header-text` tokens are renamed into the kit
+  (`header-band.rest.fill`, `dialog-header.rest.text`,
+  `header-band.rest.text`); a theme giving them still works, with a
+  reported problem. `band::BandStyle` keeps only the band's place
+  (`padding`, `gap`): the kit draws it, and `band::begin` tells the row
+  the band's state. A refused dock preview is outlined in the danger
+  colour over a dimmed area instead of a red wash; the band's buttons'
+  focus ring is two whole pixels instead of a blurred 1.5 point line.
 - The title bar's line is the kit's (`title-bar.rest.border-width`, 1 in
   the default kit): egui's panel line is no longer drawn under it, nor
   room kept for it when the title zone draws nothing.
@@ -1103,6 +1122,11 @@ egui minor.
 
 ### Fixed
 
+- Kits: a frame egui lays out (`Component::frame`, now given the pixels
+  per point, and `Component::show`) has its border snapped to whole
+  physical pixels, as the kit's own painting does, instead of a blurred
+  fraction at scales like 1.25; a box painted under a fading or disabled
+  `ui` (`Component::paint_under`) fades once, not twice.
 - An application icon drawn at a size the theme does not list (15 points,
   a kit's `indicator-size`) is rasterised at that size instead of scaled
   from the next one, which blurred it.

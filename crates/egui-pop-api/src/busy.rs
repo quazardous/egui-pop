@@ -16,8 +16,9 @@
 //! }
 //! ```
 
-use egui::{Atom, Button, Id, Rect, Response, Ui, Widget, vec2};
+use egui::{Atom, Button, Color32, Id, Rect, Response, RichText, Shape, Stroke, Ui, Widget, vec2};
 use egui_pop_core::icon::Icon;
+use egui_pop_core::kit::{Kit, Part, State};
 use egui_pop_core::motion::Busy;
 use egui_pop_core::progress::paint_spinner;
 use egui_pop_core::strings;
@@ -110,8 +111,38 @@ impl Widget for CommandButton<'_> {
         let enabled = applies && !running;
         let slot = Id::new(("egui_pop_command_button", id.as_str(), ui.id()));
         let side = t.size.icon_inline;
-        let button = Button::new((Atom::custom(slot, vec2(side, side)), title.as_str()));
-        let r = ui.add_enabled_ui(enabled, |ui| button.atom_ui(ui)).inner;
+        // egui lays the button out and takes its clicks; the kit's
+        // `command-button` paints its box under it (`under`), in the
+        // state of the last pass as egui's own frame would. egui greys
+        // it when disabled.
+        let kit = Kit::of(&ctx);
+        let look = &kit.command_button;
+        let r = ui
+            .add_enabled_ui(enabled, |ui| {
+                let under = ui.painter().add(Shape::Noop);
+                let state = ui
+                    .ctx()
+                    .read_response(ui.next_auto_id())
+                    .map_or(State::REST, |r| State::from_response(&r))
+                    .with(State::DISABLED, !ui.is_enabled());
+                let label = RichText::new(title.as_str()).color(look.style(state).text);
+                // egui's margin keeps room for its own border: kept, unseen.
+                let border = ui.visuals().widgets.inactive.bg_stroke.width;
+                let r = Button::new((Atom::custom(slot, vec2(side, side)), label))
+                    .fill(Color32::TRANSPARENT)
+                    .stroke(Stroke::new(border, Color32::TRANSPARENT))
+                    .atom_ui(ui);
+                let rect = r.response.rect;
+                let part = Part {
+                    rect,
+                    room: rect,
+                    state,
+                    label: None,
+                };
+                look.paint_under(ui, under, &part, None);
+                r
+            })
+            .inner;
         let busy = busy_shown(app, &ctx, slot, id);
         if let Some(rect) = r.rect(slot) {
             paint_slot(ui, rect, busy, self.icon, enabled);

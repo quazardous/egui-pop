@@ -42,6 +42,18 @@ field:
       $type: "color"
       $value: "{border.strong}"
       $description: "Every control outlined."
+command-button:
+  rest:
+    border-color:
+      $type: "color"
+      $value: "{border.strong}"
+      $description: "Every control outlined."
+command-palette-row:
+  selected:
+    border-color:
+      $type: "color"
+      $value: "{border.strong}"
+      $description: "Every control outlined."
 font:
   size:
     $type: "dimension"

@@ -157,7 +157,8 @@ assert!(app.handle().layout().floating_of(&TOOLS).is_some());
 ```
 
 - **The band.** A palette has the movable dialogs' header band
-  (`egui_pop_core::band`): its title, then Pin, Roll up and Close.
+  (`egui_pop_core::band`, the kit's `header-band` and
+  `band-icon-button`): its title, then Pin, Roll up and Close.
   Rolled up, only the band is left (a double click on the band does
   it too). Pinned, it stays where it is, in sight and opaque.
 - **Dragging.** The band drags the palette, kept inside the workbench

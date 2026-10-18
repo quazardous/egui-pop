@@ -1607,31 +1607,26 @@ fn drop_hint(app: &AppHandle, ctx: &egui::Context) {
         refusal: why.clone(),
     });
     drop(wb);
+    // The kit's `dock-preview`: at rest where the panel may go, disabled
+    // with its label saying why where it may not.
     let t = egui_pop_core::theme::Tokens::of(ctx);
     let painter = ctx.layer_painter(egui::LayerId::new(
         egui::Order::Foreground,
         Id::new("egui_pop.workbench.drop"),
     ));
-    let corner = t.radius.widget;
-    match why {
-        None => {
-            painter.rect_filled(rect, corner, t.accent.subtle.gamma_multiply(0.5));
-            painter.rect_stroke(
-                rect,
-                corner,
-                egui::Stroke::new(1.0, t.accent.default),
-                egui::StrokeKind::Inside,
-            );
-        }
-        Some(why) => {
-            painter.rect_filled(rect, corner, t.status.danger.gamma_multiply(0.15));
-            painter.text(
-                rect.center(),
-                egui::Align2::CENTER_CENTER,
-                why,
-                egui::FontId::proportional(t.font.body),
-                t.status.danger,
-            );
-        }
-    }
+    let label = why.map(|why| {
+        let font = egui::FontId::proportional(t.font.body);
+        ctx.fonts_mut(|f| f.layout_no_wrap(why, font, Color32::PLACEHOLDER))
+    });
+    let part = Part {
+        rect,
+        room: rect,
+        state: State::REST.with(State::DISABLED, label.is_some()),
+        label: label.as_ref(),
+    };
+    let cx = KitCx {
+        painter: &painter,
+        ppp: ctx.pixels_per_point(),
+    };
+    Kit::of(ctx).dock_preview.paint_part(&cx, &part);
 }
