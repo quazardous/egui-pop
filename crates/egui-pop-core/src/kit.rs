@@ -26,7 +26,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use egui::epaint::{CornerRadius, PathShape, PathStroke, StrokeKind};
+use egui::epaint::{CornerRadius, StrokeKind};
 use egui::{Color32, Context, Galley, Id, Painter, Pos2, Rect, Stroke, Vec2, pos2};
 use egui_pop_tokens::Value;
 
@@ -494,41 +494,27 @@ impl Primitive<ComponentKit> for BoxTab {
     fn paint(&self, cx: &KitCx<'_>, data: &ComponentKit, part: &Part<'_>) {
         let b = data.states.get(part.state);
         let rect = part.rect;
-        let r = b.radius.round().clamp(0.0, 255.0) as u8;
+        let r = Corners::Top.radius(b.radius.round().clamp(0.0, 255.0) as u8);
         if b.fill.a() > 0 {
-            cx.painter.rect_filled(rect, Corners::Top.radius(r), b.fill);
+            cx.painter.rect_filled(rect, r, b.fill);
         }
         if b.border_width > 0.0 && b.border_color.a() > 0 {
+            // The outline of a box one line taller, cut at the tab's
+            // bottom: three sides drawn, the bottom left open. egui's
+            // rectangle, not a path: nothing computed per frame.
             let w = crate::scale::snap(b.border_width, cx.ppp);
-            let h = w / 2.0;
-            let (l, t, rr, bot) = (
-                rect.left() + h,
-                rect.top() + h,
-                rect.right() - h,
-                rect.bottom(),
-            );
-            let rad = f32::from(r).min((rr - l) / 2.0).max(0.0);
-            let mut points = vec![pos2(l, bot)];
-            arc(&mut points, pos2(l + rad, t + rad), rad, 180.0, 270.0);
-            arc(&mut points, pos2(rr - rad, t + rad), rad, 270.0, 360.0);
-            points.push(pos2(rr, bot));
+            let taller = Rect::from_min_max(rect.min, pos2(rect.max.x, rect.max.y + w));
             cx.painter
-                .add(PathShape::line(points, PathStroke::new(w, b.border_color)));
+                .with_clip_rect(rect.intersect(cx.painter.clip_rect()))
+                .rect_stroke(
+                    taller,
+                    r,
+                    Stroke::new(w, b.border_color),
+                    StrokeKind::Inside,
+                );
         }
         paint_indicator(cx, rect, b, data.indicator_side);
         label_at(cx, data, part, b);
-    }
-}
-
-fn arc(points: &mut Vec<Pos2>, centre: Pos2, r: f32, from: f32, to: f32) {
-    if r <= 0.5 {
-        points.push(centre);
-        return;
-    }
-    let steps = 6;
-    for i in 0..=steps {
-        let a = (from + (to - from) * i as f32 / steps as f32).to_radians();
-        points.push(centre + r * Vec2::new(a.cos(), a.sin()));
     }
 }
 

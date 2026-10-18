@@ -16,7 +16,10 @@ egui minor.
   (`box`, the default, or `underline`; applications register their own
   with `kit::register_tab_shape`). The kit is compiled when the theme is
   installed: drawing resolves nothing. egui_dock keeps the layout and
-  docking.
+  docking. Tabs are prepared once (title translated, label laid out, width
+  measured) and again only when the theme, the scale, the language or a
+  panel's title changes: a frame of the workbench costs no more than with
+  egui_dock's own tabs (measured, `docs/kit.md`).
 - Fonts from the theme (`egui_pop_core::fonts`): the families named by
   `font.family.ui` and `font.family.mono` become egui's fonts, at four
   weights each (`fonts::family(role, weight)`, `fonts::font_id`), egui's

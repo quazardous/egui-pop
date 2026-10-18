@@ -86,6 +86,32 @@ and calls one handler per part: no lookup by name, no inheritance walk,
 no fallback. What could not be compiled (an unknown shape, a bad side) is
 in `Kit::problems`, logged, and drawn with the default.
 
+## Cost
+
+Measured with `crates/egui-pop-api/tests/bench_tabs.rs` (72 tabs in three
+areas, the interface built and tessellated without a GPU, the pointer
+sweeping the window; release build, versions run in alternation, five
+runs each, median of medians), 2026-10-18:
+
+| Version | Median frame | Instructions (callgrind) |
+|---|---|---|
+| Before kits (egui_dock's own tabs) | 360 us | 5.29 G |
+| Kit, first version | 562 us | 5.96 G |
+| Kit with prepared tabs | 355 us | 4.97 G |
+
+The first version did per frame what only changes with the theme, the
+scale, the language or a panel's title: titles translated and laid out
+three times per tab, egui_dock's style rebuilt, and the box tab's outline
+built as a path with arcs (an allocation and trigonometry per tab). Now
+each area keeps its tabs prepared (title, label laid out, width measured)
+and its egui_dock style, keyed on the kit, the pixels per point and the
+strings provider; a tab is prepared again only when its declared title
+changes. Handlers draw with egui's rectangles, not paths.
+
+Rule for handlers: nothing allocated or computed per frame that depends
+only on the kit. What a handler needs ahead goes in the component's data,
+compiled at install.
+
 ## Built so far
 
 - **Tabs of the workbench** (`tab`, `tab-bar`). egui_dock keeps the
