@@ -387,9 +387,9 @@ impl Tokens {
                 thumb: c("slider.thumb"),
             },
             menu_item: MenuItemTokens {
-                background_hover: c("menu.item.background-hover"),
-                text: c("menu.item.text"),
-                text_muted: c("menu.item.text-muted"),
+                background_hover: c("menu-item.hover.fill"),
+                text: c("menu-item.rest.text"),
+                text_muted: c("menu-item.tone.muted.text"),
             },
             dialog: DialogTokens {
                 background: c("dialog.rest.fill"),

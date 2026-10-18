@@ -222,14 +222,6 @@
     "fill": {"$value": "{accent.default}"},
     "thumb": {"$value": "{text.strong}"}
   },
-  "menu": {
-    "item": {
-      "$type": "color",
-      "background-hover": {"$value": "{surface.hover}"},
-      "text": {"$value": "{text.default}"},
-      "text-muted": {"$value": "{text.muted}"}
-    }
-  },
   "dialog": {
     "header": {"$type": "color", "$value": "{surface.raised}", "$description": "A movable dialog's header band, the handle it is dragged by."},
     "header-text": {"$type": "color", "$value": "{text.default}"}

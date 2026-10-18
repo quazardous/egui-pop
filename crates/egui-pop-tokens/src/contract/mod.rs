@@ -213,13 +213,6 @@ const CORE: &[Required] = &[
     comp("slider.track", "color", "the slider's rail"),
     comp("slider.fill", "color", "the rail up to the value"),
     comp("slider.thumb", "color", "the handle"),
-    comp(
-        "menu.item.background-hover",
-        "color",
-        "a menu item under the pointer",
-    ),
-    comp("menu.item.text", "color", "a menu item's label"),
-    comp("menu.item.text-muted", "color", "a menu item's shortcut"),
     comp("dialog.header", "color", "a movable dialog's header band"),
     comp("palette.header", "color", "a palette's header band"),
     comp(
@@ -449,6 +442,9 @@ const CORE: &[Required] = &[
 /// moved to the new names (unless the theme gives them), with a reported
 /// problem. Aliases to an old name are not followed.
 pub const RENAMED: &[(&str, &[&str])] = &[
+    ("menu.item.background-hover", &["menu-item.hover.fill"]),
+    ("menu.item.text", &["menu-item.rest.text"]),
+    ("menu.item.text-muted", &["menu-item.tone.muted.text"]),
     ("button.background", &["button.rest.fill"]),
     (
         "button.background-hover",

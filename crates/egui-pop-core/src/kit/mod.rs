@@ -482,25 +482,37 @@ impl Component {
             .stroke(Stroke::new(b.border_width.max(0.0), Color32::TRANSPARENT))
             .show(ui, add);
         let rect = r.response.rect;
+        let shadow = (shadow != Shadow::NONE).then(|| Shape::from(shadow.as_shape(rect, b.radius)));
+        self.paint_under(
+            ui,
+            slot,
+            &Part {
+                rect,
+                room: rect,
+                state,
+                label: None,
+            },
+            shadow,
+        );
+        r
+    }
+
+    /// Paints a part's box into `slot`, a shape reserved (`Shape::Noop`)
+    /// before the widget drew its content: the box ends up under the
+    /// content although it is painted after it, once the part's
+    /// rectangle and state are known. `first` goes under the box (a
+    /// shadow). One allocation per part and frame.
+    pub fn paint_under(&self, ui: &Ui, slot: ShapeIdx, part: &Part<'_>, first: Option<Shape>) {
         let layer = ui.layer_id();
         let start = ui.ctx().graphics_mut(|g| g.entry(layer).next_idx());
-        let part = Part {
-            rect,
-            room: rect,
-            state,
-            label: None,
-        };
         self.paint(
             &KitCx {
                 painter: ui.painter(),
-                ppp,
+                ppp: ui.ctx().pixels_per_point(),
             },
-            &part,
+            part,
         );
-        let mut shapes = Vec::new();
-        if shadow != Shadow::NONE {
-            shapes.push(Shape::from(shadow.as_shape(rect, b.radius)));
-        }
+        let mut shapes: Vec<Shape> = first.into_iter().collect();
         ui.ctx().graphics_mut(|g| {
             let list = g.entry(layer);
             let end = list.next_idx().0;
@@ -511,7 +523,6 @@ impl Component {
             }
         });
         ui.painter().set(slot, Shape::Vec(shapes));
-        r
     }
 }
 
@@ -568,6 +579,10 @@ components! {
     /// A data view as a whole (tree, list, table, library grid): its
     /// outline while it has the keyboard focus, painted over its rows.
     list_view: "list-view" => "plain",
+    /// An item of a menu (command, check item, submenu): egui lays it out
+    /// and takes its clicks, the kit paints its box under it; `selected`
+    /// while its submenu is open, its shortcut in the `muted` tone.
+    menu_item: "menu-item" => "box",
     /// A meter's track (its fill is a `progress-fill`).
     meter: "meter" => "track",
     /// A meter's threshold, a line across its track.

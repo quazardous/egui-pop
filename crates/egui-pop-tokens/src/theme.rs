@@ -95,6 +95,7 @@ pub(crate) const KIT_FILES: &[(&str, &str)] = &[
     ("job-log", include_str!("../themes/kit/job-log.tokens.json")),
     ("list-row", include_str!("../themes/kit/list-row.tokens.json")),
     ("list-view", include_str!("../themes/kit/list-view.tokens.json")),
+    ("menu-item", include_str!("../themes/kit/menu-item.tokens.json")),
     ("meter", include_str!("../themes/kit/meter.tokens.json")),
     ("meter-tick", include_str!("../themes/kit/meter-tick.tokens.json")),
     ("palette-window", include_str!("../themes/kit/palette-window.tokens.json")),

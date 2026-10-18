@@ -17,6 +17,7 @@ mod glyph;
 mod job_log;
 mod list_row;
 mod list_view;
+mod menu_item;
 mod meter;
 mod meter_tick;
 mod palette_window;
@@ -56,6 +57,7 @@ pub(super) const GROUPS: &[&[Required]] = &[
     job_log::CONTRACT,
     list_row::CONTRACT,
     list_view::CONTRACT,
+    menu_item::CONTRACT,
     meter::CONTRACT,
     meter_tick::CONTRACT,
     palette_window::CONTRACT,
