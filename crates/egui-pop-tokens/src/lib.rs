@@ -11,7 +11,7 @@
 //! Tokens come in three tiers ([`Tier`]): the **reference** palette (colour
 //! scales such as `gray.0`..`gray.12`), the **system** roles widgets read
 //! (`surface.panel`, `text.muted`) and **component** tokens
-//! (`slider.fill`), each tier aliasing the one below. Every theme answers
+//! (`slider-fill.rest.fill`), each tier aliasing the one below. Every theme answers
 //! the same [`contract()`]; a theme missing a token, or giving it the wrong
 //! type, gets the built-in `pop-dark` value for it and a reported problem.
 //! Resolving never panics.

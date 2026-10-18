@@ -30,6 +30,11 @@ mod progress_fill;
 mod progress_line;
 mod progress_ring;
 mod side_area;
+mod slider;
+mod slider_fill;
+mod slider_thumb;
+mod slider_toggle;
+mod slider_value;
 mod spinner;
 mod status_indicator;
 mod tab;
@@ -73,6 +78,11 @@ pub(super) const GROUPS: &[&[Required]] = &[
     progress_line::CONTRACT,
     progress_ring::CONTRACT,
     side_area::CONTRACT,
+    slider::CONTRACT,
+    slider_fill::CONTRACT,
+    slider_thumb::CONTRACT,
+    slider_toggle::CONTRACT,
+    slider_value::CONTRACT,
     spinner::CONTRACT,
     status_indicator::CONTRACT,
     tab::CONTRACT,

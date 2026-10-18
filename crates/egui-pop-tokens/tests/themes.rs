@@ -327,7 +327,7 @@ fn an_accent_re_aliases_the_accent_roles_only() {
         assert_eq!(blue.color("text.on-accent"), blue.color("blue.contrast"));
         // Aliases of the accent follow it.
         assert_eq!(blue.color("focus.ring"), blue.color("blue.9"));
-        assert_eq!(blue.color("slider.fill"), blue.color("blue.9"));
+        assert_eq!(blue.color("slider-fill.rest.fill"), blue.color("blue.9"));
         // Everything else is untouched.
         assert_eq!(blue.color("surface.panel"), plain.color("surface.panel"));
         assert_eq!(blue.color("danger"), plain.color("danger"));

@@ -265,6 +265,17 @@ compiled at install.
   `progress-ring`, `spinner`, `status-indicator`), handlers `track`,
   `span` and `tick`. The library's pills are not migrated: their neutral
   fill is a surface at 85 % opacity, which an alias cannot express yet.
+- **Sliders** (`slider`, `slider-fill`, `slider-thumb`, `slider-value`,
+  `slider-toggle`). The bar is a box with its label at the start
+  (`align`), `hover`, `active` while dragged and `focus` (a ring inside
+  it in the default kit); a range slider's bar is in the states of both
+  thumbs, each thumb in its own. The fill is a strip along the bottom
+  (`slider-fill.height`, else 15 % of the bar, handler `track`); a
+  gradient track's colours are content and stay code. A thumb is a line
+  (`tick`, `width` thick). The value is a part of its own at the end, in
+  the `warning` tone past the soft range. The square button at the end
+  is `selected` while its toggle is on, its icon in `text`. The
+  `sliders-kit-flat` snapshot restyles them with data only.
 - **Glyphs by role** (`kit::Glyph`, `glyph.<role>` tokens): the small
   marks widgets draw, named by what they mean and mapped by the kit to
   an icon of its set, compiled into a table read by index. The vocabulary

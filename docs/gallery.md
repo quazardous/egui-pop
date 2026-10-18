@@ -150,6 +150,9 @@ Egui's built-ins in egui-pop's style, values, sliders, inputs (decorators, field
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/placeholders-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/placeholders-pop-dark.png" width="200" alt="placeholders-pop-dark"></a><br>placeholders-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/dialogs-kit-square.png"><img src="../crates/egui-pop-gallery/tests/snapshots/dialogs-kit-square.png" width="200" alt="dialogs-kit-square"></a><br>dialogs-kit-square</td>
   </tr>
+  <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/sliders-kit-flat.png"><img src="../crates/egui-pop-gallery/tests/snapshots/sliders-kit-flat.png" width="200" alt="sliders-kit-flat"></a><br>sliders-kit-flat</td>
+  </tr>
 </table>
 
 ### Data views

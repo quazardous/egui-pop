@@ -2441,6 +2441,79 @@ fn a_kit_restyles_menu_items_from_the_theme_alone() {
 }
 
 #[test]
+fn a_kit_restyles_sliders_from_the_theme_alone() {
+    // Data only: flat outlined bars, the fill the bar's whole height, a
+    // thicker accent thumb, a ring outside the focused bar, its value
+    // past the soft range in the danger colour, square toggles.
+    let mut themes = egui_pop::tokens::Themes::default();
+    themes
+        .add_text(
+            "kit-sliders-flat",
+            r#"
+            $extends: "pop-dark"
+            slider:
+              rest:
+                fill: {$type: "color", $value: "{surface.sunken}"}
+                border-color: {$type: "color", $value: "{border.default}"}
+                border-width: {$type: "dimension", $value: {value: 1, unit: "px"}}
+                radius: {$type: "dimension", $value: {value: 0, unit: "px"}}
+              focus:
+                border-width: {$type: "dimension", $value: {value: 1, unit: "px"}}
+                ring-color: {$type: "color", $value: "{accent.default}"}
+                ring-width: {$type: "dimension", $value: {value: 1, unit: "px"}}
+                ring-offset: {$type: "dimension", $value: {value: 1, unit: "px"}}
+            slider-fill:
+              height: {$type: "dimension", $value: {value: 100, unit: "px"}}
+              rest:
+                fill: {$type: "color", $value: "{accent.subtle}"}
+            slider-thumb:
+              width: {$type: "dimension", $value: {value: 3, unit: "px"}}
+              rest:
+                fill: {$type: "color", $value: "{accent.default}"}
+            slider-value:
+              tone:
+                warning:
+                  text: {$type: "color", $value: "{danger}"}
+            slider-toggle:
+              rest:
+                fill: {$type: "color", $value: "{surface.sunken}"}
+                border-color: {$type: "color", $value: "{border.default}"}
+                border-width: {$type: "dimension", $value: {value: 1, unit: "px"}}
+                radius: {$type: "dimension", $value: {value: 0, unit: "px"}}
+              selected:
+                fill: {$type: "color", $value: "{accent.subtle}"}
+            "#,
+        )
+        .expect("the test theme reads");
+    let mut h = harness(options("pop-dark", Density::Comfortable, "sliders"));
+    h.run();
+    let tokens = Tokens::new(themes.resolve(&egui_pop::tokens::ThemeSpec::new("kit-sliders-flat")));
+    egui_pop::core::theme::install_tokens(&h.ctx, tokens);
+    assert!(egui_pop::core::kit::Kit::of(&h.ctx).problems.is_empty());
+    h.run();
+    // Exposure typed past its soft range (-3 to 4 EV), kept focused.
+    h.get_by_label("Exposure").click();
+    h.run();
+    h.key_press(egui::Key::Enter);
+    h.run();
+    for _ in 0..8 {
+        h.key_press(egui::Key::Backspace);
+    }
+    h.get_by_role(egui::accesskit::Role::TextInput)
+        .type_text("6");
+    h.run();
+    h.key_press(egui::Key::Enter);
+    h.run();
+    assert_eq!(
+        h.get_by_label("Exposure").accesskit_node().numeric_value(),
+        Some(6.0)
+    );
+    h.remove_cursor();
+    h.run();
+    h.snapshot("sliders-kit-flat");
+}
+
+#[test]
 fn a_folded_side_area_shows_its_strip_and_a_click_unfolds_it() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "workbench"));
     h.run();
