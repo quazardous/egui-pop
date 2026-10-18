@@ -623,6 +623,9 @@ components! {
     /// A status bar indicator, colours only: its text by tone, its
     /// progress line (`border-color` the track, `indicator-*` the fill).
     status_indicator: "status-indicator" => "plain",
+    /// An icon of the activity bar, its icon in `text`: `selected` while
+    /// its panel is shown (never `hover` then).
+    activity_bar_item: "activity-bar-item" => "box",
     /// A side area's resize grip at the middle of its edge (`width` its
     /// thickness, `height` its length); egui takes the drag.
     area_grip: "area-grip" => "box",
@@ -634,11 +637,28 @@ components! {
     /// A push button. egui's own widgets take their states from it:
     /// rest, hover, active, and selected for an open menu or combo box.
     button: "button" => "box",
+    /// A button running a command: egui lays it out and takes its clicks,
+    /// the kit paints its box; egui greys it when disabled.
+    command_button: "command-button" => "box",
+    /// A command in the command palette: egui lays it out, the kit paints
+    /// its box under it; `selected` for the one Enter runs, its matches in
+    /// the `accent` tone, its keys in the `muted` tone.
+    command_palette_row: "command-palette-row" => "box",
     /// What dims the interface behind a modal dialog: its `fill` at
     /// `opacity` (egui paints it).
     backdrop: "backdrop" => "plain",
+    /// An icon button on a header band (a palette's close, roll and pin, a
+    /// dialog's close), its icon in `text`; `selected` for a pinned
+    /// palette.
+    band_icon_button: "band-icon-button" => "box",
     /// A dialog's frame.
     dialog: "dialog" => "card",
+    /// A dialog's title row, colours only: its title in `text`, on the
+    /// header band of a movable dialog (`padding-y` below it).
+    dialog_header: "dialog-header" => "plain",
+    /// Where a dragged tab or palette would dock (its fill at `opacity`);
+    /// `disabled` when refused, its label saying why.
+    dock_preview: "dock-preview" => "box",
     /// The frame around a text or code editor; `focus` while it has the
     /// keyboard.
     editor_frame: "editor-frame" => "card",
@@ -648,8 +668,13 @@ components! {
     fault_card: "fault-card" => "card",
     /// An editor's find and replace bar.
     find_bar: "find-bar" => "card",
+    /// An icon button of the find bar (previous, next, close).
+    find_bar_button: "find-bar-button" => "box",
     /// The strip at the top of a full screen window, its way out.
     fullscreen_exit: "fullscreen-exit" => "card",
+    /// The band at the top of a movable dialog and of a palette, dragged to
+    /// move it: `hover` under the pointer, `active` while dragged.
+    header_band: "header-band" => "band",
     /// A job's log console, as plain lines.
     job_log: "job-log" => "card",
     /// A floating palette's window.
@@ -1125,6 +1150,64 @@ mod tests {
         assert_eq!(kit.progress_ring.style(State::REST).indicator_color, green);
         assert_eq!(kit.progress_bar.data.height, 12.0);
         assert_eq!(kit.meter.data.height, 12.0);
+    }
+
+    #[test]
+    fn a_theme_giving_the_former_header_tokens_still_works() {
+        let t = tokens_with(
+            r##"
+            $extends: "pop-dark"
+            palette:
+              header: {$type: "color", $value: "#102030"}
+              header-text: {$type: "color", $value: "#405060"}
+            dialog:
+              header-text: {$type: "color", $value: "#708090"}
+            "##,
+        );
+        let kit = Kit::compile(&t, &Shapes::default());
+        let hex = |c: Color32| format!("#{:02x}{:02x}{:02x}", c.r(), c.g(), c.b());
+        let band = kit.header_band.style(State::REST);
+        assert_eq!(
+            (hex(band.fill), hex(band.text)),
+            ("#102030".into(), "#405060".into())
+        );
+        let title = kit.dialog_header.style(State::REST).text;
+        assert_eq!(hex(title), "#708090");
+    }
+
+    #[test]
+    fn the_default_chrome_aliases_the_system_tokens() {
+        let t = Tokens::default();
+        let kit = Kit::compile(&t, &Shapes::default());
+        assert_eq!(kit.header_band.shape, "band");
+        assert_eq!(kit.header_band.style(State::REST).fill, t.surface.raised);
+        assert_eq!(kit.header_band.data.padding_y, t.space.xs);
+        assert_eq!(kit.dialog_header.data.padding_y, t.space.m);
+        let pinned = kit.band_icon_button.style(State::SELECTED);
+        assert_eq!(
+            (pinned.fill, pinned.text),
+            (t.surface.raised, t.text.strong)
+        );
+        let focus = kit.band_icon_button.style(State::FOCUS);
+        assert_eq!((focus.ring_color, focus.ring_width), (t.focus_ring, 2.0));
+        // A command button looks like egui's buttons, which `button` draws.
+        for s in [State::REST, State::HOVER, State::ACTIVE] {
+            let (c, b) = (kit.command_button.style(s), kit.button.style(s));
+            assert_eq!(
+                (c.fill, c.border_color, c.text),
+                (b.fill, b.border_color, b.text)
+            );
+        }
+        let row = &kit.command_palette_row;
+        assert_eq!(row.style(State::SELECTED).fill, t.selection);
+        assert_eq!(row.style_toned(Tone::Muted, State::REST).text, t.text.muted);
+        assert_eq!(
+            kit.activity_bar_item.style(State::SELECTED).fill,
+            t.accent.subtle
+        );
+        let refused = kit.dock_preview.style(State::DISABLED);
+        assert_eq!(refused.border_color, t.status.danger);
+        assert_eq!(kit.dock_preview.data.opacity, 0.5);
     }
 
     #[test]

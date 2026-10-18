@@ -101,8 +101,13 @@ pub const PAIRS: &[Pair] = &[
     text("menu-item.rest.text", "menu-item.hover.fill"),
     text("menu-item.tone.muted.text", "surface.overlay"),
     text("toast.rest.text", "toast.rest.fill"),
-    text("dialog.header-text", "dialog.header"),
-    text("palette.header-text", "palette.header"),
+    text("dialog-header.rest.text", "header-band.rest.fill"),
+    text("header-band.rest.text", "header-band.rest.fill"),
+    text("band-icon-button.rest.text", "header-band.rest.fill"),
+    text(
+        "command-palette-row.rest.text",
+        "command-palette-row.selected.fill",
+    ),
     // Editors: code over its background, line numbers over the gutter.
     text("editor.line-number", "editor.gutter"),
     text("editor.line-number-active", "editor.gutter"),

@@ -560,8 +560,8 @@ acts on (levels over an image, a find dialog over a text) can be moved
 out of the way.
 
 - **The header band.** Only a movable dialog has one: its title row on
-  a tone of its own (`dialog.header`, the title in
-  `dialog.header-text`), a separator below it, the move cursor over it.
+  the kit's `header-band` (the title in `dialog-header.rest.text`), a
+  line below it, the move cursor over it.
   It carries the ✕ when the dialog is closable. A dialog that is not
   movable keeps its plain title row: no band means "this does not
   move".

@@ -1,0 +1,34 @@
+$description: "The `dock-preview` component of the default kit (docs/kit.md), layered into pop-dark."
+dock-preview:
+  $description: "Where a dragged tab or palette would dock, over the area it is above; `disabled` when the panel refuses that area (its label says why)."
+  shape:
+    $type: "string"
+    $value: "box"
+  opacity:
+    $type: "number"
+    $value: 0.5
+    $description: "How opaque its fill is (its border and label are not faded)."
+  rest:
+    fill:
+      $type: "color"
+      $value: "{accent.subtle}"
+    border-color:
+      $type: "color"
+      $value: "{accent.default}"
+    border-width:
+      $type: "dimension"
+      $value: {value: 1, unit: "px"}
+    radius:
+      $type: "dimension"
+      $value: "{radius.widget}"
+    text:
+      $type: "color"
+      $value: "{danger}"
+      $description: "Why the drop is refused."
+  disabled:
+    fill:
+      $type: "color"
+      $value: "{surface.overlay}"
+    border-color:
+      $type: "color"
+      $value: "{danger}"

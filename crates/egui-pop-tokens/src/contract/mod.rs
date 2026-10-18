@@ -213,22 +213,10 @@ const CORE: &[Required] = &[
     comp("slider.track", "color", "the slider's rail"),
     comp("slider.fill", "color", "the rail up to the value"),
     comp("slider.thumb", "color", "the handle"),
-    comp("dialog.header", "color", "a movable dialog's header band"),
-    comp("palette.header", "color", "a palette's header band"),
-    comp(
-        "palette.header-text",
-        "color",
-        "the title on a palette's header band",
-    ),
     comp(
         "palette.magnet",
         "dimension",
         "how close a palette snaps to an edge or another palette",
-    ),
-    comp(
-        "dialog.header-text",
-        "color",
-        "the title on a movable dialog's header band",
     ),
     comp(
         "viewport.background",
@@ -502,6 +490,10 @@ pub const RENAMED: &[(&str, &[&str])] = &[
     ("dialog.radius", &["dialog.rest.radius"]),
     ("dialog.padding", &["dialog.padding-x", "dialog.padding-y"]),
     ("dialog.backdrop", &["backdrop.opacity"]),
+    ("dialog.header", &["header-band.rest.fill"]),
+    ("dialog.header-text", &["dialog-header.rest.text"]),
+    ("palette.header", &["header-band.rest.fill"]),
+    ("palette.header-text", &["header-band.rest.text"]),
     ("palette.background", &["palette-window.rest.fill"]),
     ("palette.border", &["palette-window.rest.border-color"]),
     (

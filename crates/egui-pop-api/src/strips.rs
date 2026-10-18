@@ -36,7 +36,7 @@ use std::rc::Rc;
 use egui::{Sense, Ui, vec2};
 use egui_pop_core::icon::Icon;
 use egui_pop_core::kit::{
-    BoxStyle, Kit, KitCx, Side, State as KitState, Tone as KitTone, paint_indicator,
+    BoxStyle, Kit, KitCx, Part, Side, State as KitState, Tone as KitTone, paint_indicator,
 };
 use egui_pop_core::theme::Tokens;
 use egui_pop_model::commands::CommandSpec;
@@ -218,6 +218,7 @@ impl Plugin for StripsPlugin {
 /// The activity bar: an icon per panel of the start side.
 fn activity_bar(ui: &mut Ui, app: &AppHandle) {
     let t = Tokens::of(ui.ctx());
+    let kit = Kit::of(ui.ctx());
     let layout = app.layout();
     let folded = layout.folded.contains(&Area::StartSide);
     let shown: Vec<_> = layout
@@ -243,18 +244,25 @@ fn activity_bar(ui: &mut Ui, app: &AppHandle) {
             let side = t.size.icon_panel + 2.0 * t.space.s;
             let (rect, r) = ui.allocate_exact_size(vec2(side, side), Sense::click());
             egui_pop_core::a11y::name(&r, egui::WidgetType::Button, &title);
-            if on {
-                ui.painter()
-                    .rect_filled(rect, t.radius.widget, t.accent.subtle);
-            } else if r.hovered() {
-                ui.painter()
-                    .rect_filled(rect, t.radius.widget, t.surface.hover);
-            }
-            let color = if on || r.hovered() {
-                t.text.strong
-            } else {
-                t.text.muted
+            // Selected, never hovered then: the shown panel's item keeps
+            // its look under the pointer.
+            let state = KitState::REST
+                .with(KitState::HOVER, r.hovered() && !on)
+                .with(KitState::ACTIVE, r.is_pointer_button_down_on())
+                .with(KitState::FOCUS, r.has_focus())
+                .with(KitState::SELECTED, on);
+            let part = Part {
+                rect,
+                room: rect,
+                state,
+                label: None,
             };
+            let cx = KitCx {
+                painter: ui.painter(),
+                ppp: ui.ctx().pixels_per_point(),
+            };
+            kit.activity_bar_item.paint(&cx, &part);
+            let color = kit.activity_bar_item.style(state).text;
             let inner = rect.shrink(t.space.s);
             match icon {
                 Some(i) => egui_pop_core::icon::Source::from(i).paint(ui, inner, color),

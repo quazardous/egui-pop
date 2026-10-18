@@ -54,7 +54,7 @@ does not change with the state.
 | `indicator-side` | | `top`, `bottom`, `left` or `right` |
 | `ring-color`, `ring-width`, `ring-offset` | ✓ | the focus ring, usually given by `focus` only: an outline `ring-offset` points outside the box (inside when negative), following its corners; none at width 0 |
 | `padding-y` | | between the content and the part's top and bottom edges |
-| `opacity` | | how much the part hides what is behind it, 0 to 1 (a backdrop) |
+| `opacity` | | how much the part hides what is behind it, 0 to 1 (a backdrop; the `box` handler's fill) |
 | `buttons-side` | | on `title-bar`: `end` or `start`, where the window buttons go, close outermost |
 | `buttons-hover` | | on `title-bar`: `own` or `group`, whether the three buttons are hovered together |
 | `corners` | | on `window`: `round`, `small` or `square`, the corners asked of the system (Windows 11 only) |
@@ -260,7 +260,31 @@ compiled at install.
   `palette-window`, `tip-card`, `job-log`, `fullscreen-exit`,
   `editor-frame`, `terminal-frame`, `find-bar`, `assist-card`), handler
   `card`; the `dialogs-kit-square` snapshot restyles a dialog with data
-  only. The dialog's and palette's header bands are not components yet.
+  only. Their borders are snapped to whole physical pixels like the
+  kit's own painting (`Component::frame` takes the pixels per point).
+- **The application's chrome** (`header-band`, `dialog-header`,
+  `band-icon-button`, `find-bar-button`, `activity-bar-item`,
+  `dock-preview`, `command-button`, `command-palette-row`). The band at
+  the top of a movable dialog and of a palette is drawn by the `band`
+  handler (its top corners follow the frame's `radius` inside its
+  outline, its border is the line below it), `hover` under the pointer
+  and `active` while dragged; the dialog's title is `dialog-header`'s
+  `text`, the room below it its `padding-y`. The former `dialog.header`,
+  `dialog.header-text`, `palette.header` and `palette.header-text`
+  tokens are renamed (`RENAMED`). The band's buttons (a palette's
+  close, roll and pin, `selected` while pinned; a dialog's close) and
+  the find bar's are boxes with an icon in their `text`, the close
+  marks the `close` glyph role, a focus ring as data. An activity bar
+  item is `selected` while its panel is shown (never `hover` then). The
+  dock preview is at rest where a panel may dock and `disabled` where
+  it may not, its label saying why, its fill at `opacity` (the `box`
+  handler fades its fill by the component's `opacity`). A command
+  button and a palette row are laid out by egui, which takes their
+  clicks; the kit paints their box under them (`paint_under`), in the
+  state of the last pass as egui's own frame was; a palette row's
+  matches are the `accent` tone, its keys the `muted` tone. The
+  gallery's `palettes-kit-band` snapshot restyles the bands with data
+  only.
 - **Progress and status by tone** (`progress-bar`, `progress-line`,
   `progress-fill`, `progress-caption`, `meter`, `meter-tick`,
   `progress-ring`, `spinner`, `status-indicator`), handlers `track`,

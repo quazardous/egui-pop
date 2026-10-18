@@ -148,8 +148,8 @@ fn the_default_kit_is_a_kit_folder() {
     let components: Vec<&str> = egui_pop_tokens::contract::kit_contract()
         .filter_map(|r| r.path.split('.').next())
         .collect();
-    // Only the vocabulary's tokens: a component's other tokens (the
-    // dialog's header band, `dialog.header`) are not kit tokens yet.
+    // Only the vocabulary's tokens: a component's other tokens are not
+    // kit tokens.
     let states = [
         "rest", "hover", "active", "focus", "selected", "disabled", "tone",
     ];

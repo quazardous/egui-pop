@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use super::Shapes;
 
+mod band;
 mod card;
 mod cell;
 mod outline;
@@ -19,9 +20,16 @@ pub(crate) use plain::Plain;
 /// Adds the shipped handlers other than `plain`; `card` is every
 /// component's too.
 pub(super) fn built_in(shapes: &mut Shapes) {
+    shapes.insert("activity-bar-item", "box", Arc::new(cell::BoxCell));
     shapes.insert("area-grip", "box", Arc::new(cell::BoxCell));
+    shapes.insert("band-icon-button", "box", Arc::new(cell::BoxCell));
     shapes.insert("button", "box", Arc::new(cell::BoxCell));
+    shapes.insert("command-button", "box", Arc::new(cell::BoxCell));
+    shapes.insert("command-palette-row", "box", Arc::new(cell::BoxCell));
+    shapes.insert("dock-preview", "box", Arc::new(cell::BoxCell));
     shapes.insert("field", "box", Arc::new(cell::BoxCell));
+    shapes.insert("find-bar-button", "box", Arc::new(cell::BoxCell));
+    shapes.insert("header-band", "band", Arc::new(band::Band));
     shapes.insert("list-row", "box", Arc::new(cell::BoxCell));
     shapes.insert("menu-item", "box", Arc::new(cell::BoxCell));
     shapes.insert("table-header-cell", "box", Arc::new(cell::BoxCell));
