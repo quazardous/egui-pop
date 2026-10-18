@@ -23,6 +23,30 @@ egui minor.
 - The title bar and window buttons are kit components (`title-bar`,
   `window-button`, `window-close`); `title-bar.align: start` puts the
   title after the bar's leading items instead of centring it.
+- Kits: dialogs, popovers and menus, toasts, palettes, tip, fault and
+  job-log cards, the full screen strip, the editor, terminal, find bar
+  and code assist frames are kit components (`dialog.rest.fill`,
+  `toast.padding-x`...), drawn by a `card` handler or, through
+  `Component::frame`/`show`, as egui frames; a text or code editor shows
+  a focus ring while it has the keyboard. New terms `padding-y` and
+  `opacity`, new system token `scrim`.
+- Kits: tones, a second axis beside the states
+  (`component.tone.<tone>.<term>`: accent, info, success, warning,
+  danger, muted), compiled ahead per state; a component without tones
+  pays nothing. Progress bars, lines, meters, rings, spinners and the
+  status bar's indicators are drawn by the kit by tone (`progress-bar`,
+  `progress-line`, `progress-fill`, `progress-caption`, `meter`,
+  `meter-tick`, `progress-ring`, `spinner`, `status-indicator`).
+- Kits as packages: a kit folder (`kit.json` with a manifest, more token
+  files, `fonts/`, `LICENSE`) read at run time
+  (`egui_pop_tokens::kit::KitData::load`) or embedded (`kit!`), its
+  problems reported and never fatal; `kit::check` for application tests
+  and a `kit-check` example. `AppBuilder::kit` adds a kit (theme, faces,
+  handlers) in one line, `KitSource` carries a kit's handlers,
+  `AppBuilder::user_kits` reads `<persist>/kits` and `ThemeService::kits`
+  lists them. The default kit (`themes/kit/`) is a kit folder read by
+  the same loader; an example kit, `examples/kits/underline-tabs`.
+- Tables: the sort direction is the kit's glyph after the column title.
 - Kits: the rows of trees, lists and tables (`list-row`), a focused
   view's outline (`list-view`), a table's header cells
   (`table-header-cell`) and stripes (`table-stripe`) and the tree's drop
@@ -856,6 +880,15 @@ egui minor.
 
 ### Changed
 
+- Renamed into the kit's grid, the former names still working with a
+  reported problem: `progress.*` (`progress.track` is
+  `progress-bar.rest.fill`...), `dialog.{background, border, radius,
+  padding, backdrop}`, `palette.{background, border, padding}`,
+  `toast.{background, border, text, padding}`, `editor.background`,
+  `terminal.background`. `progress::Tone` is `kit::Tone` and gains
+  `Neutral`.
+- `egui_pop_core::kit::paint_ring`: a ring inside its box follows its
+  corners.
 - `egui_pop_tokens::CONTRACT` is replaced by `contract()`: the default
   kit's components keep their contract and their tokens in one file each
   (`contract/kit/`, `themes/kit/`), so components can be added

@@ -53,6 +53,8 @@ does not change with the state.
 | `height` | | the component's height, when it has a fixed one |
 | `indicator-side` | | `top`, `bottom`, `left` or `right` |
 | `ring-color`, `ring-width`, `ring-offset` | ✓ | the focus ring, usually given by `focus` only: an outline `ring-offset` points outside the box (inside when negative), following its corners; none at width 0 |
+| `padding-y` | | between the content and the part's top and bottom edges |
+| `opacity` | | how much the part hides what is behind it, 0 to 1 (a backdrop) |
 | `align` | | where the label goes: `start`, `centre` (on the part's centre, moved into its room when it does not fit) or `end` |
 | `width` | | the component's width, when it has a fixed one |
 
@@ -83,6 +85,48 @@ with `align`, `kit::paint_label`). `KitCx` is the painter and
 the pixels per point. A shape a theme names is a handler registered under
 that name: egui-pop ships some, an application adds its own with
 `kit::register_tab_shape` before installing a theme that names them.
+
+## Tones
+
+Some components show a **tone**, which is not an interaction state:
+`accent`, `info`, `success`, `warning`, `danger`, `muted` (`kit::Tone`,
+the same names everywhere; `Neutral` is the component's own box). A
+token is `component.tone.<tone>.<term>` (every state) or
+`component.tone.<tone>.<state>.<term>`, giving only what differs. The
+defaults alias the status tokens. A box is merged as `rest`, the tone,
+then each state followed by the tone's own patch for that state: a state
+wins over a tone for what it gives, unless the tone gives that state
+too. A tone a component does not give draws its own box. At install, a
+component whose tokens give tones gets a table of 6 × 32 boxes; others
+get none. The tone travels in `State` (`State::toned`), so handlers and
+`Part` are unchanged; `Component::style_toned(tone, state)` reads one
+box. Colours-only components (rings, spinners, status indicators) keep
+their geometry in code and read their colours from the kit.
+
+## Frames
+
+`Component::frame(state)` gives a state's box as an egui `Frame` (fill,
+border, radius, `padding-x`/`padding-y` as inner margin), and
+`Component::show(ui, state, shadow, add)` lays content out in it, then
+paints the state's ring. With the shipped `card` handler egui draws the
+box (no extra cost); another handler paints once the content is laid
+out, its shapes moved under the content (one allocation per part and
+frame). Shadows are egui's (`Visuals`).
+
+## Kits as packages
+
+A kit ships as a folder: `kit.json` (a DTCG token file with a manifest
+under `$extensions."org.egui-pop.kit"`), more `*.tokens.json`, faces
+under `fonts/` and a `LICENSE`. It is read at run time
+(`KitData::load`) or embedded (`kit!`), checked by `kit::check` (in an
+application's tests) or the `kit-check` example, and added with one
+line, `AppBuilder::kit`. A kit with code is a crate exposing
+`pub fn kit() -> KitSource`, its handlers registered at install. The
+user's kits are found in `<persist>/kits`. egui-pop's default kit is
+the folder `themes/kit/`, read by the same code. Details in
+[Kits as packages](kit-packages.md). A term added to the vocabulary is
+also added to `egui_pop_tokens::kit::COMPONENT_TERMS` or `STATE_TERMS`,
+which the checks read.
 
 ## Adding a component
 
@@ -169,13 +213,23 @@ compiled at install.
   and `outline` (a border only; a part with no height is a line between
   rows). The kit is fetched once per view and pass. The gallery's
   `table-kit-rows` snapshot restyles rows and headers with data only.
+- **Frames** (`dialog`, `backdrop`, `popover`, `fault-card`, `toast`,
+  `palette-window`, `tip-card`, `job-log`, `fullscreen-exit`,
+  `editor-frame`, `terminal-frame`, `find-bar`, `assist-card`), handler
+  `card`; the `dialogs-kit-square` snapshot restyles a dialog with data
+  only. The dialog's and palette's header bands are not components yet.
+- **Progress and status by tone** (`progress-bar`, `progress-line`,
+  `progress-fill`, `progress-caption`, `meter`, `meter-tick`,
+  `progress-ring`, `spinner`, `status-indicator`), handlers `track`,
+  `span` and `tick`. The library's pills are not migrated: their neutral
+  fill is a surface at 85 % opacity, which an alias cannot express yet.
 - **Glyphs by role** (`kit::Glyph`, `glyph.<role>` tokens): the small
   marks widgets draw, named by what they mean and mapped by the kit to
   an icon of its set, compiled into a table read by index. The vocabulary
   is fixed: disclosure open and closed, sort ascending and descending,
   check, radio, indeterminate, bullet, submenu, chevron start and end,
   close, more, expand, collapse. The tree, the menus and the find bar
-  ask for roles; the table's sort arrows still use characters (next).
+  ask for roles, and so do the table's sort arrows.
 - **Application icons** (`icon_set`, feature `svg`): SVG files
   registered by name, single-colour (a white mask tinted at draw) or
   full-colour, rasterised at install for the theme's icon sizes and the

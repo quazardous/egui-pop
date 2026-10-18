@@ -17,6 +17,10 @@ devtools; every feature's moments reachable as steps (ADR 0011).
   plugin application, the command palette and the paved road.
 - [Themes](themes.md): picking and adjusting a theme, every built-in
   theme.
+- [Visual kits](kit.md): what components look like, as data per state
+  and drawing handlers, compiled when the theme is installed; and
+  [kits as packages](kit-packages.md): a kit folder, `kit!`,
+  `AppBuilder::kit`, user kits.
 - [Design tokens](tokens.md): the token format, resolution, densities,
   accents, contrast checks, writing a theme.
 - [The theme editor](theme-editor.md): a theme's tokens edited live by
