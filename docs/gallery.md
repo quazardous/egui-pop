@@ -158,6 +158,7 @@ and filmstrip, marks, filter chips, a comparison).
   </tr>
   <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/table-kit-rows.png"><img src="../crates/egui-pop-gallery/tests/snapshots/table-kit-rows.png" width="200" alt="table-kit-rows"></a><br>table-kit-rows</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/table-sorted-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/table-sorted-pop-dark.png" width="200" alt="table-sorted-pop-dark"></a><br>table-sorted-pop-dark</td>
   </tr>
 </table>
 

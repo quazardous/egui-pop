@@ -1421,6 +1421,8 @@ fn the_table_page_sorts_through_the_store_and_vetoes_one_sort() {
     h.get_by_label("Name, sorted ascending").click();
     h.run();
     assert!(h.query_by_label("Name, sorted descending").is_some());
+    // The sort direction is the kit's glyph after the column's title.
+    h.snapshot("table-sorted-pop-dark");
     let store = h.state().app.handle().store();
     assert_eq!(
         store

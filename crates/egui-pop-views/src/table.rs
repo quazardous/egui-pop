@@ -37,11 +37,11 @@
 //! }
 //! ```
 
-use egui::{Id, Response, Sense, Ui, WidgetInfo, WidgetType};
+use egui::{Id, Rect, Response, Sense, Ui, WidgetInfo, WidgetType};
 use egui_pop_api::AppHandle;
 use egui_pop_api::steps::Outcome;
 use egui_pop_core::binding::SharedStore;
-use egui_pop_core::kit::{Kit, KitCx, Part, State};
+use egui_pop_core::kit::{Glyph, Kit, KitCx, Part, State};
 use egui_pop_core::strings::{tr, tr_args};
 use egui_pop_model::commands::Origin;
 use egui_pop_model::ids::OwnerId;
@@ -626,11 +626,6 @@ impl<K: Key> TableDelegate for Delegate<'_, K> {
         };
         let rect = ui.max_rect();
         let sorted = self.sort.filter(|s| s.column == c.id);
-        let arrow = match sorted {
-            Some(s) if s.descending => " ⏷",
-            Some(_) => " ⏶",
-            None => "",
-        };
         let name = match sorted {
             Some(s) if s.descending => tr_args(ui.ctx(), &s::SORTED_DOWN, &[("column", &c.title)]),
             Some(_) => tr_args(ui.ctx(), &s::SORTED_UP, &[("column", &c.title)]),
@@ -653,24 +648,36 @@ impl<K: Key> TableDelegate for Delegate<'_, K> {
             .with(State::ACTIVE, c.sortable && r.is_pointer_button_down_on())
             .with(State::SELECTED, sorted.is_some());
         let font = egui::TextStyle::Body.resolve(ui.style());
-        let galley = ui.painter().layout_no_wrap(
-            format!("{}{arrow}", c.title),
-            font,
-            egui::Color32::PLACEHOLDER,
-        );
+        let galley = ui
+            .painter()
+            .layout_no_wrap(c.title.clone(), font, egui::Color32::PLACEHOLDER);
         let cell = &self.kit.table_header_cell;
-        cell.paint_part(
-            &KitCx {
-                painter: ui.painter(),
-                ppp: ui.ctx().pixels_per_point(),
-            },
-            &Part {
-                rect,
-                room: rect,
-                state,
-                label: Some(&galley),
-            },
-        );
+        let cx = KitCx {
+            painter: ui.painter(),
+            ppp: ui.ctx().pixels_per_point(),
+        };
+        let part = Part {
+            rect,
+            room: rect,
+            state,
+            label: Some(&galley),
+        };
+        cell.paint_part(&cx, &part);
+        // The sort direction: the kit's glyph, after the title.
+        if let Some(s) = sorted {
+            let glyph = self.kit.glyph(if s.descending {
+                Glyph::SortDescending
+            } else {
+                Glyph::SortAscending
+            });
+            let label = cell.label_rect(&part, galley.size());
+            let side = galley.size().y;
+            let at = Rect::from_min_size(
+                egui::pos2(label.right() + side * 0.25, label.top()),
+                egui::vec2(side, side),
+            );
+            glyph.paint(ui.painter(), at, cell.style(state).text);
+        }
         if c.sortable && r.clicked() {
             self.sort_to = Some(Sort::next(self.sort, &c.id));
         }
