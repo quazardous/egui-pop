@@ -104,7 +104,7 @@ impl Widget for CommandButton<'_> {
         let spec = app.command(id);
         let title = self.label.clone().unwrap_or_else(|| {
             spec.as_ref()
-                .map_or_else(|| id.to_string(), |s| app.command_title(s))
+                .map_or_else(|| id.to_string(), |s| app.command_menu_title(s))
         });
         let running = app.running(id);
         let applies = spec.is_some() && app.applies(id, &app.when_context());

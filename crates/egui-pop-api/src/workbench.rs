@@ -58,7 +58,7 @@ use egui_pop_core::kit::{
 use egui_pop_core::strings;
 use egui_pop_model::ids::{PanelId, StepId, ZoneId};
 use egui_pop_model::layout::{Floating, Layout, Node, Placement};
-use egui_pop_model::panels::{Area, PanelSpec, Panels};
+use egui_pop_model::panels::{Area, PanelSpec, Panels, Place};
 use serde_json::{Value as Json, json};
 
 use crate::app::AppHandle;
@@ -550,7 +550,7 @@ impl Workbench {
         let out = match change {
             Change::Move(p, area) | Change::Dock(p, area) => {
                 let spec = spec_of(p)?;
-                if let Some(why) = spec.refuses(*area) {
+                if let Some(why) = spec.refuses(&crate::mounts::panel_host(Place::Area(*area))) {
                     return Err(why);
                 }
                 self.layout.place(p, *area);
@@ -585,8 +585,8 @@ impl Workbench {
             }
             Change::Detach(p) => {
                 let spec = spec_of(p)?;
-                if !spec.detachable {
-                    return Err(format!("{} cannot be detached", spec.title));
+                if let Some(why) = spec.refuses(&crate::mounts::panel_host(Place::Window)) {
+                    return Err(why);
                 }
                 if self.layout.auxiliary.iter().any(|a| a.panel == *p) {
                     return Ok(json!({ "panel": p, "detached": true }));
@@ -637,8 +637,8 @@ impl Workbench {
             }
             Change::Float(p, pos) => {
                 let spec = spec_of(p)?;
-                if !spec.floatable {
-                    return Err(format!("{} cannot float", spec.title));
+                if let Some(why) = spec.refuses(&crate::mounts::panel_host(Place::Floating)) {
+                    return Err(why);
                 }
                 self.layout.float(p, *pos);
                 json!({ "panel": p, "pos": pos })

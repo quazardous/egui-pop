@@ -1,5 +1,8 @@
 //! Repository tasks, run as `cargo xtask <task>`.
 //!
+//! `hosts` writes `docs/hosts.md` from the mount declarations (ADR
+//! 0013), through the page's own test.
+//!
 //! `screenshots [filter]` refreshes every image of the documentation:
 //! it builds the gallery in release mode, captures each shot headless
 //! through wbox (`tools/wbox/shoot.py`, one nested compositor per shot),
@@ -26,6 +29,8 @@ Tasks:
   screenshots [filter]   refresh the documentation's images, headless
                          through wbox; with a filter, only the shots whose
                          name contains it (`--list` prints the names)
+  hosts                  write docs/hosts.md from the mount declarations
+                         (ADR 0013); a test fails when it is stale
 
 Environment:
   WBOX_PYTHON            the Python with the wbox library (default: the
@@ -265,6 +270,7 @@ fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let result = match args.first().map(String::as_str) {
         Some("screenshots") => screenshots(&args[1..]),
+        Some("hosts") => hosts(),
         Some("-h" | "--help") => {
             println!("{USAGE}");
             Ok(())
@@ -285,6 +291,23 @@ fn root() -> PathBuf {
         .parent()
         .expect("xtask sits in the workspace")
         .to_path_buf()
+}
+
+/// Writes `docs/hosts.md` from the declarations: the page's staleness
+/// test, run with `UPDATE_HOSTS=1`.
+fn hosts() -> Result<(), String> {
+    let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
+    let status = Command::new(cargo)
+        .args(["test", "-p", "egui-pop-gallery", "--test", "hosts_doc"])
+        .env("UPDATE_HOSTS", "1")
+        .current_dir(root())
+        .status()
+        .map_err(|e| format!("cargo: {e}"))?;
+    if !status.success() {
+        return Err(format!("the page's test failed ({status})"));
+    }
+    println!("docs/hosts.md written from the declarations");
+    Ok(())
 }
 
 fn screenshots(args: &[String]) -> Result<(), String> {

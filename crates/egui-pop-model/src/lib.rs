@@ -15,6 +15,9 @@
 //! - [`keymap`]: keys bound to commands in layers, resolved by focus
 //!   depth, with removal, unbinding and a resolution trace;
 //! - [`menus`]: menus declared by id, their items commands;
+//! - [`mount`]: the mount contract (ADR 0013): what a component needs,
+//!   what a host offers, the rules matching them, and `docs/hosts.md`
+//!   written from them;
 //! - [`panels`] and [`layout`]: declared panels, a saved arrangement and
 //!   its repair;
 //! - [`values`]: the value store (descriptors, writes with origins,
@@ -38,6 +41,7 @@ pub mod jobs;
 pub mod keymap;
 pub mod layout;
 pub mod menus;
+pub mod mount;
 pub mod order;
 pub mod panels;
 pub mod registry;

@@ -41,6 +41,21 @@ limit.
 - **Remove when**: kittest ships a `double_click` helper or a per-step
   time.
 
+## egui: a selectable button changes size under the pointer
+
+- **Compensated**: `Button::selectable` draws no frame at rest (neither
+  selected nor hovered), and its frameless margin is the button padding
+  plus the state's expansion minus its stroke width, where the framed
+  margin comes to the padding alone. A theme with a stroke at rest
+  (egui-pop's 1 px border) makes the button 2 px smaller at rest than
+  hovered: a list of them changes height under the pointer, and a
+  wrapped label can wrap differently.
+- **Upstream**: not filed yet.
+- **Workaround**: the rows of a `Choose` dialog keep the frame in every
+  state, transparent at rest (`dialogs::choice_row`, `// upstream:`).
+- **Remove when**: the frameless margin of a button equals the framed
+  one.
+
 ## egui: AccessKit bounds ignore layer transforms
 
 - **Compensated**: a widget in a transformed layer (egui's `Scene`)

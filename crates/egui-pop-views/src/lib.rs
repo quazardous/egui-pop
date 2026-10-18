@@ -10,6 +10,7 @@
 //!   filmstrip, ratings, colour labels and flags, a comparison, tag
 //!   chips and input, a search field with filter chips, their steps and
 //!   commands;
+//! - [`mounts`]: what they need (the mount contract, ADR 0013);
 //! - [`steps`]: their moments as steps, and [`ViewsPlugin`] that
 //!   declares them;
 //! - [`strings`]: the text they show, translatable.
@@ -25,6 +26,7 @@
 
 pub mod library;
 pub mod list;
+pub mod mounts;
 mod nav;
 mod rows;
 pub mod select;

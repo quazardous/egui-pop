@@ -60,6 +60,9 @@
 //! - [`strings`]: the interface's own text, by key with English
 //!   fallbacks, translated by the installed `egui_pop_core::strings`
 //!   provider;
+//! - [`mounts`]: the mount contract (ADR 0013): the hosts and their
+//!   offers, the components and their needs, `AppHandle::where_can`,
+//!   `AppHandle::mount` and the `mounts` collector;
 //! - [`DefaultPlugins`] and [`MinimalPlugins`]: plugin groups for
 //!   [`AppBuilder::plugins`];
 //! - [`AppBuilder`] and [`App`]: sorting, connecting, the shell (menu
@@ -114,6 +117,7 @@ pub mod host;
 pub mod jobs;
 pub mod jobs_centre;
 pub mod menus;
+pub mod mounts;
 pub mod palette;
 pub mod palettes;
 pub mod plugin;

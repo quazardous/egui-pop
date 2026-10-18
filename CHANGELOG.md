@@ -194,6 +194,57 @@ egui minor.
   (its menus stay in the palette, under their keys and in menus it
   opens itself); the top bar's zone is then drawn only when it has
   blocks.
+- A preview dialog (`imaging::preview`): an image viewport in a custom
+  dialog over a `Clear` backdrop, movable and kept in place, sRGB
+  first; Enter runs its command with the view it was left at, Escape
+  cancels it except during a drag of its view. The interface behind,
+  its own viewport included, keeps receiving and drawing tiles while
+  the dialog is modal. Gallery page: `preview`.
+
+- A custom dialog (`Dialog::Custom`, opened with
+  `Dialogs::open_custom`): a body of its own, drawn by a closure kept
+  on the application's side, in a size of its own, a `dialog` focus
+  scope and a fault boundary, every frame. It keeps the dialog rules
+  (a primary button saying what it does, Cancel, Enter and Escape,
+  steps, the debug bridge, movable, closable, a kept place, the
+  backdrop); keys its body claims go to it first (Ctrl+Enter accepts
+  when it claims Enter; Escape goes to it while it has something to
+  cancel). A body declaring its needs is checked against the custom
+  dialog's offer (`dialogs::custom_host`) and recorded as a mount.
+  Guide: docs/widgets.md, section 6.
+
+- Every component declares what it needs (`mounts` in
+  `egui-pop-viewport`, `egui-pop-views` and `egui-pop-editors`: the
+  image viewport, navigator, node graph, curves, wheels, histogram,
+  thumbnail, library grid, filmstrip, compare view, tree, table, text
+  and code editors, terminal), and the viewport's overlays declare
+  their offer (data, no `Ui`). The facade gathers them
+  (`egui_pop::mounts::components`, `hosts`, `page`), and
+  `egui_pop::mounts::MountsPlugin` declares them to an application.
+
+- The mount contract in the application (`api::mounts`): the offers
+  of the hosts `egui-pop-api` builds (docked panel, floating palette,
+  auxiliary window, the four-kind dialog, raw modal, popover, line
+  zone, status bar, gallery story) and the needs of its components and
+  `egui-pop-core`'s (sliders, forms, progress, the jobs centre, the
+  theme editor, tips). `AppHandle::where_can` gives every host's
+  verdict for a component, `AppHandle::mount` records a mount with its
+  conditions or refuses it with its rule (reported as `mount-refused`),
+  `Ctx::mountable` and `Ctx::host_offer` declare a plugin's own, and
+  the debug bridge's `mounts` collector shows them and answers
+  `where_can` and `check`.
+
+- The mount contract (ADR 0013) in `egui-pop-model` (`model::mount`):
+  a component declares what it needs (`Mountable`: keyboard and claimed
+  keys, pointer, workers, display, size, instances, view state, the
+  application, a question, a session, popups), a host what it offers
+  (`HostOffer`: size, focus policy and owned keys, what dismisses it,
+  lifetime, window, keymap reach, projection, what it keeps and gives,
+  display), and `check` matches them with eleven named rules: it fits,
+  fits under named conditions, or does not fit with a reason by design,
+  an egui-pop limit or an upstream limit, each written once (`CODES`).
+  `mount::page::render` writes `docs/hosts.md` from the declarations.
+
 - The context stack (ADR 0012, guide: docs/contexts.md): places
   (drill-downs, shown as a breadcrumb) and modes (global states, one
   per group, set or pushed, shown as chips) on one stack owned by the
@@ -1094,6 +1145,12 @@ egui minor.
   `threading` example measures the old intake as `tiles-ui`,
   `tiles-views-ui` and `all-ui`.
 
+- `PanelSpec::refuses` takes a host (`PanelHost`: an area, floating
+  or a window, with the host's offer) instead of an area, and a panel
+  may declare its content's needs (`PanelSpec::content`): moving,
+  floating or detaching a panel is refused, with the rule, when its
+  content does not fit the host (ADR 0013).
+
 - A display target declared `TargetSource::Tagged` needs no wgpu colour
   space: any sRGB, Display P3 or BT.2020 primaries with a transfer the
   Wayland colour-management protocol names (BT.2020 with a 2.2 power,
@@ -1202,6 +1259,18 @@ egui minor.
   from the next one, which blurred it.
 - The title bar's buttons and items are centred above its line, not on
   the line's row as well.
+- The `Choose` dialog's rows keep their size as the pointer moves over
+  them (the dialog no longer changes height by a few pixels), and their
+  text is left-aligned and wraps, a single-line row included.
+
+- Menus, context menus, command buttons, the tray and global shortcuts
+  show a command's title without the trailing hint of its arguments
+  (``Open a workspace (`path`)`` reads `Open a workspace`), in every
+  language: the hint is dropped after translation, so an application no
+  longer passes an English label to hide it. The palette keeps it. New
+  `egui_pop_core::strings::without_argument_hint` and
+  `AppHandle::command_menu_title`.
+
 - A vetoed exit no longer saves: `App::save` ran before the `app.exit`
   step, whatever its hooks decided. The step's default now writes what
   is still waiting, and what changed was written a second after it

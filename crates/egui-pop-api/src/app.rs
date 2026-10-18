@@ -357,6 +357,10 @@ pub(crate) struct Shared {
     /// Documents written a short while after their last change, when a
     /// persistence directory was given.
     writer: RefCell<Option<Writer>>,
+    /// State a module keeps on the application side, by type: what is
+    /// neither `Send` nor a service (custom dialogs' bodies, the mount
+    /// registry).
+    locals: RefCell<BTreeMap<std::any::TypeId, Rc<dyn std::any::Any>>>,
 }
 
 /// The application at run time, cheap to clone: blocks, panels, stories
@@ -430,7 +434,28 @@ impl AppHandle {
             list_traces: RefCell::new(BTreeMap::new()),
             popup: RefCell::new(None),
             writer: RefCell::new(None),
+            locals: RefCell::new(BTreeMap::new()),
         }))
+    }
+
+    /// The state of type `T` kept on the application side, made on first
+    /// use.
+    pub(crate) fn local<T: Default + 'static>(&self) -> Rc<T> {
+        let id = std::any::TypeId::of::<T>();
+        let any = self
+            .0
+            .locals
+            .borrow_mut()
+            .entry(id)
+            .or_insert_with(|| Rc::new(T::default()) as Rc<dyn std::any::Any>)
+            .clone();
+        any.downcast::<T>()
+            .unwrap_or_else(|_| unreachable!("kept under its own type"))
+    }
+
+    /// Records a diagnostic found at run time (ADR 0003).
+    pub(crate) fn report(&self, d: Diagnostic) {
+        self.0.diagnostics.borrow_mut().push(d);
     }
 
     fn weak(&self) -> Weak<Shared> {
@@ -663,6 +688,14 @@ impl AppHandle {
             ),
             None => title,
         }
+    }
+
+    /// A command's title as a menu, a toolbar or the tray shows it: its
+    /// [`command_title`](Self::command_title) without the trailing hint of
+    /// its arguments, which the palette keeps
+    /// ([`strings::without_argument_hint`]).
+    pub fn command_menu_title(&self, spec: &CommandSpec) -> String {
+        strings::without_argument_hint(&self.command_title(spec)).to_string()
     }
 
     /// A settings section's title as shown: the owner's plugin title
@@ -2680,6 +2713,8 @@ impl App {
         )
         .expect("distinct names");
         b.register(egui_pop_core::debug::store_collector(h.store()))
+            .expect("distinct names");
+        b.register(crate::mounts::collector(h.downgrade()))
             .expect("distinct names");
     }
 

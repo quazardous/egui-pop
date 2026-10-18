@@ -477,7 +477,10 @@ fn command_row(ui: &mut Ui, app: &AppHandle, cx: &WhenContext, row: Row<'_>) -> 
             let why = (!applies)
                 .then(|| strings::tr_args(&ctx, &txt::MENU_DOES_NOT_APPLY, &[("when", &s.when)]))
                 .or_else(|| (!enabled).then(|| strings::tr(&ctx, &txt::MENU_NOT_AVAILABLE)));
-            (label.clone().unwrap_or_else(|| app.command_title(s)), why)
+            (
+                label.clone().unwrap_or_else(|| app.command_menu_title(s)),
+                why,
+            )
         }
         None => (
             id.to_string(),
@@ -604,11 +607,15 @@ fn paint_item(ui: &Ui, item: &Component, slot: egui::layers::ShapeIdx, rect: Rec
     );
 }
 
-/// A command's title as shown, without undo's label.
+/// A command's title as shown, without undo's label nor the hint of its
+/// arguments.
 fn title_of(ctx: &Context, spec: &Option<CommandSpec>, id: &CommandId) -> String {
     spec.as_ref().map_or_else(
         || id.to_string(),
-        |s| strings::command_title(ctx, s.id.as_str(), &s.title),
+        |s| {
+            strings::without_argument_hint(&strings::command_title(ctx, s.id.as_str(), &s.title))
+                .to_string()
+        },
     )
 }
 
