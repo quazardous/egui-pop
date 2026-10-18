@@ -9,6 +9,10 @@ egui minor.
 
 ### Added
 
+- `AppBuilder::menu_bar(false)`: an application without a menu bar
+  (its menus stay in the palette, under their keys and in menus it
+  opens itself); the top bar's zone is then drawn only when it has
+  blocks.
 - The context stack (ADR 0012, guide: docs/contexts.md): places
   (drill-downs, shown as a breadcrumb) and modes (global states, one
   per group, set or pushed, shown as chips) on one stack owned by the

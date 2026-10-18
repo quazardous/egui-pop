@@ -306,6 +306,8 @@ pub(crate) struct Shared {
     drawing_areas: std::cell::Cell<bool>,
     /// The centre drawn without margins.
     edge_to_edge: std::cell::Cell<bool>,
+    /// The main menu drawn as a bar under the title.
+    menu_bar: std::cell::Cell<bool>,
     /// The panels' commands and their shared texts, installed on each
     /// context drawing the application.
     pub(crate) panel_commands: RefCell<strings::PanelCommands>,
@@ -392,6 +394,7 @@ impl AppHandle {
             indicators_seen: std::cell::Cell::new(0),
             drawing_areas: std::cell::Cell::new(false),
             edge_to_edge: std::cell::Cell::new(false),
+            menu_bar: std::cell::Cell::new(true),
             panel_commands: RefCell::default(),
             name: RefCell::default(),
             diagnostics: RefCell::new(Diagnostics::new()),
@@ -1415,6 +1418,12 @@ impl AppHandle {
         self.0.edge_to_edge.get()
     }
 
+    /// Whether the main menu is drawn as a bar under the title
+    /// (`AppBuilder::menu_bar`).
+    pub fn menu_bar(&self) -> bool {
+        self.0.menu_bar.get()
+    }
+
     pub(crate) fn set_drawing_areas(&self, on: bool) {
         self.0.drawing_areas.set(on);
     }
@@ -1625,6 +1634,7 @@ pub struct AppBuilder {
     host: Option<Box<dyn Host>>,
     system_focus: Option<SystemFocus>,
     edge_to_edge: bool,
+    menu_bar: bool,
     wrap: Option<WrapUi>,
     on_exit: Vec<ExitFn>,
     name: Option<String>,
@@ -1685,6 +1695,7 @@ impl AppBuilder {
             host: None,
             system_focus: None,
             edge_to_edge: false,
+            menu_bar: true,
             wrap: None,
             on_exit: Vec::new(),
             name: None,
@@ -1714,6 +1725,15 @@ impl AppBuilder {
     /// panels (an image viewer, a canvas).
     pub fn main_edge_to_edge(mut self, on: bool) -> Self {
         self.edge_to_edge = on;
+        self
+    }
+
+    /// Draws the main menu as a bar under the title (the default), or
+    /// not at all: its commands stay in the palette, under their keys and
+    /// in any menu the application opens itself (`menus::popup_at`). The
+    /// top bar's zone is then drawn only when it has blocks.
+    pub fn menu_bar(mut self, on: bool) -> Self {
+        self.menu_bar = on;
         self
     }
 
@@ -1851,6 +1871,7 @@ impl AppBuilder {
             .clone()
             .map(|p| Writer::new(p, egui_pop_core::persist::DEBOUNCE));
         app.handle.0.edge_to_edge.set(self.edge_to_edge);
+        app.handle.0.menu_bar.set(self.menu_bar);
         *app.handle.0.name.borrow_mut() = self.name.unwrap_or_default();
         app.framework(self.theme, self.themes, modes, self.panel_alignment)
             .expect("the framework's registrations are valid");
@@ -3763,17 +3784,25 @@ impl App {
                     focus::scope(ui, "titleBar", &[], |ui| h.show_zone(ui, &zones::TITLE));
                 });
         }
-        egui::Panel::top(Id::new("egui_pop.top")).show(ui, |ui| {
-            focus::scope(ui, "topBar", &[], |ui| {
-                egui::MenuBar::new().ui(ui, |ui| {
-                    crate::menus::bar(ui, &h, &MENU_MAIN);
-                    if h.zone_has_blocks(&zones::TOP_BAR) {
-                        ui.separator();
-                        h.show_zone(ui, &zones::TOP_BAR);
-                    }
+        if h.menu_bar() {
+            egui::Panel::top(Id::new("egui_pop.top")).show(ui, |ui| {
+                focus::scope(ui, "topBar", &[], |ui| {
+                    egui::MenuBar::new().ui(ui, |ui| {
+                        crate::menus::bar(ui, &h, &MENU_MAIN);
+                        if h.zone_has_blocks(&zones::TOP_BAR) {
+                            ui.separator();
+                            h.show_zone(ui, &zones::TOP_BAR);
+                        }
+                    });
                 });
             });
-        });
+        } else if h.zone_has_blocks(&zones::TOP_BAR) {
+            egui::Panel::top(Id::new("egui_pop.top")).show(ui, |ui| {
+                focus::scope(ui, "topBar", &[], |ui| {
+                    ui.horizontal(|ui| h.show_zone(ui, &zones::TOP_BAR));
+                });
+            });
+        }
         if h.zone_has_blocks(&zones::STATUS_BAR) {
             egui::Panel::bottom(Id::new("egui_pop.status")).show(ui, |ui| {
                 focus::scope(ui, "statusBar", &[], |ui| {

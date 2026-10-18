@@ -1,5 +1,5 @@
 //! The shell's hooks for applications: the title zone above the menu
-//! bar, an edge-to-edge main area, a wrapper around the whole drawing,
+//! bar, no menu bar, an edge-to-edge main area, a wrapper around the whole drawing,
 //! `on_exit` and the `app.exit` step, the window's place restored.
 
 use std::cell::Cell;
@@ -52,6 +52,18 @@ fn the_title_zone_is_above_the_menu_bar() {
     let title = h.get_by_label("my own title bar").rect();
     let file = h.get_by_label("File").rect();
     assert!(title.bottom() <= file.top() + 0.5, "{title:?} {file:?}");
+}
+
+#[test]
+fn the_menu_bar_may_be_left_out() {
+    let with = harness(App::builder());
+    let main = with.get_by_label("main body").rect();
+    let without = harness(App::builder().menu_bar(false));
+    assert!(without.query_by_label("File").is_none());
+    // The title zone stays, and the centre takes the bar's room.
+    without.get_by_label("my own title bar");
+    let higher = without.get_by_label("main body").rect();
+    assert!(higher.top() < main.top(), "{higher:?} {main:?}");
 }
 
 #[test]
