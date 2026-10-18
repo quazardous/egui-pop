@@ -1,5 +1,7 @@
 # egui-pop
 
+[![crates.io](https://img.shields.io/crates/v/egui-pop.svg)](https://crates.io/crates/egui-pop)
+
 ![The egui-pop gallery in pop-dark: the theme overview](docs/screenshots/overview-pop-dark.png)
 
 egui-pop is an application framework and component library on
