@@ -91,6 +91,10 @@ pub const COMPONENT_TERMS: &[(&str, &str)] = &[
     ("opacity", "number"),
 ];
 
+/// The tones a component may give (`component.tone.<tone>.<term>` and
+/// `component.tone.<tone>.<state>.<term>`).
+pub const TONES: [&str; 6] = ["accent", "info", "success", "warning", "danger", "muted"];
+
 /// A font file's bytes: embedded in the binary or read at run time.
 pub type Bytes = Cow<'static, [u8]>;
 
@@ -780,6 +784,29 @@ fn vocabulary(theme: &TokenFile) -> Vec<Problem> {
                         None
                     }
                 },
+                [_, "tone", tone, ..] if !TONES.contains(&tone) => {
+                    problems.push(unknown(format!(
+                        "`{tone}` is not a tone ({})",
+                        TONES.join(", ")
+                    )));
+                    None
+                }
+                [_, "tone", _, term] => match find(STATE_TERMS, term) {
+                    Some(ty) => Some(ty),
+                    None => {
+                        problems.push(unknown(format!("`{term}` is not a term a tone gives")));
+                        None
+                    }
+                },
+                [_, "tone", _, state, term] if STATES.contains(&state) => {
+                    match find(STATE_TERMS, term) {
+                        Some(ty) => Some(ty),
+                        None => {
+                            problems.push(unknown(format!("`{term}` is not a term a state gives")));
+                            None
+                        }
+                    }
+                }
                 [_, state, _] => {
                     problems.push(unknown(format!(
                         "`{state}` is not a state ({})",
@@ -903,6 +930,33 @@ mod tests {
         assert!(
             p.iter()
                 .any(|p| matches!(p, Problem::TermType { path, .. } if path == "tab.hover.radius"))
+        );
+    }
+
+    #[test]
+    fn tones_are_in_the_vocabulary() {
+        let kit = KitData::from_json(
+            "k",
+            r##"{
+              "window-button": { "tone": {
+                "warning": { "fill": {"$type": "color", "$value": "#ffbb00"},
+                             "active": { "fill": {"$type": "color", "$value": "#cc9900"} } },
+                "amber": { "fill": {"$type": "color", "$value": "#ffbb00"} },
+                "danger": { "glow": {"$type": "color", "$value": "#ff0000"} }
+              } }
+            }"##,
+        );
+        let p = kit.problems();
+        assert_eq!(p.len(), 2, "{p:?}");
+        assert!(
+            p.iter()
+                .any(|p| matches!(p, Problem::UnknownTerm { path, .. }
+            if path == "window-button.tone.amber.fill"))
+        );
+        assert!(
+            p.iter()
+                .any(|p| matches!(p, Problem::UnknownTerm { path, .. }
+            if path == "window-button.tone.danger.glow"))
         );
     }
 
