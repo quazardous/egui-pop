@@ -14,6 +14,7 @@ use egui_pop_core::binding::SharedStore;
 use egui_pop_core::debug::{DebugBridge, Feedback, FnCollector};
 use egui_pop_core::focus_mode::{self, FocusModes, Preference, SystemFocus};
 use egui_pop_core::keys::KeyDispatcher;
+use egui_pop_core::kit::KitSource;
 use egui_pop_core::overlay;
 use egui_pop_core::persist::{Persist, PersistError, Writer};
 use egui_pop_core::strings;
@@ -128,6 +129,7 @@ pub struct OverlayRect {
 pub struct ThemeService {
     spec: Mutex<ThemeSpec>,
     themes: Themes,
+    kits: Vec<egui_pop_core::tokens::kit::KitInfo>,
 }
 
 impl ThemeService {
@@ -147,6 +149,13 @@ impl ThemeService {
 
     pub fn themes(&self) -> &Themes {
         &self.themes
+    }
+
+    /// The kits added (`AppBuilder::kit`, then the user's kits), each a
+    /// theme of [`ThemeService::themes`] under its name: what a theme
+    /// picker lists.
+    pub fn kits(&self) -> &[egui_pop_core::tokens::kit::KitInfo] {
+        &self.kits
     }
 }
 
@@ -1639,6 +1648,8 @@ pub struct AppBuilder {
     on_exit: Vec<ExitFn>,
     name: Option<String>,
     panel_alignment: crate::workbench::PanelAlignment,
+    kits: Vec<KitSource>,
+    user_kits: bool,
 }
 
 /// Draws around the whole application (`AppBuilder::wrap`): gets the
@@ -1700,6 +1711,8 @@ impl AppBuilder {
             on_exit: Vec::new(),
             name: None,
             panel_alignment: crate::workbench::PanelAlignment::Justify,
+            kits: Vec::new(),
+            user_kits: false,
         }
     }
 
@@ -1785,6 +1798,48 @@ impl AppBuilder {
         self
     }
 
+    /// Adds a kit (`docs/kit-packages.md`): its theme joins the themes to
+    /// pick from, under the kit's name, and its faces and handlers are
+    /// registered when the application is built. A folder read at run
+    /// time, a `kit!` or a kit crate's `kit()`:
+    ///
+    /// ```
+    /// use egui_pop_api::App;
+    /// use egui_pop_core::kit::Kit;
+    /// use egui_pop_core::theme::ThemeSpec;
+    /// use egui_pop_core::tokens::kit::KitData;
+    ///
+    /// let kit = KitData::from_json(
+    ///     "underline",
+    ///     r#"{ "tab": { "shape": { "$type": "string", "$value": "underline" } } }"#,
+    /// );
+    /// let ctx = egui::Context::default();
+    /// let app = App::builder()
+    ///     .kit(kit)
+    ///     .theme(ThemeSpec::new("underline"))
+    ///     .build(&ctx)
+    ///     .unwrap();
+    /// assert_eq!(Kit::of(&ctx).tab.shape, "underline");
+    /// assert_eq!(app.handle().theme().kits()[0].name, "underline");
+    /// ```
+    ///
+    /// What is wrong with a kit is logged and in the diagnostics
+    /// (`kit-problem`); the kit is added anyway, with fallbacks.
+    pub fn kit(mut self, kit: impl Into<KitSource>) -> Self {
+        self.kits.push(kit.into());
+        self
+    }
+
+    /// Adds the user's kits too: the data-only kit folders under
+    /// `<persist directory>/kits` (`egui_pop_tokens::kit::discover`), read
+    /// when the application is built, after the application's own (a
+    /// user kit of the same name replaces it). Without a persistence
+    /// directory there are none.
+    pub fn user_kits(mut self, on: bool) -> Self {
+        self.user_kits = on;
+        self
+    }
+
     /// Where settings and the user's keymap are saved.
     pub fn persist(mut self, dir: impl Into<std::path::PathBuf>) -> Self {
         self.persist = Some(Persist::new(dir));
@@ -1859,6 +1914,7 @@ impl AppBuilder {
             started: false,
             installed: None,
             persist: self.persist,
+            kits: Vec::new(),
             in_flight: Vec::new(),
             waking: None,
             wrap: self.wrap,
@@ -1873,7 +1929,30 @@ impl AppBuilder {
         app.handle.0.edge_to_edge.set(self.edge_to_edge);
         app.handle.0.menu_bar.set(self.menu_bar);
         *app.handle.0.name.borrow_mut() = self.name.unwrap_or_default();
-        app.framework(self.theme, self.themes, modes, self.panel_alignment)
+        let mut themes = self.themes;
+        let mut kits = self.kits;
+        if self.user_kits
+            && let Some(p) = &app.persist
+        {
+            let dir = p.dir().join(egui_pop_core::tokens::kit::USER_KITS_DIR);
+            kits.extend(
+                egui_pop_core::tokens::kit::discover(&dir)
+                    .into_iter()
+                    .map(KitSource::new),
+            );
+        }
+        {
+            let mut d = app.handle.0.diagnostics.borrow_mut();
+            for kit in &kits {
+                themes.add_kit(&kit.data);
+                for p in kit.problems() {
+                    d.warn("kit-problem", None, kit.name(), p);
+                }
+            }
+        }
+        let infos = kits.iter().map(|k| k.data.info()).collect();
+        app.kits = kits;
+        app.framework(self.theme, themes, infos, modes, self.panel_alignment)
             .expect("the framework's registrations are valid");
         app.install_collectors();
         for i in 0..app.plugins.len() {
@@ -1977,6 +2056,9 @@ pub struct App {
     started: bool,
     installed: Option<ThemeSpec>,
     persist: Option<Persist>,
+    /// The kits added: their faces and handlers are registered in each
+    /// context the theme is installed in.
+    kits: Vec<KitSource>,
     /// Results to come.
     in_flight: Vec<InFlight>,
     /// The context the host's waker wakes.
@@ -2090,6 +2172,7 @@ impl App {
         &mut self,
         theme: ThemeSpec,
         themes: Themes,
+        kits: Vec<egui_pop_core::tokens::kit::KitInfo>,
         modes: FocusModes,
         panel_alignment: crate::workbench::PanelAlignment,
     ) -> Result<(), CtxError> {
@@ -2174,6 +2257,7 @@ impl App {
             ThemeService {
                 spec: Mutex::new(theme),
                 themes,
+                kits,
             },
         )?;
         let mut focus = egui_pop_model::values::Descriptor::choice(
@@ -3413,6 +3497,11 @@ impl App {
         let marker = Id::new("egui_pop_api::theme_installed");
         let here = ctx.data(|d| d.get_temp::<bool>(marker)).unwrap_or(false);
         if !here || self.installed.as_ref() != Some(&spec) {
+            if !here {
+                for kit in &self.kits {
+                    kit.register(&ctx);
+                }
+            }
             theme::install_with(&ctx, service.themes(), &spec);
             ctx.data_mut(|d| d.insert_temp(marker, true));
             self.installed = Some(spec);
