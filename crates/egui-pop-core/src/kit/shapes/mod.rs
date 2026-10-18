@@ -19,6 +19,7 @@ pub(crate) use plain::Plain;
 /// Adds the shipped handlers other than `plain`; `card` is every
 /// component's too.
 pub(super) fn built_in(shapes: &mut Shapes) {
+    shapes.insert("area-grip", "box", Arc::new(cell::BoxCell));
     shapes.insert("button", "box", Arc::new(cell::BoxCell));
     shapes.insert("field", "box", Arc::new(cell::BoxCell));
     shapes.insert("list-row", "box", Arc::new(cell::BoxCell));

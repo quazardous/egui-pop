@@ -224,6 +224,13 @@ compiled at install.
   flavour, data only (`frame-kit-macos`). `window.corners` is asked of
   Windows 11 when the application draws the frame; elsewhere there is no
   portable request.
+- **Side areas** (`area-strip`, `area-grip`). A folded side area is a
+  strip (`area-strip.width`) with the `drag-handle` glyph and a line on
+  the centre's side; a click unfolds it (`workbench.fold`). An open side
+  area's grip is painted at the middle of its edge (`width` thick,
+  `height` long), above the panels; egui still takes the drag and draws
+  the separator line (it reserves room for it in the panel's layout).
+  The default kit's grip is transparent.
 - **egui's own widgets** (`button`, `field`). egui's style is built from
   the kit when a theme is installed (`theme::style_with`): `button`'s
   rest, hover, active and selected are egui's inactive, hovered, active

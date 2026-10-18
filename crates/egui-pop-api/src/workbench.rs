@@ -43,9 +43,11 @@
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
-use egui::{Color32, Id, Pos2, Rect, Ui, ViewportBuilder, ViewportId};
+use egui::{Color32, Id, Pos2, Rect, Ui, ViewportBuilder, ViewportId, WidgetInfo, WidgetType};
 use egui_dock::{DockArea, DockState, NodeIndex, Split, TabViewer};
-use egui_pop_core::kit::{Kit, KitCx, Part, State};
+use egui_pop_core::kit::{
+    BoxStyle, Corners, Glyph, Kit, KitCx, Part, Side, State, paint_box, paint_indicator,
+};
 use egui_pop_core::strings;
 use egui_pop_model::ids::{PanelId, StepId, ZoneId};
 use egui_pop_model::layout::{Floating, Layout, Node};
@@ -996,8 +998,15 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
             });
     }
     let folded = app.workbench_mut().layout.folded.clone();
+    let kit = Kit::of(&ctx);
     for area in panel_alignment(app).order() {
-        if !areas.contains(&area) || !visible_in(app, area) || folded.contains(&area) {
+        if !areas.contains(&area) || !visible_in(app, area) {
+            continue;
+        }
+        if folded.contains(&area) {
+            if matches!(area, Area::StartSide | Area::EndSide) {
+                strip(app, ui, &kit, area);
+            }
             continue;
         }
         let (min, default) = sizes[&area];
@@ -1027,6 +1036,7 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
                 draw_area(app, ui, area);
             });
         app.workbench_mut().rects.insert(area, shown.response.rect);
+        grip(&ctx, &kit, area, shown.response.rect);
     }
     let mut central = egui::CentralPanel::default();
     if app.edge_to_edge() {
@@ -1044,6 +1054,114 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
     crate::palettes::show(app, &ctx);
     follow_drag(app, &ctx);
     drop_hint(app, &ctx);
+}
+
+/// A folded side area's strip (the kit's `area-strip`): its box, the line
+/// on the centre's side, the drag-handle glyph; a click unfolds the area
+/// through the `workbench.fold` step.
+fn strip(app: &AppHandle, ui: &mut Ui, kit: &Kit, area: Area) {
+    let component = &kit.area_strip;
+    let width = component.data.width.max(1.0);
+    let id = dock_id(area).with("egui_pop.strip");
+    let (panel, inner) = match area {
+        Area::StartSide => (egui::Panel::left(id), Side::Right),
+        _ => (egui::Panel::right(id), Side::Left),
+    };
+    panel
+        .resizable(false)
+        .exact_size(width)
+        .show_separator_line(false)
+        .frame(egui::Frame::NONE)
+        .show(ui, |ui| {
+            let rect = ui.max_rect();
+            let ctx = ui.ctx().clone();
+            let name = strings::tr_args(
+                &ctx,
+                &txt::WORKBENCH_UNFOLD,
+                &[("area", &area_text(&ctx, area))],
+            );
+            let r = ui.interact(rect, id.with("unfold"), egui::Sense::click());
+            let label = name.clone();
+            r.widget_info(move || WidgetInfo::labeled(WidgetType::Button, true, &label));
+            let r = r.on_hover_text(name);
+            let state = State::from_response(&r);
+            let b = component.style(state);
+            let cx = KitCx {
+                painter: ui.painter(),
+                ppp: ctx.pixels_per_point(),
+            };
+            paint_box(
+                &cx,
+                rect,
+                &BoxStyle {
+                    border_width: 0.0,
+                    ..*b
+                },
+                Corners::None,
+                inner,
+            );
+            let line = BoxStyle {
+                indicator_color: b.border_color,
+                indicator_size: b.border_width,
+                ..BoxStyle::default()
+            };
+            paint_indicator(&cx, rect, &line, inner);
+            let at = Rect::from_center_size(
+                egui::pos2(rect.center().x, rect.top() + width + 2.0),
+                egui::vec2(width, width),
+            );
+            kit.glyph(Glyph::DragHandle).paint(ui.painter(), at, b.text);
+            if r.clicked() {
+                app.fold_area(area, false);
+            }
+        });
+}
+
+/// A side area's resize grip (the kit's `area-grip`) at the middle of its
+/// edge, above the panels; egui takes the drag. Nothing is drawn while
+/// the kit's grip is transparent in every state (the default kit).
+fn grip(ctx: &egui::Context, kit: &Kit, area: Area, rect: Rect) {
+    let g = &kit.area_grip;
+    if [State::REST, State::HOVER, State::ACTIVE]
+        .iter()
+        .all(|s| g.style(*s).fill.a() == 0)
+    {
+        return;
+    }
+    let (w, h) = (g.data.width, g.data.height);
+    let (centre, size) = match area {
+        Area::StartSide => (egui::pos2(rect.right(), rect.center().y), egui::vec2(w, h)),
+        Area::EndSide => (egui::pos2(rect.left(), rect.center().y), egui::vec2(w, h)),
+        _ => (egui::pos2(rect.center().x, rect.top()), egui::vec2(h, w)),
+    };
+    let reach = ctx.global_style().interaction.resize_grab_radius_side;
+    let near = ctx.pointer_hover_pos().is_some_and(|p| match area {
+        Area::StartSide | Area::EndSide => {
+            (p.x - centre.x).abs() <= reach && rect.y_range().contains(p.y)
+        }
+        _ => (p.y - centre.y).abs() <= reach && rect.x_range().contains(p.x),
+    });
+    let state = State::REST.with(State::HOVER, near).with(
+        State::ACTIVE,
+        near && ctx.input(|i| i.pointer.primary_down()),
+    );
+    let painter = ctx.layer_painter(egui::LayerId::new(
+        egui::Order::Middle,
+        Id::new("egui_pop.area_grips"),
+    ));
+    let rect = Rect::from_center_size(centre, size);
+    g.paint(
+        &KitCx {
+            painter: &painter,
+            ppp: ctx.pixels_per_point(),
+        },
+        &Part {
+            rect,
+            room: rect,
+            state,
+            label: None,
+        },
+    );
 }
 
 /// Whether a panel has something to draw (a zone panel's zone has

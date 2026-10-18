@@ -4,6 +4,8 @@
 
 use super::Required;
 
+mod area_grip;
+mod area_strip;
 mod assist_card;
 mod backdrop;
 mod button;
@@ -44,6 +46,8 @@ mod window_close;
 
 /// Each component's contract.
 pub(super) const GROUPS: &[&[Required]] = &[
+    area_grip::CONTRACT,
+    area_strip::CONTRACT,
     assist_card::CONTRACT,
     backdrop::CONTRACT,
     button::CONTRACT,

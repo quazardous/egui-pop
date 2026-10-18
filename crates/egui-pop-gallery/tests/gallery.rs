@@ -2216,3 +2216,25 @@ fn a_kit_restyles_menu_items_from_the_theme_alone() {
     h.run();
     h.snapshot("menus-kit-bar");
 }
+
+#[test]
+fn a_folded_side_area_shows_its_strip_and_a_click_unfolds_it() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "workbench"));
+    h.run();
+    h.get_by_label("Open the demonstration panels").click();
+    h.run();
+    let app = h.state().app.handle().clone();
+    app.fold_area(egui_pop::model::panels::Area::StartSide, true);
+    h.run();
+    h.run();
+    assert!(
+        app.layout()
+            .folded
+            .contains(&egui_pop::model::panels::Area::StartSide)
+    );
+    h.snapshot("workbench-folded-pop-dark");
+    h.get_by_label("Unfold the start side bar").click();
+    h.run();
+    h.run();
+    assert!(app.layout().folded.is_empty());
+}

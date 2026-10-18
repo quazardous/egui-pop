@@ -104,6 +104,9 @@ pub enum Icon {
     TriangleUp,
     /// An icon the application registered (`icon_set::register`): an SVG
     /// file, drawn from textures made when the theme is installed.
+    /// Two dots one above the other: something to grab or to open (a
+    /// folded area's strip); always painted.
+    Grip,
     Custom(crate::icon_set::CustomIcon),
 }
 
@@ -155,6 +158,7 @@ impl Icon {
         Icon::TriangleRight,
         Icon::TriangleDown,
         Icon::TriangleUp,
+        Icon::Grip,
     ];
 
     /// The icon of a name (`settings`), as [`Icon::name`] gives it:
@@ -216,6 +220,7 @@ impl Icon {
             Icon::TriangleRight => "triangle-right",
             Icon::TriangleDown => "triangle-down",
             Icon::TriangleUp => "triangle-up",
+            Icon::Grip => "grip",
             Icon::Custom(c) => crate::icon_set::name(c),
         }
     }
@@ -281,6 +286,7 @@ fn glyph(icon: Icon) -> Option<&'static str> {
         | Icon::TriangleRight
         | Icon::TriangleDown
         | Icon::TriangleUp
+        | Icon::Grip
         | Icon::Custom(_) => return None,
         Icon::Search => p::MAGNIFYING_GLASS,
         Icon::Settings => p::GEAR_SIX,
@@ -695,6 +701,13 @@ pub fn paint_fallback(p: &Painter, icon: Icon, rect: Rect, color: Color32) {
                 ],
             };
             p.add(egui::Shape::convex_polygon(points, color, Stroke::NONE));
+        }
+        Icon::Grip => {
+            let c = rect.center();
+            let d = (rect.height() * 0.2).max(2.0);
+            let dot = (rect.width() * 0.09).max(1.0);
+            p.circle_filled(pos2(c.x, c.y - d), dot, color);
+            p.circle_filled(pos2(c.x, c.y + d), dot, color);
         }
         // Drawn from its textures (`Icon::paint`): no fallback shape.
         Icon::Custom(_) => {}

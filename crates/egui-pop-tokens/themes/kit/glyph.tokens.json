@@ -16,6 +16,7 @@
     "chevron-end": {"$value": "chevron-right"},
     "close": {"$value": "close"},
     "more": {"$value": "more"},
+    "drag-handle": {"$value": "grip"},
     "expand": {"$value": "plus"},
     "collapse": {"$value": "minus"}
   }

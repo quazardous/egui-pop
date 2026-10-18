@@ -1,0 +1,18 @@
+{
+  "$description": "The `area-strip` component of the default kit (docs/kit.md), layered into pop-dark.",
+  "area-strip": {
+    "$description": "A folded side area's strip: a click unfolds the area. Its border is the line on the centre's side, its text the drag-handle glyph.",
+    "shape": {"$type": "string", "$value": "plain"},
+    "width": {"$type": "dimension", "$value": {"value": 12, "unit": "px"}},
+    "rest": {
+      "fill": {"$type": "color", "$value": "{surface.panel}"},
+      "border-color": {"$type": "color", "$value": "{border.default}"},
+      "border-width": {"$type": "dimension", "$value": {"value": 1, "unit": "px"}},
+      "text": {"$type": "color", "$value": "{text.muted}"}
+    },
+    "hover": {
+      "fill": {"$type": "color", "$value": "{surface.hover}"},
+      "text": {"$type": "color", "$value": "{text.strong}"}
+    }
+  }
+}

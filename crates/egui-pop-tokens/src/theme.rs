@@ -82,6 +82,8 @@ pub const BUILT_IN_ACCENTS: &[&str] = &["gold", "blue", "green", "amber", "red"]
 /// (`crate::kit`): a test checks this list holds each of its files.
 #[rustfmt::skip]
 pub(crate) const KIT_FILES: &[(&str, &str)] = &[
+    ("area-grip", include_str!("../themes/kit/area-grip.tokens.json")),
+    ("area-strip", include_str!("../themes/kit/area-strip.tokens.json")),
     ("assist-card", include_str!("../themes/kit/assist-card.tokens.json")),
     ("backdrop", include_str!("../themes/kit/backdrop.tokens.json")),
     ("button", include_str!("../themes/kit/button.tokens.json")),

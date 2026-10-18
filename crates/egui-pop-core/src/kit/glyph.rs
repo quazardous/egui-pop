@@ -64,6 +64,8 @@ glyphs! {
     Close: "close" => Close,
     /// More actions.
     More: "more" => More,
+    /// Something to grab or to open: a folded area's strip.
+    DragHandle: "drag-handle" => Grip,
     /// Expands, adds a level.
     Expand: "expand" => Plus,
     /// Collapses, removes a level.

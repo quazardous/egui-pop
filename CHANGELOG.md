@@ -23,6 +23,11 @@ egui minor.
 - The title bar and window buttons are kit components (`title-bar`,
   `window-button`, `window-close`); `title-bar.align: start` puts the
   title after the bar's leading items instead of centring it.
+- Side areas: a folded side area shows a strip (the kit's `area-strip`,
+  12 px, the drag-handle glyph) whose click unfolds it, instead of
+  vanishing; an open side area can show a resize grip at the middle of
+  its edge (`area-grip`, invisible in the default kit). New glyph role
+  `drag-handle` and icon `grip`.
 - Window buttons per platform flavour: `title-bar.buttons-side`
   (`start`/`end`) puts them at the start of the title bar, close first,
   the title still centred, Snap Layouts following them; a

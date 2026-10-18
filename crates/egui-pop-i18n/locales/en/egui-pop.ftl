@@ -1026,6 +1026,8 @@ egui-pop-workbench-move-to = Move to { $area }
 
 egui-pop-workbench-stays-out = { $panel } stays out of { $area }
 
+egui-pop-workbench-unfold = Unfold { $area }
+
 egui-pop-workbench-window-title = { $panel } — { $application }
 
 menu-app-menu-edit =

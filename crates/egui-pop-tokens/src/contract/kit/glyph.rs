@@ -44,6 +44,11 @@ pub(crate) const CONTRACT: &[Required] = &[
     ),
     comp("glyph.close", "string", "the icon of the `close` glyph"),
     comp("glyph.more", "string", "the icon of the `more` glyph"),
+    comp(
+        "glyph.drag-handle",
+        "string",
+        "the icon of the `drag-handle` glyph",
+    ),
     comp("glyph.expand", "string", "the icon of the `expand` glyph"),
     comp(
         "glyph.collapse",

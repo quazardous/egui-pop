@@ -610,6 +610,11 @@ components! {
     /// A status bar indicator, colours only: its text by tone, its
     /// progress line (`border-color` the track, `indicator-*` the fill).
     status_indicator: "status-indicator" => "plain",
+    /// A side area's resize grip at the middle of its edge (`width` its
+    /// thickness, `height` its length); egui takes the drag.
+    area_grip: "area-grip" => "box",
+    /// A folded side area's strip (`width`); a click unfolds the area.
+    area_strip: "area-strip" => "plain",
     /// The frame of an editor's code assist popups (completions,
     /// actions, hover cards).
     assist_card: "assist-card" => "card",
