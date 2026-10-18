@@ -9,6 +9,26 @@ How long a deprecated item keeps working, and what counts as breaking
 for an extension (tokens, steps, commands, strings, the host contract),
 is in [GOVERNANCE.md](../GOVERNANCE.md).
 
+## Versions of the crates
+
+Each crate has its own version, and a release publishes only the
+crates that changed: a fix in `egui-pop-views` is a new
+`egui-pop-views` patch, and nothing else is published.
+
+- **The facade** (`egui-pop`) takes one minor per egui minor; it is the
+  version applications and extensions name.
+- **A sub-crate** moves when its own code or its public dependencies
+  do: a patch for a fix or an addition, a minor for a break. A sub-crate
+  that does not depend on egui (`egui-pop-tokens`, `egui-pop-model`, the
+  platform layers) may stay on its version across egui minors.
+- **A dependency names what the crate needs.** The requirement in
+  `[workspace.dependencies]` is the lowest version every user of it
+  works with; a crate that starts using something newer raises it in
+  the same change.
+- **A break travels up.** A sub-crate's new minor changes the types
+  the crates above re-export, so each of them takes a new minor too, up
+  to the facade.
+
 Three tiers:
 
 - **Stable**: kept within a minor; breaking it waits for the next minor

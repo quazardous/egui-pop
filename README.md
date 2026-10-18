@@ -238,7 +238,8 @@ and list it in the [registry of extensions](https://github.com/quazardous/egui-p
 ## Versions
 
 egui-pop has its own 0.x version; one egui-pop minor per egui minor,
-released within days of it.
+released within days of it. The sub-crates have their own versions,
+which move only when their code does.
 
 | egui-pop | egui | Rust |
 |---|---|---|

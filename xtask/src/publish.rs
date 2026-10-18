@@ -4,6 +4,10 @@
 //! whose `publish` is not `false`), so a crate added to the workspace is
 //! published without editing anything here.
 //!
+//! Each crate has its own version: only the crates whose version is not
+//! on crates.io yet are published, and each gets a local tag,
+//! `<crate>-vX.Y.Z`, on the commit it was published from.
+//!
 //! crates.io limits how many new crates an account publishes in a short
 //! time (HTTP 429). A refused crate is tried again after `--interval`
 //! seconds; any other failure stops the run. Running it again resumes
@@ -46,6 +50,7 @@ pub fn publish(args: &[String]) -> Result<(), String> {
         "{} crates, in the order of their dependencies:",
         order.len()
     );
+    let mut tags = Vec::new();
     for p in &order {
         let state = if published(&p.name, &p.version)? {
             "on crates.io, skipped"
@@ -53,11 +58,38 @@ pub fn publish(args: &[String]) -> Result<(), String> {
             "to publish"
         } else {
             publish_one(p, interval)?;
+            tags.push(tag(p)?);
             "published"
         };
         println!("  {} {}: {state}", p.name, p.version);
     }
+    if !tags.is_empty() {
+        println!(
+            "tagged {}; push them with `git push --tags`",
+            tags.join(", ")
+        );
+    }
     Ok(())
+}
+
+/// A crate's release tag, `<crate>-vX.Y.Z`.
+fn tag_name(p: &Package) -> String {
+    format!("{}-v{}", p.name, p.version)
+}
+
+/// Tags the commit a crate was just published from.
+fn tag(p: &Package) -> Result<String, String> {
+    let name = tag_name(p);
+    let status = Command::new("git")
+        .args(["tag", "-a", &name, "-m"])
+        .arg(format!("{} {}", p.name, p.version))
+        .current_dir(super::root())
+        .status()
+        .map_err(|e| format!("git tag: {e}"))?;
+    if !status.success() {
+        return Err(format!("git tag {name} failed ({status})"));
+    }
+    Ok(name)
 }
 
 fn cargo() -> String {
@@ -228,6 +260,11 @@ mod tests {
     fn a_cycle_is_an_error_naming_its_crates() {
         let all = [pkg("a", &["b"]), pkg("b", &["a"]), pkg("c", &[])];
         assert_eq!(order(&all).unwrap_err(), "a dependency cycle between a, b");
+    }
+
+    #[test]
+    fn a_tag_names_the_crate_and_its_version() {
+        assert_eq!(tag_name(&pkg("egui-pop-core", &[])), "egui-pop-core-v0.1.0");
     }
 
     #[test]

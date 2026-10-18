@@ -3,9 +3,18 @@
 All notable changes to the egui-pop crates. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/), with one egui-pop minor per
-egui minor.
+egui minor. Each crate has its own version
+([API stability](docs/stability.md#versions-of-the-crates)): an entry
+names the crate it changes, and a release lists the versions it
+publishes.
 
 ## Unreleased
+
+### Changed
+
+- Each crate has its own version and is published only when it changes;
+  the `egui-pop` facade keeps one minor per egui minor.
+  `cargo xtask publish` tags each crate it publishes, `<crate>-vX.Y.Z`.
 
 ## 0.1.1 (2026-10-18)
 

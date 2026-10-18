@@ -41,7 +41,9 @@ and why (a survey of existing crates, when one was adopted or not).
 egui-pop follows [Semantic Versioning](https://semver.org/) with **one
 egui-pop minor per egui minor**: each egui minor brings an egui-pop
 minor built on it, and an extension supports an egui-pop minor exactly
-as it supports that egui. Before 1.0 a minor may break the API; patch
+as it supports that egui. That is the `egui-pop` crate's version; each
+sub-crate has its own, which moves only when the crate does (see
+[API stability](docs/stability.md#versions-of-the-crates)). Before 1.0 a minor may break the API; patch
 releases only add or fix. What each item promises (stable, supported,
 experimental) is in [API stability](docs/stability.md).
 
