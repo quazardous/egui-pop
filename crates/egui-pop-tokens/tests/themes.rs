@@ -729,3 +729,87 @@ fn the_library_and_thumbnail_tokens_renamed_into_the_kit_keep_working() {
         "{said:?}"
     );
 }
+
+#[test]
+fn text_styles_are_steps_of_the_size_scale_with_todays_sizes() {
+    let themes = Themes::default();
+    let r = themes.resolve(&ThemeSpec::new("pop-dark"));
+    let d = |p: &str| r.dimension(p).expect(p);
+    let scale: Vec<f32> = ["xs", "s", "m", "l", "xl"]
+        .iter()
+        .map(|s| d(&format!("font.size.{s}")))
+        .collect();
+    assert!(scale.windows(2).all(|w| w[0] < w[1]), "{scale:?}");
+    // The sizes egui's text styles had before the scale.
+    assert_eq!(d("font.text-style.small"), 10.0);
+    assert_eq!(d("font.text-style.body"), 13.0);
+    assert_eq!(d("font.text-style.button"), 13.0);
+    assert_eq!(d("font.text-style.heading"), 18.0);
+    assert_eq!(d("font.text-style.monospace"), 12.5);
+    let hc = themes.resolve(&ThemeSpec::new("pop-high-contrast"));
+    let h = |p: &str| hc.dimension(p).expect(p);
+    assert_eq!(h("font.text-style.small"), 12.0);
+    assert_eq!(h("font.text-style.body"), 15.0);
+    assert_eq!(h("font.text-style.heading"), 18.0);
+    assert_eq!(h("font.text-style.monospace"), 14.0);
+    for theme in BUILT_IN_THEMES {
+        let r = themes.resolve(&ThemeSpec::new(*theme));
+        let scale: Vec<f32> = ["xs", "s", "m", "l", "xl"]
+            .iter()
+            .map(|s| r.dimension(&format!("font.size.{s}")).unwrap())
+            .collect();
+        assert!(scale.windows(2).all(|w| w[0] < w[1]), "{theme}: {scale:?}");
+    }
+}
+
+#[test]
+fn a_component_token_may_alias_any_step_and_a_step_moves_its_styles() {
+    let mut themes = Themes::default();
+    themes
+        .add_text(
+            "bigger",
+            r##"
+            $extends: "pop-dark"
+            font:
+              size:
+                m: {$type: "dimension", $value: {value: 14, unit: "px"}}
+            card:
+              title-size: {$type: "dimension", $value: "{font.size.l}"}
+            "##,
+        )
+        .unwrap();
+    let r = themes.resolve(&ThemeSpec::new("bigger"));
+    assert!(r.problems().is_empty(), "{:?}", r.problems());
+    assert_eq!(r.dimension("card.title-size"), Some(15.0));
+    assert_eq!(r.dimension("font.text-style.body"), Some(14.0));
+    assert_eq!(r.dimension("font.text-style.button"), Some(14.0));
+}
+
+#[test]
+fn an_old_font_size_token_lands_on_its_text_style() {
+    let mut themes = Themes::default();
+    themes
+        .add_text(
+            "old-fonts",
+            r##"
+            $extends: "pop-dark"
+            font:
+              size:
+                $type: "dimension"
+                body: {$value: {value: 14, unit: "px"}}
+                mono: {$value: {value: 12, unit: "px"}}
+            "##,
+        )
+        .unwrap();
+    let r = themes.resolve(&ThemeSpec::new("old-fonts"));
+    assert_eq!(r.dimension("font.text-style.body"), Some(14.0));
+    assert_eq!(r.dimension("font.text-style.button"), Some(14.0));
+    assert_eq!(r.dimension("font.text-style.monospace"), Some(12.0));
+    assert_eq!(r.dimension("font.text-style.heading"), Some(18.0));
+    let said: Vec<String> = r.problems().iter().map(ToString::to_string).collect();
+    assert!(
+        said.iter()
+            .any(|p| p.starts_with("`font.size.body` is now `font.text-style.body`")),
+        "{said:?}"
+    );
+}

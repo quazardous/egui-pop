@@ -139,6 +139,34 @@ impl Floating {
     }
 }
 
+/// Where a side area lies.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum Placement {
+    /// Beside the centre, taking its room (the default).
+    #[default]
+    Beside,
+    /// Over the centre, with a shadow; its folded strip keeps the room in
+    /// the layout, so the centre keeps its width.
+    Over,
+}
+
+impl Placement {
+    /// Its name in documents and arguments.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Placement::Beside => "beside",
+            Placement::Over => "over",
+        }
+    }
+
+    /// A placement from its name.
+    pub fn parse(name: &str) -> Option<Placement> {
+        [Placement::Beside, Placement::Over]
+            .into_iter()
+            .find(|p| p.as_str() == name)
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Layout {
     pub areas: Vec<(Area, Node)>,
@@ -150,6 +178,10 @@ pub struct Layout {
     /// Areas folded to their strip: their panels stay, unshown.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub folded: Vec<Area>,
+    /// Side areas lying over the centre ([`Placement::Over`]): their
+    /// folded strip keeps their room, the centre its width.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub over: Vec<Area>,
     /// Panels floating over the interface (palettes).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub floating: Vec<Floating>,
@@ -215,7 +247,26 @@ impl Layout {
             auxiliary: Vec::new(),
             hidden,
             folded: Vec::new(),
+            over: Vec::new(),
             floating,
+        }
+    }
+
+    /// Where a side area lies (the centre and the bottom area always
+    /// lie beside).
+    pub fn placement(&self, area: Area) -> Placement {
+        if self.over.contains(&area) {
+            Placement::Over
+        } else {
+            Placement::Beside
+        }
+    }
+
+    /// Lays a side area over the centre or beside it.
+    pub fn set_placement(&mut self, area: Area, placement: Placement) {
+        self.over.retain(|a| *a != area);
+        if placement == Placement::Over {
+            self.over.push(area);
         }
     }
 
@@ -397,6 +448,11 @@ impl Layout {
             auxiliary,
             hidden: hidden.clone(),
             folded: self.folded,
+            over: self
+                .over
+                .into_iter()
+                .filter(|a| matches!(a, Area::StartSide | Area::EndSide))
+                .collect(),
             floating,
         };
         let placed: Vec<PanelId> = layout.placed().into_iter().cloned().collect();

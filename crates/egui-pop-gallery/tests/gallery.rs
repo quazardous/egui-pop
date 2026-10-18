@@ -2636,3 +2636,29 @@ fn a_folded_side_area_shows_its_strip_and_a_click_unfolds_it() {
     h.run();
     assert!(app.layout().folded.is_empty());
 }
+
+#[test]
+fn a_side_area_lies_over_the_centre_with_its_shadow() {
+    use egui_pop::model::layout::Placement;
+    use egui_pop::model::panels::Area;
+    let mut h = harness(options("pop-dark", Density::Comfortable, "workbench"));
+    h.run();
+    h.get_by_label("Open the demonstration panels").click();
+    h.run();
+    let app = h.state().app.handle().clone();
+    let centre = app.area_rect(Area::Center).unwrap();
+    assert!(
+        app.place_area(Area::StartSide, Placement::Over)
+            .unwrap()
+            .ok()
+    );
+    for _ in 0..3 {
+        h.run();
+    }
+    // The centre keeps the room the side bar gave up; the area lies over it.
+    let wide = app.area_rect(Area::Center).unwrap();
+    assert!(wide.left() < centre.left() - 100.0, "{wide:?} {centre:?}");
+    assert!(app.area_rect(Area::StartSide).unwrap().intersects(wide));
+    assert!(h.query_by_label("Fold the start side bar").is_some());
+    h.snapshot("workbench-over-pop-dark");
+}

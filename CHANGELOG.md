@@ -55,6 +55,29 @@ egui minor.
   is unchanged. The library's search field shows a focus ring while its
   text has the keyboard, and a focused thumbnail's ring is no longer
   clipped away.
+- Workbench: a side area may lie **over** the centre instead of beside
+  it (`workbench.place`, `{ "area", "placement" }`, a step a plugin may
+  veto; `AppHandle::place_area`, `area_placement`, `AppBuilder::over`):
+  its folded strip keeps the room, so the centre keeps its width, and
+  the area lies above the centre with the kit's `side-area` shadow; a
+  click on the strip folds or unfolds it, its inner edge resizes it.
+  The placement is saved with the layout (`Layout::over`,
+  `layout::Placement`).
+
+- Shadows from tokens: `shadow.popup`, `shadow.window` and `shadow.side`
+  (`offset-x`, `offset-y`, `blur`, `spread`, `color`) become egui's
+  popup and window shadows (menus, popovers, dialogs, palettes) with
+  egui's values by default; kit components cast one through the
+  `shadow-*` terms (`ComponentKit::shadow`), `side-area` aliasing
+  `shadow.side`; `theme::shadow` reads a group as egui's `Shadow`.
+
+- Typography: a size scale in tokens, `font.size.xs`, `s`, `m`, `l`
+  and `xl`, that egui's five text styles sit on
+  (`font.text-style.small`, `body`, `button`, `heading`, `monospace`,
+  aliases of a step) and component tokens may alias; built-in themes
+  keep their sizes. `fonts::font_at(tokens, role, weight, step)` gives
+  the `FontId` of a step (`fonts::Step`), `Tokens::font.scale` its sizes.
+
 - Kits: the window buttons' glyphs are glyph roles (`glyph.window-minimize`,
   `window-maximize`, `window-restore`, `window-close`), so a kit can draw
   them with its own icons, `indicator-size` across.
@@ -1020,6 +1043,10 @@ egui minor.
   `dim`, `stack`, `best`, `chip` and `chip-text` were renamed into the
   kit (`egui_pop_tokens::RENAMED`): a theme giving them still works,
   with a reported problem.
+- Tokens: `font.size.small`, `body`, `heading` and `mono` became
+  `font.text-style.small`, `body` (and `button`), `heading` and
+  `monospace`; a theme still giving an old name works, with a reported
+  problem (`RENAMED`).
 - The title bar's line is the kit's (`title-bar.rest.border-width`, 1 in
   the default kit): egui's panel line is no longer drawn under it, nor
   room kept for it when the title zone draws nothing.

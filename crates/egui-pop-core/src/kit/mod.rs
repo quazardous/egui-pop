@@ -326,6 +326,10 @@ pub struct ComponentKit {
     /// How opaque the whole part is, 0 to 1 (1 when not given): a
     /// backdrop's strength.
     pub opacity: f32,
+    /// The shadow it casts (`shadow-offset-x`, `shadow-offset-y`,
+    /// `shadow-blur`, `shadow-spread`, `shadow-color`); none when not
+    /// given.
+    pub shadow: Shadow,
 }
 
 impl ComponentKit {
@@ -371,6 +375,8 @@ impl ComponentKit {
             opacity: r
                 .dimension(&format!("{component}.opacity"))
                 .map_or(1.0, |o| o.clamp(0.0, 1.0)),
+            shadow: crate::theme::shadow(r, &format!("{component}.shadow-"))
+                .unwrap_or(Shadow::NONE),
         }
     }
 }
@@ -956,6 +962,42 @@ mod tests {
         assert!(kit.problems.is_empty(), "{:?}", kit.problems);
         assert_eq!(kit.tab.shape, "box");
         assert!(kit.tab_bar.data.height > 0.0);
+    }
+
+    #[test]
+    fn shadows_come_from_tokens_with_egui_s_own_look_by_default() {
+        let themes = Themes::default();
+        for (name, dark) in [("pop-dark", true), ("pop-light", false)] {
+            let t = Tokens::new(themes.resolve(&ThemeSpec::new(name)));
+            let egui = if dark {
+                egui::Visuals::dark()
+            } else {
+                egui::Visuals::light()
+            };
+            let v = crate::theme::visuals(&t);
+            assert_eq!(v.window_shadow, egui.window_shadow, "{name}");
+            assert_eq!(v.popup_shadow, egui.popup_shadow, "{name}");
+            let kit = Kit::compile(&t, &Shapes::default());
+            assert_eq!(kit.side_area.data.shadow, t.shadow.side, "{name}");
+            assert_ne!(kit.side_area.data.shadow, Shadow::NONE, "{name}");
+            // A component without shadow terms casts none.
+            assert_eq!(kit.tab.data.shadow, Shadow::NONE);
+        }
+        let t = tokens_with(
+            r##"{
+              "$extends": "pop-dark",
+              "side-area": {
+                "shadow-offset-x": {"$type": "dimension", "$value": {"value": 3, "unit": "px"}},
+                "shadow-spread": {"$type": "dimension", "$value": {"value": -2, "unit": "px"}},
+                "shadow-color": {"$type": "color", "$value": "#ff000080"}
+              }
+            }"##,
+        );
+        let s = Kit::compile(&t, &Shapes::default()).side_area.data.shadow;
+        assert_eq!(s.offset, [3, 0]);
+        assert_eq!(s.spread, 0, "egui's spread is never negative");
+        assert_eq!(s.blur, 32);
+        assert_eq!(s.color, Color32::from_rgba_unmultiplied(255, 0, 0, 128));
     }
 
     #[test]

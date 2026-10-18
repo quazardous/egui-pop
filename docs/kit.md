@@ -61,6 +61,7 @@ does not change with the state.
 | `offset` | | how far the part sits from the edge it is drawn on, towards the outside (a side area's grip) |
 | `align` | | where the label goes: `start`, `centre` (on the part's centre, moved into its room when it does not fit) or `end` |
 | `width` | | the component's width, when it has a fixed one |
+| `shadow-offset-x`, `shadow-offset-y`, `shadow-blur`, `shadow-spread`, `shadow-color` | | the shadow the part casts (egui's `Shadow`; none when not given): usually aliases of a `shadow.*` group; on `side-area`, cast while it lies over the centre, `shadow-offset-x` towards the centre |
 
 States are always the same six. `rest` gives every term (the contract
 requires it); each other state gives only what differs. A part in several
@@ -116,7 +117,10 @@ their geometry in code and read their colours from the kit.
 paints the state's ring. With the shipped `card` handler egui draws the
 box (no extra cost); another handler paints once the content is laid
 out, its shapes moved under the content (one allocation per part and
-frame). Shadows are egui's (`Visuals`).
+frame). Shadows are egui's (`Visuals`), whose `window_shadow` and
+`popup_shadow` come from the `shadow.window` and `shadow.popup` tokens
+(egui's own values by default): the dialog, popover, palette and assist
+frames, and egui's menus, take them from there.
 
 ## Kits as packages
 
@@ -241,7 +245,12 @@ compiled at install.
   The default kit's grip is transparent. An open side area
   (`side-area`) has `padding-x` and `padding-y` between its edges and its
   panels (egui's 8 and 2 by default), and no separator line when its
-  `border-width` is 0.
+  `border-width` is 0. A side area may lie over the centre
+  (`workbench.place`): its strip keeps the room (`selected` while the
+  area is open; a click folds it) and the area is drawn above the
+  centre in `side-area`'s box, casting its `shadow-*` towards the centre
+  (`shadow.side` by default). The gallery's `workbench-over-pop-dark`
+  snapshot shows it.
 - **egui's own widgets** (`button`, `field`). egui's style is built from
   the kit when a theme is installed (`theme::style_with`): `button`'s
   rest, hover, active and selected are egui's inactive, hovered, active
