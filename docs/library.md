@@ -158,14 +158,15 @@ command); `LibraryState::set_expanded` does it without a step.
 
 ### Colours
 
-The colours come from the theme, through optional component tokens
-falling back on system ones: `library.star` (`status.warning`),
+The marks' colours come from the theme, through optional component
+tokens falling back on system ones: `library.star` (`status.warning`),
 `library.pick` (`text.strong`), `library.reject` (`status.danger`),
 `library.label-red`, `-yellow`, `-green`, `-blue` (the status colours)
-and `-purple`, `library.overlay`, `library.dim`, `library.band`,
-`library.stack`, `library.best`, `library.chip`; the cells use
-`thumbnail.background`, `thumbnail.hover` and `thumbnail.selected`.
-`LibraryTokens::of(ctx)` reads them all.
+and `-purple`, `library.band`. `LibraryTokens::of(ctx)` reads them.
+The boxes they sit on are the kit's (`docs/kit.md`): `thumb-cell`,
+`thumb-layer` (a rejected image's veil, a stack member's bar),
+`thumb-overlay-badge`, `pill` (badges by tone), `tag-chip`,
+`mark-toggle`, `search-field` and `compare-pane`.
 
 ## Marks outside the grid
 

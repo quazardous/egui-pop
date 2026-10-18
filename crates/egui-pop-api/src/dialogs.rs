@@ -46,7 +46,7 @@
 //! host's store, under `ui/dialogs/<key>`).
 //!
 //! Its backdrop ([`Backdrop`]) dims the interface (`Dim`, the
-//! `dialog.backdrop` token's strength, fading while the dialog is
+//! `backdrop.opacity` token's strength, fading while the dialog is
 //! dragged) or leaves it untouched (`Clear`, for a dialog previewing its
 //! effect on the image); the dialog stays modal either way, and a click
 //! on the backdrop never closes it.
@@ -93,14 +93,14 @@ use std::path::{Path, PathBuf};
 
 use std::sync::{Arc, Mutex};
 
-use egui::{Key, Modifiers, Response, Ui, Vec2, WidgetType};
+use egui::{Key, Modifiers, Response, Ui, Vec2};
 use egui_pop_core::band;
 use egui_pop_core::debug::FnCollector;
-use egui_pop_core::icon::Icon;
+use egui_pop_core::kit::{self, Kit};
+use egui_pop_core::lock;
 use egui_pop_core::overlay::{self, Kind, OverlaySpec};
 use egui_pop_core::strings::{self, CANCEL, CLOSE};
 use egui_pop_core::theme::Tokens;
-use egui_pop_core::{a11y, lock};
 use egui_pop_model::commands::{CommandSpec, Origin};
 use egui_pop_model::fuzzy;
 use egui_pop_model::ids::{BlockId, CommandId, OwnerId, PluginId, SettingId, StepId};
@@ -638,7 +638,7 @@ impl Dialog {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Backdrop {
-    /// Dimmed, as much as the `dialog.backdrop` token says (less while
+    /// Dimmed, as much as the `backdrop.opacity` token says (less while
     /// the dialog is dragged).
     #[default]
     Dim,
@@ -1702,19 +1702,17 @@ fn body(ui: &mut Ui, app: &AppHandle, o: &mut Open, header: Header<'_>) -> Optio
     answer
 }
 
-/// The style of a dialog's header band.
-fn band_style(t: &Tokens) -> band::BandStyle {
+/// Where a dialog's header band sits: reaching the dialog's edges, with
+/// the dialog header's room below its title.
+fn band_style(k: &Kit) -> band::BandStyle {
     band::BandStyle {
-        fill: t.dialog.header,
-        separator: t.dialog.border,
-        radius: t.dialog.radius,
-        padding: t.dialog.padding,
-        gap: t.space.m,
+        padding: k.dialog.data.padding_x,
+        gap: k.dialog_header.data.padding_y,
     }
 }
 
-/// The header band: the title and the ✕ (when closable) on a tone of
-/// their own, above a separator, under the move cursor
+/// The header band: the title and the ✕ (when closable) on the kit's
+/// `header-band`, above its line, under the move cursor
 /// ([`egui_pop_core::band`]).
 fn header_band(
     ui: &mut Ui,
@@ -1723,9 +1721,9 @@ fn header_band(
     closed: &mut bool,
     out: &mut Band,
 ) -> Response {
-    let t = Tokens::of(ui.ctx());
+    let kit = Kit::of(ui.ctx());
     let side = close_side(ui);
-    let (heading, b) = band::begin(ui, &band_style(&t), |ui| {
+    let (heading, b) = band::begin(ui, &band_style(&kit), |ui, state| {
         ui.horizontal_top(|ui| {
             let room = if closable {
                 (ui.available_width() - side - ui.spacing().item_spacing.x).max(0.0)
@@ -1739,7 +1737,7 @@ fn header_band(
                         egui::Label::new(
                             egui::RichText::new(title)
                                 .heading()
-                                .color(t.dialog.header_text),
+                                .color(kit.dialog_header.style(state).text),
                         )
                         .wrap()
                         .selectable(false),
@@ -1764,7 +1762,7 @@ fn header_band(
 /// Paints the header band, when there is one.
 fn paint_band(ui: &Ui, b: &Band) {
     if let Some(b) = &b.0 {
-        band::paint(ui, b, &band_style(&Tokens::of(ui.ctx())));
+        band::paint(ui, b, &band_style(&Kit::of(ui.ctx())));
     }
 }
 
@@ -1965,8 +1963,11 @@ fn remember(app: &AppHandle, key: &str, offset: Vec2) {
 /// is closable. No band behind it: a movable dialog has its header band
 /// instead ([`header_band`]).
 fn title_row(ui: &mut Ui, title: &str, closable: bool, closed: &mut bool) -> Response {
+    let text = egui::RichText::new(title)
+        .heading()
+        .color(Kit::of(ui.ctx()).dialog_header.style(kit::State::REST).text);
     if !closable {
-        return ui.heading(title);
+        return ui.label(text);
     }
     let side = close_side(ui);
     ui.horizontal_top(|ui| {
@@ -1974,7 +1975,7 @@ fn title_row(ui: &mut Ui, title: &str, closable: bool, closed: &mut bool) -> Res
         let room = (ui.available_width() - side - ui.spacing().item_spacing.x).max(0.0);
         let heading = ui
             .allocate_ui(egui::vec2(room, side), |ui| {
-                ui.add(egui::Label::new(egui::RichText::new(title).heading()).wrap())
+                ui.add(egui::Label::new(text).wrap())
             })
             .inner;
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
@@ -1993,40 +1994,12 @@ fn close_side(ui: &Ui) -> f32 {
     Tokens::of(ui.ctx()).size.control_height.max(24.0)
 }
 
-/// The ✕: an icon in a square target, named "Close". Never focused when
-/// the dialog opens (nothing asks it to be).
+/// The ✕: the kit's close glyph on a `band-icon-button`, named "Close".
+/// Never focused when the dialog opens (nothing asks it to be).
 fn close_button(ui: &mut Ui, side: f32) -> Response {
-    let t = Tokens::of(ui.ctx());
-    let (rect, response) = ui.allocate_exact_size(egui::vec2(side, side), egui::Sense::click());
-    if ui.is_rect_visible(rect) {
-        let visuals = ui.style().interact(&response);
-        if response.hovered() || response.has_focus() {
-            ui.painter()
-                .rect_filled(rect, t.radius.widget, visuals.weak_bg_fill);
-        }
-        if response.has_focus() {
-            ui.painter().rect_stroke(
-                rect,
-                t.radius.widget,
-                egui::Stroke::new(1.5, t.focus_ring),
-                egui::StrokeKind::Inside,
-            );
-        }
-        let color = if response.hovered() {
-            t.text.strong
-        } else {
-            t.text.default
-        };
-        let icon = t.size.icon_inline;
-        Icon::Close.paint(
-            ui.painter(),
-            egui::Rect::from_center_size(rect.center(), egui::vec2(icon, icon)),
-            color,
-        );
-    }
     let name = strings::tr(ui.ctx(), &CLOSE);
-    a11y::name(&response, WidgetType::Button, &name);
-    response.on_hover_text(name)
+    let glyph = Kit::of(ui.ctx()).glyph(kit::Glyph::Close);
+    band::button(ui, side, glyph, &name, false)
 }
 
 /// Cancel and the primary button, right-aligned.

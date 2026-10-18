@@ -50,7 +50,7 @@ pub struct OverlaySpec {
     #[serde(skip)]
     pub offset: egui::Vec2,
     /// How much of the theme's backdrop a modal dims the interface with
-    /// (`dialog.backdrop`): 1 by default, 0 for none (the interface stays
+    /// (`backdrop.opacity`): 1 by default, 0 for none (the interface stays
     /// as it is, still blocked).
     pub dim: f32,
 }
@@ -475,33 +475,35 @@ pub fn show<R>(
         }
         s.shown.push(spec.id);
     }
-    let tokens = crate::theme::Tokens::of(ctx);
+    let kit = crate::kit::Kit::of(ctx);
+    let rest = crate::kit::State::REST;
     let (inner, rect) = match spec.kind {
         Kind::Modal => {
-            let alpha = (tokens.dialog.backdrop * spec.dim).clamp(0.0, 1.0);
+            let backdrop = &kit.backdrop;
+            let alpha = (backdrop.data.opacity * spec.dim).clamp(0.0, 1.0);
+            let dialog = &kit.dialog;
+            let padding = dialog.data.padding_x;
             let r = egui::Modal::new(spec.id)
                 .area(
                     egui::Modal::default_area(spec.id)
                         .anchor(egui::Align2::CENTER_CENTER, spec.offset),
                 )
-                .backdrop_color(egui::Color32::from_black_alpha(
-                    (alpha * 255.0).round() as u8
-                ))
-                .frame(
-                    egui::Frame::window(&ctx.global_style())
-                        .fill(tokens.dialog.background)
-                        .stroke(egui::Stroke::new(1.0, tokens.dialog.border))
-                        .inner_margin(tokens.dialog.padding),
-                )
+                .backdrop_color(backdrop.style(rest).fill.gamma_multiply(alpha))
+                .frame(egui::Frame::NONE)
                 .show(ctx, |ui| {
-                    let width = spec.width.map_or(tokens.dialog.width, |w| {
-                        w.min(ctx.content_rect().width() - 4.0 * tokens.dialog.padding)
-                    });
-                    ui.set_max_width(width);
-                    if spec.width.is_some() {
-                        ui.set_min_width(width);
-                    }
-                    add(ui)
+                    let shadow = ui.visuals().window_shadow;
+                    dialog
+                        .show(ui, rest, shadow, |ui| {
+                            let width = spec.width.map_or(dialog.data.width, |w| {
+                                w.min(ctx.content_rect().width() - 4.0 * padding)
+                            });
+                            ui.set_max_width(width);
+                            if spec.width.is_some() {
+                                ui.set_min_width(width);
+                            }
+                            add(ui)
+                        })
+                        .inner
                 });
             (r.inner, r.response.rect)
         }
@@ -523,10 +525,8 @@ pub fn show<R>(
                 .order(egui::Order::Foreground)
                 .fixed_pos(placed.rect.min)
                 .show(ctx, |ui| {
-                    egui::Frame::menu(ui.style())
-                        .fill(tokens.surface.overlay)
-                        .show(ui, add)
-                        .inner
+                    let shadow = ui.visuals().popup_shadow;
+                    kit.popover.show(ui, rest, shadow, add).inner
                 });
             (r.inner, r.response.rect)
         }

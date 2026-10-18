@@ -2,8 +2,8 @@
 //! overlays touch what they should, problems fall back instead of breaking.
 
 use egui_pop_tokens::{
-    BUILT_IN_ACCENTS, BUILT_IN_THEMES, CONTRACT, Color, Density, Error, POP_THEMES, ThemeSpec,
-    Themes, Tier, TokenFile, Value,
+    BUILT_IN_ACCENTS, BUILT_IN_THEMES, Color, Density, Error, POP_THEMES, ThemeSpec, Themes, Tier,
+    TokenFile, Value, contract,
 };
 use serde_json::json;
 
@@ -26,7 +26,7 @@ fn built_in_themes_answer_the_whole_contract_cleanly() {
             spec.label(),
             r.problems()
         );
-        for req in CONTRACT {
+        for req in contract() {
             let t = r
                 .get(req.path)
                 .unwrap_or_else(|| panic!("{}: {}", spec.label(), req.path));
@@ -41,7 +41,7 @@ fn built_in_themes_answer_the_whole_contract_cleanly() {
 fn system_and_component_tokens_are_aliases_of_the_tier_below() {
     let themes = Themes::default();
     let r = themes.resolve(&ThemeSpec::default());
-    for req in CONTRACT.iter().filter(|r| r.ty == "color") {
+    for req in contract().filter(|r| r.ty == "color") {
         let token = r.get(req.path).unwrap();
         let target = token
             .alias
@@ -62,9 +62,14 @@ fn aliases_follow_through_extends_chains() {
     let mut themes = Themes::default();
     // A third level: mine → pop-light → pop-dark.
     themes
-        .add_json(
+        .add_text(
             "mine",
-            r##"{ "$extends": "pop-light", "gray": { "$type": "color", "2": { "$value": "#ffffff" } } }"##,
+            r##"
+            $extends: "pop-light"
+            gray:
+              $type: "color"
+              "2": {$value: "#ffffff"}
+            "##,
         )
         .unwrap();
     let mine = themes.resolve(&ThemeSpec::new("mine"));
@@ -82,19 +87,22 @@ fn aliases_follow_through_extends_chains() {
         light.color("surface.overlay")
     );
     // Component → system → reference, across files.
-    assert_eq!(mine.color("button.background"), light.color("gray.4"));
+    assert_eq!(mine.color("button.rest.fill"), light.color("gray.4"));
 }
 
 #[test]
 fn an_alias_cycle_is_reported_and_falls_back() {
     let mut themes = Themes::default();
     themes
-        .add_json(
+        .add_text(
             "loop",
-            r#"{ "$extends": "pop-dark",
-                 "text": { "$type": "color",
-                           "default": { "$value": "{text.muted}" },
-                           "muted": { "$value": "{text.default}" } } }"#,
+            r#"
+            $extends: "pop-dark"
+            text:
+              $type: "color"
+              default: {$value: "{text.muted}"}
+              muted: {$value: "{text.default}"}
+            "#,
         )
         .unwrap();
     let r = themes.resolve(&ThemeSpec::new("loop"));
@@ -110,16 +118,19 @@ fn an_alias_cycle_is_reported_and_falls_back() {
     assert_eq!(r.color("text.default"), dark.color("text.default"));
     assert!(r.get("text.default").unwrap().fallback);
     // Something aliasing into the cycle is broken too, and falls back.
-    assert!(r.get("button.text").unwrap().fallback);
+    assert!(r.get("button.rest.text").unwrap().fallback);
 }
 
 #[test]
 fn an_unknown_alias_is_reported_with_its_target() {
     let mut themes = Themes::default();
     themes
-        .add_json(
+        .add_text(
             "typo",
-            r#"{ "$extends": "pop-dark", "danger": { "$type": "color", "$value": "{redd.11}" } }"#,
+            r#"
+            $extends: "pop-dark"
+            danger: {$type: "color", $value: "{redd.11}"}
+            "#,
         )
         .unwrap();
     let r = themes.resolve(&ThemeSpec::new("typo"));
@@ -144,10 +155,32 @@ fn an_unknown_alias_is_reported_with_its_target() {
 fn extends_problems_fall_back_to_pop_dark() {
     let mut themes = Themes::default();
     themes
-        .add_json("orphan", r##"{ "$extends": "nowhere", "gray": { "$type": "color", "0": { "$value": "#000000" } } }"##)
+        .add_text(
+            "orphan",
+            r##"
+                            $extends: "nowhere"
+                            gray:
+                              $type: "color"
+                              "0": {$value: "#000000"}
+                            "##,
+        )
         .unwrap();
-    themes.add_json("a", r#"{ "$extends": "b" }"#).unwrap();
-    themes.add_json("b", r#"{ "$extends": "a" }"#).unwrap();
+    themes
+        .add_text(
+            "a",
+            r#"
+                         $extends: "b"
+                         "#,
+        )
+        .unwrap();
+    themes
+        .add_text(
+            "b",
+            r#"
+                         $extends: "a"
+                         "#,
+        )
+        .unwrap();
 
     let orphan = themes.resolve(&ThemeSpec::new("orphan"));
     assert_eq!(
@@ -165,7 +198,7 @@ fn extends_problems_fall_back_to_pop_dark() {
     // Every contract token still has a value: from pop-dark, but for the
     // density overlay's own.
     assert!(cycle.get("surface.panel").is_some_and(|t| t.fallback));
-    for req in CONTRACT {
+    for req in contract() {
         assert!(cycle.get(req.path).is_some(), "{}", req.path);
     }
 
@@ -183,10 +216,15 @@ fn extends_problems_fall_back_to_pop_dark() {
 fn missing_or_mistyped_contract_tokens_fall_back_and_say_why() {
     let mut themes = Themes::default();
     themes
-        .add_json(
+        .add_text(
             "bare",
-            r##"{ "surface": { "$type": "color", "panel": { "$value": "#102030" } },
-                  "radius": { "widget": { "$type": "color", "$value": "#ffffff" } } }"##,
+            r##"
+            surface:
+              $type: "color"
+              panel: {$value: "#102030"}
+            radius:
+              widget: {$type: "color", $value: "#ffffff"}
+            "##,
         )
         .unwrap();
     let r = themes.resolve(&ThemeSpec::new("bare"));
@@ -205,7 +243,7 @@ fn missing_or_mistyped_contract_tokens_fall_back_and_say_why() {
         dark.dimension("radius.widget")
     );
     assert_eq!(r.color("text.default"), dark.color("text.default"));
-    for req in CONTRACT {
+    for req in contract() {
         assert_eq!(
             r.get(req.path).map(|t| t.ty.as_str()),
             Some(req.ty),
@@ -242,7 +280,12 @@ fn a_density_overlay_only_touches_space_and_size() {
                     "{base}: {} changed",
                     token.path
                 );
-                let root = token.alias.as_deref().unwrap_or(&token.path);
+                // Followed to the end of its aliases (a kit radius is its
+                // height, which is {space.m}).
+                let mut root = token.path.as_str();
+                while let Some(next) = comfortable.get(root).and_then(|t| t.alias.as_deref()) {
+                    root = next;
+                }
                 assert!(
                     root.starts_with("space.")
                         || root.starts_with("size.")
@@ -284,7 +327,7 @@ fn an_accent_re_aliases_the_accent_roles_only() {
         assert_eq!(blue.color("text.on-accent"), blue.color("blue.contrast"));
         // Aliases of the accent follow it.
         assert_eq!(blue.color("focus.ring"), blue.color("blue.9"));
-        assert_eq!(blue.color("slider.fill"), blue.color("blue.9"));
+        assert_eq!(blue.color("slider-fill.rest.fill"), blue.color("blue.9"));
         // Everything else is untouched.
         assert_eq!(blue.color("surface.panel"), plain.color("surface.panel"));
         assert_eq!(blue.color("danger"), plain.color("danger"));
@@ -354,12 +397,14 @@ fn reduced_motion_zeroes_the_duration() {
 fn extensions_and_descriptions_are_preserved() {
     let mut themes = Themes::default();
     themes
-        .add_json(
+        .add_text(
             "ext",
-            r##"{ "$extends": "pop-dark",
-                  "$extensions": { "org.example.tool": { "id": 7 } },
-                  "danger": { "$type": "color", "$value": "#ff0000",
-                              "$extensions": { "org.example.tool": { "locked": true } } } }"##,
+            r##"
+            $extends: "pop-dark"
+            $extensions:
+              org.example.tool: {id: 7}
+            danger: {$type: "color", $value: "#ff0000", $extensions: {org.example.tool: {locked: true}}}
+            "##,
         )
         .unwrap();
     assert_eq!(
@@ -395,7 +440,7 @@ fn an_exported_theme_reads_back_the_same() {
     let r = themes.resolve(&spec);
     let mut again = Themes::default();
     again
-        .add_json("exported", &r.to_dtcg().to_string())
+        .add_text("exported", &r.to_dtcg().to_string())
         .unwrap();
     // Read back without the compact overlay: the file already holds its values.
     let mut no_density = again.clone();
@@ -427,7 +472,7 @@ fn every_shipped_theme_resolves_from_its_own_files() {
                 spec.label(),
                 t.problems()
             );
-            for r in egui_pop_tokens::CONTRACT {
+            for r in egui_pop_tokens::contract() {
                 let token = t
                     .get(r.path)
                     .unwrap_or_else(|| panic!("{base}: no {}", r.path));
@@ -485,4 +530,286 @@ fn control_and_icon_sizes_are_multiples_of_four_points() {
             assert_eq!(v % 4.0, 0.0, "{} {path}: {v}", spec.label());
         }
     }
+}
+
+#[test]
+fn a_renamed_token_still_works_under_its_new_name_and_is_reported() {
+    let mut themes = Themes::default();
+    themes
+        .add_text(
+            "old-names",
+            r##"
+            $extends: "pop-dark"
+            titlebar:
+              background: {$type: "color", $value: "#123456"}
+              button-width: {$type: "dimension", $value: {value: 30, unit: "px"}}
+            "##,
+        )
+        .unwrap();
+    let r = themes.resolve(&ThemeSpec::new("old-names"));
+    assert_eq!(r.color("title-bar.rest.fill").unwrap().to_hex(), "#123456");
+    assert_eq!(r.dimension("window-button.width"), Some(30.0));
+    assert_eq!(r.dimension("window-close.width"), Some(30.0));
+    let said: Vec<String> = r.problems().iter().map(ToString::to_string).collect();
+    assert!(
+        said.iter()
+            .any(|p| p.starts_with("`titlebar.background` is now `title-bar.rest.fill`")),
+        "{said:?}"
+    );
+}
+
+#[test]
+fn a_frame_token_renamed_into_the_kit_keeps_working() {
+    let mut themes = Themes::default();
+    themes
+        .add_text(
+            "old-dialog",
+            r##"
+            $extends: "pop-dark"
+            dialog:
+              background: {$type: "color", $value: "#123456"}
+              padding: {$type: "dimension", $value: {value: 20, unit: "px"}}
+              backdrop: {$type: "number", $value: 0.5}
+            editor:
+              background: {$type: "color", $value: "#654321"}
+            "##,
+        )
+        .unwrap();
+    let r = themes.resolve(&ThemeSpec::new("old-dialog"));
+    assert_eq!(r.color("dialog.rest.fill").unwrap().to_hex(), "#123456");
+    assert_eq!(r.dimension("dialog.padding-x"), Some(20.0));
+    assert_eq!(r.dimension("dialog.padding-y"), Some(20.0));
+    assert_eq!(r.dimension("backdrop.opacity"), Some(0.5));
+    assert_eq!(
+        r.color("editor-frame.rest.fill").unwrap().to_hex(),
+        "#654321"
+    );
+    let said: Vec<String> = r.problems().iter().map(ToString::to_string).collect();
+    assert!(
+        said.iter()
+            .any(|p| p.starts_with("`dialog.backdrop` is now `backdrop.opacity`")),
+        "{said:?}"
+    );
+}
+
+#[test]
+fn an_alpha_modifier_multiplies_the_aliased_colours_alpha() {
+    let mut themes = Themes::default();
+    themes
+        .add_text(
+            "alpha",
+            r##"
+            $extends: "pop-dark"
+            veil:
+              $type: "color"
+              plain: {$value: "{surface.overlay}", $extensions: {org.egui-pop.alpha: 0.85}}
+              half: {$value: "#ff000080", $extensions: {org.egui-pop.alpha: 0.5}}
+              # an alias of a modified alias keeps its modifier, and adds its own
+              through: {$value: "{veil.plain}"}
+              twice: {$value: "{veil.plain}", $extensions: {org.egui-pop.alpha: 0.5, org.example: 1}}
+            "##,
+        )
+        .unwrap();
+    let r = themes.resolve(&ThemeSpec::new("alpha"));
+    assert!(r.problems().is_empty(), "{:?}", r.problems());
+    let overlay = r.color("surface.overlay").unwrap();
+    let plain = r.color("veil.plain").unwrap();
+    assert_eq!(
+        (plain.r, plain.g, plain.b),
+        (overlay.r, overlay.g, overlay.b)
+    );
+    assert!((plain.a - 0.85 * overlay.a).abs() < 1e-6);
+    assert_eq!(
+        r.get("veil.plain").unwrap().alias.as_deref(),
+        Some("surface.overlay")
+    );
+    assert!((r.color("veil.half").unwrap().a - 0.25).abs() < 0.01);
+    assert_eq!(r.color("veil.through"), Some(plain));
+    assert!((r.color("veil.twice").unwrap().a - 0.425 * overlay.a).abs() < 1e-6);
+    // Exported, the value holds the alpha and the modifier is gone (it
+    // would apply twice); other extensions stay.
+    let out = r.to_dtcg();
+    assert_eq!(out["veil"]["plain"].get("$extensions"), None);
+    assert_eq!(
+        out["veil"]["twice"]["$extensions"],
+        json!({"org.example": 1})
+    );
+    let mut again = Themes::default();
+    again.add_text("back", &out.to_string()).unwrap();
+    let back = again.resolve(&ThemeSpec::new("back"));
+    assert_eq!(
+        back.color("veil.twice").unwrap().to_hex(),
+        r.color("veil.twice").unwrap().to_hex()
+    );
+}
+
+#[test]
+fn a_bad_alpha_modifier_is_reported() {
+    let mut themes = Themes::default();
+    themes
+        .add_text(
+            "bad-alpha",
+            r##"
+            $extends: "pop-dark"
+            veil:
+              over: {$type: "color", $value: "{surface.overlay}", $extensions: {org.egui-pop.alpha: 1.5}}
+              word: {$type: "color", $value: "{surface.overlay}", $extensions: {org.egui-pop.alpha: "half"}}
+              wide: {$type: "dimension", $value: "{radius.widget}", $extensions: {org.egui-pop.alpha: 0.5}}
+              after: {$type: "color", $value: "{veil.over}"}
+            "##,
+        )
+        .unwrap();
+    let r = themes.resolve(&ThemeSpec::new("bad-alpha"));
+    let said: Vec<String> = r.problems().iter().map(ToString::to_string).collect();
+    for path in ["veil.over", "veil.word", "veil.wide"] {
+        assert!(
+            r.problems()
+                .iter()
+                .any(|p| matches!(p, Error::InvalidModifier { path: p, .. } if p == path)),
+            "{path}: {said:?}"
+        );
+        assert!(r.get(path).is_none(), "{path}");
+    }
+    // Reported once, not again for what aliases it.
+    assert_eq!(said.len(), 3, "{said:?}");
+    assert!(r.get("veil.after").is_none());
+    assert!(said.iter().any(|p| p.contains("not a number from 0 to 1")));
+    assert!(
+        said.iter()
+            .any(|p| p.contains("is for colours, this is a dimension"))
+    );
+}
+
+#[test]
+fn an_override_replaces_the_alpha_modifier_with_its_value() {
+    let mut themes = Themes::default();
+    themes
+        .add_text(
+            "veiled",
+            r##"
+            $extends: "pop-dark"
+            veil: {$type: "color", $value: "{surface.overlay}", $extensions: {org.egui-pop.alpha: 0.5}}
+            "##,
+        )
+        .unwrap();
+    let r = themes.resolve(&ThemeSpec::new("veiled").override_token("veil", json!("#102030")));
+    assert!(r.problems().is_empty(), "{:?}", r.problems());
+    assert_eq!(r.color("veil"), Color::from_hex("#102030"));
+}
+
+#[test]
+fn the_library_and_thumbnail_tokens_renamed_into_the_kit_keep_working() {
+    let mut themes = Themes::default();
+    themes
+        .add_text(
+            "old-library",
+            r##"
+            $extends: "pop-dark"
+            thumbnail:
+              background: {$type: "color", $value: "#123456"}
+            library:
+              overlay: {$type: "color", $value: "#20202080"}
+            "##,
+        )
+        .unwrap();
+    let r = themes.resolve(&ThemeSpec::new("old-library"));
+    for path in [
+        "thumbnail.rest.fill",
+        "thumb-cell.rest.fill",
+        "compare-pane.rest.fill",
+    ] {
+        assert_eq!(r.color(path).unwrap().to_hex(), "#123456", "{path}");
+    }
+    // The old value as it was: the default's alpha modifier is not kept.
+    assert_eq!(r.color("pill.rest.fill").unwrap().to_hex(), "#20202080");
+    let said: Vec<String> = r.problems().iter().map(ToString::to_string).collect();
+    assert!(
+        said.iter()
+            .any(|p| p.starts_with("`library.overlay` is now `pill.rest.fill`")),
+        "{said:?}"
+    );
+}
+
+#[test]
+fn text_styles_are_steps_of_the_size_scale_with_todays_sizes() {
+    let themes = Themes::default();
+    let r = themes.resolve(&ThemeSpec::new("pop-dark"));
+    let d = |p: &str| r.dimension(p).expect(p);
+    let scale: Vec<f32> = ["xs", "s", "m", "l", "xl"]
+        .iter()
+        .map(|s| d(&format!("font.size.{s}")))
+        .collect();
+    assert!(scale.windows(2).all(|w| w[0] < w[1]), "{scale:?}");
+    // The sizes egui's text styles had before the scale.
+    assert_eq!(d("font.text-style.small"), 10.0);
+    assert_eq!(d("font.text-style.body"), 13.0);
+    assert_eq!(d("font.text-style.button"), 13.0);
+    assert_eq!(d("font.text-style.heading"), 18.0);
+    assert_eq!(d("font.text-style.monospace"), 12.5);
+    let hc = themes.resolve(&ThemeSpec::new("pop-high-contrast"));
+    let h = |p: &str| hc.dimension(p).expect(p);
+    assert_eq!(h("font.text-style.small"), 12.0);
+    assert_eq!(h("font.text-style.body"), 15.0);
+    assert_eq!(h("font.text-style.heading"), 18.0);
+    assert_eq!(h("font.text-style.monospace"), 14.0);
+    for theme in BUILT_IN_THEMES {
+        let r = themes.resolve(&ThemeSpec::new(*theme));
+        let scale: Vec<f32> = ["xs", "s", "m", "l", "xl"]
+            .iter()
+            .map(|s| r.dimension(&format!("font.size.{s}")).unwrap())
+            .collect();
+        assert!(scale.windows(2).all(|w| w[0] < w[1]), "{theme}: {scale:?}");
+    }
+}
+
+#[test]
+fn a_component_token_may_alias_any_step_and_a_step_moves_its_styles() {
+    let mut themes = Themes::default();
+    themes
+        .add_text(
+            "bigger",
+            r##"
+            $extends: "pop-dark"
+            font:
+              size:
+                m: {$type: "dimension", $value: {value: 14, unit: "px"}}
+            card:
+              title-size: {$type: "dimension", $value: "{font.size.l}"}
+            "##,
+        )
+        .unwrap();
+    let r = themes.resolve(&ThemeSpec::new("bigger"));
+    assert!(r.problems().is_empty(), "{:?}", r.problems());
+    assert_eq!(r.dimension("card.title-size"), Some(15.0));
+    assert_eq!(r.dimension("font.text-style.body"), Some(14.0));
+    assert_eq!(r.dimension("font.text-style.button"), Some(14.0));
+}
+
+#[test]
+fn an_old_font_size_token_lands_on_its_text_style() {
+    let mut themes = Themes::default();
+    themes
+        .add_text(
+            "old-fonts",
+            r##"
+            $extends: "pop-dark"
+            font:
+              size:
+                $type: "dimension"
+                body: {$value: {value: 14, unit: "px"}}
+                mono: {$value: {value: 12, unit: "px"}}
+            "##,
+        )
+        .unwrap();
+    let r = themes.resolve(&ThemeSpec::new("old-fonts"));
+    assert_eq!(r.dimension("font.text-style.body"), Some(14.0));
+    assert_eq!(r.dimension("font.text-style.button"), Some(14.0));
+    assert_eq!(r.dimension("font.text-style.monospace"), Some(12.0));
+    assert_eq!(r.dimension("font.text-style.heading"), Some(18.0));
+    let said: Vec<String> = r.problems().iter().map(ToString::to_string).collect();
+    assert!(
+        said.iter()
+            .any(|p| p.starts_with("`font.size.body` is now `font.text-style.body`")),
+        "{said:?}"
+    );
 }

@@ -1,7 +1,7 @@
 //! The decorated input: one component around a text, number, path or
 //! search field, with what desktop and web toolkits put around a field.
 //!
-//! - a **placeholder** shown while the field is empty (`field.placeholder`);
+//! - a **placeholder** shown while the field is empty (`field.tone.muted.text`);
 //! - **leading and trailing slots**: an icon, a prefix or a suffix text,
 //!   a unit;
 //! - a **clear ✕**, shown while there is a value and the field can be

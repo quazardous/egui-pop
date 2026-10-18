@@ -7,12 +7,19 @@ use std::str::FromStr;
 
 use serde_json::{Map, Value as Json, json};
 
-use crate::contract::{CONTRACT, Tier, required};
+use crate::contract::{Tier, contract, required};
 use crate::file::{RawToken, TokenFile, alias_target};
 use crate::{Color, Error, Value};
 
 /// The theme everything falls back to.
 pub const FALLBACK_THEME: &str = "pop-dark";
+
+/// The `$extensions` key of the alpha modifier: on a colour token, a
+/// number from 0 to 1 the colour's alpha is multiplied by, after its
+/// alias is followed (`{"$value": "{surface.overlay}", "$extensions":
+/// {"org.egui-pop.alpha": 0.85}}`, the overlay at 85 %). Every modifier
+/// met along a chain of aliases applies.
+pub const ALPHA_EXTENSION: &str = "org.egui-pop.alpha";
 
 /// egui-pop's own base themes, in the order a switcher shows them.
 pub const POP_THEMES: &[&str] = &["pop-dark", "pop-light", "pop-high-contrast"];
@@ -76,58 +83,41 @@ pub fn theme_label(name: &str) -> String {
 /// The built-in colour scales usable as an accent.
 pub const BUILT_IN_ACCENTS: &[&str] = &["gold", "blue", "green", "amber", "red"];
 
+/// The default kit's components (`docs/kit.md`), one file each, layered
+/// into `pop-dark` (and so into every theme extending it): one entry per
+/// `themes/kit/<component>.tokens.yaml`, compiled to JSON by `build.rs`.
+pub(crate) const KIT_FILES: &[(&str, &str)] = include!(concat!(env!("OUT_DIR"), "/kit_files.rs"));
+
+/// A shipped token file, `themes/<name>.tokens.yaml`, as `build.rs`
+/// compiled it to JSON.
+macro_rules! shipped {
+    ($name:literal) => {
+        include_str!(concat!(env!("OUT_DIR"), "/themes/", $name, ".tokens.json"))
+    };
+}
+
 const BUILT_IN_FILES: &[(&str, &str)] = &[
-    ("pop-dark", include_str!("../themes/pop-dark.tokens.json")),
-    ("pop-light", include_str!("../themes/pop-light.tokens.json")),
-    (
-        "pop-high-contrast",
-        include_str!("../themes/pop-high-contrast.tokens.json"),
-    ),
-    (
-        "github-light",
-        include_str!("../themes/github-light.tokens.json"),
-    ),
-    (
-        "github-dark",
-        include_str!("../themes/github-dark.tokens.json"),
-    ),
+    ("pop-dark", shipped!("pop-dark")),
+    ("pop-light", shipped!("pop-light")),
+    ("pop-high-contrast", shipped!("pop-high-contrast")),
+    ("github-light", shipped!("github-light")),
+    ("github-dark", shipped!("github-dark")),
     (
         "github-light-high-contrast",
-        include_str!("../themes/github-light-high-contrast.tokens.json"),
+        shipped!("github-light-high-contrast"),
     ),
     (
         "github-dark-high-contrast",
-        include_str!("../themes/github-dark-high-contrast.tokens.json"),
+        shipped!("github-dark-high-contrast"),
     ),
-    (
-        "catppuccin-latte",
-        include_str!("../themes/catppuccin-latte.tokens.json"),
-    ),
-    (
-        "catppuccin-mocha",
-        include_str!("../themes/catppuccin-mocha.tokens.json"),
-    ),
-    ("one-light", include_str!("../themes/one-light.tokens.json")),
-    (
-        "one-dark-pro",
-        include_str!("../themes/one-dark-pro.tokens.json"),
-    ),
-    (
-        "solarized-light",
-        include_str!("../themes/solarized-light.tokens.json"),
-    ),
-    (
-        "solarized-dark",
-        include_str!("../themes/solarized-dark.tokens.json"),
-    ),
-    (
-        "gruvbox-light",
-        include_str!("../themes/gruvbox-light.tokens.json"),
-    ),
-    (
-        "gruvbox-dark",
-        include_str!("../themes/gruvbox-dark.tokens.json"),
-    ),
+    ("catppuccin-latte", shipped!("catppuccin-latte")),
+    ("catppuccin-mocha", shipped!("catppuccin-mocha")),
+    ("one-light", shipped!("one-light")),
+    ("one-dark-pro", shipped!("one-dark-pro")),
+    ("solarized-light", shipped!("solarized-light")),
+    ("solarized-dark", shipped!("solarized-dark")),
+    ("gruvbox-light", shipped!("gruvbox-light")),
+    ("gruvbox-dark", shipped!("gruvbox-dark")),
 ];
 
 /// The scale steps an accent re-aliases from, and what they become.
@@ -164,8 +154,8 @@ impl Density {
     /// The built-in overlay file of this density.
     pub fn built_in_file(self) -> TokenFile {
         let text = match self {
-            Density::Comfortable => include_str!("../themes/density-comfortable.tokens.json"),
-            Density::Compact => include_str!("../themes/density-compact.tokens.json"),
+            Density::Comfortable => shipped!("density-comfortable"),
+            Density::Compact => shipped!("density-compact"),
         };
         TokenFile::parse(&format!("density-{}", self.name()), text)
             .expect("built-in density files parse")
@@ -384,8 +374,10 @@ impl ResolvedTokens {
             if let Some(d) = &token.description {
                 entry.insert("$description".into(), json!(d));
             }
-            if let Some(e) = &token.extensions {
-                entry.insert("$extensions".into(), e.clone());
+            // The alpha modifier is in the value already: kept, it would
+            // apply twice when the file is read back.
+            if let Some(e) = without_alpha(token.extensions.as_ref()) {
+                entry.insert("$extensions".into(), e);
             }
             node.insert(leaf.to_string(), Json::Object(entry));
         }
@@ -411,7 +403,25 @@ impl Default for Themes {
                 .collect(),
         };
         for (name, text) in BUILT_IN_FILES {
-            themes.add(TokenFile::parse(name, text).expect("built-in themes parse"));
+            let mut file = TokenFile::parse(name, text).expect("built-in themes parse");
+            if *name == FALLBACK_THEME {
+                // The default kit, read as any kit folder is; its tokens
+                // are `pop-dark`'s own.
+                let kit = crate::kit::built_in(KIT_FILES);
+                for p in kit.problems() {
+                    if matches!(
+                        p,
+                        crate::kit::Problem::Tokens(_) | crate::kit::Problem::Repeated { .. }
+                    ) {
+                        panic!("the default kit: {p}");
+                    }
+                }
+                for (path, token) in kit.theme.tokens {
+                    let clash = file.tokens.insert(path.clone(), token);
+                    assert!(clash.is_none(), "the default kit repeats {path}");
+                }
+            }
+            themes.add(file);
         }
         themes
     }
@@ -423,8 +433,9 @@ impl Themes {
         self.themes.insert(theme.name.clone(), theme)
     }
 
-    /// Reads a theme file and adds it under `name`.
-    pub fn add_json(&mut self, name: &str, text: &str) -> Result<(), Error> {
+    /// Reads a theme file (YAML or JSON, `TokenFile::parse`) and adds it
+    /// under `name`.
+    pub fn add_text(&mut self, name: &str, text: &str) -> Result<(), Error> {
         self.add(TokenFile::parse(name, text)?);
         Ok(())
     }
@@ -470,7 +481,7 @@ impl Themes {
         let mut tokens = BTreeMap::new();
         for n in chain.iter().rev() {
             if let Some(theme) = self.themes.get(n) {
-                layer(&mut tokens, &theme.tokens);
+                layer(&mut tokens, &renamed(&theme.tokens, problems));
             }
         }
         tokens
@@ -499,8 +510,7 @@ impl Themes {
     /// `pop-dark` value.
     pub fn resolve(&self, spec: &ThemeSpec) -> ResolvedTokens {
         let mut resolved = self.resolve_without_fallback(spec);
-        let missing: Vec<&str> = CONTRACT
-            .iter()
+        let missing: Vec<&str> = contract()
             .filter(|r| resolved.tokens.get(r.path).is_none_or(|t| t.ty != r.ty))
             .map(|r| r.path)
             .collect();
@@ -558,7 +568,12 @@ impl Themes {
         }
         for (path, value) in &spec.overrides {
             match raw.get_mut(path) {
-                Some(token) => token.value = value.clone(),
+                // An override is the value as wanted: the alpha modifier
+                // of the value it replaces goes with it.
+                Some(token) => {
+                    token.value = value.clone();
+                    token.extensions = without_alpha(token.extensions.as_ref());
+                }
                 None => problems.push(Error::UnknownOverride { path: path.clone() }),
             }
         }
@@ -598,7 +613,7 @@ impl Themes {
                 }
             }
         }
-        for r in CONTRACT {
+        for r in contract() {
             if !raw.contains_key(r.path) {
                 problems.push(Error::Missing {
                     path: r.path.to_string(),
@@ -615,6 +630,33 @@ impl Themes {
 
 /// Lays `over` on `under`: values replace, a token without a type keeps the
 /// type it had.
+/// A theme's tokens with the renamed ones under their new names
+/// ([`crate::contract::RENAMED`]); a new name the theme gives itself wins.
+fn renamed<'a>(
+    tokens: &'a BTreeMap<String, RawToken>,
+    problems: &mut Vec<Error>,
+) -> std::borrow::Cow<'a, BTreeMap<String, RawToken>> {
+    let olds: Vec<&(&str, &[&str])> = crate::contract::RENAMED
+        .iter()
+        .filter(|(old, _)| tokens.contains_key(*old))
+        .collect();
+    if olds.is_empty() {
+        return std::borrow::Cow::Borrowed(tokens);
+    }
+    let mut out = tokens.clone();
+    for (old, new) in olds {
+        let token = out.remove(*old).expect("filtered on presence");
+        for n in *new {
+            out.entry((*n).to_string()).or_insert_with(|| token.clone());
+        }
+        problems.push(Error::Renamed {
+            old: (*old).to_string(),
+            new: new.iter().map(|n| (*n).to_string()).collect(),
+        });
+    }
+    std::borrow::Cow::Owned(out)
+}
+
 fn layer(under: &mut BTreeMap<String, RawToken>, over: &BTreeMap<String, RawToken>) {
     for (path, token) in over {
         let mut token = token.clone();
@@ -634,13 +676,46 @@ fn is_accent_scale(raw: &BTreeMap<String, RawToken>, scale: &str) -> bool {
         .all(|(_, step)| raw.contains_key(&format!("{scale}.{step}")))
 }
 
-/// A token's type and value, aliases followed.
+/// `$extensions` without the alpha modifier, `None` when nothing else
+/// is left.
+fn without_alpha(extensions: Option<&Json>) -> Option<Json> {
+    let mut e = extensions?.clone();
+    if let Some(map) = e.as_object_mut() {
+        map.remove(ALPHA_EXTENSION);
+        if map.is_empty() {
+            return None;
+        }
+    }
+    Some(e)
+}
+
+/// A token's alpha modifier ([`ALPHA_EXTENSION`]), if it carries one.
+fn alpha_of(path: &str, token: &RawToken) -> Result<Option<f32>, Error> {
+    let Some(a) = token
+        .extensions
+        .as_ref()
+        .and_then(|e| e.get(ALPHA_EXTENSION))
+    else {
+        return Ok(None);
+    };
+    match a.as_f64() {
+        Some(a) if (0.0..=1.0).contains(&a) => Ok(Some(a as f32)),
+        _ => Err(Error::InvalidModifier {
+            path: path.to_string(),
+            reason: format!("`{ALPHA_EXTENSION}` is {a}, not a number from 0 to 1"),
+        }),
+    }
+}
+
+/// A token's type and value, aliases followed, alpha modifiers applied.
 fn resolve_one(raw: &BTreeMap<String, RawToken>, path: &str) -> Result<(String, Value), Error> {
     let mut chain = vec![path.to_string()];
     let mut declared = raw.get(path).and_then(|t| t.ty.clone());
     let mut at = raw.get(path).ok_or_else(|| Error::Missing {
         path: path.to_string(),
     })?;
+    // The alpha to multiply by, and the first token asking for it.
+    let mut alpha = alpha_of(path, at)?.map(|a| (a, path.to_string()));
     while let Some(target) = alias_target(&at.value) {
         if chain.iter().any(|c| c == target) {
             chain.push(target.to_string());
@@ -660,16 +735,33 @@ fn resolve_one(raw: &BTreeMap<String, RawToken>, path: &str) -> Result<(String, 
             });
         }
         declared = declared.or_else(|| next.ty.clone());
+        if let Some(a) = alpha_of(target, next)? {
+            alpha = Some(match alpha {
+                Some((b, carrier)) => (a * b, carrier),
+                None => (a, target.to_string()),
+            });
+        }
         chain.push(target.to_string());
         at = next;
     }
     let ty = declared.ok_or_else(|| Error::MissingType {
         path: path.to_string(),
     })?;
-    let value = Value::parse(&ty, &at.value).map_err(|reason| Error::InvalidValue {
+    let mut value = Value::parse(&ty, &at.value).map_err(|reason| Error::InvalidValue {
         path: path.to_string(),
         ty: ty.clone(),
         reason,
     })?;
+    if let Some((a, carrier)) = alpha {
+        match &mut value {
+            Value::Color(c) => c.a *= a,
+            _ => {
+                return Err(Error::InvalidModifier {
+                    path: carrier,
+                    reason: format!("`{ALPHA_EXTENSION}` is for colours, this is a {ty}"),
+                });
+            }
+        }
+    }
     Ok((ty, value))
 }

@@ -591,8 +591,8 @@ acts on (levels over an image, a find dialog over a text) can be moved
 out of the way.
 
 - **The header band.** Only a movable dialog has one: its title row on
-  a tone of its own (`dialog.header`, the title in
-  `dialog.header-text`), a separator below it, the move cursor over it.
+  the kit's `header-band` (the title in `dialog-header.rest.text`), a
+  line below it, the move cursor over it.
   It carries the ✕ when the dialog is closable. A dialog that is not
   movable keeps its plain title row: no band means "this does not
   move".
@@ -625,7 +625,7 @@ and a click on the backdrop never closes the dialog (an answer comes
 from its buttons, Enter or Escape; a stray click must not lose what
 was typed).
 
-- `Dim`, the default, darkens the interface by the `dialog.backdrop`
+- `Dim`, the default, darkens the interface by the `backdrop.opacity`
   token (an alias of the system `opacity.scrim`, a number from 0 to 1).
   While a movable dialog is dragged the dim fades to about a third, so
   the user sees where to put it; it comes back on the drop.

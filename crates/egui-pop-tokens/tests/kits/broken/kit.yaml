@@ -1,0 +1,8 @@
+# A kit with problems: a face its folder lacks, a misspelt term (`fil`).
+$extensions:
+  org.egui-pop.kit:
+    fonts:
+      - {file: "Missing-Regular.ttf", family: "Missing", weight: 400}
+tab:
+  rest:
+    fil: {$type: "color", $value: "#102030"}

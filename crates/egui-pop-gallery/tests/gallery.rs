@@ -1658,6 +1658,8 @@ fn the_table_page_sorts_through_the_store_and_vetoes_one_sort() {
     h.get_by_label("Name, sorted ascending").click();
     h.run();
     assert!(h.query_by_label("Name, sorted descending").is_some());
+    // The sort direction is the kit's glyph after the column's title.
+    h.snapshot("table-sorted-pop-dark");
     let store = h.state().app.handle().store();
     assert_eq!(
         store
@@ -2151,6 +2153,64 @@ fn the_library_page_culls_filters_and_compares() {
 }
 
 #[test]
+fn a_kit_restyles_the_library() {
+    // Data only: square cells with a bar under the selected one, square
+    // pills and badges with an outline, mark toggles and the search field
+    // square.
+    let mut themes = egui_pop::tokens::Themes::default();
+    themes
+        .add_text(
+            "kit-library",
+            r#"
+            $extends: "pop-dark"
+            thumb-cell:
+              indicator-side: {$type: "string", $value: "bottom"}
+              rest:
+                radius: {$type: "dimension", $value: {value: 0, unit: "px"}}
+              selected:
+                fill: {$type: "color", $value: "{surface.raised}"}
+                border-width: {$type: "dimension", $value: {value: 0, unit: "px"}}
+                indicator-color: {$type: "color", $value: "{accent.default}"}
+                indicator-size: {$type: "dimension", $value: {value: 4, unit: "px"}}
+            pill:
+              shape: {$type: "string", $value: "box"}
+              rest:
+                fill: {$type: "color", $value: "{surface.canvas}", $extensions: {org.egui-pop.alpha: 0.6}}
+                border-color: {$type: "color", $value: "{border.strong}"}
+                border-width: {$type: "dimension", $value: {value: 1, unit: "px"}}
+                radius: {$type: "dimension", $value: {value: 0, unit: "px"}}
+            thumb-overlay-badge:
+              rest:
+                fill: {$type: "color", $value: "{surface.canvas}", $extensions: {org.egui-pop.alpha: 0.6}}
+                radius: {$type: "dimension", $value: {value: 0, unit: "px"}}
+            mark-toggle:
+              rest:
+                radius: {$type: "dimension", $value: {value: 0, unit: "px"}}
+              selected:
+                border-color: {$type: "color", $value: "{accent.default}"}
+            search-field:
+              rest:
+                radius: {$type: "dimension", $value: {value: 0, unit: "px"}}
+                border-color: {$type: "color", $value: "{accent.default}"}
+            "#,
+        )
+        .expect("the test theme reads");
+    let mut h = harness(options("pop-dark", Density::Comfortable, "library"));
+    h.run();
+    let tokens = Tokens::new(themes.resolve(&egui_pop::tokens::ThemeSpec::new("kit-library")));
+    assert!(tokens.resolved().problems().is_empty());
+    egui_pop::core::theme::install_tokens(&h.ctx, tokens);
+    let kit = egui_pop::core::kit::Kit::of(&h.ctx);
+    assert_eq!(kit.pill.shape, "box");
+    assert!(kit.problems.is_empty(), "{:?}", kit.problems);
+    h.query_all_by_label("DSC_00001").next().unwrap().click();
+    h.run();
+    h.remove_cursor();
+    h.run();
+    h.snapshot("library-kit");
+}
+
+#[test]
 fn the_theme_editor_page_edits_a_token_measures_it_and_undoes() {
     use egui_pop::api::theme_editor::{
         CMD_THEME_READ, CMD_THEME_SET, CMD_THEME_UNDO, THEME_EDITOR,
@@ -2238,6 +2298,374 @@ fn the_tips_page_dismisses_a_tip_and_remembers_it_in_the_settings() {
     h.run();
     h.run();
     assert!(h.query_by_label("Go through the pages").is_some());
+}
+
+#[test]
+fn a_kit_redraws_the_workbench_tabs_from_the_theme_alone() {
+    // A kit folder that only changes the tab component's data and shape:
+    // no code, the `underline` handler egui-pop ships.
+    let kit = egui_pop::tokens::kit!("../../../examples/kits/underline-tabs");
+    assert!(egui_pop::tokens::kit::check(&kit).is_empty());
+    let mut themes = egui_pop::tokens::Themes::default();
+    themes.add_kit(&kit);
+    let mut h = harness(options("pop-dark", Density::Comfortable, "workbench"));
+    h.run();
+    h.get_by_label("Open the demonstration panels").click();
+    h.run();
+    let tokens = Tokens::new(themes.resolve(&egui_pop::tokens::ThemeSpec::new("underline-tabs")));
+    egui_pop::core::theme::install_tokens(&h.ctx, tokens);
+    let kit = egui_pop::core::kit::Kit::of(&h.ctx);
+    assert_eq!(kit.tab.shape, "underline");
+    assert!(kit.problems.is_empty(), "{:?}", kit.problems);
+    h.run();
+    h.run();
+    h.snapshot("workbench-kit-underline");
+}
+
+#[test]
+fn a_kit_restyles_the_rows_of_a_table() {
+    // Data only: rounded rows with a bar on the selected one, no stripes,
+    // and headers drawn as a line by the `plain` handler.
+    use egui::accesskit::Role;
+    let mut themes = egui_pop::tokens::Themes::default();
+    themes
+        .add_text(
+            "kit-rows",
+            r#"
+            $extends: "pop-dark"
+            list-row:
+              indicator-side: {$type: "string", $value: "left"}
+              rest:
+                radius: {$type: "dimension", $value: {value: 4, unit: "px"}}
+              selected:
+                fill: {$type: "color", $value: "{accent.subtle}"}
+                indicator-color: {$type: "color", $value: "{accent.default}"}
+                indicator-size: {$type: "dimension", $value: {value: 3, unit: "px"}}
+              focus:
+                ring-color: {$type: "color", $value: "{border.strong}"}
+            table-stripe:
+              rest:
+                fill: {$type: "color", $value: "{transparent}"}
+            table-header-cell:
+              shape: {$type: "string", $value: "plain"}
+              indicator-side: {$type: "string", $value: "bottom"}
+              rest:
+                fill: {$type: "color", $value: "{surface.sunken}"}
+                text: {$type: "color", $value: "{text.muted}"}
+                border-color: {$type: "color", $value: "{accent.default}"}
+                border-width: {$type: "dimension", $value: {value: 1, unit: "px"}}
+            "#,
+        )
+        .expect("the test theme reads");
+    let mut h = harness(options("pop-dark", Density::Comfortable, "table"));
+    h.run();
+    let tokens = Tokens::new(themes.resolve(&egui_pop::tokens::ThemeSpec::new("kit-rows")));
+    egui_pop::core::theme::install_tokens(&h.ctx, tokens);
+    let kit = egui_pop::core::kit::Kit::of(&h.ctx);
+    assert_eq!(kit.table_header_cell.shape, "plain");
+    assert!(kit.problems.is_empty(), "{:?}", kit.problems);
+    h.get_by_role_and_label(Role::Button, "IMG_00002.raw")
+        .click();
+    h.run();
+    h.remove_cursor();
+    h.run();
+    h.snapshot("table-kit-rows");
+}
+
+#[test]
+fn a_kit_puts_the_title_at_the_start_of_the_title_bar() {
+    // Data only: `title-bar.align` and the bar's colours, as tvty draws it.
+    let mut themes = egui_pop::tokens::Themes::default();
+    themes
+        .add_text(
+            "kit-title-start",
+            r#"
+            $extends: "pop-dark"
+            title-bar:
+              align: {$type: "string", $value: "start"}
+              rest:
+                text: {$type: "color", $value: "{text.muted}"}
+                border-width: {$type: "dimension", $value: {value: 1, unit: "px"}}
+            "#,
+        )
+        .expect("the test theme reads");
+    let mut h = harness(options("pop-dark", Density::Comfortable, "frame"));
+    h.run();
+    let tokens = Tokens::new(themes.resolve(&egui_pop::tokens::ThemeSpec::new("kit-title-start")));
+    egui_pop::core::theme::install_tokens(&h.ctx, tokens);
+    let kit = egui_pop::core::kit::Kit::of(&h.ctx);
+    assert_eq!(kit.title_bar.data.align, egui_pop::core::kit::Align::Start);
+    h.run();
+    h.run();
+    h.snapshot("frame-kit-title-start");
+}
+
+#[test]
+fn a_kit_gives_the_window_buttons_the_macos_flavour() {
+    // A kit folder, data only: `traffic-light` circles at the start of
+    // the bar, every glyph shown while the pointer is over one of them.
+    let kit = egui_pop::tokens::kit!("../../../examples/kits/flavour-macos");
+    assert!(egui_pop::tokens::kit::check(&kit).is_empty());
+    let mut themes = egui_pop::tokens::Themes::default();
+    themes.add_kit(&kit);
+    let mut h = harness(options("pop-dark", Density::Comfortable, "frame"));
+    h.run();
+    let tokens = Tokens::new(themes.resolve(&egui_pop::tokens::ThemeSpec::new("flavour-macos")));
+    egui_pop::core::theme::install_tokens(&h.ctx, tokens);
+    let kit = egui_pop::core::kit::Kit::of(&h.ctx);
+    assert!(kit.problems.is_empty(), "{:?}", kit.problems);
+    assert_eq!(kit.window_close.shape, "traffic-light");
+    assert_eq!(
+        kit.window.buttons_side,
+        egui_pop::core::kit::ButtonsSide::Start
+    );
+    h.run();
+    h.get_by_label("Minimize").hover();
+    h.run();
+    h.run();
+    h.snapshot("frame-kit-macos");
+}
+
+#[test]
+fn a_kit_restyles_a_dialogs_frame_from_the_theme_alone() {
+    // Data only: the dialog's box (square, an accent border, more room)
+    // and a darker backdrop; the `card` handler egui-pop ships.
+    let mut themes = egui_pop::tokens::Themes::default();
+    themes
+        .add_text(
+            "kit-dialog-square",
+            r#"
+            $extends: "pop-dark"
+            dialog:
+              padding-x: {$type: "dimension", $value: {value: 24, unit: "px"}}
+              padding-y: {$type: "dimension", $value: {value: 20, unit: "px"}}
+              rest:
+                fill: {$type: "color", $value: "{surface.panel}"}
+                border-color: {$type: "color", $value: "{accent.default}"}
+                border-width: {$type: "dimension", $value: {value: 2, unit: "px"}}
+                radius: {$type: "dimension", $value: {value: 0, unit: "px"}}
+            backdrop:
+              opacity: {$type: "number", $value: 0.7}
+            "#,
+        )
+        .expect("the test theme reads");
+    let mut h = harness(options("pop-dark", Density::Comfortable, "dialogs"));
+    h.run();
+    let tokens =
+        Tokens::new(themes.resolve(&egui_pop::tokens::ThemeSpec::new("kit-dialog-square")));
+    egui_pop::core::theme::install_tokens(&h.ctx, tokens);
+    let kit = egui_pop::core::kit::Kit::of(&h.ctx);
+    assert!(kit.problems.is_empty(), "{:?}", kit.problems);
+    assert_eq!(
+        kit.dialog.style(egui_pop::core::kit::State::REST).radius,
+        0.0
+    );
+    h.get_by_label("Export settings").click();
+    h.run();
+    h.run();
+    h.snapshot("dialogs-kit-square");
+}
+
+#[test]
+fn a_kit_restyles_the_palettes_bands_from_the_theme_alone() {
+    // Data only: an accent band with a thicker line, filled while the
+    // pointer is over it, and square, outlined icon buttons on it.
+    let mut themes = egui_pop::tokens::Themes::default();
+    themes
+        .add_text(
+            "kit-band-accent",
+            r#"
+            $extends: "pop-dark"
+            header-band:
+              rest:
+                fill: {$type: "color", $value: "{accent.subtle}"}
+                border-color: {$type: "color", $value: "{accent.default}"}
+                border-width: {$type: "dimension", $value: {value: 2, unit: "px"}}
+                text: {$type: "color", $value: "{text.strong}"}
+              hover:
+                fill: {$type: "color", $value: "{accent.default}"}
+                text: {$type: "color", $value: "{text.on-accent}"}
+            band-icon-button:
+              rest:
+                radius: {$type: "dimension", $value: {value: 0, unit: "px"}}
+                border-color: {$type: "color", $value: "{border.strong}"}
+                border-width: {$type: "dimension", $value: {value: 1, unit: "px"}}
+            "#,
+        )
+        .expect("the test theme reads");
+    let mut h = harness(options("pop-dark", Density::Comfortable, "palettes"));
+    h.run();
+    let tokens = Tokens::new(themes.resolve(&egui_pop::tokens::ThemeSpec::new("kit-band-accent")));
+    egui_pop::core::theme::install_tokens(&h.ctx, tokens);
+    let kit = egui_pop::core::kit::Kit::of(&h.ctx);
+    assert!(kit.problems.is_empty(), "{:?}", kit.problems);
+    assert_eq!(kit.header_band.shape, "band");
+    h.get_by_label("Open the palettes").click();
+    h.run();
+    h.run();
+    // The pointer over the toolbox's title: its band is hovered.
+    h.query_all_by_label("Toolbox").last().unwrap().hover();
+    h.run();
+    h.run();
+    h.snapshot("palettes-kit-band");
+}
+
+#[test]
+fn a_kit_restyles_menu_items_from_the_theme_alone() {
+    // Data only: square items, an accent bar on the side of the item
+    // under the pointer and of an open submenu.
+    let mut themes = egui_pop::tokens::Themes::default();
+    themes
+        .add_text(
+            "kit-menu-bar",
+            r#"
+            $extends: "pop-dark"
+            menu-item:
+              indicator-side: {$type: "string", $value: "left"}
+              rest:
+                radius: {$type: "dimension", $value: {value: 0, unit: "px"}}
+                indicator-color: {$type: "color", $value: "{accent.default}"}
+              hover:
+                fill: {$type: "color", $value: "{accent.subtle}"}
+                indicator-size: {$type: "dimension", $value: {value: 3, unit: "px"}}
+              selected:
+                fill: {$type: "color", $value: "{accent.subtle}"}
+                indicator-size: {$type: "dimension", $value: {value: 3, unit: "px"}}
+            "#,
+        )
+        .expect("the test theme reads");
+    let mut h = harness(options("pop-dark", Density::Comfortable, "menus"));
+    h.run();
+    let tokens = Tokens::new(themes.resolve(&egui_pop::tokens::ThemeSpec::new("kit-menu-bar")));
+    egui_pop::core::theme::install_tokens(&h.ctx, tokens);
+    assert!(egui_pop::core::kit::Kit::of(&h.ctx).problems.is_empty());
+    h.run();
+    h.get_by_label("Card with a context menu").click_secondary();
+    h.run();
+    h.query_all_by_label("Zoom").last().unwrap().hover();
+    h.run();
+    h.snapshot("menus-kit-bar");
+}
+
+#[test]
+fn a_kit_restyles_sliders_from_the_theme_alone() {
+    // Data only: flat outlined bars, the fill the bar's whole height, a
+    // thicker accent thumb, a ring outside the focused bar, its value
+    // past the soft range in the danger colour, square toggles.
+    let mut themes = egui_pop::tokens::Themes::default();
+    themes
+        .add_text(
+            "kit-sliders-flat",
+            r#"
+            $extends: "pop-dark"
+            slider:
+              rest:
+                fill: {$type: "color", $value: "{surface.sunken}"}
+                border-color: {$type: "color", $value: "{border.default}"}
+                border-width: {$type: "dimension", $value: {value: 1, unit: "px"}}
+                radius: {$type: "dimension", $value: {value: 0, unit: "px"}}
+              focus:
+                border-width: {$type: "dimension", $value: {value: 1, unit: "px"}}
+                ring-color: {$type: "color", $value: "{accent.default}"}
+                ring-width: {$type: "dimension", $value: {value: 1, unit: "px"}}
+                ring-offset: {$type: "dimension", $value: {value: 1, unit: "px"}}
+            slider-fill:
+              height: {$type: "dimension", $value: {value: 100, unit: "px"}}
+              rest:
+                fill: {$type: "color", $value: "{accent.subtle}"}
+            slider-thumb:
+              width: {$type: "dimension", $value: {value: 3, unit: "px"}}
+              rest:
+                fill: {$type: "color", $value: "{accent.default}"}
+            slider-value:
+              tone:
+                warning:
+                  text: {$type: "color", $value: "{danger}"}
+            slider-toggle:
+              rest:
+                fill: {$type: "color", $value: "{surface.sunken}"}
+                border-color: {$type: "color", $value: "{border.default}"}
+                border-width: {$type: "dimension", $value: {value: 1, unit: "px"}}
+                radius: {$type: "dimension", $value: {value: 0, unit: "px"}}
+              selected:
+                fill: {$type: "color", $value: "{accent.subtle}"}
+            "#,
+        )
+        .expect("the test theme reads");
+    let mut h = harness(options("pop-dark", Density::Comfortable, "sliders"));
+    h.run();
+    let tokens = Tokens::new(themes.resolve(&egui_pop::tokens::ThemeSpec::new("kit-sliders-flat")));
+    egui_pop::core::theme::install_tokens(&h.ctx, tokens);
+    assert!(egui_pop::core::kit::Kit::of(&h.ctx).problems.is_empty());
+    h.run();
+    // Exposure typed past its soft range (-3 to 4 EV), kept focused.
+    h.get_by_label("Exposure").click();
+    h.run();
+    h.key_press(egui::Key::Enter);
+    h.run();
+    for _ in 0..8 {
+        h.key_press(egui::Key::Backspace);
+    }
+    h.get_by_role(egui::accesskit::Role::TextInput)
+        .type_text("6");
+    h.run();
+    h.key_press(egui::Key::Enter);
+    h.run();
+    assert_eq!(
+        h.get_by_label("Exposure").accesskit_node().numeric_value(),
+        Some(6.0)
+    );
+    h.remove_cursor();
+    h.run();
+    h.snapshot("sliders-kit-flat");
+}
+
+#[test]
+fn a_folded_side_area_shows_its_strip_and_a_click_unfolds_it() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "workbench"));
+    h.run();
+    h.get_by_label("Open the demonstration panels").click();
+    h.run();
+    let app = h.state().app.handle().clone();
+    app.fold_area(egui_pop::model::panels::Area::StartSide, true);
+    h.run();
+    h.run();
+    assert!(
+        app.layout()
+            .folded
+            .contains(&egui_pop::model::panels::Area::StartSide)
+    );
+    h.snapshot("workbench-folded-pop-dark");
+    h.get_by_label("Unfold the start side bar").click();
+    h.run();
+    h.run();
+    assert!(app.layout().folded.is_empty());
+}
+
+#[test]
+fn a_side_area_lies_over_the_centre_with_its_shadow() {
+    use egui_pop::model::layout::Placement;
+    use egui_pop::model::panels::Area;
+    let mut h = harness(options("pop-dark", Density::Comfortable, "workbench"));
+    h.run();
+    h.get_by_label("Open the demonstration panels").click();
+    h.run();
+    let app = h.state().app.handle().clone();
+    let centre = app.area_rect(Area::Center).unwrap();
+    assert!(
+        app.place_area(Area::StartSide, Placement::Over)
+            .unwrap()
+            .ok()
+    );
+    for _ in 0..3 {
+        h.run();
+    }
+    // The centre keeps the room the side bar gave up; the area lies over it.
+    let wide = app.area_rect(Area::Center).unwrap();
+    assert!(wide.left() < centre.left() - 100.0, "{wide:?} {centre:?}");
+    assert!(app.area_rect(Area::StartSide).unwrap().intersects(wide));
+    assert!(h.query_by_label("Fold the start side bar").is_some());
+    h.snapshot("workbench-over-pop-dark");
 }
 
 #[test]

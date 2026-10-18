@@ -14,6 +14,7 @@ use egui_pop_core::binding::SharedStore;
 use egui_pop_core::debug::{DebugBridge, Feedback, FnCollector};
 use egui_pop_core::focus_mode::{self, FocusModes, Preference, SystemFocus};
 use egui_pop_core::keys::KeyDispatcher;
+use egui_pop_core::kit::KitSource;
 use egui_pop_core::overlay;
 use egui_pop_core::persist::{Persist, PersistError, Writer};
 use egui_pop_core::strings;
@@ -128,6 +129,7 @@ pub struct OverlayRect {
 pub struct ThemeService {
     spec: Mutex<ThemeSpec>,
     themes: Themes,
+    kits: Vec<egui_pop_core::tokens::kit::KitInfo>,
 }
 
 impl ThemeService {
@@ -147,6 +149,13 @@ impl ThemeService {
 
     pub fn themes(&self) -> &Themes {
         &self.themes
+    }
+
+    /// The kits added (`AppBuilder::kit`, then the user's kits), each a
+    /// theme of [`ThemeService::themes`] under its name: what a theme
+    /// picker lists.
+    pub fn kits(&self) -> &[egui_pop_core::tokens::kit::KitInfo] {
+        &self.kits
     }
 }
 
@@ -306,6 +315,10 @@ pub(crate) struct Shared {
     drawing_areas: std::cell::Cell<bool>,
     /// The centre drawn without margins.
     edge_to_edge: std::cell::Cell<bool>,
+    /// The main menu drawn as a bar under the title.
+    menu_bar: std::cell::Cell<bool>,
+    /// The shell panels' starting sizes (`AppBuilder::shell_panel_size`).
+    shell_sizes: RefCell<Vec<(PanelId, f32)>>,
     /// The panels' commands and their shared texts, installed on each
     /// context drawing the application.
     pub(crate) panel_commands: RefCell<strings::PanelCommands>,
@@ -396,6 +409,8 @@ impl AppHandle {
             indicators_seen: std::cell::Cell::new(0),
             drawing_areas: std::cell::Cell::new(false),
             edge_to_edge: std::cell::Cell::new(false),
+            menu_bar: std::cell::Cell::new(true),
+            shell_sizes: RefCell::default(),
             panel_commands: RefCell::default(),
             name: RefCell::default(),
             diagnostics: RefCell::new(Diagnostics::new()),
@@ -1448,6 +1463,12 @@ impl AppHandle {
         self.0.edge_to_edge.get()
     }
 
+    /// Whether the main menu is drawn as a bar under the title
+    /// (`AppBuilder::menu_bar`).
+    pub fn menu_bar(&self) -> bool {
+        self.0.menu_bar.get()
+    }
+
     pub(crate) fn set_drawing_areas(&self, on: bool) {
         self.0.drawing_areas.set(on);
     }
@@ -1539,9 +1560,30 @@ impl AppHandle {
         Some(out)
     }
 
+    /// Where an area was drawn in the last pass (none while it is not
+    /// shown, folded included).
+    pub fn area_rect(&self, area: Area) -> Option<egui::Rect> {
+        self.workbench_mut().rects.get(&area).copied()
+    }
+
     /// Folds an area to its strip, or unfolds it (`workbench.fold`).
     pub fn fold_area(&self, area: Area, folded: bool) -> Option<Outcome> {
         self.change_workbench(crate::workbench::Change::Fold(area, folded))
+    }
+
+    /// Lays a side area beside the centre or over it (`workbench.place`;
+    /// refused for the centre and the bottom area).
+    pub fn place_area(
+        &self,
+        area: Area,
+        placement: egui_pop_model::layout::Placement,
+    ) -> Option<Outcome> {
+        self.change_workbench(crate::workbench::Change::Place(area, placement))
+    }
+
+    /// Where a side area lies now (beside the centre, or over it).
+    pub fn area_placement(&self, area: Area) -> egui_pop_model::layout::Placement {
+        self.workbench_mut().layout.placement(area)
     }
 
     /// The indicators and their states, lightest first.
@@ -1658,10 +1700,16 @@ pub struct AppBuilder {
     host: Option<Box<dyn Host>>,
     system_focus: Option<SystemFocus>,
     edge_to_edge: bool,
+    menu_bar: bool,
+    shell_sizes: Vec<(PanelId, f32)>,
+    folded: Vec<Area>,
+    over: Vec<Area>,
     wrap: Option<WrapUi>,
     on_exit: Vec<ExitFn>,
     name: Option<String>,
     panel_alignment: crate::workbench::PanelAlignment,
+    kits: Vec<KitSource>,
+    user_kits: bool,
 }
 
 /// Draws around the whole application (`AppBuilder::wrap`): gets the
@@ -1718,10 +1766,16 @@ impl AppBuilder {
             host: None,
             system_focus: None,
             edge_to_edge: false,
+            menu_bar: true,
+            shell_sizes: Vec::new(),
+            folded: Vec::new(),
+            over: Vec::new(),
             wrap: None,
             on_exit: Vec::new(),
             name: None,
             panel_alignment: crate::workbench::PanelAlignment::Justify,
+            kits: Vec::new(),
+            user_kits: false,
         }
     }
 
@@ -1747,6 +1801,45 @@ impl AppBuilder {
     /// panels (an image viewer, a canvas).
     pub fn main_edge_to_edge(mut self, on: bool) -> Self {
         self.edge_to_edge = on;
+        self
+    }
+
+    /// Draws the main menu as a bar under the title (the default), or
+    /// not at all: its commands stay in the palette, under their keys and
+    /// in any menu the application opens itself (`menus::popup_at`). The
+    /// top bar's zone is then drawn only when it has blocks.
+    pub fn menu_bar(mut self, on: bool) -> Self {
+        self.menu_bar = on;
+        self
+    }
+
+    /// The size a shell panel starts at (`workbench::PANEL_SIDE_BAR`,
+    /// `PANEL_INSPECTOR`: their width), instead of egui-pop's; its
+    /// smallest size follows when it is larger. The user's resizing and a
+    /// saved layout still win.
+    pub fn shell_panel_size(mut self, panel: PanelId, size: f32) -> Self {
+        self.shell_sizes.retain(|(p, _)| *p != panel);
+        self.shell_sizes.push((panel, size));
+        self
+    }
+
+    /// Areas folded to their strip when the application starts with no
+    /// saved layout (a saved one, the user's choice, wins).
+    pub fn folded(mut self, areas: &[Area]) -> Self {
+        self.folded = areas.to_vec();
+        self
+    }
+
+    /// Side areas lying over the centre when the application starts with
+    /// no saved layout (`workbench.place`; a saved one wins): their
+    /// folded strip keeps the room, the centre its width. The centre and
+    /// the bottom area always lie beside.
+    pub fn over(mut self, areas: &[Area]) -> Self {
+        self.over = areas
+            .iter()
+            .copied()
+            .filter(|a| matches!(a, Area::StartSide | Area::EndSide))
+            .collect();
         self
     }
 
@@ -1795,6 +1888,51 @@ impl AppBuilder {
     /// The themes to pick from (the built-in ones by default).
     pub fn themes(mut self, themes: Themes) -> Self {
         self.themes = themes;
+        self
+    }
+
+    /// Adds a kit (`docs/kit-packages.md`): its theme joins the themes to
+    /// pick from, under the kit's name, and its faces and handlers are
+    /// registered when the application is built. A folder read at run
+    /// time, a `kit!` or a kit crate's `kit()`:
+    ///
+    /// ```
+    /// use egui_pop_api::App;
+    /// use egui_pop_core::kit::Kit;
+    /// use egui_pop_core::theme::ThemeSpec;
+    /// use egui_pop_core::tokens::kit::KitData;
+    ///
+    /// let kit = KitData::from_text(
+    ///     "underline",
+    ///     r#"
+    ///     tab:
+    ///       shape: {$type: "string", $value: "underline"}
+    ///     "#,
+    /// );
+    /// let ctx = egui::Context::default();
+    /// let app = App::builder()
+    ///     .kit(kit)
+    ///     .theme(ThemeSpec::new("underline"))
+    ///     .build(&ctx)
+    ///     .unwrap();
+    /// assert_eq!(Kit::of(&ctx).tab.shape, "underline");
+    /// assert_eq!(app.handle().theme().kits()[0].name, "underline");
+    /// ```
+    ///
+    /// What is wrong with a kit is logged and in the diagnostics
+    /// (`kit-problem`); the kit is added anyway, with fallbacks.
+    pub fn kit(mut self, kit: impl Into<KitSource>) -> Self {
+        self.kits.push(kit.into());
+        self
+    }
+
+    /// Adds the user's kits too: the data-only kit folders under
+    /// `<persist directory>/kits` (`egui_pop_tokens::kit::discover`), read
+    /// when the application is built, after the application's own (a
+    /// user kit of the same name replaces it). Without a persistence
+    /// directory there are none.
+    pub fn user_kits(mut self, on: bool) -> Self {
+        self.user_kits = on;
         self
     }
 
@@ -1872,6 +2010,7 @@ impl AppBuilder {
             started: false,
             installed: None,
             persist: self.persist,
+            kits: Vec::new(),
             in_flight: Vec::new(),
             waking: None,
             wrap: self.wrap,
@@ -1884,8 +2023,40 @@ impl AppBuilder {
             .clone()
             .map(|p| Writer::new(p, egui_pop_core::persist::DEBOUNCE));
         app.handle.0.edge_to_edge.set(self.edge_to_edge);
+        app.handle.0.menu_bar.set(self.menu_bar);
+        *app.handle.0.shell_sizes.borrow_mut() = self.shell_sizes;
+        app.handle.workbench_mut().layout.folded = self.folded;
+        app.handle.workbench_mut().layout.over = self.over;
         *app.handle.0.name.borrow_mut() = self.name.unwrap_or_default();
-        app.framework(self.theme, self.themes, modes, self.panel_alignment)
+        let mut themes = self.themes;
+        let mut kits = self.kits;
+        if self.user_kits
+            && let Some(p) = &app.persist
+        {
+            let dir = p.dir().join(egui_pop_core::tokens::kit::USER_KITS_DIR);
+            kits.extend(
+                egui_pop_core::tokens::kit::discover(&dir)
+                    .into_iter()
+                    .map(KitSource::new),
+            );
+        }
+        // A kit of the same name as an earlier one replaces it.
+        let mut seen = std::collections::BTreeSet::new();
+        kits.reverse();
+        kits.retain(|k| seen.insert(k.name().to_string()));
+        kits.reverse();
+        {
+            let mut d = app.handle.0.diagnostics.borrow_mut();
+            for kit in &kits {
+                themes.add_kit(&kit.data);
+                for p in kit.problems() {
+                    d.warn("kit-problem", None, kit.name(), p);
+                }
+            }
+        }
+        let infos = kits.iter().map(|k| k.data.info()).collect();
+        app.kits = kits;
+        app.framework(self.theme, themes, infos, modes, self.panel_alignment)
             .expect("the framework's registrations are valid");
         app.install_collectors();
         for i in 0..app.plugins.len() {
@@ -1989,6 +2160,9 @@ pub struct App {
     started: bool,
     installed: Option<ThemeSpec>,
     persist: Option<Persist>,
+    /// The kits added: their faces and handlers are registered in each
+    /// context the theme is installed in.
+    kits: Vec<KitSource>,
     /// Results to come.
     in_flight: Vec<InFlight>,
     /// The context the host's waker wakes.
@@ -2102,6 +2276,7 @@ impl App {
         &mut self,
         theme: ThemeSpec,
         themes: Themes,
+        kits: Vec<egui_pop_core::tokens::kit::KitInfo>,
         modes: FocusModes,
         panel_alignment: crate::workbench::PanelAlignment,
     ) -> Result<(), CtxError> {
@@ -2164,6 +2339,20 @@ impl App {
                 "inspector",
             ),
         ] {
+            let size = handle
+                .0
+                .shell_sizes
+                .borrow()
+                .iter()
+                .find(|(p, _)| *p == spec.id)
+                .map(|(_, s)| *s);
+            let spec = match size {
+                Some(s) => {
+                    let min = spec.min_size.min(s);
+                    spec.min_size(min).default_size(s)
+                }
+                None => spec,
+            };
             ctx.zone_panel(spec, zone, scope)?;
         }
         for spec in crate::workbench::steps() {
@@ -2186,6 +2375,7 @@ impl App {
             ThemeService {
                 spec: Mutex::new(theme),
                 themes,
+                kits,
             },
         )?;
         let mut focus = egui_pop_model::values::Descriptor::choice(
@@ -3427,6 +3617,11 @@ impl App {
         let marker = Id::new("egui_pop_api::theme_installed");
         let here = ctx.data(|d| d.get_temp::<bool>(marker)).unwrap_or(false);
         if !here || self.installed.as_ref() != Some(&spec) {
+            if !here {
+                for kit in &self.kits {
+                    kit.register(&ctx);
+                }
+            }
             theme::install_with(&ctx, service.themes(), &spec);
             ctx.data_mut(|d| d.insert_temp(marker, true));
             self.installed = Some(spec);
@@ -3771,7 +3966,7 @@ impl App {
             }
         }
         self.process_requests();
-        self.shell(ui);
+        self.outlined(ui);
         let name = self.handle.name();
         let name = if name.is_empty() {
             ctx.input(|i| i.viewport().title.clone())
@@ -3786,6 +3981,30 @@ impl App {
         self.process_requests();
     }
 
+    /// The shell, inside the kit's outline when the application draws
+    /// the window (`window.rest.border-width`).
+    fn outlined(&mut self, ui: &mut Ui) {
+        let outline = if crate::frame::own_frame(&self.handle) {
+            egui_pop_core::frame::outline(ui.ctx())
+        } else {
+            egui::Stroke::NONE
+        };
+        if outline.width <= 0.0 {
+            return self.shell(ui);
+        }
+        let rect = ui.max_rect();
+        ui.ctx()
+            .layer_painter(egui::LayerId::new(
+                egui::Order::Foreground,
+                Id::new("egui_pop.window_outline"),
+            ))
+            .rect_stroke(rect, 0.0, outline, egui::StrokeKind::Inside);
+        ui.scope_builder(
+            egui::UiBuilder::new().max_rect(rect.shrink(outline.width)),
+            |ui| self.shell(ui),
+        );
+    }
+
     fn shell(&mut self, ui: &mut Ui) {
         let h = self.handle.clone();
         if h.zone_has_blocks(&zones::TITLE) {
@@ -3793,22 +4012,32 @@ impl App {
             // system draws the frame) takes no room.
             egui::Panel::top(Id::new("egui_pop.title"))
                 .frame(egui::Frame::NONE)
+                // The kit's `title-bar` draws the line under the bar.
+                .show_separator_line(false)
                 .min_size(0.0)
                 .show(ui, |ui| {
                     focus::scope(ui, "titleBar", &[], |ui| h.show_zone(ui, &zones::TITLE));
                 });
         }
-        egui::Panel::top(Id::new("egui_pop.top")).show(ui, |ui| {
-            focus::scope(ui, "topBar", &[], |ui| {
-                egui::MenuBar::new().ui(ui, |ui| {
-                    crate::menus::bar(ui, &h, &MENU_MAIN);
-                    if h.zone_has_blocks(&zones::TOP_BAR) {
-                        ui.separator();
-                        h.show_zone(ui, &zones::TOP_BAR);
-                    }
+        if h.menu_bar() {
+            egui::Panel::top(Id::new("egui_pop.top")).show(ui, |ui| {
+                focus::scope(ui, "topBar", &[], |ui| {
+                    egui::MenuBar::new().ui(ui, |ui| {
+                        crate::menus::bar(ui, &h, &MENU_MAIN);
+                        if h.zone_has_blocks(&zones::TOP_BAR) {
+                            ui.separator();
+                            h.show_zone(ui, &zones::TOP_BAR);
+                        }
+                    });
                 });
             });
-        });
+        } else if h.zone_has_blocks(&zones::TOP_BAR) {
+            egui::Panel::top(Id::new("egui_pop.top")).show(ui, |ui| {
+                focus::scope(ui, "topBar", &[], |ui| {
+                    ui.horizontal(|ui| h.show_zone(ui, &zones::TOP_BAR));
+                });
+            });
+        }
         if h.zone_has_blocks(&zones::STATUS_BAR) {
             egui::Panel::bottom(Id::new("egui_pop.status")).show(ui, |ui| {
                 focus::scope(ui, "statusBar", &[], |ui| {

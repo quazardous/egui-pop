@@ -239,6 +239,8 @@ pub const WORKBENCH_DETACH: StrKey =
 pub const WORKBENCH_CLOSE_PANEL: StrKey =
     StrKey::new("egui-pop-workbench-close-panel", "Close { $panel }");
 pub const WORKBENCH_FLOAT: StrKey = StrKey::new("egui-pop-workbench-float", "Float");
+pub const WORKBENCH_UNFOLD: StrKey = StrKey::new("egui-pop-workbench-unfold", "Unfold { $area }");
+pub const WORKBENCH_FOLD: StrKey = StrKey::new("egui-pop-workbench-fold", "Fold { $area }");
 
 // Palettes.
 
@@ -596,6 +598,8 @@ pub const ALL: &[StrKey] = &[
     WORKBENCH_DETACH,
     WORKBENCH_CLOSE_PANEL,
     WORKBENCH_FLOAT,
+    WORKBENCH_UNFOLD,
+    WORKBENCH_FOLD,
     PALETTE_CLOSE,
     PALETTE_ROLL_UP,
     PALETTE_ROLL_DOWN,

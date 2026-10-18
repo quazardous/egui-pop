@@ -9,6 +9,191 @@ egui minor.
 
 ### Added
 
+- Kits: placeholders (`skeleton`, `skeleton-shimmer`, `empty-state`): a
+  skeleton's shapes and the band crossing them are drawn by the kit; an
+  empty state's box (none in the default kit), its `padding-y`, and its
+  icon and sentence colour (`text`, the `danger` tone when something
+  went wrong) come from it. The default look is unchanged.
+- Kits: icon buttons (`icon-button`): an `IconWidget` made clickable is
+  drawn by the kit, its icon in the box's `text` per state (hover,
+  focus ring, disabled) and by tone (the icon's tone, except `Strong`
+  and `OnAccent`, which keep their colour at rest).
+  `IconWidget::selected` makes it a toggle, `selected` while on and
+  announced as toggled. The focus ring follows the box's corners (one
+  point rounder than before).
+- Kits: sliders (`slider`, `slider-fill`, `slider-thumb`,
+  `slider-value`, `slider-toggle`): the bar, its fill strip (`height`,
+  15 % of the bar by default), its thumbs, its value (the `warning` tone
+  past the soft range) and the square button at its end are drawn by the
+  kit, per state (hover, active, focus; `selected` for a toggle that is
+  on), range sliders included; the gradient tracks stay content. The
+  default look is unchanged, except that a focused slider's fill and
+  thumb now stay whole over its ring.
+- The shipped token files are compiled from YAML to JSON when egui-pop is
+  built: the built-in themes load in 3 ms instead of 24 (release build),
+  and an unquoted `#colour` or `{alias}` in them fails the build. A
+  component's token file is found by the build; `KIT_FILES` is no longer
+  kept by hand.
+- Kits: the application's chrome is drawn by the kit, with tokens per
+  state: `header-band` (a movable dialog's and a palette's band, `hover`
+  under the pointer and `active` while dragged, which a kit may now
+  show), `dialog-header` (a dialog's title), `band-icon-button` (the
+  band's buttons, `selected` for a pinned palette, with a focus ring),
+  `find-bar-button`, `activity-bar-item` (now with a focus ring),
+  `dock-preview` (`disabled` where a panel may not dock),
+  `command-button` and `command-palette-row`. The close buttons draw
+  the `close` glyph role. The gallery's `palettes-kit-band` snapshot
+  restyles the bands with data only.
+- Tokens: a colour token aliasing another may carry
+  `$extensions: {org.egui-pop.alpha: 0.85}`, the aliased colour with its
+  alpha multiplied (`docs/tokens.md`); a value outside 0 to 1, or on a
+  token that is not a colour, is a reported problem.
+- Kits: the photo library and the viewport's widgets are drawn by the kit
+  (`thumb-cell`, `thumb-layer`, `thumb-overlay-badge`, `pill`, `tag-chip`,
+  `mark-toggle`, `search-field`, `compare-pane`, `thumbnail`, `readout`,
+  `viewport-focus`; a `pill` handler with round ends); the default look
+  is unchanged. The library's search field shows a focus ring while its
+  text has the keyboard, and a focused thumbnail's ring is no longer
+  clipped away.
+- Workbench: a side area may lie **over** the centre instead of beside
+  it (`workbench.place`, `{ "area", "placement" }`, a step a plugin may
+  veto; `AppHandle::place_area`, `area_placement`, `AppBuilder::over`):
+  its folded strip keeps the room, so the centre keeps its width, and
+  the area lies above the centre with the kit's `side-area` shadow; a
+  click on the strip folds or unfolds it, its inner edge resizes it.
+  The placement is saved with the layout (`Layout::over`,
+  `layout::Placement`).
+
+- Shadows from tokens: `shadow.popup`, `shadow.window` and `shadow.side`
+  (`offset-x`, `offset-y`, `blur`, `spread`, `color`) become egui's
+  popup and window shadows (menus, popovers, dialogs, palettes) with
+  egui's values by default; kit components cast one through the
+  `shadow-*` terms (`ComponentKit::shadow`), `side-area` aliasing
+  `shadow.side`; `theme::shadow` reads a group as egui's `Shadow`.
+
+- Typography: a size scale in tokens, `font.size.xs`, `s`, `m`, `l`
+  and `xl`, that egui's five text styles sit on
+  (`font.text-style.small`, `body`, `button`, `heading`, `monospace`,
+  aliases of a step) and component tokens may alias; built-in themes
+  keep their sizes. `fonts::font_at(tokens, role, weight, step)` gives
+  the `FontId` of a step (`fonts::Step`), `Tokens::font.scale` its sizes.
+
+- Kits: the window buttons' glyphs are glyph roles (`glyph.window-minimize`,
+  `window-maximize`, `window-restore`, `window-close`), so a kit can draw
+  them with its own icons, `indicator-size` across.
+- Kits: `window.rest.border-width` and `border-color`, a line around a
+  window the application draws, inside its edges (none in the default
+  kit; not drawn when maximized or full screen).
+- Token and kit files may be written in YAML, for comments
+  (`docs/tokens.md`): `TokenFile::parse` reads JSON when the text starts
+  with `{` and YAML otherwise. An unquoted `#colour` (a YAML comment) or
+  `{alias}` (a YAML map) is refused with its line instead of being lost.
+  JSON is still read, and is what egui-pop writes.
+- Visual kits, first component (`egui_pop_core::kit`, `docs/kit.md`): the
+  workbench's tabs and tab bars are drawn by the kit, from `tab.*` and
+  `tab-bar.*` tokens per state (`rest`, `hover`, `active`, `focus`,
+  `selected`, `disabled`) and a `shape` naming the handler that draws them
+  (`box`, the default, or `underline`; applications register their own
+  with `kit::register_tab_shape`). The kit is compiled when the theme is
+  installed: drawing resolves nothing. egui_dock keeps the layout and
+  docking. Tabs are prepared once (title translated, label laid out, width
+  measured) and again only when the theme, the scale, the language or a
+  panel's title changes: a frame of the workbench costs no more than with
+  egui_dock's own tabs (measured, `docs/kit.md`).
+- The title bar and window buttons are kit components (`title-bar`,
+  `window-button`, `window-close`); `title-bar.align: start` puts the
+  title after the bar's leading items instead of centring it.
+- `AppBuilder::shell_panel_size` (the side bar's and inspector's
+  starting size) and `AppBuilder::folded` (areas folded at the first
+  start; a saved layout wins); `AppHandle::area_rect`.
+- Kits: a `side-area` component (`border-width` 0: no separator line
+  along the area; `padding-x` and `padding-y` between its edges and its
+  panels) and a vocabulary term `offset` (how far a part sits
+  from the edge it is drawn on: a side area's grip, off its edge).
+- Side areas: a folded side area shows a strip (the kit's `area-strip`,
+  12 px, the drag-handle glyph) whose click unfolds it, instead of
+  vanishing; an open side area can show a resize grip at the middle of
+  its edge (`area-grip`, invisible in the default kit). New glyph role
+  `drag-handle` and icon `grip`.
+- Window buttons per platform flavour: `title-bar.buttons-side`
+  (`start`/`end`) puts them at the start of the title bar, close first,
+  the title still centred, Snap Layouts following them; a
+  `traffic-light` handler and `title-bar.buttons-hover: group`; window
+  buttons carry tones (minimize `warning`, maximize `success`, close
+  `danger`). An example data-only kit, `examples/kits/flavour-macos`.
+- On Windows 11, a window drawn by the application gets the system's
+  rounded corners, chosen by `window.corners` (`round`, `small`,
+  `square`); the outcome is in the `frame` debug collector.
+- Kits: `button` and `field`; egui's own widgets (every egui and
+  third-party widget) take their states from the kit's `button` (rest,
+  hover, active, selected for an open menu) and text fields their
+  background from `field` (`theme::style_with`). What egui cannot draw
+  (an indicator or a ring on a button, a field outline other than the
+  button's) is reported in the kit's problems.
+- Kits: menu items (`menu-item`): egui lays them out and draws their
+  label, the kit paints their box under it (`Component::paint_under`);
+  the shortcut is the muted tone. The look is unchanged.
+- Kits: dialogs, popovers and menus, toasts, palettes, tip, fault and
+  job-log cards, the full screen strip, the editor, terminal, find bar
+  and code assist frames are kit components (`dialog.rest.fill`,
+  `toast.padding-x`...), drawn by a `card` handler or, through
+  `Component::frame`/`show`, as egui frames; a text or code editor shows
+  a focus ring while it has the keyboard. New terms `padding-y` and
+  `opacity`, new system token `scrim`.
+- Kits: tones, a second axis beside the states
+  (`component.tone.<tone>.<term>`: accent, info, success, warning,
+  danger, muted), compiled ahead per state; a component without tones
+  pays nothing. Progress bars, lines, meters, rings, spinners and the
+  status bar's indicators are drawn by the kit by tone (`progress-bar`,
+  `progress-line`, `progress-fill`, `progress-caption`, `meter`,
+  `meter-tick`, `progress-ring`, `spinner`, `status-indicator`).
+- Kits as packages: a kit folder (`kit.json` with a manifest, more token
+  files, `fonts/`, `LICENSE`) read at run time
+  (`egui_pop_tokens::kit::KitData::load`) or embedded (`kit!`), its
+  problems reported and never fatal; `kit::check` for application tests
+  and a `kit-check` example. `AppBuilder::kit` adds a kit (theme, faces,
+  handlers) in one line, `KitSource` carries a kit's handlers,
+  `AppBuilder::user_kits` reads `<persist>/kits` and `ThemeService::kits`
+  lists them. The default kit (`themes/kit/`) is a kit folder read by
+  the same loader; an example kit, `examples/kits/underline-tabs`.
+- Tables: the sort direction is the kit's glyph after the column title.
+- Kits: the rows of trees, lists and tables (`list-row`), a focused
+  view's outline (`list-view`), a table's header cells
+  (`table-header-cell`) and stripes (`table-stripe`) and the tree's drop
+  marker (`tree-drop-marker`) are drawn by the kit, from the theme; the
+  default look is unchanged. Two handlers: `box` (a free-standing box)
+  and `outline` (a border only).
+- Kits: glyphs by role (`kit::Glyph`: disclosure, sort, check, radio,
+  bullet, submenu, chevrons, close, more, expand, collapse), each mapped
+  by the kit to an icon (`glyph.<role>` tokens). The tree's disclosure,
+  the menus' check and submenu marks and the find bar's toggle ask for a
+  role. New painted icons `triangle-right`, `triangle-down`,
+  `triangle-up`.
+- An application's own icons (`egui_pop::core::icon_set`, feature
+  `svg`): SVG files registered by name, single-colour (tinted) or
+  full-colour, rasterised with resvg when the theme is installed, drawn
+  as textures; usable as `Icon::Custom` and by a kit's glyphs.
+- Kit vocabulary: the focus ring as data (`ring-color`, `ring-width`,
+  `ring-offset`, drawn by every shipped handler) and
+  `kit::State::from_response`, the state egui sees on a response.
+- Renamed tokens: a theme giving a former name still works, its value
+  moved to the new name, with a reported problem (`RENAMED`). New system
+  token `transparent`.
+
+- Fonts from the theme (`egui_pop_core::fonts`): the families named by
+  `font.family.ui` and `font.family.mono` become egui's fonts, at four
+  weights each (`fonts::family(role, weight)`, `fonts::font_id`), egui's
+  `Proportional` and `Monospace` being the regular ones. Names are looked
+  for among faces the application registers (`fonts::register`), egui's
+  bundled faces, and the system's fonts (feature `system-fonts`, through
+  fontdb); a name found nowhere or a missing weight is in
+  `fonts::report`, and egui's bundled fonts stay last in every chain.
+  A variable face draws every weight its `wght` axis covers, instead of
+  its one registered weight.
+- `AppBuilder::menu_bar(false)`: an application without a menu bar
+  (its menus stay in the palette, under their keys and in menus it
+  opens itself); the top bar's zone is then drawn only when it has
+  blocks.
 - A preview dialog (`imaging::preview`): an image viewport in a custom
   dialog over a `Clear` backdrop, movable and kept in place, sRGB
   first; Enter runs its command with the view it was left at, Escape
@@ -887,6 +1072,66 @@ egui minor.
 
 ### Changed
 
+- The input fields' tokens are the kit's `field` component: `field.rest.fill`,
+  `field.rest.text`, `field.rest.border-color`, `field.hover.border-color`,
+  and its tones for the states every field shows (`muted`: read-only fill
+  and placeholder; `accent`: modified; `warning`: required; `danger`:
+  invalid; `info`: pending). The flat names (`field.background`...) still
+  work, each reported.
+- The `dialog.header`, `dialog.header-text`, `palette.header` and
+  `palette.header-text` tokens are renamed into the kit
+  (`header-band.rest.fill`, `dialog-header.rest.text`,
+  `header-band.rest.text`); a theme giving them still works, with a
+  reported problem. `band::BandStyle` keeps only the band's place
+  (`padding`, `gap`): the kit draws it, and `band::begin` tells the row
+  the band's state. A refused dock preview is outlined in the danger
+  colour over a dimmed area instead of a red wash; the band's buttons'
+  focus ring is two whole pixels instead of a blurred 1.5 point line.
+- `LibraryTokens` keeps the marks' colours only (stars, flags, labels,
+  the rubber band) and `ThumbnailTokens` is gone: the boxes are the
+  kit's. The `thumbnail.background`, `hover` and `selected` tokens and
+  the optional `library.overlay`, `overlay-text`, `selected-background`,
+  `dim`, `stack`, `best`, `chip` and `chip-text` were renamed into the
+  kit (`egui_pop_tokens::RENAMED`): a theme giving them still works,
+  with a reported problem.
+- Tokens: `font.size.small`, `body`, `heading` and `mono` became
+  `font.text-style.small`, `body` (and `button`), `heading` and
+  `monospace`; a theme still giving an old name works, with a reported
+  problem (`RENAMED`).
+- The title bar's line is the kit's (`title-bar.rest.border-width`, 1 in
+  the default kit): egui's panel line is no longer drawn under it, nor
+  room kept for it when the title zone draws nothing.
+- The shipped themes, densities and default kit are `.tokens.yaml`
+  files; a kit folder's file is `kit.yaml` (`kit.yml` and `kit.json`
+  are read too). `Themes::add_json` is now `Themes::add_text` and
+  `KitData::from_json` is `KitData::from_text`: both read YAML or JSON.
+- Renamed into the kit's grid: `button.{background, background-hover,
+  background-active, text, border, radius}` (`button.rest.fill`...),
+  `menu.item.*` (`menu-item.hover.fill`, `menu-item.rest.text`,
+  `menu-item.tone.muted.text`). The high-contrast themes outline text
+  fields as well as buttons.
+- Renamed into the kit's grid, the former names still working with a
+  reported problem: `progress.*` (`progress.track` is
+  `progress-bar.rest.fill`...), `dialog.{background, border, radius,
+  padding, backdrop}`, `palette.{background, border, padding}`,
+  `toast.{background, border, text, padding}`, `editor.background`,
+  `terminal.background`. `progress::Tone` is `kit::Tone` and gains
+  `Neutral`.
+- Renamed into the kit's grid, the former names still working with a
+  reported problem: `slider.track` (`slider.rest.fill`), `slider.fill`
+  (`slider-fill.rest.fill`), `slider.thumb` (`slider-thumb.rest.fill`),
+  `skeleton.fill` (`skeleton.rest.fill`), `skeleton.shimmer`
+  (`skeleton-shimmer.rest.fill`).
+- `egui_pop_core::kit::paint_ring`: a ring inside its box follows its
+  corners.
+- `egui_pop_tokens::CONTRACT` is replaced by `contract()`: the default
+  kit's components keep their contract and their tokens in one file each
+  (`contract/kit/`, `themes/kit/`), so components can be added
+  independently (`docs/kit.md`, "Adding a component").
+- The `titlebar.*` tokens are renamed into the kit's grid:
+  `title-bar.rest.fill`, `title-bar.rest.text`, `title-bar.height`,
+  `window-button.{rest,hover}.{fill,text}`, `window-close.*`,
+  `window-button.width`, `window.grip`.
 - The viewport takes tiles in off the interface thread by default:
   `ViewportState` converts each tile on the thread that delivers it
   (`set_prepare_on_worker` is on) and uploads at most
@@ -1004,6 +1249,16 @@ egui minor.
 
 ### Fixed
 
+- Kits: a frame egui lays out (`Component::frame`, now given the pixels
+  per point, and `Component::show`) has its border snapped to whole
+  physical pixels, as the kit's own painting does, instead of a blurred
+  fraction at scales like 1.25; a box painted under a fading or disabled
+  `ui` (`Component::paint_under`) fades once, not twice.
+- An application icon drawn at a size the theme does not list (15 points,
+  a kit's `indicator-size`) is rasterised at that size instead of scaled
+  from the next one, which blurred it.
+- The title bar's buttons and items are centred above its line, not on
+  the line's row as well.
 - The `Choose` dialog's rows keep their size as the pointer moves over
   them (the dialog no longer changes height by a few pixels), and their
   text is left-aligned and wraps, a single-line row included.

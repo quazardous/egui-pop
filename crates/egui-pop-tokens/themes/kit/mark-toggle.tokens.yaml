@@ -1,0 +1,40 @@
+$description: "The `mark-toggle` component of the default kit (docs/kit.md), layered into pop-dark."
+mark-toggle:
+  $description: "A pick, reject or colour label toggle button (a kit component): `selected` while on. Its mark is content, in its own colour."
+  shape:
+    $type: "string"
+    $value: "box"
+  rest:
+    fill:
+      $type: "color"
+      $value: "{surface.raised}"
+    border-color:
+      $type: "color"
+      $value: "{border.strong}"
+    border-width:
+      $type: "dimension"
+      $value: {value: 0, unit: "px"}
+    radius:
+      $type: "dimension"
+      $value: "{radius.widget}"
+  selected:
+    fill:
+      $type: "color"
+      $value: "{surface.active}"
+    border-width:
+      $type: "dimension"
+      $value: {value: 1, unit: "px"}
+  hover:
+    fill:
+      $type: "color"
+      $value: "{surface.hover}"
+  focus:
+    ring-color:
+      $type: "color"
+      $value: "{focus.ring}"
+    ring-width:
+      $type: "dimension"
+      $value: {value: 1, unit: "px"}
+    ring-offset:
+      $type: "dimension"
+      $value: {value: 1, unit: "px"}

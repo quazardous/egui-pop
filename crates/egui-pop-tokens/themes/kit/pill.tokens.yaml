@@ -1,0 +1,59 @@
+$description: "The `pill` component of the default kit (docs/kit.md), layered into pop-dark."
+pill:
+  $description: "A pill over a thumbnail (a kit component): a badge (`RAW`, `HDR`) and a stack's count; badges by tone (info, success, warning, danger). The `pill` handler rounds its ends: its radius is at most half its height."
+  shape:
+    $type: "string"
+    $value: "pill"
+    $description: "The handler that draws it: pill (box with round ends), box or plain."
+  padding-x:
+    $type: "dimension"
+    $value: {value: 4, unit: "px"}
+  padding-y:
+    $type: "dimension"
+    $value: {value: 1, unit: "px"}
+  rest:
+    fill:
+      $type: "color"
+      $value: "{surface.overlay}"
+      $extensions: {org.egui-pop.alpha: 0.85}
+    border-color:
+      $type: "color"
+      $value: "{border.default}"
+    border-width:
+      $type: "dimension"
+      $value: {value: 0, unit: "px"}
+    radius:
+      $type: "dimension"
+      $value: {value: 999, unit: "px"}
+    text:
+      $type: "color"
+      $value: "{text.strong}"
+  tone:
+    info:
+      fill:
+        $type: "color"
+        $value: "{info}"
+      text:
+        $type: "color"
+        $value: "{text.on-accent}"
+    success:
+      fill:
+        $type: "color"
+        $value: "{success}"
+      text:
+        $type: "color"
+        $value: "{text.on-accent}"
+    warning:
+      fill:
+        $type: "color"
+        $value: "{warning}"
+      text:
+        $type: "color"
+        $value: "{text.on-accent}"
+    danger:
+      fill:
+        $type: "color"
+        $value: "{danger}"
+      text:
+        $type: "color"
+        $value: "{text.on-accent}"

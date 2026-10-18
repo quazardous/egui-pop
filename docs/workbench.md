@@ -76,14 +76,24 @@ assert_eq!(h.layout().area_of(&TREE), Some(Area::EndSide));
 
 Each panel gets `<id>.focus` and `<id>.toggle` commands. The layout
 changes through the steps `workbench.move`, `workbench.show`,
-`workbench.hide`, `workbench.focus` and `workbench.fold`
-(`egui_pop::api::workbench`). A tab dragged onto another area moves
+`workbench.hide`, `workbench.focus`, `workbench.fold` and
+`workbench.place` (`egui_pop::api::workbench`). A tab dragged onto another area moves
 there when its rules allow it; otherwise the drop hint says why. The
 hint is published like an overlay: `AppHandle::drop_hint` (panel,
 area, rect, refusal), `overlay_rects` (kind `DropHint`, named
 `drop:<panel>:<area>`), and the debug bridge's `workbench` collector,
 which also shows the layout, each area's rect, the focused panel and
 the tab being dragged.
+
+A side area lies **beside** the centre, taking its room, or **over**
+it (`workbench.place`, `{ "area", "placement": "over" }`;
+`AppHandle::place_area`, `AppBuilder::over` for the first start): its
+folded strip keeps the room in the layout, so the centre keeps its
+width (a terminal in it is not resized), and the area, unfolded, lies
+above the centre next to its strip, with the kit's `side-area` shadow
+(`shadow.side`). A click on the strip folds or unfolds it; its edge on
+the centre's side resizes it. The placement is saved with the layout
+(`over`), like folding; a plugin may veto the step.
 
 Plugins declare panels too: egui-pop's jobs centre (`egui_pop.jobs`)
 and devtools are panels like the application's.
@@ -157,7 +167,8 @@ assert!(app.handle().layout().floating_of(&TOOLS).is_some());
 ```
 
 - **The band.** A palette has the movable dialogs' header band
-  (`egui_pop_core::band`): its title, then Pin, Roll up and Close.
+  (`egui_pop_core::band`, the kit's `header-band` and
+  `band-icon-button`): its title, then Pin, Roll up and Close.
   Rolled up, only the band is left (a double click on the band does
   it too). Pinned, it stays where it is, in sight and opaque.
 - **Dragging.** The band drags the palette, kept inside the workbench

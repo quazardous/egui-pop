@@ -1,0 +1,23 @@
+$description: "The `thumb-overlay-badge` component of the default kit (docs/kit.md), layered into pop-dark."
+thumb-overlay-badge:
+  $description: "The small box behind a cell's flag, colour labels and stars, and a comparison's best button (a kit component); `text` is the best button's star under the pointer."
+  shape:
+    $type: "string"
+    $value: "box"
+  rest:
+    fill:
+      $type: "color"
+      $value: "{surface.overlay}"
+      $extensions: {org.egui-pop.alpha: 0.85}
+    border-color:
+      $type: "color"
+      $value: "{border.default}"
+    border-width:
+      $type: "dimension"
+      $value: {value: 0, unit: "px"}
+    radius:
+      $type: "dimension"
+      $value: {value: 3, unit: "px"}
+    text:
+      $type: "color"
+      $value: "{text.strong}"

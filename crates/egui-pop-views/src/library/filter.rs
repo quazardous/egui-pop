@@ -429,58 +429,60 @@ impl<'a> SearchField<'a> {
                 state.chips.remove(last);
             }
         }
-        let frame = egui::Frame::new()
-            .fill(t.surface.sunken)
-            .stroke(egui::Stroke::new(1.0, t.border.default))
-            .corner_radius(t.radius.widget)
-            .inner_margin(egui::Margin::symmetric(t.space.s as i8, t.space.xs as i8));
-        let inner = frame.show(ui, |ui| {
-            ui.horizontal_wrapped(|ui| {
-                let side = t.size.icon_inline;
-                let (r, _) = ui.allocate_exact_size(egui::vec2(side, side), egui::Sense::hover());
-                egui_pop_core::icon::Icon::Search.paint(ui.painter(), r, t.text.muted);
-                for chip in state.chips.chips() {
-                    let title = chip.title(&ctx);
-                    let name = tr_args(&ctx, &s::REMOVE, &[("item", &title)]);
-                    if TagChip::new(title)
-                        .removable(true)
-                        .remove_label(name)
-                        .show(ui)
-                        .removed
-                    {
-                        state.chips.remove(&chip);
+        // The field's box, its ring while the text has the keyboard.
+        let kit = egui_pop_core::kit::Kit::of(ui.ctx());
+        let field_state =
+            egui_pop_core::kit::State::REST.with(egui_pop_core::kit::State::FOCUS, focused);
+        let inner = kit
+            .search_field
+            .show(ui, field_state, egui::epaint::Shadow::NONE, |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    let side = t.size.icon_inline;
+                    let (r, _) =
+                        ui.allocate_exact_size(egui::vec2(side, side), egui::Sense::hover());
+                    egui_pop_core::icon::Icon::Search.paint(ui.painter(), r, t.text.muted);
+                    for chip in state.chips.chips() {
+                        let title = chip.title(&ctx);
+                        let name = tr_args(&ctx, &s::REMOVE, &[("item", &title)]);
+                        if TagChip::new(title)
+                            .removable(true)
+                            .remove_label(name)
+                            .show(ui)
+                            .removed
+                        {
+                            state.chips.remove(&chip);
+                        }
                     }
-                }
-                let field = ui.add(
-                    TextEdit::singleline(&mut state.text)
-                        .id(text_id)
-                        .frame(egui::Frame::NONE)
-                        .hint_text(label.clone())
-                        .desired_width(self.width.unwrap_or(180.0)),
-                );
-                egui_pop_core::a11y::name(&field, WidgetType::TextEdit, &label);
-                let add = ui.menu_button("+", |ui| add_menu(ui, &mut state.chips));
-                egui_pop_core::a11y::name(
-                    &add.response,
-                    WidgetType::Button,
-                    &tr(&ctx, &s::ADD_FILTER),
-                );
-                if !state.chips.is_empty() || !state.text.is_empty() {
-                    let clear = ui.button("×");
-                    egui_pop_core::a11y::name(
-                        &clear,
-                        WidgetType::Button,
-                        &tr(&ctx, &s::CLEAR_FILTERS),
+                    let field = ui.add(
+                        TextEdit::singleline(&mut state.text)
+                            .id(text_id)
+                            .frame(egui::Frame::NONE)
+                            .hint_text(label.clone())
+                            .desired_width(self.width.unwrap_or(180.0)),
                     );
-                    if clear.clicked() {
-                        state.chips = Filter::default();
-                        state.text.clear();
+                    egui_pop_core::a11y::name(&field, WidgetType::TextEdit, &label);
+                    let add = ui.menu_button("+", |ui| add_menu(ui, &mut state.chips));
+                    egui_pop_core::a11y::name(
+                        &add.response,
+                        WidgetType::Button,
+                        &tr(&ctx, &s::ADD_FILTER),
+                    );
+                    if !state.chips.is_empty() || !state.text.is_empty() {
+                        let clear = ui.button("×");
+                        egui_pop_core::a11y::name(
+                            &clear,
+                            WidgetType::Button,
+                            &tr(&ctx, &s::CLEAR_FILTERS),
+                        );
+                        if clear.clicked() {
+                            state.chips = Filter::default();
+                            state.text.clear();
+                        }
                     }
-                }
-                field
-            })
-            .inner
-        });
+                    field
+                })
+                .inner
+            });
         let response = inner.inner;
         let now = proposed.unwrap_or_else(|| state.effective());
         let mut changed = None;

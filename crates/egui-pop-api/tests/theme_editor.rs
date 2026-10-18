@@ -163,7 +163,7 @@ fn a_theme_exported_imports_the_same_and_steps_can_veto() {
     for (path, value) in [
         ("accent.default", json!("#2060c0")),
         ("radius.widget", json!({ "value": 2, "unit": "px" })),
-        ("button.border", json!("{border.strong}")),
+        ("button.rest.border-color", json!("{border.strong}")),
     ] {
         let out = run(
             &mut h,

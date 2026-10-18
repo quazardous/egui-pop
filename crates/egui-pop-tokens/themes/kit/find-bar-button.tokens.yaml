@@ -1,0 +1,40 @@
+$description: "The `find-bar-button` component of the default kit (docs/kit.md), layered into pop-dark."
+find-bar-button:
+  $description: "An icon button of an editor's find bar (previous, next, close), its icon in `text`."
+  shape:
+    $type: "string"
+    $value: "box"
+  rest:
+    fill:
+      $type: "color"
+      $value: "{transparent}"
+    border-color:
+      $type: "color"
+      $value: "{transparent}"
+    border-width:
+      $type: "dimension"
+      $value: {value: 0, unit: "px"}
+    radius:
+      $type: "dimension"
+      $value: "{radius.widget}"
+    text:
+      $type: "color"
+      $value: "{text.default}"
+  hover:
+    fill:
+      $type: "color"
+      $value: "{surface.hover}"
+  focus:
+    ring-color:
+      $type: "color"
+      $value: "{focus.ring}"
+    ring-width:
+      $type: "dimension"
+      $value: {value: 2, unit: "px"}
+    ring-offset:
+      $type: "dimension"
+      $value: {value: -2, unit: "px"}
+  active:
+    fill:
+      $type: "color"
+      $value: "{surface.active}"

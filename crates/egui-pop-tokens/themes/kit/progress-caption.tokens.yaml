@@ -1,0 +1,21 @@
+$description: "The `progress-caption` component of the default kit (docs/kit.md), layered into pop-dark."
+progress-caption:
+  $description: "A progress bar's caption (a kit component): its name in rest, its value text in the muted tone."
+  shape:
+    $type: "string"
+    $value: "plain"
+  align:
+    $type: "string"
+    $value: "start"
+  padding-x:
+    $type: "dimension"
+    $value: {value: 0, unit: "px"}
+  rest:
+    text:
+      $type: "color"
+      $value: "{text.default}"
+  tone:
+    muted:
+      text:
+        $type: "color"
+        $value: "{text.muted}"

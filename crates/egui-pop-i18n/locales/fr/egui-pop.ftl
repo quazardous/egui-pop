@@ -1039,9 +1039,13 @@ egui-pop-workbench-detach = Détacher dans une fenêtre
 
 egui-pop-workbench-float = Faire flotter
 
+egui-pop-workbench-fold = Replier { $area }
+
 egui-pop-workbench-move-to = Déplacer vers { $area }
 
 egui-pop-workbench-stays-out = { $panel } ne va pas dans { $area }
+
+egui-pop-workbench-unfold = Déplier { $area }
 
 egui-pop-workbench-window-title = { $panel } — { $application }
 

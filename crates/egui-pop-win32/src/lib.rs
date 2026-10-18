@@ -27,8 +27,15 @@
 //! own frame. On other systems [`install`] answers
 //! [`Error::Unsupported`].
 //!
-//! What a message does is decided by [`decide`], plain code tested on
-//! every system; the `sys` module only calls Win32.
+//! It also asks Windows 11 to round the corners of a window drawn by the
+//! application ([`set_corners`], `DwmSetWindowAttribute` with
+//! `DWMWA_WINDOW_CORNER_PREFERENCE`): an undecorated window gets square
+//! corners otherwise. Earlier versions refuse the attribute, harmlessly
+//! ([`Error::Refused`]).
+//!
+//! What a message does is decided by [`decide`], and what a corner
+//! preference is by [`Corners::preference`] and [`corners_outcome`], plain
+//! code tested on every system; the `sys` module only calls Win32.
 
 use std::sync::Arc;
 
@@ -292,7 +299,55 @@ pub fn decide(
     }
 }
 
-/// Why a window cannot be subclassed.
+/// The corners asked of the system for a window
+/// (`DWM_WINDOW_CORNER_PREFERENCE`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Corners {
+    /// Whatever the system does by default (a window it decorates is
+    /// rounded on Windows 11, an undecorated one is not).
+    System,
+    /// Never rounded.
+    Square,
+    /// Rounded.
+    Round,
+    /// Rounded with a small radius.
+    Small,
+}
+
+/// The `DwmSetWindowAttribute` values (`dwmapi.h`).
+pub mod dwm {
+    /// `DWMWA_WINDOW_CORNER_PREFERENCE` (Windows 11, build 22000).
+    pub const WINDOW_CORNER_PREFERENCE: u32 = 33;
+    pub const WCP_DEFAULT: u32 = 0;
+    pub const WCP_DONOTROUND: u32 = 1;
+    pub const WCP_ROUND: u32 = 2;
+    pub const WCP_ROUNDSMALL: u32 = 3;
+}
+
+impl Corners {
+    /// The `DWMWA_WINDOW_CORNER_PREFERENCE` value.
+    pub fn preference(self) -> u32 {
+        match self {
+            Corners::System => dwm::WCP_DEFAULT,
+            Corners::Square => dwm::WCP_DONOTROUND,
+            Corners::Round => dwm::WCP_ROUND,
+            Corners::Small => dwm::WCP_ROUNDSMALL,
+        }
+    }
+}
+
+/// What `DwmSetWindowAttribute`'s `HRESULT` means: done when it is not
+/// negative, else refused (`E_INVALIDARG` before Windows 11, which knows
+/// no such attribute).
+pub fn corners_outcome(hresult: i32) -> Result<(), Error> {
+    if hresult >= 0 {
+        Ok(())
+    } else {
+        Err(Error::Refused(hresult))
+    }
+}
+
+/// What this layer cannot do.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Error {
     /// Not on Windows.
@@ -301,15 +356,25 @@ pub enum Error {
     NoWindow,
     /// `SetWindowSubclass` failed (another thread's window).
     Subclass,
+    /// The system refused a window attribute, with its `HRESULT` (a
+    /// version before Windows 11 for the corners).
+    Refused(i32),
 }
 
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self {
-            Error::Unsupported => "hit testing is answered on Windows only",
-            Error::NoWindow => "the window handle is null",
-            Error::Subclass => "SetWindowSubclass failed (the window belongs to another thread)",
-        })
+        match self {
+            Error::Unsupported => f.write_str("this is done on Windows only"),
+            Error::NoWindow => f.write_str("the window handle is null"),
+            Error::Subclass => {
+                f.write_str("SetWindowSubclass failed (the window belongs to another thread)")
+            }
+            Error::Refused(hr) => write!(
+                f,
+                "the system refused it (HRESULT {:#010x}; corners need Windows 11)",
+                *hr as u32
+            ),
+        }
     }
 }
 
@@ -359,6 +424,25 @@ pub fn install(hwnd: isize, handler: Arc<dyn Handler>) -> Result<Subclassed, Err
     }
 }
 
+/// Asks the system for `corners` on the window `hwnd` (an `HWND`).
+/// Harmless where refused: before Windows 11 the answer is
+/// [`Error::Refused`] and the window keeps its corners; elsewhere than
+/// Windows, [`Error::Unsupported`].
+pub fn set_corners(hwnd: isize, corners: Corners) -> Result<(), Error> {
+    if hwnd == 0 {
+        return Err(Error::NoWindow);
+    }
+    #[cfg(windows)]
+    {
+        corners_outcome(sys::set_corners(hwnd, corners.preference()))
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = corners;
+        Err(Error::Unsupported)
+    }
+}
+
 #[cfg(windows)]
 #[allow(unsafe_code)]
 mod sys {
@@ -369,6 +453,7 @@ mod sys {
     use std::sync::Arc;
 
     use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, WPARAM};
+    use windows_sys::Win32::Graphics::Dwm::DwmSetWindowAttribute;
     use windows_sys::Win32::Graphics::Gdi::ScreenToClient;
     use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
         TME_LEAVE, TME_NONCLIENT, TRACKMOUSEEVENT, TrackMouseEvent,
@@ -476,6 +561,23 @@ mod sys {
         }
         INSTALLED.with(|i| i.borrow_mut().push((hwnd, data)));
         Ok(())
+    }
+
+    /// `DwmSetWindowAttribute(DWMWA_WINDOW_CORNER_PREFERENCE)`; its
+    /// `HRESULT`.
+    pub(super) fn set_corners(hwnd: isize, preference: u32) -> i32 {
+        let value = preference as i32;
+        // SAFETY: `hwnd` is the caller's window; `value` is a valid
+        // DWM_WINDOW_CORNER_PREFERENCE that outlives the call, its size
+        // given.
+        unsafe {
+            DwmSetWindowAttribute(
+                hwnd as HWND,
+                super::dwm::WINDOW_CORNER_PREFERENCE as i32,
+                (&value as *const i32).cast(),
+                std::mem::size_of::<i32>() as u32,
+            )
+        }
     }
 
     pub(super) fn remove(hwnd: isize) {
@@ -621,6 +723,30 @@ mod tests {
             run(&mut s, &f, wm::NCLBUTTONDOWN, Area::Left, (2, 300)).reply,
             Reply::Default
         );
+    }
+
+    #[test]
+    fn corners_map_to_the_dwm_preferences() {
+        assert_eq!(Corners::System.preference(), 0);
+        assert_eq!(Corners::Square.preference(), 1);
+        assert_eq!(Corners::Round.preference(), 2);
+        assert_eq!(Corners::Small.preference(), 3);
+        assert_eq!(dwm::WINDOW_CORNER_PREFERENCE, 33);
+        assert_eq!(corners_outcome(0), Ok(()));
+        // E_INVALIDARG: Windows 10 knows no corner preference.
+        let e_invalidarg = 0x8007_0057_u32 as i32;
+        assert_eq!(
+            corners_outcome(e_invalidarg),
+            Err(Error::Refused(e_invalidarg))
+        );
+        assert_eq!(
+            Error::Refused(e_invalidarg).to_string(),
+            "the system refused it (HRESULT 0x80070057; corners need Windows 11)"
+        );
+        assert_eq!(set_corners(0, Corners::Round), Err(Error::NoWindow));
+        if !SUPPORTED {
+            assert_eq!(set_corners(1, Corners::Round), Err(Error::Unsupported));
+        }
     }
 
     #[test]

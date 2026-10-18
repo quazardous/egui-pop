@@ -218,6 +218,14 @@ pub fn install(ctx: &Context, strings: Arc<dyn Strings>) {
     ctx.data_mut(|d| d.insert_temp(id(), strings));
 }
 
+/// Which provider is installed, as an identity that changes when another
+/// one is installed (`None`: the built-in English). A cache of translated
+/// texts keys on it.
+pub fn provider_id(ctx: &Context) -> Option<usize> {
+    ctx.data(|d| d.get_temp::<Arc<dyn Strings>>(id()))
+        .map(|s| Arc::as_ptr(&s).cast::<()>() as usize)
+}
+
 /// The installed provider (English when none is).
 pub fn provider(ctx: &Context) -> Arc<dyn Strings> {
     ctx.data(|d| d.get_temp::<Arc<dyn Strings>>(id()))

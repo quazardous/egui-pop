@@ -1,0 +1,30 @@
+$description: "The `header-band` component of the default kit (docs/kit.md), layered into pop-dark."
+header-band:
+  $description: "The band at the top of a movable dialog and of a palette, the handle it is dragged by: `hover` under the pointer (not over its buttons), `active` while dragged."
+  shape:
+    $type: "string"
+    $value: "band"
+    $description: "The handler that draws it: band (its top corners rounded inside the frame's outline, its border the line below it) or plain."
+  padding-y:
+    $type: "dimension"
+    $value: "{space.xs}"
+    $description: "The room below its row, inside the band (and as much again below its line). A dialog's is its `dialog-header.padding-y`."
+  rest:
+    fill:
+      $type: "color"
+      $value: "{surface.raised}"
+    border-color:
+      $type: "color"
+      $value: "{border.default}"
+      $description: "The line below the band."
+    border-width:
+      $type: "dimension"
+      $value: {value: 1, unit: "px"}
+    radius:
+      $type: "dimension"
+      $value: "{radius.window}"
+      $description: "The frame's corner radius: the band's top corners follow it, inside the frame's outline."
+    text:
+      $type: "color"
+      $value: "{text.default}"
+      $description: "A palette's title on the band."

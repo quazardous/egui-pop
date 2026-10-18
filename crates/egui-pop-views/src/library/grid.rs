@@ -66,6 +66,7 @@ use egui::{
 };
 use egui_pop_api::AppHandle;
 use egui_pop_core::icon::Icon;
+use egui_pop_core::kit::{self, BoxStyle, Corners, Kit, KitCx, Part, Side, State};
 use egui_pop_core::placeholder::SkeletonTokens;
 use egui_pop_core::strings::{tr, tr_args};
 use egui_pop_core::theme::Tokens;
@@ -75,9 +76,9 @@ use serde_json::{Value as Json, json};
 use super::marks::{ColorLabel, CullAction, CullKeymap, Flag, MAX_RATING, Marks};
 use super::paint::{self, LibraryTokens};
 use super::plugin::{self as lib, LIBRARIES, Request};
-use crate::nav;
 use crate::select::{self, Key, Mode, Proposal, Selection};
 use crate::strings as s;
+use crate::{nav, rows};
 
 /// The smallest and largest thumbnails, in points.
 pub const MIN_SIZE: f32 = 48.0;
@@ -514,6 +515,7 @@ impl<'a> ThumbGrid<'a> {
         let n = state.order.len;
         let t = Tokens::of(ui.ctx());
         let lt = LibraryTokens::of(ui.ctx());
+        let kit = Kit::of(ui.ctx());
         let gap = t.space.s;
         let small = TextStyle::Small.resolve(ui.style());
         let caption_h = if self.captions {
@@ -733,6 +735,10 @@ impl<'a> ThumbGrid<'a> {
                 })
                 .unwrap_or_default();
             let painter = ui.painter().clone();
+            let cx = KitCx {
+                painter: &painter,
+                ppp: ui.ctx().pixels_per_point(),
+            };
             for l in first..last {
                 for col in 0..cols {
                     let p = if grid { l * cols + col } else { l };
@@ -750,15 +756,21 @@ impl<'a> ThumbGrid<'a> {
                     let marks = items.marks(i);
                     let stack = items.stack(i);
                     let name = items.label(i);
-                    // The cell and its image.
-                    let bg_fill = if selected {
-                        lt.selected_background
-                    } else if r.hovered() {
-                        lt.hover.gamma_multiply(0.35)
-                    } else {
-                        lt.cell
+                    // The cell's box (its outline and the cursor's ring
+                    // too: nothing of the content overlaps them), then
+                    // its image. A selected cell is not hovered.
+                    let cell_state = State::REST
+                        .with(State::SELECTED, selected)
+                        .with(State::HOVER, r.hovered() && !selected)
+                        .with(State::FOCUS, is_cursor);
+                    let cell_part = Part {
+                        rect,
+                        room: rect,
+                        state: cell_state,
+                        label: None,
                     };
-                    painter.rect_filled(rect, t.radius.widget, bg_fill);
+                    kit.thumb_cell.paint(&cx, &cell_part);
+                    let cell_box = *kit.thumb_cell.style(cell_state);
                     let image = Rect::from_min_size(rect.min, vec2(size, size)).shrink(t.space.xs);
                     match source.thumb(&key, px) {
                         Thumb::Ready { texture, size } => {
@@ -784,22 +796,41 @@ impl<'a> ThumbGrid<'a> {
                             Icon::Warning.paint(
                                 &painter,
                                 Rect::from_center_size(image.center(), vec2(side, side)),
-                                t.text.muted,
+                                kit.thumb_layer.style(State::REST).text,
                             );
                         }
                     }
                     wanted.push(key.clone());
+                    let layer = |rect: Rect, tone: kit::Tone| {
+                        kit.thumb_layer.paint(
+                            &cx,
+                            &Part {
+                                rect,
+                                room: rect,
+                                state: State::REST.toned(tone),
+                                label: None,
+                            },
+                        );
+                    };
                     if marks.flag == Flag::Reject {
-                        painter.rect_filled(image, 0.0, lt.dim);
+                        layer(image, kit::Tone::Muted);
                     }
-                    // A member of an expanded stack: a bar on its left.
+                    // A member of an expanded stack: a bar on its left
+                    // (the layer's indicator), under the cell's outline.
                     let member = stack.as_ref().is_some_and(|st| st.top != key);
                     if member {
-                        painter.rect_filled(
-                            Rect::from_min_size(rect.min, vec2(3.0, size)),
-                            0.0,
-                            lt.stack,
+                        layer(
+                            Rect::from_min_size(rect.min, vec2(size, size)),
+                            kit::Tone::Accent,
                         );
+                        if cell_box.border_width > 0.0 {
+                            let outline = BoxStyle {
+                                fill: Color32::TRANSPARENT,
+                                indicator_size: 0.0,
+                                ..cell_box
+                            };
+                            kit::paint_box(&cx, rect, &outline, Corners::All, Side::Bottom);
+                        }
                     }
                     if captions {
                         painter.with_clip_rect(rect.intersect(ui.clip_rect())).text(
@@ -807,13 +838,14 @@ impl<'a> ThumbGrid<'a> {
                             Align2::CENTER_CENTER,
                             &name,
                             small.clone(),
-                            t.text.default,
+                            cell_box.text,
                         );
                     }
                     if overlays {
                         let star = (size / 10.0).clamp(10.0, 16.0);
                         overlay(
-                            &painter,
+                            &cx,
+                            &kit,
                             &lt,
                             &t,
                             image,
@@ -855,14 +887,14 @@ impl<'a> ThumbGrid<'a> {
                         if let Some(st) = stack.as_ref().filter(|st| st.top == key && st.count > 1)
                         {
                             let open = expanded.contains(&st.top);
-                            let chip = paint::pill(
+                            let (chip, chip_text) = paint::pill(
                                 &painter,
+                                &kit.pill,
+                                kit::Tone::Neutral,
                                 image.left_top() + vec2(t.space.xs, t.space.xs + 18.0),
                                 Align2::LEFT_TOP,
                                 &format!("{}  ", st.count),
                                 small.clone(),
-                                lt.overlay,
-                                lt.overlay_text,
                             );
                             let chevron = Rect::from_min_size(
                                 pos2(chip.right() - chip.height(), chip.top()),
@@ -873,7 +905,7 @@ impl<'a> ThumbGrid<'a> {
                             } else {
                                 Icon::ChevronRight
                             };
-                            icon.paint(&painter, chevron, lt.overlay_text);
+                            icon.paint(&painter, chevron, chip_text);
                             let cr = ui.interact(chip, id.with(("stack", &key)), Sense::CLICK);
                             let count = st.count.to_string();
                             let cname = tr_args(
@@ -895,30 +927,6 @@ impl<'a> ThumbGrid<'a> {
                                 ));
                             }
                         }
-                    }
-                    // Outline: selected, hovered, the cursor.
-                    if selected {
-                        painter.rect_stroke(
-                            rect,
-                            t.radius.widget,
-                            Stroke::new(2.0, lt.selected),
-                            StrokeKind::Inside,
-                        );
-                    } else if r.hovered() {
-                        painter.rect_stroke(
-                            rect,
-                            t.radius.widget,
-                            Stroke::new(1.0, lt.hover),
-                            StrokeKind::Inside,
-                        );
-                    }
-                    if is_cursor {
-                        painter.rect_stroke(
-                            rect.expand(1.0),
-                            t.radius.widget,
-                            Stroke::new(1.0, t.focus_ring),
-                            StrokeKind::Outside,
-                        );
                     }
                     let a11y_name = name.clone();
                     r.widget_info(move || {
@@ -1004,13 +1012,13 @@ impl<'a> ThumbGrid<'a> {
                     },
                 )
             });
-            ui.painter().rect_stroke(
-                out.inner_rect,
-                0.0,
-                Stroke::new(1.0, t.focus_ring),
-                StrokeKind::Inside,
-            );
         }
+        rows::paint_view(
+            ui,
+            &egui_pop_core::kit::Kit::of(ui.ctx()),
+            out.inner_rect,
+            response.has_focus(),
+        );
         // Zoom: Ctrl and the wheel over a grid.
         if grid && ui.rect_contains_pointer(out.inner_rect) {
             let z = ui.input(|i| i.zoom_delta());
@@ -1442,7 +1450,8 @@ fn cells_in(
 /// A cell's overlays: its flag, labels, rating and badges.
 #[allow(clippy::too_many_arguments)]
 fn overlay(
-    painter: &egui::Painter,
+    cx: &KitCx<'_>,
+    kit: &Kit,
     lt: &LibraryTokens,
     t: &Tokens,
     image: Rect,
@@ -1452,11 +1461,23 @@ fn overlay(
     star: f32,
     small: &egui::FontId,
 ) {
+    let painter = cx.painter;
+    let badge = |rect: Rect| {
+        kit.thumb_overlay_badge.paint(
+            cx,
+            &Part {
+                rect,
+                room: rect,
+                state: State::REST,
+                label: None,
+            },
+        );
+    };
     let pad = t.space.xs;
     let icon = 16.0;
     if marks.flag != Flag::None {
         let r = Rect::from_min_size(image.left_top() + vec2(pad, pad), vec2(icon, icon));
-        painter.rect_filled(r, 3.0, lt.overlay);
+        badge(r);
         match marks.flag {
             Flag::Pick => paint::flag(painter, r.shrink(2.0), lt.pick),
             _ => paint::cross(painter, r.shrink(2.0), lt.reject),
@@ -1469,7 +1490,7 @@ fn overlay(
             pos2(image.right() - pad - w, image.top() + pad),
             vec2(w, icon),
         );
-        painter.rect_filled(back, 3.0, lt.overlay);
+        badge(back);
         for (k, l) in labels.iter().enumerate() {
             let c = pos2(back.left() + 8.0 + k as f32 * 13.0, back.center().y);
             paint::label(painter, *l, c, 5.0, lt.label(*l));
@@ -1480,7 +1501,7 @@ fn overlay(
             pos2(image.left() + star * 0.25, image.bottom() - star * 1.25),
             vec2(star * f32::from(MAX_RATING) + star * 0.5, star),
         );
-        painter.rect_filled(back, 3.0, lt.overlay);
+        badge(back);
         for j in 0..MAX_RATING {
             let c = pos2(
                 image.left() + star * (f32::from(j) + 0.75),
@@ -1494,21 +1515,21 @@ fn overlay(
     }
     let mut right = image.right() - pad;
     for b in badges.iter().rev() {
-        let (fill, text) = match b.tone {
-            Tone::Neutral => (lt.overlay, lt.overlay_text),
-            Tone::Info => (lt.tones[1], t.text.on_accent),
-            Tone::Success => (lt.tones[2], t.text.on_accent),
-            Tone::Warning => (lt.tones[3], t.text.on_accent),
-            Tone::Danger => (lt.tones[4], t.text.on_accent),
+        let tone = match b.tone {
+            Tone::Neutral => kit::Tone::Neutral,
+            Tone::Info => kit::Tone::Info,
+            Tone::Success => kit::Tone::Success,
+            Tone::Warning => kit::Tone::Warning,
+            Tone::Danger => kit::Tone::Danger,
         };
-        let r = paint::pill(
+        let (r, _) = paint::pill(
             painter,
+            &kit.pill,
+            tone,
             pos2(right, image.bottom() - pad),
             Align2::RIGHT_BOTTOM,
             &b.text,
             small.clone(),
-            fill,
-            text,
         );
         right = r.left() - 3.0;
     }

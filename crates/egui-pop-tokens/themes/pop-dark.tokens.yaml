@@ -1,0 +1,785 @@
+$description: "egui-pop's dark theme: warm neutral greys, a warm gold accent."
+gray:
+  $type: "color"
+  $description: "Warm neutral scale: 0 is the deepest background, 12 the strongest text."
+  "0":
+    $value: {colorSpace: "oklch", components: [0.165, 0.006, 75], hex: "#100e0b"}
+  "1":
+    $value: {colorSpace: "oklch", components: [0.195, 0.006, 75], hex: "#171512"}
+  "2":
+    $value: {colorSpace: "oklch", components: [0.215, 0.006, 75], hex: "#1b1916"}
+  "3":
+    $value: {colorSpace: "oklch", components: [0.24, 0.006, 75], hex: "#211f1c"}
+  "4":
+    $value: {colorSpace: "oklch", components: [0.265, 0.006, 75], hex: "#272522"}
+  "5":
+    $value: {colorSpace: "oklch", components: [0.3, 0.006, 75], hex: "#302d2b"}
+  "6":
+    $value: {colorSpace: "oklch", components: [0.34, 0.006, 75], hex: "#3a3835"}
+  "7":
+    $value: {colorSpace: "oklch", components: [0.4, 0.006, 75], hex: "#4a4744"}
+  "8":
+    $value: {colorSpace: "oklch", components: [0.5, 0.006, 75], hex: "#65635f"}
+  "9":
+    $value: {colorSpace: "oklch", components: [0.64, 0.006, 75], hex: "#8e8c88"}
+  "10":
+    $value: {colorSpace: "oklch", components: [0.76, 0.006, 75], hex: "#b3b1ad"}
+  "11":
+    $value: {colorSpace: "oklch", components: [0.9, 0.006, 75], hex: "#e0ddda"}
+  "12":
+    $value: {colorSpace: "oklch", components: [0.97, 0.006, 75], hex: "#f7f5f1"}
+gold:
+  $type: "color"
+  "1":
+    $value: {colorSpace: "oklch", components: [0.19, 0.015, 80], hex: "#17130c"}
+  "2":
+    $value: {colorSpace: "oklch", components: [0.22, 0.02, 80], hex: "#201a10"}
+  "3":
+    $value: {colorSpace: "oklch", components: [0.27, 0.04, 80], hex: "#31240e"}
+  "4":
+    $value: {colorSpace: "oklch", components: [0.31, 0.05, 80], hex: "#3e2d10"}
+  "5":
+    $value: {colorSpace: "oklch", components: [0.35, 0.06, 80], hex: "#4b3711"}
+  "6":
+    $value: {colorSpace: "oklch", components: [0.4, 0.07, 80], hex: "#5b4315"}
+  "7":
+    $value: {colorSpace: "oklch", components: [0.47, 0.09, 80], hex: "#755411"}
+  "8":
+    $value: {colorSpace: "oklch", components: [0.76, 0.12, 80], hex: "#d9a850"}
+  "9":
+    $value: {colorSpace: "oklch", components: [0.832, 0.126, 83], hex: "#f0c060"}
+  "10":
+    $value: {colorSpace: "oklch", components: [0.88, 0.12, 80], hex: "#ffcf77"}
+  "11":
+    $value: {colorSpace: "oklch", components: [0.82, 0.096, 80], hex: "#e5be7b"}
+  "12":
+    $value: {colorSpace: "oklch", components: [0.94, 0.042, 80], hex: "#fae9cc"}
+  contrast:
+    $value: "{gray.0}"
+    $description: "Text on step 9."
+amber:
+  $type: "color"
+  "1":
+    $value: {colorSpace: "oklch", components: [0.19, 0.015, 62], hex: "#19120d"}
+  "2":
+    $value: {colorSpace: "oklch", components: [0.22, 0.02, 62], hex: "#211911"}
+  "3":
+    $value: {colorSpace: "oklch", components: [0.27, 0.04, 62], hex: "#342211"}
+  "4":
+    $value: {colorSpace: "oklch", components: [0.31, 0.05, 62], hex: "#422a14"}
+  "5":
+    $value: {colorSpace: "oklch", components: [0.35, 0.06, 62], hex: "#513317"}
+  "6":
+    $value: {colorSpace: "oklch", components: [0.4, 0.07, 62], hex: "#623e1c"}
+  "7":
+    $value: {colorSpace: "oklch", components: [0.47, 0.09, 62], hex: "#7e4e1e"}
+  "8":
+    $value: {colorSpace: "oklch", components: [0.71, 0.14, 62], hex: "#df8b36"}
+  "9":
+    $value: {colorSpace: "oklch", components: [0.78, 0.14, 62], hex: "#f6a14f"}
+  "10":
+    $value: {colorSpace: "oklch", components: [0.83, 0.14, 62], hex: "#ffb160"}
+  "11":
+    $value: {colorSpace: "oklch", components: [0.82, 0.112, 62], hex: "#f8b376"}
+  "12":
+    $value: {colorSpace: "oklch", components: [0.94, 0.049, 62], hex: "#ffe5ca"}
+  contrast:
+    $value: "{gray.0}"
+    $description: "Text on step 9."
+red:
+  $type: "color"
+  "1":
+    $value: {colorSpace: "oklch", components: [0.19, 0.015, 30], hex: "#1a1110"}
+  "2":
+    $value: {colorSpace: "oklch", components: [0.22, 0.02, 30], hex: "#231715"}
+  "3":
+    $value: {colorSpace: "oklch", components: [0.27, 0.04, 30], hex: "#381f1b"}
+  "4":
+    $value: {colorSpace: "oklch", components: [0.31, 0.05, 30], hex: "#462621"}
+  "5":
+    $value: {colorSpace: "oklch", components: [0.35, 0.06, 30], hex: "#562e27"}
+  "6":
+    $value: {colorSpace: "oklch", components: [0.4, 0.07, 30], hex: "#683831"}
+  "7":
+    $value: {colorSpace: "oklch", components: [0.47, 0.09, 30], hex: "#86463c"}
+  "8":
+    $value: {colorSpace: "oklch", components: [0.61, 0.15, 30], hex: "#cd5a4a"}
+  "9":
+    $value: {colorSpace: "oklch", components: [0.68, 0.15, 30], hex: "#e6705f"}
+  "10":
+    $value: {colorSpace: "oklch", components: [0.73, 0.15, 30], hex: "#f7806e"}
+  "11":
+    $value: {colorSpace: "oklch", components: [0.82, 0.12, 30], hex: "#ffa696"}
+  "12":
+    $value: {colorSpace: "oklch", components: [0.94, 0.052, 30], hex: "#ffdfd7"}
+  contrast:
+    $value: "{gray.0}"
+    $description: "Text on step 9."
+green:
+  $type: "color"
+  "1":
+    $value: {colorSpace: "oklch", components: [0.19, 0.015, 145], hex: "#101610"}
+  "2":
+    $value: {colorSpace: "oklch", components: [0.22, 0.02, 145], hex: "#151d15"}
+  "3":
+    $value: {colorSpace: "oklch", components: [0.27, 0.04, 145], hex: "#1a2c1a"}
+  "4":
+    $value: {colorSpace: "oklch", components: [0.31, 0.05, 145], hex: "#1f3720"}
+  "5":
+    $value: {colorSpace: "oklch", components: [0.35, 0.06, 145], hex: "#254326"}
+  "6":
+    $value: {colorSpace: "oklch", components: [0.4, 0.07, 145], hex: "#2e522f"}
+  "7":
+    $value: {colorSpace: "oklch", components: [0.47, 0.09, 145], hex: "#37683a"}
+  "8":
+    $value: {colorSpace: "oklch", components: [0.67, 0.12, 145], hex: "#63a966"}
+  "9":
+    $value: {colorSpace: "oklch", components: [0.74, 0.12, 145], hex: "#78bf7b"}
+  "10":
+    $value: {colorSpace: "oklch", components: [0.79, 0.12, 145], hex: "#88cf8a"}
+  "11":
+    $value: {colorSpace: "oklch", components: [0.82, 0.096, 145], hex: "#9dd59e"}
+  "12":
+    $value: {colorSpace: "oklch", components: [0.94, 0.042, 145], hex: "#dbf3da"}
+  contrast:
+    $value: "{gray.0}"
+    $description: "Text on step 9."
+blue:
+  $type: "color"
+  "1":
+    $value: {colorSpace: "oklch", components: [0.19, 0.015, 255], hex: "#0f141b"}
+  "2":
+    $value: {colorSpace: "oklch", components: [0.22, 0.02, 255], hex: "#141b24"}
+  "3":
+    $value: {colorSpace: "oklch", components: [0.27, 0.04, 255], hex: "#19273a"}
+  "4":
+    $value: {colorSpace: "oklch", components: [0.31, 0.05, 255], hex: "#1e3149"}
+  "5":
+    $value: {colorSpace: "oklch", components: [0.35, 0.06, 255], hex: "#243c59"}
+  "6":
+    $value: {colorSpace: "oklch", components: [0.4, 0.07, 255], hex: "#2d496d"}
+  "7":
+    $value: {colorSpace: "oklch", components: [0.47, 0.09, 255], hex: "#365c8c"}
+  "8":
+    $value: {colorSpace: "oklch", components: [0.65, 0.12, 255], hex: "#5a91d7"}
+  "9":
+    $value: {colorSpace: "oklch", components: [0.72, 0.12, 255], hex: "#6fa7ee"}
+  "10":
+    $value: {colorSpace: "oklch", components: [0.77, 0.12, 255], hex: "#7fb7ff"}
+  "11":
+    $value: {colorSpace: "oklch", components: [0.82, 0.096, 255], hex: "#9ac7ff"}
+  "12":
+    $value: {colorSpace: "oklch", components: [0.94, 0.042, 255], hex: "#d9edff"}
+  contrast:
+    $value: "{gray.0}"
+    $description: "Text on step 9."
+clear:
+  $type: "color"
+  $value: "#00000000"
+  $description: "No colour at all."
+transparent:
+  $type: "color"
+  $value: "{clear}"
+  $description: "Nothing painted: a part that shows what is behind it."
+black:
+  $type: "color"
+  $value: "#000000"
+  $description: "Black, opaque."
+scrim:
+  $type: "color"
+  $value: "{black}"
+  $description: "What a backdrop dims the interface with, at opacity.scrim."
+shade:
+  $type: "color"
+  $description: "Black at an opacity (percent), for shadows."
+  "10":
+    $value: "#00000019"
+  "38":
+    $value: "#00000060"
+shadow:
+  $description: "Shadows under what lies over the interface: an offset (right and down), a blur (the penumbra's width), a spread (grown on every side) and the colour of the opaque centre. egui's own values by default."
+  popup:
+    $description: "Menus, popovers, tooltips and completion lists."
+    offset-x: {$type: "dimension", $value: {value: 6, unit: "px"}}
+    offset-y: {$type: "dimension", $value: {value: 10, unit: "px"}}
+    blur: {$type: "dimension", $value: {value: 8, unit: "px"}}
+    spread: {$type: "dimension", $value: {value: 0, unit: "px"}}
+    color: {$type: "color", $value: "{shade.38}"}
+  window:
+    $description: "Dialogs and palettes."
+    offset-x: {$type: "dimension", $value: {value: 10, unit: "px"}}
+    offset-y: {$type: "dimension", $value: {value: 20, unit: "px"}}
+    blur: {$type: "dimension", $value: {value: 15, unit: "px"}}
+    spread: {$type: "dimension", $value: {value: 0, unit: "px"}}
+    color: {$type: "color", $value: "{shade.38}"}
+  side:
+    $description: "A side area lying over the centre; `offset-x` points towards the centre."
+    offset-x: {$type: "dimension", $value: {value: 8, unit: "px"}}
+    offset-y: {$type: "dimension", $value: {value: 0, unit: "px"}}
+    blur: {$type: "dimension", $value: {value: 32, unit: "px"}}
+    spread: {$type: "dimension", $value: {value: 0, unit: "px"}}
+    color: {$type: "color", $value: "{shade.38}"}
+surface:
+  $type: "color"
+  canvas:
+    $value: "{gray.1}"
+    $description: "Behind documents, images and graphs."
+  panel:
+    $value: "{gray.2}"
+    $description: "Panels and side bars: the default background."
+  raised:
+    $value: "{gray.4}"
+    $description: "Controls at rest: buttons, combo boxes."
+  hover:
+    $value: "{gray.5}"
+    $description: "A control under the pointer."
+  active:
+    $value: "{gray.6}"
+    $description: "A control being pressed or dragged."
+  overlay:
+    $value: "{gray.3}"
+    $description: "Windows, menus, popups and dialogs."
+  sunken:
+    $value: "{gray.0}"
+    $description: "Text fields and wells: the deepest background."
+text:
+  $type: "color"
+  default:
+    $value: "{gray.11}"
+    $description: "Ordinary text."
+  muted:
+    $value: "{gray.10}"
+    $description: "Secondary text, hints, placeholders."
+  strong:
+    $value: "{gray.12}"
+    $description: "Titles, emphasis, text under the pointer."
+  on-accent:
+    $value: "{gold.contrast}"
+    $description: "Text on an accent fill."
+border:
+  $type: "color"
+  default:
+    $value: "{gray.6}"
+    $description: "Outlines and separators (decorative)."
+  strong:
+    $value: "{gray.9}"
+    $description: "Outlines that must be seen: 3:1 against panels."
+accent:
+  $type: "color"
+  default:
+    $value: "{gold.9}"
+    $description: "Primary actions, checked and selected states, links."
+  hover:
+    $value: "{gold.10}"
+    $description: "The accent under the pointer."
+  active:
+    $value: "{gold.8}"
+    $description: "The accent being pressed."
+  subtle:
+    $value: "{gold.3}"
+    $description: "A quiet accent background."
+danger:
+  $type: "color"
+  $value: "{red.11}"
+  $description: "Errors and destructive actions (readable as text)."
+warning:
+  $type: "color"
+  $value: "{amber.11}"
+  $description: "Warnings (readable as text)."
+success:
+  $type: "color"
+  $value: "{green.11}"
+  $description: "Success (readable as text)."
+info:
+  $type: "color"
+  $value: "{blue.11}"
+  $description: "Information (readable as text)."
+focus:
+  $type: "color"
+  ring:
+    $value: "{accent.default}"
+    $description: "The keyboard focus outline."
+selection:
+  $type: "color"
+  $value: "{gold.5}"
+  $description: "Selected text and items, under ordinary text."
+radius:
+  $type: "dimension"
+  widget:
+    $value: {value: 4, unit: "px"}
+    $description: "Corner radius of controls."
+  window:
+    $value: {value: 8, unit: "px"}
+    $description: "Corner radius of windows, menus and dialogs."
+space:
+  $type: "dimension"
+  xs:
+    $value: {value: 2, unit: "px"}
+    $description: "Hairline gaps: between an icon and its label."
+  s:
+    $value: {value: 4, unit: "px"}
+    $description: "Inside controls; vertical gaps between items."
+  m:
+    $value: {value: 8, unit: "px"}
+    $description: "Between items in a row."
+  l:
+    $value: {value: 12, unit: "px"}
+    $description: "Padding of windows and dialogs."
+  xl:
+    $value: {value: 16, unit: "px"}
+    $description: "Between sections."
+size:
+  $type: "dimension"
+  control:
+    height:
+      $value: {value: 24, unit: "px"}
+      $description: "Height of buttons, fields and other one-line controls."
+  icon:
+    inline:
+      $value: {value: 16, unit: "px"}
+    toolbar:
+      $value: {value: 20, unit: "px"}
+    panel:
+      $value: {value: 24, unit: "px"}
+  dialog:
+    width:
+      $value: {value: 440, unit: "px"}
+  toast:
+    width:
+      $value: {value: 340, unit: "px"}
+  titlebar:
+    height:
+      $value: {value: 32, unit: "px"}
+      $description: "Height of a window's own title bar."
+    button:
+      $value: {value: 44, unit: "px"}
+      $description: "Width of the minimize, maximize and close buttons."
+  magnet:
+    $value: {value: 12, unit: "px"}
+    $description: "How close a dragged palette snaps to the window's edges and to other palettes."
+  frame:
+    grip:
+      $value: {value: 6, unit: "px"}
+      $description: "Width of a window's own resize edges (never under 6 physical pixels)."
+font:
+  size:
+    $type: "dimension"
+    $description: "The size scale: text everywhere takes one of its steps."
+    xs:
+      $value: {value: 10, unit: "px"}
+      $description: "Captions and small print."
+    s:
+      $value: {value: 12.5, unit: "px"}
+      $description: "Secondary text, numbers and code (a monospace face at this size matches the body's x-height)."
+    m:
+      $value: {value: 13, unit: "px"}
+      $description: "Body text and buttons."
+    l:
+      $value: {value: 15, unit: "px"}
+      $description: "Emphasised text, small headings."
+    xl:
+      $value: {value: 18, unit: "px"}
+      $description: "Headings."
+  text-style:
+    $type: "dimension"
+    $description: "egui's text styles, each a step of the size scale."
+    small:
+      $value: "{font.size.xs}"
+      $description: "egui's `Small`: captions and small print."
+    body:
+      $value: "{font.size.m}"
+      $description: "egui's `Body`: body text."
+    button:
+      $value: "{font.size.m}"
+      $description: "egui's `Button`: button labels."
+    heading:
+      $value: "{font.size.xl}"
+      $description: "egui's `Heading`: headings."
+    monospace:
+      $value: "{font.size.s}"
+      $description: "egui's `Monospace`: numbers and code."
+  family:
+    $type: "fontFamily"
+    ui:
+      $value: ["Ubuntu", "sans-serif"]
+      $description: "Interface text (informative until fonts are loaded from themes)."
+    mono:
+      $value: ["Hack", "monospace"]
+      $description: "Numbers and code (informative until fonts are loaded from themes)."
+opacity:
+  $type: "number"
+  scrim:
+    $value: 0.392
+    $description: "How much the backdrop behind a modal hides the interface, 0 to 1 (egui's own: 100 of 255)."
+motion:
+  duration:
+    $type: "duration"
+    $value: {value: 120, unit: "ms"}
+    $description: "Length of animations; 0 turns them off (reduced motion)."
+  spinner:
+    $type: "duration"
+    delay:
+      $value: {value: 300, unit: "ms"}
+      $description: "Work shorter than this shows no busy indicator: a flash of spinner reads as a glitch."
+    min:
+      $value: {value: 500, unit: "ms"}
+      $description: "A busy indicator, once shown, stays at least this long, so it does not flash off."
+    turn:
+      $value: {value: 900, unit: "ms"}
+      $description: "One turn of a spinner (still under reduced motion)."
+  progress:
+    travel:
+      $type: "duration"
+      $value: {value: 1500, unit: "ms"}
+      $description: "An indeterminate bar's segment crossing its track (a still striped track under reduced motion)."
+  skeleton:
+    shimmer:
+      $type: "duration"
+      $value: {value: 1600, unit: "ms"}
+      $description: "A skeleton's shimmer crossing it (none under reduced motion)."
+palette:
+  $description: "Palettes and toolboxes floating over the interface, never modal."
+  magnet:
+    $type: "dimension"
+    $value: "{size.magnet}"
+viewport:
+  $description: "The image viewport."
+  $type: "color"
+  background:
+    $value: "{surface.canvas}"
+    $description: "Around the image."
+  backdrop:
+    $value: "{surface.sunken}"
+    $description: "Under the image where no tile has arrived yet."
+  frame:
+    $value: "{border.default}"
+    $description: "The image's outline."
+  grid:
+    $value: "{border.default}"
+    $description: "The pixel grid at high zoom."
+  guide:
+    $value: "{text.strong}"
+    $description: "Overlay shapes and guides."
+  handle:
+    $value: "{accent.default}"
+    $description: "A handle at rest."
+  handle-hover:
+    $value: "{accent.hover}"
+    $description: "A handle under the pointer or dragged."
+  handle-outline:
+    $value: "{surface.canvas}"
+    $description: "The ring around a handle."
+histogram:
+  $description: "Histograms of supplied bins."
+  $type: "color"
+  background:
+    $value: "{surface.sunken}"
+    $description: "Behind the curves."
+  grid:
+    $value: "{border.default}"
+    $description: "The quarter lines."
+  clip-shadows:
+    $value: "{info}"
+    $description: "The marker lit when shadows are clipped."
+  clip-highlights:
+    $value: "{danger}"
+    $description: "The marker lit when highlights are clipped."
+curve:
+  $description: "Curve editors (tone curves)."
+  $type: "color"
+  background:
+    $value: "{surface.sunken}"
+    $description: "Behind the graph."
+  grid:
+    $value: "{border.default}"
+    $description: "The quarter lines."
+  identity:
+    $value: "{border.default}"
+    $description: "The diagonal where output equals input."
+  line:
+    $value: "{text.default}"
+    $description: "The curve."
+  point:
+    $value: "{text.default}"
+    $description: "A point of the curve."
+  point-selected:
+    $value: "{accent.default}"
+    $description: "The selected point, or the one picked."
+  pick:
+    $value: "{warning}"
+    $description: "The value picked under the pointer in the image."
+wheel:
+  $description: "Colour wheels and the hue and saturation picker."
+  $type: "color"
+  ring:
+    $value: "{border.strong}"
+    $description: "The disc's outline."
+  puck:
+    $value: "{text.strong}"
+    $description: "The puck."
+  puck-outline:
+    $value: "{surface.canvas}"
+    $description: "The ring around the puck, so it reads on any colour."
+navigator:
+  $description: "The navigator: the whole image and the part in view."
+  $type: "color"
+  background:
+    $value: "{surface.sunken}"
+    $description: "Behind the image."
+  frame:
+    $value: "{accent.default}"
+    $description: "The outline of the part in view."
+  veil:
+    $value: "{surface.canvas}"
+    $description: "Over the part out of view, half transparent."
+cursor:
+  $description: "Tool cursors and brush outlines over the image."
+  $type: "color"
+  fill:
+    $value: "{text.strong}"
+    $description: "A tool cursor's strokes, a brush outline's line."
+  outline:
+    $value: "{surface.canvas}"
+    $description: "The ring around them, so they read on any image."
+loupe:
+  $description: "The loupe: the pixels under the pointer, magnified."
+  $type: "color"
+  background:
+    $value: "{surface.overlay}"
+    $description: "Around the picture and behind the readout."
+  frame:
+    $value: "{border.strong}"
+    $description: "The outline."
+  grid:
+    $value: "{border.default}"
+    $description: "The lines between the pixels."
+  marker:
+    $value: "{accent.default}"
+    $description: "The square around the centre pixel."
+graph:
+  $description: "Node graph editors: nodes, ports, wires and groups on a canvas."
+  $type: "color"
+  background:
+    $value: "{surface.canvas}"
+    $description: "The canvas behind the nodes."
+  grid:
+    $value: "{border.default}"
+    $description: "The canvas's grid lines."
+  node:
+    $value: "{surface.raised}"
+    $description: "A node's body."
+  node-header:
+    $value: "{surface.overlay}"
+    $description: "A node's title bar."
+  node-border:
+    $value: "{border.default}"
+    $description: "A node's outline."
+  node-selected:
+    $value: "{accent.default}"
+    $description: "A selected node's outline."
+  wire:
+    $value: "{border.strong}"
+    $description: "A wire whose type has no colour."
+  wire-preview:
+    $value: "{accent.default}"
+    $description: "The wire being drawn."
+  wire-refused:
+    $value: "{danger}"
+    $description: "The wire being drawn over a port that refuses it."
+  group:
+    $value: "{accent.subtle}"
+    $description: "Behind a group of nodes."
+  group-border:
+    $value: "{border.default}"
+    $description: "A group's outline."
+  band:
+    $value: "{accent.default}"
+    $description: "The rubber band selecting nodes."
+  type-1:
+    $value: "{accent.default}"
+    $description: "A port type's colour, the first of six."
+  type-2:
+    $value: "{info}"
+    $description: "A port type's colour, the second of six."
+  type-3:
+    $value: "{success}"
+    $description: "A port type's colour, the third of six."
+  type-4:
+    $value: "{warning}"
+    $description: "A port type's colour, the fourth of six."
+  type-5:
+    $value: "{danger}"
+    $description: "A port type's colour, the fifth of six."
+  type-6:
+    $value: "{text.muted}"
+    $description: "A port type's colour, the sixth of six."
+editor:
+  $description: "Text and code editors."
+  $type: "color"
+  gutter:
+    $value: "{surface.panel}"
+    $description: "Behind the line numbers and markers."
+  line-number:
+    $value: "{text.muted}"
+    $description: "A line number."
+  line-number-active:
+    $value: "{text.strong}"
+    $description: "The cursor line's number."
+  current-line:
+    $value: "{surface.hover}"
+    $description: "The cursor line's background."
+  selection:
+    $value: "{selection}"
+    $description: "Selected text's background."
+  cursor:
+    $value: "{text.strong}"
+    $description: "The text cursor."
+  indent-guide:
+    $value: "{border.default}"
+    $description: "Indentation guides."
+  bracket:
+    $value: "{border.strong}"
+    $description: "The outline of a matching bracket pair."
+  match:
+    $value: "{accent.subtle}"
+    $description: "A search match's background."
+  match-current:
+    $value: "{accent.default}"
+    $description: "The current search match's outline."
+  fold:
+    $value: "{text.muted}"
+    $description: "Fold arrows and the folded-text marker."
+  breakpoint:
+    $value: "{danger}"
+    $description: "A breakpoint marker."
+  error:
+    $value: "{danger}"
+    $description: "An error marker and underline."
+  warning:
+    $value: "{warning}"
+    $description: "A warning marker and underline."
+  info:
+    $value: "{info}"
+    $description: "An information marker and underline."
+  diff-added:
+    $value: "{success}"
+    $description: "A line added since the last version."
+  diff-modified:
+    $value: "{info}"
+    $description: "A line changed since the last version."
+  diff-removed:
+    $value: "{danger}"
+    $description: "Lines removed after this one."
+syntax:
+  $description: "Highlighted code, by kind of token."
+  $type: "color"
+  plain:
+    $value: "{text.default}"
+    $description: "Text with no kind."
+  keyword:
+    $value: "{accent.default}"
+    $description: "Keywords and storage words."
+  string:
+    $value: "{success}"
+    $description: "String literals."
+  number:
+    $value: "{warning}"
+    $description: "Numeric literals."
+  constant:
+    $value: "{warning}"
+    $description: "Other constants."
+  escape:
+    $value: "{warning}"
+    $description: "Escapes inside strings."
+  comment:
+    $value: "{text.muted}"
+    $description: "Comments."
+  function:
+    $value: "{text.strong}"
+    $description: "Function names."
+  type:
+    $value: "{info}"
+    $description: "Type names."
+  macro:
+    $value: "{info}"
+    $description: "Macros and attributes."
+  tag:
+    $value: "{accent.default}"
+    $description: "Markup tags."
+  operator:
+    $value: "{text.default}"
+    $description: "Operators."
+  punctuation:
+    $value: "{text.muted}"
+    $description: "Punctuation."
+  invalid:
+    $value: "{danger}"
+    $description: "Text the grammar rejects."
+terminal:
+  $description: "The terminal: its text, cursor and selection, and the 16 ANSI colours programs ask for by number (the 256-colour cube and RGB colours are the programs' own)."
+  $type: "color"
+  foreground:
+    $value: "{text.default}"
+    $description: "Text in the default colour."
+  bold:
+    $value: "{text.strong}"
+    $description: "Bold text in the default colour."
+  cursor:
+    $value: "{text.strong}"
+    $description: "The cursor."
+  selection:
+    $value: "{selection}"
+    $description: "Selected text's background."
+  link:
+    $value: "{accent.default}"
+    $description: "A link's underline under the pointer."
+  ansi:
+    $description: "The 16 ANSI colours, by number; each slot keeps its protocol name in its description."
+    "0":
+      $value: "{surface.active}"
+      $description: "ANSI colour 0 (black): the colour furthest from the text."
+    "1":
+      $value: "{danger}"
+      $description: "ANSI colour 1 (red)."
+    "2":
+      $value: "{success}"
+      $description: "ANSI colour 2 (green)."
+    "3":
+      $value: "{warning}"
+      $description: "ANSI colour 3 (yellow)."
+    "4":
+      $value: "{info}"
+      $description: "ANSI colour 4 (blue)."
+    "5":
+      $value: "{accent.default}"
+      $description: "ANSI colour 5 (magenta)."
+    "6":
+      $value: "{info}"
+      $description: "ANSI colour 6 (cyan)."
+    "7":
+      $value: "{text.default}"
+      $description: "ANSI colour 7 (white): the text's colour."
+    "8":
+      $value: "{border.strong}"
+      $description: "ANSI colour 8 (bright black)."
+    "9":
+      $value: "{danger}"
+      $description: "ANSI colour 9 (bright red)."
+    "10":
+      $value: "{success}"
+      $description: "ANSI colour 10 (bright green)."
+    "11":
+      $value: "{warning}"
+      $description: "ANSI colour 11 (bright yellow)."
+    "12":
+      $value: "{info}"
+      $description: "ANSI colour 12 (bright blue)."
+    "13":
+      $value: "{accent.hover}"
+      $description: "ANSI colour 13 (bright magenta)."
+    "14":
+      $value: "{info}"
+      $description: "ANSI colour 14 (bright cyan)."
+    "15":
+      $value: "{text.strong}"
+      $description: "ANSI colour 15 (bright white): the strongest ink."

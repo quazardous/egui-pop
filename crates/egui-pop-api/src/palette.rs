@@ -24,6 +24,7 @@ use std::sync::{Arc, Mutex};
 
 use egui::text::LayoutJob;
 use egui::{Color32, FontId, Key, TextFormat, Ui};
+use egui_pop_core::kit::{Component, Kit, Part, State as KitState, Tone};
 use egui_pop_core::lock;
 use egui_pop_core::overlay::{self, Kind, OverlaySpec};
 use egui_pop_core::strings;
@@ -305,11 +306,12 @@ fn parse_arg(input: &str, example: &Json) -> Result<Json, ArgError> {
     }
 }
 
-/// The label with its matched characters in the strong text colour.
-fn highlighted(ui: &Ui, label: &str, positions: &[usize]) -> LayoutJob {
+/// The label in the row's `text`, its matched characters underlined in
+/// the row's `accent` tone.
+fn highlighted(row: &Component, state: KitState, label: &str, positions: &[usize]) -> LayoutJob {
     let font = FontId::default();
-    let normal = ui.visuals().text_color();
-    let strong = ui.visuals().strong_text_color();
+    let normal = row.style(state).text;
+    let strong = row.style_toned(Tone::Accent, state).text;
     let mut job = LayoutJob::default();
     for (i, c) in label.chars().enumerate() {
         let hit = positions.contains(&i);
@@ -330,6 +332,23 @@ fn highlighted(ui: &Ui, label: &str, positions: &[usize]) -> LayoutJob {
         );
     }
     job
+}
+
+/// A row's state, from the last pass as egui's own frame would be:
+/// `selected` for the command Enter runs, never `hover` then.
+fn row_state(ui: &Ui, selected: bool) -> KitState {
+    let state = ui
+        .ctx()
+        .read_response(ui.next_auto_id())
+        .map_or(KitState::REST, |r| KitState::from_response(&r));
+    KitState::REST
+        .with(
+            KitState::HOVER,
+            state.contains(KitState::HOVER) && !selected,
+        )
+        .with(KitState::ACTIVE, state.contains(KitState::ACTIVE))
+        .with(KitState::FOCUS, state.contains(KitState::FOCUS))
+        .with(KitState::SELECTED, selected)
 }
 
 const SPEC_ID: &str = "egui_pop.palette";
@@ -404,10 +423,21 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                 // Justified, left-aligned: a line without keys keeps its
                 // label at the start, as the others.
                 ui.with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
+                    let kit = Kit::of(ui.ctx());
+                    let row = &kit.command_palette_row;
+                    // egui's margin keeps room for its own border: kept,
+                    // unseen; the kit paints the row's box under it.
+                    let border = ui.visuals().widgets.inactive.bg_stroke.width;
                     for (i, h) in hits.iter().enumerate() {
-                        let mut b = egui::Button::new(highlighted(ui, &h.label, &h.positions))
-                            .selected(i == selected)
-                            .frame_when_inactive(i == selected);
+                        let on = i == selected;
+                        let state = row_state(ui, on);
+                        let under = ui.painter().add(egui::Shape::Noop);
+                        let mut b =
+                            egui::Button::new(highlighted(row, state, &h.label, &h.positions))
+                                .selected(on)
+                                .frame_when_inactive(on)
+                                .fill(Color32::TRANSPARENT)
+                                .stroke(egui::Stroke::new(border, Color32::TRANSPARENT));
                         let mut keys = h.entry.keys.first().cloned().unwrap_or_default();
                         if h.recent && s.query.trim().is_empty() {
                             keys = if keys.is_empty() {
@@ -421,9 +451,17 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                             };
                         }
                         if !keys.is_empty() {
-                            b = b.shortcut_text(keys);
+                            let muted = row.style_toned(Tone::Muted, state).text;
+                            b = b.shortcut_text(egui::RichText::new(keys).color(muted));
                         }
                         let r = ui.add(b);
+                        let part = Part {
+                            rect: r.rect,
+                            room: r.rect,
+                            state,
+                            label: None,
+                        };
+                        row.paint_under(ui, under, &part, None);
                         if i == selected && edit.changed() {
                             r.scroll_to_me(None);
                         }

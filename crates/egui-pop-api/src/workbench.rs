@@ -26,12 +26,19 @@
 //! | `workbench.hide` | `{ "panel" }`: closes it (kept closed by the layout) |
 //! | `workbench.focus` | `{ "panel" }`: shows it and gives it the keyboard |
 //! | `workbench.fold` | `{ "area", "folded" }`: an area folded to its strip, or unfolded |
+//! | `workbench.place` | `{ "area", "placement" }`: a side area lies `beside` the centre or `over` it |
 //! | `workbench.detach` | `{ "panel" }`: into a window of its own (its own scale) |
 //! | `workbench.attach` | `{ "panel" }`: a detached panel docked back |
 //! | `workbench.close_window` | `{ "panel" }`: a detached panel's window closes; the default docks it back, a veto keeps the window |
 //!
 //! Each declared panel gets the commands `<panel>.focus` and
 //! `<panel>.toggle`.
+//!
+//! A side area lies **beside** the centre (an egui side panel, taking the
+//! centre's room) or **over** it ([`Placement::Over`]): its folded strip
+//! keeps the room in the layout, so the centre keeps its width, and the
+//! area, unfolded, lies above the centre next to its strip with the kit's
+//! `side-area` shadow; a click on the strip folds or unfolds it.
 //!
 //! A panel may also float over the interface: a palette
 //! (`PanelSpec::palette`) does when it opens, any floatable panel when
@@ -40,13 +47,17 @@
 //! `palette.float`, `palette.dock`, `palette.move`, `palette.roll`,
 //! `palette.pin`).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
+use std::sync::Arc;
 
-use egui::{Id, Pos2, Rect, Ui, ViewportBuilder, ViewportId};
+use egui::{Color32, Id, Pos2, Rect, Ui, ViewportBuilder, ViewportId, WidgetInfo, WidgetType};
 use egui_dock::{DockArea, DockState, NodeIndex, Split, TabViewer};
+use egui_pop_core::kit::{
+    BoxStyle, Corners, Glyph, Kit, KitCx, Part, Side, State, paint_box, paint_indicator,
+};
 use egui_pop_core::strings;
 use egui_pop_model::ids::{PanelId, StepId, ZoneId};
-use egui_pop_model::layout::{Floating, Layout, Node};
+use egui_pop_model::layout::{Floating, Layout, Node, Placement};
 use egui_pop_model::panels::{Area, PanelSpec, Panels, Place};
 use serde_json::{Value as Json, json};
 
@@ -65,6 +76,7 @@ pub const STEP_SHOW: StepId = StepId::from_static("workbench.show");
 pub const STEP_HIDE: StepId = StepId::from_static("workbench.hide");
 pub const STEP_FOCUS: StepId = StepId::from_static("workbench.focus");
 pub const STEP_FOLD: StepId = StepId::from_static("workbench.fold");
+pub const STEP_PLACE: StepId = StepId::from_static("workbench.place");
 pub const STEP_DETACH: StepId = StepId::from_static("workbench.detach");
 pub const STEP_ATTACH: StepId = StepId::from_static("workbench.attach");
 pub const STEP_CLOSE_WINDOW: StepId = StepId::from_static("workbench.close_window");
@@ -159,6 +171,11 @@ pub(crate) fn steps() -> Vec<crate::steps::StepSpec> {
         )
         .args(json!({ "area": "start_side", "folded": true })),
         StepSpec::new(
+            STEP_PLACE,
+            "A side area lies beside the centre or over it (`area`, `placement`: `beside` or `over`).",
+        )
+        .args(json!({ "area": "start_side", "placement": "over" })),
+        StepSpec::new(
             STEP_DETACH,
             "A panel moves to a window of its own (`panel`).",
         )
@@ -226,6 +243,8 @@ pub enum Change {
     Focus(PanelId),
     /// An area folded to its strip (`true`) or unfolded.
     Fold(Area, bool),
+    /// A side area lies beside the centre or over it.
+    Place(Area, Placement),
     /// A panel moved to a window of its own.
     Detach(PanelId),
     /// A detached panel docked back in its area.
@@ -271,6 +290,10 @@ impl Change {
             Change::Hide(p) => (STEP_HIDE, json!({ "panel": p })),
             Change::Focus(p) => (STEP_FOCUS, json!({ "panel": p })),
             Change::Fold(a, f) => (STEP_FOLD, json!({ "area": area_name(*a), "folded": f })),
+            Change::Place(a, p) => (
+                STEP_PLACE,
+                json!({ "area": area_name(*a), "placement": p.as_str() }),
+            ),
             Change::Detach(p) => (STEP_DETACH, json!({ "panel": p })),
             Change::Attach(p) => (STEP_ATTACH, json!({ "panel": p })),
             Change::CloseWindow(p) => (STEP_CLOSE_WINDOW, json!({ "panel": p })),
@@ -321,6 +344,20 @@ impl Change {
             let area = area_from(name).ok_or_else(|| format!("no area `{name}`"))?;
             let folded = args.get("folded").and_then(Json::as_bool).unwrap_or(true);
             return Ok(Change::Fold(area, folded));
+        }
+        if *step == STEP_PLACE {
+            let name = args
+                .get("area")
+                .and_then(Json::as_str)
+                .ok_or("`area` is missing")?;
+            let area = area_from(name).ok_or_else(|| format!("no area `{name}`"))?;
+            let name = args
+                .get("placement")
+                .and_then(Json::as_str)
+                .ok_or("`placement` is missing")?;
+            let placement = Placement::parse(name)
+                .ok_or_else(|| format!("no placement `{name}` (`beside` or `over`)"))?;
+            return Ok(Change::Place(area, placement));
         }
         let panel = args
             .get("panel")
@@ -636,6 +673,16 @@ impl Workbench {
                     self.layout.folded.push(*area);
                 }
                 json!({ "area": area_name(*area), "folded": folded })
+            }
+            Change::Place(area, placement) => {
+                if !matches!(area, Area::StartSide | Area::EndSide) {
+                    return Err(format!(
+                        "only a side area may lie over the centre, not {}",
+                        area.name()
+                    ));
+                }
+                self.layout.set_placement(*area, *placement);
+                json!({ "area": area_name(*area), "placement": placement.as_str() })
             }
         };
         self.stale = true;
@@ -993,9 +1040,27 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
                 });
             });
     }
-    let folded = app.workbench_mut().layout.folded.clone();
+    let (folded, over) = {
+        let wb = app.workbench_mut();
+        (wb.layout.folded.clone(), wb.layout.over.clone())
+    };
+    let kit = Kit::of(&ctx);
+    // Side areas lying over the centre, open, next to their strip.
+    let mut lying = Vec::new();
     for area in panel_alignment(app).order() {
-        if !areas.contains(&area) || !visible_in(app, area) || folded.contains(&area) {
+        if !areas.contains(&area) || !visible_in(app, area) {
+            continue;
+        }
+        let side = matches!(area, Area::StartSide | Area::EndSide);
+        let is_over = side && over.contains(&area);
+        if folded.contains(&area) || is_over {
+            if side {
+                let open = is_over && !folded.contains(&area);
+                let rect = strip(app, ui, &kit, area, open);
+                if open {
+                    lying.push((area, rect));
+                }
+            }
             continue;
         }
         let (min, default) = sizes[&area];
@@ -1014,17 +1079,25 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
             Area::EndSide => egui::Panel::right(id),
             _ => egui::Panel::bottom(id),
         };
-        let shown = panel
-            .resizable(true)
-            .default_size(default)
-            .min_size(min.max(48.0))
-            .show(ui, |ui| {
-                // The panel keeps its width; content narrower than it does
-                // not shrink it.
-                ui.set_min_size(ui.available_size());
-                draw_area(app, ui, area);
-            });
+        let pad = |p: f32| p.round().clamp(0.0, 127.0) as i8;
+        let side = &kit.side_area.data;
+        let shown =
+            panel
+                .frame(egui::Frame::side_top_panel(ui.style()).inner_margin(
+                    egui::Margin::symmetric(pad(side.padding_x), pad(side.padding_y)),
+                ))
+                .show_separator_line(kit.side_area.style(State::REST).border_width > 0.0)
+                .resizable(true)
+                .default_size(default)
+                .min_size(min.max(48.0))
+                .show(ui, |ui| {
+                    // The panel keeps its width; content narrower than it does
+                    // not shrink it.
+                    ui.set_min_size(ui.available_size());
+                    draw_area(app, ui, area);
+                });
         app.workbench_mut().rects.insert(area, shown.response.rect);
+        grip(&ctx, &kit, area, shown.response.rect);
     }
     let mut central = egui::CentralPanel::default();
     if app.edge_to_edge() {
@@ -1035,13 +1108,230 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
             draw_area(app, ui, Area::Center);
         }
     });
-    app.set_drawing_areas(false);
     app.workbench_mut()
         .rects
         .insert(Area::Center, shown.response.rect);
+    for (area, strip) in lying {
+        lie_over(app, &ctx, &kit, area, strip, sizes[&area]);
+    }
+    app.set_drawing_areas(false);
     crate::palettes::show(app, &ctx);
     follow_drag(app, &ctx);
     drop_hint(app, &ctx);
+}
+
+/// A folded side area's strip (the kit's `area-strip`): its box, the line
+/// on the centre's side, the drag-handle glyph; a click unfolds the area
+/// through the `workbench.fold` step. A side area lying over the centre
+/// keeps its strip while `open` (`selected` then), and a click folds it.
+/// Returns where the strip was drawn.
+fn strip(app: &AppHandle, ui: &mut Ui, kit: &Kit, area: Area, open: bool) -> Rect {
+    let component = &kit.area_strip;
+    let width = component.data.width.max(1.0);
+    let id = dock_id(area).with("egui_pop.strip");
+    let (panel, inner) = match area {
+        Area::StartSide => (egui::Panel::left(id), Side::Right),
+        _ => (egui::Panel::right(id), Side::Left),
+    };
+    panel
+        .resizable(false)
+        .exact_size(width)
+        .show_separator_line(false)
+        .frame(egui::Frame::NONE)
+        .show(ui, |ui| {
+            let rect = ui.max_rect();
+            let ctx = ui.ctx().clone();
+            let name = strings::tr_args(
+                &ctx,
+                if open {
+                    &txt::WORKBENCH_FOLD
+                } else {
+                    &txt::WORKBENCH_UNFOLD
+                },
+                &[("area", &area_text(&ctx, area))],
+            );
+            let r = ui.interact(rect, id.with("unfold"), egui::Sense::click());
+            let label = name.clone();
+            r.widget_info(move || WidgetInfo::labeled(WidgetType::Button, true, &label));
+            let r = r.on_hover_text(name);
+            let state = State::from_response(&r).with(State::SELECTED, open);
+            let b = component.style(state);
+            let cx = KitCx {
+                painter: ui.painter(),
+                ppp: ctx.pixels_per_point(),
+            };
+            paint_box(
+                &cx,
+                rect,
+                &BoxStyle {
+                    border_width: 0.0,
+                    ..*b
+                },
+                Corners::None,
+                inner,
+            );
+            let line = BoxStyle {
+                indicator_color: b.border_color,
+                indicator_size: b.border_width,
+                ..BoxStyle::default()
+            };
+            paint_indicator(&cx, rect, &line, inner);
+            let at = Rect::from_center_size(
+                egui::pos2(rect.center().x, rect.top() + width * 1.25),
+                egui::vec2(width, width),
+            );
+            kit.glyph(Glyph::DragHandle).paint(ui.painter(), at, b.text);
+            if r.clicked() {
+                app.fold_area(area, open);
+            }
+            rect
+        })
+        .inner
+}
+
+/// A side area lying over the centre, open: next to its strip (`strip`),
+/// as tall, above the centre (an egui area on the middle layer, as
+/// palettes), in the kit's `side-area` box with its shadow cast towards
+/// the centre. Its edge on the centre's side resizes it; its width is
+/// kept per area (from the side panel's when it lay beside).
+fn lie_over(
+    app: &AppHandle,
+    ctx: &egui::Context,
+    kit: &Kit,
+    area: Area,
+    strip: Rect,
+    (min, default): (f32, f32),
+) {
+    let id = dock_id(area).with("egui_pop.over");
+    let width_id = id.with("width");
+    let content = app.workbench_mut().content;
+    let min = min.max(48.0);
+    let max = (content.width() - 2.0 * strip.width()).max(min);
+    let width = ctx
+        .data_mut(|d| d.get_persisted::<f32>(width_id))
+        .or_else(|| {
+            egui::containers::panel::PanelState::load(ctx, dock_id(area)).map(|s| s.size().x)
+        })
+        .unwrap_or(if default > 0.0 { default } else { 240.0 })
+        .clamp(min, max);
+    let start = area == Area::StartSide;
+    let rect = if start {
+        Rect::from_min_size(
+            egui::pos2(strip.right(), strip.top()),
+            egui::vec2(width, strip.height()),
+        )
+    } else {
+        Rect::from_min_size(
+            egui::pos2(strip.left() - width, strip.top()),
+            egui::vec2(width, strip.height()),
+        )
+    };
+    let side = &kit.side_area;
+    let rest = *side.style(State::REST);
+    let mut shadow = side.data.shadow;
+    if !start {
+        shadow.offset[0] = shadow.offset[0].saturating_neg();
+    }
+    let pad = egui::vec2(side.data.padding_x, side.data.padding_y);
+    egui::Area::new(id)
+        .order(egui::Order::Middle)
+        .fixed_pos(rect.min)
+        .constrain(false)
+        .show(ctx, |ui| {
+            let (rect, _) = ui.allocate_exact_size(rect.size(), egui::Sense::hover());
+            let painter = ui.painter();
+            if shadow != egui::Shadow::NONE {
+                painter.add(shadow.as_shape(rect, egui::CornerRadius::ZERO));
+            }
+            painter.rect_filled(rect, 0.0, ui.visuals().panel_fill);
+            let mut inner = ui.new_child(
+                egui::UiBuilder::new()
+                    .id_salt("egui_pop.over.inner")
+                    .max_rect(rect.shrink2(pad)),
+            );
+            inner.set_clip_rect(rect.shrink2(pad));
+            inner.set_min_size(inner.available_size());
+            draw_area(app, &mut inner, area);
+            // The line on the centre's side, as a side panel's.
+            let x = if start { rect.right() } else { rect.left() };
+            if rest.border_width > 0.0 {
+                ui.painter().vline(
+                    x,
+                    rect.y_range(),
+                    ui.visuals().widgets.noninteractive.bg_stroke,
+                );
+            }
+            // Resized from that edge.
+            let reach = ui.style().interaction.resize_grab_radius_side;
+            let edge = Rect::from_x_y_ranges(x - reach..=x + reach, rect.y_range());
+            let r = ui.interact(edge, id.with("resize"), egui::Sense::drag());
+            if r.hovered() || r.dragged() {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+            }
+            if r.dragged() {
+                let dx = r.drag_delta().x;
+                let w = (width + if start { dx } else { -dx }).clamp(min, max);
+                ui.ctx().data_mut(|d| d.insert_persisted(width_id, w));
+            }
+        });
+    app.workbench_mut().rects.insert(area, rect);
+    grip(ctx, kit, area, rect);
+}
+
+/// A side area's resize grip (the kit's `area-grip`) at the middle of its
+/// edge, above the panels; egui takes the drag. Nothing is drawn while
+/// the kit's grip is transparent in every state (the default kit).
+fn grip(ctx: &egui::Context, kit: &Kit, area: Area, rect: Rect) {
+    let g = &kit.area_grip;
+    if [State::REST, State::HOVER, State::ACTIVE]
+        .iter()
+        .all(|s| g.style(*s).fill.a() == 0)
+    {
+        return;
+    }
+    let (w, h, off) = (g.data.width, g.data.height, g.data.offset);
+    let (centre, size) = match area {
+        Area::StartSide => (
+            egui::pos2(rect.right() + off, rect.center().y),
+            egui::vec2(w, h),
+        ),
+        Area::EndSide => (
+            egui::pos2(rect.left() - off, rect.center().y),
+            egui::vec2(w, h),
+        ),
+        _ => (
+            egui::pos2(rect.center().x, rect.top() - off),
+            egui::vec2(h, w),
+        ),
+    };
+    let reach = ctx.global_style().interaction.resize_grab_radius_side;
+    let near = ctx.pointer_hover_pos().is_some_and(|p| match area {
+        Area::StartSide | Area::EndSide => {
+            (p.x - centre.x).abs() <= reach && rect.y_range().contains(p.y)
+        }
+        _ => (p.y - centre.y).abs() <= reach && rect.x_range().contains(p.x),
+    });
+    let state = State::REST.with(State::HOVER, near).with(
+        State::ACTIVE,
+        near && ctx.input(|i| i.pointer.primary_down()),
+    );
+    let painter = ctx.layer_painter(egui::LayerId::new(
+        egui::Order::Middle,
+        Id::new("egui_pop.area_grips"),
+    ));
+    let rect = Rect::from_center_size(centre, size);
+    g.paint(
+        &KitCx {
+            painter: &painter,
+            ppp: ctx.pixels_per_point(),
+        },
+        &Part {
+            rect,
+            room: rect,
+            state,
+            label: None,
+        },
+    );
 }
 
 /// Whether a panel has something to draw (a zone panel's zone has
@@ -1073,20 +1363,218 @@ fn draw_area(app: &AppHandle, ui: &mut Ui, area: Area) {
         let id = drawable_tabs[0].clone();
         app.show_panel(ui, &id);
     } else {
-        let mut viewer = Viewer { app };
+        let ctx = ui.ctx().clone();
+        let kit = Kit::of(&ctx);
+        let cache_id = dock_id(area).with("egui_pop.tabs");
+        let mut cache =
+            ctx.data_mut(|d| std::mem::take(d.get_temp_mut_or_default::<TabCache>(cache_id)));
+        cache.prepare(app, &ctx, &kit, &tabs);
+        let style = cache.dock_style(ui.style(), &kit);
+        let mut viewer = Viewer {
+            app,
+            prepared: &cache.tabs,
+            seen: Vec::new(),
+        };
         DockArea::new(&mut dock)
             .id(dock_id(area))
+            .style(style)
             .show_close_buttons(false)
             .show_add_buttons(false)
             .show_leaf_close_all_buttons(false)
             .show_leaf_collapse_buttons(false)
             .show_inside(ui, &mut viewer);
+        let seen = std::mem::take(&mut viewer.seen);
+        paint_tabs(ui, &dock, &kit, &cache.tabs, &seen);
+        ctx.data_mut(|d| d.insert_temp(cache_id, cache));
     }
     app.workbench_mut().put_dock(area, dock);
 }
 
 struct Viewer<'a> {
     app: &'a AppHandle,
+    prepared: &'a HashMap<PanelId, PreparedTab>,
+    /// The tabs egui_dock laid out this pass, for the kit to paint.
+    seen: Vec<SeenTab>,
+}
+
+/// A tab egui_dock laid out and took the input of: where, on which layer
+/// (a dragged tab floats), and its interaction.
+struct SeenTab {
+    panel: PanelId,
+    rect: Rect,
+    layer: egui::LayerId,
+    hovered: bool,
+    pressed: bool,
+    focused: bool,
+}
+
+/// egui_dock lays the tabs out and takes their input; the kit paints them
+/// (`egui_pop_core::kit`). Its own tab painting is made invisible, and
+/// each tab is as wide as the kit measures it.
+fn dock_style(style: &egui::Style, kit: &Kit) -> egui_dock::Style {
+    let mut s = egui_dock::Style::from_egui(style);
+    let clear = Color32::TRANSPARENT;
+    s.tab_bar.bg_fill = clear;
+    s.tab_bar.hline_color = clear;
+    s.tab_bar.height = kit.tab_bar.data.height.max(kit.tab.data.height);
+    for t in [
+        &mut s.tab.active,
+        &mut s.tab.inactive,
+        &mut s.tab.focused,
+        &mut s.tab.hovered,
+        &mut s.tab.active_with_kb_focus,
+        &mut s.tab.inactive_with_kb_focus,
+        &mut s.tab.focused_with_kb_focus,
+    ] {
+        t.bg_fill = clear;
+        t.outline_color = clear;
+        t.text_color = clear;
+    }
+    s
+}
+
+/// A tab ready for the kit: its title, its label laid out with no colour
+/// (the kit gives it its state's) and its width as the kit measures it.
+#[derive(Clone)]
+struct PreparedTab {
+    /// The panel's English title, as declared: translated again only when
+    /// it changes.
+    english: String,
+    title: String,
+    label: Arc<egui::Galley>,
+    width: f32,
+}
+
+/// An area's prepared tabs and egui_dock style, kept across passes: a tab
+/// is laid out and measured again only when its title changes, and
+/// everything when the kit (a theme install) or the scale changes.
+#[derive(Clone, Default)]
+struct TabCache {
+    /// The kit (its address: a theme install makes a new one), the
+    /// pixels per point and the strings provider the cache was made for.
+    key: Option<(usize, u32, Option<usize>)>,
+    tabs: HashMap<PanelId, PreparedTab>,
+    style: Option<Arc<egui_dock::Style>>,
+}
+
+impl TabCache {
+    fn prepare(&mut self, app: &AppHandle, ctx: &egui::Context, kit: &Arc<Kit>, tabs: &[PanelId]) {
+        let key = (
+            Arc::as_ptr(kit) as usize,
+            ctx.pixels_per_point().to_bits(),
+            strings::provider_id(ctx),
+        );
+        if self.key != Some(key) {
+            *self = TabCache {
+                key: Some(key),
+                ..TabCache::default()
+            };
+        }
+        self.tabs.retain(|p, _| tabs.contains(p));
+        let mut font = None;
+        for panel in tabs {
+            let english = {
+                let wb = app.workbench_mut();
+                let english = wb.spec(panel).map_or(panel.as_str(), |s| s.title.as_str());
+                if self.tabs.get(panel).is_some_and(|t| t.english == english) {
+                    continue;
+                }
+                english.to_string()
+            };
+            let title = app.panel_title(ctx, panel);
+            let font = font
+                .get_or_insert_with(|| egui::TextStyle::Button.resolve(&ctx.global_style()))
+                .clone();
+            let label =
+                ctx.fonts_mut(|f| f.layout_no_wrap(title.clone(), font, Color32::PLACEHOLDER));
+            let width = kit.tab.measure(label.size()).x;
+            self.tabs.insert(
+                panel.clone(),
+                PreparedTab {
+                    english,
+                    title,
+                    label,
+                    width,
+                },
+            );
+        }
+    }
+
+    fn dock_style(&mut self, style: &egui::Style, kit: &Kit) -> egui_dock::Style {
+        (**self
+            .style
+            .get_or_insert_with(|| Arc::new(dock_style(style, kit))))
+        .clone()
+    }
+}
+
+/// Paints the tab bars and the tabs of an area with the kit, over what
+/// egui_dock laid out.
+fn paint_tabs(
+    ui: &Ui,
+    dock: &DockState<PanelId>,
+    kit: &Kit,
+    prepared: &HashMap<PanelId, PreparedTab>,
+    seen: &[SeenTab],
+) {
+    let ctx = ui.ctx();
+    let ppp = ctx.pixels_per_point();
+    let height = kit.tab_bar.data.height.max(kit.tab.data.height);
+    let mut bars: Vec<(Rect, Option<&PanelId>, &[PanelId])> = Vec::new();
+    for (_, leaf) in dock.iter_leaves() {
+        if leaf.tabs.is_empty() || leaf.tab_bar_hidden {
+            continue;
+        }
+        let bar = Rect::from_min_size(leaf.rect.min, egui::vec2(leaf.rect.width(), height));
+        bars.push((bar, leaf.tabs.get(leaf.active.0), &leaf.tabs));
+        let cx = KitCx {
+            painter: ui.painter(),
+            ppp,
+        };
+        kit.tab_bar.paint(
+            &cx,
+            &Part {
+                rect: bar,
+                room: bar,
+                state: State::REST,
+                label: None,
+            },
+        );
+    }
+    for tab in seen {
+        let Some((bar, active, _)) = bars.iter().find(|(_, _, tabs)| tabs.contains(&tab.panel))
+        else {
+            continue;
+        };
+        let painter = ctx.layer_painter(tab.layer);
+        // In the bar, tabs scrolled out of it are cut; a dragged tab
+        // floats free.
+        let painter = if tab.layer == ui.layer_id() {
+            painter.with_clip_rect(*bar)
+        } else {
+            painter
+        };
+        let state = State::REST
+            .with(State::SELECTED, *active == Some(&tab.panel))
+            .with(State::HOVER, tab.hovered)
+            .with(State::ACTIVE, tab.pressed)
+            .with(State::FOCUS, tab.focused);
+        let Some(prep) = prepared.get(&tab.panel) else {
+            continue;
+        };
+        kit.tab.paint_part(
+            &KitCx {
+                painter: &painter,
+                ppp,
+            },
+            &Part {
+                rect: tab.rect,
+                room: tab.rect,
+                state,
+                label: Some(&prep.label),
+            },
+        );
+    }
 }
 
 impl TabViewer for Viewer<'_> {
@@ -1097,7 +1585,11 @@ impl TabViewer for Viewer<'_> {
     }
 
     fn title(&mut self, tab: &mut PanelId) -> egui::WidgetText {
-        self.app.panel_title(&self.app.egui(), tab).into()
+        // The prepared label: egui_dock lays nothing out again.
+        match self.prepared.get(tab) {
+            Some(p) => p.label.clone().into(),
+            None => self.app.panel_title(&self.app.egui(), tab).into(),
+        }
     }
 
     fn ui(&mut self, ui: &mut Ui, tab: &mut PanelId) {
@@ -1110,8 +1602,33 @@ impl TabViewer for Viewer<'_> {
 
     fn on_tab_button(&mut self, tab: &mut PanelId, response: &egui::Response) {
         // egui_dock's tab buttons carry no name: give them their panel's.
-        let title = self.app.panel_title(&response.ctx, tab);
-        egui_pop_core::a11y::name(response, egui::WidgetType::Button, &title);
+        match self.prepared.get(tab) {
+            Some(p) => egui_pop_core::a11y::name(response, egui::WidgetType::Button, &p.title),
+            None => {
+                let title = self.app.panel_title(&response.ctx, tab);
+                egui_pop_core::a11y::name(response, egui::WidgetType::Button, &title);
+            }
+        }
+        self.seen.push(SeenTab {
+            panel: tab.clone(),
+            rect: response.rect,
+            layer: response.layer_id,
+            hovered: response.hovered(),
+            pressed: response.is_pointer_button_down_on(),
+            focused: response.has_focus(),
+        });
+    }
+
+    fn tab_style_override(
+        &self,
+        tab: &PanelId,
+        global: &egui_dock::TabStyle,
+    ) -> Option<egui_dock::TabStyle> {
+        let width = self.prepared.get(tab)?.width;
+        Some(egui_dock::TabStyle {
+            minimum_width: Some(width),
+            ..global.clone()
+        })
     }
 
     fn context_menu(&mut self, ui: &mut Ui, tab: &mut PanelId, _path: egui_dock::NodePath) {
@@ -1244,31 +1761,26 @@ fn drop_hint(app: &AppHandle, ctx: &egui::Context) {
         refusal: why.clone(),
     });
     drop(wb);
+    // The kit's `dock-preview`: at rest where the panel may go, disabled
+    // with its label saying why where it may not.
     let t = egui_pop_core::theme::Tokens::of(ctx);
     let painter = ctx.layer_painter(egui::LayerId::new(
         egui::Order::Foreground,
         Id::new("egui_pop.workbench.drop"),
     ));
-    let corner = t.radius.widget;
-    match why {
-        None => {
-            painter.rect_filled(rect, corner, t.accent.subtle.gamma_multiply(0.5));
-            painter.rect_stroke(
-                rect,
-                corner,
-                egui::Stroke::new(1.0, t.accent.default),
-                egui::StrokeKind::Inside,
-            );
-        }
-        Some(why) => {
-            painter.rect_filled(rect, corner, t.status.danger.gamma_multiply(0.15));
-            painter.text(
-                rect.center(),
-                egui::Align2::CENTER_CENTER,
-                why,
-                egui::FontId::proportional(t.font.body),
-                t.status.danger,
-            );
-        }
-    }
+    let label = why.map(|why| {
+        let font = egui::FontId::proportional(t.font.body);
+        ctx.fonts_mut(|f| f.layout_no_wrap(why, font, Color32::PLACEHOLDER))
+    });
+    let part = Part {
+        rect,
+        room: rect,
+        state: State::REST.with(State::DISABLED, label.is_some()),
+        label: label.as_ref(),
+    };
+    let cx = KitCx {
+        painter: &painter,
+        ppp: ctx.pixels_per_point(),
+    };
+    Kit::of(ctx).dock_preview.paint_part(&cx, &part);
 }

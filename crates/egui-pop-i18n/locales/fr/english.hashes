@@ -519,8 +519,10 @@ egui-pop-window-exit-fullscreen c8686af758ef9bc1
 egui-pop-workbench-close-panel d48094548e62ca0f
 egui-pop-workbench-detach f12827392b3d10f9
 egui-pop-workbench-float eb7e945b1415bcc5
+egui-pop-workbench-fold 873472b4101d195d
 egui-pop-workbench-move-to 1e7c641863b609f0
 egui-pop-workbench-stays-out 7973c10990577019
+egui-pop-workbench-unfold 4f6622581c6e6904
 egui-pop-workbench-window-title 2fb186786f7fdced
 menu-app-menu-edit.label 329d5a4f3eb93fa9
 menu-app-menu-file.label 181d912a9545ccc3

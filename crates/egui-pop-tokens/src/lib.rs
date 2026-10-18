@@ -11,8 +11,8 @@
 //! Tokens come in three tiers ([`Tier`]): the **reference** palette (colour
 //! scales such as `gray.0`..`gray.12`), the **system** roles widgets read
 //! (`surface.panel`, `text.muted`) and **component** tokens
-//! (`slider.fill`), each tier aliasing the one below. Every theme answers
-//! the same [`CONTRACT`]; a theme missing a token, or giving it the wrong
+//! (`slider-fill.rest.fill`), each tier aliasing the one below. Every theme answers
+//! the same [`contract()`]; a theme missing a token, or giving it the wrong
 //! type, gets the built-in `pop-dark` value for it and a reported problem.
 //! Resolving never panics.
 //!
@@ -36,6 +36,9 @@
 //! changed over it and their history, saved as a token file that
 //! `$extends` the base.
 //!
+//! A kit's tokens, fonts and licence come as a folder or embedded in the
+//! binary ([`kit`](mod@kit), [`kit!`]).
+//!
 //! Types read: `color` (DTCG colour objects in `srgb`, `srgb-linear`,
 //! `oklch` or `oklab`, any other space through its `hex` fallback, and
 //! `#rrggbb[aa]` strings), `dimension` (`px` or `rem`), `number`,
@@ -48,16 +51,19 @@ pub mod contrast;
 mod draft;
 mod error;
 mod file;
+pub mod kit;
 mod theme;
 mod value;
+mod yaml;
+mod yaml_trap;
 
 pub use color::Color;
-pub use contract::{CONTRACT, Required, Tier};
+pub use contract::{RENAMED, Required, Tier, contract};
 pub use draft::{DRAFT_EXTENSION, DRAFT_VERSION, ThemeDraft, TokenEdit};
 pub use error::Error;
 pub use file::{RawToken, TokenFile};
 pub use theme::{
-    BUILT_IN_ACCENTS, BUILT_IN_THEMES, Density, FALLBACK_THEME, POP_THEMES, ResolvedTokens,
-    ThemeSpec, Themes, Token, theme_label,
+    ALPHA_EXTENSION, BUILT_IN_ACCENTS, BUILT_IN_THEMES, Density, FALLBACK_THEME, POP_THEMES,
+    ResolvedTokens, ThemeSpec, Themes, Token, theme_label,
 };
 pub use value::{PX_PER_REM, Value};

@@ -1,0 +1,39 @@
+$description: "The `progress-fill` component of the default kit (docs/kit.md), layered into pop-dark."
+progress-fill:
+  $description: "A stretch of a track by tone (a kit component): a bar's fill and sections, a meter's fill, an indeterminate bar's segment. Each tone gives only what differs from rest."
+  shape:
+    $type: "string"
+    $value: "span"
+    $description: "The handler that draws it: span (rounded where it meets its track's ends)."
+  rest:
+    fill:
+      $type: "color"
+      $value: "{accent.default}"
+    radius:
+      $type: "dimension"
+      $value: "{progress-bar.rest.radius}"
+  tone:
+    accent:
+      fill:
+        $type: "color"
+        $value: "{accent.default}"
+    info:
+      fill:
+        $type: "color"
+        $value: "{info}"
+    success:
+      fill:
+        $type: "color"
+        $value: "{success}"
+    warning:
+      fill:
+        $type: "color"
+        $value: "{warning}"
+    danger:
+      fill:
+        $type: "color"
+        $value: "{danger}"
+    muted:
+      fill:
+        $type: "color"
+        $value: "{text.muted}"

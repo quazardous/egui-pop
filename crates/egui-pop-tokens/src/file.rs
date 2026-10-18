@@ -1,4 +1,4 @@
-//! Token files: the DTCG JSON tree read into a flat map of tokens by path.
+//! Token files: the DTCG tree (JSON or YAML) read into a flat map of tokens by path.
 
 use std::collections::BTreeMap;
 
@@ -61,16 +61,21 @@ impl TokenFile {
         }
     }
 
-    /// Reads a token file under the given name.
+    /// Reads a token file under the given name: JSON when its text
+    /// starts with `{`, YAML otherwise (the same tree, with comments).
     pub fn parse(name: &str, text: &str) -> Result<TokenFile, Error> {
-        let root: Json = serde_json::from_str(text).map_err(|e| Error::Json {
-            file: name.to_string(),
-            message: e.to_string(),
-        })?;
+        let root: Json = if crate::yaml::is_json(text) {
+            serde_json::from_str(text).map_err(|e| Error::Json {
+                file: name.to_string(),
+                message: e.to_string(),
+            })?
+        } else {
+            crate::yaml::parse(name, text)?
+        };
         let obj = root.as_object().ok_or_else(|| Error::Malformed {
             file: name.to_string(),
             path: String::new(),
-            reason: "the root is not a JSON object".into(),
+            reason: "the root is not a map of groups and tokens".into(),
         })?;
         let mut tokens = BTreeMap::new();
         walk(name, obj, "", None, &mut tokens)?;

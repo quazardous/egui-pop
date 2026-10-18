@@ -12,6 +12,9 @@ use std::fmt;
 pub enum Error {
     /// The file is not valid JSON.
     Json { file: String, message: String },
+    /// The file is not valid YAML, or holds a value YAML misreads (an
+    /// unquoted `#colour` or `{alias}`).
+    Yaml { file: String, message: String },
     /// The file is valid JSON but not a token file.
     Malformed {
         file: String,
@@ -41,12 +44,18 @@ pub enum Error {
         ty: String,
         reason: String,
     },
+    /// A modifier in a token's `$extensions` that cannot apply (an alpha
+    /// outside 0 to 1, or on a token that is not a colour).
+    InvalidModifier { path: String, reason: String },
     /// A token of the contract is not given by the theme.
     Missing { path: String },
     /// An override names a token the theme does not have.
     UnknownOverride { path: String },
     /// An accent names no usable colour scale.
     UnknownAccent { name: String },
+    /// A theme gives a token by a name that was renamed: its value was
+    /// moved to the new names.
+    Renamed { old: String, new: Vec<String> },
 }
 
 impl Error {
@@ -58,8 +67,10 @@ impl Error {
             | Error::MissingType { path }
             | Error::TypeMismatch { path, .. }
             | Error::InvalidValue { path, .. }
+            | Error::InvalidModifier { path, .. }
             | Error::Missing { path }
             | Error::UnknownOverride { path } => Some(path),
+            Error::Renamed { old, .. } => Some(old),
             Error::AliasCycle { chain } => chain.first().map(String::as_str),
             _ => None,
         }
@@ -70,6 +81,7 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Error::Json { file, message } => write!(f, "`{file}`: not valid JSON: {message}"),
+            Error::Yaml { file, message } => write!(f, "`{file}`: not valid YAML: {message}"),
             Error::Malformed { file, path, reason } => {
                 write!(f, "`{file}`: `{path}`: {reason}")
             }
@@ -94,10 +106,19 @@ impl fmt::Display for Error {
             Error::InvalidValue { path, ty, reason } => {
                 write!(f, "`{path}` is not a valid {ty}: {reason}")
             }
+            Error::InvalidModifier { path, reason } => write!(f, "`{path}`: {reason}"),
             Error::Missing { path } => write!(f, "`{path}` is missing"),
             Error::UnknownOverride { path } => {
                 write!(f, "override `{path}`: the theme has no such token")
             }
+            Error::Renamed { old, new } => write!(
+                f,
+                "`{old}` is now {}: the old name still works for now",
+                new.iter()
+                    .map(|n| format!("`{n}`"))
+                    .collect::<Vec<_>>()
+                    .join(" and ")
+            ),
             Error::UnknownAccent { name } => write!(
                 f,
                 "accent `{name}`: no colour scale of that name with steps 3, 5, 8, 9, 10 and `contrast`"

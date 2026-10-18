@@ -166,11 +166,18 @@ struct Slot {
 
 pub(crate) struct Resources {
     pipeline: wgpu::RenderPipeline,
+    // What an image surface (`wayland`) draws with: its hole, and on Linux
+    // the tile pipeline per surface format, built from the same shader and
+    // layout.
     /// Writes transparent black over the image, in the window's format.
+    #[cfg(feature = "wayland")]
     hole: wgpu::RenderPipeline,
+    #[cfg(all(feature = "wayland", target_os = "linux"))]
     shader: wgpu::ShaderModule,
+    #[cfg(all(feature = "wayland", target_os = "linux"))]
     layout: wgpu::PipelineLayout,
     /// The tile pipeline for each image surface format.
+    #[cfg(all(feature = "wayland", target_os = "linux"))]
     image_pipelines: HashMap<wgpu::TextureFormat, wgpu::RenderPipeline>,
     uniform_layout: wgpu::BindGroupLayout,
     texture_layout: wgpu::BindGroupLayout,
@@ -399,10 +406,12 @@ pub fn install_for_surface(
         ..Default::default()
     });
     let pipeline = render_pipeline(device, &shader, &layout, ["vs", "fs"], rs.target_format);
+    #[cfg(feature = "wayland")]
     let empty = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("egui-pop-viewport.hole"),
         ..Default::default()
     });
+    #[cfg(feature = "wayland")]
     let hole = render_pipeline(
         device,
         &shader,
@@ -416,9 +425,13 @@ pub fn install_for_surface(
     let target_is_srgb = rs.target_format.is_srgb();
     rs.renderer.write().callback_resources.insert(Resources {
         pipeline,
+        #[cfg(feature = "wayland")]
         hole,
+        #[cfg(all(feature = "wayland", target_os = "linux"))]
         shader,
+        #[cfg(all(feature = "wayland", target_os = "linux"))]
         layout,
+        #[cfg(all(feature = "wayland", target_os = "linux"))]
         image_pipelines: HashMap::new(),
         uniform_layout,
         texture_layout,
@@ -496,6 +509,7 @@ impl Resources {
     }
 
     /// The tile pipeline for an image surface's format.
+    #[cfg(all(feature = "wayland", target_os = "linux"))]
     pub(crate) fn image_pipeline(
         &mut self,
         device: &wgpu::Device,
@@ -508,6 +522,7 @@ impl Resources {
     }
 
     /// Draws the hole an image surface below the window shows through.
+    #[cfg(feature = "wayland")]
     pub(crate) fn draw_hole(&self, pass: &mut wgpu::RenderPass<'_>, screen: [u32; 2]) {
         pass.set_viewport(0.0, 0.0, screen[0] as f32, screen[1] as f32, 0.0, 1.0);
         pass.set_pipeline(&self.hole);

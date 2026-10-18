@@ -1,0 +1,25 @@
+$description: "The `job-log` component of the default kit (docs/kit.md), layered into pop-dark."
+job-log:
+  $description: "A job's log console, as plain lines (a kit component)."
+  shape:
+    $type: "string"
+    $value: "card"
+  padding-x:
+    $type: "dimension"
+    $value: "{space.s}"
+  padding-y:
+    $type: "dimension"
+    $value: "{space.s}"
+  rest:
+    fill:
+      $type: "color"
+      $value: "{surface.sunken}"
+    border-color:
+      $type: "color"
+      $value: "{border.default}"
+    border-width:
+      $type: "dimension"
+      $value: {value: 0, unit: "px"}
+    radius:
+      $type: "dimension"
+      $value: "{radius.widget}"

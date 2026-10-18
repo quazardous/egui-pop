@@ -232,14 +232,16 @@ impl<'a> ListView<'a> {
                     let r = ui.interact(rect, id.with(("row", &key)), rows::ROW_SENSE);
                     let selected = selection.contains(&key);
                     let cursor = focused && selection.cursor() == Some(&key);
-                    rows::paint(ui, rect, selected, r.hovered(), cursor);
+                    let state = rows::state(selected, r.hovered(), cursor);
+                    rows::paint(ui, &visible.kit.list_row, rect, state);
                     let mut child = ui.new_child(
                         UiBuilder::new()
                             .max_rect(rect.shrink2(egui::vec2(ui.spacing().item_spacing.x, 0.0)))
                             .layout(egui::Layout::left_to_right(egui::Align::Center)),
                     );
                     if selected {
-                        child.visuals_mut().override_text_color = Some(rows::text_color(ui, true));
+                        child.visuals_mut().override_text_color =
+                            Some(rows::text_color(&visible.kit.list_row, state));
                     }
                     rows.ui(&mut child, i, selected);
                     let name = rows.label(i);

@@ -21,7 +21,9 @@
 //! widget strokes, `border.*` outlines and separators, `focus.ring` the
 //! stroke of a focused or pressed widget, `selection` the fill behind
 //! selected text and items, `space.*` and `size.*` the spacing,
-//! `font.size.*` the text styles and `motion.duration` the animation time.
+//! `font.text-style.*` (steps of the `font.size.*` scale) egui's text
+//! styles, `shadow.window` and `shadow.popup` egui's window and popup
+//! shadows, and `motion.duration` the animation time.
 //!
 //! egui uses one colour (`selection.stroke`) for both the text of a
 //! selected label and the frame of a focused text field: egui-pop gives it
@@ -30,8 +32,9 @@
 //! fill with the selection fill; the `slider.*` tokens are for egui-pop's
 //! own slider.
 //!
-//! Font families (`font.family.*`) are not applied yet: egui's bundled
-//! fonts stay until fonts are loaded from themes.
+//! Font families (`font.family.*`) become egui's fonts at several weights
+//! (`fonts`): faces the application registers, the system's (feature
+//! `system-fonts`), then egui's bundled fonts.
 //!
 //! # Never per widget
 //!
@@ -44,9 +47,11 @@
 use std::sync::Arc;
 
 use egui::{
-    Color32, Context, CornerRadius, Id, Margin, Stroke, Style, TextStyle, ThemePreference, Visuals,
-    style::ScrollAnimation,
+    Color32, Context, CornerRadius, Id, Margin, Shadow, Stroke, Style, TextStyle, ThemePreference,
+    Visuals, style::ScrollAnimation,
 };
+
+use crate::kit::{Kit, Shapes, State};
 pub use egui_pop_tokens::{
     BUILT_IN_ACCENTS, BUILT_IN_THEMES, Density, FALLBACK_THEME, POP_THEMES, ResolvedTokens,
     ThemeSpec, Themes, theme_label,
@@ -137,16 +142,46 @@ pub struct Size {
     pub toast_width: f32,
 }
 
-/// Font sizes in points and families, the first preferred.
+/// Font sizes in points and families, the first preferred. `small`,
+/// `body`, `button`, `heading` and `mono` are egui's text styles
+/// (`font.text-style.*`), each a step of the `scale` (`font.size.*`).
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub struct Font {
     pub small: f32,
     pub body: f32,
+    pub button: f32,
     pub heading: f32,
     pub mono: f32,
+    /// The size scale, `xs` to `xl` (`fonts::Step`).
+    pub scale: FontScale,
     pub family_ui: Vec<String>,
     pub family_mono: Vec<String>,
+}
+
+/// The size scale's five steps, in points (`font.size.xs` to `xl`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct FontScale {
+    pub xs: f32,
+    pub s: f32,
+    pub m: f32,
+    pub l: f32,
+    pub xl: f32,
+}
+
+impl FontScale {
+    /// A step's size in points.
+    pub fn get(&self, step: crate::fonts::Step) -> f32 {
+        use crate::fonts::Step;
+        match step {
+            Step::Xs => self.xs,
+            Step::S => self.s,
+            Step::M => self.m,
+            Step::L => self.l,
+            Step::Xl => self.xl,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -163,12 +198,16 @@ pub struct ButtonTokens {
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub struct SliderTokens {
+    /// `slider.rest.fill`.
     pub track: Color32,
+    /// `slider-fill.rest.fill`.
     pub fill: Color32,
+    /// `slider-thumb.rest.fill`.
     pub thumb: Color32,
 }
 
-/// `field.*`: input fields and the states every field shows.
+/// The kit's `field` component, read as plain colours: input fields and
+/// the states every field shows (its tones).
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub struct FieldTokens {
@@ -248,6 +287,37 @@ pub struct MotionTokens {
     pub skeleton_shimmer: f32,
 }
 
+/// Shadows under what lies over the interface (`shadow.*`), as egui's.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct ShadowTokens {
+    /// Menus, popovers, tooltips (egui's `popup_shadow`).
+    pub popup: Shadow,
+    /// Dialogs and palettes (egui's `window_shadow`).
+    pub window: Shadow,
+    /// A side area lying over the centre, its `offset` towards the
+    /// centre as for the start side.
+    pub side: Shadow,
+}
+
+/// The shadow a group of tokens gives (`<prefix>offset-x`, `offset-y`,
+/// `blur`, `spread` and `color`; `shadow.window.` or a component's
+/// `side-area.shadow-`), as egui's [`Shadow`], rounded to its whole
+/// points; `None` when the colour is missing. egui's spread cannot be
+/// negative: below 0 it is 0.
+pub fn shadow(r: &ResolvedTokens, prefix: &str) -> Option<Shadow> {
+    let color = r.color(&format!("{prefix}color"))?;
+    let d = |t: &str| r.dimension(&format!("{prefix}{t}")).unwrap_or(0.0);
+    let offset = |v: f32| v.round().clamp(-128.0, 127.0) as i8;
+    let size = |v: f32| v.round().clamp(0.0, 255.0) as u8;
+    Some(Shadow {
+        offset: [offset(d("offset-x")), offset(d("offset-y"))],
+        blur: size(d("blur")),
+        spread: size(d("spread")),
+        color: color32(color),
+    })
+}
+
 /// A window's own title bar and frame.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
@@ -281,6 +351,7 @@ pub struct Tokens {
     pub space: Space,
     pub size: Size,
     pub font: Font,
+    pub shadow: ShadowTokens,
     /// `motion.duration` in seconds; zero when motion is reduced.
     pub motion_duration: f32,
     /// The other times of motion.
@@ -369,12 +440,28 @@ impl Tokens {
                 toast_width: d("size.toast.width"),
             },
             font: Font {
-                small: d("font.size.small"),
-                body: d("font.size.body"),
-                heading: d("font.size.heading"),
-                mono: d("font.size.mono"),
+                small: d("font.text-style.small"),
+                body: d("font.text-style.body"),
+                button: d("font.text-style.button"),
+                heading: d("font.text-style.heading"),
+                mono: d("font.text-style.monospace"),
+                scale: FontScale {
+                    xs: d("font.size.xs"),
+                    s: d("font.size.s"),
+                    m: d("font.size.m"),
+                    l: d("font.size.l"),
+                    xl: d("font.size.xl"),
+                },
                 family_ui: f("font.family.ui"),
                 family_mono: f("font.family.mono"),
+            },
+            shadow: {
+                let sh = |g: &str| shadow(r, &format!("shadow.{g}.")).unwrap_or(Shadow::NONE);
+                ShadowTokens {
+                    popup: sh("popup"),
+                    window: sh("window"),
+                    side: sh("side"),
+                }
             },
             motion_duration: r.duration_ms("motion.duration").unwrap_or(0.0).max(0.0) / 1000.0,
             motion: {
@@ -388,70 +475,70 @@ impl Tokens {
                 }
             },
             button: ButtonTokens {
-                background: c("button.background"),
-                background_hover: c("button.background-hover"),
-                background_active: c("button.background-active"),
-                text: c("button.text"),
-                border: c("button.border"),
-                radius: d("button.radius"),
+                background: c("button.rest.fill"),
+                background_hover: c("button.hover.fill"),
+                background_active: c("button.active.fill"),
+                text: c("button.rest.text"),
+                border: c("button.rest.border-color"),
+                radius: d("button.rest.radius"),
             },
             slider: SliderTokens {
-                track: c("slider.track"),
-                fill: c("slider.fill"),
-                thumb: c("slider.thumb"),
+                track: c("slider.rest.fill"),
+                fill: c("slider-fill.rest.fill"),
+                thumb: c("slider-thumb.rest.fill"),
             },
             field: FieldTokens {
-                background: c("field.background"),
-                background_read_only: c("field.background-read-only"),
-                text: c("field.text"),
-                placeholder: c("field.placeholder"),
-                border: c("field.border"),
-                border_hover: c("field.border-hover"),
-                modified: c("field.modified"),
-                required: c("field.required"),
-                invalid: c("field.invalid"),
-                pending: c("field.pending"),
+                background: c("field.rest.fill"),
+                background_read_only: c("field.tone.muted.fill"),
+                text: c("field.rest.text"),
+                placeholder: c("field.tone.muted.text"),
+                border: c("field.rest.border-color"),
+                border_hover: c("field.hover.border-color"),
+                modified: c("field.tone.accent.border-color"),
+                required: c("field.tone.warning.border-color"),
+                invalid: c("field.tone.danger.border-color"),
+                pending: c("field.tone.info.border-color"),
             },
             menu_item: MenuItemTokens {
-                background_hover: c("menu.item.background-hover"),
-                text: c("menu.item.text"),
-                text_muted: c("menu.item.text-muted"),
+                background_hover: c("menu-item.hover.fill"),
+                text: c("menu-item.rest.text"),
+                text_muted: c("menu-item.tone.muted.text"),
             },
             dialog: DialogTokens {
-                background: c("dialog.background"),
-                border: c("dialog.border"),
-                radius: d("dialog.radius"),
-                padding: d("dialog.padding"),
+                background: c("dialog.rest.fill"),
+                border: c("dialog.rest.border-color"),
+                radius: d("dialog.rest.radius"),
+                padding: d("dialog.padding-x"),
                 width: d("dialog.width"),
-                header: c("dialog.header"),
-                header_text: c("dialog.header-text"),
-                backdrop: d("dialog.backdrop").clamp(0.0, 1.0),
+                header: c("header-band.rest.fill"),
+                header_text: c("dialog-header.rest.text"),
+                backdrop: d("backdrop.opacity").clamp(0.0, 1.0),
             },
             toast: ToastTokens {
-                background: c("toast.background"),
-                border: c("toast.border"),
-                text: c("toast.text"),
-                padding: d("toast.padding"),
+                background: c("toast.rest.fill"),
+                border: c("toast.rest.border-color"),
+                text: c("toast.rest.text"),
+                padding: d("toast.padding-x"),
                 width: d("toast.width"),
             },
             palette: PaletteTokens {
-                background: c("palette.background"),
-                border: c("palette.border"),
-                header: c("palette.header"),
-                header_text: c("palette.header-text"),
-                padding: d("palette.padding"),
+                background: c("palette-window.rest.fill"),
+                border: c("palette-window.rest.border-color"),
+                header: c("header-band.rest.fill"),
+                header_text: c("header-band.rest.text"),
+                padding: d("palette-window.padding-x"),
                 magnet: d("palette.magnet"),
             },
             titlebar: TitlebarTokens {
-                background: c("titlebar.background"),
-                text: c("titlebar.text"),
-                text_muted: c("titlebar.text-muted"),
-                button_hover: c("titlebar.button-hover"),
-                close_hover: c("titlebar.close-hover"),
-                close_text: c("titlebar.close-text"),
-                height: d("titlebar.height"),
-                button_width: d("titlebar.button-width"),
-                grip: d("titlebar.grip"),
+                background: c("title-bar.rest.fill"),
+                text: c("title-bar.rest.text"),
+                text_muted: c("window-button.rest.text"),
+                button_hover: c("window-button.hover.fill"),
+                close_hover: c("window-close.hover.fill"),
+                close_text: c("window-close.hover.text"),
+                height: d("title-bar.height"),
+                button_width: d("window-button.width"),
+                grip: d("window.grip"),
             },
             resolved: Arc::new(resolved),
         }
@@ -500,6 +587,14 @@ fn margin(points: f32) -> Margin {
 
 /// egui's visuals for a theme.
 pub fn visuals(t: &Tokens) -> Visuals {
+    visuals_with(t, &Kit::compile(t, &Shapes::default()))
+}
+
+/// egui's visuals for a theme and its compiled kit: egui's widget states
+/// come from the kit's `button` (rest, hover, active, and selected for
+/// an open menu), text fields' background from its `field`. What egui
+/// cannot draw is in the kit's problems (`Kit::compile`).
+pub fn visuals_with(t: &Tokens, kit: &Kit) -> Visuals {
     let mut v = if t.dark_mode() {
         Visuals::dark()
     } else {
@@ -508,10 +603,12 @@ pub fn visuals(t: &Tokens) -> Visuals {
     v.panel_fill = t.surface.panel;
     v.window_fill = t.surface.overlay;
     v.extreme_bg_color = t.surface.sunken;
-    v.text_edit_bg_color = Some(t.surface.sunken);
+    v.text_edit_bg_color = Some(kit.field.style(State::REST).fill);
     v.faint_bg_color = t.surface.raised;
     v.code_bg_color = t.surface.raised;
     v.window_stroke = Stroke::new(1.0, t.border.default);
+    v.window_shadow = t.shadow.window;
+    v.popup_shadow = t.shadow.popup;
     v.window_corner_radius = radius(t.radius.window);
     v.menu_corner_radius = radius(t.radius.window);
     v.hyperlink_color = t.accent.default;
@@ -523,46 +620,25 @@ pub fn visuals(t: &Tokens) -> Visuals {
     v.text_cursor.stroke = Stroke::new(2.0, t.text.strong);
     v.text_cursor.blink = t.motion_duration > 0.0;
 
-    let b = &t.button;
     let w = &mut v.widgets;
+    let rest = kit.button.style(State::REST);
     w.noninteractive.bg_fill = t.surface.panel;
     w.noninteractive.weak_bg_fill = t.surface.panel;
-    w.noninteractive.bg_stroke = Stroke::new(1.0, t.border.default);
+    w.noninteractive.bg_stroke = Stroke::new(rest.border_width, t.border.default);
     w.noninteractive.fg_stroke = Stroke::new(1.0, t.text.default);
-    for (state, fill, border, text) in [
-        (&mut w.inactive, b.background, b.border, b.text),
-        (
-            &mut w.hovered,
-            b.background_hover,
-            t.border.strong,
-            t.text.strong,
-        ),
-        (
-            &mut w.active,
-            b.background_active,
-            t.focus_ring,
-            t.text.strong,
-        ),
-        (
-            &mut w.open,
-            b.background_hover,
-            t.border.default,
-            t.text.default,
-        ),
+    w.noninteractive.corner_radius = radius(rest.radius);
+    for (widget, state) in [
+        (&mut w.inactive, State::REST),
+        (&mut w.hovered, State::HOVER),
+        (&mut w.active, State::ACTIVE),
+        (&mut w.open, State::SELECTED),
     ] {
-        state.bg_fill = fill;
-        state.weak_bg_fill = fill;
-        state.bg_stroke = Stroke::new(1.0, border);
-        state.fg_stroke = Stroke::new(1.0, text);
-    }
-    for state in [
-        &mut w.noninteractive,
-        &mut w.inactive,
-        &mut w.hovered,
-        &mut w.active,
-        &mut w.open,
-    ] {
-        state.corner_radius = radius(b.radius);
+        let b = kit.button.style(state);
+        widget.bg_fill = b.fill;
+        widget.weak_bg_fill = b.fill;
+        widget.bg_stroke = Stroke::new(b.border_width, b.border_color);
+        widget.fg_stroke = Stroke::new(1.0, b.text);
+        widget.corner_radius = radius(b.radius);
     }
     v
 }
@@ -570,12 +646,17 @@ pub fn visuals(t: &Tokens) -> Visuals {
 /// egui's style for a theme, built over `base` (whose settings the theme
 /// does not decide are kept).
 pub fn style(t: &Tokens, base: &Style) -> Style {
+    style_with(t, &Kit::compile(t, &Shapes::default()), base)
+}
+
+/// [`style`] with a compiled kit (the one installed with the theme).
+pub fn style_with(t: &Tokens, kit: &Kit, base: &Style) -> Style {
     let mut style = base.clone();
-    style.visuals = visuals(t);
+    style.visuals = visuals_with(t, kit);
     for (text_style, size) in [
         (TextStyle::Small, t.font.small),
         (TextStyle::Body, t.font.body),
-        (TextStyle::Button, t.font.body),
+        (TextStyle::Button, t.font.button),
         (TextStyle::Heading, t.font.heading),
         (TextStyle::Monospace, t.font.mono),
     ] {
@@ -637,13 +718,16 @@ pub fn install_tokens(ctx: &Context, tokens: Tokens) -> Arc<Tokens> {
     } else {
         ThemePreference::Light
     });
+    // The kit first: egui's style is drawn from it.
+    let kit = crate::kit::install(ctx, &tokens);
     let ppp = ctx.pixels_per_point();
     ctx.all_styles_mut(|s| {
-        *s = style(&tokens, s);
+        *s = style_with(&tokens, &kit, s);
         snap_strokes(s, ppp);
     });
     ctx.data_mut(|d| d.insert_temp(tokens_id(), tokens.clone()));
-    crate::icon::install(ctx);
+    crate::fonts::install(ctx, &tokens.font.family_ui, &tokens.font.family_mono);
+    crate::icon_set::install(ctx, &tokens);
     tokens
 }
 

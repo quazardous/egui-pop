@@ -1,7 +1,7 @@
 # Design tokens
 
-egui-pop's look comes from design tokens: named, typed values in JSON files
-in the format of the W3C Design Tokens Community Group (DTCG 2025.10). No
+egui-pop's look comes from design tokens: named, typed values in YAML files
+(JSON is read too) in the format of the W3C Design Tokens Community Group (DTCG 2025.10). No
 widget hard-codes a colour or a size; it reads a token.
 
 The files live in [`crates/egui-pop-tokens/themes`](../crates/egui-pop-tokens/themes).
@@ -10,20 +10,20 @@ The files live in [`crates/egui-pop-tokens/themes`](../crates/egui-pop-tokens/th
 
 ## The format, as read here
 
-```json
-{
-  "$description": "A theme",
-  "$extends": "pop-dark",
-  "gray": {
-    "$type": "color",
-    "2": { "$value": { "colorSpace": "oklch", "components": [0.215, 0.006, 75], "hex": "#1b1916" } }
-  },
-  "surface": {
-    "$type": "color",
-    "panel": { "$value": "{gray.2}", "$description": "Panels and side bars." }
-  },
-  "radius": { "widget": { "$type": "dimension", "$value": { "value": 4, "unit": "px" } } }
-}
+```yaml
+$description: "A theme"
+$extends: "pop-dark"
+gray:
+  $type: "color"
+  "2":
+    $value: {colorSpace: "oklch", components: [0.215, 0.006, 75], hex: "#1b1916"}
+surface:
+  $type: "color"
+  panel:
+    $value: "{gray.2}"
+    $description: "Panels and side bars."
+radius:
+  widget: {$type: "dimension", $value: {value: 4, unit: "px"}}
 ```
 
 - A **token** is an object with `$value`; anything else not starting with
@@ -44,6 +44,33 @@ The files live in [`crates/egui-pop-tokens/themes`](../crates/egui-pop-tokens/th
 
 Not read yet: references inside composite values, JSON Pointer `$ref`,
 `$deprecated`, group-level `$extends`.
+
+### A colour at another opacity
+
+DTCG has no way to say "this colour, translucent". egui-pop reads one
+modifier, in the spirit of Tokens Studio's `modify`, kept under
+`$extensions` so the file stays plain DTCG (another tool reads the
+alias and ignores the modifier):
+
+```yaml
+pill:
+  rest:
+    fill:
+      $type: "color"
+      $value: "{surface.overlay}"
+      # the overlay at 85 %: its alpha multiplied by 0.85
+      $extensions: {org.egui-pop.alpha: 0.85}
+```
+
+`org.egui-pop.alpha` (`egui_pop_tokens::ALPHA_EXTENSION`) is a number
+from 0 to 1 the colour's alpha is multiplied by, once its alias is
+followed. A token aliasing a modified token gets the modified colour,
+and its own modifier multiplies again. A value outside 0 to 1, or a
+modifier on a token that is not a colour, is a reported problem, and the
+token is treated as broken. The modifier belongs to the value it is
+written with: a theme giving the token again, an override and the theme
+editor's export replace both, and `to_dtcg` writes the resulting colour
+without it.
 
 ## Three tiers
 
@@ -74,26 +101,32 @@ Not read yet: references inside composite values, JSON Pointer `$ref`,
    (Catppuccin's mauve) and use it as their accent.
 
 2. **System**: roles, what a value is for. These are the tokens widgets
-   read, listed in `CONTRACT`:
+   read, listed in `contract()`:
    `surface.{canvas, panel, raised, hover, active, overlay, sunken}`,
    `text.{default, muted, strong, on-accent}`, `border.{default, strong}`,
    `accent.{default, hover, active, subtle}`, `danger`, `warning`,
    `success`, `info`, `focus.ring`, `selection`, `radius.{widget, window}`,
+   `shadow.{popup, window, side}.{offset-x, offset-y, blur, spread, color}`
+   (egui's popup and window shadows, and a side area lying over the
+   centre; their colours alias the `shade.10` and `shade.38` palette
+   tokens, black at 10 % and 38 %),
    `space.{xs, s, m, l, xl}`, `size.control.height`,
    `size.icon.{inline, toolbar, panel}`, `size.dialog.width`, `size.magnet`,
-   `size.toast.width`, `font.size.{small, body, heading, mono}`,
+   `size.toast.width`, `font.size.{xs, s, m, l, xl}` (the size scale)
+   and `font.text-style.{small, body, button, heading, monospace}`
+   (egui's text styles, each an alias of a step),
    `font.family.{ui, mono}`, `motion.duration`,
    `motion.spinner.{delay, min, turn}` (300 ms before a busy indicator
    shows, 500 ms at least once shown, a spinner's turn),
    `motion.progress.travel`, `motion.skeleton.shimmer`, `opacity.scrim`.
 
 3. **Component**: one component's tokens, each an alias of a system token:
-   `button.*`, `slider.{track, fill, thumb}`,
+   `button.*`, the sliders' (`slider.*`, `slider-fill.*`...),
    `field.*` (input fields: their fill, read-only fill, text,
    placeholder and borders, and the colour of each field state:
    `modified`, `required`, `invalid`, `pending`),
    `progress.{track, fill, height, line, ring}` (bars, rings, meters and
-   spinners), `skeleton.{fill, shimmer}`, `menu.item.*`, `dialog.*`, `palette.*`,
+   spinners), `skeleton.*` and `skeleton-shimmer.*`, `dialog.*`, `palette.*`,
    `toast.*`, `editor.*` and `syntax.*` (one colour per kind of code:
    keywords on the accent, strings on `success`, numbers on `warning`,
    comments muted...), `terminal.*` (its text, cursor, selection, links,
@@ -101,7 +134,10 @@ Not read yet: references inside composite values, JSON Pointer `$ref`,
    ask for by number: 0 is the colour furthest from the text, 7 the
    text's own, 1 to 6 the status roles and the accent, 8 to 15 their
    stronger forms). A theme may re-alias a component token (high contrast
-   outlines every button: `button.border` is `{border.strong}`).
+   outlines every button and field: `button.rest.border-color` and
+   `field.rest.border-color` are `{border.strong}`). A component's text
+   size aliases a step of the size scale (`"{font.size.l}"`), never a
+   number of its own.
 
 ## Naming rules
 
@@ -110,7 +146,7 @@ Not read yet: references inside composite values, JSON Pointer `$ref`,
 - Path segments are lowercase, words joined by hyphens:
   `background-hover`, `on-accent`. Dots separate groups, so a segment never
   contains `.`, `{` or `}`.
-- States are suffixes of the thing they modify (`button.background-hover`),
+- States are suffixes of the thing they modify (`button.hover.fill`, the kit's grid: `docs/kit.md`),
   sizes are `xs`, `s`, `m`, `l`, `xl`.
 - A component token points at a system token, a system token at the
   palette or another role, never the other way round (a test checks it).
@@ -159,7 +195,7 @@ A theme is resolved from a `ThemeSpec`, in this order:
 3. an **accent**: a colour scale whose steps become `accent.default` (9),
    `accent.hover` (10), `accent.active` (8), `accent.subtle` (3),
    `selection` (5) and `text.on-accent` (`contrast`); anything aliasing
-   the accent (`focus.ring`, `slider.fill`) follows;
+   the accent (`focus.ring`, `slider-fill.rest.fill`) follows;
 4. **reduced motion**: `motion.duration` becomes 0 (egui's animation time,
    cursor blink and scroll animation follow);
 5. the user's **overrides**, raw values by path (aliases allowed).
@@ -178,7 +214,7 @@ let tokens = Themes::default().resolve(&spec);
 
 Resolving never panics. Problems (an unknown theme, an `$extends` cycle,
 an alias cycle, an unknown alias, a wrong type, an unreadable value, a
-missing contract token, an unknown override or accent) are listed in
+modifier that cannot apply, a missing contract token, an unknown override or accent) are listed in
 `tokens.problems()`, and every contract token with a problem takes the
 built-in `pop-dark` value.
 
@@ -194,18 +230,60 @@ contrast; and every accent in every theme at 4.5:1 and 3:1. Decorative
 borders (`border.default`) are not checked. The gallery's overview page
 shows the same table live.
 
+## YAML or JSON
+
+A token file is the DTCG tree, written in YAML (`.tokens.yaml`, the
+shipped files) or in JSON (`.tokens.json`): `TokenFile::parse` reads JSON
+when the text starts with `{`, YAML otherwise, into the same tree. The
+shipped files are compiled to JSON when egui-pop is built
+(`egui-pop-tokens/build.rs`): reading YAML costs about seven times
+JSON's, and the built-in themes load at every start (24 ms in YAML, 3 ms
+in JSON, release build). A trap below in a shipped file fails the build,
+with its file and line. YAML
+is there for comments. JSON stays the exchange format: what egui-pop
+writes (the theme editor's export, `to_dtcg`) is DTCG JSON, which other
+token tools read.
+
+In YAML, **every string is quoted**, colours and aliases first. Left
+bare, YAML reads them as something else, and a parser would take them
+silently, so egui-pop refuses them, with the line:
+
+| Written | YAML reads | Write |
+|---|---|---|
+| `$value: #0a0a0a` | a comment: the value is lost | `$value: "#0a0a0a"` |
+| `$value: {surface.panel}` | a map with one key | `$value: "{surface.panel}"` |
+
+(The same rule as every YAML colour format, Asciidoctor's themes or
+DESIGN.md's tokens among them.) Numbers stay bare
+(`$value: {value: 1, unit: "px"}`), and DTCG's colour objects need no
+quotes but their strings':
+
+```yaml
+accent:
+  default:
+    $type: "color"
+    # gold, kept in OKLCH so the light theme can derive its shades
+    $value: {colorSpace: "oklch", components: [0.832, 0.126, 83], hex: "#f0c060"}
+```
+
+A colour is `"#rgb"`, `"#rrggbb"`, `"#rrggbbaa"`, or a DTCG object
+(`colorSpace` `srgb`, `srgb-linear`, `oklch` or `oklab`; another space
+is read from its `hex` fallback).
+
 ## Adding a theme
 
-1. Write `my-theme.tokens.json`. The shortest way is to extend a built-in
+1. Write `my-theme.tokens.yaml`. The shortest way is to extend a built-in
    theme and change what differs:
 
-   ```json
-   {
-     "$extends": "pop-dark",
-     "$description": "Cooler greys",
-     "gray": { "$type": "color", "2": { "$value": "#171a1f" } },
-     "surface": { "$type": "color", "canvas": { "$value": "#000000" } }
-   }
+   ```yaml
+   $extends: "pop-dark"
+   $description: "Cooler greys"
+   gray:
+     $type: "color"
+     "2": {$value: "#171a1f"}   # a key that is a number is quoted too
+   surface:
+     $type: "color"
+     canvas: {$value: "#000000"}
    ```
 
    A theme may also stand alone (no `$extends`): it must then give every
@@ -215,7 +293,7 @@ shows the same table live.
 
    ```rust
    let mut themes = egui_pop::tokens::Themes::default();
-   themes.add_json("my-theme", include_str!("my-theme.tokens.json"))?;
+   themes.add_text("my-theme", include_str!("my-theme.tokens.yaml"))?;
    let tokens = egui_pop::theme::install_with(ctx, &themes, &ThemeSpec::new("my-theme"));
    assert!(tokens.resolved().problems().is_empty());
    ```
@@ -225,7 +303,10 @@ shows the same table live.
 
 For a new **built-in** theme: add the file under `themes/`, list it in
 `BUILT_IN_FILES` and `BUILT_IN_THEMES`, and the contrast and contract tests
-cover it at once. Add its snapshots to the gallery tests
+cover it at once. The default kit's component tokens are not in
+`pop-dark.tokens.yaml`: they live in `themes/kit/<component>.tokens.yaml`
+and are layered into `pop-dark` at load (`docs/kit.md`). Add its
+snapshots to the gallery tests
 (`UPDATE_SNAPSHOTS=1 cargo test -p egui-pop-gallery`).
 
 ## Into egui

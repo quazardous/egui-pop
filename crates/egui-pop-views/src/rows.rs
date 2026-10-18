@@ -4,10 +4,8 @@
 
 use std::ops::Range;
 
-use egui::{
-    EventFilter, Id, Rect, Response, ScrollArea, Sense, Stroke, StrokeKind, Ui, pos2, vec2,
-};
-use egui_pop_core::theme::Tokens;
+use egui::{EventFilter, Id, Rect, Response, ScrollArea, Sense, Ui, pos2, vec2};
+use egui_pop_core::kit::{Component, Kit, KitCx, Part, State};
 
 use crate::nav;
 
@@ -22,10 +20,12 @@ pub(crate) struct Scroll {
     pub to: Option<f32>,
 }
 
-/// The rows in view, with the rectangle of each.
+/// The rows in view, with the rectangle of each, and the kit they are
+/// painted with (fetched once per view and pass).
 pub(crate) struct Visible<'a> {
     pub range: Range<usize>,
     pub rect_of: &'a dyn Fn(usize) -> Rect,
+    pub kit: &'a Kit,
 }
 
 /// Draws `count` rows `row_h` high, building only those in view; the
@@ -58,6 +58,7 @@ pub(crate) fn show<R>(
     {
         area = area.vertical_scroll_offset(o.max(0.0));
     }
+    let kit = Kit::of(ui.ctx());
     let out = area.show_viewport(ui, |ui, viewport| {
         let origin = ui.max_rect().min;
         let width = ui.available_width();
@@ -75,6 +76,7 @@ pub(crate) fn show<R>(
             Visible {
                 range: first..last,
                 rect_of: &rect_of,
+                kit: &kit,
             },
         )
     });
@@ -93,13 +95,8 @@ pub(crate) fn show<R>(
                 },
             )
         });
-        ui.painter().rect_stroke(
-            out.inner_rect,
-            0.0,
-            Stroke::new(1.0, Tokens::of(ui.ctx()).focus_ring),
-            StrokeKind::Inside,
-        );
     }
+    paint_view(ui, &kit, out.inner_rect, response.has_focus());
     (out.inner, response, out.inner_rect)
 }
 
@@ -110,33 +107,52 @@ pub(crate) fn page(scroll: &Scroll, row_h: f32) -> usize {
         .max(1)
 }
 
-/// Paints a row's background: selected, under the pointer, the cursor
-/// of a focused view.
-pub(crate) fn paint(ui: &Ui, rect: Rect, selected: bool, hovered: bool, cursor: bool) {
-    let v = ui.visuals();
-    let painter = ui.painter();
-    if selected {
-        painter.rect_filled(rect, 0.0, v.selection.bg_fill);
-    } else if hovered {
-        painter.rect_filled(rect, 0.0, v.widgets.hovered.weak_bg_fill);
-    }
-    if cursor {
-        painter.rect_stroke(
-            rect.shrink(1.0),
-            0.0,
-            Stroke::new(1.0, Tokens::of(ui.ctx()).focus_ring),
-            StrokeKind::Inside,
-        );
-    }
+/// Paints a data view's own box (`list-view`) over its rows: its
+/// outline while it has the focus.
+pub(crate) fn paint_view(ui: &Ui, kit: &Kit, rect: Rect, focused: bool) {
+    kit.list_view.paint(
+        &KitCx {
+            painter: ui.painter(),
+            ppp: ui.ctx().pixels_per_point(),
+        },
+        &Part {
+            rect,
+            room: rect,
+            state: State::REST.with(State::FOCUS, focused),
+            label: None,
+        },
+    );
+}
+
+/// A row's state: selected, under the pointer, the cursor of a focused
+/// view (`focus`). A selected row is not hovered: the selection's fill
+/// stays under the pointer.
+pub(crate) fn state(selected: bool, hovered: bool, cursor: bool) -> State {
+    State::REST
+        .with(State::SELECTED, selected)
+        .with(State::HOVER, hovered && !selected)
+        .with(State::FOCUS, cursor)
+}
+
+/// Paints a row's box (`list-row`), under its content.
+pub(crate) fn paint(ui: &Ui, row: &Component, rect: Rect, state: State) {
+    row.paint(
+        &KitCx {
+            painter: ui.painter(),
+            ppp: ui.ctx().pixels_per_point(),
+        },
+        &Part {
+            rect,
+            room: rect,
+            state,
+            label: None,
+        },
+    );
 }
 
 /// The colour of a row's text.
-pub(crate) fn text_color(ui: &Ui, selected: bool) -> egui::Color32 {
-    if selected {
-        ui.visuals().selection.stroke.color
-    } else {
-        ui.visuals().text_color()
-    }
+pub(crate) fn text_color(row: &Component, state: State) -> egui::Color32 {
+    row.style(state).text
 }
 
 /// A row's height: the theme's interactive height.

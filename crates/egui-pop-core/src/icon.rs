@@ -27,6 +27,7 @@ use egui::{
     Stroke, StrokeKind, Ui, Widget, WidgetInfo, WidgetType, pos2, vec2,
 };
 
+use crate::kit::{KitCx, Part, State};
 use crate::theme::Tokens;
 
 /// The family the icon font is installed under (`phosphor` feature).
@@ -95,6 +96,25 @@ pub enum Icon {
     Unlock,
     /// An eyedropper: pick a value or a colour from the image.
     Picker,
+    /// A filled triangle pointing to the end: a closed branch (always
+    /// painted, like the dot).
+    TriangleRight,
+    /// A filled triangle pointing down: an open branch, a descending sort.
+    TriangleDown,
+    /// A filled triangle pointing up: an ascending sort.
+    TriangleUp,
+    /// Two dots one above the other: something to grab or to open (a
+    /// folded area's strip); always painted.
+    Grip,
+    /// A window's buttons, drawn by the application: a line, a square,
+    /// two squares, a cross, on the pixel grid; always painted.
+    WindowMinimize,
+    WindowMaximize,
+    WindowRestore,
+    WindowClose,
+    /// An icon the application registered (`icon_set::register`): an SVG
+    /// file, drawn from textures made when the theme is installed.
+    Custom(crate::icon_set::CustomIcon),
 }
 
 impl Icon {
@@ -142,11 +162,24 @@ impl Icon {
         Icon::Lock,
         Icon::Unlock,
         Icon::Picker,
+        Icon::TriangleRight,
+        Icon::TriangleDown,
+        Icon::TriangleUp,
+        Icon::Grip,
+        Icon::WindowMinimize,
+        Icon::WindowMaximize,
+        Icon::WindowRestore,
+        Icon::WindowClose,
     ];
 
-    /// The icon of a name (`settings`), as [`Icon::name`] gives it.
+    /// The icon of a name (`settings`), as [`Icon::name`] gives it:
+    /// egui-pop's, then the application's (`icon_set::register`).
     pub fn by_name(name: &str) -> Option<Icon> {
-        Icon::ALL.iter().copied().find(|i| i.name() == name)
+        Icon::ALL
+            .iter()
+            .copied()
+            .find(|i| i.name() == name)
+            .or_else(|| crate::icon_set::by_name(name))
     }
 
     /// Its name in kebab case (`chevron-right`): for the debug bridge and
@@ -195,11 +228,21 @@ impl Icon {
             Icon::Lock => "lock",
             Icon::Unlock => "unlock",
             Icon::Picker => "picker",
+            Icon::TriangleRight => "triangle-right",
+            Icon::TriangleDown => "triangle-down",
+            Icon::TriangleUp => "triangle-up",
+            Icon::Grip => "grip",
+            Icon::WindowMinimize => "window-minimize",
+            Icon::WindowMaximize => "window-maximize",
+            Icon::WindowRestore => "window-restore",
+            Icon::WindowClose => "window-close",
+            Icon::Custom(c) => crate::icon_set::name(c),
         }
     }
 
     /// Its glyph in the icon font; `None` without the `phosphor` feature,
-    /// and for the marks that are always painted (dot, diamond).
+    /// and for the marks that are always painted (dot, diamond, the
+    /// triangles).
     pub fn glyph(self) -> Option<&'static str> {
         glyph(self)
     }
@@ -222,6 +265,10 @@ impl Icon {
     /// Paints the icon in a square: the font's glyph when the icon font
     /// is installed in this context, else the painted shape.
     pub fn paint(self, painter: &Painter, rect: Rect, color: Color32) {
+        if let Icon::Custom(c) = self {
+            crate::icon_set::paint(painter, c, rect, color);
+            return;
+        }
         match self.glyph() {
             Some(g) if font_ready(painter.ctx()) => {
                 painter.text(
@@ -249,7 +296,17 @@ fn glyph(icon: Icon) -> Option<&'static str> {
         Icon::Close => p::X,
         Icon::Plus => p::PLUS,
         Icon::Minus => p::MINUS,
-        Icon::Dot | Icon::Diamond => return None,
+        Icon::Dot
+        | Icon::Diamond
+        | Icon::TriangleRight
+        | Icon::TriangleDown
+        | Icon::TriangleUp
+        | Icon::Grip
+        | Icon::WindowMinimize
+        | Icon::WindowMaximize
+        | Icon::WindowRestore
+        | Icon::WindowClose
+        | Icon::Custom(_) => return None,
         Icon::Search => p::MAGNIFYING_GLASS,
         Icon::Settings => p::GEAR_SIX,
         Icon::Folder => p::FOLDER,
@@ -309,6 +366,25 @@ pub fn install(ctx: &Context) {
     }
     #[cfg(not(feature = "phosphor"))]
     let _ = ctx;
+}
+
+/// Puts the icon font, in its family, into font definitions being built
+/// (`fonts::install` replaces egui's definitions and keeps it this way).
+/// Does nothing without the `phosphor` feature.
+pub fn insert(defs: &mut egui::FontDefinitions) {
+    #[cfg(feature = "phosphor")]
+    {
+        defs.font_data.insert(
+            FAMILY.into(),
+            std::sync::Arc::new(egui::FontData::from_static(
+                egui_phosphor::Variant::Regular.font_bytes(),
+            )),
+        );
+        defs.families
+            .insert(FontFamily::Name(FAMILY.into()), vec![FAMILY.into()]);
+    }
+    #[cfg(not(feature = "phosphor"))]
+    let _ = defs;
 }
 
 /// Whether the icon font is in use in this context.
@@ -621,6 +697,42 @@ pub fn paint_fallback(p: &Painter, icon: Icon, rect: Rect, color: Color32) {
             p.line_segment([at(0.24, 0.25 - lift), at(0.24, 0.45 - lift)], stroke);
             p.line_segment([at(0.76, 0.25 - lift), at(0.76, right - lift)], stroke);
         }
+        Icon::TriangleRight | Icon::TriangleDown | Icon::TriangleUp => {
+            // Sized on the square, not on the stroke box: a small solid
+            // mark that stays legible in a row's indent.
+            let c = rect.center();
+            let r = (rect.height().min(rect.width()) * 0.18).max(3.0);
+            let points = match icon {
+                Icon::TriangleDown => vec![
+                    pos2(c.x - r, c.y - r * 0.6),
+                    pos2(c.x + r, c.y - r * 0.6),
+                    pos2(c.x, c.y + r * 0.8),
+                ],
+                Icon::TriangleUp => vec![
+                    pos2(c.x - r, c.y + r * 0.6),
+                    pos2(c.x, c.y - r * 0.8),
+                    pos2(c.x + r, c.y + r * 0.6),
+                ],
+                _ => vec![
+                    pos2(c.x - r * 0.6, c.y - r),
+                    pos2(c.x + r * 0.8, c.y),
+                    pos2(c.x - r * 0.6, c.y + r),
+                ],
+            };
+            p.add(egui::Shape::convex_polygon(points, color, Stroke::NONE));
+        }
+        Icon::Grip => {
+            let c = rect.center();
+            let d = (rect.height() * 0.4).max(2.0);
+            let dot = (rect.width() * 0.2).max(1.0);
+            p.circle_filled(pos2(c.x, c.y - d), dot, color);
+            p.circle_filled(pos2(c.x, c.y + d), dot, color);
+        }
+        Icon::WindowMinimize | Icon::WindowMaximize | Icon::WindowRestore | Icon::WindowClose => {
+            paint_window_button(p, icon, rect, color);
+        }
+        // Drawn from its textures (`Icon::paint`): no fallback shape.
+        Icon::Custom(_) => {}
         Icon::Picker => {
             // The tube down to its tip, the collar across it, the bulb.
             p.line_segment([at(0.05, 0.95), at(0.6, 0.4)], stroke);
@@ -629,6 +741,56 @@ pub fn paint_fallback(p: &Painter, icon: Icon, rect: Rect, color: Color32) {
                 [at(0.62, 0.38), at(0.85, 0.15)],
                 Stroke::new(crate::scale::snap(w * 2.6, ppp), color),
             );
+        }
+    }
+}
+
+/// A window button's glyph across the square, centred on a pixel, its
+/// strokes one physical pixel: the restore glyph's back square shows only
+/// where the front one does not cover it.
+fn paint_window_button(p: &Painter, icon: Icon, rect: Rect, color: Color32) {
+    let c = pos2(
+        p.round_to_pixel_center(rect.center().x),
+        p.round_to_pixel_center(rect.center().y),
+    );
+    let s = rect.width().min(rect.height()) / 2.0;
+    let stroke = Stroke::new(crate::scale::stroke(p.ctx(), 1.0), color);
+    match icon {
+        Icon::WindowMinimize => {
+            p.line_segment([pos2(c.x - s, c.y), pos2(c.x + s, c.y)], stroke);
+        }
+        Icon::WindowMaximize => {
+            let r = Rect::from_center_size(c, vec2(2.0 * s, 2.0 * s));
+            p.rect_stroke(r, 0.0, stroke, StrokeKind::Inside);
+        }
+        Icon::WindowRestore => {
+            let front = Rect::from_min_size(
+                pos2(c.x - s, c.y - s + 2.0),
+                vec2(2.0 * s - 2.0, 2.0 * s - 2.0),
+            );
+            p.rect_stroke(front, 0.0, stroke, StrokeKind::Inside);
+            // The back square's top and end edges, offset by 2.
+            let h = stroke.width / 2.0;
+            let (l, t, r, b) = (
+                c.x - s + 2.0 + h,
+                c.y - s + h,
+                c.x + s - h,
+                c.y + s - 2.0 - h,
+            );
+            p.line(
+                vec![
+                    pos2(l, front.top()),
+                    pos2(l, t),
+                    pos2(r, t),
+                    pos2(r, b),
+                    pos2(front.right(), b),
+                ],
+                stroke,
+            );
+        }
+        _ => {
+            p.line_segment([pos2(c.x - s, c.y - s), pos2(c.x + s, c.y + s)], stroke);
+            p.line_segment([pos2(c.x + s, c.y - s), pos2(c.x - s, c.y + s)], stroke);
         }
     }
 }
@@ -722,6 +884,21 @@ pub enum Tone {
 }
 
 impl Tone {
+    /// The kit's tone it is drawn in on a button; `Default`, `Strong`
+    /// and `OnAccent` are the button's own box.
+    pub fn kit_tone(self) -> crate::kit::Tone {
+        use crate::kit::Tone as K;
+        match self {
+            Tone::Default | Tone::Strong | Tone::OnAccent => K::Neutral,
+            Tone::Muted => K::Muted,
+            Tone::Accent => K::Accent,
+            Tone::Danger => K::Danger,
+            Tone::Warning => K::Warning,
+            Tone::Success => K::Success,
+            Tone::Info => K::Info,
+        }
+    }
+
     pub fn color(self, t: &Tokens) -> Color32 {
         match self {
             Tone::Default => t.text.default,
@@ -746,6 +923,7 @@ pub struct IconWidget {
     tone: Tone,
     label: Option<String>,
     sense: Sense,
+    selected: Option<bool>,
 }
 
 impl IconWidget {
@@ -756,6 +934,7 @@ impl IconWidget {
             tone: Tone::Default,
             label: None,
             sense: Sense::hover(),
+            selected: None,
         }
     }
 
@@ -781,6 +960,15 @@ impl IconWidget {
         self.sense = Sense::click();
         self
     }
+
+    /// Clickable and on or off (a toggle made of the icon alone): drawn
+    /// in the kit's `icon-button.selected` while on, announced as
+    /// toggled.
+    pub fn selected(mut self, selected: bool) -> Self {
+        self.sense = Sense::click();
+        self.selected = Some(selected);
+        self
+    }
 }
 
 impl Widget for IconWidget {
@@ -789,21 +977,41 @@ impl Widget for IconWidget {
         let side = self.size.points(&t);
         let (rect, response) = ui.allocate_exact_size(vec2(side, side), self.sense);
         if ui.is_rect_visible(rect) {
-            let mut color = self.tone.color(&t);
-            if !ui.is_enabled() {
-                color = t.text.muted;
-            } else if self.sense.senses_click() && response.hovered() {
-                color = t.text.strong;
+            if self.sense.senses_click() {
+                // A button: drawn by the kit's `icon-button`.
+                let kit = crate::kit::Kit::of(ui.ctx());
+                let button = &kit.icon_button;
+                let state = State::from_response(&response)
+                    .with(State::SELECTED, self.selected == Some(true));
+                let part = Part {
+                    rect,
+                    room: rect,
+                    state: state.toned(self.tone.kit_tone()),
+                    label: None,
+                };
+                let cx = KitCx {
+                    painter: ui.painter(),
+                    ppp: ui.ctx().pixels_per_point(),
+                };
+                button.paint(&cx, &part);
+                // Strong and on-accent are no tones: their colour holds
+                // while nothing else (hover, selected, disabled) does.
+                let plain = !state.contains(State::HOVER)
+                    && !state.contains(State::SELECTED)
+                    && !state.contains(State::DISABLED);
+                let color = match self.tone {
+                    Tone::Strong | Tone::OnAccent if plain => self.tone.color(&t),
+                    _ => button.style(part.state).text,
+                };
+                self.source.paint(ui, rect, color);
+            } else {
+                let color = if ui.is_enabled() {
+                    self.tone.color(&t)
+                } else {
+                    t.text.muted
+                };
+                self.source.paint(ui, rect, color);
             }
-            if response.has_focus() {
-                ui.painter().rect_stroke(
-                    rect.expand(1.0),
-                    t.radius.widget,
-                    Stroke::new(crate::scale::stroke(ui.ctx(), 1.5), t.focus_ring),
-                    StrokeKind::Outside,
-                );
-            }
-            self.source.paint(ui, rect, color);
         }
         let kind = if self.sense.senses_click() {
             WidgetType::Button
@@ -812,7 +1020,10 @@ impl Widget for IconWidget {
         };
         let enabled = ui.is_enabled();
         let label = self.label.clone().unwrap_or_default();
-        response.widget_info(|| WidgetInfo::labeled(kind, enabled, &label));
+        match self.selected {
+            Some(on) => response.widget_info(|| WidgetInfo::selected(kind, enabled, on, &label)),
+            None => response.widget_info(|| WidgetInfo::labeled(kind, enabled, &label)),
+        }
         match self.label {
             Some(l) if self.sense.senses_click() => response.on_hover_text(l),
             _ => response,

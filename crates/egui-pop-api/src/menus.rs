@@ -41,11 +41,14 @@
 //! }
 //! ```
 
+use egui_pop_core::kit::{Component, Glyph, Kit, Part, State, Tone};
 use std::fmt;
 use std::rc::Rc;
 
 use egui::containers::menu::{MenuButton, MenuConfig, MenuState, SubMenu};
-use egui::{Atom, Button, Context, Id, Pos2, Rect, Response, Ui, vec2};
+use egui::{
+    Atom, Button, Color32, Context, Id, Pos2, Rect, Response, RichText, Shape, Stroke, Ui, vec2,
+};
 use egui_pop_core::icon::Icon;
 use egui_pop_core::strings;
 use egui_pop_core::theme::Tokens;
@@ -500,13 +503,28 @@ fn command_row(ui: &mut Ui, app: &AppHandle, cx: &WhenContext, row: Row<'_>) -> 
         .find(|r| r.id == *id)
         .and_then(|r| r.result.clone().err());
     let tick = Id::new(("egui_pop_menu_tick", menu.as_str(), id.as_str(), &title));
-    let mut button = Button::new((Atom::custom(tick, vec2(side, side)), title.as_str()));
-    if let Some(k) = app.keys_for(id).first() {
-        button = button.shortcut_text(k.clone());
-    }
-    let r = ui
-        .add_enabled_ui(why.is_none(), |ui| button.atom_ui(ui))
+    let kit = Kit::of(&ctx);
+    let item = &kit.menu_item;
+    let shortcut = app.keys_for(id).first().cloned();
+    // egui lays the item out and takes its clicks; the kit paints its box
+    // under it (`slot`), in the state egui's button draws with.
+    let slot = ui.painter().add(Shape::Noop);
+    let (r, state) = ui
+        .add_enabled_ui(why.is_none(), |ui| {
+            let state = item_state(ui, ui.next_auto_id());
+            let label = item_text(ui, item, state, title.as_str());
+            let mut button = Button::new((Atom::custom(tick, vec2(side, side)), label))
+                .fill(Color32::TRANSPARENT)
+                .stroke(Stroke::NONE);
+            if let Some(k) = shortcut {
+                button = button.shortcut_text(
+                    RichText::new(k).color(item.style_toned(Tone::Muted, state).text),
+                );
+            }
+            (button.atom_ui(ui), state)
+        })
         .inner;
+    paint_item(ui, item, slot, r.response.rect, state);
     // A run waiting for the host: a spinner in the icon's place, after
     // the delay.
     let busy = crate::busy::busy_shown(app, &ctx, tick, id);
@@ -514,15 +532,14 @@ fn command_row(ui: &mut Ui, app: &AppHandle, cx: &WhenContext, row: Row<'_>) -> 
         ctx.accesskit_node_builder(r.response.id, |node| node.set_busy());
     }
     if let Some(rect) = r.rect(tick) {
-        let color = if why.is_none() {
-            t.text.default
-        } else {
-            t.text.muted
-        };
+        // The mark keeps the item's resting colour (greyed when disabled).
+        let color = item
+            .style(State::REST.with(State::DISABLED, why.is_some()))
+            .text;
         if busy {
             egui_pop_core::progress::paint_spinner(ui, rect, color);
         } else if checked {
-            Icon::Check.paint(ui.painter(), rect, color);
+            kit.glyph(Glyph::Check).paint(ui.painter(), rect, color);
         } else if let Some(i) = icon {
             i.paint(ui.painter(), rect, color);
         }
@@ -553,6 +570,41 @@ fn command_row(ui: &mut Ui, app: &AppHandle, cx: &WhenContext, row: Row<'_>) -> 
         ));
     }
     response.clicked()
+}
+
+/// The state a menu item's egui button draws with this pass: its
+/// response from the last one, as egui's `Button` reads it.
+fn item_state(ui: &Ui, id: Id) -> State {
+    ui.ctx()
+        .read_response(id)
+        .map_or(State::REST, |r| State::from_response(&r))
+        .with(State::DISABLED, !ui.is_enabled())
+}
+
+/// A menu item's label in its state's colour. A disabled item keeps its
+/// resting colour: egui greys a disabled item itself.
+fn item_text(ui: &Ui, item: &Component, state: State, text: &str) -> RichText {
+    let colour = if ui.is_enabled() {
+        item.style(state).text
+    } else {
+        item.style(State::REST).text
+    };
+    RichText::new(text).color(colour)
+}
+
+/// Paints a menu item's box under what egui drew of it.
+fn paint_item(ui: &Ui, item: &Component, slot: egui::layers::ShapeIdx, rect: Rect, state: State) {
+    item.paint_under(
+        ui,
+        slot,
+        &Part {
+            rect,
+            room: rect,
+            state,
+            label: None,
+        },
+        None,
+    );
 }
 
 /// A command's title as shown, without undo's label nor the hint of its
@@ -586,16 +638,26 @@ fn submenu(
     });
     let space = Id::new(("egui_pop_menu_space", menu.as_str()));
     let arrow = Id::new(("egui_pop_menu_arrow", menu.as_str()));
-    let button = Button::new((Atom::custom(space, vec2(side, side)), label))
-        .right_text(Atom::custom(arrow, vec2(side, side)));
-    let inactive = ui.style().visuals.widgets.inactive;
-    if open {
-        ui.style_mut().visuals.widgets.inactive = ui.style().visuals.widgets.open;
-    }
+    let kit = Kit::of(ui.ctx());
+    let item = &kit.menu_item;
+    let slot = ui.painter().add(Shape::Noop);
+    // Selected while its submenu is open.
+    let state = item_state(ui, my_id).with(State::SELECTED, open);
+    let button = Button::new((
+        Atom::custom(space, vec2(side, side)),
+        item_text(ui, item, state, label),
+    ))
+    .right_text(Atom::custom(arrow, vec2(side, side)))
+    .fill(Color32::TRANSPARENT)
+    .stroke(Stroke::NONE);
     let r = button.atom_ui(ui);
-    ui.style_mut().visuals.widgets.inactive = inactive;
+    paint_item(ui, item, slot, r.response.rect, state);
     if let Some(rect) = r.rect(arrow) {
-        Icon::ChevronRight.paint(ui.painter(), rect.shrink(rect.width() * 0.15), t.text.muted);
+        kit.glyph(Glyph::Submenu).paint(
+            ui.painter(),
+            rect.shrink(rect.width() * 0.15),
+            t.text.muted,
+        );
     }
     SubMenu::default()
         .config(MenuConfig::find(ui))

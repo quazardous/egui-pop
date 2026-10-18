@@ -1,7 +1,7 @@
 [package]
 name = "egui-pop-win32"
 version = "0.1.0"
-description = "The Windows layer of egui-pop's window frame: subclasses a window to answer WM_NCHITTEST from the frame's hit regions (Snap Layouts, Aero Snap), with no egui dependency"
+description = "The Windows layer of egui-pop's window frame: subclasses a window to answer WM_NCHITTEST from the frame's hit regions (Snap Layouts, Aero Snap) and asks Windows 11 for rounded corners, with no egui dependency"
 keywords = ["egui", "windows", "titlebar", "snap-layouts", "hit-test"]
 categories = ["gui", "os::windows-apis"]
 edition.workspace = true
@@ -23,6 +23,7 @@ all = { level = "warn", priority = -1 }
 # MIT OR Apache-2.0: raw Win32 bindings.
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
+    "Win32_Graphics_Dwm",
     "Win32_Graphics_Gdi",
     "Win32_UI_Input_KeyboardAndMouse",
     "Win32_UI_Shell",

@@ -1,6 +1,35 @@
 # Fonts in egui-pop: proportional and monospace, done properly
 
-Status: design note, **not decided** (2026-10-12). Nothing here is built.
+Status: design note, **not decided** (2026-10-12). Built so far
+(2026-10-18): families from the tokens at four weights (a variable face through its
+`wght` axis, set per face with `FontTweak::coords`), from
+registered faces, egui's bundled ones and the system's (fontdb behind
+`system-fonts`, not fontique: no per-script fallback yet), reported
+problems (`egui_pop_core::fonts`); a size scale (2026-10-18), below.
+The rest is still a design.
+
+## The size scale (built)
+
+`font.size.xs`, `s`, `m`, `l` and `xl` are the theme's text sizes, in
+`px` (points). egui's five text styles each alias a step, and so may any
+component token:
+
+| Text style token | egui | Step | pop-dark | high contrast |
+|---|---|---|---|---|
+| `font.text-style.small` | `Small` | `xs` | 10 | 12 |
+| `font.text-style.monospace` | `Monospace` | `s` | 12.5 | 14 |
+| `font.text-style.body` | `Body` | `m` | 13 | 15 |
+| `font.text-style.button` | `Button` | `m` | 13 | 15 |
+| `font.text-style.heading` | `Heading` | `xl` | 18 | 18 |
+
+`l` (15, 16 in high contrast) has no text style of its own. A theme
+moves a step and every style on it follows, or re-aliases a style onto
+another step. The former `font.size.small`, `body`, `heading` and `mono`
+are renamed (`egui_pop_tokens::RENAMED`): a theme still giving them
+works, with a reported problem. In code, `fonts::font_at(tokens, role,
+weight, step)` is the `FontId` of a step (`fonts::Step`), next to
+`fonts::font_id(role, weight, size)`; `Tokens::font.scale` holds the
+sizes. Text size as a user setting (below) is still a design.
 
 The ask: "good font management, fixed-width and variable-width". Concretely,
 egui-pop should load real families for interface text (proportional) and
@@ -8,7 +37,7 @@ for values, code and debug output (monospace), let a theme and a user pick
 them, size them from one scale tied to an accessibility setting, and make
 columns of numbers line up.
 
-Today the tokens `font.family.ui` (`["Ubuntu", "sans-serif"]`) and
+When this note was written, the tokens `font.family.ui` (`["Ubuntu", "sans-serif"]`) and
 `font.family.mono` (`["Hack", "monospace"]`) are parsed and typed
 (`egui_pop_core::theme::Font::family_ui` / `family_mono`) but not applied:
 the text is drawn by egui's bundled fonts. Only `font.size.{small, body,

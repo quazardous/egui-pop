@@ -1,0 +1,34 @@
+$description: "The `side-area` component of the default kit (docs/kit.md), layered into pop-dark."
+side-area:
+  $description: "A side area of the workbench. egui draws its separator line, in the theme's border colour, unless `border-width` is 0."
+  # Between the area's edges and its panels: egui's own side-panel margins.
+  padding-x:
+    $type: "dimension"
+    $value: {value: 8, unit: "px"}
+  padding-y:
+    $type: "dimension"
+    $value: {value: 2, unit: "px"}
+  shape:
+    $type: "string"
+    $value: "plain"
+  # The shadow it casts while it lies over the centre (`offset-x` towards
+  # the centre).
+  shadow-offset-x:
+    $type: "dimension"
+    $value: "{shadow.side.offset-x}"
+  shadow-offset-y:
+    $type: "dimension"
+    $value: "{shadow.side.offset-y}"
+  shadow-blur:
+    $type: "dimension"
+    $value: "{shadow.side.blur}"
+  shadow-spread:
+    $type: "dimension"
+    $value: "{shadow.side.spread}"
+  shadow-color:
+    $type: "color"
+    $value: "{shadow.side.color}"
+  rest:
+    border-width:
+      $type: "dimension"
+      $value: {value: 1, unit: "px"}

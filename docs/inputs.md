@@ -40,7 +40,7 @@ fn export_row(ui: &mut egui::Ui, folder: &mut String, size: &mut f64, name: &mut
 
 | Decorator | How | What it does |
 |---|---|---|
-| Placeholder | `.placeholder(text)` | Shown while the field is empty, in `field.placeholder`; assistive technologies read it as the placeholder |
+| Placeholder | `.placeholder(text)` | Shown while the field is empty, in `field.tone.muted.text`; assistive technologies read it as the placeholder |
 | Leading, trailing slots | `.leading_icon`, `.prefix`, `.suffix`, `.unit`, `.trailing_icon` | Icons and texts inside the field, before or after the value, never edited |
 | Clear ✕ | `.clearable(true)` (on for `Input::search`) | Shown while there is a value and the field can be edited; Tab reaches it, Enter or Space presses it, the focus goes back to the field. One change: one undo step when the field is bound to a store, one step in the field's own Ctrl+Z history |
 | Reset | from the state | Shown while the [state](#field-states) offers "reset to default"; puts back `.default_value(text)` |
@@ -82,11 +82,11 @@ assert!(!off.is_focusable());
 | State | Builder | Edge | Marker | Assistive technologies |
 |---|---|---|---|---|
 | Disabled | `.disabled(reason)` | muted | an "i"; the **reason** is the tooltip | disabled, the reason as the description |
-| Invalid | `.invalid(message)`, `.validated(Option)` | `field.invalid`, and an outline | a crossed circle; the message is the tooltip | invalid, the message as the description |
-| Pending | `.pending()` | `field.pending`, and an outline | a clock | busy |
-| Modified | `.modified(Baseline::Saved / Default)`, `.compare(value, saved, default)` | `field.modified` | a dot; a reset arrow when it differs from its default | "changed since saved" or "from the default" in the description |
-| Required | `.required()` | none | an asterisk (`field.required`) | required |
-| Read-only | `.read_only()` | none, and the `field.background-read-only` fill | a lock | read-only |
+| Invalid | `.invalid(message)`, `.validated(Option)` | `field.tone.danger.border-color`, and an outline | a crossed circle; the message is the tooltip | invalid, the message as the description |
+| Pending | `.pending()` | `field.tone.info.border-color`, and an outline | a clock | busy |
+| Modified | `.modified(Baseline::Saved / Default)`, `.compare(value, saved, default)` | `field.tone.accent.border-color` | a dot; a reset arrow when it differs from its default | "changed since saved" or "from the default" in the description |
+| Required | `.required()` | none | an asterisk (`field.tone.warning.border-color`) | required |
+| Read-only | `.read_only()` | none, and the `field.tone.muted.fill` fill | a lock | read-only |
 
 The edge is a strip along the field's leading side in the colour of its
 first state, in that order of precedence; every state also has its

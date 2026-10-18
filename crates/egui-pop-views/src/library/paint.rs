@@ -5,23 +5,18 @@
 use std::f32::consts::{PI, TAU};
 
 use egui::{Align2, Color32, CornerRadius, FontId, Painter, Pos2, Rect, Shape, Stroke, pos2, vec2};
+use egui_pop_core::kit::{Component, KitCx, Part, State, Tone};
 use egui_pop_core::theme::Tokens;
 
 use super::marks::ColorLabel;
 
-/// The library's colours, from the installed theme: optional component
-/// tokens (`library.*`) falling back on system ones, so every theme
-/// draws them without declaring anything.
+/// The library's content colours, from the installed theme: optional
+/// component tokens (`library.*`) falling back on system ones, so every
+/// theme draws them without declaring anything. The boxes the marks sit
+/// on (cells, pills, chips, toggles, panes) are the kit's
+/// (`egui_pop_core::kit::Kit`: `thumb-cell`, `pill`, `tag-chip`...).
 #[derive(Clone, Debug, PartialEq)]
 pub struct LibraryTokens {
-    /// Behind a cell's image (`thumbnail.background`).
-    pub cell: Color32,
-    /// A cell under the pointer (`thumbnail.hover`).
-    pub hover: Color32,
-    /// A selected cell's outline (`thumbnail.selected`).
-    pub selected: Color32,
-    /// A selected cell's background (`library.selected-background`).
-    pub selected_background: Color32,
     /// A star given (`library.star`, else `status.warning`).
     pub star: Color32,
     /// A star not given, shown under the pointer (`library.star-empty`).
@@ -32,24 +27,9 @@ pub struct LibraryTokens {
     pub reject: Color32,
     /// Red, yellow, green, blue and purple (`library.label-<name>`).
     pub labels: [Color32; 5],
-    /// The pills overlays sit on (`library.overlay`).
-    pub overlay: Color32,
-    /// Text on a pill (`library.overlay-text`).
-    pub overlay_text: Color32,
-    /// Over a rejected image (`library.dim`).
-    pub dim: Color32,
     /// The rubber band (`library.band`) and its outline.
     pub band: Color32,
     pub band_outline: Color32,
-    /// The bar beside an expanded stack's members (`library.stack`).
-    pub stack: Color32,
-    /// The best image's outline and marker (`library.best`).
-    pub best: Color32,
-    /// Badge tones: neutral, info, success, warning, danger.
-    pub tones: [Color32; 5],
-    /// A chip's fill (`library.chip`) and its text.
-    pub chip: Color32,
-    pub chip_text: Color32,
 }
 
 impl LibraryTokens {
@@ -58,10 +38,6 @@ impl LibraryTokens {
         let c = |path: &str, fallback: Color32| t.color(path).unwrap_or(fallback);
         let purple = mix(t.status.danger, t.status.info);
         LibraryTokens {
-            cell: c("thumbnail.background", t.surface.raised),
-            hover: c("thumbnail.hover", t.border.strong),
-            selected: c("thumbnail.selected", t.accent.default),
-            selected_background: c("library.selected-background", t.accent.subtle),
             star: c("library.star", t.status.warning),
             star_empty: c("library.star-empty", t.text.muted),
             pick: c("library.pick", t.text.strong),
@@ -73,22 +49,8 @@ impl LibraryTokens {
                 c("library.label-blue", t.status.info),
                 c("library.label-purple", purple),
             ],
-            overlay: c("library.overlay", t.surface.overlay.gamma_multiply(0.85)),
-            overlay_text: c("library.overlay-text", t.text.strong),
-            dim: c("library.dim", t.surface.canvas.gamma_multiply(0.6)),
             band: c("library.band", t.accent.default.gamma_multiply(0.18)),
             band_outline: c("library.band-outline", t.accent.default),
-            stack: c("library.stack", t.accent.subtle),
-            best: c("library.best", t.status.success),
-            tones: [
-                t.surface.overlay,
-                t.status.info,
-                t.status.success,
-                t.status.warning,
-                t.status.danger,
-            ],
-            chip: c("library.chip", t.surface.active),
-            chip_text: c("library.chip-text", t.text.default),
         }
     }
 
@@ -190,22 +152,31 @@ pub fn label(painter: &Painter, label: ColorLabel, center: Pos2, radius: f32, co
     painter.add(shape);
 }
 
-/// A pill holding `text`, its right edge or left edge at `at`; returns
-/// its rectangle.
+/// A pill (the kit's `pill`) holding `text`, in `tone`, its corner
+/// `anchor` at `at`; returns its rectangle and its text's colour.
 pub fn pill(
     painter: &Painter,
+    pill: &Component,
+    tone: Tone,
     at: Pos2,
     anchor: Align2,
     text: &str,
     font: FontId,
-    fill: Color32,
-    color: Color32,
-) -> Rect {
-    let galley = painter.layout_no_wrap(text.to_string(), font, color);
-    let pad = vec2(4.0, 1.0);
-    let size = galley.size() + pad * 2.0;
-    let rect = anchor.anchor_size(at, size);
-    painter.rect_filled(rect, CornerRadius::same((size.y / 2.0) as u8), fill);
-    painter.galley(rect.min + pad, galley, color);
-    rect
+) -> (Rect, Color32) {
+    let galley = painter.layout_no_wrap(text.to_string(), font, Color32::PLACEHOLDER);
+    let rect = anchor.anchor_size(at, pill.measure(galley.size()));
+    let part = Part {
+        rect,
+        room: rect,
+        state: State::REST.toned(tone),
+        label: Some(&galley),
+    };
+    pill.paint_part(
+        &KitCx {
+            painter,
+            ppp: painter.ctx().pixels_per_point(),
+        },
+        &part,
+    );
+    (rect, pill.style(part.state).text)
 }

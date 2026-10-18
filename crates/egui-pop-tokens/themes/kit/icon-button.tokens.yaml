@@ -1,0 +1,70 @@
+$description: "The `icon-button` component of the default kit (docs/kit.md), layered into pop-dark."
+icon-button:
+  $description: "A button made of an icon alone (a kit component), the icon in `text`: hover, focus, disabled, selected while it is on; by tone, the icon's meaning."
+  shape:
+    $type: "string"
+    $value: "box"
+    $description: "The handler that draws it: box (fill, border, radius, ring) or plain."
+  rest:
+    fill:
+      $type: "color"
+      $value: "{transparent}"
+    border-color:
+      $type: "color"
+      $value: "{border.default}"
+    border-width:
+      $type: "dimension"
+      $value: {value: 0, unit: "px"}
+    radius:
+      $type: "dimension"
+      $value: "{radius.widget}"
+    text:
+      $type: "color"
+      $value: "{text.default}"
+  selected:
+    text:
+      $type: "color"
+      $value: "{accent.default}"
+  hover:
+    text:
+      $type: "color"
+      $value: "{text.strong}"
+  focus:
+    ring-color:
+      $type: "color"
+      $value: "{focus.ring}"
+    ring-width:
+      $type: "dimension"
+      $value: {value: 1.5, unit: "px"}
+    ring-offset:
+      $type: "dimension"
+      $value: {value: 1, unit: "px"}
+  disabled:
+    text:
+      $type: "color"
+      $value: "{text.muted}"
+  tone:
+    accent:
+      text:
+        $type: "color"
+        $value: "{accent.default}"
+    info:
+      text:
+        $type: "color"
+        $value: "{info}"
+    success:
+      text:
+        $type: "color"
+        $value: "{success}"
+    warning:
+      text:
+        $type: "color"
+        $value: "{warning}"
+    danger:
+      text:
+        $type: "color"
+        $value: "{danger}"
+    muted:
+      text:
+        $type: "color"
+        $value: "{text.muted}"

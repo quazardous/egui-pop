@@ -5,7 +5,7 @@ use egui_pop_model::ids::{CommandId, MenuId, OwnerId, PanelId};
 use egui_pop_model::keymap::{
     Action, BindOptions, DocBinding, Keymap, KeymapDoc, Keys, Layer, Resolution, Typing, Verdict,
 };
-use egui_pop_model::layout::{Auxiliary, Floating, Layout, Node};
+use egui_pop_model::layout::{Auxiliary, Floating, Layout, Node, Placement};
 use egui_pop_model::panels::{Area, PanelSpec, Panels};
 use egui_pop_model::when::WhenContext;
 use serde_json::{Value, json};
@@ -500,6 +500,7 @@ fn a_panel_found_where_it_may_not_be_goes_back_to_its_default_area() {
         auxiliary: vec![],
         hidden: vec![],
         folded: vec![],
+        over: vec![],
         floating: vec![],
     };
     let (fixed, notes) = saved.repair(&p, &[]);
@@ -645,6 +646,21 @@ fn layout_operations_place_hide_activate_and_fold() {
     l.folded.push(Area::Bottom);
     let (back, _) = Layout::from_json(&l.to_json()).unwrap().repair(&p, &[]);
     assert_eq!(back.folded, [Area::Bottom]);
+    // A side area lying over the centre is saved; only side areas may.
+    assert_eq!(l.placement(Area::EndSide), Placement::Beside);
+    l.set_placement(Area::EndSide, Placement::Over);
+    l.over.push(Area::Bottom);
+    let text = l.to_json();
+    assert!(text.contains("\"over\""), "{text}");
+    let (back, _) = Layout::from_json(&text).unwrap().repair(&p, &[]);
+    assert_eq!(back.placement(Area::EndSide), Placement::Over);
+    assert_eq!(back.over, [Area::EndSide]);
+    let mut back = back;
+    back.set_placement(Area::EndSide, Placement::Beside);
+    assert!(back.over.is_empty());
+    assert!(!back.to_json().contains("\"over\""));
+    assert_eq!(Placement::parse("over"), Some(Placement::Over));
+    assert_eq!(Placement::parse("under"), None);
     // A closed panel stays closed through a repair; a new one opens.
     assert!(back.hidden.contains(&pid("a.one")));
 }

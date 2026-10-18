@@ -35,12 +35,13 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 use egui::{
-    Color32, Context, CursorIcon, Id, Pos2, Rect, ResizeDirection, Sense, Stroke, Ui, Vec2,
+    Color32, Context, CursorIcon, Id, Pos2, Rect, ResizeDirection, Sense, Ui, Vec2,
     ViewportCommand, ViewportId, WidgetType, pos2, vec2,
 };
 use serde::Serialize;
 
 use crate::a11y;
+use crate::kit::{ButtonsHover, ButtonsSide, Glyph, Kit, KitCx, Part, State, Tone};
 use crate::state::lock;
 use crate::theme::Tokens;
 
@@ -300,6 +301,17 @@ pub fn regions(ctx: &Context) -> Option<Arc<HitRegions>> {
     HitTable::of(ctx).get(ctx.viewport_id())
 }
 
+/// The line the kit draws around a window the application draws
+/// (`window.rest.border-width`), or none: maximized and full screen
+/// windows have no edges to draw.
+pub fn outline(ctx: &Context) -> egui::Stroke {
+    if resizable(ctx) {
+        crate::kit::Kit::of(ctx).window.outline
+    } else {
+        egui::Stroke::NONE
+    }
+}
+
 fn resizable(ctx: &Context) -> bool {
     ctx.input(|i| {
         let v = i.viewport();
@@ -370,6 +382,8 @@ pub struct TitleBarOutput {
     pub request: Option<FrameRequest>,
     /// The bar.
     pub rect: Rect,
+    /// Where the title was drawn; `None` when there was no room for it.
+    pub title: Option<Rect>,
     /// Its parts, in points (the window's rectangle is left empty).
     pub layout: FrameLayout,
 }
@@ -426,11 +440,25 @@ impl<'a> TitleBar<'a> {
     ) -> TitleBarOutput {
         let ctx = ui.ctx().clone();
         let t = Tokens::of(&ctx);
-        let height = t.titlebar.height;
+        let kit = Kit::of(&ctx);
+        let height = kit.title_bar.data.height;
         let maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
         let full = ui.max_rect();
         let bar = Rect::from_min_size(full.min, vec2(full.width(), height));
-        ui.painter().rect_filled(bar, 0.0, t.titlebar.background);
+        let ppp = ctx.pixels_per_point();
+        // The bar's box first; its label (the title) after the items.
+        kit.title_bar.paint(
+            &KitCx {
+                painter: ui.painter(),
+                ppp,
+            },
+            &Part {
+                rect: bar,
+                room: bar,
+                state: State::REST,
+                label: None,
+            },
+        );
         // The caption: drag, double click, right click. Widgets on the
         // bar are drawn after it and take their clicks first.
         let drag = ui.interact(
@@ -451,34 +479,76 @@ impl<'a> TitleBar<'a> {
             caption: Some(bar),
             ..FrameLayout::default()
         };
-        // The buttons, from the end edge.
-        let mut x = bar.right();
-        let w = t.titlebar.button_width;
-        for (which, shown) in [Button::Close, Button::Maximize, Button::Minimize]
-            .into_iter()
-            .zip([self.buttons[2], self.buttons[1], self.buttons[0]])
-        {
-            if !shown {
+        // The buttons, from the edge `title-bar.buttons-side` names, close
+        // outermost: minimize, maximize, close at the end edge; close,
+        // minimize, maximize from the start edge.
+        let side = kit.window.buttons_side;
+        let order = match side {
+            ButtonsSide::End => [Button::Close, Button::Maximize, Button::Minimize],
+            ButtonsSide::Start => [Button::Close, Button::Minimize, Button::Maximize],
+        };
+        // The buttons and the items are centred above the bar's line.
+        let line = kit.title_bar.style(State::REST).border_width;
+        let inner = bar.with_max_y(bar.bottom() - line);
+        let mut slots: [Option<Rect>; 3] = [None; 3];
+        let mut x = match side {
+            ButtonsSide::End => bar.right(),
+            ButtonsSide::Start => bar.left(),
+        };
+        for which in order {
+            if !self.buttons[which as usize] {
                 continue;
             }
-            let r = Rect::from_min_max(pos2(x - w, bar.top()), pos2(x, bar.bottom()));
-            x -= w;
-            if window_button(ui, r, which, maximized) {
+            let w = match which {
+                Button::Close => kit.window_close.data.width,
+                _ => kit.window_button.data.width,
+            };
+            let (x0, x1) = match side {
+                ButtonsSide::End => (x - w, x),
+                ButtonsSide::Start => (x, x + w),
+            };
+            x = match side {
+                ButtonsSide::End => x0,
+                ButtonsSide::Start => x1,
+            };
+            slots[which as usize] = Some(Rect::from_min_max(
+                pos2(x0, inner.top()),
+                pos2(x1, inner.bottom()),
+            ));
+        }
+        // `buttons-hover: group`: all three are hovered while the pointer
+        // is over any of them (egui's pointer, or the system's on Windows).
+        let group = kit.window.buttons_hover == ButtonsHover::Group && {
+            let all = slots
+                .iter()
+                .flatten()
+                .fold(Rect::NOTHING, |a, r| a.union(*r));
+            native_hover(&ctx).is_some() || (all.is_positive() && ui.rect_contains_pointer(all))
+        };
+        for which in order {
+            let Some(r) = slots[which as usize] else {
+                continue;
+            };
+            if window_button(ui, r, which, maximized, group) {
                 request = Some(match which {
                     Button::Minimize => FrameRequest::Minimize,
                     Button::Maximize => FrameRequest::ToggleMaximize,
                     Button::Close => FrameRequest::Close,
                 });
             }
-            match which {
-                Button::Minimize => layout.minimize = Some(r),
-                Button::Maximize => layout.maximize = Some(r),
-                Button::Close => layout.close = Some(r),
-            }
         }
+        layout.minimize = slots[Button::Minimize as usize];
+        layout.maximize = slots[Button::Maximize as usize];
+        layout.close = slots[Button::Close as usize];
+        // The room the items and the title share: between the buttons and
+        // the bar's other edge.
+        let (lo, hi) = match side {
+            ButtonsSide::End => (bar.left(), x),
+            ButtonsSide::Start => (x, bar.right()),
+        };
         let gap = t.space.m;
-        // The application's items, before the buttons.
-        let end = Rect::from_min_max(pos2(bar.left(), bar.top()), pos2(x - gap, bar.bottom()));
+        // The application's items, at the end of that room.
+        let end = Rect::from_min_max(pos2(lo, inner.top()), pos2(hi - gap, inner.bottom()));
         let mut child = ui.new_child(
             egui::UiBuilder::new()
                 .max_rect(end)
@@ -489,10 +559,10 @@ impl<'a> TitleBar<'a> {
         if trailing_rect.width() > 0.0 {
             layout.holes.push(trailing_rect);
         }
-        // Leading items, from the start edge.
+        // Leading items, at its start.
         let start = Rect::from_min_max(
-            pos2(bar.left() + gap, bar.top()),
-            pos2(trailing_rect.left().min(x) - gap, bar.bottom()),
+            pos2(lo + gap, inner.top()),
+            pos2(trailing_rect.left().min(hi) - gap, inner.bottom()),
         );
         let mut child = ui.new_child(
             egui::UiBuilder::new()
@@ -504,32 +574,41 @@ impl<'a> TitleBar<'a> {
         if leading_rect.width() > 0.0 {
             layout.holes.push(leading_rect);
         }
-        // The title, centred on the bar when there is room, between the
-        // items otherwise. A label (assistive technology and tests read
-        // it) that takes no click, so the bar still drags under it.
+        // The title, where the kit's `title-bar.align` puts it, between
+        // the items. Named for assistive technology and tests; takes no
+        // click, so the bar still drags under it.
         let room = Rect::from_min_max(
-            pos2(leading_rect.right().max(bar.left()) + gap, bar.top()),
-            pos2(trailing_rect.left().min(x) - gap, bar.bottom()),
+            pos2(leading_rect.right().max(lo), inner.top()),
+            pos2(trailing_rect.left().min(hi), inner.bottom()),
         );
-        if room.width() > 0.0 {
-            let galley =
-                egui::WidgetText::from(egui::RichText::new(self.title).color(t.titlebar.text))
-                    .into_galley(
-                        ui,
-                        Some(egui::TextWrapMode::Truncate),
-                        room.width(),
-                        egui::TextStyle::Body,
-                    );
-            let size = galley.size();
-            let mut at = bar.center().x - size.x / 2.0;
-            at = at.clamp(room.left(), (room.right() - size.x).max(room.left()));
-            let r = Rect::from_min_size(pos2(at, bar.center().y - size.y / 2.0), size);
-            ui.put(
-                r,
-                egui::Label::new(egui::RichText::new(self.title).color(t.titlebar.text))
-                    .truncate()
-                    .selectable(false)
-                    .sense(Sense::hover()),
+        let width = room.width() - 2.0 * kit.title_bar.data.padding_x;
+        let mut title_rect = None;
+        if width > 0.0 && !self.title.is_empty() {
+            let font = egui::TextStyle::Body.resolve(ui.style());
+            let mut job = egui::text::LayoutJob::simple_singleline(
+                self.title.into(),
+                font,
+                Color32::PLACEHOLDER,
+            );
+            job.wrap = egui::text::TextWrapping::truncate_at_width(width);
+            let galley = ui.fonts_mut(|f| f.layout_job(job));
+            let part = Part {
+                rect: bar,
+                room,
+                state: State::REST,
+                label: Some(&galley),
+            };
+            let at = kit.title_bar.label_rect(&part, galley.size());
+            title_rect = Some(at);
+            let title = self.title;
+            ui.interact(at, ui.id().with("egui_pop.title"), Sense::hover())
+                .widget_info(|| egui::WidgetInfo::labeled(WidgetType::Label, true, title));
+            kit.title_bar.paint_label(
+                &KitCx {
+                    painter: ui.painter(),
+                    ppp,
+                },
+                &part,
             );
         }
         if !self.publish {
@@ -537,6 +616,7 @@ impl<'a> TitleBar<'a> {
             return TitleBarOutput {
                 request,
                 rect: bar,
+                title: title_rect,
                 layout,
             };
         }
@@ -554,6 +634,7 @@ impl<'a> TitleBar<'a> {
         TitleBarOutput {
             request,
             rect: bar,
+            title: title_rect,
             layout,
         }
     }
@@ -578,8 +659,14 @@ pub fn native_hover(ctx: &Context) -> Option<Button> {
         .flatten()
 }
 
-/// Draws a window button; says whether it was clicked.
-fn window_button(ui: &mut Ui, rect: Rect, which: Button, maximized: bool) -> bool {
+/// Draws a window button; says whether it was clicked. `group`: the
+/// pointer is over one of the buttons and the kit hovers them together.
+///
+/// Each button carries a tone, which a kit may give to tell them apart
+/// (the macOS flavour's red, yellow and green): minimize `warning`,
+/// maximize `success`, close `danger`. A kit giving no tones (the
+/// default) draws each with its component's own box.
+fn window_button(ui: &mut Ui, rect: Rect, which: Button, maximized: bool, group: bool) -> bool {
     let name = crate::strings::tr(
         ui.ctx(),
         match which {
@@ -593,46 +680,61 @@ fn window_button(ui: &mut Ui, rect: Rect, which: Button, maximized: bool) -> boo
     let id = ui.id().with(("egui_pop.window_button", which as u8));
     let response = ui.interact(rect, id, Sense::click());
     a11y::name(&response, WidgetType::Button, name);
-    let t = Tokens::of(ui.ctx());
-    let hot = response.hovered()
-        || response.is_pointer_button_down_on()
-        || native_hover(ui.ctx()) == Some(which);
-    let (fill, ink) = match (which, hot) {
-        (Button::Close, true) => (t.titlebar.close_hover, t.titlebar.close_text),
-        (_, true) => (t.titlebar.button_hover, t.titlebar.text),
-        (_, false) => (Color32::TRANSPARENT, t.titlebar.text_muted),
+    let kit = Kit::of(ui.ctx());
+    // On Windows the system, not egui, may see the pointer over the
+    // button (its hit test answers for it): drawn as hovered then.
+    let state = State::from_response(&response)
+        .with(State::HOVER, group || native_hover(ui.ctx()) == Some(which))
+        .toned(match which {
+            Button::Minimize => Tone::Warning,
+            Button::Maximize => Tone::Success,
+            Button::Close => Tone::Danger,
+        });
+    let component = match which {
+        Button::Close => &kit.window_close,
+        _ => &kit.window_button,
     };
     let painter = ui.painter_at(rect);
-    painter.rect_filled(rect, 0.0, fill);
-    // Glyphs a multiple of 4 points wide, on the pixel grid.
-    let c = rect.center();
-    let c = pos2(
-        painter.round_to_pixel_center(c.x),
-        painter.round_to_pixel_center(c.y),
+    component.paint(
+        &KitCx {
+            painter: &painter,
+            ppp: ui.ctx().pixels_per_point(),
+        },
+        &Part {
+            rect,
+            room: rect,
+            state,
+            label: None,
+        },
     );
-    let s = 5.0;
-    let stroke = Stroke::new(crate::scale::stroke(ui.ctx(), 1.0), ink);
-    match which {
-        Button::Minimize => {
-            painter.line_segment([pos2(c.x - s, c.y), pos2(c.x + s, c.y)], stroke);
-        }
-        Button::Maximize if maximized => {
-            let back =
-                Rect::from_min_size(pos2(c.x - s + 2.0, c.y - s), Vec2::splat(2.0 * s - 2.0));
-            let front =
-                Rect::from_min_size(pos2(c.x - s, c.y - s + 2.0), Vec2::splat(2.0 * s - 2.0));
-            painter.rect_stroke(back, 0.0, stroke, egui::StrokeKind::Inside);
-            painter.rect_filled(front, 0.0, if hot { fill } else { t.titlebar.background });
-            painter.rect_stroke(front, 0.0, stroke, egui::StrokeKind::Inside);
-        }
-        Button::Maximize => {
-            let r = Rect::from_center_size(c, Vec2::splat(2.0 * s));
-            painter.rect_stroke(r, 0.0, stroke, egui::StrokeKind::Inside);
-        }
-        Button::Close => {
-            painter.line_segment([pos2(c.x - s, c.y - s), pos2(c.x + s, c.y + s)], stroke);
-            painter.line_segment([pos2(c.x + s, c.y - s), pos2(c.x - s, c.y + s)], stroke);
-        }
+    let b = component.style(state);
+    let glyph = kit.glyph(match which {
+        Button::Minimize => Glyph::WindowMinimize,
+        Button::Maximize if maximized => Glyph::WindowRestore,
+        Button::Maximize => Glyph::WindowMaximize,
+        Button::Close => Glyph::WindowClose,
+    });
+    // The state's `indicator-size` when the kit gives one; else ten
+    // points across, or half the button's own size when it has one
+    // (`height`: a traffic light's circle).
+    let h = component.data.height;
+    let size = if b.indicator_size > 0.0 {
+        b.indicator_size
+    } else if h > 0.0 {
+        (h / 2.0).max(4.0)
+    } else {
+        10.0
+    };
+    if b.text.a() > 0 {
+        // On the pixel grid: an icon's texture drawn between pixels blurs.
+        let ppp = ui.ctx().pixels_per_point();
+        let min = rect.center() - Vec2::splat(size / 2.0);
+        let min = pos2((min.x * ppp).round() / ppp, (min.y * ppp).round() / ppp);
+        glyph.paint(
+            &painter,
+            Rect::from_min_size(min, Vec2::splat(size)),
+            b.text,
+        );
     }
     response.on_hover_text(name).clicked()
 }
@@ -693,6 +795,157 @@ mod tests {
         assert_eq!(r.grip, 0);
         assert_eq!(r.hit(0, 300), Hit::Client);
         assert_eq!(r.hit(400, 0), Hit::Caption);
+    }
+
+    /// Draws a title bar 800 points wide with a leading item, in a context
+    /// whose theme is pop-dark with `json` merged, the pointer at
+    /// `pointer`; gives what the last pass painted.
+    fn bar_with(
+        json: &str,
+        pointer: Option<Pos2>,
+    ) -> (
+        TitleBarOutput,
+        Option<Rect>,
+        Context,
+        Vec<egui::epaint::ClippedShape>,
+    ) {
+        let mut themes = egui_pop_tokens::Themes::default();
+        themes
+            .add_text("frame-test", json)
+            .expect("test theme reads");
+        let tokens = Tokens::new(themes.resolve(&egui_pop_tokens::ThemeSpec::new("frame-test")));
+        let ctx = Context::default();
+        crate::theme::install_tokens(&ctx, tokens);
+        let mut out = None;
+        let mut lead = None;
+        let mut shapes = Vec::new();
+        // Twice: the second pass sees the pointer over what the first drew.
+        for _ in 0..2 {
+            let input = egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))),
+                events: pointer
+                    .map(|p| vec![egui::Event::PointerMoved(p)])
+                    .unwrap_or_default(),
+                ..Default::default()
+            };
+            let mut full = ctx.run_ui(input, |ui| {
+                let o = TitleBar::new("Title").show(
+                    ui,
+                    |ui| {
+                        lead = Some(ui.label("Leading").rect);
+                    },
+                    |_| {},
+                );
+                out = Some(o);
+            });
+            full.textures_delta.clear();
+            shapes = full.shapes;
+        }
+        (out.expect("the bar was drawn"), lead, ctx, shapes)
+    }
+
+    const START: &str = r#"
+                        $extends: "pop-dark"
+                        title-bar:
+                          buttons-side: {$type: "string", $value: "start"}
+                        "#;
+
+    #[test]
+    fn buttons_at_the_start_come_first_and_the_title_stays_centred() {
+        let (out, lead, ctx, _) = bar_with(START, None);
+        let kit = Kit::of(&ctx);
+        assert!(kit.problems.is_empty(), "{:?}", kit.problems);
+        assert_eq!(kit.window.buttons_side, ButtonsSide::Start);
+        let l = &out.layout;
+        let (close, min, max) = (l.close.unwrap(), l.minimize.unwrap(), l.maximize.unwrap());
+        // Close at the start edge, then minimize, then maximize.
+        assert_eq!(close.left(), 0.0);
+        assert_eq!(min.left(), close.right());
+        assert_eq!(max.left(), min.right());
+        // The leading items after the buttons, published as a hole.
+        let lead = lead.unwrap();
+        assert!(lead.left() > max.right(), "{lead:?} after {max:?}");
+        assert!(l.holes.iter().any(|h| h.contains_rect(lead)));
+        // The title on the bar's centre.
+        let title = out.title.expect("the title was laid out");
+        assert!((title.center().x - 400.0).abs() < 1.0, "{title:?}");
+        // The regions a platform layer reads follow the buttons: Snap
+        // Layouts over maximize wherever it is.
+        let r = regions(&ctx).expect("published");
+        let ppp = r.pixels_per_point;
+        let at = |p: Rect| ((p.center().x * ppp) as i32, (p.center().y * ppp) as i32);
+        assert_eq!(r.hit(at(max).0, at(max).1), Hit::Maximize);
+        assert_eq!(r.hit(at(close).0, at(close).1), Hit::Close);
+        assert_eq!(
+            r.hit((790.0 * ppp) as i32, (16.0 * ppp) as i32),
+            Hit::Caption
+        );
+    }
+
+    #[test]
+    fn the_default_kit_keeps_the_buttons_at_the_end() {
+        let (out, lead, _, _) = bar_with(
+            r#"
+                                         $extends: "pop-dark"
+                                         "#,
+            None,
+        );
+        let l = &out.layout;
+        assert_eq!(l.close.unwrap().right(), 800.0);
+        assert_eq!(l.maximize.unwrap().right(), l.close.unwrap().left());
+        assert_eq!(l.minimize.unwrap().right(), l.maximize.unwrap().left());
+        assert!(lead.unwrap().right() < l.minimize.unwrap().left());
+    }
+
+    #[test]
+    fn a_bad_buttons_side_is_reported() {
+        let (out, _, ctx, _) = bar_with(
+            r#"
+            $extends: "pop-dark"
+            title-bar:
+              buttons-side: {$type: "string", $value: "left"}
+            "#,
+            None,
+        );
+        let kit = Kit::of(&ctx);
+        assert_eq!(kit.window.buttons_side, ButtonsSide::End);
+        assert_eq!(
+            kit.problems,
+            ["title-bar.buttons-side: `left` is not start or end"]
+        );
+        assert_eq!(out.layout.close.unwrap().right(), 800.0);
+    }
+
+    #[test]
+    fn grouped_buttons_hover_together() {
+        // A close glyph shown only on hover. With `group`, the pointer
+        // over minimize draws the three hovered: the close glyph shows.
+        let json = r##"
+                   $extends: "pop-dark"
+                   title-bar:
+                     buttons-side: {$type: "string", $value: "start"}
+                     buttons-hover: {$type: "string", $value: "group"}
+                   window-close:
+                     rest:
+                       text: {$type: "color", $value: "#00000000"}
+                     hover:
+                       text: {$type: "color", $value: "#ff00ff"}
+                   "##;
+        let magenta = Color32::from_rgb(255, 0, 255);
+        let close_glyph = |pointer| {
+            let (out, _, ctx, shapes) = bar_with(json, pointer);
+            assert_eq!(Kit::of(&ctx).window.buttons_hover, ButtonsHover::Group);
+            let shown = shapes.iter().any(|s| match &s.shape {
+                egui::Shape::LineSegment { stroke, .. } => stroke.color == magenta,
+                _ => false,
+            });
+            (out, shown)
+        };
+        let (out, shown) = close_glyph(None);
+        assert!(!shown);
+        let over_minimize = out.layout.minimize.unwrap().center();
+        assert!(close_glyph(Some(over_minimize)).1);
+        assert!(!close_glyph(Some(pos2(400.0, 300.0))).1);
     }
 
     #[test]

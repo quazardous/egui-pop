@@ -21,30 +21,10 @@
 //! ```
 
 use egui::{
-    Color32, Rect, Response, Sense, Stroke, StrokeKind, TextureId, Ui, Vec2, Widget, WidgetInfo,
-    WidgetType, pos2, vec2,
+    Color32, Rect, Response, Sense, TextureId, Ui, Vec2, Widget, WidgetInfo, WidgetType, pos2, vec2,
 };
+use egui_pop_core::kit::{Kit, KitCx, Part, State};
 use egui_pop_core::theme::Tokens;
-
-/// The thumbnails' colours, from the theme (`thumbnail.*`).
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct ThumbnailTokens {
-    pub background: Color32,
-    pub hover: Color32,
-    pub selected: Color32,
-}
-
-impl ThumbnailTokens {
-    pub fn of(ctx: &egui::Context) -> ThumbnailTokens {
-        let t = Tokens::of(ctx);
-        let c = |path: &str, fallback: Color32| t.color(path).unwrap_or(fallback);
-        ThumbnailTokens {
-            background: c("thumbnail.background", t.surface.raised),
-            hover: c("thumbnail.hover", t.border.strong),
-            selected: c("thumbnail.selected", t.accent.default),
-        }
-    }
-}
 
 /// One thumbnail.
 #[derive(Debug)]
@@ -119,10 +99,26 @@ impl Widget for Thumbnail {
             }
         });
         let (rect, response) = ui.allocate_exact_size(size, Sense::click());
-        let t = ThumbnailTokens::of(ui.ctx());
         let tokens = Tokens::of(ui.ctx());
+        // The kit's box (`thumbnail`): a selected thumbnail is not
+        // hovered. Painted unclipped, so the focus ring outside it shows.
+        let state = State::REST
+            .with(State::SELECTED, self.selected)
+            .with(State::HOVER, response.hovered() && !self.selected)
+            .with(State::FOCUS, response.has_focus());
+        Kit::of(ui.ctx()).thumbnail.paint(
+            &KitCx {
+                painter: ui.painter(),
+                ppp: ui.ctx().pixels_per_point(),
+            },
+            &Part {
+                rect,
+                room: rect,
+                state,
+                label: None,
+            },
+        );
         let painter = ui.painter_at(rect);
-        painter.rect_filled(rect, tokens.radius.widget, t.background);
         let inner = rect.shrink(tokens.space.xs.max(2.0));
         match (self.image, self.placeholder) {
             (Some((id, px)), _) => {
@@ -137,24 +133,6 @@ impl Widget for Thumbnail {
                 painter.rect_filled(inner, 0.0, c);
             }
             (None, None) => {}
-        }
-        let ring = if self.selected {
-            Some(Stroke::new(2.0, t.selected))
-        } else if response.hovered() {
-            Some(Stroke::new(1.0, t.hover))
-        } else {
-            None
-        };
-        if let Some(stroke) = ring {
-            painter.rect_stroke(rect, tokens.radius.widget, stroke, StrokeKind::Inside);
-        }
-        if response.has_focus() {
-            painter.rect_stroke(
-                rect.expand(1.0),
-                tokens.radius.widget,
-                Stroke::new(2.0, tokens.focus_ring),
-                StrokeKind::Outside,
-            );
         }
         let label = self.label;
         let selected = self.selected;

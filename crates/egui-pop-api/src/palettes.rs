@@ -42,12 +42,13 @@
 
 use std::collections::BTreeMap;
 
-use egui::{Id, Key, Modifiers, Pos2, Rect, Response, Ui, Vec2, WidgetType};
+use egui::{Id, Key, Modifiers, Pos2, Rect, Ui, Vec2};
 use egui_pop_core::band::{self, BandStyle};
 use egui_pop_core::icon::Icon;
+use egui_pop_core::kit::{Glyph, Kit, State};
+use egui_pop_core::lock;
 use egui_pop_core::strings;
 use egui_pop_core::theme::Tokens;
-use egui_pop_core::{a11y, lock};
 use egui_pop_model::commands::CommandSpec;
 use egui_pop_model::ids::{CommandId, PanelId, SettingId, StepId};
 use egui_pop_model::keymap::BindOptions;
@@ -367,28 +368,25 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
             .constrain(false)
             .show(ctx, |ui| {
                 ui.multiply_opacity(opacity);
+                let kit = Kit::of(ui.ctx());
+                let window = &kit.palette_window;
                 let style = BandStyle {
-                    fill: t.palette.header,
-                    separator: t.palette.border,
-                    radius: t.radius.window,
-                    padding: t.palette.padding,
-                    gap: t.space.xs,
+                    padding: window.data.padding_x,
+                    gap: kit.header_band.data.padding_y,
                 };
-                egui::Frame::window(ui.style())
-                    .fill(t.palette.background)
-                    .stroke(egui::Stroke::new(1.0, t.palette.border))
-                    .inner_margin(t.palette.padding)
-                    .show(ui, |ui| {
-                        ui.set_min_width(spec.min_size);
-                        ui.set_max_width(spec.default_size.unwrap_or(320.0).max(spec.min_size));
-                        let (_, b) =
-                            band::begin(ui, &style, |ui| band_row(ui, &t, &title, &f, &mut asked));
-                        if !f.rolled {
-                            app.show_panel(ui, &f.panel);
-                        }
-                        band::paint(ui, &b, &style);
-                        moved = Some(b);
+                let shadow = ui.visuals().window_shadow;
+                window.show(ui, State::REST, shadow, |ui| {
+                    ui.set_min_width(spec.min_size);
+                    ui.set_max_width(spec.default_size.unwrap_or(320.0).max(spec.min_size));
+                    let (_, b) = band::begin(ui, &style, |ui, state| {
+                        band_row(ui, &t, &title, state, &f, &mut asked);
                     });
+                    if !f.rolled {
+                        app.show_panel(ui, &f.panel);
+                    }
+                    band::paint(ui, &b, &style);
+                    moved = Some(b);
+                });
             });
         let rect = shown.response.rect;
         rects.insert(f.panel.clone(), rect);
@@ -419,15 +417,17 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
     app.workbench_mut().palette_rects = rects;
 }
 
-/// The band's row: the title, then Close, Roll and Pin at its end.
-fn band_row(ui: &mut Ui, t: &Tokens, title: &str, f: &Floating, asked: &mut Asked) {
+/// The band's row: the title (in the band's `state`), then Close, Roll
+/// and Pin at its end.
+fn band_row(ui: &mut Ui, t: &Tokens, title: &str, state: State, f: &Floating, asked: &mut Asked) {
     let side = t.size.control_height.max(24.0);
+    let kit = Kit::of(ui.ctx());
     ui.horizontal(|ui| {
         ui.add(
             egui::Label::new(
                 egui::RichText::new(title)
                     .strong()
-                    .color(t.palette.header_text),
+                    .color(kit.header_band.style(state).text),
             )
             .truncate()
             .selectable(false),
@@ -438,7 +438,7 @@ fn band_row(ui: &mut Ui, t: &Tokens, title: &str, f: &Floating, asked: &mut Aske
                 strings::tr_args(ui.ctx(), key, &[("palette", title)])
             };
             let name = named(ui, &txt::PALETTE_CLOSE);
-            if icon_button(ui, side, Icon::Close, &name, false).clicked() {
+            if band::button(ui, side, kit.glyph(Glyph::Close), &name, false).clicked() {
                 asked.close = true;
             }
             let (icon, name) = if f.rolled {
@@ -447,7 +447,7 @@ fn band_row(ui: &mut Ui, t: &Tokens, title: &str, f: &Floating, asked: &mut Aske
                 (Icon::ChevronUp, &txt::PALETTE_ROLL_UP)
             };
             let name = named(ui, name);
-            if icon_button(ui, side, icon, &name, false).clicked() {
+            if band::button(ui, side, icon, &name, false).clicked() {
                 asked.roll = true;
             }
             let (icon, name) = if f.pinned {
@@ -456,45 +456,11 @@ fn band_row(ui: &mut Ui, t: &Tokens, title: &str, f: &Floating, asked: &mut Aske
                 (Icon::Unlock, &txt::PALETTE_PIN)
             };
             let name = named(ui, name);
-            if icon_button(ui, side, icon, &name, f.pinned).clicked() {
+            if band::button(ui, side, icon, &name, f.pinned).clicked() {
                 asked.pin = true;
             }
         });
     });
-}
-
-/// A square icon button of the band, named.
-fn icon_button(ui: &mut Ui, side: f32, icon: Icon, name: &str, on: bool) -> Response {
-    let t = Tokens::of(ui.ctx());
-    let (rect, response) = ui.allocate_exact_size(egui::vec2(side, side), egui::Sense::click());
-    if ui.is_rect_visible(rect) {
-        let visuals = ui.style().interact(&response);
-        if response.hovered() || response.has_focus() || on {
-            ui.painter()
-                .rect_filled(rect, t.radius.widget, visuals.weak_bg_fill);
-        }
-        if response.has_focus() {
-            ui.painter().rect_stroke(
-                rect,
-                t.radius.widget,
-                egui::Stroke::new(1.5, t.focus_ring),
-                egui::StrokeKind::Inside,
-            );
-        }
-        let color = if response.hovered() || on {
-            t.text.strong
-        } else {
-            t.text.default
-        };
-        let size = t.size.icon_inline;
-        icon.paint(
-            ui.painter(),
-            Rect::from_center_size(rect.center(), egui::vec2(size, size)),
-            color,
-        );
-    }
-    a11y::name(&response, WidgetType::Button, name);
-    response.on_hover_text(name)
 }
 
 /// Follows a palette's band: a drag moves it live (snapped, clamped),

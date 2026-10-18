@@ -1,0 +1,59 @@
+$description: "The `field` component of the default kit (docs/kit.md), layered into pop-dark."
+field:
+  $description: "A text field. egui's text fields take their background from it; their outline follows the button's states (egui shares them)."
+  shape:
+    $type: "string"
+    $value: "box"
+  rest:
+    fill:
+      $type: "color"
+      $value: "{surface.sunken}"
+    border-color:
+      $type: "color"
+      $value: "{border.default}"
+    border-width:
+      $type: "dimension"
+      $value: {value: 1, unit: "px"}
+    radius:
+      $type: "dimension"
+      $value: "{radius.widget}"
+    text:
+      $type: "color"
+      $value: "{text.default}"
+  hover:
+    border-color:
+      $type: "color"
+      $value: "{border.strong}"
+  # The states every field shows, as tones: read-only and the placeholder
+  # are muted; changed, required, refused and being checked colour the
+  # field's edge and markers.
+  tone:
+    muted:
+      fill:
+        $type: "color"
+        $value: "{surface.panel}"
+        $description: "A read-only field: selectable, not editable."
+      text:
+        $type: "color"
+        $value: "{text.muted}"
+        $description: "The hint an empty field shows."
+    accent:
+      border-color:
+        $type: "color"
+        $value: "{accent.default}"
+        $description: "Changed from the saved or default value: an edge and a dot."
+    warning:
+      border-color:
+        $type: "color"
+        $value: "{warning}"
+        $description: "Must be given: an asterisk by the field."
+    danger:
+      border-color:
+        $type: "color"
+        $value: "{danger}"
+        $description: "A refused value: an edge, an icon and its message."
+    info:
+      border-color:
+        $type: "color"
+        $value: "{info}"
+        $description: "A value being checked: an edge and a clock."

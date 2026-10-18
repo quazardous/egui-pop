@@ -1,0 +1,6 @@
+# An unquoted colour: YAML reads it as a comment.
+tab:
+  rest:
+    text:
+      $type: color
+      $value: #ffffff

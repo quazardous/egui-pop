@@ -4,6 +4,7 @@
 use egui::{Id, Key, Ui};
 use egui_pop_api::AppHandle;
 use egui_pop_core::icon::Icon;
+use egui_pop_core::kit::{Glyph, Kit, KitCx, Part, State};
 use egui_pop_core::strings::{tr, tr_args};
 use egui_pop_core::theme::Tokens;
 
@@ -35,15 +36,51 @@ fn toggle(ui: &mut Ui, on: &mut bool, text: &str, label: &str) -> bool {
     false
 }
 
+/// A toggle showing a kit glyph (the replace row's disclosure) in a
+/// one-character monospace cell, like the text toggles next to it.
+fn glyph_toggle(ui: &mut Ui, on: &mut bool, glyph: Icon, label: &str) -> bool {
+    let r = ui
+        .selectable_label(*on, egui::RichText::new(" ").monospace())
+        .on_hover_text(label);
+    let side = r.rect.height() * 0.6;
+    let at = egui::Rect::from_center_size(r.rect.center(), egui::vec2(side, side));
+    let color = ui.style().interact_selectable(&r, *on).text_color();
+    glyph.paint(ui.painter(), at, color);
+    let lab = label.to_string();
+    let value = *on;
+    r.widget_info(move || {
+        egui::WidgetInfo::selected(egui::WidgetType::Checkbox, true, value, &lab)
+    });
+    if r.clicked() {
+        *on = !*on;
+        return true;
+    }
+    false
+}
+
 fn icon_button(ui: &mut Ui, icon: Icon, label: &str) -> bool {
     let size = ui.spacing().interact_size.y;
     let (rect, r) = ui.allocate_exact_size(egui::vec2(size, size), egui::Sense::click());
-    let t = Tokens::of(ui.ctx());
-    if r.hovered() {
-        ui.painter()
-            .rect_filled(rect, t.radius.widget, t.surface.hover);
+    if ui.is_rect_visible(rect) {
+        let kit = Kit::of(ui.ctx());
+        let button = &kit.find_bar_button;
+        let part = Part {
+            rect,
+            room: rect,
+            state: State::from_response(&r),
+            label: None,
+        };
+        let cx = KitCx {
+            painter: ui.painter(),
+            ppp: ui.ctx().pixels_per_point(),
+        };
+        button.paint(&cx, &part);
+        icon.paint(
+            ui.painter(),
+            rect.shrink(size * 0.22),
+            button.style(part.state).text,
+        );
     }
-    icon.paint(ui.painter(), rect.shrink(size * 0.22), t.text.default);
     egui_pop_core::a11y::name(&r, egui::WidgetType::Button, label);
     r.on_hover_text(label).clicked()
 }
@@ -64,9 +101,9 @@ pub(crate) fn show(
         (m.find.goto.clone(), std::mem::take(&mut m.find.focus))
     };
     let field_w = 220.0;
-    egui::Frame::new()
-        .inner_margin(egui::Margin::symmetric(t.space.s as i8, t.space.xs as i8))
-        .show(ui, |ui| {
+    Kit::of(&ctx)
+        .find_bar
+        .show(ui, State::REST, egui::Shadow::NONE, |ui| {
             ui.spacing_mut().item_spacing = egui::vec2(t.space.xs, t.space.xs);
             if let Some(mut text) = goto {
                 ui.horizontal(|ui| {
@@ -82,7 +119,8 @@ pub(crate) fn show(
                         r.request_focus();
                     }
                     let enter = r.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
-                    let close = icon_button(ui, Icon::Close, &tr(&ctx, &s::CLOSE));
+                    let close =
+                        icon_button(ui, Kit::of(&ctx).glyph(Glyph::Close), &tr(&ctx, &s::CLOSE));
                     if enter && let Ok(l) = text.trim().parse::<usize>() {
                         steps::goto(state, l);
                         close_bar(state);
@@ -110,8 +148,13 @@ pub(crate) fn show(
             let mut close = false;
             let mut show_replace = replace_open;
             ui.horizontal(|ui| {
-                let arrow = if show_replace { "▾" } else { "▸" };
-                if toggle(ui, &mut show_replace, arrow, &tr(&ctx, &s::TOGGLE_REPLACE)) {
+                let kit = egui_pop_core::kit::Kit::of(&ctx);
+                let glyph = kit.glyph(if show_replace {
+                    egui_pop_core::kit::Glyph::DisclosureOpen
+                } else {
+                    egui_pop_core::kit::Glyph::DisclosureClosed
+                });
+                if glyph_toggle(ui, &mut show_replace, glyph, &tr(&ctx, &s::TOGGLE_REPLACE)) {
                     state.lock().find.replace = show_replace;
                 }
                 let id = editor.with("find");
@@ -170,7 +213,7 @@ pub(crate) fn show(
                 if icon_button(ui, Icon::ChevronDown, &tr(&ctx, &s::NEXT)) {
                     next = Some(true);
                 }
-                close = icon_button(ui, Icon::Close, &tr(&ctx, &s::CLOSE));
+                close = icon_button(ui, Kit::of(&ctx).glyph(Glyph::Close), &tr(&ctx, &s::CLOSE));
             });
             if show_replace {
                 ui.horizontal(|ui| {
