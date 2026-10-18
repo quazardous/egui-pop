@@ -5,12 +5,12 @@
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
 use egui_pop_api::steps::{Before, Outcome};
-use egui_pop_api::workbench::{PANEL_INSPECTOR, PANEL_MAIN, PANEL_SIDE_BAR, STEP_MOVE};
+use egui_pop_api::workbench::{PANEL_INSPECTOR, PANEL_MAIN, PANEL_SIDE_BAR, STEP_MOVE, STEP_PLACE};
 use egui_pop_api::zones::{self, Block};
 use egui_pop_api::{App, AppBuilder, Ctx, Plugin, PluginError};
 use egui_pop_model::commands::Origin;
 use egui_pop_model::ids::{BlockId, CommandId, PanelId, PluginId};
-use egui_pop_model::layout::Node;
+use egui_pop_model::layout::{Node, Placement};
 use egui_pop_model::panels::{Area, PanelSpec};
 use serde_json::Value as Json;
 
@@ -411,4 +411,110 @@ fn an_application_sizes_the_shell_panels_and_starts_with_an_area_folded() {
         .area_rect(Area::EndSide)
         .expect("the inspector is shown");
     assert!((inspector.width() - 428.0).abs() < 2.0, "{inspector:?}");
+}
+
+/// Vetoes the end side bar lying over the centre.
+struct KeepEndBeside;
+
+impl Plugin for KeepEndBeside {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("keep-end-beside")
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        ctx.before(STEP_PLACE, |_, args| {
+            if args["area"] == "end_side" && args["placement"] == "over" {
+                Before::Veto("the inspector stays beside".into())
+            } else {
+                Before::Go
+            }
+        });
+        Ok(())
+    }
+}
+
+#[test]
+fn a_side_area_lies_over_the_centre_through_a_step_a_plugin_may_veto() {
+    let mut h = harness(builder(false).plugin(KeepEndBeside));
+    let app = h.state().handle().clone();
+    let centre = app.area_rect(Area::Center).unwrap();
+    let tree = app.area_rect(Area::StartSide).unwrap();
+    assert_eq!(app.area_placement(Area::StartSide), Placement::Beside);
+
+    // Over: the strip keeps the room, the centre gets the side bar's.
+    let out = app.place_area(Area::StartSide, Placement::Over).unwrap();
+    assert!(out.ok(), "{out:?}");
+    h.run();
+    h.run();
+    assert_eq!(app.area_placement(Area::StartSide), Placement::Over);
+    assert_eq!(app.layout().over, [Area::StartSide]);
+    let wide = app.area_rect(Area::Center).unwrap();
+    assert!(wide.width() > centre.width() + 100.0, "{wide:?} {centre:?}");
+    // The area lies over the centre, as wide as it was, still drawn.
+    let over = app.area_rect(Area::StartSide).unwrap();
+    assert!(over.intersects(wide), "{over:?} {wide:?}");
+    assert!(
+        (over.width() - tree.width()).abs() < 2.0,
+        "{over:?} {tree:?}"
+    );
+    assert!(h.query_by_label("tree body").is_some());
+    // Its strip folds it; the centre does not move.
+    h.get_by_label("Fold the start side bar").click();
+    h.run();
+    h.run();
+    assert_eq!(app.layout().folded, [Area::StartSide]);
+    assert!(h.query_by_label("tree body").is_none());
+    assert_eq!(app.area_rect(Area::Center).unwrap(), wide);
+    h.get_by_label("Unfold the start side bar").click();
+    h.run();
+    h.run();
+    assert!(app.layout().folded.is_empty());
+    assert!(h.query_by_label("tree body").is_some());
+    assert_eq!(app.area_rect(Area::Center).unwrap(), wide);
+
+    // A plugin vetoes the end side bar lying over.
+    let out = app.place_area(Area::EndSide, Placement::Over).unwrap();
+    assert_eq!(out.vetoed(), Some("the inspector stays beside"));
+    assert_eq!(app.area_placement(Area::EndSide), Placement::Beside);
+    // Only side areas lie over.
+    let out = app.place_area(Area::Bottom, Placement::Over).unwrap();
+    assert!(
+        matches!(out, Outcome::Done(Err(ref e)) if e.contains("only a side area")),
+        "{out:?}"
+    );
+    // Back beside: the centre narrows again.
+    assert!(
+        app.place_area(Area::StartSide, Placement::Beside)
+            .unwrap()
+            .ok()
+    );
+    h.run();
+    h.run();
+    assert!(app.layout().over.is_empty());
+    let back = app.area_rect(Area::Center).unwrap();
+    assert!((back.width() - centre.width()).abs() < 2.0, "{back:?}");
+}
+
+#[test]
+fn an_application_starts_an_area_over_and_the_placement_is_saved() {
+    let dir = std::env::temp_dir().join(format!("egui-pop-over-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    {
+        let h = harness(
+            builder(false)
+                .over(&[Area::StartSide, Area::Bottom])
+                .persist(&dir),
+        );
+        let app = h.state().handle();
+        // The bottom area always lies beside.
+        assert_eq!(app.layout().over, [Area::StartSide]);
+        app.place_area(Area::EndSide, Placement::Over);
+        h.state().save().unwrap();
+    }
+    // A saved layout wins over the builder's.
+    let h = harness(builder(false).persist(&dir));
+    let app = h.state().handle();
+    assert_eq!(app.area_placement(Area::StartSide), Placement::Over);
+    assert_eq!(app.area_placement(Area::EndSide), Placement::Over);
+    let _ = std::fs::remove_dir_all(&dir);
 }

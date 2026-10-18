@@ -9,6 +9,15 @@ egui minor.
 
 ### Added
 
+- Workbench: a side area may lie **over** the centre instead of beside
+  it (`workbench.place`, `{ "area", "placement" }`, a step a plugin may
+  veto; `AppHandle::place_area`, `area_placement`, `AppBuilder::over`):
+  its folded strip keeps the room, so the centre keeps its width, and
+  the area lies above the centre with the kit's `side-area` shadow; a
+  click on the strip folds or unfolds it, its inner edge resizes it.
+  The placement is saved with the layout (`Layout::over`,
+  `layout::Placement`).
+
 - Shadows from tokens: `shadow.popup`, `shadow.window` and `shadow.side`
   (`offset-x`, `offset-y`, `blur`, `spread`, `color`) become egui's
   popup and window shadows (menus, popovers, dialogs, palettes) with

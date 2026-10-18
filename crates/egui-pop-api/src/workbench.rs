@@ -26,12 +26,19 @@
 //! | `workbench.hide` | `{ "panel" }`: closes it (kept closed by the layout) |
 //! | `workbench.focus` | `{ "panel" }`: shows it and gives it the keyboard |
 //! | `workbench.fold` | `{ "area", "folded" }`: an area folded to its strip, or unfolded |
+//! | `workbench.place` | `{ "area", "placement" }`: a side area lies `beside` the centre or `over` it |
 //! | `workbench.detach` | `{ "panel" }`: into a window of its own (its own scale) |
 //! | `workbench.attach` | `{ "panel" }`: a detached panel docked back |
 //! | `workbench.close_window` | `{ "panel" }`: a detached panel's window closes; the default docks it back, a veto keeps the window |
 //!
 //! Each declared panel gets the commands `<panel>.focus` and
 //! `<panel>.toggle`.
+//!
+//! A side area lies **beside** the centre (an egui side panel, taking the
+//! centre's room) or **over** it ([`Placement::Over`]): its folded strip
+//! keeps the room in the layout, so the centre keeps its width, and the
+//! area, unfolded, lies above the centre next to its strip with the kit's
+//! `side-area` shadow; a click on the strip folds or unfolds it.
 //!
 //! A panel may also float over the interface: a palette
 //! (`PanelSpec::palette`) does when it opens, any floatable panel when
@@ -50,7 +57,7 @@ use egui_pop_core::kit::{
 };
 use egui_pop_core::strings;
 use egui_pop_model::ids::{PanelId, StepId, ZoneId};
-use egui_pop_model::layout::{Floating, Layout, Node};
+use egui_pop_model::layout::{Floating, Layout, Node, Placement};
 use egui_pop_model::panels::{Area, PanelSpec, Panels};
 use serde_json::{Value as Json, json};
 
@@ -69,6 +76,7 @@ pub const STEP_SHOW: StepId = StepId::from_static("workbench.show");
 pub const STEP_HIDE: StepId = StepId::from_static("workbench.hide");
 pub const STEP_FOCUS: StepId = StepId::from_static("workbench.focus");
 pub const STEP_FOLD: StepId = StepId::from_static("workbench.fold");
+pub const STEP_PLACE: StepId = StepId::from_static("workbench.place");
 pub const STEP_DETACH: StepId = StepId::from_static("workbench.detach");
 pub const STEP_ATTACH: StepId = StepId::from_static("workbench.attach");
 pub const STEP_CLOSE_WINDOW: StepId = StepId::from_static("workbench.close_window");
@@ -163,6 +171,11 @@ pub(crate) fn steps() -> Vec<crate::steps::StepSpec> {
         )
         .args(json!({ "area": "start_side", "folded": true })),
         StepSpec::new(
+            STEP_PLACE,
+            "A side area lies beside the centre or over it (`area`, `placement`: `beside` or `over`).",
+        )
+        .args(json!({ "area": "start_side", "placement": "over" })),
+        StepSpec::new(
             STEP_DETACH,
             "A panel moves to a window of its own (`panel`).",
         )
@@ -230,6 +243,8 @@ pub enum Change {
     Focus(PanelId),
     /// An area folded to its strip (`true`) or unfolded.
     Fold(Area, bool),
+    /// A side area lies beside the centre or over it.
+    Place(Area, Placement),
     /// A panel moved to a window of its own.
     Detach(PanelId),
     /// A detached panel docked back in its area.
@@ -275,6 +290,10 @@ impl Change {
             Change::Hide(p) => (STEP_HIDE, json!({ "panel": p })),
             Change::Focus(p) => (STEP_FOCUS, json!({ "panel": p })),
             Change::Fold(a, f) => (STEP_FOLD, json!({ "area": area_name(*a), "folded": f })),
+            Change::Place(a, p) => (
+                STEP_PLACE,
+                json!({ "area": area_name(*a), "placement": p.as_str() }),
+            ),
             Change::Detach(p) => (STEP_DETACH, json!({ "panel": p })),
             Change::Attach(p) => (STEP_ATTACH, json!({ "panel": p })),
             Change::CloseWindow(p) => (STEP_CLOSE_WINDOW, json!({ "panel": p })),
@@ -325,6 +344,20 @@ impl Change {
             let area = area_from(name).ok_or_else(|| format!("no area `{name}`"))?;
             let folded = args.get("folded").and_then(Json::as_bool).unwrap_or(true);
             return Ok(Change::Fold(area, folded));
+        }
+        if *step == STEP_PLACE {
+            let name = args
+                .get("area")
+                .and_then(Json::as_str)
+                .ok_or("`area` is missing")?;
+            let area = area_from(name).ok_or_else(|| format!("no area `{name}`"))?;
+            let name = args
+                .get("placement")
+                .and_then(Json::as_str)
+                .ok_or("`placement` is missing")?;
+            let placement = Placement::parse(name)
+                .ok_or_else(|| format!("no placement `{name}` (`beside` or `over`)"))?;
+            return Ok(Change::Place(area, placement));
         }
         let panel = args
             .get("panel")
@@ -640,6 +673,16 @@ impl Workbench {
                     self.layout.folded.push(*area);
                 }
                 json!({ "area": area_name(*area), "folded": folded })
+            }
+            Change::Place(area, placement) => {
+                if !matches!(area, Area::StartSide | Area::EndSide) {
+                    return Err(format!(
+                        "only a side area may lie over the centre, not {}",
+                        area.name()
+                    ));
+                }
+                self.layout.set_placement(*area, *placement);
+                json!({ "area": area_name(*area), "placement": placement.as_str() })
             }
         };
         self.stale = true;
@@ -997,15 +1040,26 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
                 });
             });
     }
-    let folded = app.workbench_mut().layout.folded.clone();
+    let (folded, over) = {
+        let wb = app.workbench_mut();
+        (wb.layout.folded.clone(), wb.layout.over.clone())
+    };
     let kit = Kit::of(&ctx);
+    // Side areas lying over the centre, open, next to their strip.
+    let mut lying = Vec::new();
     for area in panel_alignment(app).order() {
         if !areas.contains(&area) || !visible_in(app, area) {
             continue;
         }
-        if folded.contains(&area) {
-            if matches!(area, Area::StartSide | Area::EndSide) {
-                strip(app, ui, &kit, area);
+        let side = matches!(area, Area::StartSide | Area::EndSide);
+        let is_over = side && over.contains(&area);
+        if folded.contains(&area) || is_over {
+            if side {
+                let open = is_over && !folded.contains(&area);
+                let rect = strip(app, ui, &kit, area, open);
+                if open {
+                    lying.push((area, rect));
+                }
             }
             continue;
         }
@@ -1054,10 +1108,13 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
             draw_area(app, ui, Area::Center);
         }
     });
-    app.set_drawing_areas(false);
     app.workbench_mut()
         .rects
         .insert(Area::Center, shown.response.rect);
+    for (area, strip) in lying {
+        lie_over(app, &ctx, &kit, area, strip, sizes[&area]);
+    }
+    app.set_drawing_areas(false);
     crate::palettes::show(app, &ctx);
     follow_drag(app, &ctx);
     drop_hint(app, &ctx);
@@ -1065,8 +1122,10 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
 
 /// A folded side area's strip (the kit's `area-strip`): its box, the line
 /// on the centre's side, the drag-handle glyph; a click unfolds the area
-/// through the `workbench.fold` step.
-fn strip(app: &AppHandle, ui: &mut Ui, kit: &Kit, area: Area) {
+/// through the `workbench.fold` step. A side area lying over the centre
+/// keeps its strip while `open` (`selected` then), and a click folds it.
+/// Returns where the strip was drawn.
+fn strip(app: &AppHandle, ui: &mut Ui, kit: &Kit, area: Area, open: bool) -> Rect {
     let component = &kit.area_strip;
     let width = component.data.width.max(1.0);
     let id = dock_id(area).with("egui_pop.strip");
@@ -1084,14 +1143,18 @@ fn strip(app: &AppHandle, ui: &mut Ui, kit: &Kit, area: Area) {
             let ctx = ui.ctx().clone();
             let name = strings::tr_args(
                 &ctx,
-                &txt::WORKBENCH_UNFOLD,
+                if open {
+                    &txt::WORKBENCH_FOLD
+                } else {
+                    &txt::WORKBENCH_UNFOLD
+                },
                 &[("area", &area_text(&ctx, area))],
             );
             let r = ui.interact(rect, id.with("unfold"), egui::Sense::click());
             let label = name.clone();
             r.widget_info(move || WidgetInfo::labeled(WidgetType::Button, true, &label));
             let r = r.on_hover_text(name);
-            let state = State::from_response(&r);
+            let state = State::from_response(&r).with(State::SELECTED, open);
             let b = component.style(state);
             let cx = KitCx {
                 painter: ui.painter(),
@@ -1119,9 +1182,100 @@ fn strip(app: &AppHandle, ui: &mut Ui, kit: &Kit, area: Area) {
             );
             kit.glyph(Glyph::DragHandle).paint(ui.painter(), at, b.text);
             if r.clicked() {
-                app.fold_area(area, false);
+                app.fold_area(area, open);
+            }
+            rect
+        })
+        .inner
+}
+
+/// A side area lying over the centre, open: next to its strip (`strip`),
+/// as tall, above the centre (an egui area on the middle layer, as
+/// palettes), in the kit's `side-area` box with its shadow cast towards
+/// the centre. Its edge on the centre's side resizes it; its width is
+/// kept per area (from the side panel's when it lay beside).
+fn lie_over(
+    app: &AppHandle,
+    ctx: &egui::Context,
+    kit: &Kit,
+    area: Area,
+    strip: Rect,
+    (min, default): (f32, f32),
+) {
+    let id = dock_id(area).with("egui_pop.over");
+    let width_id = id.with("width");
+    let content = app.workbench_mut().content;
+    let min = min.max(48.0);
+    let max = (content.width() - 2.0 * strip.width()).max(min);
+    let width = ctx
+        .data_mut(|d| d.get_persisted::<f32>(width_id))
+        .or_else(|| {
+            egui::containers::panel::PanelState::load(ctx, dock_id(area)).map(|s| s.size().x)
+        })
+        .unwrap_or(if default > 0.0 { default } else { 240.0 })
+        .clamp(min, max);
+    let start = area == Area::StartSide;
+    let rect = if start {
+        Rect::from_min_size(
+            egui::pos2(strip.right(), strip.top()),
+            egui::vec2(width, strip.height()),
+        )
+    } else {
+        Rect::from_min_size(
+            egui::pos2(strip.left() - width, strip.top()),
+            egui::vec2(width, strip.height()),
+        )
+    };
+    let side = &kit.side_area;
+    let rest = *side.style(State::REST);
+    let mut shadow = side.data.shadow;
+    if !start {
+        shadow.offset[0] = shadow.offset[0].saturating_neg();
+    }
+    let pad = egui::vec2(side.data.padding_x, side.data.padding_y);
+    egui::Area::new(id)
+        .order(egui::Order::Middle)
+        .fixed_pos(rect.min)
+        .constrain(false)
+        .show(ctx, |ui| {
+            let (rect, _) = ui.allocate_exact_size(rect.size(), egui::Sense::hover());
+            let painter = ui.painter();
+            if shadow != egui::Shadow::NONE {
+                painter.add(shadow.as_shape(rect, egui::CornerRadius::ZERO));
+            }
+            painter.rect_filled(rect, 0.0, ui.visuals().panel_fill);
+            let mut inner = ui.new_child(
+                egui::UiBuilder::new()
+                    .id_salt("egui_pop.over.inner")
+                    .max_rect(rect.shrink2(pad)),
+            );
+            inner.set_clip_rect(rect.shrink2(pad));
+            inner.set_min_size(inner.available_size());
+            draw_area(app, &mut inner, area);
+            // The line on the centre's side, as a side panel's.
+            let x = if start { rect.right() } else { rect.left() };
+            if rest.border_width > 0.0 {
+                ui.painter().vline(
+                    x,
+                    rect.y_range(),
+                    ui.visuals().widgets.noninteractive.bg_stroke,
+                );
+            }
+            // Resized from that edge.
+            let reach = ui.style().interaction.resize_grab_radius_side;
+            let edge = Rect::from_x_y_ranges(x - reach..=x + reach, rect.y_range());
+            let r = ui.interact(edge, id.with("resize"), egui::Sense::drag());
+            if r.hovered() || r.dragged() {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+            }
+            if r.dragged() {
+                let dx = r.drag_delta().x;
+                let w = (width + if start { dx } else { -dx }).clamp(min, max);
+                ui.ctx().data_mut(|d| d.insert_persisted(width_id, w));
             }
         });
+    app.workbench_mut().rects.insert(area, rect);
+    grip(ctx, kit, area, rect);
 }
 
 /// A side area's resize grip (the kit's `area-grip`) at the middle of its

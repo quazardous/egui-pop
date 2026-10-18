@@ -914,7 +914,7 @@ mod tests {
         let s = Kit::compile(&t, &Shapes::default()).side_area.data.shadow;
         assert_eq!(s.offset, [3, 0]);
         assert_eq!(s.spread, 0, "egui's spread is never negative");
-        assert_eq!(s.blur, 24);
+        assert_eq!(s.blur, 32);
         assert_eq!(s.color, Color32::from_rgba_unmultiplied(255, 0, 0, 128));
     }
 

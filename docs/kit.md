@@ -244,7 +244,12 @@ compiled at install.
   The default kit's grip is transparent. An open side area
   (`side-area`) has `padding-x` and `padding-y` between its edges and its
   panels (egui's 8 and 2 by default), and no separator line when its
-  `border-width` is 0.
+  `border-width` is 0. A side area may lie over the centre
+  (`workbench.place`): its strip keeps the room (`selected` while the
+  area is open; a click folds it) and the area is drawn above the
+  centre in `side-area`'s box, casting its `shadow-*` towards the centre
+  (`shadow.side` by default). The gallery's `workbench-over-pop-dark`
+  snapshot shows it.
 - **egui's own widgets** (`button`, `field`). egui's style is built from
   the kit when a theme is installed (`theme::style_with`): `button`'s
   rest, hover, active and selected are egui's inactive, hovered, active

@@ -1538,6 +1538,21 @@ impl AppHandle {
         self.change_workbench(crate::workbench::Change::Fold(area, folded))
     }
 
+    /// Lays a side area beside the centre or over it (`workbench.place`;
+    /// refused for the centre and the bottom area).
+    pub fn place_area(
+        &self,
+        area: Area,
+        placement: egui_pop_model::layout::Placement,
+    ) -> Option<Outcome> {
+        self.change_workbench(crate::workbench::Change::Place(area, placement))
+    }
+
+    /// Where a side area lies now (beside the centre, or over it).
+    pub fn area_placement(&self, area: Area) -> egui_pop_model::layout::Placement {
+        self.workbench_mut().layout.placement(area)
+    }
+
     /// The indicators and their states, lightest first.
     pub fn indicators(&self) -> Vec<(crate::strips::Indicator, crate::strips::IndicatorState)> {
         let mut v: Vec<_> = self
@@ -1655,6 +1670,7 @@ pub struct AppBuilder {
     menu_bar: bool,
     shell_sizes: Vec<(PanelId, f32)>,
     folded: Vec<Area>,
+    over: Vec<Area>,
     wrap: Option<WrapUi>,
     on_exit: Vec<ExitFn>,
     name: Option<String>,
@@ -1720,6 +1736,7 @@ impl AppBuilder {
             menu_bar: true,
             shell_sizes: Vec::new(),
             folded: Vec::new(),
+            over: Vec::new(),
             wrap: None,
             on_exit: Vec::new(),
             name: None,
@@ -1777,6 +1794,19 @@ impl AppBuilder {
     /// saved layout (a saved one, the user's choice, wins).
     pub fn folded(mut self, areas: &[Area]) -> Self {
         self.folded = areas.to_vec();
+        self
+    }
+
+    /// Side areas lying over the centre when the application starts with
+    /// no saved layout (`workbench.place`; a saved one wins): their
+    /// folded strip keeps the room, the centre its width. The centre and
+    /// the bottom area always lie beside.
+    pub fn over(mut self, areas: &[Area]) -> Self {
+        self.over = areas
+            .iter()
+            .copied()
+            .filter(|a| matches!(a, Area::StartSide | Area::EndSide))
+            .collect();
         self
     }
 
@@ -1963,6 +1993,7 @@ impl AppBuilder {
         app.handle.0.menu_bar.set(self.menu_bar);
         *app.handle.0.shell_sizes.borrow_mut() = self.shell_sizes;
         app.handle.workbench_mut().layout.folded = self.folded;
+        app.handle.workbench_mut().layout.over = self.over;
         *app.handle.0.name.borrow_mut() = self.name.unwrap_or_default();
         let mut themes = self.themes;
         let mut kits = self.kits;
