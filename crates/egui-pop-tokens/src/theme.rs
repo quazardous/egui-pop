@@ -77,105 +77,40 @@ pub fn theme_label(name: &str) -> String {
 pub const BUILT_IN_ACCENTS: &[&str] = &["gold", "blue", "green", "amber", "red"];
 
 /// The default kit's components (`docs/kit.md`), one file each, layered
-/// into `pop-dark` (and so into every theme extending it). One line per
-/// component, in alphabetical order. `themes/kit/` is a kit folder
-/// (`crate::kit`): a test checks this list holds each of its files.
-#[rustfmt::skip]
-pub(crate) const KIT_FILES: &[(&str, &str)] = &[
-    ("area-grip", include_str!("../themes/kit/area-grip.tokens.yaml")),
-    ("area-strip", include_str!("../themes/kit/area-strip.tokens.yaml")),
-    ("assist-card", include_str!("../themes/kit/assist-card.tokens.yaml")),
-    ("backdrop", include_str!("../themes/kit/backdrop.tokens.yaml")),
-    ("button", include_str!("../themes/kit/button.tokens.yaml")),
-    ("dialog", include_str!("../themes/kit/dialog.tokens.yaml")),
-    ("editor-frame", include_str!("../themes/kit/editor-frame.tokens.yaml")),
-    ("fault-card", include_str!("../themes/kit/fault-card.tokens.yaml")),
-    ("field", include_str!("../themes/kit/field.tokens.yaml")),
-    ("find-bar", include_str!("../themes/kit/find-bar.tokens.yaml")),
-    ("fullscreen-exit", include_str!("../themes/kit/fullscreen-exit.tokens.yaml")),
-    ("glyph", include_str!("../themes/kit/glyph.tokens.yaml")),
-    ("job-log", include_str!("../themes/kit/job-log.tokens.yaml")),
-    ("list-row", include_str!("../themes/kit/list-row.tokens.yaml")),
-    ("list-view", include_str!("../themes/kit/list-view.tokens.yaml")),
-    ("menu-item", include_str!("../themes/kit/menu-item.tokens.yaml")),
-    ("meter", include_str!("../themes/kit/meter.tokens.yaml")),
-    ("meter-tick", include_str!("../themes/kit/meter-tick.tokens.yaml")),
-    ("palette-window", include_str!("../themes/kit/palette-window.tokens.yaml")),
-    ("popover", include_str!("../themes/kit/popover.tokens.yaml")),
-    ("progress-bar", include_str!("../themes/kit/progress-bar.tokens.yaml")),
-    ("progress-caption", include_str!("../themes/kit/progress-caption.tokens.yaml")),
-    ("progress-fill", include_str!("../themes/kit/progress-fill.tokens.yaml")),
-    ("progress-line", include_str!("../themes/kit/progress-line.tokens.yaml")),
-    ("progress-ring", include_str!("../themes/kit/progress-ring.tokens.yaml")),
-    ("side-area", include_str!("../themes/kit/side-area.tokens.yaml")),
-    ("spinner", include_str!("../themes/kit/spinner.tokens.yaml")),
-    ("status-indicator", include_str!("../themes/kit/status-indicator.tokens.yaml")),
-    ("tab", include_str!("../themes/kit/tab.tokens.yaml")),
-    ("tab-bar", include_str!("../themes/kit/tab-bar.tokens.yaml")),
-    ("table-header-cell", include_str!("../themes/kit/table-header-cell.tokens.yaml")),
-    ("table-stripe", include_str!("../themes/kit/table-stripe.tokens.yaml")),
-    ("terminal-frame", include_str!("../themes/kit/terminal-frame.tokens.yaml")),
-    ("tip-card", include_str!("../themes/kit/tip-card.tokens.yaml")),
-    ("title-bar", include_str!("../themes/kit/title-bar.tokens.yaml")),
-    ("toast", include_str!("../themes/kit/toast.tokens.yaml")),
-    ("tree-drop-marker", include_str!("../themes/kit/tree-drop-marker.tokens.yaml")),
-    ("window", include_str!("../themes/kit/window.tokens.yaml")),
-    ("window-button", include_str!("../themes/kit/window-button.tokens.yaml")),
-    ("window-close", include_str!("../themes/kit/window-close.tokens.yaml")),
-];
+/// into `pop-dark` (and so into every theme extending it): one entry per
+/// `themes/kit/<component>.tokens.yaml`, compiled to JSON by `build.rs`.
+pub(crate) const KIT_FILES: &[(&str, &str)] = include!(concat!(env!("OUT_DIR"), "/kit_files.rs"));
+
+/// A shipped token file, `themes/<name>.tokens.yaml`, as `build.rs`
+/// compiled it to JSON.
+macro_rules! shipped {
+    ($name:literal) => {
+        include_str!(concat!(env!("OUT_DIR"), "/themes/", $name, ".tokens.json"))
+    };
+}
 
 const BUILT_IN_FILES: &[(&str, &str)] = &[
-    ("pop-dark", include_str!("../themes/pop-dark.tokens.yaml")),
-    ("pop-light", include_str!("../themes/pop-light.tokens.yaml")),
-    (
-        "pop-high-contrast",
-        include_str!("../themes/pop-high-contrast.tokens.yaml"),
-    ),
-    (
-        "github-light",
-        include_str!("../themes/github-light.tokens.yaml"),
-    ),
-    (
-        "github-dark",
-        include_str!("../themes/github-dark.tokens.yaml"),
-    ),
+    ("pop-dark", shipped!("pop-dark")),
+    ("pop-light", shipped!("pop-light")),
+    ("pop-high-contrast", shipped!("pop-high-contrast")),
+    ("github-light", shipped!("github-light")),
+    ("github-dark", shipped!("github-dark")),
     (
         "github-light-high-contrast",
-        include_str!("../themes/github-light-high-contrast.tokens.yaml"),
+        shipped!("github-light-high-contrast"),
     ),
     (
         "github-dark-high-contrast",
-        include_str!("../themes/github-dark-high-contrast.tokens.yaml"),
+        shipped!("github-dark-high-contrast"),
     ),
-    (
-        "catppuccin-latte",
-        include_str!("../themes/catppuccin-latte.tokens.yaml"),
-    ),
-    (
-        "catppuccin-mocha",
-        include_str!("../themes/catppuccin-mocha.tokens.yaml"),
-    ),
-    ("one-light", include_str!("../themes/one-light.tokens.yaml")),
-    (
-        "one-dark-pro",
-        include_str!("../themes/one-dark-pro.tokens.yaml"),
-    ),
-    (
-        "solarized-light",
-        include_str!("../themes/solarized-light.tokens.yaml"),
-    ),
-    (
-        "solarized-dark",
-        include_str!("../themes/solarized-dark.tokens.yaml"),
-    ),
-    (
-        "gruvbox-light",
-        include_str!("../themes/gruvbox-light.tokens.yaml"),
-    ),
-    (
-        "gruvbox-dark",
-        include_str!("../themes/gruvbox-dark.tokens.yaml"),
-    ),
+    ("catppuccin-latte", shipped!("catppuccin-latte")),
+    ("catppuccin-mocha", shipped!("catppuccin-mocha")),
+    ("one-light", shipped!("one-light")),
+    ("one-dark-pro", shipped!("one-dark-pro")),
+    ("solarized-light", shipped!("solarized-light")),
+    ("solarized-dark", shipped!("solarized-dark")),
+    ("gruvbox-light", shipped!("gruvbox-light")),
+    ("gruvbox-dark", shipped!("gruvbox-dark")),
 ];
 
 /// The scale steps an accent re-aliases from, and what they become.
@@ -212,8 +147,8 @@ impl Density {
     /// The built-in overlay file of this density.
     pub fn built_in_file(self) -> TokenFile {
         let text = match self {
-            Density::Comfortable => include_str!("../themes/density-comfortable.tokens.yaml"),
-            Density::Compact => include_str!("../themes/density-compact.tokens.yaml"),
+            Density::Comfortable => shipped!("density-comfortable"),
+            Density::Compact => shipped!("density-compact"),
         };
         TokenFile::parse(&format!("density-{}", self.name()), text)
             .expect("built-in density files parse")

@@ -16,3 +16,8 @@ workspace = true
 [dependencies]
 serde_json.workspace = true
 serde-saphyr.workspace = true
+
+[build-dependencies]
+# The shipped YAML token files are compiled to JSON at build time.
+serde_json.workspace = true
+serde-saphyr.workspace = true

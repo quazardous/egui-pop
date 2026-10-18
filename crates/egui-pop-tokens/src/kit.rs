@@ -493,7 +493,8 @@ pub fn discover(dir: impl AsRef<Path>) -> Vec<KitData> {
 pub(crate) fn built_in(files: &[(&str, &'static str)]) -> KitData {
     KitData::embedded(Embedded {
         dir: "themes/kit",
-        kit: include_str!("../themes/kit/kit.yaml"),
+        // Compiled to JSON by `build.rs`, as the token files are.
+        kit: include_str!(concat!(env!("OUT_DIR"), "/themes/kit/kit.json")),
         tokens: files
             .iter()
             .map(|(component, text)| (format!("{component}.tokens.yaml"), *text))

@@ -9,6 +9,11 @@ egui minor.
 
 ### Added
 
+- The shipped token files are compiled from YAML to JSON when egui-pop is
+  built: the built-in themes load in 3 ms instead of 24 (release build),
+  and an unquoted `#colour` or `{alias}` in them fails the build. A
+  component's token file is found by the build; `KIT_FILES` is no longer
+  kept by hand.
 - Kits: the window buttons' glyphs are glyph roles (`glyph.window-minimize`,
   `window-maximize`, `window-restore`, `window-close`), so a kit can draw
   them with its own icons, `indicator-size` across.

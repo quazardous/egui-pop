@@ -55,6 +55,7 @@ pub mod kit;
 mod theme;
 mod value;
 mod yaml;
+mod yaml_trap;
 
 pub use color::Color;
 pub use contract::{RENAMED, Required, Tier, contract};

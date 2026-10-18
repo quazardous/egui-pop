@@ -140,7 +140,7 @@ in parallel (the lanes of the umbrella issue):
 
 1. **Its tokens** in `crates/egui-pop-tokens/themes/kit/<component>.tokens.yaml`
    (aliases of system tokens, `rest` complete, other states only what
-   differs), plus one line in `KIT_FILES` (`src/theme.rs`).
+   differs). `build.rs` finds it and compiles it in: no list to edit.
 2. **Its contract** in `crates/egui-pop-tokens/src/contract/kit/<component>.rs`
    (`shape`, the component terms and every `rest` term), plus one line in
    `GROUPS` (`contract/kit/mod.rs`).

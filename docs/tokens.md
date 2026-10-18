@@ -196,7 +196,12 @@ shows the same table live.
 
 A token file is the DTCG tree, written in YAML (`.tokens.yaml`, the
 shipped files) or in JSON (`.tokens.json`): `TokenFile::parse` reads JSON
-when the text starts with `{`, YAML otherwise, into the same tree. YAML
+when the text starts with `{`, YAML otherwise, into the same tree. The
+shipped files are compiled to JSON when egui-pop is built
+(`egui-pop-tokens/build.rs`): reading YAML costs about seven times
+JSON's, and the built-in themes load at every start (24 ms in YAML, 3 ms
+in JSON, release build). A trap below in a shipped file fails the build,
+with its file and line. YAML
 is there for comments. JSON stays the exchange format: what egui-pop
 writes (the theme editor's export, `to_dtcg`) is DTCG JSON, which other
 token tools read.

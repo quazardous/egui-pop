@@ -125,9 +125,8 @@ fn user_kits_are_the_folders_holding_a_kit_file() {
 
 #[test]
 fn the_default_kit_is_a_kit_folder() {
-    // `themes/kit/` read as any kit folder: clean, and each of its token
-    // files is in the built-in list (a component's file added without
-    // its line in `KIT_FILES` is caught here).
+    // `themes/kit/` read as any kit folder, from its YAML: clean, and the
+    // same tokens as the built-in list `build.rs` compiles from it.
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("themes/kit");
     let kit = KitData::load(&dir);
     assert!(kit.problems().is_empty(), "{:?}", kit.problems());
