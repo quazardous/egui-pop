@@ -1,6 +1,7 @@
 //! What a window drawn by the application takes from the kit beside its
 //! components' boxes: where its title bar puts the window buttons, which
-//! of them show the hover state, and the corners the system is asked for.
+//! of them show the hover state, the corners the system is asked for and
+//! the outline drawn around it.
 //! Compiled with the kit, read as plain fields.
 
 use super::{Tokens, string};
@@ -53,11 +54,15 @@ impl WindowCorners {
 }
 
 /// The window's terms of a kit.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct WindowKit {
     pub buttons_side: ButtonsSide,
     pub buttons_hover: ButtonsHover,
     pub corners: WindowCorners,
+    /// The line around a window drawn by the application, inside its
+    /// edges (`window.rest.border-width` and `border-color`); none when
+    /// the width is 0, the default.
+    pub outline: egui::Stroke,
 }
 
 /// Reads a string token among `choices`; what is not one of them is a
@@ -110,6 +115,14 @@ impl WindowKit {
                 ],
                 problems,
             ),
+            outline: match t.resolved().dimension("window.rest.border-width") {
+                Some(w) if w > 0.0 => egui::Stroke::new(
+                    w,
+                    t.color("window.rest.border-color")
+                        .unwrap_or(egui::Color32::TRANSPARENT),
+                ),
+                _ => egui::Stroke::NONE,
+            },
         }
     }
 }

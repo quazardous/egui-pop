@@ -9,3 +9,12 @@ window:
     $type: "string"
     $value: "round"
     $description: "The window's corners where the system can round a window drawn by the application (Windows 11): round, small or square."
+  # The line around a window the application draws, inside its edges:
+  # none in the default kit (the system's shadow and corners frame it).
+  rest:
+    border-width:
+      $type: "dimension"
+      $value: {value: 0, unit: "px"}
+    border-color:
+      $type: "color"
+      $value: "{border.default}"

@@ -9,6 +9,9 @@ egui minor.
 
 ### Added
 
+- Kits: `window.rest.border-width` and `border-color`, a line around a
+  window the application draws, inside its edges (none in the default
+  kit; not drawn when maximized or full screen).
 - Token and kit files may be written in YAML, for comments
   (`docs/tokens.md`): `TokenFile::parse` reads JSON when the text starts
   with `{` and YAML otherwise. An unquoted `#colour` (a YAML comment) or
@@ -32,7 +35,8 @@ egui minor.
   starting size) and `AppBuilder::folded` (areas folded at the first
   start; a saved layout wins); `AppHandle::area_rect`.
 - Kits: a `side-area` component (`border-width` 0: no separator line
-  along the area) and a vocabulary term `offset` (how far a part sits
+  along the area; `padding-x` and `padding-y` between its edges and its
+  panels) and a vocabulary term `offset` (how far a part sits
   from the edge it is drawn on: a side area's grip, off its edge).
 - Side areas: a folded side area shows a strip (the kit's `area-strip`,
   12 px, the drag-handle glyph) whose click unfolds it, instead of
@@ -914,6 +918,9 @@ egui minor.
 
 ### Changed
 
+- The title bar's line is the kit's (`title-bar.rest.border-width`, 1 in
+  the default kit): egui's panel line is no longer drawn under it, nor
+  room kept for it when the title zone draws nothing.
 - The shipped themes, densities and default kit are `.tokens.yaml`
   files; a kit folder's file is `kit.yaml` (`kit.yml` and `kit.json`
   are read too). `Themes::add_json` is now `Themes::add_text` and

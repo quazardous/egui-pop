@@ -35,6 +35,7 @@ title-bar:
     border-color:
       $type: "color"
       $value: "{border.default}"
+    # The line under the bar (egui's own panel line is not drawn).
     border-width:
       $type: "dimension"
-      $value: {value: 0, unit: "px"}
+      $value: {value: 1, unit: "px"}

@@ -3897,7 +3897,7 @@ impl App {
             }
         }
         self.process_requests();
-        self.shell(ui);
+        self.outlined(ui);
         let name = self.handle.name();
         let name = if name.is_empty() {
             ctx.input(|i| i.viewport().title.clone())
@@ -3912,6 +3912,30 @@ impl App {
         self.process_requests();
     }
 
+    /// The shell, inside the kit's outline when the application draws
+    /// the window (`window.rest.border-width`).
+    fn outlined(&mut self, ui: &mut Ui) {
+        let outline = if crate::frame::own_frame(&self.handle) {
+            egui_pop_core::frame::outline(ui.ctx())
+        } else {
+            egui::Stroke::NONE
+        };
+        if outline.width <= 0.0 {
+            return self.shell(ui);
+        }
+        let rect = ui.max_rect();
+        ui.ctx()
+            .layer_painter(egui::LayerId::new(
+                egui::Order::Foreground,
+                Id::new("egui_pop.window_outline"),
+            ))
+            .rect_stroke(rect, 0.0, outline, egui::StrokeKind::Inside);
+        ui.scope_builder(
+            egui::UiBuilder::new().max_rect(rect.shrink(outline.width)),
+            |ui| self.shell(ui),
+        );
+    }
+
     fn shell(&mut self, ui: &mut Ui) {
         let h = self.handle.clone();
         if h.zone_has_blocks(&zones::TITLE) {
@@ -3919,6 +3943,8 @@ impl App {
             // system draws the frame) takes no room.
             egui::Panel::top(Id::new("egui_pop.title"))
                 .frame(egui::Frame::NONE)
+                // The kit's `title-bar` draws the line under the bar.
+                .show_separator_line(false)
                 .min_size(0.0)
                 .show(ui, |ui| {
                     focus::scope(ui, "titleBar", &[], |ui| h.show_zone(ui, &zones::TITLE));

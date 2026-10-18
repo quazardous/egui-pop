@@ -224,14 +224,19 @@ compiled at install.
   their glyphs show together. `examples/kits/flavour-macos` is the macOS
   flavour, data only (`frame-kit-macos`). `window.corners` is asked of
   Windows 11 when the application draws the frame; elsewhere there is no
-  portable request.
+  portable request. `window.rest.border-width` and `border-color` draw a
+  line around the window, inside its edges (the shell is laid out within
+  it), except when maximized or full screen.
 - **Side areas** (`area-strip`, `area-grip`). A folded side area is a
   strip (`area-strip.width`) with the `drag-handle` glyph and a line on
   the centre's side; a click unfolds it (`workbench.fold`). An open side
   area's grip is painted at the middle of its edge (`width` thick,
   `height` long), above the panels; egui still takes the drag and draws
   the separator line (it reserves room for it in the panel's layout).
-  The default kit's grip is transparent.
+  The default kit's grip is transparent. An open side area
+  (`side-area`) has `padding-x` and `padding-y` between its edges and its
+  panels (egui's 8 and 2 by default), and no separator line when its
+  `border-width` is 0.
 - **egui's own widgets** (`button`, `field`). egui's style is built from
   the kit when a theme is installed (`theme::style_with`): `button`'s
   rest, hover, active and selected are egui's inactive, hovered, active

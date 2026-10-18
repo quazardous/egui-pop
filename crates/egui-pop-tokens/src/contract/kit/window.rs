@@ -9,4 +9,14 @@ pub(crate) const CONTRACT: &[Required] = &[
         "string",
         "a window's corners where the system rounds them: round, small or square",
     ),
+    comp(
+        "window.rest.border-width",
+        "dimension",
+        "the line around a window drawn by the application (0: none)",
+    ),
+    comp(
+        "window.rest.border-color",
+        "color",
+        "the line around a window drawn by the application",
+    ),
 ];

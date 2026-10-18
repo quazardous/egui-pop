@@ -1025,17 +1025,23 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
             Area::EndSide => egui::Panel::right(id),
             _ => egui::Panel::bottom(id),
         };
-        let shown = panel
-            .show_separator_line(kit.side_area.style(State::REST).border_width > 0.0)
-            .resizable(true)
-            .default_size(default)
-            .min_size(min.max(48.0))
-            .show(ui, |ui| {
-                // The panel keeps its width; content narrower than it does
-                // not shrink it.
-                ui.set_min_size(ui.available_size());
-                draw_area(app, ui, area);
-            });
+        let pad = |p: f32| p.round().clamp(0.0, 127.0) as i8;
+        let side = &kit.side_area.data;
+        let shown =
+            panel
+                .frame(egui::Frame::side_top_panel(ui.style()).inner_margin(
+                    egui::Margin::symmetric(pad(side.padding_x), pad(side.padding_y)),
+                ))
+                .show_separator_line(kit.side_area.style(State::REST).border_width > 0.0)
+                .resizable(true)
+                .default_size(default)
+                .min_size(min.max(48.0))
+                .show(ui, |ui| {
+                    // The panel keeps its width; content narrower than it does
+                    // not shrink it.
+                    ui.set_min_size(ui.available_size());
+                    draw_area(app, ui, area);
+                });
         app.workbench_mut().rects.insert(area, shown.response.rect);
         grip(&ctx, &kit, area, shown.response.rect);
     }

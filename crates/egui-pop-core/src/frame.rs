@@ -301,6 +301,17 @@ pub fn regions(ctx: &Context) -> Option<Arc<HitRegions>> {
     HitTable::of(ctx).get(ctx.viewport_id())
 }
 
+/// The line the kit draws around a window the application draws
+/// (`window.rest.border-width`), or none: maximized and full screen
+/// windows have no edges to draw.
+pub fn outline(ctx: &Context) -> egui::Stroke {
+    if resizable(ctx) {
+        crate::kit::Kit::of(ctx).window.outline
+    } else {
+        egui::Stroke::NONE
+    }
+}
+
 fn resizable(ctx: &Context) -> bool {
     ctx.input(|i| {
         let v = i.viewport();
