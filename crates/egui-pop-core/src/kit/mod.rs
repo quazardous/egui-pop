@@ -618,6 +618,24 @@ components! {
     /// A side area of the workbench: egui draws it and its separator line
     /// (none when `border-width` is 0).
     side_area: "side-area" => "plain",
+    /// A shape of a skeleton standing in for loading content.
+    skeleton: "skeleton" => "box",
+    /// The band crossing a skeleton's shapes, painted where they meet.
+    skeleton_shimmer: "skeleton-shimmer" => "box",
+    /// A slider's bar: its track and its label; `hover`, `active` while
+    /// dragged, `focus`. A range slider's bar is in the states of both
+    /// its thumbs.
+    slider: "slider" => "box",
+    /// A slider's fill, a strip along the bar's bottom (`height`, else
+    /// 15 % of the bar); not drawn on a gradient track.
+    slider_fill: "slider-fill" => "track",
+    /// A slider's thumb, a line across the bar, in its own thumb's state.
+    slider_thumb: "slider-thumb" => "tick",
+    /// The square button at a slider's end, its icon in `text`;
+    /// `selected` while its toggle is on.
+    slider_toggle: "slider-toggle" => "box",
+    /// A slider's value text, in the `warning` tone past the soft range.
+    slider_value: "slider-value" => "plain",
     /// A spinner, colours only like `progress-ring`; its label in `text`.
     spinner: "spinner" => "plain",
     /// A status bar indicator, colours only: its text by tone, its
@@ -662,6 +680,10 @@ components! {
     /// The frame around a text or code editor; `focus` while it has the
     /// keyboard.
     editor_frame: "editor-frame" => "card",
+    /// An empty place: its box (none in the default kit) around the
+    /// icon, title, sentence and action; the icon and the sentence in
+    /// `text`, the icon in the `danger` tone when something went wrong.
+    empty_state: "empty-state" => "card",
     /// A text field. egui's text fields take their background from it.
     field: "field" => "box",
     /// The card standing in for a part that panicked.
@@ -675,6 +697,9 @@ components! {
     /// The band at the top of a movable dialog and of a palette, dragged to
     /// move it: `hover` under the pointer, `active` while dragged.
     header_band: "header-band" => "band",
+    /// A button made of an icon alone (`IconWidget::sense_click`), its
+    /// icon in `text`, by tone; `selected` while it is on.
+    icon_button: "icon-button" => "box",
     /// A job's log console, as plain lines.
     job_log: "job-log" => "card",
     /// A floating palette's window.
@@ -1058,6 +1083,132 @@ mod tests {
         );
         assert_eq!(kit.table_stripe.style(State::REST).fill, t.surface.raised);
         assert_eq!(kit.table_header_cell.data.align, Align::Start);
+    }
+
+    #[test]
+    fn the_default_sliders_alias_the_system_tokens() {
+        let t = Tokens::default();
+        let kit = Kit::compile(&t, &Shapes::default());
+        let bar = &kit.slider;
+        assert_eq!(bar.shape, "box");
+        assert_eq!(bar.style(State::REST).fill, t.border.default);
+        assert_eq!(bar.style(State::REST).border_width, 0.0);
+        assert_eq!(bar.data.align, Align::Start);
+        assert_eq!(bar.data.padding_x, t.space.s);
+        let hover = bar.style(State::HOVER);
+        assert_eq!(
+            (hover.border_color, hover.border_width),
+            (t.border.strong, 1.0)
+        );
+        // Focused: the ring inside the bar, no hover border under it.
+        let focus = bar.style(State::FOCUS | State::HOVER);
+        assert_eq!(
+            (focus.ring_color, focus.ring_width, focus.ring_offset),
+            (t.focus_ring, 2.0, -2.0)
+        );
+        assert_eq!(focus.border_width, 0.0);
+        assert_eq!(kit.slider_fill.style(State::REST).fill, t.accent.default);
+        assert_eq!(kit.slider_thumb.style(State::REST).fill, t.text.strong);
+        assert_eq!(kit.slider_thumb.data.width, 2.0);
+        let value = &kit.slider_value;
+        assert_eq!(value.data.align, Align::End);
+        assert_eq!(value.style(State::REST).text, t.text.default);
+        assert_eq!(
+            value.style_toned(Tone::Warning, State::FOCUS).text,
+            t.status.warning
+        );
+        let toggle = &kit.slider_toggle;
+        assert_eq!(toggle.style(State::REST).text, t.text.default);
+        assert_eq!(toggle.style(State::SELECTED).text, t.accent.default);
+        assert_eq!(t.slider.track, t.border.default);
+    }
+
+    #[test]
+    fn an_icon_button_s_states_win_over_its_tone() {
+        let t = Tokens::default();
+        let kit = Kit::compile(&t, &Shapes::default());
+        let b = &kit.icon_button;
+        assert_eq!(b.style(State::REST).fill, Color32::TRANSPARENT);
+        assert_eq!(b.style(State::REST).text, t.text.default);
+        assert_eq!(
+            b.style_toned(Tone::Danger, State::REST).text,
+            t.status.danger
+        );
+        assert_eq!(
+            b.style_toned(Tone::Danger, State::HOVER).text,
+            t.text.strong
+        );
+        assert_eq!(
+            b.style_toned(Tone::Accent, State::DISABLED).text,
+            t.text.muted
+        );
+        assert_eq!(b.style(State::SELECTED).text, t.accent.default);
+        let focus = b.style(State::FOCUS);
+        assert_eq!(
+            (focus.ring_color, focus.ring_width, focus.ring_offset),
+            (t.focus_ring, 1.5, 1.0)
+        );
+    }
+
+    #[test]
+    fn the_default_placeholders_alias_the_system_tokens() {
+        let t = Tokens::default();
+        let kit = Kit::compile(&t, &Shapes::default());
+        assert_eq!(kit.skeleton.style(State::REST).fill, t.surface.active);
+        assert_eq!(kit.skeleton.style(State::REST).radius, t.radius.widget);
+        assert_eq!(
+            kit.skeleton_shimmer.style(State::REST).fill,
+            t.surface.hover
+        );
+        let empty = &kit.empty_state;
+        assert_eq!(empty.shape, "card");
+        assert_eq!(empty.data.padding_y, t.space.l);
+        assert_eq!(empty.style(State::REST).fill, Color32::TRANSPARENT);
+        assert_eq!(empty.style(State::REST).text, t.text.muted);
+        assert_eq!(
+            empty.style_toned(Tone::Danger, State::REST).text,
+            t.status.danger
+        );
+        // The former names still work.
+        let t = tokens_with(
+            r##"
+            $extends: "pop-dark"
+            skeleton:
+              fill: {$type: "color", $value: "#102030"}
+            "##,
+        );
+        let kit = Kit::compile(&t, &Shapes::default());
+        assert_eq!(
+            kit.skeleton.style(State::REST).fill,
+            Color32::from_rgb(0x10, 0x20, 0x30)
+        );
+    }
+
+    #[test]
+    fn a_theme_giving_the_former_slider_tokens_still_works() {
+        let t = tokens_with(
+            r##"
+            $extends: "pop-dark"
+            slider:
+              track: {$type: "color", $value: "#102030"}
+              fill: {$type: "color", $value: "#00ff00"}
+            "##,
+        );
+        let kit = Kit::compile(&t, &Shapes::default());
+        let green = Color32::from_rgb(0, 255, 0);
+        let track = Color32::from_rgb(0x10, 0x20, 0x30);
+        assert_eq!(kit.slider.style(State::REST).fill, track);
+        assert_eq!(kit.slider_toggle.style(State::REST).fill, track);
+        assert_eq!(kit.slider_fill.style(State::REST).fill, green);
+        assert_eq!(kit.slider_toggle.style(State::SELECTED).text, green);
+        assert!(
+            t.resolved()
+                .problems()
+                .iter()
+                .any(|p| p.to_string().contains("slider.track")),
+            "{:?}",
+            t.resolved().problems()
+        );
     }
 
     #[test]

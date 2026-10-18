@@ -1,0 +1,14 @@
+$description: "The `skeleton-shimmer` component of the default kit (docs/kit.md), layered into pop-dark."
+skeleton-shimmer:
+  $description: "The lighter band crossing a skeleton's shapes (a kit component), drawn over each shape where they meet; none under reduced motion."
+  shape:
+    $type: "string"
+    $value: "box"
+    $description: "The handler that draws it: box (fill, border, radius) or plain."
+  rest:
+    fill:
+      $type: "color"
+      $value: "{surface.hover}"
+    radius:
+      $type: "dimension"
+      $value: "{skeleton.rest.radius}"

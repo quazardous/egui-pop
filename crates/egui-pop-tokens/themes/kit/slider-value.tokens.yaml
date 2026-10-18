@@ -1,0 +1,21 @@
+$description: "The `slider-value` component of the default kit (docs/kit.md), layered into pop-dark."
+slider-value:
+  $description: "A slider's value text at the bar's end (a kit component), in the warning tone when the value is past the soft range."
+  shape:
+    $type: "string"
+    $value: "plain"
+  align:
+    $type: "string"
+    $value: "end"
+  padding-x:
+    $type: "dimension"
+    $value: "{slider.padding-x}"
+  rest:
+    text:
+      $type: "color"
+      $value: "{text.default}"
+  tone:
+    warning:
+      text:
+        $type: "color"
+        $value: "{warning}"

@@ -17,6 +17,7 @@ mod dialog;
 mod dialog_header;
 mod dock_preview;
 mod editor_frame;
+mod empty_state;
 mod fault_card;
 mod field;
 mod find_bar;
@@ -24,6 +25,7 @@ mod find_bar_button;
 mod fullscreen_exit;
 mod glyph;
 mod header_band;
+mod icon_button;
 mod job_log;
 mod list_row;
 mod list_view;
@@ -38,6 +40,13 @@ mod progress_fill;
 mod progress_line;
 mod progress_ring;
 mod side_area;
+mod skeleton;
+mod skeleton_shimmer;
+mod slider;
+mod slider_fill;
+mod slider_thumb;
+mod slider_toggle;
+mod slider_value;
 mod spinner;
 mod status_indicator;
 mod tab;
@@ -68,6 +77,7 @@ pub(super) const GROUPS: &[&[Required]] = &[
     dialog_header::CONTRACT,
     dock_preview::CONTRACT,
     editor_frame::CONTRACT,
+    empty_state::CONTRACT,
     fault_card::CONTRACT,
     field::CONTRACT,
     find_bar::CONTRACT,
@@ -75,6 +85,7 @@ pub(super) const GROUPS: &[&[Required]] = &[
     fullscreen_exit::CONTRACT,
     glyph::CONTRACT,
     header_band::CONTRACT,
+    icon_button::CONTRACT,
     job_log::CONTRACT,
     list_row::CONTRACT,
     list_view::CONTRACT,
@@ -89,6 +100,13 @@ pub(super) const GROUPS: &[&[Required]] = &[
     progress_line::CONTRACT,
     progress_ring::CONTRACT,
     side_area::CONTRACT,
+    skeleton::CONTRACT,
+    skeleton_shimmer::CONTRACT,
+    slider::CONTRACT,
+    slider_fill::CONTRACT,
+    slider_thumb::CONTRACT,
+    slider_toggle::CONTRACT,
+    slider_value::CONTRACT,
     spinner::CONTRACT,
     status_indicator::CONTRACT,
     tab::CONTRACT,

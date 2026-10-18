@@ -166,8 +166,11 @@ pub struct ButtonTokens {
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub struct SliderTokens {
+    /// `slider.rest.fill`.
     pub track: Color32,
+    /// `slider-fill.rest.fill`.
     pub fill: Color32,
+    /// `slider-thumb.rest.fill`.
     pub thumb: Color32,
 }
 
@@ -400,9 +403,9 @@ impl Tokens {
                 radius: d("button.rest.radius"),
             },
             slider: SliderTokens {
-                track: c("slider.track"),
-                fill: c("slider.fill"),
-                thumb: c("slider.thumb"),
+                track: c("slider.rest.fill"),
+                fill: c("slider-fill.rest.fill"),
+                thumb: c("slider-thumb.rest.fill"),
             },
             field: FieldTokens {
                 background: c("field.rest.fill"),

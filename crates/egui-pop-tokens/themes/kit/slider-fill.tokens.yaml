@@ -1,0 +1,14 @@
+$description: "The `slider-fill` component of the default kit (docs/kit.md), layered into pop-dark."
+slider-fill:
+  $description: "A slider's fill (a kit component): a strip along the bar's bottom up to the value, between a range's thumbs. Without a `height`, 15 % of the bar and at least 3 points. A gradient track's colours are content, not this."
+  shape:
+    $type: "string"
+    $value: "track"
+    $description: "The handler that draws it: track (rounded by its radius) or plain."
+  rest:
+    fill:
+      $type: "color"
+      $value: "{accent.default}"
+    radius:
+      $type: "dimension"
+      $value: "{slider.rest.radius}"

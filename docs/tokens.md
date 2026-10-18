@@ -88,12 +88,12 @@ Not read yet: references inside composite values, JSON Pointer `$ref`,
    `motion.progress.travel`, `motion.skeleton.shimmer`, `opacity.scrim`.
 
 3. **Component**: one component's tokens, each an alias of a system token:
-   `button.*`, `slider.{track, fill, thumb}`,
+   `button.*`, the sliders' (`slider.*`, `slider-fill.*`...),
    `field.*` (input fields: their fill, read-only fill, text,
    placeholder and borders, and the colour of each field state:
    `modified`, `required`, `invalid`, `pending`),
    `progress.{track, fill, height, line, ring}` (bars, rings, meters and
-   spinners), `skeleton.{fill, shimmer}`, `dialog.*`, `palette.*`,
+   spinners), `skeleton.*` and `skeleton-shimmer.*`, `dialog.*`, `palette.*`,
    `toast.*`, `editor.*` and `syntax.*` (one colour per kind of code:
    keywords on the accent, strings on `success`, numbers on `warning`,
    comments muted...), `terminal.*` (its text, cursor, selection, links,
@@ -160,7 +160,7 @@ A theme is resolved from a `ThemeSpec`, in this order:
 3. an **accent**: a colour scale whose steps become `accent.default` (9),
    `accent.hover` (10), `accent.active` (8), `accent.subtle` (3),
    `selection` (5) and `text.on-accent` (`contrast`); anything aliasing
-   the accent (`focus.ring`, `slider.fill`) follows;
+   the accent (`focus.ring`, `slider-fill.rest.fill`) follows;
 4. **reduced motion**: `motion.duration` becomes 0 (egui's animation time,
    cursor blink and scroll animation follow);
 5. the user's **overrides**, raw values by path (aliases allowed).

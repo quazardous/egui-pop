@@ -75,13 +75,14 @@ use std::fmt;
 use std::ops::RangeInclusive;
 
 use egui::{
-    Align2, CornerRadius, Id, Key, Modifiers, Rect, Response, Sense, Stroke, StrokeKind, TextEdit,
-    Ui, Widget, WidgetInfo, WidgetType, pos2, vec2,
+    Color32, Id, Key, Modifiers, Rect, Response, Sense, TextEdit, Ui, Widget, WidgetInfo,
+    WidgetType, pos2, vec2,
 };
 use egui_pop_model::values::{Descriptor, Type};
 
 use crate::field::FieldState;
 use crate::icon::Icon;
+use crate::kit::{BoxStyle, Kit, KitCx, Part, State, Tone};
 use crate::theme::Tokens;
 
 /// The slider's gestures, as data so a profile can remap them
@@ -748,37 +749,38 @@ fn show_quad(ui: &mut Ui, rect: Rect, id: Id, mut quad: Quad<'_>) -> Response {
         None => r.widget_info(|| WidgetInfo::labeled(WidgetType::Button, enabled, label)),
     }
     if ui.is_rect_visible(rect) {
-        let t = Tokens::of(ui.ctx());
-        let painter = ui.painter_at(rect);
-        let radius = CornerRadius::same(t.radius.widget.round() as u8);
-        painter.rect(
+        let kit = Kit::of(ui.ctx());
+        let toggle = &kit.slider_toggle;
+        let part = Part {
             rect,
-            radius,
-            t.slider.track,
-            Stroke::NONE,
-            StrokeKind::Inside,
-        );
-        if r.has_focus() {
-            painter.rect_stroke(
-                rect,
-                radius,
-                Stroke::new(2.0, t.focus_ring),
-                StrokeKind::Inside,
-            );
-        } else if r.hovered() {
-            let visuals = ui.style().interact(&r);
-            painter.rect_stroke(rect, radius, visuals.bg_stroke, StrokeKind::Inside);
-        }
-        // Lit when on: the fill's colour, a contrast pair with the track.
-        let color = if state == Some(true) {
-            t.slider.fill
-        } else {
-            t.text.default
+            room: rect,
+            state: State::from_response(&r).with(State::SELECTED, state == Some(true)),
+            label: None,
         };
-        quad.icon
-            .paint(&painter, rect.shrink(rect.height() * 0.2), color);
+        let painter = clipped(ui, rect, toggle.style(part.state));
+        let cx = KitCx {
+            painter: &painter,
+            ppp: ui.ctx().pixels_per_point(),
+        };
+        toggle.paint(&cx, &part);
+        quad.icon.paint(
+            &painter,
+            rect.shrink(rect.height() * 0.2),
+            toggle.style(part.state).text,
+        );
     }
     r
+}
+
+/// A painter clipped to a part, and to its focus ring when the ring
+/// goes outside it.
+fn clipped(ui: &Ui, rect: Rect, b: &BoxStyle) -> egui::Painter {
+    let ring = if b.ring_width > 0.0 {
+        (b.ring_offset + b.ring_width).max(0.0)
+    } else {
+        0.0
+    };
+    ui.painter_at(rect.expand(ring))
 }
 
 /// The modifiers' factor on a step: 0.1 fine, 10 coarse, else 1.
@@ -1067,8 +1069,10 @@ fn pressed(i: &egui::InputState, key: Key) -> bool {
             .any(|e| matches!(e, egui::Event::Key { key: k, pressed: true, .. } if *k == key))
 }
 
-/// The bar: the track, the fill (or the gradient), the thumbs, the label
-/// and the value inside. A range's fill runs between its thumbs.
+/// The bar, drawn by the kit: the track (`slider`), the fill
+/// (`slider-fill`, or the gradient), the thumbs (`slider-thumb`), the
+/// label and the value inside (`slider-value`, in the `warning` tone
+/// past the soft range). A range's fill runs between its thumbs.
 pub(crate) fn paint_bar(
     ui: &Ui,
     rect: Rect,
@@ -1081,16 +1085,27 @@ pub(crate) fn paint_bar(
     if !ui.is_rect_visible(rect) {
         return;
     }
-    let t = Tokens::of(ui.ctx());
-    let painter = ui.painter_at(rect);
-    let radius = CornerRadius::same(t.radius.widget.round() as u8);
-    painter.rect(
+    let kit = Kit::of(ui.ctx());
+    let tone = if past { Tone::Warning } else { Tone::Neutral };
+    // The bar is in the states of every thumb (a range's two).
+    let state = responses
+        .iter()
+        .fold(State::REST, |s, r| s | State::from_response(r))
+        .toned(tone);
+    let painter = clipped(ui, rect, kit.slider.style(state));
+    let cx = KitCx {
+        painter: &painter,
+        ppp: ui.ctx().pixels_per_point(),
+    };
+    let font = egui::TextStyle::Button.resolve(ui.style());
+    let label = painter.layout_no_wrap(spec.label.clone(), font.clone(), Color32::PLACEHOLDER);
+    let bar = Part {
         rect,
-        radius,
-        t.slider.track,
-        Stroke::NONE,
-        StrokeKind::Inside,
-    );
+        room: rect,
+        state,
+        label: Some(&label),
+    };
+    kit.slider.paint(&cx, &bar);
     let x_of = |v: f64| rect.left() + rect.width() * spec.frac(v).clamp(0.0, 1.0) as f32;
     // The fill is a strip along the bottom, so the label and the value
     // stay on the track's colour (one contrast pair).
@@ -1100,57 +1115,58 @@ pub(crate) fn paint_bar(
         let r = Rect::from_min_max(pos2(rect.left(), rect.bottom() - strip), rect.max);
         g.paint(&painter, r);
     } else {
-        let strip = (rect.height() * 0.15).max(3.0);
+        let fill = &kit.slider_fill;
+        let strip = match fill.data.height {
+            h if h > 0.0 => h.min(rect.height()),
+            _ => (rect.height() * 0.15).max(3.0),
+        };
         let (from, to) = match thumbs {
             [v] => (rect.left(), x_of(*v)),
             [a, b, ..] => (x_of(*a), x_of(*b)),
             [] => (rect.left(), rect.left()),
         };
-        let fill = Rect::from_min_max(pos2(from, rect.bottom() - strip), pos2(to, rect.bottom()));
-        painter.rect(
-            fill,
-            radius,
-            t.slider.fill,
-            Stroke::NONE,
-            StrokeKind::Inside,
+        let strip = Rect::from_min_max(pos2(from, rect.bottom() - strip), pos2(to, rect.bottom()));
+        fill.paint_part(
+            &cx,
+            &Part {
+                rect: strip,
+                room: rect,
+                state,
+                label: None,
+            },
         );
     }
-    for v in thumbs {
+    let thumb = &kit.slider_thumb;
+    let width = thumb.data.width.max(0.0);
+    for (i, v) in thumbs.iter().enumerate() {
         let x = x_of(*v);
-        painter.line_segment(
-            [pos2(x, rect.top()), pos2(x, rect.bottom())],
-            Stroke::new(2.0, t.slider.thumb),
+        let state = responses
+            .get(i)
+            .map_or(State::REST, |r| State::from_response(r))
+            .toned(tone);
+        let r = Rect::from_min_max(
+            pos2(x - width / 2.0, rect.top()),
+            pos2(x + width / 2.0, rect.bottom()),
+        );
+        thumb.paint_part(
+            &cx,
+            &Part {
+                rect: r,
+                room: rect,
+                state,
+                label: None,
+            },
         );
     }
-    if responses.iter().any(|r| r.has_focus()) {
-        painter.rect_stroke(
+    kit.slider.paint_label(&cx, &bar);
+    let value = painter.layout_no_wrap(text.to_string(), font, Color32::PLACEHOLDER);
+    kit.slider_value.paint_part(
+        &cx,
+        &Part {
             rect,
-            radius,
-            Stroke::new(2.0, t.focus_ring),
-            StrokeKind::Inside,
-        );
-    } else if let Some(r) = responses.iter().find(|r| r.hovered()) {
-        let visuals = ui.style().interact(r);
-        painter.rect_stroke(rect, radius, visuals.bg_stroke, StrokeKind::Inside);
-    }
-    let pad = t.space.s;
-    let font = egui::TextStyle::Button.resolve(ui.style());
-    painter.text(
-        rect.left_center() + vec2(pad, 0.0),
-        Align2::LEFT_CENTER,
-        &spec.label,
-        font.clone(),
-        t.text.default,
-    );
-    painter.text(
-        rect.right_center() - vec2(pad, 0.0),
-        Align2::RIGHT_CENTER,
-        text,
-        font,
-        if past {
-            t.status.warning
-        } else {
-            t.text.default
+            room: rect,
+            state,
+            label: Some(&value),
         },
     );
 }
@@ -1172,7 +1188,10 @@ pub(crate) fn paint_state(ui: &Ui, bar: Rect, spec: &Spec) {
     let side = font.size * 0.8;
     crate::field::paint_markers(
         ui,
-        pos2(bar.left() + t.space.s + label + t.space.xs, bar.center().y),
+        pos2(
+            bar.left() + Kit::of(ui.ctx()).slider.data.padding_x + label + t.space.xs,
+            bar.center().y,
+        ),
         side,
         t.space.xs / 2.0,
         &spec.state,

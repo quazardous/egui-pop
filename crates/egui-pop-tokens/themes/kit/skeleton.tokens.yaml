@@ -1,0 +1,14 @@
+$description: "The `skeleton` component of the default kit (docs/kit.md), layered into pop-dark."
+skeleton:
+  $description: "A shape of a skeleton standing in for content that loads (a kit component): a line or a block. The band crossing it is `skeleton-shimmer`."
+  shape:
+    $type: "string"
+    $value: "box"
+    $description: "The handler that draws it: box (fill, border, radius) or plain."
+  rest:
+    fill:
+      $type: "color"
+      $value: "{surface.active}"
+    radius:
+      $type: "dimension"
+      $value: "{radius.widget}"

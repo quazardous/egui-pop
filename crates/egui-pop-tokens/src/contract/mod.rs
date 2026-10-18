@@ -8,7 +8,7 @@ pub enum Tier {
     Reference,
     /// Roles: what a value is for (`surface.panel`, `text.muted`).
     System,
-    /// One component's tokens (`slider.fill`), aliases of system tokens.
+    /// One component's tokens (`slider-fill.rest.fill`), aliases of system tokens.
     Component,
 }
 
@@ -200,19 +200,6 @@ const CORE: &[Required] = &[
         "duration",
         "a skeleton's shimmer crossing it",
     ),
-    comp(
-        "skeleton.fill",
-        "color",
-        "the grey shapes standing in for loading content",
-    ),
-    comp(
-        "skeleton.shimmer",
-        "color",
-        "the shimmer crossing a skeleton",
-    ),
-    comp("slider.track", "color", "the slider's rail"),
-    comp("slider.fill", "color", "the rail up to the value"),
-    comp("slider.thumb", "color", "the handle"),
     comp(
         "palette.magnet",
         "dimension",
@@ -516,6 +503,17 @@ pub const RENAMED: &[(&str, &[&str])] = &[
     ("toast.padding", &["toast.padding-x", "toast.padding-y"]),
     ("editor.background", &["editor-frame.rest.fill"]),
     ("terminal.background", &["terminal-frame.rest.fill"]),
+    (
+        "slider.track",
+        &["slider.rest.fill", "slider-toggle.rest.fill"],
+    ),
+    (
+        "slider.fill",
+        &["slider-fill.rest.fill", "slider-toggle.selected.text"],
+    ),
+    ("slider.thumb", &["slider-thumb.rest.fill"]),
+    ("skeleton.fill", &["skeleton.rest.fill"]),
+    ("skeleton.shimmer", &["skeleton-shimmer.rest.fill"]),
 ];
 
 mod kit;

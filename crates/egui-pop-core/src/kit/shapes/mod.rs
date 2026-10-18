@@ -30,14 +30,21 @@ pub(super) fn built_in(shapes: &mut Shapes) {
     shapes.insert("field", "box", Arc::new(cell::BoxCell));
     shapes.insert("find-bar-button", "box", Arc::new(cell::BoxCell));
     shapes.insert("header-band", "band", Arc::new(band::Band));
+    shapes.insert("icon-button", "box", Arc::new(cell::BoxCell));
     shapes.insert("list-row", "box", Arc::new(cell::BoxCell));
     shapes.insert("menu-item", "box", Arc::new(cell::BoxCell));
+    shapes.insert("skeleton", "box", Arc::new(cell::BoxCell));
+    shapes.insert("skeleton-shimmer", "box", Arc::new(cell::BoxCell));
+    shapes.insert("slider", "box", Arc::new(cell::BoxCell));
+    shapes.insert("slider-toggle", "box", Arc::new(cell::BoxCell));
     shapes.insert("table-header-cell", "box", Arc::new(cell::BoxCell));
     shapes.insert("meter", "track", Arc::new(progress::Track));
     shapes.insert("meter-tick", "tick", Arc::new(progress::Tick));
     shapes.insert("progress-bar", "track", Arc::new(progress::Track));
     shapes.insert("progress-fill", "span", Arc::new(progress::Span));
     shapes.insert("progress-line", "track", Arc::new(progress::Track));
+    shapes.insert("slider-fill", "track", Arc::new(progress::Track));
+    shapes.insert("slider-thumb", "tick", Arc::new(progress::Tick));
     for (component, _) in super::COMPONENTS {
         shapes.insert(component, "card", CARD.clone());
     }

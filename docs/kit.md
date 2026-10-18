@@ -290,6 +290,31 @@ compiled at install.
   `progress-ring`, `spinner`, `status-indicator`), handlers `track`,
   `span` and `tick`. The library's pills are not migrated: their neutral
   fill is a surface at 85 % opacity, which an alias cannot express yet.
+- **Sliders** (`slider`, `slider-fill`, `slider-thumb`, `slider-value`,
+  `slider-toggle`). The bar is a box with its label at the start
+  (`align`), `hover`, `active` while dragged and `focus` (a ring inside
+  it in the default kit); a range slider's bar is in the states of both
+  thumbs, each thumb in its own. The fill is a strip along the bottom
+  (`slider-fill.height`, else 15 % of the bar, handler `track`); a
+  gradient track's colours are content and stay code. A thumb is a line
+  (`tick`, `width` thick). The value is a part of its own at the end, in
+  the `warning` tone past the soft range. The square button at the end
+  is `selected` while its toggle is on, its icon in `text`. The
+  `sliders-kit-flat` snapshot restyles them with data only.
+- **Icon buttons** (`icon-button`). An `IconWidget` made clickable is a
+  box (transparent in the default kit) with its icon in `text`: `hover`,
+  `focus` (a ring one point outside), `disabled`, and `selected` for a
+  toggle (`IconWidget::selected`). The icon's tone is the part's tone;
+  `Strong` and `OnAccent`, which are not tones, keep their colour at
+  rest. An icon that is not clickable is content and keeps its colour.
+- **Placeholders** (`skeleton`, `skeleton-shimmer`, `empty-state`). Each
+  shape of a skeleton is a `skeleton` part, and the band crossing them a
+  `skeleton-shimmer` part where it meets a shape; their geometry (lines,
+  blocks, gaps) stays code. An empty state is laid out by egui as before
+  (`padding-y` above and below), its box painted under it once its size
+  is known (`Component::paint_under`; transparent in the default kit);
+  its icon and sentence are in `text`, the icon in the `danger` tone
+  when something went wrong.
 - **Glyphs by role** (`kit::Glyph`, `glyph.<role>` tokens): the small
   marks widgets draw, named by what they mean and mapped by the kit to
   an icon of its set, compiled into a table read by index. The vocabulary

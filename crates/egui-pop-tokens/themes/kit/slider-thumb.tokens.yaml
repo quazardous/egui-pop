@@ -1,0 +1,14 @@
+$description: "The `slider-thumb` component of the default kit (docs/kit.md), layered into pop-dark."
+slider-thumb:
+  $description: "A slider's thumb (a kit component): a line across the bar at the value, `width` thick; hover, active and focus are its own thumb's."
+  shape:
+    $type: "string"
+    $value: "tick"
+    $description: "The handler that draws it: tick (a line across, in its fill)."
+  width:
+    $type: "dimension"
+    $value: {value: 2, unit: "px"}
+  rest:
+    fill:
+      $type: "color"
+      $value: "{text.strong}"

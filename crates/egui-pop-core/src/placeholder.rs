@@ -3,8 +3,8 @@
 //! they load), and empty states saying why a place is empty and what to
 //! do about it.
 //!
-//! - [`Skeleton`]: grey shapes in the content's layout (`skeleton.fill`)
-//!   with a shimmer crossing them (`skeleton.shimmer`, in
+//! - [`Skeleton`]: grey shapes in the content's layout (the kit's
+//!   `skeleton`) with a shimmer crossing them (`skeleton-shimmer`, in
 //!   `motion.skeleton.shimmer`); no shimmer under reduced motion, nor
 //!   under a given motion clock (tests). Its region carries AccessKit's
 //!   `busy` flag and the name "Loading", so assistive technologies wait
@@ -31,28 +31,30 @@
 //! }
 //! ```
 
-use egui::{
-    Color32, CornerRadius, Rect, Response, Sense, Ui, Widget, WidgetInfo, WidgetType, pos2, vec2,
-};
+use egui::{Color32, Rect, Response, Sense, Ui, Widget, WidgetInfo, WidgetType, pos2, vec2};
 
 use crate::icon::Icon;
+use crate::kit::{Kit, KitCx, Part, State, Tone};
 use crate::motion;
 use crate::strings;
 use crate::theme::Tokens;
 
-/// The skeleton tokens of the installed theme.
+/// The skeleton colours of the installed kit, for what stands in for
+/// content without being a skeleton (a thumbnail not loaded yet).
 #[derive(Clone, Debug, PartialEq)]
 pub struct SkeletonTokens {
+    /// `skeleton.rest.fill`.
     pub fill: Color32,
+    /// `skeleton-shimmer.rest.fill`.
     pub shimmer: Color32,
 }
 
 impl SkeletonTokens {
     pub fn of(ctx: &egui::Context) -> SkeletonTokens {
-        let t = Tokens::of(ctx);
+        let kit = Kit::of(ctx);
         SkeletonTokens {
-            fill: t.color("skeleton.fill").unwrap_or(t.surface.active),
-            shimmer: t.color("skeleton.shimmer").unwrap_or(t.surface.hover),
+            fill: kit.skeleton.style(State::REST).fill,
+            shimmer: kit.skeleton_shimmer.style(State::REST).fill,
         }
     }
 }
@@ -117,7 +119,7 @@ impl Widget for Skeleton {
     fn ui(self, ui: &mut Ui) -> Response {
         let ctx = ui.ctx().clone();
         let t = Tokens::of(&ctx);
-        let s = SkeletonTokens::of(&ctx);
+        let kit = Kit::of(&ctx);
         let line = t.font.body;
         let gap = t.space.s;
         let block = t.size.control_height;
@@ -137,7 +139,16 @@ impl Widget for Skeleton {
         let (rect, response) = ui.allocate_exact_size(vec2(width, height), Sense::hover());
         if ui.is_rect_visible(rect) {
             let painter = ui.painter_at(rect);
-            let radius = CornerRadius::same(t.radius.widget.round().clamp(0.0, 255.0) as u8);
+            let cx = KitCx {
+                painter: &painter,
+                ppp: ctx.pixels_per_point(),
+            };
+            let part_at = |rect: Rect| Part {
+                rect,
+                room: rect,
+                state: State::REST,
+                label: None,
+            };
             let mut shapes = Vec::new();
             let mut y = rect.top();
             for row in &self.rows {
@@ -168,7 +179,7 @@ impl Widget for Skeleton {
                 y += h + gap;
             }
             for r in &shapes {
-                painter.rect_filled(*r, radius, s.fill);
+                kit.skeleton.paint(&cx, &part_at(*r));
             }
             // The shimmer: a lighter band crossing, never in tests nor
             // under reduced motion.
@@ -180,7 +191,7 @@ impl Widget for Skeleton {
                 for r in &shapes {
                     let part = r.intersect(shine);
                     if part.is_positive() {
-                        painter.rect_filled(part, radius, s.shimmer);
+                        kit.skeleton_shimmer.paint(&cx, &part_at(part));
                     }
                 }
                 motion::animate(&ctx);
@@ -240,30 +251,48 @@ impl EmptyState {
     /// clicked.
     pub fn show(self, ui: &mut Ui) -> bool {
         let t = Tokens::of(ui.ctx());
+        let kit = Kit::of(ui.ctx());
+        let empty = &kit.empty_state;
+        let tone = if self.danger {
+            Tone::Danger
+        } else {
+            Tone::Neutral
+        };
+        let state = State::REST.toned(tone);
+        let pad = empty.data.padding_y;
         let mut clicked = false;
-        ui.vertical_centered(|ui| {
-            ui.add_space(t.space.l);
+        // The box goes under the content, painted once its size is known.
+        let slot = ui.painter().add(egui::Shape::Noop);
+        let r = ui.vertical_centered(|ui| {
+            ui.add_space(pad);
             let side = t.size.icon_panel * 2.0;
             let (rect, _) = ui.allocate_exact_size(vec2(side, side), Sense::hover());
-            let color = if self.danger {
-                t.status.danger
-            } else {
-                t.text.muted
-            };
             if ui.is_rect_visible(rect) {
-                self.icon.paint(ui.painter(), rect, color);
+                self.icon.paint(ui.painter(), rect, empty.style(state).text);
             }
             ui.add_space(t.space.s);
             ui.label(egui::RichText::new(&self.title).strong());
             if let Some(text) = &self.text {
-                ui.label(egui::RichText::new(text).color(t.text.muted));
+                ui.label(egui::RichText::new(text).color(empty.style(State::REST).text));
             }
             if let Some(action) = &self.action {
                 ui.add_space(t.space.s);
                 clicked = ui.button(action).clicked();
             }
-            ui.add_space(t.space.l);
+            ui.add_space(pad);
         });
+        let rect = r.response.rect;
+        empty.paint_under(
+            ui,
+            slot,
+            &Part {
+                rect,
+                room: rect,
+                state,
+                label: None,
+            },
+            None,
+        );
         clicked
     }
 }

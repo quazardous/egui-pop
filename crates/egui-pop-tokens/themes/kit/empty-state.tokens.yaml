@@ -1,0 +1,31 @@
+$description: "The `empty-state` component of the default kit (docs/kit.md), layered into pop-dark."
+empty-state:
+  $description: "An empty place saying why and what to do (a kit component): its box around the icon, title, sentence and action; the icon and the sentence in `text`, the icon in the danger tone when something went wrong."
+  shape:
+    $type: "string"
+    $value: "card"
+    $description: "The handler that draws its box: card (fill, border, radius, ring) or plain."
+  padding-y:
+    $type: "dimension"
+    $value: "{space.l}"
+  rest:
+    fill:
+      $type: "color"
+      $value: "{transparent}"
+    border-color:
+      $type: "color"
+      $value: "{border.default}"
+    border-width:
+      $type: "dimension"
+      $value: {value: 0, unit: "px"}
+    radius:
+      $type: "dimension"
+      $value: "{radius.window}"
+    text:
+      $type: "color"
+      $value: "{text.muted}"
+  tone:
+    danger:
+      text:
+        $type: "color"
+        $value: "{danger}"

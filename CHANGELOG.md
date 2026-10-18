@@ -9,6 +9,26 @@ egui minor.
 
 ### Added
 
+- Kits: placeholders (`skeleton`, `skeleton-shimmer`, `empty-state`): a
+  skeleton's shapes and the band crossing them are drawn by the kit; an
+  empty state's box (none in the default kit), its `padding-y`, and its
+  icon and sentence colour (`text`, the `danger` tone when something
+  went wrong) come from it. The default look is unchanged.
+- Kits: icon buttons (`icon-button`): an `IconWidget` made clickable is
+  drawn by the kit, its icon in the box's `text` per state (hover,
+  focus ring, disabled) and by tone (the icon's tone, except `Strong`
+  and `OnAccent`, which keep their colour at rest).
+  `IconWidget::selected` makes it a toggle, `selected` while on and
+  announced as toggled. The focus ring follows the box's corners (one
+  point rounder than before).
+- Kits: sliders (`slider`, `slider-fill`, `slider-thumb`,
+  `slider-value`, `slider-toggle`): the bar, its fill strip (`height`,
+  15 % of the bar by default), its thumbs, its value (the `warning` tone
+  past the soft range) and the square button at its end are drawn by the
+  kit, per state (hover, active, focus; `selected` for a toggle that is
+  on), range sliders included; the gradient tracks stay content. The
+  default look is unchanged, except that a focused slider's fill and
+  thumb now stay whole over its ring.
 - The shipped token files are compiled from YAML to JSON when egui-pop is
   built: the built-in themes load in 3 ms instead of 24 (release build),
   and an unquoted `#colour` or `{alias}` in them fails the build. A
@@ -1001,6 +1021,11 @@ egui minor.
   `toast.{background, border, text, padding}`, `editor.background`,
   `terminal.background`. `progress::Tone` is `kit::Tone` and gains
   `Neutral`.
+- Renamed into the kit's grid, the former names still working with a
+  reported problem: `slider.track` (`slider.rest.fill`), `slider.fill`
+  (`slider-fill.rest.fill`), `slider.thumb` (`slider-thumb.rest.fill`),
+  `skeleton.fill` (`skeleton.rest.fill`), `skeleton.shimmer`
+  (`skeleton-shimmer.rest.fill`).
 - `egui_pop_core::kit::paint_ring`: a ring inside its box follows its
   corners.
 - `egui_pop_tokens::CONTRACT` is replaced by `contract()`: the default

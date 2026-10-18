@@ -144,9 +144,9 @@ pub const PAIRS: &[Pair] = &[
     ui("focus.ring", "surface.overlay"),
     ui("focus.ring", "surface.sunken"),
     ui("accent.default", "surface.raised"),
-    ui("slider.fill", "slider.track"),
+    ui("slider-fill.rest.fill", "slider.rest.fill"),
     ui("progress-fill.rest.fill", "progress-bar.rest.fill"),
-    ui("slider.thumb", "slider.track"),
+    ui("slider-thumb.rest.fill", "slider.rest.fill"),
     // Input fields: the state edges and markers over the field.
     ui("field.tone.accent.border-color", "field.rest.fill"),
     ui("field.tone.warning.border-color", "field.rest.fill"),
