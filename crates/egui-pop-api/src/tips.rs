@@ -44,9 +44,9 @@ use std::sync::Mutex;
 use egui::Ui;
 use egui::accesskit::Role;
 use egui_pop_core::icon::{Icon, Size, Tone};
+use egui_pop_core::kit::{self, Kit};
 use egui_pop_core::lock;
 use egui_pop_core::strings;
-use egui_pop_core::theme::Tokens;
 use egui_pop_model::commands::{CommandSpec, Origin};
 use egui_pop_model::ids::{CommandId, PluginId, SettingId, StepId};
 use egui_pop_model::values::{Change, Descriptor, Set, Value};
@@ -365,13 +365,9 @@ impl Plugin for TipsPlugin {
 /// A tip's card: an icon, a heading, the text, then the buttons
 /// `actions` draws: a note for screen readers.
 fn card(ui: &mut Ui, heading: &str, title: &str, text: &str, actions: impl FnOnce(&mut Ui)) {
-    let t = Tokens::of(ui.ctx());
-    egui::Frame::new()
-        .fill(t.surface.raised)
-        .stroke(egui::Stroke::new(1.0, t.border.default))
-        .corner_radius(egui::CornerRadius::same(t.radius.widget.round() as u8))
-        .inner_margin(egui::Margin::same(t.space.m.round() as i8))
-        .show(ui, |ui| {
+    Kit::of(ui.ctx())
+        .tip_card
+        .show(ui, kit::State::REST, egui::Shadow::NONE, |ui| {
             ui.ctx().accesskit_node_builder(ui.unique_id(), |node| {
                 node.set_role(Role::Note);
             });

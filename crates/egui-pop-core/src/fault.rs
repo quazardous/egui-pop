@@ -17,9 +17,10 @@
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
-use egui::{Id, RichText, Stroke, Ui};
+use egui::{Id, RichText, Shadow, Ui};
 use serde::Serialize;
 
+use crate::kit::{Kit, State};
 use crate::strings::{self, FAULT_BODY, FAULT_TITLE, RETRY};
 use crate::theme::Tokens;
 
@@ -103,12 +104,9 @@ pub fn faults(ctx: &egui::Context) -> Vec<Fault> {
 
 fn card(ui: &mut Ui, key: Id, fault: &Fault) {
     let t = Tokens::of(ui.ctx());
-    egui::Frame::new()
-        .fill(t.surface.raised)
-        .stroke(Stroke::new(1.0, t.status.danger))
-        .corner_radius(t.radius.widget)
-        .inner_margin(t.space.m)
-        .show(ui, |ui| {
+    Kit::of(ui.ctx())
+        .fault_card
+        .show(ui, State::REST, Shadow::NONE, |ui| {
             ui.label(
                 RichText::new(strings::tr_args(
                     ui.ctx(),

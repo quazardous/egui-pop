@@ -29,7 +29,7 @@
 //! host's store, under `ui/dialogs/<key>`).
 //!
 //! Its backdrop ([`Backdrop`]) dims the interface (`Dim`, the
-//! `dialog.backdrop` token's strength, fading while the dialog is
+//! `backdrop.opacity` token's strength, fading while the dialog is
 //! dragged) or leaves it untouched (`Clear`, for a dialog previewing its
 //! effect on the image); the dialog stays modal either way, and a click
 //! on the backdrop never closes it.
@@ -80,6 +80,7 @@ use egui::{Key, Modifiers, Response, Ui, Vec2, WidgetType};
 use egui_pop_core::band;
 use egui_pop_core::debug::FnCollector;
 use egui_pop_core::icon::Icon;
+use egui_pop_core::kit::{self, Kit};
 use egui_pop_core::overlay::{self, Kind, OverlaySpec};
 use egui_pop_core::strings::{self, CANCEL, CLOSE};
 use egui_pop_core::theme::Tokens;
@@ -399,7 +400,7 @@ impl Dialog {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Backdrop {
-    /// Dimmed, as much as the `dialog.backdrop` token says (less while
+    /// Dimmed, as much as the `backdrop.opacity` token says (less while
     /// the dialog is dragged).
     #[default]
     Dim,
@@ -1240,12 +1241,13 @@ fn body(ui: &mut Ui, app: &AppHandle, o: &mut Open, header: Header<'_>) -> Optio
 }
 
 /// The style of a dialog's header band.
-fn band_style(t: &Tokens) -> band::BandStyle {
+fn band_style(t: &Tokens, k: &Kit) -> band::BandStyle {
+    let b = k.dialog.style(kit::State::REST);
     band::BandStyle {
         fill: t.dialog.header,
-        separator: t.dialog.border,
-        radius: t.dialog.radius,
-        padding: t.dialog.padding,
+        separator: b.border_color,
+        radius: b.radius,
+        padding: k.dialog.data.padding_x,
         gap: t.space.m,
     }
 }
@@ -1262,7 +1264,7 @@ fn header_band(
 ) -> Response {
     let t = Tokens::of(ui.ctx());
     let side = close_side(ui);
-    let (heading, b) = band::begin(ui, &band_style(&t), |ui| {
+    let (heading, b) = band::begin(ui, &band_style(&t, &Kit::of(ui.ctx())), |ui| {
         ui.horizontal_top(|ui| {
             let room = if closable {
                 (ui.available_width() - side - ui.spacing().item_spacing.x).max(0.0)
@@ -1301,7 +1303,11 @@ fn header_band(
 /// Paints the header band, when there is one.
 fn paint_band(ui: &Ui, b: &Band) {
     if let Some(b) = &b.0 {
-        band::paint(ui, b, &band_style(&Tokens::of(ui.ctx())));
+        band::paint(
+            ui,
+            b,
+            &band_style(&Tokens::of(ui.ctx()), &Kit::of(ui.ctx())),
+        );
     }
 }
 

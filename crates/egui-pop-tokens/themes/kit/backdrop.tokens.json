@@ -1,0 +1,11 @@
+{
+  "$description": "The `backdrop` component of the default kit (docs/kit.md), layered into pop-dark.",
+  "backdrop": {
+    "$description": "What dims the interface behind a modal dialog (a kit component).",
+    "shape": {"$type": "string", "$value": "plain"},
+    "opacity": {"$type": "number", "$value": "{opacity.scrim}"},
+    "rest": {
+      "fill": {"$type": "color", "$value": "{scrim}"}
+    }
+  }
+}

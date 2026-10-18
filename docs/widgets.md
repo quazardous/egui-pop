@@ -594,7 +594,7 @@ and a click on the backdrop never closes the dialog (an answer comes
 from its buttons, Enter or Escape; a stray click must not lose what
 was typed).
 
-- `Dim`, the default, darkens the interface by the `dialog.backdrop`
+- `Dim`, the default, darkens the interface by the `backdrop.opacity`
   token (an alias of the system `opacity.scrim`, a number from 0 to 1).
   While a movable dialog is dragged the dim fades to about a third, so
   the user sees where to put it; it comes back on the drop.

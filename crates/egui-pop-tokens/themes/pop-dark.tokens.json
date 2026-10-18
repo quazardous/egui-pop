@@ -99,6 +99,8 @@
   },
   "clear": {"$type": "color", "$value": "#00000000", "$description": "No colour at all."},
   "transparent": {"$type": "color", "$value": "{clear}", "$description": "Nothing painted: a part that shows what is behind it."},
+  "black": {"$type": "color", "$value": "#000000", "$description": "Black, opaque."},
+  "scrim": {"$type": "color", "$value": "{black}", "$description": "What a backdrop dims the interface with, at opacity.scrim."},
   "surface": {
     "$type": "color",
     "canvas": {"$value": "{gray.1}", "$description": "Behind documents, images and graphs."},
@@ -246,30 +248,14 @@
     }
   },
   "dialog": {
-    "background": {"$type": "color", "$value": "{surface.overlay}"},
-    "border": {"$type": "color", "$value": "{border.default}"},
-    "radius": {"$type": "dimension", "$value": "{radius.window}"},
-    "padding": {"$type": "dimension", "$value": "{space.l}"},
-    "width": {"$type": "dimension", "$value": "{size.dialog.width}"},
     "header": {"$type": "color", "$value": "{surface.raised}", "$description": "A movable dialog's header band, the handle it is dragged by."},
-    "header-text": {"$type": "color", "$value": "{text.default}"},
-    "backdrop": {"$type": "number", "$value": "{opacity.scrim}", "$description": "The backdrop's opacity behind a modal dialog."}
+    "header-text": {"$type": "color", "$value": "{text.default}"}
   },
   "palette": {
     "$description": "Palettes and toolboxes floating over the interface, never modal.",
-    "background": {"$type": "color", "$value": "{surface.overlay}"},
-    "border": {"$type": "color", "$value": "{border.default}"},
     "header": {"$type": "color", "$value": "{surface.raised}"},
     "header-text": {"$type": "color", "$value": "{text.default}"},
-    "padding": {"$type": "dimension", "$value": "{space.s}"},
     "magnet": {"$type": "dimension", "$value": "{size.magnet}"}
-  },
-  "toast": {
-    "background": {"$type": "color", "$value": "{surface.overlay}"},
-    "border": {"$type": "color", "$value": "{border.strong}"},
-    "text": {"$type": "color", "$value": "{text.default}"},
-    "padding": {"$type": "dimension", "$value": "{space.m}"},
-    "width": {"$type": "dimension", "$value": "{size.toast.width}"}
   },
   "viewport": {
     "$description": "The image viewport.",

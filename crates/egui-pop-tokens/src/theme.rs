@@ -80,12 +80,36 @@ pub const BUILT_IN_ACCENTS: &[&str] = &["gold", "blue", "green", "amber", "red"]
 /// into `pop-dark` (and so into every theme extending it). One line per
 /// component, in alphabetical order.
 const KIT_FILES: &[(&str, &str)] = &[
+    (
+        "backdrop",
+        include_str!("../themes/kit/backdrop.tokens.json"),
+    ),
+    ("dialog", include_str!("../themes/kit/dialog.tokens.json")),
+    (
+        "fault-card",
+        include_str!("../themes/kit/fault-card.tokens.json"),
+    ),
+    (
+        "fullscreen-exit",
+        include_str!("../themes/kit/fullscreen-exit.tokens.json"),
+    ),
+    ("job-log", include_str!("../themes/kit/job-log.tokens.json")),
+    (
+        "palette-window",
+        include_str!("../themes/kit/palette-window.tokens.json"),
+    ),
+    ("popover", include_str!("../themes/kit/popover.tokens.json")),
     ("tab", include_str!("../themes/kit/tab.tokens.json")),
     ("tab-bar", include_str!("../themes/kit/tab-bar.tokens.json")),
+    (
+        "tip-card",
+        include_str!("../themes/kit/tip-card.tokens.json"),
+    ),
     (
         "title-bar",
         include_str!("../themes/kit/title-bar.tokens.json"),
     ),
+    ("toast", include_str!("../themes/kit/toast.tokens.json")),
     ("window", include_str!("../themes/kit/window.tokens.json")),
     (
         "window-button",

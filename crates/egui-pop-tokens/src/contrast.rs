@@ -100,7 +100,7 @@ pub const PAIRS: &[Pair] = &[
     text("button.text", "button.background"),
     text("menu.item.text", "menu.item.background-hover"),
     text("menu.item.text-muted", "surface.overlay"),
-    text("toast.text", "toast.background"),
+    text("toast.rest.text", "toast.rest.fill"),
     text("dialog.header-text", "dialog.header"),
     text("palette.header-text", "palette.header"),
     // Editors: code over its background, line numbers over the gutter.
@@ -138,7 +138,7 @@ pub const PAIRS: &[Pair] = &[
     ui("slider.fill", "slider.track"),
     ui("progress.fill", "progress.track"),
     ui("slider.thumb", "slider.track"),
-    ui("toast.border", "surface.panel"),
+    ui("toast.rest.border-color", "surface.panel"),
     // A curve and its points over the curve editor's background.
     ui("curve.line", "curve.background"),
     ui("curve.point", "curve.background"),
