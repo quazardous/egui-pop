@@ -637,13 +637,13 @@ implementation drew the dash in `text.default`). The shapes an
 application picks itself (`Indicator::flag_shape`) are its own and stay
 as it asks.
 
-### 6.4 Open questions for the owner
+### 6.4 Left to component dependencies
 
-1. `indicator-button` repeats `icon-button`'s values (transparent,
-   hover, a focus ring): a case for the component dependencies being
-   discussed (based on `icon-button`, or aliases), noted there.
-   Pending (2026-10-19): what "based on" would mean is being explained
-   to the owner; `indicator-button` stays as it is until then.
+`indicator-button` repeats `icon-button`'s values (transparent, hover,
+a focus ring). It is one more case for the component dependencies of
+[#22](https://github.com/quazardous/egui-pop/issues/22) (a component
+based on another): it stays as it is until that is decided, and then
+moves with the other copies listed there.
 
 ### 6.5 Decided by the owner (2026-10-19)
 
