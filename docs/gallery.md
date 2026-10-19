@@ -20,7 +20,7 @@ directory; without it they are simulated and nothing reaches the
 desktop).
 
 Pages: `overview` (the theme overview), `tokens`, `builtins` (egui's
-built-ins), `theme-editor` (the theme editor), `icons`, `motion` (the motion clock), `values`, `sliders`, `inputs` (decorated inputs, field states and Tab order),
+built-ins), `theme-editor` (the theme editor), `icons`, `indicators` (dots, badges, pips, flags, swatches), `motion` (the motion clock), `values`, `sliders`, `inputs` (decorated inputs, field states and Tab order),
 `menus`, `dialogs`, `files` (the file chooser), `toasts`, `tips` (tips of the day and
 hints), `progress`,
 `placeholders` (skeletons and empty states), `viewport` (the image
@@ -100,9 +100,15 @@ Themes, design tokens, the theme editor, icons and scaling.
 
 ### Widgets
 
-Egui's built-ins in egui-pop's style, values, sliders, inputs (decorators, field states, Tab order), menus, dialogs (movable ones, a clear backdrop), file choosing, toasts, and progress (bars, rings, meters, spinners; still under reduced motion).
+Egui's built-ins in egui-pop's style, values, sliders, inputs (decorators, field states, Tab order), menus, dialogs (movable ones, a clear backdrop), file choosing, toasts, micro-indicators (still under reduced motion), and progress (bars, rings, meters, spinners; still under reduced motion).
 
 <table>
+  <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/indicators-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/indicators-pop-dark.png" width="200" alt="indicators-pop-dark"></a><br>indicators-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/indicators-pop-high-contrast.png"><img src="../crates/egui-pop-gallery/tests/snapshots/indicators-pop-high-contrast.png" width="200" alt="indicators-pop-high-contrast"></a><br>indicators-pop-high-contrast</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/indicators-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/indicators-pop-light.png" width="200" alt="indicators-pop-light"></a><br>indicators-pop-light</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/indicators-reduced-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/indicators-reduced-pop-dark.png" width="200" alt="indicators-reduced-pop-dark"></a><br>indicators-reduced-pop-dark</td>
+  </tr>
   <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/builtins-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/builtins-pop-dark.png" width="200" alt="builtins-pop-dark"></a><br>builtins-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/builtins-pop-dark-compact.png"><img src="../crates/egui-pop-gallery/tests/snapshots/builtins-pop-dark-compact.png" width="200" alt="builtins-pop-dark-compact"></a><br>builtins-pop-dark-compact</td>

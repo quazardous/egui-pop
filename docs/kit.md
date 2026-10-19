@@ -302,6 +302,15 @@ compiled at install.
   `progress-fill`, `progress-caption`, `meter`, `meter-tick`,
   `progress-ring`, `spinner`, `status-indicator`), handlers `track`,
   `span` and `tick`.
+- **Micro-indicators** (`indicator-dot`, `indicator-badge`,
+  `indicator-flag`, `indicator-swatch`, `indicator-outline`,
+  `indicator-button`; [indicators](indicators.md)). Dots and flags are
+  colours only: the shapes that tell states apart (a hollow LED, a
+  triangle, a square, a corner, an asterisk) stay code, so a kit cannot
+  leave colour alone to carry a state. A badge is a `pill` by tone, a
+  swatch a `box` over its colour, an interactive mark's target an
+  `indicator-button` in its state; pips are `spinner` and
+  `progress-ring`. The `indicators` snapshots.
 - **Sliders** (`slider`, `slider-fill`, `slider-thumb`, `slider-value`,
   `slider-toggle`). The bar is a box with its label at the start
   (`align`), `hover`, `active` while dragged and `focus` (a ring inside

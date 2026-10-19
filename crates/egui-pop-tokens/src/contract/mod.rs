@@ -301,6 +301,16 @@ const CORE: &[Required] = &[
         "duration",
         "a skeleton's shimmer crossing it",
     ),
+    sys(
+        "motion.pulse.period",
+        "duration",
+        "one pulse of a busy LED or of a mark calling attention",
+    ),
+    sys(
+        "motion.pulse.count",
+        "number",
+        "how many times a mark calling attention pulses",
+    ),
     comp(
         "palette.magnet",
         "dimension",

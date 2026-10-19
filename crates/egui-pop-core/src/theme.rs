@@ -285,6 +285,12 @@ pub struct MotionTokens {
     pub progress_travel: f32,
     /// A skeleton's shimmer crossing it (`motion.skeleton.shimmer`).
     pub skeleton_shimmer: f32,
+    /// One pulse of a busy LED or a mark calling attention
+    /// (`motion.pulse.period`).
+    pub pulse_period: f32,
+    /// How many times a mark calling attention pulses
+    /// (`motion.pulse.count`).
+    pub pulse_count: u32,
 }
 
 /// Shadows under what lies over the interface (`shadow.*`), as egui's.
@@ -472,6 +478,11 @@ impl Tokens {
                     spinner_turn: s("motion.spinner.turn"),
                     progress_travel: s("motion.progress.travel"),
                     skeleton_shimmer: s("motion.skeleton.shimmer"),
+                    pulse_period: s("motion.pulse.period"),
+                    pulse_count: r
+                        .dimension("motion.pulse.count")
+                        .unwrap_or(3.0)
+                        .clamp(0.0, 100.0) as u32,
                 }
             },
             button: ButtonTokens {

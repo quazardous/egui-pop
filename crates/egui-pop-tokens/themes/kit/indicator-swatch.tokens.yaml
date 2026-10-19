@@ -1,0 +1,26 @@
+$description: "The `indicator-swatch` component of the default kit (docs/kit.md), layered into pop-dark."
+indicator-swatch:
+  $description: "A colour swatch (a micro-indicator; a kit component): the colour is content, painted under the box; the box gives the outline (so a colour close to the surface still shows), the corners, and in text the slash of no colour and the dash of mixed colours; width is its side."
+  shape:
+    $type: "string"
+    $value: "box"
+    $description: "The handler that draws it: box (fill, border, radius, ring) or plain."
+  width:
+    $type: "dimension"
+    $value: "{size.icon.inline}"
+  rest:
+    fill:
+      $type: "color"
+      $value: "{transparent}"
+    border-color:
+      $type: "color"
+      $value: "{border.strong}"
+    border-width:
+      $type: "dimension"
+      $value: {value: 1, unit: "px"}
+    radius:
+      $type: "dimension"
+      $value: {value: 2, unit: "px"}
+    text:
+      $type: "color"
+      $value: "{text.muted}"

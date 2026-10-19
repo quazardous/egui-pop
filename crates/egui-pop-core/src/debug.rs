@@ -31,7 +31,7 @@ use serde_json::{Value as Json, json};
 
 use crate::binding::SharedStore;
 use crate::state::lock;
-use crate::{a11y, fault, field, focus, overlay, tab, theme};
+use crate::{a11y, fault, field, focus, indicator, overlay, tab, theme};
 
 /// An action a collector offers.
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -461,6 +461,11 @@ pub fn core_collectors() -> Vec<FnCollector> {
             },
         )
         .args(json!({ "text": "Hello" })),
+        FnCollector::new(
+            "indicators",
+            "The micro-indicators with an id drawn in the last pass: kind, state, value, text, tone, meaning, host, whether interactive, shown and pulsing.",
+        )
+        .snapshot(|ctx| json!(indicator::drawn(ctx))),
         FnCollector::new("theme", "The installed theme and its problems.").snapshot(|ctx| {
             let t = theme::Tokens::of(ctx);
             let r = t.resolved();

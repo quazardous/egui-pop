@@ -155,6 +155,52 @@ pub const PAIRS: &[Pair] = &[
     ui("field.tone.danger.border-color", "field.rest.fill"),
     ui("field.tone.info.border-color", "field.rest.fill"),
     ui("toast.rest.border-color", "surface.panel"),
+    // Micro-indicators: badge text on every tone's fill, the marks that
+    // carry a state on the surfaces they sit on, the outline against
+    // what it separates.
+    text("indicator-badge.rest.text", "indicator-badge.rest.fill"),
+    text(
+        "indicator-badge.rest.text",
+        "indicator-badge.tone.accent.fill",
+    ),
+    text(
+        "indicator-badge.rest.text",
+        "indicator-badge.tone.info.fill",
+    ),
+    text(
+        "indicator-badge.rest.text",
+        "indicator-badge.tone.success.fill",
+    ),
+    text(
+        "indicator-badge.rest.text",
+        "indicator-badge.tone.warning.fill",
+    ),
+    text(
+        "indicator-badge.rest.text",
+        "indicator-badge.tone.danger.fill",
+    ),
+    text(
+        "indicator-badge.rest.text",
+        "indicator-badge.tone.muted.fill",
+    ),
+    text(
+        "indicator-badge.rest.text",
+        "indicator-badge.tone.record.fill",
+    ),
+    ui("indicator-dot.tone.record.fill", "surface.panel"),
+    ui("indicator-dot.tone.record.fill", "surface.overlay"),
+    ui("indicator-dot.rest.border-color", "surface.panel"),
+    ui("indicator-dot.rest.border-color", "surface.overlay"),
+    ui("indicator-swatch.rest.border-color", "surface.panel"),
+    ui("indicator-swatch.rest.border-color", "surface.overlay"),
+    ui(
+        "indicator-dot.tone.accent.fill",
+        "indicator-outline.rest.ring-color",
+    ),
+    ui(
+        "indicator-dot.tone.danger.fill",
+        "indicator-outline.rest.ring-color",
+    ),
     // A curve and its points over the curve editor's background.
     ui("curve.line", "curve.background"),
     ui("curve.point", "curve.background"),

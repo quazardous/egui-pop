@@ -11,6 +11,8 @@
 //!   reader can say;
 //! - [`a11y_tree`]: the accessibility tree as indented text, for
 //!   assertions and for reading in a failure;
+//! - [`indicators`] and [`assert_indicator`]: the micro-indicators with
+//!   an id drawn in the last pass, and the state of one;
 //! - [`double_click`]: a double click that registers (see
 //!   `docs/upstream.md`);
 //! - `SharedGpu::shared_wgpu` and `gpu_lock` (feature `wgpu`): one wgpu
@@ -291,6 +293,26 @@ pub fn a11y_tree<S>(h: &Harness<'_, S>) -> String {
     let mut out = String::new();
     walk(h.root(), 0, &mut out);
     out
+}
+
+/// The micro-indicators with an id drawn in the harness's last pass
+/// (what the debug bridge's `indicators` collector shows).
+pub fn indicators<S>(h: &Harness<'_, S>) -> Vec<egui_pop_core::indicator::Record> {
+    egui_pop_core::indicator::drawn(&h.ctx)
+}
+
+/// Fails unless the indicator `id` was drawn in the last pass in
+/// `state` (an LED's `on`, a badge's `count`, a flag's `modified`...).
+#[track_caller]
+pub fn assert_indicator<S>(h: &Harness<'_, S>, id: &str, state: &str) {
+    let all = indicators(h);
+    match all.iter().find(|r| r.id == id) {
+        Some(r) => assert_eq!(r.state, state, "indicator `{id}`: {r:?}"),
+        None => panic!(
+            "no indicator `{id}` drawn; there are: {:?}",
+            all.iter().map(|r| r.id.as_str()).collect::<Vec<_>>()
+        ),
+    }
 }
 
 /// Double-clicks at a point, so that egui sees a double click.

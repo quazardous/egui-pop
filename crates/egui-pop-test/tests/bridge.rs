@@ -53,6 +53,7 @@ fn every_collector_describes_and_snapshots_itself() {
         "overlays",
         "fields",
         "faults",
+        "indicators",
         "announcements",
         "theme",
         "commands",

@@ -33,6 +33,10 @@ pub(super) fn built_in(shapes: &mut Shapes) {
     shapes.insert("find-bar-button", "box", Arc::new(cell::BoxCell));
     shapes.insert("header-band", "band", Arc::new(band::Band));
     shapes.insert("icon-button", "box", Arc::new(cell::BoxCell));
+    shapes.insert("indicator-badge", "box", Arc::new(cell::BoxCell));
+    shapes.insert("indicator-badge", "pill", Arc::new(pill::Pill));
+    shapes.insert("indicator-button", "box", Arc::new(cell::BoxCell));
+    shapes.insert("indicator-swatch", "box", Arc::new(cell::BoxCell));
     shapes.insert("list-row", "box", Arc::new(cell::BoxCell));
     shapes.insert("mark-toggle", "box", Arc::new(cell::BoxCell));
     shapes.insert("menu-item", "box", Arc::new(cell::BoxCell));

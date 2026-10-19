@@ -31,8 +31,8 @@ use std::f32::consts::TAU;
 
 use egui::accesskit::Role;
 use egui::{
-    Color32, Context, FontId, Id, Pos2, Rect, Response, Sense, Stroke, Ui, Widget, WidgetInfo,
-    WidgetType, pos2, vec2,
+    Color32, Context, FontId, Id, Painter, Pos2, Rect, Response, Sense, Stroke, Ui, Widget,
+    WidgetInfo, WidgetType, pos2, vec2,
 };
 
 pub use crate::kit::Tone;
@@ -445,13 +445,17 @@ fn arc(center: Pos2, radius: f32, start: f32, sweep: f32) -> Vec<Pos2> {
 /// `color` over `progress-ring`'s track. For a ring that is part of
 /// another widget; [`Ring`] is the widget.
 pub fn paint_ring(ui: &Ui, rect: Rect, fraction: Option<f32>, color: Color32) {
-    let ctx = ui.ctx();
+    paint_ring_on(ui.painter(), rect, fraction, color);
+}
+
+/// [`paint_ring`] with a painter of its own (another layer, a clip).
+pub fn paint_ring_on(painter: &Painter, rect: Rect, fraction: Option<f32>, color: Color32) {
+    let ctx = painter.ctx();
     let t = Tokens::of(ctx);
     let track = Kit::of(ctx).progress_ring.style(State::REST).fill;
     let side = rect.width().min(rect.height());
     let width = (side / 7.0).max(1.5);
     let radius = side / 2.0 - width / 2.0;
-    let painter = ui.painter();
     painter.circle_stroke(rect.center(), radius, Stroke::new(width, track));
     let top = -TAU / 4.0;
     match fraction {
@@ -726,14 +730,18 @@ impl Spinner {
 
 /// Paints a spinner's arc in `rect`, in `color` over `spinner`'s track.
 pub fn paint_spinner(ui: &Ui, rect: Rect, color: Color32) {
-    let ctx = ui.ctx();
+    paint_spinner_on(ui.painter(), rect, color);
+}
+
+/// [`paint_spinner`] with a painter of its own (another layer, a clip).
+pub fn paint_spinner_on(painter: &Painter, rect: Rect, color: Color32) {
+    let ctx = painter.ctx();
     let t = Tokens::of(ctx);
     let track = Kit::of(ctx).spinner.style(State::REST).fill;
     let side = rect.width().min(rect.height());
     let width = (side / 7.0).max(1.5);
     let radius = side / 2.0 - width / 2.0;
     let phase = motion::phase(ctx, f64::from(t.motion.spinner_turn), 0.125);
-    let painter = ui.painter();
     painter.circle_stroke(rect.center(), radius, Stroke::new(width, track));
     painter.line(
         arc(rect.center(), radius, -TAU / 4.0 + phase * TAU, TAU * 0.3),

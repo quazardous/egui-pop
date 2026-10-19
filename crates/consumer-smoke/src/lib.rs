@@ -59,6 +59,9 @@ pub mod editors {}
 #[doc = include_str!("../../../docs/progress.md")]
 pub mod progress {}
 
+#[doc = include_str!("../../../docs/indicators.md")]
+pub mod indicators {}
+
 #[doc = include_str!("../../../docs/workbench.md")]
 pub mod workbench {}
 

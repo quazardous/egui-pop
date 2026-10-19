@@ -1,0 +1,83 @@
+$description: "The `indicator-button` component of the default kit (docs/kit.md), layered into pop-dark."
+indicator-button:
+  $description: "The target of an interactive micro-indicator (a kit component): at least width by height (24 points, WCAG 2.5.8) around the mark, hover, active, focus, disabled, selected for a toggle that is on; text is an icon mark's colour (by tone) and, disabled, any mark's."
+  shape:
+    $type: "string"
+    $value: "box"
+    $description: "The handler that draws it: box (fill, border, radius, ring) or plain."
+  width:
+    $type: "dimension"
+    $value: {value: 24, unit: "px"}
+  height:
+    $type: "dimension"
+    $value: {value: 24, unit: "px"}
+  rest:
+    fill:
+      $type: "color"
+      $value: "{transparent}"
+    border-color:
+      $type: "color"
+      $value: "{border.default}"
+    border-width:
+      $type: "dimension"
+      $value: {value: 0, unit: "px"}
+    radius:
+      $type: "dimension"
+      $value: "{radius.widget}"
+    text:
+      $type: "color"
+      $value: "{text.default}"
+  hover:
+    fill:
+      $type: "color"
+      $value: "{surface.hover}"
+    text:
+      $type: "color"
+      $value: "{text.strong}"
+  active:
+    fill:
+      $type: "color"
+      $value: "{surface.hover}"
+  focus:
+    ring-color:
+      $type: "color"
+      $value: "{focus.ring}"
+    ring-width:
+      $type: "dimension"
+      $value: {value: 1.5, unit: "px"}
+    ring-offset:
+      $type: "dimension"
+      $value: {value: -1.5, unit: "px"}
+  disabled:
+    text:
+      $type: "color"
+      $value: "{text.muted}"
+  tone:
+    accent:
+      text:
+        $type: "color"
+        $value: "{accent.default}"
+    info:
+      text:
+        $type: "color"
+        $value: "{info}"
+    success:
+      text:
+        $type: "color"
+        $value: "{success}"
+    warning:
+      text:
+        $type: "color"
+        $value: "{warning}"
+    danger:
+      text:
+        $type: "color"
+        $value: "{danger}"
+    muted:
+      text:
+        $type: "color"
+        $value: "{text.muted}"
+    record:
+      text:
+        $type: "color"
+        $value: "{danger}"

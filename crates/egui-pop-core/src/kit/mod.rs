@@ -709,6 +709,23 @@ components! {
     /// A button made of an icon alone (`IconWidget::sense_click`), its
     /// icon in `text`, by tone; `selected` while it is on.
     icon_button: "icon-button" => "box",
+    /// A count or short text badge (a micro-indicator): a pill by tone.
+    indicator_badge: "indicator-badge" => "pill",
+    /// The target of an interactive micro-indicator: `hover`, `active`,
+    /// `focus`, `disabled`, `selected` for a toggle that is on; its
+    /// `text` is an icon mark's colour.
+    indicator_button: "indicator-button" => "box",
+    /// A dot or an LED, colours only: its colour in `fill` by tone, an
+    /// LED that is off a ring in `border-color`.
+    indicator_dot: "indicator-dot" => "plain",
+    /// A flag, colours only: its colour in `fill` by tone.
+    indicator_flag: "indicator-flag" => "plain",
+    /// The ring separating an overhanging mark from its host, colours
+    /// only (`ring-color`, `ring-width`).
+    indicator_outline: "indicator-outline" => "plain",
+    /// A colour swatch's box: its outline and corners over the colour;
+    /// `text` the slash of no colour and the dash of mixed ones.
+    indicator_swatch: "indicator-swatch" => "box",
     /// A job's log console, as plain lines.
     job_log: "job-log" => "card",
     /// A pick, reject or colour label toggle: `selected` while on.

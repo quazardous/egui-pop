@@ -1,0 +1,58 @@
+$description: "The `indicator-badge` component of the default kit (docs/kit.md), layered into pop-dark."
+indicator-badge:
+  $description: "A count or a short text on or beside a widget (a micro-indicator; a kit component): a pill at least as wide as it is high, its fill by tone, its text the panel on every tone (the tones are legible on the panel, so the panel is legible on them)."
+  shape:
+    $type: "string"
+    $value: "pill"
+    $description: "The handler that draws it: pill (box with round ends), box or plain."
+  height:
+    $type: "dimension"
+    $value: {value: 16, unit: "px"}
+  padding-x:
+    $type: "dimension"
+    $value: "{space.s}"
+  rest:
+    fill:
+      $type: "color"
+      $value: "{text.default}"
+    border-color:
+      $type: "color"
+      $value: "{border.default}"
+    border-width:
+      $type: "dimension"
+      $value: {value: 0, unit: "px"}
+    radius:
+      $type: "dimension"
+      $value: {value: 999, unit: "px"}
+    text:
+      $type: "color"
+      $value: "{surface.panel}"
+  tone:
+    accent:
+      fill:
+        $type: "color"
+        $value: "{accent.default}"
+    info:
+      fill:
+        $type: "color"
+        $value: "{info}"
+    success:
+      fill:
+        $type: "color"
+        $value: "{success}"
+    warning:
+      fill:
+        $type: "color"
+        $value: "{warning}"
+    danger:
+      fill:
+        $type: "color"
+        $value: "{danger}"
+    muted:
+      fill:
+        $type: "color"
+        $value: "{text.muted}"
+    record:
+      fill:
+        $type: "color"
+        $value: "{danger}"

@@ -1,7 +1,15 @@
 # Micro-indicators: survey, places of use and the `indicator` module
 
 Status: **design note, accepted** (2026-10-14). The owner settled the
-open questions on 2026-10-14 (section 5).
+open questions on 2026-10-14 (section 5). The first step is
+implemented on the visual kits ([kit.md](../kit.md), 2026-10-19): the
+dot, badge, pip, flag and swatch kinds, the icon kind for built-in
+icons, the gallery page and the tests; the guide is
+[indicators.md](../indicators.md). The kits changed how the tokens and
+the tone are expressed: section 6 lists each deviation from sections 3
+and 5. The workbench tab's modified dot (decision 7) is not in it:
+panels have no modified state yet and `egui_dock` has no slot for a
+tab's decoration.
 
 Micro-indicators are the small marks that say a state in very little
 space, attached to something else: a dot or LED, a count badge, an
@@ -304,6 +312,8 @@ name. Colour labels keep the library's shapes.
 
 ### 3.3 Tokens
 
+(As first designed; the kit's names are in section 6.)
+
 Component tokens aliasing system tokens, as `progress.*` and
 `library.*` do:
 
@@ -546,3 +556,96 @@ The questions as they were asked:
 7. **Dirty dot on tabs**: does the workbench adopt VS Code's dot that
    becomes the close button, given that tabs hide their close buttons
    today?
+
+## 6. Deviations under the visual kits
+
+The note was written before egui-pop drew its components through
+visual kits ([kit.md](../kit.md)): every component is data per state
+and tone, named `component.state.term`, compiled once at install, and
+nothing is drawn outside a kit. The indicators follow that rule; where
+it forces a different choice from sections 3 and 5, the choice is
+listed here (2026-10-19). Decisions 1, 3, 5, 6 and 7 are unchanged.
+
+### 6.1 Components instead of an `indicator.*` group
+
+Six kit components, plus two the kit already had:
+
+| Component | Part | Handler |
+|---|---|---|
+| `indicator-dot` | a dot or an LED | colours only; the shapes are code |
+| `indicator-badge` | a count or a short text | `pill` |
+| `indicator-flag` | a flag | colours only; the shapes are code |
+| `indicator-swatch` | a swatch's outline over its colour | `box` |
+| `indicator-outline` | the ring between an overhanging mark and its host | colours only |
+| `indicator-button` | an interactive mark's target | `box` |
+| `spinner`, `progress-ring` (existing) | activity pips | colours only |
+
+The tokens of section 3.3 map onto them:
+
+| Section 3.3 | Under the kit | Why it moved |
+|---|---|---|
+| `indicator.dot.size` | `indicator-dot.width` | the vocabulary's size term |
+| `indicator.led.ring` | `indicator-dot.rest.border-width` | the ring of an off LED is its border; pulses use the same width |
+| `indicator.led.off` | `indicator-dot.rest.border-color` | idem |
+| `indicator.record` | `<component>.tone.record.*` on `indicator-dot`, `indicator-badge`, `indicator-flag`, `indicator-button` and `status-indicator`, each aliasing `danger` | see 6.2 |
+| `indicator.badge.height`, `.padding` | `indicator-badge.height`, `.padding-x` | vocabulary |
+| `indicator.badge.font` | `font.size.small` | the vocabulary has no font term yet |
+| `indicator.badge.text` | `indicator-badge.rest.text` (the panel, on every tone, as decided) | vocabulary; the library's `pill` keeps `text.on-accent` |
+| `indicator.badge.<tone>` | `indicator-badge.tone.<tone>.fill` | the kit's tone dimension |
+| `indicator.outline` | `indicator-outline.rest.ring-color`, `.ring-width` | a ring outside the mark, following its corners |
+| `indicator.flag.size` | `indicator-flag.width` | vocabulary |
+| `indicator.swatch.size`, `.radius` | `indicator-swatch.width`, `.rest.radius` | vocabulary |
+| `indicator.swatch.border` (none in 3.3; added when built) | `indicator-swatch.rest.border-color`, `.border-width` | vocabulary |
+| `indicator.target` | `indicator-button.width` and `.height`, never under 24 points in code | the target is a part of its own, with its states |
+| `indicator.offset` | `space.xs` | the kit's `offset` points outside, and an alias cannot be negated |
+| `indicator.pulse.period`, `.count` | `motion.pulse.period`, `motion.pulse.count` | times of motion live in the system's `motion` tier, read once at install (drawing resolves nothing by name) |
+
+The interactive target gains what the kit gives every box: its hover,
+active and focus looks are data (`surface.hover`, the focus ring), a
+toggle that is on is `selected`, and a disabled mark takes
+`indicator-button.disabled.text`.
+
+### 6.2 The tone (decisions 2 and 4)
+
+- Decision 2 asked for `egui_pop_core::tone::Tone`. The kits already
+  had a tone dimension, `kit::Tone`, which progress used; it became
+  the one tone instead, and `strips::Tone` and `library::Tone` are
+  re-exports of it. **Deviation:** its path is `kit::Tone`, and its
+  set is the kit's (`Neutral`, `Accent`, `Info`, `Success`, `Warning`,
+  `Danger`, `Muted`) plus `Record`: the `Strong` and `OnAccent` of the
+  first implementation are not tones (kit.md: colours of content), so
+  `icon::Tone` stays as icons' content colour, mapped by `kit_tone`.
+- "Before 0.1": 0.1.0 was published on 2026-10-18, before the merge;
+  it is a breaking change of the next minor, said in the changelog.
+- Decision 4 holds: `record` is a tone of its own, the danger colour by
+  default. **Deviation:** it is not one system token but each
+  component's `tone.record`, since a system token may only alias the
+  reference tier (a `record` aliasing `danger` would be system to
+  system) and a theme changing `danger` would otherwise need its own
+  `record`. A kit telling recording from errors sets the components'
+  `tone.record.*`.
+
+### 6.3 Shapes stay code
+
+The kit can restyle every colour and size of a mark, not the shapes
+that tell its states apart (a hollow LED, a triangle, a square, a
+corner, an asterisk, a slash): they are what keeps colour from being
+the only carrier, so a kit replacing them could break that rule.
+Badges and swatches, whose shape says nothing, are drawn by handlers a
+kit can change. The "none" slash and the "mixed" dash of a swatch share
+`indicator-swatch.rest.text` (the first implementation drew the dash in
+`text.default`).
+
+### 6.4 Open questions for the owner
+
+1. `indicator-button` repeats `icon-button`'s values (transparent,
+   hover, a focus ring): a case for the component dependencies being
+   discussed (based on `icon-button`, or aliases), noted there.
+2. A font term in the vocabulary (`font-size`), so that a kit sizes
+   the badge's text.
+3. Whether `spinner`, `progress-ring` and the library's `pill` give a
+   `record` tone too (today they draw their own box for it).
+4. Whether the LED and flag shapes should become glyph roles of the kit
+   (`glyph.led-warning`...), mapped like disclosure arrows, with a check
+   that every state keeps a distinct shape.
+

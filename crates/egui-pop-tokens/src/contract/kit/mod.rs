@@ -27,6 +27,12 @@ mod fullscreen_exit;
 mod glyph;
 mod header_band;
 mod icon_button;
+mod indicator_badge;
+mod indicator_button;
+mod indicator_dot;
+mod indicator_flag;
+mod indicator_outline;
+mod indicator_swatch;
 mod job_log;
 mod list_row;
 mod list_view;
@@ -98,6 +104,12 @@ pub(super) const GROUPS: &[&[Required]] = &[
     glyph::CONTRACT,
     header_band::CONTRACT,
     icon_button::CONTRACT,
+    indicator_badge::CONTRACT,
+    indicator_button::CONTRACT,
+    indicator_dot::CONTRACT,
+    indicator_flag::CONTRACT,
+    indicator_outline::CONTRACT,
+    indicator_swatch::CONTRACT,
     job_log::CONTRACT,
     list_row::CONTRACT,
     list_view::CONTRACT,

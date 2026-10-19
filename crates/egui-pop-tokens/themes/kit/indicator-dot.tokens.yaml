@@ -1,0 +1,48 @@
+$description: "The `indicator-dot` component of the default kit (docs/kit.md), layered into pop-dark."
+indicator-dot:
+  $description: "A dot or an LED (a micro-indicator; a kit component, colours only: egui-pop draws each state's shape, so that colour is never alone): its colour in fill, by tone; an LED that is off is a ring in border-color, border-width thick, the thickness of a pulse's ring too; width is its diameter."
+  shape:
+    $type: "string"
+    $value: "plain"
+  width:
+    $type: "dimension"
+    $value: {value: 8, unit: "px"}
+  rest:
+    fill:
+      $type: "color"
+      $value: "{text.default}"
+    border-color:
+      $type: "color"
+      $value: "{border.strong}"
+    border-width:
+      $type: "dimension"
+      $value: {value: 1.5, unit: "px"}
+  tone:
+    accent:
+      fill:
+        $type: "color"
+        $value: "{accent.default}"
+    info:
+      fill:
+        $type: "color"
+        $value: "{info}"
+    success:
+      fill:
+        $type: "color"
+        $value: "{success}"
+    warning:
+      fill:
+        $type: "color"
+        $value: "{warning}"
+    danger:
+      fill:
+        $type: "color"
+        $value: "{danger}"
+    muted:
+      fill:
+        $type: "color"
+        $value: "{text.muted}"
+    record:
+      fill:
+        $type: "color"
+        $value: "{danger}"

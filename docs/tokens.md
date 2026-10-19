@@ -126,7 +126,10 @@ without it.
    placeholder and borders, and the colour of each field state:
    `modified`, `required`, `invalid`, `pending`),
    `progress.{track, fill, height, line, ring}` (bars, rings, meters and
-   spinners), `skeleton.*` and `skeleton-shimmer.*`, `dialog.*`, `palette.*`,
+   spinners), `indicator-dot.*`, `indicator-badge.*`, `indicator-flag.*`,
+   `indicator-swatch.*`, `indicator-outline.*` and `indicator-button.*`
+   (micro-indicators, see [indicators](indicators.md)),
+   `skeleton.*` and `skeleton-shimmer.*`, `dialog.*`, `palette.*`,
    `toast.*`, `editor.*` and `syntax.*` (one colour per kind of code:
    keywords on the accent, strings on `success`, numbers on `warning`,
    comments muted...), `terminal.*` (its text, cursor, selection, links,

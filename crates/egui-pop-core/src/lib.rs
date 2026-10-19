@@ -38,6 +38,9 @@
 //! - [`strings`]: the library's own strings, by key, with English
 //!   fallbacks;
 //! - [`icon`]: icons by role, sized and coloured from tokens;
+//! - [`indicator`]: micro-indicators (dots and LEDs, badges, pips,
+//!   flags, swatches, icons by state) drawn by the kit, passive or
+//!   buttons, inline or on a widget, recorded for agents;
 //! - [`persist`]: documents written atomically, with a backup and
 //!   migrations;
 //! - [`fault`]: fault boundaries showing an error card on panic;
@@ -56,6 +59,7 @@ pub mod fonts;
 pub mod frame;
 pub mod icon;
 pub mod icon_set;
+pub mod indicator;
 pub mod input;
 pub mod keys;
 pub mod kit;

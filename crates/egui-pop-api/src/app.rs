@@ -3978,6 +3978,10 @@ impl App {
         self.handle.clone().show_zone(ui, &zones::OVERLAYS);
         crate::menus::draw_popup(&ctx, &self.handle);
         a11y::live_regions(ui);
+        // Interactive indicators bound to a command, activated this frame.
+        for command in egui_pop_core::indicator::take_commands(&ctx) {
+            self.handle.run(command, Json::Null);
+        }
         self.process_requests();
     }
 

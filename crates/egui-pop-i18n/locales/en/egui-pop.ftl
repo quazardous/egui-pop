@@ -542,6 +542,32 @@ egui-pop-frame-restore = Restore
 
 egui-pop-frame-window-menu = Window menu
 
+egui-pop-indicator-done = Done
+
+egui-pop-indicator-error = Error
+
+egui-pop-indicator-failed = Failed
+
+egui-pop-indicator-invalid = Invalid
+
+egui-pop-indicator-mixed = Mixed
+
+egui-pop-indicator-modified = Modified
+
+egui-pop-indicator-no-color = No colour
+
+egui-pop-indicator-off = Off
+
+egui-pop-indicator-on = On
+
+egui-pop-indicator-percent = { $percent }%
+
+egui-pop-indicator-pinned = Pinned
+
+egui-pop-indicator-required = Required
+
+egui-pop-indicator-warning = Warning
+
 egui-pop-input-choices = { $label }, choices
 
 egui-pop-input-clear = Clear { $label }

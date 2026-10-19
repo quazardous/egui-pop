@@ -71,8 +71,10 @@ fn a_theme_with_a_poor_pair_fails_the_check() {
     let failures = contrast::check(&tokens, Level::Normal);
     assert!(!failures.is_empty());
     assert!(
-        // The muted text, and the editor and field tokens aliasing it.
+        // The muted text, the editor and field tokens aliasing it, and
+        // the badge text on the muted badge's fill.
         failures.iter().all(|f| f.pair.foreground.contains("muted")
+            || f.pair.background.contains("muted")
             || [
                 "editor.line-number",
                 "syntax.comment",

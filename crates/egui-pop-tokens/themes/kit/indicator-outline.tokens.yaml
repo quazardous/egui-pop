@@ -1,0 +1,13 @@
+$description: "The `indicator-outline` component of the default kit (docs/kit.md), layered into pop-dark."
+indicator-outline:
+  $description: "The ring that separates a badge or a dot from the widget it overhangs (a kit component, colours only): ring-color, ring-width thick, around the mark."
+  shape:
+    $type: "string"
+    $value: "plain"
+  rest:
+    ring-color:
+      $type: "color"
+      $value: "{surface.panel}"
+    ring-width:
+      $type: "dimension"
+      $value: {value: 1, unit: "px"}

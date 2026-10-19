@@ -437,6 +437,15 @@ motion:
       $type: "duration"
       $value: {value: 1600, unit: "ms"}
       $description: "A skeleton's shimmer crossing it (none under reduced motion)."
+  pulse:
+    period:
+      $type: "duration"
+      $value: {value: 1200, unit: "ms"}
+      $description: "One pulse of a busy LED or of a mark calling attention (a still ring under reduced motion)."
+    count:
+      $type: "number"
+      $value: 3
+      $description: "How many times a mark calling attention pulses before it stays still."
 palette:
   $description: "Palettes and toolboxes floating over the interface, never modal."
   magnet:

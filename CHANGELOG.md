@@ -10,6 +10,35 @@ publishes.
 
 ## Unreleased
 
+### Added
+
+- Micro-indicators (`egui-pop-core`, `core::indicator`), drawn by the
+  kit like every component: dots and LEDs (off, on, busy, warning,
+  error, each a shape of its own), count badges capped at `99+` (zero
+  hidden unless asked) or a short text, activity pips (busy, a
+  fraction, done, failed, delayed like `motion::Busy`), flags
+  (modified, pinned, required, invalid, or a shape of the
+  application's), colour swatches over egui's alpha checkerboard (or
+  none, or mixed), and built-in icons by state. Passive by default: on
+  a widget (`IndicatorExt::with_indicator`, `Indicator::on`) the
+  meaning joins the widget's accessible name, inline it is read as an
+  image. `interactive(action)` makes one a button (a 24-point target at
+  least, focus ring, Space and Enter, tooltip, its own AccessKit node,
+  a check box for a toggle, `disabled(reason)`, a `command` the `App`
+  runs). Anchored on a corner (overhanging on a layer above the host,
+  never clipped), an edge or the centre, with a direction for right to
+  left. A pulse for busy LEDs and `attention`, still under reduced
+  motion. Kit components `indicator-dot`, `indicator-badge`,
+  `indicator-flag`, `indicator-swatch`, `indicator-outline` and
+  `indicator-button`, system tokens `motion.pulse.period` and
+  `motion.pulse.count`, contrast pairs in every built-in theme; strings
+  with their French. Marks with an id are recorded each pass
+  (`indicator::drawn`), shown by the debug bridge's new `indicators`
+  collector and by the test kit's `indicators` and `assert_indicator`
+  (`egui-pop-test`). `progress::paint_ring_on` and `paint_spinner_on`
+  paint with a painter of their own. A gallery page (`indicators`).
+  Guide: docs/indicators.md.
+
 ### Changed
 
 - One tone for every mark (`egui-pop-core`, `egui-pop-api`,
