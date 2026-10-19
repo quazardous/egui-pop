@@ -128,16 +128,10 @@ pub struct Stack<K> {
     pub count: usize,
 }
 
-/// A badge's tone.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum Tone {
-    #[default]
-    Neutral,
-    Info,
-    Success,
-    Warning,
-    Danger,
-}
+/// A badge's tone: egui-pop's one tone ([`egui_pop_core::kit::Tone`]).
+/// The default kit's `pill` gives `info`, `success`, `warning` and
+/// `danger`; a tone it does not give is drawn as its own (neutral) box.
+pub use egui_pop_core::kit::Tone;
 
 /// A short text in a corner of a cell: `RAW`, `HDR`, `2×`, an edit mark.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1515,13 +1509,7 @@ fn overlay(
     }
     let mut right = image.right() - pad;
     for b in badges.iter().rev() {
-        let tone = match b.tone {
-            Tone::Neutral => kit::Tone::Neutral,
-            Tone::Info => kit::Tone::Info,
-            Tone::Success => kit::Tone::Success,
-            Tone::Warning => kit::Tone::Warning,
-            Tone::Danger => kit::Tone::Danger,
-        };
+        let tone = b.tone;
         let (r, _) = paint::pill(
             painter,
             &kit.pill,

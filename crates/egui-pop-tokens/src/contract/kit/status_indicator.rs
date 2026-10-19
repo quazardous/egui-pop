@@ -68,4 +68,14 @@ pub(crate) const CONTRACT: &[Required] = &[
         "color",
         "a status indicator's progress fill in the danger tone",
     ),
+    comp(
+        "status-indicator.tone.record.text",
+        "color",
+        "a status indicator's text in the record tone",
+    ),
+    comp(
+        "status-indicator.tone.record.indicator-color",
+        "color",
+        "a status indicator's progress fill in the record tone",
+    ),
 ];

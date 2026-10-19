@@ -22,7 +22,7 @@
 //!         _ => {}
 //!     }
 //!     state.text = format!("{} running", state.count.unwrap_or(0));
-//!     state.tone = if state.count == Some(0) { Tone::Quiet } else { Tone::Active };
+//!     state.tone = if state.count == Some(0) { Tone::Neutral } else { Tone::Accent };
 //! });
 //! # let _ = jobs;
 //! ```
@@ -35,9 +35,7 @@ use std::rc::Rc;
 
 use egui::{Sense, Ui, vec2};
 use egui_pop_core::icon::Icon;
-use egui_pop_core::kit::{
-    BoxStyle, Kit, KitCx, Part, Side, State as KitState, Tone as KitTone, paint_indicator,
-};
+use egui_pop_core::kit::{BoxStyle, Kit, KitCx, Part, Side, State as KitState, paint_indicator};
 use egui_pop_core::theme::Tokens;
 use egui_pop_model::commands::CommandSpec;
 use egui_pop_model::ids::{BlockId, CommandId, PluginId};
@@ -53,19 +51,11 @@ use crate::{Ctx, Plugin, PluginError};
 /// Folds or unfolds the start side bar.
 pub const CMD_TOGGLE_SIDE_BAR: CommandId = CommandId::from_static("view.side_bar.toggle");
 
-/// How an indicator looks.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Tone {
-    /// Nothing to say: drawn muted.
-    #[default]
-    Quiet,
-    /// Something is going on.
-    Active,
-    Success,
-    Warning,
-    Error,
-}
+/// How an indicator looks: egui-pop's one tone ([`egui_pop_core::kit::Tone`]).
+/// `Neutral` (nothing to say) is the `status-indicator`'s own box, drawn
+/// muted; `Accent` says something is going on; `Record` that something
+/// records.
+pub use egui_pop_core::kit::Tone;
 
 /// What an indicator shows.
 #[derive(Clone, Debug, Default, PartialEq, Serialize)]
@@ -304,16 +294,7 @@ fn indicators(ui: &mut Ui, app: &AppHandle) {
         for (ind, state) in list {
             // The kit's `status-indicator`, colours only: quiet is its own
             // box, the others its tones.
-            let box_ = kit.status_indicator.style_toned(
-                match state.tone {
-                    Tone::Quiet => KitTone::Neutral,
-                    Tone::Active => KitTone::Accent,
-                    Tone::Success => KitTone::Success,
-                    Tone::Warning => KitTone::Warning,
-                    Tone::Error => KitTone::Danger,
-                },
-                KitState::REST,
-            );
+            let box_ = kit.status_indicator.style_toned(state.tone, KitState::REST);
             let color = box_.text;
             let mut text = state.text.clone();
             if let Some(n) = state.count {

@@ -1,5 +1,7 @@
 //! Tones: what a part says (accent, info, success, warning, danger,
-//! muted), a second axis beside the interaction state.
+//! muted, record), a second axis beside the interaction state. It is
+//! egui-pop's one tone: progress, status bar items, library badges and
+//! micro-indicators all take this enum.
 //!
 //! A tone is not a state: a danger badge is danger whether or not it is
 //! under the pointer. It is compiled ahead like the states: a component's
@@ -19,14 +21,18 @@
 //! A component whose tokens give no tone has no table and pays nothing; a
 //! tone a component does not give draws its own box (`Neutral`).
 
+use serde::Serialize;
+
 use super::{BoxPatch, BoxStyle, State, Tokens};
 
 /// What a part says, the same names for every component. `Neutral` is the
 /// component's own box (no tone); the others are read from
 /// `component.tone.<name>`, their defaults aliasing the system's status
 /// tokens (`accent.default`, `info`, `success`, `warning`, `danger`,
-/// `text.muted`).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+/// `text.muted`; `record` aliases `danger` too). Serialized by its token
+/// name (`"danger"`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Tone {
     /// The component's own box.
     #[default]
@@ -39,18 +45,22 @@ pub enum Tone {
     Danger,
     /// Paused, skipped, secondary.
     Muted,
+    /// Recording: not an error, but drawn in the danger colour unless a
+    /// kit tells them apart (`component.tone.record.*`).
+    Record,
 }
 
 impl Tone {
     /// The tones a component's tokens can give, with their token names,
     /// in their table's order.
-    pub const NAMED: [(Tone, &'static str); 6] = [
+    pub const NAMED: [(Tone, &'static str); 7] = [
         (Tone::Accent, "accent"),
         (Tone::Info, "info"),
         (Tone::Success, "success"),
         (Tone::Warning, "warning"),
         (Tone::Danger, "danger"),
         (Tone::Muted, "muted"),
+        (Tone::Record, "record"),
     ];
 
     /// Its token name (`neutral` has none: it is the component's box).
@@ -63,7 +73,19 @@ impl Tone {
             Tone::Warning => "warning",
             Tone::Danger => "danger",
             Tone::Muted => "muted",
+            Tone::Record => "record",
         }
+    }
+
+    /// The tone of a token name ([`Tone::name`]), `neutral` included.
+    pub fn from_name(name: &str) -> Option<Tone> {
+        if name == "neutral" {
+            return Some(Tone::Neutral);
+        }
+        Tone::NAMED
+            .iter()
+            .find(|(_, n)| *n == name)
+            .map(|(tone, _)| *tone)
     }
 
     fn from_bits(bits: u8) -> Tone {
@@ -74,6 +96,7 @@ impl Tone {
             4 => Tone::Warning,
             5 => Tone::Danger,
             6 => Tone::Muted,
+            7 => Tone::Record,
             _ => Tone::Neutral,
         }
     }
@@ -106,7 +129,7 @@ impl State {
 
 /// A toned component's boxes: per tone of [`Tone::NAMED`], every
 /// combination of states.
-pub(super) type Tones = [[BoxStyle; 32]; 6];
+pub(super) type Tones = [[BoxStyle; 32]; 7];
 
 /// The tone table of a component, or none when its tokens give no tone.
 pub(super) fn compile(
@@ -161,7 +184,7 @@ pub(super) fn get<'a>(
 ) -> &'a BoxStyle {
     let i = state.flags();
     match (tones, state.0 >> TONE_SHIFT) {
-        (Some(table), n @ 1..=6) => &table[usize::from(n - 1)][i],
+        (Some(table), n @ 1..=7) => &table[usize::from(n - 1)][i],
         _ => &boxes[i],
     }
 }

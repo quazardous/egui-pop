@@ -38,7 +38,7 @@ impl Plugin for StripsPage {
                 match event.name.as_str() {
                     "gallery.job.started" => {
                         state.text = "Exporting".into();
-                        state.tone = Tone::Active;
+                        state.tone = Tone::Accent;
                         state.progress = Some(0.0);
                         // Busy since the job started: a spinner after
                         // the delay.

@@ -116,7 +116,9 @@ pub const COMPONENT_TERMS: &[(&str, &str)] = &[
 
 /// The tones a component may give (`component.tone.<tone>.<term>` and
 /// `component.tone.<tone>.<state>.<term>`).
-pub const TONES: [&str; 6] = ["accent", "info", "success", "warning", "danger", "muted"];
+pub const TONES: [&str; 7] = [
+    "accent", "info", "success", "warning", "danger", "muted", "record",
+];
 
 /// A font file's bytes: embedded in the binary or read at run time.
 pub type Bytes = Cow<'static, [u8]>;

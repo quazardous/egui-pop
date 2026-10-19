@@ -238,7 +238,7 @@ let jobs = Indicator::new("jobs", "Idle", "job.").reduce(|state, event| {
         "job.done" => n.saturating_sub(1),
         _ => n,
     });
-    state.tone = if state.count == Some(0) { Tone::Quiet } else { Tone::Active };
+    state.tone = if state.count == Some(0) { Tone::Neutral } else { Tone::Accent };
 });
 # let _ = jobs;
 ```

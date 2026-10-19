@@ -12,6 +12,18 @@ publishes.
 
 ### Changed
 
+- One tone for every mark (`egui-pop-core`, `egui-pop-api`,
+  `egui-pop-views`, breaking): `kit::Tone` gains `Record` (recording,
+  the danger colour unless a kit tells them apart through
+  `component.tone.record.*`), serializes by its token name and reads one
+  back (`Tone::from_name`). The status bar's `strips::Tone` and the
+  library's badge `library::Tone` are now re-exports of it. To move:
+  `Quiet` is `Neutral` (still drawn muted in the status bar), `Active`
+  is `Accent`, `Error` is `Danger`; a status item's state serializes the
+  new names. `status-indicator` gives the `record` tone. Icons keep
+  their own `icon::Tone`, whose `Strong` and `OnAccent` are colours of
+  content rather than tones (`IconWidget` maps it with `kit_tone`).
+
 - Each crate has its own version and is published only when it changes;
   the `egui-pop` facade keeps one minor per egui minor.
   `cargo xtask publish --dry-run` names the crates changed since the

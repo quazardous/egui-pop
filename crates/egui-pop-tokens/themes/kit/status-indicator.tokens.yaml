@@ -46,3 +46,11 @@ status-indicator:
       indicator-color:
         $type: "color"
         $value: "{danger}"
+    record:
+      $description: "Recording: the danger colour by default; a kit may tell it from an error."
+      text:
+        $type: "color"
+        $value: "{danger}"
+      indicator-color:
+        $type: "color"
+        $value: "{danger}"

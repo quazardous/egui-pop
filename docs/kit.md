@@ -94,15 +94,19 @@ that name: egui-pop ships some, an application adds its own with
 ## Tones
 
 Some components show a **tone**, which is not an interaction state:
-`accent`, `info`, `success`, `warning`, `danger`, `muted` (`kit::Tone`,
-the same names everywhere; `Neutral` is the component's own box). A
+`accent`, `info`, `success`, `warning`, `danger`, `muted`, `record`
+(`kit::Tone`, the same names everywhere; `Neutral` is the component's
+own box). It is egui-pop's one tone: progress, status bar items
+(`strips::Tone`), library badges (`library::Tone`) and micro-indicators
+take it. `record` (recording) aliases `danger` by default, so that a kit
+can tell a recording from an error. A
 token is `component.tone.<tone>.<term>` (every state) or
 `component.tone.<tone>.<state>.<term>`, giving only what differs. The
 defaults alias the status tokens. A box is merged as `rest`, the tone,
 then each state followed by the tone's own patch for that state: a state
 wins over a tone for what it gives, unless the tone gives that state
 too. A tone a component does not give draws its own box. At install, a
-component whose tokens give tones gets a table of 6 × 32 boxes; others
+component whose tokens give tones gets a table of 7 × 32 boxes; others
 get none. The tone travels in `State` (`State::toned`), so handlers and
 `Part` are unchanged; `Component::style_toned(tone, state)` reads one
 box. Colours-only components (rings, spinners, status indicators) keep
