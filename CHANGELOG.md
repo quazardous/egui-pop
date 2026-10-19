@@ -42,6 +42,15 @@ publishes.
   `egui-pop-tokens`): the size of a component's text
   (`ComponentKit::font_size`), a kit sizing text with data; the badge
   of the micro-indicators reads it.
+- The micro-indicators' LED and flag shapes are glyph roles of the kit
+  (`egui-pop-core`, `egui-pop-tokens`): `glyph.led-off`, `led-on`,
+  `led-busy`, `led-warning`, `led-error`, `flag-modified`,
+  `flag-pinned`, `flag-required` and `flag-invalid`, drawn by default
+  with new painted icons (`Icon::Circle`, `Disc`, `Square`, `Triangle`,
+  `Asterisk`, `Corner`; `icon::paint_mark`). Two states a kit maps to
+  the same icon are reported (`kit::DISTINCT_GLYPHS`,
+  `kit::same_glyphs`, `Problem::SameGlyph`) and drawn with egui-pop's
+  shapes, so colour never carries a state alone.
 
 ### Changed
 

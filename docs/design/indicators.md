@@ -625,25 +625,25 @@ toggle that is on is `selected`, and a disabled mark takes
   `record`. A kit telling recording from errors sets the components'
   `tone.record.*`.
 
-### 6.3 Shapes stay code
+### 6.3 Shapes as glyph roles
 
-The kit can restyle every colour and size of a mark, not the shapes
-that tell its states apart (a hollow LED, a triangle, a square, a
-corner, an asterisk, a slash): they are what keeps colour from being
-the only carrier, so a kit replacing them could break that rule.
-Badges and swatches, whose shape says nothing, are drawn by handlers a
-kit can change. The "none" slash and the "mixed" dash of a swatch share
-`indicator-swatch.rest.text` (the first implementation drew the dash in
-`text.default`).
+At first the shapes that tell states apart stayed code, so that a kit
+could not leave colour alone to carry a state. The owner decided
+otherwise on 2026-10-19 (6.5): the LEDs' and the named flags' shapes are
+glyph roles of the kit. Badges and swatches, whose shape says nothing,
+are drawn by handlers a kit can change. The "none" slash and the
+"mixed" dash of a swatch share `indicator-swatch.rest.text` (the first
+implementation drew the dash in `text.default`). The shapes an
+application picks itself (`Indicator::flag_shape`) are its own and stay
+as it asks.
 
 ### 6.4 Open questions for the owner
 
 1. `indicator-button` repeats `icon-button`'s values (transparent,
    hover, a focus ring): a case for the component dependencies being
    discussed (based on `icon-button`, or aliases), noted there.
-2. Whether the LED and flag shapes should become glyph roles of the kit
-   (`glyph.led-warning`...), mapped like disclosure arrows, with a check
-   that every state keeps a distinct shape.
+   Pending (2026-10-19): what "based on" would mean is being explained
+   to the owner; `indicator-button` stays as it is until then.
 
 ### 6.5 Decided by the owner (2026-10-19)
 
@@ -656,4 +656,17 @@ kit can change. The "none" slash and the "mixed" dash of a swatch share
   library's `pill` give a `record` tone too, aliasing `danger` like the
   others (`tone.record.indicator-color`, `pill.tone.record.fill` and
   `.text`), so a recording pip or badge is not drawn neutral.
+- **The LEDs are kittable.** The shapes of the LEDs (`glyph.led-off`,
+  `led-on`, `led-busy`, `led-warning`, `led-error`) and of the named
+  flags (`glyph.flag-modified`, `flag-pinned`, `flag-required`,
+  `flag-invalid`) are glyph roles, mapped to any icon like the
+  disclosure arrows; their defaults are new painted icons of the set
+  (`circle`, `disc`, `square`, `triangle`, `asterisk`, `corner`, with
+  the existing `diamond`), so the default look does not change. The
+  safeguard stays: `egui_pop_tokens::kit::DISTINCT_GLYPHS` lists the
+  roles that must differ (the four LED states, a busy LED from all but
+  the on one since it pulses, the four flags); `kit::check` reports a
+  kit breaking it (`Problem::SameGlyph`), and at install both roles go
+  back to their default shapes with a problem in `Kit::problems`. A
+  `corner` flag still turns to the corner it sits in.
 

@@ -112,6 +112,21 @@ pub enum Icon {
     WindowMaximize,
     WindowRestore,
     WindowClose,
+    /// Marks filling their square, always painted: what a dot, an LED or
+    /// a flag shows by default (the kit's `led-*` and `flag-*` glyph
+    /// roles). A hollow ring.
+    Circle,
+    /// A filled disc.
+    Disc,
+    /// A filled square.
+    Square,
+    /// A filled triangle, point up.
+    Triangle,
+    /// Three crossed strokes.
+    Asterisk,
+    /// A triangle filling a corner of its square (the top start one when
+    /// drawn alone; a corner flag turns it to its corner).
+    Corner,
     /// An icon the application registered (`icon_set::register`): an SVG
     /// file, drawn from textures made when the theme is installed.
     Custom(crate::icon_set::CustomIcon),
@@ -170,6 +185,12 @@ impl Icon {
         Icon::WindowMaximize,
         Icon::WindowRestore,
         Icon::WindowClose,
+        Icon::Circle,
+        Icon::Disc,
+        Icon::Square,
+        Icon::Triangle,
+        Icon::Asterisk,
+        Icon::Corner,
     ];
 
     /// The icon of a name (`settings`), as [`Icon::name`] gives it:
@@ -236,6 +257,12 @@ impl Icon {
             Icon::WindowMaximize => "window-maximize",
             Icon::WindowRestore => "window-restore",
             Icon::WindowClose => "window-close",
+            Icon::Circle => "circle",
+            Icon::Disc => "disc",
+            Icon::Square => "square",
+            Icon::Triangle => "triangle",
+            Icon::Asterisk => "asterisk",
+            Icon::Corner => "corner",
             Icon::Custom(c) => crate::icon_set::name(c),
         }
     }
@@ -306,6 +333,12 @@ fn glyph(icon: Icon) -> Option<&'static str> {
         | Icon::WindowMaximize
         | Icon::WindowRestore
         | Icon::WindowClose
+        | Icon::Circle
+        | Icon::Disc
+        | Icon::Square
+        | Icon::Triangle
+        | Icon::Asterisk
+        | Icon::Corner
         | Icon::Custom(_) => return None,
         Icon::Search => p::MAGNIFYING_GLASS,
         Icon::Settings => p::GEAR_SIX,
@@ -395,6 +428,72 @@ pub fn font_ready(ctx: &Context) -> bool {
                 .families
                 .contains_key(&FontFamily::Name(FAMILY.into()))
         })
+}
+
+/// Paints one of the marks that fill their square ([`Icon::Circle`],
+/// `Disc`, `Square`, `Triangle`, `Asterisk`, `Corner`, and the
+/// [`Icon::Diamond`]) at the full size of `rect`, a ring `ring` points
+/// thick; `false` for any other icon, which is left unpainted. Dots, LEDs
+/// and flags draw their default shapes with it.
+pub fn paint_mark(p: &Painter, icon: Icon, rect: Rect, color: Color32, ring: f32) -> bool {
+    let c = rect.center();
+    let s = rect.width().min(rect.height());
+    let r = s / 2.0;
+    match icon {
+        Icon::Circle => {
+            p.circle_stroke(c, r - ring / 2.0, Stroke::new(ring, color));
+        }
+        Icon::Disc => {
+            p.circle_filled(c, r, color);
+        }
+        Icon::Square => {
+            p.rect_filled(
+                Rect::from_center_size(c, egui::Vec2::splat(r * 1.7)),
+                egui::CornerRadius::same(1),
+                color,
+            );
+        }
+        Icon::Triangle => {
+            p.add(egui::Shape::convex_polygon(
+                vec![
+                    pos2(c.x, c.y - r),
+                    pos2(c.x + r, c.y + r * 0.8),
+                    pos2(c.x - r, c.y + r * 0.8),
+                ],
+                color,
+                Stroke::NONE,
+            ));
+        }
+        Icon::Diamond => {
+            p.add(egui::Shape::convex_polygon(
+                vec![
+                    pos2(c.x, c.y - r),
+                    pos2(c.x + r, c.y),
+                    pos2(c.x, c.y + r),
+                    pos2(c.x - r, c.y),
+                ],
+                color,
+                Stroke::NONE,
+            ));
+        }
+        Icon::Asterisk => {
+            let stroke = Stroke::new((s / 5.0).max(1.0), color);
+            for k in 0..3 {
+                let a = std::f32::consts::FRAC_PI_2 + k as f32 * PI / 3.0;
+                let d = vec2(a.cos(), a.sin()) * r;
+                p.line_segment([c - d, c + d], stroke);
+            }
+        }
+        Icon::Corner => {
+            p.add(egui::Shape::convex_polygon(
+                vec![rect.left_top(), rect.right_top(), rect.left_bottom()],
+                color,
+                Stroke::NONE,
+            ));
+        }
+        _ => return false,
+    }
+    true
 }
 
 /// Paints an icon's fallback shape, whatever the fonts. Its strokes are
@@ -730,6 +829,27 @@ pub fn paint_fallback(p: &Painter, icon: Icon, rect: Rect, color: Color32) {
         }
         Icon::WindowMinimize | Icon::WindowMaximize | Icon::WindowRestore | Icon::WindowClose => {
             paint_window_button(p, icon, rect, color);
+        }
+        // Strokes on whole physical pixels, like every fallback.
+        Icon::Circle => {
+            let ring = stroke.width;
+            p.circle_stroke(
+                rect.center(),
+                rect.width().min(rect.height()) / 2.0 - ring / 2.0,
+                stroke,
+            );
+        }
+        Icon::Asterisk => {
+            let side = rect.width().min(rect.height());
+            let lines = Stroke::new(crate::scale::snap((side / 5.0).max(1.0), ppp), color);
+            for k in 0..3 {
+                let a = std::f32::consts::FRAC_PI_2 + k as f32 * PI / 3.0;
+                let d = vec2(a.cos(), a.sin()) * side / 2.0;
+                p.line_segment([rect.center() - d, rect.center() + d], lines);
+            }
+        }
+        Icon::Disc | Icon::Square | Icon::Triangle | Icon::Corner => {
+            paint_mark(p, icon, rect, color, w);
         }
         // Drawn from its textures (`Icon::paint`): no fallback shape.
         Icon::Custom(_) => {}

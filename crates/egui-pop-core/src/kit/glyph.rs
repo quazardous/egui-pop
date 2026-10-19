@@ -78,6 +78,24 @@ glyphs! {
     WindowRestore: "window-restore" => WindowRestore,
     /// A window's close button.
     WindowClose: "window-close" => WindowClose,
+    /// An LED that is off.
+    LedOff: "led-off" => Circle,
+    /// An LED that is on.
+    LedOn: "led-on" => Disc,
+    /// A busy LED (it pulses too, a still ring under reduced motion, so it may share the on LED's shape).
+    LedBusy: "led-busy" => Disc,
+    /// An LED warning.
+    LedWarning: "led-warning" => Triangle,
+    /// An LED in error.
+    LedError: "led-error" => Square,
+    /// A modified flag (`corner` fills the corner it sits in).
+    FlagModified: "flag-modified" => Corner,
+    /// A pinned flag.
+    FlagPinned: "flag-pinned" => Diamond,
+    /// A required flag.
+    FlagRequired: "flag-required" => Asterisk,
+    /// An invalid flag.
+    FlagInvalid: "flag-invalid" => Triangle,
 }
 
 /// The icon of each role, compiled from the kit's tokens: read by index
@@ -94,6 +112,39 @@ impl Default for Glyphs {
 
 impl Glyphs {
     pub(super) fn compile(t: &Tokens, problems: &mut Vec<String>) -> Glyphs {
+        let mut glyphs = Glyphs::read(t, problems);
+        glyphs.keep_shapes_distinct(problems);
+        glyphs
+    }
+
+    /// Two roles that must differ (`egui_pop_tokens::kit::DISTINCT_GLYPHS`)
+    /// and draw the same icon go back to their defaults, which differ, so
+    /// colour never carries a state alone; a problem says so.
+    fn keep_shapes_distinct(&mut self, problems: &mut Vec<String>) {
+        let role = |name: &str| Glyph::ALL.iter().copied().find(|g| g.name() == name);
+        loop {
+            let clash = egui_pop_tokens::kit::DISTINCT_GLYPHS
+                .iter()
+                .filter_map(|(a, b)| Some((role(a)?, role(b)?)))
+                .find(|(a, b)| {
+                    self.get(*a) == self.get(*b)
+                        && (self.get(*a) != a.default_icon() || self.get(*b) != b.default_icon())
+                });
+            let Some((a, b)) = clash else { break };
+            problems.push(format!(
+                "glyph.{} and glyph.{} both draw `{}`: their states would differ by colour alone; `{}` and `{}` are drawn",
+                a.name(),
+                b.name(),
+                self.get(a).name(),
+                a.default_icon().name(),
+                b.default_icon().name()
+            ));
+            self.0[a as usize] = a.default_icon();
+            self.0[b as usize] = b.default_icon();
+        }
+    }
+
+    fn read(t: &Tokens, problems: &mut Vec<String>) -> Glyphs {
         Glyphs(
             Glyph::ALL
                 .iter()

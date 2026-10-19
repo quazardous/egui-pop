@@ -121,6 +121,47 @@ pub const TONES: [&str; 7] = [
     "accent", "info", "success", "warning", "danger", "muted", "record",
 ];
 
+/// Glyph roles that must keep shapes of their own (`glyph.<role>`), so
+/// that colour never carries a state alone: no two roles of a pair may
+/// name the same icon. The LEDs off, on, warning and error differ from
+/// each other, a busy LED from all but the on one (it pulses, or shows a
+/// still ring under reduced motion), and the four named flags from each
+/// other. [`check`] reports a kit breaking it, and egui-pop draws its own
+/// shapes for those roles.
+pub const DISTINCT_GLYPHS: &[(&str, &str)] = &[
+    ("led-off", "led-on"),
+    ("led-off", "led-warning"),
+    ("led-off", "led-error"),
+    ("led-on", "led-warning"),
+    ("led-on", "led-error"),
+    ("led-warning", "led-error"),
+    ("led-busy", "led-off"),
+    ("led-busy", "led-warning"),
+    ("led-busy", "led-error"),
+    ("flag-modified", "flag-pinned"),
+    ("flag-modified", "flag-required"),
+    ("flag-modified", "flag-invalid"),
+    ("flag-pinned", "flag-required"),
+    ("flag-pinned", "flag-invalid"),
+    ("flag-required", "flag-invalid"),
+];
+
+/// The pairs of [`DISTINCT_GLYPHS`] naming the same icon in a resolved
+/// theme, with that icon's name.
+pub fn same_glyphs(theme: &crate::ResolvedTokens) -> Vec<(&'static str, &'static str, String)> {
+    let name = |role: &str| match theme.value(&format!("glyph.{role}")) {
+        Some(crate::Value::Other(serde_json::Value::String(s))) => Some(s.clone()),
+        _ => None,
+    };
+    DISTINCT_GLYPHS
+        .iter()
+        .filter_map(|(a, b)| match (name(a), name(b)) {
+            (Some(x), Some(y)) if x == y => Some((*a, *b, x)),
+            _ => None,
+        })
+        .collect()
+}
+
 /// A font file's bytes: embedded in the binary or read at run time.
 pub type Bytes = Cow<'static, [u8]>;
 
@@ -199,6 +240,13 @@ pub enum Problem {
     NotRead { what: String },
     /// A problem of the theme the kit resolves to ([`check`]).
     Theme(Error),
+    /// Two glyph roles of [`DISTINCT_GLYPHS`] name the same icon: two
+    /// states would differ by colour alone, so egui-pop draws its own
+    /// shapes for them.
+    SameGlyph {
+        roles: (String, String),
+        icon: String,
+    },
 }
 
 impl fmt::Display for Problem {
@@ -236,6 +284,11 @@ impl fmt::Display for Problem {
             ),
             Problem::NotRead { what } => write!(f, "{what} is not read yet"),
             Problem::Theme(e) => write!(f, "theme: {e}"),
+            Problem::SameGlyph { roles, icon } => write!(
+                f,
+                "`glyph.{}` and `glyph.{}` both name `{icon}`: their states would differ by colour alone; egui-pop's own shapes are drawn",
+                roles.0, roles.1
+            ),
         }
     }
 }
@@ -476,6 +529,14 @@ pub fn check(kit: &KitData) -> Vec<Problem> {
     themes.add_kit(kit);
     let resolved = themes.resolve(&ThemeSpec::new(kit.name.clone()));
     problems.extend(resolved.problems().iter().cloned().map(Problem::Theme));
+    problems.extend(
+        same_glyphs(&resolved)
+            .into_iter()
+            .map(|(a, b, icon)| Problem::SameGlyph {
+                roles: (a.into(), b.into()),
+                icon,
+            }),
+    );
     problems
 }
 

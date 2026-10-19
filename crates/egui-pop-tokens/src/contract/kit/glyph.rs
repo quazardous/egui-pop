@@ -75,4 +75,41 @@ pub(crate) const CONTRACT: &[Required] = &[
         "string",
         "the icon of the `window-close` glyph",
     ),
+    comp("glyph.led-off", "string", "the icon of the `led-off` glyph"),
+    comp("glyph.led-on", "string", "the icon of the `led-on` glyph"),
+    comp(
+        "glyph.led-busy",
+        "string",
+        "the icon of the `led-busy` glyph",
+    ),
+    comp(
+        "glyph.led-warning",
+        "string",
+        "the icon of the `led-warning` glyph",
+    ),
+    comp(
+        "glyph.led-error",
+        "string",
+        "the icon of the `led-error` glyph",
+    ),
+    comp(
+        "glyph.flag-modified",
+        "string",
+        "the icon of the `flag-modified` glyph",
+    ),
+    comp(
+        "glyph.flag-pinned",
+        "string",
+        "the icon of the `flag-pinned` glyph",
+    ),
+    comp(
+        "glyph.flag-required",
+        "string",
+        "the icon of the `flag-required` glyph",
+    ),
+    comp(
+        "glyph.flag-invalid",
+        "string",
+        "the icon of the `flag-invalid` glyph",
+    ),
 ];

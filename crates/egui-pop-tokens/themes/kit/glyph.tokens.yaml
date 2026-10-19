@@ -42,3 +42,21 @@ glyph:
     $value: "window-restore"
   window-close:
     $value: "window-close"
+  led-off:
+    $value: "circle"
+  led-on:
+    $value: "disc"
+  led-busy:
+    $value: "disc"
+  led-warning:
+    $value: "triangle"
+  led-error:
+    $value: "square"
+  flag-modified:
+    $value: "corner"
+  flag-pinned:
+    $value: "diamond"
+  flag-required:
+    $value: "asterisk"
+  flag-invalid:
+    $value: "triangle"

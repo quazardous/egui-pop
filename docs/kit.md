@@ -308,9 +308,8 @@ compiled at install.
 - **Micro-indicators** (`indicator-dot`, `indicator-badge`,
   `indicator-flag`, `indicator-swatch`, `indicator-outline`,
   `indicator-button`; [indicators](indicators.md)). Dots and flags are
-  colours only: the shapes that tell states apart (a hollow LED, a
-  triangle, a square, a corner, an asterisk) stay code, so a kit cannot
-  leave colour alone to carry a state. A badge is a `pill` by tone, a
+  colours only; the shapes that tell states apart are glyph roles, kept
+  distinct (below). A badge is a `pill` by tone, a
   swatch a `box` over its colour, an interactive mark's target an
   `indicator-button` in its state; pips are `spinner` and
   `progress-ring`. The `indicators` snapshots.
@@ -373,7 +372,15 @@ compiled at install.
   an icon of its set, compiled into a table read by index. The vocabulary
   is fixed: disclosure open and closed, sort ascending and descending,
   check, radio, indeterminate, bullet, submenu, chevron start and end,
-  close, more, expand, collapse, and the window buttons'. The tree, the menus and the find bar
+  close, more, expand, collapse, the window buttons', and the shapes of
+  the micro-indicators' LEDs (`led-off`, `led-on`, `led-busy`,
+  `led-warning`, `led-error`) and named flags (`flag-modified`,
+  `flag-pinned`, `flag-required`, `flag-invalid`). Those must keep
+  states apart: two roles of `egui_pop_tokens::kit::DISTINCT_GLYPHS`
+  naming the same icon are a problem (`kit::check`, and at install, where
+  both go back to their default shapes), so colour never carries a state
+  alone. The marks they draw by default (`circle`, `disc`, `square`,
+  `triangle`, `diamond`, `asterisk`, `corner`) are icons of the set. The tree, the menus and the find bar
   ask for roles, and so do the table's sort arrows.
 - **Application icons** (`icon_set`, feature `svg`): SVG files
   registered by name, single-colour (a white mask tinted at draw) or

@@ -19,10 +19,12 @@
 //! component: `indicator-dot`, `indicator-badge`, `indicator-flag`,
 //! `indicator-swatch`, `indicator-outline` and `indicator-button` (the
 //! target of an interactive mark), with pips on `spinner` and
-//! `progress-ring`. Colours follow the kit's one [`Tone`]; the shapes
-//! that tell states apart stay in code, so a kit cannot make colour the
-//! only carrier. A state is never said by colour alone: each has a
-//! shape, a glyph or a text, and a name.
+//! `progress-ring`. Colours follow the kit's one [`Tone`]. The shapes of
+//! the LEDs and of the named flags are the kit's glyph roles
+//! (`glyph.led-*`, `glyph.flag-*`), which a kit remaps to any icon; the
+//! kit refuses two states that would share a shape
+//! (`egui_pop_tokens::kit::DISTINCT_GLYPHS`). A state is never said by
+//! colour alone: each has a shape, a glyph or a text, and a name.
 //!
 //! **Passive by default.** A passive mark takes no click and no focus.
 //! On a widget ([`Indicator::on`], [`IndicatorExt::with_indicator`]) its
@@ -86,7 +88,7 @@ use serde::Serialize;
 
 use crate::icon::Icon;
 pub use crate::kit::Tone;
-use crate::kit::{BoxStyle, Corners, Kit, KitCx, Part, State, paint_ring};
+use crate::kit::{BoxStyle, Corners, Glyph, Kit, KitCx, Part, State, paint_ring};
 use crate::motion;
 use crate::state::{lock, pass, shared};
 use crate::strings::{self, StrKey};
@@ -222,6 +224,17 @@ impl Led {
         }
     }
 
+    /// The kit's glyph role for its shape (`glyph.led-*`).
+    pub fn glyph(self) -> Glyph {
+        match self {
+            Led::Off => Glyph::LedOff,
+            Led::On => Glyph::LedOn,
+            Led::Busy => Glyph::LedBusy,
+            Led::Warning => Glyph::LedWarning,
+            Led::Error => Glyph::LedError,
+        }
+    }
+
     fn key(self) -> StrKey {
         match self {
             Led::Off => strings::INDICATOR_OFF,
@@ -332,6 +345,17 @@ impl Flag {
             Flag::Pinned => "pinned",
             Flag::Required => "required",
             Flag::Invalid => "invalid",
+        }
+    }
+
+    /// The kit's glyph role for its shape (`glyph.flag-*`); its
+    /// [`shape`](Flag::shape) is the default kit's.
+    pub fn glyph(self) -> Glyph {
+        match self {
+            Flag::Modified => Glyph::FlagModified,
+            Flag::Pinned => Glyph::FlagPinned,
+            Flag::Required => Glyph::FlagRequired,
+            Flag::Invalid => Glyph::FlagInvalid,
         }
     }
 
@@ -945,7 +969,13 @@ impl Indicator {
         let dir = direction(&ctx);
         let mut size = self.mark_size(ui.painter(), &lk);
         let shape = match &self.kind {
-            Kind::Flag(shape, _) => Some(*shape),
+            // A named flag sits in its corner when its glyph is `corner`.
+            Kind::Flag(_, Some(f)) => Some(if Kit::of(&ctx).glyph(f.glyph()) == Icon::Corner {
+                FlagShape::Corner
+            } else {
+                FlagShape::Square
+            }),
+            Kind::Flag(shape, None) => Some(*shape),
             _ => None,
         };
         let mut offset = lk.offset;
@@ -1167,32 +1197,9 @@ impl Indicator {
                 if look.on_host && outline.ring_width > 0.0 {
                     p.circle_filled(c, r + outline.ring_width, outline.ring_color);
                 }
-                match led {
-                    Some(Led::Off) => {
-                        p.circle_stroke(c, r - look.ring / 2.0, Stroke::new(look.ring, color));
-                    }
-                    Some(Led::Warning) => {
-                        p.add(Shape::convex_polygon(
-                            vec![
-                                pos2(c.x, c.y - r),
-                                pos2(c.x + r, c.y + r * 0.8),
-                                pos2(c.x - r, c.y + r * 0.8),
-                            ],
-                            color,
-                            Stroke::NONE,
-                        ));
-                    }
-                    Some(Led::Error) => {
-                        p.rect_filled(
-                            Rect::from_center_size(c, Vec2::splat(r * 1.7)),
-                            CornerRadius::same(1),
-                            color,
-                        );
-                    }
-                    _ => {
-                        p.circle_filled(c, r, color);
-                    }
-                }
+                // An LED's shape is its state's glyph role: the kit's.
+                let icon = led.map_or(Icon::Disc, |l| kit.glyph(l.glyph()));
+                paint_glyph(p, icon, rect, color, look.ring);
                 paint_pulse_ring(p, c, r, look);
             }
             Kind::Badge { .. } => {
@@ -1248,8 +1255,16 @@ impl Indicator {
                 Pip::Done => Icon::Check.paint(p, rect, color),
                 Pip::Failed => Icon::Error.paint(p, rect, color),
             },
-            Kind::Flag(shape, _) => {
-                paint_flag(p, *shape, rect, look.corner, color);
+            Kind::Flag(shape, flag) => {
+                match flag.map(|f| kit.glyph(f.glyph())) {
+                    // A named flag's shape is its glyph role; `corner`
+                    // turns to the corner it sits in.
+                    Some(Icon::Corner) => {
+                        paint_flag(p, FlagShape::Corner, rect, look.corner, color);
+                    }
+                    Some(icon) => paint_glyph(p, icon, rect, color, look.ring),
+                    None => paint_flag(p, *shape, rect, look.corner, color),
+                }
                 paint_pulse_ring(p, c, r, look);
             }
             Kind::Swatch(swatch) => {
@@ -1503,6 +1518,14 @@ fn paint_pulse_ring(p: &Painter, c: Pos2, r: f32, look: &Look) {
             );
         }
         Pulse::None => {}
+    }
+}
+
+/// Paints a glyph as a mark: egui-pop's own marks at the full size of
+/// `rect` (a ring `ring` thick), any other icon as it is drawn anywhere.
+fn paint_glyph(p: &Painter, icon: Icon, rect: Rect, color: Color32, ring: f32) {
+    if !crate::icon::paint_mark(p, icon, rect, color, ring) {
+        icon.paint(p, rect, color);
     }
 }
 

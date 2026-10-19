@@ -185,3 +185,26 @@ fn the_example_kits_are_clean() {
     assert!(kit::check(&macos).is_empty(), "{:?}", kit::check(&macos));
     assert_eq!(macos.name, "flavour-macos");
 }
+
+#[test]
+fn check_reports_two_states_left_to_colour_alone() {
+    let kit = KitData::from_text(
+        "merged",
+        r##"
+        glyph:
+          flag-pinned: {$type: "string", $value: "asterisk"}
+        "##,
+    );
+    let problems = kit::check(&kit);
+    assert!(
+        problems.iter().any(|p| matches!(
+            p,
+            Problem::SameGlyph { roles, icon }
+                if roles.0 == "flag-pinned" && roles.1 == "flag-required" && icon == "asterisk"
+        )),
+        "{problems:?}"
+    );
+    // The default kit keeps every state's shape apart.
+    let themes = Themes::default();
+    assert!(kit::same_glyphs(&themes.resolve(&ThemeSpec::new("pop-dark"))).is_empty());
+}

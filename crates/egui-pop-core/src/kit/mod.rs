@@ -1148,6 +1148,49 @@ mod tests {
     }
 
     #[test]
+    fn the_led_and_flag_shapes_are_glyphs_a_kit_remaps_but_never_merges() {
+        // The default shapes differ where they must.
+        let kit = Kit::compile(&Tokens::default(), &Shapes::default());
+        for (a, b) in egui_pop_tokens::kit::DISTINCT_GLYPHS {
+            let role = |n: &str| *Glyph::ALL.iter().find(|g| g.name() == n).unwrap();
+            assert_ne!(kit.glyph(role(a)), kit.glyph(role(b)), "{a} and {b}");
+        }
+        // A kit gives the LEDs other shapes.
+        let t = tokens_with(
+            r#"
+            $extends: "pop-dark"
+            glyph:
+              led-error: {$type: "string", $value: "close"}
+              flag-pinned: {$type: "string", $value: "lock"}
+            "#,
+        );
+        let kit = Kit::compile(&t, &Shapes::default());
+        assert_eq!(kit.glyph(Glyph::LedError), Icon::Close);
+        assert_eq!(kit.glyph(Glyph::FlagPinned), Icon::Lock);
+        assert!(kit.problems.is_empty(), "{:?}", kit.problems);
+        // Two states that would differ by colour alone go back to
+        // egui-pop's shapes, and the kit is told.
+        let t = tokens_with(
+            r#"
+            $extends: "pop-dark"
+            glyph:
+              led-warning: {$type: "string", $value: "square"}
+            "#,
+        );
+        let kit = Kit::compile(&t, &Shapes::default());
+        assert_eq!(kit.glyph(Glyph::LedWarning), Icon::Triangle);
+        assert_eq!(kit.glyph(Glyph::LedError), Icon::Square);
+        assert_eq!(kit.problems.len(), 1, "{:?}", kit.problems);
+        assert!(
+            kit.problems[0].starts_with("glyph.led-warning and glyph.led-error both draw"),
+            "{:?}",
+            kit.problems
+        );
+        // A busy LED may share the on LED's shape: it pulses.
+        assert_eq!(kit.glyph(Glyph::LedBusy), kit.glyph(Glyph::LedOn));
+    }
+
+    #[test]
     fn the_default_rows_alias_the_system_tokens() {
         let t = Tokens::default();
         let kit = Kit::compile(&t, &Shapes::default());

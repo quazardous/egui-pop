@@ -23,8 +23,10 @@ them, is [design/indicators.md](design/indicators.md).
 | Icon | `Indicator::icon(icon)`, `Indicator::toggle(on, when_on, when_off)` | a built-in `Icon`, or one of two by a state | the glyph |
 
 Every state has a shape, a glyph or a text, and a name: colour is never
-the only carrier: the shapes are egui-pop's, the kit gives colours and
-sizes. The tone (`tone(Tone::…)`) is the kit's one
+the only carrier. The kit gives colours and sizes, and the shapes of
+the LEDs and of the named flags as glyph roles (`glyph.led-off`...
+`glyph.flag-invalid`), which it may map to any icon but never two
+states of one kind to the same one. The tone (`tone(Tone::…)`) is the kit's one
 [`Tone`](../crates/egui-pop-core/src/kit/tone.rs): `Neutral` (the
 component's own box), `Accent`, `Info`, `Success`, `Warning`, `Danger`,
 `Muted` and `Record` (recording, the danger colour unless a kit tells
