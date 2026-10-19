@@ -14,6 +14,11 @@ pub(crate) const CONTRACT: &[Required] = &[
         "dimension",
         "either side of a badge's text",
     ),
+    comp(
+        "indicator-badge.font-size",
+        "dimension",
+        "a badge's text size",
+    ),
     comp("indicator-badge.rest.fill", "color", "a badge's fill"),
     comp(
         "indicator-badge.rest.border-color",

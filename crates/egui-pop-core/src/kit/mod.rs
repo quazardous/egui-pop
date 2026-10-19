@@ -318,6 +318,9 @@ pub struct ComponentKit {
     pub height: f32,
     /// Points; zero when the component has no fixed width.
     pub width: f32,
+    /// Points: the size of its text (`font-size`); zero when not given,
+    /// the widget's own size then.
+    pub font_size: f32,
     /// Points: how far the part sits from the edge it is drawn on,
     /// towards the outside (a side area's grip, off its area's edge).
     pub offset: f32,
@@ -362,6 +365,10 @@ impl ComponentKit {
         ComponentKit {
             states: States::compile(t, component),
             width: r.dimension(&format!("{component}.width")).unwrap_or(0.0),
+            font_size: r
+                .dimension(&format!("{component}.font-size"))
+                .unwrap_or(0.0)
+                .max(0.0),
             offset: r.dimension(&format!("{component}.offset")).unwrap_or(0.0),
             align,
             padding_x: r

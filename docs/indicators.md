@@ -100,15 +100,15 @@ around the mark, so the state is not lost.
 | Component | What it gives | Drawn by |
 |---|---|---|
 | `indicator-dot` | `width` (the diameter), `fill` by tone, an LED that is off in `border-color`, `border-width` the ring of an off LED and of a pulse | egui-pop's shapes (colours only) |
-| `indicator-badge` | `height`, `padding-x`, `fill` by tone, `text` (the panel on every tone), `radius` | the `pill` handler |
+| `indicator-badge` | `height`, `padding-x`, `font-size`, `fill` by tone, `text` (the panel on every tone), `radius` | the `pill` handler |
 | `indicator-flag` | `width` (a corner triangle's legs), `fill` by tone | egui-pop's shapes (colours only) |
 | `indicator-swatch` | `width`, the outline (`border-*`), `radius`, `text` the slash of no colour and the dash of mixed ones | the `box` handler, over the colour |
 | `indicator-outline` | `ring-color` and `ring-width`: the ring between an overhanging badge or dot and its host | colours only |
 | `indicator-button` | an interactive mark's target: `width` and `height` (24 points at least), its states, `text` an icon mark's colour by tone | the `box` handler |
 
 Activity pips are the kit's `spinner` and `progress-ring`, in their
-tones. The badge text size is `font.size.small` (the vocabulary has no
-font term yet). The contrast pairs (badge text on every tone, the
+tones. The badge's text size is `indicator-badge.font-size` (egui's
+small text in the default kit). The contrast pairs (badge text on every tone, the
 record dot and an LED that is off on the panel and menus, the swatch
 outline, the outline against the accent and danger dots) are checked in
 every built-in theme ([tokens](tokens.md#contrast)).

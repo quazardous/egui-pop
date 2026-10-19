@@ -11,6 +11,9 @@ indicator-badge:
   padding-x:
     $type: "dimension"
     $value: "{space.s}"
+  font-size:
+    $type: "dimension"
+    $value: "{font.text-style.small}"
   rest:
     fill:
       $type: "color"

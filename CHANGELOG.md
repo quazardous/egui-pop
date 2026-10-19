@@ -38,6 +38,10 @@ publishes.
   (`egui-pop-test`). `progress::paint_ring_on` and `paint_spinner_on`
   paint with a painter of their own. A gallery page (`indicators`).
   Guide: docs/indicators.md.
+- A `font-size` term in the kit's vocabulary (`egui-pop-core`,
+  `egui-pop-tokens`): the size of a component's text
+  (`ComponentKit::font_size`), a kit sizing text with data; the badge
+  of the micro-indicators reads it.
 
 ### Changed
 

@@ -115,7 +115,7 @@ struct Looks {
     /// `indicator-badge.height` and `padding-x`.
     badge_height: f32,
     badge_padding: f32,
-    /// `font.size.small`: the vocabulary has no font term yet.
+    /// `indicator-badge.font-size` (egui's small text when not given).
     badge_font: f32,
     /// `progress-ring.width`.
     pip: f32,
@@ -142,7 +142,12 @@ impl Looks {
             swatch: kit.indicator_swatch.data.width.max(6.0),
             badge_height: kit.indicator_badge.data.height.max(10.0),
             badge_padding: kit.indicator_badge.data.padding_x.max(0.0),
-            badge_font: t.font.small.max(6.0),
+            badge_font: if kit.indicator_badge.data.font_size > 0.0 {
+                kit.indicator_badge.data.font_size
+            } else {
+                t.font.small
+            }
+            .max(6.0),
             pip: kit.progress_ring.data.width.max(8.0),
             icon: t.size.icon_inline,
             target: vec2(

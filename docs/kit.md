@@ -61,6 +61,7 @@ does not change with the state.
 | `offset` | | how far the part sits from the edge it is drawn on, towards the outside (a side area's grip) |
 | `align` | | where the label goes: `start`, `centre` (on the part's centre, moved into its room when it does not fit) or `end` |
 | `width` | | the component's width, when it has a fixed one |
+| `font-size` | | the size of its text, in points (an alias of a `font.*` size); the widget's own size when not given |
 | `shadow-offset-x`, `shadow-offset-y`, `shadow-blur`, `shadow-spread`, `shadow-color` | | the shadow the part casts (egui's `Shadow`; none when not given): usually aliases of a `shadow.*` group; on `side-area`, cast while it lies over the centre, `shadow-offset-x` towards the centre |
 
 States are always the same six. `rest` gives every term (the contract

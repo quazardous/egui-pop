@@ -589,7 +589,7 @@ The tokens of section 3.3 map onto them:
 | `indicator.led.off` | `indicator-dot.rest.border-color` | idem |
 | `indicator.record` | `<component>.tone.record.*` on `indicator-dot`, `indicator-badge`, `indicator-flag`, `indicator-button` and `status-indicator`, each aliasing `danger` | see 6.2 |
 | `indicator.badge.height`, `.padding` | `indicator-badge.height`, `.padding-x` | vocabulary |
-| `indicator.badge.font` | `font.size.small` | the vocabulary has no font term yet |
+| `indicator.badge.font` | `indicator-badge.font-size` (an alias of egui's small text size) | the vocabulary's `font-size` term, added for it (6.5) |
 | `indicator.badge.text` | `indicator-badge.rest.text` (the panel, on every tone, as decided) | vocabulary; the library's `pill` keeps `text.on-accent` |
 | `indicator.badge.<tone>` | `indicator-badge.tone.<tone>.fill` | the kit's tone dimension |
 | `indicator.outline` | `indicator-outline.rest.ring-color`, `.ring-width` | a ring outside the mark, following its corners |
@@ -641,11 +641,17 @@ kit can change. The "none" slash and the "mixed" dash of a swatch share
 1. `indicator-button` repeats `icon-button`'s values (transparent,
    hover, a focus ring): a case for the component dependencies being
    discussed (based on `icon-button`, or aliases), noted there.
-2. A font term in the vocabulary (`font-size`), so that a kit sizes
-   the badge's text.
-3. Whether `spinner`, `progress-ring` and the library's `pill` give a
+2. Whether `spinner`, `progress-ring` and the library's `pill` give a
    `record` tone too (today they draw their own box for it).
-4. Whether the LED and flag shapes should become glyph roles of the kit
+3. Whether the LED and flag shapes should become glyph roles of the kit
    (`glyph.led-warning`...), mapped like disclosure arrows, with a check
    that every state keeps a distinct shape.
+
+### 6.5 Decided by the owner (2026-10-19)
+
+- **A font term.** The kit's vocabulary gains `font-size` (a component
+  term: the size of its text, in points, an alias of a `font.*` size;
+  the widget's own size when not given). The badge reads
+  `indicator-badge.font-size`, which the default kit aliases to egui's
+  small text (`font.text-style.small`), so it keeps its size.
 
