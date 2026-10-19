@@ -129,8 +129,9 @@ pub struct Stack<K> {
 }
 
 /// A badge's tone: egui-pop's one tone ([`egui_pop_core::kit::Tone`]).
-/// The default kit's `pill` gives `info`, `success`, `warning` and
-/// `danger`; a tone it does not give is drawn as its own (neutral) box.
+/// The default kit's `pill` gives `info`, `success`, `warning`,
+/// `danger` and `record`; a tone it does not give is drawn as its own
+/// (neutral) box.
 pub use egui_pop_core::kit::Tone;
 
 /// A short text in a corner of a cell: `RAW`, `HDR`, `2×`, an edit mark.

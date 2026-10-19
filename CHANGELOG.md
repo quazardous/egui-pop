@@ -56,6 +56,8 @@ publishes.
   new names. `status-indicator` gives the `record` tone. Icons keep
   their own `icon::Tone`, whose `Strong` and `OnAccent` are colours of
   content rather than tones (`IconWidget` maps it with `kit_tone`).
+  `spinner`, `progress-ring` and the library's `pill` give the `record`
+  tone as well.
 
 - Each crate has its own version and is published only when it changes;
   the `egui-pop` facade keeps one minor per egui minor.

@@ -35,4 +35,6 @@ pub(crate) const CONTRACT: &[Required] = &[
     comp("pill.tone.warning.text", "color", "a warning badge's text"),
     comp("pill.tone.danger.fill", "color", "a danger badge's fill"),
     comp("pill.tone.danger.text", "color", "a danger badge's text"),
+    comp("pill.tone.record.fill", "color", "a record badge's fill"),
+    comp("pill.tone.record.text", "color", "a record badge's text"),
 ];

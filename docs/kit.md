@@ -100,7 +100,9 @@ Some components show a **tone**, which is not an interaction state:
 own box). It is egui-pop's one tone: progress, status bar items
 (`strips::Tone`), library badges (`library::Tone`) and micro-indicators
 take it. `record` (recording) aliases `danger` by default, so that a kit
-can tell a recording from an error. A
+can tell a recording from an error; the default kit gives it wherever a
+component gives `danger` (status indicators, spinners, progress rings,
+pills, micro-indicators). A
 token is `component.tone.<tone>.<term>` (every state) or
 `component.tone.<tone>.<state>.<term>`, giving only what differs. The
 defaults alias the status tokens. A box is merged as `rest`, the tone,

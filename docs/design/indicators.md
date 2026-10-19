@@ -618,7 +618,7 @@ toggle that is on is `selected`, and a disabled mark takes
 - "Before 0.1": 0.1.0 was published on 2026-10-18, before the merge;
   it is a breaking change of the next minor, said in the changelog.
 - Decision 4 holds: `record` is a tone of its own, the danger colour by
-  default. **Deviation:** it is not one system token but each
+  default (on spinners, rings and pills too since 6.5). **Deviation:** it is not one system token but each
   component's `tone.record`, since a system token may only alias the
   reference tier (a `record` aliasing `danger` would be system to
   system) and a theme changing `danger` would otherwise need its own
@@ -641,9 +641,7 @@ kit can change. The "none" slash and the "mixed" dash of a swatch share
 1. `indicator-button` repeats `icon-button`'s values (transparent,
    hover, a focus ring): a case for the component dependencies being
    discussed (based on `icon-button`, or aliases), noted there.
-2. Whether `spinner`, `progress-ring` and the library's `pill` give a
-   `record` tone too (today they draw their own box for it).
-3. Whether the LED and flag shapes should become glyph roles of the kit
+2. Whether the LED and flag shapes should become glyph roles of the kit
    (`glyph.led-warning`...), mapped like disclosure arrows, with a check
    that every state keeps a distinct shape.
 
@@ -654,4 +652,8 @@ kit can change. The "none" slash and the "mixed" dash of a swatch share
   the widget's own size when not given). The badge reads
   `indicator-badge.font-size`, which the default kit aliases to egui's
   small text (`font.text-style.small`), so it keeps its size.
+- **Record everywhere danger is.** `spinner`, `progress-ring` and the
+  library's `pill` give a `record` tone too, aliasing `danger` like the
+  others (`tone.record.indicator-color`, `pill.tone.record.fill` and
+  `.text`), so a recording pip or badge is not drawn neutral.
 

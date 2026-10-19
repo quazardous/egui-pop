@@ -53,4 +53,9 @@ pub(crate) const CONTRACT: &[Required] = &[
         "color",
         "a progress ring's arc in the muted tone",
     ),
+    comp(
+        "progress-ring.tone.record.indicator-color",
+        "color",
+        "a progress ring's arc in the record tone",
+    ),
 ];

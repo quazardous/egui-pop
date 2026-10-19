@@ -39,3 +39,8 @@ progress-ring:
       indicator-color:
         $type: "color"
         $value: "{text.muted}"
+    record:
+      $description: "Recording: the danger colour by default; a kit may tell it from an error."
+      indicator-color:
+        $type: "color"
+        $value: "{danger}"

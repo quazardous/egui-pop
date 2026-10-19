@@ -38,4 +38,9 @@ pub(crate) const CONTRACT: &[Required] = &[
         "color",
         "a spinner's arc in the muted tone",
     ),
+    comp(
+        "spinner.tone.record.indicator-color",
+        "color",
+        "a spinner's arc in the record tone",
+    ),
 ];
