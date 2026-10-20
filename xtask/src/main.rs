@@ -6,6 +6,10 @@
 //! `publish` publishes the workspace's crates to crates.io in the order
 //! of their dependencies, skipping what is already there (`publish.rs`).
 //!
+//! `affected` lists what a change needs, tests and CI jobs, from the
+//! files it touches and the workspace's dependency graph, and runs those
+//! tests (`affected.rs`).
+//!
 //! `screenshots [filter]` refreshes every image of the documentation:
 //! it builds the gallery in release mode, captures each shot headless
 //! through wbox (`tools/wbox/shoot.py`, one nested compositor per shot),
@@ -20,6 +24,7 @@ use std::io::{BufRead as _, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
 
+mod affected;
 mod publish;
 
 use ab_glyph::{Font as _, FontRef, PxScale, ScaleFont as _};
@@ -41,6 +46,10 @@ Tasks:
                          order of their dependencies, skipping the versions
                          already there; on crates.io's rate limit, try again
                          after SECS (default 600); --dry-run prints the plan
+  affected [--base REF] [--files PATH...] [--full] [--run] [--github]
+                         the tests and CI jobs a change needs, from the
+                         files it touches and the dependency graph; --run
+                         runs those tests (`cargo xtask affected --help`)
 
 Environment:
   WBOX_PYTHON            the Python with the wbox library (default: the
@@ -282,6 +291,7 @@ fn main() -> ExitCode {
         Some("screenshots") => screenshots(&args[1..]),
         Some("hosts") => hosts(),
         Some("publish") => publish::publish(&args[1..]),
+        Some("affected") => affected::affected(&args[1..]),
         Some("-h" | "--help") => {
             println!("{USAGE}");
             Ok(())
