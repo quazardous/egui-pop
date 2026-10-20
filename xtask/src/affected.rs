@@ -876,7 +876,13 @@ fn shell_words(args: &[String]) -> String {
 fn run_tests(sel: &Selection, packages: &[Package], extra: &[String]) -> Result<(), String> {
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
     let mut failed = Vec::new();
-    for Step(args) in plan(sel, packages, extra) {
+    // Each nextest run writes its JUnit report (profile `ci`) to the
+    // same file: it is renamed after each run, so CI keeps them all.
+    let store = std::env::var_os("CARGO_TARGET_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| super::root().join("target"))
+        .join("nextest");
+    for (i, Step(args)) in plan(sel, packages, extra).into_iter().enumerate() {
         let shown = shell_words(&args);
         eprintln!("\n$ cargo {shown}");
         let status = Command::new(&cargo)
@@ -886,6 +892,12 @@ fn run_tests(sel: &Selection, packages: &[Package], extra: &[String]) -> Result<
             .map_err(|e| format!("cargo: {e}"))?;
         if !status.success() {
             failed.push(format!("cargo {shown} ({status})"));
+        }
+        for profile in fs::read_dir(&store).into_iter().flatten().flatten() {
+            let report = profile.path().join("junit.xml");
+            if report.exists() {
+                let _ = fs::rename(&report, profile.path().join(format!("junit-{i}.xml")));
+            }
         }
     }
     if failed.is_empty() {

@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+    # `labeled`: adding the ci:full label runs everything at once.
+    types: [opened, synchronize, reopened, labeled]
 
 env:
   CARGO_TERM_COLOR: always
@@ -13,8 +15,47 @@ env:
   RUST_TOOLCHAIN: "1.95"
 
 jobs:
+  # What the change needs (docs/testing.md, "Selection"): every other job
+  # runs only when a file it checks changed. Pushes to main and pull
+  # requests labelled ci:full run everything.
+  changes:
+    name: Changes
+    runs-on: ubuntu-24.04
+    outputs:
+      full: ${{ steps.affected.outputs.full }}
+      fmt: ${{ steps.affected.outputs.fmt }}
+      clippy: ${{ steps.affected.outputs.clippy }}
+      doc: ${{ steps.affected.outputs.doc }}
+      test: ${{ steps.affected.outputs.test }}
+      deny: ${{ steps.affected.outputs.deny }}
+      wasm: ${{ steps.affected.outputs.wasm }}
+      package: ${{ steps.affected.outputs.package }}
+      semver: ${{ steps.affected.outputs.semver }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: xtask
+      - id: affected
+        env:
+          FULL: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:full') }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$FULL" = true ]; then
+            cargo xtask affected --full --github
+          else
+            cargo xtask affected --base "$BASE" --github
+          fi
+
   fmt:
     name: Format
+    needs: changes
+    if: needs.changes.outputs.fmt == 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
@@ -26,6 +67,8 @@ jobs:
 
   clippy:
     name: Clippy
+    needs: changes
+    if: needs.changes.outputs.clippy == 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
@@ -37,14 +80,33 @@ jobs:
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo doc --workspace --no-deps --locked
 
+  # The guides compiled as documentation, when only they changed (clippy
+  # documents the whole workspace otherwise).
+  doc:
+    name: Guides' documentation
+    needs: changes
+    if: needs.changes.outputs.doc == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo doc -p consumer-smoke --no-deps --locked
+
   test:
     name: Tests (lavapipe)
+    needs: changes
+    if: needs.changes.outputs.test == 'true'
     runs-on: ubuntu-24.04
     env:
       # Render with Mesa's software Vulkan driver: the same pixels on every run.
       WGPU_BACKEND: vulkan
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - name: Install lavapipe
         run: |
           sudo apt-get update
@@ -52,8 +114,29 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test --workspace --locked
+      # The tests the change needs, critical tests included; everything
+      # on main (docs/testing.md).
+      - name: Tests
+        env:
+          FULL: ${{ needs.changes.outputs.full }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$FULL" = true ]; then
+            cargo xtask affected --full --run -- --profile ci
+          else
+            cargo xtask affected --base "$BASE" --run -- --profile ci
+          fi
+      - name: Upload the test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit
+          path: target/nextest/ci/junit-*.xml
+          if-no-files-found: ignore
       - name: Upload snapshot differences
         if: failure()
         uses: actions/upload-artifact@v4
@@ -66,6 +149,8 @@ jobs:
 
   deny:
     name: Licences and advisories
+    needs: changes
+    if: needs.changes.outputs.deny == 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
@@ -76,6 +161,8 @@ jobs:
 
   wasm:
     name: Gallery for the web
+    needs: changes
+    if: needs.changes.outputs.wasm == 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
@@ -88,6 +175,8 @@ jobs:
 
   package:
     name: Packaging (dry run)
+    needs: changes
+    if: needs.changes.outputs.package == 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
@@ -100,6 +189,8 @@ jobs:
 
   semver:
     name: Semver checks
+    needs: changes
+    if: needs.changes.outputs.semver == 'true'
     runs-on: ubuntu-24.04
     # Informative while the crates are at 0.0.x.
     continue-on-error: true
@@ -110,3 +201,22 @@ jobs:
         with:
           tool: cargo-semver-checks
       - run: cargo semver-checks check-release -p egui-pop
+
+  # The one required check: every job above passed or was skipped. A
+  # skipped job reports nothing, so branch protection names this one.
+  ci:
+    name: CI
+    if: always()
+    needs: [changes, fmt, clippy, doc, test, deny, wasm, package, semver]
+    runs-on: ubuntu-24.04
+    steps:
+      - env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "results: $RESULTS"
+          for r in $RESULTS; do
+            case "$r" in
+              success|skipped) ;;
+              *) echo "a job ended with: $r"; exit 1 ;;
+            esac
+          done

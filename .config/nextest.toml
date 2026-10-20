@@ -30,7 +30,8 @@ fail-fast = false
 failure-output = "immediate-final"
 
 [profile.ci.junit]
-# target/nextest/ci/junit.xml: every test's time, kept by CI.
+# target/nextest/ci/junit.xml: every test's time, kept by CI (`cargo
+# xtask affected --run` renames it junit-<n>.xml after each run).
 path = "junit.xml"
 
 # Every test marked `#[egui_pop_test::critical]`.
