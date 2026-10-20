@@ -1,5 +1,7 @@
 # egui-pop
 
+<img src="https://github.com/quazardous/egui-pop/raw/main/docs/logo/egui-pop.svg" alt="egui-pop logo" width="128" align="right">
+
 [![crates.io](https://img.shields.io/crates/v/egui-pop.svg)](https://crates.io/crates/egui-pop)
 
 ![The egui-pop gallery in pop-dark: the theme overview](https://github.com/quazardous/egui-pop/raw/main/docs/screenshots/overview-pop-dark.png)
