@@ -13,6 +13,11 @@ the workbench (the window's own frame, scale per window, panels in
 areas, strips, auxiliary windows, arrangements), devtools; every
 feature's moments reachable as steps (ADR 0011).
 
+These pages are online, with search, at
+<https://quazardous.github.io/egui-pop/docs/>, beside the
+[gallery](https://quazardous.github.io/egui-pop/), which runs in the
+browser.
+
 ## Guides
 
 - [Getting started](getting-started.md): the application template, a

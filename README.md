@@ -236,6 +236,8 @@ in the diff before committing. The steps it automates are in
 The [docs index](https://github.com/quazardous/egui-pop/blob/main/docs/README.md) lists every page: getting started,
 themes and tokens, plugins and steps, the image viewport, debugging, the
 gallery, testing, API stability and the design decisions.
+They are also online, with search, at
+<https://quazardous.github.io/egui-pop/docs/>.
 
 ## Extensions
 
