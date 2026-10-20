@@ -543,6 +543,8 @@ egui-pop-files-recent = Récents
 
 egui-pop-files-save = Enregistrer
 
+egui-pop-files-type = Type de fichier
+
 egui-pop-files-unbookmark = Retirer des favoris
 
 egui-pop-frame-exit-fullscreen = Quitter le plein écran

@@ -1313,7 +1313,9 @@ impl FilePicker {
                         for (i, n) in names.iter().enumerate() {
                             widgets::selectable_value(ui, &mut at, i, n);
                         }
-                    });
+                    })
+                    .response
+                    .accessible_name(strings::tr(ui.ctx(), &txt::FILES_TYPE));
                 if at != self.filter_index {
                     self.filter_index = at;
                     self.highlight = 0;

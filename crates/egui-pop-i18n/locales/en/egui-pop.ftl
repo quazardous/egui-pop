@@ -544,6 +544,8 @@ egui-pop-files-recent = Recent
 
 egui-pop-files-save = Save
 
+egui-pop-files-type = File type
+
 egui-pop-files-unbookmark = Remove the bookmark
 
 egui-pop-frame-exit-fullscreen = Exit full screen

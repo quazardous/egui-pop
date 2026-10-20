@@ -12,6 +12,10 @@ use egui_pop_test::SharedGpu as _;
 fn harness(options: Options) -> Harness<'static, Gallery> {
     Harness::builder()
         .with_size(egui::vec2(1100.0, 720.0))
+        // egui 0.37 asks for one more pass for each widget it styles
+        // before it has seen it: a page whose texts all change at once
+        // (translation keys shown) settles in six passes.
+        .with_max_steps(8)
         .shared_wgpu()
         .build_eframe(move |cc| {
             // Motion moves only when a test says: the same frames on

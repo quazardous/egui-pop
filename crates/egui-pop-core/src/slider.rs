@@ -1002,12 +1002,14 @@ pub(crate) fn typed_entry(
 ) -> Option<TypedEnd> {
     // Placed over the bar without moving the cursor; it takes one auto
     // id, which a slider without its entry skips (`keep_auto_ids`).
-    let edit = ui.place(
-        bar,
-        TextEdit::singleline(&mut text)
-            .id(typing_id.with("edit"))
-            .align(egui::Align2::CENTER_TOP),
-    );
+    let edit = ui
+        .place(
+            bar,
+            TextEdit::singleline(&mut text)
+                .id(typing_id.with("edit"))
+                .align(egui::Align2::CENTER_TOP),
+        )
+        .accessible_name(spec.label.clone());
     if TYPING_FOCUS.keyed(typing_id).remove(ui.ctx()).is_some() {
         edit.request_focus();
     }

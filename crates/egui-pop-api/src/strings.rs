@@ -222,6 +222,8 @@ pub const FILES_ALL: StrKey = StrKey::new("egui-pop-files-all", "All files");
 pub const FILES_HIDDEN: StrKey = StrKey::new("egui-pop-files-hidden", "Hidden files");
 pub const FILES_OPEN: StrKey = StrKey::new("egui-pop-files-open", "Open");
 pub const FILES_SAVE: StrKey = StrKey::new("egui-pop-files-save", "Save");
+/// The file picker's filter list, by file type.
+pub const FILES_TYPE: StrKey = StrKey::new("egui-pop-files-type", "File type");
 
 // Toasts.
 
@@ -584,6 +586,7 @@ pub const ALL: &[StrKey] = &[
     FILES_HIDDEN,
     FILES_OPEN,
     FILES_SAVE,
+    FILES_TYPE,
     TOAST_INFO,
     TOAST_SUCCESS,
     TOAST_WARNING,
