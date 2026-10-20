@@ -262,7 +262,7 @@ command-theme-export =
     .title = Exporter le thème
 
 command-theme-import =
-    .description = Charge un fichier .tokens.json (`text`) dans l’éditeur de thème, par l’étape theme.load ; dit quels jetons ont été laissés de côté.
+    .description = Charge un fichier .tokens.json (`text`) dans l’éditeur de thème, par l’étape theme.load ; dit quels jetons ont été laissés de côté (`skipped`) et avec quels avertissements il a été lu (`warnings`).
     .title = Importer un thème
 
 command-theme-read =
@@ -876,6 +876,8 @@ egui-pop-theme-editor-undo = Annuler
 egui-pop-theme-editor-value = Valeur
 
 egui-pop-theme-editor-value-of = Valeur de { $token }
+
+egui-pop-theme-editor-warnings = Lu avec des avertissements : { $warnings }.
 
 egui-pop-tips-at = { $at } sur { $count }
 

@@ -142,7 +142,7 @@ command-terminal-send.description b0c13a2d9a1ef58a
 command-terminal-send.title d5c665cd57bab733
 command-theme-export.description ed8307fd36980b7a
 command-theme-export.title 7cf38f07839745ad
-command-theme-import.description 65d9fd751660f28f
+command-theme-import.description 1733eecc8f9d2a0d
 command-theme-import.title 5b9d70bff2b75df0
 command-theme-read.description 99363fe11256a133
 command-theme-read.title 3c64fcb1ed62b8ef
@@ -438,6 +438,7 @@ egui-pop-theme-editor-type 612aee2a1a58cb37
 egui-pop-theme-editor-undo cc7022a2d9050a57
 egui-pop-theme-editor-value 2c5f8334d5a96db8
 egui-pop-theme-editor-value-of 8544c6c31a0dce7a
+egui-pop-theme-editor-warnings 6a50cd442d8847d5
 egui-pop-tips-at ab0dec5f39d2e5de
 egui-pop-tips-dont-show e69eab44b6dab17c
 egui-pop-tips-got-it b9e7842258705158

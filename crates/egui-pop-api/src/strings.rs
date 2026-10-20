@@ -460,6 +460,10 @@ pub const THEME_EDITOR_IMPORTED: StrKey = StrKey::new(
 );
 pub const THEME_EDITOR_SKIPPED: StrKey =
     StrKey::new("egui-pop-theme-editor-skipped", "Left out: { $tokens }.");
+pub const THEME_EDITOR_WARNINGS: StrKey = StrKey::new(
+    "egui-pop-theme-editor-warnings",
+    "Read with warnings: { $warnings }.",
+);
 pub const THEME_EDITOR_PROBLEMS: StrKey =
     StrKey::new("egui-pop-theme-editor-problems", "Problems in this theme");
 
@@ -692,6 +696,7 @@ pub const ALL: &[StrKey] = &[
     THEME_EDITOR_FILE_TEXT,
     THEME_EDITOR_IMPORTED,
     THEME_EDITOR_SKIPPED,
+    THEME_EDITOR_WARNINGS,
     THEME_EDITOR_PROBLEMS,
     TIPS_OF_THE_DAY,
     TIPS_HINT,

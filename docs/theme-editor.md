@@ -65,7 +65,10 @@ it directly, or the service (`THEME_EDITOR`: `set`, `undo`, `redo`,
   theme (7:1), AA otherwise.
 - **Export and import**: the draft as a `.tokens.json` file, or a file
   pasted and loaded. Tokens the base theme does not have, or whose value
-  is not of their type, are left out and listed.
+  is not of their type, are left out and listed, with what else the
+  file loaded with (a token renamed, a file newer than this egui-pop):
+  the file loads over its base as any theme file does
+  ([Design tokens](tokens.md#a-files-version)).
 - **Problems**: what the theme's resolution reports.
 
 ## The file
@@ -76,7 +79,8 @@ each with its `$type`, and the root's `$extensions` carries the format
 stamp, `"org.egui-pop.format": { "version": 1, "contract": 1 }`
 ([Design tokens](tokens.md#a-files-version)). Files the editor wrote
 before carry `"org.egui-pop.theme-editor": { "version": 1 }` instead,
-still read (a file stamped by a newer editor is refused). Any such file
+still read. A file stamped newer than this egui-pop knows loads
+best-effort, with a warning. Any such file
 loads as a theme (`Themes::add_text`) and imports back as a draft. The
 editor writes DTCG JSON, the exchange format; a YAML file imports too.
 
@@ -110,7 +114,8 @@ base, overrides, history, failing pairs and problems; with `path`, one
 token, its value, alias and contrast readouts), `theme.set` (`path`,
 `value`, `null` for the base theme's), `theme.undo`, `theme.redo`,
 `theme.start` (`base`), `theme.export` (`name`, the file's text back)
-and `theme.import` (`text`, the tokens left out back).
+and `theme.import` (`text`; the tokens left out back as `skipped`,
+and what the file loaded with as `warnings`).
 
 ## Keyboard and screen readers
 

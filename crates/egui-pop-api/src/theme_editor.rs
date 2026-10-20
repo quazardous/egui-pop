@@ -65,7 +65,7 @@ use egui_pop_core::tokens::contract::{self, Tier};
 use egui_pop_core::tokens::contrast::{self, Level, Pair, PairKind};
 use egui_pop_core::tokens::{
     BUILT_IN_THEMES, Color, Counterpart, ResolvedTokens, ThemeDraft, ThemeSpec, TokenEdit, Value,
-    theme_label,
+    Warning, theme_label,
 };
 use egui_pop_model::commands::CommandSpec;
 use egui_pop_model::ids::{CommandId, PluginId, StepId};
@@ -454,15 +454,17 @@ impl ThemeEditor {
         self.draft().export(app.theme().themes(), name)
     }
 
-    /// Loads a token file through the `theme.load` step; the tokens left
-    /// out (unknown to its base, or with a value of another type).
-    pub fn import(&self, app: &AppHandle, text: &str) -> Result<Vec<String>, String> {
-        let (draft, skipped) = {
+    /// Loads a token file through the `theme.load` step, over its base
+    /// as any theme file ([`ThemeDraft::import`]); what it loaded with:
+    /// the tokens left out (unknown to its base, or with a value that
+    /// does not check), renamed, or a file newer than this egui-pop.
+    pub fn import(&self, app: &AppHandle, text: &str) -> Result<Vec<Warning>, String> {
+        let (draft, warnings) = {
             let themes = app.theme();
             ThemeDraft::import(themes.themes(), "import", text).map_err(|e| e.to_string())?
         };
         self.load(app, draft, "import")?;
-        Ok(skipped)
+        Ok(warnings)
     }
 
     /// The draft, or one token, as agents read it.
@@ -647,7 +649,7 @@ impl Plugin for ThemeEditorPlugin {
         )?;
         ctx.command(
             CommandSpec::new(CMD_THEME_IMPORT, "Import a theme", CAT)
-                .description("Loads a .tokens.json file (`text`) into the theme editor, through the theme.load step; says which tokens were left out.")
+                .description("Loads a .tokens.json file (`text`) into the theme editor, through the theme.load step; says which tokens were left out (`skipped`) and what it loaded with (`warnings`).")
                 .hidden()
                 .args(json!({ "text": "{ \"$extends\": \"pop-light\" }" })),
             move |call| {
@@ -656,8 +658,11 @@ impl Plugin for ThemeEditorPlugin {
                     .get("text")
                     .and_then(Json::as_str)
                     .ok_or("`text` is missing")?;
-                let skipped = editor(call)?.import(call.app, text)?;
-                Ok(json!({ "skipped": skipped }))
+                let warnings = editor(call)?.import(call.app, text)?;
+                Ok(json!({
+                    "skipped": warnings.iter().filter(|w| w.left_out()).filter_map(Warning::path).collect::<Vec<_>>(),
+                    "warnings": warnings.iter().map(ToString::to_string).collect::<Vec<_>>(),
+                }))
             },
         )?;
         Ok(())
@@ -1241,19 +1246,31 @@ fn file(ui: &mut Ui, app: &AppHandle, editor: &ThemeEditor) {
                     .clicked()
                 {
                     let text = lock(&editor.state).file_text.clone();
-                    let out = editor.import(app, &text).map(|skipped| {
+                    let out = editor.import(app, &text).map(|warnings| {
                         let base = theme_label(editor.draft().base());
                         let mut m = strings::tr_args(
                             &ctx,
                             &txt::THEME_EDITOR_IMPORTED,
                             &[("theme", &base)],
                         );
+                        let (left, other): (Vec<&Warning>, Vec<&Warning>) =
+                            warnings.iter().partition(|w| w.left_out());
+                        let skipped: Vec<&str> = left.iter().filter_map(|w| w.path()).collect();
                         if !skipped.is_empty() {
                             m.push(' ');
                             m.push_str(&strings::tr_args(
                                 &ctx,
                                 &txt::THEME_EDITOR_SKIPPED,
                                 &[("tokens", &skipped.join(", "))],
+                            ));
+                        }
+                        if !other.is_empty() {
+                            let said: Vec<String> = other.iter().map(ToString::to_string).collect();
+                            m.push(' ');
+                            m.push_str(&strings::tr_args(
+                                &ctx,
+                                &txt::THEME_EDITOR_WARNINGS,
+                                &[("warnings", &said.join("; "))],
                             ));
                         }
                         Some(m)

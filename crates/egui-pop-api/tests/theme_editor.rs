@@ -201,6 +201,7 @@ fn a_theme_exported_imports_the_same_and_steps_can_veto() {
 
     let out = run(&mut h, &CMD_THEME_IMPORT, json!({ "text": text }));
     assert_eq!(out["skipped"], json!([]));
+    assert_eq!(out["warnings"], json!([]));
     h.run();
     let spec = h.state().handle().theme().spec();
     assert_eq!(spec.base, "pop-light");
@@ -211,6 +212,29 @@ fn a_theme_exported_imports_the_same_and_steps_can_veto() {
     );
     // Importing starts a new history.
     assert_eq!(run(&mut h, &CMD_THEME_UNDO, json!({})), Json::Null);
+
+    // A file for a newer contract, with a token that does not check,
+    // loads best-effort: the token left out, both said.
+    let newer = r##"{
+      "$extends": "pop-dark",
+      "$extensions": { "org.egui-pop.format": { "version": 1, "contract": 99 } },
+      "radius": { "widget": { "$type": "color", "$value": "#000000" } },
+      "accent": { "default": { "$type": "color", "$value": "#2060c0" } }
+    }"##;
+    let out = run(&mut h, &CMD_THEME_IMPORT, json!({ "text": newer }));
+    assert_eq!(out["skipped"], json!(["radius.widget"]));
+    let warnings = out["warnings"].as_array().unwrap();
+    assert_eq!(warnings.len(), 2, "{warnings:?}");
+    assert!(
+        warnings
+            .iter()
+            .any(|w| w.as_str().unwrap().contains("read best-effort")),
+        "{warnings:?}"
+    );
+    h.run();
+    let spec = h.state().handle().theme().spec();
+    assert_eq!(spec.base, "pop-dark");
+    assert_eq!(spec.overrides.len(), 1);
 }
 
 #[test]

@@ -310,6 +310,29 @@ for, with a stamp in the root's `$extensions`:
 A file stamped with a newer format or contract than this egui-pop knows
 loads all the same, best-effort, with a warning saying so.
 
+**One loading rule.** A theme file loads over its base theme (its
+`$extends`, else `pop-dark`) the same way wherever it comes from:
+`Themes::add_text` (an application's own themes, a user's), the theme
+editor's import (`ThemeDraft::import`), and `Themes::check_file` for a
+file already parsed. Only a file that cannot be read at all (not JSON or
+YAML, not a tree of tokens) is an error. Past that, nothing fails: each
+of these is a `Warning`, with the token's path and why.
+
+- A token whose value does not load (an unreadable value, an alias to
+  nothing or in a cycle, another type than the base's or the
+  contract's) is left out: the base theme's value stays.
+- A token the base does not have is kept as the file's own (a palette
+  scale, an extension's component); under a group of the contract
+  (`surface`, `button`) with a term no token of the base uses, it is
+  reported as a likely typo. The theme editor, which changes its base's
+  tokens only, leaves it out.
+- A token renamed since the file's contract is read under its new name.
+- A file stamped newer than this egui-pop is read best-effort.
+- A base not known yet (themes added in another order) leaves the
+  tokens unchecked; resolving the theme reports what is wrong.
+
+`Themes::add` takes a parsed file as it is, past this rule.
+
 **Renames.** A release renaming a token raises `CONTRACT_VERSION` and
 adds an entry to `egui_pop_tokens::RENAMED`: the former name, the new
 one, and the contract that dropped the former name. A file stamped with
@@ -341,7 +364,10 @@ first version.
 
    ```rust
    let mut themes = egui_pop::tokens::Themes::default();
-   themes.add_text("my-theme", include_str!("my-theme.tokens.yaml"))?;
+   // What was read otherwise than written: a token left out, renamed...
+   for warning in themes.add_text("my-theme", include_str!("my-theme.tokens.yaml"))? {
+       eprintln!("my-theme: {warning}");
+   }
    let tokens = egui_pop::theme::install_with(ctx, &themes, &ThemeSpec::new("my-theme"));
    assert!(tokens.resolved().problems().is_empty());
    ```

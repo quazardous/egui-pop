@@ -9,7 +9,7 @@ use serde_json::{Map, Value as Json, json};
 
 use crate::contract::{Tier, contract, required};
 use crate::file::{RawToken, TokenFile, alias_target};
-use crate::{Color, Error, Value};
+use crate::{Color, Error, Value, Warning};
 
 /// The theme everything falls back to.
 pub const FALLBACK_THEME: &str = "pop-dark";
@@ -506,10 +506,106 @@ impl Themes {
     }
 
     /// Reads a theme file (YAML or JSON, `TokenFile::parse`) and adds it
-    /// under `name`.
-    pub fn add_text(&mut self, name: &str, text: &str) -> Result<(), Error> {
-        self.add(TokenFile::parse(name, text)?);
-        Ok(())
+    /// under `name`, loaded over its base theme ([`Themes::check_file`]).
+    /// Only a file that cannot be read at all is an error; what was read
+    /// otherwise than written comes back as warnings.
+    pub fn add_text(&mut self, name: &str, text: &str) -> Result<Vec<Warning>, Error> {
+        let (file, warnings) = self.check_file(TokenFile::parse(name, text)?);
+        self.add(file);
+        Ok(warnings)
+    }
+
+    /// Loads a theme file over its base theme (its `$extends`, else
+    /// [`FALLBACK_THEME`]), the rule every theme file goes through: the
+    /// file is brought to the current contract ([`TokenFile::upgrade`]),
+    /// then a token whose value does not load (an unreadable value, an
+    /// alias to nothing or in a cycle, another type than the base's or
+    /// the contract's) is left out, so the base theme's value stays. A
+    /// token the base does not have is kept as the file's own (a
+    /// palette, an extension's component); under a group of the
+    /// contract, with a term no token of the base uses, it is reported
+    /// as a likely typo. Nothing here fails: each such thing is a
+    /// [`Warning`]. A base not known yet leaves the tokens unchecked.
+    pub fn check_file(&self, mut file: TokenFile) -> (TokenFile, Vec<Warning>) {
+        let mut warnings = file.upgrade();
+        let base = file
+            .extends
+            .clone()
+            .unwrap_or_else(|| FALLBACK_THEME.to_string());
+        if base != file.name && !self.themes.contains_key(&base) {
+            warnings.push(Warning::Unchecked { base });
+            return (file, warnings);
+        }
+        let base_raw = self.flatten(&base, &mut Vec::new());
+        let groups: BTreeSet<&str> = contract()
+            .filter_map(|r| r.path.split('.').next())
+            .collect();
+        let terms: BTreeSet<&str> = base_raw
+            .keys()
+            .filter_map(|p| p.rsplit('.').next())
+            .collect();
+        for path in file.tokens.keys() {
+            if base_raw.contains_key(path) || required(path).is_some() {
+                continue;
+            }
+            let group = path.split('.').next().unwrap_or_default();
+            let term = path.rsplit('.').next().unwrap_or_default();
+            if groups.contains(group) && !terms.contains(term) {
+                warnings.push(Warning::Unknown {
+                    path: path.clone(),
+                    base: base.clone(),
+                    kept: true,
+                });
+            }
+        }
+        // The file resolved as it would be, without a density overlay
+        // hiding its own space and size tokens: what breaks is left out,
+        // until nothing does (leaving a token out can break another one
+        // aliasing it).
+        let mut trial = self.clone();
+        trial.densities.clear();
+        let base_types: BTreeMap<String, String> = trial
+            .resolve_without_fallback(&ThemeSpec::new(base.clone()))
+            .tokens
+            .into_iter()
+            .map(|(path, t)| (path, t.ty))
+            .collect();
+        loop {
+            trial.add(file.clone());
+            let r = trial.resolve_without_fallback(&ThemeSpec::new(file.name.clone()));
+            let mut bad: BTreeMap<String, String> = BTreeMap::new();
+            for p in &r.problems {
+                if matches!(p, Error::Missing { .. } | Error::UnknownOverride { .. }) {
+                    continue;
+                }
+                let own: Vec<&str> = match p {
+                    Error::AliasCycle { chain } => chain.iter().map(String::as_str).collect(),
+                    _ => p.path().into_iter().collect(),
+                };
+                for path in own {
+                    if file.tokens.contains_key(path) {
+                        bad.entry(path.to_string()).or_insert_with(|| p.to_string());
+                    }
+                }
+            }
+            for (path, t) in &r.tokens {
+                if let Some(ty) = base_types.get(path)
+                    && *ty != t.ty
+                    && file.tokens.contains_key(path)
+                {
+                    bad.entry(path.clone())
+                        .or_insert_with(|| format!("a {}, where `{base}` has a {ty}", t.ty));
+                }
+            }
+            if bad.is_empty() {
+                break;
+            }
+            for (path, reason) in bad {
+                file.tokens.remove(&path);
+                warnings.push(Warning::Invalid { path, reason });
+            }
+        }
+        (file, warnings)
     }
 
     /// Replaces a density's overlay.

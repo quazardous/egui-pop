@@ -28,7 +28,7 @@ use serde_json::{Value as Json, json};
 
 use crate::file::{RawToken, TokenFile, alias_target};
 use crate::theme::{FALLBACK_THEME, ThemeSpec, Themes};
-use crate::{Error, Value};
+use crate::{Error, Value, Warning};
 
 /// The `$extensions` key the theme editor stamped its files with before
 /// the format stamp; still read.
@@ -247,15 +247,20 @@ impl ThemeDraft {
 
     /// Reads a token file as a draft: its `$extends` becomes the base
     /// (the fallback theme when it has none), its tokens the overrides.
-    /// Tokens the base theme does not have, or whose value does not
-    /// check, are left out and listed. An unknown base is an error; so
-    /// is a file stamped by a newer editor.
+    /// The file loads over its base as any theme file does
+    /// ([`Themes::check_file`]): brought to the current contract, a token
+    /// whose value does not check left out, the base's value kept. A
+    /// draft changes its base's tokens only, so a token the base does
+    /// not have is left out too. Each is a warning, as is a file stamped
+    /// newer than this egui-pop knows (read best-effort). Only an
+    /// unreadable file or an unknown base is an error.
     pub fn import(
         themes: &Themes,
         name: &str,
         text: &str,
-    ) -> Result<(ThemeDraft, Vec<String>), Error> {
-        let file = TokenFile::parse(name, text)?;
+    ) -> Result<(ThemeDraft, Vec<Warning>), Error> {
+        let mut file = TokenFile::parse(name, text)?;
+        let mut warnings = file.upgrade();
         if let Some(v) = file
             .extensions
             .as_ref()
@@ -264,10 +269,10 @@ impl ThemeDraft {
             .and_then(Json::as_u64)
             && v > LEGACY_VERSION
         {
-            return Err(Error::Malformed {
-                file: name.to_string(),
+            warnings.push(Warning::Newer {
                 path: format!("$extensions.{LEGACY_EXTENSION}.version"),
-                reason: format!("version {v} is newer than this editor's ({LEGACY_VERSION})"),
+                found: v,
+                known: LEGACY_VERSION,
             });
         }
         let base = file
@@ -277,17 +282,25 @@ impl ThemeDraft {
         if themes.get(&base).is_none() {
             return Err(Error::UnknownTheme { name: base });
         }
+        let resolved = themes.resolve(&ThemeSpec::new(base.clone()));
         let mut draft = ThemeDraft::new(base);
-        let mut skipped = Vec::new();
         for (path, token) in file.tokens {
+            if resolved.get(&path).is_none() {
+                warnings.push(Warning::Unknown {
+                    path,
+                    base: draft.base.clone(),
+                    kept: false,
+                });
+                continue;
+            }
             match check(themes, &draft.base, &path, &token.value) {
                 Ok(()) => {
                     draft.overrides.insert(path, token.value);
                 }
-                Err(_) => skipped.push(path),
+                Err(reason) => warnings.push(Warning::Invalid { path, reason }),
             }
         }
-        Ok((draft, skipped))
+        Ok((draft, warnings))
     }
 }
 
@@ -429,13 +442,14 @@ mod tests {
         let file = TokenFile::parse("mine", &text).unwrap();
         assert_eq!(file.extends.as_deref(), Some("pop-light"));
         assert_eq!(file.tokens["accent.default"].ty.as_deref(), Some("color"));
-        let (back, skipped) = ThemeDraft::import(&t, "mine", &text).unwrap();
-        assert!(skipped.is_empty());
+        assert!(text.contains(crate::FORMAT_EXTENSION));
+        let (back, warnings) = ThemeDraft::import(&t, "mine", &text).unwrap();
+        assert!(warnings.is_empty(), "{warnings:?}");
         assert_eq!(back.base(), "pop-light");
         assert_eq!(back.overrides(), d.overrides());
         // The file resolves as a theme like any other.
         let mut with = t.clone();
-        with.add_text("mine", &text).unwrap();
+        assert_eq!(with.add_text("mine", &text), Ok(vec![]));
         let r = with.resolve(&ThemeSpec::new("mine"));
         assert!(r.problems().is_empty(), "{:?}", r.problems());
         assert_eq!(r.color("accent.default"), crate::Color::from_hex("#2060c0"));
@@ -444,21 +458,45 @@ mod tests {
     #[test]
     fn imports_leave_out_what_does_not_fit_and_refuse_unknown_bases() {
         let t = themes();
-        let (d, skipped) = ThemeDraft::import(
+        let (d, warnings) = ThemeDraft::import(
             &t,
             "x",
-            r##"{ "surface": { "$type": "color", "panel": { "$value": "#000000" }, "nope": { "$value": "#000000" } } }"##,
+            r##"{ "surface": { "$type": "color", "panel": { "$value": "#000000" }, "nope": { "$value": "#000000" }, "sunken": { "$value": "blue" } } }"##,
         )
         .unwrap();
         assert_eq!(d.base(), FALLBACK_THEME);
-        assert_eq!(skipped, vec!["surface.nope".to_string()]);
+        assert_eq!(d.value("surface.panel"), Some(&json!("#000000")));
+        let left: Vec<&str> = warnings.iter().filter_map(Warning::path).collect();
+        assert_eq!(left, ["surface.nope", "surface.sunken"]);
+        assert!(warnings.iter().all(Warning::left_out));
+        assert!(
+            warnings[1]
+                .to_string()
+                .starts_with("`surface.sunken` left out"),
+            "{}",
+            warnings[1]
+        );
         assert!(matches!(
             ThemeDraft::import(&t, "x", r#"{ "$extends": "nowhere" }"#),
             Err(Error::UnknownTheme { .. })
         ));
-        let newer = format!(
-            r#"{{ "$extends": "pop-dark", "$extensions": {{ "{LEGACY_EXTENSION}": {{ "version": 99 }} }} }}"#
-        );
-        assert!(ThemeDraft::import(&t, "x", &newer).is_err());
+        // A file from a newer editor, or for a newer contract, loads
+        // best-effort and says so.
+        for newer in [
+            format!(
+                r#"{{ "$extends": "pop-dark", "$extensions": {{ "{LEGACY_EXTENSION}": {{ "version": 99 }} }} }}"#
+            ),
+            format!(
+                r#"{{ "$extends": "pop-dark", "$extensions": {{ "{}": {{ "version": 1, "contract": 99 }} }} }}"#,
+                crate::FORMAT_EXTENSION
+            ),
+        ] {
+            let (d, warnings) = ThemeDraft::import(&t, "x", &newer).unwrap();
+            assert_eq!(d.base(), "pop-dark");
+            assert!(
+                matches!(&warnings[..], [Warning::Newer { found: 99, .. }]),
+                "{warnings:?}"
+            );
+        }
     }
 }

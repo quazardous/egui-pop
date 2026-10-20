@@ -183,6 +183,25 @@ publishes.
 
 ### Changed
 
+- One loading rule for theme files (egui-pop-tokens, egui-pop-api,
+  egui-pop-i18n; breaking): `Themes::add_text`, the theme editor's
+  import and the new `Themes::check_file` load a file over its base
+  theme the same way. A token whose value does not load (unreadable, an
+  alias to nothing or in a cycle, another type than the base's or the
+  contract's) is left out, so the base theme's value stays rather than
+  `pop-dark`'s; a token under a contract group the base does not have
+  is kept and reported as a likely typo; renamed tokens are read under
+  their new names; a file stamped newer than this egui-pop loads
+  best-effort. Each is a `Warning` with the token's path and why; only
+  a file that cannot be read is an error. `Themes::add_text` returns
+  `Result<Vec<Warning>, Error>` (was `Result<(), Error>`);
+  `ThemeDraft::import` and `ThemeEditor::import` return warnings instead
+  of the paths left out, and no longer refuse a file from a newer
+  editor. The `theme.import` command adds `warnings` next to `skipped`,
+  and the editor's import message lists them (a string with its
+  French). Migration: `themes.add_text(..)?` keeps compiling; to see
+  what the resolver does with a broken token, add the parsed file with
+  `Themes::add`. Part of #37.
 - A theme with a counterpart is installed with it (egui-pop-core,
   breaking in behaviour): `theme::install` and `install_with` resolve
   the spec's counterpart and write each variant into its own egui style

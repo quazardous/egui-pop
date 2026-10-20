@@ -3,9 +3,15 @@
 
 use egui_pop_tokens::{
     BUILT_IN_ACCENTS, BUILT_IN_THEMES, Color, Density, Error, POP_THEMES, ThemeSpec, Themes, Tier,
-    TokenFile, Value, contract,
+    TokenFile, Value, Warning, contract,
 };
 use serde_json::json;
+
+/// Adds a theme file as written, without the loading rule of
+/// `Themes::add_text` (which leaves broken tokens out).
+fn add_raw(themes: &mut Themes, name: &str, text: &str) {
+    themes.add(TokenFile::parse(name, text).unwrap());
+}
 
 fn all_specs() -> impl Iterator<Item = ThemeSpec> {
     BUILT_IN_THEMES.iter().flat_map(|base| {
@@ -113,18 +119,19 @@ fn aliases_follow_through_extends_chains() {
 #[test]
 fn an_alias_cycle_is_reported_and_falls_back() {
     let mut themes = Themes::default();
-    themes
-        .add_text(
-            "loop",
-            r#"
+    // Added as written, past the loading rule: what the resolver does
+    // with a broken token.
+    add_raw(
+        &mut themes,
+        "loop",
+        r#"
             $extends: "pop-dark"
             text:
               $type: "color"
               default: {$value: "{text.muted}"}
               muted: {$value: "{text.default}"}
             "#,
-        )
-        .unwrap();
+    );
     let r = themes.resolve(&ThemeSpec::new("loop"));
     let dark = themes.resolve(&ThemeSpec::default());
     assert!(
@@ -144,15 +151,16 @@ fn an_alias_cycle_is_reported_and_falls_back() {
 #[test]
 fn an_unknown_alias_is_reported_with_its_target() {
     let mut themes = Themes::default();
-    themes
-        .add_text(
-            "typo",
-            r#"
+    // Added as written, past the loading rule: what the resolver does
+    // with a broken token.
+    add_raw(
+        &mut themes,
+        "typo",
+        r#"
             $extends: "pop-dark"
             danger: {$type: "color", $value: "{redd.11}"}
             "#,
-        )
-        .unwrap();
+    );
     let r = themes.resolve(&ThemeSpec::new("typo"));
     assert_eq!(
         r.problems(),
@@ -235,18 +243,19 @@ fn extends_problems_fall_back_to_pop_dark() {
 #[test]
 fn missing_or_mistyped_contract_tokens_fall_back_and_say_why() {
     let mut themes = Themes::default();
-    themes
-        .add_text(
-            "bare",
-            r##"
+    // Added as written, past the loading rule: what the resolver does
+    // with a broken token.
+    add_raw(
+        &mut themes,
+        "bare",
+        r##"
             surface:
               $type: "color"
               panel: {$value: "#102030"}
             radius:
               widget: {$type: "color", $value: "#ffffff"}
             "##,
-        )
-        .unwrap();
+    );
     let r = themes.resolve(&ThemeSpec::new("bare"));
     let dark = themes.resolve(&ThemeSpec::default());
     assert_eq!(r.color("surface.panel"), Color::from_hex("#102030"));
@@ -606,10 +615,12 @@ fn an_alpha_modifier_multiplies_the_aliased_colours_alpha() {
 #[test]
 fn a_bad_alpha_modifier_is_reported() {
     let mut themes = Themes::default();
-    themes
-        .add_text(
-            "bad-alpha",
-            r##"
+    // Added as written, past the loading rule: what the resolver does
+    // with a broken token.
+    add_raw(
+        &mut themes,
+        "bad-alpha",
+        r##"
             $extends: "pop-dark"
             veil:
               over: {$type: "color", $value: "{surface.overlay}", $extensions: {org.egui-pop.alpha: 1.5}}
@@ -617,8 +628,7 @@ fn a_bad_alpha_modifier_is_reported() {
               wide: {$type: "dimension", $value: "{radius.widget}", $extensions: {org.egui-pop.alpha: 0.5}}
               after: {$type: "color", $value: "{veil.over}"}
             "##,
-        )
-        .unwrap();
+    );
     let r = themes.resolve(&ThemeSpec::new("bad-alpha"));
     let said: Vec<String> = r.problems().iter().map(ToString::to_string).collect();
     for path in ["veil.over", "veil.word", "veil.wide"] {
@@ -856,10 +866,12 @@ fn bases_chain_each_completed_before_what_is_based_on_it() {
 #[test]
 fn a_cycle_of_bases_is_reported_and_each_keeps_its_own_tokens() {
     let mut themes = Themes::default();
-    themes
-        .add_text(
-            "cycle",
-            r##"
+    // Added as written, past the loading rule: what the resolver does
+    // with a broken token.
+    add_raw(
+        &mut themes,
+        "cycle",
+        r##"
             $extends: "pop-dark"
             one-box:
               based-on: {$type: "string", $value: "two-box"}
@@ -874,8 +886,7 @@ fn a_cycle_of_bases_is_reported_and_each_keeps_its_own_tokens() {
             lost-box:
               based-on: {$type: "string", $value: "no-such-box"}
             "##,
-        )
-        .unwrap();
+    );
     let r = themes.resolve(&ThemeSpec::new("cycle"));
     let cycles: Vec<&Error> = r
         .problems()
@@ -1003,4 +1014,88 @@ fn a_user_theme_names_its_counterpart_on_one_side() {
         .add_text("dusk", r#"{"$extends": "pop-light"}"#)
         .unwrap();
     assert_eq!(themes.counterpart_of("dusk"), None);
+}
+
+#[test]
+fn a_theme_file_loads_over_its_base_and_warns_instead_of_failing() {
+    let mut themes = Themes::default();
+    let warnings = themes
+        .add_text(
+            "mine",
+            r##"
+            $extends: "pop-light"
+            $extensions:
+              org.egui-pop.format: {version: 1, contract: 99}
+            surface:
+              $type: "color"
+              panel: {$value: "blue"}
+              pannel: {$value: "#000000"}
+            text:
+              default: {$type: "color", $value: "{nowhere.1}"}
+            radius:
+              widget: {$type: "color", $value: "#ffffff"}
+            gray:
+              "2": {$type: "dimension", $value: {value: 2, unit: "px"}}
+            teal:
+              $type: "color"
+              "9": {$value: "#00a0a0"}
+            accent:
+              default: {$type: "color", $value: "{teal.9}"}
+            "##,
+        )
+        .unwrap();
+    let said: Vec<String> = warnings.iter().map(ToString::to_string).collect();
+    let left: Vec<&str> = warnings
+        .iter()
+        .filter(|w| w.left_out())
+        .filter_map(Warning::path)
+        .collect();
+    assert_eq!(
+        left,
+        ["gray.2", "radius.widget", "surface.panel", "text.default"],
+        "{said:?}"
+    );
+    assert!(
+        warnings
+            .iter()
+            .any(|w| matches!(w, Warning::Newer { found: 99, .. })),
+        "{said:?}"
+    );
+    assert!(
+        warnings.iter().any(|w| matches!(
+            w,
+            Warning::Unknown { path, kept: true, .. } if path == "surface.pannel"
+        )),
+        "{said:?}"
+    );
+    assert_eq!(warnings.len(), 6, "{said:?}");
+    assert!(
+        said.iter()
+            .any(|w| w.contains("a dimension, where `pop-light` has a color")),
+        "{said:?}"
+    );
+    // What was left out keeps the base theme's value, not the fallback's.
+    let r = themes.resolve(&ThemeSpec::new("mine"));
+    let light = themes.resolve(&ThemeSpec::new("pop-light"));
+    assert!(r.problems().is_empty(), "{:?}", r.problems());
+    for path in ["surface.panel", "text.default", "radius.widget", "gray.2"] {
+        assert_eq!(r.value(path), light.value(path), "{path}");
+        assert!(!r.get(path).unwrap().fallback, "{path}");
+    }
+    // The file's own tokens stay.
+    assert_eq!(r.color("accent.default"), Color::from_hex("#00a0a0"));
+    assert!(r.get("surface.pannel").is_some());
+
+    // A base not known yet: nothing checked, said so.
+    let warnings = themes
+        .add_text("early", r#"{ "$extends": "later" }"#)
+        .unwrap();
+    assert_eq!(
+        warnings,
+        [Warning::Unchecked {
+            base: "later".into()
+        }]
+    );
+    // Only a file that cannot be read is an error.
+    assert!(themes.add_text("broken", "{ nope").is_err());
 }
