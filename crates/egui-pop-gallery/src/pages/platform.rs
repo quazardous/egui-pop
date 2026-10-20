@@ -82,7 +82,11 @@ pub fn add(builder: AppBuilder, real: bool, first: Option<Instance>) -> AppBuild
             notify: notify::Simulated::default(),
             tray: tray::Simulated::default(),
             keys: keys::Simulated::default(),
-            scratch: std::env::temp_dir().join(format!("egui-pop-gallery-{}", std::process::id())),
+            // Nothing is written on the web: these helpers do not panic there.
+            scratch: egui_pop::platform::dirs::temp_dir().join(format!(
+                "egui-pop-gallery-{}",
+                egui_pop::platform::dirs::pid()
+            )),
         };
         builder
             .plugin(NotifyPlugin::new("egui-pop gallery").backend(sim.notify.clone()))
