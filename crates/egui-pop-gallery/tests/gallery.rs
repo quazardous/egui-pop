@@ -2874,3 +2874,54 @@ fn the_preview_page_opens_an_image_viewport_in_a_custom_dialog() {
     assert!(sent.contains(r#""format":"png""#), "{sent}");
     assert!(sent.contains(r#""view""#), "{sent}");
 }
+
+/// Every slot holding one value per instance (a widget, a window), with
+/// how many it holds, from the debug bridge's `state` collector.
+fn instance_entries(h: &Harness<'_, Gallery>) -> std::collections::BTreeMap<String, u64> {
+    let snap = h.state().app.handle().debug_snapshot();
+    snap["state"]["slots"]
+        .as_array()
+        .expect("the state collector lists slots")
+        .iter()
+        .filter(|s| s["scope"] == "instance")
+        .map(|s| {
+            (
+                s["name"].as_str().unwrap().to_string(),
+                s["entries"].as_u64().unwrap(),
+            )
+        })
+        .collect()
+}
+
+#[test]
+fn the_state_kept_per_instance_stays_bounded_across_tours_of_the_pages() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, PAGES[0]));
+    // A tour: every page, a few frames each, then the next one.
+    let tour = |h: &mut Harness<'_, Gallery>| {
+        for _ in 0..PAGES.len() {
+            for _ in 0..3 {
+                h.step();
+            }
+            let f = h.state_mut().app.debug_call(
+                "commands",
+                "run",
+                &serde_json::json!({ "id": "gallery.page.next" }),
+            );
+            assert!(f.ok, "{f:?}");
+        }
+    };
+    tour(&mut h);
+    let first = instance_entries(&h);
+    assert!(!first.is_empty(), "the pages keep state per widget");
+    // Two more tours, about 260 frames: the same pages keep no more.
+    for _ in 0..2 {
+        tour(&mut h);
+        let now = instance_entries(&h);
+        let grown: Vec<String> = now
+            .iter()
+            .filter(|(name, n)| **n > first.get(*name).copied().unwrap_or(0))
+            .map(|(name, n)| format!("{name}: {} -> {n}", first.get(name).copied().unwrap_or(0)))
+            .collect();
+        assert!(grown.is_empty(), "state grows: {grown:?}");
+    }
+}
