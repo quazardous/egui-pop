@@ -1,6 +1,6 @@
 # egui-pop
 
-<img src="https://github.com/quazardous/egui-pop/raw/main/docs/logo/egui-pop-badge.svg" alt="egui-pop" width="400">
+<a href="https://quazardous.github.io/egui-pop/"><img src="https://github.com/quazardous/egui-pop/raw/main/docs/logo/egui-pop-badge.svg" alt="egui-pop" width="400"></a>
 
 [<img alt="github" src="https://img.shields.io/badge/github-quazardous/egui--pop-8da0cb?logo=github" height="20">](https://github.com/quazardous/egui-pop)
 [![Latest version](https://img.shields.io/crates/v/egui-pop.svg)](https://crates.io/crates/egui-pop)
@@ -23,7 +23,7 @@ egui's own widgets from the theme. It is for people building a real tool
 on egui (an editor, a viewer, a control panel) who want that plumbing
 done once. Not an official egui crate.
 
-![The egui-pop gallery in pop-dark: the theme overview](https://github.com/quazardous/egui-pop/raw/main/docs/screenshots/overview-pop-dark.png)
+[![The egui-pop gallery in pop-dark: the theme overview](https://github.com/quazardous/egui-pop/raw/main/docs/screenshots/overview-pop-dark.png)](https://quazardous.github.io/egui-pop/)
 
 ## Quickstart
 
