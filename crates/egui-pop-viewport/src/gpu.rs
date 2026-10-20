@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use egui::Context;
+use egui_pop_core::state;
 use egui_wgpu::wgpu;
 
 /// egui-wgpu, the version the GPU path is built with.
@@ -188,22 +189,19 @@ pub(crate) struct Resources {
     slots: HashMap<u64, Slot>,
 }
 
-fn device_id() -> egui::Id {
-    egui::Id::new("egui_pop_viewport::gpu::device")
-}
-
-fn half_id() -> egui::Id {
-    egui::Id::new("egui_pop_viewport::gpu::half_float")
-}
+/// The GPU path's device, when installed.
+const DEVICE: state::Slot<Device> = state::Slot::opaque("viewport.gpu.device");
+/// The GPU path takes half-float texels.
+const HALF_FLOAT: state::Slot<bool> = state::Slot::new("viewport.gpu.half_float");
 
 /// The GPU path's device, when installed in `ctx`.
 pub(crate) fn installed(ctx: &Context) -> Option<Device> {
-    ctx.data(|d| d.get_temp::<Device>(device_id()))
+    DEVICE.get(ctx)
 }
 
 /// Whether the GPU path installed in `ctx` takes half-float texels.
 pub(crate) fn half_float(ctx: &Context) -> bool {
-    ctx.data(|d| d.get_temp::<bool>(half_id())).unwrap_or(false)
+    HALF_FLOAT.get(ctx).unwrap_or(false)
 }
 
 /// The display stage's surface format for a wgpu one.
@@ -441,16 +439,14 @@ pub fn install_for_surface(
         textures: HashMap::new(),
         slots: HashMap::new(),
     });
-    ctx.data_mut(|d| {
-        d.insert_temp(
-            device_id(),
-            Device {
-                max_texture_side,
-                gpu: true,
-            },
-        );
-        d.insert_temp(half_id(), half);
-    });
+    DEVICE.set(
+        ctx,
+        Device {
+            max_texture_side,
+            gpu: true,
+        },
+    );
+    HALF_FLOAT.set(ctx, half);
     GpuInfo {
         max_texture_side,
         half_float: half,

@@ -87,6 +87,7 @@ use egui::{
 use egui_pop_core::a11y::{self, Politeness};
 use egui_pop_core::icon::Icon;
 use egui_pop_core::slider::{self, Slider};
+use egui_pop_core::state::Slot;
 use egui_pop_core::strings::{self, tr, tr_args};
 use egui_pop_core::theme::Tokens;
 use serde_json::{Value as Json, json};
@@ -203,18 +204,16 @@ impl Default for GraphKeys {
     }
 }
 
-fn keys_id() -> Id {
-    Id::new("egui_pop_viewport::graph::keys")
-}
+const KEYS: Slot<GraphKeys> = Slot::new("viewport.graph.keys");
 
 /// The node editors' keys in a context (the defaults until set).
 pub fn keys(ctx: &egui::Context) -> GraphKeys {
-    ctx.data(|d| d.get_temp(keys_id())).unwrap_or_default()
+    KEYS.get_or_default(ctx)
 }
 
 /// Remaps the node editors' keys in a context (an input profile).
 pub fn set_keys(ctx: &egui::Context, keys: GraphKeys) {
-    ctx.data_mut(|d| d.insert_temp(keys_id(), keys));
+    KEYS.set(ctx, keys);
 }
 
 type HookFn<'a> = dyn FnMut(&Edit, Cause) -> Verdict<Edit> + 'a;

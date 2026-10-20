@@ -32,8 +32,10 @@ use std::collections::HashMap;
 use std::f32::consts::PI;
 use std::sync::Arc;
 
-use egui::{Color32, Context, CursorIcon, CustomCursorImage, Id, Modifiers, Painter, Pos2, Stroke};
+use egui::{Color32, Context, CursorIcon, CustomCursorImage, Modifiers, Painter, Pos2, Stroke};
 use serde_json::{Value as Json, json};
+
+use egui_pop_core::state::Slot;
 
 use crate::overlay::HandleKind;
 use crate::tokens::ViewportTokens;
@@ -486,19 +488,17 @@ impl Default for CursorSettings {
     }
 }
 
-fn settings_id() -> Id {
-    Id::new("egui_pop_viewport::cursor::settings")
-}
+const SETTINGS: Slot<CursorSettings> = Slot::new("viewport.cursor.settings");
 
 /// The cursor settings of a context.
 pub fn settings(ctx: &Context) -> CursorSettings {
-    ctx.data(|d| d.get_temp(settings_id())).unwrap_or_default()
+    SETTINGS.get_or_default(ctx)
 }
 
 /// Sets the cursor settings of a context (an application maps its own
 /// settings here).
 pub fn set_settings(ctx: &Context, settings: CursorSettings) {
-    ctx.data_mut(|d| d.insert_temp(settings_id(), settings));
+    SETTINGS.set(ctx, settings);
 }
 
 /// The system's cursor size, in points: `XCURSOR_SIZE` where it is set
@@ -629,25 +629,18 @@ impl CursorImage {
     }
 }
 
-fn images_id() -> Id {
-    Id::new("egui_pop_viewport::cursor::images")
-}
+/// The cursor images registered, by name.
+const IMAGES: Slot<HashMap<String, CursorImage>> = Slot::new("viewport.cursor.images");
 
 /// Registers a cursor image under a name, for [`Cursor::Image`].
 pub fn register_image(ctx: &Context, name: impl Into<String>, image: CursorImage) {
     let name = name.into();
-    ctx.data_mut(|d| {
-        d.get_temp_mut_or_default::<HashMap<String, CursorImage>>(images_id())
-            .insert(name, image);
-    });
+    IMAGES.update(ctx, |m| m.insert(name, image));
 }
 
 /// The cursor image registered under a name.
 pub fn image(ctx: &Context, name: &str) -> Option<CursorImage> {
-    ctx.data(|d| {
-        d.get_temp::<HashMap<String, CursorImage>>(images_id())
-            .and_then(|m| m.get(name).cloned())
-    })
+    IMAGES.get(ctx).and_then(|m| m.get(name).cloned())
 }
 
 /// What reaches the screen for a cursor.
@@ -815,9 +808,11 @@ pub fn paint_outline(painter: &Painter, pos: Pos2, radius: f32, inner: f32, mark
     }
 }
 
-fn cache_id() -> Id {
-    Id::new("egui_pop_viewport::cursor::bitmaps")
-}
+/// The tool cursors' bitmaps made, by tool, side and colours.
+const BITMAPS: Slot<HashMap<CacheKey, CustomCursorImage>> = Slot::new("viewport.cursor.bitmaps");
+/// A tool cursor sample's texture and the colours it was made with, per
+/// tool and side.
+const SAMPLES: Slot<([[u8; 4]; 2], egui::TextureHandle)> = Slot::opaque("viewport.cursor.samples");
 
 type CacheKey = (ToolCursor, u32, [u8; 4], [u8; 4]);
 
@@ -832,10 +827,7 @@ pub fn tool_image(ctx: &Context, tool: ToolCursor) -> CustomCursorImage {
         t.cursor_fill.to_array(),
         t.cursor_outline.to_array(),
     );
-    if let Some(img) = ctx.data(|d| {
-        d.get_temp::<HashMap<CacheKey, CustomCursorImage>>(cache_id())
-            .and_then(|m| m.get(&key).cloned())
-    }) {
+    if let Some(img) = BITMAPS.get(ctx).and_then(|m| m.get(&key).cloned()) {
         return img;
     }
     let rgba = rasterize(tool, side, t.cursor_fill, t.cursor_outline);
@@ -846,10 +838,7 @@ pub fn tool_image(ctx: &Context, tool: ToolCursor) -> CustomCursorImage {
         size: [side as u16, side as u16],
         hotspot: [at(h[0]), at(h[1])],
     };
-    ctx.data_mut(|d| {
-        d.get_temp_mut_or_default::<HashMap<CacheKey, CustomCursorImage>>(cache_id())
-            .insert(key, img.clone());
-    });
+    BITMAPS.update(ctx, |m| m.insert(key, img.clone()));
     img
 }
 
@@ -1105,11 +1094,9 @@ pub fn paint_sample(ui: &egui::Ui, rect: egui::Rect, tool: ToolCursor) {
     let ppp = ui.ctx().pixels_per_point();
     let side = ((rect.width() * ppp).round() as u32).clamp(8, 512);
     let t = ViewportTokens::of(ui.ctx());
-    let id = Id::new(("egui_pop_viewport::cursor::sample", tool, side));
+    let id = SAMPLES.keyed((tool, side));
     let key = (t.cursor_fill.to_array(), t.cursor_outline.to_array());
-    let texture = ui
-        .ctx()
-        .data(|d| d.get_temp::<([[u8; 4]; 2], egui::TextureHandle)>(id));
+    let texture = id.get(ui.ctx());
     let handle = match texture {
         Some((k, h)) if k == [key.0, key.1] => h,
         _ => {
@@ -1121,8 +1108,7 @@ pub fn paint_sample(ui: &egui::Ui, rect: egui::Rect, tool: ToolCursor) {
                 image,
                 egui::TextureOptions::NEAREST,
             );
-            ui.ctx()
-                .data_mut(|d| d.insert_temp(id, ([key.0, key.1], h.clone())));
+            id.set(ui.ctx(), ([key.0, key.1], h.clone()));
             h
         }
     };

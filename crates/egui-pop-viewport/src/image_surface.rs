@@ -34,7 +34,8 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use egui::{Color32, Context, Id, ViewportId};
+use egui::{Color32, Context, ViewportId};
+use egui_pop_core::state::Slot;
 use egui_pop_wayland::{Capabilities, Feature, NamedPrimaries, NamedTransfer};
 use egui_wgpu::wgpu;
 use serde_json::{Value as Json, json};
@@ -404,9 +405,7 @@ impl ImageSurfaces {
     }
 }
 
-fn id() -> Id {
-    Id::new("egui_pop_viewport::image_surface")
-}
+const SURFACES: Slot<ImageSurfaces> = Slot::opaque("viewport.image_surface");
 
 /// Sets up image surfaces for the main window: `rs` is the render state
 /// the GPU path was installed on ([`crate::gpu::install`]), `window` the
@@ -447,14 +446,14 @@ pub fn install(
         }
     }
     let offer = shared.offer.clone();
-    ctx.data_mut(|d| d.insert_temp(id(), ImageSurfaces(Arc::new(Mutex::new(shared)))));
+    SURFACES.set(ctx, ImageSurfaces(Arc::new(Mutex::new(shared))));
     ctx.request_repaint();
     offer
 }
 
 /// What [`install`] found, if it ran.
 pub fn offer(ctx: &Context) -> Option<Offer> {
-    let surfaces = ctx.data(|d| d.get_temp::<ImageSurfaces>(id()))?;
+    let surfaces = SURFACES.get(ctx)?;
     Some(surfaces.lock().offer.clone())
 }
 
@@ -464,7 +463,7 @@ pub fn offer(ctx: &Context) -> Option<Offer> {
 /// keeps the compositor's events read. The image surfaces when it has
 /// one.
 pub(crate) fn frame(ctx: &Context) -> Option<(ImageSurfaces, Route)> {
-    let surfaces = ctx.data(|d| d.get_temp::<ImageSurfaces>(id()))?;
+    let surfaces = SURFACES.get(ctx)?;
     let viewport = ctx.viewport_id();
     let wanted = display::wanted(ctx);
     if viewport != ViewportId::ROOT {
@@ -592,7 +591,7 @@ impl egui_wgpu::CallbackTrait for ImagePaint {
 
 /// What the image surfaces of `ctx` are doing, for the debug bridge.
 pub fn report(ctx: &Context) -> Json {
-    let Some(surfaces) = ctx.data(|d| d.get_temp::<ImageSurfaces>(id())) else {
+    let Some(surfaces) = SURFACES.get(ctx) else {
         return json!({ "installed": false });
     };
     let s = surfaces.lock();

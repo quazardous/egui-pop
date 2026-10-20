@@ -4,6 +4,7 @@
 use egui::{
     Key, Pos2, Rect, Response, Sense, Stroke, StrokeKind, Ui, Vec2, WidgetInfo, WidgetType, vec2,
 };
+use egui_pop_core::state::Slot;
 use egui_pop_core::strings;
 use egui_pop_core::theme::Tokens;
 
@@ -151,9 +152,12 @@ impl<'a> GraphMinimap<'a> {
     }
 }
 
+/// The view before a drag on the minimap, per minimap.
+const VIEW_BEFORE: Slot<Rect> = Slot::new("viewport.graph.minimap_view_before");
+
 /// The minimap's pointer, wheel and keys; whether the view moved.
 fn gestures(ui: &Ui, response: &Response, state: &mut GraphState, map: &Map) -> bool {
-    let id = response.id.with("grab");
+    let id = VIEW_BEFORE.keyed(response.id);
     let before = state.view;
     let pointer = response.interact_pointer_pos();
     if response.drag_started()
@@ -164,14 +168,14 @@ fn gestures(ui: &Ui, response: &Response, state: &mut GraphState, map: &Map) -> 
         if !frame.contains(p) {
             state.center_on(map.to_world(p));
         }
-        ui.data_mut(|d| d.insert_temp(id, before));
+        id.set(ui.ctx(), before);
     }
     if response.dragged() {
         state.pan(response.drag_delta() / map.scale);
     }
     if response.drag_stopped()
         && ui.input(|i| i.key_pressed(Key::Escape))
-        && let Some(start) = ui.data(|d| d.get_temp::<Rect>(id))
+        && let Some(start) = id.get(ui.ctx())
     {
         state.view = start;
     }

@@ -11,7 +11,8 @@
 //!   profile); over a handle it adjusts that handle's quantity;
 //! - a modifier never changes what a gesture adjusts, only how finely.
 
-use egui::{Context, Id, Key, Modifiers, PointerButton};
+use egui::{Context, Key, Modifiers, PointerButton};
+use egui_pop_core::state::Slot;
 
 /// What the wheel does over the canvas.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -88,16 +89,14 @@ impl Default for Gestures {
     }
 }
 
-fn gestures_id() -> Id {
-    Id::new("egui_pop_viewport::gestures")
-}
+const GESTURES: Slot<Gestures> = Slot::new("viewport.gestures");
 
 /// The viewports' gestures in a context (the defaults until set).
 pub fn gestures(ctx: &Context) -> Gestures {
-    ctx.data(|d| d.get_temp(gestures_id())).unwrap_or_default()
+    GESTURES.get_or_default(ctx)
 }
 
 /// Remaps the viewports' gestures in a context (an input profile).
 pub fn set_gestures(ctx: &Context, gestures: Gestures) {
-    ctx.data_mut(|d| d.insert_temp(gestures_id(), gestures));
+    GESTURES.set(ctx, gestures);
 }

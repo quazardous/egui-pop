@@ -46,7 +46,11 @@ use egui::ecolor::Hsva;
 use egui::epaint::{Mesh, Vertex, WHITE_UV};
 use egui::{Color32, Pos2, Response, Sense, Shape, Stroke, Ui, Vec2, WidgetInfo, WidgetType, vec2};
 use egui_pop_core::slider::{self, Slider};
+use egui_pop_core::state::Slot;
 use egui_pop_core::strings;
+
+/// A drag under way on a wheel, per wheel.
+const GRAB: Slot<Grab> = Slot::new("viewport.wheel.grab");
 use egui_pop_core::theme::Tokens;
 use serde_json::{Value as Json, json};
 
@@ -330,8 +334,8 @@ fn disc(
     hook: &mut Option<Hook<'_, WheelValue>>,
     changes: &mut Vec<Change<WheelValue>>,
 ) {
-    let grab_id = response.id.with("egui_pop_wheel_grab");
-    let mut grab: Option<Grab> = ui.data(|d| d.get_temp(grab_id));
+    let grab_id = GRAB.keyed(response.id);
+    let mut grab = grab_id.get(ui.ctx());
     let mut propose = |value: &mut WheelValue, to: WheelValue, cause: Cause, done: bool| {
         if to == *value {
             return;
@@ -432,14 +436,12 @@ fn disc(
         };
         propose(value, to, Cause::Access, true);
     }
-    ui.data_mut(|d| match grab {
-        Some(g) => {
-            d.insert_temp(grab_id, g);
-        }
+    match grab {
+        Some(g) => grab_id.set(ui.ctx(), g),
         None => {
-            d.remove::<Grab>(grab_id);
+            grab_id.remove(ui.ctx());
         }
-    });
+    }
 }
 
 /// A gesture's end: one done change from the value before it (a veto

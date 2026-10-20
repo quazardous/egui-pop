@@ -14,8 +14,9 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
-use egui::{Context, Id};
+use egui::Context;
 use egui_pop_core::debug::FnCollector;
+use egui_pop_core::state::Slot;
 use serde_json::{Value as Json, json};
 
 use crate::view::{Mapping, View, Zoom};
@@ -28,10 +29,8 @@ struct Registry {
 }
 
 fn registry(ctx: &Context) -> Arc<Mutex<Registry>> {
-    ctx.data_mut(|d| {
-        d.get_temp_mut_or_default::<Arc<Mutex<Registry>>>(Id::new("egui_pop_viewport::debug"))
-            .clone()
-    })
+    const REGISTRY: Slot<Arc<Mutex<Registry>>> = Slot::new("viewport.debug");
+    REGISTRY.update(ctx, |r| r.clone())
 }
 
 fn lock(r: &Mutex<Registry>) -> std::sync::MutexGuard<'_, Registry> {

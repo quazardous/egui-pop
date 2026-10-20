@@ -47,6 +47,7 @@ use egui::{
     Color32, CursorIcon, Pos2, Rect, Response, Sense, Shape, Stroke, StrokeKind, Ui, Vec2, Widget,
     WidgetInfo, WidgetType, pos2, vec2,
 };
+use egui_pop_core::state::Slot;
 use egui_pop_core::strings;
 use egui_pop_core::theme::Tokens;
 use serde_json::{Value as Json, json};
@@ -301,6 +302,9 @@ fn change_of(from: Drag, to: Drag, cause: Cause, done: bool) -> Change<Drag> {
     }
 }
 
+/// A drag under way, per histogram.
+const DRAG: Slot<Drag> = Slot::new("viewport.histogram.drag");
+
 /// The drag, the keys and assistive actions, written to `changes`.
 fn drag(
     ui: &mut Ui,
@@ -310,14 +314,14 @@ fn drag(
     hook: &mut Option<Hook<'_, Drag>>,
     changes: &mut Vec<Change<Drag>>,
 ) {
-    let id = response.id.with("egui_pop_histogram_drag");
+    let id = DRAG.keyed(response.id);
     if response.drag_started() {
         let at = response
             .interact_pointer_pos()
             .map(|p| ((p.x - rect.left()) / rect.width().max(1.0)).clamp(0.0, 1.0));
-        ui.data_mut(|d| d.insert_temp(id, Drag { at, delta: 0.0 }));
+        id.set(ui.ctx(), Drag { at, delta: 0.0 });
     }
-    let current = ui.data(|d| d.get_temp::<Drag>(id));
+    let current = id.get(ui.ctx());
     match change::gesture(ui, response) {
         Gesture::None => {}
         Gesture::Moved(d) => {
@@ -327,13 +331,13 @@ fn drag(
                     ..from
                 };
                 if let Some(c) = change::decide(hook, change_of(from, to, Cause::Drag, false)) {
-                    ui.data_mut(|data| data.insert_temp(id, c.to));
+                    id.set(ui.ctx(), c.to);
                     changes.push(c);
                 }
             }
         }
         Gesture::Ended => {
-            ui.data_mut(|d| d.remove::<Drag>(id));
+            id.remove(ui.ctx());
             if let Some(total) = current.filter(|t| t.delta != 0.0) {
                 let start = Drag {
                     delta: 0.0,
@@ -347,7 +351,7 @@ fn drag(
             }
         }
         Gesture::Cancelled => {
-            ui.data_mut(|d| d.remove::<Drag>(id));
+            id.remove(ui.ctx());
             if let Some(total) = current.filter(|t| t.delta != 0.0) {
                 let start = Drag {
                     delta: 0.0,

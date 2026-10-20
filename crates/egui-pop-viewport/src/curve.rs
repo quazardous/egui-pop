@@ -52,6 +52,7 @@ use egui::{
     Color32, Id, Key, Modifiers, Pos2, Rect, Response, Sense, Shape, Stroke, StrokeKind, Ui, Vec2,
     Widget, WidgetInfo, WidgetType, pos2, vec2,
 };
+use egui_pop_core::state::Slot;
 use egui_pop_core::strings;
 use egui_pop_core::theme::Tokens;
 
@@ -274,18 +275,18 @@ impl Default for CurveKeys {
     }
 }
 
-fn keys_id() -> Id {
-    Id::new("egui_pop_viewport::curve::keys")
-}
+const KEYS: Slot<CurveKeys> = Slot::new("viewport.curve.keys");
+/// An editor's selection and drag, per editor.
+const MEMORY: Slot<Memory> = Slot::new("viewport.curve.memory");
 
 /// The curve editors' keys in a context (the defaults until set).
 pub fn keys(ctx: &egui::Context) -> CurveKeys {
-    ctx.data(|d| d.get_temp(keys_id())).unwrap_or_default()
+    KEYS.get_or_default(ctx)
 }
 
 /// Remaps the curve editors' keys in a context (an input profile).
 pub fn set_keys(ctx: &egui::Context, keys: CurveKeys) {
-    ctx.data_mut(|d| d.insert_temp(keys_id(), keys));
+    KEYS.set(ctx, keys);
 }
 
 /// The curve editor's colours, from the theme (`curve.*`).
@@ -468,8 +469,8 @@ impl<'a> CurveEditor<'a> {
         let (rect, mut response) = ui.allocate_exact_size(size, Sense::click_and_drag());
         let id = response.id;
         let area = rect.shrink(6.0);
-        let mem_id = id.with("egui_pop_curve");
-        let mut mem: Memory = ui.data(|d| d.get_temp(mem_id)).unwrap_or_default();
+        let mem_id = MEMORY.keyed(id);
+        let mut mem = mem_id.get_or_default(ui.ctx());
         if mem.selected.is_some_and(|i| i >= points.len()) {
             mem.selected = None;
         }
@@ -525,7 +526,7 @@ impl<'a> CurveEditor<'a> {
                 node.add_action(Action::SetValue);
             }
         });
-        ui.data_mut(|d| d.insert_temp(mem_id, mem));
+        mem_id.set(ui.ctx(), mem);
         CurveOutput {
             response,
             changes,

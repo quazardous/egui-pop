@@ -34,7 +34,8 @@
 //! assert!((Transfer::Pq.encode_at(1.0, 203.0) - 0.5807).abs() < 1e-3);
 //! ```
 
-use egui::{Color32, Context, Id, ViewportId};
+use egui::{Color32, Context, ViewportId};
+use egui_pop_core::state::Slot;
 
 /// The primaries (and white) of an encoding.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -818,21 +819,14 @@ pub fn resolve(wanted: &DisplayTarget, surface: &DisplayTarget, gpu: bool) -> Re
     }
 }
 
-fn target_id(viewport: ViewportId) -> Id {
-    Id::new(("egui_pop_viewport::display::target", viewport))
-}
-
-fn wanted_id(viewport: ViewportId) -> Id {
-    Id::new(("egui_pop_viewport::display::wanted", viewport))
-}
-
-fn default_surface_id() -> Id {
-    Id::new("egui_pop_viewport::display::default_surface")
-}
-
-fn image_id(viewport: ViewportId) -> Id {
-    Id::new(("egui_pop_viewport::display::image", viewport))
-}
+/// What a window's surface expects, per window.
+const TARGET: Slot<DisplayTarget> = Slot::new("viewport.display.target");
+/// What the application wants for a window, per window.
+const WANTED: Slot<DisplayTarget> = Slot::new("viewport.display.wanted");
+/// What every window's surface expects unless set per window.
+const DEFAULT_TARGET: Slot<DisplayTarget> = Slot::new("viewport.display.default_target");
+/// What a window's image is drawn into, per window.
+const IMAGE: Slot<ImageSurface> = Slot::new("viewport.display.image");
 
 /// What the surface of the window being drawn expects: what was set for
 /// it, else what the GPU path found when installed, else sRGB.
@@ -843,13 +837,13 @@ pub fn target(ctx: &Context) -> DisplayTarget {
 /// What a window's image is drawn into: the image's own surface when it
 /// has one ([`set_image_surface`]), else the window's surface.
 pub fn target_of(ctx: &Context, viewport: ViewportId) -> DisplayTarget {
-    ctx.data(|d| {
-        d.get_temp::<ImageSurface>(image_id(viewport))
-            .and_then(|i| i.target)
-            .or_else(|| d.get_temp(target_id(viewport)))
-            .or_else(|| d.get_temp(default_surface_id()))
-    })
-    .unwrap_or_default()
+    IMAGE
+        .keyed(viewport)
+        .get(ctx)
+        .and_then(|i| i.target)
+        .or_else(|| TARGET.keyed(viewport).get(ctx))
+        .or_else(|| DEFAULT_TARGET.get(ctx))
+        .unwrap_or_default()
 }
 
 /// The image's own surface in a window, as the image surface layer
@@ -868,12 +862,9 @@ pub struct ImageSurface {
 /// its own, and why not (or why less than wanted); viewports in that
 /// window follow on the next frame.
 pub fn set_image_surface(ctx: &Context, viewport: ViewportId, image: ImageSurface) {
-    let changed = ctx.data_mut(|d| {
-        let id = image_id(viewport);
-        let changed = d.get_temp::<ImageSurface>(id).as_ref() != Some(&image);
-        d.insert_temp(id, image);
-        changed
-    });
+    let slot = IMAGE.keyed(viewport);
+    let changed = slot.get(ctx).as_ref() != Some(&image);
+    slot.set(ctx, image);
     if changed {
         ctx.request_repaint_of(viewport);
     }
@@ -881,7 +872,7 @@ pub fn set_image_surface(ctx: &Context, viewport: ViewportId, image: ImageSurfac
 
 /// What was set with [`set_image_surface`] for a window.
 pub fn image_surface_of(ctx: &Context, viewport: ViewportId) -> Option<ImageSurface> {
-    ctx.data(|d| d.get_temp(image_id(viewport)))
+    IMAGE.keyed(viewport).get(ctx)
 }
 
 /// Sets what a window's surface expects (for example when its surface
@@ -889,29 +880,29 @@ pub fn image_surface_of(ctx: &Context, viewport: ViewportId) -> Option<ImageSurf
 /// itself). Viewports in that window follow on the next frame and signal
 /// it.
 pub fn set_target(ctx: &Context, viewport: ViewportId, target: DisplayTarget) {
-    ctx.data_mut(|d| d.insert_temp(target_id(viewport), target));
+    TARGET.keyed(viewport).set(ctx, target);
     ctx.request_repaint_of(viewport);
 }
 
 /// Sets what every window's surface expects unless set per window (the
 /// GPU path calls it with what eframe configured).
 pub fn set_default_target(ctx: &Context, target: DisplayTarget) {
-    ctx.data_mut(|d| d.insert_temp(default_surface_id(), target));
+    DEFAULT_TARGET.set(ctx, target);
     ctx.request_repaint();
 }
 
 /// What the application wants for the window being drawn (sRGB until
 /// said).
 pub fn wanted(ctx: &Context) -> DisplayTarget {
-    let id = wanted_id(ctx.viewport_id());
-    ctx.data(|d| d.get_temp(id)).unwrap_or_default()
+    let viewport = ctx.viewport_id();
+    WANTED.keyed(viewport).get_or_default(ctx)
 }
 
 /// Declares what the application wants for a window: Display P3, HDR.
 /// The viewport draws it when the surface carries it, and says why not
 /// otherwise ([`Resolution::fallback`]).
 pub fn want(ctx: &Context, viewport: ViewportId, wanted: DisplayTarget) {
-    ctx.data_mut(|d| d.insert_temp(wanted_id(viewport), wanted));
+    WANTED.keyed(viewport).set(ctx, wanted);
     ctx.request_repaint_of(viewport);
 }
 

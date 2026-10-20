@@ -33,7 +33,11 @@ use egui::{
     WidgetInfo, WidgetType, pos2, vec2,
 };
 use egui_pop_core::icon::{Icon, Size};
+use egui_pop_core::state::Slot;
 use egui_pop_core::strings;
+
+/// A drag under way on a navigator, per navigator.
+const GRAB: Slot<Grab> = Slot::new("viewport.navigator.grab");
 use egui_pop_core::theme::Tokens;
 
 use crate::change::{self, Cause, Change, Gesture, Hook, Verdict};
@@ -410,8 +414,8 @@ fn gestures(
     let Some(m) = m else {
         return;
     };
-    let grab_id = response.id.with("egui_pop_navigator_grab");
-    let mut grab: Option<Grab> = ui.data(|d| d.get_temp(grab_id));
+    let grab_id = GRAB.keyed(response.id);
+    let mut grab = grab_id.get(ui.ctx());
     let at_center = |c: [f64; 2]| View::at(m.zoom, c);
     let visible = m.visible();
     let pressed = ui.input(|i| i.pointer.primary_pressed()) && response.is_pointer_button_down_on();
@@ -533,14 +537,12 @@ fn gestures(
             apply(state, view, to, Cause::Key, true, hook, changes);
         }
     }
-    ui.data_mut(|d| match grab {
-        Some(g) => {
-            d.insert_temp(grab_id, g);
-        }
+    match grab {
+        Some(g) => grab_id.set(ui.ctx(), g),
         None => {
-            d.remove::<Grab>(grab_id);
+            grab_id.remove(ui.ctx());
         }
-    });
+    }
 }
 
 /// A drag's end: one done change from the view before it; a veto puts
