@@ -71,6 +71,9 @@ Themes, design tokens, the theme editor, icons and scaling.
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/theme-editor-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/theme-editor-pop-dark.png" width="200" alt="theme-editor-pop-dark"></a><br>theme-editor-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/theme-editor-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/theme-editor-pop-light.png" width="200" alt="theme-editor-pop-light"></a><br>theme-editor-pop-light</td>
   </tr>
+  <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/theme-editor-fonts-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/theme-editor-fonts-pop-dark.png" width="200" alt="theme-editor-fonts-pop-dark"></a><br>theme-editor-fonts-pop-dark</td>
+  </tr>
 </table>
 
 <details><summary>The overview in the other built-in themes</summary>

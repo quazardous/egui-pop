@@ -2429,10 +2429,7 @@ fn the_theme_editor_page_edits_a_token_measures_it_and_undoes() {
     use egui_pop::model::commands::Origin;
     let agent = || Origin::Agent("test".into());
     let mut results = egui_kittest::SnapshotResults::new();
-    for (theme, token) in [
-        ("pop-dark", "accent.default"),
-        ("pop-light", "surface.panel"),
-    ] {
+    for (theme, token) in [("pop-dark", "accent.default"), ("pop-light", "blue.9")] {
         let mut h = harness(options(theme, Density::Comfortable, "theme-editor"));
         h.run();
         let editor = h.state().app.handle().service(&THEME_EDITOR).unwrap();
@@ -2440,8 +2437,22 @@ fn the_theme_editor_page_edits_a_token_measures_it_and_undoes() {
         h.run();
         egui_pop_test::assert_all_named(&h);
         assert!(h.query_by_label(&format!("Value of {token}")).is_some());
+        assert!(h.query_by_label(&format!("Hex of {token}")).is_some());
+        // The preview pane draws the gallery's sampler.
+        assert!(h.query_by_label("Selected row").is_some());
+        if token == "blue.9" {
+            assert!(h.query_by_label("Generate blue").is_some());
+        }
         results.add(h.try_snapshot(format!("theme-editor-{theme}")));
     }
+    // The fonts tab.
+    let mut h = harness(options("pop-dark", Density::Comfortable, "theme-editor"));
+    h.run();
+    h.get_by_label("Fonts").click();
+    h.run();
+    egui_pop_test::assert_all_named(&h);
+    assert!(h.query_by_label("Apply the fonts").is_some());
+    results.add(h.try_snapshot("theme-editor-fonts-pop-dark"));
 
     let mut h = harness(options("pop-dark", Density::Comfortable, "theme-editor"));
     h.run();
