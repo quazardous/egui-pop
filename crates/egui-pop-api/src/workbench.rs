@@ -30,6 +30,7 @@
 //! | `workbench.detach` | `{ "panel" }`: into a window of its own (its own scale) |
 //! | `workbench.attach` | `{ "panel" }`: a detached panel docked back |
 //! | `workbench.close_window` | `{ "panel" }`: a detached panel's window closes; the default docks it back, a veto keeps the window |
+//! | `workbench.zen` | `{ "zen" }`: zen mode on or off (see below) |
 //!
 //! Each declared panel gets the commands `<panel>.focus` and
 //! `<panel>.toggle`.
@@ -39,6 +40,13 @@
 //! keeps the room in the layout, so the centre keeps its width, and the
 //! area, unfolded, lies above the centre next to its strip with the kit's
 //! `side-area` shadow; a click on the strip folds or unfolds it.
+//!
+//! **Zen mode** (the `workbench.zen` command, a toggle with no default
+//! key: applications bind one) leaves only the centre: the title bar, the
+//! menu and status bars, the activity bar, the side and bottom areas and
+//! the floating panels are hidden, and Escape (`workbench.leave_zen`)
+//! brings them back. It is a state of the session, not of the layout:
+//! never saved, so the next start shows the whole workbench.
 //!
 //! A panel may also float over the interface: a palette
 //! (`PanelSpec::palette`) does when it opens, any floatable panel when
@@ -80,6 +88,14 @@ pub const STEP_PLACE: StepId = StepId::from_static("workbench.place");
 pub const STEP_DETACH: StepId = StepId::from_static("workbench.detach");
 pub const STEP_ATTACH: StepId = StepId::from_static("workbench.attach");
 pub const STEP_CLOSE_WINDOW: StepId = StepId::from_static("workbench.close_window");
+pub const STEP_ZEN: StepId = StepId::from_static("workbench.zen");
+
+/// Toggles zen mode: only the centre is shown.
+pub const CMD_ZEN: egui_pop_model::ids::CommandId =
+    egui_pop_model::ids::CommandId::from_static("workbench.zen");
+/// Leaves zen mode (Escape while in it).
+pub const CMD_LEAVE_ZEN: egui_pop_model::ids::CommandId =
+    egui_pop_model::ids::CommandId::from_static("workbench.leave_zen");
 
 /// The setting: how the bottom panel lines up with the side bars, as
 /// VS Code's panel alignment (see [`PanelAlignment`]).
@@ -190,6 +206,11 @@ pub(crate) fn steps() -> Vec<crate::steps::StepSpec> {
             "A detached panel's window closes; by default the panel docks back (`panel`).",
         )
         .args(json!({ "panel": "app.inspector" })),
+        StepSpec::new(
+            STEP_ZEN,
+            "Zen mode starts (`zen`: true: only the centre is shown) or ends (false).",
+        )
+        .args(json!({ "zen": true })),
     ]
 }
 
@@ -265,6 +286,8 @@ pub enum Change {
     Roll(PanelId, bool),
     /// A floating panel is pinned (`true`) or unpinned.
     Pin(PanelId, bool),
+    /// Zen mode on (`true`: only the centre is shown) or off.
+    Zen(bool),
 }
 
 /// `[x, y]` as a place.
@@ -318,6 +341,7 @@ impl Change {
                 crate::palettes::STEP_PIN,
                 json!({ "panel": p, "pinned": on }),
             ),
+            Change::Zen(on) => (STEP_ZEN, json!({ "zen": on })),
         }
     }
 
@@ -336,6 +360,11 @@ impl Change {
 
     /// The change a step's (possibly redirected) arguments ask for.
     pub(crate) fn from_args(step: &StepId, args: &Json) -> Result<Change, String> {
+        if *step == STEP_ZEN {
+            return Ok(Change::Zen(
+                args.get("zen").and_then(Json::as_bool).unwrap_or(true),
+            ));
+        }
         if *step == STEP_FOLD {
             let name = args
                 .get("area")
@@ -423,6 +452,9 @@ pub(crate) struct Workbench {
     pub palette_drag: Option<(PanelId, [f32; 2], Pos2)>,
     /// Where each floating panel was drawn last frame.
     pub palette_rects: BTreeMap<PanelId, Rect>,
+    /// Zen mode: only the centre is drawn. Not part of the layout, so
+    /// never saved.
+    pub zen: bool,
 }
 
 impl Default for Workbench {
@@ -442,6 +474,7 @@ impl Default for Workbench {
             templates: Vec::new(),
             palette_drag: None,
             palette_rects: BTreeMap::new(),
+            zen: false,
         }
     }
 }
@@ -673,6 +706,11 @@ impl Workbench {
                     self.layout.folded.push(*area);
                 }
                 json!({ "area": area_name(*area), "folded": folded })
+            }
+            Change::Zen(on) => {
+                // The session's state: the layout is left as it is.
+                self.zen = *on;
+                return Ok(json!({ "zen": on }));
             }
             Change::Place(area, placement) => {
                 if !matches!(area, Area::StartSide | Area::EndSide) {
@@ -1029,8 +1067,9 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
             .collect();
         (wb.areas(), sizes)
     };
+    let zen = app.workbench_mut().zen;
     app.set_drawing_areas(true);
-    if app.zone_has_blocks(&crate::zones::ACTIVITY_BAR) {
+    if !zen && app.zone_has_blocks(&crate::zones::ACTIVITY_BAR) {
         let t = egui_pop_core::theme::Tokens::of(&ctx);
         egui::Panel::left(Id::new("egui_pop.activity_bar"))
             .resizable(false)
@@ -1049,7 +1088,8 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
     // Side areas lying over the centre, open, next to their strip.
     let mut lying = Vec::new();
     for area in panel_alignment(app).order() {
-        if !areas.contains(&area) || !visible_in(app, area) {
+        // Zen mode: the centre alone.
+        if zen || !areas.contains(&area) || !visible_in(app, area) {
             continue;
         }
         let side = matches!(area, Area::StartSide | Area::EndSide);
@@ -1116,7 +1156,9 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
         lie_over(app, &ctx, &kit, area, strip, sizes[&area]);
     }
     app.set_drawing_areas(false);
-    crate::palettes::show(app, &ctx);
+    if !zen {
+        crate::palettes::show(app, &ctx);
+    }
     follow_drag(app, &ctx);
     drop_hint(app, &ctx);
 }

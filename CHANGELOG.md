@@ -20,6 +20,14 @@ publishes.
   the workspace once the application asks (`offer_workspace_keys`), and
   says where each key comes from (workspace, user, or the application's
   own name, `name_key_sources`).
+- Zen mode (`egui-pop-api`): the `workbench.zen` command (View > Zen
+  mode, no default key) shows the centre alone, without the title, menu
+  and status bars, the activity bar, the side and bottom areas or the
+  palettes; Escape leaves it (`workbench.leave_zen`). A step,
+  `workbench.zen` (`{ "zen" }`), on the journal and open to vetoes;
+  `AppHandle::set_zen` and `zen`, the `workbenchZen` context key,
+  `zen` in the debug bridge's `workbench` collector. Not saved with the
+  layout. Strings with their French.
 - Full screen keeps the application's title bar (`egui-pop-core`,
   `egui-pop-api`): `FramePlugin` draws it with its `CAPTION_START` and
   `CAPTION` zones, so the menus and the application's items stay. Close

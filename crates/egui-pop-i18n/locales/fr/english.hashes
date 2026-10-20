@@ -186,6 +186,10 @@ command-workbench-arrangement-save.description 9b40413dc152aaee
 command-workbench-arrangement-save.title ebf7471b4bd6e7f1
 command-workbench-arrangement-switch.description 984205b37e66c1e1
 command-workbench-arrangement-switch.title d0e095ecc9422281
+command-workbench-leave-zen.description 1f1cdceb5029699c
+command-workbench-leave-zen.title 807fcda4df4c8836
+command-workbench-zen.description a38941bcc516bbed
+command-workbench-zen.title 3abce81ef922131d
 egui-pop-area-bottom 524a384390fd3b6d
 egui-pop-area-center be338e13d993b71f
 egui-pop-area-end-side 560b37ffe9b87765

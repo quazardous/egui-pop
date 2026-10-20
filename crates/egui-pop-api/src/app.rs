@@ -1665,8 +1665,28 @@ impl AppHandle {
         if let (Some(event), Outcome::Done(Ok(result))) = (change.event(), &out) {
             self.publish("egui_pop", None, event, result.clone());
         }
+        if matches!(change, crate::workbench::Change::Zen(_)) {
+            self.follow_zen();
+        }
         self.egui().request_repaint();
         Some(out)
+    }
+
+    /// Starts zen mode (only the centre is shown) or ends it
+    /// (`workbench.zen`).
+    pub fn set_zen(&self, on: bool) -> Option<Outcome> {
+        self.change_workbench(crate::workbench::Change::Zen(on))
+    }
+
+    /// Whether zen mode is on.
+    pub fn zen(&self) -> bool {
+        self.workbench_mut().zen
+    }
+
+    /// Keeps the `workbenchZen` context key in line with zen mode.
+    pub(crate) fn follow_zen(&self) {
+        let on = self.zen();
+        self.set_context("workbenchZen", if on { "true" } else { "false" });
     }
 
     /// Where an area was drawn in the last pass (none while it is not
@@ -1775,6 +1795,15 @@ fn outcome_result(outcome: Outcome) -> Result<Json, String> {
     match outcome {
         Outcome::Done(r) => r,
         Outcome::Vetoed { by, reason } => Err(format!("stopped by `{by}`: {reason}")),
+    }
+}
+
+/// A zen mode command's result: the step's, or the change asked for when
+/// it runs after the areas are drawn.
+fn zen_result(outcome: Option<Outcome>, on: bool) -> Result<Json, String> {
+    match outcome {
+        Some(o) => outcome_result(o),
+        None => Ok(json!({ "zen": on })),
     }
 }
 
@@ -2467,6 +2496,30 @@ impl App {
         for spec in crate::workbench::steps() {
             ctx.step(spec)?;
         }
+        // Zen mode: no default key for it (applications bind one);
+        // Escape leaves it, unless an overlay or a pushed mode wants it.
+        ctx.command(
+            CommandSpec::new(crate::workbench::CMD_ZEN, "Zen mode", "View")
+                .description("Shows the centre alone: no title, menu or status bar, no side or bottom area, no palette. Escape leaves it.")
+                .checked("workbenchZen")
+                .menu(MENU_VIEW, "9_window", 2),
+            |call| {
+                let on = !call.app.zen();
+                zen_result(call.app.set_zen(on), on)
+            },
+        )?
+        .command(
+            CommandSpec::new(crate::workbench::CMD_LEAVE_ZEN, "Leave zen mode", "View")
+                .description("Shows the whole workbench again.")
+                .when("workbenchZen"),
+            |call| zen_result(call.app.set_zen(false), false),
+        )?;
+        ctx.keybinding(
+            "Escape",
+            crate::workbench::CMD_LEAVE_ZEN,
+            "workbenchZen && !modePushed && !overlayOpen && !textInputFocus",
+            Layer::Default,
+        )?;
         crate::palettes::declare(&mut ctx)?;
         for (i, (menu, label)) in [
             (MENU_FILE, "File"),
@@ -2806,6 +2859,7 @@ impl App {
                         [r.min.x, r.min.y, r.max.x, r.max.y],
                     )).collect::<BTreeMap<_, _>>(),
                     "focused": wb.focused,
+                    "zen": wb.zen,
                     "dragging": wb.dragging.as_ref().map(|(p, a, _)| json!({
                         "panel": p,
                         "from": crate::workbench::area_name(*a),
@@ -4142,6 +4196,13 @@ impl App {
 
     fn shell(&mut self, ui: &mut Ui) {
         let h = self.handle.clone();
+        h.follow_zen();
+        if h.zen() {
+            // Zen mode: the centre alone, and no caption published.
+            egui_pop_core::frame::hide_title_bar(ui.ctx());
+            crate::workbench::show(&h, ui);
+            return;
+        }
         if h.zone_has_blocks(&zones::TITLE) {
             // No least height: a title zone whose blocks draw nothing (the
             // system draws the frame) takes no room.

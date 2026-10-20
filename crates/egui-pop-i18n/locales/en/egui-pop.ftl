@@ -374,6 +374,14 @@ command-workbench-arrangement-switch =
     .description = Puts the panels as a saved arrangement or a template has them.
     .title = Switch arrangement
 
+command-workbench-leave-zen =
+    .description = Shows the whole workbench again.
+    .title = Leave zen mode
+
+command-workbench-zen =
+    .description = Shows the centre alone: no title, menu or status bar, no side or bottom area, no palette. Escape leaves it.
+    .title = Zen mode
+
 egui-pop-area-bottom = the bottom panel
 
 egui-pop-area-center = the centre

@@ -76,8 +76,8 @@ assert_eq!(h.layout().area_of(&TREE), Some(Area::EndSide));
 
 Each panel gets `<id>.focus` and `<id>.toggle` commands. The layout
 changes through the steps `workbench.move`, `workbench.show`,
-`workbench.hide`, `workbench.focus`, `workbench.fold` and
-`workbench.place` (`egui_pop::api::workbench`). A tab dragged onto another area moves
+`workbench.hide`, `workbench.focus`, `workbench.fold`,
+`workbench.place` and `workbench.zen` (`egui_pop::api::workbench`). A tab dragged onto another area moves
 there when its rules allow it; otherwise the drop hint says why. The
 hint is published like an overlay: `AppHandle::drop_hint` (panel,
 area, rect, refusal), `overlay_rects` (kind `DropHint`, named
@@ -118,6 +118,21 @@ The bottom panel spans the window's whole width by default. The
 panel alignment does: `center` (between the side bars, which go down to
 the bottom), `start` (under the start side bar) or `end` (under the end
 one); `AppBuilder::panel_alignment` gives the default.
+
+## Zen mode
+
+`workbench.zen` (View > Zen mode) toggles a view of the centre alone:
+the title bar, the menu and status bars, the activity bar, the side and
+bottom areas and the floating palettes are hidden, and the frame
+publishes no caption. It has no default key, so that each application
+binds its own; Escape leaves it (`workbench.leave_zen`, while no
+overlay is open, no mode is pushed and no text field has the
+keyboard). The change is the `workbench.zen` step (`{ "zen": bool }`,
+`AppHandle::set_zen`, `AppHandle::zen`, the `workbenchZen` context
+key): a plugin may veto it, and the journal records it. Zen mode is a
+state of the session, not of the layout: it is never saved, and the
+next start shows the whole workbench. Combined with full screen, it
+leaves the content alone on the screen.
 
 ## Palettes and toolboxes: never modal
 

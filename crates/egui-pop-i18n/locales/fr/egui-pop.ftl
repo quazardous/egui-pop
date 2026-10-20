@@ -373,6 +373,14 @@ command-workbench-arrangement-switch =
     .description = Place les panneaux comme une disposition enregistrée ou un modèle.
     .title = Changer de disposition
 
+command-workbench-leave-zen =
+    .description = Affiche de nouveau tout l’établi.
+    .title = Quitter le mode zen
+
+command-workbench-zen =
+    .description = N’affiche que le centre : ni barre de titre, de menus ou d’état, ni zone latérale ou du bas, ni palette. Échap en sort.
+    .title = Mode zen
+
 egui-pop-area-bottom = le panneau du bas
 
 egui-pop-area-center = le centre
