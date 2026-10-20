@@ -801,6 +801,8 @@ egui-pop-theme-editor-adjust-of = Ajuster { $token }
 
 egui-pop-theme-editor-alias-of = Alias de { $token }
 
+egui-pop-theme-editor-apply = Appliquer
+
 egui-pop-theme-editor-borders = Bordures
 
 egui-pop-theme-editor-change-of = La modification de { $token }
@@ -810,6 +812,8 @@ egui-pop-theme-editor-changed-count = Jetons modifiés : { $count }
 egui-pop-theme-editor-components = Composants
 
 egui-pop-theme-editor-contrast = Contraste
+
+egui-pop-theme-editor-discard = Abandonner
 
 egui-pop-theme-editor-edited = modifié
 
@@ -833,6 +837,8 @@ egui-pop-theme-editor-generated = { $count } jetons de { $scale } générés ; u
 
 egui-pop-theme-editor-from = Comme dans { $theme }
 
+egui-pop-theme-editor-hex-of = Hexadécimal de { $token }
+
 egui-pop-theme-editor-import = Importer
 
 egui-pop-theme-editor-imported = Importé sur { $theme }.
@@ -847,6 +853,10 @@ egui-pop-theme-editor-not-a-value = Ni une valeur de type { $type }, ni l’alia
 
 egui-pop-theme-editor-not-applicable = s.o.
 
+egui-pop-theme-editor-not-applied = Pas encore appliqué : seul ce volet montre le brouillon.
+
+egui-pop-theme-editor-open-file = Ouvrir un fichier
+
 egui-pop-theme-editor-own = Modifié dans ce thème
 
 egui-pop-theme-editor-pair = Paire
@@ -859,6 +869,12 @@ egui-pop-theme-editor-pass = réussi
 
 egui-pop-theme-editor-pick = Choisissez un jeton dans la liste.
 
+egui-pop-theme-editor-preview = Aperçu
+
+egui-pop-theme-editor-preview-only = Aperçu seulement
+
+egui-pop-theme-editor-preview-only-hint = Les changements restent dans le volet d’aperçu jusqu’à ce qu’ils soient appliqués ; le reste de la fenêtre garde le thème installé.
+
 egui-pop-theme-editor-problems = Problèmes dans ce thème
 
 egui-pop-theme-editor-ratio = Rapport
@@ -866,6 +882,36 @@ egui-pop-theme-editor-ratio = Rapport
 egui-pop-theme-editor-redo = Rétablir
 
 egui-pop-theme-editor-reset = Revenir à { $theme }
+
+egui-pop-theme-editor-sample-button = Un bouton
+
+egui-pop-theme-editor-sample-checkbox = Une case à cocher
+
+egui-pop-theme-editor-sample-danger = Supprimer
+
+egui-pop-theme-editor-sample-disabled = Désactivé
+
+egui-pop-theme-editor-sample-field = Un champ
+
+egui-pop-theme-editor-sample-heading = Un titre
+
+egui-pop-theme-editor-sample-muted = Du texte discret, pour les indications et les détails.
+
+egui-pop-theme-editor-sample-option-a = Une option
+
+egui-pop-theme-editor-sample-option-b = Une autre
+
+egui-pop-theme-editor-sample-primary = Principal
+
+egui-pop-theme-editor-sample-selected = Une ligne sélectionnée
+
+egui-pop-theme-editor-sample-slider = Un curseur
+
+egui-pop-theme-editor-sample-text = Du texte courant, comme l’essentiel d’une interface.
+
+egui-pop-theme-editor-save-file = Enregistrer dans un fichier
+
+egui-pop-theme-editor-saved = Enregistré dans { $path }.
 
 egui-pop-theme-editor-seed-clamped = Trop sombre, trop claire ou trop vive pour une gamme : { $color } est utilisée.
 

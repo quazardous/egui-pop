@@ -802,6 +802,8 @@ egui-pop-theme-editor-adjust-of = Adjust { $token }
 
 egui-pop-theme-editor-alias-of = Alias of { $token }
 
+egui-pop-theme-editor-apply = Apply
+
 egui-pop-theme-editor-borders = Borders
 
 egui-pop-theme-editor-change-of = The change of { $token }
@@ -811,6 +813,8 @@ egui-pop-theme-editor-changed-count = Tokens changed: { $count }
 egui-pop-theme-editor-components = Components
 
 egui-pop-theme-editor-contrast = Contrast
+
+egui-pop-theme-editor-discard = Discard
 
 egui-pop-theme-editor-edited = changed
 
@@ -834,6 +838,8 @@ egui-pop-theme-editor-generate-variant = Written in the variant shown only; its 
 
 egui-pop-theme-editor-generated = { $count } tokens of { $scale } generated; one undo takes them back.
 
+egui-pop-theme-editor-hex-of = Hex of { $token }
+
 egui-pop-theme-editor-import = Import
 
 egui-pop-theme-editor-imported = Imported over { $theme }.
@@ -848,6 +854,10 @@ egui-pop-theme-editor-not-a-value = Not a { $type } value, nor an alias of a tok
 
 egui-pop-theme-editor-not-applicable = n/a
 
+egui-pop-theme-editor-not-applied = Not applied yet: only this pane shows the draft.
+
+egui-pop-theme-editor-open-file = Open a file
+
 egui-pop-theme-editor-own = Changed in this theme
 
 egui-pop-theme-editor-pair = Pair
@@ -860,6 +870,12 @@ egui-pop-theme-editor-pass = pass
 
 egui-pop-theme-editor-pick = Pick a token in the list.
 
+egui-pop-theme-editor-preview = Preview
+
+egui-pop-theme-editor-preview-only = Preview only
+
+egui-pop-theme-editor-preview-only-hint = Changes stay in the preview pane until applied; the rest of the window keeps the theme installed.
+
 egui-pop-theme-editor-problems = Problems in this theme
 
 egui-pop-theme-editor-ratio = Ratio
@@ -867,6 +883,36 @@ egui-pop-theme-editor-ratio = Ratio
 egui-pop-theme-editor-redo = Redo
 
 egui-pop-theme-editor-reset = Reset to { $theme }
+
+egui-pop-theme-editor-sample-button = A button
+
+egui-pop-theme-editor-sample-checkbox = A checkbox
+
+egui-pop-theme-editor-sample-danger = Delete
+
+egui-pop-theme-editor-sample-disabled = Disabled
+
+egui-pop-theme-editor-sample-field = A field
+
+egui-pop-theme-editor-sample-heading = A heading
+
+egui-pop-theme-editor-sample-muted = Muted text, for hints and details.
+
+egui-pop-theme-editor-sample-option-a = One option
+
+egui-pop-theme-editor-sample-option-b = Another
+
+egui-pop-theme-editor-sample-primary = Primary
+
+egui-pop-theme-editor-sample-selected = A selected row
+
+egui-pop-theme-editor-sample-slider = A slider
+
+egui-pop-theme-editor-sample-text = Body text, as most of an interface reads.
+
+egui-pop-theme-editor-save-file = Save as a file
+
+egui-pop-theme-editor-saved = Saved to { $path }.
 
 egui-pop-theme-editor-seed-clamped = Too dark, too light or too vivid for a ramp: { $color } is used.
 

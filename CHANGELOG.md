@@ -69,6 +69,19 @@ publishes.
   draws, `Tokens::of` and `Kit::of` give the scoped theme's. Scopes
   nest and are restored after a panic. Fonts stay the installed
   theme's. Part of #36.
+- The theme editor previews a draft before applying it (egui-pop-api):
+  a preview pane draws the draft in its own theme (a `ScopedTheme`),
+  with a sampler of widgets (`theme_editor::sample`, or the
+  application's, `ThemeEditor::set_sampler`). "Preview only"
+  (`ThemeEditor::set_preview_only`) keeps changes in the pane while the
+  editor and the window keep the installed theme; "Apply"
+  (`ThemeEditor::apply`) installs the draft, "Discard"
+  (`ThemeEditor::discard`) drops it, `ThemeEditor::pending` says
+  whether there is one. A hex field sits beside every colour picker.
+  "Open a file" and "Save as a file" use the host's file chooser
+  (`ThemeEditor::set_file_dialog`, `theme_editor::FileDialog`) or the
+  files plugin's (`ThemeEditor::open_file`, `save_file`). Live editing
+  stays the default. Part of #36.
 - Critical tests (egui-pop-test, the new egui-pop-test-macros):
   `#[egui_pop_test::critical]` marks a test that guards a rule any change
   can break, so a selective run still runs it; `#[critical(gpu)]` marks

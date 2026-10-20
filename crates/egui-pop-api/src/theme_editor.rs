@@ -61,8 +61,9 @@ use std::sync::{Arc, Mutex};
 
 use egui::{Id, RichText, Ui, WidgetInfo, WidgetType};
 use egui_pop_core::lock;
+use egui_pop_core::state::Slot;
 use egui_pop_core::strings;
-use egui_pop_core::theme::{Tokens, color32};
+use egui_pop_core::theme::{ScopedTheme, Tokens, color32};
 use egui_pop_core::tokens::contract::{self, Tier};
 use egui_pop_core::tokens::contrast::{self, Level, Pair, PairKind};
 use egui_pop_core::tokens::palette::{self, Backdrop, Ramp, Scheme};
@@ -70,13 +71,15 @@ use egui_pop_core::tokens::{
     BUILT_IN_THEMES, Color, Counterpart, ResolvedTokens, ThemeDraft, ThemeSpec, TokenEdit, Value,
     Warning, theme_label,
 };
-use egui_pop_core::ui::UiPop as _;
+use egui_pop_core::ui::{Tone, UiPop as _};
 use egui_pop_core::widgets;
 use egui_pop_model::commands::CommandSpec;
 use egui_pop_model::ids::{CommandId, PluginId, StepId};
 use serde_json::{Value as Json, json};
 
 use crate::app::AppHandle;
+use crate::files::{self, FileRequest};
+use crate::host::Pending;
 use crate::services::ServiceToken;
 use crate::steps::{Outcome, StepSpec};
 use crate::strings as txt;
@@ -232,9 +235,33 @@ struct Gesture {
     keys: bool,
 }
 
-#[derive(Debug, Default)]
+/// A file chooser the host gives the editor ([`ThemeEditor::set_file_dialog`]):
+/// it starts a choice and answers later, as `files::Files::choose` does
+/// (`{ "paths": [...] }`, or `null` when cancelled).
+pub type FileDialog = Arc<dyn Fn(&AppHandle, FileRequest) -> Pending + Send + Sync>;
+
+/// What the preview pane draws, in the draft's theme
+/// ([`ThemeEditor::set_sampler`]).
+pub type Sampler = Arc<dyn Fn(&mut Ui, &AppHandle) + Send + Sync>;
+
+/// A file choice under way, and what it is for.
+#[derive(Debug)]
+enum Choice {
+    Open(Pending),
+    Save(Pending),
+}
+
+#[derive(Default)]
 struct State {
     draft: ThemeDraft,
+    /// Changes stay in the draft, shown in the preview pane only, until
+    /// applied ([`ThemeEditor::apply`]).
+    preview_only: bool,
+    /// The draft's theme as the preview pane draws it, by spec.
+    scoped: Option<(ThemeSpec, ScopedTheme)>,
+    file_dialog: Option<FileDialog>,
+    sampler: Option<Sampler>,
+    choice: Option<Choice>,
     /// The base and overrides last written to the theme service; `None`
     /// before the first look at it.
     applied: Option<(String, BTreeMap<String, Json>)>,
@@ -253,6 +280,17 @@ struct State {
     /// A hex field being typed into: its key and text.
     hex: Option<(String, String)>,
     resolved: Option<Arc<ResolvedTokens>>,
+}
+
+impl std::fmt::Debug for State {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("State")
+            .field("draft", &self.draft)
+            .field("preview_only", &self.preview_only)
+            .field("selected", &self.selected)
+            .field("choice", &self.choice)
+            .finish_non_exhaustive()
+    }
 }
 
 /// The theme editor's state, shared by its view and its commands.
@@ -278,6 +316,122 @@ impl ThemeEditor {
         }
     }
 
+    /// Whether changes stay in the draft, drawn in the preview pane only,
+    /// until [`ThemeEditor::apply`]; off (live) by default, each change
+    /// installed at once.
+    pub fn preview_only(&self) -> bool {
+        lock(&self.state).preview_only
+    }
+
+    /// Switches between live editing and the preview only. Going back to
+    /// live installs the draft.
+    pub fn set_preview_only(&self, app: &AppHandle, on: bool) {
+        let was = std::mem::replace(&mut lock(&self.state).preview_only, on);
+        if was && !on {
+            self.install(app);
+        }
+    }
+
+    /// Whether the draft differs from the theme installed (a preview
+    /// not applied yet).
+    pub fn pending(&self, app: &AppHandle) -> bool {
+        self.sync(app);
+        let s = lock(&self.state);
+        s.applied.as_ref().is_some_and(|(base, overrides)| {
+            base != s.draft.base() || overrides != s.draft.overrides()
+        })
+    }
+
+    /// Installs the draft app-wide: the theme previewed becomes the
+    /// application's (in live mode it already is).
+    pub fn apply(&self, app: &AppHandle) {
+        self.install(app);
+    }
+
+    /// Drops the draft's changes not applied: the editor starts again
+    /// from the theme installed (its history emptied).
+    pub fn discard(&self, app: &AppHandle) {
+        let spec = edited(app);
+        let mut s = lock(&self.state);
+        s.draft = ThemeDraft::from_spec(&spec);
+        s.applied = Some((spec.base.clone(), spec.overrides.clone()));
+        s.gesture = None;
+        s.typing = None;
+    }
+
+    /// The file chooser the editor opens and saves files with: the
+    /// host's, so the editor needs no file-dialog dependency. Without
+    /// one, the `files` plugin's chooser (`files::FILES`) when it is
+    /// connected; without either, files are pasted as text only.
+    pub fn set_file_dialog(&self, dialog: Option<FileDialog>) {
+        lock(&self.state).file_dialog = dialog;
+    }
+
+    /// What the preview pane draws in the draft's theme; a few of egui's
+    /// and egui-pop's widgets by default ([`sample`]).
+    pub fn set_sampler(&self, sampler: Option<Sampler>) {
+        lock(&self.state).sampler = sampler;
+    }
+
+    /// The draft's theme as the preview pane draws it (built once per
+    /// draft).
+    pub fn scoped(&self, app: &AppHandle) -> ScopedTheme {
+        let tokens = self.resolved(app);
+        let spec = tokens.spec().clone();
+        if let Some((_, scoped)) = lock(&self.state)
+            .scoped
+            .as_ref()
+            .filter(|(s, _)| *s == spec)
+        {
+            return scoped.clone();
+        }
+        let scoped = ScopedTheme::new(&app.egui(), Tokens::new((*tokens).clone()));
+        lock(&self.state).scoped = Some((spec, scoped.clone()));
+        scoped
+    }
+
+    /// Starts a file choice with the host's chooser, or the `files`
+    /// plugin's; `None` when there is neither.
+    fn choose(&self, app: &AppHandle, request: FileRequest) -> Option<Pending> {
+        let dialog = lock(&self.state).file_dialog.clone();
+        match dialog {
+            Some(d) => Some(d(app, request)),
+            None => app.service(&files::FILES).map(|f| f.choose(app, request)),
+        }
+    }
+
+    fn can_choose(&self, app: &AppHandle) -> bool {
+        lock(&self.state).file_dialog.is_some() || app.service(&files::FILES).is_some()
+    }
+
+    /// Imports a token file from disk (what "Open" does once a file is
+    /// chosen).
+    pub fn open_file(
+        &self,
+        app: &AppHandle,
+        path: &std::path::Path,
+    ) -> Result<Vec<Warning>, String> {
+        let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+        lock(&self.state).file_text = text.clone();
+        self.import(app, &text)
+    }
+
+    /// Writes the draft as a token file (what "Save as" does once a
+    /// file is chosen), named after the file.
+    pub fn save_file(&self, app: &AppHandle, path: &std::path::Path) -> Result<(), String> {
+        let name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .map(|n| n.trim_end_matches(".json").trim_end_matches(".tokens"))
+            .filter(|n| !n.is_empty())
+            .unwrap_or("my-theme")
+            .to_string();
+        let text = self.export(app, &name);
+        std::fs::write(path, &text).map_err(|e| format!("{}: {e}", path.display()))?;
+        lock(&self.state).file_text = text;
+        Ok(())
+    }
+
     /// Shows a token in the editor (as a click in its list does).
     pub fn select(&self, path: &str) {
         let mut s = lock(&self.state);
@@ -295,11 +449,16 @@ impl ThemeEditor {
         lock(&self.state).draft.clone()
     }
 
-    /// The application's theme, resolved with the draft (cached).
+    /// The draft's theme, resolved (cached): the application's in live
+    /// mode.
     pub fn resolved(&self, app: &AppHandle) -> Arc<ResolvedTokens> {
+        self.sync(app);
         let service = app.theme();
-        let spec = edited(app);
+        let template = edited(app);
         let mut s = lock(&self.state);
+        // The draft's own theme: the application's in live mode, where
+        // each change is written, the preview's otherwise.
+        let spec = s.draft.spec(&template);
         if let Some(r) = s.resolved.as_ref().filter(|r| *r.spec() == spec) {
             return r.clone();
         }
@@ -310,6 +469,14 @@ impl ThemeEditor {
 
     /// Writes the draft to the application's theme.
     fn write(&self, app: &AppHandle) {
+        if lock(&self.state).preview_only {
+            return;
+        }
+        self.install(app);
+    }
+
+    /// Installs the draft app-wide, whatever the mode.
+    fn install(&self, app: &AppHandle) {
         let mut s = lock(&self.state);
         let base = s.draft.base().to_string();
         let overrides = s.draft.overrides().clone();
@@ -906,6 +1073,7 @@ pub fn show(ui: &mut Ui, app: &AppHandle) {
     };
     editor.sync(app);
     let ctx = ui.ctx().clone();
+    poll_choice(app, &editor, &ctx);
     let tokens = editor.resolved(app);
     toolbar(ui, app, &editor);
     ui.separator();
@@ -917,6 +1085,8 @@ pub fn show(ui: &mut Ui, app: &AppHandle) {
         });
         ui.separator();
         ui.vertical(|ui| {
+            preview_pane(ui, app, &editor);
+            ui.add_space(Tokens::of(&ctx).space.m);
             let selected = lock(&editor.state).selected.clone();
             match selected.as_deref().and_then(|p| tokens.get(p)) {
                 Some(t) => detail(ui, app, &editor, &tokens, t),
@@ -1001,6 +1171,39 @@ fn toolbar(ui: &mut Ui, app: &AppHandle, editor: &ThemeEditor) {
             &txt::THEME_EDITOR_CHANGED_COUNT,
             &[("count", &changed.to_string())],
         ));
+    });
+    ui.horizontal_wrapped(|ui| {
+        let mut preview_only = editor.preview_only();
+        let r = widgets::checkbox(
+            ui,
+            &mut preview_only,
+            strings::tr(&ctx, &txt::THEME_EDITOR_PREVIEW_ONLY),
+        )
+        .on_hover_text(strings::tr(&ctx, &txt::THEME_EDITOR_PREVIEW_ONLY_HINT));
+        if r.changed() {
+            editor.set_preview_only(app, preview_only);
+        }
+        if preview_only {
+            let pending = editor.pending(app);
+            if ui
+                .add_enabled(
+                    pending,
+                    egui::Button::new(strings::tr(&ctx, &txt::THEME_EDITOR_APPLY)),
+                )
+                .clicked()
+            {
+                editor.apply(app);
+            }
+            if ui
+                .add_enabled(
+                    pending,
+                    egui::Button::new(strings::tr(&ctx, &txt::THEME_EDITOR_DISCARD)),
+                )
+                .clicked()
+            {
+                editor.discard(app);
+            }
+        }
     });
     ui.horizontal(|ui| {
         let hint = strings::tr(&ctx, &txt::THEME_EDITOR_FILTER);
@@ -1331,7 +1534,15 @@ fn value_widget(
                 a: f32::from(a8) / 255.0,
             };
             r.widget_info(|| WidgetInfo::labeled(WidgetType::ColorButton, true, &name));
-            ui.monospace(c.to_hex());
+            let hex_name = strings::tr_args(&ctx, &txt::THEME_EDITOR_HEX_OF, &[("token", path)]);
+            if let Some(typed) = hex_field(ui, editor, path, *c, &hex_name, false) {
+                say(
+                    editor,
+                    editor
+                        .set(app, path, Some(json!(typed.to_hex())), Cause::Edit)
+                        .map(|_| None),
+                );
+            }
             let to = json!(picked.to_hex());
             (r, to, false)
         }
@@ -1458,6 +1669,142 @@ fn contrast_readouts(ui: &mut Ui, tokens: &ResolvedTokens, path: &str) {
         });
 }
 
+/// Takes the answer of a file choice under way, once it came.
+fn poll_choice(app: &AppHandle, editor: &ThemeEditor, ctx: &egui::Context) {
+    let answer = {
+        let s = lock(&editor.state);
+        let pending = match &s.choice {
+            Some(Choice::Open(p) | Choice::Save(p)) => p.clone(),
+            None => return,
+        };
+        drop(s);
+        match pending.take() {
+            Some(a) => a,
+            None => return,
+        }
+    };
+    let Some(choice) = lock(&editor.state).choice.take() else {
+        return;
+    };
+    let path = match files::chosen(&answer) {
+        Ok(files::Chosen::Paths(p)) => match p.into_iter().next() {
+            Some(p) => p,
+            None => return,
+        },
+        Ok(files::Chosen::Cancelled) => return,
+        Err(e) => return say(editor, Err(e)),
+    };
+    let out = match choice {
+        Choice::Open(_) => editor.open_file(app, &path).map(|w| {
+            let base = theme_label(editor.draft().base());
+            let mut m = strings::tr_args(ctx, &txt::THEME_EDITOR_IMPORTED, &[("theme", &base)]);
+            if !w.is_empty() {
+                let said: Vec<String> = w.iter().map(ToString::to_string).collect();
+                m.push(' ');
+                m.push_str(&strings::tr_args(
+                    ctx,
+                    &txt::THEME_EDITOR_WARNINGS,
+                    &[("warnings", &said.join("; "))],
+                ));
+            }
+            Some(m)
+        }),
+        Choice::Save(_) => editor.save_file(app, &path).map(|()| {
+            Some(strings::tr_args(
+                ctx,
+                &txt::THEME_EDITOR_SAVED,
+                &[("path", &path.display().to_string())],
+            ))
+        }),
+    };
+    say(editor, out);
+}
+
+/// The preview pane: the draft's theme drawn in a scoped `Ui`, the rest
+/// of the editor in the theme installed.
+fn preview_pane(ui: &mut Ui, app: &AppHandle, editor: &ThemeEditor) {
+    let ctx = ui.ctx().clone();
+    ui.strong(strings::tr(&ctx, &txt::THEME_EDITOR_PREVIEW));
+    if editor.preview_only() && editor.pending(app) {
+        ui.weak(strings::tr(&ctx, &txt::THEME_EDITOR_NOT_APPLIED));
+    }
+    let scoped = editor.scoped(app);
+    let sampler = lock(&editor.state).sampler.clone();
+    scoped.show(ui, |ui| {
+        let t = Tokens::of(ui.ctx());
+        egui::Frame::new()
+            .fill(t.surface.panel)
+            .stroke(egui::Stroke::new(1.0, t.border.default))
+            .corner_radius(egui::CornerRadius::same(
+                t.radius.window.round().clamp(0.0, 255.0) as u8,
+            ))
+            .inner_margin(egui::Margin::same(t.space.m.round().clamp(0.0, 127.0) as i8))
+            .show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                match sampler {
+                    Some(f) => f(ui, app),
+                    None => sample(ui),
+                }
+            });
+    });
+}
+
+/// The sampler's widget values, kept across frames.
+const SAMPLE: Slot<(bool, f32, String, usize)> = Slot::new("api.theme_editor.sample");
+
+/// The preview pane's default content: text by role, the status
+/// colours, buttons in their tones and states, a checkbox, options, a
+/// slider, a field, a selected row and a progress bar, drawn in the
+/// theme of the `Ui` (a [`ScopedTheme`]'s in the editor).
+pub fn sample(ui: &mut Ui) {
+    let ctx = ui.ctx().clone();
+    let t = Tokens::of(&ctx);
+    let (mut on, mut level, mut text, mut option) =
+        SAMPLE.get(&ctx).unwrap_or((true, 0.6, String::new(), 0));
+    let tr = |k: &strings::StrKey| strings::tr(&ctx, k);
+    ui.heading(tr(&txt::THEME_EDITOR_SAMPLE_HEADING));
+    ui.label(tr(&txt::THEME_EDITOR_SAMPLE_TEXT));
+    ui.weak(tr(&txt::THEME_EDITOR_SAMPLE_MUTED));
+    ui.horizontal_wrapped(|ui| {
+        for (name, color) in [
+            ("danger", t.status.danger),
+            ("warning", t.status.warning),
+            ("success", t.status.success),
+            ("info", t.status.info),
+            ("accent", t.accent.default),
+        ] {
+            ui.colored_label(color, name);
+        }
+    });
+    ui.horizontal_wrapped(|ui| {
+        let _ = ui.button(tr(&txt::THEME_EDITOR_SAMPLE_BUTTON));
+        let _ = ui.button_tone(Tone::Accent, tr(&txt::THEME_EDITOR_SAMPLE_PRIMARY));
+        let _ = ui.button_tone(Tone::Danger, tr(&txt::THEME_EDITOR_SAMPLE_DANGER));
+        ui.add_enabled(
+            false,
+            egui::Button::new(tr(&txt::THEME_EDITOR_SAMPLE_DISABLED)),
+        );
+    });
+    ui.horizontal_wrapped(|ui| {
+        widgets::checkbox(ui, &mut on, tr(&txt::THEME_EDITOR_SAMPLE_CHECKBOX));
+        widgets::radio_value(ui, &mut option, 0, tr(&txt::THEME_EDITOR_SAMPLE_OPTION_A));
+        widgets::radio_value(ui, &mut option, 1, tr(&txt::THEME_EDITOR_SAMPLE_OPTION_B));
+    });
+    ui.horizontal_wrapped(|ui| {
+        ui.add(egui::Slider::new(&mut level, 0.0..=1.0).text(tr(&txt::THEME_EDITOR_SAMPLE_SLIDER)));
+        let hint = tr(&txt::THEME_EDITOR_SAMPLE_FIELD);
+        let r = ui.add(
+            egui::TextEdit::singleline(&mut text)
+                .hint_text(&hint)
+                .desired_width(140.0),
+        );
+        egui_pop_core::a11y::name(&r, WidgetType::TextEdit, &hint);
+    });
+    let _ = widgets::selectable_label(ui, true, tr(&txt::THEME_EDITOR_SAMPLE_SELECTED));
+    ui.add(egui::ProgressBar::new(level).desired_width(220.0));
+    SAMPLE.set(&ctx, (on, level, text, option));
+}
+
 fn file(ui: &mut Ui, app: &AppHandle, editor: &ThemeEditor) {
     let ctx = ui.ctx().clone();
     let title = strings::tr(&ctx, &txt::THEME_EDITOR_FILE);
@@ -1482,6 +1829,32 @@ fn file(ui: &mut Ui, app: &AppHandle, editor: &ThemeEditor) {
                     .changed()
                 {
                     lock(&editor.state).file_name = name.clone();
+                }
+                if editor.can_choose(app) {
+                    if ui
+                        .button(strings::tr(&ctx, &txt::THEME_EDITOR_OPEN_FILE))
+                        .clicked()
+                    {
+                        let request =
+                            FileRequest::open(&strings::tr(&ctx, &txt::THEME_EDITOR_OPEN_FILE))
+                                .filter("Token files", &["json", "yaml", "yml"]);
+                        if let Some(p) = editor.choose(app, request) {
+                            lock(&editor.state).choice = Some(Choice::Open(p));
+                        }
+                    }
+                    if ui
+                        .button(strings::tr(&ctx, &txt::THEME_EDITOR_SAVE_FILE))
+                        .clicked()
+                    {
+                        let request = FileRequest::save(
+                            &strings::tr(&ctx, &txt::THEME_EDITOR_SAVE_FILE),
+                            &format!("{name}.tokens.json"),
+                        )
+                        .filter("Token files", &["json"]);
+                        if let Some(p) = editor.choose(app, request) {
+                            lock(&editor.state).choice = Some(Choice::Save(p));
+                        }
+                    }
                 }
                 if ui
                     .button(strings::tr(&ctx, &txt::THEME_EDITOR_EXPORT))

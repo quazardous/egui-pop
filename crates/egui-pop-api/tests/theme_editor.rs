@@ -308,3 +308,134 @@ fn the_generator_shows_for_a_palette_token() {
             .is_some()
     );
 }
+
+#[test]
+fn in_preview_only_the_draft_is_drawn_in_its_pane_until_applied() {
+    use std::sync::{Arc, Mutex};
+    let mut h = harness(ThemeSpec::new("pop-dark"));
+    h.run();
+    let handle = h.state().handle().clone();
+    let editor = handle.service(&THEME_EDITOR).unwrap();
+    // The pane's content records the accent it is drawn with.
+    let seen: Arc<Mutex<Option<egui::Color32>>> = Arc::default();
+    let into = seen.clone();
+    editor.set_sampler(Some(Arc::new(move |ui: &mut egui::Ui, _: &_| {
+        *into.lock().unwrap() = Some(Tokens::of(ui.ctx()).accent.default);
+        ui.label("sampled");
+    })));
+    h.get_by_label("Preview only").click();
+    h.run();
+    assert!(editor.preview_only());
+    let installed = Tokens::of(&h.ctx).accent.default;
+    run(
+        &mut h,
+        &CMD_THEME_SET,
+        json!({ "path": "accent.default", "value": "#2060c0" }),
+    );
+    h.run();
+    h.run();
+    let draft = color32(Color::from_hex("#2060c0").unwrap());
+    // The pane draws the draft; the window keeps the installed theme.
+    assert_eq!(*seen.lock().unwrap(), Some(draft));
+    assert_eq!(Tokens::of(&h.ctx).accent.default, installed);
+    assert!(handle.theme().spec().overrides.is_empty());
+    assert!(h.query_by_label("sampled").is_some());
+    // Applied: installed for the whole window.
+    h.get_by_label("Apply").click();
+    h.run();
+    h.run();
+    assert_eq!(Tokens::of(&h.ctx).accent.default, draft);
+    assert!(!editor.pending(&handle));
+    // Discarded: back to what is installed.
+    run(
+        &mut h,
+        &CMD_THEME_SET,
+        json!({ "path": "accent.default", "value": "#a02020" }),
+    );
+    h.run();
+    assert!(editor.pending(&handle));
+    h.get_by_label("Discard").click();
+    h.run();
+    assert!(!editor.pending(&handle));
+    assert_eq!(Tokens::of(&h.ctx).accent.default, draft);
+}
+
+#[test]
+fn a_hex_field_beside_the_picker_sets_a_colour() {
+    let mut h = harness(ThemeSpec::new("pop-dark"));
+    h.run();
+    let handle = h.state().handle().clone();
+    handle
+        .service(&THEME_EDITOR)
+        .unwrap()
+        .select("accent.default");
+    h.run();
+    h.get_by_label("Hex of accent.default").click();
+    h.run();
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
+    h.run();
+    h.get_by_label("Hex of accent.default").type_text("#123456");
+    h.run();
+    h.key_press(egui::Key::Enter);
+    h.run();
+    h.run();
+    assert_eq!(
+        handle.theme().spec().overrides.get("accent.default"),
+        Some(&json!("#123456"))
+    );
+}
+
+#[test]
+fn files_are_opened_and_saved_through_the_host_s_dialog() {
+    use egui_pop_api::host;
+    use std::sync::{Arc, Mutex};
+    let dir = std::env::temp_dir().join(format!("egui-pop-theme-editor-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("mine.tokens.json");
+    let mut h = harness(ThemeSpec::new("pop-dark"));
+    h.run();
+    let handle = h.state().handle().clone();
+    let editor = handle.service(&THEME_EDITOR).unwrap();
+    let asked: Arc<Mutex<Vec<String>>> = Arc::default();
+    let (log, answer) = (asked.clone(), path.clone());
+    editor.set_file_dialog(Some(Arc::new(move |_: &_, request| {
+        log.lock()
+            .unwrap()
+            .push(request.to_json()["kind"].to_string());
+        let (pending, resolver) = host::pending();
+        resolver.resolve(Ok(json!({ "paths": [answer.display().to_string()] })));
+        pending
+    })));
+    run(
+        &mut h,
+        &CMD_THEME_SET,
+        json!({ "path": "accent.default", "value": "#2060c0" }),
+    );
+    h.run();
+    h.get_by_label("Export and import").scroll_to_me();
+    h.run();
+    h.get_by_label("Export and import").click();
+    h.run();
+    h.get_by_label("Save as a file").scroll_to_me();
+    h.run();
+    h.get_by_label("Save as a file").click();
+    h.run();
+    h.run();
+    let text = std::fs::read_to_string(&path).unwrap();
+    assert!(text.contains("#2060c0"), "{text}");
+    // Back to the base, then the file opened again.
+    run(&mut h, &CMD_THEME_START, json!({ "base": "pop-dark" }));
+    h.run();
+    assert!(handle.theme().spec().overrides.is_empty());
+    h.get_by_label("Open a file").scroll_to_me();
+    h.run();
+    h.get_by_label("Open a file").click();
+    h.run();
+    h.run();
+    assert_eq!(
+        handle.theme().spec().overrides.get("accent.default"),
+        Some(&json!("#2060c0"))
+    );
+    assert_eq!(asked.lock().unwrap().len(), 2);
+    let _ = std::fs::remove_dir_all(&dir);
+}

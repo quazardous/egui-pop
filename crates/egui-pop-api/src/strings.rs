@@ -469,6 +469,57 @@ pub const THEME_EDITOR_GENERATE_VARIANT: StrKey = StrKey::new(
     "egui-pop-theme-editor-generate-variant",
     "Written in the variant shown only; its light or dark counterpart keeps its own scale.",
 );
+pub const THEME_EDITOR_PREVIEW_ONLY: StrKey =
+    StrKey::new("egui-pop-theme-editor-preview-only", "Preview only");
+pub const THEME_EDITOR_PREVIEW_ONLY_HINT: StrKey = StrKey::new(
+    "egui-pop-theme-editor-preview-only-hint",
+    "Changes stay in the preview pane until applied; the rest of the window keeps the theme installed.",
+);
+pub const THEME_EDITOR_APPLY: StrKey = StrKey::new("egui-pop-theme-editor-apply", "Apply");
+pub const THEME_EDITOR_DISCARD: StrKey = StrKey::new("egui-pop-theme-editor-discard", "Discard");
+pub const THEME_EDITOR_PREVIEW: StrKey = StrKey::new("egui-pop-theme-editor-preview", "Preview");
+pub const THEME_EDITOR_NOT_APPLIED: StrKey = StrKey::new(
+    "egui-pop-theme-editor-not-applied",
+    "Not applied yet: only this pane shows the draft.",
+);
+pub const THEME_EDITOR_HEX_OF: StrKey =
+    StrKey::new("egui-pop-theme-editor-hex-of", "Hex of { $token }");
+pub const THEME_EDITOR_OPEN_FILE: StrKey =
+    StrKey::new("egui-pop-theme-editor-open-file", "Open a file");
+pub const THEME_EDITOR_SAVE_FILE: StrKey =
+    StrKey::new("egui-pop-theme-editor-save-file", "Save as a file");
+pub const THEME_EDITOR_SAVED: StrKey =
+    StrKey::new("egui-pop-theme-editor-saved", "Saved to { $path }.");
+pub const THEME_EDITOR_SAMPLE_HEADING: StrKey =
+    StrKey::new("egui-pop-theme-editor-sample-heading", "A heading");
+pub const THEME_EDITOR_SAMPLE_TEXT: StrKey = StrKey::new(
+    "egui-pop-theme-editor-sample-text",
+    "Body text, as most of an interface reads.",
+);
+pub const THEME_EDITOR_SAMPLE_MUTED: StrKey = StrKey::new(
+    "egui-pop-theme-editor-sample-muted",
+    "Muted text, for hints and details.",
+);
+pub const THEME_EDITOR_SAMPLE_BUTTON: StrKey =
+    StrKey::new("egui-pop-theme-editor-sample-button", "A button");
+pub const THEME_EDITOR_SAMPLE_PRIMARY: StrKey =
+    StrKey::new("egui-pop-theme-editor-sample-primary", "Primary");
+pub const THEME_EDITOR_SAMPLE_DANGER: StrKey =
+    StrKey::new("egui-pop-theme-editor-sample-danger", "Delete");
+pub const THEME_EDITOR_SAMPLE_DISABLED: StrKey =
+    StrKey::new("egui-pop-theme-editor-sample-disabled", "Disabled");
+pub const THEME_EDITOR_SAMPLE_CHECKBOX: StrKey =
+    StrKey::new("egui-pop-theme-editor-sample-checkbox", "A checkbox");
+pub const THEME_EDITOR_SAMPLE_OPTION_A: StrKey =
+    StrKey::new("egui-pop-theme-editor-sample-option-a", "One option");
+pub const THEME_EDITOR_SAMPLE_OPTION_B: StrKey =
+    StrKey::new("egui-pop-theme-editor-sample-option-b", "Another");
+pub const THEME_EDITOR_SAMPLE_SLIDER: StrKey =
+    StrKey::new("egui-pop-theme-editor-sample-slider", "A slider");
+pub const THEME_EDITOR_SAMPLE_FIELD: StrKey =
+    StrKey::new("egui-pop-theme-editor-sample-field", "A field");
+pub const THEME_EDITOR_SAMPLE_SELECTED: StrKey =
+    StrKey::new("egui-pop-theme-editor-sample-selected", "A selected row");
 pub const THEME_EDITOR_FILE: StrKey =
     StrKey::new("egui-pop-theme-editor-file", "Export and import");
 pub const THEME_EDITOR_NAME: StrKey = StrKey::new("egui-pop-theme-editor-name", "Theme name");
@@ -725,6 +776,29 @@ pub const ALL: &[StrKey] = &[
     THEME_EDITOR_GENERATED,
     THEME_EDITOR_SEED_CLAMPED,
     THEME_EDITOR_GENERATE_VARIANT,
+    THEME_EDITOR_PREVIEW_ONLY,
+    THEME_EDITOR_PREVIEW_ONLY_HINT,
+    THEME_EDITOR_APPLY,
+    THEME_EDITOR_DISCARD,
+    THEME_EDITOR_PREVIEW,
+    THEME_EDITOR_NOT_APPLIED,
+    THEME_EDITOR_HEX_OF,
+    THEME_EDITOR_OPEN_FILE,
+    THEME_EDITOR_SAVE_FILE,
+    THEME_EDITOR_SAVED,
+    THEME_EDITOR_SAMPLE_HEADING,
+    THEME_EDITOR_SAMPLE_TEXT,
+    THEME_EDITOR_SAMPLE_MUTED,
+    THEME_EDITOR_SAMPLE_BUTTON,
+    THEME_EDITOR_SAMPLE_PRIMARY,
+    THEME_EDITOR_SAMPLE_DANGER,
+    THEME_EDITOR_SAMPLE_DISABLED,
+    THEME_EDITOR_SAMPLE_CHECKBOX,
+    THEME_EDITOR_SAMPLE_OPTION_A,
+    THEME_EDITOR_SAMPLE_OPTION_B,
+    THEME_EDITOR_SAMPLE_SLIDER,
+    THEME_EDITOR_SAMPLE_FIELD,
+    THEME_EDITOR_SAMPLE_SELECTED,
     THEME_EDITOR_IMPORTED,
     THEME_EDITOR_SKIPPED,
     THEME_EDITOR_WARNINGS,

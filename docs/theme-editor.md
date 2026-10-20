@@ -24,7 +24,16 @@ let app = App::builder()
 fn appearance(ui: &mut egui_pop::egui::Ui, app: &egui_pop::api::AppHandle) {
     theme_editor::show(ui, app);
 }
-# let _ = (app, appearance);
+
+// Optional: the host's file chooser, here the files plugin's.
+let handle = app.handle();
+let editor = handle.service(&theme_editor::THEME_EDITOR).unwrap();
+editor.set_file_dialog(Some(std::sync::Arc::new(|app: &egui_pop::api::AppHandle, request| {
+    app.service(&egui_pop::api::files::FILES)
+        .expect("the files plugin")
+        .choose(app, request)
+})));
+# let _ = appearance;
 ```
 
 The editor works on the application's theme (the theme service): each
@@ -38,6 +47,18 @@ from the other one; the first change makes the variant edited the
 theme, alone (its overrides are not its counterpart's), so it stays
 shown whatever the light or dark preference.
 
+**Live, or in a preview only.** By default each change is installed at
+once, as above. With "Preview only" ticked
+(`ThemeEditor::set_preview_only`), changes stay in the draft: the
+preview pane draws it (a `theme::ScopedTheme`, so `Tokens::of` and
+`Kit::of` give the draft's inside it), while the editor and the rest
+of the window keep the theme installed, so a draft with unreadable text
+or a broken control cannot make the editor itself hard to use. "Apply"
+(`ThemeEditor::apply`) installs the draft app-wide; "Discard"
+(`ThemeEditor::discard`) goes back to the installed theme; going back
+to live editing applies it. The draft's fonts are not previewed: fonts
+are global, see the Fonts tab.
+
 The model is `egui_pop_tokens::ThemeDraft`, with no egui in it: a base
 theme, the tokens changed over it (raw DTCG values, aliases kept as
 aliases) and their history. Applications that want their own view use
@@ -46,6 +67,13 @@ it directly, or the service (`THEME_EDITOR`: `set`, `undo`, `redo`,
 
 ## What it shows
 
+- **Preview**: a pane drawing the draft in its own theme: text by
+  role, the status colours, buttons in their tones and states, a
+  checkbox, options, a slider, a field, a selected row and a progress
+  bar (`theme_editor::sample`). An application shows its own widgets
+  instead with `ThemeEditor::set_sampler` (the gallery passes its
+  component sampler). "Preview only", "Apply" and "Discard" sit above
+  it.
 - **Start from**: any built-in theme; the draft starts again from it.
 - **Undo** and **Redo**, naming the token they would change.
 - **The tokens, by role**: surfaces, text, accent and focus, states,
@@ -54,7 +82,8 @@ it directly, or the service (`THEME_EDITOR`: `set`, `undo`, `redo`,
   narrows them; changed tokens are in bold, marked "changed".
 - **The token picked**: its description and type, whether it is changed
   here or as in the base theme, what it aliases; its value with the
-  widget of its type (egui's colour picker with alpha, a number field
+  widget of its type (egui's colour picker with alpha and, beside it,
+  a hex field, "Hex of `<token>`", a number field
   for dimensions, numbers and durations) and a text field taking a
   value or an alias (`{gray.3}`, checked: same type, no loop); reset to
   the base theme's value.
@@ -76,7 +105,12 @@ it directly, or the service (`THEME_EDITOR`: `set`, `undo`, `redo`,
   have no AAA) and what the theme needs: AAA text for a high-contrast
   theme (7:1), AA otherwise.
 - **Export and import**: the draft as a `.tokens.json` file, or a file
-  pasted and loaded. Tokens the base theme does not have, or whose value
+  pasted and loaded; "Open a file" and "Save as a file" through a file
+  chooser. The chooser is the host's (`ThemeEditor::set_file_dialog`, a
+  function starting a choice and answering later, as
+  `files::Files::choose` does), or the `files` plugin's when it is
+  connected, so the editor brings no file-dialog dependency; without
+  either, files are pasted as text only. Tokens the base theme does not have, or whose value
   is not of their type, are left out and listed, with what else the
   file loaded with (a token renamed, a file newer than this egui-pop):
   the file loads over its base as any theme file does
@@ -149,8 +183,6 @@ colour or an alias). The colour button is a colour well named "Adjust
 | egui_thematic | MIT | A theme editor over egui's `Visuals`, with presets and JSON save | **Own**: it edits egui's style, not DTCG tokens in tiers with aliases and contrast pairs |
 | egui-themes, zeus-theme | MIT | Ready-made egui styles | Not relevant: egui-pop's themes are token files |
 
-Not done yet: a preview strip of
-every kind of component in the editor itself (the gallery page puts a
-few widgets beside it), renaming a theme and adding it to the themes the
+Not done yet: renaming a theme and adding it to the themes the
 application offers (the editor works as overrides over a known base),
 reading a file from disk (the application passes its text).
