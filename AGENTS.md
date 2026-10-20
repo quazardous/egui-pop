@@ -25,6 +25,7 @@
 | `template/` | The `cargo generate` application template, identical to `crates/egui-pop/examples/minimal.rs` (a test checks it). |
 | `templates/extension` | The extension template: a third-party crate (a plugin, a component with tokens and strings, a story, a step, an agent command, kittest tests), a workspace member so the gate keeps it building; `cargo generate` writes its `Cargo.toml.liquid`. |
 | `tools/wbox/` | Running the gallery offscreen in a nested compositor. |
+| `tools/web-smoke.mjs` | The web smoke test: loads a Trunk build of the gallery in headless Chrome, fails on a panic or without the start line (CI's wasm job, the Pages workflow). |
 
 Principles: [CREDO.md](CREDO.md). Rules for contributions:
 [CONTRIBUTING.md](CONTRIBUTING.md).

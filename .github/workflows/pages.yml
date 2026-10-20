@@ -1,9 +1,10 @@
 name: Gallery on the web
 
-# Builds the gallery for the web with Trunk and deploys it to GitHub
-# Pages. Pages must be enabled for the repository with "GitHub Actions"
-# as the source; until the repository variable PAGES is set to `on`, it
-# only runs by hand.
+# Builds the gallery for the web with Trunk, loads it in headless Chrome
+# (tools/web-smoke.mjs), and deploys it to GitHub Pages. Pages must be
+# enabled for the repository with "GitHub Actions" as the source; until
+# the repository variable PAGES is set to `on`, it only runs by hand. Run
+# by hand on another branch, it builds and tests without deploying.
 on:
   push:
     branches: [main]
@@ -11,11 +12,9 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: pages
+  group: pages-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -35,14 +34,32 @@ jobs:
       - name: Build
         working-directory: crates/egui-pop-gallery
         run: trunk build --release --public-url /${{ github.event.repository.name }}/
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Smoke test in headless Chrome
+        run: >-
+          node tools/web-smoke.mjs crates/egui-pop-gallery/dist
+          --base /${{ github.event.repository.name }}/
+          --screenshot web-smoke.png
+      - name: Upload the smoke test's screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-smoke
+          path: web-smoke.png
+          if-no-files-found: ignore
       - uses: actions/upload-pages-artifact@v3
         with:
           path: crates/egui-pop-gallery/dist
 
   deploy:
     needs: build
-    if: github.event_name == 'workflow_dispatch' || vars.PAGES == 'on'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || vars.PAGES == 'on')
     runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
