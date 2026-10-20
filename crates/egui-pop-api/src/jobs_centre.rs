@@ -27,6 +27,7 @@ use egui_pop_core::kit::{Kit, State};
 use egui_pop_core::progress::{ProgressBar, Tone};
 use egui_pop_core::strings;
 use egui_pop_core::theme::Tokens;
+use egui_pop_core::ui::UiPop;
 use egui_pop_model::ids::PanelId;
 use egui_pop_model::jobs::{Job, JobState, Request};
 
@@ -309,7 +310,7 @@ pub fn job_row(ui: &mut Ui, app: &AppHandle, jobs: &JobsService, job: &Job, dept
             }
             ui.add(bar);
             if !detail.is_empty() {
-                ui.label(RichText::new(&detail).small().color(t.text.muted));
+                ui.meta(&detail);
             }
             if let Some(e) = &job.error
                 && !e.is_empty()
@@ -370,7 +371,7 @@ pub fn show(ui: &mut Ui, app: &AppHandle) {
     if !ended.is_empty() {
         ui.add_space(t.space.s);
         ui.horizontal(|ui| {
-            ui.label(RichText::new(strings::tr(&ctx, &txt::JOBS_HISTORY)).strong());
+            ui.section_title(strings::tr(&ctx, &txt::JOBS_HISTORY));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui
                     .small_button(strings::tr(&ctx, &txt::JOBS_CLEAR))
@@ -400,7 +401,7 @@ pub(crate) fn popover(ui: &mut Ui, app: &AppHandle, response: &egui::Response) {
         .show(|ui| {
             ui.set_width(t.size.dialog_width.min(420.0));
             ui.horizontal(|ui| {
-                ui.label(RichText::new(strings::tr(&ctx, &txt::JOBS_TITLE)).strong());
+                ui.section_title(strings::tr(&ctx, &txt::JOBS_TITLE));
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if app.panels().iter().any(|p| p.id == PANEL_JOBS)
                         && ui

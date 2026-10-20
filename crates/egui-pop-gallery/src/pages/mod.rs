@@ -3,6 +3,7 @@
 //! reused by the tests as fixtures.
 
 use egui::{Color32, CornerRadius, Sense, Stroke, Ui, vec2};
+use egui_pop::core::ui::{Space, UiPop};
 use egui_pop::theme::Tokens;
 
 pub mod arrangements;
@@ -33,6 +34,7 @@ pub mod placeholders;
 pub mod platform;
 pub mod preview;
 pub mod progress;
+pub mod roles;
 pub mod scale;
 pub mod settings;
 pub mod sliders;
@@ -52,10 +54,9 @@ pub mod zones;
 
 /// A section title with the theme's section spacing above it.
 pub(crate) fn section(ui: &mut Ui, title: &str) {
-    let t = Tokens::of(ui.ctx());
-    ui.add_space(t.space.l);
-    ui.strong(title);
-    ui.add_space(t.space.xs);
+    ui.space_role(Space::Section);
+    ui.section_title(title);
+    ui.add_space(Tokens::of(ui.ctx()).space.xs);
 }
 
 /// A filled swatch with an outline, `size` points wide.

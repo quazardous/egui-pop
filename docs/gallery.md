@@ -20,7 +20,7 @@ directory; without it they are simulated and nothing reaches the
 desktop).
 
 Pages: `overview` (the theme overview), `tokens`, `builtins` (egui's
-built-ins, and egui-pop's kit-drawn checkbox, radio, rows and chips), `theme-editor` (the theme editor), `icons`, `indicators` (dots, badges, pips, flags, swatches), `motion` (the motion clock), `values`, `sliders`, `inputs` (decorated inputs, field states and Tab order),
+built-ins, and egui-pop's kit-drawn checkbox, radio, rows and chips), `roles` (layout by role: text roles, spacing by intent, cards and buttons by tone), `theme-editor` (the theme editor), `icons`, `indicators` (dots, badges, pips, flags, swatches), `motion` (the motion clock), `values`, `sliders`, `inputs` (decorated inputs, field states and Tab order),
 `menus`, `dialogs`, `files` (the file chooser), `toasts`, `tips` (tips of the day and
 hints), `progress`,
 `placeholders` (skeletons and empty states), `viewport` (the image
@@ -160,6 +160,8 @@ Egui's built-ins in egui-pop's style, values, sliders, inputs (decorators, field
   <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/sliders-kit-flat.png"><img src="../crates/egui-pop-gallery/tests/snapshots/sliders-kit-flat.png" width="200" alt="sliders-kit-flat"></a><br>sliders-kit-flat</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/builtins-kit-toggles.png"><img src="../crates/egui-pop-gallery/tests/snapshots/builtins-kit-toggles.png" width="200" alt="builtins-kit-toggles"></a><br>builtins-kit-toggles</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/roles-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/roles-pop-dark.png" width="200" alt="roles-pop-dark"></a><br>roles-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/roles-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/roles-pop-light.png" width="200" alt="roles-pop-light"></a><br>roles-pop-light</td>
   </tr>
 </table>
 

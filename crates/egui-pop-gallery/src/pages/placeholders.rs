@@ -5,6 +5,7 @@
 use egui::Ui;
 use egui_pop::core::icon::Icon;
 use egui_pop::core::placeholder::{EmptyState, Skeleton};
+use egui_pop::core::ui::{Space, UiPop};
 use egui_pop::core::widgets;
 
 use super::section;
@@ -28,7 +29,7 @@ pub fn show(ui: &mut Ui, state: &mut State) {
         ui.label("Taken on 12 October, 18:42, at f/2.8 and 1/250 s, ISO 400.");
     } else {
         ui.add(Skeleton::rows(3).width(360.0).label("Loading the queue"));
-        ui.add_space(8.0);
+        ui.space_role(Space::Group);
         ui.add(Skeleton::text(3).width(360.0).label("Loading the metadata"));
     }
     section(ui, "Empty states");
@@ -49,7 +50,7 @@ pub fn show(ui: &mut Ui, state: &mut State) {
             state.retries += 1;
         }
     });
-    ui.weak(format!(
+    ui.muted(format!(
         "Actions run: import {} times, retry {} times.",
         state.imports, state.retries
     ));

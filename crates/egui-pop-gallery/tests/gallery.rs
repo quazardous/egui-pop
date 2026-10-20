@@ -2065,6 +2065,26 @@ fn a_command_the_host_answers_later_keeps_its_button_busy() {
     assert!(!h.get_by_label("Export").accesskit_node().is_busy());
 }
 
+fn layout_by_role(theme: &str) {
+    let mut h = harness(options(theme, Density::Comfortable, "roles"));
+    h.run();
+    h.snapshot(format!("roles-{theme}"));
+    assert!(h.query_by_label("Nothing clicked yet.").is_some());
+    h.get_by_label("danger").click();
+    h.run();
+    assert!(h.query_by_label("Last clicked: danger").is_some());
+}
+
+#[test]
+fn the_layout_by_role_page_shows_roles_spacing_and_tones() {
+    layout_by_role("pop-dark");
+}
+
+#[test]
+fn the_layout_by_role_page_in_the_light_theme() {
+    layout_by_role("pop-light");
+}
+
 #[test]
 fn skeletons_are_busy_until_the_content_loads_and_empty_states_act() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "placeholders"));

@@ -52,6 +52,10 @@ publishes.
   ..)` (the kit's card) and `button_tone(Tone, ..)` (egui's button in a
   tone of the kit's `button`). "Laying out by role" in the getting
   started guide. Part of #35.
+- The gallery's `roles` page (Layout by role): text roles, spacing by
+  intent, cards and buttons in every tone; the gallery's section titles,
+  the jobs centre's titles and details and a placeholder gap use the
+  helpers. Part of #35.
 - One writer per value (egui-pop-model): a path's descriptor says who
   may write it besides its owner (`Writers`: `Owner`, the default,
   `Also(...)`, `Any`; `Descriptor::writers`, `Descriptor::any_writer`).

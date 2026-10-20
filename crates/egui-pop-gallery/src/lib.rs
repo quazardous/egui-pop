@@ -30,7 +30,7 @@ use pages::story::PagePlugin;
 pub const TITLE: &str = "egui-pop gallery";
 
 /// The pages, as named on the command line.
-pub const PAGES: [&str; 44] = [
+pub const PAGES: [&str; 45] = [
     "overview",
     "tokens",
     "builtins",
@@ -75,6 +75,7 @@ pub const PAGES: [&str; 44] = [
     "settings",
     "i18n",
     "debug",
+    "roles",
 ];
 
 /// The gallery's plugins.
@@ -124,6 +125,16 @@ pub fn builder(options: &Options) -> AppBuilder {
             weight: 20,
             show: pages::builtins::show,
             playground: Some(pages::builtins::playground),
+        })
+        .plugin(PagePlugin {
+            plugin: PluginId::from_static("gallery.roles"),
+            story: StoryId::from_static("roles"),
+            title: "Layout by role",
+            description: "The UiPop helpers: text roles, spacing by intent, cards and buttons by tone, each read from the theme.",
+            group: "Layout",
+            weight: 200,
+            show: pages::roles::show,
+            playground: None,
         })
         .plugin(PagePlugin {
             plugin: PluginId::from_static("gallery.icons"),
