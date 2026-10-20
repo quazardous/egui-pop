@@ -5,8 +5,12 @@ How egui-pop is tested, and what to know when a test misbehaves.
 ## Goal: time that does not grow with the tests
 
 The suite's wall time must not grow linearly with the number of tests.
-The first lever is parallel runs: every test binary runs side by side,
-every test in a process of its own (cargo-nextest, below).
+Two levers:
+
+- **Parallel runs**: every test binary runs side by side, every test in a
+  process of its own (cargo-nextest, below);
+- **Selective runs**: a change runs the tests it can affect, not the
+  whole suite ([Selection](#selection)); `main` always runs everything.
 
 The integration tests are split into many small binaries
 (`crates/*/tests/*.rs`, one per feature) for that reason: a binary is a
@@ -45,6 +49,49 @@ GitHub runner has four cores, as many as nextest runs tests at once; no
 test group caps the rendering tests yet. If a machine with many cores
 runs out of memory, cap them with `--test-threads`, or add a test group
 to the configuration.
+
+## Selection
+
+`cargo xtask affected` reads the files a change touches (against the
+merge base with `origin/main`, the working tree and untracked files
+included) and the workspace's dependency graph (`cargo metadata
+--no-deps`, nothing is built), and says which tests and which CI jobs
+the change needs, and why.
+
+```sh
+cargo xtask affected                      # the report: jobs, crates, skipped crates
+cargo xtask affected --plan               # the cargo commands it would run
+cargo xtask affected --run                # run them (what CI's test job runs)
+cargo xtask affected --base upstream/main # another base
+cargo xtask affected --files docs/kit.md  # a change given by hand
+cargo xtask affected --full --run         # everything, as on main
+```
+
+The rules, per changed file:
+
+| Changed | Tests that run |
+|---|---|
+| a crate's sources, manifest, build script, data (`crates/<crate>/...`) | every test of the crate, and of every workspace crate depending on it (dev-dependencies included), doctests too |
+| a test binary's file (`crates/<crate>/tests/<binary>.rs`) | that binary alone, unless another test file includes it as a module |
+| a snapshot (`crates/<crate>/tests/snapshots/...`) | the crate's tests, not its dependents |
+| a crate's `README.md` | as its sources, and `egui-pop::readme_links` |
+| documentation (`docs/**`, `*.md` at the root) | the guides' doctests (`consumer-smoke`), `egui-pop::readme_links`, `egui-pop-gallery::gallery_doc` and `hosts_doc` |
+| `template/**` | `egui-pop::minimal` |
+| `examples/**` (example kits) | `egui-pop-tokens::kits`, `egui-pop-gallery::gallery` |
+| the workspace (`Cargo.toml`, `Cargo.lock`, `rust-toolchain*`, any root file but Markdown), `.github/`, `.config/`, `.cargo/`, `xtask/`, the test kit (`egui-pop-test`, `egui-pop-test-macros`), the token files (`crates/egui-pop-tokens/themes/`) | everything |
+| any path no rule names | everything |
+
+**When in doubt, run.** A missing rule costs time, never safety. Every
+selection adds the [critical tests](#critical-tests) it does not already
+hold (a docs-only change: those that need no GPU). Selection can still
+miss a dependency (a file read at run time from another crate's folder),
+so `main` runs everything, and a pull request labelled `ci:full` too.
+
+What the selection runs, with `--run`: one `cargo nextest run` over the
+whole crates (`-p` each, so only their tests are built), `cargo test
+--doc` for their doctests, and one `cargo nextest run` per crate with
+single binaries or critical tests (`--test` each, filtered with `-E`).
+Arguments after `--` go to every nextest run (`-- --profile ci`).
 
 ## Layers
 
