@@ -25,6 +25,7 @@
 | `docs/tokens.md` | The token tiers and how to add a theme. |
 | `template/` | The `cargo generate` application template, identical to `crates/egui-pop/examples/minimal.rs` (a test checks it). |
 | `templates/extension` | The extension template: a third-party crate (a plugin, a component with tokens and strings, a story, a step, an agent command, kittest tests), a workspace member so the gate keeps it building; `cargo generate` writes its `Cargo.toml.liquid`. |
+| `book.toml`, `docs/SUMMARY.md`, `tools/book/` | The docs site: `docs/` as an mdBook under `/docs/` on GitHub Pages; `tools/book/links.py` turns links out of `docs/` into GitHub links and fails on a broken one. |
 | `tools/wbox/` | Running the gallery offscreen in a nested compositor. |
 | `tools/web-smoke.mjs` | The web smoke test: loads a Trunk build of the gallery in headless Chrome, fails on a panic or without the start line (CI's wasm job, the Pages workflow). |
 

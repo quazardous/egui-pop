@@ -1,8 +1,10 @@
-name: Gallery on the web
+name: Gallery and docs on the web
 
-# Builds the gallery for the web with Trunk, loads it in headless Chrome
-# (tools/web-smoke.mjs), and deploys it to GitHub Pages. Pages must be
-# enabled for the repository with "GitHub Actions" as the source; until
+# Builds the docs as an mdBook (book.toml) and checks their links
+# (tools/book/links.py), builds the gallery for the web with Trunk, loads
+# it in headless Chrome (tools/web-smoke.mjs), and deploys both to GitHub
+# Pages: the gallery at the site's root, the docs under /docs/. Pages must
+# be enabled for the repository with "GitHub Actions" as the source; until
 # the repository variable PAGES is set to `on`, it only runs by hand. Run
 # by hand on another branch, it builds and tests without deploying.
 on:
@@ -30,8 +32,12 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@v2
         with:
-          tool: trunk
-      - name: Build
+          tool: trunk,mdbook@0.5.4
+      - name: Build the docs and check their links
+        run: |
+          mdbook build
+          python3 tools/book/links.py target/book
+      - name: Build the gallery
         working-directory: crates/egui-pop-gallery
         run: trunk build --release --public-url /${{ github.event.repository.name }}/
       - uses: actions/setup-node@v4
@@ -49,6 +55,8 @@ jobs:
           name: web-smoke
           path: web-smoke.png
           if-no-files-found: ignore
+      - name: Add the docs to the site
+        run: cp -r target/book crates/egui-pop-gallery/dist/docs
       - uses: actions/upload-pages-artifact@v3
         with:
           path: crates/egui-pop-gallery/dist

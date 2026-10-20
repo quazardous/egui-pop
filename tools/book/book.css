@@ -1,0 +1,20 @@
+/* The docs site's additions to mdBook's theme (book.toml). */
+
+/* The logo before the book's title. This file is copied to
+   tools/book/ in the output, beside which docs/logo/ lands as logo/. */
+.menu-title::before {
+    content: "";
+    display: inline-block;
+    width: 1.3em;
+    height: 1.3em;
+    margin-right: 0.35em;
+    vertical-align: -0.25em;
+    background: url("../../logo/egui-pop.svg") center / contain no-repeat;
+}
+
+/* The link to the gallery, added by book.js. */
+.gallery-link {
+    font-weight: 600;
+    margin-inline-end: 0.6em;
+    text-decoration: none;
+}

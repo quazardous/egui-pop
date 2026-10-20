@@ -20,6 +20,11 @@ publishes.
 
 ### Added
 
+- The docs online: the guides in `docs/` as an mdBook with search, at
+  <https://quazardous.github.io/egui-pop/docs/> beside the gallery,
+  built and deployed by the Pages workflow (`book.toml`,
+  `docs/SUMMARY.md`). Links leading out of `docs/` point to GitHub, and
+  a link to nothing fails the build (`tools/book/links.py`). Part of #30.
 - Critical tests (egui-pop-test, the new egui-pop-test-macros):
   `#[egui_pop_test::critical]` marks a test that guards a rule any change
   can break, so a selective run still runs it; `#[critical(gpu)]` marks

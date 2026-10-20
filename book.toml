@@ -1,0 +1,43 @@
+# The docs site: docs/ as an mdBook, published under /docs/ next to the
+# gallery on GitHub Pages (.github/workflows/pages.yml).
+#
+#   mdbook build                         # into target/book
+#   python3 tools/book/links.py target/book
+#
+# The table of contents is docs/SUMMARY.md, which follows docs/README.md's
+# index: a page added there is added here too. The pages are rendered in
+# place, so their relative links work both on GitHub and on the site; a
+# link out of docs/ (a crate, the CHANGELOG) or to a page left out of the
+# book is turned into a GitHub link by tools/book/links.py, which also
+# fails on a link to nothing.
+
+[book]
+title = "egui-pop"
+description = "egui-pop: an application framework and component library for egui."
+authors = ["The egui-pop contributors"]
+language = "en"
+src = "docs"
+
+[build]
+build-dir = "target/book"
+create-missing = false
+# Without the index preprocessor, README.md pages stay README.html, the
+# name every link to them gets.
+use-default-preprocessors = false
+
+[rust]
+edition = "2024"
+
+[output.html]
+site-url = "/egui-pop/docs/"
+git-repository-url = "https://github.com/quazardous/egui-pop"
+edit-url-template = "https://github.com/quazardous/egui-pop/edit/main/{path}"
+theme = "tools/book/theme"
+additional-css = ["tools/book/book.css"]
+additional-js = ["tools/book/book.js"]
+
+[output.html.playground]
+runnable = false
+
+[output.html.search]
+enable = true
