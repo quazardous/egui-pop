@@ -667,8 +667,13 @@ components! {
     /// actions, hover cards).
     assist_card: "assist-card" => "card",
     /// A push button. egui's own widgets take their states from it:
-    /// rest, hover, active, and selected for an open menu or combo box.
+    /// rest, hover, active, and selected for an open menu or combo box;
+    /// by tone, `UiPop::button_tone` (`accent` a primary action, the
+    /// status tones a solid fill, `muted` no box at rest).
     button: "button" => "box",
+    /// A card grouping content in a panel or a page (`UiPop::card`); by
+    /// tone, an edge in the status colour, `muted` a sunken well.
+    card: "card" => "card",
     /// A checkbox's box, its mark the `check` or `indeterminate` glyph:
     /// `selected` while checked (`widgets::Checkbox`).
     checkbox: "checkbox" => "box",

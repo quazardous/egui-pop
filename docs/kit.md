@@ -355,19 +355,29 @@ compiled at install.
   field's outline and text follow the button's; what egui cannot draw
   (an indicator or a ring on a button, a field outline of its own) is
   listed in the kit's problems.
+  `button` has tones, for an egui button drawn in one
+  (`UiPop::button_tone`, which overrides egui's widget states in a
+  scope, so the button keeps its layout, icon and shortcut text):
+  `accent` a primary action on the accent fill, `info`, `success`,
+  `warning`, `danger` and `record` their status colour as fill with the
+  panel's colour as text (legible both ways, like a badge), `muted` no
+  box at rest. Components based on `button` inherit them.
 - **Menu items** (`menu-item`). egui lays each item out, takes its clicks
   and draws its label, its own frame transparent; the kit paints the box
   under it (`Component::paint_under`: a slot reserved before egui draws,
   filled once the rectangle and state are known), in the state egui's
   button draws with, `selected` while a submenu is open; the shortcut is
   the `muted` tone. `menus-kit-bar` restyles items with data only.
-- **Frames** (`dialog`, `backdrop`, `popover`, `fault-card`, `toast`,
+- **Frames** (`card`, `dialog`, `backdrop`, `popover`, `fault-card`, `toast`,
   `palette-window`, `tip-card`, `job-log`, `fullscreen-exit` (the
   strip at the top of a full screen window showing no title bar),
   `editor-frame`, `terminal-frame`, `find-bar`, `assist-card`), handler
   `card`; the `dialogs-kit-square` snapshot restyles a dialog with data
   only. Their borders are snapped to whole physical pixels like the
   kit's own painting (`Component::frame` takes the pixels per point).
+  `card` is the application's own card (`UiPop::card`): the raised
+  surface at rest, an edge in the status colour by tone, `muted` a
+  sunken well; its padding is `space.group`.
 - **The application's chrome** (`header-band`, `dialog-header`,
   `band-icon-button`, `find-bar-button`, `activity-bar-item`,
   `dock-preview`, `command-button`, `command-palette-row`). The band at

@@ -126,7 +126,8 @@ without it.
 3. **Component**: one component's tokens, each an alias of a system token
    (or, for a component based on another, of its base's token under the
    same term: [kit.md](kit.md#components-based-on-another)). The kit's
-   components are `component.state.term` ([kit.md](kit.md)): `button.*`,
+   components are `component.state.term` ([kit.md](kit.md)): `button.*`
+   (with tones), `card.*` (an application's card, by tone),
    the sliders' (`slider.*`, `slider-fill.*`...), `field.*` (input
    fields, their states as tones: read-only and the placeholder `muted`,
    modified `accent`, required `warning`, invalid `danger`, pending

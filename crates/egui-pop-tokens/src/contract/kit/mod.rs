@@ -11,6 +11,7 @@ mod assist_card;
 mod backdrop;
 mod band_icon_button;
 mod button;
+mod card;
 mod checkbox;
 mod combo_arrow;
 mod command_button;
@@ -94,6 +95,7 @@ pub(super) const GROUPS: &[&[Required]] = &[
     backdrop::CONTRACT,
     band_icon_button::CONTRACT,
     button::CONTRACT,
+    card::CONTRACT,
     checkbox::CONTRACT,
     combo_arrow::CONTRACT,
     command_button::CONTRACT,

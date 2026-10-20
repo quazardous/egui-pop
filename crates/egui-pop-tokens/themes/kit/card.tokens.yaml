@@ -1,0 +1,58 @@
+$description: "The `card` component of the default kit (docs/kit.md), layered into pop-dark."
+card:
+  $description: "A card grouping content in a panel or a page (a kit component; `UiPop::card`); by tone, what it is about: an edge in the status colour, `muted` a sunken well."
+  shape:
+    $type: "string"
+    $value: "card"
+    $description: "The handler that draws it: card (egui's frame) or another frame handler."
+  padding-x:
+    $type: "dimension"
+    $value: "{space.group}"
+  padding-y:
+    $type: "dimension"
+    $value: "{space.group}"
+  rest:
+    fill:
+      $type: "color"
+      $value: "{surface.raised}"
+    border-color:
+      $type: "color"
+      $value: "{border.default}"
+    border-width:
+      $type: "dimension"
+      $value: {value: 1, unit: "px"}
+    radius:
+      $type: "dimension"
+      $value: "{radius.widget}"
+  tone:
+    accent:
+      border-color:
+        $type: "color"
+        $value: "{accent.default}"
+    info:
+      border-color:
+        $type: "color"
+        $value: "{info}"
+    success:
+      border-color:
+        $type: "color"
+        $value: "{success}"
+    warning:
+      border-color:
+        $type: "color"
+        $value: "{warning}"
+    danger:
+      border-color:
+        $type: "color"
+        $value: "{danger}"
+    record:
+      border-color:
+        $type: "color"
+        $value: "{danger}"
+    muted:
+      fill:
+        $type: "color"
+        $value: "{surface.sunken}"
+      border-color:
+        $type: "color"
+        $value: "{transparent}"

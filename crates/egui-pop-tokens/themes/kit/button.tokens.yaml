@@ -44,3 +44,210 @@ button:
     fill:
       $type: "color"
       $value: "{surface.hover}"
+  tone:
+    accent:
+      $description: "A primary action: the accent fill."
+      fill:
+        $type: "color"
+        $value: "{accent.default}"
+      border-color:
+        $type: "color"
+        $value: "{accent.default}"
+      text:
+        $type: "color"
+        $value: "{text.on-accent}"
+      hover:
+        fill:
+          $type: "color"
+          $value: "{accent.hover}"
+        border-color:
+          $type: "color"
+          $value: "{accent.hover}"
+        text:
+          $type: "color"
+          $value: "{text.on-accent}"
+      active:
+        fill:
+          $type: "color"
+          $value: "{accent.default}"
+        border-color:
+          $type: "color"
+          $value: "{accent.default}"
+        text:
+          $type: "color"
+          $value: "{text.on-accent}"
+      selected:
+        fill:
+          $type: "color"
+          $value: "{accent.hover}"
+        border-color:
+          $type: "color"
+          $value: "{accent.hover}"
+        text:
+          $type: "color"
+          $value: "{text.on-accent}"
+    info:
+      fill:
+        $type: "color"
+        $value: "{info}"
+      border-color:
+        $type: "color"
+        $value: "{info}"
+      text:
+        $type: "color"
+        $value: "{surface.panel}"
+      hover:
+        fill:
+          $type: "color"
+          $value: "{info}"
+        text:
+          $type: "color"
+          $value: "{surface.panel}"
+      active:
+        fill:
+          $type: "color"
+          $value: "{info}"
+        text:
+          $type: "color"
+          $value: "{surface.panel}"
+      selected:
+        fill:
+          $type: "color"
+          $value: "{info}"
+        text:
+          $type: "color"
+          $value: "{surface.panel}"
+    success:
+      fill:
+        $type: "color"
+        $value: "{success}"
+      border-color:
+        $type: "color"
+        $value: "{success}"
+      text:
+        $type: "color"
+        $value: "{surface.panel}"
+      hover:
+        fill:
+          $type: "color"
+          $value: "{success}"
+        text:
+          $type: "color"
+          $value: "{surface.panel}"
+      active:
+        fill:
+          $type: "color"
+          $value: "{success}"
+        text:
+          $type: "color"
+          $value: "{surface.panel}"
+      selected:
+        fill:
+          $type: "color"
+          $value: "{success}"
+        text:
+          $type: "color"
+          $value: "{surface.panel}"
+    warning:
+      fill:
+        $type: "color"
+        $value: "{warning}"
+      border-color:
+        $type: "color"
+        $value: "{warning}"
+      text:
+        $type: "color"
+        $value: "{surface.panel}"
+      hover:
+        fill:
+          $type: "color"
+          $value: "{warning}"
+        text:
+          $type: "color"
+          $value: "{surface.panel}"
+      active:
+        fill:
+          $type: "color"
+          $value: "{warning}"
+        text:
+          $type: "color"
+          $value: "{surface.panel}"
+      selected:
+        fill:
+          $type: "color"
+          $value: "{warning}"
+        text:
+          $type: "color"
+          $value: "{surface.panel}"
+    danger:
+      $description: "A destructive action: the status colour as fill, the panel as text (legible both ways)."
+      fill:
+        $type: "color"
+        $value: "{danger}"
+      border-color:
+        $type: "color"
+        $value: "{danger}"
+      text:
+        $type: "color"
+        $value: "{surface.panel}"
+      hover:
+        fill:
+          $type: "color"
+          $value: "{danger}"
+        text:
+          $type: "color"
+          $value: "{surface.panel}"
+      active:
+        fill:
+          $type: "color"
+          $value: "{danger}"
+        text:
+          $type: "color"
+          $value: "{surface.panel}"
+      selected:
+        fill:
+          $type: "color"
+          $value: "{danger}"
+        text:
+          $type: "color"
+          $value: "{surface.panel}"
+    record:
+      $description: "Recording: the danger colour by default; a kit may tell it from an error."
+      fill:
+        $type: "color"
+        $value: "{danger}"
+      border-color:
+        $type: "color"
+        $value: "{danger}"
+      text:
+        $type: "color"
+        $value: "{surface.panel}"
+      hover:
+        fill:
+          $type: "color"
+          $value: "{danger}"
+        text:
+          $type: "color"
+          $value: "{surface.panel}"
+      active:
+        fill:
+          $type: "color"
+          $value: "{danger}"
+        text:
+          $type: "color"
+          $value: "{surface.panel}"
+      selected:
+        fill:
+          $type: "color"
+          $value: "{danger}"
+        text:
+          $type: "color"
+          $value: "{surface.panel}"
+    muted:
+      $description: "A quiet action: no box until the pointer is over it."
+      fill:
+        $type: "color"
+        $value: "{transparent}"
+      border-color:
+        $type: "color"
+        $value: "{transparent}"

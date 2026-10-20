@@ -109,6 +109,17 @@ pub const PAIRS: &[Pair] = &[
     text("info", "surface.overlay"),
     // Components.
     text("button.rest.text", "button.rest.fill"),
+    // Buttons by tone: the label on the tone's fill.
+    text("button.tone.accent.text", "button.tone.accent.fill"),
+    text(
+        "button.tone.accent.hover.text",
+        "button.tone.accent.hover.fill",
+    ),
+    text("button.tone.info.text", "button.tone.info.fill"),
+    text("button.tone.success.text", "button.tone.success.fill"),
+    text("button.tone.warning.text", "button.tone.warning.fill"),
+    text("button.tone.danger.text", "button.tone.danger.fill"),
+    text("button.tone.record.text", "button.tone.record.fill"),
     text("menu-item.rest.text", "menu-item.hover.fill"),
     text("menu-item.tone.muted.text", "surface.overlay"),
     text("toast.rest.text", "toast.rest.fill"),
@@ -165,6 +176,13 @@ pub const PAIRS: &[Pair] = &[
     ui("field.tone.warning.border-color", "field.rest.fill"),
     ui("field.tone.danger.border-color", "field.rest.fill"),
     ui("field.tone.info.border-color", "field.rest.fill"),
+    // A card's edge in a tone, on the panel it sits on.
+    ui("card.tone.accent.border-color", "surface.panel"),
+    ui("card.tone.info.border-color", "surface.panel"),
+    ui("card.tone.success.border-color", "surface.panel"),
+    ui("card.tone.warning.border-color", "surface.panel"),
+    ui("card.tone.danger.border-color", "surface.panel"),
+    ui("card.tone.record.border-color", "surface.panel"),
     ui("toast.rest.border-color", "surface.panel"),
     // Micro-indicators: badge text on every tone's fill, the marks that
     // carry a state on the surfaces they sit on, the outline against

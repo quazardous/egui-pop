@@ -37,6 +37,13 @@ publishes.
   theme and in the contract and contrast pairs. Typed as
   `Tokens::space.{inline, group, section, page}` and
   `Tokens::text_role` (`TextRoles::get(TextRole)`). Part of #35.
+- A `card` kit component and button tones (egui-pop-tokens,
+  egui-pop-core): `card` is an application's card (`Kit::card`, handler
+  `card`), the raised surface at rest, by tone an edge in the status
+  colour or (`muted`) a sunken well; `button.tone.*` gives a button in
+  the accent (a primary action), a status colour as fill (`info`,
+  `success`, `warning`, `danger`, `record`) or no box at rest (`muted`).
+  Both are in the contract and the contrast pairs. Part of #35.
 - One writer per value (egui-pop-model): a path's descriptor says who
   may write it besides its owner (`Writers`: `Owner`, the default,
   `Also(...)`, `Any`; `Descriptor::writers`, `Descriptor::any_writer`).
