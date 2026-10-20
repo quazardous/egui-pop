@@ -1,4 +1,6 @@
 $description: "egui-pop's dark theme: warm neutral greys, a warm gold accent."
+$extensions:
+  org.egui-pop.variant-of: "pop-light"
 gray:
   $type: "color"
   $description: "Warm neutral scale: 0 is the deepest background, 12 the strongest text."

@@ -1,5 +1,7 @@
 $extends: "pop-dark"
 $description: "egui-pop's light theme: the dark theme's roles over light scales; overlays and fields on white paper."
+$extensions:
+  org.egui-pop.variant-of: "pop-dark"
 gray:
   $type: "color"
   $description: "Warm neutral scale for light mode: 0 is white paper, 12 the strongest ink."

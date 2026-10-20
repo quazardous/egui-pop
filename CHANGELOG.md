@@ -12,6 +12,18 @@ publishes.
 
 ### Added
 
+- Theme counterparts (egui-pop-tokens): a theme names its other
+  variant, light or dark, in its root `$extensions`
+  (`"org.egui-pop.variant-of": "pop-dark"`, `VARIANT_OF_EXTENSION`; one
+  side is enough), or a spec names it (`ThemeSpec::pair(dark, light)`,
+  `ThemeSpec::counterpart`, `ThemeSpec::alone`, the new
+  `ThemeSpec::counterpart` field, a `Counterpart`). `Themes::counterpart_of`,
+  `Themes::counterpart` and `Themes::resolve_counterpart` (the spec's
+  density, accent, reduced motion and overrides applied to it too),
+  `ResolvedTokens::is_dark`. The built-in themes come in pairs: pop
+  dark and light, and the GitHub-, Catppuccin-, One-, Solarized- and
+  Gruvbox-inspired ones (GitHub's high-contrast ones together); pop high
+  contrast stays alone.
 - State slots (egui-pop-core): `state::Slot<T>` names a value kept in
   egui's memory, per context (`Slot::new`, `Slot::opaque` for values
   without a `Debug` form) or per instance (`slot.keyed(id)`), with

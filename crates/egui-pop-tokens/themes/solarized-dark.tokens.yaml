@@ -1,6 +1,7 @@
 $extends: "pop-dark"
 $description: "Inspired by Solarized Dark by Ethan Schoonover (MIT licence), as mapped to a workbench by VS Code's built-in Solarized theme (MIT)."
 $extensions:
+  org.egui-pop.variant-of: "solarized-light"
   org.egui-pop.source:
     repository: "https://github.com/microsoft/vscode"
     file: "extensions/theme-solarized-dark/themes/solarized-dark-color-theme.json"

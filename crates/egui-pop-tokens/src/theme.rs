@@ -21,6 +21,14 @@ pub const FALLBACK_THEME: &str = "pop-dark";
 /// met along a chain of aliases applies.
 pub const ALPHA_EXTENSION: &str = "org.egui-pop.alpha";
 
+/// The root `$extensions` key naming a theme's counterpart: the other
+/// variant, light or dark, of the same theme (`$extensions:
+/// {"org.egui-pop.variant-of": "pop-dark"}` in `pop-light`). Saying it
+/// on one side is enough: the other is found by looking it up. Not
+/// inherited through `$extends`: a theme built on `pop-light` is a
+/// theme of its own.
+pub const VARIANT_OF_EXTENSION: &str = "org.egui-pop.variant-of";
+
 /// egui-pop's own base themes, in the order a switcher shows them.
 pub const POP_THEMES: &[&str] = &["pop-dark", "pop-light", "pop-high-contrast"];
 
@@ -179,8 +187,28 @@ impl FromStr for Density {
     }
 }
 
+/// Which theme, if any, is the other variant (light or dark) of a spec's
+/// base theme: installed with it, so that egui's light or dark mode
+/// (the system's, or the user's choice) switches between them without
+/// installing anything again.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Counterpart {
+    /// The one the token files name ([`VARIANT_OF_EXTENSION`]); none
+    /// when they name none.
+    #[default]
+    Auto,
+    /// This theme, whatever the files say.
+    Theme(String),
+    /// None: the base theme alone, in its own mode whatever is asked.
+    None,
+}
+
 /// What to resolve: a base theme (mode and contrast), a density, an accent,
 /// reduced motion and the user's own overrides, composed in that order.
+/// The base theme's counterpart ([`Counterpart`]), when it has one, is
+/// resolved with the same density, accent, reduced motion and overrides
+/// ([`Themes::resolve_counterpart`]).
 ///
 /// ```
 /// use egui_pop_tokens::{Density, ThemeSpec, Themes};
@@ -203,6 +231,8 @@ pub struct ThemeSpec {
     pub reduced_motion: bool,
     /// Raw DTCG values by token path, applied last; values may be aliases.
     pub overrides: BTreeMap<String, Json>,
+    /// The other variant of the base theme, light or dark.
+    pub counterpart: Counterpart,
 }
 
 impl Default for ThemeSpec {
@@ -219,7 +249,44 @@ impl ThemeSpec {
             accent: None,
             reduced_motion: false,
             overrides: BTreeMap::new(),
+            counterpart: Counterpart::Auto,
         }
+    }
+
+    /// A pair of themes, a dark one and a light one: `dark` is the base
+    /// (shown when nothing asks for light), `light` its counterpart.
+    ///
+    /// ```
+    /// use egui_pop_tokens::{ThemeSpec, Themes};
+    ///
+    /// let spec = ThemeSpec::pair("github-dark", "pop-light");
+    /// let light = Themes::default().resolve_counterpart(&spec).unwrap();
+    /// assert_eq!(light.spec().base, "pop-light");
+    /// assert!(!light.is_dark());
+    /// ```
+    pub fn pair(dark: impl Into<String>, light: impl Into<String>) -> ThemeSpec {
+        ThemeSpec::new(dark).counterpart(light)
+    }
+
+    /// Names the base theme's counterpart, whatever the token files say.
+    pub fn counterpart(mut self, theme: impl Into<String>) -> Self {
+        self.counterpart = Counterpart::Theme(theme.into());
+        self
+    }
+
+    /// The base theme alone, without its counterpart: its mode is forced.
+    pub fn alone(mut self) -> Self {
+        self.counterpart = Counterpart::None;
+        self
+    }
+
+    /// The same spec over another base theme, alone: what a counterpart
+    /// is resolved from.
+    pub fn variant(&self, base: impl Into<String>) -> ThemeSpec {
+        let mut spec = self.clone();
+        spec.base = base.into();
+        spec.counterpart = Counterpart::None;
+        spec
     }
 
     pub fn density(mut self, density: Density) -> Self {
@@ -352,6 +419,11 @@ impl ResolvedTokens {
         self.tokens.is_empty()
     }
 
+    /// Whether the theme is a dark one: its panels are dark.
+    pub fn is_dark(&self) -> bool {
+        self.color("surface.panel").is_some_and(Color::is_dark)
+    }
+
     /// The theme as one DTCG file: every token with its resolved value,
     /// nothing extended, no alias left.
     pub fn to_dtcg(&self) -> Json {
@@ -447,6 +519,50 @@ impl Themes {
 
     pub fn get(&self, name: &str) -> Option<&TokenFile> {
         self.themes.get(name)
+    }
+
+    /// The other variant of a theme, as the token files say
+    /// ([`VARIANT_OF_EXTENSION`]): the theme its own file names, else the
+    /// first theme (by name) naming it. Only a known theme other than
+    /// itself counts.
+    pub fn counterpart_of(&self, name: &str) -> Option<&str> {
+        let named = |file: &TokenFile| {
+            file.extensions
+                .as_ref()
+                .and_then(|e| e.get(VARIANT_OF_EXTENSION))
+                .and_then(Json::as_str)
+                .map(String::from)
+        };
+        if let Some(other) = self.themes.get(name).and_then(named)
+            && other != name
+            && let Some((key, _)) = self.themes.get_key_value(&other)
+        {
+            return Some(key);
+        }
+        self.themes
+            .iter()
+            .find(|(n, file)| n.as_str() != name && named(file).as_deref() == Some(name))
+            .map(|(n, _)| n.as_str())
+    }
+
+    /// The counterpart a spec asks for ([`ThemeSpec::counterpart`]): a
+    /// known theme other than the base, or none.
+    pub fn counterpart(&self, spec: &ThemeSpec) -> Option<String> {
+        match &spec.counterpart {
+            Counterpart::Auto => self.counterpart_of(&spec.base).map(String::from),
+            Counterpart::Theme(t) => {
+                (*t != spec.base && self.themes.contains_key(t)).then(|| t.clone())
+            }
+            Counterpart::None => None,
+        }
+    }
+
+    /// Resolves a spec's counterpart, if it has one
+    /// ([`Themes::counterpart`]), with the spec's density, accent,
+    /// reduced motion and overrides.
+    pub fn resolve_counterpart(&self, spec: &ThemeSpec) -> Option<ResolvedTokens> {
+        self.counterpart(spec)
+            .map(|other| self.resolve(&spec.variant(other)))
     }
 
     /// The names of the themes known, sorted.

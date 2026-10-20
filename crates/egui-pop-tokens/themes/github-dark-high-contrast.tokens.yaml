@@ -1,6 +1,7 @@
 $extends: "pop-high-contrast"
 $description: "Inspired by GitHub Dark High Contrast, from GitHub's VS Code theme (github-vscode-theme by GitHub (Primer), MIT licence). Not affiliated with or endorsed by GitHub."
 $extensions:
+  org.egui-pop.variant-of: "github-light-high-contrast"
   org.egui-pop.source:
     repository: "https://github.com/primer/github-vscode-theme"
     file: "themes/dark-high-contrast.json"

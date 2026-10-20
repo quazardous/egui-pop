@@ -1,6 +1,7 @@
 $extends: "pop-dark"
 $description: "Inspired by One Dark Pro by Binaryify (MIT licence), itself based on Atom's One Dark (GitHub, MIT)."
 $extensions:
+  org.egui-pop.variant-of: "one-light"
   org.egui-pop.source:
     repository: "https://github.com/Binaryify/OneDark-Pro"
     file: "themes/OneDark-Pro.json"

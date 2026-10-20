@@ -1,6 +1,7 @@
 $extends: "pop-light"
 $description: "Inspired by Atom One Light, as ported to VS Code by Mahmoud Ali (akamud/vscode-theme-onelight, MIT licence); the original is Atom's One Light (GitHub, MIT)."
 $extensions:
+  org.egui-pop.variant-of: "one-dark-pro"
   org.egui-pop.source:
     repository: "https://github.com/akamud/vscode-theme-onelight"
     file: "themes/OneLight.json"

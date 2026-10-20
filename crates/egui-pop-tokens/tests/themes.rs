@@ -927,3 +927,80 @@ fn kit_check_reports_a_cycle_and_an_unknown_base() {
         "{said:?}"
     );
 }
+
+#[test]
+fn built_in_themes_name_their_counterpart() {
+    let themes = Themes::default();
+    let pairs = [
+        ("pop-dark", "pop-light"),
+        ("github-dark", "github-light"),
+        ("github-dark-high-contrast", "github-light-high-contrast"),
+        ("catppuccin-mocha", "catppuccin-latte"),
+        ("one-dark-pro", "one-light"),
+        ("solarized-dark", "solarized-light"),
+        ("gruvbox-dark", "gruvbox-light"),
+    ];
+    for (dark, light) in pairs {
+        assert_eq!(themes.counterpart_of(dark), Some(light));
+        assert_eq!(themes.counterpart_of(light), Some(dark));
+        assert!(themes.resolve(&ThemeSpec::new(dark)).is_dark(), "{dark}");
+        assert!(!themes.resolve(&ThemeSpec::new(light)).is_dark(), "{light}");
+    }
+    // Every built-in theme but high contrast has one.
+    for name in BUILT_IN_THEMES {
+        let paired = pairs.iter().any(|(d, l)| d == name || l == name);
+        assert_eq!(themes.counterpart_of(name).is_some(), paired, "{name}");
+    }
+    assert_eq!(themes.counterpart_of("pop-high-contrast"), None);
+}
+
+#[test]
+fn a_counterpart_is_resolved_with_the_spec_s_choices() {
+    let themes = Themes::default();
+    let spec = ThemeSpec::new("pop-light")
+        .density(Density::Compact)
+        .accent("blue")
+        .override_token("danger", json!("#ff0000"));
+    let dark = themes
+        .resolve_counterpart(&spec)
+        .expect("pop-light has one");
+    assert_eq!(dark.spec().base, "pop-dark");
+    assert!(dark.problems().is_empty(), "{:?}", dark.problems());
+    assert_eq!(dark.dimension("space.m"), Some(4.0));
+    assert_eq!(dark.spec().accent.as_deref(), Some("blue"));
+    assert_eq!(dark.color("danger"), Color::from_hex("#ff0000"));
+    // Named by the spec, or none at all.
+    assert_eq!(
+        themes.counterpart(&ThemeSpec::new("pop-high-contrast").counterpart("pop-light")),
+        Some("pop-light".into())
+    );
+    assert_eq!(
+        themes.counterpart(&ThemeSpec::new("pop-dark").alone()),
+        None
+    );
+    assert_eq!(
+        themes.counterpart(&ThemeSpec::pair("pop-dark", "no-such-theme")),
+        None
+    );
+}
+
+#[test]
+fn a_user_theme_names_its_counterpart_on_one_side() {
+    let mut themes = Themes::default();
+    themes
+        .add_text("night", r#"{"$extends": "pop-dark"}"#)
+        .unwrap();
+    themes
+        .add_text(
+            "day",
+            r#"{"$extends": "pop-light", "$extensions": {"org.egui-pop.variant-of": "night"}}"#,
+        )
+        .unwrap();
+    assert_eq!(themes.counterpart_of("day"), Some("night"));
+    assert_eq!(themes.counterpart_of("night"), Some("day"));
+    // Not inherited: a theme built on pop-light has none.
+    themes
+        .add_text("dusk", r#"{"$extends": "pop-light"}"#)
+        .unwrap();
+    assert_eq!(themes.counterpart_of("dusk"), None);
+}

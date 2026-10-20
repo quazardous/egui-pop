@@ -1,6 +1,7 @@
 $extends: "pop-dark"
 $description: "Inspired by Gruvbox Dark (medium) by Pavel Pertsev (morhetz, MIT/X11 licence), as mapped to a workbench by the Gruvbox Theme for VS Code by jdinhlife (MIT)."
 $extensions:
+  org.egui-pop.variant-of: "gruvbox-light"
   org.egui-pop.source:
     repository: "https://github.com/jdinhify/vscode-theme-gruvbox"
     file: "themes/gruvbox-dark-medium.json"

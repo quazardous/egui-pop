@@ -1,6 +1,7 @@
 $extends: "pop-light"
 $description: "Inspired by Catppuccin Latte (catppuccin/vscode and catppuccin/palette, by the Catppuccin organization, MIT licence)."
 $extensions:
+  org.egui-pop.variant-of: "catppuccin-mocha"
   org.egui-pop.source:
     repository: "https://github.com/catppuccin/vscode"
     file: "themes/latte.json (built package)"
