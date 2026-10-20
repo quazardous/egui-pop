@@ -10,6 +10,7 @@ use egui_pop::api::stories::Story;
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
 use egui_pop::core::binding::{self, Binding};
 use egui_pop::core::strings;
+use egui_pop::core::widgets;
 use egui_pop::i18n::{Catalogue, args, plugin, t};
 use egui_pop::model::ids::{PluginId, StoryId};
 
@@ -83,7 +84,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
         )];
         choices.extend(i18n.offered());
         for (value, name) in choices {
-            if ui.selectable_label(setting == value, name).clicked() {
+            if widgets::selectable_label(ui, setting == value, name).clicked() {
                 let _ = plugin::set_language(app, &value);
             }
         }
@@ -92,7 +93,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     binding::edit(
         ui,
         Binding::bound(&store, &format!("settings/{}", plugin::SETTING_SHOW_KEYS)),
-        |ui, on: &mut bool| ui.checkbox(on, t(&ctx, "gallery-i18n-show-keys", &[])),
+        |ui, on: &mut bool| widgets::checkbox(ui, on, t(&ctx, "gallery-i18n-show-keys", &[])),
     );
 
     section(ui, &t(&ctx, "gallery-i18n-own", &[]));

@@ -10,6 +10,7 @@ use egui::Ui;
 use egui_pop::api::contexts::{self, FrameSpec, Verdict};
 use egui_pop::api::stories::Story;
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
+use egui_pop::core::widgets;
 use egui_pop::model::commands::CommandSpec;
 use egui_pop::model::ids::{CommandId, FrameId, GroupId, PanelId, PluginId, StoryId};
 use egui_pop::model::panels::{Area, PanelSpec};
@@ -146,9 +147,12 @@ fn show(ui: &mut Ui, app: &AppHandle, locked: &AtomicBool) {
     section(ui, "Compare, pushed for a moment (Escape pops it)");
     contexts::mode_toggle(ui, app, &COMPARE);
     let mut lock = locked.load(Ordering::Relaxed);
-    if ui
-        .checkbox(&mut lock, "Lock the photos (their guard refuses to leave)")
-        .changed()
+    if widgets::checkbox(
+        ui,
+        &mut lock,
+        "Lock the photos (their guard refuses to leave)",
+    )
+    .changed()
     {
         locked.store(lock, Ordering::Relaxed);
     }

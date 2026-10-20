@@ -101,6 +101,7 @@ use egui_pop_core::lock;
 use egui_pop_core::overlay::{self, Kind, OverlaySpec};
 use egui_pop_core::strings::{self, CANCEL, CLOSE};
 use egui_pop_core::theme::Tokens;
+use egui_pop_core::widgets;
 use egui_pop_model::commands::{CommandSpec, Origin};
 use egui_pop_model::fuzzy;
 use egui_pop_model::ids::{BlockId, CommandId, OwnerId, PluginId, SettingId, StepId};
@@ -1357,29 +1358,15 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     }
 }
 
-/// One row of a choice: a selectable button of the same size whether it
-/// is at rest, hovered or highlighted.
+/// One row of a choice: a selectable row of the same size whether it is
+/// at rest, hovered or highlighted.
 ///
-/// upstream: a selectable button drops its frame at rest, and its margin
-/// then is the padding plus the expansion minus the stroke width, while
-/// the framed one comes to the padding (docs/upstream.md). With the
-/// theme's 1 px stroke at rest, a row grew by 2 px under the pointer and
-/// its text could wrap differently. The frame stays on in every state,
-/// invisible at rest unless the row is highlighted.
+/// upstream: a selectable button is smaller at rest than framed
+/// (docs/upstream.md); with the theme's 1 px border a row grew by 2 px
+/// under the pointer and its text could wrap differently. A steady row
+/// keeps the framed size in every state.
 fn choice_row(ui: &mut Ui, selected: bool, text: egui::WidgetText) -> egui::Response {
-    ui.scope(|ui| {
-        if !selected {
-            let rest = &mut ui.visuals_mut().widgets.inactive;
-            rest.weak_bg_fill = egui::Color32::TRANSPARENT;
-            rest.bg_stroke.color = egui::Color32::TRANSPARENT;
-        }
-        ui.add(
-            egui::Button::selectable(selected, text)
-                .frame_when_inactive(true)
-                .wrap(),
-        )
-    })
-    .inner
+    ui.add(widgets::SelectableRow::new(selected, text).steady().wrap())
 }
 
 /// A custom dialog's state between passes, as its body left it.
@@ -2045,7 +2032,7 @@ fn edit_field(
 ) -> Response {
     let d = &field.descriptor;
     let r = match (&mut field.value, d.ty) {
-        (Value::Bool(v), _) => ui.checkbox(v, ""),
+        (Value::Bool(v), _) => widgets::checkbox(ui, v, ""),
         (Value::Float(v), _) => {
             let (lo, hi) = d.soft.or(d.hard).unwrap_or((0.0, 1.0));
             ui.add(
@@ -2061,11 +2048,11 @@ fn edit_field(
         }
         (Value::Choice(v), _) => {
             let mut picked = v.clone();
-            let r = egui::ComboBox::from_id_salt(("egui_pop.form.choice", &field.key))
+            let r = widgets::combo_box(("egui_pop.form.choice", &field.key))
                 .selected_text(picked.as_str())
                 .show_ui(ui, |ui| {
                     for c in &d.choices {
-                        ui.selectable_value(&mut picked, c.clone(), c);
+                        widgets::selectable_value(ui, &mut picked, c.clone(), c);
                     }
                 })
                 .response;

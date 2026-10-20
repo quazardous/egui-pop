@@ -11,6 +11,7 @@ use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
 use egui_pop::core::a11y::{self, Politeness};
 use egui_pop::core::overlay::{self, Anchor, Kind, OverlaySpec};
 use egui_pop::core::placement::Side;
+use egui_pop::core::widgets;
 use egui_pop::core::{fault, focus};
 use egui_pop::model::ids::{PluginId, StoryId};
 use egui_pop::theme::Tokens;
@@ -83,7 +84,7 @@ fn show(ui: &mut Ui, app: &AppHandle, s: &mut State) {
         ui.label("Collector");
         for c in &collectors {
             let name = c["name"].as_str().unwrap_or_default().to_string();
-            if ui.selectable_label(s.collector == name, &name).clicked() {
+            if widgets::selectable_label(ui, s.collector == name, &name).clicked() {
                 s.collector = name;
             }
         }
@@ -178,7 +179,7 @@ fn playground(ui: &mut Ui, app: &AppHandle, s: &mut State) {
     if ui.button("Announce \"Saved\"").clicked() {
         a11y::announce(ui.ctx(), "Saved", Politeness::Polite);
     }
-    ui.checkbox(&mut s.panic, "Make the box below panic");
+    widgets::checkbox(ui, &mut s.panic, "Make the box below panic");
     let fail = s.panic;
     fault::boundary(ui, "gallery.debug.fragile", "The fragile box", |ui| {
         if fail {

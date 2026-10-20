@@ -12,6 +12,7 @@ use egui_pop::core::frame::{FrameLayout, HitRegions, TitleBar};
 use egui_pop::core::kit::Kit;
 use egui_pop::core::param::{self, Mode};
 use egui_pop::core::state::Slot;
+use egui_pop::core::widgets;
 use egui_pop::model::ids::{BlockId, PluginId, StoryId};
 use egui_pop::theme::Tokens;
 
@@ -99,12 +100,12 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     }
     ui.weak("`own`: the gallery draws its title bar above the menu bar, with its logo at the start (a block replacing `egui_pop.frame.menu` in the `app.caption-start` zone), and its edges resize the window.");
     let mut veto = app.context().get(VETO) == "true";
-    if ui
-        .checkbox(
-            &mut veto,
-            "Veto closing the window (a before-hook on frame.close)",
-        )
-        .changed()
+    if widgets::checkbox(
+        ui,
+        &mut veto,
+        "Veto closing the window (a before-hook on frame.close)",
+    )
+    .changed()
     {
         app.set_context(VETO, if veto { "true" } else { "false" });
     }

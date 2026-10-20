@@ -7,6 +7,7 @@ use egui_pop_core::icon::Icon;
 use egui_pop_core::kit::{Glyph, Kit, KitCx, Part, State};
 use egui_pop_core::strings::{tr, tr_args};
 use egui_pop_core::theme::Tokens;
+use egui_pop_core::widgets::ToggleChip;
 
 use crate::model::EditorState;
 use crate::steps;
@@ -19,43 +20,23 @@ fn name(ui: &Ui, id: Id, label: &str) {
     ui.ctx().accesskit_node_builder(id, |n| n.set_label(label));
 }
 
-/// A small toggle button, named.
+/// A small toggle button, named: the kit's `toggle-chip`.
 fn toggle(ui: &mut Ui, on: &mut bool, text: &str, label: &str) -> bool {
-    let r = ui
-        .selectable_label(*on, egui::RichText::new(text).monospace())
-        .on_hover_text(label);
-    let lab = label.to_string();
-    let value = *on;
-    r.widget_info(move || {
-        egui::WidgetInfo::selected(egui::WidgetType::Checkbox, true, value, &lab)
-    });
-    if r.clicked() {
-        *on = !*on;
-        return true;
-    }
-    false
+    ui.add(ToggleChip::new(on, egui::RichText::new(text).monospace()).name(label))
+        .on_hover_text(label)
+        .clicked()
 }
 
 /// A toggle showing a kit glyph (the replace row's disclosure) in a
 /// one-character monospace cell, like the text toggles next to it.
 fn glyph_toggle(ui: &mut Ui, on: &mut bool, glyph: Icon, label: &str) -> bool {
-    let r = ui
-        .selectable_label(*on, egui::RichText::new(" ").monospace())
-        .on_hover_text(label);
-    let side = r.rect.height() * 0.6;
-    let at = egui::Rect::from_center_size(r.rect.center(), egui::vec2(side, side));
-    let color = ui.style().interact_selectable(&r, *on).text_color();
-    glyph.paint(ui.painter(), at, color);
-    let lab = label.to_string();
-    let value = *on;
-    r.widget_info(move || {
-        egui::WidgetInfo::selected(egui::WidgetType::Checkbox, true, value, &lab)
-    });
-    if r.clicked() {
-        *on = !*on;
-        return true;
-    }
-    false
+    ui.add(
+        ToggleChip::new(on, egui::RichText::new(" ").monospace())
+            .glyph(glyph)
+            .name(label),
+    )
+    .on_hover_text(label)
+    .clicked()
 }
 
 fn icon_button(ui: &mut Ui, icon: Icon, label: &str) -> bool {

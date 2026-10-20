@@ -51,8 +51,10 @@ limit.
   hovered: a list of them changes height under the pointer, and a
   wrapped label can wrap differently.
 - **Upstream**: not filed yet.
-- **Workaround**: the rows of a `Choose` dialog keep the frame in every
-  state, transparent at rest (`dialogs::choice_row`, `// upstream:`).
+- **Workaround**: egui-pop's selectable rows (`widgets::SelectableRow`)
+  keep egui's sizes, and `SelectableRow::steady` keeps the framed size
+  in every state: the rows of a `Choose` dialog are steady
+  (`dialogs::choice_row`, `// upstream:`).
 - **Remove when**: the frameless margin of a button equals the framed
   one.
 

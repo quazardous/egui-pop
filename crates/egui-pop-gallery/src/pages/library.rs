@@ -11,6 +11,7 @@ use std::rc::Rc;
 use egui::{Color32, ColorImage, TextureHandle, TextureOptions, Ui};
 use egui_pop::api::stories::Story;
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
+use egui_pop::core::widgets;
 use egui_pop::model::ids::{PluginId, StoryId};
 use egui_pop::views::library::compare::{CompareState, CompareView, Pane};
 use egui_pop::views::library::filter::{Candidate, Filter, SearchField, SearchState};
@@ -409,11 +410,11 @@ fn show(ui: &mut Ui, app: &AppHandle, p: &mut PageState) {
             p.filter = f;
             p.refilter();
         }
-        ui.checkbox(&mut p.auto_advance, "Auto-advance");
-        if ui.selectable_label(!p.comparing, "Grid").clicked() {
+        widgets::checkbox(ui, &mut p.auto_advance, "Auto-advance");
+        if widgets::selectable_label(ui, !p.comparing, "Grid").clicked() {
             p.comparing = false;
         }
-        if ui.selectable_label(p.comparing, "Compare").clicked() {
+        if widgets::selectable_label(ui, p.comparing, "Compare").clicked() {
             p.comparing = true;
         }
     });
@@ -522,7 +523,7 @@ fn library(ui: &mut Ui, app: &AppHandle, p: &mut PageState, thumbs: &Thumbs) {
 
 fn compare(ui: &mut Ui, p: &mut PageState, thumbs: &Thumbs) {
     section(ui, "Compare");
-    ui.checkbox(&mut p.synced, "Sync zoom and pan");
+    widgets::checkbox(ui, &mut p.synced, "Sync zoom and pan");
     let sel = p.state.selection().keys();
     let keys: Vec<u32> = if (2..=4).contains(&sel.len()) {
         sel.to_vec()

@@ -9,6 +9,7 @@ use egui_pop::api::steps::{Before, Outcome};
 use egui_pop::api::stories::Story;
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
 use egui_pop::core::state::Slot;
+use egui_pop::core::widgets;
 use egui_pop::model::ids::{PluginId, StoryId};
 use egui_pop::model::layout::{Layout, Node};
 use egui_pop::model::panels::Area;
@@ -94,12 +95,12 @@ fn show(ui: &mut Ui, app: &AppHandle, name: &Mutex<String>) {
         ui.strong(arrangements::current(app));
     });
     let mut veto = app.context().get(VETO) == "true";
-    if ui
-        .checkbox(
-            &mut veto,
-            "Veto switching (a before-hook on arrangement.switch)",
-        )
-        .changed()
+    if widgets::checkbox(
+        ui,
+        &mut veto,
+        "Veto switching (a before-hook on arrangement.switch)",
+    )
+    .changed()
     {
         app.set_context(VETO, if veto { "true" } else { "false" });
     }

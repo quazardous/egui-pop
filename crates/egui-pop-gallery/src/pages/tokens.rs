@@ -1,6 +1,7 @@
 //! Every resolved token, by tier.
 
 use egui::Ui;
+use egui_pop::core::widgets;
 use egui_pop::theme::{Tokens, color32};
 use egui_pop::tokens::{Tier, Value};
 
@@ -31,9 +32,9 @@ pub fn playground(ui: &mut Ui, state: &mut State) {
     let label = ui.label("Filter");
     ui.add(egui::TextEdit::singleline(&mut state.filter).hint_text("path contains…"))
         .labelled_by(label.id);
-    ui.checkbox(&mut state.reference, "Reference (palette)");
-    ui.checkbox(&mut state.system, "System (roles)");
-    ui.checkbox(&mut state.component, "Component");
+    widgets::checkbox(ui, &mut state.reference, "Reference (palette)");
+    widgets::checkbox(ui, &mut state.system, "System (roles)");
+    widgets::checkbox(ui, &mut state.component, "Component");
 }
 
 pub fn show(ui: &mut Ui, state: &mut State) {

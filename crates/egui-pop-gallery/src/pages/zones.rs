@@ -5,6 +5,7 @@
 use egui::{RichText, Stroke, Ui};
 use egui_pop::api::stories::Story;
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
+use egui_pop::core::widgets;
 use egui_pop::model::commands::CommandSpec;
 use egui_pop::model::ids::{BlockId, CommandId, PluginId, StoryId, ZoneId};
 use egui_pop::prelude::{Block, Place};
@@ -189,7 +190,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
 
 fn playground(ui: &mut Ui, app: &AppHandle) {
     let mut on = extender_connected(app);
-    if ui.checkbox(&mut on, "Extender plugin connected").changed() {
+    if widgets::checkbox(ui, &mut on, "Extender plugin connected").changed() {
         app.set_plugin_enabled(EXTENDER, on);
     }
 }

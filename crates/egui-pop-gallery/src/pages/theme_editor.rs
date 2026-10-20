@@ -5,6 +5,7 @@ use egui::Ui;
 use egui_pop::api::stories::Story;
 use egui_pop::api::theme_editor::{self, THEME_EDITOR_PLUGIN};
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
+use egui_pop::core::widgets;
 use egui_pop::model::ids::{PluginId, StoryId};
 
 use super::section;
@@ -45,7 +46,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     ui.horizontal_wrapped(|ui| {
         let _ = ui.button("A button");
         let mut on = true;
-        ui.checkbox(&mut on, "A checkbox");
+        widgets::checkbox(ui, &mut on, "A checkbox");
         let mut v = 0.6_f32;
         ui.add(egui::Slider::new(&mut v, 0.0..=1.0).text("A slider"));
         ui.hyperlink_to("A link", "https://github.com/quazardous/egui-pop");

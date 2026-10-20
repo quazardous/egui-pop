@@ -9,6 +9,7 @@ use std::rc::Rc;
 use egui::{Key, Ui, vec2};
 use egui_pop::api::stories::Story;
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
+use egui_pop::core::widgets;
 use egui_pop::imaging::{self, STEP_CURSOR};
 use egui_pop::model::ids::{PluginId, StoryId};
 use egui_pop::viewport::cursor::{self, Brush, Tool, ToolCursor};
@@ -143,24 +144,24 @@ pub fn playground(ui: &mut Ui, s: &mut State) {
     ui.label("Tool");
     ui.horizontal_wrapped(|ui| {
         for (i, name) in TOOLS.iter().enumerate() {
-            ui.selectable_value(&mut s.tool, i, *name);
+            widgets::selectable_value(ui, &mut s.tool, i, *name);
         }
     });
     ui.add(egui::Slider::new(&mut s.radius, 1.0..=200.0).text("Brush radius"));
     ui.add(egui::Slider::new(&mut s.hardness, 0.0..=1.0).text("Brush hardness"));
     let loupe = s.state.loupe_mut();
-    ui.checkbox(&mut loupe.on, "Loupe (L)");
+    widgets::checkbox(ui, &mut loupe.on, "Loupe (L)");
     ui.add(egui::Slider::new(&mut loupe.magnification, 4..=16).text("Magnification"));
-    ui.checkbox(&mut loupe.grid, "Loupe grid");
-    ui.checkbox(&mut loupe.marker, "Loupe centre marker");
+    widgets::checkbox(ui, &mut loupe.grid, "Loupe grid");
+    widgets::checkbox(ui, &mut loupe.marker, "Loupe centre marker");
     ui.horizontal(|ui| {
         for v in [Values::Display, Values::Scene, Values::Off] {
-            ui.selectable_value(&mut loupe.values, v, v.name());
+            widgets::selectable_value(ui, &mut loupe.values, v, v.name());
         }
     });
     let mut settings = cursor::settings(ui.ctx());
     let before = settings;
-    ui.checkbox(&mut settings.painted, "Painted cursors");
+    widgets::checkbox(ui, &mut settings.painted, "Painted cursors");
     let mut size = settings.size.unwrap_or_else(cursor::system_size);
     if ui
         .add(egui::Slider::new(&mut size, 16.0..=64.0).text("Cursor size"))

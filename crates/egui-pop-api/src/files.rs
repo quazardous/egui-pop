@@ -59,6 +59,7 @@ use egui_pop_core::lock;
 use egui_pop_core::overlay::{self, Kind, OverlaySpec};
 use egui_pop_core::strings::{self, CANCEL};
 use egui_pop_core::theme::Tokens;
+use egui_pop_core::widgets;
 use egui_pop_model::commands::Origin;
 use egui_pop_model::fuzzy;
 use egui_pop_model::ids::{BlockId, OwnerId, PluginId, SettingId, StepId};
@@ -1209,8 +1210,7 @@ impl FilePicker {
             ui.vertical(|ui| {
                 ui.set_width(150.0);
                 let mut place = |ui: &mut Ui, name: &str, dir: &Path| {
-                    if ui
-                        .selectable_label(self.dir == dir, name)
+                    if widgets::selectable_label(ui, self.dir == dir, name)
                         .on_hover_text(dir.display().to_string())
                         .clicked()
                     {
@@ -1259,7 +1259,7 @@ impl FilePicker {
                             // Selected files (choosing several) show as the
                             // highlighted one does.
                             let on = n == self.highlight || self.selected.contains(&e.path);
-                            let r = ui.selectable_label(on, label);
+                            let r = widgets::selectable_label(ui, on, label);
                             if n == self.highlight && (down || up) {
                                 r.scroll_to_me(None);
                             }
@@ -1311,11 +1311,11 @@ impl FilePicker {
                     .chain([strings::tr(ui.ctx(), &txt::FILES_ALL)])
                     .collect();
                 let mut at = self.filter_index.min(names.len() - 1);
-                egui::ComboBox::from_id_salt("egui_pop.files.filter")
+                widgets::combo_box("egui_pop.files.filter")
                     .selected_text(names[at].as_str())
                     .show_ui(ui, |ui| {
                         for (i, n) in names.iter().enumerate() {
-                            ui.selectable_value(&mut at, i, n);
+                            widgets::selectable_value(ui, &mut at, i, n);
                         }
                     });
                 if at != self.filter_index {
@@ -1323,7 +1323,8 @@ impl FilePicker {
                     self.highlight = 0;
                 }
             }
-            ui.checkbox(
+            widgets::checkbox(
+                ui,
                 &mut self.show_hidden,
                 strings::tr(ui.ctx(), &txt::FILES_HIDDEN),
             );

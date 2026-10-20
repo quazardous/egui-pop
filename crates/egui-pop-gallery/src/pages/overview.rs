@@ -2,6 +2,7 @@
 
 use egui::{Align2, Color32, CornerRadius, FontId, Stroke, StrokeKind, Ui, vec2};
 use egui_pop::core::kit::{self, Kit};
+use egui_pop::core::widgets;
 use egui_pop::theme::Tokens;
 use egui_pop::tokens::contrast::{self, Level};
 
@@ -26,8 +27,8 @@ impl Default for State {
 }
 
 pub fn playground(ui: &mut Ui, state: &mut State) {
-    ui.checkbox(&mut state.show_paths, "Token paths");
-    ui.checkbox(&mut state.show_contrast, "Contrast checks");
+    widgets::checkbox(ui, &mut state.show_paths, "Token paths");
+    widgets::checkbox(ui, &mut state.show_contrast, "Contrast checks");
 }
 
 /// A swatch with its name, and its path when asked.

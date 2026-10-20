@@ -3,6 +3,7 @@
 
 use egui::{Sense, Ui, vec2};
 use egui_pop::core::icon::{self, Icon, Size, Tone};
+use egui_pop::core::widgets;
 use egui_pop::theme::Tokens;
 
 use super::section;
@@ -36,26 +37,26 @@ const TONES: [(Tone, &str); 9] = [
 
 pub fn playground(ui: &mut Ui, state: &mut State) {
     let label = ui.label("Size");
-    egui::ComboBox::from_id_salt("icons.size")
+    widgets::combo_box("icons.size")
         .selected_text(SIZES.iter().find(|s| s.0 == state.size).map_or("", |s| s.1))
         .show_ui(ui, |ui| {
             for (s, name) in SIZES {
-                ui.selectable_value(&mut state.size, s, name);
+                widgets::selectable_value(ui, &mut state.size, s, name);
             }
         })
         .response
         .labelled_by(label.id);
     let label = ui.label("Tone");
-    egui::ComboBox::from_id_salt("icons.tone")
+    widgets::combo_box("icons.tone")
         .selected_text(TONES.iter().find(|s| s.0 == state.tone).map_or("", |s| s.1))
         .show_ui(ui, |ui| {
             for (s, name) in TONES {
-                ui.selectable_value(&mut state.tone, s, name);
+                widgets::selectable_value(ui, &mut state.tone, s, name);
             }
         })
         .response
         .labelled_by(label.id);
-    ui.checkbox(&mut state.compare, "Show painted fallbacks");
+    widgets::checkbox(ui, &mut state.compare, "Show painted fallbacks");
 }
 
 pub fn show(ui: &mut Ui, state: &mut State) {

@@ -79,6 +79,7 @@ use egui_pop_core::lock;
 use egui_pop_core::persist::Persist;
 use egui_pop_core::state::Slot;
 use egui_pop_core::strings;
+use egui_pop_core::widgets;
 
 /// The view generation a scroll area last applied its saved offset for.
 const SCROLL_APPLIED: Slot<u64> = Slot::new("api.contexts.scroll_applied");
@@ -1148,7 +1149,7 @@ pub fn breadcrumb(ui: &mut Ui, app: &AppHandle) {
             }
             let here = i + 1 == crumbs.len();
             if ui
-                .add(egui::Button::selectable(here, title.as_str()))
+                .add(widgets::SelectableRow::new(here, title.as_str()))
                 .clicked()
                 && !here
             {
@@ -1190,7 +1191,7 @@ pub fn mode_chips(ui: &mut Ui, app: &AppHandle) {
     let mut leave = None;
     ui.horizontal_wrapped(|ui| {
         for (title, m, top) in &chips {
-            let r = ui.add(egui::Button::selectable(true, format!("{title}  ×")));
+            let r = ui.add(widgets::SelectableRow::new(true, format!("{title}  ×")));
             let name = strings::tr_args(ui.ctx(), &txt::CONTEXT_LEAVE_MODE, &[("mode", title)]);
             a11y::name(&r, WidgetType::Button, &name);
             let r = r.on_hover_text(name.as_str());
@@ -1243,7 +1244,7 @@ pub fn mode_switch(ui: &mut Ui, app: &AppHandle, group: &GroupId, none: bool) {
         if none {
             let label = strings::tr(ui.ctx(), &txt::CONTEXT_NO_MODE);
             if ui
-                .add(egui::Button::selectable(on.is_none(), label))
+                .add(widgets::SelectableRow::new(on.is_none(), label))
                 .clicked()
                 && on.is_some()
             {
@@ -1255,7 +1256,7 @@ pub fn mode_switch(ui: &mut Ui, app: &AppHandle, group: &GroupId, none: bool) {
         for (id, title) in &modes {
             let selected = on.as_ref() == Some(id);
             if ui
-                .add(egui::Button::selectable(selected, title.as_str()))
+                .add(widgets::SelectableRow::new(selected, title.as_str()))
                 .clicked()
                 && !selected
             {
@@ -1286,7 +1287,7 @@ pub fn mode_toggle(ui: &mut Ui, app: &AppHandle, mode: &FrameId) -> egui::Respon
         }
         None => (mode.to_string(), None, false),
     };
-    let r = ui.add(egui::Button::selectable(on.is_some(), title));
+    let r = ui.add(widgets::SelectableRow::new(on.is_some(), title));
     if r.clicked() {
         let req = match &on {
             None => Request::push(mode.clone()),

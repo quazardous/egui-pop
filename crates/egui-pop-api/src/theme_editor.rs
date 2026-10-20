@@ -67,6 +67,7 @@ use egui_pop_core::tokens::{
     BUILT_IN_THEMES, Color, Counterpart, ResolvedTokens, ThemeDraft, ThemeSpec, TokenEdit, Value,
     Warning, theme_label,
 };
+use egui_pop_core::widgets;
 use egui_pop_model::commands::CommandSpec;
 use egui_pop_model::ids::{CommandId, PluginId, StepId};
 use serde_json::{Value as Json, json};
@@ -831,11 +832,16 @@ fn toolbar(ui: &mut Ui, app: &AppHandle, editor: &ThemeEditor) {
         let start = strings::tr(&ctx, &txt::THEME_EDITOR_START);
         let label = ui.label(&start);
         let mut picked = base.clone();
-        egui::ComboBox::from_id_salt("egui_pop.theme_editor.start")
+        widgets::combo_box("egui_pop.theme_editor.start")
             .selected_text(theme_label(&base))
             .show_ui(ui, |ui| {
                 for name in BUILT_IN_THEMES {
-                    ui.selectable_value(&mut picked, (*name).to_string(), theme_label(name));
+                    widgets::selectable_value(
+                        ui,
+                        &mut picked,
+                        (*name).to_string(),
+                        theme_label(name),
+                    );
                 }
             })
             .response
@@ -945,7 +951,7 @@ fn list(ui: &mut Ui, editor: &ThemeEditor, tokens: &ResolvedTokens) {
                                     RichText::new(path.as_str())
                                 };
                                 let is = selected.as_deref() == Some(path.as_str());
-                                let r = ui.selectable_label(is, text);
+                                let r = widgets::selectable_label(ui, is, text);
                                 if own {
                                     ui.weak(&edited);
                                 }

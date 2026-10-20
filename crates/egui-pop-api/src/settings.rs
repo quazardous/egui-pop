@@ -8,6 +8,7 @@ use egui::{Response, Ui};
 use egui_pop_core::binding::{self, Binding};
 use egui_pop_core::lock;
 use egui_pop_core::strings::{self, RESET};
+use egui_pop_core::widgets;
 use egui_pop_model::commands::Origin;
 use egui_pop_model::ids::OwnerId;
 use egui_pop_model::values::{Change, Descriptor, Set, Type, Value};
@@ -64,7 +65,7 @@ fn row(ui: &mut Ui, app: &AppHandle, entry: &SettingEntry) {
     ui.horizontal(|ui| match d.ty {
         Type::Bool => {
             binding::edit(ui, Binding::bound(&store, path), |ui, v: &mut bool| {
-                named(ui.checkbox(v, ""))
+                named(widgets::checkbox(ui, v, ""))
             });
         }
         Type::Float => {
@@ -108,11 +109,12 @@ fn row(ui: &mut Ui, app: &AppHandle, entry: &SettingEntry) {
                 .and_then(|e| e.value.as_choice().map(str::to_string))
                 .unwrap_or_default();
             let mut picked = current.clone();
-            let r = egui::ComboBox::from_id_salt(path)
+            let r = widgets::combo_box(path)
                 .selected_text(strings::setting_choice(&ctx, id, &current))
                 .show_ui(ui, |ui| {
                     for c in &d.choices {
-                        ui.selectable_value(
+                        widgets::selectable_value(
+                            ui,
                             &mut picked,
                             c.clone(),
                             strings::setting_choice(&ctx, id, c),

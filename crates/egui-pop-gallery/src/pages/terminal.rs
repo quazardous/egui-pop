@@ -11,6 +11,7 @@ use egui::Ui;
 use egui_pop::api::steps::Before;
 use egui_pop::api::stories::Story;
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
+use egui_pop::core::widgets;
 use egui_pop::editors::terminal::steps::{TERMINAL_EXIT, TERMINAL_INPUT, TERMINAL_PLUGIN};
 use egui_pop::editors::terminal::{
     Console, Sink, Spawn, Terminal, TerminalSignal, TerminalSource, TerminalState,
@@ -215,7 +216,7 @@ impl Plugin for TerminalPage {
 
 fn flag(ui: &mut Ui, app: &AppHandle, key: &str, label: &str) {
     let mut on = app.context().get(key) == "true";
-    if ui.checkbox(&mut on, label).changed() {
+    if widgets::checkbox(ui, &mut on, label).changed() {
         app.set_context(key, if on { "true" } else { "false" });
     }
 }

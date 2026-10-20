@@ -11,6 +11,7 @@ use egui::{Ui, vec2};
 use egui_pop::api::stories::Story;
 use egui_pop::api::{Ctx, Plugin, PluginError};
 use egui_pop::core::debug::FnCollector;
+use egui_pop::core::widgets;
 use egui_pop::model::ids::{PluginId, StoryId};
 use egui_pop::viewport::demo::Procedural;
 use egui_pop::viewport::hooks::Verdict;
@@ -351,19 +352,13 @@ pub fn playground(ui: &mut Ui, page: &mut PageState) {
     ui.label("Before and after (hold \\ to see before)");
     ui.horizontal(|ui| {
         let split = matches!(page.compare, Compare::Split(_));
-        if ui
-            .selectable_label(page.compare == Compare::Off, "Off")
-            .clicked()
-        {
+        if widgets::selectable_label(ui, page.compare == Compare::Off, "Off").clicked() {
             page.compare = Compare::Off;
         }
-        if ui.selectable_label(split, "Split").clicked() && !split {
+        if widgets::selectable_label(ui, split, "Split").clicked() && !split {
             page.compare = Compare::Split(0.5);
         }
-        if ui
-            .selectable_label(page.compare == Compare::Before, "Before")
-            .clicked()
-        {
+        if widgets::selectable_label(ui, page.compare == Compare::Before, "Before").clicked() {
             page.compare = Compare::Before;
         }
     });
@@ -372,10 +367,7 @@ pub fn playground(ui: &mut Ui, page: &mut PageState) {
         let shift = page.shift;
         page.source().set_shift(shift);
     }
-    if ui
-        .checkbox(&mut page.clamp, "Hook: never above 800 %")
-        .changed()
-    {
+    if widgets::checkbox(ui, &mut page.clamp, "Hook: never above 800 %").changed() {
         page.state.hooks_mut().before_view = if page.clamp {
             Some(Box::new(|change, _| match change.to.zoom {
                 Zoom::Px(z) if z > 8.0 => Verdict::Redirect(View::at(8.0, change.to.center)),

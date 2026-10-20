@@ -58,6 +58,7 @@ use crate::state;
 use crate::strings::{self, FIELD_RESET, INPUT_CHOICES, INPUT_CLEAR, INPUT_MORE};
 use crate::tab::{self, TabStop};
 use crate::theme::Tokens;
+use crate::widgets;
 
 /// What is typed in a number field while it has the focus, per field.
 const BUFFER: state::Slot<String> = state::Slot::new("core.input.buffer");
@@ -571,7 +572,7 @@ impl<'a> Input<'a> {
             });
             popup.show(|ui| {
                 for (i, item) in choices.iter().enumerate() {
-                    if ui.selectable_label(*item == buffer, item).clicked() {
+                    if widgets::selectable_label(ui, *item == buffer, item).clicked() {
                         choice = Some(i);
                     }
                 }

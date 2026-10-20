@@ -23,6 +23,7 @@ use egui_pop_core::icon::Icon;
 use egui_pop_core::kit::{Kit, KitCx, Part, State};
 use egui_pop_core::strings::{tr, tr_args};
 use egui_pop_core::theme::Tokens;
+use egui_pop_core::widgets;
 use egui_pop_model::fuzzy;
 
 use crate::strings as s;
@@ -358,8 +359,7 @@ impl<'a> TagInput<'a> {
                 .show(ui.ctx(), |ui| {
                     egui::Frame::popup(ui.style()).show(ui, |ui| {
                         for (k, c) in suggestions.iter().enumerate() {
-                            if ui
-                                .selectable_label(k == state.highlighted, c.as_str())
+                            if widgets::selectable_label(ui, k == state.highlighted, c.as_str())
                                 .clicked()
                             {
                                 commit(c, &mut added);

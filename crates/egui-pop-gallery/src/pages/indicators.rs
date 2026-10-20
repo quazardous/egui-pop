@@ -11,6 +11,7 @@ use egui_pop::core::indicator::{
     Tone,
 };
 use egui_pop::core::motion;
+use egui_pop::core::widgets;
 use egui_pop::theme::Tokens;
 
 use super::section;
@@ -143,8 +144,8 @@ pub fn playground(ui: &mut Ui, state: &mut State) {
         &mut state.anchor,
         &anchors,
     );
-    ui.checkbox(&mut state.interactive, "Interactive");
-    ui.checkbox(&mut state.right_to_left, "Right to left");
+    widgets::checkbox(ui, &mut state.interactive, "Interactive");
+    widgets::checkbox(ui, &mut state.right_to_left, "Right to left");
     if ui.button("Call attention").clicked() {
         state.attention = Some(motion::now(&ctx));
     }
@@ -159,11 +160,11 @@ fn combo<T: Copy + PartialEq>(
     choices: &[(T, &str)],
 ) {
     let l = ui.label(label);
-    egui::ComboBox::from_id_salt(salt)
+    widgets::combo_box(salt)
         .selected_text(choices.iter().find(|c| c.0 == *value).map_or("", |c| c.1))
         .show_ui(ui, |ui| {
             for &(v, name) in choices {
-                ui.selectable_value(value, v, name);
+                widgets::selectable_value(ui, value, v, name);
             }
         })
         .response
@@ -374,14 +375,14 @@ pub fn show(ui: &mut Ui, state: &mut State) {
             Anchor::TopEnd,
         );
         ui.add_space(t.space.l);
-        ui.selectable_label(true, "Masks").with_indicator(
+        widgets::selectable_label(ui, true, "Masks").with_indicator(
             ui,
             Indicator::count(2).tone(Tone::Warning).name("2 warnings"),
             Anchor::TopEnd,
         );
         ui.add_space(t.space.l);
         // A row: a stripe at its start, the modified flag in its corner.
-        let row = ui.selectable_label(false, "    exposure.tif    ");
+        let row = widgets::selectable_label(ui, false, "    exposure.tif    ");
         let row = row.with_indicator(
             ui,
             Indicator::flag_shape(FlagShape::Stripe)
@@ -415,7 +416,7 @@ pub fn show(ui: &mut Ui, state: &mut State) {
     // A menu entry: the swatch drawn beside the entry's label, its
     // colour added to the entry's name by hand.
     ui.horizontal(|ui| {
-        let entry = ui.selectable_label(false, "Accent colour");
+        let entry = widgets::selectable_label(ui, false, "Accent colour");
         ui.add(Indicator::swatch(t.accent.default).size(Size::Small));
         indicator::annotate(&ctx, entry.id, "the accent");
     });

@@ -22,6 +22,7 @@ use egui_pop_core::overlay::{self, Kind, OverlaySpec};
 use egui_pop_core::param::{self, Mode};
 use egui_pop_core::strings::{self, RESET};
 use egui_pop_core::theme::Tokens;
+use egui_pop_core::widgets;
 use egui_pop_model::commands::{CommandSpec, Origin};
 use egui_pop_model::fuzzy;
 use egui_pop_model::ids::{BlockId, CommandId, OwnerId, PluginId};
@@ -274,7 +275,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                     let enabled = filter.is_empty() || hits > 0;
                     let r = ui.add_enabled(
                         enabled,
-                        egui::Button::selectable(
+                        widgets::SelectableRow::new(
                             filter.is_empty() && *sec == current,
                             section_title(&ctx, app, &entries, sec),
                         ),
@@ -640,12 +641,14 @@ fn shortcuts(ui: &mut Ui, app: &AppHandle, st: &mut State, filter: &str) {
     if app.workspace_keys_offered() {
         ui.horizontal(|ui| {
             ui.label(strings::tr(&ctx, &txt::SHORTCUTS_TARGET));
-            ui.radio_value(
+            widgets::radio_value(
+                ui,
                 &mut st.workspace_target,
                 false,
                 strings::tr(&ctx, &txt::SHORTCUTS_TARGET_USER),
             );
-            ui.radio_value(
+            widgets::radio_value(
+                ui,
                 &mut st.workspace_target,
                 true,
                 strings::tr(&ctx, &txt::SHORTCUTS_TARGET_WORKSPACE),

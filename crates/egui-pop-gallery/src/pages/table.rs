@@ -9,6 +9,7 @@ use egui::{Color32, Ui};
 use egui_pop::api::steps::Before;
 use egui_pop::api::stories::Story;
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
+use egui_pop::core::widgets;
 use egui_pop::model::ids::{PluginId, StoryId};
 use egui_pop::views::Mode;
 use egui_pop::views::list::{self, ListRows, ListState, ListView};
@@ -247,12 +248,12 @@ impl Plugin for TablePage {
 fn show(ui: &mut Ui, app: &AppHandle, p: &mut PageState) {
     ui.label("Click a header to sort (up, down, none); drag a header's edge to resize. The sort and the widths live in the value store.");
     let mut veto = app.context().get(VETO) == "true";
-    if ui
-        .checkbox(
-            &mut veto,
-            "Veto sorting by rating (a before-hook on table.sort)",
-        )
-        .changed()
+    if widgets::checkbox(
+        ui,
+        &mut veto,
+        "Veto sorting by rating (a before-hook on table.sort)",
+    )
+    .changed()
     {
         app.set_context(VETO, if veto { "true" } else { "false" });
     }

@@ -4,6 +4,7 @@
 //! adjusting an exposure.
 
 use egui::{Color32, ColorImage, TextureHandle, TextureOptions, Ui, vec2};
+use egui_pop::core::widgets;
 use egui_pop::viewport::demo;
 use egui_pop::viewport::histogram::{Channel, Clipping, Histogram};
 use egui_pop::viewport::thumbnail::{Thumbnail, thumbnail_grid};
@@ -152,6 +153,6 @@ fn placeholder(i: usize) -> Color32 {
 
 /// The playground.
 pub fn playground(ui: &mut Ui, state: &mut State) {
-    ui.checkbox(&mut state.log, "Histogram: logarithmic");
+    widgets::checkbox(ui, &mut state.log, "Histogram: logarithmic");
     ui.label(format!("Selected: Image {}", state.selected + 1));
 }

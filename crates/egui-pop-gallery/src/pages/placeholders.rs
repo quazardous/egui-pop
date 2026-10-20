@@ -5,6 +5,7 @@
 use egui::Ui;
 use egui_pop::core::icon::Icon;
 use egui_pop::core::placeholder::{EmptyState, Skeleton};
+use egui_pop::core::widgets;
 
 use super::section;
 
@@ -19,7 +20,7 @@ pub struct State {
 pub fn show(ui: &mut Ui, state: &mut State) {
     ui.label("A skeleton stands in for content that fills progressively, in its layout; its region is busy for assistive technologies. An empty state says why a place is empty and what to do.");
     section(ui, "Skeletons");
-    ui.checkbox(&mut state.loaded, "Loaded");
+    widgets::checkbox(ui, &mut state.loaded, "Loaded");
     if state.loaded {
         for name in ["IMG_0001.raw", "IMG_0002.raw", "IMG_0003.raw"] {
             ui.label(name);

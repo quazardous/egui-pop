@@ -3,6 +3,7 @@
 //! (with `--wide-gamut`, on Wayland), and the transfers' curves.
 
 use egui::{Color32, Sense, Stroke, Ui, pos2, vec2};
+use egui_pop::core::widgets;
 use egui_pop::theme::Tokens;
 use egui_pop::viewport::display::{
     self, ColorSpace, DisplayTarget, DisplayTransform, Linear, LinearSrgb, Primaries,
@@ -100,7 +101,7 @@ pub fn show(ui: &mut Ui, s: &mut DisplayState) {
     ui.horizontal_wrapped(|ui| {
         ui.label("Wanted:");
         for (w, name) in Wanted::ALL {
-            if ui.selectable_label(s.wanted == w, name).clicked() {
+            if widgets::selectable_label(ui, s.wanted == w, name).clicked() {
                 s.wanted = w;
                 display::want(&ctx, ctx.viewport_id(), w.target());
             }

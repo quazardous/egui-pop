@@ -8,6 +8,7 @@ use egui_pop::api::palettes;
 use egui_pop::api::stories::Story;
 use egui_pop::api::workbench::Change;
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
+use egui_pop::core::widgets;
 use egui_pop::model::ids::{PanelId, PluginId, StoryId};
 use egui_pop::model::panels::{Area, PanelSpec};
 use egui_pop::theme::Tokens;
@@ -106,12 +107,12 @@ fn show(ui: &mut Ui, app: &AppHandle) {
         }
     });
     let mut fade = app.context().get(palettes::CONTEXT_STROKE) == "true";
-    if ui
-        .checkbox(
-            &mut fade,
-            "A stroke is in progress (palettes fade with the setting on)",
-        )
-        .changed()
+    if widgets::checkbox(
+        ui,
+        &mut fade,
+        "A stroke is in progress (palettes fade with the setting on)",
+    )
+    .changed()
     {
         palettes::set_stroke(app, fade);
     }
@@ -181,7 +182,7 @@ fn toolbox(ui: &mut Ui, app: &AppHandle) {
         .num_columns(2)
         .show(ui, |ui| {
             for (i, tool) in TOOLS.iter().enumerate() {
-                if ui.selectable_label(chosen == *tool, *tool).clicked() {
+                if widgets::selectable_label(ui, chosen == *tool, *tool).clicked() {
                     app.set_context(TOOL, tool);
                 }
                 if i % 2 == 1 {

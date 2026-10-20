@@ -9,6 +9,7 @@ use egui_pop::api::app::MENU_VIEW;
 use egui_pop::api::stories::StoryInfo;
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
 use egui_pop::core::lock;
+use egui_pop::core::widgets;
 use egui_pop::model::commands::CommandSpec;
 use egui_pop::model::ids::{BlockId, CommandId, PluginId, StoryId};
 use egui_pop::prelude::{Block, ServiceToken, zones};
@@ -204,7 +205,7 @@ fn switchers(ui: &mut Ui, app: &AppHandle) {
     });
     let preference = service.preference();
     let mut chosen = preference;
-    let combo = egui::ComboBox::from_id_salt("theme")
+    let combo = widgets::combo_box("theme")
         .selected_text(theme::theme_label(&shown))
         .show_ui(ui, |ui| {
             // The light or dark preference first, choosing within the pair.
@@ -215,7 +216,7 @@ fn switchers(ui: &mut Ui, app: &AppHandle) {
                     egui::ThemePreference::Light,
                     egui::ThemePreference::Dark,
                 ] {
-                    ui.selectable_value(&mut chosen, p, preference_label(p))
+                    widgets::selectable_value(ui, &mut chosen, p, preference_label(p))
                         .on_disabled_hover_text("This theme has no light or dark counterpart.");
                 }
             });
@@ -237,7 +238,7 @@ fn switchers(ui: &mut Ui, app: &AppHandle) {
                 } else {
                     theme::theme_label(&name)
                 };
-                ui.selectable_value(&mut picked, name, label);
+                widgets::selectable_value(ui, &mut picked, name, label);
             }
         })
         .response
@@ -251,27 +252,27 @@ fn switchers(ui: &mut Ui, app: &AppHandle) {
         None => "No light or dark counterpart".to_string(),
     });
     let label = ui.label("Density");
-    egui::ComboBox::from_id_salt("density")
+    widgets::combo_box("density")
         .selected_text(spec.density.name())
         .show_ui(ui, |ui| {
             for d in Density::ALL {
-                ui.selectable_value(&mut spec.density, d, d.name());
+                widgets::selectable_value(ui, &mut spec.density, d, d.name());
             }
         })
         .response
         .labelled_by(label.id);
     let label = ui.label("Accent");
-    egui::ComboBox::from_id_salt("accent")
+    widgets::combo_box("accent")
         .selected_text(spec.accent.as_deref().unwrap_or("theme's own"))
         .show_ui(ui, |ui| {
-            ui.selectable_value(&mut spec.accent, None, "theme's own");
+            widgets::selectable_value(ui, &mut spec.accent, None, "theme's own");
             for scale in service.themes().accents(&spec.base) {
-                ui.selectable_value(&mut spec.accent, Some(scale.clone()), scale);
+                widgets::selectable_value(ui, &mut spec.accent, Some(scale.clone()), scale);
             }
         })
         .response
         .labelled_by(label.id);
-    ui.checkbox(&mut spec.reduced_motion, "Reduced motion");
+    widgets::checkbox(ui, &mut spec.reduced_motion, "Reduced motion");
     if spec != before {
         service.set(spec);
     }
@@ -304,7 +305,7 @@ fn pages(ui: &mut Ui, app: &AppHandle) {
             ui.weak(&s.group);
             group = Some(s.group.clone());
         }
-        if ui.selectable_label(s.id == current, &s.title).clicked() {
+        if widgets::selectable_label(ui, s.id == current, &s.title).clicked() {
             nav.set(app, s.id.clone());
         }
     }

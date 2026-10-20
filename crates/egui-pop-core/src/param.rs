@@ -21,6 +21,7 @@ use egui_pop_model::values::{Descriptor, Type, Value};
 
 use crate::binding::{self, Bindable, Binding, Choice, SharedStore};
 use crate::slider::Slider;
+use crate::widgets;
 
 /// Where the value is.
 #[derive(Debug)]
@@ -92,15 +93,17 @@ pub fn param_shown(
             *v = f.round() as i64;
             r
         }),
-        Type::Bool => with(ui, mode, |ui, v: &mut bool| ui.checkbox(v, &d.label)),
+        Type::Bool => with(ui, mode, |ui, v: &mut bool| {
+            widgets::checkbox(ui, v, &d.label)
+        }),
         Type::Choice => labelled(ui, &d.label, |ui| {
             with(ui, mode, |ui, v: &mut Choice| {
                 let mut picked = v.0.clone();
-                let r = egui::ComboBox::from_id_salt(("egui_pop.param", &d.label))
+                let r = widgets::combo_box(("egui_pop.param", &d.label))
                     .selected_text(shown(&picked))
                     .show_ui(ui, |ui| {
                         for c in &d.choices {
-                            ui.selectable_value(&mut picked, c.clone(), shown(c));
+                            widgets::selectable_value(ui, &mut picked, c.clone(), shown(c));
                         }
                     })
                     .response;

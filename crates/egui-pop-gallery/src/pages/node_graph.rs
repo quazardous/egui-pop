@@ -13,6 +13,7 @@ use egui::{Sense, Ui, vec2};
 use egui_pop::api::steps::Before;
 use egui_pop::api::stories::Story;
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
+use egui_pop::core::widgets;
 use egui_pop::imaging::{self, graph::STEP_GRAPH_DELETE};
 use egui_pop::model::ids::{PluginId, StoryId};
 use egui_pop::theme::Tokens;
@@ -449,7 +450,7 @@ pub fn show(ui: &mut Ui, app: &AppHandle, s: &mut State) {
 
 /// The playground: snapping and the views.
 fn playground(ui: &mut Ui, s: &mut State) {
-    ui.checkbox(&mut s.snap, "Snap to a 10-unit grid");
+    widgets::checkbox(ui, &mut s.snap, "Snap to a 10-unit grid");
     ui.horizontal_wrapped(|ui| {
         if ui.button("Fit").clicked() {
             s.view.request(Request::Fit);

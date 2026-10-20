@@ -6,6 +6,7 @@ use egui_pop::api::stories::Story;
 use egui_pop::api::zoom;
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
 use egui_pop::core::scale::{self, Scale};
+use egui_pop::core::widgets;
 use egui_pop::model::ids::{PluginId, StoryId};
 use egui_pop::theme::Tokens;
 
@@ -66,8 +67,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     ui.horizontal_wrapped(|ui| {
         let now = zoom::current(app);
         for step in scale::ZOOM_STEPS {
-            if ui
-                .selectable_label((step - now).abs() < 0.001, zoom::label(step))
+            if widgets::selectable_label(ui, (step - now).abs() < 0.001, zoom::label(step))
                 .clicked()
             {
                 zoom::set(app, step);

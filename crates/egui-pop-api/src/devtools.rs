@@ -18,6 +18,7 @@ use std::sync::{Arc, Mutex};
 use egui::Ui;
 use egui_pop_core::lock;
 use egui_pop_core::strings;
+use egui_pop_core::widgets;
 use egui_pop_model::commands::CommandSpec;
 use egui_pop_model::ids::{CommandId, PanelId, PluginId, SettingId, StepId};
 use egui_pop_model::panels::{Area, PanelSpec};
@@ -157,7 +158,7 @@ fn show(ui: &mut Ui, app: &AppHandle, state: &Arc<Mutex<State>>) {
     ui.horizontal(|ui| {
         for (i, name) in txt::DEVTOOLS_TABS.iter().enumerate() {
             let name = strings::tr(ui.ctx(), name);
-            if ui.selectable_label(s.tab == i, name).clicked() {
+            if widgets::selectable_label(ui, s.tab == i, name).clicked() {
                 s.tab = i;
             }
         }
@@ -281,7 +282,7 @@ fn collectors(ui: &mut Ui, app: &AppHandle, s: &mut State) {
     }
     ui.horizontal_wrapped(|ui| {
         for n in &names {
-            if ui.selectable_label(*n == s.collector, n).clicked() {
+            if widgets::selectable_label(ui, *n == s.collector, n).clicked() {
                 s.collector.clone_from(n);
             }
         }

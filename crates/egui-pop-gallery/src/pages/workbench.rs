@@ -7,6 +7,7 @@ use egui_pop::api::steps::Before;
 use egui_pop::api::stories::Story;
 use egui_pop::api::workbench::{self, STEP_MOVE};
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
+use egui_pop::core::widgets;
 use egui_pop::model::ids::{PanelId, PluginId, StoryId};
 use egui_pop::model::panels::{Area, PanelSpec};
 
@@ -122,9 +123,12 @@ fn show(ui: &mut Ui, app: &AppHandle) {
         }
     });
     let mut veto = app.context().get(VETO) == "true";
-    if ui
-        .checkbox(&mut veto, "Veto moves (a before-hook on workbench.move)")
-        .changed()
+    if widgets::checkbox(
+        ui,
+        &mut veto,
+        "Veto moves (a before-hook on workbench.move)",
+    )
+    .changed()
     {
         app.set_context(VETO, if veto { "true" } else { "false" });
     }

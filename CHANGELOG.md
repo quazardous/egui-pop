@@ -243,6 +243,21 @@ publishes.
 
 ### Changed
 
+- egui-pop's own checkboxes, radio buttons, selectable labels and combo
+  boxes are its kit-drawn widgets (`egui_pop_core::widgets`): the
+  settings, dialogs, the file picker, contexts, devtools, the theme
+  editor, parameters, the decorated input's list, the library's tag
+  suggestions, the assist card's rows, the find bar's toggles (now
+  `toggle-chip`s) and the gallery. The default look is egui's, with
+  these deliberate changes: a chosen row under the pointer keeps its
+  resting outline (egui drew the hover outline over the selection); a
+  focused selectable row shows `list-row`'s focus ring inside it rather
+  than egui's pressed look; a checkbox's colours follow its state in the
+  same pass rather than the previous one; a checkbox in egui's menu bar
+  (the gallery's top bar) keeps its box's border, which egui's menu bar
+  drops from egui's own widgets. A `Choose` dialog's rows are
+  `SelectableRow::steady`. A kit restyling `list-row` now restyles
+  selectable rows too (they are based on it).
 - One loading rule for theme files (egui-pop-tokens, egui-pop-api,
   egui-pop-i18n; breaking): `Themes::add_text`, the theme editor's
   import and the new `Themes::check_file` load a file over its base

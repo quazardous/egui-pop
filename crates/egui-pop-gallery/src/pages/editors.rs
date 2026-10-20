@@ -10,6 +10,7 @@ use egui::Ui;
 use egui_pop::api::steps::Before;
 use egui_pop::api::stories::Story;
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
+use egui_pop::core::widgets;
 use egui_pop::editors::assist::{
     self, AssistProvider, CodeAction, CompletionItem, Hover, ItemKind, Location, Reply, Request,
     Signature, SignatureHelp, Suggestion, WordCompletion,
@@ -148,12 +149,12 @@ impl Plugin for TextPage {
 fn text_page(ui: &mut Ui, app: &AppHandle, state: &EditorState, log: &mut Log) {
     ui.label("Type, select, Ctrl+F to search, Ctrl+H to replace, Ctrl+Z to undo; Escape leaves the editor, Tab then moves on.");
     let mut veto = app.context().get(VETO) == "true";
-    if ui
-        .checkbox(
-            &mut veto,
-            "Lock the title line (a before-hook on edit.change)",
-        )
-        .changed()
+    if widgets::checkbox(
+        ui,
+        &mut veto,
+        "Lock the title line (a before-hook on edit.change)",
+    )
+    .changed()
     {
         app.set_context(VETO, if veto { "true" } else { "false" });
     }

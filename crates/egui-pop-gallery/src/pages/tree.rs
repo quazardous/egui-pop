@@ -17,6 +17,7 @@ use egui_pop::api::steps::Before;
 use egui_pop::api::stories::Story;
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
 use egui_pop::core::icon::{Icon, Tone};
+use egui_pop::core::widgets;
 use egui_pop::model::commands::CommandSpec;
 use egui_pop::model::ids::{CommandId, MenuId, PluginId, StoryId};
 use egui_pop::views::Mode;
@@ -371,12 +372,12 @@ fn show(ui: &mut Ui, app: &AppHandle, p: &mut PageState) {
         }
     });
     let mut veto = app.context().get(VETO) == "true";
-    if ui
-        .checkbox(
-            &mut veto,
-            "Veto drops into Archive (a before-hook on tree.drop)",
-        )
-        .changed()
+    if widgets::checkbox(
+        ui,
+        &mut veto,
+        "Veto drops into Archive (a before-hook on tree.drop)",
+    )
+    .changed()
     {
         app.set_context(VETO, if veto { "true" } else { "false" });
     }

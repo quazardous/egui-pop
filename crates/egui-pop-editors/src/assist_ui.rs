@@ -8,6 +8,7 @@ use egui::{Align2, Id, Key, Order, Pos2, RichText, Stroke, Ui, vec2};
 use egui_pop_api::AppHandle;
 use egui_pop_core::kit::{Kit, State};
 use egui_pop_core::theme::Tokens;
+use egui_pop_core::widgets;
 use serde_json::json;
 
 use crate::assist::{
@@ -617,7 +618,8 @@ pub(crate) fn surfaces(
                             .show(ui, |ui| {
                                 for (k, (i, label, detail)) in rows.iter().enumerate() {
                                     let r = ui.horizontal(|ui| {
-                                        let r = ui.selectable_label(
+                                        let r = widgets::selectable_label(
+                                            ui,
                                             k == selected,
                                             RichText::new(label).font(font.clone()),
                                         );
@@ -647,7 +649,7 @@ pub(crate) fn surfaces(
                 .show(&ctx, |ui| {
                     card(ui, |ui| {
                         for (k, title) in titles.iter().enumerate() {
-                            if ui.selectable_label(k == selected, title).clicked() {
+                            if widgets::selectable_label(ui, k == selected, title).clicked() {
                                 run_action = Some(items[k].clone());
                             }
                         }

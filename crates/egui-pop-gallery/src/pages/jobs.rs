@@ -12,6 +12,7 @@ use egui_pop::api::jobs_centre::PANEL_JOBS;
 use egui_pop::api::stories::Story;
 use egui_pop::api::toasts::{TOASTS, Toast};
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
+use egui_pop::core::widgets;
 use egui_pop::model::ids::{PluginId, StoryId};
 use egui_pop::model::jobs::{Job, Request};
 use serde_json::{Value as Json, json};
@@ -362,13 +363,16 @@ fn show(ui: &mut Ui, app: &AppHandle, sim: &Sim) {
             }
         }
         let mut auto = sim.0.borrow().auto;
-        if ui.checkbox(&mut auto, "Advance by itself").changed() {
+        if widgets::checkbox(ui, &mut auto, "Advance by itself").changed() {
             sim.0.borrow_mut().auto = auto;
         }
         let mut refine = app.context().get(REFINE) == "true";
-        if ui
-            .checkbox(&mut refine, "Estimate the scan (a hook on jobs.estimate)")
-            .changed()
+        if widgets::checkbox(
+            ui,
+            &mut refine,
+            "Estimate the scan (a hook on jobs.estimate)",
+        )
+        .changed()
         {
             app.set_context(REFINE, if refine { "true" } else { "false" });
         }
