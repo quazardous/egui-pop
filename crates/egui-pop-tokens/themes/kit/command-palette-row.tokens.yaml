@@ -1,25 +1,13 @@
 $description: "The `command-palette-row` component of the default kit (docs/kit.md), layered into pop-dark."
 command-palette-row:
-  $description: "A command in the command palette's list: egui lays it out and takes its clicks, the kit paints its box under it; `selected` for the one Enter runs (never `hover` then). Its matched characters are in the `accent` tone, its keys in the `muted` tone."
-  shape:
+  $description: "A command in the command palette's list: egui lays it out and takes its clicks, the kit paints its box under it; `selected` for the one Enter runs (never `hover` then). Its matched characters are in the `accent` tone, its keys in the `muted` tone. Based on `menu-item`, outlined, and selected like a list's row."
+  based-on:
     $type: "string"
-    $value: "box"
+    $value: "menu-item"
   rest:
-    fill:
-      $type: "color"
-      $value: "{transparent}"
-    border-color:
-      $type: "color"
-      $value: "{transparent}"
     border-width:
       $type: "dimension"
       $value: {value: 1, unit: "px"}
-    radius:
-      $type: "dimension"
-      $value: "{radius.widget}"
-    text:
-      $type: "color"
-      $value: "{text.default}"
   selected:
     fill:
       $type: "color"
@@ -27,26 +15,24 @@ command-palette-row:
     border-color:
       $type: "color"
       $value: "{border.default}"
+  # Its label keeps its colour under the pointer and pressed, unlike a
+  # menu item's.
   hover:
-    fill:
-      $type: "color"
-      $value: "{surface.hover}"
     border-color:
       $type: "color"
       $value: "{border.strong}"
-  active:
-    fill:
+    text:
       $type: "color"
-      $value: "{surface.active}"
+      $value: "{text.default}"
+  active:
     border-color:
       $type: "color"
       $value: "{focus.ring}"
+    text:
+      $type: "color"
+      $value: "{text.default}"
   tone:
     accent:
       text:
         $type: "color"
         $value: "{text.strong}"
-    muted:
-      text:
-        $type: "color"
-        $value: "{text.muted}"

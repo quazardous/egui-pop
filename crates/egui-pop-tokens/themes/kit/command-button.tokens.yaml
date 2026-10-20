@@ -1,46 +1,11 @@
 $description: "The `command-button` component of the default kit (docs/kit.md), layered into pop-dark."
 command-button:
-  $description: "A button running a command, its icon slot a spinner while the command runs. egui lays it out and takes its clicks, the kit paints its box; egui greys it when disabled. The default kit gives it `button`'s look."
-  shape:
+  $description: "A button running a command, its icon slot a spinner while the command runs. egui lays it out and takes its clicks, the kit paints its box; egui greys it when disabled. Based on `button`: restyling the button restyles it."
+  based-on:
     $type: "string"
-    $value: "box"
-  rest:
-    fill:
-      $type: "color"
-      $value: "{surface.raised}"
-    border-color:
-      $type: "color"
-      $value: "{border.default}"
-    border-width:
-      $type: "dimension"
-      $value: {value: 1, unit: "px"}
-    radius:
-      $type: "dimension"
-      $value: "{radius.widget}"
-    text:
-      $type: "color"
-      $value: "{text.default}"
-  hover:
-    fill:
-      $type: "color"
-      $value: "{surface.hover}"
-    border-color:
-      $type: "color"
-      $value: "{border.strong}"
-    text:
-      $type: "color"
-      $value: "{text.strong}"
+    $value: "button"
+  # A command button shows the keyboard focus, which egui's buttons do not.
   focus:
-    fill:
-      $type: "color"
-      $value: "{surface.active}"
-    border-color:
-      $type: "color"
-      $value: "{focus.ring}"
-    text:
-      $type: "color"
-      $value: "{text.strong}"
-  active:
     fill:
       $type: "color"
       $value: "{surface.active}"

@@ -1,15 +1,14 @@
 $description: "The `dialog-header` component of the default kit (docs/kit.md), layered into pop-dark."
 dialog-header:
-  $description: "A dialog's title row (colours only): its title, on the `header-band` when the dialog is movable (then `hover` and `active` with the band)."
+  $description: "A dialog's title row (colours only): its title, on the `header-band` when the dialog is movable (then `hover` and `active` with the band). Based on `header-band`: its title takes the band's `text`."
+  based-on:
+    $type: "string"
+    $value: "header-band"
   shape:
     $type: "string"
     $value: "plain"
+    $description: "Colours only: egui-pop does not paint it, the band does."
   padding-y:
     $type: "dimension"
     $value: "{space.m}"
     $description: "The room below the title of a movable dialog, inside its band (and as much again below the band's line)."
-  rest:
-    text:
-      $type: "color"
-      $value: "{text.default}"
-      $description: "The dialog's title."

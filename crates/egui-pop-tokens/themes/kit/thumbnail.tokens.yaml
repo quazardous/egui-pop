@@ -1,40 +1,18 @@
 $description: "The `thumbnail` component of the default kit (docs/kit.md), layered into pop-dark."
 thumbnail:
-  $description: "A thumbnail of the viewport crate (a kit component): selected, under the pointer (never while selected), focused."
-  shape:
+  $description: "A thumbnail of the viewport crate (a kit component): selected, under the pointer (never while selected), focused. Based on the library's `thumb-cell`, its fill kept in every state and a wider ring."
+  based-on:
     $type: "string"
-    $value: "box"
-  rest:
+    $value: "thumb-cell"
+  selected:
     fill:
       $type: "color"
       $value: "{surface.raised}"
-    border-color:
-      $type: "color"
-      $value: "{border.strong}"
-    border-width:
-      $type: "dimension"
-      $value: {value: 0, unit: "px"}
-    radius:
-      $type: "dimension"
-      $value: "{radius.widget}"
-  selected:
-    border-color:
-      $type: "color"
-      $value: "{accent.default}"
-    border-width:
-      $type: "dimension"
-      $value: {value: 2, unit: "px"}
   hover:
-    border-width:
-      $type: "dimension"
-      $value: {value: 1, unit: "px"}
-  focus:
-    ring-color:
+    fill:
       $type: "color"
-      $value: "{focus.ring}"
+      $value: "{surface.raised}"
+  focus:
     ring-width:
       $type: "dimension"
       $value: {value: 2, unit: "px"}
-    ring-offset:
-      $type: "dimension"
-      $value: {value: 1, unit: "px"}

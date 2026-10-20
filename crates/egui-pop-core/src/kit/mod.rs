@@ -1702,4 +1702,80 @@ mod tests {
             Vec2::new(30.0, 10.0)
         );
     }
+
+    #[test]
+    fn a_component_based_on_another_is_drawn_by_its_base_s_handler() {
+        struct Wide;
+        impl Primitive<ComponentKit> for Wide {
+            fn measure(&self, _: &ComponentKit, label: Vec2) -> Vec2 {
+                label * 2.0
+            }
+            fn paint(&self, _: &KitCx<'_>, _: &ComponentKit, _: &Part<'_>) {}
+            fn paint_label(&self, _: &KitCx<'_>, _: &ComponentKit, _: &Part<'_>) {}
+        }
+        let ctx = Context::default();
+        // Registered for `button` only: `command-button` is based on it.
+        register_shape(&ctx, "button", "wide", Arc::new(Wide));
+        let t = tokens_with(
+            r##"
+            $extends: "pop-dark"
+            button:
+              shape: {$type: "string", $value: "wide"}
+              hover:
+                fill: {$type: "color", $value: "#102030"}
+            "##,
+        );
+        let kit = install(&ctx, &t);
+        assert!(kit.problems.is_empty(), "{:?}", kit.problems);
+        assert_eq!(kit.command_button.shape, "wide");
+        assert_eq!(
+            kit.command_button.measure(Vec2::new(10.0, 5.0)),
+            Vec2::new(20.0, 10.0)
+        );
+        // The base's restyle reaches it; its own focus box stays.
+        assert_eq!(
+            kit.command_button.style(State::HOVER).fill,
+            Color32::from_rgb(0x10, 0x20, 0x30)
+        );
+        assert_eq!(
+            kit.command_button.style(State::FOCUS).border_color,
+            Tokens::default().focus_ring
+        );
+        // A shape of its own wins over the base's.
+        let t = tokens_with(
+            r##"
+            $extends: "pop-dark"
+            button:
+              shape: {$type: "string", $value: "wide"}
+            command-button:
+              shape: {$type: "string", $value: "box"}
+            "##,
+        );
+        assert_eq!(install(&ctx, &t).command_button.shape, "box");
+    }
+
+    #[test]
+    fn the_default_kit_s_copies_are_based_on_their_component() {
+        let t = Tokens::default();
+        let r = t.resolved();
+        for (component, base) in [
+            ("command-button", "button"),
+            ("command-palette-row", "menu-item"),
+            ("dialog-header", "header-band"),
+            ("band-icon-button", "icon-button"),
+            ("find-bar-button", "icon-button"),
+            ("thumb-overlay-badge", "pill"),
+            ("thumbnail", "thumb-cell"),
+        ] {
+            assert_eq!(
+                string(&t, &format!("{component}.based-on")).as_deref(),
+                Some(base),
+                "{component}"
+            );
+            let alias = r
+                .get(&format!("{component}.rest.fill"))
+                .and_then(|t| t.alias.clone());
+            assert_eq!(alias, Some(format!("{base}.rest.fill")), "{component}");
+        }
+    }
 }

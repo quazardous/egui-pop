@@ -374,7 +374,10 @@ compiled at install.
   state of the last pass as egui's own frame was; a palette row's
   matches are the `accent` tone, its keys the `muted` tone. The
   gallery's `palettes-kit-band` snapshot restyles the bands with data
-  only.
+  only. A command button is based on `button`, a palette row on
+  `menu-item`, the dialog's title on `header-band` and the band's and
+  find bar's buttons on `icon-button` ([based on
+  another](#components-based-on-another)).
 - **Progress and status by tone** (`progress-bar`, `progress-line`,
   `progress-fill`, `progress-caption`, `meter`, `meter-tick`,
   `progress-ring`, `spinner`, `status-indicator`), handlers `track`,

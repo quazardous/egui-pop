@@ -96,6 +96,19 @@ publishes.
   `spinner`, `progress-ring` and the library's `pill` give the `record`
   tone as well.
 
+- The default kit's components that copied another's values are based
+  on it (`egui-pop-tokens`): `command-button` on `button`,
+  `command-palette-row` on `menu-item`, `dialog-header` on
+  `header-band`, `band-icon-button` and `find-bar-button` on
+  `icon-button`, `thumb-overlay-badge` on `pill` and `thumbnail` on
+  `thumb-cell`, each giving only what differs. A kit restyling the base
+  now restyles them; `pop-high-contrast` no longer repeats
+  `command-button.rest.border-color`. A kit that gave one of these
+  components a value of its own keeps it. What the default kit draws
+  changes in two states no snapshot shows: a band's and the find bar's
+  icon buttons are muted when disabled, and the find bar's brighten
+  under the pointer, as every icon button does.
+
 - Each crate has its own version and is published only when it changes;
   the `egui-pop` facade keeps one minor per egui minor.
   `cargo xtask publish --dry-run` names the crates changed since the

@@ -1,25 +1,9 @@
 $description: "The `band-icon-button` component of the default kit (docs/kit.md), layered into pop-dark."
 band-icon-button:
-  $description: "An icon button on a header band (a palette's close, roll and pin, a dialog's close), its icon in `text`; `selected` for a palette pinned."
-  shape:
+  $description: "An icon button on a header band (a palette's close, roll and pin, a dialog's close), its icon in `text`; `selected` for a palette pinned. Based on `icon-button`, with a fill under the pointer and a ring inside it."
+  based-on:
     $type: "string"
-    $value: "box"
-  rest:
-    fill:
-      $type: "color"
-      $value: "{transparent}"
-    border-color:
-      $type: "color"
-      $value: "{transparent}"
-    border-width:
-      $type: "dimension"
-      $value: {value: 0, unit: "px"}
-    radius:
-      $type: "dimension"
-      $value: "{radius.widget}"
-    text:
-      $type: "color"
-      $value: "{text.default}"
+    $value: "icon-button"
   selected:
     fill:
       $type: "color"
@@ -31,16 +15,10 @@ band-icon-button:
     fill:
       $type: "color"
       $value: "{surface.hover}"
-    text:
-      $type: "color"
-      $value: "{text.strong}"
   focus:
     fill:
       $type: "color"
       $value: "{surface.active}"
-    ring-color:
-      $type: "color"
-      $value: "{focus.ring}"
     ring-width:
       $type: "dimension"
       $value: {value: 2, unit: "px"}
