@@ -152,7 +152,8 @@ without it.
 
 Layout code says why there is space, or what a piece of text is, rather
 than how many points: the tokens below are system roles over the
-scales, read through `Tokens` (`t.space.group`, `t.text_role.section`).
+scales, read through `Tokens` (`t.space.group`, `t.text_role.section`)
+or the `UiPop` helpers ([Getting started](getting-started.md#laying-out-by-role)).
 
 | Token | Alias of | Use |
 |---|---|---|

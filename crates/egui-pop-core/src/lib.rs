@@ -41,6 +41,8 @@
 //! - [`indicator`]: micro-indicators (dots and LEDs, badges, pips,
 //!   flags, swatches, icons by state) drawn by the kit, passive or
 //!   buttons, inline or on a widget, recorded for agents;
+//! - [`ui`]: layout helpers named by role on egui's `Ui` (text roles,
+//!   spacing by intent, a card and a button in a tone);
 //! - [`persist`]: documents written atomically, with a backup and
 //!   migrations;
 //! - [`fault`]: fault boundaries showing an error card on panic;
@@ -79,6 +81,7 @@ pub mod slider;
 pub mod strings;
 pub mod tab;
 pub mod theme;
+pub mod ui;
 pub mod widgets;
 
 pub mod state;

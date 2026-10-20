@@ -105,6 +105,7 @@ pub mod prelude {
     };
     pub use egui_pop_core::binding::{Binding, SharedStore};
     pub use egui_pop_core::theme::{Density, ThemeSpec, Tokens};
+    pub use egui_pop_core::ui::{Space, TextRole, Tone, UiPop};
     pub use egui_pop_model::commands::{CommandSpec, Origin};
     pub use egui_pop_model::ids::{
         BlockId, CommandId, HookId, MenuId, PanelId, PluginId, ServiceId, SettingId, StepId,

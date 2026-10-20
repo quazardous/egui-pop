@@ -647,14 +647,22 @@ pub fn visuals_with(t: &Tokens, kit: &Kit) -> Visuals {
         (&mut w.active, State::ACTIVE),
         (&mut w.open, State::SELECTED),
     ] {
-        let b = kit.button.style(state);
-        widget.bg_fill = b.fill;
-        widget.weak_bg_fill = b.fill;
-        widget.bg_stroke = Stroke::new(b.border_width, b.border_color);
-        widget.fg_stroke = Stroke::new(1.0, b.text);
-        widget.corner_radius = radius(b.radius);
+        set_widget_visuals(widget, kit.button.style(state));
     }
     v
+}
+
+/// One of egui's widget states drawn as a kit box: its fill, border,
+/// text colour and corner radius.
+pub(crate) fn set_widget_visuals(
+    widget: &mut egui::style::WidgetVisuals,
+    b: &crate::kit::BoxStyle,
+) {
+    widget.bg_fill = b.fill;
+    widget.weak_bg_fill = b.fill;
+    widget.bg_stroke = Stroke::new(b.border_width, b.border_color);
+    widget.fg_stroke = Stroke::new(1.0, b.text);
+    widget.corner_radius = radius(b.radius);
 }
 
 /// egui's style for a theme, built over `base` (whose settings the theme

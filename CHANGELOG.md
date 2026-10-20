@@ -44,6 +44,14 @@ publishes.
   the accent (a primary action), a status colour as fill (`info`,
   `success`, `warning`, `danger`, `record`) or no box at rest (`muted`).
   Both are in the contract and the contrast pairs. Part of #35.
+- Layout helpers named by role (egui-pop-core, egui-pop): the `UiPop`
+  extension trait on egui's `Ui` (`egui_pop_core::ui`, in the prelude
+  with `Space`, `TextRole` and `Tone`): `section_title`, `muted`,
+  `meta` and `text_role` (labels in a text role; `ui::role_text` for
+  other widgets), `space_role(Space)` (spacing by intent), `card(Tone,
+  ..)` (the kit's card) and `button_tone(Tone, ..)` (egui's button in a
+  tone of the kit's `button`). "Laying out by role" in the getting
+  started guide. Part of #35.
 - One writer per value (egui-pop-model): a path's descriptor says who
   may write it besides its owner (`Writers`: `Owner`, the default,
   `Also(...)`, `Any`; `Descriptor::writers`, `Descriptor::any_writer`).

@@ -114,6 +114,49 @@ settings window with its shortcuts editor, and the parameter widgets:
 
 ![sliders and parameter widgets](screenshots/values-pop-dark.png)
 
+## Laying out by role
+
+An application's own layout code says what a piece of text is and why
+there is space, not which size or how many points: the `UiPop` helpers
+on egui's `Ui` (in the prelude) draw from the theme's text roles,
+spacing by intent and kit ([design tokens](tokens.md#spacing-and-text-by-intent)).
+
+```rust
+use egui_pop::egui;
+use egui_pop::prelude::*;
+
+fn export_panel(ui: &mut egui::Ui) {
+    ui.section_title("Export");
+    ui.muted("Writes a copy next to the original.");
+    ui.space_role(Space::Group);
+    ui.card(Tone::Neutral, |ui| {
+        ui.label("IMG_0001.raw");
+        ui.meta("24 MB, 12 October");
+    });
+    ui.space_role(Space::Section);
+    ui.horizontal(|ui| {
+        if ui.button_tone(Tone::Accent, "Export").clicked() {
+            // ...
+        }
+        if ui.button_tone(Tone::Danger, "Delete").clicked() {
+            // ...
+        }
+    });
+}
+
+let ctx = egui::Context::default();
+egui_pop::theme::install(&ctx, &ThemeSpec::new("pop-dark"));
+let mut out = ctx.run_ui(Default::default(), export_panel);
+out.textures_delta.clear();
+```
+
+| Helper | Draws |
+|---|---|
+| `section_title`, `muted`, `meta`, `text_role(TextRole, ..)` | a label in a text role (`text-role.*`); `role_text` gives the `RichText` for other widgets |
+| `space_role(Space)` | `space.inline`, `group`, `section` or `page` (egui's `add_space` takes points) |
+| `card(Tone, ..)` | the kit's `card`, by tone |
+| `button_tone(Tone, ..)` | egui's button in a tone of the kit's `button` |
+
 ## Next
 
 - [Themes](themes.md) and [design tokens](tokens.md): the look.
