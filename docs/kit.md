@@ -129,6 +129,43 @@ frame). Shadows are egui's (`Visuals`), whose `window_shadow` and
 (egui's own values by default): the dialog, popover, palette and assist
 frames, and egui's menus, take them from there.
 
+## Bridges to egui
+
+Where egui still draws a widget, the kit reaches it through one of these
+adapters. Each is the one bridge for what it covers, and what it cannot
+carry is reported in `Kit::problems` (logged at install) rather than
+dropped in silence. Replacing one means an egui-pop-drawn widget.
+
+- **`theme::visuals_with`.** The kit becomes egui's `Visuals` at
+  install: `button`'s rest, hover, active and selected are egui's
+  inactive, hovered, active and open widget states, for every egui
+  widget; `field`'s rest fill is text fields' background. Lost, and
+  reported: an indicator or a ring on `button`, a `field` outline or
+  text colour differing from the button's (egui shares one set of
+  states).
+- **egui's checkbox, radio and combo arrow.** Only `Visuals` reach them:
+  they follow `button` like every egui widget, and the glyph roles do
+  not apply to them.
+- **`menu-item` through `Component::paint_under`.** egui lays the item
+  out, takes its clicks and draws its label with a transparent frame; the
+  kit paints the box into a slot reserved under it. `command-button`,
+  `command-palette-row` and `empty-state` are painted the same way.
+- **`side-area`.** egui draws the separator line, with its
+  non-interactive stroke: `border-width` 0 hides it; another width than
+  the button's, or a colour other than `border.default`, is reported.
+
+Two parts of the token tree are outside the grid on purpose:
+
+- **`window`** is read by `WindowKit`, not by `components!`: the window
+  is not a part egui-pop paints but a request to the system (its
+  `corners`), its resize edges (`window.grip`) and the line around it
+  (`window.rest.border-*`).
+- **The component tokens outside kits** (`viewport.*`, `histogram.*`,
+  `curve.*`, `wheel.*`, `navigator.*`, `cursor.*`, `loupe.*`,
+  `graph.*`, `editor.*`, `syntax.*`, `terminal.*`, `palette.magnet`)
+  are colours and sizes of content drawn in code, not boxes in states:
+  they keep their flat names.
+
 ## Kits as packages
 
 A kit ships as a folder: `kit.yaml` (a DTCG token file with a manifest
@@ -252,7 +289,7 @@ compiled at install.
   The default kit's grip is transparent. An open side area
   (`side-area`) has `padding-x` and `padding-y` between its edges and its
   panels (egui's 8 and 2 by default), and no separator line when its
-  `border-width` is 0. A side area may lie over the centre
+  `border-width` is 0 (egui draws the line: see Bridges to egui). A side area may lie over the centre
   (`workbench.place`): its strip keeps the room (`selected` while the
   area is open; a click folds it) and the area is drawn above the
   centre in `side-area`'s box, casting its `shadow-*` towards the centre

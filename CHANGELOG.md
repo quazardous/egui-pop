@@ -60,6 +60,11 @@ publishes.
   the same icon are reported (`kit::DISTINCT_GLYPHS`,
   `kit::same_glyphs`, `Problem::SameGlyph`) and drawn with egui-pop's
   shapes, so colour never carries a state alone.
+- A side area's separator line that egui cannot draw is reported
+  (`egui-pop-core`): a `side-area.rest.border-width` other than 0 or the
+  button's, or a `border-color` other than `border.default`, is in
+  `Kit::problems`, since egui draws the line with its own stroke.
+  docs/kit.md lists the bridges to egui that remain and what each loses.
 
 ### Changed
 

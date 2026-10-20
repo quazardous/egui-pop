@@ -899,7 +899,7 @@ impl Kit {
         let mut kit = Kit::compile_components(component, Glyphs::default(), Vec::new());
         kit.glyphs = Glyphs::compile(t, &mut problems);
         kit.window = WindowKit::compile(t, &mut problems);
-        problems.extend(egui_losses(&kit));
+        problems.extend(egui_losses(t, &kit));
         kit.problems = problems;
         kit
     }
@@ -920,9 +920,10 @@ impl Kit {
 }
 
 /// What egui's own widgets, drawn from `button` and `field`
-/// (`theme::visuals_with`), cannot show of them: a kit giving it is told,
-/// rather than seeing it dropped in silence.
-fn egui_losses(kit: &Kit) -> Vec<String> {
+/// (`theme::visuals_with`), and egui's separator of a side area cannot
+/// show of them: a kit giving it is told, rather than seeing it dropped
+/// in silence.
+fn egui_losses(t: &Tokens, kit: &Kit) -> Vec<String> {
     let mut lost = Vec::new();
     for (state, name) in [
         (State::REST, "rest"),
@@ -951,6 +952,21 @@ fn egui_losses(kit: &Kit) -> Vec<String> {
     }
     if f.text != b.text {
         lost.push("field.rest.text: egui's text fields take the button's text colour".into());
+    }
+    // egui draws a side area's separator with its non-interactive
+    // widgets' stroke: the button's width at rest, `border.default`.
+    let side = kit.side_area.style(State::REST);
+    if side.border_width > 0.0 && side.border_width != b.border_width {
+        lost.push(format!(
+            "side-area.rest.border-width: egui draws the separator line {} wide (the button's at rest); only 0 hides it",
+            b.border_width
+        ));
+    }
+    if side.border_width > 0.0 && side.border_color.a() > 0 && side.border_color != t.border.default
+    {
+        lost.push(
+            "side-area.rest.border-color: egui draws the separator line in `border.default`".into(),
+        );
     }
     lost
 }
@@ -1464,6 +1480,33 @@ mod tests {
         let kit = Kit::compile(&t, &Shapes::default());
         assert_eq!(kit.problems.len(), 1, "{:?}", kit.problems);
         assert!(kit.problems[0].starts_with("button.selected: egui's widgets draw no indicator"));
+    }
+
+    #[test]
+    fn a_side_area_separator_egui_cannot_draw_is_reported() {
+        let t = tokens_with(
+            r##"
+            $extends: "pop-dark"
+            side-area:
+              rest:
+                border-width: {$type: "dimension", $value: {value: 3, unit: "px"}}
+                border-color: {$type: "color", $value: "#ff0000"}
+            "##,
+        );
+        let kit = Kit::compile(&t, &Shapes::default());
+        assert_eq!(kit.problems.len(), 2, "{:?}", kit.problems);
+        assert!(kit.problems[0].starts_with("side-area.rest.border-width"));
+        assert!(kit.problems[1].starts_with("side-area.rest.border-color"));
+        // Hiding the line is what egui honours: nothing to report.
+        let t = tokens_with(
+            r##"
+            $extends: "pop-dark"
+            side-area:
+              rest:
+                border-width: {$type: "dimension", $value: {value: 0, unit: "px"}}
+            "##,
+        );
+        assert!(Kit::compile(&t, &Shapes::default()).problems.is_empty());
     }
 
     #[test]
