@@ -871,6 +871,8 @@ egui-pop-theme-editor-import = Importer
 
 egui-pop-theme-editor-imported = Importé sur { $theme }.
 
+egui-pop-theme-editor-lc-hint = Contraste de luminosité APCA, pour information : 60 pour du texte ordinaire, 75 pour du texte courant ; le thème est vérifié selon les WCAG.
+
 egui-pop-theme-editor-missing = Le plugin de l’éditeur de thème n’est pas branché.
 
 egui-pop-theme-editor-move-down = Descendre { $family }

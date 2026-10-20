@@ -872,6 +872,8 @@ egui-pop-theme-editor-import = Import
 
 egui-pop-theme-editor-imported = Imported over { $theme }.
 
+egui-pop-theme-editor-lc-hint = APCA lightness contrast, for information: 60 for ordinary text, 75 for body text; the theme is checked on WCAG.
+
 egui-pop-theme-editor-missing = The theme editor plugin is not connected.
 
 egui-pop-theme-editor-move-down = Move { $family } down

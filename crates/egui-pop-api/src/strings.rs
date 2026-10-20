@@ -577,6 +577,10 @@ pub const THEME_EDITOR_APPLY_FONTS_HINT: StrKey = StrKey::new(
     "egui-pop-theme-editor-apply-fonts-hint",
     "Rebuilds the font atlas once, and applies the theme being edited.",
 );
+pub const THEME_EDITOR_LC_HINT: StrKey = StrKey::new(
+    "egui-pop-theme-editor-lc-hint",
+    "APCA lightness contrast, for information: 60 for ordinary text, 75 for body text; the theme is checked on WCAG.",
+);
 pub const THEME_EDITOR_FILE: StrKey =
     StrKey::new("egui-pop-theme-editor-file", "Export and import");
 pub const THEME_EDITOR_NAME: StrKey = StrKey::new("egui-pop-theme-editor-name", "Theme name");
@@ -833,6 +837,7 @@ pub const ALL: &[StrKey] = &[
     THEME_EDITOR_GENERATED,
     THEME_EDITOR_SEED_CLAMPED,
     THEME_EDITOR_GENERATE_VARIANT,
+    THEME_EDITOR_LC_HINT,
     THEME_EDITOR_TAB_TOKENS,
     THEME_EDITOR_TAB_FONTS,
     THEME_EDITOR_FAMILIES,

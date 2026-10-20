@@ -115,7 +115,9 @@ it directly, or the service (`THEME_EDITOR`: `set`, `undo`, `redo`,
   itself or through the tokens aliasing it, with its ratio, AA (4.5:1
   for text, 3:1 for interface parts), AAA (7:1 for text; interface parts
   have no AAA) and what the theme needs: AAA text for a high-contrast
-  theme (7:1), AA otherwise.
+  theme (7:1), AA otherwise; and, for information, the pair's APCA
+  lightness contrast (Lc, `egui_pop_tokens::apca`): the theme's
+  contract stays on WCAG.
 - **Export and import**: the draft as a `.tokens.json` file, or a file
   pasted and loaded; "Open a file" and "Save as a file" through a file
   chooser. The chooser is the host's (`ThemeEditor::set_file_dialog`, a

@@ -63,6 +63,9 @@ publishes.
   `theme_editor::scale_of`). Edits recorded together undo as one change
   (`ThemeDraft::record_joined`, `undo_group`, `redo_group`,
   `ThemeDraft::scale_edits`). Part of #33.
+- The theme editor's contrast table shows each pair's APCA lightness
+  contrast beside its WCAG ratio, for information (egui-pop-api:
+  `Readout::lc`, `lc` in `theme.read`). Part of #33.
 - A theme in one part of a window (egui-pop-core): `theme::ScopedTheme`
   draws a theme's tokens, kit and egui style in a child `Ui` without
   installing it (`ScopedTheme::new`, `show`, `current`); while it

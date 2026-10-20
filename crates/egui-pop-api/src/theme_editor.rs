@@ -65,6 +65,7 @@ use egui_pop_core::lock;
 use egui_pop_core::state::Slot;
 use egui_pop_core::strings;
 use egui_pop_core::theme::{ScopedTheme, Tokens, color32};
+use egui_pop_core::tokens::apca;
 use egui_pop_core::tokens::contract::{self, Tier};
 use egui_pop_core::tokens::contrast::{self, Level, Pair, PairKind};
 use egui_pop_core::tokens::palette::{self, Backdrop, Ramp, Scheme};
@@ -154,6 +155,10 @@ pub struct Readout {
     pub aaa: Option<f32>,
     /// The ratio the theme needs ([`level_of`] its base).
     pub required: f32,
+    /// The APCA lightness contrast of the pair (`apca::lc`), shown
+    /// beside the ratio for information: the theme's contract stays on
+    /// WCAG. `None` when one side is not a colour.
+    pub lc: Option<f32>,
 }
 
 impl Readout {
@@ -180,6 +185,7 @@ impl Readout {
             "aaa": self.passes_aaa(),
             "required": self.required,
             "passes": self.passes(),
+            "lc": self.lc.map(|l| (l * 10.0).round() / 10.0),
         })
     }
 }
@@ -221,6 +227,10 @@ pub fn contrast_of(tokens: &ResolvedTokens, path: &str) -> Vec<Readout> {
             aa: Level::Normal.required(p.kind),
             aaa: (p.kind == PairKind::Text).then(|| Level::High.required(p.kind)),
             required: level.required(p.kind),
+            lc: tokens
+                .color(p.foreground)
+                .zip(tokens.color(p.background))
+                .map(|(f, b)| apca::lc(f, b)),
         })
         .collect()
 }
@@ -1860,7 +1870,7 @@ fn contrast_readouts(ui: &mut Ui, tokens: &ResolvedTokens, path: &str) {
         }
     };
     egui::Grid::new(("egui_pop.theme_editor.contrast", path))
-        .num_columns(5)
+        .num_columns(6)
         .striped(true)
         .show(ui, |ui| {
             ui.strong(strings::tr(&ctx, &txt::THEME_EDITOR_PAIR));
@@ -1868,6 +1878,8 @@ fn contrast_readouts(ui: &mut Ui, tokens: &ResolvedTokens, path: &str) {
             ui.strong("AA");
             ui.strong("AAA");
             ui.strong(strings::tr(&ctx, &txt::THEME_EDITOR_THEME_NEEDS));
+            ui.strong("APCA Lc")
+                .on_hover_text(strings::tr(&ctx, &txt::THEME_EDITOR_LC_HINT));
             ui.end_row();
             for r in &readouts {
                 ui.label(strings::tr_args(
@@ -1887,6 +1899,7 @@ fn contrast_readouts(ui: &mut Ui, tokens: &ResolvedTokens, path: &str) {
                 } else {
                     ui.colored_label(t.status.danger, needs);
                 }
+                ui.monospace(r.lc.map_or("-".into(), |l| format!("{l:.0}")));
                 ui.end_row();
             }
         });

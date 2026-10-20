@@ -514,3 +514,26 @@ fn the_fonts_tab_adds_a_file_reorders_families_and_applies_once() {
             .contains_key("font.family.ui")
     );
 }
+
+#[test]
+fn the_contrast_readouts_carry_the_apca_lightness_contrast() {
+    let mut h = harness(ThemeSpec::new("pop-light"));
+    h.run();
+    let read = run(&mut h, &CMD_THEME_READ, json!({ "path": "text.default" }));
+    let pair = read["contrast"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["background"] == "surface.panel")
+        .unwrap()
+        .clone();
+    // Dark text on a light panel: a large, positive Lc.
+    assert!(pair["lc"].as_f64().unwrap() > 75.0, "{pair}");
+    h.state()
+        .handle()
+        .service(&THEME_EDITOR)
+        .unwrap()
+        .select("text.default");
+    h.run();
+    assert!(h.query_by_label("APCA Lc").is_some());
+}
