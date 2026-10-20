@@ -20,7 +20,7 @@ directory; without it they are simulated and nothing reaches the
 desktop).
 
 Pages: `overview` (the theme overview), `tokens`, `builtins` (egui's
-built-ins, and egui-pop's kit-drawn checkbox, radio, rows and chips), `roles` (layout by role: text roles, spacing by intent, cards and buttons by tone), `theme-editor` (the theme editor), `icons`, `indicators` (dots, badges, pips, flags, swatches), `motion` (the motion clock), `values`, `sliders`, `inputs` (decorated inputs, field states and Tab order),
+built-ins, and egui-pop's kit-drawn checkbox, radio, rows and chips), `roles` (layout by role: text roles, spacing by intent, cards and buttons by tone), `scoped` (egui's own buttons, toggles, combo box and text fields restyled by the kit in a scope), `theme-editor` (the theme editor), `icons`, `indicators` (dots, badges, pips, flags, swatches), `motion` (the motion clock), `values`, `sliders`, `inputs` (decorated inputs, field states and Tab order),
 `menus`, `dialogs`, `files` (the file chooser), `toasts`, `tips` (tips of the day and
 hints), `progress`,
 `placeholders` (skeletons and empty states), `viewport` (the image
@@ -100,7 +100,7 @@ Themes, design tokens, the theme editor, icons and scaling.
 
 ### Widgets
 
-Egui's built-ins in egui-pop's style, values, sliders, inputs (decorators, field states, Tab order), menus, dialogs (movable ones, a clear backdrop), file choosing, toasts, micro-indicators (still under reduced motion), and progress (bars, rings, meters, spinners; still under reduced motion).
+Egui's built-ins in egui-pop's style, and restyled by a kit in a scope, values, sliders, inputs (decorators, field states, Tab order), menus, dialogs (movable ones, a clear backdrop), file choosing, toasts, micro-indicators (still under reduced motion), and progress (bars, rings, meters, spinners; still under reduced motion).
 
 <table>
   <tr>
@@ -162,6 +162,10 @@ Egui's built-ins in egui-pop's style, values, sliders, inputs (decorators, field
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/builtins-kit-toggles.png"><img src="../crates/egui-pop-gallery/tests/snapshots/builtins-kit-toggles.png" width="200" alt="builtins-kit-toggles"></a><br>builtins-kit-toggles</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/roles-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/roles-pop-dark.png" width="200" alt="roles-pop-dark"></a><br>roles-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/roles-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/roles-pop-light.png" width="200" alt="roles-pop-light"></a><br>roles-pop-light</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/scoped-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/scoped-pop-dark.png" width="200" alt="scoped-pop-dark"></a><br>scoped-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/scoped-kit-restyled.png"><img src="../crates/egui-pop-gallery/tests/snapshots/scoped-kit-restyled.png" width="200" alt="scoped-kit-restyled"></a><br>scoped-kit-restyled</td>
   </tr>
 </table>
 

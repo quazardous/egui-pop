@@ -99,6 +99,10 @@ publishes.
   `combo-box`, and the navigator's zoom buttons (fit, 100 %) from
   `toggle-button` (egui-pop-core, egui-pop-api, egui-pop-viewport).
   Part of #35.
+- The gallery's `scoped` page (egui widgets by kit): egui's buttons by
+  tone, buttons on or off, a combo box and text fields by tone, each in
+  its kit component's scope; the `scoped-kit-restyled` snapshot
+  restyles them with data only. Closes #35.
 - The gallery's `roles` page (Layout by role): text roles, spacing by
   intent, cards and buttons in every tone; the gallery's section titles,
   the jobs centre's titles and details and a placeholder gap use the

@@ -2899,6 +2899,72 @@ fn a_kit_restyles_egui_s_small_widgets_from_the_theme_alone() {
 }
 
 #[test]
+fn egui_s_widgets_in_a_scope_follow_their_kit_component() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "scoped"));
+    h.run();
+    h.snapshot("scoped-pop-dark");
+    h.get_by_label("danger").click();
+    h.run();
+    assert!(h.query_by_label("Last clicked: danger").is_some());
+    h.get_by_label("200 %").click();
+    h.run();
+}
+
+#[test]
+fn a_kit_restyles_egui_s_own_widgets_in_a_scope_from_the_theme_alone() {
+    // Data only: square accent buttons, a rounded accent combo box, a
+    // filled toggle, flat fields with a thick accent outline while
+    // focused. egui draws every one of them.
+    let mut themes = egui_pop::tokens::Themes::default();
+    themes
+        .add_text(
+            "kit-scoped",
+            r#"
+            $extends: "pop-dark"
+            button:
+              rest:
+                radius: {$type: "dimension", $value: {value: 0, unit: "px"}}
+            combo-box:
+              rest:
+                fill: {$type: "color", $value: "{accent.subtle}"}
+                border-color: {$type: "color", $value: "{accent.default}"}
+                radius: {$type: "dimension", $value: {value: 12, unit: "px"}}
+              hover:
+                border-color: {$type: "color", $value: "{accent.hover}"}
+            toggle-button:
+              selected:
+                fill: {$type: "color", $value: "{accent.default}"}
+                text: {$type: "color", $value: "{text.on-accent}"}
+            field:
+              rest:
+                fill: {$type: "color", $value: "{surface.panel}"}
+                border-color: {$type: "color", $value: "{border.strong}"}
+                radius: {$type: "dimension", $value: {value: 0, unit: "px"}}
+              focus:
+                border-color: {$type: "color", $value: "{accent.default}"}
+                border-width: {$type: "dimension", $value: {value: 2, unit: "px"}}
+            "#,
+        )
+        .expect("the test theme reads");
+    let mut h = harness(options("pop-dark", Density::Comfortable, "scoped"));
+    h.run();
+    let tokens = Tokens::new(themes.resolve(&egui_pop::tokens::ThemeSpec::new("kit-scoped")));
+    egui_pop::core::theme::install_tokens(&h.ctx, tokens);
+    let kit = egui_pop::core::kit::Kit::of(&h.ctx);
+    // Only the text fields outside a scope, which follow `button`.
+    assert_eq!(kit.problems.len(), 1, "{:?}", kit.problems);
+    assert!(kit.problems[0].starts_with("field.rest:"));
+    h.run();
+    // The plain field with the keyboard: its focus outline.
+    h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Plain")
+        .click();
+    h.run();
+    h.remove_cursor();
+    h.run();
+    h.snapshot("scoped-kit-restyled");
+}
+
+#[test]
 fn a_folded_side_area_shows_its_strip_and_a_click_unfolds_it() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "workbench"));
     h.run();

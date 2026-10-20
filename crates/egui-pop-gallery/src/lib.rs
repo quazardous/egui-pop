@@ -30,10 +30,11 @@ use pages::story::PagePlugin;
 pub const TITLE: &str = "egui-pop gallery";
 
 /// The pages, as named on the command line.
-pub const PAGES: [&str; 45] = [
+pub const PAGES: [&str; 46] = [
     "overview",
     "tokens",
     "builtins",
+    "scoped",
     "theme-editor",
     "icons",
     "indicators",
@@ -125,6 +126,16 @@ pub fn builder(options: &Options) -> AppBuilder {
             weight: 20,
             show: pages::builtins::show,
             playground: Some(pages::builtins::playground),
+        })
+        .plugin(PagePlugin {
+            plugin: PluginId::from_static("gallery.scoped"),
+            story: StoryId::from_static("scoped"),
+            title: "egui widgets by kit",
+            description: "egui's own buttons, combo boxes and text fields, drawn by egui with a kit component's states set in a scope.",
+            group: "Theme",
+            weight: 25,
+            show: pages::scoped::show,
+            playground: None,
         })
         .plugin(PagePlugin {
             plugin: PluginId::from_static("gallery.roles"),
