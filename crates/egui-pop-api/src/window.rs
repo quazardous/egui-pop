@@ -18,7 +18,11 @@
 use egui::{Align2, Context, Id, Order, Pos2, Rect, Ui, Vec2, ViewportCommand};
 use egui_pop_core::kit::{Kit, State};
 use egui_pop_core::lock;
+use egui_pop_core::state::Slot;
 use egui_pop_core::strings;
+
+/// The way out of full screen was shown on the last pass.
+const WAY_OUT: Slot<bool> = Slot::new("api.window.way_out");
 use egui_pop_model::commands::{CommandSpec, Origin};
 use egui_pop_model::ids::{BlockId, CommandId, PluginId};
 use egui_pop_model::values::{Change, Descriptor, Set, SettingsDoc, Value};
@@ -278,7 +282,7 @@ fn way_out(ctx: &Context, app: &AppHandle) {
         .input(|i| i.pointer.hover_pos())
         .is_some_and(|p| p.y <= screen.top() + 4.0);
     let id = Id::new("egui_pop.window.way_out");
-    let shown_before = ctx.data(|d| d.get_temp::<bool>(id)).unwrap_or(false);
+    let shown_before = WAY_OUT.get(ctx).unwrap_or(false);
     let mut keep = near_top;
     if near_top || shown_before {
         let r = egui::Area::new(id)
@@ -305,7 +309,7 @@ fn way_out(ctx: &Context, app: &AppHandle) {
             });
         keep |= r.response.contains_pointer();
     }
-    ctx.data_mut(|d| d.insert_temp(id, keep));
+    WAY_OUT.set(ctx, keep);
 }
 
 #[cfg(test)]

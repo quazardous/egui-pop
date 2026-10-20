@@ -63,6 +63,7 @@ use egui_dock::{DockArea, DockState, NodeIndex, Split, TabViewer};
 use egui_pop_core::kit::{
     BoxStyle, Corners, Glyph, Kit, KitCx, Part, Side, State, paint_box, paint_indicator,
 };
+use egui_pop_core::state::Slot;
 use egui_pop_core::strings;
 use egui_pop_model::ids::{PanelId, StepId, ZoneId};
 use egui_pop_model::layout::{Floating, Layout, Node, Placement};
@@ -1439,9 +1440,8 @@ fn draw_area(app: &AppHandle, ui: &mut Ui, area: Area) {
     } else {
         let ctx = ui.ctx().clone();
         let kit = Kit::of(&ctx);
-        let cache_id = dock_id(area).with("egui_pop.tabs");
-        let mut cache =
-            ctx.data_mut(|d| std::mem::take(d.get_temp_mut_or_default::<TabCache>(cache_id)));
+        let cache_id = TAB_CACHE.keyed(dock_id(area));
+        let mut cache = cache_id.update(&ctx, std::mem::take);
         cache.prepare(app, &ctx, &kit, &tabs);
         let style = cache.dock_style(ui.style(), &kit);
         let mut viewer = Viewer {
@@ -1459,7 +1459,7 @@ fn draw_area(app: &AppHandle, ui: &mut Ui, area: Area) {
             .show_inside(ui, &mut viewer);
         let seen = std::mem::take(&mut viewer.seen);
         paint_tabs(ui, &dock, &kit, &cache.tabs, &seen);
-        ctx.data_mut(|d| d.insert_temp(cache_id, cache));
+        cache_id.set(&ctx, cache);
         if let Some(bar) = first_bar(ui, &dock, &kit, &seen) {
             app.workbench_mut().bars.insert(area, bar);
         }
@@ -1557,6 +1557,10 @@ struct PreparedTab {
 /// An area's prepared tabs and egui_dock style, kept across passes: a tab
 /// is laid out and measured again only when its title changes, and
 /// everything when the kit (a theme install) or the scale changes.
+/// The tabs prepared for drawing, per dock (and one for a dragged tab's
+/// ghost).
+const TAB_CACHE: Slot<TabCache> = Slot::opaque("api.workbench.tab_cache");
+
 #[derive(Clone, Default)]
 struct TabCache {
     /// The kit (its address: a theme install makes a new one), the
@@ -1871,12 +1875,11 @@ fn drop_hint(app: &AppHandle, ctx: &egui::Context) {
     // The ghost: the panel's tab, laid out once per drag (a cache of its
     // own, as the areas' tabs are), where a drop puts it.
     let ghost = if why.is_none() {
-        let cache_id = Id::new("egui_pop.workbench.ghost");
-        let mut cache =
-            ctx.data_mut(|d| std::mem::take(d.get_temp_mut_or_default::<TabCache>(cache_id)));
+        let cache_id = TAB_CACHE.keyed("ghost");
+        let mut cache = cache_id.update(ctx, std::mem::take);
         cache.prepare(app, ctx, &kit, std::slice::from_ref(&panel));
         let prep = cache.tabs.get(&panel).cloned();
-        ctx.data_mut(|d| d.insert_temp(cache_id, cache));
+        cache_id.set(ctx, cache);
         prep.map(|p| {
             let at = ghost_rect(&kit, bar, rect, content, p.width);
             (p, at)

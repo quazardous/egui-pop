@@ -17,9 +17,13 @@ use egui_pop_core::keys::KeyDispatcher;
 use egui_pop_core::kit::KitSource;
 use egui_pop_core::overlay;
 use egui_pop_core::persist::{Persist, PersistError, Writer};
+use egui_pop_core::state;
 use egui_pop_core::strings;
 use egui_pop_core::theme::{self, ThemeSpec, Themes};
 use egui_pop_core::{a11y, fault, focus, lock};
+
+/// The theme was installed in this context.
+const THEME_INSTALLED: state::Slot<bool> = state::Slot::new("api.app.theme_installed");
 use egui_pop_model::commands::{CommandSpec, Commands, Origin, Run};
 use egui_pop_model::diagnostics::{Diagnostic, Diagnostics};
 use egui_pop_model::ids::{
@@ -3848,8 +3852,7 @@ impl App {
         let service = self.handle.theme();
         let spec = service.spec();
         let ctx = self.handle.egui();
-        let marker = Id::new("egui_pop_api::theme_installed");
-        let here = ctx.data(|d| d.get_temp::<bool>(marker)).unwrap_or(false);
+        let here = THEME_INSTALLED.get(&ctx).unwrap_or(false);
         if !here || self.installed.as_ref() != Some(&spec) {
             if !here {
                 for kit in &self.kits {
@@ -3857,7 +3860,7 @@ impl App {
                 }
             }
             theme::install_with(&ctx, service.themes(), &spec);
-            ctx.data_mut(|d| d.insert_temp(marker, true));
+            THEME_INSTALLED.set(&ctx, true);
             self.installed = Some(spec);
         }
     }

@@ -50,7 +50,15 @@ use egui::{
     Atom, Button, Color32, Context, Id, Pos2, Rect, Response, RichText, Shape, Stroke, Ui, vec2,
 };
 use egui_pop_core::icon::Icon;
+use egui_pop_core::state::Slot;
 use egui_pop_core::strings;
+
+/// What a context menu opened with (its `when` context and arguments,
+/// `None` when vetoed), per widget.
+const CONTEXT_MENU: Slot<Option<(WhenContext, Json)>> = Slot::new("api.menus.context");
+/// A dynamic list's items and the pass they were listed on, per menu
+/// and list.
+const LIST: Slot<(u64, Vec<ListItem>)> = Slot::new("api.menus.list");
 use egui_pop_core::theme::Tokens;
 use egui_pop_model::commands::CommandSpec;
 use egui_pop_model::ids::{CommandId, MenuId, OwnerId, StepId};
@@ -194,16 +202,15 @@ pub fn context_menu(response: &Response, app: &AppHandle, menu: &MenuId) {
 /// path): merged into every item's command arguments, and seen by `when`
 /// clauses as `args.<key>`.
 pub fn context_menu_with(response: &Response, app: &AppHandle, menu: &MenuId, args: Json) {
-    let key = response.id.with("egui_pop_menu_context");
+    let key = CONTEXT_MENU.keyed(response.id);
     if response.secondary_clicked() {
         let opened = open_step(app, menu, args, "context");
         let state = opened.map(|args| (with_args(&app.when_context(), &args), args));
-        response.ctx.data_mut(|d| d.insert_temp(key, state));
+        key.set(&response.ctx, state);
     }
     response.context_menu(|ui| {
-        let state = ui
-            .ctx()
-            .data(|d| d.get_temp::<Option<(WhenContext, Json)>>(key))
+        let state = key
+            .get(ui.ctx())
             .unwrap_or_else(|| Some((app.when_context(), Json::Null)));
         match state {
             Some((cx, args)) => items(ui, app, menu, &cx, &args, 0),
@@ -430,18 +437,14 @@ fn list_entries(
     name: &str,
     cx: &WhenContext,
 ) -> Vec<ListItem> {
-    let key = Id::new(("egui_pop_menu_list", menu.as_str(), name));
+    let key = LIST.keyed((menu.as_str(), name));
     let pass = ui.ctx().cumulative_pass_nr();
-    let kept = ui
-        .ctx()
-        .data(|d| d.get_temp::<(u64, Vec<ListItem>)>(key))
-        .filter(|(at, _)| at + 1 >= pass);
+    let kept = key.get(ui.ctx()).filter(|(at, _)| at + 1 >= pass);
     let entries = match kept {
         Some((_, entries)) => entries,
         None => app.list_items(name, cx),
     };
-    ui.ctx()
-        .data_mut(|d| d.insert_temp(key, (pass, entries.clone())));
+    key.set(ui.ctx(), (pass, entries.clone()));
     entries
 }
 

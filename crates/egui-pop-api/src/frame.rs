@@ -82,12 +82,13 @@
 //! manager, macOS rounds its own windows), and drawing them would need
 //! a transparent window.
 
-use egui::{Context, Id, Rect, Ui, Vec2, ViewportCommand};
+use egui::{Context, Rect, Ui, Vec2, ViewportCommand};
 use egui_pop_core::frame::{FrameRequest, HitTable, TitleBar};
 use egui_pop_core::icon::{Icon, Size};
 use egui_pop_core::lock;
 use egui_pop_core::overlay::{self, Anchor, Kind, OverlaySpec};
 use egui_pop_core::placement::Side;
+use egui_pop_core::state::Slot;
 use egui_pop_core::strings;
 use egui_pop_model::commands::CommandSpec;
 use egui_pop_model::ids::{BlockId, CommandId, MenuId, PluginId, SettingId, StepId};
@@ -237,7 +238,7 @@ pub fn request(app: &AppHandle, ctx: &Context, r: FrameRequest) {
                     let x = args["x"].as_f64().unwrap_or(0.0) as f32;
                     let y = args["y"].as_f64().unwrap_or(0.0) as f32;
                     let pass = c.cumulative_pass_nr();
-                    c.data_mut(|d| d.insert_temp(menu_id(), Some((egui::pos2(x, y), pass))));
+                    SYSTEM_MENU.set(&c, Some((egui::pos2(x, y), pass)));
                     Ok(json!({ "open": true }))
                 },
             );
@@ -245,9 +246,14 @@ pub fn request(app: &AppHandle, ctx: &Context, r: FrameRequest) {
     }
 }
 
-fn menu_id() -> Id {
-    Id::new("egui_pop.frame.system_menu")
-}
+/// Where the system menu was asked open, and on which pass.
+const SYSTEM_MENU: Slot<Option<(egui::Pos2, u64)>> = Slot::new("api.frame.system_menu");
+/// Whether the window's own frame was last applied, per window.
+const DECORATED: Slot<bool> = Slot::new("api.frame.decorated");
+/// The pass the title bar was last drawn in full screen, per window.
+const BAR_IN_FULL_SCREEN: Slot<u64> = Slot::new("api.frame.bar_in_full_screen");
+/// A window's native handle, per window.
+const NATIVE_WINDOW: Slot<isize> = Slot::new("api.frame.native_window");
 
 impl Plugin for FramePlugin {
     fn id(&self) -> PluginId {
@@ -438,11 +444,11 @@ fn follow_setting(ui: &Ui, app: &AppHandle) -> bool {
     app.set_context("windowMaximized", if maximized { "true" } else { "false" });
     native::follow(ctx, app, own);
     native::corners(ctx, own);
-    let key = Id::new(("egui_pop.frame.decorated", ctx.viewport_id()));
-    let applied: Option<bool> = ctx.data(|d| d.get_temp(key));
+    let key = DECORATED.keyed(ctx.viewport_id());
+    let applied = key.get(ctx);
     if applied != Some(own) {
         ctx.send_viewport_cmd(ViewportCommand::Decorations(!own));
-        ctx.data_mut(|d| d.insert_temp(key, own));
+        key.set(ctx, own);
         if !own {
             HitTable::of(ctx).forget(ctx.viewport_id());
         }
@@ -450,8 +456,8 @@ fn follow_setting(ui: &Ui, app: &AppHandle) -> bool {
     own
 }
 
-fn bar_in_full_screen_id(ctx: &Context) -> Id {
-    Id::new(("egui_pop.frame.bar_in_full_screen", ctx.viewport_id()))
+fn bar_in_full_screen(ctx: &Context) -> Slot<u64> {
+    BAR_IN_FULL_SCREEN.keyed(ctx.viewport_id())
 }
 
 /// Whether the application drew the current window's title bar in full
@@ -459,9 +465,8 @@ fn bar_in_full_screen_id(ctx: &Context) -> Id {
 /// top edge is not needed then). The previous pass counts because the
 /// window plugin may draw before the title bar within a pass.
 pub(crate) fn bar_shown_in_full_screen(ctx: &Context) -> bool {
-    // The id reads the context, so it is built before its lock is taken.
-    let id = bar_in_full_screen_id(ctx);
-    ctx.data(|d| d.get_temp::<u64>(id))
+    bar_in_full_screen(ctx)
+        .get(ctx)
         .is_some_and(|pass| pass + 1 >= ctx.cumulative_pass_nr())
 }
 
@@ -501,8 +506,7 @@ fn title_block(ui: &mut Ui, app: &AppHandle) {
             return;
         }
         let pass = ctx.cumulative_pass_nr();
-        let id = bar_in_full_screen_id(&ctx);
-        ctx.data_mut(|d| d.insert_temp(id, pass));
+        bar_in_full_screen(&ctx).set(&ctx, pass);
     }
     let title = ctx
         .input(|i| i.viewport().title.clone())
@@ -533,7 +537,7 @@ fn edges(ui: &mut Ui, app: &AppHandle) {
     }
     egui_pop_core::frame::resize_edges(&ctx);
     egui_pop_core::frame::publish(&ctx);
-    let at: Option<(egui::Pos2, u64)> = ctx.data(|d| d.get_temp(menu_id())).flatten();
+    let at = SYSTEM_MENU.get(&ctx).flatten();
     let Some((at, opened)) = at else { return };
     let spec = OverlaySpec::new("egui_pop.frame.system_menu", "Window menu", Kind::Menu);
     let mut open = true;
@@ -551,7 +555,7 @@ fn edges(ui: &mut Ui, app: &AppHandle) {
     });
     if !open || clicked {
         overlay::close(&ctx, spec.id);
-        ctx.data_mut(|d| d.insert_temp::<Option<(egui::Pos2, u64)>>(menu_id(), None));
+        SYSTEM_MENU.set(&ctx, None);
     }
 }
 
@@ -560,7 +564,7 @@ fn edges(ui: &mut Ui, app: &AppHandle) {
 /// window; an application starting eframe itself calls it from its
 /// creation context.
 pub fn set_native_window(ctx: &Context, viewport: egui::ViewportId, handle: isize) {
-    ctx.data_mut(|d| d.insert_temp(native::handle_id(viewport), handle));
+    NATIVE_WINDOW.keyed(viewport).set(ctx, handle);
 }
 
 /// Records the main window's handle from eframe's creation context.
@@ -584,19 +588,24 @@ pub(crate) fn record_native_window(cc: &eframe::CreationContext<'_>) {
 mod native {
     use std::sync::{Arc, Mutex};
 
-    use egui::{Context, Id, ViewportId};
+    use egui::{Context, ViewportId};
     use egui_pop_core::frame::{self as core_frame, Button, FrameRequest, Hit, HitTable};
     use egui_pop_core::kit::{Kit, WindowCorners};
     use egui_pop_core::lock;
+    use egui_pop_core::state::Slot;
     use egui_pop_win32::{Area, Corners, Handler, NcEvent, Subclassed};
     use serde_json::{Value as Json, json};
 
     use super::STEP_HIT_TEST;
     use crate::app::AppHandle;
 
-    pub(super) fn handle_id(viewport: ViewportId) -> Id {
-        Id::new(("egui_pop.frame.native_window", viewport))
+    /// The main window's native handle.
+    fn root_handle(ctx: &Context) -> Option<isize> {
+        super::NATIVE_WINDOW.keyed(ViewportId::ROOT).get(ctx)
     }
+
+    /// What the layer holds.
+    const NATIVE: Slot<Native> = Slot::new("api.frame.native");
 
     /// What the layer holds, shared with the window procedure.
     #[derive(Clone, Debug, Default)]
@@ -612,13 +621,7 @@ mod native {
     type Asked = (Corners, Result<(), String>);
 
     fn native(ctx: &Context) -> Native {
-        let id = Id::new("egui_pop.frame.native");
-        if let Some(n) = ctx.data(|d| d.get_temp::<Native>(id)) {
-            return n;
-        }
-        let n = Native::default();
-        ctx.data_mut(|d| d.insert_temp(id, n.clone()));
-        n
+        NATIVE.get_or_insert_with(ctx, Native::default)
     }
 
     /// Maps the frame's regions to the system's areas.
@@ -674,7 +677,7 @@ mod native {
         if ctx.viewport_id() != ViewportId::ROOT {
             return;
         }
-        let Some(hwnd) = ctx.data(|d| d.get_temp::<isize>(handle_id(ViewportId::ROOT))) else {
+        let Some(hwnd) = root_handle(ctx) else {
             return;
         };
         let n = native(ctx);
@@ -758,7 +761,7 @@ mod native {
             None if !own => return,
             _ => {}
         }
-        let hwnd = ctx.data(|d| d.get_temp::<isize>(handle_id(ViewportId::ROOT)));
+        let hwnd = root_handle(ctx);
         let outcome = match hwnd {
             _ if !egui_pop_win32::SUPPORTED => Err(
                 "not asked: only Windows rounds the corners of a window drawn by the application on request"
@@ -828,7 +831,7 @@ mod native {
         let n = native(ctx);
         json!({
             "supported": egui_pop_win32::SUPPORTED,
-            "window": ctx.data(|d| d.get_temp::<isize>(handle_id(ViewportId::ROOT))).is_some(),
+            "window": root_handle(ctx).is_some(),
             "installed": lock(&n.installed).is_some(),
             "error": lock(&n.error).clone(),
         })
@@ -930,10 +933,7 @@ mod native {
                     FrameRequest::Close,
                 ]
             );
-            assert_eq!(
-                core_frame::native_hover(&ctx),
-                Some(Button::Maximize)
-            );
+            assert_eq!(core_frame::native_hover(&ctx), Some(Button::Maximize));
             assert!(requests(&ctx).is_empty());
             // In full screen, the caption is client area: the system
             // must not move the window.

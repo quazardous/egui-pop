@@ -77,7 +77,11 @@ use egui_pop_core::a11y::{self, Politeness};
 use egui_pop_core::debug::FnCollector;
 use egui_pop_core::lock;
 use egui_pop_core::persist::Persist;
+use egui_pop_core::state::Slot;
 use egui_pop_core::strings;
+
+/// The view generation a scroll area last applied its saved offset for.
+const SCROLL_APPLIED: Slot<u64> = Slot::new("api.contexts.scroll_applied");
 use egui_pop_model::commands::{CommandSpec, Origin};
 use egui_pop_model::context::{self as model, ContextDoc, ViewDoc, ViewState};
 use egui_pop_model::ids::{CommandId, OwnerId, PanelId, PluginId, StepId};
@@ -1104,11 +1108,12 @@ pub fn scroll_area<R>(
         .and_then(|v| v.as_f64())
         .map(|v| v as f32);
     let id = ui.make_persistent_id(("egui_pop.contexts.scroll", name));
-    let applied = ui.ctx().data(|d| d.get_temp::<u64>(id));
+    let slot = SCROLL_APPLIED.keyed(id);
+    let applied = slot.get(ui.ctx());
     let mut area = area.id_salt(id);
     if applied != Some(generation) {
         area = area.vertical_scroll_offset(saved.unwrap_or(0.0));
-        ui.ctx().data_mut(|d| d.insert_temp(id, generation));
+        slot.set(ui.ctx(), generation);
     }
     let out = area.show(ui, add);
     let y = out.state.offset.y;
