@@ -228,6 +228,26 @@ fn reads(text: Color, solid: Color) -> bool {
     apca::lc(text, solid).abs() >= SOLID_LC && contrast_ratio(text, solid) >= SOLID_RATIO
 }
 
+/// What a ramp is drawn with in a theme, when it is known: the ramp is
+/// then fitted to it ([`Ramp::fitted`]).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Backdrop {
+    /// Where step 9 is drawn as text (an accent on panels, a keyword in
+    /// an editor): it reaches [`FITTED_RATIO`] on each.
+    pub surfaces: Vec<Color>,
+    /// Where step 9 is drawn as a part to see (a slider's fill on its
+    /// track): it reaches 3:1 (3.1, for rounding) on each when the
+    /// scheme's direction allows.
+    pub parts: Vec<Color>,
+    /// Text drawn on steps 3 to 5 (a selection): those steps move away
+    /// from it until it reaches [`FITTED_RATIO`].
+    pub text: Vec<Color>,
+}
+
+/// The WCAG ratio a fitted ramp reaches on the surfaces and text of its
+/// [`Backdrop`]: AA's 4.5:1, with a small margin for rounding.
+pub const FITTED_RATIO: f32 = 4.6;
+
 /// A ramp and the text colour on its solid step.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Ramp {
@@ -240,6 +260,14 @@ pub struct Ramp {
 impl Ramp {
     /// The ramp of a seed in a scheme (the seed clamped first).
     pub fn new(seed: Color, scheme: Scheme) -> Ramp {
+        Ramp::fitted(seed, scheme, &Backdrop::default())
+    }
+
+    /// The ramp of a seed in a scheme, fitted to what a theme draws it
+    /// with: step 9 moves on (darker in light, lighter in dark) until it
+    /// also reads on the backdrop's surfaces and is seen on its parts,
+    /// and steps 3 to 5 move away from its text until it reads on them.
+    pub fn fitted(seed: Color, scheme: Scheme, backdrop: &Backdrop) -> Ramp {
         let clamped = clamp_seed(seed);
         let seed = Okhsl::from_color(clamped);
         let (h, s0) = (seed.h, seed.s);
@@ -257,13 +285,18 @@ impl Ramp {
             Scheme::Dark => (dark, seed.l.min(DARK_SOLID_MAX_L)),
         };
         let solid = |l: f32| Okhsl { h, s: s9, l }.to_color();
-        let backdrop = match scheme {
+        let behind = match scheme {
             Scheme::Light => Color::WHITE,
             Scheme::Dark => dark,
         };
         for _ in 0..200 {
             let c = solid(l9);
-            if reads(text, c) && contrast_ratio(c, backdrop) >= SOLID_RATIO {
+            let fits = backdrop
+                .surfaces
+                .iter()
+                .all(|b| contrast_ratio(c, *b) >= FITTED_RATIO)
+                && backdrop.parts.iter().all(|b| contrast_ratio(c, *b) >= 3.1);
+            if reads(text, c) && contrast_ratio(c, behind) >= SOLID_RATIO && fits {
                 break;
             }
             match scheme {
@@ -291,6 +324,39 @@ impl Ramp {
                 l[10] = (l9 + 0.08).clamp(0.76, 0.9);
                 l[11] = DARK_TEXT_L.max(l[10] + 0.04);
             }
+        }
+        // Steps 3 to 5 away from the text drawn on them, then 1 and 2
+        // kept beyond them.
+        let quiet = |i: usize, l: f32| {
+            Okhsl {
+                h: shifted_hue(h, l - l9),
+                s: sat(i),
+                l,
+            }
+            .to_color()
+        };
+        for i in (2..5).rev() {
+            for _ in 0..100 {
+                let c = quiet(i, l[i]);
+                if backdrop
+                    .text
+                    .iter()
+                    .all(|t| contrast_ratio(*t, c) >= FITTED_RATIO)
+                {
+                    break;
+                }
+                match scheme {
+                    Scheme::Light if l[i] < 0.995 => l[i] = (l[i] + 0.005).min(0.995),
+                    Scheme::Dark if l[i] > 0.01 => l[i] = (l[i] - 0.005).max(0.01),
+                    _ => break,
+                }
+            }
+        }
+        for i in (0..2).rev() {
+            l[i] = match scheme {
+                Scheme::Light => l[i].max((l[i + 1] + 0.005).min(0.998)),
+                Scheme::Dark => l[i].min((l[i + 1] - 0.005).max(0.0)),
+            };
         }
         let mut steps = [Color::BLACK; 12];
         let as_given = (l9 - seed.l).abs() < 1e-6 && (s9 - s0).abs() < 1e-6;

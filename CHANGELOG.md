@@ -41,6 +41,15 @@ publishes.
   and WCAG 5:1). `palette::clamp_seed` brings a seed into what gives a
   usable ramp. `apca::lc` is the APCA lightness contrast, informative
   only: the contrast pairs stay on WCAG 2.x. Part of #33.
+- An accent from any colour (egui-pop-tokens): `ThemeSpec::accent_color(seed)`,
+  or an accent written `#rrggbb`, generates the accent's scale when the
+  theme is resolved (`SEED_SCALE`, `custom.1` to `custom.12` and
+  `custom.contrast`), for the theme's light or dark scheme, so a pair's
+  two variants each get their own ramp from the same seed. The ramp is
+  fitted to the theme (`palette::Ramp::fitted`, `palette::Backdrop`):
+  the accent reads on its surfaces and is seen on its tracks, and the
+  selection keeps its text readable. `ThemeSpec::accent_seed` reads the
+  seed back. Part of #33.
 - Critical tests (egui-pop-test, the new egui-pop-test-macros):
   `#[egui_pop_test::critical]` marks a test that guards a rule any change
   can break, so a selective run still runs it; `#[critical(gpu)]` marks

@@ -102,7 +102,10 @@ counterpart, the preference changes nothing.
   families, light and dark, and GitHub's high-contrast pair; sources and
   licences in [NOTICE](../NOTICE)).
 - **Densities**: `comfortable` and `compact`.
-- **Accents**: `gold`, `blue`, `green`, `amber` and `red`.
+- **Accents**: `gold`, `blue`, `green`, `amber` and `red`, a theme's
+  own scales, or any colour: `ThemeSpec::accent_color(seed)` generates
+  the accent's scale from it, for light and dark
+  ([Design tokens](tokens.md#a-scale-from-one-colour)).
 - **Reduced motion**.
 - **Any token**, overridden by its path (`override_token`).
 

@@ -79,7 +79,7 @@ pub use file::{RawToken, TOKENS_COMPILER, TokenFile};
 pub use format::{FORMAT_EXTENSION, FORMAT_VERSION, FormatStamp, Warning};
 pub use theme::{
     ALPHA_EXTENSION, BASED_ON, BUILT_IN_ACCENTS, BUILT_IN_THEMES, Counterpart, Density,
-    FALLBACK_THEME, POP_THEMES, ResolvedTokens, ThemeSpec, Themes, Token, VARIANT_OF_EXTENSION,
-    theme_label,
+    FALLBACK_THEME, POP_THEMES, ResolvedTokens, SEED_SCALE, ThemeSpec, Themes, Token,
+    VARIANT_OF_EXTENSION, theme_label,
 };
 pub use value::{PX_PER_REM, Value};

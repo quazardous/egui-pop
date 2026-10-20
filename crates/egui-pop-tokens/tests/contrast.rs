@@ -91,3 +91,47 @@ fn a_theme_with_a_poor_pair_fails_the_check() {
         failures[0]
     );
 }
+
+#[test]
+fn an_accent_from_any_seed_keeps_aa_contrast_in_every_theme() {
+    // Seeds round the hue circle, vivid and muted, light and dark.
+    use egui_pop_tokens::Color;
+    use egui_pop_tokens::palette::Okhsl;
+    let themes = Themes::default();
+    let mut failures = Vec::new();
+    let mut seeds = Vec::new();
+    for h in (0..360).step_by(30) {
+        for (s, l) in [(1.0, 0.55), (0.5, 0.35), (0.8, 0.8)] {
+            seeds.push(Okhsl { h: h as f32, s, l }.to_color());
+        }
+    }
+    seeds.push(Color::from_hex("#808080").unwrap());
+    for base in BUILT_IN_THEMES {
+        for seed in &seeds {
+            let spec = ThemeSpec::new(*base).accent_color(*seed);
+            let tokens = themes.resolve(&spec);
+            assert!(tokens.problems().is_empty(), "{:?}", tokens.problems());
+            for f in contrast::check(&tokens, Level::Normal) {
+                failures.push(format!("{}: {f}", spec.label()));
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn a_pair_generates_each_variant_s_ramp_from_the_same_seed() {
+    use egui_pop_tokens::Color;
+    let themes = Themes::default();
+    let spec = ThemeSpec::new("pop-dark").accent_color(Color::from_hex("#2e64a6").unwrap());
+    let dark = themes.resolve(&spec);
+    let light = themes.resolve_counterpart(&spec).unwrap();
+    let solid = |t: &egui_pop_tokens::ResolvedTokens| t.color("accent.default").unwrap();
+    assert!(!solid(&dark).is_dark());
+    assert!(solid(&light).is_dark());
+    assert!(dark.color("custom.1").unwrap().is_dark());
+    assert!(!light.color("custom.1").unwrap().is_dark());
+    // Not a colour: reported, the theme's own accent kept.
+    let bad = themes.resolve(&ThemeSpec::new("pop-dark").accent("#zzz"));
+    assert_eq!(bad.problems().len(), 1, "{:?}", bad.problems());
+}

@@ -229,6 +229,17 @@ How it is made (in OkHsl, so no step leaves the sRGB gamut):
   its saturation within its band), and `ramp` applies it first. A grey
   seed gives a neutral ramp.
 
+**An accent from a seed.** `ThemeSpec::new("pop-light").accent_color(seed)`
+(or `.accent("#c0392b")`) generates the accent's scale when the theme
+is resolved, as the `custom` scale (`SEED_SCALE`), for the base theme's
+scheme; a counterpart gets the other scheme's ramp from the same seed.
+The ramp is then fitted to the theme (`Ramp::fitted`, a `Backdrop`):
+step 9 also reads as text on the theme's surfaces and its editor
+(4.6:1) and is seen on the slider and progress tracks (3:1), and steps
+3 to 5 keep the theme's text readable on them (the selection). A test
+checks seeds round the hue circle in every built-in theme against the
+contrast pairs at AA.
+
 The approach follows egui_colors (MIT), which builds 12-step Radix-like
 scales in OkHsl with APCA; egui-pop's generator is a re-derivation with
 the targets above, not its code, and its tests check every hue in both
@@ -290,7 +301,11 @@ A theme is resolved from a `ThemeSpec`, in this order:
 3. an **accent**: a colour scale whose steps become `accent.default` (9),
    `accent.hover` (10), `accent.active` (8), `accent.subtle` (3),
    `selection` (5) and `text.on-accent` (`contrast`); anything aliasing
-   the accent (`focus.ring`, `slider-fill.rest.fill`) follows;
+   the accent (`focus.ring`, `slider-fill.rest.fill`) follows. The
+   accent may also be a seed colour (`"#3a7bd5"`,
+   `ThemeSpec::accent_color`): its scale is generated as `custom.1` to
+   `custom.12` and `custom.contrast` ([below](#a-scale-from-one-colour)),
+   for the theme's light or dark scheme;
 4. **reduced motion**: `motion.duration` becomes 0 (egui's animation time,
    cursor blink and scroll animation follow);
 5. **components based on another** (`<component>.based-on`) receive each

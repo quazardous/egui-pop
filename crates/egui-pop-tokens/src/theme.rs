@@ -11,6 +11,7 @@ use serde_json::{Map, Value as Json, json};
 use crate::cache::Cache;
 use crate::contract::{Tier, contract, required};
 use crate::file::{RawToken, TokenFile, alias_target};
+use crate::palette::{Backdrop, Ramp, Scheme};
 use crate::{Color, Error, Value, Warning};
 
 /// The theme everything falls back to.
@@ -128,6 +129,34 @@ const BUILT_IN_FILES: &[(&str, &str)] = &[
     ("solarized-dark", shipped!("solarized-dark")),
     ("gruvbox-light", shipped!("gruvbox-light")),
     ("gruvbox-dark", shipped!("gruvbox-dark")),
+];
+
+/// The scale an accent generated from a seed colour is written to
+/// ([`ThemeSpec::accent_color`]): `custom.1` to `custom.12` and
+/// `custom.contrast`, replacing a scale of that name.
+pub const SEED_SCALE: &str = "custom";
+
+/// What a seed accent's step 9 is drawn on as text, in the contrast
+/// pairs: the surfaces, the editor's background, and what a badge on the
+/// accent is written in.
+const SEED_SURFACES: &[&str] = &[
+    "surface.canvas",
+    "surface.panel",
+    "surface.raised",
+    "surface.overlay",
+    "surface.sunken",
+    "editor-frame.rest.fill",
+    "indicator-badge.rest.text",
+];
+/// What it is drawn on as a part to see: a slider's and a progress
+/// bar's track.
+const SEED_PARTS: &[&str] = &["slider.rest.fill", "progress-bar.rest.fill"];
+/// The text drawn on its quiet steps (the selection is step 5).
+const SEED_TEXT: &[&str] = &[
+    "text.default",
+    "syntax.plain",
+    "terminal.foreground",
+    "command-palette-row.rest.text",
 ];
 
 /// The scale steps an accent re-aliases from, and what they become.
@@ -296,9 +325,39 @@ impl ThemeSpec {
         self
     }
 
+    /// The accent: a colour scale of the theme by name (`"blue"`), or a
+    /// seed colour (`"#3a7bd5"`) the scale is generated from
+    /// ([`ThemeSpec::accent_color`]).
     pub fn accent(mut self, scale: impl Into<String>) -> Self {
         self.accent = Some(scale.into());
         self
+    }
+
+    /// An accent generated from a seed colour: the [`SEED_SCALE`] scale
+    /// ([`palette::Ramp`](crate::palette::Ramp)), for the theme's light
+    /// or dark scheme, the seed clamped to what gives a usable ramp. A
+    /// counterpart gets the ramp of its own scheme from the same seed.
+    ///
+    /// ```
+    /// use egui_pop_tokens::{Color, ThemeSpec, Themes, contrast};
+    ///
+    /// let spec = ThemeSpec::new("pop-light").accent_color(Color::from_hex("#c0392b").unwrap());
+    /// assert_eq!(spec.accent.as_deref(), Some("#c0392b"));
+    /// let tokens = Themes::default().resolve(&spec);
+    /// assert_eq!(tokens.get("accent.default").unwrap().alias.as_deref(), Some("custom.9"));
+    /// assert!(contrast::check(&tokens, contrast::Level::Normal).is_empty());
+    /// ```
+    pub fn accent_color(mut self, seed: Color) -> Self {
+        self.accent = Some(Color { a: 1.0, ..seed }.to_hex());
+        self
+    }
+
+    /// The accent's seed colour, when the accent is one (`#rrggbb`).
+    pub fn accent_seed(&self) -> Option<Color> {
+        self.accent
+            .as_deref()
+            .filter(|a| a.starts_with('#'))
+            .and_then(Color::from_hex)
     }
 
     pub fn reduced_motion(mut self, reduced: bool) -> Self {
@@ -782,7 +841,35 @@ impl Themes {
         if let Some(density) = self.densities.get(&spec.density) {
             layer(&mut raw, &density.tokens);
         }
-        if let Some(scale) = &spec.accent {
+        if let Some(asked) = &spec.accent {
+            let scale = match spec.accent_seed() {
+                Some(seed) => {
+                    let color = |path: &str| match resolve_one(&raw, path) {
+                        Ok((_, Value::Color(c))) => Some(c),
+                        _ => None,
+                    };
+                    let scheme = color("surface.panel").map_or(Scheme::Dark, Scheme::of_background);
+                    let all = |paths: &[&str]| paths.iter().filter_map(|p| color(p)).collect();
+                    let backdrop = Backdrop {
+                        surfaces: all(SEED_SURFACES),
+                        parts: all(SEED_PARTS),
+                        text: all(SEED_TEXT),
+                    };
+                    for (path, value) in Ramp::fitted(seed, scheme, &backdrop).tokens(SEED_SCALE) {
+                        raw.insert(
+                            path,
+                            RawToken {
+                                ty: Some("color".into()),
+                                value,
+                                description: Some(format!("Generated from {}.", seed.to_hex())),
+                                extensions: None,
+                            },
+                        );
+                    }
+                    SEED_SCALE
+                }
+                None => asked.as_str(),
+            };
             if is_accent_scale(&raw, scale) {
                 for (role, step) in ACCENT_ROLES {
                     let entry = raw.entry(role.to_string()).or_insert_with(|| RawToken {
@@ -795,7 +882,7 @@ impl Themes {
                 }
             } else {
                 problems.push(Error::UnknownAccent {
-                    name: scale.clone(),
+                    name: asked.clone(),
                 });
             }
         }
