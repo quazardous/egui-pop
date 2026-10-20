@@ -12,7 +12,7 @@
     background: url("../../logo/egui-pop.svg") center / contain no-repeat;
 }
 
-/* The link to the gallery, added by book.js. */
+/* The links to the gallery and the API, added by book.js. */
 .gallery-link {
     font-weight: 600;
     margin-inline-end: 0.6em;

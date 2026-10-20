@@ -16,7 +16,8 @@ feature's moments reachable as steps (ADR 0011).
 These pages are online, with search, at
 <https://quazardous.github.io/egui-pop/docs/>, beside the
 [gallery](https://quazardous.github.io/egui-pop/), which runs in the
-browser.
+browser, and the [API documentation](https://quazardous.github.io/egui-pop/api/)
+of every crate with every feature on.
 
 ## Guides
 

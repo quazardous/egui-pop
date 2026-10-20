@@ -237,7 +237,9 @@ The [docs index](https://github.com/quazardous/egui-pop/blob/main/docs/README.md
 themes and tokens, plugins and steps, the image viewport, debugging, the
 gallery, testing, API stability and the design decisions.
 They are also online, with search, at
-<https://quazardous.github.io/egui-pop/docs/>.
+<https://quazardous.github.io/egui-pop/docs/>, and the API documentation
+of every crate, with every feature on (docs.rs shows the default
+features), at <https://quazardous.github.io/egui-pop/api/>.
 
 ## Extensions
 

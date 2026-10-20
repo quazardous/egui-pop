@@ -1,9 +1,11 @@
 name: Gallery and docs on the web
 
 # Builds the docs as an mdBook (book.toml) and checks their links
-# (tools/book/links.py), builds the gallery for the web with Trunk, loads
-# it in headless Chrome (tools/web-smoke.mjs), and deploys both to GitHub
-# Pages: the gallery at the site's root, the docs under /docs/. Pages must
+# (tools/book/links.py), builds the workspace's API documentation with
+# every feature (docs.rs documents the default features only), builds the
+# gallery for the web with Trunk, loads it in headless Chrome
+# (tools/web-smoke.mjs), and deploys them to GitHub Pages: the gallery at
+# the site's root, the docs under /docs/, the API under /api/. Pages must
 # be enabled for the repository with "GitHub Actions" as the source; until
 # the repository variable PAGES is set to `on`, it only runs by hand. Run
 # by hand on another branch, it builds and tests without deploying.
@@ -37,6 +39,14 @@ jobs:
         run: |
           mdbook build
           python3 tools/book/links.py target/book
+      # Every feature, so the facade's optional crates and each crate's
+      # optional modules are documented; Windows-only crates document
+      # their stubs. The tools and the gallery, unpublished, are left out.
+      - name: Build the API documentation
+        run: >-
+          cargo doc --workspace --no-deps --all-features --locked
+          --exclude xtask --exclude consumer-smoke
+          --exclude egui-pop-gallery --exclude egui-pop-extension-template
       - name: Build the gallery
         working-directory: crates/egui-pop-gallery
         run: trunk build --release --public-url /${{ github.event.repository.name }}/
@@ -55,8 +65,12 @@ jobs:
           name: web-smoke
           path: web-smoke.png
           if-no-files-found: ignore
-      - name: Add the docs to the site
-        run: cp -r target/book crates/egui-pop-gallery/dist/docs
+      - name: Add the docs and the API to the site
+        run: |
+          cp -r target/book crates/egui-pop-gallery/dist/docs
+          cp -r target/doc crates/egui-pop-gallery/dist/api
+          rm -f crates/egui-pop-gallery/dist/api/.lock
+          cp tools/book/api-index.html crates/egui-pop-gallery/dist/api/index.html
       - uses: actions/upload-pages-artifact@v3
         with:
           path: crates/egui-pop-gallery/dist
