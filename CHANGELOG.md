@@ -10,6 +10,14 @@ publishes.
 
 ## Unreleased
 
+### Changed
+
+- egui-pop is now licensed under MIT OR Apache-2.0, at your option, like
+  egui and most of the Rust ecosystem (it was MIT only). `LICENSE` became
+  `LICENSE-MIT`, `LICENSE-APACHE` is new, and every crate's `license` field
+  says `MIT OR Apache-2.0`. Apache-2.0 adds an explicit patent grant;
+  anything that used egui-pop under MIT still can.
+
 ### Added
 
 - A cache of compiled files (egui-pop-tokens, egui-pop-api,

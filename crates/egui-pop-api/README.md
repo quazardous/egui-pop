@@ -21,4 +21,4 @@ started](https://github.com/quazardous/egui-pop/blob/main/docs/getting-started.m
 All of egui-pop's documentation: [the docs
 index](https://github.com/quazardous/egui-pop/blob/main/docs/README.md).
 
-License: MIT.
+License: MIT OR Apache-2.0.

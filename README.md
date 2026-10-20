@@ -255,4 +255,9 @@ authors), [GOVERNANCE.md](https://github.com/quazardous/egui-pop/blob/main/GOVER
 
 ## License
 
-MIT, see [LICENSE](https://github.com/quazardous/egui-pop/blob/main/LICENSE).
+Licensed under either of
+
+- Apache License, Version 2.0 ([LICENSE-APACHE](https://github.com/quazardous/egui-pop/blob/main/LICENSE-APACHE))
+- MIT license ([LICENSE-MIT](https://github.com/quazardous/egui-pop/blob/main/LICENSE-MIT))
+
+at your option.

@@ -21,4 +21,4 @@ services](https://github.com/quazardous/egui-pop/blob/main/docs/README.md).
 All of egui-pop's documentation: [the docs
 index](https://github.com/quazardous/egui-pop/blob/main/docs/README.md).
 
-License: MIT.
+License: MIT OR Apache-2.0.

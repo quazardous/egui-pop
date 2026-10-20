@@ -5,9 +5,11 @@ keep up with egui.
 
 ## Licence and sign-off
 
-egui-pop is MIT licensed, and contributions come in under the same licence
-(inbound = outbound): by contributing you agree that your work is published
-under the MIT licence of this repository.
+egui-pop is licensed under MIT OR Apache-2.0, at the user's option, and
+contributions come in under the same terms (inbound = outbound): by
+contributing you agree that your work is published under both licences of
+this repository, MIT and Apache-2.0, as the Apache-2.0 licence's section 5
+describes.
 
 Every commit carries a Developer Certificate of Origin sign-off
 (<https://developercertificate.org/>), a line stating you have the right to

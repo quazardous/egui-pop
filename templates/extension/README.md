@@ -44,8 +44,9 @@ Then make it yours:
    harness built on its own context, widgets found by role and label,
    `assert_all_named`, the step vetoed by another plugin, the French
    strings, the contrast of its tokens in every built-in theme.
-3. Pick your licence in `Cargo.toml` (the template's files are MIT, like
-   egui-pop; your crate may use any licence its dependencies allow).
+3. Pick your licence in `Cargo.toml` (the template's files are MIT OR
+   Apache-2.0, like egui-pop; your crate may use any licence its
+   dependencies allow).
 4. `cargo test`, then list it in egui-pop's
    [registry of extensions](https://github.com/quazardous/egui-pop/blob/main/docs/extensions.md) with a pull
    request.

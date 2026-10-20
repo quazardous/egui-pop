@@ -24,7 +24,7 @@ members = [
 [workspace.package]
 edition = "2024"
 rust-version = "1.95"
-license = "MIT"
+license = "MIT OR Apache-2.0"
 repository = "https://github.com/quazardous/egui-pop"
 homepage = "https://github.com/quazardous/egui-pop"
 authors = ["The egui-pop contributors"]
