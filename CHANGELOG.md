@@ -12,6 +12,24 @@ publishes.
 
 ### Added
 
+- One writer per value (egui-pop-model): a path's descriptor says who
+  may write it besides its owner (`Writers`: `Owner`, the default,
+  `Also(...)`, `Any`; `Descriptor::writers`, `Descriptor::any_writer`).
+  A write names the scope issuing it (`Set::by`, the new `Set::by`
+  field), or takes the one `values::enter_scope` set on its thread
+  (`current_scope`, `ScopeGuard`). A scope that is not the owner, not
+  a writer named and not the framework (`OwnerId::FRAMEWORK`, acting
+  for a person) is refused (`Refused::NotWriter`) with a
+  `not-a-writer` diagnostic (`Store::diagnostics`), each path and scope
+  once; `Store::set_writer_check(WriterCheck::Warn)` applies it with a
+  warning instead. A write naming no scope is the application's own and
+  is not checked; undo, redo, cancelling a gesture and restoring saved
+  values are never refused. `Entry::writer` keeps the last write's
+  scope, `Store::stray_writes` lists the writes from scopes that are not
+  writers, `Store::may_write` asks. The `value.*` commands write as the
+  framework and describe `writers` and `writer`. Part of #29.
+  Migration: `Set` and `Entry` have a new public field, `Refused` a new
+  variant; a `Set` written as a struct literal needs `by: None`.
 - Token file versions (egui-pop-tokens): a file says which format and
   contract it was written for with a stamp in its root `$extensions`,
   `"org.egui-pop.format": { "version": 1, "contract": 1 }`

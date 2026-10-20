@@ -3,6 +3,8 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Value as Json, json};
 
+use crate::ids::OwnerId;
+
 /// A value the store holds.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -141,6 +143,37 @@ impl PathHint {
     }
 }
 
+/// Who may write a path, besides the framework acting for a person (see
+/// [`Store::set`](super::Store::set)).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Writers {
+    /// Its owner alone: one writer per value (the default).
+    #[default]
+    Owner,
+    /// Its owner and these.
+    Also(Vec<OwnerId>),
+    /// Anyone.
+    Any,
+}
+
+impl Writers {
+    pub fn is_owner(&self) -> bool {
+        *self == Writers::Owner
+    }
+
+    /// Whether `writer` may write a path `owner` declared.
+    pub fn allow(&self, owner: &OwnerId, writer: &OwnerId) -> bool {
+        writer == owner
+            || *writer == OwnerId::FRAMEWORK
+            || match self {
+                Writers::Owner => false,
+                Writers::Also(list) => list.contains(writer),
+                Writers::Any => true,
+            }
+    }
+}
+
 /// What a value is and how it is shown and moved.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[non_exhaustive]
@@ -175,6 +208,9 @@ pub struct Descriptor {
     /// A text that names a path on disk.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<PathHint>,
+    /// Who may write it besides its owner.
+    #[serde(skip_serializing_if = "Writers::is_owner")]
+    pub writers: Writers,
 }
 
 /// Decimals enough to show one step.
@@ -204,6 +240,7 @@ impl Descriptor {
             count: None,
             capacity: None,
             path: None,
+            writers: Writers::Owner,
         }
     }
 
@@ -317,6 +354,19 @@ impl Descriptor {
     /// At most so many bytes of text.
     pub fn capacity(mut self, bytes: u32) -> Self {
         self.capacity = Some(bytes);
+        self
+    }
+
+    /// Lets these write it too, besides its owner (one writer per value
+    /// otherwise).
+    pub fn writers(mut self, writers: &[OwnerId]) -> Self {
+        self.writers = Writers::Also(writers.to_vec());
+        self
+    }
+
+    /// Lets anyone write it.
+    pub fn any_writer(mut self) -> Self {
+        self.writers = Writers::Any;
         self
     }
 

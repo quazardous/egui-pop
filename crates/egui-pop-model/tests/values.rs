@@ -474,3 +474,122 @@ fn a_path_hint_says_what_a_text_names() {
     let text = serde_json::to_value(Descriptor::text("name", "")).unwrap();
     assert!(text.get("path").is_none());
 }
+
+/// A store with a value owned by `a`, one `a` opens to `b`, one open to
+/// anyone.
+fn writers() -> (Store, OwnerId, OwnerId, OwnerId) {
+    let (a, b, c) = (
+        OwnerId::new("a").unwrap(),
+        OwnerId::new("b").unwrap(),
+        OwnerId::new("c").unwrap(),
+    );
+    let mut store = Store::new();
+    store
+        .declare(&a, "a/own", Descriptor::int("Own", 0, 10, 0))
+        .unwrap();
+    store
+        .declare(
+            &a,
+            "a/shared",
+            Descriptor::int("Shared", 0, 10, 0).writers(std::slice::from_ref(&b)),
+        )
+        .unwrap();
+    store
+        .declare(&a, "a/open", Descriptor::int("Open", 0, 10, 0).any_writer())
+        .unwrap();
+    (store, a, b, c)
+}
+
+fn write_to(path: &str, v: i64) -> Set {
+    Set::new(path, Change::To(Value::Int(v)), Origin::User)
+}
+
+#[test]
+fn a_path_is_written_by_its_writers_alone() {
+    let (mut store, a, b, c) = writers();
+    // The owner, a writer it names, anyone on an open path, the
+    // framework, and code naming no scope.
+    assert!(store.set(write_to("a/own", 1).by(&a)).is_ok());
+    assert!(store.set(write_to("a/shared", 1).by(&b)).is_ok());
+    assert!(store.set(write_to("a/open", 1).by(&c)).is_ok());
+    assert!(store.set(write_to("a/own", 2).by(&FW)).is_ok());
+    assert!(store.set(write_to("a/own", 3)).is_ok());
+    assert_eq!(store.get("a/own").unwrap().writer, None);
+    assert_eq!(store.get("a/open").unwrap().writer, Some(c.clone()));
+    assert!(store.stray_writes().is_empty());
+    // Anyone else is refused, the value kept, once in the diagnostics.
+    for _ in 0..2 {
+        let r = store.set(write_to("a/own", 9).by(&b)).unwrap_err();
+        assert!(matches!(
+            &r,
+            Refused::NotWriter { by, owner, current: Value::Int(3), .. } if *by == b && *owner == a
+        ));
+    }
+    assert!(store.set(write_to("a/shared", 9).by(&c)).is_err());
+    assert_eq!(store.get("a/own").unwrap().value, Value::Int(3));
+    assert_eq!(store.stray_writes().len(), 2);
+    assert_eq!(store.diagnostics().all().len(), 2);
+    assert_eq!(store.diagnostics().all()[0].code, NOT_A_WRITER);
+    assert!(!store.may_write("a/own", &b));
+    assert!(store.may_write("a/shared", &b));
+}
+
+#[test]
+fn the_entered_scope_issues_writes_that_name_none() {
+    let (mut store, a, b, _) = writers();
+    {
+        let _scope = enter_scope(&b);
+        assert_eq!(current_scope(), Some(b.clone()));
+        assert!(store.set(write_to("a/own", 1)).is_err());
+        assert!(store.set(write_to("a/shared", 1)).is_ok());
+        // A scope named on the write wins over the entered one.
+        assert!(store.set(write_to("a/own", 2).by(&a)).is_ok());
+        {
+            let _inner = enter_scope(&a);
+            assert!(store.set(write_to("a/own", 3)).is_ok());
+        }
+        assert_eq!(current_scope(), Some(b.clone()));
+    }
+    assert_eq!(current_scope(), None);
+    assert!(store.set(write_to("a/own", 4)).is_ok());
+}
+
+#[test]
+fn the_check_can_warn_while_plugins_migrate() {
+    let (mut store, _, b, _) = writers();
+    store.set_writer_check(WriterCheck::Warn);
+    assert!(store.set(write_to("a/own", 5).by(&b)).is_ok());
+    assert_eq!(store.get("a/own").unwrap().value, Value::Int(5));
+    assert_eq!(
+        store.stray_writes(),
+        &[StrayWrite {
+            path: "a/own".into(),
+            by: b.clone(),
+            owner: OwnerId::new("a").unwrap(),
+            refused: false,
+        }]
+    );
+    assert_eq!(
+        store.diagnostics().all()[0].level,
+        egui_pop_model::diagnostics::Level::Warning
+    );
+}
+
+#[test]
+fn undo_redo_and_restore_are_never_refused() {
+    let (mut store, a, b, _) = writers();
+    store.set(write_to("a/own", 4).by(&a)).unwrap();
+    // Undone and redone within another plugin's scope: the store replays
+    // as the framework.
+    let _scope = enter_scope(&b);
+    assert!(store.undo(&Origin::User).unwrap().is_some());
+    assert_eq!(store.get("a/own").unwrap().value, Value::Int(0));
+    assert!(store.redo(&Origin::User).unwrap().is_some());
+    assert_eq!(store.get("a/own").unwrap().writer, Some(FW));
+    let doc = SettingsDoc {
+        values: [("a/own".to_string(), json!(7))].into(),
+    };
+    assert!(store.import(&doc, &Origin::User).all().is_empty());
+    assert_eq!(store.get("a/own").unwrap().value, Value::Int(7));
+    assert!(store.stray_writes().is_empty());
+}

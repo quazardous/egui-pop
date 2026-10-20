@@ -19,6 +19,14 @@
 //!   never loops back.
 //! - Undo: one step per gesture or group, else one per write.
 //! - Paths are owned: a plugin's settings and listeners go with it.
+//! - One writer per value: a write names the scope issuing it
+//!   ([`Set::by`], or the scope [`enter_scope`] set, such as the plugin
+//!   whose command runs). A scope that is not the path's owner, not one
+//!   of its [`Writers`] and not the framework (acting for a person: the
+//!   settings form, a bound widget, an agent's `value.set`) is refused,
+//!   or only warned about under [`WriterCheck::Warn`]. A write naming no
+//!   scope is the application's own and is not checked; undo, redo and
+//!   restoring saved values are never refused.
 //!
 //! ```
 //! use egui_pop_model::commands::Origin;
@@ -39,8 +47,9 @@ mod commands;
 mod value;
 
 pub use commands::{register, register_with};
-pub use value::{Descriptor, PathHint, PathKind, Type, Value};
+pub use value::{Descriptor, PathHint, PathKind, Type, Value, Writers};
 
+use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fmt;
 
@@ -65,6 +74,8 @@ pub struct Entry {
     pub order: u64,
     /// Who declared it.
     pub owner: OwnerId,
+    /// The scope of the last write that changed it, when it named one.
+    pub writer: Option<OwnerId>,
 }
 
 /// What a write asks for.
@@ -94,6 +105,10 @@ pub struct Set {
     /// Not an undo step (state the application keeps for itself, such as
     /// the window's place).
     pub untracked: bool,
+    /// The scope issuing it (a plugin, the plugin whose command runs, the
+    /// framework); `None`: the one [`enter_scope`] set, else the
+    /// application's own code, not checked.
+    pub by: Option<OwnerId>,
 }
 
 impl Set {
@@ -106,7 +121,14 @@ impl Set {
             gesture: None,
             if_seq: None,
             untracked: false,
+            by: None,
         }
+    }
+
+    /// Issued by this scope (checked against the path's writers).
+    pub fn by(mut self, scope: &OwnerId) -> Self {
+        self.by = Some(scope.clone());
+        self
     }
 
     /// Leaves no undo step.
@@ -172,6 +194,13 @@ pub enum Refused {
         current: Value,
         by: Origin,
     },
+    /// The scope issuing it is not one of the path's writers.
+    NotWriter {
+        path: String,
+        by: OwnerId,
+        owner: OwnerId,
+        current: Value,
+    },
 }
 
 impl fmt::Display for Refused {
@@ -188,6 +217,15 @@ impl fmt::Display for Refused {
             Refused::Held { current, by } => write!(
                 f,
                 "a gesture of {by:?} holds it (the value stays {current:?})"
+            ),
+            Refused::NotWriter {
+                path,
+                by,
+                owner,
+                current,
+            } => write!(
+                f,
+                "`{by}` may not write `{path}`, owned by `{owner}` (the value stays {current:?})"
             ),
         }
     }
@@ -276,6 +314,64 @@ pub struct Step {
 /// How many changes the journal keeps.
 pub const JOURNAL: usize = 1024;
 
+/// What a write from a scope that is not one of a path's writers gets.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum WriterCheck {
+    /// Refused, with a diagnostic (the default).
+    #[default]
+    Refuse,
+    /// Applied, with a warning: to migrate plugins written before the
+    /// check.
+    Warn,
+}
+
+/// The diagnostic code of a write from a scope that is not a writer.
+pub const NOT_A_WRITER: &str = "not-a-writer";
+
+thread_local! {
+    static SCOPES: RefCell<Vec<OwnerId>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Writes on this thread that name no scope are issued by `scope` while
+/// the guard lives (the application sets the plugin connecting, the
+/// owner of the command running, the plugin a lifecycle hook belongs
+/// to). Scopes nest.
+pub fn enter_scope(scope: &OwnerId) -> ScopeGuard {
+    SCOPES.with(|s| s.borrow_mut().push(scope.clone()));
+    ScopeGuard {
+        _not_send: std::marker::PhantomData,
+    }
+}
+
+/// The scope [`enter_scope`] set on this thread, if any.
+pub fn current_scope() -> Option<OwnerId> {
+    SCOPES.with(|s| s.borrow().last().cloned())
+}
+
+/// Leaves the scope [`enter_scope`] entered when dropped.
+#[must_use = "the scope is left when the guard is dropped"]
+#[derive(Debug)]
+pub struct ScopeGuard {
+    _not_send: std::marker::PhantomData<*const ()>,
+}
+
+impl Drop for ScopeGuard {
+    fn drop(&mut self) {
+        SCOPES.with(|s| s.borrow_mut().pop());
+    }
+}
+
+/// A write from a scope that is not one of a path's writers.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct StrayWrite {
+    pub path: String,
+    pub by: OwnerId,
+    pub owner: OwnerId,
+    /// Whether it was refused (else applied, under [`WriterCheck::Warn`]).
+    pub refused: bool,
+}
+
 /// The store.
 #[derive(Default)]
 pub struct Store {
@@ -291,6 +387,10 @@ pub struct Store {
     journal: VecDeque<Changed>,
     /// Saved values for paths not declared yet (a plugin not connected).
     pending: BTreeMap<String, Json>,
+    check: WriterCheck,
+    /// Writes from scopes that are not writers, each path and scope once.
+    stray: Vec<StrayWrite>,
+    diagnostics: Diagnostics,
 }
 
 impl fmt::Debug for Store {
@@ -371,6 +471,7 @@ impl Store {
             origin: None,
             order: 0,
             owner: owner.clone(),
+            writer: None,
         };
         let default = Set::new(path, Change::To(descriptor.default.clone()), Origin::User).force();
         match Self::target(&probe, &default) {
@@ -408,6 +509,7 @@ impl Store {
             origin: None,
             order,
             owner: owner.clone(),
+            writer: None,
         };
         // A saved value waiting for this path, or the kept one: only if
         // it fits.
@@ -592,14 +694,98 @@ impl Store {
             .map(|(_, g)| &g.origin)
     }
 
+    /// What a write from a scope that is not a writer gets: refused or
+    /// warned about, as [`WriterCheck`] says; each path and scope is
+    /// reported once.
+    pub fn set_writer_check(&mut self, check: WriterCheck) {
+        self.check = check;
+    }
+
+    pub fn writer_check(&self) -> WriterCheck {
+        self.check
+    }
+
+    /// The writes from scopes that are not writers so far, each path and
+    /// scope once: what a test of a plugin set expects empty.
+    pub fn stray_writes(&self) -> &[StrayWrite] {
+        &self.stray
+    }
+
+    /// The store's diagnostics: writes from scopes that are not writers.
+    pub fn diagnostics(&self) -> &Diagnostics {
+        &self.diagnostics
+    }
+
+    /// Whether a scope may write a path (an unknown path: no).
+    pub fn may_write(&self, path: &str, scope: &OwnerId) -> bool {
+        self.entries
+            .get(path)
+            .is_some_and(|e| e.descriptor.writers.allow(&e.owner, scope))
+    }
+
+    /// Checks a write's scope; `Err` when it is refused.
+    fn check_writer(&mut self, path: &str, scope: Option<&OwnerId>) -> Result<(), Refused> {
+        let (Some(scope), Some(e)) = (scope, self.entries.get(path)) else {
+            return Ok(());
+        };
+        if e.descriptor.writers.allow(&e.owner, scope) {
+            return Ok(());
+        }
+        let refused = self.check == WriterCheck::Refuse;
+        let (owner, current) = (e.owner.clone(), e.value.clone());
+        if !self
+            .stray
+            .iter()
+            .any(|s| s.path == path && s.by == *scope && s.refused == refused)
+        {
+            self.stray.push(StrayWrite {
+                path: path.into(),
+                by: scope.clone(),
+                owner: owner.clone(),
+                refused,
+            });
+            let message = format!(
+                "`{scope}` is not one of its writers (its owner is `{owner}`): {}",
+                if refused {
+                    "the write is refused; declare the writer (`Descriptor::writers`)"
+                } else {
+                    "the write is applied (the check only warns)"
+                }
+            );
+            if refused {
+                self.diagnostics
+                    .error(NOT_A_WRITER, Some(scope), path, message);
+            } else {
+                self.diagnostics
+                    .warn(NOT_A_WRITER, Some(scope), path, message);
+            }
+        }
+        if refused {
+            return Err(Refused::NotWriter {
+                path: path.into(),
+                by: scope.clone(),
+                owner,
+                current,
+            });
+        }
+        Ok(())
+    }
+
     /// Writes a value already checked; tells the listeners.
-    fn write(&mut self, path: &str, value: Value, origin: &Origin) -> (Value, u64) {
+    fn write(
+        &mut self,
+        path: &str,
+        value: Value,
+        origin: &Origin,
+        by: Option<OwnerId>,
+    ) -> (Value, u64) {
         self.seq += 1;
         let seq = self.seq;
         let entry = self.entries.get_mut(path).expect("a declared path");
         let old = std::mem::replace(&mut entry.value, value.clone());
         entry.seq = seq;
         entry.origin = Some(origin.clone());
+        entry.writer = by;
         let event = Changed {
             path: path.into(),
             old: old.clone(),
@@ -619,14 +805,19 @@ impl Store {
         (old, seq)
     }
 
-    /// Applies a write.
+    /// Applies a write. Its scope ([`Set::by`], else [`current_scope`])
+    /// must be one of the path's writers: its owner, one its descriptor
+    /// names ([`Writers`]), or the framework; a write naming none is not
+    /// checked.
     pub fn set(&mut self, set: Set) -> Result<Applied, Refused> {
-        let entry = self
-            .entries
-            .get(&set.path)
-            .ok_or_else(|| Refused::Unknown {
+        if !self.entries.contains_key(&set.path) {
+            return Err(Refused::Unknown {
                 path: set.path.clone(),
-            })?;
+            });
+        }
+        let scope = set.by.clone().or_else(current_scope);
+        self.check_writer(&set.path, scope.as_ref())?;
+        let entry = &self.entries[&set.path];
         let current = entry.value.clone();
         if let Some(seq) = set.if_seq
             && entry.seq != seq
@@ -662,7 +853,7 @@ impl Store {
                 changed: false,
             });
         }
-        let (old, seq) = self.write(&set.path, value.clone(), &set.origin);
+        let (old, seq) = self.write(&set.path, value.clone(), &set.origin, scope);
         let change = (set.path.clone(), old, value.clone());
         match set.gesture.and_then(|g| self.gestures.get_mut(&g)) {
             _ if set.untracked => {}
@@ -741,7 +932,7 @@ impl Store {
         };
         for (path, old, _) in g.changes.into_iter().rev() {
             if self.entries.contains_key(&path) {
-                self.write(&path, old, &g.origin);
+                self.write(&path, old, &g.origin, Some(OwnerId::FRAMEWORK));
             }
         }
         true
@@ -786,7 +977,7 @@ impl Store {
         }
         for (path, value) in changes {
             if self.entries[&path].value != value {
-                self.write(&path, value, origin);
+                self.write(&path, value, origin, Some(OwnerId::FRAMEWORK));
             }
         }
         Ok(())
@@ -918,7 +1109,7 @@ impl Store {
             match result {
                 Ok(v) => {
                     if self.entries[path].value != v {
-                        self.write(path, v, origin);
+                        self.write(path, v, origin, Some(OwnerId::FRAMEWORK));
                     }
                 }
                 Err(reason) => d.warn(

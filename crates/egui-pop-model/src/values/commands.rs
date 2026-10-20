@@ -20,6 +20,8 @@ fn describe(path: &str, e: &Entry) -> Json {
         "seq": e.seq,
         "origin": e.origin,
         "owner": e.owner,
+        "writers": e.descriptor.writers,
+        "writer": e.writer,
         "descriptor": e.descriptor,
     })
 }
@@ -65,7 +67,9 @@ fn set(store: &Mutex<Store>, args: &Json, origin: &Origin, reset: bool) -> Resul
     } else {
         change_of(&store, path, args)?
     };
-    let mut s = Set::new(path, change, origin.clone());
+    // The commands act for whoever runs them, as the settings form does:
+    // the framework writes.
+    let mut s = Set::new(path, change, origin.clone()).by(&OwnerId::FRAMEWORK);
     s.force = args.get("force").and_then(Json::as_bool) == Some(true);
     s.if_seq = args.get("if_seq").and_then(Json::as_u64);
     match store.set(s) {
