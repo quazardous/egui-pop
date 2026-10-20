@@ -2,7 +2,13 @@
 
 <img src="https://github.com/quazardous/egui-pop/raw/main/docs/logo/egui-pop-badge.svg" alt="egui-pop" width="400">
 
-[![crates.io](https://img.shields.io/crates/v/egui-pop.svg)](https://crates.io/crates/egui-pop)
+[<img alt="github" src="https://img.shields.io/badge/github-quazardous/egui--pop-8da0cb?logo=github" height="20">](https://github.com/quazardous/egui-pop)
+[![Latest version](https://img.shields.io/crates/v/egui-pop.svg)](https://crates.io/crates/egui-pop)
+[![Documentation](https://docs.rs/egui-pop/badge.svg)](https://docs.rs/egui-pop)
+[![unsafe: platform crates only](https://img.shields.io/badge/unsafe-platform%20crates%20only-success.svg)](#unsafe-code)
+[![Build Status](https://github.com/quazardous/egui-pop/actions/workflows/ci.yml/badge.svg)](https://github.com/quazardous/egui-pop/actions/workflows/ci.yml)
+[![MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/quazardous/egui-pop/blob/main/LICENSE-MIT)
+[![Apache](https://img.shields.io/badge/license-Apache-blue.svg)](https://github.com/quazardous/egui-pop/blob/main/LICENSE-APACHE)
 
 ![The egui-pop gallery in pop-dark: the theme overview](https://github.com/quazardous/egui-pop/raw/main/docs/screenshots/overview-pop-dark.png)
 
@@ -252,6 +258,18 @@ which move only when their code does.
 See [CONTRIBUTING.md](https://github.com/quazardous/egui-pop/blob/main/CONTRIBUTING.md) (with a section for extension
 authors), [GOVERNANCE.md](https://github.com/quazardous/egui-pop/blob/main/GOVERNANCE.md), [AGENTS.md](https://github.com/quazardous/egui-pop/blob/main/AGENTS.md) and
 [CHANGELOG.md](https://github.com/quazardous/egui-pop/blob/main/CHANGELOG.md).
+
+## Unsafe code
+
+`unsafe` is forbidden in the whole workspace (`unsafe_code = "forbid"` in
+the workspace lints), except in the two crates that call the operating
+system directly:
+
+- `egui-pop-win32`, the Windows layer of the window frame (Snap Layouts,
+  rounded corners). Its `unsafe` code is compiled on Windows only; other
+  platforms get safe stubs.
+- `egui-pop-wayland`, the Wayland layer of the image viewport (a colour
+  managed subsurface), only with the viewport's `wayland` feature.
 
 ## License
 
