@@ -106,7 +106,13 @@ publishes.
 
 - `Request::Rebind` carries the layer changed, and `Request::ResetKeys`
   is a struct with its command and layer (egui-pop-api).
-
+- The window frame's types grow for full screen and zen mode
+  (`egui-pop-core`, `egui-pop-api`, breaking): `frame::FrameRequest`
+  gains `ExitFullscreen`, `frame::HitRegions` and `frame::FrameLayout`
+  gain `fullscreen` (struct literals add it or `..Default::default()`),
+  and `workbench::Change` gains `Zen`. A match on them adds the new
+  arm. By default the title bar now stays in full screen; set
+  `window.bar_in_fullscreen` off for the former behaviour.
 - One tone for every mark (`egui-pop-core`, `egui-pop-api`,
   `egui-pop-views`, breaking): `kit::Tone` gains `Record` (recording,
   the danger colour unless a kit tells them apart through
