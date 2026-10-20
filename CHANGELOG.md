@@ -55,6 +55,11 @@ publishes.
 
 ### Changed
 
+- A selectable row keeps its size in every state (egui-pop-core): at
+  rest it is as large as hovered or chosen, as egui 0.37's selectable
+  button is, so a list of rows no longer moves under the pointer and a
+  wrapped label no longer wraps differently. Rows and toggle chips at
+  rest grow by their border's width on each side.
 - egui-pop is now licensed under MIT OR Apache-2.0, at your option, like
   egui and most of the Rust ecosystem (it was MIT only). `LICENSE` became
   `LICENSE-MIT`, `LICENSE-APACHE` is new, and every crate's `license` field
@@ -433,6 +438,8 @@ publishes.
 
 ### Deprecated
 
+- `SelectableRow::steady` (egui-pop-core): every row keeps its size now;
+  remove the call. It does nothing and goes in the next minor.
 - `DRAFT_EXTENSION` and `DRAFT_VERSION` (egui-pop-tokens): the theme
   editor stamps its files with `FORMAT_EXTENSION` now
   (`FormatStamp::CURRENT`); the former stamp is still read on import.

@@ -4,7 +4,7 @@
 use egui::accesskit::{Role, Toggled};
 use egui_kittest::Harness;
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
-use egui_pop_core::widgets::{self, Checkbox, ToggleChip};
+use egui_pop_core::widgets::{self, Checkbox, SelectableRow, ToggleChip};
 
 #[derive(Default)]
 struct Values {
@@ -98,6 +98,25 @@ fn a_selectable_row_is_a_selected_button() {
     h.get_by_label("Second").click();
     h.run();
     assert_eq!(h.state().picked, 1);
+}
+
+#[test]
+fn a_selectable_row_keeps_egui_s_size_under_the_pointer() {
+    let mut h = Harness::new_ui(|ui| {
+        // A border at rest, as egui-pop's themes have.
+        ui.visuals_mut().widgets.inactive.bg_stroke.width = 1.0;
+        ui.add(SelectableRow::new(false, "Same"));
+        let _ = ui.selectable_label(false, "Same");
+    });
+    h.run();
+    let sizes = |h: &Harness<'_>| -> Vec<egui::Rect> {
+        h.query_all_by_label("Same").map(|n| n.rect()).collect()
+    };
+    let rest = sizes(&h);
+    assert_eq!(rest[0].size(), rest[1].size());
+    h.query_all_by_label("Same").next().unwrap().hover();
+    h.run();
+    assert_eq!(sizes(&h)[0], rest[0]);
 }
 
 #[test]
