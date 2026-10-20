@@ -6,7 +6,7 @@ use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
 use egui_pop::core::kit::{Kit, State};
 use egui_pop::theme::{self, BUILT_IN_THEMES, Density, ThemeSpec, Tokens};
-use egui_pop::tokens::Themes;
+use egui_pop::tokens::{Themes, TokenFile};
 use egui_pop_test::SharedGpu as _;
 
 /// Whether a theme is, through its `$extends` chain, a light one.
@@ -141,18 +141,21 @@ fn tokens_are_read_back_from_the_context() {
 
 #[test]
 fn a_broken_theme_installs_with_fallbacks_and_reports() {
-    let mut themes = Themes::default();
-    themes
-        .add_text(
-            "broken",
-            r#"
+    let text = r#"
             $extends: "pop-dark"
             surface:
               $type: "color"
               panel: {$value: "{nope}"}
-            "#,
-        )
-        .unwrap();
+            "#;
+    let mut themes = Themes::default();
+    // Loaded by the rule, the broken token is left out and said so.
+    let warnings = themes.add_text("broken", text).unwrap();
+    assert_eq!(
+        warnings.iter().filter_map(|w| w.path()).collect::<Vec<_>>(),
+        ["surface.panel"]
+    );
+    // Added as written, past the rule: what install does with it.
+    themes.add(TokenFile::parse("broken", text).unwrap());
     let ctx = egui::Context::default();
     let t = theme::install_with(&ctx, &themes, &ThemeSpec::new("broken"));
     // The broken role, and the component tokens aliasing it.
