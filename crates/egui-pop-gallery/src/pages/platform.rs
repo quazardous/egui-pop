@@ -253,9 +253,22 @@ fn notify_section(ui: &mut Ui, app: &AppHandle, sim: Option<&Sim>) {
                     ),
             );
         }
-        if ui.button("Notify from a thread").clicked() {
+        // The web has no threads (`std::thread::spawn` panics there): the
+        // same post comes from an asynchronous task.
+        let elsewhere =
+            ui.button("Notify from a thread")
+                .on_hover_text(if cfg!(target_arch = "wasm32") {
+                    "On the web, from an asynchronous task: a browser page has no threads."
+                } else {
+                    "Posted from a thread of its own."
+                });
+        if elsewhere.clicked() {
             let n = (*notifier).clone();
-            std::thread::spawn(move || n.post(Notification::new("Import done", "120 images")));
+            let post = move || n.post(Notification::new("Import done", "120 images"));
+            #[cfg(target_arch = "wasm32")]
+            wasm_bindgen_futures::spawn_local(async move { post() });
+            #[cfg(not(target_arch = "wasm32"))]
+            std::thread::spawn(post);
         }
     });
     for shown in notifier.history().iter().rev().take(3) {

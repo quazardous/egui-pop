@@ -548,6 +548,12 @@ publishes.
   panicked at start-up and left a black page. On the web it now logs to
   the browser's console, and when it cannot start or panics, the page
   says why instead of staying black.
+- The gallery's "Notify from a thread" button (platform page) no
+  longer panics on the web, where there are no threads: the
+  notification is posted from an asynchronous task there, as its
+  tooltip says. The gallery's other threads (the tree's slow source, the
+  code editor's completions, the viewport's demo workers) already had
+  a path for the web.
   says why instead of staying black.
 - Docked panels no longer stay drawn in the other variant after a few
   theme switches (egui-pop-api): the frame where a theme is installed,
