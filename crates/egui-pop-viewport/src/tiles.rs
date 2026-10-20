@@ -101,8 +101,10 @@ pub(crate) struct Draw<'a> {
 }
 
 /// A GPU path tile's pixels: scene floats (converted at the paint) or
-/// texels prepared by the delivering thread.
+/// texels prepared by the delivering thread. Only the GPU path reads
+/// them: without the `wgpu` feature they are queued and never read.
 #[derive(Debug)]
+#[cfg_attr(not(feature = "wgpu"), allow(dead_code))]
 pub(crate) enum GpuData {
     Scene(Vec<f32>),
     Texels(Vec<u8>),
