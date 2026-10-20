@@ -61,12 +61,13 @@ impl Plugin for Notes {
             PanelSpec::new(PanelId::from_static("notes.panel"), "Note", Area::Center),
             |ui, app| {
                 let store = app.store();
-                ui.heading("Note");
+                let heading = ui.heading("Note");
                 binding::edit(
                     ui,
                     Binding::bound(&store, "settings/notes.text"),
                     |ui, v: &mut String| {
                         ui.add(egui::TextEdit::multiline(v).desired_width(f32::INFINITY))
+                            .labelled_by(heading.id)
                     },
                 );
                 if ui.button("Clear").clicked() {
