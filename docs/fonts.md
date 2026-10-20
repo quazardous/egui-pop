@@ -375,11 +375,13 @@ workaround, remove when). Issues to open or find:
    good; do not ship RTL locales until fixed (or reorder with
    `unicode-bidi` before layout for single-direction labels only).
    Track the upstream issue.
-4. **No system font fallback in 0.36.** Fixed by #8491 (0.37). Until
-   then: bundled faces, plus an opt-in fontique fallback per locale
-   script at install.
-5. **No colour emoji in 0.36.** Fixed by #8492 (0.37). Workaround: icons
-   by role (already done), no emoji in UI strings.
+4. **No system font fallback in 0.36.** Fixed by #8491 in 0.37, opt-in
+   (eframe's `system_fonts` feature, off in egui-pop so that what is drawn
+   never depends on the system). Meanwhile: bundled faces, plus an
+   opt-in fontique fallback per locale script at install.
+5. **No colour emoji in 0.36.** Fixed by #8492 in 0.37, with the same
+   font provider. Workaround: icons by role (already done), no emoji in
+   UI strings.
 6. **Atlas thrown away when 80 % full.** Workaround: quantised sizes and
    weights, a larger `max_texture_side` on native. Possible upstream
    proposal: evict least-used glyphs instead of rebuilding.

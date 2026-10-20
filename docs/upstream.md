@@ -96,19 +96,20 @@ limit.
 ## egui_table: unnamed resize handles, rows drawn per region
 
 - **Compensated**: the column resize handles are interactive widgets
-  without an accessible name; `TableDelegate::row_ui` and
-  `header_cell_ui` are called once per region (sticky and scrolled
-  columns), also for the sticky region when there are no sticky columns.
+  without an accessible name; `TableDelegate::row_ui` is called once per
+  region (sticky and scrolled columns), also for the sticky region when
+  there are no sticky columns.
 - **Upstream**: egui_table lives in rerun-io/egui_crates now. Not filed
   yet (drafts:
   [upstream-drafts/egui_crates-table-resize-handle-name.md](upstream-drafts/egui_crates-table-resize-handle-name.md)
   and
   [upstream-drafts/egui_crates-table-row-ui-empty-sticky-region.md](upstream-drafts/egui_crates-table-row-ui-empty-sticky-region.md)).
-  On egui_table's main the header is drawn once, so only `row_ui` is still
-  called for the empty region.
+  egui_table 0.11 draws the header once, so `header_cell_ui` is no
+  longer called for an empty region (its guard went with the move to
+  0.11).
 - **Workaround**: `egui-pop-views`' data table names each handle after
-  its column once the table is drawn, and skips the rows and header
-  cells of an empty region (`table.rs`, `// upstream:`).
+  its column once the table is drawn, and skips the rows of an empty
+  region (`table.rs`, `// upstream:`).
 - **Remove when**: egui_table names its handles and skips empty regions.
 
 ## egui_kittest: no way to move a window to a screen of another scale
@@ -156,14 +157,21 @@ limit.
 
 - **Compensated**: symbols such as ✓ ▸ ◆ ● render as missing glyphs with
   egui's default fonts.
-- **Upstream**: fixed by <https://github.com/emilk/egui/pull/8491>
-  ("Render any glyph on native", merged, expected in egui 0.37).
+- **Upstream**: egui 0.37 renders any glyph the system has
+  (<https://github.com/emilk/egui/pull/8491>), through a font provider
+  (eframe's `system_fonts` feature on native, off in egui-pop) or a glyph
+  rasterizer (eframe on the web). egui's own fonts still lack these
+  symbols: without a provider (egui_kittest, an integration of its own)
+  they are drawn as tofu, and what is drawn depends on the system's
+  fonts. egui 0.37 paints `SubMenuButton`'s arrow as a triangle
+  (<https://github.com/emilk/egui/pull/8525>).
 - **Workaround**: icons are named by role (`egui_pop_core::icon::Icon`)
   and drawn from the Phosphor icon font (`phosphor` feature), installed
   in a family of its own, or painted with lines and fills; widgets never
-  put symbols in text. egui's `SubMenuButton` arrow (`⏵`) is replaced
-  by a painted chevron in egui-pop's menus.
-- **Remove when**: egui-pop moves to egui 0.37.
+  put symbols in text. egui-pop's menus paint the kit's chevron.
+- **Remove when**: never: icons drawn by role do not depend on the fonts
+  a system has, and follow the theme; this is egui-pop's design now
+  (reviewed at the egui 0.37 bump).
 
 ## eframe: no list of screens when a window is placed
 
@@ -219,7 +227,7 @@ limit.
   platform offers (`SurfaceConfiguration::color_space`: extended sRGB,
   scRGB, Display P3, BT.2100 PQ and HLG) and reports them per format
   (`SurfaceCapabilities::color_spaces`) with the display's headroom
-  (`Surface::display_hdr_info`). eframe 0.36 does not let an application
+  (`Surface::display_hdr_info`). eframe (0.36 and 0.37) does not let an application
   use any of it: egui-wgpu picks the format itself
   (`preferred_framebuffer_format`: `Rgba8Unorm` or `Bgra8Unorm`), and
   configures the surface with wgpu's default colour space
