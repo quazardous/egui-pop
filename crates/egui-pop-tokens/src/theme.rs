@@ -1,7 +1,7 @@
 //! Themes: base themes, density overlays, accents and overrides composed
 //! into one set of resolved tokens.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::str::FromStr;
 
@@ -566,6 +566,7 @@ impl Themes {
                 });
             entry.value = json!({ "value": 0, "unit": "ms" });
         }
+        inherit(&mut raw, &mut problems);
         for (path, value) in &spec.overrides {
             match raw.get_mut(path) {
                 // An override is the value as wanted: the alpha modifier
@@ -626,6 +627,132 @@ impl Themes {
             problems,
         }
     }
+}
+
+/// The component term naming the component another is based on
+/// (`command-button.based-on: "button"`, `docs/kit.md`).
+pub const BASED_ON: &str = "based-on";
+
+/// The component a component is based on, as its tokens say
+/// (`<component>.based-on`); `None` when it gives none, or no name.
+pub(crate) fn base_of<'a>(raw: &'a BTreeMap<String, RawToken>, component: &str) -> Option<&'a str> {
+    let token = raw.get(&format!("{component}.{BASED_ON}"))?;
+    token
+        .value
+        .as_str()
+        .filter(|_| alias_target(&token.value).is_none())
+}
+
+/// Components based on another (`<component>.based-on`) receive every
+/// token of their base they do not give themselves, as an alias of it
+/// (`command-button.hover.fill: "{button.hover.fill}"`): states, tones,
+/// component terms and the `shape`. Chains are followed, each base
+/// completed before the components based on it. A cycle is a problem,
+/// and its members keep their own tokens only; so is a base no token
+/// names. Done once per resolution, before the overrides, so that an
+/// override of the base reaches the components based on it.
+fn inherit(raw: &mut BTreeMap<String, RawToken>, problems: &mut Vec<Error>) {
+    let suffix = format!(".{BASED_ON}");
+    let mut bases: BTreeMap<String, String> = BTreeMap::new();
+    for (path, token) in raw.iter() {
+        let Some(component) = path.strip_suffix(&suffix) else {
+            continue;
+        };
+        if component.contains('.') {
+            continue;
+        }
+        match base_of(raw, component) {
+            Some(base) if !base.is_empty() => {
+                bases.insert(component.to_string(), base.to_string());
+            }
+            _ => problems.push(Error::InvalidValue {
+                path: path.clone(),
+                ty: "string".into(),
+                reason: format!("`{}` does not name a component", token.value),
+            }),
+        }
+    }
+    if bases.is_empty() {
+        return;
+    }
+    // The members of cycles keep their own tokens.
+    let mut cyclic: BTreeSet<String> = BTreeSet::new();
+    for start in bases.keys() {
+        let mut chain = vec![start.clone()];
+        let mut at = start;
+        while let Some(next) = bases.get(at) {
+            if let Some(i) = chain.iter().position(|c| c == next) {
+                let members = &chain[i..];
+                if members.iter().all(|m| !cyclic.contains(m)) {
+                    let mut shown = members.to_vec();
+                    shown.push(next.clone());
+                    problems.push(Error::BasedOnCycle { chain: shown });
+                    cyclic.extend(members.iter().cloned());
+                }
+                break;
+            }
+            chain.push(next.clone());
+            at = next;
+        }
+    }
+    let mut done: BTreeSet<String> = BTreeSet::new();
+    let components: Vec<String> = bases.keys().cloned().collect();
+    for component in components {
+        complete(raw, &bases, &cyclic, &mut done, &component, problems);
+    }
+}
+
+/// Gives `component` its base's tokens, its base completed first.
+fn complete(
+    raw: &mut BTreeMap<String, RawToken>,
+    bases: &BTreeMap<String, String>,
+    cyclic: &BTreeSet<String>,
+    done: &mut BTreeSet<String>,
+    component: &str,
+    problems: &mut Vec<Error>,
+) {
+    if cyclic.contains(component) || !done.insert(component.to_string()) {
+        return;
+    }
+    let Some(base) = bases.get(component) else {
+        return;
+    };
+    complete(raw, bases, cyclic, done, base, problems);
+    let prefix = format!("{base}.");
+    let inherited: Vec<(String, RawToken)> = raw
+        .range(prefix.clone()..)
+        .take_while(|(path, _)| path.starts_with(&prefix))
+        .filter_map(|(path, token)| {
+            let term = &path[prefix.len()..];
+            if term == BASED_ON {
+                return None;
+            }
+            let own = format!("{component}.{term}");
+            (!raw.contains_key(&own)).then(|| {
+                (
+                    own,
+                    RawToken {
+                        ty: token.ty.clone(),
+                        value: json!(format!("{{{path}}}")),
+                        description: None,
+                        extensions: None,
+                    },
+                )
+            })
+        })
+        .collect();
+    let has_base = raw
+        .range(prefix.clone()..)
+        .next()
+        .is_some_and(|(path, _)| path.starts_with(&prefix));
+    if !has_base {
+        problems.push(Error::UnknownBase {
+            path: format!("{component}.{BASED_ON}"),
+            base: base.clone(),
+        });
+        return;
+    }
+    raw.extend(inherited);
 }
 
 /// Lays `over` on `under`: values replace, a token without a type keeps the

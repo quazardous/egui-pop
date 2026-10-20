@@ -95,6 +95,7 @@ pub const STATE_TERMS: &[(&str, &str)] = &[
 /// The terms that do not change with the state (`component.term`), with
 /// their type.
 pub const COMPONENT_TERMS: &[(&str, &str)] = &[
+    ("based-on", "string"),
     ("shape", "string"),
     ("padding-x", "dimension"),
     ("padding-y", "dimension"),

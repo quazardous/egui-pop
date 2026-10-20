@@ -49,6 +49,7 @@ does not change with the state.
 | `text` | ✓ | its label's colour |
 | `indicator-color`, `indicator-size` | ✓ | a bar on one side of the box (none at size 0) |
 | `shape` | | the name of the handler that draws the component |
+| `based-on` | | the component this one is based on: it receives every token of it it does not give ([below](#components-based-on-another)) |
 | `padding-x` | | between the label and the sides |
 | `height` | | the component's height, when it has a fixed one |
 | `indicator-side` | | `top`, `bottom`, `left` or `right` |
@@ -69,6 +70,44 @@ requires it); each other state gives only what differs. A part in several
 states (a selected tab under the pointer) takes `rest`, then `selected`,
 `hover`, `focus`, `active`, `disabled`, in that order, a later one
 winning.
+
+## Components based on another
+
+A component that is a kind of another names it: `based-on`, a string.
+
+```yaml
+command-button:
+  based-on: {$type: "string", $value: "button"}
+  focus:
+    border-color: {$type: "color", $value: "{focus.ring}"}
+```
+
+When the theme is resolved (at install, never while drawing), the
+component receives every token of its base it does not give itself, as
+an alias of the base's (`command-button.hover.fill` is
+`"{button.hover.fill}"`): every state, every tone, the component terms
+and the `shape`. Its own tokens then apply over them, as `focus` above.
+A kit restyling the base restyles every component based on it, through
+any term, unless that component gives the term itself; so does an
+override of the base.
+
+- **One base, chains allowed**: `find-bar-button` may be based on
+  `icon-button`, itself based on another. A base is completed before
+  what is based on it, whatever the order of the files.
+- **A cycle is a problem** (`Error::BasedOnCycle`, reported at install
+  and by `kit::check`): each component of the circle keeps its own tokens
+  only. So is a base no token names (`Error::UnknownBase`).
+- **The handler follows**: the `shape` is inherited like any term, and
+  a handler registered for the base under that name draws the component
+  too, unless one is registered for the component itself. A component
+  giving its own `shape` keeps it.
+- **Tones follow**: the base's tones are inherited; a tone the component
+  gives replaces the base's term by term.
+- **Only `based-on` crosses the component tier.** Any other component
+  token aliases a system token (a test checks the default kit): an alias
+  of one term of another component would cascade one term only.
+- The contract still lists every token a based component must end with;
+  the theme giving the base gives them.
 
 ## Handlers
 

@@ -53,6 +53,12 @@ pub enum Error {
     UnknownOverride { path: String },
     /// An accent names no usable colour scale.
     UnknownAccent { name: String },
+    /// A component is based on a component no token names
+    /// (`<component>.based-on`): it keeps its own tokens only.
+    UnknownBase { path: String, base: String },
+    /// Components are based on each other in a circle: each keeps its own
+    /// tokens only.
+    BasedOnCycle { chain: Vec<String> },
 }
 
 impl Error {
@@ -66,7 +72,8 @@ impl Error {
             | Error::InvalidValue { path, .. }
             | Error::InvalidModifier { path, .. }
             | Error::Missing { path }
-            | Error::UnknownOverride { path } => Some(path),
+            | Error::UnknownOverride { path }
+            | Error::UnknownBase { path, .. } => Some(path),
             Error::AliasCycle { chain } => chain.first().map(String::as_str),
             _ => None,
         }
@@ -107,6 +114,15 @@ impl fmt::Display for Error {
             Error::UnknownOverride { path } => {
                 write!(f, "override `{path}`: the theme has no such token")
             }
+            Error::UnknownBase { path, base } => write!(
+                f,
+                "`{path}`: no token of a component `{base}`; its own tokens only are used"
+            ),
+            Error::BasedOnCycle { chain } => write!(
+                f,
+                "components are based on each other in a circle: {}; each keeps its own tokens only",
+                chain.join(" → ")
+            ),
             Error::UnknownAccent { name } => write!(
                 f,
                 "accent `{name}`: no colour scale of that name with steps 3, 5, 8, 9, 10 and `contrast`"

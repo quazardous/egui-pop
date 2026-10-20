@@ -120,17 +120,19 @@ without it.
    shows, 500 ms at least once shown, a spinner's turn),
    `motion.progress.travel`, `motion.skeleton.shimmer`, `opacity.scrim`.
 
-3. **Component**: one component's tokens, each an alias of a system token:
-   `button.*`, the sliders' (`slider.*`, `slider-fill.*`...),
-   `field.*` (input fields: their fill, read-only fill, text,
-   placeholder and borders, and the colour of each field state:
-   `modified`, `required`, `invalid`, `pending`),
-   `progress.{track, fill, height, line, ring}` (bars, rings, meters and
-   spinners), `indicator-dot.*`, `indicator-badge.*`, `indicator-flag.*`,
+3. **Component**: one component's tokens, each an alias of a system token
+   (or, for a component based on another, of its base's token under the
+   same term: [kit.md](kit.md#components-based-on-another)). The kit's
+   components are `component.state.term` ([kit.md](kit.md)): `button.*`,
+   the sliders' (`slider.*`, `slider-fill.*`...), `field.*` (input
+   fields, their states as tones: read-only and the placeholder `muted`,
+   modified `accent`, required `warning`, invalid `danger`, pending
+   `info`), the bars, rings, meters and spinners (`progress-bar.*`,
+   `progress-fill.*`, `progress-ring.*`, `spinner.*`...), `indicator-dot.*`, `indicator-badge.*`, `indicator-flag.*`,
    `indicator-swatch.*`, `indicator-outline.*` and `indicator-button.*`
    (micro-indicators, see [indicators](indicators.md)),
-   `skeleton.*` and `skeleton-shimmer.*`, `dialog.*`, `palette.*`,
-   `toast.*`, `editor.*` and `syntax.*` (one colour per kind of code:
+   `skeleton.*` and `skeleton-shimmer.*`, `dialog.*`, `palette-window.*`,
+   `toast.*`. Content drawn in code keeps flat names: `editor.*` and `syntax.*` (one colour per kind of code:
    keywords on the accent, strings on `success`, numbers on `warning`,
    comments muted...), `terminal.*` (its text, cursor, selection, links,
    and `terminal.ansi.0` to `terminal.ansi.15`, the 16 colours programs
@@ -201,7 +203,11 @@ A theme is resolved from a `ThemeSpec`, in this order:
    the accent (`focus.ring`, `slider-fill.rest.fill`) follows;
 4. **reduced motion**: `motion.duration` becomes 0 (egui's animation time,
    cursor blink and scroll animation follow);
-5. the user's **overrides**, raw values by path (aliases allowed).
+5. **components based on another** (`<component>.based-on`) receive each
+   token of their base they do not give, as an alias of it
+   ([kit.md](kit.md#components-based-on-another));
+6. the user's **overrides**, raw values by path (aliases allowed); an
+   override of a base reaches the components based on it.
 
 ```rust
 use egui_pop::tokens::{Density, ThemeSpec, Themes};
@@ -217,7 +223,9 @@ let tokens = Themes::default().resolve(&spec);
 
 Resolving never panics. Problems (an unknown theme, an `$extends` cycle,
 an alias cycle, an unknown alias, a wrong type, an unreadable value, a
-modifier that cannot apply, a missing contract token, an unknown override or accent) are listed in
+modifier that cannot apply, a missing contract token, an unknown override or accent, a
+component based on an unknown one or components based on each other in a
+circle) are listed in
 `tokens.problems()`, and every contract token with a problem takes the
 built-in `pop-dark` value.
 

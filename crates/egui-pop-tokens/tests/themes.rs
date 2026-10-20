@@ -41,13 +41,33 @@ fn built_in_themes_answer_the_whole_contract_cleanly() {
 fn system_and_component_tokens_are_aliases_of_the_tier_below() {
     let themes = Themes::default();
     let r = themes.resolve(&ThemeSpec::default());
+    // The one alias across the component tier: a component based on
+    // another (`<component>.based-on`) receives its base's token under the
+    // same term, followed here to the token the base gives.
+    let inherited = |path: &str, target: &str| {
+        let (component, term) = path.split_once('.')?;
+        let base = match r.value(&format!("{component}.based-on")) {
+            Some(Value::Other(serde_json::Value::String(b))) => b.clone(),
+            _ => return None,
+        };
+        (target == format!("{base}.{term}")).then_some(())
+    };
     for req in contract().filter(|r| r.ty == "color") {
-        let token = r.get(req.path).unwrap();
-        let target = token
+        let mut path = req.path.to_string();
+        let mut token = r.get(&path).unwrap();
+        let mut target = token
             .alias
-            .as_deref()
+            .clone()
             .unwrap_or_else(|| panic!("{} is a literal", req.path));
-        let target_tier = r.get(target).unwrap().tier();
+        while inherited(&path, &target).is_some() {
+            path = target.clone();
+            token = r.get(&path).unwrap();
+            target = token
+                .alias
+                .clone()
+                .unwrap_or_else(|| panic!("{path} (the base of {}) is a literal", req.path));
+        }
+        let target_tier = r.get(&target).unwrap().tier();
         match req.tier {
             // A role names the palette, or another role (`focus.ring`).
             Tier::System => assert_ne!(target_tier, Tier::Component, "{}", req.path),
@@ -728,5 +748,182 @@ fn a_former_token_name_is_no_longer_read() {
             .iter()
             .any(|p| p.to_string().starts_with("`button.background`")),
         "{problems:?}"
+    );
+}
+
+/// A theme over pop-dark with two components of its own, `base-box` and
+/// `child-box`, the child based on the base.
+const BASED: &str = r##"
+$extends: "pop-dark"
+base-box:
+  shape: {$type: "string", $value: "box"}
+  rest:
+    fill: {$type: "color", $value: "{surface.raised}"}
+    text: {$type: "color", $value: "{text.default}"}
+  hover:
+    fill: {$type: "color", $value: "{surface.hover}"}
+  tone:
+    danger:
+      fill: {$type: "color", $value: "{danger}"}
+child-box:
+  based-on: {$type: "string", $value: "base-box"}
+  rest:
+    text: {$type: "color", $value: "#123456"}
+"##;
+
+#[test]
+fn a_component_based_on_another_receives_what_it_does_not_give() {
+    let mut themes = Themes::default();
+    themes.add_text("based", BASED).unwrap();
+    let r = themes.resolve(&ThemeSpec::new("based"));
+    assert!(r.problems().is_empty(), "{:?}", r.problems());
+    // Inherited: states, tones and component terms, as aliases of the base.
+    for term in ["rest.fill", "hover.fill", "tone.danger.fill", "shape"] {
+        let token = r.get(&format!("child-box.{term}")).expect(term);
+        assert_eq!(token.alias.as_deref(), Some(&*format!("base-box.{term}")));
+        assert_eq!(
+            Some(&token.value),
+            r.value(&format!("base-box.{term}")),
+            "{term}"
+        );
+    }
+    // Its own value wins.
+    assert_eq!(r.color("child-box.rest.text"), Color::from_hex("#123456"));
+    // The base names no base: nothing comes back to it.
+    assert!(r.get("base-box.based-on").is_none());
+}
+
+#[test]
+fn restyling_the_base_restyles_what_is_based_on_it() {
+    let mut themes = Themes::default();
+    themes.add_text("based", BASED).unwrap();
+    themes
+        .add_text(
+            "restyled",
+            r##"
+            $extends: "based"
+            base-box:
+              hover:
+                fill: {$type: "color", $value: "#00ff00"}
+            "##,
+        )
+        .unwrap();
+    let r = themes.resolve(&ThemeSpec::new("restyled"));
+    assert_eq!(r.color("child-box.hover.fill"), Color::from_hex("#00ff00"));
+    // An override of the base reaches it too; one of its own stays its own.
+    let r = themes.resolve(
+        &ThemeSpec::new("based")
+            .override_token("base-box.rest.fill", json!("#0000ff"))
+            .override_token("child-box.hover.fill", json!("#ff0000")),
+    );
+    assert!(r.problems().is_empty(), "{:?}", r.problems());
+    assert_eq!(r.color("child-box.rest.fill"), Color::from_hex("#0000ff"));
+    assert_eq!(r.color("child-box.hover.fill"), Color::from_hex("#ff0000"));
+    assert_eq!(r.color("base-box.hover.fill"), r.color("surface.hover"));
+}
+
+#[test]
+fn bases_chain_each_completed_before_what_is_based_on_it() {
+    let mut themes = Themes::default();
+    themes.add_text("based", BASED).unwrap();
+    themes
+        .add_text(
+            "chain",
+            r##"
+            $extends: "based"
+            # Named before its base in the file and in the map's order.
+            a-grandchild:
+              based-on: {$type: "string", $value: "child-box"}
+              hover:
+                text: {$type: "color", $value: "#654321"}
+            "##,
+        )
+        .unwrap();
+    let r = themes.resolve(&ThemeSpec::new("chain"));
+    assert!(r.problems().is_empty(), "{:?}", r.problems());
+    assert_eq!(
+        r.color("a-grandchild.rest.text"),
+        Color::from_hex("#123456")
+    );
+    assert_eq!(r.color("a-grandchild.rest.fill"), r.color("surface.raised"));
+    assert_eq!(r.color("a-grandchild.tone.danger.fill"), r.color("danger"));
+    assert_eq!(
+        r.color("a-grandchild.hover.text"),
+        Color::from_hex("#654321")
+    );
+}
+
+#[test]
+fn a_cycle_of_bases_is_reported_and_each_keeps_its_own_tokens() {
+    let mut themes = Themes::default();
+    themes
+        .add_text(
+            "cycle",
+            r##"
+            $extends: "pop-dark"
+            one-box:
+              based-on: {$type: "string", $value: "two-box"}
+              rest:
+                fill: {$type: "color", $value: "#111111"}
+            two-box:
+              based-on: {$type: "string", $value: "one-box"}
+              rest:
+                text: {$type: "color", $value: "#222222"}
+            three-box:
+              based-on: {$type: "string", $value: "one-box"}
+            lost-box:
+              based-on: {$type: "string", $value: "no-such-box"}
+            "##,
+        )
+        .unwrap();
+    let r = themes.resolve(&ThemeSpec::new("cycle"));
+    let cycles: Vec<&Error> = r
+        .problems()
+        .iter()
+        .filter(|p| matches!(p, Error::BasedOnCycle { .. }))
+        .collect();
+    assert_eq!(cycles.len(), 1, "{:?}", r.problems());
+    assert!(
+        cycles[0]
+            .to_string()
+            .contains("one-box → two-box → one-box")
+    );
+    assert!(
+        r.problems()
+            .iter()
+            .any(|p| matches!(p, Error::UnknownBase { base, .. } if base == "no-such-box"))
+    );
+    // Each member of the cycle keeps its own tokens only.
+    assert!(r.get("one-box.rest.text").is_none());
+    assert!(r.get("two-box.rest.fill").is_none());
+    // Based on a member of the cycle, a component still gets its tokens.
+    assert_eq!(r.color("three-box.rest.fill"), Color::from_hex("#111111"));
+}
+
+#[test]
+fn kit_check_reports_a_cycle_and_an_unknown_base() {
+    let kit = egui_pop_tokens::kit::KitData::from_text(
+        "loops",
+        r##"
+        button:
+          based-on: {$type: "string", $value: "command-button"}
+        command-button:
+          based-on: {$type: "string", $value: "button"}
+        icon-button:
+          based-on: {$type: "string", $value: "buton"}
+        "##,
+    );
+    let said: Vec<String> = egui_pop_tokens::kit::check(&kit)
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    assert!(
+        said.iter()
+            .any(|p| p.contains("components are based on each other in a circle")),
+        "{said:?}"
+    );
+    assert!(
+        said.iter().any(|p| p.contains("`icon-button.based-on`")),
+        "{said:?}"
     );
 }

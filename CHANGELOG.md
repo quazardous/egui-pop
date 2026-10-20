@@ -60,6 +60,17 @@ publishes.
   the same icon are reported (`kit::DISTINCT_GLYPHS`,
   `kit::same_glyphs`, `Problem::SameGlyph`) and drawn with egui-pop's
   shapes, so colour never carries a state alone.
+- Components based on another (`egui-pop-tokens`, `egui-pop-core`): a
+  component's `based-on` term names its base, and when the theme is
+  resolved the component receives every token of the base it does not
+  give, as an alias of it: states, tones, component terms and the
+  `shape`, its own tokens applying over them. A kit restyling the base,
+  or an override of it, restyles every component based on it. Chains
+  are followed; a cycle (`Error::BasedOnCycle`) or a base no token
+  names (`Error::UnknownBase`) is reported, at install and by
+  `kit::check`, and the component keeps its own tokens. A handler
+  registered for the base under the inherited `shape` draws the
+  component too. `BASED_ON` names the term. Guide: docs/kit.md.
 - A side area's separator line that egui cannot draw is reported
   (`egui-pop-core`): a `side-area.rest.border-width` other than 0 or the
   button's, or a `border-color` other than `border.default`, is in

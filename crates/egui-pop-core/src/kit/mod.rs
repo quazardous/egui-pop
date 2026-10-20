@@ -812,6 +812,29 @@ impl Default for Shapes {
 }
 
 impl Shapes {
+    /// The handler a component's `shape` names: its own, else one its
+    /// base has (`<component>.based-on`, followed along a chain), so that
+    /// a component based on another is drawn as it is.
+    fn find(
+        &self,
+        t: &Tokens,
+        component: &str,
+        name: &str,
+    ) -> Option<Arc<dyn Primitive<ComponentKit>>> {
+        let mut at = component.to_string();
+        let mut seen = Vec::new();
+        loop {
+            if let Some(h) = self.0.get(&at).and_then(|h| h.get(name)) {
+                return Some(h.clone());
+            }
+            seen.push(at.clone());
+            match string(t, &format!("{at}.{}", egui_pop_tokens::BASED_ON)) {
+                Some(base) if !seen.contains(&base) => at = base,
+                _ => return None,
+            }
+        }
+    }
+
     /// Adds a handler for a component under a name.
     pub fn insert(
         &mut self,
@@ -878,8 +901,8 @@ impl Kit {
             let handlers = &shapes.0[name];
             let data = ComponentKit::compile(t, name, &mut problems);
             let asked = string(t, &format!("{name}.shape")).unwrap_or_else(|| default.into());
-            let (shape, handler) = match handlers.get(&asked) {
-                Some(h) => (asked, h.clone()),
+            let (shape, handler) = match shapes.find(t, name, &asked) {
+                Some(h) => (asked, h),
                 None => {
                     problems.push(format!(
                         "{name}.shape: no handler named `{asked}` (known: {}), `{default}` is drawn",
