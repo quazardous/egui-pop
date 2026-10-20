@@ -2254,9 +2254,10 @@ fn a_kit_restyles_the_library() {
                 border-color: {$type: "color", $value: "{border.strong}"}
                 border-width: {$type: "dimension", $value: {value: 1, unit: "px"}}
                 radius: {$type: "dimension", $value: {value: 0, unit: "px"}}
+            # Based on `pill`: its fill and outline follow; only its own
+            # corners are given again.
             thumb-overlay-badge:
               rest:
-                fill: {$type: "color", $value: "{surface.canvas}", $extensions: {org.egui-pop.alpha: 0.6}}
                 radius: {$type: "dimension", $value: {value: 0, unit: "px"}}
             mark-toggle:
               rest:
