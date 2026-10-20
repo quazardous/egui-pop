@@ -20,6 +20,14 @@ publishes.
 
 ### Added
 
+- Critical tests (egui-pop-test, the new egui-pop-test-macros):
+  `#[egui_pop_test::critical]` marks a test that guards a rule any change
+  can break, so a selective run still runs it; `#[critical(gpu)]` marks
+  one that renders. The mark renames the test with the prefix
+  `critical_` (or `critical_gpu_`), which runners select by name. Ten of
+  egui-pop's tests carry it (layering, the token contract, contrast, the
+  default kit, the catalogues, document migrations, the gallery's
+  accessible names), listed in `docs/testing.md`. Part of #10.
 - A cache of compiled files (egui-pop-tokens, egui-pop-api,
   egui-pop-platform): `egui_pop_tokens::cache`, a general store keyed by
   a source's path, a hash of its contents and the compiler's version

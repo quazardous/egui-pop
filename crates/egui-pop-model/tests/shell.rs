@@ -517,6 +517,7 @@ fn a_panel_found_where_it_may_not_be_goes_back_to_its_default_area() {
     );
 }
 
+#[egui_pop_test_macros::critical]
 #[test]
 fn a_version_1_layout_is_migrated_to_start_and_end_areas() {
     let v1 = r#"{

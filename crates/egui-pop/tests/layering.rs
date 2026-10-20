@@ -10,6 +10,7 @@ const LAYERS: &[(&str, u32)] = &[
     ("egui-pop-tokens", 0),
     ("egui-pop-win32", 0),
     ("egui-pop-wayland", 0),
+    ("egui-pop-test-macros", 0),
     ("egui-pop-model", 1),
     ("egui-pop-core", 2),
     ("egui-pop-api", 3),
@@ -30,6 +31,7 @@ const LAYERS: &[(&str, u32)] = &[
 /// Layers that must not depend on a GUI toolkit.
 const NO_EGUI_BELOW: u32 = 2;
 
+#[egui_pop_test::critical]
 #[test]
 fn dependencies_point_down_the_layers() {
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());

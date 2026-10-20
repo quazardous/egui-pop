@@ -17,6 +17,7 @@
 | `crates/egui-pop-editors` | L4, a component on the application API: text and code editors (a line buffer, virtualised drawing, search and replace, a gutter of markers, folding, a pluggable highlighter with syntect by default, code assist providers), every edit a step, driven by commands; a terminal (vt100's emulator over a source: a PTY behind the `pty` feature, or a read-only log console). |
 | `crates/egui-pop-imaging` | L4, the image tools in an application: each finished change of the viewport crate's histogram drag, curve editor, colour wheels, zoom control and navigator runs as a step (`histogram.drag`, `curve.change`, `wheel.change`, `zoom.change`), declared by `ImagingPlugin`. |
 | `crates/egui-pop-test` | L4, test kit: themed harness, "every interactive node has a name", accessibility tree dump. |
+| `crates/egui-pop-test-macros` | L0, the test kit's attributes (`critical`), re-exported by `egui-pop-test`; a procedural macro crate without dependencies. |
 | `crates/egui-pop` | L5, the facade users depend on. Holds the layering test. |
 | `crates/egui-pop-gallery` | The catalogue app, a plugin app; its pages are the snapshot fixtures. |
 | `crates/consumer-smoke` | Compiles the README and guide snippets (not published). |

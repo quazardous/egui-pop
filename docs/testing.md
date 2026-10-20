@@ -47,3 +47,50 @@ without a renderer opens a device of its own the first time it renders
 
 Until the loader is updated everywhere, a crashing GPU test binary is
 rerun with `--test-threads=1` before concluding anything.
+
+## Critical tests
+
+Selective runs (below) skip what a change cannot affect. Some tests
+guard rules that any change can break, so they run on every change,
+whatever the selection says. They carry a mark from the test kit:
+
+```rust,ignore
+#[egui_pop_test::critical]
+#[test]
+fn every_interactive_node_has_a_name() { /* ... */ }
+```
+
+The mark changes nothing in how the test runs: it renames the function
+with the prefix `critical_` (`critical_gpu_` with `#[critical(gpu)]`,
+for a test that renders), and the runners select by name. Crates whose
+tests do not use the test kit (`egui-pop-tokens`, `egui-pop-model`,
+`egui-pop-core`, `egui-pop-i18n`) use `#[egui_pop_test_macros::critical]`,
+the same attribute, through a path-only dev-dependency.
+
+```sh
+cargo test --workspace -- critical_                        # every critical test
+cargo nextest run --workspace -E 'test(/(^|::)critical_/)'  # the same, nextest
+```
+
+Rules for the mark:
+
+- **Critical tests stay fast.** They run on every pull request; one that
+  becomes slow loses its mark or is split.
+- **The list is short and written down here**, each test with the rule
+  it guards. A mark is a decision: added or removed in a commit that
+  says why.
+- **A docs-only change runs the critical tests that need no GPU.** The
+  ones marked `gpu` wait for a code change, or for `main`.
+
+| Test | Rule it guards |
+|---|---|
+| `egui-pop::layering` `critical_dependencies_point_down_the_layers` | crate layers, ADR 0001 |
+| `egui-pop-tokens::themes` `critical_built_in_themes_answer_the_whole_contract_cleanly` | every theme gives every required token |
+| `egui-pop-tokens::themes` `critical_system_and_component_tokens_are_aliases_of_the_tier_below` | component tokens alias the tier below |
+| `egui-pop-tokens::contrast` `critical_every_built_in_theme_and_density_passes_its_contrast_pairs` | contrast of every built-in theme and density |
+| `egui-pop-tokens::kits` `critical_the_default_kit_is_a_kit_folder` | the default kit is a clean kit folder |
+| `egui-pop-i18n::catalogues` `critical_the_english_catalogue_is_generated_from_the_code` | no text missing from the English catalogue |
+| `egui-pop-i18n::catalogues` `critical_every_locale_translates_everything_and_nothing_else` | no missing key, no unstamped translation |
+| `egui-pop-core::core` `critical_documents_are_written_atomically_with_a_backup_and_migrated_on_load` | an old saved document still loads |
+| `egui-pop-model::shell` `critical_a_version_1_layout_is_migrated_to_start_and_end_areas` | an old layout still loads |
+| `egui-pop-gallery::gallery` `critical_gpu_every_interactive_node_of_every_page_has_a_name` (GPU) | every interactive node of the gallery has a name |

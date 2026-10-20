@@ -1094,6 +1094,7 @@ dependencies = [
  "egui",
  "egui-phosphor",
  "egui-pop-model",
+ "egui-pop-test-macros",
  "egui-pop-tokens",
  "egui_kittest",
  "fontdb",
@@ -1159,6 +1160,7 @@ dependencies = [
  "egui-pop-editors",
  "egui-pop-model",
  "egui-pop-platform",
+ "egui-pop-test-macros",
  "egui-pop-viewport",
  "egui-pop-views",
  "egui_kittest",
@@ -1187,6 +1189,7 @@ dependencies = [
 name = "egui-pop-model"
 version = "0.1.1"
 dependencies = [
+ "egui-pop-test-macros",
  "log",
  "serde",
  "serde_json",
@@ -1223,6 +1226,7 @@ dependencies = [
  "egui-pop-api",
  "egui-pop-core",
  "egui-pop-model",
+ "egui-pop-test-macros",
  "egui-pop-viewport",
  "egui-wgpu",
  "egui_kittest",
@@ -1230,9 +1234,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "egui-pop-test-macros"
+version = "0.1.0"
+
+[[package]]
 name = "egui-pop-tokens"
 version = "0.1.1"
 dependencies = [
+ "egui-pop-test-macros",
  "serde-saphyr",
  "serde_json",
 ]

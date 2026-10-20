@@ -108,6 +108,7 @@ fn dir() -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("locales")
 }
 
+#[egui_pop_test_macros::critical]
 #[test]
 fn the_english_catalogue_is_generated_from_the_code() {
     let messages = messages();
@@ -124,6 +125,7 @@ fn the_english_catalogue_is_generated_from_the_code() {
     );
 }
 
+#[egui_pop_test_macros::critical]
 #[test]
 fn every_locale_translates_everything_and_nothing_else() {
     let messages = messages();
