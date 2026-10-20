@@ -272,7 +272,12 @@ fn menu_snapshots() {
         h.run();
         h.get_by_label("Card with a context menu").click_secondary();
         h.run();
-        h.query_all_by_label("Zoom").last().unwrap().hover();
+        // The context menu's submenu: its item is the higher of the two
+        // (the tree's order of popups is egui's, and changed in 0.37).
+        h.query_all_by_label("Zoom")
+            .min_by(|a, b| a.rect().top().total_cmp(&b.rect().top()))
+            .unwrap()
+            .hover();
         h.run();
         results.add(h.try_snapshot(format!("menus-{theme}")));
     }
@@ -2755,7 +2760,10 @@ fn a_kit_restyles_menu_items_from_the_theme_alone() {
     h.run();
     h.get_by_label("Card with a context menu").click_secondary();
     h.run();
-    h.query_all_by_label("Zoom").last().unwrap().hover();
+    h.query_all_by_label("Zoom")
+        .min_by(|a, b| a.rect().top().total_cmp(&b.rect().top()))
+        .unwrap()
+        .hover();
     h.run();
     h.snapshot("menus-kit-bar");
 }
