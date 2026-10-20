@@ -84,6 +84,10 @@ device per process (a Vulkan loader crash), is in
 
 CI also runs `cargo deny check`, builds the gallery for
 `wasm32-unknown-unknown` and runs `cargo semver-checks` on `egui-pop`.
+On a pull request, CI runs only the jobs and the tests the change can
+affect (`cargo xtask affected` says which, and why); `main` runs
+everything. The rules are in
+[docs/testing.md](docs/testing.md#selection).
 
 ## Screenshots
 

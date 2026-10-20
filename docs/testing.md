@@ -40,7 +40,8 @@ What the configuration sets:
   get no retry. A flaky test in the report is still a bug to look at.
 - **Slow tests are reported** after 60 seconds (10 for critical tests).
   The `ci` profile stops a test after 4 minutes and writes a JUnit report
-  (`target/nextest/ci/junit.xml`), which CI keeps: the slowest tests are
+  (`target/nextest/ci/junit.xml`, renamed `junit-<n>.xml` after each run
+  by `cargo xtask affected --run`), which CI keeps: the slowest tests are
   visible there.
 - **The `critical` profile** runs the critical tests alone (below).
 
@@ -92,6 +93,41 @@ whole crates (`-p` each, so only their tests are built), `cargo test
 --doc` for their doctests, and one `cargo nextest run` per crate with
 single binaries or critical tests (`--test` each, filtered with `-E`).
 Arguments after `--` go to every nextest run (`-- --profile ci`).
+
+## CI jobs
+
+The jobs of `.github/workflows/ci.yml` are selected the same way. A
+first job, `changes`, runs `cargo xtask affected --github`: it writes
+which jobs the change needs as outputs, and the report (why, the crates
+selected and skipped, the critical tests added) in the run's summary.
+
+| Job | Runs when |
+|---|---|
+| `fmt` | a `.rs` file changed |
+| `clippy` (and `cargo doc`) | a crate's file changed, other than a snapshot |
+| `doc` (the guides' `cargo doc`) | documentation changed and `clippy` does not run |
+| `test` | always: the selection above, critical tests at least |
+| `deny` | a `Cargo.toml`, `Cargo.lock` or `deny.toml` changed |
+| `wasm` | a crate the gallery builds from changed (its tests and examples aside) |
+| `package` | a manifest changed, or a file was added to or removed from a crate |
+| `semver` | a crate `egui-pop` builds from changed (its tests and examples aside) |
+
+A change under `.github/`, `.config/`, `.cargo/`, `xtask/`, to the
+workspace files, the test kit or the token files, or to any path no rule
+names runs every job. So do every push to `main` and a pull request
+labelled `ci:full`.
+
+A skipped job reports nothing, and a required check that never reports
+blocks a pull request: the last job, `CI`, needs every other one and
+fails when one of them failed. It is the only check to require.
+
+To run locally what the `test` job runs on a pull request:
+
+```sh
+git fetch origin
+cargo xtask affected --run                # the selection against origin/main
+cargo xtask affected --full --run         # what main runs
+```
 
 ## Layers
 
