@@ -15,7 +15,8 @@
 //! a command with its arguments; the `lists` debug collector shows what
 //! each provider gave last.
 //!
-//! - [`bar`] draws a menu as a menu bar (the shell draws `app.main`);
+//! - [`bar`] draws a menu as a menu bar (the shell draws `app.main`),
+//!   moving the menus that do not fit into a "…" menu;
 //! - [`show`] draws a menu's items inside an open menu or popup;
 //! - [`context_menu`] opens a declared menu on a widget's secondary click,
 //!   and [`context_menu_with`] with arguments of the moment (the clicked
@@ -42,8 +43,11 @@
 //! ```
 
 use egui_pop_core::kit::{Component, Glyph, Kit, Part, State, Tone};
+use std::cell::RefCell;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use egui::containers::menu::{MenuButton, MenuConfig, MenuState, SubMenu};
 use egui::{
@@ -150,22 +154,292 @@ pub struct ListTrace {
 }
 
 /// Draws a menu as a bar of menu buttons: each item a submenu opening a
-/// popup, a command a button.
+/// popup. The menus that do not fit go into a "…" menu (see
+/// [`bar_within`]).
 pub fn bar(ui: &mut Ui, app: &AppHandle, menu: &MenuId) {
+    bar_within(ui, app, menu, 0.0);
+}
+
+/// Draws a menu as a bar of menu buttons, keeping `reserve` points free
+/// at its end (what the bar shows after its menus).
+///
+/// The menus that fit stay in the bar, from the start; the others become
+/// submenus of a "…" entry ([`Icon::More`]), with their titles and their
+/// `when` clauses. When no menu fits besides it, the whole menu is one
+/// entry ([`Icon::Menu`]). Each label is measured once, again only when
+/// the language, the kit or the scale changes.
+///
+/// Each menu has an access key: the first letter of its label not taken
+/// by a menu before it. Alt and that letter open the menu, in the bar or
+/// inside "…"; a key binding on the same keys wins. Where each menu went,
+/// and its access key, is [`bar_layout`] (the `menu_bar` debug
+/// collector).
+pub fn bar_within(ui: &mut Ui, app: &AppHandle, menu: &MenuId, reserve: f32) {
     let cx = app.when_context();
-    for shown in show_items(&app.menu(menu), &cx) {
-        if let Shown::Item {
-            item: Item::Submenu { menu: sub, label },
-            enabled,
-            ..
-        } = shown
-        {
-            let label = strings::menu_label(ui.ctx(), sub.as_str(), &label);
-            ui.add_enabled_ui(enabled, |ui| {
-                MenuButton::new(label).ui(ui, |ui| items(ui, app, &sub, &cx, &Json::Null, 0));
-            });
-        }
+    let ctx = ui.ctx().clone();
+    let shown: Vec<(MenuId, String, bool)> = show_items(&app.menu(menu), &cx)
+        .into_iter()
+        .filter_map(|shown| match shown {
+            Shown::Item {
+                item: Item::Submenu { menu: sub, label },
+                enabled,
+                ..
+            } => Some((sub, label, enabled)),
+            _ => None,
+        })
+        .collect();
+    let font = egui::TextStyle::Button.resolve(ui.style());
+    let caches = app.local::<BarCaches>();
+    let mut caches = caches.0.borrow_mut();
+    let cache = caches.entry(menu.clone()).or_default();
+    cache.prepare(&ctx, font, &shown);
+    let pad = ui.spacing().button_padding.x * 2.0;
+    let gap = ui.spacing().item_spacing.x;
+    let side = Tokens::of(&ctx).size.icon_inline;
+    let widths: Vec<f32> = cache.menus.iter().map(|m| m.width + pad).collect();
+    let available = ui.available_width();
+    let kept = fit(&widths, gap, side + pad, available - reserve);
+    cache.fitted = Some(Fitted {
+        widths,
+        gap,
+        more: side + pad,
+        available,
+        kept,
+    });
+    // Alt and an access key: the menu it opens, if enabled.
+    let pressed = ui.input_mut(|i| {
+        cache.menus.iter().position(|m| {
+            m.enabled
+                && m.key
+                    .and_then(|k| egui::Key::from_name(&k.to_ascii_uppercase().to_string()))
+                    .is_some_and(|k| i.consume_key(egui::Modifiers::ALT, k))
+        })
+    });
+    for (i, m) in cache.menus[..kept].iter().enumerate() {
+        ui.add_enabled_ui(m.enabled, |ui| {
+            let id = ui.next_auto_id();
+            if pressed == Some(i) {
+                egui::Popup::open_id(&ctx, id.with("popup"));
+            }
+            let (r, _) = MenuButton::new(m.label.as_str())
+                .ui(ui, |ui| items(ui, app, &m.menu, &cx, &Json::Null, 0));
+            access_key(&ctx, r.id, m.key);
+        });
     }
+    let hidden = &cache.menus[kept..];
+    if !hidden.is_empty() {
+        let (icon, name) = if kept == 0 {
+            (Icon::Menu, cache.main_name.clone())
+        } else {
+            (Icon::More, cache.more_name.clone())
+        };
+        let open = pressed.and_then(|i| i.checked_sub(kept));
+        let id = ui.next_auto_id();
+        if open.is_some() {
+            egui::Popup::open_id(&ctx, id.with("popup"));
+        }
+        let mark = Id::new(("egui_pop_menu_more", menu.as_str()));
+        let button = Button::new(Atom::custom(mark, vec2(side, side)));
+        let (r, _) = MenuButton::from_button(button).ui(ui, |ui| {
+            for (i, m) in hidden.iter().enumerate() {
+                ui.add_enabled_ui(m.enabled, |ui| {
+                    let id = ui.next_auto_id();
+                    if open == Some(i) {
+                        // Opened by its access key: its submenu shows at once.
+                        let sub = SubMenu::id_from_widget_id(id);
+                        MenuState::mark_shown(ui.ctx(), sub);
+                        MenuState::from_ui(ui, |state, _| state.open_item = Some(sub));
+                    }
+                    submenu(ui, app, &m.menu, &m.label, &cx, &Json::Null, 0);
+                    access_key(ui.ctx(), id, m.key);
+                });
+            }
+        });
+        let rect = Rect::from_center_size(r.rect.center(), vec2(side, side));
+        icon.paint(ui.painter(), rect, ui.style().interact(&r).text_color());
+        r.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &name));
+        r.on_hover_text(name);
+    }
+    let layout = BarLayout {
+        bar: cache.menus[..kept].iter().map(|m| m.menu.clone()).collect(),
+        overflow: hidden.iter().map(|m| m.menu.clone()).collect(),
+        collapsed: kept == 0 && !hidden.is_empty(),
+        keys: cache
+            .menus
+            .iter()
+            .filter_map(|m| Some((m.menu.to_string(), m.key?.to_string())))
+            .collect(),
+    };
+    drop(caches);
+    app.local::<BarLayouts>()
+        .0
+        .borrow_mut()
+        .insert(menu.to_string(), layout);
+}
+
+/// Where a menu bar drew its menus last.
+#[derive(Clone, Debug, Default, PartialEq, Serialize)]
+pub struct BarLayout {
+    /// The menus in the bar, in order.
+    pub bar: Vec<MenuId>,
+    /// The menus inside "…" (or the single entry), in order.
+    pub overflow: Vec<MenuId>,
+    /// No menu fit besides "…": the whole menu is one entry.
+    pub collapsed: bool,
+    /// Each menu's access key (Alt and the letter), by menu id.
+    pub keys: BTreeMap<String, String>,
+}
+
+/// Where a menu drawn as a bar ([`bar`], the shell's `app.main`) put its
+/// menus last, if it was drawn.
+pub fn bar_layout(app: &AppHandle, menu: &MenuId) -> Option<BarLayout> {
+    app.local::<BarLayouts>()
+        .0
+        .borrow()
+        .get(menu.as_str())
+        .cloned()
+}
+
+/// Every menu bar's last layout, by menu id (the `menu_bar` collector).
+pub(crate) fn bar_layouts(app: &AppHandle) -> BTreeMap<String, BarLayout> {
+    app.local::<BarLayouts>().0.borrow().clone()
+}
+
+#[derive(Default)]
+struct BarLayouts(RefCell<BTreeMap<String, BarLayout>>);
+
+#[derive(Default)]
+struct BarCaches(RefCell<HashMap<MenuId, BarCache>>);
+
+/// A menu bar's menus, translated and measured: laid out again only when
+/// their labels, the kit, the scale or the strings provider change.
+#[derive(Default)]
+struct BarCache {
+    /// The kit (its address), the pixels per point, the strings provider
+    /// and the font the labels were measured for.
+    key: Option<(usize, u32, Option<usize>, egui::FontId)>,
+    menus: Vec<BarMenu>,
+    /// The names of "…" and of the single entry.
+    more_name: String,
+    main_name: String,
+    /// The last layout's measures.
+    fitted: Option<Fitted>,
+}
+
+/// What a bar's last layout was made from.
+struct Fitted {
+    widths: Vec<f32>,
+    gap: f32,
+    more: f32,
+    available: f32,
+    kept: usize,
+}
+
+struct BarMenu {
+    menu: MenuId,
+    /// The label as declared: translated again only when it changes.
+    english: String,
+    label: String,
+    enabled: bool,
+    /// The label's width, without the button's padding.
+    width: f32,
+    key: Option<char>,
+}
+
+impl BarCache {
+    fn prepare(&mut self, ctx: &Context, font: egui::FontId, shown: &[(MenuId, String, bool)]) {
+        let key = (
+            Arc::as_ptr(&Kit::of(ctx)) as usize,
+            ctx.pixels_per_point().to_bits(),
+            strings::provider_id(ctx),
+            font.clone(),
+        );
+        let same = self.key.as_ref() == Some(&key)
+            && self.menus.len() == shown.len()
+            && self
+                .menus
+                .iter()
+                .zip(shown)
+                .all(|(m, (id, english, _))| m.menu == *id && m.english == *english);
+        if same {
+            for (m, (_, _, enabled)) in self.menus.iter_mut().zip(shown) {
+                m.enabled = *enabled;
+            }
+            return;
+        }
+        self.key = Some(key);
+        // Asked with the labels, so that they all come in the same pass.
+        self.more_name = strings::tr(ctx, &txt::MENU_MORE);
+        self.main_name = strings::tr(ctx, &txt::MENU_MAIN);
+        let mut taken = Vec::new();
+        self.menus = shown
+            .iter()
+            .map(|(menu, english, enabled)| {
+                let label = strings::menu_label(ctx, menu.as_str(), english);
+                let width = ctx
+                    .fonts_mut(|f| {
+                        f.layout_no_wrap(label.clone(), font.clone(), Color32::PLACEHOLDER)
+                    })
+                    .size()
+                    .x;
+                let key = access_letter(&label, &taken);
+                taken.extend(key);
+                BarMenu {
+                    menu: menu.clone(),
+                    english: english.clone(),
+                    label,
+                    enabled: *enabled,
+                    width,
+                    key,
+                }
+            })
+            .collect();
+    }
+}
+
+/// Whether a bar drawn last pass would keep another number of menus
+/// with `reserve` points kept free at its end.
+pub(crate) fn refit_needed(app: &AppHandle, menu: &MenuId, reserve: f32) -> bool {
+    let caches = app.local::<BarCaches>();
+    let caches = caches.0.borrow();
+    caches
+        .get(menu)
+        .and_then(|c| c.fitted.as_ref())
+        .is_some_and(|f| fit(&f.widths, f.gap, f.more, f.available - reserve) != f.kept)
+}
+
+/// A label's access key: its first letter or digit not taken, lower case.
+fn access_letter(label: &str, taken: &[char]) -> Option<char> {
+    label
+        .chars()
+        .filter(char::is_ascii_alphanumeric)
+        .map(|c| c.to_ascii_lowercase())
+        .find(|c| !taken.contains(c))
+}
+
+/// Gives a widget its access key in the accessibility tree.
+fn access_key(ctx: &Context, id: Id, key: Option<char>) {
+    if let Some(k) = key {
+        ctx.accesskit_node_builder(id, |node| node.set_access_key(k.to_string()));
+    }
+}
+
+/// How many menus of these widths stay in a bar of `room` points, items
+/// `gap` apart, the rest going into a "…" entry `more` wide: all of them
+/// when they fit, 0 when none fits besides "…".
+fn fit(widths: &[f32], gap: f32, more: f32, room: f32) -> usize {
+    let all: f32 = widths.iter().sum::<f32>() + gap * widths.len().saturating_sub(1) as f32;
+    if all <= room {
+        return widths.len();
+    }
+    let mut used = more;
+    widths
+        .iter()
+        .take_while(|w| {
+            used += *w + gap;
+            used <= room
+        })
+        .count()
 }
 
 /// Draws a menu's items in the current `Ui` (an open menu or popup), in

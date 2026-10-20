@@ -131,6 +131,29 @@ panel alignment does: `center` (between the side bars, which go down to
 the bottom), `start` (under the start side bar) or `end` (under the end
 one); `AppBuilder::panel_alignment` gives the default.
 
+## The menu bar
+
+The shell draws the main menu (`app.main`) as a menu bar. When the
+window is too narrow for all of it, the menus that fit stay in the bar,
+from the start, and the rest become submenus of a "…" entry (the
+`more` icon, named "More menus"), keeping their titles, items and
+`when` clauses. When no menu fits besides "…", the whole menu is one
+entry (the `menu` icon, named "Main menu"). The blocks of the
+`app.top-bar` zone keep the width they took, after the menus. Each
+label is measured once, and again only when the language, the kit or
+the scale changes.
+
+Each menu has an access key: the first letter of its label not taken
+by a menu before it (File, Edit, View, Help: F, E, V, H). Alt and that
+letter open the menu, in the bar or inside "…" with the menu's
+submenu open; a key binding on the same keys wins. The accessibility
+tree gives each menu its access key.
+
+`menus::bar_layout(app, &MENU_MAIN)` says where each menu went last,
+and the `menu_bar` debug collector shows it: `bar`, `overflow`,
+`collapsed` and `keys`. `menus::bar_within` draws any declared menu as
+such a bar, keeping room at its end.
+
 ## Zen mode
 
 `workbench.zen` (View > Zen mode) toggles a view of the centre alone:

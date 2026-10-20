@@ -24,6 +24,8 @@ use egui_pop_core::{a11y, fault, focus, lock};
 
 /// The theme was installed in this context.
 const THEME_INSTALLED: state::Slot<bool> = state::Slot::new("api.app.theme_installed");
+/// The width the top bar's blocks took after the menus, last pass.
+const TOP_BAR_RESERVE: state::Slot<f32> = state::Slot::new("api.app.top_bar_reserve");
 use egui_pop_model::commands::{CommandSpec, Commands, Origin, Run};
 use egui_pop_model::diagnostics::{Diagnostic, Diagnostics};
 use egui_pop_model::ids::{
@@ -2869,6 +2871,18 @@ impl App {
         let w = h.weak();
         b.register(
             FnCollector::new(
+                "menu_bar",
+                "Each menu drawn as a bar (the shell's `app.main`): the menus in the bar, those moved into its \"…\" menu, whether it collapsed into one entry, and each menu's access key.",
+            )
+            .snapshot(move |_| {
+                let Ok(app) = up(&w) else { return Json::Null };
+                json!(crate::menus::bar_layouts(&app))
+            }),
+        )
+        .expect("distinct names");
+        let w = h.weak();
+        b.register(
+            FnCollector::new(
                 "history",
                 "What Edit > Undo and Redo would do, as the host says (the runs are in the `steps` collector).",
             )
@@ -4286,10 +4300,25 @@ impl App {
             egui::Panel::top(Id::new("egui_pop.top")).show(ui, |ui| {
                 focus::scope(ui, "topBar", &[], |ui| {
                     egui::MenuBar::new().ui(ui, |ui| {
-                        crate::menus::bar(ui, &h, &MENU_MAIN);
+                        // The top bar's blocks keep the width they took
+                        // last pass; the menus overflow before them.
+                        let reserve = TOP_BAR_RESERVE.get(ui.ctx()).unwrap_or(0.0);
+                        crate::menus::bar_within(ui, &h, &MENU_MAIN, reserve);
+                        let mut used = 0.0;
                         if h.zone_has_blocks(&zones::TOP_BAR) {
+                            // The bar takes its whole width: the zone is
+                            // measured in its own scope.
+                            let start = ui.cursor().min.x;
                             ui.separator();
-                            h.show_zone(ui, &zones::TOP_BAR);
+                            let zone = ui.scope(|ui| h.show_zone(ui, &zones::TOP_BAR));
+                            used = zone.response.rect.max.x - start + ui.spacing().item_spacing.x;
+                        }
+                        if used != reserve {
+                            TOP_BAR_RESERVE.set(ui.ctx(), used);
+                            // Laid out again at once when a menu moves.
+                            if crate::menus::refit_needed(&h, &MENU_MAIN, used) {
+                                ui.ctx().request_repaint();
+                            }
                         }
                     });
                 });

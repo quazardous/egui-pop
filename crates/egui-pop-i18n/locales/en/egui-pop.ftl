@@ -644,6 +644,10 @@ egui-pop-menu-empty = (empty)
 
 egui-pop-menu-last-run-failed = Last run failed: { $error }
 
+egui-pop-menu-main = Main menu
+
+egui-pop-menu-more = More menus
+
 egui-pop-menu-no-command = No command `{ $id }`
 
 egui-pop-menu-not-available = Not available here

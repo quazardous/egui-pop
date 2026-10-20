@@ -21,6 +21,16 @@ publishes.
   lists every slot written: name, type, scope, entries held and a
   summary of the first values; its `slot` action summarises every entry
   of one slot. egui-pop's own state goes through slots.
+- A menu bar that overflows (egui-pop-api): in a narrow window, the
+  main menu keeps the menus that fit and moves the rest into a "…"
+  menu, or becomes one entry when none fits besides it (the `more` and
+  `menu` icons, "More menus" and "Main menu"). Labels are measured once
+  per language, kit and scale. Each menu has an access key (the first
+  free letter of its label): Alt and that letter open it, inside "…"
+  when it is hidden. `menus::bar_within` keeps room at the bar's end
+  (the top bar's blocks), `menus::bar_layout` and the `menu_bar` debug
+  collector say which menus are in the bar and which in "…". Strings
+  with their French.
 - Keys changed for the workspace (egui-pop-api): `AppHandle::rebind_in` and
   `reset_keys_in` change a command's keys in the user's or the
   workspace's layer (the `keys.rebind` step says which, `layer`),

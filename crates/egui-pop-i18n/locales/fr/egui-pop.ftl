@@ -643,6 +643,10 @@ egui-pop-menu-empty = (vide)
 
 egui-pop-menu-last-run-failed = Le dernier lancement a échoué : { $error }
 
+egui-pop-menu-main = Menu principal
+
+egui-pop-menu-more = Autres menus
+
 egui-pop-menu-no-command = Pas de commande `{ $id }`
 
 egui-pop-menu-not-available = Indisponible ici

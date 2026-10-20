@@ -32,6 +32,8 @@ pub const NOTHING_MATCHES: StrKey = StrKey::new("egui-pop-nothing-matches", "Not
 pub const MENU_TOO_DEEP: StrKey =
     StrKey::new("egui-pop-menu-too-deep", "`{ $menu }` nests too deep");
 pub const MENU_EMPTY: StrKey = StrKey::new("egui-pop-menu-empty", "(empty)");
+pub const MENU_MORE: StrKey = StrKey::new("egui-pop-menu-more", "More menus");
+pub const MENU_MAIN: StrKey = StrKey::new("egui-pop-menu-main", "Main menu");
 pub const MENU_DOES_NOT_APPLY: StrKey = StrKey::new(
     "egui-pop-menu-does-not-apply",
     "Does not apply here ({ $when })",
@@ -507,6 +509,8 @@ pub const ALL: &[StrKey] = &[
     NOTHING_MATCHES,
     MENU_TOO_DEEP,
     MENU_EMPTY,
+    MENU_MORE,
+    MENU_MAIN,
     MENU_DOES_NOT_APPLY,
     MENU_NOT_AVAILABLE,
     MENU_NO_COMMAND,
