@@ -78,7 +78,21 @@ toolbar and the info panel, and a "Delete" button in the grid.
 The wrong way: each panel keeps its own field, copies it into the
 store every frame, and the delete is a flag.
 
-```rust,ignore
+```rust
+# use egui_pop::core::lock;
+# use egui_pop::egui;
+# use egui_pop::model::panels::{Area, PanelSpec};
+# use egui_pop::model::values::{Change, Set, Value};
+# use egui_pop::prelude::*;
+# const GRID: PanelId = PanelId::from_static("photos.grid");
+# const PICKED: &str = "photos/picked";
+# const DELETE_ASKED: &str = "photos/delete_asked";
+# struct Photos;
+# impl Plugin for Photos {
+#     fn id(&self) -> PluginId {
+#         PluginId::from_static("photos")
+#     }
+#     fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
 let mut picked = false;
 ctx.panel(PanelSpec::new(GRID, "Grid", Area::Center), move |ui, app| {
     ui.checkbox(&mut picked, "Picked");
@@ -93,28 +107,62 @@ ctx.panel(PanelSpec::new(GRID, "Grid", Area::Center), move |ui, app| {
         let _ = s.set(Set::new(DELETE_ASKED, Change::To(Value::Bool(true)), Origin::User));
     }
 })?;
+#         Ok(())
+#     }
+# }
+# App::builder().plugin(Photos).build(&egui::Context::default()).unwrap();
 ```
 
 The right way: the panels bind the stored value, and the delete is a
 command, with a step others may veto.
 
-```rust,ignore
-// Declared once, in `connect`.
-lock(&ctx.app().store()).declare(ctx.owner(), PICKED, Descriptor::bool("Picked", false))?;
-ctx.step(StepSpec::new(DELETE_STEP, "Deletes the current photo."))?;
-ctx.command(CommandSpec::new(DELETE, "Delete", "Photos").key("Delete"), |call| {
-    let out = call.app.step(&DELETE_STEP, call.args.clone(), |_, args| {
-        // Delete the photo named in `args`.
-        Ok(args.clone())
-    });
-    match out.vetoed() {
-        Some(reason) => Err(reason.to_string()),
-        None => Ok(serde_json::Value::Null),
-    }
-})?;
+```rust
+use egui_pop::core::{binding, lock};
+use egui_pop::egui;
+use egui_pop::model::panels::{Area, PanelSpec};
+use egui_pop::prelude::*;
 
-// The same in both panels: read every frame, written only on a click.
-ctx.panel(PanelSpec::new(GRID, "Grid", Area::Center), |ui, app| {
+const GRID: PanelId = PanelId::from_static("photos.grid");
+const INFO: PanelId = PanelId::from_static("photos.info");
+const PICKED: &str = "photos/picked";
+const DELETE: CommandId = CommandId::from_static("photos.delete");
+const REMOVE: StepId = StepId::from_static("photos.remove");
+
+struct Photos;
+
+impl Plugin for Photos {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("photos")
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        // The state: one path in the store, declared once.
+        lock(&ctx.app().store())
+            .declare(ctx.owner(), PICKED, Descriptor::bool("Picked", false))
+            .map_err(|e| PluginError::Failed(e.to_string()))?;
+
+        // The event: a command, which runs a step others may veto.
+        ctx.step(StepSpec::new(REMOVE, "Removes a photo."))?;
+        ctx.command(CommandSpec::new(DELETE, "Delete", "Photos"), |call| {
+            let out = call.app.step(&REMOVE, call.args.clone(), |_, args| {
+                // Remove the photo named in `args`.
+                Ok(args.clone())
+            });
+            match out.vetoed() {
+                Some(reason) => Err(reason.to_string()),
+                None => Ok(serde_json::Value::Null),
+            }
+        })?;
+
+        // The same in both panels.
+        ctx.panel(PanelSpec::new(GRID, "Grid", Area::Center), picked)?;
+        ctx.panel(PanelSpec::new(INFO, "Info", Area::EndSide), picked)?;
+        Ok(())
+    }
+}
+
+/// Reads the store every frame, writes it only on a click.
+fn picked(ui: &mut egui::Ui, app: &AppHandle) {
     binding::edit(ui, Binding::bound(&app.store(), PICKED), |ui, v: &mut bool| {
         ui.checkbox(v, "Picked")
     });
@@ -122,14 +170,40 @@ ctx.panel(PanelSpec::new(GRID, "Grid", Area::Center), |ui, app| {
         // Queued: runs once, before the next frame.
         app.run(DELETE, serde_json::json!({ "photo": "current" }));
     }
-})?;
+}
+
+// Another plugin refuses to delete a locked photo, without a flag of its own.
+struct Locks;
+
+impl Plugin for Locks {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("locks")
+    }
+
+    fn requires(&self) -> Vec<PluginId> {
+        vec![PluginId::from_static("photos")]
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        ctx.before(REMOVE, |_, args| {
+            if args["locked"] == true { Before::Veto("the photo is locked".into()) } else { Before::Go }
+        });
+        Ok(())
+    }
+}
+
+let mut app = App::builder().plugin(Photos).plugin(Locks).build(&egui::Context::default()).unwrap();
+let out = app.run(&DELETE, serde_json::json!({ "photo": "a" }), Origin::User);
+assert_eq!(out.now(), Some(Ok(serde_json::Value::Null)));
+let out = app.run(&DELETE, serde_json::json!({ "photo": "b", "locked": true }), Origin::User);
+assert_eq!(out.now(), Some(Err("the photo is locked".to_string())));
 ```
 
 Both panels now show the same value, a click in either one is the
 only write, and it is one undo step with an origin. The delete runs
 exactly once per click, whichever panels are open; a plugin that must
 refuse it (the photo is locked) adds a before-hook on the step instead
-of a flag of its own, the key, the menu and agents reach the same
+of a flag of its own (`Locks` above), the key, the menu and agents reach the same
 command, and the journal says it happened.
 
 ## See also

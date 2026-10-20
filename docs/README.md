@@ -168,7 +168,7 @@ Layers only depend downwards; a test reading `cargo metadata` keeps it so
 ## Code in these pages
 
 The Rust blocks of the README and of the getting started, themes,
-plugins, workbench, viewport, files, tree, lists and tables,
+plugins, state or event, workbench, viewport, files, tree, lists and tables,
 translations, platform services, packaging, debugging and
 micro-indicators pages are
 compiled and run as doctests by `crates/consumer-smoke`, against the

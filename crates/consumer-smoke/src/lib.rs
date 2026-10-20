@@ -29,6 +29,9 @@ pub mod plugins {}
 #[doc = include_str!("../../../docs/contexts.md")]
 pub mod contexts {}
 
+#[doc = include_str!("../../../docs/state-or-event.md")]
+pub mod state_or_event {}
+
 #[doc = include_str!("../../../docs/viewport.md")]
 pub mod viewport {}
 
