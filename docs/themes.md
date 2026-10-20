@@ -95,6 +95,39 @@ the settings' Appearance section): `ThemeService::preference`,
 counterpart, the preference becomes the picked theme's mode. Without a
 counterpart, the preference changes nothing.
 
+## A theme in one part of a window
+
+`theme::ScopedTheme` draws a theme in a child `Ui` without installing
+it: egui's style for it, and `Tokens::of` and `Kit::of` giving its
+tokens and kit while it draws, so egui-pop's widgets and custom painting
+follow it too. The rest of the window keeps the installed theme. The
+theme editor's preview uses it; so can a themed island, or a theme
+picker's thumbnails.
+
+```rust
+use egui_pop::egui;
+use egui_pop::theme::{ScopedTheme, ThemeSpec, Themes, Tokens};
+
+// Built once and kept: compiling the kit has a cost.
+fn island(ctx: &egui::Context) -> ScopedTheme {
+    ScopedTheme::new(ctx, Tokens::new(Themes::default().resolve(&ThemeSpec::new("pop-light"))))
+}
+
+fn draw(ui: &mut egui::Ui, light: &ScopedTheme) {
+    light.show(ui, |ui| {
+        ui.label("Drawn in pop-light");
+        let _ = Tokens::of(ui.ctx()); // pop-light's
+    });
+}
+# let _ = (island, draw);
+```
+
+Scopes nest, and the previous one comes back when `show` returns, even
+after a panic. What stays the installed theme's: fonts (egui's font
+definitions are global and rebuilding them rebuilds the atlas), and
+what egui draws in layers of its own from the context's style (a combo
+box's popup, tooltips, windows).
+
 ## What can be chosen
 
 - **Themes**: `pop-dark`, `pop-light` and `pop-high-contrast`, and twelve

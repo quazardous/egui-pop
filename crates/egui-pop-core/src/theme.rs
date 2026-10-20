@@ -511,7 +511,12 @@ impl Tokens {
     /// built-in `pop-dark` ones (installed on first use) when no theme
     /// was. Read it while drawing, never keep it across frames: a switch
     /// between light and dark changes it without any install.
+    ///
+    /// Inside a [`ScopedTheme`]'s `show`, they are the scoped theme's.
     pub fn of(ctx: &Context) -> Arc<Tokens> {
+        if let Some(scoped) = ScopedTheme::current(ctx) {
+            return scoped.tokens;
+        }
         Tokens::of_theme(ctx, ctx.theme())
     }
 
@@ -590,6 +595,109 @@ pub fn set_preference(ctx: &Context, preference: ThemePreference) {
 
 /// The tokens installed.
 const TOKENS: Slot<Variants> = Slot::opaque("core.theme.tokens");
+
+/// The scoped theme being drawn, if any.
+const SCOPED: Slot<ScopedTheme> = Slot::opaque("core.theme.scoped");
+
+/// A theme drawn in one part of a window without being installed: a
+/// theme's tokens, their kit and egui's style for them, applied to a
+/// child `Ui` ([`ScopedTheme::show`]). While it draws, [`Tokens::of`]
+/// and `Kit::of` give its tokens and kit, so egui-pop's widgets and
+/// custom painting follow it as egui's do; the rest of the window keeps
+/// the installed theme. A theme editor's preview, a themed island, a
+/// theme picker's thumbnails.
+///
+/// What stays the installed theme's: fonts (egui's font definitions are
+/// global, rebuilt with the atlas), and what egui draws in its own
+/// layers outside the child `Ui` from the context's style (the popups
+/// of a combo box, tooltips, windows). Build it once per theme and keep
+/// it (compiling the kit has a cost), never per frame.
+///
+/// ```
+/// use egui_pop_core::theme::{self, ScopedTheme, ThemeSpec, Themes, Tokens};
+///
+/// let ctx = egui::Context::default();
+/// theme::install(&ctx, &ThemeSpec::new("pop-dark"));
+/// let light = ScopedTheme::new(&ctx, Tokens::new(Themes::default().resolve(&ThemeSpec::new("pop-light"))));
+/// ctx.run_ui(Default::default(), |ui| {
+///     light.show(ui, |ui| {
+///         assert!(!Tokens::of(ui.ctx()).dark_mode());
+///         assert!(!ui.visuals().dark_mode);
+///     });
+///     assert!(Tokens::of(ui.ctx()).dark_mode());
+/// })
+/// .textures_delta
+/// .clear();
+/// ```
+#[derive(Clone)]
+pub struct ScopedTheme {
+    tokens: Arc<Tokens>,
+    kit: Arc<Kit>,
+}
+
+impl std::fmt::Debug for ScopedTheme {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ScopedTheme")
+            .field("theme", &self.tokens.resolved().spec().label())
+            .finish_non_exhaustive()
+    }
+}
+
+impl ScopedTheme {
+    /// A theme to draw scoped, its kit compiled with the shapes
+    /// registered in `ctx` (kits' handlers).
+    pub fn new(ctx: &Context, tokens: Tokens) -> ScopedTheme {
+        let tokens = Arc::new(tokens);
+        let kit = crate::kit::compile_in(ctx, &tokens);
+        ScopedTheme { tokens, kit }
+    }
+
+    pub fn tokens(&self) -> &Arc<Tokens> {
+        &self.tokens
+    }
+
+    pub fn kit(&self) -> &Arc<Kit> {
+        &self.kit
+    }
+
+    /// The scoped theme drawing now, if any.
+    pub fn current(ctx: &Context) -> Option<ScopedTheme> {
+        SCOPED.get(ctx)
+    }
+
+    /// Draws `add` in a child `Ui` with this theme: egui's style for it,
+    /// and [`Tokens::of`] and `Kit::of` giving its tokens and kit until
+    /// `add` returns (scopes nest; the previous one comes back, even
+    /// when `add` panics).
+    pub fn show<R>(&self, ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
+        struct Restore {
+            ctx: Context,
+            previous: Option<ScopedTheme>,
+        }
+        impl Drop for Restore {
+            fn drop(&mut self) {
+                match self.previous.take() {
+                    Some(p) => SCOPED.set(&self.ctx, p),
+                    None => {
+                        SCOPED.remove(&self.ctx);
+                    }
+                }
+            }
+        }
+        let ctx = ui.ctx().clone();
+        let ppp = ctx.pixels_per_point();
+        let previous = SCOPED.get(&ctx);
+        SCOPED.set(&ctx, self.clone());
+        let _restore = Restore { ctx, previous };
+        ui.scope(|ui| {
+            let mut style = style_with(&self.tokens, &self.kit, ui.style());
+            snap_strokes(&mut style, ppp);
+            ui.set_style(style);
+            add(ui)
+        })
+        .inner
+    }
+}
 
 fn radius(points: f32) -> CornerRadius {
     CornerRadius::same(points.round().clamp(0.0, 255.0) as u8)
@@ -796,4 +904,38 @@ pub fn install_with(ctx: &Context, themes: &Themes, spec: &ThemeSpec) -> Arc<Tok
 /// Resolves a spec against the built-in themes and installs it.
 pub fn install(ctx: &Context, spec: &ThemeSpec) -> Arc<Tokens> {
     install_with(ctx, &Themes::default(), spec)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tokens(name: &str) -> Tokens {
+        Tokens::new(Themes::default().resolve(&ThemeSpec::new(name)))
+    }
+
+    #[test]
+    fn scoped_themes_nest_and_come_back_even_after_a_panic() {
+        let ctx = Context::default();
+        install(&ctx, &ThemeSpec::new("pop-dark"));
+        let light = ScopedTheme::new(&ctx, tokens("pop-light"));
+        let hc = ScopedTheme::new(&ctx, tokens("pop-high-contrast"));
+        let base = |ctx: &Context| Tokens::of(ctx).resolved().spec().base.clone();
+        let mut out = ctx.run_ui(Default::default(), |ui| {
+            light.show(ui, |ui| {
+                assert_eq!(base(ui.ctx()), "pop-light");
+                assert!(Arc::ptr_eq(&Kit::of(ui.ctx()), light.kit()));
+                hc.show(ui, |ui| assert_eq!(base(ui.ctx()), "pop-high-contrast"));
+                assert_eq!(base(ui.ctx()), "pop-light");
+                let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    hc.show(ui, |_| panic!("a widget fails"));
+                }));
+                assert!(caught.is_err());
+                assert_eq!(base(ui.ctx()), "pop-light");
+            });
+            assert_eq!(base(ui.ctx()), "pop-dark");
+            assert!(ScopedTheme::current(ui.ctx()).is_none());
+        });
+        out.textures_delta.clear();
+    }
 }

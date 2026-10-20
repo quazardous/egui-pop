@@ -1014,7 +1014,12 @@ impl Kit {
     /// (`Arc::ptr_eq`): a new kit comes with a theme install and with
     /// egui's light or dark mode. Keep it, not only its address, which a
     /// dropped kit can lend to the next one.
+    ///
+    /// Inside a `ScopedTheme`'s `show`, it is the scoped theme's kit.
     pub fn of(ctx: &Context) -> Arc<Kit> {
+        if let Some(scoped) = crate::theme::ScopedTheme::current(ctx) {
+            return scoped.kit().clone();
+        }
         let theme = ctx.theme();
         if let Some(k) = KIT.get(ctx) {
             return k.get(theme).clone();
@@ -1106,6 +1111,12 @@ pub fn install_variants(ctx: &Context, dark: &Arc<Tokens>, light: &Arc<Tokens>) 
     };
     KIT.set(ctx, kits.clone());
     kits
+}
+
+/// A kit compiled for tokens with the shapes registered in `ctx`, not
+/// installed (a scoped theme's).
+pub(crate) fn compile_in(ctx: &Context, tokens: &Tokens) -> Arc<Kit> {
+    compile_logged(ctx, tokens)
 }
 
 fn compile_logged(ctx: &Context, tokens: &Tokens) -> Arc<Kit> {

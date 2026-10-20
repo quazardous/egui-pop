@@ -63,6 +63,12 @@ publishes.
   `theme_editor::scale_of`). Edits recorded together undo as one change
   (`ThemeDraft::record_joined`, `undo_group`, `redo_group`,
   `ThemeDraft::scale_edits`). Part of #33.
+- A theme in one part of a window (egui-pop-core): `theme::ScopedTheme`
+  draws a theme's tokens, kit and egui style in a child `Ui` without
+  installing it (`ScopedTheme::new`, `show`, `current`); while it
+  draws, `Tokens::of` and `Kit::of` give the scoped theme's. Scopes
+  nest and are restored after a panic. Fonts stay the installed
+  theme's. Part of #36.
 - Critical tests (egui-pop-test, the new egui-pop-test-macros):
   `#[egui_pop_test::critical]` marks a test that guards a rule any change
   can break, so a selective run still runs it; `#[critical(gpu)]` marks
