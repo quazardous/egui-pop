@@ -715,8 +715,9 @@ pub fn set_native_hover(ctx: &Context, viewport: ViewportId, button: Option<Butt
 
 /// The window button the system says the pointer is over.
 pub fn native_hover(ctx: &Context) -> Option<Button> {
-    ctx.data(|d| d.get_temp::<Option<Button>>(native_hover_id(ctx.viewport_id())))
-        .flatten()
+    // Read before the memory's lock: the viewport id takes the context's.
+    let id = native_hover_id(ctx.viewport_id());
+    ctx.data(|d| d.get_temp::<Option<Button>>(id)).flatten()
 }
 
 /// How the maximize slot's button shows.
