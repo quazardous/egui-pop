@@ -29,7 +29,9 @@
 //! assert_eq!(scale::zoom_step(2.0, 1), 2.0);
 //! ```
 
-use egui::{Context, Id, ViewportId};
+use egui::{Context, ViewportId};
+
+use crate::state::Slot;
 use serde::Serialize;
 
 /// The interface zoom's steps.
@@ -98,11 +100,14 @@ pub fn changed(ctx: &Context) -> Option<(f32, f32)> {
     changed_in(ctx, ctx.viewport_id())
 }
 
+/// The scale a window was last seen at, per window.
+const SEEN: Slot<Seen> = Slot::new("core.scale.seen");
+
 fn changed_in(ctx: &Context, viewport: ViewportId) -> Option<(f32, f32)> {
-    let id = Id::new(("egui_pop_core::scale::seen", viewport));
+    let slot = SEEN.keyed(viewport);
     let pass = ctx.cumulative_pass_nr();
     let ppp = ctx.pixels_per_point();
-    let seen = ctx.data(|d| d.get_temp::<Seen>(id));
+    let seen = slot.get(ctx);
     let next = match seen {
         Some(s) if s.pass == pass => s,
         Some(s) => Seen {
@@ -116,7 +121,7 @@ fn changed_in(ctx: &Context, viewport: ViewportId) -> Option<(f32, f32)> {
             now: ppp,
         },
     };
-    ctx.data_mut(|d| d.insert_temp(id, next));
+    slot.set(ctx, next);
     (next.before != next.now).then_some((next.before, next.now))
 }
 

@@ -33,7 +33,7 @@ use egui::{Id, Response, Ui};
 use egui_pop_model::commands::Origin;
 use egui_pop_model::values::{Change, GestureId, Set, Store, Value};
 
-use crate::state::lock;
+use crate::state::{Slot, lock};
 use crate::strings::{self, HELD_BY, NO_VALUE, READ_ONLY};
 
 /// A store shared between the application, its widgets and its commands.
@@ -130,23 +130,18 @@ impl<'a, T> Binding<'a, T> {
     }
 }
 
-fn gesture_id(response: &Response) -> Id {
-    response.id.with("egui_pop_gesture")
-}
-
-fn cancel_id(response_id: Id) -> Id {
-    response_id.with("egui_pop_cancel")
-}
+/// A bound widget's gesture in the store, per widget.
+const GESTURE: Slot<u64> = Slot::new("core.binding.gesture");
+/// The widget gave its gesture up, per widget.
+const CANCELLED: Slot<bool> = Slot::new("core.binding.cancelled");
+/// Why the store refused the widget's last write, per widget.
+const REFUSED: Slot<String> = Slot::new("core.binding.refused");
 
 /// Tells the binding around a widget that its gesture is given up (the
 /// widget has put its value back): bound to a store, the gesture's
 /// writes are undone and leave no undo step.
 pub fn cancel_gesture(ctx: &egui::Context, response_id: Id) {
-    ctx.data_mut(|d| d.insert_temp(cancel_id(response_id), true));
-}
-
-fn error_id(response_id: Id) -> Id {
-    response_id.with("egui_pop_refused")
+    CANCELLED.keyed(response_id).set(ctx, true);
 }
 
 /// Draws a widget over a binding. `widget` edits a local copy; what
@@ -186,22 +181,19 @@ pub fn edit<T: Bindable>(
             };
             let before = v.clone();
             let mut r = widget(ui, &mut v);
-            let gid = gesture_id(&r);
+            let gid = GESTURE.keyed(r.id);
             if r.drag_started() {
                 let g = lock(store).begin_gesture(Origin::User, &format!("drag {path}"));
-                ui.ctx().data_mut(|d| d.insert_temp(gid, g.0));
+                gid.set(ui.ctx(), g.0);
             }
-            let gesture = ui.ctx().data(|d| d.get_temp::<u64>(gid)).map(GestureId);
-            let cancelled = ui
-                .ctx()
-                .data_mut(|d| d.remove_temp::<bool>(cancel_id(r.id)))
-                .unwrap_or(false);
+            let gesture = gid.get(ui.ctx()).map(GestureId);
+            let cancelled = CANCELLED.keyed(r.id).remove(ui.ctx()).unwrap_or(false);
             if cancelled {
                 // The widget gave the gesture up (Escape during a drag):
                 // the store puts the values back, no undo step is left.
                 if let Some(g) = gesture {
                     lock(store).cancel(g);
-                    ui.ctx().data_mut(|d| d.remove::<u64>(gid));
+                    gid.remove(ui.ctx());
                 }
                 return r;
             }
@@ -210,11 +202,12 @@ pub fn edit<T: Bindable>(
                 set.gesture = gesture;
                 let outcome = lock(store).set(set);
                 match outcome {
-                    Ok(_) => ui.ctx().data_mut(|d| d.remove::<String>(error_id(r.id))),
+                    Ok(_) => {
+                        REFUSED.keyed(r.id).remove(ui.ctx());
+                    }
                     Err(refused) => {
                         log::warn!(target: "egui_pop", "write to `{path}` refused: {refused}");
-                        ui.ctx()
-                            .data_mut(|d| d.insert_temp(error_id(r.id), refused.to_string()));
+                        REFUSED.keyed(r.id).set(ui.ctx(), refused.to_string());
                     }
                 }
             }
@@ -222,7 +215,7 @@ pub fn edit<T: Bindable>(
                 && let Some(g) = gesture
             {
                 lock(store).end(g);
-                ui.ctx().data_mut(|d| d.remove::<u64>(gid));
+                gid.remove(ui.ctx());
             }
             if let Some(by) = held {
                 r = r.on_hover_text(strings::tr_args(
@@ -231,7 +224,7 @@ pub fn edit<T: Bindable>(
                     &[("origin", &format!("{by:?}"))],
                 ));
             }
-            if let Some(e) = ui.ctx().data(|d| d.get_temp::<String>(error_id(r.id))) {
+            if let Some(e) = REFUSED.keyed(r.id).get(ui.ctx()) {
                 r = r.on_hover_text(e);
             }
             r

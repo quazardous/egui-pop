@@ -35,6 +35,7 @@ use egui::{CursorIcon, Id, Rect, Response, Sense, Shape, Ui, Vec2, WidgetType};
 
 use crate::icon::Icon;
 use crate::kit::{Kit, KitCx, Part, State};
+use crate::state::Slot;
 use crate::theme::Tokens;
 
 /// Where a band sits in its frame.
@@ -79,6 +80,9 @@ impl Band {
 /// Starts a band at the top of a frame's content and lays out its row
 /// with `add` (a title, buttons), told the band's state. Its size is the
 /// last pass's (a guess on the first one).
+/// A band's size on the last pass, per band.
+const SIZE: Slot<Vec2> = Slot::new("core.band.size");
+
 pub fn begin<R>(
     ui: &mut Ui,
     style: &BandStyle,
@@ -87,13 +91,10 @@ pub fn begin<R>(
     let id = ui.id().with("egui_pop.band");
     let pad = style.padding;
     let top_left = ui.max_rect().min - egui::vec2(pad, pad);
-    let size = ui
-        .ctx()
-        .data(|d| d.get_temp::<Vec2>(id))
-        .unwrap_or(egui::vec2(
-            ui.available_width() + 2.0 * pad,
-            pad + ui.spacing().interact_size.y + style.gap,
-        ));
+    let size = SIZE.keyed(id).get(ui.ctx()).unwrap_or(egui::vec2(
+        ui.available_width() + 2.0 * pad,
+        pad + ui.spacing().interact_size.y + style.gap,
+    ));
     let response = ui.interact(
         Rect::from_min_size(top_left, size),
         id,
@@ -141,7 +142,7 @@ pub fn paint(ui: &Ui, band: &Band, style: &BandStyle) {
     Kit::of(ui.ctx())
         .header_band
         .paint_under(ui, shape, &part, None);
-    ui.ctx().data_mut(|d| d.insert_temp(id, rect.size()));
+    SIZE.keyed(id).set(ui.ctx(), rect.size());
 }
 
 /// A square icon button of a band, `side` points wide, named `name`

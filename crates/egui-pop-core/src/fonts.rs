@@ -31,7 +31,9 @@
 
 use std::sync::Arc;
 
-use egui::{Context, FontData, FontDefinitions, FontFamily, FontId, Id};
+use egui::{Context, FontData, FontDefinitions, FontFamily, FontId};
+
+use crate::state::Slot;
 
 /// Which text a family is for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -192,19 +194,15 @@ struct Registered {
     generation: u64,
 }
 
-fn registered_id() -> Id {
-    Id::new("egui_pop_core::fonts::registered")
-}
-
-fn installed_id() -> Id {
-    Id::new("egui_pop_core::fonts::installed")
-}
+/// The faces registered for the next install.
+const REGISTERED: Slot<Registered> = Slot::opaque("core.fonts.registered");
+/// What the last install was asked, and its report.
+const INSTALLED: Slot<(Key, Arc<Report>)> = Slot::opaque("core.fonts.installed");
 
 /// Registers a face for the families a theme names; installed with the
 /// next theme install. A face of the same family and weight is replaced.
 pub fn register(ctx: &Context, face: Face) {
-    ctx.data_mut(|d| {
-        let r = d.get_temp_mut_or_default::<Registered>(registered_id());
+    REGISTERED.update(ctx, |r| {
         r.faces
             .retain(|f| !(f.family.eq_ignore_ascii_case(&face.family) && f.weight == face.weight));
         r.faces.push(face);
@@ -214,8 +212,7 @@ pub fn register(ctx: &Context, face: Face) {
 
 /// The last install's report.
 pub fn report(ctx: &Context) -> Option<Arc<Report>> {
-    ctx.data(|d| d.get_temp::<(Key, Arc<Report>)>(installed_id()))
-        .map(|(_, r)| r)
+    INSTALLED.get(ctx).map(|(_, r)| r)
 }
 
 #[derive(Clone, PartialEq)]
@@ -241,16 +238,13 @@ fn is_generic(name: &str) -> bool {
 /// registered faces, unless they are already installed. In use from the
 /// next pass. The icon font (`icon::install`) is kept.
 pub fn install(ctx: &Context, ui: &[String], mono: &[String]) -> Arc<Report> {
-    let registered = ctx.data(|d| {
-        d.get_temp::<Registered>(registered_id())
-            .unwrap_or_default()
-    });
+    let registered = REGISTERED.get_or_default(ctx);
     let key = Key {
         ui: ui.to_vec(),
         mono: mono.to_vec(),
         generation: registered.generation,
     };
-    if let Some((k, report)) = ctx.data(|d| d.get_temp::<(Key, Arc<Report>)>(installed_id()))
+    if let Some((k, report)) = INSTALLED.get(ctx)
         && k == key
     {
         return report;
@@ -261,7 +255,7 @@ pub fn install(ctx: &Context, ui: &[String], mono: &[String]) -> Arc<Report> {
     }
     ctx.set_fonts(defs);
     let report = Arc::new(report);
-    ctx.data_mut(|d| d.insert_temp(installed_id(), (key, report.clone())));
+    INSTALLED.set(ctx, (key, report.clone()));
     report
 }
 

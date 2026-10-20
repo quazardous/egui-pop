@@ -47,11 +47,12 @@
 use std::sync::Arc;
 
 use egui::{
-    Color32, Context, CornerRadius, Id, Margin, Shadow, Stroke, Style, TextStyle, ThemePreference,
+    Color32, Context, CornerRadius, Margin, Shadow, Stroke, Style, TextStyle, ThemePreference,
     Visuals, style::ScrollAnimation,
 };
 
 use crate::kit::{Kit, Shapes, State};
+use crate::state::Slot;
 pub use egui_pop_tokens::{
     BUILT_IN_ACCENTS, BUILT_IN_THEMES, Density, FALLBACK_THEME, POP_THEMES, ResolvedTokens,
     ThemeSpec, Themes, theme_label,
@@ -401,18 +402,12 @@ impl Tokens {
     /// The tokens installed in a context, or the built-in `pop-dark` ones
     /// (installed on first use) when no theme was.
     pub fn of(ctx: &Context) -> Arc<Tokens> {
-        if let Some(t) = ctx.data(|d| d.get_temp::<Arc<Tokens>>(tokens_id())) {
-            return t;
-        }
-        let t = Arc::new(Tokens::default());
-        ctx.data_mut(|d| d.insert_temp(tokens_id(), t.clone()));
-        t
+        TOKENS.get_or_insert_with(ctx, || Arc::new(Tokens::default()))
     }
 }
 
-fn tokens_id() -> Id {
-    Id::new("egui_pop::theme::Tokens")
-}
+/// The tokens installed.
+const TOKENS: Slot<Arc<Tokens>> = Slot::opaque("core.theme.tokens");
 
 fn radius(points: f32) -> CornerRadius {
     CornerRadius::same(points.round().clamp(0.0, 255.0) as u8)
@@ -562,7 +557,7 @@ pub fn install_tokens(ctx: &Context, tokens: Tokens) -> Arc<Tokens> {
         *s = style_with(&tokens, &kit, s);
         snap_strokes(s, ppp);
     });
-    ctx.data_mut(|d| d.insert_temp(tokens_id(), tokens.clone()));
+    TOKENS.set(ctx, tokens.clone());
     crate::fonts::install(ctx, &tokens.font.family_ui, &tokens.font.family_mono);
     crate::icon_set::install(ctx, &tokens);
     tokens

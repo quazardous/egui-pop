@@ -83,6 +83,7 @@ use egui_pop_model::values::{Descriptor, Type};
 use crate::field::FieldState;
 use crate::icon::Icon;
 use crate::kit::{BoxStyle, Kit, KitCx, Part, State, Tone};
+use crate::state::Slot;
 use crate::theme::Tokens;
 
 /// The slider's gestures, as data so a profile can remap them
@@ -119,18 +120,26 @@ impl Default for Gestures {
     }
 }
 
-fn gestures_id() -> Id {
-    Id::new("egui_pop_core::slider::gestures")
-}
+const GESTURES: Slot<Gestures> = Slot::new("core.slider.gestures");
+/// A drag's position as a fraction of the bar, per slider.
+const DRAG_ACC: Slot<f64> = Slot::new("core.slider.drag_acc");
+/// The value a drag started from, per slider.
+const DRAG_START: Slot<f64> = Slot::new("core.slider.drag_start");
+/// The text of an open typed entry, per entry.
+const TYPING: Slot<String> = Slot::new("core.slider.typing");
+/// The typed entry takes the keyboard on its first frame, per entry.
+const TYPING_FOCUS: Slot<bool> = Slot::new("core.slider.typing_focus");
+/// The pass a typed entry without the focus was last held open.
+const TYPING_HELD: Slot<u64> = Slot::new("core.slider.typing_held");
 
 /// The sliders' gestures in a context (the defaults until set).
 pub fn gestures(ctx: &egui::Context) -> Gestures {
-    ctx.data(|d| d.get_temp(gestures_id())).unwrap_or_default()
+    GESTURES.get_or_default(ctx)
 }
 
 /// Remaps the sliders' gestures in a context (an input profile).
 pub fn set_gestures(ctx: &egui::Context, gestures: Gestures) {
-    ctx.data_mut(|d| d.insert_temp(gestures_id(), gestures));
+    GESTURES.set(ctx, gestures);
 }
 
 /// How the bar maps values to positions.
@@ -628,7 +637,7 @@ impl<'a> Slider<'a> {
             done,
         };
         let typing_id = typing_id(id);
-        if let Some(text) = ui.data(|d| d.get_temp::<String>(typing_id)) {
+        if let Some(text) = typing_text(ui.ctx(), typing_id) {
             if let Some(end) = typed_entry(ui, bar, typing_id, text, &spec, *value) {
                 if let Some(v) = end.value {
                     let to = spec.settle(v, spec.hard);
@@ -714,6 +723,11 @@ impl Widget for Slider<'_> {
     fn ui(self, ui: &mut Ui) -> Response {
         self.show(ui).response
     }
+}
+
+/// The text of a slider's open typed entry (`typing_id`'s).
+pub(crate) fn typing_text(ctx: &egui::Context, typing_id: Id) -> Option<String> {
+    TYPING.keyed(typing_id).get(ctx)
 }
 
 /// The id of a slider's typed entry (for tests).
@@ -820,16 +834,14 @@ pub(crate) fn drag(
     scale: f64,
     width: f32,
 ) -> Drag {
-    let acc_id = response.id.with("egui_pop_slider_acc");
-    let start_id = response.id.with("egui_pop_slider_start");
+    let acc = DRAG_ACC.keyed(response.id);
+    let start = DRAG_START.keyed(response.id);
     if response.drag_started() {
-        ui.data_mut(|d| {
-            d.insert_temp(acc_id, spec.frac(value));
-            d.insert_temp(start_id, value);
-        });
+        acc.set(ui.ctx(), spec.frac(value));
+        start.set(ui.ctx(), value);
     }
     if response.drag_stopped() {
-        let start = ui.data(|d| d.get_temp::<f64>(start_id)).unwrap_or(value);
+        let start = start.get(ui.ctx()).unwrap_or(value);
         // egui ends a drag on the cancel key.
         let cancel = gestures(ui.ctx()).cancel;
         return if ui.input(|i| i.key_pressed(cancel)) {
@@ -842,12 +854,11 @@ pub(crate) fn drag(
         let width = f64::from(width.max(1.0));
         let delta = f64::from(response.drag_delta().x) / width * scale;
         if delta != 0.0 {
-            let acc: f64 = ui
-                .data(|d| d.get_temp(acc_id))
-                .unwrap_or_else(|| spec.frac(value));
+            let slot = acc;
+            let acc = slot.get(ui.ctx()).unwrap_or_else(|| spec.frac(value));
             let (lo, hi) = (spec.frac(bounds.0), spec.frac(bounds.1));
             let next = (acc + delta).clamp(lo.min(acc), hi.max(acc));
-            ui.data_mut(|d| d.insert_temp(acc_id, next));
+            slot.set(ui.ctx(), next);
             return Drag::Moved(spec.value_at(next));
         }
     }
@@ -954,10 +965,8 @@ pub(crate) fn keys_wheel_access(
 /// Opens the typed entry with `text`. The entry takes the keyboard on
 /// the frame it first shows, and only then: a click elsewhere keeps it.
 pub(crate) fn open_typed_entry(ui: &Ui, typing_id: Id, text: String) {
-    ui.data_mut(|d| {
-        d.insert_temp(typing_id, text);
-        d.insert_temp(typing_id.with("focus"), true);
-    });
+    TYPING.keyed(typing_id).set(ui.ctx(), text);
+    TYPING_FOCUS.keyed(typing_id).set(ui.ctx(), true);
     ui.ctx().request_repaint();
 }
 
@@ -999,10 +1008,7 @@ pub(crate) fn typed_entry(
             .id(typing_id.with("edit"))
             .horizontal_align(egui::Align::Center),
     );
-    if ui
-        .data_mut(|d| d.remove_temp::<bool>(typing_id.with("focus")))
-        .is_some()
-    {
+    if TYPING_FOCUS.keyed(typing_id).remove(ui.ctx()).is_some() {
         edit.request_focus();
     }
     // Escape and Enter are the entry's: read as pressed even when a host
@@ -1013,11 +1019,11 @@ pub(crate) fn typed_entry(
     if !cancel && !enter && (edit.has_focus() || held(ui, edit.id, typing_id)) {
         // Open: key dispatchers leave Escape and Enter to it.
         crate::focus::claim_keyboard(ui.ctx(), edit.id);
-        ui.data_mut(|d| d.insert_temp(typing_id, text));
+        TYPING.keyed(typing_id).set(ui.ctx(), text);
         return None;
     }
-    ui.data_mut(|d| d.remove::<u64>(typing_id.with("held")));
-    ui.data_mut(|d| d.remove::<String>(typing_id));
+    TYPING_HELD.keyed(typing_id).remove(ui.ctx());
+    TYPING.keyed(typing_id).remove(ui.ctx());
     if cancel || enter {
         // Spent here: nothing drawn after the entry acts on them.
         ui.input_mut(|i| {
@@ -1045,15 +1051,13 @@ fn held(ui: &Ui, edit: Id, typing_id: Id) -> bool {
     let moved = ui
         .input(|i| i.pointer.any_pressed() || i.pointer.any_released() || i.key_pressed(Key::Tab));
     let elsewhere = ui.memory(|m| m.focused()).is_some_and(|f| f != edit);
-    let key = typing_id.with("held");
+    let key = TYPING_HELD.keyed(typing_id);
     let now = ui.ctx().cumulative_pass_nr();
-    let held_last = ui
-        .data(|d| d.get_temp::<u64>(key))
-        .is_some_and(|p| p + 1 == now);
+    let held_last = key.get(ui.ctx()).is_some_and(|p| p + 1 == now);
     if moved || elsewhere || held_last {
         return false;
     }
-    ui.data_mut(|d| d.insert_temp(key, now));
+    key.set(ui.ctx(), now);
     ui.memory_mut(|m| m.request_focus(edit));
     ui.ctx().request_repaint();
     true

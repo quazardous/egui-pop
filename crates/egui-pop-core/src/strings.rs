@@ -42,7 +42,9 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use egui::{Context, Id};
+use egui::Context;
+
+use crate::state::Slot;
 
 /// A string's key and its English fallback. `{ $name }` placeholders are
 /// filled by [`tr_args`].
@@ -244,27 +246,26 @@ impl Strings for MapStrings {
     }
 }
 
-fn id() -> Id {
-    Id::new("egui_pop_core::strings")
-}
+/// The installed provider.
+const PROVIDER: Slot<Arc<dyn Strings>> = Slot::opaque("core.strings.provider");
 
 /// Installs a provider for a context.
 pub fn install(ctx: &Context, strings: Arc<dyn Strings>) {
-    ctx.data_mut(|d| d.insert_temp(id(), strings));
+    PROVIDER.set(ctx, strings);
 }
 
 /// Which provider is installed, as an identity that changes when another
 /// one is installed (`None`: the built-in English). A cache of translated
 /// texts keys on it.
 pub fn provider_id(ctx: &Context) -> Option<usize> {
-    ctx.data(|d| d.get_temp::<Arc<dyn Strings>>(id()))
+    PROVIDER
+        .get(ctx)
         .map(|s| Arc::as_ptr(&s).cast::<()>() as usize)
 }
 
 /// The installed provider (English when none is).
 pub fn provider(ctx: &Context) -> Arc<dyn Strings> {
-    ctx.data(|d| d.get_temp::<Arc<dyn Strings>>(id()))
-        .unwrap_or_else(|| Arc::new(English))
+    PROVIDER.get(ctx).unwrap_or_else(|| Arc::new(English))
 }
 
 /// A number in the interface's language, with exactly `decimals` digits
@@ -404,20 +405,18 @@ pub struct PanelCommand {
 /// The commands derived from panels, by command id.
 pub type PanelCommands = Arc<BTreeMap<String, PanelCommand>>;
 
-fn panel_commands_id() -> Id {
-    Id::new("egui_pop_core::strings::panel_commands")
-}
+const PANEL_COMMANDS: Slot<PanelCommands> = Slot::new("core.strings.panel_commands");
 
 /// Installs the commands derived from panels for a context (see
 /// [`PanelCommand`]); the application does it for each context it is
 /// drawn in.
 pub fn set_panel_commands(ctx: &Context, commands: PanelCommands) {
-    ctx.data_mut(|d| d.insert_temp(panel_commands_id(), commands));
+    PANEL_COMMANDS.set(ctx, commands);
 }
 
 /// The commands derived from panels installed for a context.
 pub fn panel_commands(ctx: &Context) -> Option<PanelCommands> {
-    ctx.data(|d| d.get_temp::<PanelCommands>(panel_commands_id()))
+    PANEL_COMMANDS.get(ctx)
 }
 
 /// The panel a command is derived from, with its shared texts.

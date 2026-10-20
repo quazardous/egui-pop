@@ -1434,8 +1434,19 @@ struct Drawn {
     direction: Direction,
 }
 
+impl std::fmt::Debug for Drawn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Drawn")
+            .field("pass", &self.pass)
+            .field("building", &self.building.len())
+            .field("last", &self.last.len())
+            .field("commands", &self.commands.len())
+            .finish()
+    }
+}
+
 fn drawn_state(ctx: &Context) -> Arc<Mutex<Drawn>> {
-    shared::<Drawn>(ctx, "indicators")
+    shared::<Drawn>(ctx, "core.indicators")
 }
 
 fn rotate(ctx: &Context, s: &mut Drawn) {

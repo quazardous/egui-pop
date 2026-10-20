@@ -52,7 +52,7 @@ pub const KEPT: usize = 32;
 /// Queues a message for screen readers.
 pub fn announce(ctx: &Context, text: impl Into<String>, politeness: Politeness) {
     let time = ctx.input(|i| i.time);
-    let st = shared::<State>(ctx, "a11y");
+    let st = shared::<State>(ctx, "core.a11y");
     let mut s = lock(&st);
     s.all.push(Announcement {
         text: text.into(),
@@ -68,7 +68,7 @@ pub fn announce(ctx: &Context, text: impl Into<String>, politeness: Politeness) 
 
 /// The messages kept, oldest first.
 pub fn announcements(ctx: &Context) -> Vec<Announcement> {
-    let st = shared::<State>(ctx, "a11y");
+    let st = shared::<State>(ctx, "core.a11y");
     lock(&st).all.clone()
 }
 

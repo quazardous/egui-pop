@@ -59,8 +59,17 @@ struct State {
     busy: HashMap<Id, (Option<f64>, Option<f64>)>,
 }
 
+impl std::fmt::Debug for State {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("State")
+            .field("clock", &self.clock.is_some())
+            .field("busy", &self.busy.len())
+            .finish()
+    }
+}
+
 fn state(ctx: &Context) -> std::sync::Arc<std::sync::Mutex<State>> {
-    shared::<State>(ctx, "motion")
+    shared::<State>(ctx, "core.motion")
 }
 
 /// Gives the motion clock a clock of its own (the application's, a

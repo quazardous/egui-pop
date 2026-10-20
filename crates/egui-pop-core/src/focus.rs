@@ -97,7 +97,7 @@ struct State {
 }
 
 fn state(ctx: &Context) -> std::sync::Arc<std::sync::Mutex<State>> {
-    shared::<State>(ctx, "focus")
+    shared::<State>(ctx, "core.focus")
 }
 
 /// What the focus chain is pointed at.

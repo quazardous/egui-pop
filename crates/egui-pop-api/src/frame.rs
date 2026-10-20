@@ -931,11 +931,7 @@ mod native {
                 ]
             );
             assert_eq!(
-                ctx.data(|d| d.get_temp::<Option<Button>>(Id::new((
-                    "egui_pop_core::frame::native_hover",
-                    ViewportId::ROOT
-                ))))
-                .flatten(),
+                core_frame::native_hover(&ctx),
                 Some(Button::Maximize)
             );
             assert!(requests(&ctx).is_empty());

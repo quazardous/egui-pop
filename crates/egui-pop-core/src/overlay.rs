@@ -311,7 +311,7 @@ struct State {
 }
 
 fn state(ctx: &Context) -> std::sync::Arc<std::sync::Mutex<State>> {
-    shared::<State>(ctx, "overlay")
+    shared::<State>(ctx, "core.overlay")
 }
 
 /// Once per pass, before anything reads the keyboard: Escape and outside

@@ -12,6 +12,15 @@ publishes.
 
 ### Added
 
+- State slots (egui-pop-core): `state::Slot<T>` names a value kept in
+  egui's memory, per context (`Slot::new`, `Slot::opaque` for values
+  without a `Debug` form) or per instance (`slot.keyed(id)`), with
+  `get`, `set`, `remove`, `get_or_insert_with` and `update`. A slot
+  touched inside another slot's `update` panics with its name instead of
+  deadlocking egui's context. The debug bridge's new `state` collector
+  lists every slot written: name, type, scope, entries held and a
+  summary of the first values; its `slot` action summarises every entry
+  of one slot. egui-pop's own state goes through slots.
 - Keys changed for the workspace (egui-pop-api): `AppHandle::rebind_in` and
   `reset_keys_in` change a command's keys in the user's or the
   workspace's layer (the `keys.rebind` step says which, `layer`),

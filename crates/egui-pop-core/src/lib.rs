@@ -45,6 +45,8 @@
 //!   migrations;
 //! - [`fault`]: fault boundaries showing an error card on panic;
 //! - [`binding`]: plain, bound and watch-only values;
+//! - [`state`]: typed slots for the state kept in egui's memory,
+//!   listed by the debug bridge;
 //! - [`debug`]: the debug bridge and its collectors.
 
 pub mod a11y;
@@ -76,7 +78,7 @@ pub mod strings;
 pub mod tab;
 pub mod theme;
 
-mod state;
+pub mod state;
 
 pub use egui;
 pub use egui_pop_model as model;

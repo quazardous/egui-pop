@@ -258,7 +258,7 @@ fn rotate(ctx: &Context, s: &mut Fields) {
 /// Records a field drawn this pass (its widget calls it), so agents see
 /// it in [`fields`] and [`describe`] from the next pass.
 pub fn record(ctx: &Context, id: Id, label: &str, kind: &str, state: &FieldState) {
-    let st = shared::<Fields>(ctx, "fields");
+    let st = shared::<Fields>(ctx, "core.fields");
     let mut s = lock(&st);
     rotate(ctx, &mut s);
     s.building.push(FieldRecord {
@@ -271,7 +271,7 @@ pub fn record(ctx: &Context, id: Id, label: &str, kind: &str, state: &FieldState
 
 /// The fields drawn in the last complete pass.
 pub fn fields(ctx: &Context) -> Vec<FieldRecord> {
-    let st = shared::<Fields>(ctx, "fields");
+    let st = shared::<Fields>(ctx, "core.fields");
     let mut s = lock(&st);
     rotate(ctx, &mut s);
     s.last.clone()

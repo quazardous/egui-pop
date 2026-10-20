@@ -148,7 +148,7 @@ struct State {
 }
 
 fn state(ctx: &Context) -> std::sync::Arc<std::sync::Mutex<State>> {
-    shared::<State>(ctx, "tab")
+    shared::<State>(ctx, "core.tab")
 }
 
 fn rotate(ctx: &Context, s: &mut State) {

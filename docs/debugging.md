@@ -30,6 +30,44 @@ apply (a hook on a step nobody declares, two plugins replacing the same
 step) is reported as a diagnostic, never a silent no-op
 ([ADR 0003](adr/0003-no-silent-no-op.md)).
 
+## State in egui's memory
+
+egui-pop keeps its per-context state (tokens, fonts, the frame's
+layout, focus, overlays, a slider's drag) in egui's temporary memory,
+through typed slots (`egui_pop::core::state::Slot`). Every slot written
+is listed by the `state` collector: its name, type, whether it holds one
+value per context or one per instance (a widget, a window), how many
+entries it holds now and a one-line summary of the first ones. A count
+of instance entries that keeps growing while the interface does not is
+a leak; the `slot` action lists every entry of one slot.
+
+```rust
+use egui_pop::core::debug::DebugBridge;
+use egui_pop::core::state::Slot;
+use egui_pop::egui;
+
+// A component's own state, declared once.
+const OPEN: Slot<bool> = Slot::new("my_plugin.open");
+
+let ctx = egui::Context::default();
+OPEN.keyed("first").set(&ctx, true);
+let bridge = DebugBridge::with_core_collectors();
+let state = bridge.snapshot_of(&ctx, "state").unwrap();
+let open = state["slots"]
+    .as_array()
+    .unwrap()
+    .iter()
+    .find(|s| s["name"] == "my_plugin.open")
+    .unwrap();
+assert_eq!((open["scope"].as_str(), open["entries"].as_u64()), (Some("instance"), Some(1)));
+```
+
+egui locks its context while its memory is read or written: a slot
+takes the lock itself, so build keys (`ctx.viewport_id()`, a widget's
+id) and read other state before calling it. Only `update`'s closure
+runs under the lock, and it must not touch the context; a slot touched
+there panics with both names instead of deadlocking.
+
 ## Devtools
 
 The same collectors inside the application: `DevtoolsPlugin` (opt-in)

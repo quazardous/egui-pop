@@ -29,11 +29,12 @@ use std::sync::Arc;
 use egui::epaint::{Shadow, Shape};
 use egui::layers::ShapeIdx;
 use egui::{
-    Color32, Context, Frame, Galley, Id, InnerResponse, Margin, Painter, Pos2, Rect, Response,
-    Stroke, Ui, Vec2,
+    Color32, Context, Frame, Galley, InnerResponse, Margin, Painter, Pos2, Rect, Response, Stroke,
+    Ui, Vec2,
 };
 use egui_pop_tokens::Value;
 
+use crate::state::Slot;
 use crate::theme::Tokens;
 
 mod glyph;
@@ -862,13 +863,10 @@ impl std::fmt::Debug for Shapes {
     }
 }
 
-fn shapes_id() -> Id {
-    Id::new("egui_pop::kit::Shapes")
-}
-
-fn kit_id() -> Id {
-    Id::new("egui_pop::kit::Kit")
-}
+/// The shapes registered by components, compiled into the next kit.
+const SHAPES: Slot<Shapes> = Slot::opaque("core.kit.shapes");
+/// The compiled kit.
+const KIT: Slot<Arc<Kit>> = Slot::opaque("core.kit");
 
 /// Registers a handler for a component (one of [`COMPONENTS`]) under a
 /// name its `shape` token can give. In use from the next theme install.
@@ -878,10 +876,7 @@ pub fn register_shape(
     name: &str,
     handler: Arc<dyn Primitive<ComponentKit>>,
 ) {
-    ctx.data_mut(|d| {
-        d.get_temp_mut_or_insert_with(shapes_id(), Shapes::default)
-            .insert(component, name, handler);
-    });
+    SHAPES.update(ctx, |s| s.insert(component, name, handler));
 }
 
 /// Registers a tab handler ([`register_shape`] for `tab`).
@@ -938,7 +933,7 @@ impl Kit {
     /// The kit installed in a context, or the one of the installed
     /// tokens, compiled on first use.
     pub fn of(ctx: &Context) -> Arc<Kit> {
-        if let Some(k) = ctx.data(|d| d.get_temp::<Arc<Kit>>(kit_id())) {
+        if let Some(k) = KIT.get(ctx) {
             return k;
         }
         install(ctx, &Tokens::of(ctx))
@@ -1000,12 +995,12 @@ fn egui_losses(t: &Tokens, kit: &Kit) -> Vec<String> {
 /// Compiles the kit of `tokens` with the registered handlers and
 /// installs it. Called by `theme::install_tokens`, between frames.
 pub fn install(ctx: &Context, tokens: &Tokens) -> Arc<Kit> {
-    let shapes = ctx.data(|d| d.get_temp::<Shapes>(shapes_id()).unwrap_or_default());
+    let shapes = SHAPES.get_or_default(ctx);
     let kit = Arc::new(Kit::compile(tokens, &shapes));
     for p in &kit.problems {
         log::warn!(target: "egui_pop", "kit: {p}");
     }
-    ctx.data_mut(|d| d.insert_temp(kit_id(), kit.clone()));
+    KIT.set(ctx, kit.clone());
     kit
 }
 

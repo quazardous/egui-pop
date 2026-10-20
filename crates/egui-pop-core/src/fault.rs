@@ -21,6 +21,7 @@ use egui::{Id, RichText, Shadow, Ui};
 use serde::Serialize;
 
 use crate::kit::{Kit, State};
+use crate::state::Slot;
 use crate::strings::{self, FAULT_BODY, FAULT_TITLE, RETRY};
 use crate::theme::Tokens;
 
@@ -34,13 +35,10 @@ pub struct Fault {
     pub count: u32,
 }
 
-fn fault_id(id: Id) -> Id {
-    id.with("egui_pop_fault")
-}
-
-fn registry_id() -> Id {
-    Id::new("egui_pop_core::fault::all")
-}
+/// The fault a boundary shows, per boundary.
+const FAULT: Slot<Fault> = Slot::new("core.fault");
+/// Every boundary that failed.
+const FAILED: Slot<Vec<Id>> = Slot::new("core.fault.failed");
 
 /// The panic's message.
 fn message(payload: &(dyn std::any::Any + Send)) -> String {
@@ -62,8 +60,8 @@ pub fn boundary<R>(
     add: impl FnOnce(&mut Ui) -> R,
 ) -> Option<R> {
     let id = ui.id().with(id);
-    let key = fault_id(id);
-    if let Some(fault) = ui.ctx().data(|d| d.get_temp::<Fault>(key)) {
+    let key = FAULT.keyed(id);
+    if let Some(fault) = key.get(ui.ctx()) {
         card(ui, key, &fault);
         return None;
     }
@@ -77,13 +75,11 @@ pub fn boundary<R>(
                 count: 1,
             };
             log::error!(target: "egui_pop", "`{name}` panicked: {}", fault.message);
-            ui.ctx().data_mut(|d| {
-                d.insert_temp(key, fault.clone());
-                let mut all: Vec<Id> = d.get_temp(registry_id()).unwrap_or_default();
-                if !all.contains(&key) {
-                    all.push(key);
+            key.set(ui.ctx(), fault.clone());
+            FAILED.update(ui.ctx(), |all| {
+                if !all.contains(&id) {
+                    all.push(id);
                 }
-                d.insert_temp(registry_id(), all);
             });
             card(ui, key, &fault);
             ui.ctx().request_repaint();
@@ -94,15 +90,14 @@ pub fn boundary<R>(
 
 /// The faults currently shown, for the debug bridge.
 pub fn faults(ctx: &egui::Context) -> Vec<Fault> {
-    ctx.data(|d| {
-        let all: Vec<Id> = d.get_temp(registry_id()).unwrap_or_default();
-        all.into_iter()
-            .filter_map(|k| d.get_temp::<Fault>(k))
-            .collect()
-    })
+    FAILED
+        .get_or_default(ctx)
+        .into_iter()
+        .filter_map(|id| FAULT.keyed(id).get(ctx))
+        .collect()
 }
 
-fn card(ui: &mut Ui, key: Id, fault: &Fault) {
+fn card(ui: &mut Ui, key: Slot<Fault>, fault: &Fault) {
     let t = Tokens::of(ui.ctx());
     Kit::of(ui.ctx())
         .fault_card
@@ -123,7 +118,7 @@ fn card(ui: &mut Ui, key: Id, fault: &Fault) {
                     .color(t.text.muted),
             );
             if ui.button(strings::tr(ui.ctx(), &RETRY)).clicked() {
-                ui.ctx().data_mut(|d| d.remove::<Fault>(key));
+                key.remove(ui.ctx());
             }
         });
 }

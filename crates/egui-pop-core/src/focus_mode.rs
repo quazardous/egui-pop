@@ -36,10 +36,10 @@
 
 use std::sync::{Arc, Mutex};
 
-use egui::{Context, Id, Response};
+use egui::{Context, Response};
 use serde::Serialize;
 
-use crate::state::lock;
+use crate::state::{Slot, lock};
 
 /// The environment variable standing in for the system: `click` or
 /// `hover` (GNOME's `sloppy` and `mouse` are read as hover).
@@ -302,19 +302,17 @@ impl FocusModes {
     }
 }
 
-fn key() -> Id {
-    Id::new("egui_pop_core::focus_mode")
-}
+const MODES: Slot<FocusModes> = Slot::new("core.focus_mode");
 
 /// The context's focus modes (created on first use: the system not read,
 /// click).
 pub fn get(ctx: &Context) -> FocusModes {
-    ctx.data_mut(|d| d.get_temp_mut_or_default::<FocusModes>(key()).clone())
+    MODES.update(ctx, |m| m.clone())
 }
 
 /// Makes a context use these focus modes.
 pub fn set(ctx: &Context, modes: &FocusModes) {
-    ctx.data_mut(|d| d.insert_temp(key(), modes.clone()));
+    MODES.set(ctx, modes.clone());
 }
 
 /// The mode in force in a context.
@@ -332,7 +330,7 @@ struct Pointer {
 /// Whether the pointer is somewhere else than in the previous pass (its
 /// first position counts as a move).
 fn pointer_moved(ctx: &Context) -> bool {
-    let st = crate::state::shared::<Pointer>(ctx, "focus_mode.pointer");
+    let st = crate::state::shared::<Pointer>(ctx, "core.focus_mode.pointer");
     let mut p = lock(&st);
     let pass = crate::state::pass(ctx);
     if p.pass != pass {

@@ -19,9 +19,10 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
 
-use egui::{Color32, Context, Id, Painter, Rect, TextureHandle};
+use egui::{Color32, Context, Painter, Rect, TextureHandle};
 
 use crate::icon::Icon;
+use crate::state::Slot;
 use crate::theme::Tokens;
 
 /// How an icon is coloured.
@@ -146,13 +147,11 @@ type Textures = HashMap<(u16, u32), Option<TextureHandle>>;
 #[derive(Clone, Default)]
 struct Extra(Arc<Mutex<Textures>>);
 
-fn extra_id() -> Id {
-    Id::new("egui_pop_core::icon_set::extra")
-}
+const EXTRA: Slot<Extra> = Slot::opaque("core.icon_set.extra");
 
 /// The texture of an icon at a side no install made, made on first use.
 fn extra(ctx: &Context, icon: CustomIcon, px: u32, paint: Paint) -> Option<TextureHandle> {
-    let cache = ctx.data_mut(|d| d.get_temp_mut_or_default::<Extra>(extra_id()).clone());
+    let cache = EXTRA.update(ctx, |e| e.clone());
     let mut map = cache.0.lock().unwrap_or_else(|e| e.into_inner());
     map.entry((icon.0, px))
         .or_insert_with(|| {
@@ -165,9 +164,7 @@ fn extra(ctx: &Context, icon: CustomIcon, px: u32, paint: Paint) -> Option<Textu
         .clone()
 }
 
-fn installed_id() -> Id {
-    Id::new("egui_pop_core::icon_set::installed")
-}
+const INSTALLED: Slot<Arc<Installed>> = Slot::opaque("core.icon_set.installed");
 
 /// Rasterises every registered icon at the theme's icon sizes and the
 /// context's pixels per point. Called by `theme::install_tokens`, between
@@ -205,7 +202,7 @@ pub fn install(ctx: &Context, tokens: &Tokens) {
                 .collect(),
         })
         .collect();
-    ctx.data_mut(|d| d.insert_temp(installed_id(), Arc::new(Installed { ppp, icons })));
+    INSTALLED.set(ctx, Arc::new(Installed { ppp, icons }));
 }
 
 #[cfg(feature = "svg")]
@@ -247,10 +244,7 @@ fn rasterise(_svg: &[u8], _px: u32, _paint: Paint) -> Option<egui::ColorImage> {
 /// size at or above the square's, tinted with `color` when single-colour.
 /// Nothing is drawn before the first install that saw it.
 pub(crate) fn paint(painter: &Painter, icon: CustomIcon, rect: Rect, color: Color32) {
-    let Some(installed) = painter
-        .ctx()
-        .data(|d| d.get_temp::<Arc<Installed>>(installed_id()))
-    else {
+    let Some(installed) = INSTALLED.get(painter.ctx()) else {
         return;
     };
     let Some(r) = installed.icons.get(usize::from(icon.0)) else {
@@ -347,9 +341,7 @@ mod tests {
         register("test-dot", RING, Paint::Colour).unwrap();
         let ctx = Context::default();
         install(&ctx, &Tokens::default());
-        let installed = ctx
-            .data(|d| d.get_temp::<Arc<Installed>>(installed_id()))
-            .unwrap();
+        let installed = INSTALLED.get(&ctx).unwrap();
         let t = Tokens::default();
         let mut sides = vec![t.size.icon_inline, t.size.icon_toolbar, t.size.icon_panel];
         sides.dedup();
@@ -369,7 +361,7 @@ mod tests {
         let square = Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(15.0, 15.0));
         ring.paint(&painter, square, Color32::WHITE);
         ring.paint(&painter, square, Color32::WHITE);
-        let cache = ctx.data_mut(|d| d.get_temp_mut_or_default::<Extra>(extra_id()).clone());
+        let cache = EXTRA.update(ctx, |e| e.clone());
         let map = cache.0.lock().unwrap();
         let made: Vec<_> = map.keys().filter(|(i, _)| *i == c.0).collect();
         assert_eq!(made, [&(c.0, 15)]);

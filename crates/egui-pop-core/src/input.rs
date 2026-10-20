@@ -54,9 +54,13 @@ use egui_pop_model::field::FieldState;
 use crate::field;
 use crate::icon::Icon;
 use crate::kit::{Kit, State, Tone};
+use crate::state;
 use crate::strings::{self, FIELD_RESET, INPUT_CHOICES, INPUT_CLEAR, INPUT_MORE};
 use crate::tab::{self, TabStop};
 use crate::theme::Tokens;
+
+/// What is typed in a number field while it has the focus, per field.
+const BUFFER: state::Slot<String> = state::Slot::new("core.input.buffer");
 
 /// What a field edits.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -406,10 +410,10 @@ impl<'a> Input<'a> {
 
         // Its text as shown.
         let typing = ui.memory(|m| m.has_focus(text_id));
-        let buffer_id = base.with("buffer");
+        let buffer_id = BUFFER.keyed(base);
         let mut buffer = match &value {
             Value::Text(s) => (*s).clone(),
-            Value::Number(v) => match ui.data(|d| d.get_temp::<String>(buffer_id)) {
+            Value::Number(v) => match buffer_id.get(&ctx) {
                 Some(b) if typing => b,
                 _ => format_number(&ctx, **v, precision),
             },
@@ -590,10 +594,10 @@ impl<'a> Input<'a> {
             Value::Number(v) => {
                 let commit = choice.is_some() || reset_pressed || !response.has_focus();
                 if response.has_focus() {
-                    ui.data_mut(|d| d.insert_temp(buffer_id, buffer.clone()));
+                    buffer_id.set(&ctx, buffer.clone());
                 }
                 if commit {
-                    ui.data_mut(|d| d.remove::<String>(buffer_id));
+                    buffer_id.remove(&ctx);
                     // Escape leaves the field with nothing: what was
                     // typed is dropped, the value stays.
                     let escaped =

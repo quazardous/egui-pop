@@ -16,7 +16,7 @@ use egui::{Rect, Response, Sense, Ui, Widget, WidgetInfo, pos2, vec2};
 use super::{
     Cause, Change, Drag, Hook, SliderOutput, Spec, Thumb, Verdict, access, decide, drag, gestures,
     keep_auto_ids, keys_wheel_access, modifier_scale, open_typed_entry, paint_bar, paint_state,
-    spec_builders, state_of, typed_entry, typing_id,
+    spec_builders, state_of, typed_entry, typing_id, typing_text,
 };
 use crate::strings::{self, SLIDER_MAXIMUM, SLIDER_MINIMUM};
 
@@ -124,7 +124,7 @@ impl<'a> RangeSlider<'a> {
                 _ => (bounds.0, spec.hard.1),
             };
             let tid = typing_id(response.id);
-            if let Some(text) = ui.data(|d| d.get_temp::<String>(tid)) {
+            if let Some(text) = typing_text(ui.ctx(), tid) {
                 typing = true;
                 if let Some(end) = typed_entry(ui, bar, tid, text, &spec, *value) {
                     if let Some(v) = end.value {

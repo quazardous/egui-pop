@@ -31,7 +31,7 @@ use serde_json::{Value as Json, json};
 
 use crate::binding::SharedStore;
 use crate::state::lock;
-use crate::{a11y, fault, field, focus, indicator, overlay, tab, theme};
+use crate::{a11y, fault, field, focus, indicator, overlay, state, tab, theme};
 
 /// An action a collector offers.
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -182,7 +182,7 @@ impl DebugBridge {
     }
 
     /// A bridge with the collectors of this crate: screen, focus,
-    /// overlays, fields, faults, announcements and theme.
+    /// overlays, fields, faults, announcements, state and theme.
     pub fn with_core_collectors() -> Self {
         let mut b = Self::new();
         for c in core_collectors() {
@@ -466,6 +466,37 @@ pub fn core_collectors() -> Vec<FnCollector> {
             "The micro-indicators with an id drawn in the last pass: kind, state, value, text, tone, meaning, host, whether interactive, shown and pulsing.",
         )
         .snapshot(|ctx| json!(indicator::drawn(ctx))),
+        FnCollector::new(
+            "state",
+            "The state egui-pop keeps in egui's memory: every slot written (name, type, per context or per instance), how many entries it holds and a summary of its first values.",
+        )
+        .snapshot(|ctx| {
+            let slots = state::report(ctx, 3);
+            json!({
+                "entries": slots.iter().map(|s| s.entries).sum::<usize>(),
+                "slots": slots,
+            })
+        })
+        .action(
+            "slot",
+            "Every entry of a slot (`name`), summarised.",
+            false,
+            |ctx, args| {
+                let name = args
+                    .get("name")
+                    .and_then(Json::as_str)
+                    .ok_or("`name` is missing")?;
+                let found: Vec<_> = state::report(ctx, usize::MAX)
+                    .into_iter()
+                    .filter(|s| s.name == name)
+                    .collect();
+                if found.is_empty() {
+                    return Err(format!("no slot `{name}` was written"));
+                }
+                Ok(json!(found))
+            },
+        )
+        .args(json!({ "name": "core.theme.tokens" })),
         FnCollector::new("theme", "The installed theme and its problems.").snapshot(|ctx| {
             let t = theme::Tokens::of(ctx);
             let r = t.resolved();

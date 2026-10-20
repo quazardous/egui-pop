@@ -40,14 +40,14 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 use egui::{
-    Color32, Context, CursorIcon, Id, Pos2, Rect, ResizeDirection, Sense, Ui, Vec2,
-    ViewportCommand, ViewportId, WidgetType, pos2, vec2,
+    Color32, Context, CursorIcon, Pos2, Rect, ResizeDirection, Sense, Ui, Vec2, ViewportCommand,
+    ViewportId, WidgetType, pos2, vec2,
 };
 use serde::Serialize;
 
 use crate::a11y;
 use crate::kit::{ButtonsHover, ButtonsSide, Glyph, Kit, KitCx, Part, State, Tone};
-use crate::state::lock;
+use crate::state::{Slot, lock};
 use crate::theme::Tokens;
 
 /// The thinnest resize edge, in physical pixels, whatever the scale.
@@ -234,13 +234,8 @@ pub struct HitTable(Arc<Mutex<BTreeMap<ViewportId, Arc<HitRegions>>>>);
 impl HitTable {
     /// The context's table (one per context, made on first use).
     pub fn of(ctx: &Context) -> HitTable {
-        let id = Id::new("egui_pop_core::frame::table");
-        if let Some(t) = ctx.data(|d| d.get_temp::<HitTable>(id)) {
-            return t;
-        }
-        let t = HitTable::default();
-        ctx.data_mut(|d| d.insert_temp(id, t.clone()));
-        t
+        const TABLE: Slot<HitTable> = Slot::new("core.frame.table");
+        TABLE.get_or_insert_with(ctx, HitTable::default)
     }
 
     /// A window's last published regions.
@@ -265,27 +260,24 @@ impl HitTable {
 }
 
 /// The parts of the current window's frame drawn this pass, merged and
-/// published by [`publish`].
-fn pending_id(ctx: &Context) -> Id {
-    Id::new(("egui_pop_core::frame::pending", ctx.viewport_id()))
+/// published by [`publish`], per window.
+const PENDING: Slot<FrameLayout> = Slot::new("core.frame.pending");
+
+fn pending(ctx: &Context) -> Slot<FrameLayout> {
+    PENDING.keyed(ctx.viewport_id())
 }
 
 fn update_pending(ctx: &Context, f: impl FnOnce(&mut FrameLayout)) {
-    let id = pending_id(ctx);
-    let mut layout = ctx
-        .data(|d| d.get_temp::<FrameLayout>(id))
-        .unwrap_or_default();
+    let slot = pending(ctx);
+    let mut layout = slot.get_or_default(ctx);
     f(&mut layout);
-    ctx.data_mut(|d| d.insert_temp(id, layout));
+    slot.set(ctx, layout);
 }
 
 /// Publishes the current window's regions from what the frame drew this
 /// pass (the title bar and the edges); `TitleBar::show` calls it.
 pub fn publish(ctx: &Context) -> HitRegions {
-    let id = pending_id(ctx);
-    let mut layout = ctx
-        .data(|d| d.get_temp::<FrameLayout>(id))
-        .unwrap_or_default();
+    let mut layout = pending(ctx).get_or_default(ctx);
     layout.window = ctx.content_rect();
     if layout.grip == 0.0 {
         layout.grip = grip_token(ctx);
@@ -700,24 +692,23 @@ impl<'a> TitleBar<'a> {
     }
 }
 
-fn native_hover_id(viewport: ViewportId) -> Id {
-    Id::new(("egui_pop_core::frame::native_hover", viewport))
-}
+/// The window button the system says the pointer is over, per window.
+const NATIVE_HOVER: Slot<Option<Button>> = Slot::new("core.frame.native_hover");
 
 /// Says which window button the pointer is over when the system, not
 /// egui, sees the pointer there (on Windows the buttons answer the
 /// system's hit test, so their hover never reaches egui): the button is
 /// drawn hot. `None` when the pointer left them.
 pub fn set_native_hover(ctx: &Context, viewport: ViewportId, button: Option<Button>) {
-    ctx.data_mut(|d| d.insert_temp(native_hover_id(viewport), button));
+    NATIVE_HOVER.keyed(viewport).set(ctx, button);
     ctx.request_repaint_of(viewport);
 }
 
 /// The window button the system says the pointer is over.
 pub fn native_hover(ctx: &Context) -> Option<Button> {
     // Read before the memory's lock: the viewport id takes the context's.
-    let id = native_hover_id(ctx.viewport_id());
-    ctx.data(|d| d.get_temp::<Option<Button>>(id)).flatten()
+    let viewport = ctx.viewport_id();
+    NATIVE_HOVER.keyed(viewport).get(ctx).flatten()
 }
 
 /// How the maximize slot's button shows.
