@@ -31,6 +31,9 @@ feature's moments reachable as steps (ADR 0011).
   it.
 - [Plugins, commands and steps](plugins.md): what a plugin registers,
   commands and the host, zones and blocks, hooks, steps.
+- [State or event: what to use](state-or-event.md): how a plugin
+  shares data (the value store, commands, steps, the context stack,
+  services), the per-frame trap, one example done both ways.
 - [The context stack](contexts.md): places (a drill-down and its
   breadcrumb) and modes (global states and their chips) owned by the
   kernel and projected by the interface, kernel state and view state,

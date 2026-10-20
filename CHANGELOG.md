@@ -112,6 +112,11 @@ publishes.
   button's, or a `border-color` other than `border.default`, is in
   `Kit::problems`, since egui draws the line with its own stroke.
   docs/kit.md lists the bridges to egui that remain and what each loses.
+- A guide on how a plugin shares data, state or event
+  (docs/state-or-event.md): which of the value store, commands, steps,
+  the journal, the context stack, services and alter hooks to use for
+  each need, the per-frame trap of immediate mode, and one example done
+  both ways.
 
 ### Changed
 

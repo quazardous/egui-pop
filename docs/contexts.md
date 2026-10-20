@@ -156,7 +156,8 @@ it; a toast says what did not come back.
 ## How a plugin reacts
 
 Nobody polls a global. Everything keys on the context keys the
-projection sets, in `when` clauses:
+projection sets, in `when` clauses (how the stack sits beside the value
+store, commands and steps: [State or event](state-or-event.md)):
 
 | Key | Value |
 |---|---|

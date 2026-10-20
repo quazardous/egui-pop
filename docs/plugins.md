@@ -20,6 +20,10 @@ toasts, the settings window, the window's place and saved arrangements.
 A complete plugin application is in
 [Getting started](getting-started.md#a-plugin-application).
 
+Which of these a plugin uses to share data with others (the value
+store, a command, a step, the context stack, a service) is in
+[State or event: what to use](state-or-event.md).
+
 ## Commands
 
 A command is declared once, with a `CommandSpec`: its id, title,
