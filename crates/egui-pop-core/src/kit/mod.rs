@@ -1051,12 +1051,12 @@ fn egui_losses(t: &Tokens, kit: &Kit) -> Vec<String> {
     let (f, b) = (kit.field.style(State::REST), kit.button.style(State::REST));
     if (f.border_color, f.border_width, f.radius) != (b.border_color, b.border_width, b.radius) {
         lost.push(
-            "field.rest: egui's text fields take their outline from `button` (egui shares widget states)"
+            "field.rest: egui's text fields outside a `Field` scope take their outline from `button` (egui shares widget states)"
                 .into(),
         );
     }
     if f.text != b.text {
-        lost.push("field.rest.text: egui's text fields take the button's text colour".into());
+        lost.push("field.rest.text: egui's text fields outside a `Field` scope take the button's text colour".into());
     }
     // egui draws a side area's separator with its non-interactive
     // widgets' stroke: the button's width at rest, `border.default`.
