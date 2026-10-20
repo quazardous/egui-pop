@@ -78,6 +78,9 @@ glyphs! {
     WindowRestore: "window-restore" => WindowRestore,
     /// A window's close button.
     WindowClose: "window-close" => WindowClose,
+    /// A full screen window's button leaving full screen (where maximize
+    /// was).
+    WindowExitFullscreen: "window-exit-fullscreen" => ExitFullscreen,
     /// An LED that is off.
     LedOff: "led-off" => Circle,
     /// An LED that is on.

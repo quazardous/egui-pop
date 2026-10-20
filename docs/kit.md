@@ -295,8 +295,11 @@ compiled at install.
   `window-minimize`, `window-maximize`, `window-restore` and
   `window-close` glyph roles (egui-pop's painted marks by default, any
   icon of the set otherwise), in the box's `text`, `indicator-size`
-  across (10 by default). Buttons and items are centred above the bar's
-  line (`title-bar.rest.border-width`).
+  across (10 by default). In full screen, the bar keeps close and puts
+  a `window-button` leaving full screen where maximize was, its glyph
+  the `window-exit-fullscreen` role (`exit-fullscreen` by default).
+  Buttons and items are centred above the bar's line
+  (`title-bar.rest.border-width`).
 - **Data views** (`list-row`, `list-view`, `table-header-cell`,
   `table-stripe`, `tree-drop-marker`). One function paints the rows of
   the tree, the list and the table. A row is `selected`, `hover` (never
@@ -349,7 +352,9 @@ compiled at install.
   button draws with, `selected` while a submenu is open; the shortcut is
   the `muted` tone. `menus-kit-bar` restyles items with data only.
 - **Frames** (`dialog`, `backdrop`, `popover`, `fault-card`, `toast`,
-  `palette-window`, `tip-card`, `job-log`, `fullscreen-exit`,
+  `palette-window`, `tip-card`, `job-log`, `fullscreen-exit` (the
+  strip at the top of a full screen window whose frame the system
+  draws),
   `editor-frame`, `terminal-frame`, `find-bar`, `assist-card`), handler
   `card`; the `dialogs-kit-square` snapshot restyles a dialog with data
   only. Their borders are snapped to whole physical pixels like the

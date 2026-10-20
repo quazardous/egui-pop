@@ -42,6 +42,8 @@ glyph:
     $value: "window-restore"
   window-close:
     $value: "window-close"
+  window-exit-fullscreen:
+    $value: "exit-fullscreen"
   led-off:
     $value: "circle"
   led-on:

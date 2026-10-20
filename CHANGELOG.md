@@ -20,7 +20,10 @@ publishes.
   the workspace once the application asks (`offer_workspace_keys`), and
   says where each key comes from (workspace, user, or the application's
   own name, `name_key_sources`).
-
+- A `window-exit-fullscreen` glyph role in the kit (`egui-pop-core`,
+  `egui-pop-tokens`, `glyph.window-exit-fullscreen`, the
+  `exit-fullscreen` icon by default): the mark of the title bar's
+  button leaving full screen.
 - Micro-indicators (`egui-pop-core`, `core::indicator`), drawn by the
   kit like every component: dots and LEDs (off, on, busy, warning,
   error, each a shape of its own), count badges capped at `99+` (zero
