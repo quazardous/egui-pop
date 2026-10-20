@@ -512,6 +512,35 @@ const CORE: &[Required] = &[
     comp("terminal.ansi.15", "color", "ANSI colour 15 (bright white)"),
 ];
 
+/// The version of the contract: which tokens exist, under which names.
+///
+/// A number of its own, not a crate version: it starts at 1 and goes up
+/// by one when a release renames or removes a token of the contract (an
+/// added token does not raise it, since an older file still loads). A
+/// token file says which contract it was written for in its format
+/// stamp ([`crate::FormatStamp`]); a rename comes with an entry in
+/// [`RENAMED`], so files written for an older contract still load.
+pub const CONTRACT_VERSION: u64 = 1;
+
+/// A token renamed in the contract: `from` is read as `to` in a file
+/// written for a contract older than `contract`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Renamed {
+    /// The former name.
+    pub from: &'static str,
+    /// The name now.
+    pub to: &'static str,
+    /// The contract version that dropped `from` (the [`CONTRACT_VERSION`]
+    /// of the release renaming it).
+    pub contract: u64,
+}
+
+/// The renames between contract versions, oldest first, applied when a
+/// file stamped with an older contract is loaded: each former name is
+/// read under its new one, with a warning saying to update the file.
+/// Empty while the contract is at its first version.
+pub const RENAMED: &[Renamed] = &[];
+
 mod kit;
 
 /// Every token a theme must provide: the system tier, the component tier

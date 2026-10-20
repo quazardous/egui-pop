@@ -281,6 +281,43 @@ A colour is `"#rgb"`, `"#rrggbb"`, `"#rrggbbaa"`, or a DTCG object
 (`colorSpace` `srgb`, `srgb-linear`, `oklch` or `oklab`; another space
 is read from its `hex` fallback).
 
+## A file's version
+
+A token file may say which format and which contract it was written
+for, with a stamp in the root's `$extensions`:
+
+```json
+{
+  "$extends": "pop-light",
+  "$extensions": { "org.egui-pop.format": { "version": 1, "contract": 1 } }
+}
+```
+
+- `version` is the file format's (`FORMAT_VERSION`): how a file is laid
+  out, apart from which tokens it gives.
+- `contract` is the contract's (`CONTRACT_VERSION`): which tokens exist,
+  under which names. It is a number of its own, not a crate's version:
+  it starts at 1 and goes up by one in a release that renames or removes
+  a token of the contract. Adding a token does not raise it, since an
+  older file still loads.
+- A file without a stamp is read as current, so a file written by hand
+  needs none. The theme editor's export writes it
+  (`TokenFile::stamp`, `FormatStamp::CURRENT`).
+- One stamp per file: each file a theme is made of says what it was
+  written for, whoever wrote it, and a file keeps its meaning when it
+  travels alone.
+
+A file stamped with a newer format or contract than this egui-pop knows
+loads all the same, best-effort, with a warning saying so.
+
+**Renames.** A release renaming a token raises `CONTRACT_VERSION` and
+adds an entry to `egui_pop_tokens::RENAMED`: the former name, the new
+one, and the contract that dropped the former name. A file stamped with
+an older contract has each former name read under its new one (aliases
+naming it too), with a warning: "renamed, update your file"
+(`TokenFile::upgrade`). The table is empty while the contract is at its
+first version.
+
 ## Adding a theme
 
 1. Write `my-theme.tokens.yaml`. The shortest way is to extend a built-in

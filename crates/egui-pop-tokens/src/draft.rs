@@ -30,13 +30,19 @@ use crate::file::{RawToken, TokenFile, alias_target};
 use crate::theme::{FALLBACK_THEME, ThemeSpec, Themes};
 use crate::{Error, Value};
 
-/// The `$extensions` key a draft's file is stamped with.
-pub const DRAFT_EXTENSION: &str = "org.egui-pop.theme-editor";
+/// The `$extensions` key the theme editor stamped its files with before
+/// the format stamp; still read.
+#[deprecated(note = "the editor stamps its files with `FORMAT_EXTENSION` (`FormatStamp`)")]
+pub const DRAFT_EXTENSION: &str = LEGACY_EXTENSION;
 
-/// The version of what a draft writes under [`DRAFT_EXTENSION`]. The
-/// file itself is a plain token file; the stamp says which editor wrote
-/// it, for migrations to come.
-pub const DRAFT_VERSION: u64 = 1;
+/// The version the theme editor wrote under its former stamp.
+#[deprecated(note = "the editor stamps its files with `FORMAT_EXTENSION` (`FormatStamp`)")]
+pub const DRAFT_VERSION: u64 = LEGACY_VERSION;
+
+/// The editor's former stamp, read in files written before the format
+/// stamp.
+const LEGACY_EXTENSION: &str = "org.egui-pop.theme-editor";
+const LEGACY_VERSION: u64 = 1;
 
 /// One change of one token: from a value to another. `None` is the
 /// value the base theme gives (no override).
@@ -212,18 +218,14 @@ impl ThemeDraft {
     }
 
     /// The draft as a token file named `name`: `$extends` its base, its
-    /// overrides with their types, stamped with [`DRAFT_EXTENSION`].
+    /// overrides with their types, stamped with the current format
+    /// ([`crate::FormatStamp`]).
     pub fn to_file(&self, themes: &Themes, name: &str) -> TokenFile {
         let base = themes.resolve(&ThemeSpec::new(self.base.clone()));
         let mut file = TokenFile::new(name);
         file.description = Some(format!("Edited from {}", self.base));
         file.extends = Some(self.base.clone());
-        let mut stamp = serde_json::Map::new();
-        stamp.insert(
-            DRAFT_EXTENSION.to_string(),
-            json!({ "version": DRAFT_VERSION }),
-        );
-        file.extensions = Some(Json::Object(stamp));
+        file.stamp();
         for (path, value) in &self.overrides {
             file.tokens.insert(
                 path.clone(),
@@ -257,15 +259,15 @@ impl ThemeDraft {
         if let Some(v) = file
             .extensions
             .as_ref()
-            .and_then(|x| x.get(DRAFT_EXTENSION))
+            .and_then(|x| x.get(LEGACY_EXTENSION))
             .and_then(|x| x.get("version"))
             .and_then(Json::as_u64)
-            && v > DRAFT_VERSION
+            && v > LEGACY_VERSION
         {
             return Err(Error::Malformed {
                 file: name.to_string(),
-                path: format!("$extensions.{DRAFT_EXTENSION}.version"),
-                reason: format!("version {v} is newer than this editor's ({DRAFT_VERSION})"),
+                path: format!("$extensions.{LEGACY_EXTENSION}.version"),
+                reason: format!("version {v} is newer than this editor's ({LEGACY_VERSION})"),
             });
         }
         let base = file
@@ -455,7 +457,7 @@ mod tests {
             Err(Error::UnknownTheme { .. })
         ));
         let newer = format!(
-            r#"{{ "$extends": "pop-dark", "$extensions": {{ "{DRAFT_EXTENSION}": {{ "version": 99 }} }} }}"#
+            r#"{{ "$extends": "pop-dark", "$extensions": {{ "{LEGACY_EXTENSION}": {{ "version": 99 }} }} }}"#
         );
         assert!(ThemeDraft::import(&t, "x", &newer).is_err());
     }

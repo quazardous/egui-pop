@@ -36,6 +36,11 @@
 //! changed over it and their history, saved as a token file that
 //! `$extends` the base.
 //!
+//! A file may carry a format stamp ([`FormatStamp`]): the format and
+//! contract versions it was written for. Loading a theme over its base
+//! never fails on a token: what is read otherwise than written comes
+//! back as [`Warning`]s.
+//!
 //! A kit's tokens, fonts and licence come as a folder or embedded in the
 //! binary ([`kit`](mod@kit), [`kit!`]).
 //!
@@ -51,6 +56,7 @@ pub mod contrast;
 mod draft;
 mod error;
 mod file;
+mod format;
 pub mod kit;
 mod theme;
 mod value;
@@ -58,10 +64,12 @@ mod yaml;
 mod yaml_trap;
 
 pub use color::Color;
-pub use contract::{Required, Tier, contract};
+pub use contract::{CONTRACT_VERSION, RENAMED, Renamed, Required, Tier, contract};
+#[allow(deprecated)]
 pub use draft::{DRAFT_EXTENSION, DRAFT_VERSION, ThemeDraft, TokenEdit};
 pub use error::Error;
 pub use file::{RawToken, TokenFile};
+pub use format::{FORMAT_EXTENSION, FORMAT_VERSION, FormatStamp, Warning};
 pub use theme::{
     ALPHA_EXTENSION, BASED_ON, BUILT_IN_ACCENTS, BUILT_IN_THEMES, Counterpart, Density,
     FALLBACK_THEME, POP_THEMES, ResolvedTokens, ThemeSpec, Themes, Token, VARIANT_OF_EXTENSION,

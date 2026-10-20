@@ -72,9 +72,11 @@ it directly, or the service (`THEME_EDITOR`: `set`, `undo`, `redo`,
 
 A draft is saved as an ordinary token file (see [Design tokens](tokens.md)):
 `$extends` names the base theme, the file gives only the tokens changed,
-each with its `$type`, and the root's `$extensions` carries the editor's
-stamp, `"org.egui-pop.theme-editor": { "version": 1 }`, for migrations
-to come (a file stamped by a newer editor is refused). Any such file
+each with its `$type`, and the root's `$extensions` carries the format
+stamp, `"org.egui-pop.format": { "version": 1, "contract": 1 }`
+([Design tokens](tokens.md#a-files-version)). Files the editor wrote
+before carry `"org.egui-pop.theme-editor": { "version": 1 }` instead,
+still read (a file stamped by a newer editor is refused). Any such file
 loads as a theme (`Themes::add_text`) and imports back as a draft. The
 editor writes DTCG JSON, the exchange format; a YAML file imports too.
 
@@ -82,7 +84,7 @@ editor writes DTCG JSON, the exchange format; a YAML file imports too.
 {
   "$description": "Edited from pop-light",
   "$extends": "pop-light",
-  "$extensions": { "org.egui-pop.theme-editor": { "version": 1 } },
+  "$extensions": { "org.egui-pop.format": { "version": 1, "contract": 1 } },
   "accent": { "default": { "$type": "color", "$value": "#2060c0" } },
   "button": { "rest": { "border-color": { "$type": "color", "$value": "{border.strong}" } } }
 }

@@ -12,6 +12,18 @@ publishes.
 
 ### Added
 
+- Token file versions (egui-pop-tokens): a file says which format and
+  contract it was written for with a stamp in its root `$extensions`,
+  `"org.egui-pop.format": { "version": 1, "contract": 1 }`
+  (`FORMAT_EXTENSION`, `FormatStamp`, `TokenFile::stamp`); a file
+  without one is read as current. `CONTRACT_VERSION` is a number of its
+  own, raised by a release that renames or removes a contract token.
+  `RENAMED` (empty for now) maps a token's former name to its new one,
+  keyed by the contract that dropped it: `TokenFile::upgrade` reads a
+  file stamped with an older contract under the new names, aliases
+  included, and says so in `Warning`s, as it does for a file stamped
+  newer than this egui-pop knows. The theme editor's export writes the
+  stamp. Part of #37.
 - Light or dark (egui-pop-api, egui-pop-i18n): the
   `appearance.theme_preference` setting (`system`, the default, `light`,
   `dark`; Appearance section) chooses between a theme and its
@@ -229,6 +241,12 @@ publishes.
   `cargo xtask publish --dry-run` names the crates changed since the
   commit their version was published from, whose version is still to
   raise. Only the facade's minor releases are tagged.
+
+### Deprecated
+
+- `DRAFT_EXTENSION` and `DRAFT_VERSION` (egui-pop-tokens): the theme
+  editor stamps its files with `FORMAT_EXTENSION` now
+  (`FormatStamp::CURRENT`); the former stamp is still read on import.
 
 ### Removed
 
