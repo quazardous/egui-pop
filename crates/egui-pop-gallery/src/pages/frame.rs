@@ -118,21 +118,24 @@ fn show(ui: &mut Ui, app: &AppHandle) {
         egui::StrokeKind::Outside,
     );
     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(outer));
-    let out = TitleBar::new("Untitled — Preview").publish(false).show(
-        &mut child,
-        |ui| {
-            ui.add(
-                egui_pop::core::icon::Icon::Menu
-                    .size(egui_pop::core::icon::Size::Toolbar)
-                    .label("Preview menu")
-                    .sense_click(),
-            );
-            ui.strong("App");
-        },
-        |ui| {
-            let _ = ui.small_button("Layout");
-        },
-    );
+    let out = TitleBar::new("Untitled — Preview")
+        .publish(false)
+        .full_screen(false)
+        .show(
+            &mut child,
+            |ui| {
+                ui.add(
+                    egui_pop::core::icon::Icon::Menu
+                        .size(egui_pop::core::icon::Size::Toolbar)
+                        .label("Preview menu")
+                        .sense_click(),
+                );
+                ui.strong("App");
+            },
+            |ui| {
+                let _ = ui.small_button("Layout");
+            },
+        );
     if let Some(r) = out.request {
         ui.ctx()
             .data_mut(|d| d.insert_temp(egui::Id::new("gallery.frame.last"), format!("{r:?}")));

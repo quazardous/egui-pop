@@ -825,6 +825,37 @@ fn the_frame_page_draws_the_gallerys_own_frame_and_vetoes_closing() {
 }
 
 #[test]
+fn in_full_screen_the_gallerys_own_title_bar_stays_with_its_way_out() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "frame"));
+    h.run();
+    let store = h.state().app.handle().store();
+    egui_pop::core::lock(&store)
+        .set(egui_pop::model::values::Set::new(
+            "settings/window.frame",
+            egui_pop::model::values::Change::To(egui_pop::model::values::Value::Choice(
+                "own".into(),
+            )),
+            egui_pop::model::commands::Origin::User,
+        ))
+        .unwrap();
+    h.input_mut()
+        .viewports
+        .entry(egui::ViewportId::ROOT)
+        .or_default()
+        .fullscreen = Some(true);
+    h.run();
+    // The logo and the menus stay; close and the way out of full screen,
+    // no minimize or maximize (the preview on the page keeps its own).
+    assert!(h.query_by_label("Window menu").is_some());
+    assert_eq!(h.query_all_by_label("Exit full screen").count(), 1);
+    assert_eq!(h.query_all_by_label("Minimize").count(), 1);
+    assert_eq!(h.query_all_by_label("Close").count(), 2);
+    let r = egui_pop::core::frame::regions(&h.ctx).expect("published");
+    assert!(r.fullscreen && r.caption.is_some() && r.grip == 0, "{r:?}");
+    h.snapshot("frame-full-screen-pop-dark");
+}
+
+#[test]
 fn the_scale_page_sets_the_interface_zoom_and_draws_at_twice_the_pixels() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "scale"));
     h.run();
