@@ -1255,7 +1255,7 @@ mod tests {
         let toggle = &kit.slider_toggle;
         assert_eq!(toggle.style(State::REST).text, t.text.default);
         assert_eq!(toggle.style(State::SELECTED).text, t.accent.default);
-        assert_eq!(t.slider.track, t.border.default);
+        assert_eq!(kit.slider.style(State::REST).fill, t.border.default);
     }
 
     #[test]

@@ -1740,7 +1740,7 @@ fn drop_hint(app: &AppHandle, ctx: &egui::Context) {
     let target = if let Some((panel, from, at)) = wb.dragging.clone() {
         wb.area_at(at).filter(|a| *a != from).map(|to| (panel, to))
     } else if let Some((panel, _, at)) = wb.palette_drag.clone() {
-        let edge = egui_pop_core::theme::Tokens::of(ctx).palette.magnet;
+        let edge = crate::palettes::magnet(ctx);
         wb.dock_at(at, edge).map(|to| (panel, to))
     } else {
         None

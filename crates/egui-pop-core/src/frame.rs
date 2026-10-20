@@ -276,7 +276,7 @@ pub fn publish(ctx: &Context) -> HitRegions {
         .unwrap_or_default();
     layout.window = ctx.content_rect();
     if layout.grip == 0.0 {
-        layout.grip = Tokens::of(ctx).titlebar.grip;
+        layout.grip = grip_token(ctx);
     }
     layout.resizable = resizable(ctx);
     let regions = HitRegions::measure(&layout, ctx.pixels_per_point());
@@ -322,10 +322,15 @@ fn resizable(ctx: &Context) -> bool {
 /// The resize edges' width in points here: the token, never under
 /// [`MIN_GRIP_PX`] physical pixels.
 pub fn grip(ctx: &Context) -> f32 {
+    grip_token(ctx).max(MIN_GRIP_PX / ctx.pixels_per_point())
+}
+
+/// The resize edges' width the theme gives (`window.grip`).
+fn grip_token(ctx: &Context) -> f32 {
     Tokens::of(ctx)
-        .titlebar
-        .grip
-        .max(MIN_GRIP_PX / ctx.pixels_per_point())
+        .resolved()
+        .dimension("window.grip")
+        .unwrap_or(0.0)
 }
 
 /// Lets the window be resized from its edges and corners, as a system

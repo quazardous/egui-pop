@@ -4,6 +4,7 @@
 use egui::{Color32, TextStyle};
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
+use egui_pop::core::kit::{Kit, State};
 use egui_pop::theme::{self, BUILT_IN_THEMES, Density, ThemeSpec, Tokens};
 use egui_pop::tokens::Themes;
 use egui_pop_test::SharedGpu as _;
@@ -38,17 +39,28 @@ fn installing_each_theme_sets_the_visuals_from_its_tokens() {
         assert_eq!(v.error_fg_color, t.status.danger, "{base}");
         assert_eq!(v.warn_fg_color, t.status.warning, "{base}");
         assert_eq!(v.weak_text_color, Some(t.text.muted), "{base}");
-        assert_eq!(v.widgets.inactive.bg_fill, t.button.background, "{base}");
+        let button = |s| *Kit::of(&ctx).button.style(s);
         assert_eq!(
-            v.widgets.hovered.bg_fill, t.button.background_hover,
+            v.widgets.inactive.bg_fill,
+            button(State::REST).fill,
             "{base}"
         );
         assert_eq!(
-            v.widgets.active.bg_fill, t.button.background_active,
+            v.widgets.hovered.bg_fill,
+            button(State::HOVER).fill,
+            "{base}"
+        );
+        assert_eq!(
+            v.widgets.active.bg_fill,
+            button(State::ACTIVE).fill,
             "{base}"
         );
         assert_eq!(v.widgets.active.bg_stroke.color, t.focus_ring, "{base}");
-        assert_eq!(v.widgets.inactive.fg_stroke.color, t.button.text, "{base}");
+        assert_eq!(
+            v.widgets.inactive.fg_stroke.color,
+            button(State::REST).text,
+            "{base}"
+        );
         assert_eq!(
             style.text_styles[&TextStyle::Body].size,
             t.font.body,

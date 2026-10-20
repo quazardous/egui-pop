@@ -496,7 +496,7 @@ fn follow(
             .filter(|(p, _)| **p != f.panel)
             .map(|(_, r)| *r)
             .collect();
-        let magnet = Tokens::of(ctx).palette.magnet;
+        let magnet = magnet(ctx);
         let at = clamp(
             snap(raw, content, &others, magnet).min,
             rect.size(),
@@ -523,7 +523,7 @@ fn follow(
     let (to, area) = {
         let mut wb = app.workbench_mut();
         wb.palette_drag = None;
-        let area = wb.dock_at(at, Tokens::of(ctx).palette.magnet);
+        let area = wb.dock_at(at, magnet(ctx));
         let fl = wb.layout.floating_mut(&panel);
         let to = fl.map(|fl| std::mem::replace(&mut fl.pos, start));
         (to, area)
@@ -539,4 +539,13 @@ fn follow(
         app.workbench_refused(&format!("palette {panel}"), e);
     }
     ctx.request_repaint();
+}
+
+/// How close a dragged palette snaps to an edge or another palette, and
+/// docks in an area (`palette.magnet`).
+pub(crate) fn magnet(ctx: &egui::Context) -> f32 {
+    Tokens::of(ctx)
+        .resolved()
+        .dimension("palette.magnet")
+        .unwrap_or(0.0)
 }

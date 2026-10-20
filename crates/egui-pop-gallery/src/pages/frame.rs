@@ -9,6 +9,7 @@ use egui_pop::api::stories::Story;
 use egui_pop::api::zones::{self, Block};
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
 use egui_pop::core::frame::{FrameLayout, HitRegions, TitleBar};
+use egui_pop::core::kit::Kit;
 use egui_pop::core::param::{self, Mode};
 use egui_pop::model::ids::{BlockId, PluginId, StoryId};
 use egui_pop::theme::Tokens;
@@ -106,7 +107,10 @@ fn show(ui: &mut Ui, app: &AppHandle) {
 
     section(ui, "Preview");
     let width = ui.available_width().min(560.0);
-    let (outer, _) = ui.allocate_exact_size(vec2(width, t.titlebar.height + 72.0), Sense::hover());
+    let (outer, _) = ui.allocate_exact_size(
+        vec2(width, Kit::of(ui.ctx()).title_bar.data.height + 72.0),
+        Sense::hover(),
+    );
     ui.painter().rect_stroke(
         outer,
         0.0,

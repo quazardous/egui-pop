@@ -171,6 +171,29 @@ publishes.
   | `font.size.heading` | `font.text-style.heading` |
   | `font.size.mono` | `font.text-style.monospace` |
 
+- `Tokens` keeps the system tier only (`egui-pop-core`, breaking): the
+  per-widget structs `ButtonTokens`, `SliderTokens`, `FieldTokens`,
+  `MenuItemTokens`, `DialogTokens`, `ToastTokens`, `TitlebarTokens` and
+  `PaletteTokens`, and the `Tokens` fields holding them, are gone. They
+  read kit tokens under names of their own. To move, read the kit
+  component (`Kit::of(ctx)`): `tokens.button.background` is
+  `kit.button.style(State::REST).fill` (`background_hover` the `HOVER`
+  box, `background_active` the `ACTIVE` box, `text`, `border` and
+  `radius` the `REST` box's `text`, `border_color` and `radius`);
+  `tokens.field.background` is `kit.field.style(State::REST).fill`,
+  `background_read_only` and `placeholder` are the `Tone::Muted` box's
+  `fill` and `text` (`style_toned`), `border_hover` the `HOVER` box's
+  `border_color`, and `modified`, `required`, `invalid` and `pending`
+  the `border_color` of the tones `Accent`, `Warning`, `Danger` and
+  `Info`; the slider's, menu item's, dialog's, toast's, title bar's and
+  palette's are the boxes and terms of `slider`, `slider-fill`,
+  `slider-thumb`, `menu-item`, `dialog`, `header-band`,
+  `dialog-header`, `backdrop`, `toast`, `title-bar`, `window-button`,
+  `window-close` and `palette-window`. A token outside the kit
+  (`palette.magnet`, `window.grip`) is read with
+  `tokens.resolved().dimension(path)`. `field::color` takes the kit
+  instead of the tokens.
+
 ## 0.1.1 (2026-10-18)
 
 ### Added

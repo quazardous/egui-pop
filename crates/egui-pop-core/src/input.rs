@@ -53,6 +53,7 @@ use egui_pop_model::field::FieldState;
 
 use crate::field;
 use crate::icon::Icon;
+use crate::kit::{Kit, State, Tone};
 use crate::strings::{self, FIELD_RESET, INPUT_CHOICES, INPUT_CLEAR, INPUT_MORE};
 use crate::tab::{self, TabStop};
 use crate::theme::Tokens;
@@ -353,6 +354,8 @@ impl<'a> Input<'a> {
         } = self;
         let ctx = ui.ctx().clone();
         let t = Tokens::of(&ctx);
+        let kit = Kit::of(&ctx);
+        let fk = &kit.field;
         let h = ui.spacing().interact_size.y;
         let pad = t.space.s;
         let gap = t.space.xs;
@@ -464,9 +467,9 @@ impl<'a> Input<'a> {
         if ui.is_rect_visible(field) {
             let radius = CornerRadius::same(t.radius.widget.round().clamp(0.0, 255.0) as u8);
             let fill = if state.read_only {
-                t.field.background_read_only
+                fk.style_toned(Tone::Muted, State::REST).fill
             } else {
-                t.field.background
+                fk.style(State::REST).fill
             };
             ui.painter().rect_filled(field, radius, fill);
         }
@@ -477,11 +480,13 @@ impl<'a> Input<'a> {
                 egui::TextEdit::singleline(&mut buffer),
                 text_id,
                 width,
-                t.field.text,
+                fk.style(State::REST).text,
                 number,
             );
             if let Some(p) = &placeholder {
-                text = text.hint_text(egui::RichText::new(p).color(t.field.placeholder));
+                text = text.hint_text(
+                    egui::RichText::new(p).color(fk.style_toned(Tone::Muted, State::REST).text),
+                );
             }
             ui.put(text_rect, text)
         } else {
@@ -494,7 +499,7 @@ impl<'a> Input<'a> {
                     egui::TextEdit::singleline(&mut shown),
                     text_id,
                     width,
-                    t.field.text,
+                    fk.style(State::REST).text,
                     number,
                 ),
             )
@@ -634,9 +639,9 @@ impl<'a> Input<'a> {
             let stroke = if focused {
                 Stroke::new(2.0, t.focus_ring)
             } else if response.hovered() && ui.is_enabled() {
-                Stroke::new(1.0, t.field.border_hover)
+                Stroke::new(1.0, fk.style(State::HOVER).border_color)
             } else {
-                Stroke::new(1.0, t.field.border)
+                Stroke::new(1.0, fk.style(State::REST).border_color)
             };
             painter.rect_stroke(field, radius, stroke, StrokeKind::Inside);
             field::paint_edge(ui, field, &state);
@@ -809,24 +814,29 @@ fn attached_part(ui: &mut Ui, rect: Rect, id: Id, look: PartLook<'_>, label: &st
     r.widget_info(|| WidgetInfo::labeled(WidgetType::Button, enabled, label));
     if ui.is_rect_visible(rect) {
         let t = Tokens::of(ui.ctx());
-        let b = &t.button;
+        let kit = Kit::of(ui.ctx());
+        let b = |state| kit.button.style(state);
         let fill = if r.is_pointer_button_down_on() {
-            b.background_active
+            b(State::ACTIVE).fill
         } else if r.hovered() {
-            b.background_hover
+            b(State::HOVER).fill
         } else {
-            b.background
+            b(State::REST).fill
         };
-        let radius = CornerRadius::same(b.radius.round().clamp(0.0, 255.0) as u8);
+        let radius = CornerRadius::same(b(State::REST).radius.round().clamp(0.0, 255.0) as u8);
         ui.painter().rect_filled(rect, radius, fill);
         let stroke = if r.has_focus() {
             Stroke::new(2.0, t.focus_ring)
         } else {
-            Stroke::new(1.0, t.field.border)
+            Stroke::new(1.0, kit.field.style(State::REST).border_color)
         };
         ui.painter()
             .rect_stroke(rect, radius, stroke, StrokeKind::Inside);
-        let color = if enabled { b.text } else { t.text.muted };
+        let color = if enabled {
+            b(State::REST).text
+        } else {
+            t.text.muted
+        };
         match look {
             PartLook::Icon(i) => {
                 let side = t.size.icon_inline.min(rect.height() - 4.0);

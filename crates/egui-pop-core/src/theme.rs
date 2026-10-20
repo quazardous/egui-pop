@@ -184,91 +184,6 @@ impl FontScale {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
-#[non_exhaustive]
-pub struct ButtonTokens {
-    pub background: Color32,
-    pub background_hover: Color32,
-    pub background_active: Color32,
-    pub text: Color32,
-    pub border: Color32,
-    pub radius: f32,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-#[non_exhaustive]
-pub struct SliderTokens {
-    /// `slider.rest.fill`.
-    pub track: Color32,
-    /// `slider-fill.rest.fill`.
-    pub fill: Color32,
-    /// `slider-thumb.rest.fill`.
-    pub thumb: Color32,
-}
-
-/// The kit's `field` component, read as plain colours: input fields and
-/// the states every field shows (its tones).
-#[derive(Clone, Debug, PartialEq)]
-#[non_exhaustive]
-pub struct FieldTokens {
-    pub background: Color32,
-    pub background_read_only: Color32,
-    pub text: Color32,
-    pub placeholder: Color32,
-    pub border: Color32,
-    pub border_hover: Color32,
-    pub modified: Color32,
-    pub required: Color32,
-    pub invalid: Color32,
-    pub pending: Color32,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-#[non_exhaustive]
-pub struct MenuItemTokens {
-    pub background_hover: Color32,
-    pub text: Color32,
-    pub text_muted: Color32,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-#[non_exhaustive]
-pub struct DialogTokens {
-    pub background: Color32,
-    pub border: Color32,
-    pub radius: f32,
-    pub padding: f32,
-    pub width: f32,
-    /// A movable dialog's header band, and its title.
-    pub header: Color32,
-    pub header_text: Color32,
-    /// How opaque the backdrop behind a modal dialog is (0 to 1).
-    pub backdrop: f32,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-#[non_exhaustive]
-pub struct ToastTokens {
-    pub background: Color32,
-    pub border: Color32,
-    pub text: Color32,
-    pub padding: f32,
-    pub width: f32,
-}
-
-/// Palettes and toolboxes floating over the interface.
-#[derive(Clone, Debug, PartialEq)]
-#[non_exhaustive]
-pub struct PaletteTokens {
-    pub background: Color32,
-    pub border: Color32,
-    pub header: Color32,
-    pub header_text: Color32,
-    pub padding: f32,
-    /// How close a dragged palette snaps to an edge.
-    pub magnet: f32,
-}
-
 /// Times of motion, in seconds (see `motion`).
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
@@ -324,25 +239,10 @@ pub fn shadow(r: &ResolvedTokens, prefix: &str) -> Option<Shadow> {
     })
 }
 
-/// A window's own title bar and frame.
-#[derive(Clone, Debug, PartialEq)]
-#[non_exhaustive]
-pub struct TitlebarTokens {
-    pub background: Color32,
-    pub text: Color32,
-    pub text_muted: Color32,
-    pub button_hover: Color32,
-    pub close_hover: Color32,
-    pub close_text: Color32,
-    pub height: f32,
-    pub button_width: f32,
-    /// The resize edges' width.
-    pub grip: f32,
-}
-
-/// The system and component tokens of a resolved theme, typed for egui.
-/// Custom widgets read it with [`Tokens::of`] instead of hard-coding a
-/// colour or a size.
+/// The system tokens of a resolved theme, typed for egui. Custom widgets
+/// read it with [`Tokens::of`] instead of hard-coding a colour or a size;
+/// a component's look is in its kit (`Kit::of(ctx).<component>`), and any
+/// other token in [`Tokens::resolved`].
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub struct Tokens {
@@ -362,14 +262,6 @@ pub struct Tokens {
     pub motion_duration: f32,
     /// The other times of motion.
     pub motion: MotionTokens,
-    pub button: ButtonTokens,
-    pub slider: SliderTokens,
-    pub field: FieldTokens,
-    pub menu_item: MenuItemTokens,
-    pub dialog: DialogTokens,
-    pub toast: ToastTokens,
-    pub titlebar: TitlebarTokens,
-    pub palette: PaletteTokens,
     resolved: Arc<ResolvedTokens>,
 }
 
@@ -484,72 +376,6 @@ impl Tokens {
                         .unwrap_or(3.0)
                         .clamp(0.0, 100.0) as u32,
                 }
-            },
-            button: ButtonTokens {
-                background: c("button.rest.fill"),
-                background_hover: c("button.hover.fill"),
-                background_active: c("button.active.fill"),
-                text: c("button.rest.text"),
-                border: c("button.rest.border-color"),
-                radius: d("button.rest.radius"),
-            },
-            slider: SliderTokens {
-                track: c("slider.rest.fill"),
-                fill: c("slider-fill.rest.fill"),
-                thumb: c("slider-thumb.rest.fill"),
-            },
-            field: FieldTokens {
-                background: c("field.rest.fill"),
-                background_read_only: c("field.tone.muted.fill"),
-                text: c("field.rest.text"),
-                placeholder: c("field.tone.muted.text"),
-                border: c("field.rest.border-color"),
-                border_hover: c("field.hover.border-color"),
-                modified: c("field.tone.accent.border-color"),
-                required: c("field.tone.warning.border-color"),
-                invalid: c("field.tone.danger.border-color"),
-                pending: c("field.tone.info.border-color"),
-            },
-            menu_item: MenuItemTokens {
-                background_hover: c("menu-item.hover.fill"),
-                text: c("menu-item.rest.text"),
-                text_muted: c("menu-item.tone.muted.text"),
-            },
-            dialog: DialogTokens {
-                background: c("dialog.rest.fill"),
-                border: c("dialog.rest.border-color"),
-                radius: d("dialog.rest.radius"),
-                padding: d("dialog.padding-x"),
-                width: d("dialog.width"),
-                header: c("header-band.rest.fill"),
-                header_text: c("dialog-header.rest.text"),
-                backdrop: d("backdrop.opacity").clamp(0.0, 1.0),
-            },
-            toast: ToastTokens {
-                background: c("toast.rest.fill"),
-                border: c("toast.rest.border-color"),
-                text: c("toast.rest.text"),
-                padding: d("toast.padding-x"),
-                width: d("toast.width"),
-            },
-            palette: PaletteTokens {
-                background: c("palette-window.rest.fill"),
-                border: c("palette-window.rest.border-color"),
-                header: c("header-band.rest.fill"),
-                header_text: c("header-band.rest.text"),
-                padding: d("palette-window.padding-x"),
-                magnet: d("palette.magnet"),
-            },
-            titlebar: TitlebarTokens {
-                background: c("title-bar.rest.fill"),
-                text: c("title-bar.rest.text"),
-                text_muted: c("window-button.rest.text"),
-                button_hover: c("window-button.hover.fill"),
-                close_hover: c("window-close.hover.fill"),
-                close_text: c("window-close.hover.text"),
-                height: d("title-bar.height"),
-                button_width: d("window-button.width"),
-                grip: d("window.grip"),
             },
             resolved: Arc::new(resolved),
         }

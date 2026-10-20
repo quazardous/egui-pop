@@ -1,6 +1,7 @@
 //! The theme at a glance.
 
 use egui::{Align2, Color32, CornerRadius, FontId, Stroke, StrokeKind, Ui, vec2};
+use egui_pop::core::kit::{self, Kit};
 use egui_pop::theme::Tokens;
 use egui_pop::tokens::contrast::{self, Level};
 
@@ -117,7 +118,13 @@ fn text_samples(ui: &mut Ui, t: &Tokens) {
         let painter = ui.painter();
         painter.rect_filled(
             rect,
-            CornerRadius::same(t.button.radius.round() as u8),
+            CornerRadius::same(
+                Kit::of(ui.ctx())
+                    .button
+                    .style(kit::State::REST)
+                    .radius
+                    .round() as u8,
+            ),
             t.accent.default,
         );
         painter.text(

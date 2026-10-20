@@ -38,19 +38,24 @@ use serde_json::{Value as Json, json};
 pub use egui_pop_model::field::{Baseline, FieldState, Mark, Modified};
 
 use crate::icon::Icon;
+use crate::kit::{Kit, State, Tone};
 use crate::state::{lock, pass, shared};
 use crate::strings::{self, FIELD_DISABLED, FIELD_MODIFIED_DEFAULT, FIELD_MODIFIED_SAVED};
 use crate::strings::{FIELD_PENDING, FIELD_REQUIRED, READ_ONLY};
 use crate::theme::Tokens;
 
-/// The colour of a mark, from the `field.*` tokens.
-pub fn color(t: &Tokens, mark: Mark) -> Color32 {
+/// The colour of a mark, from the kit's `field`: the muted tone's text
+/// for a disabled or read-only field, else the border colour of the
+/// mark's tone (`danger` invalid, `info` pending, `accent` modified,
+/// `warning` required).
+pub fn color(kit: &Kit, mark: Mark) -> Color32 {
+    let tone = |tone| kit.field.style_toned(tone, State::REST);
     match mark {
-        Mark::Disabled | Mark::ReadOnly => t.text.muted,
-        Mark::Invalid => t.field.invalid,
-        Mark::Pending => t.field.pending,
-        Mark::Modified => t.field.modified,
-        Mark::Required => t.field.required,
+        Mark::Disabled | Mark::ReadOnly => tone(Tone::Muted).text,
+        Mark::Invalid => tone(Tone::Danger).border_color,
+        Mark::Pending => tone(Tone::Info).border_color,
+        Mark::Modified => tone(Tone::Accent).border_color,
+        Mark::Required => tone(Tone::Warning).border_color,
     }
 }
 
@@ -102,7 +107,7 @@ pub fn paint_edge(ui: &Ui, rect: Rect, state: &FieldState) {
         return;
     }
     let t = Tokens::of(ui.ctx());
-    let c = color(&t, mark);
+    let c = color(&Kit::of(ui.ctx()), mark);
     let radius = t.radius.widget.round().clamp(0.0, 255.0) as u8;
     let w = edge_width(&t);
     let strip = Rect::from_min_max(rect.min, pos2(rect.left() + w, rect.bottom()));
@@ -128,8 +133,7 @@ pub fn paint_edge(ui: &Ui, rect: Rect, state: &FieldState) {
 
 /// Paints one mark's marker in a square.
 pub fn paint_marker(ui: &Ui, rect: Rect, mark: Mark) {
-    let t = Tokens::of(ui.ctx());
-    let c = color(&t, mark);
+    let c = color(&Kit::of(ui.ctx()), mark);
     match icon(mark) {
         Some(i) => i.paint(ui.painter(), rect, c),
         None => {
