@@ -75,5 +75,6 @@
     - [Analysis](adr/0015-clipboard-analysis.md)
   - [0016: One writer per value](adr/0016-one-writer-per-value.md)
 - [Micro-indicators, the design](design/indicators.md)
+- [Pointer gestures, a study](design/pointer-gestures.md)
 - [Wide gamut on Wayland](wayland-colour.md)
 - [The logo](logo/README.md)

@@ -320,6 +320,11 @@ publishes.
   prints its commands (`--plan`) and runs them (`--run`); the rules are
   in `docs/testing.md`. The one check to require is the new `CI` job.
   Closes #10.
+- For contributors: a pull request touching `docs/`, `book.toml` or
+  `tools/book/` builds the docs site and checks its links in CI (the
+  new `book` job), and `tools/book/summary.py` fails when a page linked
+  from `docs/README.md` is missing from `docs/SUMMARY.md`; a broken docs
+  link no longer waits for the deploy on `main` to show.
 - egui-pop's own checkboxes, radio buttons, selectable labels and combo
   boxes are its kit-drawn widgets (`egui_pop_core::widgets`): the
   settings, dialogs, the file picker, contexts, devtools, the theme

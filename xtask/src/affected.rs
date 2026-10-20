@@ -51,6 +51,10 @@ const EVERYTHING: &[&str] = &[
     "crates/egui-pop-tokens/themes/",
 ];
 
+/// The docs site's own files, outside `docs/`: they change the book
+/// alone (`book.toml`, `tools/book/`).
+const BOOK: &[&str] = &["book.toml", "tools/book/"];
+
 /// Test binaries that read the documentation, besides `consumer-smoke`
 /// (its doctests are the guides' code).
 const DOC_READERS: &[(&str, &str)] = &[
@@ -125,6 +129,9 @@ pub struct Jobs {
     /// `cargo doc` of the guides (consumer-smoke), when clippy (which
     /// documents the whole workspace) does not run.
     pub doc: bool,
+    /// The docs site: the mdBook built, its links and its table of
+    /// contents checked (`tools/book/`).
+    pub book: bool,
     pub test: bool,
     pub deny: bool,
     pub wasm: bool,
@@ -137,6 +144,7 @@ impl Jobs {
         fmt: true,
         clippy: true,
         doc: false,
+        book: true,
         test: true,
         deny: true,
         wasm: true,
@@ -144,11 +152,12 @@ impl Jobs {
         semver: true,
     };
 
-    pub fn list(&self) -> [(&'static str, bool); 8] {
+    pub fn list(&self) -> [(&'static str, bool); 9] {
         [
             ("fmt", self.fmt),
             ("clippy", self.clippy),
             ("doc", self.doc),
+            ("book", self.book),
             ("test", self.test),
             ("deny", self.deny),
             ("wasm", self.wasm),
@@ -546,6 +555,7 @@ fn select_in(
         ..Jobs::default()
     };
     let mut docs = false;
+    let mut site = false;
     let mut code = false;
     let wasm = build_closure(packages, "egui-pop-gallery");
     let api = build_closure(packages, "egui-pop");
@@ -565,8 +575,17 @@ fn select_in(
                 .push(format!("{path}: under {prefix}, runs everything"));
             continue;
         }
+        if BOOK.iter().any(|p| path.starts_with(*p)) {
+            site = true;
+            jobs.book = true;
+            sel.reasons.push(format!("{path}: the docs site"));
+            continue;
+        }
         if is_doc(path) {
             docs = true;
+            if path.starts_with("docs/") {
+                jobs.book = true;
+            }
             for (p, b) in DOC_READERS {
                 binaries.insert((p.to_string(), b.to_string()));
             }
@@ -659,7 +678,7 @@ fn select_in(
         .into_iter()
         .filter(|(p, _)| !sel.packages.contains(p))
         .collect();
-    sel.docs_only = docs && !code;
+    sel.docs_only = (docs || site) && !code;
     if docs && !jobs.clippy {
         jobs.doc = true;
     }
@@ -1042,8 +1061,35 @@ mod tests {
         assert_eq!(sel.critical.len(), 1, "{:?}", sel.critical);
         assert!(!sel.critical[0].gpu);
         let j = sel.jobs;
-        assert!(j.test && j.doc);
+        assert!(j.test && j.doc && j.book);
         assert!(!j.fmt && !j.clippy && !j.wasm && !j.package && !j.semver && !j.deny);
+    }
+
+    #[test]
+    fn a_root_markdown_file_does_not_build_the_book() {
+        let ws = workspace();
+        let sel = select(&ws, &changed(&["README.md"]), &critical(), false);
+        assert!(sel.jobs.doc && !sel.jobs.book);
+    }
+
+    #[test]
+    fn the_docs_site_files_build_the_book_alone() {
+        let ws = workspace();
+        for path in [
+            "book.toml",
+            "tools/book/links.py",
+            "tools/book/theme/favicon.svg",
+        ] {
+            let sel = select(&ws, &changed(&[path]), &critical(), false);
+            assert!(!sel.full && sel.docs_only, "{path}");
+            assert!(sel.packages.is_empty() && sel.binaries.is_empty(), "{path}");
+            let j = sel.jobs;
+            assert!(j.book && j.test, "{path}");
+            assert!(
+                !j.fmt && !j.clippy && !j.doc && !j.wasm && !j.package && !j.semver && !j.deny,
+                "{path}"
+            );
+        }
     }
 
     #[test]

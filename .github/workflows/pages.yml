@@ -38,6 +38,7 @@ jobs:
       - name: Build the docs and check their links
         run: |
           mdbook build
+          python3 tools/book/summary.py
           python3 tools/book/links.py target/book
       # Every feature, so the facade's optional crates and each crate's
       # optional modules are documented; Windows-only crates document

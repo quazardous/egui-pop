@@ -77,9 +77,10 @@ The rules, per changed file:
 | a snapshot (`crates/<crate>/tests/snapshots/...`) | the crate's tests, not its dependents |
 | a crate's `README.md` | as its sources, and `egui-pop::readme_links` |
 | documentation (`docs/**`, `*.md` at the root) | the guides' doctests (`consumer-smoke`), `egui-pop::readme_links`, `egui-pop-gallery::gallery_doc` and `hosts_doc` |
+| the docs site (`book.toml`, `tools/book/**`) | none (the `book` job checks it) |
 | `template/**` | `egui-pop::minimal` |
 | `examples/**` (example kits) | `egui-pop-tokens::kits`, `egui-pop-gallery::gallery` |
-| the workspace (`Cargo.toml`, `Cargo.lock`, `rust-toolchain*`, any root file but Markdown), `.github/`, `.config/`, `.cargo/`, `xtask/`, the test kit (`egui-pop-test`, `egui-pop-test-macros`), the token files (`crates/egui-pop-tokens/themes/`) | everything |
+| the workspace (`Cargo.toml`, `Cargo.lock`, `rust-toolchain*`, any root file but Markdown and `book.toml`), `.github/`, `.config/`, `.cargo/`, `xtask/`, the test kit (`egui-pop-test`, `egui-pop-test-macros`), the token files (`crates/egui-pop-tokens/themes/`) | everything |
 | any path no rule names | everything |
 
 **When in doubt, run.** A missing rule costs time, never safety. Every
@@ -106,6 +107,7 @@ selected and skipped, the critical tests added) in the run's summary.
 | `fmt` | a `.rs` file changed |
 | `clippy` (and `cargo doc`) | a crate's file changed, other than a snapshot |
 | `doc` (the guides' `cargo doc`) | documentation changed and `clippy` does not run |
+| `book` (the docs site: `mdbook build`, `tools/book/summary.py`, `tools/book/links.py`) | a file under `docs/`, `book.toml` or `tools/book/` changed |
 | `test` | always: the selection above, critical tests at least |
 | `deny` | a `Cargo.toml`, `Cargo.lock` or `deny.toml` changed |
 | `wasm` | a crate the gallery builds from changed (its tests and examples aside) |
