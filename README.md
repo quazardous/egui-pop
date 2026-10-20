@@ -1,6 +1,6 @@
 # egui-pop
 
-<img src="https://github.com/quazardous/egui-pop/raw/main/docs/logo/egui-pop.svg" alt="egui-pop logo" width="128" align="right">
+<img src="https://github.com/quazardous/egui-pop/raw/main/docs/logo/egui-pop-badge.svg" alt="egui-pop" width="400">
 
 [![crates.io](https://img.shields.io/crates/v/egui-pop.svg)](https://crates.io/crates/egui-pop)
 
