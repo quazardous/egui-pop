@@ -129,6 +129,24 @@ cargo xtask affected --run                # the selection against origin/main
 cargo xtask affected --full --run         # what main runs
 ```
 
+## Time budget
+
+The target: a pull request's CI under 10 minutes on GitHub's standard
+runner (four cores), a docs-only one under 5. Measured on 2026-10-20,
+wall time of the whole workflow, with a warm cache:
+
+| Change | Before (every job, `cargo test`) | After (selection, nextest) |
+|---|---|---|
+| everything (`main`, `ci:full`, CI files) | about 6 min (tests 5 min 45 s) | about 7 min 20 s (tests 6 min 40 s) |
+| documentation only | about 6 min | about 4 min (tests 3 min 30 s; fmt, clippy, deny, wasm, package and semver skipped) |
+| one crate's source (`egui-pop-views`) | about 6 min | about 6 min (6 crates of 20 tested, deny and package skipped) |
+
+A full run is not faster yet: one test,
+`egui-pop-gallery::gallery every_page_renders_under_every_theme_and_density`,
+runs for more than 3 minutes and sets the pace; splitting it is the next
+lever. The JUnit reports of each run (the `junit` artifact) list every
+test's time.
+
 ## Layers
 
 - **Model** (`egui-pop-model`): plain unit tests, no egui, milliseconds.
@@ -223,4 +241,4 @@ Rules for the mark:
 | `egui-pop-i18n::catalogues` `critical_every_locale_translates_everything_and_nothing_else` | no missing key, no unstamped translation |
 | `egui-pop-core::core` `critical_documents_are_written_atomically_with_a_backup_and_migrated_on_load` | an old saved document still loads |
 | `egui-pop-model::shell` `critical_a_version_1_layout_is_migrated_to_start_and_end_areas` | an old layout still loads |
-| `egui-pop-gallery::gallery` `critical_gpu_every_interactive_node_of_every_page_has_a_name` (GPU) | every interactive node of the gallery has a name |
+| `egui-pop-gallery::gallery` `critical_gpu_every_interactive_node_of_every_page_has_a_name` (GPU) | every interactive node of the gallery has a name (over 30 s on CI: to split, or the mark goes) |

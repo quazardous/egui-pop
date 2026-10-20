@@ -303,6 +303,13 @@ publishes.
 
 ### Changed
 
+- For contributors: CI runs on a pull request only the jobs and the
+  tests its change can affect, plus the critical tests, with
+  cargo-nextest (`.config/nextest.toml`); `main` and the `ci:full` label
+  run everything. `cargo xtask affected` gives the selection and why,
+  prints its commands (`--plan`) and runs them (`--run`); the rules are
+  in `docs/testing.md`. The one check to require is the new `CI` job.
+  Closes #10.
 - egui-pop's own checkboxes, radio buttons, selectable labels and combo
   boxes are its kit-drawn widgets (`egui_pop_core::widgets`): the
   settings, dialogs, the file picker, contexts, devtools, the theme
