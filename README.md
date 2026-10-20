@@ -10,8 +10,6 @@
 [![MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/quazardous/egui-pop/blob/main/LICENSE-MIT)
 [![Apache](https://img.shields.io/badge/license-Apache-blue.svg)](https://github.com/quazardous/egui-pop/blob/main/LICENSE-APACHE)
 
-![The egui-pop gallery in pop-dark: the theme overview](https://github.com/quazardous/egui-pop/raw/main/docs/screenshots/overview-pop-dark.png)
-
 egui-pop is an application framework and component library on
 [egui](https://github.com/emilk/egui) for desktop applications. It wraps
 your application's kernel through a host contract and gives it design
@@ -23,6 +21,8 @@ working inside it: egui-pop lays out and draws around it, and styles
 egui's own widgets from the theme. It is for people building a real tool
 on egui (an editor, a viewer, a control panel) who want that plumbing
 done once. Not an official egui crate.
+
+![The egui-pop gallery in pop-dark: the theme overview](https://github.com/quazardous/egui-pop/raw/main/docs/screenshots/overview-pop-dark.png)
 
 ## Quickstart
 
