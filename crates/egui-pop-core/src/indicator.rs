@@ -80,8 +80,8 @@
 use std::sync::{Arc, Mutex};
 
 use egui::{
-    Color32, Context, CornerRadius, FontId, Id, LayerId, Painter, Pos2, Rect, Response, Sense,
-    Shape, Stroke, Ui, Vec2, Widget, WidgetInfo, WidgetType, pos2, vec2,
+    Color32, Context, CornerRadius, FontId, Id, LayerId, Painter, Pos2, Rect, Response, Role,
+    Sense, Shape, Stroke, Ui, Vec2, Widget, WidgetInfo, pos2, vec2,
 };
 use egui_pop_model::ids::CommandId;
 use serde::Serialize;
@@ -902,7 +902,7 @@ impl Indicator {
 
     fn egui_id(&self, fallback: Id) -> Id {
         match &self.key {
-            Some(k) => Id::new(("egui_pop_indicator", k.as_str())),
+            Some(k) => Id::unique(("egui_pop_indicator", k.as_str())),
             None => fallback,
         }
     }
@@ -992,7 +992,7 @@ impl Indicator {
             && anchor.is_corner();
         let mark = anchor.place(host, size, dir, overhang, offset);
         let fallback = ui
-            .id()
+            .scope_id()
             .with(("egui_pop_indicator", ui.next_auto_id(), anchor));
         let id = self.egui_id(fallback);
         let target = if self.is_interactive() {
@@ -1124,11 +1124,12 @@ impl Indicator {
                 } => {
                     let on = *on;
                     response.widget_info(|| {
-                        WidgetInfo::selected(WidgetType::Checkbox, ui_enabled, on, &action)
+                        WidgetInfo::selected(Role::CheckBox, ui_enabled, on, &action)
                     });
                 }
-                _ => response
-                    .widget_info(|| WidgetInfo::labeled(WidgetType::Button, ui_enabled, &action)),
+                _ => {
+                    response.widget_info(|| WidgetInfo::labeled(Role::Button, ui_enabled, &action))
+                }
             }
             if let Some(m) = &meaning {
                 ctx.accesskit_node_builder(response.id, |node| node.set_description(m.clone()));
@@ -1150,7 +1151,7 @@ impl Indicator {
                 && let Some(m) = &meaning
             {
                 let enabled = ui.is_enabled();
-                response.widget_info(|| WidgetInfo::labeled(WidgetType::Image, enabled, m));
+                response.widget_info(|| WidgetInfo::labeled(Role::Image, enabled, m));
             }
             if let Some(tip) = self.tooltip.clone().or_else(|| meaning.clone()) {
                 response = response.on_hover_text(tip);

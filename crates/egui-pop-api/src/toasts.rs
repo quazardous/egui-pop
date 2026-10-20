@@ -280,7 +280,7 @@ impl Plugin for ToastsPlugin {
 
 /// The area the toasts are drawn in.
 pub(crate) fn area_id() -> Id {
-    Id::new("egui_pop.toasts")
+    Id::unique("egui_pop.toasts")
 }
 
 /// Draws the toasts in the bottom-right corner, newest at the bottom.

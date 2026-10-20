@@ -186,7 +186,7 @@ fn ramp(ui: &mut Ui, s: &mut State) -> Option<Pick> {
             );
         }
     }
-    egui_pop::core::a11y::name(&response, egui::WidgetType::Other, "Picking ramp");
+    egui_pop::core::a11y::name(&response, egui::Role::Unknown, "Picking ramp");
     let x = response
         .interact_pointer_pos()
         .or(response.hover_pos())

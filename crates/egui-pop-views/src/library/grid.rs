@@ -61,8 +61,8 @@
 use std::collections::{HashMap, HashSet};
 
 use egui::{
-    Align2, Color32, Event, EventFilter, Id, Key as EKey, Modifiers, Rect, Response, ScrollArea,
-    Sense, Stroke, StrokeKind, TextStyle, TextureId, Ui, Vec2, WidgetInfo, WidgetType, pos2, vec2,
+    Align2, Color32, Event, EventFilter, Id, Key as EKey, Modifiers, Rect, Response, Role,
+    ScrollArea, Sense, Stroke, StrokeKind, TextStyle, TextureId, Ui, Vec2, WidgetInfo, pos2, vec2,
 };
 use egui_pop_api::AppHandle;
 use egui_pop_core::icon::Icon;
@@ -498,7 +498,7 @@ impl<'a> ThumbGrid<'a> {
         items: &dyn LibraryItems<K>,
         source: &dyn ThumbSource<K>,
     ) -> LibraryOutput<K> {
-        let id = Id::new(("egui_pop_views::library", &state.id, &self.view));
+        let id = Id::unique(("egui_pop_views::library", &state.id, &self.view));
         let grid = self.axis == Axis::Grid;
         let len = items.len();
         let before = state.selection.len();
@@ -867,9 +867,7 @@ impl<'a> ThumbGrid<'a> {
                                 &s::RATE_STARS,
                                 &[("stars", &n_stars.to_string())],
                             );
-                            sr.widget_info(move || {
-                                WidgetInfo::labeled(WidgetType::Button, true, &sname)
-                            });
+                            sr.widget_info(move || WidgetInfo::labeled(Role::Button, true, &sname));
                             if sr.clicked() {
                                 let rating = if marks.rating == n_stars { 0 } else { n_stars };
                                 let keys = targets_of(selection, &key);
@@ -912,9 +910,7 @@ impl<'a> ThumbGrid<'a> {
                                 },
                                 &[("count", &count)],
                             );
-                            cr.widget_info(move || {
-                                WidgetInfo::labeled(WidgetType::Button, true, &cname)
-                            });
+                            cr.widget_info(move || WidgetInfo::labeled(Role::Button, true, &cname));
                             if cr.clicked() {
                                 cell_ops.push(Op::Run(
                                     lib::LIBRARY_STACK,
@@ -925,12 +921,7 @@ impl<'a> ThumbGrid<'a> {
                     }
                     let a11y_name = name.clone();
                     r.widget_info(move || {
-                        WidgetInfo::selected(
-                            WidgetType::SelectableLabel,
-                            true,
-                            selected,
-                            &a11y_name,
-                        )
+                        WidgetInfo::selected(Role::Button, true, selected, &a11y_name)
                     });
                     if r.double_clicked() {
                         cell_ops.push(Op::Activate(key.clone()));
@@ -985,14 +976,14 @@ impl<'a> ThumbGrid<'a> {
         ops.extend(cell_ops);
         mem.band = band;
         if grid {
-            mem.offset = out.state.offset.y;
+            mem.offset = out.state.clamped_offset().y;
             mem.extent = out.inner_rect.height();
         } else {
-            mem.offset = out.state.offset.x;
+            mem.offset = out.state.clamped_offset().x;
             mem.extent = out.inner_rect.width();
         }
         let response = ui.interact(out.inner_rect, id, Sense::focusable_noninteractive());
-        egui_pop_core::a11y::name(&response, WidgetType::Other, &label);
+        egui_pop_core::a11y::name(&response, Role::Unknown, &label);
         if take_focus {
             response.request_focus();
         }

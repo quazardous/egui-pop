@@ -29,8 +29,8 @@
 //! ```
 
 use egui::{
-    Color32, Key, Pos2, Rect, Response, Sense, Shape, Stroke, StrokeKind, TextureId, Ui, Vec2,
-    WidgetInfo, WidgetType, pos2, vec2,
+    Color32, Key, Pos2, Rect, Response, Role, Sense, Shape, Stroke, StrokeKind, TextureId, Ui,
+    Vec2, WidgetInfo, pos2, vec2,
 };
 use egui_pop_core::icon::{Icon, Size};
 use egui_pop_core::state::Slot;
@@ -386,7 +386,7 @@ impl<'a> Navigator<'a> {
         );
         let enabled = ui.is_enabled();
         response.widget_info(|| {
-            let mut info = WidgetInfo::labeled(WidgetType::Other, enabled, &label);
+            let mut info = WidgetInfo::labeled(Role::Unknown, enabled, &label);
             info.current_text_value = Some(value.clone());
             info
         });

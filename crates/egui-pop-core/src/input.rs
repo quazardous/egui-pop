@@ -46,8 +46,8 @@
 //! ```
 
 use egui::{
-    Align, Align2, Color32, CornerRadius, FontId, Id, Rect, Response, Sense, Stroke, StrokeKind,
-    TextStyle, Ui, WidgetInfo, WidgetType, pos2, vec2,
+    Align2, Color32, CornerRadius, FontId, Id, Rect, Response, Role, Sense, Stroke, StrokeKind,
+    TextStyle, Ui, WidgetInfo, pos2, vec2,
 };
 use egui_pop_model::field::FieldState;
 
@@ -306,7 +306,7 @@ impl<'a> Input<'a> {
 
     /// Distinguishes inputs with the same label in one place.
     pub fn id_salt(mut self, salt: impl std::hash::Hash + std::fmt::Debug) -> Self {
-        self.salt = Some(Id::new(salt));
+        self.salt = Some(Id::unique(salt));
         self
     }
 
@@ -724,18 +724,16 @@ fn style(
     color: Color32,
     number: bool,
 ) -> egui::TextEdit<'_> {
-    let text = text
-        .id(id)
+    text.id(id)
         .frame(egui::Frame::NONE)
         .margin(egui::Margin::ZERO)
-        .vertical_align(Align::Center)
+        .align(if number {
+            Align2::RIGHT_CENTER
+        } else {
+            Align2::LEFT_CENTER
+        })
         .desired_width(width)
-        .text_color(color);
-    if number {
-        text.horizontal_align(Align::Max)
-    } else {
-        text
-    }
+        .text_color(color)
 }
 
 fn format_number(ctx: &egui::Context, v: f64, precision: Option<usize>) -> String {
@@ -777,7 +775,7 @@ enum PartLook<'s> {
 fn part(ui: &mut Ui, rect: Rect, id: Id, look: PartLook<'_>, label: &str) -> Response {
     let r = ui.interact(rect, id, Sense::click());
     let enabled = ui.is_enabled();
-    r.widget_info(|| WidgetInfo::labeled(WidgetType::Button, enabled, label));
+    r.widget_info(|| WidgetInfo::labeled(Role::Button, enabled, label));
     if ui.is_rect_visible(rect) {
         let t = Tokens::of(ui.ctx());
         let side = t.size.icon_inline.min(rect.height() - 4.0) * 0.8;
@@ -816,7 +814,7 @@ fn part(ui: &mut Ui, rect: Rect, id: Id, look: PartLook<'_>, label: &str) -> Res
 fn attached_part(ui: &mut Ui, rect: Rect, id: Id, look: PartLook<'_>, label: &str) -> Response {
     let r = ui.interact(rect, id, Sense::click());
     let enabled = ui.is_enabled();
-    r.widget_info(|| WidgetInfo::labeled(WidgetType::Button, enabled, label));
+    r.widget_info(|| WidgetInfo::labeled(Role::Button, enabled, label));
     if ui.is_rect_visible(rect) {
         let t = Tokens::of(ui.ctx());
         let kit = Kit::of(ui.ctx());

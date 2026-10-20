@@ -51,7 +51,8 @@ use std::sync::Arc;
 
 use egui::containers::menu::{MenuButton, MenuConfig, MenuState, SubMenu};
 use egui::{
-    Atom, Button, Color32, Context, Id, Pos2, Rect, Response, RichText, Shape, Stroke, Ui, vec2,
+    Atom, Button, Color32, Context, Id, IdSalt, Pos2, Rect, Response, RichText, Shape, Stroke, Ui,
+    vec2,
 };
 use egui_pop_core::icon::Icon;
 use egui_pop_core::state::Slot;
@@ -238,7 +239,7 @@ pub fn bar_within(ui: &mut Ui, app: &AppHandle, menu: &MenuId, reserve: f32) {
         if open.is_some() {
             egui::Popup::open_id(&ctx, id.with("popup"));
         }
-        let mark = Id::new(("egui_pop_menu_more", menu.as_str()));
+        let mark = IdSalt::new(("egui_pop_menu_more", menu.as_str()));
         let button = Button::new(Atom::custom(mark, vec2(side, side)));
         let (r, _) = MenuButton::from_button(button).ui(ui, |ui| {
             for (i, m) in hidden.iter().enumerate() {
@@ -257,7 +258,7 @@ pub fn bar_within(ui: &mut Ui, app: &AppHandle, menu: &MenuId, reserve: f32) {
         });
         let rect = Rect::from_center_size(r.rect.center(), vec2(side, side));
         icon.paint(ui.painter(), rect, ui.style().interact(&r).text_color());
-        r.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &name));
+        r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &name));
         r.on_hover_text(name);
     }
     let layout = BarLayout {
@@ -522,7 +523,7 @@ impl From<Pos2> for At {
 
 /// The popup's egui id.
 pub(crate) fn popup_id() -> Id {
-    Id::new("egui_pop.menu.popup")
+    Id::unique("egui_pop.menu.popup")
 }
 
 /// Opens a declared menu as a popup under a rectangle or at a point,
@@ -779,7 +780,8 @@ fn command_row(ui: &mut Ui, app: &AppHandle, cx: &WhenContext, row: Row<'_>) -> 
         .rev()
         .find(|r| r.id == *id)
         .and_then(|r| r.result.clone().err());
-    let tick = Id::new(("egui_pop_menu_tick", menu.as_str(), id.as_str(), &title));
+    let tick = Id::unique(("egui_pop_menu_tick", menu.as_str(), id.as_str(), &title));
+    let mark = IdSalt::new(tick);
     let kit = Kit::of(&ctx);
     let item = &kit.menu_item;
     let shortcut = app.keys_for(id).first().cloned();
@@ -790,7 +792,7 @@ fn command_row(ui: &mut Ui, app: &AppHandle, cx: &WhenContext, row: Row<'_>) -> 
         .add_enabled_ui(why.is_none(), |ui| {
             let state = item_state(ui, ui.next_auto_id());
             let label = item_text(ui, item, state, title.as_str());
-            let mut button = Button::new((Atom::custom(tick, vec2(side, side)), label))
+            let mut button = Button::new((Atom::custom(mark, vec2(side, side)), label))
                 .fill(Color32::TRANSPARENT)
                 .stroke(Stroke::NONE);
             if let Some(k) = shortcut {
@@ -808,7 +810,7 @@ fn command_row(ui: &mut Ui, app: &AppHandle, cx: &WhenContext, row: Row<'_>) -> 
     if app.running(id) {
         ctx.accesskit_node_builder(r.response.id, |node| node.set_busy());
     }
-    if let Some(rect) = r.rect(tick) {
+    if let Some(rect) = r.rect(mark) {
         // The mark keeps the item's resting colour (greyed when disabled).
         let color = item
             .style(State::REST.with(State::DISABLED, why.is_some()))
@@ -827,9 +829,8 @@ fn command_row(ui: &mut Ui, app: &AppHandle, cx: &WhenContext, row: Row<'_>) -> 
             why.is_none(),
             label.unwrap_or_else(|| title_of(&ctx, &spec, id)),
         );
-        response.widget_info(|| {
-            egui::WidgetInfo::selected(egui::WidgetType::Checkbox, on, checked, &name)
-        });
+        response
+            .widget_info(|| egui::WidgetInfo::selected(egui::Role::CheckBox, on, checked, &name));
     }
     if let Some(why) = why {
         response = response.on_disabled_hover_text(why);
@@ -913,8 +914,8 @@ fn submenu(
     let open = MenuState::from_ui(ui, |state, _| {
         state.open_item == Some(SubMenu::id_from_widget_id(my_id))
     });
-    let space = Id::new(("egui_pop_menu_space", menu.as_str()));
-    let arrow = Id::new(("egui_pop_menu_arrow", menu.as_str()));
+    let space = IdSalt::new(("egui_pop_menu_space", menu.as_str()));
+    let arrow = IdSalt::new(("egui_pop_menu_arrow", menu.as_str()));
     let kit = Kit::of(ui.ctx());
     let item = &kit.menu_item;
     let slot = ui.painter().add(Shape::Noop);

@@ -24,7 +24,7 @@
 //! }
 //! ```
 
-use egui::{Key as EKey, Response, Sense, Ui, WidgetInfo, WidgetType, vec2};
+use egui::{Key as EKey, Response, Role, Sense, Ui, WidgetInfo, vec2};
 use egui_pop_core::kit::{Kit, KitCx, Part, State};
 use egui_pop_core::strings::{StrKey, tr, tr_args};
 use egui_pop_core::theme::Tokens;
@@ -455,7 +455,7 @@ impl ColorLabels {
                     &s::LABEL_TOGGLE,
                     &[("label", &label.title(ui.ctx()))],
                 );
-                r.widget_info(move || WidgetInfo::selected(WidgetType::Checkbox, true, on, &name));
+                r.widget_info(move || WidgetInfo::selected(Role::CheckBox, true, on, &name));
                 if r.clicked() {
                     changed = Some(self.value.toggled(label));
                 }
@@ -508,7 +508,7 @@ impl FlagToggle {
                     }
                 });
                 let name = flag.title(ui.ctx());
-                r.widget_info(move || WidgetInfo::selected(WidgetType::Checkbox, true, on, &name));
+                r.widget_info(move || WidgetInfo::selected(Role::CheckBox, true, on, &name));
                 if r.clicked() {
                     changed = Some(if on { Flag::None } else { flag });
                 }

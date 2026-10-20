@@ -75,8 +75,8 @@ use std::fmt;
 use std::ops::RangeInclusive;
 
 use egui::{
-    Color32, Id, Key, Modifiers, Rect, Response, Sense, TextEdit, Ui, Widget, WidgetInfo,
-    WidgetType, pos2, vec2,
+    Color32, Id, Key, Modifiers, Rect, Response, Role, Sense, TextEdit, Ui, Widget, WidgetInfo,
+    pos2, vec2,
 };
 use egui_pop_model::values::{Descriptor, Type};
 
@@ -759,8 +759,8 @@ fn show_quad(ui: &mut Ui, rect: Rect, id: Id, mut quad: Quad<'_>) -> Response {
     let state = quad.on.as_deref().copied();
     let label = quad.label.as_str();
     match state {
-        Some(s) => r.widget_info(|| WidgetInfo::selected(WidgetType::Checkbox, enabled, s, label)),
-        None => r.widget_info(|| WidgetInfo::labeled(WidgetType::Button, enabled, label)),
+        Some(s) => r.widget_info(|| WidgetInfo::selected(Role::CheckBox, enabled, s, label)),
+        None => r.widget_info(|| WidgetInfo::labeled(Role::Button, enabled, label)),
     }
     if ui.is_rect_visible(rect) {
         let kit = Kit::of(ui.ctx());
@@ -1006,7 +1006,7 @@ pub(crate) fn typed_entry(
         bar,
         TextEdit::singleline(&mut text)
             .id(typing_id.with("edit"))
-            .horizontal_align(egui::Align::Center),
+            .align(egui::Align2::CENTER_TOP),
     );
     if TYPING_FOCUS.keyed(typing_id).remove(ui.ctx()).is_some() {
         edit.request_focus();

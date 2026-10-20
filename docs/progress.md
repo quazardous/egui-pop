@@ -184,7 +184,7 @@ use egui_pop::core::motion::{self, Busy};
 let ctx = egui_pop::egui::Context::default();
 // In a test: motion stands still until told.
 let clock = motion::freeze(&ctx, 0.0);
-let busy = Busy::new(egui_pop::egui::Id::new("export"), 0.0);
+let busy = Busy::new(egui_pop::egui::Id::unique("export"), 0.0);
 clock.set(0.2);
 assert!(!busy.visible(&ctx, true));
 clock.set(0.4);
@@ -228,7 +228,7 @@ fn ui(ui: &mut egui_pop::egui::Ui, started: f64, loading: bool) {
     ui.add(
         Spinner::new()
             .label("Loading thumbnails")
-            .delayed(egui_pop::egui::Id::new("thumbnails"), started, loading),
+            .delayed(egui_pop::egui::Id::unique("thumbnails"), started, loading),
     );
 }
 ```

@@ -501,7 +501,7 @@ fn rich_harness() -> Harness<'static, RichApp> {
                             if on { "hidden" } else { "shown" },
                         ));
                         r.widget_info(|| {
-                            egui::WidgetInfo::selected(egui::WidgetType::Checkbox, true, on, &name)
+                            egui::WidgetInfo::selected(egui::Role::CheckBox, true, on, &name)
                         });
                         if r.clicked() && !hidden.remove(&n.key) {
                             hidden.insert(n.key.clone());

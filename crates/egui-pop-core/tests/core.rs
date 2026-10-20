@@ -475,7 +475,7 @@ fn icon_strokes_are_whole_physical_pixels_at_every_scale() {
             .build_ui(|ui| {
                 let painter = ui.ctx().layer_painter(egui::LayerId::new(
                     egui::Order::Foreground,
-                    egui::Id::new("icons"),
+                    egui::Id::unique("icons"),
                 ));
                 for (row, icon) in Icon::ALL.iter().enumerate() {
                     for (col, side) in [12.0, 13.5, 16.0, 20.0, 24.0].into_iter().enumerate() {

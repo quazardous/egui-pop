@@ -3,7 +3,7 @@
 use egui_pop::api::AppHandle;
 use egui_pop::core::a11y;
 use egui_pop::core::icon::Icon;
-use egui_pop::egui::{self, Align2, Response, Sense, Stroke, StrokeKind, Ui, WidgetType};
+use egui_pop::egui::{self, Align2, Response, Role, Sense, Stroke, StrokeKind, Ui};
 
 use crate::strings;
 use crate::tokens::TallyTokens;
@@ -75,7 +75,7 @@ impl<'a> Tally<'a> {
                         t.text,
                     );
                 }
-                a11y::name(&response, WidgetType::Label, &text);
+                a11y::name(&response, Role::Label, &text);
 
                 let more = strings::tr(&ctx, &strings::INCREASE, &args);
                 if ui.add(Icon::Plus.label(&more).sense_click()).clicked() {

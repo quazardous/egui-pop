@@ -252,7 +252,16 @@ which move only when their code does.
 
 | egui-pop | egui | Rust |
 |---|---|---|
+| 0.2.x | 0.37 | 1.95 |
 | 0.1.x | 0.36 | 1.95 |
+
+egui-pop 0.2 (egui 0.37) is not on crates.io yet: egui_dock and
+egui-phosphor have no release on egui 0.37, so `main` takes them from
+git branches (`[patch.crates-io]` in the workspace's `Cargo.toml`), and
+crates.io refuses git dependencies. It is published once both are
+released. Until then, stay on 0.1 with egui 0.36, or depend on
+egui-pop through git with the same two patches in your own `Cargo.toml`
+(patches do not carry over from a dependency).
 
 ## Contributing
 

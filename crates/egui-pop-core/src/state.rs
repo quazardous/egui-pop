@@ -17,7 +17,7 @@
 //! CLICKS.update(&ctx, |n| *n += 1);
 //! assert_eq!(CLICKS.get(&ctx), Some(1));
 //! // Per instance: one value per key.
-//! let widget = egui::Id::new("a button");
+//! let widget = egui::Id::unique("a button");
 //! CLICKS.keyed(widget).set(&ctx, 7);
 //! assert_eq!(CLICKS.keyed(widget).get(&ctx), Some(7));
 //! assert_eq!(CLICKS.get(&ctx), Some(1));
@@ -143,7 +143,7 @@ impl<T: Clone + Send + Sync + 'static> Slot<T> {
     /// The same slot, one value per `key` (a widget's id, a viewport).
     pub fn keyed(self, key: impl Hash + Debug) -> Self {
         Self {
-            key: Some(Id::new(key)),
+            key: Some(Id::unique(key)),
             ..self
         }
     }
@@ -259,7 +259,7 @@ impl<T: Clone + Send + Sync + 'static> Slot<T> {
 }
 
 fn base_id(name: &'static str) -> Id {
-    Id::new(("egui_pop::slot", name))
+    Id::unique(("egui_pop::slot", name))
 }
 
 /// A value's `Debug` form, on one line, cut at [`SUMMARY_MAX`].
@@ -361,7 +361,7 @@ struct Registry {
 }
 
 fn registry(ctx: &Context) -> Arc<Mutex<Registry>> {
-    let id = Id::new("egui_pop::slot::registry");
+    let id = Id::unique("egui_pop::slot::registry");
     guarded("registry", || {
         ctx.data_mut(|d| {
             d.get_temp_mut_or_insert_with(id, || Arc::new(Mutex::new(Registry::default())))

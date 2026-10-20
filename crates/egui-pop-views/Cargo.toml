@@ -24,7 +24,7 @@ serde.workspace = true
 serde_json.workspace = true
 # MIT OR Apache-2.0: Rerun's virtualised table (sticky header, resizable
 # columns); the data table wraps it.
-egui_table = "0.10"
+egui_table = "0.11"
 
 [dev-dependencies]
 egui = { workspace = true, features = ["default_fonts"] }

@@ -1078,7 +1078,7 @@ impl Plugin for DialogsPlugin {
 
 /// The overlay a dialog is drawn in.
 pub(crate) fn overlay_id(dialog: u64) -> egui::Id {
-    egui::Id::new(("egui_pop.dialog", dialog))
+    egui::Id::unique(("egui_pop.dialog", dialog))
 }
 
 /// How many answers are remembered.

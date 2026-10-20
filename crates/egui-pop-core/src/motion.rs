@@ -25,7 +25,7 @@
 //! let ctx = egui::Context::default();
 //! let clock = ManualClock::new(0.0);
 //! motion::set_clock(&ctx, Some(clock.shared()));
-//! let id = egui::Id::new("export");
+//! let id = egui::Id::unique("export");
 //! clock.set(0.29);
 //! assert!(!Busy::new(id, 0.0).visible(&ctx, true), "not before 300 ms");
 //! clock.set(0.31);
@@ -245,13 +245,13 @@ mod tests {
     fn a_short_job_never_shows_and_a_long_one_stays_its_minimum() {
         let ctx = Context::default();
         let clock = freeze(&ctx, 10.0);
-        let id = Id::new("a");
+        let id = Id::unique("a");
         // Done in 200 ms: nothing ever shown.
         clock.set(10.2);
         assert!(!Busy::new(id, 10.0).visible(&ctx, true));
         assert!(!Busy::new(id, 10.0).visible(&ctx, false));
         // A long one shows after the delay, until it ends.
-        let id = Id::new("b");
+        let id = Id::unique("b");
         clock.set(11.0);
         assert!(Busy::new(id, 10.0).visible(&ctx, true));
         clock.set(12.0);

@@ -25,9 +25,9 @@
 //! egui's `Visuals` (`theme::visuals_with`); only its arrow is the kit's.
 
 use egui::{
-    AsIdSalt, Atom, AtomLayout, Atoms, Color32, ComboBox, Frame, Id, IntoAtoms, Margin,
-    NumExt as _, Rect, Response, Sense, Shape, Stroke, Ui, Vec2, Widget, WidgetInfo, WidgetText,
-    WidgetType, epaint, pos2, style::WidgetVisuals, vec2,
+    AsIdSalt, Atom, Atoms, Color32, ComboBox, Frame, IdSalt, IntoAtoms, Margin, NumExt as _, Rect,
+    Response, Role, Sense, Shape, Stroke, Ui, Vec2, Widget, WidgetAtom, WidgetInfo, epaint, pos2,
+    style::WidgetVisuals, vec2,
 };
 
 use crate::icon::Icon;
@@ -126,9 +126,9 @@ impl Widget for Checkbox<'_> {
         toggle.response().widget_info(|| {
             let name = text.as_deref().unwrap_or("");
             if indeterminate {
-                WidgetInfo::labeled(WidgetType::Checkbox, ui.is_enabled(), name)
+                WidgetInfo::labeled(Role::CheckBox, ui.is_enabled(), name)
             } else {
-                WidgetInfo::selected(WidgetType::Checkbox, ui.is_enabled(), on, name)
+                WidgetInfo::selected(Role::CheckBox, ui.is_enabled(), on, name)
             }
         });
         let mark = if indeterminate {
@@ -175,7 +175,7 @@ impl Widget for RadioButton<'_> {
         let text = toggle.text.clone();
         toggle.response().widget_info(|| {
             WidgetInfo::selected(
-                WidgetType::RadioButton,
+                Role::RadioButton,
                 ui.is_enabled(),
                 checked,
                 text.as_deref().unwrap_or(""),
@@ -198,8 +198,8 @@ impl Widget for RadioButton<'_> {
 /// of the box's side (`width`, else egui's icon width) before the label,
 /// at least egui's interaction height.
 struct Toggle<'a> {
-    prepared: egui::AllocatedAtomLayout<'a>,
-    rect_id: Id,
+    prepared: egui::AllocatedWidgetAtom<'a>,
+    rect_id: IdSalt,
     side: f32,
     text: Option<String>,
 }
@@ -216,10 +216,10 @@ impl<'a> Toggle<'a> {
         // Centred on the line: the icon is as tall as the line.
         let mut icon_size = Vec2::splat(side);
         icon_size.y = icon_size.y.at_least(min_size.y);
-        let rect_id = Id::new(id);
+        let rect_id = IdSalt::new(id);
         atoms.push_left(Atom::custom(rect_id, icon_size));
         let text = atoms.text().map(String::from);
-        let prepared = AtomLayout::new(atoms)
+        let prepared = WidgetAtom::new(atoms)
             .sense(Sense::click())
             .min_size(min_size)
             .allocate(ui);
@@ -513,7 +513,7 @@ fn row_ui(
     if !framed {
         padding -= Vec2::splat(ui.visuals().widgets.inactive.bg_stroke.width);
     }
-    let mut prepared = AtomLayout::new(atoms)
+    let mut prepared = WidgetAtom::new(atoms)
         .sense(Sense::click())
         .fallback_font(
             ui.style()
@@ -532,9 +532,9 @@ fn row_ui(
     let enabled = ui.is_enabled();
     r.widget_info(|| {
         if toggle {
-            WidgetInfo::selected(WidgetType::Checkbox, enabled, selected, &name)
+            WidgetInfo::selected(Role::CheckBox, enabled, selected, &name)
         } else {
-            WidgetInfo::selected(WidgetType::Button, enabled, selected, &name)
+            WidgetInfo::selected(Role::Button, enabled, selected, &name)
         }
     });
     if let Some(cursor) = ui.visuals().interact_cursor
@@ -602,13 +602,13 @@ pub fn selectable_value<'a, V: PartialEq>(
 
 /// egui's [`ComboBox`] with the kit's arrow ([`paint_combo_arrow`]):
 /// `ComboBox::from_id_salt`.
-pub fn combo_box(id_salt: impl AsIdSalt) -> ComboBox {
+pub fn combo_box(id_salt: impl AsIdSalt) -> ComboBox<'static> {
     ComboBox::from_id_salt(id_salt).icon(paint_combo_arrow)
 }
 
 /// egui's [`ComboBox`] with a label and the kit's arrow:
 /// `ComboBox::new`.
-pub fn combo_box_labelled(id_salt: impl AsIdSalt, label: impl Into<WidgetText>) -> ComboBox {
+pub fn combo_box_labelled<'a>(id_salt: impl AsIdSalt, label: impl IntoAtoms<'a>) -> ComboBox<'a> {
     ComboBox::new(id_salt, label).icon(paint_combo_arrow)
 }
 

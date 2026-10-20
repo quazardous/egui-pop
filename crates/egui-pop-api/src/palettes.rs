@@ -290,7 +290,7 @@ fn setting_f32(app: &AppHandle, id: SettingId) -> Option<f32> {
 
 /// A palette's area id.
 pub fn area_id(panel: &PanelId) -> Id {
-    Id::new(("egui_pop.palette", panel.as_str()))
+    Id::unique(("egui_pop.palette", panel.as_str()))
 }
 
 /// What a palette's band buttons asked for.

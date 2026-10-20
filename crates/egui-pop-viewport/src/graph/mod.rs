@@ -285,7 +285,7 @@ impl<'a> GraphEditor<'a> {
 
     /// Tells two editors in one `Ui` apart.
     pub fn id_salt(mut self, salt: impl std::hash::Hash + fmt::Debug) -> Self {
-        self.id_salt = Some(Id::new(salt));
+        self.id_salt = Some(Id::unique(salt));
         self
     }
 
@@ -370,7 +370,7 @@ impl<'a> GraphEditor<'a> {
     /// Draws the editor; says what the user asked for.
     pub fn show(mut self, ui: &mut Ui) -> GraphOutput {
         let ctx = ui.ctx().clone();
-        let id = ui.make_persistent_id(self.id_salt.unwrap_or(Id::new("egui_pop_graph")));
+        let id = ui.make_persistent_id(self.id_salt.unwrap_or(Id::unique("egui_pop_graph")));
         let nodes = self.model.nodes();
         let edges = self.model.edges();
         let groups = self.model.groups();
@@ -1161,7 +1161,7 @@ impl Cx<'_, '_, '_> {
             let gid = self.id.with(("group", &self.groups[g].id));
             let resp = ui.interact(band, gid, Sense::click_and_drag());
             let name = tr_args(&self.ctx, &s::GRAPH_FOLD, &[("group", &label)]);
-            a11y::name(&resp, egui::WidgetType::Button, &name);
+            a11y::name(&resp, egui::Role::Button, &name);
             self.bounds(gid, band);
             if resp.has_focus() {
                 self.ring(painter, band);
@@ -1275,7 +1275,7 @@ impl Cx<'_, '_, '_> {
             &s::GRAPH_UNFOLD,
             &[("group", &label), ("count", &count)],
         );
-        a11y::name(&resp, egui::WidgetType::Button, &name);
+        a11y::name(&resp, egui::Role::Button, &name);
         let role = tr(&self.ctx, &s::GRAPH_ROLE_STACK);
         self.ctx.accesskit_node_builder(sid, |node| {
             node.set_role_description(role);
@@ -1372,7 +1372,7 @@ impl Cx<'_, '_, '_> {
         let enabled = ui.is_enabled();
         let title = n.title.clone();
         resp.widget_info(|| {
-            let mut info = egui::WidgetInfo::labeled(egui::WidgetType::Other, enabled, &title);
+            let mut info = egui::WidgetInfo::labeled(egui::Role::Unknown, enabled, &title);
             info.current_text_value = Some(value.clone());
             info.selected = Some(selected);
             info
@@ -1442,7 +1442,7 @@ impl Cx<'_, '_, '_> {
             };
             a11y::name(
                 &cr,
-                egui::WidgetType::Button,
+                egui::Role::Button,
                 &tr_args(&self.ctx, key, &[("node", &n.title)]),
             );
             self.bounds(cid, c);
@@ -1598,7 +1598,7 @@ impl Cx<'_, '_, '_> {
             );
             let enabled = ui.is_enabled();
             pr.widget_info(|| {
-                let mut info = egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, &name);
+                let mut info = egui::WidgetInfo::labeled(egui::Role::Button, enabled, &name);
                 info.current_text_value = Some(value.clone());
                 info
             });
@@ -2000,7 +2000,7 @@ impl Cx<'_, '_, '_> {
         );
         let label = label.to_string();
         response.widget_info(|| {
-            let mut info = egui::WidgetInfo::labeled(egui::WidgetType::Other, true, &label);
+            let mut info = egui::WidgetInfo::labeled(egui::Role::Unknown, true, &label);
             info.current_text_value = Some(value.clone());
             info
         });

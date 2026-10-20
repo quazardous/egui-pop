@@ -49,8 +49,8 @@
 //! ```
 
 use egui::{
-    Color32, Id, Key, Modifiers, Pos2, Rect, Response, Sense, Shape, Stroke, StrokeKind, Ui, Vec2,
-    Widget, WidgetInfo, WidgetType, pos2, vec2,
+    Color32, Id, Key, Modifiers, Pos2, Rect, Response, Role, Sense, Shape, Stroke, StrokeKind, Ui,
+    Vec2, Widget, WidgetInfo, pos2, vec2,
 };
 use egui_pop_core::state::Slot;
 use egui_pop_core::strings;
@@ -508,7 +508,7 @@ impl<'a> CurveEditor<'a> {
         let value = value_text(ui.ctx(), points, mem.selected);
         let enabled = ui.is_enabled();
         response.widget_info(|| {
-            let mut info = WidgetInfo::labeled(WidgetType::Slider, enabled, &label);
+            let mut info = WidgetInfo::labeled(Role::Slider, enabled, &label);
             info.current_text_value = Some(value.clone());
             info
         });

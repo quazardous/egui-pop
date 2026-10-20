@@ -16,8 +16,8 @@
 //! ```
 
 use egui::{
-    Color32, Id, Key as EKey, Modifiers, Order, Response, Sense, TextEdit, TextStyle, Ui,
-    WidgetInfo, WidgetType, vec2,
+    Color32, Id, Key as EKey, Modifiers, Order, Response, Role, Sense, TextEdit, TextStyle, Ui,
+    WidgetInfo, vec2,
 };
 use egui_pop_core::icon::Icon;
 use egui_pop_core::kit::{Kit, KitCx, Part, State};
@@ -160,13 +160,12 @@ impl TagChip {
                 .remove_label
                 .clone()
                 .unwrap_or_else(|| tr_args(ui.ctx(), &s::REMOVE, &[("item", &self.text)]));
-            r.widget_info(move || WidgetInfo::labeled(WidgetType::Button, true, &name));
+            r.widget_info(move || WidgetInfo::labeled(Role::Button, true, &name));
             removed = r.clicked();
         }
         let text = self.text;
         let selected = self.selected;
-        response
-            .widget_info(move || WidgetInfo::selected(WidgetType::Button, true, selected, &text));
+        response.widget_info(move || WidgetInfo::selected(Role::Button, true, selected, &text));
         ChipResponse { response, removed }
     }
 }
@@ -259,7 +258,7 @@ impl<'a> TagInput<'a> {
     }
 
     pub fn show(self, ui: &mut Ui, state: &mut TagInputState, tags: &[String]) -> TagInputOutput {
-        let text_id = Id::new(("egui_pop_views::tag_input", &self.id));
+        let text_id = Id::unique(("egui_pop_views::tag_input", &self.id));
         let label = self
             .label
             .clone()
@@ -332,7 +331,7 @@ impl<'a> TagInput<'a> {
             )
         });
         let response = inner.inner;
-        egui_pop_core::a11y::name(&response, WidgetType::TextEdit, &label);
+        egui_pop_core::a11y::name(&response, Role::TextInput, &label);
         if response.changed() {
             // Completions follow the text at the next pass.
             ui.ctx().request_repaint();

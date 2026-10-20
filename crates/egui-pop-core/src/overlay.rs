@@ -58,7 +58,7 @@ pub struct OverlaySpec {
 impl OverlaySpec {
     pub fn new(id: impl std::hash::Hash + std::fmt::Debug, label: &str, kind: Kind) -> Self {
         Self {
-            id: Id::new(id),
+            id: Id::unique(id),
             label: label.into(),
             kind,
             dismiss_on_escape: true,
@@ -550,8 +550,8 @@ mod tests {
     #[test]
     fn escape_closes_only_the_top_overlay_and_focus_goes_back() {
         let mut s = OverlayStack::new();
-        let f1 = Id::new("field");
-        let f2 = Id::new("button in dialog");
+        let f1 = Id::unique("field");
+        let f2 = Id::unique("button in dialog");
         s.open(spec("dialog", Kind::Modal), Some(f1));
         s.open(spec("menu", Kind::Menu), Some(f2));
         let c = s.escape();
@@ -569,7 +569,7 @@ mod tests {
     #[test]
     fn an_overlay_declared_again_changes_in_place() {
         let mut s = OverlayStack::new();
-        s.open(spec("dialog", Kind::Modal), Some(Id::new("field")));
+        s.open(spec("dialog", Kind::Modal), Some(Id::unique("field")));
         s.open(spec("menu", Kind::Menu), None);
         // Escape kept for a while (a dialog moved by the keys): nothing
         // above it closes.
@@ -580,23 +580,23 @@ mod tests {
         assert!(s.update(spec("dialog", Kind::Modal)));
         let c = s.escape();
         assert_eq!(labels(&c), ["dialog"]);
-        assert_eq!(c[0].restore_focus, Some(Id::new("field")));
+        assert_eq!(c[0].restore_focus, Some(Id::unique("field")));
         assert!(!s.update(spec("ghost", Kind::Modal)));
     }
 
     #[test]
     fn closing_an_overlay_closes_those_above_it_and_restores_the_lowest_focus() {
         let mut s = OverlayStack::new();
-        s.open(spec("a", Kind::Popover), Some(Id::new(1)));
-        s.open(spec("b", Kind::Menu), Some(Id::new(2)));
-        s.open(spec("c", Kind::Menu), Some(Id::new(3)));
-        let c = s.close(Id::new("b"));
+        s.open(spec("a", Kind::Popover), Some(Id::unique(1)));
+        s.open(spec("b", Kind::Menu), Some(Id::unique(2)));
+        s.open(spec("c", Kind::Menu), Some(Id::unique(3)));
+        let c = s.close(Id::unique("b"));
         assert_eq!(labels(&c), ["c", "b"]);
         assert_eq!(c[0].reason, Reason::Parent);
         assert_eq!(c[1].reason, Reason::Closed);
-        assert_eq!(c.last().unwrap().restore_focus, Some(Id::new(2)));
+        assert_eq!(c.last().unwrap().restore_focus, Some(Id::unique(2)));
         assert_eq!(s.len(), 1);
-        assert!(s.close(Id::new("ghost")).is_empty());
+        assert!(s.close(Id::unique("ghost")).is_empty());
     }
 
     #[test]
@@ -605,7 +605,7 @@ mod tests {
         s.open(spec("menu", Kind::Menu), None);
         s.open(spec("submenu", Kind::Menu), None);
         // A click in the first menu closes the submenu only.
-        assert_eq!(labels(&s.click(Some(Id::new("menu")))), ["submenu"]);
+        assert_eq!(labels(&s.click(Some(Id::unique("menu")))), ["submenu"]);
         // A click on the interface closes the menu.
         assert_eq!(labels(&s.click(None)), ["menu"]);
         s.open(spec("dialog", Kind::Modal), None);
@@ -622,11 +622,11 @@ mod tests {
         assert!(!s.is_blocked(None));
         s.open(spec("dialog", Kind::Modal), None);
         s.open(spec("menu", Kind::Menu), None);
-        assert_eq!(s.modal(), Some(Id::new("dialog")));
+        assert_eq!(s.modal(), Some(Id::unique("dialog")));
         assert!(s.is_blocked(None));
-        assert!(s.is_blocked(Some(Id::new("popover"))));
-        assert!(!s.is_blocked(Some(Id::new("dialog"))));
-        assert!(!s.is_blocked(Some(Id::new("menu"))));
+        assert!(s.is_blocked(Some(Id::unique("popover"))));
+        assert!(!s.is_blocked(Some(Id::unique("dialog"))));
+        assert!(!s.is_blocked(Some(Id::unique("menu"))));
     }
 
     #[test]
@@ -663,7 +663,7 @@ mod tests {
                     assert!(c.len() <= 1);
                 }
                 2 => {
-                    let c = s.close(Id::new(n));
+                    let c = s.close(Id::unique(n));
                     assert_eq!(s.len() + c.len(), before);
                 }
                 _ => {

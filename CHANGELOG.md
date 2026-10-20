@@ -10,6 +10,49 @@ publishes.
 
 ## Unreleased
 
+### Breaking
+
+- egui 0.37 (every crate on egui): egui-pop moves from egui 0.36 to egui
+  0.37, with eframe, egui-wgpu, egui_kittest, egui_table 0.11 and the
+  egui 0.37 updates of egui_dock and egui-phosphor. This is the egui-pop
+  0.2 line (one egui-pop minor per egui minor). Part of #24.
+
+  Not publishable yet: egui_dock and egui-phosphor have no release on
+  egui 0.37, so the workspace takes them from git branches
+  (`[patch.crates-io]` in the root `Cargo.toml`), and crates.io refuses
+  git dependencies. egui-pop 0.2 is published once both crates are
+  released on egui 0.37 and the patches are gone.
+
+  egui-pop's own API changes with egui's:
+
+  - `egui_pop_core::a11y::name` takes an `egui::Role` (egui's
+    `WidgetType` is now AccessKit's `Role`).
+  - `widgets::combo_box` returns `ComboBox<'static>`, and
+    `widgets::combo_box_labelled` takes its label as `impl IntoAtoms`
+    and returns `ComboBox<'a>` (egui's `ComboBox` is built from atoms).
+  - `Viewport::new` (egui-pop-viewport) takes `impl AsIdSalt` (egui
+    deprecated `AsId`); the same values are accepted.
+
+  Migrating an application or an extension: depend on egui-pop 0.2 and
+  egui 0.37 (or use `egui_pop::egui`, which re-exports it), then follow
+  egui's own 0.37 changelog. What egui-pop met on the way:
+  `WidgetType::X` becomes `Role::X` (`Checkbox` is `CheckBox`,
+  `TextEdit` is `TextInput`, `SelectableLabel` is `Button`, `Other` is
+  `Unknown`), `Id::new` becomes `Id::unique` (the same value), `Ui::id`
+  becomes `Ui::scope_id`, `AtomLayout` becomes `WidgetAtom`,
+  `Atom::custom` and `WidgetAtomResponse::rect` take an `IdSalt`,
+  `TextEdit::horizontal_align` and `vertical_align` become
+  `TextEdit::align(Align2)`, a scroll area's `State::offset` is read with
+  `clamped_offset()`, `Event::MouseWheel` has a `source`, and
+  `From<String>`/`From<&str>` for `Id` are gone. egui's `default_fonts`
+  is no longer a default feature: a test harness that draws text enables
+  it. eframe's clipboard is a feature of its own now (`clipboard`):
+  egui-pop's `eframe` feature turns it on, so the system clipboard works
+  as before; an application depending on eframe directly with
+  `default-features = false` adds it. egui_kittest now fails a test
+  whose input widget has no accessible name, and panics on a glyph
+  missing from the fonts.
+
 ### Changed
 
 - egui-pop is now licensed under MIT OR Apache-2.0, at your option, like

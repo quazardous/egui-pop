@@ -466,7 +466,7 @@ pub fn hint(ui: &mut Ui, app: &AppHandle, id: &str) -> bool {
                 &[("tip", &tip.title_in(&ctx))],
             );
             let r = ui.button(&got);
-            egui_pop_core::a11y::name(&r, egui::WidgetType::Button, &name);
+            egui_pop_core::a11y::name(&r, egui::Role::Button, &name);
             if r.clicked()
                 && let Err(e) = tips.dismiss(app, id)
             {

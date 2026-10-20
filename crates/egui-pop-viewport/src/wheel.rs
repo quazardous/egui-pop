@@ -44,7 +44,7 @@ use std::ops::RangeInclusive;
 
 use egui::ecolor::Hsva;
 use egui::epaint::{Mesh, Vertex, WHITE_UV};
-use egui::{Color32, Pos2, Response, Sense, Shape, Stroke, Ui, Vec2, WidgetInfo, WidgetType, vec2};
+use egui::{Color32, Pos2, Response, Role, Sense, Shape, Stroke, Ui, Vec2, WidgetInfo, vec2};
 use egui_pop_core::slider::{self, Slider};
 use egui_pop_core::state::Slot;
 use egui_pop_core::strings;
@@ -278,7 +278,7 @@ impl<'a> ColorWheel<'a> {
             let text = value_text(ui.ctx(), *value, mode);
             let enabled = ui.is_enabled();
             response.widget_info(|| {
-                let mut info = WidgetInfo::labeled(WidgetType::Slider, enabled, &label);
+                let mut info = WidgetInfo::labeled(Role::Slider, enabled, &label);
                 info.current_text_value = Some(text.clone());
                 info
             });

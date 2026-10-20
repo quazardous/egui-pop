@@ -14,7 +14,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use egui::{Key, Ui, WidgetType};
+use egui::{Key, Role, Ui};
 use egui_pop_core::a11y;
 use egui_pop_core::keys::chord_of;
 use egui_pop_core::lock;
@@ -388,7 +388,7 @@ fn history(ui: &mut Ui, app: &AppHandle) {
                 Some(st) => strings::tr_args(&ctx, with_step, &[("change", st)]),
                 None => strings::tr(&ctx, nothing),
             });
-        a11y::name(&r, WidgetType::Button, &strings::tr(&ctx, name));
+        a11y::name(&r, Role::Button, &strings::tr(&ctx, name));
         if r.clicked() {
             app.run(command, serde_json::Value::Null);
         }
@@ -427,7 +427,7 @@ fn row(ui: &mut Ui, app: &AppHandle, e: &SettingEntry) {
             ));
         a11y::name(
             &r,
-            WidgetType::Button,
+            Role::Button,
             &strings::tr_args(ui.ctx(), &txt::SETTINGS_RESET_SETTING, &setting),
         );
         if r.clicked() {
@@ -772,7 +772,7 @@ fn shortcuts(ui: &mut Ui, app: &AppHandle, st: &mut State, filter: &str) {
                     let change = ui.small_button(strings::tr(&ctx, &txt::SHORTCUTS_CHANGE));
                     a11y::name(
                         &change,
-                        WidgetType::Button,
+                        Role::Button,
                         &strings::tr_args(&ctx, &txt::SHORTCUTS_CHANGE_NAME, &command),
                     );
                     if change.clicked() {
@@ -782,7 +782,7 @@ fn shortcuts(ui: &mut Ui, app: &AppHandle, st: &mut State, filter: &str) {
                         let none = ui.small_button(strings::tr(&ctx, &txt::SHORTCUTS_NO_KEY));
                         a11y::name(
                             &none,
-                            WidgetType::Button,
+                            Role::Button,
                             &strings::tr_args(&ctx, &txt::SHORTCUTS_NO_KEY_NAME, &command),
                         );
                         if none.clicked() {
@@ -793,7 +793,7 @@ fn shortcuts(ui: &mut Ui, app: &AppHandle, st: &mut State, filter: &str) {
                         let reset = ui.small_button(strings::tr(ui.ctx(), &RESET));
                         a11y::name(
                             &reset,
-                            WidgetType::Button,
+                            Role::Button,
                             &strings::tr_args(&ctx, &txt::SHORTCUTS_DEFAULT_NAME, &command),
                         );
                         if reset.clicked() {

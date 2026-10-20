@@ -31,7 +31,7 @@
 //! }
 //! ```
 
-use egui::{Color32, Rect, Response, Sense, Ui, Widget, WidgetInfo, WidgetType, pos2, vec2};
+use egui::{Color32, Rect, Response, Role, Sense, Ui, Widget, WidgetInfo, pos2, vec2};
 
 use crate::icon::Icon;
 use crate::kit::{Kit, KitCx, Part, State, Tone};
@@ -201,7 +201,7 @@ impl Widget for Skeleton {
             .label
             .unwrap_or_else(|| strings::tr(&ctx, &strings::LOADING));
         let enabled = ui.is_enabled();
-        response.widget_info(|| WidgetInfo::labeled(WidgetType::Other, enabled, &label));
+        response.widget_info(|| WidgetInfo::labeled(Role::Unknown, enabled, &label));
         ctx.accesskit_node_builder(response.id, |node| node.set_busy());
         response
     }

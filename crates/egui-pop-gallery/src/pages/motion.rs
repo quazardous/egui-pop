@@ -101,7 +101,7 @@ pub fn show(ui: &mut Ui, state: &mut State) {
     {
         motion::wake_at(&ctx, until);
     }
-    let visible = Busy::new(egui::Id::new("gallery.motion.busy"), since).visible(&ctx, busy);
+    let visible = Busy::new(egui::Id::unique("gallery.motion.busy"), since).visible(&ctx, busy);
     if visible && !state.was_shown {
         state.shown += 1;
     }

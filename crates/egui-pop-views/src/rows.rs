@@ -80,10 +80,10 @@ pub(crate) fn show<R>(
             },
         )
     });
-    scroll.offset = out.state.offset.y;
+    scroll.offset = out.state.clamped_offset().y;
     scroll.height = out.inner_rect.height();
     let response = ui.interact(out.inner_rect, id, Sense::focusable_noninteractive());
-    egui_pop_core::a11y::name(&response, egui::WidgetType::Other, label);
+    egui_pop_core::a11y::name(&response, egui::Role::Unknown, label);
     if response.has_focus() {
         ui.memory_mut(|m| {
             m.set_focus_lock_filter(

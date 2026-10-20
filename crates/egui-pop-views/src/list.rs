@@ -28,7 +28,7 @@
 
 use std::collections::HashSet;
 
-use egui::{Id, Response, Ui, UiBuilder, WidgetInfo, WidgetType};
+use egui::{Id, Response, Role, Ui, UiBuilder, WidgetInfo};
 use egui_pop_api::AppHandle;
 use egui_pop_core::strings::tr;
 use egui_pop_model::ids::StepId;
@@ -191,7 +191,7 @@ impl<'a> ListView<'a> {
         state: &mut ListState<K>,
         rows: &mut dyn ListRows<K>,
     ) -> ListOutput<K> {
-        let id = Id::new(("egui_pop_views::list", &self.id));
+        let id = Id::unique(("egui_pop_views::list", &self.id));
         let len = rows.len();
         retain(&mut state.selection, &mut state.len, len, &|i| rows.key(i));
         let row_h = self.row_height.unwrap_or_else(|| rows::height(ui));
@@ -246,7 +246,7 @@ impl<'a> ListView<'a> {
                     rows.ui(&mut child, i, selected);
                     let name = rows.label(i);
                     r.widget_info(move || {
-                        WidgetInfo::selected(WidgetType::SelectableLabel, true, selected, &name)
+                        WidgetInfo::selected(Role::Button, true, selected, &name)
                     });
                     if r.clicked() {
                         take_focus = true;

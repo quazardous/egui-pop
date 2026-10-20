@@ -59,7 +59,7 @@ pub fn boundary<R>(
     name: &str,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> Option<R> {
-    let id = ui.id().with(id);
+    let id = ui.scope_id().with(id);
     let key = FAULT.keyed(id);
     if let Some(fault) = key.get(ui.ctx()) {
         card(ui, key, &fault);

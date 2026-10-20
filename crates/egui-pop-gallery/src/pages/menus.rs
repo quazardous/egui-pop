@@ -150,11 +150,11 @@ fn show(ui: &mut Ui, app: &AppHandle) {
         });
     let card = ui.interact(
         frame.response.rect,
-        ui.id().with("gallery.menus.card"),
+        ui.scope_id().with("gallery.menus.card"),
         egui::Sense::click(),
     );
     card.widget_info(|| {
-        egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Card with a context menu")
+        egui::WidgetInfo::labeled(egui::Role::Button, true, "Card with a context menu")
     });
     menus::context_menu_with(&card, app, &CARD_MENU, json!({ "card": "demo" }));
     let popup = ui.button("Open the card's menu here");

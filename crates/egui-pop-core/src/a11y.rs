@@ -10,13 +10,13 @@
 //! ```
 
 use egui::accesskit::{Live, Role};
-use egui::{Context, Response, Ui, WidgetInfo, WidgetType};
+use egui::{Context, Response, Ui, WidgetInfo};
 use serde::Serialize;
 
 use crate::state::{lock, shared};
 
 /// Gives a custom widget its role and accessible name.
-pub fn name(response: &Response, kind: WidgetType, label: &str) {
+pub fn name(response: &Response, kind: Role, label: &str) {
     let enabled = response.enabled();
     let label = label.to_string();
     response.widget_info(move || WidgetInfo::labeled(kind, enabled, &label));
@@ -87,7 +87,7 @@ pub fn live_regions(ui: &mut Ui) {
             .find(|a| a.politeness == politeness)
             .map(|a| a.text.clone())
             .unwrap_or_default();
-        let id = ui.id().with(("egui_pop_live_region", salt));
+        let id = ui.scope_id().with(("egui_pop_live_region", salt));
         let (rect, _) = ui.allocate_exact_size(egui::Vec2::ZERO, egui::Sense::hover());
         let _ = rect;
         ui.ctx().accesskit_node_builder(id, |node| {

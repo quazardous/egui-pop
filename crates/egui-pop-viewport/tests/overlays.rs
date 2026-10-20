@@ -209,6 +209,7 @@ fn a_double_click_on_a_handle_resets_it_and_the_wheel_adjusts_it() {
     h.hover_at(edge);
     h.input_mut().events.push(Event::MouseWheel {
         unit: MouseWheelUnit::Point,
+        source: egui::MouseWheelSource::Wheel,
         delta: vec2(0.0, 50.0),
         modifiers: Modifiers::NONE,
         phase: egui::TouchPhase::Move,

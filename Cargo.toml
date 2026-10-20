@@ -57,16 +57,16 @@ egui-pop-wayland = { version = "0.1.1", path = "crates/egui-pop-wayland" }
 egui-pop-views = { version = "0.1.1", path = "crates/egui-pop-views" }
 egui-pop-editors = { version = "0.1.1", path = "crates/egui-pop-editors", default-features = false }
 egui-pop-imaging = { version = "0.1.1", path = "crates/egui-pop-imaging" }
-egui = { version = "0.36", default-features = false }
+egui = { version = "0.37", default-features = false }
 # MIT OR Apache-2.0: the scopes egui, egui-wgpu and wgpu already use;
 # compiled out unless a profiler backend is chosen (docs/threading.md).
 profiling = { version = "1", default-features = false }
-egui_kittest = "0.36"
+egui_kittest = "0.37"
 # MIT OR Apache-2.0: the test kit shares one wgpu device per process.
-egui-wgpu = { version = "0.36", default-features = false }
+egui-wgpu = { version = "0.37", default-features = false }
 # MIT OR Apache-2.0 (the Phosphor icons themselves are MIT).
 egui-phosphor = { version = "0.14", default-features = false, features = ["regular"] }
-eframe = { version = "0.36", default-features = false }
+eframe = { version = "0.37", default-features = false }
 # MIT; the system's file chooser (xdg portal on Linux).
 rfd = "0.17"
 # MIT: docked tabs and splits for the workbench's areas.
@@ -79,3 +79,14 @@ missing_debug_implementations = "warn"
 
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
+
+# Temporary: egui_dock and egui-phosphor have no release on egui 0.37 yet,
+# so both come from a git branch updating them to 0.37. crates.io refuses
+# git dependencies: egui-pop cannot be published while these patches
+# remain. Each goes as soon as its crate is released on egui 0.37 (then
+# raise the requirement above if the version changed, and drop the patch).
+[patch.crates-io]
+# The update offered to egui_dock (based on its 0.21 release line).
+egui_dock = { git = "https://github.com/quazardous/egui_dock", branch = "update-egui-0.37" }
+# egui-phosphor's open pull request updating it to egui 0.37.
+egui-phosphor = { git = "https://github.com/xangelix/egui-phosphor", branch = "egui-0.37" }

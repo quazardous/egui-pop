@@ -32,7 +32,7 @@ use std::f32::consts::TAU;
 use egui::accesskit::Role;
 use egui::{
     Color32, Context, FontId, Id, Painter, Pos2, Rect, Response, Sense, Stroke, Ui, Widget,
-    WidgetInfo, WidgetType, pos2, vec2,
+    WidgetInfo, pos2, vec2,
 };
 
 pub use crate::kit::Tone;
@@ -124,7 +124,7 @@ fn access(
 ) {
     let enabled = ui.is_enabled();
     let name = label.to_string();
-    response.widget_info(|| WidgetInfo::labeled(WidgetType::ProgressIndicator, enabled, &name));
+    response.widget_info(|| WidgetInfo::labeled(Role::ProgressIndicator, enabled, &name));
     let (value, text) = (value.cloned(), text.map(String::from));
     ui.ctx().accesskit_node_builder(response.id, |node| {
         if let Some(role) = role {

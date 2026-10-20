@@ -23,8 +23,8 @@
 use std::f32::consts::PI;
 
 use egui::{
-    Color32, Context, FontFamily, FontId, ImageSource, Painter, Pos2, Rect, Response, Sense,
-    Stroke, StrokeKind, Ui, Widget, WidgetInfo, WidgetType, pos2, vec2,
+    Color32, Context, FontFamily, FontId, ImageSource, Painter, Pos2, Rect, Response, Role, Sense,
+    Stroke, StrokeKind, Ui, Widget, WidgetInfo, pos2, vec2,
 };
 
 use crate::kit::{KitCx, Part, State};
@@ -1134,9 +1134,9 @@ impl Widget for IconWidget {
             }
         }
         let kind = if self.sense.senses_click() {
-            WidgetType::Button
+            Role::Button
         } else {
-            WidgetType::Image
+            Role::Image
         };
         let enabled = ui.is_enabled();
         let label = self.label.clone().unwrap_or_default();

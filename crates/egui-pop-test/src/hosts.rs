@@ -97,7 +97,7 @@ impl MockHost {
     /// application is drawn); a dialog host opens its dialog once.
     pub fn show(&mut self, ctx: &egui::Context, app: &AppHandle) {
         let draw = self.draw.clone();
-        let id = Id::new(("egui_pop_test.mock", self.offer.id.as_str()));
+        let id = Id::unique(("egui_pop_test.mock", self.offer.id.as_str()));
         match self.offer.id.as_str() {
             mounts::PANEL | mounts::STORY => {
                 area(ctx, id, |ui| {

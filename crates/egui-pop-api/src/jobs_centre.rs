@@ -169,7 +169,7 @@ fn ask_button(ui: &mut Ui, app: &AppHandle, job: &Job, request: Request) {
         &txt::JOB_ACTION_NAME,
         &[("action", &label), ("job", &job.title)],
     );
-    a11y::name(&r, egui::WidgetType::Button, &name);
+    a11y::name(&r, egui::Role::Button, &name);
     if r.clicked() {
         jobs::ask(app, &job.id, request);
     }
@@ -265,7 +265,7 @@ pub fn job_row(ui: &mut Ui, app: &AppHandle, jobs: &JobsService, job: &Job, dept
                 let r = ui.small_button(&label);
                 a11y::name(
                     &r,
-                    egui::WidgetType::Button,
+                    egui::Role::Button,
                     &strings::tr_args(
                         &ctx,
                         &txt::JOB_ACTION_NAME,
@@ -423,7 +423,7 @@ pub(crate) fn popover(ui: &mut Ui, app: &AppHandle, response: &egui::Response) {
 
 /// The popover's id.
 pub fn popover_id() -> egui::Id {
-    egui::Id::new("egui_pop.jobs.popover")
+    egui::Id::unique("egui_pop.jobs.popover")
 }
 
 /// Whether the jobs popover is open.

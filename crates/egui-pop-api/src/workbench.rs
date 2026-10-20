@@ -58,7 +58,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
-use egui::{Color32, Id, Pos2, Rect, Ui, ViewportBuilder, ViewportId, WidgetInfo, WidgetType};
+use egui::{Color32, Id, Pos2, Rect, Role, Ui, ViewportBuilder, ViewportId, WidgetInfo};
 use egui_dock::{DockArea, DockState, NodeIndex, Split, TabViewer};
 use egui_pop_core::kit::{
     BoxStyle, Corners, Glyph, Kit, KitCx, Part, Side, State, paint_box, paint_indicator,
@@ -921,7 +921,7 @@ pub(crate) fn windows(app: &AppHandle, ctx: &egui::Context, app_name: &str) {
             let full_screen = egui_pop_core::frame::full_screen(&vctx);
             if own && (!full_screen || crate::frame::bar_in_fullscreen(app)) {
                 egui_pop_core::frame::resize_edges(&vctx);
-                let out = egui::Panel::top(Id::new(("egui_pop.aux.title", panel.as_str())))
+                let out = egui::Panel::top(Id::unique(("egui_pop.aux.title", panel.as_str())))
                     .frame(egui::Frame::NONE)
                     .show(ui, |ui| {
                         egui_pop_core::frame::TitleBar::new(&title)
@@ -969,7 +969,7 @@ pub fn window_id(panel: &PanelId) -> ViewportId {
 
 /// An area's dock id.
 pub(crate) fn dock_id(area: Area) -> Id {
-    Id::new(("egui_pop.area", area_name(area)))
+    Id::unique(("egui_pop.area", area_name(area)))
 }
 /// An area as the interface names it ("the start side bar").
 fn area_text(ctx: &egui::Context, area: Area) -> String {
@@ -1103,7 +1103,7 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
     app.set_drawing_areas(true);
     if !zen && app.zone_has_blocks(&crate::zones::ACTIVITY_BAR) {
         let t = egui_pop_core::theme::Tokens::of(&ctx);
-        egui::Panel::left(Id::new("egui_pop.activity_bar"))
+        egui::Panel::left(Id::unique("egui_pop.activity_bar"))
             .resizable(false)
             .exact_size(t.size.icon_panel + 2.0 * t.space.s + 2.0 * t.space.xs)
             .show(ui, |ui| {
@@ -1227,7 +1227,7 @@ fn strip(app: &AppHandle, ui: &mut Ui, kit: &Kit, area: Area, open: bool) -> Rec
             );
             let r = ui.interact(rect, id.with("unfold"), egui::Sense::click());
             let label = name.clone();
-            r.widget_info(move || WidgetInfo::labeled(WidgetType::Button, true, &label));
+            r.widget_info(move || WidgetInfo::labeled(Role::Button, true, &label));
             let r = r.on_hover_text(name);
             let state = State::from_response(&r).with(State::SELECTED, open);
             let b = component.style(state);
@@ -1392,7 +1392,7 @@ fn grip(ctx: &egui::Context, kit: &Kit, area: Area, rect: Rect) {
     );
     let painter = ctx.layer_painter(egui::LayerId::new(
         egui::Order::Middle,
-        Id::new("egui_pop.area_grips"),
+        Id::unique("egui_pop.area_grips"),
     ));
     let rect = Rect::from_center_size(centre, size);
     g.paint(
@@ -1694,7 +1694,7 @@ impl TabViewer for Viewer<'_> {
     type Tab = PanelId;
 
     fn id(&mut self, tab: &mut PanelId) -> Id {
-        Id::new(("egui_pop.panel", tab.as_str()))
+        Id::unique(("egui_pop.panel", tab.as_str()))
     }
 
     fn title(&mut self, tab: &mut PanelId) -> egui::WidgetText {
@@ -1716,10 +1716,10 @@ impl TabViewer for Viewer<'_> {
     fn on_tab_button(&mut self, tab: &mut PanelId, response: &egui::Response) {
         // egui_dock's tab buttons carry no name: give them their panel's.
         match self.prepared.get(tab) {
-            Some(p) => egui_pop_core::a11y::name(response, egui::WidgetType::Button, &p.title),
+            Some(p) => egui_pop_core::a11y::name(response, egui::Role::Button, &p.title),
             None => {
                 let title = self.app.panel_title(&response.ctx, tab);
-                egui_pop_core::a11y::name(response, egui::WidgetType::Button, &title);
+                egui_pop_core::a11y::name(response, egui::Role::Button, &title);
             }
         }
         self.seen.push(SeenTab {
@@ -1903,7 +1903,7 @@ fn drop_hint(app: &AppHandle, ctx: &egui::Context) {
     let t = egui_pop_core::theme::Tokens::of(ctx);
     let painter = ctx.layer_painter(egui::LayerId::new(
         egui::Order::Foreground,
-        Id::new("egui_pop.workbench.drop"),
+        Id::unique("egui_pop.workbench.drop"),
     ));
     let label = why.map(|why| {
         let font = egui::FontId::proportional(t.font.body);

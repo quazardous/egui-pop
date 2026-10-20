@@ -29,8 +29,8 @@
 //! ```
 
 use egui::{
-    Align2, Color32, Id, Pos2, Rect, Response, Sense, TextStyle, Ui, Vec2, WidgetInfo, WidgetType,
-    pos2, vec2,
+    Align2, Color32, Id, Pos2, Rect, Response, Role, Sense, TextStyle, Ui, Vec2, WidgetInfo, pos2,
+    vec2,
 };
 use egui_pop_core::icon::Icon;
 use egui_pop_core::kit::{self, Corners, Kit, KitCx, Part, State};
@@ -173,7 +173,7 @@ impl<K: Key> CompareView<K> {
         let t = Tokens::of(ui.ctx());
         let lt = LibraryTokens::of(ui.ctx());
         let kit = Kit::of(ui.ctx());
-        let id = Id::new(("egui_pop_views::compare", &self.id));
+        let id = Id::unique(("egui_pop_views::compare", &self.id));
         let panes = &panes[..panes.len().min(MAX_PANES)];
         let height = self
             .height
@@ -182,7 +182,7 @@ impl<K: Key> CompareView<K> {
         let (rect, response) =
             ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
         let name = tr(ui.ctx(), &s::COMPARE);
-        egui_pop_core::a11y::name(&response, WidgetType::Other, &name);
+        egui_pop_core::a11y::name(&response, Role::Unknown, &name);
         let gap = t.space.s;
         let (cols, rows) = match panes.len() {
             0 | 1 => (1, 1),
@@ -255,7 +255,7 @@ impl<K: Key> CompareView<K> {
             // click.
             let pr = ui.interact(area, id.with(("pane", i)), Sense::click_and_drag());
             let pane_name = pane.label.clone();
-            pr.widget_info(move || WidgetInfo::labeled(WidgetType::Other, true, &pane_name));
+            pr.widget_info(move || WidgetInfo::labeled(Role::Unknown, true, &pane_name));
             if pr.double_clicked() {
                 *state.view_mut(i, self.synced) = PaneView::default();
             } else if pr.dragged() {
@@ -312,9 +312,7 @@ impl<K: Key> CompareView<K> {
                 },
             );
             let bname = tr(ui.ctx(), &s::MARK_BEST);
-            br.widget_info(move || {
-                WidgetInfo::selected(WidgetType::Checkbox, true, is_best, &bname)
-            });
+            br.widget_info(move || WidgetInfo::selected(Role::CheckBox, true, is_best, &bname));
             if br.clicked() && !is_best {
                 best = Some(pane.key.clone());
             }

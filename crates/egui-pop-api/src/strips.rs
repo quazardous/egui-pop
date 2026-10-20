@@ -233,7 +233,7 @@ fn activity_bar(ui: &mut Ui, app: &AppHandle) {
             let on = !folded && shown.contains(&p.id);
             let side = t.size.icon_panel + 2.0 * t.space.s;
             let (rect, r) = ui.allocate_exact_size(vec2(side, side), Sense::click());
-            egui_pop_core::a11y::name(&r, egui::WidgetType::Button, &title);
+            egui_pop_core::a11y::name(&r, egui::Role::Button, &title);
             // Selected, never hovered then: the shown panel's item keeps
             // its look under the pointer.
             let state = KitState::REST
@@ -306,7 +306,7 @@ fn indicators(ui: &mut Ui, app: &AppHandle) {
             // Right to left: the spinner comes after the button in code,
             // before it on screen.
             let busy = egui_pop_core::motion::Busy::new(
-                egui::Id::new(("egui_pop_indicator_busy", &ind.id)),
+                egui::Id::unique(("egui_pop_indicator_busy", &ind.id)),
                 state.busy.unwrap_or(0.0),
             )
             .visible(ui.ctx(), state.busy.is_some());

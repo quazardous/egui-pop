@@ -4489,7 +4489,7 @@ impl App {
         ui.ctx()
             .layer_painter(egui::LayerId::new(
                 egui::Order::Foreground,
-                Id::new("egui_pop.window_outline"),
+                Id::unique("egui_pop.window_outline"),
             ))
             .rect_stroke(rect, 0.0, outline, egui::StrokeKind::Inside);
         ui.scope_builder(
@@ -4510,7 +4510,7 @@ impl App {
         if h.zone_has_blocks(&zones::TITLE) {
             // No least height: a title zone whose blocks draw nothing (the
             // system draws the frame) takes no room.
-            egui::Panel::top(Id::new("egui_pop.title"))
+            egui::Panel::top(Id::unique("egui_pop.title"))
                 .frame(egui::Frame::NONE)
                 // The kit's `title-bar` draws the line under the bar.
                 .show_separator_line(false)
@@ -4520,7 +4520,7 @@ impl App {
                 });
         }
         if h.menu_bar() {
-            egui::Panel::top(Id::new("egui_pop.top")).show(ui, |ui| {
+            egui::Panel::top(Id::unique("egui_pop.top")).show(ui, |ui| {
                 focus::scope(ui, "topBar", &[], |ui| {
                     egui::MenuBar::new().ui(ui, |ui| {
                         // The top bar's blocks keep the width they took
@@ -4547,14 +4547,14 @@ impl App {
                 });
             });
         } else if h.zone_has_blocks(&zones::TOP_BAR) {
-            egui::Panel::top(Id::new("egui_pop.top")).show(ui, |ui| {
+            egui::Panel::top(Id::unique("egui_pop.top")).show(ui, |ui| {
                 focus::scope(ui, "topBar", &[], |ui| {
                     ui.horizontal(|ui| h.show_zone(ui, &zones::TOP_BAR));
                 });
             });
         }
         if h.zone_has_blocks(&zones::STATUS_BAR) {
-            egui::Panel::bottom(Id::new("egui_pop.status")).show(ui, |ui| {
+            egui::Panel::bottom(Id::unique("egui_pop.status")).show(ui, |ui| {
                 focus::scope(ui, "statusBar", &[], |ui| {
                     ui.horizontal(|ui| h.show_zone(ui, &zones::STATUS_BAR));
                 });

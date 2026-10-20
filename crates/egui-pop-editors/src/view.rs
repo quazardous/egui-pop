@@ -7,8 +7,7 @@ use egui::accesskit::Role;
 use egui::text::{CCursor, LayoutJob, TextFormat};
 use egui::{
     Align2, Color32, Event, EventFilter, FontId, Galley, Id, ImeEvent, Key, Modifiers, Painter,
-    Pos2, Rect, Response, ScrollArea, Sense, Shape, Stroke, StrokeKind, Ui, WidgetInfo, WidgetType,
-    pos2, vec2,
+    Pos2, Rect, Response, ScrollArea, Sense, Shape, Stroke, StrokeKind, Ui, WidgetInfo, pos2, vec2,
 };
 use egui_pop_api::AppHandle;
 use egui_pop_core::focus;
@@ -85,7 +84,7 @@ impl Options<'_> {
 
 /// Draws an editor.
 pub(crate) fn show(ui: &mut Ui, state: &EditorState, o: &Options<'_>) -> EditorOutput {
-    let id = Id::new(("egui_pop_editors", state.id()));
+    let id = Id::unique(("egui_pop_editors", state.id()));
     if let Some(app) = o.app
         && let Some(reg) = app.service(&EDITORS)
     {
@@ -399,7 +398,7 @@ fn text_area(
     };
     let enabled = response.enabled();
     response.widget_info(move || {
-        let mut info = WidgetInfo::labeled(WidgetType::TextEdit, enabled, &label);
+        let mut info = WidgetInfo::labeled(Role::TextInput, enabled, &label);
         info.current_text_value = Some(value.clone());
         info
     });

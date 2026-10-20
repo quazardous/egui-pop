@@ -9,9 +9,9 @@ exclude = ["src/**", "locales/**"]
 [placeholders.egui_pop_version]
 type = "string"
 prompt = "Which egui-pop version?"
-default = "0.1"
+default = "0.2"
 
 [placeholders.egui_version]
 type = "string"
 prompt = "Which egui version does that egui-pop use?"
-default = "0.36"
+default = "0.37"

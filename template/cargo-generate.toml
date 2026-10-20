@@ -4,4 +4,4 @@ cargo_generate_version = ">=0.21"
 [placeholders.egui_pop_version]
 type = "string"
 prompt = "Which egui-pop version?"
-default = "0.1"
+default = "0.2"

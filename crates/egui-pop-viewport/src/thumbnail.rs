@@ -21,7 +21,7 @@
 //! ```
 
 use egui::{
-    Color32, Rect, Response, Sense, TextureId, Ui, Vec2, Widget, WidgetInfo, WidgetType, pos2, vec2,
+    Color32, Rect, Response, Role, Sense, TextureId, Ui, Vec2, Widget, WidgetInfo, pos2, vec2,
 };
 use egui_pop_core::kit::{Kit, KitCx, Part, State};
 use egui_pop_core::theme::Tokens;
@@ -136,9 +136,7 @@ impl Widget for Thumbnail {
         }
         let label = self.label;
         let selected = self.selected;
-        response.widget_info(move || {
-            WidgetInfo::selected(WidgetType::SelectableLabel, true, selected, &label)
-        });
+        response.widget_info(move || WidgetInfo::selected(Role::Button, true, selected, &label));
         response
     }
 }

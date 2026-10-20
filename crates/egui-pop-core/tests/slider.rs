@@ -245,6 +245,7 @@ fn wheel(h: &mut Harness<'_, Panel>, at: Pos2, modifiers: Modifiers) {
     h.event(Event::ModifiersChanged(modifiers));
     h.event(Event::MouseWheel {
         unit: egui::MouseWheelUnit::Line,
+        source: egui::MouseWheelSource::Wheel,
         phase: egui::TouchPhase::Move,
         delta: egui::vec2(0.0, -1.0),
         modifiers,
@@ -764,6 +765,7 @@ fn a_range_resets_both_thumbs_and_its_wheel_follows_the_rules() {
     h.event(Event::ModifiersChanged(Modifiers::ALT));
     h.event(Event::MouseWheel {
         unit: egui::MouseWheelUnit::Line,
+        source: egui::MouseWheelSource::Wheel,
         phase: egui::TouchPhase::Move,
         delta: egui::vec2(0.0, 1.0),
         modifiers: Modifiers::ALT,

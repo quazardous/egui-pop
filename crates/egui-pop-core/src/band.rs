@@ -31,7 +31,7 @@
 //! out.textures_delta.clear();
 //! ```
 
-use egui::{CursorIcon, Id, Rect, Response, Sense, Shape, Ui, Vec2, WidgetType};
+use egui::{CursorIcon, Id, Rect, Response, Role, Sense, Shape, Ui, Vec2};
 
 use crate::icon::Icon;
 use crate::kit::{Kit, KitCx, Part, State};
@@ -88,7 +88,7 @@ pub fn begin<R>(
     style: &BandStyle,
     add: impl FnOnce(&mut Ui, State) -> R,
 ) -> (R, Band) {
-    let id = ui.id().with("egui_pop.band");
+    let id = ui.scope_id().with("egui_pop.band");
     let pad = style.padding;
     let top_left = ui.max_rect().min - egui::vec2(pad, pad);
     let size = SIZE.keyed(id).get(ui.ctx()).unwrap_or(egui::vec2(
@@ -172,6 +172,6 @@ pub fn button(ui: &mut Ui, side: f32, icon: Icon, name: &str, on: bool) -> Respo
             button.style(part.state).text,
         );
     }
-    crate::a11y::name(&response, WidgetType::Button, name);
+    crate::a11y::name(&response, Role::Button, name);
     response.on_hover_text(name)
 }

@@ -399,7 +399,7 @@ pub fn show(ui: &mut Ui, state: &mut State) {
             CornerRadius::same(t.radius.widget.round() as u8),
             t.surface.sunken,
         );
-        egui_pop::core::a11y::name(&r, egui::WidgetType::Button, "IMG_0042");
+        egui_pop::core::a11y::name(&r, egui::Role::Button, "IMG_0042");
         Indicator::flag(Flag::Pinned).on(ui, &r, Anchor::TopStart);
         Indicator::swatch(Color32::from_rgb(0xd9, 0x48, 0x3d))
             .name("red label")

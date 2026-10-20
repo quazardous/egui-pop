@@ -25,4 +25,4 @@ color_quant = "1.1"
 # Apache-2.0: the labels of the themes sheet.
 ab_glyph = "0.2"
 # The labels' font, egui's own monospace (Hack, MIT and Bitstream Vera).
-epaint_default_fonts = "0.36"
+epaint_default_fonts = "0.37"

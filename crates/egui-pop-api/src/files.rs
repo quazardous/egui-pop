@@ -674,7 +674,7 @@ fn frame(ui: &mut Ui, app: &AppHandle) {
 }
 
 fn overlay_id(id: u64) -> egui::Id {
-    egui::Id::new(("egui_pop.files", id))
+    egui::Id::unique(("egui_pop.files", id))
 }
 
 /// Ends a choice: `file.chosen` for paths, the journal for a cancel.
@@ -1165,11 +1165,7 @@ impl FilePicker {
                 .hint_text(strings::tr(ui.ctx(), hint))
                 .desired_width(f32::INFINITY),
         );
-        egui_pop_core::a11y::name(
-            &field,
-            egui::WidgetType::TextEdit,
-            &strings::tr(ui.ctx(), hint),
-        );
+        egui_pop_core::a11y::name(&field, egui::Role::TextInput, &strings::tr(ui.ctx(), hint));
         if first || tab || parent || down || up || enter {
             field.request_focus();
         }

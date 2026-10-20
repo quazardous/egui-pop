@@ -16,7 +16,9 @@
 //! }
 //! ```
 
-use egui::{Atom, Button, Color32, Id, Rect, Response, RichText, Shape, Stroke, Ui, Widget, vec2};
+use egui::{
+    Atom, Button, Color32, Id, IdSalt, Rect, Response, RichText, Shape, Stroke, Ui, Widget, vec2,
+};
 use egui_pop_core::icon::Icon;
 use egui_pop_core::kit::{Kit, Part, State};
 use egui_pop_core::motion::Busy;
@@ -109,7 +111,8 @@ impl Widget for CommandButton<'_> {
         let running = app.running(id);
         let applies = spec.is_some() && app.applies(id, &app.when_context());
         let enabled = applies && !running;
-        let slot = Id::new(("egui_pop_command_button", id.as_str(), ui.id()));
+        let slot = Id::unique(("egui_pop_command_button", id.as_str(), ui.scope_id()));
+        let atom = IdSalt::new(slot);
         let side = t.size.icon_inline;
         // egui lays the button out and takes its clicks; the kit's
         // `command-button` paints its box under it (`under`), in the
@@ -128,7 +131,7 @@ impl Widget for CommandButton<'_> {
                 let label = RichText::new(title.as_str()).color(look.style(state).text);
                 // egui's margin keeps room for its own border: kept, unseen.
                 let border = ui.visuals().widgets.inactive.bg_stroke.width;
-                let r = Button::new((Atom::custom(slot, vec2(side, side)), label))
+                let r = Button::new((Atom::custom(atom, vec2(side, side)), label))
                     .fill(Color32::TRANSPARENT)
                     .stroke(Stroke::new(border, Color32::TRANSPARENT))
                     .atom_ui(ui);
@@ -144,7 +147,7 @@ impl Widget for CommandButton<'_> {
             })
             .inner;
         let busy = busy_shown(app, &ctx, slot, id);
-        if let Some(rect) = r.rect(slot) {
+        if let Some(rect) = r.rect(atom) {
             paint_slot(ui, rect, busy, self.icon, enabled);
         }
         let mut response = r.response;

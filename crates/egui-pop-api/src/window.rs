@@ -282,7 +282,7 @@ fn way_out(ctx: &Context, app: &AppHandle) {
     let near_top = ctx
         .input(|i| i.pointer.hover_pos())
         .is_some_and(|p| p.y <= screen.top() + 4.0);
-    let id = Id::new("egui_pop.window.way_out");
+    let id = Id::unique("egui_pop.window.way_out");
     let shown_before = WAY_OUT.get(ctx).unwrap_or(false);
     let mut keep = near_top;
     if near_top || shown_before {

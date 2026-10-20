@@ -361,7 +361,7 @@ mod tests {
         let square = Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(15.0, 15.0));
         ring.paint(&painter, square, Color32::WHITE);
         ring.paint(&painter, square, Color32::WHITE);
-        let cache = EXTRA.update(ctx, |e| e.clone());
+        let cache = EXTRA.update(&ctx, |e| e.clone());
         let map = cache.0.lock().unwrap();
         let made: Vec<_> = map.keys().filter(|(i, _)| *i == c.0).collect();
         assert_eq!(made, [&(c.0, 15)]);

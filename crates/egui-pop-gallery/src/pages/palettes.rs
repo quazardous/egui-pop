@@ -219,7 +219,7 @@ fn swatches(ui: &mut Ui, app: &AppHandle) {
             };
             ui.painter()
                 .rect_stroke(rect, t.radius.widget, stroke, egui::StrokeKind::Inside);
-            egui_pop::core::a11y::name(&response, egui::WidgetType::Button, name);
+            egui_pop::core::a11y::name(&response, egui::Role::Button, name);
             if response.on_hover_text(name).clicked() {
                 app.set_context(COLOUR, name);
             }

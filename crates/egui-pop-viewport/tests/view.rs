@@ -120,6 +120,7 @@ fn the_wheel_zooms_and_stops_at_100_percent() {
     // One long scroll: continuous, but held on 100 % when it crosses it.
     h.input_mut().events.push(Event::MouseWheel {
         unit: MouseWheelUnit::Point,
+        source: egui::MouseWheelSource::Wheel,
         delta: vec2(0.0, 2000.0),
         modifiers: Modifiers::NONE,
         phase: egui::TouchPhase::Move,
@@ -129,6 +130,7 @@ fn the_wheel_zooms_and_stops_at_100_percent() {
     // The next scroll leaves it.
     h.input_mut().events.push(Event::MouseWheel {
         unit: MouseWheelUnit::Point,
+        source: egui::MouseWheelSource::Wheel,
         delta: vec2(0.0, 100.0),
         modifiers: Modifiers::NONE,
         phase: egui::TouchPhase::Move,
@@ -243,6 +245,7 @@ fn a_before_hook_clamps_or_vetoes_the_zoom() {
     h.hover_at(c);
     h.input_mut().events.push(Event::MouseWheel {
         unit: MouseWheelUnit::Point,
+        source: egui::MouseWheelSource::Wheel,
         delta: vec2(0.0, 3000.0),
         modifiers: Modifiers::NONE,
         phase: egui::TouchPhase::Move,

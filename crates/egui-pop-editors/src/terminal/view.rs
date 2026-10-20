@@ -6,7 +6,7 @@ use egui::accesskit::Role;
 use egui::text::{LayoutJob, TextFormat};
 use egui::{
     Color32, CursorIcon, Event, EventFilter, FontId, Id, ImeEvent, Key, Pos2, Rect, Response,
-    Sense, Stroke, StrokeKind, Ui, WidgetInfo, WidgetType, pos2, vec2,
+    Sense, Stroke, StrokeKind, Ui, WidgetInfo, pos2, vec2,
 };
 use egui_pop_api::AppHandle;
 use egui_pop_core::focus;
@@ -140,7 +140,7 @@ impl<'a> Terminal<'a> {
 
     /// Draws the terminal.
     pub fn show(self, ui: &mut Ui, state: &TerminalState) -> TerminalOutput {
-        let id = Id::new(("egui_pop_terminal", state.id()));
+        let id = Id::unique(("egui_pop_terminal", state.id()));
         let ctx = ui.ctx().clone();
         state.set_ctx(&ctx);
         keys::register(&ctx, id);
@@ -255,7 +255,7 @@ impl<'a> Terminal<'a> {
         let value = state.screen_text();
         let enabled = response.enabled();
         response.widget_info(move || {
-            let mut info = WidgetInfo::labeled(WidgetType::TextEdit, enabled, &label);
+            let mut info = WidgetInfo::labeled(Role::TextInput, enabled, &label);
             info.current_text_value = Some(value.clone());
             info
         });
