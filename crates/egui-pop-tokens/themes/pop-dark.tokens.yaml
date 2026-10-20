@@ -347,11 +347,12 @@ size:
   toast:
     width:
       $value: {value: 340, unit: "px"}
-  titlebar:
+  title-bar:
     height:
       $value: {value: 32, unit: "px"}
       $description: "Height of a window's own title bar."
-    button:
+  window-button:
+    width:
       $value: {value: 44, unit: "px"}
       $description: "Width of the minimize, maximize and close buttons."
   magnet:

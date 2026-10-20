@@ -94,8 +94,10 @@ publishes.
   0.1 (GOVERNANCE.md's one-minor window). A theme still giving an old
   name now carries an ordinary token nothing reads, and `kit::check`
   reports it as outside the vocabulary when its component is a kit's.
-  To move, rename each token; where a row names several tokens, give
-  each of them:
+  The system tokens `size.titlebar.height` and `size.titlebar.button`
+  are renamed in the same move, after the components they size (the
+  last two rows). To move, rename each token; where a row names several
+  tokens, give each of them:
 
   | Former name | Name now |
   |---|---|
@@ -170,6 +172,8 @@ publishes.
   | `font.size.body` | `font.text-style.body`, `font.text-style.button` |
   | `font.size.heading` | `font.text-style.heading` |
   | `font.size.mono` | `font.text-style.monospace` |
+  | `size.titlebar.height` | `size.title-bar.height` |
+  | `size.titlebar.button` | `size.window-button.width` |
 
 - `Tokens` keeps the system tier only (`egui-pop-core`, breaking): the
   per-widget structs `ButtonTokens`, `SliderTokens`, `FieldTokens`,

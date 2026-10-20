@@ -6,7 +6,7 @@ window-close:
     $value: "plain"
   width:
     $type: "dimension"
-    $value: "{size.titlebar.button}"
+    $value: "{size.window-button.width}"
   rest:
     fill:
       $type: "color"

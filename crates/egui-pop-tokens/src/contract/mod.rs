@@ -229,12 +229,12 @@ const CORE: &[Required] = &[
         "how much a backdrop behind a modal hides (0 to 1)",
     ),
     sys(
-        "size.titlebar.height",
+        "size.title-bar.height",
         "dimension",
         "height of a window's own title bar",
     ),
     sys(
-        "size.titlebar.button",
+        "size.window-button.width",
         "dimension",
         "width of a title bar's window buttons",
     ),

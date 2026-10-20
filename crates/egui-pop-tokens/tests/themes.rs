@@ -523,8 +523,8 @@ fn control_and_icon_sizes_are_multiples_of_four_points() {
             "size.icon.inline",
             "size.icon.toolbar",
             "size.icon.panel",
-            "size.titlebar.height",
-            "size.titlebar.button",
+            "size.title-bar.height",
+            "size.window-button.width",
         ] {
             let v = r.dimension(path).expect(path);
             assert_eq!(v % 4.0, 0.0, "{} {path}: {v}", spec.label());
