@@ -413,6 +413,11 @@ impl eframe::App for Gallery {
 
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
         self.show(ui);
+        // What the web smoke test waits for (tools/web-smoke.mjs).
+        #[cfg(target_arch = "wasm32")]
+        if self.frames == 1 {
+            eframe::web_sys::console::info_1(&"egui-pop gallery started".into());
+        }
     }
 
     #[cfg(target_arch = "wasm32")]

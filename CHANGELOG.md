@@ -513,6 +513,11 @@ publishes.
   (`web-time`), and where `std::env::temp_dir` and `std::process::id`
   panic there, the new `dirs::temp_dir` and `dirs::pid` give an empty
   path (where writes fail and are given up) and 0.
+- The gallery starts in a browser again: its simulated platform and demo
+  folder no longer reach for a temporary directory on the web, which
+  panicked at start-up and left a black page. On the web it now logs to
+  the browser's console, and when it cannot start or panics, the page
+  says why instead of staying black.
 
 ## 0.1.1 (2026-10-18)
 

@@ -46,9 +46,10 @@ impl Plugin for FilesPage {
     }
 }
 
-/// The demo folder: the same names on every machine.
+/// The demo folder: the same names on every machine (none on the web,
+/// which has no file system: the picker shows an empty folder).
 pub fn demo_folder() -> PathBuf {
-    let root = std::env::temp_dir().join("egui-pop-gallery-files");
+    let root = egui_pop::platform::dirs::temp_dir().join("egui-pop-gallery-files");
     for d in ["Photos/2025", "Photos/2026", "Documents", "Exports"] {
         let _ = std::fs::create_dir_all(root.join(d));
     }

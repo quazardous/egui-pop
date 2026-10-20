@@ -39,6 +39,7 @@ egui-pop = { workspace = true, features = ["editors-pty"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen-futures = "0.4"
+log.workspace = true
 
 [dev-dependencies]
 egui_kittest = { workspace = true, features = ["eframe", "wgpu", "snapshot"] }
