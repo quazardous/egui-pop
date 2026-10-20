@@ -6,7 +6,7 @@
 [![Latest version](https://img.shields.io/crates/v/egui-pop.svg)](https://crates.io/crates/egui-pop)
 [![Documentation](https://docs.rs/egui-pop/badge.svg)](https://docs.rs/egui-pop)
 [![unsafe: platform crates only](https://img.shields.io/badge/unsafe-platform%20crates%20only-success.svg)](#unsafe-code)
-[![Try it in the browser](https://img.shields.io/badge/gallery-try%20it%20in%20the%20browser-ff4f8b.svg)](https://quazardous.github.io/egui-pop/)
+[![Demo: try it in the browser](https://img.shields.io/badge/demo-try%20it%20in%20the%20browser-ff4f8b.svg)](https://quazardous.github.io/egui-pop/)
 [![Build Status](https://github.com/quazardous/egui-pop/actions/workflows/ci.yml/badge.svg)](https://github.com/quazardous/egui-pop/actions/workflows/ci.yml)
 [![MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/quazardous/egui-pop/blob/main/LICENSE-MIT)
 [![Apache](https://img.shields.io/badge/license-Apache-blue.svg)](https://github.com/quazardous/egui-pop/blob/main/LICENSE-APACHE)
