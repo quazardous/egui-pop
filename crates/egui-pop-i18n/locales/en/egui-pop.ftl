@@ -790,6 +790,8 @@ egui-pop-shortcuts-target-user = every workspace (yours)
 
 egui-pop-shortcuts-target-workspace = this workspace
 
+egui-pop-slider-entry = { $label }, typed value
+
 egui-pop-slider-maximum = { $label }, maximum
 
 egui-pop-slider-minimum = { $label }, minimum

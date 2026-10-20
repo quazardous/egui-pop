@@ -56,7 +56,7 @@ fn keys_app() -> Harness<'static, Keys> {
             focus::scope(ui, "outer", &[], |ui| {
                 let _ = ui.button("Outer button");
                 focus::scope(ui, "inner", &[("mode", "edit")], |ui| {
-                    ui.text_edit_singleline(&mut s.text);
+                    ui.text_edit_singleline(&mut s.text).accessible_name("Text");
                     let _ = ui.button("Inner button");
                 });
             });
@@ -539,7 +539,7 @@ fn escape_in_a_popover_field_leaves_the_field_before_closing_it() {
             overlay::begin_pass(ui.ctx());
             let spec = OverlaySpec::new("find", "Find", Kind::Popover);
             overlay::show(ui.ctx(), &spec, &mut s.open, None, |ui| {
-                ui.text_edit_singleline(&mut s.text);
+                ui.text_edit_singleline(&mut s.text).accessible_name("Text");
             });
         },
         Find {
@@ -578,7 +578,7 @@ fn sides(preference: egui_pop_core::focus_mode::Preference) -> Harness<'static, 
                 focus::scope(ui, "right", &[], |ui| {
                     ui.vertical(|ui| {
                         let _ = ui.button("Right button");
-                        let r = ui.text_edit_singleline(&mut s.text);
+                        let r = ui.text_edit_singleline(&mut s.text).accessible_name("Text");
                         egui_pop_core::focus_mode::follow_pointer(&r);
                     });
                 });

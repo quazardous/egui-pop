@@ -1009,7 +1009,11 @@ pub(crate) fn typed_entry(
                 .id(typing_id.with("edit"))
                 .align(egui::Align2::CENTER_TOP),
         )
-        .accessible_name(spec.label.clone());
+        .accessible_name(crate::strings::tr_args(
+            ui.ctx(),
+            &crate::strings::SLIDER_ENTRY,
+            &[("label", spec.label.as_str())],
+        ));
     if TYPING_FOCUS.keyed(typing_id).remove(ui.ctx()).is_some() {
         edit.request_focus();
     }

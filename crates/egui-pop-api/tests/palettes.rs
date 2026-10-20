@@ -35,8 +35,8 @@ impl Plugin for Demo {
                 .palette()
                 .min_size(160.0),
             move |ui, _| {
-                ui.label("Brush");
-                ui.text_edit_singleline(&mut size);
+                let label = ui.label("Brush");
+                ui.text_edit_singleline(&mut size).labelled_by(label.id);
             },
         )?
         .panel(

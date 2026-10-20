@@ -297,8 +297,9 @@ fn collectors(ui: &mut Ui, app: &AppHandle, s: &mut State) {
     ui.weak(c["description"].as_str().unwrap_or_default());
     if let Some(actions) = c["actions"].as_array().filter(|a| !a.is_empty()) {
         ui.horizontal(|ui| {
-            ui.label(strings::tr(ui.ctx(), &txt::DEVTOOLS_ARGUMENTS));
-            ui.add(egui::TextEdit::singleline(&mut s.args).desired_width(280.0));
+            let label = ui.label(strings::tr(ui.ctx(), &txt::DEVTOOLS_ARGUMENTS));
+            ui.add(egui::TextEdit::singleline(&mut s.args).desired_width(280.0))
+                .labelled_by(label.id);
         });
         ui.horizontal_wrapped(|ui| {
             for a in actions {

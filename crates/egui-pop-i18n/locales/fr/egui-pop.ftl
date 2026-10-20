@@ -789,6 +789,8 @@ egui-pop-shortcuts-search-by-key = Chercher par touche
 
 egui-pop-shortcuts-show-all = Afficher toutes les commandes
 
+egui-pop-slider-entry = { $label }, valeur saisie
+
 egui-pop-slider-maximum = { $label }, maximum
 
 egui-pop-slider-minimum = { $label }, minimum
