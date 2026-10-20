@@ -2,6 +2,50 @@
 
 How egui-pop is tested, and what to know when a test misbehaves.
 
+## Goal: time that does not grow with the tests
+
+The suite's wall time must not grow linearly with the number of tests.
+The first lever is parallel runs: every test binary runs side by side,
+every test in a process of its own (cargo-nextest, below).
+
+The integration tests are split into many small binaries
+(`crates/*/tests/*.rs`, one per feature) for that reason: a binary is a
+unit of selection, and editing one test file relinks one small binary.
+Do not merge them back into one.
+
+## The runner: cargo-nextest
+
+CI runs the tests with [cargo-nextest](https://nexte.st), configured in
+`.config/nextest.toml`. Plain `cargo test --workspace` still works and
+remains the reference: every commit passes it.
+
+```sh
+cargo install cargo-nextest --locked     # once
+cargo nextest run --workspace            # every test, binaries side by side
+cargo test --workspace --doc             # doctests (nextest does not run them)
+cargo nextest run -p egui-pop-viewport   # one crate
+```
+
+What the configuration sets:
+
+- **Retries for tests that may render.** A crash of the Vulkan loader
+  (below) kills the process of one test instead of a whole binary, and
+  that test is tried again twice before it counts as a failure; nextest
+  lists it as flaky. The crates whose tests never render
+  (`egui-pop-tokens`, `egui-pop-model`, the platform layers, `xtask`)
+  get no retry. A flaky test in the report is still a bug to look at.
+- **Slow tests are reported** after 60 seconds (10 for critical tests).
+  The `ci` profile stops a test after 4 minutes and writes a JUnit report
+  (`target/nextest/ci/junit.xml`), which CI keeps: the slowest tests are
+  visible there.
+- **The `critical` profile** runs the critical tests alone (below).
+
+One process per test means one wgpu device per test on lavapipe. The
+GitHub runner has four cores, as many as nextest runs tests at once; no
+test group caps the rendering tests yet. If a machine with many cores
+runs out of memory, cap them with `--test-threads`, or add a test group
+to the configuration.
+
 ## Layers
 
 - **Model** (`egui-pop-model`): plain unit tests, no egui, milliseconds.
@@ -46,7 +90,9 @@ without a renderer opens a device of its own the first time it renders
 (kittest's lazy renderer): give it `.shared_wgpu()` when it renders.
 
 Until the loader is updated everywhere, a crashing GPU test binary is
-rerun with `--test-threads=1` before concluding anything.
+rerun with `--test-threads=1` before concluding anything. Under nextest
+every test is a process of its own, so the parallel threads that trigger
+the crash are rarer, and a test that crashes anyway is retried.
 
 ## Critical tests
 
@@ -68,14 +114,15 @@ tests do not use the test kit (`egui-pop-tokens`, `egui-pop-model`,
 the same attribute, through a path-only dev-dependency.
 
 ```sh
-cargo test --workspace -- critical_                        # every critical test
-cargo nextest run --workspace -E 'test(/(^|::)critical_/)'  # the same, nextest
+cargo nextest run --workspace --profile critical   # every critical test
+cargo test --workspace -- critical_                # the same, plain cargo
 ```
 
 Rules for the mark:
 
 - **Critical tests stay fast.** They run on every pull request; one that
-  becomes slow loses its mark or is split.
+  becomes slow loses its mark or is split (nextest reports it as slow
+  after 10 seconds).
 - **The list is short and written down here**, each test with the rule
   it guards. A mark is a decision: added or removed in a commit that
   says why.
