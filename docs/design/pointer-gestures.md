@@ -772,3 +772,14 @@ Operating systems and browsers:
   passive listeners <https://developer.chrome.com/blog/scrolling-intervention-2>;
   Firefox pinch as Ctrl + wheel <https://bugzilla.mozilla.org/show_bug.cgi?id=1052253>;
   logical buttons <https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent/button>
+
+## Decisions (maintainer, 2026-10-20)
+
+1. **Profiles:** the five proposed (darktable, Adobe, Document, Blender / node editors, Trackpad). Helios ships all five, with darktable as its default.
+2. **The gallery's default profile:** Document.
+3. **User overrides on a profile change:** to study. Likely a dialog that asks what to do with them when the profile changes (keep them on top of the new profile, or drop them).
+4. **The wheel over sliders and values:** an option, not a fixed rule; each profile gives its default.
+5. **A double click on the image:** an option (leave the view, as darktable does, or fit); each profile gives its default.
+6. **Ctrl and the wheel on the web:** egui-pop takes it from the browser.
+
+Questions 7 to 15 above are still open.
