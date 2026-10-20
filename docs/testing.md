@@ -131,8 +131,8 @@ cargo xtask affected --full --run         # what main runs
 
 ## Time budget
 
-The target: a pull request's CI under 10 minutes on GitHub's standard
-runner (four cores), a docs-only one under 5. Measured on 2026-10-20,
+The budget (decided 2026-10-20): a pull request's CI under 10 minutes on
+GitHub's standard runner (four cores), a docs-only one under 5. Measured on 2026-10-20,
 wall time of the whole workflow, with a warm cache:
 
 | Change | Before (every job, `cargo test`) | After (selection, nextest) |
@@ -241,4 +241,3 @@ Rules for the mark:
 | `egui-pop-i18n::catalogues` `critical_every_locale_translates_everything_and_nothing_else` | no missing key, no unstamped translation |
 | `egui-pop-core::core` `critical_documents_are_written_atomically_with_a_backup_and_migrated_on_load` | an old saved document still loads |
 | `egui-pop-model::shell` `critical_a_version_1_layout_is_migrated_to_start_and_end_areas` | an old layout still loads |
-| `egui-pop-gallery::gallery` `critical_gpu_every_interactive_node_of_every_page_has_a_name` (GPU) | every interactive node of the gallery has a name (over 30 s on CI: to split, or the mark goes) |
