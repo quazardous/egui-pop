@@ -506,6 +506,14 @@ publishes.
   `tokens.resolved().dimension(path)`. `field::color` takes the kit
   instead of the tokens.
 
+### Fixed
+
+- The logs and crash reports no longer panic on the web
+  (egui-pop-platform): the time of a line comes from the browser's clock
+  (`web-time`), and where `std::env::temp_dir` and `std::process::id`
+  panic there, the new `dirs::temp_dir` and `dirs::pid` give an empty
+  path (where writes fail and are given up) and 0.
+
 ## 0.1.1 (2026-10-18)
 
 ### Added
