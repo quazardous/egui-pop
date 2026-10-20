@@ -43,6 +43,58 @@ let app = App::builder()
 app.handle().theme().set(ThemeSpec::new("gruvbox-dark").accent("amber"));
 ```
 
+## Light and dark together
+
+A theme may name its counterpart, the other variant of it, light or
+dark: its token file says so at the root
+(`$extensions: {"org.egui-pop.variant-of": "pop-dark"}`, on one side or
+both), or the spec does (`ThemeSpec::pair(dark, light)`,
+`ThemeSpec::counterpart`). The spec's density, accent, reduced motion
+and overrides apply to both. Every built-in theme with a light and a
+dark version is paired with it; `pop-high-contrast` is alone.
+
+`install` then installs both: each in its own egui style (dark or
+light), with its own kit, and `Tokens::of` and `Kit::of` give the ones
+of egui's theme of the moment, read at draw time. The theme named first
+is shown, as for a theme alone; `theme::set_preference` (or egui's own
+`ctx.set_theme`) switches to the other, or follows the system's light
+or dark mode, without installing anything again:
+
+```rust
+use egui_pop::egui;
+use egui_pop::theme::{self, ThemeSpec, Tokens};
+
+let ctx = egui::Context::default();
+let dark = theme::install(&ctx, &ThemeSpec::new("gruvbox-dark"));
+assert!(theme::is_paired(&ctx));
+theme::set_preference(&ctx, egui::ThemePreference::Light);
+assert_eq!(Tokens::of(&ctx).resolved().spec().base, "gruvbox-light");
+assert_ne!(Tokens::of(&ctx).surface.panel, dark.surface.panel);
+// Follows the system; the theme named first when it says nothing.
+theme::set_preference(&ctx, egui::ThemePreference::System);
+
+// Any two themes, or one alone (its mode is then forced).
+theme::install(&ctx, &ThemeSpec::pair("pop-high-contrast", "github-light"));
+theme::install(&ctx, &ThemeSpec::new("pop-dark").alone());
+assert!(!theme::is_paired(&ctx));
+```
+
+A theme alone keeps today's behaviour: both of egui's styles are its,
+and its mode is forced whatever is asked. A widget reading `Tokens::of`
+or `Kit::of` while drawing follows a switch; anything keeping what it
+drew from them across frames keys on the kit's address
+(`Arc::as_ptr(&Kit::of(ctx))`) or on the colours themselves. Fonts and
+icon sizes come from the theme named first.
+
+In an application, the theme service keeps the preference, the
+`appearance.theme_preference` setting (`system`, `light`, `dark`; in
+the settings' Appearance section): `ThemeService::preference`,
+`set_preference`, `shown` (the theme drawn) and `toggle`, the
+`view.theme.toggle_light_dark` command (View menu). Picking a theme
+(`ThemeService::pick`) shows it: when the preference would show its
+counterpart, the preference becomes the picked theme's mode. Without a
+counterpart, the preference changes nothing.
+
 ## What can be chosen
 
 - **Themes**: `pop-dark`, `pop-light` and `pop-high-contrast`, and twelve

@@ -317,6 +317,14 @@ impl Gallery {
     /// The gallery on a context, its theme installed.
     pub fn new(ctx: &egui::Context, options: Options) -> Result<Gallery, BuildError> {
         let app = builder(&options).build(ctx)?;
+        // The theme asked for is shown, whatever the system's light or
+        // dark mode: the switcher's "Mode" offers to follow it.
+        let service = app.handle().theme();
+        service.set_preference(if service.is_dark(&options.theme) {
+            egui::ThemePreference::Dark
+        } else {
+            egui::ThemePreference::Light
+        });
         if options.announce {
             let spec = app.handle().theme().spec();
             announce(&serde_json::json!({

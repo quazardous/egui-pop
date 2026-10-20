@@ -180,6 +180,8 @@ command-view-interface-zoom-reset.description ae3f63026d8cd68f
 command-view-interface-zoom-reset.title 3238faded85ee24f
 command-view-side-bar-toggle.description 1cd9e359739f6a74
 command-view-side-bar-toggle.title f931f2a206df0371
+command-view-theme-toggle-light-dark.description 7460b63bee5acc5c
+command-view-theme-toggle-light-dark.title a8b48a0f27483a7d
 command-workbench-arrangement-reset.description 4da24365c252a37a
 command-workbench-arrangement-reset.title db7ca7676a40511f
 command-workbench-arrangement-save.description 9b40413dc152aaee
@@ -602,6 +604,11 @@ setting-appearance-interface-zoom.label 5b75cc0eca132e0b
 setting-appearance-language-choice-system 86937a88d8b574ba
 setting-appearance-language.description c13504293ea0277b
 setting-appearance-language.label 3e94737db692401b
+setting-appearance-theme-preference-choice-dark b299412b96ce72a5
+setting-appearance-theme-preference-choice-light 1a075a58dac3f3b7
+setting-appearance-theme-preference-choice-system 86937a88d8b574ba
+setting-appearance-theme-preference.description 5c1437d3135f91a1
+setting-appearance-theme-preference.label 272329d79bec6abe
 setting-developer-devtools.description 62c267af7c6588cd
 setting-developer-devtools.label 9642ebb52ece11a7
 setting-developer-log-level-choice-debug ce9864611d84e87e

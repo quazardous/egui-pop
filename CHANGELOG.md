@@ -12,6 +12,22 @@ publishes.
 
 ### Added
 
+- Light or dark (egui-pop-api, egui-pop-i18n): the
+  `appearance.theme_preference` setting (`system`, the default, `light`,
+  `dark`; Appearance section) chooses between a theme and its
+  counterpart, applied before the next frame without installing again;
+  a theme alone keeps its mode. The theme service exposes it
+  (`ThemeService::preference`, `set_preference`), says which theme is
+  shown (`shown`, `counterpart`, `is_dark`), picks a theme as a picker
+  does (`pick`: the theme picked is shown, the preference following
+  when it must) and switches (`toggle`); the
+  `view.theme.toggle_light_dark` command (View menu, when the
+  `themePaired` context key is true) does it. The theme editor edits
+  the variant shown, and its first change makes it the theme, alone.
+  Strings with their French. Migration: an application whose theme has
+  a counterpart now follows the system's light or dark mode; set the
+  preference (`set_preference`) or give `ThemeSpec::alone()` to keep
+  one variant. The gallery starts in the mode of the theme it is given.
 - Theme counterparts (egui-pop-tokens): a theme names its other
   variant, light or dark, in its root `$extensions`
   (`"org.egui-pop.variant-of": "pop-dark"`, `VARIANT_OF_EXTENSION`; one

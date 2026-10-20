@@ -362,6 +362,10 @@ command-view-side-bar-toggle =
     .description = Folds the start side bar to its strip, or unfolds it.
     .title = Fold the side bar
 
+command-view-theme-toggle-light-dark =
+    .description = Shows the other variant of the theme, light or dark, when it has one.
+    .title = Toggle light and dark theme
+
 command-workbench-arrangement-reset =
     .description = Puts the panels back as the current arrangement's template has them.
     .title = Reset the arrangement
@@ -1239,6 +1243,16 @@ setting-appearance-language =
     .label = Language
 
 setting-appearance-language-choice-system = system
+
+setting-appearance-theme-preference =
+    .description = Which variant of a theme with a light and a dark one is shown: the system's, or always the light or the dark one. A theme without a counterpart keeps its own.
+    .label = Light or dark
+
+setting-appearance-theme-preference-choice-dark = dark
+
+setting-appearance-theme-preference-choice-light = light
+
+setting-appearance-theme-preference-choice-system = system
 
 setting-developer-devtools =
     .description = Lets the devtools panel open (F12): key resolutions, the journal, steps, focus, scale and every debug collector.

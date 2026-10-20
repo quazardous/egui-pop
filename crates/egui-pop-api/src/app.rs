@@ -19,7 +19,7 @@ use egui_pop_core::overlay;
 use egui_pop_core::persist::{Persist, PersistError, Writer};
 use egui_pop_core::state;
 use egui_pop_core::strings;
-use egui_pop_core::theme::{self, ThemeSpec, Themes};
+use egui_pop_core::theme::{self, Counterpart, ThemeSpec, Themes};
 use egui_pop_core::{a11y, fault, focus, lock};
 
 /// The theme was installed in this context.
@@ -36,7 +36,7 @@ use egui_pop_model::menus::{Item, MenuItem, Menus, sort_items};
 use egui_pop_model::order::{Node, order};
 use egui_pop_model::panels::{Area, PanelSpec, Panels};
 use egui_pop_model::registry::{OwnedList, Registry};
-use egui_pop_model::values::{Store, settings_schema};
+use egui_pop_model::values::{Change, Set, Store, Value, settings_schema};
 use egui_pop_model::when::WhenContext;
 use serde_json::{Value as Json, json};
 
@@ -130,12 +130,24 @@ pub struct OverlayRect {
 }
 
 /// The theme, as a service: read it, ask for another (installed between
-/// frames).
-#[derive(Debug)]
+/// frames), and choose between its light and dark variants when it has
+/// a counterpart (the [`SETTING_THEME_PREFERENCE`] setting).
 pub struct ThemeService {
     spec: Mutex<ThemeSpec>,
     themes: Themes,
     kits: Vec<egui_pop_core::tokens::kit::KitInfo>,
+    store: SharedStore,
+    /// Whether each theme met is a dark one, by name.
+    dark: Mutex<BTreeMap<String, bool>>,
+}
+
+impl fmt::Debug for ThemeService {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ThemeService")
+            .field("spec", &self.spec)
+            .field("kits", &self.kits)
+            .finish_non_exhaustive()
+    }
 }
 
 impl ThemeService {
@@ -163,7 +175,136 @@ impl ThemeService {
     pub fn kits(&self) -> &[egui_pop_core::tokens::kit::KitInfo] {
         &self.kits
     }
+
+    /// The light or dark mode asked for (the [`SETTING_THEME_PREFERENCE`]
+    /// setting): the system's by default. It chooses between the theme
+    /// and its counterpart; a theme alone keeps its own mode.
+    pub fn preference(&self) -> egui::ThemePreference {
+        lock(&self.store)
+            .get(&format!("settings/{SETTING_THEME_PREFERENCE}"))
+            .and_then(|e| e.value.as_choice().and_then(parse_preference))
+            .unwrap_or(egui::ThemePreference::System)
+    }
+
+    /// Asks for a light or dark mode, or the system's (written to the
+    /// setting); applied before the next frame.
+    pub fn set_preference(&self, preference: egui::ThemePreference) {
+        let set = Set::new(
+            &format!("settings/{SETTING_THEME_PREFERENCE}"),
+            Change::To(Value::Choice(preference_name(preference).into())),
+            Origin::User,
+        )
+        .untracked();
+        if let Err(e) = lock(&self.store).set(set) {
+            log::warn!(target: "egui_pop", "theme preference: {e}");
+        }
+    }
+
+    /// The theme's counterpart, its other variant, if it has one.
+    pub fn counterpart(&self) -> Option<String> {
+        self.themes.counterpart(&self.spec())
+    }
+
+    /// Whether a theme is a dark one (its panels are dark).
+    pub fn is_dark(&self, name: &str) -> bool {
+        if let Some(d) = lock(&self.dark).get(name) {
+            return *d;
+        }
+        let d = self.themes.resolve(&ThemeSpec::new(name).alone()).is_dark();
+        lock(&self.dark).insert(name.to_string(), d);
+        d
+    }
+
+    fn mode_of(&self, name: &str) -> egui::Theme {
+        if self.is_dark(name) {
+            egui::Theme::Dark
+        } else {
+            egui::Theme::Light
+        }
+    }
+
+    /// The theme shown with the preference: the spec's base, or its
+    /// counterpart when the preference (or the system's mode, with
+    /// `System`) asks for the other mode.
+    pub fn shown(&self, ctx: &Context) -> String {
+        let spec = self.spec();
+        let Some(other) = self.themes.counterpart(&spec) else {
+            return spec.base;
+        };
+        let base_mode = self.mode_of(&spec.base);
+        if self.mode_of(&other) == base_mode {
+            return spec.base;
+        }
+        let wanted = match self.preference() {
+            egui::ThemePreference::Dark => egui::Theme::Dark,
+            egui::ThemePreference::Light => egui::Theme::Light,
+            egui::ThemePreference::System => ctx.system_theme().unwrap_or(base_mode),
+        };
+        if wanted == base_mode {
+            spec.base
+        } else {
+            other
+        }
+    }
+
+    /// Picks a theme, as a theme picker does: it is shown. Its
+    /// counterpart comes from the token files; when the preference would
+    /// show the counterpart, the preference becomes the picked theme's
+    /// mode.
+    pub fn pick(&self, ctx: &Context, name: &str) {
+        self.update(|spec| {
+            spec.base = name.to_string();
+            spec.counterpart = Counterpart::Auto;
+        });
+        if self.shown(ctx) != name {
+            self.set_preference(self.mode_of(name).into());
+        }
+    }
+
+    /// Switches between the theme and its counterpart: the preference
+    /// becomes the mode of the one not shown. The mode now shown, or why
+    /// nothing changed (a theme alone).
+    pub fn toggle(&self, ctx: &Context) -> Result<egui::Theme, String> {
+        let spec = self.spec();
+        let other = self
+            .themes
+            .counterpart(&spec)
+            .filter(|o| self.mode_of(o) != self.mode_of(&spec.base))
+            .ok_or_else(|| format!("`{}` has no light or dark counterpart", spec.base))?;
+        let shown = self.shown(ctx);
+        let next = if shown == spec.base { other } else { spec.base };
+        let mode = self.mode_of(&next);
+        self.set_preference(mode.into());
+        Ok(mode)
+    }
 }
+
+/// A preference's name in the setting: `system`, `light`, `dark`.
+pub fn preference_name(p: egui::ThemePreference) -> &'static str {
+    match p {
+        egui::ThemePreference::System => "system",
+        egui::ThemePreference::Light => "light",
+        egui::ThemePreference::Dark => "dark",
+    }
+}
+
+/// A preference from its name in the setting.
+pub fn parse_preference(name: &str) -> Option<egui::ThemePreference> {
+    match name {
+        "system" => Some(egui::ThemePreference::System),
+        "light" => Some(egui::ThemePreference::Light),
+        "dark" => Some(egui::ThemePreference::Dark),
+        _ => None,
+    }
+}
+
+/// The setting choosing between a theme's light and dark variants:
+/// `system`, `light`, `dark`.
+pub const SETTING_THEME_PREFERENCE: SettingId =
+    SettingId::from_static("appearance.theme_preference");
+
+/// The command switching between the theme's light and dark variants.
+pub const CMD_THEME_TOGGLE: CommandId = CommandId::from_static("view.theme.toggle_light_dark");
 
 /// The theme service's token.
 pub const THEME: ServiceToken<ThemeService> = ServiceToken::new("app.theme");
@@ -2211,6 +2352,7 @@ impl AppBuilder {
             dirty: true,
             started: false,
             installed: None,
+            preference: None,
             persist: self.persist,
             kits: Vec::new(),
             in_flight: Vec::new(),
@@ -2361,6 +2503,8 @@ pub struct App {
     dirty: bool,
     started: bool,
     installed: Option<ThemeSpec>,
+    /// The light or dark preference applied since the last install.
+    preference: Option<egui::ThemePreference>,
     persist: Option<Persist>,
     /// The kits added: their faces and handlers are registered in each
     /// context the theme is installed in.
@@ -2602,6 +2746,29 @@ impl App {
                 spec: Mutex::new(theme),
                 themes,
                 kits,
+                store: handle.store(),
+                dark: Mutex::new(BTreeMap::new()),
+            },
+        )?;
+        ctx.setting(
+            SETTING_THEME_PREFERENCE,
+            egui_pop_model::values::Descriptor::choice(
+                "Light or dark",
+                &["system", "light", "dark"],
+                "system",
+            )
+            .description(
+                "Which variant of a theme with a light and a dark one is shown: the system's, or always the light or the dark one. A theme without a counterpart keeps its own.",
+            ),
+        )?;
+        ctx.command(
+            CommandSpec::new(CMD_THEME_TOGGLE, "Toggle light and dark theme", "View")
+                .description("Shows the other variant of the theme, light or dark, when it has one.")
+                .when("themePaired")
+                .menu(MENU_VIEW, "6_theme", 9),
+            |call| {
+                let mode = call.app.theme().toggle(&call.app.egui())?;
+                Ok(json!({ "theme": call.app.theme().shown(&call.app.egui()), "dark": mode == egui::Theme::Dark }))
             },
         )?;
         let mut focus = egui_pop_model::values::Descriptor::choice(
@@ -3876,6 +4043,16 @@ impl App {
             theme::install_with(&ctx, service.themes(), &spec);
             THEME_INSTALLED.set(&ctx, true);
             self.installed = Some(spec);
+            // The install forces the theme's own mode.
+            self.preference = None;
+            let paired = theme::is_paired(&ctx);
+            self.handle
+                .set_context("themePaired", if paired { "true" } else { "false" });
+        }
+        let preference = service.preference();
+        if self.preference != Some(preference) {
+            theme::set_preference(&ctx, preference);
+            self.preference = Some(preference);
         }
     }
 

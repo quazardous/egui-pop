@@ -64,7 +64,8 @@ use egui_pop_core::theme::{Tokens, color32};
 use egui_pop_core::tokens::contract::{self, Tier};
 use egui_pop_core::tokens::contrast::{self, Level, Pair, PairKind};
 use egui_pop_core::tokens::{
-    BUILT_IN_THEMES, Color, ResolvedTokens, ThemeDraft, ThemeSpec, TokenEdit, Value, theme_label,
+    BUILT_IN_THEMES, Color, Counterpart, ResolvedTokens, ThemeDraft, ThemeSpec, TokenEdit, Value,
+    theme_label,
 };
 use egui_pop_model::commands::CommandSpec;
 use egui_pop_model::ids::{CommandId, PluginId, StepId};
@@ -251,10 +252,12 @@ pub struct ThemeEditor {
 }
 
 impl ThemeEditor {
-    /// Follows the application's theme: when its base or overrides are
-    /// not what the editor wrote last, the editor starts again from them.
+    /// Follows the application's theme: when the theme shown (the
+    /// spec's base, or its counterpart when the light or dark preference
+    /// shows it) or its overrides are not what the editor wrote last, the
+    /// editor starts again from them.
     pub fn sync(&self, app: &AppHandle) {
-        let spec = app.theme().spec();
+        let spec = edited(app);
         let mut s = lock(&self.state);
         let now = (spec.base.clone(), spec.overrides.clone());
         if s.applied.as_ref() != Some(&now) {
@@ -285,7 +288,7 @@ impl ThemeEditor {
     /// The application's theme, resolved with the draft (cached).
     pub fn resolved(&self, app: &AppHandle) -> Arc<ResolvedTokens> {
         let service = app.theme();
-        let spec = service.spec();
+        let spec = edited(app);
         let mut s = lock(&self.state);
         if let Some(r) = s.resolved.as_ref().filter(|r| *r.spec() == spec) {
             return r.clone();
@@ -302,9 +305,12 @@ impl ThemeEditor {
         let overrides = s.draft.overrides().clone();
         s.applied = Some((base.clone(), overrides.clone()));
         drop(s);
+        // The variant edited, alone: its overrides are not its
+        // counterpart's.
         app.theme().update(|spec| {
             spec.base = base;
             spec.overrides = overrides;
+            spec.counterpart = Counterpart::None;
         });
     }
 
@@ -498,6 +504,19 @@ fn description(path: &str, own: Option<&str>) -> String {
         .map(|r| r.description.to_string())
         .or_else(|| own.map(String::from))
         .unwrap_or_default()
+}
+
+/// The theme the editor works on: the variant shown (the spec's base
+/// or its counterpart), alone, with the spec's choices.
+fn edited(app: &AppHandle) -> ThemeSpec {
+    let service = app.theme();
+    let spec = service.spec();
+    let shown = service.shown(&app.egui());
+    if shown == spec.base {
+        spec
+    } else {
+        spec.variant(shown)
+    }
 }
 
 /// Declares the editor's service, steps and agent commands.

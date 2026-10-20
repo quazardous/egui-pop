@@ -361,6 +361,10 @@ command-view-side-bar-toggle =
     .description = Replie la barre latérale de début sur sa bande, ou la déplie.
     .title = Replier la barre latérale
 
+command-view-theme-toggle-light-dark =
+    .description = Affiche l’autre variante du thème, claire ou sombre, quand il en a une.
+    .title = Basculer entre thème clair et sombre
+
 command-workbench-arrangement-reset =
     .description = Remet les panneaux comme le modèle de la disposition actuelle les place.
     .title = Réinitialiser la disposition
@@ -1238,6 +1242,16 @@ setting-appearance-language =
     .label = Langue
 
 setting-appearance-language-choice-system = Système
+
+setting-appearance-theme-preference =
+    .description = Quelle variante d’un thème qui en a une claire et une sombre est affichée : celle du système, ou toujours la claire ou la sombre. Un thème sans pendant garde la sienne.
+    .label = Clair ou sombre
+
+setting-appearance-theme-preference-choice-dark = sombre
+
+setting-appearance-theme-preference-choice-light = clair
+
+setting-appearance-theme-preference-choice-system = comme le système
 
 setting-developer-devtools =
     .description = Permet d’ouvrir le panneau des outils de développement (F12) : résolutions des touches, journal, étapes, focus, échelle et chaque collecteur de débogage.

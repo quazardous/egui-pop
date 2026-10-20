@@ -108,12 +108,9 @@ fn switching_theme_and_page_from_the_ui_and_the_keyboard() {
     h.key_press_modifiers(egui::Modifiers::ALT, egui::Key::ArrowDown);
     h.run();
     assert_eq!(h.state().page(), StoryId::from_static("builtins"));
-    // The switchers change the spec; the theme is installed between frames.
-    h.state()
-        .app
-        .handle()
-        .theme()
-        .update(|s| s.base = "pop-light".into());
+    // The switchers pick a theme; it is installed between frames.
+    let ctx = h.ctx.clone();
+    h.state().app.handle().theme().pick(&ctx, "pop-light");
     h.run();
     let tokens = Tokens::of(&h.ctx);
     assert_eq!(tokens.resolved().spec().base, "pop-light");

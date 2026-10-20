@@ -31,7 +31,12 @@ The editor works on the application's theme (the theme service): each
 change becomes the spec's base and overrides, installed before the next
 frame, so every widget follows at once. When the theme changes elsewhere
 (a theme switcher, `AppHandle::theme().set`), the editor starts again
-from it, its history emptied.
+from it, its history emptied. A theme with a light and a dark variant
+([Themes](themes.md#light-and-dark-together)) is edited in the variant
+shown, and switching between light and dark starts the editor again
+from the other one; the first change makes the variant edited the
+theme, alone (its overrides are not its counterpart's), so it stays
+shown whatever the light or dark preference.
 
 The model is `egui_pop_tokens::ThemeDraft`, with no egui in it: a base
 theme, the tokens changed over it (raw DTCG values, aliases kept as
