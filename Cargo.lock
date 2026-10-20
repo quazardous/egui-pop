@@ -1142,6 +1142,7 @@ dependencies = [
  "egui-pop",
  "egui-pop-test",
  "egui_kittest",
+ "log",
  "profiling",
  "serde_json",
  "tracing",
@@ -1210,6 +1211,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tray-icon",
+ "web-time",
  "winreg 0.55.0",
 ]
 

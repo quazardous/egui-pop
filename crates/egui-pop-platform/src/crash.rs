@@ -127,7 +127,7 @@ impl Report {
             os: std::env::consts::OS.into(),
             arch: std::env::consts::ARCH.into(),
             os_release: os_release(),
-            pid: std::process::id(),
+            pid: crate::dirs::pid(),
             started: crate::logs::now(),
             kind: "ended".into(),
             ..Report::default()
@@ -185,7 +185,7 @@ fn panic_file(dir: &Path, pid: u32) -> PathBuf {
 /// Whether a process still runs (Linux; elsewhere a session left is
 /// taken as gone).
 fn alive(pid: u32) -> bool {
-    pid == std::process::id()
+    pid == crate::dirs::pid()
         || (cfg!(target_os = "linux") && Path::new(&format!("/proc/{pid}")).exists())
 }
 
@@ -483,7 +483,7 @@ impl Plugin for CrashPlugin {
             .dir
             .clone()
             .or_else(|| crate::dirs::crash_dir(&self.app))
-            .unwrap_or_else(|| std::env::temp_dir().join(&self.app).join("crashes"));
+            .unwrap_or_else(|| crate::dirs::temp_dir().join(&self.app).join("crashes"));
         ctx.step(
             StepSpec::new(
                 STEP_REPORT,
@@ -571,7 +571,7 @@ impl Plugin for CrashPlugin {
                 offer(app, &crashes, &path);
             }
         });
-        let pid = std::process::id();
+        let pid = crate::dirs::pid();
         ctx.after(STEP_EXIT, move |_, _, _| {
             let _ = std::fs::remove_file(session_file(&dir, pid));
             let _ = std::fs::remove_file(panic_file(&dir, pid));

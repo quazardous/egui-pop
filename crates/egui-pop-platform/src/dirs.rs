@@ -60,6 +60,34 @@ pub fn log_dir(app: &str) -> Option<PathBuf> {
     state_dir(app).map(|d| d.join("logs"))
 }
 
+/// The system's temporary directory, the last resort when the
+/// environment names no place. The web has neither a file system nor a
+/// temporary directory (`std::env::temp_dir` panics there): a relative,
+/// empty path, where writes fail and are given up.
+pub fn temp_dir() -> PathBuf {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        std::env::temp_dir()
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        PathBuf::new()
+    }
+}
+
+/// This process's id; 0 on the web, which has no processes
+/// (`std::process::id` panics there).
+pub fn pid() -> u32 {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        std::process::id()
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        0
+    }
+}
+
 /// The application's crash report directory: `<state>/crashes`.
 pub fn crash_dir(app: &str) -> Option<PathBuf> {
     state_dir(app).map(|d| d.join("crashes"))

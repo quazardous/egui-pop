@@ -132,11 +132,12 @@ pub fn timestamp(since_epoch: std::time::Duration) -> String {
     )
 }
 
-/// Now, as [`timestamp`] writes it.
+/// Now, as [`timestamp`] writes it (the browser's clock on the web,
+/// where `std::time::SystemTime::now` panics).
 pub fn now() -> String {
     timestamp(
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
+        web_time::SystemTime::now()
+            .duration_since(web_time::UNIX_EPOCH)
             .unwrap_or_default(),
     )
 }
@@ -334,7 +335,7 @@ impl LogsPlugin {
     /// log directory ([`crate::dirs::log_dir`]; the temporary directory
     /// when the environment names none).
     pub fn new(app: &str) -> Self {
-        let dir = crate::dirs::log_dir(app).unwrap_or_else(|| std::env::temp_dir().join(app));
+        let dir = crate::dirs::log_dir(app).unwrap_or_else(|| crate::dirs::temp_dir().join(app));
         let name = app.rsplit('.').next().unwrap_or(app).to_lowercase();
         Self {
             logs: Logs::new(dir, &name),
