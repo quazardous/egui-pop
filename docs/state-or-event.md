@@ -48,6 +48,7 @@ egui-pop keeps both out of the frame:
 | The need | Use | The mistake it avoids |
 |---|---|---|
 | A value others display and may edit (a setting, a parameter) | the value store: `Ctx::setting`, or a path declared on `AppHandle::store()`; widgets bind it with `Binding::bound`, views with `Binding::watch` | a copy per panel written back every frame |
+| A value another plugin may write too | the owner names it a writer: `Descriptor::writers` (or `any_writer`); the other plugin writes through its command, its hooks or `Ctx::writer` | two plugins writing the same value, the last one winning ([who writes a value](#who-writes-a-value)) |
 | To react when a value changes | `Ctx::on_change(prefix, f)` on the store | comparing with last frame's value in `ui()` |
 | A request someone must act on once (delete, save, open) | a command: `Ctx::command`, asked with `AppHandle::run` | a flag in the store that the next frame forgets or reads twice |
 | A moment others may observe, veto, replace or extend | a step: `Ctx::step`, run with `AppHandle::step`; others use `Ctx::before`, `replace`, `after` | a callback list of its own, or a flag others poll |
@@ -206,12 +207,95 @@ refuse it (the photo is locked) adds a before-hook on the step instead
 of a flag of its own (`Locks` above), the key, the menu and agents reach the same
 command, and the journal says it happened.
 
+## Who writes a value
+
+A value has one writer, its owner, unless the owner names others
+([ADR 0016](adr/0016-one-writer-per-value.md)). A plugin writes as
+itself while it connects, in its command handlers and in its lifecycle
+hooks, and through `Ctx::writer` anywhere else; a write to a value it
+may not write is refused, with a `not-a-writer` diagnostic. The person
+is not limited: the settings form, bound widgets and agents write as
+the framework, which writes any value. Undo, redo and restoring saved
+values are never refused.
+
+```rust
+use egui_pop::core::lock;
+use egui_pop::egui;
+use egui_pop::model::ids::OwnerId;
+use egui_pop::model::values::{Change, Refused, Set, Value};
+use egui_pop::prelude::*;
+
+const SIZE: SettingId = SettingId::from_static("thumbs.size");
+const SELECTED: &str = "thumbs/selected";
+const FIRST: CommandId = CommandId::from_static("viewer.first");
+
+struct Thumbs;
+
+impl Plugin for Thumbs {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("thumbs")
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        // Its owner writes it, and the settings form for the person.
+        ctx.setting(SIZE, Descriptor::int("Size", 64, 512, 128))?;
+        // The viewer may move the selection too.
+        let viewer = OwnerId::new("viewer").expect("an id");
+        lock(&ctx.app().store())
+            .declare(
+                ctx.owner(),
+                SELECTED,
+                Descriptor::int("Selected", 0, 1000, 0).writers(&[viewer]),
+            )
+            .map_err(|e| PluginError::Failed(e.to_string()))?;
+        Ok(())
+    }
+}
+
+struct Viewer;
+
+impl Plugin for Viewer {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("viewer")
+    }
+
+    fn requires(&self) -> Vec<PluginId> {
+        vec![PluginId::from_static("thumbs")]
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        ctx.command(CommandSpec::new(FIRST, "First photo", "Viewer"), |call| {
+            let store = call.app.store();
+            let mut s = lock(&store);
+            // Its command writes as the viewer: the selection, yes.
+            let to = |v| Set::new(SELECTED, Change::To(Value::Int(v)), call.origin.clone());
+            s.set(to(0)).map_err(|e| e.to_string())?;
+            // The thumbnails' size, no.
+            let size = Set::new("settings/thumbs.size", Change::To(Value::Int(512)), call.origin.clone());
+            assert!(matches!(s.set(size), Err(Refused::NotWriter { .. })));
+            Ok(serde_json::Value::Null)
+        })?;
+        Ok(())
+    }
+}
+
+let mut app = App::builder().plugin(Thumbs).plugin(Viewer).build(&egui::Context::default()).unwrap();
+let out = app.run(&FIRST, serde_json::Value::Null, Origin::User);
+assert_eq!(out.now(), Some(Ok(serde_json::Value::Null)));
+```
+
+A plugin written before the check migrates under
+`AppBuilder::writer_check(WriterCheck::Warn)`: its writes go through
+and each one it should declare is in the diagnostics. A test of a
+plugin set ends with `egui_pop_test::assert_writes_declared(&app)`.
+
 ## See also
 
 - [Plugins, commands and steps](plugins.md): commands, hooks, steps.
 - [The context stack](contexts.md): places, modes, kernel state and
   view state.
-- [ADR 0009](adr/0009-value-binding.md) (binding a value) and
-  [ADR 0011](adr/0011-lifecycle-steps.md) (steps).
+- [ADR 0009](adr/0009-value-binding.md) (binding a value),
+  [ADR 0011](adr/0011-lifecycle-steps.md) (steps) and
+  [ADR 0016](adr/0016-one-writer-per-value.md) (one writer per value).
 - The "state versus events" question is also settled, for its own
   primitives, in egui_mobius's book.

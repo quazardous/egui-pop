@@ -10,7 +10,7 @@ How egui-pop is tested, and what to know when a test misbehaves.
   test kit (`egui-pop-test`) has harnesses for a whole application
   (`app`, `harness_for`), at a given scale (`app_at`, `SCALES`,
   `at_scales`, `set_native_scale`), and checks (`assert_all_named`,
-  `assert_keymap_clean`, `a11y_tree`).
+  `assert_keymap_clean`, `assert_writes_declared`, `a11y_tree`).
 - **Snapshots** (`crates/egui-pop-gallery/tests/snapshots`): the gallery's
   pages rendered with wgpu, per theme; thresholds per operating system in
   `kittest.toml`. Regenerate with `UPDATE_SNAPSHOTS=1 cargo test -p

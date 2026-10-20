@@ -24,6 +24,12 @@ Which of these a plugin uses to share data with others (the value
 store, a command, a step, the context stack, a service) is in
 [State or event: what to use](state-or-event.md).
 
+A plugin writes the values it owns, and those whose owner named it a
+writer: what it writes while connecting, in its command handlers and in
+its lifecycle hooks is written as it, and `Ctx::writer` writes as it
+from a panel or a thread
+([who writes a value](state-or-event.md#who-writes-a-value)).
+
 ## Commands
 
 A command is declared once, with a `CommandSpec`: its id, title,
