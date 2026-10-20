@@ -144,6 +144,9 @@ browser.
   behind the indicator module (accepted, with the owner's decisions and
   where the visual kits changed them): the survey, the places of use,
   what waits for the mount contract and the icon registry.
+- [Pointer gestures, a study](design/pointer-gestures.md): how
+  applications use the wheel, the buttons and the modifiers on canvases
+  (darktable in detail), and proposed gesture profiles (not decided).
 - [Fonts](fonts.md): font families from the theme at four weights, the
   size scale (built), and the design for the rest.
 - [CREDO.md](../CREDO.md): the principles.
