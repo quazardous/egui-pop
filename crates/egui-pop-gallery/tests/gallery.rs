@@ -2810,6 +2810,73 @@ fn a_kit_restyles_sliders_from_the_theme_alone() {
 }
 
 #[test]
+fn a_kit_restyles_egui_s_small_widgets_from_the_theme_alone() {
+    // Data only: square checkboxes filled with the accent when checked,
+    // diamond radio marks, rows with a bar at their start, outlined
+    // chips, a chevron as the combo box's arrow. egui's own widgets on
+    // the same page keep following `button` only.
+    let mut themes = egui_pop::tokens::Themes::default();
+    themes
+        .add_text(
+            "kit-toggles",
+            r#"
+            $extends: "pop-dark"
+            glyph:
+              radio: {$type: "string", $value: "diamond"}
+              dropdown: {$type: "string", $value: "chevron-down"}
+            checkbox:
+              rest:
+                radius: {$type: "dimension", $value: {value: 0, unit: "px"}}
+                fill: {$type: "color", $value: "{surface.sunken}"}
+              selected:
+                fill: {$type: "color", $value: "{accent.default}"}
+                border-color: {$type: "color", $value: "{accent.default}"}
+                text: {$type: "color", $value: "{text.on-accent}"}
+            radio:
+              selected:
+                fill: {$type: "color", $value: "{surface.sunken}"}
+                border-color: {$type: "color", $value: "{accent.default}"}
+                text: {$type: "color", $value: "{accent.default}"}
+            selectable-row:
+              indicator-side: {$type: "string", $value: "left"}
+              selected:
+                fill: {$type: "color", $value: "{accent.subtle}"}
+                border-width: {$type: "dimension", $value: {value: 0, unit: "px"}}
+                indicator-color: {$type: "color", $value: "{accent.default}"}
+                indicator-size: {$type: "dimension", $value: {value: 3, unit: "px"}}
+            toggle-chip:
+              rest:
+                border-width: {$type: "dimension", $value: {value: 1, unit: "px"}}
+                border-color: {$type: "color", $value: "{border.default}"}
+              selected:
+                fill: {$type: "color", $value: "{accent.subtle}"}
+                border-color: {$type: "color", $value: "{accent.default}"}
+                indicator-size: {$type: "dimension", $value: {value: 0, unit: "px"}}
+            combo-arrow:
+              rest:
+                text: {$type: "color", $value: "{accent.default}"}
+            "#,
+        )
+        .expect("the test theme reads");
+    let mut h = harness(options("pop-dark", Density::Comfortable, "builtins"));
+    h.run();
+    let tokens = Tokens::new(themes.resolve(&egui_pop::tokens::ThemeSpec::new("kit-toggles")));
+    egui_pop::core::theme::install_tokens(&h.ctx, tokens);
+    let kit = egui_pop::core::kit::Kit::of(&h.ctx);
+    assert!(kit.problems.is_empty(), "{:?}", kit.problems);
+    h.run();
+    // The toggle chip is a named checkbox, on.
+    let case = h.get_by_label("Match case");
+    assert_eq!(
+        case.accesskit_node().role(),
+        egui::accesskit::Role::CheckBox
+    );
+    h.remove_cursor();
+    h.run();
+    h.snapshot("builtins-kit-toggles");
+}
+
+#[test]
 fn a_folded_side_area_shows_its_strip_and_a_click_unfolds_it() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "workbench"));
     h.run();

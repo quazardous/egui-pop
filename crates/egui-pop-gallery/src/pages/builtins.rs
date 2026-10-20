@@ -1,6 +1,9 @@
-//! egui's own widgets, drawn with the theme and no per-widget code.
+//! egui's own widgets, drawn with the theme and no per-widget code, and
+//! the ones egui-pop draws through the kit in their place (checkbox,
+//! radio, selectable rows, toggle chips, the combo box's arrow).
 
 use egui::Ui;
+use egui_pop::core::widgets::{self, ToggleChip};
 
 use super::section;
 
@@ -18,6 +21,9 @@ pub struct State {
     pub text: String,
     pub notes: String,
     pub choice: usize,
+    /// The kit's toggle chips.
+    pub case: bool,
+    pub word: bool,
 }
 
 impl Default for State {
@@ -33,6 +39,8 @@ impl Default for State {
             text: "Some text".into(),
             notes: "Several lines\nof text".into(),
             choice: 0,
+            case: true,
+            word: false,
         }
     }
 }
@@ -40,7 +48,7 @@ impl Default for State {
 const CHOICES: [&str; 3] = ["First", "Second", "Third"];
 
 pub fn playground(ui: &mut Ui, state: &mut State) {
-    ui.checkbox(&mut state.enabled, "Enabled");
+    widgets::checkbox(ui, &mut state.enabled, "Enabled");
     ui.add(egui::Slider::new(&mut state.progress, 0.0..=1.0).text("Progress"));
     if ui.button("Reset values").clicked() {
         *state = State {
@@ -80,6 +88,30 @@ fn widgets(ui: &mut Ui, state: &mut State) {
             ui.selectable_value(&mut state.selected, i, *name);
         }
     });
+
+    section(ui, "Drawn by the kit");
+    ui.horizontal_wrapped(|ui| {
+        widgets::checkbox(ui, &mut state.checked, "Kit checkbox");
+        let mut mixed = false;
+        ui.add(widgets::Checkbox::new(&mut mixed, "Mixed").indeterminate(true));
+        for (i, name) in CHOICES.iter().enumerate() {
+            widgets::radio_value(ui, &mut state.radio, i, format!("Kit {name}"));
+        }
+    });
+    ui.horizontal_wrapped(|ui| {
+        for (i, name) in CHOICES.iter().enumerate() {
+            widgets::selectable_value(ui, &mut state.selected, i, format!("Kit {name}"));
+        }
+        ui.add(ToggleChip::new(&mut state.case, "Aa").name("Match case"));
+        ui.add(ToggleChip::new(&mut state.word, "W").name("Whole word"));
+    });
+    widgets::combo_box_labelled("builtins.kit-combo", "Kit combo box")
+        .selected_text(CHOICES[state.choice])
+        .show_ui(ui, |ui| {
+            for (i, name) in CHOICES.iter().enumerate() {
+                widgets::selectable_value(ui, &mut state.choice, i, *name);
+            }
+        });
 
     section(ui, "Values");
     ui.add(egui::Slider::new(&mut state.value, 0.0..=100.0).text("Slider"));
