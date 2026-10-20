@@ -14,6 +14,7 @@ use egui_pop_api::AppHandle;
 use egui_pop_core::focus;
 use egui_pop_core::icon::Icon;
 use egui_pop_core::kit::{Kit, State};
+use egui_pop_core::state::Slot;
 use egui_pop_core::strings::{tr, tr_args};
 use egui_pop_core::theme::Tokens;
 use egui_pop_model::ids::StepId;
@@ -33,6 +34,9 @@ use crate::steps::{
 };
 use crate::strings as s;
 use crate::tokens::EditorTokens;
+
+/// The last press on an editor was in its gutter, per editor.
+const IN_GUTTER: Slot<bool> = Slot::new("editors.view.in_gutter");
 
 /// What happened in an editor this pass.
 #[derive(Clone, Debug, PartialEq)]
@@ -783,10 +787,10 @@ fn pointer(
         response.request_focus();
         if p.x < gutter_left + g.gutter_w {
             gutter_click(state, o, g, p.x - gutter_left, line, signals);
-            ui.memory_mut(|m| m.data.insert_temp(id.with("gutter"), true));
+            IN_GUTTER.keyed(id).set(ui.ctx(), true);
             return;
         }
-        ui.memory_mut(|m| m.data.insert_temp(id.with("gutter"), false));
+        IN_GUTTER.keyed(id).set(ui.ctx(), false);
         // A click on a fold's marker opens it.
         if state.lock().folds.is_folded(line) {
             let chip = fold_chip(
@@ -813,7 +817,7 @@ fn pointer(
         }
         return;
     }
-    let in_gutter = ui.memory(|m| m.data.get_temp(id.with("gutter")).unwrap_or(false));
+    let in_gutter = IN_GUTTER.keyed(id).get(ui.ctx()).unwrap_or(false);
     if in_gutter {
         return;
     }

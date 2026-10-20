@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex};
 
 use egui::{Context, Event, Id, Key, Modifiers, RawInput};
 use egui_pop_core::lock;
+use egui_pop_core::state::Slot;
 
 /// The xterm modifier parameter (1 + Shift + 2 Alt + 4 Ctrl), when any.
 fn modifier_param(m: Modifiers) -> Option<u8> {
@@ -151,11 +152,8 @@ struct Routing {
 }
 
 fn routing(ctx: &Context) -> Arc<Mutex<Routing>> {
-    let id = Id::new("egui_pop_editors::terminal::routing");
-    ctx.data_mut(|d| {
-        d.get_temp_mut_or_insert_with(id, || Arc::new(Mutex::new(Routing::default())))
-            .clone()
-    })
+    const ROUTING: Slot<Arc<Mutex<Routing>>> = Slot::new("editors.terminal.routing");
+    ROUTING.update(ctx, |r| r.clone())
 }
 
 /// A terminal is drawn this pass: while it has the focus, the next
