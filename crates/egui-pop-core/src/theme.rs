@@ -47,15 +47,15 @@
 use std::sync::Arc;
 
 use egui::{
-    Color32, Context, CornerRadius, Margin, Shadow, Stroke, Style, TextStyle, ThemePreference,
-    Visuals, style::ScrollAnimation,
+    Color32, Context, CornerRadius, Margin, Shadow, Stroke, Style, TextStyle, Theme,
+    ThemePreference, Visuals, style::ScrollAnimation,
 };
 
 use crate::kit::{Kit, Shapes, State};
 use crate::state::Slot;
 pub use egui_pop_tokens::{
-    BUILT_IN_ACCENTS, BUILT_IN_THEMES, Density, FALLBACK_THEME, POP_THEMES, ResolvedTokens,
-    ThemeSpec, Themes, theme_label,
+    BUILT_IN_ACCENTS, BUILT_IN_THEMES, Counterpart, Density, FALLBACK_THEME, POP_THEMES,
+    ResolvedTokens, ThemeSpec, Themes, theme_label,
 };
 
 /// A token colour as an egui colour.
@@ -399,15 +399,91 @@ impl Tokens {
             .is_some_and(egui_pop_tokens::Color::is_dark)
     }
 
-    /// The tokens installed in a context, or the built-in `pop-dark` ones
-    /// (installed on first use) when no theme was.
+    /// The tokens of the theme drawn now: of egui's theme of the moment
+    /// (`ctx.theme()`, the user's or the system's light or dark mode)
+    /// when a pair is installed, else of the theme installed; the
+    /// built-in `pop-dark` ones (installed on first use) when no theme
+    /// was. Read it while drawing, never keep it across frames: a switch
+    /// between light and dark changes it without any install.
     pub fn of(ctx: &Context) -> Arc<Tokens> {
-        TOKENS.get_or_insert_with(ctx, || Arc::new(Tokens::default()))
+        Tokens::of_theme(ctx, ctx.theme())
+    }
+
+    /// The tokens installed for one of egui's themes (the same for both
+    /// when the theme installed is alone).
+    pub fn of_theme(ctx: &Context, theme: Theme) -> Arc<Tokens> {
+        variants(ctx).get(theme).clone()
+    }
+
+    /// The egui theme this set is drawn under.
+    pub fn egui_theme(&self) -> Theme {
+        if self.dark_mode() {
+            Theme::Dark
+        } else {
+            Theme::Light
+        }
+    }
+}
+
+/// The tokens installed, one set per egui theme: a theme and its
+/// counterpart, or the same theme twice when it is alone.
+#[derive(Clone, Debug)]
+pub struct Variants {
+    pub dark: Arc<Tokens>,
+    pub light: Arc<Tokens>,
+}
+
+impl Variants {
+    /// One theme for both of egui's themes.
+    pub fn alone(tokens: Arc<Tokens>) -> Variants {
+        Variants {
+            dark: tokens.clone(),
+            light: tokens,
+        }
+    }
+
+    /// The set for one of egui's themes.
+    pub fn get(&self, theme: Theme) -> &Arc<Tokens> {
+        match theme {
+            Theme::Dark => &self.dark,
+            Theme::Light => &self.light,
+        }
+    }
+
+    /// Whether a light and a dark theme are installed together: egui's
+    /// light or dark mode then chooses between them.
+    pub fn paired(&self) -> bool {
+        !Arc::ptr_eq(&self.dark, &self.light)
+    }
+}
+
+/// The tokens installed in a context, per egui theme; the built-in
+/// `pop-dark` ones, alone (installed on first use), when no theme was.
+pub fn variants(ctx: &Context) -> Variants {
+    TOKENS.get_or_insert_with(ctx, || Variants::alone(Arc::new(Tokens::default())))
+}
+
+/// Whether the theme installed has a counterpart: a light and a dark
+/// variant installed together ([`install_with`]).
+pub fn is_paired(ctx: &Context) -> bool {
+    variants(ctx).paired()
+}
+
+/// Asks for egui's light or dark mode, or the system's
+/// (`ThemePreference::System`): with a pair installed, it switches
+/// between the two at once, nothing installed again. A theme alone keeps
+/// its own mode whatever is asked.
+pub fn set_preference(ctx: &Context, preference: ThemePreference) {
+    let v = variants(ctx);
+    if v.paired() {
+        ctx.set_theme(preference);
+    } else {
+        ctx.set_theme(v.dark.egui_theme());
     }
 }
 
 /// The tokens installed.
-const TOKENS: Slot<Arc<Tokens>> = Slot::opaque("core.theme.tokens");
+const TOKENS: Slot<Variants> = Slot::opaque("core.theme.tokens");
 
 fn radius(points: f32) -> CornerRadius {
     CornerRadius::same(points.round().clamp(0.0, 255.0) as u8)
@@ -539,25 +615,66 @@ pub fn snap_strokes(style: &mut Style, ppp: f32) {
     }
 }
 
-/// Installs typed tokens into a context: egui's dark and light styles both
-/// become the theme's (so the system's light or dark preference does not
-/// swap it out), and [`Tokens::of`] returns them. Call it between frames
-/// (at start-up, or when the user picks another theme), not while drawing.
+/// Installs typed tokens into a context, alone: egui's dark and light
+/// styles both become the theme's and egui's mode is forced to the
+/// theme's (so the system's light or dark preference does not swap it
+/// out), and [`Tokens::of`] returns them. Call it between frames (at
+/// start-up, or when the user picks another theme), not while drawing.
 pub fn install_tokens(ctx: &Context, tokens: Tokens) -> Arc<Tokens> {
+    install_variants(ctx, tokens, None)
+}
+
+/// Installs a theme and, when given one of the other mode, its
+/// counterpart: each is written into its own egui style (dark or light)
+/// with its own kit, and [`Tokens::of`] and `Kit::of` give the one of
+/// egui's theme of the moment. egui's mode is set to the theme's (the
+/// first one), as when it is alone, and it is egui's fallback when the
+/// system says nothing; [`set_preference`] (or `ctx.set_theme`) then
+/// switches between the two, or follows the system, without installing
+/// anything again. A counterpart of the same mode is ignored (with a
+/// warning): the theme is installed alone. Fonts and icon sizes come
+/// from the first theme. Returns the first theme's tokens.
+pub fn install_variants(ctx: &Context, tokens: Tokens, counterpart: Option<Tokens>) -> Arc<Tokens> {
     let tokens = Arc::new(tokens);
-    ctx.set_theme(if tokens.dark_mode() {
-        ThemePreference::Dark
-    } else {
-        ThemePreference::Light
+    let counterpart = counterpart.filter(|c| {
+        let other = c.dark_mode() != tokens.dark_mode();
+        if !other {
+            log::warn!(
+                target: "egui_pop",
+                "theme: `{}` and `{}` are both {}: installed alone",
+                tokens.resolved().spec().base,
+                c.resolved().spec().base,
+                if tokens.dark_mode() { "dark" } else { "light" }
+            );
+        }
+        other
     });
-    // The kit first: egui's style is drawn from it.
-    let kit = crate::kit::install(ctx, &tokens);
+    let variants = match counterpart {
+        None => Variants::alone(tokens.clone()),
+        Some(c) if tokens.dark_mode() => Variants {
+            dark: tokens.clone(),
+            light: Arc::new(c),
+        },
+        Some(c) => Variants {
+            dark: Arc::new(c),
+            light: tokens.clone(),
+        },
+    };
+    let mode = tokens.egui_theme();
+    ctx.set_theme(mode);
+    ctx.options_mut(|o| o.fallback_theme = mode);
+    // The kits first: egui's styles are drawn from them.
+    let kits = crate::kit::install_variants(ctx, &variants.dark, &variants.light);
     let ppp = ctx.pixels_per_point();
-    ctx.all_styles_mut(|s| {
-        *s = style_with(&tokens, &kit, s);
-        snap_strokes(s, ppp);
-    });
-    TOKENS.set(ctx, tokens.clone());
+    for theme in [Theme::Dark, Theme::Light] {
+        let t = variants.get(theme);
+        let kit = kits.get(theme);
+        ctx.style_mut_of(theme, |s| {
+            *s = style_with(t, kit, s);
+            snap_strokes(s, ppp);
+        });
+    }
+    TOKENS.set(ctx, variants);
     crate::fonts::install(ctx, &tokens.font.family_ui, &tokens.font.family_mono);
     crate::icon_set::install(ctx, &tokens);
     tokens
@@ -567,8 +684,15 @@ pub fn install_tokens(ctx: &Context, tokens: Tokens) -> Arc<Tokens> {
 /// (a broken user theme, a typo in an override) are in
 /// `tokens.resolved().problems()`; the theme is installed anyway, with
 /// fallbacks.
+/// The spec's counterpart, when it has one ([`ThemeSpec::counterpart`],
+/// the token files' `org.egui-pop.variant-of`), is installed with it
+/// ([`install_variants`]).
 pub fn install_with(ctx: &Context, themes: &Themes, spec: &ThemeSpec) -> Arc<Tokens> {
-    install_tokens(ctx, Tokens::new(themes.resolve(spec)))
+    install_variants(
+        ctx,
+        Tokens::new(themes.resolve(spec)),
+        themes.resolve_counterpart(spec).map(Tokens::new),
+    )
 }
 
 /// Resolves a spec against the built-in themes and installs it.

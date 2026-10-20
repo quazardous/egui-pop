@@ -151,6 +151,23 @@ publishes.
 
 ### Changed
 
+- A theme with a counterpart is installed with it (egui-pop-core,
+  breaking in behaviour): `theme::install` and `install_with` resolve
+  the spec's counterpart and write each variant into its own egui style
+  (`ctx.style_mut_of`), with its own kit; `Tokens::of` and `Kit::of`
+  give the ones of `ctx.theme()` at draw time, so `ctx.set_theme` or the
+  system's light or dark mode switches tokens, egui's style and the kit
+  without installing again. The theme installed is still shown first
+  (its mode is set, and is egui's fallback when the system says
+  nothing). New: `theme::install_variants`, `theme::Variants`,
+  `theme::variants`, `theme::is_paired`, `theme::set_preference` (a
+  theme alone keeps its mode), `Tokens::of_theme`, `Tokens::egui_theme`,
+  `kit::Kits`, `kit::install_variants`; the debug bridge's `theme`
+  collector gives the counterpart and egui's preference. Migration:
+  egui's other style was the same theme, it is now the counterpart's;
+  install `ThemeSpec::new(..).alone()` to keep one theme in both. A
+  cache keeping what it drew from the tokens or the kit across frames
+  keys on the kit's address or the colours, not on the install.
 - `Request::Rebind` carries the layer changed, and `Request::ResetKeys`
   is a struct with its command and layer (egui-pop-api).
 - The window frame's types grow for full screen and zen mode

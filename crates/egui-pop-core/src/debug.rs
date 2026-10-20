@@ -497,9 +497,19 @@ pub fn core_collectors() -> Vec<FnCollector> {
             },
         )
         .args(json!({ "name": "core.theme.tokens" })),
-        FnCollector::new("theme", "The installed theme and its problems.").snapshot(|ctx| {
-            let t = theme::Tokens::of(ctx);
+        FnCollector::new(
+            "theme",
+            "The theme drawn now, its counterpart if installed with it, and its problems.",
+        )
+        .snapshot(|ctx| {
+            let mode = ctx.theme();
+            let v = theme::variants(ctx);
+            let t = v.get(mode).clone();
             let r = t.resolved();
+            let other = match mode {
+                egui::Theme::Dark => &v.light,
+                egui::Theme::Light => &v.dark,
+            };
             json!({
                 "spec": {
                     "base": r.spec().base,
@@ -508,6 +518,8 @@ pub fn core_collectors() -> Vec<FnCollector> {
                     "reduced_motion": r.spec().reduced_motion,
                 },
                 "dark": t.dark_mode(),
+                "counterpart": v.paired().then(|| other.resolved().spec().base.clone()),
+                "preference": format!("{:?}", ctx.options(|o| o.theme_preference)),
                 "problems": r.problems().iter().map(|p| p.to_string()).collect::<Vec<_>>(),
             })
         }),

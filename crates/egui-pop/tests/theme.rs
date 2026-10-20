@@ -71,13 +71,23 @@ fn installing_each_theme_sets_the_visuals_from_its_tokens() {
         if let Some(target) = r.get("surface.panel").unwrap().alias.as_deref() {
             assert_eq!(Some(v.panel_fill), r.color(target).map(theme::color32));
         }
-        // Both of egui's styles are the theme's.
-        ctx.set_theme(egui::Theme::Light);
-        assert_eq!(
-            ctx.global_style().visuals.panel_fill,
-            t.surface.panel,
-            "{base}"
-        );
+        // egui's other style is the counterpart's, or the theme's own
+        // when it is alone.
+        let other = if t.dark_mode() {
+            egui::Theme::Light
+        } else {
+            egui::Theme::Dark
+        };
+        ctx.set_theme(other);
+        let expected = match Themes::default().counterpart_of(base) {
+            Some(c) => {
+                Tokens::new(Themes::default().resolve(&ThemeSpec::new(c)))
+                    .surface
+                    .panel
+            }
+            None => t.surface.panel,
+        };
+        assert_eq!(ctx.global_style().visuals.panel_fill, expected, "{base}");
     }
 }
 
@@ -190,4 +200,105 @@ fn egui_widgets_are_drawn_with_the_theme() {
         let panel = t.surface.panel;
         assert_eq!(px, [panel.r(), panel.g(), panel.b(), 255], "{base}");
     }
+}
+
+/// A harness drawing one egui button, its rest fill read back each frame.
+fn button_harness() -> Harness<'static, Option<Color32>> {
+    Harness::builder()
+        .with_size(egui::vec2(200.0, 80.0))
+        .build_ui_state(
+            |ui, fill: &mut Option<Color32>| {
+                let _ = ui.button("Press");
+                *fill = Some(ui.visuals().widgets.inactive.bg_fill);
+            },
+            None,
+        )
+}
+
+#[test]
+fn a_pair_switches_tokens_style_and_kit_without_installing_again() {
+    let mut h = button_harness();
+    let dark = theme::install(&h.ctx, &ThemeSpec::new("pop-dark"));
+    let light = Tokens::new(Themes::default().resolve(&ThemeSpec::new("pop-light")));
+    assert!(theme::is_paired(&h.ctx));
+    // The theme picked is shown, as before.
+    h.run();
+    assert_eq!(h.ctx.theme(), egui::Theme::Dark);
+    assert_eq!(Tokens::of(&h.ctx).surface.panel, dark.surface.panel);
+    let dark_kit = Kit::of(&h.ctx);
+    assert_eq!(*h.state(), Some(dark_kit.button.style(State::REST).fill));
+
+    h.ctx.set_theme(egui::Theme::Light);
+    h.run();
+    let t = Tokens::of(&h.ctx);
+    assert_eq!(t.surface.panel, light.surface.panel);
+    assert_eq!(t.resolved().spec().base, "pop-light");
+    assert_eq!(h.ctx.global_style().visuals.panel_fill, light.surface.panel);
+    let light_kit = Kit::of(&h.ctx);
+    assert!(!std::sync::Arc::ptr_eq(&dark_kit, &light_kit));
+    assert_eq!(*h.state(), Some(light_kit.button.style(State::REST).fill));
+    assert_ne!(h.state(), &Some(dark_kit.button.style(State::REST).fill));
+
+    h.ctx.set_theme(egui::Theme::Dark);
+    h.run();
+    assert_eq!(Tokens::of(&h.ctx).surface.panel, dark.surface.panel);
+    assert!(std::sync::Arc::ptr_eq(&Kit::of(&h.ctx), &dark_kit));
+}
+
+#[test]
+fn a_pair_follows_the_system_when_asked() {
+    let mut h = button_harness();
+    let light = theme::install(
+        &h.ctx,
+        &ThemeSpec::new("github-light").density(Density::Compact),
+    );
+    theme::set_preference(&h.ctx, egui::ThemePreference::System);
+    // The system says nothing: the theme picked.
+    h.run();
+    assert_eq!(Tokens::of(&h.ctx).surface.panel, light.surface.panel);
+    h.input_mut().system_theme = Some(egui::Theme::Dark);
+    h.run();
+    let t = Tokens::of(&h.ctx);
+    assert_eq!(t.resolved().spec().base, "github-dark");
+    // The spec's density applies to the counterpart too.
+    assert_eq!(t.resolved().spec().density, Density::Compact);
+    assert_eq!(h.ctx.global_style().visuals.panel_fill, t.surface.panel);
+    assert!(h.ctx.global_style().visuals.dark_mode);
+    h.input_mut().system_theme = Some(egui::Theme::Light);
+    h.run();
+    assert_eq!(Tokens::of(&h.ctx).surface.panel, light.surface.panel);
+}
+
+#[test]
+fn a_theme_alone_keeps_its_mode_whatever_is_asked() {
+    let mut h = button_harness();
+    let high = theme::install(&h.ctx, &ThemeSpec::new("pop-high-contrast"));
+    assert!(!theme::is_paired(&h.ctx));
+    for preference in [
+        egui::ThemePreference::Light,
+        egui::ThemePreference::System,
+        egui::ThemePreference::Dark,
+    ] {
+        theme::set_preference(&h.ctx, preference);
+        h.input_mut().system_theme = Some(egui::Theme::Light);
+        h.run();
+        assert_eq!(h.ctx.theme(), egui::Theme::Dark, "{preference:?}");
+        assert_eq!(Tokens::of(&h.ctx).surface.panel, high.surface.panel);
+    }
+    // Even egui asked directly: both styles are the theme's.
+    h.ctx.set_theme(egui::Theme::Light);
+    h.run();
+    assert_eq!(Tokens::of(&h.ctx).surface.panel, high.surface.panel);
+    assert_eq!(h.ctx.global_style().visuals.panel_fill, high.surface.panel);
+    // A paired theme asked alone is alone too.
+    theme::install(&h.ctx, &ThemeSpec::new("pop-light").alone());
+    assert!(!theme::is_paired(&h.ctx));
+    // An explicit pair.
+    theme::install(
+        &h.ctx,
+        &ThemeSpec::pair("pop-high-contrast", "github-light"),
+    );
+    assert!(theme::is_paired(&h.ctx));
+    h.ctx.set_theme(egui::Theme::Light);
+    assert_eq!(Tokens::of(&h.ctx).resolved().spec().base, "github-light");
 }

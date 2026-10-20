@@ -322,8 +322,11 @@ snapshots to the gallery tests
 
 ## Into egui
 
-`egui_pop::theme::install` sets both of egui's styles (dark and light) from
-the system and component tiers (see the module documentation for the
-mapping) and stores a typed `Tokens` set in the context, read with
-`Tokens::of(ctx)`. Install between frames; never change the global style
-mid-frame to theme one widget.
+`egui_pop::theme::install` sets egui's styles from the system and
+component tiers (see the module documentation for the mapping) and stores
+a typed `Tokens` set in the context, read with `Tokens::of(ctx)`. A theme
+alone fills both of egui's styles, dark and light; a theme with a
+counterpart (`org.egui-pop.variant-of`, [Themes](themes.md#light-and-dark-together))
+fills each with its own variant, and `Tokens::of` gives the one of egui's
+theme of the moment. Install between frames; never change the global
+style mid-frame to theme one widget.

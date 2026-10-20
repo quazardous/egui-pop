@@ -865,8 +865,26 @@ impl std::fmt::Debug for Shapes {
 
 /// The shapes registered by components, compiled into the next kit.
 const SHAPES: Slot<Shapes> = Slot::opaque("core.kit.shapes");
-/// The compiled kit.
-const KIT: Slot<Arc<Kit>> = Slot::opaque("core.kit");
+/// The compiled kits, per egui theme.
+const KIT: Slot<Kits> = Slot::opaque("core.kit");
+
+/// The kits installed, one per egui theme (the same one twice for a
+/// theme alone).
+#[derive(Clone, Debug)]
+pub struct Kits {
+    pub dark: Arc<Kit>,
+    pub light: Arc<Kit>,
+}
+
+impl Kits {
+    /// The kit of one of egui's themes.
+    pub fn get(&self, theme: egui::Theme) -> &Arc<Kit> {
+        match theme {
+            egui::Theme::Dark => &self.dark,
+            egui::Theme::Light => &self.light,
+        }
+    }
+}
 
 /// Registers a handler for a component (one of [`COMPONENTS`]) under a
 /// name its `shape` token can give. In use from the next theme install.
@@ -930,13 +948,18 @@ impl Kit {
         self.glyphs.get(glyph)
     }
 
-    /// The kit installed in a context, or the one of the installed
-    /// tokens, compiled on first use.
+    /// The kit of the theme drawn now (of egui's theme of the moment,
+    /// as `Tokens::of`), or the ones of the installed tokens, compiled on
+    /// first use. Read it while drawing; a cache keeping what it drew
+    /// from it across frames keys on its address (`Arc::as_ptr`), which
+    /// changes with egui's light or dark mode.
     pub fn of(ctx: &Context) -> Arc<Kit> {
+        let theme = ctx.theme();
         if let Some(k) = KIT.get(ctx) {
-            return k;
+            return k.get(theme).clone();
         }
-        install(ctx, &Tokens::of(ctx))
+        let v = crate::theme::variants(ctx);
+        install_variants(ctx, &v.dark, &v.light).get(theme).clone()
     }
 }
 
@@ -993,14 +1016,43 @@ fn egui_losses(t: &Tokens, kit: &Kit) -> Vec<String> {
 }
 
 /// Compiles the kit of `tokens` with the registered handlers and
-/// installs it. Called by `theme::install_tokens`, between frames.
+/// installs it for both of egui's themes.
 pub fn install(ctx: &Context, tokens: &Tokens) -> Arc<Kit> {
+    let kit = compile_logged(ctx, tokens);
+    KIT.set(
+        ctx,
+        Kits {
+            dark: kit.clone(),
+            light: kit.clone(),
+        },
+    );
+    kit
+}
+
+/// Compiles the kits of a dark and a light theme (one kit when they are
+/// the same set) and installs them. Called by `theme::install_variants`,
+/// between frames.
+pub fn install_variants(ctx: &Context, dark: &Arc<Tokens>, light: &Arc<Tokens>) -> Kits {
+    let dark_kit = compile_logged(ctx, dark);
+    let light_kit = if Arc::ptr_eq(dark, light) {
+        dark_kit.clone()
+    } else {
+        compile_logged(ctx, light)
+    };
+    let kits = Kits {
+        dark: dark_kit,
+        light: light_kit,
+    };
+    KIT.set(ctx, kits.clone());
+    kits
+}
+
+fn compile_logged(ctx: &Context, tokens: &Tokens) -> Arc<Kit> {
     let shapes = SHAPES.get_or_default(ctx);
     let kit = Arc::new(Kit::compile(tokens, &shapes));
     for p in &kit.problems {
         log::warn!(target: "egui_pop", "kit: {p}");
     }
-    KIT.set(ctx, kit.clone());
     kit
 }
 
