@@ -621,11 +621,6 @@ impl<K: Key> TableDelegate for Delegate<'_, K> {
     }
 
     fn header_cell_ui(&mut self, ui: &mut Ui, cell: &HeaderCellInfo) {
-        // upstream: called for an empty sticky region too (see
-        // docs/upstream.md).
-        if ui.clip_rect().width() <= 0.0 {
-            return;
-        }
         let Some(c) = self.columns.get(cell.col_range.start) else {
             return;
         };
