@@ -251,7 +251,8 @@ pixels; a setting gives the system's frame back. The frame publishes
 each window's hit regions in physical pixels (`egui_pop::core::frame`,
 `HitTable`, `HitRegions::hit`), what a platform layer needs to answer
 the system's hit tests itself. Steps: `frame.minimize`,
-`frame.maximize`, `frame.close`, `frame.system_menu`, `frame.hit_test`.
+`frame.maximize`, `frame.close`, `frame.system_menu`,
+`frame.exit_fullscreen`, `frame.hit_test`.
 
 The bar starts with the `CAPTION_START` zone, whose default block
 (`frame::BLOCK_MENU`, `egui_pop.frame.menu`) is the system menu button
@@ -259,7 +260,21 @@ and the application's name; an application puts its logo there by
 replacing that block, and keeps the menu with `frame::menu_button`. The
 bar itself (`frame::BLOCK_TITLE`) keeps following the setting. The
 `CAPTION` zone holds the application's buttons, before the window's.
-In full screen the bar is not drawn and publishes no caption.
+
+**In full screen** (`F11`) the bar stays, with both zones: an
+application keeps its menus, status items and logo there. Only what a
+window needs goes: minimize, the resize edges (the hit table publishes
+no edge), and moving the window by its bar. Close stays, and a button
+leaving full screen takes maximize's place (the
+`window-exit-fullscreen` glyph role, the `frame.exit_fullscreen`
+step). A double click on the bar does nothing in full screen: it would
+otherwise maximize, which full screen has no use for, and leaving full
+screen on a double click aimed at an item of the bar would surprise
+more than it helps; the way out is that button, or `F11`. The
+`window.bar_in_fullscreen` setting (on by default) gives the former
+behaviour back: off, the bar is not drawn in full screen and publishes
+no caption, and the strip at the top edge (`WindowPlugin`) is the way
+out.
 
 ```rust
 use egui_pop::api::frame;
@@ -284,7 +299,10 @@ system's hit test from the published regions: the caption moves the
 window natively (Aero Snap, shake), the maximize button shows Snap
 Layouts, the edges resize. Clicks on the buttons and a double or right
 click on the caption still come back as the frame's requests, so their
-steps run. The window's handle comes from eframe when the application
+steps run. In full screen the caption is answered as client area (the
+system must not move the window) and so is the button leaving full
+screen, which is no maximize button: Snap Layouts never show in full
+screen. The window's handle comes from eframe when the application
 starts with `run_native` (or `run_native_with`); an application starting
 eframe itself passes it with `frame::set_native_window`. Elsewhere,
 nothing is installed. A plugin may keep the system's hit testing:

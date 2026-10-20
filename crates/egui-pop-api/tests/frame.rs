@@ -5,7 +5,8 @@
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
 use egui_pop_api::frame::{
-    BLOCK_MENU, FramePlugin, MENU_SYSTEM, STEP_CLOSE, STEP_MAXIMIZE, STEP_SYSTEM_MENU,
+    BLOCK_MENU, FramePlugin, MENU_SYSTEM, SETTING_BAR_IN_FULLSCREEN, STEP_CLOSE,
+    STEP_EXIT_FULLSCREEN, STEP_MAXIMIZE, STEP_SYSTEM_MENU,
 };
 use egui_pop_api::steps::Before;
 use egui_pop_api::zones::{self, Block};
@@ -204,26 +205,118 @@ fn the_start_of_the_bar_is_a_zone_an_application_replaces() {
     assert!(frame::regions(&h.ctx).is_none());
 }
 
-#[test]
-fn the_title_bar_is_not_drawn_in_full_screen() {
-    let mut h = harness(1.0);
-    assert!(h.query_by_label("Close").is_some());
+fn full_screen(h: &mut Harness<'static, App>, on: bool) {
     h.input_mut()
         .viewports
         .entry(egui::ViewportId::ROOT)
         .or_default()
-        .fullscreen = Some(true);
+        .fullscreen = Some(on);
     h.run();
+}
+
+/// A double click in one frame.
+fn double_click_at(h: &mut Harness<'static, App>, pos: egui::Pos2) {
+    let events = &mut h.input_mut().events;
+    events.push(egui::Event::PointerMoved(pos));
+    for _ in 0..2 {
+        for pressed in [true, false] {
+            events.push(egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: egui::Modifiers::NONE,
+            });
+        }
+    }
+    h.run();
+}
+
+fn steps_run(h: &Harness<'static, App>, step: &egui_pop_model::ids::StepId) -> usize {
+    h.state()
+        .handle()
+        .step_traces()
+        .iter()
+        .filter(|t| t.step == *step)
+        .count()
+}
+
+#[test]
+fn full_screen_keeps_the_bar_with_its_way_out_and_no_resize_edges() {
+    let mut h = harness(1.0);
+    // Out of full screen a double click on the caption maximizes.
+    let caption = egui::pos2(300.0, 10.0);
+    double_click_at(&mut h, caption);
+    assert_eq!(steps_run(&h, &STEP_MAXIMIZE), 1);
+    full_screen(&mut h, true);
+    // The bar and its zones stay; minimize and maximize go, the way out
+    // of full screen takes maximize's place.
+    assert!(h.query_by_label("Demo").is_some(), "the caption-start zone");
+    assert!(h.query_by_label("Close").is_some());
+    assert!(h.query_by_label("Minimize").is_none());
+    assert!(h.query_by_label("Maximize").is_none());
+    let exit = h.get_by_label("Exit full screen").rect();
+    let r = frame::regions(&h.ctx).expect("published");
+    assert!(r.fullscreen);
+    assert!(r.caption.is_some() && r.close.is_some(), "{r:?}");
+    assert!(r.minimize.is_none() && r.maximize.is_none(), "{r:?}");
+    assert_eq!(r.grip, 0, "no resize edges");
+    assert_eq!(r.hit(0, 300), Hit::Client);
+    assert_eq!(r.hit(300, 10), Hit::Caption);
+    let c = exit.center();
+    assert_eq!(
+        r.hit(c.x as i32, c.y as i32),
+        Hit::Client,
+        "never Snap Layouts"
+    );
+    // The window plugin's strip is not needed: the bar holds the way out.
+    h.hover_at(egui::pos2(400.0, 1.0));
+    h.run();
+    assert!(h.query_by_label("Exit full screen (F11)").is_none());
+    // A double click on the bar asks nothing in full screen.
+    double_click_at(&mut h, caption);
+    assert_eq!(steps_run(&h, &STEP_MAXIMIZE), 1);
+    // The way out is a step.
+    h.get_by_label("Exit full screen").click();
+    h.run();
+    let trace = h.state().handle().step_traces().pop().unwrap();
+    assert_eq!(trace.step, STEP_EXIT_FULLSCREEN);
+    assert_eq!(trace.ran_by.as_deref(), Some("default"));
+    assert_eq!(
+        trace.result,
+        Some(Ok(serde_json::json!({ "fullscreen": false })))
+    );
+    full_screen(&mut h, false);
+    assert!(h.query_by_label("Minimize").is_some());
+    assert!(h.query_by_label("Maximize").is_some());
+    assert!(h.query_by_label("Exit full screen").is_none());
+    let r = frame::regions(&h.ctx).expect("published");
+    assert!(!r.fullscreen && r.grip > 0);
+}
+
+#[test]
+fn the_setting_off_hides_the_bar_in_full_screen() {
+    let mut h = harness(1.0);
+    let store = h.state().handle().store();
+    egui_pop_core::lock(&store)
+        .set(Set::new(
+            &format!("settings/{SETTING_BAR_IN_FULLSCREEN}"),
+            Change::To(Value::Bool(false)),
+            egui_pop_model::commands::Origin::User,
+        ))
+        .unwrap();
+    h.run();
+    assert!(h.query_by_label("Close").is_some());
+    full_screen(&mut h, true);
     assert!(h.query_by_label("Close").is_none());
     assert!(h.query_by_label("Demo").is_none());
     let r = frame::regions(&h.ctx).expect("still published");
     assert!(r.caption.is_none() && r.close.is_none(), "{r:?}");
     assert_eq!(r.hit(400, 10), Hit::Client);
-    h.input_mut()
-        .viewports
-        .entry(egui::ViewportId::ROOT)
-        .or_default()
-        .fullscreen = Some(false);
+    assert_eq!(r.grip, 0);
+    // The window plugin's strip at the top edge is the way out again.
+    h.hover_at(egui::pos2(400.0, 1.0));
     h.run();
+    assert!(h.query_by_label("Exit full screen (F11)").is_some());
+    full_screen(&mut h, false);
     assert!(h.query_by_label("Close").is_some());
 }

@@ -266,6 +266,7 @@ egui-pop-files-open 41f71ad49a338131
 egui-pop-files-recent ab73b8f8d0246524
 egui-pop-files-save 835b5f8f6d37f13e
 egui-pop-files-unbookmark d71391bfffa763c4
+egui-pop-frame-exit-fullscreen c66409904cfa39c0
 egui-pop-frame-maximize ec3ab8180de082b7
 egui-pop-frame-minimize e6356bcffe84c79d
 egui-pop-frame-restore eb78406341b90759
@@ -625,6 +626,8 @@ setting-tips-dismissed.description 2b34e2b61c0b5dba
 setting-tips-dismissed.label ccc55079cec42fca
 setting-tips-show.description 6ac695b23e031d9c
 setting-tips-show.label 9332093cf4e2a7ec
+setting-window-bar-in-fullscreen.description 786c655875468973
+setting-window-bar-in-fullscreen.label fe960c08ac330b12
 setting-window-frame-choice-own f03cb24f9dff8cb7
 setting-window-frame-choice-system 86937a88d8b574ba
 setting-window-frame.description 9bbf4a376a8d1015

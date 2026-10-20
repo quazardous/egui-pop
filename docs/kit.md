@@ -353,8 +353,7 @@ compiled at install.
   the `muted` tone. `menus-kit-bar` restyles items with data only.
 - **Frames** (`dialog`, `backdrop`, `popover`, `fault-card`, `toast`,
   `palette-window`, `tip-card`, `job-log`, `fullscreen-exit` (the
-  strip at the top of a full screen window whose frame the system
-  draws),
+  strip at the top of a full screen window showing no title bar),
   `editor-frame`, `terminal-frame`, `find-bar`, `assist-card`), handler
   `card`; the `dialogs-kit-square` snapshot restyles a dialog with data
   only. Their borders are snapped to whole physical pixels like the

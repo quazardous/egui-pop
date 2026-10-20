@@ -4,6 +4,11 @@
 //! and for the application's items) and resize edges along the window's
 //! sides, never thinner than [`MIN_GRIP_PX`] physical pixels.
 //!
+//! **In full screen** the bar stays (it holds the application's menus and
+//! items) without what only a window needs: no minimize, a button leaving
+//! full screen where maximize was ([`FrameRequest::ExitFullscreen`]), no
+//! drag, a double click asking nothing, and no resize edges.
+//!
 //! The frame **publishes its hit regions** every frame, per window, in
 //! physical client pixels ([`HitRegions`], read through [`HitTable`]):
 //! what a platform layer needs to answer the system's hit tests itself
@@ -119,6 +124,9 @@ pub struct HitRegions {
     /// The resize edges' width; zero when the window cannot be resized
     /// from its edges (maximized, full screen).
     pub grip: i32,
+    /// The window is in full screen: its caption does not move it (a
+    /// platform layer answers it as client area).
+    pub fullscreen: bool,
 }
 
 impl HitRegions {
@@ -139,6 +147,7 @@ impl HitRegions {
             } else {
                 0
             },
+            fullscreen: layout.fullscreen,
         }
     }
 
@@ -196,6 +205,8 @@ pub struct FrameLayout {
     /// The resize edges' width in points (before the pixel minimum).
     pub grip: f32,
     pub resizable: bool,
+    /// The window is in full screen.
+    pub fullscreen: bool,
 }
 
 impl Default for FrameLayout {
@@ -209,6 +220,7 @@ impl Default for FrameLayout {
             close: None,
             grip: 0.0,
             resizable: false,
+            fullscreen: false,
         }
     }
 }
@@ -279,13 +291,15 @@ pub fn publish(ctx: &Context) -> HitRegions {
         layout.grip = grip_token(ctx);
     }
     layout.resizable = resizable(ctx);
+    layout.fullscreen = full_screen(ctx);
     let regions = HitRegions::measure(&layout, ctx.pixels_per_point());
     HitTable::of(ctx).publish(ctx.viewport_id(), regions.clone());
     regions
 }
 
-/// Says the current window shows no title bar this pass (full screen):
-/// its caption and buttons are left out of the next [`publish`].
+/// Says the current window shows no title bar this pass (full screen
+/// without its bar, a zen mode): its caption and buttons are left out of
+/// the next [`publish`].
 pub fn hide_title_bar(ctx: &Context) {
     update_pending(ctx, |l| {
         l.caption = None;
@@ -310,6 +324,11 @@ pub fn outline(ctx: &Context) -> egui::Stroke {
     } else {
         egui::Stroke::NONE
     }
+}
+
+/// Whether the current window is in full screen.
+pub fn full_screen(ctx: &Context) -> bool {
+    ctx.input(|i| i.viewport().fullscreen.unwrap_or(false))
 }
 
 fn resizable(ctx: &Context) -> bool {
@@ -379,6 +398,8 @@ pub enum FrameRequest {
     /// The system menu, opened at this point (a right click on the
     /// caption, or the logo).
     SystemMenu(Pos2),
+    /// Leave full screen (the button in place of maximize).
+    ExitFullscreen,
 }
 
 /// What [`TitleBar::show`] gives back.
@@ -407,6 +428,7 @@ pub struct TitleBar<'a> {
     title: &'a str,
     buttons: [bool; 3],
     publish: bool,
+    full_screen: Option<bool>,
 }
 
 impl<'a> TitleBar<'a> {
@@ -416,7 +438,15 @@ impl<'a> TitleBar<'a> {
             title,
             buttons: [true; 3],
             publish: true,
+            full_screen: None,
         }
+    }
+
+    /// Draws the bar as in full screen (`true`) or not, whatever the
+    /// window is (a preview); by default, as the window is.
+    pub fn full_screen(mut self, on: bool) -> Self {
+        self.full_screen = Some(on);
+        self
     }
 
     /// Whether the bar publishes the window's regions (off for a preview
@@ -448,6 +478,7 @@ impl<'a> TitleBar<'a> {
         let kit = Kit::of(&ctx);
         let height = kit.title_bar.data.height;
         let maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
+        let fullscreen = self.full_screen.unwrap_or_else(|| full_screen(&ctx));
         let full = ui.max_rect();
         let bar = Rect::from_min_size(full.min, vec2(full.width(), height));
         let ppp = ctx.pixels_per_point();
@@ -465,7 +496,8 @@ impl<'a> TitleBar<'a> {
             },
         );
         // The caption: drag, double click, right click. Widgets on the
-        // bar are drawn after it and take their clicks first.
+        // bar are drawn after it and take their clicks first. In full
+        // screen the bar neither moves the window nor maximizes it.
         let drag = ui.interact(
             bar,
             ui.id().with("egui_pop.caption"),
@@ -473,20 +505,31 @@ impl<'a> TitleBar<'a> {
         );
         let mut request = None;
         if drag.double_clicked() {
-            request = Some(FrameRequest::ToggleMaximize);
+            if !fullscreen {
+                request = Some(FrameRequest::ToggleMaximize);
+            }
         } else if drag.drag_started() {
-            ctx.send_viewport_cmd(ViewportCommand::StartDrag);
+            if !fullscreen {
+                ctx.send_viewport_cmd(ViewportCommand::StartDrag);
+            }
         } else if drag.secondary_clicked() {
             let at = drag.interact_pointer_pos().unwrap_or(bar.left_bottom());
             request = Some(FrameRequest::SystemMenu(at));
         }
         let mut layout = FrameLayout {
             caption: Some(bar),
+            fullscreen,
             ..FrameLayout::default()
         };
         // The buttons, from the edge `title-bar.buttons-side` names, close
         // outermost: minimize, maximize, close at the end edge; close,
-        // minimize, maximize from the start edge.
+        // minimize, maximize from the start edge. In full screen: no
+        // minimize, and the way out of full screen where maximize was.
+        let mut buttons = self.buttons;
+        if fullscreen {
+            buttons[Button::Minimize as usize] = false;
+            buttons[Button::Maximize as usize] = true;
+        }
         let side = kit.window.buttons_side;
         let order = match side {
             ButtonsSide::End => [Button::Close, Button::Maximize, Button::Minimize],
@@ -501,7 +544,7 @@ impl<'a> TitleBar<'a> {
             ButtonsSide::Start => bar.left(),
         };
         for which in order {
-            if !self.buttons[which as usize] {
+            if !buttons[which as usize] {
                 continue;
             }
             let w = match which {
@@ -534,9 +577,15 @@ impl<'a> TitleBar<'a> {
             let Some(r) = slots[which as usize] else {
                 continue;
             };
-            if window_button(ui, r, which, maximized, group) {
+            let look = match which {
+                Button::Maximize if fullscreen => Look::ExitFullscreen,
+                Button::Maximize if maximized => Look::Restore,
+                _ => Look::Plain,
+            };
+            if window_button(ui, r, which, look, group) {
                 request = Some(match which {
                     Button::Minimize => FrameRequest::Minimize,
+                    Button::Maximize if fullscreen => FrameRequest::ExitFullscreen,
                     Button::Maximize => FrameRequest::ToggleMaximize,
                     Button::Close => FrameRequest::Close,
                 });
@@ -545,6 +594,12 @@ impl<'a> TitleBar<'a> {
         layout.minimize = slots[Button::Minimize as usize];
         layout.maximize = slots[Button::Maximize as usize];
         layout.close = slots[Button::Close as usize];
+        if fullscreen {
+            // The way out of full screen takes its own clicks: a hole in
+            // the caption, never the system's maximize button (no Snap
+            // Layouts over it).
+            layout.holes.extend(layout.maximize.take());
+        }
         // The room the items and the title share: between the buttons and
         // the bar's other edge.
         let (lo, hi) = match side {
@@ -664,6 +719,16 @@ pub fn native_hover(ctx: &Context) -> Option<Button> {
         .flatten()
 }
 
+/// How the maximize slot's button shows.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Look {
+    Plain,
+    /// A maximized window's restore.
+    Restore,
+    /// A full screen window's way out.
+    ExitFullscreen,
+}
+
 /// Draws a window button; says whether it was clicked. `group`: the
 /// pointer is over one of the buttons and the kit hovers them together.
 ///
@@ -671,12 +736,13 @@ pub fn native_hover(ctx: &Context) -> Option<Button> {
 /// (the macOS flavour's red, yellow and green): minimize `warning`,
 /// maximize `success`, close `danger`. A kit giving no tones (the
 /// default) draws each with its component's own box.
-fn window_button(ui: &mut Ui, rect: Rect, which: Button, maximized: bool, group: bool) -> bool {
+fn window_button(ui: &mut Ui, rect: Rect, which: Button, look: Look, group: bool) -> bool {
     let name = crate::strings::tr(
         ui.ctx(),
         match which {
             Button::Minimize => &crate::strings::MINIMIZE,
-            Button::Maximize if maximized => &crate::strings::RESTORE,
+            Button::Maximize if look == Look::ExitFullscreen => &crate::strings::EXIT_FULLSCREEN,
+            Button::Maximize if look == Look::Restore => &crate::strings::RESTORE,
             Button::Maximize => &crate::strings::MAXIMIZE,
             Button::Close => &crate::strings::CLOSE,
         },
@@ -715,7 +781,8 @@ fn window_button(ui: &mut Ui, rect: Rect, which: Button, maximized: bool, group:
     let b = component.style(state);
     let glyph = kit.glyph(match which {
         Button::Minimize => Glyph::WindowMinimize,
-        Button::Maximize if maximized => Glyph::WindowRestore,
+        Button::Maximize if look == Look::ExitFullscreen => Glyph::WindowExitFullscreen,
+        Button::Maximize if look == Look::Restore => Glyph::WindowRestore,
         Button::Maximize => Glyph::WindowMaximize,
         Button::Close => Glyph::WindowClose,
     });
@@ -761,6 +828,7 @@ mod tests {
             close: Some(b(1.0)),
             grip: 4.0,
             resizable: true,
+            fullscreen: false,
         }
     }
 
@@ -900,6 +968,53 @@ mod tests {
         assert_eq!(l.maximize.unwrap().right(), l.close.unwrap().left());
         assert_eq!(l.minimize.unwrap().right(), l.maximize.unwrap().left());
         assert!(lead.unwrap().right() < l.minimize.unwrap().left());
+    }
+
+    #[test]
+    fn in_full_screen_the_bar_keeps_close_and_its_way_out_but_no_edges() {
+        let ctx = Context::default();
+        let mut out = None;
+        for _ in 0..2 {
+            let mut input = egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))),
+                ..Default::default()
+            };
+            input.viewports.insert(
+                ViewportId::ROOT,
+                egui::ViewportInfo {
+                    fullscreen: Some(true),
+                    ..Default::default()
+                },
+            );
+            let mut full = ctx.run_ui(input, |ui| {
+                resize_edges(ui.ctx());
+                out = Some(TitleBar::new("Title").show(ui, |_| {}, |_| {}));
+            });
+            full.textures_delta.clear();
+        }
+        let out = out.expect("the bar was drawn");
+        let l = &out.layout;
+        assert!(l.fullscreen);
+        assert!(l.minimize.is_none() && l.maximize.is_none(), "{l:?}");
+        let close = l.close.expect("close stays");
+        assert_eq!(close.right(), 800.0);
+        // The way out, where maximize was: a hole, so client area.
+        let exit = *l
+            .holes
+            .iter()
+            .find(|h| h.right() == close.left())
+            .expect("the way out of full screen");
+        let r = regions(&ctx).expect("published");
+        assert!(r.fullscreen);
+        assert_eq!(r.grip, 0, "no resize edges in full screen");
+        let at = |p: Pos2| (p.x as i32, p.y as i32);
+        let (x, y) = at(exit.center());
+        assert_eq!(r.hit(x, y), Hit::Client);
+        let (x, y) = at(close.center());
+        assert_eq!(r.hit(x, y), Hit::Close);
+        assert_eq!(r.hit(400, 16), Hit::Caption);
+        assert_eq!(r.hit(0, 300), Hit::Client);
+        assert_eq!(r.hit(400, 0), Hit::Caption);
     }
 
     #[test]

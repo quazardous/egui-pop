@@ -534,6 +534,8 @@ egui-pop-files-save = Save
 
 egui-pop-files-unbookmark = Remove the bookmark
 
+egui-pop-frame-exit-fullscreen = Exit full screen
+
 egui-pop-frame-maximize = Maximize
 
 egui-pop-frame-minimize = Minimize
@@ -1285,6 +1287,10 @@ setting-tips-dismissed =
 setting-tips-show =
     .description = The tip of the day and the hints beside what they are about.
     .label = Show tips
+
+setting-window-bar-in-fullscreen =
+    .description = Keeps the application's title bar (its buttons and items) in full screen; off, full screen hides it.
+    .label = Title bar in full screen
 
 setting-window-frame =
     .description = Who draws the window's title bar and edges: the application (own), or the desktop (system).

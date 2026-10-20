@@ -7,8 +7,10 @@
 //! its screen (or than what the GPU can draw) is shrunk.
 //!
 //! **Full screen** (`F11`, View > Full screen) keeps the way out
-//! reachable: moving the pointer to the top edge shows a strip with the
-//! title and an "Exit full screen" button.
+//! reachable: the application's title bar keeps a button leaving it
+//! (`frame::FramePlugin`); without that bar (the system draws the frame,
+//! or `window.bar_in_fullscreen` is off), moving the pointer to the top
+//! edge shows a strip with the title and an "Exit full screen" button.
 //!
 //! Where the window manager does not tell the window's position
 //! (Wayland), only the size and the states are kept.
@@ -233,7 +235,8 @@ fn show(ui: &mut Ui, app: &AppHandle) {
         if fullscreen { "true" } else { "false" },
     );
     track(app, &info, maximized, fullscreen);
-    if fullscreen {
+    // The application's title bar, drawn this pass, holds the way out.
+    if fullscreen && !crate::frame::bar_shown_in_full_screen(&ctx) {
         way_out(&ctx, app);
     }
 }

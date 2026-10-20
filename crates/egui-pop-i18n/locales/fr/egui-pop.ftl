@@ -533,6 +533,8 @@ egui-pop-files-save = Enregistrer
 
 egui-pop-files-unbookmark = Retirer des favoris
 
+egui-pop-frame-exit-fullscreen = Quitter le plein écran
+
 egui-pop-frame-maximize = Agrandir
 
 egui-pop-frame-minimize = Réduire
@@ -1284,6 +1286,10 @@ setting-tips-dismissed =
 setting-tips-show =
     .description = L’astuce du jour et les conseils à côté de ce qu’ils concernent.
     .label = Afficher les astuces
+
+setting-window-bar-in-fullscreen =
+    .description = Garde la barre de titre de l’application (ses boutons et ses éléments) en plein écran ; désactivé, le plein écran la masque.
+    .label = Barre de titre en plein écran
 
 setting-window-frame =
     .description = Qui dessine la barre de titre et les bords de la fenêtre : l’application (propre) ou le bureau (système).

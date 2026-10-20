@@ -11,8 +11,17 @@
 //! of the [`zones::CAPTION`] zone (the application's buttons) and the
 //! minimize, maximize and close buttons. Its hit regions are published
 //! per window ([`egui_pop_core::frame::HitTable`]) and shown by the debug
-//! bridge's `frame` collector. In full screen the bar is not drawn and
-//! publishes no caption.
+//! bridge's `frame` collector.
+//!
+//! **In full screen** the bar stays, with its zones (the menus and the
+//! application's items live there): close stays, minimize goes, and a
+//! button leaving full screen (the `frame.exit_fullscreen` step) takes
+//! maximize's place. The bar no longer moves the window and a double
+//! click on it does nothing (the way out is that button, or `F11`); the
+//! resize edges go. A setting (`window.bar_in_fullscreen`, on by default)
+//! turns this off: then in full screen the bar is not drawn and publishes
+//! no caption, and the window plugin's strip at the top edge is the way
+//! out.
 //!
 //! An application puts its logo at the start of the bar by replacing the
 //! menu block; the bar itself ([`BLOCK_TITLE`]) still follows the
@@ -40,6 +49,7 @@
 //! | `frame.maximize` | `{ "maximized": bool }` (the state asked for) | maximizes or restores |
 //! | `frame.close` | `{ "viewport": "root" }` | closes the window |
 //! | `frame.system_menu` | `{ "x", "y" }` (points) | opens the system menu there |
+//! | `frame.exit_fullscreen` | `{ "viewport": "root" }` | leaves full screen |
 //! | `frame.hit_test` | `{ "viewport": "root", "install": bool }` | on Windows, takes over the window's hit testing (or gives it back) |
 //!
 //! ## Windows: the system's hit test
@@ -50,7 +60,10 @@
 //! published regions: the caption moves the window natively (Aero Snap),
 //! the maximize button shows Snap Layouts, the edges resize. Clicks on
 //! the buttons, a double click and a right click on the caption come back
-//! as the usual requests, so the steps above still run. The handle comes
+//! as the usual requests, so the steps above still run. In full screen the
+//! caption is answered as client area (the system must not move the
+//! window), and the button leaving full screen is client area too: Snap
+//! Layouts never show in full screen. The handle comes
 //! from eframe when the application is started with
 //! `AppBuilder::run_native` (or `run_native_with`); an application
 //! starting eframe itself gives it with [`set_native_window`]. Only the
@@ -90,6 +103,10 @@ use crate::{Ctx, Plugin, PluginError};
 /// The setting: `own` (the application draws the frame) or `system`.
 pub const SETTING_FRAME: SettingId = SettingId::from_static("window.frame");
 
+/// The setting: whether the application's title bar stays in full screen
+/// (on by default).
+pub const SETTING_BAR_IN_FULLSCREEN: SettingId = SettingId::from_static("window.bar_in_fullscreen");
+
 /// The system menu (restore, minimize, maximize, close); plugins may add
 /// to it.
 pub const MENU_SYSTEM: MenuId = MenuId::from_static("app.menu.system");
@@ -104,6 +121,7 @@ pub const STEP_MAXIMIZE: StepId = StepId::from_static("frame.maximize");
 pub const STEP_CLOSE: StepId = StepId::from_static("frame.close");
 pub const STEP_SYSTEM_MENU: StepId = StepId::from_static("frame.system_menu");
 pub const STEP_HIT_TEST: StepId = StepId::from_static("frame.hit_test");
+pub const STEP_EXIT_FULLSCREEN: StepId = StepId::from_static("frame.exit_fullscreen");
 
 /// The title bar, in the [`zones::TITLE`] zone: it keeps the window's
 /// decorations in line with the setting, so it is better wrapped or
@@ -152,6 +170,15 @@ pub fn own_frame(app: &AppHandle) -> bool {
         .unwrap_or(false)
 }
 
+/// Whether the application's title bar stays in full screen
+/// (`window.bar_in_fullscreen`).
+pub fn bar_in_fullscreen(app: &AppHandle) -> bool {
+    lock(&app.store())
+        .get(&format!("settings/{SETTING_BAR_IN_FULLSCREEN}"))
+        .and_then(|e| e.value.as_bool())
+        .unwrap_or(true)
+}
+
 fn viewport_name(ctx: &Context) -> String {
     if ctx.viewport_id() == egui::ViewportId::ROOT {
         "root".into()
@@ -189,6 +216,16 @@ pub fn request(app: &AppHandle, ctx: &Context, r: FrameRequest) {
                 move |_, _| {
                     c.send_viewport_cmd(ViewportCommand::Close);
                     Ok(json!({ "closed": true }))
+                },
+            );
+        }
+        FrameRequest::ExitFullscreen => {
+            app.step(
+                &STEP_EXIT_FULLSCREEN,
+                json!({ "viewport": viewport_name(ctx) }),
+                move |_, _| {
+                    c.send_viewport_cmd(ViewportCommand::Fullscreen(false));
+                    Ok(json!({ "fullscreen": false }))
                 },
             );
         }
@@ -233,6 +270,12 @@ impl Plugin for FramePlugin {
                 "Who draws the window's title bar and edges: the application (own), or the desktop (system).",
             ),
         )?;
+        ctx.setting(
+            SETTING_BAR_IN_FULLSCREEN,
+            Descriptor::bool("Title bar in full screen", true).description(
+                "Keeps the application's title bar (its buttons and items) in full screen; off, full screen hides it.",
+            ),
+        )?;
         for spec in [
             StepSpec::new(STEP_MINIMIZE, "The frame minimizes the window.").args(json!({})),
             StepSpec::new(
@@ -250,6 +293,11 @@ impl Plugin for FramePlugin {
                 "The frame opens the system menu at a point (`x`, `y`).",
             )
             .args(json!({ "x": 8.0, "y": 32.0 })),
+            StepSpec::new(
+                STEP_EXIT_FULLSCREEN,
+                "The title bar's button leaves full screen (`viewport`: `root` for the main window).",
+            )
+            .args(json!({ "viewport": "root" })),
             StepSpec::new(
                 STEP_HIT_TEST,
                 "On Windows, the frame takes over the window's hit testing (`install`: true) or gives it back (false); a veto keeps the system's.",
@@ -402,9 +450,19 @@ fn follow_setting(ui: &Ui, app: &AppHandle) -> bool {
     own
 }
 
-/// Whether the current window is in full screen.
-fn full_screen(ctx: &Context) -> bool {
-    ctx.input(|i| i.viewport().fullscreen.unwrap_or(false))
+fn bar_in_full_screen_id(ctx: &Context) -> Id {
+    Id::new(("egui_pop.frame.bar_in_full_screen", ctx.viewport_id()))
+}
+
+/// Whether the application drew the current window's title bar in full
+/// screen this pass or the one before (the window plugin's strip at the
+/// top edge is not needed then). The previous pass counts because the
+/// window plugin may draw before the title bar within a pass.
+pub(crate) fn bar_shown_in_full_screen(ctx: &Context) -> bool {
+    // The id reads the context, so it is built before its lock is taken.
+    let id = bar_in_full_screen_id(ctx);
+    ctx.data(|d| d.get_temp::<u64>(id))
+        .is_some_and(|pass| pass + 1 >= ctx.cumulative_pass_nr())
 }
 
 /// The button opening the system menu (the [`BLOCK_MENU`] block draws
@@ -427,7 +485,8 @@ pub fn menu_button(ui: &mut Ui, app: &AppHandle) -> egui::Response {
     r
 }
 
-/// The title bar, in the title zone; not drawn in full screen.
+/// The title bar, in the title zone; in full screen, as the
+/// `window.bar_in_fullscreen` setting says.
 fn title_block(ui: &mut Ui, app: &AppHandle) {
     if !follow_setting(ui, app) {
         return;
@@ -436,9 +495,14 @@ fn title_block(ui: &mut Ui, app: &AppHandle) {
     for r in native::requests(&ctx) {
         request(app, &ctx, r);
     }
-    if full_screen(&ctx) {
-        egui_pop_core::frame::hide_title_bar(&ctx);
-        return;
+    if egui_pop_core::frame::full_screen(&ctx) {
+        if !bar_in_fullscreen(app) {
+            egui_pop_core::frame::hide_title_bar(&ctx);
+            return;
+        }
+        let pass = ctx.cumulative_pass_nr();
+        let id = bar_in_full_screen_id(&ctx);
+        ctx.data_mut(|d| d.insert_temp(id, pass));
     }
     let title = ctx
         .input(|i| i.viewport().title.clone())
@@ -588,9 +652,14 @@ mod native {
 
     impl Handler for Bridge {
         fn hit(&self, x: i32, y: i32) -> Area {
-            self.table
-                .get(self.viewport)
-                .map_or(Area::Client, |r| area(r.hit(x, y)))
+            self.table.get(self.viewport).map_or(Area::Client, |r| {
+                match r.hit(x, y) {
+                    // In full screen the bar never moves the window: its
+                    // drag, double and right clicks are egui's.
+                    Hit::Caption if r.fullscreen => Area::Client,
+                    hit => area(hit),
+                }
+            })
         }
 
         fn event(&self, event: NcEvent) {
@@ -870,6 +939,21 @@ mod native {
                 Some(Button::Maximize)
             );
             assert!(requests(&ctx).is_empty());
+            // In full screen, the caption is client area: the system
+            // must not move the window.
+            b.table.publish(
+                ViewportId::ROOT,
+                core_frame::HitRegions::measure(
+                    &core_frame::FrameLayout {
+                        fullscreen: true,
+                        resizable: false,
+                        ..layout
+                    },
+                    1.5,
+                ),
+            );
+            assert_eq!(b.hit(600, 24), Area::Client);
+            assert_eq!(b.hit(2, 400), Area::Client);
         }
     }
 }

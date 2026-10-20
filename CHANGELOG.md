@@ -20,6 +20,20 @@ publishes.
   the workspace once the application asks (`offer_workspace_keys`), and
   says where each key comes from (workspace, user, or the application's
   own name, `name_key_sources`).
+- Full screen keeps the application's title bar (`egui-pop-core`,
+  `egui-pop-api`): `FramePlugin` draws it with its `CAPTION_START` and
+  `CAPTION` zones, so the menus and the application's items stay. Close
+  stays; minimize goes, and a button leaving full screen takes
+  maximize's place (`FrameRequest::ExitFullscreen`, the
+  `frame.exit_fullscreen` step), published as client area so Windows
+  shows no Snap Layouts; the caption no longer moves the window, a
+  double click on it does nothing, and the hit table publishes no
+  resize edge (`HitRegions::fullscreen`, `FrameLayout::fullscreen`;
+  on Windows the caption answers as client area). `TitleBar::full_screen`
+  draws a preview as in full screen. The window plugin's strip at the
+  top edge shows only when no bar is drawn. Auxiliary windows follow.
+  The `window.bar_in_fullscreen` setting (on by default) gives the
+  former behaviour back. Strings with their French.
 - A `window-exit-fullscreen` glyph role in the kit (`egui-pop-core`,
   `egui-pop-tokens`, `glyph.window-exit-fullscreen`, the
   `exit-fullscreen` icon by default): the mark of the title bar's

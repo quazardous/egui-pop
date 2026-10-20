@@ -847,9 +847,10 @@ pub(crate) fn windows(app: &AppHandle, ctx: &egui::Context, app_name: &str) {
                     json!({ "viewport": panel, "from": from, "to": to }),
                 );
             }
-            // No title bar in full screen, as the main window's.
-            let full_screen = vctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
-            if own && !full_screen {
+            // In full screen, the title bar as the main window's: kept
+            // unless the setting says otherwise.
+            let full_screen = egui_pop_core::frame::full_screen(&vctx);
+            if own && (!full_screen || crate::frame::bar_in_fullscreen(app)) {
                 egui_pop_core::frame::resize_edges(&vctx);
                 let out = egui::Panel::top(Id::new(("egui_pop.aux.title", panel.as_str())))
                     .frame(egui::Frame::NONE)
