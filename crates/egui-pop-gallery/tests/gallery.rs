@@ -65,6 +65,7 @@ fn every_page_renders_under_every_theme_and_density() {
     }
 }
 
+#[egui_pop_test::critical(gpu)]
 #[test]
 fn every_interactive_node_of_every_page_has_a_name() {
     for page in PAGES {

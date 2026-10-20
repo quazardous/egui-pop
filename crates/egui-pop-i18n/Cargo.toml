@@ -32,6 +32,9 @@ unic-langid = "0.9"
 sys-locale = "0.3"
 
 [dev-dependencies]
+# Path only (left out when publishing): the `critical` mark of the
+# tests that run on every change (docs/testing.md).
+egui-pop-test-macros = { path = "../egui-pop-test-macros" }
 egui = { workspace = true, features = ["default_fonts"] }
 egui_kittest = { workspace = true }
 # Path only (left out when publishing): the catalogue test covers the

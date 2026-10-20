@@ -20,6 +20,7 @@ Crates are stacked; a crate depends only on crates of a lower layer:
 | L0 | `egui-pop-tokens`: design tokens | no |
 | L0 | `egui-pop-win32`: the frame's Windows hit-test layer (amended 2026-10-12) | no |
 | L0 | `egui-pop-wayland`: the image viewport's Wayland layer, a tagged subsurface (amended 2026-10-13) | no |
+| L0 | `egui-pop-test-macros`: the test kit's attributes, a procedural macro crate without dependencies (amended 2026-10-20) | no |
 | L1 | `egui-pop-model`: commands, keymap, menus, panels, layouts, values, ids, diagnostics, documents | no |
 | L2 | `egui-pop-core`: theme, focus, keys, overlays, placement, accessibility, strings, icons, persistence, fault boundary, binding, debug bridge | yes |
 | L3 | `egui-pop-api`: plugins, the app builder, `Ctx`, zones and blocks, hooks, services, stories | yes |

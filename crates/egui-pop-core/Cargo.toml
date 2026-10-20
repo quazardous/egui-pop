@@ -40,5 +40,8 @@ serde.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
+# Path only (left out when publishing): the `critical` mark of the
+# tests that run on every change (docs/testing.md).
+egui-pop-test-macros = { path = "../egui-pop-test-macros" }
 egui = { workspace = true, features = ["default_fonts"] }
 egui_kittest = { workspace = true, features = ["wgpu"] }

@@ -123,6 +123,7 @@ fn user_kits_are_the_folders_holding_a_kit_file() {
     assert!(kit::discover(fixture("nowhere")).is_empty());
 }
 
+#[egui_pop_test_macros::critical]
 #[test]
 fn the_default_kit_is_a_kit_folder() {
     // `themes/kit/` read as any kit folder, from its YAML: clean, and the

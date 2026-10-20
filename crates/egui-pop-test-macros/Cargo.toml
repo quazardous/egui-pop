@@ -1,0 +1,19 @@
+[package]
+name = "egui-pop-test-macros"
+version = "0.1.0"
+description = "Attributes for the egui-pop test kit: `critical`, the mark of a test that runs on every change (re-exported by egui-pop-test)"
+readme = "README.md"
+keywords = ["egui", "testing", "nextest"]
+categories = ["development-tools::testing"]
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+proc-macro = true

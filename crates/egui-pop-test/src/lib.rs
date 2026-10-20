@@ -29,7 +29,9 @@
 //!   event, answering the job commands now, later or never;
 //! - `viewport::TestSource` (feature `viewport`): a tile source for the
 //!   image viewport, every pixel its own colour, served when the test
-//!   says.
+//!   says;
+//! - [`macro@critical`]: the mark of a test that runs on every change,
+//!   whatever a selective run skips (see `docs/testing.md`).
 //!
 //! ```
 //! use egui_pop_test::{assert_all_named, themed};
@@ -49,6 +51,8 @@ pub use gpu::{SharedGpu, gpu_lock, shared_renderer, shared_setup};
 
 pub mod hosts;
 pub mod jobs;
+
+pub use egui_pop_test_macros::critical;
 #[cfg(feature = "viewport")]
 pub mod viewport;
 

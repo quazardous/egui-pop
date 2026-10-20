@@ -315,6 +315,7 @@ fn bound_widgets_write_the_store_and_a_drag_is_one_undo_step() {
     assert!(watch.accesskit_node().is_disabled());
 }
 
+#[egui_pop_test_macros::critical]
 #[test]
 fn documents_are_written_atomically_with_a_backup_and_migrated_on_load() {
     let dir = std::env::temp_dir().join(format!("egui-pop-core-test-{}", std::process::id()));

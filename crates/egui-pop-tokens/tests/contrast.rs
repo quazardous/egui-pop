@@ -12,6 +12,7 @@ fn level(base: &str) -> Level {
     }
 }
 
+#[egui_pop_test_macros::critical]
 #[test]
 fn every_built_in_theme_and_density_passes_its_contrast_pairs() {
     let themes = Themes::default();

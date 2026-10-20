@@ -21,6 +21,7 @@ fn all_specs() -> impl Iterator<Item = ThemeSpec> {
     })
 }
 
+#[egui_pop_test_macros::critical]
 #[test]
 fn built_in_themes_answer_the_whole_contract_cleanly() {
     let themes = Themes::default();
@@ -43,6 +44,7 @@ fn built_in_themes_answer_the_whole_contract_cleanly() {
     }
 }
 
+#[egui_pop_test_macros::critical]
 #[test]
 fn system_and_component_tokens_are_aliases_of_the_tier_below() {
     let themes = Themes::default();
