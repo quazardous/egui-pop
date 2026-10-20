@@ -21,6 +21,7 @@ use egui_pop_model::values::{Descriptor, Type, Value};
 
 use crate::binding::{self, Bindable, Binding, Choice, SharedStore};
 use crate::slider::Slider;
+use crate::ui::UiPop as _;
 use crate::widgets;
 
 /// Where the value is.
@@ -99,9 +100,10 @@ pub fn param_shown(
         Type::Choice => labelled(ui, &d.label, |ui| {
             with(ui, mode, |ui, v: &mut Choice| {
                 let mut picked = v.0.clone();
-                let r = widgets::combo_box(("egui_pop.param", &d.label))
-                    .selected_text(shown(&picked))
-                    .show_ui(ui, |ui| {
+                let combo =
+                    widgets::combo_box(("egui_pop.param", &d.label)).selected_text(shown(&picked));
+                let r = ui
+                    .combo_box(combo, |ui| {
                         for c in &d.choices {
                             widgets::selectable_value(ui, &mut picked, c.clone(), shown(c));
                         }

@@ -67,6 +67,7 @@ use egui_pop_core::tokens::{
     BUILT_IN_THEMES, Color, Counterpart, ResolvedTokens, ThemeDraft, ThemeSpec, TokenEdit, Value,
     Warning, theme_label,
 };
+use egui_pop_core::ui::UiPop as _;
 use egui_pop_core::widgets;
 use egui_pop_model::commands::CommandSpec;
 use egui_pop_model::ids::{CommandId, PluginId, StepId};
@@ -838,20 +839,15 @@ fn toolbar(ui: &mut Ui, app: &AppHandle, editor: &ThemeEditor) {
         let start = strings::tr(&ctx, &txt::THEME_EDITOR_START);
         let label = ui.label(&start);
         let mut picked = base.clone();
-        widgets::combo_box("egui_pop.theme_editor.start")
-            .selected_text(theme_label(&base))
-            .show_ui(ui, |ui| {
-                for name in BUILT_IN_THEMES {
-                    widgets::selectable_value(
-                        ui,
-                        &mut picked,
-                        (*name).to_string(),
-                        theme_label(name),
-                    );
-                }
-            })
-            .response
-            .labelled_by(label.id);
+        let combo =
+            widgets::combo_box("egui_pop.theme_editor.start").selected_text(theme_label(&base));
+        ui.combo_box(combo, |ui| {
+            for name in BUILT_IN_THEMES {
+                widgets::selectable_value(ui, &mut picked, (*name).to_string(), theme_label(name));
+            }
+        })
+        .response
+        .labelled_by(label.id);
         if picked != base {
             say(editor, editor.start(app, &picked).map(|()| None));
         }

@@ -94,6 +94,11 @@ publishes.
   the outline with the keyboard). What egui cannot draw of them is in
   the kit's problems. "egui's widgets in a scope" in `docs/kit.md`.
   Part of #35.
+- egui-pop's combo boxes (settings, forms, the file chooser's filter,
+  the theme editor, parameters) take their box from the kit's
+  `combo-box`, and the navigator's zoom buttons (fit, 100 %) from
+  `toggle-button` (egui-pop-core, egui-pop-api, egui-pop-viewport).
+  Part of #35.
 - The gallery's `roles` page (Layout by role): text roles, spacing by
   intent, cards and buttons in every tone; the gallery's section titles,
   the jobs centre's titles and details and a placeholder gap use the

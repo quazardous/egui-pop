@@ -8,6 +8,7 @@ use egui::{Response, Ui};
 use egui_pop_core::binding::{self, Binding};
 use egui_pop_core::lock;
 use egui_pop_core::strings::{self, RESET};
+use egui_pop_core::ui::UiPop as _;
 use egui_pop_core::widgets;
 use egui_pop_model::commands::Origin;
 use egui_pop_model::ids::OwnerId;
@@ -109,9 +110,10 @@ fn row(ui: &mut Ui, app: &AppHandle, entry: &SettingEntry) {
                 .and_then(|e| e.value.as_choice().map(str::to_string))
                 .unwrap_or_default();
             let mut picked = current.clone();
-            let r = widgets::combo_box(path)
-                .selected_text(strings::setting_choice(&ctx, id, &current))
-                .show_ui(ui, |ui| {
+            let combo =
+                widgets::combo_box(path).selected_text(strings::setting_choice(&ctx, id, &current));
+            let r = ui
+                .combo_box(combo, |ui| {
                     for c in &d.choices {
                         widgets::selectable_value(
                             ui,

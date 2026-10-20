@@ -101,6 +101,7 @@ use egui_pop_core::lock;
 use egui_pop_core::overlay::{self, Kind, OverlaySpec};
 use egui_pop_core::strings::{self, CANCEL, CLOSE};
 use egui_pop_core::theme::Tokens;
+use egui_pop_core::ui::UiPop as _;
 use egui_pop_core::widgets;
 use egui_pop_model::commands::{CommandSpec, Origin};
 use egui_pop_model::fuzzy;
@@ -2048,9 +2049,10 @@ fn edit_field(
         }
         (Value::Choice(v), _) => {
             let mut picked = v.clone();
-            let r = widgets::combo_box(("egui_pop.form.choice", &field.key))
-                .selected_text(picked.as_str())
-                .show_ui(ui, |ui| {
+            let combo = widgets::combo_box(("egui_pop.form.choice", &field.key))
+                .selected_text(picked.as_str());
+            let r = ui
+                .combo_box(combo, |ui| {
                     for c in &d.choices {
                         widgets::selectable_value(ui, &mut picked, c.clone(), c);
                     }

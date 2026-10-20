@@ -59,6 +59,7 @@ use egui_pop_core::lock;
 use egui_pop_core::overlay::{self, Kind, OverlaySpec};
 use egui_pop_core::strings::{self, CANCEL};
 use egui_pop_core::theme::Tokens;
+use egui_pop_core::ui::UiPop as _;
 use egui_pop_core::widgets;
 use egui_pop_model::commands::Origin;
 use egui_pop_model::fuzzy;
@@ -1311,13 +1312,13 @@ impl FilePicker {
                     .chain([strings::tr(ui.ctx(), &txt::FILES_ALL)])
                     .collect();
                 let mut at = self.filter_index.min(names.len() - 1);
-                widgets::combo_box("egui_pop.files.filter")
-                    .selected_text(names[at].as_str())
-                    .show_ui(ui, |ui| {
-                        for (i, n) in names.iter().enumerate() {
-                            widgets::selectable_value(ui, &mut at, i, n);
-                        }
-                    });
+                let combo =
+                    widgets::combo_box("egui_pop.files.filter").selected_text(names[at].as_str());
+                ui.combo_box(combo, |ui| {
+                    for (i, n) in names.iter().enumerate() {
+                        widgets::selectable_value(ui, &mut at, i, n);
+                    }
+                });
                 if at != self.filter_index {
                     self.filter_index = at;
                     self.highlight = 0;

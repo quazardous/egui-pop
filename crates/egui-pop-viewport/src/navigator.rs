@@ -39,6 +39,7 @@ use egui_pop_core::strings;
 /// A drag under way on a navigator, per navigator.
 const GRAB: Slot<Grab> = Slot::new("viewport.navigator.grab");
 use egui_pop_core::theme::Tokens;
+use egui_pop_core::ui::{Stock, Tone, UiPop as _};
 
 use crate::change::{self, Cause, Change, Gesture, Hook, Verdict};
 use crate::thumbnail::fitted;
@@ -190,8 +191,19 @@ impl<'a> ZoomControl<'a> {
                     &mut changes,
                 );
             }
-            let fit =
-                ui.add(egui::Button::new(tr(&crate::strings::ZOOM_FIT)).selected(view.is_fit()));
+            // Shown on or off: the kit's `toggle-button` in a scope.
+            let (fit, actual) = ui
+                .scoped(Stock::ToggleButton, Tone::Neutral, |ui| {
+                    let fit = ui.add(
+                        egui::Button::new(tr(&crate::strings::ZOOM_FIT)).selected(view.is_fit()),
+                    );
+                    let actual = ui.add(
+                        egui::Button::new(tr(&crate::strings::ZOOM_ACTUAL))
+                            .selected(view.zoom == Zoom::Px(1.0)),
+                    );
+                    (fit, actual)
+                })
+                .inner;
             if fit.clicked() {
                 apply(
                     state,
@@ -203,10 +215,6 @@ impl<'a> ZoomControl<'a> {
                     &mut changes,
                 );
             }
-            let actual = ui.add(
-                egui::Button::new(tr(&crate::strings::ZOOM_ACTUAL))
-                    .selected(view.zoom == Zoom::Px(1.0)),
-            );
             if actual.clicked() {
                 let center = m.map_or(view.center, |m| m.center);
                 apply(
