@@ -52,6 +52,10 @@ publishes.
   application passes `writer_check(WriterCheck::Warn)` while it
   migrates. `Dispatch` has a new private field (it is built by
   egui-pop only).
+- Declared writes in tests (egui-pop-test): `undeclared_writes` lists
+  the writes from a plugin to a value it neither owns nor is named a
+  writer of, `assert_writes_declared` fails on any, so a test of a
+  plugin set asserts it writes only what it declared. Part of #29.
 - Token file versions (egui-pop-tokens): a file says which format and
   contract it was written for with a stamp in its root `$extensions`,
   `"org.egui-pop.format": { "version": 1, "contract": 1 }`

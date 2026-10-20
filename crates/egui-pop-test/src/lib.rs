@@ -6,6 +6,8 @@
 //! - [`keymap_problems`] and [`assert_keymap_clean`]: no two commands
 //!   claim the same keys, no binding names a command that does not
 //!   exist;
+//! - [`undeclared_writes`] and [`assert_writes_declared`]: the plugins
+//!   wrote only the values they own or were named writers of;
 //! - [`unnamed_interactive`] and [`assert_all_named`]: every interactive
 //!   node (button, check box, slider, text input...) has a name a screen
 //!   reader can say;
@@ -175,6 +177,39 @@ pub fn assert_keymap_clean(app: &App) {
         problems.is_empty(),
         "keymap problems:\n{}",
         problems.join("\n")
+    );
+}
+
+/// The writes from a plugin to a value it neither owns nor is named a
+/// writer of (`Descriptor::writers`), refused or, under
+/// `WriterCheck::Warn`, applied: each path and plugin once.
+pub fn undeclared_writes(app: &App) -> Vec<String> {
+    let store = app.handle().store();
+    let s = egui_pop_core::lock(&store);
+    s.stray_writes()
+        .iter()
+        .map(|w| {
+            format!(
+                "`{}` wrote `{}`, owned by `{}`{}",
+                w.by,
+                w.path,
+                w.owner,
+                if w.refused { " (refused)" } else { "" }
+            )
+        })
+        .collect()
+}
+
+/// Panics, listing them, when a plugin of the application wrote a value
+/// it did not declare it writes: run the plugin set's scenarios first,
+/// with `AppBuilder::writer_check(WriterCheck::Warn)` to see every write
+/// go through.
+pub fn assert_writes_declared(app: &App) {
+    let stray = undeclared_writes(app);
+    assert!(
+        stray.is_empty(),
+        "writes not declared:\n{}",
+        stray.join("\n")
     );
 }
 

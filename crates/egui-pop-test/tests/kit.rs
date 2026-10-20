@@ -218,3 +218,82 @@ fn frames_binding_one_key_while_both_on_are_a_keymap_problem() {
         .count();
     assert_eq!(said, 2);
 }
+
+/// `a` declares a value, `b` writes it from a command.
+fn stray_app(check: egui_pop_core::model::values::WriterCheck) -> egui_pop_api::App {
+    use egui_pop_core::model::commands::{CommandSpec, Origin};
+    use egui_pop_core::model::ids::{CommandId, PluginId};
+    use egui_pop_core::model::values::{Change, Descriptor, Set, Value};
+
+    struct A;
+    impl egui_pop_api::Plugin for A {
+        fn id(&self) -> PluginId {
+            PluginId::from_static("a")
+        }
+        fn connect(
+            &mut self,
+            ctx: &mut egui_pop_api::Ctx<'_>,
+        ) -> Result<(), egui_pop_api::PluginError> {
+            egui_pop_core::lock(&ctx.app().store())
+                .declare(ctx.owner(), "a/v", Descriptor::int("V", 0, 9, 0))
+                .unwrap();
+            Ok(())
+        }
+    }
+    struct B;
+    impl egui_pop_api::Plugin for B {
+        fn id(&self) -> PluginId {
+            PluginId::from_static("b")
+        }
+        fn connect(
+            &mut self,
+            ctx: &mut egui_pop_api::Ctx<'_>,
+        ) -> Result<(), egui_pop_api::PluginError> {
+            let writer = ctx.writer();
+            ctx.command(
+                CommandSpec::new(CommandId::from_static("b.write"), "Write", "Test"),
+                move |_| {
+                    let _ = writer.set(Set::new("a/v", Change::To(Value::Int(1)), Origin::User));
+                    Ok(serde_json::Value::Null)
+                },
+            )?;
+            Ok(())
+        }
+    }
+    let mut app = egui_pop_api::App::builder()
+        .plugin(A)
+        .plugin(B)
+        .writer_check(check)
+        .build(&egui::Context::default())
+        .unwrap();
+    egui_pop_test::assert_writes_declared(&app);
+    app.run(
+        &CommandId::from_static("b.write"),
+        serde_json::Value::Null,
+        Origin::User,
+    );
+    app
+}
+
+#[test]
+fn undeclared_writes_are_listed() {
+    use egui_pop_core::model::values::WriterCheck;
+    let app = stray_app(WriterCheck::Refuse);
+    assert_eq!(
+        egui_pop_test::undeclared_writes(&app),
+        ["`b` wrote `a/v`, owned by `a` (refused)"]
+    );
+    let app = stray_app(WriterCheck::Warn);
+    assert_eq!(
+        egui_pop_test::undeclared_writes(&app),
+        ["`b` wrote `a/v`, owned by `a`"]
+    );
+}
+
+#[test]
+#[should_panic(expected = "writes not declared")]
+fn undeclared_writes_fail_the_assertion() {
+    egui_pop_test::assert_writes_declared(&stray_app(
+        egui_pop_core::model::values::WriterCheck::Warn,
+    ));
+}
