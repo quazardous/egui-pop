@@ -1102,6 +1102,7 @@ dependencies = [
  "resvg",
  "serde",
  "serde_json",
+ "skrifa",
 ]
 
 [[package]]

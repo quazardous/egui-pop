@@ -798,11 +798,21 @@ egui-pop-slider-minimum = { $label }, minimum
 
 egui-pop-theme-editor-accent = Accent and focus
 
+egui-pop-theme-editor-add = Add
+
+egui-pop-theme-editor-add-family-to = A family to add to { $role }
+
+egui-pop-theme-editor-add-font-file = Add a font file
+
 egui-pop-theme-editor-adjust-of = Adjust { $token }
 
 egui-pop-theme-editor-alias-of = Alias of { $token }
 
 egui-pop-theme-editor-apply = Apply
+
+egui-pop-theme-editor-apply-fonts = Apply the fonts
+
+egui-pop-theme-editor-apply-fonts-hint = Rebuilds the font atlas once, and applies the theme being edited.
 
 egui-pop-theme-editor-borders = Borders
 
@@ -822,11 +832,29 @@ egui-pop-theme-editor-export = Export
 
 egui-pop-theme-editor-fail = fail
 
+egui-pop-theme-editor-families = Families
+
+egui-pop-theme-editor-families-hint = In order of priority: the first one found draws, the others are its fallbacks.
+
+egui-pop-theme-editor-family-mono = Values and code (font.family.mono)
+
+egui-pop-theme-editor-family-ui = Interface text (font.family.ui)
+
 egui-pop-theme-editor-file = Export and import
 
 egui-pop-theme-editor-file-text = Theme file (.tokens.json)
 
 egui-pop-theme-editor-filter = Filter tokens
+
+egui-pop-theme-editor-font-added = { $family } { $weight } added; apply to use it.
+
+egui-pop-theme-editor-font-files = Font files
+
+egui-pop-theme-editor-font-sample = Sample
+
+egui-pop-theme-editor-font-sample-hint = Drawn with the fonts installed: apply to see a change.
+
+egui-pop-theme-editor-font-sample-text = Sphinx of black quartz, judge my vow. 0123456789
 
 egui-pop-theme-editor-from = As in { $theme }
 
@@ -846,7 +874,13 @@ egui-pop-theme-editor-imported = Imported over { $theme }.
 
 egui-pop-theme-editor-missing = The theme editor plugin is not connected.
 
+egui-pop-theme-editor-move-down = Move { $family } down
+
+egui-pop-theme-editor-move-up = Move { $family } up
+
 egui-pop-theme-editor-name = Theme name
+
+egui-pop-theme-editor-no-font-files = No font file added.
 
 egui-pop-theme-editor-no-pairs = No contrast pair uses this token.
 
@@ -881,6 +915,10 @@ egui-pop-theme-editor-problems = Problems in this theme
 egui-pop-theme-editor-ratio = Ratio
 
 egui-pop-theme-editor-redo = Redo
+
+egui-pop-theme-editor-remove-family = Remove { $family }
+
+egui-pop-theme-editor-remove-font-file = Remove the file of { $family }
 
 egui-pop-theme-editor-reset = Reset to { $theme }
 
@@ -929,6 +967,10 @@ egui-pop-theme-editor-start = Start from
 egui-pop-theme-editor-states = States
 
 egui-pop-theme-editor-surfaces = Surfaces
+
+egui-pop-theme-editor-tab-fonts = Fonts
+
+egui-pop-theme-editor-tab-tokens = Tokens
 
 egui-pop-theme-editor-text = Text
 

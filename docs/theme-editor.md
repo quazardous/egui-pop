@@ -67,6 +67,18 @@ it directly, or the service (`THEME_EDITOR`: `set`, `undo`, `redo`,
 
 ## What it shows
 
+- **Tokens** and **Fonts**: two tabs (`ThemeEditor::set_tab`). The
+  Fonts tab edits `font.family.ui` and `font.family.mono` in priority
+  order (move a family up or down, remove it, add one by name) and the
+  user's font files (added through the file chooser, read to take
+  their family and weight, kept as paths: `ThemeEditor::font_files`,
+  for the host to save, and `set_font_files` at the next start), shows
+  a sample line per role in the fonts installed, and applies once with
+  "Apply the fonts" (`ThemeEditor::apply_fonts`): the files are
+  registered, the families written as one change, the draft applied,
+  the atlas rebuilt once. A file that cannot be read is reported and
+  its previous face stays. Fonts are global, so they are never
+  previewed in the pane (see [Fonts](fonts.md#a-users-font-files-built)).
 - **Preview**: a pane drawing the draft in its own theme: text by
   role, the status colours, buttons in their tones and states, a
   checkbox, options, a slider, a field, a selected row and a progress
@@ -168,8 +180,10 @@ and what the file loaded with as `warnings`) and `theme.generate`
 ## Keyboard and screen readers
 
 Every control is reached with Tab and used with Enter or Space: the
-theme picker, undo and redo, the filter, each group and token, the
-value fields, reset, export and import. egui's colour picker is drawn
+tabs, the theme picker, undo and redo, "Preview only", "Apply" and
+"Discard", the filter, each group and token, the value and hex fields,
+reset, the seed picker's hex field and "Generate", export and import,
+the Fonts tab's moves, removals, additions and "Apply the fonts". egui's colour picker is drawn
 for the pointer; its keyboard path is the value field beside it (a hex
 colour or an alias). The colour button is a colour well named "Adjust
 `<token>`", the field "Value of `<token>`"; the contrast table is text.
@@ -185,4 +199,6 @@ colour or an alias). The colour button is a colour well named "Adjust
 
 Not done yet: renaming a theme and adding it to the themes the
 application offers (the editor works as overrides over a known base),
-reading a file from disk (the application passes its text).
+a face picked from the system's fonts in a list (the Fonts tab takes
+a family by name), a sample drawn in a face before it is applied, and
+exporting a user's font files with a theme.

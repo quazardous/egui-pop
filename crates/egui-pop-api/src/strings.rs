@@ -520,6 +520,63 @@ pub const THEME_EDITOR_SAMPLE_FIELD: StrKey =
     StrKey::new("egui-pop-theme-editor-sample-field", "A field");
 pub const THEME_EDITOR_SAMPLE_SELECTED: StrKey =
     StrKey::new("egui-pop-theme-editor-sample-selected", "A selected row");
+pub const THEME_EDITOR_TAB_TOKENS: StrKey =
+    StrKey::new("egui-pop-theme-editor-tab-tokens", "Tokens");
+pub const THEME_EDITOR_TAB_FONTS: StrKey = StrKey::new("egui-pop-theme-editor-tab-fonts", "Fonts");
+pub const THEME_EDITOR_FAMILIES: StrKey = StrKey::new("egui-pop-theme-editor-families", "Families");
+pub const THEME_EDITOR_FAMILIES_HINT: StrKey = StrKey::new(
+    "egui-pop-theme-editor-families-hint",
+    "In order of priority: the first one found draws, the others are its fallbacks.",
+);
+pub const THEME_EDITOR_FAMILY_UI: StrKey = StrKey::new(
+    "egui-pop-theme-editor-family-ui",
+    "Interface text (font.family.ui)",
+);
+pub const THEME_EDITOR_FAMILY_MONO: StrKey = StrKey::new(
+    "egui-pop-theme-editor-family-mono",
+    "Values and code (font.family.mono)",
+);
+pub const THEME_EDITOR_MOVE_UP: StrKey =
+    StrKey::new("egui-pop-theme-editor-move-up", "Move { $family } up");
+pub const THEME_EDITOR_MOVE_DOWN: StrKey =
+    StrKey::new("egui-pop-theme-editor-move-down", "Move { $family } down");
+pub const THEME_EDITOR_REMOVE_FAMILY: StrKey =
+    StrKey::new("egui-pop-theme-editor-remove-family", "Remove { $family }");
+pub const THEME_EDITOR_ADD_FAMILY_TO: StrKey = StrKey::new(
+    "egui-pop-theme-editor-add-family-to",
+    "A family to add to { $role }",
+);
+pub const THEME_EDITOR_ADD: StrKey = StrKey::new("egui-pop-theme-editor-add", "Add");
+pub const THEME_EDITOR_FONT_FILES: StrKey =
+    StrKey::new("egui-pop-theme-editor-font-files", "Font files");
+pub const THEME_EDITOR_NO_FONT_FILES: StrKey =
+    StrKey::new("egui-pop-theme-editor-no-font-files", "No font file added.");
+pub const THEME_EDITOR_REMOVE_FONT_FILE: StrKey = StrKey::new(
+    "egui-pop-theme-editor-remove-font-file",
+    "Remove the file of { $family }",
+);
+pub const THEME_EDITOR_ADD_FONT_FILE: StrKey =
+    StrKey::new("egui-pop-theme-editor-add-font-file", "Add a font file");
+pub const THEME_EDITOR_FONT_ADDED: StrKey = StrKey::new(
+    "egui-pop-theme-editor-font-added",
+    "{ $family } { $weight } added; apply to use it.",
+);
+pub const THEME_EDITOR_FONT_SAMPLE: StrKey =
+    StrKey::new("egui-pop-theme-editor-font-sample", "Sample");
+pub const THEME_EDITOR_FONT_SAMPLE_TEXT: StrKey = StrKey::new(
+    "egui-pop-theme-editor-font-sample-text",
+    "Sphinx of black quartz, judge my vow. 0123456789",
+);
+pub const THEME_EDITOR_FONT_SAMPLE_HINT: StrKey = StrKey::new(
+    "egui-pop-theme-editor-font-sample-hint",
+    "Drawn with the fonts installed: apply to see a change.",
+);
+pub const THEME_EDITOR_APPLY_FONTS: StrKey =
+    StrKey::new("egui-pop-theme-editor-apply-fonts", "Apply the fonts");
+pub const THEME_EDITOR_APPLY_FONTS_HINT: StrKey = StrKey::new(
+    "egui-pop-theme-editor-apply-fonts-hint",
+    "Rebuilds the font atlas once, and applies the theme being edited.",
+);
 pub const THEME_EDITOR_FILE: StrKey =
     StrKey::new("egui-pop-theme-editor-file", "Export and import");
 pub const THEME_EDITOR_NAME: StrKey = StrKey::new("egui-pop-theme-editor-name", "Theme name");
@@ -776,6 +833,27 @@ pub const ALL: &[StrKey] = &[
     THEME_EDITOR_GENERATED,
     THEME_EDITOR_SEED_CLAMPED,
     THEME_EDITOR_GENERATE_VARIANT,
+    THEME_EDITOR_TAB_TOKENS,
+    THEME_EDITOR_TAB_FONTS,
+    THEME_EDITOR_FAMILIES,
+    THEME_EDITOR_FAMILIES_HINT,
+    THEME_EDITOR_FAMILY_UI,
+    THEME_EDITOR_FAMILY_MONO,
+    THEME_EDITOR_MOVE_UP,
+    THEME_EDITOR_MOVE_DOWN,
+    THEME_EDITOR_REMOVE_FAMILY,
+    THEME_EDITOR_ADD_FAMILY_TO,
+    THEME_EDITOR_ADD,
+    THEME_EDITOR_FONT_FILES,
+    THEME_EDITOR_NO_FONT_FILES,
+    THEME_EDITOR_REMOVE_FONT_FILE,
+    THEME_EDITOR_ADD_FONT_FILE,
+    THEME_EDITOR_FONT_ADDED,
+    THEME_EDITOR_FONT_SAMPLE,
+    THEME_EDITOR_FONT_SAMPLE_TEXT,
+    THEME_EDITOR_FONT_SAMPLE_HINT,
+    THEME_EDITOR_APPLY_FONTS,
+    THEME_EDITOR_APPLY_FONTS_HINT,
     THEME_EDITOR_PREVIEW_ONLY,
     THEME_EDITOR_PREVIEW_ONLY_HINT,
     THEME_EDITOR_APPLY,

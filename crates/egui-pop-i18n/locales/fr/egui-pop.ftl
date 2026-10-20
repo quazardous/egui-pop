@@ -797,11 +797,21 @@ egui-pop-slider-minimum = { $label }, minimum
 
 egui-pop-theme-editor-accent = Accent et focus
 
+egui-pop-theme-editor-add = Ajouter
+
+egui-pop-theme-editor-add-family-to = Une famille à ajouter à { $role }
+
+egui-pop-theme-editor-add-font-file = Ajouter un fichier de police
+
 egui-pop-theme-editor-adjust-of = Ajuster { $token }
 
 egui-pop-theme-editor-alias-of = Alias de { $token }
 
 egui-pop-theme-editor-apply = Appliquer
+
+egui-pop-theme-editor-apply-fonts = Appliquer les polices
+
+egui-pop-theme-editor-apply-fonts-hint = Reconstruit l’atlas des polices une fois, et applique le thème en cours d’édition.
 
 egui-pop-theme-editor-borders = Bordures
 
@@ -821,11 +831,29 @@ egui-pop-theme-editor-export = Exporter
 
 egui-pop-theme-editor-fail = échec
 
+egui-pop-theme-editor-families = Familles
+
+egui-pop-theme-editor-families-hint = Par ordre de priorité : la première trouvée dessine, les autres la complètent.
+
+egui-pop-theme-editor-family-mono = Valeurs et code (font.family.mono)
+
+egui-pop-theme-editor-family-ui = Texte de l’interface (font.family.ui)
+
 egui-pop-theme-editor-file = Exporter et importer
 
 egui-pop-theme-editor-file-text = Fichier de thème (.tokens.json)
 
 egui-pop-theme-editor-filter = Filtrer les jetons
+
+egui-pop-theme-editor-font-added = { $family } { $weight } ajoutée ; appliquez pour l’utiliser.
+
+egui-pop-theme-editor-font-files = Fichiers de police
+
+egui-pop-theme-editor-font-sample = Échantillon
+
+egui-pop-theme-editor-font-sample-hint = Dessiné avec les polices installées : appliquez pour voir un changement.
+
+egui-pop-theme-editor-font-sample-text = Portez ce vieux whisky au juge blond qui fume. 0123456789
 
 egui-pop-theme-editor-generate = Générer { $scale }
 
@@ -845,7 +873,13 @@ egui-pop-theme-editor-imported = Importé sur { $theme }.
 
 egui-pop-theme-editor-missing = Le plugin de l’éditeur de thème n’est pas branché.
 
+egui-pop-theme-editor-move-down = Descendre { $family }
+
+egui-pop-theme-editor-move-up = Monter { $family }
+
 egui-pop-theme-editor-name = Nom du thème
+
+egui-pop-theme-editor-no-font-files = Aucun fichier de police ajouté.
 
 egui-pop-theme-editor-no-pairs = Aucune paire de contraste n’utilise ce jeton.
 
@@ -880,6 +914,10 @@ egui-pop-theme-editor-problems = Problèmes dans ce thème
 egui-pop-theme-editor-ratio = Rapport
 
 egui-pop-theme-editor-redo = Rétablir
+
+egui-pop-theme-editor-remove-family = Retirer { $family }
+
+egui-pop-theme-editor-remove-font-file = Retirer le fichier de { $family }
 
 egui-pop-theme-editor-reset = Revenir à { $theme }
 
@@ -928,6 +966,10 @@ egui-pop-theme-editor-start = Partir de
 egui-pop-theme-editor-states = États
 
 egui-pop-theme-editor-surfaces = Surfaces
+
+egui-pop-theme-editor-tab-fonts = Polices
+
+egui-pop-theme-editor-tab-tokens = Jetons
 
 egui-pop-theme-editor-text = Texte
 

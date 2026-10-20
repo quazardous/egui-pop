@@ -63,7 +63,10 @@ impl Role {
 }
 
 /// A font weight, as CSS and OpenType number them (100 to 900).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
+#[serde(transparent)]
 pub struct Weight(pub u16);
 
 impl Weight {
@@ -176,6 +179,89 @@ impl std::fmt::Debug for Face {
             .field("weight", &self.weight)
             .finish_non_exhaustive()
     }
+}
+
+/// A font file a user added: where it is, and the family and weight
+/// its tables give. What settings keep (paths, not bytes): the file is
+/// read again when registered ([`register_files`]).
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct FontFile {
+    pub path: std::path::PathBuf,
+    /// The family a theme names it by (the file's typographic family,
+    /// else its family name).
+    pub family: String,
+    pub weight: Weight,
+}
+
+impl FontFile {
+    /// Reads a font file (`.ttf`, `.otf`, the first face of a `.ttc`):
+    /// checks it parses, and reads its family and weight. The bytes are
+    /// not kept.
+    pub fn read(path: &std::path::Path) -> Result<FontFile, String> {
+        let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
+        let (family, weight) = inspect(&bytes).map_err(|e| format!("{}: {e}", path.display()))?;
+        Ok(FontFile {
+            path: path.to_path_buf(),
+            family,
+            weight,
+        })
+    }
+}
+
+/// A font's family and weight, from its `name` and `OS/2` tables; an
+/// error when it does not parse as a font.
+fn inspect(bytes: &[u8]) -> Result<(String, Weight), String> {
+    use skrifa::MetadataProvider as _;
+    use skrifa::string::StringId;
+    let font = skrifa::FontRef::from_index(bytes, 0).map_err(|e| format!("not a font ({e})"))?;
+    let name = |id| {
+        font.localized_strings(id)
+            .english_or_first()
+            .map(|s| s.chars().collect::<String>())
+            .filter(|s| !s.trim().is_empty())
+    };
+    let family = name(StringId::TYPOGRAPHIC_FAMILY_NAME)
+        .or_else(|| name(StringId::FAMILY_NAME))
+        .ok_or("a font without a family name")?;
+    let weight = font.attributes().weight.value().round().clamp(1.0, 1000.0) as u16;
+    Ok((family, Weight(weight)))
+}
+
+/// Registers the faces of font files a user added (paths, as settings
+/// keep them), installed with the next theme install or [`install`]:
+/// each file is read again, checked and registered under its family
+/// and weight. A file that cannot be read or parsed is reported, and
+/// the face registered before for it, if any, stays.
+pub fn register_files(ctx: &Context, files: &[FontFile]) -> Vec<String> {
+    let mut problems = Vec::new();
+    for f in files {
+        match std::fs::read(&f.path) {
+            Ok(bytes) => match inspect(&bytes) {
+                Ok(_) => register(ctx, Face::from_owned(&f.family, f.weight, bytes)),
+                Err(e) => problems.push(format!("{}: {e}", f.path.display())),
+            },
+            Err(e) => problems.push(format!("{}: {e}", f.path.display())),
+        }
+    }
+    for p in &problems {
+        log::warn!(target: "egui_pop", "fonts: {p}");
+    }
+    problems
+}
+
+/// Installs the families again with the faces registered since (after
+/// [`register_files`]), keeping the families installed; the atlas is
+/// rebuilt once, from the next pass. Nothing happens when nothing
+/// changed.
+pub fn reinstall(ctx: &Context) -> Option<Arc<Report>> {
+    let (key, _) = INSTALLED.get(ctx)?;
+    Some(install(ctx, &key.ui, &key.mono))
+}
+
+/// The families installed last: `font.family.ui` and `font.family.mono`
+/// as asked.
+pub fn installed_families(ctx: &Context) -> Option<(Vec<String>, Vec<String>)> {
+    INSTALLED.get(ctx).map(|(k, _)| (k.ui, k.mono))
 }
 
 /// What [`install`] did: the face each family starts with, and what it
@@ -666,5 +752,44 @@ mod tests {
             family(Role::Mono, Weight(450)),
             family(Role::Mono, Weight::MEDIUM)
         );
+    }
+
+    #[test]
+    fn a_font_file_is_read_by_path_and_a_broken_one_is_reported() {
+        let dir = std::env::temp_dir().join(format!("egui-pop-fonts-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let good = dir.join("inter.ttf");
+        std::fs::write(&good, INTER_VAR).unwrap();
+        let bad = dir.join("broken.ttf");
+        std::fs::write(&bad, b"not a font at all").unwrap();
+        let file = FontFile::read(&good).unwrap();
+        assert!(file.family.starts_with("Inter"), "{file:?}");
+        assert_eq!(file.weight, Weight::REGULAR);
+        assert!(FontFile::read(&bad).unwrap_err().contains("not a font"));
+        assert!(FontFile::read(&dir.join("missing.ttf")).is_err());
+
+        let ctx = Context::default();
+        let broken = FontFile {
+            path: bad.clone(),
+            ..file.clone()
+        };
+        let problems = register_files(&ctx, &[file.clone(), broken]);
+        assert_eq!(problems.len(), 1, "{problems:?}");
+        // The good one is registered: the family is found by its name.
+        let report = install(&ctx, &names(&[file.family.as_str()]), &[]);
+        assert!(
+            report.problems.iter().all(|p| !p.contains("no font named")),
+            "{:?}",
+            report.problems
+        );
+        assert_eq!(
+            installed_families(&ctx).unwrap().0,
+            vec![file.family.clone()]
+        );
+        // A path is what is kept.
+        let json = serde_json::to_value(&file).unwrap();
+        assert_eq!(json["weight"], 400);
+        assert!(json["path"].as_str().unwrap().ends_with("inter.ttf"));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

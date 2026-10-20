@@ -82,6 +82,22 @@ publishes.
   (`ThemeEditor::set_file_dialog`, `theme_editor::FileDialog`) or the
   files plugin's (`ThemeEditor::open_file`, `save_file`). Live editing
   stays the default. Part of #36.
+- Font files a user adds, kept as paths (egui-pop-core):
+  `fonts::FontFile` (a path, a family, a weight, serialisable),
+  `FontFile::read` (checked with skrifa, egui's own font reader, now a
+  direct dependency, and its family and weight read from its tables),
+  `fonts::register_files` (each file read again; an unreadable one is
+  reported and its previous face stays), `fonts::reinstall` and
+  `fonts::installed_families`; `fonts::Weight` is serialisable.
+- The theme editor has a Fonts tab (egui-pop-api): each role's families
+  in priority order (move up and down, remove, add by name), the user's
+  font files through the host's file chooser, a sample per role, and one
+  explicit "Apply the fonts" rebuilding the atlas once
+  (`ThemeEditor::apply_fonts`, `families`, `set_families`,
+  `add_font_file`, `remove_font_file`, `edited_font_files`,
+  `fonts_pending`; `theme_editor::Tab`, `ThemeEditor::tab`, `set_tab`).
+  The files are kept as paths for the host to save
+  (`ThemeEditor::font_files`, `set_font_files`). Part of #36.
 - Critical tests (egui-pop-test, the new egui-pop-test-macros):
   `#[egui_pop_test::critical]` marks a test that guards a rule any change
   can break, so a selective run still runs it; `#[critical(gpu)]` marks

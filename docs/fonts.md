@@ -5,8 +5,9 @@ Status: design note, **not decided** (2026-10-12). Built so far
 `wght` axis, set per face with `FontTweak::coords`), from
 registered faces, egui's bundled ones and the system's (fontdb behind
 `system-fonts`, not fontique: no per-script fallback yet), reported
-problems (`egui_pop_core::fonts`); a size scale (2026-10-18), below.
-The rest is still a design.
+problems (`egui_pop_core::fonts`); a size scale (2026-10-18), below;
+font files a user adds, kept as paths (2026-10-20), below. The rest is
+still a design.
 
 ## The size scale (built)
 
@@ -43,6 +44,35 @@ the text is drawn by egui's bundled fonts. Only `font.size.{small, body,
 heading, mono}` reach egui's `TextStyle`s. The icon font (Phosphor) is
 already installed in a family of its own with `ctx.add_font`
 (`egui_pop_core::icon::install`); that is the pattern to generalise.
+
+## A user's font files (built)
+
+A user adds a font file (`.ttf`, `.otf`, the first face of a `.ttc`)
+rather than the application embedding it:
+
+- `fonts::FontFile::read(path)` checks the file parses (with skrifa,
+  the font reader egui itself uses: egui panics on a file it cannot
+  parse, so nothing unchecked reaches it) and reads its family (the
+  typographic family, else the family name) and weight from its tables.
+- A `FontFile` is a path, a family and a weight, serialisable: what
+  settings keep, never the bytes. `fonts::register_files(ctx, &files)`
+  reads each file again and registers its face (`fonts::register`);
+  a file that cannot be read or parsed is reported, and the face it had
+  stays. The faces are installed with the next theme install, or at
+  once with `fonts::reinstall` when the families did not change (one
+  slow frame: the atlas is rebuilt).
+- `fonts::installed_families` gives the families installed last.
+
+The theme editor's **Fonts** tab ([The theme editor](theme-editor.md))
+edits them: each role's families in priority order (move up, move down,
+remove, add a name), the font files (added through the host's file
+chooser), a sample line per role, and one explicit "Apply the fonts"
+that registers the files, writes `font.family.ui` and
+`font.family.mono` into the theme being edited as one change, and
+applies it. Saving the files is the host's: `ThemeEditor::font_files`
+gives them, `ThemeEditor::set_font_files` registers them at the next
+start. How a user's font paths travel with an exported theme is not
+decided (a theme file names families; the files stay the user's).
 
 ## 1. What egui 0.36 / epaint can do
 

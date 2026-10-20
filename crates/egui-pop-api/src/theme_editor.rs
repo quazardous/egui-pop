@@ -60,6 +60,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 
 use egui::{Id, RichText, Ui, WidgetInfo, WidgetType};
+use egui_pop_core::fonts::{FontFile, Role};
 use egui_pop_core::lock;
 use egui_pop_core::state::Slot;
 use egui_pop_core::strings;
@@ -235,6 +236,38 @@ struct Gesture {
     keys: bool,
 }
 
+/// What the editor shows: the tokens, or the fonts.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Tab {
+    #[default]
+    Tokens,
+    Fonts,
+}
+
+/// The fonts tab's edits, applied together ([`ThemeEditor::apply_fonts`]).
+#[derive(Clone, Debug, Default)]
+struct FontsDraft {
+    /// The user's font files as applied: what the host saves.
+    files: Vec<FontFile>,
+    /// The files as edited, when they differ.
+    pending_files: Option<Vec<FontFile>>,
+    /// Each role's families as edited (`font.family.ui`, `.mono`).
+    ui: Option<Vec<String>>,
+    mono: Option<Vec<String>>,
+    /// The family name typed in, per role.
+    adding: [String; 2],
+    /// What the last apply could not do.
+    problems: Vec<String>,
+}
+
+/// The token of a role's families.
+fn family_token(role: Role) -> &'static str {
+    match role {
+        Role::Ui => "font.family.ui",
+        Role::Mono => "font.family.mono",
+    }
+}
+
 /// A file chooser the host gives the editor ([`ThemeEditor::set_file_dialog`]):
 /// it starts a choice and answers later, as `files::Files::choose` does
 /// (`{ "paths": [...] }`, or `null` when cancelled).
@@ -249,6 +282,7 @@ pub type Sampler = Arc<dyn Fn(&mut Ui, &AppHandle) + Send + Sync>;
 enum Choice {
     Open(Pending),
     Save(Pending),
+    Font(Pending),
 }
 
 #[derive(Default)]
@@ -262,6 +296,8 @@ struct State {
     file_dialog: Option<FileDialog>,
     sampler: Option<Sampler>,
     choice: Option<Choice>,
+    tab: Tab,
+    fonts: FontsDraft,
     /// The base and overrides last written to the theme service; `None`
     /// before the first look at it.
     applied: Option<(String, BTreeMap<String, Json>)>,
@@ -288,6 +324,8 @@ impl std::fmt::Debug for State {
             .field("draft", &self.draft)
             .field("preview_only", &self.preview_only)
             .field("selected", &self.selected)
+            .field("tab", &self.tab)
+            .field("fonts", &self.fonts)
             .field("choice", &self.choice)
             .finish_non_exhaustive()
     }
@@ -700,6 +738,17 @@ impl ThemeEditor {
             let themes = app.theme();
             self.draft().scale_edits(themes.themes(), scale, &ramp)?
         };
+        self.record_all(app, edits, cause)
+    }
+
+    /// Runs edits through the `theme.token` step and records them as
+    /// one change; the number made, or why none was.
+    fn record_all(
+        &self,
+        app: &AppHandle,
+        edits: Vec<TokenEdit>,
+        cause: Cause,
+    ) -> Result<usize, String> {
         let mut made = 0;
         let mut failed = None;
         for edit in edits {
@@ -723,6 +772,158 @@ impl ThemeEditor {
             Some(e) if made == 0 => Err(e),
             _ => Ok(made),
         }
+    }
+
+    /// The tab shown.
+    pub fn tab(&self) -> Tab {
+        lock(&self.state).tab
+    }
+
+    pub fn set_tab(&self, tab: Tab) {
+        lock(&self.state).tab = tab;
+    }
+
+    /// The user's font files as applied: paths, family and weight, what
+    /// the host saves in its settings (never the bytes) and gives back
+    /// at the next start ([`ThemeEditor::set_font_files`]).
+    pub fn font_files(&self) -> Vec<FontFile> {
+        lock(&self.state).fonts.files.clone()
+    }
+
+    /// The font files saved by the host, at start: registered (each read
+    /// again from its path), installed with the next theme install. What
+    /// could not be read, by file.
+    pub fn set_font_files(&self, ctx: &egui::Context, files: Vec<FontFile>) -> Vec<String> {
+        let problems = egui_pop_core::fonts::register_files(ctx, &files);
+        let mut s = lock(&self.state);
+        s.fonts.files = files;
+        s.fonts.pending_files = None;
+        problems
+    }
+
+    /// The font files as edited (applied or not).
+    pub fn edited_font_files(&self) -> Vec<FontFile> {
+        let s = lock(&self.state);
+        s.fonts
+            .pending_files
+            .clone()
+            .unwrap_or_else(|| s.fonts.files.clone())
+    }
+
+    /// Adds a font file (read to check it and to take its family and
+    /// weight), applied with [`ThemeEditor::apply_fonts`]. A file of the
+    /// same path replaces it.
+    pub fn add_font_file(&self, path: &std::path::Path) -> Result<FontFile, String> {
+        let file = FontFile::read(path)?;
+        let mut files = self.edited_font_files();
+        files.retain(|f| f.path != file.path);
+        files.push(file.clone());
+        lock(&self.state).fonts.pending_files = Some(files);
+        Ok(file)
+    }
+
+    /// Removes a font file, applied with [`ThemeEditor::apply_fonts`]
+    /// (its face stays registered until the application starts again).
+    pub fn remove_font_file(&self, path: &std::path::Path) {
+        let mut files = self.edited_font_files();
+        files.retain(|f| f.path != path);
+        lock(&self.state).fonts.pending_files = Some(files);
+    }
+
+    /// A role's families as edited, in priority order: the first found
+    /// draws, the others are its fallbacks.
+    pub fn families(&self, app: &AppHandle, role: Role) -> Vec<String> {
+        let edited = {
+            let s = lock(&self.state);
+            match role {
+                Role::Ui => s.fonts.ui.clone(),
+                Role::Mono => s.fonts.mono.clone(),
+            }
+        };
+        edited.unwrap_or_else(|| {
+            self.resolved(app)
+                .font_family(family_token(role))
+                .map(<[String]>::to_vec)
+                .unwrap_or_default()
+        })
+    }
+
+    /// Sets a role's families (in priority order), applied with
+    /// [`ThemeEditor::apply_fonts`].
+    pub fn set_families(&self, role: Role, families: Vec<String>) {
+        let mut s = lock(&self.state);
+        match role {
+            Role::Ui => s.fonts.ui = Some(families),
+            Role::Mono => s.fonts.mono = Some(families),
+        }
+    }
+
+    /// Whether the fonts tab has edits not applied.
+    pub fn fonts_pending(&self, app: &AppHandle) -> bool {
+        let (files, ui, mono) = {
+            let s = lock(&self.state);
+            (
+                s.fonts.pending_files.as_ref().map(|p| *p != s.fonts.files),
+                s.fonts.ui.clone(),
+                s.fonts.mono.clone(),
+            )
+        };
+        let tokens = self.resolved(app);
+        let differs = |role: Role, edited: Option<Vec<String>>| {
+            edited.is_some_and(|e| tokens.font_family(family_token(role)) != Some(e.as_slice()))
+        };
+        files == Some(true) || differs(Role::Ui, ui) || differs(Role::Mono, mono)
+    }
+
+    /// Applies the fonts tab, once (the atlas is rebuilt, a slow frame):
+    /// registers the font files (read again from their paths; one that
+    /// cannot be read is reported and the face it had stays), writes the
+    /// families into the draft as one change through the `theme.token`
+    /// step, and applies the draft app-wide (fonts are global: they
+    /// cannot be previewed in a pane). What could not be done, by file;
+    /// saving the files is the host's ([`ThemeEditor::font_files`]).
+    pub fn apply_fonts(&self, app: &AppHandle, cause: Cause) -> Result<Vec<String>, String> {
+        self.sync(app);
+        let ctx = app.egui();
+        let files = self.edited_font_files();
+        let problems = egui_pop_core::fonts::register_files(&ctx, &files);
+        let mut edits = Vec::new();
+        for role in Role::ALL {
+            let edited = {
+                let s = lock(&self.state);
+                match role {
+                    Role::Ui => s.fonts.ui.clone(),
+                    Role::Mono => s.fonts.mono.clone(),
+                }
+            };
+            if let Some(list) = edited {
+                let themes = app.theme();
+                if let Some(e) =
+                    self.draft()
+                        .edit(themes.themes(), family_token(role), Some(json!(list)))?
+                {
+                    edits.push(e);
+                }
+            }
+        }
+        let families_changed = !edits.is_empty();
+        if families_changed {
+            self.record_all(app, edits, cause)?;
+        }
+        self.install(app);
+        if !families_changed {
+            // The same families, other faces: installed again now (a
+            // change of families is, with the theme, before the next
+            // frame).
+            egui_pop_core::fonts::reinstall(&ctx);
+        }
+        let mut s = lock(&self.state);
+        s.fonts.files = files;
+        s.fonts.pending_files = None;
+        s.fonts.ui = None;
+        s.fonts.mono = None;
+        s.fonts.problems = problems.clone();
+        Ok(problems)
     }
 
     /// The draft, or one token, as agents read it.
@@ -1077,6 +1278,10 @@ pub fn show(ui: &mut Ui, app: &AppHandle) {
     let tokens = editor.resolved(app);
     toolbar(ui, app, &editor);
     ui.separator();
+    if editor.tab() == Tab::Fonts {
+        fonts_tab(ui, app, &editor);
+        return;
+    }
     ui.horizontal_top(|ui| {
         let list_width = (ui.available_width() * 0.38).clamp(200.0, 320.0);
         ui.vertical(|ui| {
@@ -1114,6 +1319,24 @@ pub fn show(ui: &mut Ui, app: &AppHandle) {
 
 fn toolbar(ui: &mut Ui, app: &AppHandle, editor: &ThemeEditor) {
     let ctx = ui.ctx().clone();
+    ui.horizontal(|ui| {
+        let mut tab = editor.tab();
+        widgets::selectable_value(
+            ui,
+            &mut tab,
+            Tab::Tokens,
+            strings::tr(&ctx, &txt::THEME_EDITOR_TAB_TOKENS),
+        );
+        widgets::selectable_value(
+            ui,
+            &mut tab,
+            Tab::Fonts,
+            strings::tr(&ctx, &txt::THEME_EDITOR_TAB_FONTS),
+        );
+        if tab != editor.tab() {
+            editor.set_tab(tab);
+        }
+    });
     ui.horizontal_wrapped(|ui| {
         let base = editor.draft().base().to_string();
         let start = strings::tr(&ctx, &txt::THEME_EDITOR_START);
@@ -1674,7 +1897,7 @@ fn poll_choice(app: &AppHandle, editor: &ThemeEditor, ctx: &egui::Context) {
     let answer = {
         let s = lock(&editor.state);
         let pending = match &s.choice {
-            Some(Choice::Open(p) | Choice::Save(p)) => p.clone(),
+            Some(Choice::Open(p) | Choice::Save(p) | Choice::Font(p)) => p.clone(),
             None => return,
         };
         drop(s);
@@ -1709,6 +1932,13 @@ fn poll_choice(app: &AppHandle, editor: &ThemeEditor, ctx: &egui::Context) {
             }
             Some(m)
         }),
+        Choice::Font(_) => editor.add_font_file(&path).map(|f| {
+            Some(strings::tr_args(
+                ctx,
+                &txt::THEME_EDITOR_FONT_ADDED,
+                &[("family", &f.family), ("weight", &f.weight.0.to_string())],
+            ))
+        }),
         Choice::Save(_) => editor.save_file(app, &path).map(|()| {
             Some(strings::tr_args(
                 ctx,
@@ -1718,6 +1948,162 @@ fn poll_choice(app: &AppHandle, editor: &ThemeEditor, ctx: &egui::Context) {
         }),
     };
     say(editor, out);
+}
+
+/// The fonts tab: each role's families in priority order, the user's
+/// font files, a sample, and "Apply".
+fn fonts_tab(ui: &mut Ui, app: &AppHandle, editor: &ThemeEditor) {
+    let ctx = ui.ctx().clone();
+    let t = Tokens::of(&ctx);
+    let tr = |k: &strings::StrKey| strings::tr(&ctx, k);
+    ui.strong(tr(&txt::THEME_EDITOR_FAMILIES));
+    ui.weak(tr(&txt::THEME_EDITOR_FAMILIES_HINT));
+    for (i, role, title) in [
+        (0, Role::Ui, &txt::THEME_EDITOR_FAMILY_UI),
+        (1, Role::Mono, &txt::THEME_EDITOR_FAMILY_MONO),
+    ] {
+        ui.add_space(t.space.s);
+        ui.label(RichText::new(tr(title)).strong());
+        let mut list = editor.families(app, role);
+        let mut changed = false;
+        let last = list.len().saturating_sub(1);
+        let mut action = None;
+        for (at, name) in list.iter().enumerate() {
+            ui.horizontal(|ui| {
+                ui.monospace(name);
+                let args = [("family", name.as_str())];
+                let up = strings::tr_args(&ctx, &txt::THEME_EDITOR_MOVE_UP, &args);
+                let down = strings::tr_args(&ctx, &txt::THEME_EDITOR_MOVE_DOWN, &args);
+                let remove = strings::tr_args(&ctx, &txt::THEME_EDITOR_REMOVE_FAMILY, &args);
+                if ui.add_enabled(at > 0, egui::Button::new(&up)).clicked() {
+                    action = Some((at, -1));
+                }
+                if ui
+                    .add_enabled(at < last, egui::Button::new(&down))
+                    .clicked()
+                {
+                    action = Some((at, 1));
+                }
+                if ui.button(&remove).clicked() {
+                    action = Some((at, 0));
+                }
+            });
+        }
+        match action {
+            Some((at, 0)) => {
+                list.remove(at);
+                changed = true;
+            }
+            Some((at, d)) => {
+                let to = if d < 0 { at - 1 } else { at + 1 };
+                list.swap(at, to);
+                changed = true;
+            }
+            None => {}
+        }
+        ui.horizontal(|ui| {
+            let hint = strings::tr_args(
+                &ctx,
+                &txt::THEME_EDITOR_ADD_FAMILY_TO,
+                &[("role", family_token(role))],
+            );
+            let mut typed = lock(&editor.state).fonts.adding[i].clone();
+            let r = ui.add(
+                egui::TextEdit::singleline(&mut typed)
+                    .hint_text(&hint)
+                    .desired_width(200.0),
+            );
+            egui_pop_core::a11y::name(&r, WidgetType::TextEdit, &hint);
+            let add = ui.button(tr(&txt::THEME_EDITOR_ADD)).clicked()
+                || (r.lost_focus() && ui.input(|inp| inp.key_pressed(egui::Key::Enter)));
+            if add && !typed.trim().is_empty() {
+                let name = typed.trim().to_string();
+                if !list.contains(&name) {
+                    list.push(name);
+                    changed = true;
+                }
+                typed.clear();
+            }
+            lock(&editor.state).fonts.adding[i] = typed;
+        });
+        if changed {
+            editor.set_families(role, list);
+        }
+    }
+
+    ui.add_space(t.space.m);
+    ui.strong(tr(&txt::THEME_EDITOR_FONT_FILES));
+    let files = editor.edited_font_files();
+    if files.is_empty() {
+        ui.weak(tr(&txt::THEME_EDITOR_NO_FONT_FILES));
+    }
+    for f in &files {
+        ui.horizontal(|ui| {
+            ui.label(format!("{} {}", f.family, f.weight.0));
+            ui.weak(f.path.display().to_string());
+            let remove = strings::tr_args(
+                &ctx,
+                &txt::THEME_EDITOR_REMOVE_FONT_FILE,
+                &[("family", &f.family)],
+            );
+            if ui.button(&remove).clicked() {
+                editor.remove_font_file(&f.path);
+            }
+        });
+    }
+    if editor.can_choose(app) {
+        let add = tr(&txt::THEME_EDITOR_ADD_FONT_FILE);
+        if ui.button(&add).clicked() {
+            let request = FileRequest::open(&add).filter("Fonts", &["ttf", "otf", "ttc"]);
+            if let Some(p) = editor.choose(app, request) {
+                lock(&editor.state).choice = Some(Choice::Font(p));
+            }
+        }
+    }
+
+    ui.add_space(t.space.m);
+    ui.strong(tr(&txt::THEME_EDITOR_FONT_SAMPLE));
+    let size = t.font.body;
+    let sample = tr(&txt::THEME_EDITOR_FONT_SAMPLE_TEXT);
+    for role in Role::ALL {
+        ui.label(RichText::new(&sample).font(egui_pop_core::fonts::font_id(
+            role,
+            egui_pop_core::fonts::Weight::REGULAR,
+            size,
+        )));
+    }
+    ui.weak(tr(&txt::THEME_EDITOR_FONT_SAMPLE_HINT));
+
+    ui.add_space(t.space.m);
+    ui.horizontal(|ui| {
+        let pending = editor.fonts_pending(app);
+        if ui
+            .add_enabled(
+                pending,
+                egui::Button::new(tr(&txt::THEME_EDITOR_APPLY_FONTS)),
+            )
+            .clicked()
+        {
+            let out = editor.apply_fonts(app, Cause::Edit).map(|_| None);
+            say(editor, out);
+        }
+        ui.weak(tr(&txt::THEME_EDITOR_APPLY_FONTS_HINT));
+    });
+    let problems = lock(&editor.state).fonts.problems.clone();
+    for p in problems {
+        ui.colored_label(t.status.warning, p);
+    }
+    let message = lock(&editor.state).message.clone();
+    if let Some((ok, m)) = message {
+        ui.colored_label(
+            if ok {
+                t.status.success
+            } else {
+                t.status.danger
+            },
+            m,
+        );
+    }
 }
 
 /// The preview pane: the draft's theme drawn in a scoped `Ui`, the rest

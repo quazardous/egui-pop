@@ -33,6 +33,10 @@ egui-phosphor = { workspace = true, optional = true }
 fontdb = { version = "0.23", optional = true }
 # MIT OR Apache-2.0: SVG icons (feature `svg`); no text, no raster images.
 resvg = { version = "0.46", optional = true, default-features = false }
+# MIT OR Apache-2.0, egui's own font reader (the version epaint uses):
+# a font file a user adds is checked, and its family and weight read,
+# before it reaches egui, which panics on a file it cannot parse.
+skrifa = { version = "0.44", default-features = false, features = ["std"] }
 egui-pop-tokens.workspace = true
 egui-pop-model.workspace = true
 log.workspace = true

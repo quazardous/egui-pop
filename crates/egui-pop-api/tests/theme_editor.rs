@@ -439,3 +439,78 @@ fn files_are_opened_and_saved_through_the_host_s_dialog() {
     assert_eq!(asked.lock().unwrap().len(), 2);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn the_fonts_tab_adds_a_file_reorders_families_and_applies_once() {
+    use egui_pop_api::host;
+    use egui_pop_api::theme_editor::Tab;
+    use egui_pop_core::fonts::Role;
+    use std::sync::Arc;
+    let font = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../egui-pop-core/tests/fonts/InterVariable-subset.ttf");
+    let mut h = harness(ThemeSpec::new("pop-dark"));
+    h.run();
+    let handle = h.state().handle().clone();
+    let editor = handle.service(&THEME_EDITOR).unwrap();
+    let answer = font.clone();
+    editor.set_file_dialog(Some(Arc::new(move |_: &_, _| {
+        let (pending, resolver) = host::pending();
+        resolver.resolve(Ok(json!({ "paths": [answer.display().to_string()] })));
+        pending
+    })));
+    h.get_by_label("Fonts").click();
+    h.run();
+    assert_eq!(editor.tab(), Tab::Fonts);
+    h.get_by_label("Add a font file").click();
+    h.run();
+    h.run();
+    let files = editor.edited_font_files();
+    assert_eq!(files.len(), 1, "{files:?}");
+    let family = files[0].family.clone();
+    // Nothing applied yet: kept as edits.
+    assert!(editor.font_files().is_empty());
+    assert!(editor.fonts_pending(&handle));
+    // The new family first: added at the end, then moved up to the top.
+    let before = editor.families(&handle, Role::Ui);
+    let mut list = before.clone();
+    list.push(family.clone());
+    editor.set_families(Role::Ui, list);
+    h.run();
+    for _ in 0..before.len() {
+        h.get_by_label(&format!("Move {family} up")).click();
+        h.run();
+    }
+    assert_eq!(editor.families(&handle, Role::Ui)[0], family);
+    h.get_by_label("Apply the fonts").click();
+    h.run();
+    h.run();
+    assert!(!editor.fonts_pending(&handle));
+    assert_eq!(editor.font_files().len(), 1);
+    assert_eq!(
+        handle
+            .theme()
+            .spec()
+            .overrides
+            .get("font.family.ui")
+            .and_then(|v| v[0].as_str()),
+        Some(family.as_str())
+    );
+    let report = egui_pop_core::fonts::report(&h.ctx).unwrap();
+    let primary = report
+        .primary
+        .iter()
+        .find(|(f, _)| f == "pop.ui.400")
+        .and_then(|(_, p)| p.clone())
+        .unwrap_or_default();
+    assert!(primary.contains("registered"), "{primary}");
+    // One undo takes the families back.
+    run(&mut h, &CMD_THEME_UNDO, json!({}));
+    h.run();
+    assert!(
+        !handle
+            .theme()
+            .spec()
+            .overrides
+            .contains_key("font.family.ui")
+    );
+}
