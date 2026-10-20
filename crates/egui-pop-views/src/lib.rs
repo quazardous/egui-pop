@@ -1,4 +1,4 @@
-//! Data views for egui-pop: a live tree, a list and a data table.
+//! Data views for egui-pop: a live tree, a list and a data table (probe).
 //!
 //! - [`tree`]: a tree over a source the application implements, with
 //!   lazy, asynchronous branches and edits at any time;
