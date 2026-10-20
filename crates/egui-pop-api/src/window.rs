@@ -24,7 +24,7 @@ use egui_pop_core::strings;
 /// The way out of full screen was shown on the last pass.
 const WAY_OUT: Slot<bool> = Slot::new("api.window.way_out");
 use egui_pop_model::commands::{CommandSpec, Origin};
-use egui_pop_model::ids::{BlockId, CommandId, PluginId};
+use egui_pop_model::ids::{BlockId, CommandId, OwnerId, PluginId};
 use egui_pop_model::values::{Change, Descriptor, Set, SettingsDoc, Value};
 use serde_json::json;
 
@@ -252,6 +252,7 @@ fn track(app: &AppHandle, info: &egui::ViewportInfo, maximized: bool, fullscreen
         if s.get(path).is_some_and(|e| e.value != v) {
             let _ = s.set(
                 Set::new(path, Change::To(v), Origin::User)
+                    .by(&OwnerId::FRAMEWORK)
                     .untracked()
                     .force(),
             );

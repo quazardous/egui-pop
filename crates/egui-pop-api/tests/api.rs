@@ -845,3 +845,145 @@ fn pass_handlers_run_at_every_logic_pass_and_go_with_their_plugin() {
     app.logic(&ctx);
     assert_eq!(*seen.borrow(), 2);
 }
+
+/// `owner` declares a setting and a value it opens to `other`; `other`
+/// writes both from its command, from a lifecycle hook and through its
+/// writer; what each write got goes to the log.
+fn writers_app(
+    check: Option<egui_pop_model::values::WriterCheck>,
+) -> (App, Rc<RefCell<Vec<String>>>) {
+    use egui_pop_model::values::{Change, Set, Value};
+    let l = log();
+    let owner = P::new("owner", &l, |ctx| {
+        ctx.setting(
+            SettingId::from_static("owner.size"),
+            Descriptor::int("Size", 0, 100, 10),
+        )?;
+        egui_pop_core::lock(&ctx.app().store())
+            .declare(
+                ctx.owner(),
+                "owner/shared",
+                Descriptor::int("Shared", 0, 100, 0)
+                    .writers(&[egui_pop_model::ids::OwnerId::new("other").unwrap()]),
+            )
+            .unwrap();
+        Ok(())
+    });
+    let out = l.clone();
+    let other = P::new("other", &l, move |ctx| {
+        let write = |path: &str, v: i64| Set::new(path, Change::To(Value::Int(v)), Origin::User);
+        // While it connects, its writes name it.
+        let r = egui_pop_core::lock(&ctx.app().store()).set(write("settings/owner.size", 1));
+        out.borrow_mut().push(format!("connect {}", r.is_ok()));
+        let log = out.clone();
+        ctx.command(
+            CommandSpec::new(CommandId::from_static("other.poke"), "Poke", "Test"),
+            move |call| {
+                let store = call.app.store();
+                let mut s = egui_pop_core::lock(&store);
+                let size = s.set(write("settings/owner.size", 2)).is_ok();
+                let shared = s.set(write("owner/shared", 2)).is_ok();
+                log.borrow_mut().push(format!("command {size} {shared}"));
+                Ok(Json::Null)
+            },
+        )?;
+        let writer = ctx.writer();
+        let log = out.clone();
+        ctx.on(On::Started, move |app, _| {
+            let r = egui_pop_core::lock(&app.store()).set(write("settings/owner.size", 3));
+            log.borrow_mut().push(format!("started {}", r.is_ok()));
+            let r =
+                writer.set(write("owner/shared", 3).by(&egui_pop_model::ids::OwnerId::FRAMEWORK));
+            log.borrow_mut().push(format!("writer {}", r.is_ok()));
+        });
+        Ok(())
+    })
+    .requires("owner");
+    let mut b = App::builder().plugin(owner).plugin(other);
+    if let Some(c) = check {
+        b = b.writer_check(c);
+    }
+    (build(b), l)
+}
+
+#[test]
+fn a_plugin_writes_only_the_values_it_may() {
+    let (mut app, l) = writers_app(None);
+    app.run(
+        &CommandId::from_static("other.poke"),
+        Json::Null,
+        Origin::User,
+    );
+    let log: Vec<String> = l
+        .borrow()
+        .iter()
+        .filter(|s| !s.starts_with("connect o"))
+        .cloned()
+        .collect();
+    // Refused the owner's setting from connect, a lifecycle hook and a
+    // command; its writer names it whatever the write said.
+    assert_eq!(
+        log,
+        [
+            "connect false",
+            "started false",
+            "writer true",
+            "command false true"
+        ]
+    );
+    let store = app.handle().store();
+    let s = egui_pop_core::lock(&store);
+    assert_eq!(
+        s.get("settings/owner.size").unwrap().value,
+        egui_pop_model::values::Value::Int(10)
+    );
+    let shared = s.get("owner/shared").unwrap();
+    assert_eq!(shared.writer.as_ref().map(|w| w.as_str()), Some("other"));
+    drop(s);
+    // Once per path and scope, in the application's diagnostics.
+    let stray: Vec<_> = app
+        .handle()
+        .diagnostics()
+        .into_iter()
+        .filter(|d| d.code == egui_pop_model::values::NOT_A_WRITER)
+        .collect();
+    assert_eq!(stray.len(), 1, "{stray:?}");
+    assert_eq!(stray[0].subject, "settings/owner.size");
+    // The settings form, a bound widget and the agents write as the
+    // framework.
+    let mut s = egui_pop_core::lock(&store);
+    assert!(
+        s.set(
+            egui_pop_model::values::Set::new(
+                "settings/owner.size",
+                egui_pop_model::values::Change::Reset,
+                Origin::User,
+            )
+            .by(&egui_pop_model::ids::OwnerId::FRAMEWORK)
+        )
+        .is_ok()
+    );
+}
+
+#[test]
+fn the_writer_check_can_only_warn() {
+    let (mut app, l) = writers_app(Some(egui_pop_model::values::WriterCheck::Warn));
+    app.run(
+        &CommandId::from_static("other.poke"),
+        Json::Null,
+        Origin::User,
+    );
+    assert!(
+        l.borrow().contains(&"command true true".to_string()),
+        "{:?}",
+        l.borrow()
+    );
+    let d: Vec<_> = app
+        .handle()
+        .diagnostics()
+        .into_iter()
+        .filter(|d| d.code == egui_pop_model::values::NOT_A_WRITER)
+        .collect();
+    assert_eq!(d.len(), 1);
+    assert_eq!(d[0].level, egui_pop_model::diagnostics::Level::Warning);
+}

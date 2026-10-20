@@ -34,7 +34,7 @@ use std::collections::BTreeMap;
 
 use egui_pop_core::lock;
 use egui_pop_model::commands::{CommandSpec, Origin};
-use egui_pop_model::ids::{CommandId, PluginId, StepId};
+use egui_pop_model::ids::{CommandId, OwnerId, PluginId, StepId};
 use egui_pop_model::layout::{self, Layout};
 use egui_pop_model::values::{Change, Descriptor, Set, Value};
 use serde_json::{Value as Json, json};
@@ -186,6 +186,7 @@ fn write(app: &AppHandle, path: &str, text: String) -> Result<(), String> {
     lock(&app.store())
         .set(
             Set::new(path, Change::To(Value::Text(text)), Origin::User)
+                .by(&OwnerId::FRAMEWORK)
                 .untracked()
                 .force(),
         )

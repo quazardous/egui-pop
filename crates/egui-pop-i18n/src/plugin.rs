@@ -34,7 +34,7 @@ use egui_pop_core::lock;
 use egui_pop_core::state::Slot;
 use egui_pop_core::strings;
 use egui_pop_model::commands::Origin;
-use egui_pop_model::ids::{BlockId, PluginId, SettingId, StepId};
+use egui_pop_model::ids::{BlockId, OwnerId, PluginId, SettingId, StepId};
 use egui_pop_model::values::{Change, Descriptor, Set, Value};
 use serde_json::{Value as Json, json};
 
@@ -110,11 +110,14 @@ pub fn text(ctx: &egui::Context, key: &str, english: &str, args: &crate::Args<'_
 /// (`system` or a locale with a catalogue).
 pub fn set_language(app: &AppHandle, value: &str) -> Result<(), String> {
     lock(&app.store())
-        .set(Set::new(
-            &setting_path(),
-            Change::To(Value::Choice(value.into())),
-            Origin::User,
-        ))
+        .set(
+            Set::new(
+                &setting_path(),
+                Change::To(Value::Choice(value.into())),
+                Origin::User,
+            )
+            .by(&OwnerId::from(&PLUGIN)),
+        )
         .map(|_| ())
         .map_err(|e| e.to_string())
 }
@@ -322,11 +325,14 @@ impl Plugin for I18nPlugin {
                 move |_, args| {
                     let to = args["locale"].as_str().ok_or("`locale` is missing")?;
                     lock(&store)
-                        .set(Set::new(
-                            &setting_path(),
-                            Change::To(Value::Choice(to.into())),
-                            Origin::Agent("debug bridge".into()),
-                        ))
+                        .set(
+                            Set::new(
+                                &setting_path(),
+                                Change::To(Value::Choice(to.into())),
+                                Origin::Agent("debug bridge".into()),
+                            )
+                            .by(&OwnerId::from(&PLUGIN)),
+                        )
                         .map_err(|e| e.to_string())?;
                     Ok(json!({ "setting": to }))
                 },

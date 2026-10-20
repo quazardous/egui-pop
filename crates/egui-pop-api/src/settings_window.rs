@@ -24,7 +24,7 @@ use egui_pop_core::strings::{self, RESET};
 use egui_pop_core::theme::Tokens;
 use egui_pop_model::commands::{CommandSpec, Origin};
 use egui_pop_model::fuzzy;
-use egui_pop_model::ids::{BlockId, CommandId, PluginId};
+use egui_pop_model::ids::{BlockId, CommandId, OwnerId, PluginId};
 use egui_pop_model::keymap::{Action, Keys, Layer};
 use egui_pop_model::values::{Change, Set};
 use serde_json::json;
@@ -430,7 +430,8 @@ fn row(ui: &mut Ui, app: &AppHandle, e: &SettingEntry) {
             &strings::tr_args(ui.ctx(), &txt::SETTINGS_RESET_SETTING, &setting),
         );
         if r.clicked() {
-            let _ = lock(&store).set(Set::new(&e.path, Change::Reset, Origin::User));
+            let _ = lock(&store)
+                .set(Set::new(&e.path, Change::Reset, Origin::User).by(&OwnerId::FRAMEWORK));
         }
     });
     if !d.description.is_empty() {

@@ -353,7 +353,12 @@ impl<'a> DataTable<'a> {
             return Ok(());
         };
         egui_pop_core::lock(store)
-            .set(Set::new(&format!("{prefix}/{path}"), Change::To(value), Origin::User).untracked())
+            .set(
+                // A person sorted or resized: the framework writes it.
+                Set::new(&format!("{prefix}/{path}"), Change::To(value), Origin::User)
+                    .by(&OwnerId::FRAMEWORK)
+                    .untracked(),
+            )
             .map(|_| ())
             .map_err(|e| format!("{e:?}"))
     }

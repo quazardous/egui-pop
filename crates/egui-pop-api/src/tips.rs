@@ -48,7 +48,7 @@ use egui_pop_core::kit::{self, Kit};
 use egui_pop_core::lock;
 use egui_pop_core::strings;
 use egui_pop_model::commands::{CommandSpec, Origin};
-use egui_pop_model::ids::{CommandId, PluginId, SettingId, StepId};
+use egui_pop_model::ids::{CommandId, OwnerId, PluginId, SettingId, StepId};
 use egui_pop_model::values::{Change, Descriptor, Set, Value};
 use serde_json::{Value as Json, json};
 
@@ -198,6 +198,7 @@ impl Tips {
                     Change::To(Value::Text(text)),
                     Origin::User,
                 )
+                .by(&OwnerId::FRAMEWORK)
                 .untracked(),
             )
             .map(|_| ())

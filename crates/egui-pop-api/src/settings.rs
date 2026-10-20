@@ -9,6 +9,7 @@ use egui_pop_core::binding::{self, Binding};
 use egui_pop_core::lock;
 use egui_pop_core::strings::{self, RESET};
 use egui_pop_model::commands::Origin;
+use egui_pop_model::ids::OwnerId;
 use egui_pop_model::values::{Change, Descriptor, Set, Type, Value};
 
 use crate::app::AppHandle;
@@ -121,11 +122,10 @@ fn row(ui: &mut Ui, app: &AppHandle, entry: &SettingEntry) {
                 .response;
             named(r);
             if picked != current {
-                let _ = lock(&store).set(Set::new(
-                    path,
-                    Change::To(Value::Choice(picked)),
-                    Origin::User,
-                ));
+                let _ = lock(&store).set(
+                    Set::new(path, Change::To(Value::Choice(picked)), Origin::User)
+                        .by(&OwnerId::FRAMEWORK),
+                );
             }
         }
         Type::Floats | Type::Ints => {
@@ -155,6 +155,7 @@ fn row(ui: &mut Ui, app: &AppHandle, entry: &SettingEntry) {
         ))
         .clicked()
     {
-        let _ = lock(&store).set(Set::new(path, Change::Reset, Origin::User));
+        let _ =
+            lock(&store).set(Set::new(path, Change::Reset, Origin::User).by(&OwnerId::FRAMEWORK));
     }
 }

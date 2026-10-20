@@ -31,6 +31,7 @@ use std::sync::{Arc, Mutex};
 
 use egui::{Id, Response, Ui};
 use egui_pop_model::commands::Origin;
+use egui_pop_model::ids::OwnerId;
 use egui_pop_model::values::{Change, GestureId, Set, Store, Value};
 
 use crate::state::{Slot, lock};
@@ -198,7 +199,10 @@ pub fn edit<T: Bindable>(
                 return r;
             }
             if v != before {
-                let mut set = Set::new(path, Change::To(v.to_value()), Origin::User);
+                // A person's edit: the framework writes it, whoever drew
+                // the widget.
+                let mut set =
+                    Set::new(path, Change::To(v.to_value()), Origin::User).by(&OwnerId::FRAMEWORK);
                 set.gesture = gesture;
                 let outcome = lock(store).set(set);
                 match outcome {

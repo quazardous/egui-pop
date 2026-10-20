@@ -30,6 +30,28 @@ publishes.
   framework and describe `writers` and `writer`. Part of #29.
   Migration: `Set` and `Entry` have a new public field, `Refused` a new
   variant; a `Set` written as a struct literal needs `by: None`.
+- One writer per value in an application (egui-pop-api, egui-pop-core,
+  egui-pop-views, egui-pop-i18n): what a plugin writes while it
+  connects, in its command handlers (in the interface or through
+  `Dispatch::run_local`; `Dispatch::owner`) and in its lifecycle hooks
+  is written as that plugin, and `Ctx::writer` gives a `ValueWriter`
+  that writes as it from anywhere (a panel, a block, a thread). The
+  settings form, bound widgets, the debug bridge's `store.set`, the
+  `value.*` commands and egui-pop's own helpers (zoom, theme
+  preference, window place, dialogs, recent files, tips, arrangements,
+  table sort and widths) write as the framework, so a setting stays
+  writable by the settings form without opening it to every plugin;
+  the language helpers write as the i18n plugin. `AppBuilder::writer_check`
+  chooses refusing (the default) or warning; `AppHandle::diagnostics`
+  includes the store's `not-a-writer` diagnostics. The `store` debug
+  collector lists each path's owner, `writers` and last `writer`, the
+  check, and the writes from scopes that are not writers (`stray`).
+  Part of #29. Migration: a plugin writing a value another plugin
+  declared, from its connect, a command or a lifecycle hook, is now
+  refused; the owner names it (`Descriptor::writers`), or the
+  application passes `writer_check(WriterCheck::Warn)` while it
+  migrates. `Dispatch` has a new private field (it is built by
+  egui-pop only).
 - Token file versions (egui-pop-tokens): a file says which format and
   contract it was written for with a stamp in its root `$extensions`,
   `"org.egui-pop.format": { "version": 1, "contract": 1 }`

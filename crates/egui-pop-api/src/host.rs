@@ -92,7 +92,7 @@ use std::sync::{Arc, Mutex};
 use egui_pop_core::binding::SharedStore;
 use egui_pop_core::lock;
 use egui_pop_model::commands::Origin;
-use egui_pop_model::ids::CommandId;
+use egui_pop_model::ids::{CommandId, OwnerId};
 use egui_pop_model::values::Store;
 use egui_pop_model::when::WhenContext;
 use serde::Serialize;
@@ -268,6 +268,8 @@ pub struct Dispatch<'a> {
     pub seq: Seq,
     pub app: &'a AppHandle,
     local: Option<&'a CommandFn>,
+    /// Who declared it: the scope its in-process handler writes as.
+    owner: Option<&'a OwnerId>,
 }
 
 impl fmt::Debug for Dispatch<'_> {
@@ -300,7 +302,19 @@ impl<'a> Dispatch<'a> {
             seq,
             app,
             local,
+            owner: None,
         }
+    }
+
+    /// Who declared it.
+    pub(crate) fn owned_by(mut self, owner: Option<&'a OwnerId>) -> Self {
+        self.owner = owner;
+        self
+    }
+
+    /// The plugin that declared it, if one did.
+    pub fn owner(&self) -> Option<&OwnerId> {
+        self.owner
     }
 
     /// Whether a plugin gave this command an in-process handler.
@@ -308,9 +322,12 @@ impl<'a> Dispatch<'a> {
         self.local.is_some()
     }
 
-    /// Runs the in-process handler, if there is one.
+    /// Runs the in-process handler, if there is one, as the plugin that
+    /// declared the command: what it writes to the store is written in
+    /// that plugin's scope (`egui_pop_model::values::enter_scope`).
     pub fn run_local(&self) -> Option<Result<Json, String>> {
         self.local.map(|h| {
+            let _scope = self.owner.map(egui_pop_model::values::enter_scope);
             h(&Call {
                 args: self.args,
                 origin: self.origin,

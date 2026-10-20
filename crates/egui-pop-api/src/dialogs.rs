@@ -1953,6 +1953,7 @@ fn remember(app: &AppHandle, key: &str, offset: Vec2) {
         ])),
         Origin::User,
     )
+    .by(&OwnerId::FRAMEWORK)
     .untracked();
     if let Err(e) = lock(&app.store()).set(set) {
         log::warn!(target: "egui_pop", "dialog position `{key}`: {e:?}");

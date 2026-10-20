@@ -61,7 +61,7 @@ use egui_pop_core::strings::{self, CANCEL};
 use egui_pop_core::theme::Tokens;
 use egui_pop_model::commands::Origin;
 use egui_pop_model::fuzzy;
-use egui_pop_model::ids::{BlockId, PluginId, SettingId, StepId};
+use egui_pop_model::ids::{BlockId, OwnerId, PluginId, SettingId, StepId};
 use egui_pop_model::values::{Change, Descriptor, Set, Value};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value as Json, json};
@@ -493,7 +493,9 @@ fn write_list(app: &AppHandle, path: &str, list: &[PathBuf]) {
             .collect::<Vec<_>>(),
     )
     .unwrap_or_default();
-    let set = Set::new(path, Change::To(Value::Text(text)), Origin::User).untracked();
+    let set = Set::new(path, Change::To(Value::Text(text)), Origin::User)
+        .by(&OwnerId::FRAMEWORK)
+        .untracked();
     if let Err(e) = lock(&app.store()).set(set) {
         log::warn!(target: "egui_pop", "files: keeping {path}: {e:?}");
     }

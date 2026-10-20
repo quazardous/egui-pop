@@ -532,7 +532,7 @@ pub fn store_collector(store: SharedStore) -> FnCollector {
     let (s1, s2, s3, s4) = (store.clone(), store.clone(), store.clone(), store);
     FnCollector::new(
         "store",
-        "The value store: every path, its value and who changed it.",
+        "The value store: every path, its value, its owner, who may write it and who changed it.",
     )
     .snapshot(move |_| {
         let s = lock(&s1);
@@ -543,11 +543,15 @@ pub fn store_collector(store: SharedStore) -> FnCollector {
                 "value": e.value.to_json(),
                 "default": e.descriptor.default.to_json(),
                 "owner": e.owner,
+                "writers": e.descriptor.writers,
+                "writer": e.writer,
                 "origin": e.origin,
                 "held_by": s.held_by(p),
             })).collect::<Vec<_>>(),
             "undo": s.undo_steps().iter().map(|st| st.label.clone()).collect::<Vec<_>>(),
             "pending": s.pending(),
+            "check": s.writer_check(),
+            "stray": s.stray_writes(),
         })
     })
     .action(
@@ -585,11 +589,16 @@ pub fn store_collector(store: SharedStore) -> FnCollector {
                 .ty;
             let value = Value::from_json(ty, v)?;
             let a = s
-                .set(Set::new(
-                    path,
-                    Change::To(value),
-                    Origin::Agent("debug-bridge".into()),
-                ))
+                .set(
+                    Set::new(
+                        path,
+                        Change::To(value),
+                        Origin::Agent("debug-bridge".into()),
+                    )
+                    // The agent acts as a person would, through the
+                    // framework.
+                    .by(&egui_pop_model::ids::OwnerId::FRAMEWORK),
+                )
                 .map_err(|r| r.to_string())?;
             Ok(json!({ "value": a.value.to_json(), "clamped": a.clamped, "changed": a.changed }))
         },

@@ -8,13 +8,14 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use egui::Ui;
+use egui_pop_core::binding::SharedStore;
 use egui_pop_core::strings::{self, StrKey};
 use egui_pop_model::commands::{CommandSpec, RegisterError};
 use egui_pop_model::ids::{CommandId, MenuId, OwnerId, PanelId, PluginId, SettingId, ZoneId};
 use egui_pop_model::keymap::{Action, BindOptions, Layer};
 use egui_pop_model::menus::MenuItem;
 use egui_pop_model::panels::PanelSpec;
-use egui_pop_model::values::{DeclareError, Descriptor};
+use egui_pop_model::values::{Applied, DeclareError, Descriptor, Refused, Set};
 use serde_json::Value as Json;
 
 use crate::app::{AppHandle, Call, CommandFn, Registries};
@@ -88,6 +89,42 @@ impl fmt::Display for CtxError {
 
 impl std::error::Error for CtxError {}
 
+/// Writes to the value store as one plugin (`Ctx::writer`): each write
+/// names the plugin as its scope, checked against the path's writers
+/// (`Descriptor::writers`). Cheap to clone, to keep in a panel, a block
+/// or a thread.
+#[derive(Clone)]
+pub struct ValueWriter {
+    store: SharedStore,
+    scope: OwnerId,
+}
+
+impl fmt::Debug for ValueWriter {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ValueWriter")
+            .field("scope", &self.scope)
+            .finish_non_exhaustive()
+    }
+}
+
+impl ValueWriter {
+    /// A writer for `scope` over a store.
+    pub fn new(store: SharedStore, scope: OwnerId) -> Self {
+        Self { store, scope }
+    }
+
+    /// Applies a write as this plugin (a scope the write names is
+    /// replaced).
+    pub fn set(&self, set: Set) -> Result<Applied, Refused> {
+        egui_pop_core::lock(&self.store).set(set.by(&self.scope))
+    }
+
+    /// The scope its writes name.
+    pub fn scope(&self) -> &OwnerId {
+        &self.scope
+    }
+}
+
 /// What a plugin registers through.
 pub struct Ctx<'a> {
     pub(crate) owner: OwnerId,
@@ -118,6 +155,14 @@ impl<'a> Ctx<'a> {
     /// The application, to keep in closures (blocks, handlers).
     pub fn app(&self) -> AppHandle {
         self.app.clone()
+    }
+
+    /// Writes to the value store as this plugin, to keep in closures:
+    /// a write to a path it may not write (one it neither owns nor is
+    /// named a writer of) is refused. Writes made while it connects and
+    /// in its command handlers and lifecycle hooks name it already.
+    pub fn writer(&self) -> ValueWriter {
+        ValueWriter::new(self.app.store(), self.owner.clone())
     }
 
     /// Whether another plugin is connected.

@@ -14,7 +14,7 @@
 use egui_pop_core::lock;
 use egui_pop_core::scale::{self, ZOOM_STEPS};
 use egui_pop_model::commands::{CommandSpec, Origin};
-use egui_pop_model::ids::{CommandId, SettingId, StepId};
+use egui_pop_model::ids::{CommandId, OwnerId, SettingId, StepId};
 use egui_pop_model::values::{Change, Descriptor, Set, Value};
 use serde_json::json;
 
@@ -71,6 +71,7 @@ pub fn set(app: &AppHandle, to: f32) -> crate::steps::Outcome {
                         Change::To(Value::Choice(label(to))),
                         Origin::User,
                     )
+                    .by(&OwnerId::FRAMEWORK)
                     .untracked(),
                 )
                 .map_err(|e| e.to_string())?;

@@ -194,6 +194,7 @@ impl ThemeService {
             Change::To(Value::Choice(preference_name(preference).into())),
             Origin::User,
         )
+        .by(&OwnerId::FRAMEWORK)
         .untracked();
         if let Err(e) = lock(&self.store).set(set) {
             log::warn!(target: "egui_pop", "theme preference: {e}");
@@ -1317,9 +1318,12 @@ impl AppHandle {
         focus::when_context(ctx, &base)
     }
 
-    /// The diagnostics collected (registration, zones, hooks).
+    /// The diagnostics collected (registration, zones, hooks), then the
+    /// store's (writes from plugins that are not a path's writers).
     pub fn diagnostics(&self) -> Vec<Diagnostic> {
-        self.0.diagnostics.borrow().all().to_vec()
+        let mut all = self.0.diagnostics.borrow().all().to_vec();
+        all.extend_from_slice(lock(&self.0.store).diagnostics().all());
+        all
     }
 
     /// A menu's items after the hooks.
@@ -2053,6 +2057,7 @@ pub struct AppBuilder {
     panel_alignment: crate::workbench::PanelAlignment,
     kits: Vec<KitSource>,
     user_kits: bool,
+    writer_check: Option<egui_pop_model::values::WriterCheck>,
 }
 
 /// Draws around the whole application (`AppBuilder::wrap`): gets the
@@ -2106,6 +2111,7 @@ impl AppBuilder {
             themes: Themes::default(),
             persist: None,
             store: None,
+            writer_check: None,
             host: None,
             system_focus: None,
             edge_to_edge: false,
@@ -2299,6 +2305,16 @@ impl AppBuilder {
         self
     }
 
+    /// What a write from a plugin that is not one of a path's writers
+    /// gets: refused (the default) or applied with a warning, to migrate
+    /// plugins written before the check
+    /// (`egui_pop_model::values::WriterCheck`). Either way it is in the
+    /// diagnostics.
+    pub fn writer_check(mut self, check: egui_pop_model::values::WriterCheck) -> Self {
+        self.writer_check = Some(check);
+        self
+    }
+
     /// The window manager's focus mode (`focus_mode::read_system()`
     /// reads it). Not given, it is read by `run_native` and taken as
     /// click elsewhere (tests stay the same on every desktop).
@@ -2343,6 +2359,9 @@ impl AppBuilder {
             ))
         });
         let handle = AppHandle::new(ctx, host);
+        if let Some(check) = self.writer_check {
+            lock(&handle.store()).set_writer_check(check);
+        }
         let modes = FocusModes::new(self.system_focus.unwrap_or_default());
         let mut app = App {
             handle,
@@ -3211,6 +3230,8 @@ impl App {
             connected: &connected,
         };
         let slot = &mut self.plugins[i];
+        // What it writes while connecting is written as the plugin.
+        let _scope = egui_pop_model::values::enter_scope(&owner);
         if !slot.plugin.enabled(&ctx) {
             slot.reason = Some("it is disabled".into());
             self.update_plugin_infos();
@@ -3344,6 +3365,7 @@ impl App {
         for slot in self.reg.lifecycle.iter_mut() {
             let (on, f) = &mut slot.item;
             if on.matches(event) {
+                let _scope = egui_pop_model::values::enter_scope(&slot.owner);
                 f(&handle, event);
             }
         }
@@ -4121,13 +4143,17 @@ impl App {
             "command.dispatched",
             json!({ "command": command, "args": args }),
         );
+        let owner = self.reg.commands.owner(command).cloned();
         if IN_INTERFACE.contains(command) {
             let result = match &handler {
-                Some(h) => h(&Call {
-                    args: &args,
-                    origin: &origin,
-                    app: &self.handle,
-                }),
+                Some(h) => {
+                    let _scope = owner.as_ref().map(egui_pop_model::values::enter_scope);
+                    h(&Call {
+                        args: &args,
+                        origin: &origin,
+                        app: &self.handle,
+                    })
+                }
                 None => Err(format!("no handler for `{command}`")),
             };
             self.finish(command, &args, &origin, seq, result.clone());
@@ -4140,15 +4166,18 @@ impl App {
             .borrow_mut()
             .take()
             .expect("a command dispatched from inside a dispatch is queued (AppHandle::run)");
-        let reply = host.dispatch(&Dispatch::new(
-            command,
-            &args,
-            &origin,
-            cx,
-            seq,
-            &self.handle,
-            handler.as_ref(),
-        ));
+        let reply = host.dispatch(
+            &Dispatch::new(
+                command,
+                &args,
+                &origin,
+                cx,
+                seq,
+                &self.handle,
+                handler.as_ref(),
+            )
+            .owned_by(owner.as_ref()),
+        );
         *self.handle.0.host.borrow_mut() = Some(host);
         match reply {
             Reply::Done(result) => {
