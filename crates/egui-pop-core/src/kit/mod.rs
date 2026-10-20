@@ -972,8 +972,10 @@ impl Kit {
     /// The kit of the theme drawn now (of egui's theme of the moment,
     /// as `Tokens::of`), or the ones of the installed tokens, compiled on
     /// first use. Read it while drawing; a cache keeping what it drew
-    /// from it across frames keys on its address (`Arc::as_ptr`), which
-    /// changes with egui's light or dark mode.
+    /// from it across frames keeps the `Arc` and compares it
+    /// (`Arc::ptr_eq`): a new kit comes with a theme install and with
+    /// egui's light or dark mode. Keep it, not only its address, which a
+    /// dropped kit can lend to the next one.
     pub fn of(ctx: &Context) -> Arc<Kit> {
         let theme = ctx.theme();
         if let Some(k) = KIT.get(ctx) {

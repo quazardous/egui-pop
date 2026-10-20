@@ -315,9 +315,12 @@ struct BarCaches(RefCell<HashMap<MenuId, BarCache>>);
 /// their labels, the kit, the scale or the strings provider change.
 #[derive(Default)]
 struct BarCache {
-    /// The kit (its address), the pixels per point, the strings provider
-    /// and the font the labels were measured for.
-    key: Option<(usize, u32, Option<usize>, egui::FontId)>,
+    /// The kit the labels were measured for, kept: compared by address,
+    /// which a kit dropped could otherwise lend to the next one.
+    kit: Option<Arc<Kit>>,
+    /// The pixels per point, the strings provider and the font the labels
+    /// were measured for.
+    key: Option<(u32, Option<usize>, egui::FontId)>,
     menus: Vec<BarMenu>,
     /// The names of "…" and of the single entry.
     more_name: String,
@@ -348,13 +351,14 @@ struct BarMenu {
 
 impl BarCache {
     fn prepare(&mut self, ctx: &Context, font: egui::FontId, shown: &[(MenuId, String, bool)]) {
+        let kit = Kit::of(ctx);
         let key = (
-            Arc::as_ptr(&Kit::of(ctx)) as usize,
             ctx.pixels_per_point().to_bits(),
             strings::provider_id(ctx),
             font.clone(),
         );
         let same = self.key.as_ref() == Some(&key)
+            && self.kit.as_ref().is_some_and(|k| Arc::ptr_eq(k, &kit))
             && self.menus.len() == shown.len()
             && self
                 .menus
@@ -368,6 +372,7 @@ impl BarCache {
             return;
         }
         self.key = Some(key);
+        self.kit = Some(kit);
         // Asked with the labels, so that they all come in the same pass.
         self.more_name = strings::tr(ctx, &txt::MENU_MORE);
         self.main_name = strings::tr(ctx, &txt::MENU_MAIN);

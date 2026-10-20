@@ -4428,6 +4428,9 @@ impl App {
     pub fn show(&mut self, ui: &mut Ui) {
         profiling::scope!("pop.app.show");
         let ctx = ui.ctx().clone();
+        // The style `ui` was made with: a theme installed or a light or
+        // dark switch below comes after it.
+        let before = ctx.global_style();
         self.logic(&ctx);
         if let Some((from, to)) = egui_pop_core::scale::changed(&ctx) {
             self.handle.publish(
@@ -4439,6 +4442,14 @@ impl App {
             // Strokes are snapped for the scale: install the theme again.
             self.installed = None;
             self.install_theme();
+        }
+        // Drawn with the theme of this pass, as `Kit::of` and
+        // `Tokens::of` are: else this pass mixes the variants, and what a
+        // cache keeps from it stays drawn in the other one. A style the
+        // host set on `ui` itself is kept.
+        let now = ctx.global_style();
+        if !Arc::ptr_eq(&before, &now) && Arc::ptr_eq(ui.style(), &before) {
+            ui.set_style(now);
         }
         overlay::begin_pass(&ctx);
         let cx = self.handle.when_context();

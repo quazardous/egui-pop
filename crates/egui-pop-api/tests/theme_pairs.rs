@@ -7,11 +7,13 @@
 use egui_kittest::Harness;
 use egui_pop_api::host::Reply;
 use egui_pop_api::theme_editor::{Cause, THEME_EDITOR, ThemeEditorPlugin};
-use egui_pop_api::{App, CMD_THEME_TOGGLE, DefaultPlugins};
+use egui_pop_api::{App, CMD_THEME_TOGGLE, Ctx, DefaultPlugins, Plugin, PluginError};
 use egui_pop_core::kit::{Kit, State};
 use egui_pop_core::theme::{self, Tokens};
 use egui_pop_core::tokens::ThemeSpec;
 use egui_pop_model::commands::Origin;
+use egui_pop_model::ids::{PanelId, PluginId};
+use egui_pop_model::panels::{Area, PanelSpec};
 use serde_json::json;
 
 fn harness(spec: ThemeSpec) -> Harness<'static, App> {
@@ -147,4 +149,119 @@ fn the_theme_editor_edits_the_variant_shown() {
         Tokens::of(&h.ctx).status.danger,
         egui::Color32::from_rgb(255, 0, 0)
     );
+}
+
+/// Two panels sharing the bottom area: drawn in an egui_dock dock.
+struct Docked;
+
+impl Plugin for Docked {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("docked")
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        for (id, title) in [
+            (PanelId::from_static("docked.log"), "Log"),
+            (PanelId::from_static("docked.notes"), "Notes"),
+        ] {
+            ctx.panel(
+                PanelSpec::new(id, title, Area::Bottom).min_size(80.0),
+                |ui, _| {
+                    ui.label("body");
+                },
+            )?;
+        }
+        Ok(())
+    }
+}
+
+/// Every rectangle fill painted in the last pass.
+fn fills(h: &Harness<'_, App>) -> Vec<egui::Color32> {
+    fn walk(shape: &egui::Shape, out: &mut Vec<egui::Color32>) {
+        match shape {
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+            egui::Shape::Rect(r) => out.push(r.fill),
+            _ => {}
+        }
+    }
+    let mut out = Vec::new();
+    for c in &h.output().shapes {
+        walk(&c.shape, &mut out);
+    }
+    out
+}
+
+#[test]
+fn docks_follow_every_theme_switch() {
+    let app = App::builder()
+        .theme(ThemeSpec::new("pop-dark"))
+        .plugins(DefaultPlugins)
+        .plugin(Docked)
+        .build(&egui::Context::default())
+        .unwrap();
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(900.0, 600.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+    h.run();
+    let service = h.state().handle().theme();
+    let picks = [
+        "pop-light",
+        "solarized-dark",
+        "pop-high-contrast",
+        "gruvbox-light",
+        "one-dark-pro",
+        "github-light",
+        "pop-high-contrast",
+        "catppuccin-mocha",
+        "pop-dark",
+        "solarized-light",
+    ];
+    let preferences = [
+        egui::ThemePreference::System,
+        egui::ThemePreference::Light,
+        egui::ThemePreference::Dark,
+    ];
+    let systems = [Some(egui::Theme::Dark), Some(egui::Theme::Light)];
+    let mut step = 0;
+    for round in 0..3 {
+        for name in picks {
+            for preference in preferences {
+                h.input_mut().system_theme = systems[step % 2];
+                step += 1;
+                service.pick(&h.ctx, name);
+                h.run();
+                service.set_preference(preference);
+                h.run();
+                // The dock's tab bodies are filled with egui's window
+                // fill: the overlay surface of the variant drawn now.
+                let shown = Tokens::of(&h.ctx);
+                assert_eq!(
+                    h.ctx.global_style().visuals.window_fill,
+                    shown.surface.overlay
+                );
+                let other = Tokens::of_theme(
+                    &h.ctx,
+                    match h.ctx.theme() {
+                        egui::Theme::Dark => egui::Theme::Light,
+                        egui::Theme::Light => egui::Theme::Dark,
+                    },
+                );
+                let fills = fills(&h);
+                let context = format!(
+                    "round {round}, `{name}` with {preference:?}: `{}` drawn",
+                    shown.resolved().spec().base
+                );
+                assert!(
+                    fills.contains(&shown.surface.overlay),
+                    "{context}: the dock is not filled with its overlay"
+                );
+                if other.surface.overlay != shown.surface.overlay {
+                    assert!(
+                        !fills.contains(&other.surface.overlay),
+                        "{context}: the other variant's overlay is painted"
+                    );
+                }
+            }
+        }
+    }
 }

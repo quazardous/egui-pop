@@ -1556,29 +1556,32 @@ struct PreparedTab {
 
 /// An area's prepared tabs and egui_dock style, kept across passes: a tab
 /// is laid out and measured again only when its title changes, and
-/// everything when the kit (a theme install) or the scale changes.
-/// The tabs prepared for drawing, per dock (and one for a dragged tab's
-/// ghost).
+/// everything when the kit (a theme install, a light or dark switch) or
+/// the scale changes; the style again when egui's style does. Per dock
+/// (and one for a dragged tab's ghost).
 const TAB_CACHE: Slot<TabCache> = Slot::opaque("api.workbench.tab_cache");
 
 #[derive(Clone, Default)]
 struct TabCache {
-    /// The kit (its address: a theme install makes a new one), the
-    /// pixels per point and the strings provider the cache was made for.
-    key: Option<(usize, u32, Option<usize>)>,
+    /// The kit the cache was made for, kept: compared by address, which
+    /// a kit dropped could otherwise lend to the next one (of another
+    /// theme, or of the other variant).
+    kit: Option<Arc<Kit>>,
+    /// The pixels per point and the strings provider the cache was made
+    /// for.
+    key: Option<(u32, Option<usize>)>,
     tabs: HashMap<PanelId, PreparedTab>,
-    style: Option<Arc<egui_dock::Style>>,
+    /// egui_dock's style and the egui style it was made from (kept, as
+    /// the kit is).
+    style: Option<(Arc<egui::Style>, Arc<egui_dock::Style>)>,
 }
 
 impl TabCache {
     fn prepare(&mut self, app: &AppHandle, ctx: &egui::Context, kit: &Arc<Kit>, tabs: &[PanelId]) {
-        let key = (
-            Arc::as_ptr(kit) as usize,
-            ctx.pixels_per_point().to_bits(),
-            strings::provider_id(ctx),
-        );
-        if self.key != Some(key) {
+        let key = (ctx.pixels_per_point().to_bits(), strings::provider_id(ctx));
+        if self.key != Some(key) || !self.kit.as_ref().is_some_and(|k| Arc::ptr_eq(k, kit)) {
             *self = TabCache {
+                kit: Some(kit.clone()),
                 key: Some(key),
                 ..TabCache::default()
             };
@@ -1613,11 +1616,15 @@ impl TabCache {
         }
     }
 
-    fn dock_style(&mut self, style: &egui::Style, kit: &Kit) -> egui_dock::Style {
-        (**self
-            .style
-            .get_or_insert_with(|| Arc::new(dock_style(style, kit))))
-        .clone()
+    fn dock_style(&mut self, style: &Arc<egui::Style>, kit: &Kit) -> egui_dock::Style {
+        match &self.style {
+            Some((from, dock)) if Arc::ptr_eq(from, style) => (**dock).clone(),
+            _ => {
+                let dock = dock_style(style, kit);
+                self.style = Some((style.clone(), Arc::new(dock.clone())));
+                dock
+            }
+        }
     }
 }
 

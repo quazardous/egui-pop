@@ -533,6 +533,14 @@ publishes.
   panicked at start-up and left a black page. On the web it now logs to
   the browser's console, and when it cannot start or panics, the page
   says why instead of staying black.
+  says why instead of staying black.
+- Docked panels no longer stay drawn in the other variant after a few
+  theme switches (egui-pop-api): the frame where a theme is installed,
+  or its light or dark variant chosen, is drawn with the new style from
+  its start, and the workbench's tab cache and the menu bar's labels
+  keep the kit and egui style they were made from rather than their
+  addresses, which a dropped kit could hand to the next one. `Kit::of`
+  says to keep the `Arc` too.
 
 ## 0.1.1 (2026-10-18)
 
