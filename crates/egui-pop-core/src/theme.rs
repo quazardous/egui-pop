@@ -120,7 +120,9 @@ pub struct Radius {
     pub window: f32,
 }
 
-/// Spacing steps in points.
+/// Spacing in points: the scale's steps (`space.xs` to `space.xl`), and
+/// spacing by intent (`space.inline`, `group`, `section`, `page`), each
+/// an alias of a step, so densities scale it.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub struct Space {
@@ -129,6 +131,86 @@ pub struct Space {
     pub m: f32,
     pub l: f32,
     pub xl: f32,
+    /// Between items on one line.
+    pub inline: f32,
+    /// Between related groups of items.
+    pub group: f32,
+    /// Before a section of a panel or a page.
+    pub section: f32,
+    /// Around a page's content and between its main blocks.
+    pub page: f32,
+}
+
+/// A text role: what a piece of text is (`text-role.*`), each a size,
+/// a colour and a weight over the size scale and the text colours.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum TextRole {
+    /// A page's or a dialog's title.
+    Title,
+    /// A section's title in a panel or a page.
+    Section,
+    /// Ordinary text.
+    Body,
+    /// Secondary text: hints, descriptions, an empty list's message.
+    Muted,
+    /// Small print about an item: a date, a size, a count.
+    Meta,
+}
+
+impl TextRole {
+    pub const ALL: [TextRole; 5] = [
+        TextRole::Title,
+        TextRole::Section,
+        TextRole::Body,
+        TextRole::Muted,
+        TextRole::Meta,
+    ];
+
+    /// Its name in the tokens (`title`: `text-role.title.*`).
+    pub fn name(self) -> &'static str {
+        match self {
+            TextRole::Title => "title",
+            TextRole::Section => "section",
+            TextRole::Body => "body",
+            TextRole::Muted => "muted",
+            TextRole::Meta => "meta",
+        }
+    }
+}
+
+/// How a text role is drawn.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct TextRoleStyle {
+    /// In points (a step of `font.size.*`).
+    pub size: f32,
+    pub color: Color32,
+    /// Regular unless the role says otherwise (`fonts::family` draws it).
+    pub weight: crate::fonts::Weight,
+}
+
+/// Every text role's style (`text-role.*`).
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct TextRoles {
+    pub title: TextRoleStyle,
+    pub section: TextRoleStyle,
+    pub body: TextRoleStyle,
+    pub muted: TextRoleStyle,
+    pub meta: TextRoleStyle,
+}
+
+impl TextRoles {
+    /// A role's style.
+    pub fn get(&self, role: TextRole) -> &TextRoleStyle {
+        match role {
+            TextRole::Title => &self.title,
+            TextRole::Section => &self.section,
+            TextRole::Body => &self.body,
+            TextRole::Muted => &self.muted,
+            TextRole::Meta => &self.meta,
+        }
+    }
 }
 
 /// Sizes in points.
@@ -249,6 +331,8 @@ pub fn shadow(r: &ResolvedTokens, prefix: &str) -> Option<Shadow> {
 pub struct Tokens {
     pub surface: Surface,
     pub text: Text,
+    /// Text by role (`text-role.*`).
+    pub text_role: TextRoles,
     pub border: Border,
     pub accent: Accent,
     pub status: Status,
@@ -301,6 +385,24 @@ impl Tokens {
                 strong: c("text.strong"),
                 on_accent: c("text.on-accent"),
             },
+            text_role: {
+                let role = |name: &str| TextRoleStyle {
+                    size: d(&format!("text-role.{name}.size")),
+                    color: c(&format!("text-role.{name}.color")),
+                    weight: crate::fonts::Weight(
+                        r.dimension(&format!("text-role.{name}.weight"))
+                            .unwrap_or(400.0)
+                            .clamp(1.0, 1000.0) as u16,
+                    ),
+                };
+                TextRoles {
+                    title: role("title"),
+                    section: role("section"),
+                    body: role("body"),
+                    muted: role("muted"),
+                    meta: role("meta"),
+                }
+            },
             border: Border {
                 default: c("border.default"),
                 strong: c("border.strong"),
@@ -329,6 +431,10 @@ impl Tokens {
                 m: d("space.m"),
                 l: d("space.l"),
                 xl: d("space.xl"),
+                inline: d("space.inline"),
+                group: d("space.group"),
+                section: d("space.section"),
+                page: d("space.page"),
             },
             size: Size {
                 control_height: d("size.control.height"),

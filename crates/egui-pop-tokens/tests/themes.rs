@@ -331,6 +331,55 @@ fn a_density_overlay_only_touches_space_and_size() {
 }
 
 #[test]
+fn spacing_by_intent_is_a_step_of_the_scale_in_every_density() {
+    let themes = Themes::default();
+    for base in BUILT_IN_THEMES {
+        for density in Density::ALL {
+            let r = themes.resolve(&ThemeSpec::new(*base).density(density));
+            for (intent, step) in [
+                ("inline", "s"),
+                ("group", "m"),
+                ("section", "l"),
+                ("page", "xl"),
+            ] {
+                let path = format!("space.{intent}");
+                assert_eq!(
+                    r.get(&path).and_then(|t| t.alias.as_deref()),
+                    Some(format!("space.{step}").as_str()),
+                    "{base} {density}: {path}"
+                );
+                assert_eq!(
+                    r.dimension(&path),
+                    r.dimension(&format!("space.{step}")),
+                    "{base} {density}: {path}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn text_roles_take_a_step_of_the_size_scale() {
+    let themes = Themes::default();
+    for base in BUILT_IN_THEMES {
+        let r = themes.resolve(&ThemeSpec::new(*base));
+        for role in ["title", "section", "body", "muted", "meta"] {
+            let size = format!("text-role.{role}.size");
+            let alias = r.get(&size).and_then(|t| t.alias.as_deref()).unwrap_or("");
+            assert!(
+                alias.starts_with("font.size."),
+                "{base}: {size} is {alias:?}"
+            );
+            let weight = r.dimension(&format!("text-role.{role}.weight")).unwrap();
+            assert!(
+                (100.0..=900.0).contains(&weight),
+                "{base}: {role} weight {weight}"
+            );
+        }
+    }
+}
+
+#[test]
 fn the_comfortable_overlay_restates_the_base_values() {
     let themes = Themes::default();
     let file = Density::Comfortable.built_in_file();

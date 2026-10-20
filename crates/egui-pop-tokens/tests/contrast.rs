@@ -72,13 +72,14 @@ fn a_theme_with_a_poor_pair_fails_the_check() {
     assert!(!failures.is_empty());
     assert!(
         // The muted text, the editor and field tokens aliasing it, and
-        // the badge text on the muted badge's fill.
+        // the badge text on the muted badge's fill, the meta text role.
         failures.iter().all(|f| f.pair.foreground.contains("muted")
             || f.pair.background.contains("muted")
             || [
                 "editor.line-number",
                 "syntax.comment",
-                "field.tone.muted.text"
+                "field.tone.muted.text",
+                "text-role.meta.color"
             ]
             .contains(&f.pair.foreground)),
         "{failures:?}"

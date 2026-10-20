@@ -205,6 +205,22 @@ const CORE: &[Required] = &[
     sys("space.l", "dimension", "padding of windows and dialogs"),
     sys("space.xl", "dimension", "between sections"),
     sys(
+        "space.inline",
+        "dimension",
+        "by intent: between items on one line",
+    ),
+    sys(
+        "space.group",
+        "dimension",
+        "by intent: between related groups",
+    ),
+    sys("space.section", "dimension", "by intent: before a section"),
+    sys(
+        "space.page",
+        "dimension",
+        "by intent: around a page's content",
+    ),
+    sys(
         "size.control.height",
         "dimension",
         "height of one-line controls",
@@ -272,6 +288,65 @@ const CORE: &[Required] = &[
         "font.text-style.monospace",
         "dimension",
         "egui's monospace text: numbers and code",
+    ),
+    sys("text-role.title.size", "dimension", "a title: its size"),
+    sys("text-role.title.color", "color", "a title: its colour"),
+    sys("text-role.title.weight", "number", "a title: its weight"),
+    sys(
+        "text-role.section.size",
+        "dimension",
+        "a section's title: its size",
+    ),
+    sys(
+        "text-role.section.color",
+        "color",
+        "a section's title: its colour",
+    ),
+    sys(
+        "text-role.section.weight",
+        "number",
+        "a section's title: its weight",
+    ),
+    sys(
+        "text-role.body.size",
+        "dimension",
+        "ordinary text: its size",
+    ),
+    sys("text-role.body.color", "color", "ordinary text: its colour"),
+    sys(
+        "text-role.body.weight",
+        "number",
+        "ordinary text: its weight",
+    ),
+    sys(
+        "text-role.muted.size",
+        "dimension",
+        "secondary text: its size",
+    ),
+    sys(
+        "text-role.muted.color",
+        "color",
+        "secondary text: its colour",
+    ),
+    sys(
+        "text-role.muted.weight",
+        "number",
+        "secondary text: its weight",
+    ),
+    sys(
+        "text-role.meta.size",
+        "dimension",
+        "small print about an item: its size",
+    ),
+    sys(
+        "text-role.meta.color",
+        "color",
+        "small print about an item: its colour",
+    ),
+    sys(
+        "text-role.meta.weight",
+        "number",
+        "small print about an item: its weight",
     ),
     sys("font.family.ui", "fontFamily", "interface text"),
     sys("font.family.mono", "fontFamily", "numbers and code"),

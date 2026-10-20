@@ -720,7 +720,13 @@ fn groups(tokens: &ResolvedTokens) -> Vec<Group> {
         Group {
             title: &txt::THEME_EDITOR_SHAPE,
             paths: system(&starts(&[
-                "radius.", "space.", "size.", "font.", "opacity.", "motion.",
+                "radius.",
+                "space.",
+                "size.",
+                "font.",
+                "text-role.",
+                "opacity.",
+                "motion.",
             ])),
             open: false,
         },

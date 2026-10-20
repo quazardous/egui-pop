@@ -83,6 +83,17 @@ pub const PAIRS: &[Pair] = &[
     text("text.muted", "surface.raised"),
     text("text.muted", "surface.overlay"),
     text("text.muted", "surface.sunken"),
+    // Text by role, on panels and on the raised surface cards use.
+    text("text-role.title.color", "surface.panel"),
+    text("text-role.title.color", "surface.raised"),
+    text("text-role.section.color", "surface.panel"),
+    text("text-role.section.color", "surface.raised"),
+    text("text-role.body.color", "surface.panel"),
+    text("text-role.body.color", "surface.raised"),
+    text("text-role.muted.color", "surface.panel"),
+    text("text-role.muted.color", "surface.raised"),
+    text("text-role.meta.color", "surface.panel"),
+    text("text-role.meta.color", "surface.raised"),
     // Labels on accent fills, and the accent as link text.
     text("text.on-accent", "accent.default"),
     text("text.on-accent", "accent.hover"),

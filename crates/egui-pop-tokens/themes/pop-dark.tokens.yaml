@@ -258,6 +258,33 @@ text:
   on-accent:
     $value: "{gold.contrast}"
     $description: "Text on an accent fill."
+text-role:
+  $description: "Text by role: a step of the size scale, a text colour and a weight (100 to 900; a weight other than 400 is drawn with the theme's font at that weight)."
+  title:
+    $description: "A page's or a dialog's title."
+    size: {$type: "dimension", $value: "{font.size.xl}"}
+    color: {$type: "color", $value: "{text.strong}"}
+    weight: {$type: "number", $value: 600}
+  section:
+    $description: "A section's title in a panel or a page."
+    size: {$type: "dimension", $value: "{font.size.m}"}
+    color: {$type: "color", $value: "{text.strong}"}
+    weight: {$type: "number", $value: 600}
+  body:
+    $description: "Ordinary text."
+    size: {$type: "dimension", $value: "{font.size.m}"}
+    color: {$type: "color", $value: "{text.default}"}
+    weight: {$type: "number", $value: 400}
+  muted:
+    $description: "Secondary text: hints, descriptions, an empty list's message."
+    size: {$type: "dimension", $value: "{font.size.m}"}
+    color: {$type: "color", $value: "{text.muted}"}
+    weight: {$type: "number", $value: 400}
+  meta:
+    $description: "Small print about an item: a date, a size, a count, a job's detail."
+    size: {$type: "dimension", $value: "{font.size.xs}"}
+    color: {$type: "color", $value: "{text.muted}"}
+    weight: {$type: "number", $value: 400}
 border:
   $type: "color"
   default:
@@ -330,6 +357,18 @@ space:
   xl:
     $value: {value: 16, unit: "px"}
     $description: "Between sections."
+  inline:
+    $value: "{space.s}"
+    $description: "By intent: between items on one line (a label and its value, buttons in a row)."
+  group:
+    $value: "{space.m}"
+    $description: "By intent: between related groups of items."
+  section:
+    $value: "{space.l}"
+    $description: "By intent: before a section of a panel or a page."
+  page:
+    $value: "{space.xl}"
+    $description: "By intent: around a page's content and between its main blocks."
 size:
   $type: "dimension"
   control:

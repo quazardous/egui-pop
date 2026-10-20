@@ -110,7 +110,10 @@ without it.
    (egui's popup and window shadows, and a side area lying over the
    centre; their colours alias the `shade.10` and `shade.38` palette
    tokens, black at 10 % and 38 %),
-   `space.{xs, s, m, l, xl}`, `size.control.height`,
+   `space.{xs, s, m, l, xl}` (the spacing scale),
+   `space.{inline, group, section, page}` (spacing by intent, below),
+   `text-role.{title, section, body, muted, meta}.{size, color, weight}`
+   (text by role, below), `size.control.height`,
    `size.icon.{inline, toolbar, panel}`, `size.dialog.width`, `size.magnet`,
    `size.toast.width`, `font.size.{xs, s, m, l, xl}` (the size scale)
    and `font.text-style.{small, body, button, heading, monospace}`
@@ -143,6 +146,41 @@ without it.
    `field.rest.border-color` are `{border.strong}`). A component's text
    size aliases a step of the size scale (`"{font.size.l}"`), never a
    number of its own.
+
+### Spacing and text by intent
+
+Layout code says why there is space, or what a piece of text is, rather
+than how many points: the tokens below are system roles over the
+scales, read through `Tokens` (`t.space.group`, `t.text_role.section`).
+
+| Token | Alias of | Use |
+|---|---|---|
+| `space.inline` | `{space.s}` | between items on one line |
+| `space.group` | `{space.m}` | between related groups of items |
+| `space.section` | `{space.l}` | before a section of a panel or a page |
+| `space.page` | `{space.xl}` | around a page's content, between its main blocks |
+
+They are aliases, so a density overlay, which moves the steps, moves
+them too; a theme may re-alias one onto another step.
+
+A text role is three tokens, `text-role.<role>.size` (a step of the
+size scale), `.color` (a text colour) and `.weight` (a `number`, 100 to
+900; 400 is regular). The role names say what the text is; the colours
+stay `text.*`, which the roles alias, so `text.muted` is still the one
+muted colour:
+
+| Role | Size | Colour | Weight | Use |
+|---|---|---|---|---|
+| `title` | `{font.size.xl}` | `{text.strong}` | 600 | a page's or a dialog's title |
+| `section` | `{font.size.m}` | `{text.strong}` | 600 | a section's title in a panel |
+| `body` | `{font.size.m}` | `{text.default}` | 400 | ordinary text |
+| `muted` | `{font.size.m}` | `{text.muted}` | 400 | hints, descriptions, an empty list's message |
+| `meta` | `{font.size.xs}` | `{text.muted}` | 400 | a date, a size, a count |
+
+A weight other than 400 is drawn with the theme's interface font at
+that weight (`fonts::family`), once a theme has installed the fonts;
+egui's bundled font has one weight, which draws them all. The role
+colours are in the contrast pairs, over panels and the raised surface.
 
 ## Naming rules
 

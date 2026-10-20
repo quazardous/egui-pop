@@ -29,6 +29,14 @@ publishes.
   file uncached and says so (`kit::Problem::NotCached`,
   `Warning::NotCached`). A file that cannot be read is the new
   `Error::Io`. Closes #38.
+- Spacing by intent and text by role (egui-pop-tokens, egui-pop-core):
+  the system tokens `space.inline`, `space.group`, `space.section` and
+  `space.page`, aliases of the spacing scale's steps (so densities scale
+  them), and `text-role.{title, section, body, muted, meta}`, each a
+  size on the size scale, a text colour and a weight, in every built-in
+  theme and in the contract and contrast pairs. Typed as
+  `Tokens::space.{inline, group, section, page}` and
+  `Tokens::text_role` (`TextRoles::get(TextRole)`). Part of #35.
 - One writer per value (egui-pop-model): a path's descriptor says who
   may write it besides its owner (`Writers`: `Owner`, the default,
   `Also(...)`, `Any`; `Descriptor::writers`, `Descriptor::any_writer`).
