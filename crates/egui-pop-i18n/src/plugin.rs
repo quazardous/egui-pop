@@ -31,6 +31,7 @@ use egui_pop_api::zones::{self, Block};
 use egui_pop_api::{AppHandle, Ctx, Plugin, PluginError};
 use egui_pop_core::debug::FnCollector;
 use egui_pop_core::lock;
+use egui_pop_core::state::Slot;
 use egui_pop_core::strings;
 use egui_pop_model::commands::Origin;
 use egui_pop_model::ids::{BlockId, PluginId, SettingId, StepId};
@@ -72,13 +73,12 @@ fn set_global(i18n: Option<I18n>) {
     *GLOBAL.write().unwrap_or_else(PoisonError::into_inner) = i18n;
 }
 
-fn ctx_id() -> egui::Id {
-    egui::Id::new("egui_pop_i18n::I18n")
-}
+/// The catalogues installed in a context.
+const INSTALLED: Slot<I18n> = Slot::new("i18n.installed");
 
 /// The catalogues the plugin installed in an egui context.
 pub fn of(ctx: &egui::Context) -> Option<I18n> {
-    ctx.data(|d| d.get_temp::<I18n>(ctx_id()))
+    INSTALLED.get(ctx)
 }
 
 /// The text of `key` in the context's language, with Fluent arguments;
@@ -358,8 +358,7 @@ impl Plugin for I18nPlugin {
             ctx.on(on, move |app, _| i18n.set_hooked(hooked(app)));
         }
         let app = ctx.app();
-        app.egui()
-            .data_mut(|d| d.insert_temp(ctx_id(), i18n.clone()));
+        INSTALLED.set(&app.egui(), i18n.clone());
         strings::install(&app.egui(), Arc::new(Provider::new(i18n.clone())));
         set_global(Some(i18n));
         Ok(())
@@ -367,7 +366,7 @@ impl Plugin for I18nPlugin {
 
     fn disconnect(&mut self, ctx: &mut Ctx<'_>) {
         let egui = ctx.app().egui();
-        egui.data_mut(|d| d.remove::<I18n>(ctx_id()));
+        INSTALLED.remove(&egui);
         strings::install(&egui, Arc::new(strings::English));
         set_global(None);
         *self.follow.lock().unwrap_or_else(PoisonError::into_inner) = Follow::default();
@@ -441,7 +440,7 @@ fn follow(app: &AppHandle, i18n: &I18n, follow: &Mutex<Follow>, env: Option<&str
     let generation = i18n.generation();
     if f.installed != Some(generation) {
         let ctx = app.egui();
-        ctx.data_mut(|d| d.insert_temp(ctx_id(), i18n.clone()));
+        INSTALLED.set(&ctx, i18n.clone());
         strings::install(&ctx, Arc::new(Provider::new(i18n.clone())));
         f.installed = Some(generation);
         ctx.request_repaint();
