@@ -28,6 +28,10 @@ publishes.
   a counterpart now follows the system's light or dark mode; set the
   preference (`set_preference`) or give `ThemeSpec::alone()` to keep
   one variant. The gallery starts in the mode of the theme it is given.
+- The gallery's theme picker shows the theme drawn, its pair (marked
+  in the list and named in the tooltip) and the light or dark choice
+  (follow the system, always light, always dark) at the top of its
+  list; picking a theme shows it.
 - Theme counterparts (egui-pop-tokens): a theme names its other
   variant, light or dark, in its root `$extensions`
   (`"org.egui-pop.variant-of": "pop-dark"`, `VARIANT_OF_EXTENSION`; one

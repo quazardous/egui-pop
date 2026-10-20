@@ -146,13 +146,12 @@ impl Plugin for Shell {
                 .menu(MENU_VIEW, "6_theme", 0),
             |call| {
                 let t = call.app.theme();
-                let mut next = String::new();
-                t.update(|spec| {
-                    let all = theme::BUILT_IN_THEMES;
-                    let at = all.iter().position(|n| *n == spec.base).unwrap_or(0);
-                    spec.base = all[(at + 1) % all.len()].to_string();
-                    next = spec.base.clone();
-                });
+                let ctx = call.app.egui();
+                let all = theme::BUILT_IN_THEMES;
+                let shown = t.shown(&ctx);
+                let at = all.iter().position(|n| *n == shown).unwrap_or(0);
+                let next = all[(at + 1) % all.len()];
+                t.pick(&ctx, next);
                 Ok(json!({ "theme": next }))
             },
         )?;
@@ -189,12 +188,38 @@ fn switchers(ui: &mut Ui, app: &AppHandle) {
     let service = app.theme();
     let mut spec = service.spec();
     let before = spec.clone();
+    let shown = service.shown(ui.ctx());
+    let counterpart = service.counterpart();
+    let mut picked = shown.clone();
     ui.strong(TITLE);
     ui.separator();
     let label = ui.label("Theme");
-    egui::ComboBox::from_id_salt("theme")
-        .selected_text(theme::theme_label(&spec.base))
+    // The other theme of the pair, the one not shown.
+    let other = counterpart.as_ref().map(|c| {
+        if *c == shown {
+            spec.base.clone()
+        } else {
+            c.clone()
+        }
+    });
+    let preference = service.preference();
+    let mut chosen = preference;
+    let combo = egui::ComboBox::from_id_salt("theme")
+        .selected_text(theme::theme_label(&shown))
         .show_ui(ui, |ui| {
+            // The light or dark preference first, choosing within the pair.
+            ui.weak("Light or dark");
+            ui.add_enabled_ui(other.is_some(), |ui| {
+                for p in [
+                    egui::ThemePreference::System,
+                    egui::ThemePreference::Light,
+                    egui::ThemePreference::Dark,
+                ] {
+                    ui.selectable_value(&mut chosen, p, preference_label(p))
+                        .on_disabled_hover_text("This theme has no light or dark counterpart.");
+                }
+            });
+            ui.separator();
             let names: Vec<String> = theme::BUILT_IN_THEMES
                 .iter()
                 .map(|s| s.to_string())
@@ -207,12 +232,24 @@ fn switchers(ui: &mut Ui, app: &AppHandle) {
                 )
                 .collect();
             for name in names {
-                let label = theme::theme_label(&name);
-                ui.selectable_value(&mut spec.base, name, label);
+                let label = if Some(&name) == other.as_ref() {
+                    format!("{} (its pair)", theme::theme_label(&name))
+                } else {
+                    theme::theme_label(&name)
+                };
+                ui.selectable_value(&mut picked, name, label);
             }
         })
         .response
         .labelled_by(label.id);
+    combo.on_hover_text(match &other {
+        Some(o) => format!(
+            "Paired with {}; light or dark: {}",
+            theme::theme_label(o),
+            preference_label(preference)
+        ),
+        None => "No light or dark counterpart".to_string(),
+    });
     let label = ui.label("Density");
     egui::ComboBox::from_id_salt("density")
         .selected_text(spec.density.name())
@@ -237,6 +274,21 @@ fn switchers(ui: &mut Ui, app: &AppHandle) {
     ui.checkbox(&mut spec.reduced_motion, "Reduced motion");
     if spec != before {
         service.set(spec);
+    }
+    if picked != shown {
+        service.pick(ui.ctx(), &picked);
+    }
+    if chosen != preference {
+        service.set_preference(chosen);
+    }
+}
+
+/// A light or dark preference, as the switcher shows it.
+fn preference_label(p: egui::ThemePreference) -> &'static str {
+    match p {
+        egui::ThemePreference::System => "Follow the system",
+        egui::ThemePreference::Light => "Always light",
+        egui::ThemePreference::Dark => "Always dark",
     }
 }
 

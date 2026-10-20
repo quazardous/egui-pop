@@ -115,6 +115,22 @@ fn switching_theme_and_page_from_the_ui_and_the_keyboard() {
     let tokens = Tokens::of(&h.ctx);
     assert_eq!(tokens.resolved().spec().base, "pop-light");
     assert!(!h.ctx.global_style().visuals.dark_mode);
+    // Its pair and the light or dark preference are in the picker.
+    h.get_by_role_and_label(egui::accesskit::Role::ComboBox, "Theme")
+        .click();
+    h.run();
+    assert!(h.query_by_label("Pop dark (its pair)").is_some());
+    h.get_by_label("Always dark").click();
+    h.run();
+    h.run();
+    assert_eq!(
+        h.state().app.handle().theme().preference(),
+        egui::ThemePreference::Dark
+    );
+    // The pair's other theme, shown without installing again.
+    assert_eq!(Tokens::of(&h.ctx).resolved().spec().base, "pop-dark");
+    assert_eq!(h.state().app.handle().theme().spec().base, "pop-light");
+    assert!(h.ctx.global_style().visuals.dark_mode);
 }
 
 #[test]
