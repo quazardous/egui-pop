@@ -50,6 +50,7 @@
 //! `duration` (`ms` or `s`) and `fontFamily`. Other types are kept as raw
 //! JSON ([`Value::Other`]).
 
+pub mod cache;
 mod color;
 pub mod contract;
 pub mod contrast;
@@ -68,7 +69,7 @@ pub use contract::{CONTRACT_VERSION, RENAMED, Renamed, Required, Tier, contract}
 #[allow(deprecated)]
 pub use draft::{DRAFT_EXTENSION, DRAFT_VERSION, ThemeDraft, TokenEdit};
 pub use error::Error;
-pub use file::{RawToken, TokenFile};
+pub use file::{RawToken, TOKENS_COMPILER, TokenFile};
 pub use format::{FORMAT_EXTENSION, FORMAT_VERSION, FormatStamp, Warning};
 pub use theme::{
     ALPHA_EXTENSION, BASED_ON, BUILT_IN_ACCENTS, BUILT_IN_THEMES, Counterpart, Density,

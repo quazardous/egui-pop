@@ -19,8 +19,21 @@ pub(crate) fn is_json(text: &str) -> bool {
         .starts_with('{')
 }
 
+#[cfg(test)]
+thread_local! {
+    static PARSES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many YAML files this thread parsed (to count cache hits in tests).
+#[cfg(test)]
+pub(crate) fn parses() -> usize {
+    PARSES.with(std::cell::Cell::get)
+}
+
 /// Reads a YAML token file into the tree a JSON one gives.
 pub(crate) fn parse(file: &str, text: &str) -> Result<Json, Error> {
+    #[cfg(test)]
+    PARSES.with(|n| n.set(n.get() + 1));
     if let Some((line, message)) = trap(text) {
         return Err(Error::Yaml {
             file: file.to_string(),

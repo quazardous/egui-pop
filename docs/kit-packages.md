@@ -64,10 +64,10 @@ system.
 
 | | |
 |---|---|
-| `KitData::load(dir)` | a folder at run time |
+| `KitData::load(dir)` | a folder at run time, its YAML through the default cache (`KitData::load_with(dir, &cache)` names one) |
 | `kit!("dir", tokens = [..], fonts = [..], license = "LICENSE")` | embedded in the binary (`include_str!`/`include_bytes!`, the path relative to the calling file); only `kit.yaml` is implied (`kit = "kit.json"` names another), the other files are listed |
 | `KitData::from_text(name, text)` | a data-only kit from its `kit.yaml` (or JSON) text |
-| `kit::discover(dir)` | each sub-folder holding a `kit.yaml`, `kit.yml` or `kit.json` |
+| `kit::discover(dir)` | each sub-folder holding a `kit.yaml`, `kit.yml` or `kit.json` (`discover_with(dir, &cache)`) |
 | `kit::check(&kit)` | every problem: reading it, and resolving its theme |
 
 What is wrong is in `KitData::problems()`, and the kit is usable anyway
@@ -82,7 +82,9 @@ What is wrong is in `KitData::problems()`, and the kit is usable anyway
   read by nothing, reported;
 - a face named by the manifest and missing, or a file that is not a
   font: left out (the families naming it fall back);
-- an `icons/` folder: not read yet.
+- an `icons/` folder: not read yet;
+- a token file whose compiled form cannot be kept in the cache
+  (`NotCached`): read uncached, parsed again next time.
 
 **Compile-time validation.** `kit!` is a `macro_rules` macro: it embeds,
 it does not check (that needs a proc-macro). An application checks its
@@ -167,6 +169,40 @@ user put under the persistence directory (`AppBuilder::persist`):
 kits (a user kit of the same name replaces it) and are listed by
 `ThemeService::kits()` with their folder as origin. A user kit is data
 only: code comes only from crates the application links.
+
+### The cache of compiled files
+
+A kit read at run time is YAML, which costs several times JSON to parse.
+Its files are compiled once into a cache folder, never next to the kit:
+read again unchanged, a file is read from its compiled JSON (the default
+kit's 76 files as a folder: 6.8 ms parsed, 2.8 ms from the cache, release
+build). An entry is keyed by the file's path, a hash of its contents and
+the compiler's version, so an edited file, or a new egui-pop, compiles it
+again. The checks run on what is read either way, so a kit's problems
+are the same on a hit.
+
+The cache lives in the platform's cache directory under the
+application's id (`~/.cache/<id>/egui-pop` on Linux,
+`~/Library/Caches/<id>/egui-pop` on macOS,
+`%LOCALAPPDATA%\<id>\cache\egui-pop` on Windows). egui-pop does not know
+the id, so it is off until the application gives one, for every reader
+at once or for the application's user kits:
+
+```rust
+use egui_pop::tokens::cache::{self, Cache};
+
+cache::set_default(Cache::for_app("org.example.App"));
+# cache::set_default(Cache::off());
+let _builder = egui_pop::prelude::App::builder()
+    .user_kits(true)
+    .cache(Cache::for_app("org.example.App"));
+```
+
+`Cache::at(dir)` puts it elsewhere (a test's temporary folder),
+`Cache::off()` turns it off. A cache that cannot be written is not an
+error: the kit is read uncached, with a `NotCached` problem. The store
+is not specific to tokens (`Cache::get`, `Cache::put` with a
+`Compiler`'s name and version): token files are its first user.
 
 ## The default kit
 

@@ -250,7 +250,12 @@ shipped files are compiled to JSON when egui-pop is built
 (`egui-pop-tokens/build.rs`): reading YAML costs about seven times
 JSON's, and the built-in themes load at every start (24 ms in YAML, 3 ms
 in JSON, release build). A trap below in a shipped file fails the build,
-with its file and line. YAML
+with its file and line. Files known only at run time, a user's kits and themes
+(`KitData::load`, `Themes::add_path`), are compiled into a cache folder
+instead, never next to their YAML: see
+[the cache of compiled files](kit-packages.md#the-cache-of-compiled-files).
+`Themes::add_path` runs the loading rule below on what it reads, so a
+theme's warnings are the same on a hit. YAML
 is there for comments. JSON stays the exchange format: what egui-pop
 writes (the theme editor's export, `to_dtcg`) is DTCG JSON, which other
 token tools read.

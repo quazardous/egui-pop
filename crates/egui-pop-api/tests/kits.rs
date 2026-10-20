@@ -8,6 +8,7 @@ use egui_pop_api::App;
 use egui_pop_core::fonts;
 use egui_pop_core::kit::{ComponentKit, Kit, KitCx, KitSource, Part, Primitive};
 use egui_pop_core::theme::ThemeSpec;
+use egui_pop_core::tokens::cache::Cache;
 use egui_pop_core::tokens::kit::{KitData, Origin};
 
 fn fixture(name: &str) -> std::path::PathBuf {
@@ -105,11 +106,16 @@ fn user_kits_are_read_from_the_persistence_directory() {
     )
     .unwrap();
     let ctx = egui::Context::default();
+    let cache = dir.join("cache");
     let app = App::builder()
         .persist(&dir)
         .user_kits(true)
+        .cache(Cache::at(&cache))
         .build(&ctx)
         .unwrap();
+    // Compiled into the cache given, never next to the kit.
+    assert_eq!(std::fs::read_dir(cache.join("tokens")).unwrap().count(), 1);
+    assert_eq!(std::fs::read_dir(&kit_dir).unwrap().count(), 1);
     let kits = app.handle().theme().kits().to_vec();
     assert_eq!(kits.len(), 1);
     assert_eq!(kits[0].label, "Quiet");

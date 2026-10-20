@@ -8,7 +8,8 @@
 //! | macOS | `~/Library/Application Support/<app>` | `~/Library/Logs/<app>` |
 //! | Windows | `%LOCALAPPDATA%\<app>` | `<state>\logs` |
 //!
-//! Crash reports go to `<state>/crashes`. Inside a Flatpak sandbox,
+//! Crash reports go to `<state>/crashes`. Compiled files go to the
+//! platform's cache directory ([`cache_dir`], `egui_pop_tokens::cache`). Inside a Flatpak sandbox,
 //! `XDG_STATE_HOME` points into the application's own directory, so the
 //! same code finds the sandbox's place.
 //!
@@ -62,6 +63,13 @@ pub fn log_dir(app: &str) -> Option<PathBuf> {
 /// The application's crash report directory: `<state>/crashes`.
 pub fn crash_dir(app: &str) -> Option<PathBuf> {
     state_dir(app).map(|d| d.join("crashes"))
+}
+
+/// Where egui-pop keeps the files it compiles for the application
+/// (`<platform cache>/<app>/egui-pop`): the directory of
+/// `egui_pop_tokens::cache::Cache::for_app`.
+pub fn cache_dir(app: &str) -> Option<PathBuf> {
+    egui_pop_core::tokens::cache::platform_dir(app)
 }
 
 /// Opens a file or a folder with what the system opens it with

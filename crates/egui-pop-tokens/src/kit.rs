@@ -55,6 +55,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value as Json;
 
+use crate::cache::Cache;
 use crate::contract::{kit_contract, required};
 use crate::theme::{BUILT_IN_THEMES, FALLBACK_THEME, ThemeSpec, Themes};
 use crate::{Error, TokenFile};
@@ -238,6 +239,10 @@ pub enum Problem {
     /// The kit's name is a built-in theme's: it is used with `-kit`
     /// added, so the built-in theme is not replaced.
     Name { asked: String, used: String },
+    /// A token file's compiled form could not be kept in the cache
+    /// ([`crate::cache`]): it was read uncached, and is parsed again
+    /// next time.
+    NotCached { file: String, reason: String },
     /// A part of the folder egui-pop does not read yet.
     NotRead { what: String },
     /// A problem of the theme the kit resolves to ([`check`]).
@@ -284,6 +289,9 @@ impl fmt::Display for Problem {
                 f,
                 "the kit's name `{asked}` is a built-in theme's: it is `{used}`"
             ),
+            Problem::NotCached { file, reason } => {
+                write!(f, "`{file}`: read uncached: {reason}")
+            }
             Problem::NotRead { what } => write!(f, "{what} is not read yet"),
             Problem::Theme(e) => write!(f, "theme: {e}"),
             Problem::SameGlyph { roles, icon } => write!(
@@ -334,7 +342,17 @@ pub struct KitData {
 impl KitData {
     /// Reads a kit folder (see the module). Never fails: what could not
     /// be read is in [`KitData::problems`].
+    ///
+    /// Its YAML files go through the default cache ([`crate::cache`]):
+    /// read again unchanged, they are not parsed again.
     pub fn load(dir: impl AsRef<Path>) -> KitData {
+        KitData::load_with(dir, &crate::cache::default())
+    }
+
+    /// [`KitData::load`] through a given cache ([`crate::cache::Cache`]).
+    /// An entry that cannot be written is a [`Problem::NotCached`]: the
+    /// kit is read all the same.
+    pub fn load_with(dir: impl AsRef<Path>, cache: &Cache) -> KitData {
         let dir = dir.as_ref();
         let mut problems = Vec::new();
         let read = |file: &Path| {
@@ -343,7 +361,22 @@ impl KitData {
                 message: e.to_string(),
             })
         };
-        let kit = read(&kit_file(dir).unwrap_or_else(|| dir.join(KIT_FILE)));
+        let mut not_cached = Vec::new();
+        let mut parse = |name: &str, path: &Path| {
+            let text = read(path)?;
+            let (file, unwritten) = TokenFile::parse_cached(name, &text, path, cache);
+            if let Some(e) = unwritten {
+                not_cached.push(Problem::NotCached {
+                    file: name.to_string(),
+                    reason: e.to_string(),
+                });
+            }
+            file.map_err(Problem::Tokens)
+        };
+        let kit = parse(
+            KIT_FILE,
+            &kit_file(dir).unwrap_or_else(|| dir.join(KIT_FILE)),
+        );
         let mut tokens = Vec::new();
         let mut fonts = Vec::new();
         let mut license = None;
@@ -357,7 +390,8 @@ impl KitData {
                 names.sort();
                 for (name, path) in names {
                     if TOKEN_FILE_ENDINGS.iter().any(|e| name.ends_with(e)) {
-                        tokens.push((name, read(&path)));
+                        let file = parse(&name, &path);
+                        tokens.push((name, file));
                     } else if license.is_none()
                         && matches!(name.as_str(), "LICENSE" | "LICENSE.txt" | "LICENSE.md")
                     {
@@ -393,6 +427,7 @@ impl KitData {
                 }
             }
         }
+        problems.extend(not_cached);
         if icons {
             problems.push(Problem::NotRead {
                 what: "icons/".into(),
@@ -425,10 +460,13 @@ impl KitData {
         assemble(
             &folder,
             Origin::Embedded(e.dir),
-            Ok(e.kit.to_string()),
+            TokenFile::parse(KIT_FILE, e.kit).map_err(Problem::Tokens),
             e.tokens
                 .into_iter()
-                .map(|(n, t)| (n, Ok(t.to_string())))
+                .map(|(n, t)| {
+                    let file = TokenFile::parse(&n, t).map_err(Problem::Tokens);
+                    (n, file)
+                })
                 .collect(),
             e.fonts
                 .into_iter()
@@ -445,7 +483,7 @@ impl KitData {
         assemble(
             name,
             Origin::Embedded(""),
-            Ok(kit_text.to_string()),
+            TokenFile::parse(KIT_FILE, kit_text).map_err(Problem::Tokens),
             Vec::new(),
             Vec::new(),
             None,
@@ -547,6 +585,11 @@ pub fn check(kit: &KitData) -> Vec<Problem> {
 /// user kits are in `<config>/kits` ([`USER_KITS_DIR`]); a folder that
 /// does not exist has none.
 pub fn discover(dir: impl AsRef<Path>) -> Vec<KitData> {
+    discover_with(dir, &crate::cache::default())
+}
+
+/// [`discover`] through a given cache ([`KitData::load_with`]).
+pub fn discover_with(dir: impl AsRef<Path>, cache: &Cache) -> Vec<KitData> {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return Vec::new();
     };
@@ -556,7 +599,7 @@ pub fn discover(dir: impl AsRef<Path>) -> Vec<KitData> {
         .filter(|p| kit_file(p).is_some())
         .collect();
     dirs.sort();
-    dirs.iter().map(KitData::load).collect()
+    dirs.iter().map(|d| KitData::load_with(d, cache)).collect()
 }
 
 /// The default kit: `themes/kit/`, read by the same code as any kit
@@ -592,30 +635,22 @@ fn is_font_file(name: &str) -> bool {
 fn assemble(
     folder: &str,
     origin: Origin,
-    kit: Result<String, Problem>,
-    tokens: Vec<(String, Result<String, Problem>)>,
+    kit: Result<TokenFile, Problem>,
+    tokens: Vec<(String, Result<TokenFile, Problem>)>,
     fonts: Vec<(String, Bytes)>,
     license: Option<String>,
     mut problems: Vec<Problem>,
 ) -> KitData {
-    let mut theme = match kit.map(|text| TokenFile::parse(KIT_FILE, &text)) {
-        Ok(Ok(file)) => file,
-        Ok(Err(e)) => {
-            problems.push(Problem::Tokens(e));
-            TokenFile::new(KIT_FILE)
-        }
+    let mut theme = match kit {
+        Ok(file) => file,
         Err(p) => {
             problems.push(p);
             TokenFile::new(KIT_FILE)
         }
     };
-    for (file, text) in tokens {
-        let part = match text.map(|t| TokenFile::parse(&file, &t)) {
-            Ok(Ok(part)) => part,
-            Ok(Err(e)) => {
-                problems.push(Problem::Tokens(e));
-                continue;
-            }
+    for (file, part) in tokens {
+        let part = match part {
+            Ok(part) => part,
             Err(p) => {
                 problems.push(p);
                 continue;
@@ -1106,5 +1141,141 @@ mod tests {
         themes.add_kit(&kit);
         let r = themes.resolve(&ThemeSpec::new("broken"));
         assert!(r.problems().is_empty());
+    }
+
+    /// The cache of compiled files with user kits (`crate::cache`).
+    mod cached {
+        use super::*;
+        use crate::TOKENS_COMPILER;
+        use crate::cache::Compiler;
+        use crate::yaml::parses;
+
+        const KIT: &str =
+            "$extends: \"pop-light\"\ntab:\n  shape: {$type: \"string\", $value: \"underline\"}\n";
+        const PART: &str = "tab:\n  rest:\n    fil: {$type: \"color\", $value: \"#000000\"}\n";
+
+        /// A kit folder and a cache folder, under a temporary directory
+        /// (never the user's cache).
+        fn setup(name: &str) -> (PathBuf, PathBuf) {
+            let root = std::env::temp_dir()
+                .join(format!("egui-pop-kit-cache-{name}-{}", std::process::id()));
+            std::fs::remove_dir_all(&root).ok();
+            let kit = root.join("mine");
+            std::fs::create_dir_all(&kit).unwrap();
+            std::fs::write(kit.join("kit.yaml"), KIT).unwrap();
+            std::fs::write(kit.join("tab.tokens.yaml"), PART).unwrap();
+            (kit, root.join("cache"))
+        }
+
+        #[test]
+        fn a_kit_loaded_twice_reads_its_yaml_once() {
+            let (dir, cache) = setup("twice");
+            let cache = Cache::at(cache);
+            let before = parses();
+            let first = KitData::load_with(&dir, &cache);
+            assert_eq!(parses() - before, 2, "kit.yaml and tab.tokens.yaml");
+            let second = KitData::load_with(&dir, &cache);
+            assert_eq!(parses() - before, 2, "the second load reads the cache");
+            assert_eq!(first, second, "the same kit, the same problems");
+            assert!(
+                first
+                    .problems()
+                    .iter()
+                    .any(|p| matches!(p, Problem::UnknownTerm { .. })),
+                "{:?}",
+                first.problems()
+            );
+            assert_eq!(first.theme.extends.as_deref(), Some("pop-light"));
+            std::fs::remove_dir_all(dir.parent().unwrap()).ok();
+        }
+
+        #[test]
+        fn a_changed_source_is_read_again() {
+            let (dir, cache) = setup("changed");
+            let cache = Cache::at(cache);
+            KitData::load_with(&dir, &cache);
+            std::fs::write(
+                dir.join("kit.yaml"),
+                KIT.replace("underline", "pill")
+                    .replace("pop-light", "pop-dark"),
+            )
+            .unwrap();
+            let before = parses();
+            let kit = KitData::load_with(&dir, &cache);
+            assert_eq!(parses() - before, 1, "only the changed file");
+            assert_eq!(kit.theme.extends.as_deref(), Some("pop-dark"));
+            assert_eq!(kit.theme.tokens["tab.shape"].value, "pill");
+            std::fs::remove_dir_all(dir.parent().unwrap()).ok();
+        }
+
+        #[test]
+        fn an_unwritable_cache_still_loads_and_says_so() {
+            let (dir, cache) = setup("unwritable");
+            // A file where the cache's folder should be.
+            std::fs::write(&cache, "").unwrap();
+            let kit = KitData::load_with(&dir, &Cache::at(&cache));
+            let clean = KitData::load_with(&dir, &Cache::off());
+            assert_eq!(kit.theme, clean.theme);
+            let not_cached: Vec<_> = kit
+                .problems()
+                .iter()
+                .filter(|p| matches!(p, Problem::NotCached { .. }))
+                .collect();
+            assert_eq!(not_cached.len(), 2, "{:?}", kit.problems());
+            assert!(not_cached[0].to_string().contains("read uncached"));
+            std::fs::remove_dir_all(dir.parent().unwrap()).ok();
+        }
+
+        #[test]
+        fn a_new_compiler_version_ignores_old_entries() {
+            let (dir, cache) = setup("version");
+            let cache = Cache::at(cache);
+            // An entry for kit.yaml from another version, which would
+            // give another tree.
+            let old = Compiler {
+                version: "0.0.0",
+                ..TOKENS_COMPILER
+            };
+            cache
+                .put(&old, &dir.join("kit.yaml"), KIT.as_bytes(), b"{}")
+                .unwrap();
+            let before = parses();
+            let kit = KitData::load_with(&dir, &cache);
+            assert_eq!(parses() - before, 2, "the old entry is not read");
+            assert_eq!(kit.theme.tokens["tab.shape"].value, "underline");
+            // And replaced by this version's.
+            let before = parses();
+            KitData::load_with(&dir, &cache);
+            assert_eq!(parses(), before);
+            std::fs::remove_dir_all(dir.parent().unwrap()).ok();
+        }
+
+        #[test]
+        fn a_theme_file_keeps_its_warnings_on_a_hit() {
+            let (dir, cache) = setup("theme");
+            let cache = Cache::at(cache);
+            let path = dir.join("mine.tokens.yaml");
+            std::fs::write(
+                &path,
+                "surface:\n  panel: {$type: \"color\", $value: \"{nowhere.1}\"}\n",
+            )
+            .unwrap();
+            let mut themes = Themes::default();
+            let before = parses();
+            let first = themes.add_path_with("mine", &path, &cache).unwrap();
+            let second = themes.add_path_with("mine", &path, &cache).unwrap();
+            assert_eq!(parses() - before, 1);
+            assert!(
+                first
+                    .iter()
+                    .any(|w| matches!(w, crate::Warning::Invalid { .. })),
+                "{first:?}"
+            );
+            assert_eq!(first, second);
+            assert!(themes.get("mine").is_some());
+            let missing = themes.add_path_with("gone", &dir.join("gone.yaml"), &cache);
+            assert!(matches!(missing, Err(Error::Io { .. })), "{missing:?}");
+            std::fs::remove_dir_all(dir.parent().unwrap()).ok();
+        }
     }
 }

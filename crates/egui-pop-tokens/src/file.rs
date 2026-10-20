@@ -1,10 +1,21 @@
 //! Token files: the DTCG tree (JSON or YAML) read into a flat map of tokens by path.
 
 use std::collections::BTreeMap;
+use std::path::Path;
 
 use serde_json::{Map, Value as Json};
 
 use crate::Error;
+use crate::cache::{Cache, CacheError, Compiler};
+
+/// What compiles a YAML token file into the JSON tree the cache keeps:
+/// its version is this crate's with a revision (raised when the tree a
+/// file compiles to changes), so a new egui-pop ignores the entries of
+/// the one before.
+pub const TOKENS_COMPILER: Compiler<'static> = Compiler {
+    name: "tokens",
+    version: concat!(env!("CARGO_PKG_VERSION"), "+1"),
+};
 
 /// A token as written in a file: its value may still be an alias.
 #[derive(Clone, Debug, PartialEq)]
@@ -65,13 +76,65 @@ impl TokenFile {
     /// starts with `{`, YAML otherwise (the same tree, with comments).
     pub fn parse(name: &str, text: &str) -> Result<TokenFile, Error> {
         let root: Json = if crate::yaml::is_json(text) {
-            serde_json::from_str(text).map_err(|e| Error::Json {
-                file: name.to_string(),
-                message: e.to_string(),
-            })?
+            json(name, text.as_bytes())?
         } else {
             crate::yaml::parse(name, text)?
         };
+        TokenFile::from_tree(name, &root)
+    }
+
+    /// [`TokenFile::parse`] for a file read from `source`, its YAML
+    /// compiled through a cache ([`crate::cache`]): on a hit the JSON the
+    /// YAML was compiled to is read; on a miss or a stale entry the YAML
+    /// is parsed (its problems are the error, and are not cached) and its
+    /// JSON kept. JSON files are read as they are. The second value is
+    /// the entry that could not be written: the file is read uncached.
+    pub fn parse_cached(
+        name: &str,
+        text: &str,
+        source: &Path,
+        cache: &Cache,
+    ) -> (Result<TokenFile, Error>, Option<CacheError>) {
+        if !cache.is_on() || crate::yaml::is_json(text) {
+            return (TokenFile::parse(name, text), None);
+        }
+        let contents = text.as_bytes();
+        if let Some(compiled) = cache.get(&TOKENS_COMPILER, source, contents)
+            && let Ok(root) = json(name, &compiled)
+        {
+            return (TokenFile::from_tree(name, &root), None);
+        }
+        let root = match crate::yaml::parse(name, text) {
+            Ok(root) => root,
+            Err(e) => return (Err(e), None),
+        };
+        let unwritten = serde_json::to_vec(&root)
+            .ok()
+            .and_then(|bytes| cache.put(&TOKENS_COMPILER, source, contents, &bytes).err());
+        (TokenFile::from_tree(name, &root), unwritten)
+    }
+
+    /// Reads a token file from disk under the given name, its YAML
+    /// through a cache ([`TokenFile::parse_cached`]).
+    pub fn read(
+        name: &str,
+        path: &Path,
+        cache: &Cache,
+    ) -> (Result<TokenFile, Error>, Option<CacheError>) {
+        match std::fs::read_to_string(path) {
+            Ok(text) => TokenFile::parse_cached(name, &text, path, cache),
+            Err(e) => (
+                Err(Error::Io {
+                    file: path.display().to_string(),
+                    message: e.to_string(),
+                }),
+                None,
+            ),
+        }
+    }
+
+    /// A token file from its tree (DTCG, as JSON).
+    fn from_tree(name: &str, root: &Json) -> Result<TokenFile, Error> {
         let obj = root.as_object().ok_or_else(|| Error::Malformed {
             file: name.to_string(),
             path: String::new(),
@@ -157,6 +220,13 @@ impl TokenFile {
     pub fn to_json_pretty(&self) -> String {
         serde_json::to_string_pretty(&self.to_json()).unwrap_or_default()
     }
+}
+
+fn json(name: &str, bytes: &[u8]) -> Result<Json, Error> {
+    serde_json::from_slice(bytes).map_err(|e| Error::Json {
+        file: name.to_string(),
+        message: e.to_string(),
+    })
 }
 
 fn walk(

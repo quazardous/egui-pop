@@ -12,6 +12,23 @@ publishes.
 
 ### Added
 
+- A cache of compiled files (egui-pop-tokens, egui-pop-api,
+  egui-pop-platform): `egui_pop_tokens::cache`, a general store keyed by
+  a source's path, a hash of its contents and the compiler's version
+  (`Cache`, `Compiler`, `Cache::get`, `Cache::put`, `CacheError`), in
+  the platform's cache directory under the application's id
+  (`Cache::for_app`, `cache::platform_dir`, `dirs::cache_dir`), or
+  elsewhere (`Cache::at`), or off (`Cache::off`, the default until the
+  application calls `cache::set_default`). User kits and themes read at
+  run time compile their YAML through it, never next to it: a kit read
+  twice parses its YAML once (`KitData::load_with`,
+  `kit::discover_with`, `TokenFile::parse_cached`, `TokenFile::read`,
+  the new `Themes::add_path` and `Themes::add_path_with`,
+  `AppBuilder::cache` for the user's kits). An edited file or a new
+  egui-pop compiles again; a cache that cannot be written reads the
+  file uncached and says so (`kit::Problem::NotCached`,
+  `Warning::NotCached`). A file that cannot be read is the new
+  `Error::Io`. Closes #38.
 - One writer per value (egui-pop-model): a path's descriptor says who
   may write it besides its owner (`Writers`: `Owner`, the default,
   `Also(...)`, `Any`; `Descriptor::writers`, `Descriptor::any_writer`).

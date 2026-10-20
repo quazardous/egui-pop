@@ -10,6 +10,8 @@ use std::fmt;
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub enum Error {
+    /// The file cannot be read from disk.
+    Io { file: String, message: String },
     /// The file is not valid JSON.
     Json { file: String, message: String },
     /// The file is not valid YAML, or holds a value YAML misreads (an
@@ -83,6 +85,7 @@ impl Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Error::Io { file, message } => write!(f, "`{file}`: cannot be read: {message}"),
             Error::Json { file, message } => write!(f, "`{file}`: not valid JSON: {message}"),
             Error::Yaml { file, message } => write!(f, "`{file}`: not valid YAML: {message}"),
             Error::Malformed { file, path, reason } => {

@@ -161,6 +161,10 @@ pub enum Warning {
     /// The base theme (`$extends`) is not known yet: the tokens were not
     /// checked; resolving the theme reports what is wrong.
     Unchecked { base: String },
+    /// The file's compiled form could not be kept in the cache
+    /// ([`crate::cache`]): it was read uncached, and is compiled again
+    /// next time.
+    NotCached { file: String, reason: String },
 }
 
 impl Warning {
@@ -172,7 +176,7 @@ impl Warning {
             | Warning::Unknown { path, .. }
             | Warning::Invalid { path, .. } => Some(path),
             Warning::Renamed { from, .. } => Some(from),
-            Warning::Unchecked { .. } => None,
+            Warning::Unchecked { .. } | Warning::NotCached { .. } => None,
         }
     }
 
@@ -217,6 +221,9 @@ impl fmt::Display for Warning {
                 f,
                 "no theme `{base}` yet: the tokens were not checked against it"
             ),
+            Warning::NotCached { file, reason } => {
+                write!(f, "`{file}`: read uncached: {reason}")
+            }
         }
     }
 }

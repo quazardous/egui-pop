@@ -3,10 +3,12 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
+use std::path::Path;
 use std::str::FromStr;
 
 use serde_json::{Map, Value as Json, json};
 
+use crate::cache::Cache;
 use crate::contract::{Tier, contract, required};
 use crate::file::{RawToken, TokenFile, alias_target};
 use crate::{Color, Error, Value, Warning};
@@ -512,6 +514,36 @@ impl Themes {
     pub fn add_text(&mut self, name: &str, text: &str) -> Result<Vec<Warning>, Error> {
         let (file, warnings) = self.check_file(TokenFile::parse(name, text)?);
         self.add(file);
+        Ok(warnings)
+    }
+
+    /// Reads a theme file from disk (a user's theme) and adds it under
+    /// `name`, as [`Themes::add_text`] does. Its YAML goes through the
+    /// default cache ([`crate::cache`]): read again unchanged, it is not
+    /// parsed again, and the loading rule still runs, so its warnings
+    /// are the same on a hit.
+    pub fn add_path(&mut self, name: &str, path: &Path) -> Result<Vec<Warning>, Error> {
+        self.add_path_with(name, path, &crate::cache::default())
+    }
+
+    /// [`Themes::add_path`] through a given cache. An entry that cannot
+    /// be written is a [`Warning::NotCached`]: the file is read all the
+    /// same.
+    pub fn add_path_with(
+        &mut self,
+        name: &str,
+        path: &Path,
+        cache: &Cache,
+    ) -> Result<Vec<Warning>, Error> {
+        let (file, unwritten) = TokenFile::read(name, path, cache);
+        let (file, mut warnings) = self.check_file(file?);
+        self.add(file);
+        if let Some(e) = unwritten {
+            warnings.push(Warning::NotCached {
+                file: path.display().to_string(),
+                reason: e.to_string(),
+            });
+        }
         Ok(warnings)
     }
 

@@ -2057,6 +2057,7 @@ pub struct AppBuilder {
     panel_alignment: crate::workbench::PanelAlignment,
     kits: Vec<KitSource>,
     user_kits: bool,
+    cache: Option<egui_pop_core::tokens::cache::Cache>,
     writer_check: Option<egui_pop_model::values::WriterCheck>,
 }
 
@@ -2125,6 +2126,7 @@ impl AppBuilder {
             panel_alignment: crate::workbench::PanelAlignment::Justify,
             kits: Vec::new(),
             user_kits: false,
+            cache: None,
         }
     }
 
@@ -2278,10 +2280,22 @@ impl AppBuilder {
     /// Adds the user's kits too: the data-only kit folders under
     /// `<persist directory>/kits` (`egui_pop_tokens::kit::discover`), read
     /// when the application is built, after the application's own (a
-    /// user kit of the same name replaces it). Without a persistence
-    /// directory there are none.
+    /// user kit of the same name replaces it), their YAML through the
+    /// cache (`AppBuilder::cache`). Without a persistence directory there
+    /// are none.
     pub fn user_kits(mut self, on: bool) -> Self {
         self.user_kits = on;
+        self
+    }
+
+    /// Where the files read at run time (the user's kits) are kept
+    /// compiled (`egui_pop_tokens::cache`): `Cache::for_app(id)` for the
+    /// platform's cache directory under the application's id,
+    /// `Cache::at(dir)` elsewhere, `Cache::off()` for none. Not given,
+    /// it is the process's default (`cache::set_default`), off until the
+    /// application sets one.
+    pub fn cache(mut self, cache: egui_pop_core::tokens::cache::Cache) -> Self {
+        self.cache = Some(cache);
         self
     }
 
@@ -2397,8 +2411,11 @@ impl AppBuilder {
             && let Some(p) = &app.persist
         {
             let dir = p.dir().join(egui_pop_core::tokens::kit::USER_KITS_DIR);
+            let cache = self
+                .cache
+                .unwrap_or_else(egui_pop_core::tokens::cache::default);
             kits.extend(
-                egui_pop_core::tokens::kit::discover(&dir)
+                egui_pop_core::tokens::kit::discover_with(&dir, &cache)
                     .into_iter()
                     .map(KitSource::new),
             );
