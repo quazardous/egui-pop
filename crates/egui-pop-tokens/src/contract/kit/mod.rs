@@ -62,6 +62,7 @@ mod spinner;
 mod status_indicator;
 mod tab;
 mod tab_bar;
+mod tab_preview;
 mod table_header_cell;
 mod table_stripe;
 mod tag_chip;
@@ -139,6 +140,7 @@ pub(super) const GROUPS: &[&[Required]] = &[
     status_indicator::CONTRACT,
     tab::CONTRACT,
     tab_bar::CONTRACT,
+    tab_preview::CONTRACT,
     table_header_cell::CONTRACT,
     table_stripe::CONTRACT,
     tag_chip::CONTRACT,

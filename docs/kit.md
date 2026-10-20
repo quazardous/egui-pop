@@ -280,14 +280,21 @@ compiled at install.
 
 ## Built so far
 
-- **Tabs of the workbench** (`tab`, `tab-bar`). egui_dock keeps the
+- **Tabs of the workbench** (`tab`, `tab-bar`, `tab-preview`). egui_dock keeps the
   layout, docking, drag and drop and the tabs' input; its own tab painting
   is made invisible, each tab is as wide as the kit measures it
   (`TabViewer::tab_style_override`), and the kit paints the bars and tabs
   over what egui_dock laid out. Shapes shipped: `box` (joined to its
   panel, the default, close to egui_dock's own look), `underline`, and
   `plain` for the bar. The gallery's `workbench-kit-underline` snapshot
-  is a theme that switches to `underline` with data only.
+  is a theme that switches to `underline` with data only. A tab dragged
+  over another area leaves a ghost where it would land, the
+  `tab-preview` component at rest, [based on](#components-based-on-another)
+  `tab` (its handler, sizes and radius, so a kit restyling its tabs
+  restyles their ghost), its fill the selected tab's (`surface.overlay`)
+  at 60 % alpha, its border `accent.default`. The
+  vocabulary has no dashed border: a kit wanting one names a handler of
+  its own.
 - **The title bar and window buttons** (`title-bar`, `window-button`,
   `window-close`). The title goes where `title-bar.align` says: `centre`
   (the default) or `start`, after the leading items (the gallery's

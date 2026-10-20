@@ -2928,6 +2928,11 @@ impl App {
                         "area": h.area,
                         "rect": [h.rect.min.x, h.rect.min.y, h.rect.max.x, h.rect.max.y],
                         "refusal": h.refusal,
+                        "preview": h.preview.as_ref().map(|p| json!({
+                            "area": p.area,
+                            "index": p.index,
+                            "rect": [p.rect.min.x, p.rect.min.y, p.rect.max.x, p.rect.max.y],
+                        })),
                     })),
                 })
             }),

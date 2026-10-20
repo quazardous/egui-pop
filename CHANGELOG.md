@@ -46,6 +46,17 @@ publishes.
   `egui-pop-tokens`, `glyph.window-exit-fullscreen`, the
   `exit-fullscreen` icon by default): the mark of the title bar's
   button leaving full screen.
+
+- Kit component `tab-preview` (`egui-pop-tokens`, `egui-pop-core`): the
+  ghost of a dragged tab where it would land. Based on `tab` (its
+  handler, sizes and radius), its fill is the selected tab's at 60 %
+  alpha, its border the accent.
+- Workbench (`egui-pop-api`): a tab dragged over another area it may go
+  to, or a palette over an area it docks in, shows a ghost of its tab
+  (`tab-preview`) after the last tab of that area's tab bar, where the
+  drop puts it; none when the drop is refused. `DropHint::preview` and
+  the `workbench` collector's `drop_hint.preview` give its area, index
+  and rect.
 - Micro-indicators (`egui-pop-core`, `core::indicator`), drawn by the
   kit like every component: dots and LEDs (off, on, busy, warning,
   error, each a shape of its own), count badges capped at `99+` (zero

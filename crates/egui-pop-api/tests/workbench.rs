@@ -229,6 +229,7 @@ fn the_drop_hint_is_published_with_its_rect_and_name() {
     assert_eq!(hint.area, "start_side");
     assert!(hint.refusal.is_some(), "the log stays in the bottom panel");
     assert!(hint.rect.contains(to));
+    assert!(hint.preview.is_none(), "no ghost tab where it may not go");
     let rects = app.overlay_rects();
     let shown = rects
         .iter()
@@ -242,6 +243,7 @@ fn the_drop_hint_is_published_with_its_rect_and_name() {
         "drop:demo.log:start_side"
     );
     assert!(snap["workbench"]["rects"]["bottom"].is_array());
+    assert!(snap["workbench"]["drop_hint"]["preview"].is_null());
     pointer(
         &mut h,
         egui::Event::PointerButton {
@@ -254,6 +256,76 @@ fn the_drop_hint_is_published_with_its_rect_and_name() {
     h.run();
     assert!(app.drop_hint().is_none());
     assert_eq!(area_of(&h, &LOG), Some(Area::Bottom), "refused");
+}
+
+#[test]
+fn a_tab_dragged_over_another_area_shows_its_ghost_at_the_end_of_its_tab_bar() {
+    let mut h = harness(builder(false));
+    let app = h.state().handle().clone();
+    // Drag the Tree tab (start side) over the bottom area, which holds
+    // the Log tab.
+    let from = h.get_by_label("Tree").rect().center();
+    let log = h.get_by_label("Log").rect();
+    let to = h.get_by_label("log body").rect().center();
+    let pointer = |h: &mut Harness<'_, App>, e: egui::Event| {
+        h.input_mut().events.push(e);
+        h.step();
+    };
+    pointer(&mut h, egui::Event::PointerMoved(from));
+    pointer(
+        &mut h,
+        egui::Event::PointerButton {
+            pos: from,
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: egui::Modifiers::NONE,
+        },
+    );
+    for i in 1..=8 {
+        let at = from + (to - from) * (i as f32 / 8.0);
+        pointer(&mut h, egui::Event::PointerMoved(at));
+    }
+    h.step();
+    let hint = app.drop_hint().expect("a hint while dragging");
+    assert_eq!((hint.panel.clone(), hint.area), (TREE, "bottom"));
+    assert!(hint.refusal.is_none());
+    let ghost = hint.preview.expect("the tab's ghost where it would land");
+    assert_eq!(ghost.area, "bottom");
+    assert_eq!(ghost.index, 1, "after the Log tab");
+    assert!(ghost.rect.left() >= log.right() - 0.5, "after the last tab");
+    assert!((ghost.rect.top() - log.top()).abs() < 0.5, "in the tab bar");
+    assert!((ghost.rect.height() - log.height()).abs() < 0.5);
+    assert!(hint.rect.contains_rect(ghost.rect));
+    let snap = app.debug_snapshot();
+    let preview = &snap["workbench"]["drop_hint"]["preview"];
+    assert_eq!(preview["area"], "bottom");
+    assert_eq!(preview["index"], 1);
+    assert_eq!(
+        preview["rect"][0].as_f64(),
+        Some(f64::from(ghost.rect.min.x))
+    );
+    pointer(
+        &mut h,
+        egui::Event::PointerButton {
+            pos: to,
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: egui::Modifiers::NONE,
+        },
+    );
+    h.run();
+    assert!(app.drop_hint().is_none());
+    assert_eq!(area_of(&h, &TREE), Some(Area::Bottom), "dropped there");
+    let bottom = app
+        .layout()
+        .areas
+        .into_iter()
+        .find(|(a, _)| *a == Area::Bottom)
+        .unwrap();
+    assert!(
+        matches!(&bottom.1, Node::Tabs { panels, .. } if panels.last() == Some(&TREE)),
+        "where the ghost was: last"
+    );
 }
 
 /// A host keeping one layout per workspace, or none.

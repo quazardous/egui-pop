@@ -246,6 +246,32 @@ pub struct DropHint {
     /// Why the panel may not go there, as the hint says it; `None` when
     /// it may.
     pub refusal: Option<String>,
+    /// The ghost of the panel's tab where it would land; `None` when the
+    /// drop is refused.
+    pub preview: Option<TabPreview>,
+}
+
+/// Where a drop hint draws the dragged panel's tab (the kit's
+/// `tab-preview`): in the target area's tab bar, after its tabs, where a
+/// drop on the area puts it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TabPreview {
+    /// The area (`area_name`).
+    pub area: &'static str,
+    /// The tab's index among the tabs it joins (their count: a drop on
+    /// an area appends to its first tabs).
+    pub index: usize,
+    /// Where the ghost is drawn, in points.
+    pub rect: Rect,
+}
+
+/// An area's first tab bar as drawn last frame, where a drop on the area
+/// adds its tab: the bar, the right edge of its last tab, its tab count.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TabBar {
+    pub rect: Rect,
+    pub end: f32,
+    pub tabs: usize,
 }
 
 impl DropHint {
@@ -433,6 +459,9 @@ pub(crate) struct Workbench {
     docks: BTreeMap<Area, DockState<PanelId>>,
     /// Where each area was drawn last frame.
     pub rects: BTreeMap<Area, Rect>,
+    /// Each area's first tab bar as drawn last frame (none for an area
+    /// drawn bare).
+    pub bars: BTreeMap<Area, TabBar>,
     /// The areas' rectangle.
     pub content: Rect,
     /// A tab being dragged: its panel, its area, the pointer.
@@ -465,6 +494,7 @@ impl Default for Workbench {
             layout: Layout::default(),
             docks: BTreeMap::new(),
             rects: BTreeMap::new(),
+            bars: BTreeMap::new(),
             content: Rect::NOTHING,
             dragging: None,
             hint: None,
@@ -1052,6 +1082,7 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
         wb.project();
         wb.content = ui.max_rect();
         wb.rects.clear();
+        wb.bars.clear();
         let sizes: BTreeMap<Area, (f32, f32)> = Area::ALL
             .into_iter()
             .map(|a| {
@@ -1429,8 +1460,43 @@ fn draw_area(app: &AppHandle, ui: &mut Ui, area: Area) {
         let seen = std::mem::take(&mut viewer.seen);
         paint_tabs(ui, &dock, &kit, &cache.tabs, &seen);
         ctx.data_mut(|d| d.insert_temp(cache_id, cache));
+        if let Some(bar) = first_bar(ui, &dock, &kit, &seen) {
+            app.workbench_mut().bars.insert(area, bar);
+        }
     }
     app.workbench_mut().put_dock(area, dock);
+}
+
+/// The tab bar of an area's first tabs (where `Layout::place` adds a
+/// panel), as drawn this pass: `None` when hidden.
+fn first_bar(ui: &Ui, dock: &DockState<PanelId>, kit: &Kit, seen: &[SeenTab]) -> Option<TabBar> {
+    let tree = dock.main_surface();
+    let mut at = NodeIndex::root();
+    while at.0 < tree.len() && tree[at].is_parent() {
+        at = at.left();
+    }
+    if at.0 >= tree.len() {
+        return None;
+    }
+    let leaf = tree[at].get_leaf()?;
+    if leaf.tabs.is_empty() || leaf.tab_bar_hidden {
+        return None;
+    }
+    let height = kit.tab_bar.data.height.max(kit.tab.data.height);
+    let rect = Rect::from_min_size(leaf.rect.min, egui::vec2(leaf.rect.width(), height));
+    // The right edge of its last tab in the bar (a dragged tab floats on
+    // a layer of its own); tabs scrolled out end at the bar's right.
+    let end = seen
+        .iter()
+        .filter(|t| t.layer == ui.layer_id() && leaf.tabs.contains(&t.panel))
+        .map(|t| t.rect.right())
+        .fold(rect.left(), f32::max)
+        .min(rect.right());
+    Some(TabBar {
+        rect,
+        end,
+        tabs: leaf.tabs.len(),
+    })
 }
 
 struct Viewer<'a> {
@@ -1775,7 +1841,7 @@ fn follow_drag(app: &AppHandle, ctx: &egui::Context) {
 }
 
 /// While a tab is dragged over another area, shows whether it may go
-/// there.
+/// there and, when it may, the ghost of its tab where it would land.
 fn drop_hint(app: &AppHandle, ctx: &egui::Context) {
     let mut wb = app.workbench_mut();
     wb.hint = None;
@@ -1795,15 +1861,40 @@ fn drop_hint(app: &AppHandle, ctx: &egui::Context) {
         return;
     };
     let rect = wb.hint_rect(to);
+    let bar = wb.bars.get(&to).copied();
+    let joined = bar.map_or_else(|| wb.panels_in(to).len(), |b| b.tabs);
+    let content = wb.content;
+    drop(wb);
     let title = strings::panel_title(ctx, spec.id.as_str(), &spec.title);
     let why = refusal(ctx, &spec, &title, to);
-    wb.hint = Some(DropHint {
+    let kit = Kit::of(ctx);
+    // The ghost: the panel's tab, laid out once per drag (a cache of its
+    // own, as the areas' tabs are), where a drop puts it.
+    let ghost = if why.is_none() {
+        let cache_id = Id::new("egui_pop.workbench.ghost");
+        let mut cache =
+            ctx.data_mut(|d| std::mem::take(d.get_temp_mut_or_default::<TabCache>(cache_id)));
+        cache.prepare(app, ctx, &kit, std::slice::from_ref(&panel));
+        let prep = cache.tabs.get(&panel).cloned();
+        ctx.data_mut(|d| d.insert_temp(cache_id, cache));
+        prep.map(|p| {
+            let at = ghost_rect(&kit, bar, rect, content, p.width);
+            (p, at)
+        })
+    } else {
+        None
+    };
+    app.workbench_mut().hint = Some(DropHint {
         panel,
         area: area_name(to),
         rect,
         refusal: why.clone(),
+        preview: ghost.as_ref().map(|(_, at)| TabPreview {
+            area: area_name(to),
+            index: joined,
+            rect: *at,
+        }),
     });
-    drop(wb);
     // The kit's `dock-preview`: at rest where the panel may go, disabled
     // with its label saying why where it may not.
     let t = egui_pop_core::theme::Tokens::of(ctx);
@@ -1825,5 +1916,37 @@ fn drop_hint(app: &AppHandle, ctx: &egui::Context) {
         painter: &painter,
         ppp: ctx.pixels_per_point(),
     };
-    Kit::of(ctx).dock_preview.paint_part(&cx, &part);
+    kit.dock_preview.paint_part(&cx, &part);
+    // Over it, the kit's `tab-preview`.
+    if let Some((prep, at)) = &ghost {
+        kit.tab_preview.paint_part(
+            &cx,
+            &Part {
+                rect: *at,
+                room: *at,
+                state: State::REST,
+                label: Some(&prep.label),
+            },
+        );
+    }
+}
+
+/// Where a dragged tab's ghost goes: after the last tab of the area's
+/// first tab bar (kept inside the bar), else, for an area drawn bare or
+/// closed, at the top-left of where the hint is (kept inside the areas).
+fn ghost_rect(kit: &Kit, bar: Option<TabBar>, hint: Rect, content: Rect, width: f32) -> Rect {
+    let (row, start) = match bar {
+        Some(b) => (b.rect, b.end),
+        None => {
+            let height = kit.tab_bar.data.height.max(kit.tab.data.height);
+            let row = Rect::from_min_size(hint.min, egui::vec2(hint.width(), height));
+            let room = if content.is_positive() { content } else { row };
+            (
+                Rect::from_x_y_ranges(room.x_range(), row.y_range()),
+                hint.left(),
+            )
+        }
+    };
+    let x = start.min(row.right() - width).max(row.left());
+    Rect::from_min_size(egui::pos2(x, row.top()), egui::vec2(width, row.height()))
 }

@@ -1111,6 +1111,71 @@ fn the_workbench_page_opens_moves_and_vetoes_panels() {
 }
 
 #[test]
+fn the_workbench_page_shows_a_dragged_tab_s_ghost_where_it_would_land() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "workbench"));
+    h.run();
+    h.get_by_label("Open the demonstration panels").click();
+    h.run();
+    h.run();
+    let app = h.state().app.handle().clone();
+    let notes = egui_pop::model::ids::PanelId::from_static("gallery.notes");
+    // The tabs (buttons), not the placement table's rows.
+    let tab = |h: &Harness<'_, Gallery>, name: &str| {
+        h.get_by_role_and_label(egui::accesskit::Role::Button, name)
+            .rect()
+    };
+    let properties = tab(&h, "Properties");
+    let notes_tab = tab(&h, "Notes");
+    // The Notes tab, from the bottom panel over the end side bar, held
+    // there.
+    let a = notes_tab.center();
+    let b = h
+        .get_by_label("Properties of the selection.")
+        .rect()
+        .center();
+    // Event by event, a frame each, as egui_dock follows a tab's drag.
+    let pointer = |h: &mut Harness<'_, Gallery>, e: egui::Event| {
+        h.input_mut().events.push(e);
+        h.step();
+    };
+    let button = |pos, pressed| egui::Event::PointerButton {
+        pos,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: egui::Modifiers::NONE,
+    };
+    pointer(&mut h, egui::Event::PointerMoved(a));
+    pointer(&mut h, button(a, true));
+    for i in 1..=8 {
+        pointer(
+            &mut h,
+            egui::Event::PointerMoved(a + (b - a) * (i as f32 / 8.0)),
+        );
+    }
+    h.step();
+    let hint = app.drop_hint().expect("a hint while dragging");
+    assert_eq!((hint.panel.clone(), hint.area), (notes.clone(), "end_side"));
+    let ghost = hint.preview.expect("the tab's ghost");
+    assert_eq!(
+        (ghost.area, ghost.index),
+        ("end_side", 2),
+        "after Inspector and Properties"
+    );
+    assert!(ghost.rect.left() >= properties.right() - 0.5);
+    assert!((ghost.rect.top() - properties.top()).abs() < 0.5);
+    let snap = app.debug_snapshot();
+    assert_eq!(snap["workbench"]["drop_hint"]["preview"]["index"], 2);
+    h.snapshot("workbench-drag-pop-dark");
+    pointer(&mut h, button(b, false));
+    h.run();
+    assert!(app.drop_hint().is_none());
+    assert_eq!(
+        app.layout().area_of(&notes),
+        Some(egui_pop::model::panels::Area::EndSide)
+    );
+}
+
+#[test]
 fn the_palettes_page_floats_a_toolbox_a_colour_palette_and_a_navigator() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "palettes"));
     h.run();
@@ -1145,6 +1210,10 @@ fn the_palettes_page_floats_a_toolbox_a_colour_palette_and_a_navigator() {
         h.hover_at(a + (b - a) * (i as f32 / 4.0));
         h.run();
     }
+    // Before the drop, the ghost of its tab where it would land.
+    let hint = app.drop_hint().expect("a hint while dragging");
+    let ghost = hint.preview.expect("a ghost tab where it may dock");
+    assert_eq!(ghost.area, "end_side");
     h.drop_at(b);
     h.run();
     h.run();

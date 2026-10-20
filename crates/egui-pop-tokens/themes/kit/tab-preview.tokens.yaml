@@ -1,0 +1,22 @@
+$description: "The `tab-preview` component of the default kit (docs/kit.md), layered into pop-dark."
+tab-preview:
+  $description: "The ghost of a dragged tab where it would land in another area's tab bar, drawn at rest. Based on `tab`: its handler, sizes and radius are the tab's, so restyling the tab restyles its ghost; the selected look faded, an accent border."
+  based-on:
+    $type: "string"
+    $value: "tab"
+  rest:
+    fill:
+      $type: "color"
+      $value: "{surface.overlay}"
+      $extensions: {org.egui-pop.alpha: 0.6}
+      $description: "The selected tab's fill, faded."
+    border-color:
+      $type: "color"
+      $value: "{accent.default}"
+    text:
+      $type: "color"
+      $value: "{text.default}"
+      $extensions: {org.egui-pop.alpha: 0.8}
+    indicator-color:
+      $type: "color"
+      $value: "{accent.default}"

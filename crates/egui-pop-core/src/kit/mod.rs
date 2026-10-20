@@ -752,6 +752,9 @@ components! {
     tab: "tab" => "box",
     /// The bar behind a row of tabs.
     tab_bar: "tab-bar" => "plain",
+    /// The ghost of a dragged tab where it would land in another area's
+    /// tab bar, drawn at rest; based on `tab` (its handler and sizes).
+    tab_preview: "tab-preview" => "box",
     /// A column's header in a data table: `hover` when the column sorts,
     /// `selected` when the table is sorted by it.
     table_header_cell: "table-header-cell" => "box",
@@ -1446,6 +1449,21 @@ mod tests {
         let refused = kit.dock_preview.style(State::DISABLED);
         assert_eq!(refused.border_color, t.status.danger);
         assert_eq!(kit.dock_preview.data.opacity, 0.5);
+        // A dragged tab's ghost: the tab's handler and size, the selected
+        // fill faded, an accent border.
+        let ghost = kit.tab_preview.style(State::REST);
+        assert_eq!(kit.tab_preview.shape, kit.tab.shape);
+        assert_eq!(kit.tab_preview.data.height, kit.tab.data.height);
+        assert_eq!(kit.tab_preview.data.padding_x, kit.tab.data.padding_x);
+        assert_eq!(ghost.border_color, t.accent.default);
+        let selected = kit.tab.style(State::SELECTED).fill;
+        let (g, s) = (
+            ghost.fill.to_srgba_unmultiplied(),
+            selected.to_srgba_unmultiplied(),
+        );
+        // The same colour, give or take the premultiplied rounding.
+        assert!((0..3).all(|i| g[i].abs_diff(s[i]) <= 1), "{g:?} {s:?}");
+        assert!(ghost.fill.a() < selected.a());
     }
 
     #[test]
@@ -1696,6 +1714,7 @@ mod tests {
         );
         let kit = install(&ctx, &t);
         assert_eq!(kit.tab.shape, "dot");
+        assert_eq!(kit.tab_preview.shape, "dot", "the ghost follows the tab");
         assert!(kit.problems.is_empty());
         assert_eq!(
             kit.tab.measure(Vec2::new(30.0, 10.0)),

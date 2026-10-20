@@ -65,6 +65,8 @@ pub(super) fn built_in(shapes: &mut Shapes) {
     }
     shapes.insert("tab", "box", Arc::new(tab::BoxTab));
     shapes.insert("tab", "underline", Arc::new(tab::UnderlineTab));
+    // Its default; any other tab handler through `based-on`.
+    shapes.insert("tab-preview", "box", Arc::new(tab::BoxTab));
     shapes.insert("tree-drop-marker", "outline", Arc::new(outline::Outline));
     shapes.insert(
         "window-button",

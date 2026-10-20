@@ -78,12 +78,24 @@ Each panel gets `<id>.focus` and `<id>.toggle` commands. The layout
 changes through the steps `workbench.move`, `workbench.show`,
 `workbench.hide`, `workbench.focus`, `workbench.fold`,
 `workbench.place` and `workbench.zen` (`egui_pop::api::workbench`). A tab dragged onto another area moves
-there when its rules allow it; otherwise the drop hint says why. The
-hint is published like an overlay: `AppHandle::drop_hint` (panel,
-area, rect, refusal), `overlay_rects` (kind `DropHint`, named
-`drop:<panel>:<area>`), and the debug bridge's `workbench` collector,
-which also shows the layout, each area's rect, the focused panel and
-the tab being dragged.
+there when its rules allow it; otherwise the drop hint says why. Over
+an area it may go to, the hint (the kit's `dock-preview`) carries a
+ghost of the dragged tab (the kit's `tab-preview`, with the tab's title
+and width as laid out once per drag) where the drop puts it: after the
+last tab of the area's first tab bar, or at the top of an area drawn
+bare or closed. A refused drop shows no ghost. The tabs already there
+are not pushed aside, and the ghost is always at the end: egui_dock
+only follows a drag within its own area, so it gives no insertion
+index for a tab coming from another one, and a drop on an area appends
+to its first tabs (making room live and dropping between tabs are
+possible follow-ups). A palette dragged over an area it docks in gets
+the same ghost. The hint is published like an overlay:
+`AppHandle::drop_hint` (panel, area, rect, refusal, and `preview`, the
+ghost's area, index among the tabs it joins and rect), `overlay_rects`
+(kind `DropHint`, named `drop:<panel>:<area>`), and the debug bridge's
+`workbench` collector (`drop_hint.preview: {area, index, rect}`), which
+also shows the layout, each area's rect, the focused panel and the tab
+being dragged.
 
 A side area lies **beside** the centre, taking its room, or **over**
 it (`workbench.place`, `{ "area", "placement": "over" }`;
