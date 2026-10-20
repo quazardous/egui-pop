@@ -76,6 +76,10 @@ pub struct ThemeDraft {
     overrides: BTreeMap<String, Json>,
     undo: Vec<TokenEdit>,
     redo: Vec<TokenEdit>,
+    /// Per edit of `undo` and `redo`: whether it goes with the edit made
+    /// just before it, as one change ([`ThemeDraft::record_joined`]).
+    joined_undo: Vec<bool>,
+    joined_redo: Vec<bool>,
 }
 
 impl Default for ThemeDraft {
@@ -92,6 +96,8 @@ impl ThemeDraft {
             overrides: BTreeMap::new(),
             undo: Vec::new(),
             redo: Vec::new(),
+            joined_undo: Vec::new(),
+            joined_redo: Vec::new(),
         }
     }
 
@@ -166,15 +172,95 @@ impl ThemeDraft {
     /// Records an edit already shown (by [`ThemeDraft::preview`]): it
     /// becomes the next to undo, and nothing is left to redo.
     pub fn record(&mut self, edit: TokenEdit) {
+        self.push(edit, false);
+    }
+
+    /// Records an edit as part of the change recorded just before it (a
+    /// palette generated at once): [`ThemeDraft::undo_group`] and
+    /// [`ThemeDraft::redo_group`] count them as one.
+    pub fn record_joined(&mut self, edit: TokenEdit) {
+        let joined = !self.undo.is_empty();
+        self.push(edit, joined);
+    }
+
+    fn push(&mut self, edit: TokenEdit, joined: bool) {
         self.preview(&edit.path.clone(), edit.to.clone());
         self.undo.push(edit);
+        self.joined_undo.push(joined);
         self.redo.clear();
+        self.joined_redo.clear();
+    }
+
+    /// How many edits the next undo takes back as one change: 1, or the
+    /// edits recorded together ([`ThemeDraft::record_joined`]); 0 when
+    /// there is nothing to undo.
+    pub fn undo_group(&self) -> usize {
+        if self.undo.is_empty() {
+            return 0;
+        }
+        1 + self.joined_undo.iter().rev().take_while(|j| **j).count()
+    }
+
+    /// How many edits the next redo makes again as one change.
+    pub fn redo_group(&self) -> usize {
+        if self.redo.is_empty() {
+            return 0;
+        }
+        1 + self
+            .joined_redo
+            .iter()
+            .rev()
+            .skip(1)
+            .take_while(|j| **j)
+            .count()
     }
 
     /// Makes an edit and records it (the same as [`ThemeDraft::record`],
     /// named for edits not previewed first).
     pub fn apply(&mut self, edit: TokenEdit) {
         self.record(edit);
+    }
+
+    /// The edits writing a generated scale over one of the base theme's
+    /// scales (`blue`, `gray`): its steps 1 to 12 and its `contrast`,
+    /// those the base has, each checked as [`ThemeDraft::edit`] does,
+    /// those already at that value left out. Record them with
+    /// [`ThemeDraft::record`] then [`ThemeDraft::record_joined`] so they
+    /// undo as one change.
+    ///
+    /// ```
+    /// use egui_pop_tokens::palette::{Ramp, Scheme};
+    /// use egui_pop_tokens::{Color, ThemeDraft, Themes};
+    ///
+    /// let themes = Themes::default();
+    /// let mut draft = ThemeDraft::new("pop-light");
+    /// let ramp = Ramp::new(Color::from_hex("#8e44ad").unwrap(), Scheme::Light);
+    /// let edits = draft.scale_edits(&themes, "blue", &ramp).unwrap();
+    /// assert_eq!(edits.len(), 13);
+    /// for (i, e) in edits.into_iter().enumerate() {
+    ///     if i == 0 { draft.record(e) } else { draft.record_joined(e) }
+    /// }
+    /// assert_eq!(draft.undo_group(), 13);
+    /// ```
+    pub fn scale_edits(
+        &self,
+        themes: &Themes,
+        scale: &str,
+        ramp: &crate::palette::Ramp,
+    ) -> Result<Vec<TokenEdit>, String> {
+        if !base_has(themes, &self.base, &format!("{scale}.9")) {
+            return Err(format!("`{}` has no colour scale `{scale}`", self.base));
+        }
+        let mut edits = Vec::new();
+        for (path, value) in ramp.tokens(scale) {
+            if !base_has(themes, &self.base, &path) {
+                continue;
+            }
+            if let Some(e) = self.edit(themes, &path, Some(value))? {
+                edits.push(e);
+            }
+        }
+        Ok(edits)
     }
 
     /// The edit an undo would make (the last one's inverse).
@@ -190,17 +276,21 @@ impl ThemeDraft {
     /// Takes the last edit back; returns the edit made (its inverse).
     pub fn undo(&mut self) -> Option<TokenEdit> {
         let edit = self.undo.pop()?;
+        let joined = self.joined_undo.pop().unwrap_or(false);
         self.preview(&edit.path, edit.from.clone());
         let made = edit.inverse();
         self.redo.push(edit);
+        self.joined_redo.push(joined);
         Some(made)
     }
 
     /// Makes the last undone edit again; returns it.
     pub fn redo(&mut self) -> Option<TokenEdit> {
         let edit = self.redo.pop()?;
+        let joined = self.joined_redo.pop().unwrap_or(false);
         self.preview(&edit.path, edit.to.clone());
         self.undo.push(edit.clone());
+        self.joined_undo.push(joined);
         Some(edit)
     }
 
@@ -498,5 +588,49 @@ mod tests {
                 "{warnings:?}"
             );
         }
+    }
+
+    #[test]
+    fn joined_edits_undo_and_redo_as_one_change() {
+        let themes = Themes::default();
+        let mut d = ThemeDraft::new("pop-dark");
+        let e =
+            |d: &ThemeDraft, p: &str, v: &str| d.edit(&themes, p, Some(json!(v))).unwrap().unwrap();
+        let first = e(&d, "accent.default", "#102030");
+        d.record(first);
+        let a = e(&d, "gold.1", "#111111");
+        d.record(a);
+        let b = e(&d, "gold.2", "#222222");
+        d.record_joined(b);
+        assert_eq!(d.undo_group(), 2);
+        d.undo();
+        d.undo();
+        assert_eq!(d.undo_group(), 1);
+        assert_eq!(d.redo_group(), 2);
+        d.redo();
+        d.redo();
+        assert_eq!(d.redo_group(), 0);
+        assert_eq!(d.undo_group(), 2);
+        // A new edit after an undo starts a group of its own.
+        d.undo();
+        d.undo();
+        let c = e(&d, "gold.3", "#333333");
+        d.record(c);
+        assert_eq!((d.undo_group(), d.redo_group()), (1, 0));
+    }
+
+    #[test]
+    fn a_scale_is_written_from_a_ramp() {
+        use crate::Color;
+        use crate::palette::{Ramp, Scheme};
+        let themes = Themes::default();
+        let d = ThemeDraft::new("pop-dark");
+        let ramp = Ramp::new(Color::from_hex("#27ae60").unwrap(), Scheme::Dark);
+        let edits = d.scale_edits(&themes, "green", &ramp).unwrap();
+        assert_eq!(edits.len(), 13);
+        assert!(d.scale_edits(&themes, "nope", &ramp).is_err());
+        // The neutral scale has no `contrast`: its twelve steps only.
+        let grey = Ramp::new(Color::from_hex("#808080").unwrap(), Scheme::Dark);
+        assert_eq!(d.scale_edits(&themes, "gray", &grey).unwrap().len(), 12);
     }
 }

@@ -142,6 +142,8 @@ command-terminal-send.description b0c13a2d9a1ef58a
 command-terminal-send.title d5c665cd57bab733
 command-theme-export.description ed8307fd36980b7a
 command-theme-export.title 7cf38f07839745ad
+command-theme-generate.description 4ce12ede56a2f3dd
+command-theme-generate.title 8be691085a29da01
 command-theme-import.description 1733eecc8f9d2a0d
 command-theme-import.title 5b9d70bff2b75df0
 command-theme-read.description 99363fe11256a133
@@ -410,6 +412,10 @@ egui-pop-theme-editor-file 7144a4faf22e0d8b
 egui-pop-theme-editor-file-text 1b5c187c22f2a5cb
 egui-pop-theme-editor-filter 962d67edb046c883
 egui-pop-theme-editor-from 3c2b51eebca413b5
+egui-pop-theme-editor-generate ff50aacb4c261be2
+egui-pop-theme-editor-generate-title 8895afd867384af9
+egui-pop-theme-editor-generate-variant 0cb7e31a51c63b19
+egui-pop-theme-editor-generated 885b219d8d216b50
 egui-pop-theme-editor-import 809bb223e747d022
 egui-pop-theme-editor-imported 9fb529856b85f02e
 egui-pop-theme-editor-missing 2da3da68a1843f3d
@@ -427,6 +433,9 @@ egui-pop-theme-editor-problems ea54400fd43bd9c5
 egui-pop-theme-editor-ratio c1e5d21e31b3d232
 egui-pop-theme-editor-redo ef2842c65cf40641
 egui-pop-theme-editor-reset d950babb161cf8e0
+egui-pop-theme-editor-seed-clamped 47c1b29420024ad2
+egui-pop-theme-editor-seed-hex-of bb7972271ba0fd5c
+egui-pop-theme-editor-seed-of 1b3e9721411643fd
 egui-pop-theme-editor-shape 32055babbae92e41
 egui-pop-theme-editor-skipped 62e92fc7ea4c613a
 egui-pop-theme-editor-start 7117eb73f0293a4d
@@ -586,6 +595,8 @@ plugin-egui-pop-toasts.title cc96fc899cce2811
 plugin-egui-pop-tray.title cca4f6a2e19dbb7c
 plugin-egui-pop-views.title 260aa6928752872b
 plugin-egui-pop-window.title 091ff0a5b7d5ed9d
+setting-appearance-accent-color.description 4268a26b09cc9279
+setting-appearance-accent-color.label fe7bbac67600418d
 setting-appearance-focus-choice-click 7ae7bb8dfc94d7b7
 setting-appearance-focus-choice-hover 96f62e3744de980d
 setting-appearance-focus-choice-system 86937a88d8b574ba

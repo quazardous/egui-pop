@@ -20,6 +20,7 @@ use egui_pop_core::persist::{Persist, PersistError, Writer};
 use egui_pop_core::state;
 use egui_pop_core::strings;
 use egui_pop_core::theme::{self, Counterpart, ThemeSpec, Themes};
+use egui_pop_core::tokens::Color;
 use egui_pop_core::{a11y, fault, focus, lock};
 
 /// The theme was installed in this context.
@@ -201,6 +202,71 @@ impl ThemeService {
         }
     }
 
+    fn accent_key() -> String {
+        format!("settings/{SETTING_ACCENT_COLOR}")
+    }
+
+    /// The [`SETTING_ACCENT_COLOR`] setting's text as stored (`""`: the
+    /// theme's own accent).
+    fn accent_setting(&self) -> String {
+        lock(&self.store)
+            .get(&Self::accent_key())
+            .and_then(|e| e.value.as_text().map(str::to_string))
+            .unwrap_or_default()
+    }
+
+    /// Writes the setting's colour into the spec: a seed accent, or the
+    /// theme's own when it is empty and the accent was a seed. Text that
+    /// is not a colour is reported and changes nothing.
+    fn apply_accent_setting(&self, text: &str) {
+        let text = text.trim();
+        if text.is_empty() {
+            self.update(|spec| {
+                if spec.accent_seed().is_some() {
+                    spec.accent = None;
+                }
+            });
+            return;
+        }
+        match Color::from_hex(text) {
+            Some(seed) => self.update(|spec| *spec = spec.clone().accent_color(seed)),
+            None => log::warn!(
+                target: "egui_pop",
+                "{SETTING_ACCENT_COLOR}: `{text}` is not a #rrggbb colour, the accent is kept"
+            ),
+        }
+    }
+
+    /// The accent's seed colour, when the accent is generated from one
+    /// ([`ThemeSpec::accent_color`]): the [`SETTING_ACCENT_COLOR`]
+    /// setting, or the spec's own.
+    pub fn accent_color(&self) -> Option<Color> {
+        self.spec().accent_seed()
+    }
+
+    /// Generates the accent from a colour, for the theme and its
+    /// counterpart (each its own ramp, light or dark), or goes back to
+    /// the theme's own accent (`None`). Written to the
+    /// [`SETTING_ACCENT_COLOR`] setting and the spec; installed before
+    /// the next frame.
+    pub fn set_accent_color(&self, seed: Option<Color>) {
+        let text = seed.map_or(String::new(), |c| Color { a: 1.0, ..c }.to_hex());
+        let set = Set::new(
+            &Self::accent_key(),
+            Change::To(Value::Text(text.clone())),
+            Origin::User,
+        )
+        .by(&OwnerId::FRAMEWORK)
+        .untracked();
+        if let Err(e) = lock(&self.store).set(set) {
+            log::warn!(target: "egui_pop", "accent colour: {e}");
+        }
+        match seed {
+            Some(seed) => self.update(|spec| *spec = spec.clone().accent_color(seed)),
+            None => self.apply_accent_setting(""),
+        }
+    }
+
     /// The theme's counterpart, its other variant, if it has one.
     pub fn counterpart(&self) -> Option<String> {
         self.themes.counterpart(&self.spec())
@@ -303,6 +369,10 @@ pub fn parse_preference(name: &str) -> Option<egui::ThemePreference> {
 /// `system`, `light`, `dark`.
 pub const SETTING_THEME_PREFERENCE: SettingId =
     SettingId::from_static("appearance.theme_preference");
+
+/// The setting generating the accent from a colour (`#rrggbb`), for
+/// the theme and its counterpart; empty for the theme's own accent.
+pub const SETTING_ACCENT_COLOR: SettingId = SettingId::from_static("appearance.accent_color");
 
 /// The command switching between the theme's light and dark variants.
 pub const CMD_THEME_TOGGLE: CommandId = CommandId::from_static("view.theme.toggle_light_dark");
@@ -2385,6 +2455,7 @@ impl AppBuilder {
             dirty: true,
             started: false,
             installed: None,
+            accent_setting: None,
             preference: None,
             persist: self.persist,
             kits: Vec::new(),
@@ -2539,6 +2610,9 @@ pub struct App {
     dirty: bool,
     started: bool,
     installed: Option<ThemeSpec>,
+    /// The accent colour setting as last seen (it changes the spec's
+    /// accent when it changes).
+    accent_setting: Option<String>,
     /// The light or dark preference applied since the last install.
     preference: Option<egui::ThemePreference>,
     persist: Option<Persist>,
@@ -2795,6 +2869,12 @@ impl App {
             )
             .description(
                 "Which variant of a theme with a light and a dark one is shown: the system's, or always the light or the dark one. A theme without a counterpart keeps its own.",
+            ),
+        )?;
+        ctx.setting(
+            SETTING_ACCENT_COLOR,
+            egui_pop_model::values::Descriptor::text("Accent colour", "").description(
+                "A colour (#rrggbb) the accent is generated from, light and dark: twelve steps whose text and contrast read in the theme. Empty keeps the theme's own accent.",
             ),
         )?;
         ctx.command(
@@ -4070,6 +4150,15 @@ impl App {
 
     fn install_theme(&mut self) {
         let service = self.handle.theme();
+        let accent = service.accent_setting();
+        if self.accent_setting.as_ref() != Some(&accent) {
+            // The setting moved: it decides the accent. Seen for the
+            // first time, an empty one leaves the application's spec.
+            if self.accent_setting.is_some() || !accent.trim().is_empty() {
+                service.apply_accent_setting(&accent);
+            }
+            self.accent_setting = Some(accent);
+        }
         let spec = service.spec();
         let ctx = self.handle.egui();
         let here = THEME_INSTALLED.get(&ctx).unwrap_or(false);

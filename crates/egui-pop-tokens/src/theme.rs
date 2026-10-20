@@ -136,29 +136,6 @@ const BUILT_IN_FILES: &[(&str, &str)] = &[
 /// `custom.contrast`, replacing a scale of that name.
 pub const SEED_SCALE: &str = "custom";
 
-/// What a seed accent's step 9 is drawn on as text, in the contrast
-/// pairs: the surfaces, the editor's background, and what a badge on the
-/// accent is written in.
-const SEED_SURFACES: &[&str] = &[
-    "surface.canvas",
-    "surface.panel",
-    "surface.raised",
-    "surface.overlay",
-    "surface.sunken",
-    "editor-frame.rest.fill",
-    "indicator-badge.rest.text",
-];
-/// What it is drawn on as a part to see: a slider's and a progress
-/// bar's track.
-const SEED_PARTS: &[&str] = &["slider.rest.fill", "progress-bar.rest.fill"];
-/// The text drawn on its quiet steps (the selection is step 5).
-const SEED_TEXT: &[&str] = &[
-    "text.default",
-    "syntax.plain",
-    "terminal.foreground",
-    "command-palette-row.rest.text",
-];
-
 /// The scale steps an accent re-aliases from, and what they become.
 const ACCENT_ROLES: &[(&str, &str)] = &[
     ("accent.default", "9"),
@@ -849,12 +826,7 @@ impl Themes {
                         _ => None,
                     };
                     let scheme = color("surface.panel").map_or(Scheme::Dark, Scheme::of_background);
-                    let all = |paths: &[&str]| paths.iter().filter_map(|p| color(p)).collect();
-                    let backdrop = Backdrop {
-                        surfaces: all(SEED_SURFACES),
-                        parts: all(SEED_PARTS),
-                        text: all(SEED_TEXT),
-                    };
+                    let backdrop = Backdrop::from_tokens(color);
                     for (path, value) in Ramp::fitted(seed, scheme, &backdrop).tokens(SEED_SCALE) {
                         raw.insert(
                             path,

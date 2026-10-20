@@ -28,13 +28,15 @@
 //! Commands, for agents (hidden from the palette): `theme.read` (the
 //! draft, or one token with its contrast readouts), `theme.set` (`path`,
 //! `value`, `null` for the base theme's), `theme.undo`, `theme.redo`,
-//! `theme.start` (`base`), `theme.export` (`name`) and `theme.import`
-//! (`text`).
+//! `theme.start` (`base`), `theme.export` (`name`), `theme.import`
+//! (`text`) and `theme.generate` (`scale`, `seed`: a colour scale
+//! generated from a seed, [`ThemeEditor::generate`]).
 //!
 //! Owned: egui_thematic (MIT) edits egui's `Visuals`, not tokens with
 //! aliases and contrast pairs; egui's colour picker (MIT OR Apache-2.0)
-//! is adopted for colours; egui_colors (MIT) generates palettes and is
-//! not used (see docs/theme-editor.md).
+//! is adopted for colours; egui_colors (MIT) generates palettes, and its
+//! approach is re-derived in `egui_pop_tokens::palette` (see
+//! docs/theme-editor.md).
 //!
 //! ```
 //! use egui_pop_api::theme_editor::{THEME_EDITOR, ThemeEditorPlugin, Cause};
@@ -63,6 +65,7 @@ use egui_pop_core::strings;
 use egui_pop_core::theme::{Tokens, color32};
 use egui_pop_core::tokens::contract::{self, Tier};
 use egui_pop_core::tokens::contrast::{self, Level, Pair, PairKind};
+use egui_pop_core::tokens::palette::{self, Backdrop, Ramp, Scheme};
 use egui_pop_core::tokens::{
     BUILT_IN_THEMES, Color, Counterpart, ResolvedTokens, ThemeDraft, ThemeSpec, TokenEdit, Value,
     Warning, theme_label,
@@ -97,6 +100,7 @@ pub const CMD_THEME_REDO: CommandId = CommandId::from_static("theme.redo");
 pub const CMD_THEME_START: CommandId = CommandId::from_static("theme.start");
 pub const CMD_THEME_EXPORT: CommandId = CommandId::from_static("theme.export");
 pub const CMD_THEME_IMPORT: CommandId = CommandId::from_static("theme.import");
+pub const CMD_THEME_GENERATE: CommandId = CommandId::from_static("theme.generate");
 
 /// Why a token changes, as the `theme.token` step says it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -244,6 +248,10 @@ struct State {
     file_name: String,
     /// What the last action said (an import's result, a refusal).
     message: Option<(bool, String)>,
+    /// The seed colour picked for a scale, by scale.
+    seed: Option<(String, Color)>,
+    /// A hex field being typed into: its key and text.
+    hex: Option<(String, String)>,
     resolved: Option<Arc<ResolvedTokens>>,
 }
 
@@ -374,6 +382,8 @@ impl ThemeEditor {
         self.history(app, cause, true)
     }
 
+    /// Takes back (or makes again) the next change: one edit, or the
+    /// edits made together (a generated scale).
     fn history(
         &self,
         app: &AppHandle,
@@ -381,6 +391,30 @@ impl ThemeEditor {
         redo: bool,
     ) -> Result<Option<TokenEdit>, String> {
         self.sync(app);
+        let n = {
+            let s = lock(&self.state);
+            if redo {
+                s.draft.redo_group()
+            } else {
+                s.draft.undo_group()
+            }
+        };
+        let mut last = None;
+        for _ in 0..n.max(1) {
+            match self.history_one(app, cause, redo)? {
+                Some(made) => last = Some(made),
+                None => break,
+            }
+        }
+        Ok(last)
+    }
+
+    fn history_one(
+        &self,
+        app: &AppHandle,
+        cause: Cause,
+        redo: bool,
+    ) -> Result<Option<TokenEdit>, String> {
         let next = {
             let s = lock(&self.state);
             if redo {
@@ -467,6 +501,61 @@ impl ThemeEditor {
         };
         self.load(app, draft, "import")?;
         Ok(warnings)
+    }
+
+    /// Writes a scale generated from a seed colour over one of the
+    /// theme's colour scales (`blue`, `gray`): its steps 1 to 12 and its
+    /// `contrast` ([`palette::Ramp`]), for the scheme of the variant
+    /// edited, fitted to its surfaces and text ([`Backdrop`]). Each
+    /// token goes through the `theme.token` step; together they undo as
+    /// one change. The number of tokens changed.
+    ///
+    /// The variant edited only: a theme's light or dark counterpart
+    /// keeps its own scale (generate it again with the other mode
+    /// shown). An accent for both is `ThemeService::set_accent_color`.
+    pub fn generate(
+        &self,
+        app: &AppHandle,
+        scale: &str,
+        seed: Color,
+        cause: Cause,
+    ) -> Result<usize, String> {
+        self.sync(app);
+        let tokens = self.resolved(app);
+        let scheme = if tokens.is_dark() {
+            Scheme::Dark
+        } else {
+            Scheme::Light
+        };
+        let backdrop = Backdrop::from_tokens(|p| tokens.color(p));
+        let ramp = Ramp::fitted(seed, scheme, &backdrop);
+        let edits = {
+            let themes = app.theme();
+            self.draft().scale_edits(themes.themes(), scale, &ramp)?
+        };
+        let mut made = 0;
+        let mut failed = None;
+        for edit in edits {
+            match self.step(app, edit, cause) {
+                Ok(edit) => {
+                    let mut s = lock(&self.state);
+                    if made == 0 {
+                        s.draft.record(edit);
+                    } else {
+                        s.draft.record_joined(edit);
+                    }
+                    made += 1;
+                }
+                Err(e) => failed = Some(e),
+            }
+        }
+        if made > 0 {
+            self.write(app);
+        }
+        match failed {
+            Some(e) if made == 0 => Err(e),
+            _ => Ok(made),
+        }
     }
 
     /// The draft, or one token, as agents read it.
@@ -633,6 +722,27 @@ impl Plugin for ThemeEditorPlugin {
                     .ok_or("`base` is missing")?;
                 editor(call)?.start(call.app, base)?;
                 Ok(json!({ "base": base }))
+            },
+        )?;
+        ctx.command(
+            CommandSpec::new(CMD_THEME_GENERATE, "Generate a colour scale", CAT)
+                .description("Writes a scale generated from a seed colour (`seed`, #rrggbb) over one of the theme's colour scales (`scale`): steps 1 to 12 and contrast, for the variant edited, light or dark; undone as one change.")
+                .hidden()
+                .args(json!({ "scale": "blue", "seed": "#3a7bd5" })),
+            move |call| {
+                let scale = call
+                    .args
+                    .get("scale")
+                    .and_then(Json::as_str)
+                    .ok_or("`scale` is missing")?;
+                let seed = call
+                    .args
+                    .get("seed")
+                    .and_then(Json::as_str)
+                    .and_then(Color::from_hex)
+                    .ok_or("`seed` is missing or not a #rrggbb colour")?;
+                let count = editor(call)?.generate(call.app, scale, seed, Cause::Agent)?;
+                Ok(json!({ "scale": scale, "changed": count }))
             },
         )?;
         ctx.command(
@@ -1061,7 +1171,138 @@ fn detail(
             );
         }
     });
+    if let Some(scale) = scale_of(tokens, path) {
+        generator(ui, app, editor, tokens, &scale);
+    }
     contrast_readouts(ui, tokens, path);
+}
+
+/// The colour scale a reference token is a step of (`blue` for
+/// `blue.3`): a scale with a step 9.
+pub fn scale_of(tokens: &ResolvedTokens, path: &str) -> Option<String> {
+    let (scale, _) = path.rsplit_once('.')?;
+    let nine = tokens.get(&format!("{scale}.9"))?;
+    (nine.tier() == Tier::Reference && nine.ty == "color").then(|| scale.to_string())
+}
+
+/// A colour typed in hex beside a picker: the colour's hex while it is
+/// not being typed into; a colour once the text reads as one, at each
+/// change (`live`) or when the field lets the focus go.
+fn hex_field(
+    ui: &mut Ui,
+    editor: &ThemeEditor,
+    key: &str,
+    color: Color,
+    name: &str,
+    live: bool,
+) -> Option<Color> {
+    let mut text = {
+        let s = lock(&editor.state);
+        match &s.hex {
+            Some((k, t)) if k == key => t.clone(),
+            _ => color.to_hex(),
+        }
+    };
+    let r = ui.add(
+        egui::TextEdit::singleline(&mut text)
+            .font(egui::TextStyle::Monospace)
+            .desired_width(80.0),
+    );
+    egui_pop_core::a11y::name(&r, WidgetType::TextEdit, name);
+    if r.changed() || r.has_focus() {
+        lock(&editor.state).hex = Some((key.to_string(), text.clone()));
+    }
+    let typed = Color::from_hex(text.trim()).filter(|c| c.to_hex() != color.to_hex());
+    if r.lost_focus() {
+        lock(&editor.state).hex = None;
+        return typed;
+    }
+    if live && r.changed() { typed } else { None }
+}
+
+/// "Generate this scale from a colour": a seed picker, its hex, the
+/// ramp it gives for the variant edited, and the button writing it.
+fn generator(
+    ui: &mut Ui,
+    app: &AppHandle,
+    editor: &ThemeEditor,
+    tokens: &ResolvedTokens,
+    scale: &str,
+) {
+    let ctx = ui.ctx().clone();
+    let t = Tokens::of(&ctx);
+    ui.add_space(t.space.m);
+    ui.strong(strings::tr(&ctx, &txt::THEME_EDITOR_GENERATE_TITLE));
+    let current = tokens
+        .color(&format!("{scale}.9"))
+        .unwrap_or(Color::MISSING);
+    let mut seed = {
+        let s = lock(&editor.state);
+        match &s.seed {
+            Some((k, c)) if k == scale => *c,
+            _ => current,
+        }
+    };
+    let before = seed;
+    ui.horizontal(|ui| {
+        let name = strings::tr_args(&ctx, &txt::THEME_EDITOR_SEED_OF, &[("scale", scale)]);
+        let mut c32 = color32(seed);
+        let r = egui::color_picker::color_edit_button_srgba(
+            ui,
+            &mut c32,
+            egui::color_picker::Alpha::Opaque,
+        );
+        r.widget_info(|| WidgetInfo::labeled(WidgetType::ColorButton, true, &name));
+        if r.changed() {
+            let [r8, g8, b8, _] = c32.to_srgba_unmultiplied();
+            seed = Color::rgb(
+                f32::from(r8) / 255.0,
+                f32::from(g8) / 255.0,
+                f32::from(b8) / 255.0,
+            );
+        }
+        let hex_name = strings::tr_args(&ctx, &txt::THEME_EDITOR_SEED_HEX_OF, &[("scale", scale)]);
+        if let Some(c) = hex_field(ui, editor, &format!("seed:{scale}"), seed, &hex_name, true) {
+            seed = Color { a: 1.0, ..c };
+        }
+        let label = strings::tr_args(&ctx, &txt::THEME_EDITOR_GENERATE, &[("scale", scale)]);
+        if ui.button(&label).clicked() {
+            let out = editor.generate(app, scale, seed, Cause::Edit).map(|n| {
+                Some(strings::tr_args(
+                    &ctx,
+                    &txt::THEME_EDITOR_GENERATED,
+                    &[("count", &n.to_string()), ("scale", scale)],
+                ))
+            });
+            say(editor, out);
+        }
+    });
+    if seed != before {
+        lock(&editor.state).seed = Some((scale.to_string(), seed));
+    }
+    if !palette::is_usable_seed(seed) {
+        ui.weak(strings::tr_args(
+            &ctx,
+            &txt::THEME_EDITOR_SEED_CLAMPED,
+            &[("color", &palette::clamp_seed(seed).to_hex())],
+        ));
+    }
+    // The ramp the seed gives, as it would be written.
+    let scheme = if tokens.is_dark() {
+        Scheme::Dark
+    } else {
+        Scheme::Light
+    };
+    let ramp = Ramp::fitted(seed, scheme, &Backdrop::from_tokens(|p| tokens.color(p)));
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 2.0;
+        for c in ramp.steps {
+            swatch(ui, Some(color32(c)));
+        }
+    });
+    if app.theme().counterpart().is_some() {
+        ui.weak(strings::tr(&ctx, &txt::THEME_EDITOR_GENERATE_VARIANT));
+    }
 }
 
 /// The widget a token's type is edited with: a colour picker, a number.

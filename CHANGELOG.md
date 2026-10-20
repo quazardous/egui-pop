@@ -50,6 +50,19 @@ publishes.
   the accent reads on its surfaces and is seen on its tracks, and the
   selection keeps its text readable. `ThemeSpec::accent_seed` reads the
   seed back. Part of #33.
+- An accent colour in applications (egui-pop-api): the
+  `appearance.accent_color` setting (`SETTING_ACCENT_COLOR`, `#rrggbb`,
+  empty for the theme's own accent) and `ThemeService::accent_color`
+  and `set_accent_color` generate the accent from a colour, for the
+  theme and its counterpart. Part of #33.
+- The theme editor generates a scale from a colour (egui-pop-api,
+  egui-pop-tokens): with a palette token picked, a seed picker and its
+  hex field, the ramp it gives for the variant edited, and "Generate",
+  writing the scale's twelve steps and `contrast` at once
+  (`ThemeEditor::generate`, the `theme.generate` agent command,
+  `theme_editor::scale_of`). Edits recorded together undo as one change
+  (`ThemeDraft::record_joined`, `undo_group`, `redo_group`,
+  `ThemeDraft::scale_edits`). Part of #33.
 - Critical tests (egui-pop-test, the new egui-pop-test-macros):
   `#[egui_pop_test::critical]` marks a test that guards a rule any change
   can break, so a selective run still runs it; `#[critical(gpu)]` marks

@@ -244,6 +244,43 @@ pub struct Backdrop {
     pub text: Vec<Color>,
 }
 
+impl Backdrop {
+    /// Where an accent's step 9 is drawn as text, in the contrast pairs:
+    /// the surfaces, the editor's background, and what a badge on the
+    /// accent is written in.
+    pub const SURFACES: &'static [&'static str] = &[
+        "surface.canvas",
+        "surface.panel",
+        "surface.raised",
+        "surface.overlay",
+        "surface.sunken",
+        "editor-frame.rest.fill",
+        "indicator-badge.rest.text",
+    ];
+    /// Where it is drawn as a part to see: a slider's and a progress
+    /// bar's track.
+    pub const PARTS: &'static [&'static str] = &["slider.rest.fill", "progress-bar.rest.fill"];
+    /// The text drawn on its quiet steps (the selection is step 5).
+    pub const TEXT: &'static [&'static str] = &[
+        "text.default",
+        "syntax.plain",
+        "terminal.foreground",
+        "command-palette-row.rest.text",
+    ];
+
+    /// The backdrop of an accent in a theme, its colours read by path
+    /// ([`Backdrop::SURFACES`], [`Backdrop::PARTS`], [`Backdrop::TEXT`]);
+    /// a path without a colour is left out.
+    pub fn from_tokens(color: impl Fn(&str) -> Option<Color>) -> Backdrop {
+        let all = |paths: &[&str]| paths.iter().filter_map(|p| color(p)).collect();
+        Backdrop {
+            surfaces: all(Self::SURFACES),
+            parts: all(Self::PARTS),
+            text: all(Self::TEXT),
+        }
+    }
+}
+
 /// The WCAG ratio a fitted ramp reaches on the surfaces and text of its
 /// [`Backdrop`]: AA's 4.5:1, with a small margin for rounding.
 pub const FITTED_RATIO: f32 = 4.6;

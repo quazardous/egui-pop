@@ -265,3 +265,45 @@ fn docks_follow_every_theme_switch() {
         }
     }
 }
+
+#[test]
+fn an_accent_colour_setting_generates_both_variants_ramps() {
+    use egui_pop_api::SETTING_ACCENT_COLOR;
+    use egui_pop_core::tokens::Color;
+    let mut h = harness(ThemeSpec::new("pop-dark").accent("blue"));
+    let service = h.state().handle().theme();
+    let seed = Color::from_hex("#c0392b").unwrap();
+    service.set_accent_color(Some(seed));
+    h.run();
+    assert_eq!(service.accent_color(), Some(seed));
+    let stored = egui_pop_core::lock(&h.state().handle().store())
+        .get(&format!("settings/{SETTING_ACCENT_COLOR}"))
+        .and_then(|e| e.value.as_text().map(str::to_string));
+    assert_eq!(stored.as_deref(), Some("#c0392b"));
+    // Each variant has its own ramp, from the same seed.
+    let dark = Tokens::of_theme(&h.ctx, egui::Theme::Dark);
+    let light = Tokens::of_theme(&h.ctx, egui::Theme::Light);
+    assert_eq!(
+        dark.resolved()
+            .get("accent.default")
+            .unwrap()
+            .alias
+            .as_deref(),
+        Some("custom.9")
+    );
+    assert!(!dark.resolved().color("accent.default").unwrap().is_dark());
+    assert!(light.resolved().color("accent.default").unwrap().is_dark());
+    // Emptied: the theme's own accent again.
+    service.set_accent_color(None);
+    h.run();
+    assert_eq!(service.accent_color(), None);
+    assert_eq!(
+        Tokens::of(&h.ctx)
+            .resolved()
+            .get("accent.default")
+            .unwrap()
+            .alias
+            .as_deref(),
+        Some("gold.9")
+    );
+}

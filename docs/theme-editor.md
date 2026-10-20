@@ -42,7 +42,7 @@ The model is `egui_pop_tokens::ThemeDraft`, with no egui in it: a base
 theme, the tokens changed over it (raw DTCG values, aliases kept as
 aliases) and their history. Applications that want their own view use
 it directly, or the service (`THEME_EDITOR`: `set`, `undo`, `redo`,
-`start`, `export`, `import`, `read`).
+`start`, `export`, `import`, `read`, `generate`).
 
 ## What it shows
 
@@ -58,6 +58,18 @@ it directly, or the service (`THEME_EDITOR`: `set`, `undo`, `redo`,
   for dimensions, numbers and durations) and a text field taking a
   value or an alias (`{gray.3}`, checked: same type, no loop); reset to
   the base theme's value.
+- **Generate this scale from a colour** (a palette token picked, of a
+  scale with a step 9: `blue.3`, `gray.7`): a seed picker with its hex
+  field, the twelve steps it gives for the variant edited, light or
+  dark (`egui_pop_tokens::palette`, [Design tokens](tokens.md#a-scale-from-one-colour)),
+  fitted to the theme's surfaces and text, and "Generate", which
+  writes them and the scale's `contrast` over the scale; one undo takes
+  them all back. A seed too dark, too light or too vivid is clamped,
+  and said so. Only the variant shown is written: its light or dark
+  counterpart keeps its own scale (generate it again with the other
+  mode shown; editing both variants of a pair at once is not done
+  yet). An accent for both variants is the theme service's
+  `set_accent_color` (the `appearance.accent_color` setting).
 - **Contrast**: every pair of `contrast::PAIRS` the token takes part in,
   itself or through the tokens aliasing it, with its ratio, AA (4.5:1
   for text, 3:1 for interface parts), AAA (7:1 for text; interface parts
@@ -113,9 +125,11 @@ Commands for agents (hidden from the palette): `theme.read` (the draft:
 base, overrides, history, failing pairs and problems; with `path`, one
 token, its value, alias and contrast readouts), `theme.set` (`path`,
 `value`, `null` for the base theme's), `theme.undo`, `theme.redo`,
-`theme.start` (`base`), `theme.export` (`name`, the file's text back)
-and `theme.import` (`text`; the tokens left out back as `skipped`,
-and what the file loaded with as `warnings`).
+`theme.start` (`base`), `theme.export` (`name`, the file's text back),
+`theme.import` (`text`; the tokens left out back as `skipped`,
+and what the file loaded with as `warnings`) and `theme.generate`
+(`scale`, `seed`: a scale written from a seed colour, through
+`theme.token` for each of its tokens, undone as one change).
 
 ## Keyboard and screen readers
 
@@ -131,11 +145,11 @@ colour or an alias). The colour button is a colour well named "Adjust
 | Crate | Licence | What it is | Decision |
 |---|---|---|---|
 | egui's `color_picker` (`color_edit_button_srgba`) | MIT OR Apache-2.0 | An HSV picker with alpha in a popup | **Adopt**: the colour widget |
-| egui_colors 0.13 | MIT | 12-step palettes generated from a seed colour (Radix-like), with a clamped picker; "for exploring styling options" | Not used: palettes to start a theme from are not decided |
+| egui_colors 0.13 | MIT | 12-step palettes generated from a seed colour (Radix-like), with a clamped picker; "for exploring styling options" | **Own, after it** (2026-10-20): its approach (OkHsl, hue shifts, saturation limits per hue band, APCA) re-derived in `egui_pop_tokens::palette` with documented targets and contrast tests; it depends on egui and its constants are undocumented |
 | egui_thematic | MIT | A theme editor over egui's `Visuals`, with presets and JSON save | **Own**: it edits egui's style, not DTCG tokens in tiers with aliases and contrast pairs |
 | egui-themes, zeus-theme | MIT | Ready-made egui styles | Not relevant: egui-pop's themes are token files |
 
-Not done yet: generated palettes as a starting point, a preview strip of
+Not done yet: a preview strip of
 every kind of component in the editor itself (the gallery page puts a
 few widgets beside it), renaming a theme and adding it to the themes the
 application offers (the editor works as overrides over a known base),

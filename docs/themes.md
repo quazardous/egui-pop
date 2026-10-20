@@ -105,7 +105,9 @@ counterpart, the preference changes nothing.
 - **Accents**: `gold`, `blue`, `green`, `amber` and `red`, a theme's
   own scales, or any colour: `ThemeSpec::accent_color(seed)` generates
   the accent's scale from it, for light and dark
-  ([Design tokens](tokens.md#a-scale-from-one-colour)).
+  ([Design tokens](tokens.md#a-scale-from-one-colour)). In an
+  application, the `appearance.accent_color` setting does the same
+  (`ThemeService::set_accent_color`), for both variants of a pair.
 - **Reduced motion**.
 - **Any token**, overridden by its path (`override_token`).
 

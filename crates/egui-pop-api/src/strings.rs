@@ -445,6 +445,30 @@ pub const THEME_EDITOR_PASS: StrKey = StrKey::new("egui-pop-theme-editor-pass", 
 pub const THEME_EDITOR_FAIL: StrKey = StrKey::new("egui-pop-theme-editor-fail", "fail");
 pub const THEME_EDITOR_NOT_APPLICABLE: StrKey =
     StrKey::new("egui-pop-theme-editor-not-applicable", "n/a");
+pub const THEME_EDITOR_GENERATE_TITLE: StrKey = StrKey::new(
+    "egui-pop-theme-editor-generate-title",
+    "Generate this scale from a colour",
+);
+pub const THEME_EDITOR_SEED_OF: StrKey =
+    StrKey::new("egui-pop-theme-editor-seed-of", "Seed colour of { $scale }");
+pub const THEME_EDITOR_SEED_HEX_OF: StrKey = StrKey::new(
+    "egui-pop-theme-editor-seed-hex-of",
+    "Hex of the seed colour of { $scale }",
+);
+pub const THEME_EDITOR_GENERATE: StrKey =
+    StrKey::new("egui-pop-theme-editor-generate", "Generate { $scale }");
+pub const THEME_EDITOR_GENERATED: StrKey = StrKey::new(
+    "egui-pop-theme-editor-generated",
+    "{ $count } tokens of { $scale } generated; one undo takes them back.",
+);
+pub const THEME_EDITOR_SEED_CLAMPED: StrKey = StrKey::new(
+    "egui-pop-theme-editor-seed-clamped",
+    "Too dark, too light or too vivid for a ramp: { $color } is used.",
+);
+pub const THEME_EDITOR_GENERATE_VARIANT: StrKey = StrKey::new(
+    "egui-pop-theme-editor-generate-variant",
+    "Written in the variant shown only; its light or dark counterpart keeps its own scale.",
+);
 pub const THEME_EDITOR_FILE: StrKey =
     StrKey::new("egui-pop-theme-editor-file", "Export and import");
 pub const THEME_EDITOR_NAME: StrKey = StrKey::new("egui-pop-theme-editor-name", "Theme name");
@@ -694,6 +718,13 @@ pub const ALL: &[StrKey] = &[
     THEME_EDITOR_EXPORT,
     THEME_EDITOR_IMPORT,
     THEME_EDITOR_FILE_TEXT,
+    THEME_EDITOR_GENERATE_TITLE,
+    THEME_EDITOR_SEED_OF,
+    THEME_EDITOR_SEED_HEX_OF,
+    THEME_EDITOR_GENERATE,
+    THEME_EDITOR_GENERATED,
+    THEME_EDITOR_SEED_CLAMPED,
+    THEME_EDITOR_GENERATE_VARIANT,
     THEME_EDITOR_IMPORTED,
     THEME_EDITOR_SKIPPED,
     THEME_EDITOR_WARNINGS,

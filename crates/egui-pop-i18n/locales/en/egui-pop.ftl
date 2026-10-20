@@ -286,6 +286,10 @@ command-theme-export =
     .description = The theme being edited as a .tokens.json file (`name`): $extends its base, the tokens changed with their types.
     .title = Export the theme
 
+command-theme-generate =
+    .description = Writes a scale generated from a seed colour (`seed`, #rrggbb) over one of the theme's colour scales (`scale`): steps 1 to 12 and contrast, for the variant edited, light or dark; undone as one change.
+    .title = Generate a colour scale
+
 command-theme-import =
     .description = Loads a .tokens.json file (`text`) into the theme editor, through the theme.load step; says which tokens were left out (`skipped`) and what it loaded with (`warnings`).
     .title = Import a theme
@@ -822,6 +826,14 @@ egui-pop-theme-editor-filter = Filter tokens
 
 egui-pop-theme-editor-from = As in { $theme }
 
+egui-pop-theme-editor-generate = Generate { $scale }
+
+egui-pop-theme-editor-generate-title = Generate this scale from a colour
+
+egui-pop-theme-editor-generate-variant = Written in the variant shown only; its light or dark counterpart keeps its own scale.
+
+egui-pop-theme-editor-generated = { $count } tokens of { $scale } generated; one undo takes them back.
+
 egui-pop-theme-editor-import = Import
 
 egui-pop-theme-editor-imported = Imported over { $theme }.
@@ -855,6 +867,12 @@ egui-pop-theme-editor-ratio = Ratio
 egui-pop-theme-editor-redo = Redo
 
 egui-pop-theme-editor-reset = Reset to { $theme }
+
+egui-pop-theme-editor-seed-clamped = Too dark, too light or too vivid for a ramp: { $color } is used.
+
+egui-pop-theme-editor-seed-hex-of = Hex of the seed colour of { $scale }
+
+egui-pop-theme-editor-seed-of = Seed colour of { $scale }
 
 egui-pop-theme-editor-shape = Shape, space, type and motion
 
@@ -1206,6 +1224,10 @@ plugin-egui-pop-views =
 
 plugin-egui-pop-window =
     .title = Window
+
+setting-appearance-accent-color =
+    .description = A colour (#rrggbb) the accent is generated from, light and dark: twelve steps whose text and contrast read in the theme. Empty keeps the theme's own accent.
+    .label = Accent colour
 
 setting-appearance-focus =
     .label = Keyboard focus

@@ -257,6 +257,10 @@ command-palettes-toggle =
     .description = Masque les palettes qui ne sont pas épinglées, ou les affiche de nouveau.
     .title = Masquer ou afficher les palettes
 
+command-theme-generate =
+    .description = Écrit une gamme générée à partir d’une couleur source (`seed`, #rrggbb) sur une gamme de couleurs du thème (`scale`) : nuances 1 à 12 et contrast, pour la variante éditée, claire ou sombre ; annulée en une fois.
+    .title = Générer une gamme de couleurs
+
 command-theme-export =
     .description = Le thème en cours d’édition comme fichier .tokens.json (`name`) : $extends sa base, les jetons modifiés avec leur type.
     .title = Exporter le thème
@@ -819,6 +823,14 @@ egui-pop-theme-editor-file-text = Fichier de thème (.tokens.json)
 
 egui-pop-theme-editor-filter = Filtrer les jetons
 
+egui-pop-theme-editor-generate = Générer { $scale }
+
+egui-pop-theme-editor-generate-title = Générer cette gamme à partir d’une couleur
+
+egui-pop-theme-editor-generate-variant = Écrite dans la variante affichée seulement ; sa contrepartie claire ou sombre garde sa propre gamme.
+
+egui-pop-theme-editor-generated = { $count } jetons de { $scale } générés ; une seule annulation les reprend.
+
 egui-pop-theme-editor-from = Comme dans { $theme }
 
 egui-pop-theme-editor-import = Importer
@@ -854,6 +866,12 @@ egui-pop-theme-editor-ratio = Rapport
 egui-pop-theme-editor-redo = Rétablir
 
 egui-pop-theme-editor-reset = Revenir à { $theme }
+
+egui-pop-theme-editor-seed-clamped = Trop sombre, trop claire ou trop vive pour une gamme : { $color } est utilisée.
+
+egui-pop-theme-editor-seed-hex-of = Hexadécimal de la couleur source de { $scale }
+
+egui-pop-theme-editor-seed-of = Couleur source de { $scale }
 
 egui-pop-theme-editor-shape = Forme, espace, texte et mouvement
 
@@ -1205,6 +1223,10 @@ plugin-egui-pop-views =
 
 plugin-egui-pop-window =
     .title = Fenêtre
+
+setting-appearance-accent-color =
+    .description = Une couleur (#rrggbb) d’où l’accent est généré, en clair et en sombre : douze nuances dont le texte et le contraste se lisent dans le thème. Vide garde l’accent du thème.
+    .label = Couleur d’accent
 
 setting-appearance-focus =
     .label = Focus du clavier

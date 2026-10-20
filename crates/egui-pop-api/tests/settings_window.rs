@@ -32,7 +32,10 @@ fn search_narrows_the_form_and_a_reset_takes_a_setting_back() {
     let mut h = harness();
     open(&mut h);
     assert!(h.query_all_by_label("Appearance").count() >= 1);
-    h.get_by_role(egui::accesskit::Role::TextInput)
+    // The search field, the first text field (a text setting has one).
+    h.query_all_by_role(egui::accesskit::Role::TextInput)
+        .next()
+        .expect("the search field")
         .type_text("focus");
     h.run();
     assert!(h.query_by_label("Keyboard focus").is_some());

@@ -256,3 +256,55 @@ fn the_theme_switched_elsewhere_restarts_the_editor() {
     assert_eq!(read["overrides"], json!({}));
     assert_eq!(read["can_undo"], false);
 }
+
+#[test]
+fn a_scale_generated_from_a_colour_is_written_and_undone_as_one_change() {
+    use egui_pop_api::theme_editor::CMD_THEME_GENERATE;
+    let mut h = harness(ThemeSpec::new("pop-light"));
+    h.run();
+    let out = run(
+        &mut h,
+        &CMD_THEME_GENERATE,
+        json!({ "scale": "gold", "seed": "#8e44ad" }),
+    );
+    assert_eq!(out["changed"], 13);
+    h.run();
+    let tokens = Tokens::of(&h.ctx);
+    let solid = tokens.resolved().color("gold.9").unwrap();
+    assert!(solid.is_dark(), "{solid}");
+    // The light theme's contrast pairs still pass.
+    assert!(
+        run(&mut h, &CMD_THEME_READ, json!({}))["failing"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    // One undo takes the whole scale back.
+    run(&mut h, &CMD_THEME_UNDO, json!({}));
+    h.run();
+    assert!(h.state().handle().theme().spec().overrides.is_empty());
+    // A scale the theme does not have is refused.
+    let refused = h.state_mut().run(
+        &CMD_THEME_GENERATE,
+        json!({ "scale": "nope", "seed": "#8e44ad" }),
+        Origin::Agent("test".into()),
+    );
+    assert!(refused.now().unwrap().is_err());
+}
+
+#[test]
+fn the_generator_shows_for_a_palette_token() {
+    let mut h = harness(ThemeSpec::new("pop-dark"));
+    h.run();
+    let editor = h.state().handle().service(&THEME_EDITOR).unwrap();
+    editor.select("blue.3");
+    h.run();
+    assert!(h.query_by_label("Seed colour of blue").is_some());
+    assert!(h.query_by_label("Hex of the seed colour of blue").is_some());
+    h.get_by_label("Generate blue").click();
+    h.run();
+    assert!(
+        h.query_by_label_contains("tokens of blue generated")
+            .is_some()
+    );
+}
