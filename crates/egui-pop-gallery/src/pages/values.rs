@@ -7,11 +7,15 @@ use egui_pop::api::stories::Story;
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
 use egui_pop::core::lock;
 use egui_pop::core::param::{self, Mode};
+use egui_pop::core::state::Slot;
 use egui_pop::model::ids::{PluginId, StoryId};
 use egui_pop::model::values::{Descriptor, Value};
 
 use super::section;
 use crate::shell::SHELL;
+
+/// The plain value's own copy, per page.
+const PLAIN: Slot<f64> = Slot::new("gallery.values.plain");
 
 pub const VALUES: PluginId = PluginId::from_static("gallery.values");
 
@@ -93,15 +97,13 @@ fn show(ui: &mut Ui, app: &AppHandle) {
         .unit("EV");
     param::param(ui, &watched, Mode::Watch(&store, "gallery/values/exposure"));
     section(ui, "Plain: the caller's own value");
-    let id = ui.id().with("gallery.values.plain");
-    let mut plain = ui
-        .data(|d| d.get_temp::<f64>(id))
-        .map_or(Value::Float(0.5), Value::Float);
+    let id = PLAIN.keyed(ui.id());
+    let mut plain = id.get(ui.ctx()).map_or(Value::Float(0.5), Value::Float);
     let opacity = Descriptor::float("Opacity", 0.0, 1.0, 1.0)
         .display(100.0, 0)
         .unit("%");
     param::param(ui, &opacity, Mode::Plain(&mut plain));
     if let Some(v) = plain.as_f64() {
-        ui.data_mut(|d| d.insert_temp(id, v));
+        id.set(ui.ctx(), v);
     }
 }

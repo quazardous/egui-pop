@@ -8,6 +8,7 @@ use egui_pop::api::arrangements::{self, STEP_SWITCH};
 use egui_pop::api::steps::{Before, Outcome};
 use egui_pop::api::stories::Story;
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
+use egui_pop::core::state::Slot;
 use egui_pop::model::ids::{PluginId, StoryId};
 use egui_pop::model::layout::{Layout, Node};
 use egui_pop::model::panels::Area;
@@ -15,6 +16,9 @@ use egui_pop::model::panels::Area;
 use super::section;
 use super::workbench::{CONSOLE, NOTES, OUTLINE, PROPERTIES};
 use crate::shell::SHELL;
+
+/// What the last switch said.
+const SAID: Slot<String> = Slot::new("gallery.arrangements.said");
 
 pub const ARRANGEMENTS_PAGE: PluginId = PluginId::from_static("gallery.arrangements");
 
@@ -139,13 +143,9 @@ fn show(ui: &mut Ui, app: &AppHandle, name: &Mutex<String>) {
             Outcome::Done(Err(e)) => format!("refused: {e}"),
             Outcome::Vetoed { by, reason } => format!("vetoed by {by}: {reason}"),
         };
-        ui.ctx()
-            .data_mut(|d| d.insert_temp(egui::Id::new("gallery.arrangements.said"), text));
+        SAID.set(ui.ctx(), text);
     }
-    if let Some(t) = ui
-        .ctx()
-        .data(|d| d.get_temp::<String>(egui::Id::new("gallery.arrangements.said")))
-    {
+    if let Some(t) = SAID.get(ui.ctx()) {
         ui.monospace(t);
     }
 }

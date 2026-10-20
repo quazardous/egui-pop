@@ -11,11 +11,15 @@ use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
 use egui_pop::core::frame::{FrameLayout, HitRegions, TitleBar};
 use egui_pop::core::kit::Kit;
 use egui_pop::core::param::{self, Mode};
+use egui_pop::core::state::Slot;
 use egui_pop::model::ids::{BlockId, PluginId, StoryId};
 use egui_pop::theme::Tokens;
 
 use super::section;
 use crate::shell::SHELL;
+
+/// The preview's last request.
+const LAST: Slot<String> = Slot::new("gallery.frame.last");
 
 pub const FRAME_PAGE: PluginId = PluginId::from_static("gallery.frame");
 
@@ -137,8 +141,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
             },
         );
     if let Some(r) = out.request {
-        ui.ctx()
-            .data_mut(|d| d.insert_temp(egui::Id::new("gallery.frame.last"), format!("{r:?}")));
+        LAST.set(ui.ctx(), format!("{r:?}"));
     }
     // The regions as the frame publishes them, over the preview.
     let layout = FrameLayout {
@@ -199,9 +202,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
         ui.label("Under the pointer:");
         ui.monospace(hit.map_or("(outside the preview)".to_string(), |h| format!("{h:?}")));
     });
-    let last: Option<String> = ui
-        .ctx()
-        .data(|d| d.get_temp(egui::Id::new("gallery.frame.last")));
+    let last = LAST.get(ui.ctx());
     ui.horizontal(|ui| {
         ui.label("Last request:");
         ui.monospace(last.unwrap_or_else(|| "(none)".into()));

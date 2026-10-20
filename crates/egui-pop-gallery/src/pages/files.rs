@@ -5,11 +5,12 @@
 
 use std::path::PathBuf;
 
-use egui::{Id, Ui};
+use egui::Ui;
 use egui_pop::api::files::{self, FILES, FileRequest};
 use egui_pop::api::host::Pending;
 use egui_pop::api::stories::Story;
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
+use egui_pop::core::state::Slot;
 use egui_pop::model::ids::{PluginId, StoryId};
 use egui_pop::theme::Tokens;
 
@@ -66,13 +67,11 @@ pub fn demo_folder() -> PathBuf {
     root
 }
 
-fn pending_id() -> Id {
-    Id::new("gallery.files.pending")
-}
+/// The choice asked and not answered yet.
+const PENDING: Slot<Option<Pending>> = Slot::new("gallery.files.pending");
 
-fn last_id() -> Id {
-    Id::new("gallery.files.last")
-}
+/// What the last choice gave.
+const LAST: Slot<String> = Slot::new("gallery.files.last");
 
 fn show(ui: &mut Ui, app: &AppHandle) {
     let t = Tokens::of(ui.ctx());
@@ -113,9 +112,9 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     });
     if let Some(request) = asked {
         let p = f.choose(app, request);
-        ctx.data_mut(|d| d.insert_temp(pending_id(), Some(p)));
+        PENDING.set(&ctx, Some(p));
     }
-    let pending: Option<Pending> = ctx.data(|d| d.get_temp(pending_id())).flatten();
+    let pending = PENDING.get(&ctx).flatten();
     if let Some(r) = pending.as_ref().and_then(Pending::take) {
         let text = match files::chosen(&r) {
             Ok(files::Chosen::Paths(paths)) => paths
@@ -126,15 +125,11 @@ fn show(ui: &mut Ui, app: &AppHandle) {
             Ok(files::Chosen::Cancelled) => "cancelled".into(),
             Err(e) => format!("refused: {e}"),
         };
-        ctx.data_mut(|d| {
-            d.insert_temp::<Option<Pending>>(pending_id(), None);
-            d.insert_temp(last_id(), text);
-        });
+        PENDING.set(&ctx, None);
+        LAST.set(&ctx, text);
     }
     ui.add_space(t.space.s);
-    let last: String = ctx
-        .data(|d| d.get_temp(last_id()))
-        .unwrap_or_else(|| "nothing yet".into());
+    let last = LAST.get(&ctx).unwrap_or_else(|| "nothing yet".into());
     ui.label(format!("Last choice: {last}"));
     section(ui, "Places");
     let name = |p: &PathBuf| {
