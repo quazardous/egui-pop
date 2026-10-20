@@ -41,6 +41,10 @@
 //! never fails on a token: what is read otherwise than written comes
 //! back as [`Warning`]s.
 //!
+//! A colour scale can be generated from one seed colour
+//! ([`palette::ramp`]): twelve steps for a light or a dark theme, the
+//! text on its solid step chosen with APCA ([`apca`]).
+//!
 //! A kit's tokens, fonts and licence come as a folder or embedded in the
 //! binary ([`kit`](mod@kit), [`kit!`]).
 //!
@@ -50,6 +54,7 @@
 //! `duration` (`ms` or `s`) and `fontFamily`. Other types are kept as raw
 //! JSON ([`Value::Other`]).
 
+pub mod apca;
 pub mod cache;
 mod color;
 pub mod contract;
@@ -59,6 +64,7 @@ mod error;
 mod file;
 mod format;
 pub mod kit;
+pub mod palette;
 mod theme;
 mod value;
 mod yaml;

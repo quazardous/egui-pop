@@ -184,6 +184,56 @@ that weight (`fonts::family`), once a theme has installed the fonts;
 egui's bundled font has one weight, which draws them all. The role
 colours are in the contrast pairs, over panels and the raised surface.
 
+## A scale from one colour
+
+A hue scale (steps `1` to `12` and `contrast`) can be generated from a
+seed colour rather than written by hand:
+`egui_pop_tokens::palette::ramp(seed, Scheme::Light)` gives its twelve
+steps for a light theme, `Scheme::Dark` for a dark one, from the same
+seed; `palette::Ramp` adds `contrast` and writes the scale as tokens
+(`Ramp::tokens("brick")`: `brick.1` to `brick.12`, `brick.contrast`).
+
+```rust
+use egui_pop_tokens::palette::{Ramp, Scheme};
+use egui_pop_tokens::{Color, contrast};
+
+let seed = Color::from_hex("#c0392b").unwrap();
+let light = Ramp::new(seed, Scheme::Light);
+// The text on the solid step reads, and so does the solid on the
+// backgrounds (an accent is drawn as text on panels too).
+assert!(contrast::contrast_ratio(light.contrast, light.steps[8]) >= 4.5);
+assert!(contrast::contrast_ratio(light.steps[8], light.steps[0]) >= 4.5);
+```
+
+How it is made (in OkHsl, so no step leaves the sRGB gamut):
+
+| Steps | Lightness | Saturation (times the seed's) |
+|---|---|---|
+| 1 to 7 | fixed targets, from `pop-light` and `pop-dark`'s scales | 0.45 to 0.8 in light, 0.3 to 0.7 in dark |
+| 9 | the seed's, moved away from the text until it reads | the seed's |
+| 8, 10 | step 9's, pressed and under the pointer | 0.9 to 1 |
+| 11, 12 | low- and high-contrast text | 0.95 and 0.7 in light, 0.9 and 0.5 in dark |
+
+- **The solid step** is the seed when the text on it reads: APCA's Lc
+  60 at least ([`apca::lc`](../crates/egui-pop-tokens/src/apca.rs),
+  informative elsewhere: the contrast pairs stay on WCAG 2.x) and WCAG
+  5:1. Otherwise its lightness moves, darker in light (white text),
+  lighter in dark (nearly black text), its hue and saturation kept.
+  `contrast` is the text APCA ranks higher on it.
+- **Saturation** is limited per hue band in large areas: greens and
+  cyans (OkHsl hue 125 to 200) turn neon, yellows (85 to 115) muddy.
+- **Hue** shifts a few degrees with lightness: lighter warm steps lean
+  to yellow, lighter cool steps to cyan.
+- **A seed** nearly black or white has no hue to speak of:
+  `palette::clamp_seed` brings its lightness within 0.25 to 0.92 (and
+  its saturation within its band), and `ramp` applies it first. A grey
+  seed gives a neutral ramp.
+
+The approach follows egui_colors (MIT), which builds 12-step Radix-like
+scales in OkHsl with APCA; egui-pop's generator is a re-derivation with
+the targets above, not its code, and its tests check every hue in both
+schemes against the contrast targets.
+
 ## Naming rules
 
 - Name by **role**, never by hue, outside the reference tier:

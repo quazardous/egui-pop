@@ -30,6 +30,17 @@ publishes.
   optional crates were missing there), at
   <https://quazardous.github.io/egui-pop/api/>, linked from the docs
   site's top bar and the README. Closes #30.
+- Palette ramps from one seed colour (egui-pop-tokens):
+  `palette::ramp(seed, Scheme::Light | Scheme::Dark)` gives the twelve
+  steps of a colour scale in the reference tier's step model, and
+  `palette::Ramp` adds the text that reads on step 9 (`contrast`) and
+  writes the scale as tokens (`Ramp::tokens`). It works in OkHsl
+  (`palette::Okhsl`), with lightness targets per step, saturation limits
+  per hue band and hue shifts with lightness; step 9 is the seed when
+  text reads on it, else its lightness moves until it does (APCA Lc 60
+  and WCAG 5:1). `palette::clamp_seed` brings a seed into what gives a
+  usable ramp. `apca::lc` is the APCA lightness contrast, informative
+  only: the contrast pairs stay on WCAG 2.x. Part of #33.
 - Critical tests (egui-pop-test, the new egui-pop-test-macros):
   `#[egui_pop_test::critical]` marks a test that guards a rule any change
   can break, so a selective run still runs it; `#[critical(gpu)]` marks
