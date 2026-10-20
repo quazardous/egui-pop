@@ -50,13 +50,16 @@ limit.
   (egui-pop's 1 px border) makes the button 2 px smaller at rest than
   hovered: a list of them changes height under the pointer, and a
   wrapped label can wrap differently.
-- **Upstream**: not filed yet.
+- **Upstream**: <https://github.com/emilk/egui/issues/8125> (open). Fixed
+  on egui's main and in 0.37.0: the default style hides the inactive frame
+  with `Frame::invisible`, keeping its stroke and margins
+  (`theme/default_style.rs`).
 - **Workaround**: egui-pop's selectable rows (`widgets::SelectableRow`)
   keep egui's sizes, and `SelectableRow::steady` keeps the framed size
   in every state: the rows of a `Choose` dialog are steady
   (`dialogs::choice_row`, `// upstream:`).
-- **Remove when**: the frameless margin of a button equals the framed
-  one.
+- **Remove when**: egui-pop moves to egui 0.37 (check that a selectable
+  row keeps its size under the pointer).
 
 ## egui: AccessKit bounds ignore layer transforms
 
@@ -64,7 +67,8 @@ limit.
   reports its rectangle to AccessKit in the layer's coordinates, before
   the transform: screen readers (and kittest, which clicks at a node's
   bounds) place it where it is not.
-- **Upstream**: not filed yet.
+- **Upstream**: not filed yet (draft:
+  [upstream-drafts/egui-accesskit-bounds-layer-transform.md](upstream-drafts/egui-accesskit-bounds-layer-transform.md)).
 - **Workaround**: the node graph editor sets the bounds of its nodes,
   ports, chevrons, groups, stacks and sliders to their rectangles on
   screen (`graph::Cx::bounds`, `// upstream:`).
@@ -86,8 +90,11 @@ limit.
 - **Compensated**: `Context::set_cursor_image` reaches winit only where
   egui-winit has the event loop (eframe's root and deferred viewports);
   immediate viewports and the web drop the bitmap.
-- **Upstream**: the web integration carries a TODO for CSS `url(...)`
-  cursors; not filed yet for immediate viewports.
+- **Upstream**: web: <https://github.com/emilk/egui/issues/3848> (custom
+  pointer icons, open; the web integration carries a TODO for CSS
+  `url(...)` cursors). Immediate viewports: a known limitation of
+  <https://github.com/emilk/egui/pull/8155>, not filed yet (draft:
+  [upstream-drafts/egui-cursor-image-immediate-viewports.md](upstream-drafts/egui-cursor-image-immediate-viewports.md)).
 - **Workaround**: every bitmap cursor is shown with a system cursor as
   its fallback (`cursor::apply`, `// upstream:`): the tool cursor's
   nearest system cursor, or a registered image's own fallback.
@@ -97,7 +104,9 @@ limit.
 
 - **Compensated**: winit does not say how large the system's cursors
   are, so tool cursors could not match them.
-- **Upstream**: not filed yet.
+- **Upstream**: <https://github.com/rust-windowing/winit/issues/3788>
+  (open); a comment with this use case is not posted yet (draft:
+  [upstream-drafts/winit-cursor-size-comment.md](upstream-drafts/winit-cursor-size-comment.md)).
 - **Workaround**: `cursor::system_size` reads `XCURSOR_SIZE` (X11 and
   Wayland desktops), else 24 points; `CursorSettings::size` overrides
   it.
@@ -110,8 +119,13 @@ limit.
   without an accessible name; `TableDelegate::row_ui` and
   `header_cell_ui` are called once per region (sticky and scrolled
   columns), also for the sticky region when there are no sticky columns.
-- **Upstream**: not filed yet (a name for the handles, and no call for
-  an empty region, would do).
+- **Upstream**: egui_table lives in rerun-io/egui_crates now. Not filed
+  yet (drafts:
+  [upstream-drafts/egui_crates-table-resize-handle-name.md](upstream-drafts/egui_crates-table-resize-handle-name.md)
+  and
+  [upstream-drafts/egui_crates-table-row-ui-empty-sticky-region.md](upstream-drafts/egui_crates-table-row-ui-empty-sticky-region.md)).
+  On egui_table's main the header is drawn once, so only `row_ui` is still
+  called for the empty region.
 - **Workaround**: `egui-pop-views`' data table names each handle after
   its column once the table is drawn, and skips the rows and header
   cells of an empty region (`table.rs`, `// upstream:`).
@@ -122,8 +136,9 @@ limit.
 - **Compensated**: `Harness::set_pixels_per_point` changes egui's zoom
   factor, not the window's native scale, so a test cannot simulate a
   window moved to a screen of another scale (winit's scale change).
-- **Upstream**: not filed yet (a `Harness::set_native_pixels_per_point`
-  would do).
+- **Upstream**: not filed yet (draft:
+  [upstream-drafts/egui-kittest-native-pixels-per-point.md](upstream-drafts/egui-kittest-native-pixels-per-point.md),
+  proposing `Harness::set_native_pixels_per_point`).
 - **Workaround**: `egui_pop_test::set_native_scale` writes the root
   viewport's `native_pixels_per_point` in the harness's input before the
   next step, as egui-winit does on a scale change.
