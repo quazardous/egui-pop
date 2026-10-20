@@ -156,6 +156,8 @@ out.textures_delta.clear();
 | `space_role(Space)` | `space.inline`, `group`, `section` or `page` (egui's `add_space` takes points) |
 | `card(Tone, ..)` | the kit's `card`, by tone |
 | `button_tone(Tone, ..)` | egui's button in a tone of the kit's `button` |
+| `scoped(Stock, Tone, ..)` | egui's own widgets (a button on or off, a text field in a tone) drawn from a kit component in a scope ([kits](kit.md#eguis-widgets-in-a-scope)) |
+| `combo_box(combo, ..)` | egui's combo box with its box from the kit's `combo-box` |
 
 ## Next
 

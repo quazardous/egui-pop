@@ -1,0 +1,17 @@
+$description: "The `toggle-button` component of the default kit (docs/kit.md), layered into pop-dark."
+toggle-button:
+  $description: "egui's button shown on or off (`Button::selected`, `selectable_label`), which egui draws (handler `scoped`): its states become egui's widget states in a scope, `selected` its fill and text while on (egui keeps the state's border). Based on `button`: restyling the button restyles it."
+  based-on:
+    $type: "string"
+    $value: "button"
+  shape:
+    $type: "string"
+    $value: "scoped"
+  # egui's own look: the selection colour under strong text.
+  selected:
+    fill:
+      $type: "color"
+      $value: "{selection}"
+    text:
+      $type: "color"
+      $value: "{text.strong}"

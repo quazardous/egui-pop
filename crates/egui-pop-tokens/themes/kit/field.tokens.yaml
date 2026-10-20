@@ -24,6 +24,12 @@ field:
     border-color:
       $type: "color"
       $value: "{border.strong}"
+  # egui's text field with the keyboard: its outline, in a scope
+  # (`UiPop::scoped`), egui's selection stroke.
+  focus:
+    border-color:
+      $type: "color"
+      $value: "{text.strong}"
   # The states every field shows, as tones: read-only and the placeholder
   # are muted; changed, required, refused and being checked colour the
   # field's edge and markers.

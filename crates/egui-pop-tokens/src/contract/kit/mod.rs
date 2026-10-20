@@ -14,6 +14,7 @@ mod button;
 mod card;
 mod checkbox;
 mod combo_arrow;
+mod combo_box;
 mod command_button;
 mod command_palette_row;
 mod compare_pane;
@@ -79,6 +80,7 @@ mod thumbnail;
 mod tip_card;
 mod title_bar;
 mod toast;
+mod toggle_button;
 mod toggle_chip;
 mod tree_drop_marker;
 mod viewport_focus;
@@ -98,6 +100,7 @@ pub(super) const GROUPS: &[&[Required]] = &[
     card::CONTRACT,
     checkbox::CONTRACT,
     combo_arrow::CONTRACT,
+    combo_box::CONTRACT,
     command_button::CONTRACT,
     command_palette_row::CONTRACT,
     compare_pane::CONTRACT,
@@ -163,6 +166,7 @@ pub(super) const GROUPS: &[&[Required]] = &[
     tip_card::CONTRACT,
     title_bar::CONTRACT,
     toast::CONTRACT,
+    toggle_button::CONTRACT,
     toggle_chip::CONTRACT,
     tree_drop_marker::CONTRACT,
     viewport_focus::CONTRACT,

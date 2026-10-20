@@ -78,6 +78,22 @@ publishes.
   ..)` (the kit's card) and `button_tone(Tone, ..)` (egui's button in a
   tone of the kit's `button`). "Laying out by role" in the getting
   started guide. Part of #35.
+- egui's own widgets restyled by a kit in a scope (egui-pop-tokens,
+  egui-pop-core, egui-pop): the `scoped` handler maps a kit component's
+  states onto egui's visuals (widget states, the selection, the text
+  field background) when the kit is compiled, per tone
+  (`kit::ScopedKit`, `kit::ScopedVisuals`, `Kit::scoped`), and
+  `Kit::scope` / `UiPop::scoped(Stock, Tone, ..)` sets them in a
+  `ui.scope`, so egui keeps drawing the widget. `kit::Stock` names the
+  kinds: `Button` (`button`, by tone; `UiPop::button_tone` is now this
+  scope, and egui's global widget states come from the same mapping),
+  `ComboBox` (the new `combo-box` component, the box of egui's combo
+  box; `UiPop::combo_box(combo, ..)`), `ToggleButton` (the new
+  `toggle-button`, `Button::selected` and egui's selectable labels) and
+  `Field` (`field`, by tone, egui's `TextEdit`; `field.focus` now gives
+  the outline with the keyboard). What egui cannot draw of them is in
+  the kit's problems. "egui's widgets in a scope" in `docs/kit.md`.
+  Part of #35.
 - The gallery's `roles` page (Layout by role): text roles, spacing by
   intent, cards and buttons in every tone; the gallery's section titles,
   the jobs centre's titles and details and a placeholder gap use the

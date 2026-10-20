@@ -186,8 +186,14 @@ dropped in silence. Replacing one means an egui-pop-drawn widget.
   application calling egui's directly still gets them through `Visuals`
   only (they follow `button`); egui-pop's [own
   widgets](#eguis-small-widgets) draw them through the kit. A combo
-  box's box stays egui's either way (it follows `button`): only its
-  arrow is the kit's.
+  box's box stays egui's drawing: it follows `button`, or `combo-box`
+  in a scope ([below](#eguis-widgets-in-a-scope)); its arrow is the
+  kit's.
+- **A scope (`Kit::scope`, `UiPop::scoped`).** For a few of egui's
+  widgets, one kit component's states become egui's visuals inside a
+  `ui.scope`, compiled with the kit: a combo box's box, a button shown
+  on or off, a button in a tone, a text field in a tone
+  ([below](#eguis-widgets-in-a-scope)).
 - **`menu-item` through `Component::paint_under`.** egui lays the item
   out, takes its clicks and draws its label with a transparent frame; the
   kit paints the box into a slot reserved under it. `command-button`,
@@ -356,8 +362,9 @@ compiled at install.
   (an indicator or a ring on a button, a field outline of its own) is
   listed in the kit's problems.
   `button` has tones, for an egui button drawn in one
-  (`UiPop::button_tone`, which overrides egui's widget states in a
-  scope, so the button keeps its layout, icon and shortcut text):
+  (`UiPop::button_tone`, a `Button` scope ([egui's widgets in a
+  scope](#eguis-widgets-in-a-scope)), so the button keeps its layout,
+  icon and shortcut text):
   `accent` a primary action on the accent fill, `info`, `success`,
   `warning`, `danger` and `record` their status colour as fill with the
   panel's colour as text (legible both ways, like a badge), `muted` no
@@ -483,6 +490,9 @@ compiled at install.
   ask for roles, and so do the table's sort arrows.
 - **egui's small widgets** (`checkbox`, `radio`, `combo-arrow`,
   `selectable-row`, `toggle-chip`), [below](#eguis-small-widgets).
+- **egui's widgets in a scope** (`combo-box`, `toggle-button`, and
+  `button` and `field` by tone), handler `scoped`,
+  [below](#eguis-widgets-in-a-scope).
 - **Application icons** (`icon_set`, feature `svg`): SVG files
   registered by name, single-colour (a white mask tinted at draw) or
   full-colour, rasterised at install for the theme's icon sizes and the
@@ -548,11 +558,80 @@ fn options(ui: &mut egui_pop::egui::Ui, wrap: &mut bool, mode: &mut usize) {
 - A toggle chip is a checkbox for assistive technology, named by
   `ToggleChip::name`; `ToggleChip::glyph` draws an icon on it.
 - The combo box's box, and its list's frame, are egui's: they follow
-  `button` and egui's popup through `Visuals`. Drawing them would mean
-  re-implementing egui's combo box; the arrow is what a kit restyles.
-  egui's own `ComboBox` (and the other egui widgets) keep egui's arrow.
+  `button` and egui's popup through `Visuals`, and the box follows
+  `combo-box` when shown with `UiPop::combo_box` (a scope,
+  [below](#eguis-widgets-in-a-scope)). Drawing them would mean
+  re-implementing egui's combo box. egui's own `ComboBox` (and the
+  other egui widgets) keep egui's arrow.
 - The gallery's `builtins` page shows them next to egui's own, and its
   `builtins-kit-toggles` snapshot restyles them with data only.
+
+## egui's widgets in a scope
+
+Some of egui's widgets are not worth drawing again: egui-pop would
+re-implement their layout and input for a look that egui's `Visuals`
+can already carry. For those, a kit component's states become egui's
+visuals in a `ui.scope`, and egui keeps drawing the widget, with its
+layout, icons and shortcut text. This is the `scoped` handler: the
+component's boxes are mapped onto egui's fields when the kit is
+compiled, per tone (`ScopedKit`, one `ScopedVisuals` per kind and
+tone), and a scope only copies them (`Kit::scope`); nothing is resolved
+while drawing. Outside the scope, egui's visuals are unchanged.
+
+```rust
+use egui_pop::core::ui::{Stock, Tone, UiPop};
+use egui_pop::core::widgets;
+
+fn view(ui: &mut egui_pop::egui::Ui, fit: &mut bool, mode: &mut usize, name: &mut String) {
+    ui.scoped(Stock::ToggleButton, Tone::Neutral, |ui| {
+        if ui.add(egui_pop::egui::Button::new("Fit").selected(*fit)).clicked() {
+            *fit = !*fit;
+        }
+    });
+    let combo = widgets::combo_box("mode").selected_text(["Fast", "Exact"][*mode]);
+    ui.combo_box(combo, |ui| {
+        widgets::selectable_value(ui, mode, 0, "Fast");
+        widgets::selectable_value(ui, mode, 1, "Exact");
+    });
+    ui.scoped(Stock::Field, Tone::Danger, |ui| ui.text_edit_singleline(name));
+}
+```
+
+| `Stock` | Component | egui's widgets | Mapping |
+|---|---|---|---|
+| `Button` | `button`, by tone | `Button`, and what egui draws as one (`DragValue`, a menu button, a `CollapsingHeader`'s header) | `rest`, `hover`, `active`, `selected` are egui's inactive, hovered, active and open states; `UiPop::button_tone` is this scope |
+| `ComboBox` | `combo-box` (based on `button`) | `ComboBox`'s box (`UiPop::combo_box`) | the same; `selected` while its list is open |
+| `ToggleButton` | `toggle-button` (based on `button`) | `Button::selected`, egui's `selectable_label` | the same, and `selected`'s `fill` and `text` are egui's selection colours while on |
+| `Field` | `field`, by tone | `TextEdit` | `rest`'s fill is the background, `rest` and `hover` the outline, `focus` the outline with the keyboard (egui's selection stroke); the tones (`accent` changed, `warning` required, `danger` refused, `info` being checked, `muted` read-only) colour the edge |
+
+- Every egui widget already follows `button` (and text fields' background
+  `field`) without a scope, through the style installed with the theme
+  (`theme::visuals_with`, the same mapping as a `Button` scope). A
+  scope is for a widget that should differ from the plain button: in a
+  tone, on or off, a combo box.
+- egui reads one set of states: `focus` is egui's `active` for buttons
+  and combo boxes; a disabled scope draws every state in the
+  component's `disabled` box when the kit gives one, which egui still
+  fades (its `disabled_alpha`). egui's expansion under the pointer is
+  kept.
+- What egui cannot draw is in the kit's problems: an indicator or a ring
+  on `combo-box` or `toggle-button` (beyond what they inherit from
+  `button`, reported there), a `toggle-button.selected` outline or radius
+  of its own (egui keeps the state's outline on a selected button), a
+  ring or a fill on `field.hover` or `field.focus` other than its
+  resting one, a `shape` other than `scoped` on `combo-box` or
+  `toggle-button`.
+- egui-pop's own combo boxes (settings, forms, the file chooser's
+  filter, the theme editor, parameters) are shown with
+  `UiPop::combo_box`, and the navigator's zoom buttons (fit, 100 %)
+  with a `ToggleButton` scope.
+- Not given a component of their own: `Slider` (egui-pop's own slider
+  is drawn by the kit), `CollapsingHeader`, `ScrollArea`'s bars,
+  `DragValue`, egui's menus. They follow `button` globally, or any
+  scope they are put in (a `DragValue` in a `Field` scope does not
+  become a field: egui draws it as a button).
+- The gallery's `scoped` page shows them; its `scoped-kit-restyled`
+  snapshot restyles them with data only.
 
 Known limits of this first step:
 
@@ -569,5 +648,6 @@ Known limits of this first step:
 - Kits as folders (data, fonts, icons), `kit!` embedding and validating
   them at compile time, user kits found in the config directory, a
   `check` command, the gallery previewing a kit.
-- egui's combo box drawn by egui-pop (its box and list), should a kit
-  need to restyle them apart from `button`.
+- egui's combo box's list frame (egui's popup) from a kit component;
+  more of egui's widgets in a scope (`Slider`, `CollapsingHeader`,
+  `ScrollArea`'s bars) when a kit needs them apart from `button`.

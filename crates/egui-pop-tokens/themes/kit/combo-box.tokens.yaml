@@ -1,0 +1,9 @@
+$description: "The `combo-box` component of the default kit (docs/kit.md), layered into pop-dark."
+combo-box:
+  $description: "The box of egui's combo box, which egui draws (handler `scoped`): its states become egui's widget states in a scope (`UiPop::combo_box`), `selected` while the list is open. Based on `button`: restyling the button restyles it."
+  based-on:
+    $type: "string"
+    $value: "button"
+  shape:
+    $type: "string"
+    $value: "scoped"

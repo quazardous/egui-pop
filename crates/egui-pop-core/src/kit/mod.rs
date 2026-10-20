@@ -39,6 +39,7 @@ use crate::theme::Tokens;
 
 mod glyph;
 mod paint;
+mod scoped;
 mod shapes;
 mod source;
 mod tone;
@@ -47,6 +48,7 @@ mod window;
 pub use glyph::{Glyph, Glyphs};
 
 pub use paint::{Corners, label_rect, paint_box, paint_indicator, paint_label, paint_ring};
+pub use scoped::{ScopedKit, ScopedVisuals, Stock};
 pub use source::KitSource;
 pub use tone::Tone;
 pub use window::{ButtonsHover, ButtonsSide, WindowCorners, WindowKit};
@@ -576,6 +578,9 @@ macro_rules! components {
             /// The window's own terms (`title-bar.buttons-side`,
             /// `title-bar.buttons-hover`, `window.corners`).
             pub window: WindowKit,
+            /// egui's own widgets' visuals in a scope, per [`Stock`] kind
+            /// and tone ([`Kit::scope`]).
+            pub scoped: ScopedKit,
             /// What could not be compiled as written (an unknown shape, a
             /// bad side): fallbacks were used.
             pub problems: Vec<String>,
@@ -595,6 +600,7 @@ macro_rules! components {
                     $($field: component($name, $default),)*
                     glyphs,
                     window: WindowKit::default(),
+                    scoped: ScopedKit::default(),
                     problems,
                 }
             }
@@ -680,6 +686,10 @@ components! {
     /// A combo box's arrow, the `dropdown` glyph: `selected` while its
     /// list is open (`widgets::combo_box`).
     combo_arrow: "combo-arrow" => "plain",
+    /// The box of egui's combo box, which egui draws (handler `scoped`):
+    /// its states become egui's in a scope (`UiPop::combo_box`),
+    /// `selected` while its list is open.
+    combo_box: "combo-box" => "scoped",
     /// A button running a command: egui lays it out and takes its clicks,
     /// the kit paints its box; egui greys it when disabled.
     command_button: "command-button" => "box",
@@ -804,6 +814,10 @@ components! {
     /// A toast's frame (its level's tone is its icon's); its `text` is
     /// the message's.
     toast: "toast" => "card",
+    /// egui's button shown on or off (`Button::selected`), which egui
+    /// draws (handler `scoped`): its states become egui's in a scope,
+    /// `selected` its fill and text while on.
+    toggle_button: "toggle-button" => "scoped",
     /// A small toggle showing a text or a glyph (`widgets::ToggleChip`):
     /// the find bar's options; `selected` while on.
     toggle_chip: "toggle-chip" => "box",
@@ -959,9 +973,33 @@ impl Kit {
         let mut kit = Kit::compile_components(component, Glyphs::default(), Vec::new());
         kit.glyphs = Glyphs::compile(t, &mut problems);
         kit.window = WindowKit::compile(t, &mut problems);
+        kit.scoped = ScopedKit::compile(&kit);
         problems.extend(egui_losses(t, &kit));
+        problems.extend(scoped::losses(&kit));
         kit.problems = problems;
         kit
+    }
+
+    /// `add` in a scope where egui's own widgets of a [`Stock`] kind are
+    /// drawn from the kit's component, in a tone ([`Tone::Neutral`] for
+    /// its own box): its states become egui's widget visuals
+    /// ([`ScopedVisuals`], compiled with the kit), so egui keeps drawing
+    /// the widget, with its layout, icons and shortcut text. Outside the
+    /// scope, egui's visuals are unchanged.
+    pub fn scope<R>(
+        &self,
+        ui: &mut Ui,
+        stock: Stock,
+        tone: Tone,
+        add: impl FnOnce(&mut Ui) -> R,
+    ) -> InnerResponse<R> {
+        let visuals = self.scoped.get(stock, tone);
+        let ppp = ui.ctx().pixels_per_point();
+        ui.scope(|ui| {
+            let enabled = ui.is_enabled();
+            visuals.apply(ui.visuals_mut(), enabled, ppp);
+            add(ui)
+        })
     }
 
     /// The icon a kit draws for a glyph role.

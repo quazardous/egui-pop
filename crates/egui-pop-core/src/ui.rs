@@ -26,12 +26,11 @@
 //! The helpers are few on purpose, so `Ui`'s completion list stays
 //! short; [`role_text`] and [`Space::points`] serve the rest.
 
-use egui::style::WidgetVisuals;
-use egui::{InnerResponse, Response, RichText, Shadow, Ui, WidgetText};
+use egui::{ComboBox, InnerResponse, Response, RichText, Shadow, Ui, WidgetText};
 
 use crate::fonts::{self, Role, Weight};
-pub use crate::kit::Tone;
 use crate::kit::{Kit, State};
+pub use crate::kit::{Stock, Tone};
 pub use crate::theme::TextRole;
 use crate::theme::Tokens;
 
@@ -134,10 +133,33 @@ pub trait UiPop: sealed::Sealed {
     fn card<R>(&mut self, tone: Tone, add: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R>;
 
     /// egui's button in a tone of the kit's `button` (`button.tone.*`):
-    /// its states' colours are overridden in a scope, so the button keeps
+    /// a [`Stock::Button`] scope ([`UiPop::scoped`]), so the button keeps
     /// its layout, icon and shortcut text. [`Tone::Neutral`] is the plain
     /// button.
     fn button_tone(&mut self, tone: Tone, text: impl Into<WidgetText>) -> Response;
+
+    /// `add` in a scope where egui's own widgets of a [`Stock`] kind
+    /// (buttons, combo boxes, text fields, buttons shown on or off) are
+    /// drawn from the kit's component, in a tone: its states become
+    /// egui's widget visuals, so egui keeps drawing the widget
+    /// ([`Kit::scope`]). Visuals compiled with the kit: the scope only
+    /// copies them.
+    fn scoped<R>(
+        &mut self,
+        stock: Stock,
+        tone: Tone,
+        add: impl FnOnce(&mut Ui) -> R,
+    ) -> InnerResponse<R>;
+
+    /// Shows egui's combo box (`widgets::combo_box`, for the kit's
+    /// arrow) with its box drawn from the kit's `combo-box`
+    /// ([`Stock::ComboBox`]), `add` its list's content:
+    /// `ComboBox::show_ui` in a scope.
+    fn combo_box<R>(
+        &mut self,
+        combo: ComboBox,
+        add: impl FnOnce(&mut Ui) -> R,
+    ) -> InnerResponse<Option<R>>;
 }
 
 impl UiPop for Ui {
@@ -173,29 +195,26 @@ impl UiPop for Ui {
         if tone == Tone::Neutral {
             return self.button(text);
         }
-        let kit = Kit::of(self.ctx());
-        let ppp = self.ctx().pixels_per_point();
-        self.scope(|ui| {
-            let w = &mut ui.visuals_mut().widgets;
-            for (widget, state) in [
-                (&mut w.inactive, State::REST),
-                (&mut w.hovered, State::HOVER),
-                (&mut w.active, State::ACTIVE),
-                (&mut w.open, State::SELECTED),
-            ] {
-                set_widget(widget, kit.button.style_toned(tone, state), ppp);
-            }
-            ui.button(text)
-        })
-        .inner
+        self.scoped(Stock::Button, tone, |ui| ui.button(text)).inner
     }
-}
 
-/// An egui widget state drawn as a kit box, its border snapped to whole
-/// physical pixels at `ppp`.
-fn set_widget(widget: &mut WidgetVisuals, b: &crate::kit::BoxStyle, ppp: f32) {
-    crate::theme::set_widget_visuals(widget, b);
-    widget.bg_stroke.width = crate::scale::snap(widget.bg_stroke.width, ppp);
+    fn scoped<R>(
+        &mut self,
+        stock: Stock,
+        tone: Tone,
+        add: impl FnOnce(&mut Ui) -> R,
+    ) -> InnerResponse<R> {
+        Kit::of(self.ctx()).scope(self, stock, tone, add)
+    }
+
+    fn combo_box<R>(
+        &mut self,
+        combo: ComboBox,
+        add: impl FnOnce(&mut Ui) -> R,
+    ) -> InnerResponse<Option<R>> {
+        self.scoped(Stock::ComboBox, Tone::Neutral, |ui| combo.show_ui(ui, add))
+            .inner
+    }
 }
 
 #[cfg(test)]

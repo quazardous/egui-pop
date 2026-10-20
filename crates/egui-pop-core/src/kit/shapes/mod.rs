@@ -12,6 +12,7 @@ mod outline;
 mod pill;
 mod plain;
 mod progress;
+mod scoped;
 mod tab;
 mod traffic_light;
 
@@ -26,6 +27,7 @@ pub(super) fn built_in(shapes: &mut Shapes) {
     shapes.insert("band-icon-button", "box", Arc::new(cell::BoxCell));
     shapes.insert("button", "box", Arc::new(cell::BoxCell));
     shapes.insert("checkbox", "box", Arc::new(cell::BoxCell));
+    shapes.insert("combo-box", "scoped", Arc::new(scoped::Scoped));
     shapes.insert("command-button", "box", Arc::new(cell::BoxCell));
     shapes.insert("command-palette-row", "box", Arc::new(cell::BoxCell));
     shapes.insert("dock-preview", "box", Arc::new(cell::BoxCell));
@@ -57,6 +59,7 @@ pub(super) fn built_in(shapes: &mut Shapes) {
     shapes.insert("thumb-layer", "box", Arc::new(cell::BoxCell));
     shapes.insert("thumb-overlay-badge", "box", Arc::new(cell::BoxCell));
     shapes.insert("thumbnail", "box", Arc::new(cell::BoxCell));
+    shapes.insert("toggle-button", "scoped", Arc::new(scoped::Scoped));
     shapes.insert("toggle-chip", "box", Arc::new(cell::BoxCell));
     shapes.insert("meter", "track", Arc::new(progress::Track));
     shapes.insert("meter-tick", "tick", Arc::new(progress::Tick));
