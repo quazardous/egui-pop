@@ -246,6 +246,7 @@ Zones and blocks, the workbench, palettes, arrangements, the context stack, stri
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/palettes-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/palettes-pop-dark.png" width="200" alt="palettes-pop-dark"></a><br>palettes-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/contexts-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/contexts-pop-dark.png" width="200" alt="contexts-pop-dark"></a><br>contexts-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/palettes-kit-band.png"><img src="../crates/egui-pop-gallery/tests/snapshots/palettes-kit-band.png" width="200" alt="palettes-kit-band"></a><br>palettes-kit-band</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/frame-full-screen-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/frame-full-screen-pop-dark.png" width="200" alt="frame-full-screen-pop-dark"></a><br>frame-full-screen-pop-dark</td>
   </tr>
 </table>
 
