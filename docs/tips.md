@@ -1,4 +1,4 @@
-# Tips
+# Tips 
 
 A tip of the day and contextual hints, registered by plugins,
 translated, dismissed for good and remembered in the settings. The
