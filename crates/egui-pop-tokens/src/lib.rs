@@ -58,7 +58,7 @@ mod yaml;
 mod yaml_trap;
 
 pub use color::Color;
-pub use contract::{RENAMED, Required, Tier, contract};
+pub use contract::{Required, Tier, contract};
 pub use draft::{DRAFT_EXTENSION, DRAFT_VERSION, ThemeDraft, TokenEdit};
 pub use error::Error;
 pub use file::{RawToken, TokenFile};

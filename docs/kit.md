@@ -285,9 +285,7 @@ compiled at install.
   handler (its top corners follow the frame's `radius` inside its
   outline, its border is the line below it), `hover` under the pointer
   and `active` while dragged; the dialog's title is `dialog-header`'s
-  `text`, the room below it its `padding-y`. The former `dialog.header`,
-  `dialog.header-text`, `palette.header` and `palette.header-text`
-  tokens are renamed (`RENAMED`). The band's buttons (a palette's
+  `text`, the room below it its `padding-y`. The band's buttons (a palette's
   close, roll and pin, `selected` while pinned; a dialog's close) and
   the find bar's are boxes with an icon in their `text`, the close
   marks the `close` glyph role, a focus ring as data. An activity bar
@@ -363,10 +361,7 @@ compiled at install.
   a thumbnail is `selected`, `hover` and `focus` (its ring, clipped away
   before, now shows); the pixel readout is a `card` with its text as
   label; the viewport's focus outline is `viewport-focus`'s ring, inside
-  its edges (`ring-offset` -3). The former `thumbnail.background`,
-  `hover` and `selected` system tokens and the library's optional
-  `library.overlay`, `overlay-text`, `selected-background`, `dim`,
-  `stack`, `best`, `chip` and `chip-text` are in `RENAMED`.
+  its edges (`ring-offset` -3).
 - **Glyphs by role** (`kit::Glyph`, `glyph.<role>` tokens): the small
   marks widgets draw, named by what they mean and mapped by the kit to
   an icon of its set, compiled into a table read by index. The vocabulary
@@ -388,11 +383,7 @@ compiled at install.
   window's scale, and at any other size the first time it is drawn (a
   scaled texture blurs); a kit's glyph may name them.
 - The default kit is these components' tokens in `pop-dark`, which every
-  built-in theme extends. The former `titlebar.*` tokens were renamed into
-  the grid (`titlebar.background` is `title-bar.rest.fill`,
-  `titlebar.button-hover` is `window-button.hover.fill`...): a theme still
-  giving an old name works, with a reported problem
-  (`egui_pop_tokens::RENAMED`). A `transparent` system token says "paint
+  built-in theme extends. A `transparent` system token says "paint
   nothing" (window buttons at rest).
 
 Known limits of this first step:
@@ -406,9 +397,6 @@ Known limits of this first step:
 
 ## Next
 
-- `docs/kit.md` and the vocabulary settled; today's component tokens
-  renamed to the grid (`button.background-hover` becomes
-  `button.hover.fill`), with aliases for one version.
 - One component per change: the title bar, fields, buttons, menus.
 - Kits as folders (data, fonts, icons), `kit!` embedding and validating
   them at compile time, user kits found in the config directory, a

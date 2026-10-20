@@ -35,7 +35,7 @@ changed and why. Add an entry to the `Unreleased` section of
 
 Work alternates. A **tic** is an active refactor: it moves fast and may
 leave bridges so that everything keeps working meanwhile (an old token
-name kept as an alias in `RENAMED`, a typed shim next to a new
+name still read under its new one, a typed shim next to a new
 vocabulary, an adapter that loses part of what it translates). A
 **toc** is the consolidation that follows: it regularises the notation
 and removes the bridges. A tic records each bridge it leaves in the

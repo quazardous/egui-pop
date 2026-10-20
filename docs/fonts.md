@@ -25,8 +25,7 @@ component token:
 `l` (15, 16 in high contrast) has no text style of its own. A theme
 moves a step and every style on it follows, or re-aliases a style onto
 another step. The former `font.size.small`, `body`, `heading` and `mono`
-are renamed (`egui_pop_tokens::RENAMED`): a theme still giving them
-works, with a reported problem. In code, `fonts::font_at(tokens, role,
+are no longer read (see the changelog's migration table). In code, `fonts::font_at(tokens, role,
 weight, step)` is the `FontId` of a step (`fonts::Step`), next to
 `fonts::font_id(role, weight, size)`; `Tokens::font.scale` holds the
 sizes. Text size as a user setting (below) is still a design.

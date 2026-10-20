@@ -199,7 +199,7 @@ the kit ([kit.md](kit.md)): `progress-bar` and `progress-line` (the
 tracks), `progress-fill` (fills and sections, by tone),
 `progress-caption`, `meter` and `meter-tick`, `progress-ring` and
 `spinner` (colours only), on the motion clock. The former `progress.*`
-tokens are renamed into these (a theme giving them still works).
+tokens are no longer read (see the changelog's migration table).
 
 | Widget | What |
 |---|---|

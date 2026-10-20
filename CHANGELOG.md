@@ -86,6 +86,91 @@ publishes.
   commit their version was published from, whose version is still to
   raise. Only the facade's minor releases are tagged.
 
+### Removed
+
+- The former token names are no longer read (`egui-pop-tokens`,
+  breaking): `egui_pop_tokens::RENAMED`, the step moving their values to
+  the kit's names and `Error::Renamed` are gone. They were kept through
+  0.1 (GOVERNANCE.md's one-minor window). A theme still giving an old
+  name now carries an ordinary token nothing reads, and `kit::check`
+  reports it as outside the vocabulary when its component is a kit's.
+  To move, rename each token; where a row names several tokens, give
+  each of them:
+
+  | Former name | Name now |
+  |---|---|
+  | `field.background` | `field.rest.fill` |
+  | `field.background-read-only` | `field.tone.muted.fill` |
+  | `field.text` | `field.rest.text` |
+  | `field.placeholder` | `field.tone.muted.text` |
+  | `field.border` | `field.rest.border-color` |
+  | `field.border-hover` | `field.hover.border-color` |
+  | `field.modified` | `field.tone.accent.border-color` |
+  | `field.required` | `field.tone.warning.border-color` |
+  | `field.invalid` | `field.tone.danger.border-color` |
+  | `field.pending` | `field.tone.info.border-color` |
+  | `menu.item.background-hover` | `menu-item.hover.fill` |
+  | `menu.item.text` | `menu-item.rest.text` |
+  | `menu.item.text-muted` | `menu-item.tone.muted.text` |
+  | `button.background` | `button.rest.fill` |
+  | `button.background-hover` | `button.hover.fill`, `button.selected.fill` |
+  | `button.background-active` | `button.active.fill` |
+  | `button.text` | `button.rest.text` |
+  | `button.border` | `button.rest.border-color` |
+  | `button.radius` | `button.rest.radius` |
+  | `titlebar.background` | `title-bar.rest.fill` |
+  | `titlebar.text` | `title-bar.rest.text`, `window-button.hover.text` |
+  | `titlebar.text-muted` | `window-button.rest.text`, `window-close.rest.text` |
+  | `titlebar.button-hover` | `window-button.hover.fill` |
+  | `titlebar.close-hover` | `window-close.hover.fill` |
+  | `titlebar.close-text` | `window-close.hover.text` |
+  | `titlebar.height` | `title-bar.height` |
+  | `titlebar.button-width` | `window-button.width`, `window-close.width` |
+  | `titlebar.grip` | `window.grip` |
+  | `progress.track` | `progress-bar.rest.fill`, `progress-line.rest.fill`, `meter.rest.fill`, `progress-ring.rest.fill`, `spinner.rest.fill`, `status-indicator.rest.border-color` |
+  | `progress.fill` | `progress-fill.rest.fill`, `progress-fill.tone.accent.fill`, `progress-ring.rest.indicator-color`, `progress-ring.tone.accent.indicator-color`, `spinner.rest.indicator-color`, `spinner.tone.accent.indicator-color` |
+  | `progress.height` | `progress-bar.height`, `meter.height` |
+  | `progress.line` | `progress-line.height` |
+  | `progress.ring` | `progress-ring.width`, `spinner.width` |
+  | `dialog.background` | `dialog.rest.fill` |
+  | `dialog.border` | `dialog.rest.border-color` |
+  | `dialog.radius` | `dialog.rest.radius` |
+  | `dialog.padding` | `dialog.padding-x`, `dialog.padding-y` |
+  | `dialog.backdrop` | `backdrop.opacity` |
+  | `dialog.header` | `header-band.rest.fill` |
+  | `dialog.header-text` | `dialog-header.rest.text` |
+  | `palette.header` | `header-band.rest.fill` |
+  | `palette.header-text` | `header-band.rest.text` |
+  | `palette.background` | `palette-window.rest.fill` |
+  | `palette.border` | `palette-window.rest.border-color` |
+  | `palette.padding` | `palette-window.padding-x`, `palette-window.padding-y` |
+  | `toast.background` | `toast.rest.fill` |
+  | `toast.border` | `toast.rest.border-color` |
+  | `toast.text` | `toast.rest.text` |
+  | `toast.padding` | `toast.padding-x`, `toast.padding-y` |
+  | `editor.background` | `editor-frame.rest.fill` |
+  | `terminal.background` | `terminal-frame.rest.fill` |
+  | `slider.track` | `slider.rest.fill`, `slider-toggle.rest.fill` |
+  | `slider.fill` | `slider-fill.rest.fill`, `slider-toggle.selected.text` |
+  | `slider.thumb` | `slider-thumb.rest.fill` |
+  | `skeleton.fill` | `skeleton.rest.fill` |
+  | `skeleton.shimmer` | `skeleton-shimmer.rest.fill` |
+  | `thumbnail.background` | `thumbnail.rest.fill`, `thumb-cell.rest.fill`, `compare-pane.rest.fill` |
+  | `thumbnail.hover` | `thumbnail.rest.border-color`, `thumb-cell.rest.border-color` |
+  | `thumbnail.selected` | `thumbnail.selected.border-color`, `thumb-cell.selected.border-color` |
+  | `library.selected-background` | `thumb-cell.selected.fill` |
+  | `library.overlay` | `pill.rest.fill`, `thumb-overlay-badge.rest.fill` |
+  | `library.overlay-text` | `pill.rest.text`, `thumb-overlay-badge.rest.text` |
+  | `library.dim` | `thumb-layer.tone.muted.fill` |
+  | `library.stack` | `thumb-layer.tone.accent.indicator-color` |
+  | `library.best` | `compare-pane.selected.ring-color` |
+  | `library.chip` | `tag-chip.rest.fill` |
+  | `library.chip-text` | `tag-chip.rest.text` |
+  | `font.size.small` | `font.text-style.small` |
+  | `font.size.body` | `font.text-style.body`, `font.text-style.button` |
+  | `font.size.heading` | `font.text-style.heading` |
+  | `font.size.mono` | `font.text-style.monospace` |
+
 ## 0.1.1 (2026-10-18)
 
 ### Added

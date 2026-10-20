@@ -1304,46 +1304,6 @@ mod tests {
             empty.style_toned(Tone::Danger, State::REST).text,
             t.status.danger
         );
-        // The former names still work.
-        let t = tokens_with(
-            r##"
-            $extends: "pop-dark"
-            skeleton:
-              fill: {$type: "color", $value: "#102030"}
-            "##,
-        );
-        let kit = Kit::compile(&t, &Shapes::default());
-        assert_eq!(
-            kit.skeleton.style(State::REST).fill,
-            Color32::from_rgb(0x10, 0x20, 0x30)
-        );
-    }
-
-    #[test]
-    fn a_theme_giving_the_former_slider_tokens_still_works() {
-        let t = tokens_with(
-            r##"
-            $extends: "pop-dark"
-            slider:
-              track: {$type: "color", $value: "#102030"}
-              fill: {$type: "color", $value: "#00ff00"}
-            "##,
-        );
-        let kit = Kit::compile(&t, &Shapes::default());
-        let green = Color32::from_rgb(0, 255, 0);
-        let track = Color32::from_rgb(0x10, 0x20, 0x30);
-        assert_eq!(kit.slider.style(State::REST).fill, track);
-        assert_eq!(kit.slider_toggle.style(State::REST).fill, track);
-        assert_eq!(kit.slider_fill.style(State::REST).fill, green);
-        assert_eq!(kit.slider_toggle.style(State::SELECTED).text, green);
-        assert!(
-            t.resolved()
-                .problems()
-                .iter()
-                .any(|p| p.to_string().contains("slider.track")),
-            "{:?}",
-            t.resolved().problems()
-        );
     }
 
     #[test]
@@ -1412,53 +1372,6 @@ mod tests {
         assert_eq!(fill(Tone::Warning), t.status.warning);
         assert_eq!(fill(Tone::Danger), t.status.danger);
         assert_eq!(fill(Tone::Muted), t.text.muted);
-    }
-
-    #[test]
-    fn a_theme_giving_the_former_progress_tokens_still_works() {
-        let t = tokens_with(
-            r##"
-            $extends: "pop-dark"
-            progress:
-              fill: {$type: "color", $value: "#00ff00"}
-              height: {$type: "dimension", $value: {value: 12, unit: "px"}}
-            "##,
-        );
-        let kit = Kit::compile(&t, &Shapes::default());
-        let green = Color32::from_rgb(0, 255, 0);
-        assert_eq!(kit.progress_fill.style(State::REST).fill, green);
-        assert_eq!(
-            kit.progress_fill
-                .style_toned(Tone::Accent, State::REST)
-                .fill,
-            green
-        );
-        assert_eq!(kit.progress_ring.style(State::REST).indicator_color, green);
-        assert_eq!(kit.progress_bar.data.height, 12.0);
-        assert_eq!(kit.meter.data.height, 12.0);
-    }
-
-    #[test]
-    fn a_theme_giving_the_former_header_tokens_still_works() {
-        let t = tokens_with(
-            r##"
-            $extends: "pop-dark"
-            palette:
-              header: {$type: "color", $value: "#102030"}
-              header-text: {$type: "color", $value: "#405060"}
-            dialog:
-              header-text: {$type: "color", $value: "#708090"}
-            "##,
-        );
-        let kit = Kit::compile(&t, &Shapes::default());
-        let hex = |c: Color32| format!("#{:02x}{:02x}{:02x}", c.r(), c.g(), c.b());
-        let band = kit.header_band.style(State::REST);
-        assert_eq!(
-            (hex(band.fill), hex(band.text)),
-            ("#102030".into(), "#405060".into())
-        );
-        let title = kit.dialog_header.style(State::REST).text;
-        assert_eq!(hex(title), "#708090");
     }
 
     #[test]

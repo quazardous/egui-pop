@@ -533,66 +533,6 @@ fn control_and_icon_sizes_are_multiples_of_four_points() {
 }
 
 #[test]
-fn a_renamed_token_still_works_under_its_new_name_and_is_reported() {
-    let mut themes = Themes::default();
-    themes
-        .add_text(
-            "old-names",
-            r##"
-            $extends: "pop-dark"
-            titlebar:
-              background: {$type: "color", $value: "#123456"}
-              button-width: {$type: "dimension", $value: {value: 30, unit: "px"}}
-            "##,
-        )
-        .unwrap();
-    let r = themes.resolve(&ThemeSpec::new("old-names"));
-    assert_eq!(r.color("title-bar.rest.fill").unwrap().to_hex(), "#123456");
-    assert_eq!(r.dimension("window-button.width"), Some(30.0));
-    assert_eq!(r.dimension("window-close.width"), Some(30.0));
-    let said: Vec<String> = r.problems().iter().map(ToString::to_string).collect();
-    assert!(
-        said.iter()
-            .any(|p| p.starts_with("`titlebar.background` is now `title-bar.rest.fill`")),
-        "{said:?}"
-    );
-}
-
-#[test]
-fn a_frame_token_renamed_into_the_kit_keeps_working() {
-    let mut themes = Themes::default();
-    themes
-        .add_text(
-            "old-dialog",
-            r##"
-            $extends: "pop-dark"
-            dialog:
-              background: {$type: "color", $value: "#123456"}
-              padding: {$type: "dimension", $value: {value: 20, unit: "px"}}
-              backdrop: {$type: "number", $value: 0.5}
-            editor:
-              background: {$type: "color", $value: "#654321"}
-            "##,
-        )
-        .unwrap();
-    let r = themes.resolve(&ThemeSpec::new("old-dialog"));
-    assert_eq!(r.color("dialog.rest.fill").unwrap().to_hex(), "#123456");
-    assert_eq!(r.dimension("dialog.padding-x"), Some(20.0));
-    assert_eq!(r.dimension("dialog.padding-y"), Some(20.0));
-    assert_eq!(r.dimension("backdrop.opacity"), Some(0.5));
-    assert_eq!(
-        r.color("editor-frame.rest.fill").unwrap().to_hex(),
-        "#654321"
-    );
-    let said: Vec<String> = r.problems().iter().map(ToString::to_string).collect();
-    assert!(
-        said.iter()
-            .any(|p| p.starts_with("`dialog.backdrop` is now `backdrop.opacity`")),
-        "{said:?}"
-    );
-}
-
-#[test]
 fn an_alpha_modifier_multiplies_the_aliased_colours_alpha() {
     let mut themes = Themes::default();
     themes
@@ -698,39 +638,6 @@ fn an_override_replaces_the_alpha_modifier_with_its_value() {
 }
 
 #[test]
-fn the_library_and_thumbnail_tokens_renamed_into_the_kit_keep_working() {
-    let mut themes = Themes::default();
-    themes
-        .add_text(
-            "old-library",
-            r##"
-            $extends: "pop-dark"
-            thumbnail:
-              background: {$type: "color", $value: "#123456"}
-            library:
-              overlay: {$type: "color", $value: "#20202080"}
-            "##,
-        )
-        .unwrap();
-    let r = themes.resolve(&ThemeSpec::new("old-library"));
-    for path in [
-        "thumbnail.rest.fill",
-        "thumb-cell.rest.fill",
-        "compare-pane.rest.fill",
-    ] {
-        assert_eq!(r.color(path).unwrap().to_hex(), "#123456", "{path}");
-    }
-    // The old value as it was: the default's alpha modifier is not kept.
-    assert_eq!(r.color("pill.rest.fill").unwrap().to_hex(), "#20202080");
-    let said: Vec<String> = r.problems().iter().map(ToString::to_string).collect();
-    assert!(
-        said.iter()
-            .any(|p| p.starts_with("`library.overlay` is now `pill.rest.fill`")),
-        "{said:?}"
-    );
-}
-
-#[test]
 fn text_styles_are_steps_of_the_size_scale_with_todays_sizes() {
     let themes = Themes::default();
     let r = themes.resolve(&ThemeSpec::new("pop-dark"));
@@ -786,30 +693,40 @@ fn a_component_token_may_alias_any_step_and_a_step_moves_its_styles() {
 }
 
 #[test]
-fn an_old_font_size_token_lands_on_its_text_style() {
+fn a_former_token_name_is_no_longer_read() {
+    // `titlebar.background` became `title-bar.rest.fill`: the former name
+    // is an ordinary token nothing reads.
     let mut themes = Themes::default();
     themes
         .add_text(
-            "old-fonts",
+            "old-names",
             r##"
             $extends: "pop-dark"
-            font:
-              size:
-                $type: "dimension"
-                body: {$value: {value: 14, unit: "px"}}
-                mono: {$value: {value: 12, unit: "px"}}
+            titlebar:
+              background: {$type: "color", $value: "#123456"}
             "##,
         )
         .unwrap();
-    let r = themes.resolve(&ThemeSpec::new("old-fonts"));
-    assert_eq!(r.dimension("font.text-style.body"), Some(14.0));
-    assert_eq!(r.dimension("font.text-style.button"), Some(14.0));
-    assert_eq!(r.dimension("font.text-style.monospace"), Some(12.0));
-    assert_eq!(r.dimension("font.text-style.heading"), Some(18.0));
-    let said: Vec<String> = r.problems().iter().map(ToString::to_string).collect();
+    let r = themes.resolve(&ThemeSpec::new("old-names"));
+    let default = themes.resolve(&ThemeSpec::default());
+    assert!(r.problems().is_empty(), "{:?}", r.problems());
+    assert_eq!(
+        r.color("title-bar.rest.fill"),
+        default.color("title-bar.rest.fill")
+    );
+    // In a kit, a former name of a kit component is outside the vocabulary.
+    let kit = egui_pop_tokens::kit::KitData::from_text(
+        "old",
+        r##"
+        button:
+          background: {$type: "color", $value: "#123456"}
+        "##,
+    );
+    let problems = egui_pop_tokens::kit::check(&kit);
     assert!(
-        said.iter()
-            .any(|p| p.starts_with("`font.size.body` is now `font.text-style.body`")),
-        "{said:?}"
+        problems
+            .iter()
+            .any(|p| p.to_string().starts_with("`button.background`")),
+        "{problems:?}"
     );
 }
