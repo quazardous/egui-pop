@@ -45,6 +45,8 @@
 //!   migrations;
 //! - [`fault`]: fault boundaries showing an error card on panic;
 //! - [`binding`]: plain, bound and watch-only values;
+//! - [`widgets`]: egui's checkbox, radio button, selectable row and
+//!   combo box arrow drawn through the kit, and a toggle chip;
 //! - [`state`]: typed slots for the state kept in egui's memory,
 //!   listed by the debug bridge;
 //! - [`debug`]: the debug bridge and its collectors.
@@ -77,6 +79,7 @@ pub mod slider;
 pub mod strings;
 pub mod tab;
 pub mod theme;
+pub mod widgets;
 
 pub mod state;
 

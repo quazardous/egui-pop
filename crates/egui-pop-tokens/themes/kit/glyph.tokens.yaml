@@ -30,6 +30,8 @@ glyph:
     $value: "more"
   drag-handle:
     $value: "grip"
+  dropdown:
+    $value: "triangle-down"
   expand:
     $value: "plus"
   collapse:

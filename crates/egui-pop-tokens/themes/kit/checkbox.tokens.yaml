@@ -1,0 +1,22 @@
+$description: "The `checkbox` component of the default kit (docs/kit.md), layered into pop-dark."
+checkbox:
+  $description: "A checkbox's box (a kit component), its mark the `check` or `indeterminate` glyph in `text`, its label in `text` too; `selected` while checked. Based on `button`: restyling the button restyles it. `width` is the box's side (egui's icon width when not given)."
+  based-on:
+    $type: "string"
+    $value: "button"
+  # The box keeps its resting look when checked: the mark tells it.
+  selected:
+    fill:
+      $type: "color"
+      $value: "{surface.raised}"
+  # egui draws a focused widget as a pressed one.
+  focus:
+    fill:
+      $type: "color"
+      $value: "{surface.active}"
+    border-color:
+      $type: "color"
+      $value: "{focus.ring}"
+    text:
+      $type: "color"
+      $value: "{text.strong}"

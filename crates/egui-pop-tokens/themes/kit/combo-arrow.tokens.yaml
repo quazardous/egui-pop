@@ -1,0 +1,34 @@
+$description: "The `combo-arrow` component of the default kit (docs/kit.md), layered into pop-dark."
+combo-arrow:
+  $description: "The arrow of a combo box (a kit component): the `dropdown` glyph in `text`, over a box transparent by default; `selected` while the list is open. egui draws the combo box's own box, with the button's states."
+  shape:
+    $type: "string"
+    $value: "plain"
+  rest:
+    fill:
+      $type: "color"
+      $value: "{transparent}"
+    border-color:
+      $type: "color"
+      $value: "{transparent}"
+    border-width:
+      $type: "dimension"
+      $value: {value: 0, unit: "px"}
+    radius:
+      $type: "dimension"
+      $value: {value: 0, unit: "px"}
+    text:
+      $type: "color"
+      $value: "{text.default}"
+  hover:
+    text:
+      $type: "color"
+      $value: "{text.strong}"
+  focus:
+    text:
+      $type: "color"
+      $value: "{text.strong}"
+  active:
+    text:
+      $type: "color"
+      $value: "{text.strong}"

@@ -182,9 +182,12 @@ dropped in silence. Replacing one means an egui-pop-drawn widget.
   reported: an indicator or a ring on `button`, a `field` outline or
   text colour differing from the button's (egui shares one set of
   states).
-- **egui's checkbox, radio and combo arrow.** Only `Visuals` reach them:
-  they follow `button` like every egui widget, and the glyph roles do
-  not apply to them.
+- **egui's own checkbox, radio, selectable label and combo box.** An
+  application calling egui's directly still gets them through `Visuals`
+  only (they follow `button`); egui-pop's [own
+  widgets](#eguis-small-widgets) draw them through the kit. A combo
+  box's box stays egui's either way (it follows `button`): only its
+  arrow is the kit's.
 - **`menu-item` through `Component::paint_under`.** egui lays the item
   out, takes its clicks and draws its label with a transparent frame; the
   kit paints the box into a slot reserved under it. `command-button`,
@@ -457,6 +460,7 @@ compiled at install.
   an icon of its set, compiled into a table read by index. The vocabulary
   is fixed: disclosure open and closed, sort ascending and descending,
   check, radio, indeterminate, bullet, submenu, chevron start and end,
+  dropdown (a combo box's arrow),
   close, more, expand, collapse, the window buttons', and the shapes of
   the micro-indicators' LEDs (`led-off`, `led-on`, `led-busy`,
   `led-warning`, `led-error`) and named flags (`flag-modified`,
@@ -467,6 +471,8 @@ compiled at install.
   alone. The marks they draw by default (`circle`, `disc`, `square`,
   `triangle`, `diamond`, `asterisk`, `corner`) are icons of the set. The tree, the menus and the find bar
   ask for roles, and so do the table's sort arrows.
+- **egui's small widgets** (`checkbox`, `radio`, `combo-arrow`,
+  `selectable-row`, `toggle-chip`), [below](#eguis-small-widgets).
 - **Application icons** (`icon_set`, feature `svg`): SVG files
   registered by name, single-colour (a white mask tinted at draw) or
   full-colour, rasterised at install for the theme's icon sizes and the
@@ -475,6 +481,68 @@ compiled at install.
 - The default kit is these components' tokens in `pop-dark`, which every
   built-in theme extends. A `transparent` system token says "paint
   nothing" (window buttons at rest).
+
+## egui's small widgets
+
+egui-pop draws egui's checkbox, radio button and selectable label
+itself (`egui_pop_core::widgets`, `egui_pop::core::widgets` from the
+facade), keeping egui's layout (its atoms, icon width, spacing,
+padding and interaction height), its clicks and keyboard, and what it
+tells assistive technology; the kit paints them. egui-pop's own code
+uses them everywhere, and an application switches by replacing the
+call:
+
+| egui | egui-pop |
+|---|---|
+| `ui.checkbox(&mut on, text)` | `widgets::checkbox(ui, &mut on, text)`, or `ui.add(widgets::Checkbox::new(..))` |
+| `ui.radio(on, text)`, `ui.radio_value(..)` | `widgets::radio(ui, on, text)`, `widgets::radio_value(ui, ..)` |
+| `ui.selectable_label(on, text)`, `ui.selectable_value(..)` | `widgets::selectable_label(ui, on, text)`, `widgets::selectable_value(ui, ..)` |
+| `egui::ComboBox::from_id_salt(id)`, `ComboBox::new(id, label)` | `widgets::combo_box(id)`, `widgets::combo_box_labelled(id, label)` |
+| a selectable label used as an on/off option | `ui.add(widgets::ToggleChip::new(&mut on, "Aa").name("Match case"))` |
+
+```rust
+use egui_pop::core::widgets;
+
+fn options(ui: &mut egui_pop::egui::Ui, wrap: &mut bool, mode: &mut usize) {
+    widgets::checkbox(ui, wrap, "Wrap lines");
+    widgets::combo_box_labelled("mode", "Mode")
+        .selected_text(["Fast", "Exact"][*mode])
+        .show_ui(ui, |ui| {
+            for (i, name) in ["Fast", "Exact"].iter().enumerate() {
+                widgets::selectable_value(ui, mode, i, *name);
+            }
+        });
+}
+```
+
+| Component | Part | States | Based on |
+|---|---|---|---|
+| `checkbox` | the box; its mark the `check` glyph, or `indeterminate` | `selected` while checked; `focus` like `active` (egui's look) | `button` |
+| `radio` | the circle (handler `pill`, radius 999); its mark the `radio` glyph | `selected` while chosen | `checkbox` |
+| `combo-arrow` | the box under a combo box's arrow (transparent); the `dropdown` glyph in its `text` | `selected` while the list is open | |
+| `selectable-row` | a row picked from a short list: a combo box's choices, the assist card's completions and actions, small tab strips | `selected` for the chosen one, never `hover` then | `list-row` |
+| `toggle-chip` | a small on/off option showing a text or a glyph: the find bar's case, whole word, regular expression and replace toggles | `selected` while on | `selectable-row` |
+
+- A checkbox's and a radio button's mark is in the box's `text`, and
+  its label in the `text` of the same state without `selected` (a kit
+  filling a checked box keeps the label readable); `width` is the box's side (egui's icon width when not
+  given). A radio's circle grows by egui's `expansion` under the
+  pointer, as egui's does, and so does a selectable row's box.
+- A mark is the role's icon (`glyph.check`, `glyph.radio`,
+  `glyph.indeterminate`, `glyph.dropdown`). The default icons are drawn
+  with egui's own geometry (a one-point check line, a dash, a dot of a
+  third of the inner box, a triangle as wide as egui's), so the default
+  kit looks like egui; a kit naming another icon gets that icon, 80 %
+  of the box wide (the arrow: the icon's square). `check` and
+  `indeterminate` must differ (`DISTINCT_GLYPHS`).
+- A toggle chip is a checkbox for assistive technology, named by
+  `ToggleChip::name`; `ToggleChip::glyph` draws an icon on it.
+- The combo box's box, and its list's frame, are egui's: they follow
+  `button` and egui's popup through `Visuals`. Drawing them would mean
+  re-implementing egui's combo box; the arrow is what a kit restyles.
+  egui's own `ComboBox` (and the other egui widgets) keep egui's arrow.
+- The gallery's `builtins` page shows them next to egui's own, and its
+  `builtins-kit-toggles` snapshot restyles them with data only.
 
 Known limits of this first step:
 
@@ -491,5 +559,5 @@ Known limits of this first step:
 - Kits as folders (data, fonts, icons), `kit!` embedding and validating
   them at compile time, user kits found in the config directory, a
   `check` command, the gallery previewing a kit.
-- egui's own widgets: the kit translated to `Visuals` at install, with
-  what is lost reported.
+- egui's combo box drawn by egui-pop (its box and list), should a kit
+  need to restyle them apart from `button`.

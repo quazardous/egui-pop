@@ -59,3 +59,9 @@ font:
       $value: {value: 15, unit: "px"}
     l:
       $value: {value: 16, unit: "px"}
+selectable-row:
+  selected:
+    border-color:
+      $type: "color"
+      $value: "{border.strong}"
+      $description: "Every control outlined."

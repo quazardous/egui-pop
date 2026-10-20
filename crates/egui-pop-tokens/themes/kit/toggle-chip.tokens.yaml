@@ -1,0 +1,6 @@
+$description: "The `toggle-chip` component of the default kit (docs/kit.md), layered into pop-dark."
+toggle-chip:
+  $description: "A small toggle showing a short text or a glyph (a kit component): the find bar's case, whole word and regular expression options. `selected` while on. Based on `selectable-row`."
+  based-on:
+    $type: "string"
+    $value: "selectable-row"

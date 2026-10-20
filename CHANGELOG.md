@@ -58,6 +58,20 @@ publishes.
   plugin set asserts it writes only what it declared. Part of #29.
 - Documentation: ADR 0016 (one writer per value), "Who writes a value"
   in the state-or-event guide, with a compiled example. Part of #29.
+- egui's small widgets drawn through the kit (egui-pop-core,
+  egui-pop-tokens): `widgets::Checkbox`, `RadioButton`, `SelectableRow`
+  and `ToggleChip`, with `checkbox`, `radio`, `radio_value`,
+  `selectable_label`, `selectable_value`, and `combo_box` /
+  `combo_box_labelled` (egui's `ComboBox` with the kit's arrow,
+  `paint_combo_arrow`). They keep egui's layout, clicks, keyboard and
+  accessibility; the kit paints them through five new components,
+  `checkbox` (based on `button`, `selected` while checked), `radio`
+  (based on `checkbox`, handler `pill`), `combo-arrow`,
+  `selectable-row` (based on `list-row`) and `toggle-chip` (based on
+  `selectable-row`), and their marks are glyph roles (`check`,
+  `indeterminate`, `radio`, and the new `dropdown`). The default kit
+  looks like egui's own widgets; `check` and `indeterminate` must now
+  draw different icons. Docs: [kit.md](docs/kit.md#eguis-small-widgets).
 - Token file versions (egui-pop-tokens): a file says which format and
   contract it was written for with a stamp in its root `$extensions`,
   `"org.egui-pop.format": { "version": 1, "contract": 1 }`

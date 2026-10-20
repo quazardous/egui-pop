@@ -130,6 +130,7 @@ pub const TONES: [&str; 7] = [
 /// other. [`check`] reports a kit breaking it, and egui-pop draws its own
 /// shapes for those roles.
 pub const DISTINCT_GLYPHS: &[(&str, &str)] = &[
+    ("check", "indeterminate"),
     ("led-off", "led-on"),
     ("led-off", "led-warning"),
     ("led-off", "led-error"),

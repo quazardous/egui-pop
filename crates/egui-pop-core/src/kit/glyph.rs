@@ -66,6 +66,8 @@ glyphs! {
     More: "more" => More,
     /// Something to grab or to open: a folded area's strip.
     DragHandle: "drag-handle" => Grip,
+    /// Opens a list of choices: a combo box's arrow.
+    Dropdown: "dropdown" => TriangleDown,
     /// Expands, adds a level.
     Expand: "expand" => Plus,
     /// Collapses, removes a level.

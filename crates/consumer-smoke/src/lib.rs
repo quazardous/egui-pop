@@ -17,6 +17,9 @@ pub mod themes {}
 #[doc = include_str!("../../../docs/theme-editor.md")]
 pub mod theme_editor {}
 
+#[doc = include_str!("../../../docs/kit.md")]
+pub mod kit {}
+
 #[doc = include_str!("../../../docs/kit-packages.md")]
 pub mod kit_packages {}
 

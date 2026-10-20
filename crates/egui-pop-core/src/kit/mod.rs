@@ -669,6 +669,12 @@ components! {
     /// A push button. egui's own widgets take their states from it:
     /// rest, hover, active, and selected for an open menu or combo box.
     button: "button" => "box",
+    /// A checkbox's box, its mark the `check` or `indeterminate` glyph:
+    /// `selected` while checked (`widgets::Checkbox`).
+    checkbox: "checkbox" => "box",
+    /// A combo box's arrow, the `dropdown` glyph: `selected` while its
+    /// list is open (`widgets::combo_box`).
+    combo_arrow: "combo-arrow" => "plain",
     /// A button running a command: egui lays it out and takes its clicks,
     /// the kit paints its box; egui greys it when disabled.
     command_button: "command-button" => "box",
@@ -744,11 +750,18 @@ components! {
     pill: "pill" => "pill",
     /// A popover's or a menu's surface.
     popover: "popover" => "card",
+    /// A radio button's circle, its mark the `radio` glyph: `selected`
+    /// while chosen (`widgets::RadioButton`).
+    radio: "radio" => "pill",
     /// A viewport's pixel readout; its label is the readout's text.
     readout: "readout" => "card",
     /// The library's search field: `focus` while its text has the
     /// keyboard.
     search_field: "search-field" => "card",
+    /// A row picked from a short list (`widgets::SelectableRow`): a
+    /// combo box's choices, the assist card's rows; `selected` for the
+    /// chosen one, never `hover` then.
+    selectable_row: "selectable-row" => "box",
     /// A tab of the workbench's tab bars.
     tab: "tab" => "box",
     /// The bar behind a row of tabs.
@@ -786,6 +799,9 @@ components! {
     /// A toast's frame (its level's tone is its icon's); its `text` is
     /// the message's.
     toast: "toast" => "card",
+    /// A small toggle showing a text or a glyph (`widgets::ToggleChip`):
+    /// the find bar's options; `selected` while on.
+    toggle_chip: "toggle-chip" => "box",
     /// An image viewport's outline while it has the keyboard focus.
     viewport_focus: "viewport-focus" => "plain",
     /// Minimize and maximize (the glyph is drawn in the box's `text`),

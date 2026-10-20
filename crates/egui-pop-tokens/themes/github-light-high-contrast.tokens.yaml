@@ -304,6 +304,12 @@ field:
       $type: "color"
       $value: "{border.strong}"
       $description: "Every control outlined."
+selectable-row:
+  selected:
+    border-color:
+      $type: "color"
+      $value: "{border.strong}"
+      $description: "Every control outlined."
 font:
   size:
     $type: "dimension"

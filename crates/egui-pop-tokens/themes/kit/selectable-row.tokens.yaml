@@ -1,0 +1,37 @@
+$description: "The `selectable-row` component of the default kit (docs/kit.md), layered into pop-dark."
+selectable-row:
+  $description: "A row the user picks from a short list (a kit component): a combo box's choices, the assist card's completions and actions, a tab of a small panel. `selected` for the chosen one (never `hover` then). Based on `list-row`, rounded and outlined like a button under the pointer."
+  based-on:
+    $type: "string"
+    $value: "list-row"
+  rest:
+    radius:
+      $type: "dimension"
+      $value: "{radius.widget}"
+  selected:
+    border-width:
+      $type: "dimension"
+      $value: {value: 1, unit: "px"}
+  hover:
+    border-color:
+      $type: "color"
+      $value: "{border.strong}"
+    border-width:
+      $type: "dimension"
+      $value: {value: 1, unit: "px"}
+    text:
+      $type: "color"
+      $value: "{text.strong}"
+  active:
+    fill:
+      $type: "color"
+      $value: "{surface.active}"
+    border-color:
+      $type: "color"
+      $value: "{focus.ring}"
+    border-width:
+      $type: "dimension"
+      $value: {value: 1, unit: "px"}
+    text:
+      $type: "color"
+      $value: "{text.strong}"

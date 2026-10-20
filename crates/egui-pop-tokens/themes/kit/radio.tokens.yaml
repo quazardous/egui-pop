@@ -1,0 +1,13 @@
+$description: "The `radio` component of the default kit (docs/kit.md), layered into pop-dark."
+radio:
+  $description: "A radio button's circle (a kit component), its mark the `radio` glyph in `text`; `selected` while chosen. Based on `checkbox`, drawn by the `pill` handler with a large radius: a circle."
+  based-on:
+    $type: "string"
+    $value: "checkbox"
+  shape:
+    $type: "string"
+    $value: "pill"
+  rest:
+    radius:
+      $type: "dimension"
+      $value: {value: 999, unit: "px"}

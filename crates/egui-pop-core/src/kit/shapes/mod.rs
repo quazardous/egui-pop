@@ -25,6 +25,7 @@ pub(super) fn built_in(shapes: &mut Shapes) {
     shapes.insert("area-grip", "box", Arc::new(cell::BoxCell));
     shapes.insert("band-icon-button", "box", Arc::new(cell::BoxCell));
     shapes.insert("button", "box", Arc::new(cell::BoxCell));
+    shapes.insert("checkbox", "box", Arc::new(cell::BoxCell));
     shapes.insert("command-button", "box", Arc::new(cell::BoxCell));
     shapes.insert("command-palette-row", "box", Arc::new(cell::BoxCell));
     shapes.insert("dock-preview", "box", Arc::new(cell::BoxCell));
@@ -46,6 +47,9 @@ pub(super) fn built_in(shapes: &mut Shapes) {
     shapes.insert("slider-toggle", "box", Arc::new(cell::BoxCell));
     shapes.insert("pill", "box", Arc::new(cell::BoxCell));
     shapes.insert("pill", "pill", Arc::new(pill::Pill));
+    shapes.insert("radio", "box", Arc::new(cell::BoxCell));
+    shapes.insert("radio", "pill", Arc::new(pill::Pill));
+    shapes.insert("selectable-row", "box", Arc::new(cell::BoxCell));
     shapes.insert("table-header-cell", "box", Arc::new(cell::BoxCell));
     shapes.insert("tag-chip", "box", Arc::new(cell::BoxCell));
     shapes.insert("tag-chip", "pill", Arc::new(pill::Pill));
@@ -53,6 +57,7 @@ pub(super) fn built_in(shapes: &mut Shapes) {
     shapes.insert("thumb-layer", "box", Arc::new(cell::BoxCell));
     shapes.insert("thumb-overlay-badge", "box", Arc::new(cell::BoxCell));
     shapes.insert("thumbnail", "box", Arc::new(cell::BoxCell));
+    shapes.insert("toggle-chip", "box", Arc::new(cell::BoxCell));
     shapes.insert("meter", "track", Arc::new(progress::Track));
     shapes.insert("meter-tick", "tick", Arc::new(progress::Tick));
     shapes.insert("progress-bar", "track", Arc::new(progress::Track));

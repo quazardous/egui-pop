@@ -11,6 +11,8 @@ mod assist_card;
 mod backdrop;
 mod band_icon_button;
 mod button;
+mod checkbox;
+mod combo_arrow;
 mod command_button;
 mod command_palette_row;
 mod compare_pane;
@@ -48,8 +50,10 @@ mod progress_caption;
 mod progress_fill;
 mod progress_line;
 mod progress_ring;
+mod radio;
 mod readout;
 mod search_field;
+mod selectable_row;
 mod side_area;
 mod skeleton;
 mod skeleton_shimmer;
@@ -74,6 +78,7 @@ mod thumbnail;
 mod tip_card;
 mod title_bar;
 mod toast;
+mod toggle_chip;
 mod tree_drop_marker;
 mod viewport_focus;
 mod window;
@@ -89,6 +94,8 @@ pub(super) const GROUPS: &[&[Required]] = &[
     backdrop::CONTRACT,
     band_icon_button::CONTRACT,
     button::CONTRACT,
+    checkbox::CONTRACT,
+    combo_arrow::CONTRACT,
     command_button::CONTRACT,
     command_palette_row::CONTRACT,
     compare_pane::CONTRACT,
@@ -126,8 +133,10 @@ pub(super) const GROUPS: &[&[Required]] = &[
     progress_fill::CONTRACT,
     progress_line::CONTRACT,
     progress_ring::CONTRACT,
+    radio::CONTRACT,
     readout::CONTRACT,
     search_field::CONTRACT,
+    selectable_row::CONTRACT,
     side_area::CONTRACT,
     skeleton::CONTRACT,
     skeleton_shimmer::CONTRACT,
@@ -152,6 +161,7 @@ pub(super) const GROUPS: &[&[Required]] = &[
     tip_card::CONTRACT,
     title_bar::CONTRACT,
     toast::CONTRACT,
+    toggle_chip::CONTRACT,
     tree_drop_marker::CONTRACT,
     viewport_focus::CONTRACT,
     window::CONTRACT,
