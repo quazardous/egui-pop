@@ -52,8 +52,19 @@ pub fn default_map() -> Arc<PointerMap> {
 /// Publishes a pointer map, and makes egui's scrolling follow its
 /// modifiers.
 pub fn set_map(ctx: &Context, map: PointerMap) {
+    set_shared_map(ctx, Arc::new(map));
+}
+
+/// [`set_map`] with a map shared with its publisher, who can tell it
+/// is still there ([`published`]).
+pub fn set_shared_map(ctx: &Context, map: Arc<PointerMap>) {
     apply_input_options(ctx, &map.input);
-    MAP.set(ctx, Arc::new(map));
+    MAP.set(ctx, map);
+}
+
+/// The map published in a context, if one was.
+pub fn published(ctx: &Context) -> Option<Arc<PointerMap>> {
+    MAP.get(ctx)
 }
 
 /// egui's modifiers of a chord's: Ctrl is Cmd on macOS, as in the

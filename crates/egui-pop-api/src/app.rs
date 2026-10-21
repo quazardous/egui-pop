@@ -50,7 +50,9 @@ use crate::steps::{HookFn, HookInfo, Outcome, StepHook, StepInfo, StepSpec, Step
 use crate::stories::{Story, StoryInfo};
 use crate::zones::{self, Block, DrawFn, ZoneInfo, ZoneTable, draw_chain};
 
-/// The user gives a command new keys, or none (`{ "command", "keys" }`).
+/// The user gives a command new keys, or none (`{ "command", "keys",
+/// "layer" }`; `keys` a shortcut, `null`, or an array of several: a
+/// pointer gesture's triggers).
 pub const STEP_REBIND: StepId = StepId::from_static("keys.rebind");
 /// A keymap document is loaded into a layer (`{ "layer", "bindings" }`).
 pub const STEP_LOAD_KEYMAP: StepId = StepId::from_static("keys.load");
@@ -503,6 +505,13 @@ pub enum Request {
     Rebind {
         command: CommandId,
         keys: Option<String>,
+        layer: Layer,
+    },
+    /// Gives a command several keys at once (a pointer gesture keeping
+    /// its other triggers).
+    RebindAll {
+        command: CommandId,
+        keys: Vec<String>,
         layer: Layer,
     },
     /// Takes back what a layer (the user's or the workspace's) changed
@@ -1447,6 +1456,17 @@ impl AppHandle {
         });
     }
 
+    /// Asks for a command's keys in `layer`, several at once (a pointer
+    /// gesture's triggers: `Wheel`, `Ctrl+Scroll`, `Pinch`; none: no
+    /// key), through the `keys.rebind` step (`keys` an array).
+    pub fn rebind_gestures(&self, layer: Layer, command: CommandId, keys: &[&str]) {
+        self.push_request(Request::RebindAll {
+            command,
+            keys: keys.iter().map(|k| (*k).to_string()).collect(),
+            layer,
+        });
+    }
+
     /// Asks for a command's default keys back.
     pub fn reset_keys(&self, command: CommandId) {
         self.reset_keys_in(Layer::User, command);
@@ -2125,6 +2145,7 @@ pub struct AppBuilder {
     on_exit: Vec<ExitFn>,
     name: Option<String>,
     panel_alignment: crate::workbench::PanelAlignment,
+    pointer_profile: String,
     kits: Vec<KitSource>,
     user_kits: bool,
     cache: Option<egui_pop_core::tokens::cache::Cache>,
@@ -2194,6 +2215,7 @@ impl AppBuilder {
             on_exit: Vec::new(),
             name: None,
             panel_alignment: crate::workbench::PanelAlignment::Justify,
+            pointer_profile: egui_pop_model::pointer::DEFAULT_PROFILE.into(),
             kits: Vec::new(),
             user_kits: false,
             cache: None,
@@ -2205,6 +2227,15 @@ impl AppBuilder {
     /// whole width, unless given).
     pub fn panel_alignment(mut self, alignment: crate::workbench::PanelAlignment) -> Self {
         self.panel_alignment = alignment;
+        self
+    }
+
+    /// The pointer profile by default (the `input.pointer_profile`
+    /// setting's default: `document` unless given; `darktable`, `adobe`,
+    /// `blender`, `trackpad`). An id no profile has is reported and the
+    /// default kept.
+    pub fn pointer_profile(mut self, id: &str) -> Self {
+        self.pointer_profile = id.into();
         self
     }
 
@@ -2465,6 +2496,7 @@ impl AppBuilder {
             on_exit: self.on_exit,
             autosave: AutoSave::default(),
             rebuilds: 0,
+            pointer: crate::pointer::Sync::default(),
         };
         *app.handle.0.writer.borrow_mut() = app
             .persist
@@ -2507,8 +2539,15 @@ impl AppBuilder {
         }
         let infos = kits.iter().map(|k| k.data.info()).collect();
         app.kits = kits;
-        app.framework(self.theme, themes, infos, modes, self.panel_alignment)
-            .expect("the framework's registrations are valid");
+        app.framework(
+            self.theme,
+            themes,
+            infos,
+            modes,
+            self.panel_alignment,
+            &self.pointer_profile,
+        )
+        .expect("the framework's registrations are valid");
         app.install_collectors();
         for i in 0..app.plugins.len() {
             if let Err(error) = app.connect_slot(i) {
@@ -2629,6 +2668,8 @@ pub struct App {
     autosave: AutoSave,
     /// Rebuilds so far (the keymap may have changed).
     rebuilds: u64,
+    /// The pointer profile loaded and the map published.
+    pointer: crate::pointer::Sync,
 }
 
 /// What the debounced saving of the settings, the keymap and the layout
@@ -2735,6 +2776,7 @@ impl App {
         kits: Vec<egui_pop_core::tokens::kit::KitInfo>,
         modes: FocusModes,
         panel_alignment: crate::workbench::PanelAlignment,
+        pointer_profile: &str,
     ) -> Result<(), CtxError> {
         let owner = OwnerId::FRAMEWORK;
         let handle = self.handle.clone();
@@ -2900,6 +2942,7 @@ impl App {
         ctx.setting(SETTING_FOCUS, focus)?;
         crate::zoom::register(&mut ctx)?;
         crate::sliders::register(&mut ctx)?;
+        crate::pointer::register(&mut ctx, pointer_profile)?;
         ctx.setting(
             crate::workbench::SETTING_PANEL_ALIGNMENT,
             egui_pop_model::values::Descriptor::choice(
@@ -4391,6 +4434,46 @@ impl App {
         }
     }
 
+    /// Changes a command's keys through the `keys.rebind` step: `keys`
+    /// a text (one shortcut), `null` (none) or an array (several).
+    fn rebind_step(&mut self, command: &CommandId, args: Json) {
+        let handle = self.handle.clone();
+        let keymap = &mut self.reg.keymap;
+        let mut changed = false;
+        let out = handle.step(&STEP_REBIND, args, |_, args| {
+            let command = args
+                .get("command")
+                .and_then(Json::as_str)
+                .and_then(|c| CommandId::new(c).ok())
+                .ok_or("`command` is missing")?;
+            let layer: Layer = args
+                .get("layer")
+                .cloned()
+                .map_or(Ok(Layer::User), serde_json::from_value)
+                .map_err(|e| format!("`layer`: {e}"))?;
+            let owner = layer_owner(layer)
+                .ok_or("keys change in the user's or the workspace's layer only")?;
+            match args.get("keys") {
+                Some(Json::Array(list)) => {
+                    let keys: Vec<&str> = list.iter().filter_map(Json::as_str).collect();
+                    keymap.rebind_all(&owner, layer, &command, &keys)?;
+                }
+                other => {
+                    let keys = other.and_then(Json::as_str);
+                    keymap.rebind(&owner, layer, &command, keys)?;
+                }
+            }
+            changed = true;
+            Ok(json!({ "command": command, "keys": args.get("keys"), "layer": layer }))
+        });
+        if changed {
+            self.dirty = true;
+        }
+        if let Outcome::Done(Err(e)) = out {
+            log::warn!(target: "egui_pop", "keys for `{command}`: {e}");
+        }
+    }
+
     /// Does what blocks and handlers asked for.
     pub fn process_requests(&mut self) {
         profiling::scope!("pop.app.requests");
@@ -4433,38 +4516,16 @@ impl App {
                         keys,
                         layer,
                     } => {
-                        let handle = self.handle.clone();
-                        let keymap = &mut self.reg.keymap;
-                        let mut changed = false;
-                        let out = handle.step(
-                            &STEP_REBIND,
-                            json!({ "command": command, "keys": keys, "layer": layer }),
-                            |_, args| {
-                                let command = args
-                                    .get("command")
-                                    .and_then(Json::as_str)
-                                    .and_then(|c| CommandId::new(c).ok())
-                                    .ok_or("`command` is missing")?;
-                                let keys = args.get("keys").and_then(Json::as_str);
-                                let layer: Layer = args
-                                    .get("layer")
-                                    .cloned()
-                                    .map_or(Ok(Layer::User), serde_json::from_value)
-                                    .map_err(|e| format!("`layer`: {e}"))?;
-                                let owner = layer_owner(layer).ok_or(
-                                    "keys change in the user's or the workspace's layer only",
-                                )?;
-                                keymap.rebind(&owner, layer, &command, keys)?;
-                                changed = true;
-                                Ok(json!({ "command": command, "keys": keys, "layer": layer }))
-                            },
-                        );
-                        if changed {
-                            self.dirty = true;
-                        }
-                        if let Outcome::Done(Err(e)) = out {
-                            log::warn!(target: "egui_pop", "keys for `{command}`: {e}");
-                        }
+                        let args = json!({ "command": command, "keys": keys, "layer": layer });
+                        self.rebind_step(&command, args);
+                    }
+                    Request::RebindAll {
+                        command,
+                        keys,
+                        layer,
+                    } => {
+                        let args = json!({ "command": command, "keys": keys, "layer": layer });
+                        self.rebind_step(&command, args);
                     }
                     Request::Declare { owner, spec } => {
                         let id = spec.id.clone();
@@ -4508,8 +4569,59 @@ impl App {
         self.settle();
         self.handle.feed_indicators();
         self.emit(&Lifecycle::Pass);
+        self.load_pointer_profile();
         self.process_requests();
+        self.publish_pointer(ctx);
         self.autosave(ctx);
+    }
+
+    /// The pointer profile the setting asks for, in the keymap's default
+    /// layer; after a change (not the first load), the question about
+    /// the user's changes.
+    fn load_pointer_profile(&mut self) {
+        let id = crate::pointer::profile_id(&self.handle);
+        if self.pointer.loaded.as_deref() == Some(id.as_str()) {
+            return;
+        }
+        let first = self.pointer.loaded.is_none();
+        self.pointer.loaded = Some(id.clone());
+        match crate::pointer::load_profile(&mut self.reg.keymap, &id) {
+            Some(profile) => {
+                self.dirty = true;
+                if !first {
+                    crate::pointer::ask_about_overrides(&self.handle, profile);
+                }
+            }
+            None => self.handle.0.diagnostics.borrow_mut().warn(
+                "unknown-pointer-profile",
+                None,
+                &id,
+                format!(
+                    "`{id}` is not a pointer profile: `{}` stays in force",
+                    egui_pop_model::pointer::DEFAULT_PROFILE
+                ),
+            ),
+        }
+    }
+
+    /// Publishes the pointer gestures in force to the context, when the
+    /// keymap or the settings changed, or the context lacks them.
+    fn publish_pointer(&mut self, ctx: &Context) {
+        let print = crate::pointer::settings_print(&self.handle);
+        let fresh = match &self.pointer.published {
+            Some((map, rebuilds, p)) => {
+                *rebuilds == self.rebuilds
+                    && *p == print
+                    && egui_pop_core::pointer::published(ctx).is_some_and(|m| Arc::ptr_eq(&m, map))
+            }
+            None => false,
+        };
+        if fresh {
+            return;
+        }
+        let map = Arc::new(crate::pointer::map(&self.handle, &self.reg.keymap));
+        egui_pop_core::pointer::set_shared_map(ctx, map.clone());
+        self.pointer.published = Some((map, self.rebuilds, print));
     }
 
     /// Draws the whole application in a `Ui` covering the window, after

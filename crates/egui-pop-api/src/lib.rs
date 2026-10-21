@@ -121,6 +121,7 @@ pub mod mounts;
 pub mod palette;
 pub mod palettes;
 pub mod plugin;
+pub mod pointer;
 pub mod services;
 pub mod settings;
 pub mod settings_window;

@@ -126,6 +126,18 @@ pub const SHORTCUTS_PRESS_TO_SEARCH: StrKey = StrKey::new(
 );
 pub const SHORTCUTS_BOUND_TO: StrKey =
     StrKey::new("egui-pop-shortcuts-bound-to", "Bound to { $keys }");
+/// The dialog after a change of pointer profile, when the user changed
+/// gestures: its title.
+pub const POINTER_OVERRIDES_TITLE: StrKey = StrKey::new(
+    "egui-pop-pointer-overrides-title",
+    "Pointer profile: { $profile }",
+);
+pub const POINTER_OVERRIDES_DETAIL: StrKey = StrKey::new(
+    "egui-pop-pointer-overrides-detail",
+    "You changed { $count } pointer gestures. Keep your changes on top of this profile, or drop them?",
+);
+pub const POINTER_KEEP: StrKey = StrKey::new("egui-pop-pointer-keep", "Keep my changes");
+pub const POINTER_DROP: StrKey = StrKey::new("egui-pop-pointer-drop", "Drop my changes");
 pub const SHORTCUTS_SHOW_ALL: StrKey =
     StrKey::new("egui-pop-shortcuts-show-all", "Show every command");
 pub const SHORTCUTS_CONFLICTS: StrKey = StrKey::new("egui-pop-shortcuts-conflicts", "Conflicts");
@@ -709,6 +721,10 @@ pub const ALL: &[StrKey] = &[
     SHORTCUTS_PRESS_TO_SEARCH,
     SHORTCUTS_BOUND_TO,
     SHORTCUTS_SHOW_ALL,
+    POINTER_OVERRIDES_TITLE,
+    POINTER_OVERRIDES_DETAIL,
+    POINTER_KEEP,
+    POINTER_DROP,
     SHORTCUTS_CONFLICTS,
     SHORTCUTS_CONFLICT_IN_SCOPE,
     SHORTCUTS_PRESS_NEW_KEYS,
