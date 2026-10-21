@@ -125,7 +125,9 @@ layout (`workbench.flyout`, `{ "panel", "open" }`;
 `AppHandle::open_flyout`). Escape or a click away closes it, the focus
 going back where it was: it is an overlay of the stack
 (`egui_pop::core::overlay::hold`), above which menus and dialogs open
-as usual. A click on another icon switches to that panel. A double
+as usual. A combo box's list or a context menu opened in the panel is
+part of the flyout: a click in it does not close the flyout, and Escape
+closes it first. A click on another icon switches to that panel. A double
 click on the icon, or the pin button in the flyout's band, unfolds the
 area with the panel shown. The flyout's free edge resizes it; the
 width is kept per panel and saved with the layout (`flyouts`,
