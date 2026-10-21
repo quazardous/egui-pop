@@ -60,6 +60,10 @@ publishes.
   bundled faces behind them, never the system's, and give the same
   bytes for the same graph (the PDF with fixed metadata and its objects
   in a canonical order).
+- `graph.export` writes PNG and PDF (egui-pop-imaging, egui-pop): its
+  `format` argument is `svg` by default, `png` (with a `scale`) or
+  `pdf` with the `graph-png` and `graph-pdf` features, the image
+  base64-encoded.
 - Status items with alignment, priority, live states, popovers and
   hover cards (egui-pop-api): `strips::Indicator::align` puts an item
   at the bar's start (after the breadcrumb and the chips) or its end;

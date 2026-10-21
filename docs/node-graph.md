@@ -320,7 +320,7 @@ a connection is type-checked, then the edit runs its step.
 | `graph.edit` | `graph`, `edit` (`connect`, `disconnect`, `move`, `delete`, `add`) and the edit's fields | `queued` |
 | `graph.select` | `graph`, `nodes` | `queued` |
 | `graph.view` | `graph`, and `fit: true`, `level` or `focus` (a node) | `queued` |
-| `graph.export` | `graph`, `selection`, `level`, `wires`, `background`, `title` | `svg`: the graph as an image (see [Export](#export)) |
+| `graph.export` | `graph`, `format` (`svg`, `png`, `pdf`), `selection`, `level`, `wires`, `background`, `title`, `scale` | `svg` as text, or `png` or `pdf` base64-encoded: the graph as an image (see [Export](#export)) |
 
 ## Export
 
@@ -409,14 +409,17 @@ in a canonical order (svg2pdf writes some in hash order). A failure is
 an `ExportError`: an empty image (nothing selected and no margin), a
 scale that is not positive, an image too large.
 
-The facade's `graph-png` and `graph-pdf` features turn them on.
+The facade's `graph-png` and `graph-pdf` features turn them on, in
+egui-pop-imaging too.
 
 ### Agents
 
 `show_graph` keeps a copy of the graph at each frame
 (`GraphEditor::keep_export`, `GraphOutput::export`), which the
-`graph.export` command exports: `level` by name, `wires` (`curves`,
-`orthogonal`, `straight`) to draw another style than the editor's.
+`graph.export` command exports: `format` (`svg` by default; `png` and
+`pdf` when built with their features, base64-encoded), `level` by name,
+`wires` (`curves`, `orthogonal`, `straight`) to draw another style than
+the editor's, `scale` for a PNG (1 by default).
 
 ## A graph file
 

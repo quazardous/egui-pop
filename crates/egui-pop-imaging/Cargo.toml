@@ -15,9 +15,18 @@ authors.workspace = true
 [lints]
 workspace = true
 
+[features]
+## `graph.export` writes PNG (`format: "png"`), base64-encoded.
+graph-png = ["egui-pop-viewport/graph-png", "dep:base64"]
+## `graph.export` writes PDF (`format: "pdf"`), base64-encoded.
+graph-pdf = ["egui-pop-viewport/graph-pdf", "dep:base64"]
+
 [dependencies]
 egui-pop-model.workspace = true
 egui-pop-api.workspace = true
 egui-pop-viewport.workspace = true
 egui.workspace = true
 serde_json.workspace = true
+# MIT OR Apache-2.0, already in the tree: `graph.export`'s PNG and PDF
+# as text.
+base64 = { version = "0.22", optional = true }

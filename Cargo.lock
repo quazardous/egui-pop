@@ -1179,6 +1179,7 @@ dependencies = [
 name = "egui-pop-imaging"
 version = "0.2.0"
 dependencies = [
+ "base64",
  "egui",
  "egui-pop-api",
  "egui-pop-model",

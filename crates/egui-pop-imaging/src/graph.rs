@@ -25,7 +25,8 @@
 //! the user's: type-checked, then its step), `graph.select`,
 //! `graph.view` (fit, a level, a node to focus) and `graph.export` (the
 //! graph as an SVG image, from the copy the editor kept at its last
-//! frame).
+//! frame; PNG and PDF, base64-encoded, behind the `graph-png` and
+//! `graph-pdf` features).
 
 use std::collections::BTreeMap;
 use std::sync::Mutex;
@@ -362,20 +363,60 @@ pub(crate) fn connect(ctx: &mut Ctx<'_>) -> Result<(), CtxError> {
     )?;
     ctx.command(
         CommandSpec::new(CMD_GRAPH_EXPORT, "Export the graph", CAT)
-            .description("A node editor's graph as an SVG image, drawn from the graph and its layout as the editor drew it last: `selection` (true: only the selected nodes), `level` (overview, ports or detail; ports by default), `wires` (curves, orthogonal or straight; the editor's by default), `background` (false: transparent), `title`. Gives `svg`.")
+            .description("A node editor's graph as an image, drawn from the graph and its layout as the editor drew it last: `format` (svg by default; png or pdf when built with them), `selection` (true: only the selected nodes), `level` (overview, ports or detail; ports by default), `wires` (curves, orthogonal or straight; the editor's by default), `background` (false: transparent), `title`, `scale` (a PNG's pixels per point, 1 by default). Gives `svg` as text, or `png` or `pdf` base64-encoded.")
             .hidden()
-            .args(json!({ "graph": "main", "selection": false, "level": "ports" })),
+            .args(json!({ "graph": "main", "format": "svg", "selection": false, "level": "ports" })),
         |call| {
             let (graphs, name) = target(call)?;
+            let format = call
+                .args
+                .get("format")
+                .and_then(Json::as_str)
+                .unwrap_or("svg")
+                .to_string();
+            if !EXPORT_FORMATS.contains(&format.as_str()) {
+                return Err(format!(
+                    "no export format `{format}` (built with: {})",
+                    EXPORT_FORMATS.join(", ")
+                ));
+            }
             let export = graphs
                 .export(&name)
                 .ok_or_else(|| format!("no graph to export from `{name}` yet"))?;
             let (export, options) = export_args(export, call.args)?;
-            let svg = export.svg(&options);
-            Ok(json!({ "graph": name, "format": "svg", "svg": svg }))
+            let data = match format.as_str() {
+                #[cfg(feature = "graph-png")]
+                "png" => {
+                    let scale = call.args.get("scale").and_then(Json::as_f64).unwrap_or(1.0);
+                    base64(&export.png(&options, scale as f32).map_err(|e| e.to_string())?)
+                }
+                #[cfg(feature = "graph-pdf")]
+                "pdf" => base64(&export.pdf(&options).map_err(|e| e.to_string())?),
+                _ => export.svg(&options),
+            };
+            let mut out = json!({ "graph": name, "format": format });
+            out[format.as_str()] = Json::String(data);
+            Ok(out)
         },
     )?;
     Ok(())
+}
+
+/// The formats `graph.export` writes, as built: `svg`, then `png` and
+/// `pdf` with the `graph-png` and `graph-pdf` features.
+pub const EXPORT_FORMATS: &[&str] = &[
+    "svg",
+    #[cfg(feature = "graph-png")]
+    "png",
+    #[cfg(feature = "graph-pdf")]
+    "pdf",
+];
+
+/// Bytes as standard base64, padded.
+#[cfg(any(feature = "graph-png", feature = "graph-pdf"))]
+fn base64(bytes: &[u8]) -> String {
+    use base64::Engine as _;
+    base64::engine::general_purpose::STANDARD.encode(bytes)
 }
 
 /// A level by its name.
