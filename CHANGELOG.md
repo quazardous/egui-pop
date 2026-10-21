@@ -12,6 +12,22 @@ publishes.
 
 ### Added
 
+- A widget's own secondary button (egui-pop-core): a widget that needs
+  the right click for something else claims the secondary click, the
+  drag or both on its rect (`pointer::claim::claim_secondary` with a
+  `SecondaryClaim`). Where it does, no context menu opens, neither a
+  declared one on a parent (egui-pop-api's `menus::context_menu`) nor
+  egui-pop's own (the node graph's, the status bar's, a tree's, the
+  title bar's system menu), and the canvases' profile bindings for that
+  gesture do not fire (the image viewport's secondary clicks and drags,
+  the graph's secondary drag under the Blender / node editors profile).
+  `claim::context_menu` is egui's `Response::context_menu` obeying
+  claims. The curve editor claims its secondary click (egui-pop-viewport):
+  deleting a point no longer opens a menu around it. The shortcuts
+  editor lists the uses widgets said under *Widgets' own gestures*
+  (egui-pop-api), and the debug bridge's new `pointer` collector shows
+  the profile in force, the hint, the claims in force and the uses.
+  This settles the pointer gestures' last open question.
 - The root crumb named by the application (egui-pop-api):
   `ContextsPlugin::root_label` says what is open at the root of the
   breadcrumb (a workspace, a project), asked each time the crumb is

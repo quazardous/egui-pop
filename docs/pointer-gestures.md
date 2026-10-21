@@ -128,6 +128,58 @@ output (`ViewportOutput::hint`, `GraphOutput::hint`) and for a status
 line (`egui_pop::core::pointer::hint_now`). The viewport shows the hand
 when the keys held make a drag pan where a plain drag would not.
 
+## A widget's own secondary button
+
+The secondary button opens a context menu everywhere by default, and a
+canvas may bind a secondary drag in its profile (Blender / node editors
+pan the graph with it). A widget that needs the right click for
+something else (a curve editor deleting a point, a swatch resetting its
+colour, a canvas of the application's binding a right drag) **claims**
+it on its rect, each pass it is drawn
+(`egui_pop::core::pointer::claim`):
+
+```rust
+use egui_pop::core::pointer::claim::{self, SecondaryClaim};
+use egui_pop::egui;
+
+fn swatch(ui: &mut egui::Ui) {
+    let r = ui.allocate_response(egui::vec2(24.0, 24.0), egui::Sense::click());
+    claim::claim_secondary(&r, SecondaryClaim::new("Swatch").click("Resets the colour"));
+    if r.secondary_clicked() {
+        // reset the colour
+    }
+}
+```
+
+`SecondaryClaim::click` takes the click, `drag` the drag; a widget may
+take both. Where the button was pressed over a claim:
+
+- no context menu opens, neither one declared on a parent
+  (`menus::context_menu`) nor egui-pop's own (the graph's, the status
+  bar's, a tree's, the window's system menu on the title bar); a menu
+  drawn with egui's `Response::context_menu` should go through
+  `claim::context_menu` to obey claims, and code reading the click
+  itself asks `claim::opens_context_menu`;
+- the canvas's profile binding for that gesture does not fire (the
+  image viewport's secondary clicks and drags, the graph's secondary
+  drag), and a canvas of the application's asks `claim::claimed` the
+  same way.
+
+A claimed click leaves the secondary drag to the canvas, and a claimed
+drag leaves the click to the menus. A claim counts for the pass it was
+made in and the next, so a parent that reads its response before its
+children are drawn sees them; a window or popup drawn above it hides
+it. The curve editor claims the secondary click, which deletes the
+point under the pointer.
+
+What a claim says it does is kept as the widget's **use**: the
+shortcuts editor lists the uses seen so far under *Widgets' own
+gestures* (they are the widget's, so not changed there), and
+`claim::declare_use` lists one before its widget is first drawn. The
+debug bridge's `pointer` collector shows the profile in force, the hint,
+the claims in force (widget, rect, click and drag with what they do)
+and the uses.
+
 ## The web
 
 Ctrl and the wheel zoom a page, and a trackpad's pinch arrives the same

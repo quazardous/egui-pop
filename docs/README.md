@@ -76,7 +76,8 @@ of every crate with every feature on.
 - [Pointer gestures and profiles](pointer-gestures.md): what the wheel,
   a pinch and each button do on the image, the node graph and sliders,
   as five profiles (Document, darktable, Adobe, Blender / node editors,
-  Trackpad) of keymap bindings the shortcuts editor changes.
+  Trackpad) of keymap bindings the shortcuts editor changes, and a
+  widget taking the secondary button for itself.
 - [Cursors and the loupe](cursors.md): tool cursors drawn at the
   window's scale, a brush outline that follows the zoom, the
   `cursor.resolve` step, a GPU loupe on the displayed pixels; the
@@ -159,7 +160,7 @@ of every crate with every feature on.
   what waits for the mount contract and the icon registry.
 - [Pointer gestures, a study](design/pointer-gestures.md): how
   applications use the wheel, the buttons and the modifiers on canvases
-  (darktable in detail), and proposed gesture profiles (not decided).
+  (darktable in detail), the gesture profiles, and the decisions taken.
 - [Fonts](fonts.md): font families from the theme at four weights, the
   size scale (built), and the design for the rest.
 - [CREDO.md](../CREDO.md): the principles.

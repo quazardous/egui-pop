@@ -1,7 +1,8 @@
 # Pointer gestures: a survey, and profiles instead of one rule
 
-Status: **design note, study** (2026-10-20). Nothing here is decided;
-section 7 lists the questions for the maintainer. It answers
+Status: **design note, decided** (study 2026-10-20; decisions
+2026-10-20 and 2026-10-21, at the end). Section 7 keeps the questions
+as they were asked. It answers
 [issue #47](https://github.com/quazardous/egui-pop/issues/47)
 ("Canvases: one rule for the mouse wheel and the middle button") and
 its follow-up, which widened the scope to every pointer button, the
@@ -782,15 +783,15 @@ Operating systems and browsers:
 5. **A double click on the image:** an option (leave the view, as darktable does, or fit); each profile gives its default.
 6. **Ctrl and the wheel on the web:** egui-pop takes it from the browser.
 
-Questions 7 to 15 above are still open.
+Questions 7 and 12 were settled with these (decisions 5 and 6).
 
-### Provisional choices (not decided)
+## Decisions (maintainer, 2026-10-21)
 
-The first implementation (see [pointer-gestures.md](../pointer-gestures.md))
-takes the note's proposal where a question is open. Each choice is data
-in the profile documents (`crates/egui-pop-model/profiles/*.json`) or a
-setting, so changing it is an edit there, not in code. **Not decided**:
-the maintainer settles them.
+The answers the first implementation took (see
+[pointer-gestures.md](../pointer-gestures.md)) are confirmed, with
+question 9 amended. Each is data in the profile documents
+(`crates/egui-pop-model/profiles/*.json`) or a setting, so changing one
+later is an edit there, not in code.
 
 - **Question 6 (modifiers change what, or how finely):** a binding's
   meaning is per canvas scope, so a profile may give a modifier
@@ -799,27 +800,39 @@ the maintainer settles them.
   handle adjusts that handle, whatever the profile.
 - **Question 8 (primary drag on an empty image):** it pans in every
   profile; a box select stays the graph's.
-- **Question 9 (secondary button):** a context menu everywhere, except
-  where a profile binds a secondary drag: only Blender / node editors
-  pans the graph with it (darktable's profile does not, so the graph
-  lost today's secondary-drag pan under the default profile).
-- **Question 10 (fine and coarse):** per profile. Ctrl finer and Shift
-  coarser in Document, darktable and Trackpad; Shift finer and Ctrl
-  coarser in Adobe and Blender / node editors. Document keeps today's
-  default rather than GIMP's Shift-finer cell.
-- **Question 11 (Alt):** used only where the source applications use it
-  (Adobe's Alt + wheel zoom) or egui-pop already did (Alt + wheel steps
-  a slider without the focus, in Document and darktable); the shortcuts
-  editor warns, on Linux, of a gesture bound with Alt and a drag or the
-  wheel.
-- **Question 13 (device split):** the line / point split, with a global
-  override (`input.wheel_device`: auto, mouse, trackpad); no per-device
-  settings.
+- **Question 9 (secondary button), amended:** the secondary button
+  opens a context menu everywhere by default, except where a profile
+  binds a secondary drag: only Blender / node editors pans the graph
+  with it (darktable's profile does not). Any particular widget that
+  needs the right click for something else may opt out and take the
+  secondary button for itself (a curve editor deleting a node, a
+  colour swatch resetting, a canvas binding a right drag): it claims
+  the secondary click, the drag or both on its rect
+  (`egui_pop_core::pointer::claim`). While it does, neither the
+  enclosing canvas's profile binding for that gesture nor a context
+  menu above it fires there. The claim shows in the debug bridge's
+  `pointer` collector, and the shortcuts editor lists the widget's use
+  when the claim says what it does. The curve editor claims the
+  secondary click (it deletes the point under the pointer).
+- **Question 10 (fine and coarse):** per profile. Ctrl finer and
+  Shift coarser in Document, darktable and Trackpad; Shift finer and
+  Ctrl coarser in Adobe and Blender / node editors. Document keeps
+  the earlier default rather than GIMP's Shift-finer cell.
+- **Question 11 (Alt):** used only where the source applications use
+  it (Adobe's Alt + wheel zoom) or egui-pop already did (Alt + wheel
+  steps a slider without the focus, in Document and darktable); the
+  shortcuts editor warns, on Linux, of a gesture bound with Alt and a
+  drag or the wheel.
+- **Question 13 (device split):** the line / point split, with a
+  global override (`input.wheel_device`: auto, mouse, trackpad); no
+  per-device settings.
 - **Question 14 (scope of a profile):** pointer gestures only; the
-  keyboard navigation keys (Space, +, -, 0, 1, 2, arrows) stay as they
-  are, and Space + drag pans in every profile.
-- **Question 15 (held key + pointer):** out of scope; a held key other
-  than a modifier is not part of a pointer chord yet.
+  keyboard navigation keys (Space, +, -, 0, 1, 2, arrows) stay as
+  they are, and Space + drag pans in every profile.
+- **Question 15 (held key + pointer):** left for later; a held key
+  other than a modifier is not part of a pointer chord yet.
+
+Every question of section 7 is now settled.
 
 Implementation notes (2026-10-21): the gesture commands are per canvas
 kind (`gesture.image.zoom`, `gesture.graph.pan`, `gesture.value.step`)
