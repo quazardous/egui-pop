@@ -207,6 +207,7 @@ pub(crate) fn publish(
                     "tiles": f.tiles,
                     "gpu": f.gpu,
                     "lines": f.lines,
+                    "stale": f.stale,
                 })),
             },
             "trace": trace,

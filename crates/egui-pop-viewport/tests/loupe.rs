@@ -116,11 +116,91 @@ fn the_readout_shows_displayed_values_or_the_sources() {
         "{lines:?}"
     );
     let lines = loupe::readout_lines(Some([12, 34]), Some(&readout), Values::Scene, None, labels);
-    assert_eq!(lines[1], "R 0.180  G 0.180  B 0.180");
-    // A readout for another pixel is not this one's.
-    let lines = loupe::readout_lines(Some([1, 1]), Some(&readout), Values::Scene, None, labels);
-    assert_eq!(lines[1], "no value");
+    assert_eq!(lines[1..], ["R 0.180", "G 0.180", "B 0.180"]);
+    assert!(!loupe::stale(Some([12, 34]), Some(&readout)));
     assert!(loupe::readout_lines(Some([1, 1]), None, Values::Off, None, labels).is_empty());
+}
+
+#[test]
+fn a_lagging_readout_keeps_its_values_and_is_stale() {
+    let readout = Readout {
+        side: Side::After,
+        pixel: [12, 34],
+        values: vec![("R".into(), 0.18), ("G".into(), 0.18), ("B".into(), 0.18)],
+    };
+    let stage = LinearSrgb.stage(&DisplayTarget::srgb());
+    let labels = ["display", "scene", "no value"];
+    let fresh = loupe::readout_lines(
+        Some([12, 34]),
+        Some(&readout),
+        Values::Display,
+        Some(&stage),
+        labels,
+    );
+    // The pointer moved on: the position follows it, the values stay.
+    let lagging = loupe::readout_lines(
+        Some([13, 34]),
+        Some(&readout),
+        Values::Display,
+        Some(&stage),
+        labels,
+    );
+    assert_eq!(lagging.len(), 3, "{lagging:?}");
+    assert_eq!(lagging[0], "13, 34  display");
+    assert_eq!(lagging[1..], fresh[1..]);
+    assert!(loupe::stale(Some([13, 34]), Some(&readout)));
+    // Off the image: one line, nothing stale.
+    let off = loupe::readout_lines(None, Some(&readout), Values::Display, Some(&stage), labels);
+    assert_eq!(off, ["no value"]);
+    assert!(!loupe::stale(None, Some(&readout)));
+    // No readout yet: the values say so.
+    let none = loupe::readout_lines(Some([1, 1]), None, Values::Scene, None, labels);
+    assert_eq!(none, ["1, 1  scene", "no value"]);
+    assert!(!loupe::stale(Some([1, 1]), None));
+}
+
+#[test]
+fn the_readout_templates_hold_the_widest_values_line_by_line() {
+    let labels = ["display", "scene", "no value"];
+    assert!(loupe::readout_templates(Values::Off, labels, &[]).is_empty());
+    let t = loupe::readout_templates(Values::Display, labels, &[]);
+    assert_eq!(
+        t,
+        [
+            "-00000, -00000  display",
+            "RGB 255 255 255",
+            "Lab 100 -128 -128"
+        ]
+    );
+    let names: Vec<String> = ["R", "G", "B"].map(String::from).to_vec();
+    let t = loupe::readout_templates(Values::Scene, labels, &names);
+    assert_eq!(t.len(), 4, "the position and one line per value");
+    assert_eq!(t[0], "-00000, -00000  scene");
+    assert_eq!(t[1], "R -0000.000");
+    // Before any readout: one value line, as wide as the none label.
+    let long = ["display", "scene", "nothing to show here"];
+    let t = loupe::readout_templates(Values::Scene, long, &[]);
+    assert_eq!(t.len(), 2);
+    assert_eq!(t[1], "nothing to show here");
+    // Every line fits what can be shown in it.
+    let stage = LinearSrgb.stage(&DisplayTarget::srgb());
+    let readout = Readout {
+        side: Side::After,
+        pixel: [-12345, 99999],
+        values: vec![("R".into(), 1.0), ("G".into(), 0.0), ("B".into(), 0.0)],
+    };
+    let t = loupe::readout_templates(Values::Display, labels, &[]);
+    let lines = loupe::readout_lines(
+        Some(readout.pixel),
+        Some(&readout),
+        Values::Display,
+        Some(&stage),
+        labels,
+    );
+    assert_eq!(lines.len(), t.len());
+    for (l, w) in lines.iter().zip(&t) {
+        assert!(l.chars().count() <= w.chars().count(), "{l:?} {w:?}");
+    }
 }
 
 #[test]
@@ -225,4 +305,53 @@ fn near_the_right_edge_the_loupe_flips_left() {
     let f = h.state().state.loupe_frame().expect("shown").clone();
     assert!(f.rect.right() < at.x, "{:?}", f.rect);
     assert_eq!(f.sampling.block, 8.0);
+}
+
+#[test]
+fn the_loupe_keeps_its_size_while_the_pointer_crosses_pixels() {
+    for values in [Values::Display, Values::Scene] {
+        let mut s = scene();
+        *s.state.loupe_mut() = Loupe {
+            on: true,
+            values,
+            ..Loupe::default()
+        };
+        let mut h = harness(s);
+        h.run();
+        // Low, so the loupe goes above the pointer: a change of height
+        // would move it.
+        let start = Pos2::new(150.0, 285.0);
+        h.hover_at(start);
+        h.run();
+        h.run();
+        let first = h.state().state.loupe_frame().expect("shown").clone();
+        assert!(!first.stale, "{:?}", first.lines);
+        let mut saw_stale = false;
+        // At 200 %, each step of 6 points is another pixel, and the walk
+        // crosses image x 512, where red (x % 256) drops from 255 to 0.
+        for k in 1..24 {
+            let at = start + vec2(6.0 * k as f32, 0.0);
+            h.hover_at(at);
+            // The frame the pointer moves in: the values are the last
+            // pixel's, then this one's once the source answered.
+            for settle in [false, true] {
+                if settle {
+                    h.run();
+                } else {
+                    h.step();
+                }
+                let f = h.state().state.loupe_frame().expect("shown").clone();
+                saw_stale |= f.stale;
+                assert_eq!(
+                    f.rect.size(),
+                    first.rect.size(),
+                    "{values:?} {k} {:?}",
+                    f.lines
+                );
+                assert_eq!(f.lines.len(), first.lines.len(), "{values:?} {:?}", f.lines);
+                assert_eq!(f.rect.bottom(), at.y - 24.0, "it sits above the pointer");
+            }
+        }
+        assert!(saw_stale, "the readout lags the pointer for a frame");
+    }
 }

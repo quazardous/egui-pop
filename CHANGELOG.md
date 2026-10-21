@@ -140,6 +140,14 @@ publishes.
   (installed by every `App`) now holds that input back for the next
   pass, when the field has the focus. Every text field is covered,
   egui-pop's and an application's own (`docs/upstream.md`).
+- The loupe's readout keeps its size (egui-pop-viewport): it was sized
+  from its text on every frame, so its values lines vanished for a
+  frame while the source answered for the next pixel and its width
+  followed the digits, and the loupe jumped when it sat above the
+  pointer. The block is now measured from the widest values of its
+  mode, and while the readout lags the pointer the last values stay,
+  dimmed (`LoupeFrame::stale`, `loupe::stale`,
+  `loupe::readout_templates`). Scene values now show one per line.
 
 ## 0.2.0 (2026-10-21)
 

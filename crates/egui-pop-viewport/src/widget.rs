@@ -190,6 +190,9 @@ pub struct ViewportState {
     cursor: CursorState,
     loupe: Loupe,
     loupe_frame: Option<LoupeFrame>,
+    /// The last readout the loupe showed fresh: shown dimmed while the
+    /// next pixel's values are on their way.
+    loupe_readout: Option<Readout>,
     /// The tiles drawn this frame, for the loupe.
     tile_draws: Vec<TileDraw>,
     /// The display stage drawn with this frame.
@@ -1907,27 +1910,45 @@ fn draw_loupe(
         tr(&crate::strings::LOUPE_SCENE),
         tr(&crate::strings::LOUPE_NONE),
     ];
-    let lines = loupe::readout_lines(
-        mapping.pixel_at(pointer),
-        readout,
-        l.values,
-        state.stage.as_ref(),
-        [&labels[0], &labels[1], &labels[2]],
-    );
+    let pixel = mapping.pixel_at(pointer);
+    if let Some(r) = readout.filter(|r| Some(r.pixel) == pixel) {
+        state.loupe_readout = Some(r.clone());
+    }
+    let shown = state.loupe_readout.as_ref();
+    let labels: [&str; 3] = [&labels[0], &labels[1], &labels[2]];
+    let lines = loupe::readout_lines(pixel, shown, l.values, state.stage.as_ref(), labels);
+    let stale = lines.len() > 1 && loupe::stale(pixel, shown);
+    let names: Vec<String> = shown
+        .map(|r| r.values.iter().map(|(n, _)| n.clone()).collect())
+        .unwrap_or_default();
+    let templates = loupe::readout_templates(l.values, labels, &names);
+    let font = egui::FontId::monospace(t.font.small);
+    // The block is measured from the widest values, not from this
+    // frame's: it keeps its size while the pointer moves.
+    let block = (!templates.is_empty()).then(|| {
+        painter
+            .layout_no_wrap(templates.join("\n"), font.clone(), t.text.default)
+            .size()
+    });
     let galley = (!lines.is_empty()).then(|| {
-        painter.layout_no_wrap(
-            lines.join("\n"),
-            egui::FontId::monospace(t.font.small),
-            t.text.default,
-        )
+        let mut job = egui::text::LayoutJob::default();
+        let values = if stale { t.text.muted } else { t.text.default };
+        for (i, line) in lines.iter().enumerate() {
+            let (text, color) = match i {
+                0 => (line.clone(), t.text.default),
+                _ => (format!("\n{line}"), values),
+            };
+            job.append(&text, 0.0, egui::TextFormat::simple(font.clone(), color));
+        }
+        painter.layout_job(job)
     });
     let pad = egui_pop_core::scale::snap_size(t.space.xs, ppp);
     let picture = loupe::picture_size(&l, ppp);
-    let text_h = galley.as_ref().map_or(0.0, |g| g.size().y + pad);
-    let size = egui_pop_core::scale::snap_size(picture.x + 2.0 * pad, ppp);
+    let text_h = block.map_or(0.0, |b| b.y + pad);
+    let width = (picture.x + 2.0 * pad).max(block.map_or(0.0, |b| b.x + 2.0 * pad));
     let size = Vec2::new(
-        size.max(galley.as_ref().map_or(0.0, |g| g.size().x + 2.0 * pad)),
-        picture.y + 2.0 * pad + text_h,
+        egui_pop_core::scale::snap_size(width, ppp),
+        egui_pop_core::scale::snap_size(picture.y + 2.0 * pad + text_h, ppp),
     );
     let placed = loupe::place(pointer, size, mapping.rect, l.offset);
     let snap = |v: f32| (v * ppp).round() / ppp;
@@ -2031,5 +2052,6 @@ fn draw_loupe(
         tiles,
         gpu: on_gpu,
         lines,
+        stale,
     });
 }

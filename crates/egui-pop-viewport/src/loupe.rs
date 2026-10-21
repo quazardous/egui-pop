@@ -260,6 +260,13 @@ pub fn lab_from_srgb8(rgb: [u8; 3]) -> [f32; 3] {
 
 /// The readout's lines for a pixel: its coordinates and the mode, then
 /// its values as asked (`none` when the source gave nothing usable).
+///
+/// Display shows an `RGB` and a `Lab` line; Scene shows one line per
+/// value the source named. The readout may be for another pixel: it
+/// lags the pointer while the source answers. Its values are shown all
+/// the same (the loupe dims them, see [`stale`]) rather than dropped,
+/// and the position line always follows `pixel`. Off the image (`pixel`
+/// is `None`) there is a single `none` line.
 pub fn readout_lines(
     pixel: Option<[i64; 2]>,
     readout: Option<&Readout>,
@@ -281,7 +288,6 @@ pub fn readout_lines(
             return out;
         }
     }
-    let readout = readout.filter(|r| Some(r.pixel) == pixel);
     match (values, readout) {
         (Values::Display, Some(r)) => match stage.and_then(|s| displayed(r, s)) {
             Some(rgb) => {
@@ -294,16 +300,52 @@ pub fn readout_lines(
             None => out.push(none.to_string()),
         },
         (Values::Scene, Some(r)) if !r.values.is_empty() => {
-            let mut s = String::new();
             for (name, v) in &r.values {
-                if !s.is_empty() {
-                    s.push_str("  ");
-                }
-                s.push_str(&format!("{name} {v:.3}"));
+                out.push(format!("{name} {v:.3}"));
             }
-            out.push(s);
         }
         _ => out.push(none.to_string()),
+    }
+    out
+}
+
+/// Whether the readout's values shown for `pixel` are another pixel's:
+/// the pointer moved on and the source has not answered yet.
+pub fn stale(pixel: Option<[i64; 2]>, readout: Option<&Readout>) -> bool {
+    pixel.is_some() && readout.is_some_and(|r| Some(r.pixel) != pixel)
+}
+
+/// The widest text each line of the readout can hold, one per line:
+/// what the loupe's readout block is measured from, so that its size
+/// stays the same while the values change, lag or go away.
+///
+/// Display has three lines (the position, `RGB` and `Lab`); Scene has
+/// the position and one line per name in `names` (the values the source
+/// gave last, one line while it has given none). Each line is the
+/// longer of its widest values and the `none` label; the readout is
+/// laid out in a monospace font, so the longer is the wider.
+pub fn readout_templates(values: Values, labels: [&str; 3], names: &[String]) -> Vec<String> {
+    let [display, scene, none] = labels;
+    let widest = |t: String| {
+        if none.chars().count() > t.chars().count() {
+            none.to_string()
+        } else {
+            t
+        }
+    };
+    let mode = match values {
+        Values::Off => return Vec::new(),
+        Values::Display => display,
+        Values::Scene => scene,
+    };
+    let mut out = vec![widest(format!("-00000, -00000  {mode}"))];
+    match values {
+        Values::Display => {
+            out.push(widest("RGB 255 255 255".into()));
+            out.push("Lab 100 -128 -128".into());
+        }
+        _ if names.is_empty() => out.push(widest("X -0000.000".into())),
+        _ => out.extend(names.iter().map(|n| widest(format!("{n} -0000.000")))),
     }
     out
 }
@@ -321,8 +363,12 @@ pub struct LoupeFrame {
     pub tiles: usize,
     /// On the GPU path (else the CPU's textures).
     pub gpu: bool,
-    /// The readout's lines.
+    /// The readout's lines (see [`readout_lines`]); empty when the
+    /// values are off.
     pub lines: Vec<String>,
+    /// The lines after the first show the last readout, another pixel's
+    /// (the source has not answered for this one yet): they are dimmed.
+    pub stale: bool,
 }
 
 /// Points from physical pixels.
