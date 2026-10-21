@@ -12,6 +12,15 @@ publishes.
 
 ### Added
 
+- The clipboard's model (egui-pop-model, ADR 0015): `clipboard::FormatId`
+  (MIME-like formats, an application's private types
+  `application/x-<app>.<type>+json`), `ClipItem` (a typed item with its
+  readable fallbacks, its origin and what sanitisers left out), `Slot`
+  (the user's, or a session's own), `Boundary`, `TransformSpec`, and
+  `negotiate`, `choose` and `candidates`, which pick how a paste goes
+  from what a copy offers and what a target accepts (one transform,
+  never a chain), or say why nothing fits; `strip_controls` and
+  `html_to_text` for content coming in from outside.
 - Custom pages in the settings window (egui-pop-api), closing E5 of the
   mount contract: `Ctx::settings_page` mounts a `SettingsPage` a plugin
   draws itself, in the tree under a section or a page of its own

@@ -7,6 +7,8 @@
 //! - [`when`]: context clauses (`listFocus && !textInputFocus`);
 //! - [`clock`]: where "now" comes from, injected so tests fix it;
 //! - [`commands`]: every action named, run the same way from anywhere;
+//! - [`clipboard`]: the clipboard's pure parts (ADR 0015): formats,
+//!   items, slots, boundaries, the negotiation of a paste;
 //! - [`context`]: the context stack (places and modes, ADR 0012): its
 //!   frames, its state, a pure `apply` and `restore`, its documents;
 //! - [`field`]: a field's state (modified, required, invalid, disabled
@@ -32,6 +34,7 @@
 //! - [`tab`]: the Tab order of a focus scope (reading order, indices,
 //!   groups).
 
+pub mod clipboard;
 pub mod clock;
 pub mod commands;
 pub mod context;
