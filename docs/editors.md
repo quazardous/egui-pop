@@ -445,7 +445,7 @@ not follow the text inputs' rule that Escape leaves:
 | Ctrl+Shift chords (but Ctrl+Shift+C), Command chords on macOS | the application's keymap: a terminal cannot tell Ctrl+Shift+K from Ctrl+K, so nothing is lost. `terminal.clear` is bound to Ctrl+Shift+K on the `terminal` surface |
 | Ctrl+C | copies when text is selected, else interrupts the program |
 | Ctrl+Shift+C | copies the selection; with nothing selected, does nothing |
-| Ctrl+V, Shift+Insert (the platform's paste) | pastes (bracketed when the program asked) |
+| Ctrl+V (Command+V on macOS), the Paste key; Shift+Insert on Windows only (egui-winit's mapping) | pastes (bracketed when the program asked) |
 | Shift+Page Up, Shift+Page Down | scroll back |
 
 The keys are taken before the application's key dispatcher reads them

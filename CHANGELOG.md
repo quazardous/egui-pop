@@ -726,6 +726,9 @@ publishes.
   nothing is selected (egui-pop-editors): egui-winit delivers it as a
   copy event, like Ctrl+C, which then sent ^C; with Shift held it now
   only copies the selection, and does nothing without one.
+- The terminal's documentation no longer says Shift+Insert pastes
+  everywhere: egui-winit maps it to paste on Windows only; elsewhere
+  Ctrl+V (Command+V on macOS) or the Paste key paste.
 
 ### Security
 
