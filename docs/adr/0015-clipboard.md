@@ -1,6 +1,6 @@
 # 0015: The clipboard: typed items owned by the kernel, offered in several formats, hooked at each boundary
 
-Date: 2026-10-18. Status: **proposed**.
+Date: 2026-10-18. Status: **accepted** (2026-10-21).
 
 The analysis behind it (what exists today, how egui and eframe reach
 the system clipboard, a survey of crates and of seven applications, the
@@ -139,28 +139,32 @@ own a small private-type backend later.
 - Private types across processes without a shared owner wait for a
   backend per platform; until then such a paste falls back to text.
 
-## Open questions
+## Answers to the open questions (2026-10-21)
 
-Each with the default this ADR proposes (the analysis gives the
+The owner accepted the proposed defaults (the analysis gives the
 reasons):
 
-1. **System clipboard on every copy?** Yes, the fallbacks; a type may
-   declare itself internal only.
-2. **Private type on the system clipboard, or a marker?** A marker
-   first; the private type later where the platform allows.
-3. **Clipboard history** (several items)? No; one item per slot.
-4. **Agents reading the user's clipboard?** Refused unless the host
+1. **System clipboard on every copy:** yes, the fallbacks are written
+   on every copy; a type may declare itself internal only.
+2. **Private type or marker:** a marker first (a change counter, else
+   a hash of the fallback); the private type later, where the platform
+   allows it.
+3. **Clipboard history:** none; one item per slot.
+4. **Agents reading the user's clipboard:** refused, unless the host
    allows it per agent.
-5. **External HTML on paste?** Reduced to text unless the target
-   accepts HTML, then sanitised.
-6. **Primary selection?** Opt-in, text inputs and the code editor only.
-7. **Lossy transforms?** Applied with a toast naming the loss; paste
+5. **External HTML on paste:** reduced to text, unless the target
+   accepts HTML; then sanitised.
+6. **Primary selection:** opt-in, for text inputs and the code editor
+   only.
+7. **Lossy transforms:** applied, with a toast naming the loss; paste
    special shows it beforehand.
-8. **Paste with no target that accepts it?** Refused with the reason,
+8. **Paste with no target that accepts it:** refused with the reason,
    the command greyed out; no guessed target.
 
 ## Done ahead of the steps
 
-Nothing yet. Step 1 of the analysis lists the fixes found while
-reading the code (the editor's cut before its veto, the terminal's
-bracketed paste and Ctrl+Shift+C, a doc error).
+The fixes of step 1 found while reading the code: a cut in the code
+editor copies only once its delete is accepted; the terminal removes
+the bracket's markers from a bracketed paste; Ctrl+Shift+C in the
+terminal never interrupts; `docs/editors.md` says Shift+Insert pastes
+on Windows only. The `Clipboard` contract itself is step 2.
