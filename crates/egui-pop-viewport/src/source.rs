@@ -19,6 +19,11 @@
 //!   source applied its own display transform on the CPU) or
 //!   scene-referred ([`Pixels::Scene`], linear floats the viewport passes
 //!   through the display transform, on the GPU when it can).
+//! - **Device tiles** (feature `wgpu`): a source rendering on the GPU
+//!   hands over a texture or a storage buffer that lives on the render
+//!   device (`TileSink::deliver_device`, see the `device` module);
+//!   nothing is copied, and the display transform runs in the shader as
+//!   for scene pixels.
 //! - **Where the pixels are converted**: by default the sink converts
 //!   each tile on the thread that delivers it (the display transform on
 //!   the CPU path, the half-float texels on the GPU path), so tiles
@@ -34,6 +39,8 @@ use std::sync::{Arc, Mutex};
 
 use egui::{Color32, ColorImage};
 
+#[cfg(feature = "wgpu")]
+use crate::device::{DeviceTile, RenderDevice};
 use crate::display::{self, DisplayTarget, DisplayTransform};
 
 /// A tile's quality.
@@ -210,6 +217,9 @@ pub(crate) enum Message {
     Tile(Side, Arrival),
     Changed(Side, Option<[f64; 4]>),
     Failed(Side, RequestId, String),
+    /// A device tile refused, and why.
+    #[cfg(feature = "wgpu")]
+    Refused(String),
     Readout(Readout),
 }
 
@@ -239,10 +249,10 @@ pub(crate) enum Body {
     },
     /// Ready for a GPU path texture: texels in the format of `stamp`.
     Texels { data: Vec<u8>, stamp: u64 },
-    /// Already on the GPU, rendered by the source on the GPU path's
-    /// device ([`TileSink::deliver_texture`]): nothing to copy.
+    /// Already on the render device ([`TileSink::deliver_device`]):
+    /// bound, nothing copied.
     #[cfg(feature = "wgpu")]
-    Texture(egui_wgpu::wgpu::Texture),
+    Device(Box<DeviceTile>),
 }
 
 impl Body {
@@ -254,7 +264,7 @@ impl Body {
             Body::Raw(_) | Body::Image { .. } => n * 4,
             Body::Texels { data, .. } => data.len(),
             #[cfg(feature = "wgpu")]
-            Body::Texture(_) => 0,
+            Body::Device(_) => 0,
         }
     }
 }
@@ -333,11 +343,16 @@ pub struct Stats {
     pub failed: AtomicU64,
     pub evicted: AtomicU64,
     pub changed: AtomicU64,
+    /// Device tiles taken in (bound on the render device, not copied).
+    pub device: AtomicU64,
+    /// Device tiles refused (another device, no GPU path, a resource
+    /// that does not fit), fallback or not.
+    pub refused: AtomicU64,
 }
 
 impl Stats {
     /// The counters, by name.
-    pub fn snapshot(&self) -> [(&'static str, u64); 7] {
+    pub fn snapshot(&self) -> [(&'static str, u64); 9] {
         let g = |a: &AtomicU64| a.load(Ordering::Relaxed);
         [
             ("requested", g(&self.requested)),
@@ -347,6 +362,8 @@ impl Stats {
             ("failed", g(&self.failed)),
             ("evicted", g(&self.evicted)),
             ("changed", g(&self.changed)),
+            ("device", g(&self.device)),
+            ("refused", g(&self.refused)),
         ]
     }
 
@@ -378,6 +395,8 @@ pub struct TileSink {
     tx: Sender<Message>,
     waker: Arc<Waker>,
     prep: Arc<Mutex<Option<Prep>>>,
+    #[cfg(feature = "wgpu")]
+    render: Arc<Mutex<Option<RenderDevice>>>,
 }
 
 impl fmt::Debug for TileSink {
@@ -419,28 +438,54 @@ impl TileSink {
         ));
     }
 
-    /// Delivers a tile the source rendered on the GPU (feature `wgpu`;
-    /// a prototype, measured in docs/threading.md): `texture` holds
-    /// scene-referred pixels as [`Pixels::Scene`] does, in the GPU
-    /// path's format (`Rgba16Float` when [`GpuInfo::half_float`], else
-    /// `Rgba32Float`), at least `request.size`, with `TEXTURE_BINDING`
-    /// usage; it was created on the device the GPU path was installed
-    /// with, and the work writing it was submitted to that device's
-    /// queue before this call. Nothing is copied: the interface thread
-    /// only binds it. Without the GPU path, the tile fails.
-    ///
-    /// [`GpuInfo::half_float`]: crate::gpu::GpuInfo::half_float
+    /// Delivers a tile that lives on the render device (feature `wgpu`,
+    /// see [`crate::device`]): bound by the GPU path, nothing copied.
+    /// The work writing it must have been submitted to the render
+    /// device's queue before this call. Checked here, on the calling
+    /// thread, against the render device of the last frame (and again
+    /// when the interface takes it in): a tile the viewport cannot draw
+    /// is refused, the error kept
+    /// ([`ViewportState::last_error`](crate::ViewportState::last_error)),
+    /// and its fallback pixels, when it has some, delivered as
+    /// [`TileSink::deliver`] does; without, the request fails.
     #[cfg(feature = "wgpu")]
-    pub fn deliver_texture(&self, request: &TileRequest, texture: egui_wgpu::wgpu::Texture) {
-        self.send(Message::Tile(
-            self.side,
-            Arrival {
-                request: request.id,
-                key: request.key,
-                size: request.size,
-                body: Body::Texture(texture),
-            },
-        ));
+    pub fn deliver_device(&self, request: &TileRequest, tile: DeviceTile) {
+        let render = self.render_device();
+        match tile.check(render.as_ref(), request.size) {
+            Ok(()) => self.send(Message::Tile(
+                self.side,
+                Arrival {
+                    request: request.id,
+                    key: request.key,
+                    size: request.size,
+                    body: Body::Device(Box::new(tile)),
+                },
+            )),
+            Err(e) => {
+                let error = format!("device tile refused: {e}");
+                match tile.fallback.and_then(|f| f()) {
+                    Some(pixels) => {
+                        self.send(Message::Refused(error));
+                        self.deliver(Tile::answer(request, pixels));
+                    }
+                    None => {
+                        self.send(Message::Refused(error.clone()));
+                        self.failed(request.id, error);
+                    }
+                }
+            }
+        }
+    }
+
+    /// The render device device tiles must be created on, as of the last
+    /// frame drawn (feature `wgpu`); `None` before it, or without a GPU
+    /// path.
+    #[cfg(feature = "wgpu")]
+    pub fn render_device(&self) -> Option<RenderDevice> {
+        self.render
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
     }
 
     /// The image changed in `region` (`[x0, y0, x1, y1]`, image pixels),
@@ -471,6 +516,9 @@ pub(crate) struct Feed {
     waker: Arc<Waker>,
     /// Set when tiles are converted by the delivering thread.
     pub(crate) prep: Arc<Mutex<Option<Prep>>>,
+    /// The render device of the last frame, for device tiles.
+    #[cfg(feature = "wgpu")]
+    pub(crate) render: Arc<Mutex<Option<RenderDevice>>>,
 }
 
 impl Default for Feed {
@@ -481,6 +529,8 @@ impl Default for Feed {
             rx,
             waker: Arc::default(),
             prep: Arc::default(),
+            #[cfg(feature = "wgpu")]
+            render: Arc::default(),
         }
     }
 }
@@ -498,6 +548,8 @@ impl Feed {
             tx: self.tx.clone(),
             waker: self.waker.clone(),
             prep: self.prep.clone(),
+            #[cfg(feature = "wgpu")]
+            render: self.render.clone(),
         }
     }
 
@@ -508,6 +560,23 @@ impl Feed {
             .prep
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = prep;
+    }
+
+    /// The render device device tiles are checked against.
+    #[cfg(feature = "wgpu")]
+    pub(crate) fn set_render(&self, render: Option<RenderDevice>) {
+        let mut r = self
+            .render
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let same = match (&*r, &render) {
+            (Some(a), Some(b)) => a.device == b.device,
+            (None, None) => true,
+            _ => false,
+        };
+        if !same {
+            *r = render;
+        }
     }
 
     pub(crate) fn set_context(&self, ctx: &egui::Context) {

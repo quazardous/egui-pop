@@ -30,7 +30,7 @@ use crate::hooks::{Cause, HandleMove, Hooks, TRACE_KEPT, TraceEntry, Verdict, Vi
 use crate::loupe::{self, Loupe, LoupeFrame};
 use crate::overlay::{self, Handle, HandleKind, HandleState, Overlay};
 use crate::source::{Readout, Side, Stats, TileSink, TileSource};
-use crate::tiles::{self, Texture, Tiles, UploadBudget, UploadReport};
+use crate::tiles::{self, Texture, Tiles, Transfers, UploadBudget, UploadReport};
 use crate::tokens::ViewportTokens;
 use crate::view::{self, Mapping, View, Zoom};
 
@@ -367,6 +367,27 @@ impl ViewportState {
     /// What the last frame uploaded, and what waits.
     pub fn upload_report(&self) -> UploadReport {
         self.tiles.report
+    }
+
+    /// Tile pixels copied to the GPU since the state was made, counted
+    /// where the copy happens (up to the last paint); device tiles count
+    /// as bound, with no byte.
+    pub fn transfers(&self) -> Transfers {
+        self.tiles.transfers()
+    }
+
+    /// What the last whole frame copied, its paint included: from the
+    /// start of the frame before the last one to the start of the last
+    /// one. Zero bytes on a view drawn from device tiles alone.
+    pub fn frame_transfers(&self) -> Transfers {
+        self.tiles.frame_transfers
+    }
+
+    /// The last error about tiles: one a source reported
+    /// ([`TileSink::failed`](crate::source::TileSink::failed)), or a
+    /// device tile refused and why.
+    pub fn last_error(&self) -> Option<&str> {
+        self.tiles.last_error.as_deref()
     }
 
     /// How long the view stays still before exact tiles are asked for,
