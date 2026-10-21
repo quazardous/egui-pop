@@ -76,6 +76,7 @@ platform = [
     "platform-logs",
     "platform-crash",
     "platform-focus",
+    "platform-text-scale",
 ]
 ## A single instance and deep links (`egui_pop::platform::instance`).
 platform-instance = ["dep:egui-pop-platform", "egui-pop-platform/instance"]
@@ -96,6 +97,9 @@ platform-crash = ["dep:egui-pop-platform", "egui-pop-platform/crash"]
 ## The window manager's focus mode read in-process
 ## (`egui_pop::platform::focus`).
 platform-focus = ["dep:egui-pop-platform", "egui-pop-platform/focus"]
+## The system's text scaling read in-process, the text size's default
+## (`egui_pop::platform::text_scale`).
+platform-text-scale = ["dep:egui-pop-platform", "egui-pop-platform/text-scale"]
 ## The system's file chooser (through `rfd`: the xdg desktop portal on
 ## Linux); without it, the in-app picker.
 native-dialogs = ["egui-pop-api/native-dialogs"]

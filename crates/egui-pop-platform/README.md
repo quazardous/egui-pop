@@ -6,7 +6,7 @@
 Platform services for egui-pop applications, as opt-in plugins: a single
 instance with deep links, desktop notifications with actions, a tray
 icon with a declared menu, global shortcuts, logs and crash reports, the
-focus mode read in-process.
+focus mode and the text scaling read in-process.
 
 Part of [egui-pop](https://github.com/quazardous/egui-pop), an
 application framework and component library for
