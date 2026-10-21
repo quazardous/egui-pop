@@ -56,6 +56,7 @@ fn every_collector_describes_and_snapshots_itself() {
         "indicators",
         "announcements",
         "theme",
+        "fonts",
         "commands",
         "keys",
         "zones",

@@ -149,6 +149,119 @@ pub fn font_at(tokens: &crate::theme::Tokens, role: Role, weight: Weight, step: 
     font_id(role, weight, tokens.font.scale.get(step))
 }
 
+/// The `fonts` collector of the debug bridge (among the core ones):
+/// what the theme asked, the faces registered with their origin, each
+/// egui family's chain, the sizes, the atlas; and `check`, the chars of
+/// a text no face of a family covers. Read after the first frame (egui
+/// has no fonts before).
+pub fn collector() -> crate::debug::FnCollector {
+    use serde_json::{Value as Json, json};
+    crate::debug::FnCollector::new(
+        "fonts",
+        "The fonts: the families the theme asks for, the faces registered (family, weight, origin, size, tabular digits, monospace), each egui family's faces in fallback order, the specimens, the sizes of the scale and of egui's text styles, the text size, how values line up, the atlas and the problems.",
+    )
+    .snapshot(|ctx| {
+        let t = crate::theme::Tokens::of(ctx);
+        let (ui, mono) = installed_families(ctx).unwrap_or_default();
+        let report = report(ctx).unwrap_or_default();
+        let faces: Vec<Json> = registered(ctx)
+            .iter()
+            .map(|f| {
+                json!({
+                    "family": f.family,
+                    "weight": f.weight.0,
+                    "origin": f.origin,
+                    "bytes": f.len(),
+                    "tabular_digits": f.tabular_digits(),
+                    "monospace": f.monospace(),
+                })
+            })
+            .collect();
+        let primary: std::collections::BTreeMap<&str, &Option<String>> = report
+            .primary
+            .iter()
+            .map(|(f, p)| (f.as_str(), p))
+            .collect();
+        let families: Vec<Json> = report
+            .chains
+            .iter()
+            .map(|(f, chain)| {
+                json!({
+                    "family": f,
+                    "primary": primary.get(f.as_str()).copied().cloned().flatten(),
+                    "chain": chain,
+                })
+            })
+            .collect();
+        let s = &t.font.scale;
+        let ppp = ctx.pixels_per_point();
+        // egui has no fonts before its first pass.
+        let (atlas, fill) = if ctx.cumulative_pass_nr() == 0 {
+            (None, None)
+        } else {
+            ctx.fonts(|f| (Some(f.font_image_size()), Some(f.font_atlas_fill_ratio())))
+        };
+        json!({
+            "requested": { "ui": ui, "mono": mono },
+            "faces": faces,
+            "families": families,
+            "specimens": report.specimens,
+            "tabular_digits": {
+                "ui": report.tabular_digits(Role::Ui),
+                "mono": report.tabular_digits(Role::Mono),
+            },
+            "numeric": t.font.numeric,
+            "text_size": t.resolved().spec().text_size,
+            "sizes": {
+                "scale": { "xs": s.xs, "s": s.s, "m": s.m, "l": s.l, "xl": s.xl },
+                "text_styles": {
+                    "small": t.font.small,
+                    "body": t.font.body,
+                    "button": t.font.button,
+                    "heading": t.font.heading,
+                    "monospace": t.font.mono,
+                },
+            },
+            "pixels_per_point": ppp,
+            "atlas": { "size": atlas, "fill_ratio": fill },
+            "problems": report.problems,
+        })
+    })
+    .action(
+        "check",
+        "The chars of `text` no face of a family covers (`family`: `ui` or `mono`, the default `ui`, or a family's name drawn as a specimen); drawn as a box.",
+        false,
+        |ctx, args| {
+            let text = args
+                .get("text")
+                .and_then(Json::as_str)
+                .ok_or("`text` is missing")?;
+            let asked = args.get("family").and_then(Json::as_str).unwrap_or("ui");
+            let family = match asked {
+                "ui" => FontFamily::Proportional,
+                "mono" => FontFamily::Monospace,
+                name => specimen(ctx, name, Weight::REGULAR).ok_or_else(|| {
+                    format!("`{name}` is being installed as a specimen: ask again after a frame")
+                })?,
+            };
+            if ctx.cumulative_pass_nr() == 0 {
+                return Err("egui has no fonts before its first frame".into());
+            }
+            let id = FontId::new(13.0, family);
+            let mut missing: Vec<String> = Vec::new();
+            ctx.fonts_mut(|f| {
+                for c in text.chars().filter(|c| !c.is_whitespace() && !c.is_control()) {
+                    if !f.has_glyph(&id, c) && !missing.contains(&c.to_string()) {
+                        missing.push(c.to_string());
+                    }
+                }
+            });
+            Ok(json!({ "family": asked, "missing": missing }))
+        },
+    )
+    .args(json!({ "text": "Ελληνικά 日本語", "family": "ui" }))
+}
+
 /// Where a face comes from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -1378,6 +1491,52 @@ mod tests {
                 (" EV", 0.0)
             ]
         );
+    }
+
+    #[test]
+    fn the_fonts_collector_says_what_is_installed_and_what_a_text_misses() {
+        let ctx = Context::default();
+        crate::theme::install(&ctx, &crate::theme::ThemeSpec::new("pop-dark"));
+        // Before the first frame: no atlas yet, and no panic.
+        let early = crate::debug::DebugBridge::with_core_collectors()
+            .snapshot_of(&ctx, "fonts")
+            .unwrap();
+        assert!(early["atlas"]["size"].is_null());
+        register(&ctx, Face::from_static("Inter", Weight::REGULAR, INTER_VAR));
+        reinstall(&ctx);
+        pass(&ctx);
+        let mut bridge = crate::debug::DebugBridge::with_core_collectors();
+        assert!(bridge.names().iter().any(|n| n == "fonts"));
+        let d = &bridge.snapshot_of(&ctx, "fonts").unwrap();
+        assert_eq!(
+            d["requested"]["ui"],
+            serde_json::json!(["Ubuntu", "sans-serif"])
+        );
+        assert_eq!(d["faces"][0]["family"], "Inter");
+        assert_eq!(d["faces"][0]["origin"], "registered");
+        assert_eq!(d["faces"][0]["monospace"], false);
+        assert_eq!(d["numeric"], "mono");
+        assert_eq!(d["sizes"]["text_styles"]["body"], 13.0);
+        assert_eq!(d["text_size"], 1.0);
+        assert_eq!(d["tabular_digits"]["mono"], true);
+        let families = d["families"].as_array().unwrap();
+        assert!(
+            families.iter().any(
+                |f| f["family"] == "pop.mono.400" && !f["chain"].as_array().unwrap().is_empty()
+            )
+        );
+        assert!(d["atlas"]["fill_ratio"].as_f64().is_some());
+        // `check`: what no face of the family covers.
+        let f = bridge.call(
+            &ctx,
+            "fonts",
+            "check",
+            &serde_json::json!({ "text": "Aé 日本", "family": "ui" }),
+        );
+        assert!(f.ok, "{f:?}");
+        assert_eq!(f.data["missing"], serde_json::json!(["日", "本"]));
+        let f = bridge.call(&ctx, "fonts", "check", &serde_json::json!({}));
+        assert!(!f.ok);
     }
 
     #[test]

@@ -680,6 +680,11 @@ publishes.
   as the widest when its default digits are not tabular (egui applies
   no `tnum`). `fonts::number_font`, `number_job` and `number_galley`
   lay a value out; `Tokens::font.numeric` reads the token.
+- A `fonts` debug collector (egui-pop-core, among the core collectors,
+  `fonts::collector`): the families asked, the faces registered with
+  their origin, each egui family's fallback chain, the specimens, the
+  sizes, the text size, how values line up, the atlas and the problems;
+  `check { text, family }` lists the chars no face of a family covers.
 
 ### Changed
 

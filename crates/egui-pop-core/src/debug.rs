@@ -526,6 +526,7 @@ pub fn core_collectors() -> Vec<FnCollector> {
                 "problems": r.problems().iter().map(|p| p.to_string()).collect::<Vec<_>>(),
             })
         }),
+        crate::fonts::collector(),
     ]
 }
 

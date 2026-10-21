@@ -7,8 +7,8 @@ registered faces, egui's bundled ones and the system's (fontdb behind
 `system-fonts`, not fontique: no per-script fallback yet), reported
 problems (`egui_pop_core::fonts`); a size scale (2026-10-18), below;
 font files a user adds, kept as paths (2026-10-20), below; the text size
-setting, aligned numbers (2026-10-21), below. The rest is still a
-design.
+setting, aligned numbers, the `fonts` debug collector (2026-10-21),
+below. The rest is still a design.
 
 ## The size scale (built)
 
@@ -118,6 +118,24 @@ value this way, so it no longer jitters while dragged; an application's
 readouts and tables use the same functions. Tests: a column of numbers
 in the default has every digit at the same distance from the right
 edge; Inter's digits in cells take the same width whatever they are.
+
+## The `fonts` debug collector (built)
+
+Among the core collectors of the debug bridge (section 3 below was its
+design):
+
+- snapshot: the families the theme asks for (`requested`), the faces
+  registered (family, weight, `origin`: registered or file, bytes,
+  tabular digits, monospace), each egui family with the face drawn first
+  and its fallback chain, the specimens, whether each role's face has
+  tabular digits, `numeric`, the text size, the sizes of the scale and
+  of egui's text styles, `pixels_per_point`, the atlas's size and fill
+  ratio, and the install's problems;
+- action `check { text, family }`: the chars of a text no face of a
+  family covers (`ui`, `mono` or a family's name), drawn as a box.
+
+Not built: the `coverage` action over the string catalogue, and the
+warning when the atlas is rebuilt often.
 
 ## Families by name, and the families there are (built)
 
