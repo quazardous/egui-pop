@@ -40,6 +40,8 @@
 //! - [`strings`]: the library's own strings, by key, with English
 //!   fallbacks;
 //! - [`icon`]: icons by role, sized and coloured from tokens;
+//! - [`hover_card`]: rich hover cards (formatted text, rows, live
+//!   values, command links) next to any widget, read by agents as data;
 //! - [`indicator`]: micro-indicators (dots and LEDs, badges, pips,
 //!   flags, swatches, icons by state) drawn by the kit, passive or
 //!   buttons, inline or on a widget, recorded for agents;
@@ -65,6 +67,7 @@ pub mod focus;
 pub mod focus_mode;
 pub mod fonts;
 pub mod frame;
+pub mod hover_card;
 pub mod icon;
 pub mod icon_set;
 pub mod indicator;

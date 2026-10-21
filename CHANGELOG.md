@@ -12,6 +12,16 @@ publishes.
 
 ### Added
 
+- Rich hover cards (egui-pop-core): `hover_card::HoverCard` shows a
+  `Card` next to any widget, the tier between a tooltip and a popover:
+  formatted text (`**bold**`, `` `code` ``, `- ` list lines), rows of
+  key and value, progress, separators and command links. It opens
+  after the hover delay, stays while the pointer moves onto it, closes
+  on leave after a short grace, on Escape or a click elsewhere;
+  `hover_card::open` opens it from the keyboard with the focus on its
+  first link. The card is the widget's accessible description, and as
+  data (`Card::plain_text`, serialised) agents read it without
+  hovering.
 - The gallery's `clipboard` page: two palettes copying a typed colour
   between them (Ctrl+C, Ctrl+X, Ctrl+V and the Edit menu), a grey
   palette taking it only through a lossy transform, paste special's
