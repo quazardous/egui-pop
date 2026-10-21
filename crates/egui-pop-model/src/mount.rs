@@ -762,7 +762,7 @@ pub const CODES: &[Code] = &[
         code: "c2",
         kind: CodeKind::Condition,
         title: "No keymap in this window",
-        text: "The key dispatcher reads the main window's input only, so bindings of the keymap (global and surface ones: an editor's find and save, the terminal's clear, the library's commands) do not fire while an auxiliary window has the keyboard. Keys a widget reads itself (arrows, zoom keys, typing) work. Gap E3.",
+        text: "The host's window is not reached by the key dispatcher, so bindings of the keymap (global and surface ones: an editor's find and save, the terminal's clear, the library's commands) do not fire while it has the keyboard. Keys a widget reads itself (arrows, zoom keys, typing) work. No host of egui-pop has this condition since E3 closed; a host an application declares may.",
         then: "",
     },
     Code {
@@ -894,16 +894,16 @@ pub const CODES: &[Code] = &[
     Code {
         code: "E3",
         kind: CodeKind::Limit,
-        title: "No keymap in auxiliary windows",
-        text: "Keys pressed in an auxiliary window are not dispatched.",
-        then: "Medium: the dispatcher in each immediate viewport's pass, with that window's focus chain (decided: to fix).",
+        title: "No keymap in auxiliary windows (closed)",
+        text: "Closed: the key dispatcher runs in each auxiliary window's pass, in that window's context (its focus chain, `window` naming its panel).",
+        then: "Done.",
     },
     Code {
         code: "E4",
         kind: CodeKind::Limit,
-        title: "Overlays live in the main window",
-        text: "Dialogs, menus, toasts and the command palette are drawn in the main window, and egui's modal blocks its own window only: a dialog opened from an auxiliary window appears in the main one and does not block the auxiliary window.",
-        then: "Medium to large: an overlay stack per window, or a modal blocking every window (decided: to fix).",
+        title: "Overlays live in the main window (closed for dialogs)",
+        text: "Closed for dialogs: each window has its own overlay stack, a dialog opened from an auxiliary window is shown over it, and while it is open every other window is blocked. Menus, toasts and the command palette are still drawn in the main window.",
+        then: "Done for dialogs; for the other overlays, a block in the `WINDOW_OVERLAYS` zone drawing in its own window (not decided).",
     },
     Code {
         code: "E5",

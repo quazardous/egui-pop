@@ -525,8 +525,8 @@ draws a second choice inline.
     }
     o.push_str(
         "
-E2 to E4 appear as conditions (c1, c2) or as hosts that do not exist
-yet, not as refused cells.
+E2 and the overlays E4 leaves in the main window appear as a condition
+(c1) or as hosts that do not exist yet, not as refused cells.
 
 ### Upstream limits
 
@@ -571,9 +571,11 @@ fn notes(o: &mut String) {
   gives an immediate viewport its own AccessKit tree has not been
   checked.
 - **Tests across windows.** egui_kittest draws an immediate viewport
-  inside the main one, so no headless test proves the behaviour of the
-  auxiliary window's cells (keys, modals, focus) as a separate window
-  would have it: they stay `*`.
+  inside the main one. The keys, dialogs and focus of auxiliary windows
+  are tested with an immediate viewport renderer of the tests' own
+  (`crates/egui-pop-api/tests/windows.rs`), each window's pass run with
+  its own input, but no component is mounted in a real window there:
+  the cells stay `*`.
 - **Declarations can lie.** A component declared as reading keys when
   focused that reads one globally (the node graph's Space) shows a fit
   where it misbehaves; the mount tests are the guard.

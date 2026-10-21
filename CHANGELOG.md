@@ -30,6 +30,18 @@ publishes.
 
 ### Changed
 
+- Detached panels' windows get the keymap and their dialogs
+  (egui-pop-api): the key dispatcher runs in each window's pass, in that
+  window's context (its focus chain, and the new `window` context key,
+  `app::CONTEXT_WINDOW`, holding the detached panel's id; empty in the
+  main window). A dialog comes up over the window the user worked in
+  last (`AppHandle::active_window`), a detached panel's included, and
+  every other window is blocked while it is open; a window closed with
+  a dialog open gives it to the main window. The dialogs' block moves to
+  the new `zones::WINDOW_OVERLAYS` zone, drawn in every window.
+  `AppHandle::window_panel` names the panel a window shows. The
+  auxiliary window's offer says the keymap reaches it (`docs/hosts.md`:
+  E3 closed, E4 closed for dialogs).
 - Focus chains and overlay stacks are kept per window (egui-pop-core):
   in a detached panel's window, `focus::when_context` says what has the
   keyboard there, and an overlay belongs to the window it is shown in

@@ -976,7 +976,18 @@ impl Workbench {
 /// scale, and the application's frame when it draws one). Closing such a
 /// window is the `workbench.close_window` step, whose default docks the
 /// panel back.
-pub(crate) fn windows(app: &AppHandle, ctx: &egui::Context, app_name: &str) {
+///
+/// Each window is a window of the application in full: `keys` dispatches
+/// its keys in its own context (its focus chain, `window` naming its
+/// panel), the `WINDOW_OVERLAYS` zone draws the dialogs opened from it
+/// over it, and a dialog open in another window blocks it
+/// (`overlay::block_window`).
+pub(crate) fn windows(
+    app: &AppHandle,
+    ctx: &egui::Context,
+    app_name: &str,
+    keys: &mut dyn FnMut(&egui::Context),
+) {
     let auxiliary = app.workbench_mut().layout.auxiliary.clone();
     for aux in auxiliary {
         let Some(spec) = app.workbench_mut().spec(&aux.panel).cloned() else {
@@ -1009,8 +1020,17 @@ pub(crate) fn windows(app: &AppHandle, ctx: &egui::Context, app_name: &str) {
             builder = builder.with_position(p);
         }
         let panel = aux.panel.clone();
-        ctx.show_viewport_immediate(window_id(&panel), builder, |ui, _| {
+        ctx.show_viewport_immediate(window_id(&panel), builder, |ui, class| {
             let vctx = ui.ctx().clone();
+            // Embedded in the main window (a backend without windows of
+            // its own, kittest): the main window's pass does all this.
+            let own_window = class != egui::ViewportClass::EmbeddedWindow;
+            if own_window {
+                app.note_window(&vctx);
+                egui_pop_core::overlay::block_window(&vctx);
+                egui_pop_core::overlay::begin_pass(&vctx);
+                keys(&vctx);
+            }
             if let Some((from, to)) = egui_pop_core::scale::changed(&vctx) {
                 app.publish(
                     "egui_pop",
@@ -1043,6 +1063,9 @@ pub(crate) fn windows(app: &AppHandle, ctx: &egui::Context, app_name: &str) {
             egui::CentralPanel::default().show(ui, |ui| {
                 app.show_panel(ui, &panel);
             });
+            if own_window {
+                app.show_zone(ui, &crate::zones::WINDOW_OVERLAYS);
+            }
             if vctx.input(|i| i.viewport().close_requested()) {
                 // The step decides: the default docks the panel back.
                 let out = app.change_workbench(Change::CloseWindow(panel.clone()));
@@ -1063,6 +1086,20 @@ pub(crate) fn windows(app: &AppHandle, ctx: &egui::Context, app_name: &str) {
             }
         });
     }
+}
+
+/// Forgets the overlays of the windows closed since the last pass: what
+/// they showed is gone with them (a dialog shown there comes to the main
+/// window).
+pub(crate) fn forget_closed_windows(app: &AppHandle, ctx: &egui::Context) {
+    let open: Vec<ViewportId> = app
+        .workbench_mut()
+        .layout
+        .auxiliary
+        .iter()
+        .map(|a| window_id(&a.panel))
+        .collect();
+    egui_pop_core::overlay::retain_windows(ctx, &open);
 }
 
 /// A detached panel's window id.

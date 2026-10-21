@@ -98,7 +98,6 @@ pub fn window() -> HostOffer {
         .source("workbench::windows, show_viewport_immediate")
         .resizable(true)
         .window(Window::Auxiliary)
-        .keymap(false)
         .keeps(&[Keep::Place, Keep::Size])
         .cursor_images(false)
         .headless(false)

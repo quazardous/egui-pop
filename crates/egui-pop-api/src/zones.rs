@@ -44,6 +44,14 @@ pub const STATUS_BAR: ZoneId = ZoneId::from_static("app.status-bar");
 /// command palette, dialogs, toasts) when they have something to show.
 pub const OVERLAYS: ZoneId = ZoneId::from_static("app.overlays");
 
+/// Drawn after each window's content, in the main window and in every
+/// detached panel's window: blocks there show overlays that belong to a
+/// window (the dialogs, over the window they were opened from), each
+/// drawing only in its own (`AppHandle::active_window`, egui's
+/// `Context::viewport_id`). Declared by the framework beside the shell's
+/// zones.
+pub const WINDOW_OVERLAYS: ZoneId = ZoneId::from_static("app.window-overlays");
+
 /// The shell's zones, declared by the framework.
 pub const SHELL: [ZoneId; 8] = [
     TITLE,

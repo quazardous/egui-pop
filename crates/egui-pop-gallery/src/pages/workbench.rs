@@ -1,14 +1,17 @@
 //! The workbench page: demonstration panels with placement rules,
 //! opened, moved and closed through the workbench's steps, the layout as
-//! it stands, and a veto on one move.
+//! it stands, and a veto on one move. Notes detach into a window of
+//! their own, where a key of their own works and their dialog comes up.
 
 use egui::Ui;
+use egui_pop::api::dialogs::{Confirm, DIALOGS};
 use egui_pop::api::steps::Before;
 use egui_pop::api::stories::Story;
 use egui_pop::api::workbench::{self, STEP_MOVE};
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
 use egui_pop::core::widgets;
-use egui_pop::model::ids::{PanelId, PluginId, StoryId};
+use egui_pop::model::commands::CommandSpec;
+use egui_pop::model::ids::{CommandId, PanelId, PluginId, StoryId};
 use egui_pop::model::panels::{Area, PanelSpec};
 
 use super::section;
@@ -23,6 +26,14 @@ pub const NOTES: PanelId = PanelId::from_static("gallery.notes");
 
 /// The context key the move veto reads.
 const VETO: &str = "galleryVetoMoves";
+/// The context key counting the notes cleared.
+const CLEARED: &str = "galleryNotesCleared";
+
+/// Asks before clearing the notes (Ctrl+Shift+Delete, in the notes' own
+/// window only when they are detached).
+const CMD_ASK_CLEAR: CommandId = CommandId::from_static("gallery.notes.ask_clear");
+/// Clears the notes.
+const CMD_CLEAR: CommandId = CommandId::from_static("gallery.notes.clear");
 
 /// The workbench page and its panels.
 #[derive(Debug, Default)]
@@ -77,8 +88,26 @@ impl Plugin for WorkbenchPage {
             PanelSpec::new(NOTES, "Notes", Area::Bottom)
                 .icon("edit")
                 .closed(),
-            |ui, _| {
-                ui.label("Free notes.");
+            notes,
+        )?;
+        ctx.command(
+            CommandSpec::new(CMD_ASK_CLEAR, "Clear the notes…", "Gallery")
+                .description(
+                    "Asks before clearing the notes; its key works in the notes' own window.",
+                )
+                .when("window == 'gallery.notes'")
+                .key("Ctrl+Shift+Delete"),
+            |call| {
+                ask_clear(call.app);
+                Ok(serde_json::Value::Null)
+            },
+        )?
+        .command(
+            CommandSpec::new(CMD_CLEAR, "Clear the notes", "Gallery"),
+            |call| {
+                let n: u32 = call.app.context().get(CLEARED).parse().unwrap_or(0);
+                call.app.set_context(CLEARED, &(n + 1).to_string());
+                Ok(serde_json::Value::Null)
             },
         )?;
         ctx.before(STEP_MOVE, |app, _| {
@@ -94,6 +123,29 @@ impl Plugin for WorkbenchPage {
                 .group("Framework", 102),
         )?;
         Ok(())
+    }
+}
+
+/// The notes: detached, their window takes its own key (Ctrl+Shift+Delete)
+/// and shows their dialog over it, the main window waiting meanwhile.
+fn notes(ui: &mut Ui, app: &AppHandle) {
+    ui.label("Free notes.");
+    let cleared = app.context().get(CLEARED).to_string();
+    if !cleared.is_empty() {
+        ui.weak(format!("Cleared {cleared} times."));
+    }
+    if ui.button("Clear the notes…").clicked() {
+        ask_clear(app);
+    }
+}
+
+/// Opens the dialog asking before the notes are cleared.
+fn ask_clear(app: &AppHandle) {
+    if let Some(d) = app.service(&DIALOGS) {
+        d.open(
+            Confirm::new("Clear the notes?", "Clear the notes", CMD_CLEAR)
+                .detail("Shown over the window the notes are in."),
+        );
     }
 }
 
@@ -133,6 +185,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
         app.set_context(VETO, if veto { "true" } else { "false" });
     }
     ui.weak("Drag a tab onto another area: it goes there when its rules allow it; the drop hint says why not.");
+    ui.weak("Detached, the notes' window takes their key (Ctrl+Shift+Delete) and shows their dialog over itself; every other window waits for the answer.");
     // The bottom panel's alignment, a setting (as VS Code's).
     let store = app.store();
     let path = format!("settings/{}", workbench::SETTING_PANEL_ALIGNMENT);

@@ -58,6 +58,10 @@ pub const STEP_REBIND: StepId = StepId::from_static("keys.rebind");
 pub const STEP_LOAD_KEYMAP: StepId = StepId::from_static("keys.load");
 
 /// The main menu bar.
+/// The context key holding the detached panel whose window is drawn
+/// (empty in the main window): `when: "window == 'app.log'"`.
+pub const CONTEXT_WINDOW: &str = "window";
+
 pub const MENU_MAIN: MenuId = MenuId::from_static("app.main");
 pub const MENU_FILE: MenuId = MenuId::from_static("app.menu.file");
 pub const MENU_EDIT: MenuId = MenuId::from_static("app.menu.edit");
@@ -571,6 +575,9 @@ pub(crate) struct Shared {
     edge_to_edge: std::cell::Cell<bool>,
     /// The main menu drawn as a bar under the title.
     menu_bar: std::cell::Cell<bool>,
+    /// The window the user worked in last (focused, clicked or typed
+    /// in): a dialog opens over it.
+    active_window: std::cell::Cell<egui::ViewportId>,
     /// The shell panels' starting sizes (`AppBuilder::shell_panel_size`).
     shell_sizes: RefCell<Vec<(PanelId, f32)>>,
     /// The panels' commands and their shared texts, installed on each
@@ -692,6 +699,7 @@ impl AppHandle {
             drawing_areas: std::cell::Cell::new(false),
             edge_to_edge: std::cell::Cell::new(false),
             menu_bar: std::cell::Cell::new(true),
+            active_window: std::cell::Cell::new(egui::ViewportId::ROOT),
             shell_sizes: RefCell::default(),
             panel_commands: RefCell::default(),
             name: RefCell::default(),
@@ -1385,7 +1393,10 @@ impl AppHandle {
     }
 
     /// The context keys at this moment: application-wide, then the focus
-    /// chain's, the overlays'.
+    /// chain's, the overlays'. They are the window's being drawn: in a
+    /// detached panel's window, its focus chain and its overlays, and
+    /// `window` holds the panel's id (empty in the main window);
+    /// `modalOpen` says whether a modal is open in any window.
     pub fn when_context(&self) -> WhenContext {
         let mut base = self.context();
         let ctx = &self.egui();
@@ -1394,7 +1405,60 @@ impl AppHandle {
         base.set("modalOpen", flag(overlay::modal_open(ctx)));
         base.set("canUndo", flag(self.can_undo()));
         base.set("canRedo", flag(self.can_redo()));
+        if let Some(panel) = self.window_panel(ctx.viewport_id()) {
+            base.set(CONTEXT_WINDOW, panel.as_str());
+        }
         focus::when_context(ctx, &base)
+    }
+
+    /// The panel a window shows: the detached panel of a detached
+    /// panel's window (`workbench::window_id`); `None` for the main
+    /// window, or a window that is no longer open.
+    pub fn window_panel(&self, window: egui::ViewportId) -> Option<PanelId> {
+        if window == egui::ViewportId::ROOT {
+            return None;
+        }
+        let wb = self.0.workbench.try_borrow().ok()?;
+        wb.layout
+            .auxiliary
+            .iter()
+            .find(|a| crate::workbench::window_id(&a.panel) == window)
+            .map(|a| a.panel.clone())
+    }
+
+    /// The window the user worked in last (focused, clicked or typed
+    /// in), still open: the main window (`ViewportId::ROOT`) or a
+    /// detached panel's. A dialog opens over it.
+    pub fn active_window(&self) -> egui::ViewportId {
+        self.open_window(self.0.active_window.get())
+    }
+
+    /// A window if it is still open, else the main window.
+    pub(crate) fn open_window(&self, window: egui::ViewportId) -> egui::ViewportId {
+        if self.window_panel(window).is_some() {
+            window
+        } else {
+            egui::ViewportId::ROOT
+        }
+    }
+
+    /// Notes the window being drawn as the active one when it has the
+    /// focus or got a press or a key this pass.
+    pub(crate) fn note_window(&self, ctx: &Context) {
+        let used = ctx.input(|i| {
+            i.viewport().focused == Some(true)
+                || i.events.iter().any(|e| {
+                    matches!(
+                        e,
+                        egui::Event::Key { pressed: true, .. }
+                            | egui::Event::PointerButton { pressed: true, .. }
+                            | egui::Event::Text(_)
+                    )
+                })
+        });
+        if used {
+            self.0.active_window.set(ctx.viewport_id());
+        }
     }
 
     /// The diagnostics collected (registration, zones, hooks), then the
@@ -2812,6 +2876,7 @@ impl App {
         ]) {
             ctx.zone(zone.clone(), title)?;
         }
+        ctx.zone(zones::WINDOW_OVERLAYS, "Window overlays")?;
         for (spec, zone, scope) in [
             (
                 PanelSpec::new(
@@ -4668,20 +4733,12 @@ impl App {
         if !Arc::ptr_eq(&before, &now) && Arc::ptr_eq(ui.style(), &before) {
             ui.set_style(now);
         }
+        self.handle.note_window(&ctx);
+        crate::workbench::forget_closed_windows(&self.handle, &ctx);
+        // A dialog open in a detached panel's window blocks this one.
+        overlay::block_window(&ctx);
         overlay::begin_pass(&ctx);
-        let cx = self.handle.when_context();
-        let dispatched = if self.handle.0.capturing.get() {
-            Vec::new()
-        } else {
-            self.dispatcher.process(&ctx, &self.reg.keymap, &cx)
-        };
-        *self.handle.0.traces.borrow_mut() = self.dispatcher.traces().cloned().collect();
-        *self.handle.0.pending_keys.borrow_mut() = self.dispatcher.pending().map(|k| k.to_string());
-        for d in dispatched {
-            if let Reply::Done(Err(e)) = self.run(&d.command, Json::Null, Origin::User) {
-                log::info!(target: "egui_pop", "{}: {e}", d.keys);
-            }
-        }
+        self.dispatch_keys(&ctx);
         self.process_requests();
         self.outlined(ui);
         let name = self.handle.name();
@@ -4691,8 +4748,10 @@ impl App {
         } else {
             name
         };
-        crate::workbench::windows(&self.handle.clone(), &ctx, &name);
-        self.handle.clone().show_zone(ui, &zones::OVERLAYS);
+        let handle = self.handle.clone();
+        crate::workbench::windows(&handle, &ctx, &name, &mut |c| self.dispatch_keys(c));
+        handle.show_zone(ui, &zones::OVERLAYS);
+        handle.show_zone(ui, &zones::WINDOW_OVERLAYS);
         crate::menus::draw_popup(&ctx, &self.handle);
         a11y::live_regions(ui);
         // Interactive indicators bound to a command, activated this frame.
@@ -4700,6 +4759,25 @@ impl App {
             self.handle.run(command, Json::Null);
         }
         self.process_requests();
+    }
+
+    /// Dispatches the keys of the window being drawn (`ctx`'s current
+    /// viewport: the main window, or a detached panel's) in that window's
+    /// context: its focus chain, its overlays, `window`.
+    fn dispatch_keys(&mut self, ctx: &Context) {
+        let cx = self.handle.when_context();
+        let dispatched = if self.handle.0.capturing.get() {
+            Vec::new()
+        } else {
+            self.dispatcher.process(ctx, &self.reg.keymap, &cx)
+        };
+        *self.handle.0.traces.borrow_mut() = self.dispatcher.traces().cloned().collect();
+        *self.handle.0.pending_keys.borrow_mut() = self.dispatcher.pending().map(|k| k.to_string());
+        for d in dispatched {
+            if let Reply::Done(Err(e)) = self.run(&d.command, Json::Null, Origin::User) {
+                log::info!(target: "egui_pop", "{}: {e}", d.keys);
+            }
+        }
     }
 
     /// The shell, inside the kit's outline when the application draws

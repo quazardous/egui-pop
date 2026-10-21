@@ -125,6 +125,26 @@ kept in the layout and repaired before the window opens. The window is
 titled with the panel and the application's name (`AppBuilder::name`,
 "Filmstrip — Helios"), not the main window's whole title.
 
+Such a window is a window of the application in full:
+
+- **Keys.** The keymap reaches it: the key dispatcher runs in each
+  window's pass, in that window's context. Its focus chain is its own
+  (egui keeps a focus per window), so an editor's find or save fires in
+  the window where the editor has the keyboard, and the `window`
+  context key holds the detached panel's id there (empty in the main
+  window): `when: "window == 'app.log'"` binds a key in that window
+  only.
+- **Dialogs.** A dialog comes up over the window the user worked in
+  last (`AppHandle::active_window`: focused, clicked or typed in), so a
+  dialog opened from a detached panel's window is shown there. While it
+  is open, every other window is blocked: its keys are dropped and a
+  backdrop covers it; a click there brings the dialog's window to the
+  front. A window closed with a dialog open gives it to the main window.
+  Each window has its own overlay stack (`egui_pop_core::overlay`);
+  blocks of the `WINDOW_OVERLAYS` zone are drawn in every window, each
+  drawing what belongs to it. Menus, toasts and the command palette stay
+  in the main window.
+
 The bottom panel spans the window's whole width by default. The
 `workbench.panel_alignment` setting lines it up otherwise, as VS Code's
 panel alignment does: `center` (between the side bars, which go down to

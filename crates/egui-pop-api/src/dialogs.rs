@@ -6,6 +6,15 @@
 //! ([`Custom`], opened with [`Dialogs::open_custom`]). They queue, one
 //! shown at a time, modal, drawn from the theme's tokens.
 //!
+//! A dialog comes up over the window the user worked in last
+//! ([`AppHandle::active_window`]): a detached panel's window when the
+//! dialog was opened from there (its keys, a click in it), the main
+//! window otherwise, or once that window is closed. While it is open,
+//! every other window of the application is blocked (its keys dropped, a
+//! backdrop over it; a click there brings the dialog's window to the
+//! front). The dialogs' block is in the `WINDOW_OVERLAYS` zone, drawn in
+//! every window.
+//!
 //! A custom dialog is a host of the mount contract (ADR 0013): its body
 //! is drawn by a closure kept on the application's side (the queue
 //! stays `Clone` and `Send`), in a size of the dialog's own, in a
@@ -823,6 +832,8 @@ struct Open {
     drag_from: Option<Vec2>,
     /// Focus placed on its first pass.
     focused: bool,
+    /// The window it is shown over: the active one when it came up.
+    window: Option<egui::ViewportId>,
     /// The in-app picker open inside the dialog for a field (without the
     /// files plugin): its key and picker.
     picking: Option<(String, FilePicker)>,
@@ -874,6 +885,7 @@ impl Dialogs {
             moving: None,
             drag_from: None,
             focused: false,
+            window: None,
             picking: None,
             browse: None,
             choosing: None,
@@ -1070,7 +1082,7 @@ impl Plugin for DialogsPlugin {
             .args(json!({ "answer": "accept", "values": {} })),
         )?;
         ctx.block(
-            zones::OVERLAYS,
+            zones::WINDOW_OVERLAYS,
             Block::add(BlockId::from_static("egui_pop.dialogs"), 10, show),
         );
         Ok(())
@@ -1234,10 +1246,23 @@ fn show(ui: &mut Ui, app: &AppHandle) {
             o.error = Some(e);
         }
     }
+    let ctx = ui.ctx().clone();
+    // Shown over the window it was opened from (the active one when it
+    // came up), or the main window once that one is closed; drawn in
+    // that window's pass only, the others blocked meanwhile.
+    let Some(window) = lock(&d.0)
+        .queue
+        .front_mut()
+        .map(|o| *o.window.get_or_insert_with(|| app.active_window()))
+    else {
+        return;
+    };
+    if app.open_window(window) != ctx.viewport_id() {
+        return;
+    }
     let Some(mut open_dialog) = lock(&d.0).queue.front().cloned() else {
         return;
     };
-    let ctx = ui.ctx().clone();
     if !open_dialog.focused {
         // It comes up: hooks may stop it (it is cancelled).
         let out = app.step(&STEP_SHOW, d.describe(), |_, _| Ok(Json::Null));
