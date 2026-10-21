@@ -144,3 +144,49 @@ fn the_fonts_page_picks_a_family_among_those_there_are_and_previews_it() {
     h.run();
     assert_eq!(stored(&h, &SETTING_FONT_MONO), Value::Text(String::new()));
 }
+
+#[test]
+fn resting_on_a_family_in_the_picker_previews_it_before_it_is_picked() {
+    let mut h = harness(ThemeSpec::new("pop-dark"));
+    // A system face of the test's own: nothing depends on the machine.
+    let ubuntu = egui::FontDefinitions::default().font_data["Ubuntu-Light"]
+        .font
+        .to_vec();
+    fonts::set_system_faces(
+        &h.ctx,
+        Some(vec![fonts::Face::from_owned(
+            "Fake Sans",
+            fonts::Weight::REGULAR,
+            ubuntu,
+        )]),
+    );
+    open_fonts(&mut h);
+    h.get_by_label("Interface font").click();
+    h.run();
+    h.get_by_label("Fake Sans").hover();
+    h.run();
+    h.run_steps(2);
+    assert_eq!(
+        fonts::preview(&h.ctx, Role::Ui),
+        Some(vec!["Fake Sans".to_string()])
+    );
+    let report = fonts::report(&h.ctx).unwrap();
+    let chain = |family: &str| {
+        report
+            .chains
+            .iter()
+            .find(|(f, _)| f == family)
+            .map(|(_, c)| c.clone())
+            .unwrap_or_default()
+    };
+    assert_eq!(chain("pop.preview.ui.400")[0], "pop:Fake Sans:400:system");
+    // Not picked yet: the theme's fonts are untouched.
+    assert_eq!(Tokens::of(&h.ctx).font.family_ui[0], "Ubuntu");
+    assert_eq!(chain("pop.ui.400")[0], "Ubuntu-Light");
+    // Picked: applied, and the preview ends.
+    h.get_by_label("Fake Sans").click();
+    h.run();
+    h.run();
+    assert_eq!(Tokens::of(&h.ctx).font.family_ui[0], "Fake Sans");
+    assert_eq!(fonts::preview(&h.ctx, Role::Ui), None);
+}

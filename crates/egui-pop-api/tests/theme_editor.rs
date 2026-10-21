@@ -552,6 +552,78 @@ fn the_fonts_tab_adds_a_file_reorders_families_and_applies_once() {
     );
 }
 
+/// The chain of an egui family in the last font install's report.
+fn chain(ctx: &egui::Context, family: &str) -> Vec<String> {
+    egui_pop_core::fonts::report(ctx)
+        .unwrap()
+        .chains
+        .iter()
+        .find(|(f, _)| f == family)
+        .map(|(_, c)| c.clone())
+        .unwrap_or_default()
+}
+
+#[test]
+fn the_fonts_edited_are_previewed_before_they_are_applied_even_across_a_theme_switch() {
+    use egui_pop_core::fonts::{self, Role, Weight};
+    let names = |l: &[&str]| l.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    let mut h = harness(ThemeSpec::new("pop-dark"));
+    h.run();
+    let handle = h.state().handle().clone();
+    let editor = handle.service(&THEME_EDITOR).unwrap();
+    h.get_by_label("Fonts").click();
+    h.run();
+    // Nothing edited: the preview draws the fonts installed.
+    assert_eq!(fonts::preview(&h.ctx, Role::Ui), None);
+    assert_eq!(
+        chain(&h.ctx, "pop.preview.ui.400"),
+        chain(&h.ctx, "pop.ui.400")
+    );
+    // Hack first for the interface: an edit, previewed, not applied.
+    editor.set_families(Role::Ui, names(&["Hack", "Ubuntu", "sans-serif"]));
+    h.run();
+    assert_eq!(
+        fonts::preview(&h.ctx, Role::Ui),
+        Some(names(&["Hack", "Ubuntu", "sans-serif"]))
+    );
+    assert_eq!(chain(&h.ctx, "pop.preview.ui.400")[0], "Hack");
+    assert_eq!(chain(&h.ctx, "pop.ui.400")[0], "Ubuntu-Light");
+    assert!(
+        h.query_by_label("Not applied yet: only this pane shows the draft.")
+            .is_some()
+    );
+    // Resting the pointer on a family previews it first.
+    h.get_by_label("Ubuntu").hover();
+    h.run();
+    h.run_steps(2);
+    assert_eq!(
+        editor.font_preview(&handle, Role::Ui),
+        Some(names(&["Ubuntu", "Hack", "sans-serif"]))
+    );
+    assert_eq!(chain(&h.ctx, "pop.preview.ui.400")[0], "Ubuntu-Light");
+    // The theme switched while the preview is shown, to one with other
+    // families: the fonts are installed again, the preview with them,
+    // and it keeps drawing (egui panics on a family it has not got).
+    handle.theme().set(
+        ThemeSpec::new("pop-light").override_token("font.family.ui", json!(["Hack", "sans-serif"])),
+    );
+    h.run();
+    h.run_steps(2);
+    assert_eq!(chain(&h.ctx, "pop.ui.400")[0], "Hack");
+    assert!(fonts::preview_family(&h.ctx, Role::Ui, Weight::REGULAR).is_some());
+    assert!(fonts::preview(&h.ctx, Role::Ui).is_some());
+    // Cancel drops the edits and the preview: back to the fonts
+    // installed.
+    h.get_by_label("Cancel the font edits").click();
+    h.run();
+    assert!(!editor.fonts_pending(&handle));
+    assert_eq!(fonts::preview(&h.ctx, Role::Ui), None);
+    assert_eq!(
+        chain(&h.ctx, "pop.preview.ui.400"),
+        chain(&h.ctx, "pop.ui.400")
+    );
+}
+
 #[test]
 fn a_theme_naming_a_font_file_is_saved_and_opened_with_it() {
     use egui_pop_core::fonts::FontFile;

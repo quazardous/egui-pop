@@ -88,8 +88,8 @@ rather than the application embedding it:
 The theme editor's **Fonts** tab ([The theme editor](theme-editor.md))
 edits them: each role's families in priority order (move up, move down,
 remove, add a name), the font files (added through the host's file
-chooser), a sample line per role, and one explicit "Apply the fonts"
-that registers the files, writes `font.family.ui` and
+chooser), a preview of the fonts edited, and one explicit "Apply the
+fonts" (or "Cancel the font edits") that registers the files, writes `font.family.ui` and
 `font.family.mono` into the theme being edited as one change, and
 applies it. Saving the files is the host's: `ThemeEditor::font_files`
 gives them, `ThemeEditor::set_font_files` registers them at the next
@@ -116,7 +116,9 @@ The settings window has a Fonts page under Appearance (section 3's
   keeps it. Each has its reset.
 - **Preview**: a heading, the theme editor's sample line per role
   (`theme_editor::font_sample`, shared with its Fonts tab), and numbers
-  right-aligned in the numeric font.
+  right-aligned in the numeric font. Resting the pointer on a family in
+  a picker draws the heading and the sample in it before it is picked
+  (the preview families, below).
 
 Not built: the weight of body text, the hinting choice, the per-script
 lines and the missing glyphs outlined.

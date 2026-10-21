@@ -161,6 +161,18 @@ publishes.
   way); `fonts::origin_of` says where a family a theme names would be
   found, `None` when it is missing here, and `fonts::is_generic` names
   the generic families.
+- The theme editor previews a font before it is applied (egui-pop-api):
+  the Fonts tab has its own preview pane, drawing the sampler and
+  a sample line per role in the draft's theme and in the families
+  edited, while the rest of the application keeps the fonts installed.
+  Resting the pointer on a family draws it first
+  (`ThemeEditor::preview_face`, `ThemeEditor::font_preview`); "Apply
+  the fonts" applies, and the new "Cancel the font edits"
+  (`ThemeEditor::cancel_fonts`) drops the edits. Settings › Appearance
+  › Fonts draws the family the pointer rests on in its picker in the
+  preview before it is picked. `theme_editor::font_sample` draws in the
+  preview families inside `fonts::with_preview`. English and French
+  strings. Closes #49.
 
 ### Changed
 

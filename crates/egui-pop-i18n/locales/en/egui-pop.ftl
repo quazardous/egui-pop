@@ -728,7 +728,7 @@ egui-pop-fonts-origin-registered = Shipped with the application
 
 egui-pop-fonts-origin-system = Installed on the system
 
-egui-pop-fonts-picker-hint = Each family is drawn in its own face, but the system's.
+egui-pop-fonts-picker-hint = Each family is drawn in its own face, but the system's; rest the pointer on one to preview it below.
 
 egui-pop-fonts-preview = Preview
 
@@ -1060,6 +1060,8 @@ egui-pop-theme-editor-apply-fonts-hint = Rebuilds the font atlas once, and appli
 
 egui-pop-theme-editor-borders = Borders
 
+egui-pop-theme-editor-cancel-fonts = Cancel the font edits
+
 egui-pop-theme-editor-change-of = The change of { $token }
 
 egui-pop-theme-editor-changed-count = Tokens changed: { $count }
@@ -1098,7 +1100,7 @@ egui-pop-theme-editor-font-files = Font files
 
 egui-pop-theme-editor-font-sample = Sample
 
-egui-pop-theme-editor-font-sample-hint = Drawn with the fonts installed: apply to see a change.
+egui-pop-theme-editor-font-sample-hint = Drawn with the fonts edited, before they are applied; rest the pointer on a family to preview it first.
 
 egui-pop-theme-editor-font-sample-text = Sphinx of black quartz, judge my vow. 0123456789
 

@@ -363,7 +363,7 @@ egui-pop-fonts-origin-bundled a012ac3bcaa1fe74
 egui-pop-fonts-origin-file af4c8dffda0c1053
 egui-pop-fonts-origin-registered 1ff7feaf34cf349d
 egui-pop-fonts-origin-system 668b4d5f659a1de0
-egui-pop-fonts-picker-hint f9f3cc02befdd57d
+egui-pop-fonts-picker-hint a27ceda349dea860
 egui-pop-fonts-preview 48c847eda5526dbf
 egui-pop-fonts-themes c5083f5028cb4b73
 egui-pop-frame-exit-fullscreen c66409904cfa39c0
@@ -529,6 +529,7 @@ egui-pop-theme-editor-apply 899b46da6ad579cb
 egui-pop-theme-editor-apply-fonts f26f15f728d01f88
 egui-pop-theme-editor-apply-fonts-hint 0d8de659a5f7b500
 egui-pop-theme-editor-borders ac57f193930c378a
+egui-pop-theme-editor-cancel-fonts 79262e4b99b5bcbe
 egui-pop-theme-editor-change-of 549f47f1ae0783a4
 egui-pop-theme-editor-changed-count 48cf394917428674
 egui-pop-theme-editor-components 7c2d0b5a78a612a1
@@ -548,7 +549,7 @@ egui-pop-theme-editor-filter 962d67edb046c883
 egui-pop-theme-editor-font-added 1171911f9e7459a1
 egui-pop-theme-editor-font-files 855d3309c39e8617
 egui-pop-theme-editor-font-sample 6e81484c31e304ef
-egui-pop-theme-editor-font-sample-hint 00617f4adf18e5f7
+egui-pop-theme-editor-font-sample-hint 3af556813c09d88e
 egui-pop-theme-editor-font-sample-text a130c88cb6faf77e
 egui-pop-theme-editor-from 3c2b51eebca413b5
 egui-pop-theme-editor-generate ff50aacb4c261be2

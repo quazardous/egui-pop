@@ -93,7 +93,7 @@ pub const FONTS_NUMBERS: StrKey =
     StrKey::new("egui-pop-fonts-numbers", "Values line their digits up:");
 pub const FONTS_PICKER_HINT: StrKey = StrKey::new(
     "egui-pop-fonts-picker-hint",
-    "Each family is drawn in its own face, but the system's.",
+    "Each family is drawn in its own face, but the system's; rest the pointer on one to preview it below.",
 );
 pub const FONTS_ORIGIN_BUNDLED: StrKey =
     StrKey::new("egui-pop-fonts-origin-bundled", "Shipped with egui");
@@ -695,10 +695,14 @@ pub const THEME_EDITOR_FONT_SAMPLE_TEXT: StrKey = StrKey::new(
 );
 pub const THEME_EDITOR_FONT_SAMPLE_HINT: StrKey = StrKey::new(
     "egui-pop-theme-editor-font-sample-hint",
-    "Drawn with the fonts installed: apply to see a change.",
+    "Drawn with the fonts edited, before they are applied; rest the pointer on a family to preview it first.",
 );
 pub const THEME_EDITOR_APPLY_FONTS: StrKey =
     StrKey::new("egui-pop-theme-editor-apply-fonts", "Apply the fonts");
+pub const THEME_EDITOR_CANCEL_FONTS: StrKey = StrKey::new(
+    "egui-pop-theme-editor-cancel-fonts",
+    "Cancel the font edits",
+);
 pub const THEME_EDITOR_APPLY_FONTS_HINT: StrKey = StrKey::new(
     "egui-pop-theme-editor-apply-fonts-hint",
     "Rebuilds the font atlas once, and applies the theme being edited.",
@@ -1094,6 +1098,7 @@ pub const ALL: &[StrKey] = &[
     THEME_EDITOR_FONT_SAMPLE_TEXT,
     THEME_EDITOR_FONT_SAMPLE_HINT,
     THEME_EDITOR_APPLY_FONTS,
+    THEME_EDITOR_CANCEL_FONTS,
     THEME_EDITOR_APPLY_FONTS_HINT,
     THEME_EDITOR_PREVIEW_ONLY,
     THEME_EDITOR_PREVIEW_ONLY_HINT,

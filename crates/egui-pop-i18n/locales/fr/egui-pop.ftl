@@ -653,7 +653,7 @@ egui-pop-fonts-origin-registered = Fournie avec l’application
 
 egui-pop-fonts-origin-system = Installée sur le système
 
-egui-pop-fonts-picker-hint = Chaque famille est dessinée dans sa propre police, sauf celles du système.
+egui-pop-fonts-picker-hint = Chaque famille est dessinée dans sa propre police, sauf celles du système ; laissez le pointeur sur l’une d’elles pour la prévisualiser ci-dessous.
 
 egui-pop-fonts-preview = Aperçu
 
@@ -953,6 +953,8 @@ egui-pop-theme-editor-apply-fonts-hint = Reconstruit l’atlas des polices une f
 
 egui-pop-theme-editor-borders = Bordures
 
+egui-pop-theme-editor-cancel-fonts = Annuler les modifications des polices
+
 egui-pop-theme-editor-change-of = La modification de { $token }
 
 egui-pop-theme-editor-changed-count = Jetons modifiés : { $count }
@@ -991,7 +993,7 @@ egui-pop-theme-editor-font-files = Fichiers de police
 
 egui-pop-theme-editor-font-sample = Échantillon
 
-egui-pop-theme-editor-font-sample-hint = Dessiné avec les polices installées : appliquez pour voir un changement.
+egui-pop-theme-editor-font-sample-hint = Dessiné avec les polices modifiées, avant qu’elles soient appliquées ; laissez le pointeur sur une famille pour la prévisualiser en premier.
 
 egui-pop-theme-editor-font-sample-text = Portez ce vieux whisky au juge blond qui fume. 0123456789
 

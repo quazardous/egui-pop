@@ -80,13 +80,20 @@ it directly, or the service (`THEME_EDITOR`: `set`, `undo`, `redo`,
   order (move a family up or down, remove it, add one by name) and the
   user's font files (added through the file chooser, read to take
   their family and weight, kept as paths: `ThemeEditor::font_files`,
-  for the host to save, and `set_font_files` at the next start), shows
-  a sample line per role in the fonts installed, and applies once with
-  "Apply the fonts" (`ThemeEditor::apply_fonts`): the files are
-  registered, the families written as one change, the draft applied,
-  the atlas rebuilt once. A file that cannot be read is reported and
-  its previous face stays. Fonts are global, so they are never
-  previewed in the pane (see [Fonts](fonts.md#a-users-font-files-built)).
+  for the host to save, and `set_font_files` at the next start), and
+  previews the families edited before they are applied: its own
+  preview pane draws the sampler and a sample line per role in the
+  draft's theme and in the fonts edited (`ThemeEditor::font_preview`,
+  through the preview families of
+  [Fonts](fonts.md#previewing-a-face-before-it-is-applied-built)),
+  the rest of the application keeping the fonts installed. Resting the
+  pointer on a family previews it first (`ThemeEditor::preview_face`).
+  "Apply the fonts" applies once (`ThemeEditor::apply_fonts`): the
+  files are registered, the families written as one change, the draft
+  applied, the atlas rebuilt once. "Cancel the font edits"
+  (`ThemeEditor::cancel_fonts`) drops them. A file that cannot be read
+  is reported and its previous face stays. A file added is drawn in
+  the preview once applied.
 - **Preview**: a pane drawing the draft in its own theme: text by
   role, the status colours, buttons in their tones and states, a
   checkbox, options, a slider, a field, a selected row and a progress

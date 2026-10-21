@@ -283,6 +283,13 @@ struct FontsDraft {
     mono: Option<Vec<String>>,
     /// The family name typed in, per role.
     adding: [String; 2],
+    /// A face the pointer rests on, previewed first in its role
+    /// ([`ThemeEditor::preview_face`]).
+    hovered: Option<(Role, String)>,
+    /// What was handed to the preview families last, by role: written
+    /// when it changes only, so another preview (the settings' Fonts
+    /// page) is not overwritten every frame.
+    synced: [Option<Vec<String>>; 2],
     /// What the last apply could not do.
     problems: Vec<String>,
 }
@@ -1264,12 +1271,85 @@ impl ThemeEditor {
         files == Some(true) || differs(Role::Ui, ui) || differs(Role::Mono, mono)
     }
 
+    /// Previews a face in a role without applying it (what resting the
+    /// pointer on a face does): the fonts tab's preview draws it first,
+    /// before the role's families as edited. `None` stops it.
+    pub fn preview_face(&self, role: Role, name: Option<&str>) {
+        lock(&self.state).fonts.hovered = name.map(|n| (role, n.to_string()));
+    }
+
+    /// What the fonts tab's preview draws for a role: the face previewed
+    /// ([`ThemeEditor::preview_face`]) before the role's families as
+    /// edited, or the families as edited when they are not applied;
+    /// `None` when it draws the fonts installed.
+    pub fn font_preview(&self, app: &AppHandle, role: Role) -> Option<Vec<String>> {
+        let (hovered, edited) = {
+            let s = lock(&self.state);
+            let edited = match role {
+                Role::Ui => s.fonts.ui.clone(),
+                Role::Mono => s.fonts.mono.clone(),
+            };
+            let hovered = s
+                .fonts
+                .hovered
+                .as_ref()
+                .filter(|(r, _)| *r == role)
+                .map(|(_, n)| n.clone());
+            (hovered, edited)
+        };
+        let installed = self
+            .resolved(app)
+            .font_family(family_token(role))
+            .map(<[String]>::to_vec)
+            .unwrap_or_default();
+        let edited = edited.filter(|e| *e != installed);
+        match hovered {
+            Some(name) => {
+                let mut list = edited.unwrap_or(installed);
+                list.retain(|n| !n.eq_ignore_ascii_case(&name));
+                list.insert(0, name);
+                Some(list)
+            }
+            None => edited,
+        }
+    }
+
+    /// Hands the fonts tab's preview to the preview families
+    /// (`egui_pop_core::fonts::set_preview`): drawn from the next pass.
+    fn sync_font_preview(&self, app: &AppHandle) {
+        let ctx = app.egui();
+        for (at, role) in Role::ALL.into_iter().enumerate() {
+            let want = self.font_preview(app, role);
+            let mut s = lock(&self.state);
+            if s.fonts.synced[at] != want {
+                s.fonts.synced[at] = want.clone();
+                drop(s);
+                egui_pop_core::fonts::set_preview(&ctx, role, want);
+            }
+        }
+    }
+
+    /// Drops the fonts tab's edits (families, files, the face
+    /// previewed): the fonts installed stay as they are.
+    pub fn cancel_fonts(&self, app: &AppHandle) {
+        {
+            let mut s = lock(&self.state);
+            s.fonts.pending_files = None;
+            s.fonts.ui = None;
+            s.fonts.mono = None;
+            s.fonts.hovered = None;
+            s.fonts.adding = Default::default();
+        }
+        self.sync_font_preview(app);
+    }
+
     /// Applies the fonts tab, once (the atlas is rebuilt, a slow frame):
     /// registers the font files (read again from their paths; one that
     /// cannot be read is reported and the face it had stays), writes the
     /// families into the draft as one change through the `theme.token`
-    /// step, and applies the draft app-wide (fonts are global: they
-    /// cannot be previewed in a pane). What could not be done, by file;
+    /// step, and applies the draft app-wide (fonts are global: the
+    /// fonts tab's pane previews them through the preview families,
+    /// [`ThemeEditor::font_preview`]). What could not be done, by file;
     /// saving the files is the host's ([`ThemeEditor::font_files`]).
     pub fn apply_fonts(&self, app: &AppHandle, cause: Cause) -> Result<Vec<String>, String> {
         self.sync(app);
@@ -1306,12 +1386,16 @@ impl ThemeEditor {
             // frame).
             egui_pop_core::fonts::reinstall(&ctx);
         }
-        let mut s = lock(&self.state);
-        s.fonts.files = files;
-        s.fonts.pending_files = None;
-        s.fonts.ui = None;
-        s.fonts.mono = None;
-        s.fonts.problems = problems.clone();
+        {
+            let mut s = lock(&self.state);
+            s.fonts.files = files;
+            s.fonts.pending_files = None;
+            s.fonts.ui = None;
+            s.fonts.mono = None;
+            s.fonts.hovered = None;
+            s.fonts.problems = problems.clone();
+        }
+        self.sync_font_preview(app);
         Ok(problems)
     }
 
@@ -1703,7 +1787,7 @@ pub fn show(ui: &mut Ui, app: &AppHandle) {
         });
         ui.separator();
         ui.vertical(|ui| {
-            preview_pane(ui, app, &editor);
+            preview_pane(ui, app, &editor, false);
             ui.add_space(Tokens::of(&ctx).space.m);
             let selected = lock(&editor.state).selected.clone();
             match selected.as_deref().and_then(|p| tokens.get(p)) {
@@ -2525,6 +2609,10 @@ fn fonts_tab(ui: &mut Ui, app: &AppHandle, editor: &ThemeEditor) {
     let tr = |k: &strings::StrKey| strings::tr(&ctx, k);
     ui.strong(tr(&txt::THEME_EDITOR_FAMILIES));
     ui.weak(tr(&txt::THEME_EDITOR_FAMILIES_HINT));
+    // The face the pointer rests on, previewed first in its role; kept
+    // while the pointer moves between rows.
+    let mut rested: Option<(Role, String)> = None;
+    let mut over_row = false;
     for (i, role, title) in [
         (0, Role::Ui, &txt::THEME_EDITOR_FAMILY_UI),
         (1, Role::Mono, &txt::THEME_EDITOR_FAMILY_MONO),
@@ -2537,7 +2625,11 @@ fn fonts_tab(ui: &mut Ui, app: &AppHandle, editor: &ThemeEditor) {
         let mut action = None;
         for (at, name) in list.iter().enumerate() {
             ui.horizontal(|ui| {
-                ui.monospace(name);
+                let r = ui.monospace(name);
+                if rests_on(&r) {
+                    rested = Some((role, name.clone()));
+                }
+                over_row |= r.hovered();
                 let args = [("family", name.as_str())];
                 let up = strings::tr_args(&ctx, &txt::THEME_EDITOR_MOVE_UP, &args);
                 let down = strings::tr_args(&ctx, &txt::THEME_EDITOR_MOVE_DOWN, &args);
@@ -2597,6 +2689,11 @@ fn fonts_tab(ui: &mut Ui, app: &AppHandle, editor: &ThemeEditor) {
             editor.set_families(role, list);
         }
     }
+    match rested {
+        Some((role, name)) => editor.preview_face(role, Some(&name)),
+        None if !over_row => editor.preview_face(Role::Ui, None),
+        None => {}
+    }
 
     ui.add_space(t.space.m);
     ui.strong(tr(&txt::THEME_EDITOR_FONT_FILES));
@@ -2629,8 +2726,8 @@ fn fonts_tab(ui: &mut Ui, app: &AppHandle, editor: &ThemeEditor) {
     }
 
     ui.add_space(t.space.m);
-    ui.strong(tr(&txt::THEME_EDITOR_FONT_SAMPLE));
-    font_sample(ui);
+    editor.sync_font_preview(app);
+    preview_pane(ui, app, editor, true);
     ui.weak(tr(&txt::THEME_EDITOR_FONT_SAMPLE_HINT));
 
     ui.add_space(t.space.m);
@@ -2645,6 +2742,15 @@ fn fonts_tab(ui: &mut Ui, app: &AppHandle, editor: &ThemeEditor) {
         {
             let out = editor.apply_fonts(app, Cause::Edit).map(|_| None);
             say(editor, out);
+        }
+        if ui
+            .add_enabled(
+                pending,
+                egui::Button::new(tr(&txt::THEME_EDITOR_CANCEL_FONTS)),
+            )
+            .clicked()
+        {
+            editor.cancel_fonts(app);
         }
         ui.weak(tr(&txt::THEME_EDITOR_APPLY_FONTS_HINT));
     });
@@ -2665,32 +2771,72 @@ fn fonts_tab(ui: &mut Ui, app: &AppHandle, editor: &ThemeEditor) {
     }
 }
 
-/// A sample line per role, interface then monospace, in the fonts
-/// installed at the body size: the fonts tab's sample, also the
-/// settings window's Fonts page's.
+/// A sample line per role, interface then monospace, at the body size,
+/// in the fonts installed or, in `egui_pop_core::fonts::with_preview`,
+/// in the preview families: the fonts tab's sample, also the settings
+/// window's Fonts page's.
 pub fn font_sample(ui: &mut Ui) {
     let ctx = ui.ctx().clone();
     let size = Tokens::of(&ctx).font.body;
     let sample = strings::tr(&ctx, &txt::THEME_EDITOR_FONT_SAMPLE_TEXT);
     for role in Role::ALL {
-        ui.label(RichText::new(&sample).font(egui_pop_core::fonts::font_id(
-            role,
-            egui_pop_core::fonts::Weight::REGULAR,
-            size,
-        )));
+        ui.label(
+            RichText::new(&sample).font(egui_pop_core::fonts::shown_font_id(
+                &ctx,
+                role,
+                egui_pop_core::fonts::Weight::REGULAR,
+                size,
+            )),
+        );
     }
 }
 
+/// How long the pointer rests on a face before it is previewed: a
+/// pointer sweeping over a list does not rebuild the atlas at each row.
+const PREVIEW_REST: f32 = 0.15;
+
+/// Whether the pointer rests on a response (hovered, still for
+/// [`PREVIEW_REST`]); asks for a frame when it will.
+pub(crate) fn rests_on(r: &egui::Response) -> bool {
+    if !r.hovered() {
+        return false;
+    }
+    let still = r.ctx.input(|i| i.pointer.time_since_last_movement());
+    if still >= PREVIEW_REST {
+        return true;
+    }
+    r.ctx
+        .request_repaint_after(std::time::Duration::from_secs_f32(PREVIEW_REST - still));
+    false
+}
+
 /// The preview pane: the draft's theme drawn in a scoped `Ui`, the rest
-/// of the editor in the theme installed.
-fn preview_pane(ui: &mut Ui, app: &AppHandle, editor: &ThemeEditor) {
+/// of the editor in the theme installed. With `fonts` (the fonts tab),
+/// in the fonts edited too (the preview families), a sample line per
+/// role below.
+fn preview_pane(ui: &mut Ui, app: &AppHandle, editor: &ThemeEditor, fonts: bool) {
     let ctx = ui.ctx().clone();
     ui.strong(strings::tr(&ctx, &txt::THEME_EDITOR_PREVIEW));
-    if editor.preview_only() && editor.pending(app) {
+    let not_applied = if fonts {
+        editor.fonts_pending(app)
+    } else {
+        editor.preview_only() && editor.pending(app)
+    };
+    if not_applied {
         ui.weak(strings::tr(&ctx, &txt::THEME_EDITOR_NOT_APPLIED));
     }
     let scoped = editor.scoped(app);
     let sampler = lock(&editor.state).sampler.clone();
+    let draw = |ui: &mut Ui| {
+        match sampler {
+            Some(f) => f(ui, app),
+            None => sample(ui),
+        }
+        if fonts {
+            ui.separator();
+            font_sample(ui);
+        }
+    };
     scoped.show(ui, |ui| {
         let t = Tokens::of(ui.ctx());
         egui::Frame::new()
@@ -2702,9 +2848,10 @@ fn preview_pane(ui: &mut Ui, app: &AppHandle, editor: &ThemeEditor) {
             .inner_margin(egui::Margin::same(t.space.m.round().clamp(0.0, 127.0) as i8))
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());
-                match sampler {
-                    Some(f) => f(ui, app),
-                    None => sample(ui),
+                if fonts {
+                    egui_pop_core::fonts::with_preview(ui, draw);
+                } else {
+                    draw(ui);
                 }
             });
     });

@@ -12,7 +12,8 @@
 //! The Fonts page, under Appearance, holds the text settings
 //! (`text`): the text size, a family for the interface and one for
 //! numbers and code, picked among the families there are
-//! (`egui_pop_core::fonts::families`), and a preview.
+//! (`egui_pop_core::fonts::families`), and a preview, which draws the
+//! family the pointer rests on in the picker before it is picked.
 //!
 //! Plugins add pages of their own next to the generated ones
 //! ([`crate::settings_pages`]): drawn by the plugin, placed in the tree,
@@ -34,6 +35,7 @@ use egui_pop_core::keys::chord_of;
 use egui_pop_core::lock;
 use egui_pop_core::overlay::{self, Kind, OverlaySpec};
 use egui_pop_core::param::{self, Mode};
+use egui_pop_core::state::Slot;
 use egui_pop_core::strings::{self, RESET};
 use egui_pop_core::theme::Tokens;
 use egui_pop_core::ui::UiPop as _;
@@ -654,7 +656,8 @@ fn setting_reset_button(ui: &mut Ui, app: &AppHandle, e: &SettingEntry, label: &
 }
 
 /// The Fonts page: the text size, a family per role picked among the
-/// families there are, and a preview in the fonts installed.
+/// families there are, and a preview in the fonts installed, or in the
+/// family the pointer rests on in a picker (the preview families).
 fn fonts_page(ui: &mut Ui, app: &AppHandle, entries: &[SettingEntry]) {
     let ctx = ui.ctx().clone();
     let t = Tokens::of(&ctx);
@@ -678,8 +681,10 @@ fn fonts_page(ui: &mut Ui, app: &AppHandle, entries: &[SettingEntry]) {
         .inner_margin(egui::Margin::same(t.space.m.round().clamp(0.0, 127.0) as i8))
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
-            ui.heading(strings::tr(&ctx, &txt::THEME_EDITOR_SAMPLE_HEADING));
-            crate::theme_editor::font_sample(ui);
+            fonts::with_preview(ui, |ui| {
+                ui.heading(strings::tr(&ctx, &txt::THEME_EDITOR_SAMPLE_HEADING));
+                crate::theme_editor::font_sample(ui);
+            });
             ui.add_space(t.space.s);
             ui.label(strings::tr(&ctx, &txt::FONTS_NUMBERS));
             let cell = egui::vec2(120.0, ui.spacing().interact_size.y);
@@ -708,6 +713,10 @@ fn origin_name(ctx: &egui::Context, origin: FaceOrigin) -> String {
     )
 }
 
+/// The family each role's picker previews (`[ui, mono]`), as written
+/// to the preview families last.
+const FONT_PREVIEW: Slot<[Option<String>; 2]> = Slot::opaque("api.settings.font_preview");
+
 /// A role's family: the theme's, or one of the families there are (only
 /// monospace ones for numbers and code), each drawn in its own face but
 /// the system's (loading every system font would cost too much).
@@ -718,6 +727,11 @@ fn family_row(ui: &mut Ui, app: &AppHandle, e: &SettingEntry, role: Role) {
     let current = crate::text::font(app, role);
     let themes = strings::tr(&ctx, &txt::FONTS_THEMES);
     let mut pick: Option<Option<String>> = None;
+    // The family the pointer rests on, previewed below; the preview
+    // stays while the pointer moves between rows, and ends when it
+    // leaves them (or the picker closes).
+    let mut rested: Option<String> = None;
+    let mut over_row = false;
     ui.horizontal(|ui| {
         let reset_width = 64.0;
         ui.allocate_ui(
@@ -744,6 +758,10 @@ fn family_row(ui: &mut Ui, app: &AppHandle, e: &SettingEntry, role: Role) {
                         let r = ui
                             .selectable_label(current.as_deref() == Some(f.name.as_str()), text)
                             .on_hover_text(origin_name(&ctx, f.origin));
+                        over_row |= r.hovered();
+                        if crate::theme_editor::rests_on(&r) {
+                            rested = Some(f.name.clone());
+                        }
                         if r.clicked() {
                             pick = Some(Some(f.name.clone()));
                         }
@@ -755,8 +773,24 @@ fn family_row(ui: &mut Ui, app: &AppHandle, e: &SettingEntry, role: Role) {
         );
         setting_reset_button(ui, app, e, &d.label);
     });
-    if let Some(p) = pick {
+    let at = usize::from(role == Role::Mono);
+    let mut previewed = FONT_PREVIEW.get_or_default(&ctx);
+    let want = if let Some(p) = pick {
         crate::text::set_font(app, role, p.as_deref());
+        None
+    } else if rested.is_some() {
+        rested
+    } else if !over_row {
+        None
+    } else {
+        previewed[at].clone()
+    };
+    // Written when it changes only: the theme editor's fonts tab, open
+    // at the same time, previews through the same families.
+    if previewed[at] != want {
+        fonts::set_preview(&ctx, role, want.clone().map(|n| vec![n]));
+        previewed[at] = want;
+        FONT_PREVIEW.set(&ctx, previewed);
     }
     if !d.description.is_empty() {
         ui.weak(&d.description);
