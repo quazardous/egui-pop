@@ -1,0 +1,128 @@
+{
+  "kind": "pointer-profile",
+  "version": 1,
+  "id": "darktable",
+  "title": "darktable",
+  "description": "The wheel zooms the image at the pointer (Ctrl: without stops), a middle click cycles 100 %, 200 % and fit, the wheel changes the slider under the pointer, as in darktable.",
+  "options": {
+    "slider_wheel": "value",
+    "image_double_click": "leave"
+  },
+  "input": {
+    "zoom": "Ctrl",
+    "horizontal_scroll": "Shift",
+    "vertical_scroll": "Alt"
+  },
+  "bindings": [
+    {
+      "keys": "Wheel",
+      "command": "gesture.image.zoom",
+      "scope": "surface:canvas.image"
+    },
+    {
+      "keys": "Shift+Wheel",
+      "command": "gesture.image.pan_x",
+      "scope": "surface:canvas.image"
+    },
+    {
+      "keys": "Ctrl+Wheel",
+      "command": "gesture.image.zoom_free",
+      "scope": "surface:canvas.image"
+    },
+    {
+      "keys": "Scroll",
+      "command": "gesture.image.pan",
+      "scope": "surface:canvas.image"
+    },
+    {
+      "keys": "Ctrl+Scroll",
+      "command": "gesture.image.zoom",
+      "scope": "surface:canvas.image"
+    },
+    {
+      "keys": "Pinch",
+      "command": "gesture.image.zoom",
+      "scope": "surface:canvas.image"
+    },
+    {
+      "keys": "PrimaryDrag",
+      "command": "gesture.image.pan",
+      "scope": "surface:canvas.image"
+    },
+    {
+      "keys": "MiddleDrag",
+      "command": "gesture.image.pan",
+      "scope": "surface:canvas.image"
+    },
+    {
+      "keys": "MiddleClick",
+      "command": "gesture.image.zoom_cycle",
+      "scope": "surface:canvas.image"
+    },
+    {
+      "keys": "Wheel",
+      "command": "gesture.graph.zoom",
+      "scope": "surface:canvas.graph"
+    },
+    {
+      "keys": "Shift+Wheel",
+      "command": "gesture.graph.pan_x",
+      "scope": "surface:canvas.graph"
+    },
+    {
+      "keys": "Ctrl+Wheel",
+      "command": "gesture.graph.zoom",
+      "scope": "surface:canvas.graph"
+    },
+    {
+      "keys": "Scroll",
+      "command": "gesture.graph.pan",
+      "scope": "surface:canvas.graph"
+    },
+    {
+      "keys": "Ctrl+Scroll",
+      "command": "gesture.graph.zoom",
+      "scope": "surface:canvas.graph"
+    },
+    {
+      "keys": "Pinch",
+      "command": "gesture.graph.zoom",
+      "scope": "surface:canvas.graph"
+    },
+    {
+      "keys": "MiddleDrag",
+      "command": "gesture.graph.pan",
+      "scope": "surface:canvas.graph"
+    },
+    {
+      "keys": "MiddleClick",
+      "command": "gesture.graph.fit",
+      "scope": "surface:canvas.graph"
+    },
+    {
+      "keys": "PrimaryDoubleClick",
+      "command": "gesture.graph.fit",
+      "scope": "surface:canvas.graph"
+    },
+    {
+      "keys": "Alt+Wheel",
+      "command": "gesture.value.step",
+      "scope": "surface:widget.value"
+    },
+    {
+      "keys": "Ctrl+Alt+Wheel",
+      "command": "gesture.value.panel",
+      "scope": "surface:widget.value"
+    },
+    {
+      "keys": "Ctrl+PrimaryDrag",
+      "command": "gesture.value.fine",
+      "scope": "surface:widget.value"
+    },
+    {
+      "keys": "Shift+PrimaryDrag",
+      "command": "gesture.value.coarse",
+      "scope": "surface:widget.value"
+    }
+  ]
+}

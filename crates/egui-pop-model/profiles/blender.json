@@ -1,0 +1,118 @@
+{
+  "kind": "pointer-profile",
+  "version": 1,
+  "id": "blender",
+  "title": "Blender / node editors",
+  "description": "The wheel zooms at the pointer, Shift and Ctrl with the wheel pan, the middle button pans, as in Blender and node editors.",
+  "options": {
+    "slider_wheel": "guarded",
+    "image_double_click": "fit"
+  },
+  "input": {
+    "zoom": "Ctrl",
+    "horizontal_scroll": "Shift",
+    "vertical_scroll": "Alt"
+  },
+  "bindings": [
+    {
+      "keys": "Wheel",
+      "command": "gesture.image.zoom",
+      "scope": "surface:canvas.image"
+    },
+    {
+      "keys": "Shift+Wheel",
+      "command": "gesture.image.pan_y",
+      "scope": "surface:canvas.image"
+    },
+    {
+      "keys": "Ctrl+Wheel",
+      "command": "gesture.image.pan_x",
+      "scope": "surface:canvas.image"
+    },
+    {
+      "keys": "Scroll",
+      "command": "gesture.image.pan",
+      "scope": "surface:canvas.image"
+    },
+    {
+      "keys": "Ctrl+Scroll",
+      "command": "gesture.image.zoom",
+      "scope": "surface:canvas.image"
+    },
+    {
+      "keys": "Pinch",
+      "command": "gesture.image.zoom",
+      "scope": "surface:canvas.image"
+    },
+    {
+      "keys": "PrimaryDrag",
+      "command": "gesture.image.pan",
+      "scope": "surface:canvas.image"
+    },
+    {
+      "keys": "MiddleDrag",
+      "command": "gesture.image.pan",
+      "scope": "surface:canvas.image"
+    },
+    {
+      "keys": "Wheel",
+      "command": "gesture.graph.zoom",
+      "scope": "surface:canvas.graph"
+    },
+    {
+      "keys": "Shift+Wheel",
+      "command": "gesture.graph.pan_y",
+      "scope": "surface:canvas.graph"
+    },
+    {
+      "keys": "Ctrl+Wheel",
+      "command": "gesture.graph.pan_x",
+      "scope": "surface:canvas.graph"
+    },
+    {
+      "keys": "Scroll",
+      "command": "gesture.graph.pan",
+      "scope": "surface:canvas.graph"
+    },
+    {
+      "keys": "Ctrl+Scroll",
+      "command": "gesture.graph.zoom",
+      "scope": "surface:canvas.graph"
+    },
+    {
+      "keys": "Pinch",
+      "command": "gesture.graph.zoom",
+      "scope": "surface:canvas.graph"
+    },
+    {
+      "keys": "MiddleDrag",
+      "command": "gesture.graph.pan",
+      "scope": "surface:canvas.graph"
+    },
+    {
+      "keys": "SecondaryDrag",
+      "command": "gesture.graph.pan",
+      "scope": "surface:canvas.graph"
+    },
+    {
+      "keys": "PrimaryDoubleClick",
+      "command": "gesture.graph.fit",
+      "scope": "surface:canvas.graph"
+    },
+    {
+      "keys": "Ctrl+Wheel",
+      "command": "gesture.value.step",
+      "scope": "surface:widget.value"
+    },
+    {
+      "keys": "Shift+PrimaryDrag",
+      "command": "gesture.value.fine",
+      "scope": "surface:widget.value"
+    },
+    {
+      "keys": "Ctrl+PrimaryDrag",
+      "command": "gesture.value.coarse",
+      "scope": "surface:widget.value"
+    }
+  ]
+}

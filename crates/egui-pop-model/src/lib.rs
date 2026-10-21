@@ -15,6 +15,9 @@
 //! - [`keymap`]: keys bound to commands in layers, resolved by focus
 //!   depth, with removal, unbinding and a resolution trace;
 //! - [`menus`]: menus declared by id, their items commands;
+//! - [`pointer`]: pointer gesture profiles (the wheel, a pinch, the
+//!   buttons per canvas kind) as keymap bindings, and the table canvases
+//!   read;
 //! - [`mount`]: the mount contract (ADR 0013): what a component needs,
 //!   what a host offers, the rules matching them, and `docs/hosts.md`
 //!   written from them;
@@ -44,6 +47,7 @@ pub mod menus;
 pub mod mount;
 pub mod order;
 pub mod panels;
+pub mod pointer;
 pub mod registry;
 pub mod tab;
 pub mod values;
