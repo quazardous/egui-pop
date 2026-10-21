@@ -504,7 +504,7 @@ impl<'a> TitleBar<'a> {
             if !fullscreen {
                 ctx.send_viewport_cmd(ViewportCommand::StartDrag);
             }
-        } else if drag.secondary_clicked() {
+        } else if crate::pointer::claim::opens_context_menu(&drag) {
             let at = drag.interact_pointer_pos().unwrap_or(bar.left_bottom());
             request = Some(FrameRequest::SystemMenu(at));
         }

@@ -13,6 +13,10 @@
 //! `Wheel`, a scroll in points `Scroll` (unless the wheel device setting
 //! says otherwise), a pinch `Pinch`, each with its modifiers.
 //!
+//! A widget that needs the secondary button for itself claims it on its
+//! rect ([`claim`]): context menus and the canvases' profile bindings
+//! leave that click or drag to it.
+//!
 //! ```
 //! use egui_pop_core::pointer;
 //! use egui_pop_model::keymap::Pointer;
@@ -33,6 +37,10 @@ use egui_pop_model::keymap::{Button, Chord, Pointer};
 use egui_pop_model::pointer::{InputModifiers, PointerMap, WheelDevice};
 
 use crate::state::Slot;
+
+pub mod claim;
+
+pub use claim::{Secondary, SecondaryClaim, claim_secondary, claimed};
 
 const MAP: Slot<Arc<PointerMap>> = Slot::new("core.pointer.map");
 
@@ -303,6 +311,22 @@ pub fn show_hint(ctx: &Context, text: &str) {
 pub fn hint_now(ctx: &Context) -> Option<String> {
     let (pass, text) = HINT.get(ctx)?;
     (ctx.cumulative_pass_nr() <= pass + 1 && !text.is_empty()).then_some(text)
+}
+
+/// The `pointer` collector of the debug bridge: the profile in force,
+/// the hint shown now, the widgets' claims of the secondary button in
+/// force and the uses they said ([`claim`]).
+pub fn collector() -> crate::debug::FnCollector {
+    crate::debug::FnCollector::new(
+        "pointer",
+        "The pointer profile in force, the hint a canvas shows now, and the widgets that claim the secondary button: the claims in force (widget, rect, click and drag with what they do) and every use seen.",
+    )
+    .snapshot(|ctx| {
+        let mut out = claim::report(ctx);
+        out["profile"] = serde_json::json!(map(ctx).profile);
+        out["hint"] = serde_json::json!(hint_now(ctx));
+        out
+    })
 }
 
 /// For a web build's `eframe::WebOptions::should_prevent_default`: the

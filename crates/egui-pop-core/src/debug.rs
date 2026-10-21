@@ -527,6 +527,7 @@ pub fn core_collectors() -> Vec<FnCollector> {
             })
         }),
         crate::fonts::collector(),
+        crate::pointer::collector(),
     ]
 }
 
