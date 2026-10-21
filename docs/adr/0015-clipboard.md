@@ -168,3 +168,16 @@ editor copies only once its delete is accepted; the terminal removes
 the bracket's markers from a bracketed paste; Ctrl+Shift+C in the
 terminal never interrupts; `docs/editors.md` says Shift+Insert pastes
 on Windows only. The `Clipboard` contract itself is step 2.
+
+## Built (2026-10-21)
+
+Steps 2 and 3: the model in `egui-pop-model::clipboard`, the
+`Clipboard` contract with `LocalClipboard` behind `Host::clipboard`,
+history groups (`Host::begin_group`, `Host::end_group`), endpoints
+(`ClipSource`, `ClipTarget`), plugin-declared types, transforms and
+sanitisers, the `clipboard.copy` and `clipboard.paste` steps, the four
+Edit commands (dispatched from egui's events too), the agents'
+`clipboard.*` with a dry run, and the `clipboard` collector; a gallery
+page. The guide is [docs/clipboard.md](../clipboard.md). Left: the
+first types and their sanitisers (step 4), and the system backend for
+rich formats, private types and the primary selection (step 5).
