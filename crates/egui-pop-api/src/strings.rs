@@ -126,6 +126,42 @@ pub const SHORTCUTS_PRESS_TO_SEARCH: StrKey = StrKey::new(
 );
 pub const SHORTCUTS_BOUND_TO: StrKey =
     StrKey::new("egui-pop-shortcuts-bound-to", "Bound to { $keys }");
+/// The shortcuts editor's pointer gestures: the profile in force.
+pub const SHORTCUTS_POINTER_PROFILE: StrKey = StrKey::new(
+    "egui-pop-shortcuts-pointer-profile",
+    "Pointer profile: { $profile }",
+);
+/// The same, when the user changed some of its gestures.
+pub const SHORTCUTS_POINTER_PROFILE_CHANGED: StrKey = StrKey::new(
+    "egui-pop-shortcuts-pointer-profile-changed",
+    "Pointer profile: { $profile } ({ $count } changed)",
+);
+pub const SHORTCUTS_POINTER_ONLY: StrKey =
+    StrKey::new("egui-pop-shortcuts-pointer-only", "Pointer gestures only");
+pub const SHORTCUTS_POINTER_ADD: StrKey =
+    StrKey::new("egui-pop-shortcuts-pointer-add", "Add a gesture");
+pub const SHORTCUTS_POINTER_ADD_NAME: StrKey = StrKey::new(
+    "egui-pop-shortcuts-pointer-add-name",
+    "Add a gesture to { $command }",
+);
+pub const SHORTCUTS_POINTER_REMOVE_NAME: StrKey = StrKey::new(
+    "egui-pop-shortcuts-pointer-remove-name",
+    "Remove { $keys } from { $command }",
+);
+/// The pad a gesture is done on to capture it.
+pub const SHORTCUTS_POINTER_PAD: StrKey = StrKey::new(
+    "egui-pop-shortcuts-pointer-pad",
+    "Do the gesture here for { $command }: the wheel, a pinch, a click, a double click or a drag, holding its keys. Escape: cancel.",
+);
+pub const SHORTCUTS_POINTER_PAD_NAME: StrKey =
+    StrKey::new("egui-pop-shortcuts-pointer-pad-name", "Gesture pad");
+pub const SHORTCUTS_POINTER_USE: StrKey =
+    StrKey::new("egui-pop-shortcuts-pointer-use", "Use { $keys }");
+/// Alt with the pointer on Linux.
+pub const SHORTCUTS_POINTER_ALT: StrKey = StrKey::new(
+    "egui-pop-shortcuts-pointer-alt",
+    "Alt with a drag or the wheel may go to the window manager on some Linux desktops.",
+);
 /// The dialog after a change of pointer profile, when the user changed
 /// gestures: its title.
 pub const POINTER_OVERRIDES_TITLE: StrKey = StrKey::new(
@@ -721,6 +757,16 @@ pub const ALL: &[StrKey] = &[
     SHORTCUTS_PRESS_TO_SEARCH,
     SHORTCUTS_BOUND_TO,
     SHORTCUTS_SHOW_ALL,
+    SHORTCUTS_POINTER_PROFILE,
+    SHORTCUTS_POINTER_PROFILE_CHANGED,
+    SHORTCUTS_POINTER_ONLY,
+    SHORTCUTS_POINTER_ADD,
+    SHORTCUTS_POINTER_ADD_NAME,
+    SHORTCUTS_POINTER_REMOVE_NAME,
+    SHORTCUTS_POINTER_PAD,
+    SHORTCUTS_POINTER_PAD_NAME,
+    SHORTCUTS_POINTER_USE,
+    SHORTCUTS_POINTER_ALT,
     POINTER_OVERRIDES_TITLE,
     POINTER_OVERRIDES_DETAIL,
     POINTER_KEEP,

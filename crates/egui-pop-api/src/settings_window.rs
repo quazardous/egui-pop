@@ -3,7 +3,11 @@
 //! and the form on the other, generated from the declared settings and
 //! applied as they change, each with its reset; and a shortcuts editor
 //! (every command with its keys, changed by pressing the new ones, the
-//! conflicts said, each change taken back by its reset).
+//! conflicts said, each change taken back by its reset). Pointer
+//! gestures are there too (`docs/pointer-gestures.md`): the profile in
+//! force and how many of its gestures the user changed, a filter
+//! showing them alone, each gesture's triggers removed one by one or
+//! added by doing the gesture on a pad.
 //!
 //! `Ctrl+,` (or File > Settings) opens it; Escape closes it (or stops a
 //! capture of keys).
@@ -26,7 +30,7 @@ use egui_pop_core::widgets;
 use egui_pop_model::commands::{CommandSpec, Origin};
 use egui_pop_model::fuzzy;
 use egui_pop_model::ids::{BlockId, CommandId, OwnerId, PluginId};
-use egui_pop_model::keymap::{Action, Keys, Layer};
+use egui_pop_model::keymap::{Action, Keys, Layer, Pointer};
 use egui_pop_model::values::{Change, Set};
 use serde_json::json;
 
@@ -67,6 +71,11 @@ struct State {
     /// Where keys changed go: the user's layer, or the workspace's when
     /// the application offers it.
     workspace_target: bool,
+    /// Only the pointer gestures.
+    pointer_only: bool,
+    /// The gesture command a new gesture is awaited for, and the one
+    /// done on the pad so far.
+    pointer_capture: Option<(CommandId, Option<String>)>,
 }
 
 /// Open or not, the search, the section shown.
@@ -92,6 +101,7 @@ impl SettingsWindow {
         s.open = false;
         s.capture = None;
         s.capture_search = false;
+        s.pointer_capture = None;
         s.key_filter = None;
         s.filter.clear();
     }
@@ -220,7 +230,10 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     let mut close = false;
     overlay::show(&ctx, &spec, &mut open, None, |ui| {
         let t = Tokens::of(ui.ctx());
-        let capturing = w.capturing().is_some() || lock(&w.0).capture_search;
+        let capturing = w.capturing().is_some() || {
+            let st = lock(&w.0);
+            st.capture_search || st.pointer_capture.is_some()
+        };
         if !capturing && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, Key::Escape)) {
             close = true;
             return;
@@ -261,7 +274,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                     let hits = if sec == SHORTCUTS {
                         usize::from(
                             filter.is_empty()
-                                || !shortcut_rows(&ctx, app, &filter, None).is_empty(),
+                                || !shortcut_rows(&ctx, app, &filter, None, false).is_empty(),
                         )
                     } else {
                         entries
@@ -312,7 +325,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                             let mut any = false;
                             for sec in &secs {
                                 if sec == SHORTCUTS {
-                                    if !shortcut_rows(&ctx, app, &filter, None).is_empty() {
+                                    if !shortcut_rows(&ctx, app, &filter, None, false).is_empty() {
                                         any = true;
                                         ui.strong(section_title(&ctx, app, &entries, sec));
                                         let st = &mut *s;
@@ -341,7 +354,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                     });
                 });
         });
-        app.capture_keys(s.capture.is_some() || s.capture_search);
+        app.capture_keys(s.capture.is_some() || s.capture_search || s.pointer_capture.is_some());
     });
     if close || !open {
         w.close();
@@ -441,20 +454,28 @@ fn row(ui: &mut Ui, app: &AppHandle, e: &SettingEntry) {
     ui.add_space(t.space.s);
 }
 
+/// Whether a command is a pointer gesture.
+fn is_gesture(id: &CommandId) -> bool {
+    egui_pop_model::pointer::gesture_spec(id).is_some()
+}
+
 /// The commands the shortcuts editor lists for a search (and, when
-/// searching by key, those bound to exactly these keys): visible ones and
-/// those with keys, as `Category: Title` in the interface's language.
+/// searching by key, those bound to exactly these keys): visible ones,
+/// those with keys and the pointer gestures (those alone with
+/// `pointer_only`), as `Category: Title` in the interface's language.
 fn shortcut_rows(
     ctx: &egui::Context,
     app: &AppHandle,
     filter: &str,
     keys: Option<&str>,
+    pointer_only: bool,
 ) -> Vec<(CommandSpec, String)> {
     let mut rows: Vec<(CommandSpec, String)> = app
         .commands()
         .into_iter()
         .map(|(s, _)| s)
-        .filter(|s| s.palette || !app.keys_for(&s.id).is_empty())
+        .filter(|s| s.palette || !app.keys_for(&s.id).is_empty() || is_gesture(&s.id))
+        .filter(|s| !pointer_only || is_gesture(&s.id))
         .map(|s| {
             let label = strings::tr_args(
                 ctx,
@@ -663,6 +684,10 @@ fn shortcuts(ui: &mut Ui, app: &AppHandle, st: &mut State, filter: &str) {
     } else {
         Layer::User
     };
+    pointer_header(ui, app, st);
+    pointer_pad(ui, app, st, target);
+    let pointer_only = st.pointer_only;
+    let mut pointer_capture: Option<CommandId> = None;
     let capture = &mut st.capture;
     let key_filter = st.key_filter.clone();
     if let Some(c) = capture.clone() {
@@ -699,29 +724,36 @@ fn shortcuts(ui: &mut Ui, app: &AppHandle, st: &mut State, filter: &str) {
         .striped(true)
         .spacing([t.space.m, t.space.xs])
         .show(ui, |ui| {
-            for (spec, label) in shortcut_rows(&ctx, app, filter, key_filter.as_deref()) {
+            for (spec, label) in
+                shortcut_rows(&ctx, app, filter, key_filter.as_deref(), pointer_only)
+            {
                 let name = ui.label(&label);
                 let keys = app.keys_for(&spec.id);
+                let gesture = is_gesture(&spec.id);
                 // Each key with where it comes from when it is not a default
                 // (workspace, user, or the application's own names).
                 let sources = app.key_sources(&spec.id);
-                ui.monospace(if sources.is_empty() {
-                    "—".to_string()
+                if gesture {
+                    gesture_keys(ui, app, &ctx, &spec.id, &label, &keys, target, name.id);
                 } else {
-                    sources
-                        .iter()
-                        .map(|b| match app.key_source_name(&ctx, b) {
-                            Some(source) => strings::tr_args(
-                                &ctx,
-                                &txt::SHORTCUTS_KEY_FROM,
-                                &[("keys", &b.keys.to_string()), ("source", &source)],
-                            ),
-                            None => b.keys.to_string(),
-                        })
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                })
-                .labelled_by(name.id);
+                    ui.monospace(if sources.is_empty() {
+                        "—".to_string()
+                    } else {
+                        sources
+                            .iter()
+                            .map(|b| match app.key_source_name(&ctx, b) {
+                                Some(source) => strings::tr_args(
+                                    &ctx,
+                                    &txt::SHORTCUTS_KEY_FROM,
+                                    &[("keys", &b.keys.to_string()), ("source", &source)],
+                                ),
+                                None => b.keys.to_string(),
+                            })
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    })
+                    .labelled_by(name.id);
+                }
                 // A binding of this command losing to another, or beating one.
                 let clash = conflicts.iter().find_map(|(lose, win)| {
                     let mine = |b: &egui_pop_model::keymap::Binding| {
@@ -747,7 +779,8 @@ fn shortcuts(ui: &mut Ui, app: &AppHandle, st: &mut State, filter: &str) {
                         None
                     }
                 });
-                let system = system_note(&ctx, app, &spec.id);
+                let system = system_note(&ctx, app, &spec.id)
+                    .or_else(|| gesture.then(|| alt_note(&ctx, &keys)).flatten());
                 match (clash, system) {
                     (None, None) => {
                         ui.label("");
@@ -769,6 +802,19 @@ fn shortcuts(ui: &mut Ui, app: &AppHandle, st: &mut State, filter: &str) {
                 }
                 ui.horizontal(|ui| {
                     let command = [("command", label.as_str())];
+                    if gesture {
+                        let add = ui.small_button(strings::tr(&ctx, &txt::SHORTCUTS_POINTER_ADD));
+                        a11y::name(
+                            &add,
+                            WidgetType::Button,
+                            &strings::tr_args(&ctx, &txt::SHORTCUTS_POINTER_ADD_NAME, &command),
+                        );
+                        if add.clicked() {
+                            pointer_capture = Some(spec.id.clone());
+                        }
+                        reset_button(ui, app, &ctx, target, &spec.id, &command);
+                        return;
+                    }
                     let change = ui.small_button(strings::tr(&ctx, &txt::SHORTCUTS_CHANGE));
                     a11y::name(
                         &change,
@@ -804,4 +850,211 @@ fn shortcuts(ui: &mut Ui, app: &AppHandle, st: &mut State, filter: &str) {
                 ui.end_row();
             }
         });
+    if let Some(id) = pointer_capture {
+        st.pointer_capture = Some((id, None));
+        st.capture = None;
+    }
+}
+
+/// The reset of a command's keys in `target`, when it changed them.
+fn reset_button(
+    ui: &mut Ui,
+    app: &AppHandle,
+    ctx: &egui::Context,
+    target: Layer,
+    id: &CommandId,
+    command: &[(&str, &str)],
+) {
+    if app.rebound_in(target, id) {
+        let reset = ui.small_button(strings::tr(ctx, &RESET));
+        a11y::name(
+            &reset,
+            WidgetType::Button,
+            &strings::tr_args(ctx, &txt::SHORTCUTS_DEFAULT_NAME, command),
+        );
+        if reset.clicked() {
+            app.reset_keys_in(target, id.clone());
+        }
+    }
+}
+
+/// The pointer profile in force, how many of its gestures the user
+/// changed, and the filter showing the gestures alone.
+fn pointer_header(ui: &mut Ui, app: &AppHandle, st: &mut State) {
+    let ctx = ui.ctx().clone();
+    let profile = crate::pointer::profile(app);
+    let changed = crate::pointer::overrides(app).len();
+    ui.horizontal(|ui| {
+        ui.label(if changed == 0 {
+            strings::tr_args(
+                &ctx,
+                &txt::SHORTCUTS_POINTER_PROFILE,
+                &[("profile", &profile.title)],
+            )
+        } else {
+            strings::tr_args(
+                &ctx,
+                &txt::SHORTCUTS_POINTER_PROFILE_CHANGED,
+                &[("profile", &profile.title), ("count", &changed.to_string())],
+            )
+        });
+        widgets::checkbox(
+            ui,
+            &mut st.pointer_only,
+            strings::tr(&ctx, &txt::SHORTCUTS_POINTER_ONLY),
+        );
+    });
+}
+
+/// A gesture's triggers, each with its removal.
+#[allow(clippy::too_many_arguments)]
+fn gesture_keys(
+    ui: &mut Ui,
+    app: &AppHandle,
+    ctx: &egui::Context,
+    id: &CommandId,
+    label: &str,
+    keys: &[String],
+    target: Layer,
+    name: egui::Id,
+) {
+    ui.horizontal_wrapped(|ui| {
+        if keys.is_empty() {
+            ui.monospace("—").labelled_by(name);
+        }
+        for k in keys {
+            ui.monospace(k).labelled_by(name);
+            let remove = ui.small_button("✕");
+            a11y::name(
+                &remove,
+                WidgetType::Button,
+                &strings::tr_args(
+                    ctx,
+                    &txt::SHORTCUTS_POINTER_REMOVE_NAME,
+                    &[("keys", k), ("command", label)],
+                ),
+            );
+            if remove.clicked() {
+                let rest: Vec<&str> = keys
+                    .iter()
+                    .filter(|x| *x != k)
+                    .map(String::as_str)
+                    .collect();
+                app.rebind_gestures(target, id.clone(), &rest);
+            }
+        }
+    });
+}
+
+/// On Linux, a warning for a gesture bound with Alt and a drag or the
+/// wheel, which some window managers take.
+fn alt_note(ctx: &egui::Context, keys: &[String]) -> Option<(String, bool)> {
+    if !cfg!(target_os = "linux") {
+        return None;
+    }
+    let risky = keys.iter().filter_map(|k| Keys::parse(k).ok()).any(|k| {
+        k.pointer().is_some_and(|(c, p)| {
+            c.alt && matches!(p, Pointer::Wheel | Pointer::Scroll | Pointer::Drag(_))
+        })
+    });
+    risky.then(|| (strings::tr(ctx, &txt::SHORTCUTS_POINTER_ALT), false))
+}
+
+/// The pad a new gesture is done on, while one is awaited: the gesture
+/// done shown, used (added to the command's) or cancelled.
+fn pointer_pad(ui: &mut Ui, app: &AppHandle, st: &mut State, target: Layer) {
+    use egui_pop_core::pointer::{self, chord};
+    let Some((id, mut candidate)) = st.pointer_capture.clone() else {
+        return;
+    };
+    let ctx = ui.ctx().clone();
+    let t = Tokens::of(&ctx);
+    let title = title_of(&ctx, app, &id);
+    if ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, Key::Escape)) {
+        st.pointer_capture = None;
+        return;
+    }
+    ui.add_space(t.space.s);
+    ui.colored_label(
+        t.accent.default,
+        strings::tr_args(&ctx, &txt::SHORTCUTS_POINTER_PAD, &[("command", &title)]),
+    );
+    let size = egui::vec2(ui.available_width().min(420.0), 88.0);
+    let (rect, pad) = ui.allocate_exact_size(size, egui::Sense::click_and_drag());
+    a11y::name(
+        &pad,
+        WidgetType::Other,
+        &strings::tr(&ctx, &txt::SHORTCUTS_POINTER_PAD_NAME),
+    );
+    if pad.hovered() {
+        if let Some(input) = pointer::wheel_inputs(&ctx).last() {
+            candidate = Some(input.chord().to_string());
+        }
+        pointer::take_wheel(&ctx);
+    }
+    let modifiers = ui.input(|i| i.modifiers);
+    for b in [
+        egui::PointerButton::Primary,
+        egui::PointerButton::Secondary,
+        egui::PointerButton::Middle,
+        egui::PointerButton::Extra1,
+        egui::PointerButton::Extra2,
+    ] {
+        let button = pointer::button(b);
+        let done = if pad.double_clicked_by(b) {
+            Some(Pointer::DoubleClick(button))
+        } else if pad.clicked_by(b) {
+            Some(Pointer::Click(button))
+        } else if pad.drag_stopped_by(b) {
+            Some(Pointer::Drag(button))
+        } else {
+            None
+        };
+        if let Some(p) = done {
+            candidate = Some(chord(modifiers, p).to_string());
+        }
+    }
+    let stroke = egui::Stroke::new(1.0, t.accent.default);
+    ui.painter()
+        .rect_stroke(rect, 4.0, stroke, egui::StrokeKind::Inside);
+    if let Some(c) = &candidate {
+        ui.painter().text(
+            rect.center(),
+            egui::Align2::CENTER_CENTER,
+            c,
+            egui::TextStyle::Monospace.resolve(ui.style()),
+            ui.visuals().text_color(),
+        );
+    }
+    ui.horizontal(|ui| {
+        if let Some(c) = &candidate
+            && ui
+                .button(strings::tr_args(
+                    &ctx,
+                    &txt::SHORTCUTS_POINTER_USE,
+                    &[("keys", c)],
+                ))
+                .clicked()
+        {
+            let mut keys = app.keys_for(&id);
+            if !keys.contains(c) {
+                keys.push(c.clone());
+            }
+            let keys: Vec<&str> = keys.iter().map(String::as_str).collect();
+            app.rebind_gestures(target, id.clone(), &keys);
+            candidate = None;
+            st.pointer_capture = None;
+            return;
+        }
+        if ui
+            .button(strings::tr(&ctx, &egui_pop_core::strings::CANCEL))
+            .clicked()
+        {
+            st.pointer_capture = None;
+        }
+    });
+    if let Some((_, slot)) = st.pointer_capture.as_mut() {
+        *slot = candidate;
+    }
+    ui.add_space(t.space.s);
 }
