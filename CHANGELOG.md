@@ -173,6 +173,19 @@ publishes.
   preview before it is picked. `theme_editor::font_sample` draws in the
   preview families inside `fonts::with_preview`. English and French
   strings. Closes #49.
+- The theme editor picks a face installed on the system (egui-pop-api,
+  egui-pop-tokens): the Fonts tab lists the families installed (egui's,
+  the application's, the user's font files and the system's with
+  `system-fonts`), with a search and the role they are for
+  (`ThemeEditor::installed_faces`, `ThemeEditor::set_face_search`).
+  Resting the pointer on one previews it; picking one puts it first in
+  the role's families, the others its fallbacks and a generic family
+  added when there is none (`ThemeEditor::choose_face`), applied with
+  "Apply the fonts". A theme names the face by its family name: where
+  it is missing, the next family of its list draws, the Fonts tab marks
+  it "Not installed here", and opening or importing the theme warns
+  with the new `Warning::FontMissing` (egui-pop-tokens), naming the
+  family drawing instead. English and French strings. Closes #50.
 
 ### Changed
 

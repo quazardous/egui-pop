@@ -80,8 +80,17 @@ it directly, or the service (`THEME_EDITOR`: `set`, `undo`, `redo`,
   order (move a family up or down, remove it, add one by name) and the
   user's font files (added through the file chooser, read to take
   their family and weight, kept as paths: `ThemeEditor::font_files`,
-  for the host to save, and `set_font_files` at the next start), and
-  previews the families edited before they are applied: its own
+  for the host to save, and `set_font_files` at the next start). It
+  lists the **families installed** (`ThemeEditor::installed_faces`:
+  egui's, the application's, the user's font files and the system's
+  with `system-fonts`), with a search and the role they are for
+  (monospace ones only for monospace); resting the pointer on one
+  previews it, picking one puts it first in the role's families
+  (`ThemeEditor::choose_face`), the others kept as its fallbacks and a
+  generic family (`sans-serif`, `monospace`) added at the end when the
+  list has none. A family missing on this machine is marked "Not
+  installed here". The tab previews the families edited before they
+  are applied: its own
   preview pane draws the sampler and a sample line per role in the
   draft's theme and in the fonts edited (`ThemeEditor::font_preview`,
   through the preview families of
@@ -93,7 +102,12 @@ it directly, or the service (`THEME_EDITOR`: `set`, `undo`, `redo`,
   applied, the atlas rebuilt once. "Cancel the font edits"
   (`ThemeEditor::cancel_fonts`) drops them. A file that cannot be read
   is reported and its previous face stays. A file added is drawn in
-  the preview once applied.
+  the preview once applied. A theme names a system face by its family
+  name, so it travels as a token file: where the face is missing, the
+  next family of its list draws, and opening or importing the theme
+  says so (`Warning::FontMissing`, the family drawing instead). To
+  carry the face itself, add its file as a font file: the theme is
+  then saved with it (below).
 - **Preview**: a pane drawing the draft in its own theme: text by
   role, the status colours, buttons in their tones and states, a
   checkbox, options, a slider, a field, a selected row and a progress

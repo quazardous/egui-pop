@@ -290,6 +290,10 @@ struct FontsDraft {
     /// when it changes only, so another preview (the settings' Fonts
     /// page) is not overwritten every frame.
     synced: [Option<Vec<String>>; 2],
+    /// The role the families installed are picked for (`None`: the
+    /// interface), and their search.
+    face_role: Option<Role>,
+    face_search: String,
     /// What the last apply could not do.
     problems: Vec<String>,
 }
@@ -673,7 +677,7 @@ impl ThemeEditor {
         let (package, mut warnings) = ThemePackage::read(path).map_err(|e| e.to_string())?;
         let text = package.file.to_json_pretty();
         lock(&self.state).file_text = text.clone();
-        warnings.extend(self.import(app, &text)?);
+        warnings.extend(self.import_text(app, &text)?);
         // Where the faces are on disk when they come from a folder.
         let beside = if path.is_dir() {
             Some(path.to_path_buf())
@@ -683,6 +687,7 @@ impl ThemeEditor {
             path.parent().map(std::path::Path::to_path_buf)
         };
         warnings.extend(self.add_package_fonts(app, &package, beside.as_deref()));
+        warnings.extend(self.missing_families(app));
         Ok(warnings)
     }
 
@@ -1093,6 +1098,14 @@ impl ThemeEditor {
     /// the tokens left out (unknown to its base, or with a value that
     /// does not check), renamed, or a file newer than this egui-pop.
     pub fn import(&self, app: &AppHandle, text: &str) -> Result<Vec<Warning>, String> {
+        let mut warnings = self.import_text(app, text)?;
+        warnings.extend(self.missing_families(app));
+        Ok(warnings)
+    }
+
+    /// [`ThemeEditor::import`] without the check of the families it
+    /// names (a package's faces are registered after it).
+    fn import_text(&self, app: &AppHandle, text: &str) -> Result<Vec<Warning>, String> {
         let (draft, warnings) = {
             let themes = app.theme();
             ThemeDraft::import(themes.themes(), "import", text).map_err(|e| e.to_string())?
@@ -1327,6 +1340,83 @@ impl ThemeEditor {
                 egui_pop_core::fonts::set_preview(&ctx, role, want);
             }
         }
+    }
+
+    /// The families installed a role may pick (monospace ones only for
+    /// [`Role::Mono`]), matching the fonts tab's search (a part of the
+    /// name, any case): egui's, the application's, the user's files,
+    /// then the system's.
+    pub fn installed_faces(
+        &self,
+        app: &AppHandle,
+        role: Role,
+    ) -> Vec<egui_pop_core::fonts::FamilyInfo> {
+        let search = lock(&self.state).fonts.face_search.trim().to_lowercase();
+        egui_pop_core::fonts::families(&app.egui())
+            .into_iter()
+            .filter(|f| role == Role::Ui || f.monospace)
+            .filter(|f| search.is_empty() || f.name.to_lowercase().contains(&search))
+            .collect()
+    }
+
+    /// Searches the families installed ([`ThemeEditor::installed_faces`]).
+    pub fn set_face_search(&self, search: &str) {
+        lock(&self.state).fonts.face_search = search.to_string();
+    }
+
+    /// Picks a family for a role, as clicking it among the families
+    /// installed does: put first in the role's families as edited (moved
+    /// there when it is already in them), the others kept as its
+    /// fallbacks, and a generic family added at the end when there is
+    /// none (`sans-serif`, `monospace`), so a theme naming a face missing
+    /// on another machine still draws there. Previewed, applied with
+    /// [`ThemeEditor::apply_fonts`].
+    pub fn choose_face(&self, app: &AppHandle, role: Role, name: &str) {
+        let mut list = self.families(app, role);
+        list.retain(|n| !n.eq_ignore_ascii_case(name));
+        list.insert(0, name.to_string());
+        if !list.iter().any(|n| egui_pop_core::fonts::is_generic(n)) {
+            list.push(
+                match role {
+                    Role::Ui => "sans-serif",
+                    Role::Mono => "monospace",
+                }
+                .to_string(),
+            );
+        }
+        self.set_families(role, list);
+    }
+
+    /// The families the theme being edited names that are missing here
+    /// (`egui_pop_core::fonts::origin_of`): a warning each, with the
+    /// family of its list drawing instead. A theme travels by family
+    /// name, so a face installed where it was made can be missing where
+    /// it is opened.
+    fn missing_families(&self, app: &AppHandle) -> Vec<Warning> {
+        let ctx = app.egui();
+        let tokens = self.resolved(app);
+        let mut warnings = Vec::new();
+        for role in Role::ALL {
+            let Some(list) = tokens.font_family(family_token(role)) else {
+                continue;
+            };
+            let found = |n: &String| egui_pop_core::fonts::origin_of(&ctx, n).is_some();
+            for (at, name) in list.iter().enumerate() {
+                if found(name) {
+                    continue;
+                }
+                let fallback = list[at + 1..]
+                    .iter()
+                    .find(|n| found(n))
+                    .map_or_else(|| "egui's bundled fonts".to_string(), |n| format!("`{n}`"));
+                warnings.push(Warning::FontMissing {
+                    path: family_token(role).to_string(),
+                    family: name.clone(),
+                    fallback,
+                });
+            }
+        }
+        warnings
     }
 
     /// Drops the fonts tab's edits (families, files, the face
@@ -2601,8 +2691,9 @@ fn poll_choice(app: &AppHandle, editor: &ThemeEditor, ctx: &egui::Context) {
     say(editor, out);
 }
 
-/// The fonts tab: each role's families in priority order, the user's
-/// font files, a sample, and "Apply".
+/// The fonts tab: each role's families in priority order, the families
+/// installed (searched, previewed, picked), the user's font files, a
+/// preview, and "Apply".
 fn fonts_tab(ui: &mut Ui, app: &AppHandle, editor: &ThemeEditor) {
     let ctx = ui.ctx().clone();
     let t = Tokens::of(&ctx);
@@ -2630,6 +2721,9 @@ fn fonts_tab(ui: &mut Ui, app: &AppHandle, editor: &ThemeEditor) {
                     rested = Some((role, name.clone()));
                 }
                 over_row |= r.hovered();
+                if egui_pop_core::fonts::origin_of(&ctx, name).is_none() {
+                    ui.colored_label(t.status.warning, tr(&txt::THEME_EDITOR_FAMILY_MISSING));
+                }
                 let args = [("family", name.as_str())];
                 let up = strings::tr_args(&ctx, &txt::THEME_EDITOR_MOVE_UP, &args);
                 let down = strings::tr_args(&ctx, &txt::THEME_EDITOR_MOVE_DOWN, &args);
@@ -2689,6 +2783,7 @@ fn fonts_tab(ui: &mut Ui, app: &AppHandle, editor: &ThemeEditor) {
             editor.set_families(role, list);
         }
     }
+    installed_faces(ui, app, editor, &mut rested, &mut over_row);
     match rested {
         Some((role, name)) => editor.preview_face(role, Some(&name)),
         None if !over_row => editor.preview_face(Role::Ui, None),
@@ -2768,6 +2863,82 @@ fn fonts_tab(ui: &mut Ui, app: &AppHandle, editor: &ThemeEditor) {
             },
             m,
         );
+    }
+}
+
+/// The families installed (`egui_pop_core::fonts::families`: egui's,
+/// the application's, the user's files, the system's), searched, for
+/// the role chosen (monospace ones only for monospace): resting the
+/// pointer on one previews it, picking one puts it first in the role's
+/// families ([`ThemeEditor::choose_face`]).
+fn installed_faces(
+    ui: &mut Ui,
+    app: &AppHandle,
+    editor: &ThemeEditor,
+    rested: &mut Option<(Role, String)>,
+    over_row: &mut bool,
+) {
+    let ctx = ui.ctx().clone();
+    let t = Tokens::of(&ctx);
+    let tr = |k: &strings::StrKey| strings::tr(&ctx, k);
+    ui.add_space(t.space.m);
+    ui.strong(tr(&txt::THEME_EDITOR_INSTALLED));
+    ui.weak(tr(&txt::THEME_EDITOR_INSTALLED_HINT));
+    let (mut role, mut search) = {
+        let s = lock(&editor.state);
+        (
+            s.fonts.face_role.unwrap_or(Role::Ui),
+            s.fonts.face_search.clone(),
+        )
+    };
+    ui.horizontal(|ui| {
+        widgets::selectable_value(ui, &mut role, Role::Ui, tr(&txt::THEME_EDITOR_FOR_UI));
+        widgets::selectable_value(ui, &mut role, Role::Mono, tr(&txt::THEME_EDITOR_FOR_MONO));
+        let hint = tr(&txt::THEME_EDITOR_SEARCH_FAMILIES);
+        let r = ui.add(
+            egui::TextEdit::singleline(&mut search)
+                .hint_text(&hint)
+                .desired_width(200.0),
+        );
+        egui_pop_core::a11y::name(&r, WidgetType::TextEdit, &hint);
+    });
+    {
+        let mut s = lock(&editor.state);
+        s.fonts.face_role = Some(role);
+        s.fonts.face_search = search;
+    }
+    let faces = editor.installed_faces(app, role);
+    if faces.is_empty() {
+        ui.weak(tr(&txt::THEME_EDITOR_NO_FAMILY_MATCHES));
+        return;
+    }
+    let first = editor.families(app, role).into_iter().next();
+    let row = ui.spacing().interact_size.y;
+    let mut picked = None;
+    egui::ScrollArea::vertical()
+        .id_salt("egui_pop.theme_editor.installed")
+        .max_height(row * 8.0)
+        .auto_shrink([false, true])
+        .show_rows(ui, row, faces.len(), |ui, range| {
+            for f in &faces[range] {
+                ui.horizontal(|ui| {
+                    let first = first
+                        .as_deref()
+                        .is_some_and(|n| n.eq_ignore_ascii_case(&f.name));
+                    let r = ui.selectable_label(first, &f.name);
+                    *over_row |= r.hovered();
+                    if rests_on(&r) {
+                        *rested = Some((role, f.name.clone()));
+                    }
+                    if r.clicked() {
+                        picked = Some(f.name.clone());
+                    }
+                    ui.weak(crate::settings_window::origin_name(&ctx, f.origin));
+                });
+            }
+        });
+    if let Some(name) = picked {
+        editor.choose_face(app, role, &name);
     }
 }
 

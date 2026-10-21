@@ -1084,6 +1084,8 @@ egui-pop-theme-editor-families = Families
 
 egui-pop-theme-editor-families-hint = In order of priority: the first one found draws, the others are its fallbacks.
 
+egui-pop-theme-editor-family-missing = Not installed here: the next family draws
+
 egui-pop-theme-editor-family-mono = Values and code (font.family.mono)
 
 egui-pop-theme-editor-family-ui = Interface text (font.family.ui)
@@ -1104,6 +1106,10 @@ egui-pop-theme-editor-font-sample-hint = Drawn with the fonts edited, before the
 
 egui-pop-theme-editor-font-sample-text = Sphinx of black quartz, judge my vow. 0123456789
 
+egui-pop-theme-editor-for-mono = For monospace
+
+egui-pop-theme-editor-for-ui = For the interface
+
 egui-pop-theme-editor-from = As in { $theme }
 
 egui-pop-theme-editor-generate = Generate { $scale }
@@ -1120,6 +1126,10 @@ egui-pop-theme-editor-import = Import
 
 egui-pop-theme-editor-imported = Imported over { $theme }.
 
+egui-pop-theme-editor-installed = Families installed
+
+egui-pop-theme-editor-installed-hint = Rest the pointer on a family to preview it; pick one to put it first. A theme names it by its family name: where it is missing, the next family of its list draws.
+
 egui-pop-theme-editor-lc-hint = APCA lightness contrast, for information: 60 for ordinary text, 75 for body text; the theme is checked on WCAG.
 
 egui-pop-theme-editor-light = Light
@@ -1131,6 +1141,8 @@ egui-pop-theme-editor-move-down = Move { $family } down
 egui-pop-theme-editor-move-up = Move { $family } up
 
 egui-pop-theme-editor-name = Theme name
+
+egui-pop-theme-editor-no-family-matches = No family matches.
 
 egui-pop-theme-editor-no-font-files = No font file added.
 
@@ -1219,6 +1231,8 @@ egui-pop-theme-editor-sample-text = Body text, as most of an interface reads.
 egui-pop-theme-editor-save-file = Save as a file
 
 egui-pop-theme-editor-saved = Saved to { $path }.
+
+egui-pop-theme-editor-search-families = Search the families
 
 egui-pop-theme-editor-seed-clamped = Too dark, too light or too vivid for a ramp: { $color } is used.
 

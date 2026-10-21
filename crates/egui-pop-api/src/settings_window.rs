@@ -700,8 +700,9 @@ fn fonts_page(ui: &mut Ui, app: &AppHandle, entries: &[SettingEntry]) {
         });
 }
 
-/// What an origin is called in the family picker.
-fn origin_name(ctx: &egui::Context, origin: FaceOrigin) -> String {
+/// What an origin is called in the family picker (and the theme
+/// editor's families installed).
+pub(crate) fn origin_name(ctx: &egui::Context, origin: FaceOrigin) -> String {
     strings::tr(
         ctx,
         match origin {

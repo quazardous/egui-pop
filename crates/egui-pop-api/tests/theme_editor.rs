@@ -624,6 +624,167 @@ fn the_fonts_edited_are_previewed_before_they_are_applied_even_across_a_theme_sw
     );
 }
 
+/// Two faces given as the system's, from egui's own fonts: the tests
+/// never depend on the fonts of the machine they run on.
+fn fake_system_fonts(ctx: &egui::Context) {
+    use egui_pop_core::fonts::{self, Face, Weight};
+    let bundled = egui::FontDefinitions::default().font_data;
+    fonts::set_system_faces(
+        ctx,
+        Some(vec![
+            Face::from_owned(
+                "Fake Serif",
+                Weight::REGULAR,
+                bundled["Ubuntu-Light"].font.to_vec(),
+            ),
+            Face::from_owned("Fake Mono", Weight::REGULAR, bundled["Hack"].font.to_vec()),
+        ]),
+    );
+}
+
+#[test]
+fn a_system_face_is_searched_previewed_then_picked_and_applied() {
+    use egui::accesskit::Role as A11y;
+    use egui_pop_core::fonts::{self, Origin, Role};
+    let mut h = harness(ThemeSpec::new("pop-dark"));
+    h.run();
+    fake_system_fonts(&h.ctx);
+    let handle = h.state().handle().clone();
+    let editor = handle.service(&THEME_EDITOR).unwrap();
+    h.get_by_label("Fonts").click();
+    h.run();
+    assert!(h.query_by_label("Families installed").is_some());
+    // The search narrows the families installed.
+    h.get_by_role_and_label(A11y::TextInput, "Search the families")
+        .click();
+    h.run();
+    h.get_by_role_and_label(A11y::TextInput, "Search the families")
+        .type_text("fake");
+    h.run();
+    assert_eq!(
+        h.get_by_role_and_label(A11y::TextInput, "Search the families")
+            .value()
+            .unwrap_or_default(),
+        "fake"
+    );
+    let listed: Vec<String> = editor
+        .installed_faces(&handle, Role::Ui)
+        .into_iter()
+        .map(|f| f.name)
+        .collect();
+    assert_eq!(listed, ["Fake Mono", "Fake Serif"]);
+    assert!(h.query_by_label("Fake Serif").is_some());
+    let faces = editor.installed_faces(&handle, Role::Ui);
+    assert!(faces.iter().all(|f| f.origin == Origin::System));
+    // Monospace ones only for monospace.
+    let mono: Vec<String> = editor
+        .installed_faces(&handle, Role::Mono)
+        .into_iter()
+        .map(|f| f.name)
+        .collect();
+    assert_eq!(mono, ["Fake Mono"]);
+    // Resting the pointer on one previews it, applying nothing.
+    h.get_by_label("Fake Serif").hover();
+    h.run();
+    h.run_steps(2);
+    assert_eq!(
+        fonts::preview(&h.ctx, Role::Ui).unwrap()[0],
+        "Fake Serif".to_string()
+    );
+    assert_eq!(
+        chain(&h.ctx, "pop.preview.ui.400")[0],
+        "pop:Fake Serif:400:system"
+    );
+    assert_eq!(chain(&h.ctx, "pop.ui.400")[0], "Ubuntu-Light");
+    assert!(!editor.fonts_pending(&handle));
+    // Picking it puts it first, the theme's families its fallbacks.
+    h.get_by_label("Fake Serif").click();
+    h.run();
+    assert_eq!(
+        editor.families(&handle, Role::Ui),
+        ["Fake Serif", "Ubuntu", "sans-serif"]
+    );
+    assert!(editor.fonts_pending(&handle));
+    h.get_by_label("Apply the fonts").click();
+    h.run();
+    h.run();
+    assert_eq!(
+        handle.theme().spec().overrides["font.family.ui"],
+        json!(["Fake Serif", "Ubuntu", "sans-serif"])
+    );
+    let report = egui_pop_core::fonts::report(&h.ctx).unwrap();
+    let primary = report
+        .primary
+        .iter()
+        .find(|(f, _)| f == "pop.ui.400")
+        .and_then(|(_, p)| p.clone())
+        .unwrap_or_default();
+    assert_eq!(primary, "Fake Serif 400 (system)");
+    assert_eq!(fonts::preview(&h.ctx, Role::Ui), None);
+}
+
+#[test]
+fn a_theme_naming_a_system_face_falls_back_and_warns_where_it_is_missing() {
+    use egui_pop_core::fonts::Role;
+    use egui_pop_core::tokens::Warning;
+    let mut h = harness(ThemeSpec::new("pop-dark"));
+    h.run();
+    fake_system_fonts(&h.ctx);
+    let handle = h.state().handle().clone();
+    let editor = handle.service(&THEME_EDITOR).unwrap();
+    // A face without a generic family after it gets one: the list
+    // always draws.
+    editor.set_families(Role::Mono, vec!["Hack".into()]);
+    editor.choose_face(&handle, Role::Mono, "Fake Mono");
+    assert_eq!(
+        editor.families(&handle, Role::Mono),
+        ["Fake Mono", "Hack", "monospace"]
+    );
+    editor.apply_fonts(&handle, Cause::Agent).unwrap();
+    h.run();
+    let text = run(&mut h, &CMD_THEME_EXPORT, json!({ "name": "mine" }))["text"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    // The theme names the face by its family name.
+    assert!(text.contains("Fake Mono"), "{text}");
+    // Opened on a machine without it: it loads, the next family draws,
+    // and a warning says so.
+    egui_pop_core::fonts::set_system_faces(&h.ctx, Some(Vec::new()));
+    run(&mut h, &CMD_THEME_START, json!({ "base": "pop-light" }));
+    h.run();
+    let warnings = editor.import(&handle, &text).unwrap();
+    h.run();
+    assert!(
+        warnings.iter().any(|w| matches!(
+            w,
+            Warning::FontMissing { path, family, fallback }
+                if path == "font.family.mono" && family == "Fake Mono" && fallback == "`Hack`"
+        )),
+        "{warnings:?}"
+    );
+    assert!(
+        warnings.iter().any(|w| w.to_string()
+            == "`font.family.mono`: no font named `Fake Mono` here; `Hack` draws instead"),
+        "{warnings:?}"
+    );
+    let report = egui_pop_core::fonts::report(&h.ctx).unwrap();
+    assert!(
+        report
+            .problems
+            .iter()
+            .any(|p| p.starts_with("font.family.mono: no font named Fake Mono")),
+        "{report:?}"
+    );
+    // The fonts tab says it is missing here.
+    h.get_by_label("Fonts").click();
+    h.run();
+    assert!(
+        h.query_by_label("Not installed here: the next family draws")
+            .is_some()
+    );
+}
+
 #[test]
 fn a_theme_naming_a_font_file_is_saved_and_opened_with_it() {
     use egui_pop_core::fonts::FontFile;

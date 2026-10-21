@@ -38,7 +38,7 @@ impl Plugin for ThemeEditorPage {
     fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
         ctx.story(
             Story::new(StoryId::from_static("theme-editor"), "Theme editor", show)
-                .description("The current theme's tokens edited live or in a sandboxed preview, by role: colour pickers with hex fields, the contrast of each pair a token takes part in (AA, AAA), a scale generated from one colour, the font families and files, undo, export and import as a token file.")
+                .description("The current theme's tokens edited live or in a sandboxed preview, by role: colour pickers with hex fields, the contrast of each pair a token takes part in (AA, AAA), a scale generated from one colour, the font families (picked among those installed, previewed before they are applied) and files, undo, export and import as a token file.")
                 .group("Theme", 25),
         )?;
         Ok(())
@@ -46,7 +46,7 @@ impl Plugin for ThemeEditorPage {
 }
 
 fn show(ui: &mut Ui, app: &AppHandle) {
-    ui.label("Every change applies to the whole gallery at once; tick \"Preview only\" to keep changes in the preview pane until you apply them. The theme switchers in the top bar start the editor again from the theme picked. Pick a palette token (blue.9) to generate its scale from a colour; the Fonts tab orders the families and adds font files.");
+    ui.label("Every change applies to the whole gallery at once; tick \"Preview only\" to keep changes in the preview pane until you apply them. The theme switchers in the top bar start the editor again from the theme picked. Pick a palette token (blue.9) to generate its scale from a colour; the Fonts tab orders the families, picks them among those installed and previews them before they are applied, and adds font files.");
     if let Some(editor) = app.service(&THEME_EDITOR) {
         editor.set_sampler(Some(Arc::new(|ui: &mut Ui, _: &AppHandle| sampler(ui))));
     }

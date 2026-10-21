@@ -699,6 +699,28 @@ pub const THEME_EDITOR_FONT_SAMPLE_HINT: StrKey = StrKey::new(
 );
 pub const THEME_EDITOR_APPLY_FONTS: StrKey =
     StrKey::new("egui-pop-theme-editor-apply-fonts", "Apply the fonts");
+pub const THEME_EDITOR_FAMILY_MISSING: StrKey = StrKey::new(
+    "egui-pop-theme-editor-family-missing",
+    "Not installed here: the next family draws",
+);
+pub const THEME_EDITOR_INSTALLED: StrKey =
+    StrKey::new("egui-pop-theme-editor-installed", "Families installed");
+pub const THEME_EDITOR_INSTALLED_HINT: StrKey = StrKey::new(
+    "egui-pop-theme-editor-installed-hint",
+    "Rest the pointer on a family to preview it; pick one to put it first. A theme names it by its family name: where it is missing, the next family of its list draws.",
+);
+pub const THEME_EDITOR_FOR_UI: StrKey =
+    StrKey::new("egui-pop-theme-editor-for-ui", "For the interface");
+pub const THEME_EDITOR_FOR_MONO: StrKey =
+    StrKey::new("egui-pop-theme-editor-for-mono", "For monospace");
+pub const THEME_EDITOR_SEARCH_FAMILIES: StrKey = StrKey::new(
+    "egui-pop-theme-editor-search-families",
+    "Search the families",
+);
+pub const THEME_EDITOR_NO_FAMILY_MATCHES: StrKey = StrKey::new(
+    "egui-pop-theme-editor-no-family-matches",
+    "No family matches.",
+);
 pub const THEME_EDITOR_CANCEL_FONTS: StrKey = StrKey::new(
     "egui-pop-theme-editor-cancel-fonts",
     "Cancel the font edits",
@@ -1099,6 +1121,13 @@ pub const ALL: &[StrKey] = &[
     THEME_EDITOR_FONT_SAMPLE_HINT,
     THEME_EDITOR_APPLY_FONTS,
     THEME_EDITOR_CANCEL_FONTS,
+    THEME_EDITOR_FAMILY_MISSING,
+    THEME_EDITOR_INSTALLED,
+    THEME_EDITOR_INSTALLED_HINT,
+    THEME_EDITOR_FOR_UI,
+    THEME_EDITOR_FOR_MONO,
+    THEME_EDITOR_SEARCH_FAMILIES,
+    THEME_EDITOR_NO_FAMILY_MATCHES,
     THEME_EDITOR_APPLY_FONTS_HINT,
     THEME_EDITOR_PREVIEW_ONLY,
     THEME_EDITOR_PREVIEW_ONLY_HINT,

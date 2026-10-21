@@ -169,6 +169,15 @@ pub enum Warning {
     /// missing, not a font or outside the package (the families naming
     /// it fall back), or a second token file.
     Font { file: String, reason: String },
+    /// A font family a token names (`font.family.ui`) not found where
+    /// the theme is loaded (a system face not installed on this
+    /// machine): the theme still loads, and `fallback`, the next name
+    /// of the list found, draws instead.
+    FontMissing {
+        path: String,
+        family: String,
+        fallback: String,
+    },
 }
 
 impl Warning {
@@ -178,7 +187,8 @@ impl Warning {
             Warning::Newer { path, .. }
             | Warning::BadStamp { path, .. }
             | Warning::Unknown { path, .. }
-            | Warning::Invalid { path, .. } => Some(path),
+            | Warning::Invalid { path, .. }
+            | Warning::FontMissing { path, .. } => Some(path),
             Warning::Renamed { from, .. } => Some(from),
             Warning::Unchecked { .. } | Warning::NotCached { .. } | Warning::Font { .. } => None,
         }
@@ -229,6 +239,14 @@ impl fmt::Display for Warning {
                 write!(f, "`{file}`: read uncached: {reason}")
             }
             Warning::Font { file, reason } => write!(f, "`{file}`: {reason}"),
+            Warning::FontMissing {
+                path,
+                family,
+                fallback,
+            } => write!(
+                f,
+                "`{path}`: no font named `{family}` here; {fallback} draws instead"
+            ),
         }
     }
 }

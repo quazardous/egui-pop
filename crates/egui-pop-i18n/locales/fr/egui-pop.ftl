@@ -977,6 +977,8 @@ egui-pop-theme-editor-families = Familles
 
 egui-pop-theme-editor-families-hint = Par ordre de priorité : la première trouvée dessine, les autres la complètent.
 
+egui-pop-theme-editor-family-missing = Absente ici : la famille suivante est utilisée
+
 egui-pop-theme-editor-family-mono = Valeurs et code (font.family.mono)
 
 egui-pop-theme-editor-family-ui = Texte de l’interface (font.family.ui)
@@ -997,6 +999,10 @@ egui-pop-theme-editor-font-sample-hint = Dessiné avec les polices modifiées, a
 
 egui-pop-theme-editor-font-sample-text = Portez ce vieux whisky au juge blond qui fume. 0123456789
 
+egui-pop-theme-editor-for-mono = Pour la chasse fixe
+
+egui-pop-theme-editor-for-ui = Pour l’interface
+
 egui-pop-theme-editor-generate = Générer { $scale }
 
 egui-pop-theme-editor-generate-title = Générer cette gamme à partir d’une couleur
@@ -1013,6 +1019,10 @@ egui-pop-theme-editor-import = Importer
 
 egui-pop-theme-editor-imported = Importé sur { $theme }.
 
+egui-pop-theme-editor-installed = Familles installées
+
+egui-pop-theme-editor-installed-hint = Laissez le pointeur sur une famille pour la prévisualiser ; choisissez-en une pour la mettre en premier. Un thème la nomme par son nom de famille : là où elle manque, la famille suivante de sa liste est utilisée.
+
 egui-pop-theme-editor-lc-hint = Contraste de luminosité APCA, pour information : 60 pour du texte ordinaire, 75 pour du texte courant ; le thème est vérifié selon les WCAG.
 
 egui-pop-theme-editor-light = Clair
@@ -1024,6 +1034,8 @@ egui-pop-theme-editor-move-down = Descendre { $family }
 egui-pop-theme-editor-move-up = Monter { $family }
 
 egui-pop-theme-editor-name = Nom du thème
+
+egui-pop-theme-editor-no-family-matches = Aucune famille ne correspond.
 
 egui-pop-theme-editor-no-font-files = Aucun fichier de police ajouté.
 
@@ -1112,6 +1124,8 @@ egui-pop-theme-editor-sample-text = Du texte courant, comme l’essentiel d’un
 egui-pop-theme-editor-save-file = Enregistrer dans un fichier
 
 egui-pop-theme-editor-saved = Enregistré dans { $path }.
+
+egui-pop-theme-editor-search-families = Rechercher les familles
 
 egui-pop-theme-editor-seed-clamped = Trop sombre, trop claire ou trop vive pour une gamme : { $color } est utilisée.
 

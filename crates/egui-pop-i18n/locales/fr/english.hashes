@@ -541,6 +541,7 @@ egui-pop-theme-editor-export f8b90c9ddacf7313
 egui-pop-theme-editor-fail c9f9f681b200fa5d
 egui-pop-theme-editor-families aac7322d09a06715
 egui-pop-theme-editor-families-hint 2884df881b88974e
+egui-pop-theme-editor-family-missing ed7571f09798fcaf
 egui-pop-theme-editor-family-mono fa84589d0ff3042e
 egui-pop-theme-editor-family-ui f8f55a8e6e992cb7
 egui-pop-theme-editor-file 7144a4faf22e0d8b
@@ -551,6 +552,8 @@ egui-pop-theme-editor-font-files 855d3309c39e8617
 egui-pop-theme-editor-font-sample 6e81484c31e304ef
 egui-pop-theme-editor-font-sample-hint 3af556813c09d88e
 egui-pop-theme-editor-font-sample-text a130c88cb6faf77e
+egui-pop-theme-editor-for-mono 8ec157b38021c0b3
+egui-pop-theme-editor-for-ui e95ad276031520ea
 egui-pop-theme-editor-from 3c2b51eebca413b5
 egui-pop-theme-editor-generate ff50aacb4c261be2
 egui-pop-theme-editor-generate-title 8895afd867384af9
@@ -559,12 +562,15 @@ egui-pop-theme-editor-generated 885b219d8d216b50
 egui-pop-theme-editor-hex-of a9c8f062c667cb2a
 egui-pop-theme-editor-import 809bb223e747d022
 egui-pop-theme-editor-imported 9fb529856b85f02e
+egui-pop-theme-editor-installed 008e74cd0517d54f
+egui-pop-theme-editor-installed-hint 720f190e510cbcb7
 egui-pop-theme-editor-lc-hint 79410af023183f8f
 egui-pop-theme-editor-light ff09ed6cb21bc3d7
 egui-pop-theme-editor-missing 2da3da68a1843f3d
 egui-pop-theme-editor-move-down 031a6ae4089586f0
 egui-pop-theme-editor-move-up e82d21f077a66f2f
 egui-pop-theme-editor-name 0d9bd72da05e9125
+egui-pop-theme-editor-no-family-matches f7ae08910f76c723
 egui-pop-theme-editor-no-font-files 018b81280e1feee5
 egui-pop-theme-editor-no-pairs 6d14028ed9ae7edd
 egui-pop-theme-editor-not-a-value f205006e5aee4c8f
@@ -609,6 +615,7 @@ egui-pop-theme-editor-sample-slider 87e5ae06997dd7c9
 egui-pop-theme-editor-sample-text 420e9d67b77c0ab5
 egui-pop-theme-editor-save-file 76dd2694986499bf
 egui-pop-theme-editor-saved 7e85ec8f036ffe60
+egui-pop-theme-editor-search-families dc7055a1382c3ccc
 egui-pop-theme-editor-seed-clamped 47c1b29420024ad2
 egui-pop-theme-editor-seed-hex-of bb7972271ba0fd5c
 egui-pop-theme-editor-seed-of 1b3e9721411643fd
