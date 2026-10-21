@@ -70,7 +70,7 @@ fn harness_with(theme: ThemeSpec) -> Harness<'static, App> {
 const AROUND: [&str; 5] = ["Demo", "Minimize", "side body", "log body", "status body"];
 
 fn shown(h: &Harness<'static, App>, label: &str) -> bool {
-    h.query_by_label(label).is_some()
+    h.query_all_by_label(label).next().is_some()
 }
 
 #[test]
@@ -182,7 +182,8 @@ fn in_zen(theme: ThemeSpec) -> (Harness<'static, App>, egui_pop_model::clock::Ma
 fn entering_zen_mode_says_how_to_leave_then_the_hint_fades() {
     let (mut h, clock) = in_zen(ThemeSpec::new("pop-dark"));
     // At the top centre: the key that leaves it, and a button.
-    let hint = h.get_by_label(HINT);
+    // The strip and its text both carry the hint: the first is the strip.
+    let hint = h.query_all_by_label(HINT).next().expect("the hint");
     let bounds = hint.rect();
     assert!(bounds.top() < 40.0, "{bounds:?}");
     assert!(h.query_by_label(LEAVE).is_some());
@@ -196,16 +197,16 @@ fn entering_zen_mode_says_how_to_leave_then_the_hint_fades() {
     assert_eq!(announced(&h), 1);
     clock.set(2.9);
     h.run();
-    assert!(h.query_by_label(HINT).is_some(), "three seconds");
+    assert!(h.query_all_by_label(HINT).next().is_some(), "three seconds");
     // Then it fades over `motion.duration`, and goes.
     let fade = f64::from(egui_pop_core::theme::Tokens::of(&h.ctx).motion_duration);
     assert!(fade > 0.0);
     clock.set(3.0 + fade / 2.0);
     h.run();
-    assert!(h.query_by_label(HINT).is_some(), "fading");
+    assert!(h.query_all_by_label(HINT).next().is_some(), "fading");
     clock.set(3.0 + fade + 0.01);
     h.run();
-    assert!(h.query_by_label(HINT).is_none(), "gone");
+    assert!(h.query_all_by_label(HINT).next().is_none(), "gone");
     assert!(h.query_by_label(LEAVE).is_none());
     assert!(h.state().handle().zen());
     assert_eq!(announced(&h), 1);
@@ -214,10 +215,10 @@ fn entering_zen_mode_says_how_to_leave_then_the_hint_fades() {
 #[test]
 fn under_reduced_motion_the_hint_goes_without_fading() {
     let (mut h, clock) = in_zen(ThemeSpec::new("pop-dark").reduced_motion(true));
-    assert!(h.query_by_label(HINT).is_some());
+    assert!(h.query_all_by_label(HINT).next().is_some());
     clock.set(3.0);
     h.run();
-    assert!(h.query_by_label(HINT).is_none());
+    assert!(h.query_all_by_label(HINT).next().is_none());
 }
 
 #[test]
@@ -229,7 +230,7 @@ fn the_top_edge_shows_the_way_out_and_its_button_leaves_zen_mode() {
     // At the top edge: the strip comes back.
     h.hover_at(egui::pos2(450.0, 1.0));
     h.run();
-    assert!(h.query_by_label(HINT).is_some());
+    assert!(h.query_all_by_label(HINT).next().is_some());
     assert!(h.query_by_label(LEAVE).is_some());
     // Away from it: it goes.
     h.hover_at(egui::pos2(450.0, 300.0));
@@ -319,5 +320,9 @@ fn an_application_binds_its_own_key_and_the_hint_names_the_key_leaving() {
     h.run();
     assert!(handle.zen());
     // No key leaves it but the toggle: the hint names that one.
-    assert!(h.query_by_label("Zen mode: Ctrl+K Z to leave").is_some());
+    assert!(
+        h.query_all_by_label("Zen mode: Ctrl+K Z to leave")
+            .next()
+            .is_some()
+    );
 }
