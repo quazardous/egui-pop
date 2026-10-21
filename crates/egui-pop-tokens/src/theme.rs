@@ -216,7 +216,8 @@ pub enum Counterpart {
 /// reduced motion and the user's own overrides, composed in that order.
 /// The base theme's counterpart ([`Counterpart`]), when it has one, is
 /// resolved with the same density, accent, reduced motion and overrides
-/// ([`Themes::resolve_counterpart`]).
+/// ([`Themes::resolve_counterpart`]), or with overrides of its own
+/// ([`ThemeSpec::counterpart_overrides`]).
 ///
 /// ```
 /// use egui_pop_tokens::{Density, ThemeSpec, Themes};
@@ -241,6 +242,10 @@ pub struct ThemeSpec {
     pub overrides: BTreeMap<String, Json>,
     /// The other variant of the base theme, light or dark.
     pub counterpart: Counterpart,
+    /// The counterpart's own overrides, in place of `overrides`: a pair
+    /// whose two variants are edited apart (the theme editor's). `None`:
+    /// `overrides` apply to both.
+    pub counterpart_overrides: Option<BTreeMap<String, Json>>,
 }
 
 impl Default for ThemeSpec {
@@ -258,6 +263,7 @@ impl ThemeSpec {
             reduced_motion: false,
             overrides: BTreeMap::new(),
             counterpart: Counterpart::Auto,
+            counterpart_overrides: None,
         }
     }
 
@@ -288,12 +294,37 @@ impl ThemeSpec {
         self
     }
 
-    /// The same spec over another base theme, alone: what a counterpart
-    /// is resolved from.
+    /// The same spec over another base theme, alone, with the same
+    /// overrides.
     pub fn variant(&self, base: impl Into<String>) -> ThemeSpec {
         let mut spec = self.clone();
         spec.base = base.into();
         spec.counterpart = Counterpart::None;
+        spec.counterpart_overrides = None;
+        spec
+    }
+
+    /// What the counterpart `other` is resolved from: the same spec over
+    /// it, alone, with the counterpart's own overrides when the spec
+    /// gives them ([`ThemeSpec::counterpart_overrides`]).
+    ///
+    /// ```
+    /// use egui_pop_tokens::{Color, ThemeSpec, Themes};
+    /// use serde_json::json;
+    ///
+    /// let spec = ThemeSpec::new("pop-dark")
+    ///     .override_token("danger", json!("#ff0000"))
+    ///     .counterpart_override("danger", json!("#00ff00"));
+    /// let light = Themes::default().resolve_counterpart(&spec).unwrap();
+    /// assert_eq!(light.color("danger"), Color::from_hex("#00ff00"));
+    /// let dark = Themes::default().resolve(&spec);
+    /// assert_eq!(dark.color("danger"), Color::from_hex("#ff0000"));
+    /// ```
+    pub fn counterpart_variant(&self, other: impl Into<String>) -> ThemeSpec {
+        let mut spec = self.variant(other);
+        if let Some(own) = &self.counterpart_overrides {
+            spec.overrides = own.clone();
+        }
         spec
     }
 
@@ -346,6 +377,16 @@ impl ThemeSpec {
     /// `json!("{blue.9}")`).
     pub fn override_token(mut self, path: impl Into<String>, value: Json) -> Self {
         self.overrides.insert(path.into(), value);
+        self
+    }
+
+    /// Overrides one token of the counterpart only: from the first one,
+    /// the counterpart has overrides of its own
+    /// ([`ThemeSpec::counterpart_overrides`]), starting empty.
+    pub fn counterpart_override(mut self, path: impl Into<String>, value: Json) -> Self {
+        self.counterpart_overrides
+            .get_or_insert_with(BTreeMap::new)
+            .insert(path.into(), value);
         self
     }
 
@@ -725,10 +766,11 @@ impl Themes {
 
     /// Resolves a spec's counterpart, if it has one
     /// ([`Themes::counterpart`]), with the spec's density, accent,
-    /// reduced motion and overrides.
+    /// reduced motion and overrides, or the counterpart's own overrides
+    /// ([`ThemeSpec::counterpart_variant`]).
     pub fn resolve_counterpart(&self, spec: &ThemeSpec) -> Option<ResolvedTokens> {
         self.counterpart(spec)
-            .map(|other| self.resolve(&spec.variant(other)))
+            .map(|other| self.resolve(&spec.counterpart_variant(other)))
     }
 
     /// The names of the themes known, sorted.

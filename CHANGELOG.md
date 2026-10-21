@@ -78,6 +78,12 @@ publishes.
   `Router::route_all` nudges wires that share a channel
   `Options::spacing` apart (within the margin, ordered to add few
   crossings).
+- A counterpart with overrides of its own (egui-pop-tokens):
+  `ThemeSpec::counterpart_overrides`, when set, replaces the spec's
+  overrides for its counterpart (`ThemeSpec::counterpart_override`,
+  `ThemeSpec::counterpart_variant`), so the two variants of a pair can
+  differ while both stay installed. `None`, the default, keeps the
+  overrides applying to both.
 - A reference graph model in a YAML file (egui-pop-viewport, the new
   `graph-yaml` feature; the facade's `graph-yaml`):
   `graph::yaml::YamlGraph` implements `GraphModel` for applications

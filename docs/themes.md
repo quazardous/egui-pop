@@ -50,7 +50,10 @@ dark: its token file says so at the root
 (`$extensions: {"org.egui-pop.variant-of": "pop-dark"}`, on one side or
 both), or the spec does (`ThemeSpec::pair(dark, light)`,
 `ThemeSpec::counterpart`). The spec's density, accent, reduced motion
-and overrides apply to both. Every built-in theme with a light and a
+and overrides apply to both, unless the counterpart has overrides of
+its own (`ThemeSpec::counterpart_overrides`, set one by one with
+`ThemeSpec::counterpart_override`): a pair edited variant by variant,
+as the [theme editor](theme-editor.md) does. Every built-in theme with a light and a
 dark version is paired with it; `pop-high-contrast` is alone.
 
 `install` then installs both: each in its own egui style (dark or

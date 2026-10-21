@@ -1047,6 +1047,32 @@ fn a_counterpart_is_resolved_with_the_spec_s_choices() {
 }
 
 #[test]
+fn a_counterpart_may_have_overrides_of_its_own() {
+    let themes = Themes::default();
+    let spec = ThemeSpec::new("pop-dark")
+        .accent("green")
+        .override_token("danger", json!("#ff0000"))
+        .counterpart_override("info", json!("#0000ff"));
+    let dark = themes.resolve(&spec);
+    let light = themes.resolve_counterpart(&spec).expect("pop-dark has one");
+    assert_eq!(light.spec().base, "pop-light");
+    assert!(light.problems().is_empty(), "{:?}", light.problems());
+    // Each variant its own overrides; the other choices for both.
+    assert_eq!(dark.color("danger"), Color::from_hex("#ff0000"));
+    assert_ne!(light.color("danger"), Color::from_hex("#ff0000"));
+    assert_eq!(light.color("info"), Color::from_hex("#0000ff"));
+    assert_ne!(dark.color("info"), Color::from_hex("#0000ff"));
+    assert_eq!(light.spec().accent.as_deref(), Some("green"));
+    // The counterpart resolved alone does not carry them on.
+    assert_eq!(light.spec().counterpart_overrides, None);
+    // Empty own overrides: none at all, not the base's.
+    let mut bare = spec.clone();
+    bare.counterpart_overrides = Some(Default::default());
+    let light = themes.resolve_counterpart(&bare).unwrap();
+    assert_ne!(light.color("danger"), Color::from_hex("#ff0000"));
+}
+
+#[test]
 fn a_user_theme_names_its_counterpart_on_one_side() {
     let mut themes = Themes::default();
     themes
