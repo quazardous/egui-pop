@@ -525,8 +525,8 @@ draws a second choice inline.
     }
     o.push_str(
         "
-E2 and the overlays E4 leaves in the main window appear as a condition
-(c1) or as hosts that do not exist yet, not as refused cells.
+The overlays E4 leaves in the main window appear as hosts that do not
+exist yet, not as refused cells.
 
 ### Upstream limits
 

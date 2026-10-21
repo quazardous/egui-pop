@@ -764,6 +764,40 @@ fn a_layout_saved_before_anchors_loads_unanchored_and_anchors_round_trip() {
     assert_eq!(back, l);
 }
 
+#[test]
+fn a_palette_size_is_saved_and_a_palette_out_of_its_group_is_sized_by_its_content() {
+    // Written before palettes could be resized: sized by their content.
+    let old = r#"{"version": 2, "kind": "layout", "areas": [],
+        "floating": [{"panel": "app.tools", "pos": [12.0, 34.0]}]}"#;
+    let mut l = Layout::from_json(old).unwrap();
+    assert_eq!(l.floating_of(&pid("app.tools")).unwrap().size, None);
+    assert!(!l.to_json().contains("size"), "none is not written");
+    l.floating_mut(&pid("app.tools")).unwrap().size = Some([240.0, 300.0]);
+    let back = Layout::from_json(&l.to_json()).unwrap();
+    assert_eq!(back, l);
+    assert_eq!(
+        back.floating_of(&pid("app.tools")).unwrap().size,
+        Some([240.0, 300.0])
+    );
+    // A group keeps the size of the palette joined; one coming out of it
+    // is sized by its content again.
+    let mut l = Layout::default_for(&palettes());
+    l.floating_mut(&pid("app.tools")).unwrap().size = Some([240.0, 300.0]);
+    l.floating_mut(&pid("app.colours")).unwrap().size = Some([100.0, 100.0]);
+    l.group(&[pid("app.colours")], &pid("app.tools"), Join::Below)
+        .unwrap();
+    assert_eq!(
+        l.floating_of(&pid("app.colours")).unwrap().size,
+        Some([240.0, 300.0])
+    );
+    l.ungroup(&pid("app.colours"), [400.0, 40.0]).unwrap();
+    assert_eq!(l.floating_of(&pid("app.colours")).unwrap().size, None);
+    assert_eq!(
+        l.floating_of(&pid("app.tools")).unwrap().size,
+        Some([240.0, 300.0])
+    );
+}
+
 /// Three palettes and a docked panel.
 fn palettes() -> Panels {
     let mut p = Panels::new();

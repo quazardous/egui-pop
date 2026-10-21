@@ -402,6 +402,31 @@ const CORE: &[Required] = &[
         "the room between the palettes stacked in a group",
     ),
     comp(
+        "palette.min-width",
+        "dimension",
+        "the narrowest a palette is resized to",
+    ),
+    comp(
+        "palette.min-height",
+        "dimension",
+        "the lowest a palette is resized to",
+    ),
+    comp(
+        "palette.max-width",
+        "dimension",
+        "the widest a palette is resized to",
+    ),
+    comp(
+        "palette.max-height",
+        "dimension",
+        "the highest a palette is resized to",
+    ),
+    comp(
+        "palette.grip",
+        "dimension",
+        "the width of a palette's resize edges",
+    ),
+    comp(
         "viewport.background",
         "color",
         "around the image in a viewport",

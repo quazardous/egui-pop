@@ -27,7 +27,7 @@
 //! ([`set_stroke`]) the palettes fade when the `palettes.fade_on_stroke`
 //! setting is on; `palettes.idle_opacity` makes them translucent while
 //! the pointer is elsewhere. `palettes.reset` puts them back where they
-//! open first, rolled down.
+//! open first, rolled down and sized by their content.
 //!
 //! **Groups.** Palettes float in groups ([`FloatingGroup`]), a palette
 //! alone being a group of one. A palette dropped on another one's top or
@@ -40,15 +40,31 @@
 //! palette, a palette joins its group as a tab: the group's band then
 //! holds the tabs, and the shown member its own band.
 //!
+//! **Sizes.** A palette is sized by its content until the user resizes
+//! it: its right edge, its bottom edge and the corner between them drag
+//! its size (the `palette.grip` token's width), kept between the
+//! `palette.min-width` and `palette.max-width` tokens (and its panels'
+//! own least width), `palette.min-height` and `palette.max-height`, and
+//! inside the workbench. The size is the group's
+//! ([`FloatingGroup::size`], saved in the layout): a group keeps it as
+//! palettes join it, a palette coming out of it is sized by its content
+//! again. Its content scrolls when it is taller than the room left; a
+//! rolled-up palette keeps its width and only its band's height. A
+//! double click on an edge gives the content its size back. Resized
+//! against an edge of the workbench, a palette is anchored there as when
+//! it is dropped.
+//!
 //! **Steps** (ADR 0011): `palette.open` (`{panel}`), `palette.float`
 //! (`{panel, pos}`), `palette.dock` (`{panel, area}`, `group: true` for
 //! the whole group), `palette.move` (`{panel, pos}`, once a drag is
+//! dropped), `palette.resize` (`{panel, size}`, `size` being
+//! `[width, height]` or `null` for the content's, once an edge is
 //! dropped), `palette.roll` (`{panel, rolled}`), `palette.pin`
 //! (`{panel, pinned}`), `palette.group` (`{panels, into, at}`) and
 //! `palette.ungroup` (`{panel, pos}`); `pos` is the top-left corner in
 //! points from the workbench's top-left. Each done change is published
 //! as `palette.opened`, `palette.floated`, `palette.docked`,
-//! `palette.moved`, `palette.rolled`, `palette.pinned`,
+//! `palette.moved`, `palette.resized`, `palette.rolled`, `palette.pinned`,
 //! `palette.grouped` or `palette.ungrouped`.
 //!
 //! Not built yet: a palette outside the main window (a native utility
@@ -88,6 +104,10 @@ pub const STEP_DOCK: StepId = StepId::from_static("palette.dock");
 /// A floating panel is moved: dropped after a drag, reset
 /// (`{panel, pos}`).
 pub const STEP_MOVE: StepId = StepId::from_static("palette.move");
+/// A floating panel's group is resized, once an edge is dropped, or
+/// sized by its content again (`{panel, size}`, `size` being
+/// `[width, height]` in points or `null`).
+pub const STEP_RESIZE: StepId = StepId::from_static("palette.resize");
 /// A floating panel rolls up or down (`{panel, rolled}`).
 pub const STEP_ROLL: StepId = StepId::from_static("palette.roll");
 /// A floating panel is pinned or unpinned (`{panel, pinned}`).
@@ -180,6 +200,11 @@ pub(crate) fn declare(ctx: &mut Ctx<'_>) -> Result<(), CtxError> {
             json!({ "panel": "app.tools", "pos": [120.0, 40.0] }),
         ),
         (
+            STEP_RESIZE,
+            "A floating panel's group is resized, once an edge is dropped (`panel`, `size` as `[width, height]`, or `null` for its content's size).",
+            json!({ "panel": "app.tools", "size": [240.0, 320.0] }),
+        ),
+        (
             STEP_ROLL,
             "A floating panel rolls up to its band, or down (`panel`, `rolled`).",
             json!({ "panel": "app.tools", "rolled": true }),
@@ -222,7 +247,7 @@ pub(crate) fn declare(ctx: &mut Ctx<'_>) -> Result<(), CtxError> {
     )?;
     ctx.command(
         CommandSpec::new(CMD_RESET, "Reset palettes", "View")
-            .description("Puts the floating palettes back where they first open, rolled down."),
+            .description("Puts the floating palettes back where they first open, rolled down and sized by their content."),
         |call| {
             reset(call.app);
             Ok(Json::Null)
@@ -231,7 +256,8 @@ pub(crate) fn declare(ctx: &mut Ctx<'_>) -> Result<(), CtxError> {
     Ok(())
 }
 
-/// Puts the floating palettes back where they first open, rolled down,
+/// Puts the floating palettes back where they first open, rolled down
+/// and sized by their content,
 /// each through its steps.
 pub fn reset(app: &AppHandle) {
     let floating: Vec<FloatingGroup> = app.workbench_mut().layout.floating.clone();
@@ -242,6 +268,9 @@ pub fn reset(app: &AppHandle) {
         ));
         for m in g.members.iter().filter(|m| m.rolled) {
             app.change_workbench(Change::Roll(m.panel.clone(), false));
+        }
+        if g.size.is_some() {
+            app.change_workbench(Change::ResizePalette(g.lead().clone(), None));
         }
     }
     if hidden(app) {
@@ -424,6 +453,197 @@ pub(crate) struct PaletteDrag {
     pub at: Pos2,
 }
 
+/// A palette's edge being dragged.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct PaletteResize {
+    /// Its group's first member.
+    pub panel: PanelId,
+    /// The group's size before the drag (`None`: its content's).
+    pub saved: Option<[f32; 2]>,
+    /// The size drawn when the drag started.
+    pub from: [f32; 2],
+    /// The edges dragged: the right one, the bottom one.
+    pub edges: [bool; 2],
+}
+
+/// A palette's size once its right edge (`edges[0]`) and bottom edge
+/// (`edges[1]`) are dragged by `delta` from `start`, kept between `least`
+/// and `most`.
+///
+/// ```
+/// use egui::vec2;
+/// use egui_pop_api::palettes::resize_by;
+///
+/// let (least, most) = (vec2(120.0, 64.0), vec2(640.0, 900.0));
+/// let start = vec2(200.0, 300.0);
+/// assert_eq!(resize_by(start, vec2(40.0, 25.0), [true, false], least, most), vec2(240.0, 300.0));
+/// assert_eq!(resize_by(start, vec2(40.0, 25.0), [true, true], least, most), vec2(240.0, 325.0));
+/// assert_eq!(resize_by(start, vec2(-500.0, 0.0), [true, true], least, most), vec2(120.0, 300.0));
+/// ```
+pub fn resize_by(start: Vec2, delta: Vec2, edges: [bool; 2], least: Vec2, most: Vec2) -> Vec2 {
+    let w = if edges[0] { start.x + delta.x } else { start.x };
+    let h = if edges[1] { start.y + delta.y } else { start.y };
+    Vec2::new(w, h).clamp(least, most.max(least))
+}
+
+/// A palette dimension token (`palette.grip`...), `fallback` when the
+/// theme has none.
+fn palette_dimension(ctx: &egui::Context, path: &str, fallback: f32) -> f32 {
+    Tokens::of(ctx)
+        .resolved()
+        .dimension(path)
+        .unwrap_or(fallback)
+}
+
+/// The least and the largest size of a group drawn at `pos`: the
+/// `palette.min-*` and `palette.max-*` tokens, at least `least_width`
+/// wide (its panels' least width and the frame), and inside the
+/// workbench.
+fn size_limits(ctx: &egui::Context, least_width: f32, pos: Pos2, content: Rect) -> (Vec2, Vec2) {
+    let least = Vec2::new(
+        palette_dimension(ctx, "palette.min-width", 120.0).max(least_width),
+        palette_dimension(ctx, "palette.min-height", 64.0),
+    );
+    let most = Vec2::new(
+        palette_dimension(ctx, "palette.max-width", 640.0),
+        palette_dimension(ctx, "palette.max-height", 900.0),
+    )
+    .min(content.max - pos)
+    .max(least);
+    (least, most)
+}
+
+/// Draws `add` in a vertical scroll area `height` high, as wide as the
+/// room: a resized palette's content. Its band drags the palette, so the
+/// area scrolls by its bar and the wheel, not by a drag.
+fn scrolled(ui: &mut Ui, id: Id, height: f32, add: impl FnOnce(&mut Ui)) {
+    use egui::scroll_area::ScrollSource;
+    egui::ScrollArea::vertical()
+        .id_salt(id.with("scroll"))
+        .scroll_source(ScrollSource::SCROLL_BAR | ScrollSource::MOUSE_WHEEL)
+        .auto_shrink([false, false])
+        .max_height(height)
+        .min_scrolled_height(height)
+        .show(ui, add);
+}
+
+/// A palette's resize edges, over its frame drawn at `rect`, `grip`
+/// wide: the right edge, and when it is not rolled up (`vertical`) the
+/// bottom edge and the corner between them; each with the edges it
+/// drags.
+fn resize_edges(
+    ui: &mut Ui,
+    id: Id,
+    rect: Rect,
+    grip: f32,
+    vertical: bool,
+) -> Vec<(egui::Response, [bool; 2])> {
+    let half = grip.max(2.0) / 2.0;
+    let sense = egui::Sense::CLICK | egui::Sense::DRAG;
+    let right = Rect::from_x_y_ranges(
+        rect.right() - half..=rect.right() + half,
+        rect.top()..=rect.bottom(),
+    );
+    let mut out = vec![(
+        ui.interact(right, id.with("resize.right"), sense),
+        [true, false],
+    )];
+    if vertical {
+        let bottom = Rect::from_x_y_ranges(
+            rect.left()..=rect.right(),
+            rect.bottom() - half..=rect.bottom() + half,
+        );
+        let corner = Rect::from_center_size(rect.right_bottom(), Vec2::splat(4.0 * half));
+        out.push((
+            ui.interact(bottom, id.with("resize.bottom"), sense),
+            [false, true],
+        ));
+        out.push((
+            ui.interact(corner, id.with("resize.corner"), sense),
+            [true, true],
+        ));
+    }
+    for (r, edges) in &out {
+        if r.hovered() || r.dragged() {
+            ui.ctx().set_cursor_icon(match edges {
+                [true, true] => egui::CursorIcon::ResizeNwSe,
+                [true, false] => egui::CursorIcon::ResizeHorizontal,
+                _ => egui::CursorIcon::ResizeVertical,
+            });
+        }
+    }
+    out
+}
+
+/// Follows a palette's resize edges: a drag resizes its group live
+/// (between `limits`), the drop resizes it through `palette.resize`
+/// (anchoring it again); a double click gives it its content's size back.
+fn follow_resize(
+    app: &AppHandle,
+    ctx: &egui::Context,
+    g: &FloatingGroup,
+    rect: Rect,
+    edges: &[(egui::Response, [bool; 2])],
+    (least, most): (Vec2, Vec2),
+) {
+    let lead = g.lead().clone();
+    if edges.iter().any(|(r, _)| r.double_clicked()) {
+        if g.size.is_some() {
+            run(app, &lead, Some(Change::ResizePalette(lead.clone(), None)));
+            ctx.request_repaint();
+        }
+        return;
+    }
+    let mine = app
+        .workbench_mut()
+        .palette_resize
+        .clone()
+        .filter(|r| r.panel == lead);
+    if let Some((_, e)) = edges.iter().find(|(r, _)| r.dragged()) {
+        let (origin, now) = ctx.input(|i| (i.pointer.press_origin(), i.pointer.latest_pos()));
+        let (Some(origin), Some(now)) = (origin, now) else {
+            return;
+        };
+        let from = mine
+            .as_ref()
+            .map_or([rect.width(), rect.height()], |r| r.from);
+        let size = resize_by(Vec2::from(from), now - origin, *e, least, most);
+        let mut wb = app.workbench_mut();
+        let mut changed = false;
+        if let Some(fl) = wb.layout.floating_mut(&lead) {
+            changed = fl.size != Some([size.x, size.y]);
+            fl.size = Some([size.x, size.y]);
+        }
+        if mine.is_none() {
+            wb.palette_resize = Some(PaletteResize {
+                panel: lead,
+                saved: g.size,
+                from,
+                edges: *e,
+            });
+        }
+        if changed {
+            ctx.request_repaint();
+        }
+        return;
+    }
+    let Some(r) = mine else {
+        return;
+    };
+    // Dropped: back to the size it had, then the step decides.
+    let to = {
+        let mut wb = app.workbench_mut();
+        wb.palette_resize = None;
+        wb.layout
+            .floating_mut(&lead)
+            .and_then(|fl| std::mem::replace(&mut fl.size, r.saved))
+    };
+    if to.is_some() && to != r.saved {
+        run(app, &lead, Some(Change::ResizePalette(lead.clone(), to)));
+    }
+    ctx.request_repaint();
+}
+
 /// Where dropping the dragged palettes would group them, while they are
 /// dragged over another palette: what [`group_hint`] reports.
 #[derive(Clone, Debug, PartialEq)]
@@ -569,20 +789,26 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
         let id = area_id(&lead);
         let drawn = before.get(&lead).map(|r| r.size());
         let size = drawn.unwrap_or(Vec2::ZERO);
+        let size = g.size.map_or(size, Vec2::from);
         let dragging = app
             .workbench_mut()
             .palette_drag
             .as_ref()
             .is_some_and(|d| d.whole && d.panel == lead);
+        let resizing = app
+            .workbench_mut()
+            .palette_resize
+            .as_ref()
+            .is_some_and(|r| r.panel == lead);
         // Inside the workbench, again when the window is resized; an
         // anchored group keeps its distance to its edges (not while it
-        // is dragged: the drop sets its anchor again).
-        let pos = if dragging {
+        // is dragged or resized: the drop sets its anchor again).
+        let pos = if dragging || resizing {
             clamp(content.min + Vec2::from(g.pos), size, content)
         } else {
             anchored_pos(g.pos, size, content, &g.anchor)
         };
-        if !g.anchor.is_none() && !dragging && drawn.is_some() {
+        if !g.anchor.is_none() && !dragging && !resizing && drawn.is_some() {
             // Its place follows the edges (not a move: no step).
             let at = [pos.x - content.min.x, pos.y - content.min.y];
             if at != g.pos
@@ -611,9 +837,24 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
             .iter()
             .map(|s| s.default_size.unwrap_or(320.0).max(s.min_size))
             .fold(0.0, f32::max);
+        // Its size once resized, between its limits.
+        let margin = Kit::of(ctx)
+            .palette_window
+            .frame(State::REST, ctx.pixels_per_point())
+            .total_margin()
+            .sum();
+        let (least, most) = size_limits(ctx, min + margin.x, pos, content);
+        let fixed = g.size.map(|s| Vec2::from(s).clamp(least, most));
+        let inner = fixed.map(|s| (s - margin).max(Vec2::ZERO));
+        // Rolled up, it keeps its width and only its bands' height.
+        let unrolled = g
+            .members
+            .iter()
+            .any(|m| !m.rolled && (g.arrangement == Arrangement::Stack || m.panel == *g.shown()));
         let mut asked = Asked::default();
         let mut moved: Option<band::Band> = None;
         let mut bands: Vec<MemberBand> = Vec::new();
+        let mut edges: Vec<(egui::Response, [bool; 2])> = Vec::new();
         let shown = egui::Area::new(id)
             .order(egui::Order::Middle)
             .fixed_pos(pos)
@@ -627,16 +868,34 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
                     gap: kit.header_band.data.padding_y,
                 };
                 let shadow = ui.visuals().window_shadow;
-                window.show(ui, State::REST, shadow, |ui| {
-                    ui.set_min_width(min);
-                    ui.set_max_width(max);
+                let framed = window.show(ui, State::REST, shadow, |ui| {
+                    match inner {
+                        Some(i) => {
+                            ui.set_min_width(i.x);
+                            ui.set_max_width(i.x);
+                        }
+                        None => {
+                            ui.set_min_width(min);
+                            ui.set_max_width(max);
+                        }
+                    }
+                    let top = ui.cursor().top();
+                    // The room left under the bands for a resized one.
+                    let body = |ui: &Ui| {
+                        inner
+                            .filter(|_| unrolled)
+                            .map(|i| (top + i.y - ui.cursor().top()).max(0.0))
+                    };
                     if g.is_lone() {
                         let m = &g.members[0];
                         let (_, b) = band::begin(ui, &style, |ui, state| {
                             band_row(ui, &t, &titles[0], state, m, Some(g.pinned), &mut asked);
                         });
                         if !m.rolled {
-                            app.show_panel(ui, &m.panel);
+                            match body(ui) {
+                                Some(h) => scrolled(ui, id, h, |ui| app.show_panel(ui, &m.panel)),
+                                None => app.show_panel(ui, &m.panel),
+                            }
                         }
                         band::paint(ui, &b, &style);
                         moved = Some(b);
@@ -650,41 +909,52 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
                         let shown = tabs.then_some(g.active);
                         group_row(ui, &t, &joined, &titles, shown, state, g.pinned, &mut asked);
                     });
-                    for (i, m) in g.members.iter().enumerate() {
-                        if tabs && m.panel != *g.shown() {
-                            continue;
+                    let mut column = |ui: &mut Ui| {
+                        for (i, m) in g.members.iter().enumerate() {
+                            if tabs && m.panel != *g.shown() {
+                                continue;
+                            }
+                            if !bands.is_empty() {
+                                ui.add_space(gap);
+                            }
+                            // Room for the member's band to reach up into.
+                            ui.add_space(style.padding);
+                            let top = ui.cursor().top() - style.padding;
+                            let (mb, bottom) = ui
+                                .push_id(("egui_pop.palette.member", m.panel.as_str()), |ui| {
+                                    let (_, mb) = band::begin(ui, &style, |ui, state| {
+                                        band_row(ui, &t, &titles[i], state, m, None, &mut asked);
+                                    });
+                                    if !m.rolled {
+                                        app.show_panel(ui, &m.panel);
+                                    }
+                                    (mb, ui.min_rect().bottom())
+                                })
+                                .inner;
+                            bands.push(MemberBand {
+                                panel: m.panel.clone(),
+                                band: mb,
+                                top,
+                                bottom,
+                            });
                         }
-                        if !bands.is_empty() {
-                            ui.add_space(gap);
+                        // Painted once the column's width is known.
+                        for mb in &bands {
+                            band::paint(ui, &mb.band, &style);
                         }
-                        // Room for the member's band to reach up into.
-                        ui.add_space(style.padding);
-                        let top = ui.cursor().top() - style.padding;
-                        let (mb, bottom) = ui
-                            .push_id(("egui_pop.palette.member", m.panel.as_str()), |ui| {
-                                let (_, mb) = band::begin(ui, &style, |ui, state| {
-                                    band_row(ui, &t, &titles[i], state, m, None, &mut asked);
-                                });
-                                if !m.rolled {
-                                    app.show_panel(ui, &m.panel);
-                                }
-                                (mb, ui.min_rect().bottom())
-                            })
-                            .inner;
-                        bands.push(MemberBand {
-                            panel: m.panel.clone(),
-                            band: mb,
-                            top,
-                            bottom,
-                        });
-                    }
-                    // Painted once the frame's width is known.
-                    for mb in &bands {
-                        band::paint(ui, &mb.band, &style);
+                    };
+                    match body(ui) {
+                        Some(h) => scrolled(ui, id, h, |ui| {
+                            ui.set_min_width(ui.available_width());
+                            column(ui);
+                        }),
+                        None => column(ui),
                     }
                     band::paint(ui, &b, &style);
                     moved = Some(b);
                 });
+                let grip = palette_dimension(ui.ctx(), "palette.grip", 6.0);
+                edges = resize_edges(ui, id, framed.response.rect, grip, unrolled);
             });
         let rect = shown.response.rect;
         for p in g.panels() {
@@ -741,6 +1011,7 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
         if let Some(b) = moved {
             follow(app, ctx, &g, rect, &b, &drag);
         }
+        follow_resize(app, ctx, &g, rect, &edges, (least, most));
         for (mb, own) in bands.iter().zip(own) {
             follow_member(app, ctx, &g, &mb.panel, own, rect, &mb.band, &drag);
         }

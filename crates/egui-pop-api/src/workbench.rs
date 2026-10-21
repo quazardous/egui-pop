@@ -317,6 +317,9 @@ pub enum Change {
     Ungroup(PanelId, [f32; 2]),
     /// A floating panel moves.
     MovePalette(PanelId, [f32; 2]),
+    /// A floating panel's group is resized (its frame, in points), or
+    /// sized by its content again (`None`).
+    ResizePalette(PanelId, Option<[f32; 2]>),
     /// A floating panel rolls up to its header band (`true`) or down.
     Roll(PanelId, bool),
     /// A floating panel is pinned (`true`) or unpinned.
@@ -337,6 +340,25 @@ fn pos_of(args: &Json) -> Result<[f32; 2], String> {
             y.as_f64().ok_or("`pos` holds numbers")? as f32,
         ]),
         _ => Err("`pos` is `[x, y]`".into()),
+    }
+}
+
+/// `[width, height]` as a size, or `null` (sized by the content).
+fn size_of(args: &Json) -> Result<Option<[f32; 2]>, String> {
+    let Some(a) = args.get("size").filter(|s| !s.is_null()) else {
+        return Ok(None);
+    };
+    match a.as_array().map(Vec::as_slice) {
+        Some([w, h]) => {
+            let w = w.as_f64().ok_or("`size` holds numbers")? as f32;
+            let h = h.as_f64().ok_or("`size` holds numbers")? as f32;
+            if w > 0.0 && h > 0.0 {
+                Ok(Some([w, h]))
+            } else {
+                Err("`size` is positive".into())
+            }
+        }
+        _ => Err("`size` is `[width, height]` or `null`".into()),
     }
 }
 
@@ -380,6 +402,10 @@ impl Change {
                 crate::palettes::STEP_MOVE,
                 json!({ "panel": p, "pos": pos }),
             ),
+            Change::ResizePalette(p, size) => (
+                crate::palettes::STEP_RESIZE,
+                json!({ "panel": p, "size": size }),
+            ),
             Change::Roll(p, on) => (
                 crate::palettes::STEP_ROLL,
                 json!({ "panel": p, "rolled": on }),
@@ -401,6 +427,7 @@ impl Change {
             Change::Group(..) => "palette.grouped",
             Change::Ungroup(..) => "palette.ungrouped",
             Change::MovePalette(..) => "palette.moved",
+            Change::ResizePalette(..) => "palette.resized",
             Change::Roll(..) => "palette.rolled",
             Change::Pin(..) => "palette.pinned",
             _ => return None,
@@ -468,6 +495,7 @@ impl Change {
             "palette.open" => Change::OpenPalette(panel),
             "palette.float" => Change::Float(panel, pos_of(args)?),
             "palette.move" => Change::MovePalette(panel, pos_of(args)?),
+            "palette.resize" => Change::ResizePalette(panel, size_of(args)?),
             "palette.ungroup" => Change::Ungroup(panel, pos_of(args)?),
             "palette.roll" => Change::Roll(panel, flag("rolled")),
             "palette.pin" => Change::Pin(panel, flag("pinned")),
@@ -527,6 +555,8 @@ pub(crate) struct Workbench {
     pub templates: Vec<(egui_pop_model::ids::OwnerId, String, Layout)>,
     /// A palette's band being dragged.
     pub palette_drag: Option<crate::palettes::PaletteDrag>,
+    /// A palette's edge being dragged.
+    pub palette_resize: Option<crate::palettes::PaletteResize>,
     /// Where each floating panel's group was drawn last frame.
     pub palette_rects: BTreeMap<PanelId, Rect>,
     /// Where each floating panel was drawn last frame, itself (in a
@@ -557,6 +587,7 @@ impl Default for Workbench {
             taken: 0,
             templates: Vec::new(),
             palette_drag: None,
+            palette_resize: None,
             palette_rects: BTreeMap::new(),
             member_rects: BTreeMap::new(),
             group_hint: None,
@@ -662,14 +693,20 @@ impl Workbench {
     /// Anchors a floating panel to the workbench edges its new place lies
     /// on (`palettes::anchor_of`), or to none: dropped against an edge,
     /// it sticks to it; dropped away, it no longer does.
-    /// `alone`: it just came out of its group, its size is its own.
+    /// `alone`: it just came out of its group, its size is its own. A
+    /// group resized (`size`) is anchored with its new size.
     fn anchor_palette(&mut self, p: &PanelId, alone: bool) {
         let rects = if alone {
             &self.member_rects
         } else {
             &self.palette_rects
         };
-        let size = rects.get(p).map_or(egui::Vec2::ZERO, |r| r.size());
+        let resized = (!alone)
+            .then(|| self.layout.floating_of(p).and_then(|g| g.size))
+            .flatten();
+        let size = resized
+            .map(egui::Vec2::from)
+            .unwrap_or_else(|| rects.get(p).map_or(egui::Vec2::ZERO, |r| r.size()));
         let content = self.content;
         if let Some(f) = self.layout.floating_mut(p) {
             f.anchor = if content.is_positive() {
@@ -816,6 +853,15 @@ impl Workbench {
                 f.pos = *pos;
                 self.anchor_palette(p, false);
                 json!({ "panel": p, "pos": pos })
+            }
+            Change::ResizePalette(p, size) => {
+                let f = self
+                    .layout
+                    .floating_mut(p)
+                    .ok_or_else(|| format!("`{p}` does not float"))?;
+                f.size = *size;
+                self.anchor_palette(p, false);
+                json!({ "panel": p, "size": size })
             }
             Change::Roll(p, on) => {
                 let m = self

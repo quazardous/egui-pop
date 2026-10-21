@@ -82,13 +82,15 @@ pub fn panel() -> HostOffer {
         .hides_content(true)
 }
 
-/// A floating palette: a bounded width, the content's height.
+/// A floating palette: a bounded width, the content's height, until the
+/// user resizes it (the size kept in the layout).
 pub fn palette() -> HostOffer {
     HostOffer::new(PALETTE, "F", "Floating palette")
         .source("palettes")
         .size(HostSize::Content)
+        .resizable(true)
         .focus(FocusPolicy::ClickInto)
-        .keeps(&[Keep::Place])
+        .keeps(&[Keep::Place, Keep::Size])
         .hides_content(true)
 }
 

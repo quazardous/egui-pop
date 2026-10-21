@@ -755,7 +755,7 @@ pub const CODES: &[Code] = &[
         code: "c1",
         kind: CodeKind::Condition,
         title: "Content-sized host",
-        text: "The palette, the raw modal, the popover and the dialogs of the four kinds size themselves from their content: a component that fills the space it is given must be given an explicit size (`.size()`, a `ScrollArea` with a maximum height) or it grows to the window. The user cannot resize a palette yet (E2).",
+        text: "The palette, the raw modal, the popover and the dialogs of the four kinds size themselves from their content: a component that fills the space it is given must be given an explicit size (`.size()`, a `ScrollArea` with a maximum height) or it grows to the window. A palette keeps its content's size until the user resizes it.",
         then: "",
     },
     Code {
@@ -887,9 +887,9 @@ pub const CODES: &[Code] = &[
     Code {
         code: "E2",
         kind: CodeKind::Limit,
-        title: "Palettes are not resizable",
-        text: "A palette's width is between its panel's `min_size` and `default_size`, its height the content's.",
-        then: "Small: a resize grip on the palette's area, the size kept in its place (decided: resizable).",
+        title: "Palettes are not resizable (closed)",
+        text: "Closed: a palette is resized by its right and bottom edges, between the `palette.min-*` and `palette.max-*` tokens, its size kept in the layout.",
+        then: "Done.",
     },
     Code {
         code: "E3",

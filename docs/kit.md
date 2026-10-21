@@ -210,8 +210,9 @@ Two parts of the token tree are outside the grid on purpose:
   (`window.rest.border-*`).
 - **The component tokens outside kits** (`viewport.*`, `histogram.*`,
   `curve.*`, `wheel.*`, `navigator.*`, `cursor.*`, `loupe.*`,
-  `graph.*`, `editor.*`, `syntax.*`, `terminal.*`, `palette.magnet`,
-  `palette.group.gap`) are colours and sizes of content drawn in code,
+  `graph.*`, `editor.*`, `syntax.*`, `terminal.*`, and `palette.*`: the
+  magnet, the group gap, the resize limits and grip) are colours and
+  sizes of content drawn in code,
   not boxes in states: they keep their flat names.
 
 ## Kits as packages

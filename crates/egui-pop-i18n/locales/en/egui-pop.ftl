@@ -325,7 +325,7 @@ command-notify-act =
     .title = Act on a notification
 
 command-palettes-reset =
-    .description = Puts the floating palettes back where they first open, rolled down.
+    .description = Puts the floating palettes back where they first open, rolled down and sized by their content.
     .title = Reset palettes
 
 command-palettes-toggle =

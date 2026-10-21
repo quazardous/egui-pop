@@ -202,7 +202,7 @@ acts on), never a palette.
 `PanelSpec::palette()`: it opens floating over the workbench, and its
 area is where it docks. Any panel declared `floatable(true)` may float
 too. The layout keeps floating panels next to the docked and detached
-ones (`Layout::floating`: place, rolled up, pinned), saved and repaired
+ones (`Layout::floating`: place, size, rolled up, pinned), saved and repaired
 with them.
 
 ```rust
@@ -277,6 +277,20 @@ assert!(app.handle().layout().floating_of(&TOOLS).is_some());
   token is the room between stacked members. A group is saved as the
   floating panel it was before groups, its other members under `group`:
   an application that predates groups floats them apart.
+- **Sizes.** A palette is sized by its content until it is resized:
+  its right edge, its bottom edge and the corner between them (the
+  `palette.grip` token's width) drag its size, kept between the
+  `palette.min-width` and `palette.max-width` tokens (never narrower
+  than its panels' least width), `palette.min-height` and
+  `palette.max-height`, and inside the workbench. Its content scrolls
+  when it is taller than the room left; rolled up, it keeps its width.
+  The size is the group's (`FloatingGroup::size`, saved with the layout;
+  layouts saved before it load sized by their content): palettes
+  joining a group take its size, a palette coming out of it is sized by
+  its content again. Resized against an edge of the workbench, it is
+  anchored there; pulled away from it, it no longer is. A double click
+  on an edge gives it its content's size back, and `palettes.reset`
+  does for every palette.
 - **Tab** (`palettes.toggle`, rebindable) hides and shows the unpinned
   palettes. It is the toggle only while some panel floats, no widget
   has the keyboard and no overlay is open; otherwise Tab moves the
@@ -286,16 +300,18 @@ assert!(app.handle().layout().floating_of(&TOOLS).is_some());
   on, the palettes fade until it ends. `palettes.idle_opacity` makes
   them translucent while the pointer is elsewhere.
 - **Reset.** `palettes.reset` puts them back where they first open,
-  rolled down and shown.
+  rolled down, sized by their content and shown.
 - **Steps** (ADR 0011): `palette.open`, `palette.float`, `palette.dock`,
   `palette.move` (once a drag is dropped: a veto puts the palette back,
-  a redirect places it elsewhere), `palette.roll`, `palette.pin`,
+  a redirect places it elsewhere), `palette.resize` (`{panel, size}`,
+  once an edge is dropped; `size: null` for the content's size; a veto
+  gives it its size back), `palette.roll`, `palette.pin`,
   `palette.group` (`{panels, into, at}`, `at` being `above`, `below` or
   `tab`) and `palette.ungroup` (`{panel, pos}`); a group docks whole
   through `palette.dock` with `group: true`. Once done, the journal says
   `palette.opened`, `palette.floated`, `palette.docked`,
-  `palette.moved`, `palette.rolled`, `palette.pinned`,
-  `palette.grouped` or `palette.ungrouped`.
+  `palette.moved`, `palette.resized`, `palette.rolled`,
+  `palette.pinned`, `palette.grouped` or `palette.ungrouped`.
 
 Not built yet: a palette outside the main window, as a native utility
 window. egui's viewports have no owner window (only "always on top" of

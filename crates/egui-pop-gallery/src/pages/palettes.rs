@@ -1,7 +1,8 @@
 //! The palettes page: a toolbox, a colour palette and a navigator
 //! floating over a canvas, opened by buttons (closed elsewhere in the
 //! gallery), each draggable by its band, dockable on an area, rolled up,
-//! pinned, hidden and shown by Tab, stacked into a group.
+//! pinned, hidden and shown by Tab, stacked into a group, resized by
+//! their edges.
 
 use egui::{Color32, Sense, Ui, pos2, vec2};
 use egui_pop::api::palettes;
@@ -109,6 +110,10 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                 app.set_panel_visible(&p, false);
             }
         }
+        if ui.button("Make the navigator larger").clicked() {
+            app.set_panel_visible(&NAVIGATOR, true);
+            app.change_workbench(Change::ResizePalette(NAVIGATOR, Some([320.0, 300.0])));
+        }
         if ui.button("Reset palettes").clicked() {
             palettes::reset(app);
         }
@@ -123,7 +128,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     {
         palettes::set_stroke(app, fade);
     }
-    ui.weak("Drag a palette by its band; drop it on a side bar or the bottom panel to dock it, float it again from its tab menu. Drop it on another palette's top or bottom edge to stack them: the group's band moves them all, a member's band takes it out. Tab hides and shows them while no field has the keyboard.");
+    ui.weak("Drag a palette by its band; drop it on a side bar or the bottom panel to dock it, float it again from its tab menu. Drop it on another palette's top or bottom edge to stack them: the group's band moves them all, a member's band takes it out. Drag a palette's right or bottom edge to resize it (a double click there gives it its content's size back). Tab hides and shows them while no field has the keyboard.");
     section(ui, "Canvas");
     canvas(ui, app);
 }

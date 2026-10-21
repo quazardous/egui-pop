@@ -1,12 +1,15 @@
 //! Palettes: floating panels over the workbench, opened floating, docked
 //! and floated again, dragged (snapped, clamped), docked by a drop over
 //! an area, hidden and shown by Tab, rolled up, pinned, giving the
-//! keyboard back on Escape, every change through its step.
+//! keyboard back on Escape, resized by their edges, every change through
+//! its step.
 
 use egui::accesskit::Role;
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
-use egui_pop_api::palettes::{self, CMD_RESET, STEP_DOCK, STEP_GROUP, STEP_MOVE, STEP_UNGROUP};
+use egui_pop_api::palettes::{
+    self, CMD_RESET, STEP_DOCK, STEP_GROUP, STEP_MOVE, STEP_RESIZE, STEP_UNGROUP,
+};
 use egui_pop_api::steps::{Before, Outcome};
 use egui_pop_api::workbench::Change;
 use egui_pop_api::{App, Ctx, Plugin, PluginError};
@@ -61,6 +64,9 @@ impl Plugin for Demo {
             });
             ctx.before(STEP_UNGROUP, |_, _| {
                 Before::Veto("groups stay whole".into())
+            });
+            ctx.before(STEP_RESIZE, |_, _| {
+                Before::Veto("palettes keep their size".into())
             });
             ctx.before(STEP_MOVE, |_, args| {
                 let mut a = args.clone();
@@ -615,4 +621,136 @@ fn a_palette_dropped_on_another_ones_middle_joins_it_as_a_tab() {
     assert!(floating(&h, &NAV).unwrap().is_lone());
     assert!(h.query_by_label("Brush").is_some());
     assert!(h.query_by_label("Overview").is_some());
+}
+
+/// Where a palette's frame is drawn.
+fn frame(h: &Harness<'_, App>, p: &PanelId) -> egui::Rect {
+    h.ctx
+        .memory(|m| m.area_rect(palettes::area_id(p)))
+        .expect("the palette is drawn")
+}
+
+/// A point on a palette's right edge, halfway down.
+fn right_edge(r: egui::Rect) -> egui::Pos2 {
+    egui::pos2(r.right() - 1.0, r.center().y)
+}
+
+fn near(a: f32, b: f32) -> bool {
+    (a - b).abs() < 1.0
+}
+
+#[test]
+fn a_palette_is_resized_by_its_edges_and_keeps_its_size() {
+    let mut h = harness(false);
+    assert_eq!(floating(&h, &TOOLS).unwrap().size, None, "its content's");
+    let start = frame(&h, &TOOLS);
+    let before = h.state().handle().last_event();
+    // The corner: both ways.
+    drag_by(
+        &mut h,
+        start.right_bottom() - egui::vec2(1.0, 1.0),
+        egui::vec2(60.0, 80.0),
+    );
+    let size = floating(&h, &TOOLS).unwrap().size.expect("resized");
+    assert!(near(size[0], start.width() + 60.0), "{start:?} {size:?}");
+    assert!(near(size[1], start.height() + 80.0), "{start:?} {size:?}");
+    let drawn = frame(&h, &TOOLS);
+    assert!(
+        near(drawn.width(), size[0]) && near(drawn.height(), size[1]),
+        "{drawn:?} {size:?}"
+    );
+    assert!(
+        events(&h, before).contains(&"palette.resized".to_string()),
+        "{:?}",
+        events(&h, before)
+    );
+    // The right edge: the width only.
+    drag_by(&mut h, right_edge(drawn), egui::vec2(-30.0, 0.0));
+    let narrower = floating(&h, &TOOLS).unwrap().size.unwrap();
+    assert!(near(narrower[0], size[0] - 30.0), "{narrower:?}");
+    assert_eq!(narrower[1], size[1]);
+    // Never narrower than its panel's least width (160).
+    let at = right_edge(frame(&h, &TOOLS));
+    drag_by(&mut h, at, egui::vec2(-1000.0, 0.0));
+    let least = floating(&h, &TOOLS).unwrap().size.unwrap();
+    assert!(least[0] >= 160.0 && least[0] < narrower[0], "{least:?}");
+    assert!(frame(&h, &TOOLS).width() >= 160.0);
+    // Kept in the layout.
+    assert!(h.state().handle().layout().to_json().contains("\"size\""));
+    // Its content's size again, through the step.
+    let out = h
+        .state()
+        .handle()
+        .change_workbench(Change::ResizePalette(TOOLS, None));
+    assert!(matches!(out, Some(Outcome::Done(Ok(_)))), "{out:?}");
+    h.run();
+    h.run();
+    assert_eq!(floating(&h, &TOOLS).unwrap().size, None);
+    let back = frame(&h, &TOOLS);
+    assert!(near(back.height(), start.height()), "{start:?} {back:?}");
+}
+
+#[test]
+fn a_hook_vetoes_a_resize_and_the_palette_goes_back() {
+    let mut h = harness(true);
+    let start = frame(&h, &TOOLS);
+    drag_by(
+        &mut h,
+        start.right_bottom() - egui::vec2(1.0, 1.0),
+        egui::vec2(60.0, 80.0),
+    );
+    assert_eq!(floating(&h, &TOOLS).unwrap().size, None);
+    let back = frame(&h, &TOOLS);
+    assert!(near(back.width(), start.width()), "{start:?} {back:?}");
+    assert!(near(back.height(), start.height()), "{start:?} {back:?}");
+    // Through the step from code: refused too.
+    let out = h
+        .state()
+        .handle()
+        .change_workbench(Change::ResizePalette(TOOLS, Some([300.0, 300.0])));
+    assert_eq!(
+        out.and_then(|o| o.vetoed().map(str::to_string)).as_deref(),
+        Some("palettes keep their size")
+    );
+}
+
+#[test]
+fn a_group_is_resized_as_one_and_its_content_scrolls() {
+    let mut h = harness(false);
+    stacked(&mut h);
+    let out = h
+        .state()
+        .handle()
+        .change_workbench(Change::ResizePalette(TOOLS, Some([280.0, 150.0])));
+    assert!(matches!(out, Some(Outcome::Done(Ok(_)))), "{out:?}");
+    h.run();
+    h.run();
+    let g = floating(&h, &TOOLS).unwrap();
+    assert_eq!(g.size, Some([280.0, 150.0]));
+    let drawn = frame(&h, &TOOLS);
+    assert!(
+        near(drawn.width(), 280.0) && near(drawn.height(), 150.0),
+        "{drawn:?}"
+    );
+    // Both members are still there, the column scrolling.
+    assert!(h.query_by_label("Brush").is_some());
+    assert!(h.query_by_label("Overview").is_some());
+}
+
+#[test]
+fn a_palette_resized_off_the_end_edge_is_no_longer_anchored() {
+    let mut h = harness(false);
+    // Pressed on the end edge, as when dropped there: anchored.
+    let title = h.get_by_label("Tools").rect().center();
+    drag_by(&mut h, title, egui::vec2(840.0 - title.x, 0.0));
+    let f = floating(&h, &TOOLS).unwrap();
+    assert_eq!(f.anchor.x, AnchorEdge::End, "{f:?}");
+    // Its right edge pulled in, away from the end edge.
+    let r = frame(&h, &TOOLS);
+    drag_by(&mut h, right_edge(r), egui::vec2(-40.0, 0.0));
+    let f = floating(&h, &TOOLS).unwrap();
+    assert!(f.size.is_some(), "{f:?}");
+    assert_ne!(f.anchor.x, AnchorEdge::End, "{f:?}");
+    // It stays where it was dropped: the left edge did not move.
+    assert!(near(frame(&h, &TOOLS).left(), r.left()), "{r:?}");
 }

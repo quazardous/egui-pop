@@ -175,8 +175,8 @@ impl Join {
 
 /// Panels floating over the interface as one unit: a palette alone (a
 /// group of one), or palettes stacked in a column or held as tabs. The
-/// group moves, pins and anchors as one; each member rolls up on its
-/// own.
+/// group moves, pins, anchors and is resized as one; each member rolls
+/// up on its own.
 ///
 /// Saved as the floating panel it was before groups (its first member's
 /// `panel` and `rolled`, the group's `pos`, `pinned` and `anchor`), the
@@ -209,6 +209,9 @@ pub struct FloatingGroup {
     /// The workbench edges it sticks to: set when it is dropped on them,
     /// kept as the window is resized or the layout restored.
     pub anchor: Anchor,
+    /// Its size, in points, once the user resized it (its frame, bands
+    /// included); `None`: sized by its content.
+    pub size: Option<[f32; 2]>,
 }
 
 /// A floating group as saved (see [`FloatingGroup`]).
@@ -229,6 +232,8 @@ struct GroupDoc {
     arrangement: Arrangement,
     #[serde(default, skip_serializing_if = "is_zero")]
     active: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    size: Option<[f32; 2]>,
 }
 
 fn is_zero(n: &usize) -> bool {
@@ -249,6 +254,7 @@ impl From<GroupDoc> for FloatingGroup {
             pos: d.pos,
             pinned: d.pinned,
             anchor: d.anchor,
+            size: d.size,
         };
         g.tidy();
         g
@@ -268,6 +274,7 @@ impl From<FloatingGroup> for GroupDoc {
             group: members.collect(),
             arrangement: g.arrangement,
             active: g.active,
+            size: g.size,
         }
     }
 }
@@ -285,6 +292,7 @@ impl FloatingGroup {
             pos,
             pinned: false,
             anchor: Anchor::default(),
+            size: None,
         }
     }
 

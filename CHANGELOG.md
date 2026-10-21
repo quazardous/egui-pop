@@ -30,6 +30,21 @@ publishes.
 
 ### Changed
 
+- Palettes are resizable (egui-pop-model, egui-pop-api, egui-pop-tokens):
+  their right edge, bottom edge and corner drag their size, between the
+  new `palette.min-width`, `palette.min-height`, `palette.max-width` and
+  `palette.max-height` tokens (and their panels' least width), the edges
+  `palette.grip` wide; the content scrolls when taller than the room
+  left, and a double click on an edge gives the content's size back.
+  The size is the group's, `FloatingGroup::size` (a new field, saved in
+  the layout; layouts without it load sized by their content), kept as
+  palettes join the group and dropped for one coming out of it; a
+  resize anchors the group again. The new `palette.resize` step
+  (`{panel, size}`, `Change::ResizePalette`) publishes
+  `palette.resized`; `palettes::resize_by` computes a size;
+  `palettes.reset` gives every palette its content's size back. The
+  palette's host offer is resizable and keeps its size
+  (`docs/hosts.md`: E2 closed).
 - Detached panels' windows get the keymap and their dialogs
   (egui-pop-api): the key dispatcher runs in each window's pass, in that
   window's context (its focus chain, and the new `window` context key,

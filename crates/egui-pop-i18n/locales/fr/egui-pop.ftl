@@ -254,7 +254,7 @@ command-notify-act =
     .title = Agir sur une notification
 
 command-palettes-reset =
-    .description = Remet les palettes flottantes là où elles s’ouvrent d’abord, déroulées.
+    .description = Remet les palettes flottantes là où elles s’ouvrent d’abord, déroulées et à la taille de leur contenu.
     .title = Réinitialiser les palettes
 
 command-palettes-toggle =

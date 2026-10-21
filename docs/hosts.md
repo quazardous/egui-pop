@@ -33,8 +33,8 @@ verdicts and the debug bridge's `mounts` collector shows them to agents.
 | Column | Host | Where in the code | What it offers |
 |---|---|---|---|
 | **P** | Docked panel | `Ctx::panel`, `PanelSpec`, `workbench` | A whole rect; resized by the user; shared focus; persistent; main window; the keymap reaches it; keeps its place; gives a `Ui`, an `AppHandle`, a focus scope, a fault boundary; wide gamut; may hide its content. |
-| **F** | Floating palette | `palettes` | A bounded width, the content's height; not resizable; the keyboard once clicked into; persistent; main window; the keymap reaches it; keeps its place; gives a `Ui`, an `AppHandle`, a focus scope, a fault boundary; sRGB; may hide its content. |
-| **W** | Auxiliary window | `workbench::windows`, `show_viewport_immediate` | A whole rect; resized by the user; shared focus; persistent; an auxiliary window; **the keymap does not reach it**; keeps its place, size; gives a `Ui`, an `AppHandle`, a focus scope, a fault boundary; sRGB; system cursors only. |
+| **F** | Floating palette | `palettes` | A bounded width, the content's height; resized by the user; the keyboard once clicked into; persistent; main window; the keymap reaches it; keeps its place, size; gives a `Ui`, an `AppHandle`, a focus scope, a fault boundary; sRGB; may hide its content. |
+| **W** | Auxiliary window | `workbench::windows`, `show_viewport_immediate` | A whole rect; resized by the user; shared focus; persistent; an auxiliary window; the keymap reaches it; keeps its place, size; gives a `Ui`, an `AppHandle`, a focus scope, a fault boundary; sRGB; system cursors only. |
 | **D** | Dialog (four kinds) | `dialogs: Confirm`, `Form`, `Choose`, `Info` | A bounded width, the content's height; not resizable; modal: the whole keyboard; owns Enter, Escape; closed by an answer, Escape; transient; main window; the keymap reaches it; keeps its place; gives a `Ui`; descriptor fields only; sRGB. |
 | **C** | Custom dialog | `dialogs: Dialog::Custom`, `Dialogs::open_custom` | A size of its own declaration; not resizable; modal: the whole keyboard; owns Enter, Escape (given to a content claiming them); closed by an answer, Escape; transient; main window; the keymap reaches it; keeps its place; gives a `Ui`, an `AppHandle`, a focus scope, a fault boundary; sRGB. |
 | **M** | Raw modal | `overlay::show with Kind::Modal` | A bounded width, the content's height; not resizable; modal: the whole keyboard; owns Escape; closed by Escape; transient; main window; the keymap reaches it; gives a `Ui`, an `AppHandle`, a fault boundary; sRGB. |
@@ -86,24 +86,24 @@ Hosts that take **no component at all**, by design, and so have no column:
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | Image viewport | `if c11` | `if c1 c3 c11` | `if c3*` | `D6` | `if c3 c9` | `if c1 c3 c4` | `if c1 c3 c4` | `D1` | `D1` | `if c1 c3 c4 c11` | `D2` | `yes` |
 | Navigator | `yes` | `yes` | `yes*` | `D6` | `yes` | `yes` | `yes` | `D1` | `D1` | `yes` | `D2` | `yes` |
-| Node graph | `yes` | `if c1` | `if c2*` | `D6` | `if c9 c10` | `if c1 c4 c10` | `D3` | `D1` | `D1` | `if c1 c4 c10` | `D2` | `yes` |
+| Node graph | `yes` | `if c1` | `yes*` | `D6` | `if c9 c10` | `if c1 c4 c10` | `D3` | `D1` | `D1` | `if c1 c4 c10` | `D2` | `yes` |
 | Curves | `yes` | `yes` | `yes*` | `D6` | `if c9` | `if c4` | `if c4` | `D1` | `D1` | `if c4` | `D2` | `yes` |
 | Wheels | `yes` | `yes` | `yes*` | `D6` | `if c9` | `if c4` | `if c4` | `D1` | `D1` | `if c4` | `D2` | `yes` |
 | Histogram | `yes` | `yes` | `yes*` | `D6` | `if c9` | `if c4` | `if c4` | `D1` | `D1` | `if c4` | `D2` | `yes` |
 | Thumbnail | `yes` | `yes` | `yes*` | `D6` | `yes` | `yes` | `yes` | `if c6` | `if c6` | `yes` | `D2` | `yes` |
-| Library grid | `if c11` | `if c1 c11` | `if c2*` | `D6` | `yes` | `if c1` | `if c1` | `D1` | `D1` | `if c1 c11` | `D2` | `yes` |
-| Filmstrip | `if c11` | `if c1 c11` | `if c2*` | `D6` | `yes` | `if c1` | `if c1` | `D1` | `D1` | `if c1 c11` | `D2` | `yes` |
+| Library grid | `if c11` | `if c1 c11` | `yes*` | `D6` | `yes` | `if c1` | `if c1` | `D1` | `D1` | `if c1 c11` | `D2` | `yes` |
+| Filmstrip | `if c11` | `if c1 c11` | `yes*` | `D6` | `yes` | `if c1` | `if c1` | `D1` | `D1` | `if c1 c11` | `D2` | `yes` |
 | Compare view | `if c11` | `if c1 c11` | `yes*` | `D6` | `yes` | `if c1` | `if c1` | `D1` | `D1` | `if c1 c11` | `D2` | `yes` |
 | Tree | `if c11` | `if c1 c11` | `yes*` | `D6` | `if c5 c9` | `if c1 c5` | `if c1 c5` | `D1` | `D1` | `if c1 c5 c11` | `D2` | `yes` |
 | Table, list | `yes` | `if c1` | `yes*` | `D6` | `if c5 c9` | `if c1 c5` | `if c1 c5` | `D1` | `D1` | `if c1 c5` | `D2` | `yes` |
-| Text editor | `yes` | `if c1` | `if c2*` | `D6` | `if c9 c10` | `if c1 c4 c10` | `D3` | `D1` | `D1` | `if c1 c4 c10` | `D2` | `yes` |
-| Code editor | `if c11` | `if c1 c11` | `if c2*` | `D6` | `if c5 c9 c10` | `if c1 c4 c5 c10` | `D3` | `D1` | `D1` | `if c1 c4 c5 c10 c11` | `D2` | `yes` |
-| Terminal | `if c11` | `if c1 c11` | `if c2*` | `D6` | `if c9 c10` | `if c1 c4 c10` | `D3` | `D1` | `D1` | `if c1 c4 c10 c11` | `D2` | `yes` |
+| Text editor | `yes` | `if c1` | `yes*` | `D6` | `if c9 c10` | `if c1 c4 c10` | `D3` | `D1` | `D1` | `if c1 c4 c10` | `D2` | `yes` |
+| Code editor | `if c11` | `if c1 c11` | `yes*` | `D6` | `if c5 c9 c10` | `if c1 c4 c5 c10` | `D3` | `D1` | `D1` | `if c1 c4 c5 c10 c11` | `D2` | `yes` |
+| Terminal | `if c11` | `if c1 c11` | `yes*` | `D6` | `if c9 c10` | `if c1 c4 c10` | `D3` | `D1` | `D1` | `if c1 c4 c10 c11` | `D2` | `yes` |
 | Sliders | `yes` | `yes` | `yes*` | `if c4 c8` | `if c9` | `if c4` | `if c4` | `if c6` | `if c6` | `if c4` | `D2` | `yes` |
 | Forms | `yes` | `yes` | `yes*` | `if c4 c5 c8` | `if c5 c9` | `if c5` | `if c5` | `D1` | `D1` | `if c5` | `D2` | `yes` |
 | Progress | `yes` | `yes` | `yes*` | `D6` | `yes` | `yes` | `yes` | `if c6` | `if c6` | `yes` | `D2` | `yes` |
-| Jobs centre | `if c7` | `if c1 c7` | `if c2 c7*` | `D6` | `if c7` | `if c1 c7` | `if c1 c7` | `D1` | `D1` | `if c1 c7` | `D2` | `if c7` |
-| Theme editor | `if c7` | `if c1 c7` | `if c2 c7*` | `D6` | `if c5 c7 c10` | `if c1 c5 c7 c10` | `D3` | `D1` | `D1` | `if c1 c5 c7 c10` | `D2` | `if c7` |
+| Jobs centre | `if c7` | `if c1 c7` | `if c7*` | `D6` | `if c7` | `if c1 c7` | `if c1 c7` | `D1` | `D1` | `if c1 c7` | `D2` | `if c7` |
+| Theme editor | `if c7` | `if c1 c7` | `if c7*` | `D6` | `if c5 c7 c10` | `if c1 c5 c7 c10` | `D3` | `D1` | `D1` | `if c1 c5 c7 c10` | `D2` | `if c7` |
 | Tips | `yes` | `yes` | `yes*` | `D6` | `yes` | `yes` | `yes` | `D1` | `D1` | `yes` | `D2` | `yes` |
 
 Columns: **P** docked panel, **F** floating palette, **W** auxiliary window, **D** dialog (four kinds), **C** custom dialog, **M** raw modal, **O** popover, **L** line zone, **S** status bar, **T** settings page, **V** viewport overlay, **G** gallery story.
@@ -112,8 +112,8 @@ Columns: **P** docked panel, **F** floating palette, **W** auxiliary window, **D
 
 | Status | Cells |
 |---|---|
-| fits (`yes`) | 71 |
-| fits under conditions (`if`) | 100 |
+| fits (`yes`) | 77 |
+| fits under conditions (`if`) | 94 |
 | does not fit, by design (`D1` 36, `D2` 21, `D3` 5, `D6` 19) | 81 |
 | does not fit, egui-pop limit | 0 |
 | does not fit, upstream | 0 |
@@ -145,8 +145,8 @@ and every condition is kept.
 
 | Code | Condition |
 |---|---|
-| c1 | **Content-sized host.** The palette, the raw modal, the popover and the dialogs of the four kinds size themselves from their content: a component that fills the space it is given must be given an explicit size (`.size()`, a `ScrollArea` with a maximum height) or it grows to the window. The user cannot resize a palette yet (E2). |
-| c2 | **No keymap in this window.** The key dispatcher reads the main window's input only, so bindings of the keymap (global and surface ones: an editor's find and save, the terminal's clear, the library's commands) do not fire while an auxiliary window has the keyboard. Keys a widget reads itself (arrows, zoom keys, typing) work. Gap E3. |
+| c1 | **Content-sized host.** The palette, the raw modal, the popover and the dialogs of the four kinds size themselves from their content: a component that fills the space it is given must be given an explicit size (`.size()`, a `ScrollArea` with a maximum height) or it grows to the window. A palette keeps its content's size until the user resizes it. |
+| c2 | **No keymap in this window.** The host's window is not reached by the key dispatcher, so bindings of the keymap (global and surface ones: an editor's find and save, the terminal's clear, the library's commands) do not fire while it has the keyboard. Keys a widget reads itself (arrows, zoom keys, typing) work. No host of egui-pop has this condition since E3 closed; a host an application declares may. |
 | c3 | **sRGB and system cursors.** Wide gamut and HDR fall back to sRGB in this host, with the reason reported (U2); bitmap tool cursors fall back to their system cursor (U1). |
 | c4 | **The host takes its keys first.** The host owns keys the component claims: Escape closes a modal or a popover before any component sees it, Enter accepts a dialog (ADR 0007's Escape order). A component's own Escape (a graph's deselect, a terminal program's Escape) never arrives; Shift+Escape still leaves the terminal. |
 | c5 | **Popups inside a transient host.** The component opens egui areas of its own (completion lists, context menus, drop-downs) outside egui-pop's overlay stack; whether a click in them counts as a click outside the host (which closes a popover) is not checked. |
@@ -180,13 +180,13 @@ draws a second choice inline.
 | Code | Limit | Estimated cost |
 |---|---|---|
 | E1 | **No free-content dialog (closed).** Closed by `Dialog::Custom` (ADR 0013): a dialog with a body of its own, keeping the dialog rules. | Done. |
-| E2 | **Palettes are not resizable.** A palette's width is between its panel's `min_size` and `default_size`, its height the content's. | Small: a resize grip on the palette's area, the size kept in its place (decided: resizable). |
-| E3 | **No keymap in auxiliary windows.** Keys pressed in an auxiliary window are not dispatched. | Medium: the dispatcher in each immediate viewport's pass, with that window's focus chain (decided: to fix). |
-| E4 | **Overlays live in the main window.** Dialogs, menus, toasts and the command palette are drawn in the main window, and egui's modal blocks its own window only: a dialog opened from an auxiliary window appears in the main one and does not block the auxiliary window. | Medium to large: an overlay stack per window, or a modal blocking every window (decided: to fix). |
+| E2 | **Palettes are not resizable (closed).** Closed: a palette is resized by its right and bottom edges, between the `palette.min-*` and `palette.max-*` tokens, its size kept in the layout. | Done. |
+| E3 | **No keymap in auxiliary windows (closed).** Closed: the key dispatcher runs in each auxiliary window's pass, in that window's context (its focus chain, `window` naming its panel). | Done. |
+| E4 | **Overlays live in the main window (closed for dialogs).** Closed for dialogs: each window has its own overlay stack, a dialog opened from an auxiliary window is shown over it, and while it is open every other window is blocked. Menus, toasts and the command palette are still drawn in the main window. | Done for dialogs; for the other overlays, a block in the `WINDOW_OVERLAYS` zone drawing in its own window (not decided). |
 | E5 | **No custom page in the settings window (closed).** Closed by settings pages (`Ctx::settings_page`): a page a plugin draws itself in the settings window, placed in its tree, searched, with its reset (column T). | Done. |
 
-E2 to E4 appear as conditions (c1, c2) or as hosts that do not exist
-yet, not as refused cells.
+The overlays E4 leaves in the main window appear as hosts that do not
+exist yet, not as refused cells.
 
 ### Upstream limits
 
@@ -217,9 +217,11 @@ would be refused outside the main window with U2.
   gives an immediate viewport its own AccessKit tree has not been
   checked.
 - **Tests across windows.** egui_kittest draws an immediate viewport
-  inside the main one, so no headless test proves the behaviour of the
-  auxiliary window's cells (keys, modals, focus) as a separate window
-  would have it: they stay `*`.
+  inside the main one. The keys, dialogs and focus of auxiliary windows
+  are tested with an immediate viewport renderer of the tests' own
+  (`crates/egui-pop-api/tests/windows.rs`), each window's pass run with
+  its own input, but no component is mounted in a real window there:
+  the cells stay `*`.
 - **Declarations can lie.** A component declared as reading keys when
   focused that reads one globally (the node graph's Space) shows a fit
   where it misbehaves; the mount tests are the guard.
