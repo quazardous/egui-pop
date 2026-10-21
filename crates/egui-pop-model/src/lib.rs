@@ -15,7 +15,7 @@
 //! - [`keymap`]: keys bound to commands in layers, resolved by focus
 //!   depth, with removal, unbinding and a resolution trace;
 //! - [`menus`]: menus declared by id, their items commands;
-//! - [`pointer`]: pointer gesture profiles (the wheel, a pinch, the
+//! - [`pointer`](mod@pointer): pointer gesture profiles (the wheel, a pinch, the
 //!   buttons per canvas kind) as keymap bindings, and the table canvases
 //!   read;
 //! - [`mount`]: the mount contract (ADR 0013): what a component needs,

@@ -32,7 +32,7 @@
 //! - [`placeholder`]: skeletons standing in for loading content, and
 //!   empty states;
 //! - [`placement`]: floating elements placed with flip and shift;
-//! - [`pointer`]: the pointer gestures in force (the profile's table
+//! - [`pointer`](mod@pointer): the pointer gestures in force (the profile's table
 //!   canvases read) and the wheel read raw, unit and modifiers kept;
 //! - [`scale`]: the window's scales, crisp strokes, the scale-changed
 //!   signal, the interface zoom's steps;
