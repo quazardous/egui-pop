@@ -511,7 +511,7 @@ mod archive {
             let Some(path) = entry.enclosed_name() else {
                 return Err(error(format!(
                     "`{}` is not a path inside the archive",
-                    entry.name()
+                    entry.name().unwrap_or_default()
                 )));
             };
             let name = path

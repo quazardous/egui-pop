@@ -732,6 +732,10 @@ publishes.
 
 ### Security
 
+- Theme packages read `.zip` archives with `zip` 9 instead of 8.6, which
+  had three advisories (RUSTSEC-2026-0367, 0368, 0369) about extracting
+  to disk. egui-pop never extracted to disk (entries are read one by one,
+  bounded), so no theme package was exposed.
 - A paste into the terminal can no longer end its bracketed paste early
   (egui-pop-editors): when the program asked for bracketed paste, the
   markers `ESC[200~` and `ESC[201~` are removed from the pasted text
