@@ -36,6 +36,13 @@ wayland = ["wgpu", "dep:egui-pop-wayland"]
 ## applications without a graph model of their own: read, edited by the
 ## node graph editor, written back with comments and order kept.
 graph-yaml = ["dep:serde", "dep:serde-saphyr"]
+## The node graph exported as PNG (`GraphExport::png`): the SVG export
+## rendered by resvg with its text support (font shaping), in the
+## theme's installed faces, egui's bundled faces behind them.
+graph-png = ["dep:resvg", "resvg/text", "dep:fontdb", "egui/default_fonts"]
+## The node graph exported as PDF (`GraphExport::pdf`): the SVG export
+## converted by svg2pdf, the theme's faces embedded (subset).
+graph-pdf = ["dep:svg2pdf", "dep:fontdb", "egui/default_fonts"]
 
 [dependencies]
 profiling.workspace = true
@@ -50,6 +57,14 @@ egui-pop-wayland = { workspace = true, optional = true }
 serde_json.workspace = true
 serde = { workspace = true, optional = true }
 serde-saphyr = { workspace = true, optional = true }
+# MIT OR Apache-2.0, the version egui-pop-core's `svg` feature uses: the
+# PNG export (feature `graph-png`), with its `text` feature.
+resvg = { version = "0.46", optional = true, default-features = false }
+# MIT: the fonts the PNG and PDF exports draw with (the version resvg
+# and svg2pdf read).
+fontdb = { version = "0.23", optional = true, default-features = false, features = ["std"] }
+# MIT OR Apache-2.0: the PDF export (feature `graph-pdf`).
+svg2pdf = { version = "0.13", optional = true, default-features = false, features = ["text"] }
 
 [dev-dependencies]
 eframe = { workspace = true, features = ["default_fonts", "wgpu", "wayland", "x11"] }

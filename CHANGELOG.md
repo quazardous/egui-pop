@@ -49,6 +49,17 @@ publishes.
   Agents run `graph.export` on an editor shown with `show_graph`, which
   keeps a copy at each frame (`GraphEditor::keep_export`). The
   gallery's node graph page has an Export menu.
+- The node graph exported as PNG and PDF (egui-pop-viewport,
+  egui-pop-core, egui-pop), each behind a feature:
+  `graph-png` gives `GraphExport::png(&options, scale)`, the SVG export
+  rendered by resvg with its text support at `scale` pixels per point;
+  `graph-pdf` gives `GraphExport::pdf(&options)`, converted by svg2pdf
+  with the fonts embedded as subsets and the text kept as text. Both
+  draw the labels in the theme's installed faces
+  (`fonts::installed_faces`, carried by `GraphExport::faces`), egui's
+  bundled faces behind them, never the system's, and give the same
+  bytes for the same graph (the PDF with fixed metadata and its objects
+  in a canonical order).
 - Status items with alignment, priority, live states, popovers and
   hover cards (egui-pop-api): `strips::Indicator::align` puts an item
   at the bar's start (after the breadcrumb and the chips) or its end;

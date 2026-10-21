@@ -40,6 +40,12 @@ viewport = ["dep:egui-pop-viewport"]
 ## The node graph's reference model kept in a YAML file
 ## (`egui_pop::viewport::graph::yaml`).
 graph-yaml = ["viewport", "egui-pop-viewport/graph-yaml"]
+## The node graph exported as PNG (`GraphExport::png`): resvg with its
+## text support, in the theme's installed faces.
+graph-png = ["viewport", "egui-pop-viewport/graph-png"]
+## The node graph exported as PDF (`GraphExport::pdf`): svg2pdf, the
+## theme's faces embedded.
+graph-pdf = ["viewport", "egui-pop-viewport/graph-pdf"]
 ## The image tools' steps: the histogram's drag, curves, colour wheels,
 ## the zoom control and navigator, each change a step of the application
 ## (`egui-pop-imaging`, re-exported as `egui_pop::imaging`).

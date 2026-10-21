@@ -375,10 +375,43 @@ ids for tools and tests: `<g data-node>`, `<path data-edge="a.out->b.in">`,
 `<g data-group>`, `<g data-stack>`, `<circle data-port data-side>`,
 `<g data-param>`.
 
-PNG and PDF are not built in: resvg, already a dependency of the
-`svg` feature, renders SVG to pixels, but only with its text support,
-which brings its own font loading and shaping; an application that
-wants a raster renders the SVG with the tool it already has.
+### PNG and PDF
+
+Two features render that SVG, so an application that does not want
+them does not pay for font shaping:
+
+| Feature | Method | What |
+|---|---|---|
+| `graph-png` | `GraphExport::png(&options, scale)` | resvg with its text support: `scale` pixels per graph unit (1 for a point at 100 %, 2 for a high density screen), transparent without the background; at most `GraphExport::MAX_SIDE` pixels a side |
+| `graph-pdf` | `GraphExport::pdf(&options)` | svg2pdf: one page, a graph unit a point, the text kept as text and its fonts embedded as subsets |
+
+```rust,ignore
+use egui_pop::viewport::graph::{ExportOptions, GraphExport};
+
+let export = GraphExport::capture(ctx, graph, state);
+let png: Vec<u8> = export.png(&ExportOptions::default(), 2.0)?;
+let pdf: Vec<u8> = export.pdf(&ExportOptions::default().title("Pipeline"))?;
+```
+
+The labels match the screen: `GraphExport::capture` takes the faces
+egui-pop installed for the theme's `font.family.ui`
+(`egui_pop::core::fonts::installed_faces`: the families the theme
+names, registered by the application, egui's or the system's), and
+egui's bundled faces always come behind them for what they lack. The
+system's fonts are never searched, so an export is the same on every
+machine. `GraphExport::with_theme` draws in egui's bundled faces unless
+`GraphExport::faces` gives others.
+
+Both are deterministic: the same graph, options and scale give the same
+bytes. The PDF's metadata is fixed (the title, `egui-pop` as producer,
+no date, no file identifier), and its objects are numbered and written
+in a canonical order (svg2pdf writes some in hash order). A failure is
+an `ExportError`: an empty image (nothing selected and no margin), a
+scale that is not positive, an image too large.
+
+The facade's `graph-png` and `graph-pdf` features turn them on.
+
+### Agents
 
 `show_graph` keeps a copy of the graph at each frame
 (`GraphEditor::keep_export`, `GraphOutput::export`), which the

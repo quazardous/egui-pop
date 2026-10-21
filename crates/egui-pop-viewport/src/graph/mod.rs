@@ -100,7 +100,7 @@ use egui_pop_core::strings::{self, tr, tr_args};
 use egui_pop_core::theme::Tokens;
 use serde_json::{Value as Json, json};
 
-pub use export::{ExportOptions, ExportTheme, GraphExport};
+pub use export::{ExportError, ExportOptions, ExportTheme, GraphExport};
 pub use minimap::GraphMinimap;
 pub use model::{
     Edge, Edit, GraphEvent, GraphModel, Group, Kind, Level, Moved, NewNode, Node, Param, Port,
@@ -635,7 +635,10 @@ impl<'a> GraphEditor<'a> {
             .then(|| describe(self.model, &nodes, &edges, self.state));
         let export = self.keep_export.then(|| {
             let theme = ExportTheme::of_nodes(&ctx, &nodes);
-            GraphExport::from_parts(self.model, nodes, edges, groups, self.state, theme)
+            GraphExport::from_parts(self.model, nodes, edges, groups, self.state, theme).faces(
+                egui_pop_core::fonts::installed_faces(&ctx, egui_pop_core::fonts::Role::Ui)
+                    .unwrap_or_default(),
+            )
         });
         let hint = if response.hovered() {
             let hint = crate::gestures::hint(&ctx, egui_pop_core::model::pointer::SCOPE_GRAPH);

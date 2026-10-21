@@ -1,6 +1,7 @@
 //! The node graph exported as SVG: well formed, the same text for the
 //! same graph, every node, wire, group and stack where it belongs, at
-//! each level and in each wire style, the whole graph or the selection.
+//! each level and in each wire style, the whole graph or the selection;
+//! as PNG (feature `graph-png`) and PDF (feature `graph-pdf`).
 
 use std::collections::BTreeMap;
 
@@ -284,4 +285,171 @@ fn collapsed_nodes_and_folded_groups_export_as_drawn() {
         .find(|n| n.has_tag_name("title"))
         .and_then(|n| n.text());
     assert_eq!(title, Some("Pipeline"));
+}
+
+/// The view box of an SVG export: x, y, width, height.
+#[cfg(feature = "graph-png")]
+fn view_box(svg: &str) -> [f32; 4] {
+    let doc = parse(svg);
+    let v: Vec<f32> = doc
+        .root_element()
+        .attribute("viewBox")
+        .expect("a viewBox")
+        .split(' ')
+        .map(|v| v.parse().expect("a number"))
+        .collect();
+    [v[0], v[1], v[2], v[3]]
+}
+
+/// A node's box in an SVG export: its first `<rect>`.
+#[cfg(feature = "graph-png")]
+fn node_rect(svg: &str, id: &str) -> [f32; 4] {
+    let doc = parse(svg);
+    let node = with(&doc, "data-node")
+        .into_iter()
+        .find(|n| n.attribute("data-node") == Some(id))
+        .expect("the node");
+    let rect = node
+        .descendants()
+        .find(|n| n.has_tag_name("rect"))
+        .expect("its box");
+    let a = |k: &str| -> f32 { rect.attribute(k).expect(k).parse().expect("a number") };
+    [a("x"), a("y"), a("width"), a("height")]
+}
+
+#[cfg(feature = "graph-png")]
+#[test]
+fn a_png_decodes_at_its_scale_and_draws_the_nodes_and_their_labels() {
+    use resvg::tiny_skia::Pixmap;
+
+    let state = GraphState::new();
+    let options = ExportOptions::default();
+    let svg = export(&state).svg(&options);
+    let [vx, vy, vw, vh] = view_box(&svg);
+    let scale = 2.0;
+    let png = export(&state).png(&options, scale).expect("a PNG");
+    assert!(png.starts_with(b"\x89PNG\r\n\x1a\n"));
+    let image = Pixmap::decode_png(&png).expect("it decodes");
+    assert_eq!(image.width(), (vw * scale).ceil() as u32);
+    assert_eq!(image.height(), (vh * scale).ceil() as u32);
+
+    let pixel = |x: f32, y: f32| {
+        let p = image
+            .pixel(((x - vx) * scale) as u32, ((y - vy) * scale) as u32)
+            .expect("inside the image")
+            .demultiply();
+        [p.red(), p.green(), p.blue(), p.alpha()]
+    };
+    // The background (20), and a node's body (50) at its centre.
+    assert_eq!(pixel(vx + 2.0, vy + 2.0), [20, 20, 20, 255]);
+    let [x, y, w, h] = node_rect(&svg, "mix");
+    assert_eq!(pixel(x + w / 2.0, y + h - 2.5), [50, 50, 50, 255]);
+
+    // The title is drawn: light pixels (text, 230) in the header (60),
+    // right of the type band.
+    let header_h = 28.0_f32.min(h);
+    let mut light = 0;
+    for py in ((y * scale) as i32)..(((y + header_h) * scale) as i32) {
+        for px in (((x + 12.0) * scale) as i32)..(((x + w - 6.0) * scale) as i32) {
+            let p = image
+                .pixel(
+                    (px as f32 - vx * scale) as u32,
+                    (py as f32 - vy * scale) as u32,
+                )
+                .expect("inside the image");
+            if p.red() > 150 {
+                light += 1;
+            }
+        }
+    }
+    assert!(
+        light > 20,
+        "no text in the title bar ({light} light pixels)"
+    );
+}
+
+#[cfg(feature = "graph-png")]
+#[test]
+fn a_png_is_the_same_for_the_same_graph_and_transparent_without_background() {
+    use resvg::tiny_skia::Pixmap;
+
+    let state = GraphState::new();
+    let options = ExportOptions::default().level(Level::Detail);
+    let png = export(&state).png(&options, 1.5).expect("a PNG");
+    assert_eq!(png, export(&state).png(&options, 1.5).expect("a PNG"));
+
+    let options = options.background(false);
+    let image =
+        Pixmap::decode_png(&export(&state).png(&options, 1.0).expect("a PNG")).expect("it decodes");
+    assert_eq!(image.pixel(1, 1).expect("a corner").alpha(), 0);
+}
+
+#[cfg(feature = "graph-png")]
+#[test]
+fn a_png_refuses_a_bad_scale_and_an_empty_image() {
+    use egui_pop_viewport::graph::ExportError;
+
+    let state = GraphState::new();
+    let options = ExportOptions::default();
+    for scale in [0.0, -1.0, f32::NAN] {
+        assert!(matches!(
+            export(&state).png(&options, scale),
+            Err(ExportError::Size(_))
+        ));
+    }
+    assert!(matches!(
+        export(&state).png(&options, 10_000.0),
+        Err(ExportError::Size(_))
+    ));
+    // Nothing selected and no margin: nothing to draw.
+    let empty = ExportOptions::default().selection(true).margin(0.0);
+    assert!(matches!(
+        export(&state).png(&empty, 1.0),
+        Err(ExportError::Size(_))
+    ));
+}
+
+#[cfg(feature = "graph-pdf")]
+#[test]
+fn a_pdf_embeds_its_font_and_is_the_same_for_the_same_graph() {
+    let state = GraphState::new();
+    let options = ExportOptions::default()
+        .level(Level::Detail)
+        .title("Pipeline");
+    let pdf = export(&state).pdf(&options).expect("a PDF");
+    assert!(pdf.starts_with(b"%PDF-"));
+    assert!(pdf.ends_with(b"%%EOF"));
+    let has = |s: &[u8]| pdf.windows(s.len()).any(|w| w == s);
+    assert!(has(b"/FontFile"), "a font is embedded");
+    assert!(has(b"/Producer (egui-pop)"));
+    assert!(!has(b"/CreationDate") && !has(b"/ID"));
+    // Run again: svg2pdf orders its resources by hash, the export does
+    // not.
+    for _ in 0..3 {
+        assert_eq!(pdf, export(&state).pdf(&options).expect("a PDF"));
+    }
+
+    // The cross-reference table points at each object.
+    let text = String::from_utf8_lossy(&pdf);
+    let start: usize = text
+        .rsplit("startxref\n")
+        .next()
+        .and_then(|t| t.split('\n').next())
+        .and_then(|n| n.parse().ok())
+        .expect("startxref");
+    let table = &text[start..];
+    let count: usize = table
+        .lines()
+        .nth(1)
+        .and_then(|l| l.split(' ').nth(1))
+        .and_then(|n| n.parse().ok())
+        .expect("the table's size");
+    for (n, line) in table.lines().skip(3).take(count - 1).enumerate() {
+        let offset: usize = line[..10].parse().expect("an offset");
+        assert!(
+            pdf[offset..].starts_with(format!("{} 0 obj\n", n + 1).as_bytes()),
+            "object {}",
+            n + 1
+        );
+    }
 }

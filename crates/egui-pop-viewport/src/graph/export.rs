@@ -10,11 +10,16 @@
 //! the editor draws them; what only an interactive canvas shows (the
 //! grid, the selection's outline, the focus ring, the chevrons, the
 //! application's slot in title bars) is left out.
+//!
+//! [`GraphExport::png`] (feature `graph-png`) and [`GraphExport::pdf`]
+//! (feature `graph-pdf`) render that SVG, with the theme's installed
+//! faces ([`GraphExport::faces`]) so the labels match the screen.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 
 use egui::{Color32, Pos2, Rect, pos2, vec2};
+use egui_pop_core::fonts::{self, InstalledFace, Role};
 use egui_pop_core::theme::Tokens;
 
 use super::model::{Edge, GraphModel, Group, Level, Node, Param, PortType, Side};
@@ -152,6 +157,37 @@ impl ExportOptions {
     }
 }
 
+/// Why a PNG or PDF export failed.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum ExportError {
+    /// The image would be empty (an empty graph without a margin), the
+    /// scale is not a positive number, or a side would pass
+    /// [`GraphExport::MAX_SIDE`] pixels.
+    Size(String),
+    /// The SVG could not be read back to render it.
+    Svg(String),
+    /// The PDF could not be written.
+    Pdf(String),
+}
+
+impl std::fmt::Display for ExportError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ExportError::Size(e) => write!(f, "image size: {e}"),
+            ExportError::Svg(e) => write!(f, "SVG: {e}"),
+            ExportError::Pdf(e) => write!(f, "PDF: {e}"),
+        }
+    }
+}
+
+impl std::error::Error for ExportError {}
+
+#[cfg(any(feature = "graph-png", feature = "graph-pdf"))]
+mod fonts_db;
+#[cfg(feature = "graph-pdf")]
+mod pdf;
+
 /// A graph ready to export: an owned copy of what the editor draws,
 /// kept as long as needed (an agent's `graph.export` reads the copy the
 /// editor kept at its last frame).
@@ -169,6 +205,8 @@ pub struct GraphExport {
     wires: WireStyle,
     node_width: f32,
     theme: ExportTheme,
+    /// The faces the PNG and PDF exports draw text with.
+    faces: Vec<InstalledFace>,
 }
 
 impl GraphExport {
@@ -178,10 +216,13 @@ impl GraphExport {
         let nodes = model.nodes();
         let theme = ExportTheme::of_nodes(ctx, &nodes);
         GraphExport::from_parts(model, nodes, model.edges(), model.groups(), state, theme)
+            .faces(fonts::installed_faces(ctx, Role::Ui).unwrap_or_default())
     }
 
     /// A model with an editor's state, in a theme of the caller's (a
-    /// light export of a dark interface, a test's fixed colours).
+    /// light export of a dark interface, a test's fixed colours). Its
+    /// text is drawn in egui's bundled faces unless [`GraphExport::faces`]
+    /// gives others.
     pub fn with_theme(
         model: &dyn GraphModel,
         state: &GraphState,
@@ -218,6 +259,7 @@ impl GraphExport {
             wires: state.wire_style,
             node_width: state.node_width,
             theme,
+            faces: Vec::new(),
         }
     }
 
@@ -230,6 +272,17 @@ impl GraphExport {
     /// A node's width in graph units (by default the editor's last).
     pub fn node_width(mut self, width: f32) -> Self {
         self.node_width = width.max(80.0);
+        self
+    }
+
+    /// The faces the PNG and PDF exports draw text with, in order (the
+    /// first found for a family wins, the others fill in missing
+    /// characters); by default the theme's installed faces
+    /// ([`fonts::installed_faces`]) when captured from a context. egui's
+    /// bundled faces always come after them, so text never vanishes.
+    /// The SVG names the theme's families and leaves fonts to its reader.
+    pub fn faces(mut self, faces: Vec<InstalledFace>) -> Self {
+        self.faces = faces;
         self
     }
 
@@ -456,6 +509,86 @@ impl GraphExport {
         }
         w.out.push_str("</svg>\n");
         w.out
+    }
+
+    /// The longest side of a PNG export, in pixels.
+    pub const MAX_SIDE: u32 = 16_384;
+
+    /// The graph as a PNG image (feature `graph-png`): [`GraphExport::svg`]
+    /// rendered by resvg at `scale` pixels per graph unit (1 for a point
+    /// at 100 %, 2 for a high density screen), its text in
+    /// [`GraphExport::faces`] then egui's bundled faces. Transparent
+    /// without the background. The same graph, options and scale give
+    /// the same bytes.
+    #[cfg(feature = "graph-png")]
+    pub fn png(&self, options: &ExportOptions, scale: f32) -> Result<Vec<u8>, ExportError> {
+        use resvg::{tiny_skia, usvg};
+        if !(scale.is_finite() && scale > 0.0) {
+            return Err(ExportError::Size(format!("scale {scale} is not positive")));
+        }
+        let svg = self.svg(options);
+        let (db, family) = fonts_db::database(&self.faces);
+        let opts = usvg::Options {
+            font_family: family,
+            fontdb: std::sync::Arc::new(db),
+            ..usvg::Options::default()
+        };
+        let tree = usvg::Tree::from_str(&svg, &opts).map_err(|e| match e {
+            usvg::Error::InvalidSize => ExportError::Size("the image is empty".into()),
+            e => ExportError::Svg(e.to_string()),
+        })?;
+        let size = tree.size();
+        let side = |v: f32| (v * scale).ceil();
+        let (w, h) = (side(size.width()), side(size.height()));
+        let max = Self::MAX_SIDE as f32;
+        if !(w <= max && h <= max) {
+            return Err(ExportError::Size(format!(
+                "{w} × {h} pixels, more than {} on a side",
+                Self::MAX_SIDE
+            )));
+        }
+        let mut pixmap = tiny_skia::Pixmap::new(w as u32, h as u32)
+            .ok_or_else(|| ExportError::Size("the image is empty".into()))?;
+        resvg::render(
+            &tree,
+            tiny_skia::Transform::from_scale(scale, scale),
+            &mut pixmap.as_mut(),
+        );
+        pixmap
+            .encode_png()
+            .map_err(|e| ExportError::Svg(e.to_string()))
+    }
+
+    /// The graph as a one-page PDF (feature `graph-pdf`):
+    /// [`GraphExport::svg`] converted by svg2pdf, a graph unit a PDF
+    /// point, its text kept as text in [`GraphExport::faces`] then
+    /// egui's bundled faces, each embedded as a subset. The metadata is
+    /// fixed (the title, `egui-pop` as producer, no date), and the
+    /// objects are written in a canonical order, so the same graph and
+    /// options give the same bytes.
+    #[cfg(feature = "graph-pdf")]
+    pub fn pdf(&self, options: &ExportOptions) -> Result<Vec<u8>, ExportError> {
+        use svg2pdf::usvg;
+        let svg = self.svg(options);
+        let (db, family) = fonts_db::database(&self.faces);
+        let opts = usvg::Options {
+            font_family: family,
+            fontdb: std::sync::Arc::new(db),
+            ..usvg::Options::default()
+        };
+        let tree = usvg::Tree::from_str(&svg, &opts).map_err(|e| match e {
+            usvg::Error::InvalidSize => ExportError::Size("the image is empty".into()),
+            e => ExportError::Svg(e.to_string()),
+        })?;
+        let bytes = svg2pdf::to_pdf(
+            &tree,
+            svg2pdf::ConversionOptions::default(),
+            svg2pdf::PageOptions::default(),
+        )
+        .map_err(|e| ExportError::Pdf(e.to_string()))?;
+        let title = options.title.as_deref().unwrap_or("Node graph");
+        pdf::canonical(&bytes, title)
+            .ok_or_else(|| ExportError::Pdf("svg2pdf's output could not be read back".into()))
     }
 
     fn stack(&self, w: &mut Svg, b: &Placed, g: usize, count: usize, size: f32) {
