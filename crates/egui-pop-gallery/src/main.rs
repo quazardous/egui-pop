@@ -77,7 +77,12 @@ fn main() {
         let started = eframe::WebRunner::new()
             .start(
                 canvas,
-                eframe::WebOptions::default(),
+                // egui-pop takes the wheel from the browser, Ctrl and the
+                // wheel above all (a page zoom), and a trackpad's pinch.
+                eframe::WebOptions {
+                    should_prevent_default: Box::new(egui_pop::core::pointer::web_prevent_default),
+                    ..eframe::WebOptions::default()
+                },
                 Box::new(|cc| {
                     let gallery = Gallery::from_creation_context(cc, Options::default())
                         .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
