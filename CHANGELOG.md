@@ -676,7 +676,8 @@ publishes.
 - Aligned numbers (egui-pop-tokens, egui-pop-core): the `font.numeric`
   token (`"mono"` by default, or `"ui"`) says how values line their
   digits up: in the monospace family at the size matching the text
-  around, or in the interface family, its digits each in a cell as wide
+  around (lowered so its advance is whole pixels: columns do not drift),
+  or in the interface family, its digits each in a cell as wide
   as the widest when its default digits are not tabular (egui applies
   no `tnum`). `fonts::number_font`, `number_job` and `number_galley`
   lay a value out; `Tokens::font.numeric` reads the token.

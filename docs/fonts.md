@@ -129,7 +129,10 @@ recommends, values are drawn by `font.numeric` (a theme token):
 
 - `"mono"` (the default): in the monospace family, at the size whose
   x-height matches the text around (`size × font.text-style.monospace /
-  font.text-style.body`, rounded to half a point).
+  font.text-style.body`), lowered to the nearest size whose advance is a
+  whole number of physical pixels at the window's scale: with a
+  fractional advance, glyphs snap to pixels differently from row to row
+  and a column drifts by a pixel.
 - `"ui"`: in the interface family. When its regular face's default
   digits are tabular (measured at install, `Report::tabular_digits`),
   as they are; otherwise each digit is laid in a cell as wide as the

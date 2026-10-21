@@ -344,7 +344,10 @@ pub fn number_font(ctx: &Context, size: f32) -> NumberFont {
                 1.0
             };
             NumberFont {
-                font: FontId::new((size * ratio * 2.0).round() / 2.0, FontFamily::Monospace),
+                font: FontId::new(
+                    whole_pixel_advance(ctx, size * ratio),
+                    FontFamily::Monospace,
+                ),
                 cells: false,
             }
         }
@@ -353,6 +356,26 @@ pub fn number_font(ctx: &Context, size: f32) -> NumberFont {
             cells: !report(ctx).is_some_and(|r| r.tabular_digits(Role::Ui)),
         },
     }
+}
+
+/// The largest size, not above `size`, at which the monospace family's
+/// advance is a whole number of physical pixels at the context's
+/// `pixels_per_point`: with a fractional advance, glyphs snap to pixels
+/// differently from one row to the next and a column drifts by a pixel.
+/// Before egui's first pass (no fonts yet), `size` to half a point.
+fn whole_pixel_advance(ctx: &Context, size: f32) -> f32 {
+    if ctx.cumulative_pass_nr() == 0 || size <= 0.0 {
+        return (size * 2.0).round() / 2.0;
+    }
+    let ppp = ctx.pixels_per_point();
+    let advance =
+        ctx.fonts_mut(|f| f.glyph_width(&FontId::new(size, FontFamily::Monospace), '0')) * ppp;
+    if advance <= 0.0 {
+        return size;
+    }
+    // A hair over, so an advance already whole stays.
+    let whole = (advance + 1e-3).floor().max(1.0);
+    size * whole / advance
 }
 
 /// A value's text laid out so its digits line up with the values above
@@ -1412,20 +1435,31 @@ mod tests {
         assert_eq!(Numeric::parse("ui"), Some(Numeric::Ui));
         assert_eq!(Numeric::parse("tabular"), None);
         pass(&ctx);
-        let f = number_font(&ctx, t.font.body);
-        assert_eq!(f.font.family, FontFamily::Monospace);
-        // The monospace size that matches the body's x-height.
-        assert_eq!(f.font.size, t.font.mono);
-        assert!(!f.cells);
-        // A column of numbers, right-aligned: each digit's x from the
-        // right is the same on every row.
-        let rows: Vec<Vec<f32>> = ["-1234.56", "1111.11", "8888.88", "+0000.00"]
-            .iter()
-            .map(|n| from_right(&number_galley(&ctx, n, 13.0, Color32::WHITE)))
-            .collect();
-        for r in &rows[1..] {
-            for (a, b) in r.iter().rev().zip(rows[0].iter().rev()) {
-                assert!((a - b).abs() < 0.01, "{rows:?}");
+        for ppp in [1.0, 1.25, 2.0] {
+            ctx.set_pixels_per_point(ppp);
+            pass(&ctx);
+            let f = number_font(&ctx, t.font.body);
+            assert_eq!(f.font.family, FontFamily::Monospace);
+            // About the monospace size that matches the body's x-height,
+            // never above it, its advance a whole number of pixels.
+            assert!(f.font.size <= t.font.mono + 1e-3, "{ppp}: {}", f.font.size);
+            assert!(f.font.size > t.font.mono * 0.8, "{ppp}: {}", f.font.size);
+            let advance = ctx.fonts_mut(|fonts| fonts.glyph_width(&f.font, '0')) * ppp;
+            assert!(
+                (advance - advance.round()).abs() < 0.01,
+                "{ppp}: {advance} pixels"
+            );
+            assert!(!f.cells);
+            // A column of numbers, right-aligned: each digit's x from the
+            // right is the same on every row.
+            let rows: Vec<Vec<f32>> = ["-1234.56", "1111.11", "8888.88", "+0000.00"]
+                .iter()
+                .map(|n| from_right(&number_galley(&ctx, n, 13.0, Color32::WHITE)))
+                .collect();
+            for r in &rows[1..] {
+                for (a, b) in r.iter().rev().zip(rows[0].iter().rev()) {
+                    assert!((a - b).abs() < 0.01, "{ppp}: {rows:?}");
+                }
             }
         }
     }
