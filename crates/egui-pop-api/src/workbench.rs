@@ -27,6 +27,8 @@
 //! | `workbench.focus` | `{ "panel" }`: shows it and gives it the keyboard |
 //! | `workbench.fold` | `{ "area", "folded" }`: an area folded to its strip, or unfolded |
 //! | `workbench.place` | `{ "area", "placement" }`: a side area lies `beside` the centre or `over` it |
+//! | `workbench.flyout` | `{ "panel", "open" }`: a folded side area's panel opens alone over the centre, or closes |
+//! | `workbench.flyout_size` | `{ "panel", "width" }`: the width of a panel's flyout, saved with the layout |
 //! | `workbench.detach` | `{ "panel" }`: into a window of its own (its own scale) |
 //! | `workbench.attach` | `{ "panel" }`: a detached panel docked back |
 //! | `workbench.close_window` | `{ "panel" }`: a detached panel's window closes; the default docks it back, a veto keeps the window |
@@ -40,6 +42,23 @@
 //! keeps the room in the layout, so the centre keeps its width, and the
 //! area, unfolded, lies above the centre next to its strip with the kit's
 //! `side-area` shadow; a click on the strip folds or unfolds it.
+//! The centre never folds.
+//!
+//! **Strip icons.** A side area's strip shows one icon per panel, in tab
+//! order: its [`PanelSpec::icon`] (a vector icon tinted by the kit's
+//! `activity-bar-item`, crisp at any scale), else its title's first
+//! letter; the tooltip gives the title and the panel's key, if it has
+//! one. On a folded area a click opens that panel alone as a
+//! **flyout** over the centre, next to the strip, without moving the
+//! layout (`workbench.flyout`); Escape or a click away closes it (it is
+//! an overlay of the stack, `egui_pop_core::overlay::hold`). A double
+//! click on the icon, or the flyout's pin button, unfolds the area with
+//! the panel shown. The flyout's free edge resizes it; its width is
+//! kept per panel in the layout (`flyouts`, `workbench.flyout_size`).
+//! On an area lying over the centre, open, a click shows the panel.
+//! A panel's indicator ([`crate::strips::Indicator::panel`]) shows on
+//! its icon while the panel is not shown; [`strip`] lists the icons
+//! with their marks for agents, as the `workbench` collector does.
 //!
 //! **Zen mode** (the `workbench.zen` command, a toggle on `Shift+F11`
 //! that an application may rebind) leaves only the centre: the title bar, the
@@ -93,6 +112,8 @@ pub const STEP_DETACH: StepId = StepId::from_static("workbench.detach");
 pub const STEP_ATTACH: StepId = StepId::from_static("workbench.attach");
 pub const STEP_CLOSE_WINDOW: StepId = StepId::from_static("workbench.close_window");
 pub const STEP_ZEN: StepId = StepId::from_static("workbench.zen");
+pub const STEP_FLYOUT: StepId = StepId::from_static("workbench.flyout");
+pub const STEP_FLYOUT_SIZE: StepId = StepId::from_static("workbench.flyout_size");
 
 /// Toggles zen mode: only the centre is shown.
 pub const CMD_ZEN: egui_pop_model::ids::CommandId =
@@ -195,6 +216,16 @@ pub(crate) fn steps() -> Vec<crate::steps::StepSpec> {
             "A side area lies beside the centre or over it (`area`, `placement`: `beside` or `over`).",
         )
         .args(json!({ "area": "start_side", "placement": "over" })),
+        StepSpec::new(
+            STEP_FLYOUT,
+            "A folded side area's panel opens alone over the centre (`panel`, `open`), or closes (`open`: false).",
+        )
+        .args(json!({ "panel": "app.side-bar", "open": true })),
+        StepSpec::new(
+            STEP_FLYOUT_SIZE,
+            "A panel's flyout is given a width in points (`panel`, `width`), saved with the layout.",
+        )
+        .args(json!({ "panel": "app.side-bar", "width": 280.0 })),
         StepSpec::new(
             STEP_DETACH,
             "A panel moves to a window of its own (`panel`).",
@@ -327,6 +358,11 @@ pub enum Change {
     Roll(PanelId, bool),
     /// A floating panel is pinned (`true`) or unpinned.
     Pin(PanelId, bool),
+    /// A folded side area's panel opens alone over the centre (`true`),
+    /// or closes.
+    Flyout(PanelId, bool),
+    /// The width of a panel's flyout, in points.
+    FlyoutSize(PanelId, f32),
     /// Zen mode on (`true`: only the centre is shown) or off.
     Zen(bool),
 }
@@ -418,6 +454,10 @@ impl Change {
                 json!({ "panel": p, "pinned": on }),
             ),
             Change::Zen(on) => (STEP_ZEN, json!({ "zen": on })),
+            Change::Flyout(p, open) => (STEP_FLYOUT, json!({ "panel": p, "open": open })),
+            Change::FlyoutSize(p, width) => {
+                (STEP_FLYOUT_SIZE, json!({ "panel": p, "width": width }))
+            }
         }
     }
 
@@ -502,6 +542,17 @@ impl Change {
             "palette.ungroup" => Change::Ungroup(panel, pos_of(args)?),
             "palette.roll" => Change::Roll(panel, flag("rolled")),
             "palette.pin" => Change::Pin(panel, flag("pinned")),
+            "workbench.flyout" => Change::Flyout(panel, flag("open")),
+            "workbench.flyout_size" => {
+                let width = args
+                    .get("width")
+                    .and_then(Json::as_f64)
+                    .ok_or("`width` is missing")? as f32;
+                if !(width.is_finite() && width > 0.0) {
+                    return Err("`width` is positive".into());
+                }
+                Change::FlyoutSize(panel, width)
+            }
             "workbench.move" | "palette.dock" => {
                 let name = args
                     .get("area")
@@ -571,6 +622,11 @@ pub(crate) struct Workbench {
     /// Zen mode: only the centre is drawn. Not part of the layout, so
     /// never saved.
     pub zen: bool,
+    /// The panel shown as a flyout out of its folded side area's strip:
+    /// the session's state, never saved.
+    pub flyout: Option<PanelId>,
+    /// Where the flyout was drawn last frame.
+    pub flyout_rect: Option<Rect>,
 }
 
 impl Default for Workbench {
@@ -595,6 +651,8 @@ impl Default for Workbench {
             member_rects: BTreeMap::new(),
             group_hint: None,
             zen: false,
+            flyout: None,
+            flyout_rect: None,
         }
     }
 }
@@ -884,11 +942,51 @@ impl Workbench {
                 json!({ "panel": p, "pinned": on })
             }
             Change::Fold(area, folded) => {
+                if *area == Area::Center && *folded {
+                    return Err("the centre never folds".into());
+                }
+                if !folded
+                    && self
+                        .flyout
+                        .as_ref()
+                        .is_some_and(|p| self.layout.area_of(p) == Some(*area))
+                {
+                    self.flyout = None;
+                }
                 self.layout.folded.retain(|a| a != area);
                 if *folded {
                     self.layout.folded.push(*area);
                 }
                 json!({ "area": area_name(*area), "folded": folded })
+            }
+            Change::Flyout(p, open) => {
+                let spec = spec_of(p)?;
+                if !*open {
+                    if self.flyout.as_ref() == Some(p) {
+                        self.flyout = None;
+                    }
+                    return Ok(json!({ "panel": p, "open": false }));
+                }
+                let area = self
+                    .layout
+                    .area_of(p)
+                    .ok_or_else(|| format!("{} is not in an area", spec.title))?;
+                if !matches!(area, Area::StartSide | Area::EndSide)
+                    || !self.layout.folded.contains(&area)
+                {
+                    return Err(format!(
+                        "{} is not in a folded side area: only those open as a flyout",
+                        spec.title
+                    ));
+                }
+                // The session's state: the layout is left as it is.
+                self.flyout = Some(p.clone());
+                return Ok(json!({ "panel": p, "open": true }));
+            }
+            Change::FlyoutSize(p, width) => {
+                spec_of(p)?;
+                self.layout.flyouts.insert(p.clone(), *width);
+                return Ok(json!({ "panel": p, "width": width }));
             }
             Change::Zen(on) => {
                 // The session's state: the layout is left as it is.
@@ -1306,8 +1404,10 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
         (wb.layout.folded.clone(), wb.layout.over.clone())
     };
     let kit = Kit::of(&ctx);
-    // Side areas lying over the centre, open, next to their strip.
+    // Side areas lying over the centre, open, next to their strip; the
+    // strips of folded side areas, where a flyout may open.
     let mut lying = Vec::new();
+    let mut strips = Vec::new();
     for area in panel_alignment(app).order() {
         // Zen mode: the centre alone.
         if zen || !areas.contains(&area) || !visible_in(app, area) {
@@ -1318,9 +1418,11 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
         if folded.contains(&area) || is_over {
             if side {
                 let open = is_over && !folded.contains(&area);
-                let rect = strip(app, ui, &kit, area, open);
+                let rect = draw_strip(app, ui, &kit, area, open);
                 if open {
                     lying.push((area, rect));
+                } else {
+                    strips.push((area, rect));
                 }
             }
             continue;
@@ -1376,6 +1478,23 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
     for (area, strip) in lying {
         lie_over(app, &ctx, &kit, area, strip, sizes[&area]);
     }
+    // The flyout, while its panel is still in a folded side area drawn
+    // with its strip; otherwise it is gone.
+    let flyout = app.workbench_mut().flyout.clone();
+    let mut drawn = None;
+    if let Some(panel) = flyout {
+        let area = app.workbench_mut().layout.area_of(&panel);
+        if let Some((area, strip)) = strips.iter().find(|(a, _)| Some(*a) == area) {
+            drawn = show_flyout(app, &ctx, &kit, *area, *strip, &panel);
+        }
+        if drawn.is_none() {
+            let mut wb = app.workbench_mut();
+            if wb.flyout.as_ref() == Some(&panel) {
+                wb.flyout = None;
+            }
+        }
+    }
+    app.workbench_mut().flyout_rect = drawn;
     app.set_drawing_areas(false);
     if !zen {
         crate::palettes::show(app, &ctx);
@@ -1388,10 +1507,19 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
 /// on the centre's side, the drag-handle glyph; a click unfolds the area
 /// through the `workbench.fold` step. A side area lying over the centre
 /// keeps its strip while `open` (`selected` then), and a click folds it.
-/// Returns where the strip was drawn.
-fn strip(app: &AppHandle, ui: &mut Ui, kit: &Kit, area: Area, open: bool) -> Rect {
+/// Below the glyph, an icon per panel ([`strip_icon`]), the strip
+/// widened to hold them. Returns where the strip was drawn.
+fn draw_strip(app: &AppHandle, ui: &mut Ui, kit: &Kit, area: Area, open: bool) -> Rect {
     let component = &kit.area_strip;
-    let width = component.data.width.max(1.0);
+    let grip = component.data.width.max(1.0);
+    let panels = strip_panels(app, area);
+    let t = egui_pop_core::theme::Tokens::of(ui.ctx());
+    let cell = t.size.icon_inline + 2.0 * t.space.s;
+    let width = if panels.is_empty() {
+        grip
+    } else {
+        grip.max(cell)
+    };
     let id = dock_id(area).with("egui_pop.strip");
     let (panel, inner) = match area {
         Area::StartSide => (egui::Panel::left(id), Side::Right),
@@ -1441,16 +1569,436 @@ fn strip(app: &AppHandle, ui: &mut Ui, kit: &Kit, area: Area, open: bool) -> Rec
             };
             paint_indicator(&cx, rect, &line, inner);
             let at = Rect::from_center_size(
-                egui::pos2(rect.center().x, rect.top() + width * 1.25),
-                egui::vec2(width, width),
+                egui::pos2(rect.center().x, rect.top() + grip * 1.25),
+                egui::vec2(grip, grip),
             );
             kit.glyph(Glyph::DragHandle).paint(ui.painter(), at, b.text);
             if r.clicked() {
                 app.fold_area(area, open);
             }
+            // The panels' icons, under the glyph, in tab order.
+            let shown: Vec<PanelId> = {
+                let wb = app.workbench_mut();
+                wb.layout.active_in(area).into_iter().cloned().collect()
+            };
+            let mut top = rect.top() + grip * 2.5;
+            for p in &panels {
+                let cell_rect = Rect::from_min_size(
+                    egui::pos2(rect.left(), top),
+                    egui::vec2(rect.width(), cell),
+                );
+                if cell_rect.bottom() > rect.bottom() {
+                    break;
+                }
+                strip_icon(
+                    app,
+                    ui,
+                    kit,
+                    area,
+                    p,
+                    cell_rect,
+                    open,
+                    open && shown.contains(p),
+                );
+                top += cell + t.space.xs;
+            }
             rect
         })
         .inner
+}
+
+/// A panel's icon in a side area's strip, as agents read it
+/// ([`strip`], the `workbench` collector's `strips`).
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct StripIcon {
+    /// The area whose strip it is in (`area_name`).
+    pub area: &'static str,
+    pub panel: PanelId,
+    pub title: String,
+    /// Its icon's name; `None`: its title's first letter is drawn.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
+    /// Its key (its focus command's, else its toggle command's).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub key: Option<String>,
+    /// The panel shows: in its area (open over the centre, the tab in
+    /// front) or as the flyout.
+    pub shown: bool,
+    /// It is the flyout.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub flyout: bool,
+    /// Its indicator's state, when a panel indicator speaks for it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub indicator: Option<crate::strips::IndicatorState>,
+    /// Whether the icon shows the indicator's mark now (the panel not
+    /// shown, the state saying something).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub marked: bool,
+}
+
+/// Every icon of the side areas' strips (an area folded, or lying over
+/// the centre), start side first, each in tab order, with its panel's
+/// indicator. Empty in zen mode.
+pub fn strip(app: &AppHandle) -> Vec<StripIcon> {
+    let (layout, zen, flyout) = {
+        let mut wb = app.workbench_mut();
+        (wb.layout(), wb.zen, wb.flyout.clone())
+    };
+    if zen {
+        return Vec::new();
+    }
+    let ctx = app.egui();
+    let mut out = Vec::new();
+    for area in [Area::StartSide, Area::EndSide] {
+        let folded = layout.folded.contains(&area);
+        if !folded && !layout.over.contains(&area) {
+            continue;
+        }
+        let active = layout.active_in(area);
+        for panel in strip_panels(app, area) {
+            let flown = flyout.as_ref() == Some(&panel);
+            let shown = flown || (!folded && active.contains(&&panel));
+            let indicator = panel_indicator(app, &panel);
+            let marked = !shown
+                && indicator
+                    .as_ref()
+                    .is_some_and(|(i, s)| panel_mark(i, s).is_some());
+            let icon = app
+                .workbench_mut()
+                .spec(&panel)
+                .map(|s| s.icon.clone())
+                .filter(|i| egui_pop_core::icon::Icon::by_name(i).is_some());
+            out.push(StripIcon {
+                area: area_name(area),
+                title: app.panel_title(&ctx, &panel),
+                icon,
+                key: panel_key(app, &panel),
+                shown,
+                flyout: flown,
+                indicator: indicator.map(|(_, s)| s),
+                marked,
+                panel,
+            });
+        }
+    }
+    out
+}
+
+/// The panels a side area's strip shows icons for: those it holds that
+/// have something to draw, in tab order.
+fn strip_panels(app: &AppHandle, area: Area) -> Vec<PanelId> {
+    let panels = app.workbench_mut().panels_in(area);
+    panels.into_iter().filter(|p| drawable(app, p)).collect()
+}
+
+/// A panel's key: the first binding of its focus command, else of its
+/// toggle command.
+fn panel_key(app: &AppHandle, panel: &PanelId) -> Option<String> {
+    ["focus", "toggle"].into_iter().find_map(|suffix| {
+        let id = egui_pop_model::ids::CommandId::new(format!("{panel}.{suffix}")).ok()?;
+        app.keys_for(&id).into_iter().next()
+    })
+}
+
+/// The indicator speaking for a panel ([`crate::strips::Indicator::panel`])
+/// and its state.
+fn panel_indicator(
+    app: &AppHandle,
+    panel: &PanelId,
+) -> Option<(crate::strips::Indicator, crate::strips::IndicatorState)> {
+    app.indicators()
+        .into_iter()
+        .find(|(i, _)| i.panel.as_ref() == Some(panel))
+}
+
+/// The mark a panel's indicator state shows on its strip icon: a count
+/// as a badge (in the accent tone unless the state has one), else its
+/// errors or warnings, else a dot in its tone; nothing in the neutral
+/// tone with nothing to count.
+fn panel_mark(
+    ind: &crate::strips::Indicator,
+    state: &crate::strips::IndicatorState,
+) -> Option<egui_pop_core::indicator::Indicator> {
+    use egui_pop_core::indicator::Indicator as Mark;
+    use egui_pop_core::kit::Tone;
+    let tone = state.tone;
+    let mark = if let Some(n) = state.count.filter(|n| *n > 0) {
+        Mark::count(n).tone(if tone == Tone::Neutral {
+            Tone::Accent
+        } else {
+            tone
+        })
+    } else if state.errors > 0 {
+        Mark::count(state.errors).tone(Tone::Danger)
+    } else if state.warnings > 0 {
+        Mark::count(state.warnings).tone(Tone::Warning)
+    } else if tone != Tone::Neutral {
+        Mark::dot(tone)
+    } else {
+        return None;
+    };
+    let name = if state.text.is_empty() {
+        ind.label.clone()
+    } else {
+        state.text.clone()
+    };
+    Some(mark.name(name).id(format!("strip:{}", ind.id)))
+}
+
+/// One panel's icon in a side area's strip, drawn by the kit's
+/// `activity-bar-item` (`selected` while its panel shows, in the area
+/// or as the flyout): its [`PanelSpec::icon`], else its title's first
+/// letter; its indicator's mark while the panel is not shown. A click
+/// opens or closes its flyout (folded) or shows it (`open`); a double
+/// click unfolds the area with it shown.
+#[allow(clippy::too_many_arguments)]
+fn strip_icon(
+    app: &AppHandle,
+    ui: &mut Ui,
+    kit: &Kit,
+    area: Area,
+    panel: &PanelId,
+    rect: Rect,
+    open: bool,
+    shown: bool,
+) {
+    let ctx = ui.ctx().clone();
+    let t = egui_pop_core::theme::Tokens::of(&ctx);
+    let title = app.panel_title(&ctx, panel);
+    let icon = app
+        .workbench_mut()
+        .spec(panel)
+        .and_then(|s| egui_pop_core::icon::Icon::by_name(&s.icon));
+    let flown = app.workbench_mut().flyout.as_ref() == Some(panel);
+    let id = dock_id(area).with(("egui_pop.strip_icon", panel.as_str()));
+    let r = ui.interact(rect, id, egui::Sense::click());
+    let label = title.clone();
+    r.widget_info(move || WidgetInfo::labeled(WidgetType::Button, true, &label));
+    let indicator = panel_indicator(app, panel);
+    let mut tip = title.clone();
+    if let Some(key) = panel_key(app, panel) {
+        tip.push('\n');
+        tip.push_str(&key);
+    }
+    let visible = shown || flown;
+    let mark = indicator
+        .as_ref()
+        .filter(|_| !visible)
+        .and_then(|(i, s)| panel_mark(i, s).map(|m| (m, s.detail.clone())));
+    if let Some((_, detail)) = &mark
+        && !detail.is_empty()
+    {
+        tip.push('\n');
+        tip.push_str(detail);
+    }
+    let state = State::REST
+        .with(State::HOVER, r.hovered() && !visible)
+        .with(State::ACTIVE, r.is_pointer_button_down_on())
+        .with(State::FOCUS, r.has_focus())
+        .with(State::SELECTED, visible);
+    let item = &kit.activity_bar_item;
+    let cx = KitCx {
+        painter: ui.painter(),
+        ppp: ctx.pixels_per_point(),
+    };
+    item.paint(
+        &cx,
+        &Part {
+            rect,
+            room: rect,
+            state,
+            label: None,
+        },
+    );
+    let color = item.style(state).text;
+    let inner = Rect::from_center_size(
+        rect.center(),
+        egui::vec2(t.size.icon_inline, t.size.icon_inline),
+    );
+    match icon {
+        Some(i) => egui_pop_core::icon::Source::from(i).paint(ui, inner, color),
+        None => {
+            let letter: String = title
+                .chars()
+                .next()
+                .map(|c| c.to_uppercase().collect())
+                .unwrap_or_else(|| "?".into());
+            ui.painter().text(
+                inner.center(),
+                egui::Align2::CENTER_CENTER,
+                letter,
+                egui::FontId::proportional(t.size.icon_inline),
+                color,
+            );
+        }
+    }
+    if let Some((m, _)) = mark {
+        m.on(ui, &r, egui_pop_core::indicator::Anchor::TopEnd);
+    }
+    let r = r.on_hover_text(tip);
+    if r.double_clicked() {
+        // Unfolds the area with the panel shown.
+        app.change_workbench(Change::Flyout(panel.clone(), false));
+        app.focus_panel(panel);
+    } else if r.clicked() {
+        if open {
+            app.focus_panel(panel);
+        } else {
+            app.change_workbench(Change::Flyout(panel.clone(), !flown));
+        }
+    }
+}
+
+/// A folded side area's panel shown alone over the centre, next to the
+/// strip (as an area lying over it): a band with its title and a pin
+/// button unfolding the area, then the panel. An overlay of the stack
+/// (`overlay::hold`), so Escape or a click away closes it; its edge on
+/// the centre's side resizes it, the width kept per panel in the layout
+/// (`workbench.flyout_size`). Returns where it was drawn, if it is
+/// still open.
+fn show_flyout(
+    app: &AppHandle,
+    ctx: &egui::Context,
+    kit: &Kit,
+    area: Area,
+    strip: Rect,
+    panel: &PanelId,
+) -> Option<Rect> {
+    let spec = app.workbench_mut().spec(panel).cloned()?;
+    let title = app.panel_title(ctx, panel);
+    let id = dock_id(area).with(("egui_pop.flyout", panel.as_str()));
+    let live_id = id.with("live");
+    let content = app.workbench_mut().content;
+    let min = spec.min_size.max(48.0);
+    let max = (content.width() - 2.0 * strip.width()).max(min);
+    let saved = app.workbench_mut().layout.flyouts.get(panel).copied();
+    let width = ctx
+        .data(|d| d.get_temp::<f32>(live_id))
+        .or(saved)
+        .or(spec.default_size)
+        .or_else(|| {
+            egui::containers::panel::PanelState::load(ctx, dock_id(area)).map(|s| s.size().x)
+        })
+        .unwrap_or(240.0)
+        .clamp(min, max);
+    let start = area == Area::StartSide;
+    let rect = if start {
+        Rect::from_min_size(
+            egui::pos2(strip.right(), strip.top()),
+            egui::vec2(width, strip.height()),
+        )
+    } else {
+        Rect::from_min_size(
+            egui::pos2(strip.left() - width, strip.top()),
+            egui::vec2(width, strip.height()),
+        )
+    };
+    // In the overlay stack: its rect takes in the resize edge, the strip
+    // is its anchor (a click on another icon switches the flyout).
+    let reach = ctx.global_style().interaction.resize_grab_radius_side;
+    let spec_overlay = egui_pop_core::overlay::OverlaySpec::new(
+        ("egui_pop.flyout", panel.as_str()),
+        &title,
+        egui_pop_core::overlay::Kind::Popover,
+    );
+    let mut open = true;
+    if !egui_pop_core::overlay::hold(
+        ctx,
+        &spec_overlay,
+        &mut open,
+        Some(strip),
+        rect.expand2(egui::vec2(reach, 0.0)),
+    ) {
+        app.change_workbench(Change::Flyout(panel.clone(), false));
+        return None;
+    }
+    let side = &kit.side_area;
+    let rest = *side.style(State::REST);
+    let mut shadow = side.data.shadow;
+    if !start {
+        shadow.offset[0] = shadow.offset[0].saturating_neg();
+    }
+    let pad = egui::vec2(side.data.padding_x, side.data.padding_y);
+    let t = egui_pop_core::theme::Tokens::of(ctx);
+    egui::Area::new(id)
+        .order(egui::Order::Middle)
+        .fixed_pos(rect.min)
+        .constrain(false)
+        .show(ctx, |ui| {
+            let (rect, _) = ui.allocate_exact_size(rect.size(), egui::Sense::hover());
+            let painter = ui.painter();
+            if shadow != egui::Shadow::NONE {
+                painter.add(shadow.as_shape(rect, egui::CornerRadius::ZERO));
+            }
+            painter.rect_filled(rect, 0.0, ui.visuals().panel_fill);
+            let body = rect.shrink2(pad);
+            let mut inner = ui.new_child(
+                egui::UiBuilder::new()
+                    .id_salt("egui_pop.flyout.inner")
+                    .max_rect(body),
+            );
+            inner.set_clip_rect(body);
+            inner.set_min_size(inner.available_size());
+            // The band: the title, then the pin button at the end.
+            let pin = strings::tr_args(
+                inner.ctx(),
+                &txt::WORKBENCH_FLYOUT_PIN,
+                &[("panel", &title)],
+            );
+            let button = t.size.control_height.max(24.0);
+            let header = kit.header_band.style(State::REST).text;
+            let pinned = inner
+                .horizontal(|ui| {
+                    ui.add(
+                        egui::Label::new(egui::RichText::new(&title).strong().color(header))
+                            .truncate()
+                            .selectable(false),
+                    );
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        egui_pop_core::band::button(
+                            ui,
+                            button,
+                            egui_pop_core::icon::Icon::Unlock,
+                            &pin,
+                            false,
+                        )
+                        .clicked()
+                    })
+                    .inner
+                })
+                .inner;
+            inner.separator();
+            app.show_panel(&mut inner, panel);
+            if pinned {
+                app.change_workbench(Change::Flyout(panel.clone(), false));
+                app.focus_panel(panel);
+            }
+            // The line on the centre's side, as a side panel's.
+            let x = if start { rect.right() } else { rect.left() };
+            if rest.border_width > 0.0 {
+                ui.painter().vline(
+                    x,
+                    rect.y_range(),
+                    ui.visuals().widgets.noninteractive.bg_stroke,
+                );
+            }
+            // Resized from that edge; the width is saved once let go.
+            let edge = Rect::from_x_y_ranges(x - reach..=x + reach, rect.y_range());
+            let r = ui.interact(edge, id.with("resize"), egui::Sense::drag());
+            if r.hovered() || r.dragged() {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+            }
+            if r.dragged() {
+                let dx = r.drag_delta().x;
+                let w = (width + if start { dx } else { -dx }).clamp(min, max);
+                ui.ctx().data_mut(|d| d.insert_temp(live_id, w));
+            }
+            if r.drag_stopped() {
+                ui.ctx().data_mut(|d| d.remove::<f32>(live_id));
+                app.change_workbench(Change::FlyoutSize(panel.clone(), width));
+            }
+        });
+    Some(rect)
 }
 
 /// A side area lying over the centre, open: next to its strip (`strip`),

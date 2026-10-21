@@ -1387,6 +1387,8 @@ egui-pop-workbench-detach = Détacher dans une fenêtre
 
 egui-pop-workbench-float = Faire flotter
 
+egui-pop-workbench-flyout-pin = Épingler { $panel }
+
 egui-pop-workbench-fold = Replier { $area }
 
 egui-pop-workbench-move-to = Déplacer vers { $area }

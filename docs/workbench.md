@@ -77,7 +77,8 @@ assert_eq!(h.layout().area_of(&TREE), Some(Area::EndSide));
 Each panel gets `<id>.focus` and `<id>.toggle` commands. The layout
 changes through the steps `workbench.move`, `workbench.show`,
 `workbench.hide`, `workbench.focus`, `workbench.fold`,
-`workbench.place` and `workbench.zen` (`egui_pop::api::workbench`). A tab dragged onto another area moves
+`workbench.place`, `workbench.flyout`, `workbench.flyout_size` and
+`workbench.zen` (`egui_pop::api::workbench`). A tab dragged onto another area moves
 there when its rules allow it; otherwise the drop hint says why. Over
 an area it may go to, the hint (the kit's `dock-preview`) carries a
 ghost of the dragged tab (the kit's `tab-preview`, with the tab's title
@@ -105,7 +106,63 @@ width (a terminal in it is not resized), and the area, unfolded, lies
 above the centre next to its strip, with the kit's `side-area` shadow
 (`shadow.side`). A click on the strip folds or unfolds it; its edge on
 the centre's side resizes it. The placement is saved with the layout
-(`over`), like folding; a plugin may veto the step.
+(`over`), like folding; a plugin may veto the step. The centre never
+folds: `workbench.fold` refuses it.
+
+### Strip icons and flyouts
+
+A side area's strip (folded, or lying over the centre) shows one icon
+per panel it holds, in tab order: the panel's `PanelSpec::icon`, a
+vector icon tinted by the kit's `activity-bar-item` and crisp at any
+scale, or its title's first letter when it has none. The strip widens
+to hold them. An icon's tooltip gives the panel's title and its key
+(the first binding of `<panel>.focus`, else of `<panel>.toggle`), and
+the icon is a button named by the title.
+
+On a folded area, a click on an icon opens that panel alone as a
+**flyout** over the centre, next to the strip, without moving the
+layout (`workbench.flyout`, `{ "panel", "open" }`;
+`AppHandle::open_flyout`). Escape or a click away closes it, the focus
+going back where it was: it is an overlay of the stack
+(`egui_pop::core::overlay::hold`), above which menus and dialogs open
+as usual. A click on another icon switches to that panel. A double
+click on the icon, or the pin button in the flyout's band, unfolds the
+area with the panel shown. The flyout's free edge resizes it; the
+width is kept per panel and saved with the layout (`flyouts`,
+`workbench.flyout_size`). Only a folded side area's panels fly out;
+unfolding the area closes the flyout. On an area lying over the
+centre, open, a click on an icon shows its panel there.
+
+A panel publishes an indicator through the status bar's model,
+speaking for it with `Indicator::panel`: while the panel is not shown
+(its area folded, or another tab in front), its icon carries the state
+as a micro-indicator: a count as a badge, else its errors or warnings,
+else a dot in its tone, and `detail` joins the icon's tooltip. Such an
+indicator is not a status bar item.
+
+```rust
+use egui_pop::api::strips::{Indicator, Tone};
+use egui_pop::model::ids::PanelId;
+
+const SEARCH: PanelId = PanelId::from_static("app.search");
+
+// Hits waiting in the search panel, on its icon while it is folded.
+let hits = Indicator::new("search.hits", "No hits", "search.")
+    .panel(&SEARCH)
+    .reduce(|state, event| {
+        let n = event.data["hits"].as_u64().unwrap_or(0);
+        state.count = Some(n);
+        state.text = format!("{n} hits");
+        state.tone = if n == 0 { Tone::Neutral } else { Tone::Accent };
+    });
+# let _ = hits;
+```
+
+Agents read the strips in the `workbench` collector (`strips`: each
+icon's area, panel, title, icon, key, whether its panel shows, and its
+indicator's state with `marked` when the icon shows it; `flyout`: the
+panel and its rect) or with `workbench::strip`; the mark itself is in
+the `indicators` collector as `strip:<indicator id>`.
 
 Plugins declare panels too: egui-pop's jobs centre (`egui_pop.jobs`)
 and devtools are panels like the application's.

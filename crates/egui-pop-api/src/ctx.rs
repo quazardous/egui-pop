@@ -541,7 +541,9 @@ impl<'a> Ctx<'a> {
     }
 
     /// Adds an indicator to the status bar, fed by the journal's events
-    /// (shown by `strips::StripsPlugin`).
+    /// (shown by `strips::StripsPlugin`), or, speaking for a panel
+    /// (`Indicator::panel`), to that panel's icon in a folded side
+    /// area's strip.
     /// Its `when` clause, when it has one, must parse: one that does not
     /// keeps the indicator hidden and is reported (`indicator-when`).
     pub fn indicator(&mut self, indicator: crate::strips::Indicator) -> &mut Self {

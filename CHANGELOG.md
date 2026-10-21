@@ -68,6 +68,23 @@ publishes.
   menu offers each format built in (the gallery's `graph-png` and
   `graph-pdf` features, on by default), for the whole graph and for the
   selection.
+- Strip icons and flyouts (egui-pop-api, `docs/workbench.md`): a side
+  area's strip shows one icon per panel in tab order, from
+  `PanelSpec::icon` (a vector icon tinted by the kit's
+  `activity-bar-item`) or the title's first letter, its tooltip giving
+  the title and the panel's key. On a folded area a click opens the
+  panel alone as a flyout over the centre without moving the layout
+  (`workbench.flyout`, `AppHandle::open_flyout`); Escape or a click away
+  closes it, a double click or its pin button unfolds the area with the
+  panel shown, and its free edge resizes it, the width kept per panel
+  and saved with the layout (`Layout::flyouts`,
+  `workbench.flyout_size`). A panel's indicator
+  (`strips::Indicator::panel`) shows on its icon as a badge or a dot
+  while the panel is not shown, instead of in the status bar. Agents
+  read the icons, their indicators and the flyout in the `workbench`
+  collector and `workbench::strip`. The centre never folds:
+  `workbench.fold` refuses it. Overlays drawn by their owner join the
+  stack's rules through `overlay::hold` (egui-pop-core).
 - Status items with alignment, priority, live states, popovers and
   hover cards (egui-pop-api): `strips::Indicator::align` puts an item
   at the bar's start (after the breadcrumb and the chips) or its end;

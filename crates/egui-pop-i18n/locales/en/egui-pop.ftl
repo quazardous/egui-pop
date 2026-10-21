@@ -1512,6 +1512,8 @@ egui-pop-workbench-detach = Detach into a window
 
 egui-pop-workbench-float = Float
 
+egui-pop-workbench-flyout-pin = Pin { $panel }
+
 egui-pop-workbench-fold = Fold { $area }
 
 egui-pop-workbench-move-to = Move to { $area }

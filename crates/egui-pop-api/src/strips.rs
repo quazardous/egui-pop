@@ -82,7 +82,7 @@ use egui_pop_core::theme::Tokens;
 use egui_pop_model::commands::{CommandSpec, Origin};
 use egui_pop_model::context::FrameSpec;
 use egui_pop_model::context::ROOT;
-use egui_pop_model::ids::{BlockId, CommandId, PluginId};
+use egui_pop_model::ids::{BlockId, CommandId, PanelId, PluginId};
 use egui_pop_model::keymap::BindOptions;
 use egui_pop_model::panels::Area;
 use egui_pop_model::when::{When, WhenContext};
@@ -424,7 +424,12 @@ fn describe(app: &AppHandle) -> Json {
 /// The indicators in the bar's order, from its end: the order chosen,
 /// then the others, lightest first.
 fn ordered(app: &AppHandle, choices: &Choices) -> Vec<(Indicator, IndicatorState)> {
-    let mut list = app.indicators();
+    // A panel's indicator shows on its strip icon, not in the bar.
+    let mut list: Vec<_> = app
+        .indicators()
+        .into_iter()
+        .filter(|(i, _)| i.panel.is_none())
+        .collect();
     let rank = |id: &str| {
         choices
             .order
@@ -507,6 +512,10 @@ pub struct Indicator {
     /// On a narrow bar, the items of higher priority stay longer; among
     /// equals, the lighter.
     pub priority: i32,
+    /// The panel it speaks for ([`Indicator::panel`]): shown on that
+    /// panel's icon in a folded side area's strip instead of in the
+    /// status bar.
+    pub panel: Option<PanelId>,
     pub(crate) popover: Option<PopoverFn>,
     pub(crate) hover: Option<HoverFn>,
     pub(crate) reduce: ReduceFn,
@@ -523,6 +532,7 @@ impl fmt::Debug for Indicator {
             .field("when", &self.when)
             .field("align", &self.align)
             .field("priority", &self.priority)
+            .field("panel", &self.panel)
             .field("popover", &self.popover.is_some())
             .field("hover", &self.hover.is_some())
             .finish_non_exhaustive()
@@ -542,6 +552,7 @@ impl Indicator {
             when: None,
             align: Alignment::End,
             priority: 0,
+            panel: None,
             popover: None,
             hover: None,
             reduce: Rc::new(|_, _| {}),
@@ -580,6 +591,18 @@ impl Indicator {
     /// default). Items that give way go into the bar's `…` menu.
     pub fn priority(mut self, priority: i32) -> Self {
         self.priority = priority;
+        self
+    }
+
+    /// Speaks for a panel, keyed by its id: while the panel is not
+    /// shown (its side area folded, or another tab in front), the
+    /// strip of its folded area shows the state on the panel's icon (a
+    /// count as a badge, else errors or warnings, else a dot in its
+    /// tone; `detail` joins the icon's tooltip). It is not a status bar
+    /// item; agents read it in `workbench::strip` and the `workbench`
+    /// collector.
+    pub fn panel(mut self, panel: &PanelId) -> Self {
+        self.panel = Some(panel.clone());
         self
     }
 

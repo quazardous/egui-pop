@@ -2075,6 +2075,20 @@ impl AppHandle {
         self.change_workbench(crate::workbench::Change::Fold(area, folded))
     }
 
+    /// Opens a folded side area's panel alone over the centre, as a
+    /// click on its strip icon does, or closes it (`workbench.flyout`;
+    /// refused for a panel not in a folded side area).
+    pub fn open_flyout(&self, panel: &PanelId, open: bool) -> Option<Outcome> {
+        self.change_workbench(crate::workbench::Change::Flyout(panel.clone(), open))
+    }
+
+    /// The panel shown as a flyout, and where it was drawn in the last
+    /// pass (none before it is drawn).
+    pub fn flyout(&self) -> Option<(PanelId, Option<egui::Rect>)> {
+        let wb = self.workbench_mut();
+        wb.flyout.clone().map(|p| (p, wb.flyout_rect))
+    }
+
     /// Lays a side area beside the centre or over it (`workbench.place`;
     /// refused for the centre and the bottom area).
     pub fn place_area(
@@ -3333,14 +3347,20 @@ impl App {
         b.register(
             FnCollector::new(
                 "workbench",
-                "The workbench: the layout (areas, folded, closed and detached panels), where each area was drawn (points), the focused panel, the tab being dragged and the drop hint (its rect, name and refusal).",
+                "The workbench: the layout (areas, folded, closed and detached panels, flyout widths), where each area was drawn (points), the focused panel, the side areas' strip icons (`strips`: each panel's title, icon, key, whether it shows, and its indicator with `marked` when the icon shows it), the flyout open (its panel and rect), the tab being dragged and the drop hint (its rect, name and refusal).",
             )
             .snapshot(move |_| {
                 let Ok(app) = up(&w) else { return Json::Null };
                 let layout = app.layout();
+                let strips = crate::workbench::strip(&app);
                 let wb = app.workbench_mut();
                 json!({
                     "layout": layout,
+                    "strips": strips,
+                    "flyout": wb.flyout.as_ref().map(|p| json!({
+                        "panel": p,
+                        "rect": wb.flyout_rect.map(|r| [r.min.x, r.min.y, r.max.x, r.max.y]),
+                    })),
                     "rects": wb.rects.iter().map(|(a, r)| (
                         crate::workbench::area_name(*a),
                         [r.min.x, r.min.y, r.max.x, r.max.y],

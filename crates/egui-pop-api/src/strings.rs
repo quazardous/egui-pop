@@ -349,6 +349,10 @@ pub const WORKBENCH_CLOSE_PANEL: StrKey =
 pub const WORKBENCH_FLOAT: StrKey = StrKey::new("egui-pop-workbench-float", "Float");
 pub const WORKBENCH_UNFOLD: StrKey = StrKey::new("egui-pop-workbench-unfold", "Unfold { $area }");
 pub const WORKBENCH_FOLD: StrKey = StrKey::new("egui-pop-workbench-fold", "Fold { $area }");
+/// The button of a flyout (a folded area's panel shown over the centre)
+/// unfolding its area with the panel shown.
+pub const WORKBENCH_FLYOUT_PIN: StrKey =
+    StrKey::new("egui-pop-workbench-flyout-pin", "Pin { $panel }");
 
 // Palettes.
 
@@ -1021,6 +1025,7 @@ pub const ALL: &[StrKey] = &[
     WORKBENCH_FLOAT,
     WORKBENCH_UNFOLD,
     WORKBENCH_FOLD,
+    WORKBENCH_FLYOUT_PIN,
     PALETTE_CLOSE,
     PALETTE_ROLL_UP,
     PALETTE_ROLL_DOWN,
