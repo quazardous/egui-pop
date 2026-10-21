@@ -392,6 +392,11 @@ const CORE: &[Required] = &[
         "how close a palette snaps to an edge or another palette",
     ),
     comp(
+        "palette.group.gap",
+        "dimension",
+        "the room between the palettes stacked in a group",
+    ),
+    comp(
         "viewport.background",
         "color",
         "around the image in a viewport",

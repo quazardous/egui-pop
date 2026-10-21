@@ -541,6 +541,17 @@ publishes.
   the edges, or snapped to another palette, is still only kept inside.
   Layouts saved before load unanchored. `palettes::anchor_of` and
   `palettes::anchored_pos` compute it.
+- Palettes stack into groups (egui-pop-api, egui-pop-tokens): a palette
+  dropped on another one's top or bottom edge (with the tabs' drop
+  hint, `palettes::group_hint`) stacks above or below it, each member
+  keeping its own band and roll-up. The group's band moves, pins and
+  anchors the group as one, and docks every member on a side bar or
+  the bottom panel as tabs (`palette.dock` with `group: true`); floating
+  one of them again gives the group back. A member's own band drags it
+  out of its group. New steps `palette.group` and `palette.ungroup`
+  (journal: `palette.grouped`, `palette.ungrouped`), the
+  `palette.group.gap` token, and a button on the gallery's palettes
+  page stacking two of them.
 
 ### Changed
 

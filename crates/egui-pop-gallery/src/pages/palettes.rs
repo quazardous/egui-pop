@@ -1,7 +1,7 @@
 //! The palettes page: a toolbox, a colour palette and a navigator
 //! floating over a canvas, opened by buttons (closed elsewhere in the
 //! gallery), each draggable by its band, dockable on an area, rolled up,
-//! pinned, hidden and shown by Tab.
+//! pinned, hidden and shown by Tab, stacked into a group.
 
 use egui::{Color32, Sense, Ui, pos2, vec2};
 use egui_pop::api::palettes;
@@ -10,6 +10,7 @@ use egui_pop::api::workbench::Change;
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
 use egui_pop::core::widgets;
 use egui_pop::model::ids::{PanelId, PluginId, StoryId};
+use egui_pop::model::layout::Join;
 use egui_pop::model::panels::{Area, PanelSpec};
 use egui_pop::theme::Tokens;
 
@@ -77,7 +78,7 @@ impl Plugin for PalettesPage {
         )?;
         ctx.story(
             Story::new(StoryId::from_static("palettes"), "Palettes", show)
-                .description("Toolboxes and palettes floating over the canvas, never modal: dragged by their band, snapped, docked on an area, rolled up, pinned, hidden by Tab.")
+                .description("Toolboxes and palettes floating over the canvas, never modal: dragged by their band, snapped, docked on an area, rolled up, pinned, hidden by Tab, stacked into groups.")
                 .group("Framework", 104),
         )?;
         Ok(())
@@ -96,6 +97,12 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                 app.set_panel_visible(&p, true);
                 app.change_workbench(Change::MovePalette(p, pos));
             }
+        }
+        if ui.button("Stack the colours under the toolbox").clicked() {
+            for p in [TOOLBOX, SWATCHES] {
+                app.set_panel_visible(&p, true);
+            }
+            app.change_workbench(Change::Group(vec![SWATCHES], TOOLBOX, Join::Below));
         }
         if ui.button("Close them").clicked() {
             for p in [TOOLBOX, SWATCHES, NAVIGATOR] {
@@ -116,7 +123,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     {
         palettes::set_stroke(app, fade);
     }
-    ui.weak("Drag a palette by its band; drop it on a side bar or the bottom panel to dock it, float it again from its tab menu. Tab hides and shows them while no field has the keyboard.");
+    ui.weak("Drag a palette by its band; drop it on a side bar or the bottom panel to dock it, float it again from its tab menu. Drop it on another palette's top or bottom edge to stack them: the group's band moves them all, a member's band takes it out. Tab hides and shows them while no field has the keyboard.");
     section(ui, "Canvas");
     canvas(ui, app);
 }

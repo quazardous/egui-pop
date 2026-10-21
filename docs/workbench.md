@@ -238,6 +238,22 @@ assert!(app.handle().layout().floating_of(&TOOLS).is_some());
   The anchor is saved with the layout (layouts saved before it load
   unanchored); `palettes::anchor_of` and `palettes::anchored_pos`
   compute it.
+- **Groups.** Palettes float in groups (`Layout::floating` holds
+  `FloatingGroup`s; a palette alone is a group of one). A palette
+  dropped on another one's top or bottom quarter (`palettes::join_at`,
+  with the drop hint the tabs use) stacks above or below it: a column
+  where each member keeps its own band, its own roll-up (a column of
+  rolled-up toolboxes) and its Close. The group's band, over its
+  members', lists their titles: it drags the group as one unit, pins
+  it and anchors it as a single palette. Dropped on a side bar or the
+  bottom panel, it docks every member there, as tabs; floating one of
+  them again (Float) gives the whole group back, from the members still
+  docked beside it (`Layout::docked_groups`). A member's own band drags
+  it out of its group (dropped back over its group, it stays), or onto
+  another palette's edge into that group. The `palette.group.gap`
+  token is the room between stacked members. A group is saved as the
+  floating panel it was before groups, its other members under `group`:
+  an application that predates groups floats them apart.
 - **Tab** (`palettes.toggle`, rebindable) hides and shows the unpinned
   palettes. It is the toggle only while some panel floats, no widget
   has the keyboard and no overlay is open; otherwise Tab moves the
@@ -250,10 +266,13 @@ assert!(app.handle().layout().floating_of(&TOOLS).is_some());
   rolled down and shown.
 - **Steps** (ADR 0011): `palette.open`, `palette.float`, `palette.dock`,
   `palette.move` (once a drag is dropped: a veto puts the palette back,
-  a redirect places it elsewhere), `palette.roll`, `palette.pin`; once
-  done, the journal says `palette.opened`, `palette.floated`,
-  `palette.docked`, `palette.moved`, `palette.rolled` or
-  `palette.pinned`.
+  a redirect places it elsewhere), `palette.roll`, `palette.pin`,
+  `palette.group` (`{panels, into, at}`, `at` being `above`, `below` or
+  `tab`) and `palette.ungroup` (`{panel, pos}`); a group docks whole
+  through `palette.dock` with `group: true`. Once done, the journal says
+  `palette.opened`, `palette.floated`, `palette.docked`,
+  `palette.moved`, `palette.rolled`, `palette.pinned`,
+  `palette.grouped` or `palette.ungrouped`.
 
 Not built yet: a palette outside the main window, as a native utility
 window. egui's viewports have no owner window (only "always on top" of

@@ -493,6 +493,11 @@ palette:
   magnet:
     $type: "dimension"
     $value: "{size.magnet}"
+  group:
+    $description: "Palettes stacked in a group."
+    gap:
+      $type: "dimension"
+      $value: "{space.s}"
 viewport:
   $description: "The image viewport."
   $type: "color"

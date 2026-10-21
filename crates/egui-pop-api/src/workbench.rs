@@ -66,7 +66,7 @@ use egui_pop_core::kit::{
 use egui_pop_core::state::Slot;
 use egui_pop_core::strings;
 use egui_pop_model::ids::{PanelId, StepId, ZoneId};
-use egui_pop_model::layout::{FloatingGroup, Layout, Node, Placement};
+use egui_pop_model::layout::{FloatingGroup, Join, Layout, Node, Placement};
 use egui_pop_model::panels::{Area, PanelSpec, Panels, Place};
 use serde_json::{Value as Json, json};
 
@@ -305,8 +305,16 @@ pub enum Change {
     /// A panel floats over the interface, its top-left at a place (in
     /// points from the workbench's top-left).
     Float(PanelId, [f32; 2]),
-    /// A floating panel docks in an area.
+    /// A floating panel docks in an area (taken out of its group).
     Dock(PanelId, Area),
+    /// Every member of a floating panel's group docks in an area, as
+    /// tabs.
+    DockGroup(PanelId, Area),
+    /// Floating panels join the group of another one: above it, below
+    /// it, or as tabs.
+    Group(Vec<PanelId>, PanelId, Join),
+    /// A floating panel comes out of its group, alone at a place.
+    Ungroup(PanelId, [f32; 2]),
     /// A floating panel moves.
     MovePalette(PanelId, [f32; 2]),
     /// A floating panel rolls up to its header band (`true`) or down.
@@ -356,6 +364,18 @@ impl Change {
                 crate::palettes::STEP_DOCK,
                 json!({ "panel": p, "area": area_name(*a) }),
             ),
+            Change::DockGroup(p, a) => (
+                crate::palettes::STEP_DOCK,
+                json!({ "panel": p, "area": area_name(*a), "group": true }),
+            ),
+            Change::Group(panels, into, at) => (
+                crate::palettes::STEP_GROUP,
+                json!({ "panels": panels, "into": into, "at": at.as_str() }),
+            ),
+            Change::Ungroup(p, pos) => (
+                crate::palettes::STEP_UNGROUP,
+                json!({ "panel": p, "pos": pos }),
+            ),
             Change::MovePalette(p, pos) => (
                 crate::palettes::STEP_MOVE,
                 json!({ "panel": p, "pos": pos }),
@@ -377,7 +397,9 @@ impl Change {
         Some(match self {
             Change::OpenPalette(_) => "palette.opened",
             Change::Float(..) => "palette.floated",
-            Change::Dock(..) => "palette.docked",
+            Change::Dock(..) | Change::DockGroup(..) => "palette.docked",
+            Change::Group(..) => "palette.grouped",
+            Change::Ungroup(..) => "palette.ungrouped",
             Change::MovePalette(..) => "palette.moved",
             Change::Roll(..) => "palette.rolled",
             Change::Pin(..) => "palette.pinned",
@@ -415,6 +437,27 @@ impl Change {
                 .ok_or_else(|| format!("no placement `{name}` (`beside` or `over`)"))?;
             return Ok(Change::Place(area, placement));
         }
+        if *step == crate::palettes::STEP_GROUP {
+            let panels = args
+                .get("panels")
+                .and_then(Json::as_array)
+                .ok_or("`panels` is missing")?
+                .iter()
+                .map(|p| {
+                    let p = p.as_str().ok_or("`panels` holds panel ids")?;
+                    PanelId::new(p).map_err(|e| e.to_string())
+                })
+                .collect::<Result<Vec<_>, String>>()?;
+            let into = args
+                .get("into")
+                .and_then(Json::as_str)
+                .ok_or("`into` is missing")?;
+            let into = PanelId::new(into).map_err(|e| e.to_string())?;
+            let name = args.get("at").and_then(Json::as_str).unwrap_or("below");
+            let at = Join::parse(name)
+                .ok_or_else(|| format!("no place `{name}` (`above`, `below` or `tab`)"))?;
+            return Ok(Change::Group(panels, into, at));
+        }
         let panel = args
             .get("panel")
             .and_then(Json::as_str)
@@ -425,6 +468,7 @@ impl Change {
             "palette.open" => Change::OpenPalette(panel),
             "palette.float" => Change::Float(panel, pos_of(args)?),
             "palette.move" => Change::MovePalette(panel, pos_of(args)?),
+            "palette.ungroup" => Change::Ungroup(panel, pos_of(args)?),
             "palette.roll" => Change::Roll(panel, flag("rolled")),
             "palette.pin" => Change::Pin(panel, flag("pinned")),
             "workbench.move" | "palette.dock" => {
@@ -434,7 +478,11 @@ impl Change {
                     .ok_or("`area` is missing")?;
                 let area = area_from(name).ok_or_else(|| format!("no area `{name}`"))?;
                 if step.as_str() == "palette.dock" {
-                    Change::Dock(panel, area)
+                    if args.get("group").and_then(Json::as_bool) == Some(true) {
+                        Change::DockGroup(panel, area)
+                    } else {
+                        Change::Dock(panel, area)
+                    }
                 } else {
                     Change::Move(panel, area)
                 }
@@ -477,11 +525,16 @@ pub(crate) struct Workbench {
     /// The application's named layouts (`Ctx::arrangement`): owner,
     /// name, layout.
     pub templates: Vec<(egui_pop_model::ids::OwnerId, String, Layout)>,
-    /// A palette being dragged: its panel, its place when the drag
-    /// started, the pointer.
-    pub palette_drag: Option<(PanelId, [f32; 2], Pos2)>,
-    /// Where each floating panel was drawn last frame.
+    /// A palette's band being dragged.
+    pub palette_drag: Option<crate::palettes::PaletteDrag>,
+    /// Where each floating panel's group was drawn last frame.
     pub palette_rects: BTreeMap<PanelId, Rect>,
+    /// Where each floating panel was drawn last frame, itself (in a
+    /// group, its band and content).
+    pub member_rects: BTreeMap<PanelId, Rect>,
+    /// Where the dragged palettes would join a group, while dragged over
+    /// another palette.
+    pub group_hint: Option<crate::palettes::GroupHint>,
     /// Zen mode: only the centre is drawn. Not part of the layout, so
     /// never saved.
     pub zen: bool,
@@ -505,6 +558,8 @@ impl Default for Workbench {
             templates: Vec::new(),
             palette_drag: None,
             palette_rects: BTreeMap::new(),
+            member_rects: BTreeMap::new(),
+            group_hint: None,
             zen: false,
         }
     }
@@ -607,11 +662,14 @@ impl Workbench {
     /// Anchors a floating panel to the workbench edges its new place lies
     /// on (`palettes::anchor_of`), or to none: dropped against an edge,
     /// it sticks to it; dropped away, it no longer does.
-    fn anchor_palette(&mut self, p: &PanelId) {
-        let size = self
-            .palette_rects
-            .get(p)
-            .map_or(egui::Vec2::ZERO, |r| r.size());
+    /// `alone`: it just came out of its group, its size is its own.
+    fn anchor_palette(&mut self, p: &PanelId, alone: bool) {
+        let rects = if alone {
+            &self.member_rects
+        } else {
+            &self.palette_rects
+        };
+        let size = rects.get(p).map_or(egui::Vec2::ZERO, |r| r.size());
         let content = self.content;
         if let Some(f) = self.layout.floating_mut(p) {
             f.anchor = if content.is_positive() {
@@ -724,7 +782,30 @@ impl Workbench {
                     return Err(why);
                 }
                 self.layout.float(p, *pos);
-                self.anchor_palette(p);
+                self.anchor_palette(p, false);
+                json!({ "panel": p, "pos": pos })
+            }
+            Change::DockGroup(p, area) => {
+                let panels: Vec<PanelId> = match self.layout.floating_of(p) {
+                    Some(g) => g.panels().cloned().collect(),
+                    None => vec![p.clone()],
+                };
+                let host = crate::mounts::panel_host(Place::Area(*area));
+                for q in &panels {
+                    if let Some(why) = spec_of(q)?.refuses(&host) {
+                        return Err(why);
+                    }
+                }
+                let docked = self.layout.dock_group(p, *area);
+                json!({ "panel": p, "area": area_name(*area), "panels": docked })
+            }
+            Change::Group(panels, into, at) => {
+                self.layout.group(panels, into, *at)?;
+                json!({ "panels": panels, "into": into, "at": at.as_str() })
+            }
+            Change::Ungroup(p, pos) => {
+                self.layout.ungroup(p, *pos)?;
+                self.anchor_palette(p, true);
                 json!({ "panel": p, "pos": pos })
             }
             Change::MovePalette(p, pos) => {
@@ -733,7 +814,7 @@ impl Workbench {
                     .floating_mut(p)
                     .ok_or_else(|| format!("`{p}` does not float"))?;
                 f.pos = *pos;
-                self.anchor_palette(p);
+                self.anchor_palette(p, false);
                 json!({ "panel": p, "pos": pos })
             }
             Change::Roll(p, on) => {
@@ -1881,9 +1962,9 @@ fn drop_hint(app: &AppHandle, ctx: &egui::Context) {
     // A tab over another area, or a palette over an area it docks in.
     let target = if let Some((panel, from, at)) = wb.dragging.clone() {
         wb.area_at(at).filter(|a| *a != from).map(|to| (panel, to))
-    } else if let Some((panel, _, at)) = wb.palette_drag.clone() {
+    } else if let Some(d) = wb.palette_drag.clone().filter(|_| wb.group_hint.is_none()) {
         let edge = crate::palettes::magnet(ctx);
-        wb.dock_at(at, edge).map(|to| (panel, to))
+        wb.dock_at(d.at, edge).map(|to| (d.panel, to))
     } else {
         None
     };

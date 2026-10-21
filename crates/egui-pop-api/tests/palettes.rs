@@ -6,12 +6,12 @@
 use egui::accesskit::Role;
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
-use egui_pop_api::palettes::{self, CMD_RESET, STEP_DOCK, STEP_MOVE};
-use egui_pop_api::steps::Before;
+use egui_pop_api::palettes::{self, CMD_RESET, STEP_DOCK, STEP_GROUP, STEP_MOVE, STEP_UNGROUP};
+use egui_pop_api::steps::{Before, Outcome};
 use egui_pop_api::workbench::Change;
 use egui_pop_api::{App, Ctx, Plugin, PluginError};
 use egui_pop_model::ids::{PanelId, PluginId};
-use egui_pop_model::layout::{AnchorEdge, FloatingGroup};
+use egui_pop_model::layout::{AnchorEdge, FloatingGroup, Join};
 use egui_pop_model::panels::{Area, PanelSpec};
 use serde_json::{Value as Json, json};
 
@@ -56,6 +56,12 @@ impl Plugin for Demo {
         )?;
         if self.hooks {
             ctx.before(STEP_DOCK, |_, _| Before::Veto("palettes float here".into()));
+            ctx.before(STEP_GROUP, |_, _| {
+                Before::Veto("palettes stay apart".into())
+            });
+            ctx.before(STEP_UNGROUP, |_, _| {
+                Before::Veto("groups stay whole".into())
+            });
             ctx.before(STEP_MOVE, |_, args| {
                 let mut a = args.clone();
                 a["pos"] = json!([100.0, 100.0]);
@@ -319,4 +325,247 @@ fn a_palette_dropped_on_the_end_edge_follows_it_when_the_window_grows() {
     h.set_size(egui::vec2(1100.0, 600.0));
     h.run();
     assert_eq!(floating(&h, &TOOLS).unwrap().pos[0], x, "stays put");
+}
+
+fn members(h: &Harness<'_, App>, p: &PanelId) -> Vec<PanelId> {
+    floating(h, p).map_or_else(Vec::new, |g| g.panels().cloned().collect())
+}
+
+/// Opens the navigator floating at `pos`, apart from the tools.
+fn open_nav(h: &mut Harness<'static, App>, pos: [f32; 2]) {
+    h.state().handle().set_panel_visible(&NAV, true);
+    h.state()
+        .handle()
+        .change_workbench(Change::MovePalette(NAV, pos));
+    h.run();
+    h.run();
+}
+
+/// The navigator stacked under the tools, through the step.
+fn stacked(h: &mut Harness<'static, App>) {
+    open_nav(h, [400.0, 100.0]);
+    h.state()
+        .handle()
+        .change_workbench(Change::Group(vec![NAV], TOOLS, Join::Below));
+    h.run();
+    h.run();
+    assert_eq!(members(h, &TOOLS), [TOOLS, NAV]);
+}
+
+/// Drags from a point to another, in four moves, checking the group hint
+/// before the drop with `check`.
+fn drag_to(
+    h: &mut Harness<'static, App>,
+    from: egui::Pos2,
+    to: egui::Pos2,
+    check: impl FnOnce(&Harness<'static, App>),
+) {
+    h.drag_at(from);
+    h.run();
+    for i in 1..=4 {
+        h.hover_at(from + (to - from) * (i as f32 / 4.0));
+        h.run();
+    }
+    check(h);
+    h.drop_at(to);
+    h.run();
+    h.run();
+}
+
+#[test]
+fn a_palette_dropped_on_another_ones_bottom_edge_stacks_and_the_group_moves_as_one() {
+    let mut h = harness(false);
+    open_nav(&mut h, [400.0, 100.0]);
+    // Near the tools' bottom edge: the bottom of their text field.
+    let field = h.get_by_role(Role::TextInput).rect();
+    let to = egui::pos2(field.center().x, field.bottom() - 2.0);
+    let from = h.get_by_label("Navigator").rect().center();
+    let before = h.state().handle().last_event();
+    drag_to(&mut h, from, to, |h| {
+        let hint = palettes::group_hint(h.state().handle()).expect("a group hint");
+        assert_eq!((hint.into.clone(), hint.at), (TOOLS, Join::Below));
+        assert_eq!(hint.panels, [NAV]);
+    });
+    assert!(palettes::group_hint(h.state().handle()).is_none());
+    assert_eq!(members(&h, &TOOLS), [TOOLS, NAV]);
+    let names = events(&h, before);
+    assert!(names.contains(&"palette.group".to_string()), "{names:?}");
+    assert!(names.contains(&"palette.grouped".to_string()), "{names:?}");
+    // Both drawn, one under the other, each with its own band.
+    let tools = h.get_by_label("Tools").rect();
+    let nav = h.get_by_label("Navigator").rect();
+    assert!(nav.top() > tools.bottom(), "{tools:?} {nav:?}");
+    assert!(h.query_by_label("Brush").is_some());
+    assert!(h.query_by_label("Overview").is_some());
+    // The group's band drags both.
+    let start = floating(&h, &TOOLS).unwrap().pos;
+    let band = h.get_by_label("Tools · Navigator").rect().center();
+    drag_by(&mut h, band, egui::vec2(150.0, 100.0));
+    let g = floating(&h, &NAV).unwrap();
+    assert_eq!(members(&h, &TOOLS), [TOOLS, NAV], "still one group");
+    assert!(
+        g.pos[0] > start[0] + 100.0 && g.pos[1] > start[1] + 60.0,
+        "{start:?} {g:?}"
+    );
+    let moved = h.get_by_label("Navigator").rect();
+    assert!((moved.left() - nav.left() - (g.pos[0] - start[0])).abs() < 0.5);
+}
+
+#[test]
+fn a_palette_dropped_on_another_ones_top_edge_stacks_above_it() {
+    let mut h = harness(false);
+    open_nav(&mut h, [400.0, 100.0]);
+    let title = h.get_by_label("Tools").rect();
+    let to = egui::pos2(title.center().x, title.top() + 2.0);
+    let from = h.get_by_label("Navigator").rect().center();
+    drag_to(&mut h, from, to, |h| {
+        let hint = palettes::group_hint(h.state().handle()).expect("a group hint");
+        assert_eq!(hint.at, Join::Above);
+    });
+    assert_eq!(members(&h, &TOOLS), [NAV, TOOLS]);
+}
+
+#[test]
+fn a_member_dragged_out_of_its_group_floats_alone_and_each_rolls_up_on_its_own() {
+    let mut h = harness(false);
+    stacked(&mut h);
+    // Rolled up, the navigator alone: the tools stay open.
+    h.get_by_role_and_label(Role::Button, "Roll up Navigator")
+        .click();
+    h.run();
+    h.run();
+    let g = floating(&h, &TOOLS).unwrap();
+    assert!(g.rolled(&NAV) && !g.rolled(&TOOLS));
+    assert!(h.query_by_label("Overview").is_none());
+    assert!(h.query_by_label("Brush").is_some());
+    // Its own band drags it out, where it is dropped.
+    let before = h.state().handle().last_event();
+    let from = h.get_by_label("Navigator").rect().center();
+    drag_by(&mut h, from, egui::vec2(350.0, 250.0));
+    let names = events(&h, before);
+    assert!(
+        names.contains(&"palette.ungrouped".to_string()),
+        "{names:?}"
+    );
+    assert_eq!(members(&h, &TOOLS), [TOOLS]);
+    let nav = floating(&h, &NAV).unwrap();
+    assert!(nav.is_lone() && nav.rolled(&NAV), "{nav:?}");
+    assert!(nav.pos[0] > 300.0, "{nav:?}");
+    // Dropped back over its own group, a member stays in it.
+    stacked_again(&mut h);
+    let from = h.get_by_label("Navigator").rect().center();
+    drag_by(&mut h, from, egui::vec2(0.0, -6.0));
+    assert_eq!(members(&h, &TOOLS), [TOOLS, NAV]);
+}
+
+fn stacked_again(h: &mut Harness<'static, App>) {
+    h.state()
+        .handle()
+        .change_workbench(Change::Group(vec![NAV], TOOLS, Join::Below));
+    h.run();
+    h.run();
+}
+
+#[test]
+fn hooks_veto_grouping_and_ungrouping() {
+    let mut h = harness(true);
+    open_nav(&mut h, [400.0, 100.0]);
+    let out = h
+        .state()
+        .handle()
+        .change_workbench(Change::Group(vec![NAV], TOOLS, Join::Below));
+    assert!(matches!(out, Some(Outcome::Vetoed { .. })), "{out:?}");
+    assert_eq!(members(&h, &TOOLS), [TOOLS], "vetoed: apart still");
+    // Dragged on the tools' edge: vetoed, the navigator stays where it was.
+    let field = h.get_by_role(Role::TextInput).rect();
+    let from = h.get_by_label("Navigator").rect().center();
+    let before = h.state().handle().last_event();
+    drag_to(
+        &mut h,
+        from,
+        egui::pos2(field.center().x, field.bottom() - 2.0),
+        |_| {},
+    );
+    assert_eq!(members(&h, &TOOLS), [TOOLS]);
+    assert_eq!(floating(&h, &NAV).unwrap().pos, [400.0, 100.0]);
+    let names = events(&h, before);
+    assert!(!names.contains(&"palette.grouped".to_string()), "{names:?}");
+    // Grouped through the layout, the way out is vetoed too, by a step
+    // or by a drag.
+    let mut layout = h.state().handle().layout();
+    layout.group(&[NAV], &TOOLS, Join::Below).unwrap();
+    h.state().handle().set_layout(layout);
+    h.run();
+    h.run();
+    assert_eq!(members(&h, &TOOLS), [TOOLS, NAV]);
+    let out = h
+        .state()
+        .handle()
+        .change_workbench(Change::Ungroup(NAV, [10.0, 10.0]));
+    assert!(matches!(out, Some(Outcome::Vetoed { .. })), "{out:?}");
+    let from = h.get_by_label("Navigator").rect().center();
+    drag_by(&mut h, from, egui::vec2(350.0, 250.0));
+    assert_eq!(members(&h, &TOOLS), [TOOLS, NAV], "still grouped");
+    // Without hooks, the step takes it out.
+    let mut h = harness(false);
+    stacked(&mut h);
+    let out = h
+        .state()
+        .handle()
+        .change_workbench(Change::Ungroup(NAV, [10.0, 10.0]));
+    assert!(matches!(out, Some(Outcome::Done(Ok(_)))), "{out:?}");
+    assert!(floating(&h, &NAV).unwrap().is_lone());
+}
+
+#[test]
+fn a_group_dropped_on_the_end_edge_keeps_its_anchor_when_the_window_grows() {
+    let mut h = harness(false);
+    stacked(&mut h);
+    let band = h.get_by_label("Tools · Navigator").rect().center();
+    drag_by(&mut h, band, egui::vec2(2000.0, 0.0));
+    let g = floating(&h, &TOOLS).unwrap();
+    assert_eq!(g.anchor.x, AnchorEdge::End, "{g:?}");
+    assert_eq!(members(&h, &TOOLS), [TOOLS, NAV]);
+    let close = |h: &Harness<'_, App>| {
+        h.get_by_role_and_label(Role::Button, "Close Navigator")
+            .rect()
+            .max
+    };
+    let before = close(&h);
+    let gap = 900.0 - before.x;
+    h.set_size(egui::vec2(1100.0, 700.0));
+    h.run();
+    h.run();
+    let after = close(&h);
+    assert!((1100.0 - after.x - gap).abs() < 0.5, "{before:?} {after:?}");
+    assert!((after.y - before.y).abs() < 0.5, "{before:?} {after:?}");
+}
+
+#[test]
+fn a_group_docks_whole_as_tabs_and_floats_back_as_a_group() {
+    let mut h = harness(false);
+    stacked(&mut h);
+    let before = h.state().handle().last_event();
+    let band = h.get_by_label("Tools · Navigator").rect().center();
+    let target = h.get_by_label("log body").rect().center();
+    drag_by(&mut h, band, target - band);
+    let layout = h.state().handle().layout();
+    assert!(layout.floating.is_empty(), "{:?}", layout.floating);
+    assert_eq!(layout.area_of(&TOOLS), Some(Area::Bottom));
+    assert_eq!(layout.area_of(&NAV), Some(Area::Bottom));
+    let names = events(&h, before);
+    assert_eq!(
+        names.iter().filter(|n| *n == "palette.docked").count(),
+        1,
+        "one step for the group: {names:?}"
+    );
+    // Floating one of them gives the group back.
+    h.state()
+        .handle()
+        .change_workbench(Change::Float(NAV, [200.0, 150.0]));
+    h.run();
+    h.run();
+    assert_eq!(members(&h, &NAV), [TOOLS, NAV]);
+    assert_eq!(floating(&h, &NAV).unwrap().pos, [200.0, 150.0]);
+    assert!(h.query_by_label("Tools · Navigator").is_some());
 }

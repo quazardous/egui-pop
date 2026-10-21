@@ -29,14 +29,25 @@
 //! the pointer is elsewhere. `palettes.reset` puts them back where they
 //! open first, rolled down.
 //!
+//! **Groups.** Palettes float in groups ([`FloatingGroup`]), a palette
+//! alone being a group of one. A palette dropped on another one's top or
+//! bottom quarter ([`join_at`], with the drop hint the tabs use) stacks
+//! above or below it, in a column where each keeps its own band and
+//! roll-up. The group's band (over its members') drags, pins and anchors
+//! the whole group, and docks every member over an area, as tabs
+//! (floating one of them again gives the group back); a member's own
+//! band drags it out of the group.
+//!
 //! **Steps** (ADR 0011): `palette.open` (`{panel}`), `palette.float`
-//! (`{panel, pos}`), `palette.dock` (`{panel, area}`), `palette.move`
-//! (`{panel, pos}`, once a drag is dropped), `palette.roll`
-//! (`{panel, rolled}`) and `palette.pin` (`{panel, pinned}`); `pos` is
-//! the top-left corner in points from the workbench's top-left. Each
-//! done change is published as `palette.opened`, `palette.floated`,
-//! `palette.docked`, `palette.moved`, `palette.rolled` or
-//! `palette.pinned`.
+//! (`{panel, pos}`), `palette.dock` (`{panel, area}`, `group: true` for
+//! the whole group), `palette.move` (`{panel, pos}`, once a drag is
+//! dropped), `palette.roll` (`{panel, rolled}`), `palette.pin`
+//! (`{panel, pinned}`), `palette.group` (`{panels, into, at}`) and
+//! `palette.ungroup` (`{panel, pos}`); `pos` is the top-left corner in
+//! points from the workbench's top-left. Each done change is published
+//! as `palette.opened`, `palette.floated`, `palette.docked`,
+//! `palette.moved`, `palette.rolled`, `palette.pinned`,
+//! `palette.grouped` or `palette.ungrouped`.
 //!
 //! Not built yet: a palette outside the main window (a native utility
 //! window through egui's viewports).
@@ -48,14 +59,14 @@ use std::collections::BTreeMap;
 use egui::{Id, Key, Modifiers, Pos2, Rect, Ui, Vec2};
 use egui_pop_core::band::{self, BandStyle};
 use egui_pop_core::icon::Icon;
-use egui_pop_core::kit::{Glyph, Kit, State};
+use egui_pop_core::kit::{Glyph, Kit, KitCx, Part, State};
 use egui_pop_core::lock;
 use egui_pop_core::strings;
 use egui_pop_core::theme::Tokens;
 use egui_pop_model::commands::CommandSpec;
 use egui_pop_model::ids::{CommandId, PanelId, SettingId, StepId};
 use egui_pop_model::keymap::BindOptions;
-use egui_pop_model::layout::{Anchor, AnchorEdge, FloatingGroup};
+use egui_pop_model::layout::{Anchor, AnchorEdge, FloatingGroup, Join, Member};
 use egui_pop_model::values::Descriptor;
 use serde_json::{Value as Json, json};
 
@@ -78,6 +89,11 @@ pub const STEP_MOVE: StepId = StepId::from_static("palette.move");
 pub const STEP_ROLL: StepId = StepId::from_static("palette.roll");
 /// A floating panel is pinned or unpinned (`{panel, pinned}`).
 pub const STEP_PIN: StepId = StepId::from_static("palette.pin");
+/// Floating panels join another one's group (`{panels, into, at}`, `at`
+/// being `above`, `below` or `tab`).
+pub const STEP_GROUP: StepId = StepId::from_static("palette.group");
+/// A floating panel comes out of its group, alone (`{panel, pos}`).
+pub const STEP_UNGROUP: StepId = StepId::from_static("palette.ungroup");
 
 /// Hides or shows the unpinned palettes (Tab).
 pub const CMD_TOGGLE: CommandId = CommandId::from_static("palettes.toggle");
@@ -142,8 +158,18 @@ pub(crate) fn declare(ctx: &mut Ctx<'_>) -> Result<(), CtxError> {
         ),
         (
             STEP_DOCK,
-            "A floating panel docks in an area (`panel`, `area`).",
+            "A floating panel docks in an area (`panel`, `area`); with `group`, every member of its group does, as tabs.",
             json!({ "panel": "app.tools", "area": "start_side" }),
+        ),
+        (
+            STEP_GROUP,
+            "Floating panels join another one's group, above it, below it or as a tab (`panels`, `into`, `at`).",
+            json!({ "panels": ["app.colours"], "into": "app.tools", "at": "below" }),
+        ),
+        (
+            STEP_UNGROUP,
+            "A floating panel comes out of its group, alone at a place (`panel`, `pos`).",
+            json!({ "panel": "app.colours", "pos": [16.0, 300.0] }),
         ),
         (
             STEP_MOVE,
@@ -377,33 +403,129 @@ pub fn area_id(panel: &PanelId) -> Id {
     Id::new(("egui_pop.palette", panel.as_str()))
 }
 
-/// One floating palette as drawn: its panel, and its group's place.
-struct Palette {
-    panel: PanelId,
-    rolled: bool,
-    pinned: bool,
-    pos: [f32; 2],
-    anchor: Anchor,
+/// A palette's band being dragged.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct PaletteDrag {
+    /// The palette whose band is dragged: its group's first member when
+    /// the group's band is.
+    pub panel: PanelId,
+    /// The group's band (the whole group moves), or a member's own band
+    /// (it comes out of its group).
+    pub whole: bool,
+    /// Where the dragged palettes were when the drag started, from the
+    /// workbench's top-left.
+    pub start: [f32; 2],
+    /// Where they are now (snapped, kept inside).
+    pub pos: [f32; 2],
+    /// The pointer.
+    pub at: Pos2,
+}
+
+/// Where dropping the dragged palettes would group them, while they are
+/// dragged over another palette: what [`group_hint`] reports.
+#[derive(Clone, Debug, PartialEq)]
+pub struct GroupHint {
+    /// The palettes dropped: a whole group, or one member of a group.
+    pub panels: Vec<PanelId>,
+    /// The palette they would join.
+    pub into: PanelId,
+    /// Above it, below it, or as a tab.
+    pub at: Join,
+    /// Where the hint is drawn, in points.
+    pub rect: Rect,
+}
+
+/// Where dropping the palettes dragged now would group them, if they
+/// are dragged over another palette.
+pub fn group_hint(app: &AppHandle) -> Option<GroupHint> {
+    app.workbench_mut().group_hint.clone()
+}
+
+/// Where a palette dropped with the pointer at `at`, over another
+/// palette drawn at `rect`, joins its group: on its top quarter above
+/// it, on its bottom quarter below it, else none.
+///
+/// ```
+/// use egui::{Rect, pos2, vec2};
+/// use egui_pop_api::palettes::join_at;
+/// use egui_pop_model::layout::Join;
+///
+/// let r = Rect::from_min_size(pos2(100.0, 100.0), vec2(200.0, 200.0));
+/// assert_eq!(join_at(r, pos2(150.0, 110.0)), Some(Join::Above));
+/// assert_eq!(join_at(r, pos2(150.0, 290.0)), Some(Join::Below));
+/// assert_eq!(join_at(r, pos2(150.0, 200.0)), None);
+/// assert_eq!(join_at(r, pos2(50.0, 110.0)), None);
+/// ```
+pub fn join_at(rect: Rect, at: Pos2) -> Option<Join> {
+    if !rect.contains(at) {
+        return None;
+    }
+    let edge = rect.height() / 4.0;
+    if at.y < rect.top() + edge {
+        Some(Join::Above)
+    } else if at.y > rect.bottom() - edge {
+        Some(Join::Below)
+    } else {
+        None
+    }
+}
+
+/// Where a group hint is drawn over the palette joined: its top half,
+/// its bottom half, or all of it for a tab.
+fn join_rect(rect: Rect, at: Join) -> Rect {
+    match at {
+        Join::Above => Rect::from_min_max(rect.min, egui::pos2(rect.max.x, rect.center().y)),
+        Join::Below => Rect::from_min_max(egui::pos2(rect.min.x, rect.center().y), rect.max),
+        Join::Tab => rect,
+    }
+}
+
+/// The palette the pointer at `at` drops the dragged ones on, and where,
+/// skipping the panels `skip` says (the dragged ones).
+fn join_target(
+    members: &BTreeMap<PanelId, Rect>,
+    at: Pos2,
+    skip: impl Fn(&PanelId) -> bool,
+) -> Option<(PanelId, Join, Rect)> {
+    members
+        .iter()
+        .filter(|(p, _)| !skip(p))
+        .find_map(|(p, r)| join_at(*r, at).map(|j| (p.clone(), j, join_rect(*r, j))))
 }
 
 /// What a palette's band buttons asked for.
 #[derive(Default)]
 struct Asked {
-    close: bool,
-    roll: bool,
+    close: Option<PanelId>,
+    roll: Option<PanelId>,
     pin: bool,
 }
 
-/// Draws the floating palettes over the workbench, and follows their
-/// drags: the drop docks a palette over an area, else moves it through
-/// `palette.move`.
+/// A member's band as laid out, with where the member is drawn
+/// vertically (its band's top to its content's bottom).
+struct MemberBand {
+    panel: PanelId,
+    band: band::Band,
+    top: f32,
+    bottom: f32,
+}
+
+/// Draws the floating palettes over the workbench, each group as one
+/// unit, and follows their drags: a group's band moves the group, a
+/// member's band takes it out of its group; dropped over another palette
+/// they join its group, over an area they dock there, elsewhere they
+/// move through `palette.move` or `palette.ungroup`.
 pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
-    let (floating, content, before) = {
-        let wb = app.workbench_mut();
+    let (floating, content, before, members_before) = {
+        let mut wb = app.workbench_mut();
+        if wb.palette_drag.is_none() {
+            wb.group_hint = None;
+        }
         (
             wb.layout.floating.clone(),
             wb.content,
             wb.palette_rects.clone(),
+            wb.member_rects.clone(),
         )
     };
     let any = if floating.is_empty() { "false" } else { "true" };
@@ -411,7 +533,9 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
         app.set_context(CONTEXT_FLOATING, any);
     }
     if floating.is_empty() || !content.is_positive() {
-        app.workbench_mut().palette_rects.clear();
+        let mut wb = app.workbench_mut();
+        wb.palette_rects.clear();
+        wb.member_rects.clear();
         return;
     }
     let t = Tokens::of(ctx);
@@ -420,55 +544,52 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
     let idle = setting_f32(app, SETTING_IDLE_OPACITY)
         .unwrap_or(1.0)
         .clamp(0.0, 1.0);
+    let gap = group_gap(ctx);
     let pointer = ctx.input(|i| i.pointer.latest_pos());
     let mut rects = BTreeMap::new();
-    for (g, m) in floating
-        .iter()
-        .flat_map(|g| g.members.iter().map(move |m| (g, m)))
-    {
-        let f = Palette {
-            panel: m.panel.clone(),
-            rolled: m.rolled,
-            pinned: g.pinned,
-            pos: g.pos,
-            anchor: g.anchor,
-        };
-        if hide && !f.pinned {
+    let mut members = BTreeMap::new();
+    for g in floating {
+        if hide && !g.pinned {
             continue;
         }
-        let Some(spec) = app.workbench_mut().spec(&f.panel).cloned() else {
+        let specs: Vec<_> = g
+            .panels()
+            .filter_map(|p| app.workbench_mut().spec(p).cloned())
+            .collect();
+        if specs.len() != g.members.len() {
             continue;
-        };
-        let id = area_id(&f.panel);
-        let drawn = before.get(&f.panel).map(|r| r.size());
+        }
+        let lead = g.lead().clone();
+        let id = area_id(&lead);
+        let drawn = before.get(&lead).map(|r| r.size());
         let size = drawn.unwrap_or(Vec2::ZERO);
         let dragging = app
             .workbench_mut()
             .palette_drag
             .as_ref()
-            .is_some_and(|d| d.0 == f.panel);
+            .is_some_and(|d| d.whole && d.panel == lead);
         // Inside the workbench, again when the window is resized; an
-        // anchored palette keeps its distance to its edges (not while it
+        // anchored group keeps its distance to its edges (not while it
         // is dragged: the drop sets its anchor again).
         let pos = if dragging {
-            clamp(content.min + Vec2::from(f.pos), size, content)
+            clamp(content.min + Vec2::from(g.pos), size, content)
         } else {
-            anchored_pos(f.pos, size, content, &f.anchor)
+            anchored_pos(g.pos, size, content, &g.anchor)
         };
-        if !f.anchor.is_none() && !dragging && drawn.is_some() {
+        if !g.anchor.is_none() && !dragging && drawn.is_some() {
             // Its place follows the edges (not a move: no step).
             let at = [pos.x - content.min.x, pos.y - content.min.y];
-            if at != f.pos
-                && let Some(fl) = app.workbench_mut().layout.floating_mut(&f.panel)
+            if at != g.pos
+                && let Some(fl) = app.workbench_mut().layout.floating_mut(&lead)
             {
                 fl.pos = at;
             }
         }
         let hovered = before
-            .get(&f.panel)
+            .get(&lead)
             .zip(pointer)
             .is_some_and(|(r, p)| r.contains(p));
-        let target = if f.pinned || dragging {
+        let target = if g.pinned || dragging {
             1.0
         } else if stroke {
             STROKE_OPACITY
@@ -478,9 +599,15 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
             idle
         };
         let opacity = ctx.animate_value_with_time(id.with("opacity"), target, t.motion_duration);
-        let title = app.panel_title(ctx, &f.panel);
+        let titles: Vec<String> = g.panels().map(|p| app.panel_title(ctx, p)).collect();
+        let min = specs.iter().map(|s| s.min_size).fold(0.0, f32::max);
+        let max = specs
+            .iter()
+            .map(|s| s.default_size.unwrap_or(320.0).max(s.min_size))
+            .fold(0.0, f32::max);
         let mut asked = Asked::default();
         let mut moved: Option<band::Band> = None;
+        let mut bands: Vec<MemberBand> = Vec::new();
         let shown = egui::Area::new(id)
             .order(egui::Order::Middle)
             .fixed_pos(pos)
@@ -495,20 +622,78 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
                 };
                 let shadow = ui.visuals().window_shadow;
                 window.show(ui, State::REST, shadow, |ui| {
-                    ui.set_min_width(spec.min_size);
-                    ui.set_max_width(spec.default_size.unwrap_or(320.0).max(spec.min_size));
+                    ui.set_min_width(min);
+                    ui.set_max_width(max);
+                    if g.is_lone() {
+                        let m = &g.members[0];
+                        let (_, b) = band::begin(ui, &style, |ui, state| {
+                            band_row(ui, &t, &titles[0], state, m, Some(g.pinned), &mut asked);
+                        });
+                        if !m.rolled {
+                            app.show_panel(ui, &m.panel);
+                        }
+                        band::paint(ui, &b, &style);
+                        moved = Some(b);
+                        return;
+                    }
+                    // The group's band, then each member under its own.
+                    let joined = titles.join(" · ");
                     let (_, b) = band::begin(ui, &style, |ui, state| {
-                        band_row(ui, &t, &title, state, &f, &mut asked);
+                        group_row(ui, &t, &joined, state, g.pinned, &mut asked);
                     });
-                    if !f.rolled {
-                        app.show_panel(ui, &f.panel);
+                    for (i, m) in g.members.iter().enumerate() {
+                        if i > 0 {
+                            ui.add_space(gap);
+                        }
+                        // Room for the member's band to reach up into.
+                        ui.add_space(style.padding);
+                        let top = ui.cursor().top() - style.padding;
+                        let (mb, bottom) = ui
+                            .push_id(("egui_pop.palette.member", m.panel.as_str()), |ui| {
+                                let (_, mb) = band::begin(ui, &style, |ui, state| {
+                                    band_row(ui, &t, &titles[i], state, m, None, &mut asked);
+                                });
+                                if !m.rolled {
+                                    app.show_panel(ui, &m.panel);
+                                }
+                                (mb, ui.min_rect().bottom())
+                            })
+                            .inner;
+                        bands.push(MemberBand {
+                            panel: m.panel.clone(),
+                            band: mb,
+                            top,
+                            bottom,
+                        });
+                    }
+                    // Painted once the frame's width is known.
+                    for mb in &bands {
+                        band::paint(ui, &mb.band, &style);
                     }
                     band::paint(ui, &b, &style);
                     moved = Some(b);
                 });
             });
         let rect = shown.response.rect;
-        rects.insert(f.panel.clone(), rect);
+        for p in g.panels() {
+            rects.insert(p.clone(), rect);
+        }
+        if g.is_lone() {
+            members.insert(lead.clone(), rect);
+        }
+        // Each member from its band's top to the next one's (the last to
+        // the frame's bottom).
+        let own: Vec<Rect> = bands
+            .iter()
+            .enumerate()
+            .map(|(i, mb)| {
+                let bottom = bands.get(i + 1).map_or(rect.bottom(), |n| n.top);
+                Rect::from_x_y_ranges(rect.x_range(), mb.top..=bottom.max(mb.bottom))
+            })
+            .collect();
+        for (mb, r) in bands.iter().zip(&own) {
+            members.insert(mb.panel.clone(), *r);
+        }
         // Escape in a palette gives the keyboard back.
         let layer = shown.response.layer_id;
         if let Some(focused) = ctx.memory(|m| m.focused())
@@ -519,26 +704,48 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
         {
             ctx.memory_mut(|m| m.surrender_focus(focused));
         }
-        if asked.close {
-            app.set_panel_visible(&f.panel, false);
+        if let Some(p) = asked.close {
+            app.set_panel_visible(&p, false);
             continue;
         }
-        if asked.roll {
-            app.change_workbench(Change::Roll(f.panel.clone(), !f.rolled));
+        if let Some(p) = asked.roll {
+            app.change_workbench(Change::Roll(p.clone(), !g.rolled(&p)));
         }
         if asked.pin {
-            app.change_workbench(Change::Pin(f.panel.clone(), !f.pinned));
+            app.change_workbench(Change::Pin(lead.clone(), !g.pinned));
         }
+        let drag = Drag {
+            content,
+            before: &before,
+            members: &members_before,
+        };
         if let Some(b) = moved {
-            follow(app, ctx, &f, rect, &before, &b, content);
+            follow(app, ctx, &g, rect, &b, &drag);
+        }
+        for (mb, own) in bands.iter().zip(own) {
+            follow_member(app, ctx, &g, &mb.panel, own, rect, &mb.band, &drag);
         }
     }
-    app.workbench_mut().palette_rects = rects;
+    {
+        let mut wb = app.workbench_mut();
+        wb.palette_rects = rects;
+        wb.member_rects = members;
+    }
+    paint_hints(app, ctx, content, &members_before);
 }
 
-/// The band's row: the title (in the band's `state`), then Close, Roll
-/// and Pin at its end.
-fn band_row(ui: &mut Ui, t: &Tokens, title: &str, state: State, f: &Palette, asked: &mut Asked) {
+/// The band's row of a palette alone, or of a member of a group: the
+/// title (in the band's `state`), then Close, Roll and, for a palette
+/// alone (`pinned` is its pin), Pin at its end.
+fn band_row(
+    ui: &mut Ui,
+    t: &Tokens,
+    title: &str,
+    state: State,
+    m: &Member,
+    pinned: Option<bool>,
+    asked: &mut Asked,
+) {
     let side = t.size.control_height.max(24.0);
     let kit = Kit::of(ui.ctx());
     ui.horizontal(|ui| {
@@ -558,106 +765,304 @@ fn band_row(ui: &mut Ui, t: &Tokens, title: &str, state: State, f: &Palette, ask
             };
             let name = named(ui, &txt::PALETTE_CLOSE);
             if band::button(ui, side, kit.glyph(Glyph::Close), &name, false).clicked() {
-                asked.close = true;
+                asked.close = Some(m.panel.clone());
             }
-            let (icon, name) = if f.rolled {
+            let (icon, name) = if m.rolled {
                 (Icon::ChevronDown, &txt::PALETTE_ROLL_DOWN)
             } else {
                 (Icon::ChevronUp, &txt::PALETTE_ROLL_UP)
             };
             let name = named(ui, name);
             if band::button(ui, side, icon, &name, false).clicked() {
-                asked.roll = true;
+                asked.roll = Some(m.panel.clone());
             }
-            let (icon, name) = if f.pinned {
-                (Icon::Lock, &txt::PALETTE_UNPIN)
-            } else {
-                (Icon::Unlock, &txt::PALETTE_PIN)
-            };
-            let name = named(ui, name);
-            if band::button(ui, side, icon, &name, f.pinned).clicked() {
-                asked.pin = true;
+            if let Some(pinned) = pinned {
+                pin_button(ui, side, title, pinned, asked);
             }
         });
     });
 }
 
-/// Follows a palette's band: a drag moves it live (snapped, clamped),
-/// the drop docks it over an area or moves it through `palette.move`; a
-/// double click rolls it up or down.
+/// The band's row of a group: its members' titles, then Pin.
+fn group_row(ui: &mut Ui, t: &Tokens, title: &str, state: State, pinned: bool, asked: &mut Asked) {
+    let side = t.size.control_height.max(24.0);
+    let kit = Kit::of(ui.ctx());
+    ui.horizontal(|ui| {
+        ui.add(
+            egui::Label::new(
+                egui::RichText::new(title)
+                    .weak()
+                    .color(kit.header_band.style(state).text),
+            )
+            .truncate()
+            .selectable(false),
+        );
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            pin_button(ui, side, title, pinned, asked);
+        });
+    });
+}
+
+/// Pin, or Unpin, named with the palette's (or the group's) title.
+fn pin_button(ui: &mut Ui, side: f32, title: &str, pinned: bool, asked: &mut Asked) {
+    let (icon, key) = if pinned {
+        (Icon::Lock, &txt::PALETTE_UNPIN)
+    } else {
+        (Icon::Unlock, &txt::PALETTE_PIN)
+    };
+    let name = strings::tr_args(ui.ctx(), key, &[("palette", title)]);
+    if band::button(ui, side, icon, &name, pinned).clicked() {
+        asked.pin = true;
+    }
+}
+
+/// What a drag reads of the last frame: the workbench's rectangle, each
+/// panel's group as drawn, each member as drawn.
+struct Drag<'a> {
+    content: Rect,
+    before: &'a BTreeMap<PanelId, Rect>,
+    members: &'a BTreeMap<PanelId, Rect>,
+}
+
+impl Drag<'_> {
+    /// Where a box of `size` dragged from `start` lands with the pointer
+    /// moved from `origin` to `now`: snapped to the workbench's edges and
+    /// to the palettes `skip` does not name, kept inside.
+    fn land(
+        &self,
+        ctx: &egui::Context,
+        start: [f32; 2],
+        size: Vec2,
+        origin: Pos2,
+        now: Pos2,
+        skip: impl Fn(&PanelId) -> bool,
+    ) -> [f32; 2] {
+        let raw = Rect::from_min_size(self.content.min + Vec2::from(start) + (now - origin), size);
+        let others: Vec<Rect> = self
+            .before
+            .iter()
+            .filter(|(p, _)| !skip(p))
+            .map(|(_, r)| *r)
+            .collect();
+        let at = clamp(
+            snap(raw, self.content, &others, magnet(ctx)).min,
+            size,
+            self.content,
+        );
+        [at.x - self.content.min.x, at.y - self.content.min.y]
+    }
+}
+
+/// Follows a group's band (a palette alone's band): a drag moves the
+/// group live (snapped, clamped), the drop joins another palette's group
+/// over it (`palette.group`), docks every member over an area
+/// (`palette.dock`), else moves it (`palette.move`); a double click rolls
+/// a palette alone up or down.
 fn follow(
     app: &AppHandle,
     ctx: &egui::Context,
-    f: &Palette,
+    g: &FloatingGroup,
     rect: Rect,
-    before: &BTreeMap<PanelId, Rect>,
     b: &band::Band,
-    content: Rect,
+    d: &Drag<'_>,
 ) {
+    let lead = g.lead().clone();
     if b.double_clicked {
-        app.change_workbench(Change::Roll(f.panel.clone(), !f.rolled));
+        if g.is_lone() {
+            app.change_workbench(Change::Roll(lead.clone(), !g.rolled(&lead)));
+        }
         return;
     }
     let drag = app.workbench_mut().palette_drag.clone();
-    let mine = drag.as_ref().filter(|d| d.0 == f.panel).cloned();
-    if b.dragging && !f.pinned {
+    let mine = drag.filter(|x| x.whole && x.panel == lead);
+    if b.dragging && !g.pinned {
         let (origin, now) = ctx.input(|i| (i.pointer.press_origin(), i.pointer.latest_pos()));
         let (Some(origin), Some(now)) = (origin, now) else {
             return;
         };
-        let start = mine.as_ref().map_or(f.pos, |d| d.1);
-        let raw = Rect::from_min_size(
-            content.min + Vec2::from(start) + (now - origin),
-            rect.size(),
-        );
-        let others: Vec<Rect> = before
-            .iter()
-            .filter(|(p, _)| **p != f.panel)
-            .map(|(_, r)| *r)
-            .collect();
-        let magnet = magnet(ctx);
-        let at = clamp(
-            snap(raw, content, &others, magnet).min,
-            rect.size(),
-            content,
-        );
+        let start = mine.as_ref().map_or(g.pos, |x| x.start);
+        let pos = d.land(ctx, start, rect.size(), origin, now, |p| g.holds(p));
+        let hint = join_target(d.members, now, |p| g.holds(p)).map(|(into, at, r)| GroupHint {
+            panels: g.panels().cloned().collect(),
+            into,
+            at,
+            rect: r,
+        });
         let mut wb = app.workbench_mut();
-        let pos = [at.x - content.min.x, at.y - content.min.y];
         let mut moved = false;
-        if let Some(fl) = wb.layout.floating_mut(&f.panel) {
+        if let Some(fl) = wb.layout.floating_mut(&lead) {
             moved = fl.pos != pos;
             fl.pos = pos;
         }
-        wb.palette_drag = Some((f.panel.clone(), start, now));
+        wb.palette_drag = Some(PaletteDrag {
+            panel: lead,
+            whole: true,
+            start,
+            pos,
+            at: now,
+        });
+        wb.group_hint = hint;
         // Only a move needs another frame: a held, still pointer does not.
         if moved {
             ctx.request_repaint();
         }
         return;
     }
-    let Some((panel, start, at)) = mine else {
+    let Some(x) = mine else {
         return;
     };
     // Dropped: back where it started, then the step decides.
-    let (to, area) = {
+    let (to, area, hint) = {
         let mut wb = app.workbench_mut();
         wb.palette_drag = None;
-        let area = wb.dock_at(at, magnet(ctx));
-        let fl = wb.layout.floating_mut(&panel);
-        let to = fl.map(|fl| std::mem::replace(&mut fl.pos, start));
-        (to, area)
+        let hint = wb.group_hint.take();
+        let area = wb.dock_at(x.at, magnet(ctx));
+        let fl = wb.layout.floating_mut(&lead);
+        let to = fl.map(|fl| std::mem::replace(&mut fl.pos, x.start));
+        (to, area, hint)
     };
-    let out = match (area, to) {
-        (Some(area), _) => app.change_workbench(Change::Dock(panel.clone(), area)),
-        (None, Some(to)) if to != start => {
-            app.change_workbench(Change::MovePalette(panel.clone(), to))
-        }
+    let change = match (hint, area, to) {
+        (Some(h), _, _) => Some(Change::Group(h.panels, h.into, h.at)),
+        (None, Some(area), _) if g.is_lone() => Some(Change::Dock(lead.clone(), area)),
+        (None, Some(area), _) => Some(Change::DockGroup(lead.clone(), area)),
+        (None, None, Some(to)) if to != x.start => Some(Change::MovePalette(lead.clone(), to)),
         _ => None,
     };
+    run(app, &lead, change);
+    ctx.request_repaint();
+}
+
+/// Follows the band of a member of a group: a drag shows where it would
+/// go, the drop joins another palette's group over it (or moves it
+/// within its own), docks it alone over an area, takes it out of its
+/// group anywhere else (`palette.ungroup`), or leaves it in its group
+/// when dropped back over it; a double click rolls it up or down.
+#[allow(clippy::too_many_arguments)]
+fn follow_member(
+    app: &AppHandle,
+    ctx: &egui::Context,
+    g: &FloatingGroup,
+    panel: &PanelId,
+    own: Rect,
+    group: Rect,
+    b: &band::Band,
+    d: &Drag<'_>,
+) {
+    if b.double_clicked {
+        app.change_workbench(Change::Roll(panel.clone(), !g.rolled(panel)));
+        return;
+    }
+    let drag = app.workbench_mut().palette_drag.clone();
+    let mine = drag.filter(|x| !x.whole && x.panel == *panel);
+    if b.dragging && !g.pinned {
+        let (origin, now) = ctx.input(|i| (i.pointer.press_origin(), i.pointer.latest_pos()));
+        let (Some(origin), Some(now)) = (origin, now) else {
+            return;
+        };
+        let from = own.min - d.content.min;
+        let start = mine.as_ref().map_or([from.x, from.y], |x| x.start);
+        let pos = d.land(ctx, start, own.size(), origin, now, |p| g.holds(p));
+        let hint = join_target(d.members, now, |p| p == panel).map(|(into, at, r)| GroupHint {
+            panels: vec![panel.clone()],
+            into,
+            at,
+            rect: r,
+        });
+        let mut wb = app.workbench_mut();
+        let moved = mine.as_ref().is_none_or(|x| x.pos != pos || x.at != now);
+        wb.palette_drag = Some(PaletteDrag {
+            panel: panel.clone(),
+            whole: false,
+            start,
+            pos,
+            at: now,
+        });
+        wb.group_hint = hint;
+        if moved {
+            ctx.request_repaint();
+        }
+        return;
+    }
+    let Some(x) = mine else {
+        return;
+    };
+    let (area, hint) = {
+        let mut wb = app.workbench_mut();
+        wb.palette_drag = None;
+        let hint = wb.group_hint.take();
+        (wb.dock_at(x.at, magnet(ctx)), hint)
+    };
+    let change = match (hint, area) {
+        (Some(h), _) => Some(Change::Group(h.panels, h.into, h.at)),
+        (None, Some(area)) => Some(Change::Dock(panel.clone(), area)),
+        (None, None) if group.contains(x.at) => None,
+        (None, None) => Some(Change::Ungroup(panel.clone(), x.pos)),
+    };
+    run(app, panel, change);
+    ctx.request_repaint();
+}
+
+/// Runs a dropped palette's change, telling why when it is refused.
+fn run(app: &AppHandle, panel: &PanelId, change: Option<Change>) {
+    let out = change.and_then(|c| app.change_workbench(c));
     if let Some(Outcome::Done(Err(e))) = &out {
         app.workbench_refused(&format!("palette {panel}"), e);
     }
-    ctx.request_repaint();
+}
+
+/// While palettes are dragged: over another palette, where they would
+/// join its group (the kit's `dock-preview`, as for tabs); a member
+/// dragged out of its group, where it would float alone.
+fn paint_hints(
+    app: &AppHandle,
+    ctx: &egui::Context,
+    content: Rect,
+    members: &BTreeMap<PanelId, Rect>,
+) {
+    let (drag, hint, dock) = {
+        let wb = app.workbench_mut();
+        let dock = wb
+            .palette_drag
+            .as_ref()
+            .and_then(|d| wb.dock_at(d.at, magnet(ctx)));
+        (wb.palette_drag.clone(), wb.group_hint.clone(), dock)
+    };
+    let rect = match (&hint, &drag) {
+        (Some(h), _) => h.rect,
+        (None, Some(d)) if !d.whole && dock.is_none() => {
+            let Some(own) = members.get(&d.panel) else {
+                return;
+            };
+            Rect::from_min_size(content.min + Vec2::from(d.pos), own.size())
+        }
+        _ => return,
+    };
+    let kit = Kit::of(ctx);
+    let painter = ctx.layer_painter(egui::LayerId::new(
+        egui::Order::Foreground,
+        Id::new("egui_pop.palette.hint"),
+    ));
+    let cx = KitCx {
+        painter: &painter,
+        ppp: ctx.pixels_per_point(),
+    };
+    kit.dock_preview.paint_part(
+        &cx,
+        &Part {
+            rect,
+            room: rect,
+            state: State::REST,
+            label: None,
+        },
+    );
+}
+
+/// The room between the members of a stacked group (`palette.group.gap`).
+fn group_gap(ctx: &egui::Context) -> f32 {
+    Tokens::of(ctx)
+        .resolved()
+        .dimension("palette.group.gap")
+        .unwrap_or(0.0)
 }
 
 /// How close a dragged palette snaps to an edge or another palette, and
