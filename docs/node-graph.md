@@ -294,6 +294,126 @@ a connection is type-checked, then the edit runs its step.
 | `graph.select` | `graph`, `nodes` | `queued` |
 | `graph.view` | `graph`, and `fit: true`, `level` or `focus` (a node) | `queued` |
 
+## A graph file
+
+An application without a graph model of its own can keep its graph in
+a YAML file: `egui_pop::viewport::graph::yaml::YamlGraph` (the facade's
+`graph-yaml` feature) reads one, is the editor's `GraphModel`, and
+writes the edits back into the file's text. The file is the source of
+truth: it can be written by hand or by an agent, reviewed in a diff and
+versioned.
+
+```rust
+use egui_pop::egui;
+use egui_pop::api::AppHandle;
+use egui_pop::imaging;
+use egui_pop::viewport::graph::yaml::YamlGraph;
+use egui_pop::viewport::graph::{GraphEditor, GraphModel, GraphState};
+
+fn panel(ui: &mut egui::Ui, app: &AppHandle, graph: &mut YamlGraph, state: &mut GraphState) {
+    let out = imaging::show_graph(app, "main", GraphEditor::new(&*graph, state), ui);
+    for edit in &out.edits {
+        // The one mutation point: the edit lands in the text.
+        graph.apply(edit);
+    }
+    // `graph.text()` is the file to save.
+}
+
+let graph = YamlGraph::parse("nodes:\n  - id: a # the first\n    pos: [0, 0]\n").expect("a graph file");
+assert_eq!(graph.nodes().len(), 1);
+let _ = panel;
+```
+
+### The format
+
+```yaml
+# The format's version, as token files carry theirs.
+$extensions:
+  org.egui-pop.graph: {version: 1}
+
+groups:
+  detail: Detail            # an id and its label, or {label: Detail}
+
+kinds:
+  load:
+    title: Load
+    outputs:
+      image: image          # a port's id and its type
+  blur:
+    title: Blur
+    inputs: {image: image}
+    outputs: {image: image}
+    params:
+      radius: {label: Radius, value: 2, min: 0, max: 20, step: 0.1, unit: px}
+  mix:
+    title: Blend
+    inputs:
+      base: image
+      mask: {type: mask, label: Mask, multiple: true, color: graph.type-3}
+    outputs: {image: image}
+
+nodes:
+  # The source.
+  - id: load
+    kind: load
+    pos: [0, 0]
+  - id: blur
+    kind: blur
+    title: Soft blur        # instead of the kind's
+    pos: [240, 0]
+    group: detail
+    params:
+      radius: 3.5           # the value; the rest is the kind's
+
+edges:
+  - load.image -> blur.image
+  - {from: blur.image, to: mix.base, note: kept}
+```
+
+| Key | What |
+|---|---|
+| `$extensions` | `org.egui-pop.graph: {version: N}` (`FORMAT_EXTENSION`, `FORMAT_VERSION`); a file without it is read as the current version, a newer one is read with a warning (`YamlGraph::warnings`). Other extensions are the application's. |
+| `groups` | Each group's id and label (`detail: Detail` or `detail: {label: Detail}`). |
+| `kinds` | What the canvas's menu adds, and what a node of the kind has: `title`, `inputs` and `outputs` (each port `id: type`, or `{type, label, multiple, color}`), `params` (each `{label, value, min, max, step, unit, default}`; `min` and `max` are required). |
+| `nodes` | A list of nodes: `id` (required, unique), `kind`, `title` (else the kind's, else the id), `pos` (`[x, y]`, the top-left corner, else `[0, 0]`), `group`, and `inputs`, `outputs`, `params` of their own: a port of the same id replaces the kind's, a parameter's fields go over the kind's (a number alone sets the value). |
+| `edges` | A list of wires: `node.port -> node.port` (an output, then an input; the port's id is after the last dot), or `{from: node.port, to: node.port}`. |
+
+Labels left out are the id, capitalised. A parameter's value is its
+`value`, else its `default`, else `min`; a double click goes back to
+its `default`, else to the kind's `value`. A kind or a group a node
+names must be declared. A file the format does not allow is refused
+with the line and column of what is wrong (`YamlGraphError`): YAML
+that does not parse, a top level that is not a block mapping, two
+nodes with one id, a kind, group, node or port that is not there, a
+parameter without its range.
+
+### What round-trips
+
+`YamlGraph::text` is the file as read until an edit, byte for byte. An
+edit changes the lines it lands on and nothing else:
+
+| Edit | In the text |
+|---|---|
+| `Move` | the node's `pos` value (the comment after it stays), or a `pos` line added |
+| `Param` | the parameter's value under the node's `params`, or a line added there |
+| `Delete` | the node's item and the comment right above it, the items of its wires |
+| `Connect`, `Disconnect` | the wires' items removed, a new item after the last wire |
+| `Add` | a new item after the last node (`kind-1`, `kind-2`...; a duplicate takes the group and parameters of the node it copies) |
+
+Comments, blank lines, key order, quoting, line endings and the keys
+egui-pop does not know (in a node, a wire, anywhere else) are kept.
+Two cases are written again: a node written in flow style
+(`- {id: a, pos: [0, 0]}`) that an edit reaches is written again in
+block style, its unknown keys as flow values; a `nodes` or `edges` list
+in flow style (`nodes: [...]`) is written again whole in block style
+at its first edit, comments inside it lost. Each splice is read back
+and compared with the graph the edit makes; a splice that would not
+read back falls back to writing the two lists again.
+
+An edit is one gesture (a drag's `Move` comes at its end, a slider's
+frames with `done: false`): an application that keeps an undo history
+records `text()` before an edit and reads it back to undo.
+
 ## Accessibility
 
 | Part | Role | Name | Value |

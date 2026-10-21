@@ -13,5 +13,5 @@ authors.workspace = true
 workspace = true
 
 [dependencies]
-egui-pop = { workspace = true, features = ["viewport", "imaging", "views", "editors", "i18n", "platform"] }
+egui-pop = { workspace = true, features = ["viewport", "graph-yaml", "imaging", "views", "editors", "i18n", "platform"] }
 serde_json.workspace = true

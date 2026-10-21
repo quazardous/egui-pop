@@ -63,8 +63,8 @@ of every crate with every feature on.
 - [Node graph editor](node-graph.md): an application's graph of typed
   ports on egui's `Scene`, edits handed back as requests and run as
   steps, an overview and a detail view with inline sliders, a minimap,
-  the keyboard and screen reader paths, agent commands; the survey
-  behind it.
+  the keyboard and screen reader paths, agent commands, a reference
+  model kept in a YAML file that round-trips; the survey behind it.
 - [Cursors and the loupe](cursors.md): tool cursors drawn at the
   window's scale, a brush outline that follows the zoom, the
   `cursor.resolve` step, a GPU loupe on the displayed pixels; the
