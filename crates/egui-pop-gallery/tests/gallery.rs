@@ -3290,6 +3290,51 @@ fn a_folded_side_area_shows_its_strip_and_a_click_unfolds_it() {
 }
 
 #[test]
+fn a_folded_strip_opens_a_flyout_and_shows_the_outlines_new_headings() {
+    use egui_pop::api::workbench;
+    use egui_pop::model::panels::Area;
+    let mut h = harness(options("pop-dark", Density::Comfortable, "workbench"));
+    h.run();
+    h.get_by_label("Open the demonstration panels").click();
+    h.run();
+    h.get_by_label("Add a heading to the outline").click();
+    h.run();
+    h.get_by_label("Add a heading to the outline").click();
+    h.run();
+    // The page is long: the button may be below the fold.
+    h.get_by_label("Start side: fold").scroll_to_me();
+    h.run();
+    h.get_by_label("Start side: fold").click();
+    h.run();
+    h.run();
+    let app = h.state().app.handle().clone();
+    assert!(app.layout().folded.contains(&Area::StartSide));
+    // The outline's icon carries its two new headings.
+    let outline = workbench::strip(&app)
+        .into_iter()
+        .find(|i| i.panel.as_str() == "gallery.outline")
+        .expect("the outline has an icon in the strip");
+    assert_eq!(outline.icon.as_deref(), Some("file"));
+    assert!(outline.marked, "{outline:?}");
+    assert_eq!(outline.indicator.and_then(|s| s.count), Some(2));
+    // Its flyout over the centre; the layout does not move.
+    let centre = app.area_rect(Area::Center).unwrap();
+    let id = egui_pop::model::ids::PanelId::new("gallery.outline").unwrap();
+    assert!(app.open_flyout(&id, true).unwrap().ok());
+    h.run();
+    h.run();
+    assert!(h.query_by_label("Sections of the document.").is_some());
+    assert!(h.query_by_label("Pin Outline").is_some());
+    assert_eq!(app.area_rect(Area::Center).unwrap(), centre);
+    egui_pop_test::assert_all_named(&h);
+    h.key_press(egui::Key::Escape);
+    h.run();
+    h.run();
+    assert!(app.flyout().is_none());
+    assert!(h.query_by_label("Sections of the document.").is_none());
+}
+
+#[test]
 fn a_side_area_lies_over_the_centre_with_its_shadow() {
     use egui_pop::model::layout::Placement;
     use egui_pop::model::panels::Area;

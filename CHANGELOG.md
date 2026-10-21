@@ -68,6 +68,9 @@ publishes.
   menu offers each format built in (the gallery's `graph-png` and
   `graph-pdf` features, on by default), for the whole graph and for the
   selection.
+- The gallery's `workbench` page folds either side bar to its strip,
+  opens its panels as flyouts, and feeds the outline's indicator (new
+  headings) shown on its strip icon.
 - Strip icons and flyouts (egui-pop-api, `docs/workbench.md`): a side
   area's strip shows one icon per panel in tab order, from
   `PanelSpec::icon` (a vector icon tinted by the kit's

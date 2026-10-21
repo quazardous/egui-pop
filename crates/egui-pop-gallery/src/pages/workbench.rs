@@ -2,11 +2,15 @@
 //! opened, moved and closed through the workbench's steps, the layout as
 //! it stands, and a veto on one move. Notes detach into a window of
 //! their own, where a key of their own works and their dialog comes up.
+//! A folded side area's strip shows its panels' icons: a click opens a
+//! panel as a flyout over the centre, and the outline's indicator (new
+//! headings) shows on its icon while the outline is not shown.
 
 use egui::Ui;
 use egui_pop::api::dialogs::{Confirm, DIALOGS};
 use egui_pop::api::steps::Before;
 use egui_pop::api::stories::Story;
+use egui_pop::api::strips::{Indicator, Tone};
 use egui_pop::api::workbench::{self, STEP_MOVE};
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
 use egui_pop::core::widgets;
@@ -34,6 +38,10 @@ const CLEARED: &str = "galleryNotesCleared";
 const CMD_ASK_CLEAR: CommandId = CommandId::from_static("gallery.notes.ask_clear");
 /// Clears the notes.
 const CMD_CLEAR: CommandId = CommandId::from_static("gallery.notes.clear");
+
+/// The outline's indicator: the headings added since it was last read,
+/// on its strip icon while it is not shown.
+pub const OUTLINE_NEW: &str = "gallery.outline.new";
 
 /// The workbench page and its panels.
 #[derive(Debug, Default)]
@@ -110,6 +118,24 @@ impl Plugin for WorkbenchPage {
                 Ok(serde_json::Value::Null)
             },
         )?;
+        ctx.indicator(
+            Indicator::new(OUTLINE_NEW, "No new headings", "gallery.outline.")
+                .panel(&OUTLINE)
+                .reduce(|state, event| {
+                    let n = match event.name.as_str() {
+                        "gallery.outline.heading" => state.count.unwrap_or(0) + 1,
+                        _ => 0,
+                    };
+                    state.count = Some(n);
+                    state.text = format!("{n} new headings");
+                    state.detail = if n == 0 {
+                        String::new()
+                    } else {
+                        "Headings added since the outline was read".into()
+                    };
+                    state.tone = if n == 0 { Tone::Neutral } else { Tone::Accent };
+                }),
+        );
         ctx.before(STEP_MOVE, |app, _| {
             if app.context().get(VETO) == "true" {
                 Before::Veto("moves are vetoed on the workbench page".into())
@@ -265,6 +291,48 @@ fn show(ui: &mut Ui, app: &AppHandle) {
             );
         });
     }
+
+    section(ui, "Strip icons and flyouts");
+    ui.weak("A folded side area's strip shows an icon per panel. A click opens the panel alone over the centre; Escape or a click away closes it; a double click, or its pin, unfolds the area. Its free edge resizes it, the width kept per panel with the layout.");
+    ui.horizontal_wrapped(|ui| {
+        let folded = app.layout().folded;
+        // Named apart from the strips themselves ("Unfold the start
+        // side bar").
+        for (area, fold, unfold) in [
+            (Area::StartSide, "Start side: fold", "Start side: unfold"),
+            (Area::EndSide, "End side: fold", "End side: unfold"),
+        ] {
+            let on = folded.contains(&area);
+            if ui.button(if on { unfold } else { fold }).clicked() {
+                app.fold_area(area, !on);
+            }
+        }
+        if ui.button("Add a heading to the outline").clicked() {
+            app.publish(
+                "gallery",
+                None,
+                "gallery.outline.heading",
+                serde_json::json!({}),
+            );
+        }
+        if ui.button("Mark the outline read").clicked() {
+            app.publish(
+                "gallery",
+                None,
+                "gallery.outline.read",
+                serde_json::json!({}),
+            );
+        }
+    });
+    let new = app
+        .indicators()
+        .into_iter()
+        .find(|(i, _)| i.id == OUTLINE_NEW)
+        .and_then(|(_, s)| s.count)
+        .unwrap_or(0);
+    ui.weak(format!(
+        "The outline's indicator: {new} new headings, on its strip icon while the outline is not shown."
+    ));
 
     section(ui, "The workbench's steps");
     let runs: Vec<String> = app
