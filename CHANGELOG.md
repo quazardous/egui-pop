@@ -150,6 +150,13 @@ publishes.
   mode, and while the readout lags the pointer the last values stay,
   dimmed (`LoupeFrame::stale`, `loupe::stale`,
   `loupe::readout_templates`). Scene values now show one per line.
+- A double-click hook no longer swallows "leave the view"
+  (egui-pop-viewport): with an `on_double_click` hook installed, the
+  profile's leave action (darktable's double click) sent no
+  `Signal::Leave`, even when the hook called the default action. The
+  signal is now sent whenever the default runs, without a hook or
+  through the hook's call; a hook that handles the click without
+  calling the default still sends nothing (#53).
 
 ## 0.2.0 (2026-10-21)
 

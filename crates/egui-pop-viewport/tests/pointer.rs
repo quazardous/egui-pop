@@ -8,7 +8,7 @@ use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
 use egui_pop_core::model::pointer::{self, PointerMap};
 use egui_pop_viewport::graph::{Edge, GraphEditor, GraphModel, GraphState, Node};
-use egui_pop_viewport::{Signal, View, Viewport, ViewportState, Zoom};
+use egui_pop_viewport::{Mapping, Signal, View, Viewport, ViewportState, Zoom};
 
 fn use_profile(ctx: &egui::Context, id: &str) {
     let p = pointer::profile(id).unwrap_or_else(|| panic!("no profile `{id}`"));
@@ -24,6 +24,10 @@ struct Scene {
 }
 
 fn viewport(profile: &str, view: View) -> Harness<'static, Scene> {
+    viewport_with(profile, view, ViewportState::default())
+}
+
+fn viewport_with(profile: &str, view: View, state: ViewportState) -> Harness<'static, Scene> {
     let mut h = Harness::builder()
         .with_size(vec2(400.0, 300.0))
         .build_ui_state(
@@ -36,6 +40,7 @@ fn viewport(profile: &str, view: View) -> Harness<'static, Scene> {
                 s.hint = out.hint;
             },
             Scene {
+                state,
                 view,
                 ..Scene::default()
             },
@@ -246,6 +251,66 @@ fn a_double_click_fits_or_asks_to_leave_as_the_profile_says() {
     h.run();
     assert_eq!(h.state().view, start);
     assert!(h.state().signals.contains(&Signal::Leave));
+}
+
+/// A state whose double-click hook passes the click on to the default
+/// action (`pass`) or handles it itself, zooming to 200 %.
+fn with_double_click_hook(pass: bool) -> ViewportState {
+    let mut state = ViewportState::default();
+    state.hooks_mut().on_double_click = Some(Box::new(
+        move |at: Pos2, m: &Mapping, default: &mut dyn FnMut() -> Option<View>| {
+            if pass {
+                default()
+            } else {
+                Some(m.zoom_around(at, 2.0))
+            }
+        },
+    ));
+    state
+}
+
+#[test]
+fn a_double_click_hook_that_passes_the_click_on_still_leaves_the_view() {
+    let start = View::at(3.0, [10.0, 10.0]);
+    let mut h = viewport_with("darktable", start, with_double_click_hook(true));
+    let c = centre(&h);
+    egui_pop_test::double_click_at(&mut h, c);
+    h.run();
+    assert_eq!(h.state().view, start);
+    assert_eq!(
+        h.state()
+            .signals
+            .iter()
+            .filter(|s| **s == Signal::Leave)
+            .count(),
+        1,
+        "one leave signal: {:?}",
+        h.state().signals
+    );
+}
+
+#[test]
+fn a_double_click_hook_that_passes_the_click_on_still_fits() {
+    let mut h = viewport_with(
+        "document",
+        View::at(3.0, [10.0, 10.0]),
+        with_double_click_hook(true),
+    );
+    let c = centre(&h);
+    egui_pop_test::double_click_at(&mut h, c);
+    h.run();
+    assert!(h.state().view.is_fit());
+    assert!(!h.state().signals.contains(&Signal::Leave));
+}
+
+#[test]
+fn a_double_click_hook_that_handles_the_click_does_not_leave_the_view() {
+    let mut h = viewport_with("darktable", View::fit(), with_double_click_hook(false));
+    let c = centre(&h);
+    egui_pop_test::double_click_at(&mut h, c);
+    h.run();
+    assert_eq!(h.state().view.zoom, Zoom::Px(2.0));
+    assert!(!h.state().signals.contains(&Signal::Leave));
 }
 
 #[test]

@@ -12,7 +12,11 @@ colour wheels, a zoom control and a navigator (see
 [Cursors and the loupe](cursors.md)). What the wheel, a pinch and each
 button do on it follows the pointer profile, and a double click may ask
 the application to leave the view (`Signal::Leave`): see
-[Pointer gestures and profiles](pointer-gestures.md).
+[Pointer gestures and profiles](pointer-gestures.md). The
+`on_double_click` hook replaces that double click: a hook that handles
+it returns its own view without calling the default action it is
+given; one that passes it on calls the default, which fits, zooms or
+sends `Signal::Leave` as the profile says, exactly as without a hook.
 
 ```sh
 cargo add egui-pop --features viewport

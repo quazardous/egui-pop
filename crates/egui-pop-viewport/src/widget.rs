@@ -1085,7 +1085,14 @@ fn handle_double_click(ui: &Ui, response: &Response, g: &Gestures, f: &mut Frame
     let at = response.hover_pos().unwrap_or(f.mapping.rect.center());
     let fit = f.view.is_fit();
     let m = f.mapping;
+    // The default action: leaving the view is a signal, sent only when
+    // the default runs (without a hook, or when the hook calls it).
+    let mut leave = false;
     let mut default = || match action {
+        ViewAction::Leave => {
+            leave = true;
+            None
+        }
         ViewAction::Fit => Some(View::fit()),
         ViewAction::ZoomToggle => Some(if fit {
             m.zoom_around(at, 1.0)
@@ -1107,11 +1114,11 @@ fn handle_double_click(ui: &Ui, response: &Response, g: &Gestures, f: &mut Frame
             .record("on_double_click", "run", format!("gave {to:?}"));
         to
     } else {
-        if action == ViewAction::Leave {
-            f.signals.push(Signal::Leave);
-        }
         default()
     };
+    if leave {
+        f.signals.push(Signal::Leave);
+    }
     if let Some(to) = to {
         f.change(to, Cause::DoubleClick, Phase::Once);
     }

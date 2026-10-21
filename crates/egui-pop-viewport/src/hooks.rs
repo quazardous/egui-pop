@@ -110,10 +110,14 @@ pub struct Hooks {
     /// keep the image in view). Not asked when a gesture is cancelled:
     /// that puts back a view already allowed.
     pub before_view: Option<BeforeView>,
-    /// Replaces the double click on the canvas. Gets the pointer, the
-    /// mapping and the default action (call it to get its view: `None`
-    /// when the profile's action is to leave the view, which it then
-    /// signals); returns the view to show, or `None` for no change.
+    /// Replaces the double click on the canvas (not one a handle took).
+    /// Gets the pointer, the mapping and the profile's default action;
+    /// returns the view to show, or `None` for no change. A hook that
+    /// handles the click itself does not call the default; one that
+    /// passes it on calls it and returns its view. Calling it runs the
+    /// whole default: when the profile's action is to leave the view it
+    /// returns `None` and the viewport sends `Signal::Leave`, exactly as
+    /// without a hook.
     pub on_double_click: Option<RunDoubleClick>,
     /// Before a handle moves: allow, veto (it stays) or redirect (snap
     /// it to a grid, keep it inside the image).
