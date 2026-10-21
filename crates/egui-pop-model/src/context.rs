@@ -105,6 +105,20 @@ pub struct GuardCall<'a> {
 /// owner of the stack.
 pub type Guard = Arc<dyn Fn(&GuardCall<'_>) -> Verdict + Send + Sync>;
 
+/// What a place's crumb label is asked about.
+#[derive(Debug)]
+pub struct LabelCall<'a> {
+    pub frame: &'a FrameId,
+    pub payload: &'a Json,
+    /// The frame's title, translated by the interface.
+    pub title: &'a str,
+}
+
+/// A place's crumb label from its payload (`FrameSpec::label`): `None`
+/// keeps the default (the title, and the payload when it is a text or a
+/// number).
+pub type Label = Arc<dyn Fn(&LabelCall<'_>) -> Option<String> + Send + Sync>;
+
 /// A frame as declared.
 #[derive(Clone, Serialize)]
 pub struct FrameSpec {
@@ -151,6 +165,9 @@ pub struct FrameSpec {
     pub can_enter: Option<Guard>,
     #[serde(skip)]
     pub can_leave: Option<Guard>,
+    /// A place: its crumb's label from its payload.
+    #[serde(skip)]
+    pub label: Option<Label>,
 }
 
 impl fmt::Debug for FrameSpec {
@@ -185,6 +202,7 @@ impl FrameSpec {
             hide: Vec::new(),
             can_enter: None,
             can_leave: None,
+            label: None,
         }
     }
 
@@ -264,6 +282,31 @@ impl FrameSpec {
     ) -> Self {
         self.can_leave = Some(Arc::new(f));
         self
+    }
+
+    /// A place: its crumb's label from its payload (a sub-workspace's
+    /// name for `{"id": "…"}`), wherever the interface says the crumb
+    /// (the breadcrumb, `context.read`, an announcement, an undo toast).
+    /// `None` keeps the default: the title, and the payload when it is a
+    /// text or a number. Called while the interface draws: it must not
+    /// call back into the context stack.
+    pub fn label(
+        mut self,
+        f: impl Fn(&LabelCall<'_>) -> Option<String> + Send + Sync + 'static,
+    ) -> Self {
+        self.label = Some(Arc::new(f));
+        self
+    }
+
+    /// The crumb label [`label`](Self::label) gives for a payload, if
+    /// any.
+    pub fn label_of(&self, title: &str, payload: &Json) -> Option<String> {
+        let f = self.label.as_ref()?;
+        f(&LabelCall {
+            frame: &self.id,
+            payload,
+            title,
+        })
     }
 
     /// The `when` clause that holds while the frame is on: `place ==
@@ -1528,5 +1571,28 @@ mod tests {
                 })
                 .is_err()
         );
+    }
+
+    #[test]
+    fn a_place_labels_its_crumb_from_its_payload() {
+        let space = FrameSpec::place(ALBUM, "Space").label(|c| {
+            c.payload["id"]
+                .as_str()
+                .map(|id| format!("{} {}", c.title, id.to_uppercase()))
+        });
+        assert_eq!(
+            space
+                .label_of("Espace", &json!({ "id": "dark" }))
+                .as_deref(),
+            Some("Espace DARK")
+        );
+        assert_eq!(space.label_of("Space", &json!(3)), None);
+        assert_eq!(
+            FrameSpec::place(PHOTO, "Photo").label_of("Photo", &json!("x")),
+            None
+        );
+        // The hook is not part of what is serialised (`context.read`).
+        let text = serde_json::to_value(&space).unwrap();
+        assert!(text.get("label").is_none(), "{text}");
     }
 }

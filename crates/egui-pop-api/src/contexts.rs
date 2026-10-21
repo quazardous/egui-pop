@@ -91,8 +91,8 @@ use egui_pop_model::layout::Layout;
 use serde_json::{Value as Json, json};
 
 pub use egui_pop_model::context::{
-    Dropped, Entry, Envelope, FrameRegistry, FrameSpec, Hold, Kind, Life, ModeEntry, PLACES, ROOT,
-    Refusal, RefusalKind, Request, State, Transition, Verdict,
+    Dropped, Entry, Envelope, FrameRegistry, FrameSpec, Hold, Kind, LabelCall, Life, ModeEntry,
+    PLACES, ROOT, Refusal, RefusalKind, Request, State, Transition, Verdict,
 };
 pub use egui_pop_model::ids::{FrameId, GroupId};
 
@@ -450,10 +450,18 @@ impl Projection {
         title_in(ctx, &self.registry, frame)
     }
 
-    /// A place as its crumb says it: its title, and its payload when it
-    /// is a text or a number (`Album Holidays`, `Photo 3`).
+    /// A place as its crumb says it: its frame's label for the payload
+    /// (`FrameSpec::label`), else its title, and its payload when it is a
+    /// text or a number (`Album Holidays`, `Photo 3`).
     fn crumb(&self, ctx: &egui::Context, e: &Entry) -> String {
         let title = self.title(ctx, &e.frame);
+        if let Some(label) = self
+            .registry
+            .get(&e.frame)
+            .and_then(|s| s.label_of(&title, &e.payload))
+        {
+            return label;
+        }
         match &e.payload {
             Json::String(s) if !s.is_empty() => format!("{title} {s}"),
             Json::Number(n) => format!("{title} {n}"),
@@ -1640,6 +1648,20 @@ fn start(app: &AppHandle) {
     sync(app);
 }
 
+/// The crumbs as the interface says them, for `context.read`: the
+/// root's title, then each place's.
+fn crumb_labels(app: &AppHandle, svc: &ContextService, p: &Projection) -> Vec<String> {
+    let ctx = app.egui();
+    let places = p
+        .applied
+        .as_ref()
+        .map(|s| s.places.as_slice())
+        .unwrap_or_default();
+    std::iter::once(root_title(app, svc))
+        .chain(places.iter().map(|e| p.crumb(&ctx, e)))
+        .collect()
+}
+
 /// What the `contexts` collector shows.
 fn describe(app: &AppHandle) -> Json {
     let Some(svc) = app.service(&CONTEXTS) else {
@@ -1662,6 +1684,7 @@ fn describe(app: &AppHandle) -> Json {
             "views": p.views,
             "places": p.places,
             "undo_stamps": p.stamps.len(),
+            "crumbs": crumb_labels(app, &svc, &p),
         })
     };
     let last = app.last_event();

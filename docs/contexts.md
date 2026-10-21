@@ -82,7 +82,34 @@ A frame's title (`FrameSpec::place(id, "Album")`) is English; crumbs,
 chips and switches translate it like every other declaration, under
 the key derived from its id: `frame-<id>.title` (`photos.album` gives
 `frame-photos-album.title`). The extractor of `egui-pop-i18n` lists
-them with the commands and panels.
+them with the commands and panels. The root's crumb says "Home",
+translated, unless the application names it
+(`ContextsPlugin::default().root("Main")`).
+
+## A place's payload
+
+A place's crumb says its title, and its payload when the payload is a
+text or a number (`Album Holidays`, `Photo 3`). A payload that is an
+object (a sub-workspace, `{"id": "darkroom"}`) says nothing by itself:
+the frame names it with `FrameSpec::label`, given the payload and the
+translated title; `None` keeps the default. The breadcrumb,
+`context.read` (`projection.crumbs`), the announcement of where the
+user is and the undo toast all say the crumb this way.
+
+```rust
+# use egui_pop::api::contexts::FrameSpec;
+# use egui_pop::model::ids::FrameId;
+# fn name_of(_: &str) -> Option<String> { None }
+const SPACE: FrameId = FrameId::from_static("photos.space");
+let space = FrameSpec::place(SPACE, "Workspace")
+    // The sub-workspace's name, read from the application's own state.
+    .label(|c| c.payload["id"].as_str().and_then(name_of));
+```
+
+The label is called while the interface draws: it reads what the
+application keeps (behind an `Arc` it captured), never the context
+stack itself.
+
 
 ## Arrangements by place and mode
 

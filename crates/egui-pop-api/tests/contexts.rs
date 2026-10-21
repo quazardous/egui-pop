@@ -755,3 +755,85 @@ fn each_workspace_keeps_its_own_stack_beside_its_layout() {
     assert_eq!(key(&h, "mode.orientation"), "");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A place whose payload is an object, `{"id": "…"}` (a sub-workspace):
+/// its crumb says the sub-workspace's name.
+const SPACE: FrameId = FrameId::from_static("demo.space");
+
+struct Spaces;
+
+impl Plugin for Spaces {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("spaces")
+    }
+
+    fn requires(&self) -> Vec<PluginId> {
+        vec![contexts::PLUGIN, PluginId::from_static("demo")]
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        let space = FrameSpec::place(SPACE, "Space").label(|c| match c.payload["id"].as_str() {
+            Some("dark") => Some("Darkroom".into()),
+            Some(id) => Some(format!("{} {id}", c.title)),
+            None => None,
+        });
+        ctx.frame(space)?;
+        Ok(())
+    }
+}
+
+fn spaces() -> AppBuilder {
+    App::builder()
+        .plugins(DefaultPlugins)
+        .plugin(ContextsPlugin::default().root("Main"))
+        .plugin(Demo)
+        .plugin(Spaces)
+}
+
+#[test]
+fn a_place_labels_its_crumb_from_its_payload() {
+    let mut h = harness(spaces());
+    let app = h.state().handle().clone();
+    // The root's crumb says what the application names it.
+    assert!(h.query_all_by_label("Main").next().is_some());
+    assert!(contexts::enter(&app, SPACE, json!({ "id": "dark" })).ok());
+    h.run();
+    assert!(h.query_all_by_label("Darkroom").next().is_some());
+    assert!(
+        h.query_all_by_label("Space {\"id\":\"dark\"}")
+            .next()
+            .is_none()
+    );
+    // `context.read` says the crumbs the same way.
+    let read = h
+        .state_mut()
+        .run(&contexts::CMD_READ, Json::Null, Origin::User);
+    let egui_pop_api::host::Reply::Done(Ok(read)) = read else {
+        panic!("{read:?}");
+    };
+    assert_eq!(
+        read["projection"]["crumbs"],
+        json!(["Main", "Darkroom"]),
+        "{read}"
+    );
+    // The label gets the translated title; `None` keeps the default.
+    assert!(
+        contexts::go(
+            &app,
+            vec![contexts::Entry {
+                frame: SPACE,
+                payload: json!({ "id": "map" }),
+            }]
+        )
+        .ok()
+    );
+    h.run();
+    assert!(h.query_all_by_label("Space map").next().is_some());
+    assert!(contexts::enter(&app, SPACE, json!(7)).ok());
+    h.run();
+    assert!(h.query_all_by_label("Space 7").next().is_some());
+    // A crumb still jumps back to its level.
+    h.query_all_by_label("Main").next().unwrap().click();
+    h.run();
+    assert_eq!(key(&h, "place"), "root");
+}

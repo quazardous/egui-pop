@@ -20,6 +20,12 @@ publishes.
 
 ### Added
 
+- A place's crumb from its payload (egui-pop-model, egui-pop-api):
+  `FrameSpec::label` names a place whose payload says nothing by itself
+  (a sub-workspace, `{"id": "darkroom"}`), given the payload and the
+  translated title; the breadcrumb, the announcement of where the user
+  is and the undo toast say it. `context.read` now lists the crumbs
+  (`projection.crumbs`).
 - A reference graph model in a YAML file (egui-pop-viewport, the new
   `graph-yaml` feature; the facade's `graph-yaml`):
   `graph::yaml::YamlGraph` implements `GraphModel` for applications
