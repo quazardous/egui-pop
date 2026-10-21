@@ -1406,12 +1406,21 @@ pub struct Record {
     pub rect: [f32; 4],
 }
 
-/// The indicators with an id drawn in the last complete pass.
+/// The indicators with an id drawn in the last complete pass: empty
+/// when that pass drew none (a frame hiding every bar).
 pub fn drawn(ctx: &Context) -> Vec<Record> {
     let st = drawn_state(ctx);
-    let mut s = lock(&st);
-    rotate(ctx, &mut s);
-    s.last.clone()
+    let s = lock(&st);
+    let now = pass(ctx);
+    if s.pass == now {
+        // Read while the pass draws: the one before.
+        s.last.clone()
+    } else if s.pass + 1 == now {
+        // The pass just ended.
+        s.building.clone()
+    } else {
+        Vec::new()
+    }
 }
 
 /// One drawn indicator by id.
@@ -1427,8 +1436,10 @@ pub fn take_commands(ctx: &Context) -> Vec<CommandId> {
 
 #[derive(Default)]
 struct Drawn {
+    /// The pass `building` was recorded in.
     pass: u64,
     building: Vec<Record>,
+    /// The pass before `pass`, when it recorded marks.
     last: Vec<Record>,
     commands: Vec<CommandId>,
     direction: Direction,
@@ -1449,11 +1460,19 @@ fn drawn_state(ctx: &Context) -> Arc<Mutex<Drawn>> {
     shared::<Drawn>(ctx, "core.indicators")
 }
 
+/// The first record of a pass starts its list; the one before becomes
+/// `last` only when it is the pass just before (a pass that drew no mark
+/// leaves nothing behind).
 fn rotate(ctx: &Context, s: &mut Drawn) {
     let now = pass(ctx);
     if s.pass != now {
+        s.last = if s.pass + 1 == now {
+            std::mem::take(&mut s.building)
+        } else {
+            s.building.clear();
+            Vec::new()
+        };
         s.pass = now;
-        s.last = std::mem::take(&mut s.building);
     }
 }
 

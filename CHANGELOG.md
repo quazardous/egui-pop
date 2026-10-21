@@ -729,6 +729,10 @@ publishes.
 - The terminal's documentation no longer says Shift+Insert pastes
   everywhere: egui-winit maps it to paste on Windows only; elsewhere
   Ctrl+V (Command+V on macOS) or the Paste key paste.
+- `indicator::drawn` and `indicator::find` (egui-pop-core) no longer
+  return an older frame's marks after a frame that drew none (zen mode
+  hiding every bar): the list is kept per pass, and a pass that recorded
+  no mark reads as empty.
 
 ### Security
 

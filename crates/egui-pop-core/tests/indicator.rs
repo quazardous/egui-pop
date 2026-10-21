@@ -18,6 +18,8 @@ struct State {
     clicks: u32,
     visible: bool,
     disabled: bool,
+    /// Nothing drawn (a frame hiding every bar).
+    hidden: bool,
 }
 
 fn harness(spec: ThemeSpec) -> Harness<'static, State> {
@@ -25,6 +27,9 @@ fn harness(spec: ThemeSpec) -> Harness<'static, State> {
         .with_size(egui::vec2(400.0, 200.0))
         .build_ui_state(
             |ui, s: &mut State| {
+                if s.hidden {
+                    return;
+                }
                 ui.horizontal(|ui| {
                     ui.button("Notifications").with_indicator(
                         ui,
@@ -229,4 +234,20 @@ fn right_to_left_moves_the_end_corner_to_the_left() {
     h.run();
     let rtl = indicator::find(&h.ctx, "unread").unwrap().rect;
     assert!(rtl[0] < host.left(), "past the left edge: {rtl:?}");
+}
+
+#[test]
+fn a_pass_drawing_no_mark_leaves_none_recorded() {
+    let mut h = harness(ThemeSpec::new("pop-dark"));
+    assert!(indicator::find(&h.ctx, "unread").is_some());
+    h.state_mut().hidden = true;
+    h.run();
+    h.run();
+    assert!(
+        indicator::drawn(&h.ctx).is_empty(),
+        "the marks of an older pass are gone"
+    );
+    h.state_mut().hidden = false;
+    h.run();
+    assert!(indicator::find(&h.ctx, "unread").is_some());
 }
