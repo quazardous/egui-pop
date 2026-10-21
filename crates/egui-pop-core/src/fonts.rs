@@ -776,6 +776,27 @@ pub fn register(ctx: &Context, face: Face) {
     });
 }
 
+/// The faces drawing each role's regular text, as installed last.
+const FACES: Slot<Arc<[Vec<InstalledFace>; 2]>> = Slot::opaque("core.fonts.faces");
+
+/// A face drawing a role's text, as installed: the family the theme
+/// names it by (`None` for egui's bundled faces behind the theme's),
+/// and its file.
+#[derive(Clone, Debug, PartialEq)]
+pub struct InstalledFace {
+    pub family: Option<String>,
+    pub data: Arc<FontData>,
+}
+
+/// The faces drawing a role's regular text, as installed last, in
+/// order: the theme's families found (registered, egui's or the
+/// system's), then egui's bundled faces behind them. For a renderer
+/// outside egui (an SVG rasteriser, a PDF writer) to draw the same text
+/// as the screen. `None` before the first install.
+pub fn installed_faces(ctx: &Context, role: Role) -> Option<Vec<InstalledFace>> {
+    FACES.get(ctx).map(|f| f[role as usize].clone())
+}
+
 /// The last install's report.
 pub fn report(ctx: &Context) -> Option<Arc<Report>> {
     INSTALLED.get(ctx).map(|(_, r)| r)
@@ -818,7 +839,8 @@ pub fn install(ctx: &Context, ui: &[String], mono: &[String]) -> Arc<Report> {
     {
         return report;
     }
-    let (mut defs, mut report) = definitions(&registered.faces, ui, mono, &System::get());
+    let (mut defs, mut report, drawing) =
+        definitions_and_faces(&registered.faces, ui, mono, &System::get());
     add_specimens(
         &mut defs,
         &mut report,
@@ -832,6 +854,7 @@ pub fn install(ctx: &Context, ui: &[String], mono: &[String]) -> Arc<Report> {
     ctx.set_fonts(defs);
     let report = Arc::new(report);
     INSTALLED.set(ctx, (key, report.clone()));
+    FACES.set(ctx, Arc::new(drawing));
     report
 }
 
@@ -917,12 +940,26 @@ fn nearest(weight: Weight, among: impl Iterator<Item = Weight>) -> Option<Weight
     among.min_by_key(|w| (w.0.abs_diff(weight.0), std::cmp::Reverse(w.0)))
 }
 
+#[cfg(test)]
 fn definitions(
     faces: &[Face],
     ui: &[String],
     mono: &[String],
     system: &System,
 ) -> (FontDefinitions, Report) {
+    let (defs, report, _) = definitions_and_faces(faces, ui, mono, system);
+    (defs, report)
+}
+
+/// [`definitions`], with the faces drawing each role's regular text
+/// ([`installed_faces`]), `ui` then `mono`.
+fn definitions_and_faces(
+    faces: &[Face],
+    ui: &[String],
+    mono: &[String],
+    system: &System,
+) -> (FontDefinitions, Report, [Vec<InstalledFace>; 2]) {
+    let mut drawing: [Vec<InstalledFace>; 2] = Default::default();
     let mut defs = FontDefinitions::default();
     let bundled_faces = defs.font_data.clone();
     crate::icon::insert(&mut defs);
@@ -946,6 +983,12 @@ fn definitions(
                     }
                     continue;
                 };
+                if weight == Weight::REGULAR && !chain.contains(&found.key) {
+                    drawing[role as usize].push(InstalledFace {
+                        family: Some(name.clone()),
+                        data: found.data.clone(),
+                    });
+                }
                 if primary.is_none() {
                     primary = Some(format!("{name} {} ({})", found.weight.0, found.source));
                     if found.weight != weight {
@@ -971,6 +1014,14 @@ fn definitions(
                     .and_then(|k| defs.font_data.get(k))
                     .is_some_and(|d| tabular_digits(d));
                 report.tabular.push((role.key().to_string(), tabular));
+                for key in tail.iter().filter(|k| !chain.contains(k)) {
+                    if let Some(data) = defs.font_data.get(key) {
+                        drawing[role as usize].push(InstalledFace {
+                            family: None,
+                            data: data.clone(),
+                        });
+                    }
+                }
             }
             chain.extend(tail.iter().cloned());
             let fam = family(role, weight);
@@ -999,7 +1050,7 @@ fn definitions(
             ));
         }
     }
-    (defs, report)
+    (defs, report, drawing)
 }
 
 /// Adds a family per specimen name and weight: the face found for the
