@@ -32,6 +32,10 @@ wgpu = ["dep:egui-wgpu", "dep:half"]
 ## subsurface tagged through `wp_color_management_v1` for wide gamut,
 ## below egui's sRGB interface; sRGB elsewhere, with the reason.
 wayland = ["wgpu", "dep:egui-pop-wayland"]
+## A reference graph model kept in a YAML file (`graph::yaml`), for
+## applications without a graph model of their own: read, edited by the
+## node graph editor, written back with comments and order kept.
+graph-yaml = ["dep:serde", "dep:serde-saphyr"]
 
 [dependencies]
 profiling.workspace = true
@@ -42,6 +46,8 @@ half = { version = "2", optional = true }
 egui-pop-core.workspace = true
 egui-pop-wayland = { workspace = true, optional = true }
 serde_json.workspace = true
+serde = { workspace = true, optional = true }
+serde-saphyr = { workspace = true, optional = true }
 
 [dev-dependencies]
 eframe = { workspace = true, features = ["default_fonts", "wgpu", "wayland", "x11"] }

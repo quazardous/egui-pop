@@ -37,6 +37,9 @@ theme-zip = ["egui-pop-api/theme-zip"]
 ## The image viewport, thumbnails and the histogram
 ## (`egui-pop-viewport`, re-exported as `egui_pop::viewport`).
 viewport = ["dep:egui-pop-viewport"]
+## The node graph's reference model kept in a YAML file
+## (`egui_pop::viewport::graph::yaml`).
+graph-yaml = ["viewport", "egui-pop-viewport/graph-yaml"]
 ## The image tools' steps: the histogram's drag, curves, colour wheels,
 ## the zoom control and navigator, each change a step of the application
 ## (`egui-pop-imaging`, re-exported as `egui_pop::imaging`).

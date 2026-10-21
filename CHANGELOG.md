@@ -20,6 +20,21 @@ publishes.
 
 ### Added
 
+- A reference graph model in a YAML file (egui-pop-viewport, the new
+  `graph-yaml` feature; the facade's `graph-yaml`):
+  `graph::yaml::YamlGraph` implements `GraphModel` for applications
+  without a graph model of their own. The file declares groups, kinds
+  (ports and parameters a node of that kind has), nodes and wires
+  (`load.image -> blur.image`), and is stamped in its root
+  `$extensions` (`org.egui-pop.graph: {version: 1}`,
+  `FORMAT_EXTENSION`, `FORMAT_VERSION`). `YamlGraph::apply` is its one
+  mutation point: each edit changes the text where it lands (a `pos`, a
+  parameter's value, the items deleted, new items after the last), so
+  an untouched file comes back byte for byte and an edited one keeps
+  its comments, key order, quoting and the keys egui-pop does not know.
+  A part in flow style that an edit reaches is written again in block
+  style. A malformed file is refused with its line and column
+  (`YamlGraphError`). Part of #31.
 - The docs online: the guides in `docs/` as an mdBook with search, at
   <https://quazardous.github.io/egui-pop/docs/> beside the gallery,
   built and deployed by the Pages workflow (`book.toml`,

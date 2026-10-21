@@ -73,6 +73,8 @@
 mod minimap;
 mod model;
 mod state;
+#[cfg(feature = "graph-yaml")]
+pub mod yaml;
 
 use std::collections::{BTreeSet, HashMap};
 use std::fmt;

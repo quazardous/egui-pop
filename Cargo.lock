@@ -1262,6 +1262,8 @@ dependencies = [
  "egui_kittest",
  "half",
  "profiling",
+ "serde",
+ "serde-saphyr",
  "serde_json",
 ]
 
