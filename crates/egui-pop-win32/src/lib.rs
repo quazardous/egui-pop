@@ -573,7 +573,7 @@ mod sys {
         unsafe {
             DwmSetWindowAttribute(
                 hwnd as HWND,
-                super::dwm::WINDOW_CORNER_PREFERENCE as i32,
+                super::dwm::WINDOW_CORNER_PREFERENCE as _,
                 (&value as *const i32).cast(),
                 std::mem::size_of::<i32>() as u32,
             )

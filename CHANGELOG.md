@@ -134,6 +134,8 @@ publishes.
 
 ### Fixed
 
+- egui-pop-win32 builds again with windows-sys 0.61.2, whose
+  `DwmSetWindowAttribute` takes the attribute as an unsigned value.
 - Text typed with an AccessKit focus reaches the field (egui-pop-core):
   when a screen reader or an agent focuses a text field and types in
   the same pass, egui 0.36 dropped what was typed. The focus plugin
