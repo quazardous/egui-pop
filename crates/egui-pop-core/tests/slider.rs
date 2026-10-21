@@ -982,3 +982,50 @@ fn a_panel_redrawn_while_typing_keeps_the_entry_open_and_a_real_blur_commits() {
     assert!(h.query_by_role(egui::accesskit::Role::TextInput).is_none());
     assert_ne!(h.ctx.memory(|m| m.focused()), Some(edit));
 }
+
+#[test]
+fn under_darktables_profile_the_wheel_steps_the_slider_under_the_pointer() {
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(420.0, 160.0))
+        .build_ui_state(
+            |ui, p: &mut Panel| {
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    for (i, v) in p.values.iter_mut().enumerate() {
+                        ui.add(Slider::new(v, &format!("Value {i}"), 0.0..=1.0).step(0.1));
+                    }
+                });
+            },
+            Panel {
+                values: vec![0.5; 12],
+            },
+        );
+    let darktable = egui_pop_model::pointer::profile("darktable").unwrap();
+    egui_pop_core::pointer::set_map(
+        &h.ctx,
+        egui_pop_model::pointer::PointerMap::from_profile(darktable),
+    );
+    h.run();
+    let g = egui_pop_core::slider::gestures(&h.ctx);
+    assert!(g.wheel_steps);
+    // A plain wheel steps the slider under the pointer, focused or not;
+    // the panel stays.
+    let at = h.get_by_label("Value 1").rect().center();
+    wheel(&mut h, at, Modifiers::NONE);
+    assert!(
+        (h.state().values[1] - 0.4).abs() < 1e-9,
+        "{:?}",
+        h.state().values
+    );
+    assert_eq!(h.get_by_label("Value 1").rect().center(), at);
+    // Ctrl+Alt leaves the wheel to the panel.
+    wheel(&mut h, at, Modifiers::COMMAND | Modifiers::ALT);
+    assert!((h.state().values[1] - 0.4).abs() < 1e-9);
+    // Ctrl is ten times finer.
+    let at = h.get_by_label("Value 2").rect().center();
+    wheel(&mut h, at, Modifiers::COMMAND);
+    assert!(
+        (h.state().values[2] - 0.49).abs() < 1e-9,
+        "{:?}",
+        h.state().values
+    );
+}
