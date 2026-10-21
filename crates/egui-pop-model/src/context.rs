@@ -36,7 +36,7 @@
 //! assert_eq!(t.state.rev, 2);
 //! ```
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::sync::Arc;
 
@@ -121,6 +121,16 @@ pub struct FrameSpec {
     pub icon: Option<String>,
     /// On the live stack, never restored.
     pub transient: bool,
+    /// A mode: its group shows in the status bar, as a chip while one of
+    /// its modes is on. A group is shown when any of its modes says so;
+    /// a group that is pure plumbing stays out of the bar.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub visible: bool,
+    /// A mode: its chip's tone, by the kit's tone name (`accent`, `info`,
+    /// `success`, `warning`, `danger`, `muted`, `record`); `accent` when
+    /// none.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tone: Option<String>,
     /// Context keys the frame sets while it is on (the top place's, every
     /// active mode's).
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -167,6 +177,8 @@ impl FrameSpec {
             title: title.into(),
             icon: None,
             transient: false,
+            visible: false,
+            tone: None,
             keys: Vec::new(),
             arrangement: None,
             show: Vec::new(),
@@ -194,6 +206,20 @@ impl FrameSpec {
     /// Never restored (an agent driving, a modal tool mode).
     pub fn transient(mut self) -> Self {
         self.transient = true;
+        self
+    }
+
+    /// A mode: shows its group in the status bar (a chip while one of
+    /// its modes is on).
+    pub fn visible(mut self) -> Self {
+        self.visible = true;
+        self
+    }
+
+    /// A mode: its chip's tone, a kit tone name (`record` for "an agent
+    /// is driving").
+    pub fn tone(mut self, tone: &str) -> Self {
+        self.tone = Some(tone.into());
         self
     }
 
@@ -293,6 +319,16 @@ impl FrameRegistry {
 
     pub fn is_empty(&self) -> bool {
         self.frames.is_empty()
+    }
+
+    /// The groups shown in the status bar: those with a mode declared
+    /// [`FrameSpec::visible`].
+    pub fn visible_groups(&self) -> BTreeSet<GroupId> {
+        self.frames
+            .values()
+            .filter(|f| f.kind == Kind::Mode && f.visible)
+            .filter_map(|f| f.group.clone())
+            .collect()
     }
 
     /// Every mode group, with its modes in id order.
@@ -1435,6 +1471,25 @@ mod tests {
         );
         let text = view_schema().save(&view).unwrap();
         assert_eq!(view_schema().load::<ViewDoc>(&text).unwrap().value, view);
+    }
+
+    #[test]
+    fn a_group_is_visible_when_one_of_its_modes_says_so() {
+        let mut r = FrameRegistry::new();
+        r.insert(FrameSpec::mode(CULLING, ORIENTATION, "Culling").visible())
+            .unwrap();
+        r.insert(FrameSpec::mode(REVIEW, ORIENTATION, "Review"))
+            .unwrap();
+        r.insert(FrameSpec::mode(
+            FrameId::from_static("t.plumbing"),
+            GroupId::from_static("plumbing"),
+            "Plumbing",
+        ))
+        .unwrap();
+        assert_eq!(r.visible_groups(), [ORIENTATION].into());
+        let spec = FrameSpec::mode(CULLING, ORIENTATION, "Culling").tone("record");
+        assert_eq!(spec.tone.as_deref(), Some("record"));
+        assert!(!spec.visible);
     }
 
     #[test]

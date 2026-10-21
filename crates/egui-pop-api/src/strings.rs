@@ -638,6 +638,20 @@ pub const CONTEXT_REDONE_IN: StrKey =
     StrKey::new("egui-pop-context-redone-in", "Redone in { $place }");
 /// The toast's action going to where an undo or a redo happened.
 pub const CONTEXT_GO_THERE: StrKey = StrKey::new("egui-pop-context-go-there", "Go there");
+/// A crumb of the status bar's breadcrumb, going back to its place.
+pub const CONTEXT_GO_TO: StrKey = StrKey::new("egui-pop-context-go-to", "Go to { $place }");
+/// The status bar's last crumb, where the user is.
+pub const CONTEXT_HERE: StrKey = StrKey::new("egui-pop-context-here", "You are in { $place }");
+/// The status bar's `…` crumb, a menu of the places collapsed in it.
+pub const CONTEXT_MORE_PLACES: StrKey = StrKey::new("egui-pop-context-more-places", "Places above");
+/// A pushed mode's chip in the status bar, going back to what it replaced.
+pub const CONTEXT_BACK_FROM_MODE: StrKey =
+    StrKey::new("egui-pop-context-back-from-mode", "Back from { $mode }");
+/// A chip whose mode refuses to be left now, with the guard's reason.
+pub const CONTEXT_CANNOT_LEAVE: StrKey = StrKey::new(
+    "egui-pop-context-cannot-leave",
+    "{ $mode } stays on: { $reason }",
+);
 /// Frames of the saved stack that could not come back at start.
 pub const CONTEXT_DROPPED: StrKey =
     StrKey::new("egui-pop-context-dropped", "Not restored: { $frames }");
@@ -902,6 +916,11 @@ pub const ALL: &[StrKey] = &[
     CONTEXT_UNDONE_IN,
     CONTEXT_REDONE_IN,
     CONTEXT_GO_THERE,
+    CONTEXT_GO_TO,
+    CONTEXT_HERE,
+    CONTEXT_MORE_PLACES,
+    CONTEXT_BACK_FROM_MODE,
+    CONTEXT_CANNOT_LEAVE,
     CONTEXT_DROPPED,
 ];
 

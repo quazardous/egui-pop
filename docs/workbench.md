@@ -302,6 +302,20 @@ reducing events, so its state is right the moment it shows again. A
 clause that does not parse keeps it hidden and is a diagnostic
 (`indicator-when`).
 
+With the context stack installed too, the status bar starts with where
+the user is and what is active ([status and context](status-and-context.md)):
+the breadcrumb (a click on a crumb goes back to that place, the current
+one does nothing), then a chip per active mode whose group is declared
+visible (`FrameSpec::visible`, its tone `FrameSpec::tone`). A click on a
+chip leaves its mode; a pushed mode shows a back mark and goes back to
+what it replaced; a mode whose guard refuses keeps its chip and says why
+in its tooltip. On a narrow window the middle crumbs collapse into `…`
+(a menu of them) first, then the heaviest indicators give way; chips
+never hide. `StripsPlugin::breadcrumb(false)` keeps the bar to its
+indicators, for an application showing the breadcrumb elsewhere
+(`contexts::breadcrumb`, `contexts::mode_chips`); `contexts::crumbs`,
+`contexts::chips` and `contexts::why_not` give what they show.
+
 ## The window's own frame
 
 `FramePlugin` (opt-in) draws the title bar in the `TITLE` zone above the

@@ -34,17 +34,34 @@
 //! events, so its state is right the moment it shows again.
 //! [`Indicator::during`] writes the clause of a frame for it.
 //!
+//! With the context stack ([`crate::contexts`]) installed too, the
+//! status bar starts with **where the user is**: the breadcrumb (a click
+//! on a crumb goes back to that place; the current one does nothing),
+//! then a chip per active mode of a group declared
+//! [`FrameSpec::visible`] (a click leaves the mode; a pushed mode shows a
+//! back mark and goes back to what it replaced; a mode whose guard
+//! refuses keeps its chip and says why in its tooltip). On a narrow
+//! window the middle crumbs collapse into `…` (a menu of them) first,
+//! then the heaviest indicators give way; chips never hide, since they
+//! show active states. [`StripsPlugin::breadcrumb`] turns this off.
+//!
 //! Steps (ADR 0011): `workbench.fold` (`{ "area", "folded" }`): an area
 //! folded to its strip or unfolded.
 
 use std::fmt;
+use std::ops::Range;
 use std::rc::Rc;
 
+use egui::{Color32, RichText, WidgetType};
 use egui::{Sense, Ui, vec2};
+use egui_pop_core::a11y;
 use egui_pop_core::icon::Icon;
+use egui_pop_core::indicator::Indicator as Mark;
 use egui_pop_core::kit::{BoxStyle, Kit, KitCx, Part, Side, State as KitState, paint_indicator};
+use egui_pop_core::state::Slot;
+use egui_pop_core::strings;
 use egui_pop_core::theme::Tokens;
-use egui_pop_model::commands::CommandSpec;
+use egui_pop_model::commands::{CommandSpec, Origin};
 use egui_pop_model::context::FrameSpec;
 use egui_pop_model::ids::{BlockId, CommandId, PluginId};
 use egui_pop_model::panels::Area;
@@ -53,9 +70,15 @@ use serde::Serialize;
 use serde_json::{Value as Json, json};
 
 use crate::app::{AppHandle, MENU_VIEW};
+use crate::contexts::{self, Chip, Envelope};
 use crate::host::Event;
+use crate::strings as txt;
 use crate::zones::{self, Block};
 use crate::{Ctx, Plugin, PluginError};
+
+/// Whether a chip was hovered last pass (its tooltip then asks the
+/// owner whether the mode may be left), per chip.
+const CHIP_HOVERED: Slot<bool> = Slot::new("api.strips.chip_hovered");
 
 /// Folds or unfolds the start side bar.
 pub const CMD_TOGGLE_SIDE_BAR: CommandId = CommandId::from_static("view.side_bar.toggle");
@@ -202,11 +225,15 @@ impl Indicator {
 #[derive(Clone, Debug)]
 pub struct StripsPlugin {
     activity_bar: bool,
+    breadcrumb: bool,
 }
 
 impl Default for StripsPlugin {
     fn default() -> Self {
-        Self { activity_bar: true }
+        Self {
+            activity_bar: true,
+            breadcrumb: true,
+        }
     }
 }
 
@@ -215,7 +242,16 @@ impl StripsPlugin {
     pub fn status_only() -> Self {
         Self {
             activity_bar: false,
+            ..Self::default()
         }
+    }
+
+    /// Whether the status bar starts with the context stack's breadcrumb
+    /// and mode chips, when the context plugin is installed (on by
+    /// default). An application showing them elsewhere turns it off.
+    pub fn breadcrumb(mut self, on: bool) -> Self {
+        self.breadcrumb = on;
+        self
     }
 }
 
@@ -244,6 +280,16 @@ impl Plugin for StripsPlugin {
             ctx.block(
                 zones::ACTIVITY_BAR,
                 Block::add(BlockId::from_static("egui_pop.activity"), 0, activity_bar),
+            );
+        }
+        if self.breadcrumb {
+            ctx.block(
+                zones::STATUS_BAR,
+                Block::add(
+                    BlockId::from_static("egui_pop.status_context"),
+                    0,
+                    status_context,
+                ),
             );
         }
         ctx.block(
@@ -335,17 +381,248 @@ fn activity_bar(ui: &mut Ui, app: &AppHandle) {
     });
 }
 
-/// The indicators, at the status bar's end.
-fn indicators(ui: &mut Ui, app: &AppHandle) {
+/// The indicators the bar shows, from its end: those whose clause
+/// holds, lightest first.
+fn shown(app: &AppHandle) -> Vec<(Indicator, IndicatorState)> {
     let cx = app.context();
-    let list: Vec<_> = app
-        .indicators()
+    app.indicators()
         .into_iter()
         .filter(|(i, _)| i.applies(&cx))
+        .collect()
+}
+
+/// A text's width in the status bar's small font.
+fn small_width(ui: &Ui, text: &str) -> f32 {
+    let font = egui::TextStyle::Small.resolve(ui.style());
+    ui.ctx()
+        .fonts_mut(|f| f.layout_no_wrap(text.to_string(), font, Color32::PLACEHOLDER))
+        .size()
+        .x
+}
+
+/// What an indicator says, its count after its text.
+fn indicator_text(state: &IndicatorState) -> String {
+    match state.count {
+        Some(n) => format!("{} ({n})", state.text),
+        None => state.text.clone(),
+    }
+}
+
+/// The room an indicator takes in the bar, its spacing included.
+fn indicator_width(ui: &Ui, state: &IndicatorState) -> f32 {
+    let spacing = ui.spacing().item_spacing.x;
+    let mut w = small_width(ui, &indicator_text(state)) + 2.0 * ui.spacing().button_padding.x;
+    if state.busy.is_some() {
+        w += Tokens::of(ui.ctx()).size.icon_inline + spacing;
+    }
+    w + spacing
+}
+
+/// A part of the breadcrumb as drawn: a crumb, or `…` standing for the
+/// crumbs collapsed in it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Seg {
+    Crumb(usize),
+    More(Range<usize>),
+}
+
+/// The breadcrumb's parts that fit in `budget`: every crumb, else the
+/// root, `…` and as many crumbs from the end as fit, else `…` and the
+/// last crumb. `widths` are the crumbs' (spacing included), `sep` a
+/// separator's, `more` the `…` crumb's.
+fn fit_crumbs(widths: &[f32], sep: f32, more: f32, budget: f32) -> Vec<Seg> {
+    let n = widths.len();
+    let all: Vec<Seg> = (0..n).map(Seg::Crumb).collect();
+    let width = |segs: &[Seg]| -> f32 {
+        let w: f32 = segs
+            .iter()
+            .map(|s| match s {
+                Seg::Crumb(i) => widths[*i],
+                Seg::More(_) => more,
+            })
+            .sum();
+        w + sep * segs.len().saturating_sub(1) as f32
+    };
+    if n <= 2 || width(&all) <= budget {
+        return all;
+    }
+    for tail in (1..=n - 2).rev() {
+        let mut segs = vec![Seg::Crumb(0), Seg::More(1..n - tail)];
+        segs.extend((n - tail..n).map(Seg::Crumb));
+        if width(&segs) <= budget {
+            return segs;
+        }
+    }
+    vec![Seg::More(0..n - 1), Seg::Crumb(n - 1)]
+}
+
+/// A chip's text: its title, after a back mark for a pushed mode.
+fn chip_text(chip: &Chip) -> String {
+    if chip.pushed {
+        format!("‹ {}", chip.title)
+    } else {
+        chip.title.clone()
+    }
+}
+
+/// The status bar's start: where the user is (the breadcrumb) and what is
+/// active (a chip per mode of a visible group).
+fn status_context(ui: &mut Ui, app: &AppHandle) {
+    let Some(svc) = app.service(&contexts::CONTEXTS) else {
+        return;
+    };
+    let crumbs = contexts::crumbs(app);
+    if crumbs.is_empty() {
+        return;
+    }
+    let chips: Vec<Chip> = contexts::chips(app)
+        .into_iter()
+        .filter(|c| c.visible)
         .collect();
+    let t = Tokens::of(ui.ctx());
+    let spacing = ui.spacing().item_spacing.x;
+    let pad = ui.spacing().button_padding.x;
+    // The breadcrumb gives way first: the room left once the chips and
+    // every indicator shown have theirs.
+    let crumb_widths: Vec<f32> = crumbs
+        .iter()
+        .map(|c| small_width(ui, c) + 2.0 * pad + spacing)
+        .collect();
+    let sep = small_width(ui, "›") + spacing;
+    let more = small_width(ui, "…") + 2.0 * pad + spacing;
+    let chips_width: f32 = chips
+        .iter()
+        .map(|c| {
+            let icon = if c.icon.is_some() {
+                t.size.icon_inline + spacing
+            } else {
+                0.0
+            };
+            small_width(ui, &chip_text(c)) + 2.0 * t.space.s + spacing + icon
+        })
+        .sum();
+    let indicators_width: f32 = shown(app).iter().map(|(_, s)| indicator_width(ui, s)).sum();
+    let budget = ui.available_width() - chips_width - indicators_width - t.space.s;
+    let segs = fit_crumbs(&crumb_widths, sep, more, budget);
+    let here = crumbs.len() - 1;
+    let mut jump_to = None;
+    for (k, seg) in segs.iter().enumerate() {
+        if k > 0 {
+            ui.label(RichText::new("›").small().weak());
+        }
+        match seg {
+            Seg::Crumb(i) if *i == here => {
+                let r = ui.label(RichText::new(&crumbs[*i]).small().strong());
+                let name =
+                    strings::tr_args(ui.ctx(), &txt::CONTEXT_HERE, &[("place", &crumbs[*i])]);
+                a11y::name(&r, WidgetType::Label, &name);
+            }
+            Seg::Crumb(i) => {
+                let name =
+                    strings::tr_args(ui.ctx(), &txt::CONTEXT_GO_TO, &[("place", &crumbs[*i])]);
+                let r = ui.add(egui::Button::new(RichText::new(&crumbs[*i]).small()).frame(false));
+                a11y::name(&r, WidgetType::Button, &name);
+                if r.on_hover_text(name).clicked() {
+                    jump_to = Some(*i);
+                }
+            }
+            Seg::More(range) => {
+                let name = strings::tr(ui.ctx(), &txt::CONTEXT_MORE_PLACES);
+                let r = ui.menu_button(RichText::new("…").small(), |ui| {
+                    for i in range.clone() {
+                        let go = strings::tr_args(
+                            ui.ctx(),
+                            &txt::CONTEXT_GO_TO,
+                            &[("place", &crumbs[i])],
+                        );
+                        let b = ui.button(&crumbs[i]);
+                        a11y::name(&b, WidgetType::Button, &go);
+                        if b.clicked() {
+                            jump_to = Some(i);
+                            ui.close();
+                        }
+                    }
+                });
+                a11y::name(&r.response, WidgetType::Button, &name);
+                r.response.on_hover_text(name);
+            }
+        }
+    }
+    if svc.switching() {
+        ui.spinner();
+    }
+    if !chips.is_empty() {
+        ui.add_space(t.space.s);
+    }
+    let mut leave = None;
+    for chip in &chips {
+        let tone = chip
+            .tone
+            .as_deref()
+            .and_then(Tone::from_name)
+            .unwrap_or(Tone::Accent);
+        if let Some(icon) = chip.icon.as_deref().and_then(Icon::by_name) {
+            ui.add(Mark::icon(icon).tone(tone));
+        }
+        let ctx = ui.ctx().clone();
+        let action = strings::tr_args(
+            &ctx,
+            if chip.pushed {
+                &txt::CONTEXT_BACK_FROM_MODE
+            } else {
+                &txt::CONTEXT_LEAVE_MODE
+            },
+            &[("mode", &chip.title)],
+        );
+        let hovered = CHIP_HOVERED.keyed(("egui_pop.status_chip", chip.frame.as_str()));
+        // Asked only under the pointer: a guard is the owner's code.
+        let tip = if hovered.get(&ctx) == Some(true) {
+            contexts::why_not(app, chip.leave()).map(|reason| {
+                strings::tr_args(
+                    &ctx,
+                    &txt::CONTEXT_CANNOT_LEAVE,
+                    &[("mode", &chip.title), ("reason", &reason)],
+                )
+            })
+        } else {
+            None
+        };
+        let r = ui.add(
+            Mark::text(chip_text(chip))
+                .tone(tone)
+                .name(chip.title.clone())
+                .interactive(action.clone())
+                .tooltip(tip.unwrap_or(action)),
+        );
+        hovered.set(&ctx, r.hovered());
+        if r.clicked() {
+            leave = Some(chip.leave());
+        }
+    }
+    if let Some(depth) = jump_to {
+        contexts::jump(app, depth);
+    }
+    if let Some(request) = leave {
+        contexts::request(app, Envelope::new(request), &Origin::User);
+    }
+}
+
+/// The indicators, at the status bar's end. On a narrow bar the
+/// heaviest give way.
+fn indicators(ui: &mut Ui, app: &AppHandle) {
+    let mut list = shown(app);
     if list.is_empty() {
         return;
     }
+    let mut room = ui.available_width();
+    let fits = list
+        .iter()
+        .take_while(|(_, s)| {
+            room -= indicator_width(ui, s);
+            room >= 0.0
+        })
+        .count();
+    list.truncate(fits);
     let t = Tokens::of(ui.ctx());
     let kit = Kit::of(ui.ctx());
     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -354,10 +631,7 @@ fn indicators(ui: &mut Ui, app: &AppHandle) {
             // box, the others its tones.
             let box_ = kit.status_indicator.style_toned(state.tone, KitState::REST);
             let color = box_.text;
-            let mut text = state.text.clone();
-            if let Some(n) = state.count {
-                text = format!("{text} ({n})");
-            }
+            let text = indicator_text(&state);
             let r = ui.add(
                 egui::Button::new(egui::RichText::new(&text).color(color).small()).frame(false),
             );
@@ -402,4 +676,41 @@ fn indicators(ui: &mut Ui, app: &AppHandle) {
             }
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_middle_crumbs_collapse_first() {
+        let w = [10.0; 5];
+        let all: Vec<Seg> = (0..5).map(Seg::Crumb).collect();
+        assert_eq!(fit_crumbs(&w, 1.0, 5.0, 100.0), all);
+        // 10 + 5 + 10 * 3 + 4 separators.
+        assert_eq!(
+            fit_crumbs(&w, 1.0, 5.0, 49.0),
+            vec![
+                Seg::Crumb(0),
+                Seg::More(1..2),
+                Seg::Crumb(2),
+                Seg::Crumb(3),
+                Seg::Crumb(4)
+            ]
+        );
+        assert_eq!(
+            fit_crumbs(&w, 1.0, 5.0, 27.0),
+            vec![Seg::Crumb(0), Seg::More(1..4), Seg::Crumb(4)]
+        );
+        // Not even that: `…` and where the user is.
+        assert_eq!(
+            fit_crumbs(&w, 1.0, 5.0, 1.0),
+            vec![Seg::More(0..4), Seg::Crumb(4)]
+        );
+        // Two crumbs never collapse.
+        assert_eq!(
+            fit_crumbs(&w[..2], 1.0, 5.0, 1.0),
+            vec![Seg::Crumb(0), Seg::Crumb(1)]
+        );
+    }
 }

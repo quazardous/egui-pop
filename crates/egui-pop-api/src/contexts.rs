@@ -1128,19 +1128,108 @@ pub fn scroll_area<R>(
     out.inner
 }
 
+/// The breadcrumb's crumbs as the interface says them: the root's title,
+/// then each place's (its title, and its payload when it is a text or a
+/// number). Crumb `i` is reached with [`jump`]`(app, i)`. Empty without
+/// the context plugin.
+pub fn crumbs(app: &AppHandle) -> Vec<String> {
+    let Some(svc) = app.service(&CONTEXTS) else {
+        return Vec::new();
+    };
+    let ctx = app.egui();
+    let p = lock(&svc.projection);
+    let state = p.applied.clone().unwrap_or_default();
+    std::iter::once(root_title(app, &svc))
+        .chain(state.places.iter().map(|e| p.crumb(&ctx, e)))
+        .collect()
+}
+
+/// An active mode, as a chip shows it.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct Chip {
+    pub frame: FrameId,
+    pub group: GroupId,
+    /// Its title, translated.
+    pub title: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
+    /// Its tone's name, as declared (`FrameSpec::tone`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tone: Option<String>,
+    /// The last pushed mode: leaving it goes back to what it replaced.
+    pub pushed: bool,
+    /// Its group is shown in the status bar (`FrameSpec::visible`).
+    pub visible: bool,
+}
+
+impl Chip {
+    /// The request leaving it: a pop for the last pushed mode (back to
+    /// what it replaced), else its group turned off.
+    pub fn leave(&self) -> Request {
+        if self.pushed {
+            Request::PopMode
+        } else {
+            Request::ClearMode {
+                group: self.group.clone(),
+            }
+        }
+    }
+}
+
+/// The active modes, in the order they came. Empty without the context
+/// plugin.
+pub fn chips(app: &AppHandle) -> Vec<Chip> {
+    let Some(svc) = app.service(&CONTEXTS) else {
+        return Vec::new();
+    };
+    let ctx = app.egui();
+    let p = lock(&svc.projection);
+    let state = p.applied.clone().unwrap_or_default();
+    let visible = p.registry.visible_groups();
+    let last_pushed = state.modes.iter().rposition(|m| m.life == Life::Pushed);
+    state
+        .modes
+        .iter()
+        .enumerate()
+        .map(|(i, m)| {
+            let spec = p.registry.get(&m.frame);
+            Chip {
+                frame: m.frame.clone(),
+                group: m.group.clone(),
+                title: p.title(&ctx, &m.frame),
+                icon: spec.and_then(|s| s.icon.clone()),
+                tone: spec.and_then(|s| s.tone.clone()),
+                pushed: Some(i) == last_pushed,
+                visible: visible.contains(&m.group),
+            }
+        })
+        .collect()
+}
+
+/// Why the owner would refuse a request now (its guards, a hold), asked
+/// as a dry run of the stack's own owner; `None` when it would go, when
+/// there is nothing to do, or when the host owns the stack (its answer
+/// may come later).
+pub fn why_not(app: &AppHandle, request: Request) -> Option<String> {
+    let svc = app.service(&CONTEXTS)?;
+    if svc.custom.load(Ordering::Relaxed) {
+        return None;
+    }
+    let env = Envelope::new(request).dry_run();
+    let answer = with_owner(app, |c| c.request(&env, &Origin::User))?;
+    match answer {
+        Answer::Done(Err(r)) if r.kind != RefusalKind::Nothing => Some(r.reason),
+        _ => None,
+    }
+}
+
 /// The breadcrumb: the root, then each place; a crumb jumps back to its
 /// level (the last one is where the user is).
 pub fn breadcrumb(ui: &mut Ui, app: &AppHandle) {
     let Some(svc) = app.service(&CONTEXTS) else {
         return;
     };
-    let crumbs: Vec<String> = {
-        let p = lock(&svc.projection);
-        let state = p.applied.clone().unwrap_or_default();
-        std::iter::once(root_title(app, &svc))
-            .chain(state.places.iter().map(|e| p.crumb(ui.ctx(), e)))
-            .collect()
-    };
+    let crumbs = crumbs(app);
     let mut jump_to = None;
     ui.horizontal_wrapped(|ui| {
         for (i, title) in crumbs.iter().enumerate() {
@@ -1168,41 +1257,17 @@ pub fn breadcrumb(ui: &mut Ui, app: &AppHandle) {
 /// The active modes as chips, each with a way out (a pushed mode pops,
 /// a set one is turned off).
 pub fn mode_chips(ui: &mut Ui, app: &AppHandle) {
-    let Some(svc) = app.service(&CONTEXTS) else {
-        return;
-    };
-    let chips: Vec<(String, ModeEntry, bool)> = {
-        let p = lock(&svc.projection);
-        let state = p.applied.clone().unwrap_or_default();
-        let last_pushed = state.modes.iter().rposition(|m| m.life == Life::Pushed);
-        state
-            .modes
-            .iter()
-            .enumerate()
-            .map(|(i, m)| {
-                (
-                    p.title(ui.ctx(), &m.frame),
-                    m.clone(),
-                    Some(i) == last_pushed,
-                )
-            })
-            .collect()
-    };
+    let chips = chips(app);
     let mut leave = None;
     ui.horizontal_wrapped(|ui| {
-        for (title, m, top) in &chips {
+        for chip in &chips {
+            let title = &chip.title;
             let r = ui.add(widgets::SelectableRow::new(true, format!("{title}  ×")));
             let name = strings::tr_args(ui.ctx(), &txt::CONTEXT_LEAVE_MODE, &[("mode", title)]);
             a11y::name(&r, WidgetType::Button, &name);
             let r = r.on_hover_text(name.as_str());
             if r.clicked() {
-                leave = Some(if *top {
-                    Request::PopMode
-                } else {
-                    Request::ClearMode {
-                        group: m.group.clone(),
-                    }
-                });
+                leave = Some(chip.leave());
             }
         }
     });

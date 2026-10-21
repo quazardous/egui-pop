@@ -407,11 +407,21 @@ egui-pop-command-label = { $category } : { $title }
 
 egui-pop-command-with-change = { $title } { $change }
 
+egui-pop-context-back-from-mode = Revenir de { $mode }
+
+egui-pop-context-cannot-leave = { $mode } reste actif : { $reason }
+
 egui-pop-context-dropped = Non restauré : { $frames }
 
 egui-pop-context-go-there = Y aller
 
+egui-pop-context-go-to = Aller à { $place }
+
+egui-pop-context-here = Vous êtes dans { $place }
+
 egui-pop-context-leave-mode = Quitter { $mode }
+
+egui-pop-context-more-places = Lieux au-dessus
 
 egui-pop-context-no-mode = Aucun
 

@@ -37,6 +37,19 @@ publishes.
   (`YamlGraphError`). Part of #31.
 - The gallery's `graph-file` page: the node graph editor over a YAML
   graph file, the file's text beside it, each edit landing in the text.
+- The status bar says where the user is and what is active
+  (egui-pop-api): with the context stack installed, `StripsPlugin`
+  starts the bar with the breadcrumb (a crumb goes back to its place)
+  and a chip per active mode of a group declared visible
+  (`FrameSpec::visible`, coloured by `FrameSpec::tone`). A chip leaves
+  its mode, a pushed mode's goes back to what it replaced, and a mode
+  whose guard refuses keeps its chip with the reason in its tooltip. On
+  a narrow window the middle crumbs collapse into a `…` menu first,
+  then the heaviest indicators give way; chips never hide.
+  `StripsPlugin::breadcrumb(false)` turns it off. New:
+  `contexts::crumbs`, `contexts::chips`, `contexts::why_not`, and the
+  strings `egui-pop-context-go-to`, `-here`, `-more-places`,
+  `-back-from-mode`, `-cannot-leave` (in French too).
 - Status bar indicators that follow the context (egui-pop-api):
   `strips::Indicator::when` takes a `when` clause over the context keys
   (`place == 'photos.album'`, `mode.edit == 'masks'`) and the bar shows
