@@ -168,3 +168,90 @@ fn a_value_picked_in_the_image_adds_a_point_and_the_drag_moves_it() {
     h.run();
     assert_eq!(h.state().points, identity());
 }
+
+/// A curve editor in a card with a context menu, under a plain label
+/// that has none of its own.
+#[derive(Debug, Default)]
+struct Card {
+    points: Vec<[f32; 2]>,
+    deleted: usize,
+}
+
+fn card() -> Harness<'static, Card> {
+    let mut h = Harness::builder()
+        .with_size(vec2(260.0, 300.0))
+        .build_ui_state(
+            |ui, s: &mut Card| {
+                let card = ui.interact(ui.max_rect(), egui::Id::new("card"), egui::Sense::click());
+                ui.add(egui::Label::new("Plain").selectable(false));
+                let out = CurveEditor::new(&mut s.points, "Tone curve")
+                    .size(vec2(200.0, 200.0))
+                    .show(ui);
+                s.deleted += out
+                    .changes
+                    .iter()
+                    .filter(|c| c.cause == Cause::Delete)
+                    .count();
+                egui_pop_core::pointer::claim::context_menu(&card, |ui| {
+                    ui.label("Card menu");
+                });
+            },
+            Card {
+                points: vec![[0.0, 0.0], [0.5, 0.5], [1.0, 1.0]],
+                deleted: 0,
+            },
+        );
+    h.run();
+    h
+}
+
+#[test]
+fn the_curves_right_click_deletes_a_point_and_opens_no_menu_around_it() {
+    let mut h = card();
+    // On a plain label, the card's menu opens.
+    h.get_by_label("Plain").click_secondary();
+    h.run();
+    assert!(
+        h.query_by_label("Card menu").is_some(),
+        "the card's menu opens"
+    );
+    // A click on the card, below the curve, closes it.
+    let below = egui::pos2(240.0, 285.0);
+    h.event(Event::PointerMoved(below));
+    for pressed in [true, false] {
+        h.event(Event::PointerButton {
+            pos: below,
+            button: PointerButton::Primary,
+            pressed,
+            modifiers: Modifiers::NONE,
+        });
+    }
+    h.run();
+    assert!(h.query_by_label("Card menu").is_none());
+    // On the curve's middle point: deleted, and no menu.
+    let middle = h.get_by_label("Tone curve").rect().center();
+    h.event(Event::PointerMoved(middle));
+    h.run();
+    for pressed in [true, false] {
+        h.event(Event::PointerButton {
+            pos: middle,
+            button: PointerButton::Secondary,
+            pressed,
+            modifiers: Modifiers::NONE,
+        });
+    }
+    h.run();
+    assert_eq!(h.state().deleted, 1);
+    assert_eq!(h.state().points.len(), 2);
+    assert!(
+        h.query_by_label("Card menu").is_none(),
+        "no menu over the curve"
+    );
+    // The editor says what its right click does.
+    let uses = egui_pop_core::pointer::claim::uses(&h.ctx);
+    assert!(
+        uses.iter()
+            .any(|u| u.widget == "Curve editor" && u.gesture == "SecondaryClick"),
+        "{uses:?}"
+    );
+}

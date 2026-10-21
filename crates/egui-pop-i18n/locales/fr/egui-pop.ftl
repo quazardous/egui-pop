@@ -1185,6 +1185,10 @@ egui-pop-viewport-curve-value = { $points } points
 
 egui-pop-viewport-curve-value-selected = point { $point } sur { $points } : entrée { $input } %, sortie { $output } %
 
+egui-pop-viewport-curve-editor = Éditeur de courbe
+
+egui-pop-viewport-curve-secondary-click = Supprime le point sous le pointeur
+
 egui-pop-viewport-graph-add-node = Ajouter un nœud
 
 egui-pop-viewport-graph-collapse = Replier { $node }
@@ -1743,6 +1747,10 @@ egui-pop-shortcuts-pointer-pad-name = Zone de geste
 egui-pop-shortcuts-pointer-use = Utiliser { $keys }
 
 egui-pop-shortcuts-pointer-alt = Alt avec un glissement ou la molette peut aller au gestionnaire de fenêtres sur certains bureaux Linux.
+
+egui-pop-shortcuts-widget-uses = Gestes propres aux widgets
+
+egui-pop-shortcuts-widget-uses-note = Ces widgets gardent ces gestes pour eux : les menus contextuels et le profil de pointeur les y laissent.
 
 egui-pop-viewport-hint-zoom = zoomer
 

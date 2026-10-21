@@ -1160,6 +1160,42 @@ fn shortcuts(ui: &mut Ui, app: &AppHandle, st: &mut State, filter: &str) {
         st.pointer_capture = Some((id, None));
         st.capture = None;
     }
+    widget_uses(ui, filter, key_filter.as_deref());
+}
+
+/// The widgets' own uses of the secondary button, seen or declared
+/// (`egui_pop_core::pointer::claim`): listed, not changed here.
+fn widget_uses(ui: &mut Ui, filter: &str, key_filter: Option<&str>) {
+    let ctx = ui.ctx().clone();
+    let t = Tokens::of(&ctx);
+    let needle = filter.trim().to_lowercase();
+    let uses: Vec<_> = egui_pop_core::pointer::claim::uses(&ctx)
+        .into_iter()
+        .filter(|u| key_filter.is_none_or(|k| k.eq_ignore_ascii_case(&u.gesture)))
+        .filter(|u| {
+            needle.is_empty()
+                || u.widget.to_lowercase().contains(&needle)
+                || u.does.to_lowercase().contains(&needle)
+        })
+        .collect();
+    if uses.is_empty() {
+        return;
+    }
+    ui.add_space(t.space.m);
+    ui.strong(strings::tr(&ctx, &txt::SHORTCUTS_WIDGET_USES));
+    ui.label(strings::tr(&ctx, &txt::SHORTCUTS_WIDGET_USES_NOTE));
+    egui::Grid::new("egui_pop.shortcuts.widget_uses")
+        .num_columns(3)
+        .striped(true)
+        .spacing([t.space.m, t.space.xs])
+        .show(ui, |ui| {
+            for u in &uses {
+                let name = ui.label(&u.widget);
+                ui.monospace(&u.gesture).labelled_by(name.id);
+                ui.label(&u.does);
+                ui.end_row();
+            }
+        });
 }
 
 /// The reset of a command's keys in `target`, when it changed them.

@@ -12,7 +12,10 @@
 //!
 //! - **On a point**: a press selects it, a drag moves it between its
 //!   neighbours (Ctrl finer, Shift coarser; Escape puts it back), a
-//!   double click or a right click deletes it (two points stay).
+//!   double click or a right click deletes it (two points stay). The
+//!   editor claims the secondary click on its rect
+//!   (`egui_pop_core::pointer::claim`): a context menu around it does
+//!   not open there.
 //! - **On the curve**: a press adds a point there, and a drag moves it
 //!   at once.
 //! - **Elsewhere**: a double click puts the curve back to its default
@@ -52,6 +55,7 @@ use egui::{
     Color32, Id, Key, Modifiers, Pos2, Rect, Response, Sense, Shape, Stroke, StrokeKind, Ui, Vec2,
     Widget, WidgetInfo, WidgetType, pos2, vec2,
 };
+use egui_pop_core::pointer::claim::{self, SecondaryClaim};
 use egui_pop_core::state::Slot;
 use egui_pop_core::strings;
 use egui_pop_core::theme::Tokens;
@@ -467,6 +471,14 @@ impl<'a> CurveEditor<'a> {
             vec2(w, w)
         });
         let (rect, mut response) = ui.allocate_exact_size(size, Sense::click_and_drag());
+        // The right click deletes a point: no context menu around opens
+        // over the editor.
+        claim::claim_secondary(
+            &response,
+            SecondaryClaim::new(strings::tr(ui.ctx(), &crate::strings::CURVE_EDITOR)).click(
+                strings::tr(ui.ctx(), &crate::strings::CURVE_SECONDARY_CLICK),
+            ),
+        );
         let id = response.id;
         let area = rect.shrink(6.0);
         let mem_id = MEMORY.keyed(id);

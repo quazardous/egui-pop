@@ -507,6 +507,8 @@ egui-pop-shortcuts-system-unavailable 552221bb85492345
 egui-pop-shortcuts-target 96e09f26bab6e030
 egui-pop-shortcuts-target-user d7c4f12fbf94b7a8
 egui-pop-shortcuts-target-workspace 229d7a8b8907536e
+egui-pop-shortcuts-widget-uses ac5ec03abb877a65
+egui-pop-shortcuts-widget-uses-note b4dc796d915b0be7
 egui-pop-slider-maximum c0721adb004bac87
 egui-pop-slider-minimum acae05dcb02987f1
 egui-pop-status-announce d09126c76706e2d1
@@ -641,6 +643,8 @@ egui-pop-toast-warning b31f78108878cdd7
 egui-pop-value-held-by 7acdb4232cdf0e35
 egui-pop-value-missing 552a23e8857a94ff
 egui-pop-value-read-only d8b53ec0b19db359
+egui-pop-viewport-curve-editor 98eb76be44226485
+egui-pop-viewport-curve-secondary-click 705bbe9518ca30e0
 egui-pop-viewport-curve-value 0de5c04e98319c09
 egui-pop-viewport-curve-value-selected 1f71d69aefe4730f
 egui-pop-viewport-graph-add-node 186306336105cc9d

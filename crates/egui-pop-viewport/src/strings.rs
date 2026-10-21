@@ -37,6 +37,14 @@ pub const CURVE_VALUE_SELECTED: StrKey = StrKey::new(
     "egui-pop-viewport-curve-value-selected",
     "point { $point } of { $points }: input { $input } %, output { $output } %",
 );
+/// A curve editor, as the shortcuts editor names it among the widgets'
+/// own gestures.
+pub const CURVE_EDITOR: StrKey = StrKey::new("egui-pop-viewport-curve-editor", "Curve editor");
+/// What a curve editor's secondary click does.
+pub const CURVE_SECONDARY_CLICK: StrKey = StrKey::new(
+    "egui-pop-viewport-curve-secondary-click",
+    "Deletes the point under the pointer",
+);
 /// A colour wheel's accessible value.
 pub const WHEEL_VALUE: StrKey = StrKey::new(
     "egui-pop-viewport-wheel-value",
@@ -208,6 +216,8 @@ pub const ALL: &[StrKey] = &[
     HISTOGRAM_CLIPPED_HIGHLIGHTS,
     CURVE_VALUE,
     CURVE_VALUE_SELECTED,
+    CURVE_EDITOR,
+    CURVE_SECONDARY_CLICK,
     WHEEL_VALUE,
     WHEEL_LUMINANCE,
     NAVIGATOR,

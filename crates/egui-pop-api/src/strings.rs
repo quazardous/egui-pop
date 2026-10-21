@@ -197,6 +197,15 @@ pub const SHORTCUTS_POINTER_ALT: StrKey = StrKey::new(
     "egui-pop-shortcuts-pointer-alt",
     "Alt with a drag or the wheel may go to the window manager on some Linux desktops.",
 );
+/// The heading of the widgets' own gestures (a widget claiming the
+/// secondary button).
+pub const SHORTCUTS_WIDGET_USES: StrKey =
+    StrKey::new("egui-pop-shortcuts-widget-uses", "Widgets' own gestures");
+/// Under that heading.
+pub const SHORTCUTS_WIDGET_USES_NOTE: StrKey = StrKey::new(
+    "egui-pop-shortcuts-widget-uses-note",
+    "These widgets keep these gestures for themselves: context menus and the pointer profile leave them alone there.",
+);
 /// The dialog after a change of pointer profile, when the user changed
 /// gestures: its title.
 pub const POINTER_OVERRIDES_TITLE: StrKey = StrKey::new(
@@ -892,6 +901,8 @@ pub const ALL: &[StrKey] = &[
     SHORTCUTS_POINTER_PAD_NAME,
     SHORTCUTS_POINTER_USE,
     SHORTCUTS_POINTER_ALT,
+    SHORTCUTS_WIDGET_USES,
+    SHORTCUTS_WIDGET_USES_NOTE,
     POINTER_OVERRIDES_TITLE,
     POINTER_OVERRIDES_DETAIL,
     POINTER_KEEP,

@@ -1016,6 +1016,10 @@ egui-pop-shortcuts-target-user = every workspace (yours)
 
 egui-pop-shortcuts-target-workspace = this workspace
 
+egui-pop-shortcuts-widget-uses = Widgets' own gestures
+
+egui-pop-shortcuts-widget-uses-note = These widgets keep these gestures for themselves: context menus and the pointer profile leave them alone there.
+
 egui-pop-slider-maximum = { $label }, maximum
 
 egui-pop-slider-minimum = { $label }, minimum
@@ -1283,6 +1287,10 @@ egui-pop-value-held-by = Being changed by { $origin }
 egui-pop-value-missing = no value at `{ $path }`
 
 egui-pop-value-read-only = Read only
+
+egui-pop-viewport-curve-editor = Curve editor
+
+egui-pop-viewport-curve-secondary-click = Deletes the point under the pointer
 
 egui-pop-viewport-curve-value = { $points } points
 
