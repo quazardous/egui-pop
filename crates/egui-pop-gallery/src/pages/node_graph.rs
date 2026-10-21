@@ -4,7 +4,7 @@
 //! The page keeps the graph and applies the editor's edits; each runs
 //! its `graph.*` step, and the page's plugin refuses to delete the
 //! output. Its Export menu saves the graph, or the selection, as an
-//! SVG image.
+//! SVG image, or as PNG and PDF when built with them.
 
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
@@ -39,6 +39,16 @@ pub const EXPORT_MENU: MenuId = MenuId::from_static("gallery.node-graph.export")
 pub const CMD_EXPORT: CommandId = CommandId::from_static("gallery.node-graph.export");
 pub const CMD_EXPORT_SELECTION: CommandId =
     CommandId::from_static("gallery.node-graph.export-selection");
+#[cfg(feature = "graph-png")]
+pub const CMD_EXPORT_PNG: CommandId = CommandId::from_static("gallery.node-graph.export-png");
+#[cfg(feature = "graph-png")]
+pub const CMD_EXPORT_SELECTION_PNG: CommandId =
+    CommandId::from_static("gallery.node-graph.export-selection-png");
+#[cfg(feature = "graph-pdf")]
+pub const CMD_EXPORT_PDF: CommandId = CommandId::from_static("gallery.node-graph.export-pdf");
+#[cfg(feature = "graph-pdf")]
+pub const CMD_EXPORT_SELECTION_PDF: CommandId =
+    CommandId::from_static("gallery.node-graph.export-selection-pdf");
 /// Whether nodes are selected (the selection's export is greyed
 /// otherwise).
 const HAS_SELECTION: &str = "galleryGraphSelection";
@@ -360,6 +370,60 @@ impl GraphModel for Pipeline {
     }
 }
 
+/// A file format the Export menu offers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Format {
+    Svg,
+    #[cfg(feature = "graph-png")]
+    Png,
+    #[cfg(feature = "graph-pdf")]
+    Pdf,
+}
+
+impl Format {
+    /// The formats built in, with the commands exporting the graph and
+    /// the selection.
+    const ALL: &[(Format, CommandId, CommandId)] = &[
+        (Format::Svg, CMD_EXPORT, CMD_EXPORT_SELECTION),
+        #[cfg(feature = "graph-png")]
+        (Format::Png, CMD_EXPORT_PNG, CMD_EXPORT_SELECTION_PNG),
+        #[cfg(feature = "graph-pdf")]
+        (Format::Pdf, CMD_EXPORT_PDF, CMD_EXPORT_SELECTION_PDF),
+    ];
+
+    fn name(self) -> &'static str {
+        match self {
+            Format::Svg => "SVG",
+            #[cfg(feature = "graph-png")]
+            Format::Png => "PNG",
+            #[cfg(feature = "graph-pdf")]
+            Format::Pdf => "PDF",
+        }
+    }
+
+    fn extension(self) -> &'static str {
+        match self {
+            Format::Svg => "svg",
+            #[cfg(feature = "graph-png")]
+            Format::Png => "png",
+            #[cfg(feature = "graph-pdf")]
+            Format::Pdf => "pdf",
+        }
+    }
+
+    /// The file's bytes.
+    fn write(self, export: &GraphExport, options: &ExportOptions) -> Result<Vec<u8>, String> {
+        match self {
+            Format::Svg => Ok(export.svg(options).into_bytes()),
+            // Twice a point: sharp on a high density screen.
+            #[cfg(feature = "graph-png")]
+            Format::Png => export.png(options, 2.0).map_err(|e| e.to_string()),
+            #[cfg(feature = "graph-pdf")]
+            Format::Pdf => export.pdf(options).map_err(|e| e.to_string()),
+        }
+    }
+}
+
 /// The page's state.
 #[derive(Debug)]
 pub struct State {
@@ -369,8 +433,9 @@ pub struct State {
     /// How wires are drawn.
     pub wires: WireStyle,
     level: Option<Level>,
-    /// A file asked for an export, and whether it is the selection's.
-    export: Option<(Pending, bool)>,
+    /// A file asked for an export, whether it is the selection's, and
+    /// its format.
+    export: Option<(Pending, bool, Format)>,
     /// What the last export did.
     exported: String,
     /// Whether nodes were selected, as last told to the menu.
@@ -422,31 +487,36 @@ impl Plugin for NodeGraphPage {
             }
         });
         // The menu's commands ask; the page answers at its next frame.
-        let asked: Rc<Cell<Option<bool>>> = Rc::new(Cell::new(None));
-        for (id, title, selection, order) in [
-            (CMD_EXPORT, "Export the graph as SVG…", false, 0),
-            (
-                CMD_EXPORT_SELECTION,
-                "Export the selection as SVG…",
-                true,
-                1,
-            ),
-        ] {
-            let mut spec = CommandSpec::new(id, title, "Node graph")
-                .description(if selection {
-                    "Saves the selected nodes and the wires between them as an SVG image."
+        let asked: Rc<Cell<Option<(bool, Format)>>> = Rc::new(Cell::new(None));
+        for (k, (format, whole, part)) in Format::ALL.iter().enumerate() {
+            let (format, name) = (*format, format.name());
+            for (id, selection) in [(whole.clone(), false), (part.clone(), true)] {
+                let (title, description) = if selection {
+                    (
+                        format!("Export the selection as {name}…"),
+                        format!("Saves the selected nodes and the wires between them as {name}."),
+                    )
                 } else {
-                    "Saves the whole graph as an SVG image, drawn from the graph, not the screen."
-                })
-                .menu(EXPORT_MENU, "1_export", order);
-            if selection {
-                spec = spec.when(HAS_SELECTION);
+                    (
+                        format!("Export the graph as {name}…"),
+                        format!(
+                            "Saves the whole graph as {name}, drawn from the graph, not the screen."
+                        ),
+                    )
+                };
+                let order = (k * 2 + usize::from(selection)) as i32;
+                let mut spec = CommandSpec::new(id, &title, "Node graph")
+                    .description(&description)
+                    .menu(EXPORT_MENU, "1_export", order);
+                if selection {
+                    spec = spec.when(HAS_SELECTION);
+                }
+                let asked = asked.clone();
+                ctx.command(spec, move |_| {
+                    asked.set(Some((selection, format)));
+                    Ok(json!({ "selection": selection, "format": format.extension() }))
+                })?;
             }
-            let asked = asked.clone();
-            ctx.command(spec, move |_| {
-                asked.set(Some(selection));
-                Ok(json!({ "selection": selection }))
-            })?;
         }
         let state = Rc::new(RefCell::new(State::default()));
         let play = state.clone();
@@ -463,7 +533,7 @@ impl Plugin for NodeGraphPage {
 }
 
 /// The page.
-pub fn show(ui: &mut Ui, app: &AppHandle, s: &mut State, asked: &Cell<Option<bool>>) {
+fn show(ui: &mut Ui, app: &AppHandle, s: &mut State, asked: &Cell<Option<(bool, Format)>>) {
     ui.label("Wheel to pan, Ctrl and the wheel to zoom: zoomed out the overview folds groups into stacks, zoomed in the detail shows each node's parameters. Drag from a port to wire (types are checked), drag nodes, drag the canvas for a rubber band; Delete, Ctrl+D, Ctrl+A. The page's plugin refuses to delete the output.");
     let mini = vec2(200.0, 110.0);
     let width = ui.available_width().max(320.0);
@@ -517,38 +587,46 @@ pub fn show(ui: &mut Ui, app: &AppHandle, s: &mut State, asked: &Cell<Option<boo
 
 /// Asks where to save an export the menu asked for, and writes it once
 /// the place is chosen.
-fn export(ctx: &egui::Context, app: &AppHandle, s: &mut State, asked: &Cell<Option<bool>>) {
-    if let Some(selection) = asked.take() {
+fn export(
+    ctx: &egui::Context,
+    app: &AppHandle,
+    s: &mut State,
+    asked: &Cell<Option<(bool, Format)>>,
+) {
+    if let Some((selection, format)) = asked.take() {
         match app.service(&FILES) {
             Some(f) => {
+                let ext = format.extension();
                 let name = if selection {
-                    "graph-selection.svg"
+                    format!("graph-selection.{ext}")
                 } else {
-                    "graph.svg"
+                    format!("graph.{ext}")
                 };
-                let request = FileRequest::save("Export the graph", name).filter("SVG", &["svg"]);
-                s.export = Some((f.choose(app, request), selection));
+                let request =
+                    FileRequest::save("Export the graph", &name).filter(format.name(), &[ext]);
+                s.export = Some((f.choose(app, request), selection, format));
             }
             None => s.exported = "No file chooser: the files plugin is not connected.".into(),
         }
     }
-    let Some((pending, selection)) = &s.export else {
+    let Some((pending, selection, format)) = &s.export else {
         return;
     };
     let Some(result) = pending.take() else {
         return;
     };
-    let selection = *selection;
+    let (selection, format) = (*selection, *format);
     s.export = None;
     s.exported = match files::chosen(&result) {
         Ok(files::Chosen::Paths(paths)) => match paths.first() {
             Some(path) => {
-                let svg = GraphExport::capture(ctx, &s.graph, &s.view).svg(
+                let bytes = format.write(
+                    &GraphExport::capture(ctx, &s.graph, &s.view),
                     &ExportOptions::default()
                         .selection(selection)
                         .title("Processing graph"),
                 );
-                match std::fs::write(path, svg) {
+                match bytes.and_then(|b| std::fs::write(path, b).map_err(|e| e.to_string())) {
                     Ok(()) => format!("Exported to {}", path.display()),
                     Err(e) => format!("Not exported: {e}"),
                 }

@@ -13,6 +13,11 @@ authors.workspace = true
 workspace = true
 
 [features]
+default = ["graph-png", "graph-pdf"]
+## The node graph page exports PNG (`egui-pop/graph-png`).
+graph-png = ["egui-pop/graph-png"]
+## The node graph page exports PDF (`egui-pop/graph-pdf`).
+graph-pdf = ["egui-pop/graph-pdf"]
 ## The system's file chooser in the gallery (tests always use the in-app
 ## picker, so this is off by default).
 native-dialogs = ["egui-pop/native-dialogs"]

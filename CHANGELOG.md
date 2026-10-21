@@ -64,6 +64,10 @@ publishes.
   `format` argument is `svg` by default, `png` (with a `scale`) or
   `pdf` with the `graph-png` and `graph-pdf` features, the image
   base64-encoded.
+- The gallery's node graph page exports PNG and PDF too: its Export
+  menu offers each format built in (the gallery's `graph-png` and
+  `graph-pdf` features, on by default), for the whole graph and for the
+  selection.
 - Status items with alignment, priority, live states, popovers and
   hover cards (egui-pop-api): `strips::Indicator::align` puts an item
   at the bar's start (after the breadcrumb and the chips) or its end;
