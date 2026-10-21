@@ -26,7 +26,7 @@ hints), `progress`,
 `placeholders` (skeletons and empty states), `viewport` (the image
 viewport), `navigator` (the zoom control and the navigator), `images`,
 `grading` (curves and colour wheels), `cursors` (tool cursors, brush
-outlines and the loupe), `node-graph` (the node graph editor), `display` (wide gamut and HDR surfaces),
+outlines and the loupe), `node-graph` (the node graph editor), `graph-file` (the node graph editor over a YAML file), `display` (wide gamut and HDR surfaces),
 `preview` (a custom dialog previewing an export in a viewport), `tree`
 (the live tree), `table` (lists and tables), `library` (the photo
 library), `text-editor`,

@@ -1084,6 +1084,42 @@ fn the_node_graph_page_shows_fifty_nodes_and_edits_through_its_steps() {
 }
 
 #[test]
+fn the_graph_file_page_writes_an_edit_into_the_file() {
+    use egui_pop::imaging::graph::CMD_GRAPH_EDIT;
+    use egui_pop::model::commands::Origin;
+    let mut h = harness(options("pop-dark", Density::Comfortable, "graph-file"));
+    h.run();
+    egui_pop_test::assert_all_named(&h);
+    assert!(h.query_by_label("Graph file").is_some());
+    assert!(
+        h.query_by_label_contains("5 nodes, 5 wires, format 1, 0 edits")
+            .is_some()
+    );
+    assert!(h.query_by_label_contains("    pos: [240, 0]\n").is_some());
+    // An agent moves a node: a step, then the line in the file.
+    let _ = h.state_mut().app.run(
+        &CMD_GRAPH_EDIT,
+        serde_json::json!({
+            "graph": "file",
+            "edit": "move",
+            "moves": [{ "node": "blur", "to": [260.0, 20.0] }],
+        }),
+        Origin::Agent("test".into()),
+    );
+    h.run();
+    h.run();
+    let t = last_trace_of(&h, "graph.move");
+    assert_eq!(t.args["graph"], "file");
+    assert!(h.query_by_label_contains("1 edits").is_some());
+    assert!(h.query_by_label_contains("    pos: [260, 20]\n").is_some());
+    // The comments stay.
+    assert!(
+        h.query_by_label_contains("radius: 3.5 # softer than the kind's")
+            .is_some()
+    );
+}
+
+#[test]
 fn the_workbench_page_opens_moves_and_vetoes_panels() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "workbench"));
     h.run();

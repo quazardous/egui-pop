@@ -17,6 +17,7 @@ pub mod editors;
 pub mod files;
 pub mod frame;
 pub mod grading;
+pub mod graph_file;
 pub mod i18n;
 pub mod icons;
 pub mod images;

@@ -35,6 +35,8 @@ publishes.
   A part in flow style that an edit reaches is written again in block
   style. A malformed file is refused with its line and column
   (`YamlGraphError`). Part of #31.
+- The gallery's `graph-file` page: the node graph editor over a YAML
+  graph file, the file's text beside it, each edit landing in the text.
 - The docs online: the guides in `docs/` as an mdBook with search, at
   <https://quazardous.github.io/egui-pop/docs/> beside the gallery,
   built and deployed by the Pages workflow (`book.toml`,

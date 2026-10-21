@@ -1,0 +1,70 @@
+# The gallery's graph file: a source, two treatments, a blend.
+$extensions:
+  org.egui-pop.graph: {version: 1}
+
+groups:
+  detail: Detail
+
+kinds:
+  load:
+    title: Load
+    outputs: {image: image}
+  blur:
+    title: Blur
+    inputs: {image: image}
+    outputs: {image: image}
+    params:
+      radius: {label: Radius, value: 2, min: 0, max: 20, step: 0.1, unit: px}
+  sharpen:
+    title: Sharpen
+    inputs: {image: image}
+    outputs: {image: image}
+    params:
+      amount: {label: Amount, value: 0.5, min: 0, max: 2, step: 0.01}
+  mix:
+    title: Blend
+    inputs:
+      base: image
+      top: image
+    outputs: {image: image}
+    params:
+      opacity: {label: Opacity, value: 1, min: 0, max: 1, step: 0.01}
+  output:
+    title: Output
+    inputs:
+      image: {type: image, multiple: true}
+
+nodes:
+  # The source.
+  - id: load
+    kind: load
+    pos: [0, 60]
+
+  - id: blur
+    kind: blur
+    title: Soft blur
+    pos: [240, 0]
+    group: detail
+    params:
+      radius: 3.5 # softer than the kind's
+
+  - id: sharpen
+    kind: sharpen
+    pos: [240, 140]
+    group: detail
+
+  - id: mix
+    kind: mix
+    pos: [480, 60]
+
+  - id: output
+    kind: output
+    pos: [720, 60]
+
+# An output, then an input.
+edges:
+  - load.image -> blur.image
+  - load.image -> sharpen.image
+  - blur.image -> mix.base
+  - sharpen.image -> mix.top
+  - mix.image -> output.image
