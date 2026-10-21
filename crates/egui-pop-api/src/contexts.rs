@@ -492,8 +492,8 @@ pub struct ContextService {
     /// The documents the stack and its view are kept in (see
     /// [`documents`]), as read at start or at the last [`reload`].
     documents: Mutex<(String, String)>,
-    /// The root crumb's title (`None`: "Home", translated).
-    root: Option<String>,
+    /// The root crumb's title and label.
+    root: Root,
     valid: Option<Validator>,
 }
 
@@ -1128,9 +1128,59 @@ fn save_view(app: &AppHandle, doc: &ViewDoc) {
 }
 
 fn root_title(app: &AppHandle, svc: &ContextService) -> String {
-    svc.root
-        .clone()
-        .unwrap_or_else(|| strings::tr(&app.egui(), &txt::CONTEXT_ROOT))
+    svc.root.say(&app.egui())
+}
+
+/// What the root crumb's label is asked about
+/// ([`ContextsPlugin::root_label`]).
+#[derive(Debug)]
+pub struct RootLabelCall<'a> {
+    /// To translate with (`egui_pop_core::strings::tr_args`).
+    pub ctx: &'a egui::Context,
+    /// The root's title as it would be said without the label: "Home",
+    /// or what [`ContextsPlugin::root`] or
+    /// [`root_key`](ContextsPlugin::root_key) give, translated.
+    pub title: &'a str,
+}
+
+/// The root crumb's label (`ContextsPlugin::root_label`): `None` keeps
+/// the title.
+pub type RootLabel = Arc<dyn Fn(&RootLabelCall<'_>) -> Option<String> + Send + Sync>;
+
+/// How the root's crumb is said.
+#[derive(Clone, Default)]
+struct Root {
+    /// A text as given ([`ContextsPlugin::root`]).
+    text: Option<String>,
+    /// A string translated each time it is said
+    /// ([`ContextsPlugin::root_key`]).
+    key: Option<strings::StrKey>,
+    label: Option<RootLabel>,
+}
+
+impl fmt::Debug for Root {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Root")
+            .field("text", &self.text)
+            .field("key", &self.key)
+            .field("label", &self.label.is_some())
+            .finish()
+    }
+}
+
+impl Root {
+    /// The root's crumb, as the interface says it now: the label, else
+    /// the title (the text given, else the key or "Home", translated).
+    fn say(&self, ctx: &egui::Context) -> String {
+        let title = self
+            .text
+            .clone()
+            .unwrap_or_else(|| strings::tr(ctx, self.key.as_ref().unwrap_or(&txt::CONTEXT_ROOT)));
+        self.label
+            .as_ref()
+            .and_then(|f| f(&RootLabelCall { ctx, title: &title }))
+            .unwrap_or(title)
+    }
 }
 
 /// A value a component keeps for the projection key shown (a list's
@@ -1787,7 +1837,7 @@ fn parse<T: serde::de::DeserializeOwned>(args: &Json, what: &str) -> Result<T, S
 /// collector, the undo toasts.
 #[derive(Default)]
 pub struct ContextsPlugin {
-    root: Option<String>,
+    root: Root,
     valid: Option<Validator>,
 }
 
@@ -1800,9 +1850,35 @@ impl fmt::Debug for ContextsPlugin {
 }
 
 impl ContextsPlugin {
-    /// The root crumb's title ("Home", translated, by default).
+    /// The root crumb's title, as given ("Home", translated, by default).
     pub fn root(mut self, title: &str) -> Self {
-        self.root = Some(title.into());
+        self.root.text = Some(title.into());
+        self.root.key = None;
+        self
+    }
+
+    /// The root crumb's title, a string of the application's catalogue
+    /// translated each time the crumb is said, so it follows the
+    /// language.
+    pub fn root_key(mut self, key: strings::StrKey) -> Self {
+        self.root.text = None;
+        self.root.key = Some(key);
+        self
+    }
+
+    /// The root crumb's label, asked each time the crumb is said (the
+    /// breadcrumb, the status bar, `context.read`, the announcement of
+    /// where the user is, the undo toast), given the translated title:
+    /// the name of what is open (a workspace, a project), read from the
+    /// application's own state, translated with the call's `ctx`. `None`
+    /// keeps the title. Like [`FrameSpec::label`] it is called while the
+    /// interface draws: it reads what the application keeps (behind an
+    /// `Arc` it captured), never the context stack itself.
+    pub fn root_label(
+        mut self,
+        f: impl Fn(&RootLabelCall<'_>) -> Option<String> + Send + Sync + 'static,
+    ) -> Self {
+        self.root.label = Some(Arc::new(f));
         self
     }
 

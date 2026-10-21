@@ -952,3 +952,68 @@ fn a_place_without_arrangement_looks_the_same_from_anywhere() {
     assert!(!app.panel_visible(&TREE));
     assert_eq!(app.layout().area_of(&LOG), from_album.area_of(&LOG));
 }
+
+/// The root crumb names what is open (a workspace), from the
+/// application's own state, translated, and follows it when it changes.
+#[test]
+fn the_root_crumb_says_what_the_application_names_it() {
+    use egui_pop_core::strings::{self, MapStrings, StrKey};
+    const WORKSPACE: StrKey = StrKey::new("demo-workspace", "Workspace { $name }");
+    const LIBRARY: StrKey = StrKey::new("demo-library", "Library");
+    let open = std::sync::Arc::new(std::sync::Mutex::new(Some("Holidays".to_string())));
+    let name = open.clone();
+    let mut h = harness(
+        App::builder()
+            .plugins(DefaultPlugins)
+            .plugin(
+                ContextsPlugin::default()
+                    .root_key(LIBRARY)
+                    .root_label(move |c| {
+                        let name = lock(&name).clone()?;
+                        Some(strings::tr_args(c.ctx, &WORKSPACE, &[("name", &name)]))
+                    }),
+            )
+            .plugin(Demo),
+    );
+    let app = h.state().handle().clone();
+    let read = |h: &mut Harness<'_, App>| {
+        let read = h
+            .state_mut()
+            .run(&contexts::CMD_READ, Json::Null, Origin::User);
+        let egui_pop_api::host::Reply::Done(Ok(read)) = read else {
+            panic!("{read:?}");
+        };
+        read["projection"]["crumbs"].clone()
+    };
+    // The breadcrumb, the status bar and `context.read` say the label.
+    assert!(h.query_all_by_label("Workspace Holidays").next().is_some());
+    assert_eq!(contexts::crumbs(&app), vec!["Workspace Holidays"]);
+    assert_eq!(read(&mut h), json!(["Workspace Holidays"]));
+    // Another workspace opened: the crumb follows.
+    *lock(&open) = Some("Portraits".into());
+    h.run();
+    assert!(h.query_all_by_label("Workspace Portraits").next().is_some());
+    assert!(h.query_all_by_label("Workspace Holidays").next().is_none());
+    // Translated, with the catalogue's words.
+    strings::install(
+        &app.egui(),
+        std::sync::Arc::new(
+            MapStrings::new("fr")
+                .with("demo-workspace", "Espace { $name }")
+                .with("demo-library", "Bibliothèque"),
+        ),
+    );
+    assert!(contexts::enter(&app, ALBUM, Json::Null).ok());
+    h.run();
+    assert_eq!(read(&mut h), json!(["Espace Portraits", "Album"]));
+    assert!(h.query_all_by_label("Espace Portraits").next().is_some());
+    // Nothing open: the label gives way to the title, translated.
+    *lock(&open) = None;
+    h.run();
+    assert_eq!(contexts::crumbs(&app), vec!["Bibliothèque", "Album"]);
+    assert!(h.query_all_by_label("Bibliothèque").next().is_some());
+    // The root's crumb still jumps back to the root.
+    h.query_all_by_label("Bibliothèque").next().unwrap().click();
+    h.run();
+    assert_eq!(key(&h, "place"), "root");
+}

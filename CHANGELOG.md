@@ -12,6 +12,14 @@ publishes.
 
 ### Added
 
+- The root crumb named by the application (egui-pop-api):
+  `ContextsPlugin::root_label` says what is open at the root of the
+  breadcrumb (a workspace, a project), asked each time the crumb is
+  said and given the translated title, so it follows the application's
+  state and its language; `ContextsPlugin::root_key` gives the root's
+  title as a string of the application's catalogue, translated. The
+  breadcrumb, the status bar, `context.read`, the announcement of where
+  the user is and the undo toast say it.
 - Status items with alignment, priority, live states, popovers and
   hover cards (egui-pop-api): `strips::Indicator::align` puts an item
   at the bar's start (after the breadcrumb and the chips) or its end;

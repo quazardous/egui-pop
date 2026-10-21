@@ -83,8 +83,33 @@ chips and switches translate it like every other declaration, under
 the key derived from its id: `frame-<id>.title` (`photos.album` gives
 `frame-photos-album.title`). The extractor of `egui-pop-i18n` lists
 them with the commands and panels. The root's crumb says "Home",
-translated, unless the application names it
-(`ContextsPlugin::default().root("Main")`).
+translated, unless the application names it: a text as given
+(`ContextsPlugin::default().root("Main")`), or a string of its own
+catalogue, translated each time the crumb is said (`root_key`).
+
+The root's crumb can also say what is open, a workspace or a project:
+`ContextsPlugin::root_label` is asked each time the crumb is said,
+given the translated title and the `egui::Context` to translate with;
+`None` keeps the title. The breadcrumb, the status bar, `context.read`
+(`projection.crumbs`), the announcement of where the user is and the
+undo toast all say it, and follow when the name changes.
+
+```rust
+# use egui_pop::api::contexts::ContextsPlugin;
+# use egui_pop::core::strings::{self, StrKey};
+# use std::sync::{Arc, Mutex};
+const WORKSPACE: StrKey = StrKey::new("photos-workspace", "Workspace { $name }");
+// The workspace open, as the application keeps it.
+let open: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
+let name = open.clone();
+let plugin = ContextsPlugin::default().root_label(move |c| {
+    let name = name.lock().ok()?.clone()?;
+    Some(strings::tr_args(c.ctx, &WORKSPACE, &[("name", &name)]))
+});
+```
+
+Like a place's label, it is called while the interface draws: it reads
+what the application keeps, never the context stack itself.
 
 ## A place's payload
 
