@@ -11,7 +11,7 @@ use egui_pop_api::steps::Before;
 use egui_pop_api::workbench::Change;
 use egui_pop_api::{App, Ctx, Plugin, PluginError};
 use egui_pop_model::ids::{PanelId, PluginId};
-use egui_pop_model::layout::Floating;
+use egui_pop_model::layout::{AnchorEdge, Floating};
 use egui_pop_model::panels::{Area, PanelSpec};
 use serde_json::{Value as Json, json};
 
@@ -277,4 +277,44 @@ fn hooks_veto_a_dock_and_redirect_a_move_and_reset_puts_palettes_back() {
     h.state().handle().run(CMD_RESET, Json::Null);
     h.run();
     assert_eq!(floating(&h, &TOOLS).unwrap().pos, Floating::cascade(0));
+}
+
+#[test]
+fn a_palette_dropped_on_the_end_edge_follows_it_when_the_window_grows() {
+    let mut h = harness(false);
+    let close = |h: &Harness<'_, App>| {
+        h.get_by_role_and_label(Role::Button, "Close Tools")
+            .rect()
+            .max
+    };
+    // Dragged far right: kept inside, on the end edge, anchored there.
+    let title = h.get_by_label("Tools").rect().center();
+    drag_by(&mut h, title, egui::vec2(2000.0, 0.0));
+    let f = floating(&h, &TOOLS).unwrap();
+    assert_eq!(f.anchor.x, AnchorEdge::End, "{f:?}");
+    assert_eq!(f.anchor.y, AnchorEdge::None, "{f:?}");
+    let before = close(&h);
+    let gap = 900.0 - before.x;
+    // Wider and taller: it keeps its distance to the end edge, and its
+    // place from the top.
+    h.set_size(egui::vec2(1100.0, 700.0));
+    h.run();
+    h.run();
+    let after = close(&h);
+    assert!((1100.0 - after.x - gap).abs() < 0.5, "{before:?} {after:?}");
+    assert!((after.y - before.y).abs() < 0.5, "{before:?} {after:?}");
+    // The layout says where it now is.
+    let moved = floating(&h, &TOOLS).unwrap();
+    assert!((moved.pos[0] - f.pos[0] - 200.0).abs() < 0.5, "{moved:?}");
+    // Dragged away from the edge: no longer anchored.
+    let title = h.get_by_label("Tools").rect().center();
+    drag_by(&mut h, title, egui::vec2(-300.0, 0.0));
+    let f = floating(&h, &TOOLS).unwrap();
+    assert!(f.anchor.is_none(), "{f:?}");
+    h.set_size(egui::vec2(900.0, 600.0));
+    h.run();
+    let x = floating(&h, &TOOLS).unwrap().pos[0];
+    h.set_size(egui::vec2(1100.0, 600.0));
+    h.run();
+    assert_eq!(floating(&h, &TOOLS).unwrap().pos[0], x, "stays put");
 }

@@ -604,6 +604,25 @@ impl Workbench {
     }
 
     /// Applies a change; refused when the panel's rules do not allow it.
+    /// Anchors a floating panel to the workbench edges its new place lies
+    /// on (`palettes::anchor_of`), or to none: dropped against an edge,
+    /// it sticks to it; dropped away, it no longer does.
+    fn anchor_palette(&mut self, p: &PanelId) {
+        let size = self
+            .palette_rects
+            .get(p)
+            .map_or(egui::Vec2::ZERO, |r| r.size());
+        let content = self.content;
+        if let Some(f) = self.layout.floating_mut(p) {
+            f.anchor = if content.is_positive() {
+                let rect = Rect::from_min_size(content.min + egui::Vec2::from(f.pos), size);
+                crate::palettes::anchor_of(rect, content)
+            } else {
+                Default::default()
+            };
+        }
+    }
+
     pub fn apply(&mut self, change: &Change) -> Result<Json, String> {
         self.read_back();
         let spec_of = |p: &PanelId| {
@@ -705,6 +724,7 @@ impl Workbench {
                     return Err(why);
                 }
                 self.layout.float(p, *pos);
+                self.anchor_palette(p);
                 json!({ "panel": p, "pos": pos })
             }
             Change::MovePalette(p, pos) => {
@@ -713,6 +733,7 @@ impl Workbench {
                     .floating_mut(p)
                     .ok_or_else(|| format!("`{p}` does not float"))?;
                 f.pos = *pos;
+                self.anchor_palette(p);
                 json!({ "panel": p, "pos": pos })
             }
             Change::Roll(p, on) => {

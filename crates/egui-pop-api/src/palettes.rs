@@ -5,7 +5,10 @@
 //! of docked: one model, two placements. It opens floating, is dragged by
 //! its header band ([`egui_pop_core::band`], the movable dialogs' band),
 //! clamped inside the workbench, snapping to the workbench's edges and to
-//! the other palettes within the `palette.magnet` token. Dropped on a
+//! the other palettes within the `palette.magnet` token. Dropped on an
+//! edge of the workbench, it is anchored there ([`anchor_of`]) and keeps
+//! its distance to it as the window is resized ([`anchored_pos`]); dragged
+//! away, it no longer is. Dropped on a
 //! side or bottom area (or a closed one's edge, with the workbench's drop
 //! hint), it docks there; a docked floatable panel floats again from its
 //! tab menu (Float). Its band carries Close, Roll up (down to the band)
@@ -52,7 +55,7 @@ use egui_pop_core::theme::Tokens;
 use egui_pop_model::commands::CommandSpec;
 use egui_pop_model::ids::{CommandId, PanelId, SettingId, StepId};
 use egui_pop_model::keymap::BindOptions;
-use egui_pop_model::layout::Floating;
+use egui_pop_model::layout::{Anchor, AnchorEdge, Floating};
 use egui_pop_model::values::Descriptor;
 use serde_json::{Value as Json, json};
 
@@ -267,6 +270,84 @@ pub fn snap(rect: Rect, bounds: Rect, others: &[Rect], magnet: f32) -> Rect {
     rect.translate(egui::vec2(dx.unwrap_or(0.0), dy.unwrap_or(0.0)))
 }
 
+/// How near a workbench edge a palette's side lies to be on it, in
+/// points: snapped there or clamped against it.
+const ON_EDGE: f32 = 0.5;
+
+/// The workbench edges a palette's `rect` lies on, within half a point:
+/// its anchor. A side off the edges (dragged away, or snapped to another
+/// palette) is not anchored; on both edges of an axis (as large as the
+/// workbench), the start wins.
+///
+/// ```
+/// use egui::{Rect, pos2, vec2};
+/// use egui_pop_api::palettes::anchor_of;
+/// use egui_pop_model::layout::AnchorEdge;
+///
+/// let bounds = Rect::from_min_size(pos2(0.0, 0.0), vec2(800.0, 600.0));
+/// let r = Rect::from_min_size(pos2(700.0, 200.0), vec2(100.0, 50.0));
+/// let a = anchor_of(r, bounds);
+/// assert_eq!((a.x, a.y), (AnchorEdge::End, AnchorEdge::None));
+/// ```
+pub fn anchor_of(rect: Rect, bounds: Rect) -> Anchor {
+    fn axis(lo: f32, hi: f32, start: f32, end: f32) -> (AnchorEdge, f32) {
+        let (before, after) = (lo - start, end - hi);
+        if before.abs() <= ON_EDGE {
+            (AnchorEdge::Start, before.max(0.0))
+        } else if after.abs() <= ON_EDGE {
+            (AnchorEdge::End, after.max(0.0))
+        } else {
+            (AnchorEdge::None, 0.0)
+        }
+    }
+    let (x, ox) = axis(rect.left(), rect.right(), bounds.left(), bounds.right());
+    let (y, oy) = axis(rect.top(), rect.bottom(), bounds.top(), bounds.bottom());
+    Anchor {
+        x,
+        y,
+        offset: [ox, oy],
+    }
+}
+
+/// Where a palette's top-left corner goes in `bounds`: an anchored axis
+/// keeps its distance to its edge, the other keeps `pos` (from the
+/// bounds' top-left); kept inside either way.
+///
+/// ```
+/// use egui::{Rect, pos2, vec2};
+/// use egui_pop_api::palettes::anchored_pos;
+/// use egui_pop_model::layout::{Anchor, AnchorEdge};
+///
+/// let right = Anchor { x: AnchorEdge::End, ..Anchor::default() };
+/// let wider = Rect::from_min_size(pos2(0.0, 0.0), vec2(1000.0, 600.0));
+/// let at = anchored_pos([700.0, 200.0], vec2(100.0, 50.0), wider, &right);
+/// assert_eq!(at, pos2(900.0, 200.0));
+/// ```
+pub fn anchored_pos(pos: [f32; 2], size: Vec2, bounds: Rect, anchor: &Anchor) -> Pos2 {
+    let axis = |edge: AnchorEdge, at: f32, offset: f32, start: f32, end: f32, len: f32| match edge {
+        AnchorEdge::None => start + at,
+        AnchorEdge::Start => start + offset,
+        AnchorEdge::End => end - offset - len,
+    };
+    let x = axis(
+        anchor.x,
+        pos[0],
+        anchor.offset[0],
+        bounds.left(),
+        bounds.right(),
+        size.x,
+    );
+    let y = axis(
+        anchor.y,
+        pos[1],
+        anchor.offset[1],
+        bounds.top(),
+        bounds.bottom(),
+        size.y,
+    );
+    clamp(Pos2::new(x, y), size, bounds)
+}
+
 /// A top-left corner keeping a box of `size` inside `bounds` (at its
 /// top-left when it is larger).
 fn clamp(min: Pos2, size: Vec2, bounds: Rect) -> Pos2 {
@@ -337,14 +418,30 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
             continue;
         };
         let id = area_id(&f.panel);
-        let size = before.get(&f.panel).map_or(Vec2::ZERO, |r| r.size());
-        // Inside the workbench, again when the window is resized.
-        let pos = clamp(content.min + Vec2::from(f.pos), size, content);
+        let drawn = before.get(&f.panel).map(|r| r.size());
+        let size = drawn.unwrap_or(Vec2::ZERO);
         let dragging = app
             .workbench_mut()
             .palette_drag
             .as_ref()
             .is_some_and(|d| d.0 == f.panel);
+        // Inside the workbench, again when the window is resized; an
+        // anchored palette keeps its distance to its edges (not while it
+        // is dragged: the drop sets its anchor again).
+        let pos = if dragging {
+            clamp(content.min + Vec2::from(f.pos), size, content)
+        } else {
+            anchored_pos(f.pos, size, content, &f.anchor)
+        };
+        if !f.anchor.is_none() && !dragging && drawn.is_some() {
+            // Its place follows the edges (not a move: no step).
+            let at = [pos.x - content.min.x, pos.y - content.min.y];
+            if at != f.pos
+                && let Some(fl) = app.workbench_mut().layout.floating_mut(&f.panel)
+            {
+                fl.pos = at;
+            }
+        }
         let hovered = before
             .get(&f.panel)
             .zip(pointer)
@@ -548,4 +645,107 @@ pub(crate) fn magnet(ctx: &egui::Context) -> f32 {
         .resolved()
         .dimension("palette.magnet")
         .unwrap_or(0.0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use egui::{pos2, vec2};
+
+    fn bounds(w: f32, h: f32) -> Rect {
+        Rect::from_min_size(pos2(10.0, 20.0), vec2(w, h))
+    }
+
+    const SIZE: Vec2 = Vec2::new(100.0, 50.0);
+
+    /// A palette of `SIZE` at `pos` from the bounds' top-left.
+    fn at(b: Rect, pos: [f32; 2]) -> Rect {
+        Rect::from_min_size(b.min + Vec2::from(pos), SIZE)
+    }
+
+    #[test]
+    fn each_corner_anchors_both_axes_and_follows_a_resize() {
+        let small = bounds(800.0, 600.0);
+        let large = bounds(1000.0, 700.0);
+        for (pos, x, y, moved) in [
+            ([0.0, 0.0], AnchorEdge::Start, AnchorEdge::Start, [0.0, 0.0]),
+            (
+                [700.0, 0.0],
+                AnchorEdge::End,
+                AnchorEdge::Start,
+                [900.0, 0.0],
+            ),
+            (
+                [0.0, 550.0],
+                AnchorEdge::Start,
+                AnchorEdge::End,
+                [0.0, 650.0],
+            ),
+            (
+                [700.0, 550.0],
+                AnchorEdge::End,
+                AnchorEdge::End,
+                [900.0, 650.0],
+            ),
+        ] {
+            let a = anchor_of(at(small, pos), small);
+            assert_eq!((a.x, a.y), (x, y), "{pos:?}");
+            assert_eq!(a.offset, [0.0, 0.0]);
+            let p = anchored_pos(pos, SIZE, large, &a);
+            assert_eq!(p, large.min + Vec2::from(moved), "{pos:?}");
+        }
+    }
+
+    #[test]
+    fn one_axis_only_keeps_the_other_place() {
+        let small = bounds(800.0, 600.0);
+        let a = anchor_of(at(small, [700.0, 200.0]), small);
+        assert_eq!((a.x, a.y), (AnchorEdge::End, AnchorEdge::None));
+        let large = bounds(1000.0, 700.0);
+        let p = anchored_pos([700.0, 200.0], SIZE, large, &a);
+        assert_eq!(p, large.min + vec2(900.0, 200.0));
+        let a = anchor_of(at(small, [300.0, 550.0]), small);
+        assert_eq!((a.x, a.y), (AnchorEdge::None, AnchorEdge::End));
+        let p = anchored_pos([300.0, 550.0], SIZE, large, &a);
+        assert_eq!(p, large.min + vec2(300.0, 650.0));
+    }
+
+    #[test]
+    fn the_offset_is_kept_through_a_resize() {
+        let a = Anchor {
+            x: AnchorEdge::End,
+            y: AnchorEdge::Start,
+            offset: [12.0, 8.0],
+        };
+        for w in [600.0, 800.0, 1200.0] {
+            let b = bounds(w, 500.0);
+            let p = anchored_pos([0.0, 0.0], SIZE, b, &a);
+            assert_eq!(b.right() - (p.x + SIZE.x), 12.0, "{w}");
+            assert_eq!(p.y - b.top(), 8.0, "{w}");
+        }
+        // Too small for the offset: still inside.
+        let b = bounds(105.0, 500.0);
+        let p = anchored_pos([0.0, 0.0], SIZE, b, &a);
+        assert_eq!(p.x, b.left());
+    }
+
+    #[test]
+    fn dragged_away_from_the_edge_or_onto_a_palette_it_is_not_anchored() {
+        let b = bounds(800.0, 600.0);
+        // Dropped away from the edges, beyond the magnet: snap leaves it,
+        // so no anchor.
+        let away = snap(at(b, [650.0, 200.0]), b, &[], 12.0);
+        assert!(anchor_of(away, b).is_none());
+        // Within the magnet: snapped onto the edge, anchored.
+        let near = snap(at(b, [692.0, 200.0]), b, &[], 12.0);
+        assert_eq!(anchor_of(near, b).x, AnchorEdge::End);
+        // Snapped beside another palette (not the workbench): no anchor.
+        let other = Rect::from_min_size(b.min + vec2(400.0, 180.0), SIZE);
+        let beside = snap(at(b, [505.0, 200.0]), b, &[other], 12.0);
+        assert_eq!(beside.left(), other.right());
+        assert!(anchor_of(beside, b).is_none());
+        // Unanchored: today's behaviour, clamped inside.
+        let p = anchored_pos([780.0, 200.0], SIZE, b, &Anchor::default());
+        assert_eq!(p, b.min + vec2(700.0, 200.0));
+    }
 }

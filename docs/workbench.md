@@ -227,6 +227,17 @@ assert!(app.handle().layout().floating_of(&TOOLS).is_some());
   Dropped on a side bar or the bottom panel (or a closed one's edge),
   with the drop hint the tabs use, it docks there. A docked floatable
   panel floats again from its tab menu (Float).
+- **Sticky edges.** Dropped on an edge of the workbench (snapped onto it
+  or kept against it), a palette is anchored there: `Floating::anchor`
+  holds, on each axis, the start edge, the end edge or none, and the
+  distance to it. When the window is resized, or a saved layout is
+  restored at another size, an anchored edge keeps its distance, so a
+  palette on the right edge follows it; the other axis keeps its place.
+  Dragged away from the edge, it is no longer anchored. A palette off
+  the edges, or snapped to another palette only, is just kept inside.
+  The anchor is saved with the layout (layouts saved before it load
+  unanchored); `palettes::anchor_of` and `palettes::anchored_pos`
+  compute it.
 - **Tab** (`palettes.toggle`, rebindable) hides and shows the unpinned
   palettes. It is the toggle only while some panel floats, no widget
   has the keyboard and no overlay is open; otherwise Tab moves the

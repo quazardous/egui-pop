@@ -521,6 +521,14 @@ publishes.
   when it gives one (`ThemeEditor::set_font_dir`). A `theme-zip`
   feature (egui-pop, on by default; egui-pop-api and egui-pop-core)
   turns archives on. Part of #37 and #36.
+- Palettes stick to the workbench's edges (egui-pop-model,
+  egui-pop-api): a palette dropped on an edge (snapped or kept against it)
+  is anchored there (`Floating::anchor`, start or end on each axis, with
+  its distance), and keeps that distance when the window is resized or a
+  saved layout is restored; dragged away, it no longer is. A palette off
+  the edges, or snapped to another palette, is still only kept inside.
+  Layouts saved before load unanchored. `palettes::anchor_of` and
+  `palettes::anchored_pos` compute it.
 
 ### Changed
 
