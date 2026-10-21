@@ -157,7 +157,11 @@ pub fn choices(app: &AppHandle) -> Choices {
 /// Keeps the choices for the place shown.
 fn set_choices(app: &AppHandle, c: Choices) {
     if app.service(&contexts::CONTEXTS).is_some() {
-        let value = if c.is_empty() {
+        // Forgetting a place's choices hands it the root's: an empty
+        // choice is kept as such where the root has choices to inherit.
+        let at_root = contexts::state(app).is_none_or(|s| s.place() == ROOT);
+        let root_chose = contexts::place_value_of(app, ROOT, CHOICES_VALUE).is_some();
+        let value = if c.is_empty() && (at_root || !root_chose) {
             Json::Null
         } else {
             serde_json::to_value(&c).unwrap_or(Json::Null)
