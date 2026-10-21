@@ -91,11 +91,15 @@ pub fn role_text(ui: &Ui, role: TextRole, text: impl Into<String>) -> RichText {
 }
 
 /// The family drawing a weight of interface text: `None` for the
-/// regular weight (egui's own family), and while the theme's weighted
-/// families are not installed.
+/// regular weight (egui's own family, or the preview's text style in
+/// `fonts::with_preview`), and while the theme's weighted families are
+/// not installed. In `fonts::with_preview`, the preview family.
 fn role_family(ctx: &egui::Context, weight: Weight) -> Option<egui::FontFamily> {
     if weight.nearest_installed() == Weight::REGULAR {
         return None;
+    }
+    if fonts::previewing(ctx) {
+        return fonts::preview_family(ctx, Role::Ui, weight);
     }
     let family = fonts::family(Role::Ui, weight);
     // Asking for a family egui has no fonts for panics: the theme's

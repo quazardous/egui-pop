@@ -147,6 +147,20 @@ publishes.
   `settings_window` collector and open one with `app.settings.page`
   (`{"page": "<id>"}`). English and French strings. The gallery's
   settings plugin adds a "Greeting preview" page under its section.
+- Font previews and the system's faces given (egui-pop-core):
+  `fonts::set_preview` makes each role's preview families
+  (`pop.preview.ui.400` and the other weights) draw a list of families
+  before it is applied, the theme's fonts untouched; every install
+  defines them, so a preview never vanishes when the theme switches
+  while it is shown. `fonts::with_preview` draws a `Ui` in them (its
+  text styles and the text roles), `fonts::shown_font_id` gives a
+  role's font where it is drawn, `fonts::preview_family` and
+  `fonts::preview` read them. `fonts::set_system_faces` gives the
+  system's fonts of a context in place of fontdb's (tests that must
+  not depend on the machine, or an application finding fonts its own
+  way); `fonts::origin_of` says where a family a theme names would be
+  found, `None` when it is missing here, and `fonts::is_generic` names
+  the generic families.
 
 ### Changed
 
@@ -220,6 +234,10 @@ publishes.
   signal is now sent whenever the default runs, without a hook or
   through the hook's call; a hook that handles the click without
   calling the default still sends nothing (#53).
+- A specimen asked twice in a frame no longer panics (egui-pop-core):
+  `fonts::specimen` gave its family once installed, but egui takes new
+  fonts at its next pass, so a second ask in the same frame drew with a
+  family egui did not have yet. It now waits until egui has it.
 
 ## 0.2.0 (2026-10-21)
 

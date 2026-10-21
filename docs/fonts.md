@@ -181,6 +181,50 @@ warning when the atlas is rebuilt often.
   digits by default (`Report::tabular_digits`), read from the face's
   advances with skrifa.
 
+## Previewing a face before it is applied (built)
+
+egui's fonts are global, and egui panics on a family it has no fonts
+for, so a face is previewed through families every install defines:
+
+- `fonts::set_preview(ctx, role, Some(names))` makes the role's preview
+  families (`pop.preview.ui.400`, `.500`, `.600`, `.700`, and the
+  `mono` ones) draw `names` in priority order, egui's bundled fonts
+  behind them; `None` makes them draw the role's families as installed.
+  The theme's own families are untouched. A change installs the fonts
+  again (one slow frame, from the next pass).
+- Every install defines the preview families, whatever it was asked
+  for: a theme switched while a preview is shown keeps drawing it, and
+  no frame asks for a family egui has not got.
+- `fonts::with_preview(ui, add)` draws `add` in them: its text styles
+  draw the interface preview (the monospace style the monospace one),
+  and inside it the text roles (`UiPop::section_title`, ...) and
+  `fonts::shown_font_id` give the preview families too. What draws
+  with an explicit `FontId` keeps the theme's fonts.
+- `fonts::preview_family(ctx, role, weight)` is `None` until egui's
+  fonts in use have it (before the first install's pass), as
+  `fonts::specimen` is until egui has the specimen.
+
+The theme editor's Fonts tab and Settings › Appearance › Fonts preview
+a face this way ([The theme editor](theme-editor.md#what-it-shows)).
+
+## The system's fonts, or faces given in their place (built)
+
+With `system-fonts`, the system's fonts are fontdb's (MIT, read once per
+process). `fonts::set_system_faces(ctx, Some(faces))` gives a context's
+system fonts in their place: tests that must not depend on the fonts of
+the machine they run on, or an application finding fonts its own way.
+`None` goes back to fontdb's. The faces are listed by
+`fonts::families` with `Origin::System` and found by the install as the
+system's would be.
+
+A theme names a system face by its family name: the next names of its
+list are the fallback where the face is missing.
+`fonts::origin_of(ctx, name)` says where a name would be found, `None`
+when it is missing on this machine (the install's report says so too),
+and `fonts::is_generic` names the generic families (`sans-serif`,
+`monospace`, ...), always found. A theme package carries a face's file
+instead when the file is one of the user's font files.
+
 ## Choosing the bundled pair: the gallery's Font pairs page (built)
 
 The gallery's `fonts` page draws candidate pairs side by side, egui's
