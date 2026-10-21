@@ -3193,3 +3193,69 @@ fn the_state_kept_per_instance_stays_bounded_across_tours_of_the_pages() {
         assert!(grown.is_empty(), "state grows: {grown:?}");
     }
 }
+
+#[test]
+fn the_pointer_page_switches_profile_and_lists_its_gestures() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "pointer"));
+    h.run();
+    let mut results = egui_kittest::SnapshotResults::new();
+    results.add(h.try_snapshot("pointer-pop-dark"));
+    let app = h.state().app.handle().clone();
+    assert_eq!(egui_pop::api::pointer::profile_id(&app), "document");
+    h.get_by_label("darktable").click();
+    h.run();
+    h.run();
+    assert_eq!(egui_pop::api::pointer::profile_id(&app), "darktable");
+    let map = egui_pop::core::pointer::map(&h.ctx);
+    assert_eq!(map.profile, "darktable");
+    assert!(h.query_by_label("MiddleClick").is_some());
+}
+
+#[test]
+fn the_shortcuts_editor_adds_a_gesture_done_on_its_pad() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "settings"));
+    h.run();
+    h.get_by_label("Open the settings window (Ctrl+,)").click();
+    h.run();
+    h.get_by_label("Keyboard shortcuts").click();
+    h.run();
+    assert!(h.query_by_label("Pointer profile: document").is_none());
+    assert!(h.query_by_label("Pointer profile: Document").is_some());
+    h.get_by_label("Pointer gestures only").click();
+    h.run();
+    assert!(h.query_by_label("Gallery: Next page").is_none());
+    let command = "Pointer: Image: zoom at the pointer";
+    h.get_by_label(&format!("Add a gesture to {command}"))
+        .click();
+    h.run();
+    let pad = h.get_by_label("Gesture pad").rect().center();
+    h.hover_at(pad);
+    h.event(egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Line,
+        delta: egui::vec2(0.0, 1.0),
+        modifiers: egui::Modifiers::ALT,
+        phase: egui::TouchPhase::Move,
+    });
+    h.run();
+    h.get_by_label("Use Alt+Wheel").click();
+    h.run();
+    h.run();
+    let app = h.state().app.handle().clone();
+    let zoom = egui_pop::model::pointer::gesture::IMAGE_ZOOM;
+    let keys = app.keys_for(&zoom);
+    assert!(keys.contains(&"Alt+Wheel".to_string()), "{keys:?}");
+    assert!(keys.contains(&"Ctrl+Wheel".to_string()), "{keys:?}");
+    assert!(
+        h.query_by_label("Pointer profile: Document (1 changed)")
+            .is_some()
+    );
+    // The fourth key wraps the row, below the window's fold: scrolled
+    // into view before the click.
+    let remove = format!("Remove Alt+Wheel from {command}");
+    h.get_by_label(&remove).scroll_to_me();
+    h.run();
+    h.get_by_label(&remove).click();
+    h.run();
+    h.run();
+    assert!(!app.keys_for(&zoom).contains(&"Alt+Wheel".to_string()));
+}

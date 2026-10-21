@@ -33,6 +33,7 @@ pub mod overview;
 pub mod palettes;
 pub mod placeholders;
 pub mod platform;
+pub mod pointer;
 pub mod preview;
 pub mod progress;
 pub mod roles;

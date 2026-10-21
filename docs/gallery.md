@@ -32,7 +32,8 @@ outlines and the loupe), `node-graph` (the node graph editor), `graph-file` (the
 library), `text-editor`,
 `code-editor`, `terminal`, `zones` (zones and blocks), `workbench`,
 `palettes`, `arrangements`, `contexts` (the context stack: places and modes, and the status bar that follows them), `strips`, `jobs` (a pretend host's
-background jobs), `frame`, `scale`, `platform` (the platform services),
+background jobs), `frame`, `scale`, `pointer` (pointer gesture profiles),
+`platform` (the platform services),
 `settings`, `i18n` (translations) and `debug` (the debug
 bridge). `Alt+Down` and `Alt+Up` go to the next and previous page,
 `Ctrl+Shift+T` to the next theme.
