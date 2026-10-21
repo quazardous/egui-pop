@@ -14,8 +14,8 @@ use egui_pop_editors::terminal::steps::{
     CMD_CLEAR, CMD_CLOSE, CMD_READ, CMD_SEND, TERMINAL_EXIT, TERMINAL_INPUT, TERMINAL_SPAWN,
 };
 use egui_pop_editors::terminal::{
-    Cell, Console, Sink, Spawn, Terminal, TerminalPlugin, TerminalSignal, TerminalSource,
-    TerminalState,
+    Cell, Console, InputKind, Sink, Spawn, Terminal, TerminalPlugin, TerminalSignal,
+    TerminalSource, TerminalState,
 };
 use egui_pop_model::commands::Origin;
 use egui_pop_model::ids::PluginId;
@@ -119,6 +119,36 @@ fn every_key_goes_to_the_program_and_shift_escape_leaves() {
     h.event(egui::Event::Text("x".into()));
     h.run();
     assert!(!echo.received().contains('x'));
+}
+
+#[test]
+fn a_bracketed_paste_cannot_end_its_bracket() {
+    let echo = Echo::default();
+    let t = TerminalState::new("shell", echo.clone());
+    t.spawn(None, "user").unwrap();
+    // The program asks for bracketed paste.
+    assert!(
+        echo.sink
+            .lock()
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .output(b"\x1b[?2004h")
+    );
+    // The pasted text tries to close the bracket and type a command;
+    // removing one marker must not join the rest into another.
+    t.send(
+        None,
+        "safe\x1b[201~rm -rf ~\r\x1b[20\x1b[201~0~x",
+        InputKind::Paste,
+        "user",
+    )
+    .unwrap();
+    assert_eq!(
+        echo.received(),
+        "\x1b[200~saferm -rf ~\rx\x1b[201~",
+        "only the terminal's own markers bracket the paste"
+    );
 }
 
 #[test]

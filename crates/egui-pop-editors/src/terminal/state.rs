@@ -39,6 +39,21 @@ impl InputKind {
     }
 }
 
+/// The text of a bracketed paste without the bracket's own markers
+/// (`ESC[200~`, `ESC[201~`), so that pasted text cannot end the bracket
+/// early and have what follows run as typed. Removed until none is
+/// left, so that removing one cannot join the rest into another.
+fn defang_paste(text: &str) -> String {
+    let mut text = text.to_owned();
+    loop {
+        let next = text.replace("\x1b[200~", "").replace("\x1b[201~", "");
+        if next.len() == text.len() {
+            return next;
+        }
+        text = next;
+    }
+}
+
 /// A place in the terminal's text: `line` counts from the oldest line
 /// kept (the scrollback's first, then the screen's), `col` in cells.
 #[derive(
@@ -686,7 +701,7 @@ impl TerminalState {
             return Err("the terminal is not running".into());
         }
         let bytes = if args["kind"] == "paste" && bracketed {
-            format!("\x1b[200~{text}\x1b[201~")
+            format!("\x1b[200~{}\x1b[201~", defang_paste(text))
         } else {
             text.to_string()
         };

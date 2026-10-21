@@ -719,6 +719,14 @@ publishes.
   addresses, which a dropped kit could hand to the next one. `Kit::of`
   says to keep the `Arc` too.
 
+### Security
+
+- A paste into the terminal can no longer end its bracketed paste early
+  (egui-pop-editors): when the program asked for bracketed paste, the
+  markers `ESC[200~` and `ESC[201~` are removed from the pasted text
+  before it is wrapped, so text copied from elsewhere cannot close the
+  bracket and have the rest run as typed commands.
+
 ## 0.1.1 (2026-10-18)
 
 ### Added
