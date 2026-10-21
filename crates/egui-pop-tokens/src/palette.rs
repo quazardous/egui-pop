@@ -201,7 +201,12 @@ pub fn clamp_seed(seed: Color) -> Color {
 /// dark: the same OkHsl hue and saturation (the chroma, as far as the
 /// sRGB gamut holds it at the new lightness), the lightness mirrored
 /// (`1 - l`), the alpha kept. Black and white swap, a mid grey stays;
-/// mirrored twice, a colour comes back (to within rounding). What the
+/// mirrored twice, a colour comes back (to within rounding), unless a
+/// mirror was clipped: near the cusp of its hue (the most saturated
+/// colours, `#0000ff`), the mirrored colour can lie just outside the
+/// sRGB gamut, and is clipped to it channel by channel, so its hue is
+/// kept but its saturation and lightness move a little, and mirroring
+/// it back does not give the colour it came from. What the
 /// theme editor's "Generate the other variant" does to a colour
 /// ([`crate::ThemeDraft::generate_counterpart`]).
 ///
@@ -829,6 +834,14 @@ mod ok {
         if l <= 0.0 {
             return Color::BLACK;
         }
+        let (r, g, b) = okhsl_to_linear(h, s, l);
+        Color::from_linear(r as f32, g as f32, b as f32, 1.0)
+    }
+
+    /// The linear sRGB channels of an OkHsl colour (`l` within 0 and 1,
+    /// exclusive), before they are clipped to the gamut: near the cusp
+    /// of a hue, the gamut approximation lets a channel leave 0 to 1.
+    pub(super) fn okhsl_to_linear(h: f64, s: f64, l: f64) -> (f64, f64, f64) {
         let rad = h.to_radians();
         let (a_, b_) = (rad.cos(), rad.sin());
         let ll = toe_inv(l);
@@ -851,8 +864,7 @@ mod ok {
                 k0 + t * k1 / (1.0 - k2 * t)
             }
         };
-        let (r, g, b) = oklab_to_linear_srgb(ll, c * a_, c * b_);
-        Color::from_linear(r as f32, g as f32, b as f32, 1.0)
+        oklab_to_linear_srgb(ll, c * a_, c * b_)
     }
 
     pub(super) fn srgb_to_okhsl(c: Color) -> (f64, f64, f64) {
@@ -1032,6 +1044,18 @@ mod tests {
         );
     }
 
+    /// Whether a colour's mirror is clipped to the sRGB gamut: its
+    /// mirrored coordinates give a channel outside 0 to 1.
+    fn mirror_clips(c: Color) -> bool {
+        let hsl = Okhsl::from_color(c);
+        let l = 1.0 - f64::from(hsl.l);
+        if l <= 0.0 || l >= 1.0 {
+            return false;
+        }
+        let (r, g, b) = ok::okhsl_to_linear(f64::from(hsl.h), f64::from(hsl.s.clamp(0.0, 1.0)), l);
+        [r, g, b].iter().any(|x| !(0.0..=1.0).contains(x))
+    }
+
     #[test]
     fn a_mirrored_colour_keeps_its_hue_and_saturation() {
         assert_eq!(mirror(Color::BLACK).to_hex(), "#ffffff");
@@ -1041,6 +1065,7 @@ mod tests {
             ..Color::BLACK
         };
         assert_eq!(mirror(half).to_hex(), "#ffffff80");
+        let mut clipped = 0;
         for c in seeds() {
             let m = mirror(c);
             let (a, b) = (Okhsl::from_color(c), Okhsl::from_color(m));
@@ -1050,6 +1075,19 @@ mod tests {
                 assert!(dh.min(360.0 - dh) < 1.0, "{c}: {a:?} {b:?}");
                 assert!((a.s - b.s).abs() < 0.01, "{c}: {a:?} {b:?}");
             }
+            if mirror_clips(c) || mirror_clips(m) {
+                // Clipped to the gamut on the way: the hue is kept (to
+                // within a few degrees), the round trip cannot hold.
+                if a.s > 0.05 && a.l > 0.05 && a.l < 0.95 {
+                    let back = Okhsl::from_color(mirror(m));
+                    for other in [b, back] {
+                        let dh = (a.h - other.h).abs();
+                        assert!(dh.min(360.0 - dh) < 3.0, "{c}: {a:?} {other:?}");
+                    }
+                }
+                clipped += 1;
+                continue;
+            }
             // Twice: back where it was.
             let back = mirror(m).to_srgba_u8();
             let was = c.to_srgba_u8();
@@ -1057,5 +1095,11 @@ mod tests {
                 assert!(back[i].abs_diff(was[i]) <= 2, "{c} -> {m} -> {back:?}");
             }
         }
+        // `#0000ff`, at the cusp of its hue, is clipped.
+        assert!(
+            mirror_clips(Color::from_hex("#0000ff").unwrap())
+                || mirror_clips(mirror(Color::from_hex("#0000ff").unwrap()))
+        );
+        assert!(clipped < seeds().len() / 2, "{clipped} clipped");
     }
 }
