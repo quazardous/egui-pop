@@ -179,8 +179,18 @@ such a bar, keeping room at its end.
 `workbench.zen` (View > Zen mode) toggles a view of the centre alone:
 the title bar, the menu and status bars, the activity bar, the side and
 bottom areas and the floating palettes are hidden, and the frame
-publishes no caption. It has no default key, so that each application
-binds its own; Escape leaves it (`workbench.leave_zen`, while no
+publishes no caption. `Shift+F11` toggles it (Sublime Text's
+distraction free mode; VS Code's `Ctrl+K Z` is left out, since it would
+make `Ctrl+K` a prefix everywhere while it deletes to the line's end in
+a text field). An application binds its own key in its defaults, and
+takes the default away below them:
+
+```rust,ignore
+ctx.keybinding("Ctrl+K Z", workbench::CMD_ZEN, "", Layer::Default)?
+    .unbind("Shift+F11", Layer::Workspace)?;
+```
+
+Escape leaves it (`workbench.leave_zen`, while no
 overlay is open, no mode is pushed and no text field has the
 keyboard; in a text field, the first Escape leaves the field and the
 second leaves zen mode). The way out stays in sight: on entering, a

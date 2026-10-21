@@ -282,7 +282,9 @@ publishes.
   reduced motion); screen readers hear it once. Afterwards, the pointer
   at the top edge brings the strip back until it leaves it. In full
   screen, it stands in for full screen's own strip. Both strings are in
-  the English and French catalogues.
+  the English and French catalogues. `Shift+F11` now toggles zen mode
+  (Sublime Text's distraction free key; `docs/workbench.md` shows how an
+  application binds its own, such as VS Code's `Ctrl+K Z`).
 
 ## 0.2.0 (2026-10-21)
 

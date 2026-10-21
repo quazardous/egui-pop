@@ -2937,11 +2937,14 @@ impl App {
         for spec in crate::workbench::steps() {
             ctx.step(spec)?;
         }
-        // Zen mode: no default key for it (applications bind one);
+        // Zen mode: Shift+F11 toggles it (Sublime Text's distraction
+        // free mode; VS Code's Ctrl+K Z would make Ctrl+K a prefix
+        // everywhere, and it deletes to the line's end in a text field).
         // Escape leaves it, unless an overlay or a pushed mode wants it.
         ctx.command(
             CommandSpec::new(crate::workbench::CMD_ZEN, "Zen mode", "View")
                 .description("Shows the centre alone: no title, menu or status bar, no side or bottom area, no palette. Escape leaves it.")
+                .key("Shift+F11")
                 .checked("workbenchZen")
                 .menu(MENU_VIEW, "9_window", 2),
             |call| {

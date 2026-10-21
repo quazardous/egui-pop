@@ -82,13 +82,13 @@ fn zen_mode_hides_the_bars_and_areas_and_escape_brings_them_back() {
     assert!(shown(&h, "File"), "the menu bar");
     assert!(shown(&h, "main body"));
     let handle = h.state().handle().clone();
-    // No default key: applications bind one.
+    // Shift+F11 by default.
     let entry = handle
         .palette()
         .into_iter()
         .find(|e| e.command == CMD_ZEN)
         .expect("zen mode in the palette");
-    assert!(entry.keys.is_empty(), "{:?}", entry.keys);
+    assert_eq!(entry.keys, ["Shift+F11"]);
     let layout = serde_json::to_value(handle.layout()).unwrap();
     let mark = handle.last_event();
 
@@ -269,4 +269,55 @@ fn the_command_palette_works_in_zen_mode() {
     assert!(!egui_pop_api::palette::is_open(&handle));
     assert!(!handle.zen());
     assert!(shown(&h, "side body"));
+}
+
+#[test]
+fn shift_f11_toggles_zen_mode() {
+    let mut h = harness();
+    let handle = h.state().handle().clone();
+    h.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::F11);
+    h.run();
+    assert!(handle.zen());
+    assert!(!shown(&h, "side body"));
+    h.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::F11);
+    h.run();
+    assert!(!handle.zen());
+    assert!(shown(&h, "side body"));
+}
+
+#[test]
+fn an_application_binds_its_own_key_and_the_hint_names_the_key_leaving() {
+    use egui_pop_model::keymap::Layer;
+    struct Keys;
+    impl Plugin for Keys {
+        fn id(&self) -> PluginId {
+            PluginId::from_static("keys")
+        }
+        fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+            // VS Code's key in place of the default one, and Escape
+            // taken away (an unbinding acts on the layers below its own).
+            ctx.keybinding("Ctrl+K Z", CMD_ZEN, "", Layer::Default)?
+                .unbind("Shift+F11", Layer::Workspace)?
+                .unbind("Escape", Layer::Workspace)?;
+            Ok(())
+        }
+    }
+    let app = App::builder()
+        .plugins(DefaultPlugins)
+        .plugin(Demo)
+        .plugin(Keys)
+        .build(&egui::Context::default())
+        .unwrap();
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(900.0, 600.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+    h.run();
+    let handle = h.state().handle().clone();
+    assert_eq!(handle.keys_for(&CMD_ZEN), ["Ctrl+K Z"]);
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::K);
+    h.key_press(egui::Key::Z);
+    h.run();
+    assert!(handle.zen());
+    // No key leaves it but the toggle: the hint names that one.
+    assert!(h.query_by_label("Zen mode: Ctrl+K Z to leave").is_some());
 }

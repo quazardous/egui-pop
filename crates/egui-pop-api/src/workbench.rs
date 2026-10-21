@@ -41,8 +41,8 @@
 //! area, unfolded, lies above the centre next to its strip with the kit's
 //! `side-area` shadow; a click on the strip folds or unfolds it.
 //!
-//! **Zen mode** (the `workbench.zen` command, a toggle with no default
-//! key: applications bind one) leaves only the centre: the title bar, the
+//! **Zen mode** (the `workbench.zen` command, a toggle on `Shift+F11`
+//! that an application may rebind) leaves only the centre: the title bar, the
 //! menu and status bars, the activity bar, the side and bottom areas and
 //! the floating panels are hidden, and Escape (`workbench.leave_zen`)
 //! brings them back. The way out stays in sight: a strip at the top
