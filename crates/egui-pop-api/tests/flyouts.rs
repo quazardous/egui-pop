@@ -193,16 +193,26 @@ fn a_double_click_or_the_pin_unfolds_the_area_with_the_panel_shown() {
     assert!(app.layout().folded.is_empty());
     assert!(app.flyout().is_none());
     assert!(h.query_by_label("search body").is_some());
-    // Folded again, a double click on an icon (both clicks in one
-    // frame, within the double click's delay).
+    // Folded again, a double click on an icon. kittest steps one frame
+    // per queued event (a quarter of a second each), so two `click()`s
+    // are two single clicks; both clicks go into one frame's input.
     app.fold_area(Area::StartSide, true);
     h.run();
     h.run();
-    {
-        let files = icon_button(&h, "Files");
-        files.click();
-        files.click();
-    }
+    let at = icon_button(&h, "Files").rect().center();
+    let button = |pressed| egui::Event::PointerButton {
+        pos: at,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: egui::Modifiers::default(),
+    };
+    h.input_mut().events.extend([
+        egui::Event::PointerMoved(at),
+        button(true),
+        button(false),
+        button(true),
+        button(false),
+    ]);
     h.run();
     h.run();
     assert!(app.layout().folded.is_empty());
