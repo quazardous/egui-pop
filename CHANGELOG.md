@@ -652,6 +652,15 @@ publishes.
   `ThemeSpec` also takes the user's own families
   (`ThemeSpec::font_ui`, `font_mono`), put first in `font.family.ui` and
   `font.family.mono`. The `theme` debug collector reports them.
+- Families drawn by name (egui-pop-core): `fonts::specimen(ctx, name,
+  weight)` installs and gives an egui family for any family a face is
+  found for, outside the theme's roles; `fonts::families` lists the
+  families there are (egui's, registered, the user's files, the
+  system's) with their `fonts::Origin` and whether each is monospace;
+  `fonts::registered` gives the faces registered, and `Face::origin`,
+  `tabular_digits` and `monospace` describe one. The install `Report`
+  adds each family's fallback chain, the specimens and whether each
+  role's face has tabular digits.
 
 ### Changed
 

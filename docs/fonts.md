@@ -96,6 +96,23 @@ relative path ([Design tokens](tokens.md#a-theme-with-its-fonts)), and
 opening one makes its faces the user's font files again
 (`ThemeEditor::set_font_dir` says where an archive's faces are kept).
 
+## Families by name, and the families there are (built)
+
+- `fonts::specimen(ctx, name, weight)` gives an egui family drawing a
+  family by its name, outside the theme's two roles: a picker drawing
+  each name in its own face, a page comparing fonts. The first ask
+  installs the fonts again (one slow frame, from the next pass) and
+  returns `None` meanwhile; a name found nowhere draws egui's bundled
+  fonts and is said in the report.
+- `fonts::families(ctx)` lists the families a theme or a user may name:
+  egui's bundled ones (`Ubuntu`, `Hack`), the faces registered (the
+  application's, then the user's files), then the system's (feature
+  `system-fonts`), each with its `Origin` and whether it is monospace.
+- The install's `Report` also gives each egui family's fallback chain,
+  the specimens, and per role whether its regular face has tabular
+  digits by default (`Report::tabular_digits`), read from the face's
+  advances with skrifa.
+
 ## 1. What egui 0.36 / epaint can do
 
 All of this was checked in the epaint 0.36.2 source (`src/text/*.rs`) and

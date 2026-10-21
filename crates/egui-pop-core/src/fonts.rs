@@ -28,6 +28,11 @@
 //! [`install`] runs with the theme (`theme::install_tokens`); it replaces
 //! egui's font definitions only when the families or the registered faces
 //! changed (one slow frame: egui rebuilds its atlas).
+//!
+//! Any family can also be drawn by name, outside the theme's roles, as a
+//! [`specimen`] (a picker drawing each name in its own face, a page
+//! comparing fonts); [`families`] lists the families there are, with
+//! their [`Origin`].
 
 use std::sync::Arc;
 
@@ -143,6 +148,32 @@ pub fn font_at(tokens: &crate::theme::Tokens, role: Role, weight: Weight, step: 
     font_id(role, weight, tokens.font.scale.get(step))
 }
 
+/// Where a face comes from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Origin {
+    /// egui's own fonts (`Ubuntu`, `Hack`).
+    Bundled,
+    /// A face the application registered ([`register`]).
+    Registered,
+    /// A font file the user added ([`register_files`]).
+    File,
+    /// The system's fonts (feature `system-fonts`).
+    System,
+}
+
+impl Origin {
+    /// Its name in reports: `bundled`, `registered`, `file`, `system`.
+    pub fn name(self) -> &'static str {
+        match self {
+            Origin::Bundled => "bundled",
+            Origin::Registered => "registered",
+            Origin::File => "file",
+            Origin::System => "system",
+        }
+    }
+}
+
 /// A font face the application gives: its family name (as a theme names
 /// it), its weight and the bytes of a `.ttf` or `.otf` file.
 #[derive(Clone)]
@@ -150,6 +181,7 @@ pub struct Face {
     pub family: String,
     pub weight: Weight,
     data: Arc<FontData>,
+    origin: Origin,
 }
 
 impl Face {
@@ -159,6 +191,7 @@ impl Face {
             family: family.into(),
             weight,
             data: Arc::new(FontData::from_static(bytes)),
+            origin: Origin::Registered,
         }
     }
 
@@ -168,8 +201,67 @@ impl Face {
             family: family.into(),
             weight,
             data: Arc::new(FontData::from_owned(bytes)),
+            origin: Origin::Registered,
         }
     }
+
+    /// Where it comes from: [`Origin::Registered`], or [`Origin::File`]
+    /// for a user's font file.
+    pub fn origin(&self) -> Origin {
+        self.origin
+    }
+
+    /// Its file's size, in bytes.
+    pub fn len(&self) -> usize {
+        self.data.font.len()
+    }
+
+    /// Whether its file is empty (it never draws).
+    pub fn is_empty(&self) -> bool {
+        self.data.font.is_empty()
+    }
+
+    /// Whether its digits `0` to `9` share one advance (tabular figures
+    /// by default); `false` when it cannot be read.
+    pub fn tabular_digits(&self) -> bool {
+        tabular_digits(&self.data)
+    }
+
+    /// Whether every glyph has the same advance (a monospace face, as
+    /// far as `i`, `W`, `m` and `0` tell).
+    pub fn monospace(&self) -> bool {
+        monospace(&self.data)
+    }
+}
+
+/// The advances of chars in a face, in font units; `None` when one is
+/// missing or the face cannot be read.
+fn advances(data: &FontData, chars: &[char]) -> Option<Vec<f32>> {
+    use skrifa::MetadataProvider as _;
+    let font = skrifa::FontRef::from_index(data.font.as_ref(), data.index).ok()?;
+    let charmap = font.charmap();
+    let metrics = font.glyph_metrics(
+        skrifa::instance::Size::unscaled(),
+        skrifa::instance::LocationRef::default(),
+    );
+    chars
+        .iter()
+        .map(|c| charmap.map(*c).and_then(|g| metrics.advance_width(g)))
+        .collect()
+}
+
+fn same_advance(data: &FontData, chars: &[char]) -> bool {
+    advances(data, chars).is_some_and(|a| a.windows(2).all(|w| (w[0] - w[1]).abs() < 0.5))
+}
+
+/// Whether a face's default digits are tabular (one advance for `0` to
+/// `9`): egui applies no OpenType feature, so `tnum` cannot be asked.
+fn tabular_digits(data: &FontData) -> bool {
+    same_advance(data, &['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'])
+}
+
+fn monospace(data: &FontData) -> bool {
+    same_advance(data, &['i', 'W', 'm', '0', '.'])
 }
 
 impl std::fmt::Debug for Face {
@@ -237,7 +329,13 @@ pub fn register_files(ctx: &Context, files: &[FontFile]) -> Vec<String> {
     for f in files {
         match std::fs::read(&f.path) {
             Ok(bytes) => match inspect(&bytes) {
-                Ok(_) => register(ctx, Face::from_owned(&f.family, f.weight, bytes)),
+                Ok(_) => register(
+                    ctx,
+                    Face {
+                        origin: Origin::File,
+                        ..Face::from_owned(&f.family, f.weight, bytes)
+                    },
+                ),
                 Err(e) => problems.push(format!("{}: {e}", f.path.display())),
             },
             Err(e) => problems.push(format!("{}: {e}", f.path.display())),
@@ -258,6 +356,93 @@ pub fn reinstall(ctx: &Context) -> Option<Arc<Report>> {
     Some(install(ctx, &key.ui, &key.mono))
 }
 
+/// The egui family drawing a family by its name at a weight, outside
+/// the theme's roles: a face registered, egui's or the system's, egui's
+/// bundled fonts behind it. `None` until it is installed: the first ask
+/// installs the fonts again (one slow frame, from the next pass) and
+/// asks for a repaint; draw with another font meanwhile. A name found
+/// nowhere draws egui's bundled fonts, and is said in the [`Report`].
+pub fn specimen(ctx: &Context, name: &str, weight: Weight) -> Option<FontFamily> {
+    let installed = INSTALLED
+        .get(ctx)
+        .is_some_and(|(k, _)| k.specimens.iter().any(|s| s.eq_ignore_ascii_case(name)));
+    if installed {
+        return Some(specimen_family(name, weight));
+    }
+    SPECIMENS.update(ctx, |s| {
+        if !s.iter().any(|x| x.eq_ignore_ascii_case(name)) {
+            s.push(name.to_string());
+        }
+    });
+    reinstall(ctx);
+    ctx.request_repaint();
+    None
+}
+
+fn specimen_family(name: &str, weight: Weight) -> FontFamily {
+    FontFamily::Name(
+        format!(
+            "pop.specimen.{}.{}",
+            name.to_lowercase(),
+            weight.nearest_installed().0
+        )
+        .into(),
+    )
+}
+
+/// A family there is to draw with: its name (as a theme names it),
+/// where its faces come from and whether it is monospace.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct FamilyInfo {
+    pub name: String,
+    pub origin: Origin,
+    pub monospace: bool,
+}
+
+/// The families a theme or a user may name: egui's bundled ones, the
+/// faces registered (the application's, then the user's files), then
+/// the system's (feature `system-fonts`), each once, the first origin
+/// found kept.
+pub fn families(ctx: &Context) -> Vec<FamilyInfo> {
+    let mut out: Vec<FamilyInfo> = Vec::new();
+    let mut push = |info: FamilyInfo| {
+        if !out.iter().any(|f| f.name.eq_ignore_ascii_case(&info.name)) {
+            out.push(info);
+        }
+    };
+    for (name, monospace) in [("Ubuntu", false), ("Hack", true)] {
+        push(FamilyInfo {
+            name: name.into(),
+            origin: Origin::Bundled,
+            monospace,
+        });
+    }
+    let registered = REGISTERED.get_or_default(ctx);
+    for origin in [Origin::Registered, Origin::File] {
+        for f in registered.faces.iter().filter(|f| f.origin == origin) {
+            push(FamilyInfo {
+                name: f.family.clone(),
+                origin,
+                monospace: f.monospace(),
+            });
+        }
+    }
+    for (name, monospace) in System::get().families() {
+        push(FamilyInfo {
+            name: name.clone(),
+            origin: Origin::System,
+            monospace: *monospace,
+        });
+    }
+    out
+}
+
+/// The faces registered, in order: the application's and the user's
+/// files.
+pub fn registered(ctx: &Context) -> Vec<Face> {
+    REGISTERED.get_or_default(ctx).faces
+}
+
 /// The families installed last: `font.family.ui` and `font.family.mono`
 /// as asked.
 pub fn installed_families(ctx: &Context) -> Option<(Vec<String>, Vec<String>)> {
@@ -271,7 +456,23 @@ pub struct Report {
     /// Per egui family (`pop.ui.700`): the face drawn first, as
     /// "Family weight (source)", or `None` for egui's bundled fonts.
     pub primary: Vec<(String, Option<String>)>,
+    /// Per egui family, the faces it falls back through, in order (keys
+    /// of egui's font definitions).
+    pub chains: Vec<(String, Vec<String>)>,
+    /// Per role (`ui`, `mono`): whether the face drawing its regular
+    /// weight has tabular digits by default.
+    pub tabular: Vec<(String, bool)>,
+    /// The names drawn as specimens ([`specimen`]).
+    pub specimens: Vec<String>,
     pub problems: Vec<String>,
+}
+
+impl Report {
+    /// Whether the face drawing a role's regular text has tabular
+    /// digits by default (one advance for `0` to `9`).
+    pub fn tabular_digits(&self, role: Role) -> bool {
+        self.tabular.iter().any(|(r, t)| r == role.key() && *t)
+    }
 }
 
 #[derive(Clone, Default)]
@@ -282,6 +483,8 @@ struct Registered {
 
 /// The faces registered for the next install.
 const REGISTERED: Slot<Registered> = Slot::opaque("core.fonts.registered");
+/// The names asked as specimens.
+const SPECIMENS: Slot<Vec<String>> = Slot::opaque("core.fonts.specimens");
 /// What the last install was asked, and its report.
 const INSTALLED: Slot<(Key, Arc<Report>)> = Slot::opaque("core.fonts.installed");
 
@@ -305,6 +508,7 @@ pub fn report(ctx: &Context) -> Option<Arc<Report>> {
 struct Key {
     ui: Vec<String>,
     mono: Vec<String>,
+    specimens: Vec<String>,
     generation: u64,
 }
 
@@ -325,9 +529,11 @@ fn is_generic(name: &str) -> bool {
 /// next pass. The icon font (`icon::install`) is kept.
 pub fn install(ctx: &Context, ui: &[String], mono: &[String]) -> Arc<Report> {
     let registered = REGISTERED.get_or_default(ctx);
+    let specimens = SPECIMENS.get_or_default(ctx);
     let key = Key {
         ui: ui.to_vec(),
         mono: mono.to_vec(),
+        specimens: specimens.clone(),
         generation: registered.generation,
     };
     if let Some((k, report)) = INSTALLED.get(ctx)
@@ -335,7 +541,14 @@ pub fn install(ctx: &Context, ui: &[String], mono: &[String]) -> Arc<Report> {
     {
         return report;
     }
-    let (defs, report) = definitions(&registered.faces, ui, mono, &System::get());
+    let (mut defs, mut report) = definitions(&registered.faces, ui, mono, &System::get());
+    add_specimens(
+        &mut defs,
+        &mut report,
+        &registered.faces,
+        &specimens,
+        &System::get(),
+    );
     for p in &report.problems {
         log::warn!(target: "egui_pop", "fonts: {p}");
     }
@@ -372,7 +585,7 @@ fn find(
                 key: format!("pop:{}:{}", face.family, w.0),
                 data: face.data.clone(),
                 weight: w,
-                source: "registered",
+                source: face.origin.name(),
             },
             weight,
         ));
@@ -474,10 +687,19 @@ fn definitions(
                     chain.push(found.key);
                 }
             }
+            if weight == Weight::REGULAR {
+                // The face drawing the digits: the first of the chain.
+                let first = chain.first().or(tail.first());
+                let tabular = first
+                    .and_then(|k| defs.font_data.get(k))
+                    .is_some_and(|d| tabular_digits(d));
+                report.tabular.push((role.key().to_string(), tabular));
+            }
             chain.extend(tail.iter().cloned());
             let fam = family(role, weight);
             if let FontFamily::Name(n) = &fam {
                 report.primary.push((n.to_string(), primary));
+                report.chains.push((n.to_string(), chain.clone()));
             }
             if weight == Weight::REGULAR {
                 let egui_family = match role {
@@ -501,6 +723,57 @@ fn definitions(
         }
     }
     (defs, report)
+}
+
+/// Adds a family per specimen name and weight: the face found for the
+/// name, egui's bundled proportional fonts behind it.
+fn add_specimens(
+    defs: &mut FontDefinitions,
+    report: &mut Report,
+    faces: &[Face],
+    names: &[String],
+    system: &System,
+) {
+    let bundled_faces = FontDefinitions::default().font_data;
+    let tail = defs
+        .families
+        .get(&FontFamily::Proportional)
+        .cloned()
+        .unwrap_or_default();
+    // egui's own tail, not the theme's faces in front of it.
+    let egui_tail: Vec<String> = FontDefinitions::default()
+        .families
+        .get(&FontFamily::Proportional)
+        .cloned()
+        .unwrap_or_default();
+    let tail: Vec<String> = tail.into_iter().filter(|k| egui_tail.contains(k)).collect();
+    for name in names {
+        let mut found_any = false;
+        for weight in WEIGHTS {
+            let mut chain = Vec::new();
+            if !is_generic(name)
+                && let Some(found) = find(name, weight, faces, &bundled_faces, system)
+            {
+                found_any = true;
+                defs.font_data
+                    .entry(found.key.clone())
+                    .or_insert(found.data);
+                chain.push(found.key);
+            }
+            chain.extend(tail.iter().cloned());
+            let fam = specimen_family(name, weight);
+            if let FontFamily::Name(n) = &fam {
+                report.chains.push((n.to_string(), chain.clone()));
+            }
+            defs.families.insert(fam, chain);
+        }
+        if !found_any && !is_generic(name) {
+            report
+                .problems
+                .push(format!("specimen: no font named {name}"));
+        }
+        report.specimens.push(name.clone());
+    }
 }
 
 /// The system's fonts, read once per process.
@@ -562,6 +835,34 @@ impl System {
     #[cfg(not(feature = "system-fonts"))]
     fn find(&self, _name: &str, _weight: Weight) -> Option<Found> {
         None
+    }
+
+    /// The system's families, each once, sorted, with whether it is
+    /// monospace.
+    #[cfg(feature = "system-fonts")]
+    fn families(&self) -> &'static [(String, bool)] {
+        static LIST: std::sync::OnceLock<Vec<(String, bool)>> = std::sync::OnceLock::new();
+        let Some(db) = self.db else {
+            return &[];
+        };
+        LIST.get_or_init(|| {
+            let mut out: Vec<(String, bool)> = Vec::new();
+            for face in db.faces() {
+                let Some((name, _)) = face.families.first() else {
+                    continue;
+                };
+                if !out.iter().any(|(n, _)| n == name) {
+                    out.push((name.clone(), face.monospaced));
+                }
+            }
+            out.sort_by_key(|(n, _)| n.to_lowercase());
+            out
+        })
+    }
+
+    #[cfg(not(feature = "system-fonts"))]
+    fn families(&self) -> &'static [(String, bool)] {
+        &[]
     }
 }
 
@@ -740,6 +1041,100 @@ mod tests {
         let c = install(&ctx, &names(&["Nowhere"]), &[]);
         assert!(!Arc::ptr_eq(&a, &c));
         assert!(c.problems.is_empty() || c.problems.iter().all(|p| !p.contains("no font named")));
+    }
+
+    #[test]
+    fn a_family_is_drawn_by_name_as_a_specimen_once_installed() {
+        let ctx = Context::default();
+        install(&ctx, &names(&["Ubuntu"]), &names(&["Hack"]));
+        register(&ctx, Face::from_static("Inter", Weight::REGULAR, INTER_VAR));
+        // Asked once: installed from the next pass.
+        assert_eq!(specimen(&ctx, "Inter", Weight::REGULAR), None);
+        ctx.run_ui(egui::RawInput::default(), |_| {})
+            .textures_delta
+            .clear();
+        let fam = specimen(&ctx, "inter", Weight::BOLD).expect("installed");
+        assert_eq!(fam, specimen_family("Inter", Weight::BOLD));
+        let said = report(&ctx).unwrap();
+        assert_eq!(said.specimens, vec!["Inter".to_string()]);
+        let chain = &said
+            .chains
+            .iter()
+            .find(|(f, _)| fam == FontFamily::Name(f.as_str().into()))
+            .unwrap()
+            .1;
+        assert_eq!(chain[0], "pop:Inter:400@wght700");
+        // The theme's families are untouched.
+        assert_eq!(installed_families(&ctx).unwrap().0, names(&["Ubuntu"]));
+        let width = |f: FontFamily| {
+            ctx.fonts_mut(|fonts| {
+                fonts
+                    .layout_no_wrap(
+                        "Hamburgefonstiv".into(),
+                        FontId::new(20.0, f),
+                        egui::Color32::WHITE,
+                    )
+                    .size()
+                    .x
+            })
+        };
+        let regular = specimen(&ctx, "Inter", Weight::REGULAR).unwrap();
+        assert!(width(fam) > width(regular) + 1.0);
+        // A name found nowhere still draws, and is said.
+        assert_eq!(specimen(&ctx, "Nowhere Sans", Weight::REGULAR), None);
+        ctx.run_ui(egui::RawInput::default(), |_| {})
+            .textures_delta
+            .clear();
+        assert!(specimen(&ctx, "Nowhere Sans", Weight::REGULAR).is_some());
+        assert!(
+            report(&ctx)
+                .unwrap()
+                .problems
+                .iter()
+                .any(|p| p == "specimen: no font named Nowhere Sans")
+        );
+    }
+
+    #[test]
+    fn families_list_egui_s_the_registered_and_the_user_s_with_their_origin() {
+        let ctx = Context::default();
+        register(&ctx, Face::from_static("Inter", Weight::REGULAR, INTER_VAR));
+        let hack = FontDefinitions::default().font_data["Hack"].font.to_vec();
+        register(
+            &ctx,
+            Face {
+                origin: Origin::File,
+                ..Face::from_owned("My Mono", Weight::REGULAR, hack)
+            },
+        );
+        let list = families(&ctx);
+        let find = |n: &str| list.iter().find(|f| f.name == n).cloned().unwrap();
+        assert_eq!(find("Ubuntu").origin, Origin::Bundled);
+        assert!(find("Hack").monospace);
+        assert_eq!(find("Inter").origin, Origin::Registered);
+        assert!(!find("Inter").monospace);
+        assert_eq!(find("My Mono").origin, Origin::File);
+        assert!(find("My Mono").monospace);
+        // egui's first, each name once.
+        assert_eq!(list[0].name, "Ubuntu");
+        let mut names: Vec<_> = list.iter().map(|f| f.name.to_lowercase()).collect();
+        names.dedup();
+        assert_eq!(names.len(), list.len());
+        assert_eq!(registered(&ctx).len(), 2);
+    }
+
+    #[test]
+    fn the_report_says_whether_each_role_draws_tabular_digits() {
+        let (_, report) = definitions(&[], &names(&["Ubuntu"]), &names(&["Hack"]), &System::none());
+        // A monospace face's digits are tabular.
+        assert!(report.tabular_digits(Role::Mono));
+        let hack = FontDefinitions::default().font_data["Hack"].clone();
+        assert!(tabular_digits(&hack));
+        assert!(monospace(&hack));
+        let ubuntu = FontDefinitions::default().font_data["Ubuntu-Light"].clone();
+        assert!(!monospace(&ubuntu));
+        assert_eq!(report.tabular_digits(Role::Ui), tabular_digits(&ubuntu));
+        assert_eq!(report.chains.len(), 2 * WEIGHTS.len());
     }
 
     #[test]

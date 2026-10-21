@@ -539,7 +539,7 @@ fn the_fonts_tab_adds_a_file_reorders_families_and_applies_once() {
         .find(|(f, _)| f == "pop.ui.400")
         .and_then(|(_, p)| p.clone())
         .unwrap_or_default();
-    assert!(primary.contains("registered"), "{primary}");
+    assert!(primary.contains("(file)"), "{primary}");
     // One undo takes the families back.
     run(&mut h, &CMD_THEME_UNDO, json!({}));
     h.run();
