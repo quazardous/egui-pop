@@ -31,7 +31,7 @@ outlines and the loupe), `node-graph` (the node graph editor), `graph-file` (the
 (the live tree), `table` (lists and tables), `library` (the photo
 library), `text-editor`,
 `code-editor`, `terminal`, `zones` (zones and blocks), `workbench`,
-`palettes`, `arrangements`, `contexts` (the context stack: places and modes, and the status bar that follows them), `clipboard` (typed items copied between palettes, paste special's previews), `strips`, `jobs` (a pretend host's
+`palettes`, `arrangements`, `contexts` (the context stack: places and modes, and the status bar that follows them), `clipboard` (typed items copied between palettes, paste special's previews), `strips` (the activity bar, and status items: live states, a popover, hover cards), `jobs` (a pretend host's
 background jobs), `frame`, `scale`, `pointer` (pointer gesture profiles),
 `platform` (the platform services),
 `settings`, `i18n` (translations) and `debug` (the debug
@@ -264,6 +264,8 @@ Zones and blocks, the workbench, palettes, arrangements, the context stack, the 
   <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/workbench-drag-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/workbench-drag-pop-dark.png" width="200" alt="workbench-drag-pop-dark"></a><br>workbench-drag-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/clipboard-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/clipboard-pop-dark.png" width="200" alt="clipboard-pop-dark"></a><br>clipboard-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/strips-popover-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/strips-popover-pop-dark.png" width="200" alt="strips-popover-pop-dark"></a><br>strips-popover-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/strips-card-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/strips-card-pop-dark.png" width="200" alt="strips-card-pop-dark"></a><br>strips-card-pop-dark</td>
   </tr>
 </table>
 

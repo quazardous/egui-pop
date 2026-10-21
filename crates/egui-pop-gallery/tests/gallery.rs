@@ -1369,6 +1369,46 @@ fn the_strips_page_feeds_an_indicator_and_folds_the_side_bar() {
 }
 
 #[test]
+fn the_strips_page_shows_live_states_a_popover_and_a_hover_card() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "strips"));
+    h.run();
+    let app = h.state().app.handle().clone();
+    // The page's own items show on this page only.
+    assert!(h.query_by_label("No problem").is_some());
+    assert!(h.query_by_label("Node: connected").is_some());
+    h.get_by_label("Add an error").click();
+    h.run();
+    h.get_by_label("Add a warning").click();
+    h.run();
+    h.get_by_label("Add a warning").click();
+    h.run();
+    assert!(h.query_by_label("Errors: 1").is_some());
+    assert!(h.query_by_label("Warnings: 2").is_some());
+    // The popover, as an agent or the page's button opens it.
+    h.get_by_label("Open the problems popover").click();
+    h.run();
+    h.run();
+    assert!(h.query_by_label("Dismiss all").is_some());
+    let mut results = egui_kittest::SnapshotResults::new();
+    results.add(h.try_snapshot("strips-popover-pop-dark"));
+    h.key_press(egui::Key::Escape);
+    h.run();
+    assert!(h.query_by_label("Dismiss all").is_none());
+    // The node's card, its link running a command.
+    h.get_by_label("Show the node's card").click();
+    h.run();
+    h.run();
+    assert!(h.query_by_label("Reconnect").is_some());
+    results.add(h.try_snapshot("strips-card-pop-dark"));
+    let node = egui_pop::api::strips::status(&app)
+        .into_iter()
+        .find(|e| e.id == "gallery.node")
+        .unwrap();
+    assert_eq!(node.priority, 10);
+    assert!(node.card.is_some());
+}
+
+#[test]
 fn the_workbench_page_detaches_a_panel_into_its_own_window() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "workbench"));
     h.run();
