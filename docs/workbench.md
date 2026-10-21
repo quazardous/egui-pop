@@ -355,6 +355,35 @@ assert!(app.handle().layout().floating_of(&TOOLS).is_some());
   token is the room between stacked members. A group is saved as the
   floating panel it was before groups, its other members under `group`:
   an application that predates groups floats them apart.
+- **Docking conventions.** Groups follow the classic docking
+  conventions (Photoshop, Krita, GIMP, Qt docks, VS Code), decided on
+  2026-10-21:
+  - *Close group* is an entry of the menu on the group's band (its
+    `…` button), never a button on the band, so that a stray click
+    cannot close a group. It runs `palette.close_group`, which a hook
+    may veto.
+  - *A tab dragged out* of its tabs comes out of them
+    (`palette.ungroup`): alone where it is dropped, or into the palette
+    or group it is dropped on, following the usual drop rules (an edge
+    stacks, the middle adds a tab, an area docks it). Dropped back on
+    its own tabs, it stays. The member's band still drags it too.
+  - *Closing the shown tab* shows its neighbour on the right, or the one
+    on its left when it was the last (Qt's default, as in browsers).
+  - *An edge drop on a group of tabs* stacks the palette above or below
+    it, and the tabs stay tabs: a stack's member may be a tab group
+    (`Member::tabs`), one level deep, never a stack in tabs. Its band
+    holds its tabs, the shown tab's Close and the tab group's Roll; the
+    band drags the tab group out of the stack whole (`palette.ungroup`
+    with `tabs: true`). A middle drop on a member of a stack makes that
+    member alone a tab group, the rest of the stack staying a stack. A
+    group docked whole (`palette.dock` with `group: true`) and floated
+    back comes back nested as it was.
+  - *Layouts.* A nested tab group is saved as its first tab, its other
+    tabs under `tabs` and the shown one as `shown`: layouts saved before
+    load unchanged, and an application that predates nesting reads the
+    first tab as a plain member of the stack and puts the other tabs
+    back as it does any panel missing from a layout (a palette floats
+    again on its own, a panel opening closed stays closed).
 - **Sizes.** A palette is sized by its content until it is resized:
   its right edge, its bottom edge and the corner between them (the
   `palette.grip` token's width) drag its size, kept between the
@@ -385,11 +414,13 @@ assert!(app.handle().layout().floating_of(&TOOLS).is_some());
   once an edge is dropped; `size: null` for the content's size; a veto
   gives it its size back), `palette.roll`, `palette.pin`,
   `palette.group` (`{panels, into, at}`, `at` being `above`, `below` or
-  `tab`) and `palette.ungroup` (`{panel, pos}`); a group docks whole
-  through `palette.dock` with `group: true`. Once done, the journal says
-  `palette.opened`, `palette.floated`, `palette.docked`,
+  `tab`), `palette.ungroup` (`{panel, pos}`, `tabs: true` for a nested
+  tab group whole) and `palette.close_group` (`{panel}`); a group docks
+  whole through `palette.dock` with `group: true`. Once done, the
+  journal says `palette.opened`, `palette.floated`, `palette.docked`,
   `palette.moved`, `palette.resized`, `palette.rolled`,
-  `palette.pinned`, `palette.grouped` or `palette.ungrouped`.
+  `palette.pinned`, `palette.grouped`, `palette.ungrouped` or
+  `palette.group_closed`.
 
 Not built yet: a palette outside the main window, as a native utility
 window. egui's viewports have no owner window (only "always on top" of

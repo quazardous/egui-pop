@@ -360,6 +360,11 @@ pub const PALETTE_ROLL_UP: StrKey = StrKey::new("egui-pop-palette-roll-up", "Rol
 pub const PALETTE_ROLL_DOWN: StrKey =
     StrKey::new("egui-pop-palette-roll-down", "Roll down { $palette }");
 pub const PALETTE_CLOSE: StrKey = StrKey::new("egui-pop-palette-close", "Close { $palette }");
+/// The menu of a group of palettes, on its band (named with its title).
+pub const PALETTE_GROUP_MENU: StrKey =
+    StrKey::new("egui-pop-palette-group-menu", "{ $palette } menu");
+/// The entry of a group's menu closing every palette of the group.
+pub const PALETTE_CLOSE_GROUP: StrKey = StrKey::new("egui-pop-palette-close-group", "Close group");
 pub const PALETTE_PIN: StrKey = StrKey::new("egui-pop-palette-pin", "Pin { $palette }");
 pub const PALETTE_UNPIN: StrKey = StrKey::new("egui-pop-palette-unpin", "Unpin { $palette }");
 /// A detached panel's window title, with the application's.
@@ -1027,6 +1032,8 @@ pub const ALL: &[StrKey] = &[
     WORKBENCH_FOLD,
     WORKBENCH_FLYOUT_PIN,
     PALETTE_CLOSE,
+    PALETTE_CLOSE_GROUP,
+    PALETTE_GROUP_MENU,
     PALETTE_ROLL_UP,
     PALETTE_ROLL_DOWN,
     PALETTE_PIN,
