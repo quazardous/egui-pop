@@ -209,6 +209,19 @@ publishes.
 
 ### Changed
 
+- Floating groups nest one tab group in a stack (egui-pop-model): a
+  `Member` is a palette or palettes held as tabs (`Member::tabs`, the
+  shown one `Member::shown`), one level deep. `Layout::group` stacks a
+  palette above or below a group of tabs with the tabs kept as one
+  member, a middle drop on a member of a stack makes that member alone
+  a tab group, and a whole group of tabs moved onto a stack's edge keeps
+  its tabs; `Layout::ungroup_tabs` takes a nested tab group out of its
+  stack whole; docking a group whole and floating it back keeps the
+  nesting. A tab taken out, or closed, while shown gives way to its
+  neighbour on the right, or the left one at the end (it was the one
+  before it). Saved as the first tab with the others under `tabs`:
+  layouts load unchanged, and an application that predates nesting
+  reads the first tab and floats the others again as new palettes.
 - Palettes are resizable (egui-pop-model, egui-pop-api, egui-pop-tokens):
   their right edge, bottom edge and corner drag their size, between the
   new `palette.min-width`, `palette.min-height`, `palette.max-width` and
