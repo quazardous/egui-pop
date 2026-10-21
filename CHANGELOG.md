@@ -412,6 +412,13 @@ publishes.
   in 0.N, read with the "update your file" warning in 0.N to 0.N+2,
   dropped in 0.N+3. A test fails once an entry outlives its window
   (`Renamed::expired_at`). Part of #37.
+- Kit files carry the format stamp too (egui-pop-tokens): each token
+  file of a kit (`kit.yaml` and the component files) is read by its own
+  `"org.egui-pop.format"` stamp, as a theme file is: a token renamed
+  since its contract is read under its new name, a file stamped newer
+  than this egui-pop is read best-effort, and an unreadable stamp counts
+  as current, each a `Problem::Format` warning rather than an error.
+  Part of #37.
 
 ### Changed
 

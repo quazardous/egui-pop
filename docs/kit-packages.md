@@ -42,6 +42,14 @@ font:
       $value: ["JetBrains Mono", "monospace"]
 ```
 
+Each of a kit's token files may carry the format stamp a theme file
+carries (`"org.egui-pop.format": { "version": 1, "contract": 1 }` in its
+root `$extensions`, [tokens.md](tokens.md#a-files-version)), and is read
+by its own: a file without one is current, a token renamed since the
+contract it was written for is read under its new name, and a file
+stamped newer than this egui-pop is read best-effort, each with a
+warning (`Problem::Format`), never an error.
+
 Every key is optional. `name` is the kit's theme name (the folder's name
 otherwise; a built-in theme's name gets `-kit` added); `label` is its
 name for people.
@@ -82,6 +90,9 @@ What is wrong is in `KitData::problems()`, and the kit is usable anyway
   read by nothing, reported;
 - a face named by the manifest and missing, or a file that is not a
   font: left out (the families naming it fall back);
+- a token file stamped newer than this egui-pop, with a stamp that
+  cannot be read, or giving a token renamed since its contract
+  (`Format`): read best-effort, as current, or under the new name;
 - an `icons/` folder: not read yet;
 - a token file whose compiled form cannot be kept in the cache
   (`NotCached`): read uncached, parsed again next time.

@@ -58,7 +58,7 @@ use serde_json::Value as Json;
 use crate::cache::Cache;
 use crate::contract::{kit_contract, required};
 use crate::theme::{BUILT_IN_THEMES, FALLBACK_THEME, ThemeSpec, Themes};
-use crate::{Error, TokenFile};
+use crate::{Error, TokenFile, Warning};
 
 /// The file every kit folder has.
 pub const KIT_FILE: &str = "kit.yaml";
@@ -245,6 +245,12 @@ pub enum Problem {
     NotCached { file: String, reason: String },
     /// A part of the folder egui-pop does not read yet.
     NotRead { what: String },
+    /// A token file of the kit was read otherwise than written, by its
+    /// format stamp ([`crate::FormatStamp`]): stamped newer than this
+    /// egui-pop (read best-effort), a stamp that cannot be read, or a
+    /// token renamed since the contract it was written for (read under
+    /// its new name). Kit files load as theme files do, with warnings.
+    Format { file: String, warning: Warning },
     /// A problem of the theme the kit resolves to ([`check`]).
     Theme(Error),
     /// Two glyph roles of [`DISTINCT_GLYPHS`] name the same icon: two
@@ -293,6 +299,7 @@ impl fmt::Display for Problem {
                 write!(f, "`{file}`: read uncached: {reason}")
             }
             Problem::NotRead { what } => write!(f, "{what} is not read yet"),
+            Problem::Format { file, warning } => write!(f, "`{file}`: {warning}"),
             Problem::Theme(e) => write!(f, "theme: {e}"),
             Problem::SameGlyph { roles, icon } => write!(
                 f,
@@ -641,21 +648,35 @@ fn assemble(
     license: Option<String>,
     mut problems: Vec<Problem>,
 ) -> KitData {
+    // Each file says what it was written for (one stamp per file), and
+    // is brought to the current contract before the files are merged.
+    let upgrade = |file: &str, part: &mut TokenFile, problems: &mut Vec<Problem>| {
+        problems.extend(part.upgrade().into_iter().map(|warning| Problem::Format {
+            file: file.to_string(),
+            warning,
+        }));
+    };
     let mut theme = match kit {
-        Ok(file) => file,
+        Ok(mut file) => {
+            upgrade(KIT_FILE, &mut file, &mut problems);
+            file
+        }
         Err(p) => {
             problems.push(p);
             TokenFile::new(KIT_FILE)
         }
     };
+    let mut parts = Vec::new();
     for (file, part) in tokens {
-        let part = match part {
-            Ok(part) => part,
-            Err(p) => {
-                problems.push(p);
-                continue;
+        match part {
+            Ok(mut part) => {
+                upgrade(&file, &mut part, &mut problems);
+                parts.push((file, part));
             }
-        };
+            Err(p) => problems.push(p),
+        }
+    }
+    for (file, part) in parts {
         if part.extends.is_some() {
             problems.push(Problem::Extends { file: file.clone() });
         }
@@ -1037,6 +1058,66 @@ macro_rules! kit {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn each_kit_file_is_read_by_its_own_stamp() {
+        let kit = KitData::embedded(Embedded {
+            dir: "kits/stamped",
+            kit: r##"{
+              "$extensions": { "org.egui-pop.format": { "version": 1, "contract": 99 } },
+              "tab": { "shape": { "$type": "string", "$value": "underline" } }
+            }"##,
+            tokens: vec![
+                (
+                    "button.tokens.json".into(),
+                    r##"{
+                      "$extensions": { "org.egui-pop.format": { "version": "two" } },
+                      "button": { "rest": { "fill": { "$type": "color", "$value": "#102030" } } }
+                    }"##,
+                ),
+                (
+                    "field.tokens.json".into(),
+                    r##"{ "field": { "rest": { "fill": { "$type": "color", "$value": "#203040" } } } }"##,
+                ),
+            ],
+            fonts: Vec::new(),
+            license: None,
+        });
+        let format: Vec<(&str, &Warning)> = kit
+            .problems()
+            .iter()
+            .filter_map(|p| match p {
+                Problem::Format { file, warning } => Some((file.as_str(), warning)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(format.len(), 2, "{:?}", kit.problems());
+        assert!(matches!(
+            format[0],
+            (KIT_FILE, Warning::Newer { found: 99, .. })
+        ));
+        assert!(matches!(
+            format[1],
+            ("button.tokens.json", Warning::BadStamp { .. })
+        ));
+        assert!(
+            kit.problems()[0]
+                .to_string()
+                .starts_with("`kit.yaml`: `$extensions.org.egui-pop.format.contract`"),
+            "{}",
+            kit.problems()[0]
+        );
+        // Warnings, not errors: every file's tokens are there.
+        for path in ["tab.shape", "button.rest.fill", "field.rest.fill"] {
+            assert!(kit.theme.tokens.contains_key(path), "{path}");
+        }
+        // A stamp saying the current format and contract is no problem.
+        let mut current = TokenFile::parse(KIT_FILE, "{}").unwrap();
+        current.stamp();
+        let text = current.to_json_pretty();
+        let kit = KitData::from_text("current", &text);
+        assert!(kit.problems().is_empty(), "{:?}", kit.problems());
+    }
 
     #[test]
     fn a_face_is_named_by_its_file() {
