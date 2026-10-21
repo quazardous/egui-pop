@@ -8,7 +8,7 @@ use egui::accesskit::Role;
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
 use egui_pop_api::palettes::{
-    self, CMD_RESET, STEP_DOCK, STEP_GROUP, STEP_MOVE, STEP_RESIZE, STEP_UNGROUP,
+    self, CMD_RESET, STEP_CLOSE_GROUP, STEP_DOCK, STEP_GROUP, STEP_MOVE, STEP_RESIZE, STEP_UNGROUP,
 };
 use egui_pop_api::steps::{Before, Outcome};
 use egui_pop_api::workbench::Change;
@@ -21,6 +21,7 @@ use serde_json::{Value as Json, json};
 const TOOLS: PanelId = PanelId::from_static("demo.tools");
 const NAV: PanelId = PanelId::from_static("demo.nav");
 const LOG: PanelId = PanelId::from_static("demo.log");
+const COLOURS: PanelId = PanelId::from_static("demo.colours");
 
 struct Demo {
     hooks: bool,
@@ -52,6 +53,15 @@ impl Plugin for Demo {
             },
         )?
         .panel(
+            PanelSpec::new(COLOURS, "Colours", Area::EndSide)
+                .palette()
+                .min_size(160.0)
+                .closed(),
+            |ui, _| {
+                ui.label("Swatches");
+            },
+        )?
+        .panel(
             PanelSpec::new(LOG, "Log", Area::Bottom).floatable(true),
             |ui, _| {
                 ui.label("log body");
@@ -64,6 +74,9 @@ impl Plugin for Demo {
             });
             ctx.before(STEP_UNGROUP, |_, _| {
                 Before::Veto("groups stay whole".into())
+            });
+            ctx.before(STEP_CLOSE_GROUP, |_, _| {
+                Before::Veto("groups stay open".into())
             });
             ctx.before(STEP_RESIZE, |_, _| {
                 Before::Veto("palettes keep their size".into())
@@ -753,4 +766,291 @@ fn a_palette_resized_off_the_end_edge_is_no_longer_anchored() {
     assert_ne!(f.anchor.x, AnchorEdge::End, "{f:?}");
     // It stays where it was dropped: the left edge did not move.
     assert!(near(frame(&h, &TOOLS).left(), r.left()), "{r:?}");
+}
+
+/// Opens the colours floating at `pos`, apart from the others.
+fn open_colours(h: &mut Harness<'static, App>, pos: [f32; 2]) {
+    h.state().handle().set_panel_visible(&COLOURS, true);
+    h.state()
+        .handle()
+        .change_workbench(Change::MovePalette(COLOURS, pos));
+    h.run();
+    h.run();
+}
+
+/// The navigator as a tab of the tools, shown, through the step.
+fn tabbed(h: &mut Harness<'static, App>) {
+    open_nav(h, [400.0, 100.0]);
+    h.state()
+        .handle()
+        .change_workbench(Change::Group(vec![NAV], TOOLS, Join::Tab));
+    h.run();
+    h.run();
+    let g = floating(h, &TOOLS).unwrap();
+    assert_eq!(g.arrangement, Arrangement::Tabs);
+    assert_eq!(g.shown(), &NAV);
+}
+
+#[test]
+fn a_group_closes_from_its_band_menu_through_a_vetoable_step() {
+    let mut h = harness(false);
+    stacked(&mut h);
+    // No Close on the group's band: an entry of its menu.
+    assert!(
+        h.query_by_label("Close Tools · Navigator").is_none(),
+        "no close button on the group's band"
+    );
+    let before = h.state().handle().last_event();
+    h.get_by_role_and_label(Role::Button, "Tools · Navigator menu")
+        .click();
+    h.run();
+    h.run();
+    h.get_by_label("Close group").click();
+    h.run();
+    h.run();
+    let layout = h.state().handle().layout();
+    assert!(layout.floating.is_empty(), "{:?}", layout.floating);
+    assert!(layout.hidden.contains(&TOOLS) && layout.hidden.contains(&NAV));
+    assert!(h.query_by_label("Brush").is_none());
+    let names = events(&h, before);
+    assert!(
+        names.contains(&"palette.close_group".to_string()),
+        "{names:?}"
+    );
+    assert!(
+        names.contains(&"palette.group_closed".to_string()),
+        "{names:?}"
+    );
+    // A hook vetoes it: the group stays open.
+    let mut h = harness(true);
+    let mut layout = h.state().handle().layout();
+    layout.float(&NAV, [400.0, 100.0]);
+    layout.group(&[NAV], &TOOLS, Join::Below).unwrap();
+    h.state().handle().set_layout(layout);
+    h.run();
+    h.run();
+    h.get_by_role_and_label(Role::Button, "Tools · Navigator menu")
+        .click();
+    h.run();
+    h.run();
+    h.get_by_label("Close group").click();
+    h.run();
+    h.run();
+    assert_eq!(members(&h, &TOOLS), [TOOLS, NAV], "vetoed: still open");
+    let out = h
+        .state()
+        .handle()
+        .change_workbench(Change::CloseGroup(TOOLS));
+    assert_eq!(
+        out.and_then(|o| o.vetoed().map(str::to_string)).as_deref(),
+        Some("groups stay open")
+    );
+}
+
+#[test]
+fn a_tab_dragged_out_of_its_tabs_floats_alone_or_joins_where_it_is_dropped() {
+    let mut h = harness(false);
+    tabbed(&mut h);
+    // The tab itself, not the member's band: dragged out, it floats alone.
+    let before = h.state().handle().last_event();
+    let from = h
+        .get_by_role_and_label(Role::Button, "Tools")
+        .rect()
+        .center();
+    drag_by(&mut h, from, egui::vec2(350.0, 250.0));
+    let names = events(&h, before);
+    assert!(names.contains(&"palette.ungroup".to_string()), "{names:?}");
+    assert!(
+        names.contains(&"palette.ungrouped".to_string()),
+        "{names:?}"
+    );
+    assert!(floating(&h, &TOOLS).unwrap().is_lone());
+    assert!(floating(&h, &NAV).unwrap().is_lone());
+    assert!(h.query_by_label("Brush").is_some());
+    assert!(h.query_by_label("Overview").is_some());
+    // Dropped on another palette's middle, a tab joins it as a tab.
+    let mut h = harness(false);
+    tabbed(&mut h);
+    open_colours(&mut h, [500.0, 300.0]);
+    let from = h
+        .get_by_role_and_label(Role::Button, "Tools")
+        .rect()
+        .center();
+    let to = frame(&h, &COLOURS).center();
+    drag_to(&mut h, from, to, |h| {
+        let hint = palettes::group_hint(h.state().handle()).expect("a group hint");
+        assert_eq!((hint.into.clone(), hint.at), (COLOURS, Join::Tab));
+        assert_eq!(hint.panels, [TOOLS]);
+    });
+    assert_eq!(members(&h, &COLOURS), [COLOURS, TOOLS]);
+    assert_eq!(floating(&h, &COLOURS).unwrap().shown(), &TOOLS);
+    assert!(floating(&h, &NAV).unwrap().is_lone());
+    // Dropped back on its own tabs, it stays.
+    let mut h = harness(false);
+    tabbed(&mut h);
+    let from = h
+        .get_by_role_and_label(Role::Button, "Tools")
+        .rect()
+        .center();
+    drag_by(&mut h, from, egui::vec2(0.0, 40.0));
+    assert_eq!(members(&h, &TOOLS), [TOOLS, NAV]);
+    // A click still shows it.
+    h.get_by_role_and_label(Role::Button, "Tools").click();
+    h.run();
+    h.run();
+    assert_eq!(floating(&h, &TOOLS).unwrap().shown(), &TOOLS);
+}
+
+#[test]
+fn closing_the_shown_tab_shows_its_right_neighbour_or_the_left_one_at_the_end() {
+    let mut h = harness(false);
+    open_nav(&mut h, [400.0, 100.0]);
+    open_colours(&mut h, [500.0, 300.0]);
+    h.state()
+        .handle()
+        .change_workbench(Change::Group(vec![NAV, COLOURS], TOOLS, Join::Tab));
+    h.run();
+    h.run();
+    assert_eq!(members(&h, &TOOLS), [TOOLS, NAV, COLOURS]);
+    assert_eq!(floating(&h, &TOOLS).unwrap().shown(), &NAV);
+    // The middle tab closed: the one on its right shows.
+    h.get_by_role_and_label(Role::Button, "Close Navigator")
+        .click();
+    h.run();
+    h.run();
+    assert_eq!(members(&h, &TOOLS), [TOOLS, COLOURS]);
+    assert_eq!(floating(&h, &TOOLS).unwrap().shown(), &COLOURS);
+    assert!(h.query_by_label("Swatches").is_some());
+    assert!(h.query_by_label("Brush").is_none());
+    // The last tab closed: the one on its left shows.
+    h.get_by_role_and_label(Role::Button, "Close Colours")
+        .click();
+    h.run();
+    h.run();
+    assert!(floating(&h, &TOOLS).unwrap().is_lone());
+    assert!(h.query_by_label("Brush").is_some());
+}
+
+#[test]
+fn a_palette_dropped_on_the_edge_of_tabs_stacks_beside_them_and_the_tabs_stay_tabs() {
+    let mut h = harness(false);
+    tabbed(&mut h);
+    open_colours(&mut h, [500.0, 300.0]);
+    // On the bottom edge of the group of tabs.
+    let tabs = frame(&h, &TOOLS);
+    let to = egui::pos2(tabs.center().x, tabs.bottom() - 4.0);
+    let from = h.get_by_label("Colours").rect().center();
+    let before = h.state().handle().last_event();
+    drag_to(&mut h, from, to, |h| {
+        let hint = palettes::group_hint(h.state().handle()).expect("a group hint");
+        assert_eq!((hint.into.clone(), hint.at), (NAV, Join::Below));
+    });
+    assert!(
+        events(&h, before).contains(&"palette.grouped".to_string()),
+        "{:?}",
+        events(&h, before)
+    );
+    let g = floating(&h, &TOOLS).unwrap();
+    assert_eq!(g.arrangement, Arrangement::Stack, "{g:?}");
+    assert_eq!(g.members.len(), 2, "{g:?}");
+    let nested = g.member(&NAV).unwrap();
+    assert!(nested.is_tabs());
+    assert_eq!(nested.panels().cloned().collect::<Vec<_>>(), [TOOLS, NAV]);
+    assert_eq!(nested.shown(), &NAV);
+    assert_eq!(g.member(&COLOURS).unwrap().panels().count(), 1);
+    // Drawn as tabs over the colours: both tabs, the shown one's content.
+    assert!(h.query_by_role_and_label(Role::Button, "Tools").is_some());
+    assert!(h.query_by_label("Overview").is_some());
+    assert!(h.query_by_label("Brush").is_none());
+    assert!(h.query_by_label("Swatches").is_some());
+    let overview = h.get_by_label("Overview").rect();
+    let swatches = h.get_by_label("Swatches").rect();
+    assert!(
+        swatches.top() > overview.bottom(),
+        "{overview:?} {swatches:?}"
+    );
+    // Another tab shows from the nested tabs.
+    h.get_by_role_and_label(Role::Button, "Tools").click();
+    h.run();
+    h.run();
+    assert!(h.query_by_label("Brush").is_some());
+    assert!(h.query_by_label("Overview").is_none());
+    assert_eq!(
+        floating(&h, &TOOLS).unwrap().member(&NAV).unwrap().shown(),
+        &TOOLS
+    );
+    // Docked whole and floated back: nested as it was.
+    let was = floating(&h, &TOOLS).unwrap();
+    let out = h
+        .state()
+        .handle()
+        .change_workbench(Change::DockGroup(COLOURS, Area::EndSide));
+    assert!(matches!(out, Some(Outcome::Done(Ok(_)))), "{out:?}");
+    h.run();
+    h.run();
+    let layout = h.state().handle().layout();
+    assert!(layout.floating.is_empty(), "{:?}", layout.floating);
+    for p in [&TOOLS, &NAV, &COLOURS] {
+        assert_eq!(layout.area_of(p), Some(Area::EndSide), "{p}");
+    }
+    h.state()
+        .handle()
+        .change_workbench(Change::Float(TOOLS, was.pos));
+    h.run();
+    h.run();
+    let back = floating(&h, &TOOLS).unwrap();
+    assert_eq!(back.members, was.members);
+    assert_eq!(back.arrangement, Arrangement::Stack);
+}
+
+#[test]
+fn a_nested_tab_groups_band_takes_it_out_of_its_stack_whole() {
+    let mut h = harness(false);
+    tabbed(&mut h);
+    open_colours(&mut h, [500.0, 300.0]);
+    h.state()
+        .handle()
+        .change_workbench(Change::Group(vec![COLOURS], NAV, Join::Below));
+    h.run();
+    h.run();
+    assert!(
+        floating(&h, &TOOLS)
+            .unwrap()
+            .member(&NAV)
+            .unwrap()
+            .is_tabs()
+    );
+    // Its band between its tabs and its buttons.
+    let tab = h.get_by_role_and_label(Role::Button, "Navigator").rect();
+    let roll = h
+        .get_by_role_and_label(Role::Button, "Roll up Navigator")
+        .rect();
+    assert!(roll.left() > tab.right() + 8.0, "{tab:?} {roll:?}");
+    let from = egui::pos2((tab.right() + roll.left()) / 2.0, tab.center().y);
+    let before = h.state().handle().last_event();
+    drag_by(&mut h, from, egui::vec2(300.0, 250.0));
+    let names = events(&h, before);
+    assert!(
+        names.contains(&"palette.ungrouped".to_string()),
+        "{names:?}"
+    );
+    let g = floating(&h, &TOOLS).unwrap();
+    assert_eq!(g.arrangement, Arrangement::Tabs, "{g:?}");
+    assert_eq!(members(&h, &TOOLS), [TOOLS, NAV]);
+    assert!(floating(&h, &COLOURS).unwrap().is_lone());
+    // Through the step: `palette.ungroup` with `tabs: true`.
+    let mut h = harness(false);
+    tabbed(&mut h);
+    open_colours(&mut h, [500.0, 300.0]);
+    h.state()
+        .handle()
+        .change_workbench(Change::Group(vec![COLOURS], NAV, Join::Above));
+    h.run();
+    let out = h
+        .state()
+        .handle()
+        .change_workbench(Change::UngroupTabs(TOOLS, [300.0, 300.0]));
+    assert!(matches!(out, Some(Outcome::Done(Ok(_)))), "{out:?}");
+    assert_eq!(members(&h, &NAV), [TOOLS, NAV]);
+    assert_eq!(floating(&h, &NAV).unwrap().pos, [300.0, 300.0]);
 }

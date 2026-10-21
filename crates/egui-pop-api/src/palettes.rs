@@ -40,6 +40,15 @@
 //! palette, a palette joins its group as a tab: the group's band then
 //! holds the tabs, and the shown member its own band.
 //!
+//! **Docking conventions** (as in Photoshop, Krita, GIMP, Qt docks and
+//! VS Code). Close group is an entry of the menu on the group's band,
+//! not a button on it. A tab dragged out of its tabs comes out of them,
+//! alone or into the palette it is dropped on. Closing the shown tab
+//! shows its right neighbour, or its left one at the end. A palette
+//! dropped on the top or bottom edge of a group of tabs stacks beside
+//! them and the tabs stay tabs: a stack's member may be a tab group
+//! ([`Member::tabs`]), one level deep, whose band drags it out whole.
+//!
 //! **Sizes.** A palette is sized by its content until the user resizes
 //! it: its right edge, its bottom edge and the corner between them drag
 //! its size (the `palette.grip` token's width), kept between the
@@ -60,12 +69,13 @@
 //! dropped), `palette.resize` (`{panel, size}`, `size` being
 //! `[width, height]` or `null` for the content's, once an edge is
 //! dropped), `palette.roll` (`{panel, rolled}`), `palette.pin`
-//! (`{panel, pinned}`), `palette.group` (`{panels, into, at}`) and
-//! `palette.ungroup` (`{panel, pos}`); `pos` is the top-left corner in
-//! points from the workbench's top-left. Each done change is published
-//! as `palette.opened`, `palette.floated`, `palette.docked`,
+//! (`{panel, pinned}`), `palette.group` (`{panels, into, at}`),
+//! `palette.ungroup` (`{panel, pos}`, `tabs: true` for a nested tab group
+//! whole) and `palette.close_group` (`{panel}`); `pos` is the top-left
+//! corner in points from the workbench's top-left. Each done change is
+//! published as `palette.opened`, `palette.floated`, `palette.docked`,
 //! `palette.moved`, `palette.resized`, `palette.rolled`, `palette.pinned`,
-//! `palette.grouped` or `palette.ungrouped`.
+//! `palette.grouped`, `palette.ungrouped` or `palette.group_closed`.
 //!
 //! Not built yet: a palette outside the main window (a native utility
 //! window through egui's viewports).
@@ -115,8 +125,13 @@ pub const STEP_PIN: StepId = StepId::from_static("palette.pin");
 /// Floating panels join another one's group (`{panels, into, at}`, `at`
 /// being `above`, `below` or `tab`).
 pub const STEP_GROUP: StepId = StepId::from_static("palette.group");
-/// A floating panel comes out of its group, alone (`{panel, pos}`).
+/// A floating panel comes out of its group, alone (`{panel, pos}`); with
+/// `tabs: true`, the tab group it is a tab of comes out of its stack
+/// whole.
 pub const STEP_UNGROUP: StepId = StepId::from_static("palette.ungroup");
+/// Every palette of a floating panel's group closes (`{panel}`): the
+/// group band's menu, Close group.
+pub const STEP_CLOSE_GROUP: StepId = StepId::from_static("palette.close_group");
 
 /// Hides or shows the unpinned palettes (Tab).
 pub const CMD_TOGGLE: CommandId = CommandId::from_static("palettes.toggle");
@@ -191,8 +206,13 @@ pub(crate) fn declare(ctx: &mut Ctx<'_>) -> Result<(), CtxError> {
         ),
         (
             STEP_UNGROUP,
-            "A floating panel comes out of its group, alone at a place (`panel`, `pos`).",
+            "A floating panel comes out of its group, alone at a place (`panel`, `pos`); with `tabs`, the tab group it is a tab of comes out of its stack whole.",
             json!({ "panel": "app.colours", "pos": [16.0, 300.0] }),
+        ),
+        (
+            STEP_CLOSE_GROUP,
+            "Every palette of a floating panel's group closes (`panel`).",
+            panel.clone(),
         ),
         (
             STEP_MOVE,
@@ -435,15 +455,28 @@ pub fn area_id(panel: &PanelId) -> Id {
     Id::new(("egui_pop.palette", panel.as_str()))
 }
 
-/// A palette's band being dragged.
+/// What a palette drag holds.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum DragKind {
+    /// A group's band: the whole group moves.
+    Group,
+    /// A member's own band: it comes out of its group.
+    Member,
+    /// A nested tab group's band: the tab group comes out of its stack
+    /// whole.
+    Tabs,
+    /// A tab: it comes out of its tabs.
+    Tab,
+}
+
+/// A palette's band, or a tab, being dragged.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct PaletteDrag {
-    /// The palette whose band is dragged: its group's first member when
-    /// the group's band is.
+    /// The palette dragged: its group's first member when the group's
+    /// band is, the shown tab for a nested tab group's band.
     pub panel: PanelId,
-    /// The group's band (the whole group moves), or a member's own band
-    /// (it comes out of its group).
-    pub whole: bool,
+    /// What is dragged.
+    pub kind: DragKind,
     /// Where the dragged palettes were when the drag started, from the
     /// workbench's top-left.
     pub start: [f32; 2],
@@ -717,20 +750,27 @@ fn join_target(
         .find_map(|(p, r)| join_at(*r, at).map(|j| (p.clone(), j, join_rect(*r, j))))
 }
 
-/// What a palette's band buttons asked for.
+/// What a palette's band buttons, menu and tabs asked for.
 #[derive(Default)]
 struct Asked {
     close: Option<PanelId>,
     roll: Option<PanelId>,
     pin: bool,
-    /// The tab to show, in a group of tabs.
-    show: Option<usize>,
+    /// The group's menu: Close group.
+    close_group: bool,
+    /// The tab to show.
+    show: Option<PanelId>,
+    /// The tabs drawn, and whether each is dragged.
+    grabs: Vec<(PanelId, bool)>,
 }
 
 /// A member's band as laid out, with where the member is drawn
 /// vertically (its band's top to its content's bottom).
 struct MemberBand {
+    /// The panel shown (a nested tab group's shown tab).
     panel: PanelId,
+    /// A nested tab group's band.
+    tabs: bool,
     band: band::Band,
     top: f32,
     bottom: f32,
@@ -782,7 +822,7 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
             .panels()
             .filter_map(|p| app.workbench_mut().spec(p).cloned())
             .collect();
-        if specs.len() != g.members.len() {
+        if specs.len() != g.panels().count() {
             continue;
         }
         let lead = g.lead().clone();
@@ -794,7 +834,7 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
             .workbench_mut()
             .palette_drag
             .as_ref()
-            .is_some_and(|d| d.whole && d.panel == lead);
+            .is_some_and(|d| d.kind == DragKind::Group && d.panel == lead);
         let resizing = app
             .workbench_mut()
             .palette_resize
@@ -831,7 +871,10 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
             idle
         };
         let opacity = ctx.animate_value_with_time(id.with("opacity"), target, t.motion_duration);
-        let titles: Vec<String> = g.panels().map(|p| app.panel_title(ctx, p)).collect();
+        let titles: BTreeMap<PanelId, String> = g
+            .panels()
+            .map(|p| (p.clone(), app.panel_title(ctx, p)))
+            .collect();
         let min = specs.iter().map(|s| s.min_size).fold(0.0, f32::max);
         let max = specs
             .iter()
@@ -889,7 +932,8 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
                     if g.is_lone() {
                         let m = &g.members[0];
                         let (_, b) = band::begin(ui, &style, |ui, state| {
-                            band_row(ui, &t, &titles[0], state, m, Some(g.pinned), &mut asked);
+                            let title = &titles[&m.panel];
+                            band_row(ui, &t, title, state, m, Some(g.pinned), &mut asked);
                         });
                         if !m.rolled {
                             match body(ui) {
@@ -903,17 +947,21 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
                     }
                     // The group's band (its tabs, for tabs), then each
                     // member shown under its own.
-                    let joined = titles.join(" · ");
+                    let joined = g
+                        .panels()
+                        .map(|p| titles[p].as_str())
+                        .collect::<Vec<_>>()
+                        .join(" · ");
                     let tabs = g.arrangement == Arrangement::Tabs;
                     let (_, b) = band::begin(ui, &style, |ui, state| {
-                        let shown = tabs.then_some(g.active);
-                        group_row(ui, &t, &joined, &titles, shown, state, g.pinned, &mut asked);
+                        group_row(ui, &t, &joined, &g, &titles, state, &mut asked);
                     });
                     let mut column = |ui: &mut Ui| {
-                        for (i, m) in g.members.iter().enumerate() {
+                        for m in &g.members {
                             if tabs && m.panel != *g.shown() {
                                 continue;
                             }
+                            let shown = m.shown().clone();
                             if !bands.is_empty() {
                                 ui.add_space(gap);
                             }
@@ -923,16 +971,22 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
                             let (mb, bottom) = ui
                                 .push_id(("egui_pop.palette.member", m.panel.as_str()), |ui| {
                                     let (_, mb) = band::begin(ui, &style, |ui, state| {
-                                        band_row(ui, &t, &titles[i], state, m, None, &mut asked);
+                                        if m.is_tabs() {
+                                            tabs_row(ui, &t, m, &titles, &mut asked);
+                                        } else {
+                                            let title = &titles[&m.panel];
+                                            band_row(ui, &t, title, state, m, None, &mut asked);
+                                        }
                                     });
                                     if !m.rolled {
-                                        app.show_panel(ui, &m.panel);
+                                        app.show_panel(ui, &shown);
                                     }
                                     (mb, ui.min_rect().bottom())
                                 })
                                 .inner;
                             bands.push(MemberBand {
-                                panel: m.panel.clone(),
+                                panel: shown,
+                                tabs: m.is_tabs(),
                                 band: mb,
                                 top,
                                 bottom,
@@ -973,8 +1027,11 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
                 Rect::from_x_y_ranges(rect.x_range(), mb.top..=bottom.max(mb.bottom))
             })
             .collect();
+        // A group of tabs is dropped on as a whole: its edges stack
+        // beside the tabs, its middle adds a tab.
+        let tabs = g.arrangement == Arrangement::Tabs;
         for (mb, r) in bands.iter().zip(&own) {
-            members.insert(mb.panel.clone(), *r);
+            members.insert(mb.panel.clone(), if tabs { rect } else { *r });
         }
         // Escape in a palette gives the keyboard back.
         let layer = shown.response.layer_id;
@@ -986,6 +1043,10 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
         {
             ctx.memory_mut(|m| m.surrender_focus(focused));
         }
+        if asked.close_group {
+            run(app, &lead, Some(Change::CloseGroup(lead.clone())));
+            continue;
+        }
         if let Some(p) = asked.close {
             app.set_panel_visible(&p, false);
             continue;
@@ -996,10 +1057,10 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
         if asked.pin {
             app.change_workbench(Change::Pin(lead.clone(), !g.pinned));
         }
-        if let Some(i) = asked.show {
+        if let Some(p) = &asked.show {
             // Which tab shows: the group's state, not a step.
             if let Some(fl) = app.workbench_mut().layout.floating_mut(&lead) {
-                fl.active = i;
+                fl.show(p);
             }
             ctx.request_repaint();
         }
@@ -1012,8 +1073,38 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
             follow(app, ctx, &g, rect, &b, &drag);
         }
         follow_resize(app, ctx, &g, rect, &edges, (least, most));
-        for (mb, own) in bands.iter().zip(own) {
-            follow_member(app, ctx, &g, &mb.panel, own, rect, &mb.band, &drag);
+        for (mb, own) in bands.iter().zip(&own) {
+            let kind = if mb.tabs {
+                DragKind::Tabs
+            } else {
+                DragKind::Member
+            };
+            let b = &mb.band;
+            let grab = Grab {
+                panel: &mb.panel,
+                kind,
+                dragging: b.dragging,
+                double_clicked: b.double_clicked,
+            };
+            follow_member(app, ctx, &g, grab, *own, rect, &drag);
+        }
+        // A tab dragged out of its tabs: from where its tabs are drawn
+        // (a nested tab group's member, or the whole group of tabs).
+        for (panel, dragging) in &asked.grabs {
+            let at = bands
+                .iter()
+                .position(|mb| g.member(panel).is_some_and(|m| m.holds(&mb.panel)));
+            let from = match at {
+                Some(i) if !tabs => own[i],
+                _ => rect,
+            };
+            let grab = Grab {
+                panel,
+                kind: DragKind::Tab,
+                dragging: *dragging,
+                double_clicked: false,
+            };
+            follow_member(app, ctx, &g, grab, from, rect, &drag);
         }
     }
     {
@@ -1073,45 +1164,104 @@ fn band_row(
     });
 }
 
-/// The band's row of a group: its members' titles (as tabs when
-/// `shown` says which tab shows), then Pin.
-#[allow(clippy::too_many_arguments)]
+/// The band's row of a group: its members' titles (as tabs, for a group
+/// of tabs), then Pin and the group's menu (Close group).
 fn group_row(
     ui: &mut Ui,
     t: &Tokens,
     title: &str,
-    titles: &[String],
-    shown: Option<usize>,
+    g: &FloatingGroup,
+    titles: &BTreeMap<PanelId, String>,
     state: State,
-    pinned: bool,
     asked: &mut Asked,
 ) {
     let side = t.size.control_height.max(24.0);
     let kit = Kit::of(ui.ctx());
     ui.horizontal(|ui| {
-        match shown {
-            Some(active) => {
-                for (i, name) in titles.iter().enumerate() {
-                    if widgets::selectable_label(ui, i == active, name.as_str()).clicked() {
-                        asked.show = Some(i);
-                    }
-                }
+        if g.arrangement == Arrangement::Tabs {
+            let shown = g.shown();
+            for m in &g.members {
+                tab(ui, &titles[&m.panel], &m.panel, m.panel == *shown, asked);
             }
-            None => {
-                ui.add(
-                    egui::Label::new(
-                        egui::RichText::new(title)
-                            .weak()
-                            .color(kit.header_band.style(state).text),
-                    )
-                    .truncate()
-                    .selectable(false),
-                );
-            }
+        } else {
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new(title)
+                        .weak()
+                        .color(kit.header_band.style(state).text),
+                )
+                .truncate()
+                .selectable(false),
+            );
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            pin_button(ui, side, title, pinned, asked);
+            group_menu(ui, side, title, asked);
+            pin_button(ui, side, title, g.pinned, asked);
         });
+    });
+}
+
+/// The band's row of a tab group nested in a stack: its tabs, then the
+/// shown tab's Close and the tab group's Roll.
+fn tabs_row(
+    ui: &mut Ui,
+    t: &Tokens,
+    m: &Member,
+    titles: &BTreeMap<PanelId, String>,
+    asked: &mut Asked,
+) {
+    let side = t.size.control_height.max(24.0);
+    let kit = Kit::of(ui.ctx());
+    let shown = m.shown().clone();
+    let title = titles[&shown].as_str();
+    ui.horizontal(|ui| {
+        for p in m.panels() {
+            tab(ui, &titles[p], p, *p == shown, asked);
+        }
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let named = |ui: &Ui, key: &strings::StrKey| {
+                strings::tr_args(ui.ctx(), key, &[("palette", title)])
+            };
+            let name = named(ui, &txt::PALETTE_CLOSE);
+            if band::button(ui, side, kit.glyph(Glyph::Close), &name, false).clicked() {
+                asked.close = Some(shown.clone());
+            }
+            let (icon, name) = if m.rolled {
+                (Icon::ChevronDown, &txt::PALETTE_ROLL_DOWN)
+            } else {
+                (Icon::ChevronUp, &txt::PALETTE_ROLL_UP)
+            };
+            let name = named(ui, name);
+            if band::button(ui, side, icon, &name, false).clicked() {
+                asked.roll = Some(shown.clone());
+            }
+        });
+    });
+}
+
+/// A tab of a group of tabs or of a nested tab group: a click shows it,
+/// a drag takes it out of its tabs.
+fn tab(ui: &mut Ui, title: &str, panel: &PanelId, selected: bool, asked: &mut Asked) {
+    let r = widgets::selectable_label(ui, selected, title).interact(egui::Sense::drag());
+    if r.clicked() {
+        asked.show = Some(panel.clone());
+    }
+    asked.grabs.push((panel.clone(), r.dragged()));
+}
+
+/// The group's menu button on its band, and its menu: Close group (a
+/// menu entry, so that a stray click on the band never closes a group).
+fn group_menu(ui: &mut Ui, side: f32, title: &str, asked: &mut Asked) {
+    let name = strings::tr_args(ui.ctx(), &txt::PALETTE_GROUP_MENU, &[("palette", title)]);
+    let r = band::button(ui, side, Icon::More, &name, false);
+    egui::Popup::menu(&r).show(|ui| {
+        if ui
+            .button(strings::tr(ui.ctx(), &txt::PALETTE_CLOSE_GROUP))
+            .clicked()
+        {
+            asked.close_group = true;
+            ui.close();
+        }
     });
 }
 
@@ -1186,7 +1336,7 @@ fn follow(
         return;
     }
     let drag = app.workbench_mut().palette_drag.clone();
-    let mine = drag.filter(|x| x.whole && x.panel == lead);
+    let mine = drag.filter(|x| x.kind == DragKind::Group && x.panel == lead);
     if b.dragging && !g.pinned {
         let (origin, now) = ctx.input(|i| (i.pointer.press_origin(), i.pointer.latest_pos()));
         let (Some(origin), Some(now)) = (origin, now) else {
@@ -1208,7 +1358,7 @@ fn follow(
         }
         wb.palette_drag = Some(PaletteDrag {
             panel: lead,
-            whole: true,
+            kind: DragKind::Group,
             start,
             pos,
             at: now,
@@ -1244,29 +1394,59 @@ fn follow(
     ctx.request_repaint();
 }
 
-/// Follows the band of a member of a group: a drag shows where it would
-/// go, the drop joins another palette's group over it (or moves it
-/// within its own), docks it alone over an area, takes it out of its
-/// group anywhere else (`palette.ungroup`), or leaves it in its group
-/// when dropped back over it; a double click rolls it up or down.
-#[allow(clippy::too_many_arguments)]
+/// A member's band or a tab, as the pointer left it this pass.
+struct Grab<'a> {
+    /// The member's panel (a nested tab group's shown tab), or the tab's.
+    panel: &'a PanelId,
+    kind: DragKind,
+    dragging: bool,
+    double_clicked: bool,
+}
+
+/// Follows the band of a member of a group, or a tab: a drag shows where
+/// it would go, the drop joins another palette's group over it (or moves
+/// it within its own), docks it over an area, takes it out of its group
+/// anywhere else (`palette.ungroup`; a nested tab group's band takes the
+/// tab group out whole), or leaves it in its group when dropped back over
+/// it; a double click on a band rolls it up or down.
 fn follow_member(
     app: &AppHandle,
     ctx: &egui::Context,
     g: &FloatingGroup,
-    panel: &PanelId,
+    grab: Grab<'_>,
     own: Rect,
     group: Rect,
-    b: &band::Band,
     d: &Drag<'_>,
 ) {
-    if b.double_clicked {
+    let Grab {
+        panel,
+        kind,
+        dragging,
+        double_clicked,
+    } = grab;
+    if double_clicked {
         app.change_workbench(Change::Roll(panel.clone(), !g.rolled(panel)));
         return;
     }
     let drag = app.workbench_mut().palette_drag.clone();
-    let mine = drag.filter(|x| !x.whole && x.panel == *panel);
-    if b.dragging && !g.pinned {
+    let mine = drag.filter(|x| x.kind == kind && x.panel == *panel);
+    // What moves, and what it is not dropped on: itself, and a tab's
+    // fellow tabs.
+    let held = |p: &PanelId| -> Vec<PanelId> {
+        g.member(p)
+            .map_or_else(|| vec![p.clone()], |m| m.panels().cloned().collect())
+    };
+    let moving = if kind == DragKind::Tabs {
+        held(panel)
+    } else {
+        vec![panel.clone()]
+    };
+    let mates: Vec<PanelId> = match kind {
+        DragKind::Tab if g.arrangement == Arrangement::Tabs => g.panels().cloned().collect(),
+        DragKind::Tab => held(panel),
+        _ => moving.clone(),
+    };
+    if dragging && !g.pinned {
         let (origin, now) = ctx.input(|i| (i.pointer.press_origin(), i.pointer.latest_pos()));
         let (Some(origin), Some(now)) = (origin, now) else {
             return;
@@ -1274,17 +1454,18 @@ fn follow_member(
         let from = own.min - d.content.min;
         let start = mine.as_ref().map_or([from.x, from.y], |x| x.start);
         let pos = d.land(ctx, start, own.size(), origin, now, |p| g.holds(p));
-        let hint = join_target(d.members, now, |p| p == panel).map(|(into, at, r)| GroupHint {
-            panels: vec![panel.clone()],
-            into,
-            at,
-            rect: r,
-        });
+        let hint =
+            join_target(d.members, now, |p| mates.contains(p)).map(|(into, at, r)| GroupHint {
+                panels: moving.clone(),
+                into,
+                at,
+                rect: r,
+            });
         let mut wb = app.workbench_mut();
         let moved = mine.as_ref().is_none_or(|x| x.pos != pos || x.at != now);
         wb.palette_drag = Some(PaletteDrag {
             panel: panel.clone(),
-            whole: false,
+            kind,
             start,
             pos,
             at: now,
@@ -1304,13 +1485,22 @@ fn follow_member(
         let hint = wb.group_hint.take();
         (wb.dock_at(x.at, magnet(ctx)), hint)
     };
-    let change = match (hint, area) {
-        (Some(h), _) => Some(Change::Group(h.panels, h.into, h.at)),
-        (None, Some(area)) => Some(Change::Dock(panel.clone(), area)),
-        (None, None) if group.contains(x.at) => None,
-        (None, None) => Some(Change::Ungroup(panel.clone(), x.pos)),
+    let changes = match (hint, area) {
+        (Some(h), _) => vec![Change::Group(h.panels, h.into, h.at)],
+        // Docked: the shown one last, so that it shows.
+        (None, Some(area)) => moving
+            .iter()
+            .filter(|p| *p != panel)
+            .chain([panel])
+            .map(|p| Change::Dock(p.clone(), area))
+            .collect(),
+        (None, None) if group.contains(x.at) => Vec::new(),
+        (None, None) if kind == DragKind::Tabs => vec![Change::UngroupTabs(panel.clone(), x.pos)],
+        (None, None) => vec![Change::Ungroup(panel.clone(), x.pos)],
     };
-    run(app, panel, change);
+    for c in changes {
+        run(app, panel, Some(c));
+    }
     ctx.request_repaint();
 }
 
@@ -1341,7 +1531,7 @@ fn paint_hints(
     };
     let rect = match (&hint, &drag) {
         (Some(h), _) => h.rect,
-        (None, Some(d)) if !d.whole && dock.is_none() => {
+        (None, Some(d)) if d.kind != DragKind::Group && dock.is_none() => {
             let Some(own) = members.get(&d.panel) else {
                 return;
             };

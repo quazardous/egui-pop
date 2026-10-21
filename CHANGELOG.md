@@ -209,6 +209,21 @@ publishes.
 
 ### Changed
 
+- Palette groups follow the classic docking conventions (egui-pop-api),
+  as in Photoshop, Krita, GIMP, Qt docks and VS Code. The group's band
+  has a menu with Close group, a menu entry rather than a button, run
+  as the new vetoable `palette.close_group` step (`{panel}`, published
+  as `palette.group_closed`). A tab dragged out of its tabs comes out of
+  them through `palette.ungroup`, alone where it is dropped or into the
+  palette it is dropped on (the member's band still drags it). Closing
+  the shown tab shows its right neighbour, or its left one at the end.
+  A palette dropped on the top or bottom edge of a group of tabs stacks
+  beside them and the tabs stay tabs, drawn as one member of the stack
+  whose band holds them; that band drags the tab group out whole
+  (`palette.ungroup` with `tabs: true`, `Change::UngroupTabs`). A
+  middle drop on a member of a stack now makes that member a tab group
+  instead of turning the whole stack to tabs. English and French
+  strings.
 - Floating groups nest one tab group in a stack (egui-pop-model): a
   `Member` is a palette or palettes held as tabs (`Member::tabs`, the
   shown one `Member::shown`), one level deep. `Layout::group` stacks a

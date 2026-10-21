@@ -858,6 +858,10 @@ egui-pop-palette-argument-title = { $command }: { $argument }
 
 egui-pop-palette-close = Close { $palette }
 
+egui-pop-palette-close-group = Close group
+
+egui-pop-palette-group-menu = { $palette } menu
+
 egui-pop-palette-hint = Type a command
 
 egui-pop-palette-no-match = No command matches.

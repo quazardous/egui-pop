@@ -75,7 +75,8 @@
 //! asked (its tab menu's Float). Floating panels are drawn by
 //! [`crate::palettes`], with steps of their own (`palette.open`,
 //! `palette.float`, `palette.dock`, `palette.move`, `palette.roll`,
-//! `palette.pin`).
+//! `palette.pin`, `palette.group`, `palette.ungroup`,
+//! `palette.close_group`).
 
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
@@ -349,6 +350,11 @@ pub enum Change {
     Group(Vec<PanelId>, PanelId, Join),
     /// A floating panel comes out of its group, alone at a place.
     Ungroup(PanelId, [f32; 2]),
+    /// The tab group a floating panel is a tab of, nested in a stack,
+    /// comes out of the stack whole, at a place.
+    UngroupTabs(PanelId, [f32; 2]),
+    /// Every member of a floating panel's group closes.
+    CloseGroup(PanelId),
     /// A floating panel moves.
     MovePalette(PanelId, [f32; 2]),
     /// A floating panel's group is resized (its frame, in points), or
@@ -437,6 +443,11 @@ impl Change {
                 crate::palettes::STEP_UNGROUP,
                 json!({ "panel": p, "pos": pos }),
             ),
+            Change::UngroupTabs(p, pos) => (
+                crate::palettes::STEP_UNGROUP,
+                json!({ "panel": p, "pos": pos, "tabs": true }),
+            ),
+            Change::CloseGroup(p) => (crate::palettes::STEP_CLOSE_GROUP, json!({ "panel": p })),
             Change::MovePalette(p, pos) => (
                 crate::palettes::STEP_MOVE,
                 json!({ "panel": p, "pos": pos }),
@@ -468,7 +479,8 @@ impl Change {
             Change::Float(..) => "palette.floated",
             Change::Dock(..) | Change::DockGroup(..) => "palette.docked",
             Change::Group(..) => "palette.grouped",
-            Change::Ungroup(..) => "palette.ungrouped",
+            Change::Ungroup(..) | Change::UngroupTabs(..) => "palette.ungrouped",
+            Change::CloseGroup(..) => "palette.group_closed",
             Change::MovePalette(..) => "palette.moved",
             Change::ResizePalette(..) => "palette.resized",
             Change::Roll(..) => "palette.rolled",
@@ -534,12 +546,16 @@ impl Change {
             .ok_or("`panel` is missing")?;
         let panel = PanelId::new(panel).map_err(|e| e.to_string())?;
         let flag = |key: &str| args.get(key).and_then(Json::as_bool).unwrap_or(true);
+        // A flag that is off unless it is given.
+        let flag_off = |key: &str| args.get(key).and_then(Json::as_bool).unwrap_or(false);
         Ok(match step.as_str() {
             "palette.open" => Change::OpenPalette(panel),
             "palette.float" => Change::Float(panel, pos_of(args)?),
             "palette.move" => Change::MovePalette(panel, pos_of(args)?),
             "palette.resize" => Change::ResizePalette(panel, size_of(args)?),
+            "palette.ungroup" if flag_off("tabs") => Change::UngroupTabs(panel, pos_of(args)?),
             "palette.ungroup" => Change::Ungroup(panel, pos_of(args)?),
+            "palette.close_group" => Change::CloseGroup(panel),
             "palette.roll" => Change::Roll(panel, flag("rolled")),
             "palette.pin" => Change::Pin(panel, flag("pinned")),
             "workbench.flyout" => Change::Flyout(panel, flag("open")),
@@ -908,6 +924,27 @@ impl Workbench {
                 self.layout.ungroup(p, *pos)?;
                 self.anchor_palette(p, true);
                 json!({ "panel": p, "pos": pos })
+            }
+            Change::UngroupTabs(p, pos) => {
+                self.layout.ungroup_tabs(p, *pos)?;
+                self.anchor_palette(p, true);
+                json!({ "panel": p, "pos": pos, "tabs": true })
+            }
+            Change::CloseGroup(p) => {
+                let panels: Vec<PanelId> = self
+                    .layout
+                    .floating_of(p)
+                    .ok_or_else(|| format!("`{p}` does not float"))?
+                    .panels()
+                    .cloned()
+                    .collect();
+                for q in &panels {
+                    self.layout.hide(q);
+                    if self.focused.as_ref() == Some(q) {
+                        self.focused = None;
+                    }
+                }
+                json!({ "panel": p, "panels": panels })
             }
             Change::MovePalette(p, pos) => {
                 let f = self
