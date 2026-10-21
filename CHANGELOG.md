@@ -722,6 +722,10 @@ publishes.
   (egui-pop-editors): a read-only editor or an `edit.change` before-hook
   vetoing the cut leaves the clipboard as it was; the text is copied
   once the delete is accepted.
+- Ctrl+Shift+C in the terminal no longer interrupts the program when
+  nothing is selected (egui-pop-editors): egui-winit delivers it as a
+  copy event, like Ctrl+C, which then sent ^C; with Shift held it now
+  only copies the selection, and does nothing without one.
 
 ### Security
 

@@ -122,6 +122,23 @@ fn every_key_goes_to_the_program_and_shift_escape_leaves() {
 }
 
 #[test]
+fn ctrl_shift_c_without_a_selection_does_not_interrupt() {
+    let echo = Echo::default();
+    let mut h = alone(TerminalState::new("shell", echo.clone()));
+    h.run();
+    h.get_by_label("Shell").click();
+    h.run();
+    // Under winit, Ctrl+Shift+C arrives as a copy event with Shift held.
+    h.event_modifiers(egui::Event::Copy, Modifiers::CTRL | Modifiers::SHIFT);
+    h.run();
+    assert_eq!(echo.received(), "", "Ctrl+Shift+C only copies");
+    // Ctrl+C with nothing selected still interrupts.
+    h.event_modifiers(egui::Event::Copy, Modifiers::CTRL);
+    h.run();
+    assert_eq!(echo.received(), "\x03");
+}
+
+#[test]
 fn a_bracketed_paste_cannot_end_its_bracket() {
     let echo = Echo::default();
     let t = TerminalState::new("shell", echo.clone());

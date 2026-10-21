@@ -274,6 +274,9 @@ impl<'a> Terminal<'a> {
     ) {
         let application = state.lock().parser.screen().application_cursor();
         let page = i64::from(g.rows.saturating_sub(1).max(1));
+        // egui-winit turns Ctrl+Shift+C into a copy event, as Ctrl+C:
+        // the modifiers held tell them apart.
+        let shift = ui.input(|i| i.modifiers.shift);
         // The text an Alt+key press also produces (Alt sends ESC and the
         // key itself).
         let mut skip: Option<char> = None;
@@ -296,8 +299,9 @@ impl<'a> Terminal<'a> {
                     let text = text.replace("\r\n", "\r").replace('\n', "\r");
                     self.send(state, text, InputKind::Paste, signals);
                 }
-                // Copies the selection; with none, interrupts.
-                Event::Copy if !copy(ui, state, signals) => {
+                // Copies the selection; with none, Ctrl+C interrupts and
+                // Ctrl+Shift+C does nothing.
+                Event::Copy if !copy(ui, state, signals) && !shift => {
                     self.send(state, "\x03".into(), InputKind::Keys, signals);
                 }
                 Event::Cut => self.send(state, "\x18".into(), InputKind::Keys, signals),
