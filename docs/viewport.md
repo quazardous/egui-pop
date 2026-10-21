@@ -118,6 +118,90 @@ let overlays = vec![
 # let _ = overlays;
 ```
 
+## Device tiles
+
+A source that renders on the GPU hands the viewport tiles that already
+live on the render device (feature `wgpu`, module `device`): nothing
+crosses the CPU, nothing is uploaded, and the GPU path's shader reads
+them in place. The device is the one the GPU path was installed with
+(`gpu::install`, eframe's render state): the source's engine runs on
+that device (eframe's `RenderState` hands out its `device` and `queue`)
+and answers a request with a `DeviceTile` through
+`TileSink::deliver_device`, after submitting the work that writes it.
+
+```rust,no_run
+use egui_pop::viewport::device::{BufferLayout, DeviceTile};
+use egui_pop::viewport::gpu::egui_wgpu::wgpu;
+use egui_pop::viewport::source::{Pixels, TileRequest, TileSink};
+
+/// An engine's result for one request: `rgba` holds the scaled image
+/// as packed `f32` RGBA rows of `width` pixels, on the render device.
+fn hand_over(
+    sink: &TileSink,
+    device: &wgpu::Device,
+    request: &TileRequest,
+    rgba: wgpu::Buffer,
+    width: u32,
+) {
+    let [x, y] = request.origin;
+    let tile = DeviceTile::buffer(device, rgba, BufferLayout::packed(width, 4))
+        // The request's pixels start there in the image.
+        .origin([x as u32, y as u32])
+        // Asked only if the viewport refuses the tile.
+        .fallback(|| Option::<Pixels>::None);
+    sink.deliver_device(request, tile);
+}
+# let _ = hand_over;
+```
+
+- **The resource**: a 2D texture of any float-sampled format
+  (`Rgba16Float`, `Rgba32Float`, `Rgba8Unorm`, `Rgba8UnormSrgb`...)
+  with `TEXTURE_BINDING` usage (`DeviceTile::texture`), or a storage
+  buffer of `f32` values with `STORAGE` usage (`DeviceTile::buffer`):
+  one to four channels a pixel, rows `row_floats` apart, from a byte
+  `offset` (`BufferLayout`). The viewport binds only the rows a tile
+  covers, so a tile may be cut from a whole image's buffer
+  (`DeviceTile::origin`). Buffers need an adapter that reads storage
+  buffers in a fragment shader (`gpu::render_device(ctx).buffers`; not
+  WebGL 2): deliver textures elsewhere.
+- **The colour**: `Encoding::Scene` (the default) is
+  `Pixels::Scene` on the device, linear values in the working space:
+  the display stage of the viewport's display transform (its matrix,
+  clamp and transfer, for the window's target) runs on them in the
+  shader, as on uploaded tiles, and a new target or transform needs no
+  new tile. `Encoding::Display` is `Pixels::Display`: sRGB-encoded
+  values shown as they are (an `…Srgb` texture is read back to its
+  encoded values). A transform that overrides `DisplayTransform::apply`
+  (a LUT the stage cannot express) is not run on device tiles: deliver
+  display values then. Alpha is not drawn, as on the GPU path.
+- **The check**: a tile is checked on the delivering thread against the
+  render device of the last frame, and again when the interface takes
+  it in. One made on another device, without a GPU path, or whose
+  resource does not fit (usage, format, size, binding limits) is
+  refused: `ViewportState::last_error` says why (`DeviceTileError`),
+  the `refused` counter counts it, and the tile's fallback pixels, when
+  it offers some (`DeviceTile::fallback`, called only then), take the
+  usual CPU or upload path; without, the request fails.
+  `TileSink::render_device` tells a source's thread which device to use
+  before it renders.
+- **The counters**: `ViewportState::transfers` counts the tile pixels
+  copied to the GPU where the copy happens (an egui texture loaded, a
+  GPU path texture written at the paint), and the device tiles bound in
+  place (`bound`, no byte); `frame_transfers` is the last whole frame,
+  its paint included. The `viewport` collector shows both
+  (`tiles.uploads`), with `tiles.last_error` and the `device` and
+  `refused` counters in `tiles.stats`. A view drawn from device tiles
+  alone copies zero bytes a frame.
+- **What draws them**: everything that draws the tiles: the window, the
+  before and after sides, the image surface on Wayland, the loupe
+  (which draws the tiles again, magnified), and what the
+  `under_overlays` hook paints over them (a mask's tint).
+
+The tests in `crates/egui-pop-viewport/tests/device_tiles.rs` make
+textures and buffers on the test harness's device and check the picture
+against the CPU path and the counters at zero; the `gpu_tiles` example's
+`gpu-render` intake measures the hand-over on a real GPU.
+
 ## Wide gamut and HDR
 
 A window's surface has an encoding (`display::DisplayTarget`: primaries,

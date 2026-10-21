@@ -20,6 +20,8 @@
 //!   texture budget, tiles within the device's largest texture);
 //! - `gpu` (feature `wgpu`): scene tiles as half-float textures, the
 //!   display transform in a shader;
+//! - `device` (feature `wgpu`): device tiles, a texture or a storage
+//!   buffer already on the render device, drawn with no copy;
 //! - `image_surface` (feature `wayland`): the image on a surface of its
 //!   own, tagged with a wide encoding through the Wayland compositor,
 //!   below an sRGB interface;
@@ -70,6 +72,8 @@ pub mod cursor;
 pub mod curve;
 pub mod debug;
 pub mod demo;
+#[cfg(feature = "wgpu")]
+pub mod device;
 pub mod display;
 pub mod gestures;
 #[cfg(feature = "wgpu")]

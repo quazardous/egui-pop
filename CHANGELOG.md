@@ -116,6 +116,27 @@ publishes.
   elsewhere. `EGUI_POP_TEXT_SCALE` stands in for the system. Agents
   read it in the new `text_scale` collector (`text::describe`,
   `text::user_set`). Guide: docs/fonts.md.
+- Device tiles (egui-pop-viewport, feature `wgpu`): a source that
+  renders on the GPU hands the viewport a tile already on the render
+  device, `TileSink::deliver_device` with a `device::DeviceTile`: a 2D
+  texture of any float-sampled format, or a storage buffer of `f32`
+  values (one to four channels, rows and offset given by
+  `BufferLayout`, a tile cut from a whole image by its origin), read in
+  place by the GPU path's shader. Scene values go through the display
+  stage as uploaded tiles do, display values are shown as they are.
+  Each tile is checked against the render device (`gpu::render_device`,
+  `TileSink::render_device`): one from another device, without a GPU
+  path or that does not fit is refused with the reason
+  (`DeviceTileError`, `ViewportState::last_error`) and falls back to
+  the source's CPU pixels when it offers some (`DeviceTile::fallback`).
+  The loupe, the before and after sides, the Wayland image surface and
+  what the `under_overlays` hook paints draw over device tiles as over
+  uploaded ones. Upload counters: `ViewportState::transfers` and
+  `frame_transfers` count the tile bytes copied to the GPU where the
+  copy happens and the device tiles bound in place, shown in the
+  `viewport` collector (`tiles.uploads`, `tiles.last_error`, and the
+  `device` and `refused` counters of `tiles.stats`). See
+  [device tiles](docs/viewport.md#device-tiles).
 - Status items with alignment, priority, live states, popovers and
   hover cards (egui-pop-api): `strips::Indicator::align` puts an item
   at the bar's start (after the breadcrumb and the chips) or its end;
@@ -283,6 +304,11 @@ publishes.
   (`Profile::value_keys`, `PointerMap::value_keys`), read by the slider
   (egui-pop-core: `slider::Gestures` gains `key_fine` and `key_coarse`).
 
+- `TileSink::deliver_texture` (egui-pop-viewport, a prototype) is
+  replaced by `TileSink::deliver_device`, which checks the device and
+  takes any float-sampled format: `DeviceTile::texture(&device,
+  texture)` is what it delivered. `source::Stats::snapshot` returns nine
+  counters (`device` and `refused` added).
 - Palettes are resizable (egui-pop-model, egui-pop-api, egui-pop-tokens):
   their right edge, bottom edge and corner drag their size, between the
   new `palette.min-width`, `palette.min-height`, `palette.max-width` and
