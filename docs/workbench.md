@@ -379,7 +379,8 @@ visible (`FrameSpec::visible`, its tone `FrameSpec::tone`). A click on a
 chip leaves its mode; a pushed mode shows a back mark and goes back to
 what it replaced; a mode whose guard refuses keeps its chip and says why
 in its tooltip. On a narrow window the middle crumbs collapse into `…`
-(a menu of them) first, then the heaviest indicators give way; chips
+(a menu of them) first, then indicators give way (the lowest
+`priority` first, then the heaviest) into the bar's `…` menu; chips
 never hide. `StripsPlugin::breadcrumb(false)` keeps the bar to its
 indicators, for an application showing the breadcrumb elsewhere
 (`contexts::breadcrumb`, `contexts::mode_chips`); `contexts::crumbs`,
@@ -395,9 +396,13 @@ bar arranged for the darkroom comes back as it was; a place without
 choices of its own takes the root's. Without the context stack they
 last the session.
 
+Items sit at the bar's start or end (`align`), show busy, error and
+warning states, and may open a popover or a rich hover card: see
+[the status bar](status-bar.md).
+
 Agents read what the user sees: `context.read` gives the visible status
-items in its `status` field (each one's `id`, `text`, `tone`, `count`
-and `progress`), and the `strips` debug collector shows the breadcrumb,
+items in its `status` field (each one's `id`, `text`, `tone`, `count`,
+`progress`, and the states of [the status bar](status-bar.md#what-agents-read)), and the `strips` debug collector shows the breadcrumb,
 the chips, every item with why it is hidden (`hidden_by`: the `when`
 clause that does not hold, `user`, or `narrow`) and the choices of the
 place shown; in code, `strips::status` and `strips::visible`.

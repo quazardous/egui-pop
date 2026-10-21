@@ -163,9 +163,10 @@ fn status(ui: &mut egui_pop::egui::Ui, unread: u64, rendering: bool, visible: &m
 
 ## Not yet
 
-- The status bar's `strips::Indicator` becomes `StatusItem` and is drawn
-  with these kinds once the mount contract lands; only status bar items
-  will be mutable by the user.
+- The status bar's `strips::Indicator` draws its error and warning
+  counts with these kinds' icons ([the status bar](status-bar.md)); its
+  other parts move onto them later. Only status bar items are mutable
+  by the user.
 - The library's badges (the kit's `pill`) and the tree's row marks move
   onto these kinds.
 - Workbench tabs get the modified dot that turns into the close button

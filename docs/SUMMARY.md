@@ -15,6 +15,7 @@
 - [The context stack](contexts.md)
 - [The clipboard](clipboard.md)
 - [The status bar and the context stack](status-and-context.md)
+- [The status bar](status-bar.md)
 - [The workbench](workbench.md)
 - [Hosts and components](hosts.md)
 - [The image viewport](viewport.md)

@@ -95,7 +95,8 @@ changes in the command.
 ## Build order
 
 The status bar's next pass (a rich hover and popover per item) was an
-ordering preference, not a dependency: these steps were built before it.
+ordering preference, not a dependency: these steps were built before it,
+and it is built now ([the status bar](status-bar.md)).
 1. `when` on indicators. *Built.*
 2. The breadcrumb and chips in the bar. *Built.*
 3. The saved choices per place. *Built.*
@@ -122,8 +123,10 @@ ordering preference, not a dependency: these steps were built before it.
   (`contexts::why_not`) only while the chip is under the pointer; a host
   owning the stack (an answer that may come later) gives no reason
   there, its refusal still shows in a toast on a click.
-- "Low-priority indicators" are the heaviest (`weight`): the lightest
-  sit at the bar's end and stay longest.
+- "Low-priority indicators" are those of the lowest `priority`
+  (`Indicator::priority`), then, among equals, the heaviest (`weight`):
+  the lightest sit nearest the bar's edge. They go into the bar's `…`
+  menu ([the status bar](status-bar.md#where-an-item-sits)).
 - The choices are a value per place in the `view` document
   (`contexts::place_value`, keyed by the place's frame id, `root` at the
   root), under `egui_pop.status`; without the context stack they last
