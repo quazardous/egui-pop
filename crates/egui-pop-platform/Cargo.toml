@@ -1,7 +1,7 @@
 [package]
 name = "egui-pop-platform"
 version = "0.2.0"
-description = "Platform services for egui-pop applications, as opt-in plugins: a single instance with deep links, desktop notifications with actions, a tray icon with a declared menu, global shortcuts, logs and crash reports, the focus mode read in-process"
+description = "Platform services for egui-pop applications, as opt-in plugins: a single instance with deep links, desktop notifications with actions, a tray icon with a declared menu, global shortcuts, logs and crash reports, the focus mode and the text scaling read in-process"
 readme = "README.md"
 keywords = ["egui", "tray", "notifications", "single-instance", "global-hotkey"]
 categories = ["gui"]
@@ -16,7 +16,7 @@ authors.workspace = true
 workspace = true
 
 [features]
-default = ["instance", "notify", "tray", "keys", "logs", "crash", "focus"]
+default = ["instance", "notify", "tray", "keys", "logs", "crash", "focus", "text-scale"]
 ## A single instance: a second launch hands its arguments and links to
 ## the running one (`instance`).
 instance = ["dep:interprocess"]
@@ -35,6 +35,9 @@ logs = []
 crash = ["logs"]
 ## The focus mode read in-process (`focus`).
 focus = ["dep:ashpd", "dep:futures-lite", "dep:async-io", "dep:winreg"]
+## The system's text scaling read in-process, to seed the text size
+## (`text_scale`).
+text-scale = ["dep:ashpd", "dep:futures-lite", "dep:async-io", "dep:winreg"]
 
 [dependencies]
 egui.workspace = true
@@ -60,14 +63,15 @@ tray-icon = { version = "0.26", optional = true, default-features = false, featu
 global-hotkey = { version = "0.8", optional = true }
 
 [target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", target_os = "dragonfly"))'.dependencies]
-# MIT: XDG desktop portals (global shortcuts on Wayland, the settings).
+# MIT: XDG desktop portals (global shortcuts on Wayland, the settings:
+# the focus mode, the text scaling).
 ashpd = { version = "0.13", optional = true, default-features = false, features = ["async-io", "global_shortcuts", "settings"] }
 # Apache-2.0 OR MIT: waiting on the portals from a thread.
 futures-lite = { version = "2", optional = true }
 async-io = { version = "2", optional = true }
 
 [target.'cfg(windows)'.dependencies]
-# MIT: the registry, read in-process.
+# MIT: the registry, read in-process (the focus mode, the text scaling).
 winreg = { version = "0.55", optional = true }
 
 [dev-dependencies]

@@ -75,8 +75,8 @@ pub use egui_pop_i18n as i18n;
 
 /// Platform services as opt-in plugins: a single instance and deep
 /// links, notifications, a tray icon, global shortcuts, logs and crash
-/// reports, the focus mode read in-process (feature `platform`, or
-/// `platform-<service>` for one).
+/// reports, the focus mode and the text scaling read in-process
+/// (feature `platform`, or `platform-<service>` for one).
 #[cfg(any(
     feature = "platform-instance",
     feature = "platform-notify",
@@ -84,7 +84,8 @@ pub use egui_pop_i18n as i18n;
     feature = "platform-keys",
     feature = "platform-logs",
     feature = "platform-crash",
-    feature = "platform-focus"
+    feature = "platform-focus",
+    feature = "platform-text-scale"
 ))]
 pub use egui_pop_platform as platform;
 
