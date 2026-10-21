@@ -16,6 +16,14 @@
 //! the stack an overlay its owner lays out and draws itself (a side
 //! area's flyout), so it closes by the same rules.
 //!
+//! **egui popups.** A combo box's list, a context menu or an egui menu
+//! opened from inside an overlay is an egui area of its own, drawn while
+//! the overlay is drawn but outside its rect. Both [`show`] and [`hold`]
+//! note the layers first drawn while the overlay draws: a press on one of
+//! them is inside the overlay, not a click away, and while one is open
+//! Escape is left to it (it closes first, the overlay at the next
+//! press).
+//!
 //! **Windows.** Each window has its own stack: an overlay belongs to the
 //! window it is shown in (a detached panel's window, egui's viewport),
 //! and Escape and outside clicks there close only its overlays. A modal
@@ -25,7 +33,7 @@
 
 use std::collections::BTreeSet;
 
-use egui::{Context, Id, Rect, Ui, ViewportId};
+use egui::{Context, Id, LayerId, Rect, Ui, ViewportId};
 use serde::Serialize;
 
 use crate::placement::{Placement, Side, place};
@@ -138,6 +146,8 @@ struct Entry {
     rect: Option<Rect>,
     /// The widget it was placed next to, when one was given.
     anchor: Option<Rect>,
+    /// The egui layers (popups, menus) drawn from inside it last pass.
+    popups: Vec<LayerId>,
 }
 
 /// The stack, bottom first.
@@ -171,6 +181,7 @@ impl OverlayStack {
             restore_focus: focused,
             rect: None,
             anchor: None,
+            popups: Vec::new(),
         });
         (Opened::New, Vec::new())
     }
@@ -312,16 +323,38 @@ impl OverlayStack {
         }
     }
 
+    /// Records the egui layers drawn from inside an overlay (a combo
+    /// box's list, a context menu): a press on one of them is not
+    /// outside it, and while one of them is open Escape goes to it.
+    pub fn set_popups(&mut self, id: Id, layers: Vec<LayerId>) {
+        if let Some(i) = self.position(id) {
+            self.entries[i].popups = layers;
+        }
+    }
+
+    /// The egui layers drawn from inside the top overlay last pass.
+    pub fn top_popups(&self) -> &[LayerId] {
+        self.entries.last().map_or(&[], |e| &e.popups)
+    }
+
     /// The topmost overlay drawn, or anchored, at a point: a press on
     /// the widget that opened an overlay leaves that overlay to it (its
     /// click toggles it), instead of closing it on the press and the
     /// click opening it again.
     pub fn hit(&self, pos: egui::Pos2) -> Option<Id> {
+        self.hit_on(pos, None)
+    }
+
+    /// As [`Self::hit`], `layer` being the egui layer at the point: a
+    /// press on a popup an overlay opened is inside that overlay.
+    pub fn hit_on(&self, pos: egui::Pos2, layer: Option<LayerId>) -> Option<Id> {
         self.entries
             .iter()
             .rev()
             .find(|e| {
-                e.rect.is_some_and(|r| r.contains(pos)) || e.anchor.is_some_and(|a| a.contains(pos))
+                e.rect.is_some_and(|r| r.contains(pos))
+                    || e.anchor.is_some_and(|a| a.contains(pos))
+                    || layer.is_some_and(|l| e.popups.contains(&l))
             })
             .map(|e| e.spec.id)
     }
@@ -465,7 +498,14 @@ pub fn begin_pass(ctx: &Context) -> bool {
         settle(ctx, &mut s, closed);
     }
     let mut used_escape = false;
-    if !s.stack.is_empty() && ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+    // An egui popup (a combo box's list, a context menu, a menu) open
+    // from the top overlay takes Escape first: it closes itself.
+    let popup_open = s
+        .stack
+        .top_popups()
+        .iter()
+        .any(|l| egui::Popup::is_id_open(ctx, l.id));
+    if !s.stack.is_empty() && !popup_open && ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
         let closed = s.stack.escape();
         if !closed.is_empty() {
             used_escape = true;
@@ -479,7 +519,8 @@ pub fn begin_pass(ctx: &Context) -> bool {
             .then(|| i.pointer.interact_pos())
             .flatten()
     }) {
-        let hit = s.stack.hit(pos);
+        let layer = ctx.layer_id_at(pos);
+        let hit = s.stack.hit_on(pos, layer);
         let closed = s.stack.click(hit);
         settle(ctx, &mut s, closed);
     }
@@ -559,6 +600,28 @@ pub fn modal_open(ctx: &Context) -> bool {
     !modal_windows(ctx).is_empty()
 }
 
+/// The layers holding widgets so far this pass.
+fn layers_now(ctx: &Context) -> Vec<LayerId> {
+    ctx.viewport(|v| v.this_pass.widgets.layer_ids().collect())
+}
+
+/// Notes the floating layers (egui draws popups, menus and tooltips on
+/// the foreground and tooltip orders) first drawn since `before` (taken
+/// as the overlay started drawing), but its `own`, as the popups it
+/// opened.
+fn note_popups(ctx: &Context, id: Id, before: &[LayerId], own: &[LayerId]) {
+    let layers = layers_now(ctx)
+        .into_iter()
+        .filter(|l| {
+            matches!(l.order, egui::Order::Foreground | egui::Order::Tooltip)
+                && !before.contains(l)
+                && !own.contains(l)
+        })
+        .collect();
+    let st = state(ctx);
+    lock(&st).stack.set_popups(id, layers);
+}
+
 /// Where a floating overlay goes.
 #[derive(Clone, Copy, Debug)]
 pub struct Anchor {
@@ -602,25 +665,33 @@ fn enter(ctx: &Context, spec: &OverlaySpec, open: &mut bool) -> bool {
 /// the workbench rather than placed by [`crate::placement`]) in the
 /// stack, under the stack's rules: Escape and a click outside `rect`
 /// and `anchor` close it, the focus going back where it was. Call it
-/// each pass while `*open`, with where the overlay is drawn this pass;
-/// it sets `*open` to false and returns false once the overlay closed.
-pub fn hold(
+/// each pass while `*open`, with where the overlay is drawn this pass
+/// and `draw` drawing it (egui popups opened from inside are part of
+/// it); it sets `*open` to false and returns `None`, without drawing,
+/// once the overlay closed.
+pub fn hold<R>(
     ctx: &Context,
     spec: &OverlaySpec,
     open: &mut bool,
     anchor: Option<Rect>,
     rect: Rect,
-) -> bool {
+    draw: impl FnOnce() -> R,
+) -> Option<R> {
     if !enter(ctx, spec, open) {
-        return false;
+        return None;
     }
     let st = state(ctx);
-    let mut s = lock(&st);
-    if let Some(a) = anchor {
-        s.stack.set_anchor(spec.id, a);
+    {
+        let mut s = lock(&st);
+        if let Some(a) = anchor {
+            s.stack.set_anchor(spec.id, a);
+        }
+        s.stack.set_rect(spec.id, rect);
     }
-    s.stack.set_rect(spec.id, rect);
-    true
+    let before = layers_now(ctx);
+    let inner = draw();
+    note_popups(ctx, spec.id, &before, &[]);
+    Some(inner)
 }
 
 /// Shows an overlay while `*open`; sets `*open` to false when it closes
@@ -640,7 +711,8 @@ pub fn show<R>(
     let st = state(ctx);
     let kit = crate::kit::Kit::of(ctx);
     let rest = crate::kit::State::REST;
-    let (inner, rect) = match spec.kind {
+    let before = layers_now(ctx);
+    let (inner, rect, own) = match spec.kind {
         Kind::Modal => {
             let backdrop = &kit.backdrop;
             let alpha = (backdrop.data.opacity * spec.dim).clamp(0.0, 1.0);
@@ -668,7 +740,8 @@ pub fn show<R>(
                         })
                         .inner
                 });
-            (r.inner, r.response.rect)
+            let own = vec![r.response.layer_id, r.backdrop_response.layer_id];
+            (r.inner, r.response.rect, own)
         }
         Kind::Popover | Kind::Menu => {
             let screen = ctx.content_rect();
@@ -694,10 +767,11 @@ pub fn show<R>(
                     let shadow = ui.visuals().popup_shadow;
                     kit.popover.show(ui, rest, shadow, add).inner
                 });
-            (r.inner, r.response.rect)
+            (r.inner, r.response.rect, vec![r.response.layer_id])
         }
     };
     lock(&st).stack.set_rect(spec.id, rect);
+    note_popups(ctx, spec.id, &before, &own);
     Some(inner)
 }
 
@@ -800,6 +874,29 @@ mod tests {
         // Elsewhere: outside, it closes.
         assert_eq!(s.hit((10.0, 100.0).into()), None);
         assert_eq!(labels(&s.click(None)), ["popover"]);
+    }
+
+    #[test]
+    fn a_press_on_a_popup_an_overlay_opened_is_not_outside_it() {
+        let mut s = OverlayStack::new();
+        s.open(spec("flyout", Kind::Popover), None);
+        let id = Id::new("flyout");
+        s.set_rect(
+            id,
+            Rect::from_min_max((0.0, 0.0).into(), (100.0, 400.0).into()),
+        );
+        let combo = LayerId::new(egui::Order::Foreground, Id::new("combo list"));
+        s.set_popups(id, vec![combo]);
+        assert_eq!(s.top_popups(), [combo]);
+        // On the combo box's list, past the flyout's edge: inside.
+        let past = (150.0, 50.0).into();
+        assert_eq!(s.hit_on(past, Some(combo)), Some(id));
+        assert!(s.click(s.hit_on(past, Some(combo))).is_empty());
+        // Another layer there, or none: outside, it closes.
+        let other = LayerId::new(egui::Order::Foreground, Id::new("elsewhere"));
+        assert_eq!(s.hit_on(past, Some(other)), None);
+        assert_eq!(s.hit(past), None);
+        assert_eq!(labels(&s.click(None)), ["flyout"]);
     }
 
     #[test]

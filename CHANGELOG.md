@@ -337,6 +337,12 @@ publishes.
   the context without a `Ui`, for a popup drawn after its scope ended:
   `menus::popup_at` records the scope it was opened in and is drawn in
   it (`docs/upstream.md`).
+- A combo box's list, a context menu or an egui menu opened inside an
+  overlay (a flyout, a popover, a dialog) no longer closes it when
+  clicked: the layers an overlay opens while it is drawn are part of
+  it, and Escape closes such a popup before the overlay
+  (egui-pop-core: `overlay::show`, and `overlay::hold`, which now takes
+  the closure drawing the overlay).
 - Text typed with an AccessKit focus reaches the field (egui-pop-core):
   when a screen reader or an agent focuses a text field and types in
   the same pass, egui 0.36 dropped what was typed. The focus plugin

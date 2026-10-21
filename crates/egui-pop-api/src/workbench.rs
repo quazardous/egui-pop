@@ -1960,16 +1960,47 @@ fn show_flyout(
         egui_pop_core::overlay::Kind::Popover,
     );
     let mut open = true;
-    if !egui_pop_core::overlay::hold(
+    let shown = egui_pop_core::overlay::hold(
         ctx,
         &spec_overlay,
         &mut open,
         Some(strip),
         rect.expand2(egui::vec2(reach, 0.0)),
-    ) {
+        // A combo box or a context menu opened in the panel is part of
+        // the flyout: a click in it is not a click away.
+        || {
+            draw_flyout(
+                app,
+                ctx,
+                kit,
+                (id, area, rect),
+                (width, min, max),
+                panel,
+                &title,
+            )
+        },
+    );
+    if shown.is_none() {
         app.change_workbench(Change::Flyout(panel.clone(), false));
         return None;
     }
+    Some(rect)
+}
+
+/// Draws an open flyout (`show_flyout`): its band, its panel, its
+/// resize edge.
+fn draw_flyout(
+    app: &AppHandle,
+    ctx: &egui::Context,
+    kit: &Kit,
+    (id, area, rect): (egui::Id, Area, Rect),
+    (width, min, max): (f32, f32, f32),
+    panel: &PanelId,
+    title: &str,
+) {
+    let live_id = id.with("live");
+    let reach = ctx.global_style().interaction.resize_grab_radius_side;
+    let start = area == Area::StartSide;
     let side = &kit.side_area;
     let rest = *side.style(State::REST);
     let mut shadow = side.data.shadow;
@@ -1998,11 +2029,8 @@ fn show_flyout(
             inner.set_clip_rect(body);
             inner.set_min_size(inner.available_size());
             // The band: the title, then the pin button at the end.
-            let pin = strings::tr_args(
-                inner.ctx(),
-                &txt::WORKBENCH_FLYOUT_PIN,
-                &[("panel", &title)],
-            );
+            let pin =
+                strings::tr_args(inner.ctx(), &txt::WORKBENCH_FLYOUT_PIN, &[("panel", title)]);
             let button = t.size.control_height.max(24.0);
             let header = kit.header_band.style(State::REST).text;
             // The pin first, from the end: a truncated title laid out
@@ -2020,11 +2048,9 @@ fn show_flyout(
                         .clicked();
                         ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                             ui.add(
-                                egui::Label::new(
-                                    egui::RichText::new(&title).strong().color(header),
-                                )
-                                .truncate()
-                                .selectable(false),
+                                egui::Label::new(egui::RichText::new(title).strong().color(header))
+                                    .truncate()
+                                    .selectable(false),
                             );
                         });
                         pinned
@@ -2074,7 +2100,6 @@ fn show_flyout(
                 app.change_workbench(Change::FlyoutSize(panel.clone(), w));
             }
         });
-    Some(rect)
 }
 
 /// A side area lying over the centre, open: next to its strip (`strip`),
