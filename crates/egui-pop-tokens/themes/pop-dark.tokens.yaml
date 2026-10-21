@@ -448,6 +448,10 @@ font:
     mono:
       $value: ["Hack", "monospace"]
       $description: "Numbers and code (informative until fonts are loaded from themes)."
+  numeric:
+    $type: "string"
+    $value: "mono"
+    $description: "How values line their digits up: \"mono\" draws them in the monospace family, \"ui\" in the interface family (its own digits when they are tabular, else each digit in a cell as wide as the widest)."
 opacity:
   $type: "number"
   scrim:

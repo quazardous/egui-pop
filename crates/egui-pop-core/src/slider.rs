@@ -1214,7 +1214,9 @@ pub(crate) fn paint_bar(
         );
     }
     kit.slider.paint_label(&cx, &bar);
-    let value = painter.layout_no_wrap(text.to_string(), font, Color32::PLACEHOLDER);
+    // The value's digits line up from one value to the next
+    // (`font.numeric`): it does not jitter while dragged.
+    let value = crate::fonts::number_galley(ui.ctx(), text, font.size, Color32::PLACEHOLDER);
     kit.slider_value.paint_part(
         &cx,
         &Part {

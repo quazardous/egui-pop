@@ -7,7 +7,8 @@ registered faces, egui's bundled ones and the system's (fontdb behind
 `system-fonts`, not fontique: no per-script fallback yet), reported
 problems (`egui_pop_core::fonts`); a size scale (2026-10-18), below;
 font files a user adds, kept as paths (2026-10-20), below; the text size
-setting (2026-10-21), below. The rest is still a design.
+setting, aligned numbers (2026-10-21), below. The rest is still a
+design.
 
 ## The size scale (built)
 
@@ -95,6 +96,28 @@ folder or a `.zip` archive holding the token file and the faces by
 relative path ([Design tokens](tokens.md#a-theme-with-its-fonts)), and
 opening one makes its faces the user's font files again
 (`ThemeEditor::set_font_dir` says where an archive's faces are kept).
+
+## Aligned numbers (built)
+
+egui applies no OpenType feature, so `tnum` cannot be asked: digits
+line up only in a face whose default digits are tabular. As section 3
+recommends, values are drawn by `font.numeric` (a theme token):
+
+- `"mono"` (the default): in the monospace family, at the size whose
+  x-height matches the text around (`size × font.text-style.monospace /
+  font.text-style.body`, rounded to half a point).
+- `"ui"`: in the interface family. When its regular face's default
+  digits are tabular (measured at install, `Report::tabular_digits`),
+  as they are; otherwise each digit is laid in a cell as wide as the
+  face's widest digit, right-aligned in it (one layout section per
+  digit, with its `leading_space`), the workaround of section 4.
+
+`fonts::number_font(ctx, size)` says which, `fonts::number_job` and
+`fonts::number_galley` lay a value out. egui-pop's slider draws its
+value this way, so it no longer jitters while dragged; an application's
+readouts and tables use the same functions. Tests: a column of numbers
+in the default has every digit at the same distance from the right
+edge; Inter's digits in cells take the same width whatever they are.
 
 ## Families by name, and the families there are (built)
 

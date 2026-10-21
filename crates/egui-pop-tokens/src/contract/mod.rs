@@ -351,6 +351,11 @@ const CORE: &[Required] = &[
     sys("font.family.ui", "fontFamily", "interface text"),
     sys("font.family.mono", "fontFamily", "numbers and code"),
     sys(
+        "font.numeric",
+        "string",
+        "how values line their digits up: \"mono\" or \"ui\"",
+    ),
+    sys(
         "motion.duration",
         "duration",
         "length of animations, 0 for none",

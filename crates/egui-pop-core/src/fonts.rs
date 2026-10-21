@@ -36,7 +36,8 @@
 
 use std::sync::Arc;
 
-use egui::{Context, FontData, FontDefinitions, FontFamily, FontId};
+use egui::text::{LayoutJob, LayoutSection, TextFormat};
+use egui::{Color32, Context, FontData, FontDefinitions, FontFamily, FontId, Galley};
 
 use crate::state::Slot;
 
@@ -172,6 +173,146 @@ impl Origin {
             Origin::System => "system",
         }
     }
+}
+
+/// How values line their digits up (`font.numeric`): egui applies no
+/// OpenType feature, so tabular figures (`tnum`) cannot be asked of a
+/// face whose default digits are proportional.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Numeric {
+    /// In the monospace family (`font.family.mono`), its size matched to
+    /// the interface text's: the default.
+    #[default]
+    Mono,
+    /// In the interface family: its own digits when they are tabular,
+    /// else each digit laid in a cell as wide as the widest digit.
+    Ui,
+}
+
+impl Numeric {
+    /// From the token's value: `mono` or `ui`.
+    pub fn parse(s: &str) -> Option<Numeric> {
+        match s.trim() {
+            "mono" => Some(Numeric::Mono),
+            "ui" => Some(Numeric::Ui),
+            _ => None,
+        }
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Numeric::Mono => "mono",
+            Numeric::Ui => "ui",
+        }
+    }
+}
+
+/// How a value is drawn at a size: the font, and whether its digits are
+/// laid in cells (a proportional face asked for numbers).
+#[derive(Clone, Debug, PartialEq)]
+pub struct NumberFont {
+    pub font: FontId,
+    /// Each digit in a cell as wide as the widest, right-aligned in it.
+    pub cells: bool,
+}
+
+/// How values are drawn at `size` (the size of the text around them),
+/// from `font.numeric` and the installed faces: the monospace family at
+/// the size matching the interface text's x-height, or the interface
+/// family (its digits in cells when they are not tabular).
+pub fn number_font(ctx: &Context, size: f32) -> NumberFont {
+    let t = crate::theme::Tokens::of(ctx);
+    match t.font.numeric {
+        Numeric::Mono => {
+            let ratio = if t.font.body > 0.0 {
+                t.font.mono / t.font.body
+            } else {
+                1.0
+            };
+            NumberFont {
+                font: FontId::new((size * ratio * 2.0).round() / 2.0, FontFamily::Monospace),
+                cells: false,
+            }
+        }
+        Numeric::Ui => NumberFont {
+            font: FontId::new(size, FontFamily::Proportional),
+            cells: !report(ctx).is_some_and(|r| r.tabular_digits(Role::Ui)),
+        },
+    }
+}
+
+/// A value's text laid out so its digits line up with the values above
+/// and below it ([`number_font`]): what sliders, readouts and tables of
+/// numbers draw. In cells, each digit is its own section, right-aligned
+/// in a cell as wide as the face's widest digit.
+pub fn number_job(ctx: &Context, text: &str, size: f32, color: Color32) -> LayoutJob {
+    let NumberFont { font, cells } = number_font(ctx, size);
+    if !cells {
+        return LayoutJob::simple_singleline(text.to_string(), font, color);
+    }
+    let widths: Vec<f32> =
+        ctx.fonts_mut(|f| ('0'..='9').map(|c| f.glyph_width(&font, c)).collect());
+    let cell = widths.iter().copied().fold(0.0_f32, f32::max);
+    digit_cells(text, &font, color, |c| {
+        c.to_digit(10).map(|d| cell - widths[d as usize])
+    })
+}
+
+/// The job of [`number_job`] in cells: `pad` gives the space before a
+/// digit (`None` for any other char).
+fn digit_cells(
+    text: &str,
+    font: &FontId,
+    color: Color32,
+    pad: impl Fn(char) -> Option<f32>,
+) -> LayoutJob {
+    let mut job = LayoutJob {
+        text: text.to_string(),
+        break_on_newline: false,
+        ..LayoutJob::default()
+    };
+    let format = TextFormat::simple(font.clone(), color);
+    let mut run_start: Option<usize> = None;
+    for (at, c) in text.char_indices() {
+        match pad(c) {
+            Some(leading) => {
+                if let Some(s) = run_start.take() {
+                    job.sections.push(LayoutSection {
+                        leading_space: 0.0,
+                        byte_range: span(s, at),
+                        format: format.clone(),
+                    });
+                }
+                job.sections.push(LayoutSection {
+                    leading_space: leading.max(0.0),
+                    byte_range: span(at, at + c.len_utf8()),
+                    format: format.clone(),
+                });
+            }
+            None => {
+                run_start.get_or_insert(at);
+            }
+        }
+    }
+    if let Some(s) = run_start {
+        job.sections.push(LayoutSection {
+            leading_space: 0.0,
+            byte_range: span(s, text.len()),
+            format,
+        });
+    }
+    job
+}
+
+fn span(from: usize, to: usize) -> std::ops::Range<egui::text::ByteIndex> {
+    egui::text::ByteIndex(from)..egui::text::ByteIndex(to)
+}
+
+/// [`number_job`] laid out.
+pub fn number_galley(ctx: &Context, text: &str, size: f32, color: Color32) -> Arc<Galley> {
+    let job = number_job(ctx, text, size, color);
+    ctx.fonts_mut(|f| f.layout_job(job))
 }
 
 /// A font face the application gives: its family name (as a theme names
@@ -1135,6 +1276,108 @@ mod tests {
         assert!(!monospace(&ubuntu));
         assert_eq!(report.tabular_digits(Role::Ui), tabular_digits(&ubuntu));
         assert_eq!(report.chains.len(), 2 * WEIGHTS.len());
+    }
+
+    /// The x of each glyph from the right edge, per galley.
+    fn from_right(g: &Galley) -> Vec<f32> {
+        let row = &g.rows[0];
+        let right = row.glyphs.last().map_or(0.0, |l| l.pos.x + l.advance_width);
+        row.glyphs.iter().map(|gl| right - gl.pos.x).collect()
+    }
+
+    fn pass(ctx: &Context) {
+        ctx.run_ui(egui::RawInput::default(), |_| {})
+            .textures_delta
+            .clear();
+    }
+
+    #[test]
+    fn values_are_drawn_in_the_monospace_family_by_default_and_line_up() {
+        let ctx = Context::default();
+        let t = crate::theme::install(&ctx, &crate::theme::ThemeSpec::new("pop-dark"));
+        assert_eq!(t.font.numeric, Numeric::Mono);
+        assert_eq!(Numeric::parse("ui"), Some(Numeric::Ui));
+        assert_eq!(Numeric::parse("tabular"), None);
+        pass(&ctx);
+        let f = number_font(&ctx, t.font.body);
+        assert_eq!(f.font.family, FontFamily::Monospace);
+        // The monospace size that matches the body's x-height.
+        assert_eq!(f.font.size, t.font.mono);
+        assert!(!f.cells);
+        // A column of numbers, right-aligned: each digit's x from the
+        // right is the same on every row.
+        let rows: Vec<Vec<f32>> = ["-1234.56", "1111.11", "8888.88", "+0000.00"]
+            .iter()
+            .map(|n| from_right(&number_galley(&ctx, n, 13.0, Color32::WHITE)))
+            .collect();
+        for r in &rows[1..] {
+            for (a, b) in r.iter().rev().zip(rows[0].iter().rev()) {
+                assert!((a - b).abs() < 0.01, "{rows:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_proportional_face_s_digits_are_laid_in_cells() {
+        let ctx = Context::default();
+        register(&ctx, Face::from_static("Inter", Weight::REGULAR, INTER_VAR));
+        let t = crate::theme::install(
+            &ctx,
+            &crate::theme::ThemeSpec::new("pop-dark")
+                .override_token("font.numeric", serde_json::json!("ui"))
+                .override_token("font.family.ui", serde_json::json!(["Inter"])),
+        );
+        assert_eq!(t.font.numeric, Numeric::Ui);
+        pass(&ctx);
+        // Inter's default digits are proportional.
+        assert!(!report(&ctx).unwrap().tabular_digits(Role::Ui));
+        let f = number_font(&ctx, 20.0);
+        assert_eq!(f.font, FontId::proportional(20.0));
+        assert!(f.cells);
+        let width = |s: &str| number_galley(&ctx, s, 20.0, Color32::WHITE).size().x;
+        let plain = |s: &str| {
+            ctx.fonts_mut(|fonts| {
+                fonts
+                    .layout_no_wrap(s.into(), FontId::proportional(20.0), Color32::WHITE)
+                    .size()
+                    .x
+            })
+        };
+        // Drawn plainly, ones are narrower than zeros; in cells, not.
+        assert!(plain("1111") + 1.0 < plain("0000"));
+        assert!((width("1111") - width("0000")).abs() < 0.01);
+        assert!((width("-11.1") - width("-00.0")).abs() < 0.01);
+    }
+
+    #[test]
+    fn cells_are_sections_one_per_digit() {
+        let job = digit_cells(
+            "-12.5 EV",
+            &FontId::proportional(10.0),
+            Color32::WHITE,
+            |c| c.is_ascii_digit().then_some(1.0),
+        );
+        let parts: Vec<(&str, f32)> = job
+            .sections
+            .iter()
+            .map(|s| {
+                (
+                    &job.text[s.byte_range.start.0..s.byte_range.end.0],
+                    s.leading_space,
+                )
+            })
+            .collect();
+        assert_eq!(
+            parts,
+            vec![
+                ("-", 0.0),
+                ("1", 1.0),
+                ("2", 1.0),
+                (".", 0.0),
+                ("5", 1.0),
+                (" EV", 0.0)
+            ]
+        );
     }
 
     #[test]

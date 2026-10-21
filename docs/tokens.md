@@ -118,7 +118,8 @@ without it.
    `size.toast.width`, `font.size.{xs, s, m, l, xl}` (the size scale)
    and `font.text-style.{small, body, button, heading, monospace}`
    (egui's text styles, each an alias of a step),
-   `font.family.{ui, mono}`, `motion.duration`,
+   `font.family.{ui, mono}`, `font.numeric` (`"mono"` or `"ui"`: how
+   values line their digits up, [Fonts](fonts.md)), `motion.duration`,
    `motion.spinner.{delay, min, turn}` (300 ms before a busy indicator
    shows, 500 ms at least once shown, a spinner's turn),
    `motion.progress.travel`, `motion.skeleton.shimmer`, `opacity.scrim`.

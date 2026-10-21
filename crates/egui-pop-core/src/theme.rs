@@ -240,6 +240,8 @@ pub struct Font {
     pub scale: FontScale,
     pub family_ui: Vec<String>,
     pub family_mono: Vec<String>,
+    /// How values line their digits up (`font.numeric`).
+    pub numeric: crate::fonts::Numeric,
 }
 
 /// The size scale's five steps, in points (`font.size.xs` to `xl`).
@@ -459,6 +461,12 @@ impl Tokens {
                 },
                 family_ui: f("font.family.ui"),
                 family_mono: f("font.family.mono"),
+                numeric: match r.value("font.numeric") {
+                    Some(egui_pop_tokens::Value::Other(serde_json::Value::String(s))) => {
+                        crate::fonts::Numeric::parse(s).unwrap_or_default()
+                    }
+                    _ => crate::fonts::Numeric::default(),
+                },
             },
             shadow: {
                 let sh = |g: &str| shadow(r, &format!("shadow.{g}.")).unwrap_or(Shadow::NONE);

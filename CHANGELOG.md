@@ -54,6 +54,9 @@ publishes.
   `wheel_steps` and `panel`, and both take their default from the
   profile. The keymap document is at version 3 (version 2 reads
   unchanged). Part of #47.
+- egui-pop's slider draws its value in the numeric font
+  (`font.numeric`, the monospace family by default), so the digits do
+  not jitter while it is dragged. Snapshots showing a slider changed.
 
 ### Added
 
@@ -670,6 +673,13 @@ publishes.
   (`crates/egui-pop-gallery/assets/fonts`, OFL 1.1, sources in its
   README and the NOTICE), in no published crate. The bundled pair is
   chosen there.
+- Aligned numbers (egui-pop-tokens, egui-pop-core): the `font.numeric`
+  token (`"mono"` by default, or `"ui"`) says how values line their
+  digits up: in the monospace family at the size matching the text
+  around, or in the interface family, its digits each in a cell as wide
+  as the widest when its default digits are not tabular (egui applies
+  no `tnum`). `fonts::number_font`, `number_job` and `number_galley`
+  lay a value out; `Tokens::font.numeric` reads the token.
 
 ### Changed
 
