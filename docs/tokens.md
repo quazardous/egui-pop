@@ -489,6 +489,44 @@ release. A test (`no_rename_entry_outlives_its_window`) compares each
 entry's `since` with the crate's version and fails once an entry is
 past its window, so the release raising the version drops it.
 
+## A light and dark pair in one file
+
+A pair whose two variants were edited apart (the theme editor's) is
+saved as one file: the token file of the theme named first, carrying
+its counterpart's in its root `$extensions` under
+`"org.egui-pop.counterpart"` (`COUNTERPART_EXTENSION`), with the name
+it goes by. Each names the other (`org.egui-pop.variant-of`), and the
+counterpart is an ordinary token file with its own stamp (one stamp
+per file, see above): the format version stays 1, since a reader not
+knowing the key still loads the file's own variant.
+
+```json
+{
+  "$extends": "pop-dark",
+  "$extensions": {
+    "org.egui-pop.format": { "version": 1, "contract": 1 },
+    "org.egui-pop.variant-of": "ocean-light",
+    "org.egui-pop.counterpart": {
+      "name": "ocean-light",
+      "file": {
+        "$extends": "pop-light",
+        "$extensions": {
+          "org.egui-pop.format": { "version": 1, "contract": 1 },
+          "org.egui-pop.variant-of": "ocean"
+        },
+        "accent": { "default": { "$type": "color", "$value": "#2060c0" } }
+      }
+    }
+  },
+  "accent": { "default": { "$type": "color", "$value": "#40a0ff" } }
+}
+```
+
+`Themes::add_text` and `Themes::add_path` add both, the counterpart
+under its name through the same loading rule; one that cannot be read
+is a warning, and the file's own variant is added alone. The file
+travels in a package like any other (below).
+
 ## A theme with its fonts
 
 A theme naming font files of its own (a user's, added in the theme

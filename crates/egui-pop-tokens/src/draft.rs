@@ -6,6 +6,13 @@
 //! names the base theme, and the file gives the changed tokens only, with
 //! their types. Any file egui-pop loads can be read back as a draft.
 //!
+//! A theme with a light and a dark variant is edited as a pair
+//! ([`ThemeDraft::pair`], [`ThemeDraft::from_pair_spec`]): the draft
+//! holds both variants, each with its own changes and history, and edits
+//! one at a time ([`ThemeDraft::switch`]). It is saved as one file, the
+//! first variant's, carrying the other
+//! ([`crate::COUNTERPART_EXTENSION`]).
+//!
 //! ```
 //! use egui_pop_tokens::{ThemeDraft, Themes};
 //! use serde_json::json;
@@ -28,7 +35,10 @@ use serde_json::{Value as Json, json};
 
 use crate::file::{RawToken, TokenFile, alias_target};
 use crate::palette::{Ramp, Seed};
-use crate::theme::{FALLBACK_THEME, ThemeSpec, Themes, in_scales, seed_backdrop, seeded_scales};
+use crate::theme::{
+    COUNTERPART_EXTENSION, Counterpart, FALLBACK_THEME, ThemeSpec, Themes, in_scales,
+    seed_backdrop, seeded_scales,
+};
 use crate::{Error, Value, Warning};
 
 /// The `$extensions` key the theme editor stamped its files with before
@@ -70,7 +80,34 @@ impl TokenEdit {
     }
 }
 
-/// A theme being edited.
+/// A theme being edited: one theme, or a light and dark pair.
+///
+/// Its methods read and change the variant edited: its base, its
+/// overrides, its history and its seeds. A pair's other variant keeps
+/// its own ([`ThemeDraft::counterpart`]) until [`ThemeDraft::switch`]
+/// makes it the one edited.
+///
+/// ```
+/// use egui_pop_tokens::{ThemeDraft, Themes};
+/// use serde_json::json;
+///
+/// let themes = Themes::default();
+/// let mut draft = ThemeDraft::for_theme(&themes, "pop-dark");
+/// assert_eq!(draft.counterpart().map(ThemeDraft::base), Some("pop-light"));
+/// let edit = draft.edit(&themes, "danger", Some(json!("#ff4040"))).unwrap();
+/// draft.apply(edit.unwrap());
+/// draft.switch();
+/// assert_eq!(draft.base(), "pop-light");
+/// assert!(draft.overrides().is_empty());
+/// assert!(!draft.can_undo(), "each variant its own history");
+/// let edit = draft.edit(&themes, "danger", Some(json!("#c00000"))).unwrap();
+/// draft.apply(edit.unwrap());
+/// // Installed as a pair, each variant with its own overrides.
+/// let spec = draft.pair_spec(&Default::default());
+/// assert_eq!(spec.base, "pop-dark");
+/// assert_eq!(spec.overrides["danger"], json!("#ff4040"));
+/// assert_eq!(spec.counterpart_overrides.unwrap()["danger"], json!("#c00000"));
+/// ```
 #[derive(Clone, Debug, PartialEq)]
 pub struct ThemeDraft {
     base: String,
@@ -85,6 +122,13 @@ pub struct ThemeDraft {
     /// scale: saved as their seed while their values are still the ones
     /// it gives ([`ThemeDraft::to_file`]).
     seeds: BTreeMap<String, Seed>,
+    /// A pair's other variant, light or dark: its own base, overrides,
+    /// history and seeds (its own `other` is `None`). `None` for a theme
+    /// alone.
+    other: Option<Box<ThemeDraft>>,
+    /// Whether the variant edited is the pair's second, the counterpart
+    /// of the theme named first.
+    second: bool,
 }
 
 impl Default for ThemeDraft {
@@ -104,15 +148,100 @@ impl ThemeDraft {
             joined_undo: Vec::new(),
             joined_redo: Vec::new(),
             seeds: BTreeMap::new(),
+            other: None,
+            second: false,
         }
     }
 
-    /// A draft from a spec: its base and its overrides, no history.
+    /// A draft from a spec: its base and its overrides, no history; the
+    /// base alone (see [`ThemeDraft::from_pair_spec`] for its pair).
     pub fn from_spec(spec: &ThemeSpec) -> ThemeDraft {
         ThemeDraft {
             overrides: spec.overrides.clone(),
             ..ThemeDraft::new(spec.base.clone())
         }
+    }
+
+    /// A draft over a light and dark pair, nothing changed in either:
+    /// `first` the theme named first (shown when nothing asks for the
+    /// other mode), edited first; `second` its counterpart.
+    pub fn pair(first: impl Into<String>, second: impl Into<String>) -> ThemeDraft {
+        ThemeDraft {
+            other: Some(Box::new(ThemeDraft::new(second))),
+            ..ThemeDraft::new(first)
+        }
+    }
+
+    /// A draft over a theme and, when it has one of the other mode, its
+    /// counterpart ([`Themes::counterpart_of`]), nothing changed: what
+    /// "start from a theme" gives.
+    pub fn for_theme(themes: &Themes, base: &str) -> ThemeDraft {
+        ThemeDraft::from_pair_spec(themes, &ThemeSpec::new(base))
+    }
+
+    /// A draft from a spec and its counterpart ([`Themes::counterpart`]),
+    /// no history: the base edited, with the spec's overrides; the
+    /// counterpart with its own overrides, or the spec's when it has
+    /// none of its own ([`ThemeSpec::counterpart_overrides`]). A
+    /// counterpart of the same mode as the base is not one: the draft is
+    /// the base alone.
+    pub fn from_pair_spec(themes: &Themes, spec: &ThemeSpec) -> ThemeDraft {
+        let mut draft = ThemeDraft::from_spec(spec);
+        if let Some(other) = themes
+            .counterpart(spec)
+            .filter(|other| is_dark(themes, other) != is_dark(themes, &spec.base))
+        {
+            draft.other = Some(Box::new(ThemeDraft {
+                overrides: spec
+                    .counterpart_overrides
+                    .clone()
+                    .unwrap_or_else(|| spec.overrides.clone()),
+                ..ThemeDraft::new(other)
+            }));
+        }
+        draft
+    }
+
+    /// Whether the draft is a light and dark pair.
+    pub fn is_paired(&self) -> bool {
+        self.other.is_some()
+    }
+
+    /// The pair's other variant, as it is: its base, overrides, history
+    /// and seeds. `None` for a theme alone.
+    pub fn counterpart(&self) -> Option<&ThemeDraft> {
+        self.other.as_deref()
+    }
+
+    /// Whether the variant edited is the pair's second (the counterpart
+    /// of the theme named first).
+    pub fn editing_second(&self) -> bool {
+        self.second
+    }
+
+    /// The pair's variants: the theme named first, then its counterpart
+    /// (`None` for a theme alone). Read their base, overrides, history
+    /// and seeds.
+    pub fn variants(&self) -> (&ThemeDraft, Option<&ThemeDraft>) {
+        match self.other.as_deref() {
+            None => (self, None),
+            Some(other) if self.second => (other, Some(self)),
+            Some(other) => (self, Some(other)),
+        }
+    }
+
+    /// Edits the pair's other variant: what was edited keeps its changes
+    /// and history, and gets them back when switched to again. `false`
+    /// for a theme alone (nothing to switch to).
+    pub fn switch(&mut self) -> bool {
+        let Some(mut other) = self.other.take() else {
+            return false;
+        };
+        std::mem::swap(self, &mut *other);
+        self.second = !other.second;
+        other.second = false;
+        self.other = Some(other);
+        true
     }
 
     pub fn base(&self) -> &str {
@@ -130,12 +259,36 @@ impl ThemeDraft {
         self.overrides.get(path)
     }
 
-    /// `template` with this draft's base and overrides (its density,
-    /// accent and reduced motion kept).
+    /// `template` with the variant edited's base and overrides (its
+    /// density, accent and reduced motion kept): what the variant edited
+    /// resolves from.
     pub fn spec(&self, template: &ThemeSpec) -> ThemeSpec {
         let mut spec = template.clone();
         spec.base = self.base.clone();
         spec.overrides = self.overrides.clone();
+        spec.counterpart_overrides = None;
+        spec
+    }
+
+    /// `template` with the whole draft, as it is installed: the theme
+    /// named first, its overrides, and its counterpart with overrides of
+    /// its own ([`ThemeSpec::counterpart_overrides`]); a theme alone has
+    /// no counterpart (its overrides are not another theme's).
+    pub fn pair_spec(&self, template: &ThemeSpec) -> ThemeSpec {
+        let (first, second) = self.variants();
+        let mut spec = template.clone();
+        spec.base = first.base.clone();
+        spec.overrides = first.overrides.clone();
+        match second {
+            Some(second) => {
+                spec.counterpart = Counterpart::Theme(second.base.clone());
+                spec.counterpart_overrides = Some(second.overrides.clone());
+            }
+            None => {
+                spec.counterpart = Counterpart::None;
+                spec.counterpart_overrides = None;
+            }
+        }
         spec
     }
 
@@ -357,7 +510,28 @@ impl ThemeDraft {
     /// loaded), a step changed since is written as it is. A seed none of
     /// whose steps still has its value (undone, or the theme changed
     /// under it) is not saved. Loading the file gives the draft's values.
+    ///
+    /// A pair is saved as a new pair: the file is the theme named first's,
+    /// named `name`, and carries its counterpart, named `name` and its
+    /// mode (`ocean-light`), each naming the other
+    /// ([`TokenFile::set_counterpart_file`]); loaded with
+    /// [`Themes::add_text`], both are added.
     pub fn to_file(&self, themes: &Themes, name: &str) -> TokenFile {
+        let (first, second) = self.variants();
+        let mut file = first.variant_file(themes, name);
+        if let Some(second) = second {
+            let mode = if is_dark(themes, &second.base) {
+                "dark"
+            } else {
+                "light"
+            };
+            file.set_counterpart_file(Some(second.variant_file(themes, &format!("{name}-{mode}"))));
+        }
+        file
+    }
+
+    /// The variant edited as a token file, alone.
+    fn variant_file(&self, themes: &Themes, name: &str) -> TokenFile {
         let base = themes.resolve(&ThemeSpec::new(self.base.clone()));
         let mut file = TokenFile::new(name);
         file.description = Some(format!("Edited from {}", self.base));
@@ -436,12 +610,49 @@ impl ThemeDraft {
     /// not have is left out too. Each is a warning, as is a file stamped
     /// newer than this egui-pop knows (read best-effort). Only an
     /// unreadable file or an unknown base is an error.
+    ///
+    /// A file carrying its counterpart ([`COUNTERPART_EXTENSION`]) is a
+    /// pair: the draft holds both variants, the file's own edited first.
+    /// A counterpart that cannot be read, of an unknown base or of the
+    /// same mode is a warning, the file's variant read alone.
     pub fn import(
         themes: &Themes,
         name: &str,
         text: &str,
     ) -> Result<(ThemeDraft, Vec<Warning>), Error> {
-        let mut file = TokenFile::parse(name, text)?;
+        let file = TokenFile::parse(name, text)?;
+        let counterpart = file.counterpart_file();
+        let (mut draft, mut warnings) = ThemeDraft::import_file(themes, file)?;
+        let at = format!("$extensions.{COUNTERPART_EXTENSION}");
+        match counterpart.map(|c| c.and_then(|c| ThemeDraft::import_file(themes, c))) {
+            None => {}
+            Some(Ok((other, more))) => {
+                if is_dark(themes, &other.base) == is_dark(themes, &draft.base) {
+                    warnings.push(Warning::Invalid {
+                        path: at,
+                        reason: format!(
+                            "`{}` and `{}` are both light or both dark",
+                            draft.base, other.base
+                        ),
+                    });
+                } else {
+                    warnings.extend(more);
+                    draft.other = Some(Box::new(other));
+                }
+            }
+            Some(Err(e)) => warnings.push(Warning::Invalid {
+                path: at,
+                reason: e.to_string(),
+            }),
+        }
+        Ok((draft, warnings))
+    }
+
+    /// Reads one variant's token file as a draft alone.
+    fn import_file(
+        themes: &Themes,
+        mut file: TokenFile,
+    ) -> Result<(ThemeDraft, Vec<Warning>), Error> {
         let mut warnings = file.upgrade();
         if let Some(v) = file
             .extensions
@@ -528,6 +739,11 @@ fn own_tokens(overrides: &BTreeMap<String, Json>) -> BTreeMap<String, RawToken> 
             )
         })
         .collect()
+}
+
+/// Whether a theme is a dark one (its panels are), alone.
+fn is_dark(themes: &Themes, name: &str) -> bool {
+    themes.resolve(&ThemeSpec::new(name).alone()).is_dark()
 }
 
 /// Whether the base theme has the token.
@@ -868,5 +1084,181 @@ mod tests {
         // The neutral scale has no `contrast`: its twelve steps only.
         let grey = Ramp::new(Color::from_hex("#808080").unwrap(), Scheme::Dark);
         assert_eq!(d.scale_edits(&themes, "gray", &grey).unwrap().len(), 12);
+    }
+
+    #[test]
+    fn a_pair_draft_holds_both_variants_edits() {
+        let t = themes();
+        let mut d = ThemeDraft::for_theme(&t, "pop-dark");
+        assert!(d.is_paired());
+        assert!(!d.editing_second());
+        let e = d.edit(&t, "danger", Some(json!("#ff4040"))).unwrap();
+        d.apply(e.unwrap());
+        let e = d.edit(
+            &t,
+            "radius.widget",
+            Some(json!({ "value": 2, "unit": "px" })),
+        );
+        d.apply(e.unwrap().unwrap());
+        assert!(d.switch());
+        assert!(d.editing_second());
+        assert_eq!(d.base(), "pop-light");
+        assert!(d.overrides().is_empty());
+        assert!(!d.can_undo());
+        // Checked against the variant edited's base.
+        let e = d.edit(&t, "danger", Some(json!("#a00000"))).unwrap();
+        d.apply(e.unwrap());
+        assert_eq!(d.counterpart().unwrap().overrides().len(), 2);
+        // Back: the first variant's edits and history are kept.
+        assert!(d.switch());
+        assert_eq!(d.base(), "pop-dark");
+        assert_eq!(d.value("danger"), Some(&json!("#ff4040")));
+        assert_eq!(d.history().len(), 2);
+        d.undo();
+        assert_eq!(d.overrides().len(), 1);
+        assert_eq!(
+            d.counterpart().unwrap().value("danger"),
+            Some(&json!("#a00000"))
+        );
+        let (first, second) = d.variants();
+        assert_eq!(
+            (first.base(), second.map(ThemeDraft::base)),
+            ("pop-dark", Some("pop-light"))
+        );
+        // A theme alone has nothing to switch to.
+        let mut alone = ThemeDraft::for_theme(&t, "pop-high-contrast");
+        assert!(!alone.is_paired());
+        assert!(!alone.switch());
+        assert_eq!(alone.base(), "pop-high-contrast");
+    }
+
+    #[test]
+    fn a_pair_draft_comes_from_a_spec_and_installs_as_a_pair() {
+        let t = themes();
+        // The spec's overrides apply to both, until the counterpart has
+        // its own.
+        let spec = ThemeSpec::new("gruvbox-light").override_token("danger", json!("#ff0000"));
+        let d = ThemeDraft::from_pair_spec(&t, &spec);
+        assert_eq!(d.base(), "gruvbox-light");
+        let other = d.counterpart().unwrap();
+        assert_eq!(other.base(), "gruvbox-dark");
+        assert_eq!(other.value("danger"), Some(&json!("#ff0000")));
+        let spec = spec.counterpart_override("info", json!("#0000ff"));
+        let mut d = ThemeDraft::from_pair_spec(&t, &spec);
+        assert_eq!(
+            d.counterpart()
+                .unwrap()
+                .overrides()
+                .keys()
+                .collect::<Vec<_>>(),
+            ["info"]
+        );
+        // Installed: the theme named first stays first, whichever is
+        // edited; the variant edited resolves alone.
+        d.switch();
+        let installed = d.pair_spec(&ThemeSpec::new("pop-dark").density(crate::Density::Compact));
+        assert_eq!(installed.base, "gruvbox-light");
+        assert_eq!(
+            installed.counterpart,
+            Counterpart::Theme("gruvbox-dark".into())
+        );
+        assert_eq!(installed.density, crate::Density::Compact);
+        assert_eq!(
+            installed.counterpart_overrides.as_ref().map(BTreeMap::len),
+            Some(1)
+        );
+        let resolved = t.resolve_counterpart(&installed).unwrap();
+        assert_eq!(resolved.color("info"), crate::Color::from_hex("#0000ff"));
+        assert_eq!(d.spec(&installed).base, "gruvbox-dark");
+        // A counterpart of the same mode is not one; alone, no
+        // counterpart is installed.
+        let d = ThemeDraft::from_pair_spec(&t, &ThemeSpec::pair("pop-dark", "gruvbox-dark"));
+        assert!(!d.is_paired());
+        assert_eq!(
+            d.pair_spec(&ThemeSpec::default()).counterpart,
+            Counterpart::None
+        );
+    }
+
+    #[test]
+    fn a_pair_is_saved_as_a_new_pair_and_imported_back() {
+        let t = themes();
+        let mut d = ThemeDraft::for_theme(&t, "pop-dark");
+        let e = d
+            .edit(&t, "accent.default", Some(json!("#40a0ff")))
+            .unwrap();
+        d.apply(e.unwrap());
+        d.switch();
+        let e = d
+            .edit(&t, "accent.default", Some(json!("#2060c0")))
+            .unwrap();
+        d.apply(e.unwrap());
+        generate(&mut d, &t, "blue", "#8e44ad");
+        // Saved from either variant: the theme named first's file,
+        // carrying its counterpart.
+        let file = d.to_file(&t, "ocean");
+        assert_eq!(file.name, "ocean");
+        assert_eq!(file.extends.as_deref(), Some("pop-dark"));
+        assert_eq!(file.tokens["accent.default"].value, json!("#40a0ff"));
+        let x = file.extensions.as_ref().unwrap();
+        assert_eq!(x[crate::VARIANT_OF_EXTENSION], json!("ocean-light"));
+        let inner = file.counterpart_file().unwrap().unwrap();
+        assert_eq!(inner.name, "ocean-light");
+        assert_eq!(inner.extends.as_deref(), Some("pop-light"));
+        assert_eq!(inner.tokens["accent.default"].value, json!("#2060c0"));
+        assert_eq!(inner.seeds().0.keys().collect::<Vec<_>>(), ["blue"]);
+        let ix = inner.extensions.as_ref().unwrap();
+        assert_eq!(ix[crate::VARIANT_OF_EXTENSION], json!("ocean"));
+        assert!(ix.get(crate::FORMAT_EXTENSION).is_some(), "its own stamp");
+
+        // Imported: the same pair, the file's variant edited first.
+        let text = file.to_json_pretty();
+        let (back, warnings) = ThemeDraft::import(&t, "ocean", &text).unwrap();
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert!(!back.editing_second());
+        let (first, second) = back.variants();
+        let (want_first, want_second) = d.variants();
+        assert_eq!(first.overrides(), want_first.overrides());
+        let second = second.unwrap();
+        assert_eq!(second.base(), "pop-light");
+        assert_eq!(second.overrides(), want_second.unwrap().overrides());
+        assert_eq!(second.seed("blue"), want_second.unwrap().seed("blue"));
+
+        // Loaded in an application: both themes, a pair.
+        let mut with = t.clone();
+        assert_eq!(with.add_text("ocean", &text), Ok(vec![]));
+        assert_eq!(with.counterpart_of("ocean"), Some("ocean-light"));
+        assert_eq!(with.counterpart_of("ocean-light"), Some("ocean"));
+        let light = with.resolve_counterpart(&ThemeSpec::new("ocean")).unwrap();
+        assert!(light.problems().is_empty(), "{:?}", light.problems());
+        assert_eq!(
+            light.color("accent.default"),
+            crate::Color::from_hex("#2060c0")
+        );
+    }
+
+    #[test]
+    fn a_counterpart_that_does_not_fit_is_left_out() {
+        let t = themes();
+        for (inner, said) in [
+            (r#"{ "name": "x-light" }"#, "no `file`"),
+            (
+                r#"{ "name": "x-dark", "file": { "$extends": "gruvbox-dark" } }"#,
+                "both light or both dark",
+            ),
+            (
+                r#"{ "name": "x-light", "file": { "$extends": "nowhere" } }"#,
+                "nowhere",
+            ),
+        ] {
+            let text = format!(
+                r#"{{ "$extends": "pop-dark", "$extensions": {{ "{COUNTERPART_EXTENSION}": {inner} }} }}"#
+            );
+            let (d, warnings) = ThemeDraft::import(&t, "x", &text).unwrap();
+            assert!(!d.is_paired(), "{inner}");
+            assert_eq!(d.base(), "pop-dark");
+            assert_eq!(warnings.len(), 1, "{warnings:?}");
+            assert!(warnings[0].to_string().contains(said), "{}", warnings[0]);
+        }
     }
 }

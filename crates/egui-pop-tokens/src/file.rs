@@ -134,7 +134,7 @@ impl TokenFile {
     }
 
     /// A token file from its tree (DTCG, as JSON).
-    fn from_tree(name: &str, root: &Json) -> Result<TokenFile, Error> {
+    pub(crate) fn from_tree(name: &str, root: &Json) -> Result<TokenFile, Error> {
         let obj = root.as_object().ok_or_else(|| Error::Malformed {
             file: name.to_string(),
             path: String::new(),

@@ -32,6 +32,89 @@ pub const ALPHA_EXTENSION: &str = "org.egui-pop.alpha";
 /// theme of its own.
 pub const VARIANT_OF_EXTENSION: &str = "org.egui-pop.variant-of";
 
+/// The root `$extensions` key carrying a theme's counterpart inside its
+/// file: a light and dark pair saved as one file (the theme editor's).
+/// Its value names the counterpart and gives its token file, an
+/// ordinary one with its own stamp:
+///
+/// ```json
+/// { "$extends": "pop-dark",
+///   "$extensions": {
+///     "org.egui-pop.variant-of": "ocean-light",
+///     "org.egui-pop.counterpart": {
+///       "name": "ocean-light",
+///       "file": { "$extends": "pop-light",
+///                 "$extensions": { "org.egui-pop.variant-of": "ocean" } } } } }
+/// ```
+///
+/// [`Themes::add_text`] and [`Themes::add_path`] add the counterpart
+/// too, under its name; a reader that does not know the key loads the
+/// file's own variant alone.
+pub const COUNTERPART_EXTENSION: &str = "org.egui-pop.counterpart";
+
+impl TokenFile {
+    /// Sets (or, with `None`, removes) one entry of the root
+    /// `$extensions`, keeping the others.
+    pub fn set_extension(&mut self, key: &str, value: Option<Json>) {
+        let mut root = match self.extensions.take() {
+            Some(Json::Object(m)) => m,
+            _ => Map::new(),
+        };
+        match value {
+            Some(v) => {
+                root.insert(key.to_string(), v);
+            }
+            None => {
+                root.remove(key);
+            }
+        }
+        self.extensions = (!root.is_empty()).then_some(Json::Object(root));
+    }
+
+    /// The counterpart this file carries ([`COUNTERPART_EXTENSION`]),
+    /// under its name; `None` when it carries none, an error when the
+    /// entry cannot be read.
+    pub fn counterpart_file(&self) -> Option<Result<TokenFile, Error>> {
+        let raw = self.extensions.as_ref()?.get(COUNTERPART_EXTENSION)?;
+        let malformed = |reason: &str| Error::Malformed {
+            file: self.name.clone(),
+            path: format!("$extensions.{COUNTERPART_EXTENSION}"),
+            reason: reason.to_string(),
+        };
+        let Some(name) = raw
+            .get("name")
+            .and_then(Json::as_str)
+            .filter(|n| !n.is_empty())
+        else {
+            return Some(Err(malformed("no `name` naming the counterpart")));
+        };
+        if name == self.name {
+            return Some(Err(malformed("the counterpart has the file's own name")));
+        }
+        let Some(file) = raw.get("file").filter(|f| f.is_object()) else {
+            return Some(Err(malformed("no `file` giving the counterpart's tokens")));
+        };
+        Some(TokenFile::from_tree(name, file))
+    }
+
+    /// Makes this file carry `counterpart` ([`COUNTERPART_EXTENSION`]),
+    /// each naming the other ([`VARIANT_OF_EXTENSION`]); `None` removes
+    /// it.
+    pub fn set_counterpart_file(&mut self, counterpart: Option<TokenFile>) {
+        match counterpart {
+            Some(mut other) => {
+                other.set_extension(VARIANT_OF_EXTENSION, Some(json!(self.name)));
+                self.set_extension(VARIANT_OF_EXTENSION, Some(json!(other.name)));
+                self.set_extension(
+                    COUNTERPART_EXTENSION,
+                    Some(json!({ "name": other.name, "file": other.to_json() })),
+                );
+            }
+            None => self.set_extension(COUNTERPART_EXTENSION, None),
+        }
+    }
+}
+
 /// egui-pop's own base themes, in the order a switcher shows them.
 pub const POP_THEMES: &[&str] = &["pop-dark", "pop-light", "pop-high-contrast"];
 
@@ -588,10 +671,32 @@ impl Themes {
     /// under `name`, loaded over its base theme ([`Themes::check_file`]).
     /// Only a file that cannot be read at all is an error; what was read
     /// otherwise than written comes back as warnings.
+    ///
+    /// A file carrying its counterpart ([`COUNTERPART_EXTENSION`]) adds
+    /// it too, under its own name and through the same rule; a
+    /// counterpart that cannot be read is a warning, the file's own
+    /// variant added alone.
     pub fn add_text(&mut self, name: &str, text: &str) -> Result<Vec<Warning>, Error> {
-        let (file, warnings) = self.check_file(TokenFile::parse(name, text)?);
+        let (file, mut warnings) = self.check_file(TokenFile::parse(name, text)?);
+        warnings.extend(self.add_counterpart_of(&file));
         self.add(file);
         Ok(warnings)
+    }
+
+    /// Adds the counterpart a file carries, if any.
+    fn add_counterpart_of(&mut self, file: &TokenFile) -> Vec<Warning> {
+        match file.counterpart_file() {
+            None => Vec::new(),
+            Some(Ok(other)) => {
+                let (other, warnings) = self.check_file(other);
+                self.add(other);
+                warnings
+            }
+            Some(Err(e)) => vec![Warning::Invalid {
+                path: format!("$extensions.{COUNTERPART_EXTENSION}"),
+                reason: e.to_string(),
+            }],
+        }
     }
 
     /// Reads a theme file from disk (a user's theme) and adds it under
@@ -614,6 +719,7 @@ impl Themes {
     ) -> Result<Vec<Warning>, Error> {
         let (file, unwritten) = TokenFile::read(name, path, cache);
         let (file, mut warnings) = self.check_file(file?);
+        warnings.extend(self.add_counterpart_of(&file));
         self.add(file);
         if let Some(e) = unwritten {
             warnings.push(Warning::NotCached {

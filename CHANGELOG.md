@@ -78,6 +78,16 @@ publishes.
   `Router::route_all` nudges wires that share a channel
   `Options::spacing` apart (within the margin, ordered to add few
   crossings).
+- Theme drafts over a light and dark pair (egui-pop-tokens):
+  `ThemeDraft::pair`, `for_theme` and `from_pair_spec` hold both
+  variants, each with its own changes, history and seeds; `switch`
+  edits the other one, `pair_spec` installs both (the counterpart with
+  overrides of its own). A pair is saved as one token file, the first
+  variant's, carrying its counterpart under the root
+  `org.egui-pop.counterpart` extension (`COUNTERPART_EXTENSION`,
+  `TokenFile::counterpart_file`, `set_counterpart_file`,
+  `set_extension`); `ThemeDraft::import` reads it back as a pair, and
+  `Themes::add_text` and `add_path` add both themes, linked.
 - A counterpart with overrides of its own (egui-pop-tokens):
   `ThemeSpec::counterpart_overrides`, when set, replaces the spec's
   overrides for its counterpart (`ThemeSpec::counterpart_override`,
