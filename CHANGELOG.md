@@ -238,6 +238,17 @@ publishes.
   the place, to declare an arrangement for it.
 - egui-pop-win32 builds again with windows-sys 0.61.2, whose
   `DwmSetWindowAttribute` takes the attribute as an unsigned value.
+- Popups opened inside a scoped theme are drawn in it (egui-pop-core,
+  egui-pop-api): a combo box's list, a tooltip, a context menu or a
+  menu opened in the theme editor's preview (a `theme::ScopedTheme`)
+  was drawn in the theme installed, because egui builds popups from
+  the context's style. While a scope draws, the context's style is now
+  the scoped theme's as well, put back when it ends, so egui's popups
+  and egui-pop's (menus, popovers, hover cards, the kit's pickers)
+  follow it. The new `ScopedTheme::within` applies a scoped theme to
+  the context without a `Ui`, for a popup drawn after its scope ended:
+  `menus::popup_at` records the scope it was opened in and is drawn in
+  it (`docs/upstream.md`).
 - Text typed with an AccessKit focus reaches the field (egui-pop-core):
   when a screen reader or an agent focuses a text field and types in
   the same pass, egui 0.36 dropped what was typed. The focus plugin

@@ -44,7 +44,7 @@
 //! to a child `Ui` (`ui.scope(|ui| { ui.style_mut()... })`), which does
 //! not leak to the rest of the frame.
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use egui::{
     Color32, Context, CornerRadius, Margin, Shadow, Stroke, Style, TextStyle, Theme,
@@ -615,11 +615,22 @@ const SCOPED: Slot<ScopedTheme> = Slot::opaque("core.theme.scoped");
 /// the installed theme. A theme editor's preview, a themed island, a
 /// theme picker's thumbnails.
 ///
+/// Popups follow it too. egui builds the `Ui` of a popup, a tooltip or
+/// a window from the context's style, not from the `Ui` that opened it,
+/// so while the scope draws, egui's context style is the scoped theme's
+/// as well (put back when it ends, even after a panic): a combo box's
+/// list, a tooltip, a context menu or a menu opened inside it, egui's
+/// or egui-pop's, is drawn in the scoped theme. A popup drawn later, out
+/// of the scope (egui-pop's `menus::popup_at`), records the scope it was
+/// opened in and draws within it ([`ScopedTheme::within`]).
+///
 /// What stays the installed theme's: fonts (egui's font definitions are
-/// global, rebuilt with the atlas), and what egui draws in its own
-/// layers outside the child `Ui` from the context's style (the popups
-/// of a combo box, tooltips, windows). Build it once per theme and keep
-/// it (compiling the kit has a cost), never per frame.
+/// global, rebuilt with the atlas), egui's light or dark mode
+/// (`ctx.theme()`), and what is drawn outside the scope. A change to the
+/// context's style made while the scope draws is undone when it ends:
+/// install themes between frames, as [`install_tokens`] says. Build it
+/// once per theme and keep it (compiling the kit has a cost), never per
+/// frame.
 ///
 /// ```
 /// use egui_pop_core::theme::{self, ScopedTheme, ThemeSpec, Themes, Tokens};
@@ -631,8 +642,11 @@ const SCOPED: Slot<ScopedTheme> = Slot::opaque("core.theme.scoped");
 ///     light.show(ui, |ui| {
 ///         assert!(!Tokens::of(ui.ctx()).dark_mode());
 ///         assert!(!ui.visuals().dark_mode);
+///         // What a popup opened here is built from.
+///         assert!(!ui.ctx().global_style().visuals.dark_mode);
 ///     });
 ///     assert!(Tokens::of(ui.ctx()).dark_mode());
+///     assert!(ui.ctx().global_style().visuals.dark_mode);
 /// })
 /// .textures_delta
 /// .clear();
@@ -641,6 +655,16 @@ const SCOPED: Slot<ScopedTheme> = Slot::opaque("core.theme.scoped");
 pub struct ScopedTheme {
     tokens: Arc<Tokens>,
     kit: Arc<Kit>,
+    /// The context style made last: the style it was made from, the
+    /// scale, and the style. Shared by the clones.
+    context_style: Arc<Mutex<Option<ContextStyle>>>,
+}
+
+/// A scoped theme's style for the context, and what it was made from.
+struct ContextStyle {
+    base: Arc<Style>,
+    ppp: f32,
+    style: Arc<Style>,
 }
 
 impl std::fmt::Debug for ScopedTheme {
@@ -657,7 +681,11 @@ impl ScopedTheme {
     pub fn new(ctx: &Context, tokens: Tokens) -> ScopedTheme {
         let tokens = Arc::new(tokens);
         let kit = crate::kit::compile_in(ctx, &tokens);
-        ScopedTheme { tokens, kit }
+        ScopedTheme {
+            tokens,
+            kit,
+            context_style: Arc::default(),
+        }
     }
 
     pub fn tokens(&self) -> &Arc<Tokens> {
@@ -675,15 +703,46 @@ impl ScopedTheme {
 
     /// Draws `add` in a child `Ui` with this theme: egui's style for it,
     /// and [`Tokens::of`] and `Kit::of` giving its tokens and kit until
-    /// `add` returns (scopes nest; the previous one comes back, even
-    /// when `add` panics).
+    /// `add` returns, as [`ScopedTheme::within`] does for the popups
+    /// opened in it (scopes nest; the previous one comes back, even when
+    /// `add` panics).
     pub fn show<R>(&self, ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
+        let ctx = ui.ctx().clone();
+        let ppp = ctx.pixels_per_point();
+        self.within(&ctx, || {
+            ui.scope(|ui| {
+                let mut style = style_with(&self.tokens, &self.kit, ui.style());
+                snap_strokes(&mut style, ppp);
+                ui.set_style(style);
+                add(ui)
+            })
+            .inner
+        })
+    }
+
+    /// Runs `f` with this theme as the context's, without a `Ui` of its
+    /// own: [`Tokens::of`] and `Kit::of` give its tokens and kit, and
+    /// egui's context style (what egui builds popups, tooltips, menus
+    /// and windows from) is its style. Everything comes back when `f`
+    /// returns, even when it panics. For a popup drawn after the scope
+    /// that opened it has ended: record [`ScopedTheme::current`] when it
+    /// opens, and draw it within.
+    pub fn within<R>(&self, ctx: &Context, f: impl FnOnce() -> R) -> R {
+        // upstream: egui styles a popup's `Ui` from the context, not from
+        // the `Ui` that opened it (docs/upstream.md, "popups inside a
+        // scoped style").
         struct Restore {
             ctx: Context,
             previous: Option<ScopedTheme>,
+            styles: (Arc<Style>, Arc<Style>),
         }
         impl Drop for Restore {
             fn drop(&mut self) {
+                let (dark, light) = self.styles.clone();
+                self.ctx.options_mut(|o| {
+                    o.dark_style = dark;
+                    o.light_style = light;
+                });
                 match self.previous.take() {
                     Some(p) => SCOPED.set(&self.ctx, p),
                     None => {
@@ -692,18 +751,43 @@ impl ScopedTheme {
                 }
             }
         }
-        let ctx = ui.ctx().clone();
-        let ppp = ctx.pixels_per_point();
-        let previous = SCOPED.get(&ctx);
-        SCOPED.set(&ctx, self.clone());
-        let _restore = Restore { ctx, previous };
-        ui.scope(|ui| {
-            let mut style = style_with(&self.tokens, &self.kit, ui.style());
-            snap_strokes(&mut style, ppp);
-            ui.set_style(style);
-            add(ui)
-        })
-        .inner
+        let style = self.context_style(&ctx.global_style(), ctx.pixels_per_point());
+        let previous = SCOPED.get(ctx);
+        let styles = ctx.options(|o| (o.dark_style.clone(), o.light_style.clone()));
+        SCOPED.set(ctx, self.clone());
+        let _restore = Restore {
+            ctx: ctx.clone(),
+            previous,
+            styles,
+        };
+        // Both of egui's styles: whatever its mode, the scope's is drawn.
+        ctx.options_mut(|o| {
+            o.dark_style = style.clone();
+            o.light_style = style;
+        });
+        f()
+    }
+
+    /// The context's style in this theme, made from `base` (the
+    /// context's style outside the scope) at a scale; made again only
+    /// when either changes.
+    fn context_style(&self, base: &Arc<Style>, ppp: f32) -> Arc<Style> {
+        let mut made = crate::state::lock(&self.context_style);
+        if let Some(m) = made.as_ref()
+            && Arc::ptr_eq(&m.base, base)
+            && m.ppp == ppp
+        {
+            return m.style.clone();
+        }
+        let mut style = style_with(&self.tokens, &self.kit, base);
+        snap_strokes(&mut style, ppp);
+        let style = Arc::new(style);
+        *made = Some(ContextStyle {
+            base: base.clone(),
+            ppp,
+            style: style.clone(),
+        });
+        style
     }
 }
 
@@ -929,6 +1013,7 @@ mod tests {
         let light = ScopedTheme::new(&ctx, tokens("pop-light"));
         let hc = ScopedTheme::new(&ctx, tokens("pop-high-contrast"));
         let base = |ctx: &Context| Tokens::of(ctx).resolved().spec().base.clone();
+        let installed = ctx.style_of(Theme::Dark);
         let mut out = ctx.run_ui(Default::default(), |ui| {
             light.show(ui, |ui| {
                 assert_eq!(base(ui.ctx()), "pop-light");
@@ -940,9 +1025,14 @@ mod tests {
                 }));
                 assert!(caught.is_err());
                 assert_eq!(base(ui.ctx()), "pop-light");
+                // The context's style (popups) is the scope's, back
+                // after the panic.
+                assert!(!ui.ctx().global_style().visuals.dark_mode);
+                assert!(!ui.ctx().style_of(Theme::Dark).visuals.dark_mode);
             });
             assert_eq!(base(ui.ctx()), "pop-dark");
             assert!(ScopedTheme::current(ui.ctx()).is_none());
+            assert_eq!(*ui.ctx().style_of(Theme::Dark), *installed);
         });
         out.textures_delta.clear();
     }

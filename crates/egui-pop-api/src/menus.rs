@@ -64,7 +64,7 @@ const CONTEXT_MENU: Slot<Option<(WhenContext, Json)>> = Slot::new("api.menus.con
 /// A dynamic list's items and the pass they were listed on, per menu
 /// and list.
 const LIST: Slot<(u64, Vec<ListItem>)> = Slot::new("api.menus.list");
-use egui_pop_core::theme::Tokens;
+use egui_pop_core::theme::{ScopedTheme, Tokens};
 use egui_pop_model::commands::CommandSpec;
 use egui_pop_model::ids::{CommandId, MenuId, OwnerId, StepId};
 use egui_pop_model::menus::{Item, Shown, show_items};
@@ -508,6 +508,9 @@ pub(crate) struct Popup {
     pub under: Rect,
     pub args: Json,
     pub context: WhenContext,
+    /// The scoped theme it was opened in (a theme editor's preview): it
+    /// is drawn in it, though drawn later, out of the scope.
+    pub scope: Option<ScopedTheme>,
 }
 
 /// Where a popup menu opens: under a rectangle (a button, a logo), or at
@@ -535,8 +538,10 @@ pub(crate) fn popup_id() -> Id {
 /// Opens a declared menu as a popup under a rectangle or at a point,
 /// evaluated in the context of now; egui-pop draws it from the next
 /// frame until an item is chosen, a click lands outside or Escape is
-/// pressed. One popup at a time: another replaces it. Returns whether it
-/// opened (a hook on [`STEP_OPEN`] may veto it).
+/// pressed. One popup at a time: another replaces it. Opened while a
+/// [`ScopedTheme`] draws (a theme editor's preview), it is drawn in that
+/// theme. Returns whether it opened (a hook on [`STEP_OPEN`] may veto
+/// it).
 pub fn popup_at(app: &AppHandle, menu: &MenuId, at: impl Into<At>) -> bool {
     popup_at_with(app, menu, at, Json::Null)
 }
@@ -551,6 +556,7 @@ pub fn popup_at_with(app: &AppHandle, menu: &MenuId, at: impl Into<At>, args: Js
         under: at.into().0,
         context: with_args(&app.when_context(), &args),
         args,
+        scope: ScopedTheme::current(&app.egui()),
     };
     app.set_popup(Some(popup));
     app.egui().request_repaint();
@@ -570,20 +576,27 @@ pub fn close_popup(app: &AppHandle) {
 /// Draws the popup menu while it is open (the shell does, each frame).
 pub(crate) fn draw_popup(ctx: &Context, app: &AppHandle) {
     let Some(p) = app.popup() else { return };
-    let mut open = true;
-    egui::Popup::new(
-        popup_id(),
-        ctx.clone(),
-        p.under,
-        egui::LayerId::background(),
-    )
-    .kind(egui::PopupKind::Menu)
-    .open_bool(&mut open)
-    .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
-    .show(|ui| {
-        ui.set_min_width(200.0);
-        show_with(ui, app, &p.menu, &p.context, &p.args);
-    });
+    let draw = || {
+        let mut open = true;
+        egui::Popup::new(
+            popup_id(),
+            ctx.clone(),
+            p.under,
+            egui::LayerId::background(),
+        )
+        .kind(egui::PopupKind::Menu)
+        .open_bool(&mut open)
+        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+        .show(|ui| {
+            ui.set_min_width(200.0);
+            show_with(ui, app, &p.menu, &p.context, &p.args);
+        });
+        open
+    };
+    let open = match &p.scope {
+        Some(scope) => scope.within(ctx, draw),
+        None => draw(),
+    };
     if !open {
         app.set_popup(None);
     }

@@ -85,6 +85,44 @@ limit.
 - **Remove when**: egui-pop moves to egui 0.37 (check that text typed in
   the pass of an AccessKit focus reaches the field without the plugin).
 
+## egui: popups built from the context's style, not the opening `Ui`'s
+
+- **Compensated**: egui builds the `Ui` of every `Area` from the
+  context's style (`Ui::new` falls back to `ctx.global_style()`; `Area`
+  has no style of its own), and every popup is an `Area`: a combo box's
+  list, a tooltip (`on_hover_text`, `on_hover_ui`), a context menu, a
+  menu (`menu_button`, `MenuBar`), egui's `Popup` and `Modal`, windows.
+  A style set on one `Ui` (a theme drawn in one part of a window, egui-pop's
+  `ScopedTheme`) does not reach the popups opened inside it. The hooks
+  that exist (`Popup::style`, `ComboBox::popup_style`,
+  `MenuConfig::style`, all a `StyleModifier` applied over the context's
+  style) only help at call sites one owns: `Response::on_hover_text`
+  and `Response::context_menu` take none, and a widget of another crate
+  opening a popup cannot be reached. The same in egui 0.37.0 (`ui.rs`,
+  `containers/popup.rs`); its experimental style providers see a
+  popup's `UiStack`, which does not lead back to the `Ui` that opened it.
+- **Upstream**: <https://github.com/emilk/egui/issues/4692> (tooltips
+  should inherit the parent's style, open; `ComboBox::popup_style`,
+  <https://github.com/emilk/egui/pull/7360>, covers combo boxes at the
+  call site only). A comment widening it to every popup, with a
+  proposed API, is not posted yet (draft:
+  [upstream-drafts/egui-popups-inherit-ui-style.md](upstream-drafts/egui-popups-inherit-ui-style.md)).
+- **Workaround**: while a `ScopedTheme` draws, egui's context styles
+  (dark and light) are the scoped theme's, made from the installed
+  style and kept per scope, and the installed ones are put back when
+  the scope ends, even after a panic (`ScopedTheme::within`,
+  `// upstream:` in `theme.rs`). egui 0.36 draws its popups while the
+  widget that opens them is drawn, so they follow the scope. A popup
+  egui-pop draws later, out of the scope (`menus::popup_at`, drawn by
+  the shell), records the scope it was opened in and is drawn within
+  it. Limits: egui's light or dark mode (`ctx.theme()`) stays the
+  installed one, and a change to the context's style made while a
+  scope draws is undone when it ends (themes are installed between
+  frames).
+- **Remove when**: egui's popups take the style of the `Ui` they are
+  opened from; `ScopedTheme::within` then only sets egui-pop's tokens
+  and kit (still needed for a popup drawn after its scope).
+
 ## egui: AccessKit bounds ignore layer transforms
 
 - **Compensated**: a widget in a transformed layer (egui's `Scene`)

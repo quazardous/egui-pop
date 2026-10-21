@@ -126,10 +126,46 @@ fn draw(ui: &mut egui::Ui, light: &ScopedTheme) {
 ```
 
 Scopes nest, and the previous one comes back when `show` returns, even
-after a panic. What stays the installed theme's: fonts (egui's font
-definitions are global and rebuilding them rebuilds the atlas), and
-what egui draws in layers of its own from the context's style (a combo
-box's popup, tooltips, windows).
+after a panic.
+
+**Popups follow the scope.** egui builds the `Ui` of a popup, a tooltip,
+a menu or a window from the context's style, not from the `Ui` that
+opened it. So while a scope draws, the context's style is the scoped
+theme's too, and it is put back when the scope ends. A combo box's list,
+a tooltip, a context menu, a menu, a popover, a hover card or a kit
+picker opened inside the scope is drawn in the scoped theme, whether it
+comes from egui or from egui-pop. A popup that is drawn later, outside
+the scope, records the scope it was opened in (`menus::popup_at` does)
+and is drawn in `ScopedTheme::within`, which applies the theme to the
+context without a `Ui`:
+
+```rust
+use egui_pop::egui;
+use egui_pop::theme::ScopedTheme;
+
+// Opened inside a scope, drawn at the end of the frame.
+struct Later {
+    scope: Option<ScopedTheme>,
+}
+
+fn open(ctx: &egui::Context) -> Later {
+    Later { scope: ScopedTheme::current(ctx) }
+}
+
+fn draw(ctx: &egui::Context, later: &Later, show: fn()) {
+    match &later.scope {
+        Some(scope) => scope.within(ctx, show),
+        None => show(),
+    }
+}
+# let _ = (open, draw);
+```
+
+What stays the installed theme's: fonts (egui's font definitions are
+global and rebuilding them rebuilds the atlas), egui's light or dark
+mode (`ctx.theme()`), and what is drawn outside the scope. Install
+themes between frames: a change to the context's style made while a
+scope draws is undone when the scope ends.
 
 ## What can be chosen
 

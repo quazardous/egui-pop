@@ -59,9 +59,11 @@ has no switch.
 once, as above. With "Preview only" ticked
 (`ThemeEditor::set_preview_only`), changes stay in the draft: the
 preview pane draws it (a `theme::ScopedTheme`, so `Tokens::of` and
-`Kit::of` give the draft's inside it), while the editor and the rest
-of the window keep the theme installed, so a draft with unreadable text
-or a broken control cannot make the editor itself hard to use. "Apply"
+`Kit::of` give the draft's inside it, and the popups opened in it, a
+combo box's list, a tooltip, a menu, are drawn in it too), while the
+editor and the rest of the window keep the theme installed, so a draft
+with unreadable text or a broken control cannot make the editor itself
+hard to use. "Apply"
 (`ThemeEditor::apply`) installs the draft app-wide; "Discard"
 (`ThemeEditor::discard`) goes back to the installed theme; going back
 to live editing applies it. The draft's fonts are not previewed: fonts
