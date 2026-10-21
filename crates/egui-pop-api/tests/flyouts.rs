@@ -337,3 +337,180 @@ fn a_panels_indicator_shows_on_its_icon_while_the_panel_is_not_shown() {
     assert!(!icon(&workbench::strip(&app), &SEARCH).marked);
     assert!(egui_pop_core::indicator::find(&h.ctx, "strip:demo.search.hits").is_none());
 }
+
+const FORM: PanelId = PanelId::from_static("demo.form");
+
+/// Entries long enough to reach past a narrow flyout's edge: a click on
+/// their end lands outside the flyout's rect.
+const FINE: &str = "Fine, an entry long enough to reach well past the flyout's edge";
+const MARK: &str = "Mark it, from a menu entry long enough to pass the flyout's edge";
+
+/// A narrow panel with a combo box and a button with a context menu.
+struct Form {
+    mode: std::sync::Arc<std::sync::Mutex<String>>,
+    marked: std::sync::Arc<std::sync::Mutex<bool>>,
+}
+
+impl Plugin for Form {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("form")
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        let mode = self.mode.clone();
+        let marked = self.marked.clone();
+        ctx.panel(
+            PanelSpec::new(FORM, "Form", Area::StartSide)
+                .min_size(120.0)
+                .default_size(120.0),
+            move |ui, _| {
+                let mut m = mode.lock().unwrap();
+                egui::ComboBox::from_id_salt("demo.form.mode")
+                    .selected_text(m.clone())
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut *m, "Fast".to_owned(), "Fast");
+                        ui.selectable_value(&mut *m, FINE.to_owned(), FINE);
+                    });
+                ui.button("Options").context_menu(|ui| {
+                    if ui.button(MARK).clicked() {
+                        *marked.lock().unwrap() = true;
+                    }
+                });
+            },
+        )?;
+        ctx.block(
+            zones::MAIN,
+            Block::add(BlockId::from_static("form.main"), 0, |ui, _| {
+                ui.label("main body");
+            }),
+        );
+        Ok(())
+    }
+}
+
+struct FormHarness {
+    h: Harness<'static, App>,
+    app: egui_pop_api::AppHandle,
+    mode: std::sync::Arc<std::sync::Mutex<String>>,
+    marked: std::sync::Arc<std::sync::Mutex<bool>>,
+}
+
+/// The form panel open as a flyout.
+fn form_flyout() -> FormHarness {
+    let mode = std::sync::Arc::new(std::sync::Mutex::new("Fast".to_owned()));
+    let marked = std::sync::Arc::new(std::sync::Mutex::new(false));
+    let builder = App::builder()
+        .plugin(StripsPlugin::status_only())
+        .plugin(Form {
+            mode: mode.clone(),
+            marked: marked.clone(),
+        })
+        .folded(&[Area::StartSide]);
+    let mut h = harness(builder);
+    let app = h.state().handle().clone();
+    icon_button(&h, "Form").click();
+    h.run();
+    h.run();
+    assert_eq!(app.flyout().map(|f| f.0), Some(FORM));
+    FormHarness {
+        h,
+        app,
+        mode,
+        marked,
+    }
+}
+
+impl FormHarness {
+    fn flyout_rect(&self) -> egui::Rect {
+        self.app
+            .flyout()
+            .and_then(|f| f.1)
+            .expect("the flyout is open and drawn")
+    }
+
+    /// Opens the combo box with a click on it.
+    fn open_combo(&mut self) {
+        self.h.get_by_role(egui::accesskit::Role::ComboBox).click();
+        self.h.run();
+        self.h.run();
+        assert!(
+            self.h.query_by_label(FINE).is_some(),
+            "the combo box's list is open"
+        );
+    }
+
+    /// A click near the end of an entry, outside the flyout's rect.
+    fn click_entry_end(&mut self, label: &str) {
+        let entry = self.h.get_by_label(label).rect();
+        let at = egui::pos2(entry.right() - 4.0, entry.center().y);
+        let flyout = self.flyout_rect();
+        assert!(
+            !flyout.expand(8.0).contains(at),
+            "the entry passes the flyout's edge: {at:?} {flyout:?}"
+        );
+        click_at(&mut self.h, at);
+    }
+}
+
+#[test]
+fn a_pick_in_a_combo_box_opened_in_a_flyout_keeps_the_flyout_open() {
+    let mut f = form_flyout();
+    f.open_combo();
+    f.click_entry_end(FINE);
+    assert_eq!(*f.mode.lock().unwrap(), FINE, "the value changed");
+    assert_eq!(
+        f.app.flyout().map(|o| o.0),
+        Some(FORM),
+        "the flyout stays open"
+    );
+    assert!(!egui::Popup::is_any_open(&f.h.ctx), "the list closed");
+}
+
+#[test]
+fn a_pick_in_a_context_menu_opened_in_a_flyout_keeps_the_flyout_open() {
+    let mut f = form_flyout();
+    f.h.get_by_label("Options").click_secondary();
+    f.h.run();
+    f.h.run();
+    assert!(
+        f.h.query_by_label(MARK).is_some(),
+        "the context menu is open"
+    );
+    f.click_entry_end(MARK);
+    assert!(*f.marked.lock().unwrap(), "the entry ran");
+    assert_eq!(
+        f.app.flyout().map(|o| o.0),
+        Some(FORM),
+        "the flyout stays open"
+    );
+    assert!(f.h.query_by_label(MARK).is_none(), "the menu closed");
+}
+
+#[test]
+fn a_click_truly_outside_closes_the_flyout_and_its_combo_box() {
+    let mut f = form_flyout();
+    f.open_combo();
+    click_at(&mut f.h, egui::pos2(850.0, 300.0));
+    assert!(f.app.flyout().is_none(), "the flyout closed");
+    assert!(f.h.query_by_label(FINE).is_none(), "the list closed");
+    assert_eq!(*f.mode.lock().unwrap(), "Fast", "nothing was picked");
+}
+
+#[test]
+fn escape_closes_the_combo_box_first_then_the_flyout() {
+    let mut f = form_flyout();
+    f.open_combo();
+    f.h.key_press(egui::Key::Escape);
+    f.h.run();
+    f.h.run();
+    assert!(f.h.query_by_label(FINE).is_none(), "the list closed first");
+    assert_eq!(
+        f.app.flyout().map(|o| o.0),
+        Some(FORM),
+        "the flyout is still open"
+    );
+    f.h.key_press(egui::Key::Escape);
+    f.h.run();
+    f.h.run();
+    assert!(f.app.flyout().is_none(), "then the flyout closed");
+}
