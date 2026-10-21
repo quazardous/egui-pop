@@ -131,6 +131,7 @@ pub fn signal_json(signal: &Signal) -> Json {
             "cancelled": cancelled,
             "complete": complete,
         }),
+        Signal::Leave => json!({ "signal": "leave" }),
         Signal::Loupe { on } => json!({
             "signal": "loupe",
             "on": on,

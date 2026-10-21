@@ -1,5 +1,6 @@
-//! A node graph editor over an application's graph, on egui's
-//! [`Scene`](egui::Scene) (pan and zoom).
+//! A node graph editor over an application's graph, drawn in egui's
+//! [`Scene`](egui::Scene), its pan and zoom driven by the pointer
+//! profile.
 //!
 //! **The application keeps the graph.** It describes its nodes, their
 //! typed ports, its wires and groups through [`GraphModel`]; the editor
@@ -9,11 +10,13 @@
 //! [`on_edit`](GraphEditor::on_edit) hook first: allow, veto or redirect
 //! (`egui-pop-imaging` runs them as the `graph.*` steps).
 //!
-//! - **Pan and zoom**: the wheel pans, Ctrl (Cmd) and the wheel or a
-//!   pinch zoom around the pointer, a drag with the middle or secondary
-//!   button pans, and so does a drag with Space held. A double click on
-//!   the canvas fits the graph. [`GraphMinimap`] is the navigator's
-//!   pattern: the whole graph, the part in view framed.
+//! - **Pan and zoom**, as the pointer profile says (its `canvas.graph`
+//!   scope, `docs/pointer-gestures.md`): by default the wheel pans,
+//!   Ctrl (Cmd) and the wheel or a pinch zoom around the pointer, a
+//!   drag with the middle button pans, and a double click on the canvas
+//!   fits the graph; a drag with Space held always pans.
+//!   [`GraphMinimap`] is the navigator's pattern: the whole graph, the
+//!   part in view framed.
 //! - **Levels**: the zoom picks what is drawn ([`Level`]): the
 //!   overview (compact nodes, groups folded into stacks), the ports, and
 //!   the detail, where each node's parameters are egui-pop sliders
@@ -371,6 +374,61 @@ impl<'a> GraphEditor<'a> {
         self
     }
 
+    /// The wheel, a scroll and a pinch over the graph, as the profile
+    /// says: zoom around the pointer, or pan. Takes the wheel when the
+    /// pointer is over the graph. Whether the view moved.
+    fn wheel(&mut self, ui: &Ui, outer: Rect, g: &crate::gestures::ViewGestures) -> bool {
+        use crate::gestures::ViewAction;
+        let ctx = ui.ctx();
+        if !self.state.has_view() || !ui.rect_contains_pointer(outer) {
+            return false;
+        }
+        let inputs = egui_pop_core::pointer::wheel_inputs(ctx);
+        // The scene would scroll with egui's smoothed wheel: never.
+        ctx.input_mut(|i| i.smooth_scroll_delta = Vec2::ZERO);
+        let Some(at) = ctx.input(|i| i.pointer.latest_pos()) else {
+            return false;
+        };
+        let speed = ctx.options(|o| o.input_options.scroll_zoom_speed);
+        let mut moved = false;
+        for input in &inputs {
+            let zoom = zoom_of(outer.size(), self.state.view, self.zoom_range);
+            // The graph point under the pointer (the scene fits the view
+            // in `outer`, centred).
+            let around = self.state.view.center() + (at - outer.center()) / zoom.max(1e-6);
+            match g.wheel_action(input) {
+                ViewAction::Zoom | ViewAction::ZoomFree => {
+                    let factor = if input.zoom != 1.0 {
+                        input.zoom
+                    } else {
+                        (speed * input.along_y()).exp()
+                    };
+                    let to = self.zoom_range.clamp(zoom * factor);
+                    if to != zoom {
+                        self.state.zoom_by(to / zoom, around);
+                        moved = true;
+                    }
+                }
+                a @ (ViewAction::Pan | ViewAction::PanX | ViewAction::PanY) => {
+                    let d = match a {
+                        ViewAction::PanX => vec2(input.along_x(), 0.0),
+                        ViewAction::PanY => vec2(0.0, input.along_y()),
+                        _ => input.delta,
+                    };
+                    self.state.pan(-d / zoom.max(1e-6));
+                    moved = true;
+                }
+                _ => {}
+            }
+        }
+        // What the graph used is not the nodes' (a slider stepped by
+        // the wheel's modifiers keeps its wheel when the graph has none).
+        if moved {
+            egui_pop_core::pointer::take_wheel(ctx);
+        }
+        moved
+    }
+
     /// The level a zoom shows.
     fn level_at(&self, zoom: f32) -> Level {
         if zoom < self.overview_below {
@@ -456,6 +514,10 @@ impl<'a> GraphEditor<'a> {
             }
         }
 
+        let gestures = crate::gestures::graph_gestures(&ctx);
+        if self.wheel(ui, outer, &gestures) {
+            ctx.request_repaint();
+        }
         if self.state.fit || !self.state.has_view() {
             self.state.view = fit_rect(&nodes, self.node_width);
             self.state.fit = false;
@@ -495,13 +557,13 @@ impl<'a> GraphEditor<'a> {
             focused: None,
             to_global: TSTransform::IDENTITY,
             reveal: None,
+            gestures,
         };
+        // The scene draws; the profile moves it (above and in `canvas`):
+        // its zoom held where it is, its own pan off, the wheel taken.
         let scene = egui::Scene::new()
-            .zoom_range(self.zoom_range)
-            .drag_pan_buttons(
-                egui::containers::DragPanButtons::MIDDLE
-                    | egui::containers::DragPanButtons::SECONDARY,
-            )
+            .zoom_range(Rangef::point(zoom))
+            .drag_pan_buttons(egui::containers::DragPanButtons::empty())
             .sense(Sense::click_and_drag());
         let inner = ui.scope_builder(UiBuilder::new().max_rect(outer), |ui| {
             scene.show(ui, &mut view, |ui| cx.content(ui))
@@ -789,6 +851,8 @@ struct Cx<'a, 'g, 'h> {
     to_global: TSTransform,
     /// A rect to bring into view (what gained the focus).
     reveal: Option<Rect>,
+    /// The pointer profile's gestures on the graph.
+    gestures: crate::gestures::ViewGestures,
 }
 
 impl Cx<'_, '_, '_> {
@@ -2060,9 +2124,23 @@ impl Cx<'_, '_, '_> {
         self.bounds(response.id, self.lay.visible);
         let to_scene = self.to_global.inverse();
         let pointer = ctx.input(|i| i.pointer.latest_pos()).map(|p| to_scene * p);
-        let panning = ctx.input(|i| i.key_down(Key::Space));
-        // Space held: a drag pans.
-        if panning && response.dragged_by(egui::PointerButton::Primary) {
+        let space = ctx.input(|i| i.key_down(Key::Space));
+        let modifiers = ctx.input(|i| i.modifiers);
+        // A drag the profile pans with (Space held: any drag).
+        let panning = [
+            egui::PointerButton::Primary,
+            egui::PointerButton::Secondary,
+            egui::PointerButton::Middle,
+            egui::PointerButton::Extra1,
+            egui::PointerButton::Extra2,
+        ]
+        .into_iter()
+        .any(|b| {
+            response.dragged_by(b)
+                && (self.gestures.drag_pans(b, modifiers)
+                    || (space && b == egui::PointerButton::Primary))
+        });
+        if panning {
             self.state.pan(-response.drag_delta());
         } else if response.drag_started_by(egui::PointerButton::Primary)
             && let Some(p) = pointer
@@ -2105,8 +2183,24 @@ impl Cx<'_, '_, '_> {
             }
             self.state.wire = None;
         }
-        if response.double_clicked() {
+        if response.double_clicked()
+            && self
+                .gestures
+                .double_click_action(egui::PointerButton::Primary, modifiers)
+                == crate::gestures::ViewAction::Fit
+        {
             self.state.fit = true;
+        }
+        for b in [
+            egui::PointerButton::Middle,
+            egui::PointerButton::Extra1,
+            egui::PointerButton::Extra2,
+        ] {
+            if response.clicked_by(b)
+                && self.gestures.click_action(b, modifiers) == crate::gestures::ViewAction::Fit
+            {
+                self.state.fit = true;
+            }
         }
         if response.secondary_clicked() {
             self.state.menu_at = pointer;

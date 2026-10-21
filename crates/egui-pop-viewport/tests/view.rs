@@ -112,16 +112,17 @@ fn escape_during_a_pan_puts_the_view_back() {
 }
 
 #[test]
-fn the_wheel_zooms_and_stops_at_100_percent() {
+fn ctrl_and_the_wheel_zoom_and_stop_at_100_percent() {
     let mut h = harness(1.0, View::at(0.5, [500.0, 400.0]));
     h.run();
     let c = centre(&h);
     h.hover_at(c);
-    // One long scroll: continuous, but held on 100 % when it crosses it.
+    // The default profile (Document) zooms with Ctrl and the wheel. One
+    // long scroll: continuous, but held on 100 % when it crosses it.
     h.input_mut().events.push(Event::MouseWheel {
         unit: MouseWheelUnit::Point,
         delta: vec2(0.0, 2000.0),
-        modifiers: Modifiers::NONE,
+        modifiers: Modifiers::COMMAND,
         phase: egui::TouchPhase::Move,
     });
     h.run_steps(60);
@@ -130,7 +131,7 @@ fn the_wheel_zooms_and_stops_at_100_percent() {
     h.input_mut().events.push(Event::MouseWheel {
         unit: MouseWheelUnit::Point,
         delta: vec2(0.0, 100.0),
-        modifiers: Modifiers::NONE,
+        modifiers: Modifiers::COMMAND,
         phase: egui::TouchPhase::Move,
     });
     h.run_steps(60);
@@ -244,7 +245,7 @@ fn a_before_hook_clamps_or_vetoes_the_zoom() {
     h.input_mut().events.push(Event::MouseWheel {
         unit: MouseWheelUnit::Point,
         delta: vec2(0.0, 3000.0),
-        modifiers: Modifiers::NONE,
+        modifiers: Modifiers::COMMAND,
         phase: egui::TouchPhase::Move,
     });
     h.run_steps(60);

@@ -46,6 +46,9 @@ pub enum Cause {
     Pinch,
     Key,
     DoubleClick,
+    /// A click the pointer profile gives a view action (a middle click
+    /// cycling the zoom).
+    Click,
     /// The application called the viewport (a command).
     Command,
 }
@@ -58,6 +61,7 @@ impl Cause {
             Cause::Pinch => "pinch",
             Cause::Key => "key",
             Cause::DoubleClick => "double-click",
+            Cause::Click => "click",
             Cause::Command => "command",
         }
     }
@@ -107,8 +111,9 @@ pub struct Hooks {
     /// that puts back a view already allowed.
     pub before_view: Option<BeforeView>,
     /// Replaces the double click on the canvas. Gets the pointer, the
-    /// mapping and the default action (call it to get its view); returns
-    /// the view to show, or `None` for no change.
+    /// mapping and the default action (call it to get its view: `None`
+    /// when the profile's action is to leave the view, which it then
+    /// signals); returns the view to show, or `None` for no change.
     pub on_double_click: Option<RunDoubleClick>,
     /// Before a handle moves: allow, veto (it stays) or redirect (snap
     /// it to a grid, keep it inside the image).

@@ -15,15 +15,16 @@ use std::time::Duration;
 use std::sync::Arc;
 
 use egui::{
-    Color32, Id, Key, Pos2, Rect, Response, Sense, Stroke, StrokeKind, Ui, Vec2, WidgetInfo,
-    WidgetType, pos2,
+    Color32, Id, Key, PointerButton, Pos2, Rect, Response, Sense, Stroke, StrokeKind, Ui, Vec2,
+    WidgetInfo, WidgetType, pos2,
 };
 use egui_pop_core::kit::{Kit, KitCx, Part, State};
+use egui_pop_core::model::keymap::Pointer;
 
 use crate::cursor::{self, Cursor, CursorQuery, Shown, Tool};
 use crate::debug;
 use crate::display::{self, DisplayTarget, DisplayTransform, LinearSrgb, Stage};
-use crate::gestures::{self, DoubleClick, Gestures, WheelAction};
+use crate::gestures::{self, Gestures, ViewAction};
 use crate::hooks::{Cause, HandleMove, Hooks, TRACE_KEPT, TraceEntry, Verdict, ViewChange};
 use crate::loupe::{self, Loupe, LoupeFrame};
 use crate::overlay::{self, Handle, HandleKind, HandleState, Overlay};
@@ -121,6 +122,10 @@ pub enum Signal {
     Readout(Readout),
     /// The loupe was turned on or off with its key.
     Loupe { on: bool },
+    /// The pointer asked to leave the view (darktable's double click on
+    /// the image, back to the lighttable): the application decides what
+    /// that means; the view does not change.
+    Leave,
     /// Tiles moved this frame: asked for, arrived, given up. `complete`
     /// when every tile wanted is on screen.
     Tiles {
@@ -770,7 +775,10 @@ impl<'a> Viewport<'a> {
             handle_pan(ui, &response, &g, pan_key, &mut f);
         }
         if !captured.double_click {
-            handle_double_click(&response, &g, &mut f);
+            handle_double_click(ui, &response, &g, &mut f);
+        }
+        if !captured.click && !pan_key {
+            handle_click(ui, &response, &g, &mut f);
         }
         if !captured.wheel {
             handle_wheel(ui, &response, &g, &mut f);
@@ -952,11 +960,26 @@ impl<'a> Viewport<'a> {
     }
 }
 
+/// The button of a drag that starts this frame and pans with the keys
+/// held, as the profile says (or any button with the pan key held).
+fn pan_starts(ui: &Ui, response: &Response, g: &Gestures, pan_key: bool) -> bool {
+    if pan_key && response.drag_started() {
+        return true;
+    }
+    let modifiers = ui.input(|i| i.modifiers);
+    [
+        PointerButton::Primary,
+        PointerButton::Secondary,
+        PointerButton::Middle,
+        PointerButton::Extra1,
+        PointerButton::Extra2,
+    ]
+    .into_iter()
+    .any(|b| response.drag_started_by(b) && g.pointer.drag_pans(b, modifiers))
+}
+
 fn handle_pan(ui: &Ui, response: &Response, g: &Gestures, pan_key: bool, f: &mut Frame<'_>) {
-    let starts = response.drag_started_by(g.pan_button)
-        || response.drag_started_by(g.pan_button_anywhere)
-        || (pan_key && response.drag_started());
-    if starts && f.state.pan.is_none() {
+    if pan_starts(ui, response, g, pan_key) && f.state.pan.is_none() {
         f.state.pan = Some(Pan { start: *f.view });
         f.signal(Phase::Begin, Cause::Pan);
     }
@@ -977,22 +1000,80 @@ fn handle_pan(ui: &Ui, response: &Response, g: &Gestures, pan_key: bool, f: &mut
     }
 }
 
-fn handle_double_click(response: &Response, g: &Gestures, f: &mut Frame<'_>) {
-    if !response.double_clicked() {
-        return;
-    }
-    let at = response.hover_pos().unwrap_or(f.mapping.rect.center());
-    let fit = f.view.is_fit();
+/// The view a click-like action leads to (`None`: no change).
+fn click_view(action: ViewAction, at: Pos2, f: &Frame<'_>) -> Option<View> {
     let m = f.mapping;
-    let action = g.double_click;
-    let mut default = || match action {
-        DoubleClick::Nothing => None,
-        DoubleClick::Fit => Some(View::fit()),
-        DoubleClick::FitOrActual => Some(if fit {
+    match action {
+        ViewAction::Fit => Some(View::fit()),
+        ViewAction::ZoomToggle => Some(if f.view.is_fit() {
             m.zoom_around(at, 1.0)
         } else {
             View::fit()
         }),
+        // 100 %, then 200 %, then fit (from fit or any other zoom: 100 %).
+        ViewAction::ZoomCycle => Some(if f.view.is_fit() {
+            m.zoom_around(at, 1.0)
+        } else if (m.zoom - 1.0).abs() < 1e-6 {
+            m.zoom_around(at, 2.0)
+        } else if (m.zoom - 2.0).abs() < 1e-6 {
+            View::fit()
+        } else {
+            m.zoom_around(at, 1.0)
+        }),
+        _ => None,
+    }
+}
+
+/// A click the profile gives a view action (a middle click cycling the
+/// zoom, a primary click toggling fit and 100 %).
+fn handle_click(ui: &Ui, response: &Response, g: &Gestures, f: &mut Frame<'_>) {
+    let modifiers = ui.input(|i| i.modifiers);
+    for b in [
+        PointerButton::Primary,
+        PointerButton::Secondary,
+        PointerButton::Middle,
+        PointerButton::Extra1,
+        PointerButton::Extra2,
+    ] {
+        if !response.clicked_by(b) {
+            continue;
+        }
+        let action = g.pointer.click_action(b, modifiers);
+        let at = response.hover_pos().unwrap_or(f.mapping.rect.center());
+        if action == ViewAction::Leave {
+            f.signals.push(Signal::Leave);
+        } else if let Some(to) = click_view(action, at, f) {
+            f.change(to, Cause::Click, Phase::Once);
+        }
+    }
+}
+
+fn handle_double_click(ui: &Ui, response: &Response, g: &Gestures, f: &mut Frame<'_>) {
+    if !response.double_clicked() {
+        return;
+    }
+    let modifiers = ui.input(|i| i.modifiers);
+    let action = g
+        .pointer
+        .double_click_action(PointerButton::Primary, modifiers);
+    let at = response.hover_pos().unwrap_or(f.mapping.rect.center());
+    let fit = f.view.is_fit();
+    let m = f.mapping;
+    let mut default = || match action {
+        ViewAction::Fit => Some(View::fit()),
+        ViewAction::ZoomToggle => Some(if fit {
+            m.zoom_around(at, 1.0)
+        } else {
+            View::fit()
+        }),
+        ViewAction::ZoomCycle => Some(if fit {
+            m.zoom_around(at, 1.0)
+        } else if (m.zoom - 1.0).abs() < 1e-6 {
+            m.zoom_around(at, 2.0)
+        } else {
+            View::fit()
+        }),
+        _ => None,
     };
     let to = if let Some(run) = f.state.hooks.on_double_click.as_mut() {
         let to = run(at, &m, &mut default);
@@ -1000,6 +1081,9 @@ fn handle_double_click(response: &Response, g: &Gestures, f: &mut Frame<'_>) {
             .record("on_double_click", "run", format!("gave {to:?}"));
         to
     } else {
+        if action == ViewAction::Leave {
+            f.signals.push(Signal::Leave);
+        }
         default()
     };
     if let Some(to) = to {
@@ -1007,40 +1091,67 @@ fn handle_double_click(response: &Response, g: &Gestures, f: &mut Frame<'_>) {
     }
 }
 
+/// The wheel, a scroll and a pinch, raw, as the profile says: zoom
+/// around the pointer (holding at 100 % while the wheel goes on, unless
+/// free), or pan.
 fn handle_wheel(ui: &Ui, response: &Response, g: &Gestures, f: &mut Frame<'_>) {
     if !response.hovered() {
         f.state.detent = false;
         return;
     }
-    let (scroll, pinch, modifiers) =
-        ui.input(|i| (i.smooth_scroll_delta, i.zoom_delta(), i.modifiers));
+    let inputs = egui_pop_core::pointer::wheel_inputs(ui.ctx());
     // The canvas takes the wheel: the panel around it does not scroll.
-    ui.ctx().input_mut(|i| i.smooth_scroll_delta = Vec2::ZERO);
+    egui_pop_core::pointer::take_wheel(ui.ctx());
     let pointer = response.hover_pos().unwrap_or(f.mapping.rect.center());
-    let other = !g.wheel_other.is_none() && modifiers.matches_logically(g.wheel_other);
-    let zooms = (g.wheel == WheelAction::Zoom) != other;
-    if pinch != 1.0 {
-        let z = view::wheel_zoom(
-            f.mapping.zoom,
-            (f64::from(pinch).ln() / view::WHEEL_RATE) as f32,
-        );
-        let to = f.mapping.zoom_around(pointer, z);
-        f.change(to, Cause::Pinch, Phase::Once);
-    } else if scroll == Vec2::ZERO {
-        f.state.detent = false;
-    } else if zooms {
-        if f.state.detent {
-            // Held on 100 % until the wheel stops.
-            return;
+    let mut moved = false;
+    for input in &inputs {
+        let action = g.pointer.wheel_action(input);
+        let cause = if input.pointer == Pointer::Pinch {
+            Cause::Pinch
+        } else {
+            Cause::Wheel
+        };
+        // A pinch's factor as the wheel's motion.
+        let along = if input.pointer == Pointer::Pinch {
+            (f64::from(input.zoom).ln() / view::WHEEL_RATE) as f32
+        } else {
+            input.along_y()
+        };
+        match action {
+            ViewAction::Zoom | ViewAction::ZoomFree => {
+                moved = true;
+                let free = action == ViewAction::ZoomFree || cause == Cause::Pinch;
+                if !free && f.state.detent {
+                    // Held on 100 % until the wheel stops.
+                    continue;
+                }
+                let z = if free {
+                    (f.mapping.zoom * (f64::from(along) * view::WHEEL_RATE).exp())
+                        .clamp(view::MIN_ZOOM, view::MAX_ZOOM)
+                } else {
+                    view::wheel_zoom(f.mapping.zoom, along)
+                };
+                if !free {
+                    f.state.detent = z == 1.0 && f.mapping.zoom != 1.0;
+                }
+                let to = f.mapping.zoom_around(pointer, z);
+                f.change(to, cause, Phase::Once);
+            }
+            ViewAction::Pan | ViewAction::PanX | ViewAction::PanY => {
+                moved = true;
+                let delta = match action {
+                    ViewAction::PanX => Vec2::new(input.along_x(), 0.0),
+                    ViewAction::PanY => Vec2::new(0.0, input.along_y()),
+                    _ => input.delta,
+                };
+                let to = f.mapping.panned(delta);
+                f.change(to, cause, Phase::Once);
+            }
+            _ => {}
         }
-        let dy = if scroll.y != 0.0 { scroll.y } else { scroll.x };
-        let z = view::wheel_zoom(f.mapping.zoom, dy);
-        f.state.detent = z == 1.0 && f.mapping.zoom != 1.0;
-        let to = f.mapping.zoom_around(pointer, z);
-        f.change(to, Cause::Wheel, Phase::Once);
-    } else {
-        let to = f.mapping.panned(scroll);
-        f.change(to, Cause::Wheel, Phase::Once);
+    }
+    if !moved {
+        f.state.detent = false;
     }
 }
 
@@ -1340,6 +1451,8 @@ fn draw_tiles(
 #[derive(Clone, Copy, Debug, Default)]
 struct Captured {
     drag: bool,
+    /// A click on a handle or an outline.
+    click: bool,
     double_click: bool,
     wheel: bool,
 }
@@ -1489,6 +1602,7 @@ fn handle_overlays(
     {
         let modifiers = ui.input(|i| i.modifiers);
         if let Some((i, h)) = overlay::hit(overlays, &m, p) {
+            captured.click = true;
             f.signals.push(Signal::HandleClick {
                 overlay: overlays[i].id.clone(),
                 handle: h.index,
@@ -1496,6 +1610,7 @@ fn handle_overlays(
                 modifiers,
             });
         } else if let Some((i, segment, at)) = overlay::hit_edge(overlays, &m, p) {
+            captured.click = true;
             f.signals.push(Signal::EdgeClick {
                 overlay: overlays[i].id.clone(),
                 segment,
