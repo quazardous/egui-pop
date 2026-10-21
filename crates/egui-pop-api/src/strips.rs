@@ -45,12 +45,20 @@
 //! then the heaviest indicators give way; chips never hide, since they
 //! show active states. [`StripsPlugin::breadcrumb`] turns this off.
 //!
+//! The user hides status items and orders them (an item's context
+//! menu, or `status.item.hide` and `status.item.move`); only status
+//! items can be muted. The choices ([`Choices`]) are kept per place of
+//! the context stack, in its `view` document, so a bar arranged for the
+//! darkroom comes back as it was; a place without choices of its own
+//! takes the root's. Without the context stack they last the session.
+//!
 //! Steps (ADR 0011): `workbench.fold` (`{ "area", "folded" }`): an area
 //! folded to its strip or unfolded.
 
 use std::fmt;
 use std::ops::Range;
 use std::rc::Rc;
+use std::sync::Mutex;
 
 use egui::{Color32, RichText, WidgetType};
 use egui::{Sense, Ui, vec2};
@@ -58,20 +66,23 @@ use egui_pop_core::a11y;
 use egui_pop_core::icon::Icon;
 use egui_pop_core::indicator::Indicator as Mark;
 use egui_pop_core::kit::{BoxStyle, Kit, KitCx, Part, Side, State as KitState, paint_indicator};
+use egui_pop_core::lock;
 use egui_pop_core::state::Slot;
 use egui_pop_core::strings;
 use egui_pop_core::theme::Tokens;
 use egui_pop_model::commands::{CommandSpec, Origin};
 use egui_pop_model::context::FrameSpec;
+use egui_pop_model::context::ROOT;
 use egui_pop_model::ids::{BlockId, CommandId, PluginId};
 use egui_pop_model::panels::Area;
 use egui_pop_model::when::{When, WhenContext};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value as Json, json};
 
 use crate::app::{AppHandle, MENU_VIEW};
 use crate::contexts::{self, Chip, Envelope};
 use crate::host::Event;
+use crate::services::ServiceToken;
 use crate::strings as txt;
 use crate::zones::{self, Block};
 use crate::{Ctx, Plugin, PluginError};
@@ -82,6 +93,128 @@ const CHIP_HOVERED: Slot<bool> = Slot::new("api.strips.chip_hovered");
 
 /// Folds or unfolds the start side bar.
 pub const CMD_TOGGLE_SIDE_BAR: CommandId = CommandId::from_static("view.side_bar.toggle");
+/// Hides a status item where the user is, or shows it again.
+pub const CMD_HIDE_ITEM: CommandId = CommandId::from_static("status.item.hide");
+/// Moves a status item one step towards the bar's start or end.
+pub const CMD_MOVE_ITEM: CommandId = CommandId::from_static("status.item.move");
+
+/// The status bar's state: the choices when there is no context stack
+/// to keep them per place.
+pub const STRIPS: ServiceToken<StripsService> = ServiceToken::new("app.strips");
+
+/// The name the choices are kept under, per place
+/// (`contexts::place_value`).
+pub const CHOICES_VALUE: &str = "egui_pop.status";
+
+/// The user's choices for the status bar in a place: the items hidden,
+/// and their order from the bar's end (the items not listed follow, by
+/// weight).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Choices {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub hidden: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub order: Vec<String>,
+}
+
+impl Choices {
+    /// Whether nothing was chosen.
+    pub fn is_empty(&self) -> bool {
+        self.hidden.is_empty() && self.order.is_empty()
+    }
+}
+
+/// The status bar's own state.
+#[derive(Debug, Default)]
+pub struct StripsService {
+    /// The choices, without a context stack.
+    session: Mutex<Choices>,
+}
+
+/// The choices of the place shown: its own, else the root's (the
+/// session's without a context stack).
+pub fn choices(app: &AppHandle) -> Choices {
+    if app.service(&contexts::CONTEXTS).is_some() {
+        let read = |v: Option<Json>| v.and_then(|v| serde_json::from_value::<Choices>(v).ok());
+        return read(contexts::place_value(app, CHOICES_VALUE))
+            .or_else(|| read(contexts::place_value_of(app, ROOT, CHOICES_VALUE)))
+            .unwrap_or_default();
+    }
+    app.service(&STRIPS)
+        .map(|s| lock(&s.session).clone())
+        .unwrap_or_default()
+}
+
+/// Keeps the choices for the place shown.
+fn set_choices(app: &AppHandle, c: Choices) {
+    if app.service(&contexts::CONTEXTS).is_some() {
+        let value = if c.is_empty() {
+            Json::Null
+        } else {
+            serde_json::to_value(&c).unwrap_or(Json::Null)
+        };
+        contexts::set_place_value(app, CHOICES_VALUE, value);
+    } else if let Some(s) = app.service(&STRIPS) {
+        *lock(&s.session) = c;
+    }
+    app.egui().request_repaint();
+}
+
+/// Hides a status item where the user is, or shows it again.
+pub fn hide(app: &AppHandle, id: &str, hidden: bool) {
+    let mut c = choices(app);
+    c.hidden.retain(|h| h != id);
+    if hidden {
+        c.hidden.push(id.to_string());
+    }
+    set_choices(app, c);
+}
+
+/// Moves a status item one step towards the bar's end (`toward_end`) or
+/// its start, among the items the bar shows here.
+pub fn move_item(app: &AppHandle, id: &str, toward_end: bool) {
+    let mut order: Vec<String> = shown(app).into_iter().map(|(i, _)| i.id).collect();
+    let Some(at) = order.iter().position(|o| o == id) else {
+        return;
+    };
+    // From the end: towards the end is towards the list's front.
+    let to = if toward_end {
+        at.checked_sub(1)
+    } else {
+        Some(at + 1).filter(|t| *t < order.len())
+    };
+    let Some(to) = to else {
+        return;
+    };
+    order.swap(at, to);
+    let mut c = choices(app);
+    // The items hidden or not shown here keep their places after.
+    let rest: Vec<String> = c
+        .order
+        .iter()
+        .filter(|o| !order.contains(o))
+        .cloned()
+        .collect();
+    order.extend(rest);
+    c.order = order;
+    set_choices(app, c);
+}
+
+/// The indicators in the bar's order, from its end: the order chosen,
+/// then the others, lightest first.
+fn ordered(app: &AppHandle, choices: &Choices) -> Vec<(Indicator, IndicatorState)> {
+    let mut list = app.indicators();
+    let rank = |id: &str| {
+        choices
+            .order
+            .iter()
+            .position(|o| o == id)
+            .unwrap_or(usize::MAX)
+    };
+    // Stable: the weight order stays among the items not ordered.
+    list.sort_by_key(|(i, _)| rank(&i.id));
+    list
+}
 
 /// How an indicator looks: egui-pop's one tone ([`egui_pop_core::kit::Tone`]).
 /// `Neutral` (nothing to say) is the `status-indicator`'s own box, drawn
@@ -265,6 +398,36 @@ impl Plugin for StripsPlugin {
     }
 
     fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        ctx.service(&STRIPS, StripsService::default())?;
+        ctx.command(
+            CommandSpec::new(CMD_HIDE_ITEM, "Hide a status item", "View")
+                .description("Hides a status bar item (`id`) where the user is, or shows it again (`hidden`: false).")
+                .args(json!({ "id": "jobs", "hidden": true })),
+            |call| {
+                let id = call.args["id"].as_str().ok_or("`id` is missing")?;
+                if !call.app.indicators().iter().any(|(i, _)| i.id == id) {
+                    return Err(format!("no status item `{id}`"));
+                }
+                let hidden = call.args["hidden"].as_bool().unwrap_or(true);
+                hide(call.app, id, hidden);
+                Ok(json!({ "hidden": hidden }))
+            },
+        )?
+        .command(
+            CommandSpec::new(CMD_MOVE_ITEM, "Move a status item", "View")
+                .description("Moves a status bar item (`id`) one step towards its start or end (`toward`: start or end), where the user is.")
+                .args(json!({ "id": "jobs", "toward": "end" })),
+            |call| {
+                let id = call.args["id"].as_str().ok_or("`id` is missing")?;
+                let toward_end = match call.args["toward"].as_str() {
+                    Some("end") => true,
+                    Some("start") => false,
+                    _ => return Err("`toward` is start or end".into()),
+                };
+                move_item(call.app, id, toward_end);
+                Ok(json!({ "order": choices(call.app).order }))
+            },
+        )?;
         ctx.command(
             CommandSpec::new(CMD_TOGGLE_SIDE_BAR, "Fold the side bar", "View")
                 .description("Folds the start side bar to its strip, or unfolds it.")
@@ -381,13 +544,14 @@ fn activity_bar(ui: &mut Ui, app: &AppHandle) {
     });
 }
 
-/// The indicators the bar shows, from its end: those whose clause
-/// holds, lightest first.
+/// The indicators the bar shows, from its end: those whose clause holds
+/// and that the user did not hide here, in the order chosen.
 fn shown(app: &AppHandle) -> Vec<(Indicator, IndicatorState)> {
     let cx = app.context();
-    app.indicators()
+    let c = choices(app);
+    ordered(app, &c)
         .into_iter()
-        .filter(|(i, _)| i.applies(&cx))
+        .filter(|(i, _)| i.applies(&cx) && !c.hidden.contains(&i.id))
         .collect()
 }
 
@@ -611,7 +775,15 @@ fn status_context(ui: &mut Ui, app: &AppHandle) {
 /// heaviest give way.
 fn indicators(ui: &mut Ui, app: &AppHandle) {
     let mut list = shown(app);
-    if list.is_empty() {
+    let hidden: Vec<(String, String)> = {
+        let c = choices(app);
+        app.indicators()
+            .into_iter()
+            .filter(|(i, _)| c.hidden.contains(&i.id))
+            .map(|(i, _)| (i.id, i.label))
+            .collect()
+    };
+    if list.is_empty() && hidden.is_empty() {
         return;
     }
     let mut room = ui.available_width();
@@ -626,6 +798,15 @@ fn indicators(ui: &mut Ui, app: &AppHandle) {
     let t = Tokens::of(ui.ctx());
     let kit = Kit::of(ui.ctx());
     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+        // Under the items: the bar's own menu, the hidden items to show.
+        if !hidden.is_empty() {
+            let bar = ui.interact(
+                ui.max_rect(),
+                ui.id().with("egui_pop_status_bar"),
+                Sense::click(),
+            );
+            bar.context_menu(|ui| show_hidden_menu(ui, app, &hidden));
+        }
         for (ind, state) in list {
             // The kit's `status-indicator`, colours only: quiet is its own
             // box, the others its tones.
@@ -669,6 +850,31 @@ fn indicators(ui: &mut Ui, app: &AppHandle) {
             } else {
                 r.on_hover_text(&state.detail)
             };
+            r.context_menu(|ui| {
+                let hide = strings::tr_args(ui.ctx(), &txt::STATUS_HIDE, &[("item", &ind.label)]);
+                if ui.button(hide).clicked() {
+                    app.run(CMD_HIDE_ITEM, json!({ "id": ind.id, "hidden": true }));
+                    ui.close();
+                }
+                if ui
+                    .button(strings::tr(ui.ctx(), &txt::STATUS_MOVE_START))
+                    .clicked()
+                {
+                    app.run(CMD_MOVE_ITEM, json!({ "id": ind.id, "toward": "start" }));
+                    ui.close();
+                }
+                if ui
+                    .button(strings::tr(ui.ctx(), &txt::STATUS_MOVE_END))
+                    .clicked()
+                {
+                    app.run(CMD_MOVE_ITEM, json!({ "id": ind.id, "toward": "end" }));
+                    ui.close();
+                }
+                if !hidden.is_empty() {
+                    ui.separator();
+                    show_hidden_menu(ui, app, &hidden);
+                }
+            });
             if r.clicked()
                 && let Some(c) = &ind.command
             {
@@ -676,6 +882,17 @@ fn indicators(ui: &mut Ui, app: &AppHandle) {
             }
         }
     });
+}
+
+/// A menu's entries showing the hidden items again.
+fn show_hidden_menu(ui: &mut Ui, app: &AppHandle, hidden: &[(String, String)]) {
+    for (id, label) in hidden {
+        let show = strings::tr_args(ui.ctx(), &txt::STATUS_SHOW, &[("item", label)]);
+        if ui.button(show).clicked() {
+            app.run(CMD_HIDE_ITEM, json!({ "id": id, "hidden": false }));
+            ui.close();
+        }
+    }
 }
 
 #[cfg(test)]

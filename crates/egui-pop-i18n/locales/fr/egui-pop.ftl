@@ -257,6 +257,14 @@ command-palettes-toggle =
     .description = Masque les palettes qui ne sont pas épinglées, ou les affiche de nouveau.
     .title = Masquer ou afficher les palettes
 
+command-status-item-hide =
+    .description = Masque un élément de la barre d’état (`id`) à l’endroit affiché, ou l’affiche de nouveau (`hidden` : false).
+    .title = Masquer un élément de la barre d’état
+
+command-status-item-move =
+    .description = Déplace un élément de la barre d’état (`id`) d’un pas vers son début ou sa fin (`toward` : start ou end), à l’endroit affiché.
+    .title = Déplacer un élément de la barre d’état
+
 command-theme-generate =
     .description = Écrit une gamme générée à partir d’une couleur source (`seed`, #rrggbb) sur une gamme de couleurs du thème (`scale`) : nuances 1 à 12 et contrast, pour la variante éditée, claire ou sombre ; annulée en une fois.
     .title = Générer une gamme de couleurs
@@ -804,6 +812,14 @@ egui-pop-shortcuts-show-all = Afficher toutes les commandes
 egui-pop-slider-maximum = { $label }, maximum
 
 egui-pop-slider-minimum = { $label }, minimum
+
+egui-pop-status-hide = Masquer { $item }
+
+egui-pop-status-move-end = Déplacer vers la fin
+
+egui-pop-status-move-start = Déplacer vers le début
+
+egui-pop-status-show = Afficher { $item }
 
 egui-pop-theme-editor-accent = Accent et focus
 

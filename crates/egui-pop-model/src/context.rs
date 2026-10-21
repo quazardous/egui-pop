@@ -1148,13 +1148,17 @@ pub struct ViewState {
 }
 
 /// The `view` document: the projection's layouts and view states, by
-/// projection key ([`State::projection_key`]).
+/// projection key ([`State::projection_key`]), and values kept per place
+/// (the top place's frame id, `root` at the root: the status bar's
+/// choices).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct ViewDoc {
     #[serde(default)]
     pub layouts: BTreeMap<String, Layout>,
     #[serde(default)]
     pub views: BTreeMap<String, ViewState>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub places: BTreeMap<String, BTreeMap<String, Json>>,
 }
 
 /// The `view` document's schema.
@@ -1468,6 +1472,10 @@ mod tests {
                 focus: Some(PanelId::from_static("t.list")),
                 values: [("scroll".to_string(), json!(120.0))].into(),
             },
+        );
+        view.places.insert(
+            ALBUM.to_string(),
+            [("status".to_string(), json!({ "hidden": ["jobs"] }))].into(),
         );
         let text = view_schema().save(&view).unwrap();
         assert_eq!(view_schema().load::<ViewDoc>(&text).unwrap().value, view);

@@ -1,12 +1,15 @@
 //! The status bar and the context stack together
 //! (`docs/status-and-context.md`): indicators that follow the context,
-//! the breadcrumb and the mode chips at the start of the bar.
+//! the breadcrumb and the mode chips at the start of the bar, the
+//! user's choices kept per place.
 
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
 use egui_pop_api::contexts::{self, ContextsPlugin, FrameSpec, Verdict};
-use egui_pop_api::strips::{Indicator, StripsPlugin};
+use egui_pop_api::host::Reply;
+use egui_pop_api::strips::{self, CMD_HIDE_ITEM, Indicator, StripsPlugin};
 use egui_pop_api::{App, AppBuilder, Ctx, DefaultPlugins, Plugin, PluginError};
+use egui_pop_model::commands::Origin;
 use egui_pop_model::ids::{FrameId, GroupId, PluginId};
 use serde_json::{Value as Json, json};
 
@@ -209,4 +212,51 @@ fn on_a_narrow_bar_the_crumbs_collapse_then_indicators_give_way_never_chips() {
     h.run();
     assert!(h.query_by_label("Everywhere").is_none());
     assert!(h.query_by_label("Leave Culling").is_some());
+}
+
+#[test]
+fn the_bars_choices_are_kept_per_place_falling_back_to_the_roots() {
+    let dir = std::env::temp_dir().join(format!("egui-pop-status-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    {
+        let mut h = harness(builder().persist(&dir), 1000.0);
+        let app = h.state().handle().clone();
+        // Hidden at the root, by its context menu.
+        h.get_by_label("Everywhere").click_secondary();
+        h.run();
+        h.get_by_label("Hide Everywhere").click();
+        h.run();
+        assert!(h.query_by_label("Everywhere").is_none());
+        assert_eq!(strips::choices(&app).hidden, vec!["demo.always"]);
+        // The album has no choices of its own: the root's.
+        assert!(contexts::enter(&app, ALBUM, Json::Null).ok());
+        h.run();
+        assert!(h.query_by_label("Everywhere").is_none());
+        // Shown again in the album (an agent's command), ordered there.
+        let reply = h.state_mut().run(
+            &CMD_HIDE_ITEM,
+            json!({ "id": "demo.always", "hidden": false }),
+            Origin::Agent("test".into()),
+        );
+        assert!(matches!(reply, Reply::Done(Ok(_))));
+        h.run();
+        assert!(h.query_by_label("Everywhere").is_some());
+        strips::move_item(&app, "demo.always", true);
+        h.run();
+        assert_eq!(strips::choices(&app).order, ["demo.always", "demo.images"]);
+        // The root kept its own.
+        assert!(contexts::leave(&app).ok());
+        h.run();
+        assert!(h.query_by_label("Everywhere").is_none());
+        h.state().save().unwrap();
+    }
+    // After a restart, each place as it was.
+    let mut h = harness(builder().persist(&dir), 1000.0);
+    let app = h.state().handle().clone();
+    assert!(h.query_by_label("Everywhere").is_none());
+    assert!(contexts::enter(&app, ALBUM, Json::Null).ok());
+    h.run();
+    assert!(h.query_by_label("Everywhere").is_some());
+    assert_eq!(strips::choices(&app).order, ["demo.always", "demo.images"]);
+    let _ = std::fs::remove_dir_all(&dir);
 }

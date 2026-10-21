@@ -37,6 +37,16 @@ publishes.
   (`YamlGraphError`). Part of #31.
 - The gallery's `graph-file` page: the node graph editor over a YAML
   graph file, the file's text beside it, each edit landing in the text.
+- The status bar's choices kept per place (egui-pop-api): an item's
+  context menu hides it or moves it one step (only status items can be
+  muted), agents use `status.item.hide` and `status.item.move`, code
+  `strips::hide`, `strips::move_item` and `strips::choices`. The choices
+  go into the context stack's `view` document per place, a place
+  without its own taking the root's; without the context stack they
+  last the session. The `view` document gains `places`, values kept per
+  place (`contexts::place_value`, `place_value_of`, `set_place_value`).
+  New strings `egui-pop-status-hide`, `-show`, `-move-start`,
+  `-move-end` (in French too).
 - The status bar says where the user is and what is active
   (egui-pop-api): with the context stack installed, `StripsPlugin`
   starts the bar with the breadcrumb (a crumb goes back to its place)

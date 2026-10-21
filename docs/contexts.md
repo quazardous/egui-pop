@@ -123,7 +123,11 @@ The stack has an owner, and only the owner changes it:
   `contexts::view_value` and `set_view_value` (or
   `contexts::scroll_area`), each kept per projection key (the place path
   and the active modes). It never reaches the kernel; it is written to
-  the `view` document about a second after it changes.
+  the `view` document about a second after it changes. Values kept per
+  place rather than per projection key (`contexts::place_value`,
+  `set_place_value`: the place's frame id, `root` at the root, whatever
+  its payload and the modes) go into the same document; the status
+  bar's choices are kept so.
 
 The interface reads and asks; it never writes the stack. Each
 transition is the step `context.request`: a before-hook stops it (the

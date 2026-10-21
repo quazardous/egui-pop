@@ -652,6 +652,18 @@ pub const CONTEXT_CANNOT_LEAVE: StrKey = StrKey::new(
     "egui-pop-context-cannot-leave",
     "{ $mode } stays on: { $reason }",
 );
+
+// The status bar.
+
+/// A status item's context menu: hides it here.
+pub const STATUS_HIDE: StrKey = StrKey::new("egui-pop-status-hide", "Hide { $item }");
+/// The status bar's context menu: shows a hidden item again.
+pub const STATUS_SHOW: StrKey = StrKey::new("egui-pop-status-show", "Show { $item }");
+/// A status item's context menu: moves it one step towards the bar's start.
+pub const STATUS_MOVE_START: StrKey =
+    StrKey::new("egui-pop-status-move-start", "Move towards the start");
+/// A status item's context menu: moves it one step towards the bar's end.
+pub const STATUS_MOVE_END: StrKey = StrKey::new("egui-pop-status-move-end", "Move towards the end");
 /// Frames of the saved stack that could not come back at start.
 pub const CONTEXT_DROPPED: StrKey =
     StrKey::new("egui-pop-context-dropped", "Not restored: { $frames }");
@@ -922,6 +934,10 @@ pub const ALL: &[StrKey] = &[
     CONTEXT_BACK_FROM_MODE,
     CONTEXT_CANNOT_LEAVE,
     CONTEXT_DROPPED,
+    STATUS_HIDE,
+    STATUS_SHOW,
+    STATUS_MOVE_START,
+    STATUS_MOVE_END,
 ];
 
 #[cfg(test)]

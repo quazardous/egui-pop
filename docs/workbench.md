@@ -316,6 +316,16 @@ indicators, for an application showing the breadcrumb elsewhere
 (`contexts::breadcrumb`, `contexts::mode_chips`); `contexts::crumbs`,
 `contexts::chips` and `contexts::why_not` give what they show.
 
+The user hides status items and orders them from an item's context
+menu (only status items can be muted); agents use `status.item.hide`
+(`{ "id", "hidden" }`) and `status.item.move` (`{ "id", "toward":
+"start" | "end" }`), code `strips::hide` and `strips::move_item`. The
+choices (`strips::choices`) are kept per place of the context stack in
+its `view` document (`contexts::place_value`, `set_place_value`), so a
+bar arranged for the darkroom comes back as it was; a place without
+choices of its own takes the root's. Without the context stack they
+last the session.
+
 ## The window's own frame
 
 `FramePlugin` (opt-in) draws the title bar in the `TITLE` zone above the

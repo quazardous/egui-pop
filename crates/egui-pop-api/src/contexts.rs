@@ -417,6 +417,8 @@ struct Projection {
     layouts: BTreeMap<String, Layout>,
     /// The view states, by projection key.
     views: BTreeMap<String, ViewState>,
+    /// Values kept per place (its frame id, `root`).
+    places: BTreeMap<String, BTreeMap<String, Json>>,
     /// The context keys it set.
     keys: BTreeSet<String>,
     /// Counts the projection's moves (scroll areas restore once per
@@ -440,6 +442,7 @@ impl Projection {
         ViewDoc {
             layouts: self.layouts.clone(),
             views: self.views.clone(),
+            places: self.places.clone(),
         }
     }
 
@@ -1093,6 +1096,49 @@ pub fn set_view_value(app: &AppHandle, name: &str, value: Json) {
     save_view(app, &doc);
 }
 
+/// A value kept for a place (its frame id, [`ROOT`] at the root) rather
+/// than for a projection key: the same in every album, whatever the
+/// modes. Saved with the view state.
+pub fn place_value_of(app: &AppHandle, place: &str, name: &str) -> Option<Json> {
+    let svc = app.service(&CONTEXTS)?;
+    let p = lock(&svc.projection);
+    p.places.get(place).and_then(|v| v.get(name).cloned())
+}
+
+/// A value kept for the place shown ([`place_value_of`]).
+pub fn place_value(app: &AppHandle, name: &str) -> Option<Json> {
+    let place = state(app)?.place().to_string();
+    place_value_of(app, &place, name)
+}
+
+/// Keeps a value for the place shown (`Json::Null` forgets it); written
+/// to the `view` document a second later.
+pub fn set_place_value(app: &AppHandle, name: &str, value: Json) {
+    let Some(svc) = app.service(&CONTEXTS) else {
+        return;
+    };
+    let doc = {
+        let mut p = lock(&svc.projection);
+        let place = p.applied.clone().unwrap_or_default().place().to_string();
+        let values = p.places.entry(place.clone()).or_default();
+        if value.is_null() {
+            if values.remove(name).is_none() {
+                return;
+            }
+            if values.is_empty() {
+                p.places.remove(&place);
+            }
+        } else {
+            if values.get(name) == Some(&value) {
+                return;
+            }
+            values.insert(name.to_string(), value);
+        }
+        p.doc()
+    };
+    save_view(app, &doc);
+}
+
 /// A scroll area whose offset is kept per projection key: entering a
 /// place and coming back finds it where it was.
 pub fn scroll_area<R>(
@@ -1515,6 +1561,7 @@ pub fn reload(app: &AppHandle) {
         p.applied = None;
         p.layouts.clear();
         p.views.clear();
+        p.places.clear();
     }
     if !svc.custom.load(Ordering::Relaxed) {
         let mut l = lock(&svc.local);
@@ -1585,6 +1632,7 @@ fn start(app: &AppHandle) {
             let mut p = lock(&svc.projection);
             p.layouts = read.value.layouts;
             p.views = read.value.views;
+            p.places = read.value.places;
         }
         Ok(None) => {}
         Err(e) => log::warn!(target: "egui_pop", "the view document could not be read: {e}"),
@@ -1612,6 +1660,7 @@ fn describe(app: &AppHandle) -> Json {
             "keys": p.keys,
             "layouts": p.layouts.keys().collect::<Vec<_>>(),
             "views": p.views,
+            "places": p.places,
             "undo_stamps": p.stamps.len(),
         })
     };
