@@ -287,9 +287,11 @@ fn a_palette_dropped_on_the_end_edge_follows_it_when_the_window_grows() {
             .rect()
             .max
     };
-    // Dragged far right: kept inside, on the end edge, anchored there.
+    // Dragged right until it presses on the end edge: kept inside, on
+    // the edge, anchored there. The pointer stays clear of the edge,
+    // where a drop would dock the palette in the closed end side.
     let title = h.get_by_label("Tools").rect().center();
-    drag_by(&mut h, title, egui::vec2(2000.0, 0.0));
+    drag_by(&mut h, title, egui::vec2(840.0 - title.x, 0.0));
     let f = floating(&h, &TOOLS).unwrap();
     assert_eq!(f.anchor.x, AnchorEdge::End, "{f:?}");
     assert_eq!(f.anchor.y, AnchorEdge::None, "{f:?}");
