@@ -627,6 +627,8 @@ pub(crate) struct Workbench {
     pub flyout: Option<PanelId>,
     /// Where the flyout was drawn last frame.
     pub flyout_rect: Option<Rect>,
+    /// The panel whose flyout was held in the overlay stack last frame.
+    flyout_held: Option<PanelId>,
 }
 
 impl Default for Workbench {
@@ -653,6 +655,7 @@ impl Default for Workbench {
             zen: false,
             flyout: None,
             flyout_rect: None,
+            flyout_held: None,
         }
     }
 }
@@ -1481,6 +1484,15 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
     // The flyout, while its panel is still in a folded side area drawn
     // with its strip; otherwise it is gone.
     let flyout = app.workbench_mut().flyout.clone();
+    // Another panel's flyout held last pass leaves the overlay stack
+    // now: closed later, as no longer shown, it would close the new one
+    // opened above it.
+    let held = app.workbench_mut().flyout_held.take();
+    if let Some(old) = held
+        && flyout.as_ref() != Some(&old)
+    {
+        egui_pop_core::overlay::close(&ctx, Id::new(flyout_overlay(&old)));
+    }
     let mut drawn = None;
     if let Some(panel) = flyout {
         let area = app.workbench_mut().layout.area_of(&panel);
@@ -1494,7 +1506,11 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
             }
         }
     }
-    app.workbench_mut().flyout_rect = drawn;
+    {
+        let mut wb = app.workbench_mut();
+        wb.flyout_rect = drawn;
+        wb.flyout_held = drawn.and(wb.flyout.clone());
+    }
     app.set_drawing_areas(false);
     if !zen {
         crate::palettes::show(app, &ctx);
@@ -1849,6 +1865,11 @@ fn strip_icon(
     }
 }
 
+/// What names a panel's flyout in the overlay stack.
+fn flyout_overlay(panel: &PanelId) -> (&'static str, &str) {
+    ("egui_pop.flyout", panel.as_str())
+}
+
 /// A folded side area's panel shown alone over the centre, next to the
 /// strip (as an area lying over it): a band with its title and a pin
 /// button unfolding the area, then the panel. An overlay of the stack
@@ -1897,7 +1918,7 @@ fn show_flyout(
     // is its anchor (a click on another icon switches the flyout).
     let reach = ctx.global_style().interaction.resize_grab_radius_side;
     let spec_overlay = egui_pop_core::overlay::OverlaySpec::new(
-        ("egui_pop.flyout", panel.as_str()),
+        flyout_overlay(panel),
         &title,
         egui_pop_core::overlay::Kind::Popover,
     );
@@ -1947,22 +1968,29 @@ fn show_flyout(
             );
             let button = t.size.control_height.max(24.0);
             let header = kit.header_band.style(State::REST).text;
+            // The pin first, from the end: a truncated title laid out
+            // before it would take the whole row and push it out.
             let pinned = inner
                 .horizontal(|ui| {
-                    ui.add(
-                        egui::Label::new(egui::RichText::new(&title).strong().color(header))
-                            .truncate()
-                            .selectable(false),
-                    );
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        egui_pop_core::band::button(
+                        let pinned = egui_pop_core::band::button(
                             ui,
                             button,
                             egui_pop_core::icon::Icon::Unlock,
                             &pin,
                             false,
                         )
-                        .clicked()
+                        .clicked();
+                        ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                            ui.add(
+                                egui::Label::new(
+                                    egui::RichText::new(&title).strong().color(header),
+                                )
+                                .truncate()
+                                .selectable(false),
+                            );
+                        });
+                        pinned
                     })
                     .inner
                 })
@@ -1988,14 +2016,25 @@ fn show_flyout(
             if r.hovered() || r.dragged() {
                 ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
             }
-            if r.dragged() {
-                let dx = r.drag_delta().x;
-                let w = (width + if start { dx } else { -dx }).clamp(min, max);
+            // From where the pointer is, not from its moves: a drag-only
+            // target starts dragging on the press, whose move would count.
+            let dragged_to = r.interact_pointer_pos().map(|p| {
+                let w = if start {
+                    p.x - rect.left()
+                } else {
+                    rect.right() - p.x
+                };
+                w.clamp(min, max)
+            });
+            if r.dragged()
+                && let Some(w) = dragged_to
+            {
                 ui.ctx().data_mut(|d| d.insert_temp(live_id, w));
             }
             if r.drag_stopped() {
                 ui.ctx().data_mut(|d| d.remove::<f32>(live_id));
-                app.change_workbench(Change::FlyoutSize(panel.clone(), width));
+                let w = dragged_to.unwrap_or(width);
+                app.change_workbench(Change::FlyoutSize(panel.clone(), w));
             }
         });
     Some(rect)
