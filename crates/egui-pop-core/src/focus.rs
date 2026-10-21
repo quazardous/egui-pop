@@ -226,7 +226,8 @@ pub fn scope<R>(
 
 /// Installs the focus plugin on a context (once; later calls do
 /// nothing): Escape leaves a text input before anything else sees it,
-/// see [the order](self#escape-in-order).
+/// see [the order](self#escape-in-order), and the keys typed with an
+/// AccessKit `Focus` action reach the field it focuses.
 pub fn install(ctx: &Context) {
     // Once per context, whichever window asks.
     let st = shared::<State>(ctx, "core.focus");
@@ -312,8 +313,65 @@ impl egui::plugin::Plugin for FocusPlugin {
     }
 
     fn input_hook(&mut self, ctx: &Context, input: &mut egui::RawInput) {
+        hold_after_accesskit_focus(ctx, input);
         escape(ctx, input);
     }
+}
+
+/// Events held back for each window's next pass, see
+/// [`hold_after_accesskit_focus`].
+#[derive(Debug, Default)]
+struct Held(Vec<(egui::ViewportId, Vec<egui::Event>)>);
+
+/// An AccessKit `Focus` action (a screen reader, an agent) gives a text
+/// field the keyboard from the next pass only: the keys typed with it
+/// would be lost. The keyboard input that comes after the action in the
+/// same pass is held back for the next one, in order, where the field
+/// has the focus.
+///
+/// upstream: egui hands the focus over while the field is drawn, after
+/// the field has read its input (docs/upstream.md, "egui: input in the
+/// pass of an AccessKit focus is lost").
+fn hold_after_accesskit_focus(ctx: &Context, input: &mut egui::RawInput) {
+    let window = input.viewport_id;
+    let st = shared::<Held>(ctx, "core.focus.held");
+    let mut held = lock(&st);
+    if let Some(i) = held.0.iter().position(|(w, _)| *w == window) {
+        let (_, mut events) = held.0.swap_remove(i);
+        events.append(&mut input.events);
+        input.events = events;
+    }
+    let Some(at) = input.events.iter().position(is_accesskit_focus) else {
+        return;
+    };
+    if !input.events[at + 1..].iter().any(is_keyboard_input) {
+        return;
+    }
+    let rest = input.events.split_off(at + 1);
+    held.0.push((window, rest));
+    drop(held);
+    ctx.request_repaint_of(window);
+}
+
+/// Whether an event asks, through AccessKit, to focus a widget.
+fn is_accesskit_focus(e: &egui::Event) -> bool {
+    matches!(
+        e,
+        egui::Event::AccessKitActionRequest(r) if r.action == egui::accesskit::Action::Focus
+    )
+}
+
+/// Whether an event is input a focused text field reads.
+fn is_keyboard_input(e: &egui::Event) -> bool {
+    matches!(
+        e,
+        egui::Event::Text(_)
+            | egui::Event::Key { .. }
+            | egui::Event::Paste(_)
+            | egui::Event::Copy
+            | egui::Event::Cut
+            | egui::Event::Ime(_)
+    )
 }
 
 /// Whether an event is a press of Escape without modifiers.

@@ -61,6 +61,30 @@ limit.
 - **Remove when**: egui-pop moves to egui 0.37 (check that a selectable
   row keeps its size under the pointer).
 
+## egui: input in the pass of an AccessKit focus is lost
+
+- **Compensated**: an AccessKit `Focus` action on a text field (from a
+  screen reader, an agent, or a test) is only noted when egui reads the
+  pass's input (`Focus::begin_pass`); the focus is handed over when the
+  field registers its interest in it, as it is allocated. A `TextEdit`
+  reads its events earlier, while its text is laid out, so the keys and
+  text that arrive in the same pass as the action are dropped: the field
+  gets the keyboard, not what was typed with it. Later passes are fine,
+  which is why a kittest test (one queued event per step) does not see
+  it; a platform batching the action with the keys does.
+- **Upstream**: fixed in egui 0.37.0: `Focus::begin_pass` focuses the
+  widget the action names at once, looked up among the focusable widgets
+  of the previous pass (`memory/mod.rs`), before anything reads the
+  input. No issue to file.
+- **Workaround**: the focus plugin (`egui_pop_core::focus::install`,
+  which an `App` installs) holds back the keyboard input that follows an
+  AccessKit `Focus` action in the same pass and replays it, in order, at
+  the start of the next pass, when the field has the focus
+  (`focus::hold_after_accesskit_focus`, `// upstream:`). It covers every
+  text field in the context, egui-pop's and an application's own.
+- **Remove when**: egui-pop moves to egui 0.37 (check that text typed in
+  the pass of an AccessKit focus reaches the field without the plugin).
+
 ## egui: AccessKit bounds ignore layer transforms
 
 - **Compensated**: a widget in a transformed layer (egui's `Scene`)

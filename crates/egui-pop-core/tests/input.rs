@@ -153,3 +153,51 @@ fn escape_leaves_a_number_input_with_nothing() {
     assert_eq!(h.state().n, 2.0, "what was typed is dropped");
     assert_eq!(h.get_by_label("Amount").value().as_deref(), Some("2"));
 }
+
+/// Focuses the text field labelled `label` through AccessKit and types
+/// `text` in the same frame, as a screen reader or an agent may.
+fn focus_and_type<S>(h: &mut Harness<'_, S>, label: &str, text: &str) {
+    let (target_node, target_tree) = h
+        .get_by_role_and_label(Role::TextInput, label)
+        .accesskit_node()
+        .locate();
+    let events = &mut h.input_mut().events;
+    events.push(egui::Event::AccessKitActionRequest(
+        egui::accesskit::ActionRequest {
+            action: egui::accesskit::Action::Focus,
+            target_node,
+            target_tree,
+            data: None,
+        },
+    ));
+    events.push(egui::Event::Text(text.to_owned()));
+    h.step();
+    h.run();
+}
+
+#[test]
+fn text_typed_with_an_accesskit_focus_reaches_the_input() {
+    let mut h = form();
+    egui_pop_core::focus::install(&h.ctx);
+    h.run();
+    focus_and_type(&mut h, "First", "typed");
+    assert_eq!(focused(&h), "First");
+    assert_eq!(h.state().a, "typed");
+}
+
+#[test]
+fn text_typed_with_an_accesskit_focus_reaches_a_plain_text_edit() {
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(320.0, 80.0))
+        .build_ui_state(
+            |ui, s: &mut String| {
+                egui_pop_core::focus::install(ui.ctx());
+                let label = ui.label("Name");
+                ui.text_edit_singleline(s).labelled_by(label.id);
+            },
+            String::new(),
+        );
+    h.run();
+    focus_and_type(&mut h, "Name", "Ada");
+    assert_eq!(h.state(), "Ada");
+}

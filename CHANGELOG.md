@@ -132,6 +132,15 @@ publishes.
   bringing the modal's window to the front), `overlay::modal_windows`,
   `overlay::window_of` and `overlay::retain_windows`.
 
+### Fixed
+
+- Text typed with an AccessKit focus reaches the field (egui-pop-core):
+  when a screen reader or an agent focuses a text field and types in
+  the same pass, egui 0.36 dropped what was typed. The focus plugin
+  (installed by every `App`) now holds that input back for the next
+  pass, when the field has the focus. Every text field is covered,
+  egui-pop's and an application's own (`docs/upstream.md`).
+
 ## 0.2.0 (2026-10-21)
 
 ### Changed
