@@ -111,7 +111,7 @@ command-context-hold =
     .title = Hold the context stack
 
 command-context-read =
-    .description = The places and modes on, their revision, the holds and the frames declared.
+    .description = The places and modes on, their revision, the holds and the frames declared, and what the status bar shows (`status`: each visible item's id, text, tone, count and progress).
     .title = Read the context stack
 
 command-context-release =
@@ -257,6 +257,14 @@ command-palettes-reset =
 command-palettes-toggle =
     .description = Hides the palettes that are not pinned, or shows them again.
     .title = Hide or show palettes
+
+command-status-item-hide =
+    .description = Hides a status bar item (`id`) where the user is, or shows it again (`hidden`: false).
+    .title = Hide a status item
+
+command-status-item-move =
+    .description = Moves a status bar item (`id`) one step towards its start or end (`toward`: start or end), where the user is.
+    .title = Move a status item
 
 command-terminal-clear =
     .description = Clears the screen and the scrollback (the program goes on).
@@ -408,11 +416,21 @@ egui-pop-command-label = { $category }: { $title }
 
 egui-pop-command-with-change = { $title } { $change }
 
+egui-pop-context-back-from-mode = Back from { $mode }
+
+egui-pop-context-cannot-leave = { $mode } stays on: { $reason }
+
 egui-pop-context-dropped = Not restored: { $frames }
 
 egui-pop-context-go-there = Go there
 
+egui-pop-context-go-to = Go to { $place }
+
+egui-pop-context-here = You are in { $place }
+
 egui-pop-context-leave-mode = Leave { $mode }
+
+egui-pop-context-more-places = Places above
 
 egui-pop-context-no-mode = None
 
@@ -795,6 +813,14 @@ egui-pop-shortcuts-target-workspace = this workspace
 egui-pop-slider-maximum = { $label }, maximum
 
 egui-pop-slider-minimum = { $label }, minimum
+
+egui-pop-status-hide = Hide { $item }
+
+egui-pop-status-move-end = Move towards the end
+
+egui-pop-status-move-start = Move towards the start
+
+egui-pop-status-show = Show { $item }
 
 egui-pop-theme-editor-accent = Accent and focus
 
