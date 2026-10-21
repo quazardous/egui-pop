@@ -274,6 +274,15 @@ publishes.
   `fonts::specimen` gave its family once installed, but egui takes new
   fonts at its next pass, so a second ask in the same frame drew with a
   family egui did not have yet. It now waits until egui has it.
+- Zen mode shows its way out (egui-pop-api): once the title, menu and
+  status bars were hidden, nothing said how to come back. On entering,
+  a strip at the top centre says "Zen mode: Escape to leave" (the key
+  bound to `workbench.leave_zen`) next to a "Leave zen mode" button for
+  three seconds, then fades over `motion.duration` (at once under
+  reduced motion); screen readers hear it once. Afterwards, the pointer
+  at the top edge brings the strip back until it leaves it. In full
+  screen, it stands in for full screen's own strip. Both strings are in
+  the English and French catalogues.
 
 ## 0.2.0 (2026-10-21)
 

@@ -45,8 +45,11 @@
 //! key: applications bind one) leaves only the centre: the title bar, the
 //! menu and status bars, the activity bar, the side and bottom areas and
 //! the floating panels are hidden, and Escape (`workbench.leave_zen`)
-//! brings them back. It is a state of the session, not of the layout:
-//! never saved, so the next start shows the whole workbench.
+//! brings them back. The way out stays in sight: a strip at the top
+//! centre says how to leave, with a "Leave zen mode" button, for a few
+//! seconds on entering, and again whenever the pointer reaches the top
+//! edge. It is a state of the session, not of the layout: never saved,
+//! so the next start shows the whole workbench.
 //!
 //! A panel may also float over the interface: a palette
 //! (`PanelSpec::palette`) does when it opens, any floatable panel when

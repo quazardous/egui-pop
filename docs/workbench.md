@@ -182,7 +182,18 @@ bottom areas and the floating palettes are hidden, and the frame
 publishes no caption. It has no default key, so that each application
 binds its own; Escape leaves it (`workbench.leave_zen`, while no
 overlay is open, no mode is pushed and no text field has the
-keyboard). The change is the `workbench.zen` step (`{ "zen": bool }`,
+keyboard; in a text field, the first Escape leaves the field and the
+second leaves zen mode). The way out stays in sight: on entering, a
+strip at the top centre (the kit's `fullscreen-exit` component) says
+"Zen mode: Escape to leave" (the key bound to `workbench.leave_zen`)
+next to a "Leave zen mode" button, for three
+seconds, then fades over `motion.duration` (at once under reduced
+motion); screen readers hear it once. Afterwards, the pointer at the top
+edge brings the strip back, as the menu bar of a full screen window on
+macOS, until it leaves the strip. The command palette (`Ctrl+Shift+P`)
+still opens in zen mode and offers "Leave zen mode". In full screen,
+zen's strip stands in for full screen's own. The change is the
+`workbench.zen` step (`{ "zen": bool }`,
 `AppHandle::set_zen`, `AppHandle::zen`, the `workbenchZen` context
 key): a plugin may veto it, and the journal records it. Zen mode is a
 state of the session, not of the layout: it is never saved, and the

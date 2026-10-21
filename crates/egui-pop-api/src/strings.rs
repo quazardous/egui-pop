@@ -363,6 +363,13 @@ pub const WORKBENCH_WINDOW_TITLE: StrKey = StrKey::new(
     "egui-pop-workbench-window-title",
     "{ $panel } — { $application }",
 );
+/// Zen mode's way out: its hint, with the key that leaves it.
+pub const ZEN_HINT: StrKey = StrKey::new("egui-pop-zen-hint", "Zen mode: { $keys } to leave");
+/// Zen mode's hint when no key leaves it.
+pub const ZEN_HINT_NO_KEY: StrKey = StrKey::new(
+    "egui-pop-zen-hint-no-key",
+    "Zen mode: the top edge shows the way out",
+);
 /// The commands every panel gets (`<panel>.focus`, `<panel>.toggle`):
 /// one text for every panel, its title filled in.
 pub const PANEL_FOCUS_TITLE: StrKey = StrKey::new("egui-pop-panel-focus-title", "Focus { $panel }");
@@ -1020,6 +1027,8 @@ pub const ALL: &[StrKey] = &[
     PALETTE_PIN,
     PALETTE_UNPIN,
     WORKBENCH_WINDOW_TITLE,
+    ZEN_HINT,
+    ZEN_HINT_NO_KEY,
     PANEL_FOCUS_TITLE,
     PANEL_FOCUS_DESCRIPTION,
     PANEL_TOGGLE_TITLE,

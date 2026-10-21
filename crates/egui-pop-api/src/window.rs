@@ -239,8 +239,9 @@ fn show(ui: &mut Ui, app: &AppHandle) {
         if fullscreen { "true" } else { "false" },
     );
     track(app, &info, maximized, fullscreen);
-    // The application's title bar, drawn this pass, holds the way out.
-    if fullscreen && !crate::frame::bar_shown_in_full_screen(&ctx) {
+    // The application's title bar, drawn this pass, holds the way out;
+    // in zen mode, zen's own strip does (leaving it shows the bar).
+    if fullscreen && !app.zen() && !crate::frame::bar_shown_in_full_screen(&ctx) {
         way_out(&ctx, app);
     }
 }

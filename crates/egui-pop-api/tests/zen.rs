@@ -1,5 +1,6 @@
 //! Zen mode: the centre alone, through a step, Escape bringing the
-//! whole workbench back, the saved layout left as it was.
+//! whole workbench back, the saved layout left as it was; the way out
+//! shown on entering and at the top edge; the command palette in it.
 
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
@@ -7,6 +8,7 @@ use egui_pop_api::frame::FramePlugin;
 use egui_pop_api::workbench::{CMD_ZEN, STEP_ZEN};
 use egui_pop_api::zones::{self, Block};
 use egui_pop_api::{App, Ctx, DefaultPlugins, Plugin, PluginError};
+use egui_pop_core::theme::ThemeSpec;
 use egui_pop_model::ids::{BlockId, PanelId, PluginId};
 use egui_pop_model::panels::{Area, PanelSpec};
 
@@ -46,7 +48,12 @@ impl Plugin for Demo {
 }
 
 fn harness() -> Harness<'static, App> {
+    harness_with(ThemeSpec::new("pop-dark"))
+}
+
+fn harness_with(theme: ThemeSpec) -> Harness<'static, App> {
     let app = App::builder()
+        .theme(theme)
         .plugins(DefaultPlugins)
         .plugin(FramePlugin::own().name("Demo"))
         .plugin(Demo)
@@ -155,4 +162,111 @@ fn a_plugin_may_veto_zen_mode() {
     let out = app.handle().set_zen(true).expect("ran at once");
     assert!(out.vetoed().is_some());
     assert!(!app.handle().zen());
+}
+
+const HINT: &str = "Zen mode: Escape to leave";
+const LEAVE: &str = "Leave zen mode";
+
+/// Zen mode on, with the motion clock frozen at 0 before it starts.
+fn in_zen(theme: ThemeSpec) -> (Harness<'static, App>, egui_pop_model::clock::ManualClock) {
+    let mut h = harness_with(theme);
+    let clock = egui_pop_core::motion::freeze(&h.ctx, 0.0);
+    h.run();
+    h.state().handle().run(CMD_ZEN, serde_json::json!(null));
+    h.run();
+    assert!(h.state().handle().zen());
+    (h, clock)
+}
+
+#[test]
+fn entering_zen_mode_says_how_to_leave_then_the_hint_fades() {
+    let (mut h, clock) = in_zen(ThemeSpec::new("pop-dark"));
+    // At the top centre: the key that leaves it, and a button.
+    let hint = h.get_by_label(HINT);
+    let bounds = hint.rect();
+    assert!(bounds.top() < 40.0, "{bounds:?}");
+    assert!(h.query_by_label(LEAVE).is_some());
+    // Screen readers hear it once.
+    let announced = |h: &Harness<'_, App>| {
+        egui_pop_core::a11y::announcements(&h.ctx)
+            .iter()
+            .filter(|a| a.text == HINT)
+            .count()
+    };
+    assert_eq!(announced(&h), 1);
+    clock.set(2.9);
+    h.run();
+    assert!(h.query_by_label(HINT).is_some(), "three seconds");
+    // Then it fades over `motion.duration`, and goes.
+    let fade = f64::from(egui_pop_core::theme::Tokens::of(&h.ctx).motion_duration);
+    assert!(fade > 0.0);
+    clock.set(3.0 + fade / 2.0);
+    h.run();
+    assert!(h.query_by_label(HINT).is_some(), "fading");
+    clock.set(3.0 + fade + 0.01);
+    h.run();
+    assert!(h.query_by_label(HINT).is_none(), "gone");
+    assert!(h.query_by_label(LEAVE).is_none());
+    assert!(h.state().handle().zen());
+    assert_eq!(announced(&h), 1);
+}
+
+#[test]
+fn under_reduced_motion_the_hint_goes_without_fading() {
+    let (mut h, clock) = in_zen(ThemeSpec::new("pop-dark").reduced_motion(true));
+    assert!(h.query_by_label(HINT).is_some());
+    clock.set(3.0);
+    h.run();
+    assert!(h.query_by_label(HINT).is_none());
+}
+
+#[test]
+fn the_top_edge_shows_the_way_out_and_its_button_leaves_zen_mode() {
+    let (mut h, clock) = in_zen(ThemeSpec::new("pop-dark"));
+    clock.set(10.0);
+    h.run();
+    assert!(h.query_by_label(LEAVE).is_none());
+    // At the top edge: the strip comes back.
+    h.hover_at(egui::pos2(450.0, 1.0));
+    h.run();
+    assert!(h.query_by_label(HINT).is_some());
+    assert!(h.query_by_label(LEAVE).is_some());
+    // Away from it: it goes.
+    h.hover_at(egui::pos2(450.0, 300.0));
+    h.run();
+    assert!(h.query_by_label(LEAVE).is_none());
+    // Back, and its button leaves zen mode.
+    h.hover_at(egui::pos2(450.0, 1.0));
+    h.run();
+    h.get_by_label(LEAVE).click();
+    h.run();
+    assert!(!h.state().handle().zen());
+    assert!(shown(&h, "side body"));
+    assert!(h.query_by_label(LEAVE).is_none());
+}
+
+#[test]
+fn the_command_palette_works_in_zen_mode() {
+    use egui::{Key, Modifiers};
+    let (mut h, _clock) = in_zen(ThemeSpec::new("pop-dark"));
+    let handle = h.state().handle().clone();
+    // Escape closes the palette first, then leaves zen mode.
+    h.key_press_modifiers(Modifiers::COMMAND | Modifiers::SHIFT, Key::P);
+    h.run();
+    assert!(egui_pop_api::palette::is_open(&handle));
+    h.key_press(Key::Escape);
+    h.run();
+    assert!(!egui_pop_api::palette::is_open(&handle));
+    assert!(handle.zen(), "the palette took that Escape");
+    // "Leave zen mode" is offered, and runs.
+    h.key_press_modifiers(Modifiers::COMMAND | Modifiers::SHIFT, Key::P);
+    h.run();
+    h.get_by_role(egui::accesskit::Role::TextInput)
+        .type_text("leave zen");
+    h.run();
+    h.key_press(Key::Enter);
+    h.run();
+    assert!(!egui_pop_api::palette::is_open(&handle));
+    assert!(!handle.zen());
+    assert!(shown(&h, "side body"));
 }

@@ -4819,6 +4819,7 @@ impl App {
     fn shell(&mut self, ui: &mut Ui) {
         let h = self.handle.clone();
         h.follow_zen();
+        crate::zen::show(&h, ui.ctx());
         if h.zen() {
             // Zen mode: the centre alone, and no caption published.
             egui_pop_core::frame::hide_title_bar(ui.ctx());

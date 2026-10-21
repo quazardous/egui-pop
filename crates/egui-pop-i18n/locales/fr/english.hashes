@@ -760,6 +760,8 @@ egui-pop-workbench-move-to 1e7c641863b609f0
 egui-pop-workbench-stays-out 7973c10990577019
 egui-pop-workbench-unfold 4f6622581c6e6904
 egui-pop-workbench-window-title 2fb186786f7fdced
+egui-pop-zen-hint b4f57ce4d2e085df
+egui-pop-zen-hint-no-key bbeec89f8dc28736
 menu-app-menu-edit.label 329d5a4f3eb93fa9
 menu-app-menu-file.label 181d912a9545ccc3
 menu-app-menu-help.label dd64739b1d2f8ca8

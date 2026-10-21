@@ -1522,6 +1522,10 @@ egui-pop-workbench-unfold = Unfold { $area }
 
 egui-pop-workbench-window-title = { $panel } — { $application }
 
+egui-pop-zen-hint = Zen mode: { $keys } to leave
+
+egui-pop-zen-hint-no-key = Zen mode: the top edge shows the way out
+
 menu-app-menu-edit =
     .label = Edit
 

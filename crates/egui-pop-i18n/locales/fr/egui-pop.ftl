@@ -1397,6 +1397,10 @@ egui-pop-workbench-unfold = Déplier { $area }
 
 egui-pop-workbench-window-title = { $panel } — { $application }
 
+egui-pop-zen-hint = Mode zen : { $keys } pour quitter
+
+egui-pop-zen-hint-no-key = Mode zen : le bord du haut montre la sortie
+
 menu-app-menu-edit =
     .label = Édition
 

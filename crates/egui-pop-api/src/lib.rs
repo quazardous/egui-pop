@@ -146,6 +146,7 @@ pub mod tips;
 pub mod toasts;
 pub mod window;
 pub mod workbench;
+mod zen;
 pub mod zones;
 pub mod zoom;
 
