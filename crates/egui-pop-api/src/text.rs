@@ -1,11 +1,16 @@
-//! The user's text settings, owned by egui-pop: the text size
+//! The user's text settings, owned by egui-pop, on the settings
+//! window's Fonts page (under Appearance): the text size
 //! (`appearance.text_size`, a percentage among [`TEXT_SIZES`], so the
 //! font atlas holds few sizes), applied through the theme's size scale
-//! ([`ThemeSpec::text_size`]). Only text grows: the interface zoom
-//! (`zoom`) scales everything.
+//! ([`ThemeSpec::text_size`]; only text grows: the interface zoom,
+//! `zoom`, scales everything), and a family for interface text and one
+//! for numbers and code (`appearance.font_ui`, `appearance.font_mono`;
+//! empty keeps the theme's), put first in the theme's lists
+//! ([`ThemeSpec::font_ui`]).
 //!
 //! These are the user's, not the theme's: changing theme keeps them.
 
+use egui_pop_core::fonts::Role;
 use egui_pop_core::lock;
 use egui_pop_core::theme::ThemeSpec;
 use egui_pop_core::tokens::{TEXT_SIZES, text_size_step};
@@ -19,6 +24,25 @@ use crate::ctx::{Ctx, CtxError};
 /// The setting: the text size as a percentage among the steps
 /// (`"115%"`).
 pub const SETTING_TEXT_SIZE: SettingId = SettingId::from_static("appearance.text_size");
+
+/// The setting naming the interface text's family (empty: the
+/// theme's).
+pub const SETTING_FONT_UI: SettingId = SettingId::from_static("appearance.font_ui");
+
+/// The setting naming the family of numbers and code (empty: the
+/// theme's).
+pub const SETTING_FONT_MONO: SettingId = SettingId::from_static("appearance.font_mono");
+
+/// The settings shown on the settings window's Fonts page.
+pub const FONT_SETTINGS: [SettingId; 3] = [SETTING_TEXT_SIZE, SETTING_FONT_UI, SETTING_FONT_MONO];
+
+/// The setting of a role's family.
+pub fn font_setting(role: Role) -> SettingId {
+    match role {
+        Role::Ui => SETTING_FONT_UI,
+        Role::Mono => SETTING_FONT_MONO,
+    }
+}
 
 /// A step's label: `"115%"`.
 pub fn label(factor: f32) -> String {
@@ -67,11 +91,30 @@ pub fn set_text_size(app: &AppHandle, factor: f32) {
     );
 }
 
+/// The family the user chose for a role, `None` for the theme's.
+pub fn font(app: &AppHandle, role: Role) -> Option<String> {
+    lock(&app.store())
+        .get(&format!("settings/{}", font_setting(role)))
+        .and_then(|e| e.value.as_text().map(|t| t.trim().to_string()))
+        .filter(|t| !t.is_empty())
+}
+
+/// Chooses a family for a role (`None`: the theme's); applied before
+/// the next frame.
+pub fn set_font(app: &AppHandle, role: Role, family: Option<&str>) {
+    write(
+        app,
+        &font_setting(role),
+        Value::Text(family.unwrap_or_default().trim().to_string()),
+    );
+}
+
 /// What the settings asked for when last seen; the spec changes when
 /// they move.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct Seen {
     text_size: Option<f32>,
+    fonts: Option<(Option<String>, Option<String>)>,
 }
 
 /// Writes the settings into the spec when they moved since `seen`. Seen
@@ -87,6 +130,15 @@ pub(crate) fn apply(app: &AppHandle, seen: &mut Seen, spec: &mut ThemeSpec) -> b
         }
         seen.text_size = Some(size);
     }
+    let fonts = (font(app, Role::Ui), font(app, Role::Mono));
+    if seen.fonts.as_ref() != Some(&fonts) {
+        if seen.fonts.is_some() || fonts.0.is_some() || fonts.1.is_some() {
+            changed |= spec.font_ui != fonts.0 || spec.font_mono != fonts.1;
+            spec.font_ui.clone_from(&fonts.0);
+            spec.font_mono.clone_from(&fonts.1);
+        }
+        seen.fonts = Some(fonts);
+    }
     changed
 }
 
@@ -98,6 +150,18 @@ pub(crate) fn register(ctx: &mut Ctx<'_>) -> Result<(), CtxError> {
         SETTING_TEXT_SIZE,
         Descriptor::choice("Text size", &choices, "100%").description(
             "Makes the text larger or smaller, without the spacing (the interface zoom scales everything).",
+        ),
+    )?;
+    ctx.setting(
+        SETTING_FONT_UI,
+        Descriptor::text("Interface font", "").description(
+            "A family drawn first for the interface's text, the theme's own behind it. Empty keeps the theme's.",
+        ),
+    )?;
+    ctx.setting(
+        SETTING_FONT_MONO,
+        Descriptor::text("Monospace font", "").description(
+            "A family drawn first for numbers and code, the theme's own behind it. Empty keeps the theme's.",
         ),
     )?;
     Ok(())

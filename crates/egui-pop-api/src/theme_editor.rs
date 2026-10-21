@@ -2630,15 +2630,7 @@ fn fonts_tab(ui: &mut Ui, app: &AppHandle, editor: &ThemeEditor) {
 
     ui.add_space(t.space.m);
     ui.strong(tr(&txt::THEME_EDITOR_FONT_SAMPLE));
-    let size = t.font.body;
-    let sample = tr(&txt::THEME_EDITOR_FONT_SAMPLE_TEXT);
-    for role in Role::ALL {
-        ui.label(RichText::new(&sample).font(egui_pop_core::fonts::font_id(
-            role,
-            egui_pop_core::fonts::Weight::REGULAR,
-            size,
-        )));
-    }
+    font_sample(ui);
     ui.weak(tr(&txt::THEME_EDITOR_FONT_SAMPLE_HINT));
 
     ui.add_space(t.space.m);
@@ -2670,6 +2662,22 @@ fn fonts_tab(ui: &mut Ui, app: &AppHandle, editor: &ThemeEditor) {
             },
             m,
         );
+    }
+}
+
+/// A sample line per role, interface then monospace, in the fonts
+/// installed at the body size: the fonts tab's sample, also the
+/// settings window's Fonts page's.
+pub fn font_sample(ui: &mut Ui) {
+    let ctx = ui.ctx().clone();
+    let size = Tokens::of(&ctx).font.body;
+    let sample = strings::tr(&ctx, &txt::THEME_EDITOR_FONT_SAMPLE_TEXT);
+    for role in Role::ALL {
+        ui.label(RichText::new(&sample).font(egui_pop_core::fonts::font_id(
+            role,
+            egui_pop_core::fonts::Weight::REGULAR,
+            size,
+        )));
     }
 }
 

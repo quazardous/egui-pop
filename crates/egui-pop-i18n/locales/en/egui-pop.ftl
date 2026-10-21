@@ -650,6 +650,22 @@ egui-pop-files-save = Save
 
 egui-pop-files-unbookmark = Remove the bookmark
 
+egui-pop-fonts-numbers = Values line their digits up:
+
+egui-pop-fonts-origin-bundled = Shipped with egui
+
+egui-pop-fonts-origin-file = One of your font files
+
+egui-pop-fonts-origin-registered = Shipped with the application
+
+egui-pop-fonts-origin-system = Installed on the system
+
+egui-pop-fonts-picker-hint = Each family is drawn in its own face, but the system's.
+
+egui-pop-fonts-preview = Preview
+
+egui-pop-fonts-themes = The theme's
+
 egui-pop-frame-exit-fullscreen = Exit full screen
 
 egui-pop-frame-maximize = Maximize
@@ -825,6 +841,8 @@ egui-pop-reset = Reset
 egui-pop-retry = Retry
 
 egui-pop-settings-at-default = { $setting } is at its default
+
+egui-pop-settings-fonts = Fonts
 
 egui-pop-settings-nothing-to-redo = Nothing to redo in the settings
 
@@ -1505,6 +1523,14 @@ setting-appearance-focus-choice-click = click
 setting-appearance-focus-choice-hover = hover
 
 setting-appearance-focus-choice-system = system
+
+setting-appearance-font-mono =
+    .description = A family drawn first for numbers and code, the theme's own behind it. Empty keeps the theme's.
+    .label = Monospace font
+
+setting-appearance-font-ui =
+    .description = A family drawn first for the interface's text, the theme's own behind it. Empty keeps the theme's.
+    .label = Interface font
 
 setting-appearance-interface-zoom =
     .description = Makes the whole interface larger or smaller, in every window (Ctrl+Alt+= and Ctrl+Alt+-).

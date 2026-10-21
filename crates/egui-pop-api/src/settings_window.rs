@@ -9,6 +9,11 @@
 //! showing them alone, each gesture's triggers removed one by one or
 //! added by doing the gesture on a pad.
 //!
+//! The Fonts page, under Appearance, holds the text settings
+//! (`text`): the text size, a family for the interface and one for
+//! numbers and code, picked among the families there are
+//! (`egui_pop_core::fonts::families`), and a preview.
+//!
 //! `Ctrl+,` (or File > Settings) opens it; Escape closes it (or stops a
 //! capture of keys).
 //!
@@ -20,12 +25,14 @@ use std::sync::{Arc, Mutex};
 
 use egui::{Key, Ui, WidgetType};
 use egui_pop_core::a11y;
+use egui_pop_core::fonts::{self, Origin as FaceOrigin, Role};
 use egui_pop_core::keys::chord_of;
 use egui_pop_core::lock;
 use egui_pop_core::overlay::{self, Kind, OverlaySpec};
 use egui_pop_core::param::{self, Mode};
 use egui_pop_core::strings::{self, RESET};
 use egui_pop_core::theme::Tokens;
+use egui_pop_core::ui::UiPop as _;
 use egui_pop_core::widgets;
 use egui_pop_model::commands::{CommandSpec, Origin};
 use egui_pop_model::fuzzy;
@@ -55,6 +62,10 @@ pub const CMD_VALUE_REDO: CommandId = CommandId::from_static("value.redo");
 /// The section holding the shortcuts editor, as [`SettingsWindow::open`]
 /// takes it (shown translated).
 pub const SHORTCUTS: &str = txt::SETTINGS_SHORTCUTS.fallback;
+
+/// The section of the text settings, under Appearance (shown
+/// translated): the text size, the families and a preview.
+pub const FONTS: &str = txt::SETTINGS_FONTS.fallback;
 
 #[derive(Debug, Default)]
 struct State {
@@ -182,6 +193,9 @@ fn section_title(
     if sec == SHORTCUTS {
         return strings::tr(ctx, &txt::SETTINGS_SHORTCUTS);
     }
+    if sec == FONTS {
+        return strings::tr(ctx, &txt::SETTINGS_FONTS);
+    }
     entries.iter().find(|e| e.section == sec).map_or_else(
         || sec.to_string(),
         |e| app.section_title(ctx, &e.owner, sec),
@@ -286,13 +300,20 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                             .count()
                     };
                     let enabled = filter.is_empty() || hits > 0;
-                    let r = ui.add_enabled(
-                        enabled,
-                        widgets::SelectableRow::new(
-                            filter.is_empty() && *sec == current,
-                            section_title(&ctx, app, &entries, sec),
-                        ),
+                    let item = widgets::SelectableRow::new(
+                        filter.is_empty() && *sec == current,
+                        section_title(&ctx, app, &entries, sec),
                     );
+                    // The Fonts page is Appearance's.
+                    let r = if sec == FONTS {
+                        ui.horizontal(|ui| {
+                            ui.add_space(t.space.l);
+                            ui.add_enabled(enabled, item)
+                        })
+                        .inner
+                    } else {
+                        ui.add_enabled(enabled, item)
+                    };
                     if r.clicked() {
                         s.section = Some(sec.clone());
                         s.filter.clear();
@@ -316,6 +337,8 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                             if current == SHORTCUTS {
                                 let st = &mut *s;
                                 shortcuts(ui, app, st, "");
+                            } else if current == FONTS {
+                                fonts_page(ui, app, &entries);
                             } else {
                                 for e in entries.iter().filter(|e| e.section == current) {
                                     row(ui, app, e);
@@ -426,27 +449,7 @@ fn row(ui: &mut Ui, app: &AppHandle, e: &SettingEntry) {
                 })
             },
         );
-        let changed = lock(&store)
-            .get(&e.path)
-            .is_some_and(|x| x.value != x.descriptor.default);
-        let reset = strings::tr(ui.ctx(), &RESET);
-        let setting = [("setting", d.label.as_str())];
-        let r = ui
-            .add_enabled(changed, egui::Button::new(&reset).small())
-            .on_disabled_hover_text(strings::tr_args(
-                ui.ctx(),
-                &txt::SETTINGS_AT_DEFAULT,
-                &setting,
-            ));
-        a11y::name(
-            &r,
-            WidgetType::Button,
-            &strings::tr_args(ui.ctx(), &txt::SETTINGS_RESET_SETTING, &setting),
-        );
-        if r.clicked() {
-            let _ = lock(&store)
-                .set(Set::new(&e.path, Change::Reset, Origin::User).by(&OwnerId::FRAMEWORK));
-        }
+        setting_reset_button(ui, app, e, &d.label);
     });
     if !d.description.is_empty() {
         ui.weak(&d.description);
@@ -457,6 +460,144 @@ fn row(ui: &mut Ui, app: &AppHandle, e: &SettingEntry) {
 /// Whether a command is a pointer gesture.
 fn is_gesture(id: &CommandId) -> bool {
     egui_pop_model::pointer::gesture_spec(id).is_some()
+}
+
+/// A setting's reset, greyed at its default.
+fn setting_reset_button(ui: &mut Ui, app: &AppHandle, e: &SettingEntry, label: &str) {
+    let store = app.store();
+    let changed = lock(&store)
+        .get(&e.path)
+        .is_some_and(|x| x.value != x.descriptor.default);
+    let reset = strings::tr(ui.ctx(), &RESET);
+    let setting = [("setting", label)];
+    let r = ui
+        .add_enabled(changed, egui::Button::new(&reset).small())
+        .on_disabled_hover_text(strings::tr_args(
+            ui.ctx(),
+            &txt::SETTINGS_AT_DEFAULT,
+            &setting,
+        ));
+    a11y::name(
+        &r,
+        WidgetType::Button,
+        &strings::tr_args(ui.ctx(), &txt::SETTINGS_RESET_SETTING, &setting),
+    );
+    if r.clicked() {
+        let _ = lock(&store)
+            .set(Set::new(&e.path, Change::Reset, Origin::User).by(&OwnerId::FRAMEWORK));
+    }
+}
+
+/// The Fonts page: the text size, a family per role picked among the
+/// families there are, and a preview in the fonts installed.
+fn fonts_page(ui: &mut Ui, app: &AppHandle, entries: &[SettingEntry]) {
+    let ctx = ui.ctx().clone();
+    let t = Tokens::of(&ctx);
+    for e in entries.iter().filter(|e| e.section == FONTS) {
+        match Role::ALL
+            .into_iter()
+            .find(|r| crate::text::font_setting(*r) == e.id)
+        {
+            Some(role) => family_row(ui, app, e, role),
+            None => row(ui, app, e),
+        }
+    }
+    ui.add_space(t.space.m);
+    ui.strong(strings::tr(&ctx, &txt::FONTS_PREVIEW));
+    egui::Frame::new()
+        .fill(t.surface.raised)
+        .stroke(egui::Stroke::new(1.0, t.border.default))
+        .corner_radius(egui::CornerRadius::same(
+            t.radius.widget.round().clamp(0.0, 255.0) as u8,
+        ))
+        .inner_margin(egui::Margin::same(t.space.m.round().clamp(0.0, 127.0) as i8))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.heading(strings::tr(&ctx, &txt::THEME_EDITOR_SAMPLE_HEADING));
+            crate::theme_editor::font_sample(ui);
+            ui.add_space(t.space.s);
+            ui.label(strings::tr(&ctx, &txt::FONTS_NUMBERS));
+            let cell = egui::vec2(120.0, ui.spacing().interact_size.y);
+            for n in ["0.00", "1.11", "-1234.56", "88.88"] {
+                ui.allocate_ui_with_layout(
+                    cell,
+                    egui::Layout::right_to_left(egui::Align::Center),
+                    |ui| {
+                        ui.label(fonts::number_job(&ctx, n, t.font.body, t.text.default));
+                    },
+                );
+            }
+        });
+}
+
+/// What an origin is called in the family picker.
+fn origin_name(ctx: &egui::Context, origin: FaceOrigin) -> String {
+    strings::tr(
+        ctx,
+        match origin {
+            FaceOrigin::Bundled => &txt::FONTS_ORIGIN_BUNDLED,
+            FaceOrigin::Registered => &txt::FONTS_ORIGIN_REGISTERED,
+            FaceOrigin::File => &txt::FONTS_ORIGIN_FILE,
+            FaceOrigin::System => &txt::FONTS_ORIGIN_SYSTEM,
+        },
+    )
+}
+
+/// A role's family: the theme's, or one of the families there are (only
+/// monospace ones for numbers and code), each drawn in its own face but
+/// the system's (loading every system font would cost too much).
+fn family_row(ui: &mut Ui, app: &AppHandle, e: &SettingEntry, role: Role) {
+    let ctx = ui.ctx().clone();
+    let t = Tokens::of(&ctx);
+    let d = shown(&ctx, e);
+    let current = crate::text::font(app, role);
+    let themes = strings::tr(&ctx, &txt::FONTS_THEMES);
+    let mut pick: Option<Option<String>> = None;
+    ui.horizontal(|ui| {
+        let reset_width = 64.0;
+        ui.allocate_ui(
+            egui::vec2(ui.available_width() - reset_width - t.space.m, 0.0),
+            |ui| {
+                let l = ui.label(&d.label);
+                let combo = widgets::combo_box(("egui_pop.fonts", e.id.as_str()))
+                    .selected_text(current.clone().unwrap_or_else(|| themes.clone()));
+                ui.combo_box(combo, |ui| {
+                    if ui.selectable_label(current.is_none(), &themes).clicked() {
+                        pick = Some(None);
+                    }
+                    let families = fonts::families(&ctx)
+                        .into_iter()
+                        .filter(|f| role == Role::Ui || f.monospace);
+                    for f in families {
+                        let mut text = egui::RichText::new(&f.name);
+                        if f.origin != FaceOrigin::System
+                            && let Some(family) =
+                                fonts::specimen(&ctx, &f.name, fonts::Weight::REGULAR)
+                        {
+                            text = text.family(family);
+                        }
+                        let r = ui
+                            .selectable_label(current.as_deref() == Some(f.name.as_str()), text)
+                            .on_hover_text(origin_name(&ctx, f.origin));
+                        if r.clicked() {
+                            pick = Some(Some(f.name.clone()));
+                        }
+                    }
+                })
+                .response
+                .labelled_by(l.id);
+            },
+        );
+        setting_reset_button(ui, app, e, &d.label);
+    });
+    if let Some(p) = pick {
+        crate::text::set_font(app, role, p.as_deref());
+    }
+    if !d.description.is_empty() {
+        ui.weak(&d.description);
+    }
+    ui.weak(strings::tr(&ctx, &txt::FONTS_PICKER_HINT));
+    ui.add_space(t.space.s);
 }
 
 /// The commands the shortcuts editor lists for a search (and, when

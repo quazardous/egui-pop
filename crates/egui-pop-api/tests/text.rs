@@ -1,12 +1,14 @@
 //! The user's text settings: the text size multiplies the theme's size
-//! scale (and survives a change of theme), chosen in Settings ›
-//! Appearance.
+//! scale, a family per role comes before the theme's (and both survive a
+//! change of theme), chosen on the settings window's Fonts page.
 
 use egui::{Key, Modifiers};
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
-use egui_pop_api::text::{self, SETTING_TEXT_SIZE};
+use egui_pop_api::settings_window::FONTS;
+use egui_pop_api::text::{self, SETTING_FONT_MONO, SETTING_TEXT_SIZE};
 use egui_pop_api::{App, DefaultPlugins, settings_window};
+use egui_pop_core::fonts::{self, Role};
 use egui_pop_core::theme::Tokens;
 use egui_pop_core::tokens::ThemeSpec;
 use egui_pop_model::values::Value;
@@ -22,6 +24,22 @@ fn harness(spec: ThemeSpec) -> Harness<'static, App> {
         .build_ui_state(|ui, app: &mut App| app.show(ui), app);
     h.run();
     h
+}
+
+fn open_fonts(h: &mut Harness<'_, App>) {
+    h.key_press_modifiers(Modifiers::COMMAND, Key::Comma);
+    h.run();
+    assert!(settings_window::is_open(h.state().handle()));
+    h.get_by_label(FONTS).click();
+    h.run();
+}
+
+fn stored(h: &Harness<'_, App>, id: &egui_pop_model::ids::SettingId) -> Value {
+    egui_pop_core::lock(&h.state().handle().store())
+        .get(&format!("settings/{id}"))
+        .unwrap()
+        .value
+        .clone()
 }
 
 #[test]
@@ -61,26 +79,68 @@ fn an_applications_own_text_size_stays_until_the_setting_moves() {
 }
 
 #[test]
-fn the_text_size_is_chosen_in_settings_appearance() {
+fn the_text_size_is_chosen_on_the_fonts_page() {
     let mut h = harness(ThemeSpec::new("pop-dark"));
-    h.key_press_modifiers(Modifiers::COMMAND, Key::Comma);
-    h.run();
-    assert!(settings_window::is_open(h.state().handle()));
+    open_fonts(&mut h);
     h.get_by_label("Text size").click();
     h.run();
     h.get_by_label("150%").click();
     h.run();
     h.run();
-    let path = format!("settings/{SETTING_TEXT_SIZE}");
-    let value = egui_pop_core::lock(&h.state().handle().store())
-        .get(&path)
-        .unwrap()
-        .value
-        .clone();
-    assert_eq!(value, Value::Choice("150%".into()));
+    assert_eq!(stored(&h, &SETTING_TEXT_SIZE), Value::Choice("150%".into()));
     assert_eq!(Tokens::of(&h.ctx).font.body, 19.5);
     h.get_by_label("Reset Text size").click();
     h.run();
     h.run();
     assert_eq!(Tokens::of(&h.ctx).font.body, 13.0);
+}
+
+#[test]
+fn a_family_per_role_comes_before_the_themes_and_survives_a_change_of_theme() {
+    let mut h = harness(ThemeSpec::new("pop-dark"));
+    let app = h.state().handle().clone();
+    assert_eq!(text::font(&app, Role::Ui), None);
+    text::set_font(&app, Role::Ui, Some("Hack"));
+    text::set_font(&app, Role::Mono, Some("Ubuntu"));
+    h.run();
+    let t = Tokens::of(&h.ctx);
+    assert_eq!(t.font.family_ui[0], "Hack");
+    assert_eq!(t.font.family_mono[0], "Ubuntu");
+    // Installed: egui's families follow.
+    let (ui, mono) = fonts::installed_families(&h.ctx).unwrap();
+    assert_eq!((ui[0].as_str(), mono[0].as_str()), ("Hack", "Ubuntu"));
+    app.theme().pick(&h.ctx, "pop-light");
+    h.run();
+    assert_eq!(Tokens::of(&h.ctx).font.family_ui[0], "Hack");
+    // Back to the theme's.
+    text::set_font(&app, Role::Ui, None);
+    text::set_font(&app, Role::Mono, Some("  "));
+    h.run();
+    let t = Tokens::of(&h.ctx);
+    assert_eq!(t.font.family_ui[0], "Ubuntu");
+    assert_eq!(t.font.family_mono[0], "Hack");
+    assert_eq!(text::font(&app, Role::Mono), None);
+}
+
+#[test]
+fn the_fonts_page_picks_a_family_among_those_there_are_and_previews_it() {
+    let mut h = harness(ThemeSpec::new("pop-dark"));
+    open_fonts(&mut h);
+    for label in ["Text size", "Interface font", "Monospace font", "Preview"] {
+        assert!(h.query_by_label(label).is_some(), "{label}");
+    }
+    // Numbers in the preview, in the numeric font.
+    assert!(h.query_by_label("-1234.56").is_some());
+    h.get_by_label("Monospace font").click();
+    h.run();
+    // Only monospace families are offered for numbers and code.
+    assert!(h.query_by_label("Ubuntu").is_none());
+    h.get_by_label("Hack").click();
+    h.run();
+    h.run();
+    assert_eq!(stored(&h, &SETTING_FONT_MONO), Value::Text("Hack".into()));
+    assert_eq!(Tokens::of(&h.ctx).font.family_mono[0], "Hack");
+    h.get_by_label("Reset Monospace font").click();
+    h.run();
+    assert_eq!(stored(&h, &SETTING_FONT_MONO), Value::Text(String::new()));
 }

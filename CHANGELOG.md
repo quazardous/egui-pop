@@ -647,7 +647,7 @@ publishes.
   band holds the tabs, a click shows another one, and the shown
   member's own band drags it out of the group.
 - A text size setting (egui-pop-tokens, egui-pop-api): Settings ›
-  Appearance › Text size, in seven steps from 85 % to 200 %
+  Appearance › Fonts › Text size, in seven steps from 85 % to 200 %
   (`appearance.text_size`, `egui_pop_api::text`). It multiplies the
   theme's size scale (`ThemeSpec::text_size`, `TEXT_SIZES`), each step
   rounded to half a point, without moving the spacing, and grows
@@ -685,6 +685,14 @@ publishes.
   their origin, each egui family's fallback chain, the specimens, the
   sizes, the text size, how values line up, the atlas and the problems;
   `check { text, family }` lists the chars no face of a family covers.
+- A Fonts page in the settings window, under Appearance (egui-pop-api,
+  `settings_window::FONTS`): the text size, an interface font and a
+  monospace font picked among the families there are (only monospace
+  ones for numbers and code, each drawn in its own face but the
+  system's; `appearance.font_ui`, `appearance.font_mono`,
+  `text::font`, `text::set_font`), put before the theme's families and
+  kept across themes, and a preview. `theme_editor::font_sample` draws
+  the sample line per role both pages show. French strings included.
 
 ### Changed
 

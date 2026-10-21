@@ -3606,10 +3606,17 @@ impl App {
                     id: id.clone(),
                     path: slot.item.clone(),
                     owner: slot.owner.clone(),
-                    section: titles
-                        .get(&slot.owner)
-                        .cloned()
-                        .unwrap_or_else(|| slot.owner.to_string()),
+                    // The text settings have their page, under Appearance.
+                    section: if slot.owner == OwnerId::FRAMEWORK
+                        && crate::text::FONT_SETTINGS.contains(id)
+                    {
+                        crate::settings_window::FONTS.to_string()
+                    } else {
+                        titles
+                            .get(&slot.owner)
+                            .cloned()
+                            .unwrap_or_else(|| slot.owner.to_string())
+                    },
                     descriptor: e.descriptor.clone(),
                 })
             })

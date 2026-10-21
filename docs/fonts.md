@@ -7,8 +7,10 @@ registered faces, egui's bundled ones and the system's (fontdb behind
 `system-fonts`, not fontique: no per-script fallback yet), reported
 problems (`egui_pop_core::fonts`); a size scale (2026-10-18), below;
 font files a user adds, kept as paths (2026-10-20), below; the text size
-setting, aligned numbers, the `fonts` debug collector (2026-10-21),
-below. The rest is still a design.
+setting, aligned numbers, the `fonts` debug collector, the settings
+window's Fonts page (2026-10-21), below. The bundled pair is not
+chosen yet (the gallery's Font pairs page is where it is chosen); the
+rest is still a design.
 
 ## The size scale (built)
 
@@ -35,7 +37,7 @@ sizes. The user's text size (below) multiplies the scale.
 ## Text size (built)
 
 The text size is a user setting, `appearance.text_size` in Settings ›
-Appearance, one of seven steps: 85 %, 100 %, 115 %, 130 %, 150 %, 175 %
+Appearance › Fonts, one of seven steps: 85 %, 100 %, 115 %, 130 %, 150 %, 175 %
 and 200 % (`egui_pop_tokens::TEXT_SIZES`). Quantised, so the font atlas
 holds few sizes.
 
@@ -96,6 +98,28 @@ folder or a `.zip` archive holding the token file and the faces by
 relative path ([Design tokens](tokens.md#a-theme-with-its-fonts)), and
 opening one makes its faces the user's font files again
 (`ThemeEditor::set_font_dir` says where an archive's faces are kept).
+
+## Settings › Appearance › Fonts (built)
+
+The settings window has a Fonts page under Appearance (section 3's
+"Text" page, in part), holding egui-pop's text settings
+(`egui_pop_api::text`, `settings_window::FONTS`):
+
+- **Text size**, above.
+- **Interface font** and **Monospace font** (`appearance.font_ui`,
+  `appearance.font_mono`; empty: the theme's): a family picked among
+  `fonts::families` (egui's, the application's, the user's font files,
+  the system's with `system-fonts`), only monospace ones for numbers and
+  code, each drawn in its own face (as a specimen) but the system's.
+  The family is put first in the theme's list (`ThemeSpec::font_ui`,
+  `font_mono`), the theme's families stay its fallbacks; changing theme
+  keeps it. Each has its reset.
+- **Preview**: a heading, the theme editor's sample line per role
+  (`theme_editor::font_sample`, shared with its Fonts tab), and numbers
+  right-aligned in the numeric font.
+
+Not built: the weight of body text, the hinting choice, the per-script
+lines and the missing glyphs outlined.
 
 ## Aligned numbers (built)
 

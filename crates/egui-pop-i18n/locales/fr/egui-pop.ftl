@@ -575,6 +575,22 @@ egui-pop-files-save = Enregistrer
 
 egui-pop-files-unbookmark = Retirer des favoris
 
+egui-pop-fonts-numbers = Les valeurs alignent leurs chiffres :
+
+egui-pop-fonts-origin-bundled = Fournie avec egui
+
+egui-pop-fonts-origin-file = Un de vos fichiers de police
+
+egui-pop-fonts-origin-registered = Fournie avec l’application
+
+egui-pop-fonts-origin-system = Installée sur le système
+
+egui-pop-fonts-picker-hint = Chaque famille est dessinée dans sa propre police, sauf celles du système.
+
+egui-pop-fonts-preview = Aperçu
+
+egui-pop-fonts-themes = Celle du thème
+
 egui-pop-frame-exit-fullscreen = Quitter le plein écran
 
 egui-pop-frame-maximize = Agrandir
@@ -742,6 +758,8 @@ egui-pop-reset = Réinitialiser
 egui-pop-retry = Réessayer
 
 egui-pop-settings-at-default = { $setting } est à sa valeur par défaut
+
+egui-pop-settings-fonts = Polices
 
 egui-pop-settings-nothing-to-redo = Rien à rétablir dans les réglages
 
@@ -1384,6 +1402,14 @@ setting-appearance-focus-choice-click = au clic
 setting-appearance-focus-choice-hover = au survol
 
 setting-appearance-focus-choice-system = comme le système
+
+setting-appearance-font-mono =
+    .description = Une famille dessinée en premier pour les nombres et le code, celles du thème derrière. Vide garde celles du thème.
+    .label = Police à chasse fixe
+
+setting-appearance-font-ui =
+    .description = Une famille dessinée en premier pour le texte de l’interface, celles du thème derrière. Vide garde celles du thème.
+    .label = Police de l’interface
 
 setting-appearance-interface-zoom =
     .description = Agrandit ou réduit toute l’interface, dans chaque fenêtre (Ctrl+Alt+= et Ctrl+Alt+-).

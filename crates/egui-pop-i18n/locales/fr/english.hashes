@@ -324,6 +324,14 @@ egui-pop-files-open 41f71ad49a338131
 egui-pop-files-recent ab73b8f8d0246524
 egui-pop-files-save 835b5f8f6d37f13e
 egui-pop-files-unbookmark d71391bfffa763c4
+egui-pop-fonts-numbers 76f0efa9563698d0
+egui-pop-fonts-origin-bundled a012ac3bcaa1fe74
+egui-pop-fonts-origin-file af4c8dffda0c1053
+egui-pop-fonts-origin-registered 1ff7feaf34cf349d
+egui-pop-fonts-origin-system 668b4d5f659a1de0
+egui-pop-fonts-picker-hint f9f3cc02befdd57d
+egui-pop-fonts-preview 48c847eda5526dbf
+egui-pop-fonts-themes c5083f5028cb4b73
 egui-pop-frame-exit-fullscreen c66409904cfa39c0
 egui-pop-frame-maximize ec3ab8180de082b7
 egui-pop-frame-minimize e6356bcffe84c79d
@@ -412,6 +420,7 @@ egui-pop-pointer-overrides-title 0921c009dae8f78e
 egui-pop-reset 9213e68cebd60946
 egui-pop-retry 1da925989c6c1be1
 egui-pop-settings-at-default e87443abda8df723
+egui-pop-settings-fonts a737321dde761f11
 egui-pop-settings-nothing-to-redo c2ba211e72d86016
 egui-pop-settings-nothing-to-undo e0f18bb1f4b64200
 egui-pop-settings-redo ef2842c65cf40641
@@ -735,6 +744,10 @@ setting-appearance-focus-choice-click 7ae7bb8dfc94d7b7
 setting-appearance-focus-choice-hover 96f62e3744de980d
 setting-appearance-focus-choice-system 86937a88d8b574ba
 setting-appearance-focus.label 99281e1029e88f22
+setting-appearance-font-mono.description e398b161b2bf0549
+setting-appearance-font-mono.label 79bc88bef89bfd01
+setting-appearance-font-ui.description ae96d21da6769c70
+setting-appearance-font-ui.label 4072644f9178648d
 setting-appearance-interface-zoom-choice-100- a79925dcb743ba9b
 setting-appearance-interface-zoom-choice-110- 5cbc59e5aa7371d6
 setting-appearance-interface-zoom-choice-125- 28dffcee19ea0d2e

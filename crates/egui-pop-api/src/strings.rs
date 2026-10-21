@@ -86,6 +86,25 @@ pub const SETTINGS_SEARCH_HINT: StrKey = StrKey::new(
 /// The section holding the shortcuts editor.
 pub const SETTINGS_SHORTCUTS: StrKey =
     StrKey::new("egui-pop-settings-shortcuts", "Keyboard shortcuts");
+pub const SETTINGS_FONTS: StrKey = StrKey::new("egui-pop-settings-fonts", "Fonts");
+pub const FONTS_THEMES: StrKey = StrKey::new("egui-pop-fonts-themes", "The theme's");
+pub const FONTS_PREVIEW: StrKey = StrKey::new("egui-pop-fonts-preview", "Preview");
+pub const FONTS_NUMBERS: StrKey =
+    StrKey::new("egui-pop-fonts-numbers", "Values line their digits up:");
+pub const FONTS_PICKER_HINT: StrKey = StrKey::new(
+    "egui-pop-fonts-picker-hint",
+    "Each family is drawn in its own face, but the system's.",
+);
+pub const FONTS_ORIGIN_BUNDLED: StrKey =
+    StrKey::new("egui-pop-fonts-origin-bundled", "Shipped with egui");
+pub const FONTS_ORIGIN_REGISTERED: StrKey = StrKey::new(
+    "egui-pop-fonts-origin-registered",
+    "Shipped with the application",
+);
+pub const FONTS_ORIGIN_FILE: StrKey =
+    StrKey::new("egui-pop-fonts-origin-file", "One of your font files");
+pub const FONTS_ORIGIN_SYSTEM: StrKey =
+    StrKey::new("egui-pop-fonts-origin-system", "Installed on the system");
 pub const SETTINGS_UNDO: StrKey = StrKey::new("egui-pop-settings-undo", "Undo");
 pub const SETTINGS_REDO: StrKey = StrKey::new("egui-pop-settings-redo", "Redo");
 pub const SETTINGS_UNDO_STEP: StrKey = StrKey::new(
@@ -777,6 +796,15 @@ pub const ALL: &[StrKey] = &[
     SETTINGS_TITLE,
     SETTINGS_SEARCH_HINT,
     SETTINGS_SHORTCUTS,
+    SETTINGS_FONTS,
+    FONTS_THEMES,
+    FONTS_PREVIEW,
+    FONTS_NUMBERS,
+    FONTS_PICKER_HINT,
+    FONTS_ORIGIN_BUNDLED,
+    FONTS_ORIGIN_REGISTERED,
+    FONTS_ORIGIN_FILE,
+    FONTS_ORIGIN_SYSTEM,
     SETTINGS_UNDO,
     SETTINGS_REDO,
     SETTINGS_UNDO_STEP,
