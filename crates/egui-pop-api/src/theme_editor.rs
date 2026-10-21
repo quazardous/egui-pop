@@ -468,7 +468,7 @@ impl ThemeEditor {
 
     /// Opens a theme from disk (what "Open" does once a file is chosen):
     /// a token file, the folder of a theme package, or its `.zip` archive
-    /// (with the `theme-zip` feature; [`package`](egui_pop_core::tokens::package)).
+    /// (with the `theme-zip` feature; [`package`]).
     /// The token file is imported ([`ThemeEditor::import`]); the faces it
     /// lists become the user's font files, registered and installed at
     /// once ([`ThemeEditor::set_font_dir`]). What it loaded with, the
