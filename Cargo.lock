@@ -1263,6 +1263,7 @@ dependencies = [
  "half",
  "ortho-router",
  "profiling",
+ "roxmltree 0.21.1",
  "serde",
  "serde-saphyr",
  "serde_json",

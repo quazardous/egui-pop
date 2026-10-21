@@ -20,6 +20,18 @@ publishes.
   title as a string of the application's catalogue, translated. The
   breadcrumb, the status bar, `context.read`, the announcement of where
   the user is and the undo toast say it.
+- The node graph exported as an SVG image (egui-pop-viewport,
+  egui-pop-imaging): `graph::GraphExport` draws the graph from its model
+  and layout, not from the screen, so it is crisp and the same graph
+  gives the same text: group frames, wires in the graph's `WireStyle`,
+  nodes with their ports, and stacks, in the theme's colours
+  (`ExportTheme`). `ExportOptions` picks the whole graph or the
+  selection, the level (the overview, the ports by default, or the
+  detail with each parameter's value), the background and the title.
+  `GraphEditor::export_svg` exports what an editor would draw;
+  `GraphExport::capture` exports from a model and a `GraphState`.
+  Agents run `graph.export` on an editor shown with `show_graph`, which
+  keeps a copy at each frame (`GraphEditor::keep_export`).
 - Status items with alignment, priority, live states, popovers and
   hover cards (egui-pop-api): `strips::Indicator::align` puts an item
   at the bar's start (after the breadcrumb and the chips) or its end;

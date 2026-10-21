@@ -73,6 +73,7 @@
 //! }
 //! ```
 
+mod export;
 mod minimap;
 mod model;
 mod state;
@@ -98,6 +99,7 @@ use egui_pop_core::strings::{self, tr, tr_args};
 use egui_pop_core::theme::Tokens;
 use serde_json::{Value as Json, json};
 
+pub use export::{ExportOptions, ExportTheme, GraphExport};
 pub use minimap::GraphMinimap;
 pub use model::{
     Edge, Edit, GraphEvent, GraphModel, Group, Kind, Level, Moved, NewNode, Node, Param, Port,
@@ -131,6 +133,8 @@ const GROUP_PAD: f32 = 14.0;
 const GROUP_LABEL: f32 = 24.0;
 /// The chevron's square in a title bar.
 const CHEVRON: f32 = 16.0;
+/// A node's width by default, in graph units.
+const NODE_WIDTH: f32 = 180.0;
 
 /// The node graph's colours, from the theme (`graph.*`).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -243,6 +247,7 @@ pub struct GraphEditor<'a> {
     hook: Option<Box<HookFn<'a>>>,
     requests: Vec<Request>,
     describe: bool,
+    keep_export: bool,
 }
 
 impl fmt::Debug for GraphEditor<'_> {
@@ -268,6 +273,8 @@ pub struct GraphOutput {
     pub zoom: f32,
     /// The graph as drawn, when asked ([`GraphEditor::describe`]).
     pub snapshot: Option<Json>,
+    /// A copy to export, when asked ([`GraphEditor::keep_export`]).
+    pub export: Option<GraphExport>,
     /// While the pointer is over it: what the pointer does with the
     /// keys held now, as the profile says, for a status line; empty
     /// otherwise.
@@ -283,7 +290,7 @@ impl<'a> GraphEditor<'a> {
             label: None,
             size: None,
             snap: None,
-            node_width: 180.0,
+            node_width: NODE_WIDTH,
             wires: WireStyle::Curves,
             overview_below: 0.55,
             detail_from: 0.9,
@@ -293,6 +300,7 @@ impl<'a> GraphEditor<'a> {
             hook: None,
             requests: Vec::new(),
             describe: false,
+            keep_export: false,
         }
     }
 
@@ -376,6 +384,29 @@ impl<'a> GraphEditor<'a> {
     pub fn describe(mut self, on: bool) -> Self {
         self.describe = on;
         self
+    }
+
+    /// Puts a copy of the graph as drawn in [`GraphOutput::export`], to
+    /// export later (an agent's `graph.export`); see [`GraphExport`].
+    pub fn keep_export(mut self, on: bool) -> Self {
+        self.keep_export = on;
+        self
+    }
+
+    /// The graph as this editor would draw it, ready to export (its
+    /// wire style and node width, the state's selection, collapsed nodes
+    /// and folded groups, the theme's colours).
+    pub fn export(&self, ctx: &egui::Context) -> GraphExport {
+        GraphExport::capture(ctx, self.model, self.state)
+            .wires(self.wires)
+            .node_width(self.node_width)
+    }
+
+    /// The graph as an SVG image, drawn from the model and the layout
+    /// (not from the screen): the same graph and options give the same
+    /// text. See [`GraphExport::svg`].
+    pub fn export_svg(&self, ctx: &egui::Context, options: &ExportOptions) -> String {
+        self.export(ctx).svg(options)
     }
 
     /// The wheel, a scroll and a pinch over the graph, as the profile
@@ -535,6 +566,7 @@ impl<'a> GraphEditor<'a> {
             self.state.level = Some(level);
         }
 
+        self.state.node_width = self.node_width;
         if self.state.wire_style != self.wires {
             self.state.wire_style = self.wires;
             self.state.routes.clear();
@@ -600,6 +632,10 @@ impl<'a> GraphEditor<'a> {
         let snapshot = self
             .describe
             .then(|| describe(self.model, &nodes, &edges, self.state));
+        let export = self.keep_export.then(|| {
+            let theme = ExportTheme::of_nodes(&ctx, &nodes);
+            GraphExport::from_parts(self.model, nodes, edges, groups, self.state, theme)
+        });
         let hint = if response.hovered() {
             let hint = crate::gestures::hint(&ctx, egui_pop_core::model::pointer::SCOPE_GRAPH);
             egui_pop_core::pointer::show_hint(&ctx, &hint);
@@ -614,6 +650,7 @@ impl<'a> GraphEditor<'a> {
             level,
             zoom,
             snapshot,
+            export,
             hint,
         }
     }
@@ -928,127 +965,29 @@ impl Cx<'_, '_, '_> {
 
     /// Lays the graph out.
     fn layout(&mut self) {
-        let nodes = self.base.nodes;
-        let mut lay = Layout {
-            box_of: vec![None; nodes.len()],
-            visible: self.lay.visible,
-            ..Layout::default()
-        };
+        let base = self.base;
         let folded: Vec<bool> = self.groups.iter().map(|g| self.folded(&g.id)).collect();
-        let group_index =
-            |id: &str| -> Option<usize> { self.groups.iter().position(|g| g.id == id) };
-        // Stacks: one box per folded group with members, where its
-        // first-placed member is.
-        let mut stack_box: HashMap<usize, usize> = HashMap::new();
-        for (i, n) in nodes.iter().enumerate() {
-            let Some(g) = n.group.as_deref().and_then(group_index) else {
-                continue;
-            };
-            if !folded[g] {
-                continue;
-            }
-            let p = self.pos_of(n);
-            let b = *stack_box.entry(g).or_insert_with(|| {
-                lay.boxes.push(Placed {
-                    rect: Rect::from_min_size(p, Vec2::ZERO),
-                    node: None,
-                    group: Some(g),
-                    collapsed: true,
-                });
-                lay.boxes.len() - 1
-            });
-            let r = &mut lay.boxes[b].rect;
-            r.min = r.min.min(p);
-            lay.box_of[i] = Some(b);
-        }
-        let stack_h = if self.level == Level::Overview {
-            self.overview_h()
-        } else {
-            HEADER + ROW
-        };
-        for b in &mut lay.boxes {
-            b.rect = Rect::from_min_size(b.rect.min, vec2(self.node_width, stack_h));
-        }
-        for (i, n) in nodes.iter().enumerate() {
-            if lay.box_of[i].is_some() {
-                continue;
-            }
-            let collapsed = self.state.collapsed.contains(&n.id);
-            let rows = n.inputs.len().max(n.outputs.len());
-            let params = if self.level == Level::Detail && !collapsed {
-                self.base.model.params(&n.id).len()
-            } else {
-                0
-            };
-            let h = match self.level {
-                Level::Overview => self.overview_h(),
-                _ if collapsed => HEADER,
-                _ => HEADER + rows as f32 * ROW + params as f32 * param_h(&self.ctx) + PAD,
-            };
-            let rect = Rect::from_min_size(self.pos_of(n), vec2(self.node_width, h));
-            lay.boxes.push(Placed {
-                rect,
-                node: Some(i),
-                group: None,
-                collapsed,
-            });
-            lay.box_of[i] = Some(lay.boxes.len() - 1);
-        }
-        // Ports: on their rows, or at the box's sides when it is
-        // compact.
-        for (i, n) in nodes.iter().enumerate() {
-            let Some(b) = lay.box_of[i] else { continue };
-            let placed = &lay.boxes[b];
-            let r = placed.rect;
-            let compact =
-                placed.node.is_none() || placed.collapsed || self.level == Level::Overview;
-            for (side, list) in [(Side::Input, &n.inputs), (Side::Output, &n.outputs)] {
-                let x = if side == Side::Input {
-                    r.left()
-                } else {
-                    r.right()
-                };
-                for k in 0..list.len() {
-                    let y = if compact {
-                        r.center().y
-                    } else {
-                        r.top() + HEADER + (k as f32 + 0.5) * ROW
-                    };
-                    lay.ports.insert((i, side, k), pos2(x, y));
-                }
-            }
-        }
-        // Frames around unfolded groups.
-        for (g, group) in self.groups.iter().enumerate() {
-            if folded[g] {
-                continue;
-            }
-            let mut r = Rect::NOTHING;
-            for (i, n) in nodes.iter().enumerate() {
-                if n.group.as_deref() == Some(group.id.as_str())
-                    && let Some(b) = lay.box_of[i]
-                {
-                    r = r.union(lay.boxes[b].rect);
-                }
-            }
-            if r.is_positive() {
-                let mut r = r.expand(GROUP_PAD);
-                r.min.y -= GROUP_LABEL;
-                lay.frames.push((g, r));
-            }
-        }
+        let params = |i: usize| base.model.params(&base.nodes[i].id).len();
+        let pos = |n: &Node| self.pos_of(n);
+        let mut lay = lay_out(&LayoutIn {
+            nodes: base.nodes,
+            groups: self.groups,
+            folded: &folded,
+            collapsed: &self.state.collapsed,
+            level: self.level,
+            node_width: self.node_width,
+            overview_h: self.overview_h(),
+            param_h: param_h(&self.ctx),
+            params: &params,
+            pos: &pos,
+        });
+        lay.visible = self.lay.visible;
         self.lay = lay;
     }
 
     /// Where a port is drawn, by reference.
     fn port_pos(&self, p: &PortRef, side: Side) -> Option<Pos2> {
-        let i = self.base.nodes.iter().position(|n| n.id == p.node)?;
-        let n = &self.base.nodes[i];
-        let k = match side {
-            Side::Input => n.inputs.iter().position(|q| q.id == p.port)?,
-            Side::Output => n.outputs.iter().position(|q| q.id == p.port)?,
-        };
-        self.lay.ports.get(&(i, side, k)).copied()
+        port_at(self.base.nodes, &self.lay, p, side)
     }
 
     /// Whether ports are drawn and answer.
@@ -1135,9 +1074,8 @@ impl Cx<'_, '_, '_> {
     }
 
     fn bezier(&self, painter: &egui::Painter, a: Pos2, b: Pos2, color: Color32) {
-        let dx = ((b.x - a.x).abs() * 0.5).max(40.0);
         painter.add(egui::epaint::CubicBezierShape::from_points_stroke(
-            [a, a + vec2(dx, 0.0), b - vec2(dx, 0.0), b],
+            export::curve(a, b),
             false,
             Color32::TRANSPARENT,
             Stroke::new(self.wire_width(), color),
@@ -1160,33 +1098,18 @@ impl Cx<'_, '_, '_> {
     }
 
     fn paint_wires(&mut self, painter: &egui::Painter) {
-        let mut drawn: Vec<(Edge, Pos2, Pos2, Color32)> = Vec::new();
-        let mut seen: BTreeSet<[i64; 4]> = BTreeSet::new();
-        for e in self.base.edges {
-            if let Some(w) = &self.state.wire
-                && w.detached.as_ref() == Some(e)
-            {
-                continue;
-            }
-            let (Some(a), Some(b)) = (
-                self.port_pos(&e.from, Side::Output),
-                self.port_pos(&e.to, Side::Input),
-            ) else {
-                continue;
-            };
-            // Inside one stack, or drawn twice between stacks.
-            let same_box = self.box_of(&e.from.node).is_some()
-                && self.box_of(&e.from.node) == self.box_of(&e.to.node);
-            let key = [a.x, a.y, b.x, b.y].map(|v| (v * 4.0).round() as i64);
-            if same_box || !seen.insert(key) {
-                continue;
-            }
-            let color = self
-                .base
-                .port(&e.from, Side::Output)
-                .map_or(self.t.wire, |(_, p)| self.t.type_color(&self.ctx, &p.ty));
-            drawn.push((e.clone(), a, b, color));
-        }
+        let detached = self.state.wire.as_ref().and_then(|w| w.detached.as_ref());
+        let drawn: Vec<(Edge, Pos2, Pos2, Color32)> =
+            wires_drawn(self.base.nodes, self.base.edges, &self.lay, detached)
+                .into_iter()
+                .map(|(e, a, b)| {
+                    let color = self
+                        .base
+                        .port(&e.from, Side::Output)
+                        .map_or(self.t.wire, |(_, p)| self.t.type_color(&self.ctx, &p.ty));
+                    (e.clone(), a, b, color)
+                })
+                .collect();
         self.state.drawn.routes.clear();
         if self.state.wire_style != WireStyle::Orthogonal {
             for (_, a, b, color) in drawn {
@@ -1203,11 +1126,6 @@ impl Cx<'_, '_, '_> {
             painter.add(egui::Shape::line(route.clone(), Stroke::new(width, color)));
             self.state.drawn.routes.push((edge, route));
         }
-    }
-
-    fn box_of(&self, node: &str) -> Option<usize> {
-        let i = self.base.nodes.iter().position(|n| n.id == node)?;
-        self.lay.box_of[i]
     }
 
     /// The nodes of a group.
@@ -1335,11 +1253,7 @@ impl Cx<'_, '_, '_> {
 
     /// A node's height in the overview.
     fn overview_h(&self) -> f32 {
-        let want = Tokens::of(&self.ctx).font.body * 1.8 / self.zoom.max(0.01);
-        OVERVIEW_H
-            .into_iter()
-            .find(|h| *h >= want)
-            .unwrap_or(OVERVIEW_H[2])
+        overview_height(Tokens::of(&self.ctx).font.body, self.zoom)
     }
 
     /// The title's font size: in the overview, near half the node's
@@ -2384,6 +2298,195 @@ impl Cx<'_, '_, '_> {
             self.state.fit = true;
         }
     }
+}
+
+/// What a layout is made from.
+struct LayoutIn<'a> {
+    nodes: &'a [Node],
+    groups: &'a [Group],
+    /// Whether each group is folded into a stack, by index.
+    folded: &'a [bool],
+    collapsed: &'a BTreeSet<String>,
+    level: Level,
+    node_width: f32,
+    /// A node's height in the overview.
+    overview_h: f32,
+    /// A parameter row's height.
+    param_h: f32,
+    /// A node's number of parameters, by index (asked at the detail
+    /// level only).
+    params: &'a dyn Fn(usize) -> usize,
+    /// Where a node is drawn (its top-left corner).
+    pos: &'a dyn Fn(&Node) -> Pos2,
+}
+
+/// Lays a graph out: its boxes (stacks first, then nodes), its ports and
+/// the frames of its unfolded groups. The part in view is left empty.
+fn lay_out(input: &LayoutIn<'_>) -> Layout {
+    let nodes = input.nodes;
+    let mut lay = Layout {
+        box_of: vec![None; nodes.len()],
+        ..Layout::default()
+    };
+    let group_index = |id: &str| -> Option<usize> { input.groups.iter().position(|g| g.id == id) };
+    // Stacks: one box per folded group with members, where its
+    // first-placed member is.
+    let mut stack_box: HashMap<usize, usize> = HashMap::new();
+    for (i, n) in nodes.iter().enumerate() {
+        let Some(g) = n.group.as_deref().and_then(group_index) else {
+            continue;
+        };
+        if !input.folded[g] {
+            continue;
+        }
+        let p = (input.pos)(n);
+        let b = *stack_box.entry(g).or_insert_with(|| {
+            lay.boxes.push(Placed {
+                rect: Rect::from_min_size(p, Vec2::ZERO),
+                node: None,
+                group: Some(g),
+                collapsed: true,
+            });
+            lay.boxes.len() - 1
+        });
+        let r = &mut lay.boxes[b].rect;
+        r.min = r.min.min(p);
+        lay.box_of[i] = Some(b);
+    }
+    let stack_h = if input.level == Level::Overview {
+        input.overview_h
+    } else {
+        HEADER + ROW
+    };
+    for b in &mut lay.boxes {
+        b.rect = Rect::from_min_size(b.rect.min, vec2(input.node_width, stack_h));
+    }
+    for (i, n) in nodes.iter().enumerate() {
+        if lay.box_of[i].is_some() {
+            continue;
+        }
+        let collapsed = input.collapsed.contains(&n.id);
+        let rows = n.inputs.len().max(n.outputs.len());
+        let params = if input.level == Level::Detail && !collapsed {
+            (input.params)(i)
+        } else {
+            0
+        };
+        let h = match input.level {
+            Level::Overview => input.overview_h,
+            _ if collapsed => HEADER,
+            _ => HEADER + rows as f32 * ROW + params as f32 * input.param_h + PAD,
+        };
+        let rect = Rect::from_min_size((input.pos)(n), vec2(input.node_width, h));
+        lay.boxes.push(Placed {
+            rect,
+            node: Some(i),
+            group: None,
+            collapsed,
+        });
+        lay.box_of[i] = Some(lay.boxes.len() - 1);
+    }
+    // Ports: on their rows, or at the box's sides when it is
+    // compact.
+    for (i, n) in nodes.iter().enumerate() {
+        let Some(b) = lay.box_of[i] else { continue };
+        let placed = &lay.boxes[b];
+        let r = placed.rect;
+        let compact = placed.node.is_none() || placed.collapsed || input.level == Level::Overview;
+        for (side, list) in [(Side::Input, &n.inputs), (Side::Output, &n.outputs)] {
+            let x = if side == Side::Input {
+                r.left()
+            } else {
+                r.right()
+            };
+            for k in 0..list.len() {
+                let y = if compact {
+                    r.center().y
+                } else {
+                    r.top() + HEADER + (k as f32 + 0.5) * ROW
+                };
+                lay.ports.insert((i, side, k), pos2(x, y));
+            }
+        }
+    }
+    // Frames around unfolded groups.
+    for (g, group) in input.groups.iter().enumerate() {
+        if input.folded[g] {
+            continue;
+        }
+        let mut r = Rect::NOTHING;
+        for (i, n) in nodes.iter().enumerate() {
+            if n.group.as_deref() == Some(group.id.as_str())
+                && let Some(b) = lay.box_of[i]
+            {
+                r = r.union(lay.boxes[b].rect);
+            }
+        }
+        if r.is_positive() {
+            let mut r = r.expand(GROUP_PAD);
+            r.min.y -= GROUP_LABEL;
+            lay.frames.push((g, r));
+        }
+    }
+    lay
+}
+
+/// Where a port is laid out, by reference.
+fn port_at(nodes: &[Node], lay: &Layout, p: &PortRef, side: Side) -> Option<Pos2> {
+    let i = nodes.iter().position(|n| n.id == p.node)?;
+    let n = &nodes[i];
+    let k = match side {
+        Side::Input => n.inputs.iter().position(|q| q.id == p.port)?,
+        Side::Output => n.outputs.iter().position(|q| q.id == p.port)?,
+    };
+    lay.ports.get(&(i, side, k)).copied()
+}
+
+/// The wires drawn in a layout, with their ends (an output, then an
+/// input): none inside one stack, one where several join the same two
+/// points (between stacks); `skip` is the wire being dragged off.
+fn wires_drawn<'e>(
+    nodes: &[Node],
+    edges: &'e [Edge],
+    lay: &Layout,
+    skip: Option<&Edge>,
+) -> Vec<(&'e Edge, Pos2, Pos2)> {
+    let box_of = |node: &str| -> Option<usize> {
+        let i = nodes.iter().position(|n| n.id == node)?;
+        lay.box_of[i]
+    };
+    let mut drawn = Vec::new();
+    let mut seen: BTreeSet<[i64; 4]> = BTreeSet::new();
+    for e in edges {
+        if skip == Some(e) {
+            continue;
+        }
+        let (Some(a), Some(b)) = (
+            port_at(nodes, lay, &e.from, Side::Output),
+            port_at(nodes, lay, &e.to, Side::Input),
+        ) else {
+            continue;
+        };
+        // Inside one stack, or drawn twice between stacks.
+        let from_box = box_of(&e.from.node);
+        let same_box = from_box.is_some() && from_box == box_of(&e.to.node);
+        let key = [a.x, a.y, b.x, b.y].map(|v| (v * 4.0).round() as i64);
+        if same_box || !seen.insert(key) {
+            continue;
+        }
+        drawn.push((e, a, b));
+    }
+    drawn
+}
+
+/// A node's height in the overview at a zoom: the smallest that keeps
+/// its title (`body` points) readable.
+fn overview_height(body: f32, zoom: f32) -> f32 {
+    let want = body * 1.8 / zoom.max(0.01);
+    OVERVIEW_H
+        .into_iter()
+        .find(|h| *h >= want)
+        .unwrap_or(OVERVIEW_H[2])
 }
 
 /// A parameter row's height.

@@ -73,6 +73,8 @@ pub struct GraphState {
     pub(crate) fit: bool,
     /// How wires were drawn at the last frame.
     pub(crate) wire_style: WireStyle,
+    /// A node's width at the last frame, in graph units.
+    pub(crate) node_width: f32,
     /// Orthogonal routes, by layout.
     pub(crate) routes: RouteCache,
 }
@@ -106,6 +108,7 @@ impl Default for GraphState {
             requests: Vec::new(),
             fit: false,
             wire_style: WireStyle::default(),
+            node_width: super::NODE_WIDTH,
             routes: RouteCache::default(),
         }
     }
@@ -145,6 +148,12 @@ impl GraphState {
     /// How wires were drawn at the last frame.
     pub fn wire_style(&self) -> WireStyle {
         self.wire_style
+    }
+
+    /// A node's width at the last frame, in graph units (180 before
+    /// the first).
+    pub fn node_width(&self) -> f32 {
+        self.node_width
     }
 
     /// Whether a wire is being drawn.

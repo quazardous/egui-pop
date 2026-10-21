@@ -320,6 +320,70 @@ a connection is type-checked, then the edit runs its step.
 | `graph.edit` | `graph`, `edit` (`connect`, `disconnect`, `move`, `delete`, `add`) and the edit's fields | `queued` |
 | `graph.select` | `graph`, `nodes` | `queued` |
 | `graph.view` | `graph`, and `fit: true`, `level` or `focus` (a node) | `queued` |
+| `graph.export` | `graph`, `selection`, `level`, `wires`, `background`, `title` | `svg`: the graph as an image (see [Export](#export)) |
+
+## Export
+
+The graph exports as an SVG image, drawn from the model and its layout
+rather than from the screen: it is crisp at any size, and the same
+graph with the same options gives the same text, so an export can be
+compared in a test or reviewed in a diff.
+
+```rust
+use egui_pop::egui;
+use egui_pop::viewport::graph::{ExportOptions, GraphEditor, GraphExport, GraphModel, GraphState, Level, WireStyle};
+
+fn save(ctx: &egui::Context, graph: &dyn GraphModel, state: &mut GraphState) -> (String, String) {
+    // What this editor would draw: its wire style and node width.
+    let whole = GraphEditor::new(graph, state)
+        .wires(WireStyle::Orthogonal)
+        .export_svg(ctx, &ExportOptions::default());
+    // From a model and the state alone (the style drawn last), the
+    // selection with each node's parameters.
+    let selection = GraphExport::capture(ctx, graph, state)
+        .svg(&ExportOptions::default().selection(true).level(Level::Detail));
+    (whole, selection)
+}
+
+let _ = save;
+```
+
+| Option | Default | What |
+|---|---|---|
+| `selection` | `false` | Only the selected nodes, the wires between them and the frames of their groups (an empty selection, an empty image) |
+| `level` | `Level::Ports` | The overview (compact nodes, groups folded into stacks unless unfolded there), the ports, or the detail (each parameter's label, value and unit, and how far along its range it is) |
+| `background` | `true` | The graph's background behind the drawing; off, transparent |
+| `margin` | 24 | Around the drawing, in graph units |
+| `title` | "Node graph" | The image's `<title>`, for screen readers |
+
+What is drawn: group frames with their labels, the wires in the graph's
+`WireStyle` (curves, straight segments, or orthogonal routes computed
+for the exported layout) in their port type's colour, each node with
+its title bar, its type band, its ports and their labels, and stacks
+with their count. The state's collapsed nodes and folded groups are
+kept. What only an interactive canvas shows is left out: the grid, the
+selection's outline, focus rings, chevrons, the application's slot in
+title bars. Coordinates are graph units (a point at 100 %); the
+`viewBox` frames what is drawn and the margin.
+
+The colours and sizes come from the theme (`ExportTheme::of`: the
+`graph.*` tokens, each port type's colour token, the `font.family.ui`
+family then `sans-serif`, the body and small sizes); an application
+builds its own `ExportTheme` for a light export of a dark interface,
+and passes it to `GraphExport::with_theme`. Elements carry the graph's
+ids for tools and tests: `<g data-node>`, `<path data-edge="a.out->b.in">`,
+`<g data-group>`, `<g data-stack>`, `<circle data-port data-side>`,
+`<g data-param>`.
+
+PNG and PDF are not built in: resvg, already a dependency of the
+`svg` feature, renders SVG to pixels, but only with its text support,
+which brings its own font loading and shaping; an application that
+wants a raster renders the SVG with the tool it already has.
+
+`show_graph` keeps a copy of the graph at each frame
+(`GraphEditor::keep_export`, `GraphOutput::export`), which the
+`graph.export` command exports: `level` by name, `wires` (`curves`,
+`orthogonal`, `straight`) to draw another style than the editor's.
 
 ## A graph file
 

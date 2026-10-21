@@ -22,8 +22,10 @@
 //! Commands, for agents (`graph` names an editor shown with
 //! [`show_graph`]; without it, the only one): `graph.read` (the graph
 //! as drawn), `graph.edit` (an edit, done at the editor's next frame as
-//! the user's: type-checked, then its step), `graph.select` and
-//! `graph.view` (fit, a level, a node to focus).
+//! the user's: type-checked, then its step), `graph.select`,
+//! `graph.view` (fit, a level, a node to focus) and `graph.export` (the
+//! graph as an SVG image, from the copy the editor kept at its last
+//! frame).
 
 use std::collections::BTreeMap;
 use std::sync::Mutex;
@@ -34,7 +36,10 @@ use egui_pop_api::{AppHandle, Call, Ctx, CtxError};
 use egui_pop_model::commands::CommandSpec;
 use egui_pop_model::ids::{CommandId, StepId};
 use egui_pop_viewport::change::{Cause, Verdict};
-use egui_pop_viewport::graph::{Edit, GraphEditor, GraphEvent, GraphOutput, Level, Request};
+use egui_pop_viewport::graph::{
+    Edit, ExportOptions, GraphEditor, GraphEvent, GraphExport, GraphOutput, Level, Request,
+    WireStyle,
+};
 use serde_json::{Value as Json, json};
 
 pub const STEP_GRAPH_CONNECT: StepId = StepId::from_static("graph.connect");
@@ -52,6 +57,7 @@ pub const CMD_GRAPH_READ: CommandId = CommandId::from_static("graph.read");
 pub const CMD_GRAPH_EDIT: CommandId = CommandId::from_static("graph.edit");
 pub const CMD_GRAPH_SELECT: CommandId = CommandId::from_static("graph.select");
 pub const CMD_GRAPH_VIEW: CommandId = CommandId::from_static("graph.view");
+pub const CMD_GRAPH_EXPORT: CommandId = CommandId::from_static("graph.export");
 
 /// The node editors shown with an application, by name: their last
 /// snapshot and the requests waiting for their next frame.
@@ -64,6 +70,8 @@ pub struct Graphs {
 struct Entry {
     snapshot: Json,
     queue: Vec<Request>,
+    /// The graph as drawn last, to export.
+    export: Option<GraphExport>,
 }
 
 /// The registry, a service of [`ImagingPlugin`](crate::ImagingPlugin).
@@ -100,8 +108,18 @@ impl Graphs {
             .unwrap_or_default()
     }
 
-    fn publish(&self, name: &str, snapshot: Json) {
-        self.lock().entry(name.to_string()).or_default().snapshot = snapshot;
+    /// An editor's graph as it drew it last, ready to export.
+    pub fn export(&self, name: &str) -> Option<GraphExport> {
+        self.lock().get(name).and_then(|e| e.export.clone())
+    }
+
+    fn publish(&self, name: &str, snapshot: Json, export: Option<GraphExport>) {
+        let mut all = self.lock();
+        let e = all.entry(name.to_string()).or_default();
+        e.snapshot = snapshot;
+        if export.is_some() {
+            e.export = export;
+        }
     }
 }
 
@@ -142,9 +160,9 @@ pub fn graph<'a>(
 }
 
 /// Shows a node editor as part of the application: its edits run their
-/// steps, its events go on the journal, agents' requests reach it and
-/// `graph.read` sees what it drew. `name` names it to steps and
-/// commands.
+/// steps, its events go on the journal, agents' requests reach it, and
+/// `graph.read` and `graph.export` see what it drew. `name` names it to
+/// steps and commands.
 pub fn show_graph(
     app: &AppHandle,
     name: &str,
@@ -157,6 +175,7 @@ pub fn show_graph(
         .requests(queued)
         .on_edit(graph(app, name))
         .describe(graphs.is_some())
+        .keep_export(graphs.is_some())
         .show(ui);
     for e in &out.events {
         let (event, data) = match e {
@@ -176,7 +195,7 @@ pub fn show_graph(
         app.publish("graph", None, event, data);
     }
     if let (Some(g), Some(s)) = (graphs, out.snapshot.as_ref()) {
-        g.publish(name, s.clone());
+        g.publish(name, s.clone(), out.export.clone());
     }
     out
 }
@@ -331,12 +350,7 @@ pub(crate) fn connect(ctx: &mut Ctx<'_>) -> Result<(), CtxError> {
             let request = if a.get("fit").and_then(Json::as_bool) == Some(true) {
                 Request::Fit
             } else if let Some(l) = a.get("level").and_then(Json::as_str) {
-                Request::Level(match l {
-                    "overview" => Level::Overview,
-                    "ports" => Level::Ports,
-                    "detail" => Level::Detail,
-                    _ => return Err(format!("no level `{l}`")),
-                })
+                Request::Level(level_of(l)?)
             } else if let Some(n) = a.get("focus").and_then(Json::as_str) {
                 Request::Focus(n.to_string())
             } else {
@@ -346,5 +360,54 @@ pub(crate) fn connect(ctx: &mut Ctx<'_>) -> Result<(), CtxError> {
             Ok(json!({ "graph": name, "queued": "view" }))
         },
     )?;
+    ctx.command(
+        CommandSpec::new(CMD_GRAPH_EXPORT, "Export the graph", CAT)
+            .description("A node editor's graph as an SVG image, drawn from the graph and its layout as the editor drew it last: `selection` (true: only the selected nodes), `level` (overview, ports or detail; ports by default), `wires` (curves, orthogonal or straight; the editor's by default), `background` (false: transparent), `title`. Gives `svg`.")
+            .hidden()
+            .args(json!({ "graph": "main", "selection": false, "level": "ports" })),
+        |call| {
+            let (graphs, name) = target(call)?;
+            let export = graphs
+                .export(&name)
+                .ok_or_else(|| format!("no graph to export from `{name}` yet"))?;
+            let (export, options) = export_args(export, call.args)?;
+            let svg = export.svg(&options);
+            Ok(json!({ "graph": name, "format": "svg", "svg": svg }))
+        },
+    )?;
     Ok(())
+}
+
+/// A level by its name.
+fn level_of(name: &str) -> Result<Level, String> {
+    match name {
+        "overview" => Ok(Level::Overview),
+        "ports" => Ok(Level::Ports),
+        "detail" => Ok(Level::Detail),
+        _ => Err(format!("no level `{name}`")),
+    }
+}
+
+/// `graph.export`'s arguments: the options, and the wire style.
+fn export_args(export: GraphExport, a: &Json) -> Result<(GraphExport, ExportOptions), String> {
+    let mut options = ExportOptions::default();
+    if let Some(on) = a.get("selection").and_then(Json::as_bool) {
+        options = options.selection(on);
+    }
+    if let Some(l) = a.get("level").and_then(Json::as_str) {
+        options = options.level(level_of(l)?);
+    }
+    if let Some(on) = a.get("background").and_then(Json::as_bool) {
+        options = options.background(on);
+    }
+    if let Some(t) = a.get("title").and_then(Json::as_str) {
+        options = options.title(t);
+    }
+    let export = match a.get("wires").and_then(Json::as_str) {
+        Some(w) => {
+            export.wires(WireStyle::from_name(w).ok_or_else(|| format!("no wire style `{w}`"))?)
+        }
+        None => export,
+    };
+    Ok((export, options))
 }

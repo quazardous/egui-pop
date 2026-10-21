@@ -1,10 +1,12 @@
 //! A node editor's edits run their `graph.*` steps (a veto, a
-//! redirect), and agents read and edit a graph through commands.
+//! redirect), and agents read, edit and export a graph through
+//! commands.
 
 use egui_pop_api::steps::Before;
 use egui_pop_api::{App, Ctx, Plugin, PluginError};
 use egui_pop_imaging::graph::{
-    CMD_GRAPH_EDIT, CMD_GRAPH_READ, CMD_GRAPH_SELECT, STEP_GRAPH_ADD, STEP_GRAPH_CONNECT,
+    CMD_GRAPH_EDIT, CMD_GRAPH_EXPORT, CMD_GRAPH_READ, CMD_GRAPH_SELECT, STEP_GRAPH_ADD,
+    STEP_GRAPH_CONNECT,
 };
 use egui_pop_imaging::{IMAGING_PLUGIN, ImagingPlugin};
 use egui_pop_model::commands::Origin;
@@ -246,6 +248,38 @@ fn agents_read_and_edit_a_graph_through_commands() {
         .unwrap();
     assert_eq!(read["selection"], json!(["blur"]));
     assert_eq!(read["edges"].as_array().map(Vec::len), Some(1));
+
+    // The graph as an image: the whole of it, then the selection.
+    let mut export = |args| {
+        app.run(&CMD_GRAPH_EXPORT, args, agent())
+            .now()
+            .unwrap()
+            .unwrap()
+    };
+    let all = export(json!({ "graph": "main" }));
+    assert_eq!(all["format"], "svg");
+    let svg = all["svg"].as_str().expect("the svg");
+    assert!(
+        svg.starts_with("<svg xmlns=\"http://www.w3.org/2000/svg\""),
+        "{svg}"
+    );
+    assert_eq!(svg.matches("<g data-node=").count(), 2, "{svg}");
+    assert_eq!(svg.matches("data-edge=").count(), 1, "{svg}");
+    assert_eq!(
+        export(json!({ "graph": "main" }))["svg"],
+        all["svg"],
+        "the same text"
+    );
+    let selected = export(json!({ "selection": true, "wires": "straight" }));
+    let svg = selected["svg"].as_str().expect("the svg");
+    assert!(svg.contains("<g data-node=\"blur\">"), "{svg}");
+    assert!(!svg.contains("data-node=\"load\""), "{svg}");
+    assert!(!svg.contains("data-edge="), "{svg}");
+    let bad = app
+        .run(&CMD_GRAPH_EXPORT, json!({ "level": "huge" }), agent())
+        .now()
+        .unwrap();
+    assert!(bad.is_err(), "{bad:?}");
 
     // Unknown edits are refused by the command itself.
     let bad = app
