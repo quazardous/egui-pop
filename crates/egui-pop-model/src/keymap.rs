@@ -14,6 +14,14 @@
 //! and keypad digits are the same. A shortcut is one or more chords
 //! (`Ctrl+K Ctrl+S`).
 //!
+//! A chord's key may also be a pointer gesture ([`Pointer`]): the wheel,
+//! a smooth scroll, a pinch, a click, a double click or a drag of a
+//! button, with the same modifiers (`Ctrl+Wheel`, `MiddleDrag`,
+//! `Shift+PrimaryDrag`). Such a chord stands alone (never in a
+//! sequence) and is bound in a canvas's scope (`surface:canvas.image`);
+//! the key dispatcher never sees it: the canvas asks the keymap
+//! ([`Keymap::pointer_bindings`]) what its gestures do.
+//!
 //! ```
 //! use egui_pop_model::ids::{CommandId, OwnerId};
 //! use egui_pop_model::keymap::{Action, Keymap, Keys, Layer, Resolution};
@@ -48,14 +56,112 @@ pub enum Layer {
     User,
 }
 
-/// One chord: modifiers and a logical key.
+/// A pointer button, by its logical role: the system swaps primary and
+/// secondary for a left hand, and the application never sees it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize)]
+pub enum Button {
+    Primary,
+    Secondary,
+    Middle,
+    Back,
+    Forward,
+}
+
+impl Button {
+    pub const ALL: [Button; 5] = [
+        Button::Primary,
+        Button::Secondary,
+        Button::Middle,
+        Button::Back,
+        Button::Forward,
+    ];
+
+    /// As in chords: `Primary`, `Secondary`, `Middle`, `Back`, `Forward`.
+    pub fn name(self) -> &'static str {
+        match self {
+            Button::Primary => "Primary",
+            Button::Secondary => "Secondary",
+            Button::Middle => "Middle",
+            Button::Back => "Back",
+            Button::Forward => "Forward",
+        }
+    }
+}
+
+/// The pointer part of a chord: what the pointer does while the chord's
+/// modifiers are held.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize)]
+pub enum Pointer {
+    /// A mouse wheel's notches (line units).
+    Wheel,
+    /// A smooth scroll in points: a trackpad's two fingers, a
+    /// free-spinning or high-resolution wheel.
+    Scroll,
+    /// A pinch: a trackpad's or a touch screen's two fingers moving
+    /// apart or together (a browser also sends a trackpad's pinch this
+    /// way).
+    Pinch,
+    /// A button pressed and released without moving.
+    Click(Button),
+    DoubleClick(Button),
+    /// A button held while the pointer moves.
+    Drag(Button),
+}
+
+impl Pointer {
+    /// Every pointer gesture, in a stable order.
+    pub fn all() -> Vec<Pointer> {
+        let mut out = vec![Pointer::Wheel, Pointer::Scroll, Pointer::Pinch];
+        for b in Button::ALL {
+            out.extend([Pointer::Click(b), Pointer::DoubleClick(b), Pointer::Drag(b)]);
+        }
+        out
+    }
+
+    /// As in chords: `Wheel`, `Scroll`, `Pinch`, `PrimaryClick`,
+    /// `MiddleDoubleClick`, `SecondaryDrag`.
+    pub fn name(self) -> String {
+        match self {
+            Pointer::Wheel => "Wheel".into(),
+            Pointer::Scroll => "Scroll".into(),
+            Pointer::Pinch => "Pinch".into(),
+            Pointer::Click(b) => format!("{}Click", b.name()),
+            Pointer::DoubleClick(b) => format!("{}DoubleClick", b.name()),
+            Pointer::Drag(b) => format!("{}Drag", b.name()),
+        }
+    }
+
+    /// From its name, in any case.
+    pub fn parse(text: &str) -> Option<Pointer> {
+        Pointer::all()
+            .into_iter()
+            .find(|p| p.name().eq_ignore_ascii_case(text))
+    }
+
+    /// The wheel, a scroll or a pinch (not a button).
+    pub fn is_wheel(self) -> bool {
+        matches!(self, Pointer::Wheel | Pointer::Scroll | Pointer::Pinch)
+    }
+
+    /// Its button, for a click, a double click or a drag.
+    pub fn button(self) -> Option<Button> {
+        match self {
+            Pointer::Click(b) | Pointer::DoubleClick(b) | Pointer::Drag(b) => Some(b),
+            _ => None,
+        }
+    }
+}
+
+/// One chord: modifiers and a logical key, or a pointer gesture
+/// ([`Chord::pointer`]).
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize)]
 pub struct Chord {
     pub ctrl: bool,
     pub alt: bool,
     pub shift: bool,
     pub meta: bool,
-    /// Lowercase key name: `a`, `3`, `f1`, `space`, `tab`, `escape`.
+    /// Lowercase key name: `a`, `3`, `f1`, `space`, `tab`, `escape`; or
+    /// a pointer gesture's name, lowercase (`wheel`, `middledrag`).
     pub key: String,
 }
 
@@ -97,6 +203,44 @@ impl Chord {
         c.key = normalize_key(&key);
         Ok(c)
     }
+
+    /// A pointer gesture without modifiers.
+    pub fn pointer_gesture(pointer: Pointer) -> Chord {
+        Chord::key(&pointer.name())
+    }
+
+    /// Its pointer gesture, when its key is one.
+    pub fn pointer(&self) -> Option<Pointer> {
+        Pointer::parse(&self.key)
+    }
+
+    /// Whether it is a pointer gesture.
+    pub fn is_pointer(&self) -> bool {
+        self.pointer().is_some()
+    }
+
+    /// The same modifiers, nothing else (what a held set of keys is
+    /// compared with).
+    pub fn same_modifiers(&self, other: &Chord) -> bool {
+        (self.ctrl, self.alt, self.shift, self.meta)
+            == (other.ctrl, other.alt, other.shift, other.meta)
+    }
+
+    /// Modifiers alone, as in files: `Ctrl+Shift`, `Alt`, empty for
+    /// none. The chord's key is empty.
+    pub fn parse_modifiers(text: &str) -> Result<Chord, String> {
+        let mut c = Chord::key("");
+        for m in text.split('+').map(str::trim).filter(|m| !m.is_empty()) {
+            match m.to_lowercase().as_str() {
+                "ctrl" | "control" => c.ctrl = true,
+                "alt" | "option" => c.alt = true,
+                "shift" => c.shift = true,
+                "meta" | "super" | "cmd" => c.meta = true,
+                other => return Err(format!("`{other}` is not a modifier in `{text}`")),
+            }
+        }
+        Ok(c)
+    }
 }
 
 /// Keypad digits are digits; `esc` is `escape`.
@@ -122,6 +266,9 @@ impl fmt::Display for Chord {
                 write!(f, "{name}+")?;
             }
         }
+        if let Some(p) = self.pointer() {
+            return write!(f, "{}", p.name());
+        }
         let mut k = self.key.clone();
         if let Some(first) = k.get_mut(0..1) {
             first.make_ascii_uppercase();
@@ -143,7 +290,20 @@ impl Keys {
         if chords.is_empty() {
             return Err("no keys".into());
         }
+        if chords.len() > 1 && chords.iter().any(Chord::is_pointer) {
+            return Err(format!(
+                "a pointer gesture is a chord of its own, never in a sequence: `{text}`"
+            ));
+        }
         Ok(Keys(chords))
+    }
+
+    /// Its pointer gesture, when it is one chord holding one.
+    pub fn pointer(&self) -> Option<(&Chord, Pointer)> {
+        match self.0.as_slice() {
+            [c] => c.pointer().map(|p| (c, p)),
+            _ => None,
+        }
     }
 }
 
@@ -808,6 +968,30 @@ impl Keymap {
         out
     }
 
+    /// The live bindings of pointer gestures ([`Pointer`]), one per scope
+    /// and gesture: the winner among those of the same keys in the same
+    /// scope by layer, then the clause testing more keys, then the last
+    /// declared (the order [`Keymap::conflicts`] reports). Clauses are
+    /// not evaluated: a canvas reads this table once per change of the
+    /// keymap.
+    pub fn pointer_bindings(&self) -> Vec<Binding> {
+        let mut out: Vec<(Binding, (Layer, usize, u64))> = Vec::new();
+        for (order, r) in self.live() {
+            if r.binding.keys.pointer().is_none() {
+                continue;
+            }
+            let rank = (r.binding.layer, r.when.specificity(), order);
+            match out.iter_mut().find(|(b, _)| {
+                b.keys == r.binding.keys && b.options.scope == r.binding.options.scope
+            }) {
+                Some(slot) if rank > slot.1 => *slot = (r.binding.clone(), rank),
+                Some(_) => {}
+                None => out.push((r.binding.clone(), rank)),
+            }
+        }
+        out.into_iter().map(|(b, _)| b).collect()
+    }
+
     /// The keys bound to a command (what menus and tooltips show).
     pub fn keys_for(&self, command: &CommandId) -> Vec<Keys> {
         let mut keys: Vec<Keys> = self
@@ -941,6 +1125,48 @@ impl Keymap {
         Ok(())
     }
 
+    /// [`Keymap::rebind`] with several keys at once (none: no key at
+    /// all): what a pointer gesture keeps when one of its gestures is
+    /// added or taken away (`Wheel`, `Ctrl+Scroll`, `Pinch` all zoom).
+    pub fn rebind_all(
+        &mut self,
+        owner: &OwnerId,
+        layer: Layer,
+        command: &CommandId,
+        keys: &[&str],
+    ) -> Result<(), String> {
+        let parsed = keys
+            .iter()
+            .map(|k| Keys::parse(k))
+            .collect::<Result<Vec<_>, _>>()?;
+        let scope = self
+            .rules
+            .iter()
+            .filter(|s| {
+                s.item.binding.layer < layer
+                    && s.item.binding.action == Action::Run(command.clone())
+            })
+            .max_by_key(|s| s.item.binding.layer)
+            .map(|s| s.item.binding.options.scope.clone())
+            .unwrap_or_default();
+        self.reset(owner, layer, command);
+        self.bind(owner, layer, "", Action::Remove(command.clone()), "")?;
+        for k in parsed {
+            self.bind_with(
+                owner,
+                layer,
+                &k.to_string(),
+                Action::Run(command.clone()),
+                "",
+                BindOptions {
+                    scope: scope.clone(),
+                    ..BindOptions::default()
+                },
+            )?;
+        }
+        Ok(())
+    }
+
     /// Takes back what [`Keymap::rebind`] did: the owner's rules in
     /// `layer` running or removing the command go. Returns how many.
     pub fn reset(&mut self, owner: &OwnerId, layer: Layer, command: &CommandId) -> usize {
@@ -1018,6 +1244,12 @@ fn doc_binding(b: &Binding) -> DocBinding {
         typing: o.typing,
         through_modal: o.through_modal,
     }
+}
+
+/// Version 3 of the keymap document lets a chord be a pointer gesture
+/// (`Ctrl+Wheel`, `MiddleDrag`); version 2 documents read the same.
+pub fn pointer_chords(json: serde_json::Value) -> Result<serde_json::Value, String> {
+    Ok(json)
 }
 
 /// Version 1 of the keymap document gave a command's removal a
