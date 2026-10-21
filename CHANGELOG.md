@@ -26,6 +26,10 @@ publishes.
   translated title; the breadcrumb, the announcement of where the user
   is and the undo toast say it. `context.read` now lists the crumbs
   (`projection.crumbs`).
+- A place's arrangement from its payload (egui-pop-model,
+  egui-pop-api): `FrameSpec::arrangement_for` chooses the arrangement an
+  entry starts from, falling back to `FrameSpec::arrangement`; the layout
+  a place was left with still wins on later entries.
 - A reference graph model in a YAML file (egui-pop-viewport, the new
   `graph-yaml` feature; the facade's `graph-yaml`):
   `graph::yaml::YamlGraph` implements `GraphModel` for applications

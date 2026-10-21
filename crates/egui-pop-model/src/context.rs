@@ -119,6 +119,10 @@ pub struct LabelCall<'a> {
 /// number).
 pub type Label = Arc<dyn Fn(&LabelCall<'_>) -> Option<String> + Send + Sync>;
 
+/// The arrangement a place starts from, chosen from its payload
+/// (`FrameSpec::arrangement_for`): `None` falls back to its arrangement.
+pub type ArrangementFor = Arc<dyn Fn(&Json) -> Option<String> + Send + Sync>;
+
 /// A frame as declared.
 #[derive(Clone, Serialize)]
 pub struct FrameSpec {
@@ -168,6 +172,9 @@ pub struct FrameSpec {
     /// A place: its crumb's label from its payload.
     #[serde(skip)]
     pub label: Option<Label>,
+    /// A place: the arrangement it starts from, from its payload.
+    #[serde(skip)]
+    pub arrangement_for: Option<ArrangementFor>,
 }
 
 impl fmt::Debug for FrameSpec {
@@ -203,6 +210,7 @@ impl FrameSpec {
             can_enter: None,
             can_leave: None,
             label: None,
+            arrangement_for: None,
         }
     }
 
@@ -298,6 +306,19 @@ impl FrameSpec {
         self
     }
 
+    /// A place: the arrangement (a template or a saved name) an entry
+    /// starts from, chosen from its payload; `None` falls back to
+    /// [`arrangement`](Self::arrangement). Read the first time a
+    /// projection key is shown: the layout it was left with wins on
+    /// later entries.
+    pub fn arrangement_for(
+        mut self,
+        f: impl Fn(&Json) -> Option<String> + Send + Sync + 'static,
+    ) -> Self {
+        self.arrangement_for = Some(Arc::new(f));
+        self
+    }
+
     /// The crumb label [`label`](Self::label) gives for a payload, if
     /// any.
     pub fn label_of(&self, title: &str, payload: &Json) -> Option<String> {
@@ -307,6 +328,12 @@ impl FrameSpec {
             payload,
             title,
         })
+    }
+
+    /// The arrangement [`arrangement_for`](Self::arrangement_for) chooses
+    /// for a payload, if any.
+    pub fn arrangement_of(&self, payload: &Json) -> Option<String> {
+        self.arrangement_for.as_ref().and_then(|f| f(payload))
     }
 
     /// The `when` clause that holds while the frame is on: `place ==
@@ -1594,5 +1621,23 @@ mod tests {
         // The hook is not part of what is serialised (`context.read`).
         let text = serde_json::to_value(&space).unwrap();
         assert!(text.get("label").is_none(), "{text}");
+    }
+
+    #[test]
+    fn a_place_picks_its_arrangement_from_its_payload() {
+        let space = FrameSpec::place(ALBUM, "Space")
+            .arrangement("Plain")
+            .arrangement_for(|p| (p["id"] == "dark").then(|| "Darkroom".to_string()));
+        assert_eq!(
+            space.arrangement_of(&json!({ "id": "dark" })).as_deref(),
+            Some("Darkroom")
+        );
+        assert_eq!(space.arrangement_of(&json!({ "id": "map" })), None);
+        assert_eq!(
+            FrameSpec::place(PHOTO, "Photo").arrangement_of(&json!(1)),
+            None
+        );
+        let text = serde_json::to_value(&space).unwrap();
+        assert!(text.get("arrangement_for").is_none(), "{text}");
     }
 }

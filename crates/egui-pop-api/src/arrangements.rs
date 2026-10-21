@@ -116,7 +116,8 @@ pub fn arranged_frame(app: &AppHandle) -> Option<(FrameId, Option<String>)> {
     arranged_in(&svc.shown(), &svc.frames())
 }
 
-/// [`arranged_frame`] of a state.
+/// [`arranged_frame`] of a state. A place declares the arrangement its
+/// payload chooses (`FrameSpec::arrangement_for`), else its own.
 pub(crate) fn arranged_in(
     state: &State,
     frames: &FrameRegistry,
@@ -129,10 +130,11 @@ pub(crate) fn arranged_in(
     });
     mode.or_else(|| {
         state.places.last().map(|e| {
-            (
-                e.frame.clone(),
-                frames.get(&e.frame).and_then(|s| s.arrangement.clone()),
-            )
+            let declared = frames.get(&e.frame).and_then(|s| {
+                s.arrangement_of(&e.payload)
+                    .or_else(|| s.arrangement.clone())
+            });
+            (e.frame.clone(), declared)
         })
     })
 }

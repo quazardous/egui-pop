@@ -961,7 +961,8 @@ fn derive(
             match arranged {
                 // A mode with an arrangement of its own.
                 Some((frame, declared)) if Some(&frame) != place => arrangement(&frame, declared),
-                // The place: as it was left, else its arrangement.
+                // The place: as it was left, else its arrangement (the
+                // one its payload chooses, `FrameSpec::arrangement_for`).
                 Some((frame, declared)) => p
                     .layouts
                     .get(&base.projection_key())

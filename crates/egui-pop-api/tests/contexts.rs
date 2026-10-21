@@ -757,7 +757,8 @@ fn each_workspace_keeps_its_own_stack_beside_its_layout() {
 }
 
 /// A place whose payload is an object, `{"id": "…"}` (a sub-workspace):
-/// its crumb says the sub-workspace's name.
+/// its crumb says the sub-workspace's name, its arrangement depends on
+/// which one.
 const SPACE: FrameId = FrameId::from_static("demo.space");
 
 struct Spaces;
@@ -772,11 +773,13 @@ impl Plugin for Spaces {
     }
 
     fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
-        let space = FrameSpec::place(SPACE, "Space").label(|c| match c.payload["id"].as_str() {
-            Some("dark") => Some("Darkroom".into()),
-            Some(id) => Some(format!("{} {id}", c.title)),
-            None => None,
-        });
+        let space = FrameSpec::place(SPACE, "Space")
+            .label(|c| match c.payload["id"].as_str() {
+                Some("dark") => Some("Darkroom".into()),
+                Some(id) => Some(format!("{} {id}", c.title)),
+                None => None,
+            })
+            .arrangement_for(|p| (p["id"] == "dark").then(|| "Album view".to_string()));
         ctx.frame(space)?;
         Ok(())
     }
@@ -836,4 +839,35 @@ fn a_place_labels_its_crumb_from_its_payload() {
     h.query_all_by_label("Main").next().unwrap().click();
     h.run();
     assert_eq!(key(&h, "place"), "root");
+}
+
+#[test]
+fn a_place_starts_from_the_arrangement_its_payload_chooses() {
+    use egui_pop_api::arrangements;
+    let mut h = harness(spaces());
+    let app = h.state().handle().clone();
+    assert!(app.panel_visible(&TREE));
+    // First entry of the dark one: the arrangement its payload chooses.
+    assert!(contexts::enter(&app, SPACE, json!({ "id": "dark" })).ok());
+    h.run();
+    assert!(!app.panel_visible(&TREE));
+    assert_eq!(arrangements::current(&app), "Album view");
+    // Changed there, then left.
+    app.move_panel(&LOG, Area::EndSide);
+    h.run();
+    assert!(contexts::back(&app).ok());
+    h.run();
+    // Another one, which chooses nothing: the frame's arrangement (none
+    // declared: the layout shown).
+    assert!(contexts::enter(&app, SPACE, json!({ "id": "map" })).ok());
+    h.run();
+    assert!(app.panel_visible(&TREE));
+    assert_eq!(app.layout().area_of(&LOG), Some(Area::Bottom));
+    assert!(contexts::back(&app).ok());
+    h.run();
+    // Back in the dark one: the layout it was left with wins.
+    assert!(contexts::enter(&app, SPACE, json!({ "id": "dark" })).ok());
+    h.run();
+    assert!(!app.panel_visible(&TREE));
+    assert_eq!(app.layout().area_of(&LOG), Some(Area::EndSide));
 }

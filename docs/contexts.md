@@ -103,13 +103,23 @@ user is and the undo toast all say the crumb this way.
 const SPACE: FrameId = FrameId::from_static("photos.space");
 let space = FrameSpec::place(SPACE, "Workspace")
     // The sub-workspace's name, read from the application's own state.
-    .label(|c| c.payload["id"].as_str().and_then(name_of));
+    .label(|c| c.payload["id"].as_str().and_then(name_of))
+    // The darkroom starts from its own arrangement, the others from the
+    // frame's.
+    .arrangement_for(|p| (p["id"] == "darkroom").then(|| "Darkroom".to_string()))
+    .arrangement("Workspace");
 ```
 
 The label is called while the interface draws: it reads what the
 application keeps (behind an `Arc` it captured), never the context
 stack itself.
 
+`FrameSpec::arrangement_for` chooses, from the payload, the arrangement
+an entry starts from; `None` falls back to the frame's
+`arrangement`. The chosen one is what the place declares for that
+payload: the next section's rules apply to it unchanged (the layout a
+projection key was left with wins on later entries; the user's choice
+for the frame wins over what it declares).
 
 ## Arrangements by place and mode
 
