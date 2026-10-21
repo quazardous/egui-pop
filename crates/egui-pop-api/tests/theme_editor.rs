@@ -1,13 +1,16 @@
 //! The theme editor: a token edited in its view changes the theme, its
 //! contrast is measured, undo takes it back, a theme exported is
-//! imported the same, and steps veto changes.
+//! imported the same, and steps veto changes. A light and dark pair is
+//! edited as a pair: its switch, its file, and its other variant
+//! generated.
 
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
 use egui_pop_api::steps::Before;
 use egui_pop_api::theme_editor::{
-    self, CMD_THEME_EXPORT, CMD_THEME_IMPORT, CMD_THEME_READ, CMD_THEME_SET, CMD_THEME_START,
-    CMD_THEME_UNDO, Cause, STEP_THEME_TOKEN, THEME_EDITOR, ThemeEditorPlugin,
+    self, CMD_THEME_COUNTERPART, CMD_THEME_EXPORT, CMD_THEME_IMPORT, CMD_THEME_READ, CMD_THEME_SET,
+    CMD_THEME_START, CMD_THEME_SWITCH, CMD_THEME_UNDO, Cause, STEP_THEME_TOKEN, THEME_EDITOR,
+    ThemeEditorPlugin,
 };
 use egui_pop_api::zones::{self, Block};
 use egui_pop_api::{App, Ctx, Plugin, PluginError};
@@ -656,4 +659,188 @@ fn the_contrast_readouts_carry_the_apca_lightness_contrast() {
         .select("text.default");
     h.run();
     assert!(h.query_by_label("APCA Lc").is_some());
+}
+
+#[test]
+fn the_editor_s_switch_edits_the_other_variant_and_keeps_the_pair() {
+    let mut h = harness(ThemeSpec::new("pop-dark"));
+    h.run();
+    let handle = h.state().handle().clone();
+    run(
+        &mut h,
+        &CMD_THEME_SET,
+        json!({ "path": "surface.panel", "value": "#101010" }),
+    );
+    h.run();
+    assert_eq!(run(&mut h, &CMD_THEME_READ, json!({}))["variant"], "dark");
+
+    // The switch: the light variant edited, and shown.
+    h.get_by_label("Light").click();
+    h.run();
+    h.run();
+    let read = run(&mut h, &CMD_THEME_READ, json!({}));
+    assert_eq!(read["base"], "pop-light");
+    assert_eq!(read["variant"], "light");
+    assert_eq!(read["overrides"], json!({}));
+    assert_eq!(read["can_undo"], false);
+    assert_eq!(
+        read["counterpart"]["overrides"],
+        json!({ "surface.panel": "#101010" })
+    );
+    assert_eq!(handle.theme().preference(), egui::ThemePreference::Light);
+    assert_eq!(Tokens::of(&h.ctx).resolved().spec().base, "pop-light");
+    assert!(egui_pop_core::theme::is_paired(&h.ctx));
+
+    // An edit of the light variant, its own.
+    run(
+        &mut h,
+        &CMD_THEME_SET,
+        json!({ "path": "info", "value": "#0000ff" }),
+    );
+    h.run();
+    let spec = handle.theme().spec();
+    assert_eq!(spec.base, "pop-dark");
+    assert_eq!(
+        spec.overrides,
+        [("surface.panel".to_string(), json!("#101010"))].into()
+    );
+    assert_eq!(
+        spec.counterpart_overrides,
+        Some([("info".to_string(), json!("#0000ff"))].into())
+    );
+
+    // Back to dark: its edit and history kept; undo is the dark one's.
+    h.get_by_label("Dark").click();
+    h.run();
+    h.run();
+    let read = run(&mut h, &CMD_THEME_READ, json!({}));
+    assert_eq!(read["base"], "pop-dark");
+    assert_eq!(read["can_undo"], true);
+    run(&mut h, &CMD_THEME_UNDO, json!({}));
+    h.run();
+    let spec = handle.theme().spec();
+    assert!(spec.overrides.is_empty());
+    assert_eq!(spec.counterpart_overrides.map(|o| o.len()), Some(1));
+    // The command does the same.
+    assert_eq!(
+        run(&mut h, &CMD_THEME_SWITCH, json!({}))["base"],
+        "pop-light"
+    );
+    h.run();
+    assert_eq!(Tokens::of(&h.ctx).resolved().spec().base, "pop-light");
+}
+
+#[test]
+fn a_theme_alone_has_no_switch() {
+    let mut h = harness(ThemeSpec::new("pop-high-contrast"));
+    h.run();
+    assert!(h.query_by_label("Variant edited").is_none());
+    let out = h
+        .state_mut()
+        .run(&CMD_THEME_SWITCH, json!({}), Origin::Agent("test".into()));
+    assert!(out.now().unwrap().is_err());
+}
+
+#[test]
+fn a_pair_is_saved_as_a_new_pair_and_opened_back() {
+    let mut h = harness(ThemeSpec::new("gruvbox-dark"));
+    h.run();
+    run(
+        &mut h,
+        &CMD_THEME_SET,
+        json!({ "path": "accent.default", "value": "#40a0ff" }),
+    );
+    run(&mut h, &CMD_THEME_SWITCH, json!({}));
+    run(
+        &mut h,
+        &CMD_THEME_SET,
+        json!({ "path": "accent.default", "value": "#2060c0" }),
+    );
+    h.run();
+    let installed = h.state().handle().theme().spec();
+    let text = run(&mut h, &CMD_THEME_EXPORT, json!({ "name": "ocean" }))["text"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let file: Json = serde_json::from_str(&text).unwrap();
+    assert_eq!(file["$extends"], "gruvbox-dark");
+    assert_eq!(file["accent"]["default"]["$value"], "#40a0ff");
+    let x = &file["$extensions"];
+    assert_eq!(x["org.egui-pop.variant-of"], "ocean-light");
+    assert_eq!(x["org.egui-pop.counterpart"]["name"], "ocean-light");
+    let inner = &x["org.egui-pop.counterpart"]["file"];
+    assert_eq!(inner["$extends"], "gruvbox-light");
+    assert_eq!(inner["accent"]["default"]["$value"], "#2060c0");
+
+    // Another theme, then the file: the same pair, installed.
+    run(&mut h, &CMD_THEME_START, json!({ "base": "pop-dark" }));
+    h.run();
+    let out = run(&mut h, &CMD_THEME_IMPORT, json!({ "text": text }));
+    assert_eq!(out["warnings"], json!([]));
+    h.run();
+    let spec = h.state().handle().theme().spec();
+    assert_eq!(spec.base, "gruvbox-dark");
+    assert_eq!(spec.overrides, installed.overrides);
+    assert_eq!(spec.counterpart_overrides, installed.counterpart_overrides);
+    assert!(egui_pop_core::theme::is_paired(&h.ctx));
+    // The file's first variant is edited, and shown.
+    let read = run(&mut h, &CMD_THEME_READ, json!({}));
+    assert_eq!(read["base"], "gruvbox-dark");
+    assert_eq!(Tokens::of(&h.ctx).resolved().spec().base, "gruvbox-dark");
+}
+
+#[test]
+fn the_other_variant_is_proposed_then_applied_as_one_change() {
+    let mut h = harness(ThemeSpec::new("pop-dark"));
+    h.run();
+    let handle = h.state().handle().clone();
+    run(
+        &mut h,
+        &CMD_THEME_SET,
+        json!({ "path": "surface.panel", "value": "#000000" }),
+    );
+    h.run();
+    // Proposed from the view: shown, nothing written.
+    h.get_by_label("Generate the other variant").click();
+    h.run();
+    h.run();
+    assert!(h.query_by_label("Proposed for Pop light").is_some());
+    let editor = handle.service(&THEME_EDITOR).unwrap();
+    let proposal = editor.proposal().expect("a proposal");
+    assert_eq!(proposal.edits.len(), 1);
+    assert_eq!(proposal.edits[0].to, Some(json!("#ffffff")));
+    assert_eq!(
+        handle.theme().spec().counterpart_overrides,
+        Some(Default::default())
+    );
+    // Dropped, then proposed again and applied.
+    h.get_by_label("Cancel").click();
+    h.run();
+    assert!(editor.proposal().is_none());
+    h.get_by_label("Generate the other variant").click();
+    h.run();
+    h.get_by_label("Apply to Pop light").click();
+    h.run();
+    h.run();
+    assert!(editor.proposal().is_none());
+    let spec = handle.theme().spec();
+    assert_eq!(
+        spec.counterpart_overrides,
+        Some([("surface.panel".to_string(), json!("#ffffff"))].into())
+    );
+    // Still editing the dark variant; the light one's undo takes it back.
+    assert_eq!(editor.draft().base(), "pop-dark");
+    let out = run(&mut h, &CMD_THEME_COUNTERPART, json!({}));
+    assert_eq!(out["edits"], json!([]));
+    run(&mut h, &CMD_THEME_SWITCH, json!({}));
+    run(&mut h, &CMD_THEME_UNDO, json!({}));
+    h.run();
+    assert_eq!(
+        handle.theme().spec().counterpart_overrides,
+        Some(Default::default())
+    );
+    // Applied by the command too.
+    run(&mut h, &CMD_THEME_SWITCH, json!({}));
+    let out = run(&mut h, &CMD_THEME_COUNTERPART, json!({ "apply": true }));
+    assert_eq!(out["changed"], 1);
 }

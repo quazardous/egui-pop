@@ -364,8 +364,12 @@ command-terminal-send =
     .description = Sends `text` to the program through `terminal.input` (with `enter`, followed by Enter).
     .title = Send input
 
+command-theme-counterpart =
+    .description = The pair's other variant generated from the one edited (colours mirrored: the same hue and saturation, the lightness inverted; aliases and other values as they are): the edits proposed, or, with `apply`, written as one change.
+    .title = Generate the other variant
+
 command-theme-export =
-    .description = The theme being edited as a .tokens.json file (`name`): $extends its base, the tokens changed with their types.
+    .description = The theme being edited as a .tokens.json file (`name`): $extends its base, the tokens changed with their types; a light and dark pair as one file carrying its counterpart.
     .title = Export the theme
 
 command-theme-generate =
@@ -391,6 +395,10 @@ command-theme-set =
 command-theme-start =
     .description = Starts the theme editor again from a theme (`base`), its history emptied, through the theme.load step.
     .title = Start a theme from
+
+command-theme-switch =
+    .description = Edits the other variant, light or dark, of the pair being edited, and shows it; each variant keeps its changes and history.
+    .title = Switch the variant edited
 
 command-theme-undo =
     .description = Takes the theme editor's last change back, through the theme.token step.
@@ -952,6 +960,8 @@ egui-pop-theme-editor-components = Components
 
 egui-pop-theme-editor-contrast = Contrast
 
+egui-pop-theme-editor-dark = Dark
+
 egui-pop-theme-editor-discard = Discard
 
 egui-pop-theme-editor-edited = changed
@@ -990,7 +1000,7 @@ egui-pop-theme-editor-generate = Generate { $scale }
 
 egui-pop-theme-editor-generate-title = Generate this scale from a colour
 
-egui-pop-theme-editor-generate-variant = Written in the variant shown only; its light or dark counterpart keeps its own scale.
+egui-pop-theme-editor-generate-variant = Written in the variant edited only; the other keeps its own scale (switch to it, or generate the other variant).
 
 egui-pop-theme-editor-generated = { $count } tokens of { $scale } generated; one undo takes them back.
 
@@ -1001,6 +1011,8 @@ egui-pop-theme-editor-import = Import
 egui-pop-theme-editor-imported = Imported over { $theme }.
 
 egui-pop-theme-editor-lc-hint = APCA lightness contrast, for information: 60 for ordinary text, 75 for body text; the theme is checked on WCAG.
+
+egui-pop-theme-editor-light = Light
 
 egui-pop-theme-editor-missing = The theme editor plugin is not connected.
 
@@ -1021,6 +1033,22 @@ egui-pop-theme-editor-not-applicable = n/a
 egui-pop-theme-editor-not-applied = Not applied yet: only this pane shows the draft.
 
 egui-pop-theme-editor-open-file = Open a file
+
+egui-pop-theme-editor-other = Generate the other variant
+
+egui-pop-theme-editor-other-apply = Apply to { $theme }
+
+egui-pop-theme-editor-other-cancel = Cancel
+
+egui-pop-theme-editor-other-hint = Proposes { $theme } from this variant: colours mirrored (the same hue and saturation, the lightness inverted), aliases and other values as they are. Nothing changes until applied.
+
+egui-pop-theme-editor-other-none = Nothing to change: { $theme } already matches this variant.
+
+egui-pop-theme-editor-other-previewed = The preview pane shows the proposal.
+
+egui-pop-theme-editor-other-title = Proposed for { $theme }
+
+egui-pop-theme-editor-other-written = { $count } tokens of { $theme } written; one undo there takes them back.
 
 egui-pop-theme-editor-own = Changed in this theme
 
@@ -1113,6 +1141,10 @@ egui-pop-theme-editor-undo = Undo
 egui-pop-theme-editor-value = Value
 
 egui-pop-theme-editor-value-of = Value of { $token }
+
+egui-pop-theme-editor-variant = Variant edited
+
+egui-pop-theme-editor-variant-hint = The light and dark variants are edited as a pair, each with its own changes and history: switching shows and edits the other one.
 
 egui-pop-theme-editor-warnings = Read with warnings: { $warnings }.
 

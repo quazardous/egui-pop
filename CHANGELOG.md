@@ -24,6 +24,19 @@ publishes.
   and a group is saved as the floating panel it was before (its other
   members under `group`), so applications that predate groups still
   read it.
+- The theme editor edits a light and dark pair as a pair
+  (egui-pop-api): the draft holds both variants, each with its own
+  changes and history, and both stay installed, so the light or dark
+  toggle and "follow the system" keep working; switching (the editor's
+  new "Variant edited" switch, `ThemeEditor::switch_variant`, the
+  `theme.switch` command, the application's toggle or the system's
+  mode) edits the other variant instead of the first edit splitting the
+  pair. A pair is saved, exported and packaged as a new pair, one file
+  carrying both variants, and opens back as a pair. "Generate the other
+  variant" (`ThemeEditor::propose_counterpart`, `apply_counterpart`,
+  the `theme.counterpart` command) computes the other variant from the
+  one edited and shows it, with the preview pane, before it is applied.
+  The `theme.load` step gains a `counterpart` argument.
 - egui-pop is now licensed under MIT OR Apache-2.0, at your option, like
   egui and most of the Rust ecosystem (it was MIT only). `LICENSE` became
   `LICENSE-MIT`, `LICENSE-APACHE` is new, and every crate's `license` field

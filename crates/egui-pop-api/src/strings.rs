@@ -515,7 +515,41 @@ pub const THEME_EDITOR_SEED_CLAMPED: StrKey = StrKey::new(
 );
 pub const THEME_EDITOR_GENERATE_VARIANT: StrKey = StrKey::new(
     "egui-pop-theme-editor-generate-variant",
-    "Written in the variant shown only; its light or dark counterpart keeps its own scale.",
+    "Written in the variant edited only; the other keeps its own scale (switch to it, or generate the other variant).",
+);
+pub const THEME_EDITOR_VARIANT: StrKey =
+    StrKey::new("egui-pop-theme-editor-variant", "Variant edited");
+pub const THEME_EDITOR_VARIANT_HINT: StrKey = StrKey::new(
+    "egui-pop-theme-editor-variant-hint",
+    "The light and dark variants are edited as a pair, each with its own changes and history: switching shows and edits the other one.",
+);
+pub const THEME_EDITOR_DARK: StrKey = StrKey::new("egui-pop-theme-editor-dark", "Dark");
+pub const THEME_EDITOR_LIGHT: StrKey = StrKey::new("egui-pop-theme-editor-light", "Light");
+pub const THEME_EDITOR_OTHER: StrKey =
+    StrKey::new("egui-pop-theme-editor-other", "Generate the other variant");
+pub const THEME_EDITOR_OTHER_HINT: StrKey = StrKey::new(
+    "egui-pop-theme-editor-other-hint",
+    "Proposes { $theme } from this variant: colours mirrored (the same hue and saturation, the lightness inverted), aliases and other values as they are. Nothing changes until applied.",
+);
+pub const THEME_EDITOR_OTHER_TITLE: StrKey = StrKey::new(
+    "egui-pop-theme-editor-other-title",
+    "Proposed for { $theme }",
+);
+pub const THEME_EDITOR_OTHER_PREVIEWED: StrKey = StrKey::new(
+    "egui-pop-theme-editor-other-previewed",
+    "The preview pane shows the proposal.",
+);
+pub const THEME_EDITOR_OTHER_NONE: StrKey = StrKey::new(
+    "egui-pop-theme-editor-other-none",
+    "Nothing to change: { $theme } already matches this variant.",
+);
+pub const THEME_EDITOR_OTHER_APPLY: StrKey =
+    StrKey::new("egui-pop-theme-editor-other-apply", "Apply to { $theme }");
+pub const THEME_EDITOR_OTHER_CANCEL: StrKey =
+    StrKey::new("egui-pop-theme-editor-other-cancel", "Cancel");
+pub const THEME_EDITOR_OTHER_WRITTEN: StrKey = StrKey::new(
+    "egui-pop-theme-editor-other-written",
+    "{ $count } tokens of { $theme } written; one undo there takes them back.",
 );
 pub const THEME_EDITOR_PREVIEW_ONLY: StrKey =
     StrKey::new("egui-pop-theme-editor-preview-only", "Preview only");
@@ -925,6 +959,18 @@ pub const ALL: &[StrKey] = &[
     THEME_EDITOR_GENERATED,
     THEME_EDITOR_SEED_CLAMPED,
     THEME_EDITOR_GENERATE_VARIANT,
+    THEME_EDITOR_VARIANT,
+    THEME_EDITOR_VARIANT_HINT,
+    THEME_EDITOR_DARK,
+    THEME_EDITOR_LIGHT,
+    THEME_EDITOR_OTHER,
+    THEME_EDITOR_OTHER_HINT,
+    THEME_EDITOR_OTHER_TITLE,
+    THEME_EDITOR_OTHER_PREVIEWED,
+    THEME_EDITOR_OTHER_NONE,
+    THEME_EDITOR_OTHER_APPLY,
+    THEME_EDITOR_OTHER_CANCEL,
+    THEME_EDITOR_OTHER_WRITTEN,
     THEME_EDITOR_LC_HINT,
     THEME_EDITOR_TAB_TOKENS,
     THEME_EDITOR_TAB_FONTS,

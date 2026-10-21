@@ -10,6 +10,17 @@
 //! When the theme changes elsewhere (a theme switcher), the editor starts
 //! again from it.
 //!
+//! A theme with a light and a dark variant is edited as a pair: the
+//! draft holds both, each with its own changes and history, and the
+//! variant edited is the one shown. Switching between light and dark (the
+//! editor's own switch, [`ThemeEditor::switch_variant`], the application's
+//! toggle, or the system's mode when the preference follows it) edits the
+//! other one. Both stay installed, and a pair is saved as a new pair, one
+//! file carrying both. "Generate the other variant"
+//! ([`ThemeEditor::propose_counterpart`], [`ThemeEditor::apply_counterpart`])
+//! computes the other variant from the one edited, shown before it is
+//! applied.
+//!
 //! The model is [`ThemeDraft`] (no
 //! egui): a base theme, the tokens changed over it and their history.
 //! A file is an ordinary `.tokens.json` that `$extends` the base.
@@ -17,7 +28,7 @@
 //! | Step | Arguments | Default |
 //! |---|---|---|
 //! | `theme.token` | `path`, `from`, `to` (raw DTCG values, `null` for the base theme's), `cause` (`edit`, `reset`, `undo`, `redo`, `agent`) | writes `to` |
-//! | `theme.load` | `base`, `overrides`, `cause` (`start`, `import`) | loads them (the history starts again) |
+//! | `theme.load` | `base`, `overrides`, `counterpart` (`{base, overrides}`, or `null` for a theme alone), `cause` (`start`, `import`) | loads them (the history starts again) |
 //!
 //! A before-hook vetoes a change (the token keeps `from`) or redirects
 //! it (another `to`, checked again); a run-hook's result is the value
@@ -29,8 +40,11 @@
 //! draft, or one token with its contrast readouts), `theme.set` (`path`,
 //! `value`, `null` for the base theme's), `theme.undo`, `theme.redo`,
 //! `theme.start` (`base`), `theme.export` (`name`), `theme.import`
-//! (`text`) and `theme.generate` (`scale`, `seed`: a colour scale
-//! generated from a seed, [`ThemeEditor::generate`]).
+//! (`text`), `theme.generate` (`scale`, `seed`: a colour scale
+//! generated from a seed, [`ThemeEditor::generate`]), `theme.switch`
+//! (the pair's other variant edited) and `theme.counterpart` (the other
+//! variant generated from the one edited; proposed, or written with
+//! `apply`).
 //!
 //! Owned: egui_thematic (MIT) edits egui's `Visuals`, not tokens with
 //! aliases and contrast pairs; egui's colour picker (MIT OR Apache-2.0)
@@ -71,8 +85,8 @@ use egui_pop_core::tokens::contrast::{self, Level, Pair, PairKind};
 use egui_pop_core::tokens::package::{self, ThemePackage};
 use egui_pop_core::tokens::palette::{self, Scheme, Seed};
 use egui_pop_core::tokens::{
-    BUILT_IN_THEMES, Color, Counterpart, ResolvedTokens, ThemeDraft, ThemeSpec, TokenEdit, Value,
-    Warning, theme_label,
+    BUILT_IN_THEMES, Color, Counterpart, GeneratedVariant, ResolvedTokens, ThemeDraft, ThemeSpec,
+    TokenEdit, Value, Warning, theme_label,
 };
 use egui_pop_core::ui::{Tone, UiPop as _};
 use egui_pop_core::widgets;
@@ -107,6 +121,8 @@ pub const CMD_THEME_START: CommandId = CommandId::from_static("theme.start");
 pub const CMD_THEME_EXPORT: CommandId = CommandId::from_static("theme.export");
 pub const CMD_THEME_IMPORT: CommandId = CommandId::from_static("theme.import");
 pub const CMD_THEME_GENERATE: CommandId = CommandId::from_static("theme.generate");
+pub const CMD_THEME_SWITCH: CommandId = CommandId::from_static("theme.switch");
+pub const CMD_THEME_COUNTERPART: CommandId = CommandId::from_static("theme.counterpart");
 
 /// Why a token changes, as the `theme.token` step says it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -288,6 +304,32 @@ pub type FileDialog = Arc<dyn Fn(&AppHandle, FileRequest) -> Pending + Send + Sy
 /// ([`ThemeEditor::set_sampler`]).
 pub type Sampler = Arc<dyn Fn(&mut Ui, &AppHandle) + Send + Sync>;
 
+/// What is installed, as the editor compares it: the theme named first
+/// and its overrides, and its counterpart of the other mode with its
+/// own, if any.
+type Installed = (
+    String,
+    BTreeMap<String, Json>,
+    Option<(String, BTreeMap<String, Json>)>,
+);
+
+/// What a spec installs ([`Installed`]).
+fn installed(app: &AppHandle, spec: &ThemeSpec) -> Installed {
+    let service = app.theme();
+    let counterpart = service
+        .themes()
+        .counterpart(spec)
+        .filter(|c| service.is_dark(c) != service.is_dark(&spec.base))
+        .map(|c| {
+            let own = spec
+                .counterpart_overrides
+                .clone()
+                .unwrap_or_else(|| spec.overrides.clone());
+            (c, own)
+        });
+    (spec.base.clone(), spec.overrides.clone(), counterpart)
+}
+
 /// A file choice under way, and what it is for.
 #[derive(Debug)]
 enum Choice {
@@ -312,9 +354,15 @@ struct State {
     choice: Option<Choice>,
     tab: Tab,
     fonts: FontsDraft,
-    /// The base and overrides last written to the theme service; `None`
-    /// before the first look at it.
-    applied: Option<(String, BTreeMap<String, Json>)>,
+    /// What was last written to the theme service, or found there;
+    /// `None` before the first look at it.
+    applied: Option<Installed>,
+    /// The theme shown when the editor last looked: when it changes (a
+    /// light or dark switch), the pair's variant of its mode is edited.
+    shown: Option<String>,
+    /// The other variant generated from the one edited, shown before
+    /// it is applied ([`ThemeEditor::propose_counterpart`]).
+    proposal: Option<GeneratedVariant>,
     selected: Option<String>,
     filter: String,
     gesture: Option<Gesture>,
@@ -352,20 +400,155 @@ pub struct ThemeEditor {
 }
 
 impl ThemeEditor {
-    /// Follows the application's theme: when the theme shown (the
-    /// spec's base, or its counterpart when the light or dark preference
-    /// shows it) or its overrides are not what the editor wrote last, the
-    /// editor starts again from them.
+    /// Follows the application's theme: when the theme installed (its
+    /// base, its counterpart and their overrides) is not what the editor
+    /// wrote last, the editor starts again from it, a pair as a pair,
+    /// editing the variant shown. When the variant shown changes (the
+    /// light or dark preference, or the system's mode), the pair's
+    /// variant of that mode is edited.
     pub fn sync(&self, app: &AppHandle) {
-        let spec = edited(app);
+        let service = app.theme();
+        let spec = service.spec();
+        let now = installed(app, &spec);
+        let shown = service.shown(&app.egui());
         let mut s = lock(&self.state);
-        let now = (spec.base.clone(), spec.overrides.clone());
         if s.applied.as_ref() != Some(&now) {
-            s.draft = ThemeDraft::from_spec(&spec);
+            let mut draft = ThemeDraft::from_pair_spec(service.themes(), &spec);
+            if draft.base() != shown {
+                draft.switch();
+            }
+            s.draft = draft;
             s.applied = Some(now);
+            s.shown = Some(shown);
             s.gesture = None;
             s.typing = None;
+            s.proposal = None;
+            return;
         }
+        if s.shown.as_deref() != Some(shown.as_str()) {
+            if s.draft.is_paired() && service.is_dark(s.draft.base()) != service.is_dark(&shown) {
+                s.draft.switch();
+                s.gesture = None;
+                s.typing = None;
+                s.proposal = None;
+            }
+            s.shown = Some(shown);
+        }
+    }
+
+    /// Edits the pair's other variant, and shows it: the light or dark
+    /// preference becomes its mode, as the application's toggle does.
+    /// Each variant keeps its changes and history. The theme now edited,
+    /// or why nothing changed (a theme alone).
+    pub fn switch_variant(&self, app: &AppHandle) -> Result<String, String> {
+        self.sync(app);
+        let base = {
+            let mut s = lock(&self.state);
+            if !s.draft.switch() {
+                return Err(format!(
+                    "`{}` has no light or dark counterpart",
+                    s.draft.base()
+                ));
+            }
+            s.gesture = None;
+            s.typing = None;
+            s.proposal = None;
+            s.draft.base().to_string()
+        };
+        self.show_edited(app);
+        Ok(base)
+    }
+
+    /// Makes the variant edited the one shown: the preference becomes
+    /// its mode when another theme is shown.
+    fn show_edited(&self, app: &AppHandle) {
+        let service = app.theme();
+        let ctx = app.egui();
+        let (paired, base) = {
+            let s = lock(&self.state);
+            (s.draft.is_paired(), s.draft.base().to_string())
+        };
+        if paired && service.shown(&ctx) != base {
+            service.set_preference(if service.is_dark(&base) {
+                egui::ThemePreference::Dark
+            } else {
+                egui::ThemePreference::Light
+            });
+        }
+        lock(&self.state).shown = Some(service.shown(&ctx));
+    }
+
+    /// Whether the variant edited is the dark one.
+    pub fn editing_dark(&self, app: &AppHandle) -> bool {
+        let base = lock(&self.state).draft.base().to_string();
+        app.theme().is_dark(&base)
+    }
+
+    /// The other variant generated from the one edited
+    /// ([`ThemeDraft::generate_counterpart`]), kept to be shown (the
+    /// preview pane draws it) until applied or dropped. `None` for a
+    /// theme alone.
+    pub fn propose_counterpart(&self, app: &AppHandle) -> Option<GeneratedVariant> {
+        self.sync(app);
+        let proposal = {
+            let themes = app.theme();
+            self.draft().generate_counterpart(themes.themes())
+        };
+        lock(&self.state).proposal = proposal.clone();
+        proposal
+    }
+
+    /// The proposal shown, if any.
+    pub fn proposal(&self) -> Option<GeneratedVariant> {
+        lock(&self.state).proposal.clone()
+    }
+
+    /// Drops the proposal shown.
+    pub fn drop_proposal(&self) {
+        lock(&self.state).proposal = None;
+    }
+
+    /// Writes the other variant generated from the one edited: its edits
+    /// through the `theme.token` step, recorded on it as one change (one
+    /// undo there takes them back), and its seeds. The variant edited
+    /// stays the same. The number of tokens changed.
+    pub fn apply_counterpart(&self, app: &AppHandle, cause: Cause) -> Result<usize, String> {
+        self.sync(app);
+        let generated = {
+            let themes = app.theme();
+            self.draft().generate_counterpart(themes.themes())
+        }
+        .ok_or_else(|| format!("`{}` has no light or dark counterpart", self.draft().base()))?;
+        lock(&self.state).draft.switch();
+        let made = if generated.edits.is_empty() {
+            Ok(0)
+        } else {
+            self.record_all(app, generated.edits, cause)
+        };
+        let mut s = lock(&self.state);
+        if made.is_ok() {
+            let old: Vec<String> = s.draft.seeds().keys().cloned().collect();
+            for scale in old {
+                s.draft.set_seed(&scale, None);
+            }
+            for (scale, seed) in generated.seeds {
+                s.draft.set_seed(&scale, Some(seed));
+            }
+        }
+        s.draft.switch();
+        s.proposal = None;
+        made
+    }
+
+    /// The proposal's variant as it would be: its spec.
+    fn proposal_spec(&self, app: &AppHandle) -> Option<ThemeSpec> {
+        let s = lock(&self.state);
+        let proposal = s.proposal.as_ref()?;
+        let mut other = s.draft.counterpart()?.clone();
+        for e in &proposal.edits {
+            other.preview(&e.path, e.to.clone());
+        }
+        Some(other.spec(&app.theme().spec()))
     }
 
     /// Whether changes stay in the draft, drawn in the preview pane only,
@@ -388,10 +571,12 @@ impl ThemeEditor {
     /// not applied yet).
     pub fn pending(&self, app: &AppHandle) -> bool {
         self.sync(app);
-        let s = lock(&self.state);
-        s.applied.as_ref().is_some_and(|(base, overrides)| {
-            base != s.draft.base() || overrides != s.draft.overrides()
-        })
+        let spec = lock(&self.state).draft.pair_spec(&app.theme().spec());
+        let draft = installed(app, &spec);
+        lock(&self.state)
+            .applied
+            .as_ref()
+            .is_some_and(|applied| *applied != draft)
     }
 
     /// Installs the draft app-wide: the theme previewed becomes the
@@ -403,12 +588,8 @@ impl ThemeEditor {
     /// Drops the draft's changes not applied: the editor starts again
     /// from the theme installed (its history emptied).
     pub fn discard(&self, app: &AppHandle) {
-        let spec = edited(app);
-        let mut s = lock(&self.state);
-        s.draft = ThemeDraft::from_spec(&spec);
-        s.applied = Some((spec.base.clone(), spec.overrides.clone()));
-        s.gesture = None;
-        s.typing = None;
+        lock(&self.state).applied = None;
+        self.sync(app);
     }
 
     /// The file chooser the editor opens and saves files with: the
@@ -426,9 +607,13 @@ impl ThemeEditor {
     }
 
     /// The draft's theme as the preview pane draws it (built once per
-    /// draft).
+    /// draft): the variant edited, or the other variant proposed while a
+    /// proposal is shown ([`ThemeEditor::propose_counterpart`]).
     pub fn scoped(&self, app: &AppHandle) -> ScopedTheme {
-        let tokens = self.resolved(app);
+        let tokens = match self.proposal_spec(app) {
+            Some(spec) => Arc::new(app.theme().themes().resolve(&spec)),
+            None => self.resolved(app),
+        };
         let spec = tokens.spec().clone();
         if let Some((_, scoped)) = lock(&self.state)
             .scoped
@@ -646,7 +831,7 @@ impl ThemeEditor {
     pub fn resolved(&self, app: &AppHandle) -> Arc<ResolvedTokens> {
         self.sync(app);
         let service = app.theme();
-        let template = edited(app);
+        let template = service.spec();
         let mut s = lock(&self.state);
         // The draft's own theme: the application's in live mode, where
         // each change is written, the preview's otherwise.
@@ -669,17 +854,18 @@ impl ThemeEditor {
 
     /// Installs the draft app-wide, whatever the mode.
     fn install(&self, app: &AppHandle) {
-        let mut s = lock(&self.state);
-        let base = s.draft.base().to_string();
-        let overrides = s.draft.overrides().clone();
-        s.applied = Some((base.clone(), overrides.clone()));
-        drop(s);
-        // The variant edited, alone: its overrides are not its
-        // counterpart's.
-        app.theme().update(|spec| {
-            spec.base = base;
-            spec.overrides = overrides;
-            spec.counterpart = Counterpart::None;
+        let service = app.theme();
+        let new = lock(&self.state).draft.pair_spec(&service.spec());
+        let now = installed(app, &new);
+        lock(&self.state).applied = Some(now);
+        // A pair with both variants, each with its own overrides; a
+        // theme alone without a counterpart (its overrides are not
+        // another theme's).
+        service.update(|spec| {
+            spec.base = new.base;
+            spec.overrides = new.overrides;
+            spec.counterpart = new.counterpart;
+            spec.counterpart_overrides = new.counterpart_overrides;
         });
     }
 
@@ -805,9 +991,11 @@ impl ThemeEditor {
 
     /// Runs the `theme.load` step and loads what it gives.
     fn load(&self, app: &AppHandle, draft: ThemeDraft, cause: &str) -> Result<(), String> {
+        let (first, second) = draft.variants();
         let args = json!({
-            "base": draft.base(),
-            "overrides": draft.overrides(),
+            "base": first.base(),
+            "overrides": first.overrides(),
+            "counterpart": second.map(|c| json!({ "base": c.base(), "overrides": c.overrides() })),
             "cause": cause,
         });
         let v = match app.step(&STEP_THEME_LOAD, args, |_, a| Ok(a.clone())) {
@@ -823,41 +1011,78 @@ impl ThemeEditor {
         if themes.themes().get(&base).is_none() {
             return Err(format!("no theme `{base}`"));
         }
+        let map = |v: &Json| -> BTreeMap<String, Json> {
+            v.as_object()
+                .map(|o| o.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+                .unwrap_or_default()
+        };
         let mut spec = ThemeSpec::new(base);
-        if let Some(o) = v["overrides"].as_object() {
-            spec.overrides = o.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+        spec.overrides = map(&v["overrides"]);
+        spec.counterpart = Counterpart::None;
+        if let Some(c) = v["counterpart"].as_object() {
+            let other = c
+                .get("base")
+                .and_then(Json::as_str)
+                .ok_or("the step gave a `counterpart` without a `base`")?;
+            if themes.themes().get(other).is_none() {
+                return Err(format!("no theme `{other}`"));
+            }
+            spec.counterpart = Counterpart::Theme(other.to_string());
+            spec.counterpart_overrides = Some(c.get("overrides").map(map).unwrap_or_default());
+        }
+        let mut new = ThemeDraft::from_pair_spec(themes.themes(), &spec);
+        drop(themes);
+        // The seeds a file gave: saved again as seeds while the scales
+        // keep their values (`ThemeDraft::to_file` checks).
+        let (first, second) = draft.variants();
+        let carry = |to: &mut ThemeDraft, from: &ThemeDraft| {
+            if to.base() == from.base() {
+                for (scale, seed) in from.seeds() {
+                    to.set_seed(scale, Some(*seed));
+                }
+            }
+        };
+        carry(&mut new, first);
+        if let Some(second) = second
+            && new.switch()
+        {
+            carry(&mut new, second);
+            new.switch();
         }
         {
             let mut s = lock(&self.state);
-            s.draft = ThemeDraft::from_spec(&spec);
-            // The seeds a file gave: saved again as seeds while the
-            // scales keep their values (`ThemeDraft::to_file` checks).
-            if s.draft.base() == draft.base() {
-                for (scale, seed) in draft.seeds() {
-                    s.draft.set_seed(scale, Some(*seed));
-                }
-            }
+            s.draft = new;
             s.gesture = None;
             s.typing = None;
+            s.proposal = None;
         }
         self.write(app);
+        if !self.preview_only() {
+            self.show_edited(app);
+        }
         Ok(())
     }
 
     /// Starts again from a theme the application knows (its tokens as
-    /// they are, the history emptied), through the `theme.load` step.
+    /// they are, the history emptied), through the `theme.load` step:
+    /// with its counterpart of the other mode, if it has one, as a pair,
+    /// the theme picked edited and shown.
     pub fn start(&self, app: &AppHandle, base: &str) -> Result<(), String> {
-        self.load(app, ThemeDraft::new(base), "start")
+        let draft = ThemeDraft::for_theme(app.theme().themes(), base);
+        self.load(app, draft, "start")
     }
 
-    /// The draft as the text of a `.tokens.json` file named `name`.
+    /// The draft as the text of a `.tokens.json` file named `name`: a
+    /// pair as one file, the theme named first's carrying its
+    /// counterpart (named `name` and its mode, `my-theme-light`).
     pub fn export(&self, app: &AppHandle, name: &str) -> String {
         self.sync(app);
         self.draft().export(app.theme().themes(), name)
     }
 
     /// Loads a token file through the `theme.load` step, over its base
-    /// as any theme file ([`ThemeDraft::import`]); what it loaded with:
+    /// as any theme file ([`ThemeDraft::import`]), a file carrying its
+    /// counterpart as a pair; what it loaded with:
     /// the tokens left out (unknown to its base, or with a value that
     /// does not check), renamed, or a file newer than this egui-pop.
     pub fn import(&self, app: &AppHandle, text: &str) -> Result<Vec<Warning>, String> {
@@ -879,9 +1104,10 @@ impl ThemeEditor {
     /// scale as its seed, regenerated when loaded, rather than twelve
     /// values. The number of tokens changed.
     ///
-    /// The variant edited only: a theme's light or dark counterpart
-    /// keeps its own scale (generate it again with the other mode
-    /// shown). An accent for both is `ThemeService::set_accent_color`.
+    /// The variant edited only: a pair's other variant keeps its own
+    /// scale (switch to it and generate it there, or generate the other
+    /// variant, [`ThemeEditor::apply_counterpart`]). An accent for both
+    /// is `ThemeService::set_accent_color`.
     pub fn generate(
         &self,
         app: &AppHandle,
@@ -1096,8 +1322,15 @@ impl ThemeEditor {
         let draft = self.draft();
         let Some(path) = path else {
             let level = level_of(draft.base());
+            let dark = app.theme().is_dark(draft.base());
             return Ok(json!({
                 "base": draft.base(),
+                "variant": if dark { "dark" } else { "light" },
+                "counterpart": draft.counterpart().map(|c| json!({
+                    "base": c.base(),
+                    "overrides": c.overrides(),
+                    "can_undo": c.can_undo(),
+                })),
                 "overrides": draft.overrides(),
                 "history": draft.history().iter().map(TokenEdit::to_json).collect::<Vec<_>>(),
                 "can_undo": draft.can_undo(),
@@ -1128,19 +1361,6 @@ fn description(path: &str, own: Option<&str>) -> String {
         .map(|r| r.description.to_string())
         .or_else(|| own.map(String::from))
         .unwrap_or_default()
-}
-
-/// The theme the editor works on: the variant shown (the spec's base
-/// or its counterpart), alone, with the spec's choices.
-fn edited(app: &AppHandle) -> ThemeSpec {
-    let service = app.theme();
-    let spec = service.spec();
-    let shown = service.shown(&app.egui());
-    if shown == spec.base {
-        spec
-    } else {
-        spec.variant(shown)
-    }
 }
 
 /// Declares the editor's service, steps and agent commands.
@@ -1277,8 +1497,38 @@ impl Plugin for ThemeEditorPlugin {
             },
         )?;
         ctx.command(
+            CommandSpec::new(CMD_THEME_SWITCH, "Switch the variant edited", CAT)
+                .description("Edits the other variant, light or dark, of the pair being edited, and shows it; each variant keeps its changes and history.")
+                .hidden(),
+            move |call| {
+                let base = editor(call)?.switch_variant(call.app)?;
+                Ok(json!({ "base": base }))
+            },
+        )?;
+        ctx.command(
+            CommandSpec::new(CMD_THEME_COUNTERPART, "Generate the other variant", CAT)
+                .description("The pair's other variant generated from the one edited (colours mirrored: the same hue and saturation, the lightness inverted; aliases and other values as they are): the edits proposed, or, with `apply`, written as one change.")
+                .hidden()
+                .args(json!({ "apply": false })),
+            move |call| {
+                let e = editor(call)?;
+                if call.args.get("apply").and_then(Json::as_bool) == Some(true) {
+                    let count = e.apply_counterpart(call.app, Cause::Agent)?;
+                    return Ok(json!({ "changed": count }));
+                }
+                let g = e
+                    .propose_counterpart(call.app)
+                    .ok_or("the theme edited has no light or dark counterpart")?;
+                Ok(json!({
+                    "edits": g.edits.iter().map(TokenEdit::to_json).collect::<Vec<_>>(),
+                    "seeds": g.seeds.iter().map(|(k, v)| (k.clone(), v.to_json())).collect::<serde_json::Map<_, _>>(),
+                    "skipped": g.skipped,
+                }))
+            },
+        )?;
+        ctx.command(
             CommandSpec::new(CMD_THEME_EXPORT, "Export the theme", CAT)
-                .description("The theme being edited as a .tokens.json file (`name`): $extends its base, the tokens changed with their types.")
+                .description("The theme being edited as a .tokens.json file (`name`): $extends its base, the tokens changed with their types; a light and dark pair as one file carrying its counterpart.")
                 .hidden()
                 .args(json!({ "name": "my-theme" })),
             move |call| {
@@ -1558,6 +1808,9 @@ fn toolbar(ui: &mut Ui, app: &AppHandle, editor: &ThemeEditor) {
             &[("count", &changed.to_string())],
         ));
     });
+    if draft_paired(editor) {
+        pair_bar(ui, app, editor);
+    }
     ui.horizontal_wrapped(|ui| {
         let mut preview_only = editor.preview_only();
         let r = widgets::checkbox(
@@ -1602,6 +1855,144 @@ fn toolbar(ui: &mut Ui, app: &AppHandle, editor: &ThemeEditor) {
         drop(s);
         r.widget_info(|| WidgetInfo::labeled(WidgetType::TextEdit, true, &hint));
     });
+}
+
+fn draft_paired(editor: &ThemeEditor) -> bool {
+    lock(&editor.state).draft.is_paired()
+}
+
+/// A pair's bar: the variant edited, light or dark (switching shows and
+/// edits the other), and "Generate the other variant" with its proposal.
+fn pair_bar(ui: &mut Ui, app: &AppHandle, editor: &ThemeEditor) {
+    let ctx = ui.ctx().clone();
+    let other = editor
+        .draft()
+        .counterpart()
+        .map(|c| theme_label(c.base()))
+        .unwrap_or_default();
+    ui.horizontal_wrapped(|ui| {
+        ui.label(strings::tr(&ctx, &txt::THEME_EDITOR_VARIANT))
+            .on_hover_text(strings::tr(&ctx, &txt::THEME_EDITOR_VARIANT_HINT));
+        let dark = editor.editing_dark(app);
+        let mut wanted = dark;
+        widgets::selectable_value(
+            ui,
+            &mut wanted,
+            true,
+            strings::tr(&ctx, &txt::THEME_EDITOR_DARK),
+        );
+        widgets::selectable_value(
+            ui,
+            &mut wanted,
+            false,
+            strings::tr(&ctx, &txt::THEME_EDITOR_LIGHT),
+        );
+        if wanted != dark {
+            say(editor, editor.switch_variant(app).map(|_| None));
+        }
+        let generate = strings::tr(&ctx, &txt::THEME_EDITOR_OTHER);
+        if ui
+            .button(&generate)
+            .on_hover_text(strings::tr_args(
+                &ctx,
+                &txt::THEME_EDITOR_OTHER_HINT,
+                &[("theme", &other)],
+            ))
+            .clicked()
+        {
+            editor.propose_counterpart(app);
+        }
+    });
+    let Some(proposal) = editor.proposal() else {
+        return;
+    };
+    let t = Tokens::of(&ctx);
+    egui::Frame::new()
+        .stroke(egui::Stroke::new(1.0, t.border.default))
+        .inner_margin(egui::Margin::same(t.space.s.round().clamp(0.0, 127.0) as i8))
+        .show(ui, |ui| {
+            ui.strong(strings::tr_args(
+                &ctx,
+                &txt::THEME_EDITOR_OTHER_TITLE,
+                &[("theme", &other)],
+            ));
+            if proposal.edits.is_empty() {
+                ui.weak(strings::tr_args(
+                    &ctx,
+                    &txt::THEME_EDITOR_OTHER_NONE,
+                    &[("theme", &other)],
+                ));
+            } else {
+                ui.weak(strings::tr(&ctx, &txt::THEME_EDITOR_OTHER_PREVIEWED));
+                let draft = editor.draft();
+                let before = draft.counterpart().map(|c| {
+                    let themes = app.theme();
+                    themes.themes().resolve(&c.spec(&themes.spec()))
+                });
+                egui::ScrollArea::vertical()
+                    .id_salt("egui_pop.theme_editor.proposal")
+                    .max_height(160.0)
+                    .show(ui, |ui| {
+                        egui::Grid::new("egui_pop.theme_editor.proposal.grid")
+                            .num_columns(3)
+                            .show(ui, |ui| {
+                                for e in &proposal.edits {
+                                    ui.monospace(&e.path);
+                                    let was = before.as_ref().and_then(|b| b.color(&e.path));
+                                    let to =
+                                        e.to.as_ref()
+                                            .and_then(Json::as_str)
+                                            .and_then(Color::from_hex);
+                                    swatch(ui, was.map(color32));
+                                    match (&e.to, to) {
+                                        (_, Some(c)) => swatch(ui, Some(color32(c))),
+                                        (Some(v), None) => {
+                                            ui.monospace(v.to_string());
+                                        }
+                                        (None, None) => {
+                                            ui.weak(strings::tr_args(
+                                                &ctx,
+                                                &txt::THEME_EDITOR_FROM,
+                                                &[("theme", &other)],
+                                            ));
+                                        }
+                                    }
+                                    ui.end_row();
+                                }
+                            });
+                    });
+            }
+            if !proposal.skipped.is_empty() {
+                ui.weak(strings::tr_args(
+                    &ctx,
+                    &txt::THEME_EDITOR_SKIPPED,
+                    &[("tokens", &proposal.skipped.join(", "))],
+                ));
+            }
+            ui.horizontal(|ui| {
+                let apply =
+                    strings::tr_args(&ctx, &txt::THEME_EDITOR_OTHER_APPLY, &[("theme", &other)]);
+                if ui
+                    .add_enabled(!proposal.edits.is_empty(), egui::Button::new(&apply))
+                    .clicked()
+                {
+                    let out = editor.apply_counterpart(app, Cause::Edit).map(|n| {
+                        Some(strings::tr_args(
+                            &ctx,
+                            &txt::THEME_EDITOR_OTHER_WRITTEN,
+                            &[("count", &n.to_string()), ("theme", &other)],
+                        ))
+                    });
+                    say(editor, out);
+                }
+                if ui
+                    .button(strings::tr(&ctx, &txt::THEME_EDITOR_OTHER_CANCEL))
+                    .clicked()
+                {
+                    editor.drop_proposal();
+                }
+            });
+        });
 }
 
 /// Records what an action said, shown under the file area.
@@ -1890,7 +2281,7 @@ fn generator(
             swatch(ui, Some(color32(c)));
         }
     });
-    if app.theme().counterpart().is_some() {
+    if editor.draft().is_paired() {
         ui.weak(strings::tr(&ctx, &txt::THEME_EDITOR_GENERATE_VARIANT));
     }
 }

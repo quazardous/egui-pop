@@ -2,7 +2,8 @@
 //! preference (a setting, through the theme service) switches tokens,
 //! egui's style and the kit without installing again, follows the
 //! system when asked, and a theme alone keeps its mode; the toggle
-//! command, and the theme editor editing the variant shown.
+//! command, and the theme editor editing the variant shown, the pair
+//! kept.
 
 use egui_kittest::Harness;
 use egui_pop_api::host::Reply;
@@ -128,7 +129,7 @@ fn picking_a_theme_shows_it() {
 }
 
 #[test]
-fn the_theme_editor_edits_the_variant_shown() {
+fn the_theme_editor_edits_the_variant_shown_and_keeps_the_pair() {
     let mut h = harness(ThemeSpec::new("pop-dark"));
     let handle = h.state().handle().clone();
     handle.theme().set_preference(egui::ThemePreference::Light);
@@ -140,15 +141,43 @@ fn the_theme_editor_edits_the_variant_shown() {
         .set(&handle, "danger", Some(json!("#ff0000")), Cause::Agent)
         .unwrap();
     h.run();
-    // The variant edited is shown alone, with the edit.
+    // Both variants stay installed, the edit the light one's only.
     let spec = handle.theme().spec();
-    assert_eq!(spec.base, "pop-light");
+    assert_eq!(spec.base, "pop-dark");
+    assert!(spec.overrides.is_empty());
+    assert_eq!(
+        spec.counterpart_overrides
+            .as_ref()
+            .and_then(|o| o.get("danger")),
+        Some(&json!("#ff0000"))
+    );
+    assert!(theme::is_paired(&h.ctx));
     assert_eq!(base(&h), "pop-light");
-    assert!(!theme::is_paired(&h.ctx));
     assert_eq!(
         Tokens::of(&h.ctx).status.danger,
         egui::Color32::from_rgb(255, 0, 0)
     );
+    // The toggle still works, and the editor follows it.
+    assert_eq!(toggle(&mut h).unwrap()["theme"], "pop-dark");
+    assert_ne!(
+        Tokens::of(&h.ctx).status.danger,
+        egui::Color32::from_rgb(255, 0, 0)
+    );
+    editor.sync(&handle);
+    assert_eq!(editor.draft().base(), "pop-dark");
+    assert!(!editor.draft().can_undo());
+    // So does the system's mode, when the preference follows it.
+    handle.theme().set_preference(egui::ThemePreference::System);
+    h.input_mut().system_theme = Some(egui::Theme::Light);
+    h.run();
+    editor.sync(&handle);
+    assert_eq!(editor.draft().base(), "pop-light");
+    assert!(editor.draft().can_undo(), "its own history kept");
+    assert_eq!(base(&h), "pop-light");
+    h.input_mut().system_theme = Some(egui::Theme::Dark);
+    h.run();
+    editor.sync(&handle);
+    assert_eq!(editor.draft().base(), "pop-dark");
 }
 
 /// Two panels sharing the bottom area: drawn in an egui_dock dock.

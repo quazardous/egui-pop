@@ -40,12 +40,20 @@ The editor works on the application's theme (the theme service): each
 change becomes the spec's base and overrides, installed before the next
 frame, so every widget follows at once. When the theme changes elsewhere
 (a theme switcher, `AppHandle::theme().set`), the editor starts again
-from it, its history emptied. A theme with a light and a dark variant
-([Themes](themes.md#light-and-dark-together)) is edited in the variant
-shown, and switching between light and dark starts the editor again
-from the other one; the first change makes the variant edited the
-theme, alone (its overrides are not its counterpart's), so it stays
-shown whatever the light or dark preference.
+from it, its history emptied.
+
+**A light and dark pair is edited as a pair.** A theme with a light
+and a dark variant ([Themes](themes.md#light-and-dark-together)) keeps
+both in the draft, each with its own changes, history and generated
+scales, and both stay installed: the variant edited's changes are its
+own (`ThemeSpec::counterpart_overrides` for the counterpart's). The
+variant edited is the one shown. The editor's "Variant edited" switch
+(Dark, Light; `ThemeEditor::switch_variant`) edits the other one and
+shows it, the preference becoming its mode as the application's
+light or dark toggle does; that toggle, or the system's mode while
+the preference follows it, switches the variant edited too. Undo and
+redo act on the variant edited. A theme alone (`pop-high-contrast`)
+has no switch.
 
 **Live, or in a preview only.** By default each change is installed at
 once, as above. With "Preview only" ticked
@@ -107,11 +115,26 @@ it directly, or the service (`THEME_EDITOR`: `set`, `undo`, `redo`,
   writes them and the scale's `contrast` over the scale; one undo takes
   them all back. The seed is recorded, and the file saved gives the
   scale as its seed rather than twelve values (see [The file](#the-file)). A seed too dark, too light or too vivid is clamped,
-  and said so. Only the variant shown is written: its light or dark
-  counterpart keeps its own scale (generate it again with the other
-  mode shown; editing both variants of a pair at once is not done
-  yet). An accent for both variants is the theme service's
+  and said so. Only the variant edited is written: the other keeps its
+  own scale (switch to it and generate it there, or generate the other
+  variant, below). An accent for both variants is the theme service's
   `set_accent_color` (the `appearance.accent_color` setting).
+- **Generate the other variant** (a pair): the other variant computed
+  from the one edited (`ThemeEditor::propose_counterpart`,
+  `egui_pop_tokens::ThemeDraft::generate_counterpart`), offered, never
+  applied silently: the changes it would make are listed (each token,
+  its colour now and proposed), the preview pane draws the proposal,
+  and "Apply to `<theme>`" writes it (`ThemeEditor::apply_counterpart`,
+  each token through `theme.token`, one undo in that variant), or
+  "Cancel" drops it. The rule, deterministic: a colour is mirrored
+  (`palette::mirror`: the same OkHsl hue and saturation, the lightness
+  `1 - l`; black and white swap), an alias (`{blue.9}`) and any other
+  value (dimensions, numbers, durations, font families) are carried as
+  they are, a scale generated from a seed is generated again from it
+  for the other scheme (fitted to the other variant as generated), and
+  the other variant's own changes not among these are taken back.
+  Tokens its base lacks, or whose value does not check there, are
+  listed as left out.
 - **Contrast**: every pair of `contrast::PAIRS` the token takes part in,
   itself or through the tokens aliasing it, with its ratio, AA (4.5:1
   for text, 3:1 for interface parts), AAA (7:1 for text; interface parts
@@ -119,8 +142,8 @@ it directly, or the service (`THEME_EDITOR`: `set`, `undo`, `redo`,
   theme (7:1), AA otherwise; and, for information, the pair's APCA
   lightness contrast (Lc, `egui_pop_tokens::apca`): the theme's
   contract stays on WCAG.
-- **Export and import**: the draft as a `.tokens.json` file, or a file
-  pasted and loaded; "Open a file" and "Save as a file" through a file
+- **Export and import**: the draft as a `.tokens.json` file (a pair as
+  one file, both variants), or a file pasted and loaded; "Open a file" and "Save as a file" through a file
   chooser. A theme naming the user's font files is saved with them:
   as a folder (`<name>/<name>.tokens.json` and `fonts/`) beside the
   path chosen, or as a `.zip` archive when the path ends in `.zip`
@@ -163,6 +186,15 @@ saved with the user's font files lists them under `"org.egui-pop.fonts"`
 (`[{ "file": "fonts/Inter-Regular.ttf", "family": "Inter", "weight": 400 }]`),
 by their path in the package ([Design tokens](tokens.md#a-theme-with-its-fonts)).
 
+A pair is saved as a new pair, both variants under the name given: the
+file is the theme named first's (named `<name>`), and carries its
+counterpart's, named `<name>-light` or `<name>-dark`, under
+`"org.egui-pop.counterpart"`, each naming the other
+([Design tokens](tokens.md#a-light-and-dark-pair-in-one-file)). Saved,
+exported or packaged, it is one file; imported or opened, it is the
+pair again, the first variant edited; added to an application's themes
+(`Themes::add_text`, `add_path`), it is two themes, a pair.
+
 ```json
 {
   "$description": "Edited from pop-light",
@@ -178,7 +210,7 @@ by their path in the package ([Design tokens](tokens.md#a-theme-with-its-fonts))
 | Step | Arguments | Default |
 |---|---|---|
 | `theme.token` | `path`, `from`, `to` (raw DTCG values, `null` for the base theme's), `cause` (`edit`, `reset`, `undo`, `redo`, `agent`) | writes `to` |
-| `theme.load` | `base`, `overrides`, `cause` (`start`, `import`) | loads them, the history emptied |
+| `theme.load` | `base`, `overrides`, `counterpart` (`{base, overrides}`, `null` for a theme alone), `cause` (`start`, `import`) | loads them, the history emptied |
 
 A before-hook vetoes a change (the token keeps `from`) or redirects it
 (another `to`, checked again); a run-hook's result is the value written.
@@ -189,19 +221,27 @@ number moved with the keys, or a value typed in, becomes one when its
 field lets the focus go.
 
 Commands for agents (hidden from the palette): `theme.read` (the draft:
-base, overrides, history, failing pairs and problems; with `path`, one
+base, `variant` (`dark` or `light`), overrides, history, failing pairs
+and problems, and the pair's `counterpart` (its base, overrides,
+whether it can undo; `null` for a theme alone); with `path`, one
 token, its value, alias and contrast readouts), `theme.set` (`path`,
 `value`, `null` for the base theme's), `theme.undo`, `theme.redo`,
 `theme.start` (`base`), `theme.export` (`name`, the file's text back),
 `theme.import` (`text`; the tokens left out back as `skipped`,
 and what the file loaded with as `warnings`) and `theme.generate`
 (`scale`, `seed`: a scale written from a seed colour, through
-`theme.token` for each of its tokens, undone as one change).
+`theme.token` for each of its tokens, undone as one change),
+`theme.switch` (the pair's other variant edited, and shown) and
+`theme.counterpart` (the other variant generated from the one edited:
+its `edits`, `seeds` and `skipped` proposed, or, with `apply: true`,
+written as one change, `changed` back).
 
 ## Keyboard and screen readers
 
 Every control is reached with Tab and used with Enter or Space: the
-tabs, the theme picker, undo and redo, "Preview only", "Apply" and
+tabs, the theme picker, undo and redo, the variant switch (Dark,
+Light), "Generate the other variant" with "Apply to `<theme>`" and
+"Cancel", "Preview only", "Apply" and
 "Discard", the filter, each group and token, the value and hex fields,
 reset, the seed picker's hex field and "Generate", export and import,
 the Fonts tab's moves, removals, additions and "Apply the fonts". egui's colour picker is drawn

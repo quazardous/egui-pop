@@ -270,7 +270,7 @@ command-theme-generate =
     .title = Générer une gamme de couleurs
 
 command-theme-export =
-    .description = Le thème en cours d’édition comme fichier .tokens.json (`name`) : $extends sa base, les jetons modifiés avec leur type.
+    .description = Le thème en cours d’édition comme fichier .tokens.json (`name`) : $extends sa base, les jetons modifiés avec leur type ; une paire claire et sombre en un seul fichier portant sa contrepartie.
     .title = Exporter le thème
 
 command-theme-import =
@@ -364,6 +364,14 @@ command-terminal-restart =
 command-terminal-send =
     .description = Envoie `text` au programme par `terminal.input` (avec `enter`, suivi d’Entrée).
     .title = Envoyer une saisie
+
+command-theme-counterpart =
+    .description = L’autre variante de la paire générée à partir de celle éditée (couleurs en miroir : même teinte et même saturation, luminosité inversée ; alias et autres valeurs tels quels) : les modifications proposées, ou, avec `apply`, écrites en une seule modification.
+    .title = Générer l’autre variante
+
+command-theme-switch =
+    .description = Édite l’autre variante, claire ou sombre, de la paire en cours d’édition, et l’affiche ; chaque variante garde ses modifications et son historique.
+    .title = Basculer la variante éditée
 
 command-view-interface-zoom-reset =
     .description = Rend à l’interface sa taille normale.
@@ -849,6 +857,8 @@ egui-pop-theme-editor-components = Composants
 
 egui-pop-theme-editor-contrast = Contraste
 
+egui-pop-theme-editor-dark = Sombre
+
 egui-pop-theme-editor-discard = Abandonner
 
 egui-pop-theme-editor-edited = modifié
@@ -885,7 +895,7 @@ egui-pop-theme-editor-generate = Générer { $scale }
 
 egui-pop-theme-editor-generate-title = Générer cette gamme à partir d’une couleur
 
-egui-pop-theme-editor-generate-variant = Écrite dans la variante affichée seulement ; sa contrepartie claire ou sombre garde sa propre gamme.
+egui-pop-theme-editor-generate-variant = Écrite dans la variante éditée seulement ; l’autre garde sa propre gamme (basculez vers elle, ou générez l’autre variante).
 
 egui-pop-theme-editor-generated = { $count } jetons de { $scale } générés ; une seule annulation les reprend.
 
@@ -898,6 +908,8 @@ egui-pop-theme-editor-import = Importer
 egui-pop-theme-editor-imported = Importé sur { $theme }.
 
 egui-pop-theme-editor-lc-hint = Contraste de luminosité APCA, pour information : 60 pour du texte ordinaire, 75 pour du texte courant ; le thème est vérifié selon les WCAG.
+
+egui-pop-theme-editor-light = Clair
 
 egui-pop-theme-editor-missing = Le plugin de l’éditeur de thème n’est pas branché.
 
@@ -918,6 +930,22 @@ egui-pop-theme-editor-not-applicable = s.o.
 egui-pop-theme-editor-not-applied = Pas encore appliqué : seul ce volet montre le brouillon.
 
 egui-pop-theme-editor-open-file = Ouvrir un fichier
+
+egui-pop-theme-editor-other = Générer l’autre variante
+
+egui-pop-theme-editor-other-apply = Appliquer à { $theme }
+
+egui-pop-theme-editor-other-cancel = Annuler
+
+egui-pop-theme-editor-other-hint = Propose { $theme } à partir de cette variante : couleurs en miroir (même teinte et même saturation, luminosité inversée), alias et autres valeurs tels quels. Rien ne change avant d’appliquer.
+
+egui-pop-theme-editor-other-none = Rien à changer : { $theme } correspond déjà à cette variante.
+
+egui-pop-theme-editor-other-previewed = Le volet d’aperçu montre la proposition.
+
+egui-pop-theme-editor-other-title = Proposition pour { $theme }
+
+egui-pop-theme-editor-other-written = { $count } jetons de { $theme } écrits ; une annulation dans cette variante les reprend.
 
 egui-pop-theme-editor-own = Modifié dans ce thème
 
@@ -1010,6 +1038,10 @@ egui-pop-theme-editor-undo = Annuler
 egui-pop-theme-editor-value = Valeur
 
 egui-pop-theme-editor-value-of = Valeur de { $token }
+
+egui-pop-theme-editor-variant = Variante éditée
+
+egui-pop-theme-editor-variant-hint = Les variantes claire et sombre sont éditées en paire, chacune avec ses modifications et son historique : basculer affiche et édite l’autre.
 
 egui-pop-theme-editor-warnings = Lu avec des avertissements : { $warnings }.
 
