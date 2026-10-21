@@ -93,6 +93,7 @@ use egui::{
 };
 use egui_pop_core::a11y::{self, Politeness};
 use egui_pop_core::icon::Icon;
+use egui_pop_core::pointer::claim::{self, Secondary};
 use egui_pop_core::slider::{self, Slider};
 use egui_pop_core::state::Slot;
 use egui_pop_core::strings::{self, tr, tr_args};
@@ -1554,7 +1555,7 @@ impl Cx<'_, '_, '_> {
     fn node_menu(&mut self, resp: &Response, n: &Node) {
         let ctx = self.ctx.clone();
         let mut chosen = None;
-        let _ = resp.context_menu(|ui| {
+        let _ = claim::context_menu(resp, |ui| {
             if ui.button(tr(&ctx, &s::GRAPH_DUPLICATE)).clicked() {
                 chosen = Some(0);
                 ui.close();
@@ -1767,7 +1768,7 @@ impl Cx<'_, '_, '_> {
         }
         let ctx = self.ctx.clone();
         let mut chosen = false;
-        let _ = pr.context_menu(|ui| {
+        let _ = claim::context_menu(pr, |ui| {
             if ui.button(tr(&ctx, &s::GRAPH_DISCONNECT)).clicked() {
                 chosen = true;
                 ui.close();
@@ -2068,6 +2069,10 @@ impl Cx<'_, '_, '_> {
             response.dragged_by(b)
                 && (self.gestures.drag_pans(b, modifiers)
                     || (space && b == egui::PointerButton::Primary))
+                // A widget on the graph that claims the secondary drag
+                // keeps it.
+                && !(b == egui::PointerButton::Secondary
+                    && claim::claimed(&ctx, Secondary::Drag).is_some())
         });
         if panning {
             self.state.pan(-response.drag_delta());
@@ -2131,13 +2136,13 @@ impl Cx<'_, '_, '_> {
                 self.state.fit = true;
             }
         }
-        if response.secondary_clicked() {
+        if claim::opens_context_menu(response) {
             self.state.menu_at = pointer;
         }
         let kinds = self.base.model.kinds();
         if !kinds.is_empty() {
             let mut chosen = None;
-            let _ = response.context_menu(|ui| {
+            let _ = claim::context_menu(response, |ui| {
                 ui.label(tr(&ctx, &s::GRAPH_ADD_NODE));
                 for k in &kinds {
                     if ui.button(&k.title).clicked() {

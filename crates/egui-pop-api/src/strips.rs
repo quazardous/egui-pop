@@ -1226,7 +1226,9 @@ fn indicators(ui: &mut Ui, app: &AppHandle) {
                 ui.id().with("egui_pop_status_bar"),
                 Sense::click(),
             );
-            bar.context_menu(|ui| show_hidden_menu(ui, app, &hidden));
+            egui_pop_core::pointer::claim::context_menu(&bar, |ui| {
+                show_hidden_menu(ui, app, &hidden)
+            });
         }
         for (ind, state) in &list {
             if ind.align == Alignment::End && !narrowed.contains(&ind.id) {
@@ -1515,7 +1517,7 @@ fn item(
     if !description.is_empty() {
         ctx.accesskit_node_builder(r.id, |node| node.set_description(description));
     }
-    r.context_menu(|ui| {
+    egui_pop_core::pointer::claim::context_menu(&r, |ui| {
         let hide = strings::tr_args(ui.ctx(), &txt::STATUS_HIDE, &[("item", &ind.label)]);
         if ui.button(hide).clicked() {
             app.run(CMD_HIDE_ITEM, json!({ "id": ind.id, "hidden": true }));

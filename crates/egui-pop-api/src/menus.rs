@@ -21,7 +21,8 @@
 //! - [`context_menu`] opens a declared menu on a widget's secondary click,
 //!   and [`context_menu_with`] with arguments of the moment (the clicked
 //!   row's path), merged into every item's command and seen by the `when`
-//!   clauses as `args.<key>`;
+//!   clauses as `args.<key>`; not where a widget claimed the secondary
+//!   click for itself (`egui_pop_core::pointer::claim`);
 //! - [`popup_at`] opens a declared menu as a popup under a rectangle or
 //!   at a point (a logo, `Alt+Space`); egui-pop draws it until an item is
 //!   chosen, a click lands outside or Escape is pressed.
@@ -472,7 +473,8 @@ fn show_with(ui: &mut Ui, app: &AppHandle, menu: &MenuId, cx: &WhenContext, args
 
 /// Opens a declared menu on the widget's secondary click (or a long
 /// touch). Its items are evaluated in the context of the moment it
-/// opened, and their commands run in it.
+/// opened, and their commands run in it. It does not open where a widget
+/// inside claimed the secondary click (`egui_pop_core::pointer::claim`).
 pub fn context_menu(response: &Response, app: &AppHandle, menu: &MenuId) {
     context_menu_with(response, app, menu, Json::Null);
 }
@@ -482,12 +484,12 @@ pub fn context_menu(response: &Response, app: &AppHandle, menu: &MenuId) {
 /// clauses as `args.<key>`.
 pub fn context_menu_with(response: &Response, app: &AppHandle, menu: &MenuId, args: Json) {
     let key = CONTEXT_MENU.keyed(response.id);
-    if response.secondary_clicked() {
+    if egui_pop_core::pointer::claim::opens_context_menu(response) {
         let opened = open_step(app, menu, args, "context");
         let state = opened.map(|args| (with_args(&app.when_context(), &args), args));
         key.set(&response.ctx, state);
     }
-    response.context_menu(|ui| {
+    egui_pop_core::pointer::claim::context_menu(response, |ui| {
         let state = key
             .get(ui.ctx())
             .unwrap_or_else(|| Some((app.when_context(), Json::Null)));

@@ -20,6 +20,7 @@ use egui::{
 };
 use egui_pop_core::kit::{Kit, KitCx, Part, State};
 use egui_pop_core::model::keymap::Pointer;
+use egui_pop_core::pointer::claim::{self, Secondary};
 
 use crate::cursor::{self, Cursor, CursorQuery, Shown, Tool};
 use crate::debug;
@@ -1001,7 +1002,18 @@ fn pan_starts(ui: &Ui, response: &Response, g: &Gestures, pan_key: bool) -> bool
         PointerButton::Extra2,
     ]
     .into_iter()
-    .any(|b| response.drag_started_by(b) && g.pointer.drag_pans(b, modifiers))
+    .any(|b| {
+        response.drag_started_by(b)
+            && g.pointer.drag_pans(b, modifiers)
+            && !claimed(ui, b, Secondary::Drag)
+    })
+}
+
+/// A widget over the image (an overlay of the application's) claimed
+/// this gesture of the secondary button where it started: the profile's
+/// binding leaves it to that widget.
+fn claimed(ui: &Ui, b: PointerButton, gesture: Secondary) -> bool {
+    b == PointerButton::Secondary && claim::claimed(ui.ctx(), gesture).is_some()
 }
 
 fn handle_pan(ui: &Ui, response: &Response, g: &Gestures, pan_key: bool, f: &mut Frame<'_>) {
@@ -1061,7 +1073,7 @@ fn handle_click(ui: &Ui, response: &Response, g: &Gestures, f: &mut Frame<'_>) {
         PointerButton::Extra1,
         PointerButton::Extra2,
     ] {
-        if !response.clicked_by(b) {
+        if !response.clicked_by(b) || claimed(ui, b, Secondary::Click) {
             continue;
         }
         let action = g.pointer.click_action(b, modifiers);

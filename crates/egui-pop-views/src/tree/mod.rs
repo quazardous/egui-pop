@@ -722,7 +722,7 @@ impl<'a, K: Key> TreeView<'a, K> {
                                 None => continue,
                             };
                             let r = ui.interact(rect, id.with(("row", &key)), rows::ROW_SENSE);
-                            if r.secondary_clicked() {
+                            if egui_pop_core::pointer::claim::opens_context_menu(&r) {
                                 *context = open_context(app, tree, &key, &mut signals);
                             }
                             // The menu, for the node the step settled on.
@@ -740,7 +740,9 @@ impl<'a, K: Key> TreeView<'a, K> {
                                     }
                                     Some(ContextMenu::Ui(add)) => {
                                         if let Some(n) = model.node(target) {
-                                            r.context_menu(|ui| add(ui, n));
+                                            egui_pop_core::pointer::claim::context_menu(&r, |ui| {
+                                                add(ui, n)
+                                            });
                                         }
                                     }
                                     None => {}

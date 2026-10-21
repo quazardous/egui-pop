@@ -418,3 +418,66 @@ fn only_blender_pans_the_graph_with_a_secondary_drag() {
         assert_eq!(h.state().view.view != view, pans, "{id}");
     }
 }
+
+/// The graph of [`graph`], with a widget over `claim` claiming the
+/// secondary drag (none: no claim).
+fn graph_under_claim(profile: &str, claim: Option<egui::Rect>) -> Harness<'static, GraphScene> {
+    use egui_pop_core::pointer::claim::{self, SecondaryClaim};
+    let mut h = Harness::builder()
+        .with_size(vec2(720.0, 420.0))
+        .build_ui_state(
+            move |ui, s: &mut GraphScene| {
+                GraphEditor::new(&s.graph, &mut s.view)
+                    .size(vec2(700.0, 400.0))
+                    .show(ui);
+                if let Some(rect) = claim {
+                    claim::claim_secondary_rect(
+                        ui.ctx(),
+                        egui::Id::new("pad"),
+                        ui.layer_id(),
+                        rect,
+                        SecondaryClaim::new("Pad").drag("Draws a stroke"),
+                    );
+                }
+            },
+            GraphScene {
+                graph: Graph {
+                    nodes: vec![
+                        Node::new("a", "a", "A", [0.0, 0.0]),
+                        Node::new("b", "b", "B", [400.0, 200.0]),
+                    ],
+                },
+                view: GraphState::new(),
+            },
+        );
+    use_profile(&h.ctx, profile);
+    h.run();
+    h
+}
+
+#[test]
+fn a_secondary_drag_claimed_by_a_widget_does_not_pan_the_graph() {
+    let at = empty_spot(&graph("blender"));
+    let pad = egui::Rect::from_center_size(at, vec2(30.0, 30.0));
+    for (claim, pans) in [(None, true), (Some(pad), false)] {
+        let mut h = graph_under_claim("blender", claim);
+        h.run();
+        let view = h.state().view.view;
+        drag(&mut h, at, vec2(40.0, 0.0), PointerButton::Secondary);
+        h.key_press(egui::Key::Escape);
+        h.run();
+        assert_eq!(
+            h.state().view.view != view,
+            pans,
+            "claimed: {}",
+            claim.is_some()
+        );
+    }
+    // A claim elsewhere leaves the profile's binding alone.
+    let away = egui::Rect::from_center_size(at + vec2(200.0, -200.0), vec2(30.0, 30.0));
+    let mut h = graph_under_claim("blender", Some(away));
+    let view = h.state().view.view;
+    drag(&mut h, at, vec2(40.0, 0.0), PointerButton::Secondary);
+    h.run();
+    assert_ne!(h.state().view.view, view, "a claim elsewhere");
+}

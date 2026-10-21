@@ -350,3 +350,118 @@ fn the_top_bars_blocks_keep_their_room_after_the_menus() {
     assert!(shown.right() <= help + 20.0, "the block is not cut");
     assert_eq!(shown.width(), block.width());
 }
+
+const CARD: MenuId = MenuId::from_static("swatches.card");
+const CARD_RENAME: CommandId = CommandId::from_static("swatches.rename");
+
+/// A card with a declared context menu, holding a plain label and a
+/// swatch that takes the right click for itself (it resets) and senses
+/// drags only, so egui gives its clicks to the card under it.
+struct Swatches {
+    resets: Rc<Cell<usize>>,
+}
+
+impl Plugin for Swatches {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("swatches")
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        ctx.command(
+            CommandSpec::new(CARD_RENAME, "swatches.rename", "Swatches"),
+            |_| Ok(Json::Null),
+        )?;
+        ctx.menu_item(MenuItem::command(CARD, "1", 0, CARD_RENAME))?;
+        let resets = self.resets.clone();
+        ctx.block(
+            egui_pop_api::zones::MAIN,
+            egui_pop_api::zones::Block::add(
+                BlockId::from_static("swatches.card"),
+                0,
+                move |ui, app| {
+                    use egui_pop_core::pointer::claim::{self, SecondaryClaim};
+                    let rect = egui::Rect::from_min_size(ui.cursor().min, egui::vec2(300.0, 120.0));
+                    let card = ui.interact(rect, ui.id().with("card"), egui::Sense::click());
+                    ui.add(egui::Label::new("plain").selectable(false));
+                    let swatch = ui.allocate_response(egui::vec2(40.0, 40.0), egui::Sense::drag());
+                    swatch.widget_info(|| {
+                        egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "swatch")
+                    });
+                    claim::claim_secondary(
+                        &swatch,
+                        SecondaryClaim::new("Swatch").click("Resets the colour"),
+                    );
+                    if ui.rect_contains_pointer(swatch.rect)
+                        && ui.input(|i| i.pointer.button_clicked(egui::PointerButton::Secondary))
+                    {
+                        resets.set(resets.get() + 1);
+                    }
+                    menus::context_menu(&card, app, &CARD);
+                },
+            ),
+        );
+        Ok(())
+    }
+}
+
+#[test]
+fn a_widget_that_claims_the_right_click_keeps_it_from_the_menu_around_it() {
+    let resets = Rc::new(Cell::new(0));
+    let app = App::builder()
+        .plugin(Swatches {
+            resets: resets.clone(),
+        })
+        .build(&egui::Context::default())
+        .unwrap();
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(700.0, 500.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+    h.run();
+    // An ordinary widget: the card's menu opens.
+    h.get_by_label("plain").click_secondary();
+    h.run();
+    assert!(
+        h.query_by_label("swatches.rename").is_some(),
+        "the menu opens"
+    );
+    // A click on the card, away from the menu, closes it.
+    let away = h.get_by_label("plain").rect().left_top() + egui::vec2(250.0, 100.0);
+    h.event(egui::Event::PointerMoved(away));
+    for pressed in [true, false] {
+        h.event(egui::Event::PointerButton {
+            pos: away,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        });
+    }
+    h.run();
+    assert!(
+        h.query_by_label("swatches.rename").is_none(),
+        "the menu closed"
+    );
+    // The swatch: its own action, and no menu.
+    let before = resets.get();
+    h.get_by_label("swatch").click_secondary();
+    h.run();
+    assert_eq!(resets.get(), before + 1, "the swatch resets");
+    assert!(
+        h.query_by_label("swatches.rename").is_none(),
+        "no menu over the swatch"
+    );
+    // Agents see the claim, and the use it said.
+    let snapshot = h.state().handle().debug_snapshot();
+    let pointer = &snapshot["pointer"];
+    assert!(
+        pointer["claims"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|c| c["widget"] == "Swatch" && c["click"] == "Resets the colour"),
+        "{pointer}"
+    );
+    assert_eq!(
+        pointer["uses"],
+        json!([{ "widget": "Swatch", "gesture": "SecondaryClick", "does": "Resets the colour" }])
+    );
+}
