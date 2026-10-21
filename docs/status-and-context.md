@@ -1,9 +1,10 @@
-# The status bar and the context stack (proposed)
+# The status bar and the context stack
 
-**Status: proposed, not built.** This note settles how the status bar and
-the context stack ([contexts.md](contexts.md), ADR 0012) meet. Each point
-gives a recommended default; the owner confirms or changes them, and the
-work is built with the status bar's next pass.
+**Status: decided (2026-10-21), built.** This note settles how the status
+bar and the context stack ([contexts.md](contexts.md), ADR 0012) meet.
+The owner accepted every recommended default below, the open questions
+included. How to use it is in [workbench.md](workbench.md#slim-strips);
+"As built" at the end says where the code differs in its details.
 
 ## Why together
 
@@ -93,10 +94,40 @@ changes in the command.
 
 ## Build order
 
-This waits on the status bar's next pass (a rich hover and popover per
-item), which itself waits on the mount contract. Steps:
-1. `when` on indicators.
-2. The breadcrumb and chips in the bar.
-3. The saved choices per place.
-4. The `status` field in `context.read`.
-5. Gallery page, tests, and a Helios adoption (library, darkroom, culling).
+The status bar's next pass (a rich hover and popover per item) was an
+ordering preference, not a dependency: these steps were built before it.
+1. `when` on indicators. *Built.*
+2. The breadcrumb and chips in the bar. *Built.*
+3. The saved choices per place. *Built.*
+4. The `status` field in `context.read`. *Built.*
+5. Gallery page, tests (*built*), and an adoption by an application
+   (library, darkroom, culling), still to come.
+
+## As built
+
+- `Indicator::when(clause)`; `Indicator::during(&frame)` answers open
+  question 3: it writes the frame's clause (`FrameSpec::clause`: the top
+  place, or the mode on in its group), so a frame's status items need no
+  clause by hand. A clause that does not parse keeps the item hidden and
+  is a diagnostic (`indicator-when`).
+- Groups have no declaration of their own: a mode declared
+  `FrameSpec::visible()` makes its group visible. A chip's tone is
+  `FrameSpec::tone(name)` (a kit tone name, `accent` by default); a chip
+  is the micro-indicators' text badge, interactive.
+- A group has no default mode: a chip's click turns its group off
+  (`ClearMode`), or pops the last pushed mode (`PopMode`, back to what
+  it replaced). A crumb goes back with `context.jump` to its depth, the
+  same transition as `context.go` to its path.
+- The guard's reason is asked as a dry run of the stack's own owner
+  (`contexts::why_not`) only while the chip is under the pointer; a host
+  owning the stack (an answer that may come later) gives no reason
+  there, its refusal still shows in a toast on a click.
+- "Low-priority indicators" are the heaviest (`weight`): the lightest
+  sit at the bar's end and stay longest.
+- The choices are a value per place in the `view` document
+  (`contexts::place_value`, keyed by the place's frame id, `root` at the
+  root), under `egui_pop.status`; without the context stack they last
+  the session. They are changed from an item's context menu, or by
+  `status.item.hide` and `status.item.move`.
+- The root crumb shows at the root too ("You are in Home" for a screen
+  reader), so the bar always says where the user is.

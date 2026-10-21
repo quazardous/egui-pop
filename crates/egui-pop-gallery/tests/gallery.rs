@@ -1358,16 +1358,24 @@ fn the_context_stack_page_drills_down_switches_modes_and_comes_back() {
     h.run();
     let app = h.state().app.handle().clone();
     assert_eq!(context_key(&h, "place"), "root");
+    // The status bar starts with where the user is.
+    assert!(h.query_by_label("You are in All photos").is_some());
     // Three levels down; the breadcrumb follows.
     h.get_by_label("Open the album Holidays").click();
     h.run();
+    // The album's own status item.
+    assert!(h.query_by_label("12 photos").is_some());
     h.get_by_label("Open photo 3").click();
     h.run();
+    assert!(h.query_by_label("12 photos").is_none());
     assert_eq!(context_key(&h, "place"), "gallery.photo");
     assert_eq!(context_key(&h, "placeDepth"), "2");
     assert!(h.query_by_label("Album Holidays").is_some());
     assert!(h.query_by_label("Photo 3").is_some());
-    // An orientation set: its panel shows, its keys work.
+    assert!(h.query_by_label("Go to Album Holidays").is_some());
+    assert!(h.query_by_label("You are in Photo 3").is_some());
+    // An orientation set: its panel shows, its keys work, its chip and
+    // its picks show in the status bar.
     h.get_by_label("Culling").click();
     h.run();
     assert_eq!(context_key(&h, "mode.orientation"), "gallery.culling");
@@ -1375,13 +1383,24 @@ fn the_context_stack_page_drills_down_switches_modes_and_comes_back() {
     h.key_press(egui::Key::P);
     h.run();
     assert_eq!(context_key(&h, "galleryContextKey"), "picked");
-    // A compare pushed on top.
+    assert!(h.query_by_label("Picks (1)").is_some());
+    // A compare pushed on top: a chip with a back mark.
     h.get_by_label("Compare").click();
     h.run();
     h.run();
     assert!(app.panel_visible(&SECOND));
+    assert!(h.query_by_label("Back from Compare").is_some());
     let mut results = egui_kittest::SnapshotResults::new();
     results.add(h.try_snapshot("contexts-pop-dark"));
+    // Its chip goes back, as Escape does: its panel goes, the
+    // orientation stays.
+    h.get_by_label("Back from Compare").click();
+    h.run();
+    assert!(!app.panel_visible(&SECOND));
+    assert_eq!(context_key(&h, "mode.orientation"), "gallery.culling");
+    h.get_by_label("Compare").click();
+    h.run();
+    assert!(app.panel_visible(&SECOND));
     // Escape pops it: its panel goes, the orientation stays.
     h.key_press(egui::Key::Escape);
     h.run();

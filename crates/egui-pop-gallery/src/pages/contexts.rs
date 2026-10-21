@@ -1,7 +1,10 @@
 //! The context stack page: a three-level drill-down (an album, a photo,
 //! a mask) shown as a breadcrumb, an orientation set for the session and
 //! a compare pushed for a moment, with panels and keys that follow, and a
-//! guard that refuses to leave a locked photo.
+//! guard that refuses to leave a locked photo. The status bar starts
+//! with the same breadcrumb and the modes as chips, and its items follow
+//! the place: a photo count in an album, the picks while culling, the
+//! mask being painted.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -9,6 +12,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use egui::Ui;
 use egui_pop::api::contexts::{self, FrameSpec, Verdict};
 use egui_pop::api::stories::Story;
+use egui_pop::api::strips::{self, Indicator, Tone};
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
 use egui_pop::core::widgets;
 use egui_pop::model::commands::CommandSpec;
@@ -91,15 +95,53 @@ impl Plugin for ContextsPage {
             }
         });
         let mask = FrameSpec::place(MASK, "Mask").key("galleryMaskOpen", "true");
-        let culling = FrameSpec::mode(CULLING, ORIENTATION, "Culling").show(RATINGS);
+        // The orientation and the compare show in the status bar.
+        let culling = FrameSpec::mode(CULLING, ORIENTATION, "Culling")
+            .show(RATINGS)
+            .visible();
         let retouch = FrameSpec::mode(RETOUCH, ORIENTATION, "Retouch");
         let review = FrameSpec::mode(REVIEW, ORIENTATION, "Review");
-        let compare =
-            FrameSpec::mode(COMPARE, GroupId::from_static("compare"), "Compare").show(SECOND);
+        let compare = FrameSpec::mode(COMPARE, GroupId::from_static("compare"), "Compare")
+            .show(SECOND)
+            .visible()
+            .tone("info");
+        // Status items that follow the place and the mode.
+        ctx.indicator(
+            Indicator::new(
+                "gallery.contexts.photos",
+                "12 photos",
+                "gallery.contexts.none.",
+            )
+            .during(&album),
+        )
+        .indicator(
+            Indicator::new(
+                "gallery.contexts.picks",
+                "No pick",
+                "gallery.contexts.picked",
+            )
+            .during(&culling)
+            .reduce(|state, _| {
+                let n = state.count.unwrap_or(0) + 1;
+                state.count = Some(n);
+                state.text = "Picks".into();
+                state.tone = Tone::Success;
+            }),
+        )
+        .indicator(
+            Indicator::new(
+                "gallery.contexts.mask",
+                "Painting a mask",
+                "gallery.contexts.none.",
+            )
+            .when("galleryMaskOpen == 'true'"),
+        );
         ctx.command(
             CommandSpec::new(CMD_PICK, "Pick the photo", "Gallery"),
             |call| {
                 call.app.set_context(LAST, "picked");
+                call.app
+                    .publish("gallery", None, "gallery.contexts.picked", Json::Null);
                 Ok(Json::Null)
             },
         )?
@@ -217,4 +259,13 @@ fn show(ui: &mut Ui, app: &AppHandle, locked: &AtomicBool) {
         state.rev,
         state.projection_key()
     ));
+    section(ui, "In the status bar");
+    ui.label("The status bar starts with the same breadcrumb and the orientation and compare as chips (a click leaves the mode). Its items follow the place: the photo count in an album, the picks while culling, the mask being painted. Right-click an item to hide it or move it here; each place keeps its own choices, the root's where it has none.");
+    for item in strips::visible(app) {
+        let text = match item.count {
+            Some(n) => format!("{} ({n})", item.text),
+            None => item.text,
+        };
+        ui.monospace(format!("{}: {text}", item.id));
+    }
 }

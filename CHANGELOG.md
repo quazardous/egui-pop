@@ -37,6 +37,11 @@ publishes.
   (`YamlGraphError`). Part of #31.
 - The gallery's `graph-file` page: the node graph editor over a YAML
   graph file, the file's text beside it, each edit landing in the text.
+- The gallery's `contexts` page shows the status bar following the
+  stack: the breadcrumb and the orientation and compare chips at its
+  start, a photo count in an album, the picks while culling, the mask
+  being painted. The design note `docs/status-and-context.md` is
+  decided and built.
 - Agents read what the status bar shows (egui-pop-api): `context.read`
   gains a `status` field, each visible item's id, text, tone, count and
   progress; the new `strips` debug collector shows the breadcrumb, the

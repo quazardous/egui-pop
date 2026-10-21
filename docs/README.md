@@ -45,8 +45,8 @@ of every crate with every feature on.
   kernel and projected by the interface, kernel state and view state,
   how a plugin reacts.
 - [The status bar and the context stack](status-and-context.md)
-  (proposed): the breadcrumb and mode chips in the status bar, status
-  items that follow the context, one saved state.
+  (decided, built): the breadcrumb and mode chips in the status bar,
+  status items that follow the context, one saved state.
 - [The workbench](workbench.md): panels in areas with placement rules,
   auxiliary windows, arrangements, strips and indicators, the window's
   own frame, scale and the interface zoom, the keymap at run time, hooks
