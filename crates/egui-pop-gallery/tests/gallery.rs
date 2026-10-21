@@ -3505,3 +3505,64 @@ fn the_font_pairs_page_compares_each_pair_and_measures_their_digits() {
     assert!(!all_equal(&digit_advances(&h.ctx, family("Inter"), 13.0)));
     h.snapshot("fonts-pop-dark");
 }
+
+/// Zen mode entered from the View menu: its way out is in sight, and
+/// Escape leaves it.
+#[test]
+fn zen_mode_from_the_view_menu_shows_its_way_out_and_escape_leaves_it() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "overview"));
+    h.run();
+    h.get_by_label("View").click();
+    h.run();
+    h.query_all_by_label("Zen mode").last().unwrap().click();
+    h.run();
+    let handle = h.state().app.handle().clone();
+    assert!(handle.zen());
+    assert!(h.query_by_label("View").is_none(), "the menu bar is hidden");
+    // (The strip and its text both carry the hint.)
+    assert!(
+        h.query_all_by_label("Zen mode: Escape to leave")
+            .next()
+            .is_some()
+    );
+    assert!(h.query_by_label("Leave zen mode").is_some());
+    h.key_press(egui::Key::Escape);
+    h.run();
+    assert!(!handle.zen());
+    assert!(h.query_by_label("View").is_some());
+    assert!(
+        h.query_all_by_label("Zen mode: Escape to leave")
+            .next()
+            .is_none()
+    );
+}
+
+/// In a text field, the first Escape leaves the field, the second zen
+/// mode; Shift+F11 toggles it even while typing.
+#[test]
+fn escape_leaves_a_text_field_then_zen_mode() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "inputs"));
+    h.run();
+    text_input(&h, "Search").focus();
+    h.run();
+    assert!(text_input(&h, "Search").is_focused());
+    h.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::F11);
+    h.run();
+    let handle = h.state().app.handle().clone();
+    assert!(handle.zen(), "Shift+F11 while typing");
+    assert!(text_input(&h, "Search").is_focused(), "the field kept it");
+    h.key_press(egui::Key::Escape);
+    h.run();
+    assert!(handle.zen(), "the first Escape leaves the field");
+    assert!(!text_input(&h, "Search").is_focused());
+    h.key_press(egui::Key::Escape);
+    h.run();
+    assert!(!handle.zen(), "the second leaves zen mode");
+    // Shift+F11 toggles it on and off.
+    h.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::F11);
+    h.run();
+    assert!(handle.zen());
+    h.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::F11);
+    h.run();
+    assert!(!handle.zen());
+}
