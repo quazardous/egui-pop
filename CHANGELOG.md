@@ -78,6 +78,13 @@ publishes.
   `Router::route_all` nudges wires that share a channel
   `Options::spacing` apart (within the margin, ordered to add few
   crossings).
+- A pair's other variant generated from the one edited
+  (egui-pop-tokens): `ThemeDraft::generate_counterpart` proposes the
+  edits, without making them (`GeneratedVariant`): colours mirrored by
+  `palette::mirror` (the same OkHsl hue and saturation, the lightness
+  `1 - l`), aliases and other values carried as they are, a seeded
+  scale generated again from its seed for the other scheme, the other
+  variant's own changes not among them taken back.
 - Theme drafts over a light and dark pair (egui-pop-tokens):
   `ThemeDraft::pair`, `for_theme` and `from_pair_spec` hold both
   variants, each with its own changes, history and seeds; `switch`

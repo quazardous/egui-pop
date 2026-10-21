@@ -197,6 +197,33 @@ pub fn clamp_seed(seed: Color) -> Color {
     Okhsl { h: hsl.h, s, l }.to_color()
 }
 
+/// A colour's counterpart in a theme of the other scheme, light for
+/// dark: the same OkHsl hue and saturation (the chroma, as far as the
+/// sRGB gamut holds it at the new lightness), the lightness mirrored
+/// (`1 - l`), the alpha kept. Black and white swap, a mid grey stays;
+/// mirrored twice, a colour comes back (to within rounding). What the
+/// theme editor's "Generate the other variant" does to a colour
+/// ([`crate::ThemeDraft::generate_counterpart`]).
+///
+/// ```
+/// use egui_pop_tokens::{Color, palette};
+///
+/// let white = palette::mirror(Color::BLACK);
+/// assert_eq!(white.to_hex(), "#ffffff");
+/// let deep = Color::from_hex("#1a3a6e").unwrap();
+/// let pale = palette::mirror(deep);
+/// assert!(deep.is_dark() && !pale.is_dark());
+/// ```
+pub fn mirror(c: Color) -> Color {
+    let hsl = Okhsl::from_color(c);
+    let out = Okhsl {
+        l: 1.0 - hsl.l,
+        ..hsl
+    }
+    .to_color();
+    Color { a: c.a, ..out }
+}
+
 /// Whether a seed gives a ramp as it is ([`clamp_seed`] leaves it).
 pub fn is_usable_seed(seed: Color) -> bool {
     clamp_seed(seed).to_hex() == Color { a: 1.0, ..seed }.to_hex()
@@ -1003,5 +1030,32 @@ mod tests {
             t.iter()
                 .all(|(_, v)| v.as_str().is_some_and(|s| s.starts_with('#')))
         );
+    }
+
+    #[test]
+    fn a_mirrored_colour_keeps_its_hue_and_saturation() {
+        assert_eq!(mirror(Color::BLACK).to_hex(), "#ffffff");
+        assert_eq!(mirror(Color::WHITE).to_hex(), "#000000");
+        let half = Color {
+            a: 0.5,
+            ..Color::BLACK
+        };
+        assert_eq!(mirror(half).to_hex(), "#ffffff80");
+        for c in seeds() {
+            let m = mirror(c);
+            let (a, b) = (Okhsl::from_color(c), Okhsl::from_color(m));
+            assert!((a.l + b.l - 1.0).abs() < 0.01, "{c}: {a:?} {b:?}");
+            if a.s > 0.05 && a.l > 0.05 && a.l < 0.95 {
+                let dh = (a.h - b.h).abs();
+                assert!(dh.min(360.0 - dh) < 1.0, "{c}: {a:?} {b:?}");
+                assert!((a.s - b.s).abs() < 0.01, "{c}: {a:?} {b:?}");
+            }
+            // Twice: back where it was.
+            let back = mirror(m).to_srgba_u8();
+            let was = c.to_srgba_u8();
+            for i in 0..3 {
+                assert!(back[i].abs_diff(was[i]) <= 2, "{c} -> {m} -> {back:?}");
+            }
+        }
     }
 }

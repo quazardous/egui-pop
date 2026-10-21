@@ -80,6 +80,25 @@ impl TokenEdit {
     }
 }
 
+/// A pair's other variant generated from the one edited
+/// ([`ThemeDraft::generate_counterpart`]): a proposal, for a preview,
+/// that changes nothing until recorded.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct GeneratedVariant {
+    /// The edits making the other variant: each checked against its
+    /// base, from its own values. Recorded on it as one change (the
+    /// first with [`ThemeDraft::record`], the others with
+    /// [`ThemeDraft::record_joined`]).
+    pub edits: Vec<TokenEdit>,
+    /// The seeds its scales are generated from, for its scheme: what it
+    /// records ([`ThemeDraft::set_seed`]) in place of its own.
+    pub seeds: BTreeMap<String, Seed>,
+    /// The tokens, or seeded scales, of the variant edited not carried
+    /// over: the other base has no such token, or the value does not
+    /// check there.
+    pub skipped: Vec<String>,
+}
+
 /// A theme being edited: one theme, or a light and dark pair.
 ///
 /// Its methods read and change the variant edited: its base, its
@@ -228,6 +247,107 @@ impl ThemeDraft {
             Some(other) if self.second => (other, Some(self)),
             Some(other) => (self, Some(other)),
         }
+    }
+
+    /// The pair's other variant as generated from the one edited, so
+    /// that it becomes its counterpart: its base with the edited
+    /// variant's changes carried over, its own changes not among them
+    /// taken back. `None` for a theme alone. Deterministic, and nothing
+    /// is changed: record [`GeneratedVariant::edits`] on the other
+    /// variant (after [`ThemeDraft::switch`]) to apply it.
+    ///
+    /// How each change is carried over:
+    ///
+    /// - a colour value: mirrored ([`crate::palette::mirror`], the
+    ///   same OkHsl hue and saturation, the lightness `1 - l`);
+    /// - an alias (`{blue.9}`): as it is, so it names the other
+    ///   variant's own token;
+    /// - any other value (a dimension, a number, a duration, font
+    ///   families): as it is, shared by both;
+    /// - a scale generated from a seed ([`ThemeDraft::set_seed`], its
+    ///   step 9 still changed): the same seed for the other scheme,
+    ///   generated again ([`ThemeDraft::seeded_ramp`]) over the other
+    ///   variant with the changes above, its steps written; the seed is
+    ///   in [`GeneratedVariant::seeds`].
+    ///
+    /// ```
+    /// use egui_pop_tokens::{ThemeDraft, Themes};
+    /// use serde_json::json;
+    ///
+    /// let themes = Themes::default();
+    /// let mut draft = ThemeDraft::for_theme(&themes, "pop-dark");
+    /// let e = draft.edit(&themes, "surface.panel", Some(json!("#000000"))).unwrap();
+    /// draft.apply(e.unwrap());
+    /// let generated = draft.generate_counterpart(&themes).unwrap();
+    /// assert_eq!(generated.edits[0].path, "surface.panel");
+    /// assert_eq!(generated.edits[0].to, Some(json!("#ffffff")));
+    /// ```
+    pub fn generate_counterpart(&self, themes: &Themes) -> Option<GeneratedVariant> {
+        let other = self.other.as_deref()?;
+        let scheme = if is_dark(themes, &other.base) {
+            crate::palette::Scheme::Dark
+        } else {
+            crate::palette::Scheme::Light
+        };
+        let resolved = themes.resolve(&ThemeSpec::new(other.base.clone()));
+        let live: BTreeMap<&String, &Seed> = self
+            .seeds
+            .iter()
+            .filter(|(scale, _)| self.overrides.contains_key(&format!("{scale}.9")))
+            .collect();
+        let mut out = GeneratedVariant::default();
+        let mut wanted: BTreeMap<String, Json> = BTreeMap::new();
+        for (path, value) in &self.overrides {
+            if in_scales(live.keys().copied(), path) {
+                continue;
+            }
+            let is_color = resolved.get(path).is_some_and(|t| t.ty == "color");
+            let carried = match Value::parse("color", value) {
+                Ok(Value::Color(c)) if is_color && alias_target(value).is_none() => {
+                    json!(crate::palette::mirror(c).to_hex())
+                }
+                _ => value.clone(),
+            };
+            match check(themes, &other.base, path, &carried) {
+                Ok(()) => {
+                    wanted.insert(path.clone(), carried);
+                }
+                Err(_) => out.skipped.push(path.clone()),
+            }
+        }
+        // The seeded scales, fitted to the other variant as generated.
+        let fitted = ThemeDraft {
+            overrides: wanted.clone(),
+            ..ThemeDraft::new(other.base.clone())
+        };
+        for (scale, seed) in live {
+            if resolved.get(&format!("{scale}.9")).is_none() {
+                out.skipped.push(scale.clone());
+                continue;
+            }
+            let seed = Seed::new(seed.color, scheme);
+            let ramp = fitted.seeded_ramp(themes, scale, seed);
+            for (path, value) in ramp.tokens(scale) {
+                if resolved.get(&path).is_some() {
+                    wanted.insert(path, value);
+                }
+            }
+            out.seeds.insert(scale.clone(), seed);
+        }
+        let paths: std::collections::BTreeSet<&String> =
+            other.overrides.keys().chain(wanted.keys()).collect();
+        for path in paths {
+            let from = other.overrides.get(path).cloned();
+            let to = wanted.get(path).cloned();
+            if from != to {
+                out.edits.push(TokenEdit {
+                    path: path.clone(),
+                    from,
+                    to,
+                });
+            }
+        }
+        Some(out)
     }
 
     /// Edits the pair's other variant: what was edited keeps its changes
@@ -1260,5 +1380,92 @@ mod tests {
             assert_eq!(warnings.len(), 1, "{warnings:?}");
             assert!(warnings[0].to_string().contains(said), "{}", warnings[0]);
         }
+    }
+
+    #[test]
+    fn the_other_variant_is_generated_from_the_one_edited() {
+        use crate::Color;
+        use crate::palette::{Scheme, mirror};
+        let t = themes();
+        let mut d = ThemeDraft::for_theme(&t, "pop-dark");
+        assert!(
+            ThemeDraft::new("pop-dark")
+                .generate_counterpart(&t)
+                .is_none()
+        );
+        for (path, v) in [
+            ("surface.panel", json!("#000000")),
+            ("danger", json!("#1a3a6e")),
+            ("button.rest.border-color", json!("{border.strong}")),
+            ("radius.widget", json!({ "value": 2, "unit": "px" })),
+        ] {
+            let e = d.edit(&t, path, Some(v)).unwrap().unwrap();
+            d.apply(e);
+        }
+        // A seeded scale, for the dark scheme.
+        let seed = Seed::new(Color::from_hex("#27ae60").unwrap(), Scheme::Dark);
+        let ramp = d.seeded_ramp(&t, "green", seed);
+        for e in d.scale_edits(&t, "green", &ramp).unwrap() {
+            d.record_joined(e);
+        }
+        d.set_seed("green", Some(seed));
+        // The other variant has a change of its own, not carried over.
+        d.switch();
+        let e = d.edit(&t, "info", Some(json!("#00ffff"))).unwrap();
+        d.apply(e.unwrap());
+        d.switch();
+
+        let g = d.generate_counterpart(&t).unwrap();
+        assert!(g.skipped.is_empty(), "{:?}", g.skipped);
+        let to = |path: &str| {
+            g.edits
+                .iter()
+                .find(|e| e.path == path)
+                .unwrap_or_else(|| panic!("no edit of {path}"))
+                .to
+                .clone()
+        };
+        assert_eq!(to("surface.panel"), Some(json!("#ffffff")));
+        let deep = Color::from_hex("#1a3a6e").unwrap();
+        assert_eq!(to("danger"), Some(json!(mirror(deep).to_hex())));
+        assert_eq!(
+            to("button.rest.border-color"),
+            Some(json!("{border.strong}"))
+        );
+        assert_eq!(
+            to("radius.widget"),
+            Some(json!({ "value": 2, "unit": "px" }))
+        );
+        assert_eq!(to("info"), None, "taken back");
+        // The seed for the light scheme, its ramp fitted to the other
+        // variant as generated (white panels).
+        let light = Seed::new(seed.color, Scheme::Light);
+        assert_eq!(g.seeds, BTreeMap::from([("green".to_string(), light)]));
+        let mut fitted = ThemeDraft::new("pop-light");
+        fitted.preview("surface.panel", Some(json!("#ffffff")));
+        fitted.preview("danger", to("danger"));
+        fitted.preview("button.rest.border-color", Some(json!("{border.strong}")));
+        fitted.preview("radius.widget", Some(json!({ "value": 2, "unit": "px" })));
+        for (path, value) in fitted.seeded_ramp(&t, "green", light).tokens("green") {
+            assert_eq!(to(&path), Some(value), "{path}");
+        }
+        // Deterministic: the same proposal again.
+        assert_eq!(d.generate_counterpart(&t), Some(g.clone()));
+
+        // Recorded on the other variant: one change, and it becomes the
+        // edited one's counterpart.
+        d.switch();
+        for (i, e) in g.edits.iter().cloned().enumerate() {
+            if i == 0 {
+                d.record(e)
+            } else {
+                d.record_joined(e)
+            }
+        }
+        assert_eq!(d.undo_group(), g.edits.len());
+        assert_eq!(d.value("surface.panel"), Some(&json!("#ffffff")));
+        assert_eq!(d.value("info"), None);
+        let r = t.resolve(&d.spec(&ThemeSpec::default()));
+        assert!(r.problems().is_empty(), "{:?}", r.problems());
     }
 }
