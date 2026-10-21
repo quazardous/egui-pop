@@ -165,6 +165,10 @@ pub enum Warning {
     /// ([`crate::cache`]): it was read uncached, and is compiled again
     /// next time.
     NotCached { file: String, reason: String },
+    /// A file of a theme package ([`crate::package`]) not read: a face
+    /// missing, not a font or outside the package (the families naming
+    /// it fall back), or a second token file.
+    Font { file: String, reason: String },
 }
 
 impl Warning {
@@ -176,7 +180,7 @@ impl Warning {
             | Warning::Unknown { path, .. }
             | Warning::Invalid { path, .. } => Some(path),
             Warning::Renamed { from, .. } => Some(from),
-            Warning::Unchecked { .. } | Warning::NotCached { .. } => None,
+            Warning::Unchecked { .. } | Warning::NotCached { .. } | Warning::Font { .. } => None,
         }
     }
 
@@ -224,6 +228,7 @@ impl fmt::Display for Warning {
             Warning::NotCached { file, reason } => {
                 write!(f, "`{file}`: read uncached: {reason}")
             }
+            Warning::Font { file, reason } => write!(f, "`{file}`: {reason}"),
         }
     }
 }

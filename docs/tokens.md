@@ -489,6 +489,55 @@ release. A test (`no_rename_entry_outlives_its_window`) compares each
 entry's `since` with the crate's version and fails once an entry is
 past its window, so the release raising the version drops it.
 
+## A theme with its fonts
+
+A theme naming font files of its own (a user's, added in the theme
+editor) travels as a package: a folder, or a `.zip` archive of the
+same files, holding the token file and the faces by relative path
+(`egui_pop_tokens::package`).
+
+```text
+my-theme/
+  my-theme.tokens.json
+  fonts/Inter-Regular.ttf
+```
+
+The token file lists its faces in its root `$extensions`, with the
+family a theme names each by and its weight:
+
+```json
+{
+  "$extends": "pop-dark",
+  "$extensions": { "org.egui-pop.fonts": [
+    { "file": "fonts/Inter-Regular.ttf", "family": "Inter", "weight": 400 }
+  ] },
+  "font": { "family": { "ui": { "$type": "fontFamily", "$value": ["Inter", "sans-serif"] } } }
+}
+```
+
+- `ThemePackage::read(path)` takes the folder, the archive or the lone
+  token file (its faces then looked for beside it by the same paths).
+  In a folder or an archive, the token file is the one at the top
+  ending in `.tokens.json`, `.tokens.yaml` or `.tokens.yml` (the first
+  by name; another is a warning); an archive of the folder itself, its
+  files under one top folder, reads too.
+- Only a package without a readable token file is an error. A face
+  missing, not a TrueType or OpenType file, or with a path leaving the
+  package is left out with a `Warning::Font`, and the families naming
+  it fall back. An archive holding more than 256 MiB once unpacked is
+  refused.
+- `ThemePackage::write(path)` writes what a user chose: a `.zip` path
+  is an archive; otherwise a theme without faces is the lone token
+  file, and one with faces a folder named after the theme beside the
+  path. `write_dir` and `to_zip` write one or the other.
+- Archives need egui-pop-tokens' `zip` feature (`theme-zip` in
+  `egui-pop`, on by default): zip (MIT), deflate only, through the
+  flate2 that egui's image decoding already uses. Without it, a folder
+  or a lone file still reads and writes, and an archive is an error.
+
+The theme editor saves and opens themes this way
+([The theme editor](theme-editor.md#the-file)).
+
 ## Adding a theme
 
 1. Write `my-theme.tokens.yaml`. The shortest way is to extend a built-in

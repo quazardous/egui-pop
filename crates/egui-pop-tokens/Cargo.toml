@@ -15,9 +15,19 @@ authors.workspace = true
 [lints]
 workspace = true
 
+[features]
+## Theme packages as `.zip` archives (`package::ThemePackage::from_zip`,
+## `to_zip`); a folder or a lone token file needs no feature.
+zip = ["dep:zip", "dep:flate2"]
+
 [dependencies]
 serde_json.workspace = true
 serde-saphyr.workspace = true
+# MIT: theme packages as .zip archives (feature `zip`), deflate only.
+zip = { version = "8.1", optional = true, default-features = false, features = ["deflate-flate2"] }
+# MIT OR Apache-2.0: zip's deflate through flate2's pure Rust backend
+# (miniz_oxide), the one egui's image decoding already uses.
+flate2 = { version = "1.1", optional = true, default-features = false, features = ["rust_backend"] }
 
 [build-dependencies]
 # The shipped YAML token files are compiled to JSON at build time.

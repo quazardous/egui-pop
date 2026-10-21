@@ -46,7 +46,8 @@
 //! text on its solid step chosen with APCA ([`apca`]).
 //!
 //! A kit's tokens, fonts and licence come as a folder or embedded in the
-//! binary ([`kit`](mod@kit), [`kit!`]).
+//! binary ([`kit`](mod@kit), [`kit!`]). A theme using font files travels
+//! as a folder or a `.zip` archive holding them ([`package`]).
 //!
 //! Types read: `color` (DTCG colour objects in `srgb`, `srgb-linear`,
 //! `oklch` or `oklab`, any other space through its `hex` fallback, and
@@ -64,6 +65,7 @@ mod error;
 mod file;
 mod format;
 pub mod kit;
+pub mod package;
 pub mod palette;
 mod theme;
 mod value;

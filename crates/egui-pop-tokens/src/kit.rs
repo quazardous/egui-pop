@@ -764,11 +764,12 @@ fn assemble(
 }
 
 /// The first bytes of a TrueType, OpenType or collection file.
-fn looks_like_font(bytes: &[u8]) -> bool {
-    matches!(
-        &bytes[..4],
-        [0, 1, 0, 0] | b"OTTO" | b"true" | b"ttcf" | b"typ1"
-    )
+pub(crate) fn looks_like_font(bytes: &[u8]) -> bool {
+    bytes.len() >= 4
+        && matches!(
+            &bytes[..4],
+            [0, 1, 0, 0] | b"OTTO" | b"true" | b"ttcf" | b"typ1"
+        )
 }
 
 #[derive(Default)]

@@ -431,6 +431,15 @@ publishes.
   `ThemeDraft::set_seed`), and its export writes the seed in place of
   the steps still at the value it gives; import reads it back. Part of
   #33.
+- Theme packages (egui-pop-tokens): a theme using font files travels as
+  a folder or a `.zip` archive holding its token file and the faces by
+  relative path, listed in the token file's root `$extensions`
+  (`"org.egui-pop.fonts"`, `package::ThemePackage`,
+  `package::FONTS_EXTENSION`). `ThemePackage::read` takes a folder, an
+  archive or a lone token file (its faces beside it); a face missing or
+  not a font is a `Warning::Font`, never an error. Archives need the new
+  `zip` feature (zip, MIT, deflate only, through the flate2 already in
+  egui's tree). Part of #37 and #36.
 
 ### Changed
 
