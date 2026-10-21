@@ -12,7 +12,9 @@
 //!
 //! [`show`] is the egui side: it keeps the stack in the context, draws an
 //! overlay (a modal with a backdrop, or an area placed next to an anchor
-//! with [`crate::placement`]) and restores the focus.
+//! with [`crate::placement`]) and restores the focus. [`hold`] keeps in
+//! the stack an overlay its owner lays out and draws itself (a side
+//! area's flyout), so it closes by the same rules.
 //!
 //! **Windows.** Each window has its own stack: an overlay belongs to the
 //! window it is shown in (a detached panel's window, egui's viewport),
@@ -564,6 +566,63 @@ pub struct Anchor {
     pub side: Side,
 }
 
+/// Keeps an overlay in the stack for this pass while `*open`, opening
+/// it the first time; sets `*open` to false when it was closed (Escape,
+/// a click outside, [`close`]) and returns whether it is still open.
+fn enter(ctx: &Context, spec: &OverlaySpec, open: &mut bool) -> bool {
+    begin_pass(ctx);
+    let st = state(ctx);
+    let mut s = lock(&st);
+    if let Some(i) = s.closed.iter().position(|c| c.id == spec.id) {
+        s.closed.remove(i);
+        *open = false;
+        return false;
+    }
+    if !*open {
+        if s.stack.contains(spec.id) {
+            let closed = s.stack.close(spec.id);
+            settle(ctx, &mut s, closed);
+            s.closed.retain(|c| c.id != spec.id);
+        }
+        return false;
+    }
+    if !s.stack.contains(spec.id) {
+        let focused = ctx.memory(|m| m.focused());
+        let (_, closed) = s.stack.open(spec.clone(), focused);
+        settle(ctx, &mut s, closed);
+    } else if s.stack.specs().any(|o| o.id == spec.id && o != spec) {
+        // Declared differently this pass (Escape kept, moved).
+        s.stack.update(spec.clone());
+    }
+    s.shown.push(spec.id);
+    true
+}
+
+/// Holds an overlay its owner draws itself (a flyout laid out against
+/// the workbench rather than placed by [`crate::placement`]) in the
+/// stack, under the stack's rules: Escape and a click outside `rect`
+/// and `anchor` close it, the focus going back where it was. Call it
+/// each pass while `*open`, with where the overlay is drawn this pass;
+/// it sets `*open` to false and returns false once the overlay closed.
+pub fn hold(
+    ctx: &Context,
+    spec: &OverlaySpec,
+    open: &mut bool,
+    anchor: Option<Rect>,
+    rect: Rect,
+) -> bool {
+    if !enter(ctx, spec, open) {
+        return false;
+    }
+    let st = state(ctx);
+    let mut s = lock(&st);
+    if let Some(a) = anchor {
+        s.stack.set_anchor(spec.id, a);
+    }
+    s.stack.set_rect(spec.id, rect);
+    true
+}
+
 /// Shows an overlay while `*open`; sets `*open` to false when it closes
 /// (Escape, a click outside, or [`close`]), restoring the focus. A modal
 /// is centred (moved by its `offset`) over a backdrop (`dim`); other
@@ -575,33 +634,10 @@ pub fn show<R>(
     anchor: Option<Anchor>,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> Option<R> {
-    begin_pass(ctx);
-    let st = state(ctx);
-    {
-        let mut s = lock(&st);
-        if let Some(i) = s.closed.iter().position(|c| c.id == spec.id) {
-            s.closed.remove(i);
-            *open = false;
-            return None;
-        }
-        if !*open {
-            if s.stack.contains(spec.id) {
-                let closed = s.stack.close(spec.id);
-                settle(ctx, &mut s, closed);
-                s.closed.retain(|c| c.id != spec.id);
-            }
-            return None;
-        }
-        if !s.stack.contains(spec.id) {
-            let focused = ctx.memory(|m| m.focused());
-            let (_, closed) = s.stack.open(spec.clone(), focused);
-            settle(ctx, &mut s, closed);
-        } else if s.stack.specs().any(|o| o.id == spec.id && o != spec) {
-            // Declared differently this pass (Escape kept, moved).
-            s.stack.update(spec.clone());
-        }
-        s.shown.push(spec.id);
+    if !enter(ctx, spec, open) {
+        return None;
     }
+    let st = state(ctx);
     let kit = crate::kit::Kit::of(ctx);
     let rest = crate::kit::State::REST;
     let (inner, rect) = match spec.kind {
