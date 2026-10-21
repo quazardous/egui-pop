@@ -15,14 +15,20 @@
 //!   motion over the soft range; a click never makes it jump. A drag is
 //!   one gesture (one undo step when bound to a store); Escape during it
 //!   puts the value back with no trace.
-//! - **Fine and coarse**: Ctrl (Cmd) ten times finer, Shift ten times
-//!   coarser, for drags, arrows and the wheel alike.
+//! - **Fine and coarse**: ten times finer and ten times coarser with
+//!   the pointer profile's modifiers (`gesture.value.fine` and
+//!   `gesture.value.coarse`; Ctrl (Cmd) finer and Shift coarser by
+//!   default), for drags, arrows and the wheel alike.
 //! - **Keys** when focused: the arrows step, Page Up and Page Down take
 //!   coarse steps, Home and End go to the soft ends, Enter opens the
 //!   typed entry.
-//! - **Wheel**: it scrolls the panel; it steps a slider only when the
-//!   slider has the focus or Alt is held over it, so scrolling past
-//!   sliders never changes a value.
+//! - **Wheel**, as the pointer profile says
+//!   ([`crate::pointer`]): guarded (the default), it scrolls the panel
+//!   and steps a slider only when the slider has the focus or the step
+//!   modifiers are held over it (Alt by default), so scrolling past
+//!   sliders never changes a value; on values (darktable), it steps the
+//!   slider under the pointer, and the panel scrolls with the panel
+//!   modifiers (Ctrl+Alt).
 //! - **Typed entry**: a number or an expression ([`expr`]: `x * 2`,
 //!   `1,5 EV`); units after it are ignored; a value past the soft range
 //!   is kept up to the hard one. Enter or leaving the entry (a click
@@ -86,19 +92,28 @@ use crate::kit::{BoxStyle, Kit, KitCx, Part, State, Tone};
 use crate::state::Slot;
 use crate::theme::Tokens;
 
-/// The slider's gestures, as data so a profile can remap them
-/// ([`set_gestures`]). The invariants hold whatever the keys: a click
-/// never makes the value jump, a drag is relative and one gesture, a
-/// modifier scales the step and never changes what is adjusted.
+/// The slider's gestures, as data so a profile can remap them: by
+/// default they follow the pointer profile ([`Gestures::from_map`]);
+/// [`set_gestures`] sets them outright. The invariants hold whatever
+/// the keys: a click never makes the value jump, a drag is relative and
+/// one gesture, a modifier scales the step and never changes what is
+/// adjusted.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Gestures {
-    /// Held: ten times finer (drag, arrows, wheel).
+    /// Held: ten times finer (drag, arrows, wheel); none: never.
     pub fine: Modifiers,
-    /// Held: ten times coarser.
+    /// Held: ten times coarser; none: never.
     pub coarse: Modifiers,
     /// Held over a slider without the focus: the wheel steps it (else
-    /// the wheel scrolls the panel).
+    /// the wheel scrolls the panel); none: only with
+    /// [`Gestures::wheel_steps`] or the focus.
     pub wheel: Modifiers,
+    /// The wheel steps the slider under the pointer, focused or not
+    /// (darktable); the panel scrolls with [`Gestures::panel`] held.
+    pub wheel_steps: bool,
+    /// Held: the wheel scrolls the panel, even over a slider; none:
+    /// never.
+    pub panel: Modifiers,
     /// Opens the typed entry on a focused slider.
     pub typed_entry: Key,
     /// During a drag: puts the value back, no trace.
@@ -108,11 +123,41 @@ pub struct Gestures {
 }
 
 impl Default for Gestures {
+    /// The default pointer profile's.
     fn default() -> Self {
+        Self::from_map(&crate::pointer::default_map())
+    }
+}
+
+impl Gestures {
+    /// What a pointer map says: the modifiers of `gesture.value.step`
+    /// on the wheel (a plain `Wheel` binding steps unfocused sliders),
+    /// of `gesture.value.panel` on the wheel, of `gesture.value.fine`
+    /// and `gesture.value.coarse` on a primary drag; the profile's
+    /// option for the wheel over sliders.
+    pub fn from_map(map: &egui_pop_model::pointer::PointerMap) -> Self {
+        use egui_pop_model::keymap::{Button, Pointer};
+        use egui_pop_model::pointer::{SCOPE_VALUE, SliderWheel, gesture};
+        fn on(
+            map: &egui_pop_model::pointer::PointerMap,
+            command: &egui_pop_model::ids::CommandId,
+            pointer: Pointer,
+        ) -> Vec<Modifiers> {
+            map.chords(SCOPE_VALUE, command)
+                .filter(|c| c.pointer() == Some(pointer))
+                .map(crate::pointer::modifiers_of)
+                .collect()
+        }
+        let first = |mods: Vec<Modifiers>| mods.into_iter().find(|m| m.any());
+        let step = on(map, &gesture::VALUE_STEP, Pointer::Wheel);
+        let drag = Pointer::Drag(Button::Primary);
         Self {
-            fine: Modifiers::COMMAND,
-            coarse: Modifiers::SHIFT,
-            wheel: Modifiers::ALT,
+            fine: first(on(map, &gesture::VALUE_FINE, drag)).unwrap_or(Modifiers::NONE),
+            coarse: first(on(map, &gesture::VALUE_COARSE, drag)).unwrap_or(Modifiers::NONE),
+            wheel: first(step.clone()).unwrap_or(Modifiers::NONE),
+            wheel_steps: map.options.slider_wheel == SliderWheel::Value
+                || step.iter().any(|m| !m.any()),
+            panel: first(on(map, &gesture::VALUE_PANEL, Pointer::Wheel)).unwrap_or(Modifiers::NONE),
             typed_entry: Key::Enter,
             cancel: Key::Escape,
             reset_on_double_click: true,
@@ -132,12 +177,15 @@ const TYPING_FOCUS: Slot<bool> = Slot::new("core.slider.typing_focus");
 /// The pass a typed entry without the focus was last held open.
 const TYPING_HELD: Slot<u64> = Slot::new("core.slider.typing_held");
 
-/// The sliders' gestures in a context (the defaults until set).
+/// The sliders' gestures in a context: those set, else the pointer
+/// profile's ([`crate::pointer::map`]).
 pub fn gestures(ctx: &egui::Context) -> Gestures {
-    GESTURES.get_or_default(ctx)
+    GESTURES
+        .get(ctx)
+        .unwrap_or_else(|| Gestures::from_map(&crate::pointer::map(ctx)))
 }
 
-/// Remaps the sliders' gestures in a context (an input profile).
+/// Sets the sliders' gestures in a context, over the pointer profile's.
 pub fn set_gestures(ctx: &egui::Context, gestures: Gestures) {
     GESTURES.set(ctx, gestures);
 }
@@ -901,12 +949,15 @@ pub(crate) fn keys_wheel_access(
             }
         });
     }
-    // The wheel: the panel scrolls, unless the slider has the focus or
-    // the wheel modifier is held over it; then each notch (a touchpad's
-    // stream as one per frame) steps it and the panel does not scroll.
+    // The wheel: the panel scrolls, unless the slider has the focus,
+    // the wheel modifier is held over it or the profile has the wheel
+    // step values; then each notch (a touchpad's stream as one per
+    // frame) steps it and the panel does not scroll. The panel
+    // modifiers always leave the wheel to the panel.
     let mods = ui.input(|i| i.modifiers);
     let wheel_held = g.wheel.any() && mods.matches_logically(g.wheel);
-    if response.hovered() && (response.has_focus() || wheel_held) {
+    let panel_held = g.panel.any() && mods.matches_logically(g.panel);
+    if response.hovered() && !panel_held && (response.has_focus() || wheel_held || g.wheel_steps) {
         let wheel: f32 = ui.input(|i| {
             i.events
                 .iter()

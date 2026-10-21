@@ -32,6 +32,8 @@
 //! - [`placeholder`]: skeletons standing in for loading content, and
 //!   empty states;
 //! - [`placement`]: floating elements placed with flip and shift;
+//! - [`pointer`]: the pointer gestures in force (the profile's table
+//!   canvases read) and the wheel read raw, unit and modifiers kept;
 //! - [`scale`]: the window's scales, crisp strokes, the scale-changed
 //!   signal, the interface zoom's steps;
 //! - [`a11y`]: accessible names and an announcer;
@@ -75,6 +77,7 @@ pub mod param;
 pub mod persist;
 pub mod placeholder;
 pub mod placement;
+pub mod pointer;
 pub mod progress;
 pub mod scale;
 pub mod slider;
