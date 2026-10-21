@@ -5,7 +5,7 @@ use egui_pop_model::ids::{CommandId, MenuId, OwnerId, PanelId};
 use egui_pop_model::keymap::{
     Action, BindOptions, DocBinding, Keymap, KeymapDoc, Keys, Layer, Resolution, Typing, Verdict,
 };
-use egui_pop_model::layout::{Auxiliary, Floating, Layout, Node, Placement};
+use egui_pop_model::layout::{Anchor, AnchorEdge, Auxiliary, Floating, Layout, Node, Placement};
 use egui_pop_model::panels::{Area, PanelSpec, Panels};
 use egui_pop_model::when::WhenContext;
 use serde_json::{Value, json};
@@ -719,12 +719,14 @@ fn a_floating_panel_that_may_no_longer_float_is_docked_back() {
                 pos: [40.0, 40.0],
                 rolled: false,
                 pinned: true,
+                anchor: Default::default(),
             },
             Floating {
                 panel: pid("app.gone"),
                 pos: [0.0, 0.0],
                 rolled: false,
                 pinned: false,
+                anchor: Default::default(),
             },
         ],
         ..Layout::default()
@@ -733,4 +735,28 @@ fn a_floating_panel_that_may_no_longer_float_is_docked_back() {
     assert!(fixed.floating.is_empty());
     assert_eq!(fixed.area_of(&pid("app.log")), Some(Area::Bottom));
     assert_eq!(notes.len(), 2, "{notes:?}");
+}
+
+#[test]
+fn a_layout_saved_before_anchors_loads_unanchored_and_anchors_round_trip() {
+    // Written before floating panels had an anchor.
+    let old = r#"{"version": 2, "kind": "layout", "areas": [],
+        "floating": [{"panel": "app.tools", "pos": [12.0, 34.0], "pinned": true}]}"#;
+    let l = Layout::from_json(old).unwrap();
+    let f = l.floating_of(&pid("app.tools")).unwrap();
+    assert_eq!(f.pos, [12.0, 34.0]);
+    assert!(f.pinned);
+    assert_eq!(f.anchor, Anchor::default());
+    assert!(!l.to_json().contains("anchor"), "none is not written");
+    // Anchored: kept through a save.
+    let mut l = l;
+    l.floating_mut(&pid("app.tools")).unwrap().anchor = Anchor {
+        x: AnchorEdge::End,
+        y: AnchorEdge::None,
+        offset: [8.0, 0.0],
+    };
+    let text = l.to_json();
+    assert!(text.contains("\"end\""), "{text}");
+    let back = Layout::from_json(&text).unwrap();
+    assert_eq!(back, l);
 }

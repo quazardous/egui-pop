@@ -124,6 +124,60 @@ pub struct Floating {
     /// hidden with the others, not faded).
     #[serde(default, skip_serializing_if = "is_false")]
     pub pinned: bool,
+    /// The workbench edges it sticks to: set when it is dropped on them,
+    /// kept as the window is resized or the layout restored.
+    #[serde(default, skip_serializing_if = "Anchor::is_none")]
+    pub anchor: Anchor,
+}
+
+/// Which workbench edge a floating panel sticks to, on one axis.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AnchorEdge {
+    /// None: it keeps its place from the workbench's top-left, clamped
+    /// inside.
+    #[default]
+    None,
+    /// The left edge (x) or the top edge (y).
+    Start,
+    /// The right edge (x) or the bottom edge (y).
+    End,
+}
+
+impl AnchorEdge {
+    fn is_none(&self) -> bool {
+        *self == AnchorEdge::None
+    }
+}
+
+/// The workbench edges a floating panel sticks to, horizontally and
+/// vertically, and its distance to each: when the workbench changes size,
+/// an anchored edge keeps that distance.
+///
+/// ```
+/// use egui_pop_model::layout::{Anchor, AnchorEdge};
+///
+/// let right = Anchor { x: AnchorEdge::End, ..Anchor::default() };
+/// assert!(!right.is_none());
+/// assert!(Anchor::default().is_none());
+/// ```
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct Anchor {
+    #[serde(default, skip_serializing_if = "AnchorEdge::is_none")]
+    pub x: AnchorEdge,
+    #[serde(default, skip_serializing_if = "AnchorEdge::is_none")]
+    pub y: AnchorEdge,
+    /// The distance to the anchored edge on each axis, in points (zero on
+    /// an axis that is not anchored).
+    #[serde(default)]
+    pub offset: [f32; 2],
+}
+
+impl Anchor {
+    /// Anchored on neither axis.
+    pub fn is_none(&self) -> bool {
+        self.x.is_none() && self.y.is_none()
+    }
 }
 
 fn is_false(b: &bool) -> bool {
@@ -233,6 +287,7 @@ impl Layout {
                     pos: Floating::cascade(floating.len()),
                     rolled: false,
                     pinned: false,
+                    anchor: Anchor::default(),
                 });
                 continue;
             }
@@ -303,6 +358,7 @@ impl Layout {
             pos,
             rolled: false,
             pinned: false,
+            anchor: Anchor::default(),
         });
     }
 
