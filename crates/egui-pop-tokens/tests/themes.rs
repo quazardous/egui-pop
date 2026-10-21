@@ -1179,14 +1179,16 @@ fn a_scale_given_by_its_seed_is_generated_when_resolved() {
     let base = themes.resolve(&ThemeSpec::new("pop-light"));
     let backdrop = Backdrop::from_tokens(|p| base.color(p));
     let seed = Color::from_hex("#8e44ad").unwrap();
+    // Generated steps are written as hex values: compared once rounded.
+    let hexed = |c: Color| Color::from_hex(&c.to_hex());
     let ramp = Ramp::fitted(seed, Scheme::Light, &backdrop);
-    assert_eq!(r.color("blue.9"), Some(ramp.steps[8]));
-    assert_eq!(r.color("blue.contrast"), Some(ramp.contrast));
+    assert_eq!(r.color("blue.9"), hexed(ramp.steps[8]));
+    assert_eq!(r.color("blue.contrast"), hexed(ramp.contrast));
     // A step the file gives keeps the file's value.
     assert_eq!(r.color("blue.4"), Color::from_hex("#010203"));
     // The roles aliasing the scale follow it.
     let blue = themes.resolve(&ThemeSpec::new("seeded").accent("blue"));
-    assert_eq!(blue.color("accent.default"), Some(ramp.steps[8]));
+    assert_eq!(blue.color("accent.default"), hexed(ramp.steps[8]));
     // A scale the base does not have gets its twelve steps and contrast,
     // for the theme's scheme when the seed does not say.
     let brick = Ramp::fitted(
@@ -1197,12 +1199,12 @@ fn a_scale_given_by_its_seed_is_generated_when_resolved() {
     for (i, step) in brick.steps.iter().enumerate() {
         assert_eq!(
             r.color(&format!("brick.{}", i + 1)),
-            Some(*step),
+            hexed(*step),
             "brick.{}",
             i + 1
         );
     }
-    assert_eq!(r.color("brick.contrast"), Some(brick.contrast));
+    assert_eq!(r.color("brick.contrast"), hexed(brick.contrast));
     // Written back, the seeds stay.
     let mut file = TokenFile::parse("x", "{}").unwrap();
     file.set_seed("blue", Some(Seed::new(seed, Scheme::Dark)));
