@@ -51,7 +51,8 @@ publishes.
   before), `Orthogonal` (routed around the nodes by `ortho-router`,
   wires sharing a channel spread apart) or `Straight`. Routes are
   cached in the `GraphState` by layout; `GraphState::wire_style` and the
-  graph's snapshot (`wires`, `routes`) say what was drawn.
+  graph's snapshot (`wires`, `routes`) say what was drawn. The
+  gallery's node graph page has the three styles in its playground.
 - `ortho-router` 0.1.0, a new standalone crate without dependencies (no
   egui): orthogonal connector routing around rectangular obstacles, for
   any project that draws wires between nodes. `Router::route` and

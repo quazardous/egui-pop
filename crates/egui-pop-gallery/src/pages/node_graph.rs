@@ -19,7 +19,7 @@ use egui_pop::model::ids::{PluginId, StoryId};
 use egui_pop::theme::Tokens;
 use egui_pop::viewport::graph::{
     Edge, Edit, GraphEditor, GraphMinimap, GraphModel, GraphState, Group, Kind, Level, Node, Param,
-    Port, PortRef, PortType, Request,
+    Port, PortRef, PortType, Request, WireStyle,
 };
 
 use crate::shell::SHELL;
@@ -352,6 +352,8 @@ pub struct State {
     pub graph: Pipeline,
     pub view: GraphState,
     pub snap: bool,
+    /// How wires are drawn.
+    pub wires: WireStyle,
     level: Option<Level>,
 }
 
@@ -361,6 +363,7 @@ impl Default for State {
             graph: Pipeline::synthetic(),
             view: GraphState::new(),
             snap: true,
+            wires: WireStyle::Curves,
             level: None,
         }
     }
@@ -420,6 +423,7 @@ pub fn show(ui: &mut Ui, app: &AppHandle, s: &mut State) {
         .label("Processing graph")
         .size(vec2(width, height))
         .snap(s.snap.then_some(10.0))
+        .wires(s.wires)
         .header(move |ui, _node| {
             // The application's slot: a status light.
             let (r, _) = ui.allocate_exact_size(vec2(10.0, 10.0), Sense::hover());
@@ -448,9 +452,18 @@ pub fn show(ui: &mut Ui, app: &AppHandle, s: &mut State) {
     });
 }
 
-/// The playground: snapping and the views.
+/// The playground: snapping, the wires and the views.
 fn playground(ui: &mut Ui, s: &mut State) {
     widgets::checkbox(ui, &mut s.snap, "Snap to a 10-unit grid");
+    ui.horizontal_wrapped(|ui| {
+        for (style, label) in [
+            (WireStyle::Curves, "Curved wires"),
+            (WireStyle::Orthogonal, "Orthogonal wires"),
+            (WireStyle::Straight, "Straight wires"),
+        ] {
+            widgets::radio_value(ui, &mut s.wires, style, label);
+        }
+    });
     ui.horizontal_wrapped(|ui| {
         if ui.button("Fit").clicked() {
             s.view.request(Request::Fit);

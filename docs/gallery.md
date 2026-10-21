@@ -225,6 +225,7 @@ the display, and a preview dialog (a custom dialog holding a viewport).
   <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/node-graph-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/node-graph-pop-dark.png" width="200" alt="node-graph-pop-dark"></a><br>node-graph-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/node-graph-detail-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/node-graph-detail-pop-dark.png" width="200" alt="node-graph-detail-pop-dark"></a><br>node-graph-detail-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/node-graph-orthogonal-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/node-graph-orthogonal-pop-dark.png" width="200" alt="node-graph-orthogonal-pop-dark"></a><br>node-graph-orthogonal-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/preview-dialog-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/preview-dialog-pop-dark.png" width="200" alt="preview-dialog-pop-dark"></a><br>preview-dialog-pop-dark</td>
   </tr>
 </table>

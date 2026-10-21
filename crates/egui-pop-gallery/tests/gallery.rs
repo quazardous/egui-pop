@@ -1084,6 +1084,40 @@ fn the_node_graph_page_shows_fifty_nodes_and_edits_through_its_steps() {
 }
 
 #[test]
+fn the_node_graph_page_routes_wires_around_the_nodes() {
+    use egui_pop::imaging::graph::CMD_GRAPH_READ;
+    use egui_pop::model::commands::Origin;
+    let mut h = harness(options("pop-dark", Density::Comfortable, "node-graph"));
+    h.run();
+    h.get_by_label("Orthogonal wires").click();
+    h.run();
+    h.run();
+    let graph = h
+        .state_mut()
+        .app
+        .run(
+            &CMD_GRAPH_READ,
+            serde_json::json!({ "graph": "gallery" }),
+            Origin::Agent("test".into()),
+        )
+        .now()
+        .expect("answered now")
+        .expect("read");
+    assert_eq!(graph["wires"], "orthogonal");
+    let routes = graph["routes"].as_array().expect("the routes");
+    assert!(!routes.is_empty());
+    for r in routes {
+        let points = r["points"].as_array().expect("points");
+        assert!(points.len() >= 2, "{r}");
+        for w in points.windows(2) {
+            assert!(w[0][0] == w[1][0] || w[0][1] == w[1][1], "slanted: {r}");
+        }
+    }
+    egui_pop_test::assert_all_named(&h);
+    h.snapshot("node-graph-orthogonal-pop-dark");
+}
+
+#[test]
 fn the_graph_file_page_writes_an_edit_into_the_file() {
     use egui_pop::imaging::graph::CMD_GRAPH_EDIT;
     use egui_pop::model::commands::Origin;
