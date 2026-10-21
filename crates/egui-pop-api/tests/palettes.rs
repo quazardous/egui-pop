@@ -438,10 +438,11 @@ fn a_member_dragged_out_of_its_group_floats_alone_and_each_rolls_up_on_its_own()
     assert!(g.rolled(&NAV) && !g.rolled(&TOOLS));
     assert!(h.query_by_label("Overview").is_none());
     assert!(h.query_by_label("Brush").is_some());
-    // Its own band drags it out, where it is dropped.
+    // Its own band drags it out, where it is dropped (clear of the
+    // bottom edge, where a drop would dock it).
     let before = h.state().handle().last_event();
     let from = h.get_by_label("Navigator").rect().center();
-    drag_by(&mut h, from, egui::vec2(350.0, 250.0));
+    drag_by(&mut h, from, egui::vec2(350.0, 150.0));
     let names = events(&h, before);
     assert!(
         names.contains(&"palette.ungrouped".to_string()),
@@ -469,7 +470,15 @@ fn stacked_again(h: &mut Harness<'static, App>) {
 #[test]
 fn hooks_veto_grouping_and_ungrouping() {
     let mut h = harness(true);
-    open_nav(&mut h, [400.0, 100.0]);
+    // Placed through the layout: the hooks redirect every move.
+    h.state().handle().set_panel_visible(&NAV, true);
+    h.run();
+    let mut layout = h.state().handle().layout();
+    layout.floating_mut(&NAV).unwrap().pos = [400.0, 100.0];
+    h.state().handle().set_layout(layout);
+    h.run();
+    h.run();
+    assert_eq!(floating(&h, &NAV).unwrap().pos, [400.0, 100.0]);
     let out = h
         .state()
         .handle()
@@ -521,8 +530,10 @@ fn hooks_veto_grouping_and_ungrouping() {
 fn a_group_dropped_on_the_end_edge_keeps_its_anchor_when_the_window_grows() {
     let mut h = harness(false);
     stacked(&mut h);
+    // Dragged right until it presses on the end edge, the pointer clear
+    // of the edge, where a drop would dock the group.
     let band = h.get_by_label("Tools · Navigator").rect().center();
-    drag_by(&mut h, band, egui::vec2(2000.0, 0.0));
+    drag_by(&mut h, band, egui::vec2(840.0 - band.x, 0.0));
     let g = floating(&h, &TOOLS).unwrap();
     assert_eq!(g.anchor.x, AnchorEdge::End, "{g:?}");
     assert_eq!(members(&h, &TOOLS), [TOOLS, NAV]);
