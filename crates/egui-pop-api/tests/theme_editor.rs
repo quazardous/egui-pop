@@ -518,6 +518,9 @@ fn the_fonts_tab_adds_a_file_reorders_families_and_applies_once() {
         h.run();
     }
     assert_eq!(editor.families(&handle, Role::Ui)[0], family);
+    // The Fonts tab is long: the button may be below the fold.
+    h.get_by_label("Apply the fonts").scroll_to_me();
+    h.run();
     h.get_by_label("Apply the fonts").click();
     h.run();
     h.run();
@@ -593,7 +596,14 @@ fn the_fonts_edited_are_previewed_before_they_are_applied_even_across_a_theme_sw
             .is_some()
     );
     // Resting the pointer on a family previews it first.
-    h.get_by_label("Ubuntu").hover();
+    // The family list and the installed families both name it; the
+    // installed list comes last.
+    h.query_all_by_label("Ubuntu")
+        .last()
+        .unwrap()
+        .scroll_to_me();
+    h.run();
+    h.query_all_by_label("Ubuntu").last().unwrap().hover();
     h.run();
     h.run_steps(2);
     assert_eq!(
@@ -705,6 +715,9 @@ fn a_system_face_is_searched_previewed_then_picked_and_applied() {
         ["Fake Serif", "Ubuntu", "sans-serif"]
     );
     assert!(editor.fonts_pending(&handle));
+    // The Fonts tab is long: the button may be below the fold.
+    h.get_by_label("Apply the fonts").scroll_to_me();
+    h.run();
     h.get_by_label("Apply the fonts").click();
     h.run();
     h.run();
