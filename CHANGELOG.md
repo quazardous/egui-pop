@@ -552,6 +552,10 @@ publishes.
   (journal: `palette.grouped`, `palette.ungrouped`), the
   `palette.group.gap` token, and a button on the gallery's palettes
   page stacking two of them.
+- Palettes group as tabs too (egui-pop-api): a palette dropped on the
+  middle of another one joins its group as a tab, shown; the group's
+  band holds the tabs, a click shows another one, and the shown
+  member's own band drags it out of the group.
 
 ### Changed
 

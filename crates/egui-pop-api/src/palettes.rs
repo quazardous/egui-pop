@@ -36,7 +36,9 @@
 //! roll-up. The group's band (over its members') drags, pins and anchors
 //! the whole group, and docks every member over an area, as tabs
 //! (floating one of them again gives the group back); a member's own
-//! band drags it out of the group.
+//! band drags it out of the group. Dropped on the middle of another
+//! palette, a palette joins its group as a tab: the group's band then
+//! holds the tabs, and the shown member its own band.
 //!
 //! **Steps** (ADR 0011): `palette.open` (`{panel}`), `palette.float`
 //! (`{panel, pos}`), `palette.dock` (`{panel, area}`, `group: true` for
@@ -63,10 +65,11 @@ use egui_pop_core::kit::{Glyph, Kit, KitCx, Part, State};
 use egui_pop_core::lock;
 use egui_pop_core::strings;
 use egui_pop_core::theme::Tokens;
+use egui_pop_core::widgets;
 use egui_pop_model::commands::CommandSpec;
 use egui_pop_model::ids::{CommandId, PanelId, SettingId, StepId};
 use egui_pop_model::keymap::BindOptions;
-use egui_pop_model::layout::{Anchor, AnchorEdge, FloatingGroup, Join, Member};
+use egui_pop_model::layout::{Anchor, AnchorEdge, Arrangement, FloatingGroup, Join, Member};
 use egui_pop_model::values::Descriptor;
 use serde_json::{Value as Json, json};
 
@@ -443,7 +446,8 @@ pub fn group_hint(app: &AppHandle) -> Option<GroupHint> {
 
 /// Where a palette dropped with the pointer at `at`, over another
 /// palette drawn at `rect`, joins its group: on its top quarter above
-/// it, on its bottom quarter below it, else none.
+/// it, on its bottom quarter below it, in between as a tab; outside it,
+/// none.
 ///
 /// ```
 /// use egui::{Rect, pos2, vec2};
@@ -453,7 +457,7 @@ pub fn group_hint(app: &AppHandle) -> Option<GroupHint> {
 /// let r = Rect::from_min_size(pos2(100.0, 100.0), vec2(200.0, 200.0));
 /// assert_eq!(join_at(r, pos2(150.0, 110.0)), Some(Join::Above));
 /// assert_eq!(join_at(r, pos2(150.0, 290.0)), Some(Join::Below));
-/// assert_eq!(join_at(r, pos2(150.0, 200.0)), None);
+/// assert_eq!(join_at(r, pos2(150.0, 200.0)), Some(Join::Tab));
 /// assert_eq!(join_at(r, pos2(50.0, 110.0)), None);
 /// ```
 pub fn join_at(rect: Rect, at: Pos2) -> Option<Join> {
@@ -466,7 +470,7 @@ pub fn join_at(rect: Rect, at: Pos2) -> Option<Join> {
     } else if at.y > rect.bottom() - edge {
         Some(Join::Below)
     } else {
-        None
+        Some(Join::Tab)
     }
 }
 
@@ -499,6 +503,8 @@ struct Asked {
     close: Option<PanelId>,
     roll: Option<PanelId>,
     pin: bool,
+    /// The tab to show, in a group of tabs.
+    show: Option<usize>,
 }
 
 /// A member's band as laid out, with where the member is drawn
@@ -636,13 +642,19 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
                         moved = Some(b);
                         return;
                     }
-                    // The group's band, then each member under its own.
+                    // The group's band (its tabs, for tabs), then each
+                    // member shown under its own.
                     let joined = titles.join(" · ");
+                    let tabs = g.arrangement == Arrangement::Tabs;
                     let (_, b) = band::begin(ui, &style, |ui, state| {
-                        group_row(ui, &t, &joined, state, g.pinned, &mut asked);
+                        let shown = tabs.then_some(g.active);
+                        group_row(ui, &t, &joined, &titles, shown, state, g.pinned, &mut asked);
                     });
                     for (i, m) in g.members.iter().enumerate() {
-                        if i > 0 {
+                        if tabs && m.panel != *g.shown() {
+                            continue;
+                        }
+                        if !bands.is_empty() {
                             ui.add_space(gap);
                         }
                         // Room for the member's band to reach up into.
@@ -714,6 +726,13 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
         if asked.pin {
             app.change_workbench(Change::Pin(lead.clone(), !g.pinned));
         }
+        if let Some(i) = asked.show {
+            // Which tab shows: the group's state, not a step.
+            if let Some(fl) = app.workbench_mut().layout.floating_mut(&lead) {
+                fl.active = i;
+            }
+            ctx.request_repaint();
+        }
         let drag = Drag {
             content,
             before: &before,
@@ -783,20 +802,42 @@ fn band_row(
     });
 }
 
-/// The band's row of a group: its members' titles, then Pin.
-fn group_row(ui: &mut Ui, t: &Tokens, title: &str, state: State, pinned: bool, asked: &mut Asked) {
+/// The band's row of a group: its members' titles (as tabs when
+/// `shown` says which tab shows), then Pin.
+#[allow(clippy::too_many_arguments)]
+fn group_row(
+    ui: &mut Ui,
+    t: &Tokens,
+    title: &str,
+    titles: &[String],
+    shown: Option<usize>,
+    state: State,
+    pinned: bool,
+    asked: &mut Asked,
+) {
     let side = t.size.control_height.max(24.0);
     let kit = Kit::of(ui.ctx());
     ui.horizontal(|ui| {
-        ui.add(
-            egui::Label::new(
-                egui::RichText::new(title)
-                    .weak()
-                    .color(kit.header_band.style(state).text),
-            )
-            .truncate()
-            .selectable(false),
-        );
+        match shown {
+            Some(active) => {
+                for (i, name) in titles.iter().enumerate() {
+                    if widgets::selectable_label(ui, i == active, name.as_str()).clicked() {
+                        asked.show = Some(i);
+                    }
+                }
+            }
+            None => {
+                ui.add(
+                    egui::Label::new(
+                        egui::RichText::new(title)
+                            .weak()
+                            .color(kit.header_band.style(state).text),
+                    )
+                    .truncate()
+                    .selectable(false),
+                );
+            }
+        }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             pin_button(ui, side, title, pinned, asked);
         });

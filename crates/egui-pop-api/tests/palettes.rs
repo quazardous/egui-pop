@@ -11,7 +11,7 @@ use egui_pop_api::steps::{Before, Outcome};
 use egui_pop_api::workbench::Change;
 use egui_pop_api::{App, Ctx, Plugin, PluginError};
 use egui_pop_model::ids::{PanelId, PluginId};
-use egui_pop_model::layout::{AnchorEdge, FloatingGroup, Join};
+use egui_pop_model::layout::{AnchorEdge, Arrangement, FloatingGroup, Join};
 use egui_pop_model::panels::{Area, PanelSpec};
 use serde_json::{Value as Json, json};
 
@@ -568,4 +568,40 @@ fn a_group_docks_whole_as_tabs_and_floats_back_as_a_group() {
     assert_eq!(members(&h, &NAV), [TOOLS, NAV]);
     assert_eq!(floating(&h, &NAV).unwrap().pos, [200.0, 150.0]);
     assert!(h.query_by_label("Tools · Navigator").is_some());
+}
+
+#[test]
+fn a_palette_dropped_on_another_ones_middle_joins_it_as_a_tab() {
+    let mut h = harness(false);
+    open_nav(&mut h, [400.0, 100.0]);
+    let to = h.get_by_label("Brush").rect().center();
+    let from = h.get_by_label("Navigator").rect().center();
+    drag_to(&mut h, from, to, |h| {
+        let hint = palettes::group_hint(h.state().handle()).expect("a group hint");
+        assert_eq!((hint.into.clone(), hint.at), (TOOLS, Join::Tab));
+    });
+    let g = floating(&h, &TOOLS).unwrap();
+    assert_eq!(g.arrangement, Arrangement::Tabs);
+    assert_eq!(members(&h, &TOOLS), [TOOLS, NAV]);
+    // The dropped one shows; the other waits behind its tab.
+    assert!(h.query_by_label("Overview").is_some());
+    assert!(h.query_by_label("Brush").is_none());
+    h.get_by_role_and_label(Role::Button, "Tools").click();
+    h.run();
+    h.run();
+    assert!(h.query_by_label("Brush").is_some());
+    assert!(h.query_by_label("Overview").is_none());
+    assert_eq!(floating(&h, &TOOLS).unwrap().shown(), &TOOLS);
+    // Saved and read back as tabs.
+    let layout = h.state().handle().layout();
+    let back = egui_pop_model::layout::Layout::from_json(&layout.to_json()).unwrap();
+    assert_eq!(back.floating, layout.floating);
+    // The shown member's band drags it out: the other is alone again.
+    let band = h.get_by_role_and_label(Role::Button, "Close Tools").rect();
+    let from = egui::pos2(band.left() - 64.0, band.center().y);
+    drag_by(&mut h, from, egui::vec2(300.0, 250.0));
+    assert!(floating(&h, &TOOLS).unwrap().is_lone());
+    assert!(floating(&h, &NAV).unwrap().is_lone());
+    assert!(h.query_by_label("Brush").is_some());
+    assert!(h.query_by_label("Overview").is_some());
 }

@@ -250,7 +250,10 @@ assert!(app.handle().layout().floating_of(&TOOLS).is_some());
   them again (Float) gives the whole group back, from the members still
   docked beside it (`Layout::docked_groups`). A member's own band drags
   it out of its group (dropped back over its group, it stays), or onto
-  another palette's edge into that group. The `palette.group.gap`
+  another palette's edge into that group. Dropped on the middle of
+  another palette, a palette joins its group as a tab: the group's
+  band holds the tabs (a click shows one), the shown member keeps its
+  own band, which drags it out. The `palette.group.gap`
   token is the room between stacked members. A group is saved as the
   floating panel it was before groups, its other members under `group`:
   an application that predates groups floats them apart.
