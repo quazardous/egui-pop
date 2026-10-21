@@ -218,6 +218,31 @@ impl Default for Gestures {
     }
 }
 
+/// What the pointer does in a view's scope with the modifiers held now,
+/// in words (`Wheel: zoom · MiddleDrag: pan`): a canvas's hint, empty
+/// when nothing is bound with them.
+pub fn hint(ctx: &Context, scope: &str) -> String {
+    use crate::strings as s;
+    use egui_pop_core::strings::tr;
+    let modifiers = ctx.input(|i| i.modifiers);
+    let map = pointer_map::map(ctx);
+    pointer_map::hint(&map, scope, modifiers, |command| {
+        let key = match ViewAction::of(command) {
+            ViewAction::Nothing => return None,
+            ViewAction::Zoom => &s::HINT_ZOOM,
+            ViewAction::ZoomFree => &s::HINT_ZOOM_FREE,
+            ViewAction::Pan => &s::HINT_PAN,
+            ViewAction::PanX => &s::HINT_PAN_X,
+            ViewAction::PanY => &s::HINT_PAN_Y,
+            ViewAction::ZoomCycle => &s::HINT_ZOOM_CYCLE,
+            ViewAction::Fit => &s::HINT_FIT,
+            ViewAction::ZoomToggle => &s::HINT_ZOOM_TOGGLE,
+            ViewAction::Leave => &s::HINT_LEAVE,
+        };
+        Some(tr(ctx, key))
+    })
+}
+
 /// The node graph's pointer gestures in a context (its
 /// `canvas.graph` scope).
 pub fn graph_gestures(ctx: &Context) -> ViewGestures {

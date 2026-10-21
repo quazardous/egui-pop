@@ -290,6 +290,21 @@ pub fn hint(
         .join(" · ")
 }
 
+const HINT: Slot<(u64, String)> = Slot::new("core.pointer.hint");
+
+/// A canvas under the pointer says what the pointer does there now
+/// ([`hint`]), for a status line to show ([`hint_now`]).
+pub fn show_hint(ctx: &Context, text: &str) {
+    HINT.set(ctx, (ctx.cumulative_pass_nr(), text.to_string()));
+}
+
+/// The hint a canvas under the pointer gave in this pass or the last
+/// one, if any (and not empty).
+pub fn hint_now(ctx: &Context) -> Option<String> {
+    let (pass, text) = HINT.get(ctx)?;
+    (ctx.cumulative_pass_nr() <= pass + 1 && !text.is_empty()).then_some(text)
+}
+
 /// For a web build's `eframe::WebOptions::should_prevent_default`: the
 /// browser never gets an event egui-pop handles, the wheel above all
 /// (Ctrl and the wheel would zoom the page, and a trackpad's pinch

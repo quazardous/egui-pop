@@ -516,6 +516,10 @@ pub struct ViewportOutput {
     pub readout: Option<Readout>,
     /// What changed this frame, in order.
     pub signals: Vec<Signal>,
+    /// While the pointer is over it: what the pointer does with the
+    /// keys held now, as the profile says (`Wheel: pan · Ctrl+...`
+    /// gestures with Ctrl held), for a status line; empty otherwise.
+    pub hint: String,
 }
 
 /// The viewport widget, built per frame.
@@ -755,6 +759,7 @@ impl<'a> Viewport<'a> {
                 hover_pixel: None,
                 readout: None,
                 signals,
+                hint: String::new(),
             };
         };
 
@@ -929,7 +934,17 @@ impl<'a> Viewport<'a> {
             tool: self.tool.clone(),
             modifiers: ui.input(|i| i.modifiers),
             dragging: response.dragged() || state.pan.is_some() || state.drag.is_some(),
-            panning: state.pan.is_some() || pan_key,
+            // The pan key held, a pan, or keys held that make a drag pan
+            // (where a drag without them would not).
+            panning: state.pan.is_some() || pan_key || {
+                let m = ui.input(|i| i.modifiers);
+                response.hovered()
+                    && m.any()
+                    && g.pointer.drag_pans(PointerButton::Primary, m)
+                    && !g
+                        .pointer
+                        .drag_pans(PointerButton::Primary, egui::Modifiers::NONE)
+            },
             handle: state
                 .drag
                 .as_ref()
@@ -950,12 +965,20 @@ impl<'a> Viewport<'a> {
         name(&response, self.label.as_deref(), Some(mapping.zoom));
         state.last_mapping = Some(mapping);
         debug::publish(ui.ctx(), &self.name, state, view, &mapping, &signals);
+        let hint = if response.hovered() {
+            let hint = gestures::hint(ui.ctx(), egui_pop_core::model::pointer::SCOPE_IMAGE);
+            egui_pop_core::pointer::show_hint(ui.ctx(), &hint);
+            hint
+        } else {
+            String::new()
+        };
         ViewportOutput {
             response,
             mapping: Some(mapping),
             hover_pixel,
             readout,
             signals,
+            hint,
         }
     }
 }

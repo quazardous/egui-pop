@@ -175,8 +175,31 @@ pub const GRAPH_MINIMAP: StrKey =
 pub const GRAPH_MINIMAP_VALUE: StrKey =
     StrKey::new("egui-pop-viewport-graph-minimap-value", "zoom { $zoom } %");
 
+/// What a pointer gesture does, in a canvas's hint (`Wheel: zoom`).
+pub const HINT_ZOOM: StrKey = StrKey::new("egui-pop-viewport-hint-zoom", "zoom");
+pub const HINT_ZOOM_FREE: StrKey =
+    StrKey::new("egui-pop-viewport-hint-zoom-free", "zoom without stops");
+pub const HINT_PAN: StrKey = StrKey::new("egui-pop-viewport-hint-pan", "pan");
+pub const HINT_PAN_X: StrKey = StrKey::new("egui-pop-viewport-hint-pan-x", "pan sideways");
+pub const HINT_PAN_Y: StrKey = StrKey::new("egui-pop-viewport-hint-pan-y", "pan up and down");
+pub const HINT_ZOOM_CYCLE: StrKey =
+    StrKey::new("egui-pop-viewport-hint-zoom-cycle", "100 %, 200 %, fit");
+pub const HINT_FIT: StrKey = StrKey::new("egui-pop-viewport-hint-fit", "fit");
+pub const HINT_ZOOM_TOGGLE: StrKey =
+    StrKey::new("egui-pop-viewport-hint-zoom-toggle", "fit or 100 %");
+pub const HINT_LEAVE: StrKey = StrKey::new("egui-pop-viewport-hint-leave", "leave");
+
 /// Every string the viewport shows, for catalogues and tests.
 pub const ALL: &[StrKey] = &[
+    HINT_ZOOM,
+    HINT_ZOOM_FREE,
+    HINT_PAN,
+    HINT_PAN_X,
+    HINT_PAN_Y,
+    HINT_ZOOM_CYCLE,
+    HINT_FIT,
+    HINT_ZOOM_TOGGLE,
+    HINT_LEAVE,
     VIEWPORT,
     HISTOGRAM,
     HISTOGRAM_VALUE,

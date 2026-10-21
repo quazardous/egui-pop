@@ -268,6 +268,10 @@ pub struct GraphOutput {
     pub zoom: f32,
     /// The graph as drawn, when asked ([`GraphEditor::describe`]).
     pub snapshot: Option<Json>,
+    /// While the pointer is over it: what the pointer does with the
+    /// keys held now, as the profile says, for a status line; empty
+    /// otherwise.
+    pub hint: String,
 }
 
 impl<'a> GraphEditor<'a> {
@@ -593,6 +597,13 @@ impl<'a> GraphEditor<'a> {
         let snapshot = self
             .describe
             .then(|| describe(self.model, &nodes, &edges, self.state));
+        let hint = if response.hovered() {
+            let hint = crate::gestures::hint(&ctx, egui_pop_core::model::pointer::SCOPE_GRAPH);
+            egui_pop_core::pointer::show_hint(&ctx, &hint);
+            hint
+        } else {
+            String::new()
+        };
         GraphOutput {
             response,
             edits,
@@ -600,6 +611,7 @@ impl<'a> GraphEditor<'a> {
             level,
             zoom,
             snapshot,
+            hint,
         }
     }
 }
