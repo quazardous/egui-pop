@@ -267,7 +267,7 @@ Zones and blocks, the workbench, palettes, arrangements, the context stack, stri
 
 ### Application services
 
-Settings, shortcuts, tips, platform services, translations, the developer tools, and the jobs centre (a job's log console open, in the page and in the status bar's popover).
+Settings, shortcuts, pointer gesture profiles, tips, platform services, translations, the developer tools, and the jobs centre (a job's log console open, in the page and in the status bar's popover).
 
 <table>
   <tr>
@@ -281,6 +281,9 @@ Settings, shortcuts, tips, platform services, translations, the developer tools,
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/debug-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/debug-pop-dark.png" width="200" alt="debug-pop-dark"></a><br>debug-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/devtools-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/devtools-pop-dark.png" width="200" alt="devtools-pop-dark"></a><br>devtools-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/tips-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/tips-pop-dark.png" width="200" alt="tips-pop-dark"></a><br>tips-pop-dark</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/pointer-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/pointer-pop-dark.png" width="200" alt="pointer-pop-dark"></a><br>pointer-pop-dark</td>
   </tr>
 </table>
 
