@@ -121,6 +121,15 @@ payload: the next section's rules apply to it unchanged (the layout a
 projection key was left with wins on later entries; the user's choice
 for the frame wins over what it declares).
 
+The top place's payload also sets context keys, for `when` clauses: a
+text, a number or a boolean as `payload`, an object's fields of those
+kinds as `payload.<field>` (nested values set nothing). A key binding
+for one sub-workspace only:
+
+```rust,ignore
+ctx.keybinding("K", PICK, "place == 'photos.space' && payload.id == 'darkroom'", Layer::Default)?;
+```
+
 ## Arrangements by place and mode
 
 The current arrangement (the View menu's switch, save and reset) is
@@ -206,6 +215,7 @@ store, commands and steps: [State or event](state-or-event.md)):
 | `placeDepth` | how many places deep |
 | `mode.<group>` | the mode on in the group, empty when none |
 | `modePushed` | whether a pushed mode is on |
+| `payload`, `payload.<field>` | the top place's payload: a text, a number or a boolean, or an object's fields of those kinds |
 | a frame's own keys | `FrameSpec::key`, while the frame is on |
 
 - **Commands, menus, toolboxes**: `when: "mode.orientation == 'photos.culling'"`.
@@ -228,7 +238,7 @@ store, commands and steps: [State or event](state-or-event.md)):
   of a change made out of sight says where in a toast, with "Go there".
 
 The stack's own keys (`place`, `placeDepth`, `modePushed`,
-`mode.<group>`) are the projection's alone: a plugin setting one by
+`mode.<group>`, `payload`, `payload.<field>`) are the projection's alone: a plugin setting one by
 hand (`AppHandle::set_context`) makes two truths, and the projection
 overwrites it at the next transition. Each such write is reported: a
 diagnostic the first time per key (`context-key-by-hand`), and the

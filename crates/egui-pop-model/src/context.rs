@@ -525,7 +525,8 @@ impl State {
 
     /// The context keys the stack sets: `place`, `placeDepth`,
     /// `modePushed`, `mode.<group>` for every group of the registry (empty
-    /// when none is on), and the keys of the top place and active modes.
+    /// when none is on), the keys of the top place and active modes, and
+    /// the top place's payload ([`payload_keys`]).
     pub fn when_keys(&self, registry: &FrameRegistry) -> Vec<(String, String)> {
         let mut out = vec![
             ("place".to_string(), self.place().to_string()),
@@ -556,7 +557,34 @@ impl State {
                 out.extend(spec.keys.iter().cloned());
             }
         }
+        if let Some(top) = self.places.last() {
+            out.extend(payload_keys(&top.payload));
+        }
         out
+    }
+}
+
+/// The context keys a top place's payload sets, for `when` clauses: a
+/// text, a number or a boolean as `payload`; an object's fields that
+/// are one of those as `payload.<field>` (`payload.id == 'darkroom'`).
+/// Nested values set nothing.
+pub fn payload_keys(payload: &Json) -> Vec<(String, String)> {
+    fn scalar(v: &Json) -> Option<String> {
+        match v {
+            Json::String(s) => Some(s.clone()),
+            Json::Number(n) => Some(n.to_string()),
+            Json::Bool(b) => Some(b.to_string()),
+            _ => None,
+        }
+    }
+    match payload {
+        Json::Object(fields) => fields
+            .iter()
+            .filter_map(|(k, v)| scalar(v).map(|v| (format!("payload.{k}"), v)))
+            .collect(),
+        v => scalar(v)
+            .map(|v| vec![("payload".to_string(), v)])
+            .unwrap_or_default(),
     }
 }
 
@@ -1639,5 +1667,43 @@ mod tests {
         );
         let text = serde_json::to_value(&space).unwrap();
         assert!(text.get("arrangement_for").is_none(), "{text}");
+    }
+
+    #[test]
+    fn the_top_places_payload_sets_keys() {
+        let r = registry();
+        let s = go(
+            &State::default(),
+            &r,
+            Request::Enter {
+                frame: ALBUM,
+                payload: json!({ "id": "dark", "n": 2, "deep": { "x": 1 } }),
+            },
+        );
+        let keys = s.when_keys(&r);
+        assert!(
+            keys.contains(&("payload.id".into(), "dark".into())),
+            "{keys:?}"
+        );
+        assert!(keys.contains(&("payload.n".into(), "2".into())), "{keys:?}");
+        assert!(!keys.iter().any(|(k, _)| k.starts_with("payload.deep")));
+        let w = crate::when::When::parse("place == 't.album' && payload.id == 'dark'").unwrap();
+        let mut cx = crate::when::WhenContext::new();
+        for (k, v) in &keys {
+            cx.set(k, v);
+        }
+        assert!(w.eval(&cx));
+        // Only the top place's payload counts.
+        let s = go(&s, &r, Request::enter(MASK));
+        assert!(
+            !s.when_keys(&r)
+                .iter()
+                .any(|(k, _)| k.starts_with("payload"))
+        );
+        assert_eq!(
+            payload_keys(&json!("holidays")),
+            vec![("payload".to_string(), "holidays".to_string())]
+        );
+        assert!(payload_keys(&Json::Null).is_empty());
     }
 }

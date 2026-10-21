@@ -758,7 +758,7 @@ fn each_workspace_keeps_its_own_stack_beside_its_layout() {
 
 /// A place whose payload is an object, `{"id": "…"}` (a sub-workspace):
 /// its crumb says the sub-workspace's name, its arrangement depends on
-/// which one.
+/// which one, a key binds in one of them only.
 const SPACE: FrameId = FrameId::from_static("demo.space");
 
 struct Spaces;
@@ -780,7 +780,12 @@ impl Plugin for Spaces {
                 None => None,
             })
             .arrangement_for(|p| (p["id"] == "dark").then(|| "Album view".to_string()));
-        ctx.frame(space)?;
+        ctx.frame(space)?.keybinding(
+            "K",
+            PICK,
+            "place == 'demo.space' && payload.id == 'dark'",
+            egui_pop_model::keymap::Layer::Default,
+        )?;
         Ok(())
     }
 }
@@ -870,4 +875,26 @@ fn a_place_starts_from_the_arrangement_its_payload_chooses() {
     h.run();
     assert!(!app.panel_visible(&TREE));
     assert_eq!(app.layout().area_of(&LOG), Some(Area::EndSide));
+}
+
+#[test]
+fn a_key_binds_on_a_payload_field() {
+    let mut h = harness(spaces());
+    let app = h.state().handle().clone();
+    assert!(contexts::enter(&app, SPACE, json!({ "id": "map" })).ok());
+    h.run();
+    assert_eq!(key(&h, "payload.id"), "map");
+    h.key_press(Key::K);
+    h.run();
+    assert_eq!(key(&h, "demoLast"), "", "K does nothing in another space");
+    assert!(contexts::back(&app).ok());
+    assert!(contexts::enter(&app, SPACE, json!({ "id": "dark" })).ok());
+    h.run();
+    h.key_press(Key::K);
+    h.run();
+    assert_eq!(key(&h, "demoLast"), "pick");
+    // Left: the payload's keys go with it.
+    assert!(contexts::back(&app).ok());
+    h.run();
+    assert_eq!(key(&h, "payload.id"), "");
 }

@@ -535,10 +535,13 @@ impl ContextService {
 }
 
 /// Whether a context key is the stack's own: `place`, `placeDepth`,
-/// `modePushed`, `mode.<group>`. Only the projection sets them; a plugin
-/// declares frames and reads them.
+/// `modePushed`, `mode.<group>`, the top place's `payload` and
+/// `payload.<field>`. Only the projection sets them; a plugin declares
+/// frames and reads them.
 pub fn is_stack_key(key: &str) -> bool {
-    matches!(key, "place" | "placeDepth" | "modePushed") || key.starts_with("mode.")
+    matches!(key, "place" | "placeDepth" | "modePushed" | "payload")
+        || key.starts_with("mode.")
+        || key.starts_with("payload.")
 }
 
 /// One of the stack's own context keys, set by hand (`AppHandle::set_context`)

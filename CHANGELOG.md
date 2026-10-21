@@ -30,6 +30,10 @@ publishes.
   egui-pop-api): `FrameSpec::arrangement_for` chooses the arrangement an
   entry starts from, falling back to `FrameSpec::arrangement`; the layout
   a place was left with still wins on later entries.
+- The top place's payload as context keys (egui-pop-model,
+  egui-pop-api): `payload` for a text, a number or a boolean,
+  `payload.<field>` for an object's fields, so a `when` clause (a key
+  binding) can name one sub-workspace: `payload.id == 'darkroom'`.
 - A reference graph model in a YAML file (egui-pop-viewport, the new
   `graph-yaml` feature; the facade's `graph-yaml`):
   `graph::yaml::YamlGraph` implements `GraphModel` for applications
