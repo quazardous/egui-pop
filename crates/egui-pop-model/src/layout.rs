@@ -113,14 +113,134 @@ pub struct Auxiliary {
     pub rect: [f32; 4],
 }
 
-/// One panel of a floating group.
+/// One member of a floating group: a palette, or palettes held as tabs
+/// in one slot of a stack (a tab group nested in the stack, one level
+/// only).
+///
+/// Saved as the palette it was before nesting (its first tab's `panel`),
+/// the other tabs under `tabs`: an application that predates nesting
+/// reads the first tab and puts the others back as it does any panel
+/// missing from a layout (a palette floats again on its own).
+///
+/// ```
+/// use egui_pop_model::ids::PanelId;
+/// use egui_pop_model::layout::Member;
+///
+/// let tools = PanelId::from_static("app.tools");
+/// let m = Member::palette(tools.clone());
+/// assert!(!m.is_tabs());
+/// assert_eq!(m.shown(), &tools);
+/// ```
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Member {
+    /// The palette, or the first of its tabs.
     pub panel: PanelId,
     /// Rolled up to its header band (each member of a stack rolls up on
-    /// its own).
+    /// its own; a tab group rolls up as one).
     #[serde(default, skip_serializing_if = "is_false")]
     pub rolled: bool,
+    /// The panels held as tabs with `panel`, after it: empty for a
+    /// palette.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tabs: Vec<PanelId>,
+    /// The shown tab: 0 for `panel`, `n` for `tabs[n - 1]`.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub shown: usize,
+}
+
+impl Member {
+    /// A palette, rolled down.
+    pub fn palette(panel: PanelId) -> Member {
+        Member {
+            panel,
+            rolled: false,
+            tabs: Vec::new(),
+            shown: 0,
+        }
+    }
+
+    /// Whether it holds tabs (a tab group nested in a stack).
+    pub fn is_tabs(&self) -> bool {
+        !self.tabs.is_empty()
+    }
+
+    /// Its panels, in order.
+    pub fn panels(&self) -> impl Iterator<Item = &PanelId> {
+        std::iter::once(&self.panel).chain(&self.tabs)
+    }
+
+    /// Whether a panel is one of its panels.
+    pub fn holds(&self, panel: &PanelId) -> bool {
+        self.panels().any(|p| p == panel)
+    }
+
+    /// The panel shown: the palette, or its shown tab.
+    pub fn shown(&self) -> &PanelId {
+        match self.shown.min(self.tabs.len()) {
+            0 => &self.panel,
+            n => &self.tabs[n - 1],
+        }
+    }
+
+    /// Shows one of its tabs; whether it holds it.
+    pub fn show(&mut self, panel: &PanelId) -> bool {
+        let at = self.panels().position(|p| p == panel);
+        if let Some(i) = at {
+            self.shown = i;
+        }
+        at.is_some()
+    }
+
+    /// Its panels as a list, and back.
+    fn list(&self) -> Vec<PanelId> {
+        self.panels().cloned().collect()
+    }
+
+    fn from_list(mut panels: Vec<PanelId>, shown: usize, rolled: bool) -> Member {
+        let panel = panels.remove(0);
+        Member {
+            panel,
+            rolled,
+            shown: shown.min(panels.len()),
+            tabs: panels,
+        }
+    }
+
+    /// Takes one of its tabs out (not its only panel); the shown tab out,
+    /// its neighbour on the right is shown, or on the left at the end.
+    fn take_tab(&mut self, panel: &PanelId) -> bool {
+        let mut list = self.list();
+        let Some(i) = list.iter().position(|p| p == panel) else {
+            return false;
+        };
+        if list.len() == 1 {
+            return false;
+        }
+        list.remove(i);
+        let shown = shown_after_removal(self.shown, i, list.len());
+        *self = Member::from_list(list, shown, self.rolled);
+        true
+    }
+
+    /// Its panels as palettes of their own (a tab group taken apart).
+    fn split(self) -> Vec<Member> {
+        let rolled = self.rolled;
+        self.panels()
+            .cloned()
+            .map(|p| Member {
+                rolled,
+                ..Member::palette(p)
+            })
+            .collect()
+    }
+}
+
+/// The shown index once the item at `removed` is out of a list now `len`
+/// long: an earlier one shifts it left; the shown one out, its right
+/// neighbour (now at its index) shows, or the left one at the end.
+fn shown_after_removal(shown: usize, removed: usize, len: usize) -> usize {
+    let shown = if removed < shown { shown - 1 } else { shown };
+    shown.min(len.saturating_sub(1))
 }
 
 /// How the members of a floating group are laid out.
@@ -176,14 +296,17 @@ impl Join {
 }
 
 /// Panels floating over the interface as one unit: a palette alone (a
-/// group of one), or palettes stacked in a column or held as tabs. The
-/// group moves, pins, anchors and is resized as one; each member rolls
-/// up on its own.
+/// group of one), or palettes stacked in a column or held as tabs. A
+/// stack's member may itself be a tab group ([`Member::tabs`]): one level
+/// of nesting, a tab group never holding a stack. The group moves, pins,
+/// anchors and is resized as one; each member rolls up on its own.
 ///
 /// Saved as the floating panel it was before groups (its first member's
 /// `panel` and `rolled`, the group's `pos`, `pinned` and `anchor`), the
 /// other members under `group`: an application that predates groups
 /// reads the first member and floats the others again as new palettes.
+/// A nested tab group is saved as its first tab with the others under
+/// `tabs` (see [`Member`]).
 ///
 /// ```
 /// use egui_pop_model::ids::PanelId;
@@ -197,7 +320,7 @@ impl Join {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(from = "GroupDoc", into = "GroupDoc")]
 pub struct FloatingGroup {
-    /// Its panels, in order (never empty): top to bottom in a stack,
+    /// Its members, in order (never empty): top to bottom in a stack,
     /// start to end as tabs.
     pub members: Vec<Member>,
     pub arrangement: Arrangement,
@@ -223,6 +346,12 @@ struct GroupDoc {
     pos: [f32; 2],
     #[serde(default, skip_serializing_if = "is_false")]
     rolled: bool,
+    /// The first member's other tabs, when it is a nested tab group.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    tabs: Vec<PanelId>,
+    /// The first member's shown tab.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    shown: usize,
     #[serde(default, skip_serializing_if = "is_false")]
     pinned: bool,
     #[serde(default, skip_serializing_if = "Anchor::is_none")]
@@ -247,6 +376,8 @@ impl From<GroupDoc> for FloatingGroup {
         let mut members = vec![Member {
             panel: d.panel,
             rolled: d.rolled,
+            tabs: d.tabs,
+            shown: d.shown,
         }];
         members.extend(d.group);
         let mut g = FloatingGroup {
@@ -271,6 +402,8 @@ impl From<FloatingGroup> for GroupDoc {
             panel: first.panel,
             pos: g.pos,
             rolled: first.rolled,
+            tabs: first.tabs,
+            shown: first.shown,
             pinned: g.pinned,
             anchor: g.anchor,
             group: members.collect(),
@@ -285,10 +418,7 @@ impl FloatingGroup {
     /// A palette floating alone at `pos`.
     pub fn lone(panel: PanelId, pos: [f32; 2]) -> FloatingGroup {
         FloatingGroup {
-            members: vec![Member {
-                panel,
-                rolled: false,
-            }],
+            members: vec![Member::palette(panel)],
             arrangement: Arrangement::Stack,
             active: 0,
             pos,
@@ -305,53 +435,90 @@ impl FloatingGroup {
         [at, at]
     }
 
-    /// Its panels, in order.
+    /// Its panels, in order (a nested tab group's tabs in their order).
     pub fn panels(&self) -> impl Iterator<Item = &PanelId> {
-        self.members.iter().map(|m| &m.panel)
+        self.members.iter().flat_map(Member::panels)
     }
 
-    /// Whether a panel is one of its members.
+    /// Whether a panel is one of its panels.
     pub fn holds(&self, panel: &PanelId) -> bool {
-        self.members.iter().any(|m| m.panel == *panel)
+        self.members.iter().any(|m| m.holds(panel))
     }
 
-    /// A member by its panel.
+    /// The member holding a panel (a nested tab group for any of its
+    /// tabs).
     pub fn member(&self, panel: &PanelId) -> Option<&Member> {
-        self.members.iter().find(|m| m.panel == *panel)
+        self.members.iter().find(|m| m.holds(panel))
     }
 
-    /// A member by its panel, to change it.
+    /// The member holding a panel, to change it.
     pub fn member_mut(&mut self, panel: &PanelId) -> Option<&mut Member> {
-        self.members.iter_mut().find(|m| m.panel == *panel)
+        self.members.iter_mut().find(|m| m.holds(panel))
     }
 
-    /// Whether a member is rolled up (`false` for a panel not in it).
+    /// Whether the member holding a panel is rolled up (`false` for a
+    /// panel not in it).
     pub fn rolled(&self, panel: &PanelId) -> bool {
         self.member(panel).is_some_and(|m| m.rolled)
     }
 
-    /// Its first member: the one that names it in steps.
+    /// Its first member's first panel: the one that names it in steps.
     pub fn lead(&self) -> &PanelId {
         &self.members[0].panel
     }
 
-    /// The member shown: the active tab, or the first of a stack.
+    /// The member shown: the active tab, or the first of a stack (its
+    /// shown tab, for a nested tab group).
     pub fn shown(&self) -> &PanelId {
         let i = match self.arrangement {
             Arrangement::Tabs => self.active.min(self.members.len() - 1),
             Arrangement::Stack => 0,
         };
-        &self.members[i].panel
+        self.members[i].shown()
+    }
+
+    /// Shows a panel: the tab it is in a group of tabs, or its tab in a
+    /// nested tab group; whether it is one of its panels.
+    pub fn show(&mut self, panel: &PanelId) -> bool {
+        let Some(i) = self.members.iter().position(|m| m.holds(panel)) else {
+            return false;
+        };
+        if self.arrangement == Arrangement::Tabs {
+            self.active = i;
+        }
+        self.members[i].show(panel)
     }
 
     /// A palette alone, not grouped with others.
     pub fn is_lone(&self) -> bool {
-        self.members.len() == 1
+        self.members.len() == 1 && !self.members[0].is_tabs()
     }
 
-    /// Keeps its fields consistent: the active tab inside, and a palette
-    /// alone a plain stack.
+    /// Keeps its fields consistent: nested tab groups only in a stack, a
+    /// stack of one tab group made a group of tabs, the active tab
+    /// inside, and a palette alone a plain stack.
     fn tidy(&mut self) {
+        if self.arrangement == Arrangement::Tabs && self.members.iter().any(Member::is_tabs) {
+            // Tabs hold palettes: a nested tab group's tabs join them.
+            let shown = self.shown().clone();
+            let members = std::mem::take(&mut self.members);
+            self.members = members.into_iter().flat_map(Member::split).collect();
+            self.active = self
+                .members
+                .iter()
+                .position(|m| m.panel == shown)
+                .unwrap_or(0);
+        }
+        if self.members.len() == 1 && self.members[0].is_tabs() {
+            // A stack of one tab group: the group's tabs.
+            let m = self.members.remove(0);
+            self.active = m.shown.min(m.tabs.len());
+            self.members = m.split();
+            self.arrangement = Arrangement::Tabs;
+        }
+        for m in &mut self.members {
+            m.shown = m.shown.min(m.tabs.len());
+        }
         if self.members.len() <= 1 {
             self.arrangement = Arrangement::Stack;
             self.active = 0;
@@ -362,17 +529,54 @@ impl FloatingGroup {
         }
     }
 
-    /// Takes a member out, if it is in; the shown tab stays shown when
-    /// it is another one.
+    /// Takes a panel out, if it is in: out of its nested tab group, or a
+    /// member out. The shown tab out, its neighbour on the right is
+    /// shown, or the one on the left when it was the last.
     fn take(&mut self, panel: &PanelId) -> Option<Member> {
-        let i = self.members.iter().position(|m| m.panel == *panel)?;
+        let i = self.members.iter().position(|m| m.holds(panel))?;
+        let out = if self.members[i].take_tab(panel) {
+            Member {
+                rolled: self.members[i].rolled,
+                ..Member::palette(panel.clone())
+            }
+        } else {
+            let m = self.members.remove(i);
+            self.active = shown_after_removal(self.active, i, self.members.len());
+            m
+        };
+        self.tidy();
+        Some(out)
+    }
+
+    /// Takes out the member holding a panel, whole (a nested tab group
+    /// with its tabs).
+    fn take_member(&mut self, panel: &PanelId) -> Option<Member> {
+        let i = self.members.iter().position(|m| m.holds(panel))?;
         let m = self.members.remove(i);
-        // The shown tab out: the one before it is shown.
-        if i < self.active || (i == self.active && i > 0) {
-            self.active -= 1;
-        }
+        self.active = shown_after_removal(self.active, i, self.members.len());
         self.tidy();
         Some(m)
+    }
+
+    /// Keeps only the panels `keep` says, in their members; members left
+    /// empty go.
+    fn retain_panels(&mut self, keep: impl Fn(&PanelId) -> bool) {
+        let was = self.shown().clone();
+        let members = std::mem::take(&mut self.members);
+        for m in members {
+            let shown = m.shown().clone();
+            let list: Vec<PanelId> = m.panels().filter(|p| keep(p)).cloned().collect();
+            if list.is_empty() {
+                continue;
+            }
+            let at = list.iter().position(|p| *p == shown).unwrap_or(0);
+            self.members.push(Member::from_list(list, at, m.rolled));
+        }
+        if self.members.is_empty() {
+            return;
+        }
+        self.active = self.members.iter().position(|m| m.holds(&was)).unwrap_or(0);
+        self.tidy();
     }
 }
 
@@ -602,17 +806,9 @@ impl Layout {
         let mut group = FloatingGroup::lone(panel.clone(), pos);
         if let Some(i) = self.docked_groups.iter().position(|g| g.holds(panel)) {
             let mut was = self.docked_groups.remove(i);
-            was.members.retain(|m| {
-                m.panel == *panel || (area.is_some() && self.area_of(&m.panel) == area)
-            });
-            if was.members.len() > 1 {
-                if was.arrangement == Arrangement::Tabs {
-                    was.active = was
-                        .members
-                        .iter()
-                        .position(|m| m.panel == *panel)
-                        .unwrap_or(0);
-                }
+            was.retain_panels(|p| p == panel || (area.is_some() && self.area_of(p) == area));
+            if was.panels().count() > 1 {
+                was.show(panel);
                 was.pos = pos;
                 was.anchor = Anchor::default();
                 group = was;
@@ -627,9 +823,18 @@ impl Layout {
     }
 
     /// Moves floating panels into the group of another floating panel,
-    /// `into`: above it or below it (the group is then a stack), or as
-    /// tabs (the group is then tabs, the first of them shown). Each keeps
-    /// whether it is rolled up; groups left empty go.
+    /// `into`, and says where:
+    ///
+    /// - [`Join::Above`] or [`Join::Below`] it: the group is then a stack.
+    ///   Beside a group of tabs, the tabs stay tabs, as one member of the
+    ///   stack (a nested tab group).
+    /// - [`Join::Tab`]: as tabs of it, the first of them shown. In a group
+    ///   of tabs or with a palette alone, the group turns to tabs; on a
+    ///   member of a stack, that member alone becomes a tab group.
+    ///
+    /// A nested tab group whose tabs all move keeps them, unless it joins
+    /// as tabs; each moved member keeps whether it is rolled up; groups
+    /// left empty go.
     pub fn group(&mut self, panels: &[PanelId], into: &PanelId, at: Join) -> Result<(), String> {
         if panels.is_empty() {
             return Err("no panel to group".into());
@@ -645,27 +850,65 @@ impl Layout {
         if self.floating_of(into).is_none() {
             return Err(format!("`{into}` does not float"));
         }
-        let mut moving = Vec::new();
+        let mut moving: Vec<Member> = Vec::new();
+        // A whole group of tabs moving: one tab group, its tabs kept.
+        while let Some(i) = self.floating.iter().position(|g| {
+            g.arrangement == Arrangement::Tabs
+                && !g.holds(into)
+                && g.panels().all(|p| panels.contains(p))
+        }) {
+            let g = self.floating.remove(i);
+            let rolled = g.members.get(g.active).is_some_and(|m| m.rolled);
+            let list = g.panels().cloned().collect();
+            moving.push(Member::from_list(list, g.active, rolled));
+        }
         for p in panels {
-            if let Some(g) = self.floating_mut(p)
-                && let Some(m) = g.take(p)
-            {
-                moving.push(m);
+            if moving.iter().any(|m| m.holds(p)) {
+                continue;
             }
+            let Some(g) = self.floating_mut(p) else {
+                continue;
+            };
+            let whole = g
+                .member(p)
+                .is_some_and(|m| m.is_tabs() && m.panels().all(|q| panels.contains(q)));
+            let m = if whole { g.take_member(p) } else { g.take(p) };
+            moving.extend(m);
         }
         self.floating.retain(|g| !g.members.is_empty());
         let g = self.floating_mut(into).expect("checked above");
-        let i = g.members.iter().position(|m| m.panel == *into).unwrap_or(0);
-        let first = match at {
-            Join::Above => i,
-            Join::Below | Join::Tab => i + 1,
-        };
-        for (k, m) in moving.into_iter().enumerate() {
-            g.members.insert(first + k, m);
-        }
+        let mut i = g.members.iter().position(|m| m.holds(into)).unwrap_or(0);
         match at {
-            Join::Above | Join::Below => g.arrangement = Arrangement::Stack,
+            Join::Above | Join::Below => {
+                if g.arrangement == Arrangement::Tabs {
+                    // Beside tabs: they stay tabs, one member of the stack.
+                    let rolled = g.members.get(g.active).is_some_and(|m| m.rolled);
+                    let list = g.members.iter().map(|m| m.panel.clone()).collect();
+                    g.members = vec![Member::from_list(list, g.active, rolled)];
+                    g.arrangement = Arrangement::Stack;
+                    g.active = 0;
+                    i = 0;
+                }
+                let first = if at == Join::Above { i } else { i + 1 };
+                for (k, m) in moving.into_iter().enumerate() {
+                    g.members.insert(first + k, m);
+                }
+            }
+            Join::Tab if g.arrangement == Arrangement::Stack && g.members.len() > 1 => {
+                // On a member of a stack: that member holds the tabs.
+                let m = &mut g.members[i];
+                let mut list = m.list();
+                let at = list.iter().position(|p| p == into).unwrap_or(0) + 1;
+                let new: Vec<PanelId> = moving.iter().flat_map(|m| m.list()).collect();
+                list.splice(at..at, new);
+                *m = Member::from_list(list, at, m.rolled);
+            }
             Join::Tab => {
+                let first = i + 1;
+                let flat: Vec<Member> = moving.into_iter().flat_map(Member::split).collect();
+                for (k, m) in flat.into_iter().enumerate() {
+                    g.members.insert(first + k, m);
+                }
                 g.arrangement = Arrangement::Tabs;
                 g.active = first;
             }
@@ -675,7 +918,8 @@ impl Layout {
     }
 
     /// Takes a floating panel out of its group, alone at `pos` (it keeps
-    /// whether it is rolled up).
+    /// whether it is rolled up); out of a nested tab group, the group's
+    /// other tabs stay.
     pub fn ungroup(&mut self, panel: &PanelId, pos: [f32; 2]) -> Result<(), String> {
         let g = self
             .floating_mut(panel)
@@ -687,6 +931,25 @@ impl Layout {
         let mut lone = FloatingGroup::lone(m.panel, pos);
         lone.members[0].rolled = m.rolled;
         self.floating.push(lone);
+        Ok(())
+    }
+
+    /// Takes the tab group a floating panel is a tab of, nested in a
+    /// stack, out of the stack whole: a group of tabs at `pos`. A palette
+    /// that is not in a nested tab group comes out alone, as
+    /// [`Layout::ungroup`] takes it.
+    pub fn ungroup_tabs(&mut self, panel: &PanelId, pos: [f32; 2]) -> Result<(), String> {
+        let g = self
+            .floating_mut(panel)
+            .ok_or_else(|| format!("`{panel}` does not float"))?;
+        if !g.member(panel).is_some_and(Member::is_tabs) || g.members.len() < 2 {
+            return self.ungroup(panel, pos);
+        }
+        let m = g.take_member(panel).expect("held");
+        let mut tabs = FloatingGroup::lone(m.panel.clone(), pos);
+        tabs.members = vec![m];
+        tabs.tidy();
+        self.floating.push(tabs);
         Ok(())
     }
 
@@ -764,7 +1027,7 @@ impl Layout {
         for g in &mut self.docked_groups {
             g.take(panel);
         }
-        self.docked_groups.retain(|g| g.members.len() > 1);
+        self.docked_groups.retain(|g| g.panels().count() > 1);
         if !self.hidden.contains(panel) {
             self.hidden.push(panel.clone());
         }
@@ -825,22 +1088,21 @@ impl Layout {
         }
         let mut floating = Vec::new();
         for mut g in self.floating {
-            let members = std::mem::take(&mut g.members);
-            for m in members {
-                match panels.get(m.panel.as_str()) {
-                    None => notes.push(format!("panel `{}` no longer exists", m.panel)),
+            let mut keep = Vec::new();
+            for p in g.panels() {
+                match panels.get(p.as_str()) {
+                    None => notes.push(format!("panel `{p}` no longer exists")),
                     Some(spec) if !spec.floatable => {
                         notes.push(format!(
-                            "`{}` no longer floats: docked in its default area",
-                            m.panel
+                            "`{p}` no longer floats: docked in its default area"
                         ));
-                        redock.push(m.panel);
+                        redock.push(p.clone());
                     }
-                    Some(_) => g.members.push(m),
+                    Some(_) => keep.push(p.clone()),
                 }
             }
+            g.retain_panels(|p| keep.contains(p));
             if !g.members.is_empty() {
-                g.tidy();
                 floating.push(g);
             }
         }
@@ -848,11 +1110,8 @@ impl Layout {
             .docked_groups
             .into_iter()
             .filter_map(|mut g| {
-                g.members.retain(|m| known(&m.panel));
-                (g.members.len() > 1).then(|| {
-                    g.tidy();
-                    g
-                })
+                g.retain_panels(|p| known(p));
+                (g.panels().count() > 1).then_some(g)
             })
             .collect();
         let mut areas: Vec<(Area, Node)> = Vec::new();

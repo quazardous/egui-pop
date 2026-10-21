@@ -886,13 +886,13 @@ fn palettes_stack_into_one_group_and_come_out_of_it() {
 #[test]
 fn a_tab_joins_a_group_shown_and_the_group_turns_to_tabs() {
     let mut l = Layout::default_for(&palettes());
-    l.group(&[pid("app.colours")], &pid("app.tools"), Join::Below)
-        .unwrap();
     l.group(&[pid("app.nav")], &pid("app.tools"), Join::Tab)
+        .unwrap();
+    l.group(&[pid("app.colours")], &pid("app.nav"), Join::Tab)
         .unwrap();
     let g = l.floating_of(&pid("app.tools")).unwrap();
     assert_eq!(g.arrangement, Arrangement::Tabs);
-    assert_eq!(g.shown(), &pid("app.nav"));
+    assert_eq!(g.shown(), &pid("app.colours"));
     assert_eq!(
         members(&l, "app.tools"),
         ["app.tools", "app.nav", "app.colours"]
@@ -900,18 +900,231 @@ fn a_tab_joins_a_group_shown_and_the_group_turns_to_tabs() {
     let text = l.to_json();
     assert!(text.contains("\"tabs\""), "{text}");
     assert_eq!(Layout::from_json(&text).unwrap(), l);
-    // The shown tab out: the one before it is shown.
+    assert_eq!(Join::parse("tab"), Some(Join::Tab));
+    assert_eq!(Join::parse("aside"), None);
+}
+
+#[test]
+fn the_shown_tab_out_its_right_neighbour_shows_or_the_left_one_at_the_end() {
+    let mut l = Layout::default_for(&palettes());
+    l.group(
+        &[pid("app.nav"), pid("app.colours")],
+        &pid("app.tools"),
+        Join::Tab,
+    )
+    .unwrap();
+    assert_eq!(
+        members(&l, "app.tools"),
+        ["app.tools", "app.nav", "app.colours"]
+    );
+    // The middle tab shown, then closed: the one on its right shows.
+    l.floating_mut(&pid("app.tools"))
+        .unwrap()
+        .show(&pid("app.nav"));
+    l.hide(&pid("app.nav"));
+    assert_eq!(
+        l.floating_of(&pid("app.tools")).unwrap().shown(),
+        &pid("app.colours")
+    );
+    // The last tab shown, then taken out: the one on its left shows.
+    l.float(&pid("app.nav"), [0.0, 0.0]);
+    l.group(&[pid("app.nav")], &pid("app.colours"), Join::Tab)
+        .unwrap();
+    assert_eq!(
+        members(&l, "app.tools"),
+        ["app.tools", "app.colours", "app.nav"]
+    );
+    assert_eq!(
+        l.floating_of(&pid("app.tools")).unwrap().shown(),
+        &pid("app.nav")
+    );
     l.ungroup(&pid("app.nav"), [0.0, 0.0]).unwrap();
     assert_eq!(
         l.floating_of(&pid("app.tools")).unwrap().shown(),
-        &pid("app.tools")
+        &pid("app.colours")
+    );
+    // A tab before the shown one out: the shown one stays shown.
+    l.group(&[pid("app.nav")], &pid("app.colours"), Join::Tab)
+        .unwrap();
+    l.ungroup(&pid("app.tools"), [0.0, 0.0]).unwrap();
+    assert_eq!(
+        l.floating_of(&pid("app.nav")).unwrap().shown(),
+        &pid("app.nav")
     );
     // Down to one: a plain palette again.
     l.ungroup(&pid("app.colours"), [0.0, 0.0]).unwrap();
-    let g = l.floating_of(&pid("app.tools")).unwrap();
+    let g = l.floating_of(&pid("app.nav")).unwrap();
     assert_eq!((g.arrangement, g.active), (Arrangement::Stack, 0));
-    assert_eq!(Join::parse("tab"), Some(Join::Tab));
-    assert_eq!(Join::parse("aside"), None);
+}
+
+/// The tools and the navigator as tabs, the navigator shown, and the
+/// colours stacked below them: a stack holding a tab group.
+fn nested() -> Layout {
+    let mut l = Layout::default_for(&palettes());
+    l.group(&[pid("app.nav")], &pid("app.tools"), Join::Tab)
+        .unwrap();
+    l.group(&[pid("app.colours")], &pid("app.nav"), Join::Below)
+        .unwrap();
+    l
+}
+
+#[test]
+fn an_edge_drop_on_tabs_stacks_beside_them_and_the_tabs_stay_tabs() {
+    let l = nested();
+    let g = l.floating_of(&pid("app.tools")).unwrap();
+    assert_eq!(g.arrangement, Arrangement::Stack);
+    assert_eq!(g.members.len(), 2);
+    let tabs = g.member(&pid("app.nav")).unwrap();
+    assert!(tabs.is_tabs());
+    assert_eq!(
+        tabs.panels().collect::<Vec<_>>(),
+        [&pid("app.tools"), &pid("app.nav")]
+    );
+    assert_eq!(tabs.shown(), &pid("app.nav"), "the shown tab stays shown");
+    assert!(!g.member(&pid("app.colours")).unwrap().is_tabs());
+    assert_eq!(
+        members(&l, "app.tools"),
+        ["app.tools", "app.nav", "app.colours"]
+    );
+    // Above them too.
+    let mut above = Layout::default_for(&palettes());
+    above
+        .group(&[pid("app.nav")], &pid("app.tools"), Join::Tab)
+        .unwrap();
+    above
+        .group(&[pid("app.colours")], &pid("app.tools"), Join::Above)
+        .unwrap();
+    let g = above.floating_of(&pid("app.tools")).unwrap();
+    assert_eq!(g.members[0].panel, pid("app.colours"));
+    assert!(g.members[1].is_tabs());
+    // A middle drop on a member of a stack: that member alone holds the
+    // tabs.
+    let mut l = nested();
+    l.float(&pid("app.log"), [0.0, 0.0]);
+    l.group(&[pid("app.log")], &pid("app.colours"), Join::Tab)
+        .unwrap();
+    let g = l.floating_of(&pid("app.tools")).unwrap();
+    assert_eq!(g.arrangement, Arrangement::Stack);
+    assert_eq!(g.members.len(), 2);
+    let m = g.member(&pid("app.colours")).unwrap();
+    assert_eq!(
+        m.panels().collect::<Vec<_>>(),
+        [&pid("app.colours"), &pid("app.log")]
+    );
+    assert_eq!(m.shown(), &pid("app.log"));
+    // Its shown tab closed: the neighbour shows; one tab left, a palette.
+    l.hide(&pid("app.log"));
+    let g = l.floating_of(&pid("app.tools")).unwrap();
+    assert!(!g.member(&pid("app.colours")).unwrap().is_tabs());
+    // A nested tab group's tab out of it: the others stay tabs.
+    let mut l = nested();
+    l.ungroup(&pid("app.tools"), [300.0, 0.0]).unwrap();
+    assert_eq!(members(&l, "app.nav"), ["app.nav", "app.colours"]);
+    assert!(l.floating_of(&pid("app.tools")).unwrap().is_lone());
+    // The tab group out of the stack, whole: a group of tabs.
+    let mut l = nested();
+    l.ungroup_tabs(&pid("app.tools"), [300.0, 0.0]).unwrap();
+    let g = l.floating_of(&pid("app.tools")).unwrap();
+    assert_eq!(g.arrangement, Arrangement::Tabs);
+    assert_eq!(g.shown(), &pid("app.nav"));
+    assert_eq!(g.pos, [300.0, 0.0]);
+    assert!(l.floating_of(&pid("app.colours")).unwrap().is_lone());
+    // A whole tab group dropped on a stack's edge keeps its tabs; dropped
+    // as a tab, its tabs join the others.
+    l.group(
+        &[pid("app.tools"), pid("app.nav")],
+        &pid("app.colours"),
+        Join::Above,
+    )
+    .unwrap();
+    assert_eq!(l.floating.len(), 1);
+    assert_eq!(l.floating[0].members, nested().floating[0].members);
+    let mut l = nested();
+    l.ungroup_tabs(&pid("app.tools"), [300.0, 0.0]).unwrap();
+    l.group(
+        &[pid("app.tools"), pid("app.nav")],
+        &pid("app.colours"),
+        Join::Tab,
+    )
+    .unwrap();
+    let g = l.floating_of(&pid("app.colours")).unwrap();
+    assert_eq!(g.arrangement, Arrangement::Tabs);
+    assert_eq!(g.members.len(), 3);
+}
+
+#[test]
+fn a_nested_tab_group_round_trips_and_an_older_reader_reads_its_first_tab() {
+    let l = nested();
+    let text = l.to_json();
+    assert_eq!(Layout::from_json(&text).unwrap(), l);
+    // Saved as the stack it was, its first member the tab group's first
+    // tab, the other tabs under `tabs`.
+    let json: Value = serde_json::from_str(&text).unwrap();
+    let first = &json["floating"][0];
+    assert_eq!(first["panel"], "app.tools");
+    assert_eq!(first["tabs"], json!(["app.nav"]));
+    assert_eq!(first["shown"], 1);
+    assert_eq!(first["group"][0]["panel"], "app.colours");
+    assert!(first.get("arrangement").is_none(), "a stack");
+    // A reader that predates nesting ignores `tabs` and `shown`: it
+    // reads the first tab as a member of the stack and puts the others
+    // back as any panel missing from a layout, a palette floating alone.
+    let mut old = json.clone();
+    let floating = old["floating"][0].as_object_mut().unwrap();
+    floating.remove("tabs");
+    floating.remove("shown");
+    let older = Layout::from_json(&old.to_string()).unwrap();
+    assert_eq!(members(&older, "app.tools"), ["app.tools", "app.colours"]);
+    let (fixed, notes) = older.repair(&palettes(), &[]);
+    assert_eq!(members(&fixed, "app.tools"), ["app.tools", "app.colours"]);
+    assert!(fixed.floating_of(&pid("app.nav")).unwrap().is_lone());
+    assert_eq!(notes, ["new palette `app.nav` floats"]);
+    // Repaired tab by tab: a tab no longer declared goes, the group
+    // stays, back to a stack of palettes.
+    let mut fewer = Panels::new();
+    fewer
+        .declare(&FW, PanelSpec::new(pid("app.log"), "Log", Area::Bottom))
+        .unwrap();
+    for id in ["app.tools", "app.colours"] {
+        fewer
+            .declare(&FW, PanelSpec::new(pid(id), id, Area::StartSide).palette())
+            .unwrap();
+    }
+    let (fixed, notes) = l.repair(&fewer, &[]);
+    assert_eq!(members(&fixed, "app.tools"), ["app.tools", "app.colours"]);
+    let g = fixed.floating_of(&pid("app.tools")).unwrap();
+    assert!(g.members.iter().all(|m| !m.is_tabs()), "{g:?}");
+    assert_eq!(notes, ["panel `app.nav` no longer exists"]);
+}
+
+#[test]
+fn a_nested_tab_group_docks_whole_and_floats_back_nested() {
+    let mut l = nested();
+    l.float(&pid("app.tools"), [120.0, 80.0]);
+    let was = l.floating_of(&pid("app.tools")).unwrap().clone();
+    let docked = l.dock_group(&pid("app.colours"), Area::EndSide);
+    assert_eq!(
+        docked,
+        [pid("app.tools"), pid("app.nav"), pid("app.colours")]
+    );
+    assert!(l.floating.is_empty());
+    assert_eq!(l.active_in(Area::EndSide), [&pid("app.nav")]);
+    assert_eq!(Layout::from_json(&l.to_json()).unwrap(), l);
+    // Floating a tab of the nested group gives the whole stack back,
+    // nested as it was, that tab shown.
+    l.float(&pid("app.tools"), [120.0, 80.0]);
+    let back = l.floating_of(&pid("app.tools")).unwrap();
+    assert_eq!(back.members.len(), 2);
+    let tabs = back.member(&pid("app.tools")).unwrap();
+    assert_eq!(
+        tabs.panels().collect::<Vec<_>>(),
+        [&pid("app.tools"), &pid("app.nav")]
+    );
+    assert_eq!(tabs.shown(), &pid("app.tools"));
+    let mut expected = was;
+    expected.members[0].shown = 0;
+    assert_eq!(back, &expected);
+    assert!(l.docked_groups.is_empty());
 }
 
 #[test]
