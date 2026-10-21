@@ -1,6 +1,6 @@
 [package]
 name = "egui-pop-tokens"
-version = "0.1.1"
+version = "0.2.0"
 description = "Design tokens for egui-pop: a DTCG parser and resolver with themes, densities, accents and contrast checks (no egui dependency)"
 readme = "README.md"
 keywords = ["design-tokens", "dtcg", "theme", "egui", "accessibility"]

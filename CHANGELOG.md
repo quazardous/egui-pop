@@ -10,6 +10,8 @@ publishes.
 
 ## Unreleased
 
+## 0.2.0 (2026-10-21)
+
 ### Changed
 
 - A floating panel is now a group of floating panels (egui-pop-model):

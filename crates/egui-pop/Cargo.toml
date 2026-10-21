@@ -1,6 +1,6 @@
 [package]
 name = "egui-pop"
-version = "0.1.1"
+version = "0.2.0"
 description = "Themable, accessible, agent-drivable application framework and component library for egui: design tokens and visual kits, plugins, commands and keymaps, a workbench of panels, dialogs, palettes, inputs and sliders, trees and tables, editors, an image viewport (not an official egui crate)"
 readme = "../../README.md"
 keywords = ["egui", "gui", "widgets", "design-system", "accessibility"]

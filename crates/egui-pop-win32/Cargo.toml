@@ -1,6 +1,6 @@
 [package]
 name = "egui-pop-win32"
-version = "0.1.1"
+version = "0.2.0"
 description = "The Windows layer of egui-pop's window frame: subclasses a window to answer WM_NCHITTEST from the frame's hit regions (Snap Layouts, Aero Snap) and asks Windows 11 for rounded corners, with no egui dependency"
 readme = "README.md"
 keywords = ["egui", "windows", "titlebar", "snap-layouts", "hit-test"]

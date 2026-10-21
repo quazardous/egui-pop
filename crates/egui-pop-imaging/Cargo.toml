@@ -1,6 +1,6 @@
 [package]
 name = "egui-pop-imaging"
-version = "0.1.1"
+version = "0.2.0"
 description = "The image tools of egui-pop in an application: the histogram's drag, the curve editor, the colour wheels and the zoom control and navigator, and the node graph editor, each finished change a step an application can veto, redirect, replace or follow"
 readme = "README.md"
 keywords = ["egui", "histogram", "curves", "color-grading", "navigator"]

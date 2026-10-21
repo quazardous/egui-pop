@@ -1,6 +1,6 @@
 [package]
 name = "egui-pop-wayland"
-version = "0.1.1"
+version = "0.2.0"
 description = "The Wayland layer of egui-pop's image viewport: a subsurface under a window, tagged through wp_color_management_v1, and the compositor's preferred image description, with no egui dependency"
 readme = "README.md"
 keywords = ["wayland", "color-management", "wide-gamut", "hdr", "subsurface"]

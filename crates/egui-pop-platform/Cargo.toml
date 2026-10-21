@@ -1,6 +1,6 @@
 [package]
 name = "egui-pop-platform"
-version = "0.1.1"
+version = "0.2.0"
 description = "Platform services for egui-pop applications, as opt-in plugins: a single instance with deep links, desktop notifications with actions, a tray icon with a declared menu, global shortcuts, logs and crash reports, the focus mode read in-process"
 readme = "README.md"
 keywords = ["egui", "tray", "notifications", "single-instance", "global-hotkey"]

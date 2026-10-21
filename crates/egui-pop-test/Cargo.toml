@@ -1,6 +1,6 @@
 [package]
 name = "egui-pop-test"
-version = "0.1.1"
+version = "0.2.0"
 description = "Test kit for egui-pop applications: themed egui_kittest harnesses, a check that every interactive node has a name, an accessibility tree dump, a double click that registers, keymap checks"
 readme = "README.md"
 keywords = ["egui", "testing", "accessibility", "kittest"]

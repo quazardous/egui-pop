@@ -1,6 +1,6 @@
 [package]
 name = "egui-pop-viewport"
-version = "0.1.1"
+version = "0.2.0"
 description = "A generic tiled image viewport for egui-pop: pan and zoom in physical pixels, tiles from an asynchronous source (proxy then exact), a display-transform hook, overlays with handles, before/after, a pixel readout, thumbnails and a histogram"
 readme = "README.md"
 keywords = ["egui", "image", "viewport", "tiles", "zoom"]
