@@ -159,14 +159,17 @@ one `Move` comes at the end (Escape during the drag drops it).
 
 ### Gestures
 
+Pan and zoom follow the pointer profile
+([pointer-gestures.md](pointer-gestures.md)); the defaults (Document):
+
 | Gesture | What it does |
 |---|---|
-| Wheel | Pans |
+| Wheel, two fingers | Pans (Shift and the wheel: sideways) |
 | Ctrl (Cmd) and the wheel, a pinch | Zooms around the pointer |
-| Drag with the middle or secondary button, or with Space held | Pans |
+| Drag with the middle button, or with Space held | Pans |
 | Drag on the canvas | A rubber band: selects the nodes it touches (Shift or Ctrl adds) |
 | Click on the canvas | Clears the selection, drops a wire begun with a click |
-| Double click on the canvas | Fits the graph |
+| Double click on the canvas | Fits the graph (`gesture.graph.fit`) |
 | Click on a node | Selects it (Shift or Ctrl adds or removes it) |
 | Drag a node | Moves the selection |
 | Double click on a title, or its chevron | Collapses the node to its title |

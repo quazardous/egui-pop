@@ -20,6 +20,7 @@
 - [Image tools](image-tools.md)
 - [Node graph editor](node-graph.md)
 - [Cursors and the loupe](cursors.md)
+- [Pointer gestures and profiles](pointer-gestures.md)
 - [Choosing files](files.md)
 - [Sliders](sliders.md)
 - [Inputs, field states and Tab order](inputs.md)

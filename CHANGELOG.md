@@ -29,6 +29,18 @@ publishes.
   `LICENSE-MIT`, `LICENSE-APACHE` is new, and every crate's `license` field
   says `MIT OR Apache-2.0`. Apache-2.0 adds an explicit patent grant;
   anything that used egui-pop under MIT still can.
+- The image viewport follows the pointer profile, Document by default
+  (egui-pop-viewport): the wheel pans and Ctrl with the wheel zooms (the
+  wheel zoomed and Shift with it panned); a pinch, two fingers and the
+  middle button work as before. The node graph no longer pans with a
+  secondary drag under the default profile. `viewport::Gestures` carries
+  the pointer's gestures as a `ViewGestures` table in place of `wheel`,
+  `wheel_other`, `pan_button_anywhere` and `double_click`
+  (`WheelAction` and `DoubleClick` are gone); `Signal::Leave` and
+  `Cause::Click` are new variants. `core::slider::Gestures` gains
+  `wheel_steps` and `panel`, and both take their default from the
+  profile. The keymap document is at version 3 (version 2 reads
+  unchanged). Part of #47.
 
 ### Added
 
@@ -124,6 +136,25 @@ publishes.
   a frame's clause. A hidden indicator keeps reducing events. A clause
   that does not parse keeps it hidden and is a diagnostic
   (`indicator-when`).
+- Pointer gesture profiles (egui-pop-model, egui-pop-core, egui-pop-api,
+  egui-pop-viewport): a chord's key may be a pointer gesture (`Wheel`,
+  `Scroll`, `Pinch`, `PrimaryClick`, `MiddleDrag`...), bound to gesture
+  commands per canvas kind (`gesture.image.zoom`, `gesture.graph.pan`,
+  `gesture.value.step`) in the same keymap as the keyboard shortcuts.
+  Five profiles ship as documents: Document (the default), darktable,
+  Adobe, Blender / node editors and Trackpad; an application picks one
+  (`AppBuilder::pointer_profile`), the user another
+  (`input.pointer_profile`), with the wheel over sliders, a double
+  click on the image and the wheel device as settings. The shortcuts
+  editor shows the profile, filters the gestures, removes a trigger and
+  adds one done on a pad, reports conflicts per canvas; a change of
+  profile asks whether to keep the user's changes. The image viewport,
+  the node graph and sliders read the wheel raw (unit and modifiers
+  kept) and do what the profile says, with a hint for the keys held
+  (`ViewportOutput::hint`, `GraphOutput::hint`, `core::pointer::hint_now`).
+  The web gallery takes Ctrl and the wheel and a pinch from the browser
+  (`core::pointer::web_prevent_default`). A gallery page and
+  `docs/pointer-gestures.md`. Part of #47.
 - The docs online: the guides in `docs/` as an mdBook with search, at
   <https://quazardous.github.io/egui-pop/docs/> beside the gallery,
   built and deployed by the Pages workflow (`book.toml`,

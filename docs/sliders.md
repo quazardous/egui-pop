@@ -29,12 +29,12 @@ fn exposure(ui: &mut egui::Ui, ev: &mut f64, on: &mut bool) {
 | Gesture | What it does |
 |---|---|
 | Drag anywhere on the bar | The value follows the pointer's motion over the soft range; a click never makes it jump. One gesture: one undo step when bound to the store |
-| Ctrl (Cmd) / Shift held | Ten times finer / coarser, for drags, arrows and the wheel |
+| Ctrl (Cmd) / Shift held | Ten times finer / coarser, for drags, arrows and the wheel (the pointer profile's modifiers; Blender's and Adobe's swap them) |
 | Escape during a drag | Puts the value back, with no trace |
 | Arrows, Page Up, Page Down | One step, one coarse step (when focused) |
 | Home, End | The soft range's ends |
 | Enter | The typed entry: a number or an expression, then Enter or a click elsewhere commits it (Escape leaves it with nothing). While open it owns Escape and Enter: key bindings never see them. Only a real blur commits it (a click elsewhere, Tab, the focus taken by another widget), not a frame where the panel is redrawn and nobody holds the focus |
-| Wheel | Scrolls the panel; steps the slider only when it has the focus or Alt is held over it |
+| Wheel | Scrolls the panel; steps the slider only when it has the focus or Alt is held over it. As the pointer profile says ([pointer-gestures.md](pointer-gestures.md)): under darktable's it changes the slider under the pointer, Ctrl+Alt and the wheel scrolling the panel |
 | Double click | Back to the default |
 
 The keys are data (`slider::Gestures`, `slider::set_gestures`), for input

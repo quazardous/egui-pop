@@ -503,6 +503,11 @@ bindings of one key whose `when` clauses can never both hold
 (`view == 'masks'` and `view == 'lighttable'`, `When::excludes`) are no
 conflict.
 
+Pointer gestures live in the same keymap (`Ctrl+Wheel`, `MiddleDrag`
+bound to gesture commands in a canvas's scope), the pointer profile's
+in the default layer; `rebind_gestures` gives a gesture several
+triggers at once. See [Pointer gestures and profiles](pointer-gestures.md).
+
 ## Around the shell
 
 `AppBuilder::wrap` draws around the whole application,

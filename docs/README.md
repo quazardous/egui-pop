@@ -65,6 +65,10 @@ of every crate with every feature on.
   steps, an overview and a detail view with inline sliders, a minimap,
   the keyboard and screen reader paths, agent commands, a reference
   model kept in a YAML file that round-trips; the survey behind it.
+- [Pointer gestures and profiles](pointer-gestures.md): what the wheel,
+  a pinch and each button do on the image, the node graph and sliders,
+  as five profiles (Document, darktable, Adobe, Blender / node editors,
+  Trackpad) of keymap bindings the shortcuts editor changes.
 - [Cursors and the loupe](cursors.md): tool cursors drawn at the
   window's scale, a brush outline that follows the zoom, the
   `cursor.resolve` step, a GPU loupe on the displayed pixels; the

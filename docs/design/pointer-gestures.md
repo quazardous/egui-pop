@@ -783,3 +783,49 @@ Operating systems and browsers:
 6. **Ctrl and the wheel on the web:** egui-pop takes it from the browser.
 
 Questions 7 to 15 above are still open.
+
+### Provisional choices (not decided)
+
+The first implementation (see [pointer-gestures.md](../pointer-gestures.md))
+takes the note's proposal where a question is open. Each choice is data
+in the profile documents (`crates/egui-pop-model/profiles/*.json`) or a
+setting, so changing it is an edit there, not in code. **Not decided**:
+the maintainer settles them.
+
+- **Question 6 (modifiers change what, or how finely):** a binding's
+  meaning is per canvas scope, so a profile may give a modifier
+  another action (Blender's Ctrl + wheel pans sideways). Per-target
+  bindings (a handle, a node, a port) are not built: the wheel over a
+  handle adjusts that handle, whatever the profile.
+- **Question 8 (primary drag on an empty image):** it pans in every
+  profile; a box select stays the graph's.
+- **Question 9 (secondary button):** a context menu everywhere, except
+  where a profile binds a secondary drag: only Blender / node editors
+  pans the graph with it (darktable's profile does not, so the graph
+  lost today's secondary-drag pan under the default profile).
+- **Question 10 (fine and coarse):** per profile. Ctrl finer and Shift
+  coarser in Document, darktable and Trackpad; Shift finer and Ctrl
+  coarser in Adobe and Blender / node editors. Document keeps today's
+  default rather than GIMP's Shift-finer cell.
+- **Question 11 (Alt):** used only where the source applications use it
+  (Adobe's Alt + wheel zoom) or egui-pop already did (Alt + wheel steps
+  a slider without the focus, in Document and darktable); the shortcuts
+  editor warns, on Linux, of a gesture bound with Alt and a drag or the
+  wheel.
+- **Question 13 (device split):** the line / point split, with a global
+  override (`input.wheel_device`: auto, mouse, trackpad); no per-device
+  settings.
+- **Question 14 (scope of a profile):** pointer gestures only; the
+  keyboard navigation keys (Space, +, -, 0, 1, 2, arrows) stay as they
+  are, and Space + drag pans in every profile.
+- **Question 15 (held key + pointer):** out of scope; a held key other
+  than a modifier is not part of a pointer chord yet.
+
+Implementation notes (2026-10-21): the gesture commands are per canvas
+kind (`gesture.image.zoom`, `gesture.graph.pan`, `gesture.value.step`)
+rather than shared (`view.zoom`), so the shortcuts editor shows and
+changes each canvas's on its own; a gesture keeps several triggers
+(`Wheel`, `Ctrl+Scroll`, `Pinch`). The options of decisions 4 and 5
+are settings whose `profile` choice takes the profile's default.
+Decision 3 is the dialog asking to keep or drop the user's changes
+after a change of profile; they stay until it is answered.
