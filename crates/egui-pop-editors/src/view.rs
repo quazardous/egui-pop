@@ -1069,18 +1069,21 @@ fn keys(
                 let text = copy_text(state);
                 ui.ctx().copy_text(text);
             }
+            // A cut copies only once its delete is accepted: a read-only
+            // editor or a vetoed edit leaves the clipboard as it was.
             Event::Cut => {
                 let text = copy_text(state);
-                ui.ctx().copy_text(text);
                 let span = cut_span(state);
-                edit(
+                if edit(
                     state,
                     o,
                     vec![Change::delete(span)],
                     EditKind::Cut,
                     None,
                     signals,
-                );
+                ) {
+                    ui.ctx().copy_text(text);
+                }
             }
             Event::Paste(text) if !text.is_empty() => {
                 let span = state.selection().span();

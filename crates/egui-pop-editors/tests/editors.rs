@@ -106,6 +106,42 @@ fn typing_moving_and_escape_leaving() {
     );
 }
 
+/// The text the last frame put on the clipboard, if any.
+fn copied<S>(h: &Harness<'_, S>) -> Option<String> {
+    h.output()
+        .platform_output
+        .commands
+        .iter()
+        .find_map(|c| match c {
+            egui::OutputCommand::CopyText(text) => Some(text.clone()),
+            _ => None,
+        })
+}
+
+#[test]
+fn a_refused_cut_leaves_the_clipboard_alone() {
+    let mut h = alone(EditorState::new("notes", "keep me").read_only(true), false);
+    h.run();
+    click_editor(&mut h, "Notes");
+    // Copy reaches the clipboard even when read-only...
+    h.event(egui::Event::Copy);
+    h.step();
+    assert_eq!(copied(&h).as_deref(), Some("keep me\n"));
+    // ...but a cut whose delete is refused copies nothing.
+    h.event(egui::Event::Cut);
+    h.step();
+    assert_eq!(copied(&h), None, "a refused cut must not copy");
+    h.run();
+    assert_eq!(h.state().state.text(), "keep me");
+    // Accepted, the cut deletes and copies.
+    let _ = h.state().state.clone().read_only(false);
+    h.event(egui::Event::Cut);
+    h.step();
+    assert_eq!(copied(&h).as_deref(), Some("keep me\n"));
+    h.run();
+    assert_eq!(h.state().state.text(), "");
+}
+
 #[test]
 fn search_and_replace_from_the_bar() {
     let mut h = alone(EditorState::new("notes", "one two one\nthree one"), false);

@@ -718,6 +718,10 @@ publishes.
   keep the kit and egui style they were made from rather than their
   addresses, which a dropped kit could hand to the next one. `Kit::of`
   says to keep the `Arc` too.
+- A cut in the code editor no longer copies when its delete is refused
+  (egui-pop-editors): a read-only editor or an `edit.change` before-hook
+  vetoing the cut leaves the clipboard as it was; the text is copied
+  once the delete is accepted.
 
 ### Security
 
