@@ -661,6 +661,15 @@ publishes.
   `tabular_digits` and `monospace` describe one. The install `Report`
   adds each family's fallback chain, the specimens and whether each
   role's face has tabular digits.
+- The gallery's `fonts` page (Font pairs): candidate pairs of a
+  proportional and a monospace family side by side, egui's own as the
+  baseline (Inter + JetBrains Mono NL, Noto Sans + Noto Sans Mono, IBM
+  Plex Sans + Plex Mono): interface text, weights, a slider, numbers in
+  a table, code and scripts, with each pair's size and whether its
+  digits are tabular. The candidate files are gallery assets
+  (`crates/egui-pop-gallery/assets/fonts`, OFL 1.1, sources in its
+  README and the NOTICE), in no published crate. The bundled pair is
+  chosen there.
 
 ### Changed
 

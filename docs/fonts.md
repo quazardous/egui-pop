@@ -113,6 +113,33 @@ opening one makes its faces the user's font files again
   digits by default (`Report::tabular_digits`), read from the face's
   advances with skrifa.
 
+## Choosing the bundled pair: the gallery's Font pairs page (built)
+
+The gallery's `fonts` page draws candidate pairs side by side, egui's
+own as the baseline: a heading, a paragraph, buttons and a checkbox, the
+four weights, a slider with its value, a column of numbers right-aligned
+in the proportional and in the monospace face, code, and a few scripts;
+each pair says its licence, the size of its files and whether its digits
+are tabular, measured from the glyphs. The pair bundled is chosen on that
+page: **not decided**.
+
+| Pair | Files carried | Licence | Digits |
+|---|---|---|---|
+| Ubuntu Light + Hack (egui's) | none (in egui) | Ubuntu Font Licence; MIT + Bitstream Vera | Measured on the page |
+| Inter + JetBrains Mono NL | 416 + 201 KB (617 KB) | OFL 1.1 | Inter proportional |
+| Noto Sans + Noto Sans Mono | 453 + 381 KB (834 KB) | OFL 1.1 | Noto Sans tabular |
+| IBM Plex Sans + Plex Mono | 537 + 273 KB (810 KB) | OFL 1.1, RFN "Plex" | Measured on the page |
+
+The files are gallery assets, in `crates/egui-pop-gallery/assets/fonts`
+with each licence and source; no published crate includes them. Inter
+and Noto are subset to Latin, Greek and Cyrillic with their other axes
+pinned (full files: 877 KB, 2049 KB, 1708 KB); JetBrains Mono NL (no
+ligatures, no variable build) is subset, regular and bold; IBM Plex is
+as published, since a modified build must be renamed (subset and renamed
+it would be 347 + 98 KB). The page's test checks every monospace face
+has one advance for digits, `i` and `W`, and that Noto Sans's digits are
+tabular and Inter's are not.
+
 ## 1. What egui 0.36 / epaint can do
 
 All of this was checked in the epaint 0.36.2 source (`src/text/*.rs`) and

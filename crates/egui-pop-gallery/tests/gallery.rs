@@ -3259,3 +3259,46 @@ fn the_shortcuts_editor_adds_a_gesture_done_on_its_pad() {
     h.run();
     assert!(!app.keys_for(&zoom).contains(&"Alt+Wheel".to_string()));
 }
+
+#[test]
+fn the_font_pairs_page_compares_each_pair_and_measures_their_digits() {
+    use egui_pop::core::fonts::{self, Weight};
+    use egui_pop_gallery::pages::fonts::{CANDIDATES, all_equal, digit_advances};
+    let mut h = harness(options("pop-dark", Density::Comfortable, "fonts"));
+    h.run();
+    for c in &CANDIDATES {
+        assert!(h.query_by_label(c.title).is_some(), "{}", c.title);
+        // Within the budget for the pair bundled.
+        assert!(c.bytes() < 1_000_000, "{}: {} bytes", c.title, c.bytes());
+    }
+    let report = fonts::report(&h.ctx).unwrap();
+    assert!(
+        !report.problems.iter().any(|p| p.starts_with("specimen")),
+        "{:?}",
+        report.problems
+    );
+    let family = |name: &str| fonts::specimen(&h.ctx, name, Weight::REGULAR).unwrap();
+    for c in &CANDIDATES {
+        // Every monospace face: one advance for digits, `i` and `W`.
+        let mono = family(c.mono);
+        assert!(
+            all_equal(&digit_advances(&h.ctx, mono.clone(), 13.0)),
+            "{}",
+            c.mono
+        );
+        let id = egui::FontId::new(13.0, mono);
+        let (i, w) = h
+            .ctx
+            .fonts_mut(|f| (f.glyph_width(&id, 'i'), f.glyph_width(&id, 'W')));
+        assert!((i - w).abs() < 0.01, "{}: i {i}, W {w}", c.mono);
+    }
+    // What the study says of the proportional faces: Noto Sans's default
+    // digits are tabular, Inter's are not.
+    assert!(all_equal(&digit_advances(
+        &h.ctx,
+        family("Noto Sans"),
+        13.0
+    )));
+    assert!(!all_equal(&digit_advances(&h.ctx, family("Inter"), 13.0)));
+    h.snapshot("fonts-pop-dark");
+}
