@@ -303,23 +303,40 @@ fn sample(ui: &mut Ui, c: &Candidate, regular: &FontFamily, mono: &FontFamily) {
     ui.add_space(t.space.s);
     ui.label(RichText::new("Numbers, right-aligned").strong());
     let cell = vec2(110.0, ui.spacing().interact_size.y);
-    egui::Grid::new(ui.id().with("numbers"))
-        .num_columns(2)
-        .spacing([t.space.m, 0.0])
-        .show(ui, |ui| {
-            ui.weak("proportional");
-            ui.weak("monospace");
-            ui.end_row();
-            for n in NUMBERS {
-                let text = format!("{n:.2}");
-                for family in [regular, mono] {
-                    ui.allocate_ui_with_layout(cell, Layout::right_to_left(Align::Center), |ui| {
-                        ui.label(RichText::new(&text).family(family.clone()));
-                    });
-                }
-                ui.end_row();
+    // Fixed cells, no Grid: the column's size never depends on the
+    // previous frame (the faces are installed while the page settles).
+    let row = |ui: &mut Ui, cells: [(RichText, bool); 2]| {
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = t.space.m;
+            for (text, weak) in cells {
+                ui.allocate_ui_with_layout(cell, Layout::right_to_left(Align::Center), |ui| {
+                    ui.set_min_size(cell);
+                    if weak {
+                        ui.weak(text.text());
+                    } else {
+                        ui.label(text);
+                    }
+                });
             }
         });
+    };
+    row(
+        ui,
+        [
+            (RichText::new("proportional"), true),
+            (RichText::new("monospace"), true),
+        ],
+    );
+    for n in NUMBERS {
+        let text = format!("{n:.2}");
+        row(
+            ui,
+            [
+                (RichText::new(&text).family(regular.clone()), false),
+                (RichText::new(&text).family(mono.clone()), false),
+            ],
+        );
+    }
 
     ui.add_space(t.space.s);
     ui.label(RichText::new("Code").strong());
