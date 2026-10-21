@@ -63,6 +63,21 @@ fn line<S>(h: &mut Harness<'_, S>, dy: f32, modifiers: Modifiers) {
     wheel(h, MouseWheelUnit::Line, vec2(0.0, dy), modifiers);
 }
 
+/// Sixty notches at once; the view settles in the frame they come and
+/// does not move while egui's smoothing of them runs out.
+fn burst(h: &mut Harness<'_, Scene>, modifiers: Modifiers) {
+    h.input_mut().events.push(Event::MouseWheel {
+        unit: MouseWheelUnit::Line,
+        delta: vec2(0.0, 60.0),
+        modifiers,
+        phase: egui::TouchPhase::Move,
+    });
+    h.step();
+    let settled = h.state().view;
+    h.run_steps(30);
+    assert_eq!(h.state().view, settled, "the view moved after the burst");
+}
+
 fn zoom_of(view: View) -> f64 {
     match view.zoom {
         Zoom::Px(z) => z,
@@ -130,13 +145,16 @@ fn darktable_zooms_with_the_wheel_and_ctrl_lifts_the_stops() {
     let mut h = viewport("darktable", View::at(0.5, [500.0, 400.0]));
     let c = centre(&h);
     h.hover_at(c);
-    // A long notch stream crossing 100 % stops there.
-    line(&mut h, 60.0, Modifiers::NONE);
+    // A long notch stream crossing 100 % stops there. egui smooths such
+    // a burst for its scroll areas over the next frames and repaints
+    // while it does (`InputState::wants_repaint_after`): the viewport
+    // takes the wheel and must stay put meanwhile.
+    burst(&mut h, Modifiers::NONE);
     assert_eq!(h.state().view.zoom, Zoom::Px(1.0));
     // Ctrl: no stop.
     let mut h = viewport("darktable", View::at(0.5, [500.0, 400.0]));
     h.hover_at(c);
-    line(&mut h, 60.0, Modifiers::COMMAND);
+    burst(&mut h, Modifiers::COMMAND);
     assert!(zoom_of(h.state().view) > 1.0);
 }
 
