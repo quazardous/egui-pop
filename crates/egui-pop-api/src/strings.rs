@@ -785,6 +785,38 @@ pub const STATUS_MOVE_END: StrKey = StrKey::new("egui-pop-status-move-end", "Mov
 pub const CONTEXT_DROPPED: StrKey =
     StrKey::new("egui-pop-context-dropped", "Not restored: { $frames }");
 
+// The clipboard.
+
+/// A copy made with parts left out at the boundary, as a toast says it.
+pub const CLIPBOARD_COPIED_STRIPPED: StrKey = StrKey::new(
+    "egui-pop-clipboard-copied-stripped",
+    "Copied; left out: { $what }",
+);
+/// A paste through a lossy transform, as a toast says it.
+pub const CLIPBOARD_PASTED_LOSSY: StrKey =
+    StrKey::new("egui-pop-clipboard-pasted-lossy", "Pasted; lost: { $what }");
+/// A copy refused or vetoed, as a toast says it.
+pub const CLIPBOARD_NOT_COPIED: StrKey =
+    StrKey::new("egui-pop-clipboard-not-copied", "Not copied: { $reason }");
+/// A paste refused or vetoed, as a toast says it.
+pub const CLIPBOARD_NOT_PASTED: StrKey =
+    StrKey::new("egui-pop-clipboard-not-pasted", "Not pasted: { $reason }");
+/// Paste special's dialog title.
+pub const CLIPBOARD_PASTE_SPECIAL: StrKey =
+    StrKey::new("egui-pop-clipboard-paste-special", "Paste special");
+/// A way to paste: in a format.
+pub const CLIPBOARD_AS: StrKey = StrKey::new("egui-pop-clipboard-as", "As { $format }");
+/// A way to paste: in a format, through a transform.
+pub const CLIPBOARD_AS_THROUGH: StrKey = StrKey::new(
+    "egui-pop-clipboard-as-through",
+    "As { $format }, through { $transform }",
+);
+/// A way to paste: one part of the item alone.
+pub const CLIPBOARD_ONLY_PART: StrKey =
+    StrKey::new("egui-pop-clipboard-only-part", "Only { $part }");
+/// What a lossy way to paste loses.
+pub const CLIPBOARD_LOSES: StrKey = StrKey::new("egui-pop-clipboard-loses", "loses { $what }");
+
 /// Every string of this module, for catalogues and tests.
 pub const ALL: &[StrKey] = &[
     COMMAND_LABEL,
@@ -1095,6 +1127,15 @@ pub const ALL: &[StrKey] = &[
     STATUS_SHOW,
     STATUS_MOVE_START,
     STATUS_MOVE_END,
+    CLIPBOARD_COPIED_STRIPPED,
+    CLIPBOARD_PASTED_LOSSY,
+    CLIPBOARD_NOT_COPIED,
+    CLIPBOARD_NOT_PASTED,
+    CLIPBOARD_PASTE_SPECIAL,
+    CLIPBOARD_AS,
+    CLIPBOARD_AS_THROUGH,
+    CLIPBOARD_ONLY_PART,
+    CLIPBOARD_LOSES,
 ];
 
 #[cfg(test)]

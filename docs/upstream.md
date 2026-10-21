@@ -264,6 +264,23 @@ limit.
 - **Remove when**: egui-wgpu takes a surface format and colour space;
   then `gpu::install` reads them from the render state.
 
+## egui-winit: copy, cut and paste arrive as events, their keys swallowed
+
+- **Compensated**: egui-winit turns the platform's copy, cut and paste
+  chords (Command or Ctrl with C, X, V; Ctrl+Insert, Shift+Insert,
+  Shift+Delete on Windows) into `Event::Copy`, `Event::Cut` and
+  `Event::Paste(text)` and sends no key event: a command bound to them
+  in the keymap never runs. A paste is read synchronously, as text
+  only, and nothing reads the primary selection.
+- **Upstream**: not filed yet.
+- **Workaround**: while a clipboard endpoint has the focus (and no text
+  field does), the clipboard plugin takes the three events and runs
+  `edit.copy`, `edit.cut`, `edit.paste` (Shift held: paste special)
+  with the pasted text (`clipboard::pass`, `// upstream:`); the keymap
+  binds the same keys for every other backend (kittest, the web).
+- **Remove when**: egui-winit sends the key events (or lets a keymap
+  claim them) and offers a pull model for richer formats.
+
 ## Wayland: no colour management through winit
 
 - **Compensated**: on Wayland, colour management is the

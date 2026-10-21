@@ -13,6 +13,7 @@
 - [Plugins, commands and steps](plugins.md)
 - [State or event: what to use](state-or-event.md)
 - [The context stack](contexts.md)
+- [The clipboard](clipboard.md)
 - [The status bar and the context stack](status-and-context.md)
 - [The workbench](workbench.md)
 - [Hosts and components](hosts.md)

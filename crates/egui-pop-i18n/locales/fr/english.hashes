@@ -1,5 +1,6 @@
 # The hash of the English text each key was translated from: a key
 # whose English changed since is reported by the catalogue check.
+category-clipboard d9ee853515a6a499
 category-dialogs 93177f9aec8337b4
 category-edit 329d5a4f3eb93fa9
 category-editor 1506bdc27aacc0ce
@@ -35,6 +36,16 @@ command-app-window-menu.description fb8c2f9b4adbae3f
 command-app-window-menu.title 8bde8da9b61e8ece
 command-app-window-minimize.description 293883059101d7f3
 command-app-window-minimize.title e6356bcffe84c79d
+command-clipboard-copy.description 5e6877bf2a1f28e0
+command-clipboard-copy.title 34687519b9d42e7e
+command-clipboard-offers.description c444d705bf315355
+command-clipboard-offers.title a65691ca0b6e77b9
+command-clipboard-paste.description f4ffcfd047829e1d
+command-clipboard-paste.title daec7cee6cc601bc
+command-clipboard-read.description 1fe969fcd5a833db
+command-clipboard-read.title b0d82f812b9e736e
+command-clipboard-write.description 4e3e113407d728ff
+command-clipboard-write.title cc19a4b07fe9c319
 command-code-actions.description 14c4f00f4fa2a3fe
 command-code-actions.title 9c0ac41ea48f57af
 command-code-complete.description f7ed2e860ed7355c
@@ -71,6 +82,14 @@ command-crash-reveal.description e039b5328a31627c
 command-crash-reveal.title fc7f6a28bfaf4aa8
 command-dialogs-move.description dcf98be63ecae961
 command-dialogs-move.title a273c065a7d7359a
+command-edit-copy.description a3eea3fbff61f7b1
+command-edit-copy.title 424486452ba52062
+command-edit-cut.description 5fd2313f0dd19e43
+command-edit-cut.title 1a488dc113f483d3
+command-edit-paste.description c991a80c800cb6ca
+command-edit-paste.title 451a293e3a93282e
+command-edit-pasteSpecial.description ebc462d664023a74
+command-edit-pasteSpecial.title 5b758766f60f3b13
 command-edit-redo.description b786327d06875b47
 command-edit-redo.title ef2842c65cf40641
 command-edit-undo.description 73aea46b70356964
@@ -247,6 +266,15 @@ egui-pop-area-end-side 560b37ffe9b87765
 egui-pop-area-start-side ef1e5352ef93cccc
 egui-pop-busy 950036cb399f1a66
 egui-pop-cancel e09b40fcf1e41cfb
+egui-pop-clipboard-as 6316ea594e850f32
+egui-pop-clipboard-as-through 06fdbc1f9a1917cf
+egui-pop-clipboard-copied-stripped e6f1e5c950d19c57
+egui-pop-clipboard-loses 67b13c7c56734c5d
+egui-pop-clipboard-not-copied c2a94a3b47232898
+egui-pop-clipboard-not-pasted 8ad10f6b979064a1
+egui-pop-clipboard-only-part e1ae963c92bca6de
+egui-pop-clipboard-paste-special 5b758766f60f3b13
+egui-pop-clipboard-pasted-lossy cd19c2f1d8d60159
 egui-pop-close 1f6b3eb35a454a53
 egui-pop-command-label f7db8091440d2b6d
 egui-pop-command-with-change a4dbe71ac8e01e89
@@ -719,6 +747,7 @@ menu-app-menu-view.label 9cb14957d0a66a9e
 panel-egui-pop-devtools.title 9642ebb52ece11a7
 panel-egui-pop-jobs.title 61eef857facc40ad
 plugin-egui-pop-arrangements.title 82eceb9b2f1a7dae
+plugin-egui-pop-clipboard.title d9ee853515a6a499
 plugin-egui-pop-contexts.title 15cdd71e19e43d2a
 plugin-egui-pop-crash.title f483a6c35b26c923
 plugin-egui-pop-devtools.title 3bef768f6a95f10d

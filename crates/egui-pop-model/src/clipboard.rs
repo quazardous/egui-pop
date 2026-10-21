@@ -408,8 +408,8 @@ impl fmt::Display for Refusal {
 }
 
 /// Every way an offer fits a target, the best first: per accepted format
-/// (richest first), the offer's own representation, then each transform
-/// making it from what is offered (from the richest offered).
+/// (richest first), the offer's own representation, or else each
+/// transform making it from what is offered (from the richest offered).
 pub fn candidates(
     offer: &[FormatId],
     accepts: &[FormatId],
@@ -424,6 +424,10 @@ pub fn candidates(
                 transform: None,
                 lossy: false,
             });
+        }
+        if offer.contains(to) {
+            // Offered as it is: no transform needed.
+            continue;
         }
         for from in offer {
             for t in transforms.iter().filter(|t| t.to == *to && t.from == *from) {

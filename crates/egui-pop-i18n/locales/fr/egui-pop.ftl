@@ -1,6 +1,8 @@
 # Le texte d’egui-pop et ce que déclarent ses plugins, en français.
 # Traduction de ../en/egui-pop.ftl, sous les mêmes clés.
 
+category-clipboard = Presse-papiers
+
 category-dialogs = Dialogues
 
 category-edit = Édition
@@ -68,6 +70,26 @@ command-app-window-menu =
 command-app-window-minimize =
     .description = Réduit la fenêtre.
     .title = Réduire
+
+command-clipboard-copy =
+    .description = Copie depuis une source (`source`) dans l’emplacement de la session (`slot`) ; `cut` supprime ce qui a été copié ; `dry_run` dit ce qui serait copié et laissé de côté.
+    .title = Copier depuis une source
+
+command-clipboard-offers =
+    .description = Ce que contient un emplacement (`slot`) : son type, son titre, ses formats et sa révision ; avec `target`, chaque façon de l’y coller, avec son aperçu.
+    .title = Ce que propose le presse-papiers
+
+command-clipboard-paste =
+    .description = Colle l’emplacement de la session (`slot`) dans une cible (`target`), dans un format (`format`), par une transformation (`transform`), seulement certaines parties (`parts`), vérifié contre `if_rev` ; `dry_run` dit le plan et les changements sans les faire.
+    .title = Coller dans une cible
+
+command-clipboard-read =
+    .description = L’élément d’un emplacement (`slot`, celui de la session par défaut), contenu compris ; celui de l’utilisateur est refusé à un agent sauf si l’hôte le permet.
+    .title = Lire le presse-papiers
+
+command-clipboard-write =
+    .description = Met un élément dans un emplacement (`slot`, celui de la session par défaut) : son format (`format`), ses données (`data`), un titre (`title`).
+    .title = Écrire le presse-papiers
 
 command-code-actions =
     .description = Demande au fournisseur d’assistance les actions et corrections rapides au curseur.
@@ -140,6 +162,22 @@ command-crash-reveal =
 command-dialogs-move =
     .description = Déplace le dialogue affiché avec les flèches ; Entrée garde la place, Échap le remet où il était.
     .title = Déplacer le dialogue
+
+command-edit-copy =
+    .description = Copier la sélection.
+    .title = Copier
+
+command-edit-cut =
+    .description = Couper la sélection : copiée une fois sa suppression acceptée.
+    .title = Couper
+
+command-edit-paste =
+    .description = Coller dans le format le plus riche que l’élément actif accepte.
+    .title = Coller
+
+command-edit-pasteSpecial =
+    .description = Choisir le format, la transformation ou les parties à coller, chacun avec son aperçu.
+    .title = Collage spécial
 
 command-edit-redo =
     .description = Rétablir la dernière modification annulée.
@@ -420,6 +458,24 @@ egui-pop-area-start-side = la barre latérale de début
 egui-pop-busy = Occupé
 
 egui-pop-cancel = Annuler
+
+egui-pop-clipboard-as = Comme { $format }
+
+egui-pop-clipboard-as-through = Comme { $format }, par { $transform }
+
+egui-pop-clipboard-copied-stripped = Copié ; laissé de côté : { $what }
+
+egui-pop-clipboard-loses = perd { $what }
+
+egui-pop-clipboard-not-copied = Non copié : { $reason }
+
+egui-pop-clipboard-not-pasted = Non collé : { $reason }
+
+egui-pop-clipboard-only-part = Seulement { $part }
+
+egui-pop-clipboard-paste-special = Collage spécial
+
+egui-pop-clipboard-pasted-lossy = Collé ; perdu : { $what }
 
 egui-pop-close = Fermer
 
@@ -1325,6 +1381,9 @@ panel-egui-pop-jobs =
 
 plugin-egui-pop-arrangements =
     .title = Dispositions
+
+plugin-egui-pop-clipboard =
+    .title = Presse-papiers
 
 plugin-egui-pop-contexts =
     .title = Pile de contextes

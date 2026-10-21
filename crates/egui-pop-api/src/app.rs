@@ -103,6 +103,15 @@ const IN_INTERFACE: &[CommandId] = &[
     crate::contexts::CMD_SET_MODE,
     crate::contexts::CMD_HOLD,
     crate::contexts::CMD_RELEASE,
+    crate::clipboard::CMD_CUT,
+    crate::clipboard::CMD_COPY,
+    crate::clipboard::CMD_PASTE,
+    crate::clipboard::CMD_PASTE_SPECIAL,
+    crate::clipboard::CMD_CLIP_COPY,
+    crate::clipboard::CMD_CLIP_PASTE,
+    crate::clipboard::CMD_OFFERS,
+    crate::clipboard::CMD_READ,
+    crate::clipboard::CMD_WRITE,
 ];
 pub const CMD_SAVE: CommandId = CommandId::from_static("app.save");
 
@@ -1407,6 +1416,9 @@ impl AppHandle {
         base.set("canRedo", flag(self.can_redo()));
         if let Some(panel) = self.window_panel(ctx.viewport_id()) {
             base.set(CONTEXT_WINDOW, panel.as_str());
+        }
+        for (key, on) in crate::clipboard::keys(self).into_iter().flatten() {
+            base.set(key, flag(on));
         }
         focus::when_context(ctx, &base)
     }

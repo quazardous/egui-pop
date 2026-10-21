@@ -20,6 +20,11 @@
 //! - [`contexts`]: the context stack (places and modes, ADR 0012): its
 //!   owner behind the host, the projection, the breadcrumb and mode
 //!   chips, the `nav.*` and `context.*` commands, a plugin;
+//! - [`clipboard`]: the clipboard (ADR 0015): its owner behind the
+//!   host, components' sources and targets, types, transforms and
+//!   sanitisers declared by plugins, the `clipboard.copy` and
+//!   `clipboard.paste` steps, the Edit commands and the agents'
+//!   `clipboard.*`, a plugin;
 //! - [`services`]: typed service tokens;
 //! - [`stories`]: gallery stories as a contribution;
 //! - [`busy`]: a button bound to a command, showing its busy state (a
@@ -107,6 +112,7 @@
 pub mod app;
 pub mod arrangements;
 pub mod busy;
+pub mod clipboard;
 pub mod contexts;
 pub mod ctx;
 pub mod devtools;

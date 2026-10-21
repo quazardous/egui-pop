@@ -44,6 +44,10 @@ of every crate with every feature on.
   breadcrumb) and modes (global states and their chips) owned by the
   kernel and projected by the interface, kernel state and view state,
   how a plugin reacts.
+- [The clipboard](clipboard.md): typed items kept by the owner,
+  readable fallbacks on the system clipboard, a paste negotiated with
+  its target, types, transforms and sanitisers declared by plugins,
+  the Edit commands and the agents' `clipboard.*`.
 - [The status bar and the context stack](status-and-context.md)
   (decided, built): the breadcrumb and mode chips in the status bar,
   status items that follow the context, one saved state.

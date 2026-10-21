@@ -69,6 +69,7 @@ fn messages() -> Messages {
         .plugin(egui_pop_api::theme_editor::ThemeEditorPlugin)
         .plugin(egui_pop_api::tips::TipsPlugin)
         .plugin(egui_pop_api::contexts::ContextsPlugin::default())
+        .plugin(egui_pop_api::clipboard::ClipboardPlugin)
         .plugin(egui_pop_i18n::I18nPlugin::new())
         .plugin(egui_pop_i18n::ShowKeys)
         .plugin(egui_pop_views::ViewsPlugin)

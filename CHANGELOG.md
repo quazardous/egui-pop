@@ -12,6 +12,28 @@ publishes.
 
 ### Added
 
+- The clipboard (egui-pop-api, ADR 0015, `docs/clipboard.md`): the
+  `Clipboard` contract (one item per slot, the user's and each agent
+  session's own, a revision, `clipboard.changed` on the journal),
+  reached through the new `Host::clipboard` with `LocalClipboard` as
+  the default, kept by `ClipboardPlugin`. Components register
+  endpoints (`clipboard::register`, `Ctx::clip_endpoint`, `bind` to the
+  widget drawing them) with a `ClipSource` and a `ClipTarget`; plugins
+  declare types (fallbacks, parts, migrations), transforms (lossy or
+  not) and sanitisers per boundary (`Ctx::clip_type`,
+  `Ctx::clip_transform`, `Ctx::clip_sanitiser`). The `clipboard.copy`
+  and `clipboard.paste` steps can be vetoed and redirected; a paste is
+  one undo step (the new `Host::begin_group` and `Host::end_group`, the
+  store's by default), a cut copies only once its delete is accepted.
+  `edit.cut`, `edit.copy`, `edit.paste` and `edit.pasteSpecial` (a
+  choice of every format, transform and part, each with its preview)
+  sit in the Edit menu, greyed (`canCut`, `canCopy`, `canPaste`) when
+  nothing focused answers, and run from egui-winit's copy, cut and
+  paste events too; text fields keep egui's own. Agents have
+  `clipboard.copy`, `clipboard.paste` (with `format`, `transform`,
+  `parts`, `if_rev`, `dry_run`), `clipboard.offers`, `clipboard.read`
+  and `clipboard.write`, and the debug bridge a `clipboard` collector.
+  `CtxError` gains `Clipboard`.
 - The clipboard's model (egui-pop-model, ADR 0015): `clipboard::FormatId`
   (MIME-like formats, an application's private types
   `application/x-<app>.<type>+json`), `ClipItem` (a typed item with its

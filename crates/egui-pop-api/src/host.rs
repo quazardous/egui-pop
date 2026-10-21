@@ -26,7 +26,11 @@
 //!   one document by default, a workspace's own, or none (the host keeps
 //!   it);
 //! - the owner of the context stack ([`Host::contexts`]): the kernel's,
-//!   or egui-pop's `LocalContexts` by default.
+//!   or egui-pop's `LocalContexts` by default;
+//! - the owner of the clipboard ([`Host::clipboard`]): the kernel's, or
+//!   egui-pop's `LocalClipboard` by default; and the history groups a
+//!   paste is made in ([`Host::begin_group`], [`Host::end_group`]): the
+//!   store's by default.
 //!
 //! [`LocalHost`] is the default: commands run in-process on the
 //! interface thread (their handlers given to `Ctx::command`), the journal
@@ -93,7 +97,7 @@ use egui_pop_core::binding::SharedStore;
 use egui_pop_core::lock;
 use egui_pop_model::commands::Origin;
 use egui_pop_model::ids::{CommandId, OwnerId};
-use egui_pop_model::values::Store;
+use egui_pop_model::values::{GestureId, Store};
 use egui_pop_model::when::WhenContext;
 use serde::Serialize;
 use serde_json::Value as Json;
@@ -441,6 +445,35 @@ pub trait Host {
     /// transitions; it never writes the stack.
     fn contexts(&mut self) -> Option<&mut dyn crate::contexts::Contexts> {
         None
+    }
+
+    /// The owner of the clipboard (ADR 0015), when the application's
+    /// kernel keeps it. `None` (the default): egui-pop's own
+    /// [`LocalClipboard`](crate::clipboard::LocalClipboard), kept by
+    /// `ClipboardPlugin`.
+    fn clipboard(&mut self) -> Option<&mut dyn crate::clipboard::Clipboard> {
+        None
+    }
+
+    /// Opens a history group labelled `label` ("Paste a colour"): what is
+    /// written in it until [`Host::end_group`] is one undo step. egui-pop
+    /// opens one around a paste and around a cut's delete; the writes
+    /// carry it (`Set::gesture`). The default opens a group of the store;
+    /// `None`: the host groups nothing.
+    fn begin_group(&mut self, origin: &Origin, label: &str) -> Option<GestureId> {
+        Some(lock(&self.store()).begin_group(origin.clone(), label))
+    }
+
+    /// Ends a history group: kept as one undo step, or (`keep` false)
+    /// put back as it was.
+    fn end_group(&mut self, group: GestureId, keep: bool) {
+        let store = self.store();
+        let mut s = lock(&store);
+        if keep {
+            s.end(group);
+        } else {
+            s.cancel(group);
+        }
     }
 }
 
