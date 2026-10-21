@@ -77,8 +77,7 @@ fn open(h: &mut Harness<'_, App>) {
 }
 
 /// Types in the search field (labelled by the window's title), clicked
-/// first as a person would: an accessibility focus alone does not give
-/// it the keyboard.
+/// first as a person would.
 fn search(h: &mut Harness<'_, App>, text: &str) {
     h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Settings")
         .click();

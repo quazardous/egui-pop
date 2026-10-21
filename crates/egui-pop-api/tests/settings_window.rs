@@ -2,9 +2,10 @@
 //! shortcuts editor (capture, conflicts, reset, the layer keys go to and
 //! where each comes from).
 
+use egui::accesskit::Role;
 use egui::{Key, Modifiers};
 use egui_kittest::Harness;
-use egui_kittest::kittest::Queryable as _;
+use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use egui_pop_api::app::{CMD_QUIT, CMD_UNDO};
 use egui_pop_api::settings_window::{self, SHORTCUTS};
 use egui_pop_api::{App, DefaultPlugins};
@@ -27,18 +28,63 @@ fn open(h: &mut Harness<'_, App>) {
     assert!(settings_window::is_open(h.state().handle()));
 }
 
+/// What the search field holds.
+fn search_text(h: &Harness<'_, App>) -> String {
+    h.get_by_role_and_label(Role::TextInput, "Settings")
+        .value()
+        .unwrap_or_default()
+}
+
+#[test]
+fn the_search_takes_text_typed_with_an_accesskit_focus() {
+    let mut h = harness();
+    open(&mut h);
+    // A screen reader or an agent focuses the field and types in the
+    // same frame: the text reaches the field.
+    let (target_node, target_tree) = h
+        .get_by_role_and_label(Role::TextInput, "Settings")
+        .accesskit_node()
+        .locate();
+    let events = &mut h.input_mut().events;
+    events.push(egui::Event::AccessKitActionRequest(
+        egui::accesskit::ActionRequest {
+            action: egui::accesskit::Action::Focus,
+            target_node,
+            target_tree,
+            data: None,
+        },
+    ));
+    events.push(egui::Event::Text("focus".into()));
+    h.step();
+    h.run();
+    assert_eq!(search_text(&h), "focus");
+    assert!(h.query_by_label("Keyboard focus").is_some());
+    assert!(h.query_all_by_label("Interface zoom").next().is_none());
+    // Later keys reach it too.
+    h.get_by_role_and_label(Role::TextInput, "Settings")
+        .type_text(" x");
+    h.run();
+    assert_eq!(search_text(&h), "focus x");
+}
+
 #[test]
 fn search_narrows_the_form_and_a_reset_takes_a_setting_back() {
     let mut h = harness();
     open(&mut h);
     assert!(h.query_all_by_label("Appearance").count() >= 1);
-    // The search field, the first text field (a text setting has one).
-    h.query_all_by_role(egui::accesskit::Role::TextInput)
-        .next()
-        .expect("the search field")
+    // The search field (labelled by the window's title), clicked first
+    // as a person would.
+    h.get_by_role_and_label(Role::TextInput, "Settings").click();
+    h.run();
+    h.get_by_role_and_label(Role::TextInput, "Settings")
         .type_text("focus");
     h.run();
+    assert_eq!(search_text(&h), "focus");
     assert!(h.query_by_label("Keyboard focus").is_some());
+    // A setting of the same section that does not match goes (an empty
+    // search shows it with the first section). The search is fuzzy:
+    // "Light or dark" stays, its description holding f…o…c…u…s.
+    assert!(h.query_all_by_label("Interface zoom").next().is_none());
     // The shortcuts matching the search are listed too, nothing else.
     assert!(h.query_by_label("Edit: Undo").is_none());
     h.get_by_label("Keyboard focus").click();
