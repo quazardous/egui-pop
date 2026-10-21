@@ -17,6 +17,9 @@
 //!   next start (`crash.report`); nothing is sent.
 //! - [`focus`]: the window manager's focus mode read in-process (the
 //!   Settings portal, `kwinrc`, the registry), followed while running.
+//! - [`text_scale`]: the system's text scaling read in-process (the
+//!   Settings portal, KDE's font DPI, the registry), the default of the
+//!   text size setting.
 //!
 //! Each service names its moments as steps (ADR 0011): a plugin may
 //! observe, veto or redirect, replace or extend them; the application's
@@ -42,6 +45,8 @@ pub mod logs;
 #[cfg(feature = "notify")]
 pub mod notify;
 pub mod strings;
+#[cfg(feature = "text-scale")]
+pub mod text_scale;
 #[cfg(feature = "tray")]
 pub mod tray;
 pub mod window;

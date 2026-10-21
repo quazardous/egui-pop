@@ -54,6 +54,53 @@ holds few sizes.
   next frame. Changing theme keeps it: it is the user's, not the
   theme's.
 
+### Starting from the system's text size
+
+The desktop's text scaling ("larger text") is the setting's default:
+`AppBuilder::system_text_scale` takes it, rounded to the nearest step
+(125 % starts at 130 %). It is not the display's scale, which winit
+gives as the pixels per point and egui-pop already follows; the image
+viewport's 100 % stays one image pixel per screen pixel whatever the
+text size.
+
+- A value the user chose always wins. The seeded one is a default, not
+  a choice: it is never saved, so a later change in the desktop's
+  settings is followed at the next start; Reset in the settings window
+  goes back to it. A choice equal to the seeded step cannot be told
+  apart from it (only values that differ from their default are saved).
+- egui-pop reads no system itself; without `system_text_scale` the
+  default is 100 %. `egui-pop-platform` reads it in the process
+  (feature `platform-text-scale`, or `platform`), with no helper
+  program:
+
+```rust,no_run
+use egui_pop::platform::text_scale;
+use egui_pop::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    App::builder()
+        .plugins(DefaultPlugins)
+        .system_text_scale(text_scale::read())
+        .run_native("Viewer", Default::default())?;
+    Ok(())
+}
+```
+
+| | Read from |
+|---|---|
+| GNOME on Wayland (and desktops using its settings) | the XDG Settings portal: `org.gnome.desktop.interface` `text-scaling-factor` |
+| KDE Plasma on Wayland | `forceFontDPIWayland`, else `forceFontDPI` (group `General` of `kcmfonts`, then `kdeglobals`), over 96 |
+| Linux on X11 | nothing: GNOME and Plasma fold the text scaling into `Xft.dpi`, which winit reads as the display's scale, so it is already applied |
+| Windows | "Make text bigger": `TextScaleFactor` under `HKCU\Software\Microsoft\Accessibility` (100 to 225), through the registry API |
+| macOS, other desktops, the web | nothing: 100 % |
+
+`EGUI_POP_TEXT_SCALE` (`1.25` or `125%`) stands in for the system.
+`text_scale::read_with` takes each source as a function, so tests give
+a fake answer. Agents read the result in the `text_scale` collector:
+the size in use, the setting's default, whether the user chose it, and
+the system's factor, step and source (`text::describe`); the setting's
+description says it too.
+
 The ask: "good font management, fixed-width and variable-width". Concretely,
 egui-pop should load real families for interface text (proportional) and
 for values, code and debug output (monospace), let a theme and a user pick

@@ -88,6 +88,19 @@ publishes.
   collector and `workbench::strip`. The centre never folds:
   `workbench.fold` refuses it. Overlays drawn by their owner join the
   stack's rules through `overlay::hold` (egui-pop-core).
+- The text size starts from the system's text scaling (egui-pop-api,
+  egui-pop-platform): `AppBuilder::system_text_scale` makes the
+  desktop's "larger text" factor (`text::SystemTextScale`) the default
+  of `appearance.text_size`, rounded to a step, separate from the
+  display's scale. A value the user chose always wins, and the seeded
+  one is never saved as theirs. `platform::text_scale::read` (feature
+  `platform-text-scale`) reads it in-process: GNOME's
+  `text-scaling-factor` through the Settings portal, KDE's forced font
+  DPI from its files, Windows' "Make text bigger" through the registry
+  API; nothing on X11, where `Xft.dpi` already carries it, nor
+  elsewhere. `EGUI_POP_TEXT_SCALE` stands in for the system. Agents
+  read it in the new `text_scale` collector (`text::describe`,
+  `text::user_set`). Guide: docs/fonts.md.
 - Status items with alignment, priority, live states, popovers and
   hover cards (egui-pop-api): `strips::Indicator::align` puts an item
   at the bar's start (after the breadcrumb and the chips) or its end;

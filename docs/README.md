@@ -125,7 +125,8 @@ of every crate with every feature on.
   [a single instance and deep links](instance.md),
   [notifications](notifications.md), [the tray icon](tray.md),
   [global shortcuts](global-shortcuts.md), [logs and crash reports](logs.md),
-  [the focus mode read in-process](focus-mode.md).
+  [the focus mode read in-process](focus-mode.md),
+  [the system's text scaling](fonts.md#starting-from-the-systems-text-size).
 - [Tips](tips.md): a tip of the day and contextual hints, registered
   by plugins, translated, dismissed for good through the settings.
 - [Debugging](debugging.md): the debug bridge and devtools.
@@ -167,7 +168,8 @@ of every crate with every feature on.
   applications use the wheel, the buttons and the modifiers on canvases
   (darktable in detail), the gesture profiles, and the decisions taken.
 - [Fonts](fonts.md): font families from the theme at four weights, the
-  size scale (built), and the design for the rest.
+  size scale and the text size seeded from the system's (built), and
+  the design for the rest.
 - [CREDO.md](../CREDO.md): the principles.
 
 ## The crates
