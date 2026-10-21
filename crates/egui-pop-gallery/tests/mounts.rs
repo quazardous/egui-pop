@@ -138,6 +138,8 @@ fn every_component_mounts_in_every_host_that_accepts_it() {
 fn every_refused_mount_is_reported_with_its_rule_and_mounts_nothing() {
     let h = harness();
     let app = app(&h);
+    // The gallery's own mounts (its settings page) stay as they are.
+    let mounted = app.mounts().len();
     let mut refused = 0;
     for m in egui_pop::mounts::components() {
         for offer in egui_pop::mounts::hosts() {
@@ -152,7 +154,7 @@ fn every_refused_mount_is_reported_with_its_rule_and_mounts_nothing() {
             let d = app.diagnostics();
             assert_eq!(d.len(), before + 1, "{} in {}", m.id, offer.id);
             assert_eq!(d[before].code, "mount-refused");
-            assert!(app.mounts().is_empty());
+            assert_eq!(app.mounts().len(), mounted);
         }
     }
     assert!(refused > 0);

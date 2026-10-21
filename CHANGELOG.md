@@ -25,7 +25,8 @@ publishes.
   refused and reported. Its body is drawn in a focus scope and a fault
   boundary. Agents see the tree and the pages in the new
   `settings_window` collector and open one with `app.settings.page`
-  (`{"page": "<id>"}`). English and French strings.
+  (`{"page": "<id>"}`). English and French strings. The gallery's
+  settings plugin adds a "Greeting preview" page under its section.
 
 ## 0.2.0 (2026-10-21)
 

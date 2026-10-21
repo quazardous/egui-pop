@@ -1,8 +1,12 @@
 //! The settings page: settings declared by a plugin, applied live, each
-//! with its reset.
+//! with its reset; and a custom page of the settings window, "Greeting
+//! preview", under the gallery's section, drawing two of them with the
+//! preview.
 
 use egui::{RichText, Ui};
 use egui_pop::api::settings;
+use egui_pop::api::settings_pages::SettingsPage as CustomPage;
+use egui_pop::api::settings_window;
 use egui_pop::api::stories::Story;
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
 use egui_pop::core::binding;
@@ -12,6 +16,12 @@ use egui_pop::model::values::Descriptor;
 use crate::shell::SHELL;
 
 pub const SETTINGS: PluginId = PluginId::from_static("gallery.settings");
+
+/// The custom page of the settings window.
+pub const PREVIEW_PAGE: &str = "gallery.preview";
+
+const SIZE: SettingId = SettingId::from_static("gallery.size");
+const STRONG: SettingId = SettingId::from_static("gallery.strong");
 
 /// The settings page.
 #[derive(Debug, Default)]
@@ -36,14 +46,14 @@ impl Plugin for SettingsPage {
             Descriptor::text("Greeting", "Hello").description("The preview's text."),
         )?
         .setting(
-            SettingId::from_static("gallery.size"),
+            SIZE,
             Descriptor::float("Size", 8.0, 48.0, 18.0)
                 .step(1.0)
                 .unit("pt")
                 .description("The preview's font size."),
         )?
         .setting(
-            SettingId::from_static("gallery.strong"),
+            STRONG,
             Descriptor::bool("Strong", false).description("Draw the preview in bold."),
         )?
         .setting(
@@ -55,6 +65,20 @@ impl Plugin for SettingsPage {
                 .description("Settings declared by plugins, applied as you change them, each with its reset.")
                 .group("Framework", 110),
         )?;
+        // A page of its own in the settings window, under this plugin's
+        // section: the size and weight with the preview they change.
+        ctx.settings_page(
+            CustomPage::new(PREVIEW_PAGE, "Greeting preview")
+                .under("Gallery settings")
+                .keywords(&["specimen", "sample", "font"])
+                .description("The greeting as the settings draw it.")
+                .settings(&[SIZE, STRONG]),
+            |ui, app| {
+                settings_window::setting_row(ui, app, &SIZE);
+                settings_window::setting_row(ui, app, &STRONG);
+                preview(ui, app);
+            },
+        );
         Ok(())
     }
 }
@@ -71,6 +95,12 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     settings::form(ui, app);
     ui.add_space(t.space.l);
     ui.strong("Preview");
+    preview(ui, app);
+}
+
+/// The greeting, drawn as the settings say.
+fn preview(ui: &mut Ui, app: &AppHandle) {
+    let t = egui_pop::theme::Tokens::of(ui.ctx());
     let store = app.store();
     let text: String = binding::read(&store, "settings/gallery.greeting").unwrap_or_default();
     let size: f64 = binding::read(&store, "settings/gallery.size").unwrap_or(18.0);

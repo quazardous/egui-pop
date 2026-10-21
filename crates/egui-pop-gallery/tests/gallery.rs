@@ -719,6 +719,38 @@ fn the_settings_window_searches_and_edits_shortcuts() {
 }
 
 #[test]
+fn the_settings_window_shows_the_gallerys_custom_page() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "settings"));
+    h.run();
+    h.get_by_label("Open the settings window (Ctrl+,)").click();
+    h.run();
+    h.run();
+    // Under the gallery's section, found by a keyword (the search field
+    // is labelled by the window's title; the page behind has fields too;
+    // clicked first: an accessibility focus alone does not give it the
+    // keyboard).
+    h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Settings")
+        .click();
+    h.run();
+    h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Settings")
+        .type_text("specimen");
+    h.run();
+    h.run();
+    h.get_by_label("Open the Greeting preview page").click();
+    h.run();
+    h.run();
+    assert!(h.query_by_label("Reset Size").is_some());
+    assert!(h.query_by_label("Reset Strong").is_some());
+    assert!(h.query_by_label("Reset Greeting").is_none());
+    egui_pop_test::assert_all_named(&h);
+    let snap = h.state().app.handle().debug_snapshot();
+    assert_eq!(
+        snap["settings_window"]["section"],
+        serde_json::json!(egui_pop_gallery::pages::settings::PREVIEW_PAGE)
+    );
+}
+
+#[test]
 fn the_gallerys_keymap_is_clean() {
     let h = harness(Options::default());
     egui_pop_test::assert_keymap_clean(&h.state().app);
