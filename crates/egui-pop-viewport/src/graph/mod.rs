@@ -540,7 +540,8 @@ impl<'a> GraphEditor<'a> {
             self.state.routes.clear();
         }
         let label = self.label.clone().unwrap_or_else(|| tr(&ctx, &s::GRAPH));
-        let mut view = self.state.view;
+        let shown = self.state.view;
+        let mut view = shown;
         let mut cx = Cx {
             ctx: ctx.clone(),
             id,
@@ -577,7 +578,9 @@ impl<'a> GraphEditor<'a> {
         let reveal = cx.reveal.take();
         let visible = cx.lay.visible;
         drop(cx);
-        if view != self.state.view {
+        // The scene's rect changes only by its own (rounding); a pan by a
+        // drag (`canvas`) already moved the state's view and stays.
+        if view != shown && self.state.view == shown {
             self.state.view = view;
         }
         if let Some(r) = reveal
