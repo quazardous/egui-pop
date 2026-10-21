@@ -1476,3 +1476,169 @@ setting-workbench-panel-alignment-choice-end = fin
 setting-workbench-panel-alignment-choice-justify = justifié
 
 setting-workbench-panel-alignment-choice-start = début
+
+category-pointer = Pointeur
+
+command-gesture-image-zoom =
+    .description = Zoome l’image autour du pointeur, en marquant un arrêt à l’ajustement et à 100 %.
+    .title = Image : zoomer au pointeur
+
+command-gesture-image-zoom-free =
+    .description = Zoome l’image autour du pointeur, sans arrêt.
+    .title = Image : zoomer sans arrêt
+
+command-gesture-image-pan =
+    .description = Déplace l’image à la molette ou en la faisant glisser.
+    .title = Image : déplacer
+
+command-gesture-image-pan-x =
+    .description = Déplace l’image latéralement à la molette.
+    .title = Image : déplacer horizontalement
+
+command-gesture-image-pan-y =
+    .description = Déplace l’image vers le haut ou le bas à la molette.
+    .title = Image : déplacer verticalement
+
+command-gesture-image-zoom-cycle =
+    .description = Passe à 100 %, puis 200 %, puis à l’ajustement, autour du pointeur.
+    .title = Image : cycle de zoom
+
+command-gesture-image-fit =
+    .description = Ajuste toute l’image à la vue.
+    .title = Image : ajuster
+
+command-gesture-image-zoom-toggle =
+    .description = Passe à 100 % autour du pointeur quand l’image est ajustée, sinon l’ajuste.
+    .title = Image : ajuster ou 100 %
+
+command-gesture-graph-zoom =
+    .description = Zoome le graphe autour du pointeur.
+    .title = Graphe de nœuds : zoomer au pointeur
+
+command-gesture-graph-pan =
+    .description = Déplace le graphe à la molette ou en le faisant glisser.
+    .title = Graphe de nœuds : déplacer
+
+command-gesture-graph-pan-x =
+    .description = Déplace le graphe latéralement à la molette.
+    .title = Graphe de nœuds : déplacer horizontalement
+
+command-gesture-graph-pan-y =
+    .description = Déplace le graphe vers le haut ou le bas à la molette.
+    .title = Graphe de nœuds : déplacer verticalement
+
+command-gesture-graph-fit =
+    .description = Ajuste tout le graphe à la vue.
+    .title = Graphe de nœuds : ajuster
+
+command-gesture-value-step =
+    .description = La molette avec ces touches fait avancer le curseur sous le pointeur, qu’il ait le focus ou non.
+    .title = Valeurs : pas à la molette
+
+command-gesture-value-fine =
+    .description = Ces touches rendent le glissement, les flèches et la molette d’un curseur dix fois plus fins.
+    .title = Valeurs : plus fin
+
+command-gesture-value-coarse =
+    .description = Ces touches rendent le glissement, les flèches et la molette d’un curseur dix fois plus grossiers.
+    .title = Valeurs : plus grossier
+
+command-gesture-value-panel =
+    .description = La molette avec ces touches fait défiler le panneau, même au-dessus d’un curseur.
+    .title = Valeurs : faire défiler le panneau
+
+command-pointer-overrides =
+    .description = Garde les gestes du pointeur que l’utilisateur a changés sur le profil en cours, ou les abandonne (`value` : keep ou drop).
+    .title = Garder ou abandonner les gestes du pointeur changés
+
+egui-pop-pointer-overrides-title = Profil de pointeur : { $profile }
+
+egui-pop-pointer-overrides-detail = Vous avez changé { $count } gestes du pointeur. Les garder par-dessus ce profil, ou les abandonner ?
+
+egui-pop-pointer-keep = Garder mes changements
+
+egui-pop-pointer-drop = Abandonner mes changements
+
+egui-pop-shortcuts-pointer-profile = Profil de pointeur : { $profile }
+
+egui-pop-shortcuts-pointer-profile-changed = Profil de pointeur : { $profile } ({ $count } changés)
+
+egui-pop-shortcuts-pointer-only = Gestes du pointeur seulement
+
+egui-pop-shortcuts-pointer-add = Ajouter un geste
+
+egui-pop-shortcuts-pointer-add-name = Ajouter un geste à { $command }
+
+egui-pop-shortcuts-pointer-remove-name = Retirer { $keys } de { $command }
+
+egui-pop-shortcuts-pointer-pad = Faites ici le geste pour { $command } : la molette, un pincement, un clic, un double clic ou un glissement, en tenant ses touches. Échap : annuler.
+
+egui-pop-shortcuts-pointer-pad-name = Zone de geste
+
+egui-pop-shortcuts-pointer-use = Utiliser { $keys }
+
+egui-pop-shortcuts-pointer-alt = Alt avec un glissement ou la molette peut aller au gestionnaire de fenêtres sur certains bureaux Linux.
+
+egui-pop-viewport-hint-zoom = zoomer
+
+egui-pop-viewport-hint-zoom-free = zoomer sans arrêt
+
+egui-pop-viewport-hint-pan = déplacer
+
+egui-pop-viewport-hint-pan-x = déplacer latéralement
+
+egui-pop-viewport-hint-pan-y = déplacer vers le haut ou le bas
+
+egui-pop-viewport-hint-zoom-cycle = 100 %, 200 %, ajuster
+
+egui-pop-viewport-hint-fit = ajuster
+
+egui-pop-viewport-hint-zoom-toggle = ajuster ou 100 %
+
+egui-pop-viewport-hint-leave = quitter
+
+setting-input-pointer-profile =
+    .description = Ce que font la molette, un pincement et les boutons de la souris sur l’image, le graphe de nœuds et les curseurs, comme dans darktable, les applications d’Adobe, les outils de document (GIMP, Inkscape, le web), Blender et les éditeurs de nœuds, ou sur un pavé tactile. L’éditeur de raccourcis montre et change chaque geste.
+    .label = Profil de pointeur
+
+setting-input-pointer-profile-choice-document = document
+
+setting-input-pointer-profile-choice-darktable = darktable
+
+setting-input-pointer-profile-choice-adobe = adobe
+
+setting-input-pointer-profile-choice-blender = blender
+
+setting-input-pointer-profile-choice-trackpad = pavé tactile
+
+setting-input-slider-wheel =
+    .description = Si la molette au-dessus d’un curseur fait défiler le panneau (protégée : le curseur n’avance qu’avec le focus ou les touches de pas) ou change la valeur (valeur) ; profil : comme le dit le profil de pointeur.
+    .label = Molette sur les curseurs
+
+setting-input-slider-wheel-choice-profile = profil
+
+setting-input-slider-wheel-choice-guarded = protégée
+
+setting-input-slider-wheel-choice-value = valeur
+
+setting-input-image-double-click =
+    .description = Ce que fait un double clic sur l’image : l’ajuster, quitter la vue (retour au navigateur, comme dans darktable) ou rien ; profil : comme le dit le profil de pointeur.
+    .label = Double clic sur l’image
+
+setting-input-image-double-click-choice-profile = profil
+
+setting-input-image-double-click-choice-fit = ajuster
+
+setting-input-image-double-click-choice-leave = quitter
+
+setting-input-image-double-click-choice-nothing = rien
+
+setting-input-wheel-device =
+    .description = Ce qui envoie les événements de molette : auto distingue une molette de souris (lignes) d’un pavé tactile (points) ; certaines souris envoient aussi des points, et choisir souris ou pavé tactile tranche.
+    .label = Appareil de la molette
+
+setting-input-wheel-device-choice-auto = auto
+
+setting-input-wheel-device-choice-mouse = souris
+
+setting-input-wheel-device-choice-trackpad = pavé tactile
