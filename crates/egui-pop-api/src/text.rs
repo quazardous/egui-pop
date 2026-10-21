@@ -9,6 +9,14 @@
 //! ([`ThemeSpec::font_ui`]).
 //!
 //! These are the user's, not the theme's: changing theme keeps them.
+//!
+//! The text size starts from the system's: the desktop's text scaling
+//! ([`SystemTextScale`], given to `AppBuilder::system_text_scale`; the
+//! `text-scale` service of `egui-pop-platform` reads it) is the
+//! setting's default, rounded to a step. The display's scale is not
+//! part of it (winit gives that as the pixels per point). A value the
+//! user chose always wins; the seeded one is a default, so it is never
+//! saved as the user's and follows the system from one run to the next.
 
 use egui_pop_core::fonts::Role;
 use egui_pop_core::lock;
@@ -20,6 +28,59 @@ use egui_pop_model::values::{Change, Descriptor, Set, Value};
 
 use crate::app::AppHandle;
 use crate::ctx::{Ctx, CtxError};
+
+/// The system's text scaling: what the desktop asks text to be
+/// multiplied by, separate from the display's scale. egui-pop reads no
+/// system itself; an application gives it (`AppBuilder::system_text_scale`),
+/// and `egui_pop_platform::text_scale::read` reads it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SystemTextScale {
+    /// The factor (1: no scaling).
+    pub factor: f32,
+    /// Where it was read (`"GNOME"`, `"KDE"`, `"Windows"`, `"env"`);
+    /// `None`: nothing was read.
+    pub from: Option<&'static str>,
+}
+
+impl Default for SystemTextScale {
+    fn default() -> Self {
+        Self {
+            factor: 1.0,
+            from: None,
+        }
+    }
+}
+
+impl SystemTextScale {
+    /// A factor read from `from`.
+    pub fn new(factor: f32, from: &'static str) -> Self {
+        Self {
+            factor,
+            from: Some(from),
+        }
+    }
+
+    /// The step of [`TEXT_SIZES`] the factor seeds (a factor that is not
+    /// a positive number seeds 100 %).
+    pub fn step(&self) -> f32 {
+        if self.factor.is_finite() && self.factor > 0.0 {
+            text_size_step(self.factor)
+        } else {
+            1.0
+        }
+    }
+
+    /// What the setting's description says about it.
+    fn said(&self) -> String {
+        match self.from {
+            Some(from) => format!(
+                "The system asks for {} ({from}), the default here",
+                label(self.factor)
+            ),
+            None => "Nothing was read from the system: the default is 100%".into(),
+        }
+    }
+}
 
 /// The setting: the text size as a percentage among the steps
 /// (`"115%"`).
@@ -142,15 +203,45 @@ pub(crate) fn apply(app: &AppHandle, seen: &mut Seen, spec: &mut ThemeSpec) -> b
     changed
 }
 
-/// The framework's registrations.
-pub(crate) fn register(ctx: &mut Ctx<'_>) -> Result<(), CtxError> {
+/// Whether the user chose the text size: it differs from the default
+/// the system seeded. A choice equal to that default is not told apart
+/// from it (only values that differ from their default are saved).
+pub fn user_set(app: &AppHandle) -> bool {
+    lock(&app.store())
+        .get(&format!("settings/{SETTING_TEXT_SIZE}"))
+        .is_some_and(|e| e.value != e.descriptor.default)
+}
+
+/// What the `text_scale` collector shows: the setting, its default, who
+/// chose it, the system's factor and where it was read.
+pub fn describe(app: &AppHandle) -> serde_json::Value {
+    let system = app.system_text_scale();
+    let default = lock(&app.store())
+        .get(&format!("settings/{SETTING_TEXT_SIZE}"))
+        .and_then(|e| e.descriptor.default.as_choice().map(str::to_string));
+    serde_json::json!({
+        "text_size": text_size(app),
+        "default": default,
+        "user_set": user_set(app),
+        "system": {
+            "factor": system.factor,
+            "step": system.step(),
+            "from": system.from,
+        },
+    })
+}
+
+/// The framework's registrations: the text size's default is the
+/// system's step.
+pub(crate) fn register(ctx: &mut Ctx<'_>, system: SystemTextScale) -> Result<(), CtxError> {
     let choices: Vec<String> = TEXT_SIZES.iter().map(|f| label(*f)).collect();
     let choices: Vec<&str> = choices.iter().map(String::as_str).collect();
     ctx.setting(
         SETTING_TEXT_SIZE,
-        Descriptor::choice("Text size", &choices, "100%").description(
-            "Makes the text larger or smaller, without the spacing (the interface zoom scales everything).",
-        ),
+        Descriptor::choice("Text size", &choices, &label(system.step())).description(&format!(
+            "Makes the text larger or smaller, without the spacing (the interface zoom scales everything). {}.",
+            system.said()
+        )),
     )?;
     ctx.setting(
         SETTING_FONT_UI,
@@ -179,5 +270,67 @@ mod tests {
         assert_eq!(parse("120%"), Some(1.15));
         assert_eq!(parse("abc"), None);
         assert_eq!(parse("-5%"), None);
+    }
+
+    fn app_with(system: SystemTextScale) -> crate::App {
+        crate::App::builder()
+            .system_text_scale(system)
+            .build(&egui::Context::default())
+            .unwrap()
+    }
+
+    fn saved(app: &crate::App) -> bool {
+        lock(&app.handle().store())
+            .export("settings/")
+            .values
+            .contains_key(&format!("settings/{SETTING_TEXT_SIZE}"))
+    }
+
+    #[test]
+    fn the_system_factor_seeds_the_default_without_saving_it() {
+        let app = app_with(SystemTextScale::new(1.25, "GNOME"));
+        let h = app.handle();
+        assert_eq!(text_size(h), 1.3);
+        assert_eq!(h.theme().spec().text_size, 1.3);
+        assert!(!user_set(h));
+        assert!(!saved(&app), "a seeded size is a default, not the user's");
+        let d = describe(h);
+        assert_eq!(d["default"], "130%");
+        assert_eq!(d["system"]["from"], "GNOME");
+        assert_eq!(d["system"]["factor"], 1.25);
+        assert_eq!(d["user_set"], false);
+        assert_eq!(h.debug_snapshot()["text_scale"], d);
+    }
+
+    #[test]
+    fn a_user_choice_wins_over_the_system() {
+        let app = app_with(SystemTextScale::new(1.5, "Windows"));
+        let h = app.handle();
+        set_text_size(h, 1.0);
+        assert_eq!(text_size(h), 1.0);
+        assert!(user_set(h));
+        assert!(saved(&app), "the user's 100% differs from the seeded 150%");
+        // Saved, it comes back over the seed of the next run.
+        let doc = lock(&h.store()).export("settings/");
+        let next = app_with(SystemTextScale::new(1.5, "Windows"));
+        lock(&next.handle().store()).import(&doc, &Origin::User);
+        assert_eq!(text_size(next.handle()), 1.0);
+        assert!(user_set(next.handle()));
+    }
+
+    #[test]
+    fn nothing_read_or_a_bad_factor_seeds_100() {
+        for system in [
+            SystemTextScale::default(),
+            SystemTextScale::new(f32::NAN, "env"),
+            SystemTextScale::new(0.0, "KDE"),
+        ] {
+            let app = app_with(system);
+            assert_eq!(text_size(app.handle()), 1.0, "{system:?}");
+            assert!(!saved(&app));
+        }
+        // Past the steps: the nearest end.
+        assert_eq!(SystemTextScale::new(3.0, "GNOME").step(), 2.0);
+        assert_eq!(SystemTextScale::new(0.5, "GNOME").step(), 0.85);
     }
 }
