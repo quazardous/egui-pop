@@ -337,16 +337,19 @@ mod tests {
                 from: "panel.fill",
                 to: "surface.panel",
                 contract: 2,
+                since: "0.2",
             },
             Renamed {
                 from: "old.b",
                 to: "mid.b",
                 contract: 2,
+                since: "0.2",
             },
             Renamed {
                 from: "mid.b",
                 to: "new.b",
                 contract: 3,
+                since: "0.4",
             },
         ];
         let text = r##"{
@@ -393,6 +396,51 @@ mod tests {
             assert!(r.contract >= 2, "{} → {}", r.from, r.to);
             assert!(r.contract <= CONTRACT_VERSION, "{} → {}", r.from, r.to);
             assert!(crate::contract::required(r.from).is_none(), "{}", r.from);
+        }
+    }
+
+    #[test]
+    fn a_rename_entry_stays_two_minor_releases() {
+        let r = Renamed {
+            from: "a",
+            to: "b",
+            contract: 2,
+            since: "0.3",
+        };
+        for (version, expired) in [
+            ("0.3.0", false),
+            ("0.4.1", false),
+            ("0.5.0-rc.1", false),
+            ("0.6.0", true),
+            // A major counts as one more minor release.
+            ("1.0.0", false),
+            ("1.1.0", false),
+            ("1.2.0", true),
+        ] {
+            assert_eq!(r.expired_at(version), Some(expired), "{version}");
+        }
+        assert_eq!(r.expired_at("0.2.0"), None, "older than the entry");
+        assert_eq!(r.expired_at("one"), None);
+    }
+
+    /// Fails once an entry has outlived its window: the release raising
+    /// this crate's version past it drops the entry (docs/tokens.md, "A
+    /// file's version").
+    #[test]
+    fn no_rename_entry_outlives_its_window() {
+        let now = env!("CARGO_PKG_VERSION");
+        for r in RENAMED {
+            match r.expired_at(now) {
+                Some(false) => {}
+                Some(true) => panic!(
+                    "`{}` → `{}` was renamed in {} and is past its window in {now}: drop it from RENAMED",
+                    r.from, r.to, r.since
+                ),
+                None => panic!(
+                    "`{}` → `{}`: `since` ({}) is not a release at or before {now}",
+                    r.from, r.to, r.since
+                ),
+            }
         }
     }
 }

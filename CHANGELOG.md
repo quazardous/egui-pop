@@ -406,6 +406,12 @@ publishes.
   the journal, the context stack, services and alter hooks to use for
   each need, the per-frame trap of immediate mode, and one example done
   both ways.
+- How long a renamed token is read (egui-pop-tokens): each `RENAMED`
+  entry records the release that renamed the token (`Renamed::since`)
+  and stays for two minor releases after it (`RENAME_WINDOW`): renamed
+  in 0.N, read with the "update your file" warning in 0.N to 0.N+2,
+  dropped in 0.N+3. A test fails once an entry outlives its window
+  (`Renamed::expired_at`). Part of #37.
 
 ### Changed
 

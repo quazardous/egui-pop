@@ -608,12 +608,54 @@ pub struct Renamed {
     /// The contract version that dropped `from` (the [`CONTRACT_VERSION`]
     /// of the release renaming it).
     pub contract: u64,
+    /// The release of `egui-pop-tokens` renaming it, `"major.minor"`
+    /// (`"0.3"`): the entry stays for [`RENAME_WINDOW`] minor releases
+    /// after it ([`Renamed::expired_at`]).
+    pub since: &'static str,
+}
+
+/// How many minor releases after the one renaming a token its former
+/// name is still read: renamed in 0.N, read (with the "update your file"
+/// warning) in 0.N, 0.N+1 and 0.N+2, its entry dropped in 0.N+3. After
+/// that, the former name loads as a token the base theme does not have
+/// (a warning). A test fails when an entry of [`RENAMED`] outlives it.
+pub const RENAME_WINDOW: u64 = 2;
+
+impl Renamed {
+    /// Whether this entry has outlived its window ([`RENAME_WINDOW`]) in
+    /// the release `version` (`"major.minor"`, a patch and a pre-release
+    /// ignored): more than two minor releases after [`Renamed::since`].
+    /// A major release counts as one more minor release (1.0 follows
+    /// 0.N). `None` when either version cannot be read.
+    pub fn expired_at(&self, version: &str) -> Option<bool> {
+        let (since_major, since_minor) = major_minor(self.since)?;
+        let (major, minor) = major_minor(version)?;
+        let releases = if major == since_major {
+            minor.checked_sub(since_minor)?
+        } else if major > since_major {
+            // Every major in between counts once, then the new major's
+            // minors.
+            (major - since_major) + minor
+        } else {
+            return None;
+        };
+        Some(releases > RENAME_WINDOW)
+    }
+}
+
+/// `"1.4"`, `"1.4.2"` or `"1.4.2-rc.1"` as `(1, 4)`.
+fn major_minor(version: &str) -> Option<(u64, u64)> {
+    let mut parts = version.split(['.', '-', '+']);
+    let major = parts.next()?.parse().ok()?;
+    let minor = parts.next()?.parse().ok()?;
+    Some((major, minor))
 }
 
 /// The renames between contract versions, oldest first, applied when a
 /// file stamped with an older contract is loaded: each former name is
 /// read under its new one, with a warning saying to update the file.
-/// Empty while the contract is at its first version.
+/// Each entry stays for [`RENAME_WINDOW`] minor releases after the one
+/// that added it. Empty while the contract is at its first version.
 pub const RENAMED: &[Renamed] = &[];
 
 mod kit;

@@ -445,11 +445,22 @@ of these is a `Warning`, with the token's path and why.
 
 **Renames.** A release renaming a token raises `CONTRACT_VERSION` and
 adds an entry to `egui_pop_tokens::RENAMED`: the former name, the new
-one, and the contract that dropped the former name. A file stamped with
+one, the contract that dropped the former name, and the release of
+`egui-pop-tokens` that renamed it (`since: "0.3"`). A file stamped with
 an older contract has each former name read under its new one (aliases
 naming it too), with a warning: "renamed, update your file"
 (`TokenFile::upgrade`). The table is empty while the contract is at its
 first version.
+
+**How long a rename is read.** Two minor releases after the one renaming
+it (`RENAME_WINDOW`): a token renamed in 0.N is still read under its
+former name, with the warning, in 0.N, 0.N+1 and 0.N+2; its entry is
+dropped in 0.N+3, after which the former name loads as a token the base
+theme does not have (kept as the file's own, or left out by the theme
+editor, with a warning). A major release counts as one more minor
+release. A test (`no_rename_entry_outlives_its_window`) compares each
+entry's `since` with the crate's version and fails once an entry is
+past its window, so the release raising the version drops it.
 
 ## Adding a theme
 
