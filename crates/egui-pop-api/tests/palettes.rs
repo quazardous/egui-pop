@@ -11,7 +11,7 @@ use egui_pop_api::steps::Before;
 use egui_pop_api::workbench::Change;
 use egui_pop_api::{App, Ctx, Plugin, PluginError};
 use egui_pop_model::ids::{PanelId, PluginId};
-use egui_pop_model::layout::{AnchorEdge, Floating};
+use egui_pop_model::layout::{AnchorEdge, FloatingGroup};
 use egui_pop_model::panels::{Area, PanelSpec};
 use serde_json::{Value as Json, json};
 
@@ -78,7 +78,7 @@ fn harness(hooks: bool) -> Harness<'static, App> {
     h
 }
 
-fn floating(h: &Harness<'_, App>, p: &PanelId) -> Option<Floating> {
+fn floating(h: &Harness<'_, App>, p: &PanelId) -> Option<FloatingGroup> {
     h.state().handle().layout().floating_of(p).cloned()
 }
 
@@ -108,7 +108,7 @@ fn drag_by(h: &mut Harness<'static, App>, from: egui::Pos2, by: egui::Vec2) {
 fn a_palette_opens_floating_docks_and_floats_again() {
     let mut h = harness(false);
     let tools = floating(&h, &TOOLS).expect("a palette floats");
-    assert_eq!(tools.pos, Floating::cascade(0));
+    assert_eq!(tools.pos, FloatingGroup::cascade(0));
     assert!(h.query_by_label("Brush").is_some());
     assert_eq!(
         h.state().handle().layout().area_of(&LOG),
@@ -232,7 +232,7 @@ fn a_palette_rolls_up_to_its_band_and_closes_from_it() {
     h.get_by_role_and_label(Role::Button, "Roll up Tools")
         .click();
     h.run();
-    assert!(floating(&h, &TOOLS).unwrap().rolled);
+    assert!(floating(&h, &TOOLS).unwrap().rolled(&TOOLS));
     assert!(h.query_by_label("Brush").is_none());
     assert!(h.query_by_label("Tools").is_some(), "its band stays");
     h.get_by_role_and_label(Role::Button, "Roll down Tools")
@@ -276,7 +276,7 @@ fn hooks_veto_a_dock_and_redirect_a_move_and_reset_puts_palettes_back() {
     drag_by(&mut h, title, egui::vec2(220.0, 140.0));
     h.state().handle().run(CMD_RESET, Json::Null);
     h.run();
-    assert_eq!(floating(&h, &TOOLS).unwrap().pos, Floating::cascade(0));
+    assert_eq!(floating(&h, &TOOLS).unwrap().pos, FloatingGroup::cascade(0));
 }
 
 #[test]

@@ -12,6 +12,18 @@ publishes.
 
 ### Changed
 
+- A floating panel is now a group of floating panels (egui-pop-model):
+  `Layout::floating` holds `FloatingGroup`s (members, each rolled up or
+  not, arranged as a stack or as tabs, with the group's place, pin and
+  anchor), a palette alone being a group of one; `Floating` is gone,
+  `FloatingGroup::cascade` replaces `Floating::cascade`, and
+  `floating_of` returns the panel's group (`rolled(panel)` says whether
+  a member is rolled up). `Layout::group`, `ungroup` and `dock_group`
+  change groups; `Layout::docked_groups` keeps a group docked whole so
+  that floating one of its panels gives it back. Layouts load unchanged,
+  and a group is saved as the floating panel it was before (its other
+  members under `group`), so applications that predate groups still
+  read it.
 - egui-pop is now licensed under MIT OR Apache-2.0, at your option, like
   egui and most of the Rust ecosystem (it was MIT only). `LICENSE` became
   `LICENSE-MIT`, `LICENSE-APACHE` is new, and every crate's `license` field
@@ -523,7 +535,7 @@ publishes.
   turns archives on. Part of #37 and #36.
 - Palettes stick to the workbench's edges (egui-pop-model,
   egui-pop-api): a palette dropped on an edge (snapped or kept against it)
-  is anchored there (`Floating::anchor`, start or end on each axis, with
+  is anchored there (`FloatingGroup::anchor`, start or end on each axis, with
   its distance), and keeps that distance when the window is resized or a
   saved layout is restored; dragged away, it no longer is. A palette off
   the edges, or snapped to another palette, is still only kept inside.

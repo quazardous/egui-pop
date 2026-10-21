@@ -228,7 +228,7 @@ assert!(app.handle().layout().floating_of(&TOOLS).is_some());
   with the drop hint the tabs use, it docks there. A docked floatable
   panel floats again from its tab menu (Float).
 - **Sticky edges.** Dropped on an edge of the workbench (snapped onto it
-  or kept against it), a palette is anchored there: `Floating::anchor`
+  or kept against it), a palette is anchored there: `FloatingGroup::anchor`
   holds, on each axis, the start edge, the end edge or none, and the
   distance to it. When the window is resized, or a saved layout is
   restored at another size, an anchored edge keeps its distance, so a

@@ -5,7 +5,9 @@ use egui_pop_model::ids::{CommandId, MenuId, OwnerId, PanelId};
 use egui_pop_model::keymap::{
     Action, BindOptions, DocBinding, Keymap, KeymapDoc, Keys, Layer, Resolution, Typing, Verdict,
 };
-use egui_pop_model::layout::{Anchor, AnchorEdge, Auxiliary, Floating, Layout, Node, Placement};
+use egui_pop_model::layout::{
+    Anchor, AnchorEdge, Arrangement, Auxiliary, FloatingGroup, Join, Layout, Node, Placement,
+};
 use egui_pop_model::panels::{Area, PanelSpec, Panels};
 use egui_pop_model::when::WhenContext;
 use serde_json::{Value, json};
@@ -502,6 +504,7 @@ fn a_panel_found_where_it_may_not_be_goes_back_to_its_default_area() {
         folded: vec![],
         over: vec![],
         floating: vec![],
+        docked_groups: vec![],
     };
     let (fixed, notes) = saved.repair(&p, &[]);
     assert_eq!(
@@ -679,7 +682,7 @@ fn a_palette_floats_from_the_start_and_is_kept_floating() {
     let layout = Layout::default_for(&p);
     assert_eq!(layout.area_of(&pid("app.log")), Some(Area::Bottom));
     let tools = layout.floating_of(&pid("app.tools")).unwrap();
-    assert_eq!(tools.pos, Floating::cascade(0));
+    assert_eq!(tools.pos, FloatingGroup::cascade(0));
     assert!(layout.shows(&pid("app.tools")));
     assert_eq!(layout.area_of(&pid("app.tools")), None);
     // Saved and read back, floating still.
@@ -698,9 +701,18 @@ fn a_palette_floats_from_the_start_and_is_kept_floating() {
         l.floating_of(&pid("app.tools")).unwrap().pos,
         [200.0, 100.0]
     );
-    l.floating_mut(&pid("app.tools")).unwrap().rolled = true;
+    l.floating_mut(&pid("app.tools"))
+        .unwrap()
+        .member_mut(&pid("app.tools"))
+        .unwrap()
+        .rolled = true;
     l.float(&pid("app.tools"), [10.0, 20.0]);
-    assert!(l.floating_of(&pid("app.tools")).unwrap().rolled, "kept");
+    assert!(
+        l.floating_of(&pid("app.tools"))
+            .unwrap()
+            .rolled(&pid("app.tools")),
+        "kept"
+    );
     // Closed: no longer placed, and kept closed.
     l.hide(&pid("app.tools"));
     assert!(!l.shows(&pid("app.tools")));
@@ -714,20 +726,11 @@ fn a_floating_panel_that_may_no_longer_float_is_docked_back() {
         .unwrap();
     let saved = Layout {
         floating: vec![
-            Floating {
-                panel: pid("app.log"),
-                pos: [40.0, 40.0],
-                rolled: false,
+            FloatingGroup {
                 pinned: true,
-                anchor: Default::default(),
+                ..FloatingGroup::lone(pid("app.log"), [40.0, 40.0])
             },
-            Floating {
-                panel: pid("app.gone"),
-                pos: [0.0, 0.0],
-                rolled: false,
-                pinned: false,
-                anchor: Default::default(),
-            },
+            FloatingGroup::lone(pid("app.gone"), [0.0, 0.0]),
         ],
         ..Layout::default()
     };
@@ -759,4 +762,164 @@ fn a_layout_saved_before_anchors_loads_unanchored_and_anchors_round_trip() {
     assert!(text.contains("\"end\""), "{text}");
     let back = Layout::from_json(&text).unwrap();
     assert_eq!(back, l);
+}
+
+/// Three palettes and a docked panel.
+fn palettes() -> Panels {
+    let mut p = Panels::new();
+    p.declare(&FW, PanelSpec::new(pid("app.log"), "Log", Area::Bottom))
+        .unwrap();
+    for id in ["app.tools", "app.colours", "app.nav"] {
+        p.declare(&FW, PanelSpec::new(pid(id), id, Area::StartSide).palette())
+            .unwrap();
+    }
+    p
+}
+
+fn members(l: &Layout, panel: &str) -> Vec<String> {
+    l.floating_of(&pid(panel))
+        .unwrap()
+        .panels()
+        .map(|p| p.to_string())
+        .collect()
+}
+
+#[test]
+fn palettes_stack_into_one_group_and_come_out_of_it() {
+    let mut l = Layout::default_for(&palettes());
+    assert_eq!(l.floating.len(), 3, "each alone: a group of one");
+    l.floating_mut(&pid("app.colours"))
+        .unwrap()
+        .member_mut(&pid("app.colours"))
+        .unwrap()
+        .rolled = true;
+    l.group(&[pid("app.colours")], &pid("app.tools"), Join::Below)
+        .unwrap();
+    l.group(&[pid("app.nav")], &pid("app.tools"), Join::Above)
+        .unwrap();
+    assert_eq!(l.floating.len(), 1);
+    assert_eq!(
+        members(&l, "app.tools"),
+        ["app.nav", "app.tools", "app.colours"]
+    );
+    let g = l.floating_of(&pid("app.tools")).unwrap();
+    assert_eq!(g.arrangement, Arrangement::Stack);
+    assert!(
+        g.rolled(&pid("app.colours")),
+        "each member keeps its roll-up"
+    );
+    assert!(!g.rolled(&pid("app.tools")));
+    assert_eq!(g.lead(), &pid("app.nav"));
+    // One unit: floating any member moves the group.
+    l.float(&pid("app.colours"), [300.0, 40.0]);
+    assert_eq!(l.floating.len(), 1);
+    assert_eq!(l.floating[0].pos, [300.0, 40.0]);
+    // Saved and read back.
+    let back = Layout::from_json(&l.to_json()).unwrap();
+    assert_eq!(back, l);
+    // Out of the group: alone where it is dropped, rolled up still.
+    l.ungroup(&pid("app.colours"), [10.0, 400.0]).unwrap();
+    assert_eq!(members(&l, "app.tools"), ["app.nav", "app.tools"]);
+    let c = l.floating_of(&pid("app.colours")).unwrap();
+    assert!(c.is_lone() && c.rolled(&pid("app.colours")));
+    assert_eq!(c.pos, [10.0, 400.0]);
+    assert!(l.ungroup(&pid("app.colours"), [0.0, 0.0]).is_err(), "alone");
+    assert!(
+        l.group(&[pid("app.log")], &pid("app.tools"), Join::Below)
+            .is_err()
+    );
+    assert!(
+        l.group(&[pid("app.tools")], &pid("app.tools"), Join::Below)
+            .is_err()
+    );
+    // Closed: out of its group, the others stay together.
+    l.hide(&pid("app.nav"));
+    assert!(l.floating_of(&pid("app.tools")).unwrap().is_lone());
+}
+
+#[test]
+fn a_tab_joins_a_group_shown_and_the_group_turns_to_tabs() {
+    let mut l = Layout::default_for(&palettes());
+    l.group(&[pid("app.colours")], &pid("app.tools"), Join::Below)
+        .unwrap();
+    l.group(&[pid("app.nav")], &pid("app.tools"), Join::Tab)
+        .unwrap();
+    let g = l.floating_of(&pid("app.tools")).unwrap();
+    assert_eq!(g.arrangement, Arrangement::Tabs);
+    assert_eq!(g.shown(), &pid("app.nav"));
+    assert_eq!(
+        members(&l, "app.tools"),
+        ["app.tools", "app.nav", "app.colours"]
+    );
+    let text = l.to_json();
+    assert!(text.contains("\"tabs\""), "{text}");
+    assert_eq!(Layout::from_json(&text).unwrap(), l);
+    // The shown tab out: the one before it is shown.
+    l.ungroup(&pid("app.nav"), [0.0, 0.0]).unwrap();
+    assert_eq!(
+        l.floating_of(&pid("app.tools")).unwrap().shown(),
+        &pid("app.tools")
+    );
+    // Down to one: a plain palette again.
+    l.ungroup(&pid("app.colours"), [0.0, 0.0]).unwrap();
+    let g = l.floating_of(&pid("app.tools")).unwrap();
+    assert_eq!((g.arrangement, g.active), (Arrangement::Stack, 0));
+    assert_eq!(Join::parse("tab"), Some(Join::Tab));
+    assert_eq!(Join::parse("aside"), None);
+}
+
+#[test]
+fn a_group_docks_whole_as_tabs_and_floats_back_as_a_group() {
+    let mut l = Layout::default_for(&palettes());
+    l.group(&[pid("app.colours")], &pid("app.tools"), Join::Below)
+        .unwrap();
+    l.float(&pid("app.tools"), [120.0, 80.0]);
+    let docked = l.dock_group(&pid("app.colours"), Area::EndSide);
+    assert_eq!(docked, [pid("app.tools"), pid("app.colours")]);
+    assert!(l.floating_of(&pid("app.tools")).is_none());
+    assert_eq!(l.area_of(&pid("app.tools")), Some(Area::EndSide));
+    assert_eq!(l.area_of(&pid("app.colours")), Some(Area::EndSide));
+    assert_eq!(l.active_in(Area::EndSide), [&pid("app.tools")]);
+    assert_eq!(l.docked_groups.len(), 1);
+    let back = Layout::from_json(&l.to_json()).unwrap();
+    assert_eq!(back, l, "the docked group is kept with the layout");
+    // Floating one of them gives the group back, where it is floated.
+    l.float(&pid("app.colours"), [40.0, 40.0]);
+    assert_eq!(members(&l, "app.tools"), ["app.tools", "app.colours"]);
+    assert_eq!(l.floating_of(&pid("app.tools")).unwrap().pos, [40.0, 40.0]);
+    assert!(l.docked_groups.is_empty());
+    assert_eq!(l.area_of(&pid("app.tools")), None);
+    // A member moved elsewhere in between stays docked.
+    l.dock_group(&pid("app.tools"), Area::EndSide);
+    l.place(&pid("app.tools"), Area::Bottom);
+    l.float(&pid("app.colours"), [40.0, 40.0]);
+    assert!(l.floating_of(&pid("app.colours")).unwrap().is_lone());
+    assert_eq!(l.area_of(&pid("app.tools")), Some(Area::Bottom));
+}
+
+#[test]
+fn a_group_is_repaired_member_by_member_and_old_applications_read_its_first() {
+    let mut l = Layout::default_for(&palettes());
+    l.group(&[pid("app.colours")], &pid("app.tools"), Join::Below)
+        .unwrap();
+    // Saved as a floating panel with the others under `group`.
+    let text = l.to_json();
+    let json: serde_json::Value = serde_json::from_str(&text).unwrap();
+    let first = &json["floating"][0];
+    assert_eq!(first["panel"], "app.tools");
+    assert_eq!(first["group"][0]["panel"], "app.colours");
+    // A member no longer declared goes, the group stays.
+    let mut fewer = Panels::new();
+    fewer
+        .declare(&FW, PanelSpec::new(pid("app.log"), "Log", Area::Bottom))
+        .unwrap();
+    for id in ["app.tools", "app.nav"] {
+        fewer
+            .declare(&FW, PanelSpec::new(pid(id), id, Area::StartSide).palette())
+            .unwrap();
+    }
+    let (fixed, notes) = l.repair(&fewer, &[]);
+    assert_eq!(members(&fixed, "app.tools"), ["app.tools"]);
+    assert!(fixed.floating_of(&pid("app.tools")).unwrap().is_lone());
+    assert_eq!(notes.len(), 1, "{notes:?}");
 }

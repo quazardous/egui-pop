@@ -66,7 +66,7 @@ use egui_pop_core::kit::{
 use egui_pop_core::state::Slot;
 use egui_pop_core::strings;
 use egui_pop_model::ids::{PanelId, StepId, ZoneId};
-use egui_pop_model::layout::{Floating, Layout, Node, Placement};
+use egui_pop_model::layout::{FloatingGroup, Layout, Node, Placement};
 use egui_pop_model::panels::{Area, PanelSpec, Panels, Place};
 use serde_json::{Value as Json, json};
 
@@ -597,7 +597,7 @@ impl Workbench {
     fn reopen(&mut self, spec: &PanelSpec) {
         if spec.palette {
             let n = self.layout.floating.len();
-            self.layout.float(&spec.id, Floating::cascade(n));
+            self.layout.float(&spec.id, FloatingGroup::cascade(n));
         } else {
             self.layout.place(&spec.id, spec.area);
         }
@@ -709,7 +709,7 @@ impl Workbench {
                 if !self.layout.shows(p) {
                     if spec.floatable {
                         let n = self.layout.floating.len();
-                        self.layout.float(p, Floating::cascade(n));
+                        self.layout.float(p, FloatingGroup::cascade(n));
                     } else {
                         self.reopen(&spec);
                     }
@@ -737,11 +737,12 @@ impl Workbench {
                 json!({ "panel": p, "pos": pos })
             }
             Change::Roll(p, on) => {
-                let f = self
+                let m = self
                     .layout
                     .floating_mut(p)
+                    .and_then(|g| g.member_mut(p))
                     .ok_or_else(|| format!("`{p}` does not float"))?;
-                f.rolled = *on;
+                m.rolled = *on;
                 json!({ "panel": p, "rolled": on })
             }
             Change::Pin(p, on) => {

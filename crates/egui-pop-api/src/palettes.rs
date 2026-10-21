@@ -55,7 +55,7 @@ use egui_pop_core::theme::Tokens;
 use egui_pop_model::commands::CommandSpec;
 use egui_pop_model::ids::{CommandId, PanelId, SettingId, StepId};
 use egui_pop_model::keymap::BindOptions;
-use egui_pop_model::layout::{Anchor, AnchorEdge, Floating};
+use egui_pop_model::layout::{Anchor, AnchorEdge, FloatingGroup};
 use egui_pop_model::values::Descriptor;
 use serde_json::{Value as Json, json};
 
@@ -205,11 +205,14 @@ pub(crate) fn declare(ctx: &mut Ctx<'_>) -> Result<(), CtxError> {
 /// Puts the floating palettes back where they first open, rolled down,
 /// each through its steps.
 pub fn reset(app: &AppHandle) {
-    let floating: Vec<Floating> = app.workbench_mut().layout.floating.clone();
-    for (n, f) in floating.iter().enumerate() {
-        app.change_workbench(Change::MovePalette(f.panel.clone(), Floating::cascade(n)));
-        if f.rolled {
-            app.change_workbench(Change::Roll(f.panel.clone(), false));
+    let floating: Vec<FloatingGroup> = app.workbench_mut().layout.floating.clone();
+    for (n, g) in floating.iter().enumerate() {
+        app.change_workbench(Change::MovePalette(
+            g.lead().clone(),
+            FloatingGroup::cascade(n),
+        ));
+        for m in g.members.iter().filter(|m| m.rolled) {
+            app.change_workbench(Change::Roll(m.panel.clone(), false));
         }
     }
     if hidden(app) {
@@ -374,6 +377,15 @@ pub fn area_id(panel: &PanelId) -> Id {
     Id::new(("egui_pop.palette", panel.as_str()))
 }
 
+/// One floating palette as drawn: its panel, and its group's place.
+struct Palette {
+    panel: PanelId,
+    rolled: bool,
+    pinned: bool,
+    pos: [f32; 2],
+    anchor: Anchor,
+}
+
 /// What a palette's band buttons asked for.
 #[derive(Default)]
 struct Asked {
@@ -410,7 +422,17 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
         .clamp(0.0, 1.0);
     let pointer = ctx.input(|i| i.pointer.latest_pos());
     let mut rects = BTreeMap::new();
-    for f in floating {
+    for (g, m) in floating
+        .iter()
+        .flat_map(|g| g.members.iter().map(move |m| (g, m)))
+    {
+        let f = Palette {
+            panel: m.panel.clone(),
+            rolled: m.rolled,
+            pinned: g.pinned,
+            pos: g.pos,
+            anchor: g.anchor,
+        };
         if hide && !f.pinned {
             continue;
         }
@@ -516,7 +538,7 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
 
 /// The band's row: the title (in the band's `state`), then Close, Roll
 /// and Pin at its end.
-fn band_row(ui: &mut Ui, t: &Tokens, title: &str, state: State, f: &Floating, asked: &mut Asked) {
+fn band_row(ui: &mut Ui, t: &Tokens, title: &str, state: State, f: &Palette, asked: &mut Asked) {
     let side = t.size.control_height.max(24.0);
     let kit = Kit::of(ui.ctx());
     ui.horizontal(|ui| {
@@ -566,7 +588,7 @@ fn band_row(ui: &mut Ui, t: &Tokens, title: &str, state: State, f: &Floating, as
 fn follow(
     app: &AppHandle,
     ctx: &egui::Context,
-    f: &Floating,
+    f: &Palette,
     rect: Rect,
     before: &BTreeMap<PanelId, Rect>,
     b: &band::Band,
