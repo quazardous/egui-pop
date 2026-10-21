@@ -538,7 +538,17 @@ impl<'a> Ctx<'a> {
 
     /// Adds an indicator to the status bar, fed by the journal's events
     /// (shown by `strips::StripsPlugin`).
+    /// Its `when` clause, when it has one, must parse: one that does not
+    /// keeps the indicator hidden and is reported (`indicator-when`).
     pub fn indicator(&mut self, indicator: crate::strips::Indicator) -> &mut Self {
+        if let Some(Err(e)) = indicator.clause() {
+            self.app.warn(
+                "indicator-when",
+                Some(&self.owner),
+                &indicator.id,
+                format!("the `when` clause of the indicator `{}`: {e}", indicator.id),
+            );
+        }
         self.app.add_indicator(&self.owner, indicator);
         self
     }

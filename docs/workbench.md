@@ -293,6 +293,15 @@ let jobs = Indicator::new("jobs", "Idle", "job.").reduce(|state, event| {
 # let _ = jobs;
 ```
 
+An indicator can follow the context stack ([contexts](contexts.md)):
+`when("place == 'photos.album'")` shows it only where the clause holds,
+with the grammar of commands over the context keys (`place`,
+`placeDepth`, `modePushed`, `mode.<group>`, a frame's own keys);
+`during(&frame)` writes a frame's clause for it. Hidden, it keeps
+reducing events, so its state is right the moment it shows again. A
+clause that does not parse keeps it hidden and is a diagnostic
+(`indicator-when`).
+
 ## The window's own frame
 
 `FramePlugin` (opt-in) draws the title bar in the `TITLE` zone above the

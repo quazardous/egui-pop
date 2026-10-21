@@ -37,6 +37,13 @@ publishes.
   (`YamlGraphError`). Part of #31.
 - The gallery's `graph-file` page: the node graph editor over a YAML
   graph file, the file's text beside it, each edit landing in the text.
+- Status bar indicators that follow the context (egui-pop-api):
+  `strips::Indicator::when` takes a `when` clause over the context keys
+  (`place == 'photos.album'`, `mode.edit == 'masks'`) and the bar shows
+  the indicator only where it holds; `Indicator::during(&frame)` writes
+  a frame's clause. A hidden indicator keeps reducing events. A clause
+  that does not parse keeps it hidden and is a diagnostic
+  (`indicator-when`).
 - The docs online: the guides in `docs/` as an mdBook with search, at
   <https://quazardous.github.io/egui-pop/docs/> beside the gallery,
   built and deployed by the Pages workflow (`book.toml`,

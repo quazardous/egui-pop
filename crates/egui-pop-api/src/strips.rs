@@ -27,6 +27,13 @@
 //! # let _ = jobs;
 //! ```
 //!
+//! An indicator may follow the context ([`Indicator::when`]): a `when`
+//! clause over the context keys (the context stack's `place`,
+//! `mode.<group>`, a frame's own keys), the grammar of commands. The bar
+//! shows it only where its clause holds; hidden, it keeps reducing
+//! events, so its state is right the moment it shows again.
+//! [`Indicator::during`] writes the clause of a frame for it.
+//!
 //! Steps (ADR 0011): `workbench.fold` (`{ "area", "folded" }`): an area
 //! folded to its strip or unfolded.
 
@@ -38,8 +45,10 @@ use egui_pop_core::icon::Icon;
 use egui_pop_core::kit::{BoxStyle, Kit, KitCx, Part, Side, State as KitState, paint_indicator};
 use egui_pop_core::theme::Tokens;
 use egui_pop_model::commands::CommandSpec;
+use egui_pop_model::context::FrameSpec;
 use egui_pop_model::ids::{BlockId, CommandId, PluginId};
 use egui_pop_model::panels::Area;
+use egui_pop_model::when::{When, WhenContext};
 use serde::Serialize;
 use serde_json::{Value as Json, json};
 
@@ -90,8 +99,13 @@ pub struct Indicator {
     pub command: Option<CommandId>,
     /// Lighter first, from the end of the status bar.
     pub weight: i32,
+    /// Where it shows: a `when` clause over the context keys (none:
+    /// everywhere).
+    pub when: Option<String>,
     pub(crate) reduce: ReduceFn,
     pub(crate) initial: IndicatorState,
+    /// The clause, parsed once.
+    parsed: Option<Rc<Result<When, String>>>,
 }
 
 impl fmt::Debug for Indicator {
@@ -99,6 +113,7 @@ impl fmt::Debug for Indicator {
         f.debug_struct("Indicator")
             .field("id", &self.id)
             .field("prefix", &self.prefix)
+            .field("when", &self.when)
             .finish_non_exhaustive()
     }
 }
@@ -113,11 +128,13 @@ impl Indicator {
             prefix: prefix.into(),
             command: None,
             weight: 0,
+            when: None,
             reduce: Rc::new(|_, _| {}),
             initial: IndicatorState {
                 text: label.into(),
                 ..IndicatorState::default()
             },
+            parsed: None,
         }
     }
 
@@ -142,6 +159,42 @@ impl Indicator {
     pub fn initial(mut self, state: IndicatorState) -> Self {
         self.initial = state;
         self
+    }
+
+    /// Shows it only where a `when` clause holds over the context keys
+    /// (`place == 'photos.album'`, `mode.edit == 'masks'`), the grammar
+    /// of commands. Hidden, it keeps reducing events; only its drawing
+    /// is skipped. A clause that does not parse keeps it hidden and is
+    /// reported when it is added (`indicator-when`).
+    pub fn when(mut self, clause: &str) -> Self {
+        self.when = Some(clause.into());
+        self.parsed = Some(Rc::new(When::parse(clause)));
+        self
+    }
+
+    /// Shows it only while a frame of the context stack is on: its
+    /// clause ([`FrameSpec::clause`]: the top place, or the mode on in
+    /// its group), so a frame's own status items need no clause written
+    /// by hand.
+    pub fn during(self, frame: &FrameSpec) -> Self {
+        self.when(&frame.clause())
+    }
+
+    /// Its clause, parsed (`None` without one).
+    pub fn clause(&self) -> Option<Result<&When, &str>> {
+        self.parsed
+            .as_deref()
+            .map(|r| r.as_ref().map_err(String::as_str))
+    }
+
+    /// Whether its clause holds over the context keys (always without
+    /// one; never when it does not parse).
+    pub fn applies(&self, cx: &WhenContext) -> bool {
+        match self.clause() {
+            None => true,
+            Some(Ok(w)) => w.eval(cx),
+            Some(Err(_)) => false,
+        }
     }
 }
 
@@ -284,7 +337,12 @@ fn activity_bar(ui: &mut Ui, app: &AppHandle) {
 
 /// The indicators, at the status bar's end.
 fn indicators(ui: &mut Ui, app: &AppHandle) {
-    let list = app.indicators();
+    let cx = app.context();
+    let list: Vec<_> = app
+        .indicators()
+        .into_iter()
+        .filter(|(i, _)| i.applies(&cx))
+        .collect();
     if list.is_empty() {
         return;
     }
