@@ -56,6 +56,9 @@ publishes.
   obstacles. Routes are deterministic; when no way exists a documented
   fallback (one elbow) comes back with `Route::routed` false.
   `Router::fingerprint` keys a cache of routes by layout.
+  `Router::route_all` nudges wires that share a channel
+  `Options::spacing` apart (within the margin, ordered to add few
+  crossings).
 - A reference graph model in a YAML file (egui-pop-viewport, the new
   `graph-yaml` feature; the facade's `graph-yaml`):
   `graph::yaml::YamlGraph` implements `GraphModel` for applications

@@ -4,6 +4,7 @@
 
 mod geom;
 mod grid;
+mod nudge;
 
 pub use geom::{Point, Rect, Side};
 
@@ -56,6 +57,11 @@ pub struct Options {
     /// What a bend costs, as a length (default 40): the higher, the
     /// fewer bends at the price of longer routes.
     pub bend_penalty: f32,
+    /// How far apart [`Router::route_all`] spreads wires that share a
+    /// channel (default 6; 0 leaves them on top of each other). A group
+    /// spreads over the margin at most, so with many wires in one
+    /// channel they come closer than this.
+    pub spacing: f32,
 }
 
 impl Default for Options {
@@ -63,6 +69,7 @@ impl Default for Options {
         Options {
             margin: 12.0,
             bend_penalty: 40.0,
+            spacing: 6.0,
         }
     }
 }
@@ -158,7 +165,9 @@ impl Router {
     ///
     /// The connectors share one grid, built from the obstacles and every
     /// connector's ports, so routing many at once costs little more than
-    /// routing one.
+    /// routing one. Then wires sharing a channel are spread
+    /// [`spacing`](Options::spacing) apart: their segments on one line
+    /// move across it, the segments at the ports excepted.
     pub fn route_all(&mut self, connectors: &[Connector]) -> Vec<Route> {
         let margin = self.options.margin.max(0.0);
         let bend = self.options.bend_penalty.max(0.0);
@@ -169,10 +178,12 @@ impl Router {
             .filter(|p| p.is_finite())
             .collect();
         let grid = Grid::build(&grown, &stubs);
-        connectors
+        let mut routes: Vec<Route> = connectors
             .iter()
             .map(|c| route_in(&grid, &mut self.search, c, margin, bend))
-            .collect()
+            .collect();
+        nudge::nudge(&mut routes, self.options.spacing, margin);
+        routes
     }
 
     /// A hash of the obstacles, the options and `connectors`: the same
@@ -182,6 +193,7 @@ impl Router {
         let mut h = Fnv::default();
         h.f32(self.options.margin);
         h.f32(self.options.bend_penalty);
+        h.f32(self.options.spacing);
         h.u64(self.obstacles.len() as u64);
         for o in &self.obstacles {
             for v in [o.min.x, o.min.y, o.max.x, o.max.y] {

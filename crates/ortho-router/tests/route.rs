@@ -182,6 +182,73 @@ fn a_coordinate_that_is_not_finite_falls_back_to_a_segment() {
 
 #[test]
 fn routes_are_deterministic() {
+    let (nodes, wires) = rows_and_columns();
+    let mut a = router(&nodes);
+    let first = a.route_all(&wires);
+    let again = a.route_all(&wires);
+    let fresh = router(&nodes).route_all(&wires);
+    assert_eq!(first, again);
+    assert_eq!(first, fresh);
+    for r in &first {
+        assert!(r.routed);
+        assert_orthogonal(r);
+        assert_clear(r, &nodes);
+    }
+}
+
+#[test]
+fn wires_sharing_a_channel_are_spread_apart() {
+    let (nodes, wires) = rows_and_columns();
+    let routes = router(&nodes).route_all(&wires);
+    for (i, ri) in routes.iter().enumerate() {
+        for rj in &routes[i + 1..] {
+            for a in inner_segments(ri) {
+                for b in inner_segments(rj) {
+                    assert!(!overlap(a, b), "{a:?} on top of {b:?}");
+                }
+            }
+        }
+    }
+    for r in &routes {
+        assert_orthogonal(r);
+        assert_clear(r, &nodes);
+    }
+}
+
+/// A route's segments that may move: not those at its ports.
+fn inner_segments(r: &Route) -> Vec<(Point, Point)> {
+    let n = r.points.len();
+    (1..n.saturating_sub(2))
+        .map(|k| (r.points[k], r.points[k + 1]))
+        .collect()
+}
+
+/// Whether two segments lie on one line and share a stretch of it.
+fn overlap(a: (Point, Point), b: (Point, Point)) -> bool {
+    let horizontal = |s: (Point, Point)| s.0.y == s.1.y;
+    if horizontal(a) != horizontal(b) {
+        return false;
+    }
+    // Along the segments, and across.
+    let uv = |p: Point| {
+        if horizontal(a) {
+            (p.x, p.y)
+        } else {
+            (p.y, p.x)
+        }
+    };
+    let ((a0, va), (a1, _)) = (uv(a.0), uv(a.1));
+    let ((b0, vb), (b1, _)) = (uv(b.0), uv(b.1));
+    if (va - vb).abs() > 1e-3 {
+        return false;
+    }
+    let lo = a0.min(a1).max(b0.min(b1));
+    let hi = a0.max(a1).min(b0.max(b1));
+    hi - lo > 1e-3
+}
+
+/// Six rows of five nodes, each node wired to one in the next column.
+fn rows_and_columns() -> (Vec<Rect>, Vec<Connector>) {
     let nodes: Vec<Rect> = (0..6)
         .flat_map(|r| (0..5).map(move |c| rect(c as f32 * 240.0, r as f32 * 130.0, 180.0, 70.0)))
         .collect();
@@ -197,17 +264,7 @@ fn routes_are_deterministic() {
             })
         })
         .collect();
-    let mut a = router(&nodes);
-    let first = a.route_all(&wires);
-    let again = a.route_all(&wires);
-    let fresh = router(&nodes).route_all(&wires);
-    assert_eq!(first, again);
-    assert_eq!(first, fresh);
-    for r in &first {
-        assert!(r.routed);
-        assert_orthogonal(r);
-        assert_clear(r, &nodes);
-    }
+    (nodes, wires)
 }
 
 #[test]

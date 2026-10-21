@@ -88,6 +88,12 @@ deterministic. The route leaves its first port along the port's side
 and arrives at the second one coming in through its side (a last turn
 there costs a bend too).
 
+`Router::route_all` then nudges: segments of different routes on one
+line that overlap are spread `Options::spacing` apart across it,
+centred on the line and within the margin, ordered so the spreading
+adds as few crossings as it can. A segment moves as a whole, so the
+route stays orthogonal; the segments at the ports stay where they are.
+
 When no route exists (a port boxed in, a stub end inside another
 obstacle), the router does not fail: it returns the fallback, a stub out
 of each port joined by one elbow halfway, with `Route::routed` set to
@@ -97,7 +103,9 @@ of each port joined by one elbow halfway, with `Route::routed` set to
 
 - Obstacles are rectangles; a port's stub is not checked against other
   obstacles, only its end.
-- Routes are found one by one: wires sharing a channel overlap.
+- Routes are found one by one, then nudged: wires sharing a channel are
+  spread apart, but a route does not make room for the others, and a
+  channel with many wires squeezes them within the margin.
 - No incremental update: each call rebuilds the grid. Cache routes
   under `Router::fingerprint` while the layout does not change.
 
