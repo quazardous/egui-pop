@@ -582,6 +582,8 @@ pub(crate) struct Shared {
     drawing_areas: std::cell::Cell<bool>,
     /// The centre drawn without margins.
     edge_to_edge: std::cell::Cell<bool>,
+    /// The system's text scaling (`AppBuilder::system_text_scale`).
+    system_text_scale: std::cell::Cell<crate::text::SystemTextScale>,
     /// The main menu drawn as a bar under the title.
     menu_bar: std::cell::Cell<bool>,
     /// The window the user worked in last (focused, clicked or typed
@@ -707,6 +709,7 @@ impl AppHandle {
             indicators_seen: std::cell::Cell::new(0),
             drawing_areas: std::cell::Cell::new(false),
             edge_to_edge: std::cell::Cell::new(false),
+            system_text_scale: std::cell::Cell::default(),
             menu_bar: std::cell::Cell::new(true),
             active_window: std::cell::Cell::new(egui::ViewportId::ROOT),
             shell_sizes: RefCell::default(),
@@ -1947,6 +1950,12 @@ impl AppHandle {
         self.0.edge_to_edge.get()
     }
 
+    /// The system's text scaling the text size was seeded from
+    /// (`AppBuilder::system_text_scale`; 1 when none was given).
+    pub fn system_text_scale(&self) -> crate::text::SystemTextScale {
+        self.0.system_text_scale.get()
+    }
+
     /// Whether the main menu is drawn as a bar under the title
     /// (`AppBuilder::menu_bar`).
     pub fn menu_bar(&self) -> bool {
@@ -2226,6 +2235,7 @@ pub struct AppBuilder {
     store: Option<SharedStore>,
     host: Option<Box<dyn Host>>,
     system_focus: Option<SystemFocus>,
+    system_text_scale: crate::text::SystemTextScale,
     edge_to_edge: bool,
     menu_bar: bool,
     shell_sizes: Vec<(PanelId, f32)>,
@@ -2296,6 +2306,7 @@ impl AppBuilder {
             writer_check: None,
             host: None,
             system_focus: None,
+            system_text_scale: crate::text::SystemTextScale::default(),
             edge_to_edge: false,
             menu_bar: true,
             shell_sizes: Vec::new(),
@@ -2529,6 +2540,15 @@ impl AppBuilder {
         self
     }
 
+    /// The system's text scaling (`egui_pop_platform::text_scale::read`
+    /// reads it in-process): the default of the text size setting, rounded
+    /// to a step, until the user chooses one. Not given, the default is
+    /// 100 %; egui-pop reads nothing itself.
+    pub fn system_text_scale(mut self, system: crate::text::SystemTextScale) -> Self {
+        self.system_text_scale = system;
+        self
+    }
+
     /// Sorts the plugins, connects them, installs the theme and resolves
     /// the declarations, on a context.
     pub fn build(self, ctx: &Context) -> Result<App, BuildError> {
@@ -2595,6 +2615,7 @@ impl AppBuilder {
             .clone()
             .map(|p| Writer::new(p, egui_pop_core::persist::DEBOUNCE));
         app.handle.0.edge_to_edge.set(self.edge_to_edge);
+        app.handle.0.system_text_scale.set(self.system_text_scale);
         app.handle.0.menu_bar.set(self.menu_bar);
         *app.handle.0.shell_sizes.borrow_mut() = self.shell_sizes;
         app.handle.workbench_mut().layout.folded = self.folded;
@@ -3040,7 +3061,7 @@ impl App {
         );
         ctx.setting(SETTING_FOCUS, focus)?;
         crate::zoom::register(&mut ctx)?;
-        crate::text::register(&mut ctx)?;
+        crate::text::register(&mut ctx, handle.system_text_scale())?;
         crate::sliders::register(&mut ctx)?;
         crate::pointer::register(&mut ctx, pointer_profile)?;
         ctx.setting(
@@ -3303,6 +3324,18 @@ impl App {
             .snapshot(move |_| {
                 let Ok(app) = up(&w) else { return Json::Null };
                 json!(crate::menus::bar_layouts(&app))
+            }),
+        )
+        .expect("distinct names");
+        let w = h.weak();
+        b.register(
+            FnCollector::new(
+                "text_scale",
+                "The text size: the factor in use, the setting's default (the system's step), whether the user chose it, and the system's text scaling (factor, step, where it was read).",
+            )
+            .snapshot(move |_| {
+                let Ok(app) = up(&w) else { return Json::Null };
+                crate::text::describe(&app)
             }),
         )
         .expect("distinct names");
