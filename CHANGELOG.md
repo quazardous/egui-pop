@@ -28,6 +28,19 @@ publishes.
   (`{"page": "<id>"}`). English and French strings. The gallery's
   settings plugin adds a "Greeting preview" page under its section.
 
+### Changed
+
+- Focus chains and overlay stacks are kept per window (egui-pop-core):
+  in a detached panel's window, `focus::when_context` says what has the
+  keyboard there, and an overlay belongs to the window it is shown in
+  (Escape and outside clicks there close only its overlays).
+  `overlay::modal_open` says whether a modal is open in any window;
+  `overlay::stack` and `overlay::rects` are the current window's. New:
+  `overlay::block_window` blocks a window while a modal is open in
+  another (its keys dropped, a backdrop taking the pointer, a click
+  bringing the modal's window to the front), `overlay::modal_windows`,
+  `overlay::window_of` and `overlay::retain_windows`.
+
 ## 0.2.0 (2026-10-21)
 
 ### Changed

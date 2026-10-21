@@ -14,7 +14,9 @@
 //!
 //! The chain is computed from the previous pass's scopes (egui decides
 //! focus between passes), so it is ready before this pass's widgets read
-//! the keyboard.
+//! the keyboard. Each window has its own scopes and chain (egui keeps a
+//! focus per window): in a detached panel's window, [`when_context`]
+//! says what has the keyboard there.
 //!
 //! # Escape, in order
 //!
@@ -55,7 +57,7 @@ use egui::{Context, Id, LayerId, Pos2, Rect, Ui};
 use egui_pop_model::when::WhenContext;
 use serde::Serialize;
 
-use crate::state::{lock, pass, shared};
+use crate::state::{lock, pass, shared, shared_in_window};
 
 /// One scope as drawn in a pass.
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -96,8 +98,11 @@ struct State {
     escaped: Option<(Id, u64)>,
 }
 
+/// The focus state of the window being drawn: each window (a detached
+/// panel's included) has its own scopes and chain, as egui keeps a
+/// focus per window.
 fn state(ctx: &Context) -> std::sync::Arc<std::sync::Mutex<State>> {
-    shared::<State>(ctx, "core.focus")
+    shared_in_window::<State>(ctx, "core.focus")
 }
 
 /// What the focus chain is pointed at.
@@ -223,7 +228,8 @@ pub fn scope<R>(
 /// nothing): Escape leaves a text input before anything else sees it,
 /// see [the order](self#escape-in-order).
 pub fn install(ctx: &Context) {
-    let st = state(ctx);
+    // Once per context, whichever window asks.
+    let st = shared::<State>(ctx, "core.focus");
     let mut s = lock(&st);
     if !s.installed {
         s.installed = true;

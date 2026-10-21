@@ -13,12 +13,21 @@
 //! [`show`] is the egui side: it keeps the stack in the context, draws an
 //! overlay (a modal with a backdrop, or an area placed next to an anchor
 //! with [`crate::placement`]) and restores the focus.
+//!
+//! **Windows.** Each window has its own stack: an overlay belongs to the
+//! window it is shown in (a detached panel's window, egui's viewport),
+//! and Escape and outside clicks there close only its overlays. A modal
+//! open in one window blocks the others ([`block_window`]), and
+//! [`modal_open`] says whether one is open anywhere; [`stack`] and
+//! [`rects`] are the current window's.
 
-use egui::{Context, Id, Rect, Ui};
+use std::collections::BTreeSet;
+
+use egui::{Context, Id, Rect, Ui, ViewportId};
 use serde::Serialize;
 
 use crate::placement::{Placement, Side, place};
-use crate::state::{lock, pass, shared};
+use crate::state::{forget_window, lock, pass, shared, shared_of_window};
 
 /// What kind of overlay.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -310,8 +319,100 @@ struct State {
     history: Vec<Closed>,
 }
 
+const STATE: &str = "core.overlay";
+
+/// The windows other than the main one that have an overlay state.
+#[derive(Debug, Default)]
+struct Windows(BTreeSet<ViewportId>);
+
+fn windows(ctx: &Context) -> std::sync::Arc<std::sync::Mutex<Windows>> {
+    shared::<Windows>(ctx, "core.overlay.windows")
+}
+
+/// The overlay state of the window being drawn: each window has its own
+/// stack, drawn in it and counting its own passes.
 fn state(ctx: &Context) -> std::sync::Arc<std::sync::Mutex<State>> {
-    shared::<State>(ctx, "core.overlay")
+    let viewport = ctx.viewport_id();
+    if viewport != ViewportId::ROOT {
+        lock(&windows(ctx)).0.insert(viewport);
+    }
+    shared_of_window::<State>(ctx, STATE, viewport)
+}
+
+/// Every window's overlay state, the main window's first.
+fn all(ctx: &Context) -> Vec<(ViewportId, std::sync::Arc<std::sync::Mutex<State>>)> {
+    let others: Vec<ViewportId> = lock(&windows(ctx)).0.iter().copied().collect();
+    std::iter::once(ViewportId::ROOT)
+        .chain(others)
+        .map(|v| (v, shared_of_window::<State>(ctx, STATE, v)))
+        .collect()
+}
+
+/// Forgets the overlays of the windows other than the main one that are
+/// not in `live` (closed windows): what they showed is gone with them.
+pub fn retain_windows(ctx: &Context, live: &[ViewportId]) {
+    let gone: Vec<ViewportId> = {
+        let w = windows(ctx);
+        let mut w = lock(&w);
+        let gone = w.0.iter().filter(|v| !live.contains(v)).copied().collect();
+        w.0.retain(|v| live.contains(v));
+        gone
+    };
+    for v in gone {
+        forget_window::<State>(ctx, STATE, v);
+    }
+}
+
+/// The windows where a modal overlay is open, the main window first.
+pub fn modal_windows(ctx: &Context) -> Vec<ViewportId> {
+    all(ctx)
+        .into_iter()
+        .filter(|(_, st)| lock(st).stack.modal().is_some())
+        .map(|(v, _)| v)
+        .collect()
+}
+
+/// While a modal overlay is open in another window, blocks the window
+/// being drawn: its keys and typed text are dropped this pass (nothing
+/// below reads them: neither the key dispatcher nor a widget), and a
+/// backdrop over it (the theme's `backdrop`, as under a dialog) takes the
+/// pointer; a click there brings the window of the modal to the front.
+/// Call it at the start of each window's pass, before the keys are
+/// read. Returns the window holding the modal, when this one is blocked.
+///
+/// A dialog opened from a detached panel's window is shown in that window
+/// and blocks every other one, the main window included, and the other
+/// way round: every window of the application waits for the answer.
+pub fn block_window(ctx: &Context) -> Option<ViewportId> {
+    let here = ctx.viewport_id();
+    let owner = modal_windows(ctx).into_iter().find(|v| *v != here)?;
+    ctx.input_mut(|i| {
+        i.events.retain(|e| {
+            !matches!(
+                e,
+                egui::Event::Key { .. }
+                    | egui::Event::Text(_)
+                    | egui::Event::Paste(_)
+                    | egui::Event::Copy
+                    | egui::Event::Cut
+                    | egui::Event::Ime(_)
+            )
+        });
+    });
+    let kit = crate::kit::Kit::of(ctx);
+    let backdrop = &kit.backdrop;
+    let fill = backdrop
+        .style(crate::kit::State::REST)
+        .fill
+        .gamma_multiply(backdrop.data.opacity.clamp(0.0, 1.0));
+    let r = egui::Modal::new(Id::new(("egui_pop.window_blocked", here)))
+        .backdrop_color(fill)
+        .frame(egui::Frame::NONE)
+        .show(ctx, |_| {});
+    if r.backdrop_response.clicked() || r.backdrop_response.drag_started() {
+        ctx.send_viewport_cmd_to(owner, egui::ViewportCommand::Focus);
+    }
+    Some(owner)
 }
 
 /// Once per pass, before anything reads the keyboard: Escape and outside
@@ -388,7 +489,15 @@ pub fn close(ctx: &Context, id: Id) {
     settle(ctx, &mut s, closed);
 }
 
-/// The open overlays, bottom first.
+/// The window an overlay is open in, if it is open in any.
+pub fn window_of(ctx: &Context, id: Id) -> Option<ViewportId> {
+    all(ctx)
+        .into_iter()
+        .find(|(_, st)| lock(st).stack.contains(id))
+        .map(|(v, _)| v)
+}
+
+/// The open overlays of the window being drawn, bottom first.
 pub fn stack(ctx: &Context) -> Vec<OverlaySpec> {
     let st = state(ctx);
     let s = lock(&st);
@@ -424,10 +533,10 @@ pub fn rect(ctx: &Context, id: Id) -> Option<Rect> {
         .and_then(|e| e.rect)
 }
 
-/// Whether a modal overlay is open.
+/// Whether a modal overlay is open, in any window of the application
+/// (every window waits for it, see [`block_window`]).
 pub fn modal_open(ctx: &Context) -> bool {
-    let st = state(ctx);
-    lock(&st).stack.modal().is_some()
+    !modal_windows(ctx).is_empty()
 }
 
 /// Where a floating overlay goes.
@@ -680,5 +789,74 @@ mod tests {
             dedup.dedup();
             assert_eq!(ids.len(), dedup.len());
         }
+    }
+
+    /// One pass of a window (`viewport`), with `events`.
+    fn pass_in(
+        ctx: &Context,
+        viewport: ViewportId,
+        events: Vec<egui::Event>,
+        add: impl FnMut(&mut Ui),
+    ) {
+        let input = egui::RawInput {
+            viewport_id: viewport,
+            // egui wants the window it runs among the viewports it is
+            // told of.
+            viewports: std::iter::once((viewport, Default::default())).collect(),
+            events,
+            ..Default::default()
+        };
+        let mut out = ctx.run_ui(input, add);
+        // Nothing renders: the textures are dropped on purpose.
+        out.textures_delta.clear();
+    }
+
+    fn key(key: egui::Key) -> egui::Event {
+        egui::Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        }
+    }
+
+    #[test]
+    fn each_window_has_its_stack_and_a_modal_blocks_the_others() {
+        let ctx = Context::default();
+        let other = ViewportId::from_hash_of("a detached window");
+        let dialog = OverlaySpec::new("dialog", "Dialog", Kind::Modal);
+        let mut open = true;
+        // Shown in the detached window: it belongs there.
+        pass_in(&ctx, other, Vec::new(), |ui| {
+            assert!(
+                block_window(ui.ctx()).is_none(),
+                "its own modal does not block it"
+            );
+            show(ui.ctx(), &dialog, &mut open, None, |ui| ui.label("Sure?"));
+        });
+        assert_eq!(window_of(&ctx, dialog.id), Some(other));
+        assert_eq!(modal_windows(&ctx), [other]);
+        assert!(modal_open(&ctx));
+        // The main window's stack is empty, and its keys are dropped.
+        let mut seen = Vec::new();
+        pass_in(&ctx, ViewportId::ROOT, vec![key(egui::Key::A)], |ui| {
+            assert!(stack(ui.ctx()).is_empty());
+            assert_eq!(block_window(ui.ctx()), Some(other));
+            seen = ui.ctx().input(|i| i.events.clone());
+        });
+        assert!(seen.is_empty(), "{seen:?}");
+        // Escape in the main window closes nothing of the other's.
+        pass_in(&ctx, ViewportId::ROOT, vec![key(egui::Key::Escape)], |ui| {
+            begin_pass(ui.ctx());
+        });
+        assert_eq!(window_of(&ctx, dialog.id), Some(other));
+        // The window closed: its overlays go with it.
+        retain_windows(&ctx, &[]);
+        assert!(!modal_open(&ctx));
+        pass_in(&ctx, ViewportId::ROOT, vec![key(egui::Key::A)], |ui| {
+            assert!(block_window(ui.ctx()).is_none());
+            assert_eq!(ui.ctx().input(|i| i.events.len()), 1);
+        });
     }
 }

@@ -470,6 +470,46 @@ pub(crate) fn shared<T: Default + Debug + Send + 'static>(
         .0
 }
 
+/// Shared state of type `T` for the window being drawn (egui's current
+/// viewport), created on first use: the main window's is [`shared`]'s,
+/// each other window has its own (the focus chain, the overlay stack:
+/// egui keeps focus and modals per window, and each window counts its
+/// own passes).
+pub(crate) fn shared_in_window<T: Default + Debug + Send + 'static>(
+    ctx: &Context,
+    name: &'static str,
+) -> Arc<Mutex<T>> {
+    let viewport = ctx.viewport_id();
+    shared_of_window(ctx, name, viewport)
+}
+
+/// A window's shared state of type `T` (see [`shared_in_window`]).
+pub(crate) fn shared_of_window<T: Default + Debug + Send + 'static>(
+    ctx: &Context,
+    name: &'static str,
+    viewport: egui::ViewportId,
+) -> Arc<Mutex<T>> {
+    if viewport == egui::ViewportId::ROOT {
+        return shared(ctx, name);
+    }
+    Slot::<Shared<T>>::new(name)
+        .keyed(viewport)
+        .get_or_insert_with(ctx, || Shared(Arc::new(Mutex::new(T::default()))))
+        .0
+}
+
+/// Forgets a window's shared state of type `T` (the window closed); the
+/// main window's is kept.
+pub(crate) fn forget_window<T: Debug + Send + 'static>(
+    ctx: &Context,
+    name: &'static str,
+    viewport: egui::ViewportId,
+) {
+    if viewport != egui::ViewportId::ROOT {
+        Slot::<Shared<T>>::new(name).keyed(viewport).remove(ctx);
+    }
+}
+
 /// A shared value, summarised by what it holds.
 struct Shared<T>(Arc<Mutex<T>>);
 
