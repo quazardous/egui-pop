@@ -871,6 +871,11 @@ publishes.
 
 ### Fixed
 
+- Dock tab labels no longer come out scrambled after a theme that installs
+  other fonts (for example a switch to a light theme): a tab's label was
+  kept laid out across passes and pointed into a font atlas that the
+  switch had rebuilt. It is now laid out each pass through egui's own
+  galley cache.
 - The logs and crash reports no longer panic on the web
   (egui-pop-platform): the time of a line comes from the browser's clock
   (`web-time`), and where `std::env::temp_dir` and `std::process::id`

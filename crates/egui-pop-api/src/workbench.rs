@@ -1647,6 +1647,10 @@ fn dock_style(style: &egui::Style, kit: &Kit) -> egui_dock::Style {
 
 /// A tab ready for the kit: its title, its label laid out with no colour
 /// (the kit gives it its state's) and its width as the kit measures it.
+/// The label is laid out again each pass through egui's own galley cache
+/// (cheap): a galley kept across passes points into the font atlas of the
+/// pass it was made in, and a theme that installs other fonts rebuilds
+/// that atlas, which scrambled the tab labels.
 #[derive(Clone)]
 struct PreparedTab {
     /// The panel's English title, as declared: translated again only when
@@ -1658,7 +1662,7 @@ struct PreparedTab {
 }
 
 /// An area's prepared tabs and egui_dock style, kept across passes: a tab
-/// is laid out and measured again only when its title changes, and
+/// is translated again only when its title changes, and
 /// everything when the kit (a theme install, a light or dark switch) or
 /// the scale changes; the style again when egui's style does. Per dock
 /// (and one for a dragged tab's ghost).
@@ -1690,23 +1694,26 @@ impl TabCache {
             };
         }
         self.tabs.retain(|p, _| tabs.contains(p));
-        let mut font = None;
+        let font = egui::TextStyle::Button.resolve(&ctx.global_style());
+        let layout = |title: &str| {
+            let label = ctx.fonts_mut(|f| {
+                f.layout_no_wrap(title.to_owned(), font.clone(), Color32::PLACEHOLDER)
+            });
+            let width = kit.tab.measure(label.size()).x;
+            (label, width)
+        };
         for panel in tabs {
             let english = {
                 let wb = app.workbench_mut();
                 let english = wb.spec(panel).map_or(panel.as_str(), |s| s.title.as_str());
-                if self.tabs.get(panel).is_some_and(|t| t.english == english) {
+                if let Some(t) = self.tabs.get_mut(panel).filter(|t| t.english == english) {
+                    (t.label, t.width) = layout(&t.title);
                     continue;
                 }
                 english.to_string()
             };
             let title = app.panel_title(ctx, panel);
-            let font = font
-                .get_or_insert_with(|| egui::TextStyle::Button.resolve(&ctx.global_style()))
-                .clone();
-            let label =
-                ctx.fonts_mut(|f| f.layout_no_wrap(title.clone(), font, Color32::PLACEHOLDER));
-            let width = kit.tab.measure(label.size()).x;
+            let (label, width) = layout(&title);
             self.tabs.insert(
                 panel.clone(),
                 PreparedTab {
