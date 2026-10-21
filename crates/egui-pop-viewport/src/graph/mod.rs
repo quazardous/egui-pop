@@ -73,6 +73,7 @@
 mod minimap;
 mod model;
 mod state;
+mod wires;
 #[cfg(feature = "graph-yaml")]
 pub mod yaml;
 
@@ -100,6 +101,7 @@ pub use model::{
     PortRef, PortType, Refusal, Request, Side, TYPE_TOKENS, check,
 };
 pub use state::GraphState;
+pub use wires::WireStyle;
 
 use crate::change::{Cause, Verdict};
 use crate::strings as s;
@@ -230,6 +232,7 @@ pub struct GraphEditor<'a> {
     size: Option<Vec2>,
     snap: Option<f32>,
     node_width: f32,
+    wires: WireStyle,
     overview_below: f32,
     detail_from: f32,
     zoom_range: Rangef,
@@ -274,6 +277,7 @@ impl<'a> GraphEditor<'a> {
             size: None,
             snap: None,
             node_width: 180.0,
+            wires: WireStyle::Curves,
             overview_below: 0.55,
             detail_from: 0.9,
             // upstream: text blurs in a Scene zoomed past 100 % (docs/upstream.md).
@@ -313,6 +317,15 @@ impl<'a> GraphEditor<'a> {
     /// A node's width in graph units (default 180).
     pub fn node_width(mut self, width: f32) -> Self {
         self.node_width = width.max(80.0);
+        self
+    }
+
+    /// How wires are drawn (default [`WireStyle::Curves`]).
+    /// [`WireStyle::Orthogonal`] routes them around the nodes; the
+    /// routes are kept in the [`GraphState`] and computed again only
+    /// when the layout changes.
+    pub fn wires(mut self, style: WireStyle) -> Self {
+        self.wires = style;
         self
     }
 
@@ -456,6 +469,10 @@ impl<'a> GraphEditor<'a> {
             self.state.level = Some(level);
         }
 
+        if self.state.wire_style != self.wires {
+            self.state.wire_style = self.wires;
+            self.state.routes.clear();
+        }
         let label = self.label.clone().unwrap_or_else(|| tr(&ctx, &s::GRAPH));
         let mut view = self.state.view;
         let mut cx = Cx {
@@ -1010,6 +1027,7 @@ impl Cx<'_, '_, '_> {
                 .fold(Rect::NOTHING, |r, b| r.union(b.rect)),
             visible: self.lay.visible,
             zoom: self.zoom,
+            routes: std::mem::take(&mut self.state.drawn.routes),
         };
     }
 
@@ -1047,7 +1065,23 @@ impl Cx<'_, '_, '_> {
         ));
     }
 
-    fn paint_wires(&self, painter: &egui::Painter) {
+    /// A wire from an output at `a` to an input at `b`, in the graph's
+    /// style; an orthogonal one is a rough elbow (the wire being drawn).
+    fn wire_line(&self, painter: &egui::Painter, a: Pos2, b: Pos2, color: Color32) {
+        let stroke = Stroke::new(self.wire_width(), color);
+        match self.state.wire_style {
+            WireStyle::Curves => self.bezier(painter, a, b, color),
+            WireStyle::Straight => {
+                painter.line_segment([a, b], stroke);
+            }
+            WireStyle::Orthogonal => {
+                painter.add(egui::Shape::line(wires::elbow(a, b).to_vec(), stroke));
+            }
+        }
+    }
+
+    fn paint_wires(&mut self, painter: &egui::Painter) {
+        let mut drawn: Vec<(Edge, Pos2, Pos2, Color32)> = Vec::new();
         let mut seen: BTreeSet<[i64; 4]> = BTreeSet::new();
         for e in self.base.edges {
             if let Some(w) = &self.state.wire
@@ -1072,7 +1106,23 @@ impl Cx<'_, '_, '_> {
                 .base
                 .port(&e.from, Side::Output)
                 .map_or(self.t.wire, |(_, p)| self.t.type_color(&self.ctx, &p.ty));
-            self.bezier(painter, a, b, color);
+            drawn.push((e.clone(), a, b, color));
+        }
+        self.state.drawn.routes.clear();
+        if self.state.wire_style != WireStyle::Orthogonal {
+            for (_, a, b, color) in drawn {
+                self.wire_line(painter, a, b, color);
+            }
+            return;
+        }
+        // Around every box drawn (nodes and stacks), cached by layout.
+        let boxes: Vec<Rect> = self.lay.boxes.iter().map(|b| b.rect).collect();
+        let ends: Vec<(Pos2, Pos2)> = drawn.iter().map(|&(_, a, b, _)| (a, b)).collect();
+        let routes = self.state.routes.routes(&boxes, &ends).to_vec();
+        let width = self.wire_width();
+        for ((edge, _, _, color), route) in drawn.into_iter().zip(routes) {
+            painter.add(egui::Shape::line(route.clone(), Stroke::new(width, color)));
+            self.state.drawn.routes.push((edge, route));
         }
     }
 
@@ -1897,7 +1947,7 @@ impl Cx<'_, '_, '_> {
             } else {
                 (end, start)
             };
-            self.bezier(painter, a, b, color);
+            self.wire_line(painter, a, b, color);
         }
         if w.by_pointer && ui.input(|i| i.pointer.any_released()) {
             self.state.wire = None;
@@ -2250,7 +2300,8 @@ fn lock_keys(ui: &Ui, id: Id, escape: bool) {
 
 /// The graph as drawn: nodes (place, ports and their wires, group,
 /// collapsed, selected, parameters), wires, groups, the selection, the
-/// view and the level. What `graph.read` answers.
+/// view and the level; the wire style, and each wire's route when it is
+/// orthogonal. What `graph.read` answers.
 pub fn describe(
     model: &dyn GraphModel,
     nodes: &[Node],
@@ -2307,6 +2358,16 @@ pub fn describe(
         "zoom": state.drawn.zoom,
         "visible": [v.min.x, v.min.y, v.max.x, v.max.y],
         "wiring": state.wire.as_ref().map(|w| json!({ "from": w.from.to_json(), "side": w.side.name() })),
+        "wires": state.wire_style.name(),
+        "routes": state
+            .drawn
+            .routes
+            .iter()
+            .map(|(e, points)| json!({
+                "edge": e.to_json(),
+                "points": points.iter().map(|p| [p.x, p.y]).collect::<Vec<_>>(),
+            }))
+            .collect::<Vec<_>>(),
     })
 }
 

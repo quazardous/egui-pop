@@ -1,6 +1,7 @@
 //! The node graph editor: a wire dragged between ports, a wire of the
 //! wrong type refused, a node deleted, a veto, a wire made from the
-//! keyboard, and the overview against the detail view.
+//! keyboard, the overview against the detail view, and wires routed
+//! around the nodes.
 
 use egui::accesskit::Role;
 use egui::{Event, Key, Modifiers, PointerButton, Pos2, vec2};
@@ -9,7 +10,7 @@ use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use egui_pop_viewport::change::{Cause, Verdict};
 use egui_pop_viewport::graph::{
     Edge, Edit, GraphEditor, GraphEvent, GraphModel, GraphState, Level, Node, Param, Port, PortRef,
-    PortType, Request,
+    PortType, Request, WireStyle,
 };
 
 #[derive(Debug, Default)]
@@ -339,4 +340,72 @@ fn the_overview_is_compact_and_the_detail_edits_parameters() {
     assert!(h.query_by_label("Radius").is_none(), "no parameters");
     assert!(h.query_by_label("Load, output Image").is_none(), "no ports");
     assert!(h.query_by_label("Blur").is_some(), "the nodes stay");
+}
+
+#[test]
+fn orthogonal_wires_go_around_the_nodes() {
+    let mut graph = Pipeline::new();
+    graph.edges = vec![
+        wire(("load", "image"), ("blur", "image")),
+        wire(("blur", "image"), ("mix", "a")),
+        wire(("mask", "mask"), ("mix", "m")),
+    ];
+    // A node in the way from the mask to the mix.
+    graph
+        .nodes
+        .push(Node::new("wall", "wall", "Wall", [300.0, 150.0]));
+    let mut h = Harness::builder()
+        .with_size(vec2(720.0, 420.0))
+        .build_ui_state(
+            |ui, s: &mut (Pipeline, GraphState, Option<serde_json::Value>)| {
+                let out = GraphEditor::new(&s.0, &mut s.1)
+                    .size(vec2(700.0, 400.0))
+                    .wires(WireStyle::Orthogonal)
+                    .describe(true)
+                    .show(ui);
+                s.2 = out.snapshot;
+            },
+            (graph, GraphState::new(), None),
+        );
+    h.run();
+    assert_eq!(h.state().1.wire_style(), WireStyle::Orthogonal);
+    let snap = h.state().2.clone().expect("described");
+    assert_eq!(snap["wires"], "orthogonal");
+    let routes = snap["routes"].as_array().expect("routes");
+    assert_eq!(routes.len(), 3, "{snap}");
+    // Every node's title bar (180 wide, 28 high at least), which no
+    // wire crosses.
+    let bars: Vec<[f64; 4]> = snap["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|n| {
+            let (x, y) = (n["pos"][0].as_f64().unwrap(), n["pos"][1].as_f64().unwrap());
+            [x, y, x + 180.0, y + 28.0]
+        })
+        .collect();
+    for r in routes {
+        let points: Vec<[f64; 2]> = r["points"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|p| [p[0].as_f64().unwrap(), p[1].as_f64().unwrap()])
+            .collect();
+        assert!(points.len() >= 2, "{r}");
+        for w in points.windows(2) {
+            let (a, b) = (w[0], w[1]);
+            assert!(a[0] == b[0] || a[1] == b[1], "slanted: {r}");
+            for k in 0..=40 {
+                let t = f64::from(k) / 40.0;
+                let p = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+                for bar in &bars {
+                    let inside = p[0] > bar[0] + 0.5
+                        && p[0] < bar[2] - 0.5
+                        && p[1] > bar[1] + 0.5
+                        && p[1] < bar[3] - 0.5;
+                    assert!(!inside, "{p:?} crosses the node at {bar:?}: {r}");
+                }
+            }
+        }
+    }
 }

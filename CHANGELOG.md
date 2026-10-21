@@ -46,6 +46,12 @@ publishes.
   egui-pop-api): `payload` for a text, a number or a boolean,
   `payload.<field>` for an object's fields, so a `when` clause (a key
   binding) can name one sub-workspace: `payload.id == 'darkroom'`.
+- Orthogonal wires in the node graph (egui-pop-viewport):
+  `GraphEditor::wires` picks a `WireStyle`, `Curves` (the default, as
+  before), `Orthogonal` (routed around the nodes by `ortho-router`,
+  wires sharing a channel spread apart) or `Straight`. Routes are
+  cached in the `GraphState` by layout; `GraphState::wire_style` and the
+  graph's snapshot (`wires`, `routes`) say what was drawn.
 - `ortho-router` 0.1.0, a new standalone crate without dependencies (no
   egui): orthogonal connector routing around rectangular obstacles, for
   any project that draws wires between nodes. `Router::route` and

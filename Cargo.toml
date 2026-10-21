@@ -42,6 +42,7 @@ debug = false
 
 [workspace.dependencies]
 egui-pop-tokens = { version = "0.1.1", path = "crates/egui-pop-tokens" }
+ortho-router = { version = "0.1.0", path = "crates/ortho-router" }
 serde_json = "1"
 serde = { version = "1", features = ["derive"] }
 # MIT OR Apache-2.0: token and kit files may be written in YAML (comments).

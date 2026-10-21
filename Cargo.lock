@@ -1261,6 +1261,7 @@ dependencies = [
  "egui-wgpu",
  "egui_kittest",
  "half",
+ "ortho-router",
  "profiling",
  "serde",
  "serde-saphyr",

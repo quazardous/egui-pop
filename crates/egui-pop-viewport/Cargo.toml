@@ -40,6 +40,8 @@ graph-yaml = ["dep:serde", "dep:serde-saphyr"]
 [dependencies]
 profiling.workspace = true
 egui.workspace = true
+# The node graph's orthogonal wires (a crate of this workspace, no egui).
+ortho-router.workspace = true
 egui-wgpu = { version = "0.36", default-features = false, optional = true }
 # MIT OR Apache-2.0: f32 to half-float conversion for tile textures.
 half = { version = "2", optional = true }

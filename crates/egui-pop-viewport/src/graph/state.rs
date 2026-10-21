@@ -7,6 +7,7 @@ use std::collections::BTreeSet;
 use egui::{Pos2, Rect, Vec2};
 
 use super::model::{Edge, Level, PortRef, Request, Side};
+use super::wires::{RouteCache, WireStyle};
 
 /// A wire being drawn.
 #[derive(Clone, Debug, PartialEq)]
@@ -41,6 +42,8 @@ pub(crate) struct Drawn {
     pub visible: Rect,
     /// Screen points per graph unit.
     pub zoom: f32,
+    /// Each wire's orthogonal route, when the style is orthogonal.
+    pub routes: Vec<(Edge, Vec<Pos2>)>,
 }
 
 /// A node editor's state: keep it with the graph's view.
@@ -68,6 +71,10 @@ pub struct GraphState {
     pub(crate) drawn: Drawn,
     pub(crate) requests: Vec<Request>,
     pub(crate) fit: bool,
+    /// How wires were drawn at the last frame.
+    pub(crate) wire_style: WireStyle,
+    /// Orthogonal routes, by layout.
+    pub(crate) routes: RouteCache,
 }
 
 impl Default for Drawn {
@@ -77,6 +84,7 @@ impl Default for Drawn {
             bounds: Rect::NOTHING,
             visible: Rect::NOTHING,
             zoom: 1.0,
+            routes: Vec::new(),
         }
     }
 }
@@ -97,6 +105,8 @@ impl Default for GraphState {
             drawn: Drawn::default(),
             requests: Vec::new(),
             fit: false,
+            wire_style: WireStyle::default(),
+            routes: RouteCache::default(),
         }
     }
 }
@@ -130,6 +140,11 @@ impl GraphState {
     /// The part of the graph in view at the last frame.
     pub fn visible(&self) -> Rect {
         self.drawn.visible
+    }
+
+    /// How wires were drawn at the last frame.
+    pub fn wire_style(&self) -> WireStyle {
+        self.wire_style
     }
 
     /// Whether a wire is being drawn.

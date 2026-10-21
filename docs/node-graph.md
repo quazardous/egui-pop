@@ -176,6 +176,30 @@ one `Move` comes at the end (Escape during the drag drops it).
 | A group's title | Folds the group into a stack; a click on the stack unfolds it; dragging either moves the group |
 | Secondary click | The canvas's menu (add a node), a node's (duplicate, delete), a port's (disconnect) |
 
+### Wires
+
+`wires(style)` picks how the graph's wires are drawn (`WireStyle`):
+
+| Style | What it draws |
+|---|---|
+| `Curves` (the default) | A curve out of each port; it may cross nodes |
+| `Orthogonal` | Horizontal and vertical segments around the nodes (and stacks), keeping a margin from them, with few bends; wires through one channel are spread apart |
+| `Straight` | A straight segment from port to port |
+
+Orthogonal routes come from [ortho-router](../crates/ortho-router/README.md),
+a crate of this workspace without egui, published on its own for any
+project that draws connectors: A* with a bend cost over the grid of
+the nodes' edges grown by the margin. The routes are kept in the
+`GraphState` and computed again only when the layout changes (a node
+moved, collapsed or folded, a wire added or removed, another level), so
+a frame that changes nothing routes nothing; while nodes are dragged
+they follow at each frame. When a port has no way out (boxed in by
+other nodes), its wire falls back to one elbow halfway. The wire being
+drawn is that elbow too, routed once it is connected.
+`GraphState::wire_style` says the style drawn last, and the graph's
+snapshot (`describe`, `graph.read`) carries `wires` (its name) and,
+when orthogonal, `routes`: each wire's `edge` and `points`.
+
 ### Overview and detail
 
 The zoom picks the level (`Level`), with `levels(overview_below,
