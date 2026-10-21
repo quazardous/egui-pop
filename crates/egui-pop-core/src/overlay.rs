@@ -35,7 +35,9 @@ use crate::state::{forget_window, lock, pass, shared, shared_of_window};
 pub enum Kind {
     /// Blocks what is below; Escape closes it, a click outside does not.
     Modal,
-    /// Floats next to an anchor; Escape or a click outside closes it.
+    /// Floats next to an anchor; Escape or a click outside closes it (a
+    /// press on its anchor is not outside: the widget that opened it
+    /// toggles it).
     Popover,
     /// As a popover, for menus.
     Menu,
@@ -132,6 +134,8 @@ struct Entry {
     spec: OverlaySpec,
     restore_focus: Option<Id>,
     rect: Option<Rect>,
+    /// The widget it was placed next to, when one was given.
+    anchor: Option<Rect>,
 }
 
 /// The stack, bottom first.
@@ -164,6 +168,7 @@ impl OverlayStack {
             spec,
             restore_focus: focused,
             rect: None,
+            anchor: None,
         });
         (Opened::New, Vec::new())
     }
@@ -297,12 +302,25 @@ impl OverlayStack {
         }
     }
 
-    /// The topmost overlay drawn at a point.
+    /// Records the widget an overlay was placed next to: a press there
+    /// is not outside it.
+    pub fn set_anchor(&mut self, id: Id, anchor: Rect) {
+        if let Some(i) = self.position(id) {
+            self.entries[i].anchor = Some(anchor);
+        }
+    }
+
+    /// The topmost overlay drawn, or anchored, at a point: a press on
+    /// the widget that opened an overlay leaves that overlay to it (its
+    /// click toggles it), instead of closing it on the press and the
+    /// click opening it again.
     pub fn hit(&self, pos: egui::Pos2) -> Option<Id> {
         self.entries
             .iter()
             .rev()
-            .find(|e| e.rect.is_some_and(|r| r.contains(pos)))
+            .find(|e| {
+                e.rect.is_some_and(|r| r.contains(pos)) || e.anchor.is_some_and(|a| a.contains(pos))
+            })
             .map(|e| e.spec.id)
     }
 }
@@ -620,6 +638,9 @@ pub fn show<R>(
             let screen = ctx.content_rect();
             let last = ctx.memory(|m| m.area_rect(spec.id)).map(|r| r.size());
             let size = last.unwrap_or(egui::vec2(200.0, 100.0));
+            if let Some(a) = anchor {
+                lock(&st).stack.set_anchor(spec.id, a.rect);
+            }
             let anchor = anchor.unwrap_or_else(|| {
                 let p = ctx
                     .input(|i| i.pointer.interact_pos())
@@ -722,6 +743,27 @@ mod tests {
         assert_eq!(labels(&s.click(None)), ["popover"]);
         assert!(s.click(None).is_empty(), "the modal stays");
         assert_eq!(s.len(), 1);
+    }
+
+    #[test]
+    fn a_press_on_a_popovers_anchor_is_not_outside_it() {
+        let mut s = OverlayStack::new();
+        s.open(spec("popover", Kind::Popover), None);
+        let id = Id::new("popover");
+        s.set_rect(
+            id,
+            Rect::from_min_max((100.0, 0.0).into(), (200.0, 80.0).into()),
+        );
+        s.set_anchor(
+            id,
+            Rect::from_min_max((100.0, 90.0).into(), (140.0, 110.0).into()),
+        );
+        // On the anchor: the widget that opened it toggles it.
+        assert_eq!(s.hit((120.0, 100.0).into()), Some(id));
+        assert!(s.click(s.hit((120.0, 100.0).into())).is_empty());
+        // Elsewhere: outside, it closes.
+        assert_eq!(s.hit((10.0, 100.0).into()), None);
+        assert_eq!(labels(&s.click(None)), ["popover"]);
     }
 
     #[test]

@@ -68,7 +68,7 @@ command-context-go.description e9837aeca085f654
 command-context-go.title ef5fc6bb0f5dc33e
 command-context-hold.description b350cdc3e91ac715
 command-context-hold.title 973d27e95810494e
-command-context-read.description 8d131de2071caa15
+command-context-read.description 3c72f0253dad03ca
 command-context-read.title 52918dc71463856d
 command-context-release.description 9a663efe551c163c
 command-context-release.title 148be79e57159390
@@ -188,8 +188,12 @@ command-pointer-overrides.description 306190a9bd097c45
 command-pointer-overrides.title 977af8cf4162cf41
 command-status-item-hide.description b1bb3e3cde4f5bda
 command-status-item-hide.title 71a137873e76076f
+command-status-item-hover.description 4f3ac26dc58cab90
+command-status-item-hover.title a104ebf036fdebe4
 command-status-item-move.description 6a3e79fc7c8bd669
 command-status-item-move.title ce3022069571a974
+command-status-item-open.description 21112345159c430b
+command-status-item-open.title 495bce07ed3f35a3
 command-terminal-clear.description 0b290a35fb6042b3
 command-terminal-clear.title a0c2715e684e1ceb
 command-terminal-close.description e447937e00a4b090
@@ -505,10 +509,14 @@ egui-pop-shortcuts-target-user d7c4f12fbf94b7a8
 egui-pop-shortcuts-target-workspace 229d7a8b8907536e
 egui-pop-slider-maximum c0721adb004bac87
 egui-pop-slider-minimum acae05dcb02987f1
+egui-pop-status-announce d09126c76706e2d1
+egui-pop-status-errors 18defe0eecaee157
 egui-pop-status-hide a107a37c2e3dfa5e
+egui-pop-status-more 590be6e5ed220780
 egui-pop-status-move-end eb0c1f329b7028dc
 egui-pop-status-move-start 804c56a00b768f23
 egui-pop-status-show 56e9d4fa05989539
+egui-pop-status-warnings bd449020dd0eead1
 egui-pop-theme-editor-accent 1572a6c93868539c
 egui-pop-theme-editor-add ea5be6af4dfc4a82
 egui-pop-theme-editor-add-family-to 1d6dd21666f68ba1

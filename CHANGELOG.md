@@ -12,6 +12,24 @@ publishes.
 
 ### Added
 
+- Status items with alignment, priority, live states, popovers and
+  hover cards (egui-pop-api): `strips::Indicator::align` puts an item
+  at the bar's start (after the breadcrumb and the chips) or its end;
+  `Indicator::priority` says what stays on a narrow bar, the items that
+  give way going into a `…` menu instead of vanishing.
+  `IndicatorState::errors` and `warnings` show as counts with their
+  icons in the danger and warning tones; turning to errors pulses once
+  and is announced once, politely. `Indicator::popover` opens a small
+  layout next to the item on a click or Enter (Tab goes into it; Escape
+  or a click outside closes it, the focus back on the item), and
+  `Indicator::hover` gives a rich hover card in place of the tooltip,
+  `Ctrl+K Ctrl+I` opening it on the focused item. Agents run
+  `status.item.open` and `status.item.hover`, and read each item's
+  alignment, priority, busy state, counts, popover and card in
+  `strips::status`, the `strips` collector (with the popover open) and
+  `context.read`. A press on a popover's anchor is no longer a click
+  outside it (egui-pop-core, `OverlayStack::set_anchor`): the widget
+  that opened it toggles it closed instead of reopening it.
 - Rich hover cards (egui-pop-core): `hover_card::HoverCard` shows a
   `Card` next to any widget, the tier between a tooltip and a popover:
   formatted text (`**bold**`, `` `code` ``, `- ` list lines), rows of

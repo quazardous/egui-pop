@@ -136,7 +136,7 @@ command-context-hold =
     .title = Retenir la pile de contextes
 
 command-context-read =
-    .description = Les lieux et les modes actifs, leur révision, les retenues et les cadres déclarés, et ce que montre la barre d’état (`status` : l’identifiant, le texte, le ton, le compte et la progression de chaque élément visible).
+    .description = Les lieux et les modes actifs, leur révision, les retenues et les cadres déclarés, et ce que montre la barre d’état (`status` : l’identifiant, le texte, le ton, le compte et la progression de chaque élément visible, s’il est occupé, ses comptes d’erreurs et d’avertissements, et sa carte de survol).
     .title = Lire la pile de contextes
 
 command-context-release =
@@ -303,9 +303,17 @@ command-status-item-hide =
     .description = Masque un élément de la barre d’état (`id`) à l’endroit affiché, ou l’affiche de nouveau (`hidden` : false).
     .title = Masquer un élément de la barre d’état
 
+command-status-item-hover =
+    .description = Ouvre la carte de survol d’un élément de la barre d’état (`id` ; par défaut celui qui a le focus clavier), comme le survol. Échap la ferme.
+    .title = Afficher la carte d’un élément de la barre d’état
+
 command-status-item-move =
     .description = Déplace un élément de la barre d’état (`id`) d’un pas vers son début ou sa fin (`toward` : start ou end), à l’endroit affiché.
     .title = Déplacer un élément de la barre d’état
+
+command-status-item-open =
+    .description = Ouvre la fenêtre contextuelle d’un élément de la barre d’état (`id`), comme un clic dessus, ou la ferme (`open` : false).
+    .title = Ouvrir un élément de la barre d’état
 
 command-theme-generate =
     .description = Écrit une gamme générée à partir d’une couleur source (`seed`, #rrggbb) sur une gamme de couleurs du thème (`scale`) : nuances 1 à 12 et contrast, pour la variante éditée, claire ou sombre ; annulée en une fois.
@@ -909,13 +917,21 @@ egui-pop-slider-maximum = { $label }, maximum
 
 egui-pop-slider-minimum = { $label }, minimum
 
+egui-pop-status-announce = { $item } : { $state }
+
+egui-pop-status-errors = Erreurs : { $count }
+
 egui-pop-status-hide = Masquer { $item }
+
+egui-pop-status-more = Autres éléments d’état
 
 egui-pop-status-move-end = Déplacer vers la fin
 
 egui-pop-status-move-start = Déplacer vers le début
 
 egui-pop-status-show = Afficher { $item }
+
+egui-pop-status-warnings = Avertissements : { $count }
 
 egui-pop-theme-editor-accent = Accent et focus
 

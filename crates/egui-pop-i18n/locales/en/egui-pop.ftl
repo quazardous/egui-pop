@@ -139,7 +139,7 @@ command-context-hold =
     .title = Hold the context stack
 
 command-context-read =
-    .description = The places and modes on, their revision, the holds and the frames declared, and what the status bar shows (`status`: each visible item's id, text, tone, count and progress).
+    .description = The places and modes on, their revision, the holds and the frames declared, and what the status bar shows (`status`: each visible item's id, text, tone, count and progress, whether it is busy, its error and warning counts, and its hover card).
     .title = Read the context stack
 
 command-context-release =
@@ -378,9 +378,17 @@ command-status-item-hide =
     .description = Hides a status bar item (`id`) where the user is, or shows it again (`hidden`: false).
     .title = Hide a status item
 
+command-status-item-hover =
+    .description = Opens the hover card of a status bar item (`id`; by default the one with the keyboard focus), as hovering it does. Escape closes it.
+    .title = Show a status item's card
+
 command-status-item-move =
     .description = Moves a status bar item (`id`) one step towards its start or end (`toward`: start or end), where the user is.
     .title = Move a status item
+
+command-status-item-open =
+    .description = Opens the popover of a status bar item (`id`), as a click on it does, or closes it (`open`: false).
+    .title = Open a status item
 
 command-terminal-clear =
     .description = Clears the screen and the scrollback (the program goes on).
@@ -1012,13 +1020,21 @@ egui-pop-slider-maximum = { $label }, maximum
 
 egui-pop-slider-minimum = { $label }, minimum
 
+egui-pop-status-announce = { $item }: { $state }
+
+egui-pop-status-errors = Errors: { $count }
+
 egui-pop-status-hide = Hide { $item }
+
+egui-pop-status-more = More status items
 
 egui-pop-status-move-end = Move towards the end
 
 egui-pop-status-move-start = Move towards the start
 
 egui-pop-status-show = Show { $item }
+
+egui-pop-status-warnings = Warnings: { $count }
 
 egui-pop-theme-editor-accent = Accent and focus
 

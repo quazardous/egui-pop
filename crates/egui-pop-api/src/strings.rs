@@ -781,6 +781,16 @@ pub const STATUS_MOVE_START: StrKey =
     StrKey::new("egui-pop-status-move-start", "Move towards the start");
 /// A status item's context menu: moves it one step towards the bar's end.
 pub const STATUS_MOVE_END: StrKey = StrKey::new("egui-pop-status-move-end", "Move towards the end");
+/// The status bar's overflow button: the items that gave way on a
+/// narrow bar.
+pub const STATUS_MORE: StrKey = StrKey::new("egui-pop-status-more", "More status items");
+/// A status item's error count, as a screen reader says it.
+pub const STATUS_ERRORS: StrKey = StrKey::new("egui-pop-status-errors", "Errors: { $count }");
+/// A status item's warning count, as a screen reader says it.
+pub const STATUS_WARNINGS: StrKey = StrKey::new("egui-pop-status-warnings", "Warnings: { $count }");
+/// Announced once when a status item turns to errors.
+pub const STATUS_ANNOUNCE: StrKey =
+    StrKey::new("egui-pop-status-announce", "{ $item }: { $state }");
 /// Frames of the saved stack that could not come back at start.
 pub const CONTEXT_DROPPED: StrKey =
     StrKey::new("egui-pop-context-dropped", "Not restored: { $frames }");
@@ -1136,6 +1146,10 @@ pub const ALL: &[StrKey] = &[
     CLIPBOARD_AS_THROUGH,
     CLIPBOARD_ONLY_PART,
     CLIPBOARD_LOSES,
+    STATUS_MORE,
+    STATUS_ERRORS,
+    STATUS_WARNINGS,
+    STATUS_ANNOUNCE,
 ];
 
 #[cfg(test)]
