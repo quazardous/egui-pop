@@ -105,7 +105,8 @@ it directly, or the service (`THEME_EDITOR`: `set`, `undo`, `redo`,
   dark (`egui_pop_tokens::palette`, [Design tokens](tokens.md#a-scale-from-one-colour)),
   fitted to the theme's surfaces and text, and "Generate", which
   writes them and the scale's `contrast` over the scale; one undo takes
-  them all back. A seed too dark, too light or too vivid is clamped,
+  them all back. The seed is recorded, and the file saved gives the
+  scale as its seed rather than twelve values (see [The file](#the-file)). A seed too dark, too light or too vivid is clamped,
   and said so. Only the variant shown is written: its light or dark
   counterpart keeps its own scale (generate it again with the other
   mode shown; editing both variants of a pair at once is not done
@@ -137,7 +138,14 @@ A draft is saved as an ordinary token file (see [Design tokens](tokens.md)):
 `$extends` names the base theme, the file gives only the tokens changed,
 each with its `$type`, and the root's `$extensions` carries the format
 stamp, `"org.egui-pop.format": { "version": 1, "contract": 1 }`
-([Design tokens](tokens.md#a-files-version)). Files the editor wrote
+([Design tokens](tokens.md#a-files-version)). A scale generated from
+a colour is saved as its seed, under `"org.egui-pop.seeds"`
+(`{ "blue": { "seed": "#8e44ad", "scheme": "light" } }`), and generated
+again when the file is loaded
+([Design tokens](tokens.md#a-scale-from-one-colour)): the steps still
+at the value the seed gives are left out of the file, a step changed
+since is written as it is, and a seed whose scale was undone or no
+longer matches is not saved. Files the editor wrote
 before carry `"org.egui-pop.theme-editor": { "version": 1 }` instead,
 still read. A file stamped newer than this egui-pop knows loads
 best-effort, with a warning. Any such file

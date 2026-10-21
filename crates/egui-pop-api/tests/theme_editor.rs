@@ -293,6 +293,40 @@ fn a_scale_generated_from_a_colour_is_written_and_undone_as_one_change() {
 }
 
 #[test]
+fn a_generated_scale_is_exported_as_its_seed_and_imported_back() {
+    use egui_pop_api::theme_editor::CMD_THEME_GENERATE;
+    let mut h = harness(ThemeSpec::new("pop-light"));
+    h.run();
+    run(
+        &mut h,
+        &CMD_THEME_GENERATE,
+        json!({ "scale": "gold", "seed": "#8e44ad" }),
+    );
+    h.run();
+    let generated = h.state().handle().theme().spec().overrides.clone();
+    assert_eq!(generated.len(), 13);
+    let out = run(&mut h, &CMD_THEME_EXPORT, json!({ "name": "mine" }));
+    let text = out["text"].as_str().expect("the file's text").to_string();
+    let file: Json = serde_json::from_str(&text).unwrap();
+    // The seed and its scheme, not the twelve values.
+    assert_eq!(
+        file["$extensions"]["org.egui-pop.seeds"]["gold"],
+        json!({ "seed": "#8e44ad", "scheme": "light" })
+    );
+    assert!(file.get("gold").is_none(), "{text}");
+    // Imported, the scale is regenerated with the same values.
+    run(&mut h, &CMD_THEME_START, json!({ "base": "pop-light" }));
+    h.run();
+    assert!(h.state().handle().theme().spec().overrides.is_empty());
+    run(&mut h, &CMD_THEME_IMPORT, json!({ "text": text }));
+    h.run();
+    assert_eq!(h.state().handle().theme().spec().overrides, generated);
+    // Exported again, still as its seed.
+    let again = run(&mut h, &CMD_THEME_EXPORT, json!({ "name": "mine" }));
+    assert_eq!(again["text"].as_str(), Some(text.as_str()));
+}
+
+#[test]
 fn the_generator_shows_for_a_palette_token() {
     let mut h = harness(ThemeSpec::new("pop-dark"));
     h.run();

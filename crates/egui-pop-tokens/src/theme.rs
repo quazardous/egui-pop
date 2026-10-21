@@ -11,7 +11,7 @@ use serde_json::{Map, Value as Json, json};
 use crate::cache::Cache;
 use crate::contract::{Tier, contract, required};
 use crate::file::{RawToken, TokenFile, alias_target};
-use crate::palette::{Backdrop, Ramp, Scheme};
+use crate::palette::{Backdrop, Ramp, Scheme, Seed};
 use crate::{Color, Error, Value, Warning};
 
 /// The theme everything falls back to.
@@ -586,7 +586,8 @@ impl Themes {
     /// Loads a theme file over its base theme (its `$extends`, else
     /// [`FALLBACK_THEME`]), the rule every theme file goes through: the
     /// file is brought to the current contract ([`TokenFile::upgrade`]),
-    /// then a token whose value does not load (an unreadable value, an
+    /// a seed that cannot be read ([`crate::palette::SEEDS_EXTENSION`])
+    /// is left out, then a token whose value does not load (an unreadable value, an
     /// alias to nothing or in a cycle, another type than the base's or
     /// the contract's) is left out, so the base theme's value stays. A
     /// token the base does not have is kept as the file's own (a
@@ -596,6 +597,7 @@ impl Themes {
     /// [`Warning`]. A base not known yet leaves the tokens unchecked.
     pub fn check_file(&self, mut file: TokenFile) -> (TokenFile, Vec<Warning>) {
         let mut warnings = file.upgrade();
+        warnings.extend(file.seeds().1);
         let base = file
             .extends
             .clone()
@@ -736,7 +738,11 @@ impl Themes {
 
     /// The theme's tokens with everything it extends, the theme's own
     /// winning. An unknown theme falls back to [`FALLBACK_THEME`].
-    fn flatten(&self, name: &str, problems: &mut Vec<Error>) -> BTreeMap<String, RawToken> {
+    pub(crate) fn flatten(
+        &self,
+        name: &str,
+        problems: &mut Vec<Error>,
+    ) -> BTreeMap<String, RawToken> {
         let mut chain: Vec<String> = Vec::new();
         let mut at = Some(name.to_string());
         while let Some(n) = at {
@@ -761,6 +767,13 @@ impl Themes {
         let mut tokens = BTreeMap::new();
         for n in chain.iter().rev() {
             if let Some(theme) = self.themes.get(n) {
+                // The scales the file gives by their seed, under its own
+                // tokens: a step it also gives keeps its value.
+                let (seeds, _) = theme.seeds();
+                if !seeds.is_empty() {
+                    let generated = seeded_scales(&tokens, &theme.tokens, &seeds);
+                    layer(&mut tokens, &generated);
+                }
                 layer(&mut tokens, &theme.tokens);
             }
         }
@@ -1071,6 +1084,71 @@ fn layer(under: &mut BTreeMap<String, RawToken>, over: &BTreeMap<String, RawToke
         }
         under.insert(path.clone(), token);
     }
+}
+
+/// Whether `path` is a token of one of `scales` (`blue.3` of `blue`).
+pub(crate) fn in_scales<'a>(mut scales: impl Iterator<Item = &'a String>, path: &str) -> bool {
+    scales.any(|s| {
+        path.strip_prefix(s.as_str())
+            .is_some_and(|rest| rest.starts_with('.'))
+    })
+}
+
+/// What a seeded scale is fitted to, and the scheme it is generated for
+/// when its seed does not say: the theme as `under` and `own` give it,
+/// the seeded scales' own tokens left out (so a scale never fits itself).
+pub(crate) fn seed_backdrop(
+    under: &BTreeMap<String, RawToken>,
+    own: &BTreeMap<String, RawToken>,
+    seeds: &BTreeMap<String, Seed>,
+) -> (Backdrop, Scheme) {
+    let mut raw = under.clone();
+    let others: BTreeMap<String, RawToken> = own
+        .iter()
+        .filter(|(p, _)| !in_scales(seeds.keys(), p))
+        .map(|(p, t)| (p.clone(), t.clone()))
+        .collect();
+    layer(&mut raw, &others);
+    let color = |path: &str| match resolve_one(&raw, path) {
+        Ok((_, Value::Color(c))) => Some(c),
+        _ => None,
+    };
+    let scheme = color("surface.panel").map_or(Scheme::Dark, Scheme::of_background);
+    (Backdrop::from_tokens(color), scheme)
+}
+
+/// The tokens of the scales a file gives by their seed
+/// ([`crate::palette::SEEDS_EXTENSION`]), generated over `under` (the
+/// themes the file extends) and fitted to the theme with the file's own
+/// tokens ([`seed_backdrop`]). A scale the themes under it already have
+/// gets the steps they have (a neutral scale has no `contrast`); a new
+/// one gets its twelve steps and `contrast`.
+pub(crate) fn seeded_scales(
+    under: &BTreeMap<String, RawToken>,
+    own: &BTreeMap<String, RawToken>,
+    seeds: &BTreeMap<String, Seed>,
+) -> BTreeMap<String, RawToken> {
+    let (backdrop, scheme) = seed_backdrop(under, own, seeds);
+    let mut out = BTreeMap::new();
+    for (scale, seed) in seeds {
+        let ramp = Ramp::fitted(seed.color, seed.scheme.unwrap_or(scheme), &backdrop);
+        let known = under.contains_key(&format!("{scale}.1"));
+        for (path, value) in ramp.tokens(scale) {
+            if known && !under.contains_key(&path) && !own.contains_key(&path) {
+                continue;
+            }
+            out.insert(
+                path,
+                RawToken {
+                    ty: Some("color".into()),
+                    value,
+                    description: Some(format!("Generated from {}.", seed.color.to_hex())),
+                    extensions: None,
+                },
+            );
+        }
+    }
+    out
 }
 
 fn is_accent_scale(raw: &BTreeMap<String, RawToken>, scale: &str) -> bool {

@@ -240,6 +240,33 @@ step 9 also reads as text on the theme's surfaces and its editor
 checks seeds round the hue circle in every built-in theme against the
 contrast pairs at AA.
 
+**A scale saved as its seed.** A token file may give a scale by its
+seed rather than as twelve values, in its root `$extensions`
+(`palette::SEEDS_EXTENSION`):
+
+```json
+{
+  "$extends": "pop-light",
+  "$extensions": { "org.egui-pop.seeds": {
+    "blue": { "seed": "#8e44ad", "scheme": "light" }
+  } }
+}
+```
+
+When the theme is resolved, the scale is generated from the seed
+(`Ramp::fitted`), for the scheme given (`light` or `dark`; without one,
+the theme's, from `surface.panel`), fitted to the theme's surfaces and
+text as the file and the themes it extends give them (the scale's own
+tokens left out, so a scale never fits itself). A scale its base
+already has gets the steps the base has (`gray` has no `contrast`); a
+new scale gets its twelve steps and `contrast`. Then the file's own
+tokens are laid over it: a step the file also gives keeps the file's
+value. A file with the twelve values written out, and no seed, works
+as before. An entry that cannot be read is a warning
+(`Warning::Invalid`), and the scale keeps the values under it. The
+theme editor's "palette from a colour" writes the seed
+([The theme editor](theme-editor.md#the-file)).
+
 The approach follows egui_colors (MIT), which builds 12-step Radix-like
 scales in OkHsl with APCA; egui-pop's generator is a re-derivation with
 the targets above, not its code, and its tests check every hue in both

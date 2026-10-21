@@ -1150,3 +1150,64 @@ fn a_theme_file_loads_over_its_base_and_warns_instead_of_failing() {
     // Only a file that cannot be read is an error.
     assert!(themes.add_text("broken", "{ nope").is_err());
 }
+
+#[test]
+fn a_scale_given_by_its_seed_is_generated_when_resolved() {
+    use egui_pop_tokens::palette::{Backdrop, Ramp, SEEDS_EXTENSION, Scheme, Seed};
+    let mut themes = Themes::default();
+    let warnings = themes
+        .add_text(
+            "seeded",
+            r##"{
+              "$extends": "pop-light",
+              "$extensions": { "org.egui-pop.seeds": {
+                "blue": { "seed": "#8e44ad", "scheme": "light" },
+                "brick": { "seed": "#c0392b" },
+                "bad": { "seed": "purple" }
+              } },
+              "blue": { "4": { "$type": "color", "$value": "#010203" } }
+            }"##,
+        )
+        .unwrap();
+    // An entry that cannot be read is a warning, the rest loads.
+    assert!(
+        matches!(&warnings[..], [Warning::Invalid { path, .. }] if path == &format!("$extensions.{SEEDS_EXTENSION}.bad")),
+        "{warnings:?}"
+    );
+    let r = themes.resolve(&ThemeSpec::new("seeded"));
+    assert!(r.problems().is_empty(), "{:?}", r.problems());
+    let base = themes.resolve(&ThemeSpec::new("pop-light"));
+    let backdrop = Backdrop::from_tokens(|p| base.color(p));
+    let seed = Color::from_hex("#8e44ad").unwrap();
+    let ramp = Ramp::fitted(seed, Scheme::Light, &backdrop);
+    assert_eq!(r.color("blue.9"), Some(ramp.steps[8]));
+    assert_eq!(r.color("blue.contrast"), Some(ramp.contrast));
+    // A step the file gives keeps the file's value.
+    assert_eq!(r.color("blue.4"), Color::from_hex("#010203"));
+    // The roles aliasing the scale follow it.
+    let blue = themes.resolve(&ThemeSpec::new("seeded").accent("blue"));
+    assert_eq!(blue.color("accent.default"), Some(ramp.steps[8]));
+    // A scale the base does not have gets its twelve steps and contrast,
+    // for the theme's scheme when the seed does not say.
+    let brick = Ramp::fitted(
+        Color::from_hex("#c0392b").unwrap(),
+        Scheme::Light,
+        &backdrop,
+    );
+    for (i, step) in brick.steps.iter().enumerate() {
+        assert_eq!(
+            r.color(&format!("brick.{}", i + 1)),
+            Some(*step),
+            "brick.{}",
+            i + 1
+        );
+    }
+    assert_eq!(r.color("brick.contrast"), Some(brick.contrast));
+    // Written back, the seeds stay.
+    let mut file = TokenFile::parse("x", "{}").unwrap();
+    file.set_seed("blue", Some(Seed::new(seed, Scheme::Dark)));
+    let back = TokenFile::parse("x", &file.to_json_pretty()).unwrap();
+    assert_eq!(back.seeds().0["blue"], Seed::new(seed, Scheme::Dark));
+    file.set_seed("blue", None);
+    assert_eq!(file.extensions, None);
+}

@@ -430,6 +430,167 @@ pub fn ramp(seed: Color, scheme: Scheme) -> [Color; 12] {
     Ramp::new(seed, scheme).steps
 }
 
+/// The root `$extensions` key under which a token file gives colour
+/// scales by their seed rather than as twelve values:
+///
+/// ```json
+/// { "$extensions": { "org.egui-pop.seeds": {
+///     "blue": { "seed": "#8e44ad", "scheme": "light" }
+/// } } }
+/// ```
+///
+/// When the theme is resolved, each such scale is generated from its
+/// seed ([`Ramp::fitted`], fitted to the theme's surfaces and text as
+/// the file gives them), then the file's own tokens are laid over it: a
+/// step the file also gives explicitly keeps the file's value.
+pub const SEEDS_EXTENSION: &str = "org.egui-pop.seeds";
+
+/// A colour scale given by its seed in a token file ([`SEEDS_EXTENSION`]).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Seed {
+    /// The seed colour (its alpha ignored).
+    pub color: Color,
+    /// The scheme the scale is generated for; `None`: the theme's, from
+    /// its panels (`surface.panel`).
+    pub scheme: Option<Scheme>,
+}
+
+impl Seed {
+    /// A seed for a scheme.
+    pub fn new(color: Color, scheme: Scheme) -> Seed {
+        Seed {
+            color,
+            scheme: Some(scheme),
+        }
+    }
+
+    /// As written under [`SEEDS_EXTENSION`]: `{ "seed": "#rrggbb",
+    /// "scheme": "light" }`, the scheme left out when not given.
+    pub fn to_json(self) -> Json {
+        let mut entry = serde_json::Map::new();
+        entry.insert(
+            "seed".into(),
+            json!(
+                Color {
+                    a: 1.0,
+                    ..self.color
+                }
+                .to_hex()
+            ),
+        );
+        if let Some(scheme) = self.scheme {
+            entry.insert("scheme".into(), json!(scheme.name()));
+        }
+        Json::Object(entry)
+    }
+
+    /// Reads an entry written by [`Seed::to_json`]; why not, when it
+    /// cannot be read.
+    pub fn from_json(entry: &Json) -> Result<Seed, String> {
+        let obj = entry
+            .as_object()
+            .ok_or_else(|| format!("`{entry}` is not a map with a `seed`"))?;
+        let color = match obj.get("seed") {
+            Some(Json::String(hex)) => {
+                Color::from_hex(hex).ok_or_else(|| format!("`{hex}` is not a hex colour"))?
+            }
+            Some(other) => return Err(format!("`seed`: `{other}` is not a hex colour")),
+            None => return Err("no `seed`".into()),
+        };
+        let scheme = match obj.get("scheme") {
+            None => None,
+            Some(Json::String(s)) if s == "light" => Some(Scheme::Light),
+            Some(Json::String(s)) if s == "dark" => Some(Scheme::Dark),
+            Some(other) => {
+                return Err(format!("`scheme`: `{other}` is neither `light` nor `dark`"));
+            }
+        };
+        Ok(Seed { color, scheme })
+    }
+}
+
+impl Scheme {
+    /// `"light"` or `"dark"`, as a file names it.
+    pub fn name(self) -> &'static str {
+        match self {
+            Scheme::Light => "light",
+            Scheme::Dark => "dark",
+        }
+    }
+}
+
+impl crate::TokenFile {
+    /// The colour scales the file gives by their seed
+    /// ([`SEEDS_EXTENSION`]), by scale name, and a warning for each entry
+    /// that cannot be read (left out: the scale keeps the values under
+    /// it).
+    pub fn seeds(
+        &self,
+    ) -> (
+        std::collections::BTreeMap<String, Seed>,
+        Vec<crate::Warning>,
+    ) {
+        let mut seeds = std::collections::BTreeMap::new();
+        let mut warnings = Vec::new();
+        let Some(raw) = self
+            .extensions
+            .as_ref()
+            .and_then(|x| x.get(SEEDS_EXTENSION))
+        else {
+            return (seeds, warnings);
+        };
+        let Some(map) = raw.as_object() else {
+            warnings.push(crate::Warning::Invalid {
+                path: format!("$extensions.{SEEDS_EXTENSION}"),
+                reason: format!("`{raw}` is not a map of scales"),
+            });
+            return (seeds, warnings);
+        };
+        for (scale, entry) in map {
+            let path = format!("$extensions.{SEEDS_EXTENSION}.{scale}");
+            if scale.is_empty() || scale.contains(['.', '{', '}']) {
+                warnings.push(crate::Warning::Invalid {
+                    path,
+                    reason: "a scale's name may not be empty or contain `.`, `{` or `}`".into(),
+                });
+                continue;
+            }
+            match Seed::from_json(entry) {
+                Ok(seed) => {
+                    seeds.insert(scale.clone(), seed);
+                }
+                Err(reason) => warnings.push(crate::Warning::Invalid { path, reason }),
+            }
+        }
+        (seeds, warnings)
+    }
+
+    /// Gives a scale by its seed (`None` takes it out), keeping the rest
+    /// of the root `$extensions`.
+    pub fn set_seed(&mut self, scale: &str, seed: Option<Seed>) {
+        let mut root = match self.extensions.take() {
+            Some(Json::Object(m)) => m,
+            _ => serde_json::Map::new(),
+        };
+        let mut seeds = match root.remove(SEEDS_EXTENSION) {
+            Some(Json::Object(m)) => m,
+            _ => serde_json::Map::new(),
+        };
+        match seed {
+            Some(seed) => {
+                seeds.insert(scale.to_string(), seed.to_json());
+            }
+            None => {
+                seeds.remove(scale);
+            }
+        }
+        if !seeds.is_empty() {
+            root.insert(SEEDS_EXTENSION.to_string(), Json::Object(seeds));
+        }
+        self.extensions = (!root.is_empty()).then_some(Json::Object(root));
+    }
+}
+
 /// OkHsl over Oklab, after Björn Ottosson's reference implementation
 /// ("Okhsv and Okhsl", 2021, MIT).
 mod ok {

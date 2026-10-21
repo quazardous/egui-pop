@@ -27,7 +27,8 @@ use std::collections::BTreeMap;
 use serde_json::{Value as Json, json};
 
 use crate::file::{RawToken, TokenFile, alias_target};
-use crate::theme::{FALLBACK_THEME, ThemeSpec, Themes};
+use crate::palette::{Ramp, Seed};
+use crate::theme::{FALLBACK_THEME, ThemeSpec, Themes, in_scales, seed_backdrop, seeded_scales};
 use crate::{Error, Value, Warning};
 
 /// The `$extensions` key the theme editor stamped its files with before
@@ -80,6 +81,10 @@ pub struct ThemeDraft {
     /// just before it, as one change ([`ThemeDraft::record_joined`]).
     joined_undo: Vec<bool>,
     joined_redo: Vec<bool>,
+    /// The scales generated from a seed ([`ThemeDraft::set_seed`]), by
+    /// scale: saved as their seed while their values are still the ones
+    /// it gives ([`ThemeDraft::to_file`]).
+    seeds: BTreeMap<String, Seed>,
 }
 
 impl Default for ThemeDraft {
@@ -98,6 +103,7 @@ impl ThemeDraft {
             redo: Vec::new(),
             joined_undo: Vec::new(),
             joined_redo: Vec::new(),
+            seeds: BTreeMap::new(),
         }
     }
 
@@ -263,6 +269,41 @@ impl ThemeDraft {
         Ok(edits)
     }
 
+    /// The ramp a seed gives for one of the base theme's scales, as a
+    /// file giving that scale by its seed is resolved: fitted to the
+    /// draft's theme without that scale's own tokens
+    /// ([`crate::palette::SEEDS_EXTENSION`]). Write it with
+    /// [`ThemeDraft::scale_edits`], then [`ThemeDraft::set_seed`], so the
+    /// file saves the seed rather than twelve values.
+    pub fn seeded_ramp(&self, themes: &Themes, scale: &str, seed: Seed) -> Ramp {
+        let under = themes.flatten(&self.base, &mut Vec::new());
+        let one = BTreeMap::from([(scale.to_string(), seed)]);
+        let (backdrop, scheme) = seed_backdrop(&under, &own_tokens(&self.overrides), &one);
+        Ramp::fitted(seed.color, seed.scheme.unwrap_or(scheme), &backdrop)
+    }
+
+    /// Records that a scale was generated from a seed (`None` forgets
+    /// it). Not an edit: the scale's values are ([`ThemeDraft::scale_edits`]).
+    /// The file saves the seed in place of the scale's values as long as
+    /// they are the ones it gives; once changed by hand or undone, the
+    /// values are saved as they are.
+    pub fn set_seed(&mut self, scale: &str, seed: Option<Seed>) {
+        match seed {
+            Some(seed) => self.seeds.insert(scale.to_string(), seed),
+            None => self.seeds.remove(scale),
+        };
+    }
+
+    /// The seed a scale was generated from, as recorded.
+    pub fn seed(&self, scale: &str) -> Option<Seed> {
+        self.seeds.get(scale).copied()
+    }
+
+    /// The seeds recorded, by scale.
+    pub fn seeds(&self) -> &BTreeMap<String, Seed> {
+        &self.seeds
+    }
+
     /// The edit an undo would make (the last one's inverse).
     pub fn undo_edit(&self) -> Option<TokenEdit> {
         self.undo.last().map(TokenEdit::inverse)
@@ -309,7 +350,13 @@ impl ThemeDraft {
 
     /// The draft as a token file named `name`: `$extends` its base, its
     /// overrides with their types, stamped with the current format
-    /// ([`crate::FormatStamp`]).
+    /// ([`crate::FormatStamp`]). A scale generated from a seed
+    /// ([`ThemeDraft::set_seed`]) is saved as its seed
+    /// ([`crate::palette::SEEDS_EXTENSION`]): the steps whose value is the
+    /// one the seed gives are left out (regenerated when the file is
+    /// loaded), a step changed since is written as it is. A seed none of
+    /// whose steps still has its value (undone, or the theme changed
+    /// under it) is not saved. Loading the file gives the draft's values.
     pub fn to_file(&self, themes: &Themes, name: &str) -> TokenFile {
         let base = themes.resolve(&ThemeSpec::new(self.base.clone()));
         let mut file = TokenFile::new(name);
@@ -326,6 +373,51 @@ impl ThemeDraft {
                     extensions: None,
                 },
             );
+        }
+        if self.seeds.is_empty() {
+            return file;
+        }
+        // The seeds still giving the draft's values, until that holds for
+        // every seed kept (which seeds are kept changes what the others
+        // are fitted to).
+        let under = themes.flatten(&self.base, &mut Vec::new());
+        let own = own_tokens(&self.overrides);
+        let mut kept = self.seeds.clone();
+        let generated = loop {
+            let generated = seeded_scales(&under, &own, &kept);
+            let stale: Vec<String> = kept
+                .keys()
+                .filter(|scale| {
+                    !generated.iter().any(|(path, t)| {
+                        in_scales(std::iter::once(*scale), path)
+                            && self.overrides.get(path) == Some(&t.value)
+                    })
+                })
+                .cloned()
+                .collect();
+            if stale.is_empty() {
+                break generated;
+            }
+            for scale in stale {
+                kept.remove(&scale);
+            }
+        };
+        for (path, t) in generated {
+            match self.overrides.get(&path) {
+                Some(v) if *v == t.value => {
+                    file.tokens.remove(&path);
+                }
+                Some(_) => {}
+                // The base's value, which the seed would replace.
+                None => {
+                    if let Some(raw) = under.get(&path) {
+                        file.tokens.insert(path, raw.clone());
+                    }
+                }
+            }
+        }
+        for (scale, seed) in kept {
+            file.set_seed(&scale, Some(seed));
         }
         file
     }
@@ -374,6 +466,20 @@ impl ThemeDraft {
         }
         let resolved = themes.resolve(&ThemeSpec::new(base.clone()));
         let mut draft = ThemeDraft::new(base);
+        let (mut seeds, seed_warnings) = file.seeds();
+        warnings.extend(seed_warnings);
+        // A draft changes its base's scales only.
+        seeds.retain(|scale, _| {
+            let known = resolved.get(&format!("{scale}.1")).is_some();
+            if !known {
+                warnings.push(Warning::Unknown {
+                    path: format!("$extensions.{}.{scale}", crate::palette::SEEDS_EXTENSION),
+                    base: draft.base.clone(),
+                    kept: false,
+                });
+            }
+            known
+        });
         for (path, token) in file.tokens {
             if resolved.get(&path).is_none() {
                 warnings.push(Warning::Unknown {
@@ -390,8 +496,38 @@ impl ThemeDraft {
                 Err(reason) => warnings.push(Warning::Invalid { path, reason }),
             }
         }
+        // The seeded scales' steps the file does not give, as the file
+        // resolves them.
+        if !seeds.is_empty() {
+            let under = themes.flatten(&draft.base, &mut Vec::new());
+            for (path, t) in seeded_scales(&under, &own_tokens(&draft.overrides), &seeds) {
+                if !draft.overrides.contains_key(&path) && resolved.get(&path).is_some() {
+                    draft.overrides.insert(path, t.value);
+                }
+            }
+            draft.seeds = seeds;
+        }
         Ok((draft, warnings))
     }
+}
+
+/// A draft's overrides as raw tokens (their types from the tokens they
+/// override).
+fn own_tokens(overrides: &BTreeMap<String, Json>) -> BTreeMap<String, RawToken> {
+    overrides
+        .iter()
+        .map(|(path, value)| {
+            (
+                path.clone(),
+                RawToken {
+                    ty: None,
+                    value: value.clone(),
+                    description: None,
+                    extensions: None,
+                },
+            )
+        })
+        .collect()
 }
 
 /// Whether the base theme has the token.
@@ -617,6 +753,106 @@ mod tests {
         let c = e(&d, "gold.3", "#333333");
         d.record(c);
         assert_eq!((d.undo_group(), d.redo_group()), (1, 0));
+    }
+
+    /// Generates `scale` from `hex` as the theme editor does: the edits,
+    /// one change, and the seed recorded.
+    fn generate(d: &mut ThemeDraft, themes: &Themes, scale: &str, hex: &str) {
+        use crate::Color;
+        use crate::palette::Scheme;
+        let seed = Seed::new(Color::from_hex(hex).unwrap(), Scheme::Light);
+        let ramp = d.seeded_ramp(themes, scale, seed);
+        let edits = d.scale_edits(themes, scale, &ramp).unwrap();
+        assert!(!edits.is_empty());
+        for (i, e) in edits.into_iter().enumerate() {
+            if i == 0 {
+                d.record(e)
+            } else {
+                d.record_joined(e)
+            }
+        }
+        d.set_seed(scale, Some(seed));
+    }
+
+    #[test]
+    fn a_generated_scale_is_saved_as_its_seed() {
+        let t = themes();
+        let mut d = ThemeDraft::new("pop-light");
+        let e = d.edit(&t, "surface.panel", Some(json!("#f4f0ea"))).unwrap();
+        d.apply(e.unwrap());
+        generate(&mut d, &t, "blue", "#8e44ad");
+        let file = d.to_file(&t, "mine");
+        // The seed, not the twelve values.
+        assert!(
+            !file.tokens.keys().any(|p| p.starts_with("blue.")),
+            "{:?}",
+            file.tokens.keys()
+        );
+        assert_eq!(file.seeds().0.keys().collect::<Vec<_>>(), ["blue"]);
+        assert!(file.tokens.contains_key("surface.panel"));
+        // Loaded as a theme, the file gives the draft's values.
+        let text = file.to_json_pretty();
+        let mut with = t.clone();
+        assert_eq!(with.add_text("mine", &text), Ok(vec![]));
+        let loaded = with.resolve(&ThemeSpec::new("mine"));
+        let drafted = t.resolve(&d.spec(&ThemeSpec::new("pop-light")));
+        for i in 1..=12 {
+            let path = format!("blue.{i}");
+            assert_eq!(loaded.color(&path), drafted.color(&path), "{path}");
+        }
+        assert_eq!(
+            loaded.color("blue.contrast"),
+            drafted.color("blue.contrast")
+        );
+        // Imported, it is the same draft, its seed recorded.
+        let (back, warnings) = ThemeDraft::import(&t, "mine", &text).unwrap();
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(back.overrides(), d.overrides());
+        assert_eq!(back.seed("blue"), d.seed("blue"));
+    }
+
+    #[test]
+    fn a_seeded_scale_changed_or_undone_is_saved_as_it_is() {
+        let t = themes();
+        let mut d = ThemeDraft::new("pop-light");
+        generate(&mut d, &t, "blue", "#8e44ad");
+        // A step changed by hand is written; the others still come from
+        // the seed.
+        let e = d.edit(&t, "blue.4", Some(json!("#010203"))).unwrap();
+        d.apply(e.unwrap());
+        let file = d.to_file(&t, "mine");
+        assert_eq!(file.tokens["blue.4"].value, json!("#010203"));
+        assert!(!file.tokens.contains_key("blue.9"));
+        assert!(file.seeds().0.contains_key("blue"));
+        let (back, _) = ThemeDraft::import(&t, "mine", &file.to_json_pretty()).unwrap();
+        assert_eq!(back.overrides(), d.overrides());
+        // Undone, the seed is not saved: the file gives the base's scale.
+        d.undo();
+        while d.undo_group() > 0 {
+            for _ in 0..d.undo_group() {
+                d.undo();
+            }
+        }
+        assert!(d.overrides().is_empty());
+        let file = d.to_file(&t, "mine");
+        assert!(file.seeds().0.is_empty());
+        assert!(file.tokens.is_empty(), "{:?}", file.tokens.keys());
+    }
+
+    #[test]
+    fn a_seed_for_a_scale_the_base_lacks_is_left_out() {
+        let t = themes();
+        let (d, warnings) = ThemeDraft::import(
+            &t,
+            "x",
+            r##"{ "$extends": "pop-dark", "$extensions": { "org.egui-pop.seeds": {
+                "brick": { "seed": "#c0392b" }, "blue": { "seed": "#c0392b", "scheme": "dusk" } } } }"##,
+        )
+        .unwrap();
+        assert!(d.overrides().is_empty());
+        assert!(d.seeds().is_empty());
+        assert_eq!(warnings.len(), 2, "{warnings:?}");
+        assert!(warnings.iter().all(Warning::left_out), "{warnings:?}");
     }
 
     #[test]

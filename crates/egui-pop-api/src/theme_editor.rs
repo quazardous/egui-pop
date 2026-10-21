@@ -68,7 +68,7 @@ use egui_pop_core::theme::{ScopedTheme, Tokens, color32};
 use egui_pop_core::tokens::apca;
 use egui_pop_core::tokens::contract::{self, Tier};
 use egui_pop_core::tokens::contrast::{self, Level, Pair, PairKind};
-use egui_pop_core::tokens::palette::{self, Backdrop, Ramp, Scheme};
+use egui_pop_core::tokens::palette::{self, Scheme, Seed};
 use egui_pop_core::tokens::{
     BUILT_IN_THEMES, Color, Counterpart, ResolvedTokens, ThemeDraft, ThemeSpec, TokenEdit, Value,
     Warning, theme_label,
@@ -686,6 +686,13 @@ impl ThemeEditor {
         {
             let mut s = lock(&self.state);
             s.draft = ThemeDraft::from_spec(&spec);
+            // The seeds a file gave: saved again as seeds while the
+            // scales keep their values (`ThemeDraft::to_file` checks).
+            if s.draft.base() == draft.base() {
+                for (scale, seed) in draft.seeds() {
+                    s.draft.set_seed(scale, Some(*seed));
+                }
+            }
             s.gesture = None;
             s.typing = None;
         }
@@ -721,9 +728,12 @@ impl ThemeEditor {
     /// Writes a scale generated from a seed colour over one of the
     /// theme's colour scales (`blue`, `gray`): its steps 1 to 12 and its
     /// `contrast` ([`palette::Ramp`]), for the scheme of the variant
-    /// edited, fitted to its surfaces and text ([`Backdrop`]). Each
-    /// token goes through the `theme.token` step; together they undo as
-    /// one change. The number of tokens changed.
+    /// edited, fitted to its surfaces and text
+    /// ([`ThemeDraft::seeded_ramp`]). Each token goes through the
+    /// `theme.token` step; together they undo as one change. The seed is
+    /// recorded ([`ThemeDraft::set_seed`]): the exported file gives the
+    /// scale as its seed, regenerated when loaded, rather than twelve
+    /// values. The number of tokens changed.
     ///
     /// The variant edited only: a theme's light or dark counterpart
     /// keeps its own scale (generate it again with the other mode
@@ -737,18 +747,17 @@ impl ThemeEditor {
     ) -> Result<usize, String> {
         self.sync(app);
         let tokens = self.resolved(app);
-        let scheme = if tokens.is_dark() {
-            Scheme::Dark
-        } else {
-            Scheme::Light
-        };
-        let backdrop = Backdrop::from_tokens(|p| tokens.color(p));
-        let ramp = Ramp::fitted(seed, scheme, &backdrop);
+        let seed = Seed::new(seed, scheme_of(&tokens));
         let edits = {
             let themes = app.theme();
-            self.draft().scale_edits(themes.themes(), scale, &ramp)?
+            let draft = self.draft();
+            let ramp = draft.seeded_ramp(themes.themes(), scale, seed);
+            draft.scale_edits(themes.themes(), scale, &ramp)?
         };
-        self.record_all(app, edits, cause)
+        let made = self.record_all(app, edits, cause)?;
+        // Saved as the seed while the scale keeps the values it gives.
+        lock(&self.state).draft.set_seed(scale, Some(seed));
+        Ok(made)
     }
 
     /// Runs edits through the `theme.token` step and records them as
@@ -1676,7 +1685,8 @@ fn generator(
         let s = lock(&editor.state);
         match &s.seed {
             Some((k, c)) if k == scale => *c,
-            _ => current,
+            // The seed the scale was generated from, else its solid step.
+            _ => s.draft.seed(scale).map_or(current, |seed| seed.color),
         }
     };
     let before = seed;
@@ -1724,12 +1734,12 @@ fn generator(
         ));
     }
     // The ramp the seed gives, as it would be written.
-    let scheme = if tokens.is_dark() {
-        Scheme::Dark
-    } else {
-        Scheme::Light
+    let ramp = {
+        let themes = app.theme();
+        editor
+            .draft()
+            .seeded_ramp(themes.themes(), scale, Seed::new(seed, scheme_of(tokens)))
     };
-    let ramp = Ramp::fitted(seed, scheme, &Backdrop::from_tokens(|p| tokens.color(p)));
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 2.0;
         for c in ramp.steps {
@@ -1738,6 +1748,15 @@ fn generator(
     });
     if app.theme().counterpart().is_some() {
         ui.weak(strings::tr(&ctx, &txt::THEME_EDITOR_GENERATE_VARIANT));
+    }
+}
+
+/// The scheme a scale is generated for in a theme: its panels'.
+fn scheme_of(tokens: &ResolvedTokens) -> Scheme {
+    if tokens.is_dark() {
+        Scheme::Dark
+    } else {
+        Scheme::Light
     }
 }
 

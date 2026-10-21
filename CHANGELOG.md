@@ -419,6 +419,18 @@ publishes.
   than this egui-pop is read best-effort, and an unreadable stamp counts
   as current, each a `Problem::Format` warning rather than an error.
   Part of #37.
+- A colour scale saved as its seed (egui-pop-tokens, egui-pop-api): a
+  token file may give a scale by its seed colour and scheme in its root
+  `$extensions` (`"org.egui-pop.seeds": { "blue": { "seed": "#8e44ad",
+  "scheme": "light" } }`, `palette::SEEDS_EXTENSION`, `palette::Seed`,
+  `TokenFile::seeds`, `TokenFile::set_seed`); the scale is generated
+  when the theme is resolved, fitted to the theme's surfaces and text,
+  and a step the file also gives keeps the file's value. A file with the
+  twelve values written out works as before. The theme editor's
+  "palette from a colour" records the seed (`ThemeDraft::seeded_ramp`,
+  `ThemeDraft::set_seed`), and its export writes the seed in place of
+  the steps still at the value it gives; import reads it back. Part of
+  #33.
 
 ### Changed
 
