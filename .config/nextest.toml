@@ -14,7 +14,8 @@ fail-fast = false
 [[profile.default.overrides]]
 filter = """
 not (package(egui-pop-tokens) | package(egui-pop-model) | package(egui-pop-wayland)
-     | package(egui-pop-win32) | package(egui-pop-test-macros) | package(xtask))
+     | package(egui-pop-win32) | package(egui-pop-test-macros) | package(ortho-router)
+     | package(xtask))
 """
 retries = 2
 

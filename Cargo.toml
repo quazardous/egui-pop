@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
     "crates/egui-pop-tokens",
+    "crates/ortho-router",
     "crates/egui-pop-win32",
     "crates/egui-pop-wayland",
     "crates/egui-pop-model",

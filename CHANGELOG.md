@@ -46,6 +46,16 @@ publishes.
   egui-pop-api): `payload` for a text, a number or a boolean,
   `payload.<field>` for an object's fields, so a `when` clause (a key
   binding) can name one sub-workspace: `payload.id == 'darkroom'`.
+- `ortho-router` 0.1.0, a new standalone crate without dependencies (no
+  egui): orthogonal connector routing around rectangular obstacles, for
+  any project that draws wires between nodes. `Router::route` and
+  `Router::route_all` turn connectors (two `Port`s, a point and the side
+  it leaves from) into polylines of horizontal and vertical segments
+  that keep `Options::margin` away from the obstacles, with few bends
+  (`Options::bend_penalty`): A* over the Hanan grid of the grown
+  obstacles. Routes are deterministic; when no way exists a documented
+  fallback (one elbow) comes back with `Route::routed` false.
+  `Router::fingerprint` keys a cache of routes by layout.
 - A reference graph model in a YAML file (egui-pop-viewport, the new
   `graph-yaml` feature; the facade's `graph-yaml`):
   `graph::yaml::YamlGraph` implements `GraphModel` for applications

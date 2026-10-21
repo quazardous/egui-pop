@@ -1,0 +1,18 @@
+[package]
+name = "ortho-router"
+version = "0.1.0"
+description = "Orthogonal connector routing around rectangular obstacles: right-angled wires between ports that go around nodes, with few bends (no dependencies)"
+readme = "README.md"
+keywords = ["routing", "orthogonal", "connector", "diagram", "node-graph"]
+categories = ["algorithms", "graphics", "gui"]
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
