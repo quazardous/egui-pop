@@ -12,6 +12,11 @@ publishes.
 
 ### Added
 
+- The gallery's `clipboard` page: two palettes copying a typed colour
+  between them (Ctrl+C, Ctrl+X, Ctrl+V and the Edit menu), a grey
+  palette taking it only through a lossy transform, paste special's
+  ways with their previews, and a text field keeping egui's own copy
+  and paste.
 - The clipboard (egui-pop-api, ADR 0015, `docs/clipboard.md`): the
   `Clipboard` contract (one item per slot, the user's and each agent
   session's own, a revision, `clipboard.changed` on the journal),

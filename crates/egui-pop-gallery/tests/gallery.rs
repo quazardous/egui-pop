@@ -1503,6 +1503,94 @@ fn the_context_stack_page_drills_down_switches_modes_and_comes_back() {
 }
 
 #[test]
+fn the_clipboard_page_copies_a_colour_between_palettes_and_previews_paste_special() {
+    use egui::accesskit::Role;
+    use egui_pop::api::dialogs::{self, DIALOGS, Dialog};
+    use egui_pop::model::commands::Origin;
+    let mut h = harness(options("pop-dark", Density::Comfortable, "clipboard"));
+    h.run();
+    let app = h.state().app.handle().clone();
+    let value = |h: &Harness<'_, Gallery>, label: &str| {
+        h.get_by_label(label)
+            .accesskit_node()
+            .value()
+            .unwrap_or_default()
+    };
+    // Nothing focused answers: the Edit commands are greyed.
+    assert_eq!(app.when_context().get("canCopy"), "false");
+    // Ctrl+C on palette A copies its selected colour, a typed item.
+    h.get_by_label("Palette A").focus();
+    h.run();
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::C);
+    h.run();
+    assert!(
+        h.query_by_label_contains("a colour (revision 1)").is_some(),
+        "the page shows what the clipboard holds"
+    );
+    // Paste special's ways into palette B, each with its preview.
+    assert!(h.query_by_label("As a colour").is_some());
+    assert!(h.query_by_label("As text").is_some());
+    assert!(
+        h.query_all_by_label("adds #3a7bd5 as colour 2")
+            .next()
+            .is_some()
+    );
+    // Ctrl+V on palette B pastes it as a colour.
+    h.get_by_label("Palette B").focus();
+    h.run();
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::V);
+    h.run();
+    assert_eq!(value(&h, "Palette B"), "#2e8b57, #3a7bd5");
+    let mut results = egui_kittest::SnapshotResults::new();
+    results.add(h.try_snapshot("clipboard-pop-dark"));
+    // The greys take it only through a lossy transform, which a toast
+    // names.
+    h.get_by_label("Greys").focus();
+    h.run();
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::V);
+    h.run();
+    assert_eq!(value(&h, "Greys"), "#808080, #747474");
+    // (The toast's close button names it too.)
+    assert!(
+        h.query_all_by_label("Pasted; lost: the hue")
+            .next()
+            .is_some()
+    );
+    // Ctrl+Shift+V on palette B: the choice of every way; text chosen.
+    h.get_by_label("Palette B").focus();
+    h.run();
+    h.key_press_modifiers(
+        egui::Modifiers::COMMAND | egui::Modifiers::SHIFT,
+        egui::Key::V,
+    );
+    h.run();
+    let d = app.service(&DIALOGS).unwrap();
+    let Some((_, Dialog::Choose(c))) = d.current() else {
+        panic!("paste special is open");
+    };
+    let text = c.options.iter().position(|o| o.label == "As text").unwrap();
+    assert_eq!(c.options[text].hint, "adds #3a7bd5 as colour 3");
+    d.answer(dialogs::Answer::Choose { index: text }, Origin::User)
+        .unwrap();
+    h.run();
+    assert_eq!(value(&h, "Palette B"), "#2e8b57, #3a7bd5, #3a7bd5");
+    // A text field keeps egui's own paste: the clipboard is untouched.
+    let rev = egui_pop::api::clipboard::with_owner(&app, |c| c.rev()).unwrap();
+    h.query_all_by_label("Note")
+        .find(|n| n.accesskit_node().role() == Role::TextInput)
+        .unwrap()
+        .focus();
+    h.run();
+    h.event(egui::Event::Paste(" pasted".into()));
+    h.run();
+    assert_eq!(
+        egui_pop::api::clipboard::with_owner(&app, |c| c.rev()),
+        Some(rev)
+    );
+    egui_pop_test::assert_all_named(&h);
+}
+
+#[test]
 fn the_shortcuts_editor_searches_by_key_and_removes_every_key() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "settings"));
     h.run();

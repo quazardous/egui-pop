@@ -31,7 +31,7 @@ outlines and the loupe), `node-graph` (the node graph editor), `graph-file` (the
 (the live tree), `table` (lists and tables), `library` (the photo
 library), `text-editor`,
 `code-editor`, `terminal`, `zones` (zones and blocks), `workbench`,
-`palettes`, `arrangements`, `contexts` (the context stack: places and modes, and the status bar that follows them), `strips`, `jobs` (a pretend host's
+`palettes`, `arrangements`, `contexts` (the context stack: places and modes, and the status bar that follows them), `clipboard` (typed items copied between palettes, paste special's previews), `strips`, `jobs` (a pretend host's
 background jobs), `frame`, `scale`, `pointer` (pointer gesture profiles),
 `platform` (the platform services),
 `settings`, `i18n` (translations) and `debug` (the debug
@@ -234,7 +234,7 @@ the display, and a preview dialog (a custom dialog holding a viewport).
 
 ### Layout
 
-Zones and blocks, the workbench, palettes, arrangements, the context stack, strips and the window frame.
+Zones and blocks, the workbench, palettes, arrangements, the context stack, the clipboard, strips and the window frame.
 
 <table>
   <tr>
@@ -263,6 +263,7 @@ Zones and blocks, the workbench, palettes, arrangements, the context stack, stri
   </tr>
   <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/workbench-drag-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/workbench-drag-pop-dark.png" width="200" alt="workbench-drag-pop-dark"></a><br>workbench-drag-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/clipboard-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/clipboard-pop-dark.png" width="200" alt="clipboard-pop-dark"></a><br>clipboard-pop-dark</td>
   </tr>
 </table>
 

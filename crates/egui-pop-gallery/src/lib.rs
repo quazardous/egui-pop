@@ -7,7 +7,8 @@
 //! Pages: the theme overview, the token table, the theme editor and
 //! egui's built-in widgets (plain functions reused by the snapshot tests); zones and
 //! blocks (one plugin replacing, extending and wrapping another's
-//! blocks); settings applied live; translations; the platform services
+//! blocks); settings applied live; translations; the clipboard (typed
+//! items between widgets, paste special); the platform services
 //! (simulated unless `--platform`); the debug bridge.
 
 use std::io::Write as _;
@@ -30,7 +31,7 @@ use pages::story::PagePlugin;
 pub const TITLE: &str = "egui-pop gallery";
 
 /// The pages, as named on the command line.
-pub const PAGES: [&str; 49] = [
+pub const PAGES: [&str; 50] = [
     "overview",
     "tokens",
     "builtins",
@@ -70,6 +71,7 @@ pub const PAGES: [&str; 49] = [
     "palettes",
     "arrangements",
     "contexts",
+    "clipboard",
     "strips",
     "jobs",
     "frame",
@@ -251,6 +253,8 @@ pub fn builder(options: &Options) -> AppBuilder {
         .plugin(pages::arrangements::ArrangementsPage::default())
         .plugin(egui_pop::api::contexts::ContextsPlugin::default().root("All photos"))
         .plugin(pages::contexts::ContextsPage::default())
+        .plugin(egui_pop::api::clipboard::ClipboardPlugin)
+        .plugin(pages::clipboard::ClipboardPage)
         .plugin(egui_pop::api::strips::StripsPlugin::default())
         .plugin(pages::strips::StripsPage)
         .plugin(jobs_plugin(&jobs_sim))

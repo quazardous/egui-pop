@@ -8,6 +8,7 @@ use egui_pop::theme::Tokens;
 
 pub mod arrangements;
 pub mod builtins;
+pub mod clipboard;
 pub mod contexts;
 pub mod cursors;
 pub mod debug;
