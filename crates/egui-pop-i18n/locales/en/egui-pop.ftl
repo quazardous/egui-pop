@@ -20,6 +20,8 @@ category-navigation = Navigation
 
 category-notifications = Notifications
 
+category-pointer = Pointer
+
 category-terminal = Terminal
 
 category-theme = Theme
@@ -190,6 +192,74 @@ command-editor-write =
     .description = Changes the text through `edit.change`: the whole `text`; or `text` between `from` and `to` (`{"{"}line, col{"}"}` from 0); or a list of `changes`. One undo step.
     .title = Write the text
 
+command-gesture-graph-fit =
+    .description = Fits the whole graph in the view.
+    .title = Node graph: fit
+
+command-gesture-graph-pan =
+    .description = Moves the graph with the wheel or a drag.
+    .title = Node graph: pan
+
+command-gesture-graph-pan-x =
+    .description = Moves the graph sideways with the wheel.
+    .title = Node graph: pan horizontally
+
+command-gesture-graph-pan-y =
+    .description = Moves the graph up and down with the wheel.
+    .title = Node graph: pan vertically
+
+command-gesture-graph-zoom =
+    .description = Zooms the graph around the pointer.
+    .title = Node graph: zoom at the pointer
+
+command-gesture-image-fit =
+    .description = Fits the whole image in the view.
+    .title = Image: fit
+
+command-gesture-image-pan =
+    .description = Moves the image with the wheel or a drag.
+    .title = Image: pan
+
+command-gesture-image-pan-x =
+    .description = Moves the image sideways with the wheel.
+    .title = Image: pan horizontally
+
+command-gesture-image-pan-y =
+    .description = Moves the image up and down with the wheel.
+    .title = Image: pan vertically
+
+command-gesture-image-zoom =
+    .description = Zooms the image around the pointer, holding at fit and 100 %.
+    .title = Image: zoom at the pointer
+
+command-gesture-image-zoom-cycle =
+    .description = Goes to 100 %, then 200 %, then fit, around the pointer.
+    .title = Image: zoom cycle
+
+command-gesture-image-zoom-free =
+    .description = Zooms the image around the pointer, holding nowhere.
+    .title = Image: zoom without stops
+
+command-gesture-image-zoom-toggle =
+    .description = Goes to 100 % around the pointer when the image fits, else fits it.
+    .title = Image: fit or 100 %
+
+command-gesture-value-coarse =
+    .description = These keys make a slider's drag, arrows and wheel ten times coarser.
+    .title = Values: coarser
+
+command-gesture-value-fine =
+    .description = These keys make a slider's drag, arrows and wheel ten times finer.
+    .title = Values: finer
+
+command-gesture-value-panel =
+    .description = The wheel with these keys scrolls the panel, even over a slider.
+    .title = Values: scroll the panel
+
+command-gesture-value-step =
+    .description = The wheel with these keys steps the slider under the pointer, focused or not.
+    .title = Values: step with the wheel
+
 command-job-cancel =
     .description = Asks the host to cancel the job `id`; it shows as cancelling until the host says it is cancelled.
     .title = Cancel a job
@@ -257,6 +327,10 @@ command-palettes-reset =
 command-palettes-toggle =
     .description = Hides the palettes that are not pinned, or shows them again.
     .title = Hide or show palettes
+
+command-pointer-overrides =
+    .description = Keeps the pointer gestures the user changed on the current profile, or drops them (`value`: keep or drop).
+    .title = Keep or drop pointer gesture changes
 
 command-status-item-hide =
     .description = Hides a status bar item (`id`) where the user is, or shows it again (`hidden`: false).
@@ -730,6 +804,14 @@ egui-pop-picker-close = Close the picker
 
 egui-pop-picker-up = Up
 
+egui-pop-pointer-drop = Drop my changes
+
+egui-pop-pointer-keep = Keep my changes
+
+egui-pop-pointer-overrides-detail = You changed { $count } pointer gestures. Keep your changes on top of this profile, or drop them?
+
+egui-pop-pointer-overrides-title = Pointer profile: { $profile }
+
 egui-pop-reset = Reset
 
 egui-pop-retry = Retry
@@ -785,6 +867,26 @@ egui-pop-shortcuts-key-from = { $keys } ({ $source })
 egui-pop-shortcuts-no-key = No key
 
 egui-pop-shortcuts-no-key-name = Remove every key of { $command }
+
+egui-pop-shortcuts-pointer-add = Add a gesture
+
+egui-pop-shortcuts-pointer-add-name = Add a gesture to { $command }
+
+egui-pop-shortcuts-pointer-alt = Alt with a drag or the wheel may go to the window manager on some Linux desktops.
+
+egui-pop-shortcuts-pointer-only = Pointer gestures only
+
+egui-pop-shortcuts-pointer-pad = Do the gesture here for { $command }: the wheel, a pinch, a click, a double click or a drag, holding its keys. Escape: cancel.
+
+egui-pop-shortcuts-pointer-pad-name = Gesture pad
+
+egui-pop-shortcuts-pointer-profile = Pointer profile: { $profile }
+
+egui-pop-shortcuts-pointer-profile-changed = Pointer profile: { $profile } ({ $count } changed)
+
+egui-pop-shortcuts-pointer-remove-name = Remove { $keys } from { $command }
+
+egui-pop-shortcuts-pointer-use = Use { $keys }
 
 egui-pop-shortcuts-press-new-keys = Press the new keys for { $command }. Escape: cancel; Backspace: no key.
 
@@ -1110,6 +1212,24 @@ egui-pop-viewport-graph-value = { $nodes } nodes, { $wires } wires, { $level }
 
 egui-pop-viewport-graph-wire-started = Wire from { $port }: choose a port
 
+egui-pop-viewport-hint-fit = fit
+
+egui-pop-viewport-hint-leave = leave
+
+egui-pop-viewport-hint-pan = pan
+
+egui-pop-viewport-hint-pan-x = pan sideways
+
+egui-pop-viewport-hint-pan-y = pan up and down
+
+egui-pop-viewport-hint-zoom = zoom
+
+egui-pop-viewport-hint-zoom-cycle = 100 %, 200 %, fit
+
+egui-pop-viewport-hint-zoom-free = zoom without stops
+
+egui-pop-viewport-hint-zoom-toggle = fit or 100 %
+
 egui-pop-viewport-histogram-clipped-highlights = highlights clipped: { $percent } %
 
 egui-pop-viewport-histogram-clipped-shadows = shadows clipped: { $percent } %
@@ -1427,6 +1547,52 @@ setting-dialogs-movable =
 setting-files-native =
     .description = Choose files with the system's chooser when there is one; off, with egui-pop's own.
     .label = Use the system's file chooser
+
+setting-input-image-double-click =
+    .description = What a double click on the image does: fit it, leave the view (back to the browser, as darktable does), or nothing; profile: as the pointer profile says.
+    .label = Double click on the image
+
+setting-input-image-double-click-choice-fit = fit
+
+setting-input-image-double-click-choice-leave = leave
+
+setting-input-image-double-click-choice-nothing = nothing
+
+setting-input-image-double-click-choice-profile = profile
+
+setting-input-pointer-profile =
+    .description = What the wheel, a pinch and the mouse buttons do on the image, the node graph and sliders, as in darktable, Adobe's applications, document tools (GIMP, Inkscape, the web), Blender and node editors, or on a trackpad. The shortcuts editor shows and changes each gesture.
+    .label = Pointer profile
+
+setting-input-pointer-profile-choice-adobe = adobe
+
+setting-input-pointer-profile-choice-blender = blender
+
+setting-input-pointer-profile-choice-darktable = darktable
+
+setting-input-pointer-profile-choice-document = document
+
+setting-input-pointer-profile-choice-trackpad = trackpad
+
+setting-input-slider-wheel =
+    .description = Whether the wheel over a slider scrolls the panel (guarded: the slider steps only with the focus or the step keys) or changes the value (value); profile: as the pointer profile says.
+    .label = Wheel over sliders
+
+setting-input-slider-wheel-choice-guarded = guarded
+
+setting-input-slider-wheel-choice-profile = profile
+
+setting-input-slider-wheel-choice-value = value
+
+setting-input-wheel-device =
+    .description = What sends wheel events: auto tells a mouse wheel (lines) from a trackpad (points); some mice send points too, and choosing mouse or trackpad settles it.
+    .label = Wheel device
+
+setting-input-wheel-device-choice-auto = auto
+
+setting-input-wheel-device-choice-mouse = mouse
+
+setting-input-wheel-device-choice-trackpad = trackpad
 
 setting-notifications-desktop =
     .description = Where notifications show: on the desktop, on the desktop only while the window does not have the focus, or in the window.
