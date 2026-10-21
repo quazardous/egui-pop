@@ -17,7 +17,7 @@
 //! - `cpu-worker`, `cpu-ui`: the same without the GPU path (the display
 //!   transform on the CPU, egui textures);
 //! - `gpu-render`: the workers render each tile on the GPU into a
-//!   texture of their own and hand it over (`TileSink::deliver_texture`):
+//!   texture of their own and hand it over (`TileSink::deliver_device`):
 //!   no pixel crosses the CPU.
 //!
 //! The second argument is the period (8: a storm; 30: views held).
@@ -37,6 +37,7 @@ use std::time::{Duration, Instant};
 
 use egui::{Context, Pos2, RawInput, Rect, vec2};
 use egui_pop_viewport::demo::Procedural;
+use egui_pop_viewport::device::DeviceTile;
 use egui_pop_viewport::gpu::egui_wgpu::{self, wgpu};
 use egui_pop_viewport::source::{TileRequest, TileSink, TileSource};
 use egui_pop_viewport::tiles::UploadBudget;
@@ -351,7 +352,8 @@ fn gpu_work(s: &Shared) {
         let texture = render_tile(&s.gpu, &job);
         // Submitted before the hand-over: the interface's frame, later
         // on the same queue, samples a finished texture.
-        s.sink.deliver_texture(&job, texture);
+        s.sink
+            .deliver_device(&job, DeviceTile::texture(&s.gpu.device, texture));
         lock(&s.queue).served += 1;
     }
 }

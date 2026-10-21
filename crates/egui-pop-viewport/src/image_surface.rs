@@ -844,6 +844,7 @@ mod wl {
             };
             let [bw, bh] = place.buffer;
             let size = [bw as f32, bh as f32];
+            r.ensure_image_pipelines(device, format);
             let mut drawn = Vec::new();
             for (side, clip) in &p.sides {
                 if side.write_uniforms(device, queue, r, size, place.origin, false) {
@@ -886,8 +887,7 @@ mod wl {
                         continue;
                     }
                     pass.set_scissor_rect(x0, y0, x1 - x0, y1 - y0);
-                    pass.set_pipeline(r.image_pipeline(device, format));
-                    side.draw(&mut pass, r);
+                    side.draw(&mut pass, r, &r.image_pipelines[&format]);
                 }
             }
             queue.submit([encoder.finish()]);

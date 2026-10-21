@@ -624,7 +624,8 @@ tiles come from two worker threads. Each intake runs in its own process:
   the upload budget;
 - `gpu-render`: the source's workers render each tile on the GPU, into a
   texture of their own, with the demo image's function ported to WGSL,
-  and hand it over (`TileSink::deliver_texture`, a prototype): no pixel
+  and hand it over (`TileSink::deliver_device`, see
+  [device tiles](viewport.md#device-tiles)): no pixel
   crosses the CPU, the interface thread only binds the texture;
 - `cpu-ui`, `cpu-worker`: the same without the GPU path installed (the
   display transform on the CPU, egui textures), old and new default.
@@ -689,7 +690,7 @@ What the rows show:
   workers (section 5.1: fewer tiles served in a storm). The opt-out
   stays: `set_prepare_on_worker(false)`, `UploadBudget::UNLIMITED`.
 - **A source whose pixels are on the GPU hands over textures**
-  (`TileSink::deliver_texture`): no copy, the interface thread only
+  (`TileSink::deliver_device`): no copy, the interface thread only
   binds, the best of the three by an order of magnitude. This is the
   path for an application whose pipeline renders on the GPU (Helios's
   processing): its output should reach the viewport as textures on
@@ -700,7 +701,7 @@ What the rows show:
   `prepare` is the texture creation and the copy. The workers can do
   both (wgpu's device and queue are shareable): the sink, given the
   device, creates and fills the texture on the delivering thread and
-  hands it over as `deliver_texture` does. A pool of tile textures
+  hands it over as `deliver_device` does. A pool of tile textures
   reused instead of created would cut it further.
 
 ## 6. Proposal: a threading model for egui-pop
@@ -786,7 +787,7 @@ graphs, scopes and histograms.
    waiting thread for actionable notifications.
 9. The delegated surface (section 4) in the viewport crate, then the
    viewport's tiles on it. Measured first as tiles rendered on the GPU
-   by the source (`TileSink::deliver_texture`, section 5.2): the
+   by the source (`TileSink::deliver_device`, section 5.2): the
    interface thread's tile cost goes from 12 ms to under 1 ms at p99.
 10. egui-pop's interface kernel on its own thread: not recommended
     (section 3.5); for the owner to decide.

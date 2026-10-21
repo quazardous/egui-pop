@@ -108,9 +108,9 @@ pub(crate) struct Draw<'a> {
 pub(crate) enum GpuData {
     Scene(Vec<f32>),
     Texels(Vec<u8>),
-    /// Rendered by the source on the device: bound, not copied.
+    /// On the render device: bound, not copied.
     #[cfg(feature = "wgpu")]
-    Texture(egui_wgpu::wgpu::Texture),
+    Device(Box<crate::device::DeviceTile>),
 }
 
 /// The GPU path's uploads and releases, waiting for the next paint.
@@ -118,6 +118,46 @@ pub(crate) enum GpuData {
 pub(crate) struct GpuQueue {
     pub uploads: Vec<(u64, [u32; 2], GpuData)>,
     pub frees: Vec<u64>,
+    /// What the paints copied and bound so far.
+    pub copied: Transfers,
+}
+
+/// Tile pixels copied from the CPU to the GPU, counted where the copy
+/// happens: an egui texture loaded (the CPU path), a GPU path texture
+/// written at the paint. Device tiles are bound in place and count as
+/// `bound`, with no byte. The draws' uniforms (a few hundred bytes a
+/// frame) are not tile pixels and are not counted.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Transfers {
+    /// Bytes copied.
+    pub bytes: u64,
+    /// Tiles copied.
+    pub tiles: u64,
+    /// Device tiles bound, nothing copied.
+    pub bound: u64,
+}
+
+impl Transfers {
+    fn plus(self, o: Transfers) -> Transfers {
+        Transfers {
+            bytes: self.bytes + o.bytes,
+            tiles: self.tiles + o.tiles,
+            bound: self.bound + o.bound,
+        }
+    }
+
+    fn minus(self, o: Transfers) -> Transfers {
+        Transfers {
+            bytes: self.bytes.saturating_sub(o.bytes),
+            tiles: self.tiles.saturating_sub(o.tiles),
+            bound: self.bound.saturating_sub(o.bound),
+        }
+    }
+
+    /// Nothing copied.
+    pub fn is_zero_copy(&self) -> bool {
+        self.bytes == 0 && self.tiles == 0
+    }
 }
 
 /// How much a frame uploads at most: tiles and bytes (whichever is
@@ -256,6 +296,13 @@ pub(crate) struct Tiles {
     prep_key: Option<PrepKey>,
     prep_stamp: u64,
     pub report: UploadReport,
+    /// What the interface thread copied (egui textures).
+    cpu_copied: Transfers,
+    /// Everything copied, as of the start of this frame.
+    last_total: Transfers,
+    /// What the last whole frame copied: from the start of the frame
+    /// before to the start of this one, its paint included.
+    pub frame_transfers: Transfers,
 }
 
 /// A waiting tile's upload order: its class, its distance to the view's
@@ -299,6 +346,9 @@ impl Default for Tiles {
             prep_key: None,
             prep_stamp: 0,
             report: UploadReport::default(),
+            cpu_copied: Transfers::default(),
+            last_total: Transfers::default(),
+            frame_transfers: Transfers::default(),
         }
     }
 }
@@ -346,6 +396,17 @@ impl Tiles {
     /// Requests still waiting for an answer.
     pub fn outstanding(&self) -> usize {
         self.asked.len()
+    }
+
+    /// Everything copied so far (the GPU path's paints up to the last
+    /// one).
+    pub fn transfers(&self) -> Transfers {
+        let gpu = self
+            .gpu
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .copied;
+        self.cpu_copied.plus(gpu)
     }
 
     /// Bytes of textures held.
@@ -428,7 +489,12 @@ impl Tiles {
         self.frame += 1;
         self.missing = 0;
         self.report = UploadReport::default();
+        let total = self.transfers();
+        self.frame_transfers = total.minus(self.last_total);
+        self.last_total = total;
         self.feed.set_context(ctx);
+        #[cfg(feature = "wgpu")]
+        self.feed.set_render(crate::gpu::render_device(ctx));
         let effective = self.wanted_size.min(device.max_texture_side).max(16);
         if effective != self.tile_size {
             self.tile_size = effective;
@@ -453,6 +519,11 @@ impl Tiles {
                 Message::Changed(side, region) => {
                     Stats::add(&self.stats.changed, 1);
                     self.invalidate(side, region);
+                }
+                #[cfg(feature = "wgpu")]
+                Message::Refused(error) => {
+                    Stats::add(&self.stats.refused, 1);
+                    self.last_error = Some(error);
                 }
                 Message::Readout(r) => self.readout = Some(r),
             }
@@ -577,8 +648,9 @@ impl Tiles {
             Body::Raw(Pixels::Scene(v)) => v.len() == n * 4,
             Body::Image { image, .. } => image.pixels.len() == n,
             Body::Texels { .. } => true,
+            // Checked below, against the render device of this frame.
             #[cfg(feature = "wgpu")]
-            Body::Texture(t) => t.width() >= tile.size[0] && t.height() >= tile.size[1],
+            Body::Device(_) => true,
         };
         if !ok || n == 0 {
             Stats::add(&self.stats.failed, 1);
@@ -617,18 +689,33 @@ impl Tiles {
                 (Texture::Gpu(id), n * 8, false, false)
             }
             #[cfg(feature = "wgpu")]
-            Body::Texture(texture) => {
-                if !device.gpu {
-                    // No GPU path to bind it to.
-                    Stats::add(&self.stats.failed, 1);
+            Body::Device(mut dt) => {
+                // The device may have changed since the source checked.
+                let render = crate::gpu::render_device(ctx);
+                if let Err(e) = dt.check(render.as_ref(), tile.size) {
+                    Stats::add(&self.stats.refused, 1);
+                    self.last_error = Some(format!("device tile refused: {e}"));
+                    match dt.fallback.take().and_then(|f| f()) {
+                        Some(pixels) => {
+                            let fallback = Pending {
+                                size: tile.size,
+                                body: Body::Raw(pixels),
+                                seq: tile.seq,
+                            };
+                            self.arrived(ctx, device, target, transform, k, fallback);
+                        }
+                        None => Stats::add(&self.stats.failed, 1),
+                    }
                     return;
                 }
+                Stats::add(&self.stats.device, 1);
+                let bytes = dt.footprint(tile.size);
                 self.gpu
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .uploads
-                    .push((id, tile.size, GpuData::Texture(texture)));
-                (Texture::Gpu(id), n * 8, false, false)
+                    .push((id, tile.size, GpuData::Device(dt)));
+                (Texture::Gpu(id), bytes, false, false)
             }
             Body::Image {
                 image,
@@ -639,6 +726,8 @@ impl Tiles {
                 // Transformed with a transform since replaced: shown
                 // until its replacement arrives.
                 let stale = baked && stamp != current;
+                self.cpu_copied.bytes += (n * 4) as u64;
+                self.cpu_copied.tiles += 1;
                 (Texture::Egui(load(image)), n * 4, baked, stale)
             }
             Body::Raw(pixels) => {
@@ -655,6 +744,8 @@ impl Tiles {
                         ColorImage::new([tile.size[0] as usize, tile.size[1] as usize], out)
                     }
                 };
+                self.cpu_copied.bytes += (n * 4) as u64;
+                self.cpu_copied.tiles += 1;
                 (Texture::Egui(load(image)), n * 4, baked, false)
             }
         };

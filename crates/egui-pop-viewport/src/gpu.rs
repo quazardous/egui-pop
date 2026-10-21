@@ -23,6 +23,7 @@ use egui_wgpu::wgpu;
 /// egui-wgpu, the version the GPU path is built with.
 pub use egui_wgpu;
 
+use crate::device::{Encoding, RenderDevice, Resource};
 use crate::display::{self, ColorSpace, DisplayTarget, Stage, SurfaceFormat, TargetSource};
 use crate::tiles::{Device, GpuData, GpuQueue};
 
@@ -37,7 +38,9 @@ pub struct GpuInfo {
     pub target_is_srgb: bool,
 }
 
-const SHADER: &str = r#"
+/// What every tile pipeline shares: the draw's uniform, the vertex
+/// stage, the transfers and the display stage.
+const COMMON: &str = r#"
 struct Draw {
     dst: vec4<f32>,
     sizes: vec4<f32>,
@@ -46,10 +49,12 @@ struct Draw {
     m2: vec4<f32>,
     params: vec4<f32>,
     extra: vec4<f32>,
+    // Uploaded tiles and textures: the tile's texel origin, 0, the mode;
+    // buffers: the tile's first float, floats a row, channels, the mode.
+    layout: vec4<u32>,
 };
 
 @group(0) @binding(0) var<uniform> d: Draw;
-@group(1) @binding(0) var tex: texture_2d<f32>;
 
 struct V {
     @builtin(position) pos: vec4<f32>,
@@ -122,22 +127,45 @@ fn encode(v: f32, code: u32, white: f32) -> f32 {
     return srgb_encode(v);
 }
 
-@fragment
-fn fs(v: V) -> @location(0) vec4<f32> {
+// The tile's texel under a fragment, from the tile's top left.
+fn texel_at(pos: vec2<f32>) -> vec2<i32> {
     let size = d.sizes.zw;
-    let t = (v.pos.xy - d.dst.xy) / (d.dst.zw - d.dst.xy) * size;
-    let texel = clamp(vec2<i32>(floor(t)), vec2<i32>(0, 0), vec2<i32>(size) - vec2<i32>(1, 1));
-    let s = textureLoad(tex, texel, 0);
-    var rgb = vec3<f32>(dot(d.m0.xyz, s.rgb), dot(d.m1.xyz, s.rgb), dot(d.m2.xyz, s.rgb));
-    rgb = clamp(rgb, vec3<f32>(d.params.x), vec3<f32>(d.params.y));
-    let code = u32(d.params.z);
-    let white = d.extra.x;
-    var out = vec3<f32>(encode(rgb.r, code, white), encode(rgb.g, code, white), encode(rgb.b, code, white));
+    let t = (pos - d.dst.xy) / (d.dst.zw - d.dst.xy) * size;
+    return clamp(vec2<i32>(floor(t)), vec2<i32>(0, 0), vec2<i32>(size) - vec2<i32>(1, 1));
+}
+
+// A value read to the colour written. Mode 0: scene-referred, through
+// the display stage; 1: display-encoded, as it is; 2: display-encoded
+// in an sRGB texture, whose read decoded it: encoded again.
+fn shade(s: vec3<f32>) -> vec4<f32> {
+    let mode = d.layout.w;
+    var out = s;
+    if mode == 0u {
+        var rgb = vec3<f32>(dot(d.m0.xyz, s), dot(d.m1.xyz, s), dot(d.m2.xyz, s));
+        rgb = clamp(rgb, vec3<f32>(d.params.x), vec3<f32>(d.params.y));
+        let code = u32(d.params.z);
+        let white = d.extra.x;
+        out = vec3<f32>(encode(rgb.r, code, white), encode(rgb.g, code, white), encode(rgb.b, code, white));
+    } else if mode == 2u {
+        out = vec3<f32>(srgb_encode(s.r), srgb_encode(s.g), srgb_encode(s.b));
+    }
     if d.params.w > 0.5 {
         // The surface encodes sRGB itself: hand it what decodes to `out`.
         out = vec3<f32>(srgb_decode(out.r), srgb_decode(out.g), srgb_decode(out.b));
     }
     return vec4<f32>(out, 1.0);
+}
+"#;
+
+/// Tiles in textures: uploaded ones and device textures; and the hole
+/// an image surface shows through.
+const TEXTURE: &str = r#"
+@group(1) @binding(0) var tex: texture_2d<f32>;
+
+@fragment
+fn fs(v: V) -> @location(0) vec4<f32> {
+    let texel = texel_at(v.pos.xy) + vec2<i32>(d.layout.xy);
+    return shade(textureLoad(tex, texel, 0).rgb);
 }
 
 // A triangle over the whole target, for the hole an image surface below
@@ -156,8 +184,25 @@ fn fs_hole() -> @location(0) vec4<f32> {
 }
 "#;
 
+/// Device tiles in storage buffers of `f32`, read in place.
+const BUFFER: &str = r#"
+@group(1) @binding(0) var<storage, read> buf: array<f32>;
+
+@fragment
+fn fs(v: V) -> @location(0) vec4<f32> {
+    let t = vec2<u32>(texel_at(v.pos.xy));
+    let channels = d.layout.z;
+    let i = d.layout.x + t.y * d.layout.y + t.x * channels;
+    var s = vec3<f32>(buf[i]);
+    if channels >= 3u {
+        s = vec3<f32>(buf[i], buf[i + 1u], buf[i + 2u]);
+    }
+    return shade(s);
+}
+"#;
+
 /// Bytes of one draw's uniform.
-const UNIFORM_SIZE: u64 = 7 * 16;
+const UNIFORM_SIZE: u64 = 8 * 16;
 
 struct Slot {
     buffer: wgpu::Buffer,
@@ -165,27 +210,61 @@ struct Slot {
     capacity: usize,
 }
 
+/// The tile pipelines for one target format: textures, and storage
+/// buffers where the adapter reads them in a fragment shader.
+pub(crate) struct Pipelines {
+    texture: wgpu::RenderPipeline,
+    buffer: Option<wgpu::RenderPipeline>,
+}
+
+/// A tile bound for drawing: its bind group, which pipeline reads it,
+/// and its uniform's `layout`.
+struct Bound {
+    group: wgpu::BindGroup,
+    buffer: bool,
+    layout: [u32; 4],
+}
+
+/// The shader modules and pipeline layouts the tile pipelines are built
+/// from.
+struct Modules {
+    texture: (wgpu::ShaderModule, wgpu::PipelineLayout),
+    buffer: Option<(wgpu::ShaderModule, wgpu::PipelineLayout)>,
+}
+
+impl Modules {
+    fn pipelines(&self, device: &wgpu::Device, format: wgpu::TextureFormat) -> Pipelines {
+        let (shader, layout) = &self.texture;
+        Pipelines {
+            texture: render_pipeline(device, shader, layout, ["vs", "fs"], format),
+            buffer: self.buffer.as_ref().map(|(shader, layout)| {
+                render_pipeline(device, shader, layout, ["vs", "fs"], format)
+            }),
+        }
+    }
+}
+
 pub(crate) struct Resources {
-    pipeline: wgpu::RenderPipeline,
+    pipelines: Pipelines,
     // What an image surface (`wayland`) draws with: its hole, and on Linux
     // the tile pipeline per surface format, built from the same shader and
     // layout.
     /// Writes transparent black over the image, in the window's format.
     #[cfg(feature = "wayland")]
     hole: wgpu::RenderPipeline,
+    modules: Modules,
+    /// The tile pipelines for each image surface format.
     #[cfg(all(feature = "wayland", target_os = "linux"))]
-    shader: wgpu::ShaderModule,
-    #[cfg(all(feature = "wayland", target_os = "linux"))]
-    layout: wgpu::PipelineLayout,
-    /// The tile pipeline for each image surface format.
-    #[cfg(all(feature = "wayland", target_os = "linux"))]
-    image_pipelines: HashMap<wgpu::TextureFormat, wgpu::RenderPipeline>,
+    pub(crate) image_pipelines: HashMap<wgpu::TextureFormat, Pipelines>,
     uniform_layout: wgpu::BindGroupLayout,
     texture_layout: wgpu::BindGroupLayout,
+    buffer_layout: wgpu::BindGroupLayout,
     stride: u64,
     format: wgpu::TextureFormat,
     target_is_srgb: bool,
-    textures: HashMap<u64, wgpu::BindGroup>,
+    /// The device's storage binding offset alignment.
+    storage_align: u64,
+    textures: HashMap<u64, Bound>,
     slots: HashMap<u64, Slot>,
 }
 
@@ -193,6 +272,15 @@ pub(crate) struct Resources {
 const DEVICE: state::Slot<Device> = state::Slot::opaque("viewport.gpu.device");
 /// The GPU path takes half-float texels.
 const HALF_FLOAT: state::Slot<bool> = state::Slot::new("viewport.gpu.half_float");
+/// The render device, for device tiles.
+const RENDER: state::Slot<RenderDevice> = state::Slot::opaque("viewport.gpu.render");
+
+/// The render device of the GPU path installed in `ctx`: the device a
+/// [`DeviceTile`](crate::device::DeviceTile) must be created on, and what
+/// it can read. `None` without a GPU path.
+pub fn render_device(ctx: &Context) -> Option<RenderDevice> {
+    RENDER.get(ctx)
+}
 
 /// The GPU path's device, when installed in `ctx`.
 pub(crate) fn installed(ctx: &Context) -> Option<Device> {
@@ -370,8 +458,16 @@ pub fn install_for_surface(
     };
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("egui-pop-viewport"),
-        source: wgpu::ShaderSource::Wgsl(SHADER.into()),
+        source: wgpu::ShaderSource::Wgsl(format!("{COMMON}{TEXTURE}").into()),
     });
+    // Storage buffers read in a fragment shader: not on every adapter
+    // (WebGL 2, some downlevel ones).
+    let buffers = rs
+        .adapter
+        .get_downlevel_capabilities()
+        .flags
+        .contains(wgpu::DownlevelFlags::FRAGMENT_STORAGE)
+        && device.limits().max_storage_buffers_per_shader_stage > 0;
     let uniform_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("egui-pop-viewport.draw"),
         entries: &[wgpu::BindGroupLayoutEntry {
@@ -398,12 +494,36 @@ pub fn install_for_surface(
             count: None,
         }],
     });
+    let buffer_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("egui-pop-viewport.device-buffer"),
+        entries: &[wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        }],
+    });
     let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("egui-pop-viewport"),
         bind_group_layouts: &[Some(&uniform_layout), Some(&texture_layout)],
         ..Default::default()
     });
-    let pipeline = render_pipeline(device, &shader, &layout, ["vs", "fs"], rs.target_format);
+    let buffer_module = buffers.then(|| {
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("egui-pop-viewport.device-buffer"),
+            source: wgpu::ShaderSource::Wgsl(format!("{COMMON}{BUFFER}").into()),
+        });
+        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("egui-pop-viewport.device-buffer"),
+            bind_group_layouts: &[Some(&uniform_layout), Some(&buffer_layout)],
+            ..Default::default()
+        });
+        (shader, layout)
+    });
     #[cfg(feature = "wayland")]
     let empty = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("egui-pop-viewport.hole"),
@@ -421,24 +541,38 @@ pub fn install_for_surface(
     let stride = UNIFORM_SIZE.div_ceil(align) * align;
     let max_texture_side = device.limits().max_texture_dimension_2d;
     let target_is_srgb = rs.target_format.is_srgb();
+    let storage_align = u64::from(device.limits().min_storage_buffer_offset_alignment);
+    let modules = Modules {
+        texture: (shader, layout),
+        buffer: buffer_module,
+    };
+    let pipelines = modules.pipelines(device, rs.target_format);
     rs.renderer.write().callback_resources.insert(Resources {
-        pipeline,
+        pipelines,
         #[cfg(feature = "wayland")]
         hole,
-        #[cfg(all(feature = "wayland", target_os = "linux"))]
-        shader,
-        #[cfg(all(feature = "wayland", target_os = "linux"))]
-        layout,
+        modules,
         #[cfg(all(feature = "wayland", target_os = "linux"))]
         image_pipelines: HashMap::new(),
         uniform_layout,
         texture_layout,
+        buffer_layout,
         stride,
         format,
         target_is_srgb,
+        storage_align,
         textures: HashMap::new(),
         slots: HashMap::new(),
     });
+    RENDER.set(
+        ctx,
+        RenderDevice {
+            device: device.clone(),
+            buffers,
+            storage_align,
+            max_binding: device.limits().max_storage_buffer_binding_size,
+        },
+    );
     DEVICE.set(
         ctx,
         Device {
@@ -491,30 +625,93 @@ fn render_pipeline(
 }
 
 impl Resources {
-    /// A tile texture's bind group.
-    fn bind_tile(&self, device: &wgpu::Device, texture: &wgpu::Texture) -> wgpu::BindGroup {
+    /// A tile texture's bind group (`layout`: its uniform's).
+    fn bind_tile(&self, device: &wgpu::Device, texture: &wgpu::Texture, layout: [u32; 4]) -> Bound {
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        device.create_bind_group(&wgpu::BindGroupDescriptor {
+        let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("egui-pop-viewport.tile"),
             layout: &self.texture_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
                 resource: wgpu::BindingResource::TextureView(&view),
             }],
-        })
+        });
+        Bound {
+            group,
+            buffer: false,
+            layout,
+        }
     }
 
-    /// The tile pipeline for an image surface's format.
+    /// A device tile's binding: its texture, or the rows of its buffer
+    /// the tile covers. `None` when it cannot be bound here (checked
+    /// before: another device, or buffers unreadable).
+    fn bind_device(
+        &self,
+        device: &wgpu::Device,
+        tile: &crate::device::DeviceTile,
+        size: [u32; 2],
+    ) -> Option<Bound> {
+        if tile.device() != device {
+            return None;
+        }
+        let display = tile.encoding == Encoding::Display;
+        match tile.resource() {
+            Resource::Texture(texture) => {
+                let mode = match (display, texture.format().is_srgb()) {
+                    (false, _) => 0,
+                    (true, false) => 1,
+                    (true, true) => 2,
+                };
+                let [ox, oy] = tile.origin;
+                Some(self.bind_tile(device, texture, [ox, oy, 0, mode]))
+            }
+            Resource::Buffer { buffer, layout } => {
+                self.modules.buffer.as_ref()?;
+                let (offset, bytes, base) = layout.binding(tile.origin, size, self.storage_align);
+                let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("egui-pop-viewport.device-buffer"),
+                    layout: &self.buffer_layout,
+                    entries: &[wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                            buffer,
+                            offset,
+                            size: wgpu::BufferSize::new(bytes),
+                        }),
+                    }],
+                });
+                Some(Bound {
+                    group,
+                    buffer: true,
+                    layout: [
+                        u32::try_from(base).ok()?,
+                        layout.row_floats,
+                        layout.channels,
+                        u32::from(display),
+                    ],
+                })
+            }
+        }
+    }
+
+    /// The tile pipelines for an image surface's format, built on first
+    /// use.
     #[cfg(all(feature = "wayland", target_os = "linux"))]
-    pub(crate) fn image_pipeline(
+    pub(crate) fn ensure_image_pipelines(
         &mut self,
         device: &wgpu::Device,
         format: wgpu::TextureFormat,
-    ) -> &wgpu::RenderPipeline {
-        let (shader, layout) = (&self.shader, &self.layout);
+    ) {
+        let modules = &self.modules;
         self.image_pipelines
             .entry(format)
-            .or_insert_with(|| render_pipeline(device, shader, layout, ["vs", "fs"], format))
+            .or_insert_with(|| modules.pipelines(device, format));
+    }
+
+    /// The window's tile pipelines.
+    pub(crate) fn pipelines(&self) -> &Pipelines {
+        &self.pipelines
     }
 
     /// Draws the hole an image surface below the window shows through.
@@ -561,21 +758,24 @@ impl TilePaint {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             (std::mem::take(&mut q.uploads), std::mem::take(&mut q.frees))
         };
+        if uploads.is_empty() && frees.is_empty() {
+            return;
+        }
         for id in frees {
             r.textures.remove(&id);
         }
+        let mut copied = crate::tiles::Transfers::default();
         for (id, size, data) in uploads {
             let half = r.format == wgpu::TextureFormat::Rgba16Float;
             let bpp: u32 = if half { 8 } else { 16 };
             let bytes = match data {
                 GpuData::Scene(data) => crate::source::texels(&data, half),
                 GpuData::Texels(bytes) => bytes,
-                GpuData::Texture(texture) => {
-                    // Rendered by the source: bound as it is. Another
-                    // format is left out (the tile is not drawn).
-                    if texture.format() == r.format {
-                        let group = r.bind_tile(device, &texture);
-                        r.textures.insert(id, group);
+                GpuData::Device(tile) => {
+                    // On the render device: bound as it is.
+                    if let Some(bound) = r.bind_device(device, &tile, size) {
+                        r.textures.insert(id, bound);
+                        copied.bound += 1;
                     }
                     continue;
                 }
@@ -610,9 +810,18 @@ impl TilePaint {
                 },
                 extent,
             );
-            let group = r.bind_tile(device, &texture);
-            r.textures.insert(id, group);
+            copied.bytes += bytes.len() as u64;
+            copied.tiles += 1;
+            let bound = r.bind_tile(device, &texture, [0; 4]);
+            r.textures.insert(id, bound);
         }
+        let mut q = self
+            .queue
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        q.copied.bytes += copied.bytes;
+        q.copied.tiles += copied.tiles;
+        q.copied.bound += copied.bound;
     }
 
     /// Writes the draws' uniforms for a target of `size` pixels whose
@@ -665,10 +874,12 @@ impl TilePaint {
         let Some(slot) = r.slots.get(&self.slot) else {
             return false;
         };
+        let r = &*r;
         let mut bytes = vec![0u8; stride as usize * needed];
         let [sw, sh] = size;
         let m = &self.stage.matrix;
         for (i, d) in self.draws.iter().enumerate() {
+            let layout = r.textures.get(&d.texture).map_or([0; 4], |b| b.layout);
             let values: [f32; 28] = [
                 d.dst[0] - origin[0],
                 d.dst[1] - origin[1],
@@ -703,22 +914,45 @@ impl TilePaint {
             for (k, v) in values.iter().enumerate() {
                 bytes[at + k * 4..at + k * 4 + 4].copy_from_slice(&v.to_le_bytes());
             }
+            let at = at + values.len() * 4;
+            for (k, v) in layout.iter().enumerate() {
+                bytes[at + k * 4..at + k * 4 + 4].copy_from_slice(&v.to_le_bytes());
+            }
         }
         queue.write_buffer(&slot.buffer, 0, &bytes);
         true
     }
 
-    /// Records the draws (the pipeline and viewport set by the caller).
-    pub(crate) fn draw(&self, pass: &mut wgpu::RenderPass<'_>, r: &Resources) {
+    /// Records the draws with `pipelines` (the viewport set by the
+    /// caller): textures and buffers, each with its pipeline.
+    pub(crate) fn draw(
+        &self,
+        pass: &mut wgpu::RenderPass<'_>,
+        r: &Resources,
+        pipelines: &Pipelines,
+    ) {
         let Some(slot) = r.slots.get(&self.slot) else {
             return;
         };
+        let mut current = None;
         for (i, d) in self.draws.iter().enumerate() {
-            let Some(texture) = r.textures.get(&d.texture) else {
+            let Some(bound) = r.textures.get(&d.texture) else {
                 continue;
             };
+            let pipeline = if bound.buffer {
+                match &pipelines.buffer {
+                    Some(p) => p,
+                    None => continue,
+                }
+            } else {
+                &pipelines.texture
+            };
+            if current != Some(bound.buffer) {
+                pass.set_pipeline(pipeline);
+                current = Some(bound.buffer);
+            }
             pass.set_bind_group(0, &slot.group, &[(i as u64 * r.stride) as u32]);
-            pass.set_bind_group(1, texture, &[]);
+            pass.set_bind_group(1, &bound.group, &[]);
             pass.draw(0..6, 0..1);
         }
     }
@@ -755,7 +989,6 @@ impl egui_wgpu::CallbackTrait for TilePaint {
         // Positions are in window pixels; the scissor keeps the clip.
         let [sw, sh] = info.screen_size_px;
         pass.set_viewport(0.0, 0.0, sw as f32, sh as f32, 0.0, 1.0);
-        pass.set_pipeline(&r.pipeline);
-        self.draw(pass, r);
+        self.draw(pass, r, r.pipelines());
     }
 }

@@ -1,6 +1,7 @@
 //! The viewports seen by egui-pop's debug bridge: register
 //! [`collector`] and its `viewport` snapshot lists every viewport drawn
-//! (view, mapping, hooks set, what the hooks decided, the last signals);
+//! (view, mapping, hooks set, what the hooks decided, the last signals,
+//! the tiles and the bytes their uploads copied, `tiles.uploads`);
 //! its `set_view` action moves a viewport as a command would (through
 //! its `before_view` hook, on the next frame).
 //!
@@ -19,6 +20,7 @@ use egui_pop_core::debug::FnCollector;
 use egui_pop_core::state::Slot;
 use serde_json::{Value as Json, json};
 
+use crate::tiles::Transfers;
 use crate::view::{Mapping, View, Zoom};
 use crate::widget::{Signal, ViewportState};
 
@@ -184,6 +186,11 @@ pub(crate) fn publish(
                 "outstanding": state.outstanding(),
                 "complete": state.tiles_complete(),
                 "stats": state.stats().snapshot().iter().map(|(k, v)| (k.to_string(), json!(v))).collect::<serde_json::Map<_, _>>(),
+                "uploads": {
+                    "frame": transfers_json(state.frame_transfers()),
+                    "total": transfers_json(state.transfers()),
+                },
+                "last_error": state.last_error(),
             },
             "hooks": state.hooks().names(),
             "display": state.display_target().map(|t| format!("{t:?}")),
@@ -214,6 +221,11 @@ pub(crate) fn publish(
             "signals": all[keep..].to_vec(),
         }),
     );
+}
+
+/// Tile pixels copied to the GPU, as JSON.
+pub fn transfers_json(t: Transfers) -> Json {
+    json!({ "bytes": t.bytes, "tiles": t.tiles, "bound": t.bound })
 }
 
 /// The image surfaces' report (feature `wayland`).
