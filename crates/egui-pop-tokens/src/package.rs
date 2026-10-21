@@ -675,7 +675,11 @@ mod tests {
         let (p, warnings) = from_parts("t", text, |_| Ok(font_bytes("x"))).unwrap();
         assert!(p.fonts.is_empty());
         assert_eq!(warnings.len(), 3, "{warnings:?}");
-        assert!(matches!(warnings[2], Warning::Invalid { .. }));
+        // The entry without a family is set aside while the list is read,
+        // before the two paths are checked.
+        assert!(matches!(warnings[0], Warning::Invalid { .. }));
+        assert!(matches!(warnings[1], Warning::Font { .. }));
+        assert!(matches!(warnings[2], Warning::Font { .. }));
         // The list is not kept in the file: it is the package's.
         assert_eq!(p.file.extensions, None);
     }
