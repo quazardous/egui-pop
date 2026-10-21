@@ -110,7 +110,7 @@ command-context-hold =
     .title = Retenir la pile de contextes
 
 command-context-read =
-    .description = Les lieux et les modes actifs, leur révision, les retenues et les cadres déclarés.
+    .description = Les lieux et les modes actifs, leur révision, les retenues et les cadres déclarés, et ce que montre la barre d’état (`status` : l’identifiant, le texte, le ton, le compte et la progression de chaque élément visible).
     .title = Lire la pile de contextes
 
 command-context-release =

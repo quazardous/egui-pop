@@ -326,6 +326,13 @@ bar arranged for the darkroom comes back as it was; a place without
 choices of its own takes the root's. Without the context stack they
 last the session.
 
+Agents read what the user sees: `context.read` gives the visible status
+items in its `status` field (each one's `id`, `text`, `tone`, `count`
+and `progress`), and the `strips` debug collector shows the breadcrumb,
+the chips, every item with why it is hidden (`hidden_by`: the `when`
+clause that does not hold, `user`, or `narrow`) and the choices of the
+place shown; in code, `strips::status` and `strips::visible`.
+
 ## The window's own frame
 
 `FramePlugin` (opt-in) draws the title bar in the `TITLE` zone above the

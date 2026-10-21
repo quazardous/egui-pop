@@ -52,6 +52,11 @@
 //! darkroom comes back as it was; a place without choices of its own
 //! takes the root's. Without the context stack they last the session.
 //!
+//! Agents read what the bar shows: [`status`] lists every item with
+//! why it is hidden (its `when`, the user, a narrow bar), `context.read`
+//! gives the visible ones in its `status` field, and the `strips` debug
+//! collector shows the breadcrumb, the chips, the items and the choices.
+//!
 //! Steps (ADR 0011): `workbench.fold` (`{ "area", "folded" }`): an area
 //! folded to its strip or unfolded.
 
@@ -63,6 +68,7 @@ use std::sync::Mutex;
 use egui::{Color32, RichText, WidgetType};
 use egui::{Sense, Ui, vec2};
 use egui_pop_core::a11y;
+use egui_pop_core::debug::FnCollector;
 use egui_pop_core::icon::Icon;
 use egui_pop_core::indicator::Indicator as Mark;
 use egui_pop_core::kit::{BoxStyle, Kit, KitCx, Part, Side, State as KitState, paint_indicator};
@@ -86,6 +92,9 @@ use crate::services::ServiceToken;
 use crate::strings as txt;
 use crate::zones::{self, Block};
 use crate::{Ctx, Plugin, PluginError};
+
+/// The indicators the last pass left out for want of room.
+const NARROWED: Slot<Vec<String>> = Slot::new("api.strips.narrowed");
 
 /// Whether a chip was hovered last pass (its tooltip then asks the
 /// owner whether the mode may be left), per chip.
@@ -198,6 +207,86 @@ pub fn move_item(app: &AppHandle, id: &str, toward_end: bool) {
     order.extend(rest);
     c.order = order;
     set_choices(app, c);
+}
+
+/// Why a status item is not shown.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HiddenBy {
+    /// Its `when` clause does not hold here (or does not parse).
+    When(String),
+    /// The user hid it here.
+    User,
+    /// The bar was too narrow for it last pass.
+    Narrow,
+}
+
+/// A status item as the bar has it now.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct StatusEntry {
+    pub id: String,
+    pub text: String,
+    pub tone: Tone,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub count: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub progress: Option<f32>,
+    /// Why it is not shown; `None` when it is.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hidden_by: Option<HiddenBy>,
+}
+
+/// Every status item in the bar's order from its end, with why it is
+/// hidden. Empty without the strips plugin.
+pub fn status(app: &AppHandle) -> Vec<StatusEntry> {
+    if app.service(&STRIPS).is_none() {
+        return Vec::new();
+    }
+    let cx = app.context();
+    let c = choices(app);
+    let narrowed = NARROWED.get(&app.egui()).unwrap_or_default();
+    ordered(app, &c)
+        .into_iter()
+        .map(|(i, s)| {
+            let hidden_by = if !i.applies(&cx) {
+                Some(HiddenBy::When(i.when.clone().unwrap_or_default()))
+            } else if c.hidden.contains(&i.id) {
+                Some(HiddenBy::User)
+            } else if narrowed.contains(&i.id) {
+                Some(HiddenBy::Narrow)
+            } else {
+                None
+            };
+            StatusEntry {
+                id: i.id,
+                text: s.text,
+                tone: s.tone,
+                count: s.count,
+                progress: s.progress,
+                hidden_by,
+            }
+        })
+        .collect()
+}
+
+/// The status items the bar shows, as `context.read` gives them.
+pub fn visible(app: &AppHandle) -> Vec<StatusEntry> {
+    status(app)
+        .into_iter()
+        .filter(|i| i.hidden_by.is_none())
+        .collect()
+}
+
+/// What the `strips` collector shows.
+fn describe(app: &AppHandle) -> Json {
+    let place = contexts::state(app).map(|s| s.place().to_string());
+    json!({
+        "breadcrumb": contexts::crumbs(app),
+        "chips": contexts::chips(app),
+        "items": status(app),
+        "place": place,
+        "choices": choices(app),
+    })
 }
 
 /// The indicators in the bar's order, from its end: the order chosen,
@@ -399,6 +488,17 @@ impl Plugin for StripsPlugin {
 
     fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
         ctx.service(&STRIPS, StripsService::default())?;
+        let w = ctx.app().downgrade();
+        ctx.collector(
+            FnCollector::new(
+                "strips",
+                "The status bar: the breadcrumb and the mode chips at its start (`chips`: each mode on, `visible` when its group shows in the bar), every status item in the bar's order from its end with its state and why it is hidden (`hidden_by`: the `when` clause that does not hold, `user`, `narrow`), the place shown and the user's choices there.",
+            )
+            .snapshot(move |_| match w.get() {
+                Ok(app) => describe(&app),
+                Err(_) => Json::Null,
+            }),
+        )?;
         ctx.command(
             CommandSpec::new(CMD_HIDE_ITEM, "Hide a status item", "View")
                 .description("Hides a status bar item (`id`) where the user is, or shows it again (`hidden`: false).")
@@ -774,6 +874,7 @@ fn status_context(ui: &mut Ui, app: &AppHandle) {
 /// The indicators, at the status bar's end. On a narrow bar the
 /// heaviest give way.
 fn indicators(ui: &mut Ui, app: &AppHandle) {
+    NARROWED.set(ui.ctx(), Vec::new());
     let mut list = shown(app);
     let hidden: Vec<(String, String)> = {
         let c = choices(app);
@@ -794,6 +895,10 @@ fn indicators(ui: &mut Ui, app: &AppHandle) {
             room >= 0.0
         })
         .count();
+    NARROWED.set(
+        ui.ctx(),
+        list.iter().skip(fits).map(|(i, _)| i.id.clone()).collect(),
+    );
     list.truncate(fits);
     let t = Tokens::of(ui.ctx());
     let kit = Kit::of(ui.ctx());

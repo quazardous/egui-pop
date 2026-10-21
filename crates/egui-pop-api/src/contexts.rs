@@ -1679,6 +1679,7 @@ fn describe(app: &AppHandle) -> Json {
         .collect();
     json!({
         "owner": owner,
+        "status": crate::strips::visible(app),
         "warnings": warnings,
         "hand_writes": hand_writes,
         "clashes": clashes,
@@ -1796,7 +1797,7 @@ impl Plugin for ContextsPlugin {
         )?
         .command(
             CommandSpec::new(CMD_READ, "Read the context stack", category)
-                .description("The places and modes on, their revision, the holds and the frames declared."),
+                .description("The places and modes on, their revision, the holds and the frames declared, and what the status bar shows (`status`: each visible item's id, text, tone, count and progress)."),
             |call| Ok(describe(call.app)),
         )?
         .command(

@@ -37,6 +37,12 @@ publishes.
   (`YamlGraphError`). Part of #31.
 - The gallery's `graph-file` page: the node graph editor over a YAML
   graph file, the file's text beside it, each edit landing in the text.
+- Agents read what the status bar shows (egui-pop-api): `context.read`
+  gains a `status` field, each visible item's id, text, tone, count and
+  progress; the new `strips` debug collector shows the breadcrumb, the
+  chips, every item with why it is hidden (`hidden_by`: the `when`
+  clause that does not hold, `user`, `narrow`) and the choices of the
+  place shown; `strips::status` and `strips::visible` in code.
 - The status bar's choices kept per place (egui-pop-api): an item's
   context menu hides it or moves it one step (only status items can be
   muted), agents use `status.item.hide` and `status.item.move`, code

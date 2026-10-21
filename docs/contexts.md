@@ -198,7 +198,8 @@ diagnostic the first time per key (`context-key-by-hand`), and the
 `contexts` collector's `warnings` (`hand_writes`: the key, the value,
 how many times, the command running and its plugin).
 
-Agents use the same path as the user: `context.read`,
+Agents use the same path as the user: `context.read` (which also
+gives what the status bar shows, in `status`),
 `context.request` (any transition, with `if_rev` and `dry_run`),
 `context.go`, `context.set_mode`, `context.hold` and `context.release`;
 the `contexts` collector of the debug bridge shows the state, the

@@ -1,7 +1,7 @@
 //! The status bar and the context stack together
 //! (`docs/status-and-context.md`): indicators that follow the context,
 //! the breadcrumb and the mode chips at the start of the bar, the
-//! user's choices kept per place.
+//! user's choices kept per place, and what agents read of it.
 
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
@@ -259,4 +259,70 @@ fn the_bars_choices_are_kept_per_place_falling_back_to_the_roots() {
     assert!(h.query_by_label("Everywhere").is_some());
     assert_eq!(strips::choices(&app).order, ["demo.always", "demo.images"]);
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn agents_read_what_the_bar_shows_and_why_an_item_is_hidden() {
+    let mut h = harness(builder(), 1000.0);
+    let app = h.state().handle().clone();
+    assert!(contexts::enter(&app, ALBUM, Json::Null).ok());
+    app.publish("host", None, "image.added", json!({}));
+    h.run();
+    let reply = h.state_mut().run(
+        &contexts::CMD_READ,
+        Json::Null,
+        Origin::Agent("test".into()),
+    );
+    let Reply::Done(Ok(read)) = reply else {
+        panic!("context.read answers at once");
+    };
+    let status = read["status"].as_array().unwrap();
+    let images = status.iter().find(|i| i["id"] == "demo.images").unwrap();
+    assert_eq!(images["text"], "Images");
+    assert_eq!(images["count"], 1);
+    assert_eq!(images["tone"], "neutral");
+    assert!(status.iter().any(|i| i["id"] == "demo.always"));
+    assert!(!status.iter().any(|i| i["id"] == "demo.broken"));
+    // The collector says why the others are hidden.
+    strips::hide(&app, "demo.always", true);
+    assert!(contexts::leave(&app).ok());
+    h.run();
+    let strips = h.state().handle().debug_snapshot()["strips"].clone();
+    let item = |id: &str| {
+        strips["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|i| i["id"] == id)
+            .cloned()
+            .unwrap()
+    };
+    assert_eq!(
+        item("demo.images")["hidden_by"],
+        json!({ "when": "place == 'demo.album'" })
+    );
+    assert_eq!(
+        item("demo.broken")["hidden_by"],
+        json!({ "when": "place ==" })
+    );
+    // Hidden in the album only: the root shows it.
+    assert!(item("demo.always")["hidden_by"].is_null());
+    assert_eq!(strips["breadcrumb"], json!(["Home"]));
+    let visible: Vec<String> = strips::visible(&app).into_iter().map(|i| i.id).collect();
+    assert_eq!(visible, ["demo.always"]);
+}
+
+#[test]
+fn a_narrow_bar_says_which_items_gave_way() {
+    let mut h = harness(builder(), 170.0);
+    let app = h.state().handle().clone();
+    assert!(contexts::enter(&app, ALBUM, json!("Holidays")).ok());
+    assert!(contexts::enter(&app, PHOTO, json!(3)).ok());
+    assert!(contexts::set_mode(&app, CULLING).ok());
+    h.run();
+    let always = strips::status(&app)
+        .into_iter()
+        .find(|i| i.id == "demo.always")
+        .unwrap();
+    assert_eq!(always.hidden_by, Some(strips::HiddenBy::Narrow));
 }
