@@ -121,7 +121,15 @@ it directly, or the service (`THEME_EDITOR`: `set`, `undo`, `redo`,
   contract stays on WCAG.
 - **Export and import**: the draft as a `.tokens.json` file, or a file
   pasted and loaded; "Open a file" and "Save as a file" through a file
-  chooser. The chooser is the host's (`ThemeEditor::set_file_dialog`, a
+  chooser. A theme naming the user's font files is saved with them:
+  as a folder (`<name>/<name>.tokens.json` and `fonts/`) beside the
+  path chosen, or as a `.zip` archive when the path ends in `.zip`
+  (`ThemeEditor::save_file`, `ThemeEditor::package`). "Open a file"
+  takes a token file (a package's faces found beside it) or an archive
+  (`ThemeEditor::open_file`); the faces become the user's font files,
+  registered at once, copied first to the host's font folder when it
+  gives one (`ThemeEditor::set_font_dir`, else an archive's faces are
+  registered for this run only, with a warning). The chooser is the host's (`ThemeEditor::set_file_dialog`, a
   function starting a choice and answering later, as
   `files::Files::choose` does), or the `files` plugin's when it is
   connected, so the editor brings no file-dialog dependency; without
@@ -150,7 +158,10 @@ before carry `"org.egui-pop.theme-editor": { "version": 1 }` instead,
 still read. A file stamped newer than this egui-pop knows loads
 best-effort, with a warning. Any such file
 loads as a theme (`Themes::add_text`) and imports back as a draft. The
-editor writes DTCG JSON, the exchange format; a YAML file imports too.
+editor writes DTCG JSON, the exchange format; a YAML file imports too. A theme
+saved with the user's font files lists them under `"org.egui-pop.fonts"`
+(`[{ "file": "fonts/Inter-Regular.ttf", "family": "Inter", "weight": 400 }]`),
+by their path in the package ([Design tokens](tokens.md#a-theme-with-its-fonts)).
 
 ```json
 {
@@ -210,5 +221,4 @@ colour or an alias). The colour button is a colour well named "Adjust
 Not done yet: renaming a theme and adding it to the themes the
 application offers (the editor works as overrides over a known base),
 a face picked from the system's fonts in a list (the Fonts tab takes
-a family by name), a sample drawn in a face before it is applied, and
-exporting a user's font files with a theme.
+a family by name), and a sample drawn in a face before it is applied.

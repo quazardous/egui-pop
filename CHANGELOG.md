@@ -440,6 +440,15 @@ publishes.
   not a font is a `Warning::Font`, never an error. Archives need the new
   `zip` feature (zip, MIT, deflate only, through the flate2 already in
   egui's tree). Part of #37 and #36.
+- The theme editor saves a theme with the user's font files it names
+  (egui-pop-api): as a folder beside the path chosen, or a `.zip`
+  archive when the path ends in `.zip` (`ThemeEditor::save_file`, which
+  now returns where it wrote, `ThemeEditor::package`); "Open a file"
+  takes a token file, a package's token file or an archive, and makes
+  its faces the user's font files, copied to the host's font folder
+  when it gives one (`ThemeEditor::set_font_dir`). A `theme-zip`
+  feature (egui-pop, on by default; egui-pop-api and egui-pop-core)
+  turns archives on. Part of #37 and #36.
 
 ### Changed
 

@@ -60,7 +60,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 
 use egui::{Id, RichText, Ui, WidgetInfo, WidgetType};
-use egui_pop_core::fonts::{FontFile, Role};
+use egui_pop_core::fonts::{Face, FontFile, Role, Weight};
 use egui_pop_core::lock;
 use egui_pop_core::state::Slot;
 use egui_pop_core::strings;
@@ -68,6 +68,7 @@ use egui_pop_core::theme::{ScopedTheme, Tokens, color32};
 use egui_pop_core::tokens::apca;
 use egui_pop_core::tokens::contract::{self, Tier};
 use egui_pop_core::tokens::contrast::{self, Level, Pair, PairKind};
+use egui_pop_core::tokens::package::{self, ThemePackage};
 use egui_pop_core::tokens::palette::{self, Scheme, Seed};
 use egui_pop_core::tokens::{
     BUILT_IN_THEMES, Color, Counterpart, ResolvedTokens, ThemeDraft, ThemeSpec, TokenEdit, Value,
@@ -304,6 +305,9 @@ struct State {
     /// The draft's theme as the preview pane draws it, by spec.
     scoped: Option<(ThemeSpec, ScopedTheme)>,
     file_dialog: Option<FileDialog>,
+    /// Where the faces of an opened theme package are copied
+    /// ([`ThemeEditor::set_font_dir`]).
+    font_dir: Option<std::path::PathBuf>,
     sampler: Option<Sampler>,
     choice: Option<Choice>,
     tab: Tab,
@@ -452,32 +456,172 @@ impl ThemeEditor {
         lock(&self.state).file_dialog.is_some() || app.service(&files::FILES).is_some()
     }
 
-    /// Imports a token file from disk (what "Open" does once a file is
-    /// chosen).
+    /// Where the faces of a theme package opened in the editor are
+    /// copied, so they are kept as the user's own font files (paths,
+    /// [`ThemeEditor::font_files`]): a folder of the host's, such as one
+    /// under its data directory. Without one, the faces of a folder are
+    /// used where they are, and those of an archive are registered for
+    /// this run only (a warning says so).
+    pub fn set_font_dir(&self, dir: Option<std::path::PathBuf>) {
+        lock(&self.state).font_dir = dir;
+    }
+
+    /// Opens a theme from disk (what "Open" does once a file is chosen):
+    /// a token file, the folder of a theme package, or its `.zip` archive
+    /// (with the `theme-zip` feature; [`package`](egui_pop_core::tokens::package)).
+    /// The token file is imported ([`ThemeEditor::import`]); the faces it
+    /// lists become the user's font files, registered and installed at
+    /// once ([`ThemeEditor::set_font_dir`]). What it loaded with, the
+    /// faces not read included.
     pub fn open_file(
         &self,
         app: &AppHandle,
         path: &std::path::Path,
     ) -> Result<Vec<Warning>, String> {
-        let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+        let (package, mut warnings) = ThemePackage::read(path).map_err(|e| e.to_string())?;
+        let text = package.file.to_json_pretty();
         lock(&self.state).file_text = text.clone();
-        self.import(app, &text)
+        warnings.extend(self.import(app, &text)?);
+        // Where the faces are on disk when they come from a folder.
+        let beside = if path.is_dir() {
+            Some(path.to_path_buf())
+        } else if package::is_zip(path) {
+            None
+        } else {
+            path.parent().map(std::path::Path::to_path_buf)
+        };
+        warnings.extend(self.add_package_fonts(app, &package, beside.as_deref()));
+        Ok(warnings)
     }
 
-    /// Writes the draft as a token file (what "Save as" does once a
-    /// file is chosen), named after the file.
-    pub fn save_file(&self, app: &AppHandle, path: &std::path::Path) -> Result<(), String> {
+    /// Makes a package's faces the user's font files: copied to the font
+    /// folder when there is one, else used where they are, else
+    /// registered for this run only.
+    fn add_package_fonts(
+        &self,
+        app: &AppHandle,
+        package: &ThemePackage,
+        beside: Option<&std::path::Path>,
+    ) -> Vec<Warning> {
+        if package.fonts.is_empty() {
+            return Vec::new();
+        }
+        let ctx = app.egui();
+        let font_dir = lock(&self.state).font_dir.clone();
+        let mut warnings = Vec::new();
+        let mut added = Vec::new();
+        for font in &package.fonts {
+            let name = std::path::Path::new(&font.file)
+                .file_name()
+                .map_or_else(|| font.file.clone(), |n| n.to_string_lossy().into_owned());
+            let at = match (&font_dir, beside) {
+                (Some(dir), _) => {
+                    let to = dir.join(&name);
+                    match std::fs::create_dir_all(dir)
+                        .and_then(|()| std::fs::write(&to, &font.bytes))
+                    {
+                        Ok(()) => to,
+                        Err(e) => {
+                            warnings.push(Warning::Font {
+                                file: font.file.clone(),
+                                reason: format!("not copied to {}: {e}", dir.display()),
+                            });
+                            continue;
+                        }
+                    }
+                }
+                (None, Some(dir)) => dir.join(&font.file),
+                (None, None) => {
+                    egui_pop_core::fonts::register(
+                        &ctx,
+                        Face::from_owned(&font.family, Weight(font.weight), font.bytes.clone()),
+                    );
+                    warnings.push(Warning::Font {
+                        file: font.file.clone(),
+                        reason: "registered for this run only: no font folder to keep it in".into(),
+                    });
+                    continue;
+                }
+            };
+            match FontFile::read(&at) {
+                Ok(f) => added.push(f),
+                Err(reason) => warnings.push(Warning::Font {
+                    file: font.file.clone(),
+                    reason,
+                }),
+            }
+        }
+        if !added.is_empty() {
+            let problems = egui_pop_core::fonts::register_files(&ctx, &added);
+            let mut s = lock(&self.state);
+            let merge = |files: &mut Vec<FontFile>| {
+                files.retain(|f| !added.iter().any(|a| a.path == f.path));
+                files.extend(added.iter().cloned());
+            };
+            merge(&mut s.fonts.files);
+            if let Some(pending) = s.fonts.pending_files.as_mut() {
+                merge(pending);
+            }
+            s.fonts.problems = problems;
+        }
+        egui_pop_core::fonts::reinstall(&ctx);
+        warnings
+    }
+
+    /// The draft as a theme package named `name`: its token file
+    /// ([`ThemeEditor::export`]) and the user's font files (applied) of
+    /// the families its `font.family.ui` and `font.family.mono` name.
+    pub fn package(&self, app: &AppHandle, name: &str) -> Result<ThemePackage, String> {
+        self.sync(app);
+        let file = self.draft().to_file(app.theme().themes(), name);
+        let tokens = self.resolved(app);
+        let named: Vec<String> = Role::ALL
+            .into_iter()
+            .filter_map(|role| tokens.font_family(family_token(role)))
+            .flatten()
+            .cloned()
+            .collect();
+        let mut package = ThemePackage::new(file);
+        for f in self.font_files() {
+            if !named.contains(&f.family) {
+                continue;
+            }
+            let bytes = std::fs::read(&f.path).map_err(|e| format!("{}: {e}", f.path.display()))?;
+            let file_name = f.path.file_name().map_or_else(
+                || format!("{}.ttf", f.family),
+                |n| n.to_string_lossy().into_owned(),
+            );
+            package.add_font(&f.family, f.weight.0, &file_name, bytes);
+        }
+        Ok(package)
+    }
+
+    /// Writes the draft (what "Save as" does once a file is chosen),
+    /// named after the file: a token file, or, when the theme names
+    /// font files of the user's ([`ThemeEditor::package`]), a folder
+    /// beside it holding the token file and the faces; a path ending in
+    /// `.zip` is an archive of the same (`theme-zip` feature). Where the
+    /// token file, or the archive, was written.
+    pub fn save_file(
+        &self,
+        app: &AppHandle,
+        path: &std::path::Path,
+    ) -> Result<std::path::PathBuf, String> {
         let name = path
             .file_name()
             .and_then(|n| n.to_str())
-            .map(|n| n.trim_end_matches(".json").trim_end_matches(".tokens"))
+            .map(|n| {
+                n.trim_end_matches(".zip")
+                    .trim_end_matches(".json")
+                    .trim_end_matches(".tokens")
+            })
             .filter(|n| !n.is_empty())
             .unwrap_or("my-theme")
             .to_string();
-        let text = self.export(app, &name);
-        std::fs::write(path, &text).map_err(|e| format!("{}: {e}", path.display()))?;
-        lock(&self.state).file_text = text;
-        Ok(())
+        let package = self.package(app, &name)?;
+        let written = package.write(path).map_err(|e| e.to_string())?;
+        lock(&self.state).file_text = package.token_file().to_json_pretty();
+        Ok(written)
     }
 
     /// Shows a token in the editor (as a click in its list does).
@@ -1971,11 +2115,11 @@ fn poll_choice(app: &AppHandle, editor: &ThemeEditor, ctx: &egui::Context) {
                 &[("family", &f.family), ("weight", &f.weight.0.to_string())],
             ))
         }),
-        Choice::Save(_) => editor.save_file(app, &path).map(|()| {
+        Choice::Save(_) => editor.save_file(app, &path).map(|written| {
             Some(strings::tr_args(
                 ctx,
                 &txt::THEME_EDITOR_SAVED,
-                &[("path", &path.display().to_string())],
+                &[("path", &written.display().to_string())],
             ))
         }),
     };
@@ -2256,6 +2400,8 @@ fn file(ui: &mut Ui, app: &AppHandle, editor: &ThemeEditor) {
                         let request =
                             FileRequest::open(&strings::tr(&ctx, &txt::THEME_EDITOR_OPEN_FILE))
                                 .filter("Token files", &["json", "yaml", "yml"]);
+                        #[cfg(feature = "theme-zip")]
+                        let request = request.filter("Theme archives", &["zip"]);
                         if let Some(p) = editor.choose(app, request) {
                             lock(&editor.state).choice = Some(Choice::Open(p));
                         }
@@ -2269,6 +2415,8 @@ fn file(ui: &mut Ui, app: &AppHandle, editor: &ThemeEditor) {
                             &format!("{name}.tokens.json"),
                         )
                         .filter("Token files", &["json"]);
+                        #[cfg(feature = "theme-zip")]
+                        let request = request.filter("Theme archives", &["zip"]);
                         if let Some(p) = editor.choose(app, request) {
                             lock(&editor.state).choice = Some(Choice::Save(p));
                         }

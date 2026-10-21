@@ -550,6 +550,92 @@ fn the_fonts_tab_adds_a_file_reorders_families_and_applies_once() {
 }
 
 #[test]
+fn a_theme_naming_a_font_file_is_saved_and_opened_with_it() {
+    use egui_pop_core::fonts::FontFile;
+    let font = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../egui-pop-core/tests/fonts/InterVariable-subset.ttf");
+    let dir = std::env::temp_dir().join(format!("egui-pop-theme-package-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut h = harness(ThemeSpec::new("pop-dark"));
+    h.run();
+    let handle = h.state().handle().clone();
+    let editor = handle.service(&THEME_EDITOR).unwrap();
+    let file = FontFile::read(&font).unwrap();
+    let family = file.family.clone();
+    editor.set_font_files(&h.ctx, vec![file]);
+    run(
+        &mut h,
+        &CMD_THEME_SET,
+        json!({ "path": "font.family.ui", "value": [family, "sans-serif"] }),
+    );
+    h.run();
+    // Saved: a folder named after the theme, the face beside the file.
+    let written = editor
+        .save_file(&handle, &dir.join("mine.tokens.json"))
+        .unwrap();
+    let package = dir.join("mine");
+    assert_eq!(written, package.join("mine.tokens.json"));
+    let face = package.join("fonts/InterVariable-subset.ttf");
+    assert!(face.is_file());
+    let text = std::fs::read_to_string(&written).unwrap();
+    assert!(
+        text.contains("org.egui-pop.fonts") && text.contains("fonts/InterVariable-subset.ttf"),
+        "{text}"
+    );
+    // Opened again from a fresh start: the theme and its face.
+    run(&mut h, &CMD_THEME_START, json!({ "base": "pop-dark" }));
+    editor.set_font_files(&h.ctx, Vec::new());
+    h.run();
+    let warnings = editor.open_file(&handle, &package).unwrap();
+    assert!(warnings.is_empty(), "{warnings:?}");
+    h.run();
+    assert_eq!(
+        handle.theme().spec().overrides["font.family.ui"][0],
+        json!(family)
+    );
+    let files = editor.font_files();
+    assert_eq!(files.len(), 1, "{files:?}");
+    assert_eq!(files[0].path, face);
+    // With a font folder, the face is copied there and kept from there.
+    let kept = dir.join("kept-fonts");
+    editor.set_font_dir(Some(kept.clone()));
+    editor.set_font_files(&h.ctx, Vec::new());
+    let warnings = editor.open_file(&handle, &written).unwrap();
+    assert!(warnings.is_empty(), "{warnings:?}");
+    assert_eq!(
+        editor.font_files()[0].path,
+        kept.join("InterVariable-subset.ttf")
+    );
+    // A theme without a font file of the user's is a lone token file.
+    editor.set_font_files(&h.ctx, Vec::new());
+    let lone = editor
+        .save_file(&handle, &dir.join("lone.tokens.json"))
+        .unwrap();
+    assert_eq!(lone, dir.join("lone.tokens.json"));
+    assert!(lone.is_file());
+    // An archive, with the feature; registered for this run only
+    // without a font folder.
+    #[cfg(feature = "theme-zip")]
+    {
+        editor.set_font_files(&h.ctx, vec![FontFile::read(&font).unwrap()]);
+        let zip = editor.save_file(&handle, &dir.join("mine.zip")).unwrap();
+        assert_eq!(zip, dir.join("mine.zip"));
+        editor.set_font_dir(None);
+        editor.set_font_files(&h.ctx, Vec::new());
+        let warnings = editor.open_file(&handle, &zip).unwrap();
+        assert!(
+            matches!(&warnings[..], [egui_pop_core::tokens::Warning::Font { reason, .. }] if reason.contains("this run only")),
+            "{warnings:?}"
+        );
+        assert!(editor.font_files().is_empty());
+    }
+    #[cfg(not(feature = "theme-zip"))]
+    assert!(editor.save_file(&handle, &dir.join("mine.zip")).is_err());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn the_contrast_readouts_carry_the_apca_lightness_contrast() {
     let mut h = harness(ThemeSpec::new("pop-light"));
     h.run();

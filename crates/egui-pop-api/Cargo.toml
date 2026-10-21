@@ -28,6 +28,9 @@ phosphor = ["egui-pop-core/phosphor"]
 system-fonts = ["egui-pop-core/system-fonts"]
 ## An application's own SVG icons.
 svg = ["egui-pop-core/svg"]
+## The theme editor opens and saves themes with their fonts as `.zip`
+## archives too (a folder needs no feature).
+theme-zip = ["egui-pop-core/theme-zip"]
 
 [dependencies]
 profiling.workspace = true

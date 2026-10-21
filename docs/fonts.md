@@ -71,8 +71,11 @@ that registers the files, writes `font.family.ui` and
 `font.family.mono` into the theme being edited as one change, and
 applies it. Saving the files is the host's: `ThemeEditor::font_files`
 gives them, `ThemeEditor::set_font_files` registers them at the next
-start. How a user's font paths travel with an exported theme is not
-decided (a theme file names families; the files stay the user's).
+start. A theme naming the user's font files is saved with them, as a
+folder or a `.zip` archive holding the token file and the faces by
+relative path ([Design tokens](tokens.md#a-theme-with-its-fonts)), and
+opening one makes its faces the user's font files again
+(`ThemeEditor::set_font_dir` says where an archive's faces are kept).
 
 ## 1. What egui 0.36 / epaint can do
 

@@ -25,6 +25,9 @@ system-fonts = ["dep:fontdb"]
 ## An application's own icons from SVG files (`icon_set`), rasterised
 ## with resvg when the theme is installed.
 svg = ["dep:resvg"]
+## Theme packages as `.zip` archives (`egui_pop_tokens::package`): a
+## theme and its font files in one file.
+theme-zip = ["egui-pop-tokens/zip"]
 
 [dependencies]
 egui.workspace = true
