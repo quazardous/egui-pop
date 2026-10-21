@@ -3,24 +3,29 @@
 //! blends to one output), shown with the node editor and its minimap.
 //! The page keeps the graph and applies the editor's edits; each runs
 //! its `graph.*` step, and the page's plugin refuses to delete the
-//! output.
+//! output. Its Export menu saves the graph, or the selection, as an
+//! SVG image.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use egui::{Sense, Ui, vec2};
+use egui_pop::api::files::{self, FILES, FileRequest};
+use egui_pop::api::host::Pending;
 use egui_pop::api::steps::Before;
 use egui_pop::api::stories::Story;
-use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
+use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError, menus};
 use egui_pop::core::widgets;
 use egui_pop::imaging::{self, graph::STEP_GRAPH_DELETE};
-use egui_pop::model::ids::{PluginId, StoryId};
+use egui_pop::model::commands::CommandSpec;
+use egui_pop::model::ids::{CommandId, MenuId, PluginId, StoryId};
 use egui_pop::theme::Tokens;
 use egui_pop::viewport::graph::{
-    Edge, Edit, GraphEditor, GraphMinimap, GraphModel, GraphState, Group, Kind, Level, Node, Param,
-    Port, PortRef, PortType, Request, WireStyle,
+    Edge, Edit, ExportOptions, GraphEditor, GraphExport, GraphMinimap, GraphModel, GraphState,
+    Group, Kind, Level, Node, Param, Port, PortRef, PortType, Request, WireStyle,
 };
+use serde_json::json;
 
 use crate::shell::SHELL;
 
@@ -28,6 +33,15 @@ pub const NODE_GRAPH: PluginId = PluginId::from_static("gallery.node-graph");
 
 /// The name the editor goes by in steps and commands.
 pub const GRAPH: &str = "gallery";
+
+/// The page's Export menu.
+pub const EXPORT_MENU: MenuId = MenuId::from_static("gallery.node-graph.export");
+pub const CMD_EXPORT: CommandId = CommandId::from_static("gallery.node-graph.export");
+pub const CMD_EXPORT_SELECTION: CommandId =
+    CommandId::from_static("gallery.node-graph.export-selection");
+/// Whether nodes are selected (the selection's export is greyed
+/// otherwise).
+const HAS_SELECTION: &str = "galleryGraphSelection";
 
 /// A parameter: id, label, default, minimum, maximum, step, unit.
 type ParamDef = (&'static str, &'static str, f64, f64, f64, f64, &'static str);
@@ -355,6 +369,12 @@ pub struct State {
     /// How wires are drawn.
     pub wires: WireStyle,
     level: Option<Level>,
+    /// A file asked for an export, and whether it is the selection's.
+    export: Option<(Pending, bool)>,
+    /// What the last export did.
+    exported: String,
+    /// Whether nodes were selected, as last told to the menu.
+    selected: Option<bool>,
 }
 
 impl Default for State {
@@ -365,6 +385,9 @@ impl Default for State {
             snap: true,
             wires: WireStyle::Curves,
             level: None,
+            export: None,
+            exported: String::new(),
+            selected: None,
         }
     }
 }
@@ -398,11 +421,38 @@ impl Plugin for NodeGraphPage {
                 Before::Go
             }
         });
+        // The menu's commands ask; the page answers at its next frame.
+        let asked: Rc<Cell<Option<bool>>> = Rc::new(Cell::new(None));
+        for (id, title, selection, order) in [
+            (CMD_EXPORT, "Export the graph as SVG…", false, 0),
+            (
+                CMD_EXPORT_SELECTION,
+                "Export the selection as SVG…",
+                true,
+                1,
+            ),
+        ] {
+            let mut spec = CommandSpec::new(id, title, "Node graph")
+                .description(if selection {
+                    "Saves the selected nodes and the wires between them as an SVG image."
+                } else {
+                    "Saves the whole graph as an SVG image, drawn from the graph, not the screen."
+                })
+                .menu(EXPORT_MENU, "1_export", order);
+            if selection {
+                spec = spec.when(HAS_SELECTION);
+            }
+            let asked = asked.clone();
+            ctx.command(spec, move |_| {
+                asked.set(Some(selection));
+                Ok(json!({ "selection": selection }))
+            })?;
+        }
         let state = Rc::new(RefCell::new(State::default()));
         let play = state.clone();
         ctx.story(
             Story::new(StoryId::from_static("node-graph"), "Node graph editor", move |ui, app| {
-                show(ui, app, &mut state.borrow_mut())
+                show(ui, app, &mut state.borrow_mut(), &asked)
             })
             .description("A node graph over fifty nodes: typed ports and wires, groups folded into stacks, an overview and a detail view with inline sliders, a minimap; each edit a graph.* step.")
             .group("Components", 78)
@@ -413,7 +463,7 @@ impl Plugin for NodeGraphPage {
 }
 
 /// The page.
-pub fn show(ui: &mut Ui, app: &AppHandle, s: &mut State) {
+pub fn show(ui: &mut Ui, app: &AppHandle, s: &mut State, asked: &Cell<Option<bool>>) {
     ui.label("Wheel to pan, Ctrl and the wheel to zoom: zoomed out the overview folds groups into stacks, zoomed in the detail shows each node's parameters. Drag from a port to wire (types are checked), drag nodes, drag the canvas for a rubber band; Delete, Ctrl+D, Ctrl+A. The page's plugin refuses to delete the output.");
     let mini = vec2(200.0, 110.0);
     let width = ui.available_width().max(320.0);
@@ -448,8 +498,66 @@ pub fn show(ui: &mut Ui, app: &AppHandle, s: &mut State) {
             if !selected.is_empty() {
                 ui.label(format!("Selected: {}", selected.join(", ")));
             }
+            let menu = ui.button("Export");
+            if menu.clicked() {
+                menus::popup_at(app, &EXPORT_MENU, menu.rect);
+            }
+            if !s.exported.is_empty() {
+                ui.weak(&s.exported);
+            }
         });
     });
+    let has = !s.view.selection.is_empty();
+    if s.selected != Some(has) {
+        app.set_context(HAS_SELECTION, if has { "true" } else { "false" });
+        s.selected = Some(has);
+    }
+    export(ui.ctx(), app, s, asked);
+}
+
+/// Asks where to save an export the menu asked for, and writes it once
+/// the place is chosen.
+fn export(ctx: &egui::Context, app: &AppHandle, s: &mut State, asked: &Cell<Option<bool>>) {
+    if let Some(selection) = asked.take() {
+        match app.service(&FILES) {
+            Some(f) => {
+                let name = if selection {
+                    "graph-selection.svg"
+                } else {
+                    "graph.svg"
+                };
+                let request = FileRequest::save("Export the graph", name).filter("SVG", &["svg"]);
+                s.export = Some((f.choose(app, request), selection));
+            }
+            None => s.exported = "No file chooser: the files plugin is not connected.".into(),
+        }
+    }
+    let Some((pending, selection)) = &s.export else {
+        return;
+    };
+    let Some(result) = pending.take() else {
+        return;
+    };
+    let selection = *selection;
+    s.export = None;
+    s.exported = match files::chosen(&result) {
+        Ok(files::Chosen::Paths(paths)) => match paths.first() {
+            Some(path) => {
+                let svg = GraphExport::capture(ctx, &s.graph, &s.view).svg(
+                    &ExportOptions::default()
+                        .selection(selection)
+                        .title("Processing graph"),
+                );
+                match std::fs::write(path, svg) {
+                    Ok(()) => format!("Exported to {}", path.display()),
+                    Err(e) => format!("Not exported: {e}"),
+                }
+            }
+            None => String::new(),
+        },
+        Ok(files::Chosen::Cancelled) => String::new(),
+        Err(e) => format!("Not exported: {e}"),
+    };
 }
 
 /// The playground: snapping, the wires and the views.

@@ -1150,6 +1150,49 @@ fn the_node_graph_page_routes_wires_around_the_nodes() {
 }
 
 #[test]
+fn the_node_graph_page_exports_the_graph_as_svg() {
+    use egui_pop::imaging::graph::{CMD_GRAPH_EXPORT, CMD_GRAPH_SELECT};
+    use egui_pop::model::commands::Origin;
+    let mut h = harness(options("pop-dark", Density::Comfortable, "node-graph"));
+    h.run();
+    assert!(
+        h.query_by_label("Export").is_some(),
+        "the page's Export menu"
+    );
+    let export = |h: &mut Harness<'static, Gallery>, args: serde_json::Value| {
+        h.state_mut()
+            .app
+            .run(&CMD_GRAPH_EXPORT, args, Origin::Agent("test".into()))
+            .now()
+            .expect("answered now")
+            .expect("exported")["svg"]
+            .as_str()
+            .expect("the svg")
+            .to_string()
+    };
+    let svg = export(&mut h, serde_json::json!({ "graph": "gallery" }));
+    assert!(svg.starts_with("<svg "), "{svg}");
+    assert_eq!(svg.matches("<g data-node=").count(), 50);
+    assert_eq!(
+        svg,
+        export(&mut h, serde_json::json!({ "graph": "gallery" }))
+    );
+    let _ = h.state_mut().app.run(
+        &CMD_GRAPH_SELECT,
+        serde_json::json!({ "graph": "gallery", "nodes": ["blur-1", "sharpen-1"] }),
+        Origin::Agent("test".into()),
+    );
+    h.run();
+    let svg = export(
+        &mut h,
+        serde_json::json!({ "graph": "gallery", "selection": true, "level": "detail" }),
+    );
+    assert_eq!(svg.matches("<g data-node=").count(), 2, "{svg}");
+    assert_eq!(svg.matches("data-edge=").count(), 1, "{svg}");
+    assert!(svg.contains("data-param=\"radius\""), "{svg}");
+}
+
+#[test]
 fn the_graph_file_page_writes_an_edit_into_the_file() {
     use egui_pop::imaging::graph::CMD_GRAPH_EDIT;
     use egui_pop::model::commands::Origin;

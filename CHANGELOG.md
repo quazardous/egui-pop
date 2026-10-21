@@ -31,7 +31,8 @@ publishes.
   `GraphEditor::export_svg` exports what an editor would draw;
   `GraphExport::capture` exports from a model and a `GraphState`.
   Agents run `graph.export` on an editor shown with `show_graph`, which
-  keeps a copy at each frame (`GraphEditor::keep_export`).
+  keeps a copy at each frame (`GraphEditor::keep_export`). The
+  gallery's node graph page has an Export menu.
 - Status items with alignment, priority, live states, popovers and
   hover cards (egui-pop-api): `strips::Indicator::align` puts an item
   at the bar's start (after the breadcrumb and the chips) or its end;
