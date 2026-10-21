@@ -503,6 +503,7 @@ fn a_panel_found_where_it_may_not_be_goes_back_to_its_default_area() {
         hidden: vec![],
         folded: vec![],
         over: vec![],
+        flyouts: Default::default(),
         floating: vec![],
         docked_groups: vec![],
     };
@@ -667,6 +668,17 @@ fn layout_operations_place_hide_activate_and_fold() {
     assert_eq!(Placement::parse("under"), None);
     // A closed panel stays closed through a repair; a new one opens.
     assert!(back.hidden.contains(&pid("a.one")));
+    // A flyout's width is kept per panel; a panel gone loses it, and the
+    // centre never stays folded.
+    back.flyouts.insert(pid("a.two"), 260.0);
+    back.flyouts.insert(pid("a.gone"), 300.0);
+    back.folded.push(Area::Center);
+    let text = back.to_json();
+    assert!(text.contains("\"flyouts\""), "{text}");
+    let (again, _) = Layout::from_json(&text).unwrap().repair(&p, &[]);
+    assert_eq!(again.flyouts.get(&pid("a.two")), Some(&260.0));
+    assert!(!again.flyouts.contains_key(&pid("a.gone")));
+    assert!(!again.folded.contains(&Area::Center));
 }
 
 #[test]

@@ -3,6 +3,8 @@
 //! which screen. Saved as the `layout` document, restored at start-up,
 //! repaired when it no longer matches the panels or the screens.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
 
@@ -471,6 +473,10 @@ pub struct Layout {
     /// folded strip keeps their room, the centre its width.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub over: Vec<Area>,
+    /// The width each panel was given as a flyout over the centre, out
+    /// of its folded side area's strip, in points.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub flyouts: BTreeMap<PanelId, f32>,
     /// Panels floating over the interface (palettes), each group as one
     /// unit (a palette alone is a group of one).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -540,6 +546,7 @@ impl Layout {
             hidden,
             folded: Vec::new(),
             over: Vec::new(),
+            flyouts: BTreeMap::new(),
             floating,
             docked_groups: Vec::new(),
         }
@@ -873,7 +880,17 @@ impl Layout {
             areas,
             auxiliary,
             hidden: hidden.clone(),
-            folded: self.folded,
+            // The centre never folds.
+            folded: self
+                .folded
+                .into_iter()
+                .filter(|a| *a != Area::Center)
+                .collect(),
+            flyouts: self
+                .flyouts
+                .into_iter()
+                .filter(|(p, w)| known(p) && w.is_finite() && *w > 0.0)
+                .collect(),
             over: self
                 .over
                 .into_iter()
