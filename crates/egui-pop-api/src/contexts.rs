@@ -921,7 +921,8 @@ fn show_panel(app: &AppHandle, layout: &mut Layout, panel: &PanelId) {
 /// The layout of a projection key seen for the first time: the arranged
 /// frame's arrangement when it changed (a mode declaring one, else the
 /// place; see `arrangements::arranged_frame`), the place's layout as it
-/// was left, or the layout shown; then the modes' panels shown and
+/// was left, else the nearest enclosing place's (as it was left, else
+/// its arrangement; the root's last), else the layout shown; then the modes' panels shown and
 /// hidden.
 fn derive(
     app: &AppHandle,
@@ -965,15 +966,19 @@ fn derive(
                 // A mode with an arrangement of its own.
                 Some((frame, declared)) if Some(&frame) != place => arrangement(&frame, declared),
                 // The place: as it was left, else its arrangement (the
-                // one its payload chooses, `FrameSpec::arrangement_for`).
+                // one its payload chooses, `FrameSpec::arrangement_for`),
+                // else the nearest enclosing place's layout (the root's
+                // last), whichever place the user came from.
                 Some((frame, declared)) => p
                     .layouts
                     .get(&base.projection_key())
                     .cloned()
-                    .or_else(|| arrangement(&frame, declared)),
+                    .or_else(|| arrangement(&frame, declared))
+                    .or_else(|| enclosing_layout(p, new, &frame, registry, &arrangement)),
                 // The root, as it was left.
                 None => p.layouts.get(&base.projection_key()).cloned(),
             }
+            // Nothing remembered at all: the layout shown.
             .unwrap_or_else(|| current.clone())
         };
     for m in &new.modes {
@@ -987,6 +992,54 @@ fn derive(
         }
     }
     layout
+}
+
+/// The layout of the nearest place enclosing the top one, the root last:
+/// as it was left (without modes, else with the new state's modes), else
+/// the arrangement it starts from (`arrangement`, given its frame and what
+/// it declares). For a place (`frame`) that declares no arrangement and
+/// has no layout of its own, entered for the first time; debug builds
+/// warn about it.
+fn enclosing_layout(
+    p: &Projection,
+    new: &State,
+    frame: &FrameId,
+    registry: &FrameRegistry,
+    arrangement: &dyn Fn(&FrameId, Option<String>) -> Option<Layout>,
+) -> Option<Layout> {
+    let found = (0..new.places.len()).rev().find_map(|depth| {
+        let outer = State {
+            places: new.places[..depth].to_vec(),
+            modes: Vec::new(),
+            ..new.clone()
+        };
+        let with_modes = State {
+            modes: new.modes.clone(),
+            ..outer.clone()
+        };
+        [outer.projection_key(), with_modes.projection_key()]
+            .into_iter()
+            .find_map(|key| p.layouts.get(&key).cloned().map(|l| (key, l)))
+            .or_else(|| {
+                let (f, declared) = crate::arrangements::arranged_in(&outer, registry)?;
+                arrangement(&f, declared).map(|l| (outer.projection_key(), l))
+            })
+    });
+    #[cfg(debug_assertions)]
+    {
+        let from = found.as_ref().map_or_else(
+            || "the layout shown".to_string(),
+            |(k, _)| format!("`{k}`'s layout"),
+        );
+        log::warn!(
+            target: "egui_pop",
+            "the place `{frame}` declares no arrangement and has no layout of its own: it starts \
+             from {from}; declare one with `FrameSpec::arrangement`"
+        );
+    }
+    #[cfg(not(debug_assertions))]
+    let _ = frame;
+    found.map(|(_, l)| l)
 }
 
 /// Projects a new state: keeps the view of the key left, puts the

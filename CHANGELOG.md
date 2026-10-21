@@ -134,6 +134,13 @@ publishes.
 
 ### Fixed
 
+- A place that declares no arrangement no longer takes on the layout of
+  the place the user came from (egui-pop-api): entered for the first
+  time, it starts from the nearest enclosing place's layout (as it was
+  left, else its arrangement), else the root's, so it looks the same
+  whichever place it is entered from. With nothing remembered at all it
+  keeps the layout shown, as before. Debug builds log a warning naming
+  the place, to declare an arrangement for it.
 - egui-pop-win32 builds again with windows-sys 0.61.2, whose
   `DwmSetWindowAttribute` takes the attribute as an unsigned value.
 - Text typed with an AccessKit focus reaches the field (egui-pop-core):

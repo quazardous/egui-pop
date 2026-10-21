@@ -64,7 +64,7 @@ a guard that refuses.
 | Shown as | a crumb of the breadcrumb (`contexts::breadcrumb`) | a chip with a way out (`contexts::mode_chips`), a switch (`mode_switch`), a toggle (`mode_toggle`) |
 | Moves | `enter` (with a payload: which group, which mask), `leave`, `jump` to a level, `go` to a path | `set_mode` (sticky), `push_mode` (temporary), `pop_mode`, `clear_mode` |
 | How many | a path from the root | one per group; groups combine |
-| The projection | the place's arrangement the first time, then the layout it was left with | the panels it shows or hides, or an arrangement of its own; a layout change made in a mode is the mode's, gone when it is left |
+| The projection | the place's arrangement the first time (none declared: the enclosing place's layout), then the layout it was left with | the panels it shows or hides, or an arrangement of its own; a layout change made in a mode is the mode's, gone when it is left |
 | Back (`nav.back`, Alt+Left) | leaves it | a pushed mode pops (Escape too), putting back what it replaced; a set mode stays |
 
 Use a place when the user goes *somewhere* and expects to come back to
@@ -150,6 +150,16 @@ what they declare.
 | the root | `settings/workbench.arrangement` |
 | a place | its entry in `settings/workbench.arrangement.frames`, else its `arrangement` |
 | a mode declaring an arrangement, on | the same, for the mode; it wins over the place while it is on |
+
+A place that declares no arrangement, the first time it is entered,
+starts from the nearest enclosing place's layout: as that place was
+left, else the arrangement it starts from, the root's last. A photo
+under an album starts from the album's layout, a place at the top
+level from the root's, whichever place the user came from: opening
+the photo from another place does not carry that place's layout over.
+With nothing remembered at all (the first start), it keeps the layout
+shown. Debug builds log a warning for such a place; declaring an
+arrangement for it says what it should look like.
 
 `arrangements::arranged_frame` says which frame it is.
 

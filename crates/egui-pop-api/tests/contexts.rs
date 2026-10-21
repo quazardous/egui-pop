@@ -898,3 +898,57 @@ fn a_key_binds_on_a_payload_field() {
     h.run();
     assert_eq!(key(&h, "payload.id"), "");
 }
+
+/// A place that declares no arrangement (the photo), entered for the
+/// first time: its layout does not depend on where the user came from.
+#[test]
+fn a_place_without_arrangement_looks_the_same_from_anywhere() {
+    let photo = || {
+        vec![contexts::Entry {
+            frame: PHOTO,
+            payload: json!("p1"),
+        }]
+    };
+    // Entered from the root: the root's layout.
+    let mut a = harness(builder());
+    let app = a.state().handle().clone();
+    assert!(contexts::go(&app, photo()).ok());
+    a.run();
+    let from_root = app.layout();
+    assert!(app.panel_visible(&TREE));
+    // Entered from the album, whose arrangement hides the tree: the
+    // root's layout too, not the album's.
+    let mut b = harness(builder());
+    let app = b.state().handle().clone();
+    assert!(contexts::enter(&app, ALBUM, Json::Null).ok());
+    b.run();
+    assert!(!app.panel_visible(&TREE));
+    assert!(contexts::go(&app, photo()).ok());
+    b.run();
+    assert_eq!(app.layout(), from_root);
+    assert!(app.panel_visible(&TREE));
+    // Under the album, it starts from the album's layout, whether the user
+    // comes from the album or from the root.
+    let under = |payload: &str| {
+        vec![
+            contexts::Entry {
+                frame: ALBUM,
+                payload: Json::Null,
+            },
+            contexts::Entry {
+                frame: PHOTO,
+                payload: json!(payload),
+            },
+        ]
+    };
+    assert!(contexts::go(&app, under("p2")).ok());
+    b.run();
+    let from_album = app.layout();
+    assert!(!app.panel_visible(&TREE));
+    let mut c = harness(builder());
+    let app = c.state().handle().clone();
+    assert!(contexts::go(&app, under("p2")).ok());
+    c.run();
+    assert!(!app.panel_visible(&TREE));
+    assert_eq!(app.layout().area_of(&LOG), from_album.area_of(&LOG));
+}
