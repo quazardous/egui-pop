@@ -6,8 +6,8 @@ Status: design note, **not decided** (2026-10-12). Built so far
 registered faces, egui's bundled ones and the system's (fontdb behind
 `system-fonts`, not fontique: no per-script fallback yet), reported
 problems (`egui_pop_core::fonts`); a size scale (2026-10-18), below;
-font files a user adds, kept as paths (2026-10-20), below. The rest is
-still a design.
+font files a user adds, kept as paths (2026-10-20), below; the text size
+setting (2026-10-21), below. The rest is still a design.
 
 ## The size scale (built)
 
@@ -29,7 +29,26 @@ another step. The former `font.size.small`, `body`, `heading` and `mono`
 are no longer read (see the changelog's migration table). In code, `fonts::font_at(tokens, role,
 weight, step)` is the `FontId` of a step (`fonts::Step`), next to
 `fonts::font_id(role, weight, size)`; `Tokens::font.scale` holds the
-sizes. Text size as a user setting (below) is still a design.
+sizes. The user's text size (below) multiplies the scale.
+
+## Text size (built)
+
+The text size is a user setting, `appearance.text_size` in Settings ›
+Appearance, one of seven steps: 85 %, 100 %, 115 %, 130 %, 150 %, 175 %
+and 200 % (`egui_pop_tokens::TEXT_SIZES`). Quantised, so the font atlas
+holds few sizes.
+
+- `ThemeSpec::text_size(factor)` (the nearest step) multiplies each step
+  of `font.size.*` when the theme resolves, rounded to half a point;
+  the text styles and every component token aliasing a step follow.
+  Spacing does not move: it is not the interface zoom, which scales
+  everything (`appearance.interface_zoom`).
+- `size.control.height` grows to at least `ceil(body × 1.6)` when the
+  text size is not 100 %, so a larger label is not clipped in a button.
+- In an application, `egui_pop_api::text` reads and writes the setting
+  (`text_size`, `set_text_size`); the theme is installed again at the
+  next frame. Changing theme keeps it: it is the user's, not the
+  theme's.
 
 The ask: "good font management, fixed-width and variable-width". Concretely,
 egui-pop should load real families for interface text (proportional) and

@@ -750,6 +750,15 @@ setting-appearance-interface-zoom.label 5b75cc0eca132e0b
 setting-appearance-language-choice-system 86937a88d8b574ba
 setting-appearance-language.description c13504293ea0277b
 setting-appearance-language.label 3e94737db692401b
+setting-appearance-text-size-choice-100- a79925dcb743ba9b
+setting-appearance-text-size-choice-115- 3173cee591f15a01
+setting-appearance-text-size-choice-130- b2ba8df6f49783cc
+setting-appearance-text-size-choice-150- ddc669c4526c7e4a
+setting-appearance-text-size-choice-175- 61290ad646c57a2b
+setting-appearance-text-size-choice-200- f981c652a32d1d1e
+setting-appearance-text-size-choice-85- cff7c9cdae3ebe51
+setting-appearance-text-size.description 3a897d700dac3a66
+setting-appearance-text-size.label f79defd818c4ea83
 setting-appearance-theme-preference-choice-dark b299412b96ce72a5
 setting-appearance-theme-preference-choice-light 1a075a58dac3f3b7
 setting-appearance-theme-preference-choice-system 86937a88d8b574ba

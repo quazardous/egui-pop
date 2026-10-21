@@ -329,7 +329,38 @@ pub struct ThemeSpec {
     /// whose two variants are edited apart (the theme editor's). `None`:
     /// `overrides` apply to both.
     pub counterpart_overrides: Option<BTreeMap<String, Json>>,
+    /// The user's text size: a factor of the size scale (`font.size.*`),
+    /// one of [`TEXT_SIZES`]; 1 keeps the theme's sizes
+    /// ([`ThemeSpec::text_size`]).
+    pub text_size: f32,
+    /// A family the user puts first in `font.family.ui`, before the
+    /// theme's own (which stay its fallbacks).
+    pub font_ui: Option<String>,
+    /// A family the user puts first in `font.family.mono`.
+    pub font_mono: Option<String>,
 }
+
+/// The text sizes a user chooses from, as factors of a theme's size
+/// scale: few steps, so the font atlas holds few sizes.
+pub const TEXT_SIZES: [f32; 7] = [0.85, 1.0, 1.15, 1.3, 1.5, 1.75, 2.0];
+
+/// The step of [`TEXT_SIZES`] nearest to a factor.
+pub fn text_size_step(factor: f32) -> f32 {
+    TEXT_SIZES
+        .iter()
+        .copied()
+        .min_by(|a, b| (a - factor).abs().total_cmp(&(b - factor).abs()))
+        .unwrap_or(1.0)
+}
+
+/// The tokens of the size scale a text size multiplies.
+const SIZE_SCALE: [&str; 5] = [
+    "font.size.xs",
+    "font.size.s",
+    "font.size.m",
+    "font.size.l",
+    "font.size.xl",
+];
 
 impl Default for ThemeSpec {
     fn default() -> Self {
@@ -347,6 +378,9 @@ impl ThemeSpec {
             overrides: BTreeMap::new(),
             counterpart: Counterpart::Auto,
             counterpart_overrides: None,
+            text_size: 1.0,
+            font_ui: None,
+            font_mono: None,
         }
     }
 
@@ -456,6 +490,43 @@ impl ThemeSpec {
         self
     }
 
+    /// The user's text size, a factor of the theme's size scale, rounded
+    /// to the nearest of [`TEXT_SIZES`]: each step of `font.size.*` is
+    /// multiplied and rounded to half a point, and every text style and
+    /// component token aliasing a step follows. Only the text grows:
+    /// spacing does not (the interface zoom scales everything), and
+    /// `size.control.height` grows to at least 1.6 times the body text,
+    /// so a larger label is not clipped.
+    ///
+    /// ```
+    /// use egui_pop_tokens::{ThemeSpec, Themes};
+    ///
+    /// let themes = Themes::default();
+    /// let base = themes.resolve(&ThemeSpec::new("pop-dark"));
+    /// let large = themes.resolve(&ThemeSpec::new("pop-dark").text_size(1.3));
+    /// assert_eq!(base.dimension("font.size.m"), Some(13.0));
+    /// assert_eq!(large.dimension("font.size.m"), Some(17.0));
+    /// assert_eq!(large.dimension("font.text-style.body"), Some(17.0));
+    /// assert_eq!(large.dimension("space.m"), base.dimension("space.m"));
+    /// ```
+    pub fn text_size(mut self, factor: f32) -> Self {
+        self.text_size = text_size_step(factor);
+        self
+    }
+
+    /// A family drawn first for interface text (`font.family.ui`), the
+    /// theme's own families after it; `None` keeps the theme's.
+    pub fn font_ui(mut self, family: Option<String>) -> Self {
+        self.font_ui = family.filter(|f| !f.trim().is_empty());
+        self
+    }
+
+    /// A family drawn first for numbers and code (`font.family.mono`).
+    pub fn font_mono(mut self, family: Option<String>) -> Self {
+        self.font_mono = family.filter(|f| !f.trim().is_empty());
+        self
+    }
+
     /// Overrides one token with a raw DTCG value (`json!("#3080ff")`,
     /// `json!("{blue.9}")`).
     pub fn override_token(mut self, path: impl Into<String>, value: Json) -> Self {
@@ -481,6 +552,12 @@ impl ThemeSpec {
         }
         if self.reduced_motion {
             parts.push("reduced motion".into());
+        }
+        if (self.text_size - 1.0).abs() > f32::EPSILON {
+            parts.push(format!("text {}%", (self.text_size * 100.0).round()));
+        }
+        for f in [&self.font_ui, &self.font_mono].into_iter().flatten() {
+            parts.push(f.clone());
         }
         if !self.overrides.is_empty() {
             parts.push(format!("{} overrides", self.overrides.len()));
@@ -1042,6 +1119,8 @@ impl Themes {
                 None => problems.push(Error::UnknownOverride { path: path.clone() }),
             }
         }
+        user_fonts(&mut raw, spec);
+        text_size(&mut raw, spec.text_size);
 
         let mut tokens = BTreeMap::new();
         for (path, token) in &raw {
@@ -1089,6 +1168,59 @@ impl Themes {
             spec: spec.clone(),
             tokens,
             problems,
+        }
+    }
+}
+
+/// Puts the user's families (`ThemeSpec::font_ui`, `font_mono`) first
+/// in the theme's lists.
+fn user_fonts(raw: &mut BTreeMap<String, RawToken>, spec: &ThemeSpec) {
+    for (path, family) in [
+        ("font.family.ui", &spec.font_ui),
+        ("font.family.mono", &spec.font_mono),
+    ] {
+        let Some(family) = family else { continue };
+        let theirs = match resolve_one(raw, path) {
+            Ok((_, Value::FontFamily(list))) => list,
+            _ => Vec::new(),
+        };
+        let mut list = vec![family.clone()];
+        list.extend(theirs.into_iter().filter(|f| f != family));
+        let entry = raw.entry(path.to_string()).or_insert_with(|| RawToken {
+            ty: Some("fontFamily".into()),
+            value: Json::Null,
+            description: None,
+            extensions: None,
+        });
+        entry.value = json!(list);
+    }
+}
+
+/// Multiplies the size scale by the user's text size (each step rounded
+/// to half a point), and grows the control height with the body text.
+fn text_size(raw: &mut BTreeMap<String, RawToken>, factor: f32) {
+    if (factor - 1.0).abs() <= f32::EPSILON || !factor.is_finite() || factor <= 0.0 {
+        return;
+    }
+    for path in SIZE_SCALE {
+        let Ok((_, Value::Dimension(size))) = resolve_one(raw, path) else {
+            continue;
+        };
+        let scaled = (size * factor * 2.0).round() / 2.0;
+        if let Some(token) = raw.get_mut(path) {
+            token.value = json!({ "value": scaled, "unit": "px" });
+        }
+    }
+    let body = match resolve_one(raw, "font.text-style.body") {
+        Ok((_, Value::Dimension(b))) => b,
+        _ => return,
+    };
+    if let Ok((_, Value::Dimension(height))) = resolve_one(raw, "size.control.height") {
+        let wanted = (body * 1.6).ceil();
+        if wanted > height
+            && let Some(token) = raw.get_mut("size.control.height")
+        {
+            token.value = json!({ "value": wanted, "unit": "px" });
         }
     }
 }

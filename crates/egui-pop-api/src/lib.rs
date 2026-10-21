@@ -131,6 +131,7 @@ pub mod stories;
 pub mod strings;
 pub mod strips;
 pub mod system_keys;
+pub mod text;
 pub mod theme_editor;
 pub mod tips;
 pub mod toasts;

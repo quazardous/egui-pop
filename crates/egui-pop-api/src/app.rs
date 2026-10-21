@@ -2487,6 +2487,7 @@ impl AppBuilder {
             started: false,
             installed: None,
             accent_setting: None,
+            text_seen: crate::text::Seen::default(),
             preference: None,
             persist: self.persist,
             kits: Vec::new(),
@@ -2652,6 +2653,9 @@ pub struct App {
     /// The accent colour setting as last seen (it changes the spec's
     /// accent when it changes).
     accent_setting: Option<String>,
+    /// The text settings as last seen (they change the spec when they
+    /// change).
+    text_seen: crate::text::Seen,
     /// The light or dark preference applied since the last install.
     preference: Option<egui::ThemePreference>,
     persist: Option<Persist>,
@@ -2941,6 +2945,7 @@ impl App {
         );
         ctx.setting(SETTING_FOCUS, focus)?;
         crate::zoom::register(&mut ctx)?;
+        crate::text::register(&mut ctx)?;
         crate::sliders::register(&mut ctx)?;
         crate::pointer::register(&mut ctx, pointer_profile)?;
         ctx.setting(
@@ -4201,6 +4206,10 @@ impl App {
                 service.apply_accent_setting(&accent);
             }
             self.accent_setting = Some(accent);
+        }
+        let mut wanted = service.spec();
+        if crate::text::apply(&self.handle, &mut self.text_seen, &mut wanted) {
+            service.set(wanted);
         }
         let spec = service.spec();
         let ctx = self.handle.egui();

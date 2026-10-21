@@ -1415,6 +1415,24 @@ setting-appearance-language =
 
 setting-appearance-language-choice-system = Système
 
+setting-appearance-text-size =
+    .description = Agrandit ou réduit le texte, sans les espacements (le zoom de l’interface agrandit tout).
+    .label = Taille du texte
+
+setting-appearance-text-size-choice-100- = 100 %
+
+setting-appearance-text-size-choice-115- = 115 %
+
+setting-appearance-text-size-choice-130- = 130 %
+
+setting-appearance-text-size-choice-150- = 150 %
+
+setting-appearance-text-size-choice-175- = 175 %
+
+setting-appearance-text-size-choice-200- = 200 %
+
+setting-appearance-text-size-choice-85- = 85 %
+
 setting-appearance-theme-preference =
     .description = Quelle variante d’un thème qui en a une claire et une sombre est affichée : celle du système, ou toujours la claire ou la sombre. Un thème sans pendant garde la sienne.
     .label = Clair ou sombre

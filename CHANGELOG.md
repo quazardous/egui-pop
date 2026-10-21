@@ -643,6 +643,15 @@ publishes.
   middle of another one joins its group as a tab, shown; the group's
   band holds the tabs, a click shows another one, and the shown
   member's own band drags it out of the group.
+- A text size setting (egui-pop-tokens, egui-pop-api): Settings ›
+  Appearance › Text size, in seven steps from 85 % to 200 %
+  (`appearance.text_size`, `egui_pop_api::text`). It multiplies the
+  theme's size scale (`ThemeSpec::text_size`, `TEXT_SIZES`), each step
+  rounded to half a point, without moving the spacing, and grows
+  `size.control.height` with the body text so labels are not clipped.
+  `ThemeSpec` also takes the user's own families
+  (`ThemeSpec::font_ui`, `font_mono`), put first in `font.family.ui` and
+  `font.family.mono`. The `theme` debug collector reports them.
 
 ### Changed
 

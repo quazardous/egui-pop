@@ -1536,6 +1536,24 @@ setting-appearance-language =
 
 setting-appearance-language-choice-system = system
 
+setting-appearance-text-size =
+    .description = Makes the text larger or smaller, without the spacing (the interface zoom scales everything).
+    .label = Text size
+
+setting-appearance-text-size-choice-100- = 100%
+
+setting-appearance-text-size-choice-115- = 115%
+
+setting-appearance-text-size-choice-130- = 130%
+
+setting-appearance-text-size-choice-150- = 150%
+
+setting-appearance-text-size-choice-175- = 175%
+
+setting-appearance-text-size-choice-200- = 200%
+
+setting-appearance-text-size-choice-85- = 85%
+
 setting-appearance-theme-preference =
     .description = Which variant of a theme with a light and a dark one is shown: the system's, or always the light or the dark one. A theme without a counterpart keeps its own.
     .label = Light or dark

@@ -474,6 +474,93 @@ fn reduced_motion_zeroes_the_duration() {
 }
 
 #[test]
+fn a_text_size_scales_the_size_scale_in_half_points_and_nothing_else() {
+    let themes = Themes::default();
+    for base in POP_THEMES {
+        for density in Density::ALL {
+            let spec = ThemeSpec::new(*base).density(density);
+            let plain = themes.resolve(&spec);
+            let mut previous: Option<Vec<f32>> = None;
+            for factor in egui_pop_tokens::TEXT_SIZES {
+                let r = themes.resolve(&spec.clone().text_size(factor));
+                assert!(
+                    r.problems().is_empty(),
+                    "{base} {factor}: {:?}",
+                    r.problems()
+                );
+                let sizes: Vec<f32> = ["xs", "s", "m", "l", "xl"]
+                    .iter()
+                    .map(|s| r.dimension(&format!("font.size.{s}")).unwrap())
+                    .collect();
+                for (i, s) in ["xs", "s", "m", "l", "xl"].iter().enumerate() {
+                    let theirs = plain.dimension(&format!("font.size.{s}")).unwrap();
+                    // Rounded to half a point.
+                    assert_eq!(sizes[i] * 2.0, (sizes[i] * 2.0).round(), "{base} {factor}");
+                    assert!(
+                        (sizes[i] - theirs * factor).abs() <= 0.25,
+                        "{base} {factor} {s}"
+                    );
+                }
+                // Monotonic, step by step and size by size.
+                assert!(sizes.windows(2).all(|w| w[0] <= w[1]), "{sizes:?}");
+                if let Some(p) = &previous {
+                    assert!(p.iter().zip(&sizes).all(|(a, b)| a <= b), "{p:?} {sizes:?}");
+                }
+                previous = Some(sizes);
+                // The text styles follow their steps; spacing does not move.
+                assert_eq!(
+                    r.dimension("font.text-style.body"),
+                    r.dimension("font.size.m")
+                );
+                assert_eq!(r.dimension("space.m"), plain.dimension("space.m"));
+                // A control holds its label.
+                let body = r.dimension("font.text-style.body").unwrap();
+                let control = r.dimension("size.control.height").unwrap();
+                assert!(
+                    factor == 1.0 || control >= (body * 1.6).ceil(),
+                    "{base} {factor}: {control} for {body}"
+                );
+                assert!(control >= plain.dimension("size.control.height").unwrap());
+            }
+        }
+    }
+    // A factor between steps takes the nearest one.
+    assert_eq!(ThemeSpec::default().text_size(1.2).text_size, 1.15);
+    assert_eq!(ThemeSpec::default().text_size(9.0).text_size, 2.0);
+    assert!(
+        ThemeSpec::default()
+            .text_size(1.5)
+            .label()
+            .contains("text 150%")
+    );
+}
+
+#[test]
+fn a_users_families_come_first_and_the_themes_stay_as_fallbacks() {
+    let themes = Themes::default();
+    let spec = ThemeSpec::new("pop-light")
+        .font_ui(Some("Inter".into()))
+        .font_mono(Some("Hack".into()));
+    let r = themes.resolve(&spec);
+    assert!(r.problems().is_empty(), "{:?}", r.problems());
+    let ui = r.font_family("font.family.ui").unwrap();
+    assert_eq!(ui[0], "Inter");
+    assert!(ui.len() > 1, "the theme's families stay: {ui:?}");
+    // A family the theme already names is not listed twice.
+    let mono = r.font_family("font.family.mono").unwrap();
+    assert_eq!(mono.iter().filter(|f| *f == "Hack").count(), 1, "{mono:?}");
+    assert_eq!(mono[0], "Hack");
+    // Empty is the theme's own.
+    let plain = themes.resolve(&ThemeSpec::new("pop-light").font_ui(Some(" ".into())));
+    assert_eq!(
+        plain.font_family("font.family.ui"),
+        themes
+            .resolve(&ThemeSpec::new("pop-light"))
+            .font_family("font.family.ui")
+    );
+}
+
+#[test]
 fn extensions_and_descriptions_are_preserved() {
     let mut themes = Themes::default();
     themes
