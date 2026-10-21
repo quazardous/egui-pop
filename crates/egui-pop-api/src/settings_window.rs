@@ -14,6 +14,10 @@
 //! numbers and code, picked among the families there are
 //! (`egui_pop_core::fonts::families`), and a preview.
 //!
+//! Plugins add pages of their own next to the generated ones
+//! ([`crate::settings_pages`]): drawn by the plugin, placed in the tree,
+//! found by the search, with their reset.
+//!
 //! `Ctrl+,` (or File > Settings) opens it; Escape closes it (or stops a
 //! capture of keys).
 //!
@@ -44,12 +48,16 @@ use serde_json::json;
 use crate::app::{AppHandle, MENU_FILE};
 use crate::hooks::SettingEntry;
 use crate::services::ServiceToken;
+use crate::settings_pages::{self, SettingsPage};
 use crate::strings as txt;
 use crate::zones::{self, Block};
 use crate::{Ctx, Plugin, PluginError};
 
 /// Opens and closes the settings window.
 pub const CMD_SETTINGS: CommandId = CommandId::from_static("app.settings");
+
+/// Opens the settings window on a custom page (`{"page": "<id>"}`).
+pub const CMD_SETTINGS_PAGE: CommandId = CommandId::from_static("app.settings.page");
 
 /// The settings window's state, as a service.
 pub const SETTINGS_WINDOW: ServiceToken<SettingsWindow> = ServiceToken::new("app.settings_window");
@@ -98,7 +106,8 @@ impl SettingsWindow {
         lock(&self.0).open
     }
 
-    /// Opens it, on a section if given.
+    /// Opens it, on a section (as the tree names it) or a custom page
+    /// (its id) if given.
     pub fn open(&self, section: Option<&str>) {
         let mut s = lock(&self.0);
         s.open = true;
@@ -120,6 +129,13 @@ impl SettingsWindow {
     /// The command whose new keys are awaited.
     pub fn capturing(&self) -> Option<CommandId> {
         lock(&self.0).capture.clone()
+    }
+
+    /// The section or custom page asked for last (shown when there is
+    /// no search), and the search.
+    pub fn shown(&self) -> (Option<String>, String) {
+        let s = lock(&self.0);
+        (s.section.clone(), s.filter.clone())
     }
 }
 
@@ -163,11 +179,90 @@ impl Plugin for SettingsPlugin {
                 Ok(json!({ "open": w.is_open() }))
             },
         )?;
+        ctx.command(
+            CommandSpec::new(CMD_SETTINGS_PAGE, "Settings page", "File")
+                .description("Opens the settings window on a custom page (its id).")
+                .hidden()
+                .args(json!({ "page": "" })),
+            |call| {
+                let page = call
+                    .args
+                    .get("page")
+                    .and_then(|s| s.as_str())
+                    .ok_or("`page` is missing")?;
+                if call.app.settings_page(page).is_none() {
+                    return Err(format!("no settings page `{page}`"));
+                }
+                let w = call
+                    .app
+                    .service(&SETTINGS_WINDOW)
+                    .ok_or("no settings window")?;
+                w.open(Some(page));
+                lock(&w.0).filter.clear();
+                Ok(json!({ "open": true, "page": page }))
+            },
+        )?;
         ctx.block(
             zones::OVERLAYS,
             Block::add(BlockId::from_static("egui_pop.settings"), 5, show),
         );
+        let w = ctx.app().downgrade();
+        ctx.collector(
+            egui_pop_core::debug::FnCollector::new(
+                "settings_window",
+                "The settings window: open or not, the section or page shown, the search, the tree (sections and custom pages) and the custom pages (id, title, parent, order, keywords, settings, component, reset, changed). `app.settings.page` opens a page.",
+            )
+            .snapshot(move |ctx| match w.get() {
+                Ok(app) => describe(ctx, &app),
+                Err(_) => serde_json::Value::Null,
+            }),
+        )?;
         Ok(())
+    }
+}
+
+/// What the `settings_window` collector shows.
+fn describe(ctx: &egui::Context, app: &AppHandle) -> serde_json::Value {
+    let (open, shown, filter) =
+        app.service(&SETTINGS_WINDOW)
+            .map_or((false, None, String::new()), |w| {
+                let (sec, filter) = w.shown();
+                (w.is_open(), sec, filter)
+            });
+    let all = app.settings();
+    let pages = app.settings_pages();
+    let entries = settings_pages::unclaimed(&all, &pages);
+    let tree: Vec<serde_json::Value> = settings_pages::tree(&sections(&entries), &pages)
+        .into_iter()
+        .map(|n| {
+            json!({
+                "key": n.key,
+                "title": node_title(ctx, app, &entries, &pages, &n.key),
+                "depth": n.depth,
+                "page": n.page,
+            })
+        })
+        .collect();
+    json!({
+        "open": open,
+        "section": shown,
+        "filter": filter,
+        "tree": tree,
+        "pages": settings_pages::describe(app),
+    })
+}
+
+/// A line of the tree as shown: a custom page's title, or the section's.
+fn node_title(
+    ctx: &egui::Context,
+    app: &AppHandle,
+    entries: &[SettingEntry],
+    pages: &[SettingsPage],
+    key: &str,
+) -> String {
+    match pages.iter().find(|p| p.id == key) {
+        Some(p) => p.title.clone(),
+        None => section_title(ctx, app, entries, key),
     }
 }
 
@@ -204,7 +299,7 @@ fn section_title(
 
 /// A setting's descriptor as shown: its label and description in the
 /// interface's language.
-fn shown(ctx: &egui::Context, e: &SettingEntry) -> egui_pop_model::values::Descriptor {
+pub(crate) fn shown(ctx: &egui::Context, e: &SettingEntry) -> egui_pop_model::values::Descriptor {
     let mut d = e.descriptor.clone();
     let id = e.id.as_str();
     d.label = strings::setting_label(ctx, id, &d.label);
@@ -214,7 +309,12 @@ fn shown(ctx: &egui::Context, e: &SettingEntry) -> egui_pop_model::values::Descr
 
 /// Whether a setting matches the search (label, description, section,
 /// as shown).
-fn matches(ctx: &egui::Context, app: &AppHandle, e: &SettingEntry, filter: &str) -> bool {
+pub(crate) fn matches(
+    ctx: &egui::Context,
+    app: &AppHandle,
+    e: &SettingEntry,
+    filter: &str,
+) -> bool {
     let d = shown(ctx, e);
     let text = format!(
         "{} {} {}",
@@ -225,6 +325,26 @@ fn matches(ctx: &egui::Context, app: &AppHandle, e: &SettingEntry, filter: &str)
     filter
         .split_whitespace()
         .all(|w| fuzzy::score(w, &text).is_some())
+}
+
+/// Whether a custom page matches the search.
+fn page_matches(
+    ctx: &egui::Context,
+    app: &AppHandle,
+    entries: &[SettingEntry],
+    all: &[SettingEntry],
+    page: &SettingsPage,
+    filter: &str,
+) -> bool {
+    let parent = page
+        .parent
+        .as_deref()
+        .map(|p| match app.settings_page(p) {
+            Some(parent) => parent.title,
+            None => section_title(ctx, app, entries, p),
+        })
+        .unwrap_or_default();
+    settings_pages::matches(ctx, page, &parent, all, filter)
 }
 
 /// Draws the window while it is open.
@@ -252,7 +372,10 @@ fn show(ui: &mut Ui, app: &AppHandle) {
             close = true;
             return;
         }
-        let entries = app.settings();
+        let all = app.settings();
+        let pages = app.settings_pages();
+        // The settings a custom page edits are drawn by the page.
+        let entries = settings_pages::unclaimed(&all, &pages);
         let mut s = lock(&w.0);
         ui.horizontal(|ui| {
             let title = ui.heading(strings::tr(&ctx, &txt::SETTINGS_TITLE));
@@ -269,7 +392,9 @@ fn show(ui: &mut Ui, app: &AppHandle) {
             history(ui, app);
         });
         ui.separator();
-        let secs = sections(&entries);
+        let nodes = settings_pages::tree(&sections(&entries), &pages);
+        let secs: Vec<String> = nodes.iter().map(|n| n.key.clone()).collect();
+        let page_of = |key: &str| pages.iter().find(|p| p.id == key);
         let current = s
             .section
             .clone()
@@ -284,8 +409,14 @@ fn show(ui: &mut Ui, app: &AppHandle) {
             // The tree: sections, those with matches when searching.
             ui.vertical(|ui| {
                 ui.set_width(200.0);
-                for sec in &secs {
-                    let hits = if sec == SHORTCUTS {
+                for node in &nodes {
+                    let sec = &node.key;
+                    let hits = if let Some(page) = page_of(sec) {
+                        usize::from(
+                            filter.is_empty()
+                                || page_matches(&ctx, app, &entries, &all, page, &filter),
+                        )
+                    } else if sec == SHORTCUTS {
                         usize::from(
                             filter.is_empty()
                                 || !shortcut_rows(&ctx, app, &filter, None, false).is_empty(),
@@ -302,10 +433,11 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                     let enabled = filter.is_empty() || hits > 0;
                     let item = widgets::SelectableRow::new(
                         filter.is_empty() && *sec == current,
-                        section_title(&ctx, app, &entries, sec),
+                        node_title(&ctx, app, &entries, &pages, sec),
                     );
-                    // The Fonts page is Appearance's.
-                    let r = if sec == FONTS {
+                    // A page under a parent, and the Fonts page (Appearance's),
+                    // are indented.
+                    let r = if node.depth > 0 || sec == FONTS {
                         ui.horizontal(|ui| {
                             ui.add_space(t.space.l);
                             ui.add_enabled(enabled, item)
@@ -332,9 +464,13 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                     // descriptions wrap.
                     ui.vertical(|ui| {
                         if filter.is_empty() {
-                            ui.strong(section_title(&ctx, app, &entries, &current));
+                            ui.strong(node_title(&ctx, app, &entries, &pages, &current));
                             ui.add_space(t.space.s);
-                            if current == SHORTCUTS {
+                            if let Some(page) = page_of(&current) {
+                                settings_pages::header(ui, app, page);
+                                ui.add_space(t.space.s);
+                                settings_pages::draw(ui, app, &page.id);
+                            } else if current == SHORTCUTS {
                                 let st = &mut *s;
                                 shortcuts(ui, app, st, "");
                             } else if current == FONTS {
@@ -346,7 +482,19 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                             }
                         } else {
                             let mut any = false;
+                            let mut open_page = None;
                             for sec in &secs {
+                                if let Some(page) = page_of(sec) {
+                                    if page_matches(&ctx, app, &entries, &all, page, &filter) {
+                                        any = true;
+                                        if settings_pages::search_hit(ui, app, page, &all, &filter)
+                                        {
+                                            open_page = Some(page.id.clone());
+                                        }
+                                        ui.add_space(t.space.m);
+                                    }
+                                    continue;
+                                }
                                 if sec == SHORTCUTS {
                                     if !shortcut_rows(&ctx, app, &filter, None, false).is_empty() {
                                         any = true;
@@ -372,6 +520,10 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                             }
                             if !any {
                                 ui.weak(strings::tr(&ctx, &txt::NOTHING_MATCHES));
+                            }
+                            if let Some(id) = open_page {
+                                s.section = Some(id);
+                                s.filter.clear();
                             }
                         }
                     });
@@ -431,9 +583,22 @@ fn history(ui: &mut Ui, app: &AppHandle) {
     }
 }
 
+/// Draws a declared setting as the settings window does (its editor
+/// bound to the store, its reset, its description), for a custom page;
+/// `false` when no setting has that id.
+pub fn setting_row(ui: &mut Ui, app: &AppHandle, id: &egui_pop_model::ids::SettingId) -> bool {
+    match app.settings().into_iter().find(|e| e.id == *id) {
+        Some(e) => {
+            row(ui, app, &e);
+            true
+        }
+        None => false,
+    }
+}
+
 /// One setting: its editor bound to the store, its reset, its
 /// description.
-fn row(ui: &mut Ui, app: &AppHandle, e: &SettingEntry) {
+pub(crate) fn row(ui: &mut Ui, app: &AppHandle, e: &SettingEntry) {
     let store = app.store();
     let t = Tokens::of(ui.ctx());
     let ctx = ui.ctx().clone();

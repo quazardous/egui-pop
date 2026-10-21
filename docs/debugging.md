@@ -8,7 +8,9 @@ diagnostics and the mount
 contract (`mounts`: every component and host declared, what is mounted
 where, `where_can` and `check`, see [hosts.md](hosts.md)), the fonts
 (`fonts`: faces, fallback chains, sizes, and `check` for the chars a
-family misses, see [fonts.md](fonts.md)), each with a JSON snapshot and
+family misses, see [fonts.md](fonts.md)), the settings window
+(`settings_window`: open or not, the page shown, the search, the tree and
+the custom pages), each with a JSON snapshot and
 actions flagged `mutates`; every call returns a feedback block. A person
 reads it in the gallery, an agent or a test reads the same data as JSON.
 

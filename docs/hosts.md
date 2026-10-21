@@ -41,6 +41,7 @@ verdicts and the debug bridge's `mounts` collector shows them to agents.
 | **O** | Popover | `overlay::show with Kind::Popover`, `egui::Popup` | A bounded width, the content's height; not resizable; shared focus; owns Escape; closed by Escape, a click outside; transient; main window; the keymap reaches it; gives a `Ui`, an `AppHandle`; sRGB. |
 | **L** | Line zone | `zones: TOP_BAR`, `TITLE_BAR`, `ACTIVITY_BAR` | One row; not resizable; shared focus; persistent; main window; the keymap reaches it; gives a `Ui`, an `AppHandle`, a focus scope, a fault boundary; sRGB. |
 | **S** | Status bar | `zones: STATUS_BAR`, `strips` | One row; not resizable; shared focus; persistent; main window; the keymap reaches it; gives a `Ui`, an `AppHandle`, a focus scope, a fault boundary; sRGB. |
+| **T** | Settings page | `Ctx::settings_page`, `SettingsPage` | A bounded width, the content's height; not resizable; modal: the whole keyboard; owns Escape; closed by Escape; transient; main window; the keymap reaches it; gives a `Ui`, an `AppHandle`, a focus scope, a fault boundary; sRGB; may hide its content. |
 | **V** | Viewport overlay | `egui_pop_viewport::overlay` | **no `Ui`: data only**; no keyboard; persistent; its panel's window; sRGB. |
 | **G** | Gallery story | `Ctx::story`, `Story` | A whole rect; resized by the user; shared focus; persistent; main window; the keymap reaches it; gives a `Ui`, an `AppHandle`, a focus scope, a fault boundary; wide gamut. |
 
@@ -49,8 +50,6 @@ Hosts that take **no component at all**, by design, and so have no column:
 - **Toast** (`toasts`): text, a level, actions and a job's progress;
   data only. A component goes in the jobs centre or a panel the toast's
   action opens.
-- **Settings window page** (`settings_window`): pages are generated from
-  declared settings; there is no custom page (a gap, E5).
 - **Menus and the command palette**: items, not content.
 - **A palette outside the main window** (a native utility window): not
   built, and blocked upstream, U3.
@@ -83,42 +82,42 @@ Hosts that take **no component at all**, by design, and so have no column:
 
 ## The matrix
 
-| Component | P | F | W | D | C | M | O | L | S | V | G |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| Image viewport | `if c11` | `if c1 c3 c11` | `if c3*` | `D6` | `if c3 c9` | `if c1 c3 c4` | `if c1 c3 c4` | `D1` | `D1` | `D2` | `yes` |
-| Navigator | `yes` | `yes` | `yes*` | `D6` | `yes` | `yes` | `yes` | `D1` | `D1` | `D2` | `yes` |
-| Node graph | `yes` | `if c1` | `if c2*` | `D6` | `if c9 c10` | `if c1 c4 c10` | `D3` | `D1` | `D1` | `D2` | `yes` |
-| Curves | `yes` | `yes` | `yes*` | `D6` | `if c9` | `if c4` | `if c4` | `D1` | `D1` | `D2` | `yes` |
-| Wheels | `yes` | `yes` | `yes*` | `D6` | `if c9` | `if c4` | `if c4` | `D1` | `D1` | `D2` | `yes` |
-| Histogram | `yes` | `yes` | `yes*` | `D6` | `if c9` | `if c4` | `if c4` | `D1` | `D1` | `D2` | `yes` |
-| Thumbnail | `yes` | `yes` | `yes*` | `D6` | `yes` | `yes` | `yes` | `if c6` | `if c6` | `D2` | `yes` |
-| Library grid | `if c11` | `if c1 c11` | `if c2*` | `D6` | `yes` | `if c1` | `if c1` | `D1` | `D1` | `D2` | `yes` |
-| Filmstrip | `if c11` | `if c1 c11` | `if c2*` | `D6` | `yes` | `if c1` | `if c1` | `D1` | `D1` | `D2` | `yes` |
-| Compare view | `if c11` | `if c1 c11` | `yes*` | `D6` | `yes` | `if c1` | `if c1` | `D1` | `D1` | `D2` | `yes` |
-| Tree | `if c11` | `if c1 c11` | `yes*` | `D6` | `if c5 c9` | `if c1 c5` | `if c1 c5` | `D1` | `D1` | `D2` | `yes` |
-| Table, list | `yes` | `if c1` | `yes*` | `D6` | `if c5 c9` | `if c1 c5` | `if c1 c5` | `D1` | `D1` | `D2` | `yes` |
-| Text editor | `yes` | `if c1` | `if c2*` | `D6` | `if c9 c10` | `if c1 c4 c10` | `D3` | `D1` | `D1` | `D2` | `yes` |
-| Code editor | `if c11` | `if c1 c11` | `if c2*` | `D6` | `if c5 c9 c10` | `if c1 c4 c5 c10` | `D3` | `D1` | `D1` | `D2` | `yes` |
-| Terminal | `if c11` | `if c1 c11` | `if c2*` | `D6` | `if c9 c10` | `if c1 c4 c10` | `D3` | `D1` | `D1` | `D2` | `yes` |
-| Sliders | `yes` | `yes` | `yes*` | `if c4 c8` | `if c9` | `if c4` | `if c4` | `if c6` | `if c6` | `D2` | `yes` |
-| Forms | `yes` | `yes` | `yes*` | `if c4 c5 c8` | `if c5 c9` | `if c5` | `if c5` | `D1` | `D1` | `D2` | `yes` |
-| Progress | `yes` | `yes` | `yes*` | `D6` | `yes` | `yes` | `yes` | `if c6` | `if c6` | `D2` | `yes` |
-| Jobs centre | `if c7` | `if c1 c7` | `if c2 c7*` | `D6` | `if c7` | `if c1 c7` | `if c1 c7` | `D1` | `D1` | `D2` | `if c7` |
-| Theme editor | `if c7` | `if c1 c7` | `if c2 c7*` | `D6` | `if c5 c7 c10` | `if c1 c5 c7 c10` | `D3` | `D1` | `D1` | `D2` | `if c7` |
-| Tips | `yes` | `yes` | `yes*` | `D6` | `yes` | `yes` | `yes` | `D1` | `D1` | `D2` | `yes` |
+| Component | P | F | W | D | C | M | O | L | S | T | V | G |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Image viewport | `if c11` | `if c1 c3 c11` | `if c3*` | `D6` | `if c3 c9` | `if c1 c3 c4` | `if c1 c3 c4` | `D1` | `D1` | `if c1 c3 c4 c11` | `D2` | `yes` |
+| Navigator | `yes` | `yes` | `yes*` | `D6` | `yes` | `yes` | `yes` | `D1` | `D1` | `yes` | `D2` | `yes` |
+| Node graph | `yes` | `if c1` | `if c2*` | `D6` | `if c9 c10` | `if c1 c4 c10` | `D3` | `D1` | `D1` | `if c1 c4 c10` | `D2` | `yes` |
+| Curves | `yes` | `yes` | `yes*` | `D6` | `if c9` | `if c4` | `if c4` | `D1` | `D1` | `if c4` | `D2` | `yes` |
+| Wheels | `yes` | `yes` | `yes*` | `D6` | `if c9` | `if c4` | `if c4` | `D1` | `D1` | `if c4` | `D2` | `yes` |
+| Histogram | `yes` | `yes` | `yes*` | `D6` | `if c9` | `if c4` | `if c4` | `D1` | `D1` | `if c4` | `D2` | `yes` |
+| Thumbnail | `yes` | `yes` | `yes*` | `D6` | `yes` | `yes` | `yes` | `if c6` | `if c6` | `yes` | `D2` | `yes` |
+| Library grid | `if c11` | `if c1 c11` | `if c2*` | `D6` | `yes` | `if c1` | `if c1` | `D1` | `D1` | `if c1 c11` | `D2` | `yes` |
+| Filmstrip | `if c11` | `if c1 c11` | `if c2*` | `D6` | `yes` | `if c1` | `if c1` | `D1` | `D1` | `if c1 c11` | `D2` | `yes` |
+| Compare view | `if c11` | `if c1 c11` | `yes*` | `D6` | `yes` | `if c1` | `if c1` | `D1` | `D1` | `if c1 c11` | `D2` | `yes` |
+| Tree | `if c11` | `if c1 c11` | `yes*` | `D6` | `if c5 c9` | `if c1 c5` | `if c1 c5` | `D1` | `D1` | `if c1 c5 c11` | `D2` | `yes` |
+| Table, list | `yes` | `if c1` | `yes*` | `D6` | `if c5 c9` | `if c1 c5` | `if c1 c5` | `D1` | `D1` | `if c1 c5` | `D2` | `yes` |
+| Text editor | `yes` | `if c1` | `if c2*` | `D6` | `if c9 c10` | `if c1 c4 c10` | `D3` | `D1` | `D1` | `if c1 c4 c10` | `D2` | `yes` |
+| Code editor | `if c11` | `if c1 c11` | `if c2*` | `D6` | `if c5 c9 c10` | `if c1 c4 c5 c10` | `D3` | `D1` | `D1` | `if c1 c4 c5 c10 c11` | `D2` | `yes` |
+| Terminal | `if c11` | `if c1 c11` | `if c2*` | `D6` | `if c9 c10` | `if c1 c4 c10` | `D3` | `D1` | `D1` | `if c1 c4 c10 c11` | `D2` | `yes` |
+| Sliders | `yes` | `yes` | `yes*` | `if c4 c8` | `if c9` | `if c4` | `if c4` | `if c6` | `if c6` | `if c4` | `D2` | `yes` |
+| Forms | `yes` | `yes` | `yes*` | `if c4 c5 c8` | `if c5 c9` | `if c5` | `if c5` | `D1` | `D1` | `if c5` | `D2` | `yes` |
+| Progress | `yes` | `yes` | `yes*` | `D6` | `yes` | `yes` | `yes` | `if c6` | `if c6` | `yes` | `D2` | `yes` |
+| Jobs centre | `if c7` | `if c1 c7` | `if c2 c7*` | `D6` | `if c7` | `if c1 c7` | `if c1 c7` | `D1` | `D1` | `if c1 c7` | `D2` | `if c7` |
+| Theme editor | `if c7` | `if c1 c7` | `if c2 c7*` | `D6` | `if c5 c7 c10` | `if c1 c5 c7 c10` | `D3` | `D1` | `D1` | `if c1 c5 c7 c10` | `D2` | `if c7` |
+| Tips | `yes` | `yes` | `yes*` | `D6` | `yes` | `yes` | `yes` | `D1` | `D1` | `yes` | `D2` | `yes` |
 
-Columns: **P** docked panel, **F** floating palette, **W** auxiliary window, **D** dialog (four kinds), **C** custom dialog, **M** raw modal, **O** popover, **L** line zone, **S** status bar, **V** viewport overlay, **G** gallery story.
+Columns: **P** docked panel, **F** floating palette, **W** auxiliary window, **D** dialog (four kinds), **C** custom dialog, **M** raw modal, **O** popover, **L** line zone, **S** status bar, **T** settings page, **V** viewport overlay, **G** gallery story.
 
 ## Counts
 
 | Status | Cells |
 |---|---|
-| fits (`yes`) | 67 |
-| fits under conditions (`if`) | 83 |
+| fits (`yes`) | 71 |
+| fits under conditions (`if`) | 100 |
 | does not fit, by design (`D1` 36, `D2` 21, `D3` 5, `D6` 19) | 81 |
 | does not fit, egui-pop limit | 0 |
 | does not fit, upstream | 0 |
-| **total** (21 components by 11 hosts) | 231 |
+| **total** (21 components by 12 hosts) | 252 |
 
 Of the cells that fit, 21 are not tried (`*`): their host
 cannot be mounted headless.
@@ -184,9 +183,9 @@ draws a second choice inline.
 | E2 | **Palettes are not resizable.** A palette's width is between its panel's `min_size` and `default_size`, its height the content's. | Small: a resize grip on the palette's area, the size kept in its place (decided: resizable). |
 | E3 | **No keymap in auxiliary windows.** Keys pressed in an auxiliary window are not dispatched. | Medium: the dispatcher in each immediate viewport's pass, with that window's focus chain (decided: to fix). |
 | E4 | **Overlays live in the main window.** Dialogs, menus, toasts and the command palette are drawn in the main window, and egui's modal blocks its own window only: a dialog opened from an auxiliary window appears in the main one and does not block the auxiliary window. | Medium to large: an overlay stack per window, or a modal blocking every window (decided: to fix). |
-| E5 | **No custom page in the settings window.** The settings window's pages are generated from declared settings. | Small: a page kind drawing a block. |
+| E5 | **No custom page in the settings window (closed).** Closed by settings pages (`Ctx::settings_page`): a page a plugin draws itself in the settings window, placed in its tree, searched, with its reset (column T). | Done. |
 
-E2 to E5 appear as conditions (c1, c2) or as hosts that do not exist
+E2 to E4 appear as conditions (c1, c2) or as hosts that do not exist
 yet, not as refused cells.
 
 ### Upstream limits

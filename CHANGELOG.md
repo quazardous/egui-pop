@@ -10,6 +10,23 @@ publishes.
 
 ## Unreleased
 
+### Added
+
+- Custom pages in the settings window (egui-pop-api), closing E5 of the
+  mount contract: `Ctx::settings_page` mounts a `SettingsPage` a plugin
+  draws itself, in the tree under a section or a page of its own
+  (`under`, `order`), found by the search through its title, its
+  `keywords`, its description and the `settings` it edits (which leave
+  the generated sections; `settings_window::setting_row` draws one as
+  the window does). Its reset takes them back to their defaults as one
+  undo step, with a reset of its own for the rest (`reset_with`). It is
+  checked against the new settings page host (`mounts::SETTINGS_PAGE`,
+  column T of `docs/hosts.md`): a component that does not fit is
+  refused and reported. Its body is drawn in a focus scope and a fault
+  boundary. Agents see the tree and the pages in the new
+  `settings_window` collector and open one with `app.settings.page`
+  (`{"page": "<id>"}`). English and French strings.
+
 ## 0.2.0 (2026-10-21)
 
 ### Changed

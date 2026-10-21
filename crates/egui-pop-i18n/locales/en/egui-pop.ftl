@@ -52,6 +52,10 @@ command-app-settings =
     .description = Every setting, searchable, and the keyboard shortcuts.
     .title = Settings
 
+command-app-settings-page =
+    .description = Opens the settings window on a custom page (its id).
+    .title = Settings page
+
 command-app-window-close =
     .description = Closes the window, as its close button does.
     .title = Close window
@@ -848,11 +852,21 @@ egui-pop-settings-nothing-to-redo = Nothing to redo in the settings
 
 egui-pop-settings-nothing-to-undo = Nothing to undo in the settings
 
+egui-pop-settings-open-page = Open
+
+egui-pop-settings-open-page-name = Open the { $page } page
+
+egui-pop-settings-page-at-default = { $page } is at its defaults
+
 egui-pop-settings-redo = Redo
 
 egui-pop-settings-redo-name = Redo in the settings
 
 egui-pop-settings-redo-step = Redo { $change } (the settings only)
+
+egui-pop-settings-reset-page = Reset the page
+
+egui-pop-settings-reset-page-name = Reset { $page }
 
 egui-pop-settings-reset-setting = Reset { $setting }
 

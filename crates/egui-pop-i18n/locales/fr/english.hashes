@@ -23,6 +23,8 @@ command-app-palette.description 0264151557606e9e
 command-app-palette.title f9e5c255cb220019
 command-app-quit.description e0bd058d4b8ec90e
 command-app-quit.title a4050ce0b3604cfc
+command-app-settings-page.description 4f66c3520ac03040
+command-app-settings-page.title da5bb2e8404c3093
 command-app-settings.description b2fbc689f22e879c
 command-app-settings.title 3b5b172596a8843e
 command-app-window-close.description 44ed8094ffd02436
@@ -423,9 +425,14 @@ egui-pop-settings-at-default e87443abda8df723
 egui-pop-settings-fonts a737321dde761f11
 egui-pop-settings-nothing-to-redo c2ba211e72d86016
 egui-pop-settings-nothing-to-undo e0f18bb1f4b64200
+egui-pop-settings-open-page 41f71ad49a338131
+egui-pop-settings-open-page-name 82e0369fec9e4450
+egui-pop-settings-page-at-default 84f0b8385b374c7d
 egui-pop-settings-redo ef2842c65cf40641
 egui-pop-settings-redo-name af9f0247b6743222
 egui-pop-settings-redo-step ced7a8918c435b60
+egui-pop-settings-reset-page f345dfd54267a720
+egui-pop-settings-reset-page-name 941ca78a193c147d
 egui-pop-settings-reset-setting 353b0e091ee83932
 egui-pop-settings-search-hint 220f35eb35bc223a
 egui-pop-settings-shortcuts 0d070a1def8c650f

@@ -134,6 +134,22 @@ pub const SETTINGS_AT_DEFAULT: StrKey = StrKey::new(
     "egui-pop-settings-at-default",
     "{ $setting } is at its default",
 );
+/// A custom page's reset.
+pub const SETTINGS_RESET_PAGE: StrKey =
+    StrKey::new("egui-pop-settings-reset-page", "Reset the page");
+/// A custom page's reset, as the screen reader says it.
+pub const SETTINGS_RESET_PAGE_NAME: StrKey =
+    StrKey::new("egui-pop-settings-reset-page-name", "Reset { $page }");
+pub const SETTINGS_PAGE_AT_DEFAULT: StrKey = StrKey::new(
+    "egui-pop-settings-page-at-default",
+    "{ $page } is at its defaults",
+);
+/// The button opening a custom page found by the search.
+pub const SETTINGS_OPEN_PAGE: StrKey = StrKey::new("egui-pop-settings-open-page", "Open");
+pub const SETTINGS_OPEN_PAGE_NAME: StrKey = StrKey::new(
+    "egui-pop-settings-open-page-name",
+    "Open the { $page } page",
+);
 
 // The shortcuts editor.
 
@@ -815,6 +831,11 @@ pub const ALL: &[StrKey] = &[
     SETTINGS_REDO_NAME,
     SETTINGS_RESET_SETTING,
     SETTINGS_AT_DEFAULT,
+    SETTINGS_RESET_PAGE,
+    SETTINGS_RESET_PAGE_NAME,
+    SETTINGS_PAGE_AT_DEFAULT,
+    SETTINGS_OPEN_PAGE,
+    SETTINGS_OPEN_PAGE_NAME,
     SHORTCUTS_SEARCH_BY_KEY,
     SHORTCUTS_PRESS_TO_SEARCH,
     SHORTCUTS_BOUND_TO,

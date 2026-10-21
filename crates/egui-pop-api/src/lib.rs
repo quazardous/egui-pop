@@ -49,6 +49,8 @@
 //!   from egui-pop's sliders;
 //! - [`settings_window`]: the settings window (search, sections, form)
 //!   and the shortcuts editor, a plugin;
+//! - [`settings_pages`]: custom pages a plugin draws in the settings
+//!   window, placed in its tree, searched, with their reset;
 //! - [`system_keys`]: how the shortcuts bound in the system scope (also
 //!   outside the window) are registered, as the shortcuts editor shows
 //!   it;
@@ -124,6 +126,7 @@ pub mod plugin;
 pub mod pointer;
 pub mod services;
 pub mod settings;
+pub mod settings_pages;
 pub mod settings_window;
 pub mod sliders;
 pub mod steps;

@@ -908,9 +908,9 @@ pub const CODES: &[Code] = &[
     Code {
         code: "E5",
         kind: CodeKind::Limit,
-        title: "No custom page in the settings window",
-        text: "The settings window's pages are generated from declared settings.",
-        then: "Small: a page kind drawing a block.",
+        title: "No custom page in the settings window (closed)",
+        text: "Closed by settings pages (`Ctx::settings_page`): a page a plugin draws itself in the settings window, placed in its tree, searched, with its reset (column T).",
+        then: "Done.",
     },
     Code {
         code: "U1",

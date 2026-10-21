@@ -53,6 +53,9 @@ pub const POPOVER: &str = "popover";
 pub const LINE: &str = "line";
 /// The status bar.
 pub const STATUS_BAR: &str = "status-bar";
+/// A custom page of the settings window
+/// ([`crate::settings_pages::SettingsPage`]).
+pub const SETTINGS_PAGE: &str = "settings.page";
 /// A gallery story.
 pub const STORY: &str = "story";
 
@@ -176,6 +179,7 @@ pub fn hosts() -> Vec<HostOffer> {
         popover(),
         line(),
         status_bar(),
+        crate::settings_pages::host(),
         story(),
     ]
 }
@@ -305,7 +309,7 @@ impl AppHandle {
 
     /// Whether what `owner` declared still counts (the framework, or a
     /// connected plugin).
-    fn owner_connected(&self, owner: &OwnerId) -> bool {
+    pub(crate) fn owner_connected(&self, owner: &OwnerId) -> bool {
         *owner == OwnerId::FRAMEWORK
             || self
                 .plugins()

@@ -49,6 +49,10 @@ command-app-settings =
     .description = Tous les réglages, avec recherche, et les raccourcis clavier.
     .title = Réglages
 
+command-app-settings-page =
+    .description = Ouvre la fenêtre des réglages sur une page personnalisée (son identifiant).
+    .title = Page de réglages
+
 command-app-window-close =
     .description = Ferme la fenêtre, comme son bouton de fermeture.
     .title = Fermer la fenêtre
@@ -765,11 +769,21 @@ egui-pop-settings-nothing-to-redo = Rien à rétablir dans les réglages
 
 egui-pop-settings-nothing-to-undo = Rien à annuler dans les réglages
 
+egui-pop-settings-open-page = Ouvrir
+
+egui-pop-settings-open-page-name = Ouvrir la page { $page }
+
+egui-pop-settings-page-at-default = { $page } est à ses valeurs par défaut
+
 egui-pop-settings-redo = Rétablir
 
 egui-pop-settings-redo-name = Rétablir dans les réglages
 
 egui-pop-settings-redo-step = Rétablir { $change } (les réglages seulement)
+
+egui-pop-settings-reset-page = Réinitialiser la page
+
+egui-pop-settings-reset-page-name = Réinitialiser { $page }
 
 egui-pop-settings-reset-setting = Réinitialiser { $setting }
 

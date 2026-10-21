@@ -81,6 +81,81 @@ commands without a handler (`Ctx::declare`) and gives the host to
 `AppBuilder::host`; a command may then answer later, from any thread,
 and the frame never waits.
 
+## Settings pages
+
+The settings window draws a page per section of declared settings. A
+plugin adds a page of its own, with its own layout, through
+`Ctx::settings_page`: a `SettingsPage` (an id, a title, a place in the
+tree, keywords for the search, the settings it edits) and the closure
+drawing it.
+
+```rust
+use egui_pop::api::settings_pages::SettingsPage;
+use egui_pop::api::settings_window;
+use egui_pop::egui;
+use egui_pop::prelude::*;
+
+const THREADS: SettingId = SettingId::from_static("compute.threads");
+
+struct Compute;
+
+impl Plugin for Compute {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("compute")
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        ctx.setting(THREADS, Descriptor::int("Worker threads", 1, 64, 4))?;
+        ctx.settings_page(
+            SettingsPage::new("compute.devices", "Compute")
+                .order(10)
+                .keywords(&["GPU", "OpenCL"])
+                .settings(&[THREADS]),
+            |ui, app| {
+                ui.label("The devices found, and which one runs what.");
+                settings_window::setting_row(ui, app, &THREADS);
+            },
+        );
+        Ok(())
+    }
+}
+
+let app = App::builder()
+    .plugins(DefaultPlugins)
+    .plugin(Compute)
+    .build(&egui::Context::default())
+    .unwrap();
+assert_eq!(app.handle().settings_pages()[0].id, "compute.devices");
+```
+
+- **Its place.** `under("Appearance")` puts it under a section (as the
+  tree names it) or under a page of its own (its id); without a parent,
+  or under one that does not exist, it is a page of its own, after the
+  generated sections and before the keyboard shortcuts. `order` sorts
+  the pages of a parent (then the title). One level only.
+- **The search** finds it by its title, its parent, its description,
+  its `keywords` and its settings as shown; a hit lists the settings
+  that match and a button opening the page.
+- **Its settings** (`settings`) leave the generated sections: the page
+  draws them, as the window does with `settings_window::setting_row`.
+  The page's reset takes them back to their defaults as one undo step
+  of the settings; `reset_with` adds a reset of its own for what is not
+  a setting, and says when that is away from its defaults.
+- **The mount contract.** The page's component (`needs`, a plain
+  widget by default) is checked against the settings page host (column
+  T of [hosts.md](hosts.md)): modal, transient, the form's width and the
+  content's height, not drawn while another page is shown. A component
+  that does not fit is refused and reported (`mount-refused`), and the
+  page is not added. The body is drawn in a focus scope and a fault
+  boundary.
+- **Agents** read the tree and the pages in the `settings_window`
+  collector, and open a page with `app.settings.page`
+  (`{"page": "compute.devices"}`).
+
+A body moves the settings window by commands (`app.settings`,
+`app.settings.page`), not through its service, which is held while the
+body is drawn.
+
 ## Zones and blocks
 
 Zones and blocks let a plugin add to, replace, extend or wrap what

@@ -95,8 +95,6 @@ Hosts that take **no component at all**, by design, and so have no column:
 - **Toast** (`toasts`): text, a level, actions and a job's progress;
   data only. A component goes in the jobs centre or a panel the toast's
   action opens.
-- **Settings window page** (`settings_window`): pages are generated from
-  declared settings; there is no custom page (a gap, E5).
 - **Menus and the command palette**: items, not content.
 - **A palette outside the main window** (a native utility window): not
   built, and blocked upstream, U3.
@@ -527,7 +525,7 @@ draws a second choice inline.
     }
     o.push_str(
         "
-E2 to E5 appear as conditions (c1, c2) or as hosts that do not exist
+E2 to E4 appear as conditions (c1, c2) or as hosts that do not exist
 yet, not as refused cells.
 
 ### Upstream limits
