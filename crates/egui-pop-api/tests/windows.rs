@@ -335,6 +335,13 @@ fn the_palette_menus_and_toasts_open_in_the_detached_window_in_use() {
     assert_eq!(h.service(&palette::PALETTE).unwrap().window(), Some(log));
     assert_eq!(overlay::window_of(&r.ctx, palette_overlay()), Some(log));
     assert_eq!(overlay::modal_windows(&r.ctx), [log]);
+    // Agents see it in the `windows` collector.
+    let seen = h.describe_windows();
+    assert_eq!(seen["active"], "demo.log");
+    assert_eq!(seen["palette"], "demo.log");
+    assert_eq!(seen["windows"][1]["window"], "demo.log");
+    assert_eq!(seen["windows"][1]["overlays"][0], "Command palette");
+    assert_eq!(seen["windows"][1]["modal"], true);
     press(ViewportId::ROOT, Key::G);
     r.frame();
     assert!(r.ran().is_empty(), "{:?}", r.ran());

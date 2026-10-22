@@ -44,3 +44,29 @@ before, for a driver to read what the application saw. The window title is alway
 `egui-pop gallery`. Run `egui-pop-gallery --help` for every option.
 
 `out/`, `log/` and `screenshots/` are not committed.
+
+## Overlays across real windows
+
+`windows.py` checks what kittest cannot: a detached panel in a real
+window of its own, under a real window manager. It starts the gallery
+twice on the workbench page with the notes detached
+(`GALLERY_DETACH=gallery.notes`, `--detach`), focuses the notes' window
+by its title, and checks the debug bridge's `windows` collector, dumped
+when the gallery quits by itself:
+
+- Ctrl+Shift+P there opens the command palette in that window, which
+  blocks the main one;
+- Ctrl+Shift+Delete there asks before clearing the notes: the dialog is
+  over that window, and Ctrl+Shift+P pressed in the main window then
+  opens nothing.
+
+```sh
+cargo build --release -p egui-pop-gallery
+$WBOX_PYTHON tools/wbox/windows.py            # --frames 900, --out DIR
+```
+
+It prints one JSON line per run (`{"name": "palette", "ok": true}`) and
+exits with 1 when a run failed; screenshots of each run go to
+`screenshots/`. The gate does not run it: it needs wbox (labwc, a
+headless compositor) and a release build, as `cargo xtask screenshots`
+does.

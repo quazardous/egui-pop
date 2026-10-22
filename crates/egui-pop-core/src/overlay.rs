@@ -425,6 +425,17 @@ pub fn modal_windows(ctx: &Context) -> Vec<ViewportId> {
         .collect()
 }
 
+/// Every window's open overlays, bottom first, the main window first
+/// (windows without any left out): what the debug bridge shows of the
+/// windows.
+pub fn stacks(ctx: &Context) -> Vec<(ViewportId, Vec<OverlaySpec>)> {
+    all(ctx)
+        .into_iter()
+        .map(|(v, st)| (v, lock(&st).stack.specs().cloned().collect::<Vec<_>>()))
+        .filter(|(_, specs)| !specs.is_empty())
+        .collect()
+}
+
 /// While a modal overlay is open in another window, blocks the window
 /// being drawn: its keys and typed text are dropped this pass (nothing
 /// below reads them: neither the key dispatcher nor a widget), and a
