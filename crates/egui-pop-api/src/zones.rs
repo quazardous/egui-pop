@@ -40,14 +40,17 @@ pub const INSPECTOR: ZoneId = ZoneId::from_static("app.inspector");
 /// The status bar at the bottom.
 pub const STATUS_BAR: ZoneId = ZoneId::from_static("app.status-bar");
 
-/// Drawn after the shell, every frame: blocks there show overlays (the
-/// command palette, dialogs, toasts) when they have something to show.
+/// Drawn after the shell, every frame, in the main window only: blocks
+/// there show what stays in the main window (the settings window, the
+/// in-app file chooser, the frame's edges) or follow a setting. Overlays that open
+/// in the window the user works in go in [`WINDOW_OVERLAYS`].
 pub const OVERLAYS: ZoneId = ZoneId::from_static("app.overlays");
 
 /// Drawn after each window's content, in the main window and in every
 /// detached panel's window: blocks there show overlays that belong to a
-/// window (the dialogs, over the window they were opened from), each
-/// drawing only in its own (`AppHandle::active_window`, egui's
+/// window (the dialogs and the command palette, over the window they
+/// were opened from; the toasts, in the active window), each drawing
+/// only in its own (`AppHandle::active_window`, egui's
 /// `Context::viewport_id`). Declared by the framework beside the shell's
 /// zones.
 pub const WINDOW_OVERLAYS: ZoneId = ZoneId::from_static("app.window-overlays");

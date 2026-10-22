@@ -10,6 +10,11 @@
 //! arrows move the selection, Enter runs, Escape closes (or leaves an
 //! argument prompt).
 //!
+//! It opens in the window the user works in
+//! ([`AppHandle::active_window`]), a detached panel's included, as VS
+//! Code's auxiliary windows do, and goes to the main window if that one
+//! closes. A modal overlay, it blocks the other windows while it is open.
+//!
 //! ```
 //! use egui_pop_api::{App, palette};
 //!
@@ -84,8 +89,9 @@ impl Plugin for PalettePlugin {
                 Ok(json!({ "open": p.is_open() }))
             },
         )?;
+        // Drawn in every window, shown in its own.
         ctx.block(
-            zones::OVERLAYS,
+            zones::WINDOW_OVERLAYS,
             Block::add(BlockId::from_static("egui_pop.palette"), 0, show),
         );
         Ok(())
@@ -114,6 +120,8 @@ struct State {
     query: String,
     selected: usize,
     prompt: Option<Prompt>,
+    /// The window it is shown in: the active one when it first draws.
+    window: Option<egui::ViewportId>,
 }
 
 /// The palette's state: open or not, the query.
@@ -137,6 +145,13 @@ impl Palette {
 
     pub fn close(&self) {
         *lock(&self.0) = State::default();
+    }
+
+    /// The window it is shown in, once open and drawn: the one the user
+    /// worked in when it opened (`AppHandle::active_window`).
+    pub fn window(&self) -> Option<egui::ViewportId> {
+        let s = lock(&self.0);
+        s.open.then_some(s.window).flatten()
     }
 
     /// The query typed.
@@ -363,6 +378,12 @@ fn show(ui: &mut Ui, app: &AppHandle) {
         return;
     }
     let ctx = ui.ctx().clone();
+    // Shown in the window it opened in (the active one then), or the main
+    // window once that one is closed; drawn in that window's pass only.
+    let window = *lock(&p.0).window.get_or_insert_with(|| app.active_window());
+    if app.open_window(window) != ctx.viewport_id() {
+        return;
+    }
     // The palette handles Escape itself: back from a prompt, else close.
     let spec = OverlaySpec::new(SPEC_ID, "Command palette", Kind::Modal).keep_on_escape();
     let entries = app.palette();

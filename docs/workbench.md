@@ -199,8 +199,15 @@ Such a window is a window of the application in full:
   front. A window closed with a dialog open gives it to the main window.
   Each window has its own overlay stack (`egui_pop_core::overlay`);
   blocks of the `WINDOW_OVERLAYS` zone are drawn in every window, each
-  drawing what belongs to it. Menus, toasts and the command palette stay
-  in the main window.
+  drawing what belongs to it.
+- **Menus, the palette and toasts.** As in VS Code's auxiliary windows,
+  they open in the window in use: the command palette and a popup menu
+  (`menus::popup_at`) open over the window the user worked in when they
+  opened, and a context menu over the widget it belongs to; the toasts
+  show in the active window. Each goes to the main window when its
+  window closes. The palette, a modal overlay, blocks the other windows
+  as a dialog does. The settings window and the in-app file chooser
+  open in the main window.
 
 The bottom panel spans the window's whole width by default. The
 `workbench.panel_alignment` setting lines it up otherwise, as VS Code's

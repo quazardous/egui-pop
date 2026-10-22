@@ -2,7 +2,8 @@
 //! pressed there run in that window's context (its focus chain, `window`
 //! naming its panel), a dialog opened from there is shown over it and
 //! blocks the main window, and comes back to the main window when its
-//! window closes.
+//! window closes. The command palette, popup menus and toasts open in the
+//! window in use as dialogs do.
 //!
 //! kittest draws a detached panel inside the main window (one window
 //! only), so these tests run an egui context with real viewports: an
@@ -14,9 +15,12 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use egui::{Context, Event, Key, Modifiers, Pos2, RawInput, Rect, ViewportId, vec2};
+use egui_pop_api::app::MENU_VIEW;
 use egui_pop_api::dialogs::{self, Answer, Confirm, Dialogs};
+use egui_pop_api::toasts::{TOASTS, Toast};
 use egui_pop_api::workbench::{self, Change};
 use egui_pop_api::{App, Ctx, DefaultPlugins, Plugin, PluginError};
+use egui_pop_api::{menus, palette};
 use egui_pop_core::overlay;
 use egui_pop_model::commands::{CommandSpec, Origin};
 use egui_pop_model::ids::{CommandId, PanelId, PluginId};
@@ -155,7 +159,11 @@ impl Run {
 /// Queues a key press and its release (with Ctrl) for a window's next
 /// pass: a key left down would make its next press a repeat.
 fn press(viewport: ViewportId, key: Key) {
-    let modifiers = Modifiers::COMMAND;
+    press_with(viewport, key, Modifiers::COMMAND);
+}
+
+/// As [`press`], with given modifiers.
+fn press_with(viewport: ViewportId, key: Key, modifiers: Modifiers) {
     QUEUED.with(|q| {
         let mut q = q.borrow_mut();
         let events = q.entry(viewport).or_default();
@@ -298,4 +306,100 @@ fn a_dialog_opened_from_the_main_window_blocks_a_detached_one() {
     press(log, Key::F);
     r.frame();
     assert!(r.ran().is_empty(), "{:?}", r.ran());
+}
+
+/// The palette's overlay id.
+fn palette_overlay() -> egui::Id {
+    egui::Id::new("egui_pop.palette")
+}
+
+/// The toasts' area id.
+fn toasts_area() -> egui::Id {
+    egui::Id::new("egui_pop.toasts")
+}
+
+#[test]
+fn the_palette_menus_and_toasts_open_in_the_detached_window_in_use() {
+    let mut r = Run::new();
+    let h = r.app.handle().clone();
+    assert!(h.detach_panel(&LOG).unwrap().ok());
+    r.frame();
+    let log = workbench::window_id(&LOG);
+    // The palette, opened by its key in the log's window, shows there and
+    // blocks the main window (a modal overlay).
+    press_with(log, Key::F1, Modifiers::NONE);
+    r.frame();
+    r.frame();
+    assert_eq!(h.active_window(), log);
+    assert!(palette::is_open(&h));
+    assert_eq!(h.service(&palette::PALETTE).unwrap().window(), Some(log));
+    assert_eq!(overlay::window_of(&r.ctx, palette_overlay()), Some(log));
+    assert_eq!(overlay::modal_windows(&r.ctx), [log]);
+    press(ViewportId::ROOT, Key::G);
+    r.frame();
+    assert!(r.ran().is_empty(), "{:?}", r.ran());
+    // Its key closes it, in its window.
+    press_with(log, Key::F1, Modifiers::NONE);
+    r.frame();
+    r.frame();
+    assert!(!palette::is_open(&h));
+    assert!(!overlay::modal_open(&r.ctx));
+    // A popup menu opened while the log's window is in use shows there.
+    assert!(menus::popup_at(&h, &MENU_VIEW, egui::pos2(40.0, 40.0)));
+    r.frame();
+    r.frame();
+    assert_eq!(menus::popup_window(&h), Some(log));
+    assert_eq!(menus::popup_open(&h), Some(MENU_VIEW));
+    menus::close_popup(&h);
+    // A toast shows in the window in use: drawn (its clock started), not
+    // in the main window.
+    h.service(&TOASTS).unwrap().notify(Toast::info("Saved"));
+    r.frame();
+    r.frame();
+    let shown = h.service(&TOASTS).unwrap().shown();
+    assert!(shown[0].until.is_some(), "{shown:?}");
+    assert!(r.ctx.memory(|m| m.area_rect(toasts_area())).is_none());
+    // Back in the main window, the toast follows.
+    click(ViewportId::ROOT, egui::pos2(450.0, 300.0));
+    r.frame();
+    r.frame();
+    assert_eq!(h.active_window(), ViewportId::ROOT);
+    assert!(r.ctx.memory(|m| m.area_rect(toasts_area())).is_some());
+}
+
+#[test]
+fn the_palette_and_a_menu_whose_window_closes_come_to_the_main_window() {
+    let mut r = Run::new();
+    let h = r.app.handle().clone();
+    let log = workbench::window_id(&LOG);
+    // A popup menu opened in the log's window.
+    assert!(h.detach_panel(&LOG).unwrap().ok());
+    r.frame();
+    click(log, WINDOW.center());
+    r.frame();
+    assert_eq!(h.active_window(), log);
+    assert!(menus::popup_at(&h, &MENU_VIEW, egui::pos2(40.0, 40.0)));
+    r.frame();
+    assert_eq!(menus::popup_window(&h), Some(log));
+    // The window closes (docked back): the menu goes to the main window.
+    assert!(h.change_workbench(Change::CloseWindow(LOG)).unwrap().ok());
+    r.frame();
+    r.frame();
+    assert_eq!(menus::popup_window(&h), Some(ViewportId::ROOT));
+    menus::close_popup(&h);
+    // The palette, opened in the log's window detached again, too.
+    assert!(h.detach_panel(&LOG).unwrap().ok());
+    r.frame();
+    press_with(log, Key::F1, Modifiers::NONE);
+    r.frame();
+    r.frame();
+    assert_eq!(overlay::window_of(&r.ctx, palette_overlay()), Some(log));
+    assert!(h.change_workbench(Change::CloseWindow(LOG)).unwrap().ok());
+    r.frame();
+    r.frame();
+    assert!(palette::is_open(&h));
+    assert_eq!(
+        overlay::window_of(&r.ctx, palette_overlay()),
+        Some(ViewportId::ROOT)
+    );
 }
