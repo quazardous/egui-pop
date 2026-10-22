@@ -1,10 +1,10 @@
 # Icons: an inventory of where they serve
 
-Status: **inventory, for review** (2026-10-22). Sections 1 and 2
+Status: **inventory, decided** (2026-10-22). Sections 1 and 2
 describe what exists, read from the code of egui-pop and of Helios, an
-application built on it. Sections 3 to 5 are **proposed**: nothing in
-them is decided until the owner says so. Section 6 is the order of work
-that follows.
+application built on it. Sections 3 to 5 were proposed and are
+**decided (2026-10-22)**, with the owner's answers in section 7.
+Section 6 is the order of work that follows.
 
 egui-pop draws icons by role (`Icon`, in `egui_pop_core::icon`):
 a name such as `search` or `warning`, never a codepoint, drawn from the
@@ -72,7 +72,7 @@ registered ones).
 | Window buttons (minimise, maximise, restore, close) | Required: system convention | Glyph role (`window-*`) | Drawn on the pixel grid; hover, pressed, the close's danger hover | Only label: each button's name | Kit glyphs in `egui-pop-core/src/frame.rs` | None |
 | Overflow and main menu entries ("More menus", "Main menu") | Required: the menu bar folded into one button | Command | `toolbar`; hover, open | Only label: "More menus", "Main menu" | `Icon::More` and `Icon::Menu` hard-coded in `bar_within` (`egui-pop-api/src/menus.rs`) | None needed |
 | Caption items (the application's marks in the title bar) | Required: icon-only by place | Command (each opens something) | `toolbar`; a count badge, a ring, a busy state | Only label: the command's title; the state joins the name | Chosen by the application per item (Helios: `Icon::Notification` hard-coded) | Should come from the command the item runs |
-| Breadcrumb crumbs | Optional: the text names the place; an icon helps to find the root and the kind of place | Object kind (a place, `FrameSpec`) | `inline`; the current crumb strong | Decorative | `FrameSpec.icon` (`egui-pop-model/src/context.rs`) is documented "for the chips and crumbs", but the crumbs in `egui-pop-api/src/strips.rs` draw text only; the separator is a literal `›` | The crumbs ignore the declared icon; the separator should be a glyph role (`chevron-end`) |
+| Breadcrumb crumbs | Optional: the text names the place; an icon on every place that declares one, hidden in the compact density (decided 2026-10-22) | Object kind (a place, `FrameSpec`) | `inline`; the current crumb strong | Decorative | `FrameSpec.icon` (`egui-pop-model/src/context.rs`) is documented "for the chips and crumbs", but the crumbs in `egui-pop-api/src/strips.rs` draw text only; the separator is a literal `›` | The crumbs ignore the declared icon; the separator should be a glyph role (`chevron-end`) |
 | Mode chips | Optional: a mode is named by its text; an icon makes an active mode visible at a glance | Object kind (a mode, `FrameSpec`) | `inline`; the mode's tone | Decorative | `FrameSpec.icon` by name lookup, copied to `Chip.icon` (`egui-pop-api/src/contexts.rs`), drawn by `strips.rs` as `Mark::icon` | An unknown name draws nothing and says nothing (ADR 0003) |
 | Status items (indicators) | Optional: most items are short texts; an item that is icon-only (a connection, a sync) needs one | Command when the item runs one, object kind otherwise (a connection) | `inline`; tone, busy spinner, error and warning counts | Decorative beside text; only label when alone: the item's label | `strips::Indicator` has no icon field; the error and warning counts are hard-coded `Icon::Error` and `Icon::Warning` (`strips.rs`) | No icon on an item; the counts' icons should be the severity kinds |
 | Status item popovers and hover cards | Optional: content drawn by the application | Either | `inline` | As for the content | Drawn by the item's `PopoverFn` or `HoverFn` (`strips.rs`, `egui-pop-core/src/hover_card.rs`) | None in egui-pop |
@@ -100,7 +100,7 @@ registered ones).
 |---|---|---|---|---|---|---|
 | Activity bar | Required: an icon-only strip by convention | Object kind (a panel) | `panel`; selected (the shown panel), hover, focus, an indicator | Only label: the panel's title | `PanelSpec::icon: String` (`egui-pop-model/src/panels.rs`) by name lookup in `activity_bar` (`strips.rs`); empty or unknown: the title's first letter | An unknown name falls back to a letter silently (ADR 0003) |
 | Folded strips and flyouts | Required: same as the activity bar | Object kind (a panel) | `panel`; selected, an indicator's dot or count | Only label: the title and its key | Built on the `wip/folded-strip-icons` branch from `PanelSpec::icon`, not yet on main | The same name lookup |
-| Panel tabs | Optional, off by default: the title is the label and tab bars are narrow | Object kind (a panel) | `inline`; active | Decorative | Text only (the tab bar in `egui-pop-api/src/workbench.rs`) | None now; when wanted, the same `PanelSpec` icon |
+| Panel tabs | Optional, behind a setting off by default (decided 2026-10-22): the title is the label and tab bars are narrow | Object kind (a panel) | `inline`; active | Decorative | Text only (the tab bar in `egui-pop-api/src/workbench.rs`) | None now; when wanted, the same `PanelSpec` icon |
 | Floating palette bands (close, roll up, pin) | Required: a band has no room for text | Glyph role (close, roll), command (pin) | The band's side; pin is `selected` while on | Only label: Close, Roll up / Roll down, Pin / Unpin | `band::button(ui, side, icon, name, on)` (`egui-pop-core/src/band.rs`); `Icon::ChevronDown`/`ChevronUp` and `Icon::Lock`/`Unlock` hard-coded in `egui-pop-api/src/palettes.rs` | Pin uses the lock icons; roll should be a glyph role |
 | Settings categories (the window's tree) | Optional: categories are text; icons help on a long tree (as macOS and GNOME settings do) | Object kind (a settings section or page) | `inline` | Decorative | Text only (`settings_window.rs`, `settings_pages.rs`; `SettingsPage` has no icon) | No icon on a section or page |
 | Theme editor token groups | Not used: groups are named by role and few; colour swatches already mark the rows | — | — | — | Text; undo and redo are text buttons (`egui-pop-api/src/theme_editor.rs`) | None; undo and redo could take the commands' icons if they become commands |
@@ -275,7 +275,7 @@ All four agree on two things: an icon is never the only label of a
 menu item, and icons are for the common, well-known actions, not for
 every item.
 
-### The `menus.icons` setting (proposed, owner to decide)
+### The `menus.icons` setting (decided, 2026-10-22)
 
 A setting under Appearance, `menus.icons`, with three values:
 
@@ -287,13 +287,13 @@ A setting under Appearance, `menus.icons`, with three values:
   GNOME (read from `XDG_CURRENT_DESKTOP`); on Plasma, follow
   `ShowIconsInMenuItems` when it can be read.
 
-The default follows what the owner asked for (Word's look, an
-established application's habit) rather than the platform; `platform`
-is there for GNOME users. The setting changes menus only: the palette,
+The default is `on`, Word's look, as the owner asked (an established
+application's habit) rather than the platform; `off` and `platform` are
+the other choices, `platform` being there for GNOME users. The setting changes menus only: the palette,
 toolbars and other surfaces keep their own rule. Tray menus follow it
 when the system lets an application draw icons there.
 
-## 4. The icon registry (proposed)
+## 4. The icon registry (decided, 2026-10-22)
 
 One place where commands and object kinds declare their icon **once**;
 every surface reads it, no widget picks an icon for a command or a
@@ -304,8 +304,10 @@ kind, and agents read the names.
 An icon is referred to by **name** wherever it is declared: the model
 crate has no egui (ADR 0001), and `PanelSpec::icon` already works this
 way. A name is egui-pop's (`settings`, `history`, the kebab-case
-`Icon::name`) or one an application registered (`icon_set::register`).
-Resolution happens in `egui-pop-core`, through `Icon::by_name`.
+`Icon::name`), a Phosphor glyph's (section 4.5) or one a plugin
+registered (`plugin-id:name`, section 4.5). Every name is checked
+against that vocabulary; resolution happens in `egui-pop-core`,
+through `Icon::by_name`.
 
 An unknown name is reported (a diagnostic naming the declarer, the
 surface and the name, ADR 0003) when the plugin connects and again
@@ -363,14 +365,15 @@ the registry:
 ### 4.5 Plugins and the vocabulary
 
 A plugin registers its SVGs by name at connect time and declares its
-kinds; both are owned by the plugin and removed with it. To keep two
-plugins from clashing, a plugin's own names could carry its id
-(`helios.mask-circle`); egui-pop's names stay bare.
+kinds; both are owned by the plugin and removed with it. A plugin's
+own names are prefixed by its id, `plugin-id:name` (`helios:mask-circle`),
+so two plugins never clash; egui-pop's names stay bare.
 
 The built-in vocabulary is about 57 names. With the `phosphor` feature
-on (the default), every Phosphor glyph is in the font already; exposing
-them by name (`ph.export`) would give applications a large set with no
-SVG to ship. Whether to do so is an open question (section 7).
+on (the default), every Phosphor glyph is in the font already, and they
+are exposed by name, under the same prefixed form (`phosphor:export`),
+which gives applications a large set with no SVG to ship. Without the
+feature, a Phosphor name does not resolve and is reported as unknown.
 
 ### 4.6 What `describe` reports
 
@@ -384,7 +387,7 @@ SVG to ship. Whether to do so is an open question (section 7).
   indicators report the icon name each entry shows, so an agent reads
   what is drawn without pixels.
 
-## 5. The menu gutter (proposed)
+## 5. The menu gutter (decided, 2026-10-22)
 
 The rows of a menu already reserve an `inline` square on their left
 (section 2.2). The gutter makes it a column with rules.
@@ -425,16 +428,18 @@ The rows of a menu already reserve an `inline` square on their left
 
 ## 6. Delivery order
 
-1. **This inventory**, reviewed by the owner (decisions in section 7).
+1. **This inventory**, reviewed by the owner (decisions in section 7,
+   2026-10-22).
 2. **The registry, model side**: `CommandSpec::icon` and `icon_on`,
    kind declarations, names checked with diagnostics, the `icons`
    collector and the names in `describe`; `ListItem` by name and
    serialised.
 3. **Menus**: the gutter of section 5, radio items, the `menus.icons`
-   setting; the gallery's menus page with icons, ticks, radios, framed
-   and disabled entries; snapshots and alignment tests; the extension
+   setting (default `on`); the gallery's menus page with icons, ticks,
+   radios, framed and disabled entries; snapshots and alignment tests; the extension
    template declares an icon on its command.
-4. **Command surfaces**: the palette's icon column, `CommandButton`
+4. **Command surfaces**: the palette's icon (when the command declares
+   one), `CommandButton`
    and caption items from the command, the shortcut editor; choice rows
    with icons (for quick open).
 5. **Icons out of widgets**: severities as kinds (toasts, the editors'
@@ -442,27 +447,31 @@ The rows of a menu already reserve an `inline` square on their left
    roles (jobs centre, library, graph), the palette's pin, the
    library's marks as glyph roles.
 6. **Object kinds where the table says required**: the file chooser's
-   places and entries, the breadcrumb's icons, the graph's node kinds
-   and port shapes, job kinds, settings sections.
-7. **Toolbars** as a component (overflow, icon or text mode), if the
-   owner wants one in egui-pop.
+   places and entries, the breadcrumb's icons (hidden in the compact
+   density), panel tabs' icons behind a setting (off by default), the
+   graph's node kinds and port shapes, job kinds, settings sections.
+7. **Toolbars**: a toolbar component in egui-pop (overflow, icon or
+   text mode).
 8. **Helios**: icons for its panels, places and modes, commands (open,
    export, undo and redo, the masks tools, culling marks, view modes),
    mask kinds instead of emoji, job kinds, a workspace's icon checked
    and shown, the caption's bell from its command.
 
-## 7. Open questions for the owner
+## 7. Decisions (2026-10-22)
 
-1. The `menus.icons` default: `on` everywhere (Word's look, as asked),
-   or `platform`?
-2. A checked command with an icon: frame the icon (Word), or replace it
-   with the tick?
-3. Expose the Phosphor glyphs by name, so applications have a large
-   vocabulary without shipping SVGs?
-4. Prefix a plugin's icon names with its id?
-5. Should the breadcrumb show the places' icons, or only the root's?
-6. Icons in panel tabs: never, or a setting?
-7. Icons in the command palette: only when declared (a column that may
-   be empty), or never (as VS Code)?
-8. Should egui-pop own a toolbar component, or leave toolbars to
-   applications with `CommandButton`?
+The owner accepted the plan on 2026-10-22 and settled the open
+questions:
+
+1. **`menus.icons` defaults to `on`** (the Word-like gutter); `off` and
+   `platform` are the other choices.
+2. **A checked command with an icon shows the icon framed**, as Windows
+   and Word do. Without an icon, the tick goes in the gutter.
+3. **Phosphor glyphs are exposed by name**, and every name is checked
+   against the vocabulary.
+4. **A plugin's icon names are prefixed by its id**: `plugin-id:name`.
+5. **The breadcrumb shows an icon on every place that declares one**,
+   hidden in the compact density.
+6. **Icons in panel tabs sit behind a setting, off by default.** Folded
+   strips (and the activity bar) always show icons.
+7. **The command palette shows an icon when the command declares one.**
+8. **egui-pop gets a toolbar component.**

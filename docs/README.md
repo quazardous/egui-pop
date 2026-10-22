@@ -162,7 +162,7 @@ of every crate with every feature on.
   egui-pop and in an application such as Helios (command icons and
   object-kind icons, the rule, size, states and accessibility of each,
   what exists and the gap), the platforms' conventions for menu icons,
-  and the proposed registry and menu gutter (for review).
+  and the registry and menu gutter (decided 2026-10-22).
 - [Pointer gestures, a study](design/pointer-gestures.md): how
   applications use the wheel, the buttons and the modifiers on canvases
   (darktable in detail), the gesture profiles, and the decisions taken.
