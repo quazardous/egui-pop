@@ -198,6 +198,30 @@ fn profiles_give_their_options_and_the_wheel_its_meaning() {
 }
 
 #[test]
+fn adobes_profile_is_shift_coarser_and_alt_finer_as_in_photoshop() {
+    let adobe = PointerMap::from_profile(pointer::profile("adobe").unwrap());
+    assert_eq!(
+        adobe.command(SCOPE_VALUE, &chord("Shift+PrimaryDrag")),
+        Some(&gesture::VALUE_COARSE)
+    );
+    assert_eq!(
+        adobe.command(SCOPE_VALUE, &chord("Alt+PrimaryDrag")),
+        Some(&gesture::VALUE_FINE)
+    );
+    assert_eq!(adobe.command(SCOPE_VALUE, &chord("Ctrl+PrimaryDrag")), None);
+    let fine: Vec<String> = adobe
+        .chords(SCOPE_VALUE, &gesture::VALUE_FINE)
+        .map(|c| c.to_string())
+        .collect();
+    assert_eq!(fine, ["Alt+PrimaryDrag"]);
+    let coarse: Vec<String> = adobe
+        .chords(SCOPE_VALUE, &gesture::VALUE_COARSE)
+        .map(|c| c.to_string())
+        .collect();
+    assert_eq!(coarse, ["Shift+PrimaryDrag"]);
+}
+
+#[test]
 fn keymap_documents_of_version_2_read_as_version_3() {
     let old = r#"{"version": 2, "kind": "keymap", "bindings": [{"keys": "Ctrl+K", "command": "demo.go"}]}"#;
     let read = egui_pop_model::keymap_schema()

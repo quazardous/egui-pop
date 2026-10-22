@@ -136,7 +136,7 @@ section 4.
 | Two-finger scroll | pans [DT-tp] | — | pans (since 22, s) [C1c] | pans (macOS gestures) [PS1] | scrolls | pans (macOS, Wayland) [KR2] | pans [AF5] | — |
 | Pinch | zooms [DT-tp] | — | zooms (s) [C1c] | zooms [PS1] | zooms or rotates (s) [GI7] | zooms and rotates (touch) [KR2] | zooms; two-finger double tap: 100 % [AF5] | — |
 | Wheel over a slider | **changes the value** (Ctrl fine, Shift coarse); Ctrl+Alt scrolls the panel; preference swaps [DT-slider] | — | changes it if the preference is on; Alt scrolls [C1b] | steps a focused field (s) [PS4] | — | — | — | **scrolls the panel; Shift + wheel changes the value** [RT1] |
-| Drag a slider | absolute; any modifier: relative, Ctrl fine, Shift coarse [DT-slider] | Shift finer (s) [LR4] | — | scrubby label: Shift ×10, Alt fine (s) [PS4] | Shift or right: fine; Ctrl: coarse [GI3] | Shift fine (relative), Ctrl snaps [KR3] | scrubby label [AF1] | hold still: fine [RT1] |
+| Drag a slider | absolute; any modifier: relative, Ctrl fine, Shift coarse [DT-slider] | Shift finer (s) [LR4]; colour wheels: Alt fine [LR5] | — | scrubby label: Shift ×10 [PS5], Alt ÷10 (s) [PS4] [PS6] | Shift or right: fine; Ctrl: coarse [GI3] | Shift fine (relative), Ctrl snaps [KR3] | scrubby label [AF1] | hold still: fine [RT1] |
 | Right click on a slider | fine-tune popup, type a value [DT-slider] | — | — | — | text edit, value selected [GI3] | text entry [KR3] | context menu | — |
 | Double click on a slider | resets [DT-slider] | on the name: resets [LR3] | resets [C1d] | — | — | text entry [KR3] | — | (reset button) [RT2] |
 | Thumbnail grid: Ctrl / Shift click | toggles / range [DT-lt] | toggles / range [LR3] | adds / range [C1e] | — | — | — | — | — |
@@ -195,8 +195,8 @@ section 4.
   a preference to swap, and its users rely on it.
 - **Fine and coarse**: Ctrl fine / Shift coarse (darktable, egui-pop
   today), Shift fine / Ctrl snap (Blender, Krita), Shift coarse / Alt
-  fine (Photoshop scrubby labels). No consensus: it belongs to the
-  profile.
+  fine (Photoshop scrubby labels, Adobe's arrow keys, Lightroom's
+  colour wheels). No consensus: it belongs to the profile.
 - **Trackpads**: two fingers pan and a pinch zooms everywhere except
   Blender's 3D view (two fingers orbit).
 
@@ -541,15 +541,41 @@ widgets.
 | Alt + wheel | zoom at pointer | zoom | — | zoom | — | — |
 | Primary click, empty | zoom toggle fit ↔ 100 % at pointer (Lightroom) | clear selection | add point | centre | jump | select |
 | Primary drag, empty | pan when zoomed | box select | move point | move frame | absolute drag | rubber band |
-| Shift + primary drag | constrain; scrubby zoom | box add | constrain | — | fine | extend |
+| Shift + primary drag | constrain; scrubby zoom | box add | constrain | — | coarse | extend |
 | Ctrl + primary drag | zoom box | box toggle | — | — | — | toggle |
-| Alt + primary drag | duplicate / from centre | duplicate selection | — | — | — | — |
+| Alt + primary drag | duplicate / from centre | duplicate selection | — | — | fine | — |
 | Space + primary drag | pan | pan | — | — | — | — |
 | Space+Ctrl + click / Space+Alt + click | zoom in / zoom out | same | — | — | — | — |
 | Middle drag / click | pan / — | pan / — | — | — | — | — |
 | Primary double click | fit | fit | delete point | fit | on the label: reset | activate |
 | Secondary click | menu | menu | menu | — | menu | menu |
 | Two-finger scroll / pinch | pan / zoom | pan / zoom | — | pan / zoom | panel.scroll | scroll |
+
+Profile notes (2026-10-22):
+
+- **Coarse and fine follow Adobe.** Shift is ten times coarser and
+  Alt (Option) ten times finer on a value, for a drag, the arrow keys
+  and the wheel alike; Ctrl has no value gesture. Photoshop's scrubby
+  sliders move ten times faster with Shift [PS5] and ten times slower
+  with Alt (s) [PS4] [PS6]; Photoshop's pop-up sliders step by 10 %
+  with Shift and the arrow keys [PS5]; Lightroom Classic's Develop
+  sliders step in larger increments with Shift and the arrow keys
+  [LR3], and Alt on its colour wheels is a fine adjust mode [LR5]. The
+  slider reads its arrow keys' modifiers from the same `fine` and
+  `coarse` gestures as its drag, so Shift with the arrows is coarse
+  without a binding of its own (profiles carry pointer gestures only,
+  question 14). Two Lightroom habits do not fit one modifier pair and
+  are left out: a Shift drag on a Develop slider is reported finer
+  (s) [LR4], and Alt while dragging a Basic panel slider shows the
+  clipped areas [LR5]. Alt with a drag comes with the shortcuts
+  editor's Linux warning (Xfce and KWin take it).
+- **A click toggles fit and 100 %**, as in Lightroom [LR1], so a
+  double click is first two clicks that toggle twice and end where
+  they started; the double click option (`input.image_double_click`,
+  fit here) then applies on top, so from fit a double click changes
+  nothing. "A double click fits" is not a gesture to rely on under
+  this profile: an application that needs it picks another profile or
+  rebinds the click.
 
 #### C. Document (GIMP, Inkscape, Figma, the web)
 
@@ -710,10 +736,13 @@ snapshots (they refuse automated fetches); the URLs are the originals.
 - [PS2] (s) <https://community.adobe.com/t5/photoshop-ecosystem-discussions/how-can-i-change-zoom-and-scroll-modifiers-in-photoshop/td-p/14833929>
 - [PS3] <https://helpx.adobe.com/photoshop/using/default-keyboard-shortcuts.html>
 - [PS4] (s) <https://planetphotoshop.com/scrubby-slider-shift-click-trick.html>
+- [PS5] <https://helpx.adobe.com/photoshop/using/panels-menus.html> (scrubby sliders: "Holding down the Shift key while dragging accelerates the scrubbing by a factor of 10"; pop-up sliders: Shift with the Up or Down Arrow key changes the value in 10 % increments)
+- [PS6] (s) <https://planetphotoshop.com/micro-control-of-scrubby-sliders.html> (Option or Alt: "the sliders change at 1/10 speed")
 - [LR1] <https://helpx.adobe.com/lightroom-classic/help/view-photos.html>
 - [LR2] (s) <https://jkost.com/blog/2020/07/zooming-in-lightroom-classic.html>
-- [LR3] <https://helpx.adobe.com/lightroom-classic/help/keyboard-shortcuts.html>
+- [LR3] <https://helpx.adobe.com/lightroom-classic/help/keyboard-shortcuts.html> (Develop module: "Increase/decrease selected slider in larger increments: Shift + Up Arrow / Shift + Down Arrow")
 - [LR4] (s) <https://community.adobe.com/t5/lightroom-classic-discussions/sliders-in-the-develop-module/m-p/9359357>
+- [LR5] <https://helpx.adobe.com/lightroom-classic/help/image-tone-color.html> (colour wheels: "Alt (Windows)/Option (macOS): Fine Adjust mode"; Basic panel: Alt or Option while moving a slider shows the clipped areas)
 - [C1a] <https://support.captureone.com/hc/en-us/articles/360002473237>
 - [C1b] <https://support.captureone.com/hc/en-us/articles/360002484097>
 - [C1c] (s) <https://support.captureone.com/hc/es/community/posts/4416440456721-Zoom-with-trackpad>
@@ -816,10 +845,14 @@ later is an edit there, not in code.
   secondary click (it deletes the point under the pointer).
 - **Question 10 (fine and coarse):** per profile. Ctrl finer and
   Shift coarser in Document, darktable and Trackpad; Shift finer and
-  Ctrl coarser in Adobe and Blender / node editors. Document keeps
-  the earlier default rather than GIMP's Shift-finer cell.
+  Ctrl coarser in Blender / node editors. Document keeps the earlier
+  default rather than GIMP's Shift-finer cell. Amended 2026-10-22: a
+  profile follows the application it is named after, so Adobe's is
+  Alt finer and Shift coarser, with no Ctrl value gesture (Adobe's
+  profile notes, section 6.2 B); it first shipped swapped.
 - **Question 11 (Alt):** used only where the source applications use
-  it (Adobe's Alt + wheel zoom) or egui-pop already did (Alt + wheel
+  it (Adobe's Alt + wheel zoom, and Alt finer on values since
+  2026-10-22) or egui-pop already did (Alt + wheel
   steps a slider without the focus, in Document and darktable); the
   shortcuts editor warns, on Linux, of a gesture bound with Alt and a
   drag or the wheel.
