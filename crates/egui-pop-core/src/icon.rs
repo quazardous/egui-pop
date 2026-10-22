@@ -141,6 +141,20 @@ pub enum Icon {
     /// A glyph of the Phosphor font by name (`phosphor:grid-four`,
     /// [`registry`]); only with the `phosphor` feature.
     Phosphor(PhosphorIcon),
+    /// The window's layout, as a frame of areas: a button opening the
+    /// layout's choices (VS Code's "Customize layout"); always painted.
+    Layout,
+    /// A frame with its left area filled: that area shows (a toggle on).
+    /// The `-off` icons outline the area instead: it is folded or hidden.
+    /// Always painted, on the pixel grid.
+    LayoutLeft,
+    LayoutLeftOff,
+    /// A frame with its bottom area filled, or outlined (`-off`).
+    LayoutBottom,
+    LayoutBottomOff,
+    /// A frame with its right area filled, or outlined (`-off`).
+    LayoutRight,
+    LayoutRightOff,
     /// An icon the application registered (`icon_set::register`): an SVG
     /// file, drawn from textures made when the theme is installed.
     Custom(crate::icon_set::CustomIcon),
@@ -205,6 +219,13 @@ impl Icon {
         Icon::Triangle,
         Icon::Asterisk,
         Icon::Corner,
+        Icon::Layout,
+        Icon::LayoutLeft,
+        Icon::LayoutLeftOff,
+        Icon::LayoutBottom,
+        Icon::LayoutBottomOff,
+        Icon::LayoutRight,
+        Icon::LayoutRightOff,
     ];
 
     /// The icon of a name (`settings`), as [`Icon::name`] gives it:
@@ -277,6 +298,13 @@ impl Icon {
             Icon::Asterisk => "asterisk",
             Icon::Corner => "corner",
             Icon::Phosphor(p) => p.name(),
+            Icon::Layout => "layout",
+            Icon::LayoutLeft => "layout-left",
+            Icon::LayoutLeftOff => "layout-left-off",
+            Icon::LayoutBottom => "layout-bottom",
+            Icon::LayoutBottomOff => "layout-bottom-off",
+            Icon::LayoutRight => "layout-right",
+            Icon::LayoutRightOff => "layout-right-off",
             Icon::Custom(c) => crate::icon_set::name(c),
         }
     }
@@ -353,6 +381,13 @@ fn glyph(icon: Icon) -> Option<&'static str> {
         | Icon::Triangle
         | Icon::Asterisk
         | Icon::Corner
+        | Icon::Layout
+        | Icon::LayoutLeft
+        | Icon::LayoutLeftOff
+        | Icon::LayoutBottom
+        | Icon::LayoutBottomOff
+        | Icon::LayoutRight
+        | Icon::LayoutRightOff
         | Icon::Custom(_) => return None,
         Icon::Phosphor(g) => return g.glyph(),
         Icon::Search => p::MAGNIFYING_GLASS,
@@ -866,6 +901,13 @@ pub fn paint_fallback(p: &Painter, icon: Icon, rect: Rect, color: Color32) {
         Icon::Disc | Icon::Square | Icon::Triangle | Icon::Corner => {
             paint_mark(p, icon, rect, color, w);
         }
+        Icon::Layout
+        | Icon::LayoutLeft
+        | Icon::LayoutLeftOff
+        | Icon::LayoutBottom
+        | Icon::LayoutBottomOff
+        | Icon::LayoutRight
+        | Icon::LayoutRightOff => paint_layout(p, icon, rect, color, stroke.width),
         // Drawn from its textures (`Icon::paint`): no fallback shape.
         Icon::Custom(_) => {}
         // Before the icon font is in use: the placeholder's ring.
@@ -878,6 +920,53 @@ pub fn paint_fallback(p: &Painter, icon: Icon, rect: Rect, color: Color32) {
                 [at(0.62, 0.38), at(0.85, 0.15)],
                 Stroke::new(crate::scale::snap(w * 2.6, ppp), color),
             );
+        }
+    }
+}
+
+/// A layout icon: a frame on the pixel grid, wider than tall, with one
+/// area filled (shown) or outlined (`-off`: folded or hidden), or, for
+/// [`Icon::Layout`], split into a column and two cells. Strokes are
+/// `width` thick (whole physical pixels).
+fn paint_layout(p: &Painter, icon: Icon, rect: Rect, color: Color32, width: f32) {
+    use egui::emath::GuiRounding as _;
+    let ppp = p.pixels_per_point();
+    let stroke = Stroke::new(width, color);
+    let frame = rect
+        .shrink2(vec2(rect.width() * 0.08, rect.height() * 0.18))
+        .round_to_pixels(ppp);
+    p.rect_stroke(frame, 1.0, stroke, StrokeKind::Inside);
+    let inner = frame.shrink(width);
+    let snap = |x: f32| x.round_to_pixels(ppp);
+    // A line along an edge inside the frame, centred on its pixels.
+    let vline = |x: f32| {
+        let x = p.round_to_pixel_center(x);
+        p.line_segment([pos2(x, inner.top()), pos2(x, inner.bottom())], stroke);
+    };
+    let hline = |y: f32, from: f32, to: f32| {
+        let y = p.round_to_pixel_center(y);
+        p.line_segment([pos2(from, y), pos2(to, y)], stroke);
+    };
+    let side = (inner.width() * 0.34).max(width * 2.0);
+    let low = (inner.height() * 0.4).max(width * 2.0);
+    match icon {
+        Icon::LayoutLeft => {
+            p.rect_filled(inner.with_max_x(snap(inner.left() + side)), 0.0, color);
+        }
+        Icon::LayoutLeftOff => vline(inner.left() + side),
+        Icon::LayoutRight => {
+            p.rect_filled(inner.with_min_x(snap(inner.right() - side)), 0.0, color);
+        }
+        Icon::LayoutRightOff => vline(inner.right() - side - width),
+        Icon::LayoutBottom => {
+            p.rect_filled(inner.with_min_y(snap(inner.bottom() - low)), 0.0, color);
+        }
+        Icon::LayoutBottomOff => hline(inner.bottom() - low - width, inner.left(), inner.right()),
+        _ => {
+            // A column at the start, two cells after it.
+            let x = inner.left() + inner.width() * 0.42;
+            vline(x);
+            hline(inner.center().y, x, inner.right());
         }
     }
 }
