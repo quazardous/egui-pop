@@ -199,6 +199,10 @@ struct Scene {
     state: ViewportState,
     view: View,
     source: Box<dyn TileSource>,
+    /// The source is shown: off until the harness installed the GPU
+    /// path, since building a harness already runs frames (an
+    /// application installs it before its first frame).
+    live: bool,
 }
 
 /// The shared device and its queue (see `egui_pop_test::shared_setup`).
@@ -232,6 +236,7 @@ fn device_scene(
         state,
         view,
         source: Box::new(source),
+        live: false,
     }
 }
 
@@ -243,6 +248,7 @@ fn cpu_scene(view: View) -> Scene {
         state,
         view,
         source: Box::new(source),
+        live: false,
     }
 }
 
@@ -264,16 +270,18 @@ fn harness(s: Scene, ppp: f32, gpu: bool) -> Harness<'static, Scene> {
         .renderer(renderer)
         .build_ui_state(
             |ui, s: &mut Scene| {
-                Viewport::new("t")
-                    .source(s.source.as_ref())
-                    .pixel_grid(false)
-                    .show(ui, &mut s.state, &mut s.view);
+                let mut v = Viewport::new("t").pixel_grid(false);
+                if s.live {
+                    v = v.source(s.source.as_ref());
+                }
+                v.show(ui, &mut s.state, &mut s.view);
             },
             s,
         );
     if gpu {
         egui_pop_viewport::gpu::install(&h.ctx, &rs);
     }
+    h.state_mut().live = true;
     // Stepped, not run: a source whose tiles keep failing keeps asking
     // for frames.
     h.run_steps(2);
@@ -339,7 +347,11 @@ fn assert_zero_upload(h: &mut Harness<'_, Scene>, what: &str) {
     assert_eq!((total.bytes, total.tiles), (0, 0), "{what}: {total:?}");
     assert!(total.bound > 0, "{what}: no device tile bound");
     let stats: Vec<_> = st.stats().snapshot().to_vec();
-    assert!(stats.contains(&("refused", 0)), "{what}: {stats:?}");
+    assert!(
+        stats.contains(&("refused", 0)),
+        "{what}: {stats:?}, last error: {:?}",
+        st.last_error()
+    );
     assert!(st.last_error().is_none(), "{what}: {:?}", st.last_error());
     let snap = egui_pop_viewport::debug::snapshot(&h.ctx);
     let uploads = &snap["viewports"]["t"]["tiles"]["uploads"];
