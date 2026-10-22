@@ -4,11 +4,12 @@
 //!
 //! Keys come from two places:
 //!
-//! - **sources** ([`scan_source`], [`scan_dir`]): calls written in Rust
+//! - **sources** ([`scan`], [`scan_tree`]): calls written in Rust
 //!   with a literal key, `tr!("key")`, `t(ctx, "key", …)`,
 //!   `text(ctx, "key", "English", …)`, `StrKey::new("key", "English")`,
 //!   `lookup(ctx, "key", "English")` (see [`Pattern::DEFAULTS`]; an
-//!   application adds its own);
+//!   application adds its own), under any path (`app::Message::new`);
+//!   a constructor call it cannot read is reported ([`Scan::unread`]);
 //! - **declarations** ([`declarations`]): what the plugins of a built
 //!   application declare (commands, categories, panels, submenus,
 //!   settings and their choices, plugins), under the keys
@@ -17,7 +18,8 @@
 //! [`english`] writes the English catalogue from them, sorted, so the
 //! same keys always give the same bytes; [`update`] merges them into an
 //! existing one, keeping the English written there for keys the code
-//! gives none; [`report`] compares every locale with them.
+//! gives none; [`out_of_date`] checks a catalogue against them, listing
+//! the calls not read; [`report`] compares every locale with them.
 //!
 //! ```
 //! use egui_pop_i18n::extract::{self, Pattern};
@@ -268,12 +270,77 @@ fn string_literal(source: &str, i: usize) -> (String, usize) {
     (out, j)
 }
 
-/// The keys a Rust source uses through `patterns`, with their English.
-/// A call whose key is not a literal, or not a valid Fluent key, is
-/// skipped.
-pub fn scan_source(source: &str, file: &str, patterns: &[Pattern]) -> Vec<Found> {
+/// A call the scanner took for a message constructor but could not
+/// read: the message it declares is missing from what was found, or
+/// found without its English.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Unread {
+    /// The callee as written, path included (`app::Message::new`).
+    pub callee: String,
+    /// `file:line` of the call.
+    pub origin: String,
+    /// Why it was not read (`the key is not a string literal`).
+    pub reason: String,
+}
+
+impl std::fmt::Display for Unread {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}: `{}(…)` not read: {}",
+            self.origin, self.callee, self.reason
+        )
+    }
+}
+
+/// What a scan gives: the keys found, and the constructor calls that
+/// could not be read.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Scan {
+    pub found: Vec<Found>,
+    pub unread: Vec<Unread>,
+}
+
+impl Scan {
+    /// Adds another scan's results after this one's.
+    pub fn extend(&mut self, other: Scan) {
+        self.found.extend(other.found);
+        self.unread.extend(other.unread);
+    }
+}
+
+/// Whether `callee` (as written) is the call `pattern` names: the same
+/// path, or a longer one ending in it (`a::b::Message::new` and
+/// `crate::Message::new` are `Message::new`; `egui_pop_i18n::t` is `t`).
+fn names(callee: &str, pattern: &str) -> bool {
+    callee == pattern
+        || callee
+            .strip_suffix(pattern)
+            .is_some_and(|head| head.ends_with("::"))
+}
+
+/// A constructor: a pattern whose callee ends in `::new`
+/// (`StrKey::new`, an application's `Message::new`). It declares a
+/// message, so its key and English must be literals the scanner reads.
+fn constructor(pattern: &Pattern) -> bool {
+    pattern.callee.ends_with("::new")
+}
+
+/// The keys a Rust source uses through `patterns`, with their English,
+/// and the constructor calls it could not read.
+///
+/// A callee is matched by its path's last segments, however long the
+/// path and however it is laid out (`helios::Message::new(`,
+/// `::app::strings::Message::new(`, a path or arguments split across
+/// lines, comments between). A call whose key is not a literal, or not
+/// a valid Fluent key, is skipped; when the pattern is a constructor
+/// (its callee ends in `::new`, as `StrKey::new`), the call is also
+/// reported in [`Scan::unread`] with its file and line, and logged as a
+/// warning; so is a constructor whose English is not a literal (its key
+/// is still found, without English).
+pub fn scan(source: &str, file: &str, patterns: &[Pattern]) -> Scan {
     let toks = tokens(source);
-    let mut out = Vec::new();
+    let mut out = Scan::default();
     for (i, t) in toks.iter().enumerate() {
         let Tok::Ident(name, line) = t else { continue };
         // The callee as written: a path `a::b`, then `!` for a macro.
@@ -305,19 +372,16 @@ pub fn scan_source(source: &str, file: &str, patterns: &[Pattern]) -> Vec<Found>
         {
             continue;
         }
-        // Inside a path, only the last segments are matched.
-        if i > 1
+        // Inside a path (`a::b`), the path was read from its first
+        // segment; a leading `::` (`::app::Message::new`) starts one.
+        if i > 2
             && matches!(toks.get(i - 1), Some(Tok::Punct(':')))
             && matches!(toks.get(i - 2), Some(Tok::Punct(':')))
+            && matches!(toks.get(i - 3), Some(Tok::Ident(..)))
         {
             continue;
         }
-        let Some(p) = patterns.iter().find(|p| {
-            p.callee == callee
-                || callee
-                    .rsplit_once("::")
-                    .is_some_and(|(_, last)| p.callee == last)
-        }) else {
+        let Some(p) = patterns.iter().find(|p| names(&callee, p.callee)) else {
             continue;
         };
         let args = arguments(&toks, j);
@@ -328,20 +392,53 @@ pub fn scan_source(source: &str, file: &str, patterns: &[Pattern]) -> Vec<Found>
             },
             _ => None,
         };
-        let Some(key) = literal(p.key).filter(|k| valid_key(k)) else {
-            continue;
+        let origin = format!("{file}:{line}");
+        let mut unread = |reason: String| {
+            if constructor(p) {
+                let u = Unread {
+                    callee: callee.clone(),
+                    origin: origin.clone(),
+                    reason,
+                };
+                log::warn!("i18n extraction: {u}");
+                out.unread.push(u);
+            }
         };
-        let english = match p.english.and_then(literal) {
-            Some(e) => English::Pattern(e),
+        let key = match literal(p.key) {
+            Some(k) if valid_key(&k) => k,
+            Some(k) => {
+                unread(format!("`{k}` is not a Fluent key"));
+                continue;
+            }
+            None => {
+                unread("the key is not a string literal".into());
+                continue;
+            }
+        };
+        let english = match p.english.map(|n| (n, literal(n))) {
+            Some((_, Some(e))) => English::Pattern(e),
+            Some((n, None)) => {
+                unread(format!(
+                    "its English (argument {}) is not a string literal: `{key}` is kept without it",
+                    n + 1
+                ));
+                English::None
+            }
             None => English::None,
         };
-        out.push(Found {
+        out.found.push(Found {
             key,
             english,
-            origin: format!("{file}:{line}"),
+            origin,
         });
     }
     out
+}
+
+/// The keys a Rust source uses through `patterns`, with their English:
+/// [`scan`]'s keys, its unread calls only logged.
+pub fn scan_source(source: &str, file: &str, patterns: &[Pattern]) -> Vec<Found> {
+    scan(source, file, patterns).found
 }
 
 /// The arguments of the call whose `(` is at `open`, each as its tokens.
@@ -375,20 +472,25 @@ fn arguments(toks: &[Tok], open: usize) -> Vec<Vec<Tok>> {
     out
 }
 
-/// [`scan_source`] over every `.rs` file under `dir` (`target` and hidden
+/// [`scan`] over every `.rs` file under `dir` (`target` and hidden
 /// directories skipped), files in a stable order; origins are relative
 /// to `dir`.
-pub fn scan_dir(dir: &Path, patterns: &[Pattern]) -> io::Result<Vec<Found>> {
+pub fn scan_tree(dir: &Path, patterns: &[Pattern]) -> io::Result<Scan> {
     let mut files = Vec::new();
     walk(dir, &mut files)?;
     files.sort();
-    let mut out = Vec::new();
+    let mut out = Scan::default();
     for f in files {
         let source = std::fs::read_to_string(&f)?;
         let name = f.strip_prefix(dir).unwrap_or(&f).display().to_string();
-        out.extend(scan_source(&source, &name, patterns));
+        out.extend(scan(&source, &name, patterns));
     }
     Ok(out)
+}
+
+/// [`scan_tree`]'s keys, its unread calls only logged.
+pub fn scan_dir(dir: &Path, patterns: &[Pattern]) -> io::Result<Vec<Found>> {
+    Ok(scan_tree(dir, patterns)?.found)
 }
 
 fn walk(dir: &Path, out: &mut Vec<std::path::PathBuf>) -> io::Result<()> {
@@ -719,6 +821,25 @@ pub fn update(source: &str, messages: &Messages, header: &str, prune: bool) -> U
     out
 }
 
+/// The catalogue check of an English catalogue: `None` when `current`
+/// (the file at `path`) is `fresh` (what [`english`] or [`update`]
+/// writes now); else the failure message, saying `path` is out of date
+/// and listing `unread` (see [`Scan::unread`]), the calls whose
+/// messages are missing from it.
+pub fn out_of_date(path: &str, current: &str, fresh: &str, unread: &[Unread]) -> Option<String> {
+    if current == fresh {
+        return None;
+    }
+    let mut out = format!("{path} is out of date");
+    if !unread.is_empty() {
+        out.push_str("; the extractor could not read these calls, their messages are missing:");
+        for u in unread {
+            let _ = write!(out, "\n  {u}");
+        }
+    }
+    Some(out)
+}
+
 /// A pattern as Fluent's serializer writes it, to compare two.
 fn canonical(pattern: &str) -> String {
     existing(&format!("m = {}\n", indent(pattern)))
@@ -797,6 +918,129 @@ mod tests {
         );
         assert_eq!(found[0].origin, "x.rs:4");
         assert_eq!(found[2].origin, "x.rs:7");
+    }
+
+    /// An application's constructor, next to the defaults.
+    const MESSAGE: &[Pattern] = &[
+        Pattern {
+            callee: "Message::new",
+            key: 0,
+            english: Some(1),
+        },
+        Pattern {
+            callee: "t",
+            key: 1,
+            english: None,
+        },
+    ];
+
+    #[test]
+    fn a_path_qualified_constructor_is_extracted() {
+        let src = r#"
+            const A: Message = Message::new("plain", "Plain");
+            const B: Message = app_core::Message::new("one-segment", "One");
+            const C: Message = crate::strings::Message::new("crate-path", "Crate");
+            const D: Message = ::app_core::Message::new("leading-colons", "Leading");
+            const E: StrKey = egui_pop::core::strings::StrKey::new("str-key", "Key");
+            const F: Other = app::NotMessage::new("not-ours", "No");
+        "#;
+        let mut patterns = MESSAGE.to_vec();
+        patterns.extend_from_slice(Pattern::DEFAULTS);
+        let s = scan(src, "x.rs", &patterns);
+        let keys: Vec<&str> = s.found.iter().map(|f| f.key.as_str()).collect();
+        assert_eq!(
+            keys,
+            [
+                "plain",
+                "one-segment",
+                "crate-path",
+                "leading-colons",
+                "str-key"
+            ]
+        );
+        assert_eq!(s.found[2].english, English::Pattern("Crate".into()));
+        assert_eq!(s.found[3].origin, "x.rs:5");
+        assert!(s.unread.is_empty(), "{:?}", s.unread);
+    }
+
+    #[test]
+    fn a_multi_line_qualified_constructor_is_extracted() {
+        let src = "
+            pub const READY: Message = app_core
+                ::strings::
+                Message // the status bar's
+                ::new(
+                    \"status-ready\",
+                    \"Ready\",
+                );
+        ";
+        let s = scan(src, "src/status.rs", MESSAGE);
+        assert_eq!(
+            s.found,
+            [Found {
+                key: "status-ready".into(),
+                english: English::Pattern("Ready".into()),
+                origin: "src/status.rs:2".into(),
+            }]
+        );
+        assert!(s.unread.is_empty(), "{:?}", s.unread);
+    }
+
+    #[test]
+    fn an_unreadable_constructor_is_reported_with_its_file_and_line() {
+        let src = r#"
+            const OK: Message = Message::new("fine", "Fine");
+            let dynamic = app::Message::new(id, "Text");
+            let bad = Message::new("not a key", "Text");
+            let computed = app::Message::new(
+                "computed",
+                concat!("Comp", "uted"),
+            );
+            // Not a constructor: a dynamic key stays silent.
+            let looked_up = t(ctx, key);
+        "#;
+        let s = scan(src, "src/ui.rs", MESSAGE);
+        let keys: Vec<(&str, &English)> = s
+            .found
+            .iter()
+            .map(|f| (f.key.as_str(), &f.english))
+            .collect();
+        assert_eq!(
+            keys,
+            [
+                ("fine", &English::Pattern("Fine".into())),
+                ("computed", &English::None)
+            ]
+        );
+        let places: Vec<(&str, &str)> = s
+            .unread
+            .iter()
+            .map(|u| (u.origin.as_str(), u.callee.as_str()))
+            .collect();
+        assert_eq!(
+            places,
+            [
+                ("src/ui.rs:3", "app::Message::new"),
+                ("src/ui.rs:4", "Message::new"),
+                ("src/ui.rs:5", "app::Message::new"),
+            ]
+        );
+        assert_eq!(
+            s.unread[0].to_string(),
+            "src/ui.rs:3: `app::Message::new(…)` not read: the key is not a string literal"
+        );
+        // The catalogue check lists them when the catalogue is stale.
+        let m = messages(&s.found).unwrap();
+        let fresh = english(&m, "");
+        assert_eq!(out_of_date("en/app.ftl", &fresh, &fresh, &s.unread), None);
+        let failure = out_of_date("en/app.ftl", "", &fresh, &s.unread).unwrap();
+        assert!(
+            failure.starts_with("en/app.ftl is out of date"),
+            "{failure}"
+        );
+        for u in &s.unread {
+            assert!(failure.contains(&u.to_string()), "{failure}");
+        }
     }
 
     #[test]

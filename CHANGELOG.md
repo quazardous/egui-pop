@@ -277,6 +277,17 @@ publishes.
 
 ### Fixed
 
+- The key extractor reads a path-qualified constructor (egui-pop-i18n):
+  a pattern such as `Message::new` now takes `app_core::Message::new(…)`,
+  `crate::strings::Message::new(…)` and `::app::Message::new(…)`, the
+  path and arguments laid out over several lines, where it skipped them
+  without a word and the catalogue check later failed as "out of date".
+  A constructor call (a pattern ending in `::new`) it cannot read, its
+  key or English not a string literal or the key not a Fluent key, is
+  now reported with its file and line: `extract::scan` and
+  `extract::scan_tree` return them in `Scan::unread` beside the keys,
+  each is logged as a warning, and `extract::out_of_date`, the
+  catalogue check, lists them in its failure message.
 - A place that declares no arrangement no longer takes on the layout of
   the place the user came from (egui-pop-api): entered for the first
   time, it starts from the nearest enclosing place's layout (as it was

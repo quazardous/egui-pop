@@ -22,6 +22,7 @@ egui-pop-core.workspace = true
 egui-pop-api.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+log.workspace = true
 # Apache-2.0 OR MIT (fluent-bundle, fluent-syntax, fluent-pseudo,
 # intl-memoizer), MIT OR Apache-2.0 (unic-langid, sys-locale).
 fluent-bundle = "0.16"
