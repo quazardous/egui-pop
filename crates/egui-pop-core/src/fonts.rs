@@ -675,9 +675,10 @@ pub fn specimen(ctx: &Context, name: &str, weight: Weight) -> Option<FontFamily>
 }
 
 /// Previews a role's families before they are applied: the preview
-/// families ([`preview_family`], drawn by [`with_preview`]) draw `names`
-/// in priority order (egui's bundled fonts behind them), or the role's
-/// families as installed with `None`. The theme's own families are
+/// families ([`preview_family`], drawn by [`with_preview`]) draw the
+/// faces found for `names` in priority order, the role's families as
+/// installed behind them (so a name found nowhere draws the role's
+/// families, never nothing), or the role's families alone with `None`. The theme's own families are
 /// untouched. Installed again at once when it changes (one slow frame,
 /// from the next pass); every install defines the preview families, so
 /// a theme switched while a preview is shown keeps it.
@@ -1322,12 +1323,19 @@ fn definitions_and_faces(
                 };
                 defs.families.insert(egui_family, chain.clone());
             }
-            // The preview family: the role's chain, or the preview's.
+            // The preview family: the preview's faces before the role's
+            // chain (its fallbacks), or the role's chain alone when the
+            // preview finds no face (names unknown here, generic ones):
+            // never empty, never less than what the role draws.
             let previewed = match &preview[at] {
                 Some(list) => {
                     let mut c =
                         chain_at(&mut defs, list, weight, faces, &bundled_faces, system).keys;
-                    c.extend(tail.iter().cloned());
+                    for k in &chain {
+                        if !c.contains(k) {
+                            c.push(k.clone());
+                        }
+                    }
                     c
                 }
                 None => chain.clone(),
@@ -1811,11 +1819,20 @@ mod tests {
             Some(names(&["Inter", "sans-serif"]))
         );
         assert_eq!(chain_of(&ctx, &family)[0], "pop:Inter:400");
-        // The theme's own families are untouched.
-        assert_ne!(
-            chain_of(&ctx, &FontFamily::Proportional)[0],
-            "pop:Inter:400"
-        );
+        // The theme's own families are untouched (the report names
+        // egui's `Proportional` as the role's regular, `pop.ui.400`), and
+        // follow the previewed face in the preview, as its fallbacks.
+        let ui_chain = chain_of(&ctx, &FontFamily::Name("pop.ui.400".into()));
+        assert_eq!(ui_chain[0], "Ubuntu-Light");
+        assert_eq!(chain_of(&ctx, &family)[1..], ui_chain[..]);
+        // A preview naming nothing found here falls back to the role's
+        // families: a preview family is never empty.
+        set_preview(&ctx, Role::Ui, Some(names(&["Nowhere Sans"])));
+        assert_eq!(chain_of(&ctx, &family), ui_chain);
+        set_preview(&ctx, Role::Ui, Some(Vec::new()));
+        assert_eq!(chain_of(&ctx, &family), ui_chain);
+        set_preview(&ctx, Role::Ui, Some(names(&["Inter", "sans-serif"])));
+        assert_eq!(chain_of(&ctx, &family)[0], "pop:Inter:400");
         // A theme switched while the preview draws: the preview is
         // defined again by the new install, and drawing with it in the
         // same frame and the next never panics.

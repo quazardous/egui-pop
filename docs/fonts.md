@@ -190,8 +190,10 @@ for, so a face is previewed through families every install defines:
 
 - `fonts::set_preview(ctx, role, Some(names))` makes the role's preview
   families (`pop.preview.ui.400`, `.500`, `.600`, `.700`, and the
-  `mono` ones) draw `names` in priority order, egui's bundled fonts
-  behind them; `None` makes them draw the role's families as installed.
+  `mono` ones) draw the faces found for `names` in priority order, the
+  role's families as installed behind them: a name found nowhere draws
+  the role's families, never an empty family. `None` makes them draw
+  the role's families alone.
   The theme's own families are untouched. A change installs the fonts
   again (one slow frame, from the next pass).
 - Every install defines the preview families, whatever it was asked
