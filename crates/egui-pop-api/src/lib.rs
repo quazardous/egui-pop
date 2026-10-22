@@ -124,6 +124,7 @@ pub mod hooks;
 pub mod host;
 pub mod jobs;
 pub mod jobs_centre;
+pub mod layout_controls;
 pub mod menus;
 pub mod mounts;
 pub mod palette;

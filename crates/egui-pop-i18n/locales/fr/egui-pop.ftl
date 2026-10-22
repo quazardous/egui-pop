@@ -1835,3 +1835,11 @@ setting-input-wheel-device-choice-auto = auto
 setting-input-wheel-device-choice-mouse = souris
 
 setting-input-wheel-device-choice-trackpad = pavé tactile
+
+setting-workbench-side-bar-position =
+    .description = Où se trouve la barre latérale principale : à gauche, la secondaire à droite (gauche), ou l’inverse (droite).
+    .label = Position de la barre latérale principale
+
+setting-workbench-side-bar-position-choice-left = gauche
+
+setting-workbench-side-bar-position-choice-right = droite

@@ -664,16 +664,18 @@ fn settings_persist_and_come_back_with_their_plugin() {
     let app = build(App::builder().persist(&dir).plugin(make(&l)));
     // The framework's own (light or dark, the accent colour, the focus
     // mode, the interface zoom, the text size and fonts, the pointer
-    // gestures, the panel's alignment, the palettes') come first.
+    // gestures, the panel's alignment, the side bars' position, the
+    // palettes') come first.
     let settings = app.handle().settings();
     let ids: Vec<_> = settings.iter().map(|s| s.id.clone()).collect();
-    assert_eq!(settings.len(), 15, "{ids:?}");
+    assert_eq!(settings.len(), 16, "{ids:?}");
     for id in [
         egui_pop_api::SETTING_THEME_PREFERENCE,
         egui_pop_api::SETTING_ACCENT_COLOR,
         egui_pop_api::SETTING_FOCUS,
         egui_pop_api::zoom::SETTING_ZOOM,
         egui_pop_api::workbench::SETTING_PANEL_ALIGNMENT,
+        egui_pop_api::layout_controls::SETTING_SIDE_BAR_POSITION,
         egui_pop_api::palettes::SETTING_FADE,
         egui_pop_api::palettes::SETTING_IDLE_OPACITY,
         egui_pop_api::pointer::SETTING_PROFILE,

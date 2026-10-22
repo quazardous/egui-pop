@@ -1836,3 +1836,11 @@ setting-workbench-panel-alignment-choice-end = end
 setting-workbench-panel-alignment-choice-justify = justify
 
 setting-workbench-panel-alignment-choice-start = start
+
+setting-workbench-side-bar-position =
+    .description = Where the primary side bar lies: on the left, the secondary one on the right (left), or the other way round (right).
+    .label = Primary side bar position
+
+setting-workbench-side-bar-position-choice-left = left
+
+setting-workbench-side-bar-position-choice-right = right

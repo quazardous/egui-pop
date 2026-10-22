@@ -232,6 +232,17 @@ pub fn area_name(area: Area) -> &'static str {
     }
 }
 
+/// Whether a side area lies on the window's left: the start one, unless
+/// the primary side bar is on the right (`flipped`). `false` for the
+/// centre and the bottom area.
+pub(crate) fn on_left(area: Area, flipped: bool) -> bool {
+    match area {
+        Area::StartSide => !flipped,
+        Area::EndSide => flipped,
+        _ => false,
+    }
+}
+
 /// An area from its name.
 pub fn area_from(name: &str) -> Option<Area> {
     Area::ALL.into_iter().find(|a| area_name(*a) == name)
@@ -571,6 +582,9 @@ pub(crate) struct Workbench {
     /// Zen mode: only the centre is drawn. Not part of the layout, so
     /// never saved.
     pub zen: bool,
+    /// The primary (start) side bar lies on the right, the secondary on
+    /// the left (`workbench.side_bar_position`), as of the last pass.
+    pub flipped: bool,
 }
 
 impl Default for Workbench {
@@ -595,6 +609,7 @@ impl Default for Workbench {
             member_rects: BTreeMap::new(),
             group_hint: None,
             zen: false,
+            flipped: false,
         }
     }
 }
@@ -961,11 +976,12 @@ impl Workbench {
         let shown = |a: Area| self.docks.contains_key(&a);
         let c = self.content;
         if c.is_positive() {
-            if !shown(Area::StartSide) && at.x < c.left() + EDGE {
-                return Some(Area::StartSide);
+            let (left, right) = self.left_right();
+            if !shown(left) && at.x < c.left() + EDGE {
+                return Some(left);
             }
-            if !shown(Area::EndSide) && at.x > c.right() - EDGE {
-                return Some(Area::EndSide);
+            if !shown(right) && at.x > c.right() - EDGE {
+                return Some(right);
             }
             if !shown(Area::Bottom) && at.y > c.bottom() - EDGE {
                 return Some(Area::Bottom);
@@ -992,11 +1008,12 @@ impl Workbench {
         let shown = |a: Area| self.docks.contains_key(&a);
         let c = self.content;
         if c.is_positive() {
-            if !shown(Area::StartSide) && at.x < c.left() + edge {
-                return Some(Area::StartSide);
+            let (left, right) = self.left_right();
+            if !shown(left) && at.x < c.left() + edge {
+                return Some(left);
             }
-            if !shown(Area::EndSide) && at.x > c.right() - edge {
-                return Some(Area::EndSide);
+            if !shown(right) && at.x > c.right() - edge {
+                return Some(right);
             }
             if !shown(Area::Bottom) && at.y > c.bottom() - edge {
                 return Some(Area::Bottom);
@@ -1009,12 +1026,29 @@ impl Workbench {
             .map(|(a, _)| *a)
     }
 
+    /// Whether a side area lies on the window's left now (the start one,
+    /// unless the primary side bar is on the right).
+    pub fn on_left(&self, area: Area) -> bool {
+        on_left(area, self.flipped)
+    }
+
+    /// The side areas on the left and on the right.
+    fn left_right(&self) -> (Area, Area) {
+        if self.flipped {
+            (Area::EndSide, Area::StartSide)
+        } else {
+            (Area::StartSide, Area::EndSide)
+        }
+    }
+
     /// Where a drop hint for `area` is drawn.
     pub fn hint_rect(&self, area: Area) -> Rect {
         let c = self.content;
+        let left = Rect::from_min_max(c.min, egui::pos2(c.left() + EDGE, c.bottom()));
+        let right = Rect::from_min_max(egui::pos2(c.right() - EDGE, c.top()), c.max);
         self.rects.get(&area).copied().unwrap_or(match area {
-            Area::StartSide => Rect::from_min_max(c.min, egui::pos2(c.left() + EDGE, c.bottom())),
-            Area::EndSide => Rect::from_min_max(egui::pos2(c.right() - EDGE, c.top()), c.max),
+            Area::StartSide | Area::EndSide if self.on_left(area) => left,
+            Area::StartSide | Area::EndSide => right,
             Area::Bottom => Rect::from_min_max(egui::pos2(c.left(), c.bottom() - EDGE), c.max),
             Area::Center => c,
         })
@@ -1288,12 +1322,23 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
             .collect();
         (wb.areas(), sizes)
     };
-    let zen = app.workbench_mut().zen;
+    let flipped = crate::layout_controls::side_bar_position(app).flipped();
+    let zen = {
+        let mut wb = app.workbench_mut();
+        wb.flipped = flipped;
+        wb.zen
+    };
     app.set_drawing_areas(true);
     if !zen && app.zone_has_blocks(&crate::zones::ACTIVITY_BAR) {
         let t = egui_pop_core::theme::Tokens::of(&ctx);
-        egui::Panel::left(Id::new("egui_pop.activity_bar"))
-            .resizable(false)
+        // Beside the primary side bar, as VS Code's.
+        let id = Id::new("egui_pop.activity_bar");
+        let bar = if flipped {
+            egui::Panel::right(id)
+        } else {
+            egui::Panel::left(id)
+        };
+        bar.resizable(false)
             .exact_size(t.size.icon_panel + 2.0 * t.space.s + 2.0 * t.space.xs)
             .show(ui, |ui| {
                 egui_pop_core::focus::scope(ui, "activityBar", &[], |ui| {
@@ -1337,8 +1382,8 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
             fallback.max(min)
         };
         let panel = match area {
-            Area::StartSide => egui::Panel::left(id),
-            Area::EndSide => egui::Panel::right(id),
+            Area::StartSide | Area::EndSide if on_left(area, flipped) => egui::Panel::left(id),
+            Area::StartSide | Area::EndSide => egui::Panel::right(id),
             _ => egui::Panel::bottom(id),
         };
         let pad = |p: f32| p.round().clamp(0.0, 127.0) as i8;
@@ -1359,7 +1404,7 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
                     draw_area(app, ui, area);
                 });
         app.workbench_mut().rects.insert(area, shown.response.rect);
-        grip(&ctx, &kit, area, shown.response.rect);
+        grip(&ctx, &kit, area, shown.response.rect, flipped);
     }
     let mut central = egui::CentralPanel::default();
     if app.edge_to_edge() {
@@ -1393,9 +1438,11 @@ fn strip(app: &AppHandle, ui: &mut Ui, kit: &Kit, area: Area, open: bool) -> Rec
     let component = &kit.area_strip;
     let width = component.data.width.max(1.0);
     let id = dock_id(area).with("egui_pop.strip");
-    let (panel, inner) = match area {
-        Area::StartSide => (egui::Panel::left(id), Side::Right),
-        _ => (egui::Panel::right(id), Side::Left),
+    let left = app.workbench_mut().on_left(area);
+    let (panel, inner) = if left {
+        (egui::Panel::left(id), Side::Right)
+    } else {
+        (egui::Panel::right(id), Side::Left)
     };
     panel
         .resizable(false)
@@ -1478,7 +1525,9 @@ fn lie_over(
         })
         .unwrap_or(if default > 0.0 { default } else { 240.0 })
         .clamp(min, max);
-    let start = area == Area::StartSide;
+    let flipped = app.workbench_mut().flipped;
+    // On the left: next to its strip's right edge.
+    let start = on_left(area, flipped);
     let rect = if start {
         Rect::from_min_size(
             egui::pos2(strip.right(), strip.top()),
@@ -1539,13 +1588,13 @@ fn lie_over(
             }
         });
     app.workbench_mut().rects.insert(area, rect);
-    grip(ctx, kit, area, rect);
+    grip(ctx, kit, area, rect, flipped);
 }
 
 /// A side area's resize grip (the kit's `area-grip`) at the middle of its
 /// edge, above the panels; egui takes the drag. Nothing is drawn while
 /// the kit's grip is transparent in every state (the default kit).
-fn grip(ctx: &egui::Context, kit: &Kit, area: Area, rect: Rect) {
+fn grip(ctx: &egui::Context, kit: &Kit, area: Area, rect: Rect, flipped: bool) {
     let g = &kit.area_grip;
     if [State::REST, State::HOVER, State::ACTIVE]
         .iter()
@@ -1555,11 +1604,11 @@ fn grip(ctx: &egui::Context, kit: &Kit, area: Area, rect: Rect) {
     }
     let (w, h, off) = (g.data.width, g.data.height, g.data.offset);
     let (centre, size) = match area {
-        Area::StartSide => (
+        Area::StartSide | Area::EndSide if on_left(area, flipped) => (
             egui::pos2(rect.right() + off, rect.center().y),
             egui::vec2(w, h),
         ),
-        Area::EndSide => (
+        Area::StartSide | Area::EndSide => (
             egui::pos2(rect.left() - off, rect.center().y),
             egui::vec2(w, h),
         ),

@@ -3039,6 +3039,7 @@ impl App {
                 "How the bottom panel lines up with the side bars: the whole width (justify), between them (center), under the start one (start) or under the end one (end).",
             ),
         )?;
+        crate::layout_controls::declare(&mut ctx)?;
         ctx.service(&FOCUS_MODE, modes)?;
         ctx.step(
             crate::steps::StepSpec::new(
