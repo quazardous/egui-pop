@@ -26,7 +26,8 @@
 //! The helpers are few on purpose, so `Ui`'s completion list stays
 //! short; [`role_text`] and [`Space::points`] serve the rest.
 
-use egui::{ComboBox, InnerResponse, Response, RichText, Shadow, Ui, WidgetText};
+use egui::scroll_area::ScrollAreaOutput;
+use egui::{ComboBox, InnerResponse, Response, RichText, ScrollArea, Shadow, Ui, WidgetText};
 
 use crate::fonts::{self, Role, Weight};
 use crate::kit::{Kit, State};
@@ -164,6 +165,18 @@ pub trait UiPop: sealed::Sealed {
         combo: ComboBox,
         add: impl FnOnce(&mut Ui) -> R,
     ) -> InnerResponse<Option<R>>;
+
+    /// Shows egui's scroll area with its bars drawn from the kit's
+    /// `scroll-bar` ([`Stock::ScrollBar`]: the thumb's fills and corners,
+    /// the track), `add` its content, drawn in this `Ui`'s own style.
+    /// Every scroll area already takes the bar's width, margin,
+    /// placement and visibility from the theme (egui's `ScrollStyle`);
+    /// this scope adds the colours, which egui shares with buttons.
+    fn scroll_area<R>(
+        &mut self,
+        area: ScrollArea,
+        add: impl FnOnce(&mut Ui) -> R,
+    ) -> ScrollAreaOutput<R>;
 }
 
 impl UiPop for Ui {
@@ -218,6 +231,24 @@ impl UiPop for Ui {
     ) -> InnerResponse<Option<R>> {
         self.scoped(Stock::ComboBox, Tone::Neutral, |ui| combo.show_ui(ui, add))
             .inner
+    }
+
+    fn scroll_area<R>(
+        &mut self,
+        area: ScrollArea,
+        add: impl FnOnce(&mut Ui) -> R,
+    ) -> ScrollAreaOutput<R> {
+        // egui paints the bars with the visuals of the `Ui` the area is
+        // shown in, and builds its content's `Ui` from it: the content
+        // gets the style outside the scope back.
+        let style = self.style().clone();
+        self.scoped(Stock::ScrollBar, Tone::Neutral, |ui| {
+            area.show(ui, |ui| {
+                ui.set_style(style);
+                add(ui)
+            })
+        })
+        .inner
     }
 }
 

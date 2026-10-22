@@ -67,7 +67,7 @@ pub struct WindowKit {
 
 /// Reads a string token among `choices`; what is not one of them is a
 /// problem and gives the default.
-fn choice<T: Copy + Default>(
+pub(super) fn choice<T: Copy + Default>(
     t: &Tokens,
     path: &str,
     choices: &[(&str, T)],

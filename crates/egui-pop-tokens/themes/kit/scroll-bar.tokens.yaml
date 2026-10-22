@@ -1,0 +1,39 @@
+$description: "The `scroll-bar` component of the default kit (docs/kit.md), layered into pop-dark."
+scroll-bar:
+  $description: "The scroll bars of every scroll area, which egui draws (handler `scoped`): `width`, `margin`, `placement` and `visibility` become egui's `ScrollStyle` with the theme; the thumb's fill per state, its radius and the track are egui's widget colours in a `ScrollBar` scope (`UiPop::scroll_area`). The defaults are egui's own bars: floating, 10 points wide, shown under the pointer, the thumb in the button's text colours."
+  shape:
+    $type: "string"
+    $value: "scoped"
+  width:
+    $type: "dimension"
+    $value: {value: 10, unit: "px"}
+  margin:
+    $type: "dimension"
+    $value: {value: 0, unit: "px"}
+  placement:
+    $type: "string"
+    $value: "over"
+    $description: "over: the bar floats over the content, which runs to the edge under it; beside: the bar takes room beside the content."
+  visibility:
+    $type: "string"
+    $value: "hover"
+    $description: "always: shown at rest, at full width; hover: shown while the pointer is over the scroll area, thin until over the bar (egui's look); scroll: while scrolling (egui 0.36 has no such state: drawn as hover, and reported)."
+  track-fill:
+    $type: "color"
+    $value: "{surface.sunken}"
+  # egui's own look: the thumb in the button's text colours and corners.
+  rest:
+    fill:
+      $type: "color"
+      $value: "{button.rest.text}"
+    radius:
+      $type: "dimension"
+      $value: "{button.rest.radius}"
+  hover:
+    fill:
+      $type: "color"
+      $value: "{button.hover.text}"
+  active:
+    fill:
+      $type: "color"
+      $value: "{button.active.text}"

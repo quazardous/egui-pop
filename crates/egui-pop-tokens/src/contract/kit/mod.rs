@@ -54,6 +54,7 @@ mod progress_line;
 mod progress_ring;
 mod radio;
 mod readout;
+mod scroll_bar;
 mod search_field;
 mod selectable_row;
 mod side_area;
@@ -140,6 +141,7 @@ pub(super) const GROUPS: &[&[Required]] = &[
     progress_ring::CONTRACT,
     radio::CONTRACT,
     readout::CONTRACT,
+    scroll_bar::CONTRACT,
     search_field::CONTRACT,
     selectable_row::CONTRACT,
     side_area::CONTRACT,

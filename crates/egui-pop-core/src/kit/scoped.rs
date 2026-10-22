@@ -36,14 +36,22 @@ pub enum Stock {
     /// `selectable_label`), from `toggle-button`: as `Button`, plus its
     /// `selected` fill and text while on (egui's selection colours).
     ToggleButton,
+    /// The bars of egui's `ScrollArea`, from `scroll-bar`: the thumb's
+    /// `rest`, `hover` and `active` fills are egui's inactive, hovered
+    /// and active foreground colours, its `radius` their corners, and
+    /// `track-fill` egui's `extreme_bg_color`. Only the bars: the
+    /// content is drawn in the style outside the scope
+    /// (`UiPop::scroll_area`).
+    ScrollBar,
 }
 
 impl Stock {
-    pub const ALL: [Stock; 4] = [
+    pub const ALL: [Stock; 5] = [
         Stock::Button,
         Stock::ComboBox,
         Stock::Field,
         Stock::ToggleButton,
+        Stock::ScrollBar,
     ];
 
     /// The kit component it is drawn from.
@@ -53,6 +61,7 @@ impl Stock {
             Stock::ComboBox => "combo-box",
             Stock::Field => "field",
             Stock::ToggleButton => "toggle-button",
+            Stock::ScrollBar => "scroll-bar",
         }
     }
 
@@ -62,6 +71,7 @@ impl Stock {
             Stock::ComboBox => &kit.combo_box,
             Stock::Field => &kit.field,
             Stock::ToggleButton => &kit.toggle_button,
+            Stock::ScrollBar => &kit.scroll_bar,
         }
     }
 
@@ -89,6 +99,8 @@ pub struct ScopedVisuals {
     pub selection_stroke: Option<Stroke>,
     /// Text fields' background (egui's `text_edit_bg_color`).
     pub text_edit_bg: Option<Color32>,
+    /// A scroll bar's track (egui's `extreme_bg_color`).
+    pub extreme_bg: Option<Color32>,
 }
 
 /// A placeholder for a kit compiled without its scoped table (never
@@ -99,6 +111,7 @@ const NONE: ScopedVisuals = ScopedVisuals {
     selection_fill: None,
     selection_stroke: None,
     text_edit_bg: None,
+    extreme_bg: None,
 };
 
 const WIDGET_NONE: WidgetVisuals = WidgetVisuals {
@@ -133,7 +146,8 @@ fn set(dst: &mut WidgetVisuals, src: &WidgetVisuals, ppp: f32) {
 }
 
 impl ScopedVisuals {
-    fn compile(stock: Stock, c: &Component, tone: Tone) -> ScopedVisuals {
+    fn compile(stock: Stock, kit: &Kit, tone: Tone) -> ScopedVisuals {
+        let c = stock.of(kit);
         let b = |state: State| c.style_toned(tone, state);
         let rest = b(State::REST);
         let disabled = b(State::DISABLED);
@@ -162,6 +176,20 @@ impl ScopedVisuals {
                 s.widgets[3] = widget_visuals(rest);
                 s.selection_stroke = Some(Stroke::new(focus.border_width, focus.border_color));
                 s.text_edit_bg = Some(rest.fill);
+            }
+            Stock::ScrollBar => {
+                // egui draws the thumb in the state's foreground colour
+                // (`ScrollStyle::foreground_color`, set with the theme)
+                // and corners, the track in `extreme_bg_color`; a scroll
+                // bar has no open state.
+                for (i, state) in [State::REST, State::HOVER, State::ACTIVE]
+                    .into_iter()
+                    .enumerate()
+                {
+                    s.widgets[i].fg_stroke.color = b(state).fill;
+                }
+                s.widgets[3] = s.widgets[0];
+                s.extreme_bg = Some(kit.scroll.track);
             }
         }
         s
@@ -193,6 +221,9 @@ impl ScopedVisuals {
         if let Some(bg) = self.text_edit_bg {
             v.text_edit_bg_color = Some(bg);
         }
+        if let Some(bg) = self.extreme_bg {
+            v.extreme_bg_color = bg;
+        }
     }
 
     /// Only egui's four widget states (what `theme::visuals_with` gives
@@ -218,17 +249,16 @@ pub struct ScopedKit([Box<[ScopedVisuals]>; Stock::ALL.len()]);
 impl ScopedKit {
     pub(super) fn compile(kit: &Kit) -> ScopedKit {
         ScopedKit(Stock::ALL.map(|stock| {
-            let c = stock.of(kit);
-            if c.data.states.toned() {
-                let mut all = vec![ScopedVisuals::compile(stock, c, Tone::Neutral)];
+            if stock.of(kit).data.states.toned() {
+                let mut all = vec![ScopedVisuals::compile(stock, kit, Tone::Neutral)];
                 all.extend(
                     Tone::NAMED
                         .iter()
-                        .map(|(tone, _)| ScopedVisuals::compile(stock, c, *tone)),
+                        .map(|(tone, _)| ScopedVisuals::compile(stock, kit, *tone)),
                 );
                 all.into_boxed_slice()
             } else {
-                Box::new([ScopedVisuals::compile(stock, c, Tone::Neutral)])
+                Box::new([ScopedVisuals::compile(stock, kit, Tone::Neutral)])
             }
         }))
     }
@@ -249,6 +279,12 @@ impl ScopedKit {
 /// `field` are checked with egui's global widgets (`egui_losses`).
 pub(super) fn losses(kit: &Kit) -> Vec<String> {
     let mut lost = Vec::new();
+    if kit.scroll_bar.shape != "scoped" {
+        lost.push(format!(
+            "scroll-bar.shape: egui draws it, so `{}` is not used (only `scoped`)",
+            kit.scroll_bar.shape
+        ));
+    }
     for stock in [Stock::ComboBox, Stock::ToggleButton] {
         let c = stock.of(kit);
         let name = stock.component();

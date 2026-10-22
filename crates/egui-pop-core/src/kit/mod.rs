@@ -40,6 +40,7 @@ use crate::theme::Tokens;
 mod glyph;
 mod paint;
 mod scoped;
+mod scroll;
 mod shapes;
 mod source;
 mod tone;
@@ -49,6 +50,7 @@ pub use glyph::{Glyph, Glyphs};
 
 pub use paint::{Corners, label_rect, paint_box, paint_indicator, paint_label, paint_ring};
 pub use scoped::{ScopedKit, ScopedVisuals, Stock};
+pub use scroll::{Placement, ScrollBarKit, Visibility};
 pub use source::KitSource;
 pub use tone::Tone;
 pub use window::{ButtonsHover, ButtonsSide, WindowCorners, WindowKit};
@@ -578,6 +580,10 @@ macro_rules! components {
             /// The window's own terms (`title-bar.buttons-side`,
             /// `title-bar.buttons-hover`, `window.corners`).
             pub window: WindowKit,
+            /// The scroll bars' terms (`scroll-bar.width`, `margin`,
+            /// `placement`, `visibility`, `track-fill`): egui's
+            /// `ScrollStyle` ([`ScrollBarKit::style`]).
+            pub scroll: ScrollBarKit,
             /// egui's own widgets' visuals in a scope, per [`Stock`] kind
             /// and tone ([`Kit::scope`]).
             pub scoped: ScopedKit,
@@ -600,6 +606,7 @@ macro_rules! components {
                     $($field: component($name, $default),)*
                     glyphs,
                     window: WindowKit::default(),
+                    scroll: ScrollBarKit::default(),
                     scoped: ScopedKit::default(),
                     problems,
                 }
@@ -770,6 +777,11 @@ components! {
     radio: "radio" => "pill",
     /// A viewport's pixel readout; its label is the readout's text.
     readout: "readout" => "card",
+    /// The scroll bars of every scroll area, which egui draws (handler
+    /// `scoped`): `rest`, `hover` and `active` the thumb (its `fill` and
+    /// `radius`); the terms that do not change with the state are
+    /// [`Kit::scroll`].
+    scroll_bar: "scroll-bar" => "scoped",
     /// The library's search field: `focus` while its text has the
     /// keyboard.
     search_field: "search-field" => "card",
@@ -973,9 +985,11 @@ impl Kit {
         let mut kit = Kit::compile_components(component, Glyphs::default(), Vec::new());
         kit.glyphs = Glyphs::compile(t, &mut problems);
         kit.window = WindowKit::compile(t, &mut problems);
+        kit.scroll = ScrollBarKit::compile(t, &kit.scroll_bar.data, &mut problems);
         kit.scoped = ScopedKit::compile(&kit);
         problems.extend(egui_losses(t, &kit));
         problems.extend(scoped::losses(&kit));
+        problems.extend(scroll::losses(t, &kit));
         kit.problems = problems;
         kit
     }
