@@ -51,7 +51,7 @@ struct Draw {
     extra: vec4<f32>,
     // Uploaded tiles and textures: the tile's texel origin, 0, the mode;
     // buffers: the tile's first float, floats a row, channels, the mode.
-    layout: vec4<u32>,
+    tile_layout: vec4<u32>,
 };
 
 @group(0) @binding(0) var<uniform> d: Draw;
@@ -138,7 +138,7 @@ fn texel_at(pos: vec2<f32>) -> vec2<i32> {
 // the display stage; 1: display-encoded, as it is; 2: display-encoded
 // in an sRGB texture, whose read decoded it: encoded again.
 fn shade(s: vec3<f32>) -> vec4<f32> {
-    let mode = d.layout.w;
+    let mode = d.tile_layout.w;
     var out = s;
     if mode == 0u {
         var rgb = vec3<f32>(dot(d.m0.xyz, s), dot(d.m1.xyz, s), dot(d.m2.xyz, s));
@@ -164,7 +164,7 @@ const TEXTURE: &str = r#"
 
 @fragment
 fn fs(v: V) -> @location(0) vec4<f32> {
-    let texel = texel_at(v.pos.xy) + vec2<i32>(d.layout.xy);
+    let texel = texel_at(v.pos.xy) + vec2<i32>(d.tile_layout.xy);
     return shade(textureLoad(tex, texel, 0).rgb);
 }
 
@@ -191,8 +191,8 @@ const BUFFER: &str = r#"
 @fragment
 fn fs(v: V) -> @location(0) vec4<f32> {
     let t = vec2<u32>(texel_at(v.pos.xy));
-    let channels = d.layout.z;
-    let i = d.layout.x + t.y * d.layout.y + t.x * channels;
+    let channels = d.tile_layout.z;
+    let i = d.tile_layout.x + t.y * d.tile_layout.y + t.x * channels;
     var s = vec3<f32>(buf[i]);
     if channels >= 3u {
         s = vec3<f32>(buf[i], buf[i + 1u], buf[i + 2u]);
@@ -990,5 +990,27 @@ impl egui_wgpu::CallbackTrait for TilePaint {
         let [sw, sh] = info.screen_size_px;
         pass.set_viewport(0.0, 0.0, sw as f32, sh as f32, 0.0, 1.0);
         self.draw(pass, r, r.pipelines());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{BUFFER, COMMON, TEXTURE};
+
+    /// Each tile module, as `install` composes it, parses and validates
+    /// with naga (what wgpu runs at shader creation), without a GPU.
+    #[test]
+    fn the_tile_shaders_parse_and_validate() {
+        for (name, part) in [("texture", TEXTURE), ("buffer", BUFFER)] {
+            let source = format!("{COMMON}{part}");
+            let module = naga::front::wgsl::parse_str(&source)
+                .unwrap_or_else(|e| panic!("{name}: {}", e.emit_to_string(&source)));
+            naga::valid::Validator::new(
+                naga::valid::ValidationFlags::all(),
+                naga::valid::Capabilities::empty(),
+            )
+            .validate(&module)
+            .unwrap_or_else(|e| panic!("{name}: {}", e.emit_to_string(&source)));
+        }
     }
 }
