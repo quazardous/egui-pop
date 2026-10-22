@@ -3096,6 +3096,7 @@ impl App {
                 "Whether menus show the commands' icons in a column on their left (on), none (off), or follow the desktop (platform: off on GNOME, as KDE Plasma says, on elsewhere).",
             ),
         )?;
+        crate::layout_controls::declare(&mut ctx)?;
         ctx.service(&FOCUS_MODE, modes)?;
         ctx.step(
             crate::steps::StepSpec::new(

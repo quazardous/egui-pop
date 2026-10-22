@@ -141,6 +141,13 @@ publishes.
   `disclosure-*` glyph roles) and `section-count` (based on
   `indicator-badge`). The gallery's `sections` page shows them; the
   survey and the classic apps compared are in `docs/sections.md`.
+- The primary side bar on the left or the right (egui-pop-api): the
+  `workbench.side_bar_position` setting (`left` by default, or `right`)
+  draws the start side area on the window's right and the end one on
+  its left, with their strips, the open areas lying over the centre and
+  the activity bar beside the primary one, as VS Code's "Primary Side
+  Bar Position". Panels keep their areas; a change is one undo step.
+  English and French strings.
 - Layout icons (egui-pop-core): `Icon::Layout`, and `LayoutLeft`,
   `LayoutBottom`, `LayoutRight` with their `-off` twins (`layout-left`,
   `layout-left-off`...): a frame whose area is filled while it shows and
