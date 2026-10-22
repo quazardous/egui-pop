@@ -1,7 +1,9 @@
 //! Pointer gestures in an application, owned by egui-pop: the pointer
-//! profile setting (`input.pointer_profile`: darktable, Adobe, Document,
-//! Blender / node editors, Trackpad; Document unless the application
-//! picks another with [`AppBuilder::pointer_profile`]), the options
+//! profile setting (`input.pointer_profile`: Document, darktable,
+//! Photoshop, Lightroom Classic, Blender / node editors, Trackpad;
+//! Document unless the application picks another with
+//! [`AppBuilder::pointer_profile`]; a retired id such as `adobe` names
+//! its successor, `lightroom`), the options
 //! each profile gives its default for (`input.slider_wheel`,
 //! `input.image_double_click`), the wheel device (`input.wheel_device`),
 //! and the gesture commands (`gesture.image.zoom`...) the profile binds
@@ -71,9 +73,11 @@ fn choice(app: &AppHandle, id: &SettingId) -> Option<String> {
 }
 
 /// The profile the setting asks for (its id; it may name no shipped
-/// profile).
+/// profile; an alias is given as the profile it names).
 pub fn profile_id(app: &AppHandle) -> String {
-    choice(app, &SETTING_PROFILE).unwrap_or_else(|| pointer::DEFAULT_PROFILE.into())
+    choice(app, &SETTING_PROFILE)
+        .map(|id| pointer::canonical_id(&id).to_string())
+        .unwrap_or_else(|| pointer::DEFAULT_PROFILE.into())
 }
 
 /// The profile in force: the setting's, else the default.
@@ -81,11 +85,13 @@ pub fn profile(app: &AppHandle) -> &'static Profile {
     pointer::profile(&profile_id(app)).unwrap_or_else(pointer::default_profile)
 }
 
-/// Asks for a profile (the setting), applied before the next frame.
+/// Asks for a profile (the setting), applied before the next frame. An
+/// alias (`adobe`) asks for the profile it names (`lightroom`).
 pub fn set_profile(app: &AppHandle, id: &str) -> Result<(), String> {
     if pointer::profile(id).is_none() {
         return Err(format!("`{id}` is not a pointer profile"));
     }
+    let id = pointer::canonical_id(id);
     lock(&app.store())
         .set(
             Set::new(
@@ -211,6 +217,7 @@ pub(crate) fn ask_about_overrides(app: &AppHandle, profile: &Profile) {
 /// the default profile's bindings.
 pub(crate) fn register(ctx: &mut Ctx<'_>, default_profile: &str) -> Result<(), CtxError> {
     let ids = pointer::ids();
+    let default_profile = pointer::canonical_id(default_profile);
     let default = if ids.contains(&default_profile) {
         default_profile
     } else {
@@ -224,7 +231,7 @@ pub(crate) fn register(ctx: &mut Ctx<'_>, default_profile: &str) -> Result<(), C
     ctx.setting(
         SETTING_PROFILE,
         Descriptor::choice("Pointer profile", &ids, default).description(
-            "What the wheel, a pinch and the mouse buttons do on the image, the node graph and sliders, as in darktable, Adobe's applications, document tools (GIMP, Inkscape, the web), Blender and node editors, or on a trackpad. The shortcuts editor shows and changes each gesture.",
+            "What the wheel, a pinch and the mouse buttons do on the image, the node graph and sliders, as in darktable, Photoshop, Lightroom Classic, document tools (GIMP, Inkscape, the web), Blender and node editors, or on a trackpad. The shortcuts editor shows and changes each gesture.",
         ),
     )?;
     let mut wheel = vec![FROM_PROFILE];

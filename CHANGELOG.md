@@ -209,6 +209,24 @@ publishes.
 
 ### Changed
 
+- Two pointer profiles replace Adobe (egui-pop-model, egui-pop-api):
+  Photoshop (`photoshop`) and Lightroom Classic (`lightroom`), each
+  following its application, with sources in the design note; where
+  the application has no equivalent, the gesture is left unbound. Under
+  Photoshop the wheel scrolls, Ctrl + wheel scrolls sideways, Alt +
+  wheel zooms and neither a click nor a double click on the image zooms;
+  under Lightroom Classic a click toggles fit and 100 %, the plain wheel
+  leaves the image alone, Ctrl + wheel zooms and a double click leaves
+  the view. **Migration:** the id `adobe` stays accepted, as an alias
+  of `lightroom` (`pointer::ALIASES`, `pointer::canonical_id`), the
+  closest for a photo editor: `AppBuilder::pointer_profile("adobe")`,
+  `pointer::set_profile` and a saved setting naming it get Lightroom
+  Classic. The `settings` document is now version 2, whose migration
+  rewrites a saved `adobe`; pickers list six profiles, not the alias.
+  A profile may give a value's arrow keys their own modifiers
+  (`Profile::value_keys`, `PointerMap::value_keys`), read by the slider
+  (egui-pop-core: `slider::Gestures` gains `key_fine` and `key_coarse`).
+
 - Palettes are resizable (egui-pop-model, egui-pop-api, egui-pop-tokens):
   their right edge, bottom edge and corner drag their size, between the
   new `palette.min-width`, `palette.min-height`, `palette.max-width` and
@@ -305,15 +323,13 @@ publishes.
   the English and French catalogues. `Shift+F11` now toggles zen mode
   (Sublime Text's distraction free key; `docs/workbench.md` shows how an
   application binds its own, such as VS Code's `Ctrl+K Z`).
-- Adobe's pointer profile takes Adobe's fine and coarse modifiers
-  (egui-pop-model): Shift makes a value ten times coarser and Alt
-  (Option) ten times finer, for a slider's drag, its arrow keys and
-  its wheel, as Photoshop's scrubby sliders and the arrow keys of
-  Photoshop and Lightroom Classic do; Ctrl no longer changes a value's
-  step. The profile shipped them swapped (Shift finer, Ctrl coarser).
-  The design note cites Adobe's help pages and says why, under this
-  profile, a double click on the image toggles fit and 100 % twice
-  (#57).
+- Fine and coarse modifiers follow Adobe's applications
+  (egui-pop-model): the Adobe pointer profile made Shift + drag finer
+  and Ctrl + drag coarser, the other way round from Photoshop. Its
+  successor Photoshop makes a value ten times coarser with Shift and
+  ten times finer with Alt (Option), for a drag, the arrow keys and the
+  wheel, with no Ctrl value gesture; Lightroom Classic's makes a Shift
+  drag finer and, with the arrows, Shift coarser and Alt finer (#57).
 
 ## 0.2.0 (2026-10-21)
 

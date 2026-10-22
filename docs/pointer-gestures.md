@@ -38,38 +38,46 @@ The keymap's layers, removals, conflicts and resolution trace apply
 unchanged ([plugins.md](plugins.md)); the key dispatcher never sees a
 pointer chord: canvases read the resolved table instead.
 
-## The five profiles
+## The six profiles
 
 A profile is a `pointer-profile` document (in
 `crates/egui-pop-model/profiles/`): bindings for the default layer, the
-options it gives its default for, and the modifiers egui's own
-scrolling follows (`egui::InputOptions`), so plain scroll areas agree.
+options it gives its default for, the modifiers egui's own scrolling
+follows (`egui::InputOptions`), so plain scroll areas agree, and, where
+they differ from the drag's, the modifiers of a value's arrow keys
+(`value_keys`). Each profile named after an application follows that
+application; where it has no equivalent the gesture is left unbound.
 
-| | Document (default) | darktable | Adobe | Blender / node editors | Trackpad |
-|---|---|---|---|---|---|
-| Wheel on the image | pans | zooms (Ctrl: no stops) | pans | zooms | pans |
-| Ctrl + wheel on the image | zooms | zooms without stops | zooms | pans sideways | zooms |
-| Shift + wheel on the image | pans sideways | pans sideways | pans sideways | pans up and down | — |
-| Alt + wheel on the image | — | — | zooms | — | — |
-| Two fingers / a pinch | pan / zoom | pan / zoom | pan / zoom | pan / zoom | pan / zoom |
-| Primary drag on the image | pans | pans | pans | pans | pans |
-| Middle drag | pans | pans | pans | pans (graph: also a secondary drag) | — |
-| Middle click on the image | — | 100 %, 200 %, fit | — | — | — |
-| Click on the image | — | — | fit or 100 % | — | — |
-| Double click on the image | fits | leaves the view | fits | fits | fits |
-| Wheel on the graph | pans | zooms | pans | zooms | pans |
-| Wheel over a slider | scrolls the panel | changes the value | scrolls the panel | scrolls the panel | scrolls the panel |
-| Steps a slider without the focus | Alt + wheel | the wheel; Ctrl+Alt + wheel scrolls the panel | — | Ctrl + wheel | Ctrl + wheel |
-| Finer / coarser | Ctrl / Shift | Ctrl / Shift | Alt / Shift | Shift / Ctrl | Ctrl / Shift |
+| | Document (default) | darktable | Photoshop | Lightroom Classic | Blender / node editors | Trackpad |
+|---|---|---|---|---|---|---|
+| Wheel on the image | pans | zooms (Ctrl: no stops) | pans | — | zooms | pans |
+| Ctrl + wheel on the image | zooms | zooms without stops | pans sideways | zooms | pans sideways | zooms |
+| Shift + wheel on the image | pans sideways | pans sideways | — | — | pans up and down | — |
+| Alt + wheel on the image | — | — | zooms | — | — | — |
+| Two fingers / a pinch | pan / zoom | pan / zoom | pan / zoom | pan / zoom | pan / zoom | pan / zoom |
+| Primary drag on the image | pans | pans | pans | pans | pans | pans |
+| Middle drag | pans | pans | — | — | pans (graph: also a secondary drag) | — |
+| Middle click on the image | — | 100 %, 200 %, fit | — | — | — | — |
+| Click on the image | — | — | — | fit or 100 % | — | — |
+| Double click on the image | fits | leaves the view | — | leaves the view | fits | fits |
+| Wheel on the graph | pans | zooms | pans | pans | zooms | pans |
+| Wheel over a slider | scrolls the panel | changes the value | scrolls the panel | scrolls the panel | scrolls the panel | scrolls the panel |
+| Steps a slider without the focus | Alt + wheel | the wheel; Ctrl+Alt + wheel scrolls the panel | — | — | Ctrl + wheel | Ctrl + wheel |
+| Finer / coarser drag | Ctrl / Shift | Ctrl / Shift | Alt / Shift | Shift / — | Shift / Ctrl | Ctrl / Shift |
+| Finer / coarser arrows | as the drag | as the drag | as the drag | Alt / Shift | as the drag | as the drag |
 
 In every profile a drag with Space held pans the image and the graph,
 Escape cancels a drag, a primary drag on a handle moves it and the wheel
 over a handle adjusts it. The finer and coarser modifiers apply to a
-slider's drag, its arrow keys and its wheel alike: under Adobe's
-profile Shift with the arrows takes coarse steps, as in Photoshop and
-Lightroom. Adobe's click on the image toggles fit and 100 %, as in
-Lightroom, so a double click toggles twice before the double click
-option applies: from fit it changes nothing. "Leaves the view" is a signal
+slider's drag, its wheel and, unless the profile gives them their own,
+its arrow keys: Lightroom Classic makes a Shift drag finer but Shift
+with the arrows coarser, and has no coarser drag. Neither Adobe
+application has a node graph: both profiles take Photoshop's canvas
+wheel there. Lightroom's click on the image toggles fit and 100 %, so a
+double click toggles twice and then leaves the view, as its Loupe goes
+back to the Grid. The id `adobe`, from before the split into Photoshop
+and Lightroom Classic, still works and names `lightroom`; pickers do
+not list it. "Leaves the view" is a signal
 (`Signal::Leave`): the application decides what it means (darktable
 goes back to the lighttable).
 

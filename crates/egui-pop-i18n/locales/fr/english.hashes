@@ -859,12 +859,13 @@ setting-input-image-double-click-choice-nothing 08ea6d1866d64918
 setting-input-image-double-click-choice-profile 96d3f8614647fc44
 setting-input-image-double-click.description 59d7518015450366
 setting-input-image-double-click.label c25ab0cd2a9f8127
-setting-input-pointer-profile-choice-adobe 85b999d19cdb9cc6
 setting-input-pointer-profile-choice-blender 62e70a864891fa67
 setting-input-pointer-profile-choice-darktable cefbeddd2789b117
 setting-input-pointer-profile-choice-document eeec15a4cb4a70c2
+setting-input-pointer-profile-choice-lightroom 89a8641711359bae
+setting-input-pointer-profile-choice-photoshop 436ad43f3edf4ff7
 setting-input-pointer-profile-choice-trackpad 6a14f8103f0cae39
-setting-input-pointer-profile.description 5d07641c8834ee81
+setting-input-pointer-profile.description 85d6864ae3e52e10
 setting-input-pointer-profile.label bee3e17858f2ca93
 setting-input-slider-wheel-choice-guarded 9c8bdd8b76f93007
 setting-input-slider-wheel-choice-profile 96d3f8614647fc44

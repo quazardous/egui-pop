@@ -18,7 +18,9 @@
 //! - **Fine and coarse**: ten times finer and ten times coarser with
 //!   the pointer profile's modifiers (`gesture.value.fine` and
 //!   `gesture.value.coarse`; Ctrl (Cmd) finer and Shift coarser by
-//!   default), for drags, arrows and the wheel alike.
+//!   default), for drags, arrows and the wheel alike, unless the
+//!   profile gives the arrows their own (`value_keys`: Lightroom's Shift
+//!   drag is finer, its Shift with the arrows coarser).
 //! - **Keys** when focused: the arrows step, Page Up and Page Down take
 //!   coarse steps, Home and End go to the soft ends, Enter opens the
 //!   typed entry.
@@ -104,6 +106,10 @@ pub struct Gestures {
     pub fine: Modifiers,
     /// Held: ten times coarser; none: never.
     pub coarse: Modifiers,
+    /// Held with the arrow keys: ten times finer; none: never.
+    pub key_fine: Modifiers,
+    /// Held with the arrow keys: ten times coarser; none: never.
+    pub key_coarse: Modifiers,
     /// Held over a slider without the focus: the wheel steps it (else
     /// the wheel scrolls the panel); none: only with
     /// [`Gestures::wheel_steps`] or the focus.
@@ -134,7 +140,8 @@ impl Gestures {
     /// on the wheel (a plain `Wheel` binding steps unfocused sliders),
     /// of `gesture.value.panel` on the wheel, of `gesture.value.fine`
     /// and `gesture.value.coarse` on a primary drag; the profile's
-    /// option for the wheel over sliders.
+    /// `value_keys` for the arrows (the drag's where it gives none); the
+    /// profile's option for the wheel over sliders.
     pub fn from_map(map: &egui_pop_model::pointer::PointerMap) -> Self {
         use egui_pop_model::keymap::{Button, Pointer};
         use egui_pop_model::pointer::{SCOPE_VALUE, SliderWheel, gesture};
@@ -151,9 +158,20 @@ impl Gestures {
         let first = |mods: Vec<Modifiers>| mods.into_iter().find(|m| m.any());
         let step = on(map, &gesture::VALUE_STEP, Pointer::Wheel);
         let drag = Pointer::Drag(Button::Primary);
+        let fine = first(on(map, &gesture::VALUE_FINE, drag)).unwrap_or(Modifiers::NONE);
+        let coarse = first(on(map, &gesture::VALUE_COARSE, drag)).unwrap_or(Modifiers::NONE);
+        let keys = |text: &str, drag: Modifiers| {
+            if text.trim().is_empty() {
+                drag
+            } else {
+                crate::pointer::modifiers_from_text(text)
+            }
+        };
         Self {
-            fine: first(on(map, &gesture::VALUE_FINE, drag)).unwrap_or(Modifiers::NONE),
-            coarse: first(on(map, &gesture::VALUE_COARSE, drag)).unwrap_or(Modifiers::NONE),
+            fine,
+            coarse,
+            key_fine: keys(&map.value_keys.fine, fine),
+            key_coarse: keys(&map.value_keys.coarse, coarse),
             wheel: first(step.clone()).unwrap_or(Modifiers::NONE),
             wheel_steps: map.options.slider_wheel == SliderWheel::Value
                 || step.iter().any(|m| !m.any()),
@@ -847,11 +865,20 @@ fn clipped(ui: &Ui, rect: Rect, b: &BoxStyle) -> egui::Painter {
 
 /// The modifiers' factor on a step: 0.1 fine, 10 coarse, else 1.
 pub(crate) fn modifier_scale(ui: &Ui, g: &Gestures) -> f64 {
+    scale_of(ui, g.fine, g.coarse)
+}
+
+/// The arrow keys' factor on a step, from their own modifiers.
+fn key_scale(ui: &Ui, g: &Gestures) -> f64 {
+    scale_of(ui, g.key_fine, g.key_coarse)
+}
+
+fn scale_of(ui: &Ui, fine: Modifiers, coarse: Modifiers) -> f64 {
     let mods = ui.input(|i| i.modifiers);
     let held = |m: Modifiers| m.any() && mods.matches_logically(m);
-    if held(g.fine) {
+    if held(fine) {
         0.1
-    } else if held(g.coarse) {
+    } else if held(coarse) {
         10.0
     } else {
         1.0
@@ -929,13 +956,14 @@ pub(crate) fn keys_wheel_access(
     let mut v = value;
     let mut cause = None;
     if response.has_focus() {
+        let key_scale = key_scale(ui, g);
         ui.input(|i| {
             let count = |keys: &[Key]| keys.iter().map(|k| i.num_presses(*k) as f64).sum::<f64>();
             let steps =
                 count(&[Key::ArrowRight, Key::ArrowUp]) - count(&[Key::ArrowLeft, Key::ArrowDown]);
             let pages = count(&[Key::PageUp]) - count(&[Key::PageDown]);
             if steps != 0.0 || pages != 0.0 {
-                v = spec.stepped(v, steps, scale);
+                v = spec.stepped(v, steps, key_scale);
                 v = spec.stepped(v, pages, 10.0);
                 cause = Some(Cause::Key);
             }
