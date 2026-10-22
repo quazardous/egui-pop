@@ -73,9 +73,9 @@ slider's drag, its wheel and, unless the profile gives them their own,
 its arrow keys: Lightroom Classic makes a Shift drag finer but Shift
 with the arrows coarser, and has no coarser drag. Neither Adobe
 application has a node graph: both profiles take Photoshop's canvas
-wheel there. Lightroom's click on the image toggles fit and 100 %, so a
-double click toggles twice and then leaves the view, as its Loupe goes
-back to the Grid. The id `adobe`, from before the split into Photoshop
+wheel there. Lightroom's click on the image toggles fit and 100 %, and
+a double click leaves the view, as its Loupe goes back to the Grid: its
+first click toggles the zoom, its second press only leaves. The id `adobe`, from before the split into Photoshop
 and Lightroom Classic, still works and names `lightroom`; pickers do
 not list it. "Leaves the view" is a signal
 (`Signal::Leave`): the application decides what it means (darktable

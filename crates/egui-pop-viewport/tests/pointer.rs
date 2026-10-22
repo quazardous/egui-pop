@@ -322,12 +322,21 @@ fn lightrooms_click_toggles_fit_and_100_percent_and_a_double_click_leaves() {
     assert_eq!(h.state().view.zoom, Zoom::Px(1.0));
     click(&mut h, c, PointerButton::Primary);
     assert!(h.state().view.is_fit(), "{:?}", h.state().view);
-    // A double click is two clicks that toggle twice, then leaves the
-    // view, as Lightroom's Loupe goes back to the Grid.
+    let leaves = |h: &Harness<'_, Scene>| {
+        h.state()
+            .signals
+            .iter()
+            .filter(|s| **s == Signal::Leave)
+            .count()
+    };
+    assert_eq!(leaves(&h), 0, "single clicks never leave");
+    // A double click leaves the view once, as Lightroom's Loupe goes
+    // back to the Grid. Its first click toggles the zoom; its second
+    // press runs the double click alone. The zoom left behind does not
+    // matter: the view is left.
     egui_pop_test::double_click_at(&mut h, c);
     h.run();
-    assert!(h.state().view.is_fit(), "{:?}", h.state().view);
-    assert!(h.state().signals.contains(&Signal::Leave));
+    assert_eq!(leaves(&h), 1, "{:?}", h.state().signals);
 }
 
 #[test]
