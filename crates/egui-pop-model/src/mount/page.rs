@@ -289,11 +289,16 @@ fn needs(m: &Mountable) -> String {
     if !pointer.is_empty() {
         parts.push(pointer.join(", "));
     }
-    if m.workers == Workers::DrainedWhenDrawn {
+    let workers = match m.workers {
+        Workers::None => None,
+        Workers::DrainedWhenDrawn => Some("workers, drained when drawn"),
+        Workers::Bounded => Some("workers, bounded while hidden"),
+    };
+    if let Some(w) = workers {
         parts.push(if m.keep_under_modal {
-            "workers, drained when drawn, kept under a modal".into()
+            format!("{w}, kept under a modal")
         } else {
-            "workers, drained when drawn".into()
+            w.into()
         });
     }
     match m.display {
@@ -563,7 +568,12 @@ fn notes(o: &mut String) {
   with its rule.
 - **Workers.** Tile, thumbnail, tree and terminal sources run on the
   application's threads and keep running whatever the host, a modal
-  included; their queues are drained when the component is drawn (c11).
+  included. Hidden, a component keeps bounded memory (c11 closed): the
+  terminal and the jobs take their input off-draw; the viewport folds
+  its source's changes past `source::NOTICES`, the tree reloads past
+  `tree::EDITS_WAITING` edits, the library keeps its `INBOX` latest
+  requests and a console its `CONSOLE_PENDING` latest bytes, each
+  counting what it dropped (docs/threading.md, section 2.2).
 - **Accessibility in an auxiliary window** is not tried: whether eframe
   gives an immediate viewport its own AccessKit tree has not been
   checked.

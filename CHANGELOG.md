@@ -360,6 +360,24 @@ publishes.
   takes any float-sampled format: `DeviceTile::texture(&device,
   texture)` is what it delivered. `source::Stats::snapshot` returns nine
   counters (`device` and `refused` added).
+- Hidden components keep bounded memory (egui-pop-viewport,
+  egui-pop-views, egui-pop-editors, egui-pop-model): a component its
+  host stops drawing (a tab behind another, a palette hidden) no longer
+  lets its workers' queue grow. The image viewport folds its source's
+  changes past `source::NOTICES` (256) into one change of the whole
+  image and drops readouts past it (`coalesced` in its stats,
+  `ViewportState::notices_waiting`); a tree drops its edits past
+  `tree::EDITS_WAITING` (4096) and loads every branch again at its next
+  pass (`TreeState::dropped`, `TreeState::waiting`, and a
+  `tree.overflowed` event); the library's command inbox counts what it
+  drops (`dropped` in the `libraries` collector, `INBOX` public); a
+  `Console` no terminal started keeps its latest `CONSOLE_PENDING`
+  bytes (1 MiB) from a line's start (`Console::dropped`,
+  `Console::waiting`). The terminal and the jobs already took their
+  input off-draw. Components declare it with the new
+  `Mountable::bounded_workers` (`Workers::Bounded`); `docs/hosts.md`:
+  c11 closed for egui-pop's components, and `docs/threading.md` lists
+  each queue.
 - The command palette, popup menus and toasts open in the window in use
   (egui-pop-api), as dialogs already did and as VS Code's auxiliary
   windows do: in a detached panel's window, the palette and a menu

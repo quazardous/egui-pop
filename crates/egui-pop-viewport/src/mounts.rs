@@ -30,7 +30,7 @@ pub fn viewport() -> Mountable {
         .drag()
         .wheel()
         .cursor_images()
-        .workers()
+        .bounded_workers()
         .keep_under_modal()
         .display(Display::WideWanted)
         .fills()

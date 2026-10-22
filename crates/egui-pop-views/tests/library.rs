@@ -15,7 +15,7 @@ use egui_pop_views::library::grid::{
 };
 use egui_pop_views::library::marks::{ColorLabel, CullKeymap, Flag, Marks};
 use egui_pop_views::library::plugin::{
-    CMD_RATE, CMD_SELECT, LIBRARY_FLAG, LIBRARY_RATE, LibraryPlugin,
+    CMD_RATE, CMD_SELECT, INBOX, LIBRARIES, LIBRARY_FLAG, LIBRARY_RATE, LibraryPlugin,
 };
 use egui_pop_views::library::tags::{TagInput, TagInputState};
 use serde_json::json;
@@ -471,4 +471,31 @@ fn the_tag_input_completes_adds_and_removes() {
     h.get_by_label("Remove sea").click();
     h.run();
     assert_eq!(h.state().1, ["sunset", "dunes"]);
+}
+
+#[test]
+fn a_library_not_drawn_keeps_its_latest_requests_and_counts_the_others() {
+    let mut h = harness(40, false, true, CullKeymap::lightroom());
+    h.run();
+    // Its host stops drawing it; an agent keeps rating.
+    let app = h.state_mut().app.as_mut().unwrap();
+    for i in 0..INBOX + 36 {
+        app.run(
+            &CMD_RATE,
+            json!({ "library": "shoot", "keys": [1], "rating": i % 6 }),
+            Origin::Agent("t".into()),
+        )
+        .now()
+        .unwrap()
+        .unwrap();
+    }
+    let reg = app.handle().service(&LIBRARIES).unwrap();
+    let shoot = &reg.describe()["libraries"]["shoot"];
+    assert_eq!(shoot["waiting"], INBOX);
+    assert_eq!(shoot["dropped"], 36);
+    // Drawn again, it takes in what waited.
+    h.run();
+    let shoot = &reg.describe()["libraries"]["shoot"];
+    assert_eq!(shoot["waiting"], 0);
+    assert_eq!(shoot["dropped"], 36);
 }

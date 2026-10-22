@@ -267,6 +267,23 @@ impl<K: Key> Model<K> {
         ticket
     }
 
+    /// Loads every branch again, as a [`Edit::Reload`] of each: what
+    /// was loaded stays on screen until its new children come, a branch
+    /// that was loading or had failed is asked for again (the answer it
+    /// waited for is no longer taken). Used when edits were dropped.
+    pub fn reload_all(&mut self) {
+        let parents: Vec<Option<K>> = self.children.keys().cloned().collect();
+        for parent in parents {
+            let stale = match self.children.remove(&parent) {
+                Some(Children::Loaded(v) | Children::Stale(v)) => v,
+                Some(Children::Loading { stale, .. }) => stale,
+                Some(Children::Failed(_)) | None => continue,
+            };
+            self.children.insert(parent, Children::Stale(stale));
+        }
+        self.dirty = true;
+    }
+
     /// Marks a branch as failed (a load vetoed or refused).
     pub fn fail(&mut self, parent: Option<&K>, reason: &str) {
         let stale = match self.children.remove(&parent.cloned()) {

@@ -14,8 +14,8 @@ use egui_pop_editors::terminal::steps::{
     CMD_CLEAR, CMD_CLOSE, CMD_READ, CMD_SEND, TERMINAL_EXIT, TERMINAL_INPUT, TERMINAL_SPAWN,
 };
 use egui_pop_editors::terminal::{
-    Cell, Console, InputKind, Sink, Spawn, Terminal, TerminalPlugin, TerminalSignal,
-    TerminalSource, TerminalState,
+    CONSOLE_PENDING, Cell, Console, InputKind, Sink, Spawn, Terminal, TerminalPlugin,
+    TerminalSignal, TerminalSource, TerminalState,
 };
 use egui_pop_model::commands::Origin;
 use egui_pop_model::ids::PluginId;
@@ -365,4 +365,30 @@ fn a_program_runs_in_a_pseudo_terminal_and_exits() {
     }
     assert_eq!(t.exit_code(), Some(3), "{}", t.text());
     assert!(t.text().contains("hello"), "{}", t.text());
+}
+
+#[test]
+fn a_console_whose_terminal_is_not_drawn_keeps_its_latest_output_only() {
+    // No terminal started it (its host never drew it); a worker writes
+    // on: about twice what it keeps.
+    let log = Console::new();
+    let line = "x".repeat(99);
+    let writer = log.clone();
+    let l = line.clone();
+    std::thread::spawn(move || {
+        for _ in 0..20_000 {
+            writer.line(&l);
+        }
+    })
+    .join()
+    .unwrap();
+    // Each line is 101 bytes (`\r\n`); what went is counted.
+    assert!(log.waiting() <= CONSOLE_PENDING, "{}", log.waiting());
+    assert!(log.dropped() > 0);
+    assert_eq!(log.waiting() as u64 + log.dropped(), 20_000 * 101);
+    assert_eq!(log.dropped() % 101, 0, "dropped by whole lines");
+    // Started at last, the terminal shows the latest lines.
+    let term = TerminalState::new("log", log.clone());
+    term.spawn(None, "user").unwrap();
+    assert!(term.text().ends_with(&line));
 }
