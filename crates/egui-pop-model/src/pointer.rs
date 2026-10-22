@@ -8,10 +8,12 @@
 //! **profile** ([`Profile`], a `pointer-profile` document) is a set of
 //! those bindings for the default layer, the options it implies (the
 //! wheel over sliders, a double click on the image) and the modifiers
-//! egui's own scrolling follows. Five ship with the library
-//! ([`builtin`]): darktable, Adobe, Document (the default), Blender /
-//! node editors and Trackpad. The user's overrides are ordinary
-//! user-layer bindings on top.
+//! egui's own scrolling follows. Six ship with the library
+//! ([`builtin`]): Document (the default), darktable, Photoshop,
+//! Lightroom Classic, Blender / node editors and Trackpad, each
+//! following the application it is named after. A retired id still
+//! names its successor ([`ALIASES`]: `adobe` is `lightroom`). The
+//! user's overrides are ordinary user-layer bindings on top.
 //!
 //! A canvas reads the resolved table, a [`PointerMap`], built from the
 //! keymap ([`PointerMap::from_keymap`]) or from a profile alone
@@ -346,6 +348,21 @@ impl Default for InputModifiers {
     }
 }
 
+/// The modifiers that scale a value's arrow-key steps, when they differ
+/// from its drag's (`gesture.value.fine` and `gesture.value.coarse`),
+/// as chords' modifiers (`Alt`, `Shift`; empty: the drag's). Lightroom
+/// Classic, for one, makes a Shift drag finer but Shift with the arrows
+/// coarser. Profiles bind pointer gestures only: this is data the
+/// slider reads, not a keymap binding.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ValueKeys {
+    /// Held with the arrows: ten times finer.
+    pub fine: String,
+    /// Held with the arrows: ten times coarser.
+    pub coarse: String,
+}
+
 /// A pointer profile, as shipped or saved: the `pointer-profile`
 /// document.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -360,6 +377,8 @@ pub struct Profile {
     pub options: Options,
     #[serde(default)]
     pub input: InputModifiers,
+    #[serde(default)]
+    pub value_keys: ValueKeys,
     /// Default-layer bindings, as in a keymap document.
     #[serde(default)]
     pub bindings: Vec<DocBinding>,
@@ -375,10 +394,11 @@ pub fn parse_profile(text: &str) -> Result<Profile, DocError> {
     schema().load::<Profile>(text).map(|l| l.value)
 }
 
-const SHIPPED: [&str; 5] = [
+const SHIPPED: [&str; 6] = [
     include_str!("../profiles/document.json"),
     include_str!("../profiles/darktable.json"),
-    include_str!("../profiles/adobe.json"),
+    include_str!("../profiles/photoshop.json"),
+    include_str!("../profiles/lightroom.json"),
     include_str!("../profiles/blender.json"),
     include_str!("../profiles/trackpad.json"),
 ];
@@ -395,9 +415,43 @@ pub fn builtin() -> &'static [Profile] {
     &BUILTIN
 }
 
-/// A shipped profile by id.
+/// Retired profile ids and the shipped profile each now names: `adobe`
+/// was split into `photoshop` and `lightroom` (2026-10-22) and is read
+/// as `lightroom`, the closer of the two for a photo editor. Aliases are
+/// accepted wherever an id is, and listed nowhere ([`ids`]).
+pub const ALIASES: &[(&str, &str)] = &[("adobe", "lightroom")];
+
+/// The id a profile id stands for: itself, or the profile an alias
+/// names.
+pub fn canonical_id(id: &str) -> &str {
+    ALIASES
+        .iter()
+        .find(|(alias, _)| *alias == id)
+        .map_or(id, |(_, to)| to)
+}
+
+/// A shipped profile by id (an alias gives the profile it names).
 pub fn profile(id: &str) -> Option<&'static Profile> {
+    let id = canonical_id(id);
     builtin().iter().find(|p| p.id == id)
+}
+
+/// The `settings` document's migration from version 1: a saved profile
+/// id that is now an alias becomes the profile it names.
+pub(crate) fn settings_profile_aliases(
+    mut json: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    if let Some(v) = json
+        .get_mut("values")
+        .and_then(|values| values.get_mut("settings/input.pointer_profile"))
+        && let Some(id) = v.as_str()
+    {
+        let to = canonical_id(id);
+        if to != id {
+            *v = serde_json::Value::String(to.into());
+        }
+    }
+    Ok(json)
 }
 
 /// The default profile ([`DEFAULT_PROFILE`]).
@@ -432,6 +486,8 @@ pub struct PointerMap {
     pub profile: String,
     pub options: Options,
     pub input: InputModifiers,
+    /// The modifiers of a value's arrow-key steps, when not its drag's.
+    pub value_keys: ValueKeys,
     pub wheel_device: WheelDevice,
     pub bindings: Vec<PointerBinding>,
 }
@@ -475,6 +531,7 @@ impl PointerMap {
             profile: profile.id.clone(),
             options: profile.options,
             input: profile.input.clone(),
+            value_keys: profile.value_keys.clone(),
             wheel_device: WheelDevice::Auto,
             bindings,
         }

@@ -983,18 +983,21 @@ fn a_panel_redrawn_while_typing_keeps_the_entry_open_and_a_real_blur_commits() {
     assert_ne!(h.ctx.memory(|m| m.focused()), Some(edit));
 }
 
+fn under_profile(id: &str) -> Harness<'static, f64> {
+    let h = slider();
+    let p = egui_pop_model::pointer::profile(id).unwrap();
+    egui_pop_core::pointer::set_map(&h.ctx, egui_pop_model::pointer::PointerMap::from_profile(p));
+    h
+}
+
 #[test]
-fn under_adobes_profile_shift_is_coarser_and_alt_finer_with_the_arrows() {
-    let mut h = slider();
-    let adobe = egui_pop_model::pointer::profile("adobe").unwrap();
-    egui_pop_core::pointer::set_map(
-        &h.ctx,
-        egui_pop_model::pointer::PointerMap::from_profile(adobe),
-    );
+fn under_photoshops_profile_shift_is_coarser_and_alt_finer_with_the_arrows() {
+    let mut h = under_profile("photoshop");
     h.run();
     let g = egui_pop_core::slider::gestures(&h.ctx);
     assert_eq!(g.fine, Modifiers::ALT);
     assert_eq!(g.coarse, Modifiers::SHIFT);
+    assert_eq!((g.key_fine, g.key_coarse), (g.fine, g.coarse));
     h.get_by_label("Exposure").click();
     h.run();
     h.key_press_modifiers(Modifiers::SHIFT, Key::ArrowRight);
@@ -1007,6 +1010,43 @@ fn under_adobes_profile_shift_is_coarser_and_alt_finer_with_the_arrows() {
     h.key_press_modifiers(Modifiers::COMMAND, Key::ArrowRight);
     h.run();
     assert!((ev(&h) - 0.109).abs() < 1e-9, "Ctrl: one step, {}", ev(&h));
+}
+
+#[test]
+fn under_lightrooms_profile_a_shift_drag_is_finer_and_shift_arrows_coarser() {
+    let mut h = under_profile("lightroom");
+    h.run();
+    let g = egui_pop_core::slider::gestures(&h.ctx);
+    assert_eq!(g.fine, Modifiers::SHIFT);
+    assert_eq!(g.coarse, Modifiers::NONE);
+    assert_eq!(g.key_fine, Modifiers::ALT);
+    assert_eq!(g.key_coarse, Modifiers::SHIFT);
+    // The arrows: Shift larger, Alt smaller.
+    h.get_by_label("Exposure").click();
+    h.run();
+    h.key_press_modifiers(Modifiers::SHIFT, Key::ArrowRight);
+    h.run();
+    assert!(
+        (ev(&h) - 0.1).abs() < 1e-9,
+        "Shift arrow: coarse, {}",
+        ev(&h)
+    );
+    h.key_press_modifiers(Modifiers::ALT, Key::ArrowLeft);
+    h.run();
+    assert!(
+        (ev(&h) - 0.099).abs() < 1e-9,
+        "Alt arrow: finer, {}",
+        ev(&h)
+    );
+    // A Shift drag of a quarter bar moves ten times less than a plain
+    // one (a quarter of 4 EV).
+    let start = ev(&h);
+    let bar = h.get_by_label("Exposure").rect();
+    h.event(Event::ModifiersChanged(Modifiers::SHIFT));
+    drag(&mut h, bar.center(), bar.width() / 4.0, Modifiers::SHIFT);
+    h.event(Event::ModifiersChanged(Modifiers::NONE));
+    let moved = ev(&h) - start;
+    assert!((moved - 0.1).abs() < 0.02, "Shift drag: finer, {moved}");
 }
 
 #[test]

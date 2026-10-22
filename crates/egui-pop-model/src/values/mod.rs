@@ -429,9 +429,12 @@ pub struct SettingsDoc {
     pub values: BTreeMap<String, Json>,
 }
 
-/// The `settings` document's schema.
+/// The `settings` document's schema. Version 2 reads a retired pointer
+/// profile id as the profile it names (`adobe` as `lightroom`).
 pub fn settings_schema() -> Schema {
-    Schema::new("settings", 1).migration(0, same)
+    Schema::new("settings", 2)
+        .migration(0, same)
+        .migration(1, crate::pointer::settings_profile_aliases)
 }
 
 impl Store {

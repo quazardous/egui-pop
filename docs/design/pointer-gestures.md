@@ -122,7 +122,7 @@ section 4.
 |---|---|---|---|---|---|---|---|---|
 | Wheel on the image | zooms at the pointer, soft stops at fit/100 % [DT-zoom] | — (zoom is click/Space) [LR1] | zooms in steps (preference) [C1a] | scrolls vertically; zooms with "Zoom with Scroll Wheel" [PS1] | scrolls vertically [GI1] | zooms at the pointer [KR2] | scrolls vertically [AF1] | zooms at the pointer (s) [RT3] |
 | Shift + wheel | on a mask: feather / hardness / compression [DT-masks] | — | — | — | scrolls horizontally [GI1] | — | scrolls horizontally [AF1] | — |
-| Ctrl + wheel | zooms past the soft stops [DT-zoom]; on a mask: opacity | — | — | scrolls horizontally (s) [PS2] | zooms [GI2] | — | rotates the canvas (preference) [AF3] | resizes a colour picker (s) [RT3] |
+| Ctrl + wheel | zooms past the soft stops [DT-zoom]; on a mask: opacity | zooms (s) [LR6] | — | scrolls horizontally (s) [PS2] | zooms [GI2] | — | rotates the canvas (preference) [AF3] | resizes a colour picker (s) [RT3] |
 | Alt + wheel | (colour zones: next channel) | — | scrolls the tool panel when wheel-on-slider is on [C1b] | zooms (s) [PS2] | tool opacity (Ctrl+Alt: size…) [GI3] | — | zooms [AF2] | — |
 | Middle drag | — | — | — | — | pans [GI4] | pans; Ctrl: zoom; Shift: rotate [KR1] | — | — |
 | Middle click | cycles 100 % → 200 % → fit at the pointer [DT-mid] | — | — | — | (GTK: paste) | — | — | — |
@@ -533,6 +533,10 @@ widgets.
 
 #### B. Adobe (Lightroom Classic, Photoshop, Capture One-ish)
 
+The proposal, as first made; since 2026-10-22 it ships as two profiles,
+Photoshop and Lightroom Classic, each following its application (the
+notes after the table).
+
 | Trigger | Image viewport | Node graph | Curves | Minimap / navigator | Sliders / values | Lists / grids |
 |---|---|---|---|---|---|---|
 | Wheel | pan y ("Zoom with scroll wheel" toggles to zoom) | pan y | — | — | panel.scroll | scroll |
@@ -551,31 +555,60 @@ widgets.
 | Secondary click | menu | menu | menu | — | menu | menu |
 | Two-finger scroll / pinch | pan / zoom | pan / zoom | — | pan / zoom | panel.scroll | scroll |
 
-Profile notes (2026-10-22):
+Photoshop and Lightroom Classic (2026-10-22). A profile follows the
+application it is named after; where that application has no
+equivalent, the gesture is left unbound rather than invented.
 
-- **Coarse and fine follow Adobe.** Shift is ten times coarser and
-  Alt (Option) ten times finer on a value, for a drag, the arrow keys
-  and the wheel alike; Ctrl has no value gesture. Photoshop's scrubby
-  sliders move ten times faster with Shift [PS5] and ten times slower
-  with Alt (s) [PS4] [PS6]; Photoshop's pop-up sliders step by 10 %
-  with Shift and the arrow keys [PS5]; Lightroom Classic's Develop
-  sliders step in larger increments with Shift and the arrow keys
-  [LR3], and Alt on its colour wheels is a fine adjust mode [LR5]. The
-  slider reads its arrow keys' modifiers from the same `fine` and
-  `coarse` gestures as its drag, so Shift with the arrows is coarse
-  without a binding of its own (profiles carry pointer gestures only,
-  question 14). Two Lightroom habits do not fit one modifier pair and
-  are left out: a Shift drag on a Develop slider is reported finer
-  (s) [LR4], and Alt while dragging a Basic panel slider shows the
-  clipped areas [LR5]. Alt with a drag comes with the shortcuts
-  editor's Linux warning (Xfce and KWin take it).
-- **A click toggles fit and 100 %**, as in Lightroom [LR1], so a
-  double click is first two clicks that toggle twice and end where
-  they started; the double click option (`input.image_double_click`,
-  fit here) then applies on top, so from fit a double click changes
-  nothing. "A double click fits" is not a gesture to rely on under
-  this profile: an application that needs it picks another profile or
-  rebinds the click.
+**Photoshop** (`photoshop`):
+
+- Image: the wheel scrolls vertically [PS1], Ctrl + wheel sideways and
+  Alt + wheel zooms (s) [PS2]; Shift + wheel is not documented and
+  left unbound. A primary drag pans, as the Hand tool [PS1]. A click
+  does nothing: only the Zoom tool zooms on a click [PS1], and an
+  image viewer is under the Hand tool. A double click on the image
+  does nothing either (`image_double_click: nothing`); Photoshop's
+  double clicks that fit or show 100 % are on the Hand and Zoom tools'
+  icons [PS1]. The middle button is not documented: unbound. Two
+  fingers pan and a pinch zooms [PS1].
+- Values: Shift + drag ten times coarser [PS5], Alt (Option) + drag ten
+  times finer (s) [PS4] [PS6], Ctrl nothing. The arrows follow the
+  drag: Shift with them is coarser, as Shift with the Up and Down Arrow
+  keys steps a pop-up slider by 10 % [PS5]. Alt with a drag comes with
+  the shortcuts editor's Linux warning (Xfce and KWin take it).
+
+**Lightroom Classic** (`lightroom`):
+
+- Image: a click toggles the two zoom levels, fit and 1:1 [LR1]; a
+  primary drag pans, as the Hand tool in the Loupe [LR1]. A double
+  click goes from the Loupe back to the Grid (s) [LR2]: the profile
+  leaves the view (`image_double_click: leave`), after the double
+  click's two clicks have toggled the zoom twice. The plain wheel
+  neither zooms nor pans the Loupe [LR1], and Ctrl + wheel zooms (s)
+  [LR6]; Shift and Alt with the wheel and the middle button are not
+  documented: unbound. Lightroom's Space toggles the zoom, and held
+  with a press zooms in to pan [LR1]; egui-pop's Space + drag pans in
+  every profile, which comes close. Shift + drag (scrubby zoom) and
+  Ctrl + drag (zoom to a box) in Develop (s) [LR2] have no gesture
+  command yet: unbound.
+- Values: a Shift drag on a Develop slider is slower, for fine tuning
+  (s) [LR4]; no modifier makes a drag coarser; Alt while dragging a
+  Basic panel slider shows the clipped areas [LR5], an application's
+  matter, so Alt + drag is unbound. The arrows take their own
+  modifiers (`value_keys`): Shift with them gives larger increments
+  [LR3], Alt smaller ones (s) [LR4]. Alt on the colour wheels is a
+  fine adjust mode [LR5], which a wheel widget of an application's
+  own may follow.
+
+Neither application has a node graph: both profiles take Photoshop's
+canvas wheel there (the wheel pans, Ctrl + wheel pans sideways, Alt +
+wheel zooms; two fingers and a pinch as everywhere), and Space + drag
+pans it.
+
+The id `adobe`, the single profile shipped before 2026-10-22, is an
+alias of `lightroom`, the closer of the two for a photo editor: an
+application or a saved setting naming it gets Lightroom Classic
+(`pointer::ALIASES`; the `settings` document's version 2 rewrites it).
+No picker lists it.
 
 #### C. Document (GIMP, Inkscape, Figma, the web)
 
@@ -741,8 +774,9 @@ snapshots (they refuse automated fetches); the URLs are the originals.
 - [LR1] <https://helpx.adobe.com/lightroom-classic/help/view-photos.html>
 - [LR2] (s) <https://jkost.com/blog/2020/07/zooming-in-lightroom-classic.html>
 - [LR3] <https://helpx.adobe.com/lightroom-classic/help/keyboard-shortcuts.html> (Develop module: "Increase/decrease selected slider in larger increments: Shift + Up Arrow / Shift + Down Arrow")
-- [LR4] (s) <https://community.adobe.com/t5/lightroom-classic-discussions/sliders-in-the-develop-module/m-p/9359357>
+- [LR4] (s) <https://community.adobe.com/t5/lightroom-classic-discussions/sliders-in-the-develop-module/m-p/9359357> (a Community Expert: Shift while dragging "will slow the slider down"; with the pointer over a slider, Shift with the Up and Down Arrow keys increases the increments, Alt or Option makes them smaller)
 - [LR5] <https://helpx.adobe.com/lightroom-classic/help/image-tone-color.html> (colour wheels: "Alt (Windows)/Option (macOS): Fine Adjust mode"; Basic panel: Alt or Option while moving a slider shows the clipped areas)
+- [LR6] (s) <https://community.adobe.com/t5/lightroom-classic-discussions/zoom-with-mouse-scroll-wheel-windows-11-lr-classic-13-3-1/m-p/15061527> (a Community Expert: zoom in the Grid and the Loupe by holding Ctrl with the mouse wheel)
 - [C1a] <https://support.captureone.com/hc/en-us/articles/360002473237>
 - [C1b] <https://support.captureone.com/hc/en-us/articles/360002484097>
 - [C1c] (s) <https://support.captureone.com/hc/es/community/posts/4416440456721-Zoom-with-trackpad>
@@ -847,12 +881,11 @@ later is an edit there, not in code.
   Shift coarser in Document, darktable and Trackpad; Shift finer and
   Ctrl coarser in Blender / node editors. Document keeps the earlier
   default rather than GIMP's Shift-finer cell. Amended 2026-10-22: a
-  profile follows the application it is named after, so Adobe's is
-  Alt finer and Shift coarser, with no Ctrl value gesture (Adobe's
-  profile notes, section 6.2 B); it first shipped swapped.
+  profile follows the application it is named after, and the Adobe
+  profile is split in two (see the decisions of 2026-10-22).
 - **Question 11 (Alt):** used only where the source applications use
-  it (Adobe's Alt + wheel zoom, and Alt finer on values since
-  2026-10-22) or egui-pop already did (Alt + wheel
+  it (Photoshop's Alt + wheel zoom and Alt finer on values, Lightroom's
+  Alt finer with the arrows) or egui-pop already did (Alt + wheel
   steps a slider without the focus, in Document and darktable); the
   shortcuts editor warns, on Linux, of a gesture bound with Alt and a
   drag or the wheel.
@@ -875,3 +908,16 @@ changes each canvas's on its own; a gesture keeps several triggers
 are settings whose `profile` choice takes the profile's default.
 Decision 3 is the dialog asking to keep or drop the user's changes
 after a change of profile; they stay until it is answered.
+
+## Decisions (maintainer, 2026-10-22)
+
+- **Two Adobe profiles.** The Adobe profile is replaced by Photoshop
+  (`photoshop`) and Lightroom Classic (`lightroom`), each following its
+  application, with sources (section 6.2 B). Where the application has
+  no equivalent, the gesture is left unbound. Six profiles ship.
+- **The old id.** `adobe` stays accepted as an alias of `lightroom`, the
+  closest for a photo editor, and is listed in no picker.
+- **The arrows' own modifiers.** A profile may give a value's arrow keys
+  modifiers other than its drag's (`value_keys`): Lightroom Classic's
+  Shift drag is finer while its Shift with the arrows is coarser. It is
+  profile data the slider reads, not a binding (question 14 stands).

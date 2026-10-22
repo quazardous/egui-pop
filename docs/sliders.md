@@ -29,7 +29,7 @@ fn exposure(ui: &mut egui::Ui, ev: &mut f64, on: &mut bool) {
 | Gesture | What it does |
 |---|---|
 | Drag anywhere on the bar | The value follows the pointer's motion over the soft range; a click never makes it jump. One gesture: one undo step when bound to the store |
-| Ctrl (Cmd) / Shift held | Ten times finer / coarser, for drags, arrows and the wheel (the pointer profile's modifiers; Blender's swaps them, Adobe's is Alt finer and Shift coarser) |
+| Ctrl (Cmd) / Shift held | Ten times finer / coarser, for drags, arrows and the wheel (the pointer profile's modifiers: Blender's swaps them, Photoshop's is Alt finer and Shift coarser; Lightroom Classic's Shift drag is finer while its arrows are Alt finer and Shift coarser) |
 | Escape during a drag | Puts the value back, with no trace |
 | Arrows, Page Up, Page Down | One step, one coarse step (when focused) |
 | Home, End | The soft range's ends |
