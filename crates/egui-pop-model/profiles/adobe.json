@@ -3,7 +3,7 @@
   "version": 1,
   "id": "adobe",
   "title": "Adobe",
-  "description": "The wheel scrolls, Ctrl or Alt with the wheel zooms, a click toggles fit and 100 %, as in Lightroom and Photoshop.",
+  "description": "The wheel scrolls, Ctrl or Alt with the wheel zooms, a click toggles fit and 100 %, Shift steps a value coarser and Alt finer, as in Lightroom and Photoshop.",
   "options": {
     "slider_wheel": "guarded",
     "image_double_click": "fit"
@@ -110,12 +110,12 @@
       "scope": "surface:canvas.graph"
     },
     {
-      "keys": "Shift+PrimaryDrag",
+      "keys": "Alt+PrimaryDrag",
       "command": "gesture.value.fine",
       "scope": "surface:widget.value"
     },
     {
-      "keys": "Ctrl+PrimaryDrag",
+      "keys": "Shift+PrimaryDrag",
       "command": "gesture.value.coarse",
       "scope": "surface:widget.value"
     }

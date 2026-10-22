@@ -60,11 +60,16 @@ scrolling follows (`egui::InputOptions`), so plain scroll areas agree.
 | Wheel on the graph | pans | zooms | pans | zooms | pans |
 | Wheel over a slider | scrolls the panel | changes the value | scrolls the panel | scrolls the panel | scrolls the panel |
 | Steps a slider without the focus | Alt + wheel | the wheel; Ctrl+Alt + wheel scrolls the panel | — | Ctrl + wheel | Ctrl + wheel |
-| Finer / coarser | Ctrl / Shift | Ctrl / Shift | Shift / Ctrl | Shift / Ctrl | Ctrl / Shift |
+| Finer / coarser | Ctrl / Shift | Ctrl / Shift | Alt / Shift | Shift / Ctrl | Ctrl / Shift |
 
 In every profile a drag with Space held pans the image and the graph,
 Escape cancels a drag, a primary drag on a handle moves it and the wheel
-over a handle adjusts it. "Leaves the view" is a signal
+over a handle adjusts it. The finer and coarser modifiers apply to a
+slider's drag, its arrow keys and its wheel alike: under Adobe's
+profile Shift with the arrows takes coarse steps, as in Photoshop and
+Lightroom. Adobe's click on the image toggles fit and 100 %, as in
+Lightroom, so a double click toggles twice before the double click
+option applies: from fit it changes nothing. "Leaves the view" is a signal
 (`Signal::Leave`): the application decides what it means (darktable
 goes back to the lighttable).
 

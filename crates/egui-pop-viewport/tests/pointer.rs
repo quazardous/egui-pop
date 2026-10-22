@@ -320,6 +320,15 @@ fn adobes_click_toggles_fit_and_100_percent() {
     h.hover_at(c);
     click(&mut h, c, PointerButton::Primary);
     assert_eq!(h.state().view.zoom, Zoom::Px(1.0));
+    click(&mut h, c, PointerButton::Primary);
+    assert!(h.state().view.is_fit(), "{:?}", h.state().view);
+    // A double click is two clicks that toggle twice, as in Lightroom:
+    // from fit it ends at fit, the profile's double click option (fit)
+    // on top.
+    egui_pop_test::double_click_at(&mut h, c);
+    h.run();
+    assert!(h.state().view.is_fit(), "{:?}", h.state().view);
+    assert!(!h.state().signals.contains(&Signal::Leave));
 }
 
 #[test]

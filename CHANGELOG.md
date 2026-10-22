@@ -305,6 +305,15 @@ publishes.
   the English and French catalogues. `Shift+F11` now toggles zen mode
   (Sublime Text's distraction free key; `docs/workbench.md` shows how an
   application binds its own, such as VS Code's `Ctrl+K Z`).
+- Adobe's pointer profile takes Adobe's fine and coarse modifiers
+  (egui-pop-model): Shift makes a value ten times coarser and Alt
+  (Option) ten times finer, for a slider's drag, its arrow keys and
+  its wheel, as Photoshop's scrubby sliders and the arrow keys of
+  Photoshop and Lightroom Classic do; Ctrl no longer changes a value's
+  step. The profile shipped them swapped (Shift finer, Ctrl coarser).
+  The design note cites Adobe's help pages and says why, under this
+  profile, a double click on the image toggles fit and 100 % twice
+  (#57).
 
 ## 0.2.0 (2026-10-21)
 
