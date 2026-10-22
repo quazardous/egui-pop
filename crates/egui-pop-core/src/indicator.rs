@@ -86,7 +86,7 @@ use egui::{
 use egui_pop_model::ids::CommandId;
 use serde::Serialize;
 
-use crate::icon::Icon;
+use crate::icon::{Icon, IconRef};
 pub use crate::kit::Tone;
 use crate::kit::{BoxStyle, Corners, Glyph, Kit, KitCx, Part, State, paint_ring};
 use crate::motion;
@@ -626,17 +626,26 @@ impl Indicator {
         Indicator::new(Kind::Swatch(swatch))
     }
 
-    /// A built-in icon as a mark.
-    pub fn icon(icon: Icon) -> Indicator {
-        Indicator::new(Kind::Icon { icon, toggle: None })
+    /// An icon as a mark, by value or by name (`"visible"`,
+    /// `"phosphor:wifi-high"`; an unknown name is reported and drawn as
+    /// the placeholder).
+    pub fn icon(icon: impl Into<IconRef>) -> Indicator {
+        Indicator::new(Kind::Icon {
+            icon: icon.into().or_placeholder("indicator"),
+            toggle: None,
+        })
     }
 
-    /// One of two icons by a state (eye and eye-off, lock and unlock).
-    /// Made interactive, it is a check box.
-    pub fn toggle(on: bool, when_on: Icon, when_off: Icon) -> Indicator {
+    /// One of two icons by a state (eye and eye-off, lock and unlock),
+    /// each by value or by name. Made interactive, it is a check box.
+    pub fn toggle(
+        on: bool,
+        when_on: impl Into<IconRef>,
+        when_off: impl Into<IconRef>,
+    ) -> Indicator {
         Indicator::new(Kind::Icon {
-            icon: when_on,
-            toggle: Some((on, when_off)),
+            icon: when_on.into().or_placeholder("indicator"),
+            toggle: Some((on, when_off.into().or_placeholder("indicator"))),
         })
     }
 
