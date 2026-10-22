@@ -277,6 +277,51 @@ state of the session, not of the layout: it is never saved, and the
 next start shows the whole workbench. Combined with full screen, it
 leaves the content alone on the screen.
 
+## The layout controls
+
+VS Code's layout controls, the rule here (`egui_pop::api::layout_controls`):
+
+- **The area toggles.** `workbench.toggle.primarySideBar` (`Ctrl+B`),
+  `workbench.toggle.panel` (`Ctrl+J`) and
+  `workbench.toggle.secondarySideBar` (`Ctrl+Alt+B`) fold a shown area
+  to its strip, or show it again, through the `workbench.fold` step: the
+  area keeps its panels, its tabs and its size. An area with nothing
+  left to show gets its first closed panel back (`workbench.show`). The
+  primary side bar is the start side area, the panel the bottom one,
+  the secondary side bar the end side one. They are in the View menu,
+  ticked while their area shows; the context keys `sideBarVisible`,
+  `panelVisible` and `auxiliaryBarVisible` say so. The strips plugin's
+  own fold command (`view.side_bar.toggle`) has no key: `Ctrl+B` is
+  VS Code's.
+- **The options**, settings each change of which is one undo step: the
+  primary side bar on the left or the right
+  (`workbench.side_bar_position`, `left` by default; the secondary one
+  lies across from it, the activity bar beside the primary one; the
+  `workbench.layout.sideBarPosition` command), and the bottom panel
+  under the editors or across the full width
+  (`workbench.panel_alignment`, `center` by default as VS Code's; the
+  `workbench.layout.panelAlignment` command).
+- **The layout menu** (`layout_controls::MENU_LAYOUT`, View > Customize
+  layout, the `workbench.layout.customize` command): the area toggles;
+  the arrangements, the application's templates and the saved ones, the
+  current one ticked; "Save the current arrangement as…", which asks for
+  a name in a dialog; and the options.
+- **In the title bar**, when the application asks for them:
+
+  ```rust,ignore
+  App::builder().plugin(FramePlugin::own().layout_controls(true))
+  ```
+
+  A "Customize layout" button opening that menu, then a toggle per
+  area, at the end of the bar before the window's buttons (the
+  `egui_pop.frame.layout` block of the `app.caption` zone). Each toggle's
+  icon is filled while its area shows and outlined while it is folded or
+  hidden (`layout-left`, `layout-bottom`, `layout-right` and their
+  `-off` twins), the side bars' icons following their side; its tooltip
+  gives its key, and assistive technology hears it as a toggle. They are
+  drawn by the kit's `icon-button`. `layout_controls::show` draws the
+  same controls anywhere else (the gallery's Layout controls page).
+
 ## Palettes and toolboxes: never modal
 
 Decided on 2026-10-13: a toolbox, a colour palette or a navigator
@@ -543,7 +588,9 @@ The bar starts with the `CAPTION_START` zone, whose default block
 and the application's name; an application puts its logo there by
 replacing that block, and keeps the menu with `frame::menu_button`. The
 bar itself (`frame::BLOCK_TITLE`) keeps following the setting. The
-`CAPTION` zone holds the application's buttons, before the window's.
+`CAPTION` zone holds the application's buttons, before the window's;
+`FramePlugin::layout_controls(true)` puts VS Code's layout controls
+there, nearest the window's buttons (see "The layout controls").
 
 **In full screen** (`F11`) the bar stays, with both zones: an
 application keeps its menus, status items and logo there. Only what a
