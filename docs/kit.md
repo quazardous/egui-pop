@@ -63,6 +63,10 @@ does not change with the state.
 | `align` | | where the label goes: `start`, `centre` (on the part's centre, moved into its room when it does not fit) or `end` |
 | `width` | | the component's width, when it has a fixed one |
 | `font-size` | | the size of its text, in points (an alias of a `font.*` size); the widget's own size when not given |
+| `margin` | | on `scroll-bar`: between the bar and its scroll area's edge |
+| `placement` | | on `scroll-bar`: `over` the content (floating, the content runs under it) or `beside` it (taking room) |
+| `visibility` | | on `scroll-bar`: `always` (at rest too), on `hover` of the scroll area, or while it `scroll`s |
+| `track-fill` | | on `scroll-bar`: the track behind the thumb (transparent: none) |
 | `shadow-offset-x`, `shadow-offset-y`, `shadow-blur`, `shadow-spread`, `shadow-color` | | the shadow the part casts (egui's `Shadow`; none when not given): usually aliases of a `shadow.*` group; on `side-area`, cast while it lies over the centre, `shadow-offset-x` towards the centre |
 
 States are always the same six. `rest` gives every term (the contract
@@ -198,6 +202,12 @@ dropped in silence. Replacing one means an egui-pop-drawn widget.
   out, takes its clicks and draws its label with a transparent frame; the
   kit paints the box into a slot reserved under it. `command-button`,
   `command-palette-row` and `empty-state` are painted the same way.
+- **`scroll-bar` through egui's `ScrollStyle`.** Its `width`,
+  `margin`, `placement`, `visibility` and whether it has a track are
+  written into egui's style with the theme, so every scroll area
+  follows them, an application's own included; its thumb's colours
+  and corners, which egui takes from the widget states, are the kit's
+  in a `ScrollBar` scope ([below](#scroll-bars)).
 - **`side-area`.** egui draws the separator line, with its
   non-interactive stroke: `border-width` 0 hides it; another width than
   the button's, or a colour other than `border.default`, is reported.
@@ -494,6 +504,9 @@ compiled at install.
 - **egui's widgets in a scope** (`combo-box`, `toggle-button`, and
   `button` and `field` by tone), handler `scoped`,
   [below](#eguis-widgets-in-a-scope).
+- **Scroll bars** (`scroll-bar`), handler `scoped`: egui's
+  `ScrollStyle` for every scroll area, the thumb's colours in a scope,
+  [below](#scroll-bars).
 - **Application icons** (`icon_set`, feature `svg`): SVG files
   registered by name, single-colour (a white mask tinted at draw) or
   full-colour, rasterised at install for the theme's icon sizes and the
@@ -603,6 +616,7 @@ fn view(ui: &mut egui_pop::egui::Ui, fit: &mut bool, mode: &mut usize, name: &mu
 | `Button` | `button`, by tone | `Button`, and what egui draws as one (`DragValue`, a menu button, a `CollapsingHeader`'s header) | `rest`, `hover`, `active`, `selected` are egui's inactive, hovered, active and open states; `UiPop::button_tone` is this scope |
 | `ComboBox` | `combo-box` (based on `button`) | `ComboBox`'s box (`UiPop::combo_box`) | the same; `selected` while its list is open |
 | `ToggleButton` | `toggle-button` (based on `button`) | `Button::selected`, egui's `selectable_label` | the same, and `selected`'s `fill` and `text` are egui's selection colours while on |
+| `ScrollBar` | `scroll-bar` | `ScrollArea`'s bars (`UiPop::scroll_area`) | the thumb's `rest`, `hover` and `active` fills are egui's inactive, hovered and active foreground colours, its `radius` their corners, `track-fill` egui's `extreme_bg_color`; the content keeps the style outside the scope ([below](#scroll-bars)) |
 | `Field` | `field`, by tone | `TextEdit` | `rest`'s fill is the background, `rest` and `hover` the outline, `focus` the outline with the keyboard (egui's selection stroke); the tones (`accent` changed, `warning` required, `danger` refused, `info` being checked, `muted` read-only) colour the edge |
 
 - Every egui widget already follows `button` (and text fields' background
@@ -620,19 +634,91 @@ fn view(ui: &mut egui_pop::egui::Ui, fit: &mut bool, mode: &mut usize, name: &mu
   `button`, reported there), a `toggle-button.selected` outline or radius
   of its own (egui keeps the state's outline on a selected button), a
   ring or a fill on `field.hover` or `field.focus` other than its
-  resting one, a `shape` other than `scoped` on `combo-box` or
-  `toggle-button`.
+  resting one, a `shape` other than `scoped` on `combo-box`,
+  `toggle-button` or `scroll-bar`.
 - egui-pop's own combo boxes (settings, forms, the file chooser's
   filter, the theme editor, parameters) are shown with
   `UiPop::combo_box`, and the navigator's zoom buttons (fit, 100 %)
   with a `ToggleButton` scope.
 - Not given a component of their own: `Slider` (egui-pop's own slider
-  is drawn by the kit), `CollapsingHeader`, `ScrollArea`'s bars,
-  `DragValue`, egui's menus. They follow `button` globally, or any
+  is drawn by the kit), `CollapsingHeader`, `DragValue`, egui's menus. They follow `button` globally, or any
   scope they are put in (a `DragValue` in a `Field` scope does not
   become a field: egui draws it as a button).
 - The gallery's `scoped` page shows them; its `scoped-kit-restyled`
   snapshot restyles them with data only.
+
+### Scroll bars
+
+egui draws every scroll area's bars. The kit's `scroll-bar` reaches
+them two ways:
+
+- **With the theme, in every scroll area.** `width`, `margin`,
+  `placement` and `visibility`, and whether there is a track, become
+  egui's `ScrollStyle` when the theme is installed
+  (`ScrollBarKit::style`, `Kit::scroll`), and in a scoped theme. An
+  application's own `egui::ScrollArea` follows them with nothing to
+  change.
+- **In a `ScrollBar` scope, the colours.** egui draws the thumb in the
+  widget states' foreground colours and corners, which every button
+  shares, and the track in `extreme_bg_color`, which text fields and
+  canvases share. `UiPop::scroll_area` shows a scroll area in a scope
+  where they are the thumb's `rest`, `hover` (under the pointer) and
+  `active` (dragged) fills, its `radius` and the `track-fill`; the
+  content is drawn in the style outside the scope.
+
+| Token | Meaning | Default (egui's own bars) |
+|---|---|---|
+| `scroll-bar.width` | the bar at its widest | 10 |
+| `scroll-bar.margin` | between the bar and the scroll area's edge | 0 |
+| `scroll-bar.placement` | `over`: floats over the content, which runs to the edge under it; `beside`: takes room, the content is narrower by the bar, its margin and egui's 4 point gap | `over` |
+| `scroll-bar.visibility` | `always`: at rest too, at full width; `hover`: while the pointer is over the scroll area, thin until it is over the bar; `scroll`: while scrolling | `hover` |
+| `scroll-bar.track-fill` | the track; transparent for none, in every scroll area | `{surface.sunken}` |
+| `scroll-bar.rest.fill`, `hover.fill`, `active.fill` | the thumb at rest, under the pointer, dragged | the button's text colours |
+| `scroll-bar.rest.radius` | the thumb's and track's corners; half the width or more rounds them fully | the button's |
+
+The defaults are egui's `ScrollStyle::floating()` with the button's
+colours, so the built-in themes look as egui does. A theme opts in with
+data only; tvty's bar (a 6 point thumb, fully rounded, 4 points from the
+edge, no track, over the content, shown at rest):
+
+```yaml
+$extends: "pop-dark"
+scroll-bar:
+  width: {$type: "dimension", $value: {value: 6, unit: "px"}}
+  margin: {$type: "dimension", $value: {value: 4, unit: "px"}}
+  placement: {$type: "string", $value: "over"}
+  visibility: {$type: "string", $value: "always"}
+  track-fill: {$type: "color", $value: "{transparent}"}
+  rest:
+    fill: {$type: "color", $value: "#4b4b4b"}
+    radius: {$type: "dimension", $value: {value: 999, unit: "px"}}
+  hover:
+    fill: {$type: "color", $value: "#5a5a5a"}
+  active:
+    fill: {$type: "color", $value: "#6a6a6a"}
+```
+
+```rust
+use egui_pop::core::ui::UiPop;
+
+fn tickets(ui: &mut egui_pop::egui::Ui, rows: &[String]) {
+    let area = egui_pop::egui::ScrollArea::vertical().auto_shrink(false);
+    ui.scroll_area(area, |ui| {
+        for row in rows {
+            ui.label(row);
+        }
+    });
+}
+```
+
+What egui cannot draw is in the kit's problems: a thumb whose colours
+or radius differ from the button's (egui's scroll areas outside a
+`ScrollBar` scope draw the button's), a track in another colour than
+`surface.sunken` outside a scope, `visibility: scroll` (egui 0.36 has no
+while-scrolling state: drawn as `hover`), and a bar `beside` the content
+not `always` visible (egui shows such a bar whenever the content
+overflows). The gallery's `scoped` page shows one, restyled in its
+`scoped-kit-restyled` snapshot.
 
 Known limits of this first step:
 
@@ -650,5 +736,5 @@ Known limits of this first step:
   them at compile time, user kits found in the config directory, a
   `check` command, the gallery previewing a kit.
 - egui's combo box's list frame (egui's popup) from a kit component;
-  more of egui's widgets in a scope (`Slider`, `CollapsingHeader`,
-  `ScrollArea`'s bars) when a kit needs them apart from `button`.
+  more of egui's widgets in a scope (`Slider`, `CollapsingHeader`)
+  when a kit needs them apart from `button`.

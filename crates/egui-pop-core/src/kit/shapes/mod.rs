@@ -51,6 +51,7 @@ pub(super) fn built_in(shapes: &mut Shapes) {
     shapes.insert("pill", "pill", Arc::new(pill::Pill));
     shapes.insert("radio", "box", Arc::new(cell::BoxCell));
     shapes.insert("radio", "pill", Arc::new(pill::Pill));
+    shapes.insert("scroll-bar", "scoped", Arc::new(scoped::Scoped));
     shapes.insert("selectable-row", "box", Arc::new(cell::BoxCell));
     shapes.insert("table-header-cell", "box", Arc::new(cell::BoxCell));
     shapes.insert("tag-chip", "box", Arc::new(cell::BoxCell));

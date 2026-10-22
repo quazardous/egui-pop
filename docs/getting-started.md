@@ -158,6 +158,7 @@ out.textures_delta.clear();
 | `button_tone(Tone, ..)` | egui's button in a tone of the kit's `button` |
 | `scoped(Stock, Tone, ..)` | egui's own widgets (a button on or off, a text field in a tone) drawn from a kit component in a scope ([kits](kit.md#eguis-widgets-in-a-scope)) |
 | `combo_box(combo, ..)` | egui's combo box with its box from the kit's `combo-box` |
+| `scroll_area(area, ..)` | egui's scroll area with its bars' colours from the kit's `scroll-bar` (their width, margin, placement and visibility come with the theme, in every scroll area) |
 
 ## Next
 

@@ -12,6 +12,21 @@ publishes.
 
 ### Added
 
+- A `scroll-bar` kit component (egui-pop-tokens, egui-pop-core): a
+  theme gives scroll bars a `width`, a `margin` to the edge, a
+  `placement` (`over` the content, floating, or `beside` it, taking
+  room), a `visibility` (`always`, on `hover`, while scrolling), a
+  `track-fill` (transparent for none), and the thumb's fill at rest,
+  under the pointer and dragged, and its radius. The terms become
+  egui's `ScrollStyle` with the theme (`Kit::scroll`,
+  `ScrollBarKit::style`), so every scroll area follows them, an
+  application's own and a scoped theme's included; the colours, which
+  egui shares with buttons, come in a `ScrollBar` scope
+  (`Stock::ScrollBar`, `UiPop::scroll_area`). The defaults are egui's
+  own floating bars: the built-in themes look as before. What egui
+  cannot draw is in the kit's problems. The theme editor lists the
+  tokens with the components', `docs/kit.md` gives a thin bar shown at
+  rest as an example, and the gallery's `scoped` page shows one.
 - A widget's own secondary button (egui-pop-core): a widget that needs
   the right click for something else claims the secondary click, the
   drag or both on its rect (`pointer::claim::claim_secondary` with a
