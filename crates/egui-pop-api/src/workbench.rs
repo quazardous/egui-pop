@@ -1166,9 +1166,10 @@ impl Workbench {
 ///
 /// Each window is a window of the application in full: `keys` dispatches
 /// its keys in its own context (its focus chain, `window` naming its
-/// panel), the `WINDOW_OVERLAYS` zone draws the dialogs opened from it
-/// over it, and a dialog open in another window blocks it
-/// (`overlay::block_window`).
+/// panel), the `WINDOW_OVERLAYS` zone draws the overlays opened from it
+/// over it (dialogs, the command palette, popup menus; the toasts while
+/// it is the active window), and a modal open in another window blocks
+/// it (`overlay::block_window`).
 pub(crate) fn windows(
     app: &AppHandle,
     ctx: &egui::Context,
@@ -1252,6 +1253,7 @@ pub(crate) fn windows(
             });
             if own_window {
                 app.show_zone(ui, &crate::zones::WINDOW_OVERLAYS);
+                crate::menus::draw_popup(&vctx, app);
             }
             if vctx.input(|i| i.viewport().close_requested()) {
                 // The step decides: the default docks the panel back.

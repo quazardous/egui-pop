@@ -360,6 +360,15 @@ publishes.
   takes any float-sampled format: `DeviceTile::texture(&device,
   texture)` is what it delivered. `source::Stats::snapshot` returns nine
   counters (`device` and `refused` added).
+- The command palette, popup menus and toasts open in the window in use
+  (egui-pop-api), as dialogs already did and as VS Code's auxiliary
+  windows do: in a detached panel's window, the palette and a menu
+  opened with `menus::popup_at` show over it (`menus::popup_window`,
+  `Palette::window` say where), and the toasts show in the active
+  window; each goes to the main window when its window closes. The
+  palette blocks the other windows while it is open, as a modal. Their
+  blocks move to the `WINDOW_OVERLAYS` zone; `AppHandle::overlay_rects`
+  reports the window being drawn. `docs/hosts.md`: E4 closed.
 - Palettes are resizable (egui-pop-model, egui-pop-api, egui-pop-tokens):
   their right edge, bottom edge and corner drag their size, between the
   new `palette.min-width`, `palette.min-height`, `palette.max-width` and
