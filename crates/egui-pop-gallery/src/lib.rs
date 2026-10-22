@@ -357,6 +357,17 @@ impl Gallery {
         } else {
             egui::ThemePreference::Light
         });
+        // A panel detached at start (a scripted run with real windows).
+        let detached = options.detach.as_deref().map(|p| {
+            let panel = egui_pop::model::ids::PanelId::new(p).map_err(|e| e.to_string())?;
+            let h = app.handle();
+            h.set_panel_visible(&panel, true);
+            match h.detach_panel(&panel) {
+                Some(out) if out.ok() => Ok(panel.to_string()),
+                Some(out) => Err(format!("{out:?}")),
+                None => Err(format!("no panel `{panel}`")),
+            }
+        });
         if options.announce {
             let spec = app.handle().theme().spec();
             announce(&serde_json::json!({
@@ -370,6 +381,10 @@ impl Gallery {
                 "reduced_motion": spec.reduced_motion,
                 "page": options.page,
                 "quit_after": options.quit_after,
+                "detached": detached.as_ref().map(|d| match d {
+                    Ok(p) => serde_json::json!({ "panel": p }),
+                    Err(e) => serde_json::json!({ "error": e }),
+                }),
                 "plugins": app.handle().plugins().iter().map(|p| p.id.to_string()).collect::<Vec<_>>(),
                 "diagnostics": app.handle().diagnostics(),
             }));

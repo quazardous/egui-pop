@@ -12,7 +12,8 @@ cargo run -p egui-pop-gallery -- --help
 Options: `--theme`, `--density` (`comfortable` or `compact`),
 `--accent`, `--reduced-motion`, `--page` (the page shown first),
 `--lang` (the language setting's default: `en`, `fr` or `system`),
-`--quit-after <frames>` and `--dump-debug` for scripted runs, and
+`--quit-after <frames>`, `--dump-debug` and `--detach <panel>` (a panel
+opened in a window of its own at start) for scripted runs, and
 `--platform` (the desktop's own platform services: a single instance
 answering `gallery://page/<name>` links, notifications, a tray icon, the
 global shortcut Ctrl+Alt+G, logs and crash reports in the user's state

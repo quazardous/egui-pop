@@ -28,6 +28,9 @@ Options:
   --wide-gamut           a transparent window whose image viewports get
                          a surface of their own on Wayland, BT.2020 with
                          a 2.2 power wanted (see the display page)
+  --detach <panel>       open a panel and detach it into a window of its
+                         own at start (gallery.notes, on the workbench
+                         page)
   --quit-after <frames>  exit by itself after this many frames
   --dump-debug           with --quit-after: print the debug bridge's
                          snapshot (event \"debug\") before quitting
@@ -51,6 +54,8 @@ pub struct Options {
     pub lang: String,
     /// The window's inner size in points.
     pub size: [f32; 2],
+    /// A panel opened and detached into its own window at start.
+    pub detach: Option<String>,
     /// Close the window after this many frames.
     pub quit_after: Option<u64>,
     /// Print the JSON start and quit lines on stdout.
@@ -75,6 +80,7 @@ impl Default for Options {
             page: "overview".into(),
             lang: "en".into(),
             size: DEFAULT_SIZE,
+            detach: None,
             quit_after: None,
             announce: false,
             dump_debug: false,
@@ -111,6 +117,7 @@ impl Options {
                 "--lang" => o.lang = value("--lang")?,
                 "--size" => o.size = parse_size(&value("--size")?)?,
                 "--dump-debug" => o.dump_debug = true,
+                "--detach" => o.detach = Some(value("--detach")?),
                 "--platform" => o.platform = true,
                 "--wide-gamut" => o.wide_gamut = true,
                 "--quit-after" => {
@@ -163,6 +170,8 @@ mod tests {
             "--size",
             "1280x800",
             "--wide-gamut",
+            "--detach",
+            "gallery.notes",
         ])
         .unwrap();
         assert_eq!(o.theme, "pop-light");
@@ -174,6 +183,7 @@ mod tests {
         assert_eq!(o.lang, "fr");
         assert_eq!(o.size, [1280.0, 800.0]);
         assert!(o.wide_gamut);
+        assert_eq!(o.detach.as_deref(), Some("gallery.notes"));
         assert_eq!(
             Options::parse(Vec::<String>::new()).unwrap(),
             Options::default()
