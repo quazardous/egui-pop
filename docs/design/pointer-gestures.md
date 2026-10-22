@@ -581,8 +581,11 @@ equivalent, the gesture is left unbound rather than invented.
 - Image: a click toggles the two zoom levels, fit and 1:1 [LR1]; a
   primary drag pans, as the Hand tool in the Loupe [LR1]. A double
   click goes from the Loupe back to the Grid (s) [LR2]: the profile
-  leaves the view (`image_double_click: leave`), after the double
-  click's two clicks have toggled the zoom twice. The plain wheel
+  leaves the view (`image_double_click: leave`). The double click's
+  first click toggles the zoom; its second press runs the double click
+  alone, as in every profile, so the zoom left behind is whatever that
+  first click gave, which no longer matters once the view is left. The
+  plain wheel
   neither zooms nor pans the Loupe [LR1], and Ctrl + wheel zooms (s)
   [LR6]; Shift and Alt with the wheel and the middle button are not
   documented: unbound. Lightroom's Space toggles the zoom, and held
