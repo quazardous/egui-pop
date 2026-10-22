@@ -437,7 +437,9 @@ fn a_pdf_embeds_its_font_and_is_the_same_for_the_same_graph() {
         .and_then(|t| t.split('\n').next())
         .and_then(|n| n.parse().ok())
         .expect("startxref");
-    let table = &text[start..];
+    // `start` is a byte offset into the PDF: the lossy text has other
+    // offsets once a binary stream is replaced.
+    let table = std::str::from_utf8(&pdf[start..]).expect("the table is ASCII");
     let count: usize = table
         .lines()
         .nth(1)
