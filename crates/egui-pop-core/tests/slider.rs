@@ -984,6 +984,32 @@ fn a_panel_redrawn_while_typing_keeps_the_entry_open_and_a_real_blur_commits() {
 }
 
 #[test]
+fn under_adobes_profile_shift_is_coarser_and_alt_finer_with_the_arrows() {
+    let mut h = slider();
+    let adobe = egui_pop_model::pointer::profile("adobe").unwrap();
+    egui_pop_core::pointer::set_map(
+        &h.ctx,
+        egui_pop_model::pointer::PointerMap::from_profile(adobe),
+    );
+    h.run();
+    let g = egui_pop_core::slider::gestures(&h.ctx);
+    assert_eq!(g.fine, Modifiers::ALT);
+    assert_eq!(g.coarse, Modifiers::SHIFT);
+    h.get_by_label("Exposure").click();
+    h.run();
+    h.key_press_modifiers(Modifiers::SHIFT, Key::ArrowRight);
+    h.run();
+    assert!((ev(&h) - 0.1).abs() < 1e-9, "Shift: coarse, {}", ev(&h));
+    h.key_press_modifiers(Modifiers::ALT, Key::ArrowLeft);
+    h.run();
+    assert!((ev(&h) - 0.099).abs() < 1e-9, "Alt: finer, {}", ev(&h));
+    // Ctrl changes no step under this profile.
+    h.key_press_modifiers(Modifiers::COMMAND, Key::ArrowRight);
+    h.run();
+    assert!((ev(&h) - 0.109).abs() < 1e-9, "Ctrl: one step, {}", ev(&h));
+}
+
+#[test]
 fn under_darktables_profile_the_wheel_steps_the_slider_under_the_pointer() {
     let mut h = Harness::builder()
         .with_size(egui::vec2(420.0, 160.0))
