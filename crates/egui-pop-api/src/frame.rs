@@ -23,6 +23,13 @@
 //! no caption, and the window plugin's strip at the top edge is the way
 //! out.
 //!
+//! **VS Code's layout controls** come at the end of the bar, before the
+//! window's buttons, when the application asks
+//! (`FramePlugin::own().layout_controls(true)`): a "Customize layout"
+//! button opening the layout menu, and a toggle per area (the primary
+//! side bar, the panel, the secondary side bar), filled while the area
+//! shows; see [`crate::layout_controls`].
+//!
 //! An application puts its logo at the start of the bar by replacing the
 //! menu block; the bar itself ([`BLOCK_TITLE`]) still follows the
 //! setting:
@@ -139,6 +146,7 @@ pub const BLOCK_MENU: BlockId = BlockId::from_static("egui_pop.frame.menu");
 pub struct FramePlugin {
     own: bool,
     name: String,
+    layout_controls: bool,
 }
 
 impl FramePlugin {
@@ -147,6 +155,7 @@ impl FramePlugin {
         Self {
             own: true,
             name: String::new(),
+            layout_controls: false,
         }
     }
 
@@ -159,6 +168,16 @@ impl FramePlugin {
     /// application's (`AppBuilder::name`).
     pub fn name(mut self, name: &str) -> Self {
         self.name = name.into();
+        self
+    }
+
+    /// Draws VS Code's layout controls at the end of the title bar
+    /// (off by default): the "Customize layout" button and the area
+    /// toggles ([`crate::layout_controls::show`], the
+    /// `egui_pop.frame.layout` block of the [`zones::CAPTION`] zone,
+    /// before the application's own items).
+    pub fn layout_controls(mut self, on: bool) -> Self {
+        self.layout_controls = on;
         self
     }
 }
@@ -367,6 +386,17 @@ impl Plugin for FramePlugin {
         )?;
         let name = self.name.clone();
         ctx.block(zones::TITLE, Block::add(BLOCK_TITLE, 0, title_block));
+        if self.layout_controls {
+            // Nearest the window's buttons: drawn first from the end.
+            ctx.block(
+                zones::CAPTION,
+                Block::add(
+                    crate::layout_controls::BLOCK_LAYOUT_CONTROLS,
+                    -1000,
+                    crate::layout_controls::show,
+                ),
+            );
+        }
         ctx.block(
             zones::CAPTION_START,
             Block::add(BLOCK_MENU, 0, move |ui, app| {

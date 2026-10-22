@@ -1879,3 +1879,40 @@ command-workbench-toggle-panel =
 command-workbench-toggle-secondarySideBar =
     .description = Affiche ou masque la barre latérale secondaire : masquée, elle se replie sur sa bande et garde ses panneaux.
     .title = Afficher ou masquer la barre latérale secondaire
+
+command-workbench-layout-customize =
+    .description = Ouvre le menu de la disposition : les zones, les agencements, l’enregistrement de l’agencement actuel, la place des barres latérales et du panneau.
+    .title = Personnaliser la disposition…
+
+command-workbench-layout-sideBarPosition =
+    .description = Place la barre latérale principale à gauche ou à droite (`position` : `left` ou `right` ; sans elle, de l’autre côté).
+    .title = Changer de côté la barre latérale principale
+
+command-workbench-layout-panelAlignment =
+    .description = Aligne le panneau du bas sous les éditeurs ou sur toute la largeur (`alignment` : `center`, `justify`, `start` ou `end` ; sans lui, passe de `center` à `justify` et inversement).
+    .title = Panneau sur toute la largeur
+
+menu-app-menu-layout =
+    .label = Personnaliser la disposition
+
+egui-pop-layout-customize = Personnaliser la disposition
+
+egui-pop-layout-with-key = { $action } ({ $keys })
+
+egui-pop-layout-save-as = Enregistrer l’agencement actuel sous…
+
+egui-pop-layout-side-bar-left = Barre latérale principale à gauche
+
+egui-pop-layout-side-bar-right = Barre latérale principale à droite
+
+egui-pop-layout-panel-center = Panneau sous les éditeurs
+
+egui-pop-layout-panel-justify = Panneau sur toute la largeur
+
+egui-pop-arrangement-save-title = Enregistrer l’agencement actuel
+
+egui-pop-arrangement-save-verb = Enregistrer l’agencement
+
+egui-pop-arrangement-name = Nom
+
+egui-pop-arrangement-suggested = Agencement { $n }

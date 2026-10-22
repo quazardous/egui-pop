@@ -393,6 +393,44 @@ pub const PANEL_TOGGLE_DESCRIPTION: StrKey = StrKey::new(
     "Opens { $panel } where it was, or closes it.",
 );
 
+// The layout controls.
+
+/// The title bar's button opening the layout's choices.
+pub const LAYOUT_CUSTOMIZE: StrKey = StrKey::new("egui-pop-layout-customize", "Customize layout");
+/// An area toggle's tooltip: its action and its key.
+pub const LAYOUT_WITH_KEY: StrKey =
+    StrKey::new("egui-pop-layout-with-key", "{ $action } ({ $keys })");
+/// The layout menu's item saving the current arrangement.
+pub const LAYOUT_SAVE_AS: StrKey = StrKey::new(
+    "egui-pop-layout-save-as",
+    "Save the current arrangement as…",
+);
+pub const LAYOUT_SIDE_BAR_LEFT: StrKey = StrKey::new(
+    "egui-pop-layout-side-bar-left",
+    "Primary side bar on the left",
+);
+pub const LAYOUT_SIDE_BAR_RIGHT: StrKey = StrKey::new(
+    "egui-pop-layout-side-bar-right",
+    "Primary side bar on the right",
+);
+pub const LAYOUT_PANEL_CENTER: StrKey =
+    StrKey::new("egui-pop-layout-panel-center", "Panel under the editors");
+pub const LAYOUT_PANEL_JUSTIFY: StrKey = StrKey::new(
+    "egui-pop-layout-panel-justify",
+    "Panel across the full width",
+);
+/// The dialog naming an arrangement to save.
+pub const ARRANGEMENT_SAVE_TITLE: StrKey = StrKey::new(
+    "egui-pop-arrangement-save-title",
+    "Save the current arrangement",
+);
+pub const ARRANGEMENT_SAVE_VERB: StrKey =
+    StrKey::new("egui-pop-arrangement-save-verb", "Save the arrangement");
+pub const ARRANGEMENT_NAME: StrKey = StrKey::new("egui-pop-arrangement-name", "Name");
+/// The name the dialog suggests (`n`: one more than the saved ones).
+pub const ARRANGEMENT_SUGGESTED: StrKey =
+    StrKey::new("egui-pop-arrangement-suggested", "Arrangement { $n }");
+
 // Devtools.
 
 pub const DEVTOOLS_OFF: StrKey = StrKey::new(
@@ -1048,6 +1086,17 @@ pub const ALL: &[StrKey] = &[
     WORKBENCH_WINDOW_TITLE,
     ZEN_HINT,
     ZEN_HINT_NO_KEY,
+    LAYOUT_CUSTOMIZE,
+    LAYOUT_WITH_KEY,
+    LAYOUT_SAVE_AS,
+    LAYOUT_SIDE_BAR_LEFT,
+    LAYOUT_SIDE_BAR_RIGHT,
+    LAYOUT_PANEL_CENTER,
+    LAYOUT_PANEL_JUSTIFY,
+    ARRANGEMENT_SAVE_TITLE,
+    ARRANGEMENT_SAVE_VERB,
+    ARRANGEMENT_NAME,
+    ARRANGEMENT_SUGGESTED,
     PANEL_FOCUS_TITLE,
     PANEL_FOCUS_DESCRIPTION,
     PANEL_TOGGLE_TITLE,
