@@ -1426,6 +1426,47 @@ impl AppHandle {
         focus::when_context(ctx, &base)
     }
 
+    /// A window's name for agents: `main`, or its detached panel's id.
+    pub fn window_name(&self, window: egui::ViewportId) -> String {
+        self.window_panel(window)
+            .map_or_else(|| "main".to_string(), |p| p.to_string())
+    }
+
+    /// What the `windows` collector shows: the active window, each
+    /// window's overlays, where the palette and the popup menu are.
+    pub fn describe_windows(&self) -> Json {
+        let ctx = self.egui();
+        let modal = overlay::modal_windows(&ctx);
+        let mut windows = vec![egui::ViewportId::ROOT];
+        if let Ok(wb) = self.0.workbench.try_borrow() {
+            windows.extend(
+                wb.layout
+                    .auxiliary
+                    .iter()
+                    .map(|a| crate::workbench::window_id(&a.panel)),
+            );
+        }
+        let stacks = overlay::stacks(&ctx);
+        let palette = self
+            .service(&crate::palette::PALETTE)
+            .and_then(|p| p.window())
+            .map(|w| self.window_name(self.open_window(w)));
+        json!({
+            "active": self.window_name(self.active_window()),
+            "windows": windows.iter().map(|v| json!({
+                "window": self.window_name(*v),
+                "overlays": stacks
+                    .iter()
+                    .find(|(w, _)| w == v)
+                    .map(|(_, specs)| specs.iter().map(|o| o.label.clone()).collect::<Vec<_>>())
+                    .unwrap_or_default(),
+                "modal": modal.contains(v),
+            })).collect::<Vec<_>>(),
+            "palette": palette,
+            "popup_menu": crate::menus::popup_window(self).map(|w| self.window_name(w)),
+        })
+    }
+
     /// The panel a window shows: the detached panel of a detached
     /// panel's window (`workbench::window_id`); `None` for the main
     /// window, or a window that is no longer open.
@@ -3343,6 +3384,18 @@ impl App {
                         }))
                         .collect::<Vec<_>>()
                 )
+            }),
+        )
+        .expect("distinct names");
+        let w = h.weak();
+        b.register(
+            FnCollector::new(
+                "windows",
+                "The application's windows (`main`, or a detached panel's id): the active one (where dialogs, the palette and menus open, and toasts show), each window's open overlays (bottom first) and whether a modal blocks the others, and the windows the palette and the popup menu are shown in.",
+            )
+            .snapshot(move |_| {
+                let Ok(app) = up(&w) else { return Json::Null };
+                app.describe_windows()
             }),
         )
         .expect("distinct names");

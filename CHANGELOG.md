@@ -12,6 +12,16 @@ publishes.
 
 ### Added
 
+- A real-window scenario under wbox (`tools/wbox/windows.py`): the
+  gallery with its notes detached into a window of their own, the
+  command palette opened there and a dialog blocking the other windows,
+  checked from the debug bridge. The new `windows` collector
+  (egui-pop-api, `AppHandle::describe_windows`) says which window is
+  active, each window's overlays and the modal blocking the others, and
+  where the palette and the popup menu are; `overlay::stacks`
+  (egui-pop-core) lists every window's overlays. The gallery's new
+  `--detach <panel>` (`GALLERY_DETACH` in wbox) detaches a panel at
+  start.
 - A widget's own secondary button (egui-pop-core): a widget that needs
   the right click for something else claims the secondary click, the
   drag or both on its rect (`pointer::claim::claim_secondary` with a
