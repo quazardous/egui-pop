@@ -600,9 +600,18 @@ pub fn modal_open(ctx: &Context) -> bool {
     !modal_windows(ctx).is_empty()
 }
 
-/// The layers holding widgets so far this pass.
+/// The layers holding widgets so far this pass. egui keeps the layers
+/// of earlier passes in its list, emptied: only those with a widget
+/// count.
 fn layers_now(ctx: &Context) -> Vec<LayerId> {
-    ctx.viewport(|v| v.this_pass.widgets.layer_ids().collect())
+    ctx.viewport(|v| {
+        v.this_pass
+            .widgets
+            .layers()
+            .filter(|(_, rects)| !rects.is_empty())
+            .map(|(l, _)| *l)
+            .collect()
+    })
 }
 
 /// Notes the floating layers (egui draws popups, menus and tooltips on
@@ -994,6 +1003,50 @@ mod tests {
             repeat: false,
             modifiers: egui::Modifiers::NONE,
         }
+    }
+
+    fn press(pos: egui::Pos2) -> Vec<egui::Event> {
+        vec![
+            egui::Event::PointerMoved(pos),
+            egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed: true,
+                modifiers: egui::Modifiers::NONE,
+            },
+        ]
+    }
+
+    #[test]
+    fn a_held_overlay_stays_open_on_a_press_in_a_popup_it_drew() {
+        let ctx = Context::default();
+        let spec = OverlaySpec::new("flyout", "Flyout", Kind::Popover);
+        let rect = Rect::from_min_max((0.0, 0.0).into(), (100.0, 300.0).into());
+        let popup = Id::new("a combo box's list");
+        let mut open = true;
+        // A foreground area past the overlay's edge, drawn while the
+        // overlay draws, over several passes (egui keeps the layers of
+        // earlier passes in its list).
+        let frame = |events: Vec<egui::Event>, open: &mut bool| {
+            pass_in(&ctx, ViewportId::ROOT, events, |ui| {
+                hold(ui.ctx(), &spec, open, None, rect, || {
+                    egui::Area::new(popup)
+                        .order(egui::Order::Foreground)
+                        .fixed_pos((150.0, 50.0))
+                        .show(ui.ctx(), |ui| ui.label("an entry"));
+                });
+            });
+        };
+        for _ in 0..3 {
+            frame(Vec::new(), &mut open);
+        }
+        assert!(open);
+        frame(press((160.0, 55.0).into()), &mut open);
+        frame(Vec::new(), &mut open);
+        assert!(open, "a press in its popup is inside it");
+        frame(press((400.0, 200.0).into()), &mut open);
+        frame(Vec::new(), &mut open);
+        assert!(!open, "a press elsewhere closes it");
     }
 
     #[test]
