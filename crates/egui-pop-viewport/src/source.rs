@@ -28,7 +28,7 @@
 //!   the interface thread converts each tile when it takes it in.
 
 use std::fmt;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex};
 
@@ -333,11 +333,15 @@ pub struct Stats {
     pub failed: AtomicU64,
     pub evicted: AtomicU64,
     pub changed: AtomicU64,
+    /// Changes folded into one change of the whole image, and readouts
+    /// dropped, while the viewport was not drawn and
+    /// [`NOTICES`] were already waiting.
+    pub coalesced: AtomicU64,
 }
 
 impl Stats {
     /// The counters, by name.
-    pub fn snapshot(&self) -> [(&'static str, u64); 7] {
+    pub fn snapshot(&self) -> [(&'static str, u64); 8] {
         let g = |a: &AtomicU64| a.load(Ordering::Relaxed);
         [
             ("requested", g(&self.requested)),
@@ -347,6 +351,7 @@ impl Stats {
             ("failed", g(&self.failed)),
             ("evicted", g(&self.evicted)),
             ("changed", g(&self.changed)),
+            ("coalesced", g(&self.coalesced)),
         ]
     }
 
@@ -371,6 +376,71 @@ impl Waker {
     }
 }
 
+/// How many changes and readouts wait at most for the viewport to take
+/// them in. Tiles and failures answer requests, which the viewport makes
+/// only when drawn; changes and readouts come when the source says, so a
+/// viewport no longer drawn (a tab behind another) would keep them all.
+/// Past this many, a change becomes one change of the whole image, kept
+/// as a flag, and a readout is dropped (the next one replaces it).
+pub const NOTICES: usize = 256;
+
+/// What waits on the channel beyond the answers to requests.
+#[derive(Debug, Default)]
+pub(crate) struct Backlog {
+    /// Changes and readouts sent and not taken in yet.
+    queued: AtomicUsize,
+    /// A side changed everywhere, its changes folded past [`NOTICES`]
+    /// (after, before).
+    whole: [AtomicBool; 2],
+    /// Changes folded and readouts dropped since last taken in.
+    coalesced: AtomicU64,
+}
+
+impl Backlog {
+    fn slot(side: Side) -> usize {
+        match side {
+            Side::After => 0,
+            Side::Before => 1,
+        }
+    }
+
+    /// Whether a notice may go on the channel; counts it if so.
+    fn admit(&self) -> bool {
+        let admitted = self
+            .queued
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| {
+                (n < NOTICES).then_some(n + 1)
+            })
+            .is_ok();
+        if !admitted {
+            self.coalesced.fetch_add(1, Ordering::Relaxed);
+        }
+        admitted
+    }
+
+    /// A notice taken in from the channel.
+    pub(crate) fn taken(&self) {
+        let _ = self
+            .queued
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1));
+    }
+
+    /// The sides whose changes were folded, cleared, and how many
+    /// notices were folded or dropped since the last call.
+    pub(crate) fn take_folded(&self) -> (Vec<Side>, u64) {
+        let sides = [Side::After, Side::Before]
+            .into_iter()
+            .filter(|s| self.whole[Self::slot(*s)].swap(false, Ordering::AcqRel))
+            .collect();
+        (sides, self.coalesced.swap(0, Ordering::Relaxed))
+    }
+
+    /// Changes and readouts waiting.
+    pub(crate) fn queued(&self) -> usize {
+        self.queued.load(Ordering::Acquire)
+    }
+}
+
 /// Where a source delivers; cheap to clone, usable from any thread.
 #[derive(Clone)]
 pub struct TileSink {
@@ -378,6 +448,7 @@ pub struct TileSink {
     tx: Sender<Message>,
     waker: Arc<Waker>,
     prep: Arc<Mutex<Option<Prep>>>,
+    backlog: Arc<Backlog>,
 }
 
 impl fmt::Debug for TileSink {
@@ -444,9 +515,16 @@ impl TileSink {
     }
 
     /// The image changed in `region` (`[x0, y0, x1, y1]`, image pixels),
-    /// or everywhere (`None`, also for a new size).
+    /// or everywhere (`None`, also for a new size). While [`NOTICES`]
+    /// changes and readouts wait (the viewport is not drawn), it is
+    /// folded into one change of the whole image.
     pub fn changed(&self, region: Option<[f64; 4]>) {
-        self.send(Message::Changed(self.side, region));
+        if self.backlog.admit() {
+            self.send(Message::Changed(self.side, region));
+        } else {
+            self.backlog.whole[Backlog::slot(self.side)].store(true, Ordering::Release);
+            self.waker.wake();
+        }
     }
 
     /// A request could not be served.
@@ -454,8 +532,12 @@ impl TileSink {
         self.send(Message::Failed(self.side, request, error.into()));
     }
 
-    /// Answers [`TileSource::readout`].
+    /// Answers [`TileSource::readout`]. Dropped while [`NOTICES`]
+    /// changes and readouts wait (the viewport is not drawn).
     pub fn readout(&self, pixel: [i64; 2], values: Vec<(String, f32)>) {
+        if !self.backlog.admit() {
+            return;
+        }
         self.send(Message::Readout(Readout {
             side: self.side,
             pixel,
@@ -471,6 +553,8 @@ pub(crate) struct Feed {
     waker: Arc<Waker>,
     /// Set when tiles are converted by the delivering thread.
     pub(crate) prep: Arc<Mutex<Option<Prep>>>,
+    /// The changes and readouts waiting, bounded.
+    pub(crate) backlog: Arc<Backlog>,
 }
 
 impl Default for Feed {
@@ -481,6 +565,7 @@ impl Default for Feed {
             rx,
             waker: Arc::default(),
             prep: Arc::default(),
+            backlog: Arc::default(),
         }
     }
 }
@@ -498,6 +583,7 @@ impl Feed {
             tx: self.tx.clone(),
             waker: self.waker.clone(),
             prep: self.prep.clone(),
+            backlog: self.backlog.clone(),
         }
     }
 

@@ -32,7 +32,7 @@ mod view;
 
 #[cfg(feature = "pty")]
 pub use pty::PtySource;
-pub use source::{CommandLine, Console, Sink, Size, Spawn, TerminalSource};
+pub use source::{CONSOLE_PENDING, CommandLine, Console, Sink, Size, Spawn, TerminalSource};
 pub use state::{Cell, InputKind, TerminalState};
 pub use steps::{TERMINALS, TerminalPlugin, Terminals};
 pub use view::{Terminal, TerminalOutput, TerminalSignal};

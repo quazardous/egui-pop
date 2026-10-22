@@ -98,9 +98,21 @@ pub trait TreeSource<K: Key> {
     }
 }
 
+/// How many edits wait at most for a tree's next pass. A tree its host
+/// no longer draws (a tab behind another) still receives its source's
+/// and the application's edits; past this many, they are dropped and
+/// the tree loads every branch again at its next pass
+/// ([`TreeState::dropped`] counts them, and a `tree.overflowed` event
+/// says so on the journal when the view has the application).
+pub const EDITS_WAITING: usize = 4096;
+
 struct Inbox<K> {
     edits: Vec<Edit<K>>,
     ctx: Option<Context>,
+    /// Edits were dropped: every branch is loaded again.
+    overflowed: bool,
+    /// Edits dropped since the tree was made.
+    dropped: u64,
 }
 
 /// The application's hand on a tree's view: edits from any thread,
@@ -126,7 +138,15 @@ impl<K> std::fmt::Debug for TreeHandle<K> {
 impl<K> TreeHandle<K> {
     fn push(&self, edit: Edit<K>) {
         let mut inbox = self.inbox.lock().unwrap_or_else(|e| e.into_inner());
-        inbox.edits.push(edit);
+        if inbox.edits.len() >= EDITS_WAITING {
+            // Not drawn for long: the waiting edits and this one give way
+            // to loading everything again.
+            inbox.dropped += inbox.edits.len() as u64 + 1;
+            inbox.edits = Vec::new();
+            inbox.overflowed = true;
+        } else {
+            inbox.edits.push(edit);
+        }
         if let Some(ctx) = &inbox.ctx {
             ctx.request_repaint();
         }
@@ -255,6 +275,8 @@ impl<K: Key> Default for TreeState<K> {
             inbox: Arc::new(Mutex::new(Inbox {
                 edits: Vec::new(),
                 ctx: None,
+                overflowed: false,
+                dropped: 0,
             })),
             scroll: Scroll::default(),
             type_ahead: TypeAhead::default(),
@@ -361,10 +383,36 @@ impl<K: Key> TreeState<K> {
         }
     }
 
-    /// Applies the edits waiting; returns whether there were any.
+    /// Edits dropped since the tree was made: they waited past
+    /// [`EDITS_WAITING`] while the tree was not drawn, and every branch
+    /// was loaded again instead.
+    pub fn dropped(&self) -> u64 {
+        self.inbox.lock().unwrap_or_else(|e| e.into_inner()).dropped
+    }
+
+    /// Edits waiting for the next pass (at most [`EDITS_WAITING`]).
+    pub fn waiting(&self) -> usize {
+        self.inbox
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .edits
+            .len()
+    }
+
+    /// Applies the edits waiting (loading every branch again when edits
+    /// were dropped); returns whether there were any.
     fn drain(&mut self) -> bool {
-        let edits = std::mem::take(&mut self.inbox.lock().unwrap_or_else(|e| e.into_inner()).edits);
-        let any = !edits.is_empty();
+        let (edits, overflowed) = {
+            let mut inbox = self.inbox.lock().unwrap_or_else(|e| e.into_inner());
+            (
+                std::mem::take(&mut inbox.edits),
+                std::mem::take(&mut inbox.overflowed),
+            )
+        };
+        if overflowed {
+            self.model.reload_all();
+        }
+        let any = !edits.is_empty() || overflowed;
         let cursor_at = self
             .selection
             .cursor()
@@ -652,7 +700,21 @@ impl<'a, K: Key> TreeView<'a, K> {
             .ctx
             .get_or_insert_with(|| ui.ctx().clone());
         let mut signals = Vec::new();
+        let overflowed = state
+            .inbox
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .overflowed;
         state.drain();
+        if overflowed && let Some(app) = self.app {
+            // Not drawn for long, it dropped edits: agents see it.
+            app.publish(
+                "egui_pop.tree",
+                None,
+                "tree.overflowed",
+                json!({ "tree": self.id, "dropped": state.dropped() }),
+            );
+        }
         // Branches shown expanded and never loaded are asked for, once.
         for _ in 0..4 {
             let wanted = state.model.take_wanted();

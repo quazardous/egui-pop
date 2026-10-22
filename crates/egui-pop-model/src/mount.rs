@@ -87,6 +87,11 @@ pub enum Workers {
     /// A producer the application runs (tiles, thumbnails, a source),
     /// posting to a queue drained when the component is drawn.
     DrainedWhenDrawn,
+    /// A producer the application runs, whose queue stays bounded while
+    /// the component is not drawn: drained off-draw (on the delivering
+    /// thread, or at each pass) or capped, what it drops counted where
+    /// agents see it.
+    Bounded,
 }
 
 /// The colours a component needs.
@@ -241,6 +246,13 @@ impl Mountable {
     /// Fed by workers, drained when drawn.
     pub fn workers(mut self) -> Self {
         self.workers = Workers::DrainedWhenDrawn;
+        self
+    }
+
+    /// Fed by workers, its queue bounded while it is not drawn (drained
+    /// off-draw or capped): no host makes it grow.
+    pub fn bounded_workers(mut self) -> Self {
+        self.workers = Workers::Bounded;
         self
     }
 
@@ -825,7 +837,7 @@ pub const CODES: &[Code] = &[
         code: "c11",
         kind: CodeKind::Condition,
         title: "A queue while hidden",
-        text: "The host can stop drawing its content (a tab behind another, a palette hidden by Tab or rolled up) while the component's workers keep delivering: their queue grows until it is drawn again (docs/threading.md, section 2.2).",
+        text: "The host can stop drawing its content (a tab behind another, a palette hidden by Tab or rolled up) while the component's workers keep delivering: their queue grows until it is drawn again (docs/threading.md, section 2.2). No component of egui-pop has it: each drains its queue off-draw or caps it (`Mountable::bounded_workers`); a component an application declares with `workers()` may.",
         then: "",
     },
     Code {
@@ -1394,6 +1406,12 @@ mod tests {
         let v = Mountable::new("viewport", "Viewport").workers();
         assert_eq!(codes(&check(&v, &panel())), ["c11"]);
         assert_eq!(check(&v, &custom_dialog()), Fit::Yes, "drawn every frame");
+    }
+
+    #[test]
+    fn r9_bounded_workers_fit_a_host_that_hides_the_component() {
+        let v = Mountable::new("viewport", "Viewport").bounded_workers();
+        assert_eq!(check(&v, &panel()), Fit::Yes);
     }
 
     #[test]

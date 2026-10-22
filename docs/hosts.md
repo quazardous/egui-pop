@@ -58,21 +58,21 @@ Hosts that take **no component at all**, by design, and so have no column:
 
 | Row | Crate | What it needs |
 |---|---|---|
-| Image viewport | `egui-pop-viewport` | Keys while hovered, claims Space, Escape; drags, wheel, bitmap cursors; workers, drained when drawn, kept under a modal; wide gamut wanted; fills; role `image`. |
+| Image viewport | `egui-pop-viewport` | Keys while hovered, claims Space, Escape; drags, wheel, bitmap cursors; workers, bounded while hidden, kept under a modal; wide gamut wanted; fills; role `image`. |
 | Navigator | `egui-pop-viewport` | Keys when focused; drags, wheel; at least 120 by 80, at most 320 by 214, aspect 1.5; role `image`. |
 | Node graph | `egui-pop-viewport` | Keys when focused, claims Escape, Space; keymap bindings; drags, wheel; fills; **holds a session**; role `group`. |
 | Curves | `egui-pop-viewport` | Keys when focused, claims Escape; drags; at least 120 by 120, at most 320 by 320, aspect 1; role `image`. |
 | Wheels | `egui-pop-viewport` | Keys when focused, claims Escape; drags; at least 48 by 48, 160 by 160 preferred, aspect 1; role `slider`. |
 | Histogram | `egui-pop-viewport` | Keys when focused, claims Escape; drags; at least 120 by 40, at most 600 by 200; a preview mode; role `image`. |
 | Thumbnail | `egui-pop-viewport` | No keyboard; at least 16 by 16, 96 by 72 preferred; a preview mode; role `image`. |
-| Library grid | `egui-pop-views` | Keys when focused, claims Space; keymap bindings; drags, wheel; workers, drained when drawn; fills; role `grid`. |
-| Filmstrip | `egui-pop-views` | Keys when focused, claims Space; keymap bindings; drags, wheel; workers, drained when drawn; at least 120 by 120, fills; role `grid`. |
-| Compare view | `egui-pop-views` | No keyboard; drags, wheel; workers, drained when drawn; at least 0 by 80, fills; role `image`. |
-| Tree | `egui-pop-views` | Keys when focused, claims Enter, Space; drags; workers, drained when drawn; fills; popups of its own; role `tree`. |
+| Library grid | `egui-pop-views` | Keys when focused, claims Space; keymap bindings; drags, wheel; workers, bounded while hidden; fills; role `grid`. |
+| Filmstrip | `egui-pop-views` | Keys when focused, claims Space; keymap bindings; drags, wheel; workers, bounded while hidden; at least 120 by 120, fills; role `grid`. |
+| Compare view | `egui-pop-views` | No keyboard; drags, wheel; workers, bounded while hidden; at least 0 by 80, fills; role `image`. |
+| Tree | `egui-pop-views` | Keys when focused, claims Enter, Space; drags; workers, bounded while hidden; fills; popups of its own; role `tree`. |
 | Table, list | `egui-pop-views` | Keys when focused, claims Enter, Space; drags; fills; popups of its own; role `grid`. |
 | Text editor | `egui-pop-editors` | Keys when focused, claims Enter, Tab, Escape; keymap surface `editor`; drags; fills; **holds a session**; role `text`. |
-| Code editor | `egui-pop-editors` | Keys when focused, claims Enter, Tab, Escape; keymap surface `editor`; drags; workers, drained when drawn; fills; **holds a session**; popups of its own; role `text`. |
-| Terminal | `egui-pop-editors` | **every key** while focused, claims Enter, Tab, Escape; keymap surface `terminal`; drags; workers, drained when drawn; at least 32 by 32, fills; **holds a session**; role `terminal`. |
+| Code editor | `egui-pop-editors` | Keys when focused, claims Enter, Tab, Escape; keymap surface `editor`; drags; workers, bounded while hidden; fills; **holds a session**; popups of its own; role `text`. |
+| Terminal | `egui-pop-editors` | **every key** while focused, claims Enter, Tab, Escape; keymap surface `terminal`; drags; workers, bounded while hidden; at least 32 by 32, fills; **holds a session**; role `terminal`. |
 | Sliders | `egui-pop-core` | Keys when focused, claims Enter, Escape; drags; at least 120 by 20; a descriptor field; role `slider`. |
 | Forms | `egui-pop-core` | Keys when focused, claims Enter; at least 200 by 48; popups of its own; a descriptor field; role `form`. |
 | Progress | `egui-pop-core` | No keyboard; at least 40 by 4, 200 by 8 preferred; a preview mode; role `progressbar`. |
@@ -84,21 +84,21 @@ Hosts that take **no component at all**, by design, and so have no column:
 
 | Component | P | F | W | D | C | M | O | L | S | T | V | G |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Image viewport | `if c11` | `if c1 c3 c11` | `if c3*` | `D6` | `if c3 c9` | `if c1 c3 c4` | `if c1 c3 c4` | `D1` | `D1` | `if c1 c3 c4 c11` | `D2` | `yes` |
+| Image viewport | `yes` | `if c1 c3` | `if c3*` | `D6` | `if c3 c9` | `if c1 c3 c4` | `if c1 c3 c4` | `D1` | `D1` | `if c1 c3 c4` | `D2` | `yes` |
 | Navigator | `yes` | `yes` | `yes*` | `D6` | `yes` | `yes` | `yes` | `D1` | `D1` | `yes` | `D2` | `yes` |
 | Node graph | `yes` | `if c1` | `yes*` | `D6` | `if c9 c10` | `if c1 c4 c10` | `D3` | `D1` | `D1` | `if c1 c4 c10` | `D2` | `yes` |
 | Curves | `yes` | `yes` | `yes*` | `D6` | `if c9` | `if c4` | `if c4` | `D1` | `D1` | `if c4` | `D2` | `yes` |
 | Wheels | `yes` | `yes` | `yes*` | `D6` | `if c9` | `if c4` | `if c4` | `D1` | `D1` | `if c4` | `D2` | `yes` |
 | Histogram | `yes` | `yes` | `yes*` | `D6` | `if c9` | `if c4` | `if c4` | `D1` | `D1` | `if c4` | `D2` | `yes` |
 | Thumbnail | `yes` | `yes` | `yes*` | `D6` | `yes` | `yes` | `yes` | `if c6` | `if c6` | `yes` | `D2` | `yes` |
-| Library grid | `if c11` | `if c1 c11` | `yes*` | `D6` | `yes` | `if c1` | `if c1` | `D1` | `D1` | `if c1 c11` | `D2` | `yes` |
-| Filmstrip | `if c11` | `if c1 c11` | `yes*` | `D6` | `yes` | `if c1` | `if c1` | `D1` | `D1` | `if c1 c11` | `D2` | `yes` |
-| Compare view | `if c11` | `if c1 c11` | `yes*` | `D6` | `yes` | `if c1` | `if c1` | `D1` | `D1` | `if c1 c11` | `D2` | `yes` |
-| Tree | `if c11` | `if c1 c11` | `yes*` | `D6` | `if c5 c9` | `if c1 c5` | `if c1 c5` | `D1` | `D1` | `if c1 c5 c11` | `D2` | `yes` |
+| Library grid | `yes` | `if c1` | `yes*` | `D6` | `yes` | `if c1` | `if c1` | `D1` | `D1` | `if c1` | `D2` | `yes` |
+| Filmstrip | `yes` | `if c1` | `yes*` | `D6` | `yes` | `if c1` | `if c1` | `D1` | `D1` | `if c1` | `D2` | `yes` |
+| Compare view | `yes` | `if c1` | `yes*` | `D6` | `yes` | `if c1` | `if c1` | `D1` | `D1` | `if c1` | `D2` | `yes` |
+| Tree | `yes` | `if c1` | `yes*` | `D6` | `if c5 c9` | `if c1 c5` | `if c1 c5` | `D1` | `D1` | `if c1 c5` | `D2` | `yes` |
 | Table, list | `yes` | `if c1` | `yes*` | `D6` | `if c5 c9` | `if c1 c5` | `if c1 c5` | `D1` | `D1` | `if c1 c5` | `D2` | `yes` |
 | Text editor | `yes` | `if c1` | `yes*` | `D6` | `if c9 c10` | `if c1 c4 c10` | `D3` | `D1` | `D1` | `if c1 c4 c10` | `D2` | `yes` |
-| Code editor | `if c11` | `if c1 c11` | `yes*` | `D6` | `if c5 c9 c10` | `if c1 c4 c5 c10` | `D3` | `D1` | `D1` | `if c1 c4 c5 c10 c11` | `D2` | `yes` |
-| Terminal | `if c11` | `if c1 c11` | `yes*` | `D6` | `if c9 c10` | `if c1 c4 c10` | `D3` | `D1` | `D1` | `if c1 c4 c10 c11` | `D2` | `yes` |
+| Code editor | `yes` | `if c1` | `yes*` | `D6` | `if c5 c9 c10` | `if c1 c4 c5 c10` | `D3` | `D1` | `D1` | `if c1 c4 c5 c10` | `D2` | `yes` |
+| Terminal | `yes` | `if c1` | `yes*` | `D6` | `if c9 c10` | `if c1 c4 c10` | `D3` | `D1` | `D1` | `if c1 c4 c10` | `D2` | `yes` |
 | Sliders | `yes` | `yes` | `yes*` | `if c4 c8` | `if c9` | `if c4` | `if c4` | `if c6` | `if c6` | `if c4` | `D2` | `yes` |
 | Forms | `yes` | `yes` | `yes*` | `if c4 c5 c8` | `if c5 c9` | `if c5` | `if c5` | `D1` | `D1` | `if c5` | `D2` | `yes` |
 | Progress | `yes` | `yes` | `yes*` | `D6` | `yes` | `yes` | `yes` | `if c6` | `if c6` | `yes` | `D2` | `yes` |
@@ -112,8 +112,8 @@ Columns: **P** docked panel, **F** floating palette, **W** auxiliary window, **D
 
 | Status | Cells |
 |---|---|
-| fits (`yes`) | 77 |
-| fits under conditions (`if`) | 94 |
+| fits (`yes`) | 84 |
+| fits under conditions (`if`) | 87 |
 | does not fit, by design (`D1` 36, `D2` 21, `D3` 5, `D6` 19) | 81 |
 | does not fit, egui-pop limit | 0 |
 | does not fit, upstream | 0 |
@@ -155,7 +155,7 @@ and every condition is kept.
 | c8 | **As a descriptor field only.** In a dialog of the four kinds, the component exists only as a `Form` field made from a value descriptor (a slider from a float or int), not as a free widget; a `Custom` dialog takes it as it is. |
 | c9 | **Claims honoured by declaration.** The host owns Enter and Escape, and gives them to a content that claims them: when the content claims Enter, Ctrl+Enter accepts; Escape goes first to a content that claims it and has something to cancel (a drag), then cancels. |
 | c10 | **A session per showing.** The host is transient: shown again, the component starts a new session (a new program, an empty draft) unless the application keeps its state; closing it asks first or loses the session. |
-| c11 | **A queue while hidden.** The host can stop drawing its content (a tab behind another, a palette hidden by Tab or rolled up) while the component's workers keep delivering: their queue grows until it is drawn again (docs/threading.md, section 2.2). |
+| c11 | **A queue while hidden.** The host can stop drawing its content (a tab behind another, a palette hidden by Tab or rolled up) while the component's workers keep delivering: their queue grows until it is drawn again (docs/threading.md, section 2.2). No component of egui-pop has it: each drains its queue off-draw or caps it (`Mountable::bounded_workers`); a component an application declares with `workers()` may. |
 | c12 | **View state not kept.** The host keeps no view values and is outside the context stack's projection: the component's zoom, scroll or selection is not kept across places and restarts. |
 
 ## Reasons
@@ -209,7 +209,12 @@ would be refused outside the main window with U2.
   with its rule.
 - **Workers.** Tile, thumbnail, tree and terminal sources run on the
   application's threads and keep running whatever the host, a modal
-  included; their queues are drained when the component is drawn (c11).
+  included. Hidden, a component keeps bounded memory (c11 closed): the
+  terminal and the jobs take their input off-draw; the viewport folds
+  its source's changes past `source::NOTICES`, the tree reloads past
+  `tree::EDITS_WAITING` edits, the library keeps its `INBOX` latest
+  requests and a console its `CONSOLE_PENDING` latest bytes, each
+  counting what it dropped (docs/threading.md, section 2.2).
 - **Accessibility in an auxiliary window** is not tried: whether eframe
   gives an immediate viewport its own AccessKit tree has not been
   checked.

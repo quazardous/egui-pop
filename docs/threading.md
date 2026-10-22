@@ -254,8 +254,30 @@ provider's thread, the host's kernel.
 
 All of them post the same way: a queue (a channel or a vector behind a
 mutex) and `request_repaint()`. The interface drains the queue at its
-next pass. **None of the queues is bounded and none is drained with a
-budget**, except the editor's highlighting (500 lines a pass).
+next pass. None is drained with a budget, except the editor's
+highlighting (500 lines a pass).
+
+A component its host stops drawing (a tab behind another, a palette
+hidden or rolled up) keeps receiving. Each of egui-pop's keeps bounded
+memory meanwhile, by draining off-draw or by a cap whose drops are
+counted where agents see them:
+
+| Queue | While not drawn |
+|---|---|
+| Terminal output (a PTY, a `Console`) | Off-draw: the delivering thread feeds the emulator, whose scrollback is bounded. |
+| A `Console` no terminal started yet | Capped: the latest `CONSOLE_PENDING` bytes (1 MiB) from a line's start; `Console::dropped`, and `dropped` in the start's result. |
+| Jobs (`job.*` events) | Off-draw: folded at each pass from the bounded journal; each job's log keeps its last lines. |
+| Image viewport (`TileSink`) | Tiles and failures answer requests, made only when drawn. Changes and readouts are capped at `source::NOTICES` (256): a change past it becomes one change of the whole image, a readout is dropped; `coalesced` in the viewport's stats. |
+| Tree (`TreeHandle`, a source's answers) | Capped at `tree::EDITS_WAITING` (4096): past it, the edits waiting are dropped and every branch loads again at the next pass; `TreeState::dropped`, and a `tree.overflowed` event. |
+| Library commands | Capped at `library::plugin::INBOX` (64), the oldest dropped; `dropped` in the `libraries` collector. |
+| Code assist | One answer waiting per kind; a new request cancels the old. |
+| Platform plugins (notifications, shortcuts, tray, instance, focus mode) | Off-draw: drained at each pass. |
+
+Thumbnails and the library's images are the application's: egui-pop
+keeps no queue of them. A component an application declares with
+workers drained when drawn (`Mountable::workers`) gets condition c11
+in `docs/hosts.md`; `Mountable::bounded_workers` says it keeps bounded
+memory hidden.
 
 ### 2.3 What is shared
 

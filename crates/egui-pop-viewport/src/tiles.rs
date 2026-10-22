@@ -436,6 +436,9 @@ impl Tiles {
         }
         self.update_prep(ctx, device, target, transform);
         while let Ok(m) = self.feed.rx.try_recv() {
+            if matches!(m, Message::Changed(..) | Message::Readout(_)) {
+                self.feed.backlog.taken();
+            }
             match m {
                 Message::Tile(side, tile) => self.take(side, tile),
                 Message::Failed(side, id, error) => {
@@ -456,6 +459,14 @@ impl Tiles {
                 }
                 Message::Readout(r) => self.readout = Some(r),
             }
+        }
+        // Changes folded while the viewport was not drawn: the whole
+        // image changed.
+        let (whole, coalesced) = self.feed.backlog.take_folded();
+        Stats::add(&self.stats.coalesced, coalesced);
+        for side in whole {
+            Stats::add(&self.stats.changed, 1);
+            self.invalidate(side, None);
         }
         self.upload(ctx, device, target, transform.as_ref(), view);
     }

@@ -214,10 +214,18 @@ impl Sink {
 #[derive(Clone, Debug, Default)]
 pub struct Console(Arc<Mutex<ConsoleInner>>);
 
+/// How many bytes a console keeps for a terminal that has not started
+/// it yet (one its host has not drawn): the latest, from a line's
+/// start; older ones are dropped and counted ([`Console::dropped`]).
+pub const CONSOLE_PENDING: usize = 1 << 20;
+
 #[derive(Debug, Default)]
 struct ConsoleInner {
-    /// Written before a terminal started the console.
+    /// Written before a terminal started the console (the latest
+    /// [`CONSOLE_PENDING`] bytes).
     pending: Vec<u8>,
+    /// Bytes dropped from `pending`.
+    dropped: u64,
     sink: Option<Sink>,
     /// The last byte written was `\r`.
     after_cr: bool,
@@ -260,7 +268,29 @@ impl Console {
         if !delivered {
             i.sink = None;
             i.pending.extend_from_slice(&out);
+            if i.pending.len() > CONSOLE_PENDING {
+                // The oldest go, up to a line's start: no half escape or
+                // character is left.
+                let excess = i.pending.len() - CONSOLE_PENDING;
+                let cut = i.pending[excess..]
+                    .iter()
+                    .position(|&b| b == b'\n')
+                    .map_or(i.pending.len(), |p| excess + p + 1);
+                i.pending.drain(..cut);
+                i.dropped += cut as u64;
+            }
         }
+    }
+
+    /// Bytes written before a terminal started the console and dropped,
+    /// past [`CONSOLE_PENDING`] (the terminal shows the latest).
+    pub fn dropped(&self) -> u64 {
+        lock(&self.0).dropped
+    }
+
+    /// Bytes waiting for a terminal to start the console.
+    pub fn waiting(&self) -> usize {
+        lock(&self.0).pending.len()
     }
 
     /// The work behind the console ended (`code` when it has one): the
@@ -294,7 +324,7 @@ impl TerminalSource for Console {
             sink.exit(code);
         }
         i.sink = Some(sink);
-        Ok(json!({ "replayed": pending.len() }))
+        Ok(json!({ "replayed": pending.len(), "dropped": i.dropped }))
     }
 
     fn stop(&mut self) -> Result<(), String> {
