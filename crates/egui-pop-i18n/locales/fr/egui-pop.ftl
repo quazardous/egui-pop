@@ -1557,7 +1557,7 @@ setting-appearance-language =
 setting-appearance-language-choice-system = Système
 
 setting-appearance-text-size =
-    .description = Agrandit ou réduit le texte, sans les espacements (le zoom de l’interface agrandit tout).
+    .description = Agrandit ou réduit le texte, sans les espacements (le zoom de l’interface agrandit tout). Rien n’a été lu du système : la valeur par défaut est 100 %.
     .label = Taille du texte
 
 setting-appearance-text-size-choice-100- = 100 %
