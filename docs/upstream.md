@@ -123,6 +123,35 @@ limit.
   opened from; `ScopedTheme::within` then only sets egui-pop's tokens
   and kit (still needed for a popup drawn after its scope).
 
+## egui: scroll bar colours come from the widget visuals
+
+- **Compensated**: egui's `ScrollStyle` carries a scroll bar's sizes
+  and opacities but no colour. egui 0.36 draws the thumb in the
+  colours of the widget states (`visuals.widgets.inactive`, `hovered`,
+  `active`): their `fg_stroke` colour with `foreground_color`, else
+  their `bg_fill`, and their `corner_radius`; these are the button's
+  colours and corners. It draws the track in `extreme_bg_color`, which
+  text fields, canvases and progress bars also use. A theme cannot give
+  the scroll bars colours of their own without changing every button
+  and field. egui 0.37.0 is the same: its `ScrollStyle` has no colour
+  either (`style.rs`, `containers/scroll_area.rs`).
+- **Upstream**: not filed yet (draft:
+  [upstream-drafts/egui-scroll-style-colours.md](upstream-drafts/egui-scroll-style-colours.md)).
+- **Workaround**: the kit's `scroll-bar` goes into `ScrollStyle` with
+  the theme for what it can carry (width, margin, placement,
+  visibility, no track), in every scroll area. Its colours come from a
+  `ScrollBar` scope: `UiPop::scroll_area` shows the area in a `Ui`
+  whose widget states' foreground colours and corners are the thumb's,
+  and whose `extreme_bg_color` is the track's, and gives the content
+  the style from outside the scope again (`// upstream:` in `ui.rs`).
+  An `egui::ScrollArea` shown directly keeps the button's colours, and
+  the kit reports it in its problems.
+- **Remove when**: egui's `ScrollStyle` (or its visuals) has its own
+  colours for the thumb in each state and for the track, and its own
+  corner radius; the kit then writes them with the theme,
+  `Stock::ScrollBar` and the problem go, and `UiPop::scroll_area`
+  becomes a plain `ScrollArea::show`.
+
 ## egui: AccessKit bounds ignore layer transforms
 
 - **Compensated**: a widget in a transformed layer (egui's `Scene`)
