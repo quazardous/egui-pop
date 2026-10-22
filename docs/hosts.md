@@ -182,11 +182,8 @@ draws a second choice inline.
 | E1 | **No free-content dialog (closed).** Closed by `Dialog::Custom` (ADR 0013): a dialog with a body of its own, keeping the dialog rules. | Done. |
 | E2 | **Palettes are not resizable (closed).** Closed: a palette is resized by its right and bottom edges, between the `palette.min-*` and `palette.max-*` tokens, its size kept in the layout. | Done. |
 | E3 | **No keymap in auxiliary windows (closed).** Closed: the key dispatcher runs in each auxiliary window's pass, in that window's context (its focus chain, `window` naming its panel). | Done. |
-| E4 | **Overlays live in the main window (closed for dialogs).** Closed for dialogs: each window has its own overlay stack, a dialog opened from an auxiliary window is shown over it, and while it is open every other window is blocked. Menus, toasts and the command palette are still drawn in the main window. | Done for dialogs; for the other overlays, a block in the `WINDOW_OVERLAYS` zone drawing in its own window (not decided). |
+| E4 | **Overlays live in the main window (closed).** Closed: each window has its own overlay stack. A dialog, the command palette and a popup menu open over the window in use, a context menu over its widget, and the toasts show in the active window, each going to the main window when its window closes; while a modal is open every other window is blocked. | Done. |
 | E5 | **No custom page in the settings window (closed).** Closed by settings pages (`Ctx::settings_page`): a page a plugin draws itself in the settings window, placed in its tree, searched, with its reset (column T). | Done. |
-
-The overlays E4 leaves in the main window appear as hosts that do not
-exist yet, not as refused cells.
 
 ### Upstream limits
 
@@ -217,7 +214,7 @@ would be refused outside the main window with U2.
   gives an immediate viewport its own AccessKit tree has not been
   checked.
 - **Tests across windows.** egui_kittest draws an immediate viewport
-  inside the main one. The keys, dialogs and focus of auxiliary windows
+  inside the main one. The keys, overlays and focus of auxiliary windows
   are tested with an immediate viewport renderer of the tests' own
   (`crates/egui-pop-api/tests/windows.rs`), each window's pass run with
   its own input, but no component is mounted in a real window there:

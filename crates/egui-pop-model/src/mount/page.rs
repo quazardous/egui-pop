@@ -525,9 +525,6 @@ draws a second choice inline.
     }
     o.push_str(
         "
-The overlays E4 leaves in the main window appear as hosts that do not
-exist yet, not as refused cells.
-
 ### Upstream limits
 
 | Code | Limit | Entry |
@@ -571,7 +568,7 @@ fn notes(o: &mut String) {
   gives an immediate viewport its own AccessKit tree has not been
   checked.
 - **Tests across windows.** egui_kittest draws an immediate viewport
-  inside the main one. The keys, dialogs and focus of auxiliary windows
+  inside the main one. The keys, overlays and focus of auxiliary windows
   are tested with an immediate viewport renderer of the tests' own
   (`crates/egui-pop-api/tests/windows.rs`), each window's pass run with
   its own input, but no component is mounted in a real window there:

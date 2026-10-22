@@ -515,6 +515,8 @@ pub(crate) struct Popup {
     /// The scoped theme it was opened in (a theme editor's preview): it
     /// is drawn in it, though drawn later, out of the scope.
     pub scope: Option<ScopedTheme>,
+    /// The window it opens in: the active one when it opened.
+    pub window: egui::ViewportId,
 }
 
 /// Where a popup menu opens: under a rectangle (a button, a logo), or at
@@ -542,10 +544,13 @@ pub(crate) fn popup_id() -> Id {
 /// Opens a declared menu as a popup under a rectangle or at a point,
 /// evaluated in the context of now; egui-pop draws it from the next
 /// frame until an item is chosen, a click lands outside or Escape is
-/// pressed. One popup at a time: another replaces it. Opened while a
-/// [`ScopedTheme`] draws (a theme editor's preview), it is drawn in that
-/// theme. Returns whether it opened (a hook on [`STEP_OPEN`] may veto
-/// it).
+/// pressed. One popup at a time: another replaces it. It opens in the
+/// window the user works in ([`AppHandle::active_window`]: a detached
+/// panel's window when it was opened from there), the rectangle in that
+/// window's points, and goes to the main window if that window closes.
+/// Opened while a [`ScopedTheme`] draws (a theme editor's preview), it
+/// is drawn in that theme. Returns whether it opened (a hook on
+/// [`STEP_OPEN`] may veto it).
 pub fn popup_at(app: &AppHandle, menu: &MenuId, at: impl Into<At>) -> bool {
     popup_at_with(app, menu, at, Json::Null)
 }
@@ -561,6 +566,7 @@ pub fn popup_at_with(app: &AppHandle, menu: &MenuId, at: impl Into<At>, args: Js
         context: with_args(&app.when_context(), &args),
         args,
         scope: ScopedTheme::current(&app.egui()),
+        window: app.active_window(),
     };
     app.set_popup(Some(popup));
     app.egui().request_repaint();
@@ -572,14 +578,24 @@ pub fn popup_open(app: &AppHandle) -> Option<MenuId> {
     app.popup().map(|p| p.menu)
 }
 
+/// The window the popup menu shows in, if one is open: the one it was
+/// opened in, or the main window once that one is closed.
+pub fn popup_window(app: &AppHandle) -> Option<egui::ViewportId> {
+    app.popup().map(|p| app.open_window(p.window))
+}
+
 /// Closes the popup menu, if one is open.
 pub fn close_popup(app: &AppHandle) {
     app.set_popup(None);
 }
 
-/// Draws the popup menu while it is open (the shell does, each frame).
+/// Draws the popup menu while it is open, in the window it belongs to
+/// (the shell calls it in each window's pass).
 pub(crate) fn draw_popup(ctx: &Context, app: &AppHandle) {
     let Some(p) = app.popup() else { return };
+    if app.open_window(p.window) != ctx.viewport_id() {
+        return;
+    }
     let draw = || {
         let mut open = true;
         egui::Popup::new(

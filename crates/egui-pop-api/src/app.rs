@@ -1079,7 +1079,8 @@ impl AppHandle {
     /// last: dialogs, modals, popovers and menus of the overlay stack,
     /// the toast stack, then egui's popups. What an application keeps
     /// its own hit-testing and pictures right with, without egui-pop's
-    /// internal ids.
+    /// internal ids. They are the window's being drawn (the main window
+    /// outside a pass): each window has its own overlays.
     pub fn overlay_rects(&self) -> Vec<OverlayRect> {
         let ctx = self.egui();
         let dialog = self
@@ -1116,9 +1117,11 @@ impl AppHandle {
         }
         let toasts = crate::toasts::area_id();
         known.push(toasts);
-        if self
-            .service(&crate::toasts::TOASTS)
-            .is_some_and(|t| !t.shown().is_empty())
+        // The toasts are drawn in the active window only.
+        if self.active_window() == ctx.viewport_id()
+            && self
+                .service(&crate::toasts::TOASTS)
+                .is_some_and(|t| !t.shown().is_empty())
             && let Some(rect) = ctx.memory(|m| m.area_rect(toasts))
         {
             out.push(OverlayRect {

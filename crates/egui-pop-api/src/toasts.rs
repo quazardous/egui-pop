@@ -5,6 +5,10 @@
 //! them holds them), warnings after longer, errors stay until closed.
 //! Screen readers hear them through the live region (errors at once).
 //!
+//! They show in the window the user works in
+//! ([`AppHandle::active_window`]): a detached panel's window while it
+//! has the focus, the main window again when that one closes.
+//!
 //! The queue is data: [`Toasts::shown`] and [`Toasts::history`], the
 //! debug bridge's `toasts` collector (with `dismiss`), and a
 //! `toast.shown` event in the journal.
@@ -270,8 +274,9 @@ impl Plugin for ToastsPlugin {
             })
             .args(json!({ "id": 1 })),
         )?;
+        // Drawn in every window, shown in the active one.
         ctx.block(
-            zones::OVERLAYS,
+            zones::WINDOW_OVERLAYS,
             Block::add(BlockId::from_static("egui_pop.toasts"), 20, show),
         );
         Ok(())
@@ -283,12 +288,16 @@ pub(crate) fn area_id() -> Id {
     Id::new("egui_pop.toasts")
 }
 
-/// Draws the toasts in the bottom-right corner, newest at the bottom.
+/// Draws the toasts in the bottom-right corner of the active window,
+/// newest at the bottom.
 fn show(ui: &mut Ui, app: &AppHandle) {
     let Some(toasts) = app.service(&TOASTS) else {
         return;
     };
     let ctx = ui.ctx().clone();
+    if app.active_window() != ctx.viewport_id() {
+        return;
+    }
     let now = ctx.input(|i| i.time);
     let fresh = std::mem::take(&mut lock(&toasts.0).fresh);
     for t in fresh {

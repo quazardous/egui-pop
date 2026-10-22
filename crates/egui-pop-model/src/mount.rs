@@ -901,9 +901,9 @@ pub const CODES: &[Code] = &[
     Code {
         code: "E4",
         kind: CodeKind::Limit,
-        title: "Overlays live in the main window (closed for dialogs)",
-        text: "Closed for dialogs: each window has its own overlay stack, a dialog opened from an auxiliary window is shown over it, and while it is open every other window is blocked. Menus, toasts and the command palette are still drawn in the main window.",
-        then: "Done for dialogs; for the other overlays, a block in the `WINDOW_OVERLAYS` zone drawing in its own window (not decided).",
+        title: "Overlays live in the main window (closed)",
+        text: "Closed: each window has its own overlay stack. A dialog, the command palette and a popup menu open over the window in use, a context menu over its widget, and the toasts show in the active window, each going to the main window when its window closes; while a modal is open every other window is blocked.",
+        then: "Done.",
     },
     Code {
         code: "E5",
