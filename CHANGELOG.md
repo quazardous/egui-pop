@@ -141,6 +141,11 @@ publishes.
   `disclosure-*` glyph roles) and `section-count` (based on
   `indicator-badge`). The gallery's `sections` page shows them; the
   survey and the classic apps compared are in `docs/sections.md`.
+- Layout icons (egui-pop-core): `Icon::Layout`, and `LayoutLeft`,
+  `LayoutBottom`, `LayoutRight` with their `-off` twins (`layout-left`,
+  `layout-left-off`...): a frame whose area is filled while it shows and
+  outlined while it is folded or hidden, as VS Code's layout toggles.
+  Always painted, on the pixel grid.
 - A widget's own secondary button (egui-pop-core): a widget that needs
   the right click for something else claims the secondary click, the
   drag or both on its rect (`pointer::claim::claim_secondary` with a
