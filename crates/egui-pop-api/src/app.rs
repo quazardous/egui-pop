@@ -3176,7 +3176,7 @@ impl App {
         let mut b = h.0.bridge.borrow_mut();
         let (w1, w2) = (h.weak(), h.weak());
         b.register(
-            FnCollector::new("commands", "Every command: id, title, keys, where it applies, owner; the last runs.")
+            FnCollector::new("commands", "Every command: id, title, keys, where it applies, its icon and \"on\" icon by name (with the names that do not resolve), owner; the last runs.")
                 .snapshot(move |_| {
                     let Ok(app) = up(&w1) else { return Json::Null };
                     let cx = app.when_context();
@@ -3193,6 +3193,9 @@ impl App {
                             "args": s.args,
                             "running": app.running(&s.id),
                             "owner": owner,
+                            "icon": s.icon,
+                            "icon_on": s.icon_on,
+                            "unknown_icons": unknown_icons(s),
                         })).collect::<Vec<_>>(),
                         "context": cx.iter().map(|(k, v, d)| json!({"key": k, "value": v, "depth": d})).collect::<Vec<_>>(),
                         "history": app.history(),
@@ -3210,6 +3213,62 @@ impl App {
                     Ok(json!({ "queued": true }))
                 })
                 .args(json!({ "id": "app.palette", "args": null })),
+        )
+        .expect("distinct names");
+        let (w1, w2) = (h.weak(), h.weak());
+        b.register(
+            FnCollector::new(
+                "icons",
+                "The icon vocabulary (egui-pop's names, the Phosphor set's `phosphor:<name>` when built in, the registered ones with their owner and paint), every icon a command, panel or frame declares and whether it resolves, the unknown names with who asked for them, and the icons drawn by name in the last pass (tree rows, inputs, crumbs).",
+            )
+            .snapshot(move |ctx| {
+                use egui_pop_core::icon::registry;
+                let Ok(app) = up(&w1) else { return Json::Null };
+                let declared = declared_icons(&app);
+                let mut unknown: Vec<Json> = registry::unknown()
+                    .into_iter()
+                    .map(|u| json!(u))
+                    .collect();
+                for d in declared.iter().filter(|d| !d.resolves) {
+                    unknown.push(json!({
+                        "name": d.name,
+                        "surfaces": [format!("{} {}", d.surface, d.subject)],
+                        "owner": d.owner,
+                        "hint": registry::hint(&d.name),
+                    }));
+                }
+                json!({
+                    "builtin": registry::builtin_names().collect::<Vec<_>>(),
+                    "phosphor": {
+                        "available": registry::phosphor_available(),
+                        "prefix": registry::PHOSPHOR_PREFIX,
+                        "count": registry::phosphor_names().len(),
+                    },
+                    "registered": egui_pop_core::icon_set::registered().iter().map(|r| json!({
+                        "name": r.name,
+                        "owner": r.owner,
+                        "paint": match r.paint {
+                            egui_pop_core::icon_set::Paint::Mono => "single-colour",
+                            egui_pop_core::icon_set::Paint::Colour => "full-colour",
+                        },
+                    })).collect::<Vec<_>>(),
+                    "declared": declared,
+                    "unknown": unknown,
+                    "drawn": registry::drawn(ctx),
+                })
+            })
+            .action(
+                "search",
+                "The names of the vocabulary containing `query` (at most `limit`, 50 by default), Phosphor's included.",
+                false,
+                move |_, args| {
+                    let _ = up(&w2)?;
+                    let query = args.get("query").and_then(Json::as_str).ok_or("`query` is missing")?;
+                    let limit = args.get("limit").and_then(Json::as_u64).unwrap_or(50) as usize;
+                    Ok(json!(egui_pop_core::icon::registry::search(query, limit)))
+                },
+            )
+            .args(json!({ "query": "grid", "limit": 20 })),
         )
         .expect("distinct names");
         let (w1, w2) = (h.weak(), h.weak());
@@ -3870,6 +3929,7 @@ impl App {
         }
         *self.handle.0.derived.borrow_mut() = derived;
         self.check_steps(&mut d);
+        self.check_icons(&mut d);
         self.handle.zones_mut().resolve(&mut d);
         // The panels, but a zone shown as a panel only when it has blocks.
         let zone_of = self.handle.workbench_mut().zone_of.clone();
@@ -3904,6 +3964,28 @@ impl App {
         self.rebuilds += 1;
         if self.started {
             self.emit(&Lifecycle::Rebuilt);
+        }
+    }
+
+    /// Every icon name a command or a panel declares is checked against
+    /// the icon vocabulary (`unknown-icon`): an unknown one is drawn as a
+    /// placeholder (a panel's title letter), never dropped silently.
+    fn check_icons(&self, d: &mut Diagnostics) {
+        for icon in declared_icons(&self.handle) {
+            if !icon.resolves {
+                d.warn(
+                    "unknown-icon",
+                    icon.owner.as_ref(),
+                    icon.subject.as_str(),
+                    format!(
+                        "{} `{}` declares the icon `{}`: {}; a placeholder is drawn",
+                        icon.surface,
+                        icon.subject,
+                        icon.name,
+                        egui_pop_core::icon::registry::hint(&icon.name)
+                    ),
+                );
+            }
         }
     }
 
@@ -4941,7 +5023,75 @@ impl App {
 }
 
 /// Diagnostic codes recomputed by each rebuild.
+/// An icon name a declaration gives, as the `icons` collector and the
+/// `unknown-icon` diagnostic read it.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct DeclaredIcon {
+    /// What declares it: `command`, `command (on)`, `panel`, `frame`.
+    pub surface: &'static str,
+    /// The command's, panel's or frame's id.
+    pub subject: String,
+    pub owner: Option<OwnerId>,
+    pub name: String,
+    /// Whether the name is in the icon vocabulary.
+    pub resolves: bool,
+}
+
+/// A command's icon names that do not resolve.
+fn unknown_icons(spec: &CommandSpec) -> Vec<&str> {
+    [&spec.icon, &spec.icon_on]
+        .into_iter()
+        .flatten()
+        .map(String::as_str)
+        .filter(|n| !egui_pop_core::icon::registry::is_known(n))
+        .collect()
+}
+
+/// Every icon name the commands, panels and frames (places and modes)
+/// declare.
+pub fn declared_icons(app: &AppHandle) -> Vec<DeclaredIcon> {
+    let known = |n: &str| egui_pop_core::icon::registry::is_known(n);
+    let mut out = Vec::new();
+    let derived = app.0.derived.borrow();
+    for (spec, owner) in &derived.commands {
+        for (surface, name) in [("command", &spec.icon), ("command (on)", &spec.icon_on)] {
+            if let Some(name) = name {
+                out.push(DeclaredIcon {
+                    surface,
+                    subject: spec.id.to_string(),
+                    owner: Some(owner.clone()),
+                    name: name.clone(),
+                    resolves: known(name),
+                });
+            }
+        }
+    }
+    for (spec, owner) in &derived.panels {
+        if !spec.icon.is_empty() {
+            out.push(DeclaredIcon {
+                surface: "panel",
+                subject: spec.id.to_string(),
+                owner: Some(owner.clone()),
+                name: spec.icon.clone(),
+                resolves: known(&spec.icon),
+            });
+        }
+    }
+    drop(derived);
+    for (frame, name) in crate::contexts::frame_icons(app) {
+        out.push(DeclaredIcon {
+            surface: "frame",
+            subject: frame.to_string(),
+            owner: None,
+            resolves: known(&name),
+            name,
+        });
+    }
+    out
+}
+
 const RESOLUTION_CODES: &[&str] = &[
+    "unknown-icon",
     "unknown-zone",
     "duplicate-block",
     "dangling-replace",
