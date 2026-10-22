@@ -238,6 +238,8 @@ impl UiPop for Ui {
         area: ScrollArea,
         add: impl FnOnce(&mut Ui) -> R,
     ) -> ScrollAreaOutput<R> {
+        // upstream: egui's `ScrollStyle` has no colours, the bars take
+        // the widget states' (docs/upstream.md, "scroll bar colours").
         // egui paints the bars with the visuals of the `Ui` the area is
         // shown in, and builds its content's `Ui` from it: the content
         // gets the style outside the scope back.
