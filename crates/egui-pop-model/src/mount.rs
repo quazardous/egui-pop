@@ -931,7 +931,7 @@ pub const CODES: &[Code] = &[
         kind: CodeKind::Upstream,
         title: "No owner window for egui viewports",
         text: "A palette in a native utility window would float above every application.",
-        then: "[workbench.md](workbench.md#palettes-and-toolboxes-never-modal)",
+        then: "[upstream.md](upstream.md#winit-and-egui-no-owner-window-for-a-viewport)",
     },
 ];
 

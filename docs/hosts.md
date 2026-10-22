@@ -194,7 +194,7 @@ exist yet, not as refused cells.
 |---|---|---|
 | U1 | **No custom cursor in immediate viewports.** eframe shows no custom cursor in an immediate viewport (nor on the web): bitmap cursors fall back to system cursors there. | [upstream.md](upstream.md#eframe-no-custom-cursor-on-the-web-or-in-immediate-viewports) |
 | U2 | **Wide gamut in the main window only.** Wide gamut goes through the image's own Wayland surface, made from the main window's handles: eframe gives no surface colour space and winit no colour management, so other windows draw sRGB. | [upstream.md](upstream.md#wayland-no-colour-management-through-winit) |
-| U3 | **No owner window for egui viewports.** A palette in a native utility window would float above every application. | [workbench.md](workbench.md#palettes-and-toolboxes-never-modal) |
+| U3 | **No owner window for egui viewports.** A palette in a native utility window would float above every application. | [upstream.md](upstream.md#winit-and-egui-no-owner-window-for-a-viewport) |
 
 U1 and U2 degrade a cell (condition c3) rather than refuse it: no
 component of today requires wide gamut. One that did (a mastering view)

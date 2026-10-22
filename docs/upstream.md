@@ -175,6 +175,27 @@ limit.
 - **Remove when**: winit reports the cursor size (Windows'
   `SM_CXCURSOR`, the desktop's cursor theme size).
 
+## winit and egui: no owner window for a viewport
+
+- **Not built**: a palette or toolbox as a native utility window (U3 in
+  [hosts.md](hosts.md)). Without an owner, such a window floats above
+  every application instead of only above its own, and is listed in the
+  taskbar and the window switcher.
+- **Upstream**: winit has an owner only on Windows
+  (`WindowAttributesExtWindows::with_owner_window`). The cross-platform
+  request is <https://github.com/rust-windowing/winit/issues/4256>
+  (open; it names X11's `XSetTransientForHint`, macOS child windows and,
+  in a comment, Wayland's `xdg_toplevel.set_parent`). A comment with
+  this use case is not posted yet (draft:
+  [upstream-drafts/winit-owner-window-comment.md](upstream-drafts/winit-owner-window-comment.md)).
+  egui's `ViewportBuilder` has no owner either; an issue is drafted for
+  when winit has one
+  ([upstream-drafts/egui-viewport-owner-issue.md](upstream-drafts/egui-viewport-owner-issue.md)).
+- **Workaround**: palettes stay inside the main window; a detached
+  panel is an ordinary top-level window, not a utility window.
+- **Remove when**: winit gives an owner on every desktop platform and
+  egui's `ViewportBuilder` passes it through.
+
 ## egui_table: unnamed resize handles, rows drawn per region
 
 - **Compensated**: the column resize handles are interactive widgets
