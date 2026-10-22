@@ -94,6 +94,15 @@ pub struct CommandSpec {
     /// A description of its arguments (free JSON, a schema or an
     /// example); `null` when it takes none.
     pub args: Json,
+    /// Its icon's name (`save`, `phosphor:export`, `my-plugin:crop`):
+    /// every surface running the command shows it. Checked against the
+    /// icon vocabulary when the application resolves its declarations.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
+    /// The icon shown instead while `checked` holds (eye-off for a
+    /// toggle whose icon is the eye).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon_on: Option<String>,
 }
 
 impl CommandSpec {
@@ -110,7 +119,32 @@ impl CommandSpec {
             palette: true,
             agent: true,
             args: Json::Null,
+            icon: None,
+            icon_on: None,
         }
+    }
+
+    /// Its icon, by name: egui-pop's (`save`), a Phosphor glyph's
+    /// (`phosphor:export`) or a registered one (`my-plugin:crop`).
+    /// Declared once, shown by every surface running the command.
+    pub fn icon(mut self, name: &str) -> Self {
+        self.icon = Some(name.into());
+        self
+    }
+
+    /// The icon shown while its `checked` clause holds, by name.
+    pub fn icon_on(mut self, name: &str) -> Self {
+        self.icon_on = Some(name.into());
+        self
+    }
+
+    /// The icon's name to show: `icon_on` while checked (when declared),
+    /// else `icon`.
+    pub fn icon_for(&self, checked: bool) -> Option<&str> {
+        if checked && let Some(on) = &self.icon_on {
+            return Some(on);
+        }
+        self.icon.as_deref()
     }
 
     pub fn when(mut self, when: &str) -> Self {

@@ -969,3 +969,22 @@ fn a_group_is_repaired_member_by_member_and_old_applications_read_its_first() {
     assert!(fixed.floating_of(&pid("app.tools")).unwrap().is_lone());
     assert_eq!(notes.len(), 1, "{notes:?}");
 }
+
+#[test]
+fn a_command_declares_its_icon_and_its_on_icon_by_name() {
+    let spec = CommandSpec::new(cmd("view.grid"), "Show the grid", "View")
+        .checked("grid")
+        .icon("phosphor:grid-four")
+        .icon_on("phosphor:grid-nine");
+    assert_eq!(spec.icon_for(false), Some("phosphor:grid-four"));
+    assert_eq!(spec.icon_for(true), Some("phosphor:grid-nine"));
+    let plain = CommandSpec::new(cmd("file.save"), "Save", "File").icon("save");
+    assert_eq!(plain.icon_for(true), Some("save"));
+    assert_eq!(CommandSpec::new(cmd("a.b"), "B", "A").icon_for(false), None);
+    // Agents read the names; a command without an icon says nothing.
+    let json = serde_json::to_value(&spec).unwrap();
+    assert_eq!(json["icon"], "phosphor:grid-four");
+    assert_eq!(json["icon_on"], "phosphor:grid-nine");
+    let bare = serde_json::to_value(CommandSpec::new(cmd("a.b"), "B", "A")).unwrap();
+    assert!(bare.get("icon").is_none());
+}

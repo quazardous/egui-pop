@@ -1305,6 +1305,21 @@ pub fn crumbs(app: &AppHandle) -> Vec<String> {
         .collect()
 }
 
+/// Every declared frame's icon name (places and modes).
+pub(crate) fn frame_icons(app: &AppHandle) -> Vec<(FrameId, String)> {
+    let Some(svc) = app.service(&CONTEXTS) else {
+        return Vec::new();
+    };
+    // The owner's registry, current right after a plugin connects; the
+    // projection's while the owner is busy.
+    let registry =
+        with_owner(app, |c| c.registry()).unwrap_or_else(|| lock(&svc.projection).registry.clone());
+    registry
+        .iter()
+        .filter_map(|s| s.icon.clone().map(|i| (s.id.clone(), i)))
+        .collect()
+}
+
 /// An active mode, as a chip shows it.
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct Chip {

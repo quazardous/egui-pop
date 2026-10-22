@@ -27,6 +27,16 @@ publishes.
   list entries are serialised with their icon's name for agents, and
   the icons tree rows and inputs draw are recorded by name each pass
   (`icon::registry::drawn`).
+- Command icons, checked and shown to agents (egui-pop-model,
+  egui-pop-api): a command declares its icon once, with an optional
+  icon shown while it is checked (`CommandSpec::icon`,
+  `CommandSpec::icon_on`). The `unknown-icon` diagnostic names each
+  command, panel or place whose icon does not resolve. The `commands`
+  collector gives each command's `icon`, `icon_on` and `unknown_icons`;
+  a new `icons` collector lists the vocabulary, every declared icon and
+  whether it resolves, the unknown names with who asked for them, and
+  the icons drawn by name in the last pass; its `search` action finds
+  names.
 - A widget's own secondary button (egui-pop-core): a widget that needs
   the right click for something else claims the secondary click, the
   drag or both on its rect (`pointer::claim::claim_secondary` with a
