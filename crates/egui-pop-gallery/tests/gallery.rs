@@ -3519,22 +3519,21 @@ fn zen_mode_from_the_view_menu_shows_its_way_out_and_escape_leaves_it() {
     let handle = h.state().app.handle().clone();
     assert!(handle.zen());
     assert!(h.query_by_label("View").is_none(), "the menu bar is hidden");
-    // (The strip and its text both carry the hint.)
-    assert!(
-        h.query_all_by_label("Zen mode: Escape to leave")
-            .next()
-            .is_some()
-    );
+    // The strip shows it (the live region keeps it too, as a `Status`).
+    assert!(zen_hint_on_screen(&h));
     assert!(h.query_by_label("Leave zen mode").is_some());
     h.key_press(egui::Key::Escape);
     h.run();
     assert!(!handle.zen());
     assert!(h.query_by_label("View").is_some());
-    assert!(
-        h.query_all_by_label("Zen mode: Escape to leave")
-            .next()
-            .is_none()
-    );
+    assert!(!zen_hint_on_screen(&h));
+}
+
+/// Whether zen mode's strip shows its hint: the polite live region keeps
+/// the last announcement as its label, a `Status` node left out here.
+fn zen_hint_on_screen(h: &Harness<'_, Gallery>) -> bool {
+    h.query_all_by_label("Zen mode: Escape to leave")
+        .any(|n| n.accesskit_node().role() != egui::accesskit::Role::Status)
 }
 
 /// In a text field, the first Escape leaves the field, the second zen
