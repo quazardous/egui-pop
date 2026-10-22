@@ -288,6 +288,17 @@ publishes.
   `extract::scan_tree` return them in `Scan::unread` beside the keys,
   each is logged as a warning, and `extract::out_of_date`, the
   catalogue check, lists them in its failure message.
+- A font family name resolves to the system's font before egui's bundled
+  face (egui-pop-core): `font.family.*` names are looked up in the faces
+  the application registered, then the system's fonts, then egui's
+  bundled faces, as platforms resolve a font stack. A theme naming
+  `Ubuntu` drew egui's bundled Ubuntu-Light (a light face) even where
+  the system has Ubuntu, and shadowed the names after it; a bundled
+  face is now reached by its name only when the system has no family of
+  that name. `fonts::origin_of` and `fonts::families` follow the same
+  order. The install's report says where each name was found
+  (`Report::resolved`: `Ubuntu → bundled Ubuntu-Light`), and so does
+  the `fonts` debug collector (`resolved`).
 - A place that declares no arrangement no longer takes on the layout of
   the place the user came from (egui-pop-api): entered for the first
   time, it starts from the nearest enclosing place's layout (as it was
