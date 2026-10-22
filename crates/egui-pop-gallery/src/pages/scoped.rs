@@ -1,6 +1,8 @@
 //! egui's own widgets restyled by the kit in a scope (`UiPop::scoped`):
 //! egui still draws them, and a component's states become egui's widget
-//! visuals for the widgets added in the scope.
+//! visuals for the widgets added in the scope; and the scroll bars,
+//! whose width, margin, placement and visibility every scroll area takes
+//! from the theme, their colours from a scope (`UiPop::scroll_area`).
 
 use egui::Ui;
 use egui_pop::core::ui::{Stock, Tone, UiPop};
@@ -93,4 +95,16 @@ pub fn show(ui: &mut Ui, state: &mut State) {
                 ui.end_row();
             }
         });
+
+    section(ui, "Scroll bars (scroll-bar)");
+    ui.muted("Every scroll area takes the bar's width, margin, placement and visibility from the theme; this one also its thumb's colours and corners and its track.");
+    let area = egui::ScrollArea::vertical()
+        .id_salt("scoped.scroll")
+        .max_height(96.0)
+        .auto_shrink([false, true]);
+    ui.scroll_area(area, |ui| {
+        for row in 1..=24 {
+            ui.label(format!("Row {row}"));
+        }
+    });
 }

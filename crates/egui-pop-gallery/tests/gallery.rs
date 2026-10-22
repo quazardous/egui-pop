@@ -3217,7 +3217,8 @@ fn egui_s_widgets_in_a_scope_follow_their_kit_component() {
 fn a_kit_restyles_egui_s_own_widgets_in_a_scope_from_the_theme_alone() {
     // Data only: square accent buttons, a rounded accent combo box, a
     // filled toggle, flat fields with a thick accent outline while
-    // focused. egui draws every one of them.
+    // focused, a thin rounded scroll bar shown at rest without a track
+    // (docs/kit.md, tvty's). egui draws every one of them.
     let mut themes = egui_pop::tokens::Themes::default();
     themes
         .add_text(
@@ -3246,6 +3247,18 @@ fn a_kit_restyles_egui_s_own_widgets_in_a_scope_from_the_theme_alone() {
               focus:
                 border-color: {$type: "color", $value: "{accent.default}"}
                 border-width: {$type: "dimension", $value: {value: 2, unit: "px"}}
+            scroll-bar:
+              width: {$type: "dimension", $value: {value: 6, unit: "px"}}
+              margin: {$type: "dimension", $value: {value: 4, unit: "px"}}
+              visibility: {$type: "string", $value: "always"}
+              track-fill: {$type: "color", $value: "{transparent}"}
+              rest:
+                fill: {$type: "color", $value: "{border.strong}"}
+                radius: {$type: "dimension", $value: {value: 999, unit: "px"}}
+              hover:
+                fill: {$type: "color", $value: "{text.muted}"}
+              active:
+                fill: {$type: "color", $value: "{text.default}"}
             "#,
         )
         .expect("the test theme reads");
@@ -3254,9 +3267,11 @@ fn a_kit_restyles_egui_s_own_widgets_in_a_scope_from_the_theme_alone() {
     let tokens = Tokens::new(themes.resolve(&egui_pop::tokens::ThemeSpec::new("kit-scoped")));
     egui_pop::core::theme::install_tokens(&h.ctx, tokens);
     let kit = egui_pop::core::kit::Kit::of(&h.ctx);
-    // Only the text fields outside a scope, which follow `button`.
-    assert_eq!(kit.problems.len(), 1, "{:?}", kit.problems);
+    // Only the text fields and the scroll bars outside a scope, which
+    // follow `button`.
+    assert_eq!(kit.problems.len(), 2, "{:?}", kit.problems);
     assert!(kit.problems[0].starts_with("field.rest:"));
+    assert!(kit.problems[1].starts_with("scroll-bar:"));
     h.run();
     // The plain field with the keyboard: its focus outline.
     h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Plain")
