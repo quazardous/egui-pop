@@ -1233,6 +1233,18 @@ fn preview_family_name(role: Role, weight: Weight) -> FontFamily {
     )
 }
 
+/// Adds faces to a chain, each once: a face already in it (egui's
+/// Ubuntu named by the theme, then reached again through `sans-serif`)
+/// keeps its first place, so egui never gets the same face twice in a
+/// family.
+fn extend_unique(chain: &mut Vec<String>, more: &[String]) {
+    for k in more {
+        if !chain.contains(k) {
+            chain.push(k.clone());
+        }
+    }
+}
+
 #[cfg(test)]
 fn definitions(
     faces: &[Face],
@@ -1294,15 +1306,12 @@ fn definitions_and_faces(
                 report.tabular.push((role.key().to_string(), tabular));
             }
             let theirs = chain.len();
-            chain.extend(tail.iter().cloned());
+            extend_unique(&mut chain, tail);
             if weight == Weight::REGULAR {
-                // What egui draws the role's regular text with, in its
-                // order: the theme's faces by the name they were found
-                // by, then egui's bundled ones.
+                // What egui draws the role's regular text with: the same
+                // chain, each face once, the theme's by the name they
+                // were found by, then egui's bundled ones.
                 for (i, key) in chain.iter().enumerate() {
-                    if chain[..i].contains(key) {
-                        continue;
-                    }
                     if let Some(data) = defs.font_data.get(key) {
                         drawing[at].push(InstalledFace {
                             family: (i < theirs).then(|| named[i].clone()),
@@ -1331,11 +1340,7 @@ fn definitions_and_faces(
                 Some(list) => {
                     let mut c =
                         chain_at(&mut defs, list, weight, faces, &bundled_faces, system).keys;
-                    for k in &chain {
-                        if !c.contains(k) {
-                            c.push(k.clone());
-                        }
-                    }
+                    extend_unique(&mut c, &chain);
                     c
                 }
                 None => chain.clone(),
@@ -1397,7 +1402,7 @@ fn add_specimens(
                     .or_insert(found.data);
                 chain.push(found.key);
             }
-            chain.extend(tail.iter().cloned());
+            extend_unique(&mut chain, &tail);
             let fam = specimen_family(name, weight);
             if let FontFamily::Name(n) = &fam {
                 report.chains.push((n.to_string(), chain.clone()));
@@ -1825,6 +1830,17 @@ mod tests {
         let ui_chain = chain_of(&ctx, &FontFamily::Name("pop.ui.400".into()));
         assert_eq!(ui_chain[0], "Ubuntu-Light");
         assert_eq!(chain_of(&ctx, &family)[1..], ui_chain[..]);
+        // The faces reported for renderers outside egui are that chain,
+        // each face once.
+        let drawn = installed_faces(&ctx, Role::Ui).unwrap();
+        assert_eq!(drawn.len(), ui_chain.len());
+        assert_eq!(drawn[0].family.as_deref(), Some("Ubuntu"));
+        // No installed family has the same face twice (the theme's
+        // `Ubuntu` and the bundled fonts behind `sans-serif` are one).
+        for (f, chain) in &report(&ctx).unwrap().chains {
+            let mut seen = std::collections::BTreeSet::new();
+            assert!(chain.iter().all(|k| seen.insert(k)), "{f}: {chain:?}");
+        }
         // A preview naming nothing found here falls back to the role's
         // families: a preview family is never empty.
         set_preview(&ctx, Role::Ui, Some(names(&["Nowhere Sans"])));
@@ -1899,6 +1915,18 @@ mod tests {
             .and_then(|(_, p)| p.clone())
             .unwrap();
         assert_eq!(primary, "Fake Sans 400 (system)");
+        // The faces a renderer outside egui draws with are the chain egui
+        // got, the given system face first, by its name.
+        let drawn = installed_faces(&ctx, Role::Ui).unwrap();
+        let chain = &report
+            .chains
+            .iter()
+            .find(|(f, _)| f == "pop.ui.400")
+            .unwrap()
+            .1;
+        assert_eq!(drawn.len(), chain.len());
+        assert_eq!(drawn[0].family.as_deref(), Some("Fake Sans"));
+        assert!(drawn[1..].iter().all(|f| f.family.is_none()));
         // Another machine, without it: the next name draws, and the
         // report says what is missing.
         set_system_faces(&ctx, Some(Vec::new()));
