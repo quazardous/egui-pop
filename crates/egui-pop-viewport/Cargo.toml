@@ -74,6 +74,9 @@ egui_kittest = { workspace = true, features = ["wgpu", "snapshot"] }
 # publishing (the test kit depends on this crate).
 egui-pop-test = { path = "../egui-pop-test", features = ["viewport", "wgpu"] }
 serde_json.workspace = true
+# MIT OR Apache-2.0, already in the tree through wgpu: the viewport's
+# WGSL parsed and validated in unit tests, without a GPU.
+naga = { version = "30", features = ["wgsl-in"] }
 # MIT OR Apache-2.0, already in the tree through resvg: the SVG export's
 # tests parse what it writes.
 roxmltree = "0.21"
