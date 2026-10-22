@@ -912,3 +912,7 @@ setting-workbench-panel-alignment-choice-justify bde531151896fcb7
 setting-workbench-panel-alignment-choice-start 1c7249d10be859d7
 setting-workbench-panel-alignment.description e4d1d1a4e48451a1
 setting-workbench-panel-alignment.label 64c1815d9c3ca57e
+setting-workbench-side-bar-position-choice-left 622539f8c7c64116
+setting-workbench-side-bar-position-choice-right a06eb36cd14089a5
+setting-workbench-side-bar-position.description 8aed83157f596658
+setting-workbench-side-bar-position.label b709627312ad600a
