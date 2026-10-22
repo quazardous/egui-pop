@@ -211,10 +211,11 @@ Such a window is a window of the application in full:
   as a dialog does. The settings window and the in-app file chooser
   open in the main window.
 
-The bottom panel spans the window's whole width by default. The
+The bottom panel lies under the editors by default, between the side
+bars, which go down to the bottom, as VS Code has it. The
 `workbench.panel_alignment` setting lines it up otherwise, as VS Code's
-panel alignment does: `center` (between the side bars, which go down to
-the bottom), `start` (under the start side bar) or `end` (under the end
+panel alignment does: `justify` (the window's whole width, under both
+side bars), `start` (under the start side bar) or `end` (under the end
 one); `AppBuilder::panel_alignment` gives the default.
 
 ## The menu bar
