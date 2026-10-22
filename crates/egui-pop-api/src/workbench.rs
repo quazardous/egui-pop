@@ -131,10 +131,11 @@ pub const SETTING_PANEL_ALIGNMENT: egui_pop_model::ids::SettingId =
 /// How the bottom panel lines up with the side bars.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum PanelAlignment {
-    /// The window's whole width, under both side bars (the default).
-    #[default]
+    /// The window's whole width, under both side bars.
     Justify,
-    /// Between the side bars, which go down to the bottom.
+    /// Between the side bars, which go down to the bottom: under the
+    /// editors (the default, as VS Code's).
+    #[default]
     Center,
     /// From the start edge, under the start side bar, to the end side bar.
     Start,
