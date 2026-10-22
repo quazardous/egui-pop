@@ -4,7 +4,8 @@ Status: **inventory, decided** (2026-10-22). Sections 1 and 2
 describe what exists, read from the code of egui-pop and of Helios, an
 application built on it. Sections 3 to 5 were proposed and are
 **decided (2026-10-22)**, with the owner's answers in section 7.
-Section 6 is the order of work that follows.
+Section 6 is the order of work that follows. The "Today" column of
+section 2 follows the work: the registry of step 2 (section 6) is in.
 
 egui-pop draws icons by role (`Icon`, in `egui_pop_core::icon`):
 a name such as `search` or `warning`, never a codepoint, drawn from the
@@ -72,8 +73,8 @@ registered ones).
 | Window buttons (minimise, maximise, restore, close) | Required: system convention | Glyph role (`window-*`) | Drawn on the pixel grid; hover, pressed, the close's danger hover | Only label: each button's name | Kit glyphs in `egui-pop-core/src/frame.rs` | None |
 | Overflow and main menu entries ("More menus", "Main menu") | Required: the menu bar folded into one button | Command | `toolbar`; hover, open | Only label: "More menus", "Main menu" | `Icon::More` and `Icon::Menu` hard-coded in `bar_within` (`egui-pop-api/src/menus.rs`) | None needed |
 | Caption items (the application's marks in the title bar) | Required: icon-only by place | Command (each opens something) | `toolbar`; a count badge, a ring, a busy state | Only label: the command's title; the state joins the name | Chosen by the application per item (Helios: `Icon::Notification` hard-coded) | Should come from the command the item runs |
-| Breadcrumb crumbs | Optional: the text names the place; an icon on every place that declares one, hidden in the compact density (decided 2026-10-22) | Object kind (a place, `FrameSpec`) | `inline`; the current crumb strong | Decorative | `FrameSpec.icon` (`egui-pop-model/src/context.rs`) is documented "for the chips and crumbs", but the crumbs in `egui-pop-api/src/strips.rs` draw text only; the separator is a literal `›` | The crumbs ignore the declared icon; the separator should be a glyph role (`chevron-end`) |
-| Mode chips | Optional: a mode is named by its text; an icon makes an active mode visible at a glance | Object kind (a mode, `FrameSpec`) | `inline`; the mode's tone | Decorative | `FrameSpec.icon` by name lookup, copied to `Chip.icon` (`egui-pop-api/src/contexts.rs`), drawn by `strips.rs` as `Mark::icon` | An unknown name draws nothing and says nothing (ADR 0003) |
+| Breadcrumb crumbs | Optional: the text names the place; an icon on every place that declares one, hidden in the compact density (decided 2026-10-22) | Object kind (a place, `FrameSpec`) | `inline`; the current crumb strong | Decorative | `FrameSpec.icon` (`egui-pop-model/src/context.rs`), drawn before the crumb by `status_context` (`egui-pop-api/src/strips.rs`), not in the compact density; `contexts::crumb_icons` and the `strips` collector give the names; the separator is a literal `›` | The separator should be a glyph role (`chevron-end`) |
+| Mode chips | Optional: a mode is named by its text; an icon makes an active mode visible at a glance | Object kind (a mode, `FrameSpec`) | `inline`; the mode's tone | Decorative | `FrameSpec.icon` by name lookup, copied to `Chip.icon` (`egui-pop-api/src/contexts.rs`), drawn by `strips.rs` as `Mark::icon`; an unknown name is an `unknown-icon` diagnostic | An unknown name still draws nothing on the chip |
 | Status items (indicators) | Optional: most items are short texts; an item that is icon-only (a connection, a sync) needs one | Command when the item runs one, object kind otherwise (a connection) | `inline`; tone, busy spinner, error and warning counts | Decorative beside text; only label when alone: the item's label | `strips::Indicator` has no icon field; the error and warning counts are hard-coded `Icon::Error` and `Icon::Warning` (`strips.rs`) | No icon on an item; the counts' icons should be the severity kinds |
 | Status item popovers and hover cards | Optional: content drawn by the application | Either | `inline` | As for the content | Drawn by the item's `PopoverFn` or `HoverFn` (`strips.rs`, `egui-pop-core/src/hover_card.rs`) | None in egui-pop |
 | Busy slot of a command control | Required: a spinner replaces the icon while a run waits | Command | The control's icon size; busy after `motion.spinner.delay` | Decorative; AccessKit's busy flag carries the state | `busy::paint_slot(.., icon: Option<Icon>, ..)` in `egui-pop-api/src/busy.rs`, the icon given per call | The icon should be the command's |
@@ -83,8 +84,8 @@ registered ones).
 | Surface | Rule | Family | Size and states | Accessibility | Today | Gap |
 |---|---|---|---|---|---|---|
 | Menu bar titles | Not used: every platform shows text titles | — | — | — | Text | None |
-| Menu items (bar, context and popup menus) | Optional, in an aligned gutter (section 5); following the `menus.icons` setting (section 3) | Command | `inline`; disabled (greyed), checked (a tick in the gutter, or a frame around the icon), busy (a spinner in the gutter), the "on" icon of a toggle | Decorative: the title is the name; a check item is announced as a check box | Every row already reserves an `inline` square on its left (`command_row` in `egui-pop-api/src/menus.rs`) holding the spinner, the tick or the row's icon, in that order; command rows pass `icon: None` because `CommandSpec` (`egui-pop-model/src/commands.rs`) has no icon | `CommandSpec::icon` and an "on" icon; the tick hides the icon instead of framing it; no radio items (only checkable ones); no setting |
-| List-provider entries | Optional, as menu items; an entry naming a thing (a recent file, a profile) takes that thing's kind icon | Command, or object kind | As menu items | Decorative | `ListItem::icon: Option<Icon>` (`menus.rs`), `#[serde(skip)]` | Not reported to agents; set per entry instead of from the command or the kind |
+| Menu items (bar, context and popup menus) | Optional, in an aligned gutter (section 5); following the `menus.icons` setting (section 3) | Command | `inline`; disabled (greyed), checked (a tick in the gutter, or a frame around the icon), busy (a spinner in the gutter), the "on" icon of a toggle | Decorative: the title is the name; a check item is announced as a check box | Every row already reserves an `inline` square on its left (`command_row` in `egui-pop-api/src/menus.rs`) holding the spinner, the tick or the row's icon, in that order; command rows pass `icon: None`, though `CommandSpec` (`egui-pop-model/src/commands.rs`) now declares `icon` and `icon_on` | Rows do not read the command's icons yet; the tick hides the icon instead of framing it; no radio items (only checkable ones); no setting |
+| List-provider entries | Optional, as menu items; an entry naming a thing (a recent file, a profile) takes that thing's kind icon | Command, or object kind | As menu items | Decorative | `ListItem::icon`, by value or by name (`menus.rs`), serialised by name for the `lists` collector | Set per entry; an entry without one does not fall back to its command's |
 | Submenu entries | Optional: Apple and Microsoft both allow an icon on the entry; its arrow is a glyph | Command group (no command of its own) | `inline`; open | Decorative | `Item::Submenu { menu, label }` (`egui-pop-model/src/menus.rs`) has no icon; the arrow is egui's | No icon on a submenu; the arrow should be the `submenu` glyph role, as the kit documents |
 | Command palette | Optional: shown in a fixed column when the command declares one; text stays the label | Command | `inline`; disabled entries greyed | Decorative | Text only (`egui-pop-api/src/palette.rs`) | Reads nothing; needs the command's icon |
 | Quick open (a list of things to go to) | Required when the list mixes kinds (a module, an image, a workspace): the icon says which kind a match is | Object kind | `inline` | Decorative; the kind joins the accessible name when the text does not say it | egui-pop has none; Helios builds it on the choice dialog, whose rows are text only (`choice_row` in `egui-pop-api/src/dialogs.rs`) | Choice rows take no icon |
@@ -98,7 +99,7 @@ registered ones).
 
 | Surface | Rule | Family | Size and states | Accessibility | Today | Gap |
 |---|---|---|---|---|---|---|
-| Activity bar | Required: an icon-only strip by convention | Object kind (a panel) | `panel`; selected (the shown panel), hover, focus, an indicator | Only label: the panel's title | `PanelSpec::icon: String` (`egui-pop-model/src/panels.rs`) by name lookup in `activity_bar` (`strips.rs`); empty or unknown: the title's first letter | An unknown name falls back to a letter silently (ADR 0003) |
+| Activity bar | Required: an icon-only strip by convention | Object kind (a panel) | `panel`; selected (the shown panel), hover, focus, an indicator | Only label: the panel's title | `PanelSpec::icon: String` (`egui-pop-model/src/panels.rs`) by name lookup in `activity_bar` (`strips.rs`); empty or unknown: the title's first letter, an unknown name being an `unknown-icon` diagnostic | None |
 | Folded strips and flyouts | Required: same as the activity bar | Object kind (a panel) | `panel`; selected, an indicator's dot or count | Only label: the title and its key | Built on the `wip/folded-strip-icons` branch from `PanelSpec::icon`, not yet on main | The same name lookup |
 | Panel tabs | Optional, behind a setting off by default (decided 2026-10-22): the title is the label and tab bars are narrow | Object kind (a panel) | `inline`; active | Decorative | Text only (the tab bar in `egui-pop-api/src/workbench.rs`) | None now; when wanted, the same `PanelSpec` icon |
 | Floating palette bands (close, roll up, pin) | Required: a band has no room for text | Glyph role (close, roll), command (pin) | The band's side; pin is `selected` while on | Only label: Close, Roll up / Roll down, Pin / Unpin | `band::button(ui, side, icon, name, on)` (`egui-pop-core/src/band.rs`); `Icon::ChevronDown`/`ChevronUp` and `Icon::Lock`/`Unlock` hard-coded in `egui-pop-api/src/palettes.rs` | Pin uses the lock icons; roll should be a glyph role |
@@ -111,7 +112,7 @@ registered ones).
 
 | Surface | Rule | Family | Size and states | Accessibility | Today | Gap |
 |---|---|---|---|---|---|---|
-| Tree rows | Optional per tree, required where rows mix kinds (files and folders, mask elements) | Object kind | `inline`, in the row's text colour; selected | Decorative | `TreeView::icon(Fn(&Node) -> Option<Source>)` (`egui-pop-views/src/tree/mod.rs`) | A closure per tree, so the same kind may look different in two trees; not reported to agents |
+| Tree rows | Optional per tree, required where rows mix kinds (files and folders, mask elements) | Object kind | `inline`, in the row's text colour; selected | Decorative | `TreeView::icon(Fn(&Node) -> Option<Source>)` (`egui-pop-views/src/tree/mod.rs`), a name given with `Source::named`; each row's icon name reported to agents (the `icons` collector's `drawn`) | A closure per tree, so the same kind may look different in two trees (kinds: step 6) |
 | Tree disclosure | Required | Glyph role (`disclosure-*`) | `inline`; open, closed | Decorative (the row's expanded state is announced) | Kit glyphs | None |
 | Row actions (buttons on a row) | Required: icon-only on hover or focus, by space | Command | `inline`; on/off for toggles | Only label: the command's title | Each application draws its own (Helios: eye and lock in the masks tree) | No row-action helper reading commands |
 | Table and list headers | Not used, except the sort mark | Glyph role (`sort-*`) | `inline` | Decorative (the sort is announced) | Kit glyphs in `egui-pop-views/src/table.rs` | None |
@@ -145,10 +146,10 @@ registered ones).
 | Jobs centre: job rows | Optional: a job kind's icon (import, export); the state is text and a ring | Object kind (job kind), severity for a failure | `inline`; running ring, failed | Decorative: the state is text | Text and a ring; the log toggle is `Icon::ChevronDown`/`ChevronRight` hard-coded (`egui-pop-api/src/jobs_centre.rs`) | No job kind icon; the log toggle should be the disclosure role |
 | Jobs status item and panel | Required in the status item (a ring), optional on the panel | Object kind (the Jobs panel) | `inline` | The item's text names it | A ring painted in `jobs.rs`; the panel declares `.icon("history")` | None |
 | Tips | Optional: the info icon marks a tip card | Object kind (severity: info) | `inline` | Decorative: the heading names it | `Icon::Info` hard-coded in `egui-pop-api/src/tips.rs`; `Tip` has no icon | A plugin's tip cannot have its own |
-| Micro-indicators (icon kind) | Required: the icon is the mark | Either: an on/off pair is a command's, a state mark is a kind's | `inline`; on/off, tone | Only label: the mark's meaning | `Indicator::icon(Icon)`, `Indicator::toggle(on, when_on, when_off)` (`egui-pop-core/src/indicator.rs`) | Built-in icons only; names wait for the registry ([design/indicators.md](design/indicators.md)) |
+| Micro-indicators (icon kind) | Required: the icon is the mark | Either: an on/off pair is a command's, a state mark is a kind's | `inline`; on/off, tone | Only label: the mark's meaning | `Indicator::icon`, `Indicator::toggle(on, when_on, when_off)` (`egui-pop-core/src/indicator.rs`), each icon by value or by name | No `Indicator::command(id)` taking a command's icon pair yet ([design/indicators.md](design/indicators.md)) |
 | Field state marks | Required: a state is never said by colour alone | Glyph role | `inline`; disabled, invalid, pending, modified, read-only | Decorative: the state joins the field's name | `field::icon(Mark)` in `egui-pop-core/src/field.rs` | Hard-coded mapping; could be glyph roles |
-| Inputs: leading and trailing icons | Optional: a search field's magnifier, a path field's folder | Object kind (what the field holds) | `inline` | Decorative | `Input::leading_icon`, `trailing_icon` (`egui-pop-core/src/input.rs`); search fields add `Icon::Search` | Per instance |
-| Inputs: attached buttons | Optional: an icon button when the action is standard (clear, browse) | Command | `inline` | Only label: `Attached::icon(icon, label)` | `Attached::icon` in `input.rs` | Per instance |
+| Inputs: leading and trailing icons | Optional: a search field's magnifier, a path field's folder | Object kind (what the field holds) | `inline` | Decorative | `Input::leading_icon`, `trailing_icon` (`egui-pop-core/src/input.rs`), by value or by name, reported to agents (the `icons` collector's `drawn`); search fields add `Icon::Search` | Per instance; no kind (`file/folder`) yet |
+| Inputs: attached buttons | Optional: an icon button when the action is standard (clear, browse) | Command | `inline` | Only label: `Attached::icon(icon, label)` | `Attached::icon` in `input.rs`, by value or by name | Per instance |
 | Dialog titles | Not used: the title and the buttons say it; a danger dialog is marked by its buttons | — | — | — | None | None |
 | Dialog buttons | Not used: the verb matters | — | — | — | Text (`egui-pop-api/src/dialogs.rs`) | None |
 | Dialog close | Required | Glyph role (`close`) | Band button | Only label: "Close" | Kit glyph on a `band-icon-button` (`dialogs.rs`) | None |
@@ -202,10 +203,14 @@ The gaps that matter most:
 1. **Commands have no icon.** `CommandSpec` declares none, so menus,
    the palette, toolbars, the shortcut editor and status items cannot
    show one, and every command control takes its icon from its caller.
+   *Declared since step 2 (`CommandSpec::icon`, `icon_on`); the surfaces
+   read them from step 3.*
 2. **Icon names are not checked.** `PanelSpec::icon`, `FrameSpec.icon`
    and a workspace's icon are free strings; an unknown name becomes a
    letter or nothing, with no diagnostic (against
-   [ADR 0003](adr/0003-no-silent-no-op.md)).
+   [ADR 0003](adr/0003-no-silent-no-op.md)). *Closed by step 2 for
+   egui-pop's declarations (the `unknown-icon` diagnostic, the `icons`
+   collector); a workspace's icon is Helios's.*
 3. **Icons are chosen inside widgets**: severities in toasts, the
    editors' gutter and the status bar's counts; chevrons in the jobs
    centre, the library grid, the graph and Helios's parameters (which
@@ -214,9 +219,11 @@ The gaps that matter most:
 4. **Agents see only part of it.** Panel and frame icons and the
    indicators' icon names are reported; `ListItem::icon` is skipped,
    tree and input icons are closures or fields nobody describes.
+   *Closed by step 2: list entries, commands, tree rows and inputs are
+   reported by name.*
 5. **Port types are told by colour alone** in the node graph.
 6. **The breadcrumb ignores `FrameSpec.icon`**, which says it serves
-   the crumbs.
+   the crumbs. *Closed by step 2.*
 7. **The vocabulary is small.** About 57 built-in names cover
    egui-pop's own needs; an application's commands (Export, Crop,
    Import) need its own SVGs or a larger set (section 4.5).
@@ -314,6 +321,14 @@ surface and the name, ADR 0003) when the plugin connects and again
 when the theme is installed, and drawn as a neutral placeholder (the
 title's first letter, as the activity bar does today), never silently
 dropped.
+
+In code: `egui_pop_core::icon::registry` holds the vocabulary
+(`lookup`, which keeps each answer; `resolve`, which also reports;
+`unknown`; `search`), `IconRef` lets a widget take an `Icon` or a name,
+and `Source::named` gives a tree row's icon by name. egui-pop-api checks
+every command's, panel's and frame's icon when it resolves the
+declarations (the `unknown-icon` diagnostic) and its `icons` collector
+shows the whole of it to agents.
 
 ### 4.2 Command icons
 
@@ -433,7 +448,9 @@ The rows of a menu already reserve an `inline` square on their left
 2. **The registry, model side**: `CommandSpec::icon` and `icon_on`,
    kind declarations, names checked with diagnostics, the `icons`
    collector and the names in `describe`; `ListItem` by name and
-   serialised.
+   serialised. *Done, but for the kind declarations (`<domain>/<kind>`,
+   section 4.3), left to step 6 with the surfaces that need them; the
+   breadcrumb's icons (from step 6) came with it.*
 3. **Menus**: the gutter of section 5, radio items, the `menus.icons`
    setting (default `on`); the gallery's menus page with icons, ticks,
    radios, framed and disabled entries; snapshots and alignment tests; the extension
