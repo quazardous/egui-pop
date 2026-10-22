@@ -1686,7 +1686,7 @@ setting-appearance-language =
 setting-appearance-language-choice-system = system
 
 setting-appearance-text-size =
-    .description = Makes the text larger or smaller, without the spacing (the interface zoom scales everything).
+    .description = Makes the text larger or smaller, without the spacing (the interface zoom scales everything). Nothing was read from the system: the default is 100%.
     .label = Text size
 
 setting-appearance-text-size-choice-100- = 100%
