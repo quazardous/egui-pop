@@ -31,7 +31,7 @@ use pages::story::PagePlugin;
 pub const TITLE: &str = "egui-pop gallery";
 
 /// The pages, as named on the command line.
-pub const PAGES: [&str; 50] = [
+pub const PAGES: [&str; 51] = [
     "overview",
     "tokens",
     "builtins",
@@ -68,6 +68,7 @@ pub const PAGES: [&str; 50] = [
     "terminal",
     "zones",
     "workbench",
+    "layout",
     "palettes",
     "arrangements",
     "contexts",
@@ -98,7 +99,7 @@ pub fn builder(options: &Options) -> AppBuilder {
         .theme(spec)
         .plugins(egui_pop::api::DefaultPlugins)
         .plugin(egui_pop::mounts::MountsPlugin)
-        .plugin(egui_pop::api::frame::FramePlugin::system())
+        .plugin(egui_pop::api::frame::FramePlugin::system().layout_controls(true))
         .plugin(shell::Shell {
             first: StoryId::new(options.page.as_str()).unwrap_or(StoryId::from_static("overview")),
         })
@@ -249,6 +250,7 @@ pub fn builder(options: &Options) -> AppBuilder {
         .plugin(pages::zones::ZonesPage)
         .plugin(pages::zones::Extender)
         .plugin(pages::workbench::WorkbenchPage)
+        .plugin(pages::layout::LayoutPage)
         .plugin(pages::palettes::PalettesPage)
         .plugin(pages::arrangements::ArrangementsPage::default())
         .plugin(egui_pop::api::contexts::ContextsPlugin::default().root("All photos"))

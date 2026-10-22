@@ -29,7 +29,8 @@ publishes.
   `workbench.layout.panelAlignment`, each change a write of its setting
   and one undo step; `workbench.layout.customize` opens the menu.
   `workbench.arrangement.save` without a name asks for one in a dialog,
-  suggesting a new name. English and French strings.
+  suggesting a new name. English and French strings. The gallery has a
+  Layout controls page, and its own title bar shows them.
 - VS Code's area toggles (egui-pop-api): `workbench.toggle.primarySideBar`
   (`Ctrl+B`), `workbench.toggle.panel` (`Ctrl+J`) and
   `workbench.toggle.secondarySideBar` (`Ctrl+Alt+B`) fold a shown area to

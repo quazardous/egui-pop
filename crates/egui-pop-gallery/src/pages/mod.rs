@@ -26,6 +26,7 @@ pub mod images;
 pub mod indicators;
 pub mod inputs;
 pub mod jobs;
+pub mod layout;
 pub mod library;
 pub mod menus;
 pub mod motion;
