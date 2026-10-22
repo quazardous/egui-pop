@@ -141,6 +141,18 @@ publishes.
   `disclosure-*` glyph roles) and `section-count` (based on
   `indicator-badge`). The gallery's `sections` page shows them; the
   survey and the classic apps compared are in `docs/sections.md`.
+- VS Code's area toggles (egui-pop-api): `workbench.toggle.primarySideBar`
+  (`Ctrl+B`), `workbench.toggle.panel` (`Ctrl+J`) and
+  `workbench.toggle.secondarySideBar` (`Ctrl+Alt+B`) fold a shown area to
+  its strip or show it again through the `workbench.fold` step, keeping
+  its panels; an area with nothing left to show gets its first closed
+  panel back (`workbench.show`). They are in the View menu, ticked while
+  their area shows, and the context keys `sideBarVisible`,
+  `panelVisible` and `auxiliaryBarVisible` say so
+  (`layout_controls::area_shown`, `toggle_area`). Their icons are the
+  layout icons (`CommandSpec::icon` and `icon_on`: `layout-left-off`
+  and `layout-left`, and so on), filled while their area shows. English
+  and French strings.
 - The primary side bar on the left or the right (egui-pop-api): the
   `workbench.side_bar_position` setting (`left` by default, or `right`)
   draws the start side area on the window's right and the end one on
@@ -525,6 +537,11 @@ publishes.
   palette blocks the other windows while it is open, as a modal. Their
   blocks move to the `WINDOW_OVERLAYS` zone; `AppHandle::overlay_rects`
   reports the window being drawn. `docs/hosts.md`: E4 closed.
+- `Ctrl+B` is the workbench's (egui-pop-api): the strips plugin's
+  `view.side_bar.toggle` ("Fold the side bar") loses its `Ctrl+B` and
+  its View menu item to `workbench.toggle.primarySideBar`, which does the
+  same as VS Code's; the command stays, without a key, for code that
+  runs it.
 - The bottom panel lies under the editors by default (egui-pop-api):
   the `workbench.panel_alignment` setting now defaults to `center`,
   between the side bars, as VS Code's panel alignment does; `justify`

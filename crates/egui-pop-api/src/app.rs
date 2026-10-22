@@ -1392,6 +1392,9 @@ impl AppHandle {
         for (key, on) in crate::clipboard::keys(self).into_iter().flatten() {
             base.set(key, flag(on));
         }
+        for (key, on) in crate::layout_controls::keys(self) {
+            base.set(key, flag(on));
+        }
         focus::when_context(ctx, &base)
     }
 
@@ -1953,6 +1956,11 @@ impl AppHandle {
 
     pub(crate) fn workbench_mut(&self) -> RefMut<'_, crate::workbench::Workbench> {
         self.0.workbench.borrow_mut()
+    }
+
+    /// The workbench, unless something holds it now.
+    pub(crate) fn try_workbench(&self) -> Option<RefMut<'_, crate::workbench::Workbench>> {
+        self.0.workbench.try_borrow_mut().ok()
     }
 
     /// Whether the centre is drawn edge to edge.
