@@ -61,8 +61,10 @@ pub const CMD_FILTER: CommandId = CommandId::from_static("library.filter");
 /// The plugin's id.
 pub const LIBRARY: PluginId = PluginId::from_static("egui_pop.library");
 
-/// How many requests a library keeps waiting for its view.
-const INBOX: usize = 64;
+/// How many requests a library keeps waiting for its view: a view its
+/// host no longer draws keeps the latest, the older ones dropped and
+/// counted (`dropped` in the collector).
+pub const INBOX: usize = 64;
 
 /// A step a command asked a library's view to run.
 #[derive(Clone, Debug, PartialEq)]
@@ -79,6 +81,8 @@ struct Entry {
     filter: Json,
     inbox: VecDeque<Request>,
     filter_inbox: Option<Json>,
+    /// Requests dropped from a full inbox.
+    dropped: u64,
 }
 
 #[derive(Debug, Default)]
@@ -110,7 +114,8 @@ impl Libraries {
     }
 
     /// What the collector shows: each library's count, selection (the
-    /// first hundred keys), cursor and filter.
+    /// first hundred keys), cursor and filter, the requests waiting for
+    /// its view and those dropped (past [`INBOX`]).
     pub fn describe(&self) -> Json {
         let i = lock(&self.inner);
         let all: serde_json::Map<String, Json> = i
@@ -126,6 +131,7 @@ impl Libraries {
                         "cursor": e.cursor,
                         "filter": e.filter,
                         "waiting": e.inbox.len(),
+                        "dropped": e.dropped,
                     }),
                 )
             })
@@ -207,6 +213,7 @@ impl Libraries {
         e.inbox.push_back(request);
         while e.inbox.len() > INBOX {
             e.inbox.pop_front();
+            e.dropped += 1;
         }
     }
 }
@@ -256,7 +263,7 @@ impl Plugin for LibraryPlugin {
         ctx.collector(
             FnCollector::new(
                 "libraries",
-                "The photo libraries drawn: their count, selection, cursor, filter and waiting requests.",
+                "The photo libraries drawn: their count, selection, cursor, filter, and the requests waiting for their view and dropped from a full inbox.",
             )
             .snapshot(move |_| reg.describe()),
         )?;

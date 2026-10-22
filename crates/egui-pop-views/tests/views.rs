@@ -239,6 +239,47 @@ fn changes_under_an_expanded_tree_keep_selection_and_expansion() {
 }
 
 #[test]
+fn a_tree_not_drawn_drops_its_edits_past_the_cap_and_loads_again() {
+    let mut h = tree_harness(None);
+    h.run();
+    h.state_mut().state.set_expanded(&"a".into(), true);
+    h.run();
+    let asked = h.state().source.asked.lock().unwrap().len();
+    // Its host stops drawing it (no pass); a worker keeps renaming.
+    let edit = h.state().state.handle();
+    std::thread::spawn(move || {
+        for i in 0..tree::EDITS_WAITING + 100 {
+            edit.rename("a/1".into(), format!("File a1 v{i}"));
+        }
+    })
+    .join()
+    .unwrap();
+    // The queue stayed bounded: the edits past the cap gave way to
+    // loading everything again.
+    assert_eq!(h.state().state.waiting(), 99);
+    assert_eq!(h.state().state.dropped(), tree::EDITS_WAITING as u64 + 1);
+    // Drawn again: every branch shown is asked for again, and agents are
+    // told on the journal.
+    h.run();
+    let again = h.state().source.asked.lock().unwrap()[asked..].to_vec();
+    assert!(
+        again.contains(&None) && again.contains(&Some("a".into())),
+        "{again:?}"
+    );
+    assert_eq!(h.state().state.waiting(), 0);
+    let told = h
+        .state()
+        .handle()
+        .events_since(0)
+        .into_iter()
+        .find(|e| e.name == "tree.overflowed")
+        .expect("a tree.overflowed event");
+    assert_eq!(told.data["tree"], "files");
+    assert_eq!(told.data["dropped"], tree::EDITS_WAITING as u64 + 1);
+    assert!(h.query_by_label("Folder A").is_some());
+}
+
+#[test]
 fn the_keyboard_moves_opens_closes_and_searches() {
     let mut h = tree_harness(None);
     h.run();

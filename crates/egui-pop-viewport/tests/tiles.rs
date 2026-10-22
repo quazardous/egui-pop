@@ -8,7 +8,7 @@ use egui::{Key, pos2, vec2};
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
 use egui_pop_test::viewport::TestSource;
-use egui_pop_viewport::source::Quality;
+use egui_pop_viewport::source::{NOTICES, Quality};
 use egui_pop_viewport::tiles::UploadBudget;
 use egui_pop_viewport::{Signal, View, Viewport, ViewportState};
 
@@ -163,6 +163,29 @@ fn a_change_asks_again_for_its_region_only_and_keeps_the_old_tiles_meanwhile() {
     // ... and nothing was thrown away while waiting.
     assert_eq!(h.state().state.tile_count(), held);
     assert!(!h.state().state.tiles_complete());
+    settle(&mut h);
+}
+
+#[test]
+fn a_viewport_not_drawn_keeps_a_bounded_backlog_of_changes() {
+    let mut h = harness(scene(View::actual([500.0, 400.0]), true, false), 1.0);
+    settle(&mut h);
+    let changed = h.state().state.stats().snapshot()[6].1;
+    // Hidden (no pass draws it), its source keeps changing the image and
+    // answering readouts.
+    let sink = h.state().state.sink();
+    for i in 0..10_000 {
+        sink.changed(Some([0.0, 0.0, 10.0, 10.0]));
+        sink.readout([i, 0], vec![("L".into(), 0.5)]);
+    }
+    assert!(h.state().state.notices_waiting() <= NOTICES);
+    // Drawn again: all taken in, the folded changes as one change of the
+    // whole image, and counted.
+    h.run();
+    assert_eq!(h.state().state.notices_waiting(), 0);
+    let st = h.state().state.stats().snapshot();
+    assert_eq!(st[6].1 - changed, NOTICES as u64 / 2 + 1, "{st:?}");
+    assert_eq!(st[7], ("coalesced", 20_000 - NOTICES as u64), "{st:?}");
     settle(&mut h);
 }
 

@@ -296,6 +296,14 @@ impl ViewportState {
         &self.tiles.stats
     }
 
+    /// Changes and readouts the source sent that wait for the next
+    /// draw: at most [`NOTICES`](crate::source::NOTICES), however long
+    /// the viewport is not drawn (the others are folded, counted as
+    /// `coalesced` in [`stats`](Self::stats)).
+    pub fn notices_waiting(&self) -> usize {
+        self.tiles.feed.backlog.queued()
+    }
+
     /// No request outstanding and every wanted exact tile on screen
     /// (after the last frame).
     pub fn tiles_complete(&self) -> bool {
