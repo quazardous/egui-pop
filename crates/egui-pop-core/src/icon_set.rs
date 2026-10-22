@@ -6,6 +6,10 @@
 //! colour a widget gives, like the built-in icons) or full-colour
 //! ([`Paint::Colour`], an application's logo, drawn as it is).
 //!
+//! An application's names may stay bare (`play-circle`); a plugin's are
+//! prefixed by its id (`my-plugin:mask-circle`, [`register_for`]) so two
+//! plugins never clash. `phosphor:` names belong to the Phosphor set.
+//!
 //! [`install`] (run with the theme, `theme::install_tokens`) rasterises
 //! every registered icon at the icon sizes of the theme (`size.icon.*`)
 //! and the window's pixels per point, as textures; drawing paints one
@@ -52,6 +56,9 @@ pub enum IconError {
 impl std::fmt::Display for IconError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            IconError::Taken(n) if n.starts_with(crate::icon::registry::PHOSPHOR_PREFIX) => {
+                write!(f, "`{n}` is in the Phosphor set's name space")
+            }
             IconError::Taken(n) => write!(f, "`{n}` is one of egui-pop's icons"),
             IconError::Svg(e) => write!(f, "not a readable SVG: {e}"),
             IconError::Unsupported => write!(f, "egui-pop was built without the `svg` feature"),
@@ -73,26 +80,68 @@ static SET: RwLock<Vec<Entry>> = RwLock::new(Vec::new());
 
 /// Registers an SVG icon under a name (kebab case, like `play-circle`),
 /// or replaces the one registered under it. In use from the next theme
-/// install. Each new name is kept for the whole process.
+/// install. Each new name is kept for the whole process. A name
+/// `<owner>:<name>` is owned by `owner` (see [`register_for`]); egui-pop's
+/// names and the `phosphor:` ones are refused.
 pub fn register(name: &str, svg: impl Into<Arc<[u8]>>, paint: Paint) -> Result<Icon, IconError> {
-    if Icon::ALL.iter().any(|i| i.name() == name) {
+    if Icon::ALL.iter().any(|i| i.name() == name)
+        || name.starts_with(crate::icon::registry::PHOSPHOR_PREFIX)
+    {
         return Err(IconError::Taken(name.into()));
     }
     let svg = svg.into();
     check(&svg)?;
-    let mut set = SET.write().unwrap_or_else(|e| e.into_inner());
-    if let Some(i) = set.iter().position(|e| e.name == name) {
-        set[i].svg = svg;
-        set[i].paint = paint;
-        return Ok(Icon::Custom(CustomIcon(i as u16)));
-    }
-    let id = u16::try_from(set.len()).expect("fewer than 65536 icons");
-    set.push(Entry {
-        name: Box::leak(name.to_string().into_boxed_str()),
-        svg,
-        paint,
-    });
-    Ok(Icon::Custom(CustomIcon(id)))
+    let icon = {
+        let mut set = SET.write().unwrap_or_else(|e| e.into_inner());
+        if let Some(i) = set.iter().position(|e| e.name == name) {
+            set[i].svg = svg;
+            set[i].paint = paint;
+            return Ok(Icon::Custom(CustomIcon(i as u16)));
+        }
+        let id = u16::try_from(set.len()).expect("fewer than 65536 icons");
+        set.push(Entry {
+            name: Box::leak(name.to_string().into_boxed_str()),
+            svg,
+            paint,
+        });
+        Icon::Custom(CustomIcon(id))
+    };
+    // The name may have been looked up, and found unknown, before.
+    crate::icon::registry::forget(name);
+    Ok(icon)
+}
+
+/// Registers a plugin's SVG icon under `<owner>:<name>` (the plugin's id
+/// as `owner`: `my-plugin:mask-circle`), as [`register`] does.
+pub fn register_for(
+    owner: &str,
+    name: &str,
+    svg: impl Into<Arc<[u8]>>,
+    paint: Paint,
+) -> Result<Icon, IconError> {
+    register(&format!("{owner}:{name}"), svg, paint)
+}
+
+/// A registered icon, as agents read it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Registered {
+    pub name: &'static str,
+    /// The plugin owning it (the part before `:`), `None` for an
+    /// application's bare name.
+    pub owner: Option<&'static str>,
+    pub paint: Paint,
+}
+
+/// Every registered icon, in registration order.
+pub fn registered() -> Vec<Registered> {
+    let set = SET.read().unwrap_or_else(|e| e.into_inner());
+    set.iter()
+        .map(|e| Registered {
+            name: e.name,
+            owner: e.name.split_once(':').map(|(o, _)| o),
+            paint: e.paint,
+        })
+        .collect()
 }
 
 /// A registered icon by name.
@@ -302,6 +351,21 @@ mod tests {
         let top = image[(12, 3)];
         assert!(top.a() > 100 && top.r() == top.a(), "{top:?}");
         assert_eq!(image[(12, 12)].a(), 0);
+    }
+
+    #[test]
+    fn a_plugin_icon_is_prefixed_by_its_owner_and_resolves_once_registered() {
+        assert_eq!(Icon::by_name("test-plugin:ring"), None);
+        let ring = register_for("test-plugin", "ring", RING, Paint::Mono).unwrap();
+        assert_eq!(ring.name(), "test-plugin:ring");
+        assert_eq!(Icon::by_name("test-plugin:ring"), Some(ring));
+        let r = registered();
+        let entry = r.iter().find(|e| e.name == "test-plugin:ring").unwrap();
+        assert_eq!(entry.owner, Some("test-plugin"));
+        assert!(matches!(
+            register("phosphor:ring", RING, Paint::Mono),
+            Err(IconError::Taken(_))
+        ));
     }
 
     #[test]

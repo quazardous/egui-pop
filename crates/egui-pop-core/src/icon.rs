@@ -10,6 +10,13 @@
 //! A [`Source`] is what an [`IconWidget`] draws: an icon by role, a glyph
 //! from any font, or an image.
 //!
+//! Icons are declared by **name** wherever a declaration has no egui (a
+//! command, a panel, a place): one vocabulary of egui-pop's names, the
+//! Phosphor glyphs' (`phosphor:<name>`) and the registered ones
+//! (`<plugin-id>:<name>`), resolved once and checked, the unknown ones
+//! reported ([`registry`]). Widgets taking an icon accept a name too
+//! ([`IconRef`]).
+//!
 //! ```
 //! use egui_pop_core::icon::{Icon, Size, Tone};
 //!
@@ -29,6 +36,10 @@ use egui::{
 
 use crate::kit::{KitCx, Part, State};
 use crate::theme::Tokens;
+
+pub mod registry;
+
+pub use registry::{IconRef, PLACEHOLDER, PhosphorIcon};
 
 /// The family the icon font is installed under (`phosphor` feature).
 pub const FAMILY: &str = "egui-pop-icons";
@@ -127,6 +138,9 @@ pub enum Icon {
     /// A triangle filling a corner of its square (the top start one when
     /// drawn alone; a corner flag turns it to its corner).
     Corner,
+    /// A glyph of the Phosphor font by name (`phosphor:grid-four`,
+    /// [`registry`]); only with the `phosphor` feature.
+    Phosphor(PhosphorIcon),
     /// An icon the application registered (`icon_set::register`): an SVG
     /// file, drawn from textures made when the theme is installed.
     Custom(crate::icon_set::CustomIcon),
@@ -194,13 +208,12 @@ impl Icon {
     ];
 
     /// The icon of a name (`settings`), as [`Icon::name`] gives it:
-    /// egui-pop's, then the application's (`icon_set::register`).
+    /// egui-pop's, then the Phosphor glyphs' (`phosphor:<name>`), then
+    /// the registered ones (`icon_set::register`). Resolved once
+    /// ([`registry::lookup`]); [`registry::resolve`] also reports a name
+    /// that does not resolve.
     pub fn by_name(name: &str) -> Option<Icon> {
-        Icon::ALL
-            .iter()
-            .copied()
-            .find(|i| i.name() == name)
-            .or_else(|| crate::icon_set::by_name(name))
+        registry::lookup(name)
     }
 
     /// Its name in kebab case (`chevron-right`): for the debug bridge and
@@ -263,6 +276,7 @@ impl Icon {
             Icon::Triangle => "triangle",
             Icon::Asterisk => "asterisk",
             Icon::Corner => "corner",
+            Icon::Phosphor(p) => p.name(),
             Icon::Custom(c) => crate::icon_set::name(c),
         }
     }
@@ -340,6 +354,7 @@ fn glyph(icon: Icon) -> Option<&'static str> {
         | Icon::Asterisk
         | Icon::Corner
         | Icon::Custom(_) => return None,
+        Icon::Phosphor(g) => return g.glyph(),
         Icon::Search => p::MAGNIFYING_GLASS,
         Icon::Settings => p::GEAR_SIX,
         Icon::Folder => p::FOLDER,
@@ -853,6 +868,8 @@ pub fn paint_fallback(p: &Painter, icon: Icon, rect: Rect, color: Color32) {
         }
         // Drawn from its textures (`Icon::paint`): no fallback shape.
         Icon::Custom(_) => {}
+        // Before the icon font is in use: the placeholder's ring.
+        Icon::Phosphor(_) => paint_fallback(p, PLACEHOLDER, rect, color),
         Icon::Picker => {
             // The tube down to its tip, the collar across it, the bulb.
             p.line_segment([at(0.05, 0.95), at(0.6, 0.4)], stroke);
@@ -915,6 +932,13 @@ fn paint_window_button(p: &Painter, icon: Icon, rect: Rect, color: Color32) {
     }
 }
 
+impl serde::Serialize for Icon {
+    /// Its name: what agents read.
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(self.name())
+    }
+}
+
 /// What an icon widget draws.
 #[derive(Clone, Debug)]
 pub enum Source {
@@ -936,6 +960,20 @@ impl From<Icon> for Source {
 }
 
 impl Source {
+    /// An icon by name ([`registry`]): a name that does not resolve is
+    /// reported (`surface`) and drawn as the [`PLACEHOLDER`].
+    pub fn named(name: &str, surface: &str) -> Source {
+        Source::Icon(registry::resolve(name, surface).unwrap_or(PLACEHOLDER))
+    }
+
+    /// The name of the icon it draws; `None` for a glyph or an image.
+    pub fn icon_name(&self) -> Option<&'static str> {
+        match self {
+            Source::Icon(i) => Some(i.name()),
+            _ => None,
+        }
+    }
+
     /// A glyph in the proportional family.
     pub fn glyph(text: &str) -> Source {
         Source::Glyph {

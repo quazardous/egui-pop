@@ -52,7 +52,7 @@ use egui::{
 use egui_pop_model::field::FieldState;
 
 use crate::field;
-use crate::icon::Icon;
+use crate::icon::{Icon, IconRef};
 use crate::kit::{Kit, State, Tone};
 use crate::state;
 use crate::strings::{self, FIELD_RESET, INPUT_CHOICES, INPUT_CLEAR, INPUT_MORE};
@@ -104,10 +104,12 @@ pub struct Attached {
 }
 
 impl Attached {
-    /// An icon button, named `label` for assistive technologies.
-    pub fn icon(icon: Icon, label: &str) -> Self {
+    /// An icon button, named `label` for assistive technologies; the
+    /// icon by value or by name (`"folder"`, `"phosphor:export"`; an
+    /// unknown name is reported and drawn as the placeholder).
+    pub fn icon(icon: impl Into<IconRef>, label: &str) -> Self {
         Self {
-            icon: Some(icon),
+            icon: Some(icon.into().or_placeholder("input button")),
             text: None,
             label: label.into(),
             menu: Vec::new(),
@@ -237,8 +239,11 @@ impl<'a> Input<'a> {
         self
     }
 
-    pub fn leading_icon(mut self, icon: Icon) -> Self {
-        self.leading.push(Slot::Icon(icon));
+    /// An icon before the value, by value or by name (an unknown name is
+    /// reported and drawn as the placeholder).
+    pub fn leading_icon(mut self, icon: impl Into<IconRef>) -> Self {
+        self.leading
+            .push(Slot::Icon(icon.into().or_placeholder("input icon")));
         self
     }
 
@@ -259,8 +264,10 @@ impl<'a> Input<'a> {
         self.suffix(unit)
     }
 
-    pub fn trailing_icon(mut self, icon: Icon) -> Self {
-        self.trailing.push(Slot::Icon(icon));
+    /// An icon after the value, by value or by name.
+    pub fn trailing_icon(mut self, icon: impl Into<IconRef>) -> Self {
+        self.trailing
+            .push(Slot::Icon(icon.into().or_placeholder("input icon")));
         self
     }
 
@@ -698,6 +705,17 @@ impl<'a> Input<'a> {
         });
         field::access(&ctx, response.id, &state);
         field::record(&ctx, response.id, &label, kind.name(), &state);
+        // Its icons, by name, for agents.
+        for slot in leading.iter().chain(trailing.iter()) {
+            if let Slot::Icon(i) = slot {
+                crate::icon::registry::record(&ctx, "input", &label, i.name());
+            }
+        }
+        for b in &buttons {
+            if let Some(i) = b.icon {
+                crate::icon::registry::record(&ctx, "input button", &b.label, i.name());
+            }
+        }
         let mut response = field::hover(ui, &response, &state);
         if changed {
             response.mark_changed();

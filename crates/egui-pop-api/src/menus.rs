@@ -89,7 +89,8 @@ pub const STEP_OPEN: StepId = StepId::from_static("menu.open");
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct ListItem {
     pub label: String,
-    #[serde(skip)]
+    /// Its icon; agents read its name (the `lists` collector).
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub icon: Option<Icon>,
     /// What it runs, with its arguments.
     pub command: CommandId,
@@ -112,8 +113,11 @@ impl ListItem {
         }
     }
 
-    pub fn icon(mut self, icon: Icon) -> Self {
-        self.icon = Some(icon);
+    /// Its icon, by value or by name (`"history"`, `"phosphor:file-image"`,
+    /// `"my-plugin:album"`). A name that does not resolve is reported (the
+    /// `icons` collector) and the entry shows no icon.
+    pub fn icon(mut self, icon: impl Into<egui_pop_core::icon::IconRef>) -> Self {
+        self.icon = icon.into().resolve("menu list item");
         self
     }
 

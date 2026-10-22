@@ -12,6 +12,21 @@ publishes.
 
 ### Added
 
+- One icon registry (egui-pop-core, egui-pop-api, egui-pop-views;
+  docs/icons.md, section 4): an icon is named from one vocabulary,
+  egui-pop's names (`settings`), the Phosphor glyphs' as
+  `phosphor:<name>` (`phosphor:grid-four`, about 1,500 with the
+  `phosphor` feature) and the registered SVGs, a plugin's prefixed by
+  its id (`my-plugin:mask-circle`, `Ctx::icon`,
+  `icon_set::register_for`). Names are resolved once
+  (`icon::registry::lookup`); an unknown one is logged, listed
+  (`icon::registry::unknown`) and drawn as a placeholder instead of
+  nothing. Widgets taking an icon accept a name too (`ListItem::icon`,
+  `Input::leading_icon` and `trailing_icon`, `Attached::icon`,
+  `Indicator::icon` and `toggle`, `Source::named` for a tree's rows);
+  list entries are serialised with their icon's name for agents, and
+  the icons tree rows and inputs draw are recorded by name each pass
+  (`icon::registry::drawn`).
 - A widget's own secondary button (egui-pop-core): a widget that needs
   the right click for something else claims the secondary click, the
   drag or both on its rect (`pointer::claim::claim_secondary` with a
@@ -208,6 +223,14 @@ publishes.
   family drawing instead. English and French strings. Closes #50.
 
 ### Changed
+
+- Icons by name (egui-pop-core): `Icon` gains a `Phosphor` variant
+  (the enum is non-exhaustive) and is serialised as its name;
+  `Icon::by_name` also resolves `phosphor:<name>` and keeps its answers.
+  `ListItem::icon`, `Input::leading_icon`, `Input::trailing_icon`,
+  `Attached::icon`, `Indicator::icon` and `Indicator::toggle` take
+  `impl Into<IconRef>` instead of `Icon`: calls passing an `Icon` are
+  unchanged. `icon_set::register` refuses names under `phosphor:`.
 
 - Palettes are resizable (egui-pop-model, egui-pop-api, egui-pop-tokens):
   their right edge, bottom edge and corner drag their size, between the

@@ -604,7 +604,9 @@ impl<'a, K: Key> TreeView<'a, K> {
 
     /// Each row's icon, between the triangle and the label (`None`: no
     /// icon on that row), drawn in the row's text colour at the inline
-    /// icon size.
+    /// icon size. A name of the icon vocabulary is given with
+    /// `Source::named` (`"folder"`, `"phosphor:image"`); the icon each row
+    /// shows is reported to agents (the `icons` collector's `drawn`).
     pub fn icon(mut self, icon: impl Fn(&Node<K>) -> Option<Source> + 'a) -> Self {
         self.icon = Some(Box::new(icon));
         self
@@ -775,6 +777,14 @@ impl<'a, K: Key> TreeView<'a, K> {
                                     vec2(side, side),
                                 );
                                 source.paint(ui, at, color);
+                                if let Some(name) = source.icon_name() {
+                                    egui_pop_core::icon::registry::record(
+                                        ui.ctx(),
+                                        "tree",
+                                        &node.label,
+                                        name,
+                                    );
+                                }
                                 left += side + ui.spacing().icon_spacing;
                             }
                             // The row's widgets, from the right end; the

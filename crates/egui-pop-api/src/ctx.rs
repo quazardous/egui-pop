@@ -169,6 +169,19 @@ impl<'a> Ctx<'a> {
         ValueWriter::new(self.app.store(), self.owner.clone())
     }
 
+    /// Registers an SVG icon of this plugin under `<plugin-id>:<name>`
+    /// (`my-plugin:mask-circle`), the name its declarations then use
+    /// (`CommandSpec::icon`, `PanelSpec::icon`). Needs the `svg` feature
+    /// of `egui-pop-core`.
+    pub fn icon(
+        &mut self,
+        name: &str,
+        svg: impl Into<std::sync::Arc<[u8]>>,
+        paint: egui_pop_core::icon_set::Paint,
+    ) -> Result<egui_pop_core::icon::Icon, egui_pop_core::icon_set::IconError> {
+        egui_pop_core::icon_set::register_for(self.plugin.as_str(), name, svg, paint)
+    }
+
     /// Whether another plugin is connected.
     pub fn is_connected(&self, plugin: &PluginId) -> bool {
         self.connected.contains(plugin)
