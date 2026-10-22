@@ -247,7 +247,7 @@ the display, and a preview dialog (a custom dialog holding a viewport).
 
 ### Layout
 
-Zones and blocks, the workbench, palettes, arrangements, the context stack, the clipboard, strips and the window frame.
+Zones and blocks, the workbench, the layout controls, palettes, arrangements, the context stack, the clipboard, strips and the window frame.
 
 <table>
   <tr>
@@ -279,6 +279,10 @@ Zones and blocks, the workbench, palettes, arrangements, the context stack, the 
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/clipboard-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/clipboard-pop-dark.png" width="200" alt="clipboard-pop-dark"></a><br>clipboard-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/strips-popover-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/strips-popover-pop-dark.png" width="200" alt="strips-popover-pop-dark"></a><br>strips-popover-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/strips-card-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/strips-card-pop-dark.png" width="200" alt="strips-card-pop-dark"></a><br>strips-card-pop-dark</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/layout-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/layout-pop-dark.png" width="200" alt="layout-pop-dark"></a><br>layout-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/layout-menu-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/layout-menu-pop-dark.png" width="200" alt="layout-menu-pop-dark"></a><br>layout-menu-pop-dark</td>
   </tr>
 </table>
 

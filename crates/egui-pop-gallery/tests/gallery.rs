@@ -1384,6 +1384,47 @@ fn the_workbench_page_opens_moves_and_vetoes_panels() {
 }
 
 #[test]
+fn the_layout_page_toggles_the_areas_and_opens_the_layout_menu() {
+    use egui_pop::api::layout_controls::{self, MENU_LAYOUT, SideBarPosition};
+    use egui_pop::model::panels::Area;
+    let mut h = harness(options("pop-dark", Density::Comfortable, "layout"));
+    h.run();
+    let app = h.state().app.handle().clone();
+    let mut results = egui_kittest::SnapshotResults::new();
+    results.add(h.try_snapshot("layout-pop-dark"));
+    let toggled = |h: &Harness<'_, Gallery>| {
+        h.get_by_label("Toggle primary side bar")
+            .accesskit_node()
+            .toggled()
+    };
+    assert_eq!(toggled(&h), Some(egui::accesskit::Toggled::True));
+    h.get_by_label("Toggle primary side bar").click();
+    h.run();
+    h.run();
+    assert!(app.layout().folded.contains(&Area::StartSide));
+    assert_eq!(toggled(&h), Some(egui::accesskit::Toggled::False));
+    h.get_by_label("Toggle primary side bar").click();
+    h.run();
+    h.run();
+    assert!(app.layout().folded.is_empty());
+    h.get_by_label("Customize layout").click();
+    h.run();
+    assert_eq!(egui_pop::api::menus::popup_open(&app), Some(MENU_LAYOUT));
+    assert!(
+        h.query_by_label("Save the current arrangement as…")
+            .is_some()
+    );
+    results.add(h.try_snapshot("layout-menu-pop-dark"));
+    h.get_by_label("Primary side bar on the right").click();
+    h.run();
+    h.run();
+    assert_eq!(
+        layout_controls::side_bar_position(&app),
+        SideBarPosition::Right
+    );
+}
+
+#[test]
 fn the_workbench_page_shows_a_dragged_tab_s_ghost_where_it_would_land() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "workbench"));
     h.run();
