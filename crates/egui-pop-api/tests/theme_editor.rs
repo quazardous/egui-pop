@@ -623,7 +623,10 @@ fn the_fonts_edited_are_previewed_before_they_are_applied_even_across_a_theme_sw
     assert!(fonts::preview_family(&h.ctx, Role::Ui, Weight::REGULAR).is_some());
     assert!(fonts::preview(&h.ctx, Role::Ui).is_some());
     // Cancel drops the edits and the preview: back to the fonts
-    // installed.
+    // installed. The installed list was scrolled into view: the button
+    // may be out of it.
+    h.get_by_label("Cancel the font edits").scroll_to_me();
+    h.run();
     h.get_by_label("Cancel the font edits").click();
     h.run();
     assert!(!editor.fonts_pending(&handle));
