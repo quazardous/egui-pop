@@ -21,6 +21,10 @@
 //! its default area). A saved layout is repaired against today's panels
 //! when switched to (ADR 0003: what changed is said).
 //!
+//! Saving without a name (`workbench.arrangement.save` with `name`
+//! empty, as the View menu and the layout menu run it) asks for one in
+//! a dialog, a new name suggested, when the dialogs plugin is there.
+//!
 //! Steps (ADR 0011), each with its default:
 //!
 //! | Step | Arguments |
@@ -42,6 +46,7 @@ use serde_json::{Value as Json, json};
 use crate::app::{AppHandle, MENU_VIEW};
 use crate::contexts::{self, FrameId, FrameRegistry, State};
 use crate::steps::{Outcome, StepSpec};
+use crate::strings as txt;
 use crate::{Ctx, Plugin, PluginError};
 
 /// Where the saved arrangements are: a JSON object, name to layout
@@ -283,6 +288,42 @@ pub fn delete(app: &AppHandle, name: &str) -> Outcome {
     })
 }
 
+/// Asks for the name to save the current arrangement under, in a form
+/// that runs `workbench.arrangement.save` with it; `false` without the
+/// dialogs plugin.
+pub fn ask_name(app: &AppHandle) -> bool {
+    let Some(dialogs) = app.service(&crate::dialogs::DIALOGS) else {
+        return false;
+    };
+    let ctx = app.egui();
+    let tr = |key| egui_pop_core::strings::tr(&ctx, key);
+    let taken = names(app);
+    let suggested = (saved(app).len() + 1..)
+        .map(|n| {
+            egui_pop_core::strings::tr_args(
+                &ctx,
+                &txt::ARRANGEMENT_SUGGESTED,
+                &[("n", &n.to_string())],
+            )
+        })
+        .find(|n| !taken.contains(n))
+        .unwrap_or_default();
+    let mut form = crate::dialogs::Form::new(
+        &tr(&txt::ARRANGEMENT_SAVE_TITLE),
+        &tr(&txt::ARRANGEMENT_SAVE_VERB),
+        CMD_SAVE,
+    )
+    .field(
+        "name",
+        Descriptor::text(&tr(&txt::ARRANGEMENT_NAME), &suggested),
+    );
+    // Answered, the save runs with the name, empty or not: never asked
+    // again.
+    form.args = json!({ "asked": true });
+    dialogs.open(form);
+    true
+}
+
 fn outcome(o: Outcome) -> Result<Json, String> {
     match o {
         Outcome::Done(r) => r,
@@ -344,6 +385,10 @@ impl Plugin for ArrangementsPlugin {
                     .get("name")
                     .and_then(Json::as_str)
                     .unwrap_or_default();
+                let asked = call.args.get("asked").and_then(Json::as_bool) == Some(true);
+                if name.trim().is_empty() && !asked && ask_name(call.app) {
+                    return Ok(json!({ "asked": true }));
+                }
                 outcome(save(call.app, name))
             },
         )?

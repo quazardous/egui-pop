@@ -1,20 +1,28 @@
 //! The layout, as VS Code arranges it: each area shown or hidden by its
 //! toggle and its key, through the fold step; the primary side bar on
-//! the left or the right, each change a setting undone as one step.
+//! the left or the right, each change a setting undone as one step; the
+//! title bar's controls (their icons following the areas) and the
+//! layout menu (arrangements applied and saved, the options).
 
+use egui::accesskit::Toggled;
 use egui_kittest::Harness;
-use egui_kittest::kittest::Queryable as _;
+use egui_kittest::kittest::{NodeT as _, Queryable as _};
+use egui_pop_api::arrangements;
+use egui_pop_api::dialogs::{Answer, DIALOGS};
 use egui_pop_api::frame::FramePlugin;
 use egui_pop_api::layout_controls::{
     self, CMD_TOGGLE_PANEL, CMD_TOGGLE_PRIMARY_SIDE_BAR, CMD_TOGGLE_SECONDARY_SIDE_BAR,
-    SETTING_SIDE_BAR_POSITION, SideBarPosition, TOGGLES,
+    MENU_LAYOUT, SETTING_SIDE_BAR_POSITION, SideBarPosition, TOGGLES,
 };
+use egui_pop_api::menus;
 use egui_pop_api::strips::{self, StripsPlugin};
-use egui_pop_api::workbench::STEP_FOLD;
+use egui_pop_api::workbench::{self, PanelAlignment, STEP_FOLD};
 use egui_pop_api::zones::{self, Block};
 use egui_pop_api::{App, AppHandle, Ctx, DefaultPlugins, Plugin, PluginError};
+use egui_pop_core::icon::Icon;
 use egui_pop_model::commands::Origin;
 use egui_pop_model::ids::{BlockId, PanelId, PluginId};
+use egui_pop_model::layout::{Layout, Node};
 use egui_pop_model::panels::{Area, PanelSpec};
 use egui_pop_model::values::{Change, Set, Value};
 use serde_json::Value as Json;
@@ -48,6 +56,15 @@ impl Plugin for Demo {
                 ui.label("inspector body");
             }),
         );
+        // A built-in arrangement: the tree at the end, no log.
+        ctx.arrangement(
+            "Focus",
+            Layout {
+                areas: vec![(Area::EndSide, Node::tab(TREE))],
+                hidden: vec![LOG],
+                ..Layout::default()
+            },
+        );
         Ok(())
     }
 }
@@ -55,7 +72,7 @@ impl Plugin for Demo {
 fn harness() -> Harness<'static, App> {
     let app = App::builder()
         .plugins(DefaultPlugins)
-        .plugin(FramePlugin::own().name("Demo"))
+        .plugin(FramePlugin::own().name("Demo").layout_controls(true))
         .plugin(StripsPlugin::default())
         .plugin(Demo)
         .build(&egui::Context::default())
@@ -206,4 +223,155 @@ fn ctrl_b_ctrl_j_and_ctrl_alt_b_toggle_the_areas() {
         h.run();
         assert_eq!(shown(&app), [true; 3], "{modifiers:?} {key:?} again");
     }
+}
+
+/// A toggle's name in the title bar: its command's title.
+fn toggle_name(app: &AppHandle, area: Area) -> String {
+    let command = layout_controls::toggle_command(area).unwrap();
+    app.command(&command).unwrap().title
+}
+
+fn toggled(h: &Harness<'_, App>, name: &str) -> Option<Toggled> {
+    h.get_by_label(name).accesskit_node().toggled()
+}
+
+#[test]
+fn the_title_bar_toggles_round_trip_and_their_icons_follow() {
+    let mut h = harness();
+    let app = handle(&h);
+    let icons = [
+        (Area::StartSide, Icon::LayoutLeft, Icon::LayoutLeftOff),
+        (Area::Bottom, Icon::LayoutBottom, Icon::LayoutBottomOff),
+        (Area::EndSide, Icon::LayoutRight, Icon::LayoutRightOff),
+    ];
+    assert!(h.query_by_label("Customize layout").is_some());
+    for (area, filled, outlined) in icons {
+        let name = toggle_name(&app, area);
+        assert_eq!(toggled(&h, &name), Some(Toggled::True), "{name}");
+        assert_eq!(layout_controls::toggle_icon(&app, area), filled);
+        h.get_by_label(&name).click();
+        h.run();
+        h.run();
+        assert!(app.layout().folded.contains(&area), "{name} folds");
+        assert_eq!(toggled(&h, &name), Some(Toggled::False), "{name}");
+        assert_eq!(layout_controls::toggle_icon(&app, area), outlined);
+        h.get_by_label(&name).click();
+        h.run();
+        h.run();
+        assert!(!app.layout().folded.contains(&area), "{name} unfolds");
+        assert_eq!(toggled(&h, &name), Some(Toggled::True), "{name}");
+        assert_eq!(layout_controls::toggle_icon(&app, area), filled);
+    }
+}
+
+/// Opens the layout menu from the title bar's button.
+fn open_menu(h: &mut Harness<'_, App>) {
+    h.get_by_label("Customize layout").click();
+    h.run();
+    assert_eq!(menus::popup_open(&handle(h)), Some(MENU_LAYOUT));
+}
+
+/// Chooses an entry of the layout menu.
+fn choose(h: &mut Harness<'_, App>, label: &str) {
+    open_menu(h);
+    h.get_by_label(label).click();
+    h.run();
+    h.run();
+}
+
+#[test]
+fn the_layout_menu_applies_a_built_in_arrangement_and_saves_the_current_one() {
+    let mut h = harness();
+    let app = handle(&h);
+    assert_eq!(arrangements::current(&app), arrangements::DEFAULT);
+    // Built in: the application's template.
+    choose(&mut h, "Focus");
+    assert_eq!(arrangements::current(&app), "Focus");
+    assert_eq!(app.layout().area_of(&TREE), Some(Area::EndSide));
+    assert!(!app.panel_visible(&LOG));
+    // Changed, then saved under a name asked in a dialog.
+    app.move_panel(&TREE, Area::StartSide);
+    h.run();
+    choose(&mut h, "Save the current arrangement as…");
+    let dialogs = app.service(&DIALOGS).unwrap();
+    assert!(dialogs.current().is_some(), "a name is asked");
+    let mut values = serde_json::Map::new();
+    values.insert("name".into(), Json::from("Mine"));
+    dialogs
+        .answer(Answer::Accept { values }, Origin::User)
+        .unwrap();
+    h.run();
+    h.run();
+    assert!(arrangements::saved(&app).contains_key("Mine"));
+    assert_eq!(arrangements::current(&app), "Mine");
+    // The menu lists it, ticked; the other arrangement switches back.
+    open_menu(&mut h);
+    assert_eq!(toggled(&h, "Mine"), Some(Toggled::True));
+    h.get_by_label("Focus").click();
+    h.run();
+    h.run();
+    assert_eq!(app.layout().area_of(&TREE), Some(Area::EndSide));
+    choose(&mut h, "Mine");
+    assert_eq!(app.layout().area_of(&TREE), Some(Area::StartSide));
+}
+
+#[test]
+fn each_layout_option_changes_the_layout_and_is_undone_in_one_step() {
+    let mut h = harness();
+    let app = handle(&h);
+    // The defaults: the side bars as they were, the panel under the
+    // editors.
+    let (start, end, bottom) = (
+        rect(&h, "start_side"),
+        rect(&h, "end_side"),
+        rect(&h, "bottom"),
+    );
+    assert!(start.right() <= end.left());
+    assert!(bottom.left() >= start.right() - 1.0 && bottom.right() <= end.left() + 1.0);
+    open_menu(&mut h);
+    assert_eq!(
+        toggled(&h, "Primary side bar on the left"),
+        Some(Toggled::True)
+    );
+    assert_eq!(toggled(&h, "Panel under the editors"), Some(Toggled::True));
+    h.key_press(egui::Key::Escape);
+    h.run();
+
+    choose(&mut h, "Primary side bar on the right");
+    assert_eq!(
+        layout_controls::side_bar_position(&app),
+        SideBarPosition::Right
+    );
+    let (start, end) = (rect(&h, "start_side"), rect(&h, "end_side"));
+    assert!(end.right() <= start.left(), "{start:?} {end:?}");
+    // The toggles' icons follow their side.
+    assert_eq!(
+        layout_controls::toggle_icon(&app, Area::StartSide),
+        Icon::LayoutRight
+    );
+    assert_eq!(
+        layout_controls::toggle_icon(&app, Area::EndSide),
+        Icon::LayoutLeft
+    );
+
+    choose(&mut h, "Panel across the full width");
+    assert_eq!(workbench::panel_alignment(&app), PanelAlignment::Justify);
+    let (start, end, bottom) = (
+        rect(&h, "start_side"),
+        rect(&h, "end_side"),
+        rect(&h, "bottom"),
+    );
+    assert!(bottom.left() <= end.left() + 1.0 && bottom.right() >= start.right() - 1.0);
+    assert!(start.bottom() <= bottom.top() + 1.0, "under both side bars");
+
+    // Each was one undo step.
+    assert!(app.undo(&Origin::User).ok());
+    h.run();
+    assert_eq!(workbench::panel_alignment(&app), PanelAlignment::Center);
+    assert!(app.undo(&Origin::User).ok());
+    h.run();
+    assert_eq!(
+        layout_controls::side_bar_position(&app),
+        SideBarPosition::Left
+    );
 }

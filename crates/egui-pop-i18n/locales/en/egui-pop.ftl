@@ -522,6 +522,18 @@ command-workbench-arrangement-switch =
     .description = Puts the panels as a saved arrangement or a template has them.
     .title = Switch arrangement
 
+command-workbench-layout-customize =
+    .description = Opens the layout menu: the areas, the arrangements, saving the current one, where the side bars and the panel lie.
+    .title = Customize layout…
+
+command-workbench-layout-panelAlignment =
+    .description = Lines the bottom panel up under the editors or across the full width (`alignment`: `center`, `justify`, `start` or `end`; without it, switches between `center` and `justify`).
+    .title = Toggle full-width panel
+
+command-workbench-layout-sideBarPosition =
+    .description = Puts the primary side bar on the left or the right (`position`: `left` or `right`; without it, on the other side).
+    .title = Toggle primary side bar position
+
 command-workbench-leave-zen =
     .description = Shows the whole workbench again.
     .title = Leave zen mode
@@ -549,6 +561,14 @@ egui-pop-area-center = the centre
 egui-pop-area-end-side = the end side bar
 
 egui-pop-area-start-side = the start side bar
+
+egui-pop-arrangement-name = Name
+
+egui-pop-arrangement-save-title = Save the current arrangement
+
+egui-pop-arrangement-save-verb = Save the arrangement
+
+egui-pop-arrangement-suggested = Arrangement { $n }
 
 egui-pop-busy = Busy
 
@@ -839,6 +859,20 @@ egui-pop-jobs-none = No jobs.
 egui-pop-jobs-open-panel = Open the panel
 
 egui-pop-jobs-title = Jobs
+
+egui-pop-layout-customize = Customize layout
+
+egui-pop-layout-panel-center = Panel under the editors
+
+egui-pop-layout-panel-justify = Panel across the full width
+
+egui-pop-layout-save-as = Save the current arrangement as…
+
+egui-pop-layout-side-bar-left = Primary side bar on the left
+
+egui-pop-layout-side-bar-right = Primary side bar on the right
+
+egui-pop-layout-with-key = { $action } ({ $keys })
 
 egui-pop-loading = Loading
 
@@ -1558,6 +1592,9 @@ menu-app-menu-file =
 
 menu-app-menu-help =
     .label = Help
+
+menu-app-menu-layout =
+    .label = Customize layout
 
 menu-app-menu-view =
     .label = View
