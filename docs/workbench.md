@@ -364,7 +364,8 @@ arrangement's template. Steps: `arrangement.save`, `arrangement.switch`,
 ## Slim strips
 
 `StripsPlugin` (opt-in) draws the activity bar, a button per panel of the
-start side bar (`Ctrl+B` folds the side bar to its strip), and status bar
+start side bar (`Ctrl+B`, the workbench's `workbench.toggle.primarySideBar`,
+folds the side bar to its strip), and status bar
 indicators fed by the host's journal: an `Indicator` is a reducer over
 the events of a prefix, so a long job publishes its progress and the
 status bar follows it.

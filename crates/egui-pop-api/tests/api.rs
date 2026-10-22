@@ -603,7 +603,7 @@ fn keys_run_commands_through_the_shell_and_the_palette_lists_them() {
     let p = P::new("p", &l, move |ctx| {
         let r = r.clone();
         ctx.command(
-            CommandSpec::new(CommandId::from_static("p.count"), "Count", "Demo").key("Ctrl+J"),
+            CommandSpec::new(CommandId::from_static("p.count"), "Count", "Demo").key("Ctrl+U"),
             move |_| {
                 *r.borrow_mut() += 1;
                 Ok(Json::Null)
@@ -622,7 +622,7 @@ fn keys_run_commands_through_the_shell_and_the_palette_lists_them() {
             ),
         );
     h.run();
-    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::J);
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::U);
     h.run();
     assert_eq!(*ran.borrow(), 1);
     // The palette opens on its key, filters, and Enter runs the command.
@@ -641,7 +641,7 @@ fn keys_run_commands_through_the_shell_and_the_palette_lists_them() {
     assert_eq!(*ran.borrow(), 2);
     assert!(!egui_pop_api::palette::is_open(h.state().handle()));
     let trace = h.state().dispatcher().traces().next().unwrap().clone();
-    assert_eq!(trace.keys, "Ctrl+J");
+    assert_eq!(trace.keys, "Ctrl+U");
     // The menu bar shows the framework's menus.
     assert!(h.query_by_label("File").is_some());
     let _ = MenuId::from_static("x");

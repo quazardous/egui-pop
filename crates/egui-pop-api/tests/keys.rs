@@ -169,9 +169,9 @@ fn removing_every_key_needs_no_placeholder_and_a_rebind_may_be_vetoed() {
     let t = h.step_traces().pop().unwrap();
     assert_eq!(t.step, STEP_REBIND);
     assert!(t.vetoed_by.is_some());
-    h.rebind(GO, Some("Ctrl+J".into()));
+    h.rebind(GO, Some("Ctrl+U".into()));
     app.process_requests();
-    assert_eq!(h.keys_for(&GO), ["Ctrl+J"]);
+    assert_eq!(h.keys_for(&GO), ["Ctrl+U"]);
 }
 
 #[test]
@@ -195,16 +195,16 @@ fn keys_change_in_the_workspace_s_layer_and_each_binding_says_where_it_comes_fro
     };
     assert_eq!(layers(&h), [("Ctrl+G".to_string(), Layer::Default)]);
     // The workspace's keys: in its layer, which the application exports.
-    h.rebind_in(Layer::Workspace, GO, Some("Ctrl+J".into()));
+    h.rebind_in(Layer::Workspace, GO, Some("Ctrl+U".into()));
     app.process_requests();
-    assert_eq!(layers(&h), [("Ctrl+J".to_string(), Layer::Workspace)]);
+    assert_eq!(layers(&h), [("Ctrl+U".to_string(), Layer::Workspace)]);
     assert!(h.rebound_in(Layer::Workspace, &GO));
     assert!(!h.rebound_in(Layer::User, &GO));
     let doc = h.export_keymap(Layer::Workspace);
     assert!(
         doc.bindings
             .iter()
-            .any(|b| b.keys == "Ctrl+J" && b.command.as_deref() == Some("demo.go"))
+            .any(|b| b.keys == "Ctrl+U" && b.command.as_deref() == Some("demo.go"))
     );
     assert!(h.export_keymap(Layer::User).bindings.is_empty());
     let t = h.step_traces().pop().unwrap();
@@ -218,7 +218,7 @@ fn keys_change_in_the_workspace_s_layer_and_each_binding_says_where_it_comes_fro
     assert_eq!(layers(&h), [("Ctrl+K".to_string(), Layer::User)]);
     h.reset_keys(GO);
     app.process_requests();
-    assert_eq!(layers(&h), [("Ctrl+J".to_string(), Layer::Workspace)]);
+    assert_eq!(layers(&h), [("Ctrl+U".to_string(), Layer::Workspace)]);
     h.reset_keys_in(Layer::Workspace, GO);
     app.process_requests();
     assert_eq!(layers(&h), [("Ctrl+G".to_string(), Layer::Default)]);

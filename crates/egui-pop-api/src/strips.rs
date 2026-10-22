@@ -1,7 +1,8 @@
 //! Slim strips, as a plugin ([`StripsPlugin`], opt-in): the **activity
 //! bar**, a column of icons along the start edge, one per panel that
 //! lives in the start side bar (an icon shows its panel, a click on the
-//! shown one folds the side bar to the strip, `Ctrl+B` too), and the
+//! shown one folds the side bar to the strip, as the workbench's
+//! `workbench.toggle.primarySideBar` does on `Ctrl+B`), and the
 //! **status bar** with **indicators**: small items whose state is fed by
 //! the host's events (a job's progress, a connection, a count), each
 //! with an optional command run on a click.
@@ -89,7 +90,7 @@ use egui_pop_model::when::{When, WhenContext};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value as Json, json};
 
-use crate::app::{AppHandle, MENU_VIEW};
+use crate::app::AppHandle;
 use crate::contexts::{self, Chip, Envelope};
 use crate::host::Event;
 use crate::services::ServiceToken;
@@ -121,7 +122,9 @@ const ERRORS_SEEN: Slot<(u64, f64)> = Slot::new("api.strips.errors_seen");
 /// owner whether the mode may be left), per chip.
 const CHIP_HOVERED: Slot<bool> = Slot::new("api.strips.chip_hovered");
 
-/// Folds or unfolds the start side bar.
+/// Folds or unfolds the start side bar. It has no key and no menu item
+/// of its own: `Ctrl+B` and the View menu run the workbench's
+/// `workbench.toggle.primarySideBar` (`layout_controls`).
 pub const CMD_TOGGLE_SIDE_BAR: CommandId = CommandId::from_static("view.side_bar.toggle");
 /// Hides a status item where the user is, or shows it again.
 pub const CMD_HIDE_ITEM: CommandId = CommandId::from_static("status.item.hide");
@@ -770,9 +773,7 @@ impl Plugin for StripsPlugin {
         )?;
         ctx.command(
             CommandSpec::new(CMD_TOGGLE_SIDE_BAR, "Fold the side bar", "View")
-                .description("Folds the start side bar to its strip, or unfolds it.")
-                .key("Ctrl+B")
-                .menu(MENU_VIEW, "3_layout", 0),
+                .description("Folds the start side bar to its strip, or unfolds it."),
             |call| {
                 let folded = call.app.layout().folded.contains(&Area::StartSide);
                 call.app.fold_area(Area::StartSide, !folded);

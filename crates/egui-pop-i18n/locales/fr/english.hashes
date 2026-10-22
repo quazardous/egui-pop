@@ -262,6 +262,12 @@ command-workbench-arrangement-switch.description 984205b37e66c1e1
 command-workbench-arrangement-switch.title d0e095ecc9422281
 command-workbench-leave-zen.description 1f1cdceb5029699c
 command-workbench-leave-zen.title 807fcda4df4c8836
+command-workbench-toggle-panel.description 32ec8f8f14f0aee9
+command-workbench-toggle-panel.title e2a922a82ec8940f
+command-workbench-toggle-primarySideBar.description 6abebaff6edb9c44
+command-workbench-toggle-primarySideBar.title 12ad1d9930347243
+command-workbench-toggle-secondarySideBar.description 1135c31c9a8e5988
+command-workbench-toggle-secondarySideBar.title 7d25f4b21647c51f
 command-workbench-zen.description a38941bcc516bbed
 command-workbench-zen.title 3abce81ef922131d
 egui-pop-area-bottom 524a384390fd3b6d
