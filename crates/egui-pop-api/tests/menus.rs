@@ -56,7 +56,9 @@ impl Plugin for Doc {
             asked.set(asked.get() + 1);
             vec![
                 ListItem::new("a.txt", OPEN, json!({ "path": "a.txt" })),
-                ListItem::new("b.txt", OPEN, json!({ "path": "b.txt" })).checked(true),
+                ListItem::new("b.txt", OPEN, json!({ "path": "b.txt" }))
+                    .checked(true)
+                    .icon("history"),
             ]
         });
         let veto = self.veto.clone();
@@ -140,6 +142,9 @@ fn a_list_is_asked_for_when_its_menu_opens_at_a_point_and_its_entries_run() {
     let snapshot = app.debug_snapshot();
     assert_eq!(snapshot["lists"][0]["name"], "doc.recent");
     assert_eq!(snapshot["lists"][0]["last"][1]["label"], "b.txt");
+    // Agents read an entry's icon by name.
+    assert_eq!(snapshot["lists"][0]["last"][1]["icon"], "history");
+    assert!(snapshot["lists"][0]["last"][0].get("icon").is_none());
     h.get_by_label("b.txt").click();
     h.run();
     h.run();
