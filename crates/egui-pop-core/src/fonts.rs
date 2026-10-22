@@ -2094,7 +2094,16 @@ mod tests {
             &Previews::default(),
             &System::get(&ctx),
         );
-        assert!(report.problems.is_empty(), "{report:?}");
+        // The fake face has weight 400 only: the other weights draw it,
+        // and the report says so; nothing else is a problem.
+        assert!(
+            report
+                .problems
+                .iter()
+                .all(|p| p.starts_with("font.family.ui: Ubuntu has no weight ")
+                    && p.ends_with(", 400 is drawn")),
+            "{report:?}"
+        );
         let regular = &defs.families[&FontFamily::Proportional];
         assert_eq!(regular[0], "pop:Ubuntu:400:system");
         let bold = &defs.families[&family(Role::Ui, Weight::BOLD)];
