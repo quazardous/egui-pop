@@ -222,6 +222,9 @@ fn show(ui: &mut Ui, app: &AppHandle) {
         egui_pop::core::param::param(ui, &d, egui_pop::core::param::Mode::Bound(&store, &path));
     }
 
+    section(ui, "Strip icons and flyouts");
+    strip_controls(ui, app);
+
     section(ui, "Placement rules");
     egui::Grid::new("gallery.workbench.rules")
         .num_columns(4)
@@ -292,7 +295,31 @@ fn show(ui: &mut Ui, app: &AppHandle) {
         });
     }
 
-    section(ui, "Strip icons and flyouts");
+    section(ui, "The workbench's steps");
+    let runs: Vec<String> = app
+        .step_traces()
+        .into_iter()
+        .filter(|t| t.step.as_str().starts_with("workbench."))
+        .rev()
+        .take(4)
+        .map(|t| match (&t.vetoed_by, &t.result) {
+            (Some((by, why)), _) => format!("{} {}: vetoed by {by} ({why})", t.step, t.args),
+            (None, Some(Ok(_))) => format!("{} {}: done", t.step, t.args),
+            (None, Some(Err(e))) => format!("{} {}: refused ({e})", t.step, t.args),
+            _ => t.step.to_string(),
+        })
+        .collect();
+    if runs.is_empty() {
+        ui.weak("Nothing yet.");
+    }
+    for r in runs {
+        ui.monospace(r);
+    }
+}
+
+/// The strips' controls, near the top of the page so they show without
+/// scrolling: fold either side, feed the outline's indicator.
+fn strip_controls(ui: &mut Ui, app: &AppHandle) {
     ui.weak("A folded side area's strip shows an icon per panel. A click opens the panel alone over the centre; Escape or a click away closes it; a double click, or its pin, unfolds the area. Its free edge resizes it, the width kept per panel with the layout.");
     ui.horizontal_wrapped(|ui| {
         let folded = app.layout().folded;
@@ -333,25 +360,4 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     ui.weak(format!(
         "The outline's indicator: {new} new headings, on its strip icon while the outline is not shown."
     ));
-
-    section(ui, "The workbench's steps");
-    let runs: Vec<String> = app
-        .step_traces()
-        .into_iter()
-        .filter(|t| t.step.as_str().starts_with("workbench."))
-        .rev()
-        .take(4)
-        .map(|t| match (&t.vetoed_by, &t.result) {
-            (Some((by, why)), _) => format!("{} {}: vetoed by {by} ({why})", t.step, t.args),
-            (None, Some(Ok(_))) => format!("{} {}: done", t.step, t.args),
-            (None, Some(Err(e))) => format!("{} {}: refused ({e})", t.step, t.args),
-            _ => t.step.to_string(),
-        })
-        .collect();
-    if runs.is_empty() {
-        ui.weak("Nothing yet.");
-    }
-    for r in runs {
-        ui.monospace(r);
-    }
 }

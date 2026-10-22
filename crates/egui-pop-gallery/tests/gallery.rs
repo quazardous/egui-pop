@@ -3301,14 +3301,27 @@ fn a_folded_strip_opens_a_flyout_and_shows_the_outlines_new_headings() {
     h.run();
     h.get_by_label("Add a heading to the outline").click();
     h.run();
-    // The page is long: the button may be below the fold.
-    h.get_by_label("Start side: fold").scroll_to_me();
-    h.run();
+    // The page's strip controls sit above its long tables: in view.
+    let app = h.state().app.handle().clone();
+    let button = h.get_by_label("Start side: fold").rect();
+    let centre = app.area_rect(Area::Center).unwrap();
+    assert!(
+        centre.contains_rect(button),
+        "the button {button:?} is out of the centre {centre:?}"
+    );
     h.get_by_label("Start side: fold").click();
     h.run();
     h.run();
-    let app = h.state().app.handle().clone();
-    assert!(app.layout().folded.contains(&Area::StartSide));
+    let steps: Vec<String> = app
+        .step_traces()
+        .into_iter()
+        .filter(|t| t.step.as_str().starts_with("workbench."))
+        .map(|t| format!("{} {} {:?} {:?}", t.step, t.args, t.vetoed_by, t.result))
+        .collect();
+    assert!(
+        app.layout().folded.contains(&Area::StartSide),
+        "not folded; the workbench's steps: {steps:#?}"
+    );
     // The outline's icon carries its two new headings.
     let outline = workbench::strip(&app)
         .into_iter()
