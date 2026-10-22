@@ -1,11 +1,13 @@
 //! The icon registry seen from an application: commands, panels and
 //! places declare icons by name, every name is checked (an unknown one is
-//! a diagnostic, never silence) and agents read the names.
+//! a diagnostic, never silence), agents read the names, and the
+//! breadcrumb shows a place's icon except in the compact density.
 
 use egui_kittest::Harness;
 use egui_pop_api::contexts::{self, ContextsPlugin, FrameSpec};
 use egui_pop_api::strips::StripsPlugin;
 use egui_pop_api::{App, AppBuilder, Ctx, DefaultPlugins, Plugin, PluginError};
+use egui_pop_core::theme::{Density, ThemeSpec};
 use egui_pop_model::commands::CommandSpec;
 use egui_pop_model::ids::{CommandId, FrameId, PanelId, PluginId};
 use egui_pop_model::panels::{Area, PanelSpec};
@@ -154,5 +156,47 @@ fn the_icons_collector_lists_the_vocabulary_the_declarations_and_the_unknown_nam
             .as_array()
             .unwrap()
             .contains(&json!("chevron-right"))
+    );
+}
+
+#[test]
+fn the_breadcrumb_shows_a_place_icon_except_in_the_compact_density() {
+    let mut h = harness(builder());
+    let app = h.state().handle().clone();
+    assert!(contexts::enter(&app, ALBUM, Json::Null).ok());
+    h.run();
+    assert!(contexts::enter(&app, PHOTO, json!(1)).ok());
+    h.run();
+    h.run();
+    assert_eq!(
+        contexts::crumb_icons(&app),
+        [None, Some("folder".to_string()), None]
+    );
+    let strips = app.debug_snapshot()["strips"].clone();
+    assert_eq!(strips["breadcrumb_icons"], json!([null, "folder", null]));
+    let drawn = app.debug_snapshot()["icons"]["drawn"].clone();
+    assert!(
+        drawn
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|d| d["surface"] == "breadcrumb" && d["icon"] == "folder"),
+        "{drawn}"
+    );
+
+    let compact = builder().theme(ThemeSpec::new("pop-dark").density(Density::Compact));
+    let mut h = harness(compact);
+    let app = h.state().handle().clone();
+    assert!(contexts::enter(&app, ALBUM, Json::Null).ok());
+    h.run();
+    h.run();
+    let drawn = app.debug_snapshot()["icons"]["drawn"].clone();
+    assert!(
+        !drawn
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|d| d["surface"] == "breadcrumb"),
+        "{drawn}"
     );
 }

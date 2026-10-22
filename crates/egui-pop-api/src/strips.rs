@@ -413,6 +413,7 @@ fn describe(app: &AppHandle) -> Json {
     let place = contexts::state(app).map(|s| s.place().to_string());
     json!({
         "breadcrumb": contexts::crumbs(app),
+        "breadcrumb_icons": contexts::crumb_icons(app),
         "chips": contexts::chips(app),
         "items": status(app),
         "open": OPEN.get(&app.egui()),
@@ -1021,11 +1022,16 @@ fn status_context(ui: &mut Ui, app: &AppHandle) {
     let t = Tokens::of(ui.ctx());
     let spacing = ui.spacing().item_spacing.x;
     let pad = ui.spacing().button_padding.x;
+    let icons = crumb_icons(app, &t, crumbs.len());
     // The breadcrumb gives way first: the room left once the chips and
     // every indicator shown have theirs.
     let crumb_widths: Vec<f32> = crumbs
         .iter()
-        .map(|c| small_width(ui, c) + 2.0 * pad + spacing)
+        .zip(&icons)
+        .map(|(c, icon)| {
+            let mark = icon.map_or(0.0, |_| t.size.icon_inline + spacing);
+            small_width(ui, c) + 2.0 * pad + spacing + mark
+        })
         .collect();
     let sep = small_width(ui, "›") + spacing;
     let more = small_width(ui, "…") + 2.0 * pad + spacing;
@@ -1048,6 +1054,17 @@ fn status_context(ui: &mut Ui, app: &AppHandle) {
     for (k, seg) in segs.iter().enumerate() {
         if k > 0 {
             ui.label(RichText::new("›").small().weak());
+        }
+        if let Seg::Crumb(i) = seg
+            && let Some(icon) = icons[*i]
+        {
+            let tone = if *i == here {
+                egui_pop_core::icon::Tone::Strong
+            } else {
+                egui_pop_core::icon::Tone::Muted
+            };
+            ui.add(egui_pop_core::icon::IconWidget::new(icon).tone(tone));
+            egui_pop_core::icon::registry::record(ui.ctx(), "breadcrumb", &crumbs[*i], icon.name());
         }
         match seg {
             Seg::Crumb(i) if *i == here => {
@@ -1144,6 +1161,26 @@ fn status_context(ui: &mut Ui, app: &AppHandle) {
     if let Some(request) = leave {
         contexts::request(app, Envelope::new(request), &Origin::User);
     }
+}
+
+/// Each crumb's icon: its place's (`FrameSpec::icon`, the placeholder for
+/// a name that does not resolve: the `unknown-icon` diagnostic says it),
+/// none in the compact density, where the bar has no room for them.
+fn crumb_icons(app: &AppHandle, t: &Tokens, n: usize) -> Vec<Option<Icon>> {
+    if t.resolved().spec().density == egui_pop_core::theme::Density::Compact {
+        return vec![None; n];
+    }
+    let mut icons: Vec<Option<Icon>> = contexts::crumb_icons(app)
+        .into_iter()
+        .map(|name| {
+            name.map(|n| {
+                egui_pop_core::icon::registry::lookup(&n)
+                    .unwrap_or(egui_pop_core::icon::PLACEHOLDER)
+            })
+        })
+        .collect();
+    icons.resize(n, None);
+    icons
 }
 
 /// The items that give way in `room`, by index: the items are kept by
