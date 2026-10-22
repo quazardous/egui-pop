@@ -428,6 +428,8 @@ egui-pop-ok e055ee2a95ee5237
 egui-pop-palette-argument-help 7d846686818b8139
 egui-pop-palette-argument-title d3fe37537802bde3
 egui-pop-palette-close 102491ca00281644
+egui-pop-palette-close-group a5f517ecf21ee8c6
+egui-pop-palette-group-menu 4de338214c9cb7b1
 egui-pop-palette-hint ea358ba38bab7dbf
 egui-pop-palette-no-match b35d6729c46fa10e
 egui-pop-palette-not-bool 993eb161aa18de6a
