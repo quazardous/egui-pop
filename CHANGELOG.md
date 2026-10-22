@@ -177,7 +177,7 @@ publishes.
   egui-pop-tokens): the Fonts tab lists the families installed (egui's,
   the application's, the user's font files and the system's with
   `system-fonts`), with a search and the role they are for
-  (`ThemeEditor::installed_faces`, `ThemeEditor::set_face_search`).
+  (`ThemeEditor::installed_families`, `ThemeEditor::set_face_search`).
   Resting the pointer on one previews it; picking one puts it first in
   the role's families, the others its fallbacks and a generic family
   added when there is none (`ThemeEditor::choose_face`), applied with

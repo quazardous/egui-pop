@@ -81,7 +81,7 @@ it directly, or the service (`THEME_EDITOR`: `set`, `undo`, `redo`,
   user's font files (added through the file chooser, read to take
   their family and weight, kept as paths: `ThemeEditor::font_files`,
   for the host to save, and `set_font_files` at the next start). It
-  lists the **families installed** (`ThemeEditor::installed_faces`:
+  lists the **families installed** (`ThemeEditor::installed_families`:
   egui's, the application's, the user's font files and the system's
   with `system-fonts`), with a search and the role they are for
   (monospace ones only for monospace); resting the pointer on one

@@ -681,17 +681,17 @@ fn a_system_face_is_searched_previewed_then_picked_and_applied() {
         "fake"
     );
     let listed: Vec<String> = editor
-        .installed_faces(&handle, Role::Ui)
+        .installed_families(&handle, Role::Ui)
         .into_iter()
         .map(|f| f.name)
         .collect();
     assert_eq!(listed, ["Fake Mono", "Fake Serif"]);
     assert!(h.query_by_label("Fake Serif").is_some());
-    let faces = editor.installed_faces(&handle, Role::Ui);
+    let faces = editor.installed_families(&handle, Role::Ui);
     assert!(faces.iter().all(|f| f.origin == Origin::System));
     // Monospace ones only for monospace.
     let mono: Vec<String> = editor
-        .installed_faces(&handle, Role::Mono)
+        .installed_families(&handle, Role::Mono)
         .into_iter()
         .map(|f| f.name)
         .collect();

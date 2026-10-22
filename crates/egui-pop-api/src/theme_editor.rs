@@ -1346,7 +1346,7 @@ impl ThemeEditor {
     /// [`Role::Mono`]), matching the fonts tab's search (a part of the
     /// name, any case): egui's, the application's, the user's files,
     /// then the system's.
-    pub fn installed_faces(
+    pub fn installed_families(
         &self,
         app: &AppHandle,
         role: Role,
@@ -1359,7 +1359,7 @@ impl ThemeEditor {
             .collect()
     }
 
-    /// Searches the families installed ([`ThemeEditor::installed_faces`]).
+    /// Searches the families installed ([`ThemeEditor::installed_families`]).
     pub fn set_face_search(&self, search: &str) {
         lock(&self.state).fonts.face_search = search.to_string();
     }
@@ -2783,7 +2783,7 @@ fn fonts_tab(ui: &mut Ui, app: &AppHandle, editor: &ThemeEditor) {
             editor.set_families(role, list);
         }
     }
-    installed_faces(ui, app, editor, &mut rested, &mut over_row);
+    installed_families(ui, app, editor, &mut rested, &mut over_row);
     match rested {
         Some((role, name)) => editor.preview_face(role, Some(&name)),
         None if !over_row => editor.preview_face(Role::Ui, None),
@@ -2871,7 +2871,7 @@ fn fonts_tab(ui: &mut Ui, app: &AppHandle, editor: &ThemeEditor) {
 /// the role chosen (monospace ones only for monospace): resting the
 /// pointer on one previews it, picking one puts it first in the role's
 /// families ([`ThemeEditor::choose_face`]).
-fn installed_faces(
+fn installed_families(
     ui: &mut Ui,
     app: &AppHandle,
     editor: &ThemeEditor,
@@ -2907,7 +2907,7 @@ fn installed_faces(
         s.fonts.face_role = Some(role);
         s.fonts.face_search = search;
     }
-    let faces = editor.installed_faces(app, role);
+    let faces = editor.installed_families(app, role);
     if faces.is_empty() {
         ui.weak(tr(&txt::THEME_EDITOR_NO_FAMILY_MATCHES));
         return;
