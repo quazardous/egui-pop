@@ -12,6 +12,24 @@ publishes.
 
 ### Added
 
+- VS Code's layout controls in the title bar (egui-pop-api):
+  `FramePlugin::own().layout_controls(true)` puts at the end of the bar,
+  before the window's buttons, a "Customize layout" button and a toggle
+  per area (the primary side bar, the panel, the secondary side bar),
+  its icon filled while the area shows and outlined while it is folded
+  or hidden, its tooltip giving its key, drawn by the kit's
+  `icon-button` (`layout_controls::show`, the `egui_pop.frame.layout`
+  block of the `app.caption` zone). The button opens the layout menu
+  (`layout_controls::MENU_LAYOUT`, also View > Customize layout): the
+  area toggles, the arrangements (the application's templates and the
+  saved ones, the current one ticked), "Save the current arrangement
+  as…", the primary side bar on the left or the right, and the panel
+  under the editors or across the full width. The options are the
+  commands `workbench.layout.sideBarPosition` and
+  `workbench.layout.panelAlignment`, each change a write of its setting
+  and one undo step; `workbench.layout.customize` opens the menu.
+  `workbench.arrangement.save` without a name asks for one in a dialog,
+  suggesting a new name. English and French strings.
 - VS Code's area toggles (egui-pop-api): `workbench.toggle.primarySideBar`
   (`Ctrl+B`), `workbench.toggle.panel` (`Ctrl+J`) and
   `workbench.toggle.secondarySideBar` (`Ctrl+Alt+B`) fold a shown area to

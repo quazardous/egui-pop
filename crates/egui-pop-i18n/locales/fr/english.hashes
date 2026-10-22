@@ -260,6 +260,12 @@ command-workbench-arrangement-save.description 9b40413dc152aaee
 command-workbench-arrangement-save.title ebf7471b4bd6e7f1
 command-workbench-arrangement-switch.description 984205b37e66c1e1
 command-workbench-arrangement-switch.title d0e095ecc9422281
+command-workbench-layout-customize.description a55c2eab21f043c4
+command-workbench-layout-customize.title 3b8f72c694040104
+command-workbench-layout-panelAlignment.description dfb955725ba55abf
+command-workbench-layout-panelAlignment.title e5129e70a0a6f1fd
+command-workbench-layout-sideBarPosition.description 326d78f56e32ca0c
+command-workbench-layout-sideBarPosition.title 9377f826bd726ce4
 command-workbench-leave-zen.description 1f1cdceb5029699c
 command-workbench-leave-zen.title 807fcda4df4c8836
 command-workbench-toggle-panel.description 32ec8f8f14f0aee9
@@ -274,6 +280,10 @@ egui-pop-area-bottom 524a384390fd3b6d
 egui-pop-area-center be338e13d993b71f
 egui-pop-area-end-side 560b37ffe9b87765
 egui-pop-area-start-side ef1e5352ef93cccc
+egui-pop-arrangement-name e8f800548ef8413c
+egui-pop-arrangement-save-title 50972489f52a7614
+egui-pop-arrangement-save-verb edfcfc3efd9be837
+egui-pop-arrangement-suggested 338dc3b437ee92cb
 egui-pop-busy 950036cb399f1a66
 egui-pop-cancel e09b40fcf1e41cfb
 egui-pop-clipboard-as 6316ea594e850f32
@@ -419,6 +429,13 @@ egui-pop-jobs-history 32a082307a8ba077
 egui-pop-jobs-none 0ebe1e5aa4ddcb6e
 egui-pop-jobs-open-panel 1f3b5987e440aa3e
 egui-pop-jobs-title 61eef857facc40ad
+egui-pop-layout-customize 0789011beda46404
+egui-pop-layout-panel-center a88054fa124b0434
+egui-pop-layout-panel-justify 58d33c3b26e49678
+egui-pop-layout-save-as 100ac79eb3256c6c
+egui-pop-layout-side-bar-left f885409ee8ade7ec
+egui-pop-layout-side-bar-right 1846cc56be2ff46b
+egui-pop-layout-with-key e299415f9d8c0e08
 egui-pop-loading 720c0d53970fae0f
 egui-pop-menu-does-not-apply bf1e62d76906b266
 egui-pop-menu-empty 345d54844349630f
@@ -771,6 +788,7 @@ egui-pop-zen-hint-no-key bbeec89f8dc28736
 menu-app-menu-edit.label 329d5a4f3eb93fa9
 menu-app-menu-file.label 181d912a9545ccc3
 menu-app-menu-help.label dd64739b1d2f8ca8
+menu-app-menu-layout.label 0789011beda46404
 menu-app-menu-view.label 9cb14957d0a66a9e
 panel-egui-pop-devtools.title 9642ebb52ece11a7
 panel-egui-pop-jobs.title 61eef857facc40ad
