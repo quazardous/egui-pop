@@ -115,6 +115,10 @@ pub const COMPONENT_TERMS: &[(&str, &str)] = &[
     ("shadow-blur", "dimension"),
     ("shadow-spread", "dimension"),
     ("shadow-color", "color"),
+    ("margin", "dimension"),
+    ("placement", "string"),
+    ("visibility", "string"),
+    ("track-fill", "color"),
 ];
 
 /// The tones a component may give (`component.tone.<tone>.<term>` and

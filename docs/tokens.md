@@ -137,7 +137,10 @@ without it.
    `indicator-swatch.*`, `indicator-outline.*` and `indicator-button.*`
    (micro-indicators, see [indicators](indicators.md)),
    `skeleton.*` and `skeleton-shimmer.*`, `dialog.*`, `palette-window.*`,
-   `toast.*`. Content drawn in code keeps flat names: `editor.*` and `syntax.*` (one colour per kind of code:
+   `toast.*`, `scroll-bar.*` (every scroll area's bars: `width`,
+   `margin`, `placement`, `visibility`, `track-fill`, the thumb's
+   `rest`, `hover` and `active` fill and its radius;
+   [kit.md](kit.md#scroll-bars)). Content drawn in code keeps flat names: `editor.*` and `syntax.*` (one colour per kind of code:
    keywords on the accent, strings on `success`, numbers on `warning`,
    comments muted...), `terminal.*` (its text, cursor, selection, links,
    and `terminal.ansi.0` to `terminal.ansi.15`, the 16 colours programs
@@ -628,4 +631,6 @@ alone fills both of egui's styles, dark and light; a theme with a
 counterpart (`org.egui-pop.variant-of`, [Themes](themes.md#light-and-dark-together))
 fills each with its own variant, and `Tokens::of` gives the one of egui's
 theme of the moment. Install between frames; never change the global
-style mid-frame to theme one widget.
+style mid-frame to theme one widget. The kit's `scroll-bar` becomes
+egui's `ScrollStyle` there, so every scroll area follows the theme's
+bars ([kit.md](kit.md#scroll-bars)).

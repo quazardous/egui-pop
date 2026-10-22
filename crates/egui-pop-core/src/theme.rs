@@ -23,7 +23,9 @@
 //! selected text and items, `space.*` and `size.*` the spacing,
 //! `font.text-style.*` (steps of the `font.size.*` scale) egui's text
 //! styles, `shadow.window` and `shadow.popup` egui's window and popup
-//! shadows, and `motion.duration` the animation time.
+//! shadows, `motion.duration` the animation time, and the kit's
+//! `scroll-bar` every scroll area's `ScrollStyle` (its width, margin,
+//! placement and visibility).
 //!
 //! egui uses one colour (`selection.stroke`) for both the text of a
 //! selected label and the frame of a focused text field: egui-pop gives it
@@ -883,6 +885,8 @@ pub fn style_with(t: &Tokens, kit: &Kit, base: &Style) -> Style {
     // compact density's 2px small space would do.
     sp.icon_spacing = s.s.max(4.0);
     sp.indent = t.size.icon_toolbar;
+    // Every scroll area's bars, from the kit's `scroll-bar`.
+    sp.scroll = kit.scroll.style(&sp.scroll);
     style.animation_time = t.motion_duration;
     if t.motion_duration == 0.0 {
         style.scroll_animation = ScrollAnimation::none();
