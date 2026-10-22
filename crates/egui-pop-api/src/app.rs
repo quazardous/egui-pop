@@ -2290,7 +2290,7 @@ impl AppBuilder {
             wrap: None,
             on_exit: Vec::new(),
             name: None,
-            panel_alignment: crate::workbench::PanelAlignment::Justify,
+            panel_alignment: crate::workbench::PanelAlignment::Center,
             pointer_profile: egui_pop_model::pointer::DEFAULT_PROFILE.into(),
             kits: Vec::new(),
             user_kits: false,
@@ -2299,8 +2299,9 @@ impl AppBuilder {
     }
 
     /// The bottom panel's alignment by default (the
-    /// `workbench.panel_alignment` setting's default; `Justify`, the
-    /// whole width, unless given).
+    /// `workbench.panel_alignment` setting's default; `Center`, under
+    /// the editors between the side bars as VS Code has it, unless
+    /// given).
     pub fn panel_alignment(mut self, alignment: crate::workbench::PanelAlignment) -> Self {
         self.panel_alignment = alignment;
         self

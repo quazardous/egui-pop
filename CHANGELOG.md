@@ -201,6 +201,12 @@ publishes.
 
 ### Changed
 
+- The bottom panel lies under the editors by default (egui-pop-api):
+  the `workbench.panel_alignment` setting now defaults to `center`,
+  between the side bars, as VS Code's panel alignment does; `justify`
+  (the window's whole width) was the default before. An application
+  keeps the old look with
+  `AppBuilder::panel_alignment(PanelAlignment::Justify)`.
 - Palettes are resizable (egui-pop-model, egui-pop-api, egui-pop-tokens):
   their right edge, bottom edge and corner drag their size, between the
   new `palette.min-width`, `palette.min-height`, `palette.max-width` and

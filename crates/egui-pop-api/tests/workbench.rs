@@ -438,16 +438,16 @@ fn the_bottom_panel_lines_up_with_the_side_bars_as_the_setting_says() {
     let mut h = harness(builder(false));
     assert_eq!(
         egui_pop_api::workbench::panel_alignment(h.state().handle()),
-        PanelAlignment::Justify,
-        "the default keeps the whole width"
+        PanelAlignment::Center,
+        "the default lines it up under the editors, as VS Code"
     );
-    let (start, end, bottom) = rects(&h);
-    assert!(bottom.left() <= start.left() && bottom.right() >= end.right());
-    assert!(start.bottom() <= bottom.top() + 1.0);
-    set(&mut h, PanelAlignment::Center);
     let (start, end, bottom) = rects(&h);
     assert!(bottom.left() >= start.right() - 1.0 && bottom.right() <= end.left() + 1.0);
     assert!(start.bottom() > bottom.top(), "the side bars go down");
+    set(&mut h, PanelAlignment::Justify);
+    let (start, end, bottom) = rects(&h);
+    assert!(bottom.left() <= start.left() && bottom.right() >= end.right());
+    assert!(start.bottom() <= bottom.top() + 1.0);
     set(&mut h, PanelAlignment::Start);
     let (start, end, bottom) = rects(&h);
     assert!(bottom.left() <= start.left() && bottom.right() <= end.left() + 1.0);
@@ -457,10 +457,10 @@ fn the_bottom_panel_lines_up_with_the_side_bars_as_the_setting_says() {
     assert!(bottom.left() >= start.right() - 1.0 && bottom.right() >= end.right());
     assert!(start.bottom() > bottom.top());
     // A builder's default.
-    let h = harness(builder(false).panel_alignment(PanelAlignment::Center));
+    let h = harness(builder(false).panel_alignment(PanelAlignment::Justify));
     assert_eq!(
         egui_pop_api::workbench::panel_alignment(h.state().handle()),
-        PanelAlignment::Center
+        PanelAlignment::Justify
     );
 }
 
