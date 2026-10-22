@@ -75,8 +75,8 @@ of every crate with every feature on.
   model kept in a YAML file that round-trips; the survey behind it.
 - [Pointer gestures and profiles](pointer-gestures.md): what the wheel,
   a pinch and each button do on the image, the node graph and sliders,
-  as five profiles (Document, darktable, Adobe, Blender / node editors,
-  Trackpad) of keymap bindings the shortcuts editor changes, and a
+  as six profiles (Document, darktable, Photoshop, Lightroom Classic,
+  Blender / node editors, Trackpad) of keymap bindings the shortcuts editor changes, and a
   widget taking the secondary button for itself.
 - [Cursors and the loupe](cursors.md): tool cursors drawn at the
   window's scale, a brush outline that follows the zoom, the

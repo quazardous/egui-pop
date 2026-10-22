@@ -1760,16 +1760,18 @@ setting-input-image-double-click-choice-nothing = nothing
 setting-input-image-double-click-choice-profile = profile
 
 setting-input-pointer-profile =
-    .description = What the wheel, a pinch and the mouse buttons do on the image, the node graph and sliders, as in darktable, Adobe's applications, document tools (GIMP, Inkscape, the web), Blender and node editors, or on a trackpad. The shortcuts editor shows and changes each gesture.
+    .description = What the wheel, a pinch and the mouse buttons do on the image, the node graph and sliders, as in darktable, Photoshop, Lightroom Classic, document tools (GIMP, Inkscape, the web), Blender and node editors, or on a trackpad. The shortcuts editor shows and changes each gesture.
     .label = Pointer profile
-
-setting-input-pointer-profile-choice-adobe = adobe
 
 setting-input-pointer-profile-choice-blender = blender
 
 setting-input-pointer-profile-choice-darktable = darktable
 
 setting-input-pointer-profile-choice-document = document
+
+setting-input-pointer-profile-choice-lightroom = lightroom
+
+setting-input-pointer-profile-choice-photoshop = photoshop
 
 setting-input-pointer-profile-choice-trackpad = trackpad
 

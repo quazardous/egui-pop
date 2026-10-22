@@ -1,4 +1,4 @@
-//! The pointer gestures page: the five profiles, what each binds on the
+//! The pointer gestures page: the six profiles, what each binds on the
 //! image viewport, the node graph and sliders, and the hint a canvas
 //! under the pointer gives.
 
@@ -36,7 +36,7 @@ impl Plugin for PointerPage {
     fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
         ctx.story(
             Story::new(StoryId::from_static("pointer"), "Pointer gestures", show)
-                .description("Pointer profiles (darktable, Adobe, Document, Blender / node editors, Trackpad): what the wheel, a pinch and each button do on the image, the node graph and sliders, rebindable in the shortcuts editor.")
+                .description("Pointer profiles (Document, darktable, Photoshop, Lightroom Classic, Blender / node editors, Trackpad): what the wheel, a pinch and each button do on the image, the node graph and sliders, rebindable in the shortcuts editor.")
                 .group("Framework", 107),
         )?;
         Ok(())

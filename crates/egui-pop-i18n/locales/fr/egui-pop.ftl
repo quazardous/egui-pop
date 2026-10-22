@@ -1797,14 +1797,16 @@ egui-pop-viewport-hint-zoom-toggle = ajuster ou 100 %
 egui-pop-viewport-hint-leave = quitter
 
 setting-input-pointer-profile =
-    .description = Ce que font la molette, un pincement et les boutons de la souris sur l’image, le graphe de nœuds et les curseurs, comme dans darktable, les applications d’Adobe, les outils de document (GIMP, Inkscape, le web), Blender et les éditeurs de nœuds, ou sur un pavé tactile. L’éditeur de raccourcis montre et change chaque geste.
+    .description = Ce que font la molette, un pincement et les boutons de la souris sur l’image, le graphe de nœuds et les curseurs, comme dans darktable, Photoshop, Lightroom Classic, les outils de document (GIMP, Inkscape, le web), Blender et les éditeurs de nœuds, ou sur un pavé tactile. L’éditeur de raccourcis montre et change chaque geste.
     .label = Profil de pointeur
 
 setting-input-pointer-profile-choice-document = document
 
 setting-input-pointer-profile-choice-darktable = darktable
 
-setting-input-pointer-profile-choice-adobe = adobe
+setting-input-pointer-profile-choice-photoshop = photoshop
+
+setting-input-pointer-profile-choice-lightroom = lightroom
 
 setting-input-pointer-profile-choice-blender = blender
 

@@ -6,8 +6,9 @@ use egui_pop_model::keymap::{
 };
 use egui_pop_model::pointer::{
     self, GESTURES, ImageDoubleClick, PROFILE_OWNER, PointerMap, SCOPE_GRAPH, SCOPE_IMAGE,
-    SCOPE_VALUE, SCOPES, SliderWheel, gesture,
+    SCOPE_VALUE, SCOPES, SliderWheel, ValueKeys, gesture,
 };
+use egui_pop_model::values::{SettingsDoc, settings_schema};
 
 fn chord(text: &str) -> Chord {
     Chord::parse(text).unwrap()
@@ -129,11 +130,18 @@ fn rebinding_all_keeps_a_gestures_scope_and_every_trigger() {
 }
 
 #[test]
-fn the_five_profiles_ship_with_known_gestures_in_their_scopes() {
+fn the_six_profiles_ship_with_known_gestures_in_their_scopes() {
     let ids = pointer::ids();
     assert_eq!(
         ids,
-        ["document", "darktable", "adobe", "blender", "trackpad"]
+        [
+            "document",
+            "darktable",
+            "photoshop",
+            "lightroom",
+            "blender",
+            "trackpad"
+        ]
     );
     assert_eq!(pointer::default_profile().id, pointer::DEFAULT_PROFILE);
     for p in pointer::builtin() {
@@ -197,28 +205,92 @@ fn profiles_give_their_options_and_the_wheel_its_meaning() {
     }
 }
 
+fn chords_of(map: &PointerMap, scope: &str, command: &CommandId) -> Vec<String> {
+    map.chords(scope, command).map(|c| c.to_string()).collect()
+}
+
 #[test]
-fn adobes_profile_is_shift_coarser_and_alt_finer_as_in_photoshop() {
-    let adobe = PointerMap::from_profile(pointer::profile("adobe").unwrap());
+fn photoshops_profile_scrolls_zooms_with_alt_and_is_shift_coarser_alt_finer() {
+    let ps = PointerMap::from_profile(pointer::profile("photoshop").unwrap());
+    assert_eq!(ps.options.image_double_click, ImageDoubleClick::Nothing);
+    for (keys, command) in [
+        ("Wheel", Some(&gesture::IMAGE_PAN)),
+        ("Ctrl+Wheel", Some(&gesture::IMAGE_PAN_X)),
+        ("Alt+Wheel", Some(&gesture::IMAGE_ZOOM)),
+        ("Shift+Wheel", None),
+        ("PrimaryDrag", Some(&gesture::IMAGE_PAN)),
+        // The Hand tool's click does nothing; only the Zoom tool zooms.
+        ("PrimaryClick", None),
+        ("MiddleDrag", None),
+    ] {
+        assert_eq!(ps.command(SCOPE_IMAGE, &chord(keys)), command, "{keys}");
+    }
     assert_eq!(
-        adobe.command(SCOPE_VALUE, &chord("Shift+PrimaryDrag")),
-        Some(&gesture::VALUE_COARSE)
+        chords_of(&ps, SCOPE_VALUE, &gesture::VALUE_FINE),
+        ["Alt+PrimaryDrag"]
     );
     assert_eq!(
-        adobe.command(SCOPE_VALUE, &chord("Alt+PrimaryDrag")),
-        Some(&gesture::VALUE_FINE)
+        chords_of(&ps, SCOPE_VALUE, &gesture::VALUE_COARSE),
+        ["Shift+PrimaryDrag"]
     );
-    assert_eq!(adobe.command(SCOPE_VALUE, &chord("Ctrl+PrimaryDrag")), None);
-    let fine: Vec<String> = adobe
-        .chords(SCOPE_VALUE, &gesture::VALUE_FINE)
-        .map(|c| c.to_string())
-        .collect();
-    assert_eq!(fine, ["Alt+PrimaryDrag"]);
-    let coarse: Vec<String> = adobe
-        .chords(SCOPE_VALUE, &gesture::VALUE_COARSE)
-        .map(|c| c.to_string())
-        .collect();
-    assert_eq!(coarse, ["Shift+PrimaryDrag"]);
+    assert_eq!(ps.command(SCOPE_VALUE, &chord("Ctrl+PrimaryDrag")), None);
+    // The arrows follow the drag.
+    assert_eq!(ps.value_keys, ValueKeys::default());
+}
+
+#[test]
+fn lightrooms_profile_clicks_to_zoom_and_has_its_own_arrow_modifiers() {
+    let lr = PointerMap::from_profile(pointer::profile("lightroom").unwrap());
+    assert_eq!(lr.profile, "lightroom");
+    assert_eq!(lr.options.image_double_click, ImageDoubleClick::Leave);
+    assert_eq!(lr.options.slider_wheel, SliderWheel::Guarded);
+    for (keys, command) in [
+        ("PrimaryClick", Some(&gesture::IMAGE_ZOOM_TOGGLE)),
+        ("PrimaryDrag", Some(&gesture::IMAGE_PAN)),
+        // Lightroom's plain wheel does not zoom or pan the Loupe:
+        // unbound; Ctrl with it zooms.
+        ("Wheel", None),
+        ("Ctrl+Wheel", Some(&gesture::IMAGE_ZOOM)),
+        ("Alt+Wheel", None),
+        ("MiddleDrag", None),
+    ] {
+        assert_eq!(lr.command(SCOPE_IMAGE, &chord(keys)), command, "{keys}");
+    }
+    // A Shift drag is finer; no drag is coarser; Alt is the
+    // application's (clipping on the Basic panel), not a step.
+    assert_eq!(
+        chords_of(&lr, SCOPE_VALUE, &gesture::VALUE_FINE),
+        ["Shift+PrimaryDrag"]
+    );
+    assert!(chords_of(&lr, SCOPE_VALUE, &gesture::VALUE_COARSE).is_empty());
+    assert_eq!(lr.command(SCOPE_VALUE, &chord("Alt+PrimaryDrag")), None);
+    // The arrows: Shift larger, Alt smaller.
+    assert_eq!(lr.value_keys.fine, "Alt");
+    assert_eq!(lr.value_keys.coarse, "Shift");
+}
+
+#[test]
+fn the_retired_adobe_id_names_lightroom_and_is_listed_nowhere() {
+    assert_eq!(pointer::canonical_id("adobe"), "lightroom");
+    assert_eq!(pointer::canonical_id("photoshop"), "photoshop");
+    assert_eq!(pointer::profile("adobe").unwrap().id, "lightroom");
+    assert!(!pointer::ids().contains(&"adobe"));
+    for (alias, to) in pointer::ALIASES {
+        assert!(pointer::profile(alias).is_some(), "{alias}");
+        assert!(pointer::ids().contains(to), "{alias} names {to}");
+    }
+    // A settings document of version 1 that saved `adobe` reads as
+    // `lightroom`; other values are left alone.
+    let old = r#"{"version": 1, "kind": "settings", "values": {"settings/input.pointer_profile": "adobe", "settings/input.slider_wheel": "value"}}"#;
+    let read = settings_schema().load::<SettingsDoc>(old).unwrap();
+    assert_eq!(
+        read.value.values["settings/input.pointer_profile"],
+        serde_json::json!("lightroom")
+    );
+    assert_eq!(
+        read.value.values["settings/input.slider_wheel"],
+        serde_json::json!("value")
+    );
 }
 
 #[test]

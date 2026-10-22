@@ -81,6 +81,26 @@ fn an_application_picks_its_profile_and_the_setting_switches_it() {
 }
 
 #[test]
+fn the_retired_adobe_id_gives_lightroom() {
+    let ctx = egui::Context::default();
+    let mut app = App::builder().pointer_profile("adobe").build(&ctx).unwrap();
+    passes(&mut app, &ctx, 2);
+    assert_eq!(pointer::profile_id(app.handle()), "lightroom");
+    assert_eq!(egui_pop_core::pointer::map(&ctx).profile, "lightroom");
+    pointer::set_profile(app.handle(), "photoshop").unwrap();
+    passes(&mut app, &ctx, 2);
+    assert_eq!(egui_pop_core::pointer::map(&ctx).profile, "photoshop");
+    // Asked by its old id, the setting stores the profile it names.
+    pointer::set_profile(app.handle(), "adobe").unwrap();
+    passes(&mut app, &ctx, 2);
+    assert_eq!(pointer::profile_id(app.handle()), "lightroom");
+    let stored = egui_pop_core::lock(&app.handle().store())
+        .get(&format!("settings/{}", pointer::SETTING_PROFILE))
+        .and_then(|e| e.value.as_choice().map(str::to_string));
+    assert_eq!(stored.as_deref(), Some("lightroom"));
+}
+
+#[test]
 fn an_option_set_overrides_the_profiles_default() {
     let ctx = egui::Context::default();
     let mut app = App::builder()
@@ -155,7 +175,7 @@ fn a_change_of_profile_asks_whether_to_keep_the_users_changes() {
         .build_ui_state(|ui, app: &mut App| app.show(ui), app);
     h.run();
     // No change of the user's: no question.
-    pointer::set_profile(h.state().handle(), "adobe").unwrap();
+    pointer::set_profile(h.state().handle(), "photoshop").unwrap();
     h.run();
     assert!(d.current().is_none());
     h.state()

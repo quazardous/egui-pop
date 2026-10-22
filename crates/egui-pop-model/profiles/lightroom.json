@@ -1,0 +1,87 @@
+{
+  "kind": "pointer-profile",
+  "version": 1,
+  "id": "lightroom",
+  "title": "Lightroom Classic",
+  "description": "A click toggles fit and 100 %, a drag pans, Ctrl with the wheel zooms, a double click leaves the view, a Shift drag is finer and Shift with the arrows coarser, as in Lightroom Classic.",
+  "options": {
+    "slider_wheel": "guarded",
+    "image_double_click": "leave"
+  },
+  "input": {
+    "zoom": "Ctrl",
+    "horizontal_scroll": "Shift",
+    "vertical_scroll": "Alt"
+  },
+  "value_keys": {
+    "fine": "Alt",
+    "coarse": "Shift"
+  },
+  "bindings": [
+    {
+      "keys": "Scroll",
+      "command": "gesture.image.pan",
+      "scope": "surface:canvas.image"
+    },
+    {
+      "keys": "Ctrl+Wheel",
+      "command": "gesture.image.zoom",
+      "scope": "surface:canvas.image"
+    },
+    {
+      "keys": "Ctrl+Scroll",
+      "command": "gesture.image.zoom",
+      "scope": "surface:canvas.image"
+    },
+    {
+      "keys": "Pinch",
+      "command": "gesture.image.zoom",
+      "scope": "surface:canvas.image"
+    },
+    {
+      "keys": "PrimaryClick",
+      "command": "gesture.image.zoom_toggle",
+      "scope": "surface:canvas.image"
+    },
+    {
+      "keys": "PrimaryDrag",
+      "command": "gesture.image.pan",
+      "scope": "surface:canvas.image"
+    },
+    {
+      "keys": "Wheel",
+      "command": "gesture.graph.pan",
+      "scope": "surface:canvas.graph"
+    },
+    {
+      "keys": "Ctrl+Wheel",
+      "command": "gesture.graph.pan_x",
+      "scope": "surface:canvas.graph"
+    },
+    {
+      "keys": "Alt+Wheel",
+      "command": "gesture.graph.zoom",
+      "scope": "surface:canvas.graph"
+    },
+    {
+      "keys": "Scroll",
+      "command": "gesture.graph.pan",
+      "scope": "surface:canvas.graph"
+    },
+    {
+      "keys": "Ctrl+Scroll",
+      "command": "gesture.graph.zoom",
+      "scope": "surface:canvas.graph"
+    },
+    {
+      "keys": "Pinch",
+      "command": "gesture.graph.zoom",
+      "scope": "surface:canvas.graph"
+    },
+    {
+      "keys": "Shift+PrimaryDrag",
+      "command": "gesture.value.fine",
+      "scope": "surface:widget.value"
+    }
+  ]
+}

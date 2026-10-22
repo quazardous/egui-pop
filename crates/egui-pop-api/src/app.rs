@@ -2321,9 +2321,10 @@ impl AppBuilder {
     }
 
     /// The pointer profile by default (the `input.pointer_profile`
-    /// setting's default: `document` unless given; `darktable`, `adobe`,
-    /// `blender`, `trackpad`). An id no profile has is reported and the
-    /// default kept.
+    /// setting's default: `document` unless given; `darktable`,
+    /// `photoshop`, `lightroom`, `blender`, `trackpad`; the retired
+    /// `adobe` gives `lightroom`). An id no profile has is reported and
+    /// the default kept.
     pub fn pointer_profile(mut self, id: &str) -> Self {
         self.pointer_profile = id.into();
         self

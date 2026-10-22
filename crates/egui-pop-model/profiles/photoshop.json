@@ -1,12 +1,12 @@
 {
   "kind": "pointer-profile",
   "version": 1,
-  "id": "adobe",
-  "title": "Adobe",
-  "description": "The wheel scrolls, Ctrl or Alt with the wheel zooms, a click toggles fit and 100 %, Shift steps a value coarser and Alt finer, as in Lightroom and Photoshop.",
+  "id": "photoshop",
+  "title": "Photoshop",
+  "description": "The wheel scrolls, Ctrl with the wheel scrolls sideways and Alt with it zooms, a drag pans like the Hand tool, Shift steps a value coarser and Alt finer, as in Photoshop.",
   "options": {
     "slider_wheel": "guarded",
-    "image_double_click": "fit"
+    "image_double_click": "nothing"
   },
   "input": {
     "zoom": "Ctrl",
@@ -20,13 +20,8 @@
       "scope": "surface:canvas.image"
     },
     {
-      "keys": "Shift+Wheel",
-      "command": "gesture.image.pan_x",
-      "scope": "surface:canvas.image"
-    },
-    {
       "keys": "Ctrl+Wheel",
-      "command": "gesture.image.zoom",
+      "command": "gesture.image.pan_x",
       "scope": "surface:canvas.image"
     },
     {
@@ -50,17 +45,7 @@
       "scope": "surface:canvas.image"
     },
     {
-      "keys": "PrimaryClick",
-      "command": "gesture.image.zoom_toggle",
-      "scope": "surface:canvas.image"
-    },
-    {
       "keys": "PrimaryDrag",
-      "command": "gesture.image.pan",
-      "scope": "surface:canvas.image"
-    },
-    {
-      "keys": "MiddleDrag",
       "command": "gesture.image.pan",
       "scope": "surface:canvas.image"
     },
@@ -70,13 +55,8 @@
       "scope": "surface:canvas.graph"
     },
     {
-      "keys": "Shift+Wheel",
-      "command": "gesture.graph.pan_x",
-      "scope": "surface:canvas.graph"
-    },
-    {
       "keys": "Ctrl+Wheel",
-      "command": "gesture.graph.zoom",
+      "command": "gesture.graph.pan_x",
       "scope": "surface:canvas.graph"
     },
     {
@@ -97,16 +77,6 @@
     {
       "keys": "Pinch",
       "command": "gesture.graph.zoom",
-      "scope": "surface:canvas.graph"
-    },
-    {
-      "keys": "MiddleDrag",
-      "command": "gesture.graph.pan",
-      "scope": "surface:canvas.graph"
-    },
-    {
-      "keys": "PrimaryDoubleClick",
-      "command": "gesture.graph.fit",
       "scope": "surface:canvas.graph"
     },
     {
