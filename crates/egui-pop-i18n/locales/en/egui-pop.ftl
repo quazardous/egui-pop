@@ -526,6 +526,18 @@ command-workbench-leave-zen =
     .description = Shows the whole workbench again.
     .title = Leave zen mode
 
+command-workbench-toggle-panel =
+    .description = Shows or hides the bottom panel: hidden, it keeps its panels.
+    .title = Toggle panel
+
+command-workbench-toggle-primarySideBar =
+    .description = Shows or hides the primary side bar: hidden, it folds to its strip and keeps its panels.
+    .title = Toggle primary side bar
+
+command-workbench-toggle-secondarySideBar =
+    .description = Shows or hides the secondary side bar: hidden, it folds to its strip and keeps its panels.
+    .title = Toggle secondary side bar
+
 command-workbench-zen =
     .description = Shows the centre alone: no title, menu or status bar, no side or bottom area, no palette. Escape leaves it.
     .title = Zen mode

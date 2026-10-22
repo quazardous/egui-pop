@@ -1867,3 +1867,15 @@ setting-workbench-side-bar-position =
 setting-workbench-side-bar-position-choice-left = gauche
 
 setting-workbench-side-bar-position-choice-right = droite
+
+command-workbench-toggle-primarySideBar =
+    .description = Affiche ou masque la barre latérale principale : masquée, elle se replie sur sa bande et garde ses panneaux.
+    .title = Afficher ou masquer la barre latérale principale
+
+command-workbench-toggle-panel =
+    .description = Affiche ou masque le panneau du bas : masqué, il garde ses panneaux.
+    .title = Afficher ou masquer le panneau
+
+command-workbench-toggle-secondarySideBar =
+    .description = Affiche ou masque la barre latérale secondaire : masquée, elle se replie sur sa bande et garde ses panneaux.
+    .title = Afficher ou masquer la barre latérale secondaire

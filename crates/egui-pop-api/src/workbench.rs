@@ -2301,7 +2301,7 @@ fn grip(ctx: &egui::Context, kit: &Kit, area: Area, rect: Rect, flipped: bool) {
 
 /// Whether a panel has something to draw (a zone panel's zone has
 /// blocks).
-fn drawable(app: &AppHandle, panel: &PanelId) -> bool {
+pub(crate) fn drawable(app: &AppHandle, panel: &PanelId) -> bool {
     let zone = app.workbench_mut().zone_of.get(panel).cloned();
     zone.is_none_or(|z| app.zone_has_blocks(&z))
 }

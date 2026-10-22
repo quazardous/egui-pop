@@ -244,14 +244,14 @@ fn keys_go_to_the_workspace_when_asked_and_each_says_where_it_comes_from() {
     h.run();
     h.get_by_label("Change the keys of Edit: Undo").click();
     h.run();
-    h.key_press_modifiers(Modifiers::COMMAND, Key::J);
+    h.key_press_modifiers(Modifiers::COMMAND, Key::U);
     h.run();
     h.run();
-    assert_eq!(handle.keys_for(&CMD_UNDO), ["Ctrl+J"]);
+    assert_eq!(handle.keys_for(&CMD_UNDO), ["Ctrl+U"]);
     assert!(handle.rebound_in(Layer::Workspace, &CMD_UNDO));
     assert!(!handle.rebound(&CMD_UNDO));
     // The host's name for it.
-    assert!(h.query_by_label("Ctrl+J (the template's)").is_some());
+    assert!(h.query_by_label("Ctrl+U (the template's)").is_some());
     // Back to the user's: changed there, said so, and its reset.
     h.get_by_label("every workspace (yours)").click();
     h.run();
@@ -264,5 +264,5 @@ fn keys_go_to_the_workspace_when_asked_and_each_says_where_it_comes_from() {
     h.get_by_label("Default keys of Edit: Undo").click();
     h.run();
     h.run();
-    assert_eq!(handle.keys_for(&CMD_UNDO), ["Ctrl+J"]);
+    assert_eq!(handle.keys_for(&CMD_UNDO), ["Ctrl+U"]);
 }
