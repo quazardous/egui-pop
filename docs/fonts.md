@@ -3,8 +3,9 @@
 Status: design note, **not decided** (2026-10-12). Built so far
 (2026-10-18): families from the tokens at four weights (a variable face through its
 `wght` axis, set per face with `FontTweak::coords`), from
-registered faces, egui's bundled ones and the system's (fontdb behind
-`system-fonts`, not fontique: no per-script fallback yet), reported
+registered faces, the system's (fontdb behind `system-fonts`, not
+fontique: no per-script fallback yet) and egui's bundled ones, in that
+order (2026-10-22), reported
 problems (`egui_pop_core::fonts`); a size scale (2026-10-18), below;
 font files a user adds, kept as paths (2026-10-20), below; the text size
 setting, aligned numbers, the `fonts` debug collector, the settings
@@ -210,6 +211,36 @@ for, so a face is previewed through families every install defines:
 
 The theme editor's Fonts tab and Settings › Appearance › Fonts preview
 a face this way ([The theme editor](theme-editor.md#what-it-shows)).
+
+## The order a name is looked up in (built)
+
+Each name of `font.family.ui` and `font.family.mono` (and a specimen's
+name) is looked for in this order, the order a platform resolves a font
+stack in (as GPUI and browsers do):
+
+1. the faces the application registered, and the user's font files;
+2. the system's fonts, by family name (below);
+3. egui's bundled faces by name (`Ubuntu` is egui's Ubuntu-Light,
+   `Hack` its Hack).
+
+A bundled face is reached by its name only when the system has no
+family of that name: a theme naming `Ubuntu` draws the system's Ubuntu
+where it is installed, egui's Ubuntu-Light elsewhere, so a stack copied
+from a platform (`Helvetica, Segoe UI, Ubuntu, Adwaita Sans, ...`)
+draws what the platform draws. Until 2026-10-22 egui's bundled faces
+came before the system's, and shadowed the system's Ubuntu.
+`fonts::origin_of` and `fonts::families` follow the same order: a
+family both on the system and bundled is listed once, as the system's.
+
+The install's report says where each name was found
+(`Report::resolved`, `Report::resolved(list, name)`), at the regular
+weight, in list order: its list (`ui`, `mono` or `specimen`), its
+origin (`registered`, `file`, `system`, `bundled`, or none for a name
+found nowhere) and the face drawn (egui's key for a bundled face, the
+PostScript name of a system one, else its family and weight). Shown, it
+reads `Ubuntu → bundled Ubuntu-Light`, `Adwaita Sans → system
+AdwaitaSans-Regular`, `Helvetica → missing`; the `fonts` collector gives
+the same under `resolved`, each with its `says` line.
 
 ## The system's fonts, or faces given in their place (built)
 

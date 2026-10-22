@@ -5,15 +5,19 @@
 //!
 //! 1. faces the application registered ([`register`]): bytes it embeds or
 //!    reads from disk;
-//! 2. egui's bundled faces by name (`Ubuntu` is egui's Ubuntu-Light,
-//!    `Hack` its Hack): the built-in themes name them;
-//! 3. the system's fonts by family name (feature `system-fonts`);
+//! 2. the system's fonts by family name (feature `system-fonts`, or the
+//!    faces given by [`set_system_faces`]);
+//! 3. egui's bundled faces by name (`Ubuntu` is egui's Ubuntu-Light,
+//!    `Hack` its Hack): the built-in themes name them. A bundled face is
+//!    reached by its name only when the system has no family of that
+//!    name, as platforms resolve a font stack.
 //!
 //! The first found is the primary, the others its fallbacks, and egui's
 //! bundled fonts always come last so text never vanishes. A generic name
 //! (`sans-serif`, `serif`, `monospace`, `system-ui`) stands for those
 //! bundled fonts. A name found nowhere is a problem in the [`Report`]
-//! (ADR 0003), never replaced in silence.
+//! (ADR 0003), never replaced in silence; the report says where each
+//! name was found ([`Report::resolved`]: `Ubuntu → bundled Ubuntu-Light`).
 //!
 //! egui's `FontId` has no weight: each weight of [`WEIGHTS`] is an egui
 //! family of its own, [`family`]`(role, weight)`, and [`font_id`] gives
@@ -169,7 +173,7 @@ pub fn collector() -> crate::debug::FnCollector {
     use serde_json::{Value as Json, json};
     crate::debug::FnCollector::new(
         "fonts",
-        "The fonts: the families the theme asks for, the faces registered (family, weight, origin, size, tabular digits, monospace), each egui family's faces in fallback order, the specimens, the sizes of the scale and of egui's text styles, the text size, how values line up, the atlas and the problems.",
+        "The fonts: the families the theme asks for and where each name was found (registered, system or bundled), the faces registered (family, weight, origin, size, tabular digits, monospace), each egui family's faces in fallback order, the specimens, the sizes of the scale and of egui's text styles, the text size, how values line up, the atlas and the problems.",
     )
     .snapshot(|ctx| {
         let t = crate::theme::Tokens::of(ctx);
@@ -217,6 +221,17 @@ pub fn collector() -> crate::debug::FnCollector {
             "faces": faces,
             "families": families,
             "specimens": report.specimens,
+            "resolved": report
+                .resolved
+                .iter()
+                .map(|r| json!({
+                    "list": r.list,
+                    "name": r.name,
+                    "origin": r.origin,
+                    "face": r.face,
+                    "says": r.to_string(),
+                }))
+                .collect::<Vec<_>>(),
             "tabular_digits": {
                 "ui": report.tabular_digits(Role::Ui),
                 "mono": report.tabular_digits(Role::Mono),
@@ -807,14 +822,28 @@ pub struct FamilyInfo {
 
 /// The families a theme or a user may name: egui's bundled ones, the
 /// faces registered (the application's, then the user's files), then
-/// the system's (feature `system-fonts`), each once, the first origin
-/// found kept.
+/// the system's (feature `system-fonts`), each once. A name in several
+/// places is listed at its first place with the origin the install
+/// finds it at ([`origin_of`]): a registered face before the system's,
+/// the system's before egui's.
 pub fn families(ctx: &Context) -> Vec<FamilyInfo> {
+    // The install's order: registered (and files), system, bundled.
+    let rank = |o: Origin| match o {
+        Origin::Registered | Origin::File => 0,
+        Origin::System => 1,
+        Origin::Bundled => 2,
+    };
     let mut out: Vec<FamilyInfo> = Vec::new();
-    let mut push = |info: FamilyInfo| {
-        if !out.iter().any(|f| f.name.eq_ignore_ascii_case(&info.name)) {
-            out.push(info);
+    let mut push = |info: FamilyInfo| match out
+        .iter_mut()
+        .find(|f| f.name.eq_ignore_ascii_case(&info.name))
+    {
+        Some(f) if rank(info.origin) < rank(f.origin) => {
+            f.origin = info.origin;
+            f.monospace = info.monospace;
         }
+        Some(_) => {}
+        None => out.push(info),
     };
     for (name, monospace) in [("Ubuntu", false), ("Hack", true)] {
         push(FamilyInfo {
@@ -844,9 +873,10 @@ pub fn families(ctx: &Context) -> Vec<FamilyInfo> {
 }
 
 /// Where the family a theme names would be found, in the order the
-/// install looks ([`install`]): `Some(Origin::Bundled)` for a generic
-/// name (`sans-serif`) and egui's own faces, `None` for a name found
-/// nowhere on this machine (its list's next name draws).
+/// install looks ([`install`]): registered, then the system's, then
+/// egui's own faces; `Some(Origin::Bundled)` for a generic name
+/// (`sans-serif`), `None` for a name found nowhere on this machine (its
+/// list's next name draws).
 pub fn origin_of(ctx: &Context, name: &str) -> Option<Origin> {
     if is_generic(name) {
         return Some(Origin::Bundled);
@@ -859,21 +889,18 @@ pub fn origin_of(ctx: &Context, name: &str) -> Option<Origin> {
     {
         return Some(f.origin);
     }
-    let lower = name.to_ascii_lowercase();
-    let bundled = FontDefinitions::default().font_data.into_keys().any(|k| {
-        let k = k.to_ascii_lowercase();
-        k == lower
-            || k.strip_prefix(&lower)
-                .is_some_and(|rest| rest.starts_with('-'))
-    });
-    if bundled {
-        return Some(Origin::Bundled);
-    }
-    System::get(ctx)
+    let on_system = System::get(ctx)
         .families()
         .iter()
-        .any(|(n, _)| n.eq_ignore_ascii_case(name))
-        .then_some(Origin::System)
+        .any(|(n, _)| n.eq_ignore_ascii_case(name));
+    if on_system {
+        return Some(Origin::System);
+    }
+    FontDefinitions::default()
+        .font_data
+        .keys()
+        .any(|k| bundled_key_matches(k, name))
+        .then_some(Origin::Bundled)
 }
 
 /// Whether a name is a generic one (`sans-serif`, `serif`, `monospace`,
@@ -952,10 +979,48 @@ pub struct Report {
     pub tabular: Vec<(String, bool)>,
     /// The names drawn as specimens ([`specimen`]).
     pub specimens: Vec<String>,
+    /// Where each name of the roles' lists and of the specimens was
+    /// found, at the regular weight, in list order.
+    pub resolved: Vec<Resolved>,
     pub problems: Vec<String>,
 }
 
+/// Where a family name was found by an install: so a theme author sees
+/// `Ubuntu → bundled Ubuntu-Light` where the system has no Ubuntu.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct Resolved {
+    /// The list it is in: `ui`, `mono` or `specimen`.
+    pub list: String,
+    /// The name as the list gives it.
+    pub name: String,
+    /// Where its face comes from; `None` for a name found nowhere. A
+    /// generic name (`sans-serif`) is egui's bundled fonts.
+    pub origin: Option<Origin>,
+    /// The face drawn: egui's key for a bundled one (`Ubuntu-Light`),
+    /// the PostScript name for a system one when it has one, else its
+    /// family and weight (`Inter 400`); `None` for a generic name or a
+    /// name found nowhere.
+    pub face: Option<String>,
+}
+
+impl std::fmt::Display for Resolved {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match (self.origin, &self.face) {
+            (Some(o), Some(face)) => write!(f, "{} → {} {face}", self.name, o.name()),
+            (Some(o), None) => write!(f, "{} → {}", self.name, o.name()),
+            (None, _) => write!(f, "{} → missing", self.name),
+        }
+    }
+}
+
 impl Report {
+    /// Where a name of a list (`ui`, `mono` or `specimen`) was found.
+    pub fn resolved(&self, list: &str, name: &str) -> Option<&Resolved> {
+        self.resolved
+            .iter()
+            .find(|r| r.list == list && r.name.eq_ignore_ascii_case(name))
+    }
+
     /// Whether the face drawing a role's regular text has tabular
     /// digits by default (one advance for `0` to `9`).
     pub fn tabular_digits(&self, role: Role) -> bool {
@@ -1093,12 +1158,23 @@ pub fn install(ctx: &Context, ui: &[String], mono: &[String]) -> Arc<Report> {
 }
 
 /// A face found for a name at a weight: its key in the definitions, its
-/// data, the weight it has and where it came from.
+/// data, the weight it has, where it came from and the face it is, as
+/// reports name it (`Ubuntu-Light`, `Inter 400`).
 struct Found {
     key: String,
     data: Arc<FontData>,
     weight: Weight,
-    source: &'static str,
+    origin: Origin,
+    face: String,
+}
+
+/// Whether a key of egui's bundled faces is a family's: the family itself
+/// (`Hack`) or one of its styles (`Ubuntu-Light`).
+fn bundled_key_matches(key: &str, name: &str) -> bool {
+    let (k, lower) = (key.to_ascii_lowercase(), name.to_ascii_lowercase());
+    k == lower
+        || k.strip_prefix(&lower)
+            .is_some_and(|rest| rest.starts_with('-'))
 }
 
 fn find(
@@ -1119,27 +1195,26 @@ fn find(
                 key: format!("pop:{}:{}", face.family, w.0),
                 data: face.data.clone(),
                 weight: w,
-                source: face.origin.name(),
+                origin: face.origin,
+                face: format!("{} {}", face.family, w.0),
             },
             weight,
         ));
     }
-    // egui's faces have one weight each: the others draw it.
-    let lower = name.to_ascii_lowercase();
-    if let Some((key, data)) = bundled.iter().find(|(k, _)| {
-        let k = k.to_ascii_lowercase();
-        k == lower
-            || k.strip_prefix(&lower)
-                .is_some_and(|rest| rest.starts_with('-'))
-    }) {
-        return Some(Found {
-            key: key.clone(),
-            data: data.clone(),
-            weight,
-            source: "bundled",
-        });
+    // The system's before egui's: a theme naming `Ubuntu` gets the
+    // system's Ubuntu where it is installed, as the platform would.
+    if let Some(found) = system.find(name, weight) {
+        return Some(on_axis(found, weight));
     }
-    system.find(name, weight).map(|f| on_axis(f, weight))
+    // egui's faces have one weight each: the others draw it.
+    let (key, data) = bundled.iter().find(|(k, _)| bundled_key_matches(k, name))?;
+    Some(Found {
+        key: key.clone(),
+        data: data.clone(),
+        weight,
+        origin: Origin::Bundled,
+        face: key.clone(),
+    })
 }
 
 /// A face drawn at `weight` through its `wght` axis when it has one that
@@ -1165,7 +1240,8 @@ fn on_axis(found: Found, weight: Weight) -> Found {
         key: format!("{}@wght{}", found.key, weight.0),
         data: Arc::new(data),
         weight,
-        source: found.source,
+        origin: found.origin,
+        face: found.face,
     }
 }
 
@@ -1182,9 +1258,12 @@ struct Chain {
     names: Vec<String>,
     /// The first face found: the name it was found by, its weight and
     /// where it came from.
-    first: Option<(String, Weight, &'static str)>,
+    first: Option<(String, Weight, Origin)>,
     /// The names found nowhere.
     missing: Vec<String>,
+    /// Each name of the list, in order, with where it was found and the
+    /// face (generic ones too).
+    resolved: Vec<(String, Option<Origin>, Option<String>)>,
 }
 
 fn chain_at(
@@ -1200,14 +1279,25 @@ fn chain_at(
         names: Vec::new(),
         first: None,
         missing: Vec::new(),
+        resolved: Vec::new(),
     };
-    for name in names.iter().filter(|n| !is_generic(n)) {
+    for name in names {
+        if is_generic(name) {
+            chain
+                .resolved
+                .push((name.clone(), Some(Origin::Bundled), None));
+            continue;
+        }
         let Some(found) = find(name, weight, faces, bundled, system) else {
             chain.missing.push(name.clone());
+            chain.resolved.push((name.clone(), None, None));
             continue;
         };
+        chain
+            .resolved
+            .push((name.clone(), Some(found.origin), Some(found.face.clone())));
         if chain.first.is_none() {
-            chain.first = Some((name.clone(), found.weight, found.source));
+            chain.first = Some((name.clone(), found.weight, found.origin));
         }
         defs.font_data
             .entry(found.key.clone())
@@ -1283,8 +1373,8 @@ fn definitions_and_faces(
         for weight in WEIGHTS {
             let found = chain_at(&mut defs, names, weight, faces, &bundled_faces, system);
             let mut primary = None;
-            if let Some((name, w, source)) = &found.first {
-                primary = Some(format!("{name} {} ({source})", w.0));
+            if let Some((name, w, origin)) = &found.first {
+                primary = Some(format!("{name} {} ({})", w.0, origin.name()));
                 if *w != weight {
                     report.problems.push(format!(
                         "{}: {name} has no weight {}, {} is drawn",
@@ -1298,6 +1388,19 @@ fn definitions_and_faces(
             let mut chain = found.keys;
             if weight == Weight::REGULAR {
                 missing = found.missing;
+                report
+                    .resolved
+                    .extend(
+                        found
+                            .resolved
+                            .into_iter()
+                            .map(|(name, origin, face)| Resolved {
+                                list: role.key().to_string(),
+                                name,
+                                origin,
+                                face,
+                            }),
+                    );
                 // The face drawing the digits: the first of the chain.
                 let first = chain.first().or(tail.first());
                 let tabular = first
@@ -1393,9 +1496,22 @@ fn add_specimens(
         let mut found_any = false;
         for weight in WEIGHTS {
             let mut chain = Vec::new();
-            if !is_generic(name)
-                && let Some(found) = find(name, weight, faces, &bundled_faces, system)
-            {
+            let found = (!is_generic(name))
+                .then(|| find(name, weight, faces, &bundled_faces, system))
+                .flatten();
+            if weight == Weight::REGULAR {
+                report.resolved.push(Resolved {
+                    list: "specimen".into(),
+                    name: name.clone(),
+                    origin: match &found {
+                        Some(f) => Some(f.origin),
+                        None if is_generic(name) => Some(Origin::Bundled),
+                        None => None,
+                    },
+                    face: found.as_ref().map(|f| f.face.clone()),
+                });
+            }
+            if let Some(found) = found {
                 found_any = true;
                 defs.font_data
                     .entry(found.key.clone())
@@ -1488,7 +1604,12 @@ impl System {
                     key: format!("pop:{name}:{}:system", w.0),
                     data: Arc::new(data),
                     weight: w,
-                    source: "system",
+                    origin: Origin::System,
+                    face: if info.post_script_name.is_empty() {
+                        format!("{name} {}", w.0)
+                    } else {
+                        info.post_script_name.clone()
+                    },
                 })
             }
             System::Given(list) => {
@@ -1503,7 +1624,8 @@ impl System {
                     key: format!("pop:{}:{}:system", face.family, w.0),
                     data: face.data.clone(),
                     weight: w,
-                    source: "system",
+                    origin: Origin::System,
+                    face: format!("{} {}", face.family, w.0),
                 })
             }
             System::None => {
@@ -1657,7 +1779,8 @@ mod tests {
                 key: "Hack".into(),
                 data: hack,
                 weight: Weight::REGULAR,
-                source: "bundled",
+                origin: Origin::Bundled,
+                face: "Hack".into(),
             },
             Weight::BOLD,
         );
@@ -1939,6 +2062,196 @@ mod tests {
             "{report:?}"
         );
         assert_eq!(origin_of(&ctx, "Fake Sans"), None);
+    }
+
+    /// A context whose system fonts are the faces given (never the
+    /// machine's), each from one of egui's own files.
+    fn fake_system(faces: &[(&str, &str)]) -> Context {
+        let ctx = Context::default();
+        let bundled = FontDefinitions::default().font_data;
+        set_system_faces(
+            &ctx,
+            Some(
+                faces
+                    .iter()
+                    .map(|(family, file)| {
+                        Face::from_owned(family, Weight::REGULAR, bundled[*file].font.to_vec())
+                    })
+                    .collect(),
+            ),
+        );
+        ctx
+    }
+
+    #[test]
+    fn a_name_on_the_system_and_bundled_resolves_to_the_system_s() {
+        // The system has an Ubuntu (Hack's file, to tell them apart).
+        let ctx = fake_system(&[("Ubuntu", "Hack")]);
+        let (defs, report) = definitions(
+            &[],
+            &names(&["Ubuntu", "sans-serif"]),
+            &names(&["monospace"]),
+            &Previews::default(),
+            &System::get(&ctx),
+        );
+        assert!(report.problems.is_empty(), "{report:?}");
+        let regular = &defs.families[&FontFamily::Proportional];
+        assert_eq!(regular[0], "pop:Ubuntu:400:system");
+        let bold = &defs.families[&family(Role::Ui, Weight::BOLD)];
+        assert_eq!(bold[0], "pop:Ubuntu:400:system");
+        // egui's bundled faces stay behind it, each once.
+        assert!(regular.iter().any(|k| k == "Ubuntu-Light"));
+        let mut seen = std::collections::BTreeSet::new();
+        assert!(regular.iter().all(|k| seen.insert(k)), "{regular:?}");
+        let ubuntu = report.resolved("ui", "Ubuntu").unwrap();
+        assert_eq!(ubuntu.origin, Some(Origin::System));
+        assert_eq!(ubuntu.to_string(), "Ubuntu → system Ubuntu 400");
+        assert_eq!(
+            report.resolved("ui", "sans-serif").unwrap().origin,
+            Some(Origin::Bundled)
+        );
+        // Asked by name, and listed, it is the system's too.
+        assert_eq!(origin_of(&ctx, "ubuntu"), Some(Origin::System));
+        let listed = families(&ctx);
+        let ubuntu = listed.iter().find(|f| f.name == "Ubuntu").unwrap();
+        assert_eq!(ubuntu.origin, Origin::System);
+        assert!(ubuntu.monospace);
+        assert_eq!(listed.iter().filter(|f| f.name == "Ubuntu").count(), 1);
+        // A registered face still comes before the system's.
+        let faces = vec![Face::from_static("Ubuntu", Weight::REGULAR, INTER_VAR)];
+        let (defs, report) = definitions(
+            &faces,
+            &names(&["Ubuntu"]),
+            &[],
+            &Previews::default(),
+            &System::get(&ctx),
+        );
+        assert_eq!(
+            defs.families[&FontFamily::Proportional][0],
+            "pop:Ubuntu:400"
+        );
+        assert_eq!(
+            report.resolved("ui", "Ubuntu").unwrap().origin,
+            Some(Origin::Registered)
+        );
+    }
+
+    #[test]
+    fn a_name_missing_on_the_system_falls_back_to_the_bundled_face() {
+        let ctx = fake_system(&[("Fake Sans", "Ubuntu-Light")]);
+        let (defs, report) = definitions(
+            &[],
+            &names(&["Ubuntu"]),
+            &names(&["Hack"]),
+            &Previews::default(),
+            &System::get(&ctx),
+        );
+        assert!(report.problems.is_empty(), "{report:?}");
+        assert_eq!(defs.families[&FontFamily::Proportional][0], "Ubuntu-Light");
+        let ubuntu = report.resolved("ui", "Ubuntu").unwrap();
+        assert_eq!(ubuntu.origin, Some(Origin::Bundled));
+        assert_eq!(ubuntu.face.as_deref(), Some("Ubuntu-Light"));
+        assert_eq!(ubuntu.to_string(), "Ubuntu → bundled Ubuntu-Light");
+        assert_eq!(
+            report.resolved("mono", "Hack").unwrap().to_string(),
+            "Hack → bundled Hack"
+        );
+        assert_eq!(origin_of(&ctx, "Ubuntu"), Some(Origin::Bundled));
+    }
+
+    #[test]
+    fn a_stack_whose_first_family_is_missing_everywhere_resolves_to_the_next() {
+        // A platform's stack, on a machine with Adwaita Sans only.
+        let ctx = fake_system(&[("Adwaita Sans", "Ubuntu-Light")]);
+        let stack = names(&[
+            "Helvetica",
+            "Segoe UI",
+            "Adwaita Sans",
+            "Ubuntu",
+            "sans-serif",
+        ]);
+        let (defs, report) =
+            definitions(&[], &stack, &[], &Previews::default(), &System::get(&ctx));
+        let regular = &defs.families[&FontFamily::Proportional];
+        assert_eq!(regular[0], "pop:Adwaita Sans:400:system");
+        let primary = report
+            .primary
+            .iter()
+            .find(|(f, _)| f == "pop.ui.400")
+            .and_then(|(_, p)| p.clone());
+        assert_eq!(primary.as_deref(), Some("Adwaita Sans 400 (system)"));
+        // The names after it are its fallbacks: egui's Ubuntu, once.
+        assert_eq!(regular[1], "Ubuntu-Light");
+        let mut seen = std::collections::BTreeSet::new();
+        assert!(regular.iter().all(|k| seen.insert(k)), "{regular:?}");
+        // Every name is said, in order, the missing ones as missing.
+        let said: Vec<String> = report
+            .resolved
+            .iter()
+            .filter(|r| r.list == "ui")
+            .map(|r| r.to_string())
+            .collect();
+        assert_eq!(
+            said,
+            [
+                "Helvetica → missing",
+                "Segoe UI → missing",
+                "Adwaita Sans → system Adwaita Sans 400",
+                "Ubuntu → bundled Ubuntu-Light",
+                "sans-serif → bundled",
+            ]
+        );
+        for missing in ["Helvetica", "Segoe UI"] {
+            assert!(
+                report
+                    .problems
+                    .iter()
+                    .any(|p| p.starts_with(&format!("font.family.ui: no font named {missing}"))),
+                "{report:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_report_and_the_collector_say_where_each_name_was_found() {
+        let ctx = fake_system(&[("Ubuntu", "Hack")]);
+        crate::theme::install(&ctx, &crate::theme::ThemeSpec::new("pop-dark"));
+        pass(&ctx);
+        let bridge = crate::debug::DebugBridge::with_core_collectors();
+        let said = |ctx: &Context| -> Vec<serde_json::Value> {
+            let d = bridge.snapshot_of(ctx, "fonts").unwrap();
+            d["resolved"].as_array().unwrap().clone()
+        };
+        let ubuntu = |list: &[serde_json::Value]| {
+            list.iter()
+                .find(|r| r["list"] == "ui" && r["name"] == "Ubuntu")
+                .cloned()
+                .unwrap()
+        };
+        let r = ubuntu(&said(&ctx));
+        assert_eq!(r["origin"], "system");
+        assert_eq!(r["face"], "Ubuntu 400");
+        assert_eq!(r["says"], "Ubuntu → system Ubuntu 400");
+        // Another machine, without Ubuntu: egui's, said as such.
+        set_system_faces(&ctx, Some(Vec::new()));
+        reinstall(&ctx);
+        let r = ubuntu(&said(&ctx));
+        assert_eq!(r["origin"], "bundled");
+        assert_eq!(r["says"], "Ubuntu → bundled Ubuntu-Light");
+        assert_eq!(
+            report(&ctx)
+                .unwrap()
+                .resolved("ui", "Ubuntu")
+                .unwrap()
+                .origin,
+            Some(Origin::Bundled)
+        );
+        // A specimen is said too, a name found nowhere as missing.
+        assert_eq!(specimen(&ctx, "Nowhere Sans", Weight::REGULAR), None);
+        let r = report(&ctx).unwrap();
+        let nowhere = r.resolved("specimen", "Nowhere Sans").unwrap();
+        assert_eq!(nowhere.origin, None);
+        assert_eq!(nowhere.to_string(), "Nowhere Sans → missing");
     }
 
     #[test]
