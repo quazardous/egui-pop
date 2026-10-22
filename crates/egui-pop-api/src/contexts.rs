@@ -1305,6 +1305,24 @@ pub fn crumbs(app: &AppHandle) -> Vec<String> {
         .collect()
 }
 
+/// The icon each crumb's place declares (`FrameSpec::icon`), by name,
+/// in [`crumbs`]' order: `None` for the root and for a place without one.
+pub fn crumb_icons(app: &AppHandle) -> Vec<Option<String>> {
+    let Some(svc) = app.service(&CONTEXTS) else {
+        return Vec::new();
+    };
+    let p = lock(&svc.projection);
+    let state = p.applied.clone().unwrap_or_default();
+    std::iter::once(None)
+        .chain(
+            state
+                .places
+                .iter()
+                .map(|e| p.registry.get(&e.frame).and_then(|s| s.icon.clone())),
+        )
+        .collect()
+}
+
 /// Every declared frame's icon name (places and modes).
 pub(crate) fn frame_icons(app: &AppHandle) -> Vec<(FrameId, String)> {
     let Some(svc) = app.service(&CONTEXTS) else {

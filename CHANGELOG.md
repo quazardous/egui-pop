@@ -52,6 +52,11 @@ publishes.
   whether it resolves, the unknown names with who asked for them, and
   the icons drawn by name in the last pass; its `search` action finds
   names.
+- Icons on the breadcrumb (egui-pop-api): a place declaring an icon
+  (`FrameSpec::icon`) shows it before its crumb, except in the compact
+  density; `contexts::crumb_icons` and the `strips` collector's
+  `breadcrumb_icons` give them by name.
+
 - A widget's own secondary button (egui-pop-core): a widget that needs
   the right click for something else claims the secondary click, the
   drag or both on its rect (`pointer::claim::claim_secondary` with a
