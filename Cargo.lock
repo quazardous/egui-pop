@@ -1263,6 +1263,7 @@ dependencies = [
  "egui_kittest",
  "fontdb",
  "half",
+ "naga",
  "ortho-router",
  "profiling",
  "resvg 0.46.0",
