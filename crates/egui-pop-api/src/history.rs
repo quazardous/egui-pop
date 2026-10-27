@@ -609,12 +609,17 @@ pub fn active(app: &AppHandle) -> Vec<ScopeId> {
 }
 
 /// Where Ctrl+Z (`redo` false) or Ctrl+Shift+Z goes now: the focused
-/// local scope, else the owner's active scope with the newest head (for
+/// local scope; while a modal is open, nothing else; else the owner's active scope with the newest head (for
 /// a redo, the scope last undone that can still redo, else the first
 /// active one that can). `None`: no history at all.
 pub fn target(app: &AppHandle, redo: bool) -> Option<Target> {
     if let Some(l) = focused_local(app) {
         return Some(Target::Local(l));
+    }
+    // The keys reach a modal (its own local scope, the settings window),
+    // never the application's history behind it.
+    if egui_pop_core::overlay::modal_open(&app.egui()) {
+        return None;
     }
     let lines = active_lines(app);
     if !redo {

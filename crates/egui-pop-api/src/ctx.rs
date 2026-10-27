@@ -481,8 +481,9 @@ impl<'a> Ctx<'a> {
     /// Registers a local scope (ADR 0014) for a focus surface: while the
     /// focus is in `surface` (`egui_pop_core::focus::scope`), Ctrl+Z and
     /// Ctrl+Shift+Z undo and redo there, not in the application's
-    /// history. A text field inside keeps its own undo. One scope per
-    /// surface: a second replaces the first. It goes with the plugin.
+    /// history, also in a modal (the settings window). A text field
+    /// inside keeps its own undo. One scope per surface: a second
+    /// replaces the first. It goes with the plugin.
     pub fn local_scope(
         &mut self,
         surface: &str,

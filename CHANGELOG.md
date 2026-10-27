@@ -384,6 +384,9 @@ publishes.
   agents); what the settings window's form writes goes to the store's
   `SETTINGS` history, undone by Ctrl+Z and the window's buttons while
   the focus is in the window, and no longer by the application's undo.
+  Edit > Undo's and Redo's keys now pass through a modal, where only a
+  focused local scope takes them: the application's history behind a
+  modal is never undone.
 - Undo histories are capped: the value store keeps its newest 500
   steps (`values::HISTORY_CAP`), the theme editor's draft its newest
   500 edits (`DRAFT_HISTORY_CAP`), the oldest dropped first, where they
