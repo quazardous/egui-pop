@@ -111,12 +111,16 @@ fn pad(strokes: Strokes) -> P {
             ctx.block(
                 zones::MAIN,
                 Block::add(BlockId::from_static("pad.block"), 0, |ui, _| {
-                    egui_pop_core::focus::scope(ui, PAD, &[], |ui| {
-                        ui.add_space(20.0);
-                        let _ = ui.button("In the pad");
-                        let mut text = String::from("note");
-                        ui.add(egui::TextEdit::singleline(&mut text).id_salt("pad.note"));
-                        ui.add_space(20.0);
+                    // A surface takes the whole room it is given: the pad
+                    // gets a box of its own, the button below stays out.
+                    ui.allocate_ui(egui::vec2(300.0, 120.0), |ui| {
+                        egui_pop_core::focus::scope(ui, PAD, &[], |ui| {
+                            ui.add_space(20.0);
+                            let _ = ui.button("In the pad");
+                            let mut text = String::from("note");
+                            ui.add(egui::TextEdit::singleline(&mut text).id_salt("pad.note"));
+                            ui.add_space(20.0);
+                        });
                     });
                     ui.add_space(40.0);
                     let _ = ui.button("Outside");
@@ -455,8 +459,11 @@ fn the_settings_window_undoes_the_changes_made_in_it() {
     h.key_press_modifiers(Modifiers::COMMAND, Key::Comma);
     h.run();
     assert!(egui_pop_api::settings_window::is_open(&a));
-    h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Settings")
-        .type_text("Demo flag");
+    // The application's step is not reachable behind the modal.
+    assert!(history::target(&a, false).is_none());
+    assert!(!a.can_undo());
+    // The demo plugin's section, picked in the tree.
+    h.get_by_label("demo").click();
     h.run();
     h.get_by_label("Demo flag").click();
     h.run();

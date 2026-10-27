@@ -32,7 +32,7 @@ use egui_pop_model::diagnostics::{Diagnostic, Diagnostics};
 use egui_pop_model::ids::{
     CommandId, MenuId, OwnerId, PanelId, PluginId, SettingId, StepId, StoryId, ZoneId,
 };
-use egui_pop_model::keymap::{Binding, Keymap, Layer, Trace};
+use egui_pop_model::keymap::{BindOptions, Binding, Keymap, Layer, Trace};
 use egui_pop_model::menus::{Item, MenuItem, Menus, sort_items};
 use egui_pop_model::order::{Node, order};
 use egui_pop_model::panels::{Area, PanelSpec, Panels};
@@ -3157,7 +3157,7 @@ impl App {
         ctx.command(
             CommandSpec::new(CMD_UNDO, "Undo", "Edit")
                 .description("Undo the last change.")
-                .key("Ctrl+Z")
+                .key_with("Ctrl+Z", BindOptions::global().through_modal())
                 .when("!textInputFocus && canUndo")
                 .menu(MENU_EDIT, "0_undo", 0),
             |call| outcome_result(call.app.undo(call.origin)),
@@ -3165,8 +3165,8 @@ impl App {
         ctx.command(
             CommandSpec::new(CMD_REDO, "Redo", "Edit")
                 .description("Redo the last undone change.")
-                .key("Ctrl+Shift+Z")
-                .key("Ctrl+Y")
+                .key_with("Ctrl+Shift+Z", BindOptions::global().through_modal())
+                .key_with("Ctrl+Y", BindOptions::global().through_modal())
                 .when("!textInputFocus && canRedo")
                 .menu(MENU_EDIT, "0_undo", 1),
             |call| outcome_result(call.app.redo(call.origin)),
