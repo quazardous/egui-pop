@@ -261,7 +261,9 @@ pub(crate) struct Resources {
     pub(crate) image_pipelines: HashMap<wgpu::TextureFormat, Pipelines>,
     uniform_layout: wgpu::BindGroupLayout,
     texture_layout: wgpu::BindGroupLayout,
-    buffer_layout: wgpu::BindGroupLayout,
+    /// The buffer tiles' layout, `None` where the adapter cannot read
+    /// storage buffers in a fragment shader.
+    buffer_layout: Option<wgpu::BindGroupLayout>,
     stride: u64,
     format: wgpu::TextureFormat,
     target_is_srgb: bool,
@@ -474,14 +476,10 @@ pub fn install_for_surface(
         label: Some("egui-pop-viewport"),
         source: wgpu::ShaderSource::Wgsl(format!("{COMMON}{TEXTURE}").into()),
     });
-    // Storage buffers read in a fragment shader: not on every adapter
-    // (WebGL 2, some downlevel ones).
-    let buffers = rs
-        .adapter
-        .get_downlevel_capabilities()
-        .flags
-        .contains(wgpu::DownlevelFlags::FRAGMENT_STORAGE)
-        && device.limits().max_storage_buffers_per_shader_stage > 0;
+    let buffers = reads_fragment_storage(
+        rs.adapter.get_downlevel_capabilities().flags,
+        &device.limits(),
+    );
     let uniform_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("egui-pop-viewport.draw"),
         entries: &[wgpu::BindGroupLayoutEntry {
@@ -508,32 +506,36 @@ pub fn install_for_surface(
             count: None,
         }],
     });
-    let buffer_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        label: Some("egui-pop-viewport.device-buffer"),
-        entries: &[wgpu::BindGroupLayoutEntry {
-            binding: 0,
-            visibility: wgpu::ShaderStages::FRAGMENT,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Storage { read_only: true },
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
-        }],
+    // Without fragment storage (WebGL 2), even the buffer binding's
+    // layout fails validation: neither it nor its pipeline is created.
+    let buffer_layout = buffers.then(|| {
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("egui-pop-viewport.device-buffer"),
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+        })
     });
     let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("egui-pop-viewport"),
         bind_group_layouts: &[Some(&uniform_layout), Some(&texture_layout)],
         ..Default::default()
     });
-    let buffer_module = buffers.then(|| {
+    let buffer_module = buffer_layout.as_ref().map(|buffer_layout| {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("egui-pop-viewport.device-buffer"),
             source: wgpu::ShaderSource::Wgsl(format!("{COMMON}{BUFFER}").into()),
         });
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("egui-pop-viewport.device-buffer"),
-            bind_group_layouts: &[Some(&uniform_layout), Some(&buffer_layout)],
+            bind_group_layouts: &[Some(&uniform_layout), Some(buffer_layout)],
             ..Default::default()
         });
         (shader, layout)
@@ -601,6 +603,17 @@ pub fn install_for_surface(
         half_float: half,
         target_is_srgb,
     }
+}
+
+/// Whether an adapter with these downlevel `flags` and a device with
+/// these `limits` let the tile shader read a storage buffer in its
+/// fragment stage. WebGL 2 does not (no `FRAGMENT_STORAGE`, no storage
+/// buffer per stage): there, buffer device tiles are refused
+/// ([`DeviceTileError::BuffersUnsupported`](crate::device::DeviceTileError::BuffersUnsupported))
+/// and the buffer pipeline is not built.
+pub fn reads_fragment_storage(flags: wgpu::DownlevelFlags, limits: &wgpu::Limits) -> bool {
+    flags.contains(wgpu::DownlevelFlags::FRAGMENT_STORAGE)
+        && limits.max_storage_buffers_per_shader_stage > 0
 }
 
 /// A pipeline of the viewport's shader, its `[vertex, fragment]` entry
@@ -684,10 +697,11 @@ impl Resources {
             }
             Resource::Buffer { buffer, layout } => {
                 self.modules.buffer.as_ref()?;
+                let buffer_layout = self.buffer_layout.as_ref()?;
                 let (offset, bytes, base) = layout.binding(tile.origin, size, self.storage_align);
                 let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
                     label: Some("egui-pop-viewport.device-buffer"),
-                    layout: &self.buffer_layout,
+                    layout: buffer_layout,
                     entries: &[wgpu::BindGroupEntry {
                         binding: 0,
                         resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
@@ -1046,7 +1060,32 @@ pub(crate) fn set_render_device(ctx: &Context, device: &wgpu::Device) {
 
 #[cfg(test)]
 mod tests {
-    use super::{BUFFER, COMMON, TEXTURE};
+    use super::{BUFFER, COMMON, TEXTURE, reads_fragment_storage};
+
+    /// WebGL 2 (downlevel flags and limits) reads no storage buffer in a
+    /// fragment shader; a full WebGPU or native device does.
+    #[test]
+    fn fragment_storage_follows_the_flags_and_the_limits() {
+        let webgl2 = wgpu::Limits::downlevel_webgl2_defaults();
+        assert_eq!(webgl2.max_storage_buffers_per_shader_stage, 0);
+        assert!(!reads_fragment_storage(
+            wgpu::DownlevelFlags::empty(),
+            &webgl2
+        ));
+        // The flag alone is not enough: the stage's limit must allow one.
+        assert!(!reads_fragment_storage(
+            wgpu::DownlevelFlags::FRAGMENT_STORAGE,
+            &webgl2
+        ));
+        assert!(!reads_fragment_storage(
+            wgpu::DownlevelFlags::empty(),
+            &wgpu::Limits::default()
+        ));
+        assert!(reads_fragment_storage(
+            wgpu::DownlevelFlags::all(),
+            &wgpu::Limits::default()
+        ));
+    }
 
     /// Each tile module, as `install` composes it, parses and validates
     /// with naga (what wgpu runs at shader creation), without a GPU.

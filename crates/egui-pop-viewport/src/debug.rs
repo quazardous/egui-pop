@@ -1,7 +1,8 @@
 //! The viewports seen by egui-pop's debug bridge: register
 //! [`collector`] and its `viewport` snapshot lists every viewport drawn
 //! (view, mapping, hooks set, what the hooks decided, the last signals,
-//! the tiles and the bytes their uploads copied, `tiles.uploads`);
+//! the tiles and the bytes their uploads copied, `tiles.uploads`, and
+//! the device tiles the render device takes, `tiles.device`);
 //! its `set_view` action moves a viewport as a command would (through
 //! its `before_view` hook, on the next frame).
 //!
@@ -170,6 +171,7 @@ pub(crate) fn publish(
             |t| json!({ "time": t.time, "hook": t.hook, "verdict": t.verdict, "detail": t.detail }),
         )
         .collect();
+    let device_tiles = device_tiles(ctx);
     r.snapshots.insert(
         name.to_string(),
         json!({
@@ -191,6 +193,7 @@ pub(crate) fn publish(
                     "total": transfers_json(state.transfers()),
                 },
                 "last_error": state.last_error(),
+                "device": device_tiles,
             },
             "hooks": state.hooks().names(),
             "display": state.display_target().map(|t| format!("{t:?}")),
@@ -221,6 +224,23 @@ pub(crate) fn publish(
             "signals": all[keep..].to_vec(),
         }),
     );
+}
+
+/// What device tiles the render device takes (feature `wgpu`): `null`
+/// without a GPU path; `buffers` false where the adapter reads no storage
+/// buffer in a fragment shader (WebGL 2), so a producer delivers textures
+/// or host tiles.
+#[cfg(feature = "wgpu")]
+fn device_tiles(ctx: &Context) -> Json {
+    crate::gpu::render_device(ctx).map_or(
+        Json::Null,
+        |r| json!({ "textures": true, "buffers": r.buffers }),
+    )
+}
+
+#[cfg(not(feature = "wgpu"))]
+fn device_tiles(_: &Context) -> Json {
+    Json::Null
 }
 
 /// Tile pixels copied to the GPU, as JSON.
