@@ -879,6 +879,11 @@ setting-input-wheel-device-choice-mouse 5f2621c2513a74d2
 setting-input-wheel-device-choice-trackpad 6a14f8103f0cae39
 setting-input-wheel-device.description 78ffc641448d30d7
 setting-input-wheel-device.label 554fd75522ec1644
+setting-menus-icons-choice-off 721d4f4fe78bec18
+setting-menus-icons-choice-on c9cf4429f7cac946
+setting-menus-icons-choice-platform 315089c975359810
+setting-menus-icons.description 418c1061312fd477
+setting-menus-icons.label 84f195ce86f5f96e
 setting-notifications-desktop-choice-always 2f25054a585490a2
 setting-notifications-desktop-choice-never d5bfc6682132cc31
 setting-notifications-desktop-choice-unfocused 51e0695065fd9127
