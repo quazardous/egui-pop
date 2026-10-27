@@ -387,8 +387,14 @@ fn a_console_whose_terminal_is_not_drawn_keeps_its_latest_output_only() {
     assert!(log.dropped() > 0);
     assert_eq!(log.waiting() as u64 + log.dropped(), 20_000 * 101);
     assert_eq!(log.dropped() % 101, 0, "dropped by whole lines");
-    // Started at last, the terminal shows the latest lines.
-    let term = TerminalState::new("log", log.clone());
+    // Started at last, the terminal shows the latest lines (wide enough
+    // that a line is one row: `text` has a row per line).
+    let term = TerminalState::new("log", log.clone()).size(24, 120);
     term.spawn(None, "user").unwrap();
-    assert!(term.text().ends_with(&line));
+    let text = term.text();
+    assert!(
+        text.ends_with(&line),
+        "{:?}",
+        &text[text.len().saturating_sub(300)..]
+    );
 }
