@@ -6,6 +6,11 @@
 //! turn, the example's value as the default; Enter runs it in the
 //! context the palette opened in.
 //!
+//! A command declaring an icon ([`CommandSpec::icon`]) shows it in a
+//! column before its title, as JetBrains' Find Action does; the column is
+//! kept on every row while one of the matches has an icon, so the titles
+//! align. The icon is decorative: the title is the row's name.
+//!
 //! Keys: `Ctrl+Shift+P` and `F1` open and close it (through modals), the
 //! arrows move the selection, Enter runs, Escape closes (or leaves an
 //! argument prompt).
@@ -29,10 +34,12 @@ use std::sync::{Arc, Mutex};
 
 use egui::text::LayoutJob;
 use egui::{Color32, FontId, Key, TextFormat, Ui};
+use egui_pop_core::icon::{Icon, IconRef};
 use egui_pop_core::kit::{Component, Kit, Part, State as KitState, Tone};
 use egui_pop_core::lock;
 use egui_pop_core::overlay::{self, Kind, OverlaySpec};
 use egui_pop_core::strings;
+use egui_pop_core::theme::Tokens;
 use egui_pop_model::commands::CommandSpec;
 use egui_pop_model::fuzzy::{self, Match};
 use egui_pop_model::ids::{BlockId, CommandId, PluginId};
@@ -449,16 +456,34 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                     // egui's margin keeps room for its own border: kept,
                     // unseen; the kit paints the row's box under it.
                     let border = ui.visuals().widgets.inactive.bg_stroke.width;
+                    // The commands' icons, and a column for them while
+                    // one of the matches has one.
+                    let icons: Vec<Option<(Icon, String)>> = hits
+                        .iter()
+                        .map(|h| {
+                            let name = app.command(&h.entry.command)?.icon?;
+                            Some((IconRef::from(&name).or_placeholder("palette"), name))
+                        })
+                        .collect();
+                    let side = Tokens::of(ui.ctx()).size.icon_inline;
+                    let column = icons.iter().any(Option::is_some);
                     for (i, h) in hits.iter().enumerate() {
                         let on = i == selected;
                         let state = row_state(ui, on);
                         let under = ui.painter().add(egui::Shape::Noop);
-                        let mut b =
-                            egui::Button::new(highlighted(row, state, &h.label, &h.positions))
-                                .selected(on)
-                                .frame_when_inactive(on)
-                                .fill(Color32::TRANSPARENT)
-                                .stroke(egui::Stroke::new(border, Color32::TRANSPARENT));
+                        let slot =
+                            egui::Id::new(("egui_pop_palette_icon", h.entry.command.as_str()));
+                        let label = highlighted(row, state, &h.label, &h.positions);
+                        let mut atoms: Vec<egui::Atom<'_>> = Vec::with_capacity(2);
+                        if column {
+                            atoms.push(egui::Atom::custom(slot, egui::vec2(side, side)));
+                        }
+                        atoms.push(label.into());
+                        let mut b = egui::Button::new(egui::Atoms::from(atoms))
+                            .selected(on)
+                            .frame_when_inactive(on)
+                            .fill(Color32::TRANSPARENT)
+                            .stroke(egui::Stroke::new(border, Color32::TRANSPARENT));
                         let mut keys = h.entry.keys.first().cloned().unwrap_or_default();
                         if h.recent && s.query.trim().is_empty() {
                             keys = if keys.is_empty() {
@@ -475,7 +500,12 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                             let muted = row.style_toned(Tone::Muted, state).text;
                             b = b.shortcut_text(egui::RichText::new(keys).color(muted));
                         }
-                        let r = ui.add(b);
+                        let r = b.atom_ui(ui);
+                        if let (Some(rect), Some((icon, name))) = (r.rect(slot), &icons[i]) {
+                            icon.paint(ui.painter(), rect, row.style(state).text);
+                            egui_pop_core::icon::registry::record(&ctx, "palette", &h.label, name);
+                        }
+                        let r = r.response;
                         let part = Part {
                             rect: r.rect,
                             room: r.rect,

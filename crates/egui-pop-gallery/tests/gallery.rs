@@ -354,6 +354,42 @@ fn menu_icons_off_keeps_ticks_and_dots_in_the_gutter() {
 }
 
 #[test]
+fn the_palette_shows_the_commands_icons_in_a_column() {
+    use egui::accesskit::Role;
+    let mut h = harness(options("pop-dark", Density::Comfortable, "menus"));
+    h.run();
+    h.key_press_modifiers(
+        egui::Modifiers::COMMAND | egui::Modifiers::SHIFT,
+        egui::Key::P,
+    );
+    h.run();
+    h.query_all_by_label("Command palette")
+        .find(|n| n.accesskit_node().role() == Role::TextInput)
+        .expect("the palette's field")
+        .type_text("card");
+    h.run();
+    h.run();
+    let drawn = egui_pop::core::icon::registry::drawn(&h.ctx);
+    let icon = |label: &str| {
+        drawn
+            .iter()
+            .find(|d| d.surface == "palette" && d.label.ends_with(label))
+            .map(|d| d.icon.clone())
+    };
+    assert_eq!(
+        icon("Duplicate the card").as_deref(),
+        Some("copy"),
+        "{drawn:?}"
+    );
+    assert_eq!(
+        icon("Lock the card").as_deref(),
+        Some("unlock"),
+        "{drawn:?}"
+    );
+    h.snapshot("palette-icons");
+}
+
+#[test]
 fn dialogs_open_from_the_page_and_send_what_they_ran() {
     let mut results = egui_kittest::SnapshotResults::new();
     for theme in ["pop-dark", "pop-light"] {

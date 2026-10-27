@@ -12,6 +12,11 @@ publishes.
 
 ### Added
 
+- The command palette shows a command's icon (egui-pop-api;
+  docs/icons.md, section 7): `CommandSpec::icon` in a column before the
+  title, as JetBrains' Find Action does, kept on every row while one of
+  the matches has an icon so the titles align. The icon is decorative
+  and recorded in the icon registry's drawn list (`palette`).
 - Menus show the commands' icons in an aligned gutter (egui-pop-api,
   egui-pop-model, egui-pop-core, egui-pop-tokens; docs/icons.md,
   section 5): every row starts with a column of fixed width holding the
