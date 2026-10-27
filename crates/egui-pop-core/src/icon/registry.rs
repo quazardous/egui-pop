@@ -424,19 +424,23 @@ mod tests {
     #[test]
     fn drawn_icons_are_read_from_the_pass_before() {
         let ctx = Context::default();
+        let photos = [Drawn {
+            surface: "tree".into(),
+            label: "Photos".into(),
+            icon: "folder".into(),
+        }];
         let mut out = ctx.run_ui(Default::default(), |ui| {
             record(ui.ctx(), "tree", "Photos", "folder");
         });
         out.textures_delta.clear();
-        let mut out = ctx.run_ui(Default::default(), |_| {});
+        // Between the passes, and all through the next one, the pass
+        // before is the one that drew.
+        assert_eq!(drawn(&ctx), photos);
+        let mut seen = Vec::new();
+        let mut out = ctx.run_ui(Default::default(), |ui| seen = drawn(ui.ctx()));
         out.textures_delta.clear();
-        assert_eq!(
-            drawn(&ctx),
-            [Drawn {
-                surface: "tree".into(),
-                label: "Photos".into(),
-                icon: "folder".into(),
-            }]
-        );
+        assert_eq!(seen, photos);
+        // Once that pass is complete, it drew nothing.
+        assert!(drawn(&ctx).is_empty());
     }
 }
