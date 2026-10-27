@@ -77,6 +77,9 @@ serde_json.workspace = true
 # MIT OR Apache-2.0, already in the tree through wgpu: the viewport's
 # WGSL parsed and validated in unit tests, without a GPU.
 naga = { version = "30", features = ["wgsl-in"] }
+# MIT OR Apache-2.0, already in the tree through egui-wgpu: its stub
+# device (`noop`) lets unit tests make device tiles without a GPU.
+wgpu = { version = "30", default-features = false, features = ["noop"] }
 # MIT OR Apache-2.0, already in the tree through resvg: the SVG export's
 # tests parse what it writes.
 roxmltree = "0.21"

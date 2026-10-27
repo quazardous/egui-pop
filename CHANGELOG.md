@@ -128,7 +128,15 @@ publishes.
   `TileSink::render_device`): one from another device, without a GPU
   path or that does not fit is refused with the reason
   (`DeviceTileError`, `ViewportState::last_error`) and falls back to
-  the source's CPU pixels when it offers some (`DeviceTile::fallback`).
+  the source's CPU pixels when it offers some (`DeviceTile::fallback`),
+  made on the delivering thread, never on the interface thread: a tile
+  refused when the interface takes it in is asked for again. The
+  render device is read when needed, so a GPU path installed after the
+  first frame takes over: tiles served from fallback pixels are asked
+  for again as device tiles. `DeviceTile::keep` attaches what the
+  producer needs alive while the tile is held (its image and the
+  charge it carries in a GPU memory ledger), dropped when the tile is
+  replaced, evicted or refused, or the viewport's state is dropped.
   The loupe, the before and after sides, the Wayland image surface and
   what the `under_overlays` hook paints draw over device tiles as over
   uploaded ones. Upload counters: `ViewportState::transfers` and
@@ -349,6 +357,9 @@ publishes.
 
 ### Fixed
 
+- The GPU path's tile textures are released (egui-pop-viewport): those
+  of a dropped `ViewportState` at the next paint of any viewport, and a
+  tile replaced before its first paint is no longer bound and kept.
 - The key extractor reads a path-qualified constructor (egui-pop-i18n):
   a pattern such as `Message::new` now takes `app_core::Message::new(…)`,
   `crate::strings::Message::new(…)` and `::app::Message::new(…)`, the

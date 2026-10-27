@@ -4,10 +4,13 @@
 //! with no tile byte uploaded by the viewport; the loupe and a mask's
 //! tint draw over them as over uploaded tiles; a tile from another
 //! device, or without a GPU path, is refused with the reason and falls
-//! back to the source's pixels. Every test needs a wgpu adapter (lavapipe
-//! is enough).
+//! back to the source's pixels; what a tile keeps alive lives as long as
+//! the tile; a GPU path installed after the first frames takes over from
+//! the fallback. Every test needs a wgpu adapter (lavapipe is enough).
 
 use std::future::Future as _;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use egui::{Color32, Pos2, vec2};
 use egui_kittest::Harness;
@@ -43,6 +46,24 @@ struct DeviceSource {
     kind: Kind,
     /// Offers CPU pixels when refused.
     fallback: bool,
+    /// The tokens its tiles keep alive.
+    live: Arc<AtomicUsize>,
+}
+
+/// Counts the values alive: one more made, one less dropped.
+struct Token(Arc<AtomicUsize>);
+
+impl Token {
+    fn new(live: &Arc<AtomicUsize>) -> Token {
+        live.fetch_add(1, Ordering::SeqCst);
+        Token(live.clone())
+    }
+}
+
+impl Drop for Token {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::SeqCst);
+    }
 }
 
 /// The display bytes of a tile, as `TestSource` serves them.
@@ -185,7 +206,7 @@ impl TileSource for DeviceSource {
 
     fn request(&self, requests: Vec<TileRequest>) {
         for r in requests {
-            let mut tile = self.tile(&r);
+            let mut tile = self.tile(&r).keep(Token::new(&self.live));
             if self.fallback {
                 let req = r.clone();
                 tile = tile.fallback(move || Some(Pixels::Scene(scene_floats(&req))));
@@ -231,6 +252,7 @@ fn device_scene(
         queue: device.1,
         kind,
         fallback,
+        live: Arc::default(),
     };
     Scene {
         state,
@@ -255,6 +277,13 @@ fn cpu_scene(view: View) -> Scene {
 /// A harness rendering with the process's device; the GPU path installed
 /// when `gpu`.
 fn harness(s: Scene, ppp: f32, gpu: bool) -> Harness<'static, Scene> {
+    build(s, ppp, gpu, false)
+}
+
+/// [`harness`]; the source shown from the first frame when `early`, the
+/// GPU path then installed after the frames the build runs.
+fn build(mut s: Scene, ppp: f32, gpu: bool, early: bool) -> Harness<'static, Scene> {
+    s.live = early;
     let rs = {
         let setup = egui_pop_test::shared_setup();
         let _guard = egui_pop_test::gpu_lock();
@@ -569,5 +598,82 @@ fn a_mask_tint_composites_over_device_tiles_as_over_cpu_tiles() {
         }
         assert!(checked > 500);
         assert_zero_upload(&mut h, &format!("{kind:?} tinted"));
+    }
+}
+
+/// The tokens a device source's tiles keep alive.
+fn live_tokens(live: &Arc<AtomicUsize>) -> usize {
+    live.load(Ordering::SeqCst)
+}
+
+#[test]
+fn what_a_tile_keeps_lives_as_long_as_the_viewport_holds_it() {
+    let view = View::actual([300.3, 200.7]);
+    let mut s = device_scene(view, Kind::SceneTexture, shared(), false);
+    let live = Arc::new(AtomicUsize::new(0));
+    let (device, queue) = shared();
+    s.source = Box::new(DeviceSource {
+        sink: s.state.sink(),
+        device,
+        queue,
+        kind: Kind::SceneTexture,
+        fallback: false,
+        live: live.clone(),
+    });
+    let mut h = harness(s, 1.0, true);
+    settle(&mut h);
+    let _ = h.render().expect("render");
+    let held = h.state().state.tile_count();
+    assert!(held > 0);
+    assert_eq!(live_tokens(&live), held, "one per tile held");
+    // The image changed: every tile replaced, the old ones dropped once
+    // the paint released their bindings.
+    h.state().state.sink().changed(None);
+    settle(&mut h);
+    let _ = h.render().expect("render");
+    assert_eq!(live_tokens(&live), h.state().state.tile_count());
+    // The viewport's state dropped (a CPU source's scene in its place):
+    // the next paint releases what it held.
+    let mut cpu = cpu_scene(view);
+    cpu.live = true;
+    *h.state_mut() = cpu;
+    settle(&mut h);
+    let _ = h.render().expect("render");
+    assert_eq!(live_tokens(&live), 0, "dropped with the state");
+}
+
+#[test]
+fn a_gpu_path_installed_after_the_first_frames_takes_over_from_the_fallback() {
+    let view = View::actual([300.3, 200.7]);
+    // The source shown from the first frame, the GPU path installed only
+    // after the frames the harness's build runs: the first requests are
+    // refused and served from the fallback, then asked for again.
+    let mut h = build(
+        device_scene(view, Kind::SceneTexture, shared(), true),
+        1.0,
+        true,
+        true,
+    );
+    settle(&mut h);
+    let st = &h.state().state;
+    let device = st
+        .stats()
+        .snapshot()
+        .iter()
+        .find(|(k, _)| *k == "device")
+        .map_or(0, |(_, v)| *v);
+    let held = st.tile_count() as u64;
+    assert!(held > 0);
+    assert!(
+        device >= held,
+        "{device} device tiles taken in for {held} held: {:?}",
+        st.stats().snapshot()
+    );
+    assert!(st.transfers().bound >= held);
+    assert_one_to_one(&mut h, 1.0, 1, "after a late install");
+    for _ in 0..3 {
+        h.run();
+        let f = h.state().state.frame_transfers();
+        assert!(f.is_zero_copy(), "the last frame copied {f:?}");
     }
 }

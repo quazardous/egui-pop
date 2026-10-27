@@ -135,20 +135,25 @@ use egui_pop::viewport::gpu::egui_wgpu::wgpu;
 use egui_pop::viewport::source::{Pixels, TileRequest, TileSink};
 
 /// An engine's result for one request: `rgba` holds the scaled image
-/// as packed `f32` RGBA rows of `width` pixels, on the render device.
+/// as packed `f32` RGBA rows of `width` pixels, on the render device;
+/// `image` owns it on the engine's side.
 fn hand_over(
     sink: &TileSink,
     device: &wgpu::Device,
     request: &TileRequest,
     rgba: wgpu::Buffer,
     width: u32,
+    image: std::sync::Arc<dyn std::any::Any + Send + Sync>,
 ) {
     let [x, y] = request.origin;
     let tile = DeviceTile::buffer(device, rgba, BufferLayout::packed(width, 4))
         // The request's pixels start there in the image.
         .origin([x as u32, y as u32])
-        // Asked only if the viewport refuses the tile.
-        .fallback(|| Option::<Pixels>::None);
+        // Asked only if the viewport refuses the tile, on this thread.
+        .fallback(|| Option::<Pixels>::None)
+        // Held while the viewport holds the tile: the engine's image,
+        // and the charge it carries in its memory accounting.
+        .keep(image);
     sink.deliver_device(request, tile);
 }
 # let _ = hand_over;
@@ -175,7 +180,8 @@ fn hand_over(
   (a LUT the stage cannot express) is not run on device tiles: deliver
   display values then. Alpha is not drawn, as on the GPU path.
 - **The check**: a tile is checked on the delivering thread against the
-  render device of the last frame, and again when the interface takes
+  render device installed now (`TileSink::render_device`, read from the
+  viewport's context when called), and again when the interface takes
   it in. One made on another device, without a GPU path, or whose
   resource does not fit (usage, format, size, binding limits) is
   refused: `ViewportState::last_error` says why (`DeviceTileError`),
@@ -184,6 +190,31 @@ fn hand_over(
   usual CPU or upload path; without, the request fails.
   `TileSink::render_device` tells a source's thread which device to use
   before it renders.
+- **Where the fallback runs**: on the thread that calls
+  `deliver_device`, never on the interface thread (unless the source
+  delivers from it). A tile refused when the interface takes it in (the
+  render device changed after the source's check) is dropped, its
+  fallback not called, and its request made again through the source's
+  `request`, as for any tile the viewport no longer holds: the source
+  then checks against the new device and falls back on its own thread.
+- **The order of install and first frame**: install the GPU path
+  (`gpu::install`) before the first `Viewport::show`, as eframe's
+  creation context allows (`cc.wgpu_render_state`); the first frame's
+  requests then take the device path. Installed later, the requests
+  made before it are refused (no GPU path) and served from their
+  fallback pixels, or fail without them; when the render device appears
+  (or changes), the viewport asks for those tiles again, and they come
+  back as device tiles, the fallback shown until then. A failed request
+  is asked for again on the next frame anyway.
+- **What a tile keeps alive**: `DeviceTile::keep` attaches a value (the
+  producer's image, with the charge it carries in a GPU memory ledger)
+  that the viewport holds exactly as long as it holds the tile, waiting
+  or shown, and drops when the tile is replaced, invalidated, evicted
+  or refused, or the viewport's state is dropped. On the GPU path a
+  tile released is dropped at the next paint, once its binding is gone
+  (a tile replaced before its first paint is never bound). The
+  viewport's `wgpu::Buffer` or `wgpu::Texture` clone keeps the memory
+  alive anyway; the kept value makes the producer's accounting see it.
 - **The counters**: `ViewportState::transfers` counts the tile pixels
   copied to the GPU where the copy happens (an egui texture loaded, a
   GPU path texture written at the paint), and the device tiles bound in

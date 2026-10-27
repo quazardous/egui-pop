@@ -51,6 +51,20 @@ pub const MIN_PROXY_SCALE: f64 = 1.0 / 64.0;
 
 static NEXT_TEXTURE: AtomicU64 = AtomicU64::new(1);
 
+/// The GPU path textures of tile caches dropped (a viewport's state gone):
+/// released by the next paint of any viewport.
+static ORPHANS: std::sync::Mutex<Vec<u64>> = std::sync::Mutex::new(Vec::new());
+
+/// The GPU path textures to release for the tile caches dropped since
+/// the last call.
+fn take_orphans() -> Vec<u64> {
+    std::mem::take(
+        &mut *ORPHANS
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner),
+    )
+}
+
 /// A tile's texture.
 pub(crate) enum Texture {
     /// An egui texture, sRGB 8 bits (display-ready pixels, or scene
@@ -82,6 +96,9 @@ struct Entry {
     /// Scene pixels transformed on the CPU: redone when the display
     /// target or transform changes.
     baked: bool,
+    /// A refused device tile's fallback pixels: asked for again when the
+    /// render device changes.
+    fallback: bool,
 }
 
 #[derive(Debug)]
@@ -113,13 +130,34 @@ pub(crate) enum GpuData {
     Device(Box<crate::device::DeviceTile>),
 }
 
+/// A tile for the GPU path: its texture id, size and pixels.
+pub(crate) type Upload = (u64, [u32; 2], GpuData);
+
 /// The GPU path's uploads and releases, waiting for the next paint.
 #[derive(Debug, Default)]
 pub(crate) struct GpuQueue {
-    pub uploads: Vec<(u64, [u32; 2], GpuData)>,
+    pub uploads: Vec<Upload>,
     pub frees: Vec<u64>,
     /// What the paints copied and bound so far.
     pub copied: Transfers,
+}
+
+impl GpuQueue {
+    /// What a paint takes in: the uploads, less those released since they
+    /// were queued (a tile replaced within a frame: dropped here, with
+    /// what a device tile keeps alive), and the textures to release,
+    /// those of the tile caches dropped since included.
+    #[cfg_attr(not(feature = "wgpu"), allow(dead_code))]
+    pub(crate) fn drain(&mut self) -> (Vec<Upload>, Vec<u64>) {
+        let mut frees = std::mem::take(&mut self.frees);
+        frees.extend(take_orphans());
+        let mut uploads = std::mem::take(&mut self.uploads);
+        if !frees.is_empty() {
+            let freed: std::collections::HashSet<u64> = frees.iter().copied().collect();
+            uploads.retain(|u| !freed.contains(&u.0));
+        }
+        (uploads, frees)
+    }
 }
 
 /// Tile pixels copied from the CPU to the GPU, counted where the copy
@@ -223,6 +261,8 @@ struct Pending {
     body: Body,
     /// Arrival order, to keep it among equals.
     seq: u64,
+    /// A refused device tile's fallback pixels.
+    fallback: bool,
 }
 
 /// What the uploads of the last frame did.
@@ -303,6 +343,39 @@ pub(crate) struct Tiles {
     /// What the last whole frame copied: from the start of the frame
     /// before to the start of this one, its paint included.
     pub frame_transfers: Transfers,
+    /// The render device seen at the last frame's start.
+    #[cfg(feature = "wgpu")]
+    render_seen: Option<egui_wgpu::wgpu::Device>,
+}
+
+impl Drop for Tiles {
+    /// What the GPU path holds for this cache is released by the next
+    /// paint (with what device tiles keep alive); tiles waiting for
+    /// their paint are dropped now.
+    fn drop(&mut self) {
+        let mut ids: Vec<u64> = self
+            .entries
+            .values()
+            .filter_map(|e| match e.texture {
+                Texture::Gpu(id) => Some(id),
+                Texture::Egui(_) => None,
+            })
+            .collect();
+        {
+            let mut q = self
+                .gpu
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            q.uploads.clear();
+            ids.append(&mut q.frees);
+        }
+        if !ids.is_empty() {
+            ORPHANS
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .extend(ids);
+        }
+    }
 }
 
 /// A waiting tile's upload order: its class, its distance to the view's
@@ -349,6 +422,8 @@ impl Default for Tiles {
             cpu_copied: Transfers::default(),
             last_total: Transfers::default(),
             frame_transfers: Transfers::default(),
+            #[cfg(feature = "wgpu")]
+            render_seen: None,
         }
     }
 }
@@ -494,7 +569,7 @@ impl Tiles {
         self.last_total = total;
         self.feed.set_context(ctx);
         #[cfg(feature = "wgpu")]
-        self.feed.set_render(crate::gpu::render_device(ctx));
+        self.note_render(ctx);
         let effective = self.wanted_size.min(device.max_texture_side).max(16);
         if effective != self.tile_size {
             self.tile_size = effective;
@@ -531,6 +606,26 @@ impl Tiles {
         self.upload(ctx, device, target, transform.as_ref(), view);
     }
 
+    /// A new render device (the GPU path installed, or installed again):
+    /// the fallback pixels of device tiles refused before are asked for
+    /// again, as device tiles, and shown until they arrive.
+    #[cfg(feature = "wgpu")]
+    fn note_render(&mut self, ctx: &Context) {
+        let now = crate::gpu::render_device(ctx).map(|r| r.device);
+        if now == self.render_seen {
+            return;
+        }
+        self.render_seen = now;
+        let before = self.pending.len();
+        self.pending.retain(|_, p| !p.fallback);
+        Stats::add(&self.stats.dropped, (before - self.pending.len()) as u64);
+        for e in self.entries.values_mut() {
+            if e.fallback {
+                e.stale = true;
+            }
+        }
+    }
+
     /// A tile delivered: kept for its upload when still wanted.
     fn take(&mut self, side: Side, tile: Arrival) {
         let k = (side, tile.key);
@@ -546,6 +641,7 @@ impl Tiles {
                 size: tile.size,
                 body: tile.body,
                 seq: self.next_seq,
+                fallback: tile.fallback,
             },
         );
     }
@@ -689,23 +785,21 @@ impl Tiles {
                 (Texture::Gpu(id), n * 8, false, false)
             }
             #[cfg(feature = "wgpu")]
-            Body::Device(mut dt) => {
-                // The device may have changed since the source checked.
+            Body::Device(dt) => {
+                // The device may have changed since the source checked:
+                // refused, the tile is dropped (what it keeps with it,
+                // its fallback not called: never on the interface
+                // thread) and asked for again, the source checking it
+                // against the device of now.
                 let render = crate::gpu::render_device(ctx);
                 if let Err(e) = dt.check(render.as_ref(), tile.size) {
                     Stats::add(&self.stats.refused, 1);
                     self.last_error = Some(format!("device tile refused: {e}"));
-                    match dt.fallback.take().and_then(|f| f()) {
-                        Some(pixels) => {
-                            let fallback = Pending {
-                                size: tile.size,
-                                body: Body::Raw(pixels),
-                                seq: tile.seq,
-                            };
-                            self.arrived(ctx, device, target, transform, k, fallback);
-                        }
-                        None => Stats::add(&self.stats.failed, 1),
-                    }
+                    // Asked for since it was neither held fresh nor asked
+                    // for: the next request pass asks again (an older
+                    // tile there, stale, stays on screen until then).
+                    drop(dt);
+                    ctx.request_repaint();
                     return;
                 }
                 Stats::add(&self.stats.device, 1);
@@ -764,6 +858,7 @@ impl Tiles {
                 born: self.frame,
                 stale,
                 baked,
+                fallback: tile.fallback,
             },
         );
     }
@@ -1080,5 +1175,316 @@ impl Tiles {
                 Stats::add(&self.stats.evicted, 1);
             }
         }
+    }
+}
+
+#[cfg(all(test, feature = "wgpu"))]
+mod device_tests {
+    //! Device tiles through the cache, on wgpu's stub device (no GPU):
+    //! what a tile keeps alive, where its fallback runs, and the render
+    //! device read when it is needed.
+
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::{Arc, Mutex};
+    use std::thread::ThreadId;
+
+    use egui::{Rect, pos2, vec2};
+    use egui_wgpu::wgpu;
+
+    use super::*;
+    use crate::device::DeviceTile;
+    use crate::display::LinearSrgb;
+    use crate::view::View;
+
+    fn stub_device() -> wgpu::Device {
+        wgpu::Device::noop(&wgpu::DeviceDescriptor::default()).0
+    }
+
+    /// Two stub devices of one instance (stub devices of two instances
+    /// may compare equal).
+    fn two_stub_devices() -> (wgpu::Device, wgpu::Device) {
+        use std::future::Future as _;
+        fn ready<T>(f: impl std::future::Future<Output = T>) -> T {
+            let mut f = std::pin::pin!(f);
+            let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
+            match f.as_mut().poll(&mut cx) {
+                std::task::Poll::Ready(v) => v,
+                std::task::Poll::Pending => panic!("the stub backend answers at once"),
+            }
+        }
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::NOOP,
+            backend_options: wgpu::BackendOptions {
+                noop: wgpu::NoopBackendOptions::enabled(),
+                ..Default::default()
+            },
+            ..wgpu::InstanceDescriptor::new_without_display_handle()
+        });
+        let adapter = ready(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
+            .expect("the stub adapter");
+        let device = || {
+            ready(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+                .expect("a stub device")
+                .0
+        };
+        let (a, b) = (device(), device());
+        assert!(a != b);
+        (a, b)
+    }
+
+    /// Counts the values alive: one more made, one less dropped.
+    struct Token(Arc<AtomicUsize>);
+
+    impl Token {
+        fn new(live: &Arc<AtomicUsize>) -> Token {
+            live.fetch_add(1, Ordering::SeqCst);
+            Token(live.clone())
+        }
+    }
+
+    impl Drop for Token {
+        fn drop(&mut self) {
+            self.0.fetch_sub(1, Ordering::SeqCst);
+        }
+    }
+
+    /// A 64-pixel image (one tile), delivered from a worker thread as a
+    /// texture on `device`, keeping a token, with a fallback that notes
+    /// the thread it runs on.
+    struct Source {
+        sink: TileSink,
+        device: wgpu::Device,
+        live: Arc<AtomicUsize>,
+        requests: Arc<AtomicUsize>,
+        fallbacks: Arc<Mutex<Vec<ThreadId>>>,
+    }
+
+    impl Source {
+        fn new(sink: TileSink, device: wgpu::Device) -> Source {
+            Source {
+                sink,
+                device,
+                live: Arc::default(),
+                requests: Arc::default(),
+                fallbacks: Arc::default(),
+            }
+        }
+
+        fn live(&self) -> usize {
+            self.live.load(Ordering::SeqCst)
+        }
+
+        fn fallback_threads(&self) -> Vec<ThreadId> {
+            self.fallbacks.lock().unwrap().clone()
+        }
+    }
+
+    impl TileSource for Source {
+        fn size(&self) -> Option<[u32; 2]> {
+            Some([64, 64])
+        }
+
+        fn request(&self, requests: Vec<TileRequest>) {
+            self.requests.fetch_add(requests.len(), Ordering::SeqCst);
+            std::thread::scope(|s| {
+                s.spawn(|| {
+                    for r in requests {
+                        let texture = self.device.create_texture(&wgpu::TextureDescriptor {
+                            label: None,
+                            size: wgpu::Extent3d {
+                                width: r.size[0],
+                                height: r.size[1],
+                                depth_or_array_layers: 1,
+                            },
+                            mip_level_count: 1,
+                            sample_count: 1,
+                            dimension: wgpu::TextureDimension::D2,
+                            format: wgpu::TextureFormat::Rgba16Float,
+                            usage: wgpu::TextureUsages::TEXTURE_BINDING,
+                            view_formats: &[],
+                        });
+                        let fallbacks = self.fallbacks.clone();
+                        let n = (r.size[0] * r.size[1] * 4) as usize;
+                        let tile = DeviceTile::texture(&self.device, texture)
+                            .keep(Token::new(&self.live))
+                            .fallback(move || {
+                                fallbacks.lock().unwrap().push(std::thread::current().id());
+                                Some(Pixels::Scene(vec![0.5; n]))
+                            });
+                        self.sink.deliver_device(&r, tile);
+                    }
+                });
+            });
+        }
+    }
+
+    struct Bench {
+        ctx: Context,
+        tiles: Tiles,
+        mapping: Mapping,
+        transform: Arc<dyn DisplayTransform>,
+    }
+
+    impl Bench {
+        fn new() -> Bench {
+            let rect = Rect::from_min_size(pos2(0.0, 0.0), vec2(100.0, 100.0));
+            Bench {
+                ctx: Context::default(),
+                tiles: Tiles::default(),
+                mapping: Mapping::new(&View::actual([32.0, 32.0]), [64.0, 64.0], rect, 1.0),
+                transform: Arc::new(LinearSrgb),
+            }
+        }
+
+        /// One frame: take in what arrived, then ask for what is wanted.
+        fn step(&mut self, source: &Source) {
+            let gpu = crate::gpu::render_device(&self.ctx).is_some();
+            let device = Device {
+                max_texture_side: 8192,
+                gpu,
+            };
+            self.tiles.receive(
+                &self.ctx,
+                device,
+                &DisplayTarget::default(),
+                &self.transform,
+                &self.mapping,
+            );
+            let _ = self
+                .tiles
+                .frame(Side::After, source, &self.mapping, true)
+                .len();
+        }
+
+        /// What the next paint does with the queue: binds the uploads
+        /// (held, returned) and releases the rest.
+        fn paint(&self) -> Vec<Upload> {
+            self.tiles.gpu.lock().unwrap().drain().0
+        }
+
+        fn stat(&self, name: &str) -> u64 {
+            self.tiles
+                .stats
+                .snapshot()
+                .iter()
+                .find(|(k, _)| *k == name)
+                .map_or(0, |(_, v)| *v)
+        }
+    }
+
+    #[test]
+    fn what_a_device_tile_keeps_lives_as_long_as_the_tile() {
+        let mut b = Bench::new();
+        let device = stub_device();
+        crate::gpu::set_render_device(&b.ctx, &device);
+        let source = Source::new(b.tiles.feed.sink(Side::After), device);
+        b.step(&source);
+        assert_eq!(source.live(), 1, "delivered, waiting to be taken in");
+        b.step(&source);
+        assert_eq!(b.stat("device"), 1);
+        let bound = b.paint();
+        assert_eq!(bound.len(), 1);
+        assert_eq!(source.live(), 1, "held with the binding");
+        // The image changed: the tile is asked for again, the new one
+        // replaces it in the frame that takes it in.
+        source.sink.changed(None);
+        b.step(&source);
+        assert_eq!(source.live(), 2, "the shown tile and its replacement");
+        b.step(&source);
+        assert_eq!(b.stat("device"), 2);
+        let (uploads, frees) = b.tiles.gpu.lock().unwrap().drain();
+        assert_eq!(frees, vec![bound[0].0], "the replaced tile is released");
+        // The paint drops the released binding with what it keeps.
+        drop(bound);
+        assert_eq!(source.live(), 1);
+        // Replaced twice before a paint: the upload released before it
+        // was bound is dropped by the paint, with what it keeps.
+        source.sink.changed(None);
+        b.step(&source);
+        b.step(&source);
+        source.sink.changed(None);
+        b.step(&source);
+        b.step(&source);
+        assert_eq!(source.live(), 3, "one bound, two queued");
+        let next = b.paint();
+        assert_eq!(next.len(), 1);
+        assert_eq!(source.live(), 2);
+        drop(uploads);
+        assert_eq!(source.live(), 1);
+        // The viewport's state dropped: the tiles waiting for a paint are
+        // dropped at once, the bound ones released by the next paint.
+        source.sink.changed(None);
+        b.step(&source);
+        b.step(&source);
+        assert_eq!(source.live(), 2, "the bound tile and one queued");
+        drop(b);
+        assert_eq!(source.live(), 1, "the queued one dropped");
+        drop(next);
+        assert_eq!(source.live(), 0);
+    }
+
+    #[test]
+    fn a_tile_refused_at_take_in_is_asked_again_and_falls_back_off_the_interface_thread() {
+        let mut b = Bench::new();
+        let (first, second) = two_stub_devices();
+        crate::gpu::set_render_device(&b.ctx, &first);
+        let source = Source::new(b.tiles.feed.sink(Side::After), first);
+        // Delivered and checked against the first device.
+        b.step(&source);
+        assert_eq!(source.requests.load(Ordering::SeqCst), 1);
+        assert_eq!(b.stat("refused"), 0);
+        // The render device changes before the interface takes it in.
+        crate::gpu::set_render_device(&b.ctx, &second);
+        b.step(&source);
+        assert_eq!(b.stat("refused"), 1, "at take-in");
+        assert_eq!(
+            source.requests.load(Ordering::SeqCst),
+            2,
+            "asked for again in the same frame"
+        );
+        let main = std::thread::current().id();
+        let threads = source.fallback_threads();
+        assert_eq!(threads.len(), 1, "the fallback ran once");
+        assert!(threads.iter().all(|t| *t != main), "never on this thread");
+        assert_eq!(source.live(), 0, "both refused tiles dropped");
+        b.step(&source);
+        assert_eq!(b.stat("refused"), 2, "then on the worker");
+        assert_eq!(b.tiles.entries.len(), 1, "the fallback pixels shown");
+        assert!(
+            b.tiles
+                .last_error
+                .as_deref()
+                .is_some_and(|e| e.contains("another wgpu device"))
+        );
+    }
+
+    #[test]
+    fn the_gpu_path_installed_after_the_first_frame_replaces_the_fallback() {
+        let mut b = Bench::new();
+        let device = stub_device();
+        let source = Source::new(b.tiles.feed.sink(Side::After), device.clone());
+        // No GPU path: refused on the worker, the fallback shown.
+        b.step(&source);
+        assert!(source.sink.render_device().is_none());
+        b.step(&source);
+        assert_eq!(b.tiles.entries.len(), 1);
+        assert_eq!(b.stat("device"), 0);
+        assert_eq!(source.fallback_threads().len(), 1);
+        // Installed between frames: the sink reads it at once.
+        crate::gpu::set_render_device(&b.ctx, &device);
+        assert!(
+            source
+                .sink
+                .render_device()
+                .is_some_and(|r| r.device == device)
+        );
+        // The next frame asks for the fallback's tile again, as a device
+        // tile, shown in the frame after.
+        b.step(&source);
+        assert_eq!(source.requests.load(Ordering::SeqCst), 2);
+        b.step(&source);
+        assert_eq!(b.stat("device"), 1);
+        assert_eq!(source.fallback_threads().len(), 1);
+        assert!(b.tiles.entries.values().all(|e| !e.fallback && !e.stale));
     }
 }

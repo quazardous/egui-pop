@@ -25,10 +25,20 @@
 //! tile from another device, or one that does not fit, is refused with a
 //! [`DeviceTileError`]: the source's fallback ([`DeviceTile::fallback`]),
 //! when it offers one, then gives CPU pixels that take the usual path.
+//! The fallback runs on the thread that delivers the tile, never on the
+//! interface thread: a tile refused when the interface takes it in (the
+//! render device changed in between) is dropped and asked for again.
+//!
+//! What the producer needs alive while the tile is shown (its image, with
+//! the charge it carries in the producer's memory accounting) rides with
+//! the tile ([`DeviceTile::keep`]): the viewport holds it exactly as long
+//! as it holds the tile, and drops it when the tile is replaced, evicted
+//! or refused, or the viewport's state is dropped.
 //! The viewport's upload counters
 //! ([`ViewportState::transfers`](crate::ViewportState::transfers)) count
 //! device tiles as bound, with no byte copied.
 
+use std::any::Any;
 use std::fmt;
 
 use egui_wgpu::wgpu;
@@ -121,6 +131,9 @@ impl Resource {
 /// CPU pixels for a device tile the viewport cannot draw.
 type Fallback = Box<dyn FnOnce() -> Option<Pixels> + Send>;
 
+/// What a device tile keeps alive while the viewport holds it.
+pub(crate) type Keep = Box<dyn Any + Send + Sync>;
+
 /// A tile on the render device: the resource, the device it was created
 /// on, what its values are, and where the tile starts in it.
 pub struct DeviceTile {
@@ -129,6 +142,7 @@ pub struct DeviceTile {
     pub(crate) encoding: Encoding,
     pub(crate) origin: [u32; 2],
     pub(crate) fallback: Option<Fallback>,
+    pub(crate) keep: Vec<Keep>,
 }
 
 impl fmt::Debug for DeviceTile {
@@ -138,6 +152,7 @@ impl fmt::Debug for DeviceTile {
             .field("encoding", &self.encoding)
             .field("origin", &self.origin)
             .field("fallback", &self.fallback.is_some())
+            .field("keep", &self.keep.len())
             .finish()
     }
 }
@@ -162,6 +177,7 @@ impl DeviceTile {
             encoding: Encoding::Scene,
             origin: [0, 0],
             fallback: None,
+            keep: Vec::new(),
         }
     }
 
@@ -180,14 +196,29 @@ impl DeviceTile {
 
     /// CPU pixels, made only when the viewport refuses the tile (another
     /// device, no GPU path, a resource that does not fit): they then
-    /// take the CPU tiles' path. Called once, on the thread that
-    /// delivers the tile, or on the interface thread when the refusal
-    /// happens there; `None` gives up (the request fails).
+    /// take the CPU tiles' path. Called at most once, on the thread that
+    /// calls [`TileSink::deliver_device`](crate::source::TileSink::deliver_device),
+    /// never on the interface thread (unless the source delivers from
+    /// it): a tile refused when the interface takes it in is dropped,
+    /// its fallback not called, and the tile asked for again through
+    /// the source's `request`. `None` gives up (the request fails).
     pub fn fallback(
         mut self,
         pixels: impl FnOnce() -> Option<Pixels> + Send + 'static,
     ) -> DeviceTile {
         self.fallback = Some(Box::new(pixels));
+        self
+    }
+
+    /// Keeps `value` alive as long as the viewport holds the tile: until
+    /// the tile is replaced, evicted, invalidated or refused, or the
+    /// viewport's state is dropped (on the GPU path, at the next paint
+    /// after the release, once the tile's binding is gone). For what
+    /// owns the resource's memory on the producer's side (its image and
+    /// the charge it carries in a GPU memory ledger), so that memory is
+    /// accounted for while it is shown. Each call adds one value.
+    pub fn keep(mut self, value: impl Any + Send + Sync) -> DeviceTile {
+        self.keep.push(Box::new(value));
         self
     }
 

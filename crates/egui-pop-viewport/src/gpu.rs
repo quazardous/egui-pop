@@ -223,6 +223,9 @@ struct Bound {
     group: wgpu::BindGroup,
     buffer: bool,
     layout: [u32; 4],
+    /// What a device tile keeps alive while it is held
+    /// ([`DeviceTile::keep`](crate::device::DeviceTile::keep)).
+    _keep: Vec<crate::device::Keep>,
 }
 
 /// The shader modules and pipeline layouts the tile pipelines are built
@@ -277,7 +280,8 @@ const RENDER: state::Slot<RenderDevice> = state::Slot::opaque("viewport.gpu.rend
 
 /// The render device of the GPU path installed in `ctx`: the device a
 /// [`DeviceTile`](crate::device::DeviceTile) must be created on, and what
-/// it can read. `None` without a GPU path.
+/// it can read. `None` without a GPU path. Read when called: set by
+/// [`install`] at once, not at the next frame.
 pub fn render_device(ctx: &Context) -> Option<RenderDevice> {
     RENDER.get(ctx)
 }
@@ -432,6 +436,12 @@ pub(crate) fn color_space_flag(space: ColorSpace) -> wgpu::SurfaceColorSpaces {
 /// window: eframe 0.36 configures `rs.target_format` with wgpu's default
 /// colour space (8-bit sRGB in practice). A host that configured its
 /// surface itself calls [`install_for_surface`].
+///
+/// Install it before the first [`Viewport::show`](crate::Viewport::show)
+/// (in eframe's app creation, from `cc.wgpu_render_state`): the first
+/// frame's tile requests then take the device path. Device tiles asked
+/// for before are refused (no GPU path) and served from their fallback,
+/// then asked for again once the render device is there.
 pub fn install(ctx: &Context, rs: &egui_wgpu::RenderState) -> GpuInfo {
     install_for_surface(ctx, rs, wgpu::SurfaceColorSpace::Auto, 1.0)
 }
@@ -640,6 +650,7 @@ impl Resources {
             group,
             buffer: false,
             layout,
+            _keep: Vec::new(),
         }
     }
 
@@ -682,6 +693,7 @@ impl Resources {
                     }],
                 });
                 Some(Bound {
+                    _keep: Vec::new(),
                     group,
                     buffer: true,
                     layout: [
@@ -751,13 +763,11 @@ impl TilePaint {
         // On the render thread: one texture per tile uploaded, and the
         // f16 conversion of tiles not prepared by the delivering thread.
         profiling::scope!("pop.tiles.gpu_prepare");
-        let (uploads, frees) = {
-            let mut q = self
-                .queue
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            (std::mem::take(&mut q.uploads), std::mem::take(&mut q.frees))
-        };
+        let (uploads, frees) = self
+            .queue
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .drain();
         if uploads.is_empty() && frees.is_empty() {
             return;
         }
@@ -771,9 +781,11 @@ impl TilePaint {
             let bytes = match data {
                 GpuData::Scene(data) => crate::source::texels(&data, half),
                 GpuData::Texels(bytes) => bytes,
-                GpuData::Device(tile) => {
-                    // On the render device: bound as it is.
-                    if let Some(bound) = r.bind_device(device, &tile, size) {
+                GpuData::Device(mut tile) => {
+                    // On the render device: bound as it is, what it keeps
+                    // held with the binding until the tile is released.
+                    if let Some(mut bound) = r.bind_device(device, &tile, size) {
+                        bound._keep = std::mem::take(&mut tile.keep);
                         r.textures.insert(id, bound);
                         copied.bound += 1;
                     }
@@ -991,6 +1003,21 @@ impl egui_wgpu::CallbackTrait for TilePaint {
         pass.set_viewport(0.0, 0.0, sw as f32, sh as f32, 0.0, 1.0);
         self.draw(pass, r, r.pipelines());
     }
+}
+
+/// Sets the render device device tiles are checked against, as
+/// [`install`] does, for tests without a render state.
+#[cfg(test)]
+pub(crate) fn set_render_device(ctx: &Context, device: &wgpu::Device) {
+    RENDER.set(
+        ctx,
+        RenderDevice {
+            device: device.clone(),
+            buffers: true,
+            storage_align: 256,
+            max_binding: 1 << 27,
+        },
+    );
 }
 
 #[cfg(test)]
