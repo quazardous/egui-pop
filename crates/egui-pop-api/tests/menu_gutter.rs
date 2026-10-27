@@ -216,8 +216,10 @@ fn the_gutter_is_decorative_check_and_radio_items_say_their_state() {
     let other = h.get_by_label("50%");
     assert_eq!(other.accesskit_node().role(), Role::RadioButton);
     assert_eq!(other.accesskit_node().toggled(), Some(Toggled::False));
-    // The icon adds no node: the title is the row's name.
-    assert_eq!(h.get_by_label("Save").accesskit_node().role(), Role::Button);
+    // The icon adds no node: the row is one button named by its title.
+    let save: Vec<_> = h.query_all_by_label_contains("Save").collect();
+    assert_eq!(save.len(), 1, "one node for the Save row");
+    assert_eq!(save[0].accesskit_node().role(), Role::Button);
 }
 
 #[test]
