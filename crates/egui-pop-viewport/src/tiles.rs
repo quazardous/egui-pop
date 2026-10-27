@@ -1203,7 +1203,6 @@ mod device_tests {
     /// Two stub devices of one instance (stub devices of two instances
     /// may compare equal).
     fn two_stub_devices() -> (wgpu::Device, wgpu::Device) {
-        use std::future::Future as _;
         fn ready<T>(f: impl std::future::Future<Output = T>) -> T {
             let mut f = std::pin::pin!(f);
             let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
