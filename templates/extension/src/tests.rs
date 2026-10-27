@@ -109,6 +109,8 @@ fn the_plugin_connects_cleanly() {
     // People find the increment in the palette; agents get both.
     let increment = app.command(&CMD_INCREMENT).unwrap();
     assert!(increment.palette && increment.agent);
+    // Its icon is declared once, by name, and resolves (no diagnostic).
+    assert_eq!(increment.icon.as_deref(), Some("plus"));
     let set = app.command(&CMD_SET).unwrap();
     assert!(!set.palette && set.agent);
     assert_eq!(set.args["value"], 3);

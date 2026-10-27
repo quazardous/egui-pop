@@ -12,6 +12,8 @@ publishes.
 
 ### Added
 
+- The extension template's command declares an icon
+  (`CommandSpec::icon("plus")`), shown by menus and the palette.
 - The command palette shows a command's icon (egui-pop-api;
   docs/icons.md, section 7): `CommandSpec::icon` in a column before the
   title, as JetBrains' Find Action does, kept on every row while one of
