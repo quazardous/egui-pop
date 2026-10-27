@@ -42,6 +42,7 @@ pub mod diagnostics;
 pub mod doc;
 pub mod field;
 pub mod fuzzy;
+pub mod history;
 pub mod ids;
 pub mod jobs;
 pub mod keymap;

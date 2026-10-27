@@ -221,6 +221,11 @@ typed_id!(
     /// context key `mode.<group>`, so letters, digits, `_` and `.`.
     GroupId
 );
+typed_id!(
+    /// A history (ADR 0014): one undo line, a document's edit, a
+    /// collection's marks, the settings window (`app`, `settings`).
+    ScopeId
+);
 
 impl OwnerId {
     /// The framework itself.

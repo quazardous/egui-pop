@@ -39,6 +39,20 @@ publishes.
   agents and tests each row's icon, mark and where its label starts.
   The gallery's menus page shows icons, framed toggles, ticks, a radio
   group and a disabled entry.
+- Undo histories by scope (egui-pop-model, ADR 0014): the pure parts
+  of the history contract in `history` (`ScopeId`, `ScopeInfo`,
+  `StepInfo`, `Label`, `Line`, `Request`, `Refusal`, the merge rule
+  `merges` with its one-second `MERGE_WINDOW`, the routing rule
+  `newest`, `plan_jump`). The value store keeps one history per scope:
+  a write's step goes to the application's (`APP`) unless it names
+  another (`Set::history`) or one was entered on the thread
+  (`enter_history`); each step has an id, its time on the store's
+  clock (`Store::set_clock`), the place it was made in
+  (`Store::set_place`) and its group. Writes with the same merge key
+  (`Set::merge`) from one origin less than a second apart are one step,
+  until `Store::seal`. `undo_in`, `redo_in`, `jump_in` (all or nothing),
+  `check_walk` (a dry run), `history_rev` and `gesture_open` reach each
+  history.
 - A `scroll-bar` kit component (egui-pop-tokens, egui-pop-core): a
   theme gives scroll bars a `width`, a `margin` to the edge, a
   `placement` (`over` the content, floating, or `beside` it, taking
