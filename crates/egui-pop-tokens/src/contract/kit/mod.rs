@@ -57,6 +57,9 @@ mod radio;
 mod readout;
 mod scroll_bar;
 mod search_field;
+mod section_band;
+mod section_count;
+mod section_disclosure;
 mod selectable_row;
 mod side_area;
 mod skeleton;
@@ -145,6 +148,9 @@ pub(super) const GROUPS: &[&[Required]] = &[
     readout::CONTRACT,
     scroll_bar::CONTRACT,
     search_field::CONTRACT,
+    section_band::CONTRACT,
+    section_count::CONTRACT,
+    section_disclosure::CONTRACT,
     selectable_row::CONTRACT,
     side_area::CONTRACT,
     skeleton::CONTRACT,

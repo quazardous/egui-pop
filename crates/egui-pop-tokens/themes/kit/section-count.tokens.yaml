@@ -1,0 +1,22 @@
+$description: "The `section-count` component of the default kit (docs/kit.md), layered into pop-dark."
+section-count:
+  $description: "The count on a section's band (a kit component): based on `indicator-badge` (its pill, sizes and tones), quieter than a badge at rest: the raised surface outlined, the default text."
+  based-on:
+    $type: "string"
+    $value: "indicator-badge"
+  padding-x:
+    $type: "dimension"
+    $value: "{space.inline}"
+  rest:
+    fill:
+      $type: "color"
+      $value: "{surface.raised}"
+    border-color:
+      $type: "color"
+      $value: "{border.default}"
+    border-width:
+      $type: "dimension"
+      $value: {value: 1, unit: "px"}
+    text:
+      $type: "color"
+      $value: "{text.default}"

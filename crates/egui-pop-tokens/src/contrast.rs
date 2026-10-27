@@ -222,6 +222,12 @@ pub const PAIRS: &[Pair] = &[
     ui("indicator-dot.rest.border-color", "surface.overlay"),
     ui("indicator-swatch.rest.border-color", "surface.panel"),
     ui("indicator-swatch.rest.border-color", "surface.overlay"),
+    // A section's band: its title on the panel and under the pointer,
+    // its count on its pill, its disclosure mark on the panel.
+    text("section-band.rest.text", "surface.panel"),
+    text("section-band.rest.text", "section-band.hover.fill"),
+    text("section-count.rest.text", "section-count.rest.fill"),
+    ui("section-disclosure.rest.text", "surface.panel"),
     ui(
         "indicator-dot.tone.accent.fill",
         "indicator-outline.rest.ring-color",

@@ -1,0 +1,57 @@
+$description: "The `section-band` component of the default kit (docs/kit.md), layered into pop-dark."
+section-band:
+  $description: "The title band of a collapsible section in a stack (`sections::Sections`): its disclosure mark (`section-disclosure`), its title and its count (`section-count`) on one row, a line above and under it. `hover` under the pointer, `active` while pressed, `focus` with the keyboard (its ring inside the band)."
+  shape:
+    $type: "string"
+    $value: "section"
+    $description: "The handler that draws it: section (its fill, a line along its top and its bottom edges, a ring) or plain."
+  height:
+    $type: "dimension"
+    $value: {value: 28, unit: "px"}
+  padding-x:
+    $type: "dimension"
+    $value: "{space.l}"
+    $description: "Between the band's sides and its mark and count; the mark, the title and the count are `space.inline` apart."
+  font-size:
+    $type: "dimension"
+    $value: "{font.size.s}"
+    $description: "The title's size; it is drawn at the section text role's weight, in capitals unless the stack says otherwise."
+  align:
+    $type: "string"
+    $value: "start"
+  rest:
+    fill:
+      $type: "color"
+      $value: "{transparent}"
+    border-color:
+      $type: "color"
+      $value: "{border.default}"
+      $description: "The lines above and under the band."
+    border-width:
+      $type: "dimension"
+      $value: {value: 1, unit: "px"}
+    radius:
+      $type: "dimension"
+      $value: {value: 0, unit: "px"}
+    text:
+      $type: "color"
+      $value: "{text.default}"
+      $description: "The section's title."
+  hover:
+    fill:
+      $type: "color"
+      $value: "{surface.hover}"
+  active:
+    fill:
+      $type: "color"
+      $value: "{surface.active}"
+  focus:
+    ring-color:
+      $type: "color"
+      $value: "{focus.ring}"
+    ring-width:
+      $type: "dimension"
+      $value: {value: 1, unit: "px"}
+    ring-offset:
+      $type: "dimension"
+      $value: {value: -2, unit: "px"}

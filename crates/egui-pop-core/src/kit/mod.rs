@@ -790,6 +790,16 @@ components! {
     /// The library's search field: `focus` while its text has the
     /// keyboard.
     search_field: "search-field" => "card",
+    /// The title band of a collapsible section (`sections::Sections`):
+    /// a line above and under it, `hover`, `active` while pressed,
+    /// `focus` with the keyboard; its title in `text`.
+    section_band: "section-band" => "section",
+    /// The count on a section's band, based on `indicator-badge`.
+    section_count: "section-count" => "pill",
+    /// A section band's disclosure mark, colours only: the
+    /// `disclosure-open` or `disclosure-closed` glyph in `text`,
+    /// `width` across, in the band's state.
+    section_disclosure: "section-disclosure" => "plain",
     /// A row picked from a short list (`widgets::SelectableRow`): a
     /// combo box's choices, the assist card's rows; `selected` for the
     /// chosen one, never `hover` then.
