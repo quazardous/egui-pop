@@ -5,14 +5,16 @@
 //! code and a few scripts, in its pair's faces, with the size of its
 //! files and whether its digits are tabular, measured.
 //!
-//! The candidate files are gallery assets (`assets/fonts`, each with its
-//! licence and source), registered when the page is first shown; egui's
-//! own pair is the baseline.
+//! The pair egui-pop bundles (Inter and JetBrains Mono NL, feature
+//! `bundled-fonts`) comes from `egui_pop::core::fonts::bundled`; the
+//! other candidates are gallery assets (`assets/fonts`, each with its
+//! licence and source). They are registered when the page is first
+//! shown; egui's own pair is the baseline.
 
 use egui::{Align, FontFamily, FontId, Layout, RichText, TextStyle, Ui, vec2};
 use egui_pop::api::stories::Story;
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
-use egui_pop::core::fonts::{self, Face, Weight};
+use egui_pop::core::fonts::{self, Face, Weight, bundled};
 use egui_pop::core::state::Slot;
 use egui_pop::model::ids::{PluginId, StoryId};
 use egui_pop::theme::Tokens;
@@ -71,23 +73,27 @@ pub const CANDIDATES: [Candidate; 4] = [
         faces: &[],
     },
     Candidate {
-        title: "Inter + JetBrains Mono NL",
+        title: "Inter + JetBrains Mono NL (bundled)",
         ui: "Inter",
         mono: "JetBrains Mono NL",
         licence: "OFL 1.1",
-        note: "Inter variable (wght), subset; JetBrains Mono without ligatures, regular and bold, subset.",
+        note: "egui-pop's default pair. Inter variable (wght), subset; JetBrains Mono without ligatures, regular and bold, subset.",
         faces: &[
-            face!("Inter", 400, "inter/Inter-subset.ttf"),
-            face!(
-                "JetBrains Mono NL",
-                400,
-                "jetbrains-mono/JetBrainsMonoNL-Regular-subset.ttf"
-            ),
-            face!(
-                "JetBrains Mono NL",
-                700,
-                "jetbrains-mono/JetBrainsMonoNL-Bold-subset.ttf"
-            ),
+            CandidateFace {
+                family: "Inter",
+                weight: 400,
+                bytes: bundled::INTER,
+            },
+            CandidateFace {
+                family: "JetBrains Mono NL",
+                weight: 400,
+                bytes: bundled::JETBRAINS_MONO_NL_REGULAR,
+            },
+            CandidateFace {
+                family: "JetBrains Mono NL",
+                weight: 700,
+                bytes: bundled::JETBRAINS_MONO_NL_BOLD,
+            },
         ],
     },
     Candidate {
@@ -204,7 +210,7 @@ fn families(ctx: &egui::Context, c: &Candidate) -> Option<[FontFamily; 3]> {
 fn show(ui: &mut Ui, _app: &AppHandle) {
     let ctx = ui.ctx().clone();
     register_candidates(&ctx);
-    ui.label("Each column draws the same content in one pair. egui applies no OpenType feature: digits line up only in a face whose default digits are tabular, ligatures cannot be turned off (hence JetBrains Mono NL), and a weight is a variable face's wght axis or a face of its own. Sizes are the files carried, subset to Latin, Greek and Cyrillic where the licence allows; the budget for the bundled pair is about 1 MB.");
+    ui.label("Each column draws the same content in one pair. egui applies no OpenType feature: digits line up only in a face whose default digits are tabular, ligatures cannot be turned off (hence JetBrains Mono NL), and a weight is a variable face's wght axis or a face of its own. Sizes are the files carried, subset to Latin, Greek and Cyrillic where the licence allows; egui-pop bundles Inter + JetBrains Mono NL (feature bundled-fonts), within a budget of about 1 MB.");
     let t = Tokens::of(&ctx);
     let width = 300.0;
     ui.add_space(t.space.m);

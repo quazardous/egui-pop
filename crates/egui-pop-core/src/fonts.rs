@@ -7,15 +7,20 @@
 //!    reads from disk;
 //! 2. the system's fonts by family name (feature `system-fonts`, or the
 //!    faces given by [`set_system_faces`]);
-//! 3. egui's bundled faces by name (`Ubuntu` is egui's Ubuntu-Light,
-//!    `Hack` its Hack): the built-in themes name them. A bundled face is
-//!    reached by its name only when the system has no family of that
-//!    name, as platforms resolve a font stack.
+//! 3. the faces bundled by name: egui-pop's own pair with the
+//!    `bundled-fonts` feature ([`bundled`]: `Inter`, `JetBrains Mono
+//!    NL`), then egui's (`Ubuntu` is egui's Ubuntu-Light, `Hack` its
+//!    Hack). A bundled face is reached by its name only when the system
+//!    has no family of that name, as platforms resolve a font stack.
 //!
 //! The first found is the primary, the others its fallbacks, and egui's
 //! bundled fonts always come last so text never vanishes. A generic name
-//! (`sans-serif`, `serif`, `monospace`, `system-ui`) stands for those
-//! bundled fonts. A name found nowhere is a problem in the [`Report`]
+//! (`sans-serif`, `serif`, `system-ui`; `monospace`, `ui-monospace`)
+//! stands for the bundled fonts: egui-pop's pair with `bundled-fonts`
+//! (Inter for the proportional names, JetBrains Mono NL for the
+//! monospace ones, at every weight), else egui's own faces. The built-in
+//! themes name only generic families, so the default pair is egui-pop's
+//! with the feature and egui's without it. A name found nowhere is a problem in the [`Report`]
 //! (ADR 0003), never replaced in silence; the report says where each
 //! name was found ([`Report::resolved`]: `Ubuntu → bundled Ubuntu-Light`).
 //!
@@ -288,11 +293,91 @@ pub fn collector() -> crate::debug::FnCollector {
     .args(json!({ "text": "Ελληνικά 日本語", "family": "ui" }))
 }
 
+/// The fonts egui-pop bundles (feature `bundled-fonts`, on by default):
+/// Inter for interface text, JetBrains Mono NL (without ligatures) for
+/// values and code, subset to Latin, Greek and Cyrillic. They are under
+/// the SIL Open Font License 1.1, whose text ships with them (the
+/// crate's `fonts/` folder). The generic family names draw them, and a
+/// theme or a user may name them.
+#[cfg(feature = "bundled-fonts")]
+pub mod bundled {
+    /// The interface family, as a theme names it.
+    pub const UI_FAMILY: &str = "Inter";
+    /// The monospace family, as a theme names it.
+    pub const MONO_FAMILY: &str = "JetBrains Mono NL";
+    /// Inter, variable (`wght` 100 to 900), `opsz` pinned at 14.
+    pub static INTER: &[u8] = include_bytes!("../fonts/inter/Inter-subset.ttf");
+    /// JetBrains Mono NL Regular (400).
+    pub static JETBRAINS_MONO_NL_REGULAR: &[u8] =
+        include_bytes!("../fonts/jetbrains-mono/JetBrainsMonoNL-Regular-subset.ttf");
+    /// JetBrains Mono NL Bold (700).
+    pub static JETBRAINS_MONO_NL_BOLD: &[u8] =
+        include_bytes!("../fonts/jetbrains-mono/JetBrainsMonoNL-Bold-subset.ttf");
+}
+
+/// egui-pop's bundled faces, [`Origin::Bundled`]; none without
+/// `bundled-fonts`.
+fn pop_bundled() -> &'static [Face] {
+    #[cfg(feature = "bundled-fonts")]
+    {
+        static FACES: std::sync::OnceLock<Vec<Face>> = std::sync::OnceLock::new();
+        FACES.get_or_init(|| {
+            let face = |family: &str, weight, bytes| Face {
+                origin: Origin::Bundled,
+                ..Face::from_static(family, weight, bytes)
+            };
+            vec![
+                face(bundled::UI_FAMILY, Weight::REGULAR, bundled::INTER),
+                face(
+                    bundled::MONO_FAMILY,
+                    Weight::REGULAR,
+                    bundled::JETBRAINS_MONO_NL_REGULAR,
+                ),
+                face(
+                    bundled::MONO_FAMILY,
+                    Weight::BOLD,
+                    bundled::JETBRAINS_MONO_NL_BOLD,
+                ),
+            ]
+        })
+    }
+    #[cfg(not(feature = "bundled-fonts"))]
+    {
+        &[]
+    }
+}
+
+/// The bundled family a generic name stands for: egui-pop's interface
+/// family for `sans-serif`, `serif` and `system-ui`, its monospace one
+/// for `monospace` and `ui-monospace`; `None` without `bundled-fonts`
+/// (egui's own faces behind every chain draw it).
+fn generic_family(name: &str) -> Option<&'static str> {
+    if !is_generic(name) {
+        return None;
+    }
+    #[cfg(feature = "bundled-fonts")]
+    {
+        let mono = ["monospace", "ui-monospace"]
+            .iter()
+            .any(|g| g.eq_ignore_ascii_case(name));
+        Some(if mono {
+            bundled::MONO_FAMILY
+        } else {
+            bundled::UI_FAMILY
+        })
+    }
+    #[cfg(not(feature = "bundled-fonts"))]
+    {
+        None
+    }
+}
+
 /// Where a face comes from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Origin {
-    /// egui's own fonts (`Ubuntu`, `Hack`).
+    /// The fonts bundled: egui-pop's (`Inter`, `JetBrains Mono NL`, with
+    /// `bundled-fonts`) and egui's own (`Ubuntu`, `Hack`).
     Bundled,
     /// A face the application registered ([`register`]).
     Registered,
@@ -820,7 +905,8 @@ pub struct FamilyInfo {
     pub monospace: bool,
 }
 
-/// The families a theme or a user may name: egui's bundled ones, the
+/// The families a theme or a user may name: the bundled ones (egui-pop's
+/// with `bundled-fonts`, then egui's), the
 /// faces registered (the application's, then the user's files), then
 /// the system's (feature `system-fonts`), each once. A name in several
 /// places is listed at its first place with the origin the install
@@ -845,6 +931,13 @@ pub fn families(ctx: &Context) -> Vec<FamilyInfo> {
         Some(_) => {}
         None => out.push(info),
     };
+    for f in pop_bundled() {
+        push(FamilyInfo {
+            name: f.family.clone(),
+            origin: Origin::Bundled,
+            monospace: f.monospace(),
+        });
+    }
     for (name, monospace) in [("Ubuntu", false), ("Hack", true)] {
         push(FamilyInfo {
             name: name.into(),
@@ -874,7 +967,7 @@ pub fn families(ctx: &Context) -> Vec<FamilyInfo> {
 
 /// Where the family a theme names would be found, in the order the
 /// install looks ([`install`]): registered, then the system's, then
-/// egui's own faces; `Some(Origin::Bundled)` for a generic name
+/// the bundled faces (egui-pop's, then egui's); `Some(Origin::Bundled)` for a generic name
 /// (`sans-serif`), `None` for a name found nowhere on this machine (its
 /// list's next name draws).
 pub fn origin_of(ctx: &Context, name: &str) -> Option<Origin> {
@@ -896,6 +989,12 @@ pub fn origin_of(ctx: &Context, name: &str) -> Option<Origin> {
     if on_system {
         return Some(Origin::System);
     }
+    if pop_bundled()
+        .iter()
+        .any(|f| f.family.eq_ignore_ascii_case(name))
+    {
+        return Some(Origin::Bundled);
+    }
     FontDefinitions::default()
         .font_data
         .keys()
@@ -904,8 +1003,8 @@ pub fn origin_of(ctx: &Context, name: &str) -> Option<Origin> {
 }
 
 /// Whether a name is a generic one (`sans-serif`, `serif`, `monospace`,
-/// `system-ui`, `ui-monospace`): it stands for egui's bundled fonts, so
-/// it is always found. A list ending with one always draws.
+/// `system-ui`, `ui-monospace`): it stands for the bundled fonts
+/// (egui-pop's with `bundled-fonts`, else egui's), so it is always found. A list ending with one always draws.
 pub fn is_generic(name: &str) -> bool {
     GENERIC.iter().any(|g| g.eq_ignore_ascii_case(name))
 }
@@ -1184,27 +1283,16 @@ fn find(
     bundled: &std::collections::BTreeMap<String, Arc<FontData>>,
     system: &System,
 ) -> Option<Found> {
-    let own: Vec<&Face> = faces
-        .iter()
-        .filter(|f| f.family.eq_ignore_ascii_case(name))
-        .collect();
-    if let Some(w) = nearest(weight, own.iter().map(|f| f.weight)) {
-        let face = own.iter().find(|f| f.weight == w)?;
-        return Some(on_axis(
-            Found {
-                key: format!("pop:{}:{}", face.family, w.0),
-                data: face.data.clone(),
-                weight: w,
-                origin: face.origin,
-                face: format!("{} {}", face.family, w.0),
-            },
-            weight,
-        ));
+    if let Some(found) = among(faces, name, weight) {
+        return Some(found);
     }
-    // The system's before egui's: a theme naming `Ubuntu` gets the
-    // system's Ubuntu where it is installed, as the platform would.
+    // The system's before the bundled ones: a theme naming `Ubuntu` gets
+    // the system's Ubuntu where it is installed, as the platform would.
     if let Some(found) = system.find(name, weight) {
         return Some(on_axis(found, weight));
+    }
+    if let Some(found) = among(pop_bundled(), name, weight) {
+        return Some(found);
     }
     // egui's faces have one weight each: the others draw it.
     let (key, data) = bundled.iter().find(|(k, _)| bundled_key_matches(k, name))?;
@@ -1215,6 +1303,38 @@ fn find(
         origin: Origin::Bundled,
         face: key.clone(),
     })
+}
+
+/// The face of a family among `faces` nearest `weight`, drawn at
+/// `weight` through its axis when it has one.
+fn among(faces: &[Face], name: &str, weight: Weight) -> Option<Found> {
+    let own: Vec<&Face> = faces
+        .iter()
+        .filter(|f| f.family.eq_ignore_ascii_case(name))
+        .collect();
+    let w = nearest(weight, own.iter().map(|f| f.weight))?;
+    let face = own.iter().find(|f| f.weight == w)?;
+    let key = match face.origin {
+        Origin::Bundled => format!("pop:{}:{}:bundled", face.family, w.0),
+        _ => format!("pop:{}:{}", face.family, w.0),
+    };
+    Some(on_axis(
+        Found {
+            key,
+            data: face.data.clone(),
+            weight: w,
+            origin: face.origin,
+            face: format!("{} {}", face.family, w.0),
+        },
+        weight,
+    ))
+}
+
+/// The bundled face a generic name draws at a weight ([`generic_family`]):
+/// `None` without `bundled-fonts`.
+fn generic_face(name: &str, weight: Weight) -> Option<(&'static str, Found)> {
+    let family = generic_family(name)?;
+    among(pop_bundled(), family, weight).map(|found| (family, found))
 }
 
 /// A face drawn at `weight` through its `wght` axis when it has one that
@@ -1256,9 +1376,12 @@ struct Chain {
     keys: Vec<String>,
     /// The name each key was found by, in the same order.
     names: Vec<String>,
-    /// The first face found: the name it was found by, its weight and
-    /// where it came from.
+    /// The first face found: the name it was found by (the bundled
+    /// family for a generic name), its weight and where it came from.
     first: Option<(String, Weight, Origin)>,
+    /// Whether the first face was found by a generic name: it draws
+    /// what the bundled fonts have, its weight said by no problem.
+    first_generic: bool,
     /// The names found nowhere.
     missing: Vec<String>,
     /// Each name of the list, in order, with where it was found and the
@@ -1278,14 +1401,36 @@ fn chain_at(
         keys: Vec::new(),
         names: Vec::new(),
         first: None,
+        first_generic: false,
         missing: Vec::new(),
         resolved: Vec::new(),
     };
     for name in names {
         if is_generic(name) {
+            // The bundled family it stands for, unless the list found
+            // that family already (`Inter` installed, then `sans-serif`).
+            let found = generic_face(name, weight)
+                .filter(|(family, _)| !chain.names.iter().any(|n| n.eq_ignore_ascii_case(family)));
+            let Some((family, found)) = found else {
+                chain
+                    .resolved
+                    .push((name.clone(), Some(Origin::Bundled), None));
+                continue;
+            };
             chain
                 .resolved
-                .push((name.clone(), Some(Origin::Bundled), None));
+                .push((name.clone(), Some(found.origin), Some(found.face.clone())));
+            if chain.first.is_none() {
+                chain.first = Some((family.to_string(), found.weight, found.origin));
+                chain.first_generic = true;
+            }
+            defs.font_data
+                .entry(found.key.clone())
+                .or_insert(found.data);
+            if !chain.keys.contains(&found.key) {
+                chain.keys.push(found.key);
+                chain.names.push(family.to_string());
+            }
             continue;
         }
         let Some(found) = find(name, weight, faces, bundled, system) else {
@@ -1375,7 +1520,7 @@ fn definitions_and_faces(
             let mut primary = None;
             if let Some((name, w, origin)) = &found.first {
                 primary = Some(format!("{name} {} ({})", w.0, origin.name()));
-                if *w != weight {
+                if *w != weight && !found.first_generic {
                     report.problems.push(format!(
                         "{}: {name} has no weight {}, {} is drawn",
                         role.token(),
@@ -1813,7 +1958,105 @@ mod tests {
     }
 
     #[test]
-    fn the_built_in_themes_names_are_egui_s_bundled_faces() {
+    fn the_built_in_themes_generic_names_draw_the_bundled_pair_at_every_weight() {
+        let t = crate::theme::Tokens::default();
+        assert_eq!(t.font.family_ui, names(&["sans-serif"]));
+        assert_eq!(t.font.family_mono, names(&["monospace"]));
+        let (defs, report) = definitions(
+            &[],
+            &t.font.family_ui,
+            &t.font.family_mono,
+            &Previews::default(),
+            &System::none(),
+        );
+        // JetBrains Mono NL has 400 and 700 only: a generic name draws
+        // what the bundled fonts have, and says no problem.
+        assert!(report.problems.is_empty(), "{report:?}");
+        let first = |f: FontFamily| defs.families[&f][0].clone();
+        let egui_first = |f: FontFamily| FontDefinitions::default().families[&f][0].clone();
+        if cfg!(feature = "bundled-fonts") {
+            assert_eq!(first(FontFamily::Proportional), "pop:Inter:400:bundled");
+            assert_eq!(
+                first(family(Role::Ui, Weight::BOLD)),
+                "pop:Inter:400:bundled@wght700"
+            );
+            assert_eq!(
+                first(FontFamily::Monospace),
+                "pop:JetBrains Mono NL:400:bundled"
+            );
+            assert_eq!(
+                first(family(Role::Mono, Weight::BOLD)),
+                "pop:JetBrains Mono NL:700:bundled"
+            );
+            // Values line up: JetBrains Mono NL's digits are tabular,
+            // Inter's are not.
+            assert!(report.tabular_digits(Role::Mono));
+            assert!(!report.tabular_digits(Role::Ui));
+            assert_eq!(
+                report.resolved("ui", "sans-serif").unwrap().to_string(),
+                "sans-serif → bundled Inter 400"
+            );
+            // egui's faces stay behind them.
+            let regular = &defs.families[&FontFamily::Proportional];
+            assert!(regular.contains(&egui_first(FontFamily::Proportional)));
+        } else {
+            assert_eq!(
+                first(FontFamily::Proportional),
+                egui_first(FontFamily::Proportional)
+            );
+            assert_eq!(
+                first(FontFamily::Monospace),
+                egui_first(FontFamily::Monospace)
+            );
+        }
+    }
+
+    #[cfg(feature = "bundled-fonts")]
+    #[test]
+    fn the_bundled_pair_parses_and_is_listed_by_name() {
+        let faces = pop_bundled();
+        assert_eq!(faces.len(), 3);
+        for f in faces {
+            assert!(inspect(f.data.font.as_ref()).is_ok(), "{f:?}");
+        }
+        let inter = &faces[0];
+        assert!(
+            inter
+                .data
+                .variation_axes()
+                .iter()
+                .any(|a| a.tag.to_be_bytes() == *b"wght")
+        );
+        assert!(faces[1].monospace() && faces[1].tabular_digits());
+        let ctx = Context::default();
+        set_system_faces(&ctx, Some(Vec::new()));
+        let list = families(&ctx);
+        assert_eq!(list[0].name, bundled::UI_FAMILY);
+        assert_eq!(list[1].name, bundled::MONO_FAMILY);
+        assert!(list[1].monospace);
+        assert_eq!(origin_of(&ctx, "inter"), Some(Origin::Bundled));
+        // Named, it is found like any family; a system face of the same
+        // name comes first.
+        let ctx = fake_system(&[("Inter", "Ubuntu-Light")]);
+        assert_eq!(origin_of(&ctx, "Inter"), Some(Origin::System));
+        let (defs, _) = definitions(
+            &[],
+            &names(&["Inter", "sans-serif"]),
+            &[],
+            &Previews::default(),
+            &System::get(&ctx),
+        );
+        let regular = &defs.families[&FontFamily::Proportional];
+        assert_eq!(regular[0], "pop:Inter:400:system");
+        // `sans-serif` adds no second Inter behind the system's.
+        assert!(
+            !regular.iter().any(|k| k.ends_with(":bundled")),
+            "{regular:?}"
+        );
+    }
+
+    #[test]
+    fn egui_s_faces_named_draw_egui_s_pair() {
         let (defs, report) = definitions(
             &[],
             &names(&["Ubuntu", "sans-serif"]),
@@ -2049,7 +2292,15 @@ mod tests {
             .1;
         assert_eq!(drawn.len(), chain.len());
         assert_eq!(drawn[0].family.as_deref(), Some("Fake Sans"));
-        assert!(drawn[1..].iter().all(|f| f.family.is_none()));
+        // Then the bundled face `sans-serif` stands for, by its family,
+        // and egui's faces behind, unnamed.
+        let behind = if cfg!(feature = "bundled-fonts") {
+            assert_eq!(drawn[1].family.as_deref(), Some("Inter"));
+            2
+        } else {
+            1
+        };
+        assert!(drawn[behind..].iter().all(|f| f.family.is_none()));
         // Another machine, without it: the next name draws, and the
         // report says what is missing.
         set_system_faces(&ctx, Some(Vec::new()));
@@ -2207,7 +2458,11 @@ mod tests {
                 "Segoe UI → missing",
                 "Adwaita Sans → system Adwaita Sans 400",
                 "Ubuntu → bundled Ubuntu-Light",
-                "sans-serif → bundled",
+                if cfg!(feature = "bundled-fonts") {
+                    "sans-serif → bundled Inter 400"
+                } else {
+                    "sans-serif → bundled"
+                },
             ]
         );
         for missing in ["Helvetica", "Segoe UI"] {
@@ -2224,7 +2479,13 @@ mod tests {
     #[test]
     fn the_report_and_the_collector_say_where_each_name_was_found() {
         let ctx = fake_system(&[("Ubuntu", "Hack")]);
-        crate::theme::install(&ctx, &crate::theme::ThemeSpec::new("pop-dark"));
+        crate::theme::install(
+            &ctx,
+            &crate::theme::ThemeSpec::new("pop-dark").override_token(
+                "font.family.ui",
+                serde_json::json!(["Ubuntu", "sans-serif"]),
+            ),
+        );
         pass(&ctx);
         let bridge = crate::debug::DebugBridge::with_core_collectors();
         let said = |ctx: &Context| -> Vec<serde_json::Value> {
@@ -2283,8 +2544,14 @@ mod tests {
         assert!(!find("Inter").monospace);
         assert_eq!(find("My Mono").origin, Origin::File);
         assert!(find("My Mono").monospace);
-        // egui's first, each name once.
-        assert_eq!(list[0].name, "Ubuntu");
+        // The bundled ones first (egui-pop's, then egui's), each name
+        // once.
+        let first = if cfg!(feature = "bundled-fonts") {
+            "Inter"
+        } else {
+            "Ubuntu"
+        };
+        assert_eq!(list[0].name, first);
         let mut names: Vec<_> = list.iter().map(|f| f.name.to_lowercase()).collect();
         names.dedup();
         assert_eq!(names.len(), list.len());
@@ -2440,10 +2707,7 @@ mod tests {
         let mut bridge = crate::debug::DebugBridge::with_core_collectors();
         assert!(bridge.names().iter().any(|n| n == "fonts"));
         let d = &bridge.snapshot_of(&ctx, "fonts").unwrap();
-        assert_eq!(
-            d["requested"]["ui"],
-            serde_json::json!(["Ubuntu", "sans-serif"])
-        );
+        assert_eq!(d["requested"]["ui"], serde_json::json!(["sans-serif"]));
         assert_eq!(d["faces"][0]["family"], "Inter");
         assert_eq!(d["faces"][0]["origin"], "registered");
         assert_eq!(d["faces"][0]["monospace"], false);

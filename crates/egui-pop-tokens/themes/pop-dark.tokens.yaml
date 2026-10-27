@@ -443,11 +443,11 @@ font:
   family:
     $type: "fontFamily"
     ui:
-      $value: ["Ubuntu", "sans-serif"]
-      $description: "Interface text (informative until fonts are loaded from themes)."
+      $value: ["sans-serif"]
+      $description: "Interface text: families by name, in order; `sans-serif` is the bundled interface face (Inter with egui-pop's bundled fonts, else egui's Ubuntu Light)."
     mono:
-      $value: ["Hack", "monospace"]
-      $description: "Numbers and code (informative until fonts are loaded from themes)."
+      $value: ["monospace"]
+      $description: "Numbers and code: families by name, in order; `monospace` is the bundled monospace face (JetBrains Mono NL with egui-pop's bundled fonts, else egui's Hack)."
   numeric:
     $type: "string"
     $value: "mono"

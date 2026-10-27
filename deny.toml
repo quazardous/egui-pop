@@ -34,6 +34,13 @@ unused-allowed-license = "allow"
 crate = "epaint_default_fonts"
 allow = ["OFL-1.1", "Ubuntu-font-1.0"]
 
+# egui-pop's own bundled fonts (Inter, JetBrains Mono NL, feature
+# `bundled-fonts`): the code stays MIT or Apache-2.0, the fonts are under
+# their own licence, its text shipped next to them.
+[[licenses.exceptions]]
+crate = "egui-pop-core"
+allow = ["OFL-1.1"]
+
 # The Windows clipboard backend of eframe (the gallery only), under the
 # permissive Boost licence.
 [[licenses.exceptions]]
