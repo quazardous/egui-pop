@@ -43,6 +43,7 @@ pub(super) fn built_in(shapes: &mut Shapes) {
     shapes.insert("list-row", "box", Arc::new(cell::BoxCell));
     shapes.insert("mark-toggle", "box", Arc::new(cell::BoxCell));
     shapes.insert("menu-item", "box", Arc::new(cell::BoxCell));
+    shapes.insert("menu-item-gutter", "box", Arc::new(cell::BoxCell));
     shapes.insert("skeleton", "box", Arc::new(cell::BoxCell));
     shapes.insert("skeleton-shimmer", "box", Arc::new(cell::BoxCell));
     shapes.insert("slider", "box", Arc::new(cell::BoxCell));

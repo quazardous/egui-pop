@@ -5,7 +5,9 @@
 //! not work), a submenu, or a list the application fills when the menu
 //! opens (the themes, the recent files). Items sit in groups, separated
 //! when shown, and in an order within their group; a `when` clause hides
-//! or greys an item, a `checked` clause ticks it.
+//! or greys an item, a `checked` clause ticks it. A radio item
+//! ([`MenuItem::radio`]) is one choice of a group: its `checked` clause
+//! says whether it is the chosen one, shown with a dot instead of a tick.
 
 use serde::Serialize;
 use serde_json::Value as Json;
@@ -47,6 +49,10 @@ pub struct MenuItem {
     pub grey: bool,
     /// When it shows ticked; empty: never.
     pub checked: String,
+    /// One choice of a group (a dot when chosen) rather than a toggle (a
+    /// tick); its `checked` clause says whether it is the chosen one.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub radio: bool,
 }
 
 impl MenuItem {
@@ -63,6 +69,7 @@ impl MenuItem {
             when: String::new(),
             grey: true,
             checked: String::new(),
+            radio: false,
         }
     }
 
@@ -78,6 +85,7 @@ impl MenuItem {
             when: String::new(),
             grey: true,
             checked: String::new(),
+            radio: false,
         }
     }
 
@@ -114,6 +122,15 @@ impl MenuItem {
         self.checked = when.into();
         self
     }
+
+    /// A radio item: one choice of a group, chosen while `when` holds
+    /// (`zoom == '100'`), shown with a dot instead of a tick. The items of
+    /// a group sit together; their clauses pick one of them.
+    pub fn radio(mut self, when: &str) -> Self {
+        self.checked = when.into();
+        self.radio = true;
+        self
+    }
 }
 
 /// An item as a menu shows it in a context.
@@ -126,6 +143,9 @@ pub enum Shown {
         checked: bool,
         /// It has a `checked` clause: a toggle, ticked or not.
         checkable: bool,
+        /// A radio item: a dot when checked, never a tick.
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        radio: bool,
     },
     Separator,
 }
@@ -163,6 +183,7 @@ pub fn show_items(items: &[MenuItem], cx: &WhenContext) -> Vec<Shown> {
             enabled: applies,
             checked: !i.checked.is_empty() && holds(&i.checked),
             checkable: !i.checked.is_empty(),
+            radio: i.radio,
         });
     }
     out

@@ -42,6 +42,7 @@ mod list_row;
 mod list_view;
 mod mark_toggle;
 mod menu_item;
+mod menu_item_gutter;
 mod meter;
 mod meter_tick;
 mod palette_window;
@@ -129,6 +130,7 @@ pub(super) const GROUPS: &[&[Required]] = &[
     list_view::CONTRACT,
     mark_toggle::CONTRACT,
     menu_item::CONTRACT,
+    menu_item_gutter::CONTRACT,
     meter::CONTRACT,
     meter_tick::CONTRACT,
     palette_window::CONTRACT,

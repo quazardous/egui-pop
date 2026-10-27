@@ -626,6 +626,58 @@ fn menus_are_declared_grouped_and_follow_the_context() {
 }
 
 #[test]
+fn radio_items_pick_one_of_their_group() {
+    use egui_pop_model::menus::{MenuItem, Menus, Shown};
+    let m_id = MenuId::from_static("view.zoom");
+    let mut m = Menus::new();
+    for (i, p) in ["50", "100", "200"].into_iter().enumerate() {
+        m.contribute(
+            &FW,
+            MenuItem::command(m_id.clone(), "1_zoom", i as i32, cmd("view.zoom"))
+                .radio(&format!("zoom == '{p}'")),
+        )
+        .unwrap();
+    }
+    m.contribute(
+        &FW,
+        MenuItem::command(m_id.clone(), "2_grid", 0, cmd("view.grid")).checked("grid"),
+    )
+    .unwrap();
+    let cx = WhenContext::new().with("zoom", "100");
+    let marks: Vec<(bool, bool, bool)> = m
+        .show(&m_id, &cx)
+        .into_iter()
+        .filter_map(|s| match s {
+            Shown::Item {
+                checked,
+                checkable,
+                radio,
+                ..
+            } => Some((checked, checkable, radio)),
+            Shown::Separator => None,
+        })
+        .collect();
+    assert_eq!(
+        marks,
+        [
+            (false, true, true),
+            (true, true, true),
+            (false, true, true),
+            (false, true, false),
+        ]
+    );
+    // Agents read a radio item as such; a check item says nothing new.
+    let items = m.items(&m_id);
+    assert_eq!(serde_json::to_value(&items[0]).unwrap()["radio"], true);
+    assert!(
+        serde_json::to_value(&items[3])
+            .unwrap()
+            .get("radio")
+            .is_none()
+    );
+}
+
+#[test]
 fn layout_operations_place_hide_activate_and_fold() {
     let mut p = Panels::new();
     for (id, area) in [("a.one", Area::Bottom), ("a.two", Area::Bottom)] {

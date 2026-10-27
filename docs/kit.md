@@ -386,6 +386,13 @@ compiled at install.
   filled once the rectangle and state are known), in the state egui's
   button draws with, `selected` while a submenu is open; the shortcut is
   the `muted` tone. `menus-kit-bar` restyles items with data only.
+  Its gutter (`menu-item-gutter`, [icons.md](icons.md), section 5) is
+  the column on the left holding the command's icon, the tick, the
+  radio dot or the spinner: its `width` (else the inline icon size plus
+  `space.s` on each side, so the density moves it), and its `selected`
+  state the frame around the icon of a checked command (`surface.active`
+  with a 1 point `accent.default` border, so the state does not rest on
+  the fill alone).
 - **Frames** (`card`, `dialog`, `backdrop`, `popover`, `fault-card`, `toast`,
   `palette-window`, `tip-card`, `job-log`, `fullscreen-exit` (the
   strip at the top of a full screen window showing no title bar),

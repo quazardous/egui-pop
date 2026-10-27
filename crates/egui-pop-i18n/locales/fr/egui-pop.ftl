@@ -1622,6 +1622,16 @@ setting-files-native =
     .description = Choisir les fichiers avec le sélecteur du système quand il y en a un ; désactivé, avec celui d’egui-pop.
     .label = Utiliser le sélecteur de fichiers du système
 
+setting-menus-icons =
+    .description = Si les menus montrent les icônes des commandes dans une colonne à leur gauche (activé), aucune (désactivé), ou suivent le bureau (plateforme : désactivé sous GNOME, comme le dit KDE Plasma, activé ailleurs).
+    .label = Icônes des menus
+
+setting-menus-icons-choice-off = désactivé
+
+setting-menus-icons-choice-on = activé
+
+setting-menus-icons-choice-platform = plateforme
+
 setting-notifications-desktop =
     .description = Où s’affichent les notifications : sur le bureau, sur le bureau seulement quand la fenêtre n’a pas le focus, ou dans la fenêtre.
     .label = Notifications du bureau

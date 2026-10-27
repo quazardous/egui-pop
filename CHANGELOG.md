@@ -12,6 +12,26 @@ publishes.
 
 ### Added
 
+- Menus show the commands' icons in an aligned gutter (egui-pop-api,
+  egui-pop-model, egui-pop-core, egui-pop-tokens; docs/icons.md,
+  section 5): every row starts with a column of fixed width holding the
+  command's icon (`CommandSpec::icon`, or `icon_on` while checked), and
+  its label starts after it whether it has an icon or not. A checked
+  command with an icon shows it framed, as Word does; one without an
+  icon gets the tick there. Radio items are new (`MenuItem::radio`): the
+  chosen one of a group gets a dot, and AccessKit reads them as radio
+  buttons. A disabled entry's icon is greyed with its label, and the
+  reason stays in the tooltip. Shortcuts keep a right-aligned column
+  before the submenu arrows' one. The gutter is a new kit part,
+  `menu-item-gutter`: its `width` (else the inline icon size plus
+  `space.s` on each side, 24 points comfortable, 16 compact) and its
+  `selected` state, the frame. A `menus.icons` setting picks `on` (the
+  default), `off` (no icons; the gutter is kept only in a menu with a
+  check or radio item) or `platform` (off on GNOME, as KDE Plasma's
+  `ShowIconsInMenuItems` says, on elsewhere). `menus::rows_drawn` gives
+  agents and tests each row's icon, mark and where its label starts.
+  The gallery's menus page shows icons, framed toggles, ticks, a radio
+  group and a disabled entry.
 - A `scroll-bar` kit component (egui-pop-tokens, egui-pop-core): a
   theme gives scroll bars a `width`, a `margin` to the edge, a
   `placement` (`over` the content, floating, or `beside` it, taking

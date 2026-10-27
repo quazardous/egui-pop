@@ -1,5 +1,6 @@
 //! The menus page: commands declared once, shown in the menu bar and in
-//! a context menu with their keys, ticks and greyed states.
+//! a context menu with their keys, icons, ticks, radio dots and greyed
+//! states, every label aligned after the gutter.
 
 use egui::Ui;
 use egui_pop::api::app::MENU_VIEW;
@@ -24,6 +25,8 @@ pub const CMD_GRID: CommandId = CommandId::from_static("gallery.menus.grid");
 pub const CMD_SNAP: CommandId = CommandId::from_static("gallery.menus.snap");
 pub const CMD_ZOOM: CommandId = CommandId::from_static("gallery.menus.zoom");
 pub const CMD_LOCKED: CommandId = CommandId::from_static("gallery.menus.locked");
+pub const CMD_LOCK: CommandId = CommandId::from_static("gallery.menus.lock");
+pub const CMD_DUPLICATE: CommandId = CommandId::from_static("gallery.menus.duplicate");
 /// The zoom submenu's list, filled when it opens.
 pub const ZOOM_LIST: &str = "gallery.menus.zooms";
 
@@ -53,11 +56,14 @@ impl Plugin for MenusPage {
     fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
         let app = ctx.app();
         app.set_context("galleryGrid", "true");
+        app.set_context("gallerySnap", "true");
+        app.set_context("galleryLocked", "true");
         app.set_context("galleryZoom", "100");
         ctx.command(
             CommandSpec::new(CMD_GRID, "Show grid", "Menus")
                 .description("Shows or hides the card's grid.")
                 .key("Ctrl+Shift+G")
+                .icon("square")
                 .checked("galleryGrid")
                 .menu(MENU_VIEW, "7_menus", 0)
                 .menu(CARD_MENU, "1_view", 0),
@@ -71,6 +77,22 @@ impl Plugin for MenusPage {
                 .menu(MENU_VIEW, "7_menus", 1)
                 .menu(CARD_MENU, "1_view", 1),
             |call| Ok(toggle(call.app, "gallerySnap")),
+        )?
+        .command(
+            CommandSpec::new(CMD_LOCK, "Lock the card", "Menus")
+                .description("Locks the card: an open padlock while unlocked, a closed one, framed, while locked.")
+                .icon("unlock")
+                .icon_on("lock")
+                .checked("galleryLocked")
+                .menu(CARD_MENU, "1_view", 2),
+            |call| Ok(toggle(call.app, "galleryLocked")),
+        )?
+        .command(
+            CommandSpec::new(CMD_DUPLICATE, "Duplicate the card", "Menus")
+                .description("Makes a copy of the card.")
+                .icon("copy")
+                .menu(CARD_MENU, "3_edit", 0),
+            |_| Ok(json!(null)),
         )?
         .command(
             CommandSpec::new(CMD_ZOOM, "Zoom", "Menus")
@@ -88,7 +110,8 @@ impl Plugin for MenusPage {
         )?
         .command(
             CommandSpec::new(CMD_LOCKED, "Delete the card", "Menus")
-                .description("Never applies here: shown greyed, with the reason.")
+                .description("Never applies here: shown greyed, its icon too, with the reason.")
+                .icon("delete")
                 .when("galleryCardUnlocked")
                 .menu(CARD_MENU, "9_danger", 0),
             |_| Ok(json!(null)),
@@ -106,17 +129,18 @@ impl Plugin for MenusPage {
                 })
                 .collect()
         });
+        // A radio group: the zoom in use has the dot.
         for (i, p) in [50, 100, 200].into_iter().enumerate() {
             ctx.menu_item(
                 MenuItem::command(ZOOM_MENU, "1", i as i32, CMD_ZOOM)
                     .args(json!({ "percent": p }))
                     .label(&format!("{p}%"))
-                    .checked(&format!("galleryZoom == '{p}'")),
+                    .radio(&format!("galleryZoom == '{p}'")),
             )?;
         }
         ctx.story(
             Story::new(StoryId::from_static("menus"), "Menus", show)
-                .description("Commands declared once, in the menu bar and a context menu: keys, ticks, greyed items, submenus.")
+                .description("Commands declared once, in the menu bar and a context menu: icons in an aligned gutter, framed when on, ticks, radio dots, greyed items, submenus.")
                 .group("Components", 40),
         )?;
         Ok(())
@@ -126,7 +150,7 @@ impl Plugin for MenusPage {
 fn show(ui: &mut Ui, app: &AppHandle) {
     let t = Tokens::of(ui.ctx());
     let cx = app.context();
-    ui.label("The View menu holds two of these commands; the card's context menu holds them all, its Zoom submenu a list filled when it opens.");
+    ui.label("The View menu holds two of these commands; the card's context menu holds them all, its Zoom submenu a radio group and a list filled when it opens. A command's icon sits in the gutter, framed while the command is on; a checked item without an icon has a tick there, the chosen zoom a dot; the setting Menu icons hides the icons.");
     section(ui, "A card with a context menu");
     let frame = egui::Frame::group(ui.style())
         .inner_margin(t.space.l)

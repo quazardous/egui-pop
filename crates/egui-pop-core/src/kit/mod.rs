@@ -626,6 +626,11 @@ components! {
     /// and takes its clicks, the kit paints its box under it; `selected`
     /// while its submenu is open, its shortcut in the `muted` tone.
     menu_item: "menu-item" => "box",
+    /// The column on a menu item's left holding its icon, tick, radio dot
+    /// or spinner: its `width` (else the inline icon size plus `space.s`
+    /// on each side, [`Kit::menu_gutter`]); `selected` frames the icon of
+    /// a checked command.
+    menu_item_gutter: "menu-item-gutter" => "box",
     /// A meter's track (its fill is a `progress-fill`).
     meter: "meter" => "track",
     /// A meter's threshold, a line across its track.
@@ -1019,6 +1024,18 @@ impl Kit {
     /// The icon a kit draws for a glyph role.
     pub fn glyph(&self, glyph: Glyph) -> crate::icon::Icon {
         self.glyphs.get(glyph)
+    }
+
+    /// The width of a menu's gutter (`menu-item-gutter.width`), else the
+    /// inline icon size plus `space.s` on each side: 24 points in the
+    /// comfortable density, 16 in the compact one.
+    pub fn menu_gutter(&self, t: &Tokens) -> f32 {
+        let width = self.menu_item_gutter.data.width;
+        if width > 0.0 {
+            width
+        } else {
+            t.size.icon_inline + 2.0 * t.space.s
+        }
     }
 
     /// The kit of the theme drawn now (of egui's theme of the moment,

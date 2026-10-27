@@ -1795,6 +1795,16 @@ setting-input-wheel-device-choice-mouse = mouse
 
 setting-input-wheel-device-choice-trackpad = trackpad
 
+setting-menus-icons =
+    .description = Whether menus show the commands' icons in a column on their left (on), none (off), or follow the desktop (platform: off on GNOME, as KDE Plasma says, on elsewhere).
+    .label = Menu icons
+
+setting-menus-icons-choice-off = off
+
+setting-menus-icons-choice-on = on
+
+setting-menus-icons-choice-platform = platform
+
 setting-notifications-desktop =
     .description = Where notifications show: on the desktop, on the desktop only while the window does not have the focus, or in the window.
     .label = Desktop notifications

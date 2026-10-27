@@ -276,6 +276,83 @@ fn menu_snapshots() {
     }
 }
 
+/// Opens the card's context menu and its Zoom submenu.
+fn open_card_menu(h: &mut Harness<'_, Gallery>) {
+    h.run();
+    h.get_by_label("Card with a context menu").click_secondary();
+    h.run();
+    h.query_all_by_label("Zoom").last().unwrap().hover();
+    h.run();
+}
+
+#[test]
+fn the_menus_gutter_aligns_icons_ticks_and_radio_dots() {
+    use egui_pop::api::menus::{self, Mark};
+    use egui_pop_gallery::pages::menus::{CARD_MENU, ZOOM_MENU};
+    let mut results = egui_kittest::SnapshotResults::new();
+    for (theme, density, gutter, name) in [
+        ("pop-dark", Density::Comfortable, 24.0, None),
+        ("pop-dark", Density::Compact, 16.0, Some("menus-compact")),
+        (
+            "pop-high-contrast",
+            Density::Comfortable,
+            24.0,
+            Some("menus-high-contrast"),
+        ),
+    ] {
+        let mut h = harness(options(theme, density, "menus"));
+        open_card_menu(&mut h);
+        let rows = menus::rows_drawn(&h.ctx);
+        for menu in [CARD_MENU, ZOOM_MENU] {
+            let rows: Vec<_> = rows.iter().filter(|r| r.menu == menu).collect();
+            assert!(!rows.is_empty(), "{menu}");
+            for r in &rows {
+                assert_eq!(r.gutter, gutter, "{theme} {r:?}");
+                assert!((r.label_x - rows[0].label_x).abs() < 0.01, "{theme} {r:?}");
+            }
+        }
+        let mark = |label: &str| {
+            rows.iter()
+                .find(|r| r.label == label)
+                .unwrap_or_else(|| panic!("{label} in {rows:?}"))
+                .mark
+        };
+        assert_eq!(mark("Show grid"), Mark::Framed);
+        assert_eq!(mark("Lock the card"), Mark::Framed);
+        assert_eq!(mark("Snap to grid"), Mark::Check);
+        assert_eq!(mark("Duplicate the card"), Mark::Icon);
+        assert_eq!(mark("Delete the card"), Mark::Icon);
+        assert_eq!(mark("100%"), Mark::Radio);
+        assert_eq!(mark("50%"), Mark::None);
+        if let Some(name) = name {
+            results.add(h.try_snapshot(name));
+        }
+    }
+}
+
+#[test]
+fn menu_icons_off_keeps_ticks_and_dots_in_the_gutter() {
+    use egui_pop::api::menus::{self, Mark, MenuIcons, SETTING_ICONS};
+    use egui_pop::model::commands::Origin;
+    use egui_pop::model::values::{Change, Set, Value};
+    let mut h = harness(options("pop-dark", Density::Comfortable, "menus"));
+    h.run();
+    egui_pop::core::lock(&h.state().app.handle().store())
+        .set(Set::new(
+            &format!("settings/{SETTING_ICONS}"),
+            Change::To(Value::Choice(MenuIcons::Off.as_str().into())),
+            Origin::User,
+        ))
+        .unwrap();
+    open_card_menu(&mut h);
+    let rows = menus::rows_drawn(&h.ctx);
+    assert!(rows.iter().all(|r| r.icon.is_none()), "{rows:?}");
+    let mark = |label: &str| rows.iter().find(|r| r.label == label).unwrap().mark;
+    assert_eq!(mark("Show grid"), Mark::Check);
+    assert_eq!(mark("100%"), Mark::Radio);
+    h.snapshot("menus-icons-off");
+}
+
 #[test]
 fn dialogs_open_from_the_page_and_send_what_they_ran() {
     let mut results = egui_kittest::SnapshotResults::new();
