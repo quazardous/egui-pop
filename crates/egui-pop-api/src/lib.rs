@@ -120,6 +120,7 @@ pub mod dialogs;
 pub mod files;
 pub mod frame;
 mod groups;
+pub mod history;
 pub mod hooks;
 pub mod host;
 pub mod jobs;

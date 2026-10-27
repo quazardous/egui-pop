@@ -1,6 +1,7 @@
-//! Undo and redo through the host: egui-pop owns the keys, the commands
-//! and the steps; the host says what an undo is; hooks see, stop or
-//! replace each run, and the journal says how it went.
+//! Undo and redo through the host's history owner (ADR 0014): egui-pop
+//! owns the keys, the commands and the steps; the owner says what an undo
+//! is; hooks see, stop or replace each run, and the journal says how it
+//! went.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -9,6 +10,10 @@ use std::sync::{Arc, Mutex};
 use egui::{Key, Modifiers};
 use egui_kittest::Harness;
 use egui_pop_api::app::{CMD_REDO, CMD_UNDO, STEP_UNDO};
+use egui_pop_api::history::{
+    Answer, History, Label, Line, Refusal, RefusalKind, Request, ScopeId, ScopeInfo, StepInfo,
+    Walked,
+};
 use egui_pop_api::host::{Dispatch, Host, Journal, Reply, Waker};
 use egui_pop_api::settings_window::CMD_VALUE_UNDO;
 use egui_pop_api::steps::Before;
@@ -22,17 +27,104 @@ use serde_json::{Value as Json, json};
 
 /// The application's history: labels of the steps done and undone.
 #[derive(Clone, Default)]
-struct History {
+struct Log {
     done: Arc<Mutex<Vec<String>>>,
     undone: Arc<Mutex<Vec<String>>>,
     calls: Arc<Mutex<Vec<String>>>,
+}
+
+const DOC: ScopeId = ScopeId::from_static("doc");
+
+/// The kernel's history owner: one scope, steps named by their labels.
+#[derive(Default)]
+struct Owner {
+    log: Log,
+    rev: u64,
+}
+
+impl Owner {
+    fn steps(list: &[String], first: usize) -> Vec<StepInfo> {
+        list.iter()
+            .enumerate()
+            .map(|(i, l)| StepInfo::new((first + i) as u64, DOC, Label::text(l), Origin::User))
+            .collect()
+    }
+
+    fn walk(&mut self, request: &Request, redo: bool) -> Answer {
+        if request.scope != DOC {
+            return Answer::Done(Err(Refusal::new(RefusalKind::Unknown, "no such scope")));
+        }
+        if !request.dry_run {
+            self.log
+                .calls
+                .lock()
+                .unwrap()
+                .push(if redo { "host redo" } else { "host undo" }.into());
+        }
+        let (from, to) = if redo {
+            (&self.log.undone, &self.log.done)
+        } else {
+            (&self.log.done, &self.log.undone)
+        };
+        let step = if request.dry_run {
+            from.lock().unwrap().last().cloned()
+        } else {
+            from.lock().unwrap().pop()
+        };
+        if let Some(s) = &step
+            && !request.dry_run
+        {
+            to.lock().unwrap().push(s.clone());
+            self.rev += 1;
+        }
+        let head = self.log.done.lock().unwrap().len() as u64;
+        Answer::Done(Ok(Walked {
+            scope: DOC,
+            steps: step
+                .map(|l| StepInfo::new(head + 1, DOC, Label::text(l), Origin::User))
+                .into_iter()
+                .collect(),
+            rev: self.rev,
+            head,
+            dry_run: request.dry_run,
+        }))
+    }
+}
+
+impl History for Owner {
+    fn scopes(&self) -> Vec<ScopeInfo> {
+        vec![ScopeInfo::new(DOC, "Document")]
+    }
+    fn line(&self, scope: &ScopeId) -> Option<Line> {
+        (*scope == DOC).then(|| {
+            let done = self.log.done.lock().unwrap().clone();
+            let mut undone = self.log.undone.lock().unwrap().clone();
+            undone.reverse();
+            let mut redo = Self::steps(&undone, done.len() + 1);
+            redo.reverse();
+            Line {
+                undo: Self::steps(&done, 1),
+                redo,
+                rev: self.rev,
+            }
+        })
+    }
+    fn undo(&mut self, request: &Request, _: &Origin) -> Answer {
+        self.walk(request, false)
+    }
+    fn redo(&mut self, request: &Request, _: &Origin) -> Answer {
+        self.walk(request, true)
+    }
+    fn jump(&mut self, _: &Request, _: u64, _: &Origin) -> Answer {
+        Answer::Done(Err(Refusal::new(RefusalKind::Owner, "no jumps here")))
+    }
 }
 
 #[derive(Default)]
 struct Kernel {
     journal: Journal,
     store: SharedStore,
-    history: History,
+    owner: Owner,
 }
 
 impl Host for Kernel {
@@ -49,32 +141,8 @@ impl Host for Kernel {
         self.store.clone()
     }
     fn set_waker(&mut self, _: Waker) {}
-    fn can_undo(&self) -> bool {
-        !self.history.done.lock().unwrap().is_empty()
-    }
-    fn can_redo(&self) -> bool {
-        !self.history.undone.lock().unwrap().is_empty()
-    }
-    fn undo_label(&self) -> Option<String> {
-        self.history.done.lock().unwrap().last().cloned()
-    }
-    fn redo_label(&self) -> Option<String> {
-        self.history.undone.lock().unwrap().last().cloned()
-    }
-    fn undo(&mut self, _: &Origin) -> Result<Option<String>, String> {
-        self.history.calls.lock().unwrap().push("host undo".into());
-        let step = self.history.done.lock().unwrap().pop();
-        if let Some(s) = &step {
-            self.history.undone.lock().unwrap().push(s.clone());
-        }
-        Ok(step)
-    }
-    fn redo(&mut self, _: &Origin) -> Result<Option<String>, String> {
-        let step = self.history.undone.lock().unwrap().pop();
-        if let Some(s) = &step {
-            self.history.done.lock().unwrap().push(s.clone());
-        }
-        Ok(step)
+    fn history(&mut self) -> Option<&mut dyn History> {
+        Some(&mut self.owner)
     }
 }
 
@@ -91,14 +159,15 @@ impl Plugin for P {
     }
 }
 
-fn kernel(steps: &[&str]) -> (Kernel, History) {
+fn kernel(steps: &[&str]) -> (Kernel, Log) {
     let k = Kernel::default();
-    k.history
+    k.owner
+        .log
         .done
         .lock()
         .unwrap()
         .extend(steps.iter().map(|s| s.to_string()));
-    let h = k.history.clone();
+    let h = k.owner.log.clone();
     (k, h)
 }
 
@@ -184,7 +253,9 @@ fn hooks_run_in_order_and_a_veto_stops_the_undo() {
         .build(&egui::Context::default())
         .unwrap();
     let r = app.run(&CMD_UNDO, Json::Null, Origin::User).now().unwrap();
-    assert_eq!(r, Ok(json!({ "undone": "rotate" })));
+    let r = r.unwrap();
+    assert_eq!(r["undone"], "rotate");
+    assert_eq!(r["scope"], "doc");
     assert_eq!(
         *calls.lock().unwrap(),
         ["before rotate", "host undo", "after \"rotate\""]

@@ -394,7 +394,7 @@ writing the store from its thread contends with the frame (briefly).
   elsewhere the close waits a round trip, or the veto arrives after the
   fact. ADR 0011's promise ("observe, veto, replace, extend at the
   moment it happens") would weaken to "at the next frame".
-- **Undo.** Undo is already the host's (`Host::undo`): it moves with the
+- **Undo.** Undo is already the host's (`Host::history`): it moves with the
   application's kernel without change. The store's undo groups gestures
   by drag start and end on the interface thread; across threads a
   gesture's begin and end must travel with their writes, in order.

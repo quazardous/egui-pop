@@ -112,14 +112,14 @@ the focus (Ctrl+S saves the editor, not the application), and the user
 rebinds them in the shortcuts editor. An editor shown without an
 application handles the same keys itself.
 
-**Undo.** egui-pop's host contract (`Host::undo`) undoes the
-application's history but has no way to add entries to it, so the
-editor keeps its **own** history: typing coalesces until a pause, a
-space or a move; every other edit is one entry. Ctrl+Z in a focused
-editor undoes it (as in any text input, the application's `edit.undo`
-is `!textInputFocus`); each undo and redo reaches the application as an
-`edit.change` with `kind` `undo` or `redo`. An application wanting one
-history calls `EditorState::undo` from its own `Host::undo`.
+**Undo.** The application's histories are its kernel's
+(`Host::history`, ADR 0014); the editor keeps its **own** history:
+typing coalesces until a pause, a space or a move; every other edit is
+one entry. Ctrl+Z in a focused editor undoes it (as in any text input,
+the application's `edit.undo` is `!textInputFocus`); each undo and redo
+reaches the application as an `edit.change` with `kind` `undo` or
+`redo`. An application wanting one history calls `EditorState::undo`
+from its own `History` owner.
 
 **Search and replace.** Ctrl+F opens the bar above the text (the
 selection becomes the query), Ctrl+H with the replacement field: match
