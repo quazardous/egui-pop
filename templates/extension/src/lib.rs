@@ -145,6 +145,8 @@ impl Plugin for TallyPlugin {
         ctx.command(
             CommandSpec::new(CMD_INCREMENT, "Increase a tally", "Tally")
                 .description("Adds one to a tally (`tally`: its name).")
+                // Declared once, by name: menus and the palette show it.
+                .icon("plus")
                 .args(json!({ "tally": "apples" })),
             |call| {
                 let name = tally_arg(call.args)?;
