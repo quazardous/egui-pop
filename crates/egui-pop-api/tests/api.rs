@@ -664,10 +664,11 @@ fn settings_persist_and_come_back_with_their_plugin() {
     let app = build(App::builder().persist(&dir).plugin(make(&l)));
     // The framework's own (light or dark, the accent colour, the focus
     // mode, the interface zoom, the text size and fonts, the pointer
-    // gestures, the panel's alignment, the palettes') come first.
+    // gestures, the panel's alignment, the palettes', the menu icons) come
+    // first.
     let settings = app.handle().settings();
     let ids: Vec<_> = settings.iter().map(|s| s.id.clone()).collect();
-    assert_eq!(settings.len(), 15, "{ids:?}");
+    assert_eq!(settings.len(), 16, "{ids:?}");
     for id in [
         egui_pop_api::SETTING_THEME_PREFERENCE,
         egui_pop_api::SETTING_ACCENT_COLOR,
