@@ -1,0 +1,26 @@
+$description: "The `section-disclosure` component of the default kit (docs/kit.md), layered into pop-dark."
+section-disclosure:
+  $description: "The disclosure mark on a section's band (a kit component): the `disclosure-open` or `disclosure-closed` glyph in `text`, `width` across, over a box transparent by default; in the band's state."
+  shape:
+    $type: "string"
+    $value: "plain"
+  width:
+    $type: "dimension"
+    $value: {value: 10, unit: "px"}
+    $description: "The mark's size across."
+  rest:
+    fill:
+      $type: "color"
+      $value: "{transparent}"
+    border-color:
+      $type: "color"
+      $value: "{transparent}"
+    border-width:
+      $type: "dimension"
+      $value: {value: 0, unit: "px"}
+    radius:
+      $type: "dimension"
+      $value: {value: 0, unit: "px"}
+    text:
+      $type: "color"
+      $value: "{accent.default}"
