@@ -2389,6 +2389,90 @@ fn the_indicators_page_names_its_marks_and_answers_like_buttons() {
 }
 
 #[test]
+fn the_sections_page_in_every_pop_theme() {
+    let mut results = egui_kittest::SnapshotResults::new();
+    for theme in POP_THEMES {
+        let mut h = harness(options(theme, Density::Comfortable, "sections"));
+        h.run();
+        results.add(h.try_snapshot(format!("sections-{theme}")));
+    }
+}
+
+#[test]
+fn the_sections_page_folds_opens_and_resizes_its_sections() {
+    use egui::accesskit::Role;
+    use egui_pop::core::sections::laid_out;
+    use egui_pop_gallery::pages::sections::STACK;
+    let mut h = harness(options("pop-dark", Density::Comfortable, "sections"));
+    h.run();
+    let open = |h: &Harness<'_, Gallery>| -> Vec<bool> {
+        laid_out(&h.ctx, STACK).iter().map(|s| s.open).collect()
+    };
+    // Bands are buttons named by their title and count, expanded or not.
+    let live = h.get_by_role_and_label(Role::Button, "Live, 3");
+    assert_eq!(live.accesskit_node().data().is_expanded(), Some(true));
+    let shut = h.get_by_role_and_label(Role::Button, "Shut, 12");
+    assert_eq!(shut.accesskit_node().data().is_expanded(), Some(false));
+    assert_eq!(open(&h), [true, true, false]);
+    // A click folds a section; its rows go, its band stays.
+    h.get_by_label("Idle, 0").click();
+    h.run();
+    assert_eq!(open(&h), [true, false, false]);
+    assert!(h.query_by_label("Folded idle").is_some());
+    assert!(h.query_by_label("No idle session").is_none());
+    // Enter on a focused band opens it.
+    h.get_by_label("Shut, 12").focus();
+    h.run();
+    h.key_press(egui::Key::Enter);
+    h.run();
+    assert_eq!(open(&h), [true, false, true]);
+    assert!(h.query_by_label("Opened shut").is_some());
+    assert!(h.query_by_label("Closed 1").is_some());
+    // The line above Idle is a boundary between Live and Shut: dragged
+    // down, Live grows and Shut shrinks, each at least its least height.
+    let before = laid_out(&h.ctx, STACK);
+    let (live_h, shut_h) = (
+        before[0].body.unwrap().height(),
+        before[2].body.unwrap().height(),
+    );
+    let line = h
+        .get_by_role_and_label(Role::Splitter, "Resize Live")
+        .rect();
+    let a = line.center();
+    h.drag_at(a);
+    h.run();
+    for i in 1..=4 {
+        h.hover_at(a + egui::vec2(0.0, 10.0 * i as f32));
+        h.run();
+    }
+    h.drop_at(a + egui::vec2(0.0, 40.0));
+    h.run();
+    let after = laid_out(&h.ctx, STACK);
+    let (live_after, shut_after) = (
+        after[0].body.unwrap().height(),
+        after[2].body.unwrap().height(),
+    );
+    assert!(live_after > live_h + 30.0, "{live_h} -> {live_after}");
+    assert!((live_after + shut_after - live_h - shut_h).abs() < 1.0);
+    h.snapshot("sections-resized-pop-dark");
+    // A double click on it gives the heights back.
+    let line = h
+        .get_by_role_and_label(Role::Splitter, "Resize Live")
+        .rect();
+    egui_pop_test::double_click_at(&mut h, line.center());
+    h.run();
+    assert!(h.query_by_label("Heights given back").is_some());
+    let reset = laid_out(&h.ctx, STACK);
+    assert!(
+        (reset[0].body.unwrap().height() - reset[2].body.unwrap().height()).abs() < 1.0,
+        "{reset:?}"
+    );
+    // The layout is remembered: a new pass keeps it.
+    h.run();
+    assert_eq!(open(&h), [true, false, true]);
+}
+
+#[test]
 fn the_progress_page_gives_values_and_ranges_and_still_frames() {
     use egui::accesskit::Role;
     let mut results = egui_kittest::SnapshotResults::new();

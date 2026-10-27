@@ -21,7 +21,7 @@ directory; without it they are simulated and nothing reaches the
 desktop).
 
 Pages: `overview` (the theme overview), `tokens`, `builtins` (egui's
-built-ins, and egui-pop's kit-drawn checkbox, radio, rows and chips), `roles` (layout by role: text roles, spacing by intent, cards and buttons by tone), `scoped` (egui's own buttons, toggles, combo box and text fields restyled by the kit in a scope), `theme-editor` (the theme editor), `fonts` (candidate font pairs side by side), `icons`, `indicators` (dots, badges, pips, flags, swatches), `motion` (the motion clock), `values`, `sliders`, `inputs` (decorated inputs, field states and Tab order),
+built-ins, and egui-pop's kit-drawn checkbox, radio, rows and chips), `roles` (layout by role: text roles, spacing by intent, cards and buttons by tone), `scoped` (egui's own buttons, toggles, combo box and text fields restyled by the kit in a scope), `theme-editor` (the theme editor), `fonts` (candidate font pairs side by side), `icons`, `indicators` (dots, badges, pips, flags, swatches), `sections` (collapsible sections stacked in a panel), `motion` (the motion clock), `values`, `sliders`, `inputs` (decorated inputs, field states and Tab order),
 `menus`, `dialogs`, `files` (the file chooser), `toasts`, `tips` (tips of the day and
 hints), `progress`,
 `placeholders` (skeletons and empty states), `viewport` (the image
@@ -106,7 +106,7 @@ Themes, design tokens, the theme editor, icons and scaling.
 
 ### Widgets
 
-Egui's built-ins in egui-pop's style, and restyled by a kit in a scope, values, sliders, inputs (decorators, field states, Tab order), menus, dialogs (movable ones, a clear backdrop), file choosing, toasts, micro-indicators (still under reduced motion), and progress (bars, rings, meters, spinners; still under reduced motion).
+Egui's built-ins in egui-pop's style, and restyled by a kit in a scope, values, sliders, inputs (decorators, field states, Tab order), menus, dialogs (movable ones, a clear backdrop), file choosing, toasts, micro-indicators (still under reduced motion), collapsible sections (folded, resized), and progress (bars, rings, meters, spinners; still under reduced motion).
 
 <table>
   <tr>
@@ -114,6 +114,12 @@ Egui's built-ins in egui-pop's style, and restyled by a kit in a scope, values, 
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/indicators-pop-high-contrast.png"><img src="../crates/egui-pop-gallery/tests/snapshots/indicators-pop-high-contrast.png" width="200" alt="indicators-pop-high-contrast"></a><br>indicators-pop-high-contrast</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/indicators-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/indicators-pop-light.png" width="200" alt="indicators-pop-light"></a><br>indicators-pop-light</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/indicators-reduced-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/indicators-reduced-pop-dark.png" width="200" alt="indicators-reduced-pop-dark"></a><br>indicators-reduced-pop-dark</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/sections-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/sections-pop-dark.png" width="200" alt="sections-pop-dark"></a><br>sections-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/sections-pop-high-contrast.png"><img src="../crates/egui-pop-gallery/tests/snapshots/sections-pop-high-contrast.png" width="200" alt="sections-pop-high-contrast"></a><br>sections-pop-high-contrast</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/sections-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/sections-pop-light.png" width="200" alt="sections-pop-light"></a><br>sections-pop-light</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/sections-resized-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/sections-resized-pop-dark.png" width="200" alt="sections-resized-pop-dark"></a><br>sections-resized-pop-dark</td>
   </tr>
   <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/builtins-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/builtins-pop-dark.png" width="200" alt="builtins-pop-dark"></a><br>builtins-pop-dark</td>
