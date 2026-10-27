@@ -166,9 +166,19 @@ fn hand_over(
   one to four channels a pixel, rows `row_floats` apart, from a byte
   `offset` (`BufferLayout`). The viewport binds only the rows a tile
   covers, so a tile may be cut from a whole image's buffer
-  (`DeviceTile::origin`). Buffers need an adapter that reads storage
-  buffers in a fragment shader (`gpu::render_device(ctx).buffers`; not
-  WebGL 2): deliver textures elsewhere.
+  (`DeviceTile::origin`).
+- **Buffers need fragment storage**: the tile shader reads a buffer in
+  its fragment stage, which WebGL 2 (and some downlevel adapters) cannot
+  do: no `DownlevelFlags::FRAGMENT_STORAGE`, and
+  `max_storage_buffers_per_shader_stage` is 0. `gpu::install` checks
+  both (`gpu::reads_fragment_storage`) and, without them, builds no
+  buffer binding or pipeline (creating one would fail wgpu's
+  validation); a buffer device tile is then refused with
+  `DeviceTileError::BuffersUnsupported` and served from its fallback.
+  Texture device tiles and uploaded tiles work on every adapter. A
+  producer reads `gpu::render_device(ctx).buffers` (or the `viewport`
+  collector's `tiles.device.buffers`) and delivers textures or host
+  tiles where it is false.
 - **The colour**: `Encoding::Scene` (the default) is
   `Pixels::Scene` on the device, linear values in the working space:
   the display stage of the viewport's display transform (its matrix,
@@ -220,8 +230,9 @@ fn hand_over(
   GPU path texture written at the paint), and the device tiles bound in
   place (`bound`, no byte); `frame_transfers` is the last whole frame,
   its paint included. The `viewport` collector shows both
-  (`tiles.uploads`), with `tiles.last_error` and the `device` and
-  `refused` counters in `tiles.stats`. A view drawn from device tiles
+  (`tiles.uploads`), with `tiles.last_error`, what the render device
+  takes (`tiles.device`: `null` without a GPU path, `buffers`), and
+  the `device` and `refused` counters in `tiles.stats`. A view drawn from device tiles
   alone copies zero bytes a frame.
 - **What draws them**: everything that draws the tiles: the window, the
   before and after sides, the image surface on Wayland, the loupe

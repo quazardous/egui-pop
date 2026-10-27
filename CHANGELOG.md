@@ -143,7 +143,13 @@ publishes.
   `frame_transfers` count the tile bytes copied to the GPU where the
   copy happens and the device tiles bound in place, shown in the
   `viewport` collector (`tiles.uploads`, `tiles.last_error`, and the
-  `device` and `refused` counters of `tiles.stats`). See
+  `device` and `refused` counters of `tiles.stats`). Buffers need an
+  adapter that reads storage in a fragment shader
+  (`gpu::reads_fragment_storage`): on WebGL 2 the GPU path builds no
+  buffer pipeline, refuses buffer tiles with
+  `DeviceTileError::BuffersUnsupported` and says so in
+  `RenderDevice::buffers` and the collector's `tiles.device`; textures
+  and uploaded tiles work everywhere. See
   [device tiles](docs/viewport.md#device-tiles).
 - Status items with alignment, priority, live states, popovers and
   hover cards (egui-pop-api): `strips::Indicator::align` puts an item
