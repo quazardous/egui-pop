@@ -378,6 +378,12 @@ publishes.
   `can_undo` and the labels follow the focus. The `edit.undo` and
   `edit.redo` steps name their `scope`, and their result adds `scope`,
   `steps`, `rev` and `head`.
+- The theme editor's draft and the settings window are local scopes:
+  while the editor has the focus, Edit > Undo and its keys undo its
+  changes (`theme.undo` and `theme.redo` lose their own keys, kept for
+  agents); what the settings window's form writes goes to the store's
+  `SETTINGS` history, undone by Ctrl+Z and the window's buttons while
+  the focus is in the window, and no longer by the application's undo.
 - Undo histories are capped: the value store keeps its newest 500
   steps (`values::HISTORY_CAP`), the theme editor's draft its newest
   500 edits (`DRAFT_HISTORY_CAP`), the oldest dropped first, where they

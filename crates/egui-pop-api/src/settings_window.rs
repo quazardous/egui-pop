@@ -22,9 +22,12 @@
 //! `Ctrl+,` (or File > Settings) opens it; Escape closes it (or stops a
 //! capture of keys).
 //!
-//! The settings have an undo of their own, the store's (`value.undo`,
-//! `value.redo`), with its buttons in the window: Edit > Undo and
-//! `Ctrl+Z` undo the application's changes, through the host.
+//! The settings have a history of their own (ADR 0014): what the
+//! window's form writes goes to the store's [`SETTINGS`] history, a
+//! local scope of the window's focus surface ([`SURFACE`]). While the
+//! focus is in the window, Edit > Undo, `Ctrl+Z` and `Ctrl+Shift+Z` (and
+//! the window's own buttons) undo and redo the settings' changes; outside
+//! it, the application's.
 
 use std::sync::{Arc, Mutex};
 
@@ -44,10 +47,11 @@ use egui_pop_model::commands::{CommandSpec, Origin};
 use egui_pop_model::fuzzy;
 use egui_pop_model::ids::{BlockId, CommandId, OwnerId, PluginId};
 use egui_pop_model::keymap::{Action, Keys, Layer, Pointer};
-use egui_pop_model::values::{Change, Set};
+use egui_pop_model::values::{self, Change, Set};
 use serde_json::json;
 
 use crate::app::{AppHandle, MENU_FILE};
+use crate::history::StoreScope;
 use crate::hooks::SettingEntry;
 use crate::services::ServiceToken;
 use crate::settings_pages::{self, SettingsPage};
@@ -64,10 +68,16 @@ pub const CMD_SETTINGS_PAGE: CommandId = CommandId::from_static("app.settings.pa
 /// The settings window's state, as a service.
 pub const SETTINGS_WINDOW: ServiceToken<SettingsWindow> = ServiceToken::new("app.settings_window");
 
-/// The store's own undo and redo, which the settings window's buttons
-/// run.
+/// The store's own undo and redo of the application's history (the
+/// model's `value.undo` and `value.redo`, for agents).
 pub const CMD_VALUE_UNDO: CommandId = CommandId::from_static("value.undo");
 pub const CMD_VALUE_REDO: CommandId = CommandId::from_static("value.redo");
+
+/// The focus surface the window's content is drawn in
+/// (`settingsWindowFocus`): its local scope is the settings' history.
+pub const SURFACE: &str = "settingsWindow";
+
+pub use egui_pop_model::history::SETTINGS;
 
 /// The section holding the shortcuts editor, as [`SettingsWindow::open`]
 /// takes it (shown translated).
@@ -161,6 +171,7 @@ impl Plugin for SettingsPlugin {
 
     fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
         ctx.service(&SETTINGS_WINDOW, SettingsWindow::default())?;
+        ctx.local_scope(SURFACE, StoreScope::new(SETTINGS, "Settings"));
         ctx.command(
             CommandSpec::new(CMD_SETTINGS, "Settings", "File")
                 .description("Every setting, searchable, and the keyboard shortcuts.")
@@ -365,173 +376,185 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     let mut open = true;
     let mut close = false;
     overlay::show(&ctx, &spec, &mut open, None, |ui| {
-        let t = Tokens::of(ui.ctx());
-        let capturing = w.capturing().is_some() || {
-            let st = lock(&w.0);
-            st.capture_search || st.pointer_capture.is_some()
-        };
-        if !capturing && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, Key::Escape)) {
-            close = true;
-            return;
-        }
-        let all = app.settings();
-        let pages = app.settings_pages();
-        // The settings a custom page edits are drawn by the page.
-        let entries = settings_pages::unclaimed(&all, &pages);
-        let mut s = lock(&w.0);
-        ui.horizontal(|ui| {
-            let title = ui.heading(strings::tr(&ctx, &txt::SETTINGS_TITLE));
-            let search = ui
-                .add(
-                    egui::TextEdit::singleline(&mut s.filter)
-                        .hint_text(strings::tr(&ctx, &txt::SETTINGS_SEARCH_HINT))
-                        .desired_width(360.0),
-                )
-                .labelled_by(title.id);
-            if search.changed() {
-                s.capture = None;
+        // What the form writes is the settings' history, undone while the
+        // focus is in the window.
+        let _history = values::enter_history(&SETTINGS);
+        egui_pop_core::focus::scope(ui, SURFACE, &[], |ui| {
+            let t = Tokens::of(ui.ctx());
+            let capturing = w.capturing().is_some() || {
+                let st = lock(&w.0);
+                st.capture_search || st.pointer_capture.is_some()
+            };
+            if !capturing && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, Key::Escape)) {
+                close = true;
+                return;
             }
-            history(ui, app);
-        });
-        ui.separator();
-        let nodes = settings_pages::tree(&sections(&entries), &pages);
-        let secs: Vec<String> = nodes.iter().map(|n| n.key.clone()).collect();
-        let page_of = |key: &str| pages.iter().find(|p| p.id == key);
-        let current = s
-            .section
-            .clone()
-            .filter(|c| secs.contains(c))
-            .unwrap_or_else(|| secs[0].clone());
-        let filter = s.filter.trim().to_string();
-        let height = (ui.ctx().content_rect().height() * 0.6).max(240.0);
-        // The form's width: the window's, less the tree (a scroll area in
-        // a modal would otherwise grow without end).
-        let form_width = (ui.max_rect().width() - 220.0).max(240.0);
-        ui.horizontal_top(|ui| {
-            // The tree: sections, those with matches when searching.
-            ui.vertical(|ui| {
-                ui.set_width(200.0);
-                for node in &nodes {
-                    let sec = &node.key;
-                    let hits = if let Some(page) = page_of(sec) {
-                        usize::from(
-                            filter.is_empty()
-                                || page_matches(&ctx, app, &entries, &all, page, &filter),
-                        )
-                    } else if sec == SHORTCUTS {
-                        usize::from(
-                            filter.is_empty()
-                                || !shortcut_rows(&ctx, app, &filter, None, false).is_empty(),
-                        )
-                    } else {
-                        entries
-                            .iter()
-                            .filter(|e| {
-                                &e.section == sec
-                                    && (filter.is_empty() || matches(&ctx, app, e, &filter))
-                            })
-                            .count()
-                    };
-                    let enabled = filter.is_empty() || hits > 0;
-                    let item = widgets::SelectableRow::new(
-                        filter.is_empty() && *sec == current,
-                        node_title(&ctx, app, &entries, &pages, sec),
-                    );
-                    // A page under a parent, and the Fonts page (Appearance's),
-                    // are indented.
-                    let r = if node.depth > 0 || sec == FONTS {
-                        ui.horizontal(|ui| {
-                            ui.add_space(t.space.l);
-                            ui.add_enabled(enabled, item)
-                        })
-                        .inner
-                    } else {
-                        ui.add_enabled(enabled, item)
-                    };
-                    if r.clicked() {
-                        s.section = Some(sec.clone());
-                        s.filter.clear();
-                    }
+            let all = app.settings();
+            let pages = app.settings_pages();
+            // The settings a custom page edits are drawn by the page.
+            let entries = settings_pages::unclaimed(&all, &pages);
+            let mut s = lock(&w.0);
+            ui.horizontal(|ui| {
+                let title = ui.heading(strings::tr(&ctx, &txt::SETTINGS_TITLE));
+                let search = ui
+                    .add(
+                        egui::TextEdit::singleline(&mut s.filter)
+                            .hint_text(strings::tr(&ctx, &txt::SETTINGS_SEARCH_HINT))
+                            .desired_width(360.0),
+                    )
+                    .labelled_by(title.id);
+                if search.changed() {
+                    s.capture = None;
                 }
+                history(ui, app);
             });
             ui.separator();
-            egui::ScrollArea::vertical()
-                .id_salt("egui_pop.settings.form")
-                .max_height(height)
-                .max_width(form_width)
-                .auto_shrink([false, false])
-                .show(ui, |ui| {
-                    ui.set_width(form_width - 16.0);
-                    // Top-down here (the row around is left to right), so
-                    // descriptions wrap.
-                    ui.vertical(|ui| {
-                        if filter.is_empty() {
-                            ui.strong(node_title(&ctx, app, &entries, &pages, &current));
-                            ui.add_space(t.space.s);
-                            if let Some(page) = page_of(&current) {
-                                settings_pages::header(ui, app, page);
-                                ui.add_space(t.space.s);
-                                settings_pages::draw(ui, app, &page.id);
-                            } else if current == SHORTCUTS {
-                                let st = &mut *s;
-                                shortcuts(ui, app, st, "");
-                            } else if current == FONTS {
-                                fonts_page(ui, app, &entries);
-                            } else {
-                                for e in entries.iter().filter(|e| e.section == current) {
-                                    row(ui, app, e);
-                                }
-                            }
+            let nodes = settings_pages::tree(&sections(&entries), &pages);
+            let secs: Vec<String> = nodes.iter().map(|n| n.key.clone()).collect();
+            let page_of = |key: &str| pages.iter().find(|p| p.id == key);
+            let current = s
+                .section
+                .clone()
+                .filter(|c| secs.contains(c))
+                .unwrap_or_else(|| secs[0].clone());
+            let filter = s.filter.trim().to_string();
+            let height = (ui.ctx().content_rect().height() * 0.6).max(240.0);
+            // The form's width: the window's, less the tree (a scroll area in
+            // a modal would otherwise grow without end).
+            let form_width = (ui.max_rect().width() - 220.0).max(240.0);
+            ui.horizontal_top(|ui| {
+                // The tree: sections, those with matches when searching.
+                ui.vertical(|ui| {
+                    ui.set_width(200.0);
+                    for node in &nodes {
+                        let sec = &node.key;
+                        let hits = if let Some(page) = page_of(sec) {
+                            usize::from(
+                                filter.is_empty()
+                                    || page_matches(&ctx, app, &entries, &all, page, &filter),
+                            )
+                        } else if sec == SHORTCUTS {
+                            usize::from(
+                                filter.is_empty()
+                                    || !shortcut_rows(&ctx, app, &filter, None, false).is_empty(),
+                            )
                         } else {
-                            let mut any = false;
-                            let mut open_page = None;
-                            for sec in &secs {
-                                if let Some(page) = page_of(sec) {
-                                    if page_matches(&ctx, app, &entries, &all, page, &filter) {
-                                        any = true;
-                                        if settings_pages::search_hit(ui, app, page, &all, &filter)
-                                        {
-                                            open_page = Some(page.id.clone());
-                                        }
-                                        ui.add_space(t.space.m);
-                                    }
-                                    continue;
-                                }
-                                if sec == SHORTCUTS {
-                                    if !shortcut_rows(&ctx, app, &filter, None, false).is_empty() {
-                                        any = true;
-                                        ui.strong(section_title(&ctx, app, &entries, sec));
-                                        let st = &mut *s;
-                                        shortcuts(ui, app, st, &filter);
-                                    }
-                                    continue;
-                                }
-                                let list: Vec<&SettingEntry> = entries
-                                    .iter()
-                                    .filter(|e| &e.section == sec && matches(&ctx, app, e, &filter))
-                                    .collect();
-                                if list.is_empty() {
-                                    continue;
-                                }
-                                any = true;
-                                ui.strong(section_title(&ctx, app, &entries, sec));
-                                for e in list {
-                                    row(ui, app, e);
-                                }
-                                ui.add_space(t.space.m);
-                            }
-                            if !any {
-                                ui.weak(strings::tr(&ctx, &txt::NOTHING_MATCHES));
-                            }
-                            if let Some(id) = open_page {
-                                s.section = Some(id);
-                                s.filter.clear();
-                            }
+                            entries
+                                .iter()
+                                .filter(|e| {
+                                    &e.section == sec
+                                        && (filter.is_empty() || matches(&ctx, app, e, &filter))
+                                })
+                                .count()
+                        };
+                        let enabled = filter.is_empty() || hits > 0;
+                        let item = widgets::SelectableRow::new(
+                            filter.is_empty() && *sec == current,
+                            node_title(&ctx, app, &entries, &pages, sec),
+                        );
+                        // A page under a parent, and the Fonts page (Appearance's),
+                        // are indented.
+                        let r = if node.depth > 0 || sec == FONTS {
+                            ui.horizontal(|ui| {
+                                ui.add_space(t.space.l);
+                                ui.add_enabled(enabled, item)
+                            })
+                            .inner
+                        } else {
+                            ui.add_enabled(enabled, item)
+                        };
+                        if r.clicked() {
+                            s.section = Some(sec.clone());
+                            s.filter.clear();
                         }
-                    });
+                    }
                 });
+                ui.separator();
+                egui::ScrollArea::vertical()
+                    .id_salt("egui_pop.settings.form")
+                    .max_height(height)
+                    .max_width(form_width)
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        ui.set_width(form_width - 16.0);
+                        // Top-down here (the row around is left to right), so
+                        // descriptions wrap.
+                        ui.vertical(|ui| {
+                            if filter.is_empty() {
+                                ui.strong(node_title(&ctx, app, &entries, &pages, &current));
+                                ui.add_space(t.space.s);
+                                if let Some(page) = page_of(&current) {
+                                    settings_pages::header(ui, app, page);
+                                    ui.add_space(t.space.s);
+                                    settings_pages::draw(ui, app, &page.id);
+                                } else if current == SHORTCUTS {
+                                    let st = &mut *s;
+                                    shortcuts(ui, app, st, "");
+                                } else if current == FONTS {
+                                    fonts_page(ui, app, &entries);
+                                } else {
+                                    for e in entries.iter().filter(|e| e.section == current) {
+                                        row(ui, app, e);
+                                    }
+                                }
+                            } else {
+                                let mut any = false;
+                                let mut open_page = None;
+                                for sec in &secs {
+                                    if let Some(page) = page_of(sec) {
+                                        if page_matches(&ctx, app, &entries, &all, page, &filter) {
+                                            any = true;
+                                            if settings_pages::search_hit(
+                                                ui, app, page, &all, &filter,
+                                            ) {
+                                                open_page = Some(page.id.clone());
+                                            }
+                                            ui.add_space(t.space.m);
+                                        }
+                                        continue;
+                                    }
+                                    if sec == SHORTCUTS {
+                                        if !shortcut_rows(&ctx, app, &filter, None, false)
+                                            .is_empty()
+                                        {
+                                            any = true;
+                                            ui.strong(section_title(&ctx, app, &entries, sec));
+                                            let st = &mut *s;
+                                            shortcuts(ui, app, st, &filter);
+                                        }
+                                        continue;
+                                    }
+                                    let list: Vec<&SettingEntry> = entries
+                                        .iter()
+                                        .filter(|e| {
+                                            &e.section == sec && matches(&ctx, app, e, &filter)
+                                        })
+                                        .collect();
+                                    if list.is_empty() {
+                                        continue;
+                                    }
+                                    any = true;
+                                    ui.strong(section_title(&ctx, app, &entries, sec));
+                                    for e in list {
+                                        row(ui, app, e);
+                                    }
+                                    ui.add_space(t.space.m);
+                                }
+                                if !any {
+                                    ui.weak(strings::tr(&ctx, &txt::NOTHING_MATCHES));
+                                }
+                                if let Some(id) = open_page {
+                                    s.section = Some(id);
+                                    s.filter.clear();
+                                }
+                            }
+                        });
+                    });
+            });
+            app.capture_keys(
+                s.capture.is_some() || s.capture_search || s.pointer_capture.is_some(),
+            );
         });
-        app.capture_keys(s.capture.is_some() || s.capture_search || s.pointer_capture.is_some());
     });
     if close || !open {
         w.close();
@@ -540,22 +563,25 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     }
 }
 
-/// The settings' own undo and redo: the store's, not the application's.
+/// The settings' own undo and redo: their history's ([`SETTINGS`]), not
+/// the application's.
 fn history(ui: &mut Ui, app: &AppHandle) {
     let (undo, redo) = {
-        let store = app.store();
-        let s = lock(&store);
+        let line = crate::history::line(app, &SETTINGS).unwrap_or_default();
+        let ctx = ui.ctx();
         (
-            s.undo_steps().last().map(|st| st.label.clone()),
-            s.redo_steps().last().map(|st| st.label.clone()),
+            line.head()
+                .map(|st| crate::history::label_text(ctx, &st.label)),
+            line.next()
+                .map(|st| crate::history::label_text(ctx, &st.label)),
         )
     };
     let ctx = ui.ctx().clone();
-    for (label, step, command, with_step, nothing, name) in [
+    for (label, step, redo, with_step, nothing, name) in [
         (
             &txt::SETTINGS_UNDO,
             undo,
-            CMD_VALUE_UNDO,
+            false,
             &txt::SETTINGS_UNDO_STEP,
             &txt::SETTINGS_NOTHING_TO_UNDO,
             &txt::SETTINGS_UNDO_NAME,
@@ -563,7 +589,7 @@ fn history(ui: &mut Ui, app: &AppHandle) {
         (
             &txt::SETTINGS_REDO,
             redo,
-            CMD_VALUE_REDO,
+            true,
             &txt::SETTINGS_REDO_STEP,
             &txt::SETTINGS_NOTHING_TO_REDO,
             &txt::SETTINGS_REDO_NAME,
@@ -580,7 +606,11 @@ fn history(ui: &mut Ui, app: &AppHandle) {
             });
         a11y::name(&r, WidgetType::Button, &strings::tr(&ctx, name));
         if r.clicked() {
-            app.run(command, serde_json::Value::Null);
+            if redo {
+                crate::history::redo_in(app, &SETTINGS, &Origin::User);
+            } else {
+                crate::history::undo_in(app, &SETTINGS, &Origin::User);
+            }
         }
     }
 }

@@ -18,7 +18,7 @@ use egui_pop_api::{App, Ctx, Plugin, PluginError};
 use egui_pop_core::lock;
 use egui_pop_model::clock::ManualClock;
 use egui_pop_model::commands::Origin;
-use egui_pop_model::ids::{BlockId, OwnerId, PluginId};
+use egui_pop_model::ids::{BlockId, OwnerId, PluginId, SettingId};
 use egui_pop_model::values::{self, Change, Descriptor, Set, Value};
 use serde_json::{Value as Json, json};
 
@@ -424,6 +424,65 @@ fn the_store_owner_answers_dry_runs_and_stale_requests() {
     assert_eq!(line.undo[0].label.text, "Import");
     assert_eq!(line.undo[0].group, Some(g));
     assert_eq!(owner.tips(&APP).unwrap().undo, line.undo);
+}
+
+#[test]
+fn the_settings_window_undoes_the_changes_made_in_it() {
+    let app = App::builder()
+        .plugin(egui_pop_api::settings_window::SettingsPlugin)
+        .plugin(pad(Strokes::default()))
+        .plugin(P(
+            "demo",
+            Box::new(|ctx| {
+                ctx.setting(
+                    SettingId::from_static("demo.flag"),
+                    Descriptor::bool("Demo flag", false),
+                )?;
+                Ok(())
+            }),
+        ))
+        .build(&egui::Context::default())
+        .unwrap();
+    let a = app.handle().clone();
+    set(&a, 6);
+    // The settings window keeps a local scope over the store's SETTINGS
+    // history.
+    assert!(matches!(
+        history::scope_target(&a, &SETTINGS),
+        Some(Target::Local(_))
+    ));
+    let mut h = harness(app);
+    h.key_press_modifiers(Modifiers::COMMAND, Key::Comma);
+    h.run();
+    assert!(egui_pop_api::settings_window::is_open(&a));
+    h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Settings")
+        .type_text("Demo flag");
+    h.run();
+    h.get_by_label("Demo flag").click();
+    h.run();
+    let flag = || {
+        lock(&a.store())
+            .get("settings/demo.flag")
+            .unwrap()
+            .value
+            .clone()
+    };
+    assert_eq!(flag(), Value::Bool(true));
+    assert_eq!(
+        lock(&a.store()).undo_steps_in(&SETTINGS).len(),
+        1,
+        "written in the window: the settings' history"
+    );
+    // Ctrl+Z in the window: the setting goes back, the application's
+    // step stays.
+    h.key_press_modifiers(Modifiers::COMMAND, Key::Z);
+    h.run();
+    assert_eq!(flag(), Value::Bool(false));
+    assert_eq!(n(&a), Value::Int(6));
+    // The window's own Redo button makes it again.
+    h.get_by_label("Redo in the settings").click();
+    h.run();
+    assert_eq!(flag(), Value::Bool(true));
 }
 
 #[test]

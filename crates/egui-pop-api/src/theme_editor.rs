@@ -38,7 +38,9 @@
 //!
 //! Commands, for agents (hidden from the palette): `theme.read` (the
 //! draft, or one token with its contrast readouts), `theme.set` (`path`,
-//! `value`, `null` for the base theme's), `theme.undo`, `theme.redo`,
+//! `value`, `null` for the base theme's), `theme.undo`, `theme.redo`
+//! (the draft's history is also a local scope, [`SCOPE`]: while the
+//! editor has the focus, Edit > Undo and Ctrl+Z undo its changes),
 //! `theme.start` (`base`), `theme.export` (`name`), `theme.import`
 //! (`text`), `theme.generate` (`scale`, `seed`: a colour scale
 //! generated from a seed, [`ThemeEditor::generate`]), `theme.switch`
@@ -91,11 +93,11 @@ use egui_pop_core::ui::{Tone, UiPop as _};
 use egui_pop_core::{focus, lock, widgets};
 use egui_pop_model::commands::{CommandSpec, Origin};
 use egui_pop_model::ids::{CommandId, PluginId, StepId};
-use egui_pop_model::keymap::BindOptions;
 use serde_json::{Value as Json, json};
 
 use crate::app::AppHandle;
 use crate::files::{self, FileRequest};
+use crate::history::{Label, Line, LocalScope, Refusal, RefusalKind, ScopeId, ScopeInfo, StepInfo};
 use crate::host::Pending;
 use crate::services::ServiceToken;
 use crate::steps::{Outcome, StepSpec};
@@ -103,8 +105,123 @@ use crate::strings as txt;
 use crate::{Ctx, Plugin, PluginError};
 
 /// The focus surface the editor is drawn in (`themeEditorFocus`): its
-/// keys listen there.
+/// keys listen there, and its draft is the local scope Ctrl+Z undoes in
+/// while it has the focus.
 pub const SURFACE: &str = "themeEditor";
+
+/// The editor's history, a local scope (ADR 0014).
+pub const SCOPE: ScopeId = ScopeId::from_static("theme");
+
+/// The editor's draft as a local scope: one step per change (the edits
+/// recorded together, a generated scale, are one), undone and redone
+/// through the `theme.token` step.
+#[derive(Debug)]
+struct ThemeScope;
+
+impl ThemeScope {
+    fn cause(origin: &Origin, redo: bool) -> Cause {
+        match (origin, redo) {
+            (Origin::User, false) => Cause::Undo,
+            (Origin::User, true) => Cause::Redo,
+            _ => Cause::Agent,
+        }
+    }
+
+    fn walk(
+        &self,
+        app: &AppHandle,
+        origin: &Origin,
+        redo: bool,
+    ) -> Result<Option<StepInfo>, Refusal> {
+        let Some(editor) = app.service(&THEME_EDITOR) else {
+            return Ok(None);
+        };
+        let line = self.line(app);
+        let step = if redo { line.next() } else { line.head() }.cloned();
+        let made = if redo {
+            editor.redo(app, Self::cause(origin, true))
+        } else {
+            editor.undo(app, Self::cause(origin, false))
+        }
+        .map_err(|e| Refusal::new(RefusalKind::Owner, e))?;
+        Ok(made.and(step))
+    }
+}
+
+impl LocalScope for ThemeScope {
+    fn info(&self) -> ScopeInfo {
+        let mut info = ScopeInfo::new(SCOPE, "Theme editor");
+        info.local = true;
+        info.focus = vec![SURFACE.into()];
+        info.cap = egui_pop_core::tokens::DRAFT_HISTORY_CAP;
+        info
+    }
+
+    fn line(&self, app: &AppHandle) -> Line {
+        let Some(editor) = app.service(&THEME_EDITOR) else {
+            return Line::default();
+        };
+        let draft = editor.draft();
+        let (undo, redo) = (draft.undo_changes(), draft.redo_changes());
+        // Steps are numbered by position: the head is the number of
+        // changes done, the next redo the one after it.
+        let step = |id: usize, change: &[TokenEdit]| {
+            let first = change.first().map_or("", |e| e.path.as_str());
+            let label = match change.len() {
+                1 => Label::message(
+                    txt::THEME_EDITOR_STEP.key,
+                    txt::THEME_EDITOR_STEP.fallback,
+                    &[("token", first)],
+                ),
+                n => Label::message(
+                    txt::THEME_EDITOR_STEP_MANY.key,
+                    txt::THEME_EDITOR_STEP_MANY.fallback,
+                    &[("token", first), ("more", &(n - 1).to_string())],
+                ),
+            };
+            StepInfo::new(id as u64, SCOPE, label, Origin::User)
+        };
+        let done = undo.len();
+        let undo_steps: Vec<StepInfo> = undo
+            .iter()
+            .enumerate()
+            .map(|(i, c)| step(i + 1, c))
+            .collect();
+        let redo_steps: Vec<StepInfo> = redo
+            .iter()
+            .enumerate()
+            .map(|(j, c)| step(done + redo.len() - j, c))
+            .collect();
+        // Its revision: a digest of both lists (it changes with them).
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        std::hash::Hash::hash(
+            &(
+                undo.iter()
+                    .flatten()
+                    .map(|e| e.to_json().to_string())
+                    .collect::<Vec<_>>(),
+                redo.iter()
+                    .flatten()
+                    .map(|e| e.to_json().to_string())
+                    .collect::<Vec<_>>(),
+            ),
+            &mut hasher,
+        );
+        Line {
+            undo: undo_steps,
+            redo: redo_steps,
+            rev: std::hash::Hasher::finish(&hasher),
+        }
+    }
+
+    fn undo(&self, app: &AppHandle, origin: &Origin) -> Result<Option<StepInfo>, Refusal> {
+        self.walk(app, origin, false)
+    }
+
+    fn redo(&self, app: &AppHandle, origin: &Origin) -> Result<Option<StepInfo>, Refusal> {
+        self.walk(app, origin, true)
+    }
+}
 
 /// The plugin's id.
 pub const THEME_EDITOR_PLUGIN: PluginId = PluginId::from_static("egui_pop.theme_editor");
@@ -1609,32 +1726,26 @@ impl Plugin for ThemeEditorPlugin {
                 }))
             },
         )?;
-        // The editor's own undo keys while it has the focus: a binding on
-        // its surface outranks the application's Edit > Undo (ADR 0014).
-        let surface = || BindOptions::surface(SURFACE);
-        for (id, title, description, redo, keys) in [
+        // The editor's draft is a local scope (ADR 0014): while the editor
+        // has the focus, Edit > Undo, Ctrl+Z and Ctrl+Shift+Z go there.
+        ctx.local_scope(SURFACE, ThemeScope);
+        for (id, title, description, redo) in [
             (
                 CMD_THEME_UNDO,
                 "Undo a theme change",
                 "Takes the theme editor's last change back, through the theme.token step.",
                 false,
-                &["Ctrl+Z"][..],
             ),
             (
                 CMD_THEME_REDO,
                 "Redo a theme change",
                 "Makes the theme editor's last undone change again.",
                 true,
-                &["Ctrl+Shift+Z", "Ctrl+Y"][..],
             ),
         ] {
-            let mut spec = CommandSpec::new(id, title, CAT)
+            let spec = CommandSpec::new(id, title, CAT)
                 .description(description)
-                .when("!textInputFocus")
                 .hidden();
-            for k in keys {
-                spec = spec.key_with(k, surface());
-            }
             ctx.command(spec, move |call| {
                 let e = editor(call)?;
                 let cause = match (call.origin, redo) {
