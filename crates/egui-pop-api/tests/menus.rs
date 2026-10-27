@@ -140,11 +140,16 @@ fn a_list_is_asked_for_when_its_menu_opens_at_a_point_and_its_entries_run() {
     assert!(menu.rect.contains_rect(a));
     assert_eq!(menu.id, "doc.recent");
     let snapshot = app.debug_snapshot();
-    assert_eq!(snapshot["lists"][0]["name"], "doc.recent");
-    assert_eq!(snapshot["lists"][0]["last"][1]["label"], "b.txt");
+    let recent = snapshot["lists"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|l| l["name"] == "doc.recent")
+        .expect("the list is reported");
+    assert_eq!(recent["last"][1]["label"], "b.txt");
     // Agents read an entry's icon by name.
-    assert_eq!(snapshot["lists"][0]["last"][1]["icon"], "history");
-    assert!(snapshot["lists"][0]["last"][0].get("icon").is_none());
+    assert_eq!(recent["last"][1]["icon"], "history");
+    assert!(recent["last"][0].get("icon").is_none());
     h.get_by_label("b.txt").click();
     h.run();
     h.run();
