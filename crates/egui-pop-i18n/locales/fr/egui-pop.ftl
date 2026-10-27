@@ -1145,6 +1145,10 @@ egui-pop-theme-editor-start = Partir de
 
 egui-pop-theme-editor-states = États
 
+egui-pop-theme-editor-step = Modifier { $token }
+
+egui-pop-theme-editor-step-many = Modifier { $token } et { $more } autres
+
 egui-pop-theme-editor-surfaces = Surfaces
 
 egui-pop-theme-editor-tab-fonts = Polices

@@ -519,6 +519,13 @@ pub const THEME_EDITOR_PALETTE: StrKey = StrKey::new("egui-pop-theme-editor-pale
 pub const THEME_EDITOR_EDITED: StrKey = StrKey::new("egui-pop-theme-editor-edited", "changed");
 pub const THEME_EDITOR_PICK: StrKey =
     StrKey::new("egui-pop-theme-editor-pick", "Pick a token in the list.");
+/// A step of the theme editor's history (ADR 0014): one token set.
+pub const THEME_EDITOR_STEP: StrKey = StrKey::new("egui-pop-theme-editor-step", "Set { $token }");
+/// A step of the theme editor's history: tokens set together (a scale).
+pub const THEME_EDITOR_STEP_MANY: StrKey = StrKey::new(
+    "egui-pop-theme-editor-step-many",
+    "Set { $token } and { $more } more",
+);
 pub const THEME_EDITOR_TYPE: StrKey = StrKey::new("egui-pop-theme-editor-type", "Type: { $type }");
 pub const THEME_EDITOR_OWN: StrKey =
     StrKey::new("egui-pop-theme-editor-own", "Changed in this theme");
@@ -1078,6 +1085,8 @@ pub const ALL: &[StrKey] = &[
     THEME_EDITOR_PALETTE,
     THEME_EDITOR_EDITED,
     THEME_EDITOR_PICK,
+    THEME_EDITOR_STEP,
+    THEME_EDITOR_STEP_MANY,
     THEME_EDITOR_TYPE,
     THEME_EDITOR_OWN,
     THEME_EDITOR_FROM,

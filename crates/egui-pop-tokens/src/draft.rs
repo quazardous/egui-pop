@@ -620,6 +620,40 @@ impl ThemeDraft {
         &self.seeds
     }
 
+    /// The changes an undo walks back, oldest first: each the edits
+    /// recorded together ([`ThemeDraft::record_joined`]), in the order
+    /// they were made.
+    pub fn undo_changes(&self) -> Vec<Vec<TokenEdit>> {
+        let mut out: Vec<Vec<TokenEdit>> = Vec::new();
+        for (edit, joined) in self.undo.iter().zip(&self.joined_undo) {
+            match out.last_mut() {
+                Some(group) if *joined => group.push(edit.clone()),
+                _ => out.push(vec![edit.clone()]),
+            }
+        }
+        out
+    }
+
+    /// The changes a redo makes again, the next one last, each in the
+    /// order its edits were made.
+    pub fn redo_changes(&self) -> Vec<Vec<TokenEdit>> {
+        let mut out = Vec::new();
+        let mut end = self.redo.len();
+        while end > 0 {
+            // The change's first edit is the nearest; the edits joined
+            // to it lie before it in the list.
+            let first = end - 1;
+            let mut start = first;
+            while start > 0 && self.joined_redo.get(start - 1).copied().unwrap_or(false) {
+                start -= 1;
+            }
+            out.push(self.redo[start..=first].iter().rev().cloned().collect());
+            end = start;
+        }
+        out.reverse();
+        out
+    }
+
     /// The edit an undo would make (the last one's inverse).
     pub fn undo_edit(&self) -> Option<TokenEdit> {
         self.undo.last().map(TokenEdit::inverse)
@@ -1212,6 +1246,42 @@ mod tests {
         let c = e(&d, "gold.3", "#333333");
         d.record(c);
         assert_eq!((d.undo_group(), d.redo_group()), (1, 0));
+    }
+
+    #[test]
+    fn the_changes_list_joined_edits_as_one_in_the_order_made() {
+        let themes = Themes::default();
+        let mut d = ThemeDraft::new("pop-dark");
+        let e =
+            |d: &ThemeDraft, p: &str, v: &str| d.edit(&themes, p, Some(json!(v))).unwrap().unwrap();
+        let first = e(&d, "accent.default", "#102030");
+        d.record(first);
+        let a = e(&d, "gold.1", "#111111");
+        d.record(a);
+        let b = e(&d, "gold.2", "#222222");
+        d.record_joined(b);
+        let paths = |changes: Vec<Vec<TokenEdit>>| -> Vec<Vec<String>> {
+            changes
+                .into_iter()
+                .map(|c| c.into_iter().map(|e| e.path).collect())
+                .collect()
+        };
+        assert_eq!(
+            paths(d.undo_changes()),
+            [vec!["accent.default"], vec!["gold.1", "gold.2"]]
+        );
+        assert!(d.redo_changes().is_empty());
+        // Both undone: the scale is the next redo, the accent after it.
+        d.undo();
+        d.undo();
+        d.undo();
+        assert_eq!(
+            paths(d.redo_changes()),
+            [vec!["gold.1", "gold.2"], vec!["accent.default"]]
+        );
+        d.redo();
+        assert_eq!(paths(d.redo_changes()), [vec!["gold.1", "gold.2"]]);
+        assert_eq!(paths(d.undo_changes()), [vec!["accent.default"]]);
     }
 
     /// Generates `scale` from `hex` as the theme editor does: the edits,

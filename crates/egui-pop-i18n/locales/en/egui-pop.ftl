@@ -1252,6 +1252,10 @@ egui-pop-theme-editor-start = Start from
 
 egui-pop-theme-editor-states = States
 
+egui-pop-theme-editor-step = Set { $token }
+
+egui-pop-theme-editor-step-many = Set { $token } and { $more } more
+
 egui-pop-theme-editor-surfaces = Surfaces
 
 egui-pop-theme-editor-tab-fonts = Fonts

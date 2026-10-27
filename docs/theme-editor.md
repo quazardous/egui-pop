@@ -259,10 +259,11 @@ and what the file loaded with as `warnings`) and `theme.generate`
 its `edits`, `seeds` and `skipped` proposed, or, with `apply: true`,
 written as one change, `changed` back).
 
-The editor is a focus surface of its own (`themeEditor`): while it has
-the focus, Ctrl+Z runs `theme.undo` and Ctrl+Shift+Z or Ctrl+Y
-`theme.redo`, ahead of the application's Edit > Undo; a text field of
-the editor keeps its own undo while it is being typed in.
+The editor is a focus surface of its own (`themeEditor`), and its
+draft is a local scope (`theme`, [ADR 0014](adr/0014-undo.md)): while the editor
+has the focus, Edit > Undo, Ctrl+Z, Ctrl+Shift+Z and Ctrl+Y undo and
+redo its changes, not the application's; a text field of the editor
+keeps its own undo while it is being typed in.
 
 ## Keyboard and screen readers
 
