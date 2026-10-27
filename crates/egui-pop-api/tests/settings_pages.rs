@@ -256,13 +256,20 @@ fn the_page_reset_takes_its_settings_back_in_one_step() {
     h.get_by_label("Devices").click();
     h.run();
     h.run();
-    let steps = egui_pop_core::lock(&handle.store()).undo_steps().len();
+    // The settings window writes into its own history, apart from the
+    // application's.
+    let settings = egui_pop_model::history::SETTINGS;
+    let steps = egui_pop_core::lock(&handle.store())
+        .undo_steps_in(&settings)
+        .len();
     h.get_by_label("Reset Devices").click();
     h.run();
     assert_eq!(threads(&h), Value::Int(4));
     assert!(!handle.settings_page(PAGE).unwrap().is_changed(&handle));
     assert_eq!(
-        egui_pop_core::lock(&handle.store()).undo_steps().len(),
+        egui_pop_core::lock(&handle.store())
+            .undo_steps_in(&settings)
+            .len(),
         steps + 1
     );
 }
