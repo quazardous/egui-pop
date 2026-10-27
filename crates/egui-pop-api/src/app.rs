@@ -72,24 +72,27 @@ pub const MENU_HELP: MenuId = MenuId::from_static("app.menu.help");
 pub use crate::palette::CMD_PALETTE;
 pub const CMD_QUIT: CommandId = CommandId::from_static("app.quit");
 /// Undo and redo: the keys, menu items and `when` checks are
-/// egui-pop's, what an undo does is the host's ([`Host::undo`]), each
-/// run going through the [`STEP_UNDO`] and [`STEP_REDO`] steps.
+/// egui-pop's, what an undo does is the history owner's
+/// ([`Host::history`], ADR 0014), each run going through the
+/// [`STEP_UNDO`] and [`STEP_REDO`] steps.
 pub const CMD_UNDO: CommandId = CommandId::from_static("edit.undo");
 pub const CMD_REDO: CommandId = CommandId::from_static("edit.redo");
 /// The steps of an undo and a redo (ADR 0011): a before-hook may veto
-/// one (a gesture in progress) or redirect it, a run-hook does it instead
-/// of the host, an after-hook follows. Their arguments: `label` (what it
-/// takes back, as the menu said) and `origin`. Their result:
-/// `{"undone": label}` (`{"redone": label}`), the label `null` when there
-/// was nothing. Besides the step's own signal, the journal says
-/// `edit.undone` / `edit.redone` with the label, or `edit.undo_failed` /
-/// `edit.redo_failed` with the error or the veto.
+/// one (a gesture in progress) or redirect it (another `scope`), a
+/// run-hook does it instead of the owner, an after-hook follows. Their
+/// arguments: `label` (what it takes back, as the menu said), `origin`
+/// and `scope` (the history focus picked). Their result:
+/// `{"undone": label, "scope", "steps", "rev", "head"}` (`"redone"`), the
+/// label `null` when there was nothing. Besides the step's own signal,
+/// the journal says `edit.undone` / `edit.redone` with the label, or
+/// `edit.undo_failed` / `edit.redo_failed` with the error or the veto;
+/// and `history.changed` or `history.refused`.
 pub const STEP_UNDO: StepId = StepId::from_static("edit.undo");
 pub const STEP_REDO: StepId = StepId::from_static("edit.redo");
 
 /// Commands that run in the interface rather than through the host's
 /// dispatch: their run calls the host itself (undo and redo call
-/// `Host::undo` and `Host::redo`, the context stack's commands
+/// `Host::history`, the context stack's commands
 /// `Host::contexts`, which a dispatch would hold).
 const IN_INTERFACE: &[CommandId] = &[
     CMD_UNDO,
@@ -952,25 +955,26 @@ impl AppHandle {
         host.as_mut().map(|h| f(h.as_mut()))
     }
 
-    /// Whether there is something to undo, as the host says (`false`
-    /// while the host dispatches a command).
+    /// Whether Ctrl+Z would undo something now, in the history focus
+    /// picks (`crate::history::target`; `false` while the host dispatches
+    /// a command).
     pub fn can_undo(&self) -> bool {
-        self.with_host(|h| h.can_undo()).unwrap_or(false)
+        crate::history::can_undo(self)
     }
 
-    /// Whether there is something to redo.
+    /// Whether Ctrl+Shift+Z would redo something now.
     pub fn can_redo(&self) -> bool {
-        self.with_host(|h| h.can_redo()).unwrap_or(false)
+        crate::history::can_redo(self)
     }
 
     /// What an undo would take back ("exposure change").
     pub fn undo_label(&self) -> Option<String> {
-        self.with_host(|h| h.undo_label()).flatten()
+        crate::history::undo_label(self)
     }
 
     /// What a redo would do again.
     pub fn redo_label(&self) -> Option<String> {
-        self.with_host(|h| h.redo_label()).flatten()
+        crate::history::redo_label(self)
     }
 
     /// A command's title as menus show it now, in the interface's
@@ -1024,55 +1028,17 @@ impl AppHandle {
         }
     }
 
-    /// Undoes through the [`STEP_UNDO`] step: its hooks, then (unless a
-    /// run-hook replaces it) the host's undo; the journal says how it
-    /// went. What `edit.undo` runs.
+    /// Undoes through the [`STEP_UNDO`] step, in the history focus
+    /// picks (`crate::history::undo`): its hooks, then (unless a run-hook
+    /// replaces it) the owner's undo; the journal says how it went. What
+    /// `edit.undo` runs.
     pub fn undo(&self, origin: &Origin) -> Outcome {
-        self.history_step(false, origin)
+        crate::history::undo(self, origin)
     }
 
     /// Redoes through the [`STEP_REDO`] step.
     pub fn redo(&self, origin: &Origin) -> Outcome {
-        self.history_step(true, origin)
-    }
-
-    fn history_step(&self, redo: bool, origin: &Origin) -> Outcome {
-        let (step, key, done, failed) = if redo {
-            (&STEP_REDO, "redone", "edit.redone", "edit.redo_failed")
-        } else {
-            (&STEP_UNDO, "undone", "edit.undone", "edit.undo_failed")
-        };
-        let label = if redo {
-            self.redo_label()
-        } else {
-            self.undo_label()
-        };
-        let args = json!({ "label": label, "origin": source_of(origin) });
-        let who = origin.clone();
-        let outcome = self.step(step, args, move |app, _| {
-            let mut host = app.0.host.borrow_mut();
-            let h = host.as_mut().ok_or("the host is dispatching a command")?;
-            let r = if redo { h.redo(&who) } else { h.undo(&who) }?;
-            Ok(json!({ key: r }))
-        });
-        let source = source_of(origin);
-        match &outcome {
-            Outcome::Done(Ok(v)) => {
-                if !v[key].is_null() {
-                    self.publish(&source, None, done, json!({ "label": v[key] }));
-                }
-            }
-            Outcome::Done(Err(e)) => {
-                self.publish(&source, None, failed, json!({ "label": label, "error": e }));
-            }
-            Outcome::Vetoed { by, reason } => self.publish(
-                &source,
-                None,
-                failed,
-                json!({ "label": label, "vetoed_by": by, "reason": reason }),
-            ),
-        }
-        outcome
+        crate::history::redo(self, origin)
     }
 
     /// Every overlay on screen, bottom first, with where it was drawn
@@ -2250,7 +2216,7 @@ fn zen_result(outcome: Option<Outcome>, on: bool) -> Result<Json, String> {
 }
 
 /// A focus scope name from an id: letters, digits, `_` and `.` only.
-fn scope_name(id: &str) -> String {
+pub(crate) fn scope_name(id: &str) -> String {
     id.chars()
         .map(|c| {
             if c.is_ascii_alphanumeric() || c == '.' {
@@ -3169,17 +3135,25 @@ impl App {
         ctx.step(
             StepSpec::new(
                 STEP_UNDO,
-                "Undoes the last change: the host's undo by default.",
+                "Undoes the last change in the history focus picks: the history owner's undo by default.",
             )
-            .args(json!({ "label": "exposure change", "origin": "user" })),
+            .args(json!({ "label": "exposure change", "origin": "user", "scope": "app" })),
         )?;
         ctx.step(
             StepSpec::new(
                 STEP_REDO,
-                "Redoes the last undone change: the host's redo by default.",
+                "Redoes the last undone change: the history owner's redo by default.",
             )
-            .args(json!({ "label": "exposure change", "origin": "user" })),
+            .args(json!({ "label": "exposure change", "origin": "user", "scope": "app" })),
         )?;
+        ctx.step(
+            StepSpec::new(
+                crate::history::STEP_JUMP,
+                "Brings a history to one of its steps (`to`, 0: the start) by undos or redos, all or nothing.",
+            )
+            .args(json!({ "scope": "app", "to": 3, "origin": "user" })),
+        )?;
+        ctx.on(crate::hooks::On::Pass, |app, _| crate::history::pass(app));
         ctx.command(
             CommandSpec::new(CMD_UNDO, "Undo", "Edit")
                 .description("Undo the last change.")
@@ -3457,16 +3431,11 @@ impl App {
         b.register(
             FnCollector::new(
                 "history",
-                "What Edit > Undo and Redo would do, as the host says (the runs are in the `steps` collector).",
+                "The histories (ADR 0014): each scope, whether it is active, where Edit > Undo and Redo go and what they would do (the runs are in the `steps` collector).",
             )
             .snapshot(move |_| {
                 let Ok(app) = up(&w) else { return Json::Null };
-                json!({
-                    "can_undo": app.can_undo(),
-                    "undo": app.undo_label(),
-                    "can_redo": app.can_redo(),
-                    "redo": app.redo_label(),
-                })
+                crate::history::snapshot(&app)
             }),
         )
         .expect("distinct names");
@@ -3684,6 +3653,7 @@ impl App {
         h.workbench.borrow_mut().templates.retain(|t| t.0 != *owner);
         h.services.borrow_mut().remove_owner(owner);
         lock(&h.store).remove_owner(owner);
+        crate::history::remove_owner(&self.handle, owner);
         h.diagnostics.borrow_mut().remove_owner(owner);
         h.collectors.borrow_mut().retain(|(o, name)| {
             if o == owner {

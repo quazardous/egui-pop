@@ -39,6 +39,24 @@ publishes.
   agents and tests each row's icon, mark and where its label starts.
   The gallery's menus page shows icons, framed toggles, ticks, a radio
   group and a disabled entry.
+- The history contract (egui-pop-api, ADR 0014): `history::History`,
+  the owner of the application's histories, reached through
+  `Host::history()` (the kernel's) or egui-pop's `StoreHistory` over the
+  value store; its scopes, their steps (`line`, `tips`, `rev`) and the
+  requests `undo`, `redo`, `jump` (all with `if_rev` and `dry_run`),
+  `group` and `close`. Local scopes (`history::LocalScope`, registered
+  for a focus surface with `Ctx::local_scope`; `StoreScope` over one of
+  the store's histories) keep a component's own history. Ctrl+Z,
+  outside a text field, undoes in the innermost focused surface with a
+  local scope, else the newest step among the owner's scopes active in
+  the window (`history::target`); redo goes back to the scope last
+  undone. Undo, redo and the new jump are vetoable steps (`edit.undo`,
+  `edit.redo`, `edit.jump`) naming their scope, a before-hook may
+  redirect them, a gesture in progress refuses them; each answer
+  publishes `history.changed` or `history.refused`, and the owner's own
+  moves are published at the next pass. The application gives the store
+  a clock and seals merging when the focus moves. The `history`
+  collector lists the scopes and where the keys go.
 - Undo histories by scope (egui-pop-model, ADR 0014): the pure parts
   of the history contract in `history` (`ScopeId`, `ScopeInfo`,
   `StepInfo`, `Label`, `Line`, `Request`, `Refusal`, the merge rule
@@ -353,6 +371,13 @@ publishes.
 
 ### Changed
 
+- `Host::undo`, `Host::redo`, `Host::can_undo`, `Host::can_redo`,
+  `Host::undo_label` and `Host::redo_label` are replaced by
+  `Host::history()` (ADR 0014): a host with its own undo implements
+  `history::History` for its scopes. `AppHandle::undo`, `redo`,
+  `can_undo` and the labels follow the focus. The `edit.undo` and
+  `edit.redo` steps name their `scope`, and their result adds `scope`,
+  `steps`, `rev` and `head`.
 - Undo histories are capped: the value store keeps its newest 500
   steps (`values::HISTORY_CAP`), the theme editor's draft its newest
   500 edits (`DRAFT_HISTORY_CAP`), the oldest dropped first, where they

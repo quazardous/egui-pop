@@ -15,11 +15,12 @@
 //!   `publish`, `since` and `last_seq` itself), or not at all: egui-pop
 //!   then keeps one in memory, as `LocalHost` does;
 //! - the value store holding settings ([`Host::store`]);
-//! - the application's history: [`Host::undo`] and [`Host::redo`], with
-//!   [`Host::can_undo`], [`Host::can_redo`] and the labels the menus show
-//!   ("Undo exposure change"). egui-pop owns the keys, the commands and
-//!   the steps around them (`edit.undo`, `edit.redo`, ADR 0011); the host
-//!   says what an undo is. The default undoes the store;
+//! - the owner of the application's histories ([`Host::history`], ADR
+//!   0014): its scopes, their steps and labels ("Undo exposure change"),
+//!   undo, redo and jump. egui-pop owns the keys, the commands and the
+//!   steps around them (`edit.undo`, `edit.redo`, `edit.jump`, ADR 0011)
+//!   and routes Ctrl+Z by focus; the owner says what an undo is. The
+//!   default undoes the store's application history;
 //! - a [`Waker`] the host calls from any thread when something changed
 //!   ([`Host::set_waker`]);
 //! - where the workbench's layout is kept ([`Host::layout_document`]):
@@ -382,47 +383,16 @@ pub trait Host {
     /// The value store holding settings and values.
     fn store(&self) -> SharedStore;
 
-    /// Whether there is something to undo (the `canUndo` context key,
-    /// greying Edit > Undo). The default asks the store.
-    fn can_undo(&self) -> bool {
-        !lock(&self.store()).undo_steps().is_empty()
-    }
-
-    /// Whether there is something to redo (`canRedo`).
-    fn can_redo(&self) -> bool {
-        !lock(&self.store()).redo_steps().is_empty()
-    }
-
-    /// What an undo would take back, as the menu names it ("exposure
-    /// change" for "Undo exposure change"); `None`: no label.
-    fn undo_label(&self) -> Option<String> {
-        lock(&self.store())
-            .undo_steps()
-            .last()
-            .map(|s| s.label.clone())
-    }
-
-    /// What a redo would do again.
-    fn redo_label(&self) -> Option<String> {
-        lock(&self.store())
-            .redo_steps()
-            .last()
-            .map(|s| s.label.clone())
-    }
-
-    /// Undoes the last step of the application's history: the label of
-    /// what was undone, `None` when there was nothing. The default undoes
-    /// the store, which keeps its newest `HISTORY_CAP` (500) steps; a
+    /// The owner of the application's histories (ADR 0014), when the
+    /// kernel keeps them. `None` (the default): egui-pop's
+    /// [`StoreHistory`](crate::history::StoreHistory) over [`Host::store`],
+    /// which keeps its newest `HISTORY_CAP` (500) steps per history; a
     /// host keeps more or fewer with `Store::set_history_cap`. egui-pop
-    /// calls it from the `edit.undo` step's default run, outside any
-    /// dispatch.
-    fn undo(&mut self, origin: &Origin) -> Result<Option<String>, String> {
-        lock(&self.store()).undo(origin).map_err(|r| r.to_string())
-    }
-
-    /// Redoes the last undone step.
-    fn redo(&mut self, origin: &Origin) -> Result<Option<String>, String> {
-        lock(&self.store()).redo(origin).map_err(|r| r.to_string())
+    /// owns the keys, the commands and the steps around them
+    /// (`edit.undo`, `edit.redo`, `edit.jump`); the owner says what an
+    /// undo is.
+    fn history(&mut self) -> Option<&mut dyn crate::history::History> {
+        None
     }
 
     /// How to wake the interface; the host calls it from any thread when
