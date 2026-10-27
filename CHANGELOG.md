@@ -358,8 +358,9 @@ publishes.
 ### Fixed
 
 - The GPU path's tile textures are released (egui-pop-viewport): those
-  of a dropped `ViewportState` at the next paint of any viewport, and a
-  tile replaced before its first paint is no longer bound and kept.
+  of a dropped `ViewportState` at the next paint of any viewport on the
+  same renderer, and a tile replaced before its first paint is no
+  longer bound and kept.
 - The key extractor reads a path-qualified constructor (egui-pop-i18n):
   a pattern such as `Message::new` now takes `app_core::Message::new(…)`,
   `crate::strings::Message::new(…)` and `::app::Message::new(…)`, the

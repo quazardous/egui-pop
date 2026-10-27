@@ -51,20 +51,6 @@ pub const MIN_PROXY_SCALE: f64 = 1.0 / 64.0;
 
 static NEXT_TEXTURE: AtomicU64 = AtomicU64::new(1);
 
-/// The GPU path textures of tile caches dropped (a viewport's state gone):
-/// released by the next paint of any viewport.
-static ORPHANS: std::sync::Mutex<Vec<u64>> = std::sync::Mutex::new(Vec::new());
-
-/// The GPU path textures to release for the tile caches dropped since
-/// the last call.
-fn take_orphans() -> Vec<u64> {
-    std::mem::take(
-        &mut *ORPHANS
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner),
-    )
-}
-
 /// A tile's texture.
 pub(crate) enum Texture {
     /// An egui texture, sRGB 8 bits (display-ready pixels, or scene
@@ -140,17 +126,19 @@ pub(crate) struct GpuQueue {
     pub frees: Vec<u64>,
     /// What the paints copied and bound so far.
     pub copied: Transfers,
+    /// The tile cache is dropped: `frees` holds every texture it had on
+    /// the GPU path, for the render state that bound them to release at
+    /// its next paint, whichever viewport paints.
+    pub closed: bool,
 }
 
 impl GpuQueue {
     /// What a paint takes in: the uploads, less those released since they
     /// were queued (a tile replaced within a frame: dropped here, with
-    /// what a device tile keeps alive), and the textures to release,
-    /// those of the tile caches dropped since included.
+    /// what a device tile keeps alive), and the textures to release.
     #[cfg_attr(not(feature = "wgpu"), allow(dead_code))]
     pub(crate) fn drain(&mut self) -> (Vec<Upload>, Vec<u64>) {
-        let mut frees = std::mem::take(&mut self.frees);
-        frees.extend(take_orphans());
+        let frees = std::mem::take(&mut self.frees);
         let mut uploads = std::mem::take(&mut self.uploads);
         if !frees.is_empty() {
             let freed: std::collections::HashSet<u64> = frees.iter().copied().collect();
@@ -350,10 +338,12 @@ pub(crate) struct Tiles {
 
 impl Drop for Tiles {
     /// What the GPU path holds for this cache is released by the next
-    /// paint (with what device tiles keep alive); tiles waiting for
-    /// their paint are dropped now.
+    /// paint on the render state that bound it (with what device tiles
+    /// keep alive): the queue, closed, keeps the textures to release,
+    /// and that render state keeps the queue. Tiles waiting for their
+    /// paint are dropped now.
     fn drop(&mut self) {
-        let mut ids: Vec<u64> = self
+        let ids: Vec<u64> = self
             .entries
             .values()
             .filter_map(|e| match e.texture {
@@ -361,20 +351,13 @@ impl Drop for Tiles {
                 Texture::Egui(_) => None,
             })
             .collect();
-        {
-            let mut q = self
-                .gpu
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            q.uploads.clear();
-            ids.append(&mut q.frees);
-        }
-        if !ids.is_empty() {
-            ORPHANS
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .extend(ids);
-        }
+        let mut q = self
+            .gpu
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        q.uploads.clear();
+        q.frees.extend(ids);
+        q.closed = true;
     }
 }
 
