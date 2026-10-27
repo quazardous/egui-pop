@@ -402,6 +402,22 @@ publishes.
   Edit > Undo's and Redo's keys now pass through a modal, where only a
   focused local scope takes them: the application's history behind a
   modal is never undone.
+- egui-pop bundles a default font pair (egui-pop-core, egui-pop-api,
+  egui-pop; docs/fonts.md): Inter for interface text and JetBrains Mono
+  NL for values and code, subset to Latin, Greek and Cyrillic (about
+  620 KB, SIL Open Font License 1.1, its text shipped with the fonts in
+  egui-pop-core's `fonts/`), behind the `bundled-fonts` feature, on by
+  default; without it, egui's own pair (Ubuntu Light and Hack) is the
+  default as before. The built-in themes now name only generic families
+  (`font.family.ui` is `["sans-serif"]`, `font.family.mono`
+  `["monospace"]`), which draw the bundled pair at every weight (Inter
+  through its `wght` axis). Values (`font.numeric`, still `"mono"`) take
+  JetBrains Mono's tabular digits. Inter, JetBrains Mono NL, Ubuntu and
+  Hack can all be named by a theme or picked on the Fonts page; a name
+  is still found on the system before a bundled face. egui-pop-core's
+  licence is now `(MIT OR Apache-2.0) AND OFL-1.1`. The workspace
+  depends on egui-pop-core without its default features, so the facade's
+  feature decides. Every gallery snapshot changes.
 - Undo histories are capped: the value store keeps its newest 500
   steps (`values::HISTORY_CAP`), the theme editor's draft its newest
   500 edits (`DRAFT_HISTORY_CAP`), the oldest dropped first, where they
