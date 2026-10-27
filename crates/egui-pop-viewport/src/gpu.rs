@@ -269,6 +269,10 @@ pub(crate) struct Resources {
     storage_align: u64,
     textures: HashMap<u64, Bound>,
     slots: HashMap<u64, Slot>,
+    /// The queues of the tile caches whose tiles this render state
+    /// binds: a closed one (its cache dropped) has its textures released
+    /// by the next paint of any viewport here, then is forgotten.
+    queues: Vec<Arc<Mutex<GpuQueue>>>,
 }
 
 /// The GPU path's device, when installed.
@@ -573,6 +577,7 @@ pub fn install_for_surface(
         storage_align,
         textures: HashMap::new(),
         slots: HashMap::new(),
+        queues: Vec::new(),
     });
     RENDER.set(
         ctx,
@@ -763,6 +768,25 @@ impl TilePaint {
         // On the render thread: one texture per tile uploaded, and the
         // f16 conversion of tiles not prepared by the delivering thread.
         profiling::scope!("pop.tiles.gpu_prepare");
+        // This cache's queue, known here before anything is bound from
+        // it; the textures of caches dropped since released, with what
+        // their device tiles keep alive. Per render state: another
+        // renderer's paint never sees these textures.
+        if !r.queues.iter().any(|q| Arc::ptr_eq(q, &self.queue)) {
+            r.queues.push(self.queue.clone());
+        }
+        let textures = &mut r.textures;
+        r.queues.retain(|q| {
+            let mut q = q.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            if !q.closed {
+                return true;
+            }
+            for id in q.frees.drain(..) {
+                textures.remove(&id);
+            }
+            q.uploads.clear();
+            false
+        });
         let (uploads, frees) = self
             .queue
             .lock()
