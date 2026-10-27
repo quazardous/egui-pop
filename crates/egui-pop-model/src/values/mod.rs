@@ -20,7 +20,14 @@
 //! - Undo: one step per gesture or group, else one per write; the newest
 //!   [`HISTORY_CAP`] steps are kept unless the host sets another cap. An
 //!   undo or a redo never writes into a drag still going, the dragger's
-//!   own included.
+//!   own included. Steps go to a history by scope (ADR 0014): the
+//!   application's ([`APP`]) unless the write names another
+//!   ([`Set::history`], or the one [`enter_history`] set, such as the
+//!   settings window's). Each step has an id, its time on the store's
+//!   clock ([`Store::set_clock`]) and the place it was made in
+//!   ([`Store::set_place`]); writes carrying the same merge key
+//!   ([`Set::merge`]) from one origin less than a second apart are one
+//!   step, until [`Store::seal`] (the focus left).
 //! - Paths are owned: a plugin's settings and listeners go with it.
 //! - One writer per value: a write names the scope issuing it
 //!   ([`Set::by`], or the scope [`enter_scope`] set, such as the plugin
@@ -59,9 +66,13 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
 
+use crate::clock::SharedClock;
 use crate::commands::Origin;
+use crate::context::Entry as Place;
 use crate::diagnostics::Diagnostics;
 use crate::doc::{Schema, same};
+pub use crate::history::{APP, SETTINGS};
+use crate::history::{MergeMark, ScopeId, merges};
 use crate::ids::{OwnerId, check};
 
 /// A value at its path.
@@ -112,6 +123,12 @@ pub struct Set {
     /// framework); `None`: the one [`enter_scope`] set, else the
     /// application's own code, not checked.
     pub by: Option<OwnerId>,
+    /// Repeats with the same key are one undo step while they come less
+    /// than a second apart ([`crate::history::merges`]).
+    pub merge: Option<String>,
+    /// The history its step goes to; `None`: the one [`enter_history`]
+    /// set, else [`APP`].
+    pub history: Option<ScopeId>,
 }
 
 impl Set {
@@ -125,7 +142,23 @@ impl Set {
             if_seq: None,
             untracked: false,
             by: None,
+            merge: None,
+            history: None,
         }
+    }
+
+    /// Merged with the previous step when it carries the same key, comes
+    /// from the same origin less than a second before, and the history
+    /// was not sealed since (a held arrow, a wheel's notches).
+    pub fn merge(mut self, key: &str) -> Self {
+        self.merge = Some(key.into());
+        self
+    }
+
+    /// Its step goes to this history.
+    pub fn history(mut self, scope: &ScopeId) -> Self {
+        self.history = Some(scope.clone());
+        self
     }
 
     /// Issued by this scope (checked against the path's writers).
@@ -298,6 +331,8 @@ struct ListenerSlot {
 struct Gesture {
     origin: Origin,
     label: String,
+    /// The history its step goes to.
+    history: ScopeId,
     /// Whether the paths it touched are held against other origins: a
     /// drag holds them, a group of an agent's writes does not.
     holds: bool,
@@ -308,10 +343,33 @@ struct Gesture {
 /// One undo step.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct Step {
+    /// Unique in the store, from 1.
+    pub id: u64,
     pub label: String,
     pub origin: Origin,
     /// Path, old value, new value, in the order written.
     pub changes: Vec<(String, Value, Value)>,
+    /// When it was made (its last merged write), on the store's clock.
+    pub at: f64,
+    /// The place of the context stack it was made in.
+    pub place: Vec<Place>,
+    /// Its merge key, when its writes merge with the next.
+    pub merge: Option<String>,
+    /// The gesture or group it was made of.
+    pub group: Option<u64>,
+}
+
+/// One history of the store: its undo and redo steps.
+#[derive(Clone, Debug, Default)]
+struct History {
+    undo: Vec<Step>,
+    redo: Vec<Step>,
+    /// Undo and redo steps the cap dropped so far.
+    dropped: (u64, u64),
+    /// Moves on with every change of either list.
+    rev: u64,
+    /// The next step does not merge with the head.
+    sealed: bool,
 }
 
 /// How many changes the journal keeps.
@@ -334,6 +392,38 @@ pub const NOT_A_WRITER: &str = "not-a-writer";
 
 thread_local! {
     static SCOPES: RefCell<Vec<OwnerId>> = const { RefCell::new(Vec::new()) };
+    static HISTORIES: RefCell<Vec<ScopeId>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Steps made on this thread go to `scope`'s history while the guard
+/// lives, unless a write names its own ([`Set::history`]); a gesture or a
+/// group keeps the history it was opened in. The settings window enters
+/// [`SETTINGS`] while it draws its form. Histories nest.
+pub fn enter_history(scope: &ScopeId) -> HistoryGuard {
+    HISTORIES.with(|s| s.borrow_mut().push(scope.clone()));
+    HistoryGuard {
+        _not_send: std::marker::PhantomData,
+    }
+}
+
+/// The history [`enter_history`] set on this thread, else [`APP`].
+pub fn current_history() -> ScopeId {
+    HISTORIES
+        .with(|s| s.borrow().last().cloned())
+        .unwrap_or(APP)
+}
+
+/// Leaves the history [`enter_history`] entered when dropped.
+#[must_use = "the history is left when the guard is dropped"]
+#[derive(Debug)]
+pub struct HistoryGuard {
+    _not_send: std::marker::PhantomData<*const ()>,
+}
+
+impl Drop for HistoryGuard {
+    fn drop(&mut self) {
+        HISTORIES.with(|s| s.borrow_mut().pop());
+    }
 }
 
 /// Writes on this thread that name no scope are issued by `scope` while
@@ -387,12 +477,15 @@ pub struct Store {
     next_order: u64,
     gestures: BTreeMap<GestureId, Gesture>,
     next_gesture: u64,
-    undo: Vec<Step>,
-    redo: Vec<Step>,
-    /// The host's cap on the undo history; [`HISTORY_CAP`] when unset.
+    /// The histories, by scope ([`APP`] first made).
+    histories: BTreeMap<ScopeId, History>,
+    next_step: u64,
+    /// The host's cap on each history; [`HISTORY_CAP`] when unset.
     history_cap: Option<usize>,
-    /// Undo and redo steps the cap dropped so far.
-    dropped: (u64, u64),
+    /// Where steps take their time from; none: 0, and nothing merges.
+    clock: Option<SharedClock>,
+    /// The place new steps are made in.
+    place: Vec<Place>,
     listeners: BTreeMap<ListenerId, ListenerSlot>,
     next_listener: u64,
     journal: VecDeque<Changed>,
@@ -875,11 +968,17 @@ impl Store {
                 g.paths.insert(set.path.clone());
                 g.changes.push(change);
             }
-            None => self.push_step(Step {
-                label: format!("set {}", set.path),
-                origin: set.origin,
-                changes: vec![change],
-            }),
+            None => {
+                let history = set.history.clone().unwrap_or_else(current_history);
+                let step = self.new_step(
+                    format!("set {}", set.path),
+                    set.origin,
+                    vec![change],
+                    set.merge.clone(),
+                    None,
+                );
+                self.push_step(&history, step);
+            }
         }
         Ok(Applied {
             value,
@@ -889,9 +988,83 @@ impl Store {
         })
     }
 
-    fn push_step(&mut self, step: Step) {
-        self.undo.push(step);
-        self.redo.clear();
+    fn new_step(
+        &mut self,
+        label: String,
+        origin: Origin,
+        changes: Vec<(String, Value, Value)>,
+        merge: Option<String>,
+        group: Option<u64>,
+    ) -> Step {
+        self.next_step += 1;
+        Step {
+            id: self.next_step,
+            label,
+            origin,
+            changes,
+            at: self.now(),
+            place: self.place.clone(),
+            merge,
+            group,
+        }
+    }
+
+    /// The store's clock now (0 without one).
+    pub fn now(&self) -> f64 {
+        self.clock.as_ref().map_or(0.0, |c| c.now())
+    }
+
+    /// Where steps take their time from (the interface's clock); without
+    /// one, steps are made at 0 and writes never merge.
+    pub fn set_clock(&mut self, clock: Option<SharedClock>) {
+        self.clock = clock;
+    }
+
+    /// Whether the store has a clock.
+    pub fn has_clock(&self) -> bool {
+        self.clock.is_some()
+    }
+
+    /// The place of the context stack new steps are made in (the
+    /// interface follows the stack), root first.
+    pub fn set_place(&mut self, place: Vec<Place>) {
+        self.place = place;
+    }
+
+    /// The next step of every history starts a new one, even with the
+    /// head's merge key (the focus left the target).
+    pub fn seal(&mut self) {
+        for h in self.histories.values_mut() {
+            h.sealed = true;
+        }
+    }
+
+    fn push_step(&mut self, history: &ScopeId, step: Step) {
+        let clocked = self.clock.is_some();
+        let h = self.histories.entry(history.clone()).or_default();
+        h.rev += 1;
+        let joins = clocked && !h.sealed && h.redo.is_empty();
+        let head = h.undo.last_mut().filter(|_| joins);
+        if let (Some(head), Some(key)) = (head, &step.merge)
+            && let Some(prev) = &head.merge
+            && merges(
+                &MergeMark::new(prev, head.origin.clone(), head.at),
+                &MergeMark::new(key, step.origin.clone(), step.at),
+            )
+        {
+            for (path, old, new) in step.changes {
+                match head.changes.iter_mut().find(|(p, _, _)| *p == path) {
+                    Some(c) => c.2 = new,
+                    None => head.changes.push((path, old, new)),
+                }
+            }
+            head.at = step.at;
+            head.label = step.label;
+            return;
+        }
+        h.sealed = false;
+        h.undo.push(step);
+        h.redo.clear();
         self.trim_history();
     }
 
@@ -910,22 +1083,42 @@ impl Store {
 
     fn trim_history(&mut self) {
         let cap = self.history_cap();
-        for (steps, dropped) in [
-            (&mut self.undo, &mut self.dropped.0),
-            (&mut self.redo, &mut self.dropped.1),
-        ] {
-            // The oldest undo step and the farthest redo step come first.
-            let over = steps.len().saturating_sub(cap);
-            steps.drain(..over);
-            *dropped += over as u64;
+        for h in self.histories.values_mut() {
+            for (steps, dropped) in [
+                (&mut h.undo, &mut h.dropped.0),
+                (&mut h.redo, &mut h.dropped.1),
+            ] {
+                // The oldest undo step and the farthest redo step come first.
+                let over = steps.len().saturating_sub(cap);
+                if over > 0 {
+                    steps.drain(..over);
+                    *dropped += over as u64;
+                    h.rev += 1;
+                }
+            }
         }
     }
 
-    /// How many undo steps and redo steps the cap dropped since the store
-    /// began, each from the front of its list: what a reader keeping
-    /// something beside each step (its place) drops too.
+    /// How many undo steps and redo steps the cap dropped from the
+    /// application's history ([`APP`]) since the store began, each from
+    /// the front of its list.
     pub fn dropped_steps(&self) -> (u64, u64) {
-        self.dropped
+        self.dropped_steps_in(&APP)
+    }
+
+    /// How many steps the cap dropped from a history.
+    pub fn dropped_steps_in(&self, history: &ScopeId) -> (u64, u64) {
+        self.histories.get(history).map_or((0, 0), |h| h.dropped)
+    }
+
+    /// The histories that have had a step, by scope.
+    pub fn histories(&self) -> Vec<ScopeId> {
+        self.histories.keys().cloned().collect()
+    }
+
+    /// A history's revision: it moves on with every change of its lists.
+    pub fn history_rev(&self, history: &ScopeId) -> u64 {
+        self.histories.get(history).map_or(0, |h| h.rev)
     }
 
     fn open(&mut self, origin: Origin, label: &str, holds: bool) -> GestureId {
@@ -936,6 +1129,7 @@ impl Store {
             Gesture {
                 origin,
                 label: label.into(),
+                history: current_history(),
                 holds,
                 paths: BTreeSet::new(),
                 changes: Vec::new(),
@@ -962,13 +1156,19 @@ impl Store {
             return false;
         };
         if !g.changes.is_empty() {
-            self.push_step(Step {
-                label: g.label,
-                origin: g.origin,
-                changes: g.changes,
-            });
+            let step = self.new_step(g.label, g.origin, g.changes, None, Some(id.0));
+            self.push_step(&g.history, step);
         }
         true
+    }
+
+    /// The label of a gesture still going (a drag) whose writes would go
+    /// to `history`: an undo there waits for it.
+    pub fn gesture_open(&self, history: &ScopeId) -> Option<&str> {
+        self.gestures
+            .values()
+            .find(|g| g.holds && g.history == *history)
+            .map(|g| g.label.as_str())
     }
 
     /// Cancels a gesture or a group: what it changed is put back as it
@@ -986,31 +1186,30 @@ impl Store {
         true
     }
 
-    /// The undo steps, oldest first.
+    /// The application's undo steps ([`APP`]), oldest first.
     pub fn undo_steps(&self) -> &[Step] {
-        &self.undo
+        self.undo_steps_in(&APP)
     }
 
-    /// The redo steps, the next one last.
+    /// The application's redo steps, the next one last.
     pub fn redo_steps(&self) -> &[Step] {
-        &self.redo
+        self.redo_steps_in(&APP)
     }
 
-    /// Puts back the values a step changed, as a write by `origin`.
-    fn replay(&mut self, step: &Step, origin: &Origin, back: bool) -> Result<(), Refused> {
-        let changes: Vec<(String, Value)> = if back {
-            step.changes
-                .iter()
-                .rev()
-                .map(|(p, old, _)| (p.clone(), old.clone()))
-                .collect()
-        } else {
-            step.changes
-                .iter()
-                .map(|(p, _, new)| (p.clone(), new.clone()))
-                .collect()
-        };
-        for (path, _) in &changes {
+    /// A history's undo steps, oldest first.
+    pub fn undo_steps_in(&self, history: &ScopeId) -> &[Step] {
+        self.histories.get(history).map_or(&[], |h| &h.undo)
+    }
+
+    /// A history's redo steps, the next one last.
+    pub fn redo_steps_in(&self, history: &ScopeId) -> &[Step] {
+        self.histories.get(history).map_or(&[], |h| &h.redo)
+    }
+
+    /// Whether a step can be put back (`back`) or made again: its paths
+    /// exist and no drag still going holds one.
+    fn can_replay(&self, step: &Step) -> Result<(), Refused> {
+        for (path, _, _) in &step.changes {
             let current = self
                 .entries
                 .get(path)
@@ -1025,6 +1224,24 @@ impl Store {
                 });
             }
         }
+        Ok(())
+    }
+
+    /// Puts back the values a step changed, as a write by `origin`.
+    fn replay(&mut self, step: &Step, origin: &Origin, back: bool) -> Result<(), Refused> {
+        self.can_replay(step)?;
+        let changes: Vec<(String, Value)> = if back {
+            step.changes
+                .iter()
+                .rev()
+                .map(|(p, old, _)| (p.clone(), old.clone()))
+                .collect()
+        } else {
+            step.changes
+                .iter()
+                .map(|(p, _, new)| (p.clone(), new.clone()))
+                .collect()
+        };
         for (path, value) in changes {
             if self.entries[&path].value != value {
                 self.write(&path, value, origin, Some(OwnerId::FRAMEWORK));
@@ -1033,32 +1250,110 @@ impl Store {
         Ok(())
     }
 
-    /// Undoes the last step; its label, or `None` when there is none.
+    /// Undoes the application's last step ([`APP`]); its label, or
+    /// `None` when there is none.
     pub fn undo(&mut self, origin: &Origin) -> Result<Option<String>, Refused> {
-        let Some(step) = self.undo.pop() else {
-            return Ok(None);
-        };
-        if let Err(e) = self.replay(&step, origin, true) {
-            self.undo.push(step);
-            return Err(e);
-        }
-        let label = step.label.clone();
-        self.redo.push(step);
-        Ok(Some(label))
+        Ok(self.undo_in(&APP, origin)?.map(|s| s.label))
     }
 
-    /// Redoes the last undone step.
+    /// Redoes the application's last undone step.
     pub fn redo(&mut self, origin: &Origin) -> Result<Option<String>, Refused> {
-        let Some(step) = self.redo.pop() else {
+        Ok(self.redo_in(&APP, origin)?.map(|s| s.label))
+    }
+
+    /// Undoes a history's last step; the step, or `None` when there is
+    /// none.
+    pub fn undo_in(&mut self, history: &ScopeId, origin: &Origin) -> Result<Option<Step>, Refused> {
+        self.walk(history, origin, false)
+    }
+
+    /// Redoes a history's last undone step.
+    pub fn redo_in(&mut self, history: &ScopeId, origin: &Origin) -> Result<Option<Step>, Refused> {
+        self.walk(history, origin, true)
+    }
+
+    /// Whether an undo (or a redo) of a history would be refused, without
+    /// making it: the step it would take, or `None` when there is none.
+    pub fn check_walk(&self, history: &ScopeId, redo: bool) -> Result<Option<&Step>, Refused> {
+        let Some(h) = self.histories.get(history) else {
             return Ok(None);
         };
-        if let Err(e) = self.replay(&step, origin, false) {
-            self.redo.push(step);
+        let Some(step) = (if redo { h.redo.last() } else { h.undo.last() }) else {
+            return Ok(None);
+        };
+        self.can_replay(step)?;
+        Ok(Some(step))
+    }
+
+    /// Brings a history to step `to` (0: everything undone) by undos or
+    /// redos, all or none: every step on the way is checked first. How
+    /// many steps it walked, or `None` when `to` is not in the history.
+    pub fn jump_in(
+        &mut self,
+        history: &ScopeId,
+        to: u64,
+        origin: &Origin,
+    ) -> Result<Option<usize>, Refused> {
+        let Some((redo, count)) = self.plan_jump(history, to) else {
+            return Ok(None);
+        };
+        {
+            let h = &self.histories[history];
+            let list = if redo { &h.redo } else { &h.undo };
+            for step in list.iter().rev().take(count) {
+                self.can_replay(step)?;
+            }
+        }
+        for _ in 0..count {
+            self.walk(history, origin, redo)?;
+        }
+        Ok(Some(count))
+    }
+
+    /// Redos (`true`) or undos, and how many, to bring a history to `to`.
+    pub fn plan_jump(&self, history: &ScopeId, to: u64) -> Option<(bool, usize)> {
+        let h = self.histories.get(history);
+        if to == 0 {
+            return Some((false, h.map_or(0, |h| h.undo.len())));
+        }
+        let h = h?;
+        if let Some(i) = h.undo.iter().position(|s| s.id == to) {
+            return Some((false, h.undo.len() - 1 - i));
+        }
+        h.redo
+            .iter()
+            .position(|s| s.id == to)
+            .map(|i| (true, h.redo.len() - i))
+    }
+
+    fn walk(
+        &mut self,
+        history: &ScopeId,
+        origin: &Origin,
+        redo: bool,
+    ) -> Result<Option<Step>, Refused> {
+        let Some(h) = self.histories.get_mut(history) else {
+            return Ok(None);
+        };
+        let Some(step) = (if redo { h.redo.pop() } else { h.undo.pop() }) else {
+            return Ok(None);
+        };
+        let replayed = self.replay(&step, origin, !redo);
+        let h = self.histories.get_mut(history).expect("still there");
+        let (from, to) = if redo {
+            (&mut h.redo, &mut h.undo)
+        } else {
+            (&mut h.undo, &mut h.redo)
+        };
+        if let Err(e) = replayed {
+            from.push(step);
             return Err(e);
         }
-        let label = step.label.clone();
-        self.undo.push(step);
-        Ok(Some(label))
+        to.push(step.clone());
+        h.rev += 1;
+        // What comes next never merges with a step walked over.
+        h.sealed = true;
+        Ok(Some(step))
     }
 
     /// Calls `f` after every change of a path starting with `prefix`
@@ -1118,8 +1413,14 @@ impl Store {
             }
         }
         let gone = |s: &Step| s.changes.iter().any(|(p, _, _)| paths.contains(p));
-        self.undo.retain(|s| !gone(s));
-        self.redo.retain(|s| !gone(s));
+        for h in self.histories.values_mut() {
+            let n = h.undo.len() + h.redo.len();
+            h.undo.retain(|s| !gone(s));
+            h.redo.retain(|s| !gone(s));
+            if h.undo.len() + h.redo.len() != n {
+                h.rev += 1;
+            }
+        }
         self.listeners.retain(|_, l| l.owner != *owner);
         paths
     }

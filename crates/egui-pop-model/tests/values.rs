@@ -673,3 +673,160 @@ fn the_undo_history_keeps_its_newest_five_hundred_steps_or_the_hosts_cap() {
     assert_eq!(store.undo_steps().len(), 3);
     assert!(store.redo_steps().is_empty());
 }
+
+fn set_gain(v: f64) -> Set {
+    Set::new(GAIN, Change::To(Value::Float(v)), Origin::User)
+}
+
+fn clocked() -> (Store, egui_pop_model::clock::ManualClock) {
+    let mut store = mixer();
+    let clock = egui_pop_model::clock::ManualClock::new(100.0);
+    store.set_clock(Some(clock.shared()));
+    (store, clock)
+}
+
+#[test]
+fn repeats_with_a_merge_key_are_one_step_within_a_second() {
+    let (mut store, clock) = clocked();
+    store.set(set_gain(1.0).merge(GAIN)).unwrap();
+    clock.advance(0.4);
+    store.set(set_gain(2.0).merge(GAIN)).unwrap();
+    clock.advance(0.9);
+    store.set(set_gain(3.0).merge(GAIN)).unwrap();
+    // Each repeat less than a second after the last: one step, from the
+    // first old value to the last new one, timed by the last.
+    assert_eq!(store.undo_steps().len(), 1);
+    let step = &store.undo_steps()[0];
+    assert_eq!(
+        step.changes,
+        [(GAIN.into(), Value::Float(0.0), Value::Float(3.0))]
+    );
+    assert!((step.at - 101.3).abs() < 1e-9);
+    // A second later, a new step.
+    clock.advance(1.0);
+    store.set(set_gain(4.0).merge(GAIN)).unwrap();
+    assert_eq!(store.undo_steps().len(), 2);
+    // Without a merge key, another origin, or another key: new steps.
+    store.set(set_gain(5.0)).unwrap();
+    store
+        .set(Set::new(GAIN, Change::To(Value::Float(5.5)), agent()).merge(GAIN))
+        .unwrap();
+    store.set(set_gain(6.0).merge("other")).unwrap();
+    assert_eq!(store.undo_steps().len(), 5);
+    store.undo(&Origin::User).unwrap();
+    assert_eq!(store.get(GAIN).unwrap().value, Value::Float(5.5));
+}
+
+#[test]
+fn sealing_an_undo_or_no_clock_stop_the_merging() {
+    let (mut store, _clock) = clocked();
+    store.set(set_gain(1.0).merge(GAIN)).unwrap();
+    // The focus left: the next repeat is a step of its own.
+    store.seal();
+    store.set(set_gain(2.0).merge(GAIN)).unwrap();
+    assert_eq!(store.undo_steps().len(), 2);
+    // After an undo, the next write never joins a step walked over.
+    store.undo(&Origin::User).unwrap();
+    store.redo(&Origin::User).unwrap();
+    store.set(set_gain(3.0).merge(GAIN)).unwrap();
+    assert_eq!(store.undo_steps().len(), 3);
+    // Without a clock, nothing merges.
+    let mut plain = mixer();
+    plain.set(set_gain(1.0).merge(GAIN)).unwrap();
+    plain.set(set_gain(2.0).merge(GAIN)).unwrap();
+    assert_eq!(plain.undo_steps().len(), 2);
+}
+
+#[test]
+fn steps_go_to_the_history_their_write_or_the_thread_names() {
+    let mut store = mixer();
+    store.set(set_gain(1.0)).unwrap();
+    {
+        let _settings = enter_history(&SETTINGS);
+        assert_eq!(current_history(), SETTINGS);
+        store.set(set_gain(2.0)).unwrap();
+        // A gesture keeps the history it was opened in.
+        let g = store.begin_gesture(Origin::User, "drag gain");
+        drop(_settings);
+        store.set(set_gain(3.0).gesture(g)).unwrap();
+        store.end(g);
+    }
+    assert_eq!(current_history(), APP);
+    let other = egui_pop_model::history::ScopeId::from_static("doc");
+    store.set(set_gain(4.0).history(&other)).unwrap();
+    assert_eq!(store.undo_steps().len(), 1);
+    assert_eq!(store.undo_steps_in(&SETTINGS).len(), 2);
+    assert_eq!(store.undo_steps_in(&other).len(), 1);
+    assert_eq!(store.undo_steps_in(&SETTINGS)[1].label, "drag gain");
+    assert!(store.undo_steps_in(&SETTINGS)[1].group.is_some());
+    // Undoing one history leaves the others.
+    let rev = store.history_rev(&SETTINGS);
+    let step = store.undo_in(&SETTINGS, &Origin::User).unwrap().unwrap();
+    assert_eq!(step.label, "drag gain");
+    assert_eq!(store.get(GAIN).unwrap().value, Value::Float(2.0));
+    assert!(store.history_rev(&SETTINGS) > rev);
+    assert_eq!(store.undo_steps().len(), 1);
+    assert_eq!(store.redo_steps_in(&SETTINGS).len(), 1);
+    let ids: Vec<u64> = store
+        .histories()
+        .iter()
+        .map(|h| store.history_rev(h))
+        .collect();
+    assert_eq!(ids.len(), 3);
+}
+
+#[test]
+fn a_step_keeps_its_id_its_time_and_its_place() {
+    let (mut store, clock) = clocked();
+    let place = vec![egui_pop_model::context::Entry::new(
+        egui_pop_model::ids::FrameId::from_static("demo.album"),
+    )];
+    store.set_place(place.clone());
+    store.set(set_gain(1.0)).unwrap();
+    clock.advance(2.0);
+    store.set_place(Vec::new());
+    store.set(set_gain(2.0)).unwrap();
+    let steps = store.undo_steps();
+    assert_eq!(steps[0].place, place);
+    assert!(steps[1].place.is_empty());
+    assert!(steps[0].id < steps[1].id);
+    assert_eq!((steps[0].at, steps[1].at), (100.0, 102.0));
+}
+
+#[test]
+fn a_jump_walks_to_a_step_all_or_nothing() {
+    let mut store = mixer();
+    for v in 1..=4 {
+        store.set(set_gain(f64::from(v))).unwrap();
+    }
+    let ids: Vec<u64> = store.undo_steps().iter().map(|s| s.id).collect();
+    // Back to the second step: two undos.
+    assert_eq!(store.jump_in(&APP, ids[1], &Origin::User).unwrap(), Some(2));
+    assert_eq!(store.get(GAIN).unwrap().value, Value::Float(2.0));
+    // Forward to the last: two redos.
+    assert_eq!(store.plan_jump(&APP, ids[3]), Some((true, 2)));
+    assert_eq!(store.jump_in(&APP, ids[3], &Origin::User).unwrap(), Some(2));
+    assert_eq!(store.get(GAIN).unwrap().value, Value::Float(4.0));
+    // To the start; to a step that is not there.
+    assert_eq!(store.jump_in(&APP, 0, &Origin::User).unwrap(), Some(4));
+    assert_eq!(store.get(GAIN).unwrap().value, Value::Float(0.0));
+    assert_eq!(store.jump_in(&APP, 999, &Origin::User).unwrap(), None);
+    // A drag holding the gain refuses the whole jump: nothing moves.
+    let g = store.begin_gesture(agent(), "drag");
+    store
+        .set(Set::new(GAIN, Change::To(Value::Float(9.0)), agent()).gesture(g))
+        .unwrap();
+    assert_eq!(store.gesture_open(&APP), Some("drag"));
+    assert!(matches!(
+        store.jump_in(&APP, ids[3], &Origin::User),
+        Err(Refused::Held { .. })
+    ));
+    assert!(matches!(
+        store.check_walk(&APP, true),
+        Err(Refused::Held { .. })
+    ));
+    assert_eq!(store.redo_steps().len(), 4);
+    store.cancel(g);
+    assert_eq!(store.gesture_open(&APP), None);
+    assert_eq!(store.check_walk(&APP, true).unwrap().unwrap().id, ids[0]);
+}
