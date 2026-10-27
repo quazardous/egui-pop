@@ -5,7 +5,8 @@ describe what exists, read from the code of egui-pop and of Helios, an
 application built on it. Sections 3 to 5 were proposed and are
 **decided (2026-10-22)**, with the owner's answers in section 7.
 Section 6 is the order of work that follows. The "Today" column of
-section 2 follows the work: the registry of step 2 (section 6) is in.
+section 2 follows the work: the registry of step 2 (section 6) is in,
+and so are the menus of step 3.
 
 egui-pop draws icons by role (`Icon`, in `egui_pop_core::icon`):
 a name such as `search` or `warning`, never a codepoint, drawn from the
@@ -84,9 +85,9 @@ registered ones).
 | Surface | Rule | Family | Size and states | Accessibility | Today | Gap |
 |---|---|---|---|---|---|---|
 | Menu bar titles | Not used: every platform shows text titles | — | — | — | Text | None |
-| Menu items (bar, context and popup menus) | Optional, in an aligned gutter (section 5); following the `menus.icons` setting (section 3) | Command | `inline`; disabled (greyed), checked (a tick in the gutter, or a frame around the icon), busy (a spinner in the gutter), the "on" icon of a toggle | Decorative: the title is the name; a check item is announced as a check box | Every row already reserves an `inline` square on its left (`command_row` in `egui-pop-api/src/menus.rs`) holding the spinner, the tick or the row's icon, in that order; command rows pass `icon: None`, though `CommandSpec` (`egui-pop-model/src/commands.rs`) now declares `icon` and `icon_on` | Rows do not read the command's icons yet; the tick hides the icon instead of framing it; no radio items (only checkable ones); no setting |
+| Menu items (bar, context and popup menus) | Optional, in an aligned gutter (section 5); following the `menus.icons` setting (section 3) | Command | `inline`; disabled (greyed), checked (a tick in the gutter, or a frame around the icon), busy (a spinner in the gutter), the "on" icon of a toggle | Decorative: the title is the name; a check item is announced as a check box | Every row starts with the gutter of section 5 (`command_row` in `egui-pop-api/src/menus.rs`): the command's icon (`icon`, `icon_on` while checked), framed while checked; the tick or the radio dot (`MenuItem::radio`) of an item without one; the spinner while running. `menus::rows_drawn` gives each row's icon, mark and label start | Done (step 3); full-colour icons are not yet masked in high contrast |
 | List-provider entries | Optional, as menu items; an entry naming a thing (a recent file, a profile) takes that thing's kind icon | Command, or object kind | As menu items | Decorative | `ListItem::icon`, by value or by name (`menus.rs`), serialised by name for the `lists` collector | Set per entry; an entry without one does not fall back to its command's |
-| Submenu entries | Optional: Apple and Microsoft both allow an icon on the entry; its arrow is a glyph | Command group (no command of its own) | `inline`; open | Decorative | `Item::Submenu { menu, label }` (`egui-pop-model/src/menus.rs`) has no icon; the arrow is egui's | No icon on a submenu; the arrow should be the `submenu` glyph role, as the kit documents |
+| Submenu entries | Optional: Apple and Microsoft both allow an icon on the entry; its arrow is a glyph | Command group (no command of its own) | `inline`; open | Decorative | `Item::Submenu { menu, label }` (`egui-pop-model/src/menus.rs`) has no icon; the arrow is the `submenu` glyph role, in the menu's last column | No icon on a submenu |
 | Command palette | Optional: shown in a fixed column when the command declares one; text stays the label | Command | `inline`; disabled entries greyed | Decorative | Text only (`egui-pop-api/src/palette.rs`) | Reads nothing; needs the command's icon |
 | Quick open (a list of things to go to) | Required when the list mixes kinds (a module, an image, a workspace): the icon says which kind a match is | Object kind | `inline` | Decorative; the kind joins the accessible name when the text does not say it | egui-pop has none; Helios builds it on the choice dialog, whose rows are text only (`choice_row` in `egui-pop-api/src/dialogs.rs`) | Choice rows take no icon |
 | Toolbars | Required: a toolbar is icon-first, with a tooltip giving the title and the key | Command | `toolbar`; disabled, on (selected), busy | Only label: the command's title | No toolbar component; an application lays out `CommandButton`s (`busy.rs`, icon set per instance with `.icon()`) or clickable `IconWidget`s | The icon is given by each caller; no container (overflow, text or icon mode) |
@@ -203,8 +204,8 @@ The gaps that matter most:
 1. **Commands have no icon.** `CommandSpec` declares none, so menus,
    the palette, toolbars, the shortcut editor and status items cannot
    show one, and every command control takes its icon from its caller.
-   *Declared since step 2 (`CommandSpec::icon`, `icon_on`); the surfaces
-   read them from step 3.*
+   *Declared since step 2 (`CommandSpec::icon`, `icon_on`); menus read
+   them since step 3.*
 2. **Icon names are not checked.** `PanelSpec::icon`, `FrameSpec.icon`
    and a workspace's icon are free strings; an unknown name becomes a
    letter or nothing, with no diagnostic (against
@@ -413,7 +414,10 @@ The rows of a menu already reserve an `inline` square on their left
   density overlays move both tokens. Every row of a menu, with or
   without an icon, starts its label after the gutter, so labels align.
   With `menus.icons` off and no check or radio item, the gutter is not
-  reserved.
+  reserved. *Built as a part of its own, `menu-item-gutter`, since the
+  "on" frame needs states: its `width` term is the gutter (the default
+  above when not given, `Kit::menu_gutter`), its `selected` state the
+  frame.*
 - **Without an icon.** A checked item draws the `check` glyph role in
   the gutter; the chosen item of a radio group draws the `radio` glyph
   role (a radio group is new: an item kind whose `checked` clause picks
@@ -454,7 +458,7 @@ The rows of a menu already reserve an `inline` square on their left
 3. **Menus**: the gutter of section 5, radio items, the `menus.icons`
    setting (default `on`); the gallery's menus page with icons, ticks,
    radios, framed and disabled entries; snapshots and alignment tests; the extension
-   template declares an icon on its command.
+   template declares an icon on its command. *Done (2026-10-27).*
 4. **Command surfaces**: the palette's icon (when the command declares
    one), `CommandButton`
    and caption items from the command, the shortcut editor; choice rows

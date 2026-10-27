@@ -496,6 +496,7 @@ fn menu_entries(
                 enabled,
                 checked,
                 checkable,
+                ..
             } => items.push(Some((item, enabled, checked, checkable))),
         }
     }

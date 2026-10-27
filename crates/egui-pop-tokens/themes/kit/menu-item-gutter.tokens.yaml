@@ -1,0 +1,29 @@
+$description: "The `menu-item-gutter` component of the default kit (docs/kit.md), layered into pop-dark."
+menu-item-gutter:
+  $description: "The column on a menu item's left holding its icon, its tick, its radio dot or its spinner. Its `width`, when given, is the column's; without it, the inline icon size plus `{space.s}` on each side, so the density overlays move it. `selected` frames the icon of a checked command, so the state does not rest on the fill alone."
+  shape:
+    $type: "string"
+    $value: "box"
+  rest:
+    fill:
+      $type: "color"
+      $value: "{transparent}"
+    border-color:
+      $type: "color"
+      $value: "{transparent}"
+    border-width:
+      $type: "dimension"
+      $value: {value: 0, unit: "px"}
+    radius:
+      $type: "dimension"
+      $value: "{radius.widget}"
+  selected:
+    fill:
+      $type: "color"
+      $value: "{surface.active}"
+    border-color:
+      $type: "color"
+      $value: "{accent.default}"
+    border-width:
+      $type: "dimension"
+      $value: {value: 1, unit: "px"}

@@ -9,6 +9,19 @@
 //! the command does not apply. Clicking runs the command as the user, in
 //! the context the menu opened in.
 //!
+//! Every row starts with the **gutter** (`docs/icons.md`, section 5): a
+//! column of fixed width ([`Kit::menu_gutter`], scaled by the density)
+//! holding the command's icon ([`CommandSpec::icon`], or `icon_on` while
+//! checked), the tick of a checked item without an icon, the dot of a
+//! chosen radio item, or the spinner of a running command; a checked
+//! command with an icon shows it framed (`menu-item-gutter`'s `selected`
+//! state), as Word does. Labels start after it whether a row has an icon
+//! or not, so they align; shortcuts keep a right-aligned column, before
+//! the submenu arrows' column. The [`SETTING_ICONS`] setting turns the
+//! icons off (the gutter is then kept only in a menu with a check or radio
+//! item) or follows the platform. The gutter is decorative: AccessKit
+//! reads the title, and a check or radio item as checked or not.
+//!
 //! A list item (`MenuItem::list`) is filled by the list provider of its
 //! name (`Ctx::list_provider`), asked when the menu opens and never on
 //! every frame: the recent files, the profiles. Each entry it gives runs
@@ -50,11 +63,12 @@ use std::fmt;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use egui::AtomExt as _;
 use egui::containers::menu::{MenuButton, MenuConfig, MenuState, SubMenu};
 use egui::{
     Atom, Button, Color32, Context, Id, Pos2, Rect, Response, RichText, Shape, Stroke, Ui, vec2,
 };
-use egui_pop_core::icon::Icon;
+use egui_pop_core::icon::{Icon, IconRef};
 use egui_pop_core::state::Slot;
 use egui_pop_core::strings;
 
@@ -66,7 +80,7 @@ const CONTEXT_MENU: Slot<Option<(WhenContext, Json)>> = Slot::new("api.menus.con
 const LIST: Slot<(u64, Vec<ListItem>)> = Slot::new("api.menus.list");
 use egui_pop_core::theme::{ScopedTheme, Tokens};
 use egui_pop_model::commands::CommandSpec;
-use egui_pop_model::ids::{CommandId, MenuId, OwnerId, StepId};
+use egui_pop_model::ids::{CommandId, MenuId, OwnerId, SettingId, StepId};
 use egui_pop_model::menus::{Item, Shown, show_items};
 use egui_pop_model::when::{When, WhenContext};
 use serde::Serialize;
@@ -84,6 +98,116 @@ const MAX_DEPTH: u32 = 8;
 /// arguments, "how": "popup" | "context"}`. A veto keeps it closed, a
 /// redirect changes its arguments.
 pub const STEP_OPEN: StepId = StepId::from_static("menu.open");
+
+/// The setting: whether menus show the commands' icons in their gutter,
+/// `on` (the default, Word's look), `off`, or `platform` ([`MenuIcons`]).
+pub const SETTING_ICONS: SettingId = SettingId::from_static("menus.icons");
+
+/// What the [`SETTING_ICONS`] setting asks for.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum MenuIcons {
+    /// The icons the commands declare, in a gutter every row keeps.
+    #[default]
+    On,
+    /// No icons; ticks and radio dots keep the gutter, reserved only in a
+    /// menu that holds a check or radio item.
+    Off,
+    /// `on` on Windows, macOS and KDE Plasma (following its
+    /// `ShowIconsInMenuItems`), `off` on GNOME.
+    Platform,
+}
+
+impl MenuIcons {
+    /// The setting's choices, in order.
+    pub const CHOICES: [&'static str; 3] = ["on", "off", "platform"];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            MenuIcons::On => "on",
+            MenuIcons::Off => "off",
+            MenuIcons::Platform => "platform",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<MenuIcons> {
+        [MenuIcons::On, MenuIcons::Off, MenuIcons::Platform]
+            .into_iter()
+            .find(|m| m.as_str() == s)
+    }
+
+    /// Whether menus show icons: `platform` asks the desktop (read once).
+    pub fn shows(self) -> bool {
+        match self {
+            MenuIcons::On => true,
+            MenuIcons::Off => false,
+            MenuIcons::Platform => {
+                static PLATFORM: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+                *PLATFORM.get_or_init(|| {
+                    let desktop = std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default();
+                    platform_shows_icons(&desktop, || read_config("kdeglobals"))
+                })
+            }
+        }
+    }
+}
+
+/// Whether the platform shows icons in menus, from the desktop
+/// (`XDG_CURRENT_DESKTOP`) and KDE's `kdeglobals`: not on GNOME; on KDE
+/// Plasma as its `ShowIconsInMenuItems` (group `KDE`) says, yes when it
+/// does not say; yes elsewhere (Windows, macOS, other desktops).
+pub fn platform_shows_icons(desktop: &str, kdeglobals: impl FnOnce() -> Option<String>) -> bool {
+    if cfg!(any(windows, target_os = "macos")) {
+        return true;
+    }
+    let desktop = desktop.to_uppercase();
+    if desktop.split(':').any(|d| d == "KDE") {
+        return kdeglobals().and_then(|text| kde_show_icons(&text)) != Some(false);
+    }
+    !desktop.split(':').any(|d| d == "GNOME")
+}
+
+/// `ShowIconsInMenuItems` in the `[KDE]` group of a `kdeglobals` text.
+fn kde_show_icons(text: &str) -> Option<bool> {
+    let mut group = "";
+    let mut found = None;
+    for line in text.lines().map(str::trim) {
+        if let Some(g) = line.strip_prefix('[').and_then(|l| l.strip_suffix(']')) {
+            group = g;
+        } else if group == "KDE"
+            && let Some((key, value)) = line.split_once('=')
+            && key.trim() == "ShowIconsInMenuItems"
+        {
+            found = match value.trim() {
+                "true" => Some(true),
+                "false" => Some(false),
+                _ => found,
+            };
+        }
+    }
+    found
+}
+
+/// A file of the user's configuration directory, as text.
+fn read_config(name: &str) -> Option<String> {
+    let config = std::env::var("XDG_CONFIG_HOME")
+        .ok()
+        .filter(|c| !c.is_empty())
+        .map(std::path::PathBuf::from)
+        .or_else(|| {
+            std::env::var("HOME")
+                .ok()
+                .map(|h| std::path::Path::new(&h).join(".config"))
+        })?;
+    std::fs::read_to_string(config.join(name)).ok()
+}
+
+/// What the [`SETTING_ICONS`] setting says now.
+pub fn menu_icons(app: &AppHandle) -> MenuIcons {
+    egui_pop_core::lock(&app.store())
+        .get(&format!("settings/{SETTING_ICONS}"))
+        .and_then(|e| e.value.as_choice().and_then(MenuIcons::parse))
+        .unwrap_or_default()
+}
 
 /// An entry a list provider gives when its menu opens.
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -255,7 +379,7 @@ pub fn bar_within(ui: &mut Ui, app: &AppHandle, menu: &MenuId, reserve: f32) {
                         MenuState::mark_shown(ui.ctx(), sub);
                         MenuState::from_ui(ui, |state, _| state.open_item = Some(sub));
                     }
-                    submenu(ui, app, &m.menu, &m.label, &cx, &Json::Null, 0);
+                    submenu(ui, app, &m.menu, &m.label, &cx, &Json::Null, 0, &TITLES);
                     access_key(ui.ctx(), id, m.key);
                 });
             }
@@ -680,7 +804,20 @@ fn items(ui: &mut Ui, app: &AppHandle, menu: &MenuId, cx: &WhenContext, args: &J
         ui.weak(strings::tr(ui.ctx(), &txt::MENU_EMPTY));
         return;
     }
-    for shown in show_items(&list, cx) {
+    let shown = show_items(&list, cx);
+    // The lists' entries first: the columns depend on them.
+    let lists: HashMap<String, Vec<ListItem>> = shown
+        .iter()
+        .filter_map(|s| match s {
+            Shown::Item {
+                item: Item::List { name },
+                ..
+            } => Some((name.clone(), list_entries(ui, app, menu, name, cx))),
+            _ => None,
+        })
+        .collect();
+    let columns = Columns::of(ui.ctx(), app, &shown, &lists);
+    for shown in shown {
         match shown {
             Shown::Separator => {
                 ui.separator();
@@ -690,6 +827,7 @@ fn items(ui: &mut Ui, app: &AppHandle, menu: &MenuId, cx: &WhenContext, args: &J
                 enabled,
                 checked,
                 checkable,
+                radio,
             } => match item {
                 Item::Command {
                     id,
@@ -700,34 +838,49 @@ fn items(ui: &mut Ui, app: &AppHandle, menu: &MenuId, cx: &WhenContext, args: &J
                         menu,
                         id: &id,
                         label,
-                        icon: None,
+                        icon: RowIcon::Command,
                         enabled,
                         checked,
                         checkable,
+                        radio,
                     };
-                    if command_row(ui, app, cx, row) {
+                    if command_row(ui, app, cx, &columns, row) {
                         app.request_run_in(id.clone(), merge(&own, args), cx.clone());
                         ui.close();
                     }
                 }
                 Item::Submenu { menu: sub, label } => {
                     let label = strings::menu_label(ui.ctx(), sub.as_str(), &label);
-                    ui.add_enabled_ui(enabled, |ui| {
-                        submenu(ui, app, &sub, &label, cx, args, depth)
-                    });
+                    let label_x = ui
+                        .add_enabled_ui(enabled, |ui| {
+                            submenu(ui, app, &sub, &label, cx, args, depth, &columns)
+                        })
+                        .inner;
+                    record_row(
+                        ui.ctx(),
+                        RowTrace {
+                            menu: menu.clone(),
+                            label,
+                            icon: None,
+                            mark: Mark::None,
+                            label_x,
+                            gutter: columns.gutter,
+                        },
+                    );
                 }
                 Item::List { name } => {
-                    for entry in list_entries(ui, app, menu, &name, cx) {
+                    for entry in lists.get(&name).cloned().unwrap_or_default() {
                         let row = Row {
                             menu,
                             id: &entry.command,
                             label: Some(entry.label.clone()),
-                            icon: entry.icon,
+                            icon: RowIcon::Own(entry.icon),
                             enabled: enabled && entry.enabled,
                             checked: entry.checked,
                             checkable: entry.checked,
+                            radio: false,
                         };
-                        if command_row(ui, app, cx, row) {
+                        if command_row(ui, app, cx, &columns, row) {
                             app.request_run_in(
                                 entry.command.clone(),
                                 merge(&entry.args, args),
@@ -740,6 +893,157 @@ fn items(ui: &mut Ui, app: &AppHandle, menu: &MenuId, cx: &WhenContext, args: &J
             },
         }
     }
+}
+
+/// How the rows of one menu line up: worked out once for the whole menu,
+/// so every row starts its label at the same x.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Columns {
+    /// The gutter's width; zero when the menu keeps none.
+    gutter: f32,
+    /// The commands' icons are shown.
+    icons: bool,
+    /// A column at the end for submenu arrows (blank on other rows).
+    arrow: bool,
+}
+
+impl Columns {
+    fn of(
+        ctx: &Context,
+        app: &AppHandle,
+        shown: &[Shown],
+        lists: &HashMap<String, Vec<ListItem>>,
+    ) -> Columns {
+        let icons = menu_icons(app).shows();
+        let mut marks = false;
+        let mut arrow = false;
+        for s in shown {
+            let Shown::Item {
+                item, checkable, ..
+            } = s
+            else {
+                continue;
+            };
+            match item {
+                Item::Command { id, .. } => marks |= *checkable || app.running(id),
+                Item::Submenu { .. } => arrow = true,
+                Item::List { name } => {
+                    marks |= lists
+                        .get(name)
+                        .is_some_and(|l| l.iter().any(|e| e.checked || app.running(&e.command)));
+                }
+            }
+        }
+        let t = Tokens::of(ctx);
+        let gutter = if icons || marks {
+            Kit::of(ctx).menu_gutter(&t)
+        } else {
+            0.0
+        };
+        Columns {
+            gutter,
+            icons,
+            arrow,
+        }
+    }
+
+    /// The gutter's atom, first in a row; none when the menu keeps no
+    /// gutter.
+    fn gutter_atom(&self, id: Id, side: f32) -> Option<Atom<'static>> {
+        (self.gutter > 0.0).then(|| Atom::custom(id, vec2(self.gutter, side)))
+    }
+}
+
+/// The overflow's rows: the menu bar's titles, without a gutter.
+const TITLES: Columns = Columns {
+    gutter: 0.0,
+    icons: false,
+    arrow: true,
+};
+
+/// Where a row's icon comes from.
+#[derive(Clone, Copy, Debug)]
+enum RowIcon {
+    /// The command's (`icon`, `icon_on` while checked).
+    Command,
+    /// Its own (a list entry's): never its command's.
+    Own(Option<Icon>),
+}
+
+/// What a row's gutter holds, as agents read it ([`rows_drawn`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Mark {
+    /// Nothing: no icon, not checked.
+    None,
+    /// The command's icon.
+    Icon,
+    /// The icon, framed: a checked command with an icon.
+    Framed,
+    /// A tick: a checked item without an icon.
+    Check,
+    /// A dot: the chosen item of a radio group, without an icon.
+    Radio,
+    /// The spinner of a running command.
+    Busy,
+}
+
+/// A menu row as it was drawn, for agents and tests.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct RowTrace {
+    /// The menu it is in.
+    pub menu: MenuId,
+    /// Its label.
+    pub label: String,
+    /// The name of the icon it shows, if any (framed or not).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
+    pub mark: Mark,
+    /// Where its label starts, in points from the row's left edge.
+    pub label_x: f32,
+    /// The gutter's width (zero when the menu keeps none).
+    pub gutter: f32,
+}
+
+/// The rows drawn this pass and the last complete pass's.
+const ROWS: Slot<(u64, Vec<RowTrace>, Vec<RowTrace>)> = Slot::new("api.menus.rows");
+
+/// The most rows kept per pass.
+const ROWS_MAX: usize = 512;
+
+fn record_row(ctx: &Context, row: RowTrace) {
+    let now = ctx.cumulative_pass_nr();
+    ROWS.update(ctx, |(pass, building, last)| {
+        if *pass != now {
+            *last = if *pass + 1 == now {
+                std::mem::take(building)
+            } else {
+                Vec::new()
+            };
+            building.clear();
+            *pass = now;
+        }
+        if building.len() < ROWS_MAX {
+            building.push(row);
+        }
+    });
+}
+
+/// The menu rows drawn in the last complete pass (every open menu's,
+/// and menus drawn in place): their labels, icons, gutter marks and
+/// where their labels start, so an agent or a test reads what a menu
+/// shows without pixels.
+pub fn rows_drawn(ctx: &Context) -> Vec<RowTrace> {
+    let now = ctx.cumulative_pass_nr();
+    ROWS.update(ctx, |(pass, building, last)| {
+        if *pass + 1 == now {
+            building.clone()
+        } else if *pass == now {
+            last.clone()
+        } else {
+            Vec::new()
+        }
+    })
 }
 
 /// A list's entries: asked of its provider when the menu opens (the
@@ -767,14 +1071,21 @@ struct Row<'a> {
     menu: &'a MenuId,
     id: &'a CommandId,
     label: Option<String>,
-    icon: Option<Icon>,
+    icon: RowIcon,
     enabled: bool,
     checked: bool,
     checkable: bool,
+    radio: bool,
 }
 
 /// Draws a command row; whether it was clicked.
-fn command_row(ui: &mut Ui, app: &AppHandle, cx: &WhenContext, row: Row<'_>) -> bool {
+fn command_row(
+    ui: &mut Ui,
+    app: &AppHandle,
+    cx: &WhenContext,
+    columns: &Columns,
+    row: Row<'_>,
+) -> bool {
     let t = Tokens::of(ui.ctx());
     let ctx = ui.ctx().clone();
     let side = t.size.icon_inline;
@@ -786,6 +1097,7 @@ fn command_row(ui: &mut Ui, app: &AppHandle, cx: &WhenContext, row: Row<'_>) -> 
         enabled,
         checked,
         checkable,
+        radio,
     } = row;
     let spec = app.command(id);
     let (title, why) = match &spec {
@@ -819,7 +1131,22 @@ fn command_row(ui: &mut Ui, app: &AppHandle, cx: &WhenContext, row: Row<'_>) -> 
         .rev()
         .find(|r| r.id == *id)
         .and_then(|r| r.result.clone().err());
+    // The icon shown: the command's (its "on" one while checked), or a
+    // list entry's own; none when the setting hides icons.
+    let icon: Option<(Icon, String)> = if columns.icons {
+        match icon {
+            RowIcon::Command => spec
+                .as_ref()
+                .and_then(|s| s.icon_for(checked))
+                .map(|name| (IconRef::from(name).or_placeholder("menu"), name.to_string())),
+            RowIcon::Own(i) => i.map(|i| (i, i.name().to_string())),
+        }
+    } else {
+        None
+    };
     let tick = Id::new(("egui_pop_menu_tick", menu.as_str(), id.as_str(), &title));
+    let text_id = tick.with("label");
+    let blank = tick.with("arrow");
     let kit = Kit::of(&ctx);
     let item = &kit.menu_item;
     let shortcut = app.keys_for(id).first().cloned();
@@ -830,46 +1157,108 @@ fn command_row(ui: &mut Ui, app: &AppHandle, cx: &WhenContext, row: Row<'_>) -> 
         .add_enabled_ui(why.is_none(), |ui| {
             let state = item_state(ui, ui.next_auto_id());
             let label = item_text(ui, item, state, title.as_str());
-            let mut button = Button::new((Atom::custom(tick, vec2(side, side)), label))
-                .fill(Color32::TRANSPARENT)
-                .stroke(Stroke::NONE);
+            let mut atoms: Vec<Atom<'_>> = Vec::with_capacity(5);
+            atoms.extend(columns.gutter_atom(tick, side));
+            atoms.push(label.atom_id(text_id));
+            if shortcut.is_some() || columns.arrow {
+                atoms.push(Atom::grow());
+            }
             if let Some(k) = shortcut {
-                button = button.shortcut_text(
-                    RichText::new(k).color(item.style_toned(Tone::Muted, state).text),
+                atoms.push(
+                    RichText::new(k)
+                        .color(item.style_toned(Tone::Muted, state).text)
+                        .into(),
                 );
             }
+            if columns.arrow {
+                atoms.push(Atom::custom(blank, vec2(side, side)));
+            }
+            let button = Button::new(egui::Atoms::from(atoms))
+                .fill(Color32::TRANSPARENT)
+                .stroke(Stroke::NONE);
             (button.atom_ui(ui), state)
         })
         .inner;
     paint_item(ui, item, slot, r.response.rect, state);
-    // A run waiting for the host: a spinner in the icon's place, after
-    // the delay.
+    // A run waiting for the host: a spinner in the gutter, after the
+    // delay.
     let busy = crate::busy::busy_shown(app, &ctx, tick, id);
     if app.running(id) {
         ctx.accesskit_node_builder(r.response.id, |node| node.set_busy());
     }
+    let mark = match (busy, checked, &icon) {
+        (true, ..) => Mark::Busy,
+        (false, true, Some(_)) => Mark::Framed,
+        (false, true, None) if radio => Mark::Radio,
+        (false, true, None) => Mark::Check,
+        (false, false, Some(_)) => Mark::Icon,
+        (false, false, None) => Mark::None,
+    };
     if let Some(rect) = r.rect(tick) {
-        // The mark keeps the item's resting colour (greyed when disabled).
-        let color = item
-            .style(State::REST.with(State::DISABLED, why.is_some()))
-            .text;
-        if busy {
-            egui_pop_core::progress::paint_spinner(ui, rect, color);
-        } else if checked {
-            kit.glyph(Glyph::Check).paint(ui.painter(), rect, color);
-        } else if let Some(i) = icon {
-            i.paint(ui.painter(), rect, color);
+        // The mark keeps the item's resting colour (greyed when
+        // disabled), never a tone: high contrast keeps the text's.
+        let disabled = why.is_some();
+        let color = item.style(State::REST.with(State::DISABLED, disabled)).text;
+        let square = Rect::from_center_size(rect.center(), vec2(side, side));
+        let painter = ui.painter();
+        if mark == Mark::Framed {
+            let frame = Rect::from_center_size(
+                rect.center(),
+                vec2(rect.width(), rect.width().min(r.response.rect.height())),
+            );
+            kit.menu_item_gutter.paint(
+                &egui_pop_core::kit::KitCx {
+                    painter,
+                    ppp: ctx.pixels_per_point(),
+                },
+                &Part {
+                    rect: frame,
+                    room: frame,
+                    state: State::SELECTED.with(State::DISABLED, disabled),
+                    label: None,
+                },
+            );
+        }
+        match mark {
+            Mark::Busy => egui_pop_core::progress::paint_spinner(ui, square, color),
+            Mark::Check => kit.glyph(Glyph::Check).paint(painter, square, color),
+            Mark::Radio => kit.glyph(Glyph::Radio).paint(painter, square, color),
+            Mark::Icon | Mark::Framed => {
+                if let Some((i, _)) = &icon {
+                    i.paint(painter, square, color);
+                }
+            }
+            Mark::None => {}
         }
     }
+    if let Some((_, name)) = &icon {
+        egui_pop_core::icon::registry::record(&ctx, "menu", &title, name);
+    }
+    record_row(
+        &ctx,
+        RowTrace {
+            menu: menu.clone(),
+            label: title.clone(),
+            icon: icon.as_ref().map(|(_, n)| n.clone()),
+            mark,
+            label_x: r
+                .rect(text_id)
+                .map_or(0.0, |l| l.left() - r.response.rect.left()),
+            gutter: columns.gutter,
+        },
+    );
     let mut response = r.response;
     if checkable {
         let (on, name) = (
             why.is_none(),
             label.unwrap_or_else(|| title_of(&ctx, &spec, id)),
         );
-        response.widget_info(|| {
-            egui::WidgetInfo::selected(egui::WidgetType::Checkbox, on, checked, &name)
-        });
+        let kind = if radio {
+            egui::WidgetType::RadioButton
+        } else {
+            egui::WidgetType::Checkbox
+        };
+        response.widget_info(|| egui::WidgetInfo::selected(kind, on, checked, &name));
     }
     if let Some(why) = why {
         response = response.on_disabled_hover_text(why);
@@ -936,8 +1325,10 @@ fn title_of(ctx: &Context, spec: &Option<CommandSpec>, id: &CommandId) -> String
     )
 }
 
-/// A submenu button with a painted arrow, opening on hover as egui's
-/// `SubMenuButton` does.
+/// A submenu button with a painted arrow in the menu's last column,
+/// opening on hover as egui's `SubMenuButton` does; where its label
+/// starts in the row.
+#[allow(clippy::too_many_arguments)]
 fn submenu(
     ui: &mut Ui,
     app: &AppHandle,
@@ -946,7 +1337,8 @@ fn submenu(
     cx: &WhenContext,
     args: &Json,
     depth: u32,
-) {
+    columns: &Columns,
+) -> f32 {
     let t = Tokens::of(ui.ctx());
     let side = t.size.icon_inline;
     let my_id = ui.next_auto_id();
@@ -955,18 +1347,20 @@ fn submenu(
     });
     let space = Id::new(("egui_pop_menu_space", menu.as_str()));
     let arrow = Id::new(("egui_pop_menu_arrow", menu.as_str()));
+    let text_id = space.with("label");
     let kit = Kit::of(ui.ctx());
     let item = &kit.menu_item;
     let slot = ui.painter().add(Shape::Noop);
     // Selected while its submenu is open.
     let state = item_state(ui, my_id).with(State::SELECTED, open);
-    let button = Button::new((
-        Atom::custom(space, vec2(side, side)),
-        item_text(ui, item, state, label),
-    ))
-    .right_text(Atom::custom(arrow, vec2(side, side)))
-    .fill(Color32::TRANSPARENT)
-    .stroke(Stroke::NONE);
+    let mut atoms: Vec<Atom<'_>> = Vec::with_capacity(4);
+    atoms.extend(columns.gutter_atom(space, side));
+    atoms.push(item_text(ui, item, state, label).atom_id(text_id));
+    atoms.push(Atom::grow());
+    atoms.push(Atom::custom(arrow, vec2(side, side)));
+    let button = Button::new(egui::Atoms::from(atoms))
+        .fill(Color32::TRANSPARENT)
+        .stroke(Stroke::NONE);
     let r = button.atom_ui(ui);
     paint_item(ui, item, slot, r.response.rect, state);
     if let Some(rect) = r.rect(arrow) {
@@ -981,6 +1375,8 @@ fn submenu(
         .show(ui, &r.response, |ui| {
             items(ui, app, menu, cx, args, depth + 1)
         });
+    r.rect(text_id)
+        .map_or(0.0, |l| l.left() - r.response.rect.left())
 }
 
 impl AppHandle {

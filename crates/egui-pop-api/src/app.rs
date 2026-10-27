@@ -3119,6 +3119,17 @@ impl App {
                 "How the bottom panel lines up with the side bars: the whole width (justify), between them (center), under the start one (start) or under the end one (end).",
             ),
         )?;
+        ctx.setting(
+            crate::menus::SETTING_ICONS,
+            egui_pop_model::values::Descriptor::choice(
+                "Menu icons",
+                &crate::menus::MenuIcons::CHOICES,
+                crate::menus::MenuIcons::default().as_str(),
+            )
+            .description(
+                "Whether menus show the commands' icons in a column on their left (on), none (off), or follow the desktop (platform: off on GNOME, as KDE Plasma says, on elsewhere).",
+            ),
+        )?;
         ctx.service(&FOCUS_MODE, modes)?;
         ctx.step(
             crate::steps::StepSpec::new(
