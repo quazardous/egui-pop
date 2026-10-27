@@ -117,8 +117,8 @@ fn a_family_per_role_comes_before_the_themes_and_survives_a_change_of_theme() {
     text::set_font(&app, Role::Mono, Some("  "));
     h.run();
     let t = Tokens::of(&h.ctx);
-    assert_eq!(t.font.family_ui[0], "Ubuntu");
-    assert_eq!(t.font.family_mono[0], "Hack");
+    assert_eq!(t.font.family_ui[0], "sans-serif");
+    assert_eq!(t.font.family_mono[0], "monospace");
     assert_eq!(text::font(&app, Role::Mono), None);
 }
 
@@ -181,8 +181,14 @@ fn resting_on_a_family_in_the_picker_previews_it_before_it_is_picked() {
     };
     assert_eq!(chain("pop.preview.ui.400")[0], "pop:Fake Sans:400:system");
     // Not picked yet: the theme's fonts are untouched.
-    assert_eq!(Tokens::of(&h.ctx).font.family_ui[0], "Ubuntu");
-    assert_eq!(chain("pop.ui.400")[0], "Ubuntu-Light");
+    assert_eq!(Tokens::of(&h.ctx).font.family_ui[0], "sans-serif");
+    // The bundled interface face: egui-pop's Inter, else egui's own.
+    let bundled = if cfg!(feature = "bundled-fonts") {
+        "pop:Inter:400:bundled"
+    } else {
+        "Ubuntu-Light"
+    };
+    assert_eq!(chain("pop.ui.400")[0], bundled);
     // Picked: applied, and the preview ends.
     h.get_by_label("Fake Sans").click();
     h.run();

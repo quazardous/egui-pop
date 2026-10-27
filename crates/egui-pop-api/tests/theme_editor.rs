@@ -590,7 +590,7 @@ fn the_fonts_edited_are_previewed_before_they_are_applied_even_across_a_theme_sw
         Some(names(&["Hack", "Ubuntu", "sans-serif"]))
     );
     assert_eq!(chain(&h.ctx, "pop.preview.ui.400")[0], "Hack");
-    assert_eq!(chain(&h.ctx, "pop.ui.400")[0], "Ubuntu-Light");
+    assert_eq!(chain(&h.ctx, "pop.ui.400")[0], BUNDLED_UI);
     assert!(
         h.query_by_label("Not applied yet: only this pane shows the draft.")
             .is_some()
@@ -636,6 +636,14 @@ fn the_fonts_edited_are_previewed_before_they_are_applied_even_across_a_theme_sw
         chain(&h.ctx, "pop.ui.400")
     );
 }
+
+/// The face the built-in themes draw interface text with (their
+/// `sans-serif`): egui-pop's bundled Inter, else egui's own.
+const BUNDLED_UI: &str = if cfg!(feature = "bundled-fonts") {
+    "pop:Inter:400:bundled"
+} else {
+    "Ubuntu-Light"
+};
 
 /// Two faces given as the system's, from egui's own fonts: the tests
 /// never depend on the fonts of the machine they run on.
@@ -708,14 +716,14 @@ fn a_system_face_is_searched_previewed_then_picked_and_applied() {
         chain(&h.ctx, "pop.preview.ui.400")[0],
         "pop:Fake Serif:400:system"
     );
-    assert_eq!(chain(&h.ctx, "pop.ui.400")[0], "Ubuntu-Light");
+    assert_eq!(chain(&h.ctx, "pop.ui.400")[0], BUNDLED_UI);
     assert!(!editor.fonts_pending(&handle));
     // Picking it puts it first, the theme's families its fallbacks.
     h.get_by_label("Fake Serif").click();
     h.run();
     assert_eq!(
         editor.families(&handle, Role::Ui),
-        ["Fake Serif", "Ubuntu", "sans-serif"]
+        ["Fake Serif", "sans-serif"]
     );
     assert!(editor.fonts_pending(&handle));
     // The Fonts tab is long: the button may be below the fold.
@@ -726,7 +734,7 @@ fn a_system_face_is_searched_previewed_then_picked_and_applied() {
     h.run();
     assert_eq!(
         handle.theme().spec().overrides["font.family.ui"],
-        json!(["Fake Serif", "Ubuntu", "sans-serif"])
+        json!(["Fake Serif", "sans-serif"])
     );
     let report = egui_pop_core::fonts::report(&h.ctx).unwrap();
     let primary = report

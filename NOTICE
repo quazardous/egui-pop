@@ -1,18 +1,27 @@
 egui-pop
 Copyright (c) the egui-pop contributors. MIT OR Apache-2.0 (see LICENSE-MIT and LICENSE-APACHE).
 
+Bundled fonts
+-------------
+
+egui-pop-core (crates/egui-pop-core/fonts, compiled in by its
+`bundled-fonts` feature, on by default) carries Inter (Copyright 2020 The
+Inter Project Authors) and JetBrains Mono NL (Copyright 2020 The
+JetBrains Mono Project Authors), subset, each under the SIL Open Font
+License 1.1 (the OFL.txt beside it), not under egui-pop's licences. Their
+sources, versions and changes are in that folder's README.md.
+
 Gallery fonts
 -------------
 
-The gallery (crates/egui-pop-gallery, not published) carries candidate
-fonts for its "Font pairs" page in crates/egui-pop-gallery/assets/fonts,
-each under the SIL Open Font License 1.1 (the OFL.txt beside it), not
-under egui-pop's licences: Inter (Copyright 2020 The Inter Project
-Authors), Noto Sans and Noto Sans Mono (Copyright 2022 The Noto Project
-Authors), JetBrains Mono NL (Copyright 2020 The JetBrains Mono Project
-Authors), IBM Plex Sans and IBM Plex Mono (Copyright 2017 IBM Corp., with
-Reserved Font Name "Plex"). Their sources, versions and changes are in
-that folder's README.md. No published crate includes them.
+The gallery (crates/egui-pop-gallery, not published) carries the other
+candidate fonts for its "Font pairs" page in
+crates/egui-pop-gallery/assets/fonts, each under the SIL Open Font
+License 1.1 (the OFL.txt beside it), not under egui-pop's licences: Noto
+Sans and Noto Sans Mono (Copyright 2022 The Noto Project Authors), IBM
+Plex Sans and IBM Plex Mono (Copyright 2017 IBM Corp., with Reserved Font
+Name "Plex"). Their sources, versions and changes are in that folder's
+README.md. No published crate includes them.
 
 Editor-inspired themes
 ----------------------

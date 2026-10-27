@@ -16,7 +16,10 @@ authors.workspace = true
 workspace = true
 
 [features]
-default = ["eframe"]
+default = ["eframe", "bundled-fonts"]
+## egui-pop's default font pair, Inter and JetBrains Mono NL (see
+## `egui-pop-core`).
+bundled-fonts = ["egui-pop-core/bundled-fonts"]
 ## Run applications in a native window or a browser through eframe.
 eframe = ["dep:eframe"]
 ## The system's file chooser for path fields (rfd); without it, the

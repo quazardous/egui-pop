@@ -49,7 +49,9 @@ serde = { version = "1", features = ["derive"] }
 serde-saphyr = { version = "2", default-features = false, features = ["deserialize"] }
 log = "0.4"
 egui-pop-model = { version = "0.2.0", path = "crates/egui-pop-model" }
-egui-pop-core = { version = "0.2.0", path = "crates/egui-pop-core" }
+# Without its default fonts: the facade's `bundled-fonts` turns them on,
+# so an application can leave them out.
+egui-pop-core = { version = "0.2.0", path = "crates/egui-pop-core", default-features = false }
 egui-pop-api = { version = "0.2.0", path = "crates/egui-pop-api", default-features = false }
 egui-pop-test = { version = "0.2.0", path = "crates/egui-pop-test" }
 egui-pop-test-macros = { version = "0.1.0", path = "crates/egui-pop-test-macros" }

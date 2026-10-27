@@ -16,7 +16,13 @@ authors.workspace = true
 workspace = true
 
 [features]
-default = ["eframe", "phosphor", "theme-zip"]
+default = ["eframe", "phosphor", "theme-zip", "bundled-fonts"]
+## egui-pop's default font pair, Inter for interface text and JetBrains
+## Mono NL (without ligatures, tabular digits) for values and code,
+## subset to Latin, Greek and Cyrillic: about 620 KB, under the SIL Open
+## Font License 1.1 (its text ships with the fonts). Without it, egui's
+## own pair (Ubuntu Light and Hack) is the default.
+bundled-fonts = ["egui-pop-api/bundled-fonts"]
 ## Run applications through eframe (`App::run_native`, `eframe::App`).
 eframe = ["egui-pop-api/eframe"]
 ## Icons drawn from the Phosphor icon font (MIT, about 480 KB); without
