@@ -424,10 +424,12 @@ mod tests {
     #[test]
     fn drawn_icons_are_read_from_the_pass_before() {
         let ctx = Context::default();
-        let _ = ctx.run_ui(Default::default(), |ui| {
+        let mut out = ctx.run_ui(Default::default(), |ui| {
             record(ui.ctx(), "tree", "Photos", "folder");
         });
-        let _ = ctx.run_ui(Default::default(), |_| {});
+        out.textures_delta.clear();
+        let mut out = ctx.run_ui(Default::default(), |_| {});
+        out.textures_delta.clear();
         assert_eq!(
             drawn(&ctx),
             [Drawn {
