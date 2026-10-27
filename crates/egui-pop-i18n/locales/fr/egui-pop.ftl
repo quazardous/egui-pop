@@ -829,6 +829,8 @@ egui-pop-reset = Réinitialiser
 
 egui-pop-retry = Réessayer
 
+egui-pop-section-resize = Redimensionner { $section }
+
 egui-pop-settings-at-default = { $setting } est à sa valeur par défaut
 
 egui-pop-settings-fonts = Polices

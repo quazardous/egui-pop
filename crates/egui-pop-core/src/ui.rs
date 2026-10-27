@@ -95,7 +95,7 @@ pub fn role_text(ui: &Ui, role: TextRole, text: impl Into<String>) -> RichText {
 /// regular weight (egui's own family, or the preview's text style in
 /// `fonts::with_preview`), and while the theme's weighted families are
 /// not installed. In `fonts::with_preview`, the preview family.
-fn role_family(ctx: &egui::Context, weight: Weight) -> Option<egui::FontFamily> {
+pub(crate) fn role_family(ctx: &egui::Context, weight: Weight) -> Option<egui::FontFamily> {
     if weight.nearest_installed() == Weight::REGULAR {
         return None;
     }

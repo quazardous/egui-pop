@@ -31,6 +31,7 @@
 - [The photo library](library.md)
 - [Text and code editors](editors.md)
 - [Micro-indicators](indicators.md)
+- [Collapsible sections](sections.md)
 - [Jobs and progress](progress.md)
 - [Translations](i18n.md)
 - [Platform services]()
