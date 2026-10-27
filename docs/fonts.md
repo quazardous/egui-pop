@@ -9,9 +9,60 @@ order (2026-10-22), reported
 problems (`egui_pop_core::fonts`); a size scale (2026-10-18), below;
 font files a user adds, kept as paths (2026-10-20), below; the text size
 setting, aligned numbers, the `fonts` debug collector, the settings
-window's Fonts page (2026-10-21), below. The bundled pair is not
-chosen yet (the gallery's Font pairs page is where it is chosen); the
-rest is still a design.
+window's Fonts page (2026-10-21), below; the bundled pair, Inter and
+JetBrains Mono NL behind the `bundled-fonts` feature (decided and built
+2026-10-27), below. The rest is still a design.
+
+## The bundled pair: Inter and JetBrains Mono NL (decided 2026-10-27)
+
+egui-pop bundles **Inter** for interface text and **JetBrains Mono NL**
+for values and code, chosen on the gallery's Font pairs page (below):
+
+- **Why.** Inter is designed for interfaces at small sizes (tall
+  x-height, open shapes) and is variable, so one file draws every weight
+  through its `wght` axis. JetBrains Mono NL is the cut without
+  programming ligatures (egui cannot turn `calt` off), with a slashed
+  zero and tabular digits, so columns of values line up. Noto was the
+  alternative (tabular digits in its proportional face, the family of
+  the CJK fallbacks), at 834 KB against 617 KB; IBM Plex cannot be
+  subset without being renamed (Reserved Font Name).
+- **Size.** Inter subset to Latin, Greek and Cyrillic, `opsz` pinned at
+  14: 416 KB. JetBrains Mono NL regular and bold, subset the same way:
+  201 KB. 617 KB together, within the budget of about 1 MB.
+- **Licence.** Both are under the SIL Open Font License 1.1, which
+  allows bundling them with MIT or Apache-2.0 code provided the licence
+  ships with the fonts: each font's `OFL.txt` sits next to it in
+  `crates/egui-pop-core/fonts/`, with a README giving its source,
+  version and changes, and the crate's package carries them.
+  egui-pop-core's licence reads `(MIT OR Apache-2.0) AND OFL-1.1`, and
+  `deny.toml` allows `OFL-1.1` for that crate alone.
+- **The feature.** `bundled-fonts`, on by default in egui-pop,
+  egui-pop-api and egui-pop-core; the workspace depends on
+  egui-pop-core without its default features, so an application that
+  leaves the facade's feature out (`default-features = false`) leaves
+  the files out of its binary. Without it, egui's own pair (Ubuntu
+  Light and Hack, from egui's `default_fonts`) is the default, as before.
+- **How it is the default.** The built-in themes name only generic
+  families: `font.family.ui` is `["sans-serif"]`, `font.family.mono`
+  `["monospace"]`. A generic name stands for the bundled fonts: with
+  the feature, `sans-serif`, `serif` and `system-ui` draw Inter and
+  `monospace` and `ui-monospace` JetBrains Mono NL, at every weight
+  (Inter on its axis, JetBrains Mono NL's nearest of 400 and 700, said
+  by no problem); without it, egui's faces behind every chain draw them.
+  A generic name after a list that already found the same family
+  (`Inter` on the system, then `sans-serif`) adds no second copy.
+- **Values.** `font.numeric` stays `"mono"` by default and draws values
+  in JetBrains Mono NL, whose digits are tabular; `"ui"` draws them in
+  Inter, whose default digits are proportional, so in cells.
+- **Still available.** Inter and JetBrains Mono NL are bundled families
+  a theme may name (`["Inter", "sans-serif"]`) and the Fonts page lists,
+  as egui's `Ubuntu` and `Hack` stay: a theme naming them, or a user
+  picking them, gets egui's pair. A name is still looked for on the
+  system before a bundled face (the order below): a theme naming
+  `Inter` draws the system's Inter where it is installed.
+- The fonts are reached from code as `egui_pop_core::fonts::bundled`
+  (the bytes and the family names); the gallery's Font pairs page
+  draws them from there.
 
 ## The size scale (built)
 
@@ -107,7 +158,7 @@ for values, code and debug output (monospace), let a theme and a user pick
 them, size them from one scale tied to an accessibility setting, and make
 columns of numbers line up.
 
-When this note was written, the tokens `font.family.ui` (`["Ubuntu", "sans-serif"]`) and
+When this note was written (2026-10-12), the tokens `font.family.ui` (`["Ubuntu", "sans-serif"]`) and
 `font.family.mono` (`["Hack", "monospace"]`) are parsed and typed
 (`egui_pop_core::theme::Font::family_ui` / `family_mono`) but not applied:
 the text is drawn by egui's bundled fonts. Only `font.size.{small, body,
@@ -267,10 +318,12 @@ stack in (as GPUI and browsers do):
 
 1. the faces the application registered, and the user's font files;
 2. the system's fonts, by family name (below);
-3. egui's bundled faces by name (`Ubuntu` is egui's Ubuntu-Light,
+3. the bundled faces by name: egui-pop's (`Inter`, `JetBrains Mono NL`,
+   with `bundled-fonts`), then egui's (`Ubuntu` is egui's Ubuntu-Light,
    `Hack` its Hack).
 
-A bundled face is reached by its name only when the system has no
+A generic name (`sans-serif`, `monospace`, ...) draws the bundled pair
+(above). A bundled face is reached by its name only when the system has no
 family of that name: a theme naming `Ubuntu` draws the system's Ubuntu
 where it is installed, egui's Ubuntu-Light elsewhere, so a stack copied
 from a platform (`Helvetica, Segoe UI, Ubuntu, Adwaita Sans, ...`)
@@ -314,18 +367,20 @@ own as the baseline: a heading, a paragraph, buttons and a checkbox, the
 four weights, a slider with its value, a column of numbers right-aligned
 in the proportional and in the monospace face, code, and a few scripts;
 each pair says its licence, the size of its files and whether its digits
-are tabular, measured from the glyphs. The pair bundled is chosen on that
-page: **not decided**.
+are tabular, measured from the glyphs. The pair bundled was chosen on
+that page: **decided** (2026-10-27), Inter + JetBrains Mono NL (the
+bundled pair, above).
 
 | Pair | Files carried | Licence | Digits |
 |---|---|---|---|
 | Ubuntu Light + Hack (egui's) | none (in egui) | Ubuntu Font Licence; MIT + Bitstream Vera | Measured on the page |
-| Inter + JetBrains Mono NL | 416 + 201 KB (617 KB) | OFL 1.1 | Inter proportional |
+| Inter + JetBrains Mono NL (**bundled**, 2026-10-27) | 416 + 201 KB (617 KB), in egui-pop-core | OFL 1.1 | Inter proportional, JetBrains Mono NL tabular |
 | Noto Sans + Noto Sans Mono | 453 + 381 KB (834 KB) | OFL 1.1 | Noto Sans tabular |
 | IBM Plex Sans + Plex Mono | 537 + 273 KB (810 KB) | OFL 1.1, RFN "Plex" | Measured on the page |
 
-The files are gallery assets, in `crates/egui-pop-gallery/assets/fonts`
-with each licence and source; no published crate includes them. Inter
+The bundled pair's files are in `crates/egui-pop-core/fonts`, the
+others are gallery assets in `crates/egui-pop-gallery/assets/fonts`
+(not published), each with its licence and source. Inter
 and Noto are subset to Latin, Greek and Cyrillic with their other axes
 pinned (full files: 877 KB, 2049 KB, 1708 KB); JetBrains Mono NL (no
 ligatures, no variable build) is subset, regular and bold; IBM Plex is
@@ -511,9 +566,10 @@ per-script fallback, and asks the OS for "sans-serif" / "monospace"
      Greek + Cyrillic). Alternative if tabular digits in proportional
      text matter more than small-size polish: **Noto Sans** (tabular by
      default, same family as the CJK and Arabic fallbacks). A side by side
-     page in the gallery decides; mark it "not decided".
+     page in the gallery decides: Inter, **decided** 2026-10-27.
    - Mono: **JetBrains Mono NL** or **Noto Sans Mono** (no ligatures,
-     slashed or dotted zero by default, variable `wght`).
+     slashed or dotted zero by default, variable `wght`): JetBrains Mono
+     NL, **decided** 2026-10-27 (regular and bold, no variable build).
    - Keep egui's Noto Emoji and Ubuntu-Light only as last fallbacks while
      `default_fonts` stays on (it is enabled by egui-pop crates today and
      features are additive, so turning it off saves about 1.4 MB only if
@@ -543,8 +599,8 @@ Families (type `fontFamily`, a list):
 
 | Token | Default | Use |
 |---|---|---|
-| `font.family.ui` | `["Inter", "system-ui", "sans-serif"]` | Interface text, `FontFamily::Proportional`. |
-| `font.family.mono` | `["JetBrains Mono NL", "monospace"]` | Values, code, logs, the debug pages, `FontFamily::Monospace`. |
+| `font.family.ui` | `["sans-serif"]` (built: the bundled Inter) | Interface text, `FontFamily::Proportional`. |
+| `font.family.mono` | `["monospace"]` (built: the bundled JetBrains Mono NL) | Values, code, logs, the debug pages, `FontFamily::Monospace`. |
 | `font.family.display` (optional) | `{font.family.ui}` | Headings, if a theme wants a distinct face. |
 
 Weights (type `fontWeight`, DTCG's own type, 1 to 1000, or keywords):
