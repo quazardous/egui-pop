@@ -185,7 +185,8 @@ fn a_viewport_not_drawn_keeps_a_bounded_backlog_of_changes() {
     assert_eq!(h.state().state.notices_waiting(), 0);
     let st = h.state().state.stats().snapshot();
     assert_eq!(st[6].1 - changed, NOTICES as u64 / 2 + 1, "{st:?}");
-    assert_eq!(st[7], ("coalesced", 20_000 - NOTICES as u64), "{st:?}");
+    let coalesced = st.iter().find(|(k, _)| *k == "coalesced").map(|(_, v)| *v);
+    assert_eq!(coalesced, Some(20_000 - NOTICES as u64), "{st:?}");
     settle(&mut h);
 }
 
