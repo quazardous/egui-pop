@@ -47,6 +47,8 @@
 //!   buttons, inline or on a widget, recorded for agents;
 //! - [`ui`]: layout helpers named by role on egui's `Ui` (text roles,
 //!   spacing by intent, a card and a button in a tone);
+//! - [`sections`]: collapsible sections stacked in a panel, each a
+//!   band over its own scrolling body, folded and resized, remembered;
 //! - [`persist`]: documents written atomically, with a backup and
 //!   migrations;
 //! - [`fault`]: fault boundaries showing an error card on panic;
@@ -83,6 +85,7 @@ pub mod placement;
 pub mod pointer;
 pub mod progress;
 pub mod scale;
+pub mod sections;
 pub mod slider;
 pub mod strings;
 pub mod tab;

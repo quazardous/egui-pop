@@ -115,6 +115,10 @@ of every crate with every feature on.
   passive (their meaning in their host's name) or buttons, inline or on
   a widget's corner, a pulse still under reduced motion, their states
   for agents.
+- [Collapsible sections](sections.md): sections stacked in a panel,
+  each a band (disclosure mark, title, count) over its own scrolling
+  body, folded, resized at the line between two and remembered; drawn
+  by the kit; the classic apps compared and the crates surveyed.
 - [Jobs and progress](progress.md): the host's background jobs folded
   from its journal, each with an estimated overall percentage, their
   commands, the `jobs.estimate` step, a fake host for tests.

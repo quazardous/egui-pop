@@ -126,6 +126,21 @@ publishes.
   (egui-pop-core) lists every window's overlays. The gallery's new
   `--detach <panel>` (`GALLERY_DETACH` in wbox) detaches a panel at
   start.
+- Collapsible sections stacked in a panel (egui-pop-core):
+  `sections::Sections` lays out sections, each a title band (the
+  disclosure mark, the title in capitals, a count) over its own
+  scrolling body. A click, Space or Enter folds or opens a section; the
+  line between two open sections resizes them, and a double click on it
+  gives the heights back; each keeps a least height (two rows by
+  default). What is folded and the heights are remembered with the
+  window's layout (`sections::Layout`). A band is a button named by its
+  title and count, expanded or not; a boundary a splitter ("Resize
+  Live"); `sections::laid_out` gives the stack as drawn, for agents and
+  tests. Drawn by three new kit components, `section-band` (handler
+  `section`, lines above and under it), `section-disclosure` (the
+  `disclosure-*` glyph roles) and `section-count` (based on
+  `indicator-badge`). The gallery's `sections` page shows them; the
+  survey and the classic apps compared are in `docs/sections.md`.
 - A widget's own secondary button (egui-pop-core): a widget that needs
   the right click for something else claims the secondary click, the
   drag or both on its rect (`pointer::claim::claim_secondary` with a

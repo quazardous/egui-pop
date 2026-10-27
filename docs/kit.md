@@ -439,6 +439,14 @@ compiled at install.
   swatch a `box` over its colour, an interactive mark's target an
   `indicator-button` in its state; pips are `spinner` and
   `progress-ring`. The `indicators` snapshots.
+- **Collapsible sections** (`section-band`, `section-disclosure`,
+  `section-count`; [sections](sections.md)). The band is `hover`,
+  `active` while pressed and `focus` (a ring inside it); the `section`
+  handler draws its fill and its border as a line along its top and its
+  bottom edges, so two stacked bands share one line. Its mark is the
+  `disclosure-*` glyph role in `section-disclosure`'s `text`, `width`
+  across; its count a `section-count`, based on `indicator-badge`. The
+  `sections` snapshots.
 - **Sliders** (`slider`, `slider-fill`, `slider-thumb`, `slider-value`,
   `slider-toggle`). The bar is a box with its label at the start
   (`align`), `hover`, `active` while dragged and `focus` (a ring inside
