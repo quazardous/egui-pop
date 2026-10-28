@@ -86,7 +86,8 @@ all = { level = "warn", priority = -1 }
 # remain. Each goes as soon as its crate is released on egui 0.37 (then
 # raise the requirement above if the version changed, and drop the patch).
 [patch.crates-io]
-# The update offered to egui_dock (based on its 0.21 release line).
-egui_dock = { git = "https://github.com/quazardous/egui_dock", branch = "update-egui-0.37" }
+# egui_dock's open pull request updating it to egui 0.37
+# (anhosh/egui_dock#354), until a release carries it.
+egui_dock = { git = "https://github.com/crumblingstatue/egui_dock", branch = "egui-037" }
 # egui-phosphor's open pull request updating it to egui 0.37.
 egui-phosphor = { git = "https://github.com/xangelix/egui-phosphor", branch = "egui-0.37" }

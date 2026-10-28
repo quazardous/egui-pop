@@ -1325,7 +1325,7 @@ dependencies = [
 [[package]]
 name = "egui_dock"
 version = "0.21.1"
-source = "git+https://github.com/quazardous/egui_dock?branch=update-egui-0.37#23f0fcf9b1c2408d08006af3312c85af4ead3f90"
+source = "git+https://github.com/crumblingstatue/egui_dock?branch=egui-037#4bd1dcd90c7a71ed3bf38159f49a2992fa653c2c"
 dependencies = [
  "duplicate",
  "egui",
