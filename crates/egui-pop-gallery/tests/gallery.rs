@@ -818,6 +818,14 @@ fn the_history_page_lists_the_steps_and_jumps_to_one() {
     assert!(app.undo(&Origin::User).ok());
     h.run();
     assert!(h.query_by_label("Start").is_some());
+    // A snapshot pins the values, listed above the steps.
+    h.get_by_label("Take a snapshot").click();
+    // The new row comes under the pointer: previewed, and the window
+    // settles all the same (a resting pointer asks for no repaint).
+    h.run();
+    assert!(history::previewing(&app).is_some());
+    assert_eq!(history::snapshots(&app, &APP).len(), 1);
+    assert!(h.query_by_label("Snapshot 1").is_some());
     egui_pop_test::assert_all_named(&h);
     h.snapshot("history-pop-dark");
     // The start row undoes everything.
@@ -826,6 +834,79 @@ fn the_history_page_lists_the_steps_and_jumps_to_one() {
     let line = history::line(&app, &APP).unwrap();
     assert!(line.undo.is_empty());
     assert_eq!(line.redo.len(), before + 3);
+    // A new change replaces the steps undone: behind the toggle, and a
+    // click goes back to one of them.
+    {
+        let store = app.store();
+        let mut s = egui_pop::core::lock(&store);
+        s.set(Set::new(
+            EXPOSURE,
+            Change::To(Value::Float(-1.0)),
+            Origin::User,
+        ))
+        .unwrap();
+        s.seal();
+    }
+    h.run();
+    assert!(history::line(&app, &APP).unwrap().redo.is_empty());
+    let replaced = history::replaced(&app, &APP);
+    assert_eq!(replaced.len(), before + 3);
+    h.get_by_label("Show replaced steps").click();
+    h.run();
+    let agent = replaced.last().unwrap().step.id;
+    let jump = history::jump(&app, &APP, agent, &Origin::User);
+    assert!(jump.ok(), "{jump:?}");
+    assert_eq!(history::line(&app, &APP).unwrap().head_id(), agent);
+    // The snapshot brings the values back, as one new step.
+    let snap = history::snapshots(&app, &APP)[0].id;
+    assert!(history::restore(&app, &APP, snap, &Origin::User).ok());
+    let store = app.store();
+    assert_eq!(
+        egui_pop::core::lock(&store).get(RADIUS).unwrap().value,
+        Value::Int(40)
+    );
+}
+
+#[test]
+fn the_history_page_undoes_one_step_out_of_order() {
+    use egui_pop::api::history::{self, APP};
+    use egui_pop::model::commands::Origin;
+    use egui_pop::model::values::{Change, Set, Value};
+    use egui_pop_gallery::pages::history::{EXPOSURE, RADIUS};
+    let mut h = harness(options("pop-dark", Density::Comfortable, "history"));
+    h.run();
+    let app = h.state().app.handle().clone();
+    let store = app.store();
+    {
+        let mut s = egui_pop::core::lock(&store);
+        s.set(Set::new(
+            EXPOSURE,
+            Change::To(Value::Float(0.5)),
+            Origin::User,
+        ))
+        .unwrap();
+        s.seal();
+        s.set(Set::new(RADIUS, Change::To(Value::Int(60)), Origin::User))
+            .unwrap();
+        s.seal();
+    }
+    // The history locks the store itself: ask it once the lock above is gone.
+    let line = history::line(&app, &APP).unwrap();
+    let exposure = line.undo[line.undo.len() - 2].id;
+    h.run();
+    // The exposure step, older, is undone by a new step; the radius stays.
+    assert!(history::undo_step(&app, &APP, exposure, &Origin::User).ok());
+    {
+        let s = egui_pop::core::lock(&store);
+        assert_eq!(s.get(EXPOSURE).unwrap().value, Value::Float(0.0));
+        assert_eq!(s.get(RADIUS).unwrap().value, Value::Int(60));
+    }
+    // Undoing it again is refused: a later step changed the exposure.
+    let again = history::undo_step(&app, &APP, exposure, &Origin::User);
+    assert!(!again.ok());
+    // The preview of the radius step's predecessor says what differs.
+    let preview = history::hover(&app, &APP, history::At::Step(exposure)).unwrap();
+    assert!(preview.changes.iter().any(|c| c.what == "Exposure"));
 }
 
 #[test]
