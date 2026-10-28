@@ -1,5 +1,5 @@
 //! About the application, as a plugin ([`AboutPlugin`]): Help > About
-//! <application> opens a dialog with the application's name, icon,
+//! *application* opens a dialog with the application's name, icon,
 //! version, one-line description, licences, authors and links, and a
 //! "Copy version info" button for bug reports. The host describes the
 //! application with an [`AppInfo`].
@@ -13,7 +13,7 @@
 //! step when [`crate::clipboard::ClipboardPlugin`] is connected (the
 //! `about.version` endpoint), else straight to the system clipboard.
 //!
-//! Commands: `about` (Help > About <application>; its title says
+//! Commands: `about` (Help > About *application*; its title says
 //! `{ $application }`) and, for agents, `about.read` (the same as JSON,
 //! kept out of the palette).
 //!
@@ -62,7 +62,7 @@ pub const ABOUT_PLUGIN: PluginId = PluginId::from_static("egui_pop.about");
 /// What the application says about itself, as a service.
 pub const ABOUT: ServiceToken<About> = ServiceToken::new("egui_pop.about");
 
-/// Help > About <application>.
+/// Help > About *application*.
 pub const CMD_ABOUT: CommandId = CommandId::from_static("about");
 /// The same, as JSON, for agents.
 pub const CMD_ABOUT_READ: CommandId = CommandId::from_static("about.read");
@@ -246,7 +246,7 @@ impl About {
     }
 }
 
-/// Help > About <application>, and `about.read` for agents.
+/// Help > About *application*, and `about.read` for agents.
 #[derive(Debug, Default)]
 pub struct AboutPlugin {
     info: AppInfo,

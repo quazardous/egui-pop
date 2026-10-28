@@ -28,7 +28,7 @@ publishes.
   gallery, and Help > "egui-pop on GitHub" and "Documentation"; the
   `about` page draws the dialog's body and opens the dialog.
 - About the application (egui-pop-api; docs/about.md): the opt-in
-  `about::AboutPlugin` adds Help > About <application> (the `about`
+  `about::AboutPlugin` adds Help > About *application* (the `about`
   command), a dialog with the name, icon, version, one-line
   description, licences, authors and links (repository, website, docs,
   issues, opened with `Context::open_url`) the host gives in an

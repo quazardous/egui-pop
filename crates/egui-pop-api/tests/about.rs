@@ -1,4 +1,4 @@
-//! About: Help > About <application> opens a dialog with what the host
+//! About: Help > About *application* opens a dialog with what the host
 //! said about the application, its version info is copied through the
 //! clipboard (or straight to the system's without its plugin), agents
 //! read the same as JSON, and the title follows the language.
