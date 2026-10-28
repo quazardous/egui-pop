@@ -314,6 +314,17 @@ pub const FILES_ALL: StrKey = StrKey::new("egui-pop-files-all", "All files");
 pub const FILES_HIDDEN: StrKey = StrKey::new("egui-pop-files-hidden", "Hidden files");
 pub const FILES_OPEN: StrKey = StrKey::new("egui-pop-files-open", "Open");
 pub const FILES_SAVE: StrKey = StrKey::new("egui-pop-files-save", "Save");
+pub const FILES_PREVIEW: StrKey = StrKey::new("egui-pop-files-preview", "Preview");
+pub const FILES_PREVIEW_LOADING: StrKey =
+    StrKey::new("egui-pop-files-preview-loading", "Loading the preview…");
+pub const FILES_PREVIEW_NONE: StrKey = StrKey::new("egui-pop-files-preview-none", "No preview");
+pub const FILES_PREVIEW_FAILED: StrKey =
+    StrKey::new("egui-pop-files-preview-failed", "The preview failed");
+pub const FILES_SIZE: StrKey = StrKey::new("egui-pop-files-size", "Size");
+pub const FILES_ITEMS: StrKey = StrKey::new("egui-pop-files-items", "Items");
+pub const FILES_DIMENSIONS: StrKey = StrKey::new("egui-pop-files-dimensions", "Dimensions");
+pub const FILES_PAGES: StrKey = StrKey::new("egui-pop-files-pages", "Pages");
+pub const FILES_MODIFIED: StrKey = StrKey::new("egui-pop-files-modified", "Modified");
 
 // Toasts.
 
@@ -1107,6 +1118,15 @@ pub const ALL: &[StrKey] = &[
     FILES_HIDDEN,
     FILES_OPEN,
     FILES_SAVE,
+    FILES_PREVIEW,
+    FILES_PREVIEW_LOADING,
+    FILES_PREVIEW_NONE,
+    FILES_PREVIEW_FAILED,
+    FILES_SIZE,
+    FILES_ITEMS,
+    FILES_DIMENSIONS,
+    FILES_PAGES,
+    FILES_MODIFIED,
     TOAST_INFO,
     TOAST_SUCCESS,
     TOAST_WARNING,

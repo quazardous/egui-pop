@@ -2248,6 +2248,8 @@ fn the_files_page_chooses_with_the_in_app_picker() {
     h.run();
     assert!(h.query_by_label("harbour.png").is_some());
     assert!(h.query_by_label("notes.txt").is_none(), "filtered out");
+    // The preview pane shows the highlighted entry's once it is made.
+    run_until(&mut h, |h| preview_state(h) != "loading");
     h.snapshot("files-pop-dark");
     h.get_by_label("Filter, or type a path").type_text("light");
     h.run();
@@ -2262,6 +2264,14 @@ fn the_files_page_chooses_with_the_in_app_picker() {
         h.state().app.handle().debug_snapshot()["files"]
     );
     assert!(egui_pop::api::files::recent(h.state().app.handle()).contains(&root.join("Photos")));
+}
+
+/// The state of the open picker's preview (`none` without one).
+fn preview_state(h: &Harness<'_, Gallery>) -> String {
+    h.state().app.handle().debug_snapshot()["files"]["open"][0]["picker"]["preview"]["state"]
+        .as_str()
+        .unwrap_or("none")
+        .to_string()
 }
 
 /// Drags from one node to a point of another (`at`: how far down it).

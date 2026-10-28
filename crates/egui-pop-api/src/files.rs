@@ -27,6 +27,9 @@
 //! - **Previews** come from pluggable providers ([`preview`]): plugins
 //!   register theirs with [`Files::previews`]; they are made off the
 //!   interface thread, cancelled when the selection moves, and cached.
+//!   The in-app picker shows the selected entry's preview and facts in
+//!   a pane beside the list (`Alt+P` shows or hides it; the
+//!   `files.preview` setting remembers).
 //!
 //! Steps (ADR 0011):
 //!
@@ -99,6 +102,8 @@ pub const STEP_CHOSEN: StepId = StepId::from_static("file.chosen");
 
 /// The setting: use the system's chooser when there is one.
 pub const SETTING_NATIVE: SettingId = SettingId::from_static("files.native");
+/// The setting: the in-app picker shows its preview pane.
+pub const SETTING_PREVIEW: SettingId = SettingId::from_static("files.preview");
 
 /// Where recent places are kept (a JSON list of folders, newest first).
 pub const RECENT: &str = "settings/files.recent";
@@ -410,7 +415,12 @@ impl Files {
         }) else {
             return false;
         };
+        picker.show_preview = preview_wanted(app);
+        let before = picker.show_preview;
         let out = picker.show(ui, &places(app));
+        if picker.show_preview != before {
+            want_preview(app, picker.show_preview);
+        }
         settle(app, &answer, out, true);
         self.keep(id, picker);
         true
@@ -428,6 +438,8 @@ impl Files {
     fn start(&self, app: &AppHandle, id: u64, request: FileRequest) -> Result<Json, String> {
         let native = lock(&self.0).native && native_available();
         let fs = self.file_system();
+        let previews = self.previews();
+        let show_preview = preview_wanted(app);
         let recent = recent(app);
         let mut s = lock(&self.0);
         let o = s
@@ -444,7 +456,8 @@ impl Files {
             return Ok(json!({ "via": "native" }));
         }
         o.via = Via::InApp;
-        let mut picker = FilePicker::new_in(&request, fs.clone());
+        let mut picker = FilePicker::new_in(&request, fs.clone()).with_previews(previews);
+        picker.show_preview = show_preview;
         if request.directory.is_none()
             && let Some(dir) = recent.first().filter(|d| fs.is_dir(d))
         {
@@ -633,6 +646,12 @@ impl Plugin for FilesPlugin {
                 "Choose files with the system's chooser when there is one; off, with egui-pop's own.",
             ),
         )?;
+        ctx.setting(
+            SETTING_PREVIEW,
+            Descriptor::bool("Previews in the file picker", true).description(
+                "egui-pop's file picker shows the selected file's preview and facts beside the list; Alt+P shows or hides it.",
+            ),
+        )?;
         {
             let store = ctx.app().store();
             let mut store = lock(&store);
@@ -721,6 +740,10 @@ fn frame(ui: &mut Ui, app: &AppHandle) {
         done
     };
     let ctx = ui.ctx().clone();
+    if !done.is_empty() {
+        // Nothing to preview for them any more.
+        files.previews().cancel();
+    }
     for (id, request, answer, resolver) in done {
         overlay::close(&ctx, overlay_id(id));
         finish(app, &files, id, &request, answer, resolver);
@@ -809,7 +832,14 @@ fn picker_overlay(ctx: &egui::Context, app: &AppHandle, files: &Files) {
         return;
     };
     let places = places(app);
-    let spec = OverlaySpec::new(("egui_pop.files", id), &title, Kind::Modal).width(640.0);
+    picker.show_preview = preview_wanted(app);
+    let before = picker.show_preview;
+    let width = if before {
+        640.0 + preview::PANE_WIDTH
+    } else {
+        640.0
+    };
+    let spec = OverlaySpec::new(("egui_pop.files", id), &title, Kind::Modal).width(width);
     debug_assert_eq!(spec.id, overlay_id(id));
     let mut open = true;
     let mut out = None;
@@ -817,8 +847,32 @@ fn picker_overlay(ctx: &egui::Context, app: &AppHandle, files: &Files) {
         ui.heading(&title);
         out = picker.show(ui, &places);
     });
+    if picker.show_preview != before {
+        want_preview(app, picker.show_preview);
+    }
     settle(app, &answer, out, open);
     files.keep(id, picker);
+}
+
+/// Whether the in-app picker shows its preview pane (the setting).
+pub fn preview_wanted(app: &AppHandle) -> bool {
+    lock(&app.store())
+        .get(&format!("settings/{SETTING_PREVIEW}"))
+        .and_then(|e| e.value.as_bool())
+        .unwrap_or(true)
+}
+
+/// Shows or hides the in-app picker's preview pane (the setting, kept).
+pub fn want_preview(app: &AppHandle, on: bool) {
+    let set = Set::new(
+        &format!("settings/{SETTING_PREVIEW}"),
+        Change::To(Value::Bool(on)),
+        Origin::User,
+    )
+    .by(&OwnerId::FRAMEWORK);
+    if let Err(e) = lock(&app.store()).set(set) {
+        log::warn!(target: "egui_pop", "{SETTING_PREVIEW}: {e:?}");
+    }
 }
 
 /// The home folder, if known.
@@ -873,11 +927,14 @@ pub struct FilePicker {
     /// Files selected (choosing several).
     pub selected: BTreeSet<PathBuf>,
     pub show_hidden: bool,
+    /// The preview pane is shown (with previews, [`FilePicker::with_previews`]).
+    pub show_preview: bool,
     /// Why the last Enter did nothing.
     pub error: Option<String>,
     focused: bool,
     listing: Option<(PathBuf, bool, Vec<Entry>)>,
     fs: SharedFs,
+    previews: Option<Previews>,
 }
 
 impl FilePicker {
@@ -909,11 +966,27 @@ impl FilePicker {
             highlight: 0,
             selected: BTreeSet::new(),
             show_hidden: false,
+            show_preview: false,
             error: None,
             focused: false,
             listing: None,
             fs,
+            previews: None,
         }
+    }
+
+    /// Shows the selected entry's preview in a pane beside the list,
+    /// from these providers (`Alt+P` hides it).
+    pub fn with_previews(mut self, previews: Previews) -> Self {
+        self.previews = Some(previews);
+        self.show_preview = true;
+        self
+    }
+
+    /// The entry the preview is of: the highlighted one.
+    pub fn highlighted(&mut self) -> Option<Entry> {
+        let at = self.highlight;
+        self.visible().into_iter().nth(at)
     }
 
     /// Where it reads.
@@ -1179,7 +1252,22 @@ impl FilePicker {
             "filter": self.filter().map(|f| f.name.clone()),
             "completions": self.completions(),
             "error": self.error,
+            "preview": self.preview_state(),
         })
+    }
+
+    /// The highlighted entry's preview as agents read it (`null` without
+    /// the pane).
+    fn preview_state(&mut self) -> Json {
+        let Some(previews) = self.previews.clone().filter(|_| self.show_preview) else {
+            return Json::Null;
+        };
+        let Some(e) = self.highlighted() else {
+            return Json::Null;
+        };
+        let mut d = previews.peek(&self.fs, &e.path).describe();
+        d["path"] = json!(e.path.display().to_string());
+        d
     }
 
     /// Draws the picker; its answer when given.
@@ -1203,6 +1291,11 @@ impl FilePicker {
                 i.consume_key(Modifiers::COMMAND, Key::D),
             )
         });
+        // Alt+P, as the preview pane of the Windows file explorer.
+        if self.previews.is_some() && ui.input_mut(|i| i.consume_key(Modifiers::ALT, Key::P)) {
+            self.show_preview = !self.show_preview;
+        }
+        let preview_on = self.show_preview && self.previews.is_some();
         let bookmarked = places.bookmarks.contains(&self.dir);
         ui.horizontal(|ui| {
             if ui.button(strings::tr(ui.ctx(), &txt::PICKER_UP)).clicked() {
@@ -1310,47 +1403,62 @@ impl FilePicker {
             // Not a separator: in a row it takes the row's height, which
             // grows with it in a modal.
             ui.add_space(t.space.m);
-            egui::ScrollArea::vertical()
-                .id_salt("egui_pop.files.entries")
-                .max_height(280.0)
-                .auto_shrink([false, false])
-                .show(ui, |ui| {
-                    // One entry per row (the row beside the places is
-                    // laid out left to right).
-                    ui.set_width(ui.available_width());
-                    ui.with_layout(egui::Layout::top_down_justified(egui::Align::Min), |ui| {
-                        for (n, e) in shown.iter().enumerate() {
-                            let label = if e.is_dir {
-                                format!("{}/", e.name)
-                            } else {
-                                e.name.clone()
-                            };
-                            // Selected files (choosing several) show as the
-                            // highlighted one does.
-                            let on = n == self.highlight || self.selected.contains(&e.path);
-                            let r = widgets::selectable_label(ui, on, label);
-                            if n == self.highlight && (down || up) {
-                                r.scroll_to_me(None);
-                            }
-                            if r.double_clicked() {
-                                self.highlight = n;
-                                answer = answer.take().or_else(|| self.activate());
-                            } else if r.clicked() {
-                                self.highlight = n;
-                                if e.is_dir {
-                                    self.go(e.path.clone());
-                                } else if self.kind == ChooseKind::OpenMany {
-                                    self.toggle();
-                                } else if self.kind == ChooseKind::Save {
-                                    self.text = e.name.clone();
+            let list_width = if preview_on {
+                (ui.available_width() - preview::PANE_WIDTH - t.space.m).max(160.0)
+            } else {
+                ui.available_width()
+            };
+            ui.vertical(|ui| {
+                ui.set_width(list_width);
+                egui::ScrollArea::vertical()
+                    .id_salt("egui_pop.files.entries")
+                    .max_height(280.0)
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        // One entry per row (the row beside the places is
+                        // laid out left to right).
+                        ui.set_width(ui.available_width());
+                        ui.with_layout(egui::Layout::top_down_justified(egui::Align::Min), |ui| {
+                            for (n, e) in shown.iter().enumerate() {
+                                let label = if e.is_dir {
+                                    format!("{}/", e.name)
+                                } else {
+                                    e.name.clone()
+                                };
+                                // Selected files (choosing several) show as the
+                                // highlighted one does.
+                                let on = n == self.highlight || self.selected.contains(&e.path);
+                                let r = widgets::selectable_label(ui, on, label);
+                                if n == self.highlight && (down || up) {
+                                    r.scroll_to_me(None);
+                                }
+                                if r.double_clicked() {
+                                    self.highlight = n;
+                                    answer = answer.take().or_else(|| self.activate());
+                                } else if r.clicked() {
+                                    self.highlight = n;
+                                    if e.is_dir {
+                                        self.go(e.path.clone());
+                                    } else if self.kind == ChooseKind::OpenMany {
+                                        self.toggle();
+                                    } else if self.kind == ChooseKind::Save {
+                                        self.text = e.name.clone();
+                                    }
                                 }
                             }
-                        }
-                        if shown.is_empty() {
-                            ui.weak(strings::tr(ui.ctx(), &txt::NOTHING_MATCHES));
-                        }
+                            if shown.is_empty() {
+                                ui.weak(strings::tr(ui.ctx(), &txt::NOTHING_MATCHES));
+                            }
+                        });
                     });
+            });
+            if preview_on {
+                ui.add_space(t.space.m);
+                ui.vertical(|ui| {
+                    ui.set_width(preview::PANE_WIDTH);
+                    self.preview_pane(ui);
                 });
+            }
         });
         if toggle {
             self.toggle();
@@ -1397,6 +1505,14 @@ impl FilePicker {
                 &mut self.show_hidden,
                 strings::tr(ui.ctx(), &txt::FILES_HIDDEN),
             );
+            if self.previews.is_some() {
+                widgets::checkbox(
+                    ui,
+                    &mut self.show_preview,
+                    strings::tr(ui.ctx(), &txt::FILES_PREVIEW),
+                )
+                .on_hover_text("Alt+P");
+            }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let verb = match self.kind {
                     ChooseKind::Open | ChooseKind::OpenMany => &txt::FILES_OPEN,
@@ -1412,6 +1528,26 @@ impl FilePicker {
             });
         });
         answer
+    }
+}
+
+impl FilePicker {
+    /// The pane beside the list: the highlighted entry's preview, asked
+    /// of the providers (the one asked before is cancelled).
+    fn preview_pane(&mut self, ui: &mut Ui) {
+        let Some(previews) = self.previews.clone() else {
+            return;
+        };
+        match self.highlighted() {
+            Some(e) => {
+                let shown = previews.get(ui.ctx(), &self.fs, &e.path);
+                let meta = self.fs.metadata(&e.path).ok();
+                preview::pane(ui, &e.name, meta.as_ref(), &shown);
+            }
+            None => {
+                ui.weak(strings::tr(ui.ctx(), &txt::FILES_PREVIEW_NONE));
+            }
+        }
     }
 }
 

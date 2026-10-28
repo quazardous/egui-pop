@@ -729,19 +729,37 @@ egui-pop-files-bookmark = Ajouter ce dossier aux favoris
 
 egui-pop-files-bookmarks = Favoris
 
+egui-pop-files-dimensions = Dimensions
+
 egui-pop-files-filter = Filtrer, ou saisir un chemin
 
 egui-pop-files-hidden = Fichiers cachés
 
 egui-pop-files-home = Dossier personnel
 
+egui-pop-files-items = Éléments
+
+egui-pop-files-modified = Modifié
+
 egui-pop-files-name = Nom du fichier, ou un chemin
 
 egui-pop-files-open = Ouvrir
 
+egui-pop-files-pages = Pages
+
+egui-pop-files-preview = Aperçu
+
+egui-pop-files-preview-failed = L’aperçu a échoué
+
+egui-pop-files-preview-loading = Chargement de l’aperçu…
+
+egui-pop-files-preview-none = Pas d’aperçu
+
 egui-pop-files-recent = Récents
 
 egui-pop-files-save = Enregistrer
+
+egui-pop-files-size = Taille
 
 egui-pop-files-unbookmark = Retirer des favoris
 
@@ -1791,6 +1809,10 @@ setting-dialogs-movable =
 setting-files-native =
     .description = Choisir les fichiers avec le sélecteur du système quand il y en a un ; désactivé, avec celui d’egui-pop.
     .label = Utiliser le sélecteur de fichiers du système
+
+setting-files-preview =
+    .description = Le sélecteur de fichiers d’egui-pop montre l’aperçu et les informations du fichier sélectionné à côté de la liste ; Alt+P l’affiche ou le masque.
+    .label = Aperçus dans le sélecteur de fichiers
 
 setting-menus-icons =
     .description = Si les menus montrent les icônes des commandes dans une colonne à leur gauche (activé), aucune (désactivé), ou suivent le bureau (plateforme : désactivé sous GNOME, comme le dit KDE Plasma, activé ailleurs).

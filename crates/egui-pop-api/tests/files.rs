@@ -127,7 +127,8 @@ fn a_typed_path_completes_with_tab_and_backspace_goes_up() {
     assert_eq!(picker(&h).text, format!("{}/notes/", root.display()));
     key(&mut h, Key::Enter, Modifiers::NONE);
     assert_eq!(picker(&h).dir, root.join("notes"));
-    assert!(h.query_by_label("todo.md").is_some());
+    // The list's row, and the preview pane's title once it is selected.
+    assert!(h.query_all_by_label("todo.md").next().is_some());
     // Backspace in an empty field: the parent folder.
     key(&mut h, Key::Backspace, Modifiers::NONE);
     assert_eq!(picker(&h).dir, root);
