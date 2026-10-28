@@ -73,6 +73,65 @@ has no file system: an application gives the picker a `MemoryFs` there
 gallery does for its demo folder. `FilePicker::new_in` makes a picker
 on any file system.
 
+## Previews
+
+Previews come from providers (`files::preview::PreviewProvider`) that
+plugins register on the files service:
+
+```rust
+use std::sync::Arc;
+use egui_pop::api::files::preview::{Body, Handles, Preview, PreviewProvider, PreviewRequest};
+
+#[derive(Debug)]
+struct Notes;
+
+impl PreviewProvider for Notes {
+    fn id(&self) -> &str {
+        "my_app.notes"
+    }
+    fn handles(&self) -> Handles {
+        Handles::new().extensions(&["note"]).magic(b"NOTE1")
+    }
+    fn priority(&self) -> i32 {
+        10
+    }
+    fn preview(&self, request: &PreviewRequest) -> Result<Option<Preview>, String> {
+        let bytes = request.read()?;
+        let text = String::from_utf8_lossy(&bytes[5.min(bytes.len())..]).into_owned();
+        Ok(Some(Preview::new(Body::Text { text, truncated: false }).fact("Format", "Note 1")))
+    }
+}
+
+// In a plugin's `connect`, after the files plugin's:
+// ctx.app().service(&FILES).unwrap().previews().register(Arc::new(Notes));
+# let _ = Arc::new(Notes);
+```
+
+- **Which provider.** A provider's `Handles` name file extensions,
+  MIME types (from the extension: `image/png`, a family `text/*`, any
+  file `*/*`), magic bytes a file starts with, and folders. The
+  providers that handle a path are tried from the highest `priority`
+  down; `accepts` may refuse a path its handles match. The first to
+  give a preview wins; one may pass (`Ok(None)`) to the next.
+- **A failure is a reason.** An error, or a panic in the provider, shows
+  as "no preview" with its reason; nothing crashes.
+- **Off the interface thread.** `Previews::get` answers from the cache,
+  else hands the path to a worker thread and says `Loading`; the frame
+  never waits, and the context is woken when the preview is ready.
+  Asking for another path cancels the one asked before (a long provider
+  checks `PreviewRequest::cancelled`). On the web, which has no threads,
+  previews are made in the frame. `Previews::compute` makes one at once
+  (agents, tests).
+- **Cached and capped.** Previews are kept by path, size and
+  modification time, up to 64 MiB (`Previews::set_cache_bytes`; the
+  oldest go first); a provider reads at most 64 MiB of a file
+  (`PreviewRequest::read` refuses more, `set_max_bytes`) and draws images
+  at most 256 pixels long (`set_max_side`).
+- **What a preview holds.** A body (an image, a text's first lines, a
+  document drawn simply, a folder's counts and first thumbnails, or
+  nothing) and facts: dimensions, pages, and labelled facts of the
+  provider's own.
+
 ## Steps
 
 | Step | Arguments | Default |

@@ -24,6 +24,9 @@
 //!   folder held in memory ([`fs::MemoryFs`]; the web build has no file
 //!   system), given with [`FilesPlugin::file_system`] or
 //!   [`Files::set_file_system`].
+//! - **Previews** come from pluggable providers ([`preview`]): plugins
+//!   register theirs with [`Files::previews`]; they are made off the
+//!   interface thread, cancelled when the selection moves, and cached.
 //!
 //! Steps (ADR 0011):
 //!
@@ -81,8 +84,10 @@ use crate::zones::{self, Block};
 use crate::{Ctx, Plugin, PluginError};
 
 pub mod fs;
+pub mod preview;
 
 use fs::SharedFs;
+use preview::Previews;
 
 /// The file chooser, as a service.
 pub const FILES: ServiceToken<Files> = ServiceToken::new("app.files");
@@ -288,6 +293,7 @@ struct State {
     native: bool,
     /// Where the in-app picker reads (none: the system's file system).
     fs: Option<SharedFs>,
+    previews: Previews,
 }
 
 /// The choices open, as a service.
@@ -325,6 +331,12 @@ impl Files {
     /// Reads from `fs` in the in-app pickers opened from now on.
     pub fn set_file_system(&self, fs: SharedFs) {
         lock(&self.0).fs = Some(fs);
+    }
+
+    /// The preview providers, their cache and their worker: a plugin
+    /// registers its providers here ([`Previews::register`]).
+    pub fn previews(&self) -> Previews {
+        lock(&self.0).previews.clone()
     }
 
     /// Starts a choice; its result comes later through the [`Pending`].
@@ -474,6 +486,7 @@ impl Files {
                 d
             }).collect::<Vec<_>>(),
             "last": s.last.iter().cloned().collect::<Vec<_>>(),
+            "previews": s.previews.describe(),
         })
     }
 
