@@ -48,6 +48,10 @@ publishes.
   `links::Inline` draws them, each link with the link widget; tips,
   toasts and settings descriptions use it. A text without any of it is
   drawn as before.
+- The gallery's `viewer` page (egui-pop-gallery): its own help pages,
+  an anchor, a page that is not there, a remote image waiting for the
+  user (fetched from a pretend network), short texts in the inline
+  subset.
 - The gallery's `links` page (egui-pop-gallery): declared links, links
   that ask first (from content, a text showing another address, an
   internationalised host), local files, a blocked scheme, egui's own

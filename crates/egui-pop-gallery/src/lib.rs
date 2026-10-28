@@ -10,7 +10,8 @@
 //! blocks); the application's history (its panel, a click jumping to a
 //! step); settings applied live; translations; the clipboard (typed
 //! items between widgets, paste special); links (one policy, the
-//! confirmation, an agent's request); the platform services
+//! confirmation, an agent's request); the viewer (help pages, find,
+//! zoom, remote images once allowed); the platform services
 //! (simulated unless `--platform`); the debug bridge; Help > About, and
 //! the Help menu's links to the repository and the docs.
 
@@ -34,7 +35,7 @@ use pages::story::PagePlugin;
 pub const TITLE: &str = "egui-pop gallery";
 
 /// The pages, as named on the command line.
-pub const PAGES: [&str; 56] = [
+pub const PAGES: [&str; 57] = [
     "overview",
     "tokens",
     "builtins",
@@ -81,6 +82,7 @@ pub const PAGES: [&str; 56] = [
     "contexts",
     "clipboard",
     "links",
+    "viewer",
     "strips",
     "jobs",
     "frame",
@@ -284,6 +286,8 @@ pub fn builder(options: &Options) -> AppBuilder {
         .plugin(egui_pop::api::clipboard::ClipboardPlugin)
         .plugin(pages::clipboard::ClipboardPage)
         .plugin(pages::links::LinksPage)
+        .plugin(pages::viewer::plugin())
+        .plugin(pages::viewer::ViewerPage)
         .plugin(egui_pop::api::strips::StripsPlugin::default())
         .plugin(pages::strips::StripsPage)
         .plugin(jobs_plugin(&jobs_sim))
