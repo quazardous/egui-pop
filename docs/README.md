@@ -44,6 +44,9 @@ of every crate with every feature on.
   breadcrumb) and modes (global states and their chips) owned by the
   kernel and projected by the interface, kernel state and view state,
   how a plugin reacts.
+- [History](history.md): undo histories owned by the kernel, which one
+  Ctrl+Z undoes, the "Go there" toast, the history panel and the
+  agents' `history.*`.
 - [The clipboard](clipboard.md): typed items kept by the owner,
   readable fallbacks on the system clipboard, a paste negotiated with
   its target, types, transforms and sanitisers declared by plugins,

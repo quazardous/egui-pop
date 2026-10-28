@@ -276,7 +276,7 @@ store, commands and steps: [State or event](state-or-event.md)):
   history panel that walks a change made out of sight says where in a
   toast ("Undone in Photo 3"), with "Go there"; a component's local
   history (the theme editor, the settings window) is undone where it
-  is shown and says nothing.
+  is shown and says nothing. See [History](history.md).
 
 The stack's own keys (`place`, `placeDepth`, `modePushed`,
 `mode.<group>`, `payload`, `payload.<field>`) are the projection's alone: a plugin setting one by
