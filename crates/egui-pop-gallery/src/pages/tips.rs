@@ -85,6 +85,17 @@ impl Plugin for TipsPage {
 
 fn show(ui: &mut Ui, app: &AppHandle) {
     ui.label("Plugins register tips, in code or in files (tips/<id>.md: a header, a title, the text with {key} for the command's key in force); a dismissed tip is remembered in the settings (tips.dismissed) and comes back with \"Show every tip again\".");
+    // At the top: the page is taller than the window, and the card
+    // floats over its lower part.
+    ui.horizontal(|ui| {
+        if ui.button("Show every tip again").clicked() {
+            app.run(CMD_TIPS_RESET, serde_json::Value::Null);
+        }
+        // The browser, as Help > Tips… opens it.
+        if ui.button("Browse the tips").clicked() {
+            app.run(CMD_TIPS_BROWSE, serde_json::Value::Null);
+        }
+    });
     section(ui, "Tip of the day");
     if !tips::tip_of_the_day(ui, app) {
         ui.weak("No tip of the day to show: all dismissed, closed or turned off.");
@@ -101,14 +112,15 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     });
     section(ui, "A tip beside what it is about");
     ui.label("A tip names its target; the card goes beside it, never over it, with a halo. Escape, \"Not now\" or \"Got it\" closes it.");
+    // The target last on its row: the card goes after it, over nothing
+    // of the row.
     ui.horizontal(|ui| {
-        tips::mark(ui.button("Import"), IMPORT_TARGET);
-        ui.add_space(ui.spacing().item_spacing.x);
         if ui.button("Show the tip again").clicked()
             && let Some(t) = app.service(&TIPS)
         {
             let _ = t.show(app, POINTING_TIP);
         }
+        tips::mark(ui.button("Import"), IMPORT_TARGET);
     });
     // Shown once when the page first opens.
     let once = egui::Id::new("gallery.tips.pointing-shown");
@@ -143,13 +155,4 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                 ui.end_row();
             }
         });
-    ui.horizontal(|ui| {
-        if ui.button("Show every tip again").clicked() {
-            app.run(CMD_TIPS_RESET, serde_json::Value::Null);
-        }
-        // The browser, as Help > Tips… opens it.
-        if ui.button("Browse the tips").clicked() {
-            app.run(CMD_TIPS_BROWSE, serde_json::Value::Null);
-        }
-    });
 }

@@ -56,8 +56,9 @@ publishes.
   the bottom corner at the start without one. Commands `tips.show`,
   `tips.next`, `tips.gotIt`, `tips.notNow` (Escape), `tips.off` and,
   for agents, `tips.current`; the `tipShown` context key and a
-  `tip.shown` event. The gallery's tips page shows a tip pointing at a
-  button.
+  `tip.shown` event. `tips.reset` ("Show every tip again") also forgets
+  which tips were shown today; the commands used stay recorded. The
+  gallery's tips page shows a tip pointing at a button.
 - A tips browser with a switch per plugin (egui-pop-api;
   docs/tips.md): "Tips…" in the Help menu (`tips.browse`, in a dialog)
   lists every tip by the plugin that declared it, with its text, whether
