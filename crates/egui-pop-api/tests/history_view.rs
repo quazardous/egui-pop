@@ -153,3 +153,147 @@ fn the_panel_lists_the_steps_and_a_click_jumps_there() {
     let line = history::line(&handle, &APP).unwrap();
     assert_eq!(line.redo.len(), 3);
 }
+
+#[test]
+fn a_pointer_resting_on_a_row_lets_the_window_idle() {
+    let app = app();
+    let handle = app.handle().clone();
+    handle.set_panel_visible(&PANEL_HISTORY, true);
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(900.0, 600.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+    h.run();
+    h.run();
+    // Resting on "Start": previewed, and the passes settle.
+    h.get_by_label("Start").hover();
+    h.run();
+    assert_eq!(
+        history::previewing(&handle),
+        Some((APP, history::At::Step(0)))
+    );
+    for _ in 0..5 {
+        h.step();
+    }
+    assert!(
+        !h.ctx.has_requested_repaint(),
+        "a resting pointer asks for no repaint"
+    );
+    assert!(history::previewing(&handle).is_some());
+    // Moved away: the preview ends in the pass it leaves.
+    h.hover_at(egui::pos2(899.0, 599.0));
+    h.step();
+    assert_eq!(history::previewing(&handle), None);
+    h.run();
+    let store = handle.store();
+    assert_eq!(
+        lock(&store).get(N).unwrap().value,
+        Value::Int(3),
+        "nothing committed"
+    );
+}
+
+#[test]
+fn an_agent_takes_restores_and_deletes_snapshots() {
+    let mut app = app();
+    let read = run(&mut app, "history.read", json!({ "scope": "app" })).unwrap();
+    assert_eq!(read["features"]["snapshots"], true);
+    // A dry run takes nothing; a stale revision is refused.
+    let dry = run(
+        &mut app,
+        "history.snapshot",
+        json!({ "scope": "app", "name": "three", "dry_run": true }),
+    )
+    .unwrap();
+    assert_eq!(dry["snapshot"]["id"], 0);
+    assert!(history::snapshots(&app.handle().clone(), &APP).is_empty());
+    let stale = run(
+        &mut app,
+        "history.snapshot",
+        json!({ "scope": "app", "name": "three", "if_rev": 999 }),
+    );
+    assert!(stale.is_err());
+    let snap = run(
+        &mut app,
+        "history.snapshot",
+        json!({ "scope": "app", "name": "three", "if_rev": read["rev"] }),
+    )
+    .unwrap();
+    let id = snap["snapshot"]["id"].as_u64().unwrap();
+    // Without a name: numbered.
+    let second = run(&mut app, "history.snapshot", json!({ "scope": "app" })).unwrap();
+    assert_eq!(second["snapshot"]["name"], "Snapshot 2");
+    run(&mut app, "history.undo", json!({ "scope": "app" })).unwrap();
+    assert_eq!(n(&app), Value::Int(2));
+    // Restored as a new step.
+    let restored = run(
+        &mut app,
+        "history.restore",
+        json!({ "scope": "app", "snapshot": id }),
+    )
+    .unwrap();
+    assert_eq!(restored["steps"].as_array().unwrap().len(), 1);
+    assert_eq!(n(&app), Value::Int(3));
+    let read = run(&mut app, "history.read", json!({ "scope": "app" })).unwrap();
+    assert_eq!(read["snapshots"].as_array().unwrap().len(), 2);
+    run(
+        &mut app,
+        "history.drop_snapshot",
+        json!({ "scope": "app", "snapshot": id }),
+    )
+    .unwrap();
+    assert!(
+        run(
+            &mut app,
+            "history.restore",
+            json!({ "scope": "app", "snapshot": id }),
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn an_agent_undoes_one_step_out_of_order_when_nothing_later_touched_it() {
+    let mut app = app();
+    {
+        let store = app.handle().store();
+        let mut s = lock(&store);
+        s.declare(&OwnerId::USER, "doc/m", Descriptor::int("M", 0, 9, 0))
+            .unwrap();
+        s.set(Set::new("doc/m", Change::To(Value::Int(5)), Origin::User))
+            .unwrap();
+        s.seal();
+    }
+    let read = run(&mut app, "history.read", json!({ "scope": "app" })).unwrap();
+    let first = read["undo"][0]["id"].as_u64().unwrap();
+    let third = read["undo"][2]["id"].as_u64().unwrap();
+    // `doc/n` changed again later: refused, with the reason.
+    let refused = run(
+        &mut app,
+        "history.undo_step",
+        json!({ "scope": "app", "step": first }),
+    )
+    .unwrap_err();
+    assert!(refused.contains("later step"), "{refused}");
+    // The last `doc/n` step: only `doc/m` came after.
+    let dry = run(
+        &mut app,
+        "history.undo_step",
+        json!({ "scope": "app", "step": third, "dry_run": true }),
+    )
+    .unwrap();
+    assert_eq!(dry["dry_run"], true);
+    assert_eq!(n(&app), Value::Int(3));
+    run(
+        &mut app,
+        "history.undo_step",
+        json!({ "scope": "app", "step": third }),
+    )
+    .unwrap();
+    assert_eq!(n(&app), Value::Int(2));
+    let m = lock(&app.handle().store())
+        .get("doc/m")
+        .unwrap()
+        .value
+        .clone();
+    assert_eq!(m, Value::Int(5));
+}

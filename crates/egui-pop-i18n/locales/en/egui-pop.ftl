@@ -310,6 +310,10 @@ command-gesture-value-step =
     .description = The wheel with these keys steps the slider under the pointer, focused or not.
     .title = Values: step with the wheel
 
+command-history-drop-snapshot =
+    .description = Deletes one of a history's snapshots (`scope`; none: where Undo goes now; `snapshot`, its id), refused unless its revision is still `if_rev`; with `dry_run`, only checks it is there.
+    .title = Delete a snapshot
+
 command-history-jump =
     .description = Brings a history (`scope`) to one of its steps (`to`, its id; 0: the start) by undos or redos, all or nothing, refused unless its revision is still `if_rev`; with `dry_run`, only says which steps it would walk.
     .title = Jump in a history
@@ -319,16 +323,28 @@ command-history-list =
     .title = List the histories
 
 command-history-read =
-    .description = A history's steps (`scope`; none: where Undo goes now): `undo`, oldest first, and `redo`, the next one last; each step's id, label and its text in the interface's language, origin, group, place and time; the history's revision and head.
+    .description = A history's steps (`scope`; none: where Undo goes now): `undo`, oldest first, and `redo`, the next one last; each step's id, label and its text in the interface's language, origin, group, place and time; the history's revision and head; its `snapshots`, the `replaced` steps its owner keeps (each with the step it came `after`) and the `features` its owner supports.
     .title = Read a history
 
 command-history-redo =
     .description = Redoes the last undone step of a history (`scope`; none: where Redo goes now), refused unless its revision is still `if_rev`; with `dry_run`, only says what it would redo.
     .title = Redo in a history
 
+command-history-restore =
+    .description = Brings a history (`scope`; none: where Undo goes now) back to one of its snapshots (`snapshot`, its id) as one new step an undo takes back, refused unless its revision is still `if_rev`; with `dry_run`, only says what it would change.
+    .title = Restore a snapshot
+
+command-history-snapshot =
+    .description = Pins a history's current state (`scope`; none: where Undo goes now) under `name` (none: numbered), refused unless its revision is still `if_rev`, or when its owner has no snapshots; with `dry_run`, only says what it would take.
+    .title = Take a snapshot
+
 command-history-undo =
     .description = Undoes the last step of a history (`scope`; none: where Undo goes now), refused unless its revision is still `if_rev`; with `dry_run`, only says what it would undo.
     .title = Undo in a history
+
+command-history-undo-step =
+    .description = Undoes one step of a history (`scope`; none: where Undo goes now; `step`, its id) out of order: the newest as an undo does, an older one by a new step putting its values back, refused when a later step changed one of them or when its owner does not allow it, and unless its revision is still `if_rev`; with `dry_run`, only checks it.
+    .title = Undo one step
 
 command-job-cancel =
     .description = Asks the host to cancel the job `id`; it shows as cancelling until the host says it is cancelled.
@@ -864,11 +880,31 @@ egui-pop-frame-window-menu = Window menu
 
 egui-pop-history-by = { $label } ({ $origin })
 
+egui-pop-history-delete-snapshot = Delete the snapshot
+
 egui-pop-history-jump = Go back or forward to this step
 
 egui-pop-history-none = No history
 
+egui-pop-history-preview-change = { $what }: { $then } (now { $now })
+
+egui-pop-history-replaced = { $label } (replaced)
+
+egui-pop-history-restore = Restore
+
+egui-pop-history-restore-hint = Go back to this snapshot (a new step)
+
+egui-pop-history-show-replaced = Show replaced steps
+
+egui-pop-history-snapshot-name = Snapshot { $n }
+
+egui-pop-history-snapshots = Snapshots
+
 egui-pop-history-start = Start
+
+egui-pop-history-take-snapshot = Take a snapshot
+
+egui-pop-history-undo-this = Undo this step
 
 egui-pop-indicator-done = Done
 

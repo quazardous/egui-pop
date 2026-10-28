@@ -124,6 +124,29 @@ publishes.
   text's name in paste special are catalogue strings
   (`clipboard::title_of`, `clipboard::format_title`). English and French
   strings.
+- Snapshots, the hover preview, "Undo this step" and the replaced
+  steps in the history (egui-pop-model, egui-pop-api, ADR 0014;
+  docs/history.md): `History` gains `features`, `snapshots`,
+  `snapshot`, `restore`, `forget`, `undo_step`, `replaced` and
+  `preview`, each with a default (unsupported, or nothing), so an owner
+  implementing none of them keeps working. `StoreHistory` supports them
+  all over the value store (`Store::take_snapshot`,
+  `Store::restore_snapshot`, `Store::undo_step_in`, `Store::replaced_in`,
+  `Store::values_at`; a jump reaches a replaced step). The history
+  panel lists the snapshots above the steps (a click restores one, a
+  context menu restores or deletes it, a "Take a snapshot" button),
+  previews the row under the pointer (the owner's answer, what differs,
+  in its tooltip; ended in the pass the pointer leaves, and a pointer
+  resting on a row lets the window idle; `history::hover_in` and
+  `history::rows_drawn` give a host's own rows the same), offers "Undo this
+  step" in a step's context menu (a refusal says why in a toast) and
+  shows the replaced steps behind a "Show replaced steps" toggle. New
+  steps `edit.restore` and `edit.undo_step`; agents get
+  `history.snapshot`, `history.restore`, `history.drop_snapshot` and
+  `history.undo_step` (with `scope`, `if_rev` and `dry_run`), and
+  `history.read` lists the snapshots, the replaced steps and the
+  features. The gallery's `history` page shows them all, with a
+  snapshot taken as an agent.
 - The gallery's `history` page (egui-pop-gallery): values bound to the
   store, a button making a change as an agent, and the history panel's
   list beside them, a click jumping to a step; the History panel is in
@@ -140,9 +163,7 @@ publishes.
   `if_rev` and `dry_run`; kept out of the palette) run through the same
   steps as the keys (a dry run changes nothing and publishes no
   `edit.undone` nor `history.changed`); `history::ask` is
-  the same request from code. Snapshots and the hover
-  preview of the ADR's panel wait on owner support (the contract has no
-  snapshot nor preview request yet).
+  the same request from code.
 - Tips declared in files (egui-pop-api; docs/tips.md): `tips/<id>.md`, a
   header (`id`, `surface`, `command`, `target`, `contextual`), a
   `# Title` and the text, registered with `Tips::add_files` (built in
@@ -606,6 +627,11 @@ publishes.
 - `AppHandle::local` is public (egui-pop-api): a host or a plugin keeps
   its own state on the application side, one value per type, as
   egui-pop's own services do (a clipboard endpoint's state, for one).
+- `history::RefusalKind` has an `Unsupported` kind, and `history::Walk`
+  `Restore` and `UndoStep` (egui-pop-model, egui-pop-api): a `match`
+  over either needs the new arms. The value store keeps the redo list a
+  new step drops (as replaced steps, as many as the cap), and the
+  history panel's refusals now show in a toast.
 - The "Undone in <place>" toast reads the place from the step itself
   (egui-pop-api, ADR 0014): the context stack tells the value store
   where new steps are made (`Store::set_place`), and an undo, a redo or

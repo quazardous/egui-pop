@@ -141,6 +141,10 @@ const IN_INTERFACE: &[CommandId] = &[
     crate::history_view::CMD_UNDO,
     crate::history_view::CMD_REDO,
     crate::history_view::CMD_JUMP,
+    crate::history_view::CMD_SNAPSHOT,
+    crate::history_view::CMD_RESTORE,
+    crate::history_view::CMD_DROP_SNAPSHOT,
+    crate::history_view::CMD_UNDO_STEP,
     crate::contexts::CMD_BACK,
     crate::contexts::CMD_UP,
     crate::contexts::CMD_ENTER,
@@ -3213,6 +3217,20 @@ impl App {
                 "Brings a history to one of its steps (`to`, 0: the start) by undos or redos, all or nothing.",
             )
             .args(json!({ "scope": "app", "to": 3, "origin": "user" })),
+        )?;
+        ctx.step(
+            StepSpec::new(
+                crate::history::STEP_RESTORE,
+                "Brings a history back to one of its snapshots (`snapshot`), as a new step.",
+            )
+            .args(json!({ "scope": "app", "snapshot": 1, "origin": "user" })),
+        )?;
+        ctx.step(
+            StepSpec::new(
+                crate::history::STEP_UNDO_STEP,
+                "Undoes one step of a history (`step`) out of order, when its owner allows it.",
+            )
+            .args(json!({ "scope": "app", "step": 3, "origin": "user" })),
         )?;
         ctx.on(crate::hooks::On::Pass, |app, _| crate::history::pass(app));
         ctx.command(

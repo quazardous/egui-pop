@@ -889,6 +889,37 @@ pub const HISTORY_BY: StrKey = StrKey::new("egui-pop-history-by", "{ $label } ({
 /// What a row of the history panel does.
 pub const HISTORY_JUMP: StrKey =
     StrKey::new("egui-pop-history-jump", "Go back or forward to this step");
+/// The history panel's snapshots, as a heading.
+pub const HISTORY_SNAPSHOTS: StrKey = StrKey::new("egui-pop-history-snapshots", "Snapshots");
+/// The history panel's button pinning the current state.
+pub const HISTORY_TAKE_SNAPSHOT: StrKey =
+    StrKey::new("egui-pop-history-take-snapshot", "Take a snapshot");
+/// A new snapshot's name, numbered.
+pub const HISTORY_SNAPSHOT_NAME: StrKey =
+    StrKey::new("egui-pop-history-snapshot-name", "Snapshot { $n }");
+/// A snapshot row's action, and its context menu's first item.
+pub const HISTORY_RESTORE: StrKey = StrKey::new("egui-pop-history-restore", "Restore");
+/// What a snapshot row does.
+pub const HISTORY_RESTORE_HINT: StrKey = StrKey::new(
+    "egui-pop-history-restore-hint",
+    "Go back to this snapshot (a new step)",
+);
+/// A snapshot row's context menu: delete it.
+pub const HISTORY_DELETE_SNAPSHOT: StrKey =
+    StrKey::new("egui-pop-history-delete-snapshot", "Delete the snapshot");
+/// A step row's context menu: undo that one step, out of order.
+pub const HISTORY_UNDO_THIS: StrKey = StrKey::new("egui-pop-history-undo-this", "Undo this step");
+/// The history panel's toggle showing the steps new steps replaced.
+pub const HISTORY_SHOW_REPLACED: StrKey =
+    StrKey::new("egui-pop-history-show-replaced", "Show replaced steps");
+/// A step a new step dropped from the redo list.
+pub const HISTORY_REPLACED: StrKey =
+    StrKey::new("egui-pop-history-replaced", "{ $label } (replaced)");
+/// One line of a row's preview: a value there, and now.
+pub const HISTORY_PREVIEW_CHANGE: StrKey = StrKey::new(
+    "egui-pop-history-preview-change",
+    "{ $what }: { $then } (now { $now })",
+);
 /// A crumb of the status bar's breadcrumb, going back to its place.
 pub const CONTEXT_GO_TO: StrKey = StrKey::new("egui-pop-context-go-to", "Go to { $place }");
 /// The status bar's last crumb, where the user is.
@@ -1321,6 +1352,16 @@ pub const ALL: &[StrKey] = &[
     HISTORY_START,
     HISTORY_BY,
     HISTORY_JUMP,
+    HISTORY_SNAPSHOTS,
+    HISTORY_TAKE_SNAPSHOT,
+    HISTORY_SNAPSHOT_NAME,
+    HISTORY_RESTORE,
+    HISTORY_RESTORE_HINT,
+    HISTORY_DELETE_SNAPSHOT,
+    HISTORY_UNDO_THIS,
+    HISTORY_SHOW_REPLACED,
+    HISTORY_REPLACED,
+    HISTORY_PREVIEW_CHANGE,
     CONTEXT_GO_TO,
     CONTEXT_HERE,
     CONTEXT_MORE_PLACES,
