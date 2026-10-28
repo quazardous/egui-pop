@@ -75,6 +75,9 @@ egui-phosphor = { version = "0.14", default-features = false, features = ["regul
 eframe = { version = "0.36", default-features = false }
 # MIT; the system's file chooser (xdg portal on Linux).
 rfd = "0.17"
+# MIT OR Apache-2.0: PNG and JPEG decoded for the file picker's previews
+# (eframe and egui_kittest already depend on it).
+image = { version = "0.25", default-features = false }
 # MIT: docked tabs and splits for the workbench's areas.
 egui_dock = { version = "0.21", default-features = false }
 egui-pop = { version = "0.2.0", path = "crates/egui-pop" }

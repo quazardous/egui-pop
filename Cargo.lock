@@ -1080,6 +1080,7 @@ dependencies = [
  "egui-pop-win32",
  "egui_dock",
  "egui_kittest",
+ "image",
  "log",
  "profiling",
  "raw-window-handle",
@@ -2241,6 +2242,8 @@ dependencies = [
  "num-traits",
  "png 0.18.1",
  "tiff",
+ "zune-core",
+ "zune-jpeg",
 ]
 
 [[package]]

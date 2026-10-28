@@ -16,7 +16,7 @@ authors.workspace = true
 workspace = true
 
 [features]
-default = ["eframe", "phosphor", "theme-zip", "bundled-fonts"]
+default = ["eframe", "phosphor", "theme-zip", "bundled-fonts", "image-previews"]
 ## egui-pop's default font pair, Inter for interface text and JetBrains
 ## Mono NL (without ligatures, tabular digits) for values and code,
 ## subset to Latin, Greek and Cyrillic: about 620 KB, under the SIL Open
@@ -115,6 +115,9 @@ platform-clipboard-wayland = ["platform-clipboard", "egui-pop-platform/clipboard
 ## The system's file chooser (through `rfd`: the xdg desktop portal on
 ## Linux); without it, the in-app picker.
 native-dialogs = ["egui-pop-api/native-dialogs"]
+## PNG and JPEG previews in the in-app file picker, decoded with the
+## `image` crate (MIT OR Apache-2.0), which eframe already uses.
+image-previews = ["egui-pop-api/image-previews"]
 
 [dependencies]
 egui.workspace = true

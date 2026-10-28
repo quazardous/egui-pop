@@ -29,7 +29,9 @@
 //!   interface thread, cancelled when the selection moves, and cached.
 //!   The in-app picker shows the selected entry's preview and facts in
 //!   a pane beside the list (`Alt+P` shows or hides it; the
-//!   `files.preview` setting remembers).
+//!   `files.preview` setting remembers). Built in ([`providers`]):
+//!   images (PNG and JPEG, feature `image-previews`), text and code,
+//!   Markdown drawn simply, folders with their first images.
 //!
 //! Steps (ADR 0011):
 //!
@@ -88,6 +90,7 @@ use crate::{Ctx, Plugin, PluginError};
 
 pub mod fs;
 pub mod preview;
+pub mod providers;
 
 use fs::SharedFs;
 use preview::Previews;
@@ -597,6 +600,7 @@ pub const PLUGIN: PluginId = PluginId::from_static("egui_pop.files");
 pub struct FilesPlugin {
     native: bool,
     fs: Option<SharedFs>,
+    builtin_previews: bool,
 }
 
 impl Default for FilesPlugin {
@@ -605,6 +609,7 @@ impl Default for FilesPlugin {
         Self {
             native: true,
             fs: None,
+            builtin_previews: true,
         }
     }
 }
@@ -615,6 +620,7 @@ impl FilesPlugin {
         Self {
             native: false,
             fs: None,
+            builtin_previews: true,
         }
     }
 
@@ -622,6 +628,13 @@ impl FilesPlugin {
     /// from the system's file system.
     pub fn file_system(mut self, fs: SharedFs) -> Self {
         self.fs = Some(fs);
+        self
+    }
+
+    /// Without the built-in preview providers ([`providers::builtin`]):
+    /// only those plugins register.
+    pub fn without_builtin_previews(mut self) -> Self {
+        self.builtin_previews = false;
         self
     }
 }
@@ -639,6 +652,11 @@ impl Plugin for FilesPlugin {
         let files = Files::default();
         if let Some(fs) = self.fs.clone() {
             files.set_file_system(fs);
+        }
+        if self.builtin_previews {
+            for p in providers::builtin() {
+                files.previews().register(p);
+            }
         }
         ctx.setting(
             SETTING_NATIVE,
