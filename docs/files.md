@@ -146,6 +146,18 @@ impl PreviewProvider for Notes {
   - folders: how many items, and the first images as the providers
     preview them (four at most, among the first sixteen files that are
     images or of no known type).
+- **The system's thumbnails** (feature `platform-thumbnails` of the
+  facade, part of `platform`; `egui_pop::platform::thumbnails`, an
+  opt-in `ThumbnailsPlugin`): for what egui-pop's providers do not
+  preview (PDF, office documents, videos, fonts…), at the lowest
+  priority and on the system's file system only. On Linux and the BSDs
+  it reads the freedesktop thumbnail cache (a thumbnail whose
+  `Thumb::MTime` is the file's), else runs the installed thumbnailer
+  for the file's MIME type (the shared MIME database's globs) into a
+  temporary file, stopped after 10 s (`ThumbnailsPlugin::timeout`) or
+  when the selection moves; it reads the cache and does not write it.
+  The Windows shell's thumbnails and macOS's QuickLook are not done
+  yet: the provider gives that as its reason. The web has none.
 - **What a preview holds.** A body (an image, a text's first lines, a
   document drawn simply, a folder's counts and first thumbnails, or
   nothing) and facts: dimensions, pages, and labelled facts of the

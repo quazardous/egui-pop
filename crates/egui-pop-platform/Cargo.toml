@@ -45,6 +45,10 @@ clipboard = ["dep:arboard", "dep:png", "dep:base64"]
 ## compositor offers it (arboard's `wayland-data-control`), not only
 ## through XWayland.
 clipboard-wayland = ["clipboard", "arboard/wayland-data-control"]
+## The system's thumbnails as a preview provider of the file picker
+## (`thumbnails`): the freedesktop cache and thumbnailers. Off by
+## default.
+thumbnails = ["dep:image"]
 
 [dependencies]
 egui.workspace = true
@@ -56,6 +60,8 @@ serde.workspace = true
 serde_json.workspace = true
 # MIT OR Apache-2.0: the clock on the web (std's, re-exported elsewhere).
 web-time = "1"
+# MIT OR Apache-2.0: thumbnails decoded (`thumbnails`).
+image = { workspace = true, optional = true, features = ["png", "jpeg"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # 0BSD OR Apache-2.0: local sockets (named pipes on Windows).

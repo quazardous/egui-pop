@@ -147,6 +147,14 @@ publishes.
   `history.read` lists the snapshots, the replaced steps and the
   features. The gallery's `history` page shows them all, with a
   snapshot taken as an agent.
+- The system's thumbnails in the file picker (egui-pop-platform,
+  feature `thumbnails`, off by default; the facade's
+  `platform-thumbnails`, part of `platform`): `thumbnails::ThumbnailsPlugin`
+  registers a preview provider of the lowest priority reading the
+  freedesktop thumbnail cache, else running the installed thumbnailer
+  for the file's MIME type, with a timeout and a cancel (Linux and the
+  BSDs). Windows (the shell's thumbnails) and macOS (QuickLook) are not
+  done yet and say so; the web has none. The gallery registers it.
 - Built-in file previews (egui-pop-api, docs/files.md), registered by
   the files plugin (`FilesPlugin::without_builtin_previews` leaves them
   out): PNG and JPEG images scaled down with their dimensions (feature

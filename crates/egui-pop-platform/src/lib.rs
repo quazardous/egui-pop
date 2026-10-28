@@ -22,6 +22,9 @@
 //!   text size setting.
 //! - [`clipboard`]: the system clipboard over arboard (files, images,
 //!   HTML, text, the primary selection), the clipboard's system backend.
+//! - [`thumbnails`] (off by default): the system's thumbnails as a
+//!   preview provider of the file picker (the freedesktop cache and
+//!   thumbnailers; not yet on Windows and macOS).
 //!
 //! Each service names its moments as steps (ADR 0011): a plugin may
 //! observe, veto or redirect, replace or extend them; the application's
@@ -51,6 +54,8 @@ pub mod notify;
 pub mod strings;
 #[cfg(feature = "text-scale")]
 pub mod text_scale;
+#[cfg(feature = "thumbnails")]
+pub mod thumbnails;
 #[cfg(feature = "tray")]
 pub mod tray;
 pub mod window;
