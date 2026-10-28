@@ -106,6 +106,12 @@ ctx.clip_type(
 )?;
 ```
 
+- A **type**'s title ("a colour") is a declaration, translated under
+  `clip-<format>.title` (`clipboard::type_title_key`) and listed by the
+  key extractor; an item's own title ("3 nodes") is translated when its
+  source gives it as a message, `ClipItem::title_key("demo-nodes",
+  &[("count", "3")])`, its English `title` the fallback. The undo
+  step's label ("Paste a colour") and paste special's formats use them.
 - A **type** renders its fallbacks for items whose source gave none,
   lists its parts (paste special offers each alone), and migrates a
   payload made at an older version before it is pasted.

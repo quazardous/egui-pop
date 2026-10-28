@@ -960,6 +960,13 @@ pub const CLIPBOARD_ONLY_PART: StrKey =
     StrKey::new("egui-pop-clipboard-only-part", "Only { $part }");
 /// What a lossy way to paste loses.
 pub const CLIPBOARD_LOSES: StrKey = StrKey::new("egui-pop-clipboard-loses", "loses { $what }");
+/// A paste's undo step, by the item's title.
+pub const CLIPBOARD_PASTE_STEP: StrKey =
+    StrKey::new("egui-pop-clipboard-paste-step", "Paste { $title }");
+/// A cut's undo step, by the item's title.
+pub const CLIPBOARD_CUT_STEP: StrKey = StrKey::new("egui-pop-clipboard-cut-step", "Cut { $title }");
+/// Plain text, as a format and as the title of text from outside.
+pub const CLIPBOARD_TEXT: StrKey = StrKey::new("egui-pop-clipboard-text", "text");
 
 /// Every string of this module, for catalogues and tests.
 pub const ALL: &[StrKey] = &[
@@ -1333,6 +1340,9 @@ pub const ALL: &[StrKey] = &[
     CLIPBOARD_AS_THROUGH,
     CLIPBOARD_ONLY_PART,
     CLIPBOARD_LOSES,
+    CLIPBOARD_PASTE_STEP,
+    CLIPBOARD_CUT_STEP,
+    CLIPBOARD_TEXT,
     STATUS_MORE,
     STATUS_ERRORS,
     STATUS_WARNINGS,

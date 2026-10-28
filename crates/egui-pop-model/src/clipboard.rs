@@ -268,6 +268,14 @@ pub struct Stripped {
     pub format: FormatId,
 }
 
+/// A title as a catalogue message: its key and its arguments.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TitleKey {
+    pub key: String,
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub args: std::collections::BTreeMap<String, String>,
+}
+
 /// What one copy made: a typed item with its readable fallbacks.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ClipItem {
@@ -277,8 +285,13 @@ pub struct ClipItem {
     /// The version of its type it was made at.
     pub version: u32,
     pub payload: Json,
-    /// What it is, for menus and toasts ("a colour", "3 nodes").
+    /// What it is, for menus and toasts ("a colour", "3 nodes"), in
+    /// English.
     pub title: String,
+    /// Its title as a catalogue message, shown in the interface's
+    /// language (`title` is its English).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title_key: Option<TitleKey>,
     /// Its other representations, richest first (text last).
     #[serde(default)]
     pub fallbacks: Vec<Repr>,
@@ -299,6 +312,7 @@ impl ClipItem {
             version,
             payload,
             title: title.into(),
+            title_key: None,
             fallbacks: Vec::new(),
             origin: ClipOrigin::default(),
             stripped: Vec::new(),
@@ -311,6 +325,20 @@ impl ClipItem {
         let mut item = Self::new(TEXT, 0, Json::String(text.into()), "text");
         item.external = true;
         item
+    }
+
+    /// Its title as a catalogue message with its arguments (`{ $count }`
+    /// nodes): the interface shows it in its language, the English
+    /// `title` where the catalogue has no translation.
+    pub fn title_key(mut self, key: &str, args: &[(&str, &str)]) -> Self {
+        self.title_key = Some(TitleKey {
+            key: key.into(),
+            args: args
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
+        });
+        self
     }
 
     /// Adds a fallback representation.

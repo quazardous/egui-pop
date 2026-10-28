@@ -553,6 +553,8 @@ egui-pop-clipboard-as-through = Comme { $format }, par { $transform }
 
 egui-pop-clipboard-copied-stripped = Copié ; laissé de côté : { $what }
 
+egui-pop-clipboard-cut-step = Couper { $title }
+
 egui-pop-clipboard-loses = perd { $what }
 
 egui-pop-clipboard-not-copied = Non copié : { $reason }
@@ -563,7 +565,11 @@ egui-pop-clipboard-only-part = Seulement { $part }
 
 egui-pop-clipboard-paste-special = Collage spécial
 
+egui-pop-clipboard-paste-step = Coller { $title }
+
 egui-pop-clipboard-pasted-lossy = Collé ; perdu : { $what }
+
+egui-pop-clipboard-text = texte
 
 egui-pop-close = Fermer
 

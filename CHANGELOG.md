@@ -43,6 +43,15 @@ publishes.
   translations; `strings::set_application` and `strings::application`
   hold it per context. The extractor keeps it a Fluent placeable in the
   English catalogue (egui-pop-i18n, `extract::plain_with`).
+- Translatable clipboard titles (egui-pop-api, egui-pop-model,
+  egui-pop-i18n; #73): a type's title is a declaration under
+  `clip-<format>.title` (`clipboard::type_title_key`), listed by the key
+  extractor; an item carries its title as a catalogue message with its
+  arguments (`ClipItem::title_key`), its English `title` the fallback;
+  the undo step's label ("Paste { $title }", "Cut { $title }") and plain
+  text's name in paste special are catalogue strings
+  (`clipboard::title_of`, `clipboard::format_title`). English and French
+  strings.
 - The gallery's `history` page (egui-pop-gallery): values bound to the
   store, a button making a change as an agent, and the history panel's
   list beside them, a click jumping to a step; the History panel is in
