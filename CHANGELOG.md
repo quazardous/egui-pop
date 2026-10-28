@@ -43,6 +43,20 @@ publishes.
   translations; `strings::set_application` and `strings::application`
   hold it per context. The extractor keeps it a Fluent placeable in the
   English catalogue (egui-pop-i18n, `extract::plain_with`).
+- Clipboard endpoints over elements and areas (egui-pop-api; #73): in
+  a node graph, a tree or a list of sliders the focus sits on each
+  node, row or slider, so `clipboard::bind_element` binds each one's
+  widget with its key and `clipboard::bind_area` any focused widget
+  whose centre lies in an area (a widget bound alone wins, then the
+  smaller area). The source and the target receive the element's key
+  (`ClipSource::copy_element`, `Cut::element`, `Paste::element`;
+  `clipboard::element` says the focused one), and agents name one with
+  `element` in `clipboard.copy` and `clipboard.paste`. The focused
+  widget's rectangle is read from egui's lists of widgets, never through
+  `Context::read_response`, which surrenders the focus of a widget not
+  hovered during a press. `clipboard::ways_for` and
+  `clipboard::paste_special_for` take a whole request (its element
+  included). Breaking: `Cut` and `Paste` have an `element` field.
 - Translatable clipboard titles (egui-pop-api, egui-pop-model,
   egui-pop-i18n; #73): a type's title is a declaration under
   `clip-<format>.title` (`clipboard::type_title_key`), listed by the key

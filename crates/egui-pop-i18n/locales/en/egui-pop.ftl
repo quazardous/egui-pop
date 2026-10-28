@@ -83,7 +83,7 @@ command-app-window-minimize =
     .title = Minimize
 
 command-clipboard-copy =
-    .description = Copies from an endpoint (`source`) into the session's slot (`slot`); `cut` deletes what was copied; `dry_run` says what would be copied and left out.
+    .description = Copies from an endpoint (`source`), one of its elements (`element`), into the session's slot (`slot`); `cut` deletes what was copied; `dry_run` says what would be copied and left out.
     .title = Copy from an endpoint
 
 command-clipboard-offers =
@@ -91,7 +91,7 @@ command-clipboard-offers =
     .title = What the clipboard offers
 
 command-clipboard-paste =
-    .description = Pastes the session's slot (`slot`) into an endpoint (`target`), in a `format`, through a `transform`, only some `parts`, checked against `if_rev`; `dry_run` says the plan and the changes without making them.
+    .description = Pastes the session's slot (`slot`) into an endpoint (`target`), one of its elements (`element`), in a `format`, through a `transform`, only some `parts`, checked against `if_rev`; `dry_run` says the plan and the changes without making them.
     .title = Paste into an endpoint
 
 command-clipboard-read =

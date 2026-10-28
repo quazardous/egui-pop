@@ -14,8 +14,11 @@
 //!   an endpoint by name ([`register`], or [`Ctx::clip_endpoint`]) with a
 //!   [`ClipSource`] (what a copy takes, what a cut deletes) and a
 //!   [`ClipTarget`] (the formats it accepts, how it applies a paste),
-//!   and says each pass which widget draws it ([`bind`]): the endpoint
-//!   of the focused widget is the one the Edit commands use.
+//!   and says each pass which widget draws it ([`bind`]), which widgets
+//!   draw its elements ([`bind_element`]: a graph's nodes, a tree's
+//!   rows, each with its key) or which area it covers ([`bind_area`]):
+//!   the endpoint of the focused widget is the one the Edit commands
+//!   use, and its source and target receive the element's key.
 //! - **Types, transforms and sanitisers** are declared by plugins and go
 //!   with them ([`Ctx::clip_type`], [`Ctx::clip_transform`],
 //!   [`Ctx::clip_sanitiser`]): a type renders its fallbacks, lists its
@@ -93,7 +96,7 @@
 //! ```
 
 use std::cell::{Cell, RefCell};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
 use std::rc::Rc;
 
@@ -278,12 +281,24 @@ pub struct Cut<'a> {
     pub item: &'a ClipItem,
     pub origin: &'a Origin,
     pub group: Option<GestureId>,
+    /// The element cut (a node, a row): the key its widget was bound
+    /// with ([`bind_element`]), or the one a request named.
+    pub element: Option<&'a str>,
 }
 
 /// What a copy takes from a component.
 pub trait ClipSource {
     /// The selection as an item; `None`: nothing to copy.
     fn copy(&self, app: &AppHandle) -> Option<ClipItem>;
+
+    /// What a copy takes from one element of the endpoint (a node, a
+    /// row: the key its widget was bound with, [`bind_element`], or the
+    /// one a request named); by default [`ClipSource::copy`], whatever
+    /// the element.
+    fn copy_element(&self, app: &AppHandle, element: Option<&str>) -> Option<ClipItem> {
+        let _ = element;
+        self.copy(app)
+    }
 
     /// Whether a copy would take something now (`canCopy`).
     fn can_copy(&self, _app: &AppHandle) -> bool {
@@ -319,6 +334,9 @@ pub struct Paste<'a> {
     /// The history group the target's writes carry (`Set::gesture`):
     /// the paste is one undo step.
     pub group: Option<GestureId>,
+    /// The element pasted into (a node, a row): the key its widget was
+    /// bound with ([`bind_element`]), or the one a request named.
+    pub element: Option<&'a str>,
 }
 
 impl Paste<'_> {
@@ -533,6 +551,17 @@ struct Endpoint {
     source: Option<Rc<dyn ClipSource>>,
     target: Option<Rc<dyn ClipTarget>>,
     widget: Option<egui::Id>,
+    /// An area: any focused widget whose centre lies inside, with the
+    /// pass it was bound in.
+    area: Option<(egui::Rect, u64)>,
+    /// Its elements' widgets: their keys and the pass each was bound in.
+    elements: HashMap<egui::Id, (String, u64)>,
+}
+
+/// Whether something bound in pass `at` is still current in pass `now`
+/// (bound this pass or the one before: a pass may ask before drawing).
+fn current(at: u64, now: u64) -> bool {
+    now.saturating_sub(at) <= 1
 }
 
 /// What the system clipboard holds, as far as the owner knows.
@@ -611,7 +640,10 @@ fn add_endpoint(
 ) {
     let st = state(app);
     let mut eps = st.endpoints.borrow_mut();
-    let widget = eps.get(name).and_then(|e| e.widget);
+    let (widget, area, elements) = eps
+        .remove(name)
+        .map(|e| (e.widget, e.area, e.elements))
+        .unwrap_or_default();
     eps.insert(
         name.into(),
         Endpoint {
@@ -619,6 +651,8 @@ fn add_endpoint(
             source,
             target,
             widget,
+            area,
+            elements,
         },
     );
 }
@@ -641,14 +675,93 @@ pub fn endpoints(app: &AppHandle) -> Vec<String> {
     state(app).endpoints.borrow().keys().cloned().collect()
 }
 
-/// The endpoint whose widget has the focus.
-pub fn focused(app: &AppHandle) -> Option<String> {
-    let id = app.egui().memory(|m| m.focused())?;
+/// Says that an endpoint covers an area, each pass it is drawn: any
+/// focused widget whose centre lies inside it (a node of a graph, a row
+/// of a tree, a slider of a list) uses the endpoint. A widget bound
+/// alone ([`bind`], [`bind_element`]) wins over an area.
+///
+/// The focused widget's rectangle is read from egui's lists of widgets,
+/// never through `Context::read_response`: building a response for a
+/// widget that is not hovered during a press makes egui surrender its
+/// focus.
+pub fn bind_area(app: &AppHandle, name: &str, area: egui::Rect) {
+    let now = app.egui().cumulative_pass_nr();
+    if let Some(e) = state(app).endpoints.borrow_mut().get_mut(name) {
+        e.area = Some((area, now));
+    }
+}
+
+/// Says which widget draws one element of an endpoint (a node, a row)
+/// and its key, each pass it is drawn: while that widget has the focus,
+/// the Edit commands use the endpoint, and its source and target receive
+/// the key ([`ClipSource::copy_element`], [`Cut::element`],
+/// [`Paste::element`]).
+pub fn bind_element(app: &AppHandle, name: &str, widget: egui::Id, key: &str) {
+    let now = app.egui().cumulative_pass_nr();
+    if let Some(e) = state(app).endpoints.borrow_mut().get_mut(name) {
+        e.elements.retain(|_, (_, at)| current(*at, now));
+        e.elements.insert(widget, (key.into(), now));
+    }
+}
+
+/// The key of an endpoint's element whose widget has the focus, if one
+/// was bound ([`bind_element`]).
+pub fn element(app: &AppHandle, name: &str) -> Option<String> {
+    let ctx = app.egui();
+    let id = ctx.memory(|m| m.focused())?;
+    let now = ctx.cumulative_pass_nr();
     state(app)
         .endpoints
         .borrow()
+        .get(name)?
+        .elements
+        .get(&id)
+        .filter(|(_, at)| current(*at, now))
+        .map(|(k, _)| k.clone())
+}
+
+/// A widget's rectangle from egui's lists of widgets (this pass's, else
+/// the last one's), with no side effect on the focus.
+fn widget_rect(ctx: &egui::Context, id: egui::Id) -> Option<egui::Rect> {
+    ctx.viewport(|v| {
+        v.this_pass
+            .widgets
+            .get(id)
+            .or_else(|| v.prev_pass.widgets.get(id))
+            .map(|w| w.rect)
+    })
+}
+
+/// The endpoint whose widget has the focus: one bound to it alone or as
+/// an element, else one whose area holds it.
+pub fn focused(app: &AppHandle) -> Option<String> {
+    let ctx = app.egui();
+    let id = ctx.memory(|m| m.focused())?;
+    let now = ctx.cumulative_pass_nr();
+    let st = state(app);
+    let eps = st.endpoints.borrow();
+    if let Some((n, _)) = eps.iter().find(|(_, e)| {
+        e.widget == Some(id) || e.elements.get(&id).is_some_and(|(_, at)| current(*at, now))
+    }) {
+        return Some(n.clone());
+    }
+    let areas: Vec<(&String, egui::Rect)> = eps
         .iter()
-        .find(|(_, e)| e.widget == Some(id))
+        .filter_map(|(n, e)| {
+            e.area
+                .filter(|(_, at)| current(*at, now))
+                .map(|(r, _)| (n, r))
+        })
+        .collect();
+    if areas.is_empty() {
+        return None;
+    }
+    let centre = widget_rect(&ctx, id)?.center();
+    // The smallest area holding it: an area nested in another wins.
+    areas
+        .into_iter()
+        .filter(|(_, r)| r.contains(centre))
+        .min_by(|a, b| a.1.area().total_cmp(&b.1.area()))
         .map(|(n, _)| n.clone())
 }
 
@@ -802,6 +915,10 @@ pub struct CopyRequest {
     /// Say what would be copied and left out, copy nothing.
     #[serde(default)]
     pub dry_run: bool,
+    /// The element copied from (a node, a row); the focused one's when
+    /// the Edit commands copy.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub element: Option<String>,
 }
 
 impl CopyRequest {
@@ -824,6 +941,12 @@ impl CopyRequest {
 
     pub fn slot(mut self, slot: Slot) -> Self {
         self.slot = Some(slot);
+        self
+    }
+
+    /// The element copied from.
+    pub fn element(mut self, key: &str) -> Self {
+        self.element = Some(key.into());
         self
     }
 }
@@ -854,6 +977,10 @@ pub struct PasteRequest {
     /// What the system clipboard held, when the paste key brought it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub text: Option<String>,
+    /// The element pasted into (a node, a row); the focused one's when
+    /// the Edit commands paste.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub element: Option<String>,
 }
 
 impl PasteRequest {
@@ -897,6 +1024,12 @@ impl PasteRequest {
 
     pub fn slot(mut self, slot: Slot) -> Self {
         self.slot = Some(slot);
+        self
+    }
+
+    /// The element pasted into.
+    pub fn element(mut self, key: &str) -> Self {
+        self.element = Some(key.into());
         self
     }
 }
@@ -950,7 +1083,7 @@ fn run_copy(app: &AppHandle, req: &CopyRequest, who: &Origin) -> Result<Json, St
         return Err(format!("`{}` cannot be cut", req.source));
     }
     let mut item = source
-        .copy(app)
+        .copy_element(app, req.element.as_deref())
         .ok_or_else(|| "nothing is selected to copy".to_string())?;
     let ty = clip_type(app, &item.kind);
     if item.title.is_empty() {
@@ -985,6 +1118,7 @@ fn run_copy(app: &AppHandle, req: &CopyRequest, who: &Origin) -> Result<Json, St
     item.stripped = stripped;
     let summary = json!({
         "source": req.source,
+        "element": req.element,
         "slot": slot,
         "kind": item.kind,
         "title": item.title,
@@ -1010,6 +1144,7 @@ fn run_copy(app: &AppHandle, req: &CopyRequest, who: &Origin) -> Result<Json, St
                 item: &item,
                 origin: who,
                 group: g,
+                element: req.element.as_deref(),
             },
         ) {
             group_end(app, g, false);
@@ -1070,6 +1205,7 @@ struct Ready {
     repr: Repr,
     lost: Option<String>,
     stripped: Vec<Stripped>,
+    element: Option<String>,
 }
 
 /// The item a paste takes: the owner's, or the external text the paste
@@ -1186,6 +1322,7 @@ fn prepare(app: &AppHandle, req: &PasteRequest, who: &Origin) -> Result<Ready, S
         repr,
         lost,
         stripped,
+        element: req.element.clone(),
     })
 }
 
@@ -1242,12 +1379,14 @@ fn run_paste(app: &AppHandle, req: &PasteRequest, who: &Origin) -> Result<Json, 
             dry_run: req.dry_run,
             origin: who,
             group,
+            element: req.element.as_deref(),
         },
     );
     group_end(app, group, changes.is_ok());
     let changes = changes?;
     Ok(json!({
         "target": req.target,
+        "element": req.element,
         "kind": ready.item.kind,
         "title": ready.item.title,
         "internal": ready.internal,
@@ -1287,6 +1426,23 @@ pub fn ways(
         target: target.into(),
         slot,
         text: text.map(Into::into),
+        ..PasteRequest::default()
+    };
+    ways_for(app, &base, origin)
+}
+
+/// The ways a request's item fits its target (its `target`, `slot`,
+/// `text` and `element`; its format, transform and parts ignored).
+pub fn ways_for(
+    app: &AppHandle,
+    request: &PasteRequest,
+    origin: &Origin,
+) -> Result<Vec<Way>, String> {
+    let base = PasteRequest {
+        target: request.target.clone(),
+        slot: request.slot.clone(),
+        text: request.text.clone(),
+        element: request.element.clone(),
         dry_run: true,
         ..PasteRequest::default()
     };
@@ -1365,6 +1521,7 @@ fn preview(
                 dry_run: true,
                 origin,
                 group: None,
+                element: ready.element.as_deref(),
             },
         )
         .ok()?;
@@ -1383,10 +1540,24 @@ pub fn paste_special(
     text: Option<&str>,
     origin: &Origin,
 ) -> Result<Json, String> {
+    let mut req = PasteRequest::new(target);
+    req.text = text.map(Into::into);
+    paste_special_for(app, &req, origin)
+}
+
+/// Opens paste special for a request (its `target`, `text` and
+/// `element`).
+pub fn paste_special_for(
+    app: &AppHandle,
+    request: &PasteRequest,
+    origin: &Origin,
+) -> Result<Json, String> {
+    let target = request.target.as_str();
+    let text = request.text.as_deref();
     let dialogs = app
         .service(&crate::dialogs::DIALOGS)
         .ok_or("paste special needs the dialogs plugin")?;
-    let ways = ways(app, target, None, text, origin)?;
+    let ways = ways_for(app, request, origin)?;
     if ways.is_empty() {
         return Err("nothing on the clipboard fits here".into());
     }
@@ -1411,7 +1582,7 @@ pub fn paste_special(
         options,
         CMD_CLIP_PASTE,
     )
-    .args(json!({ "target": target, "text": text }))
+    .args(json!({ "target": target, "text": text, "element": request.element }))
     .value_key("special");
     let id = dialogs.open(choose);
     Ok(json!({ "dialog": id, "ways": ways.len() }))
@@ -1525,6 +1696,15 @@ fn endpoint_arg(app: &AppHandle, args: &Json, key: &str) -> Result<String, Strin
     }
 }
 
+/// The element a command acts on: `args.element`, else the focused
+/// element of the endpoint.
+fn element_arg(app: &AppHandle, args: &Json, endpoint: &str) -> Option<String> {
+    match args.get("element").and_then(Json::as_str) {
+        Some(k) => Some(k.to_string()),
+        None => element(app, endpoint),
+    }
+}
+
 fn slot_arg(args: &Json, origin: &Origin) -> Slot {
     args.get("slot")
         .and_then(Json::as_str)
@@ -1586,6 +1766,8 @@ fn describe(app: &AppHandle) -> Json {
                 "source": e.source.is_some(),
                 "target": e.target.is_some(),
                 "bound": e.widget.is_some(),
+                "area": e.area.map(|(r, _)| [r.min.x, r.min.y, r.max.x, r.max.y]),
+                "elements": e.elements.len(),
                 "focused": focused.as_deref() == Some(n.as_str()),
             })
         })
@@ -1650,7 +1832,9 @@ impl Plugin for ClipboardPlugin {
                 .menu(MENU_EDIT, MENU_GROUP, 0),
             |call| {
                 let source = endpoint_arg(call.app, call.args, "source")?;
-                outcome_json(copy(call.app, CopyRequest::new(&source).cut(), call.origin))
+                let mut req = CopyRequest::new(&source).cut();
+                req.element = element_arg(call.app, call.args, &source);
+                outcome_json(copy(call.app, req, call.origin))
             },
         )?
         .command(
@@ -1662,7 +1846,9 @@ impl Plugin for ClipboardPlugin {
                 .menu(MENU_EDIT, MENU_GROUP, 1),
             |call| {
                 let source = endpoint_arg(call.app, call.args, "source")?;
-                outcome_json(copy(call.app, CopyRequest::new(&source), call.origin))
+                let mut req = CopyRequest::new(&source);
+                req.element = element_arg(call.app, call.args, &source);
+                outcome_json(copy(call.app, req, call.origin))
             },
         )?
         .command(
@@ -1674,7 +1860,10 @@ impl Plugin for ClipboardPlugin {
                 .menu(MENU_EDIT, MENU_GROUP, 2),
             |call| {
                 let target = endpoint_arg(call.app, call.args, "target")?;
-                let req = paste_args(call.args, target)?;
+                let mut req = paste_args(call.args, target)?;
+                if req.element.is_none() {
+                    req.element = element(call.app, &req.target);
+                }
                 outcome_json(paste(call.app, req, call.origin))
             },
         )?
@@ -1686,17 +1875,20 @@ impl Plugin for ClipboardPlugin {
                 .menu(MENU_EDIT, MENU_GROUP, 3),
             |call| {
                 let target = endpoint_arg(call.app, call.args, "target")?;
-                let req = paste_args(call.args, target.clone())?;
+                let mut req = paste_args(call.args, target)?;
+                if req.element.is_none() {
+                    req.element = element(call.app, &req.target);
+                }
                 if req.format.is_some() || req.transform.is_some() || req.parts.is_some() {
                     return outcome_json(paste(call.app, req, call.origin));
                 }
-                paste_special(call.app, &target, req.text.as_deref(), call.origin)
+                paste_special_for(call.app, &req, call.origin)
             },
         )?;
         let category = "Clipboard";
         ctx.command(
             CommandSpec::new(CMD_CLIP_COPY, "Copy from an endpoint", category)
-                .description("Copies from an endpoint (`source`) into the session's slot (`slot`); `cut` deletes what was copied; `dry_run` says what would be copied and left out.")
+                .description("Copies from an endpoint (`source`), one of its elements (`element`), into the session's slot (`slot`); `cut` deletes what was copied; `dry_run` says what would be copied and left out.")
                 .args(json!({ "source": "demo.swatches", "cut": false, "dry_run": true })),
             |call| {
                 let mut req: CopyRequest = parse(call.args, "a copy")?;
@@ -1706,7 +1898,7 @@ impl Plugin for ClipboardPlugin {
         )?
         .command(
             CommandSpec::new(CMD_CLIP_PASTE, "Paste into an endpoint", category)
-                .description("Pastes the session's slot (`slot`) into an endpoint (`target`), in a `format`, through a `transform`, only some `parts`, checked against `if_rev`; `dry_run` says the plan and the changes without making them.")
+                .description("Pastes the session's slot (`slot`) into an endpoint (`target`), one of its elements (`element`), in a `format`, through a `transform`, only some `parts`, checked against `if_rev`; `dry_run` says the plan and the changes without making them.")
                 .args(json!({ "target": "demo.swatches", "format": null, "transform": null, "if_rev": null, "dry_run": true })),
             |call| {
                 let target = call.args["target"]
