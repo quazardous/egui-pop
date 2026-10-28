@@ -50,6 +50,45 @@ use crate::steps::{HookFn, HookInfo, Outcome, StepHook, StepInfo, StepSpec, Step
 use crate::stories::{Story, StoryInfo};
 use crate::zones::{self, Block, DrawFn, ZoneInfo, ZoneTable, draw_chain};
 
+/// The number of the pass a viewport began last (keyed by the viewport),
+/// written by [`PassMarker`]: equal to `cumulative_pass_nr` while that
+/// pass runs, behind it once the pass has ended.
+const PASS_BEGUN: state::Slot<u64> = state::Slot::new("api.app.pass_begun");
+
+/// Marks each pass's beginning, so that [`App::logic`] tells a call
+/// inside a pass from one between passes.
+#[derive(Debug)]
+struct PassMarker;
+
+impl egui::plugin::Plugin for PassMarker {
+    fn debug_name(&self) -> &'static str {
+        "egui_pop_api::pass_marker"
+    }
+
+    fn on_begin_pass(&mut self, ui: &mut Ui) {
+        let ctx = ui.ctx();
+        PASS_BEGUN
+            .keyed(ctx.viewport_id())
+            .set(ctx, ctx.cumulative_pass_nr());
+    }
+}
+
+/// Adds [`PassMarker`] to `ctx`, once.
+fn install_pass_marker(ctx: &Context) {
+    if ctx.plugin_opt::<PassMarker>().is_none() {
+        ctx.add_plugin(PassMarker);
+    }
+}
+
+/// The viewport and the number of the pass running in `ctx`; `None`
+/// between passes (eframe's ticks of a hidden window, a test calling
+/// [`App::logic`] alone), or before the marker saw a pass begin.
+fn pass_in_progress(ctx: &Context) -> Option<(egui::ViewportId, u64)> {
+    let viewport = ctx.viewport_id();
+    let pass = ctx.cumulative_pass_nr();
+    (PASS_BEGUN.keyed(viewport).get(ctx) == Some(pass)).then_some((viewport, pass))
+}
+
 /// The user gives a command new keys, or none (`{ "command", "keys",
 /// "layer" }`; `keys` a shortcut, `null`, or an array of several: a
 /// pointer gesture's triggers).
@@ -2633,7 +2672,9 @@ impl AppBuilder {
             autosave: AutoSave::default(),
             rebuilds: 0,
             pointer: crate::pointer::Sync::default(),
+            logic_pass: None,
         };
+        install_pass_marker(ctx);
         *app.handle.0.writer.borrow_mut() = app
             .persist
             .clone()
@@ -2811,6 +2852,8 @@ pub struct App {
     rebuilds: u64,
     /// The pointer profile loaded and the map published.
     pointer: crate::pointer::Sync,
+    /// The pass the logic last ran in (`App::logic`).
+    logic_pass: Option<(egui::ViewportId, u64)>,
 }
 
 /// What the debounced saving of the settings, the keymap and the layout
@@ -4516,6 +4559,7 @@ impl App {
     /// context and shown in another, as test harnesses do).
     fn attach(&mut self, ctx: &Context) {
         *self.handle.0.ctx.borrow_mut() = ctx.clone();
+        install_pass_marker(ctx);
         let commands = self.handle.0.panel_commands.borrow().clone();
         if !strings::panel_commands(ctx).is_some_and(|c| Arc::ptr_eq(&c, &commands)) {
             strings::set_panel_commands(ctx, commands);
@@ -4847,8 +4891,24 @@ impl App {
         }
     }
 
-    /// Between frames: the theme asked for, requests, declarations.
+    /// Between frames: the theme asked for, requests, declarations, and
+    /// the `On::Pass` handlers.
+    ///
+    /// Runs once per pass: a second call inside the same egui pass (the
+    /// same viewport and `Context::cumulative_pass_nr`) does nothing.
+    /// eframe calls it from its `logic` hook and [`App::show`] calls it
+    /// again, so that an integration without that hook (plain egui,
+    /// kittest's `build_ui`) still runs it; the guard keeps the handlers
+    /// to one run per pass on both paths. Calls between passes always
+    /// run: eframe ticks the logic alone while the window is hidden, and
+    /// those ticks share one pass number.
     pub fn logic(&mut self, ctx: &Context) {
+        if let Some(pass) = pass_in_progress(ctx) {
+            if self.logic_pass == Some(pass) {
+                return;
+            }
+            self.logic_pass = Some(pass);
+        }
         profiling::scope!("pop.app.logic");
         self.attach(ctx);
         self.install_theme();
@@ -4912,6 +4972,9 @@ impl App {
 
     /// Draws the whole application in a `Ui` covering the window, after
     /// dispatching this frame's keys.
+    ///
+    /// Runs [`App::logic`] first, which does nothing when the host
+    /// already ran it in this pass (eframe's `logic` hook).
     pub fn show(&mut self, ui: &mut Ui) {
         profiling::scope!("pop.app.show");
         let ctx = ui.ctx().clone();

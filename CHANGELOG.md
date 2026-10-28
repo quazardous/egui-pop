@@ -709,6 +709,15 @@ publishes.
 
 ### Fixed
 
+- `App::logic` runs once per pass (egui-pop-api): under eframe and
+  kittest's `build_eframe`, the `logic` hook and `App::show` both ran
+  it, so every `On::Pass` handler ran twice a frame. A second call in
+  the same pass (the same viewport and `cumulative_pass_nr`) now does
+  nothing; `App::show` still runs it for hosts without the hook (plain
+  egui, kittest's `build_ui`), and calls between passes (eframe's
+  ticks of a hidden window, a test calling `logic` alone) always run.
+  A host driving egui through `begin_pass` and `end_pass` itself
+  rather than `run_ui` keeps the unguarded behaviour.
 - A widget in a palette keeps the focus it takes when a click lands on
   one of its children (a tree focused through its clicked row), so its
   keys (Delete, F2, the arrows) reach it as they do when the panel is
