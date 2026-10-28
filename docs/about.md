@@ -1,6 +1,6 @@
 # About the application
 
-Help > About <application>: a dialog with the application's name, icon,
+Help > About *application*: a dialog with the application's name, icon,
 version, one-line description, licences, authors and links, and a
 "Copy version info" button for bug reports. The gallery's `about` page
 shows it, and its Help menu has it.
@@ -49,7 +49,7 @@ system's browser on the desktop.
 
 | Command | What |
 |---|---|
-| `about` | Help > About <application> (the title says `{ $application }`, filled with the name) |
+| `about` | Help > About *application* (the title says `{ $application }`, filled with the name) |
 | `about.read` | For agents, kept out of the palette: everything as JSON (name, version, description, licences, authors, links, egui-pop's and egui's versions, the platform, the renderer, `version_info`) |
 
 `about::open(app)` opens the dialog from code; `about::show(ui, app,
