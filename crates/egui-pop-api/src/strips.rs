@@ -283,6 +283,9 @@ pub struct StatusEntry {
     /// The higher, the longer it stays on a narrow bar.
     #[serde(skip_serializing_if = "is_zero_i32")]
     pub priority: i32,
+    /// The name of the icon it shows before its text, if any.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
     /// Busy: a spinner before its text.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub busy: bool,
@@ -335,7 +338,9 @@ pub fn status(app: &AppHandle) -> Vec<StatusEntry> {
                 None
             };
             let card = i.card(&s, app);
+            let icon = shown_icon(app, &i, &s);
             StatusEntry {
+                icon,
                 open: open.as_deref() == Some(i.id.as_str()),
                 popover: i.popover.is_some(),
                 align: i.align,
@@ -472,6 +477,11 @@ pub struct IndicatorState {
     pub busy: Option<f64>,
     /// A tooltip.
     pub detail: String,
+    /// Its icon's name (`phosphor:wifi-high`), before its text; an item
+    /// with an icon and no text shows the icon alone, named by its
+    /// label. `None`: the icon of the command it runs, if any.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
     /// The last event that changed it.
     pub seq: u64,
 }
@@ -574,9 +584,21 @@ impl Indicator {
         self
     }
 
-    /// Runs a command on a click.
+    /// Runs a command on a click. Without an icon of its own, the item
+    /// shows the command's (`CommandSpec::icon`, `icon_on` while the
+    /// command's `checked` clause holds).
     pub fn command(mut self, id: CommandId) -> Self {
         self.command = Some(id);
+        self
+    }
+
+    /// Its icon, by name (egui-pop's, `phosphor:<name>` or a plugin's),
+    /// drawn before its text; a reducer may change it
+    /// ([`IndicatorState::icon`]). An item whose text is empty shows the
+    /// icon alone (a connection, a sync), named by its label for screen
+    /// readers. Checked with the other declared icons (`unknown-icon`).
+    pub fn icon(mut self, name: &str) -> Self {
+        self.initial.icon = Some(name.into());
         self
     }
 
@@ -943,11 +965,38 @@ fn indicator_text(state: &IndicatorState) -> String {
     }
 }
 
-/// The room an indicator takes in the bar, its spacing included.
-fn indicator_width(ui: &Ui, state: &IndicatorState) -> f32 {
+/// The name of the icon an item shows: its own, else its command's (the
+/// "on" one while the command is checked).
+pub(crate) fn shown_icon(
+    app: &AppHandle,
+    ind: &Indicator,
+    state: &IndicatorState,
+) -> Option<String> {
+    if let Some(name) = &state.icon {
+        return Some(name.clone());
+    }
+    let spec = app.command(ind.command.as_ref()?)?;
+    let checked = !spec.checked.is_empty()
+        && When::parse(&spec.checked).is_ok_and(|w| w.eval(&app.when_context()));
+    spec.icon_for(checked).map(str::to_string)
+}
+
+/// The room an indicator takes in the bar, its spacing included; `icon`:
+/// it shows one before its text.
+fn indicator_width(ui: &Ui, state: &IndicatorState, icon_shown: bool) -> f32 {
     let spacing = ui.spacing().item_spacing.x;
     let icon = Tokens::of(ui.ctx()).size.icon_inline;
-    let mut w = small_width(ui, &indicator_text(state)) + 2.0 * ui.spacing().button_padding.x;
+    let text = indicator_text(state);
+    let mut w = 2.0 * ui.spacing().button_padding.x;
+    if !text.is_empty() {
+        w += small_width(ui, &text);
+    }
+    if icon_shown {
+        w += icon;
+        if !text.is_empty() {
+            w += ui.spacing().icon_spacing;
+        }
+    }
     if state.busy.is_some() {
         w += icon + spacing;
     }
@@ -1047,7 +1096,10 @@ fn status_context(ui: &mut Ui, app: &AppHandle) {
             small_width(ui, &chip_text(c)) + 2.0 * t.space.s + spacing + icon
         })
         .sum();
-    let indicators_width: f32 = shown(app).iter().map(|(_, s)| indicator_width(ui, s)).sum();
+    let indicators_width: f32 = shown(app)
+        .iter()
+        .map(|(i, s)| indicator_width(ui, s, shown_icon(app, i, s).is_some()))
+        .sum();
     let budget = ui.available_width() - chips_width - indicators_width - t.space.s;
     let segs = fit_crumbs(&crumb_widths, sep, more, budget);
     let here = crumbs.len() - 1;
@@ -1219,7 +1271,7 @@ fn more_width(ui: &Ui) -> f32 {
 /// The items shown that give way this pass, worked out once per pass by
 /// the first block drawing items (the bar's start), in the room left
 /// after the breadcrumb and the chips.
-fn narrowed(ui: &Ui, list: &[(Indicator, IndicatorState)]) -> Vec<String> {
+fn narrowed(ui: &Ui, app: &AppHandle, list: &[(Indicator, IndicatorState)]) -> Vec<String> {
     let ctx = ui.ctx();
     let pass = ctx.cumulative_pass_nr();
     if NARROWED_PASS.get(ctx) == Some(pass) {
@@ -1227,7 +1279,10 @@ fn narrowed(ui: &Ui, list: &[(Indicator, IndicatorState)]) -> Vec<String> {
     }
     let items: Vec<(i32, f32)> = list
         .iter()
-        .map(|(i, s)| (i.priority, indicator_width(ui, s)))
+        .map(|(i, s)| {
+            let icon = shown_icon(app, i, s).is_some();
+            (i.priority, indicator_width(ui, s, icon))
+        })
         .collect();
     let out: Vec<String> = fit(&items, ui.available_width(), more_width(ui))
         .into_iter()
@@ -1255,7 +1310,7 @@ fn start_items(ui: &mut Ui, app: &AppHandle) {
     if list.is_empty() {
         return;
     }
-    let narrowed = narrowed(ui, &list);
+    let narrowed = narrowed(ui, app, &list);
     let hidden = user_hidden(app);
     for (ind, state) in &list {
         if ind.align == Alignment::Start && !narrowed.contains(&ind.id) {
@@ -1278,7 +1333,7 @@ fn indicators(ui: &mut Ui, app: &AppHandle) {
             return;
         }
     }
-    let narrowed = narrowed(ui, &list);
+    let narrowed = narrowed(ui, app, &list);
     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
         // Under the items: the bar's own menu, the hidden items to show.
         if !hidden.is_empty() {
@@ -1470,6 +1525,10 @@ fn item(
     )
     .visible(&ctx, state.busy.is_some());
     let since = errors_since(&ctx, ind, state);
+    let icon = shown_icon(app, ind, state).map(|name| {
+        let i = egui_pop_core::icon::IconRef::from(name.as_str()).or_placeholder("status");
+        (i, name)
+    });
     let mut parts = [
         ItemPart::Spinner,
         ItemPart::Text,
@@ -1505,10 +1564,36 @@ fn item(
                 egui_pop_core::progress::paint_spinner(ui, rect, color);
             }
             ItemPart::Text => {
-                let r = ui.add(
-                    egui::Button::new(RichText::new(indicator_text(state)).color(color).small())
-                        .frame(false),
-                );
+                let text = indicator_text(state);
+                let label = RichText::new(text.as_str()).color(color).small();
+                let r = match &icon {
+                    // The icon before the text, in the button: it takes
+                    // the clicks too.
+                    Some((i, name)) => {
+                        let side = t.size.icon_inline;
+                        let slot = egui::Id::new(("egui_pop_indicator_icon", &ind.id));
+                        let mark = egui::Atom::custom(slot, vec2(side, side));
+                        let button = if text.is_empty() {
+                            egui::Button::new(mark)
+                        } else {
+                            egui::Button::new((mark, label))
+                        };
+                        let r = button.frame(false).atom_ui(ui);
+                        if let Some(rect) = r.rect(slot) {
+                            i.paint(ui.painter(), rect, color);
+                        }
+                        egui_pop_core::icon::registry::record(&ctx, "status", &ind.label, name);
+                        if text.is_empty() {
+                            // The icon alone: its label names it.
+                            let name = ind.label.clone();
+                            r.response.widget_info(|| {
+                                egui::WidgetInfo::labeled(WidgetType::Button, true, &name)
+                            });
+                        }
+                        r.response
+                    }
+                    None => ui.add(egui::Button::new(label).frame(false)),
+                };
                 if let Some(p) = state.progress {
                     // The button carries the text; the line is drawn
                     // only: the track in `border-color`, the fill in

@@ -2,8 +2,9 @@
 //! status bar items fed by the journal: a pretend job publishing its
 //! progress (with a hover card following it), problems at the bar's
 //! start (error and warning counts, a popover), and a node connection of
-//! high priority (a hover card with a link, a popover with a small
-//! form).
+//! high priority with an icon before its text (a hover card with a
+//! link, a popover with a small form), and a sync shown by its icon
+//! alone.
 
 use egui::Ui;
 use egui_pop::api::stories::Story;
@@ -142,6 +143,7 @@ impl Plugin for StripsPage {
                     tone: Tone::Success,
                     ..Default::default()
                 })
+                .icon("phosphor:plugs-connected")
                 .reduce(|state, event| {
                     if event.name == "gallery.node.connected" {
                         state.text = "Node: connected".into();
@@ -156,6 +158,17 @@ impl Plugin for StripsPage {
                         .row("Latency", "12 ms")
                         .link("Reconnect", RECONNECT, Json::Null)
                 }),
+        );
+        // An item shown by its icon alone, named by its label.
+        ctx.indicator(
+            Indicator::new("gallery.sync", "Sync: up to date", "gallery.sync.")
+                .when(HERE)
+                .weight(-5)
+                .initial(strips::IndicatorState {
+                    detail: "Sync: up to date".into(),
+                    ..Default::default()
+                })
+                .icon("phosphor:cloud-check"),
         );
         ctx.story(
             Story::new(StoryId::from_static("strips"), "Strips", show)

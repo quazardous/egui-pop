@@ -1825,6 +1825,15 @@ fn the_strips_page_shows_live_states_a_popover_and_a_hover_card() {
         .unwrap();
     assert_eq!(node.priority, 10);
     assert!(node.card.is_some());
+    assert_eq!(node.icon.as_deref(), Some("phosphor:plugs-connected"));
+    // An item shown by its icon alone keeps its label as its name.
+    let sync = egui_pop::api::strips::status(&app)
+        .into_iter()
+        .find(|e| e.id == "gallery.sync")
+        .unwrap();
+    assert!(sync.text.is_empty());
+    assert_eq!(sync.icon.as_deref(), Some("phosphor:cloud-check"));
+    assert!(h.query_by_label("Sync: up to date").is_some());
 }
 
 #[test]

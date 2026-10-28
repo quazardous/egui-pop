@@ -38,6 +38,7 @@ events:
 | Field | Shown as |
 |---|---|
 | `text`, `tone` | the item's text, in the kit's `status-indicator` tone |
+| `icon` | an icon before the text, in the same colour (`Indicator::icon`, by name); with an empty text, the icon alone, named by the item's label |
 | `count` | `text (n)` |
 | `busy` | a spinner before the text, after `motion.spinner.delay` |
 | `progress` | a thin line under the text |
@@ -52,6 +53,16 @@ When an item turns to errors (from none), its error icon pulses a few
 times (a still ring under reduced motion) and a screen reader
 announces it once, politely ("Problems: Errors: 2"); more errors do not
 announce again.
+
+An item's icon (`Indicator::icon("phosphor:plugs-connected")`, or
+`IndicatorState::icon` from its reducer) sits before its text, inside
+the same button, in the item's colour. An item without an icon of its
+own that runs a command (`Indicator::command`) shows the command's
+(`CommandSpec::icon`, its `icon_on` while the command's `checked`
+clause holds). Most items are short texts and need none; one shown by
+its icon alone (a connection, a sync) keeps its label as its
+accessible name. The names are checked with the other declarations
+(`unknown-icon`), an unknown one drawn as the placeholder.
 
 ## Popovers
 
@@ -139,7 +150,8 @@ let problems = Indicator::new("checks", "No problem", "check.")
 
 Each entry of `strips::status` (the `strips` collector's `items`, and
 `context.read`'s `status` for the visible ones) gives the item's `id`,
-`text`, `tone`, `count`, `progress`, `align`, `priority` (when not 0),
+`text`, `tone`, `icon` (the name shown, when any), `count`, `progress`,
+`align`, `priority` (when not 0),
 `busy`, `errors` and `warnings` (when not 0), `popover` (it has one),
 `open` (it is open), its `card`, and `hidden_by` (`when`, `user`, or
 `narrow`) for a hidden one. The collector also gives the item whose
@@ -154,7 +166,8 @@ popover is `open`.
 
 The gallery's `strips` page shows each: the problems at the bar's start
 with their counts and popover, the node item of high priority with its
-card and a small connection form, and the job's live card.
+icon, card and a small connection form, a sync shown by its icon alone,
+and the job's live card.
 
 ![the problems popover](../crates/egui-pop-gallery/tests/snapshots/strips-popover-pop-dark.png)
 ![the node's card](../crates/egui-pop-gallery/tests/snapshots/strips-card-pop-dark.png)

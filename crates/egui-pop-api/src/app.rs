@@ -5214,7 +5214,8 @@ impl App {
 /// `unknown-icon` diagnostic read it.
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct DeclaredIcon {
-    /// What declares it: `command`, `command (on)`, `panel`, `frame`.
+    /// What declares it: `command`, `command (on)`, `panel`, `frame`,
+    /// `status item`.
     pub surface: &'static str,
     /// The command's, panel's or frame's id.
     pub subject: String,
@@ -5234,8 +5235,8 @@ fn unknown_icons(spec: &CommandSpec) -> Vec<&str> {
         .collect()
 }
 
-/// Every icon name the commands, panels and frames (places and modes)
-/// declare.
+/// Every icon name the commands, panels, frames (places and modes) and
+/// status items declare.
 pub fn declared_icons(app: &AppHandle) -> Vec<DeclaredIcon> {
     let known = |n: &str| egui_pop_core::icon::registry::is_known(n);
     let mut out = Vec::new();
@@ -5267,6 +5268,18 @@ pub fn declared_icons(app: &AppHandle) -> Vec<DeclaredIcon> {
         }
     }
     drop(derived);
+    for slot in app.0.indicators.borrow().iter() {
+        let (ind, _) = &slot.item;
+        if let Some(name) = &ind.initial.icon {
+            out.push(DeclaredIcon {
+                surface: "status item",
+                subject: ind.id.clone(),
+                owner: Some(slot.owner.clone()),
+                name: name.clone(),
+                resolves: known(name),
+            });
+        }
+    }
     for (frame, name) in crate::contexts::frame_icons(app) {
         out.push(DeclaredIcon {
             surface: "frame",
