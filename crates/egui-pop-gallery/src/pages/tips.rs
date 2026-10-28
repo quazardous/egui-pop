@@ -27,7 +27,15 @@ pub const TIP_FILES: &[(&str, &str)] = &[
         "gallery.palette.md",
         include_str!("../../tips/gallery.palette.md"),
     ),
+    (
+        "gallery.import-here.md",
+        include_str!("../../tips/gallery.import-here.md"),
+    ),
 ];
+
+/// The tip pointing at the page's Import button, and its target.
+const POINTING_TIP: &str = "gallery.import-here";
+const IMPORT_TARGET: &str = "gallery.tips.import";
 
 /// The gallery's tips declared in code.
 pub fn gallery_tips() -> Vec<Tip> {
@@ -91,6 +99,25 @@ fn show(ui: &mut Ui, app: &AppHandle) {
             }
         });
     });
+    section(ui, "A tip beside what it is about");
+    ui.label("A tip names its target; the card goes beside it, never over it, with a halo. Escape, \"Not now\" or \"Got it\" closes it.");
+    ui.horizontal(|ui| {
+        tips::mark(ui.button("Import"), IMPORT_TARGET);
+        ui.add_space(ui.spacing().item_spacing.x);
+        if ui.button("Show the tip again").clicked()
+            && let Some(t) = app.service(&TIPS)
+        {
+            let _ = t.show(app, POINTING_TIP);
+        }
+    });
+    // Shown once when the page first opens.
+    let once = egui::Id::new("gallery.tips.pointing-shown");
+    if !ui.ctx().data(|d| d.get_temp::<bool>(once).unwrap_or(false)) {
+        ui.ctx().data_mut(|d| d.insert_temp(once, true));
+        if let Some(t) = app.service(&TIPS) {
+            let _ = t.show(app, POINTING_TIP);
+        }
+    }
     section(ui, "The tips registered");
     let Some(t) = app.service(&TIPS) else {
         return;

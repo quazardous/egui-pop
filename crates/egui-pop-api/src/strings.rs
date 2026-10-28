@@ -829,6 +829,9 @@ pub const TIPS_GOT_IT_NAME: StrKey = StrKey::new(
     "egui-pop-tips-got-it-name",
     "Got it: do not show { $tip } again",
 );
+pub const TIPS_DID_YOU_KNOW: StrKey = StrKey::new("egui-pop-tips-did-you-know", "Did you know?");
+pub const TIPS_NOT_NOW: StrKey = StrKey::new("egui-pop-tips-not-now", "Not now");
+pub const TIPS_NO_MORE: StrKey = StrKey::new("egui-pop-tips-no-more", "No more tips");
 
 // The context stack.
 
@@ -1253,6 +1256,9 @@ pub const ALL: &[StrKey] = &[
     TIPS_DONT_SHOW,
     TIPS_GOT_IT,
     TIPS_GOT_IT_NAME,
+    TIPS_DID_YOU_KNOW,
+    TIPS_NOT_NOW,
+    TIPS_NO_MORE,
     CONTEXT_ROOT,
     CONTEXT_LEAVE_MODE,
     CONTEXT_NO_MODE,

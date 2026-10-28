@@ -93,12 +93,77 @@ tips. The gallery's own tips are in `crates/egui-pop-gallery/tips`.
 The card is a note for screen readers; its buttons are named ("Got it:
 do not show `<title>` again").
 
+## Shown by themselves
+
+`Tips::set_auto(true)` lets tips come by themselves, as a card that
+never takes the focus and is never modal: once five seconds after the
+start, then the first time a tip's `surface` holds (a panel focused, a
+mode entered). Off by default: an application turns it on. The rules
+choose the tip:
+
+- not contextual, not dismissed ("Got it" is final);
+- its command never used: a person who ran it knows it (the commands a
+  person runs, from the keyboard, a menu or the palette, are recorded
+  in `tips.used`; an agent's or a script's are not);
+- its surface holds;
+- not shown in the last day (`tips.seen`);
+- among the rest, the one shown longest ago, never shown first, then
+  the first registered.
+
+`Tips::pick` applies them in a context, `Tips::refusal` says why a tip
+would not be chosen, and `tips::pick::Rules` is the same without an
+application.
+
+The card says "Did you know?", with "Got it" (never again), "Next tip"
+(the next the rules choose), "No more tips" (the `tips.show` setting)
+and a close button, "Not now", which Escape is too: the tip may come
+back another day.
+
+## Pointing at what it is about
+
+A tip with a `target` names what it is about, and the element names
+itself where it is drawn:
+
+```rust,ignore
+tips::mark(ui.button("Import"), "photos.import");
+// or, for any rectangle: tips::target(ui.ctx(), "photos.rating", rect);
+```
+
+The card goes beside the target, after it when there is room, else on
+another side (`placement`), a gap away, never over it, and a halo
+surrounds the target. A tip whose target is not drawn shows in the
+bottom corner at the start (toasts keep the end). Both come from the
+theme:
+
+| Token | What | Without it |
+|---|---|---|
+| `tip-card.halo-color` | The halo around a target | `status.info`, the card's icon's |
+| `tip-card.width` | The card's width | A toast's width |
+
+## Commands
+
+| Command | What |
+|---|---|
+| `tips.show` | Shows the tip the rules choose here (`tip`: that one) |
+| `tips.next` | The next tip, in place of the one shown |
+| `tips.gotIt` | Dismisses the tip shown for good |
+| `tips.notNow` | Closes the card (Escape) |
+| `tips.off` | No more tips |
+| `tips.current` | For agents: the tip shown, its card's and its target's rectangles |
+| `tips.reset` | Shows every tip again |
+| `tips.list`, `tips.dismiss` | For agents: every tip, and dismissing one |
+
+`tipShown` is set while a card is shown, for `when` clauses; the
+journal says `tip.shown`.
+
 ## Remembered in the settings
 
 | Setting | What |
 |---|---|
 | `tips.show` | Show tips at all (on by default) |
 | `tips.dismissed` | The ids of the tips not to show again, separated by commas |
+| `tips.seen` | When each tip was shown last, `id@seconds` |
+| `tips.used` | The commands a person used, separated by commas |
 
 Dismissing a tip writes `tips.dismissed` without an undo step, through
 the `tips.dismiss` step (`tip`, `cause`: `user` or `agent`; a veto keeps
@@ -131,6 +196,4 @@ egui's tooltips (`on_hover_text`) stay what they are, help on hover. No
 crate was found offering a tip of the day, onboarding hints or tours
 for egui with dismissal kept in settings and translations: owned.
 
-Not done yet: rules choosing a tip from the selection, a card pointing
-at a widget by its id (a hint is drawn where it is called), a
-per-plugin off switch.
+Not done yet: a per-plugin off switch.

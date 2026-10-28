@@ -367,17 +367,41 @@ command-theme-undo =
     .description = Annule la dernière modification de l’éditeur de thème, par l’étape theme.token.
     .title = Annuler une modification du thème
 
+command-tips-current =
+    .description = L’astuce affichée en carte (son id, son titre, son texte et sa cible, null sans astuce), et où sont sa carte et sa cible.
+    .title = L’astuce affichée
+
 command-tips-dismiss =
     .description = Écarte une astuce pour de bon (`tip`, son id), par l’étape tips.dismiss.
     .title = Écarter une astuce
+
+command-tips-gotIt =
+    .description = Écarte pour de bon l’astuce affichée.
+    .title = Compris
 
 command-tips-list =
     .description = Toutes les astuces enregistrées : leur id, leur titre et leur texte en anglais, si elles sont contextuelles et si elles ont été écartées.
     .title = Lister les astuces
 
+command-tips-next =
+    .description = Affiche à la place l’astuce suivante que choisissent les règles.
+    .title = Astuce suivante
+
+command-tips-notNow =
+    .description = Ferme l’astuce affichée ; elle pourra revenir un autre jour.
+    .title = Pas maintenant
+
+command-tips-off =
+    .description = N’affiche plus d’astuces (le réglage tips.show).
+    .title = Désactiver les astuces
+
 command-tips-reset =
     .description = Oublie quelles astuces ont été écartées.
     .title = Afficher de nouveau toutes les astuces
+
+command-tips-show =
+    .description = Affiche l’astuce que choisissent les règles ici, en carte à côté de ce dont elle parle ; `tip`, un id, affiche celle-là.
+    .title = Afficher une astuce
 
 command-value-get =
     .description = Une valeur avec son descripteur (`path`).
@@ -1205,6 +1229,8 @@ egui-pop-theme-editor-warnings = Lu avec des avertissements : { $warnings }.
 
 egui-pop-tips-at = { $at } sur { $count }
 
+egui-pop-tips-did-you-know = Le saviez-vous ?
+
 egui-pop-tips-dont-show = Ne plus afficher
 
 egui-pop-tips-got-it = Compris
@@ -1214,6 +1240,10 @@ egui-pop-tips-got-it-name = Compris : ne plus afficher { $tip }
 egui-pop-tips-hint = Astuce
 
 egui-pop-tips-next = Astuce suivante
+
+egui-pop-tips-no-more = Plus d’astuces
+
+egui-pop-tips-not-now = Pas maintenant
 
 egui-pop-tips-of-the-day = Astuce du jour
 
@@ -1694,9 +1724,17 @@ setting-tips-dismissed =
     .description = Les astuces à ne plus afficher, par id ; vide pour toutes les afficher de nouveau.
     .label = Astuces écartées
 
+setting-tips-seen =
+    .description = Quand chaque astuce a été affichée pour la dernière fois, pour qu’elle ne revienne pas le même jour.
+    .label = Astuces affichées
+
 setting-tips-show =
     .description = L’astuce du jour et les conseils à côté de ce qu’ils concernent.
     .label = Afficher les astuces
+
+setting-tips-used =
+    .description = Les commandes déjà utilisées : leurs astuces ne s’affichent plus d’elles-mêmes.
+    .label = Commandes utilisées
 
 setting-window-bar-in-fullscreen =
     .description = Garde la barre de titre de l’application (ses boutons et ses éléments) en plein écran ; désactivé, le plein écran la masque.
