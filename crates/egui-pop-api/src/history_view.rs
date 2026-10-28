@@ -15,7 +15,9 @@
 //!   would do), `history.read` (a scope's steps), `history.undo`,
 //!   `history.redo` and `history.jump`, each with `scope` (none: where
 //!   the keys go), `if_rev` and `dry_run`. They run through the same
-//!   steps as the keys, so a hook vetoing an undo vetoes an agent's too.
+//!   steps as the keys, so a hook vetoing an undo vetoes an agent's too,
+//!   and in the interface, not through the host's dispatch (which would
+//!   hold the host, and with it the history owner).
 //!
 //! ```
 //! use egui_pop_api::App;
