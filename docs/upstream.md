@@ -400,15 +400,36 @@ limit.
   Shift+Delete on Windows) into `Event::Copy`, `Event::Cut` and
   `Event::Paste(text)` and sends no key event: a command bound to them
   in the keymap never runs. A paste is read synchronously, as text
-  only, and nothing reads the primary selection.
-- **Upstream**: not filed yet.
+  only, and nothing reads the primary selection. When the system
+  clipboard holds no text (a file manager's copy of files, a browser's
+  "Copy image"), the paste chord makes no event at all: its press is
+  dropped, only its release reaches egui as a key event.
+- **Upstream**: egui 0.37 answers most of it: `NativeOptions::clipboard_shortcuts`
+  (egui-winit's `State::set_clipboard_shortcuts`), when off, sends the
+  chords as plain key events, and `Event::PasteImage` (emilk/egui#8472)
+  carries an image when the clipboard holds no text. A clipboard
+  holding only files still makes no event with the shortcuts on
+  (emilk/egui#1167 asks for file paste events).
 - **Workaround**: while a clipboard endpoint has the focus (and no text
   field does), the clipboard plugin takes the three events and runs
   `edit.copy`, `edit.cut`, `edit.paste` (Shift held: paste special)
   with the pasted text (`clipboard::pass`, `// upstream:`); the keymap
-  binds the same keys for every other backend (kittest, the web).
-- **Remove when**: egui-winit sends the key events (or lets a keymap
-  claim them) and offers a pull model for richer formats.
+  binds the same keys for every other backend (kittest, the web). The
+  paste chord with no text is recognised by its release: a release of
+  the paste key whose press egui never saw, with no paste event since
+  and the command modifier held meanwhile, runs `edit.paste` with
+  `no_text`, and the system backend reads what the clipboard holds
+  (files, an image, HTML); with the default backend, which reads
+  nothing, that paste is refused when the owner's text is no longer
+  there. It fires on the release, not the press, and a key repeat
+  pastes once.
+- **Remove when**: egui-pop moves to egui 0.37: turn
+  `clipboard_shortcuts` off in the native options, bind Ctrl+C, Ctrl+X
+  and Ctrl+V (and Windows' Insert and Delete chords) in the keymap for
+  every backend, and give text fields their copy, cut and paste events
+  from the system backend (egui's `TextEdit` reads `Event::Copy`,
+  `Event::Cut` and `Event::Paste`), so the key is seen on its press
+  whatever the clipboard holds.
 
 ## Wayland: no colour management through winit
 

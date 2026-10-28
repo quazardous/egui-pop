@@ -820,6 +820,9 @@ struct State {
     system: RefCell<System>,
     deferred: RefCell<Vec<Deferred>>,
     backend: RefCell<Option<Box<dyn SystemBackend>>>,
+    paste_key: RefCell<PasteKey>,
+    /// The pass whose events the paste key watch read last.
+    paste_key_pass: Cell<Option<u64>>,
     /// The last read of the system clipboard, with its pass.
     read_cache: RefCell<Option<(u64, Option<Vec<Repr>>)>>,
 }
@@ -1218,6 +1221,13 @@ pub struct PasteRequest {
     /// the Edit commands paste.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub element: Option<String>,
+    /// The paste key found no text on the system clipboard (it holds
+    /// files, an image, or nothing): what it holds is read through the
+    /// system backend, and a paste is refused when the backend reads
+    /// nothing while the system clipboard no longer holds what the owner
+    /// wrote there.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub no_text: bool,
 }
 
 impl PasteRequest {
@@ -1460,6 +1470,7 @@ fn current_item(
     app: &AppHandle,
     slot: &Slot,
     text: Option<&str>,
+    no_text: bool,
 ) -> Result<(ClipItem, bool), String> {
     let internal = with_owner(app, |c| c.get(slot)).ok_or(NO_PLUGIN)?;
     let owners = |internal: Option<ClipItem>| {
@@ -1472,9 +1483,18 @@ fn current_item(
     }
     // What the system clipboard holds: what the backend reads (every
     // format), else the text the paste key brought.
-    let reprs = match (system_read(app), text) {
+    let read = system_read(app);
+    let reprs = match (read, text) {
         (Some(r), _) if !r.is_empty() => r,
         (_, Some(t)) => vec![Repr::new(TEXT, Json::String(t.into()))],
+        // The paste key found no text, nothing reads the rest, and what
+        // the owner wrote there is gone: something else is there.
+        (None, None) if no_text && state(app).system.borrow().written.is_some() => {
+            return Err(
+                "the system clipboard holds no text, and the clipboard backend reads nothing else"
+                    .into(),
+            );
+        }
         _ => return owners(internal),
     };
     let st = state(app);
@@ -1515,7 +1535,7 @@ fn prepare(app: &AppHandle, req: &PasteRequest, who: &Origin) -> Result<Ready, S
     let target = ep
         .target
         .ok_or_else(|| format!("nothing can be pasted into `{}`", req.target))?;
-    let (mut item, internal) = current_item(app, &slot, req.text.as_deref())?;
+    let (mut item, internal) = current_item(app, &slot, req.text.as_deref(), req.no_text)?;
     // An item made at an older version of its type is migrated first.
     if let Some(t) = clip_type(app, &item.kind)
         && item.version < t.version
@@ -1784,6 +1804,7 @@ pub fn ways_for(
         slot: request.slot.clone(),
         text: request.text.clone(),
         element: request.element.clone(),
+        no_text: request.no_text,
         dry_run: true,
         ..PasteRequest::default()
     };
@@ -1923,7 +1944,12 @@ pub fn paste_special_for(
         options,
         CMD_CLIP_PASTE,
     )
-    .args(json!({ "target": target, "text": text, "element": request.element }))
+    .args(json!({
+        "target": target,
+        "text": text,
+        "element": request.element,
+        "no_text": request.no_text,
+    }))
     .value_key("special");
     let id = dialogs.open(choose);
     Ok(json!({ "dialog": id, "ways": ways.len() }))
@@ -2004,10 +2030,15 @@ fn pass(app: &AppHandle) {
     // their keys (docs/upstream.md).
     settle(app);
     let ctx = app.egui();
+    let silent = watch_paste_key(app, &ctx);
     if ctx.text_edit_focused() || focused(app).is_none() {
         return;
     }
     let mut runs = Vec::new();
+    if let Some(shift) = silent {
+        let cmd = if shift { CMD_PASTE_SPECIAL } else { CMD_PASTE };
+        runs.push((cmd, json!({ "no_text": true })));
+    }
     ctx.input_mut(|i| {
         let shift = i.modifiers.shift;
         i.events.retain(|e| match e {
@@ -2030,6 +2061,72 @@ fn pass(app: &AppHandle) {
     for (cmd, args) in runs {
         app.run_as(cmd, args, Origin::User);
     }
+}
+
+/// What the paste key did, as far as egui's events tell.
+#[derive(Debug, Default)]
+struct PasteKey {
+    /// Its press arrived as a key (not a paste chord).
+    down: bool,
+    /// egui-winit made a paste of it (the system clipboard held text).
+    pasted: bool,
+    /// The command modifier was held since its last release.
+    command: bool,
+}
+
+fn is_paste_key(key: egui::Key, modifiers: egui::Modifiers) -> bool {
+    key == egui::Key::Paste
+        || key == egui::Key::V
+        || (cfg!(target_os = "windows") && modifiers.shift && key == egui::Key::Insert)
+}
+
+/// The paste chord egui-winit swallowed without an event: it makes
+/// `Event::Paste` only when the system clipboard holds text, and drops
+/// the key's press either way, but lets its release through. A release
+/// of the paste key whose press egui never saw, with no paste since and
+/// the command modifier held meanwhile, is that chord: the paste key
+/// with no text on the system clipboard (files, an image). Gives
+/// whether Shift was held (paste special) when it is.
+///
+/// Reads each pass's events once: the logic runs twice in a pass under
+/// eframe (its `logic` hook, then `App::show`), and a second read of a
+/// release would take it for one whose press egui never saw.
+fn watch_paste_key(app: &AppHandle, ctx: &egui::Context) -> Option<bool> {
+    let st = state(app);
+    let pass = ctx.cumulative_pass_nr();
+    if st.paste_key_pass.replace(Some(pass)) == Some(pass) {
+        return None;
+    }
+    let mut k = st.paste_key.borrow_mut();
+    ctx.input(|i| {
+        if i.modifiers.command {
+            k.command = true;
+        }
+        let mut silent = None;
+        for e in &i.events {
+            match e {
+                egui::Event::Paste(_) => k.pasted = true,
+                egui::Event::Key {
+                    key,
+                    pressed,
+                    modifiers,
+                    ..
+                } if is_paste_key(*key, *modifiers) => {
+                    if *pressed {
+                        k.down = true;
+                    } else {
+                        let chord = *key != egui::Key::V || modifiers.command || k.command;
+                        if !k.down && !k.pasted && chord {
+                            silent = Some(modifiers.shift);
+                        }
+                        *k = PasteKey::default();
+                    }
+                }
+                _ => {}
+            }
+        }
+        silent
+    })
 }
 
 /// The endpoint a command acts on: `args[key]`, else the focused one.
