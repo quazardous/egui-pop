@@ -3524,6 +3524,18 @@ impl App {
         let w = h.weak();
         b.register(
             FnCollector::new(
+                "toolbars",
+                "Each toolbar drawn last (`toolbars::Toolbar`), by menu id: its orientation and labels, every tool in order (a command with its arguments, a submenu or a separator; its title, icon name, key, whether it is enabled and why not, checked, busy) and which went into its \"More tools\" menu.",
+            )
+            .snapshot(move |_| {
+                let Ok(app) = up(&w) else { return Json::Null };
+                json!(crate::toolbars::layouts(&app))
+            }),
+        )
+        .expect("distinct names");
+        let w = h.weak();
+        b.register(
+            FnCollector::new(
                 "text_scale",
                 "The text size: the factor in use, the setting's default (the system's step), whether the user chose it, and the system's text scaling (factor, step, where it was read).",
             )

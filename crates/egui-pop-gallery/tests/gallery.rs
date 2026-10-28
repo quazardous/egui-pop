@@ -390,6 +390,70 @@ fn the_palette_shows_the_commands_icons_in_a_column() {
 }
 
 #[test]
+fn toolbars_show_icons_states_and_the_tools_that_do_not_fit() {
+    use egui_pop::api::toolbars::{self, ToolKind};
+    use egui_pop_gallery::pages::toolbars::{BAR, BAR_NARROW, PALETTE};
+    let mut results = egui_kittest::SnapshotResults::new();
+    for (theme, density, name) in [
+        ("pop-dark", Density::Comfortable, "toolbars-pop-dark"),
+        ("pop-light", Density::Comfortable, "toolbars-pop-light"),
+        ("pop-dark", Density::Compact, "toolbars-compact"),
+    ] {
+        let mut h = harness(options(theme, density, "toolbars"));
+        h.run();
+        h.run();
+        let app = h.state().app.handle().clone();
+        let bar = toolbars::layout(&app, &BAR).expect("drawn");
+        assert_eq!(bar.overflow, 0, "{bar:?}");
+        let tool = |label: &str| {
+            bar.tools
+                .iter()
+                .find(|t| t.label == label)
+                .unwrap_or_else(|| panic!("{label} in {bar:?}"))
+                .clone()
+        };
+        assert_eq!(tool("Save the card").keys.as_deref(), Some("Ctrl+Alt+S"));
+        assert!(tool("Show the grid").checked);
+        assert_eq!(tool("Cut").icon.as_deref(), Some("cut"));
+        assert_eq!(tool("Paste").icon.as_deref(), Some("paste"));
+        assert_eq!(tool("Publish").icon, None);
+        assert!(bar.tools.iter().any(|t| t.kind == ToolKind::Submenu));
+        let narrow = toolbars::layout(&app, &BAR_NARROW).expect("drawn");
+        assert!(narrow.overflow > 0, "{narrow:?}");
+        let palette = toolbars::layout(&app, &PALETTE).expect("drawn");
+        let pick = palette.tools.iter().find(|t| t.label == "Pick").unwrap();
+        assert!(pick.checked);
+        assert_eq!(pick.icon.as_deref(), Some("picker"));
+        results.add(h.try_snapshot(name));
+    }
+    // The tools that did not fit, opened from More tools.
+    let mut h = harness(options("pop-dark", Density::Comfortable, "toolbars"));
+    h.run();
+    h.get_by_label("More tools").click();
+    h.run();
+    h.run();
+    let rows = egui_pop::api::menus::rows_drawn(&h.ctx);
+    assert!(rows.iter().any(|r| r.menu == BAR_NARROW), "{rows:?}");
+    results.add(h.try_snapshot("toolbars-more"));
+}
+
+#[test]
+fn a_toolbar_tool_runs_its_command_and_follows_its_state() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "toolbars"));
+    h.run();
+    h.query_all_by_label("Erase").next().unwrap().click();
+    h.run();
+    h.run();
+    assert_eq!(context_key(&h, "galleryTool"), "erase");
+    let app = h.state().app.handle().clone();
+    let palette =
+        egui_pop::api::toolbars::layout(&app, &egui_pop_gallery::pages::toolbars::PALETTE).unwrap();
+    let erase = palette.tools.iter().find(|t| t.label == "Erase").unwrap();
+    assert!(erase.checked);
+    egui_pop_test::assert_all_named(&h);
+}
+
+#[test]
 fn dialogs_open_from_the_page_and_send_what_they_ran() {
     let mut results = egui_kittest::SnapshotResults::new();
     for theme in ["pop-dark", "pop-light"] {

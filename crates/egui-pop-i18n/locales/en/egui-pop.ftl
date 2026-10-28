@@ -1528,6 +1528,10 @@ egui-pop-toast-success = Done
 
 egui-pop-toast-warning = Warning
 
+egui-pop-toolbar-more = More tools
+
+egui-pop-toolbar-with-key = { $action } ({ $keys })
+
 egui-pop-value-held-by = Being changed by { $origin }
 
 egui-pop-value-missing = no value at `{ $path }`

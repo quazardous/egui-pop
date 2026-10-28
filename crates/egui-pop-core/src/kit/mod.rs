@@ -848,6 +848,10 @@ components! {
     /// A small toggle showing a text or a glyph (`widgets::ToggleChip`):
     /// the find bar's options; `selected` while on.
     toggle_chip: "toggle-chip" => "box",
+    /// A toolbar's button (`toolbars`): its icon and label in `text`, a
+    /// fill under the pointer; `selected`, framed, while its command is
+    /// on.
+    toolbar_button: "toolbar-button" => "box",
     /// An image viewport's outline while it has the keyboard focus.
     viewport_focus: "viewport-focus" => "plain",
     /// Minimize and maximize (the glyph is drawn in the box's `text`),
@@ -1943,6 +1947,7 @@ mod tests {
             ("dialog-header", "header-band"),
             ("band-icon-button", "icon-button"),
             ("find-bar-button", "icon-button"),
+            ("toolbar-button", "icon-button"),
             ("thumb-overlay-badge", "pill"),
             ("thumbnail", "thumb-cell"),
         ] {

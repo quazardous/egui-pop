@@ -58,6 +58,9 @@ of every crate with every feature on.
   end, what gives way on a narrow window, live states (busy, error and
   warning counts), a popover per item, and rich hover cards shared with
   other widgets.
+- [Toolbars](toolbars.md): a menu's items drawn as a row or a column of
+  command buttons, icons from the commands, on and greyed states, the
+  tools that do not fit in More tools.
 - [The workbench](workbench.md): panels in areas with placement rules,
   auxiliary windows, arrangements, strips and indicators, the window's
   own frame, scale and the interface zoom, the keymap at run time, hooks
