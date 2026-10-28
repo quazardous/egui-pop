@@ -1469,6 +1469,103 @@ fn the_layout_page_toggles_the_areas_and_opens_the_layout_menu() {
 }
 
 #[test]
+fn the_layout_controls_mirror_their_icons_with_the_primary_side_bar() {
+    use egui_pop::api::layout_controls::{self, MENU_LAYOUT, SideBarPosition};
+    use egui_pop::api::menus;
+    use egui_pop::model::commands::Origin;
+    use egui_pop::model::panels::Area;
+    const PRIMARY: &str = "Toggle primary side bar";
+    const PANEL: &str = "Toggle panel";
+    const SECONDARY: &str = "Toggle secondary side bar";
+    let mut h = harness(options("pop-dark", Density::Comfortable, "layout"));
+    h.run();
+    let app = h.state().app.handle().clone();
+    // The icon a side bar's toggle shows: its side, filled while shown.
+    let expected = |side: &str, area: Area| {
+        if layout_controls::area_shown(&app, area) {
+            format!("layout-{side}")
+        } else {
+            format!("layout-{side}-off")
+        }
+    };
+    // The title bar's toggles, as the debug bridge's icons list them.
+    let drawn = |h: &Harness<'_, Gallery>, label: &str| {
+        let drawn = egui_pop::core::icon::registry::drawn(&h.ctx);
+        drawn
+            .iter()
+            .find(|d| d.surface == "layout controls" && d.label == label)
+            .map(|d| d.icon.clone())
+            .unwrap_or_else(|| panic!("{label} in {drawn:?}"))
+    };
+    // Their order on screen, from the left.
+    let order = |h: &Harness<'_, Gallery>| {
+        let mut toggles =
+            [PRIMARY, PANEL, SECONDARY].map(|label| (h.get_by_label(label).rect().left(), label));
+        toggles.sort_by(|a, b| a.0.total_cmp(&b.0));
+        toggles.map(|(_, label)| label)
+    };
+    // The layout menu's rows, opened by its button.
+    let menu_icon = |h: &mut Harness<'_, Gallery>, label: &str| {
+        if menus::popup_open(&app) != Some(MENU_LAYOUT) {
+            h.get_by_label("Customize layout").click();
+            h.run();
+            h.run();
+        }
+        let rows = menus::rows_drawn(&h.ctx);
+        rows.iter()
+            .find(|r| r.menu == MENU_LAYOUT && r.label == label)
+            .and_then(|r| r.icon.clone())
+            .unwrap_or_else(|| panic!("{label} in {rows:?}"))
+    };
+    // By default: the primary side bar on the left.
+    assert_eq!(drawn(&h, PRIMARY), expected("left", Area::StartSide));
+    assert_eq!(drawn(&h, SECONDARY), expected("right", Area::EndSide));
+    assert_eq!(order(&h), [PRIMARY, PANEL, SECONDARY]);
+    assert_eq!(
+        menu_icon(&mut h, PRIMARY),
+        expected("left", Area::StartSide)
+    );
+    assert_eq!(
+        menu_icon(&mut h, SECONDARY),
+        expected("right", Area::EndSide)
+    );
+    menus::close_popup(&app);
+    h.run();
+    // On the right: the icons and the order mirror, the commands stay.
+    let _ = h.state_mut().app.run(
+        &layout_controls::CMD_SIDE_BAR_POSITION,
+        serde_json::json!({ "position": "right" }),
+        Origin::Agent("test".into()),
+    );
+    h.run();
+    h.run();
+    assert_eq!(
+        layout_controls::side_bar_position(&app),
+        SideBarPosition::Right
+    );
+    assert_eq!(drawn(&h, PRIMARY), expected("right", Area::StartSide));
+    assert_eq!(drawn(&h, SECONDARY), expected("left", Area::EndSide));
+    assert_eq!(order(&h), [SECONDARY, PANEL, PRIMARY]);
+    assert_eq!(
+        menu_icon(&mut h, PRIMARY),
+        expected("right", Area::StartSide)
+    );
+    assert_eq!(
+        menu_icon(&mut h, SECONDARY),
+        expected("left", Area::EndSide)
+    );
+    // Folded, the primary side bar's toggle keeps its side, outlined.
+    menus::close_popup(&app);
+    h.run();
+    h.get_by_label(PRIMARY).click();
+    h.run();
+    h.run();
+    assert!(app.layout().folded.contains(&Area::StartSide));
+    assert_eq!(drawn(&h, PRIMARY), "layout-right-off");
+    assert_eq!(menu_icon(&mut h, PRIMARY), "layout-right-off");
+}
+
+#[test]
 fn the_workbench_page_shows_a_dragged_tab_s_ghost_where_it_would_land() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "workbench"));
     h.run();

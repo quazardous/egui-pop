@@ -461,7 +461,13 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                     let icons: Vec<Option<(Icon, String)>> = hits
                         .iter()
                         .map(|h| {
-                            let name = app.command(&h.entry.command)?.icon?;
+                            let declared = app.command(&h.entry.command)?.icon?;
+                            let name = crate::layout_controls::command_icon(
+                                app,
+                                &h.entry.command,
+                                &declared,
+                            )
+                            .to_string();
                             Some((IconRef::from(&name).or_placeholder("palette"), name))
                         })
                         .collect();

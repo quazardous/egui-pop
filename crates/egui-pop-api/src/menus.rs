@@ -1138,6 +1138,7 @@ fn command_row(
             RowIcon::Command => spec
                 .as_ref()
                 .and_then(|s| s.icon_for(checked))
+                .map(|name| crate::layout_controls::command_icon(app, id, name))
                 .map(|name| (IconRef::from(name).or_placeholder("menu"), name.to_string())),
             RowIcon::Own(i) => i.map(|i| (i, i.name().to_string())),
         }

@@ -685,6 +685,14 @@ publishes.
   looks for Escape first, and it, the focus chain and F6 find the
   focused widget's place through `focus::peek_response`, which reads a
   response without egui's "clicked elsewhere" rule dropping the focus.
+- The layout controls' side bar icons mirror with the primary side bar
+  on the right (egui-pop-api), as VS Code's: the toggle commands' icons
+  in the layout menu, the View menu and the palette now show the
+  primary side bar's toggle on its side and the secondary one's across
+  from it (`layout_controls::command_icon`), as the title bar's toggles
+  already did; the commands and their keys are unchanged. The title
+  bar's buttons record their icons for the debug bridge's `icons`
+  collector (the `layout controls` surface).
 
 - The GPU path's tile textures are released (egui-pop-viewport): those
   of a dropped `ViewportState` at the next paint of any viewport on the
