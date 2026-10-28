@@ -147,6 +147,13 @@ publishes.
   `history.read` lists the snapshots, the replaced steps and the
   features. The gallery's `history` page shows them all, with a
   snapshot taken as an agent.
+- Built-in file previews (egui-pop-api, docs/files.md), registered by
+  the files plugin (`FilesPlugin::without_builtin_previews` leaves them
+  out): PNG and JPEG images scaled down with their dimensions (feature
+  `image-previews` of egui-pop-api and the facade, on by default,
+  through the `image` crate eframe already uses), Markdown drawn simply
+  by a small renderer of egui-pop's own, the first lines of text and
+  code files, and folders with their item count and first images.
 - A preview pane in the in-app file picker (egui-pop-api,
   docs/files.md): beside the list, the highlighted entry's preview and
   its facts (size, a folder's items, dimensions, pages, modification

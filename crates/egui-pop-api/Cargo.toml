@@ -16,7 +16,7 @@ authors.workspace = true
 workspace = true
 
 [features]
-default = ["eframe", "bundled-fonts"]
+default = ["eframe", "bundled-fonts", "image-previews"]
 ## egui-pop's default font pair, Inter and JetBrains Mono NL (see
 ## `egui-pop-core`).
 bundled-fonts = ["egui-pop-core/bundled-fonts"]
@@ -25,6 +25,8 @@ eframe = ["dep:eframe"]
 ## The system's file chooser for path fields (rfd); without it, the
 ## in-app picker.
 native-dialogs = ["dep:rfd"]
+## PNG and JPEG previews in the in-app file picker (the `image` crate).
+image-previews = ["dep:image"]
 ## Icons from the Phosphor icon font (see `egui-pop-core`).
 phosphor = ["egui-pop-core/phosphor"]
 ## The families a theme names, found among the system's fonts.
@@ -47,6 +49,7 @@ egui_dock.workspace = true
 log.workspace = true
 serde.workspace = true
 rfd = { workspace = true, optional = true }
+image = { workspace = true, optional = true, features = ["png", "jpeg"] }
 serde_json.workspace = true
 # MIT OR Apache-2.0: the wall clock on the web too (tips shown when),
 # where `std::time::SystemTime::now` panics.

@@ -123,10 +123,10 @@ impl Handles {
         let ext = extension(probe.path);
         ext.as_deref()
             .is_some_and(|e| self.extensions.iter().any(|x| x == e))
+            || self.mime.iter().any(|x| x == "*/*")
             || probe.mime.is_some_and(|m| {
                 self.mime.iter().any(|x| {
-                    x == "*/*"
-                        || x == m
+                    x == m
                         || x.strip_suffix("/*")
                             .is_some_and(|family| m.split('/').next() == Some(family))
                 })

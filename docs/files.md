@@ -132,6 +132,20 @@ impl PreviewProvider for Notes {
   oldest go first); a provider reads at most 64 MiB of a file
   (`PreviewRequest::read` refuses more, `set_max_bytes`) and draws images
   at most 256 pixels long (`set_max_side`).
+- **Built in** (`files::providers`, registered by the files plugin
+  unless `FilesPlugin::without_builtin_previews`):
+  - images: PNG and JPEG decoded with the `image` crate and scaled down,
+    with their dimensions (feature `image-previews` of the facade, on by
+    default; `image` is MIT OR Apache-2.0 and eframe already uses it);
+  - Markdown, drawn simply: headings, paragraphs, items, quotes, code
+    and rules, emphasis and links as plain text. No Markdown renderer
+    is in the tree; this small one is egui-pop's own, until the
+    renderer the in-app viewer will use is chosen;
+  - text and code: the first 40 lines in a monospace font (any file
+    that reads as UTF-8 text, at the lowest priority);
+  - folders: how many items, and the first images as the providers
+    preview them (four at most, among the first sixteen files that are
+    images or of no known type).
 - **What a preview holds.** A body (an image, a text's first lines, a
   document drawn simply, a folder's counts and first thumbnails, or
   nothing) and facts: dimensions, pages, and labelled facts of the
