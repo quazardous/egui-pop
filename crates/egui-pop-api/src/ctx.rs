@@ -274,6 +274,30 @@ impl<'a> Ctx<'a> {
         Ok(self)
     }
 
+    /// Sets the icon of a command, whoever declared it (one of
+    /// egui-pop's own, another plugin's): `icon` and `icon_on` (shown
+    /// while its `checked` clause holds; `None` for none) replace the
+    /// declared ones on every surface running the command. The last
+    /// plugin to set one wins; it goes with the plugin. A command not
+    /// declared is reported (`unknown-command`); names are checked as a
+    /// declaration's (`unknown-icon`).
+    pub fn command_icon(
+        &mut self,
+        command: CommandId,
+        icon: &str,
+        icon_on: Option<&str>,
+    ) -> &mut Self {
+        self.reg.command_icons.push(
+            &self.owner,
+            crate::app::CommandIcon {
+                command,
+                icon: icon.into(),
+                icon_on: icon_on.map(Into::into),
+            },
+        );
+        self
+    }
+
     /// Contributes a menu item.
     pub fn menu_item(&mut self, item: MenuItem) -> Result<&mut Self, CtxError> {
         self.reg

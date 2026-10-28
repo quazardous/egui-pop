@@ -477,6 +477,18 @@ pub(crate) struct Registries {
     pub hooks: OwnedList<Hook>,
     pub lifecycle: OwnedList<(On, LifecycleFn)>,
     pub settings: Registry<SettingId, String>,
+    /// Icons set on commands another plugin may own
+    /// (`Ctx::command_icon`), applied in contribution order.
+    pub command_icons: OwnedList<CommandIcon>,
+}
+
+/// An icon set on a command whoever declared it (`Ctx::command_icon`):
+/// it replaces the command's `icon` and `icon_on`.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct CommandIcon {
+    pub command: CommandId,
+    pub icon: String,
+    pub icon_on: Option<String>,
 }
 
 impl Registries {
@@ -489,6 +501,7 @@ impl Registries {
             hooks: OwnedList::new(),
             lifecycle: OwnedList::new(),
             settings: Registry::new(),
+            command_icons: OwnedList::new(),
         }
     }
 
@@ -500,6 +513,7 @@ impl Registries {
         self.hooks.remove_owner(owner);
         self.lifecycle.remove_owner(owner);
         self.settings.remove_owner(owner);
+        self.command_icons.remove_owner(owner);
     }
 }
 
@@ -529,6 +543,9 @@ pub(crate) struct Derived {
     /// Each owner's section title, before the hooks (a plugin's title).
     pub sections: BTreeMap<OwnerId, String>,
     pub commands: Vec<(CommandSpec, OwnerId)>,
+    /// The commands whose icon a plugin other than their owner set
+    /// (`Ctx::command_icon`), with that plugin: the last one wins.
+    pub icons_set_by: BTreeMap<CommandId, OwnerId>,
     /// Every declared panel with its owner, in declaration order.
     pub panels: Vec<(egui_pop_model::panels::PanelSpec, OwnerId)>,
     /// Each command's live key bindings, as shown.
@@ -1577,6 +1594,12 @@ impl AppHandle {
             .iter()
             .find(|(s, _)| s.id == *id)
             .map(|(s, _)| s.clone())
+    }
+
+    /// The plugin that set a command's icon over its declaration
+    /// (`Ctx::command_icon`), if one did.
+    pub fn icon_set_by(&self, id: &CommandId) -> Option<OwnerId> {
+        self.0.derived.borrow().icons_set_by.get(id).cloned()
     }
 
     /// Asks for a command's keys to be the user's own (`None`: no key),
@@ -3307,6 +3330,7 @@ impl App {
                             "icon": s.icon,
                             "icon_on": s.icon_on,
                             "unknown_icons": unknown_icons(s),
+                            "icon_set_by": app.icon_set_by(&s.id),
                         })).collect::<Vec<_>>(),
                         "context": cx.iter().map(|(k, v, d)| json!({"key": k, "value": v, "depth": d})).collect::<Vec<_>>(),
                         "history": app.history(),
@@ -3962,6 +3986,29 @@ impl App {
                 )
             })
             .collect();
+        // Icons set by another plugin replace the declared ones, the last
+        // contribution winning.
+        for slot in reg.command_icons.iter() {
+            let set = &slot.item;
+            match derived.commands.iter_mut().find(|(s, _)| s.id == set.command) {
+                Some((spec, _)) => {
+                    spec.icon = Some(set.icon.clone());
+                    spec.icon_on.clone_from(&set.icon_on);
+                    derived
+                        .icons_set_by
+                        .insert(set.command.clone(), slot.owner.clone());
+                }
+                None => d.warn(
+                    "unknown-command",
+                    Some(&slot.owner),
+                    set.command.as_str(),
+                    format!(
+                        "`{}` sets the icon of command `{}`, which is not declared: nothing shows it",
+                        slot.owner, set.command
+                    ),
+                ),
+            }
+        }
         derived.keys = reg
             .commands
             .specs()
@@ -5194,6 +5241,8 @@ pub fn declared_icons(app: &AppHandle) -> Vec<DeclaredIcon> {
     let mut out = Vec::new();
     let derived = app.0.derived.borrow();
     for (spec, owner) in &derived.commands {
+        // An icon set by another plugin is that plugin's.
+        let owner = derived.icons_set_by.get(&spec.id).unwrap_or(owner);
         for (surface, name) in [("command", &spec.icon), ("command (on)", &spec.icon_on)] {
             if let Some(name) = name {
                 out.push(DeclaredIcon {

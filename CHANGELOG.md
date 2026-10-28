@@ -199,6 +199,12 @@ publishes.
   `FilesPlugin::file_system` or `Files::set_file_system`, so that the
   picker shows files on the web build too; `FilePicker::new_in` makes a
   picker on one. `files::PLUGIN` names the plugin.
+- `Ctx::command_icon` (egui-pop-api; docs/icons.md, section 4.2): a
+  plugin sets the icon (and the "on" icon) of a command it does not
+  own, egui-pop's own or another plugin's; the last one wins, it goes
+  with its plugin, a command not declared is reported
+  (`unknown-command`), and the `commands` collector says who set it
+  (`icon_set_by`; `AppHandle::icon_set_by`).
 - egui-pop's own commands carry icons (egui-pop-api, egui-pop-editors,
   egui-pop-platform, egui-pop-core; docs/icons.md, section 4.2), shown
   by menus and the palette: Undo and Redo, Cut, Copy, Paste and Paste
