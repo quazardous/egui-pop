@@ -24,7 +24,9 @@ negotiation, no egui).
   (text), so a colour lands in a chat as `#d9a441`. A paste whose text
   is still what the owner wrote there pastes the owner's item; other
   text is external and pasted as text. A type declared internal
-  (`ClipType::internal`) never reaches the system clipboard.
+  (`ClipType::internal`) never reaches the system clipboard. How it is
+  written and read is the [system backend](#the-system-backend)'s
+  business.
 - **A target** accepts formats, richest first. A paste takes the first
   the item offers, or one a declared transform makes from what it
   offers (one transform, never a chain); nothing fits: the paste is
@@ -178,6 +180,45 @@ characters and escape sequences from external text, and
 `egui_pop.html-to-text` (lossy) reduces HTML to text for a target that
 does not take HTML.
 
+## The system backend
+
+A `SystemBackend` writes one copy's representations to the system
+clipboard at once and reads back what other applications left there:
+
+| Backend | Writes | Reads |
+|---|---|---|
+| `EguiText` (the default) | text, through egui | nothing: the paste key's text only |
+| `platform::clipboard::Arboard` (feature `clipboard`) | text, HTML (with its text), an image, files | text, HTML, an image, files; the primary selection |
+| the host's (`Clipboard::system`) | what the kernel decides (its private types too) | idem |
+
+A copy gives the backend every representation it writes
+(`SystemBackend::writes`), sanitised for the system boundary: the
+fallbacks, and the private type itself where the backend writes it. A
+paste reads every format the backend reads, as **one external item
+with several representations** (`ClipItem::external`: files as
+`text/uri-list`, an image as `image/png`, HTML, text), so negotiation
+picks the richest the target accepts; it is sanitised at the external
+boundary first. With a backend that reads, Edit > Paste from the menu
+pastes what the system clipboard holds too, and the paste command is
+enabled for a target taking only what the backend may read
+(`SystemBackend::readable`). The system clipboard is read once per
+pass.
+
+The representations' data: text, HTML and a URI list (one `file://`
+URI per line, CRLF between) are JSON strings; an image is a string,
+the PNG file's bytes in standard base64; a private type is its JSON
+payload.
+
+```rust,ignore
+// The application's own backend (or the platform crate's):
+clipboard::set_backend(app, Box::new(MyBackend::new()));
+// A kernel's: its `Clipboard` implementation returns it.
+fn system(&mut self) -> Option<&mut dyn SystemBackend> { Some(&mut self.system) }
+```
+
+The `clipboard` collector names the backend in use and what it says of
+itself (`SystemBackend::describe`: on Wayland, its path).
+
 ## Steps
 
 Copy and paste are steps (ADR 0011), observed, vetoed, redirected or
@@ -234,13 +275,10 @@ payload), the endpoints and what plugins declared.
 
 ## Not yet
 
-- What the system clipboard holds is read only when the paste key
-  brings it (egui reads it as text, on the key): Edit > Paste from the
-  menu pastes the owner's item.
-- Rich formats from other applications (HTML, images, files), private
-  types across processes without a shared owner, and the **primary
-  selection** (select to copy, middle-click to paste; opt-in, for text
-  inputs and the code editor) wait for egui-pop's own system backend
-  over arboard and smithay-clipboard (ADR 0015, step 5).
+- With the default backend, what the system clipboard holds is read
+  only when the paste key brings it (egui reads it as text, on the
+  key): Edit > Paste from the menu pastes the owner's item.
+- Private types across processes without a shared owner need a backend
+  that writes them (a host's); arboard writes only standard formats.
 - The first types (colours, graph nodes, theme tokens, table rows) and
   their sanitisers come next (ADR 0015, step 4).

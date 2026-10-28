@@ -43,6 +43,23 @@ publishes.
   translations; `strings::set_application` and `strings::application`
   hold it per context. The extractor keeps it a Fluent placeable in the
   English catalogue (egui-pop-i18n, `extract::plain_with`).
+- The clipboard's system backend (egui-pop-api, egui-pop-model; #73):
+  `clipboard::SystemBackend` writes one copy's representations to the
+  system clipboard at once (every one it writes, `writes`: the
+  sanitised fallbacks and the private type itself where it can) and
+  reads back what other applications left there, every format it can,
+  as one external item with several representations
+  (`ClipItem::external`: files as `text/uri-list`, an image as
+  `image/png`, HTML, text), so negotiation picks the richest the target
+  accepts. The default, `clipboard::EguiText`, writes text through egui
+  and reads nothing, as before; a host gives its own
+  (`Clipboard::system`), an application installs one
+  (`clipboard::set_backend`). With a backend that reads, Edit > Paste
+  from the menu pastes what the system clipboard holds, and the paste
+  command is enabled for a target taking what it may read
+  (`SystemBackend::readable`). The primary selection goes through it
+  too (`clipboard::primary_text`, `clipboard::set_primary_text`); the
+  `clipboard` collector names the backend and its platform path.
 - Deferred clipboard pastes (egui-pop-api; #73): a target whose edit
   goes through the application's own loop implements
   `ClipTarget::apply` and answers `Pasted::Later` with a result to come

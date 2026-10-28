@@ -47,12 +47,15 @@
 //!   `clipboard.read`, `clipboard.write`, each in the session's own slot
 //!   unless the owner allows otherwise; the `clipboard` collector.
 //!
-//! What the system clipboard holds is known only when the paste key
-//! brings it (egui reads it as text, on the key): a paste through the
-//! menu or a command uses the owner's item. The primary selection, rich
-//! formats from other applications (HTML, images, files) and private
-//! types on the system clipboard wait for a system backend of egui-pop's
-//! own (ADR 0015, step 5).
+//! **The system clipboard** is reached through a [`SystemBackend`]: a
+//! copy gives it every representation it writes, at once; a paste reads
+//! every format it can (files, images, HTML, text) as one external item.
+//! The default, [`EguiText`], writes text through egui and reads
+//! nothing: a paste then knows the system clipboard only by the text the
+//! paste key brought, and a paste through the menu or a command uses the
+//! owner's item. A host gives its own backend ([`Clipboard::system`]),
+//! an application installs one ([`set_backend`]; `egui-pop-platform`'s
+//! `clipboard` feature has one over arboard).
 //!
 //! ```
 //! use std::rc::Rc;
@@ -207,6 +210,154 @@ pub trait Clipboard {
     fn take_events(&mut self) -> Vec<(String, Json)> {
         Vec::new()
     }
+
+    /// The owner's own way to the system clipboard (a kernel writing
+    /// its private types there): it wins over the one installed with
+    /// [`set_backend`], which wins over egui's text.
+    fn system(&mut self) -> Option<&mut dyn SystemBackend> {
+        None
+    }
+}
+
+/// The system clipboard as egui-pop writes and reads it: what one copy
+/// leaves there for other applications, what a paste finds there.
+///
+/// The default, [`EguiText`], writes the text through egui and reads
+/// nothing (a paste knows only the text the paste key brought). A host
+/// gives its own through [`Clipboard::system`], an application installs
+/// one with [`set_backend`] (`egui-pop-platform`'s `clipboard` feature
+/// has one over arboard: files, images, HTML and the primary
+/// selection).
+///
+/// Representations follow the formats' usual data: text, HTML and a
+/// URI list (`text/uri-list`, one `file://` URI per line, CRLF between)
+/// are JSON strings; an image (`image/png`) is a string, the PNG file's
+/// bytes in standard base64; a private type is its JSON payload.
+pub trait SystemBackend {
+    /// What it is called, for the collector ("egui", "arboard").
+    fn name(&self) -> String;
+
+    /// Whether it writes a format: a copy gives it every representation
+    /// it writes, so a private type crosses only where it can.
+    fn writes(&self, format: &FormatId) -> bool {
+        *format == TEXT
+    }
+
+    /// Writes one copy's representations (richest first, sanitised for
+    /// the system boundary) at once, replacing what the system clipboard
+    /// held.
+    fn write(&mut self, ctx: &egui::Context, reprs: &[Repr]) -> Result<(), String>;
+
+    /// What the system clipboard holds, in each format it reads, richest
+    /// first; `None` when it cannot read (a paste then knows only the
+    /// text the paste key brought), empty when the clipboard is.
+    fn read(&mut self, ctx: &egui::Context) -> Option<Vec<Repr>> {
+        let _ = ctx;
+        None
+    }
+
+    /// The formats a read may bring besides text, so that the paste
+    /// command is enabled for a target taking only files or images.
+    fn readable(&self) -> Vec<FormatId> {
+        Vec::new()
+    }
+
+    /// The primary selection's text (X11 and Wayland: select to copy,
+    /// middle-click to paste); `None` where there is none.
+    fn read_primary(&mut self) -> Option<String> {
+        None
+    }
+
+    /// Sets the primary selection's text.
+    fn write_primary(&mut self, text: &str) -> Result<(), String> {
+        let _ = text;
+        Err("this clipboard backend has no primary selection".into())
+    }
+
+    /// What it says of itself for the collector: its platform path (on
+    /// Wayland: XWayland, the data-control protocol, or the core
+    /// protocol), what it reads and writes.
+    fn describe(&self) -> Json {
+        Json::Null
+    }
+}
+
+/// The default backend: text through egui (`Context::copy_text`, which
+/// eframe hands to its own clipboard at the end of the pass), nothing
+/// read.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct EguiText;
+
+impl SystemBackend for EguiText {
+    fn name(&self) -> String {
+        "egui".into()
+    }
+
+    fn write(&mut self, ctx: &egui::Context, reprs: &[Repr]) -> Result<(), String> {
+        if let Some(text) = reprs.iter().find(|r| r.format == TEXT).and_then(Repr::text) {
+            ctx.copy_text(text.to_string());
+        }
+        Ok(())
+    }
+
+    fn describe(&self) -> Json {
+        json!({ "writes": [TEXT], "reads": "the paste key's text" })
+    }
+}
+
+/// Installs the system clipboard's backend (unless the owner gives its
+/// own, [`Clipboard::system`]); before, egui's text ([`EguiText`]).
+pub fn set_backend(app: &AppHandle, backend: Box<dyn SystemBackend>) {
+    let st = state(app);
+    *st.backend.borrow_mut() = Some(backend);
+    *st.read_cache.borrow_mut() = None;
+}
+
+/// Runs `f` on the system backend: the owner's, else the one installed,
+/// else egui's text.
+pub fn with_backend<R>(app: &AppHandle, f: impl FnOnce(&mut dyn SystemBackend) -> R) -> R {
+    let mut f = Some(f);
+    let by_owner = with_owner(app, |c| {
+        c.system().map(|b| f.take().expect("called once")(b))
+    })
+    .flatten();
+    if let Some(r) = by_owner {
+        return r;
+    }
+    let f = f.take().expect("called once");
+    let st = state(app);
+    let mut installed = st.backend.borrow_mut();
+    match installed.as_mut() {
+        Some(b) => f(b.as_mut()),
+        None => f(&mut EguiText),
+    }
+}
+
+/// What the system clipboard holds now, read once per pass (a paste
+/// special asks several times).
+fn system_read(app: &AppHandle) -> Option<Vec<Repr>> {
+    let ctx = app.egui();
+    let now = ctx.cumulative_pass_nr();
+    let st = state(app);
+    if let Some((at, reprs)) = st.read_cache.borrow().as_ref()
+        && *at == now
+    {
+        return reprs.clone();
+    }
+    let reprs = with_backend(app, |b| b.read(&ctx));
+    *st.read_cache.borrow_mut() = Some((now, reprs.clone()));
+    reprs
+}
+
+/// The primary selection's text, through the system backend (opt-in:
+/// egui-pop's own widgets do not use it yet).
+pub fn primary_text(app: &AppHandle) -> Option<String> {
+    with_backend(app, |b| b.read_primary())
+}
+
+/// Sets the primary selection's text, through the system backend.
+pub fn set_primary_text(app: &AppHandle, text: &str) -> Result<(), String> {
+    with_backend(app, |b| b.write_primary(text))
 }
 
 /// The default rule: the user may use any slot, a session (an agent, a
@@ -634,12 +785,27 @@ fn current(at: u64, now: u64) -> bool {
 /// What the system clipboard holds, as far as the owner knows.
 #[derive(Debug, Default)]
 struct System {
-    /// The marker of the text the last copy wrote there.
-    written: Option<u64>,
+    /// The format and the marker of what the last copy wrote there (its
+    /// text when it wrote some).
+    written: Option<(FormatId, u64)>,
     /// The last user copy was internal only: nothing was written.
     internal_only: bool,
-    /// The marker of the text a paste brought since that copy.
+    /// The marker of what a paste found there since that copy.
     seen: Option<u64>,
+}
+
+/// A representation's marker: its text's, else its data's.
+fn mark(r: &Repr) -> u64 {
+    match r.text() {
+        Some(t) => model::marker(t),
+        None => model::marker(&r.data.to_string()),
+    }
+}
+
+/// The representation a marker is taken from: text when there is some,
+/// else the first.
+fn marked(reprs: &[Repr]) -> Option<&Repr> {
+    reprs.iter().find(|r| r.format == TEXT).or(reprs.first())
 }
 
 #[derive(Default)]
@@ -653,6 +819,9 @@ struct State {
     sanitisers: RefCell<Vec<(OwnerId, Sanitiser)>>,
     system: RefCell<System>,
     deferred: RefCell<Vec<Deferred>>,
+    backend: RefCell<Option<Box<dyn SystemBackend>>>,
+    /// The last read of the system clipboard, with its pass.
+    read_cache: RefCell<Option<(u64, Option<Vec<Repr>>)>>,
 }
 
 fn state(app: &AppHandle) -> Rc<State> {
@@ -1171,17 +1340,18 @@ fn run_copy(app: &AppHandle, req: &CopyRequest, who: &Origin) -> Result<Json, St
     let mut stripped = sanitise(app, Boundary::Owner, &mut own);
     let [own] = own;
     item.payload = own.data;
-    // Towards the system clipboard: the fallbacks, sanitised.
+    // Towards the system clipboard: the fallbacks, sanitised, and the
+    // private type itself where the backend writes it.
     let internal = ty.as_ref().is_some_and(|t| t.internal);
     let to_system = slot == Slot::User && !internal;
-    let mut system_text = None;
+    let mut system_out: Vec<Repr> = Vec::new();
     if to_system {
-        let mut out = item.fallbacks.clone();
-        stripped.extend(sanitise(app, Boundary::System, &mut out));
-        system_text = out
-            .iter()
-            .find(|r| r.format == TEXT)
-            .and_then(|r| r.text().map(str::to_string));
+        if with_backend(app, |b| b.writes(&item.kind)) {
+            system_out.push(Repr::new(item.kind.clone(), item.payload.clone()));
+        }
+        system_out.extend(item.fallbacks.iter().cloned());
+        stripped.extend(sanitise(app, Boundary::System, &mut system_out));
+        system_out.retain(|r| with_backend(app, |b| b.writes(&r.format)));
     }
     item.stripped = stripped;
     let summary = json!({
@@ -1238,27 +1408,34 @@ fn run_copy(app: &AppHandle, req: &CopyRequest, who: &Origin) -> Result<Json, St
         Answer::Later(_) => json!(null),
     };
     group_end(app, group, true);
-    if slot == Slot::User {
-        let st = state(app);
-        let mut sys = st.system.borrow_mut();
-        match system_text {
-            Some(text) => {
-                *sys = System {
-                    written: Some(model::marker(&text)),
-                    ..System::default()
-                };
-                app.egui().copy_text(text);
-            }
-            None => {
-                *sys = System {
-                    internal_only: true,
-                    ..System::default()
-                };
-            }
-        }
-    }
     let mut summary = summary;
     summary["rev"] = rev;
+    if slot == Slot::User {
+        let written = marked(&system_out).map(|r| (r.format.clone(), mark(r)));
+        let ctx = app.egui();
+        let wrote = match &written {
+            Some(_) => with_backend(app, |b| b.write(&ctx, &system_out)),
+            None => Ok(()),
+        };
+        let st = state(app);
+        *st.read_cache.borrow_mut() = None;
+        *st.system.borrow_mut() = match (&written, &wrote) {
+            (Some(_), Ok(())) => System {
+                written,
+                ..System::default()
+            },
+            // Nothing written (an internal type, or the backend failed):
+            // the system clipboard keeps what it held.
+            _ => System {
+                internal_only: true,
+                ..System::default()
+            },
+        };
+        if let Err(e) = wrote {
+            log::warn!("the system clipboard was not written: {e}");
+            summary["system_error"] = json!(e);
+        }
+    }
     Ok(summary)
 }
 
@@ -1285,22 +1462,43 @@ fn current_item(
     text: Option<&str>,
 ) -> Result<(ClipItem, bool), String> {
     let internal = with_owner(app, |c| c.get(slot)).ok_or(NO_PLUGIN)?;
-    let Some(text) = text.filter(|_| *slot == Slot::User) else {
-        return internal
+    let owners = |internal: Option<ClipItem>| {
+        internal
             .map(|i| (i, true))
-            .ok_or_else(|| "the clipboard is empty".into());
+            .ok_or_else(|| "the clipboard is empty".to_string())
     };
-    let m = model::marker(text);
+    if *slot != Slot::User {
+        return owners(internal);
+    }
+    // What the system clipboard holds: what the backend reads (every
+    // format), else the text the paste key brought.
+    let reprs = match (system_read(app), text) {
+        (Some(r), _) if !r.is_empty() => r,
+        (_, Some(t)) => vec![Repr::new(TEXT, Json::String(t.into()))],
+        _ => return owners(internal),
+    };
     let st = state(app);
     let mut sys = st.system.borrow_mut();
     let ours = internal.is_some()
-        && (sys.written == Some(m) || (sys.internal_only && sys.seen.is_none_or(|s| s == m)));
-    if sys.internal_only {
-        sys.seen = Some(m);
-    }
+        && match &sys.written {
+            Some((format, m)) => reprs
+                .iter()
+                .find(|r| r.format == *format)
+                .is_some_and(|r| mark(r) == *m),
+            None => {
+                let m = marked(&reprs).map(mark);
+                let ours = sys.internal_only && (sys.seen.is_none() || sys.seen == m);
+                if sys.internal_only {
+                    sys.seen = m;
+                }
+                ours
+            }
+        };
     match internal {
         Some(item) if ours => Ok((item, true)),
-        _ => Ok((ClipItem::external_text(text), false)),
+        _ => ClipItem::external(reprs)
+            .map(|i| (i, false))
+            .ok_or_else(|| "the clipboard is empty".into()),
     }
 }
 
@@ -1774,8 +1972,10 @@ pub(crate) fn keys(app: &AppHandle) -> Option<[(&'static str, bool); 3]> {
     };
     let paste = ep.target.as_ref().is_some_and(|t| {
         let mut offers = with_owner(app, |c| c.offers(&Slot::User)).unwrap_or_default();
-        if !offers.contains(&TEXT) {
-            offers.push(TEXT);
+        for f in std::iter::once(TEXT).chain(with_backend(app, |b| b.readable())) {
+            if !offers.contains(&f) {
+                offers.push(f);
+            }
         }
         let item = with_owner(app, |c| c.get(&Slot::User)).flatten();
         let specs: Vec<TransformSpec> = st
@@ -1920,6 +2120,7 @@ fn describe(app: &AppHandle) -> Json {
         "rev": with_owner(app, |c| c.rev()),
         "owner": if st.custom.get() { "host" } else { "local" },
         "pending_pastes": st.deferred.borrow().len(),
+        "system": with_backend(app, |b| json!({ "backend": b.name(), "about": b.describe() })),
         "slots": slots,
         "endpoints": endpoints,
         "types": st.types.borrow().iter().map(|(o, t)| json!({
