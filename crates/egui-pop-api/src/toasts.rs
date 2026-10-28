@@ -404,12 +404,9 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                             egui::Layout::top_down(egui::Align::Min),
                             |ui| {
                                 ui.set_max_width(width);
-                                ui.add(
-                                    egui::Label::new(
-                                        egui::RichText::new(&shown.toast.text).color(text),
-                                    )
-                                    .wrap(),
-                                );
+                                crate::links::Inline::new(&shown.toast.text)
+                                    .color(text)
+                                    .show(ui, app);
                             },
                         );
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {

@@ -178,6 +178,7 @@ fn show_card(ctx: &Context, app: &AppHandle, tips: &Tips, tip: &Tip) {
             let shadow = t.shadow.popup;
             card_in(
                 ui,
+                app,
                 shadow,
                 &heading,
                 &title,

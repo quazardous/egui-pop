@@ -35,6 +35,8 @@
 //! assert!(d.refused.is_some() && d.reveal_instead);
 //! ```
 
+pub mod inline;
+
 use std::collections::BTreeSet;
 use std::fmt;
 

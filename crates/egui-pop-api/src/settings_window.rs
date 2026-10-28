@@ -650,7 +650,9 @@ pub(crate) fn row(ui: &mut Ui, app: &AppHandle, e: &SettingEntry) {
         setting_reset_button(ui, app, e, &d.label);
     });
     if !d.description.is_empty() {
-        ui.weak(&d.description);
+        crate::links::Inline::new(&d.description)
+            .weak()
+            .show(ui, app);
     }
     ui.add_space(t.space.s);
 }
@@ -825,7 +827,9 @@ fn family_row(ui: &mut Ui, app: &AppHandle, e: &SettingEntry, role: Role) {
         FONT_PREVIEW.set(&ctx, previewed);
     }
     if !d.description.is_empty() {
-        ui.weak(&d.description);
+        crate::links::Inline::new(&d.description)
+            .weak()
+            .show(ui, app);
     }
     ui.weak(strings::tr(&ctx, &txt::FONTS_PICKER_HINT));
     ui.add_space(t.space.s);
