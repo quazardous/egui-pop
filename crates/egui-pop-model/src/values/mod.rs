@@ -28,6 +28,12 @@
 //!   ([`Store::set_place`]); writes carrying the same merge key
 //!   ([`Set::merge`]) from one origin less than a second apart are one
 //!   step, until [`Store::seal`] (the focus left).
+//! - A history also keeps its snapshots ([`Store::take_snapshot`],
+//!   restored as a new step), the redo lists new steps dropped
+//!   ([`Store::replaced_in`], reachable by [`Store::jump_in`]), and
+//!   undoes one step out of order unless a later step changed the same
+//!   path ([`Store::undo_step_in`]); [`Store::values_at`] says what
+//!   differs at a point, for a preview.
 //! - Paths are owned: a plugin's settings and listeners go with it.
 //! - One writer per value: a write names the scope issuing it
 //!   ([`Set::by`], or the scope [`enter_scope`] set, such as the plugin
@@ -54,6 +60,7 @@
 //! ```
 
 mod commands;
+mod points;
 mod value;
 
 pub use commands::{register, register_with};
@@ -370,6 +377,11 @@ struct History {
     rev: u64,
     /// The next step does not merge with the head.
     sealed: bool,
+    /// Redo lists new steps dropped, oldest first: shown as "replaced"
+    /// steps, reachable by a jump.
+    replaced: Vec<points::Branch>,
+    /// Named states pinned in it, oldest first.
+    snapshots: Vec<points::Snap>,
 }
 
 /// How many changes the journal keeps.
@@ -480,6 +492,7 @@ pub struct Store {
     /// The histories, by scope ([`APP`] first made).
     histories: BTreeMap<ScopeId, History>,
     next_step: u64,
+    next_snapshot: u64,
     /// The host's cap on each history; [`HISTORY_CAP`] when unset.
     history_cap: Option<usize>,
     /// Where steps take their time from; none: 0, and nothing merges.
@@ -1043,6 +1056,15 @@ impl Store {
         let clocked = self.clock.is_some();
         let h = self.histories.entry(history.clone()).or_default();
         h.rev += 1;
+        // A snapshot keeps the value each path had when it was taken: a
+        // path changed for the first time since is recorded now.
+        for snap in &mut h.snapshots {
+            for (path, old, _) in &step.changes {
+                snap.values
+                    .entry(path.clone())
+                    .or_insert_with(|| old.clone());
+            }
+        }
         let joins = clocked && !h.sealed && h.redo.is_empty();
         let head = h.undo.last_mut().filter(|_| joins);
         if let (Some(head), Some(key)) = (head, &step.merge)
@@ -1063,8 +1085,16 @@ impl Store {
             return;
         }
         h.sealed = false;
+        // The redo list a new step drops is kept, as a replaced line.
+        let after = h.undo.last().map_or(0, |s| s.id);
+        let dropped: Vec<Step> = h.redo.drain(..).rev().collect();
+        if !dropped.is_empty() {
+            h.replaced.push(points::Branch {
+                after,
+                steps: dropped,
+            });
+        }
         h.undo.push(step);
-        h.redo.clear();
         self.trim_history();
     }
 
@@ -1095,6 +1125,11 @@ impl Store {
                     *dropped += over as u64;
                     h.rev += 1;
                 }
+            }
+            // Replaced lines: the oldest go first.
+            while h.replaced.iter().map(|b| b.steps.len()).sum::<usize>() > cap {
+                h.replaced.remove(0);
+                h.rev += 1;
             }
         }
     }
@@ -1295,7 +1330,10 @@ impl Store {
         origin: &Origin,
     ) -> Result<Option<usize>, Refused> {
         let Some((redo, count)) = self.plan_jump(history, to) else {
-            return Ok(None);
+            // A replaced step: back to where its line left, then along it.
+            return Ok(self
+                .jump_replaced(history, to, origin, false)?
+                .map(|steps| steps.len()));
         };
         {
             let h = &self.histories[history];
@@ -1419,6 +1457,13 @@ impl Store {
             h.redo.retain(|s| !gone(s));
             if h.undo.len() + h.redo.len() != n {
                 h.rev += 1;
+            }
+            for b in &mut h.replaced {
+                b.steps.retain(|s| !gone(s));
+            }
+            h.replaced.retain(|b| !b.steps.is_empty());
+            for snap in &mut h.snapshots {
+                snap.values.retain(|p, _| !paths.contains(p));
             }
         }
         self.listeners.retain(|_, l| l.owner != *owner);

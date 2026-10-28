@@ -4,6 +4,7 @@
 use std::sync::{Arc, Mutex};
 
 use egui_pop_model::commands::{Commands, Origin};
+use egui_pop_model::history::At;
 use egui_pop_model::ids::{CommandId, OwnerId};
 use egui_pop_model::values::*;
 use egui_pop_model::when::WhenContext;
@@ -829,4 +830,116 @@ fn a_jump_walks_to_a_step_all_or_nothing() {
     store.cancel(g);
     assert_eq!(store.gesture_open(&APP), None);
     assert_eq!(store.check_walk(&APP, true).unwrap().unwrap().id, ids[0]);
+}
+
+#[test]
+fn a_snapshot_pins_the_values_and_restores_them_as_a_step() {
+    let mut store = mixer();
+    store.set(set_gain(1.0)).unwrap();
+    let snap = store
+        .take_snapshot(&APP, "one", &Origin::User, false)
+        .unwrap();
+    assert_eq!(snap.step, store.undo_steps()[0].id);
+    store.set(set_gain(2.0)).unwrap();
+    // A path first changed after the snapshot is pinned at its old value.
+    store
+        .set(Set::new(
+            "mixer/mute",
+            Change::To(Value::Bool(true)),
+            Origin::User,
+        ))
+        .unwrap();
+    let changes = store.values_at(&APP, At::Snapshot(snap.id)).unwrap();
+    assert_eq!(changes.len(), 2);
+    // A dry run changes nothing.
+    let dry = store
+        .restore_snapshot(&APP, snap.id, &Origin::User, true)
+        .unwrap()
+        .unwrap();
+    assert_eq!(dry.id, 0);
+    assert_eq!(store.get(GAIN).unwrap().value, Value::Float(2.0));
+    let step = store
+        .restore_snapshot(&APP, snap.id, &Origin::User, false)
+        .unwrap()
+        .unwrap();
+    assert_eq!(step.label, "Restore “one”");
+    assert_eq!(store.get(GAIN).unwrap().value, Value::Float(1.0));
+    assert_eq!(store.get("mixer/mute").unwrap().value, Value::Bool(false));
+    // Already there: nothing to do. The restore is undone as any step.
+    assert_eq!(
+        store.restore_snapshot(&APP, snap.id, &Origin::User, false),
+        Ok(None)
+    );
+    store.undo(&Origin::User).unwrap();
+    assert_eq!(store.get(GAIN).unwrap().value, Value::Float(2.0));
+    // The cap never drops it; deleting it does.
+    store.set_history_cap(0);
+    assert_eq!(store.snapshots_in(&APP).len(), 1);
+    assert!(store.forget_snapshot(&APP, snap.id));
+    assert!(store.snapshots_in(&APP).is_empty());
+}
+
+#[test]
+fn one_step_is_undone_out_of_order_unless_a_later_one_touched_it() {
+    let mut store = mixer();
+    store.set(set_gain(1.0)).unwrap();
+    store
+        .set(Set::new(
+            "mixer/mute",
+            Change::To(Value::Bool(true)),
+            Origin::User,
+        ))
+        .unwrap();
+    store.set(set_gain(2.0)).unwrap();
+    let ids: Vec<u64> = store.undo_steps().iter().map(|s| s.id).collect();
+    // The first gain step: the last one changed the gain since.
+    let r = store
+        .undo_step_in(&APP, ids[0], &Origin::User, false)
+        .unwrap_err();
+    assert_eq!(r.kind, egui_pop_model::history::RefusalKind::Owner);
+    // The mute step: a new step puts it back, the gain stays.
+    let undone = store
+        .undo_step_in(&APP, ids[1], &Origin::User, false)
+        .unwrap();
+    assert_eq!(undone.id, ids[1]);
+    assert_eq!(store.get("mixer/mute").unwrap().value, Value::Bool(false));
+    assert_eq!(store.get(GAIN).unwrap().value, Value::Float(2.0));
+    assert_eq!(store.undo_steps().len(), 4);
+    // The head: an undo.
+    let head = store.undo_steps()[3].id;
+    store
+        .undo_step_in(&APP, head, &Origin::User, false)
+        .unwrap();
+    assert_eq!(store.redo_steps().len(), 1);
+    assert_eq!(store.get("mixer/mute").unwrap().value, Value::Bool(true));
+}
+
+#[test]
+fn a_new_step_keeps_the_redo_list_as_a_replaced_line_reachable_by_a_jump() {
+    let mut store = mixer();
+    for v in 1..=3 {
+        store.set(set_gain(f64::from(v))).unwrap();
+    }
+    let ids: Vec<u64> = store.undo_steps().iter().map(|s| s.id).collect();
+    store.jump_in(&APP, ids[0], &Origin::User).unwrap();
+    // 5, inside the gain's soft range (a set past it stops at 6).
+    store.set(set_gain(5.0)).unwrap();
+    let replaced: Vec<(u64, u64)> = store
+        .replaced_in(&APP)
+        .iter()
+        .map(|(after, s)| (*after, s.id))
+        .collect();
+    assert_eq!(replaced, vec![(ids[0], ids[1]), (ids[0], ids[2])]);
+    // Its values, previewed.
+    let at = store.values_at(&APP, At::Step(ids[2])).unwrap();
+    assert_eq!(
+        at,
+        vec![(GAIN.into(), Value::Float(5.0), Value::Float(3.0))]
+    );
+    // Back along it: the line left becomes a replaced one in its place.
+    let new = store.undo_steps()[1].id;
+    assert_eq!(store.jump_in(&APP, ids[2], &Origin::User).unwrap(), Some(3));
+    assert_eq!(store.get(GAIN).unwrap().value, Value::Float(3.0));
+    let replaced: Vec<u64> = store.replaced_in(&APP).iter().map(|(_, s)| s.id).collect();
+    assert_eq!(replaced, vec![new]);
 }

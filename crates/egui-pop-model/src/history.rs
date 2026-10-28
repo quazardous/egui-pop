@@ -19,6 +19,11 @@
 //!   focused local scope, undoes the newest step among the scopes active
 //!   in the window.
 //! - A **jump** ([`plan_jump`]) is a run of undos or redos to a step.
+//! - Beyond them, as an owner supports them ([`Features`]): a
+//!   [`Snapshot`] (a named state pinned in a scope), a [`Preview`] of a
+//!   point ([`At`]) the pointer is on, the steps a new step dropped from
+//!   the redo list ([`Replaced`]), and one step undone out of order,
+//!   unless a later step shares a target ([`may_undo_out_of_order`]).
 //!
 //! ```
 //! use egui_pop_model::commands::Origin;
@@ -276,6 +281,9 @@ pub enum RefusalKind {
     /// The owner's own reason (another process, a later step on the
     /// same target).
     Owner,
+    /// The owner does not support the request (snapshots, undoing one
+    /// step out of order).
+    Unsupported,
 }
 
 /// A refusal, with its reason as the interface shows it.
@@ -301,6 +309,110 @@ impl fmt::Display for Refusal {
 }
 
 impl std::error::Error for Refusal {}
+
+/// A named state pinned in a scope (ADR 0014): taken by the user or an
+/// agent, never dropped by the cap, restored as a new step.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Snapshot {
+    /// Unique within its owner; never 0.
+    pub id: u64,
+    pub scope: ScopeId,
+    pub name: String,
+    /// The scope's head when it was taken (0: the start).
+    pub step: u64,
+    /// Who took it.
+    pub origin: Origin,
+    /// When it was taken, in seconds of the owner's clock.
+    #[serde(default)]
+    pub at: f64,
+}
+
+/// A step a new step dropped from the redo list, kept by an owner whose
+/// history keeps every state (ADR 0014): the history panel shows it as a
+/// "replaced" row behind a toggle, and a jump reaches it.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Replaced {
+    pub step: StepInfo,
+    /// The step it came after (0: the start): where its line left the
+    /// current one.
+    pub after: u64,
+}
+
+/// A point of a history the panel previews: a step (0: the start, a
+/// replaced step included) or a snapshot.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", content = "id", rename_all = "snake_case")]
+pub enum At {
+    Step(u64),
+    Snapshot(u64),
+}
+
+/// What the owner answers a hover on the history panel: it may show the
+/// state there itself (`shown`: in its own views, the image as it was),
+/// and say what differs from now, which the panel shows beside the row.
+/// Nothing is committed: the hover ending cancels it.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct Preview {
+    /// The owner shows the state in its own views.
+    #[serde(default)]
+    pub shown: bool,
+    /// What differs from now, as the panel lists it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub changes: Vec<PreviewChange>,
+}
+
+/// One thing a preview says differs.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct PreviewChange {
+    /// What it is ("Exposure").
+    pub what: String,
+    /// Its value at the point previewed.
+    pub then: String,
+    /// Its value now.
+    pub now: String,
+}
+
+/// What an owner supports beyond undo, redo and jump, per scope; the
+/// history panel offers only these.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
+pub struct Features {
+    /// Snapshots: taken, restored, deleted.
+    pub snapshots: bool,
+    /// Undoing one step out of order ("Undo this step").
+    pub undo_step: bool,
+}
+
+impl Features {
+    /// Everything.
+    pub fn all() -> Self {
+        Self {
+            snapshots: true,
+            undo_step: true,
+        }
+    }
+}
+
+/// Whether undoing `step` out of order is allowed (VS Code's rule): no
+/// later step of `undo` (oldest first) changed one of the same `targets`.
+/// `targets_of` names what a step changes. `Err`: the later step in the
+/// way, and the target it shares.
+pub fn may_undo_out_of_order<'a, T: PartialEq + 'a, S>(
+    undo: &'a [S],
+    step: usize,
+    targets_of: impl Fn(&'a S) -> Vec<&'a T>,
+) -> Result<(), (usize, &'a T)> {
+    let Some(s) = undo.get(step) else {
+        return Ok(());
+    };
+    let mine = targets_of(s);
+    for (i, later) in undo.iter().enumerate().skip(step + 1) {
+        if let Some(t) = targets_of(later).into_iter().find(|t| mine.contains(t)) {
+            return Err((i, t));
+        }
+    }
+    Ok(())
+}
 
 /// What a step carries to be merged with the next: its merge key (the
 /// target path, or the component's own key), origin and time.
@@ -508,6 +620,17 @@ mod tests {
             serde_json::to_value(Label::text("x")).unwrap(),
             serde_json::json!({ "text": "x" })
         );
+    }
+
+    #[test]
+    fn one_step_is_undone_out_of_order_unless_a_later_one_shares_a_target() {
+        fn targets<'a>(s: &'a [&'static str; 2]) -> Vec<&'a &'static str> {
+            s.iter().filter(|t| !t.is_empty()).collect()
+        }
+        let steps = [["a", ""], ["b", ""], ["a", "c"]];
+        assert_eq!(may_undo_out_of_order(&steps, 0, targets), Err((2, &"a")));
+        assert_eq!(may_undo_out_of_order(&steps, 1, targets), Ok(()));
+        assert_eq!(may_undo_out_of_order(&steps, 2, targets), Ok(()));
     }
 
     #[test]
