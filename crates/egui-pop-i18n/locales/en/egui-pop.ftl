@@ -1530,6 +1530,8 @@ egui-pop-toast-warning = Warning
 
 egui-pop-toolbar-more = More tools
 
+egui-pop-toolbar-more-in = More tools: { $toolbar }
+
 egui-pop-toolbar-with-key = { $action } ({ $keys })
 
 egui-pop-value-held-by = Being changed by { $origin }

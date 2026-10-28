@@ -58,7 +58,14 @@ last ones go into a **More tools** button (the `more` glyph role) at the
 end, which opens them as a menu, with their icons, ticks and keys; a
 separator never ends the row nor starts that menu. A column (a tool
 palette, `vertical`) is as wide as its widest tool and overflows the
-same way downwards.
+same way downwards; it measures the height its `Ui` offers, which
+inside `ui.horizontal` is a single row's, so give it room of its own
+(`ui.allocate_ui`, a panel).
+
+`Toolbar::name` names a toolbar for screen readers: its More tools
+button is then "More tools: Formatting", so two toolbars shown together
+never have two controls of the same name. Name every toolbar of a
+window that shows more than one.
 
 A button is the toolbar icon size (`size.icon.toolbar`) padded by
 `space.xs` on each side, so the compact density makes the whole

@@ -919,6 +919,8 @@ egui-pop-menu-more = Autres menus
 
 egui-pop-toolbar-more = Autres outils
 
+egui-pop-toolbar-more-in = Autres outils : { $toolbar }
+
 egui-pop-toolbar-with-key = { $action } ({ $keys })
 
 egui-pop-menu-no-command = Pas de commande `{ $id }`

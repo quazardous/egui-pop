@@ -208,7 +208,8 @@ publishes.
   it does not apply, busy while its run waits; groups are separated, a
   submenu opens its menu, a list gives a button per entry. `Labels`
   shows icons (the default), icons with their titles, or titles; the
-  tools that do not fit go into a "More tools" menu. Sizes follow
+  tools that do not fit go into a "More tools" menu, named after the
+  toolbar (`Toolbar::name`: "More tools: Formatting"). Sizes follow
   `size.icon.toolbar` and `space.xs`, so the density moves them. A new
   kit component, `toolbar-button` (based on `icon-button`), paints the
   buttons. `toolbars::layout` and the `toolbars` debug collector give
