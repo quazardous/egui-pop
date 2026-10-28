@@ -13,6 +13,7 @@
 - [Plugins, commands and steps](plugins.md)
 - [State or event: what to use](state-or-event.md)
 - [The context stack](contexts.md)
+- [History](history.md)
 - [The clipboard](clipboard.md)
 - [The status bar and the context stack](status-and-context.md)
 - [The status bar](status-bar.md)
