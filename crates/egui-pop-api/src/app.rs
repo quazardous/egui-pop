@@ -2645,6 +2645,7 @@ impl AppBuilder {
         app.handle.workbench_mut().layout.folded = self.folded;
         app.handle.workbench_mut().layout.over = self.over;
         *app.handle.0.name.borrow_mut() = self.name.unwrap_or_default();
+        strings::set_application(ctx, &app.handle.name());
         let mut themes = self.themes;
         let mut kits = self.kits;
         if self.user_kits
@@ -4519,6 +4520,7 @@ impl App {
         if !strings::panel_commands(ctx).is_some_and(|c| Arc::ptr_eq(&c, &commands)) {
             strings::set_panel_commands(ctx, commands);
         }
+        strings::set_application(ctx, &self.handle.0.name.borrow());
         focus::install(ctx);
         // egui-pop's interface zoom replaces egui's keys (`zoom`).
         egui_pop_core::scale::disable_keyboard_zoom(ctx);

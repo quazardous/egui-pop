@@ -12,6 +12,11 @@ publishes.
 
 ### Added
 
+- A command's title may say `{ $application }` (egui-pop-core,
+  egui-pop-api): menus, the palette and the shortcuts editor fill it
+  with the application's name (`AppBuilder::name`), in English and in
+  translations; `strings::set_application` and `strings::application`
+  hold it per context.
 - The gallery's `history` page (egui-pop-gallery): values bound to the
   store, a button making a change as an agent, and the history panel's
   list beside them, a click jumping to a step; the History panel is in
