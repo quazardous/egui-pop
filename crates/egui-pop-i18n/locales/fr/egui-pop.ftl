@@ -367,6 +367,10 @@ command-theme-undo =
     .description = Annule la dernière modification de l’éditeur de thème, par l’étape theme.token.
     .title = Annuler une modification du thème
 
+command-tips-browse =
+    .description = Toutes les astuces, par plugin qui les déclare, chaque plugin avec son propre interrupteur.
+    .title = Astuces…
+
 command-tips-current =
     .description = L’astuce affichée en carte (son id, son titre, son texte et sa cible, null sans astuce), et où sont sa carte et sa cible.
     .title = L’astuce affichée
@@ -394,6 +398,10 @@ command-tips-notNow =
 command-tips-off =
     .description = N’affiche plus d’astuces (le réglage tips.show).
     .title = Désactiver les astuces
+
+command-tips-origin =
+    .description = Active ou désactive (`on`) les astuces d’un plugin (`origin`, son id), sans toucher aux autres.
+    .title = Activer ou désactiver les astuces d’un plugin
 
 command-tips-reset =
     .description = Oublie quelles astuces ont été écartées.
@@ -1229,6 +1237,8 @@ egui-pop-theme-editor-warnings = Lu avec des avertissements : { $warnings }.
 
 egui-pop-tips-at = { $at } sur { $count }
 
+egui-pop-tips-browser = Astuces
+
 egui-pop-tips-did-you-know = Le saviez-vous ?
 
 egui-pop-tips-dont-show = Ne plus afficher
@@ -1243,11 +1253,25 @@ egui-pop-tips-next = Astuce suivante
 
 egui-pop-tips-no-more = Plus d’astuces
 
+egui-pop-tips-none = Aucune astuce n’est déclarée.
+
 egui-pop-tips-not-now = Pas maintenant
 
 egui-pop-tips-of-the-day = Astuce du jour
 
+egui-pop-tips-origin-on = Afficher ces astuces
+
+egui-pop-tips-origin-on-name = Afficher les astuces de { $origin }
+
 egui-pop-tips-previous = Astuce précédente
+
+egui-pop-tips-show = Afficher
+
+egui-pop-tips-show-name = Afficher l’astuce { $tip }
+
+egui-pop-tips-state-dismissed = Écartée
+
+egui-pop-tips-state-used = Sa commande a servi
 
 egui-pop-toast-close = Fermer : { $text }
 
@@ -1723,6 +1747,10 @@ setting-palettes-idle-opacity =
 setting-tips-dismissed =
     .description = Les astuces à ne plus afficher, par id ; vide pour toutes les afficher de nouveau.
     .label = Astuces écartées
+
+setting-tips-off =
+    .description = Les plugins dont les astuces sont désactivées, par id ; les autres affichent toujours les leurs.
+    .label = Plugins sans astuces
 
 setting-tips-seen =
     .description = Quand chaque astuce a été affichée pour la dernière fois, pour qu’elle ne revienne pas le même jour.

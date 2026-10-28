@@ -54,6 +54,7 @@
 //! assert!(tips.of_the_day(app.handle()).is_none());
 //! ```
 
+mod browser;
 pub mod file;
 pub mod markup;
 pub mod pick;
@@ -87,6 +88,7 @@ use crate::zones::{self, Block};
 use crate::{Ctx, Plugin, PluginError};
 use egui_pop_model::ids::BlockId;
 
+pub use browser::{browser, groups};
 pub use screen::{halo_color, mark, target, target_rect, targets_seen};
 
 /// The plugin's id.
@@ -104,6 +106,8 @@ pub const SETTING_TIPS_DISMISSED: SettingId = SettingId::from_static("tips.dismi
 pub const SETTING_TIPS_SEEN: SettingId = SettingId::from_static("tips.seen");
 /// The commands a person used: their ids, separated by commas.
 pub const SETTING_TIPS_USED: SettingId = SettingId::from_static("tips.used");
+/// The origins (plugins) whose tips are off, separated by commas.
+pub const SETTING_TIPS_OFF: SettingId = SettingId::from_static("tips.off");
 
 /// A tip is dismissed.
 pub const STEP_TIPS_DISMISS: StepId = StepId::from_static("tips.dismiss");
@@ -117,6 +121,8 @@ pub const CMD_TIPS_GOT_IT: CommandId = CommandId::from_static("tips.gotIt");
 pub const CMD_TIPS_NOT_NOW: CommandId = CommandId::from_static("tips.notNow");
 pub const CMD_TIPS_OFF: CommandId = CommandId::from_static("tips.off");
 pub const CMD_TIPS_CURRENT: CommandId = CommandId::from_static("tips.current");
+pub const CMD_TIPS_BROWSE: CommandId = CommandId::from_static("tips.browse");
+pub const CMD_TIPS_ORIGIN: CommandId = CommandId::from_static("tips.origin");
 
 /// The context key set while a tip's card is shown.
 pub const CONTEXT_TIP_SHOWN: &str = "tipShown";
@@ -440,9 +446,27 @@ impl Tips {
         }
     }
 
-    /// The origins whose tips are off.
-    fn off(&self, _app: &AppHandle) -> BTreeSet<String> {
-        BTreeSet::new()
+    /// The origins whose tips are off (the `tips.off` setting).
+    pub fn off(&self, app: &AppHandle) -> BTreeSet<String> {
+        pick::read_ids(&Self::text_setting(app, &SETTING_TIPS_OFF))
+    }
+
+    /// Turns an origin's tips (a plugin's) on or off, the others kept.
+    pub fn set_origin_on(&self, app: &AppHandle, origin: &str, on: bool) -> Result<(), String> {
+        let mut off = self.off(app);
+        let changed = if on {
+            off.remove(origin)
+        } else {
+            off.insert(origin.to_string())
+        };
+        if !changed {
+            return Ok(());
+        }
+        Self::write_setting(app, &SETTING_TIPS_OFF, pick::write_ids(&off))?;
+        if !on && self.current().is_some_and(|t| t.origin_name() == origin) {
+            self.set_current(app, None);
+        }
+        Ok(())
     }
 
     /// The tip the rules pick in a context, among those `keep` accepts
@@ -723,10 +747,13 @@ impl Tips {
     /// The tips of the day still to show, in order.
     fn left(&self, app: &AppHandle) -> Vec<Tip> {
         let dismissed = self.dismissed(app);
+        let off = self.off(app);
         lock(&self.state)
             .tips
             .iter()
-            .filter(|t| !t.contextual && !dismissed.contains(&t.id))
+            .filter(|t| {
+                !t.contextual && !dismissed.contains(&t.id) && !off.contains(t.origin_name())
+            })
             .cloned()
             .collect()
     }
@@ -784,6 +811,12 @@ impl Plugin for TipsPlugin {
             SETTING_TIPS_DISMISSED,
             Descriptor::text("Dismissed tips", "")
                 .description("The tips not to show again, by id; empty to show them all again."),
+        )?;
+        ctx.setting(
+            SETTING_TIPS_OFF,
+            Descriptor::text("Plugins without tips", "").description(
+                "The plugins whose tips are off, by id; the others still show theirs.",
+            ),
         )?;
         ctx.setting(
             SETTING_TIPS_SEEN,
@@ -914,6 +947,48 @@ impl Plugin for TipsPlugin {
                     Some(t) => screen::describe(call.app, &t),
                     None => Json::Null,
                 })
+            },
+        )?;
+        ctx.command(
+            CommandSpec::new(CMD_TIPS_BROWSE, "Tips…", CAT)
+                .description("Every tip, by the plugin that declared it, each plugin's with its own switch.")
+                .menu(crate::app::MENU_HELP, "1_tips", 0),
+            |call| {
+                let dialogs = call
+                    .app
+                    .service(&crate::dialogs::DIALOGS)
+                    .ok_or("the dialogs plugin is not connected")?;
+                let title = strings::tr(&call.app.egui(), &txt::TIPS_BROWSER);
+                let id = dialogs.open_custom(
+                    call.app,
+                    crate::dialogs::Custom::closing(&title),
+                    |ui, app, _| {
+                        egui::ScrollArea::vertical()
+                            .auto_shrink([false, false])
+                            .show(ui, |ui| browser::browser(ui, app));
+                    },
+                )?;
+                Ok(json!({ "dialog": id }))
+            },
+        )?
+        .command(
+            CommandSpec::new(CMD_TIPS_ORIGIN, "Turn a plugin's tips on or off", CAT)
+                .description("Turns the tips of one plugin (`origin`, its id) on or off (`on`), the others kept.")
+                .hidden()
+                .args(json!({ "origin": "photos", "on": false })),
+            |call| {
+                let origin = call
+                    .args
+                    .get("origin")
+                    .and_then(Json::as_str)
+                    .ok_or("`origin` is missing")?;
+                let on = call
+                    .args
+                    .get("on")
+                    .and_then(Json::as_bool)
+                    .ok_or("`on` is missing")?;
+                service(call.app)?.set_origin_on(call.app, origin, on)?;
+                Ok(json!({ "origin": origin, "on": on }))
             },
         )?;
         // Escape closes the card, unless something else wants it.
@@ -1055,7 +1130,8 @@ pub fn hint(ui: &mut Ui, app: &AppHandle, id: &str) -> bool {
     let Some(tip) = tips.get(id) else {
         return false;
     };
-    if !tips.enabled(app) || tips.is_dismissed(app, id) {
+    if !tips.enabled(app) || tips.is_dismissed(app, id) || tips.off(app).contains(tip.origin_name())
+    {
         return false;
     }
     let ctx = ui.ctx().clone();

@@ -832,6 +832,17 @@ pub const TIPS_GOT_IT_NAME: StrKey = StrKey::new(
 pub const TIPS_DID_YOU_KNOW: StrKey = StrKey::new("egui-pop-tips-did-you-know", "Did you know?");
 pub const TIPS_NOT_NOW: StrKey = StrKey::new("egui-pop-tips-not-now", "Not now");
 pub const TIPS_NO_MORE: StrKey = StrKey::new("egui-pop-tips-no-more", "No more tips");
+pub const TIPS_BROWSER: StrKey = StrKey::new("egui-pop-tips-browser", "Tips");
+pub const TIPS_NONE: StrKey = StrKey::new("egui-pop-tips-none", "No tips are registered.");
+pub const TIPS_ORIGIN_ON: StrKey = StrKey::new("egui-pop-tips-origin-on", "Show these tips");
+pub const TIPS_ORIGIN_ON_NAME: StrKey = StrKey::new(
+    "egui-pop-tips-origin-on-name",
+    "Show the tips of { $origin }",
+);
+pub const TIPS_STATE_DISMISSED: StrKey = StrKey::new("egui-pop-tips-state-dismissed", "Dismissed");
+pub const TIPS_STATE_USED: StrKey = StrKey::new("egui-pop-tips-state-used", "Its command was used");
+pub const TIPS_SHOW: StrKey = StrKey::new("egui-pop-tips-show", "Show");
+pub const TIPS_SHOW_NAME: StrKey = StrKey::new("egui-pop-tips-show-name", "Show the tip { $tip }");
 
 // The context stack.
 
@@ -1259,6 +1270,14 @@ pub const ALL: &[StrKey] = &[
     TIPS_DID_YOU_KNOW,
     TIPS_NOT_NOW,
     TIPS_NO_MORE,
+    TIPS_BROWSER,
+    TIPS_NONE,
+    TIPS_ORIGIN_ON,
+    TIPS_ORIGIN_ON_NAME,
+    TIPS_STATE_DISMISSED,
+    TIPS_STATE_USED,
+    TIPS_SHOW,
+    TIPS_SHOW_NAME,
     CONTEXT_ROOT,
     CONTEXT_LEAVE_MODE,
     CONTEXT_NO_MODE,

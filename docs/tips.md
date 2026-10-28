@@ -101,7 +101,8 @@ start, then the first time a tip's `surface` holds (a panel focused, a
 mode entered). Off by default: an application turns it on. The rules
 choose the tip:
 
-- not contextual, not dismissed ("Got it" is final);
+- not contextual, not dismissed ("Got it" is final), its plugin's
+  tips not turned off;
 - its command never used: a person who ran it knows it (the commands a
   person runs, from the keyboard, a menu or the palette, are recorded
   in `tips.used`; an agent's or a script's are not);
@@ -140,6 +141,17 @@ theme:
 | `tip-card.halo-color` | The halo around a target | `status.info`, the card's icon's |
 | `tip-card.width` | The card's width | A toast's width |
 
+## The browser
+
+"Tips…" in the Help menu (`tips.browse`, which needs the dialogs
+plugin) lists every tip by the plugin that declared it, under the
+plugin's title: each with its text as shown, whether it was dismissed
+or its command used, and a "Show" button. Each plugin's group has its
+own switch, "Show these tips": off, that plugin's tips are never shown
+(`tips.off`), the others still are. `tips::browser(ui, app)` draws the
+same list anywhere, and `tips.origin` (`origin`, `on`) turns a plugin's
+tips on or off for agents.
+
 ## Commands
 
 | Command | What |
@@ -150,6 +162,8 @@ theme:
 | `tips.notNow` | Closes the card (Escape) |
 | `tips.off` | No more tips |
 | `tips.current` | For agents: the tip shown, its card's and its target's rectangles |
+| `tips.browse` | "Tips…": the browser |
+| `tips.origin` | Turns a plugin's tips on or off (`origin`, `on`) |
 | `tips.reset` | Shows every tip again |
 | `tips.list`, `tips.dismiss` | For agents: every tip, and dismissing one |
 
@@ -164,6 +178,7 @@ journal says `tip.shown`.
 | `tips.dismissed` | The ids of the tips not to show again, separated by commas |
 | `tips.seen` | When each tip was shown last, `id@seconds` |
 | `tips.used` | The commands a person used, separated by commas |
+| `tips.off` | The plugins whose tips are off, separated by commas |
 
 Dismissing a tip writes `tips.dismissed` without an undo step, through
 the `tips.dismiss` step (`tip`, `cause`: `user` or `agent`; a veto keeps
@@ -196,4 +211,5 @@ egui's tooltips (`on_hover_text`) stay what they are, help on hover. No
 crate was found offering a tip of the day, onboarding hints or tours
 for egui with dismissal kept in settings and translations: owned.
 
-Not done yet: a per-plugin off switch.
+Not done yet: translated tips as files of their own
+(`i18n/<lang>/tips/<id>.md`); a tip is translated in the catalogues.
