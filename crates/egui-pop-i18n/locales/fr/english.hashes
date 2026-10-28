@@ -40,11 +40,11 @@ command-app-window-menu.description fb8c2f9b4adbae3f
 command-app-window-menu.title 8bde8da9b61e8ece
 command-app-window-minimize.description 293883059101d7f3
 command-app-window-minimize.title e6356bcffe84c79d
-command-clipboard-copy.description 5e6877bf2a1f28e0
+command-clipboard-copy.description 29266c451a105301
 command-clipboard-copy.title 34687519b9d42e7e
 command-clipboard-offers.description c444d705bf315355
 command-clipboard-offers.title a65691ca0b6e77b9
-command-clipboard-paste.description f4ffcfd047829e1d
+command-clipboard-paste.description 4ca11adeff537b5c
 command-clipboard-paste.title daec7cee6cc601bc
 command-clipboard-read.description 1fe969fcd5a833db
 command-clipboard-read.title b0d82f812b9e736e

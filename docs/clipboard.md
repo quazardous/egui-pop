@@ -71,6 +71,31 @@ let response = draw_swatches(ui);
 clipboard::bind(app, "demo.swatches", response.id);
 ```
 
+In a node graph, a tree or a list of sliders, the focus sits on each
+node, row or slider, not on the panel. Such a component binds its
+elements, or an area, instead of one widget:
+
+```rust,ignore
+// Each element, with its key: the source and the target receive it.
+for node in &graph.nodes {
+    let response = draw_node(ui, node);
+    clipboard::bind_element(app, "demo.graph", response.id, &node.key);
+}
+// Or any focused widget whose centre lies in the canvas.
+clipboard::bind_area(app, "demo.graph", canvas.rect);
+```
+
+`ClipSource::copy_element`, `Cut::element` and `Paste::element` carry
+the focused element's key (`clipboard::element` says it); an agent
+names one with `element` in `clipboard.copy` and `clipboard.paste`. A
+widget bound alone wins over an area, and of two areas holding the
+focused widget the smaller one. The focused widget's rectangle is read
+from egui's lists of widgets: `Context::read_response` is never used
+for it, as building a response for a widget that is not hovered during
+a press makes egui surrender that widget's focus (a host finding the
+focused row that way steals the tree's focus on the click that gave
+it).
+
 A paste is **one undo step** ("Paste a colour"): egui-pop opens a
 history group (`Host::begin_group`, the store's by default) and the
 target's writes carry it (`Set::gesture(paste.group)`). A cut is the

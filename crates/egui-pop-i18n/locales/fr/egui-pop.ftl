@@ -80,7 +80,7 @@ command-app-window-minimize =
     .title = Réduire
 
 command-clipboard-copy =
-    .description = Copie depuis une source (`source`) dans l’emplacement de la session (`slot`) ; `cut` supprime ce qui a été copié ; `dry_run` dit ce qui serait copié et laissé de côté.
+    .description = Copie depuis une source (`source`), l’un de ses éléments (`element`), dans l’emplacement de la session (`slot`) ; `cut` supprime ce qui a été copié ; `dry_run` dit ce qui serait copié et laissé de côté.
     .title = Copier depuis une source
 
 command-clipboard-offers =
@@ -88,7 +88,7 @@ command-clipboard-offers =
     .title = Ce que propose le presse-papiers
 
 command-clipboard-paste =
-    .description = Colle l’emplacement de la session (`slot`) dans une cible (`target`), dans un format (`format`), par une transformation (`transform`), seulement certaines parties (`parts`), vérifié contre `if_rev` ; `dry_run` dit le plan et les changements sans les faire.
+    .description = Colle l’emplacement de la session (`slot`) dans une cible (`target`), l’un de ses éléments (`element`), dans un format (`format`), par une transformation (`transform`), seulement certaines parties (`parts`), vérifié contre `if_rev` ; `dry_run` dit le plan et les changements sans les faire.
     .title = Coller dans une cible
 
 command-clipboard-read =
