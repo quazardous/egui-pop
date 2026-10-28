@@ -80,6 +80,13 @@ pub enum Icon {
     /// Back to the default.
     Reset,
     Copy,
+    /// Cut: scissors.
+    Cut,
+    /// Paste: a clipboard.
+    Paste,
+    /// Paste with a choice (format, transform, parts): a clipboard
+    /// holding lines.
+    PasteSpecial,
     Delete,
     Keyboard,
     /// The command palette.
@@ -186,6 +193,9 @@ impl Icon {
         Icon::Redo,
         Icon::Reset,
         Icon::Copy,
+        Icon::Cut,
+        Icon::Paste,
+        Icon::PasteSpecial,
         Icon::Delete,
         Icon::Keyboard,
         Icon::Command,
@@ -264,6 +274,9 @@ impl Icon {
             Icon::Redo => "redo",
             Icon::Reset => "reset",
             Icon::Copy => "copy",
+            Icon::Cut => "cut",
+            Icon::Paste => "paste",
+            Icon::PasteSpecial => "paste-special",
             Icon::Delete => "delete",
             Icon::Keyboard => "keyboard",
             Icon::Command => "command",
@@ -403,6 +416,9 @@ fn glyph(icon: Icon) -> Option<&'static str> {
         Icon::Redo => p::ARROW_U_UP_RIGHT,
         Icon::Reset => p::ARROW_COUNTER_CLOCKWISE,
         Icon::Copy => p::COPY,
+        Icon::Cut => p::SCISSORS,
+        Icon::Paste => p::CLIPBOARD,
+        Icon::PasteSpecial => p::CLIPBOARD_TEXT,
         Icon::Delete => p::TRASH,
         Icon::Keyboard => p::KEYBOARD,
         Icon::Command => p::COMMAND,
@@ -708,6 +724,29 @@ pub fn paint_fallback(p: &Painter, icon: Icon, rect: Rect, color: Color32) {
         Icon::Copy => {
             frame(at(0.3, 0.3), at(1.0, 1.0));
             p.line(vec![at(0.0, 0.7), at(0.0, 0.0), at(0.7, 0.0)], stroke);
+        }
+        Icon::Cut => {
+            // Two blades crossing above two rings.
+            p.line_segment([at(0.32, 0.66), at(0.78, 0.0)], stroke);
+            p.line_segment([at(0.68, 0.66), at(0.22, 0.0)], stroke);
+            p.circle_stroke(at(0.22, 0.82), len * 0.17, stroke);
+            p.circle_stroke(at(0.78, 0.82), len * 0.17, stroke);
+        }
+        Icon::Paste | Icon::PasteSpecial => {
+            // A board and its clip.
+            outline(vec![
+                at(0.3, 0.1),
+                at(0.08, 0.1),
+                at(0.08, 1.0),
+                at(0.92, 1.0),
+                at(0.92, 0.1),
+                at(0.7, 0.1),
+            ]);
+            frame(at(0.3, 0.0), at(0.7, 0.2));
+            if icon == Icon::PasteSpecial {
+                p.line_segment([at(0.28, 0.48), at(0.72, 0.48)], stroke);
+                p.line_segment([at(0.28, 0.72), at(0.72, 0.72)], stroke);
+            }
         }
         Icon::Delete => {
             p.line_segment([at(0.0, 0.18), at(1.0, 0.18)], stroke);

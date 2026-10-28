@@ -468,6 +468,7 @@ fn commands(ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
     let editor = json!({ "editor": "notes (optional: the editor that last had the focus)" });
     ctx.command(
         CommandSpec::new(CMD_FIND, "Find", CAT)
+            .icon("search")
             .description("Opens the search bar; with `query` (and `case_sensitive`, `whole_word`, `regex`), searches and selects the first match after the cursor.")
             .key_with("Ctrl+F", surface())
             .args(json!({ "editor": "notes", "query": "todo", "case_sensitive": false, "whole_word": false, "regex": false })),
@@ -563,6 +564,7 @@ fn commands(ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
     )?;
     ctx.command(
         CommandSpec::new(CMD_SAVE, "Save", CAT)
+            .icon("save")
             .description("Saves the editor's text through the `edit.save` step.")
             .key_with("Ctrl+S", surface())
             .args(editor.clone()),
@@ -628,6 +630,7 @@ fn commands(ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
     )?;
     ctx.command(
         CommandSpec::new(CMD_UNDO, "Undo in the editor", CAT)
+            .icon("undo")
             .description(
                 "Undoes the editor's last edit (its own history, as Ctrl+Z in the editor).",
             )
@@ -641,6 +644,7 @@ fn commands(ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
     )?;
     ctx.command(
         CommandSpec::new(CMD_REDO, "Redo in the editor", CAT)
+            .icon("redo")
             .description("Redoes the editor's last undone edit.")
             .hidden()
             .args(editor.clone()),

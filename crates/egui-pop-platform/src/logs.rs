@@ -393,6 +393,7 @@ impl Plugin for LogsPlugin {
         let dir = logs.dir().to_path_buf();
         ctx.command(
             CommandSpec::new(CMD_REVEAL, "Show the log folder", "Help")
+                .icon("folder")
                 .description("Opens the folder holding the application's log files."),
             move |_| {
                 crate::dirs::reveal(&dir)?;

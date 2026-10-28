@@ -80,6 +80,7 @@ impl Plugin for PalettePlugin {
         ctx.service(&PALETTE, Palette::default())?;
         ctx.command(
             CommandSpec::new(CMD_PALETTE, "Command palette", "View")
+                .icon("command")
                 .description("Search and run any command.")
                 // Through modals: the palette is one, and closes on its key.
                 .key_with("Ctrl+Shift+P", BindOptions::global().through_modal())

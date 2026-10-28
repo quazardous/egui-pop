@@ -174,6 +174,7 @@ impl Plugin for SettingsPlugin {
         ctx.local_scope(SURFACE, StoreScope::new(SETTINGS, "Settings"));
         ctx.command(
             CommandSpec::new(CMD_SETTINGS, "Settings", "File")
+                .icon("settings")
                 .description("Every setting, searchable, and the keyboard shortcuts.")
                 .key("Ctrl+Comma")
                 .menu(MENU_FILE, "8_settings", 0)

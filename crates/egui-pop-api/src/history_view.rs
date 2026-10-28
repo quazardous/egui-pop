@@ -155,6 +155,7 @@ impl Plugin for HistoryPlugin {
         )?
         .command(
             CommandSpec::new(CMD_UNDO, "Undo in a history", category)
+                .icon("undo")
                 .description("Undoes the last step of a history (`scope`; none: where Undo goes now), refused unless its revision is still `if_rev`; with `dry_run`, only says what it would undo.")
                 .args(json!({ "scope": "app", "if_rev": null, "dry_run": false }))
                 .hidden(),
@@ -162,6 +163,7 @@ impl Plugin for HistoryPlugin {
         )?
         .command(
             CommandSpec::new(CMD_REDO, "Redo in a history", category)
+                .icon("redo")
                 .description("Redoes the last undone step of a history (`scope`; none: where Redo goes now), refused unless its revision is still `if_rev`; with `dry_run`, only says what it would redo.")
                 .args(json!({ "scope": "app", "if_rev": null, "dry_run": false }))
                 .hidden(),
@@ -169,6 +171,7 @@ impl Plugin for HistoryPlugin {
         )?
         .command(
             CommandSpec::new(CMD_JUMP, "Jump in a history", category)
+                .icon("history")
                 .description("Brings a history (`scope`) to one of its steps (`to`, its id; 0: the start) by undos or redos, all or nothing, refused unless its revision is still `if_rev`; with `dry_run`, only says which steps it would walk.")
                 .args(json!({ "scope": "app", "to": 0, "if_rev": null, "dry_run": false }))
                 .hidden(),

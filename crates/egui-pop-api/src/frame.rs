@@ -335,6 +335,7 @@ impl Plugin for FramePlugin {
         ctx.zone(zones::CAPTION_START, "Title bar start")?;
         ctx.command(
             CommandSpec::new(CMD_MINIMIZE, "Minimize", "Window")
+                .icon("window-minimize")
                 .description("Minimizes the window.")
                 .menu(MENU_SYSTEM, "1_size", 1)
                 .no_agent(),
@@ -345,6 +346,8 @@ impl Plugin for FramePlugin {
         )?
         .command(
             CommandSpec::new(CMD_MAXIMIZE, "Maximize", "Window")
+                .icon("window-maximize")
+                .icon_on("window-restore")
                 .description("Maximizes the window, or restores it.")
                 .checked("windowMaximized")
                 .menu(MENU_SYSTEM, "1_size", 2)
@@ -356,6 +359,7 @@ impl Plugin for FramePlugin {
         )?
         .command(
             CommandSpec::new(CMD_CLOSE, "Close window", "Window")
+                .icon("window-close")
                 .description("Closes the window, as its close button does.")
                 .menu(MENU_SYSTEM, "9_close", 0)
                 .no_agent(),
@@ -366,6 +370,7 @@ impl Plugin for FramePlugin {
         )?
         .command(
             CommandSpec::new(CMD_SYSTEM_MENU, "Window menu", "Window")
+                .icon("menu")
                 .description("Opens the window's menu (restore, minimize, maximize, close).")
                 .key("Alt+Space")
                 .when("windowOwnFrame")

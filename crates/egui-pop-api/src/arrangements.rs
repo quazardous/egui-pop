@@ -408,6 +408,7 @@ impl Plugin for ArrangementsPlugin {
         )?
         .command(
             CommandSpec::new(CMD_RESET, "Reset the arrangement", "View")
+                .icon("reset")
                 .description("Puts the panels back as the current arrangement's template has them.")
                 .menu(MENU_VIEW, "3_layout", 12),
             |call| outcome(reset(call.app)),
