@@ -22,7 +22,7 @@ desktop).
 
 Pages: `overview` (the theme overview), `tokens`, `builtins` (egui's
 built-ins, and egui-pop's kit-drawn checkbox, radio, rows and chips), `roles` (layout by role: text roles, spacing by intent, cards and buttons by tone), `scoped` (egui's own buttons, toggles, combo box and text fields restyled by the kit in a scope), `theme-editor` (the theme editor), `fonts` (candidate font pairs side by side), `icons`, `indicators` (dots, badges, pips, flags, swatches), `sections` (collapsible sections stacked in a panel), `motion` (the motion clock), `values`, `history` (the application's history: its panel's list, a click jumping to a step), `sliders`, `inputs` (decorated inputs, field states and Tab order),
-`menus`, `dialogs`, `files` (the file chooser), `toasts`, `tips` (tips of the day and
+`menus`, `toolbars` (toolbars of commands, More tools, a tool palette), `dialogs`, `files` (the file chooser), `toasts`, `tips` (tips of the day and
 hints), `about` (Help > About: what the gallery says about itself, its
 version info to copy), `progress`,
 `placeholders` (skeletons and empty states), `viewport` (the image
@@ -107,7 +107,7 @@ Themes, design tokens, the theme editor, icons and scaling.
 
 ### Widgets
 
-Egui's built-ins in egui-pop's style, and restyled by a kit in a scope, values, the history (its list, an agent's step, one undone), sliders, inputs (decorators, field states, Tab order), menus, dialogs (movable ones, a clear backdrop), file choosing (and an image's preview), toasts, micro-indicators (still under reduced motion), collapsible sections (folded, resized), and progress (bars, rings, meters, spinners; still under reduced motion).
+Egui's built-ins in egui-pop's style, and restyled by a kit in a scope, values, the history (its list, an agent's step, one undone), sliders, inputs (decorators, field states, Tab order), menus, toolbars (icons, titles, More tools, a tool palette), dialogs (movable ones, a clear backdrop), file choosing (and an image's preview), toasts, micro-indicators (still under reduced motion), collapsible sections (folded, resized), and progress (bars, rings, meters, spinners; still under reduced motion).
 
 <table>
   <tr>
@@ -139,6 +139,12 @@ Egui's built-ins in egui-pop's style, and restyled by a kit in a scope, values, 
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/menus-compact.png"><img src="../crates/egui-pop-gallery/tests/snapshots/menus-compact.png" width="200" alt="menus-compact"></a><br>menus-compact</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/menus-high-contrast.png"><img src="../crates/egui-pop-gallery/tests/snapshots/menus-high-contrast.png" width="200" alt="menus-high-contrast"></a><br>menus-high-contrast</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/menus-icons-off.png"><img src="../crates/egui-pop-gallery/tests/snapshots/menus-icons-off.png" width="200" alt="menus-icons-off"></a><br>menus-icons-off</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/toolbars-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/toolbars-pop-dark.png" width="200" alt="toolbars-pop-dark"></a><br>toolbars-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/toolbars-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/toolbars-pop-light.png" width="200" alt="toolbars-pop-light"></a><br>toolbars-pop-light</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/toolbars-compact.png"><img src="../crates/egui-pop-gallery/tests/snapshots/toolbars-compact.png" width="200" alt="toolbars-compact"></a><br>toolbars-compact</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/toolbars-more.png"><img src="../crates/egui-pop-gallery/tests/snapshots/toolbars-more.png" width="200" alt="toolbars-more"></a><br>toolbars-more</td>
   </tr>
   <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/palette-icons.png"><img src="../crates/egui-pop-gallery/tests/snapshots/palette-icons.png" width="200" alt="palette-icons"></a><br>palette-icons</td>

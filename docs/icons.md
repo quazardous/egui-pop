@@ -91,7 +91,7 @@ registered ones).
 | Submenu entries | Optional: Apple and Microsoft both allow an icon on the entry; its arrow is a glyph | Command group (no command of its own) | `inline`; open | Decorative | `Item::Submenu { menu, label }` (`egui-pop-model/src/menus.rs`) has no icon; the arrow is the `submenu` glyph role, in the menu's last column | No icon on a submenu |
 | Command palette | Optional: shown in a fixed column when the command declares one; text stays the label | Command | `inline`; disabled entries greyed | Decorative | The command's `icon` in a column before the title, kept on every row while a match has one (`egui-pop-api/src/palette.rs`) | Done (with step 3) |
 | Quick open (a list of things to go to) | Required when the list mixes kinds (a module, an image, a workspace): the icon says which kind a match is | Object kind | `inline` | Decorative; the kind joins the accessible name when the text does not say it | egui-pop has none; Helios builds it on the choice dialog, whose rows are text only (`choice_row` in `egui-pop-api/src/dialogs.rs`) | Choice rows take no icon |
-| Toolbars | Required: a toolbar is icon-first, with a tooltip giving the title and the key | Command | `toolbar`; disabled, on (selected), busy | Only label: the command's title | No toolbar component; an application lays out `CommandButton`s (`busy.rs`, icon set per instance with `.icon()`) or clickable `IconWidget`s | The icon is given by each caller; no container (overflow, text or icon mode) |
+| Toolbars | Required: a toolbar is icon-first, with a tooltip giving the title and the key | Command | `toolbar`; disabled, on (selected), busy | Only label: the command's title | `toolbars::Toolbar` draws a menu's items as buttons from the commands' icons (`docs/toolbars.md`): titles and keys in tooltips, on and greyed states, separators, More tools, icons, titles or both, a row or a column | None; `CommandButton` still takes its icon from the caller |
 | Command buttons with text | Optional: text is the label | Command | `inline`; busy | Decorative | `CommandButton::icon` (`busy.rs`) | Per instance |
 | Split buttons | Optional on the main part, not used on the arrow (a glyph) | Command | `inline` | Decorative | `input::split_button(ui, text, items)` (`egui-pop-core/src/input.rs`): text only | No icon |
 | Toggle chips | Optional: a chip may be an icon alone | Command or object kind | `inline`; on | Only label when alone: `ToggleChip::name` | `ToggleChip::glyph(Icon)` (`egui-pop-core/src/widgets.rs`) | Per instance |
@@ -495,7 +495,8 @@ The rows of a menu already reserve an `inline` square on their left
    density), panel tabs' icons behind a setting (off by default), the
    graph's node kinds and port shapes, job kinds, settings sections.
 7. **Toolbars**: a toolbar component in egui-pop (overflow, icon or
-   text mode).
+   text mode). *Done (2026-10-28, `docs/toolbars.md`), with icons on
+   status items, on egui-pop's own commands and `Ctx::command_icon`.*
 8. **Helios**: icons for its panels, places and modes, commands (open,
    export, undo and redo, the masks tools, culling marks, view modes),
    mask kinds instead of emoji, job kinds, a workspace's icon checked

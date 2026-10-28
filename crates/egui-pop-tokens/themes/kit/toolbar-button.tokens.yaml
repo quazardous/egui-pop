@@ -1,0 +1,27 @@
+$description: "The `toolbar-button` component of the default kit (docs/kit.md), layered into pop-dark."
+toolbar-button:
+  $description: "A toolbar's button (docs/toolbars.md): its icon (and its label, when the toolbar shows them) in `text`; a fill under the pointer and while pressed; `selected` for a command that is on, framed as a checked menu icon is, so the state does not rest on the fill alone. Based on `icon-button`."
+  based-on:
+    $type: "string"
+    $value: "icon-button"
+  hover:
+    fill:
+      $type: "color"
+      $value: "{surface.hover}"
+  active:
+    fill:
+      $type: "color"
+      $value: "{surface.active}"
+  selected:
+    fill:
+      $type: "color"
+      $value: "{surface.active}"
+    border-color:
+      $type: "color"
+      $value: "{accent.default}"
+    border-width:
+      $type: "dimension"
+      $value: {value: 1, unit: "px"}
+    text:
+      $type: "color"
+      $value: "{text.strong}"

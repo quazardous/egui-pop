@@ -405,7 +405,8 @@ compiled at install.
   sunken well; its padding is `space.group`.
 - **The application's chrome** (`header-band`, `dialog-header`,
   `band-icon-button`, `find-bar-button`, `activity-bar-item`,
-  `dock-preview`, `command-button`, `command-palette-row`). The band at
+  `dock-preview`, `command-button`, `command-palette-row`,
+  `toolbar-button`). The band at
   the top of a movable dialog and of a palette is drawn by the `band`
   handler (its top corners follow the frame's `radius` inside its
   outline, its border is the line below it), `hover` under the pointer
@@ -426,7 +427,11 @@ compiled at install.
   only. A command button is based on `button`, a palette row on
   `menu-item`, the dialog's title on `header-band` and the band's and
   find bar's buttons on `icon-button` ([based on
-  another](#components-based-on-another)).
+  another](#components-based-on-another)). A toolbar's button
+  ([toolbars](toolbars.md)) is based on `icon-button` too: a fill under
+  the pointer and while pressed, its icon and label in `text`, and
+  `selected` while its command is on, framed (`surface.active` with a 1
+  point `accent.default` border) as a checked menu icon is.
 - **Progress and status by tone** (`progress-bar`, `progress-line`,
   `progress-fill`, `progress-caption`, `meter`, `meter-tick`,
   `progress-ring`, `spinner`, `status-indicator`), handlers `track`,

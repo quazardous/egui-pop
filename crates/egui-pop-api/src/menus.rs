@@ -761,7 +761,7 @@ fn open_step(app: &AppHandle, menu: &MenuId, args: Json, how: &str) -> Option<Js
 }
 
 /// A context with arguments as `args.<key>` keys (scalars only).
-fn with_args(cx: &WhenContext, args: &Json) -> WhenContext {
+pub(crate) fn with_args(cx: &WhenContext, args: &Json) -> WhenContext {
     let mut cx = cx.clone();
     if let Json::Object(m) = args {
         for (k, v) in m {
@@ -777,7 +777,7 @@ fn with_args(cx: &WhenContext, args: &Json) -> WhenContext {
 }
 
 /// An item's arguments with a call's merged in (the call's win).
-fn merge(item: &Json, extra: &Json) -> Json {
+pub(crate) fn merge(item: &Json, extra: &Json) -> Json {
     match (item, extra) {
         (_, Json::Null) => item.clone(),
         (Json::Null, _) => extra.clone(),
@@ -804,7 +804,21 @@ fn items(ui: &mut Ui, app: &AppHandle, menu: &MenuId, cx: &WhenContext, args: &J
         ui.weak(strings::tr(ui.ctx(), &txt::MENU_EMPTY));
         return;
     }
-    let shown = show_items(&list, cx);
+    rows(ui, app, menu, show_items(&list, cx), cx, args, depth);
+}
+
+/// Draws a menu's rows already evaluated in a context (some of a menu's
+/// items: a toolbar's overflow), with arguments merged into every
+/// command an item runs.
+pub(crate) fn rows(
+    ui: &mut Ui,
+    app: &AppHandle,
+    menu: &MenuId,
+    shown: Vec<Shown>,
+    cx: &WhenContext,
+    args: &Json,
+    depth: u32,
+) {
     // The lists' entries first: the columns depend on them.
     let lists: HashMap<String, Vec<ListItem>> = shown
         .iter()

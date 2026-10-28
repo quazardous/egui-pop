@@ -55,6 +55,7 @@ pub mod theme_editor;
 pub mod tips;
 pub mod toasts;
 pub mod tokens;
+pub mod toolbars;
 pub mod tree;
 pub mod values;
 pub mod viewport;

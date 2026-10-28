@@ -199,6 +199,22 @@ publishes.
   `FilesPlugin::file_system` or `Files::set_file_system`, so that the
   picker shows files on the web build too; `FilePicker::new_in` makes a
   picker on one. `files::PLUGIN` names the plugin.
+- Toolbars (egui-pop-api, egui-pop-core, egui-pop-tokens;
+  docs/toolbars.md, docs/icons.md decision 8): `toolbars::Toolbar` draws
+  a menu's items, contributed as any menu's, as a row or a column of
+  buttons. Each shows its command's icon (`icon_on` while checked), its
+  title and first key in the tooltip, and is on (framed, announced as
+  toggled) while its `checked` clause holds, greyed with the reason where
+  it does not apply, busy while its run waits; groups are separated, a
+  submenu opens its menu, a list gives a button per entry. `Labels`
+  shows icons (the default), icons with their titles, or titles; the
+  tools that do not fit go into a "More tools" menu. Sizes follow
+  `size.icon.toolbar` and `space.xs`, so the density moves them. A new
+  kit component, `toolbar-button` (based on `icon-button`), paints the
+  buttons. `toolbars::layout` and the `toolbars` debug collector give
+  agents every tool drawn, its state and whether it overflowed. The
+  gallery's new `toolbars` page shows them, egui-pop's Edit commands
+  included.
 - Status bar items show icons (egui-pop-api; docs/status-bar.md):
   `Indicator::icon` (by name; `IndicatorState::icon` lets a reducer
   change it) draws an icon before the item's text, in its colour; an

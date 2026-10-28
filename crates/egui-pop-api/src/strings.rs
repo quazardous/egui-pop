@@ -34,6 +34,11 @@ pub const MENU_TOO_DEEP: StrKey =
 pub const MENU_EMPTY: StrKey = StrKey::new("egui-pop-menu-empty", "(empty)");
 pub const MENU_MORE: StrKey = StrKey::new("egui-pop-menu-more", "More menus");
 pub const MENU_MAIN: StrKey = StrKey::new("egui-pop-menu-main", "Main menu");
+/// A toolbar's button holding the tools that do not fit.
+pub const TOOLBAR_MORE: StrKey = StrKey::new("egui-pop-toolbar-more", "More tools");
+/// A toolbar button's tooltip: its command's title and its key.
+pub const TOOLBAR_WITH_KEY: StrKey =
+    StrKey::new("egui-pop-toolbar-with-key", "{ $action } ({ $keys })");
 pub const MENU_DOES_NOT_APPLY: StrKey = StrKey::new(
     "egui-pop-menu-does-not-apply",
     "Does not apply here ({ $when })",
@@ -1019,6 +1024,8 @@ pub const ALL: &[StrKey] = &[
     MENU_EMPTY,
     MENU_MORE,
     MENU_MAIN,
+    TOOLBAR_MORE,
+    TOOLBAR_WITH_KEY,
     MENU_DOES_NOT_APPLY,
     MENU_NOT_AVAILABLE,
     MENU_NO_COMMAND,

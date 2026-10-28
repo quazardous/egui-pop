@@ -67,6 +67,7 @@ pub(super) fn built_in(shapes: &mut Shapes) {
     shapes.insert("thumbnail", "box", Arc::new(cell::BoxCell));
     shapes.insert("toggle-button", "scoped", Arc::new(scoped::Scoped));
     shapes.insert("toggle-chip", "box", Arc::new(cell::BoxCell));
+    shapes.insert("toolbar-button", "box", Arc::new(cell::BoxCell));
     shapes.insert("meter", "track", Arc::new(progress::Track));
     shapes.insert("meter-tick", "tick", Arc::new(progress::Tick));
     shapes.insert("progress-bar", "track", Arc::new(progress::Track));

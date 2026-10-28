@@ -917,6 +917,10 @@ egui-pop-menu-main = Menu principal
 
 egui-pop-menu-more = Autres menus
 
+egui-pop-toolbar-more = Autres outils
+
+egui-pop-toolbar-with-key = { $action } ({ $keys })
+
 egui-pop-menu-no-command = Pas de commande `{ $id }`
 
 egui-pop-menu-not-available = Indisponible ici
