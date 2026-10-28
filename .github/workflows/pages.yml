@@ -4,8 +4,10 @@ name: Gallery and docs on the web
 # (tools/book/links.py), builds the workspace's API documentation with
 # every feature (docs.rs documents the default features only), builds the
 # gallery for the web with Trunk, loads it in headless Chrome
-# (tools/web-smoke.mjs), and deploys them to GitHub Pages: the gallery at
-# the site's root, the docs under /docs/, the API under /api/. Pages must
+# (tools/web-smoke.mjs), and deploys them to GitHub Pages: a static
+# landing page at the site's root (tools/site/index.html, with a few of
+# the gallery's snapshots; its links checked by tools/site/links.py), the
+# gallery under /gallery/, the docs under /docs/, the API under /api/. Pages must
 # be enabled for the repository with "GitHub Actions" as the source; until
 # the repository variable PAGES is set to `on`, it only runs by hand. Run
 # by hand on another branch, it builds and tests without deploying.
@@ -50,14 +52,14 @@ jobs:
           --exclude egui-pop-gallery --exclude egui-pop-extension-template
       - name: Build the gallery
         working-directory: crates/egui-pop-gallery
-        run: trunk build --release --public-url /${{ github.event.repository.name }}/
+        run: trunk build --release --public-url /${{ github.event.repository.name }}/gallery/
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - name: Smoke test in headless Chrome
         run: >-
           node tools/web-smoke.mjs crates/egui-pop-gallery/dist
-          --base /${{ github.event.repository.name }}/
+          --base /${{ github.event.repository.name }}/gallery/
           --screenshot web-smoke.png
       - name: Upload the smoke test's screenshot
         if: always()
@@ -66,15 +68,26 @@ jobs:
           name: web-smoke
           path: web-smoke.png
           if-no-files-found: ignore
-      - name: Add the docs and the API to the site
+      # The landing page at the root, its images from the gallery's
+      # snapshots and the logo, then the gallery, the docs and the API.
+      - name: Assemble the site and check the landing page's links
         run: |
-          cp -r target/book crates/egui-pop-gallery/dist/docs
-          cp -r target/doc crates/egui-pop-gallery/dist/api
-          rm -f crates/egui-pop-gallery/dist/api/.lock
-          cp tools/book/api-index.html crates/egui-pop-gallery/dist/api/index.html
+          mkdir -p target/site/img
+          cp tools/site/index.html target/site/index.html
+          cp docs/logo/egui-pop.svg target/site/img/
+          for shot in overview-pop-dark overview-pop-light workbench-pop-dark \
+                      preview-dialog-pop-dark node-graph-pop-dark theme-editor-pop-dark; do
+            cp "crates/egui-pop-gallery/tests/snapshots/$shot.png" target/site/img/
+          done
+          cp -r crates/egui-pop-gallery/dist target/site/gallery
+          cp -r target/book target/site/docs
+          cp -r target/doc target/site/api
+          rm -f target/site/api/.lock
+          cp tools/book/api-index.html target/site/api/index.html
+          python3 tools/site/links.py target/site
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: crates/egui-pop-gallery/dist
+          path: target/site
 
   deploy:
     needs: build
