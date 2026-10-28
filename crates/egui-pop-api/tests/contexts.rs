@@ -463,6 +463,55 @@ fn an_undo_out_of_sight_says_where_and_goes_there() {
 }
 
 #[test]
+fn a_step_carries_its_place_and_a_jump_out_of_sight_says_where() {
+    use egui_pop_api::history::{self, APP};
+    let mut h = harness(builder());
+    let app = h.state().handle().clone();
+    assert!(contexts::enter(&app, ALBUM, Json::Null).ok());
+    assert!(contexts::enter(&app, PHOTO, json!(3)).ok());
+    h.run();
+    lock(&app.store())
+        .set(Set::new(
+            "settings/demo.n",
+            Change::To(Value::Int(4)),
+            Origin::User,
+        ))
+        .unwrap();
+    h.run();
+    // The step knows where it was made: the album, then the photo.
+    let line = history::line(&app, &APP).unwrap();
+    let step = line.head().unwrap().clone();
+    assert_eq!(step.place.len(), 2);
+    assert_eq!(step.place[1].frame, PHOTO);
+    assert_eq!(step.place[1].payload, json!(3));
+    assert!(contexts::jump(&app, 0).ok());
+    h.run();
+    let toasts = app.service(&TOASTS).unwrap();
+    // A jump to the start, from the root, walks it back: it says where.
+    assert!(history::jump(&app, &APP, 0, &Origin::User).ok());
+    h.run();
+    assert!(
+        toasts
+            .shown()
+            .iter()
+            .any(|t| t.toast.text == "Undone in Photo 3"),
+        "{:?}",
+        toasts.shown()
+    );
+    // A jump forward again redoes it.
+    assert!(history::jump(&app, &APP, step.id, &Origin::User).ok());
+    h.run();
+    assert!(
+        toasts
+            .shown()
+            .iter()
+            .any(|t| t.toast.text == "Redone in Photo 3"),
+        "{:?}",
+        toasts.shown()
+    );
+}
+
+#[test]
 fn the_stack_and_its_view_come_back_after_a_restart() {
     let dir = std::env::temp_dir().join(format!("egui-pop-contexts-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);

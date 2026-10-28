@@ -430,6 +430,15 @@ publishes.
 
 ### Changed
 
+- The "Undone in <place>" toast reads the place from the step itself
+  (egui-pop-api, ADR 0014): the context stack tells the value store
+  where new steps are made (`Store::set_place`), and an undo, a redo or
+  a jump (`edit.jump`) that walks a step made out of sight (its
+  `StepInfo::place`) says where, with "Go there". A host owning its own
+  histories gets the toast by filling `place`; the stack no longer
+  counts the store's steps beside it, and the `contexts` collector no
+  longer reports `undo_stamps`. A local scope (the theme editor, the
+  settings window) is undone where it is shown, without a toast.
 - `Host::undo`, `Host::redo`, `Host::can_undo`, `Host::can_redo`,
   `Host::undo_label` and `Host::redo_label` are replaced by
   `Host::history()` (ADR 0014): a host with its own undo implements
