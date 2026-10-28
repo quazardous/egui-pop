@@ -51,6 +51,11 @@ of every crate with every feature on.
   readable fallbacks on the system clipboard, a paste negotiated with
   its target, types, transforms and sanitisers declared by plugins,
   the Edit commands and the agents' `clipboard.*`.
+- [Links](links.md): one service opens every link through one policy
+  and the `link.open` step, with a replaceable opener; the link widget,
+  the confirmation, trust per host, local files and Reveal, egui's own
+  hyperlinks routed through it, the agents' `links.open` and
+  `links.check`, and the lint.
 - [The status bar and the context stack](status-and-context.md)
   (decided, built): the breadcrumb and mode chips in the status bar,
   status items that follow the context, one saved state.

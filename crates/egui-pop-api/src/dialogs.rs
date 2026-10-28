@@ -160,7 +160,7 @@ pub const SETTING_MOVABLE: SettingId = SettingId::from_static("dialogs.movable")
 pub const CMD_MOVE: CommandId = CommandId::from_static("dialogs.move");
 
 /// The plugin's id, owner of the positions it keeps.
-const PLUGIN: PluginId = PluginId::from_static("egui_pop.dialogs");
+pub const PLUGIN: PluginId = PluginId::from_static("egui_pop.dialogs");
 /// What is left of the backdrop while a dialog is dragged.
 const DRAG_DIM: f32 = 0.35;
 /// How many arrow steps one Shift+arrow press moves.
@@ -941,6 +941,11 @@ impl Dialogs {
     /// points (zero: centred).
     pub fn offset(&self) -> Option<Vec2> {
         lock(&self.0).queue.front().map(|o| o.offset)
+    }
+
+    /// Whether a dialog is still open (shown or waiting).
+    pub fn is_open(&self, id: u64) -> bool {
+        lock(&self.0).queue.iter().any(|o| o.id == id)
     }
 
     /// How many dialogs wait, the shown one included.

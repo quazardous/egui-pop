@@ -14,7 +14,7 @@ use egui_pop_model::commands::CommandSpec;
 use egui_pop_model::ids::{CommandId, PluginId};
 use serde_json::{Value as Json, json};
 
-const REVEAL: CommandId = CommandId::from_static("files.reveal");
+const REVEAL: CommandId = CommandId::from_static("files.show");
 
 struct Files(Rc<RefCell<Vec<Json>>>);
 

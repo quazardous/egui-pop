@@ -1018,6 +1018,51 @@ pub const CLIPBOARD_CUT_STEP: StrKey = StrKey::new("egui-pop-clipboard-cut-step"
 /// Plain text, as a format and as the title of text from outside.
 pub const CLIPBOARD_TEXT: StrKey = StrKey::new("egui-pop-clipboard-text", "text");
 
+// Links.
+
+/// A link's context menu: open it its kind's way.
+pub const LINKS_OPEN: StrKey = StrKey::new("egui-pop-links-open", "Open");
+/// A link's context menu: open it outside the application.
+pub const LINKS_OPEN_OUTSIDE: StrKey = StrKey::new("egui-pop-links-open-outside", "Open outside");
+/// A link's context menu, a toast's action: the file in its folder.
+pub const LINKS_REVEAL: StrKey = StrKey::new("egui-pop-links-reveal", "Show in folder");
+/// A link's context menu, the confirmation, a toast's action.
+pub const LINKS_COPY: StrKey = StrKey::new("egui-pop-links-copy", "Copy link");
+/// A link's hover and the confirmation: where it goes.
+pub const LINKS_HOST: StrKey = StrKey::new("egui-pop-links-host", "Host: { $host }");
+/// The confirmation's title for a link.
+pub const LINKS_CONFIRM_TITLE: StrKey =
+    StrKey::new("egui-pop-links-confirm-title", "Open this link?");
+/// The confirmation's title for a local file.
+pub const LINKS_CONFIRM_FILE: StrKey =
+    StrKey::new("egui-pop-links-confirm-file", "Open this file?");
+/// The confirmation's title for showing a file in its folder.
+pub const LINKS_CONFIRM_REVEAL: StrKey = StrKey::new(
+    "egui-pop-links-confirm-reveal",
+    "Show this file in its folder?",
+);
+/// The confirmation's title for an agent's request.
+pub const LINKS_CONFIRM_AGENT: StrKey = StrKey::new(
+    "egui-pop-links-confirm-agent",
+    "{ $agent } asks to open this",
+);
+/// The confirmation, when the link's text shows another address.
+pub const LINKS_CONFIRM_DISGUISED: StrKey = StrKey::new(
+    "egui-pop-links-confirm-disguised",
+    "Its text said { $label }, but it goes elsewhere.",
+);
+/// The confirmation, for a link found in content.
+pub const LINKS_CONFIRM_CONTENT: StrKey = StrKey::new(
+    "egui-pop-links-confirm-content",
+    "This link comes from the content, not from the application.",
+);
+/// The confirmation: trust the link's host until the application quits.
+pub const LINKS_TRUST: StrKey =
+    StrKey::new("egui-pop-links-trust", "Trust { $host } for this session");
+/// A link that could not be opened, as a toast says it.
+pub const LINKS_NOT_OPENED: StrKey =
+    StrKey::new("egui-pop-links-not-opened", "Not opened: { $reason }");
+
 /// Every string of this module, for catalogues and tests.
 pub const ALL: &[StrKey] = &[
     COMMAND_LABEL,
@@ -1415,6 +1460,19 @@ pub const ALL: &[StrKey] = &[
     CLIPBOARD_PASTE_STEP,
     CLIPBOARD_CUT_STEP,
     CLIPBOARD_TEXT,
+    LINKS_OPEN,
+    LINKS_OPEN_OUTSIDE,
+    LINKS_REVEAL,
+    LINKS_COPY,
+    LINKS_HOST,
+    LINKS_CONFIRM_TITLE,
+    LINKS_CONFIRM_FILE,
+    LINKS_CONFIRM_REVEAL,
+    LINKS_CONFIRM_AGENT,
+    LINKS_CONFIRM_DISGUISED,
+    LINKS_CONFIRM_CONTENT,
+    LINKS_TRUST,
+    LINKS_NOT_OPENED,
     STATUS_MORE,
     STATUS_ERRORS,
     STATUS_WARNINGS,

@@ -18,6 +18,25 @@ publishes.
   commit when known (`0.2.0 (abc1234)`): git's, else the
   `EGUI_POP_GALLERY_COMMIT` variable, else none. The facade gains
   `egui_pop::VERSION`.
+- The links service (egui-pop-api, ADR 0017): `links::LinksPlugin`, in
+  `DefaultPlugins`, opens every link through one policy and the
+  `link.open` step (veto, redirect, replace), with a replaceable
+  `Opener` (`EguiOpener` by default, `RecordingOpener` for tests,
+  `NullOpener` for a headless node); egui's own `OpenUrl` (a
+  hyperlink, `ctx.open_url`) is taken out of each frame and opened
+  through it. Declared web and mail links open at once; a link found in
+  content asks while its host is not trusted (with "Trust <host> for
+  this session"); a local file is always confirmed and a program
+  refused, Show in folder offered; an agent's request is always
+  confirmed by the user, one at a time, five queued. Failures end in a
+  warning toast with Copy link. The widget `links::link` shows the real
+  target on hover (punycode too), has a context menu (Open, Open
+  outside, Show in folder, Copy link), opens on Enter and Space,
+  outside on Ctrl+click and middle click. Agents get `links.open` (with
+  a dry run) and `links.check`; `files.reveal`; the `links` collector;
+  `links::lint` and `egui_pop_test::assert_links_clean` check the links
+  an application declares. `Dialogs::is_open` and
+  `AppHandle::menu_ids` are new. Guide: `docs/links.md`.
 - Links' pure parts (egui-pop-model, ADR 0017): `links::Target` (a URL
   or an absolute path, its host in Unicode and punycode),
   `links::Request` (target, how, source, the text it was shown under,

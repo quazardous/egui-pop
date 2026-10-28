@@ -4,6 +4,7 @@ use crate::Plugin;
 use crate::arrangements::ArrangementsPlugin;
 use crate::dialogs::DialogsPlugin;
 use crate::files::FilesPlugin;
+use crate::links::LinksPlugin;
 use crate::palette::PalettePlugin;
 use crate::settings_window::SettingsPlugin;
 use crate::toasts::ToastsPlugin;
@@ -26,9 +27,10 @@ impl PluginGroup for MinimalPlugins {
 }
 
 /// What most applications want: the command palette, dialogs, the file
-/// chooser, toasts and the settings window with its shortcuts editor, the
-/// window's place, named arrangements of the workbench (and the next
-/// components of the paved road as they come).
+/// chooser, toasts, links (opened through one policy) and the settings
+/// window with its shortcuts editor, the window's place, named
+/// arrangements of the workbench (and the next components of the paved
+/// road as they come).
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DefaultPlugins;
 
@@ -39,6 +41,7 @@ impl PluginGroup for DefaultPlugins {
             Box::new(DialogsPlugin),
             Box::new(FilesPlugin::default()),
             Box::new(ToastsPlugin),
+            Box::new(LinksPlugin::default()),
             Box::new(SettingsPlugin),
             Box::new(WindowPlugin),
             Box::new(ArrangementsPlugin),

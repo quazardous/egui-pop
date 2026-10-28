@@ -17,6 +17,8 @@ category-jobs = Tâches
 
 category-library = Photothèque
 
+category-links = Liens
+
 category-navigation = Navigation
 
 category-notifications = Notifications
@@ -243,6 +245,10 @@ command-file-preview =
     .description = Les métadonnées de l’aperçu d’un fichier ou d’un dossier (`path`), comme le sélecteur intégré les montre : s’il s’agit d’un dossier, sa taille et sa date de modification, le fournisseur, le genre d’aperçu, les dimensions, les pages, les comptes d’un dossier, les informations propres au fournisseur, ou pourquoi il n’y en a pas ; ni pixels ni texte.
     .title = Aperçu d’un fichier
 
+command-files-reveal =
+    .description = Montre un fichier (`path`) sélectionné dans le gestionnaire de fichiers ; la demande d’un agent est confirmée par l’utilisateur.
+    .title = Afficher dans le dossier
+
 command-history-drop-snapshot =
     .description = Supprime l’un des instantanés d’un historique (`scope` ; aucune : là où va Annuler maintenant ; `snapshot`, son id), refusé si sa révision n’est plus `if_rev` ; avec `dry_run`, vérifie seulement qu’il existe.
     .title = Supprimer un instantané
@@ -318,6 +324,22 @@ command-library-select =
 command-library-tag =
     .description = Ajoute des mots-clés (`add`) à des images et en enlève d’autres (`remove`) : `keys`, sinon la sélection ; par `library.tag`.
     .title = Indexer des images
+
+command-links-check =
+    .description = Ce qu’est un lien (`target`) et comment il s’ouvrirait (`how`, `source`) : son genre, la manière, si l’utilisateur serait consulté, le verdict de la règle et les capacités de l’ouvreur ; rien n’est ouvert et aucune étape ne s’exécute.
+    .title = Vérifier un lien
+
+command-links-confirmed =
+    .description = La réponse de l’utilisateur à la confirmation d’un lien (`id`, `trust`).
+    .title = Ouvrir le lien confirmé
+
+command-links-copy =
+    .description = Copie un lien (`target`) par le presse-papiers.
+    .title = Copier un lien
+
+command-links-open =
+    .description = Ouvre un lien (`target`) à la manière de son genre ou selon `how` (auto, outside, inside, reveal) ; la demande d’un agent est toujours confirmée par l’utilisateur ; `dry_run` dit le genre, la manière, s’il demanderait et le verdict, sans rien ouvrir.
+    .title = Ouvrir un lien
 
 command-logs-reveal =
     .description = Ouvre le dossier des fichiers journaux de l’application.
@@ -904,6 +926,32 @@ egui-pop-jobs-none = Aucune tâche.
 egui-pop-jobs-open-panel = Ouvrir le panneau
 
 egui-pop-jobs-title = Tâches
+
+egui-pop-links-confirm-agent = { $agent } demande à ouvrir ceci
+
+egui-pop-links-confirm-content = Ce lien vient du contenu, pas de l’application.
+
+egui-pop-links-confirm-disguised = Son texte disait { $label }, mais il mène ailleurs.
+
+egui-pop-links-confirm-file = Ouvrir ce fichier ?
+
+egui-pop-links-confirm-reveal = Afficher ce fichier dans son dossier ?
+
+egui-pop-links-confirm-title = Ouvrir ce lien ?
+
+egui-pop-links-copy = Copier le lien
+
+egui-pop-links-host = Hôte : { $host }
+
+egui-pop-links-not-opened = Non ouvert : { $reason }
+
+egui-pop-links-open = Ouvrir
+
+egui-pop-links-open-outside = Ouvrir à l’extérieur
+
+egui-pop-links-reveal = Afficher dans le dossier
+
+egui-pop-links-trust = Faire confiance à { $host } pour cette session
 
 egui-pop-loading = Chargement
 
@@ -1664,6 +1712,9 @@ plugin-egui-pop-jobs =
 
 plugin-egui-pop-library =
     .title = Photothèque
+
+plugin-egui-pop-links =
+    .title = Liens
 
 plugin-egui-pop-logs =
     .title = Journaux

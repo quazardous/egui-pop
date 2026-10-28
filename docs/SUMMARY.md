@@ -15,6 +15,7 @@
 - [The context stack](contexts.md)
 - [History](history.md)
 - [The clipboard](clipboard.md)
+- [Links](links.md)
 - [The status bar and the context stack](status-and-context.md)
 - [The status bar](status-bar.md)
 - [Toolbars](toolbars.md)
