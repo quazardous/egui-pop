@@ -44,6 +44,43 @@ Add `TipsPlugin` to the application. A tip has an id, an English title
 and text; a contextual tip is shown only where the application asks for
 it, never as the tip of the day.
 
+## Tips in files
+
+A tip is also a file, `tips/<id>.md`: one idea per file, shipped by a
+plugin beside its code, with no code of its own.
+
+```text
+---
+command: photos.rate
+surface: focusedPanel == 'photos.grid'
+target: photos.rating
+---
+# Rate quickly
+
+Press {key} to rate the selected photos, **0** to clear the rating.
+```
+
+| Header | What | Default |
+|---|---|---|
+| `id` | The tip's id, prefixed by its plugin's | The file's name |
+| `surface` | A `when` clause: where the tip makes sense | Anywhere |
+| `command` | The command the tip teaches | None |
+| `target` | The name of what the tip is about | None |
+| `contextual` | `true`: shown only where the application asks | `false` |
+
+The header is optional; the text starts with a `# Title` heading. It
+keeps paragraphs (a blank line between them), `**bold**` and
+`` `code` ``. `{key}` is the key bound to the tip's command in the
+keymap in force, and `{key:<command>}` another command's: a key the
+user rebound shows rebound. A command without a key shows its title in
+bold.
+
+`Tips::add_files(origin, files)` registers files built into the binary
+(`include_str!`), `Tips::add_dir(origin, dir)` a folder's; both return
+the files that could not be read (the line and what is wrong), and
+register the others. `origin` is the plugin's id, which groups its
+tips. The gallery's own tips are in `crates/egui-pop-gallery/tips`.
+
 ## Showing them
 
 - `tips::tip_of_the_day(ui, app)`: a card with the tip in turn among
@@ -73,12 +110,15 @@ empties the list; for agents, `tips.list` and `tips.dismiss` (`tip`).
 
 A tip's title and text are looked up under keys derived from its id,
 `tip-<id>.title` and `tip-<id>.text` (the id's dots become dashes), in
-the application's catalogues; the English given is the fallback. The
+the application's catalogues; the English given is the fallback. A
+file's tip is translated the same way. In a catalogue, `{key}` is
+written `{ $key }` and `{key:<command>}` is `{ $key-<command> }` (the
+command's dots become dashes), Fluent's own placeholders. The
 gallery's own tips are translated in `crates/egui-pop-gallery/locales`:
 
 ```ftl
 tip-gallery-next-page =
-    .text = Alt+Bas et Alt+Haut passent à la page suivante et à la précédente.
+    .text = { $key } et { $key-gallery-page-previous } passent à la page suivante et à la précédente.
     .title = Parcourir les pages
 ```
 
@@ -91,6 +131,6 @@ egui's tooltips (`on_hover_text`) stay what they are, help on hover. No
 crate was found offering a tip of the day, onboarding hints or tours
 for egui with dismissal kept in settings and translations: owned.
 
-Not done yet: tips in files (`tips/<id>.md`) shipped by plugins, rules
-choosing a tip from the selection, a card pointing at a widget by its
-id (a hint is drawn where it is called), a per-plugin off switch.
+Not done yet: rules choosing a tip from the selection, a card pointing
+at a widget by its id (a hint is drawn where it is called), a
+per-plugin off switch.

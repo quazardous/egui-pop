@@ -12,24 +12,26 @@ use crate::shell::SHELL;
 
 pub const TIPS_PAGE: PluginId = PluginId::from_static("gallery.tips");
 
-/// The gallery's tips (their French is in `locales/fr/gallery.ftl`).
+/// The gallery's tips declared in files, `tips/<id>.md` (their French
+/// is in `locales/fr/gallery.ftl`).
+pub const TIP_FILES: &[(&str, &str)] = &[
+    (
+        "gallery.next-page.md",
+        include_str!("../../tips/gallery.next-page.md"),
+    ),
+    (
+        "gallery.next-theme.md",
+        include_str!("../../tips/gallery.next-theme.md"),
+    ),
+    (
+        "gallery.palette.md",
+        include_str!("../../tips/gallery.palette.md"),
+    ),
+];
+
+/// The gallery's tips declared in code.
 pub fn gallery_tips() -> Vec<Tip> {
     vec![
-        Tip::new(
-            "gallery.next-page",
-            "Go through the pages",
-            "Alt+Down and Alt+Up go to the next and the previous page.",
-        ),
-        Tip::new(
-            "gallery.next-theme",
-            "Try every theme",
-            "Ctrl+Shift+T switches to the next theme; the theme editor starts from it.",
-        ),
-        Tip::new(
-            "gallery.palette",
-            "Find any command",
-            "Ctrl+Shift+P opens the command palette.",
-        ),
         Tip::new(
             "gallery.export-hint",
             "Exports keep your choices",
@@ -58,6 +60,8 @@ impl Plugin for TipsPage {
 
     fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
         if let Some(tips) = ctx.app().service(&TIPS) {
+            let errors = tips.add_files("gallery", TIP_FILES);
+            debug_assert!(errors.is_empty(), "the gallery's tips: {errors:?}");
             for tip in gallery_tips() {
                 tips.add(tip);
             }
@@ -72,7 +76,7 @@ impl Plugin for TipsPage {
 }
 
 fn show(ui: &mut Ui, app: &AppHandle) {
-    ui.label("Plugins register tips; a dismissed tip is remembered in the settings (tips.dismissed) and comes back with \"Show every tip again\".");
+    ui.label("Plugins register tips, in code or in files (tips/<id>.md: a header, a title, the text with {key} for the command's key in force); a dismissed tip is remembered in the settings (tips.dismissed) and comes back with \"Show every tip again\".");
     section(ui, "Tip of the day");
     if !tips::tip_of_the_day(ui, app) {
         ui.weak("No tip of the day to show: all dismissed, closed or turned off.");
