@@ -879,6 +879,7 @@ plugin-egui-pop-notify.title 0e1b1762c20eed77
 plugin-egui-pop-palette.title f9e5c255cb220019
 plugin-egui-pop-settings.title 3b5b172596a8843e
 plugin-egui-pop-strips.title bfc6f37ce6abc72c
+plugin-egui-pop-system-clipboard.title b528c047a273f2d0
 plugin-egui-pop-system-keys.title 7f2d7968d75f4dc5
 plugin-egui-pop-terminal.title d3fbfb901d4c6c19
 plugin-egui-pop-theme-editor.title 3cf4b14fef58503f

@@ -43,6 +43,19 @@ publishes.
   translations; `strings::set_application` and `strings::application`
   hold it per context. The extractor keeps it a Fluent placeable in the
   English catalogue (egui-pop-i18n, `extract::plain_with`).
+- The system clipboard over arboard (egui-pop-platform, feature
+  `clipboard`, on by default; the facade's `platform-clipboard`; #73):
+  `clipboard::SystemClipboardPlugin` installs `clipboard::Arboard` as
+  the clipboard's system backend. A copy writes its richest standard
+  representation (files as `file://` URIs, else an image, else HTML
+  with its text, else text: arboard writes one per copy); a paste reads
+  all four as one external item; the primary selection is read and
+  written on X11 and Wayland. The clipboard opens on first use. On
+  Wayland it goes through XWayland, or with `clipboard-wayland`
+  (`platform-clipboard-wayland`: arboard's `wayland-data-control`,
+  through wl-clipboard-rs, MIT OR Apache-2.0) through the data-control
+  protocol where the compositor offers it; the `clipboard` collector
+  says which (`Arboard::path`). English and French strings.
 - The paste key with no text on the system clipboard (egui-pop-api;
   #73): egui-winit makes no paste event when the clipboard holds only
   files or an image, and drops the key's press; egui-pop recognises the

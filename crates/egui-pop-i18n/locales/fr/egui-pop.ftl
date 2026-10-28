@@ -1616,6 +1616,9 @@ plugin-egui-pop-settings =
 plugin-egui-pop-strips =
     .title = Bandes
 
+plugin-egui-pop-system-clipboard =
+    .title = Presse-papiers du système
+
 plugin-egui-pop-system-keys =
     .title = Raccourcis globaux
 

@@ -1790,6 +1790,9 @@ plugin-egui-pop-settings =
 plugin-egui-pop-strips =
     .title = Strips
 
+plugin-egui-pop-system-clipboard =
+    .title = System clipboard
+
 plugin-egui-pop-system-keys =
     .title = Global shortcuts
 

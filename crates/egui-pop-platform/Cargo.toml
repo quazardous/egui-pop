@@ -16,7 +16,7 @@ authors.workspace = true
 workspace = true
 
 [features]
-default = ["instance", "notify", "tray", "keys", "logs", "crash", "focus", "text-scale"]
+default = ["instance", "notify", "tray", "keys", "logs", "crash", "focus", "text-scale", "clipboard"]
 ## A single instance: a second launch hands its arguments and links to
 ## the running one (`instance`).
 instance = ["dep:interprocess"]
@@ -38,6 +38,13 @@ focus = ["dep:ashpd", "dep:futures-lite", "dep:async-io", "dep:winreg"]
 ## The system's text scaling read in-process, to seed the text size
 ## (`text_scale`).
 text-scale = ["dep:ashpd", "dep:futures-lite", "dep:async-io", "dep:winreg"]
+## The system clipboard over arboard: files, images, HTML and text, the
+## primary selection (`clipboard`).
+clipboard = ["dep:arboard", "dep:png", "dep:base64"]
+## The clipboard on Wayland through the data-control protocol where the
+## compositor offers it (arboard's `wayland-data-control`), not only
+## through XWayland.
+clipboard-wayland = ["clipboard", "arboard/wayland-data-control"]
 
 [dependencies]
 egui.workspace = true
@@ -61,6 +68,14 @@ notify-rust = { version = "4.18", optional = true, default-features = false, fea
 tray-icon = { version = "0.26", optional = true, default-features = false, features = ["ksni"] }
 # Apache-2.0 OR MIT: global shortcuts on Windows, macOS and X11.
 global-hotkey = { version = "0.8", optional = true }
+# MIT OR Apache-2.0: the system clipboard (already in the tree through
+# egui-winit), with images.
+arboard = { version = "3.6", optional = true, default-features = false, features = ["image-data"] }
+# MIT OR Apache-2.0: the clipboard's images as PNG files (the version
+# arboard's image crate uses).
+png = { version = "0.18", optional = true }
+# MIT OR Apache-2.0: PNG files carried as text.
+base64 = { version = "0.22", optional = true }
 
 [target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", target_os = "dragonfly"))'.dependencies]
 # MIT: XDG desktop portals (global shortcuts on Wayland, the settings:

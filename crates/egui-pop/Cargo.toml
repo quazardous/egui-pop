@@ -83,6 +83,7 @@ platform = [
     "platform-crash",
     "platform-focus",
     "platform-text-scale",
+    "platform-clipboard",
 ]
 ## A single instance and deep links (`egui_pop::platform::instance`).
 platform-instance = ["dep:egui-pop-platform", "egui-pop-platform/instance"]
@@ -106,6 +107,11 @@ platform-focus = ["dep:egui-pop-platform", "egui-pop-platform/focus"]
 ## The system's text scaling read in-process, the text size's default
 ## (`egui_pop::platform::text_scale`).
 platform-text-scale = ["dep:egui-pop-platform", "egui-pop-platform/text-scale"]
+## The system clipboard over arboard: files, images, HTML, the primary
+## selection (`egui_pop::platform::clipboard`).
+platform-clipboard = ["dep:egui-pop-platform", "egui-pop-platform/clipboard"]
+## The clipboard on Wayland through the data-control protocol too.
+platform-clipboard-wayland = ["platform-clipboard", "egui-pop-platform/clipboard-wayland"]
 ## The system's file chooser (through `rfd`: the xdg desktop portal on
 ## Linux); without it, the in-app picker.
 native-dialogs = ["egui-pop-api/native-dialogs"]
