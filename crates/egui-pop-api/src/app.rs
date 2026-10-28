@@ -91,12 +91,17 @@ pub const STEP_UNDO: StepId = StepId::from_static("edit.undo");
 pub const STEP_REDO: StepId = StepId::from_static("edit.redo");
 
 /// Commands that run in the interface rather than through the host's
-/// dispatch: their run calls the host itself (undo and redo call
-/// `Host::history`, the context stack's commands
-/// `Host::contexts`, which a dispatch would hold).
+/// dispatch: their run calls the host itself (undo, redo and the
+/// agents' `history.*` call `Host::history`, the context stack's
+/// commands `Host::contexts`, which a dispatch would hold).
 const IN_INTERFACE: &[CommandId] = &[
     CMD_UNDO,
     CMD_REDO,
+    crate::history_view::CMD_LIST,
+    crate::history_view::CMD_READ,
+    crate::history_view::CMD_UNDO,
+    crate::history_view::CMD_REDO,
+    crate::history_view::CMD_JUMP,
     crate::contexts::CMD_BACK,
     crate::contexts::CMD_UP,
     crate::contexts::CMD_ENTER,
