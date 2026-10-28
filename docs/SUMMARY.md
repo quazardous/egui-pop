@@ -79,6 +79,8 @@
   - [0015: The clipboard](adr/0015-clipboard.md)
     - [Analysis](adr/0015-clipboard-analysis.md)
   - [0016: One writer per value](adr/0016-one-writer-per-value.md)
+  - [0017: Links and outside content](adr/0017-links-and-outside-content.md)
+    - [Analysis](adr/0017-links-and-outside-content-analysis.md)
 - [Micro-indicators, the design](design/indicators.md)
 - [Icons: an inventory](icons.md)
 - [Pointer gestures, a study](design/pointer-gestures.md)
