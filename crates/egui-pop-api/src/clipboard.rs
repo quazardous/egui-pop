@@ -355,12 +355,33 @@ pub trait ClipTarget {
     /// changes as JSON (a dry run's are paste special's preview, a
     /// string reading best).
     fn paste(&self, app: &AppHandle, paste: &Paste<'_>) -> Result<Json, String>;
+
+    /// What a transform may know of the target before adapting a paste
+    /// to it ([`Transform::for_target`]): the image a mask lands on, the
+    /// range a value is clamped to, the names a pasted one must not
+    /// take. `element` is the element pasted into, if any. Nothing by
+    /// default.
+    fn context(&self, app: &AppHandle, element: Option<&str>) -> Json {
+        let _ = (app, element);
+        Json::Null
+    }
+}
+
+/// The target a transform adapts a paste to.
+#[derive(Clone, Copy, Debug)]
+pub struct Destination<'a> {
+    /// The endpoint's name.
+    pub target: &'a str,
+    /// The element pasted into, if any.
+    pub element: Option<&'a str>,
+    /// What the target says of itself ([`ClipTarget::context`]).
+    pub context: &'a Json,
 }
 
 type RenderFn = Rc<dyn Fn(&Json) -> Vec<Repr>>;
 type PartsFn = Rc<dyn Fn(&Json) -> Vec<Part>>;
 type MigrateFn = Rc<dyn Fn(u32, Json) -> Result<Json, String>>;
-type TransformFn = Rc<dyn Fn(&Repr) -> Result<Transformed, String>>;
+type TransformFn = Rc<dyn Fn(&Repr, &Destination<'_>) -> Result<Transformed, String>>;
 type AppliesFn = Rc<dyn Fn(&Repr, &str) -> bool>;
 type SanitiseFn = Rc<dyn Fn(&mut Json) -> Vec<String>>;
 
@@ -487,6 +508,22 @@ impl Transform {
     pub fn new(
         spec: TransformSpec,
         f: impl Fn(&Repr) -> Result<Transformed, String> + 'static,
+    ) -> Self {
+        Self {
+            spec,
+            applies: None,
+            run: Rc::new(move |r, _| f(r)),
+        }
+    }
+
+    /// A transform that adapts to the target: it also receives the
+    /// target's name, element and context ([`ClipTarget::context`]): a
+    /// mask scaled to the image it lands on, a value clamped to the
+    /// target's range, a name made unique. What it loses shows in the
+    /// toast and in paste special's preview like any other loss.
+    pub fn for_target(
+        spec: TransformSpec,
+        f: impl Fn(&Repr, &Destination<'_>) -> Result<Transformed, String> + 'static,
     ) -> Self {
         Self {
             spec,
@@ -1307,7 +1344,13 @@ fn prepare(app: &AppHandle, req: &PasteRequest, who: &Origin) -> Result<Ready, S
     let mut lost = None;
     if let Some(id) = &plan.transform {
         let t = transform(app, id).ok_or_else(|| format!("no transform `{id}`"))?;
-        let out = (t.run)(&repr)?;
+        let context = target.context(app, req.element.as_deref());
+        let dest = Destination {
+            target: &req.target,
+            element: req.element.as_deref(),
+            context: &context,
+        };
+        let out = (t.run)(&repr, &dest)?;
         repr = Repr::new(plan.to.clone(), out.data);
         lost = out
             .lost

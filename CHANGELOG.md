@@ -43,6 +43,13 @@ publishes.
   translations; `strings::set_application` and `strings::application`
   hold it per context. The extractor keeps it a Fluent placeable in the
   English catalogue (egui-pop-i18n, `extract::plain_with`).
+- Clipboard transforms that see the target (egui-pop-api; #73):
+  `Transform::for_target` receives the target's name, the element
+  pasted into and what the target says of itself (`ClipTarget::context`,
+  nothing by default), so a mask scaled to the image it lands on, a
+  value clamped to the target's range or a name made unique is a
+  transform, its loss in the toast and in paste special's preview,
+  rather than an adaptation hidden in `ClipTarget::paste`.
 - Clipboard endpoints over elements and areas (egui-pop-api; #73): in
   a node graph, a tree or a list of sliders the focus sits on each
   node, row or slider, so `clipboard::bind_element` binds each one's
