@@ -43,6 +43,17 @@ publishes.
   translations; `strings::set_application` and `strings::application`
   hold it per context. The extractor keeps it a Fluent placeable in the
   English catalogue (egui-pop-i18n, `extract::plain_with`).
+- The paste key with no text on the system clipboard (egui-pop-api;
+  #73): egui-winit makes no paste event when the clipboard holds only
+  files or an image, and drops the key's press; egui-pop recognises the
+  chord by its release (a release of the paste key whose press egui
+  never saw, no paste since, the command modifier held) and runs
+  `edit.paste` with `no_text` (`PasteRequest::no_text`), so the system
+  backend reads what the clipboard holds. With the default backend,
+  which reads nothing, such a paste is refused when the owner's text is
+  no longer there. docs/upstream.md says what egui 0.37's
+  `NativeOptions::clipboard_shortcuts` and `Event::PasteImage` will
+  replace.
 - The clipboard's system backend (egui-pop-api, egui-pop-model; #73):
   `clipboard::SystemBackend` writes one copy's representations to the
   system clipboard at once (every one it writes, `writes`: the

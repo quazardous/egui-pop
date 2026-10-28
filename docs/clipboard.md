@@ -252,7 +252,12 @@ code editor and the terminal keep theirs too.
 egui-winit turns the platform's copy, cut and paste chords into events
 and swallows the keys (see [upstream](upstream.md)); while an endpoint
 has the focus, those events run the commands (Shift held on a paste:
-paste special), so they work under winit as under the keymap.
+paste special), so they work under winit as under the keymap. When the
+system clipboard holds no text (files, an image), egui-winit makes no
+paste event at all; egui-pop recognises the chord by its release and
+pastes with `no_text`: the system backend reads what the clipboard
+holds. With the default backend, which reads nothing, such a paste is
+refused when the owner's text is no longer on the system clipboard.
 
 ## Agents
 
