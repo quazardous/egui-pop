@@ -231,6 +231,26 @@ command-editor-write =
     .description = Modifie le texte par `edit.change` : tout le `text` ; ou `text` entre `from` et `to` (`{"{"}line, col{"}"}` à partir de 0) ; ou une liste de `changes`. Une seule étape d’annulation.
     .title = Écrire le texte
 
+command-history-jump =
+    .description = Amène un historique (`scope`) à l’une de ses étapes (`to`, son id ; 0 : le début) par annulations ou rétablissements, tout ou rien, refusé si sa révision n’est plus `if_rev` ; avec `dry_run`, dit seulement quelles étapes il parcourrait.
+    .title = Sauter dans un historique
+
+command-history-list =
+    .description = Chaque historique (sa portée : id, titre, s’il est local ou durable, sa limite), s’il est actif dans la fenêtre, sa révision, sa tête et ses comptes, et où vont Annuler et Rétablir maintenant avec ce qu’ils feraient.
+    .title = Lister les historiques
+
+command-history-read =
+    .description = Les étapes d’un historique (`scope` ; aucune : là où va Annuler maintenant) : `undo`, la plus ancienne d’abord, et `redo`, la suivante en dernier ; pour chaque étape son id, son libellé et son texte dans la langue de l’interface, son origine, son groupe, son lieu et son heure ; la révision et la tête de l’historique.
+    .title = Lire un historique
+
+command-history-redo =
+    .description = Rétablit la dernière étape annulée d’un historique (`scope` ; aucune : là où va Rétablir maintenant), refusé si sa révision n’est plus `if_rev` ; avec `dry_run`, dit seulement ce qu’il rétablirait.
+    .title = Rétablir dans un historique
+
+command-history-undo =
+    .description = Annule la dernière étape d’un historique (`scope` ; aucune : là où va Annuler maintenant), refusé si sa révision n’est plus `if_rev` ; avec `dry_run`, dit seulement ce qu’il annulerait.
+    .title = Annuler dans un historique
+
 command-job-cancel =
     .description = Demande à l’hôte d’annuler la tâche `id` ; elle apparaît en cours d’annulation jusqu’à ce que l’hôte confirme.
     .title = Annuler une tâche
@@ -668,6 +688,14 @@ egui-pop-frame-minimize = Réduire
 egui-pop-frame-restore = Restaurer
 
 egui-pop-frame-window-menu = Menu de la fenêtre
+
+egui-pop-history-by = { $label } ({ $origin })
+
+egui-pop-history-jump = Revenir ou avancer jusqu’à cette étape
+
+egui-pop-history-none = Aucun historique
+
+egui-pop-history-start = Début
 
 egui-pop-indicator-done = Terminé
 
@@ -1428,6 +1456,9 @@ menu-app-menu-view =
 panel-egui-pop-devtools =
     .title = Outils de développement
 
+panel-egui-pop-history =
+    .title = Historique
+
 panel-egui-pop-jobs =
     .title = Tâches
 
@@ -1460,6 +1491,9 @@ plugin-egui-pop-focus-mode =
 
 plugin-egui-pop-frame =
     .title = Cadre de la fenêtre
+
+plugin-egui-pop-history =
+    .title = Historique
 
 plugin-egui-pop-i18n =
     .title = Langue

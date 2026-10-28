@@ -302,6 +302,26 @@ command-gesture-value-step =
     .description = The wheel with these keys steps the slider under the pointer, focused or not.
     .title = Values: step with the wheel
 
+command-history-jump =
+    .description = Brings a history (`scope`) to one of its steps (`to`, its id; 0: the start) by undos or redos, all or nothing, refused unless its revision is still `if_rev`; with `dry_run`, only says which steps it would walk.
+    .title = Jump in a history
+
+command-history-list =
+    .description = Every history (its scope: id, title, whether it is local or durable, its cap), whether it is active in the window, its revision, head and counts, and where Undo and Redo go now with what they would do.
+    .title = List the histories
+
+command-history-read =
+    .description = A history's steps (`scope`; none: where Undo goes now): `undo`, oldest first, and `redo`, the next one last; each step's id, label and its text in the interface's language, origin, group, place and time; the history's revision and head.
+    .title = Read a history
+
+command-history-redo =
+    .description = Redoes the last undone step of a history (`scope`; none: where Redo goes now), refused unless its revision is still `if_rev`; with `dry_run`, only says what it would redo.
+    .title = Redo in a history
+
+command-history-undo =
+    .description = Undoes the last step of a history (`scope`; none: where Undo goes now), refused unless its revision is still `if_rev`; with `dry_run`, only says what it would undo.
+    .title = Undo in a history
+
 command-job-cancel =
     .description = Asks the host to cancel the job `id`; it shows as cancelling until the host says it is cancelled.
     .title = Cancel a job
@@ -775,6 +795,14 @@ egui-pop-frame-minimize = Minimize
 egui-pop-frame-restore = Restore
 
 egui-pop-frame-window-menu = Window menu
+
+egui-pop-history-by = { $label } ({ $origin })
+
+egui-pop-history-jump = Go back or forward to this step
+
+egui-pop-history-none = No history
+
+egui-pop-history-start = Start
 
 egui-pop-indicator-done = Done
 
@@ -1602,6 +1630,9 @@ menu-app-menu-view =
 panel-egui-pop-devtools =
     .title = Devtools
 
+panel-egui-pop-history =
+    .title = History
+
 panel-egui-pop-jobs =
     .title = Jobs
 
@@ -1634,6 +1665,9 @@ plugin-egui-pop-focus-mode =
 
 plugin-egui-pop-frame =
     .title = Window frame
+
+plugin-egui-pop-history =
+    .title = History
 
 plugin-egui-pop-i18n =
     .title = Language

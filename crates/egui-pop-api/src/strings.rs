@@ -851,6 +851,16 @@ pub const CONTEXT_REDONE_IN: StrKey =
     StrKey::new("egui-pop-context-redone-in", "Redone in { $place }");
 /// The toast's action going to where an undo or a redo happened.
 pub const CONTEXT_GO_THERE: StrKey = StrKey::new("egui-pop-context-go-there", "Go there");
+/// The history panel without any history.
+pub const HISTORY_NONE: StrKey = StrKey::new("egui-pop-history-none", "No history");
+/// The history panel's first row: before the first step.
+pub const HISTORY_START: StrKey = StrKey::new("egui-pop-history-start", "Start");
+/// A step of the history panel made by an agent, a script or another
+/// process.
+pub const HISTORY_BY: StrKey = StrKey::new("egui-pop-history-by", "{ $label } ({ $origin })");
+/// What a row of the history panel does.
+pub const HISTORY_JUMP: StrKey =
+    StrKey::new("egui-pop-history-jump", "Go back or forward to this step");
 /// A crumb of the status bar's breadcrumb, going back to its place.
 pub const CONTEXT_GO_TO: StrKey = StrKey::new("egui-pop-context-go-to", "Go to { $place }");
 /// The status bar's last crumb, where the user is.
@@ -1251,6 +1261,10 @@ pub const ALL: &[StrKey] = &[
     CONTEXT_UNDONE_IN,
     CONTEXT_REDONE_IN,
     CONTEXT_GO_THERE,
+    HISTORY_NONE,
+    HISTORY_START,
+    HISTORY_BY,
+    HISTORY_JUMP,
     CONTEXT_GO_TO,
     CONTEXT_HERE,
     CONTEXT_MORE_PLACES,

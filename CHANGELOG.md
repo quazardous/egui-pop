@@ -12,6 +12,21 @@ publishes.
 
 ### Added
 
+- The history panel and the `history.*` commands (egui-pop-api, ADR
+  0014): `history_view::HistoryPlugin` brings a `History` panel (closed
+  until asked for, in the end side bar; `history_view::show` draws it
+  anywhere) listing the scopes as chips, then the chosen scope's steps
+  under a "Start" row: the head selected, the steps a redo would make
+  again muted, a step made by an agent, a script or another process
+  named with its origin; a click jumps there through `edit.jump`. For
+  agents, `history.list`, `history.read`, `history.undo`, `history.redo`
+  and `history.jump` (each with `scope`, else where the keys go,
+  `if_rev` and `dry_run`; kept out of the palette) run through the same
+  steps as the keys (a dry run changes nothing and publishes no
+  `edit.undone` nor `history.changed`); `history::ask` is
+  the same request from code. Snapshots and the hover
+  preview of the ADR's panel wait on owner support (the contract has no
+  snapshot nor preview request yet).
 - The extension template's command declares an icon
   (`CommandSpec::icon("plus")`), shown by menus and the palette.
 - The command palette shows a command's icon (egui-pop-api;
