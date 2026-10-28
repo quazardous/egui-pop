@@ -341,6 +341,24 @@ impl ClipItem {
         self
     }
 
+    /// Content from outside the owner in several representations,
+    /// richest first (what the system clipboard held: files, an image,
+    /// HTML, text); `None` when there is none. Its type is the first
+    /// representation's format, its title the plain text's name.
+    pub fn external(reprs: Vec<Repr>) -> Option<Self> {
+        let mut reprs = reprs.into_iter();
+        let first = reprs.next()?;
+        let mut item = Self::new(first.format, 0, first.data, "");
+        item.fallbacks = reprs.collect();
+        item.title = if item.kind == TEXT {
+            "text".into()
+        } else {
+            item.kind.to_string()
+        };
+        item.external = true;
+        Some(item)
+    }
+
     /// Adds a fallback representation.
     pub fn fallback(mut self, format: FormatId, data: Json) -> Self {
         self.fallbacks.push(Repr::new(format, data));
