@@ -854,6 +854,52 @@ fn pass_handlers_run_at_every_logic_pass_and_go_with_their_plugin() {
     assert_eq!(*seen.borrow(), 2);
 }
 
+/// One frame of a host driving egui itself: a pass running `ui`.
+fn frame(ctx: &egui::Context, ui: impl FnMut(&mut egui::Ui)) {
+    let mut out = ctx.run_ui(egui::RawInput::default(), ui);
+    out.textures_delta.clear();
+}
+
+#[test]
+fn pass_handlers_run_once_per_pass_when_the_host_runs_the_logic_too() {
+    let l = log();
+    let seen = Rc::new(RefCell::new(0));
+    let s = seen.clone();
+    let ctx = egui::Context::default();
+    let mut app = App::builder()
+        .plugin(P::new("ticker", &l, move |ctx| {
+            let s = s.clone();
+            ctx.on(On::Pass, move |_, _| *s.borrow_mut() += 1);
+            Ok(())
+        }))
+        .build(&ctx)
+        .unwrap();
+    // As eframe and kittest's `build_eframe` do: the logic hook, then
+    // the drawing, which runs the logic again.
+    for _ in 0..3 {
+        frame(&ctx, |ui| {
+            app.logic(ui.ctx());
+            app.show(ui);
+        });
+    }
+    assert_eq!(*seen.borrow(), 3);
+    // A hidden window: the logic alone between passes, every time.
+    app.logic(&ctx);
+    app.logic(&ctx);
+    assert_eq!(*seen.borrow(), 5);
+    // The next pass still runs its own logic, once.
+    frame(&ctx, |ui| {
+        app.logic(ui.ctx());
+        app.show(ui);
+    });
+    assert_eq!(*seen.borrow(), 6);
+    // A plain integration: the drawing alone runs the logic.
+    for _ in 0..2 {
+        frame(&ctx, |ui| app.show(ui));
+    }
+    assert_eq!(*seen.borrow(), 8);
+}
+
 /// `owner` declares a setting and a value it opens to `other`; `other`
 /// writes both from its command, from a lifecycle hook and through its
 /// writer; what each write got goes to the log.

@@ -209,7 +209,10 @@ Each frame, in this order:
    indicators from the journal, the pass lifecycle, process the
    requests (commands queued by blocks and handlers, enabling plugins,
    rebinding keys, workbench changes). eframe calls it through
-   `eframe::App::logic`, then `App::show` calls it **a second time**.
+   `eframe::App::logic`, then `App::show` calls it again, for hosts
+   without that hook; a second call in the same pass does nothing, so
+   it runs once per pass. Calls between passes (eframe's ticks of a
+   hidden window) always run.
 2. `App::show`: key dispatch (commands run synchronously through the
    host), the shell (title, menu bar, status bar, the workbench and
    its panels), auxiliary windows, overlays, popups, live regions,
@@ -796,7 +799,8 @@ graphs, scopes and histograms.
    since 2026-10-13 (sections 5.1 to 5.3); next, the GPU path's texture
    creation and copy on the workers too (section 5.3).
 4. `App::logic` runs twice per eframe frame (from `eframe::App::logic`
-   and again from `App::show`): run it once.
+   and again from `App::show`): run it once. Done: a second call in
+   the same pass does nothing.
 5. A thread-safe journal (`SharedJournal`) and a channel-backed `Host`
    adapter, so a kernel on its own thread is the paved road.
 6. A snapshot service (an `Arc` swapped per version) for state a kernel
