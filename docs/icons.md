@@ -362,6 +362,15 @@ the context stack (`chevron-left`, `up`), Find and Save in the editors
 (`reset`). egui-pop declares no Select all command: a text field keeps
 egui's own.
 
+An application sets the icon of a command it does not own (one of
+egui-pop's, another plugin's) with `Ctx::command_icon(id, icon,
+icon_on)`: both names replace the declared ones on every surface, the
+last plugin to set one wins, and the change goes with its plugin. A
+command that is not declared is reported (`unknown-command`), and the
+names are checked as a declaration's (`unknown-icon`, owned by the
+plugin that set them). The `commands` collector gives `icon_set_by`,
+the plugin whose icon is shown.
+
 ### 4.3 Object-kind icons
 
 A kind is a namespaced id (`<domain>/<kind>`) mapped to an icon name,
