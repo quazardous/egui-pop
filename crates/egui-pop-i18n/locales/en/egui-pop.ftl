@@ -474,17 +474,41 @@ command-theme-undo =
     .description = Takes the theme editor's last change back, through the theme.token step.
     .title = Undo a theme change
 
+command-tips-current =
+    .description = The tip shown as a card (its id, title, text and target, null when none), and where its card and its target are.
+    .title = The tip shown
+
 command-tips-dismiss =
     .description = Dismisses a tip for good (`tip`, its id), through the tips.dismiss step.
     .title = Dismiss a tip
+
+command-tips-gotIt =
+    .description = Dismisses the tip shown for good.
+    .title = Got it
 
 command-tips-list =
     .description = Every tip registered: its id, English title and text, whether it is contextual and whether it was dismissed.
     .title = List the tips
 
+command-tips-next =
+    .description = Shows the next tip the rules pick in place of the one shown.
+    .title = Next tip
+
+command-tips-notNow =
+    .description = Closes the tip shown; it may show again another day.
+    .title = Not now
+
+command-tips-off =
+    .description = Shows no more tips (the tips.show setting).
+    .title = Turn tips off
+
 command-tips-reset =
     .description = Forgets which tips were dismissed.
     .title = Show every tip again
+
+command-tips-show =
+    .description = Shows the tip the rules pick here, as a card beside what it is about; `tip`, an id, shows that one.
+    .title = Show a tip
 
 command-value-get =
     .description = A value with its descriptor (`path`).
@@ -1358,6 +1382,8 @@ egui-pop-theme-editor-warnings = Read with warnings: { $warnings }.
 
 egui-pop-tips-at = { $at } of { $count }
 
+egui-pop-tips-did-you-know = Did you know?
+
 egui-pop-tips-dont-show = Don't show again
 
 egui-pop-tips-got-it = Got it
@@ -1367,6 +1393,10 @@ egui-pop-tips-got-it-name = Got it: do not show { $tip } again
 egui-pop-tips-hint = Tip
 
 egui-pop-tips-next = Next tip
+
+egui-pop-tips-no-more = No more tips
+
+egui-pop-tips-not-now = Not now
 
 egui-pop-tips-of-the-day = Tip of the day
 
@@ -1916,9 +1946,17 @@ setting-tips-dismissed =
     .description = The tips not to show again, by id; empty to show them all again.
     .label = Dismissed tips
 
+setting-tips-seen =
+    .description = When each tip was shown last, so it does not show again the same day.
+    .label = Tips shown
+
 setting-tips-show =
     .description = The tip of the day and the hints beside what they are about.
     .label = Show tips
+
+setting-tips-used =
+    .description = The commands already used: their tips are not shown by themselves.
+    .label = Commands used
 
 setting-window-bar-in-fullscreen =
     .description = Keeps the application's title bar (its buttons and items) in full screen; off, full screen hides it.

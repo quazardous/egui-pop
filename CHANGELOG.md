@@ -41,6 +41,23 @@ publishes.
   `{ $key-<command> }` in a catalogue). `Tip` gains `surface`,
   `command`, `target` and `origin`. The gallery's tips of the day are
   files now (`crates/egui-pop-gallery/tips`).
+- Tips chosen by rules and shown beside what they are about
+  (egui-pop-api; docs/tips.md): with `Tips::set_auto(true)`, a tip
+  comes by itself five seconds after the start, then the first time a
+  tip's `surface` holds. The rules skip a tip dismissed, one whose
+  command a person already used (`tips.used`, read from the journal),
+  one whose surface does not hold and one shown in the last day
+  (`tips.seen`), then take the one shown longest ago (`Tips::pick`,
+  `Tips::refusal`, `tips::pick::Rules`). Its card ("Did you know?",
+  Got it, Next tip, No more tips, Not now) never takes the focus; it
+  goes beside its `target` without covering it, with a halo around it
+  (`tips::mark` and `tips::target` name what a tip may point at; the
+  theme's optional `tip-card.halo-color` and `tip-card.width`), and in
+  the bottom corner at the start without one. Commands `tips.show`,
+  `tips.next`, `tips.gotIt`, `tips.notNow` (Escape), `tips.off` and,
+  for agents, `tips.current`; the `tipShown` context key and a
+  `tip.shown` event. The gallery's tips page shows a tip pointing at a
+  button.
 
 - The extension template's command declares an icon
   (`CommandSpec::icon("plus")`), shown by menus and the palette.

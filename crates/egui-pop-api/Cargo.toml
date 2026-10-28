@@ -46,6 +46,9 @@ log.workspace = true
 serde.workspace = true
 rfd = { workspace = true, optional = true }
 serde_json.workspace = true
+# MIT OR Apache-2.0: the wall clock on the web too (tips shown when),
+# where `std::time::SystemTime::now` panics.
+web-time = "1"
 # The Windows layer of the frame (stubs elsewhere).
 egui-pop-win32.workspace = true
 
