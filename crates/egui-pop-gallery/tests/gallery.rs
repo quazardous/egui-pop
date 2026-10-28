@@ -3216,6 +3216,89 @@ fn the_gallerys_tips_pass_the_lint_and_one_points_at_its_button() {
 }
 
 #[test]
+fn help_says_about_the_gallery_and_links_to_the_repository_and_the_docs() {
+    use egui_pop::api::about::{CMD_ABOUT, CMD_ABOUT_READ};
+    use egui_pop::api::app::MENU_HELP;
+    use egui_pop::model::menus::Item;
+    use egui_pop_gallery::pages::about::{CMD_DOCS, CMD_GITHUB};
+    let mut h = harness(options("pop-dark", Density::Comfortable, "about"));
+    h.run();
+    egui_pop_test::assert_all_named(&h);
+    // The Help menu: the links, then About.
+    let help: Vec<_> = h
+        .state()
+        .app
+        .handle()
+        .menu(&MENU_HELP)
+        .into_iter()
+        .filter_map(|i| match i.item {
+            Item::Command { id, .. } => Some(id),
+            _ => None,
+        })
+        .collect();
+    for id in [&CMD_GITHUB, &CMD_DOCS, &CMD_ABOUT] {
+        assert!(help.contains(id), "{id} not in Help: {help:?}");
+    }
+    let handle = h.state().app.handle().clone();
+    let about = handle.command(&CMD_ABOUT).unwrap();
+    assert_eq!(handle.command_menu_title(&about), "About egui-pop gallery");
+    assert!(h.query_by_label("Source code").is_some());
+    assert!(h.query_by_label("MIT OR Apache-2.0").is_some());
+    let mut results = egui_kittest::SnapshotResults::new();
+    results.add(h.try_snapshot("about-pop-dark"));
+    // The dialog.
+    h.get_by_label("Open the About dialog").click();
+    for _ in 0..4 {
+        let _ = h.run_ok();
+    }
+    assert!(egui_pop::core::overlay::modal_open(&h.ctx));
+    assert!(h.query_by_label("About egui-pop gallery").is_some());
+    egui_pop_test::assert_all_named(&h);
+    results.add(h.try_snapshot("about-dialog-pop-dark"));
+    // Agents read the same; the version info names the renderer.
+    let read = h
+        .state_mut()
+        .app
+        .run(
+            &CMD_ABOUT_READ,
+            serde_json::Value::Null,
+            egui_pop::model::commands::Origin::User,
+        )
+        .now()
+        .unwrap()
+        .unwrap();
+    assert_eq!(read["name"], "egui-pop gallery");
+    assert_eq!(
+        read["links"]["repository"],
+        "https://github.com/quazardous/egui-pop"
+    );
+    assert!(
+        read["renderer"]
+            .as_str()
+            .is_some_and(|r| r.starts_with("wgpu: "))
+    );
+    // Copied through the clipboard, then the button says so.
+    h.query_all_by_label("Copy version info")
+        .last()
+        .unwrap()
+        .click();
+    h.run();
+    assert!(h.query_by_label("Copied.").is_some());
+    let copied = egui_pop::api::clipboard::with_owner(&handle, |c| {
+        c.get(&egui_pop::model::clipboard::Slot::User)
+    })
+    .flatten()
+    .expect("the version info is in the clipboard");
+    assert!(
+        copied
+            .payload
+            .as_str()
+            .unwrap()
+            .starts_with("egui-pop gallery 0.0.0\negui-pop ")
+    );
+}
+
+#[test]
 fn a_kit_redraws_the_workbench_tabs_from_the_theme_alone() {
     // A kit folder that only changes the tab component's data and shape:
     // no code, the `underline` handler egui-pop ships.

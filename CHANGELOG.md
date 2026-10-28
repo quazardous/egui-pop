@@ -12,6 +12,9 @@ publishes.
 
 ### Added
 
+- The gallery turns About on (egui-pop-gallery): Help > About egui-pop
+  gallery, and Help > "egui-pop on GitHub" and "Documentation"; the
+  `about` page draws the dialog's body and opens the dialog.
 - About the application (egui-pop-api; docs/about.md): the opt-in
   `about::AboutPlugin` adds Help > About <application> (the `about`
   command), a dialog with the name, icon, version, one-line
