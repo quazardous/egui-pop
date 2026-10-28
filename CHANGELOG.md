@@ -678,6 +678,14 @@ publishes.
 
 ### Fixed
 
+- A widget in a palette keeps the focus it takes when a click lands on
+  one of its children (a tree focused through its clicked row), so its
+  keys (Delete, F2, the arrows) reach it as they do when the panel is
+  docked (egui-pop-api, egui-pop-core): the palettes' Escape check
+  looks for Escape first, and it, the focus chain and F6 find the
+  focused widget's place through `focus::peek_response`, which reads a
+  response without egui's "clicked elsewhere" rule dropping the focus.
+
 - The GPU path's tile textures are released (egui-pop-viewport): those
   of a dropped `ViewportState` at the next paint of any viewport on the
   same renderer, and a tile replaced before its first paint is no

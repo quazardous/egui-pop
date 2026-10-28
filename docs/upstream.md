@@ -166,6 +166,23 @@ limit.
 - **Remove when**: egui applies the layer's transform to the bounds it
   reports.
 
+## egui: no side-effect free read of a widget's response
+
+- **Compensated**: `Context::read_response` runs the "clicked
+  elsewhere" rule (`get_response`): on a frame with a click that did
+  not land on the widget, a focused widget loses the focus. Read every
+  pass for the focused widget, to find its layer or place, it drops the
+  focus a widget took when the click landed on one of its children (a
+  tree focused through its clicked row). The pass's widget lists, which
+  hold the layer and rectangles, are not public.
+- **Upstream**: not filed yet.
+- **Workaround**: `focus::peek_response` reads the response with
+  `surrender_focus_on` set to `Never` for the call (`// upstream:` in
+  `focus.rs`); the focus chain, hover mode, F6 and the palettes'
+  Escape check use it.
+- **Remove when**: egui offers a read of a widget's rectangle and layer
+  (or a response) without interaction side effects.
+
 ## egui: text blurs in a Scene zoomed past 100 %
 
 - **Compensated**: egui draws text at its size and scales the layer, so
