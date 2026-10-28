@@ -18,6 +18,8 @@ category-jobs = Jobs
 
 category-library = Library
 
+category-links = Links
+
 category-navigation = Navigation
 
 category-notifications = Notifications
@@ -246,6 +248,10 @@ command-file-preview =
     .description = A file's or a folder's preview metadata (`path`), as the in-app picker shows it: whether it is a folder, its size and modification time, the provider, the kind of preview, dimensions, pages, a folder's counts, the provider's facts, or why there is none; no pixels and no text.
     .title = Preview a file
 
+command-files-reveal =
+    .description = Shows a file (`path`) selected in the file manager; an agent's request is confirmed by the user.
+    .title = Show in folder
+
 command-gesture-graph-fit =
     .description = Fits the whole graph in the view.
     .title = Node graph: fit
@@ -389,6 +395,22 @@ command-library-select =
 command-library-tag =
     .description = Adds tags (`add`) to images and takes others off (`remove`): `keys`, else the selection; through `library.tag`.
     .title = Tag images
+
+command-links-check =
+    .description = What a link (`target`) is and how it would open (`how`, `source`): its kind, the way, whether the user would be asked, the policy's verdict and the opener's capabilities; nothing is opened and no step runs.
+    .title = Check a link
+
+command-links-confirmed =
+    .description = The user's answer to a link's confirmation (`id`, `trust`).
+    .title = Open the confirmed link
+
+command-links-copy =
+    .description = Copies a link (`target`) through the clipboard.
+    .title = Copy a link
+
+command-links-open =
+    .description = Opens a link (`target`) its kind's way or `how` (auto, outside, inside, reveal); an agent's request is always confirmed by the user; `dry_run` says the kind, how, whether it would ask and the verdict, opening nothing.
+    .title = Open a link
 
 command-logs-reveal =
     .description = Opens the folder holding the application's log files.
@@ -1025,6 +1047,32 @@ egui-pop-layout-side-bar-left = Primary side bar on the left
 egui-pop-layout-side-bar-right = Primary side bar on the right
 
 egui-pop-layout-with-key = { $action } ({ $keys })
+
+egui-pop-links-confirm-agent = { $agent } asks to open this
+
+egui-pop-links-confirm-content = This link comes from the content, not from the application.
+
+egui-pop-links-confirm-disguised = Its text said { $label }, but it goes elsewhere.
+
+egui-pop-links-confirm-file = Open this file?
+
+egui-pop-links-confirm-reveal = Show this file in its folder?
+
+egui-pop-links-confirm-title = Open this link?
+
+egui-pop-links-copy = Copy link
+
+egui-pop-links-host = Host: { $host }
+
+egui-pop-links-not-opened = Not opened: { $reason }
+
+egui-pop-links-open = Open
+
+egui-pop-links-open-outside = Open outside
+
+egui-pop-links-reveal = Show in folder
+
+egui-pop-links-trust = Trust { $host } for this session
 
 egui-pop-loading = Loading
 
@@ -1838,6 +1886,9 @@ plugin-egui-pop-jobs =
 
 plugin-egui-pop-library =
     .title = Photo library
+
+plugin-egui-pop-links =
+    .title = Links
 
 plugin-egui-pop-logs =
     .title = Logs

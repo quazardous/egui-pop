@@ -8,6 +8,9 @@
 //!   exist;
 //! - [`tips_problems`] and [`assert_tips_clean`]: every tip names a
 //!   declared command, a surface that parses and a target drawn;
+//! - [`links_problems`] and [`assert_links_clean`]: every link the
+//!   application declares parses, uses an allowed scheme, names a
+//!   declared command and a file that is there;
 //! - [`undeclared_writes`] and [`assert_writes_declared`]: the plugins
 //!   wrote only the values they own or were named writers of;
 //! - [`unnamed_interactive`] and [`assert_all_named`]: every interactive
@@ -190,6 +193,25 @@ pub fn assert_tips_clean(app: &App, targets: &[&str]) {
     assert!(
         problems.is_empty(),
         "tips problems:\n{}",
+        problems.join("\n")
+    );
+}
+
+/// The problems of the links the application declares
+/// ([`egui_pop_api::links::lint`]): targets that do not parse, blocked
+/// schemes, `command:` links naming no declared command, files that are
+/// not there. Links drawn as declared count once drawn.
+pub fn links_problems(app: &App) -> Vec<String> {
+    egui_pop_api::links::lint::problems(app.handle())
+}
+
+/// Fails with the links' problems, if any.
+#[track_caller]
+pub fn assert_links_clean(app: &App) {
+    let problems = links_problems(app);
+    assert!(
+        problems.is_empty(),
+        "links problems:\n{}",
         problems.join("\n")
     );
 }

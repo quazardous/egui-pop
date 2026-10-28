@@ -17,9 +17,9 @@ use egui_pop_platform::notify::{
 };
 use serde_json::{Value as Json, json};
 
-const SHOW: CommandId = CommandId::from_static("files.reveal");
+const SHOW: CommandId = CommandId::from_static("files.show");
 
-/// Records the runs of `files.reveal`.
+/// Records the runs of `files.show`.
 struct Files(Arc<Mutex<Vec<Json>>>);
 
 impl Plugin for Files {

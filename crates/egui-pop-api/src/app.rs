@@ -1585,6 +1585,11 @@ impl AppHandle {
         all
     }
 
+    /// The menus declared, by id.
+    pub fn menu_ids(&self) -> Vec<MenuId> {
+        self.0.derived.borrow().menus.keys().cloned().collect()
+    }
+
     /// A menu's items after the hooks.
     pub fn menu(&self, menu: &MenuId) -> Vec<MenuItem> {
         self.0
