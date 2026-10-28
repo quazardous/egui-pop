@@ -516,6 +516,8 @@ fn walk(dir: &Path, out: &mut Vec<std::path::PathBuf>) -> io::Result<()> {
 /// context stack's frames (title).
 pub fn declarations(app: &AppHandle, menus: &[MenuId]) -> Vec<Found> {
     let mut out = Vec::new();
+    // Command titles, which may say `{ $application }`.
+    let mut titles = Vec::new();
     let mut push = |key: String, text: &str, origin: String| {
         if !text.trim().is_empty() {
             out.push(Found {
@@ -532,11 +534,15 @@ pub fn declarations(app: &AppHandle, menus: &[MenuId]) -> Vec<Found> {
         // A panel's commands read texts shared by every panel (egui-pop's
         // catalogue has them): nothing of their own to translate.
         if strings::panel_command(&ctx, id).is_none() {
-            push(
-                strings::declared_key(kind::COMMAND, id, Some("title")),
-                &spec.title,
-                origin.clone(),
-            );
+            // A title may say `{ $application }` (filled where it is
+            // drawn): kept as a placeable, the rest as plain text.
+            if !spec.title.trim().is_empty() {
+                titles.push(Found {
+                    key: strings::declared_key(kind::COMMAND, id, Some("title")),
+                    english: plain_with(&spec.title, COMMAND_TITLE_VARIABLES),
+                    origin: origin.clone(),
+                });
+            }
             push(
                 strings::declared_key(kind::COMMAND, id, Some("description")),
                 &spec.description,
@@ -606,6 +612,7 @@ pub fn declarations(app: &AppHandle, menus: &[MenuId]) -> Vec<Found> {
             format!("frame {}", f.id),
         );
     }
+    out.extend(titles);
     out
 }
 
@@ -643,6 +650,46 @@ pub fn messages(found: &[Found]) -> Result<Messages, String> {
         Ok(out)
     } else {
         Err(errors.join("\n"))
+    }
+}
+
+/// The variables a command's title may say (`{ $application }`, the
+/// application's name), filled where the title is drawn.
+pub const COMMAND_TITLE_VARIABLES: &[&str] = &["application"];
+
+/// Plain text in which the placeables of `variables` (`{ $name }` or
+/// `{$name}`) stay placeables: [`English::Plain`] when it has none, else
+/// an [`English::Pattern`] with every other brace escaped.
+///
+/// ```
+/// use egui_pop_i18n::extract::{English, plain_with};
+///
+/// assert_eq!(
+///     plain_with("About { $application } {x}", &["application"]),
+///     English::Pattern("About { $application } {\"{\"}x{\"}\"}".into())
+/// );
+/// assert_eq!(plain_with("Use { $other }", &["application"]), English::Plain("Use { $other }".into()));
+/// ```
+pub fn plain_with(text: &str, variables: &[&str]) -> English {
+    let mut pattern = escape(text);
+    let mut found = false;
+    for v in variables {
+        for (spaced, written) in [(true, format!("{{ ${v} }}")), (false, format!("{{${v}}}"))] {
+            let escaped = if spaced {
+                format!("{{\"{{\"}} ${v} {{\"}}\"}}")
+            } else {
+                format!("{{\"{{\"}}${v}{{\"}}\"}}")
+            };
+            if text.contains(&written) {
+                found = true;
+                pattern = pattern.replace(&escaped, &format!("{{ ${v} }}"));
+            }
+        }
+    }
+    if found {
+        English::Pattern(pattern)
+    } else {
+        English::Plain(text.to_string())
     }
 }
 
@@ -1041,6 +1088,31 @@ mod tests {
         for u in &s.unread {
             assert!(failure.contains(&u.to_string()), "{failure}");
         }
+    }
+
+    #[test]
+    fn a_command_title_keeps_its_application_placeable() {
+        let found = vec![Found {
+            key: "command-about.title".into(),
+            english: plain_with("About { $application }", COMMAND_TITLE_VARIABLES),
+            origin: "command about".into(),
+        }];
+        let ftl = english(&messages(&found).unwrap(), "");
+        assert_eq!(
+            ftl.trim(),
+            "command-about =\n    .title = About { $application }"
+        );
+        let i = crate::I18n::new("en");
+        i.add("en", &ftl).unwrap();
+        assert_eq!(
+            i.t("command-about.title", &[("application", "Helios".into())]),
+            "About Helios"
+        );
+        // Written without spaces, and beside a brace that stays text.
+        assert_eq!(
+            plain_with("{$application} {x}", COMMAND_TITLE_VARIABLES),
+            English::Pattern("{ $application } {\"{\"}x{\"}\"}".into())
+        );
     }
 
     #[test]
