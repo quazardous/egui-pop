@@ -3097,6 +3097,28 @@ fn the_tips_page_dismisses_a_tip_and_remembers_it_in_the_settings() {
 }
 
 #[test]
+fn the_gallerys_tips_pass_the_lint_and_one_points_at_its_button() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "tips"));
+    h.run();
+    // The page draws the button its pointing tip names.
+    egui_pop_test::assert_tips_clean(&h.state().app, &[]);
+    let tips = h
+        .state()
+        .app
+        .handle()
+        .service(&egui_pop::api::tips::TIPS)
+        .unwrap();
+    assert_eq!(
+        tips.current().map(|t| t.id).as_deref(),
+        Some("gallery.import-here")
+    );
+    assert!(h.query_by_label("Did you know?").is_some());
+    h.key_press(egui::Key::Escape);
+    h.run();
+    assert!(tips.current().is_none());
+}
+
+#[test]
 fn a_kit_redraws_the_workbench_tabs_from_the_theme_alone() {
     // A kit folder that only changes the tab component's data and shape:
     // no code, the `underline` handler egui-pop ships.
