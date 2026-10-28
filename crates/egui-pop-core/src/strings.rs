@@ -444,12 +444,44 @@ fn panel_command_text(
         .unwrap_or_else(|| tr_args(ctx, shared, &args))
 }
 
-/// A command's title.
+const APPLICATION: Slot<String> = Slot::new("core.strings.application");
+
+/// Sets the application's name for a context: what `{ $application }`
+/// says in a command's title ("About { $application }"). The
+/// application does it for each context it is drawn in.
+pub fn set_application(ctx: &Context, name: &str) {
+    if APPLICATION.get(ctx).as_deref() != Some(name) {
+        APPLICATION.set(ctx, name.to_string());
+    }
+}
+
+/// The application's name set for a context (empty when none was).
+pub fn application(ctx: &Context) -> String {
+    APPLICATION.get(ctx).unwrap_or_default()
+}
+
+/// A command's title. A title saying `{ $application }` (in English or
+/// in its translation) has it filled with the application's name
+/// ([`set_application`]).
+///
+/// ```
+/// use egui_pop_core::strings;
+///
+/// let ctx = egui::Context::default();
+/// strings::set_application(&ctx, "Helios");
+/// assert_eq!(strings::command_title(&ctx, "about", "About { $application }"), "About Helios");
+/// ```
 pub fn command_title(ctx: &Context, id: &str, english: &str) -> String {
     if let Some(p) = panel_command(ctx, id) {
         return panel_command_text(ctx, id, "title", &p.title, &p);
     }
-    declared(ctx, kind::COMMAND, id, Some("title"), english)
+    let name = application(ctx);
+    lookup_args(
+        ctx,
+        &declared_key(kind::COMMAND, id, Some("title")),
+        english,
+        &[("application", &name)],
+    )
 }
 
 /// A command's title as a menu, a toolbar or a tray shows it: without the
