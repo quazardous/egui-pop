@@ -401,3 +401,65 @@ fn tips_show_by_themselves_once_the_start_has_passed() {
         Some("shots.compare")
     );
 }
+
+#[test]
+fn a_plugins_tips_turn_off_alone_and_the_browser_lists_them_by_plugin() {
+    let clock = ManualClock::new(1_000_000.0);
+    let mut h = harness_of(
+        App::builder()
+            .plugin(TipsPlugin)
+            .plugin(Photos)
+            .plugin(Shots)
+            .build(&egui::Context::default())
+            .unwrap(),
+    );
+    let tips = h.state().handle().service(&TIPS).unwrap();
+    tips.set_clock(clock.shared());
+    h.state_mut()
+        .run(
+            &tips::CMD_TIPS_ORIGIN,
+            json!({ "origin": "shots", "on": false }),
+            Origin::Agent("test".into()),
+        )
+        .now()
+        .unwrap()
+        .unwrap();
+    assert!(tips.off(h.state().handle()).contains("shots"));
+    let cx = egui_pop_model::when::WhenContext::new().flag("shotsOpen", true);
+    let picked = tips.pick(h.state().handle(), &cx, |_| true).unwrap();
+    assert_eq!(picked.origin_name(), "photos");
+    let groups: Vec<String> = tips::groups(&tips.all())
+        .into_iter()
+        .map(|(o, _)| o)
+        .collect();
+    assert_eq!(groups, ["photos", "shots"]);
+    // Back on: the shots' tips are picked again.
+    tips.set_origin_on(h.state().handle(), "shots", true)
+        .unwrap();
+    assert!(tips.off(h.state().handle()).is_empty());
+    h.run();
+}
+
+#[test]
+fn the_browser_shows_each_plugins_switch() {
+    let app = App::builder()
+        .plugin(TipsPlugin)
+        .plugin(Shots)
+        .build(&egui::Context::default())
+        .unwrap();
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(600.0, 500.0))
+        .build_ui_state(|ui, app: &mut App| tips::browser(ui, app.handle()), app);
+    h.run();
+    assert!(h.query_by_label("Rate from the keyboard").is_some());
+    h.get_by_label("Show the tips of shots").click();
+    h.run();
+    let tips = h.state().handle().service(&TIPS).unwrap();
+    assert!(tips.off(h.state().handle()).contains("shots"));
+    h.get_by_label("Show the tip Compare two shots").click();
+    h.run();
+    assert_eq!(
+        tips.current().map(|t| t.id).as_deref(),
+        Some("shots.compare")
+    );
+}

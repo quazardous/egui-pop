@@ -3,7 +3,7 @@
 
 use egui::Ui;
 use egui_pop::api::stories::Story;
-use egui_pop::api::tips::{self, CMD_TIPS_RESET, TIPS, TIPS_PLUGIN, Tip};
+use egui_pop::api::tips::{self, CMD_TIPS_BROWSE, CMD_TIPS_RESET, TIPS, TIPS_PLUGIN, Tip};
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
 use egui_pop::model::ids::{PluginId, StoryId};
 
@@ -123,12 +123,18 @@ fn show(ui: &mut Ui, app: &AppHandle) {
         return;
     };
     let dismissed = t.dismissed(app);
+    let off = t.off(app);
     egui::Grid::new("gallery.tips.list")
-        .num_columns(2)
+        .num_columns(3)
         .striped(true)
         .show(ui, |ui| {
             for tip in t.all() {
                 ui.monospace(&tip.id);
+                ui.weak(if off.contains(tip.origin_name()) {
+                    format!("{} (off)", tip.origin_name())
+                } else {
+                    tip.origin_name().to_string()
+                });
                 ui.weak(match (tip.contextual, dismissed.contains(&tip.id)) {
                     (_, true) => "dismissed",
                     (true, false) => "hint",
@@ -137,7 +143,13 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                 ui.end_row();
             }
         });
-    if ui.button("Show every tip again").clicked() {
-        app.run(CMD_TIPS_RESET, serde_json::Value::Null);
-    }
+    ui.horizontal(|ui| {
+        if ui.button("Show every tip again").clicked() {
+            app.run(CMD_TIPS_RESET, serde_json::Value::Null);
+        }
+        // The browser, as Help > Tips… opens it.
+        if ui.button("Browse the tips").clicked() {
+            app.run(CMD_TIPS_BROWSE, serde_json::Value::Null);
+        }
+    });
 }

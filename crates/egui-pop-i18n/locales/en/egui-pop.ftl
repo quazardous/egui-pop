@@ -474,6 +474,10 @@ command-theme-undo =
     .description = Takes the theme editor's last change back, through the theme.token step.
     .title = Undo a theme change
 
+command-tips-browse =
+    .description = Every tip, by the plugin that declared it, each plugin's with its own switch.
+    .title = Tips…
+
 command-tips-current =
     .description = The tip shown as a card (its id, title, text and target, null when none), and where its card and its target are.
     .title = The tip shown
@@ -501,6 +505,10 @@ command-tips-notNow =
 command-tips-off =
     .description = Shows no more tips (the tips.show setting).
     .title = Turn tips off
+
+command-tips-origin =
+    .description = Turns the tips of one plugin (`origin`, its id) on or off (`on`), the others kept.
+    .title = Turn a plugin's tips on or off
 
 command-tips-reset =
     .description = Forgets which tips were dismissed.
@@ -1382,6 +1390,8 @@ egui-pop-theme-editor-warnings = Read with warnings: { $warnings }.
 
 egui-pop-tips-at = { $at } of { $count }
 
+egui-pop-tips-browser = Tips
+
 egui-pop-tips-did-you-know = Did you know?
 
 egui-pop-tips-dont-show = Don't show again
@@ -1396,11 +1406,25 @@ egui-pop-tips-next = Next tip
 
 egui-pop-tips-no-more = No more tips
 
+egui-pop-tips-none = No tips are registered.
+
 egui-pop-tips-not-now = Not now
 
 egui-pop-tips-of-the-day = Tip of the day
 
+egui-pop-tips-origin-on = Show these tips
+
+egui-pop-tips-origin-on-name = Show the tips of { $origin }
+
 egui-pop-tips-previous = Previous tip
+
+egui-pop-tips-show = Show
+
+egui-pop-tips-show-name = Show the tip { $tip }
+
+egui-pop-tips-state-dismissed = Dismissed
+
+egui-pop-tips-state-used = Its command was used
 
 egui-pop-toast-close = Close: { $text }
 
@@ -1945,6 +1969,10 @@ setting-palettes-idle-opacity =
 setting-tips-dismissed =
     .description = The tips not to show again, by id; empty to show them all again.
     .label = Dismissed tips
+
+setting-tips-off =
+    .description = The plugins whose tips are off, by id; the others still show theirs.
+    .label = Plugins without tips
 
 setting-tips-seen =
     .description = When each tip was shown last, so it does not show again the same day.

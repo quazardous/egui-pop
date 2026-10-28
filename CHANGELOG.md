@@ -58,6 +58,13 @@ publishes.
   for agents, `tips.current`; the `tipShown` context key and a
   `tip.shown` event. The gallery's tips page shows a tip pointing at a
   button.
+- A tips browser with a switch per plugin (egui-pop-api;
+  docs/tips.md): "Tips…" in the Help menu (`tips.browse`, in a dialog)
+  lists every tip by the plugin that declared it, with its text, whether
+  it was dismissed or its command used, and a Show button; each
+  plugin's group turns its tips off alone (`tips.off`,
+  `Tips::set_origin_on`, `tips.origin` for agents), for the tip of the
+  day, hints and the cards alike. `tips::browser` draws it anywhere.
 
 - The extension template's command declares an icon
   (`CommandSpec::icon("plus")`), shown by menus and the palette.
