@@ -56,6 +56,11 @@ draws the in-app picker where it wants it (`Files::show_inline`).
   `Ctrl+Space` selects a file (choosing several); `Ctrl+D` bookmarks the
   folder; Escape cancels (from the field, the first Escape lets go of
   the focus, as everywhere in egui-pop).
+- Beside the list, a preview pane: the highlighted entry's preview
+  (below) and its facts: a file's size and modification time (in UTC),
+  a folder's items, dimensions, pages, and the provider's own. `Alt+P` (as in
+  the Windows file explorer) or the Preview box shows or hides it; the
+  `files.preview` setting remembers.
 - Beside the folder: home, the recent places and the bookmarks, kept in
   the host's store (`settings/files.recent`, `settings/files.bookmarks`,
   saved with the settings).

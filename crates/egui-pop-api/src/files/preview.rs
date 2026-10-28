@@ -56,11 +56,14 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::SystemTime;
 
-use egui::{ColorImage, TextureHandle, TextureOptions};
+use egui::{ColorImage, RichText, TextureHandle, TextureOptions, Ui};
 use egui_pop_core::lock;
+use egui_pop_core::strings::tr;
+use egui_pop_core::theme::Tokens;
 use serde_json::{Value as Json, json};
 
 use super::fs::{Meta, SharedFs};
+use crate::strings as txt;
 
 /// The longest side of a preview's image, by default, in pixels.
 pub const MAX_SIDE: u32 = 256;
@@ -918,6 +921,164 @@ fn run(request: &PreviewRequest) -> Shown {
         }
     }
     Shown::Nothing
+}
+
+/// The width of the picker's preview pane.
+pub const PANE_WIDTH: f32 = 240.0;
+/// The height of a preview's drawing in the pane.
+const PANE_HEIGHT: f32 = 180.0;
+
+/// Draws a preview pane: the entry's name, its preview and its facts
+/// (a file's size and modification time, a folder's items, dimensions,
+/// pages, the provider's).
+pub fn pane(ui: &mut Ui, name: &str, meta: Option<&Meta>, shown: &Shown) {
+    let t = Tokens::of(ui.ctx());
+    ui.add(egui::Label::new(RichText::new(name).strong()).truncate());
+    ui.add_space(t.space.xs);
+    let ready = match shown {
+        Shown::Loading => {
+            ui.weak(tr(ui.ctx(), &txt::FILES_PREVIEW_LOADING));
+            None
+        }
+        Shown::Nothing => {
+            ui.weak(tr(ui.ctx(), &txt::FILES_PREVIEW_NONE));
+            None
+        }
+        Shown::Failed(reason) => {
+            ui.colored_label(t.status.danger, tr(ui.ctx(), &txt::FILES_PREVIEW_FAILED));
+            ui.add(egui::Label::new(RichText::new(reason).weak()).wrap());
+            None
+        }
+        Shown::Ready(r) => {
+            body(ui, r, name);
+            Some(r)
+        }
+    };
+    ui.add_space(t.space.s);
+    let meta = ready.map(|r| &r.meta).or(meta);
+    let mut rows: Vec<(String, String)> = Vec::new();
+    if let Some(m) = meta.filter(|m| !m.is_dir) {
+        rows.push((tr(ui.ctx(), &txt::FILES_SIZE), size_text(m.len)));
+    }
+    if let Some(p) = ready.map(|r| &r.preview) {
+        if let Body::Folder { folders, files, .. } = &p.body {
+            rows.push((
+                tr(ui.ctx(), &txt::FILES_ITEMS),
+                (folders + files).to_string(),
+            ));
+        }
+        if let Some([w, h]) = p.dimensions {
+            rows.push((tr(ui.ctx(), &txt::FILES_DIMENSIONS), format!("{w} × {h}")));
+        }
+        if let Some(n) = p.pages {
+            rows.push((tr(ui.ctx(), &txt::FILES_PAGES), n.to_string()));
+        }
+    }
+    // A file's: a folder's changes with what is put in it.
+    if let Some(at) = meta.filter(|m| !m.is_dir).and_then(|m| m.modified) {
+        rows.push((tr(ui.ctx(), &txt::FILES_MODIFIED), time_text(at)));
+    }
+    if let Some(p) = ready.map(|r| &r.preview) {
+        rows.extend(p.facts.iter().cloned());
+    }
+    egui::Grid::new("egui_pop.files.preview.facts")
+        .num_columns(2)
+        .spacing([t.space.m, t.space.xs])
+        .show(ui, |ui| {
+            for (label, value) in rows {
+                ui.weak(label);
+                ui.label(value);
+                ui.end_row();
+            }
+        });
+}
+
+/// A size that fits `image` in `area`, keeping its proportions, never
+/// larger than it is.
+fn fit(image: [usize; 2], area: egui::Vec2) -> egui::Vec2 {
+    let (w, h) = (image[0].max(1) as f32, image[1].max(1) as f32);
+    let k = (area.x / w).min(area.y / h).min(1.0);
+    egui::vec2(w * k, h * k)
+}
+
+fn body(ui: &mut Ui, ready: &Ready, name: &str) {
+    let t = Tokens::of(ui.ctx());
+    let area = egui::vec2(ui.available_width(), PANE_HEIGHT);
+    match &ready.preview.body {
+        Body::Empty => {}
+        Body::Image(image) => {
+            if let Some(tex) = ready.texture(ui.ctx(), 0) {
+                let r = ui.image((tex.id(), fit(image.size, area)));
+                egui_pop_core::a11y::name(&r, egui::WidgetType::Image, name);
+            }
+        }
+        Body::Text { text, truncated } => {
+            egui::ScrollArea::vertical()
+                .id_salt("egui_pop.files.preview.text")
+                .max_height(area.y)
+                .auto_shrink([false, true])
+                .show(ui, |ui| {
+                    ui.add(egui::Label::new(RichText::new(text).monospace().small()).wrap());
+                    if *truncated {
+                        ui.weak("…");
+                    }
+                });
+        }
+        Body::Markdown(blocks) => {
+            egui::ScrollArea::vertical()
+                .id_salt("egui_pop.files.preview.document")
+                .max_height(area.y)
+                .auto_shrink([false, true])
+                .show(ui, |ui| {
+                    for b in blocks {
+                        match b {
+                            Block::Heading(1, s) => {
+                                ui.label(RichText::new(s).heading());
+                            }
+                            Block::Heading(_, s) => {
+                                ui.label(RichText::new(s).strong());
+                            }
+                            Block::Paragraph(s) => {
+                                ui.add(egui::Label::new(s.as_str()).wrap());
+                            }
+                            Block::Item(s) => {
+                                ui.add(egui::Label::new(format!("• {s}")).wrap());
+                            }
+                            Block::Code(s) => {
+                                ui.label(RichText::new(s).monospace().small());
+                            }
+                            Block::Quote(s) => {
+                                ui.add(egui::Label::new(RichText::new(s).italics().weak()).wrap());
+                            }
+                            Block::Rule => {
+                                ui.separator();
+                            }
+                        }
+                    }
+                });
+        }
+        Body::Folder { thumbnails, .. } => {
+            let side = ((area.x - t.space.xs) / 2.0).floor();
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing = egui::vec2(t.space.xs, t.space.xs);
+                for (n, image) in thumbnails.iter().enumerate() {
+                    if let Some(tex) = ready.texture(ui.ctx(), n) {
+                        let size = fit(image.size, egui::vec2(side, side));
+                        let (rect, r) =
+                            ui.allocate_exact_size(egui::vec2(side, side), egui::Sense::hover());
+                        let at = egui::Rect::from_center_size(rect.center(), size);
+                        ui.painter().image(
+                            tex.id(),
+                            at,
+                            egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                            egui::Color32::WHITE,
+                        );
+                        egui_pop_core::a11y::name(&r, egui::WidgetType::Image, name);
+                    }
+                }
+            });
+        }
+    }
 }
 
 /// A size in bytes, as people read it (powers of 1000).

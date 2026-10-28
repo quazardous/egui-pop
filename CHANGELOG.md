@@ -147,6 +147,15 @@ publishes.
   `history.read` lists the snapshots, the replaced steps and the
   features. The gallery's `history` page shows them all, with a
   snapshot taken as an agent.
+- A preview pane in the in-app file picker (egui-pop-api,
+  docs/files.md): beside the list, the highlighted entry's preview and
+  its facts (size, a folder's items, dimensions, pages, modification
+  time, the provider's own); `Alt+P` or the Preview box shows or hides
+  it, remembered in the `files.preview` setting (on by default).
+  `FilePicker::with_previews` gives the pane to a picker of one's own;
+  the `files` collector says the highlighted entry's preview state. The
+  picker's modal is wider with the pane; snapshots showing the picker
+  change.
 - Pluggable file previews (egui-pop-api, docs/files.md):
   `files::preview::PreviewProvider`, registered on
   `Files::previews`, chosen by file extension, MIME type, magic bytes or

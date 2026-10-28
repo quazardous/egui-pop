@@ -836,19 +836,37 @@ egui-pop-files-bookmark = Bookmark this folder
 
 egui-pop-files-bookmarks = Bookmarks
 
+egui-pop-files-dimensions = Dimensions
+
 egui-pop-files-filter = Filter, or type a path
 
 egui-pop-files-hidden = Hidden files
 
 egui-pop-files-home = Home
 
+egui-pop-files-items = Items
+
+egui-pop-files-modified = Modified
+
 egui-pop-files-name = File name, or a path
 
 egui-pop-files-open = Open
 
+egui-pop-files-pages = Pages
+
+egui-pop-files-preview = Preview
+
+egui-pop-files-preview-failed = The preview failed
+
+egui-pop-files-preview-loading = Loading the preview…
+
+egui-pop-files-preview-none = No preview
+
 egui-pop-files-recent = Recent
 
 egui-pop-files-save = Save
+
+egui-pop-files-size = Size
 
 egui-pop-files-unbookmark = Remove the bookmark
 
@@ -1965,6 +1983,10 @@ setting-dialogs-movable =
 setting-files-native =
     .description = Choose files with the system's chooser when there is one; off, with egui-pop's own.
     .label = Use the system's file chooser
+
+setting-files-preview =
+    .description = egui-pop's file picker shows the selected file's preview and facts beside the list; Alt+P shows or hides it.
+    .label = Previews in the file picker
 
 setting-input-image-double-click =
     .description = What a double click on the image does: fit it, leave the view (back to the browser, as darktable does), or nothing; profile: as the pointer profile says.
