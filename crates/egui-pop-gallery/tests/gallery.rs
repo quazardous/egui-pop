@@ -2150,9 +2150,9 @@ fn the_links_page_opens_declared_links_and_asks_for_content_and_agents() {
         (r[0].target.as_str(), r[0].how, r[0].source),
         (REPOSITORY, How::Outside, Source::Declared)
     );
-    // egui's own hyperlink goes through the same policy.
-    h.get_by_role_and_label(Role::Link, "egui's Hyperlink")
-        .click();
+    // egui's own hyperlink goes through the same policy (it is
+    // announced as a label: see docs/upstream.md).
+    h.get_by_label("egui's Hyperlink").click();
     h.run();
     h.run();
     assert_eq!(rec.records().len(), 2);

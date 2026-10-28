@@ -1236,6 +1236,11 @@ impl Link {
             .as_ref()
             .map_or_else(|| self.target.clone(), Target::shown);
         ui.ctx().accesskit_node_builder(response.id, |node| {
+            // upstream: with selectable labels on (egui's default),
+            // `egui::Link` draws through the label text selection, which
+            // sets the node's role back to `Label` after the link set it
+            // (docs/upstream.md): the role is set again here, after it.
+            node.set_role(egui::accesskit::Role::Link);
             node.set_description(shown.clone());
         });
         if self.source == Source::Declared {

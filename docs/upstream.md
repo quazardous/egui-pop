@@ -29,6 +29,21 @@ its workaround. Workarounds are not part of the extension contract
 ([GOVERNANCE.md](../GOVERNANCE.md)): they go when upstream fixes the
 limit.
 
+## egui: a link with selectable labels is announced as a label
+
+- **Compensated**: `egui::Link` (and `Hyperlink`) sets its AccessKit
+  role to `Link`, then draws its text through the label text selection
+  when `selectable_labels` is on (egui's default), whose AccessKit
+  update (`update_accesskit_for_text_widget`, with `Role::Label`)
+  overwrites the role: screen readers, and tests looking for a link by
+  its role, see a plain label.
+- **Upstream**: not filed yet.
+- **Workaround**: `egui_pop::api::links::Link` sets the role back to
+  `Link` on the node after drawing it (`crates/egui-pop-api/src/links.rs`).
+  egui's own `Hyperlink` on the built-in widgets page keeps the
+  limit.
+- **Remove when**: the text selection keeps the role the widget gave.
+
 ## egui_kittest: no double click from queued events
 
 - **Compensated**: a double click made of queued events never registers,
