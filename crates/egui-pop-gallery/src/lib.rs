@@ -103,6 +103,9 @@ pub fn builder(options: &Options) -> AppBuilder {
         .name("egui-pop gallery")
         .theme(spec)
         .plugins(egui_pop::api::DefaultPlugins)
+        // The desktop's thumbnails in the file picker, for what egui-pop
+        // does not preview itself.
+        .plugin(egui_pop::platform::thumbnails::ThumbnailsPlugin::default())
         .plugin(egui_pop::mounts::MountsPlugin)
         .plugin(egui_pop::api::frame::FramePlugin::system().layout_controls(true))
         .plugin(shell::Shell {

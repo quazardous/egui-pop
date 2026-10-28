@@ -1216,6 +1216,7 @@ dependencies = [
  "egui_kittest",
  "futures-lite",
  "global-hotkey",
+ "image",
  "interprocess",
  "log",
  "notify-rust",

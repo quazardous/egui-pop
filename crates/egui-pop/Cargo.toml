@@ -84,6 +84,7 @@ platform = [
     "platform-focus",
     "platform-text-scale",
     "platform-clipboard",
+    "platform-thumbnails",
 ]
 ## A single instance and deep links (`egui_pop::platform::instance`).
 platform-instance = ["dep:egui-pop-platform", "egui-pop-platform/instance"]
@@ -112,6 +113,10 @@ platform-text-scale = ["dep:egui-pop-platform", "egui-pop-platform/text-scale"]
 platform-clipboard = ["dep:egui-pop-platform", "egui-pop-platform/clipboard"]
 ## The clipboard on Wayland through the data-control protocol too.
 platform-clipboard-wayland = ["platform-clipboard", "egui-pop-platform/clipboard-wayland"]
+## The system's thumbnails as a preview provider of the file picker
+## (`egui_pop::platform::thumbnails`; the freedesktop cache and
+## thumbnailers).
+platform-thumbnails = ["dep:egui-pop-platform", "egui-pop-platform/thumbnails"]
 ## The system's file chooser (through `rfd`: the xdg desktop portal on
 ## Linux); without it, the in-app picker.
 native-dialogs = ["egui-pop-api/native-dialogs"]
