@@ -46,7 +46,8 @@
 //! veto the choice (the result is the reason, as an error) or redirect
 //! it to other paths. The journal says `file.cancelled` when the person
 //! cancels. The debug bridge's `files` collector shows the choices open
-//! and answers them (`answer`), as a person would.
+//! and answers them (`answer`), as a person would. The `file.preview`
+//! command gives agents a path's preview metadata ([`preview_metadata`]).
 //!
 //! ```
 //! use egui_pop_api::files::{self, FileRequest, FilesPlugin, FILES};
@@ -73,9 +74,9 @@ use egui_pop_core::strings::{self, CANCEL};
 use egui_pop_core::theme::Tokens;
 use egui_pop_core::ui::UiPop as _;
 use egui_pop_core::widgets;
-use egui_pop_model::commands::Origin;
+use egui_pop_model::commands::{CommandSpec, Origin};
 use egui_pop_model::fuzzy;
-use egui_pop_model::ids::{BlockId, OwnerId, PluginId, SettingId, StepId};
+use egui_pop_model::ids::{BlockId, CommandId, OwnerId, PluginId, SettingId, StepId};
 use egui_pop_model::values::{Change, Descriptor, Set, Value};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value as Json, json};
@@ -102,6 +103,9 @@ pub const FILES: ServiceToken<Files> = ServiceToken::new("app.files");
 pub const STEP_CHOOSE: StepId = StepId::from_static("file.choose");
 /// Paths were chosen.
 pub const STEP_CHOSEN: StepId = StepId::from_static("file.chosen");
+
+/// A path's preview metadata, for agents (`{ "path" }`).
+pub const CMD_PREVIEW: CommandId = CommandId::from_static("file.preview");
 
 /// The setting: use the system's chooser when there is one.
 pub const SETTING_NATIVE: SettingId = SettingId::from_static("files.native");
@@ -698,6 +702,21 @@ impl Plugin for FilesPlugin {
             )
             .args(json!({ "id": 1, "request": FileRequest::open("Open").to_json(), "paths": ["/tmp/a.png"] })),
         )?;
+        let f = files.clone();
+        ctx.command(
+            CommandSpec::new(CMD_PREVIEW, "Preview a file", "File")
+                .description("A file's or a folder's preview metadata (`path`), as the in-app picker shows it: whether it is a folder, its size and modification time, the provider, the kind of preview, dimensions, pages, a folder's counts, the provider's facts, or why there is none; no pixels and no text.")
+                .args(json!({ "path": "/tmp/a.png" }))
+                .hidden(),
+            move |call| {
+                let path = call
+                    .args
+                    .get("path")
+                    .and_then(Json::as_str)
+                    .ok_or("`path` is missing")?;
+                preview_metadata(&f, Path::new(path))
+            },
+        )?;
         let (a, b) = (files.clone(), files.clone());
         ctx.collector(
             FnCollector::new(
@@ -870,6 +889,29 @@ fn picker_overlay(ctx: &egui::Context, app: &AppHandle, files: &Files) {
     }
     settle(app, &answer, out, open);
     files.keep(id, picker);
+}
+
+/// A path's preview metadata, as `file.preview` gives it: made now
+/// from the providers if it is not in the cache. Metadata only: no
+/// pixels and no text.
+pub fn preview_metadata(files: &Files, path: &Path) -> Result<Json, String> {
+    let fs = files.file_system();
+    let meta = fs
+        .metadata(path)
+        .map_err(|e| format!("{}: {e}", path.display()))?;
+    let mut d = files.previews().compute(&fs, path).describe();
+    d["path"] = json!(path.display().to_string());
+    d["is_dir"] = json!(meta.is_dir);
+    if !meta.is_dir {
+        d["size"] = json!(meta.len);
+    }
+    if let Some(t) = meta.modified {
+        if let Ok(since) = t.duration_since(std::time::SystemTime::UNIX_EPOCH) {
+            d["modified"] = json!(since.as_secs());
+        }
+        d["modified_text"] = json!(preview::time_text(t));
+    }
+    Ok(d)
 }
 
 /// Whether the in-app picker shows its preview pane (the setting).
@@ -1778,6 +1820,89 @@ mod tests {
             p.activate(),
             Some(PickerAnswer::Chosen(vec![root.join("Photos/a.png")]))
         );
+    }
+
+    /// A provider that names what it was asked for, at the size asked.
+    #[derive(Debug)]
+    struct Fake;
+
+    impl preview::PreviewProvider for Fake {
+        fn id(&self) -> &str {
+            "fake"
+        }
+        fn handles(&self) -> preview::Handles {
+            preview::Handles::new().extensions(&["fake"]).folders()
+        }
+        fn priority(&self) -> i32 {
+            50
+        }
+        fn preview(
+            &self,
+            request: &preview::PreviewRequest,
+        ) -> Result<Option<preview::Preview>, String> {
+            if request.meta.is_dir {
+                return Err("folders are not faked".into());
+            }
+            Ok(Some(
+                preview::Preview::new(preview::Body::Empty)
+                    .dimensions(request.max_side, 7)
+                    .pages(3)
+                    .fact("Name", request.path.display().to_string()),
+            ))
+        }
+    }
+
+    #[test]
+    fn agents_read_a_preview_and_the_picker_says_it() {
+        let root = PathBuf::from("/demo");
+        let fs: SharedFs = Arc::new(
+            fs::MemoryFs::new()
+                .file_at(
+                    root.join("a.fake"),
+                    b"x".to_vec(),
+                    Some(std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(60)),
+                )
+                .dir(root.join("sub")),
+        );
+        let mut app = crate::App::builder()
+            .plugin(FilesPlugin::in_app().file_system(fs.clone()))
+            .build(&egui::Context::default())
+            .unwrap();
+        let files = app.handle().service(&FILES).unwrap();
+        files.previews().register(Arc::new(Fake));
+        assert_eq!(files.previews().providers()[0], ("fake".into(), 50));
+        let out = app
+            .run(
+                &CMD_PREVIEW,
+                json!({ "path": "/demo/a.fake" }),
+                Origin::Agent("test".into()),
+            )
+            .now()
+            .unwrap()
+            .unwrap();
+        assert_eq!(out["state"], "ready");
+        assert_eq!(out["provider"], "fake");
+        assert_eq!(out["dimensions"], json!([preview::MAX_SIDE, 7]));
+        assert_eq!(out["pages"], 3);
+        assert_eq!(out["size"], 1);
+        assert_eq!(out["modified"], 60);
+        assert_eq!(out["modified_text"], "1970-01-01 00:01 UTC");
+        // A failure is a reason.
+        let out = preview_metadata(&files, &root.join("sub")).unwrap();
+        assert_eq!(out["state"], "failed");
+        assert_eq!(out["reason"], "folders are not faked");
+        assert!(preview_metadata(&files, &root.join("missing")).is_err());
+        // The picker's pane asks the same providers; the bridge says what
+        // it shows.
+        let mut p = FilePicker::new_in(&FileRequest::open("Open").directory(&root), fs)
+            .with_previews(files.previews());
+        assert_eq!(p.highlighted().unwrap().name, "sub");
+        p.highlight = 1;
+        let d = p.describe();
+        assert_eq!(d["preview"]["state"], "ready", "{d}");
+        assert_eq!(d["preview"]["path"], "/demo/a.fake");
+        p.show_preview = false;
+        assert!(p.describe()["preview"].is_null());
     }
 
     #[test]

@@ -120,6 +120,8 @@ command-editor-undo.description 5dde22e4b03efa03
 command-editor-undo.title ddfb37209e42e01c
 command-editor-write.description b3b0d1d3ff5c1123
 command-editor-write.title 3445f8530fb91884
+command-file-preview.description 4815c49f71f424ee
+command-file-preview.title 9d7e43897e327a20
 command-gesture-graph-fit.description af1bccabc6fb1040
 command-gesture-graph-fit.title e2fc634418e36f54
 command-gesture-graph-pan-x.description aebc315a489c932b

@@ -239,6 +239,10 @@ command-editor-write =
     .description = Modifie le texte par `edit.change` : tout le `text` ; ou `text` entre `from` et `to` (`{"{"}line, col{"}"}` à partir de 0) ; ou une liste de `changes`. Une seule étape d’annulation.
     .title = Écrire le texte
 
+command-file-preview =
+    .description = Les métadonnées de l’aperçu d’un fichier ou d’un dossier (`path`), comme le sélecteur intégré les montre : s’il s’agit d’un dossier, sa taille et sa date de modification, le fournisseur, le genre d’aperçu, les dimensions, les pages, les comptes d’un dossier, les informations propres au fournisseur, ou pourquoi il n’y en a pas ; ni pixels ni texte.
+    .title = Aperçu d’un fichier
+
 command-history-drop-snapshot =
     .description = Supprime l’un des instantanés d’un historique (`scope` ; aucune : là où va Annuler maintenant ; `snapshot`, son id), refusé si sa révision n’est plus `if_rev` ; avec `dry_run`, vérifie seulement qu’il existe.
     .title = Supprimer un instantané
