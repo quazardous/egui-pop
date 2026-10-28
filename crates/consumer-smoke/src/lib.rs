@@ -26,6 +26,9 @@ pub mod kit_packages {}
 #[doc = include_str!("../../../docs/tips.md")]
 pub mod tips {}
 
+#[doc = include_str!("../../../docs/about.md")]
+pub mod about {}
+
 #[doc = include_str!("../../../docs/plugins.md")]
 pub mod plugins {}
 

@@ -136,6 +136,9 @@ of every crate with every feature on.
   [the system's text scaling](fonts.md#starting-from-the-systems-text-size).
 - [Tips](tips.md): a tip of the day and contextual hints, registered
   by plugins, translated, dismissed for good through the settings.
+- [About the application](about.md): Help > About <application>, the
+  application's name, version, licences, authors and links, its version
+  info to copy, `about.read` for agents.
 - [Debugging](debugging.md): the debug bridge and devtools.
 - [Extensions](extensions.md): the known extensions in three tiers
   (official, community, featured), the entry format, how to get listed

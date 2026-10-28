@@ -12,6 +12,16 @@ publishes.
 
 ### Added
 
+- About the application (egui-pop-api; docs/about.md): the opt-in
+  `about::AboutPlugin` adds Help > About <application> (the `about`
+  command), a dialog with the name, icon, version, one-line
+  description, licences, authors and links (repository, website, docs,
+  issues, opened with `Context::open_url`) the host gives in an
+  `AppInfo`, and a "Copy version info" button (the application's,
+  egui-pop's and egui's versions, the platform, the renderer) copying
+  plain text through the `clipboard.copy` step when the clipboard
+  plugin is connected; `about.read` gives agents the same as JSON. Its
+  text is in English and French.
 - A command's title may say `{ $application }` (egui-pop-core,
   egui-pop-api): menus, the palette and the shortcuts editor fill it
   with the application's name (`AppBuilder::name`), in English and in

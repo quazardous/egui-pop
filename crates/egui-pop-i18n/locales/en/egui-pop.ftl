@@ -34,6 +34,14 @@ category-view = View
 
 category-window = Window
 
+command-about =
+    .description = The application's name, version, licence, authors and links, with its version info to copy.
+    .title = About { $application }
+
+command-about-read =
+    .description = The application's name, version, description, licences, authors and links, egui-pop's and egui's versions, the platform, the renderer and the version info as text.
+    .title = Read about the application
+
 command-app-devtools =
     .description = Opens or closes the devtools panel (when the Devtools setting is on).
     .title = Devtools
@@ -605,6 +613,26 @@ command-workbench-toggle-secondarySideBar =
 command-workbench-zen =
     .description = Shows the centre alone: no title, menu or status bar, no side or bottom area, no palette. Escape leaves it.
     .title = Zen mode
+
+egui-pop-about-authors = Authors
+
+egui-pop-about-copied = Copied.
+
+egui-pop-about-copy = Copy version info
+
+egui-pop-about-docs = Documentation
+
+egui-pop-about-issues = Report a problem
+
+egui-pop-about-licence = Licence
+
+egui-pop-about-repository = Source code
+
+egui-pop-about-title = About { $application }
+
+egui-pop-about-version = Version { $version }
+
+egui-pop-about-website = Website
 
 egui-pop-area-bottom = the bottom panel
 
@@ -1689,6 +1717,9 @@ panel-egui-pop-history =
 
 panel-egui-pop-jobs =
     .title = Jobs
+
+plugin-egui-pop-about =
+    .title = About
 
 plugin-egui-pop-arrangements =
     .title = Arrangements
