@@ -16,7 +16,7 @@ authors.workspace = true
 workspace = true
 
 [features]
-default = ["instance", "notify", "tray", "keys", "logs", "crash", "focus", "text-scale", "clipboard"]
+default = ["instance", "notify", "tray", "keys", "logs", "crash", "focus", "text-scale", "clipboard", "open"]
 ## A single instance: a second launch hands its arguments and links to
 ## the running one (`instance`).
 instance = ["dep:interprocess"]
@@ -35,6 +35,10 @@ logs = []
 crash = ["logs"]
 ## The focus mode read in-process (`focus`).
 focus = ["dep:ashpd", "dep:futures-lite", "dep:async-io", "dep:winreg"]
+## Links to local files and folders opened outside, and Reveal (the
+## file manager with the file selected), for the links service
+## (`open`).
+open = ["dep:opener"]
 ## The system's text scaling read in-process, to seed the text size
 ## (`text_scale`).
 text-scale = ["dep:ashpd", "dep:futures-lite", "dep:async-io", "dep:winreg"]
@@ -72,6 +76,10 @@ notify-rust = { version = "4.18", optional = true, default-features = false, fea
 # MIT OR Apache-2.0: the tray icon (StatusNotifierItem through ksni on
 # Linux, no GTK; Win32; AppKit). ksni is under the Unlicense.
 tray-icon = { version = "0.26", optional = true, default-features = false, features = ["ksni"] }
+# MIT OR Apache-2.0: files and folders opened with the system's default
+# application, and Reveal (the freedesktop file manager interface over
+# zbus, else the OpenURI portal; `open -R`; Explorer's selection).
+opener = { version = "0.9", optional = true, features = ["reveal"] }
 # Apache-2.0 OR MIT: global shortcuts on Windows, macOS and X11.
 global-hotkey = { version = "0.8", optional = true }
 # MIT OR Apache-2.0: the system clipboard (already in the tree through

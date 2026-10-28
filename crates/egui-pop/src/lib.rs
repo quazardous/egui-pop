@@ -90,7 +90,8 @@ pub use egui_pop_i18n as i18n;
     feature = "platform-logs",
     feature = "platform-crash",
     feature = "platform-focus",
-    feature = "platform-text-scale"
+    feature = "platform-text-scale",
+    feature = "platform-open"
 ))]
 pub use egui_pop_platform as platform;
 

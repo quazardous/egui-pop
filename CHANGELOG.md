@@ -18,6 +18,16 @@ publishes.
   commit when known (`0.2.0 (abc1234)`): git's, else the
   `EGUI_POP_GALLERY_COMMIT` variable, else none. The facade gains
   `egui_pop::VERSION`.
+- The system opener (egui-pop-platform, feature `open`, the facade's
+  `platform-open`): `open::SystemOpener` opens local files and folders
+  with the system's default application and shows a file in its folder
+  (the freedesktop file manager interface, else the OpenURI portal;
+  `open -R`; Explorer's selection), from a thread; `open::OpenPlugin`
+  installs it in the links service. It brings `opener` (MIT OR
+  Apache-2.0, over zbus already in the tree). The single-instance
+  plugin adds its schemes to the links policy and declares a hidden
+  `deeplink.open` command, so a click on an application link inside
+  opens it in-process.
 - The links service (egui-pop-api, ADR 0017): `links::LinksPlugin`, in
   `DefaultPlugins`, opens every link through one policy and the
   `link.open` step (veto, redirect, replace), with a replaceable
