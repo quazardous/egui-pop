@@ -412,7 +412,22 @@ impl<'a> Terminal<'a> {
         } else if response.clicked() {
             match &link {
                 Some((_, l)) if ctrl => {
-                    ctx.open_url(egui::OpenUrl::new_tab(&l.url));
+                    // Text a program printed: content, opened outside,
+                    // through the links service's policy (a `file://`
+                    // link is a confirmed open, never a browser's).
+                    match self.app {
+                        Some(app) => {
+                            egui_pop_api::links::open(
+                                app,
+                                egui_pop_api::links::Request::new(&l.url)
+                                    .how(egui_pop_api::links::How::Outside)
+                                    .source(egui_pop_api::links::Source::Content),
+                            );
+                        }
+                        // Without an application, egui's own request
+                        // (an application's interceptor still sees it).
+                        None => ctx.open_url(egui::OpenUrl::new_tab(&l.url)),
+                    }
                     signals.push(TerminalSignal::Link { url: l.url.clone() });
                 }
                 _ => state.clear_selection(),

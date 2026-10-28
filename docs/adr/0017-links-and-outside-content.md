@@ -219,3 +219,23 @@ analysis come first; the viewer (step 5) follows.
 Nothing yet. Step 1 of the analysis is the fix found while reading the
 code: links do nothing on native because eframe's `links` feature is
 off.
+
+## Built (2026-10-28)
+
+Steps 1 to 4 of the analysis: eframe's `links` feature on; the model
+in `egui-pop-model::links` (targets, requests, the policy, the lint's
+check); the service in `egui-pop-api::links` (`LinksPlugin`, in
+`DefaultPlugins`: the `link.open` step, `EguiOpener`,
+`RecordingOpener`, `NullOpener`, the interceptor of egui's `OpenUrl`,
+the confirmation with a per-session trust, the agents' rate limits,
+warning toasts with Copy link, `links.open`, `links.check`,
+`files.reveal`, the `links` collector, the widget and the lint);
+`SystemOpener` in `egui-pop-platform` (feature `open`, through the
+opener crate, whose Reveal falls back on the OpenURI portal; inside
+Flatpak `xdg-open` is the portal's, so ashpd is not needed for it); the
+terminal's Ctrl+click on the service; a gallery page. The guide is
+[docs/links.md](../links.md). Left: the viewer and the inline subset
+for short texts (step 5), the HTML subset (step 6), an opt-in online
+check of declared links. The gallery's built-in widgets page keeps
+egui's own `Hyperlink`, which it shows as one of egui's widgets: the
+interceptor routes it through the policy.

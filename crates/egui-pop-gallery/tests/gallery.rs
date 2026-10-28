@@ -2125,6 +2125,113 @@ fn the_clipboard_page_copies_a_colour_between_palettes_and_previews_paste_specia
 }
 
 #[test]
+fn the_links_page_opens_declared_links_and_asks_for_content_and_agents() {
+    use egui::accesskit::Role;
+    use egui_pop::api::dialogs::DIALOGS;
+    use egui_pop::api::links::{self, How, RecordingOpener, Source};
+    use egui_pop_gallery::pages::links::{AGENT_TARGET, REPORT, REPOSITORY};
+    let mut h = harness(options("pop-dark", Density::Comfortable, "links"));
+    h.run();
+    let app = h.state().app.handle().clone();
+    let rec = RecordingOpener::default();
+    links::links(&app)
+        .unwrap()
+        .set_opener(std::sync::Arc::new(rec.clone()));
+    egui_pop_test::assert_all_named(&h);
+    egui_pop_test::assert_links_clean(&h.state().app);
+    let mut results = egui_kittest::SnapshotResults::new();
+    results.add(h.try_snapshot("links-pop-dark"));
+    // A declared web link opens at once, outside.
+    h.get_by_role_and_label(Role::Link, "Source code").click();
+    h.run();
+    let r = rec.records();
+    assert_eq!(r.len(), 1);
+    assert_eq!(
+        (r[0].target.as_str(), r[0].how, r[0].source),
+        (REPOSITORY, How::Outside, Source::Declared)
+    );
+    // egui's own hyperlink goes through the same policy.
+    h.get_by_role_and_label(Role::Link, "egui's Hyperlink")
+        .click();
+    h.run();
+    h.run();
+    assert_eq!(rec.records().len(), 2);
+    // A link found in content asks first; trusting its host opens it
+    // and the next one without asking.
+    h.get_by_role_and_label(Role::Link, "A link found in a document")
+        .click();
+    h.run();
+    let dialogs = app.service(&DIALOGS).unwrap();
+    assert_eq!(dialogs.describe()["title"], "Open this link?");
+    assert_eq!(rec.records().len(), 2);
+    h.get_by_label("Trust example.org for this session").click();
+    h.run();
+    h.get_by_role_and_label(Role::Button, "Open").click();
+    h.run();
+    h.run();
+    assert_eq!(rec.records().last().unwrap().target, REPORT);
+    h.get_by_role_and_label(Role::Link, "A link found in a document")
+        .click();
+    h.run();
+    assert!(dialogs.is_empty());
+    assert_eq!(rec.records().len(), 4);
+    // A text showing another address always asks.
+    h.get_by_role_and_label(Role::Link, "https://example.org")
+        .click();
+    h.run();
+    assert_eq!(dialogs.describe()["title"], "Open this link?");
+    h.key_press(egui::Key::Escape);
+    h.run();
+    h.run();
+    assert_eq!(rec.records().len(), 4);
+    // An agent's request is always confirmed, naming the agent; an agent
+    // cannot answer it.
+    h.get_by_label("Ask to open a page, as an agent").click();
+    h.run();
+    h.run();
+    assert_eq!(dialogs.describe()["title"], "gallery asks to open this");
+    let agent = egui_pop::model::commands::Origin::Agent("gallery".into());
+    dialogs
+        .answer(
+            egui_pop::api::dialogs::Answer::Accept {
+                values: Default::default(),
+            },
+            agent,
+        )
+        .unwrap();
+    h.run();
+    assert!(
+        !dialogs.is_empty(),
+        "an agent cannot confirm its own request"
+    );
+    h.get_by_role_and_label(Role::Button, "Open").click();
+    h.run();
+    h.run();
+    let last = rec.records().last().unwrap().clone();
+    assert_eq!(
+        (last.target.as_str(), last.source, last.origin.as_str()),
+        (AGENT_TARGET, Source::Agent, "agent:gallery")
+    );
+    // A program is never opened, and a blocked scheme says which.
+    let n = rec.records().len();
+    h.get_by_role_and_label(Role::Link, "A program").click();
+    h.run();
+    h.get_by_role_and_label(Role::Link, "A script").click();
+    h.run();
+    assert_eq!(rec.records().len(), n);
+    assert!(
+        h.query_all_by_label_contains("never opened from a link")
+            .next()
+            .is_some()
+    );
+    assert!(
+        h.query_all_by_label_contains("`javascript:` links are blocked")
+            .next()
+            .is_some()
+    );
+}
+
+#[test]
 fn the_shortcuts_editor_searches_by_key_and_removes_every_key() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "settings"));
     h.run();

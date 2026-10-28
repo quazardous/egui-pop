@@ -30,6 +30,7 @@ pub mod inputs;
 pub mod jobs;
 pub mod layout;
 pub mod library;
+pub mod links;
 pub mod menus;
 pub mod motion;
 pub mod navigator;
