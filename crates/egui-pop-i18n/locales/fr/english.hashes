@@ -150,6 +150,16 @@ command-gesture-value-panel.description 2604dc7ad8cb0477
 command-gesture-value-panel.title c7e38b72093dbe31
 command-gesture-value-step.description 28dd8dd569518e78
 command-gesture-value-step.title 547562cb851b7b85
+command-history-jump.description 01e45ff186f3b55c
+command-history-jump.title 89c47defb9f5373f
+command-history-list.description 9aa5e33e48963252
+command-history-list.title 24f3780cd52e1590
+command-history-read.description 112496b91df1352a
+command-history-read.title 6923d5fff308cb1c
+command-history-redo.description fead8e8d817e3f8e
+command-history-redo.title 6d43db04b08d28d3
+command-history-undo.description 15451ed758477fc3
+command-history-undo.title d7862830e60d25c5
 command-job-cancel.description d258f5baadf3fd81
 command-job-cancel.title ec63fa3499246b13
 command-job-pause.description 2199ca98c09b0278
@@ -387,6 +397,10 @@ egui-pop-frame-maximize ec3ab8180de082b7
 egui-pop-frame-minimize e6356bcffe84c79d
 egui-pop-frame-restore eb78406341b90759
 egui-pop-frame-window-menu 8bde8da9b61e8ece
+egui-pop-history-by 7ba70f1ff11b8552
+egui-pop-history-jump 3c25cffdcaf94845
+egui-pop-history-none 9f2a43038c4c659c
+egui-pop-history-start b1d0aa0c78fdb3f7
 egui-pop-indicator-done 3570446200466199
 egui-pop-indicator-error 1e732d4d496b57f9
 egui-pop-indicator-failed f6df755a7ae7b232
@@ -797,6 +811,7 @@ menu-app-menu-help.label dd64739b1d2f8ca8
 menu-app-menu-layout.label 0789011beda46404
 menu-app-menu-view.label 9cb14957d0a66a9e
 panel-egui-pop-devtools.title 9642ebb52ece11a7
+panel-egui-pop-history.title 32a082307a8ba077
 panel-egui-pop-jobs.title 61eef857facc40ad
 plugin-egui-pop-arrangements.title 82eceb9b2f1a7dae
 plugin-egui-pop-clipboard.title d9ee853515a6a499
@@ -808,6 +823,7 @@ plugin-egui-pop-editors.title 65a0cf767233fbc9
 plugin-egui-pop-files.title 4058925ba5dd4dd6
 plugin-egui-pop-focus-mode.title bc53c8151e3fb3cc
 plugin-egui-pop-frame.title 48659a05a447c4ea
+plugin-egui-pop-history.title 32a082307a8ba077
 plugin-egui-pop-i18n.title 3e94737db692401b
 plugin-egui-pop-instance.title f7cc366957d3fa5e
 plugin-egui-pop-job-consoles.title 571de76007835d48

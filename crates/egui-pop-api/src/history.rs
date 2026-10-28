@@ -730,9 +730,10 @@ pub fn label_text(ctx: &egui::Context, label: &Label) -> String {
     }
 }
 
-/// What a walk asks.
+/// What a walk asks: an undo, a redo, or a jump to a step (0: the
+/// start).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Walk {
+pub enum Walk {
     Undo,
     Redo,
     Jump(u64),
@@ -812,37 +813,69 @@ fn walk(
 /// Undoes where Ctrl+Z goes ([`target`]), through the `edit.undo` step.
 pub fn undo(app: &AppHandle, origin: &Origin) -> Outcome {
     let t = target(app, false);
-    run(app, t, Walk::Undo, origin)
+    run(app, t, Walk::Undo, None, origin)
 }
 
 /// Redoes where Ctrl+Shift+Z goes, through the `edit.redo` step.
 pub fn redo(app: &AppHandle, origin: &Origin) -> Outcome {
     let t = target(app, true);
-    run(app, t, Walk::Redo, origin)
+    run(app, t, Walk::Redo, None, origin)
 }
 
 /// Undoes in a named scope, through the `edit.undo` step.
 pub fn undo_in(app: &AppHandle, scope: &ScopeId, origin: &Origin) -> Outcome {
     let t = scope_target(app, scope).unwrap_or_else(|| Target::Owner(scope.clone()));
-    run(app, Some(t), Walk::Undo, origin)
+    run(app, Some(t), Walk::Undo, None, origin)
 }
 
 /// Redoes in a named scope, through the `edit.redo` step.
 pub fn redo_in(app: &AppHandle, scope: &ScopeId, origin: &Origin) -> Outcome {
     let t = scope_target(app, scope).unwrap_or_else(|| Target::Owner(scope.clone()));
-    run(app, Some(t), Walk::Redo, origin)
+    run(app, Some(t), Walk::Redo, None, origin)
 }
 
 /// Brings a scope to step `to` (0: the start), through the `edit.jump`
 /// step.
 pub fn jump(app: &AppHandle, scope: &ScopeId, to: u64, origin: &Origin) -> Outcome {
     let t = scope_target(app, scope).unwrap_or_else(|| Target::Owner(scope.clone()));
-    run(app, Some(t), Walk::Jump(to), origin)
+    run(app, Some(t), Walk::Jump(to), None, origin)
+}
+
+/// An undo, a redo or a jump as an agent asks it (the `history.undo`,
+/// `history.redo` and `history.jump` commands): in `request.scope`, or
+/// where the keys go when it is `None`; refused unless the scope's
+/// revision is still `if_rev`; with `dry_run`, checked and answered,
+/// nothing changed. It runs through its step like the keys.
+pub fn ask(
+    app: &AppHandle,
+    what: Walk,
+    scope: Option<&ScopeId>,
+    if_rev: Option<u64>,
+    dry_run: bool,
+    origin: &Origin,
+) -> Outcome {
+    let t = match scope {
+        Some(s) => Some(scope_target(app, s).unwrap_or_else(|| Target::Owner(s.clone()))),
+        None => target(app, what == Walk::Redo),
+    };
+    let request = Request {
+        scope: t.as_ref().map_or(APP, Target::scope),
+        if_rev,
+        dry_run,
+    };
+    run(app, t, what, Some(request), origin)
 }
 
 /// Runs a walk through its step: its hooks may veto it, or redirect it
 /// by naming another `scope` in its arguments.
-fn run(app: &AppHandle, target: Option<Target>, what: Walk, origin: &Origin) -> Outcome {
+fn run(
+    app: &AppHandle,
+    target: Option<Target>,
+    what: Walk,
+    asked: Option<Request>,
+    origin: &Origin,
+) -> Outcome {
+    let (if_rev, dry_run) = asked.map_or((None, false), |r| (r.if_rev, r.dry_run));
     let (step, key, done, failed) = match what {
         Walk::Undo => (&STEP_UNDO, "undone", "edit.undone", "edit.undo_failed"),
         Walk::Redo => (&STEP_REDO, "redone", "edit.redone", "edit.redo_failed"),
@@ -867,6 +900,12 @@ fn run(app: &AppHandle, target: Option<Target>, what: Walk, origin: &Origin) -> 
     if let Walk::Jump(to) = what {
         args["to"] = json!(to);
     }
+    if let Some(rev) = if_rev {
+        args["if_rev"] = json!(rev);
+    }
+    if dry_run {
+        args["dry_run"] = json!(true);
+    }
     let refusal: Rc<RefCell<Option<Refusal>>> = Rc::default();
     let walked: Rc<RefCell<Option<Walked>>> = Rc::default();
     let (r2, w2) = (refusal.clone(), walked.clone());
@@ -885,17 +924,22 @@ fn run(app: &AppHandle, target: Option<Target>, what: Walk, origin: &Origin) -> 
         let Some(target) = target else {
             return Ok(json!({ key: Json::Null }));
         };
-        let request = Request::new(target.scope());
+        let mut request = Request::new(target.scope());
+        request.if_rev = if_rev;
+        request.dry_run = dry_run;
         match walk(app, &target, what, &request, &who) {
             Ok(Some(w)) => {
                 let name = w.steps.last().map(|s| label_text(&app.egui(), &s.label));
-                let out = json!({
+                let mut out = json!({
                     key: name,
                     "scope": w.scope,
                     "steps": w.steps,
                     "rev": w.rev,
                     "head": w.head,
                 });
+                if w.dry_run {
+                    out["dry_run"] = json!(true);
+                }
                 *w2.borrow_mut() = Some(w);
                 Ok(out)
             }
@@ -910,7 +954,7 @@ fn run(app: &AppHandle, target: Option<Target>, what: Walk, origin: &Origin) -> 
     let source = source_of(origin);
     match &outcome {
         Outcome::Done(Ok(v)) => {
-            if !v[key].is_null() {
+            if !v[key].is_null() && !dry_run {
                 app.publish(
                     &source,
                     None,

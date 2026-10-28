@@ -121,6 +121,7 @@ pub mod files;
 pub mod frame;
 mod groups;
 pub mod history;
+pub mod history_view;
 pub mod hooks;
 pub mod host;
 pub mod jobs;
