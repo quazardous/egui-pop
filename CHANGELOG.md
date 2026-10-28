@@ -65,6 +65,12 @@ publishes.
   plugin's group turns its tips off alone (`tips.off`,
   `Tips::set_origin_on`, `tips.origin` for agents), for the tip of the
   day, hints and the cards alike. `tips::browser` draws it anywhere.
+- A lint for tips (egui-pop-api, egui-pop-test; docs/tips.md):
+  `tips::lint::problems` reports a tip whose command (or one a
+  `{key:<command>}` names) is not declared, a `{key}` without a command,
+  a surface that does not parse, a target never named, an id not
+  prefixed by its origin; `egui_pop_test::assert_tips_clean` fails a
+  test with them. The gallery's tips are checked.
 
 - The extension template's command declares an icon
   (`CommandSpec::icon("plus")`), shown by menus and the palette.

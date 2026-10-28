@@ -56,6 +56,7 @@
 
 mod browser;
 pub mod file;
+pub mod lint;
 pub mod markup;
 pub mod pick;
 mod screen;

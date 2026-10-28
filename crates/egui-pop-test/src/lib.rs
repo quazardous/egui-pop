@@ -6,6 +6,8 @@
 //! - [`keymap_problems`] and [`assert_keymap_clean`]: no two commands
 //!   claim the same keys, no binding names a command that does not
 //!   exist;
+//! - [`tips_problems`] and [`assert_tips_clean`]: every tip names a
+//!   declared command, a surface that parses and a target drawn;
 //! - [`undeclared_writes`] and [`assert_writes_declared`]: the plugins
 //!   wrote only the values they own or were named writers of;
 //! - [`unnamed_interactive`] and [`assert_all_named`]: every interactive
@@ -171,6 +173,25 @@ pub fn keymap_problems(app: &App) -> Vec<String> {
         }
     }
     out
+}
+
+/// The problems of the tips registered ([`egui_pop_api::tips::lint`]):
+/// unknown commands, `{key}` without a command, surfaces that do not
+/// parse, targets never named (neither in `targets` nor drawn so far),
+/// ids not prefixed by their origin.
+pub fn tips_problems(app: &App, targets: &[&str]) -> Vec<String> {
+    egui_pop_api::tips::lint::problems(app.handle(), targets)
+}
+
+/// Fails with the tips' problems, if any.
+#[track_caller]
+pub fn assert_tips_clean(app: &App, targets: &[&str]) {
+    let problems = tips_problems(app, targets);
+    assert!(
+        problems.is_empty(),
+        "tips problems:\n{}",
+        problems.join("\n")
+    );
 }
 
 /// Fails with the keymap's problems, if any.

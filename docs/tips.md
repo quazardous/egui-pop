@@ -152,6 +152,21 @@ own switch, "Show these tips": off, that plugin's tips are never shown
 same list anywhere, and `tips.origin` (`origin`, `on`) turns a plugin's
 tips on or off for agents.
 
+## The lint
+
+`tips::lint::problems(app, targets)` checks every tip registered
+against the application: its command and those its `{key:<command>}`
+name are declared, a `{key}` has a command, its surface parses, its
+target is named (in `targets`, or drawn so far), its id starts with
+its origin. In a test, after drawing the screens the tips point at:
+
+```rust,ignore
+egui_pop_test::assert_tips_clean(&app, &["photos.stars"]);
+```
+
+A renamed command or target then fails the test instead of leaving a
+dead tip behind. The gallery's tips pass it.
+
 ## Commands
 
 | Command | What |
