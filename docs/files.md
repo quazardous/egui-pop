@@ -63,6 +63,16 @@ draws the in-app picker where it wants it (`Files::show_inline`).
 
 `FilePicker` is usable on its own, in any `Ui`.
 
+### Where it reads
+
+The picker reads through a `files::fs::FileSystem`: the system's
+(`StdFs`, the default), or a folder held in memory (`MemoryFs`: files
+with their bytes and modification times, and folders). The web build
+has no file system: an application gives the picker a `MemoryFs` there
+(`FilesPlugin::file_system`, or `Files::set_file_system` later), as the
+gallery does for its demo folder. `FilePicker::new_in` makes a picker
+on any file system.
+
 ## Steps
 
 | Step | Arguments | Default |

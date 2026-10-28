@@ -20,6 +20,10 @@
 //!   path with completion (`Tab`), the fuzzy filter of the choice dialog,
 //!   the request's filters, recent places and bookmarks kept in the host
 //!   store (`settings/files.recent`, `settings/files.bookmarks`).
+//!   It reads through a [`fs::FileSystem`]: the system's by default, or a
+//!   folder held in memory ([`fs::MemoryFs`]; the web build has no file
+//!   system), given with [`FilesPlugin::file_system`] or
+//!   [`Files::set_file_system`].
 //!
 //! Steps (ADR 0011):
 //!
@@ -75,6 +79,10 @@ use crate::steps::{Outcome, StepSpec};
 use crate::strings as txt;
 use crate::zones::{self, Block};
 use crate::{Ctx, Plugin, PluginError};
+
+pub mod fs;
+
+use fs::SharedFs;
 
 /// The file chooser, as a service.
 pub const FILES: ServiceToken<Files> = ServiceToken::new("app.files");
@@ -278,6 +286,8 @@ struct State {
     last: VecDeque<Json>,
     /// The system's chooser is used when available (the setting).
     native: bool,
+    /// Where the in-app picker reads (none: the system's file system).
+    fs: Option<SharedFs>,
 }
 
 /// The choices open, as a service.
@@ -307,6 +317,16 @@ pub fn native_available() -> bool {
 }
 
 impl Files {
+    /// Where the in-app picker reads.
+    pub fn file_system(&self) -> SharedFs {
+        lock(&self.0).fs.clone().unwrap_or_else(fs::native)
+    }
+
+    /// Reads from `fs` in the in-app pickers opened from now on.
+    pub fn set_file_system(&self, fs: SharedFs) {
+        lock(&self.0).fs = Some(fs);
+    }
+
     /// Starts a choice; its result comes later through the [`Pending`].
     pub fn choose(&self, app: &AppHandle, request: FileRequest) -> Pending {
         self.start_choice(app, request, false).1
@@ -395,6 +415,7 @@ impl Files {
     /// available and wanted, else the in-app picker.
     fn start(&self, app: &AppHandle, id: u64, request: FileRequest) -> Result<Json, String> {
         let native = lock(&self.0).native && native_available();
+        let fs = self.file_system();
         let recent = recent(app);
         let mut s = lock(&self.0);
         let o = s
@@ -411,9 +432,9 @@ impl Files {
             return Ok(json!({ "via": "native" }));
         }
         o.via = Via::InApp;
-        let mut picker = FilePicker::new(&request);
+        let mut picker = FilePicker::new_in(&request, fs.clone());
         if request.directory.is_none()
-            && let Some(dir) = recent.first().filter(|d| d.is_dir())
+            && let Some(dir) = recent.first().filter(|d| fs.is_dir(d))
         {
             picker.go(dir.clone());
         }
@@ -542,29 +563,46 @@ pub fn remember(app: &AppHandle, paths: &[PathBuf]) {
     write_list(app, RECENT, &list);
 }
 
+/// The plugin's id.
+pub const PLUGIN: PluginId = PluginId::from_static("egui_pop.files");
+
 /// The plugin.
 #[derive(Clone, Debug)]
 pub struct FilesPlugin {
     native: bool,
+    fs: Option<SharedFs>,
 }
 
 impl Default for FilesPlugin {
     /// The system's chooser when there is one.
     fn default() -> Self {
-        Self { native: true }
+        Self {
+            native: true,
+            fs: None,
+        }
     }
 }
 
 impl FilesPlugin {
     /// The in-app picker by default (the setting may still switch).
     pub fn in_app() -> Self {
-        Self { native: false }
+        Self {
+            native: false,
+            fs: None,
+        }
+    }
+
+    /// The in-app picker reads from `fs` (a [`fs::MemoryFs`], say), not
+    /// from the system's file system.
+    pub fn file_system(mut self, fs: SharedFs) -> Self {
+        self.fs = Some(fs);
+        self
     }
 }
 
 impl Plugin for FilesPlugin {
     fn id(&self) -> PluginId {
-        PluginId::from_static("egui_pop.files")
+        PLUGIN
     }
 
     fn title(&self) -> String {
@@ -573,6 +611,9 @@ impl Plugin for FilesPlugin {
 
     fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
         let files = Files::default();
+        if let Some(fs) = self.fs.clone() {
+            files.set_file_system(fs);
+        }
         ctx.setting(
             SETTING_NATIVE,
             Descriptor::bool("Use the system's file chooser", self.native).description(
@@ -823,16 +864,24 @@ pub struct FilePicker {
     pub error: Option<String>,
     focused: bool,
     listing: Option<(PathBuf, bool, Vec<Entry>)>,
+    fs: SharedFs,
 }
 
 impl FilePicker {
-    /// A picker for a request, in its folder (else home, else the root).
+    /// A picker for a request, in its folder (else home, else the root),
+    /// on the system's file system.
     pub fn new(request: &FileRequest) -> Self {
+        Self::new_in(request, fs::native())
+    }
+
+    /// A picker for a request reading from `fs`, in the request's folder
+    /// (else home, else the root).
+    pub fn new_in(request: &FileRequest, fs: SharedFs) -> Self {
         let dir = request
             .directory
             .clone()
-            .filter(|d| d.is_dir())
-            .or_else(home)
+            .filter(|d| fs.is_dir(d))
+            .or_else(|| home().filter(|h| fs.is_dir(h)))
             .unwrap_or_else(|| PathBuf::from("/"));
         Self {
             kind: request.kind,
@@ -850,7 +899,13 @@ impl FilePicker {
             error: None,
             focused: false,
             listing: None,
+            fs,
         }
+    }
+
+    /// Where it reads.
+    pub fn file_system(&self) -> &SharedFs {
+        &self.fs
     }
 
     /// Shows another folder.
@@ -892,16 +947,15 @@ impl FilePicker {
                 .cloned()
                 .collect();
         }
-        let mut all: Vec<Entry> = std::fs::read_dir(&self.dir)
+        let mut all: Vec<Entry> = self
+            .fs
+            .read_dir(&self.dir)
             .map(|r| {
-                r.filter_map(Result::ok)
-                    .map(|e| {
-                        let path = e.path();
-                        Entry {
-                            name: e.file_name().to_string_lossy().into_owned(),
-                            is_dir: path.is_dir(),
-                            path,
-                        }
+                r.into_iter()
+                    .map(|e| Entry {
+                        path: self.dir.join(&e.name),
+                        name: e.name,
+                        is_dir: e.is_dir,
                     })
                     .filter(|e| self.show_hidden || !e.name.starts_with('.'))
                     .filter(|e| e.is_dir || self.kind != ChooseKind::Folder)
@@ -972,18 +1026,19 @@ impl FilePicker {
             p.text = head.to_string();
             p.typed_path()
         };
-        let Ok(read) = std::fs::read_dir(&head_path) else {
+        let Ok(read) = self.fs.read_dir(&head_path) else {
             return Vec::new();
         };
         let lower = part.to_lowercase();
         let mut out: Vec<String> = read
-            .filter_map(Result::ok)
+            .into_iter()
             .filter_map(|e| {
-                let name = e.file_name().to_string_lossy().into_owned();
-                let is_dir = e.path().is_dir();
+                let (name, is_dir) = (e.name, e.is_dir);
                 let shown = (self.show_hidden || !name.starts_with('.') || part.starts_with('.'))
                     && name.to_lowercase().starts_with(&lower)
-                    && (is_dir || (self.kind != ChooseKind::Folder && self.accepts(&e.path())));
+                    && (is_dir
+                        || (self.kind != ChooseKind::Folder
+                            && self.accepts(&head_path.join(&name))));
                 shown.then(|| format!("{head}{name}{}", if is_dir { "/" } else { "" }))
             })
             .collect();
@@ -1020,15 +1075,15 @@ impl FilePicker {
         self.error = None;
         if self.is_path() {
             let p = self.typed_path();
-            if p.is_dir() {
+            if self.fs.is_dir(&p) {
                 self.go(p);
                 return None;
             }
             return match self.kind {
-                ChooseKind::Save if p.parent().is_some_and(Path::is_dir) => {
+                ChooseKind::Save if p.parent().is_some_and(|d| self.fs.is_dir(d)) => {
                     Some(PickerAnswer::Chosen(vec![p]))
                 }
-                ChooseKind::Open | ChooseKind::OpenMany if p.is_file() => {
+                ChooseKind::Open | ChooseKind::OpenMany if self.fs.is_file(&p) => {
                     Some(PickerAnswer::Chosen(vec![p]))
                 }
                 _ => {
@@ -1043,7 +1098,7 @@ impl FilePicker {
                 return None;
             }
             let p = self.dir.join(&name);
-            if p.is_dir() {
+            if self.fs.is_dir(&p) {
                 self.go(p);
                 return None;
             }
@@ -1068,7 +1123,7 @@ impl FilePicker {
     pub fn accept(&mut self) -> Option<PickerAnswer> {
         match self.kind {
             ChooseKind::Folder => {
-                let dir = if self.is_path() && self.typed_path().is_dir() {
+                let dir = if self.is_path() && self.fs.is_dir(&self.typed_path()) {
                     self.typed_path()
                 } else {
                     let shown = self.visible();
@@ -1534,6 +1589,28 @@ mod tests {
         assert_eq!(p.activate(), None);
         assert!(p.error.is_some());
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn the_picker_reads_a_memory_folder() {
+        let root = PathBuf::from("/demo");
+        let fs: SharedFs = Arc::new(
+            fs::MemoryFs::new()
+                .file(root.join("Photos/a.png"), b"x".to_vec())
+                .file(root.join("notes.txt"), b"y".to_vec()),
+        );
+        let mut p = FilePicker::new_in(&FileRequest::open("Open").directory(&root), fs);
+        assert_eq!(p.dir, root);
+        let names =
+            |p: &mut FilePicker| p.visible().into_iter().map(|e| e.name).collect::<Vec<_>>();
+        assert_eq!(names(&mut p), vec!["Photos", "notes.txt"]);
+        // Enter goes into the folder, then chooses its file.
+        assert_eq!(p.activate(), None);
+        assert_eq!(p.dir, root.join("Photos"));
+        assert_eq!(
+            p.activate(),
+            Some(PickerAnswer::Chosen(vec![root.join("Photos/a.png")]))
+        );
     }
 
     #[test]
