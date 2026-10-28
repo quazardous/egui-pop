@@ -792,8 +792,10 @@ impl AppHandle {
     }
 
     /// The state of type `T` kept on the application side, made on first
-    /// use.
-    pub(crate) fn local<T: Default + 'static>(&self) -> Rc<T> {
+    /// use: one value per type and per application, shared by its windows
+    /// and gone with it. A plugin or a host keeps its own state there
+    /// under a type of its own (a private type keeps others out).
+    pub fn local<T: Default + 'static>(&self) -> Rc<T> {
         let id = std::any::TypeId::of::<T>();
         let any = self
             .0

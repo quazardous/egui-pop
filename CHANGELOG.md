@@ -522,6 +522,9 @@ publishes.
 
 ### Changed
 
+- `AppHandle::local` is public (egui-pop-api): a host or a plugin keeps
+  its own state on the application side, one value per type, as
+  egui-pop's own services do (a clipboard endpoint's state, for one).
 - The "Undone in <place>" toast reads the place from the step itself
   (egui-pop-api, ADR 0014): the context stack tells the value store
   where new steps are made (`Store::set_place`), and an undo, a redo or
