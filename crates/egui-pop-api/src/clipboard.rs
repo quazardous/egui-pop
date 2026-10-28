@@ -333,8 +333,8 @@ pub fn with_backend<R>(app: &AppHandle, f: impl FnOnce(&mut dyn SystemBackend) -
     }
 }
 
-/// What the system clipboard holds now, read once per pass (a paste
-/// special asks several times).
+/// What the system clipboard holds now, read once per paste (paste
+/// special asks several times) and per pass.
 fn system_read(app: &AppHandle) -> Option<Vec<Repr>> {
     let ctx = app.egui();
     let now = ctx.cumulative_pass_nr();
@@ -1621,6 +1621,7 @@ fn prepare(app: &AppHandle, req: &PasteRequest, who: &Origin) -> Result<Ready, S
 /// Pastes through the [`STEP_PASTE`] step. A refusal or a veto asked by
 /// the user shows in a toast, and so does what a lossy transform lost.
 pub fn paste(app: &AppHandle, request: PasteRequest, origin: &Origin) -> Outcome {
+    *state(app).read_cache.borrow_mut() = None;
     let mut args = serde_json::to_value(&request).unwrap_or(Json::Null);
     args["origin"] = json!(source_of(origin));
     let who = origin.clone();
@@ -1799,6 +1800,7 @@ pub fn ways_for(
     request: &PasteRequest,
     origin: &Origin,
 ) -> Result<Vec<Way>, String> {
+    *state(app).read_cache.borrow_mut() = None;
     let base = PasteRequest {
         target: request.target.clone(),
         slot: request.slot.clone(),

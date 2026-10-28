@@ -303,6 +303,51 @@ fn ctrl_c_and_ctrl_v_copy_a_typed_item_between_two_widgets() {
 }
 
 #[test]
+fn the_paste_key_pastes_once_when_the_logic_runs_twice_a_pass() {
+    // As under eframe: its `logic` hook, then `App::show`, which runs
+    // the logic again.
+    let (b, _) = builder();
+    let app = b.build(&egui::Context::default()).unwrap();
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(800.0, 500.0))
+        .build_ui_state(
+            |ui, app: &mut App| {
+                app.logic(ui.ctx());
+                app.show(ui);
+            },
+            app,
+        );
+    h.run();
+    let app = h.state().handle().clone();
+    let refused = |app: &AppHandle| {
+        app.step_traces()
+            .into_iter()
+            .filter(|t| t.step == STEP_PASTE)
+            .filter(|t| matches!(t.result, Some(Err(_))))
+            .count()
+    };
+    h.get_by_label("Swatch A").focus();
+    h.run();
+    h.key_press_modifiers(Modifiers::COMMAND, Key::C);
+    h.run();
+    h.get_by_label("Swatch B").focus();
+    h.run();
+    // The paste key as a key: its press, then its release.
+    h.key_press_modifiers(Modifiers::COMMAND, Key::V);
+    h.run();
+    assert_eq!(store_hex(&app, B), "#d9a441");
+    assert_eq!(refused(&app), 0, "the release is no second paste");
+    // As egui-winit sends it with text on the system clipboard: the
+    // paste event, then the key's release alone.
+    h.event(egui::Event::Paste("#102030".into()));
+    h.run();
+    h.key_up_modifiers(Modifiers::COMMAND, Key::V);
+    h.run();
+    assert_eq!(store_hex(&app, B), "#102030");
+    assert_eq!(refused(&app), 0, "the release is no second paste");
+}
+
+#[test]
 fn the_edit_commands_sit_in_the_edit_menu_greyed_when_nothing_focused_answers() {
     let (b, _) = builder();
     let mut h = harness(b);
@@ -741,4 +786,236 @@ fn a_type_is_declared_once_and_goes_with_its_plugin() {
     h.run();
     assert!(clipboard::clip_type(&app, &COLOR).is_none());
     assert!(!clipboard::endpoints(&app).contains(&"a".to_string()));
+}
+
+/// A system clipboard in memory: what the last copy wrote there, and
+/// what a paste reads (`None`: it cannot read).
+#[derive(Clone, Default)]
+struct FakeSystem {
+    written: Rc<RefCell<Vec<clipboard::Repr>>>,
+    held: Rc<RefCell<Option<Vec<clipboard::Repr>>>>,
+}
+
+impl clipboard::SystemBackend for FakeSystem {
+    fn name(&self) -> String {
+        "fake".into()
+    }
+
+    fn writes(&self, format: &FormatId) -> bool {
+        *format == TEXT || *format == COLOR
+    }
+
+    fn write(&mut self, _: &egui::Context, reprs: &[clipboard::Repr]) -> Result<(), String> {
+        *self.written.borrow_mut() = reprs.to_vec();
+        *self.held.borrow_mut() = Some(reprs.to_vec());
+        Ok(())
+    }
+
+    fn read(&mut self, _: &egui::Context) -> Option<Vec<clipboard::Repr>> {
+        self.held.borrow().clone()
+    }
+
+    fn readable(&self) -> Vec<FormatId> {
+        vec![clipboard::URI_LIST]
+    }
+}
+
+fn done(out: Outcome) -> Result<Json, String> {
+    match out {
+        Outcome::Done(r) => r,
+        Outcome::Vetoed { reason, .. } => Err(reason),
+    }
+}
+
+#[test]
+fn a_system_backend_gets_every_format_it_writes_and_gives_back_what_others_left() {
+    let (b, _) = builder();
+    let h = harness(b);
+    let app = h.state().handle().clone();
+    let system = FakeSystem::default();
+    clipboard::set_backend(&app, Box::new(system.clone()));
+    done(clipboard::copy(&app, CopyRequest::new("a"), &Origin::User)).unwrap();
+    // The private type crosses where the backend writes it, the text
+    // sanitised for the system boundary.
+    let written = system.written.borrow().clone();
+    assert_eq!(written[0].format, COLOR);
+    let text = written.iter().find(|r| r.format == TEXT).unwrap();
+    assert_eq!(text.data, json!("#d9a441"));
+    // Still there: the owner's item is pasted.
+    let v = done(clipboard::paste(
+        &app,
+        PasteRequest::new("b"),
+        &Origin::User,
+    ))
+    .unwrap();
+    assert_eq!(v["internal"], true);
+    assert_eq!(store_hex(&app, B), "#d9a441");
+    // Another application's files and their text: one external item,
+    // negotiated like any other.
+    *system.held.borrow_mut() = Some(vec![
+        clipboard::Repr::new(clipboard::URI_LIST, json!("file:///tmp/%23123456")),
+        clipboard::Repr::new(TEXT, json!("#123456")),
+    ]);
+    let v = done(clipboard::paste(
+        &app,
+        PasteRequest::new("b"),
+        &Origin::User,
+    ))
+    .unwrap();
+    assert_eq!(v["internal"], false);
+    assert_eq!(v["kind"], "text/uri-list");
+    assert_eq!(v["format"], "text/plain");
+    assert_eq!(store_hex(&app, B), "#123456");
+}
+
+#[test]
+fn the_paste_key_with_no_text_is_refused_when_nothing_reads_the_rest() {
+    let (b, _) = builder();
+    let h = harness(b);
+    let app = h.state().handle().clone();
+    done(clipboard::copy(&app, CopyRequest::new("a"), &Origin::User)).unwrap();
+    let req = PasteRequest {
+        no_text: true,
+        ..PasteRequest::new("b")
+    };
+    let e = done(clipboard::paste(&app, req, &Origin::User)).unwrap_err();
+    assert!(e.contains("no text"), "{e}");
+    assert_eq!(store_hex(&app, B), "#000000");
+}
+
+const COUNT: FormatId = FormatId::from_static("application/x-demo.count+json");
+
+/// A target taking counts, saying its limit, keeping what it was given.
+#[derive(Default)]
+struct Counter {
+    got: RefCell<Option<(Json, Option<String>)>>,
+    later: RefCell<Option<egui_pop_api::host::Resolver>>,
+    deferred: bool,
+}
+
+impl ClipTarget for Counter {
+    fn accepts(&self, _: &AppHandle) -> Vec<FormatId> {
+        vec![COUNT]
+    }
+
+    fn paste(&self, _: &AppHandle, p: &Paste<'_>) -> Result<Json, String> {
+        if !p.dry_run {
+            *self.got.borrow_mut() = Some((p.repr.data.clone(), p.element.map(str::to_string)));
+        }
+        Ok(json!("counts"))
+    }
+
+    fn apply(&self, app: &AppHandle, p: &Paste<'_>) -> clipboard::Pasted {
+        if !self.deferred {
+            return clipboard::Pasted::Done(self.paste(app, p));
+        }
+        let (pending, resolver) = egui_pop_api::host::pending();
+        *self.later.borrow_mut() = Some(resolver);
+        clipboard::Pasted::Later(pending)
+    }
+
+    fn context(&self, _: &AppHandle, element: Option<&str>) -> Json {
+        json!({ "max": 3, "element": element })
+    }
+}
+
+/// Declares text to counts, clamped to the target's limit.
+struct Counting {
+    counter: Rc<Counter>,
+}
+
+impl Plugin for Counting {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("counting")
+    }
+
+    fn requires(&self) -> Vec<PluginId> {
+        vec![clipboard::PLUGIN]
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        ctx.clip_endpoint("count", None, Some(self.counter.clone()));
+        ctx.clip_transform(Transform::for_target(
+            TransformSpec::new("counting.length", TEXT, COUNT).lossy(),
+            |r, d| {
+                let n = r.text().unwrap_or("").chars().count() as u64;
+                let max = d.context["max"].as_u64().unwrap_or(u64::MAX);
+                Ok(Transformed::lossy(
+                    json!({ "n": n.min(max), "in": d.target, "at": d.context["element"] }),
+                    "the count above the limit",
+                ))
+            },
+        ))?;
+        Ok(())
+    }
+}
+
+fn put_text(app: &AppHandle, text: &str) {
+    clipboard::with_owner(app, |c| {
+        c.put(
+            &Slot::User,
+            ClipItem::new(TEXT, 0, json!(text), "text"),
+            &Origin::User,
+        )
+    })
+    .unwrap();
+}
+
+#[test]
+fn a_transform_sees_the_target_and_its_element() {
+    let counter = Rc::new(Counter::default());
+    let (b, _) = builder();
+    let h = harness(b.plugin(Counting {
+        counter: counter.clone(),
+    }));
+    let app = h.state().handle().clone();
+    put_text(&app, "hello");
+    let v = done(clipboard::paste(
+        &app,
+        PasteRequest::new("count").element("row-2"),
+        &Origin::User,
+    ))
+    .unwrap();
+    assert_eq!(v["lost"], "the count above the limit");
+    assert_eq!(v["element"], "row-2");
+    let (data, element) = counter.got.borrow().clone().unwrap();
+    assert_eq!(data, json!({ "n": 3, "in": "count", "at": "row-2" }));
+    assert_eq!(element.as_deref(), Some("row-2"));
+}
+
+#[test]
+fn a_deferred_paste_answers_pending_then_publishes_its_result() {
+    let counter = Rc::new(Counter {
+        deferred: true,
+        ..Counter::default()
+    });
+    let (b, _) = builder();
+    let mut h = harness(b.plugin(Counting {
+        counter: counter.clone(),
+    }));
+    let app = h.state().handle().clone();
+    put_text(&app, "hi");
+    let v = done(clipboard::paste(
+        &app,
+        PasteRequest::new("count"),
+        &Origin::User,
+    ))
+    .unwrap();
+    assert_eq!(v["pending"], true);
+    assert_eq!(clipboard::pending_pastes(&app), 1);
+    counter
+        .later
+        .borrow_mut()
+        .take()
+        .unwrap()
+        .resolve(Ok(json!("two counted")));
+    h.run();
+    assert_eq!(clipboard::pending_pastes(&app), 0);
+    let pasted = app
+        .events_since(0)
+        .into_iter()
+        .find(|e| e.name == "clipboard.pasted")
+        .expect("the result is published");
+    assert_eq!(pasted.data["changes"], "two counted");
+    assert_eq!(pasted.data["pending"], false);
 }
