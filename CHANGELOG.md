@@ -18,6 +18,12 @@ publishes.
   commit when known (`0.2.0 (abc1234)`): git's, else the
   `EGUI_POP_GALLERY_COMMIT` variable, else none. The facade gains
   `egui_pop::VERSION`.
+- The links service shows pages inside (egui-pop-api): `links::Inside`,
+  installed with `Links::set_inside`, receives what the policy sends
+  inside (`docs:` pages, documentation pages, local images); with one,
+  `docs:` links open there instead of their online copy, and
+  `Links::caps` says so. The lint checks declared `docs:` links against
+  the viewer's pages (`lint::check` takes them).
 - The inline subset for short texts (egui-pop-model, egui-pop-api):
   `egui_pop_model::links::inline::runs` reads emphasis, strong, code and links
   (`[label](target)`, `<…>`, a bare `https://` address) and

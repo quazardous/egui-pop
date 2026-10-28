@@ -133,7 +133,9 @@ pub enum Opening {
 #[derive(Clone, Copy, Debug)]
 pub struct OpenCall<'a> {
     pub target: &'a Target,
-    /// `Outside` or `Reveal` (`Inside` is the application's).
+    /// `Outside` or `Reveal`; `Inside` for a page or an image when no
+    /// viewer ([`Inside`]) is installed and the opener says it shows
+    /// them itself (`Caps::inside`).
     pub how: How,
     pub kind: Kind,
     pub source: Source,
@@ -155,6 +157,25 @@ pub trait Opener: Send + Sync {
     /// Opens a target the policy approved (and the user confirmed when
     /// asked).
     fn open(&self, call: &OpenCall<'_>) -> Opening;
+}
+
+/// What shows pages and images inside the application (the viewer of
+/// `egui_pop_views::viewer`, or the host's own): the links service hands
+/// it each request the policy sends inside (`docs:` pages, pages on the
+/// application's documentation hosts, local images), after the policy
+/// and the user's confirmation.
+pub trait Inside: Send + Sync {
+    /// Its name, as the `links` collector shows it.
+    fn name(&self) -> &str;
+
+    /// Shows a target (`call.how` is `Inside`), or says why not.
+    fn show(&self, app: &AppHandle, call: &OpenCall<'_>) -> Result<(), String>;
+
+    /// The `docs:` pages it has, when it knows them: the lint checks
+    /// the declared `docs:` links against them.
+    fn docs_pages(&self) -> Option<Vec<String>> {
+        None
+    }
 }
 
 /// The default opener: web pages and `mailto:` through egui's `OpenUrl`
@@ -354,12 +375,14 @@ impl Opener for NullOpener {
 pub struct Links {
     opener: Mutex<Arc<dyn Opener>>,
     policy: Mutex<Policy>,
+    inside: Mutex<Option<Arc<dyn Inside>>>,
 }
 
 impl std::fmt::Debug for Links {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Links")
             .field("opener", &self.opener().name())
+            .field("inside", &self.inside().map(|i| i.name().to_string()))
             .field("policy", &self.policy())
             .finish()
     }
@@ -370,7 +393,27 @@ impl Links {
         Self {
             opener: Mutex::new(opener),
             policy: Mutex::new(policy),
+            inside: Mutex::new(None),
         }
+    }
+
+    /// What shows pages and images inside, if anything.
+    pub fn inside(&self) -> Option<Arc<dyn Inside>> {
+        lock(&self.inside).clone()
+    }
+
+    /// Installs (or removes) what shows pages and images inside: with
+    /// one, `docs:` pages open there rather than in their online copy.
+    pub fn set_inside(&self, inside: Option<Arc<dyn Inside>>) {
+        *lock(&self.inside) = inside;
+    }
+
+    /// What the application can do: the opener's capabilities, and
+    /// showing pages inside when a viewer is installed.
+    pub fn caps(&self) -> Caps {
+        let mut caps = self.opener().caps();
+        caps.inside |= self.inside().is_some();
+        caps
     }
 
     /// The opener in use.
@@ -538,7 +581,7 @@ pub fn decide(app: &AppHandle, request: &Request) -> Result<Decision, String> {
         .and_then(|t| facts_of(&t));
     Ok(links
         .policy()
-        .decide(request, &links.opener().caps(), facts.as_ref()))
+        .decide(request, &links.caps(), facts.as_ref()))
 }
 
 /// Opens a link through the [`STEP_OPEN`] step. A refusal or a failure
@@ -591,7 +634,7 @@ fn run_default(
 ) -> Result<Json, String> {
     let links = links(app).ok_or(NO_PLUGIN)?;
     let opener = links.opener();
-    let caps = opener.caps();
+    let caps = links.caps();
     let target = Target::parse(&req.target).ok();
     let facts = target.as_ref().and_then(facts_of);
     let policy = links.policy();
@@ -609,6 +652,7 @@ fn run_default(
         "host": d.host,
         "disguised": d.disguised,
         "opener": opener.name(),
+        "inside": links.inside().map(|i| i.name().to_string()),
     });
     if dry {
         summary["dry_run"] = json!(true);
@@ -654,10 +698,19 @@ fn run_default(
         &d,
         &target,
         &policy,
-        opener.as_ref(),
+        Openers {
+            opener: opener.as_ref(),
+            inside: links.inside(),
+        },
         summary,
         toast,
     )
+}
+
+/// Who opens: the opener, and the viewer inside when there is one.
+struct Openers<'a> {
+    opener: &'a dyn Opener,
+    inside: Option<Arc<dyn Inside>>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -667,11 +720,47 @@ fn perform(
     d: &Decision,
     target: &Target,
     policy: &Policy,
-    opener: &dyn Opener,
+    openers: Openers<'_>,
     mut summary: Json,
     toast: bool,
 ) -> Result<Json, String> {
     let who = source_of(&req.origin);
+    let opener = openers.opener;
+    let ctx = app.egui();
+    let call = OpenCall {
+        target,
+        how: d.how,
+        kind: d.kind,
+        source: req.source,
+        origin: &req.origin,
+        egui: &ctx,
+    };
+    if d.how == How::Inside
+        && matches!(
+            d.kind,
+            Kind::Doc | Kind::Markdown | Kind::Html | Kind::Image
+        )
+    {
+        // The viewer, else an opener that shows pages itself.
+        let shown = match &openers.inside {
+            Some(inside) => inside.show(app, &call),
+            None => match opener.open(&call) {
+                Opening::Done(r) => r,
+                Opening::Later(_) => Err("the opener answers later for a page inside".into()),
+            },
+        };
+        return match shown {
+            Ok(()) => {
+                app.publish(&who, None, "link.opened", summary.clone());
+                summary["status"] = json!("opened");
+                Ok(summary)
+            }
+            Err(e) => {
+                failed(app, &summary, &e, toast);
+                Err(e)
+            }
+        };
+    }
     if d.how == How::Inside {
         let (command, args) = match d.kind {
             Kind::AppLink => (
@@ -709,15 +798,7 @@ fn perform(
         }
         _ => target,
     };
-    let ctx = app.egui();
-    let call = OpenCall {
-        target,
-        how: d.how,
-        kind: d.kind,
-        source: req.source,
-        origin: &req.origin,
-        egui: &ctx,
-    };
+    let call = OpenCall { target, ..call };
     match opener.open(&call) {
         Opening::Done(Ok(())) => {
             app.publish(&who, None, "link.opened", summary.clone());
@@ -1154,12 +1235,14 @@ fn pass(app: &AppHandle) {
 /// The collector's snapshot.
 fn describe(app: &AppHandle) -> Json {
     let st = state(app);
-    let (opener, caps, policy) = match links(app) {
-        Some(l) => {
-            let o = l.opener();
-            (json!(o.name()), json!(o.caps()), json!(l.policy()))
-        }
-        None => (Json::Null, Json::Null, Json::Null),
+    let (opener, inside, caps, policy) = match links(app) {
+        Some(l) => (
+            json!(l.opener().name()),
+            json!(l.inside().map(|i| i.name().to_string())),
+            json!(l.caps()),
+            json!(l.policy()),
+        ),
+        None => (Json::Null, Json::Null, Json::Null, Json::Null),
     };
     let asking: Vec<Json> = st
         .asking
@@ -1180,6 +1263,7 @@ fn describe(app: &AppHandle) -> Json {
         .collect();
     json!({
         "opener": opener,
+        "inside": inside,
         "caps": caps,
         "policy": policy,
         "asking": asking,
@@ -1527,7 +1611,7 @@ impl Plugin for LinksPlugin {
             |call| {
                 let req = request_of(call.args, call.origin, "target")?;
                 let d = decide(call.app, &req)?;
-                let caps = links(call.app).map(|l| l.opener().caps());
+                let caps = links(call.app).map(|l| l.caps());
                 let mut out = serde_json::to_value(&d).map_err(|e| e.to_string())?;
                 out["caps"] = json!(caps);
                 out["refused"] = json!(d.refused.as_ref().map(ToString::to_string));
