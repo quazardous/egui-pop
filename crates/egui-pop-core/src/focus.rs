@@ -105,10 +105,35 @@ fn state(ctx: &Context) -> std::sync::Arc<std::sync::Mutex<State>> {
     shared_in_window::<State>(ctx, "core.focus")
 }
 
+/// A widget's response from this pass (else the last), read without
+/// touching the focus.
+///
+/// `Context::read_response` runs egui's "clicked elsewhere" rule: on a
+/// click that did not land on the widget, a focused widget loses the
+/// focus. Called every pass for the focused widget (to find its layer,
+/// its place), it drops the focus a widget took when a click landed on
+/// one of its children (a tree focused through its clicked row). This
+/// reads the response with that rule off.
+///
+/// upstream: egui has no side-effect free way to read a widget's
+/// response or layer (see docs/upstream.md).
+pub fn peek_response(ctx: &Context, id: Id) -> Option<egui::Response> {
+    use egui::SurrenderFocusOn;
+    let was = ctx.options_mut(|o| {
+        std::mem::replace(
+            &mut o.input_options.surrender_focus_on,
+            SurrenderFocusOn::Never,
+        )
+    });
+    let r = ctx.read_response(id);
+    ctx.options_mut(|o| o.input_options.surrender_focus_on = was);
+    r
+}
+
 /// What the focus chain is pointed at.
 fn target(ctx: &Context, pressed: Option<(LayerId, Pos2)>) -> Option<(LayerId, Pos2)> {
     if let Some(id) = ctx.memory(|m| m.focused())
-        && let Some(r) = ctx.read_response(id)
+        && let Some(r) = peek_response(ctx, id)
     {
         return Some((r.layer_id, r.interact_rect.center()));
     }
@@ -142,7 +167,7 @@ fn follow_pointer(ctx: &Context, s: &mut State) {
         return;
     };
     if let Some(id) = ctx.memory(|m| m.focused())
-        && let Some(r) = ctx.read_response(id)
+        && let Some(r) = peek_response(ctx, id)
         && deepest(&s.last, r.layer_id, r.interact_rect.center()) != Some(under)
     {
         ctx.memory_mut(|m| m.surrender_focus(id));
@@ -398,7 +423,7 @@ fn escape(ctx: &Context, input: &mut egui::RawInput) {
     let Some(id) = ctx.memory(|m| m.focused()) else {
         return;
     };
-    if let Some(r) = ctx.read_response(id) {
+    if let Some(r) = peek_response(ctx, id) {
         let st = state(ctx);
         lock(&st).pressed = Some((r.layer_id, r.interact_rect.center()));
     }

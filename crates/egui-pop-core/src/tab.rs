@@ -338,7 +338,7 @@ fn begin_pass(ctx: &Context) {
         }
         let current = at.map(|(i, _)| i).or_else(|| {
             let f = focused?;
-            let r = ctx.read_response(f)?;
+            let r = crate::focus::peek_response(ctx, f)?;
             panels.iter().copied().find(|&p| {
                 s.last[p].layer == r.layer_id && s.last[p].rect.contains(r.rect.center())
             })

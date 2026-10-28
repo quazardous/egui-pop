@@ -1,8 +1,10 @@
 //! Palettes: floating panels over the workbench, opened floating, docked
 //! and floated again, dragged (snapped, clamped), docked by a drop over
 //! an area, hidden and shown by Tab, rolled up, pinned, giving the
-//! keyboard back on Escape, resized by their edges, every change through
-//! its step.
+//! keyboard back on Escape (and the focus a widget inside took), resized
+//! by their edges, every change through its step.
+
+use std::sync::{Arc, Mutex};
 
 use egui::accesskit::Role;
 use egui_kittest::Harness;
@@ -1053,4 +1055,90 @@ fn a_nested_tab_groups_band_takes_it_out_of_its_stack_whole() {
     assert!(matches!(out, Some(Outcome::Done(Ok(_)))), "{out:?}");
     assert_eq!(members(&h, &NAV), [TOOLS, NAV]);
     assert_eq!(floating(&h, &NAV).unwrap().pos, [300.0, 300.0]);
+}
+
+const MASKS: PanelId = PanelId::from_static("tree.masks");
+
+/// A palette holding a tree: a focusable widget that takes the focus
+/// when one of its rows is clicked, and keeps the arrows and Escape.
+struct Masks {
+    keys: Arc<Mutex<Vec<egui::Key>>>,
+}
+
+impl Plugin for Masks {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("tree")
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        let keys = self.keys.clone();
+        ctx.panel(
+            PanelSpec::new(MASKS, "Masks", Area::StartSide)
+                .palette()
+                .min_size(160.0),
+            move |ui, _| tree(ui, &keys),
+        )?;
+        Ok(())
+    }
+}
+
+fn tree(ui: &mut egui::Ui, keys: &Mutex<Vec<egui::Key>>) {
+    let id = ui.make_persistent_id("masks.tree");
+    // The tree first, as a tree view registers itself before its rows.
+    let rect = egui::Rect::from_min_size(ui.cursor().min, egui::vec2(ui.available_width(), 48.0));
+    let tree = ui.interact(rect, id, egui::Sense::focusable_noninteractive());
+    tree.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Other, true, "Mask tree"));
+    for row in ["Mask 1", "Mask 2"] {
+        if ui.button(row).clicked() {
+            ui.memory_mut(|m| m.request_focus(id));
+        }
+    }
+    if ui.memory(|m| m.has_focus(id)) {
+        let filter = egui::EventFilter {
+            horizontal_arrows: true,
+            vertical_arrows: true,
+            escape: true,
+            tab: false,
+        };
+        ui.memory_mut(|m| m.set_focus_lock_filter(id, filter));
+        if ui.input(|i| i.key_pressed(egui::Key::Delete)) {
+            lock(keys).push(egui::Key::Delete);
+        }
+    }
+}
+
+fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+#[test]
+fn a_tree_in_a_palette_keeps_the_focus_its_clicked_row_gave_it() {
+    let keys = Arc::new(Mutex::new(Vec::new()));
+    let app = App::builder()
+        .plugin(Masks { keys: keys.clone() })
+        .build(&egui::Context::default())
+        .unwrap();
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(900.0, 600.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+    h.run();
+    assert!(floating(&h, &MASKS).is_some(), "a palette");
+    let tree = h.ctx.memory(|m| m.focused());
+    assert!(tree.is_none(), "nothing focused when it opens");
+    h.get_by_label("Mask 1").click();
+    h.run();
+    let focused = h.ctx.memory(|m| m.focused());
+    assert!(
+        h.get_by_label("Mask tree").is_focused(),
+        "the tree keeps the focus its row gave it, not {focused:?}"
+    );
+    h.key_press(egui::Key::Delete);
+    h.run();
+    assert_eq!(*lock(&keys), [egui::Key::Delete], "the tree gets its keys");
+    // Escape in the palette still gives the keyboard back.
+    h.key_press(egui::Key::Escape);
+    h.run();
+    assert!(!h.get_by_label("Mask tree").is_focused());
+    assert!(h.ctx.memory(|m| m.focused()).is_none());
+    assert!(h.query_by_label("Mask 1").is_some(), "still open");
 }

@@ -86,6 +86,7 @@ use std::collections::BTreeMap;
 
 use egui::{Id, Key, Modifiers, Pos2, Rect, Ui, Vec2};
 use egui_pop_core::band::{self, BandStyle};
+use egui_pop_core::focus;
 use egui_pop_core::icon::Icon;
 use egui_pop_core::kit::{Glyph, Kit, KitCx, Part, State};
 use egui_pop_core::lock;
@@ -1033,12 +1034,14 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
         for (mb, r) in bands.iter().zip(&own) {
             members.insert(mb.panel.clone(), if tabs { rect } else { *r });
         }
-        // Escape in a palette gives the keyboard back.
+        // Escape in a palette gives the keyboard back. The key first,
+        // then the focused widget's layer, read without touching the
+        // focus (egui's `read_response` drops the focus of a widget a
+        // click did not land on, such as a tree focused through its row).
         let layer = shown.response.layer_id;
-        if let Some(focused) = ctx.memory(|m| m.focused())
-            && ctx
-                .read_response(focused)
-                .is_some_and(|r| r.layer_id == layer)
+        if ctx.input(|i| i.key_pressed(Key::Escape))
+            && let Some(focused) = ctx.memory(|m| m.focused())
+            && focus::peek_response(ctx, focused).is_some_and(|r| r.layer_id == layer)
             && ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape))
         {
             ctx.memory_mut(|m| m.surrender_focus(focused));
