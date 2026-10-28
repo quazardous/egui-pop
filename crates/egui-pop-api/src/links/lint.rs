@@ -11,7 +11,8 @@ use crate::app::AppHandle;
 /// What is wrong with the links the application declares, one line each:
 /// a target that does not parse, a blocked scheme, a `command:` link
 /// naming a command that is not declared, a local file that is not
-/// there. Walked: links declared by plugins ([`crate::Ctx::link`],
+/// there, a `docs:` page the viewer does not have (when a viewer is
+/// installed and knows its pages). Walked: links declared by plugins ([`crate::Ctx::link`],
 /// [`super::declare`]) and drawn as declared so far ([`super::link`]),
 /// menu items running `links.open` or `files.reveal`, the links in the
 /// tips' texts, and the actions of the toasts shown so far.
@@ -20,6 +21,7 @@ pub fn problems(app: &AppHandle) -> Vec<String> {
         return vec!["the links plugin is not connected".into()];
     };
     let policy = links.policy();
+    let docs = links.inside().and_then(|i| i.docs_pages());
     let commands: Vec<String> = app
         .commands()
         .into_iter()
@@ -60,16 +62,22 @@ pub fn problems(app: &AppHandle) -> Vec<String> {
     all.dedup();
     all.iter()
         .filter_map(|(place, target)| {
-            check(&policy, target, &commands)
+            check(&policy, target, &commands, docs.as_deref())
                 .err()
                 .map(|e| format!("{place}: {e}"))
         })
         .collect()
 }
 
-/// One declared link's problem, if any.
-pub fn check(policy: &model::Policy, target: &str, commands: &[String]) -> Result<(), String> {
-    model::check_declared(policy, target, commands, None)?;
+/// One declared link's problem, if any; `docs` lists the `docs:` pages
+/// there are (`None`: not checked).
+pub fn check(
+    policy: &model::Policy,
+    target: &str,
+    commands: &[String],
+    docs: Option<&[String]>,
+) -> Result<(), String> {
+    model::check_declared(policy, target, commands, docs)?;
     // A file the application ships or names must be there.
     if let Ok(t) = Target::parse(target)
         && let Some(facts) = super::facts_of(&t)
