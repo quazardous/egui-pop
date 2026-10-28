@@ -32,8 +32,10 @@
 //!   agents `context.read`, `context.request` (with `if_rev` and
 //!   `dry_run`), `context.go`, `context.set_mode`, `context.hold` and
 //!   `context.release`. The `contexts` collector shows it all.
-//! - **Undo out of sight**: an undo or a redo of a change made in
-//!   another place says so in a toast, with "Go there".
+//! - **Undo out of sight**: the value store's new steps carry the place
+//!   shown (`Store::set_place`); an undo, a redo or a jump that walks a
+//!   step made in another place (its `StepInfo::place`) says so in a
+//!   toast, with "Go there".
 //!
 //! ```
 //! use egui_pop_api::contexts::{self, ContextsPlugin, FrameSpec};
@@ -97,6 +99,7 @@ pub use egui_pop_model::context::{
 pub use egui_pop_model::ids::{FrameId, GroupId};
 
 use crate::app::{AppHandle, STEP_REDO, STEP_UNDO};
+use crate::history::{self, StepInfo};
 use crate::hooks::{Lifecycle, On};
 use crate::host::{Pending, source_of};
 use crate::services::ServiceToken;
@@ -424,13 +427,6 @@ struct Projection {
     /// Counts the projection's moves (scroll areas restore once per
     /// move).
     generation: u64,
-    /// The place path each undo step and redo step was made in, as the
-    /// store's histories stand.
-    stamps: Vec<Vec<Entry>>,
-    redo_stamps: Vec<Vec<Entry>>,
-    undo_len: Option<usize>,
-    /// The store's dropped steps when last followed.
-    dropped: (u64, u64),
 }
 
 impl Projection {
@@ -1090,6 +1086,8 @@ fn project(app: &AppHandle, svc: &ContextService, new: State, registry: FrameReg
         .collect();
     let doc = p.doc();
     drop(p);
+    // The value store's new steps are made here (`StepInfo::place`).
+    lock(&app.store()).set_place(new.places.clone());
     for k in stale {
         app.set_stack_context(&k, "");
     }
@@ -1562,89 +1560,48 @@ pub fn mode_toggle(ui: &mut Ui, app: &AppHandle, mode: &FrameId) -> egui::Respon
     r
 }
 
-/// Follows the store's undo and redo histories: each new step is stamped
-/// with the place path it was made in.
-fn track_undo(app: &AppHandle, svc: &ContextService) {
-    let (undo, redo, dropped) = {
-        let store = app.store();
-        let s = lock(&store);
-        (
-            s.undo_steps().len(),
-            s.redo_steps().len(),
-            s.dropped_steps(),
-        )
-    };
-    let mut p = lock(&svc.projection);
-    let here = p
-        .applied
-        .as_ref()
-        .map(|s| s.places.clone())
-        .unwrap_or_default();
-    // The steps the store's cap dropped went from the front of its lists:
-    // their stamps go the same way, so the others stay beside their steps.
-    let gone = |n: u64| usize::try_from(n).unwrap_or(usize::MAX);
-    let (undo_gone, redo_gone) = (gone(dropped.0 - p.dropped.0), gone(dropped.1 - p.dropped.1));
-    p.dropped = dropped;
-    let n = p.stamps.len().min(undo_gone);
-    p.stamps.drain(..n);
-    let n = p.redo_stamps.len().min(redo_gone);
-    p.redo_stamps.drain(..n);
-    p.undo_len = p.undo_len.map(|l| l.saturating_sub(undo_gone));
-    if p.undo_len.is_some_and(|n| undo > n) && redo == 0 {
-        p.redo_stamps.clear();
-    }
-    p.stamps.truncate(undo);
-    while p.stamps.len() < undo {
-        p.stamps.push(here.clone());
-    }
-    p.redo_stamps.truncate(redo);
-    while p.redo_stamps.len() < redo {
-        p.redo_stamps.insert(0, here.clone());
-    }
-    p.undo_len = Some(undo);
-}
-
-/// After an undo (or a redo): a change made in another place says where,
-/// with "Go there".
-fn undone(app: &AppHandle, redo: bool, result: &Result<Json, String>) {
-    let key = if redo { "redone" } else { "undone" };
+/// After an undo, a redo or a jump in one of the owner's scopes: a step
+/// made in another place than the one shown says where, with "Go there".
+/// The place is the step's own (`StepInfo::place`, root first; empty:
+/// the root); a component's local scope is undone where it is shown,
+/// and says nothing.
+fn undone(app: &AppHandle, what: Walked, result: &Result<Json, String>) {
     let Ok(v) = result else { return };
-    if v[key].is_null() {
+    let Some(step) = v["steps"]
+        .as_array()
+        .and_then(|s| s.last())
+        .and_then(|s| serde_json::from_value::<StepInfo>(s.clone()).ok())
+    else {
+        return;
+    };
+    if history::scopes(app)
+        .iter()
+        .any(|s| s.local && s.id == step.scope)
+    {
         return;
     }
     let Some(svc) = app.service(&CONTEXTS) else {
         return;
     };
-    let (stamp, here, title) = {
-        let mut p = lock(&svc.projection);
-        let stamp = if redo {
-            p.redo_stamps.pop()
-        } else {
-            p.stamps.pop()
-        };
-        if let Some(s) = &stamp {
-            if redo {
-                p.stamps.push(s.clone());
-            } else {
-                p.redo_stamps.push(s.clone());
-            }
+    let redo = match what {
+        Walked::Undo => false,
+        Walked::Redo => true,
+        // A jump that left the step done redid it.
+        Walked::Jump => {
+            history::line(app, &step.scope).is_some_and(|l| l.undo.iter().any(|s| s.id == step.id))
         }
-        p.undo_len = p
-            .undo_len
-            .map(|n| if redo { n + 1 } else { n.saturating_sub(1) });
+    };
+    let (here, title) = {
+        let p = lock(&svc.projection);
         let here = p
             .applied
             .as_ref()
             .map(|s| s.places.clone())
             .unwrap_or_default();
-        let title = stamp
-            .as_ref()
-            .and_then(|s| s.last())
-            .map(|e| p.crumb(&app.egui(), e));
-        (stamp, here, title)
+        let title = step.place.last().map(|e| p.crumb(&app.egui(), e));
+        (here, title)
     };
-    let Some(stamp) = stamp else { return };
-    if stamp == here {
+    if step.place == here {
         return;
     }
     let Some(t) = app.service(&crate::toasts::TOASTS) else {
@@ -1664,12 +1621,19 @@ fn undone(app: &AppHandle, redo: bool, result: &Result<Json, String>) {
     t.notify(crate::toasts::Toast::info(&text).action(
         &strings::tr(&ctx, &txt::CONTEXT_GO_THERE),
         CMD_GO,
-        json!({ "places": stamp }),
+        json!({ "places": step.place }),
     ));
 }
 
-/// Each pass: the answers a remote owner gave, the projection, the undo
-/// stamps.
+/// Which walk of a history ran.
+#[derive(Clone, Copy, Debug)]
+enum Walked {
+    Undo,
+    Redo,
+    Jump,
+}
+
+/// Each pass: the answers a remote owner gave, the projection.
 fn pass(app: &AppHandle) {
     let Some(svc) = app.service(&CONTEXTS) else {
         return;
@@ -1692,7 +1656,6 @@ fn pass(app: &AppHandle) {
         }
     }
     sync(app);
-    track_undo(app, &svc);
 }
 
 /// The documents the stack (`LocalContexts`) and its view are kept in:
@@ -1839,7 +1802,6 @@ fn describe(app: &AppHandle) -> Json {
             "layouts": p.layouts.keys().collect::<Vec<_>>(),
             "views": p.views,
             "places": p.places,
-            "undo_stamps": p.stamps.len(),
             "crumbs": crumb_labels(app, &svc, &p),
         })
     };
@@ -2140,8 +2102,15 @@ impl Plugin for ContextsPlugin {
                 with_owner(app, |c| c.remove_owner(&OwnerId::from(p)));
             }
         });
-        ctx.after(STEP_UNDO, |app, _, result| undone(app, false, result))
-            .after(STEP_REDO, |app, _, result| undone(app, true, result));
+        ctx.after(STEP_UNDO, |app, _, result| {
+            undone(app, Walked::Undo, result)
+        })
+        .after(STEP_REDO, |app, _, result| {
+            undone(app, Walked::Redo, result)
+        })
+        .after(history::STEP_JUMP, |app, _, result| {
+            undone(app, Walked::Jump, result);
+        });
         Ok(())
     }
 }

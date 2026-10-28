@@ -269,8 +269,14 @@ store, commands and steps: [State or event](state-or-event.md)):
   per frame, `context.refused` with the reason, `context.restored`,
   `context.held` and `context.released`. A plugin that must act on one
   frame reads `context.entered`.
-- **Undo**: undo steps remember the place they were made in. An undo
-  of a change made out of sight says where in a toast, with "Go there".
+- **Undo**: each step of a history carries the place it was made in
+  (`StepInfo::place`, ADR 0014): the stack tells the value store where
+  new steps are made (`Store::set_place`), and a host owning its own
+  histories fills it the same way. An undo, a redo or a jump in the
+  history panel that walks a change made out of sight says where in a
+  toast ("Undone in Photo 3"), with "Go there"; a component's local
+  history (the theme editor, the settings window) is undone where it
+  is shown and says nothing.
 
 The stack's own keys (`place`, `placeDepth`, `modePushed`,
 `mode.<group>`, `payload`, `payload.<field>`) are the projection's alone: a plugin setting one by
