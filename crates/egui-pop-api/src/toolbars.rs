@@ -146,6 +146,9 @@ pub struct ToolbarLayout {
     pub menu: MenuId,
     pub orientation: Orientation,
     pub labels: Labels,
+    /// Its name for screen readers ([`Toolbar::name`]).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
     /// Every tool, in order, those in "More tools" marked `overflow`.
     pub tools: Vec<ToolTrace>,
     /// How many tools went into "More tools" (separators not counted).
@@ -183,6 +186,7 @@ pub struct Toolbar<'a> {
     orientation: Orientation,
     labels: Labels,
     args: Json,
+    name: Option<String>,
 }
 
 impl<'a> Toolbar<'a> {
@@ -194,7 +198,17 @@ impl<'a> Toolbar<'a> {
             orientation: Orientation::Horizontal,
             labels: Labels::Icons,
             args: Json::Null,
+            name: None,
         }
+    }
+
+    /// Its name for screen readers (`Formatting`, `Tools`): its "More
+    /// tools" button is then `More tools: <name>`, so two toolbars of a
+    /// window never have two controls of one name. Give it whenever more
+    /// than one toolbar shows at a time.
+    pub fn name(mut self, name: impl Into<String>) -> Self {
+        self.name = Some(name.into());
+        self
     }
 
     /// A column instead of a row (a tool palette).
@@ -224,7 +238,9 @@ impl<'a> Toolbar<'a> {
     }
 
     /// Draws it in the room the `Ui` has, the tools that do not fit in
-    /// "More tools"; returns what it drew.
+    /// "More tools"; returns what it drew. A column measures the height
+    /// its `Ui` offers: inside `ui.horizontal` that is one row's, so give
+    /// it room (`ui.allocate_ui`, a panel) rather than a row.
     pub fn show(self, ui: &mut Ui) -> ToolbarLayout {
         let app = self.app;
         let ctx = ui.ctx().clone();
@@ -298,6 +314,7 @@ impl<'a> Toolbar<'a> {
             menu: self.menu.clone(),
             orientation: self.orientation,
             labels: self.labels,
+            name: self.name.clone(),
             overflow: overflow
                 .iter()
                 .filter(|&&i| tools[i].trace.kind != ToolKind::Separator)
@@ -552,7 +569,10 @@ impl<'a> Toolbar<'a> {
     /// The "More tools" button, opening the tools that did not fit.
     fn more(&self, ui: &mut Ui, m: &Metrics, cx: &WhenContext, rows: Vec<Shown>, width: f32) {
         let ctx = ui.ctx().clone();
-        let name = strings::tr(&ctx, &txt::TOOLBAR_MORE);
+        let name = match &self.name {
+            Some(toolbar) => strings::tr_args(&ctx, &txt::TOOLBAR_MORE_IN, &[("toolbar", toolbar)]),
+            None => strings::tr(&ctx, &txt::TOOLBAR_MORE),
+        };
         let (rect, response) = ui.allocate_exact_size(vec2(width, m.height), Sense::click());
         if ui.is_rect_visible(rect) {
             let kit = Kit::of(&ctx);

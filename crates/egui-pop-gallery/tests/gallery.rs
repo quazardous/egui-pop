@@ -421,6 +421,8 @@ fn toolbars_show_icons_states_and_the_tools_that_do_not_fit() {
         let narrow = toolbars::layout(&app, &BAR_NARROW).expect("drawn");
         assert!(narrow.overflow > 0, "{narrow:?}");
         let palette = toolbars::layout(&app, &PALETTE).expect("drawn");
+        // The column has room: every tool shows, none in More tools.
+        assert_eq!(palette.overflow, 0, "{palette:?}");
         let pick = palette.tools.iter().find(|t| t.label == "Pick").unwrap();
         assert!(pick.checked);
         assert_eq!(pick.icon.as_deref(), Some("picker"));
@@ -429,7 +431,7 @@ fn toolbars_show_icons_states_and_the_tools_that_do_not_fit() {
     // The tools that did not fit, opened from More tools.
     let mut h = harness(options("pop-dark", Density::Comfortable, "toolbars"));
     h.run();
-    h.get_by_label("More tools").click();
+    h.get_by_label("More tools: Narrow").click();
     h.run();
     h.run();
     let rows = egui_pop::api::menus::rows_drawn(&h.ctx);

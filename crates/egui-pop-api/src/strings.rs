@@ -36,6 +36,9 @@ pub const MENU_MORE: StrKey = StrKey::new("egui-pop-menu-more", "More menus");
 pub const MENU_MAIN: StrKey = StrKey::new("egui-pop-menu-main", "Main menu");
 /// A toolbar's button holding the tools that do not fit.
 pub const TOOLBAR_MORE: StrKey = StrKey::new("egui-pop-toolbar-more", "More tools");
+/// The same button of a named toolbar (`Toolbar::name`).
+pub const TOOLBAR_MORE_IN: StrKey =
+    StrKey::new("egui-pop-toolbar-more-in", "More tools: { $toolbar }");
 /// A toolbar button's tooltip: its command's title and its key.
 pub const TOOLBAR_WITH_KEY: StrKey =
     StrKey::new("egui-pop-toolbar-with-key", "{ $action } ({ $keys })");
@@ -1025,6 +1028,7 @@ pub const ALL: &[StrKey] = &[
     MENU_MORE,
     MENU_MAIN,
     TOOLBAR_MORE,
+    TOOLBAR_MORE_IN,
     TOOLBAR_WITH_KEY,
     MENU_DOES_NOT_APPLY,
     MENU_NOT_AVAILABLE,

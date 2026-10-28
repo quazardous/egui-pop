@@ -221,39 +221,43 @@ impl Plugin for ToolbarsPage {
 }
 
 fn show(ui: &mut Ui, app: &AppHandle) {
-    ui.label("Each toolbar draws a menu's items: a command's icon, its title and key in the tooltip, framed while its command is on, greyed where it does not apply (Publish while the card is locked; Undo, Cut and Paste when there is nothing to undo or no selection). Groups are separated; Align opens a submenu.");
+    ui.label("Each toolbar draws a menu's items: a command's icon, its title and key in the tooltip, framed while its command is on, greyed where it does not apply (Publish while the card is locked; Undo, Cut and Paste when there is nothing to undo or no selection). Groups are separated; Align opens a submenu. Each toolbar is named, so its More tools button says which it belongs to.");
     section(ui, "Icons");
     ui.horizontal(|ui| {
-        Toolbar::new(app, &BAR).show(ui);
+        Toolbar::new(app, &BAR).name("Card").show(ui);
     });
     section(ui, "Titles beside the icons");
     ui.horizontal_wrapped(|ui| {
         Toolbar::new(app, &BAR_TITLES)
+            .name("Card with titles")
             .labels(Labels::Beside)
             .show(ui);
     });
     section(ui, "In a narrow room: the rest in More tools");
     ui.allocate_ui(egui::vec2(240.0, 48.0), |ui| {
         ui.horizontal(|ui| {
-            Toolbar::new(app, &BAR_NARROW).show(ui);
+            Toolbar::new(app, &BAR_NARROW).name("Narrow").show(ui);
         });
     });
     section(ui, "A vertical tool palette");
-    ui.horizontal(|ui| {
+    // A column measures the height it is offered: room of its own, not a
+    // row's.
+    ui.allocate_ui(egui::vec2(240.0, 260.0), |ui| {
         egui::Frame::group(ui.style()).show(ui, |ui| {
             Toolbar::new(app, &PALETTE)
+                .name("Tools")
                 .labels(Labels::Beside)
                 .vertical()
                 .show(ui);
         });
-        ui.label(format!(
-            "Tool: {}, grid {}",
-            app.context().get("galleryTool"),
-            if app.context().get("galleryToolbarGrid") == "true" {
-                "on"
-            } else {
-                "off"
-            }
-        ));
     });
+    ui.label(format!(
+        "Tool: {}, grid {}",
+        app.context().get("galleryTool"),
+        if app.context().get("galleryToolbarGrid") == "true" {
+            "on"
+        } else {
+            "off"
+        }
+    ));
 }
