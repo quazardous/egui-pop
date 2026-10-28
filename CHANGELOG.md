@@ -147,6 +147,15 @@ publishes.
   `history.read` lists the snapshots, the replaced steps and the
   features. The gallery's `history` page shows them all, with a
   snapshot taken as an agent.
+- Pluggable file previews (egui-pop-api, docs/files.md):
+  `files::preview::PreviewProvider`, registered on
+  `Files::previews`, chosen by file extension, MIME type, magic bytes or
+  folder with a priority (a provider may pass to the next); previews
+  are made on a worker thread (in the frame on the web), the one asked
+  before cancelled when another is asked, cached by path, size and
+  modification time up to a size, and a provider's error or panic is
+  shown as a reason. The `files` collector lists the providers and the
+  cache.
 - The in-app file picker reads through a file system (egui-pop-api,
   docs/files.md): `files::fs::FileSystem`, the system's (`StdFs`) by
   default or a folder held in memory (`MemoryFs`), given with
