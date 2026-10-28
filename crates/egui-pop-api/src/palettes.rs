@@ -268,6 +268,7 @@ pub(crate) fn declare(ctx: &mut Ctx<'_>) -> Result<(), CtxError> {
     )?;
     ctx.command(
         CommandSpec::new(CMD_RESET, "Reset palettes", "View")
+            .icon("reset")
             .description("Puts the floating palettes back where they first open, rolled down and sized by their content."),
         |call| {
             reset(call.app);

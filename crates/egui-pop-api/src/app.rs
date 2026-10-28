@@ -3115,6 +3115,7 @@ impl App {
         )?;
         ctx.command(
             CommandSpec::new(CMD_THEME_TOGGLE, "Toggle light and dark theme", "View")
+                .icon("theme")
                 .description("Shows the other variant of the theme, light or dark, when it has one.")
                 .when("themePaired")
                 .menu(MENU_VIEW, "6_theme", 9),
@@ -3235,6 +3236,7 @@ impl App {
         ctx.on(crate::hooks::On::Pass, |app, _| crate::history::pass(app));
         ctx.command(
             CommandSpec::new(CMD_UNDO, "Undo", "Edit")
+                .icon("undo")
                 .description("Undo the last change.")
                 .key_with("Ctrl+Z", BindOptions::global().through_modal())
                 .when("!textInputFocus && canUndo")
@@ -3243,6 +3245,7 @@ impl App {
         )?;
         ctx.command(
             CommandSpec::new(CMD_REDO, "Redo", "Edit")
+                .icon("redo")
                 .description("Redo the last undone change.")
                 .key_with("Ctrl+Shift+Z", BindOptions::global().through_modal())
                 .key_with("Ctrl+Y", BindOptions::global().through_modal())

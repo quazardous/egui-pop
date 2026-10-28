@@ -1937,12 +1937,14 @@ impl Plugin for ContextsPlugin {
         let category = "Navigation";
         ctx.command(
             CommandSpec::new(CMD_BACK, "Back", category)
+                .icon("chevron-left")
                 .description("Pops the last pushed mode, else leaves the place shown for its parent.")
                 .key("Alt+Left"),
             |call| outcome_json(request(call.app, Envelope::new(Request::Back), call.origin)),
         )?
         .command(
             CommandSpec::new(CMD_UP, "Up to the parent place", category)
+                .icon("up")
                 .description("Leaves the place shown for its parent.")
                 .key("Alt+Shift+Up")
                 .when("placeDepth != '0'"),

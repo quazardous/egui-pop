@@ -2266,6 +2266,7 @@ impl Plugin for ClipboardPlugin {
         let category = "Edit";
         ctx.command(
             CommandSpec::new(CMD_CUT, "Cut", category)
+                .icon("cut")
                 .description("Cut the selection: copied once its delete is accepted.")
                 .key("Ctrl+X")
                 .key("Shift+Delete")
@@ -2280,6 +2281,7 @@ impl Plugin for ClipboardPlugin {
         )?
         .command(
             CommandSpec::new(CMD_COPY, "Copy", category)
+                .icon("copy")
                 .description("Copy the selection.")
                 .key("Ctrl+C")
                 .key("Ctrl+Insert")
@@ -2294,6 +2296,7 @@ impl Plugin for ClipboardPlugin {
         )?
         .command(
             CommandSpec::new(CMD_PASTE, "Paste", category)
+                .icon("paste")
                 .description("Paste in the richest format the focused element accepts.")
                 .key("Ctrl+V")
                 .key("Shift+Insert")
@@ -2310,6 +2313,7 @@ impl Plugin for ClipboardPlugin {
         )?
         .command(
             CommandSpec::new(CMD_PASTE_SPECIAL, "Paste special", category)
+                .icon("paste-special")
                 .description("Choose the format, the transform or the parts to paste, each with its preview.")
                 .key("Ctrl+Shift+V")
                 .when("!textInputFocus && canPaste")

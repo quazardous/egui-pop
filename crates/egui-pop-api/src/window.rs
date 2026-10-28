@@ -207,6 +207,8 @@ impl Plugin for WindowPlugin {
         }
         ctx.command(
             CommandSpec::new(CMD_FULLSCREEN, "Full screen", "View")
+                .icon("fullscreen")
+                .icon_on("exit-fullscreen")
                 .description("Fills the screen; the top edge brings the way out back.")
                 .key("F11")
                 .checked("windowFullscreen")

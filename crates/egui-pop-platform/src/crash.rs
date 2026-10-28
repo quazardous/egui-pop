@@ -520,6 +520,7 @@ impl Plugin for CrashPlugin {
         let dismiss = crashes.clone();
         ctx.command(
             CommandSpec::new(CMD_DISMISS, "Delete a crash report", "Help")
+                .icon("delete")
                 .description("Deletes a crash report (`path`).")
                 .args(json!({ "path": "report.json" }))
                 .hidden(),

@@ -320,6 +320,7 @@ fn commands(ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
     )?;
     ctx.command(
         CommandSpec::new(CMD_COPY, "Copy the selection", CAT)
+            .icon("copy")
             .description("Copies the terminal's selection to the clipboard.")
             .args(terminal.clone()),
         |call| {

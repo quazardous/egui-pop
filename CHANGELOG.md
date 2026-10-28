@@ -199,6 +199,16 @@ publishes.
   `FilesPlugin::file_system` or `Files::set_file_system`, so that the
   picker shows files on the web build too; `FilePicker::new_in` makes a
   picker on one. `files::PLUGIN` names the plugin.
+- egui-pop's own commands carry icons (egui-pop-api, egui-pop-editors,
+  egui-pop-platform, egui-pop-core; docs/icons.md, section 4.2), shown
+  by menus and the palette: Undo and Redo, Cut, Copy, Paste and Paste
+  special, Settings, the command palette, Full screen, the light and
+  dark toggle, the window's buttons and menu, Back and Up, the editors'
+  Find and Save, the terminal's Copy, the resets of the palettes and
+  the arrangement, and the log and crash report commands. Three
+  built-in icons are new for them: `cut` (scissors), `paste` (a
+  clipboard) and `paste-special` (a clipboard holding lines), drawn
+  from the icon font or painted.
 - The gallery's `history` page (egui-pop-gallery): values bound to the
   store, a button making a change as an agent, and the history panel's
   list beside them, a click jumping to a step; the History panel is in

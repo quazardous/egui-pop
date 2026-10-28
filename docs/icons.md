@@ -349,6 +349,19 @@ indicators made from a command (`Indicator::toggle` from `icon` and
 `icon_on`). A caller may still pass an icon for one control (a
 different size of the same idea), but the default is the command's.
 
+egui-pop's own commands declare theirs from the built-in names, so
+they show without the `phosphor` feature: Undo and Redo (`undo`,
+`redo`, and the editor's and the history's), Cut, Copy, Paste and
+Paste special (`cut`, `copy`, `paste`, `paste-special`, built-in names
+added for them), Settings (`settings`), the command palette
+(`command`), Full screen (`fullscreen`, `exit-fullscreen` while on),
+the light and dark toggle (`theme`), the window's Minimize, Maximize
+(`window-restore` while maximized), Close and its menu, Back and Up in
+the context stack (`chevron-left`, `up`), Find and Save in the editors
+(`search`, `save`), the resets of the palettes and the arrangement
+(`reset`). egui-pop declares no Select all command: a text field keeps
+egui's own.
+
 ### 4.3 Object-kind icons
 
 A kind is a namespaced id (`<domain>/<kind>`) mapped to an icon name,
