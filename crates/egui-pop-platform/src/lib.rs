@@ -20,6 +20,8 @@
 //! - [`text_scale`]: the system's text scaling read in-process (the
 //!   Settings portal, KDE's font DPI, the registry), the default of the
 //!   text size setting.
+//! - [`clipboard`]: the system clipboard over arboard (files, images,
+//!   HTML, text, the primary selection), the clipboard's system backend.
 //!
 //! Each service names its moments as steps (ADR 0011): a plugin may
 //! observe, veto or redirect, replace or extend them; the application's
@@ -31,6 +33,8 @@
 //! - [`window`]: the main window brought to the front;
 //! - [`strings`]: the text the services show themselves.
 
+#[cfg(all(feature = "clipboard", not(target_arch = "wasm32")))]
+pub mod clipboard;
 #[cfg(feature = "crash")]
 pub mod crash;
 pub mod dirs;

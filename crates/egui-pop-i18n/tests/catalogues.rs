@@ -50,6 +50,8 @@ fn platform(b: egui_pop_api::AppBuilder, scratch: &Path) -> egui_pop_api::AppBui
             .hook(false),
     )
     .plugin(focus::FocusModePlugin::fixed(Default::default()))
+    // Opens no clipboard until a copy or a paste.
+    .plugin(egui_pop_platform::clipboard::SystemClipboardPlugin::new())
 }
 
 /// Everything egui-pop shows, by key.

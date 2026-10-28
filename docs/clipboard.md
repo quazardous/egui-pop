@@ -219,6 +219,34 @@ fn system(&mut self) -> Option<&mut dyn SystemBackend> { Some(&mut self.system) 
 The `clipboard` collector names the backend in use and what it says of
 itself (`SystemBackend::describe`: on Wayland, its path).
 
+### arboard (egui-pop-platform)
+
+```rust,ignore
+use egui_pop::platform::clipboard::SystemClipboardPlugin;
+
+App::builder()
+    .plugin(ClipboardPlugin)
+    .plugin(SystemClipboardPlugin::new()) // feature `platform-clipboard`
+```
+
+`SystemClipboardPlugin` installs `Arboard`, which opens the clipboard
+on first use. arboard writes **one format per copy**: files (a
+`text/uri-list` of `file://` URIs), else an image, else HTML with its
+text alternative, else text; it reads all four. Private types stay in
+the owner. Its path to the system clipboard:
+
+| Platform | Path |
+|---|---|
+| Windows, macOS | the Win32 clipboard, `NSPasteboard` |
+| X11 | selections, through x11rb |
+| Wayland | XWayland by default: a copy reaches native Wayland applications only when the compositor hands XWayland's selection over (some do only while an X11 window has the focus). With `platform-clipboard-wayland` (arboard's `wayland-data-control`, through wl-clipboard-rs), the data-control protocol where the compositor offers it (wlroots compositors, KDE Plasma), XWayland elsewhere. The core protocol, which needs the window's input serial, is what egui-winit's text clipboard uses (smithay-clipboard), not arboard. |
+| the web | none: the module is not built for `wasm32` |
+
+The **primary selection** (select to copy, middle-click to paste) is
+read and written on X11 and Wayland through the backend
+(`clipboard::primary_text`, `clipboard::set_primary_text`); egui-pop's
+text inputs and code editor do not use it yet (opt-in, ADR 0015).
+
 ## Steps
 
 Copy and paste are steps (ADR 0011), observed, vetoed, redirected or
