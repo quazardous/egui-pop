@@ -115,7 +115,7 @@ use crate::{Ctx, CtxError, Plugin, PluginError};
 
 pub use egui_pop_model::clipboard::{
     Boundary, ClipItem, ClipOrigin, FormatId, HTML, PNG, Plan, Refusal, Repr, Slot, Stripped, TEXT,
-    TransformSpec, URI_LIST,
+    TitleKey, TransformSpec, URI_LIST,
 };
 
 /// The plugin's id.
@@ -713,20 +713,54 @@ fn sanitise(app: &AppHandle, boundary: Boundary, reprs: &mut [Repr]) -> Vec<Stri
     out
 }
 
-/// What a type is called, for messages: its declared title, else the
-/// item's own.
-fn title_of(app: &AppHandle, item: &ClipItem) -> String {
-    if !item.title.is_empty() {
-        return item.title.clone();
-    }
-    clip_type(app, &item.kind).map_or_else(|| item.kind.to_string(), |t| t.title)
+/// The catalogue key of a type's title: `clip-<slug(format)>.title`.
+pub fn type_title_key(format: &FormatId) -> String {
+    strings::declared_key(strings::kind::CLIP, format.as_str(), Some("title"))
 }
 
-fn format_title(app: &AppHandle, format: &FormatId) -> String {
-    if *format == TEXT {
-        return "text".into();
+/// What an item is called, in the interface's language: its own message
+/// ([`ClipItem::title_key`]), else its type's declared title when the
+/// item kept it, else its English title, else its format.
+pub fn title_of(app: &AppHandle, item: &ClipItem) -> String {
+    let ctx = app.egui();
+    if let Some(k) = &item.title_key {
+        let args: Vec<(&str, &str)> = k
+            .args
+            .iter()
+            .map(|(a, v)| (a.as_str(), v.as_str()))
+            .collect();
+        return strings::lookup_args(&ctx, &k.key, &item.title, &args);
     }
-    clip_type(app, format).map_or_else(|| format.to_string(), |t| t.title)
+    if item.external && item.kind == TEXT {
+        return strings::tr(&ctx, &txt::CLIPBOARD_TEXT);
+    }
+    let ty = clip_type(app, &item.kind);
+    match ty {
+        Some(t) if item.title.is_empty() || item.title == t.title => {
+            strings::lookup(&ctx, &type_title_key(&t.format), &t.title)
+        }
+        _ if !item.title.is_empty() => item.title.clone(),
+        _ => item.kind.to_string(),
+    }
+}
+
+/// What a format is called, in the interface's language: plain text, a
+/// declared type's title, else the format itself.
+pub fn format_title(app: &AppHandle, format: &FormatId) -> String {
+    let ctx = app.egui();
+    if *format == TEXT {
+        return strings::tr(&ctx, &txt::CLIPBOARD_TEXT);
+    }
+    clip_type(app, format).map_or_else(
+        || format.to_string(),
+        |t| strings::lookup(&ctx, &type_title_key(format), &t.title),
+    )
+}
+
+/// The types declared, with the plugin owning each (for catalogues:
+/// each type's title is a declaration, keyed by [`type_title_key`]).
+pub fn types(app: &AppHandle) -> Vec<(OwnerId, ClipType)> {
+    state(app).types.borrow().clone()
 }
 
 fn capitalised(text: &str) -> String {
@@ -964,7 +998,12 @@ fn run_copy(app: &AppHandle, req: &CopyRequest, who: &Origin) -> Result<Json, St
         return Ok(summary);
     }
     let group = if req.cut {
-        let g = group_begin(app, who, &format!("Cut {}", item.title));
+        let label = strings::tr_args(
+            &app.egui(),
+            &txt::CLIPBOARD_CUT_STEP,
+            &[("title", &title_of(app, &item))],
+        );
+        let g = group_begin(app, who, &label);
         if let Err(e) = source.delete(
             app,
             &Cut {
@@ -1186,7 +1225,12 @@ fn run_paste(app: &AppHandle, req: &PasteRequest, who: &Origin) -> Result<Json, 
     let group = if req.dry_run {
         None
     } else {
-        group_begin(app, who, &format!("Paste {}", title_of(app, &ready.item)))
+        let label = strings::tr_args(
+            &app.egui(),
+            &txt::CLIPBOARD_PASTE_STEP,
+            &[("title", &title_of(app, &ready.item))],
+        );
+        group_begin(app, who, &label)
     };
     let changes = ready.target.paste(
         app,

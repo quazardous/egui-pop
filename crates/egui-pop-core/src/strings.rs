@@ -375,6 +375,8 @@ pub mod kind {
     pub const PLUGIN: &str = "plugin";
     /// A frame of the context stack: a place or a mode.
     pub const FRAME: &str = "frame";
+    /// A type of clipboard item (its title: "a colour").
+    pub const CLIP: &str = "clip";
 }
 
 /// The key of a declaration's text: `<kind>-<slug(id)>`, then

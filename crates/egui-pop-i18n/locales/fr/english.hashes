@@ -329,12 +329,15 @@ egui-pop-cancel e09b40fcf1e41cfb
 egui-pop-clipboard-as 6316ea594e850f32
 egui-pop-clipboard-as-through 06fdbc1f9a1917cf
 egui-pop-clipboard-copied-stripped e6f1e5c950d19c57
+egui-pop-clipboard-cut-step 7385081d1f9a01c3
 egui-pop-clipboard-loses 67b13c7c56734c5d
 egui-pop-clipboard-not-copied c2a94a3b47232898
 egui-pop-clipboard-not-pasted 8ad10f6b979064a1
 egui-pop-clipboard-only-part e1ae963c92bca6de
 egui-pop-clipboard-paste-special 5b758766f60f3b13
+egui-pop-clipboard-paste-step 68b302286fe66b38
 egui-pop-clipboard-pasted-lossy cd19c2f1d8d60159
+egui-pop-clipboard-text 31de90ba8a547d64
 egui-pop-close 1f6b3eb35a454a53
 egui-pop-command-label f7db8091440d2b6d
 egui-pop-command-with-change a4dbe71ac8e01e89

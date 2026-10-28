@@ -604,6 +604,13 @@ pub fn declarations(app: &AppHandle, menus: &[MenuId]) -> Vec<Found> {
             format!("plugin {}", p.id),
         );
     }
+    for (_, t) in egui_pop_api::clipboard::types(app) {
+        push(
+            egui_pop_api::clipboard::type_title_key(&t.format),
+            &t.title,
+            format!("clipboard type {}", t.format),
+        );
+    }
     let frames = egui_pop_api::contexts::with_owner(app, |c| c.registry()).unwrap_or_default();
     for f in frames.iter() {
         push(
