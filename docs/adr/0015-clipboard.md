@@ -181,3 +181,53 @@ Edit commands (dispatched from egui's events too), the agents'
 page. The guide is [docs/clipboard.md](../clipboard.md). Left: the
 first types and their sanitisers (step 4), and the system backend for
 rich formats, private types and the primary selection (step 5).
+
+## Follow-up: gaps found by an application (2026-10-28)
+
+An application building its own clip types (parameters, graph nodes,
+mask shapes) and its own system clipboard on the contract found gaps
+(issue #73). Built, each in the guide ([docs/clipboard.md](../clipboard.md)):
+
+- **Elements and areas.** In a graph or a tree the focus sits on each
+  node or row: `bind_element` binds each element's widget with its key,
+  `bind_area` any focused widget whose centre lies in an area; the
+  source and the target receive the key (`ClipSource::copy_element`,
+  `Cut::element`, `Paste::element`) and agents name one (`element`).
+  The focused widget's rectangle comes from egui's lists of widgets:
+  `Context::read_response` would surrender the focus of a widget not
+  hovered during a press.
+- **Deferred pastes.** A target whose edit goes through the
+  application's loop answers `Pasted::Later` from `ClipTarget::apply`;
+  the history group stays open until the result arrives (one undo step
+  still), and the result is published as `clipboard.pasted`.
+- **Transforms that see the target.** `Transform::for_target` receives
+  the target's name, element and `ClipTarget::context`, so an
+  adaptation to the target is a transform whose loss is shown, not a
+  hidden step of `ClipTarget::paste`.
+- **Translatable titles.** A type's title is a declaration
+  (`clip-<format>.title`); an item carries its title as a catalogue
+  message (`ClipItem::title_key`); the undo step's labels are strings.
+- **`AppHandle::local`** is public, for a host's own state.
+- **The system backend (step 5).** `SystemBackend` writes one copy's
+  representations at once and reads every format the system clipboard
+  holds as one external item with several representations
+  (`ClipItem::external`); the default, `EguiText`, keeps text through
+  egui, so nothing changes for an application that does not opt in. A
+  host gives its own (`Clipboard::system`), an application installs
+  one (`set_backend`); `egui-pop-platform` has one over arboard
+  (`SystemClipboardPlugin`), which states its Wayland path (XWayland,
+  or the data-control protocol with `clipboard-wayland`) and reads and
+  writes the primary selection.
+- **The paste key with no text.** egui-winit makes no event when the
+  system clipboard holds no text; the chord is recognised by its
+  release (its press never reaches egui) and pasted with `no_text`, read
+  through the backend. egui 0.37's `NativeOptions::clipboard_shortcuts`
+  replaces this at the bump (docs/upstream.md).
+
+Left: egui-pop's text inputs and code editor using the primary
+selection (the backend reads and writes it; the widgets do not yet);
+private types across processes without a shared owner (arboard writes
+only standard formats: a host's backend may); several rich formats in
+one copy through arboard (it writes one per copy: files, else an image,
+else HTML with its text, else text); the web (no backend reads there);
+the first types of step 4.

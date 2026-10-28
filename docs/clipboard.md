@@ -312,6 +312,11 @@ payload), the endpoints and what plugins declared.
   only when the paste key brings it (egui reads it as text, on the
   key): Edit > Paste from the menu pastes the owner's item.
 - Private types across processes without a shared owner need a backend
-  that writes them (a host's); arboard writes only standard formats.
+  that writes them (a host's); arboard writes only standard formats,
+  one per copy.
+- egui-pop's text inputs and code editor do not use the primary
+  selection yet, though the arboard backend reads and writes it.
+- On the web no backend reads the system clipboard: a paste knows the
+  browser's paste text only.
 - The first types (colours, graph nodes, theme tokens, table rows) and
   their sanitisers come next (ADR 0015, step 4).
