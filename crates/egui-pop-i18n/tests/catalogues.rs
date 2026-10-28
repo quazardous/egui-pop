@@ -68,6 +68,7 @@ fn messages() -> Messages {
         .plugin(egui_pop_api::jobs::JobsPlugin::default())
         .plugin(egui_pop_api::theme_editor::ThemeEditorPlugin)
         .plugin(egui_pop_api::tips::TipsPlugin)
+        .plugin(egui_pop_api::about::AboutPlugin::default())
         .plugin(egui_pop_api::contexts::ContextsPlugin::default())
         .plugin(egui_pop_api::history_view::HistoryPlugin::default())
         .plugin(egui_pop_api::clipboard::ClipboardPlugin)

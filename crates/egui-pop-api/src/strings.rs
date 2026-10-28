@@ -844,6 +844,20 @@ pub const TIPS_STATE_USED: StrKey = StrKey::new("egui-pop-tips-state-used", "Its
 pub const TIPS_SHOW: StrKey = StrKey::new("egui-pop-tips-show", "Show");
 pub const TIPS_SHOW_NAME: StrKey = StrKey::new("egui-pop-tips-show-name", "Show the tip { $tip }");
 
+// About the application.
+
+/// The About dialog's title.
+pub const ABOUT_TITLE: StrKey = StrKey::new("egui-pop-about-title", "About { $application }");
+pub const ABOUT_VERSION: StrKey = StrKey::new("egui-pop-about-version", "Version { $version }");
+pub const ABOUT_LICENCE: StrKey = StrKey::new("egui-pop-about-licence", "Licence");
+pub const ABOUT_AUTHORS: StrKey = StrKey::new("egui-pop-about-authors", "Authors");
+pub const ABOUT_REPOSITORY: StrKey = StrKey::new("egui-pop-about-repository", "Source code");
+pub const ABOUT_WEBSITE: StrKey = StrKey::new("egui-pop-about-website", "Website");
+pub const ABOUT_DOCS: StrKey = StrKey::new("egui-pop-about-docs", "Documentation");
+pub const ABOUT_ISSUES: StrKey = StrKey::new("egui-pop-about-issues", "Report a problem");
+pub const ABOUT_COPY: StrKey = StrKey::new("egui-pop-about-copy", "Copy version info");
+pub const ABOUT_COPIED: StrKey = StrKey::new("egui-pop-about-copied", "Copied.");
+
 // The context stack.
 
 /// The breadcrumb's first crumb, the root.
@@ -1278,6 +1292,16 @@ pub const ALL: &[StrKey] = &[
     TIPS_STATE_USED,
     TIPS_SHOW,
     TIPS_SHOW_NAME,
+    ABOUT_TITLE,
+    ABOUT_VERSION,
+    ABOUT_LICENCE,
+    ABOUT_AUTHORS,
+    ABOUT_REPOSITORY,
+    ABOUT_WEBSITE,
+    ABOUT_DOCS,
+    ABOUT_ISSUES,
+    ABOUT_COPY,
+    ABOUT_COPIED,
     CONTEXT_ROOT,
     CONTEXT_LEAVE_MODE,
     CONTEXT_NO_MODE,

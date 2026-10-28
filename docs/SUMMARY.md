@@ -43,6 +43,7 @@
   - [Logs and crash reports](logs.md)
   - [The focus mode](focus-mode.md)
 - [Tips](tips.md)
+- [About the application](about.md)
 - [Debugging](debugging.md)
 - [Extensions](extensions.md)
 - [The gallery](gallery.md)

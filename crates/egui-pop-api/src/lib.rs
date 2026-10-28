@@ -62,6 +62,9 @@
 //! - [`theme_editor`]: a theme's tokens edited live, by role, with
 //!   colour pickers, contrast readouts, undo, export and import, a
 //!   plugin;
+//! - [`about`]: Help > About <application>, the application's name,
+//!   version, licences, authors and links, and its version info to
+//!   copy, a plugin;
 //! - [`tips`]: a tip of the day and contextual hints, dismissed for good
 //!   through the settings, a plugin;
 //! - [`strings`]: the interface's own text, by key with English
@@ -109,6 +112,7 @@
 //! assert_eq!(out.now(), Some(Ok(serde_json::json!("hello"))));
 //! ```
 
+pub mod about;
 pub mod app;
 pub mod arrangements;
 pub mod busy;

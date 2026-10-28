@@ -31,6 +31,14 @@ category-view = Affichage
 
 category-window = Fenêtre
 
+command-about =
+    .description = Le nom de l’application, sa version, sa licence, ses auteurs et ses liens, avec ses informations de version à copier.
+    .title = À propos de { $application }
+
+command-about-read =
+    .description = Le nom de l’application, sa version, sa description, ses licences, ses auteurs et ses liens, les versions d’egui-pop et d’egui, la plateforme, le moteur de rendu et les informations de version en texte.
+    .title = Lire les informations sur l’application
+
 command-app-devtools =
     .description = Ouvre ou ferme le panneau des outils de développement (quand le réglage Outils de développement est activé).
     .title = Outils de développement
@@ -506,6 +514,26 @@ command-workbench-leave-zen =
 command-workbench-zen =
     .description = N’affiche que le centre : ni barre de titre, de menus ou d’état, ni zone latérale ou du bas, ni palette. Échap en sort.
     .title = Mode zen
+
+egui-pop-about-authors = Auteurs
+
+egui-pop-about-copied = Copié.
+
+egui-pop-about-copy = Copier les informations de version
+
+egui-pop-about-docs = Documentation
+
+egui-pop-about-issues = Signaler un problème
+
+egui-pop-about-licence = Licence
+
+egui-pop-about-repository = Code source
+
+egui-pop-about-title = À propos de { $application }
+
+egui-pop-about-version = Version { $version }
+
+egui-pop-about-website = Site web
 
 egui-pop-area-bottom = le panneau du bas
 
@@ -1515,6 +1543,9 @@ panel-egui-pop-history =
 
 panel-egui-pop-jobs =
     .title = Tâches
+
+plugin-egui-pop-about =
+    .title = À propos
 
 plugin-egui-pop-arrangements =
     .title = Dispositions
