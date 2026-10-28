@@ -1292,6 +1292,100 @@ pub fn link(ui: &mut Ui, app: &AppHandle, label: &str, target: &str) -> Response
     Link::new(label, target).show(ui, app)
 }
 
+/// A short text in the inline subset (ADR 0017): emphasis, strong,
+/// code and links (`[label](target)`, `<https://…>`, a bare address),
+/// each link drawn with [`Link`]; tips, toasts and settings descriptions
+/// use it, so their text needs no markdown renderer. A text without any
+/// of it is a plain label. See `egui_pop_model::links::inline` for what
+/// is read.
+#[derive(Clone, Debug)]
+pub struct Inline<'a> {
+    text: &'a str,
+    weak: bool,
+    color: Option<egui::Color32>,
+    source: Source,
+}
+
+impl<'a> Inline<'a> {
+    /// A text the application declares: its links are declared ones.
+    pub fn new(text: &'a str) -> Self {
+        Self {
+            text,
+            weak: false,
+            color: None,
+            source: Source::Declared,
+        }
+    }
+
+    /// Drawn weak (a description).
+    pub fn weak(mut self) -> Self {
+        self.weak = true;
+        self
+    }
+
+    /// Drawn in this colour (a toast's text), links aside.
+    pub fn color(mut self, color: egui::Color32) -> Self {
+        self.color = Some(color);
+        self
+    }
+
+    /// Where its links come from (`Declared` unless said).
+    pub fn source(mut self, source: Source) -> Self {
+        self.source = source;
+        self
+    }
+
+    fn rich(&self, text: &str) -> RichText {
+        let t = RichText::new(text);
+        match self.color {
+            Some(c) => t.color(c),
+            None if self.weak => t.weak(),
+            None => t,
+        }
+    }
+
+    /// Draws it.
+    pub fn show(self, ui: &mut Ui, app: &AppHandle) -> Response {
+        use egui_pop_model::links::inline;
+        if !inline::has_markup(self.text) {
+            return ui.label(self.rich(self.text));
+        }
+        let runs = inline::runs(self.text);
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing.x = 0.0;
+            for run in &runs {
+                match &run.link {
+                    Some(target) => {
+                        Link::new(&run.text, target)
+                            .source(self.source)
+                            .show(ui, app);
+                    }
+                    None => {
+                        let mut t = self.rich(&run.text);
+                        if run.strong {
+                            t = t.strong();
+                        }
+                        if run.emphasis {
+                            t = t.italics();
+                        }
+                        if run.code {
+                            t = t.code();
+                        }
+                        ui.label(t);
+                    }
+                }
+            }
+        })
+        .response
+    }
+}
+
+/// Draws a short text the application declares in the inline subset;
+/// see [`Inline`].
+pub fn inline(ui: &mut Ui, app: &AppHandle, text: &str) -> Response {
+    Inline::new(text).show(ui, app)
+}
+
 /// A link's hover: the full target, then its host (an internationalised
 /// one with its punycode).
 fn hover(ui: &mut Ui, raw: &str, target: Option<&Target>) {

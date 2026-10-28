@@ -18,6 +18,12 @@ publishes.
   commit when known (`0.2.0 (abc1234)`): git's, else the
   `EGUI_POP_GALLERY_COMMIT` variable, else none. The facade gains
   `egui_pop::VERSION`.
+- The inline subset for short texts (egui-pop-model, egui-pop-api):
+  `egui_pop_model::links::inline::runs` reads emphasis, strong, code and links
+  (`[label](target)`, `<…>`, a bare `https://` address) and
+  `links::Inline` draws them, each link with the link widget; tips,
+  toasts and settings descriptions use it. A text without any of it is
+  drawn as before.
 - The gallery's `links` page (egui-pop-gallery): declared links, links
   that ask first (from content, a text showing another address, an
   internationalised host), local files, a blocked scheme, egui's own

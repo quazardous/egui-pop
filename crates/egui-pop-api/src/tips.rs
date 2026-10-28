@@ -1023,11 +1023,20 @@ fn service(app: &AppHandle) -> Result<std::sync::Arc<Tips>, String> {
         .ok_or_else(|| "the tips plugin is not connected".to_string())
 }
 
-/// A tip's card: an icon, a heading, the text (bold and code drawn),
-/// then the buttons `actions` draws: a note for screen readers.
-fn card(ui: &mut Ui, heading: &str, title: &str, text: &str, actions: impl FnOnce(&mut Ui)) {
+/// A tip's card: an icon, a heading, the text (in the inline subset:
+/// emphasis, code, links), then the buttons `actions` draws: a note for
+/// screen readers.
+fn card(
+    ui: &mut Ui,
+    app: &AppHandle,
+    heading: &str,
+    title: &str,
+    text: &str,
+    actions: impl FnOnce(&mut Ui),
+) {
     card_in(
         ui,
+        app,
         egui::Shadow::NONE,
         heading,
         title,
@@ -1039,8 +1048,10 @@ fn card(ui: &mut Ui, heading: &str, title: &str, text: &str, actions: impl FnOnc
 
 /// [`card`] with a shadow, and `corner` drawn at the end of the heading
 /// (a close button).
+#[allow(clippy::too_many_arguments)]
 fn card_in(
     ui: &mut Ui,
+    app: &AppHandle,
     shadow: egui::Shadow,
     heading: &str,
     title: &str,
@@ -1062,8 +1073,7 @@ fn card_in(
                 }
             });
             ui.strong(title);
-            let job = markup::job(text, ui.style(), ui.available_width());
-            ui.label(job);
+            crate::links::inline(ui, app, text);
             ui.horizontal_wrapped(actions);
         });
 }
@@ -1083,6 +1093,7 @@ pub fn tip_of_the_day(ui: &mut Ui, app: &AppHandle) -> bool {
     let heading = strings::tr(&ctx, &txt::TIPS_OF_THE_DAY);
     card(
         ui,
+        app,
         &heading,
         &tip.title_in(&ctx),
         &tip.text_shown(&ctx, app),
@@ -1142,6 +1153,7 @@ pub fn hint(ui: &mut Ui, app: &AppHandle, id: &str) -> bool {
     let heading = strings::tr(&ctx, &txt::TIPS_HINT);
     card(
         ui,
+        app,
         &heading,
         &tip.title_in(&ctx),
         &tip.text_shown(&ctx, app),
