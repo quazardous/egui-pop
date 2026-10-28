@@ -199,6 +199,16 @@ publishes.
   `FilesPlugin::file_system` or `Files::set_file_system`, so that the
   picker shows files on the web build too; `FilePicker::new_in` makes a
   picker on one. `files::PLUGIN` names the plugin.
+- Status bar items show icons (egui-pop-api; docs/status-bar.md):
+  `Indicator::icon` (by name; `IndicatorState::icon` lets a reducer
+  change it) draws an icon before the item's text, in its colour; an
+  item without one that runs a command shows the command's (its "on"
+  icon while the command is checked). An item with an empty text shows
+  its icon alone, named by its label for screen readers. The names are
+  checked like other declarations (`unknown-icon`), and
+  `strips::status` gives each item's `icon`. The gallery's strips page
+  puts an icon on its node item and adds a sync item shown by its icon
+  alone.
 - `Ctx::command_icon` (egui-pop-api; docs/icons.md, section 4.2): a
   plugin sets the icon (and the "on" icon) of a command it does not
   own, egui-pop's own or another plugin's; the last one wins, it goes
