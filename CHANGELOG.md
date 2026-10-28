@@ -12,6 +12,11 @@ publishes.
 
 ### Added
 
+- Links open on the desktop (egui-pop-api, egui-pop-gallery): eframe is
+  built with its `links` feature, so `Context::open_url` (About's links,
+  the gallery's Help links, a terminal's links) opens the system's
+  browser instead of doing nothing; it brings `webbrowser` (MIT OR
+  Apache-2.0).
 - A landing page for the site (https://quazardous.github.io/egui-pop/):
   a static page at the root saying what egui-pop is, with screenshots
   from the gallery's snapshots and links to the gallery, the docs, the
