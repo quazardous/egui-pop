@@ -7,7 +7,8 @@
 //! Pages: the theme overview, the token table, the theme editor and
 //! egui's built-in widgets (plain functions reused by the snapshot tests); zones and
 //! blocks (one plugin replacing, extending and wrapping another's
-//! blocks); settings applied live; translations; the clipboard (typed
+//! blocks); the application's history (its panel, a click jumping to a
+//! step); settings applied live; translations; the clipboard (typed
 //! items between widgets, paste special); the platform services
 //! (simulated unless `--platform`); the debug bridge.
 
@@ -31,7 +32,7 @@ use pages::story::PagePlugin;
 pub const TITLE: &str = "egui-pop gallery";
 
 /// The pages, as named on the command line.
-pub const PAGES: [&str; 52] = [
+pub const PAGES: [&str; 53] = [
     "overview",
     "tokens",
     "builtins",
@@ -43,6 +44,7 @@ pub const PAGES: [&str; 52] = [
     "sections",
     "motion",
     "values",
+    "history",
     "sliders",
     "inputs",
     "menus",
@@ -195,6 +197,8 @@ pub fn builder(options: &Options) -> AppBuilder {
             playground: None,
         })
         .plugin(pages::values::ValuesPage)
+        .plugin(egui_pop::api::history_view::HistoryPlugin::default())
+        .plugin(pages::history::HistoryPage)
         .plugin(pages::sliders::SlidersPage)
         .plugin(pages::inputs::InputsPage)
         .plugin(pages::menus::MenusPage)

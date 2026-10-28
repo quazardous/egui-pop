@@ -21,7 +21,7 @@ directory; without it they are simulated and nothing reaches the
 desktop).
 
 Pages: `overview` (the theme overview), `tokens`, `builtins` (egui's
-built-ins, and egui-pop's kit-drawn checkbox, radio, rows and chips), `roles` (layout by role: text roles, spacing by intent, cards and buttons by tone), `scoped` (egui's own buttons, toggles, combo box and text fields restyled by the kit in a scope), `theme-editor` (the theme editor), `fonts` (candidate font pairs side by side), `icons`, `indicators` (dots, badges, pips, flags, swatches), `sections` (collapsible sections stacked in a panel), `motion` (the motion clock), `values`, `sliders`, `inputs` (decorated inputs, field states and Tab order),
+built-ins, and egui-pop's kit-drawn checkbox, radio, rows and chips), `roles` (layout by role: text roles, spacing by intent, cards and buttons by tone), `scoped` (egui's own buttons, toggles, combo box and text fields restyled by the kit in a scope), `theme-editor` (the theme editor), `fonts` (candidate font pairs side by side), `icons`, `indicators` (dots, badges, pips, flags, swatches), `sections` (collapsible sections stacked in a panel), `motion` (the motion clock), `values`, `history` (the application's history: its panel's list, a click jumping to a step), `sliders`, `inputs` (decorated inputs, field states and Tab order),
 `menus`, `dialogs`, `files` (the file chooser), `toasts`, `tips` (tips of the day and
 hints), `progress`,
 `placeholders` (skeletons and empty states), `viewport` (the image
@@ -106,7 +106,7 @@ Themes, design tokens, the theme editor, icons and scaling.
 
 ### Widgets
 
-Egui's built-ins in egui-pop's style, and restyled by a kit in a scope, values, sliders, inputs (decorators, field states, Tab order), menus, dialogs (movable ones, a clear backdrop), file choosing, toasts, micro-indicators (still under reduced motion), collapsible sections (folded, resized), and progress (bars, rings, meters, spinners; still under reduced motion).
+Egui's built-ins in egui-pop's style, and restyled by a kit in a scope, values, the history (its list, an agent's step, one undone), sliders, inputs (decorators, field states, Tab order), menus, dialogs (movable ones, a clear backdrop), file choosing, toasts, micro-indicators (still under reduced motion), collapsible sections (folded, resized), and progress (bars, rings, meters, spinners; still under reduced motion).
 
 <table>
   <tr>
@@ -184,6 +184,7 @@ Egui's built-ins in egui-pop's style, and restyled by a kit in a scope, values, 
   <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/scoped-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/scoped-pop-dark.png" width="200" alt="scoped-pop-dark"></a><br>scoped-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/scoped-kit-restyled.png"><img src="../crates/egui-pop-gallery/tests/snapshots/scoped-kit-restyled.png" width="200" alt="scoped-kit-restyled"></a><br>scoped-kit-restyled</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/history-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/history-pop-dark.png" width="200" alt="history-pop-dark"></a><br>history-pop-dark</td>
   </tr>
 </table>
 
