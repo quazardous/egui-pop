@@ -147,6 +147,12 @@ publishes.
   `history.read` lists the snapshots, the replaced steps and the
   features. The gallery's `history` page shows them all, with a
   snapshot taken as an agent.
+- The in-app file picker reads through a file system (egui-pop-api,
+  docs/files.md): `files::fs::FileSystem`, the system's (`StdFs`) by
+  default or a folder held in memory (`MemoryFs`), given with
+  `FilesPlugin::file_system` or `Files::set_file_system`, so that the
+  picker shows files on the web build too; `FilePicker::new_in` makes a
+  picker on one. `files::PLUGIN` names the plugin.
 - The gallery's `history` page (egui-pop-gallery): values bound to the
   store, a button making a change as an agent, and the history panel's
   list beside them, a click jumping to a step; the History panel is in
