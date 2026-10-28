@@ -25,7 +25,10 @@
 //!   opening that menu, then a toggle per area, its icon filled while the
 //!   area shows and outlined while it is folded or hidden, its tooltip
 //!   giving its key. Drawn by the kit's `icon-button`; the side bars'
-//!   icons follow their side.
+//!   icons follow their side, and so does their order: with the primary
+//!   side bar on the right, the secondary side bar's toggle comes first.
+//!   Menus and the palette show the toggle commands' icons mirrored the
+//!   same way ([`command_icon`]).
 
 use egui::{Rect, Response, Sense, Ui, WidgetInfo, WidgetType, vec2};
 use egui_pop_core::icon::{Icon, Size};
@@ -247,6 +250,26 @@ pub fn toggle_icon(app: &AppHandle, area: Area) -> Icon {
     }
 }
 
+/// A command's icon as menus and the palette show it: the side bars'
+/// toggles declare their icons for the default position (the primary
+/// side bar on the left), and mirror them while it is on the right, as
+/// the title bar's toggles do ([`toggle_icon`]). Any other command's
+/// icon, or a name that is not a side's, is shown as declared.
+pub fn command_icon<'a>(app: &AppHandle, command: &CommandId, name: &'a str) -> &'a str {
+    let side_bar =
+        *command == CMD_TOGGLE_PRIMARY_SIDE_BAR || *command == CMD_TOGGLE_SECONDARY_SIDE_BAR;
+    if !side_bar || !side_bar_position(app).flipped() {
+        return name;
+    }
+    match name {
+        "layout-left" => "layout-right",
+        "layout-left-off" => "layout-right-off",
+        "layout-right" => "layout-left",
+        "layout-right-off" => "layout-left-off",
+        other => other,
+    }
+}
+
 /// Writes a layout setting as the user's change: one undo step.
 fn write_choice(
     app: &AppHandle,
@@ -307,8 +330,11 @@ pub fn open_menu(app: &AppHandle, under: Option<Rect>) -> bool {
 
 /// The title bar's layout controls (the [`BLOCK_LAYOUT_CONTROLS`]
 /// block): the "Customize layout" button, then the toggles of the left
-/// side bar, the panel and the right side bar, from the start. An
-/// application drawing a bar of its own may call it there.
+/// side bar, the panel and the right side bar, from the start, whichever
+/// side the primary side bar lies on. Each button's icon is recorded
+/// (the `layout controls` surface of the icons the debug bridge lists),
+/// so an agent reads which one shows. An application drawing a bar of
+/// its own may call it there.
 pub fn show(ui: &mut Ui, app: &AppHandle) {
     let ctx = ui.ctx().clone();
     let (left, right) = if side_bar_position(app).flipped() {
@@ -330,6 +356,12 @@ pub fn show(ui: &mut Ui, app: &AppHandle) {
                 None => {
                     let name = strings::tr(&ctx, &txt::LAYOUT_CUSTOMIZE);
                     let r = button(ui, Icon::Layout, &name, &name, None);
+                    egui_pop_core::icon::registry::record(
+                        &ctx,
+                        "layout controls",
+                        &name,
+                        Icon::Layout.name(),
+                    );
                     BUTTON.keyed(ctx.viewport_id()).set(&ctx, r.rect);
                     if r.clicked() {
                         open_menu(app, Some(r.rect));
@@ -350,7 +382,14 @@ pub fn show(ui: &mut Ui, app: &AppHandle) {
                         None => name.clone(),
                     };
                     let on = area_shown(app, area);
-                    let r = button(ui, toggle_icon(app, area), &name, &tip, Some(on));
+                    let icon = toggle_icon(app, area);
+                    let r = button(ui, icon, &name, &tip, Some(on));
+                    egui_pop_core::icon::registry::record(
+                        &ctx,
+                        "layout controls",
+                        &name,
+                        icon.name(),
+                    );
                     if r.clicked() {
                         app.run(command, Json::Null);
                     }
@@ -416,9 +455,10 @@ fn arrangement_items(app: &AppHandle) -> Vec<ListItem> {
 /// Declares the commands, the setting and the layout menu (the
 /// framework's own plugin does). Each command's icon is its area's
 /// layout icon, outlined while the area is hidden and filled while it
-/// shows (`icon_on`), on the side the default position gives it; the
-/// title bar's toggles follow the side the area lies on
-/// ([`toggle_icon`]).
+/// shows (`icon_on`), on the side the default position gives it; menus
+/// and the palette mirror it while the primary side bar is on the right
+/// ([`command_icon`]), and the title bar's toggles follow the side the
+/// area lies on ([`toggle_icon`]).
 pub(crate) fn declare(ctx: &mut crate::Ctx<'_>) -> Result<(), crate::CtxError> {
     let specs = [
         CommandSpec::new(CMD_TOGGLE_PRIMARY_SIDE_BAR, "Toggle primary side bar", "View")

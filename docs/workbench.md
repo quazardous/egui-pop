@@ -317,10 +317,20 @@ VS Code's layout controls, the rule here (`egui_pop::api::layout_controls`):
   `egui_pop.frame.layout` block of the `app.caption` zone). Each toggle's
   icon is filled while its area shows and outlined while it is folded or
   hidden (`layout-left`, `layout-bottom`, `layout-right` and their
-  `-off` twins), the side bars' icons following their side; its tooltip
-  gives its key, and assistive technology hears it as a toggle. They are
-  drawn by the kit's `icon-button`. `layout_controls::show` draws the
-  same controls anywhere else (the gallery's Layout controls page).
+  `-off` twins); its tooltip gives its key, and assistive technology
+  hears it as a toggle. They are drawn by the kit's `icon-button`.
+  `layout_controls::show` draws the same controls anywhere else (the
+  gallery's Layout controls page).
+- **The side bars' icons follow their side**, as VS Code's: with the
+  primary side bar on the right, its toggle shows `layout-right` and
+  the secondary side bar's `layout-left`, and the title bar's toggles
+  read secondary, panel, primary from the start. The layout menu, the
+  View menu and the palette mirror the toggle commands' icons the same
+  way (`layout_controls::command_icon`); the menus keep their order, as
+  VS Code's layout menu does, and the commands and their keys stay the
+  same. The title bar's icons are listed by the debug bridge's `icons`
+  collector (the `layout controls` surface), the menus' rows by
+  `menus::rows_drawn`.
 
 ## Palettes and toolboxes: never modal
 
