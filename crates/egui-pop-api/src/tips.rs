@@ -20,6 +20,14 @@
 //! Commands: `tips.reset` (every tip shown again, in the Help menu's
 //! category) and, for agents, `tips.list` and `tips.dismiss` (`tip`).
 //!
+//! Tips are also declared in files, `tips/<id>.md` ([`file`]): a header
+//! (`id`, `surface`, `command`, `target`, `contextual`), a `# Title` and
+//! the text, read with [`Tips::add_files`] (the files' text, built into
+//! the binary with `include_str!`) or [`Tips::add_dir`]. A text shows
+//! `**bold**` and `` `code` ``; `{key}` is the key bound to the tip's
+//! command in the keymap in force, `{key:<command>}` another command's
+//! ([`markup`]), so a rebound key shows rebound.
+//!
 //! Owned: egui has tooltips (`on_hover_text`), which stay as they are;
 //! no crate offers remembered, translated tips (see docs/tips.md).
 //!
@@ -38,7 +46,11 @@
 //! assert!(tips.of_the_day(app.handle()).is_none());
 //! ```
 
+pub mod file;
+pub mod markup;
+
 use std::collections::BTreeSet;
+use std::path::Path;
 use std::sync::Mutex;
 
 use egui::Ui;
@@ -83,14 +95,26 @@ fn setting_path(id: &SettingId) -> String {
     format!("settings/{id}")
 }
 
+pub use file::TipError;
+
 /// A tip: a title and a text, in English (translated by its id's keys).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Tip {
     pub id: String,
     pub title: String,
+    /// The text: paragraphs on lines of their own, `**bold**`,
+    /// `` `code` ``, `{key}` and `{key:<command>}`.
     pub text: String,
     /// Shown only where [`hint`] is called, never as the tip of the day.
     pub contextual: bool,
+    /// Where the tip makes sense, a `when` clause (empty: anywhere).
+    pub surface: String,
+    /// The command it teaches: `{key}` shows its binding.
+    pub command: Option<CommandId>,
+    /// The name of what it is about, as drawn ([`target`]).
+    pub target: Option<String>,
+    /// Who declared it, for grouping (empty: the id's first segment).
+    pub origin: String,
 }
 
 impl Tip {
@@ -100,6 +124,10 @@ impl Tip {
             title: title.into(),
             text: text.into(),
             contextual: false,
+            surface: String::new(),
+            command: None,
+            target: None,
+            origin: String::new(),
         }
     }
 
@@ -109,14 +137,79 @@ impl Tip {
         self
     }
 
+    /// Where the tip makes sense, a `when` clause.
+    pub fn surface(mut self, when: &str) -> Self {
+        self.surface = when.into();
+        self
+    }
+
+    /// The command it teaches.
+    pub fn command(mut self, command: CommandId) -> Self {
+        self.command = Some(command);
+        self
+    }
+
+    /// The name of what it is about ([`target`]).
+    pub fn target(mut self, name: &str) -> Self {
+        self.target = Some(name.into());
+        self
+    }
+
+    /// Who declared it (a plugin's id).
+    pub fn origin(mut self, origin: &str) -> Self {
+        self.origin = origin.into();
+        self
+    }
+
+    /// Who declared it: the origin given, else the id's first segment.
+    pub fn origin_name(&self) -> &str {
+        if self.origin.is_empty() {
+            self.id.split('.').next().unwrap_or(&self.id)
+        } else {
+            &self.origin
+        }
+    }
+
+    /// Reads a tip from a file's text ([`file`]).
+    pub fn parse(file: &str, source: &str) -> Result<Tip, TipError> {
+        file::parse(file, source)
+    }
+
     /// The title in the interface's language.
     pub fn title_in(&self, ctx: &egui::Context) -> String {
         strings::declared(ctx, TIP_KIND, &self.id, Some("title"), &self.title)
     }
 
-    /// The text in the interface's language.
+    /// The text in the interface's language, placeholders left.
     pub fn text_in(&self, ctx: &egui::Context) -> String {
         strings::declared(ctx, TIP_KIND, &self.id, Some("text"), &self.text)
+    }
+
+    /// The text as shown: in the interface's language, `{key}` and
+    /// `{key:<command>}` replaced by the bindings in force (as
+    /// `` `Ctrl+K` ``), a command without one by its title in bold. A
+    /// translation writes them `{ $key }` and `{ $key-<command> }` (the
+    /// command's dots as dashes), Fluent's own placeholders.
+    pub fn text_shown(&self, ctx: &egui::Context, app: &AppHandle) -> String {
+        let shown = |c: &str| CommandId::new(c).ok().and_then(|c| key_text(ctx, app, &c));
+        let own = self.command.as_ref().and_then(|c| shown(c.as_str()));
+        let mut args: Vec<(String, String)> = Vec::new();
+        if let Some(k) = &own {
+            args.push(("key".into(), k.clone()));
+        }
+        for c in markup::named_commands(&self.text) {
+            if let Some(k) = shown(&c) {
+                args.push((format!("key-{}", strings::slug(&c)), k));
+            }
+        }
+        let args: Vec<(&str, &str)> = args.iter().map(|(a, b)| (a.as_str(), b.as_str())).collect();
+        let text = strings::lookup_args(
+            ctx,
+            &strings::declared_key(TIP_KIND, &self.id, Some("text")),
+            &self.text,
+            &args,
+        );
+        markup::resolve(&text, own.as_deref(), shown)
     }
 
     fn to_json(&self, dismissed: bool) -> Json {
@@ -125,9 +218,30 @@ impl Tip {
             "title": self.title,
             "text": self.text,
             "contextual": self.contextual,
+            "surface": self.surface,
+            "command": self.command,
+            "target": self.target,
+            "origin": self.origin_name(),
             "dismissed": dismissed,
         })
     }
+}
+
+/// A command's key as a tip shows it: its first binding in force as
+/// code, else its title in bold; `None` for a command not declared.
+fn key_text(ctx: &egui::Context, app: &AppHandle, id: &CommandId) -> Option<String> {
+    if let Some(k) = app.keys_for(id).into_iter().next() {
+        return Some(format!("`{k}`"));
+    }
+    let (spec, _) = app.commands().into_iter().find(|(s, _)| s.id == *id)?;
+    let title = strings::declared(
+        ctx,
+        strings::kind::COMMAND,
+        id.as_str(),
+        Some("title"),
+        &spec.title,
+    );
+    Some(format!("**{title}**"))
 }
 
 #[derive(Debug, Default)]
@@ -153,6 +267,32 @@ impl Tips {
             Some(t) => *t = tip,
             None => s.tips.push(tip),
         }
+    }
+
+    /// Registers tips from files' text, `(name, text)` (`photos.rate.md`
+    /// and its text, built in with `include_str!`), as declared by
+    /// `origin` (a plugin's id). Returns the files that could not be read;
+    /// the others are registered.
+    pub fn add_files(&self, origin: &str, files: &[(&str, &str)]) -> Vec<TipError> {
+        let mut errors = Vec::new();
+        for (name, text) in files {
+            match file::parse(name, text) {
+                Ok(t) => self.add(t.origin(origin)),
+                Err(e) => errors.push(e),
+            }
+        }
+        errors
+    }
+
+    /// Registers the tips of a folder's `*.md` files (a plugin's `tips/`
+    /// folder shipped beside it), as declared by `origin`. Returns the
+    /// files that could not be read.
+    pub fn add_dir(&self, origin: &str, dir: &Path) -> Vec<TipError> {
+        let (tips, errors) = file::read_dir(dir);
+        for t in tips {
+            self.add(t.origin(origin));
+        }
+        errors
     }
 
     /// Every tip, in the order registered.
@@ -363,8 +503,8 @@ impl Plugin for TipsPlugin {
     }
 }
 
-/// A tip's card: an icon, a heading, the text, then the buttons
-/// `actions` draws: a note for screen readers.
+/// A tip's card: an icon, a heading, the text (bold and code drawn),
+/// then the buttons `actions` draws: a note for screen readers.
 fn card(ui: &mut Ui, heading: &str, title: &str, text: &str, actions: impl FnOnce(&mut Ui)) {
     Kit::of(ui.ctx())
         .tip_card
@@ -377,7 +517,8 @@ fn card(ui: &mut Ui, heading: &str, title: &str, text: &str, actions: impl FnOnc
                 ui.weak(heading);
             });
             ui.strong(title);
-            ui.label(text);
+            let job = markup::job(text, ui.style(), ui.available_width());
+            ui.label(job);
             ui.horizontal_wrapped(actions);
         });
 }
@@ -399,7 +540,7 @@ pub fn tip_of_the_day(ui: &mut Ui, app: &AppHandle) -> bool {
         ui,
         &heading,
         &tip.title_in(&ctx),
-        &tip.text_in(&ctx),
+        &tip.text_shown(&ctx, app),
         |ui| {
             let several = left > 1;
             if ui
@@ -457,7 +598,7 @@ pub fn hint(ui: &mut Ui, app: &AppHandle, id: &str) -> bool {
         ui,
         &heading,
         &tip.title_in(&ctx),
-        &tip.text_in(&ctx),
+        &tip.text_shown(&ctx, app),
         |ui| {
             let got = strings::tr(&ctx, &txt::TIPS_GOT_IT);
             let name = strings::tr_args(

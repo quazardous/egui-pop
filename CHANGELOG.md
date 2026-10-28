@@ -31,6 +31,17 @@ publishes.
   the same request from code. Snapshots and the hover
   preview of the ADR's panel wait on owner support (the contract has no
   snapshot nor preview request yet).
+- Tips declared in files (egui-pop-api; docs/tips.md): `tips/<id>.md`, a
+  header (`id`, `surface`, `command`, `target`, `contextual`), a
+  `# Title` and the text, registered with `Tips::add_files` (built in
+  with `include_str!`) or `Tips::add_dir`, which report each file that
+  could not be read with its line. A tip's text shows `**bold**` and
+  `` `code` ``, and `{key}` / `{key:<command>}` become the key bindings
+  in force, so a rebound key shows rebound (`{ $key }` and
+  `{ $key-<command> }` in a catalogue). `Tip` gains `surface`,
+  `command`, `target` and `origin`. The gallery's tips of the day are
+  files now (`crates/egui-pop-gallery/tips`).
+
 - The extension template's command declares an icon
   (`CommandSpec::icon("plus")`), shown by menus and the palette.
 - The command palette shows a command's icon (egui-pop-api;
