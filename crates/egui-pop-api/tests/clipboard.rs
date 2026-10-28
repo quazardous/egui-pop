@@ -303,9 +303,10 @@ fn ctrl_c_and_ctrl_v_copy_a_typed_item_between_two_widgets() {
 }
 
 #[test]
-fn the_paste_key_pastes_once_when_the_logic_runs_twice_a_pass() {
-    // As under eframe: its `logic` hook, then `App::show`, which runs
-    // the logic again.
+fn the_paste_key_pastes_once_a_pass() {
+    // As under eframe: its `logic` hook, then `App::show`, which calls
+    // the logic again; and between passes, the logic ticked alone (a
+    // hidden window) over the last pass's input.
     let (b, _) = builder();
     let app = b.build(&egui::Context::default()).unwrap();
     let mut h = Harness::builder()
@@ -319,12 +320,37 @@ fn the_paste_key_pastes_once_when_the_logic_runs_twice_a_pass() {
         );
     h.run();
     let app = h.state().handle().clone();
-    let refused = |app: &AppHandle| {
+    let pastes = |app: &AppHandle| {
         app.step_traces()
             .into_iter()
             .filter(|t| t.step == STEP_PASTE)
-            .filter(|t| matches!(t.result, Some(Err(_))))
             .count()
+    };
+    // The paste key's events one pass each, as egui-winit sends them;
+    // right after the pass holding its release, the logic ticks alone
+    // over that pass's input.
+    let paste_key = |h: &mut Harness<'_, App>, press: bool| {
+        let key = |pressed| egui::Event::Key {
+            key: Key::V,
+            physical_key: None,
+            pressed,
+            repeat: false,
+            modifiers: Modifiers::COMMAND,
+        };
+        h.event(egui::Event::ModifiersChanged(Modifiers::COMMAND));
+        h.step();
+        if press {
+            h.event(key(true));
+            h.step();
+        }
+        h.event(key(false));
+        h.step();
+        let ctx = h.ctx.clone();
+        for _ in 0..3 {
+            h.state_mut().logic(&ctx);
+        }
+        h.event(egui::Event::ModifiersChanged(Modifiers::NONE));
+        h.run();
     };
     h.get_by_label("Swatch A").focus();
     h.run();
@@ -333,18 +359,16 @@ fn the_paste_key_pastes_once_when_the_logic_runs_twice_a_pass() {
     h.get_by_label("Swatch B").focus();
     h.run();
     // The paste key as a key: its press, then its release.
-    h.key_press_modifiers(Modifiers::COMMAND, Key::V);
-    h.run();
+    paste_key(&mut h, true);
     assert_eq!(store_hex(&app, B), "#d9a441");
-    assert_eq!(refused(&app), 0, "the release is no second paste");
+    assert_eq!(pastes(&app), 1, "the release is no second paste");
     // As egui-winit sends it with text on the system clipboard: the
     // paste event, then the key's release alone.
     h.event(egui::Event::Paste("#102030".into()));
     h.run();
-    h.key_up_modifiers(Modifiers::COMMAND, Key::V);
-    h.run();
+    paste_key(&mut h, false);
     assert_eq!(store_hex(&app, B), "#102030");
-    assert_eq!(refused(&app), 0, "the release is no second paste");
+    assert_eq!(pastes(&app), 2, "the release is no second paste");
 }
 
 #[test]

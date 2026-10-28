@@ -83,7 +83,7 @@ fn install_pass_marker(ctx: &Context) {
 /// The viewport and the number of the pass running in `ctx`; `None`
 /// between passes (eframe's ticks of a hidden window, a test calling
 /// [`App::logic`] alone), or before the marker saw a pass begin.
-fn pass_in_progress(ctx: &Context) -> Option<(egui::ViewportId, u64)> {
+pub(crate) fn pass_in_progress(ctx: &Context) -> Option<(egui::ViewportId, u64)> {
     let viewport = ctx.viewport_id();
     let pass = ctx.cumulative_pass_nr();
     (PASS_BEGUN.keyed(viewport).get(ctx) == Some(pass)).then_some((viewport, pass))

@@ -821,8 +821,6 @@ struct State {
     deferred: RefCell<Vec<Deferred>>,
     backend: RefCell<Option<Box<dyn SystemBackend>>>,
     paste_key: RefCell<PasteKey>,
-    /// The pass whose events the paste key watch read last.
-    paste_key_pass: Cell<Option<u64>>,
     /// The last read of the system clipboard, with its pass.
     read_cache: RefCell<Option<(u64, Option<Vec<Repr>>)>>,
 }
@@ -2090,15 +2088,13 @@ fn is_paste_key(key: egui::Key, modifiers: egui::Modifiers) -> bool {
 /// with no text on the system clipboard (files, an image). Gives
 /// whether Shift was held (paste special) when it is.
 ///
-/// Reads each pass's events once: the logic runs twice in a pass under
-/// eframe (its `logic` hook, then `App::show`), and a second read of a
-/// release would take it for one whose press egui never saw.
+/// Reads the events only while a pass runs: between passes (eframe's
+/// ticks of a hidden window) the input is still the last pass's, read
+/// already, and a second read of a release would take it for one whose
+/// press egui never saw.
 fn watch_paste_key(app: &AppHandle, ctx: &egui::Context) -> Option<bool> {
+    crate::app::pass_in_progress(ctx)?;
     let st = state(app);
-    let pass = ctx.cumulative_pass_nr();
-    if st.paste_key_pass.replace(Some(pass)) == Some(pass) {
-        return None;
-    }
     let mut k = st.paste_key.borrow_mut();
     ctx.input(|i| {
         if i.modifiers.command {
