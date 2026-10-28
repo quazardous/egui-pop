@@ -1,6 +1,6 @@
 # 0017: Links and outside content: one service opens them, an egui-native viewer shows what is safe, the rest goes outside
 
-Date: 2026-10-28. Status: **proposed**.
+Date: 2026-10-28. Status: **accepted** (2026-10-28).
 
 The analysis behind it (what exists today, what egui and eframe do with
 a link, a survey of openers, markdown and HTML renderers, webviews and
@@ -206,6 +206,13 @@ reasons):
     `mailto:` (same tab, which hands it to the mail client).
 14. **Rate limits?** One pending confirmation per agent session, five
     queued, then refused; content opens only on a click.
+
+## Answers to the open questions (2026-10-28)
+
+The owner accepted the proposed defaults above, with the analysis's
+fifteenth: the viewer is a `viewer` module in `egui-pop-views` behind a
+`markdown` feature rather than a new crate. Steps 1 to 4 of the
+analysis come first; the viewer (step 5) follows.
 
 ## Done ahead of the steps
 
