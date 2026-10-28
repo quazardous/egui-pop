@@ -178,4 +178,9 @@ other paths. The journal says `file.cancelled`. The debug bridge's
 `files` collector shows the choices open, the in-app picker's folder,
 field and entries, and answers a choice (`answer`).
 
-The gallery's `files` page opens each kind of choice in a demo folder.
+The gallery's `files` page opens each kind of choice in a demo folder
+whose files are made by code at start (the repository holds no binary
+file): PNG and JPEG images drawn with the `image` crate, a text file, a
+Markdown document and a CSV table, written to the temporary folder on
+the desktop and given to the picker as a `MemoryFs` on the web, so the
+previews show there too.

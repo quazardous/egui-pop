@@ -34,6 +34,8 @@ egui-pop = { workspace = true, features = ["viewport", "graph-yaml", "imaging", 
 egui = { workspace = true, features = ["default_fonts"] }
 eframe = { workspace = true, features = ["default_fonts", "wgpu", "accesskit", "wayland", "x11", "links"] }
 serde_json.workspace = true
+# The files page's demo images, drawn and encoded at start.
+image = { workspace = true, features = ["png", "jpeg"] }
 profiling = { workspace = true, optional = true }
 # MIT: the spans the `threading` example measures.
 tracing = { version = "0.1", optional = true }

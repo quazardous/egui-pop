@@ -147,6 +147,12 @@ publishes.
   `history.read` lists the snapshots, the replaced steps and the
   features. The gallery's `history` page shows them all, with a
   snapshot taken as an agent.
+- The gallery's demo folder has real files (egui-pop-gallery): its
+  images (PNG and JPEG, drawn with the `image` crate), a text file, a
+  Markdown document and a CSV table are made by code at start, with a
+  fixed modification time, instead of placeholders holding the bytes
+  `demo`; on the web the picker reads the same files from memory, so
+  the files page shows previews there too.
 - The system's thumbnails in the file picker (egui-pop-platform,
   feature `thumbnails`, off by default; the facade's
   `platform-thumbnails`, part of `platform`): `thumbnails::ThumbnailsPlugin`
