@@ -511,7 +511,7 @@ command-tips-origin =
     .title = Turn a plugin's tips on or off
 
 command-tips-reset =
-    .description = Forgets which tips were dismissed.
+    .description = Forgets which tips were dismissed and which were shown today.
     .title = Show every tip again
 
 command-tips-show =

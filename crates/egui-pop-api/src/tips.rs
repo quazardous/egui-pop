@@ -739,10 +739,13 @@ impl Tips {
         }
     }
 
-    /// Shows every tip again.
+    /// Shows every tip again: none dismissed, none held back for having
+    /// been shown today. The commands used stay recorded: what a person
+    /// knows does not change, and the browser still shows those tips.
     pub fn reset(&self, app: &AppHandle) -> Result<(), String> {
         lock(&self.state).closed = false;
-        self.write_dismissed(app, &BTreeSet::new())
+        self.write_dismissed(app, &BTreeSet::new())?;
+        Self::write_setting(app, &SETTING_TIPS_SEEN, String::new())
     }
 
     /// The tips of the day still to show, in order.
@@ -839,7 +842,7 @@ impl Plugin for TipsPlugin {
         )?;
         ctx.command(
             CommandSpec::new(CMD_TIPS_RESET, "Show every tip again", CAT)
-                .description("Forgets which tips were dismissed."),
+                .description("Forgets which tips were dismissed and which were shown today."),
             |call| {
                 let tips = call
                     .app

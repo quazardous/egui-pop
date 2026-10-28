@@ -199,7 +199,9 @@ Dismissing a tip writes `tips.dismissed` without an undo step, through
 the `tips.dismiss` step (`tip`, `cause`: `user` or `agent`; a veto keeps
 it showing). The settings are saved with the others, so a tip dismissed
 stays dismissed in the next run. `tips.reset` ("Show every tip again")
-empties the list; for agents, `tips.list` and `tips.dismiss` (`tip`).
+empties the list and `tips.seen`, so a tip shown today may come again
+at once; `tips.used` stays, since what a person knows does not change
+(the browser still shows those tips). For agents, `tips.list` and `tips.dismiss` (`tip`).
 
 ## Translated
 

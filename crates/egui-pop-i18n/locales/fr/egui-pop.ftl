@@ -404,7 +404,7 @@ command-tips-origin =
     .title = Activer ou désactiver les astuces d’un plugin
 
 command-tips-reset =
-    .description = Oublie quelles astuces ont été écartées.
+    .description = Oublie quelles astuces ont été écartées et lesquelles ont été affichées aujourd’hui.
     .title = Afficher de nouveau toutes les astuces
 
 command-tips-show =
