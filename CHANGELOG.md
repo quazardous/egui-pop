@@ -12,6 +12,10 @@ publishes.
 
 ### Added
 
+- The gallery's `history` page (egui-pop-gallery): values bound to the
+  store, a button making a change as an agent, and the history panel's
+  list beside them, a click jumping to a step; the History panel is in
+  the gallery too.
 - The history panel and the `history.*` commands (egui-pop-api, ADR
   0014): `history_view::HistoryPlugin` brings a `History` panel (closed
   until asked for, in the end side bar; `history_view::show` draws it

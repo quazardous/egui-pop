@@ -785,6 +785,50 @@ fn tab_cycles_inside_a_modal() {
 }
 
 #[test]
+fn the_history_page_lists_the_steps_and_jumps_to_one() {
+    use egui_pop::api::history::{self, APP};
+    use egui_pop::model::commands::Origin;
+    use egui_pop::model::values::{Change, Set, Value};
+    use egui_pop_gallery::pages::history::{EXPOSURE, RADIUS};
+    let mut h = harness(options("pop-dark", Density::Comfortable, "history"));
+    h.run();
+    let app = h.state().app.handle().clone();
+    let before = history::line(&app, &APP).unwrap().undo.len();
+    {
+        let store = app.store();
+        let mut s = egui_pop::core::lock(&store);
+        s.set(Set::new(
+            EXPOSURE,
+            Change::To(Value::Float(0.3)),
+            Origin::User,
+        ))
+        .unwrap();
+        s.seal();
+        s.set(Set::new(RADIUS, Change::To(Value::Int(40)), Origin::User))
+            .unwrap();
+        s.seal();
+    }
+    h.run();
+    h.get_by_label("Double the radius as an agent").click();
+    h.run();
+    let line = history::line(&app, &APP).unwrap();
+    assert_eq!(line.undo.len(), before + 3);
+    assert_eq!(line.head().unwrap().origin, Origin::Agent("helper".into()));
+    // Undone: the agent's step is muted under the head.
+    assert!(app.undo(&Origin::User).ok());
+    h.run();
+    assert!(h.query_by_label("Start").is_some());
+    egui_pop_test::assert_all_named(&h);
+    h.snapshot("history-pop-dark");
+    // The start row undoes everything.
+    h.get_by_label("Start").click();
+    h.run();
+    let line = history::line(&app, &APP).unwrap();
+    assert!(line.undo.is_empty());
+    assert_eq!(line.redo.len(), before + 3);
+}
+
+#[test]
 fn values_bind_in_three_modes_and_watch_follows() {
     let mut results = egui_kittest::SnapshotResults::new();
     for theme in ["pop-dark", "pop-light"] {
