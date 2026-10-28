@@ -36,7 +36,8 @@ publishes.
   egui-pop-api): menus, the palette and the shortcuts editor fill it
   with the application's name (`AppBuilder::name`), in English and in
   translations; `strings::set_application` and `strings::application`
-  hold it per context.
+  hold it per context. The extractor keeps it a Fluent placeable in the
+  English catalogue (egui-pop-i18n, `extract::plain_with`).
 - The gallery's `history` page (egui-pop-gallery): values bound to the
   store, a button making a change as an agent, and the history panel's
   list beside them, a click jumping to a step; the History panel is in
