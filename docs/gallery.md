@@ -33,7 +33,7 @@ outlines and the loupe), `node-graph` (the node graph editor), `graph-file` (the
 (the live tree), `table` (lists and tables), `library` (the photo
 library), `text-editor`,
 `code-editor`, `terminal`, `zones` (zones and blocks), `workbench`,
-`palettes`, `arrangements`, `contexts` (the context stack: places and modes, and the status bar that follows them), `clipboard` (typed items copied between palettes, paste special's previews), `links` (one policy for every link: declared links, links that ask first, local files, an agent's request), `strips` (the activity bar, and status items: live states, a popover, hover cards), `jobs` (a pretend host's
+`palettes`, `arrangements`, `contexts` (the context stack: places and modes, and the status bar that follows them), `clipboard` (typed items copied between palettes, paste special's previews), `links` (one policy for every link: declared links, links that ask first, local files, an agent's request), `viewer` (help pages, markdown and images in a panel), `strips` (the activity bar, and status items: live states, a popover, hover cards), `jobs` (a pretend host's
 background jobs), `frame`, `scale`, `pointer` (pointer gesture profiles),
 `platform` (the platform services),
 `settings`, `i18n` (translations) and `debug` (the debug
@@ -256,7 +256,7 @@ the display, and a preview dialog (a custom dialog holding a viewport).
 
 ### Layout
 
-Zones and blocks, the workbench, the layout controls, palettes, arrangements, the context stack, the clipboard, links, strips and the window frame.
+Zones and blocks, the workbench, the layout controls, palettes, arrangements, the context stack, the clipboard, links, the viewer, strips and the window frame.
 
 <table>
   <tr>
@@ -293,6 +293,7 @@ Zones and blocks, the workbench, the layout controls, palettes, arrangements, th
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/layout-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/layout-pop-dark.png" width="200" alt="layout-pop-dark"></a><br>layout-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/layout-menu-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/layout-menu-pop-dark.png" width="200" alt="layout-menu-pop-dark"></a><br>layout-menu-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/links-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/links-pop-dark.png" width="200" alt="links-pop-dark"></a><br>links-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/viewer-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/viewer-pop-dark.png" width="200" alt="viewer-pop-dark"></a><br>viewer-pop-dark</td>
   </tr>
 </table>
 

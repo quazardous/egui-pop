@@ -59,6 +59,7 @@ pub mod tokens;
 pub mod toolbars;
 pub mod tree;
 pub mod values;
+pub mod viewer;
 pub mod viewport;
 pub mod workbench;
 pub mod zones;

@@ -2260,6 +2260,109 @@ fn the_links_page_opens_declared_links_and_asks_for_content_and_agents() {
 }
 
 #[test]
+fn the_viewer_shows_docs_pages_finds_zooms_and_asks_before_remote_images() {
+    use egui::accesskit::Role;
+    use egui_pop::api::links::{self, How, RecordingOpener, Source};
+    use egui_pop::views::viewer::{self, VIEWER};
+    use serde_json::json;
+    let mut h = harness(options("pop-dark", Density::Comfortable, "viewer"));
+    h.run();
+    let app = h.state().app.handle().clone();
+    egui_pop_test::assert_links_clean(&h.state().app);
+    let rec = RecordingOpener::default();
+    links::links(&app)
+        .unwrap()
+        .set_opener(std::sync::Arc::new(rec.clone()));
+    // A `docs:` link opens inside, in the viewer's panel, offline.
+    h.get_by_role_and_label(Role::Link, "The help").click();
+    h.run();
+    h.run();
+    let v = app.service(&VIEWER).unwrap();
+    assert_eq!(v.state()["target"], "docs:index");
+    assert_eq!(v.state()["status"], "shown");
+    assert!(app.panel_visible(&viewer::PANEL));
+    assert!(rec.records().is_empty(), "nothing went outside");
+    egui_pop_test::assert_all_named(&h);
+    let mut results = egui_kittest::SnapshotResults::new();
+    results.add(h.try_snapshot("viewer-pop-dark"));
+    // A link of the page: the guide, inside; back and forward walk.
+    v.follow(&app, "guide.md", false);
+    h.run();
+    assert_eq!(v.state()["target"], "docs:guide.md");
+    assert_eq!(v.state()["back"], json!(["docs:index"]));
+    app.run(viewer::CMD_BACK, json!({}));
+    h.run();
+    assert_eq!(v.state()["target"], "docs:index");
+    app.run(viewer::CMD_FORWARD, json!({}));
+    h.run();
+    assert_eq!(v.state()["target"], "docs:guide.md");
+    // Find in page, and the next match.
+    app.run(viewer::CMD_FIND, json!({ "query": "zoom" }));
+    h.run();
+    let find = v.state()["find"].clone();
+    assert!(find["matches"].as_u64().unwrap() >= 2, "{find}");
+    assert_eq!(find["at"], 1);
+    app.run(viewer::CMD_FIND_NEXT, json!({}));
+    h.run();
+    assert_eq!(v.state()["find"]["at"], 2);
+    // The page's zoom, apart from the interface's.
+    app.run(viewer::CMD_ZOOM_IN, json!({}));
+    h.run();
+    assert!((v.zoom() - 1.1).abs() < 0.001);
+    app.run(viewer::CMD_ZOOM_RESET, json!({}));
+    h.run();
+    assert!((v.zoom() - 1.0).abs() < 0.001);
+    // A remote image waits for the user, then its host is remembered.
+    assert_eq!(v.state()["blocked_hosts"], json!(["images.example.org"]));
+    let agent = egui_pop::model::commands::Origin::Agent("gallery".into());
+    app.run_as(
+        viewer::CMD_LOAD_IMAGES,
+        json!({ "host": "images.example.org" }),
+        agent,
+    );
+    h.run();
+    assert_eq!(
+        v.state()["blocked_hosts"],
+        json!(["images.example.org"]),
+        "an agent cannot allow a host"
+    );
+    h.get_by_label("Load images from images.example.org")
+        .click();
+    h.run();
+    h.run();
+    assert_eq!(v.state()["blocked_hosts"], json!([]));
+    assert!(v.allowed_hosts(&app).contains("images.example.org"));
+    // A page that is not there: an error page with Retry, Open outside
+    // and Copy link.
+    v.follow(&app, "missing.md", false);
+    h.run();
+    assert_eq!(v.state()["status"], "failed");
+    assert_eq!(v.state()["error"]["failure"], "not_found");
+    h.get_by_role_and_label(Role::Button, "Retry");
+    // The error page's and the toolbar's.
+    assert_eq!(
+        h.query_all_by_role_and_label(Role::Button, "Open outside")
+            .count(),
+        2
+    );
+    // A web link in a page goes outside, through the policy.
+    app.run(viewer::CMD_BACK, json!({}));
+    h.run();
+    v.follow(&app, "https://github.com/quazardous/egui-pop", false);
+    h.run();
+    let r = rec.records();
+    assert_eq!(r.len(), 1);
+    assert_eq!(
+        (r[0].target.as_str(), r[0].how, r[0].source),
+        (
+            "https://github.com/quazardous/egui-pop",
+            How::Outside,
+            Source::Declared
+        )
+    );
+}
+
+#[test]
 fn the_shortcuts_editor_searches_by_key_and_removes_every_key() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "settings"));
     h.run();
