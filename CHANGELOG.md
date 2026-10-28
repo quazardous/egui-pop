@@ -12,6 +12,13 @@ publishes.
 
 ### Added
 
+- A landing page for the site (https://quazardous.github.io/egui-pop/):
+  a static page at the root saying what egui-pop is, with screenshots
+  from the gallery's snapshots and links to the gallery, the docs, the
+  API, the repository and the licences (`tools/site/index.html`, light
+  and dark, no script nor external resource; its links checked by
+  `tools/site/links.py`). The gallery moves to `/gallery/`; the docs'
+  header links to both.
 - The gallery turns About on (egui-pop-gallery): Help > About egui-pop
   gallery, and Help > "egui-pop on GitHub" and "Documentation"; the
   `about` page draws the dialog's body and opens the dialog.

@@ -6,7 +6,7 @@
 [![Latest version](https://img.shields.io/crates/v/egui-pop.svg)](https://crates.io/crates/egui-pop)
 [![Documentation](https://docs.rs/egui-pop/badge.svg)](https://docs.rs/egui-pop)
 [![unsafe: platform crates only](https://img.shields.io/badge/unsafe-platform%20crates%20only-success.svg)](#unsafe-code)
-[![Demo](https://img.shields.io/badge/demo-live-ff4f8b.svg)](https://quazardous.github.io/egui-pop/)
+[![Demo](https://img.shields.io/badge/demo-live-ff4f8b.svg)](https://quazardous.github.io/egui-pop/gallery/)
 [![Build Status](https://github.com/quazardous/egui-pop/actions/workflows/ci.yml/badge.svg)](https://github.com/quazardous/egui-pop/actions/workflows/ci.yml)
 [![MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/quazardous/egui-pop/blob/main/LICENSE-MIT)
 [![Apache](https://img.shields.io/badge/license-Apache-blue.svg)](https://github.com/quazardous/egui-pop/blob/main/LICENSE-APACHE)
@@ -23,7 +23,7 @@ egui's own widgets from the theme. It is for people building a real tool
 on egui (an editor, a viewer, a control panel) who want that plumbing
 done once. Not an official egui crate.
 
-[![The egui-pop gallery in pop-dark: the theme overview](https://github.com/quazardous/egui-pop/raw/main/docs/screenshots/overview-pop-dark.png)](https://quazardous.github.io/egui-pop/)
+[![The egui-pop gallery in pop-dark: the theme overview](https://github.com/quazardous/egui-pop/raw/main/docs/screenshots/overview-pop-dark.png)](https://quazardous.github.io/egui-pop/gallery/)
 
 ## Quickstart
 
