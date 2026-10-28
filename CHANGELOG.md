@@ -147,6 +147,13 @@ publishes.
   `history.read` lists the snapshots, the replaced steps and the
   features. The gallery's `history` page shows them all, with a
   snapshot taken as an agent.
+- `file.preview` for agents (egui-pop-api, docs/files.md): a path's
+  preview metadata (folder or not, size, modification time, provider,
+  kind, dimensions, pages, a folder's counts, the provider's facts, or
+  why there is none), no pixels and no text; `files::preview_metadata`
+  from code. The gallery's `files-preview-pop-dark` snapshot shows the
+  picker previewing an image; tests drive the pane, `Alt+P` and the
+  command with a fake provider and the demo folder.
 - The gallery's demo folder has real files (egui-pop-gallery): its
   images (PNG and JPEG, drawn with the `image` crate), a text file, a
   Markdown document and a CSV table are made by code at start, with a

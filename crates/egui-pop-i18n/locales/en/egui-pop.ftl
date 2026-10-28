@@ -242,6 +242,10 @@ command-editor-write =
     .description = Changes the text through `edit.change`: the whole `text`; or `text` between `from` and `to` (`{"{"}line, col{"}"}` from 0); or a list of `changes`. One undo step.
     .title = Write the text
 
+command-file-preview =
+    .description = A file's or a folder's preview metadata (`path`), as the in-app picker shows it: whether it is a folder, its size and modification time, the provider, the kind of preview, dimensions, pages, a folder's counts, the provider's facts, or why there is none; no pixels and no text.
+    .title = Preview a file
+
 command-gesture-graph-fit =
     .description = Fits the whole graph in the view.
     .title = Node graph: fit

@@ -170,6 +170,15 @@ impl PreviewProvider for Notes {
 | `file.choose` | `{ "id", "request" }` | opens the system's chooser or the in-app picker |
 | `file.chosen` | `{ "id", "request", "paths" }` | remembers the places, gives the paths |
 
+For agents, the `file.preview` command (`{ "path" }`, kept out of the
+palette) gives a path's preview metadata as the pane shows it, made at
+once if it is not in the cache: whether it is a folder, its size and
+modification time, the provider, the kind of preview, dimensions,
+pages, a folder's counts, the provider's facts, or the state and the
+reason when there is none. No pixels and no text. The `files`
+collector shows the providers, the cache, and the highlighted entry's
+preview state in each open picker.
+
 A run-hook on `file.choose` replaces the whole chooser: it answers
 `{ "paths": [...] }` or `{ "cancelled": true }` at once, or later
 through `Files::deliver`. A before-hook on `file.chosen` refuses a

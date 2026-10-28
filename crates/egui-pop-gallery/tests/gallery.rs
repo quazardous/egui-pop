@@ -2266,6 +2266,66 @@ fn the_files_page_chooses_with_the_in_app_picker() {
     assert!(egui_pop::api::files::recent(h.state().app.handle()).contains(&root.join("Photos")));
 }
 
+#[test]
+fn the_files_page_previews_the_highlighted_file() {
+    use egui_pop::model::commands::Origin;
+    let root = egui_pop_gallery::pages::files::demo_folder();
+    let mut h = harness(options("pop-dark", Density::Comfortable, "files"));
+    h.run();
+    h.get_by_label("Open an image…").click();
+    h.run();
+    h.run();
+    h.get_by_label("Filter, or type a path").type_text("harb");
+    h.run();
+    run_until(&mut h, |h| preview_state(h) == "ready");
+    h.run();
+    let preview =
+        || h.state().app.handle().debug_snapshot()["files"]["open"][0]["picker"]["preview"].clone();
+    assert_eq!(preview()["provider"], "egui_pop.images", "{}", preview());
+    assert!(h.query_by_label("240 × 160").is_some(), "{}", preview());
+    assert!(h.query_by_label("2026-01-15 10:04 UTC").is_some());
+    h.snapshot("files-preview-pop-dark");
+    // Alt+P hides the pane, and the setting remembers; again shows it.
+    h.key_press_modifiers(egui::Modifiers::ALT, egui::Key::P);
+    h.run();
+    h.run();
+    assert!(h.query_by_label("Dimensions").is_none());
+    assert!(!egui_pop::api::files::preview_wanted(
+        h.state().app.handle()
+    ));
+    h.key_press_modifiers(egui::Modifiers::ALT, egui::Key::P);
+    h.run();
+    run_until(&mut h, |h| h.query_by_label("Dimensions").is_some());
+    assert!(egui_pop::api::files::preview_wanted(h.state().app.handle()));
+    // An agent reads the same metadata.
+    let out = h
+        .state_mut()
+        .app
+        .run(
+            &egui_pop::api::files::CMD_PREVIEW,
+            serde_json::json!({ "path": root.join("Photos/lighthouse.jpg") }),
+            Origin::Agent("test".into()),
+        )
+        .now()
+        .unwrap()
+        .unwrap();
+    assert_eq!(out["kind"], "image", "{out}");
+    assert_eq!(out["dimensions"], serde_json::json!([160, 240]));
+    // A folder: its items and first images.
+    let out = egui_pop::api::files::preview_metadata(
+        &h.state()
+            .app
+            .handle()
+            .service(&egui_pop::api::files::FILES)
+            .unwrap(),
+        &root.join("Photos"),
+    )
+    .unwrap();
+    assert_eq!(out["kind"], "folder", "{out}");
+    assert_eq!(out["folders"], 2);
+    assert_eq!(out["thumbnails"], 2);
+}
+
 /// The state of the open picker's preview (`none` without one).
 fn preview_state(h: &Harness<'_, Gallery>) -> String {
     h.state().app.handle().debug_snapshot()["files"]["open"][0]["picker"]["preview"]["state"]
