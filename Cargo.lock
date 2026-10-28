@@ -1197,9 +1197,11 @@ name = "egui-pop-model"
 version = "0.2.0"
 dependencies = [
  "egui-pop-test-macros",
+ "idna",
  "log",
  "serde",
  "serde_json",
+ "url",
 ]
 
 [[package]]

@@ -19,6 +19,8 @@ workspace = true
 log.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+url.workspace = true
+idna.workspace = true
 
 [dev-dependencies]
 # Path only (left out when publishing): the `critical` mark of the

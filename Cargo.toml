@@ -48,6 +48,11 @@ serde = { version = "1", features = ["derive"] }
 # MIT OR Apache-2.0: token and kit files may be written in YAML (comments).
 serde-saphyr = { version = "2", default-features = false, features = ["deserialize"] }
 log = "0.4"
+# MIT OR Apache-2.0: links parsed and their hosts shown in Unicode and
+# punycode (`egui_pop_model::links`); already in the tree through
+# eframe's `links` (webbrowser).
+url = "2.5"
+idna = "1"
 egui-pop-model = { version = "0.2.0", path = "crates/egui-pop-model" }
 # Without its default fonts: the facade's `bundled-fonts` turns them on,
 # so an application can leave them out.
