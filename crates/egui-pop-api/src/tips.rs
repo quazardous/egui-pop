@@ -28,7 +28,7 @@
 //! it. Commands `tips.show`, `tips.next`, `tips.gotIt`, `tips.notNow`
 //! (Escape), `tips.off` and, for agents, `tips.current`.
 //!
-//! Tips are also declared in files, `tips/<id>.md` ([`file`]): a header
+//! Tips are also declared in files, `tips/<id>.md` ([`mod@file`]): a header
 //! (`id`, `surface`, `command`, `target`, `contextual`), a `# Title` and
 //! the text, read with [`Tips::add_files`] (the files' text, built into
 //! the binary with `include_str!`) or [`Tips::add_dir`]. A text shows
@@ -213,7 +213,7 @@ impl Tip {
         }
     }
 
-    /// Reads a tip from a file's text ([`file`]).
+    /// Reads a tip from a file's text ([`mod@file`]).
     pub fn parse(file: &str, source: &str) -> Result<Tip, TipError> {
         file::parse(file, source)
     }
