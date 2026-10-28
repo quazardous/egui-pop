@@ -169,6 +169,10 @@ command-crash-reveal =
     .description = Ouvre le fichier d’un rapport de plantage (`path`).
     .title = Afficher un rapport de plantage
 
+command-deeplink-open =
+    .description = Ouvre un lien du schéma propre à l’application (`url`) par l’étape `deeplink.open`.
+    .title = Ouvrir un lien de l’application
+
 command-dialogs-move =
     .description = Déplace le dialogue affiché avec les flèches ; Entrée garde la place, Échap le remet où il était.
     .title = Déplacer le dialogue

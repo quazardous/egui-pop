@@ -85,6 +85,8 @@ command-crash-dismiss.description b5df35a904ab206d
 command-crash-dismiss.title 8d7a524d19b27a4a
 command-crash-reveal.description e039b5328a31627c
 command-crash-reveal.title fc7f6a28bfaf4aa8
+command-deeplink-open.description 031619f6e67cdf44
+command-deeplink-open.title c0fee5be543b96c0
 command-dialogs-move.description dcf98be63ecae961
 command-dialogs-move.title a273c065a7d7359a
 command-edit-copy.description a3eea3fbff61f7b1

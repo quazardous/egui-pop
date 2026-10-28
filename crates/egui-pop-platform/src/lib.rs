@@ -17,6 +17,10 @@
 //!   next start (`crash.report`); nothing is sent.
 //! - [`focus`]: the window manager's focus mode read in-process (the
 //!   Settings portal, `kwinrc`, the registry), followed while running.
+//! - [`open`]: the links service's system opener: local files and
+//!   folders opened with the system's default application, and Reveal
+//!   (the file manager with the file selected), through the portals in
+//!   Flatpak.
 //! - [`text_scale`]: the system's text scaling read in-process (the
 //!   Settings portal, KDE's font DPI, the registry), the default of the
 //!   text size setting.
@@ -51,6 +55,8 @@ pub mod keys;
 pub mod logs;
 #[cfg(feature = "notify")]
 pub mod notify;
+#[cfg(feature = "open")]
+pub mod open;
 pub mod strings;
 #[cfg(feature = "text-scale")]
 pub mod text_scale;

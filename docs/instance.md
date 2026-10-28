@@ -54,6 +54,12 @@ application's id and the user's name. Nothing else is written.
 | `instance.second_launch` | `args`, `cwd`, `links` (the arguments in one of the plugin's schemes) | the main window comes to the front, then each link runs `deeplink.open` |
 | `deeplink.open` | `url` | the plugin's `links` command runs with `{ "url" }`; without one the step fails and says so |
 
+A click on a link in one of the plugin's schemes inside the
+application (the [links service](links.md)) opens it in-process, with
+no round trip through the system: the plugin adds its schemes to the
+links policy at start, and its hidden command `deeplink.open` (`url`)
+runs the same step.
+
 `deeplink.open` also runs at start for the links the first launch was
 given (`viewer://album/3` on its command line). A plugin vetoes
 `instance.second_launch` to stay in the background, replaces it to open

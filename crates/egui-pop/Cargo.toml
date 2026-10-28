@@ -85,6 +85,7 @@ platform = [
     "platform-text-scale",
     "platform-clipboard",
     "platform-thumbnails",
+    "platform-open",
 ]
 ## A single instance and deep links (`egui_pop::platform::instance`).
 platform-instance = ["dep:egui-pop-platform", "egui-pop-platform/instance"]
@@ -117,6 +118,9 @@ platform-clipboard-wayland = ["platform-clipboard", "egui-pop-platform/clipboard
 ## (`egui_pop::platform::thumbnails`; the freedesktop cache and
 ## thumbnailers).
 platform-thumbnails = ["dep:egui-pop-platform", "egui-pop-platform/thumbnails"]
+## Local files and folders opened outside, and Reveal, for the links
+## service (`egui_pop::platform::open`).
+platform-open = ["dep:egui-pop-platform", "egui-pop-platform/open"]
 ## The system's file chooser (through `rfd`: the xdg desktop portal on
 ## Linux); without it, the in-app picker.
 native-dialogs = ["egui-pop-api/native-dialogs"]

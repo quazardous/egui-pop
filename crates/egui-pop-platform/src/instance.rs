@@ -60,6 +60,7 @@ use egui_pop_api::services::ServiceToken;
 use egui_pop_api::steps::StepSpec;
 use egui_pop_api::{AppHandle, Ctx, Plugin, PluginError};
 use egui_pop_core::lock;
+use egui_pop_model::commands::CommandSpec;
 use egui_pop_model::ids::{CommandId, PluginId, StepId};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value as Json, json};
@@ -70,6 +71,9 @@ pub const PLUGIN: PluginId = PluginId::from_static("egui_pop.instance");
 pub const STEP_SECOND_LAUNCH: StepId = StepId::from_static("instance.second_launch");
 /// A link to open: `{ "url" }`.
 pub const STEP_DEEPLINK: StepId = StepId::from_static("deeplink.open");
+/// Opens a link of the application's own scheme (`url`), through
+/// [`STEP_DEEPLINK`]: what the links service runs for a click on one.
+pub const CMD_DEEPLINK: CommandId = CommandId::from_static("deeplink.open");
 /// The launches handed over, as a service.
 pub const LAUNCHES: ServiceToken<Launches> = ServiceToken::new("platform.instance");
 /// How many launches [`Launches::history`] keeps.
@@ -428,6 +432,31 @@ impl Plugin for InstancePlugin {
             )
             .args(json!({ "url": "myapp://open/42" })),
         )?;
+        // A click on one of these links inside the application (the
+        // links service) opens it here, through the same step.
+        let links = self.links.clone();
+        ctx.command(
+            CommandSpec::new(CMD_DEEPLINK, "Open an application link", "Links")
+                .description("Opens a link of the application's own scheme (`url`) through the `deeplink.open` step.")
+                .args(json!({ "url": "myapp://open/42" }))
+                .hidden()
+                .no_agent(),
+            move |call| {
+                let url = call.args["url"].as_str().ok_or("`url` is missing")?;
+                open_link(call.app, links.as_ref(), url);
+                Ok(json!({ "url": url }))
+            },
+        )?;
+        let schemes = self.schemes.clone();
+        ctx.on(On::Started, move |app, _| {
+            if let Some(l) = egui_pop_api::links::links(app) {
+                l.update_policy(|p| {
+                    for s in &schemes {
+                        *p = std::mem::take(p).app_scheme(s);
+                    }
+                });
+            }
+        });
         let launches = self.instance.launches();
         ctx.service(&LAUNCHES, launches.clone())?;
         launches.set_waker(Some(ctx.app().egui()));

@@ -172,6 +172,10 @@ command-crash-reveal =
     .description = Opens a crash report's file (`path`).
     .title = Show a crash report
 
+command-deeplink-open =
+    .description = Opens a link of the application's own scheme (`url`) through the `deeplink.open` step.
+    .title = Open an application link
+
 command-dialogs-move =
     .description = Moves the dialog shown with the arrow keys; Enter keeps the place, Escape puts it back.
     .title = Move dialog
