@@ -40,7 +40,9 @@ profiling.workspace = true
 egui.workspace = true
 egui-pop-model.workspace = true
 egui-pop-core.workspace = true
-eframe = { workspace = true, optional = true, features = ["default_fonts", "wgpu", "accesskit", "wayland", "x11"] }
+# `links`: Context::open_url opens the system's browser on the desktop
+# (webbrowser, MIT OR Apache-2.0); a no-op without it.
+eframe = { workspace = true, optional = true, features = ["default_fonts", "wgpu", "accesskit", "wayland", "x11", "links"] }
 egui_dock.workspace = true
 log.workspace = true
 serde.workspace = true
