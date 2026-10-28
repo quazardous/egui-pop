@@ -14,6 +14,9 @@
 //! - [`field`]: a field's state (modified, required, invalid, disabled
 //!   with a reason, read-only, pending);
 //! - [`fuzzy`]: fuzzy matching and ranking for search fields;
+//! - [`links`]: links' pure parts (ADR 0017): a target parsed and
+//!   classified, the request to open it, the policy deciding how and
+//!   whether to confirm;
 //! - [`keymap`]: keys bound to commands in layers, resolved by focus
 //!   depth, with removal, unbinding and a resolution trace;
 //! - [`menus`]: menus declared by id, their items commands;
@@ -47,6 +50,7 @@ pub mod ids;
 pub mod jobs;
 pub mod keymap;
 pub mod layout;
+pub mod links;
 pub mod menus;
 pub mod mount;
 pub mod order;

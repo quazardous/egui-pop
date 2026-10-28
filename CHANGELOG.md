@@ -18,6 +18,15 @@ publishes.
   commit when known (`0.2.0 (abc1234)`): git's, else the
   `EGUI_POP_GALLERY_COMMIT` variable, else none. The facade gains
   `egui_pop::VERSION`.
+- Links' pure parts (egui-pop-model, ADR 0017): `links::Target` (a URL
+  or an absolute path, its host in Unicode and punycode),
+  `links::Request` (target, how, source, the text it was shown under,
+  who asks) and `links::Policy::decide`, the one rule every link
+  follows: the kind of target, how it opens, whether the user confirms
+  first, or why it is refused; `links::find` (the links in a short
+  text) and `links::check_declared` for the lint. It brings `url` and
+  `idna` (MIT OR Apache-2.0, already in the tree through eframe's
+  `links`).
 - Links open on the desktop (egui-pop-api, egui-pop-gallery): eframe is
   built with its `links` feature, so `Context::open_url` (About's links,
   the gallery's Help links, a terminal's links) opens the system's
