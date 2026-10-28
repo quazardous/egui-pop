@@ -52,7 +52,7 @@ The policy classifies the target from its scheme, host and extension
 | Web page (`https:`, `http:`) | the system browser; a new tab on the web build | the same |
 | Video (YouTube, Vimeo, a remote video file) | the browser, never embedded | the same |
 | `mailto:` | the mail client (the same tab on the web, which hands it over) | the same |
-| `docs:` page | the viewer when there is one, else its online copy (`Policy::docs_online`) | outside |
+| `docs:` page | the viewer when there is one (see below), else its online copy (`Policy::docs_online`) | outside |
 | Local file | its default application, after a confirmation; a program refused, Show in folder offered | Show in folder |
 | Local folder | the file manager | the same |
 | The application's own scheme (`<app>://`) | `deeplink.open`, inside | the same |
@@ -169,12 +169,107 @@ egui_pop_test::assert_links_clean(&app);
 The gallery's links pass it. Checking that remote links answer is not
 part of it (an opt-in task, never in the gate).
 
+## Short texts
+
+Tips, toasts and settings descriptions read a small part of markdown,
+drawn by `links::Inline` (`links::inline(ui, app, text)` for a text the
+application declares):
+
+| Written | Drawn |
+|---|---|
+| `*text*`, `_text_` | emphasis |
+| `**text**`, `__text__` | strong |
+| `` `code` `` | code |
+| `[label](target)` | a link (the widget above) |
+| `<https://…>`, a bare `https://…` | a link showing its address |
+| `\*` | a literal `*` |
+
+A delimiter without its pair stays as written (`2 * 3`), `_` inside a
+word too (`snake_case_name`); a text without any of it is a plain
+label. Headings, lists, images and HTML are not read there: a longer
+text belongs in the viewer.
+
+```rust,ignore
+use egui_pop::api::links::Inline;
+
+Inline::new("Press `Ctrl+K`, or read [the guide](docs:guide).")
+    .weak()
+    .show(ui, app);
+```
+
+## The viewer
+
+`egui_pop::views::viewer` (feature `views-markdown`) shows pages inside
+the application: a panel of the end side bar, detachable into its own
+window like any panel, one page at a time. `ViewerPlugin` installs it
+in the links service (`Links::set_inside`), so what the policy sends
+inside opens there: `docs:` pages, markdown pages on the application's
+documentation hosts (`Policy::docs_host`), local images.
+
+```rust,ignore
+use egui_pop::views::viewer::{Docs, ViewerPlugin};
+
+App::builder().plugin(
+    ViewerPlugin::default().docs(
+        Docs::new()
+            .page("index", include_str!("../help/index.md"))
+            .page("guide/start", include_str!("../help/guide/start.md"))
+            .file("img/panel.png", include_bytes!("../help/img/panel.png").as_slice()),
+    ),
+);
+```
+
+A `docs:` link names a page with or without `.md` (`docs:guide/start`),
+a folder its `index.md` (`docs:guide/`, `docs:` the root's), an anchor
+its heading (`docs:guide/start#install`, the heading's text in lower
+case with dashes, or its `{#id}`). Links and images in a page resolve
+against it (`../img/panel.png`).
+
+- **Toolbar**: back and forward (the session's history, nothing kept
+  across runs), reload, the address bar (the real target; typing a
+  target opens it through the links service, a bare name as a `docs:`
+  page), **Open outside** (a `docs:` page's online copy), **Copy link**,
+  the zoom (a click puts it back to 100%).
+- **Keys**, while the viewer has the focus: Ctrl+F finds in the page,
+  F3 and Shift+F3 (Enter and Shift+Enter in the field) move between the
+  matches, Ctrl+plus, Ctrl+minus and Ctrl+0 zoom the page (not the
+  interface), Alt+Left and Alt+Right go back and forward, F5 reloads.
+- **Links in a page** go through the links service: a `docs:` page's
+  links are declared (they may run `command:` links), another page's
+  are content; another `docs:` page stays inside, a web page goes
+  outside; Ctrl+click or a middle click opens outside.
+- **What it shows**: markdown (egui_commonmark: tables, task lists,
+  footnotes, code), images (PNG, JPEG, GIF), text. HTML pages, videos
+  and full web pages are not shown inside: their error page offers
+  **Open outside**.
+- **Remote pages and images** come through a `viewer::Fetch` the host
+  gives (`ViewerPlugin::fetch`); without one nothing remote is loaded
+  and the page says so. A remote image never loads before the user
+  asks: it shows its alt text, and a bar says "Images from `host` are
+  not loaded" with **Load images from `host`**; the host is then
+  remembered in the `viewer.image_hosts` setting (empty it to be asked
+  again). Images on the page's own host (a documentation host) load at
+  once. Allowing a host is the user's alone: agents cannot.
+- **Failures** (not found, no connection, too large, a type it cannot
+  show) show an error page in place with **Retry**, **Open outside**
+  and **Copy link**, and `viewer.failed` on the journal.
+
+| Command | What |
+|---|---|
+| `viewer.back`, `viewer.forward`, `viewer.reload` | the history |
+| `viewer.find` | `query`: searches the page and goes to its first match |
+| `viewer.find_next`, `viewer.find_previous` | the matches |
+| `viewer.zoom_in`, `viewer.zoom_out`, `viewer.zoom_reset` | the page's zoom |
+| `viewer.open_outside`, `viewer.copy_link` | the page's address |
+| `viewer.state` | the page (address, status or error, title, headings, text), the history, the search, the zoom, the images and the hosts allowed |
+
+The `viewer` collector of the debug bridge shows the same state;
+`viewer.shown` and `viewer.failed` go on the journal. The lint checks
+declared `docs:` links against the pages the viewer has.
+
 ## Not yet
 
-- The viewer inside the application (markdown, `docs:` pages, a safe
-  HTML subset, images, back and forward, find, zoom) is the next step
-  of ADR 0017; until then `docs:` links open their online copy, or are
-  refused with the reason.
-- The inline subset for short texts (emphasis, code, links in tips and
-  toasts) comes with it.
+- A safe HTML subset in the viewer (step 6 of ADR 0017): HTML pages
+  show an error page with Open outside meanwhile.
+- The lint does not yet walk the links inside `docs:` pages.
 - No webview: full web pages and videos open outside.

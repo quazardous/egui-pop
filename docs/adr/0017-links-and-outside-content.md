@@ -235,7 +235,27 @@ opener crate, whose Reveal falls back on the OpenURI portal; inside
 Flatpak `xdg-open` is the portal's, so ashpd is not needed for it); the
 terminal's Ctrl+click on the service; a gallery page. The guide is
 [docs/links.md](../links.md). Left: the viewer and the inline subset
-for short texts (step 5), the HTML subset (step 6), an opt-in online
-check of declared links. The gallery's built-in widgets page keeps
+for short texts (step 5, built below), the HTML subset (step 6), an
+opt-in online check of declared links. The gallery's built-in widgets page keeps
 egui's own `Hyperlink`, which it shows as one of egui's widgets: the
 interceptor routes it through the policy.
+
+Step 5 (2026-10-28): the viewer, `viewer` in `egui-pop-views` behind
+the `markdown` feature (egui_commonmark 0.25, the release on egui
+0.36): `ViewerPlugin`, a closed panel of the end side bar, installs
+itself in the links service as its `Inside` way, so `docs:` pages
+(from the `Docs` the application ships), documentation hosts' markdown
+and local images open there; back, forward, reload, the address bar,
+find in page, the page's zoom, anchors, the error page, remote images
+behind a per-host click remembered in the `viewer.image_hosts`
+setting, `viewer.state` and the `viewer` collector for agents. A page
+is drawn block by block (its top-level blocks, each through
+egui_commonmark) so find in page and anchors know where each block
+is; links in a page are taken through egui_commonmark's link hooks
+and opened through the links service. Remote pages and images need a
+`Fetch` the host gives: egui-pop adds no HTTP client. The inline
+subset for short texts (`links::Inline`) is owned, without a markdown
+crate, and drawn in tips, toasts and settings descriptions. Left: the
+HTML subset (step 6, its pages show an error page with Open outside),
+the lint walking the links inside `docs:` pages, an opt-in online check
+of declared links.

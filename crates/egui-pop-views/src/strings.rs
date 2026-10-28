@@ -86,6 +86,73 @@ pub const FILTER_TO: StrKey = StrKey::new("egui-pop-views-filter-to", "Until { $
 /// The comparison's "best" toggle.
 pub const MARK_BEST: StrKey = StrKey::new("egui-pop-views-mark-best", "Best of the comparison");
 
+/// The viewer's toolbar: the previous page.
+pub const VIEWER_BACK: StrKey = StrKey::new("egui-pop-views-viewer-back", "Back");
+/// The viewer's toolbar: the next page.
+pub const VIEWER_FORWARD: StrKey = StrKey::new("egui-pop-views-viewer-forward", "Forward");
+/// The viewer's toolbar: the page again.
+pub const VIEWER_RELOAD: StrKey = StrKey::new("egui-pop-views-viewer-reload", "Reload");
+/// The viewer's address bar's accessible name.
+pub const VIEWER_ADDRESS: StrKey = StrKey::new("egui-pop-views-viewer-address", "Address");
+/// The viewer's search field's accessible name and hint.
+pub const VIEWER_FIND: StrKey = StrKey::new("egui-pop-views-viewer-find", "Find in page");
+/// Where the search is: the current match and how many.
+pub const VIEWER_FIND_COUNT: StrKey =
+    StrKey::new("egui-pop-views-viewer-find-count", "{ $at } of { $count }");
+/// The search found nothing.
+pub const VIEWER_FIND_NONE: StrKey = StrKey::new("egui-pop-views-viewer-find-none", "No match");
+pub const VIEWER_FIND_PREVIOUS: StrKey =
+    StrKey::new("egui-pop-views-viewer-find-previous", "Previous match");
+pub const VIEWER_FIND_NEXT: StrKey = StrKey::new("egui-pop-views-viewer-find-next", "Next match");
+pub const VIEWER_FIND_CLOSE: StrKey =
+    StrKey::new("egui-pop-views-viewer-find-close", "Close the search");
+/// The page's zoom, a button resetting it.
+pub const VIEWER_ZOOM: StrKey = StrKey::new("egui-pop-views-viewer-zoom", "Page zoom: { $zoom }");
+pub const VIEWER_ZOOM_IN: StrKey = StrKey::new("egui-pop-views-viewer-zoom-in", "Zoom in");
+pub const VIEWER_ZOOM_OUT: StrKey = StrKey::new("egui-pop-views-viewer-zoom-out", "Zoom out");
+/// Nothing open yet.
+pub const VIEWER_EMPTY: StrKey = StrKey::new(
+    "egui-pop-views-viewer-empty",
+    "Nothing is open. Help pages and images open here.",
+);
+/// A page on its way.
+pub const VIEWER_LOADING: StrKey =
+    StrKey::new("egui-pop-views-viewer-loading", "Loading { $target }…");
+/// The bar over a page whose remote images wait for the user.
+pub const VIEWER_IMAGES_BLOCKED: StrKey = StrKey::new(
+    "egui-pop-views-viewer-images-blocked",
+    "Images from { $host } are not loaded.",
+);
+/// The bar's button: load them, and remember the host.
+pub const VIEWER_IMAGES_LOAD: StrKey = StrKey::new(
+    "egui-pop-views-viewer-images-load",
+    "Load images from { $host }",
+);
+/// In place of an image that is not shown.
+pub const VIEWER_IMAGE_MISSING: StrKey = StrKey::new(
+    "egui-pop-views-viewer-image-missing",
+    "Image not shown: { $alt }",
+);
+/// The error page's titles.
+pub const VIEWER_NOT_FOUND: StrKey = StrKey::new(
+    "egui-pop-views-viewer-not-found",
+    "This page does not exist",
+);
+pub const VIEWER_NO_CONNECTION: StrKey = StrKey::new(
+    "egui-pop-views-viewer-no-connection",
+    "This page could not be loaded",
+);
+pub const VIEWER_TOO_LARGE: StrKey = StrKey::new(
+    "egui-pop-views-viewer-too-large",
+    "This page is too large to show here",
+);
+pub const VIEWER_UNSUPPORTED: StrKey = StrKey::new(
+    "egui-pop-views-viewer-unsupported",
+    "This page cannot be shown here",
+);
+/// The viewer's content's accessible name.
+pub const VIEWER_PAGE: StrKey = StrKey::new("egui-pop-views-viewer-page", "Page");
+
 /// Every string the views show, for catalogues and tests.
 pub const ALL: &[StrKey] = &[
     TREE,
@@ -128,6 +195,29 @@ pub const ALL: &[StrKey] = &[
     FILTER_FROM,
     FILTER_TO,
     MARK_BEST,
+    VIEWER_BACK,
+    VIEWER_FORWARD,
+    VIEWER_RELOAD,
+    VIEWER_ADDRESS,
+    VIEWER_FIND,
+    VIEWER_FIND_COUNT,
+    VIEWER_FIND_NONE,
+    VIEWER_FIND_PREVIOUS,
+    VIEWER_FIND_NEXT,
+    VIEWER_FIND_CLOSE,
+    VIEWER_ZOOM,
+    VIEWER_ZOOM_IN,
+    VIEWER_ZOOM_OUT,
+    VIEWER_EMPTY,
+    VIEWER_LOADING,
+    VIEWER_IMAGES_BLOCKED,
+    VIEWER_IMAGES_LOAD,
+    VIEWER_IMAGE_MISSING,
+    VIEWER_NOT_FOUND,
+    VIEWER_NO_CONNECTION,
+    VIEWER_TOO_LARGE,
+    VIEWER_UNSUPPORTED,
+    VIEWER_PAGE,
 ];
 
 #[cfg(test)]

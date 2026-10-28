@@ -34,6 +34,8 @@ category-values = Values
 
 category-view = View
 
+category-viewer = Viewer
+
 category-window = Window
 
 command-about =
@@ -615,6 +617,58 @@ command-view-side-bar-toggle =
 command-view-theme-toggle-light-dark =
     .description = Shows the other variant of the theme, light or dark, when it has one.
     .title = Toggle light and dark theme
+
+command-viewer-back =
+    .description = Shows the viewer's previous page.
+    .title = Back
+
+command-viewer-copy-link =
+    .description = Copies the address of the viewer's page.
+    .title = Copy the page's link
+
+command-viewer-find =
+    .description = Opens the viewer's search; with `query`, searches the page and goes to the first match.
+    .title = Find in page
+
+command-viewer-find-next =
+    .description = Goes to the next match of the viewer's search.
+    .title = Find next in page
+
+command-viewer-find-previous =
+    .description = Goes to the previous match of the viewer's search.
+    .title = Find previous in page
+
+command-viewer-forward =
+    .description = Shows the viewer's next page, after going back.
+    .title = Forward
+
+command-viewer-load-images =
+    .description = Loads the images of a host (`host`) the viewer's page shows, and remembers the host; the user's choice alone.
+    .title = Load images from a host
+
+command-viewer-open-outside =
+    .description = Opens the viewer's page outside the application (a `docs:` page's online copy), through the links service; an agent's request is confirmed by the user.
+    .title = Open the page outside
+
+command-viewer-reload =
+    .description = Loads the viewer's page again.
+    .title = Reload the page
+
+command-viewer-state =
+    .description = The viewer's page (address, status or error, title, headings, text), its history, search, zoom, images and the hosts allowed.
+    .title = Read the viewer
+
+command-viewer-zoom-in =
+    .description = Makes the viewer's page larger, one step.
+    .title = Zoom in the page
+
+command-viewer-zoom-out =
+    .description = Makes the viewer's page smaller, one step.
+    .title = Zoom out the page
+
+command-viewer-zoom-reset =
+    .description = Gives the viewer's page its normal size.
+    .title = Reset the page zoom
 
 command-workbench-arrangement-reset =
     .description = Puts the panels back as the current arrangement's template has them.
@@ -1790,6 +1844,52 @@ egui-pop-views-tree = Tree
 
 egui-pop-views-unflagged = Unflagged
 
+egui-pop-views-viewer-address = Address
+
+egui-pop-views-viewer-back = Back
+
+egui-pop-views-viewer-empty = Nothing is open. Help pages and images open here.
+
+egui-pop-views-viewer-find = Find in page
+
+egui-pop-views-viewer-find-close = Close the search
+
+egui-pop-views-viewer-find-count = { $at } of { $count }
+
+egui-pop-views-viewer-find-next = Next match
+
+egui-pop-views-viewer-find-none = No match
+
+egui-pop-views-viewer-find-previous = Previous match
+
+egui-pop-views-viewer-forward = Forward
+
+egui-pop-views-viewer-image-missing = Image not shown: { $alt }
+
+egui-pop-views-viewer-images-blocked = Images from { $host } are not loaded.
+
+egui-pop-views-viewer-images-load = Load images from { $host }
+
+egui-pop-views-viewer-loading = Loading { $target }…
+
+egui-pop-views-viewer-no-connection = This page could not be loaded
+
+egui-pop-views-viewer-not-found = This page does not exist
+
+egui-pop-views-viewer-page = Page
+
+egui-pop-views-viewer-reload = Reload
+
+egui-pop-views-viewer-too-large = This page is too large to show here
+
+egui-pop-views-viewer-unsupported = This page cannot be shown here
+
+egui-pop-views-viewer-zoom = Page zoom: { $zoom }
+
+egui-pop-views-viewer-zoom-in = Zoom in
+
+egui-pop-views-viewer-zoom-out = Zoom out
+
 egui-pop-views-yellow = Yellow
 
 egui-pop-window-exit-fullscreen = Exit full screen (F11)
@@ -1839,6 +1939,9 @@ panel-egui-pop-history =
 
 panel-egui-pop-jobs =
     .title = Jobs
+
+panel-egui-pop-viewer =
+    .title = Viewer
 
 plugin-egui-pop-about =
     .title = About
@@ -1929,6 +2032,9 @@ plugin-egui-pop-toasts =
 
 plugin-egui-pop-tray =
     .title = Tray icon
+
+plugin-egui-pop-viewer =
+    .title = Viewer
 
 plugin-egui-pop-views =
     .title = Data views
@@ -2148,6 +2254,10 @@ setting-tips-show =
 setting-tips-used =
     .description = The commands already used: their tips are not shown by themselves.
     .label = Commands used
+
+setting-viewer-image-hosts =
+    .description = The hosts whose images the viewer loads, each allowed by you once; empty to be asked again.
+    .label = Images loaded from
 
 setting-window-bar-in-fullscreen =
     .description = Keeps the application's title bar (its buttons and items) in full screen; off, full screen hides it.

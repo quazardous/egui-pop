@@ -18,6 +18,24 @@ publishes.
   commit when known (`0.2.0 (abc1234)`): git's, else the
   `EGUI_POP_GALLERY_COMMIT` variable, else none. The facade gains
   `egui_pop::VERSION`.
+- The in-app viewer (egui-pop-views, feature `markdown`, the facade's
+  `views-markdown`; ADR 0017): `viewer::ViewerPlugin`, opt-in, a panel
+  of the end side bar (detachable) showing one page at a time: the
+  `docs:` pages the application ships (`viewer::Docs`), markdown pages
+  on its documentation hosts and local images. Back and forward over
+  the session's history, reload, an address bar showing the real
+  target, find in page (Ctrl+F, F3, Shift+F3), the page's own zoom
+  (Ctrl+plus, Ctrl+minus, Ctrl+0), anchors, links in a page opened
+  through the links service. Remote pages and images come through a
+  `viewer::Fetch` the host gives (none by default); a remote image
+  loads only after a click on "Load images from `host`", the host then
+  remembered in the `viewer.image_hosts` setting. A page that cannot be
+  shown gets an error page with Retry, Open outside and Copy link;
+  HTML pages are not shown inside yet. Agents read it through
+  `viewer.state` and the `viewer` collector. It brings egui_commonmark
+  0.25 (MIT OR Apache-2.0, on egui 0.36), pulldown-cmark (MIT) and
+  egui_extras' image loader (MIT OR Apache-2.0, decoding PNG, JPEG and
+  GIF through image).
 - The links service shows pages inside (egui-pop-api): `links::Inside`,
   installed with `Links::set_inside`, receives what the policy sends
   inside (`docs:` pages, documentation pages, local images); with one,
