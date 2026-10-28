@@ -356,6 +356,19 @@ pub trait ClipTarget {
     /// string reading best).
     fn paste(&self, app: &AppHandle, paste: &Paste<'_>) -> Result<Json, String>;
 
+    /// Applies a paste (never a dry run: paste special's previews and an
+    /// agent's plan go through [`ClipTarget::paste`]). A target whose
+    /// edit goes through the application's own loop (a network edit, a
+    /// viewport command applied next frame) answers [`Pasted::Later`]
+    /// with a result to come ([`crate::host::pending`]): its writes still
+    /// carry `paste.group`, which stays open until the result arrives,
+    /// so the paste remains one undo step; the result is published as
+    /// `clipboard.pasted` and a failure shown to the user. By default,
+    /// [`ClipTarget::paste`] now.
+    fn apply(&self, app: &AppHandle, paste: &Paste<'_>) -> Pasted {
+        Pasted::Done(self.paste(app, paste))
+    }
+
     /// What a transform may know of the target before adapting a paste
     /// to it ([`Transform::for_target`]): the image a mask lands on, the
     /// range a value is clamped to, the names a pasted one must not
@@ -365,6 +378,23 @@ pub trait ClipTarget {
         let _ = (app, element);
         Json::Null
     }
+}
+
+/// What a target answers a paste it applies ([`ClipTarget::apply`]).
+#[derive(Debug)]
+pub enum Pasted {
+    /// Its changes, or why it refused, now.
+    Done(Result<Json, String>),
+    /// The result comes later (the application's loop applies it).
+    Later(Pending),
+}
+
+/// A paste whose result is to come: its group stays open until then.
+struct Deferred {
+    pending: Pending,
+    group: Option<GestureId>,
+    origin: Origin,
+    summary: Json,
 }
 
 /// The target a transform adapts a paste to.
@@ -622,6 +652,7 @@ struct State {
     transforms: RefCell<Vec<(OwnerId, Transform)>>,
     sanitisers: RefCell<Vec<(OwnerId, Sanitiser)>>,
     system: RefCell<System>,
+    deferred: RefCell<Vec<Deferred>>,
 }
 
 fn state(app: &AppHandle) -> Rc<State> {
@@ -1382,7 +1413,8 @@ pub fn paste(app: &AppHandle, request: PasteRequest, origin: &Origin) -> Outcome
     if *origin == Origin::User {
         match &out {
             Outcome::Done(Ok(v)) => {
-                if let Some(lost) = v["lost"].as_str() {
+                // A deferred paste says its loss once it is made.
+                if let (Some(lost), false) = (v["lost"].as_str(), v["pending"] == json!(true)) {
                     toast(app, &txt::CLIPBOARD_PASTED_LOSSY, "what", lost, false);
                 }
             }
@@ -1412,22 +1444,29 @@ fn run_paste(app: &AppHandle, req: &PasteRequest, who: &Origin) -> Result<Json, 
         );
         group_begin(app, who, &label)
     };
-    let changes = ready.target.paste(
-        app,
-        &Paste {
-            repr: &ready.repr,
-            plan: &ready.plan,
-            item: &ready.item,
-            parts: req.parts.as_deref(),
-            dry_run: req.dry_run,
-            origin: who,
-            group,
-            element: req.element.as_deref(),
-        },
-    );
-    group_end(app, group, changes.is_ok());
-    let changes = changes?;
-    Ok(json!({
+    let paste = Paste {
+        repr: &ready.repr,
+        plan: &ready.plan,
+        item: &ready.item,
+        parts: req.parts.as_deref(),
+        dry_run: req.dry_run,
+        origin: who,
+        group,
+        element: req.element.as_deref(),
+    };
+    let answer = if req.dry_run {
+        Pasted::Done(ready.target.paste(app, &paste))
+    } else {
+        ready.target.apply(app, &paste)
+    };
+    let (changes, later) = match answer {
+        Pasted::Done(changes) => {
+            group_end(app, group, changes.is_ok());
+            (changes?, None)
+        }
+        Pasted::Later(p) => (Json::Null, Some(p)),
+    };
+    let summary = json!({
         "target": req.target,
         "element": req.element,
         "kind": ready.item.kind,
@@ -1442,7 +1481,68 @@ fn run_paste(app: &AppHandle, req: &PasteRequest, who: &Origin) -> Result<Json, 
         "parts": req.parts,
         "changes": changes,
         "dry_run": req.dry_run,
-    }))
+        "pending": later.is_some(),
+    });
+    if let Some(pending) = later {
+        state(app).deferred.borrow_mut().push(Deferred {
+            pending,
+            group,
+            origin: who.clone(),
+            summary: summary.clone(),
+        });
+        app.egui().request_repaint();
+    }
+    Ok(summary)
+}
+
+/// How many pastes wait for their result ([`Pasted::Later`]).
+pub fn pending_pastes(app: &AppHandle) -> usize {
+    state(app).deferred.borrow().len()
+}
+
+/// Each pass: the deferred pastes whose result arrived close their undo
+/// group (kept when they succeeded), publish `clipboard.pasted` (the
+/// paste's summary with its `changes`, or its `error`) and, for the
+/// user, show a failure or a loss.
+fn settle(app: &AppHandle) {
+    let arrived: Vec<(Deferred, Result<Json, String>)> = {
+        let st = state(app);
+        let mut list = st.deferred.borrow_mut();
+        let mut out = Vec::new();
+        let mut i = 0;
+        while i < list.len() {
+            match list[i].pending.take() {
+                Some(r) => out.push((list.remove(i), r)),
+                None => i += 1,
+            }
+        }
+        out
+    };
+    for (d, result) in arrived {
+        group_end(app, d.group, result.is_ok());
+        let mut data = d.summary;
+        data["pending"] = json!(false);
+        match &result {
+            Ok(changes) => data["changes"] = changes.clone(),
+            Err(e) => data["error"] = json!(e),
+        }
+        app.publish(
+            &source_of(&d.origin),
+            None,
+            "clipboard.pasted",
+            data.clone(),
+        );
+        if d.origin == Origin::User {
+            match &result {
+                Ok(_) => {
+                    if let Some(lost) = data["lost"].as_str() {
+                        toast(app, &txt::CLIPBOARD_PASTED_LOSSY, "what", lost, false);
+                    }
+                }
+                Err(e) => toast(app, &txt::CLIPBOARD_NOT_PASTED, "reason", e, true),
+            }
+        }
+    }
 }
 
 /// Every way the clipboard fits a target, as paste special lists them:
@@ -1702,6 +1802,7 @@ pub(crate) fn keys(app: &AppHandle) -> Option<[(&'static str, bool); 3]> {
 fn pass(app: &AppHandle) {
     // upstream: egui-winit sends these chords as events and swallows
     // their keys (docs/upstream.md).
+    settle(app);
     let ctx = app.egui();
     if ctx.text_edit_focused() || focused(app).is_none() {
         return;
@@ -1818,6 +1919,7 @@ fn describe(app: &AppHandle) -> Json {
     json!({
         "rev": with_owner(app, |c| c.rev()),
         "owner": if st.custom.get() { "host" } else { "local" },
+        "pending_pastes": st.deferred.borrow().len(),
         "slots": slots,
         "endpoints": endpoints,
         "types": st.types.borrow().iter().map(|(o, t)| json!({

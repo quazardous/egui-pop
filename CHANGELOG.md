@@ -43,6 +43,16 @@ publishes.
   translations; `strings::set_application` and `strings::application`
   hold it per context. The extractor keeps it a Fluent placeable in the
   English catalogue (egui-pop-i18n, `extract::plain_with`).
+- Deferred clipboard pastes (egui-pop-api; #73): a target whose edit
+  goes through the application's own loop implements
+  `ClipTarget::apply` and answers `Pasted::Later` with a result to come
+  (`host::pending`). The paste's history group stays open until the
+  result arrives (one undo step still), the `clipboard.paste` step
+  answers `"pending": true`, and the result is published as
+  `clipboard.pasted` (the summary with the target's `changes` or its
+  `error`), a failure or a loss shown to the user in a toast;
+  `clipboard::pending_pastes` and the `clipboard` collector count those
+  waiting. Dry runs still go through `ClipTarget::paste`.
 - Clipboard transforms that see the target (egui-pop-api; #73):
   `Transform::for_target` receives the target's name, the element
   pasted into and what the target says of itself (`ClipTarget::context`,

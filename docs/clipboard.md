@@ -107,6 +107,21 @@ the preview, an agent reads it as the plan.
 Writes a source or a target makes are its plugin's own (the scope of
 the plugin that registered the endpoint).
 
+A target whose edit goes through the application's own loop (a
+network edit, a command the viewport applies on the next frame)
+implements `ClipTarget::apply` and answers `Pasted::Later` with a
+result to come (`host::pending`, the same as a host's
+`Reply::Later`). Its writes still carry `paste.group`, which stays
+open until the result arrives, so the paste stays one undo step. The
+`clipboard.paste` step answers at once with `"pending": true` (and no
+`changes`); when the result arrives the group closes (kept only on
+success), `clipboard.pasted` is published with the same summary and
+the target's `changes` or its `error`, and the user sees a failure or
+a loss in a toast. An agent watches `clipboard.pasted` for the
+outcome; `clipboard::pending_pastes` and the collector say how many
+wait. A dry run (paste special's preview, an agent's plan) always goes
+through `ClipTarget::paste`, now.
+
 ## Types, transforms and sanitisers
 
 Plugins declare them in `connect`, and they go with the plugin:
