@@ -144,7 +144,13 @@ ctx.clip_type(
   says it loses information: it is applied, and a toast names the loss
   (`Transformed::lossy(data, "the hue")`); paste special shows it
   beforehand. `Transform::when` limits it to some representations or
-  targets.
+  targets. `Transform::for_target` adapts to the target: it receives
+  the target's name, the element pasted into and what the target says
+  of itself (`ClipTarget::context`: the image a mask lands on, the
+  range a value is clamped to, the names already taken), so a mask
+  scaled to the image, a value clamped or a name made unique is a
+  transform, its loss shown in the toast and paste special's preview,
+  rather than an adaptation hidden in `ClipTarget::paste`.
 - A **sanitiser** runs on each representation crossing its boundary:
   `Boundary::System` (what leaves for other applications: local paths,
   secrets, owner-local ids), `Boundary::External` (what comes in),
