@@ -6,6 +6,7 @@ use egui::{Color32, CornerRadius, Sense, Stroke, Ui, vec2};
 use egui_pop::core::ui::{Space, UiPop};
 use egui_pop::theme::Tokens;
 
+pub mod about;
 pub mod arrangements;
 pub mod builtins;
 pub mod clipboard;

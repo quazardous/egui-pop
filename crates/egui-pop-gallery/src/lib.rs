@@ -10,7 +10,8 @@
 //! blocks); the application's history (its panel, a click jumping to a
 //! step); settings applied live; translations; the clipboard (typed
 //! items between widgets, paste special); the platform services
-//! (simulated unless `--platform`); the debug bridge.
+//! (simulated unless `--platform`); the debug bridge; Help > About, and
+//! the Help menu's links to the repository and the docs.
 
 use std::io::Write as _;
 
@@ -32,7 +33,7 @@ use pages::story::PagePlugin;
 pub const TITLE: &str = "egui-pop gallery";
 
 /// The pages, as named on the command line.
-pub const PAGES: [&str; 53] = [
+pub const PAGES: [&str; 54] = [
     "overview",
     "tokens",
     "builtins",
@@ -52,6 +53,7 @@ pub const PAGES: [&str; 53] = [
     "files",
     "toasts",
     "tips",
+    "about",
     "progress",
     "placeholders",
     "viewport",
@@ -210,6 +212,8 @@ pub fn builder(options: &Options) -> AppBuilder {
         .plugin(pages::fonts::FontsPage)
         .plugin(egui_pop::api::tips::TipsPlugin)
         .plugin(pages::tips::TipsPage)
+        .plugin(egui_pop::api::about::AboutPlugin::new(pages::about::info()))
+        .plugin(pages::about::AboutPage)
         .plugin(PagePlugin {
             plugin: PluginId::from_static("gallery.placeholders"),
             story: StoryId::from_static("placeholders"),
@@ -360,7 +364,16 @@ impl Gallery {
                 );
             }
         }
-        Gallery::new(&cc.egui_ctx, options)
+        let gallery = Gallery::new(&cc.egui_ctx, options)?;
+        // What draws the interface, for About's version info.
+        if let Some(rs) = cc.wgpu_render_state.as_ref()
+            && let Some(about) = gallery.app.handle().service(&egui_pop::api::about::ABOUT)
+        {
+            let adapter = rs.adapter.get_info();
+            let renderer = format!("wgpu: {:?}, {}", adapter.backend, adapter.name);
+            about.update(|i| i.renderer = Some(renderer));
+        }
+        Ok(gallery)
     }
 
     /// The gallery on a context, its theme installed.

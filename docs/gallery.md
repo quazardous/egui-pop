@@ -23,7 +23,8 @@ desktop).
 Pages: `overview` (the theme overview), `tokens`, `builtins` (egui's
 built-ins, and egui-pop's kit-drawn checkbox, radio, rows and chips), `roles` (layout by role: text roles, spacing by intent, cards and buttons by tone), `scoped` (egui's own buttons, toggles, combo box and text fields restyled by the kit in a scope), `theme-editor` (the theme editor), `fonts` (candidate font pairs side by side), `icons`, `indicators` (dots, badges, pips, flags, swatches), `sections` (collapsible sections stacked in a panel), `motion` (the motion clock), `values`, `history` (the application's history: its panel's list, a click jumping to a step), `sliders`, `inputs` (decorated inputs, field states and Tab order),
 `menus`, `dialogs`, `files` (the file chooser), `toasts`, `tips` (tips of the day and
-hints), `progress`,
+hints), `about` (Help > About: what the gallery says about itself, its
+version info to copy), `progress`,
 `placeholders` (skeletons and empty states), `viewport` (the image
 viewport), `navigator` (the zoom control and the navigator), `images`,
 `grading` (curves and colour wheels), `cursors` (tool cursors, brush
@@ -289,7 +290,7 @@ Zones and blocks, the workbench, the layout controls, palettes, arrangements, th
 
 ### Application services
 
-Settings, shortcuts, pointer gesture profiles, tips, platform services, translations, the developer tools, and the jobs centre (a job's log console open, in the page and in the status bar's popover).
+Settings, shortcuts, pointer gesture profiles, tips, About (the page and its dialog), platform services, translations, the developer tools, and the jobs centre (a job's log console open, in the page and in the status bar's popover).
 
 <table>
   <tr>
@@ -306,6 +307,8 @@ Settings, shortcuts, pointer gesture profiles, tips, platform services, translat
   </tr>
   <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/pointer-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/pointer-pop-dark.png" width="200" alt="pointer-pop-dark"></a><br>pointer-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/about-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/about-pop-dark.png" width="200" alt="about-pop-dark"></a><br>about-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/about-dialog-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/about-dialog-pop-dark.png" width="200" alt="about-dialog-pop-dark"></a><br>about-dialog-pop-dark</td>
   </tr>
 </table>
 

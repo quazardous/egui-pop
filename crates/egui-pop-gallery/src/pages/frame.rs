@@ -75,14 +75,24 @@ impl Plugin for FramePage {
     }
 }
 
-/// The gallery's logo: an accent disc with a ring.
+/// The gallery's logo, at the size of a toolbar icon.
 fn logo(ui: &mut Ui) {
+    let side = Tokens::of(ui.ctx()).size.icon_toolbar;
+    logo_sized(ui, side);
+}
+
+/// The gallery's logo: an accent disc with a ring, `side` points wide
+/// (also the About dialog's icon).
+pub(crate) fn logo_sized(ui: &mut Ui, side: f32) {
     let t = Tokens::of(ui.ctx());
-    let side = t.size.icon_toolbar;
     let (r, _) = ui.allocate_exact_size(vec2(side, side), Sense::hover());
     let p = ui.painter();
     p.circle_filled(r.center(), side * 0.45, t.accent.default);
-    p.circle_stroke(r.center(), side * 0.25, Stroke::new(1.5, t.surface.panel));
+    p.circle_stroke(
+        r.center(),
+        side * 0.25,
+        Stroke::new((side / 16.0).max(1.5), t.surface.panel),
+    );
 }
 
 fn show(ui: &mut Ui, app: &AppHandle) {
