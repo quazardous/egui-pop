@@ -432,7 +432,10 @@ back.
 paths and addresses included; a triple click a line); Ctrl+Shift+C, or
 Ctrl+C while something is selected, copies (soft-wrapped lines joined).
 `http://`, `https://` and `file://` addresses are links: underlined
-under the pointer, opened by Ctrl+click.
+under the pointer, opened by Ctrl+click through the links service
+([links](links.md)) as content found in a program's output: a web page
+asks first while its host is not trusted, a `file://` link is a
+confirmed open (never a browser's), a program is refused.
 
 **Keys and focus (decided 2026-10-13).** A program in a terminal needs
 Escape (vi, less, readline) and Tab (completion), so the terminal does

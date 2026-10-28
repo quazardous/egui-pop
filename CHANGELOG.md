@@ -18,6 +18,12 @@ publishes.
   commit when known (`0.2.0 (abc1234)`): git's, else the
   `EGUI_POP_GALLERY_COMMIT` variable, else none. The facade gains
   `egui_pop::VERSION`.
+- The gallery's `links` page (egui-pop-gallery): declared links, links
+  that ask first (from content, a text showing another address, an
+  internationalised host), local files, a blocked scheme, egui's own
+  hyperlink through the same policy, an agent's request and the
+  requests so far; with `--platform` the gallery opens local files
+  through the system opener.
 - The system opener (egui-pop-platform, feature `open`, the facade's
   `platform-open`): `open::SystemOpener` opens local files and folders
   with the system's default application and shows a file in its folder
@@ -771,6 +777,10 @@ publishes.
   over either needs the new arms. The value store keeps the redo list a
   new step drops (as replaced steps, as many as the cap), and the
   history panel's refusals now show in a toast.
+- The terminal's Ctrl+click on a link (egui-pop-editors) opens it
+  through the links service, as content found in a program's output:
+  a web page asks first while its host is not trusted, a `file://` link
+  is a confirmed open (never a browser's), a program is refused.
 - The "Undone in <place>" toast reads the place from the step itself
   (egui-pop-api, ADR 0014): the context stack tells the value store
   where new steps are made (`Store::set_place`), and an undo, a redo or

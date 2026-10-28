@@ -9,7 +9,8 @@
 //! blocks (one plugin replacing, extending and wrapping another's
 //! blocks); the application's history (its panel, a click jumping to a
 //! step); settings applied live; translations; the clipboard (typed
-//! items between widgets, paste special); the platform services
+//! items between widgets, paste special); links (one policy, the
+//! confirmation, an agent's request); the platform services
 //! (simulated unless `--platform`); the debug bridge; Help > About, and
 //! the Help menu's links to the repository and the docs.
 
@@ -33,7 +34,7 @@ use pages::story::PagePlugin;
 pub const TITLE: &str = "egui-pop gallery";
 
 /// The pages, as named on the command line.
-pub const PAGES: [&str; 55] = [
+pub const PAGES: [&str; 56] = [
     "overview",
     "tokens",
     "builtins",
@@ -79,6 +80,7 @@ pub const PAGES: [&str; 55] = [
     "arrangements",
     "contexts",
     "clipboard",
+    "links",
     "strips",
     "jobs",
     "frame",
@@ -281,6 +283,7 @@ pub fn builder(options: &Options) -> AppBuilder {
         .plugin(pages::contexts::ContextsPage::default())
         .plugin(egui_pop::api::clipboard::ClipboardPlugin)
         .plugin(pages::clipboard::ClipboardPage)
+        .plugin(pages::links::LinksPage)
         .plugin(egui_pop::api::strips::StripsPlugin::default())
         .plugin(pages::strips::StripsPage)
         .plugin(jobs_plugin(&jobs_sim))

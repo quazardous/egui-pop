@@ -76,6 +76,7 @@ pub fn add(builder: AppBuilder, real: bool, first: Option<Instance>) -> AppBuild
                 &super::about::version(),
             ))
             .plugin(FocusModePlugin::new())
+            .plugin(egui_pop::platform::open::OpenPlugin)
             .plugin(PlatformPage { sim: None })
     } else {
         let sim = Sim {
