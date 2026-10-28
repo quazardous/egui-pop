@@ -13,7 +13,11 @@
 //! - [`mounts`]: what they need (the mount contract, ADR 0013);
 //! - [`steps`]: their moments as steps, and [`ViewsPlugin`] that
 //!   declares them;
-//! - [`strings`]: the text they show, translatable.
+//! - [`strings`]: the text they show, translatable;
+//! - `viewer` (feature `markdown`): the in-app viewer of ADR 0017, a
+//!   panel showing `docs:` pages, markdown and images with back and
+//!   forward, an address bar, find in page and zoom, the links service's
+//!   way inside.
 //!
 //! All three are virtualised (only the rows in view are built), take
 //! the keyboard focus as a whole (arrows, Page Up/Down, Home/End,
@@ -34,6 +38,8 @@ pub mod steps;
 pub mod strings;
 pub mod table;
 pub mod tree;
+#[cfg(feature = "markdown")]
+pub mod viewer;
 
 pub use nav::TYPE_AHEAD_DELAY;
 pub use select::{Mode, Selection};

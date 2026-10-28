@@ -60,6 +60,10 @@ imaging = ["viewport", "dep:egui-pop-imaging"]
 ## Data views: a live tree, a list and a data table
 ## (`egui-pop-views`, re-exported as `egui_pop::views`).
 views = ["dep:egui-pop-views"]
+## The in-app viewer (`egui_pop::views::viewer`): `docs:` pages,
+## markdown (egui_commonmark, MIT OR Apache-2.0) and images in a panel,
+## the links service's way inside.
+views-markdown = ["views", "egui-pop-views/markdown"]
 ## Text and code editors, with syntect highlighting (`egui-pop-editors`,
 ## re-exported as `egui_pop::editors`).
 editors = ["dep:egui-pop-editors", "egui-pop-editors/syntect"]

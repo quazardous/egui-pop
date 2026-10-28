@@ -25,6 +25,25 @@ serde_json.workspace = true
 # MIT OR Apache-2.0: Rerun's virtualised table (sticky header, resizable
 # columns); the data table wraps it.
 egui_table = "0.10"
+# MIT OR Apache-2.0: the viewer's markdown (feature `markdown`), its
+# version tied to egui's (0.25 is on egui 0.36).
+egui_commonmark = { version = "0.25", default-features = false, features = ["pulldown_cmark"], optional = true }
+# MIT: the parser egui_commonmark uses; the viewer reads a page's blocks,
+# headings, links and images with it.
+pulldown-cmark = { version = "0.13", default-features = false, optional = true }
+# MIT OR Apache-2.0: egui's image loader (decoding only; no file or http
+# loader is installed, the viewer hands the bytes over itself).
+egui_extras = { version = "0.36", default-features = false, features = ["image"], optional = true }
+# MIT OR Apache-2.0: the formats the viewer decodes.
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif"], optional = true }
+# MIT OR Apache-2.0: relative links and images resolved against a page.
+url = { workspace = true, optional = true }
+log = { workspace = true, optional = true }
+
+[features]
+## The in-app viewer (`viewer`): markdown pages, `docs:` pages and images,
+## with navigation, find in page and zoom.
+markdown = ["dep:egui_commonmark", "dep:pulldown-cmark", "dep:egui_extras", "dep:image", "dep:url", "dep:log"]
 
 [dev-dependencies]
 egui = { workspace = true, features = ["default_fonts"] }

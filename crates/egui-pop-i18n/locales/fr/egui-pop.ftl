@@ -2179,3 +2179,113 @@ egui-pop-arrangement-save-verb = Enregistrer l’agencement
 egui-pop-arrangement-name = Nom
 
 egui-pop-arrangement-suggested = Agencement { $n }
+
+category-viewer = Visionneuse
+
+command-viewer-back =
+    .description = Affiche la page précédente de la visionneuse.
+    .title = Précédente
+
+command-viewer-copy-link =
+    .description = Copie l’adresse de la page de la visionneuse.
+    .title = Copier le lien de la page
+
+command-viewer-find =
+    .description = Ouvre la recherche de la visionneuse ; avec `query`, cherche dans la page et va à la première correspondance.
+    .title = Rechercher dans la page
+
+command-viewer-find-next =
+    .description = Va à la correspondance suivante de la recherche de la visionneuse.
+    .title = Correspondance suivante dans la page
+
+command-viewer-find-previous =
+    .description = Va à la correspondance précédente de la recherche de la visionneuse.
+    .title = Correspondance précédente dans la page
+
+command-viewer-forward =
+    .description = Affiche la page suivante de la visionneuse, après un retour.
+    .title = Suivante
+
+command-viewer-load-images =
+    .description = Charge les images d’un hôte (`host`) que montre la page de la visionneuse, et retient l’hôte ; le choix de l’utilisateur seul.
+    .title = Charger les images d’un hôte
+
+command-viewer-open-outside =
+    .description = Ouvre la page de la visionneuse hors de l’application (la copie en ligne d’une page `docs:`), par le service des liens ; la demande d’un agent est confirmée par l’utilisateur.
+    .title = Ouvrir la page à l’extérieur
+
+command-viewer-reload =
+    .description = Charge à nouveau la page de la visionneuse.
+    .title = Recharger la page
+
+command-viewer-state =
+    .description = La page de la visionneuse (adresse, état ou erreur, titre, titres de sections, texte), son historique, sa recherche, son zoom, ses images et les hôtes autorisés.
+    .title = Lire la visionneuse
+
+command-viewer-zoom-in =
+    .description = Agrandit la page de la visionneuse d’un cran.
+    .title = Agrandir la page
+
+command-viewer-zoom-out =
+    .description = Réduit la page de la visionneuse d’un cran.
+    .title = Réduire la page
+
+command-viewer-zoom-reset =
+    .description = Rend à la page de la visionneuse sa taille normale.
+    .title = Taille normale de la page
+
+egui-pop-views-viewer-address = Adresse
+
+egui-pop-views-viewer-back = Précédente
+
+egui-pop-views-viewer-empty = Rien n’est ouvert. Les pages d’aide et les images s’ouvrent ici.
+
+egui-pop-views-viewer-find = Rechercher dans la page
+
+egui-pop-views-viewer-find-close = Fermer la recherche
+
+egui-pop-views-viewer-find-count = { $at } sur { $count }
+
+egui-pop-views-viewer-find-next = Correspondance suivante
+
+egui-pop-views-viewer-find-none = Aucune correspondance
+
+egui-pop-views-viewer-find-previous = Correspondance précédente
+
+egui-pop-views-viewer-forward = Suivante
+
+egui-pop-views-viewer-image-missing = Image non affichée : { $alt }
+
+egui-pop-views-viewer-images-blocked = Les images de { $host } ne sont pas chargées.
+
+egui-pop-views-viewer-images-load = Charger les images de { $host }
+
+egui-pop-views-viewer-loading = Chargement de { $target }…
+
+egui-pop-views-viewer-no-connection = Cette page n’a pas pu être chargée
+
+egui-pop-views-viewer-not-found = Cette page n’existe pas
+
+egui-pop-views-viewer-page = Page
+
+egui-pop-views-viewer-reload = Recharger
+
+egui-pop-views-viewer-too-large = Cette page est trop grande pour être affichée ici
+
+egui-pop-views-viewer-unsupported = Cette page ne peut pas être affichée ici
+
+egui-pop-views-viewer-zoom = Zoom de la page : { $zoom }
+
+egui-pop-views-viewer-zoom-in = Agrandir
+
+egui-pop-views-viewer-zoom-out = Réduire
+
+panel-egui-pop-viewer =
+    .title = Visionneuse
+
+plugin-egui-pop-viewer =
+    .title = Visionneuse
+
+setting-viewer-image-hosts =
+    .description = Les hôtes dont la visionneuse charge les images, chacun autorisé par vous une fois ; vide pour être de nouveau consulté.
+    .label = Images chargées depuis
