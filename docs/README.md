@@ -160,6 +160,9 @@ of every crate with every feature on.
 - [Threading survey](threading-survey.md): how darktable, vkdt, GIMP,
   Krita, Blender and others split work between threads, and the
   patterns that fit egui-pop.
+- [File dialogs survey](file-dialogs-survey.md): how the system dialogs,
+  Blender, darktable, Lightroom and file managers lay out, preview, search
+  and save, and the changes ranked for egui-pop's in-app picker.
 - [API stability](stability.md): what each release promises.
 - [Governance](../GOVERNANCE.md): who decides, decisions as ADRs and
   requests for comments, what breaks an extension, deprecation windows.

@@ -68,6 +68,9 @@ draws the in-app picker where it wants it (`Files::show_inline`).
 
 `FilePicker` is usable on its own, in any `Ui`.
 
+How other dialogs do it, and what the picker should take from them:
+the [file dialogs survey](file-dialogs-survey.md).
+
 ### Where it reads
 
 The picker reads through a `files::fs::FileSystem`: the system's
