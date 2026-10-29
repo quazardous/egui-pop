@@ -41,28 +41,56 @@ fn title(h: &Harness<'_, Gallery>, page: &str) -> String {
         .title
 }
 
-#[test]
-fn every_page_renders_under_every_theme_and_density() {
-    for theme in POP_THEMES {
-        for density in Density::ALL {
-            for page in PAGES {
-                let mut h = harness(options(theme, density, page));
-                run_page(&mut h, page);
-                // In the side bar and as the page's heading.
-                let titles = h.query_all_by_label(&title(&h, page)).count();
-                assert_eq!(titles, 2, "{theme} {page}");
-                let tokens = Tokens::of(&h.ctx);
-                assert!(tokens.resolved().problems().is_empty());
-                assert_eq!(tokens.resolved().spec().base, *theme);
-                assert!(
-                    h.state().app.handle().diagnostics().is_empty(),
-                    "{:?}",
-                    h.state().app.handle().diagnostics()
-                );
-                h.render().expect("render");
+// Every page under one theme and one density, a test per pair: each runs
+// in a process of its own, side by side, and stays well under CI's
+// timeout as pages are added.
+fn every_page_renders(theme: &str, density: Density) {
+    for page in PAGES {
+        let mut h = harness(options(theme, density, page));
+        run_page(&mut h, page);
+        // In the side bar and as the page's heading.
+        let titles = h.query_all_by_label(&title(&h, page)).count();
+        assert_eq!(titles, 2, "{theme} {page}");
+        let tokens = Tokens::of(&h.ctx);
+        assert!(tokens.resolved().problems().is_empty());
+        assert_eq!(tokens.resolved().spec().base, theme);
+        assert!(
+            h.state().app.handle().diagnostics().is_empty(),
+            "{:?}",
+            h.state().app.handle().diagnostics()
+        );
+        h.render().expect("render");
+    }
+}
+
+macro_rules! every_page_renders {
+    ($($name:ident: $theme:literal, $density:ident;)*) => {
+        $(
+            #[test]
+            fn $name() {
+                every_page_renders($theme, Density::$density);
+            }
+        )*
+
+        #[test]
+        fn every_theme_and_density_has_its_render_test() {
+            let covered = [$(($theme, Density::$density)),*];
+            for theme in POP_THEMES {
+                for density in Density::ALL {
+                    assert!(covered.contains(&(*theme, density)), "{theme} {density:?}");
+                }
             }
         }
-    }
+    };
+}
+
+every_page_renders! {
+    every_page_renders_in_pop_dark_comfortable: "pop-dark", Comfortable;
+    every_page_renders_in_pop_dark_compact: "pop-dark", Compact;
+    every_page_renders_in_pop_light_comfortable: "pop-light", Comfortable;
+    every_page_renders_in_pop_light_compact: "pop-light", Compact;
+    every_page_renders_in_pop_high_contrast_comfortable: "pop-high-contrast", Comfortable;
+    every_page_renders_in_pop_high_contrast_compact: "pop-high-contrast", Compact;
 }
 
 // Not critical: it renders every page (over 30 s on CI); it runs whenever
