@@ -83,7 +83,8 @@ struct Entry {
     /// target or transform changes.
     baked: bool,
     /// A refused device tile's fallback pixels: asked for again when the
-    /// render device changes.
+    /// render device changes (read only with the `wgpu` feature).
+    #[cfg_attr(not(feature = "wgpu"), allow(dead_code))]
     fallback: bool,
 }
 
