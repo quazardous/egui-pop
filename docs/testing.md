@@ -143,11 +143,13 @@ wall time of the whole workflow, with a warm cache:
 | documentation only | about 6 min | about 4 min (tests 3 min 30 s; fmt, clippy, deny, wasm, package and semver skipped) |
 | one crate's source (`egui-pop-views`) | about 6 min | about 6 min (6 crates of 20 tested, deny and package skipped) |
 
-A full run is not faster yet: one test,
-`egui-pop-gallery::gallery every_page_renders_under_every_theme_and_density`,
-runs for more than 3 minutes and sets the pace; splitting it is the next
-lever. The JUnit reports of each run (the `junit` artifact) list every
-test's time.
+A full run was not faster: one test, rendering every gallery page under
+every theme and density, ran for nearly 4 minutes on lavapipe and set the
+pace (and reached the CI timeout as pages were added). It is split in
+`egui-pop-gallery::gallery` into a test per theme and density
+(`every_page_renders_in_<theme>_<density>`), run side by side; a further
+test checks every theme and density has its own. The JUnit reports of
+each run (the `junit` artifact) list every test's time.
 
 ## Layers
 
