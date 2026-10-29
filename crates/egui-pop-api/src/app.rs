@@ -206,6 +206,9 @@ pub struct ThemeService {
     store: SharedStore,
     /// Whether each theme met is a dark one, by name.
     dark: Mutex<BTreeMap<String, bool>>,
+    /// The context the application draws in: asked to repaint when the
+    /// theme changes.
+    ctx: Mutex<Context>,
 }
 
 impl fmt::Debug for ThemeService {
@@ -222,14 +225,32 @@ impl ThemeService {
         lock(&self.spec).clone()
     }
 
-    /// Asks for a theme; installed before the next frame.
+    /// Asks for a theme; installed before the next frame, which it asks
+    /// for (an idle window does not wait for input to show it).
     pub fn set(&self, spec: ThemeSpec) {
-        *lock(&self.spec) = spec;
+        self.update(|s| *s = spec);
     }
 
-    /// Changes the theme in place.
+    /// Changes the theme in place; installed before the next frame,
+    /// which it asks for when the spec changed.
     pub fn update(&self, f: impl FnOnce(&mut ThemeSpec)) {
-        f(&mut lock(&self.spec));
+        let changed = {
+            let mut spec = lock(&self.spec);
+            let before = spec.clone();
+            f(&mut spec);
+            *spec != before
+        };
+        if changed {
+            lock(&self.ctx).request_repaint();
+        }
+    }
+
+    /// Follows the context the application draws in.
+    fn follow(&self, ctx: &Context) {
+        let mut mine = lock(&self.ctx);
+        if *mine != *ctx {
+            *mine = ctx.clone();
+        }
     }
 
     pub fn themes(&self) -> &Themes {
@@ -3117,6 +3138,7 @@ impl App {
                 kits,
                 store: handle.store(),
                 dark: Mutex::new(BTreeMap::new()),
+                ctx: Mutex::new(handle.egui()),
             },
         )?;
         ctx.setting(
@@ -4656,6 +4678,7 @@ impl App {
         }
         if self.waking.as_ref() != Some(ctx) {
             self.waking = Some(ctx.clone());
+            self.handle.theme().follow(ctx);
             let c = ctx.clone();
             if let Some(h) = self.handle.0.host.borrow_mut().as_mut() {
                 h.set_waker(Waker::new(move || c.request_repaint()));
@@ -4976,19 +4999,21 @@ impl App {
     /// Between frames: the theme asked for, requests, declarations, and
     /// the `On::Pass` handlers.
     ///
-    /// Runs once per pass: a second call inside the same egui pass (the
-    /// same viewport and `Context::cumulative_pass_nr`) does nothing.
-    /// eframe calls it from its `logic` hook and [`App::show`] calls it
-    /// again, so that an integration without that hook (plain egui,
-    /// kittest's `build_ui`) still runs it; the guard keeps the handlers
-    /// to one run per pass on both paths. Calls between passes always
-    /// run: eframe ticks the logic alone while the window is hidden, and
-    /// those ticks share one pass number.
+    /// The `On::Pass` handlers run once per pass: a second call inside
+    /// the same egui pass (the same viewport and
+    /// `Context::cumulative_pass_nr`) settles again (the theme asked
+    /// for, requests, declarations) but does not run them. eframe calls
+    /// it from its `logic` hook and [`App::show`] calls it again, so that
+    /// an integration without that hook (plain egui, kittest's
+    /// `build_ui`) still runs it; a host may also call it a second time
+    /// after changing something (a theme, a request) so the change is in
+    /// place before the pass draws. Calls between passes always run the
+    /// handlers: eframe ticks the logic alone while the window is
+    /// hidden, and those ticks share one pass number.
     pub fn logic(&mut self, ctx: &Context) {
+        let mut again = false;
         if let Some(pass) = pass_in_progress(ctx) {
-            if self.logic_pass == Some(pass) {
-                return;
-            }
+            again = self.logic_pass == Some(pass);
             self.logic_pass = Some(pass);
         }
         profiling::scope!("pop.app.logic");
@@ -4996,7 +5021,9 @@ impl App {
         self.install_theme();
         self.settle();
         self.handle.feed_indicators();
-        self.emit(&Lifecycle::Pass);
+        if !again {
+            self.emit(&Lifecycle::Pass);
+        }
         self.load_pointer_profile();
         self.process_requests();
         self.publish_pointer(ctx);

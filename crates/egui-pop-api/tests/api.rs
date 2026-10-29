@@ -900,6 +900,74 @@ fn pass_handlers_run_once_per_pass_when_the_host_runs_the_logic_too() {
     assert_eq!(*seen.borrow(), 8);
 }
 
+#[test]
+fn a_second_logic_in_the_pass_installs_the_theme_asked_for_between() {
+    use egui_pop_core::tokens::ThemeSpec;
+    let l = log();
+    let seen = Rc::new(RefCell::new(0));
+    let s = seen.clone();
+    let ctx = egui::Context::default();
+    let mut app = App::builder()
+        .theme(ThemeSpec::new("pop-dark").alone())
+        .plugin(P::new("ticker", &l, move |ctx| {
+            let s = s.clone();
+            ctx.on(On::Pass, move |_, _| *s.borrow_mut() += 1);
+            Ok(())
+        }))
+        .build(&ctx)
+        .unwrap();
+    frame(&ctx, |ui| {
+        app.logic(ui.ctx());
+        app.show(ui);
+    });
+    assert!(ctx.global_style().visuals.dark_mode);
+    let before = ctx.global_style().visuals.panel_fill;
+    // As a host settling its queued actions: the logic, a theme switch,
+    // the logic again, then the drawing.
+    frame(&ctx, |ui| {
+        app.logic(ui.ctx());
+        app.handle()
+            .theme()
+            .set(ThemeSpec::new("solarized-light").alone());
+        app.logic(ui.ctx());
+        let style = ui.ctx().global_style();
+        assert!(!style.visuals.dark_mode, "installed in the same pass");
+        assert_ne!(style.visuals.panel_fill, before);
+        app.show(ui);
+    });
+    // The handlers still ran once per pass.
+    assert_eq!(*seen.borrow(), 2);
+}
+
+#[test]
+fn a_theme_change_asks_for_a_repaint() {
+    use egui_pop_core::tokens::ThemeSpec;
+    let ctx = egui::Context::default();
+    let mut app = App::builder()
+        .theme(ThemeSpec::new("pop-dark").alone())
+        .build(&ctx)
+        .unwrap();
+    for _ in 0..3 {
+        frame(&ctx, |ui| app.show(ui));
+    }
+    assert!(!ctx.has_requested_repaint(), "idle");
+    // Outside a pass (an agent, a timer).
+    app.handle()
+        .theme()
+        .set(ThemeSpec::new("solarized-light").alone());
+    assert!(ctx.has_requested_repaint(), "set");
+    // The install may animate for a few frames.
+    for _ in 0..30 {
+        if !ctx.has_requested_repaint() {
+            break;
+        }
+        frame(&ctx, |ui| app.show(ui));
+    }
+    assert!(!ctx.has_requested_repaint(), "idle again");
+    app.handle().theme().update(|spec| spec.text_size = 1.25);
+    assert!(ctx.has_requested_repaint(), "update");
+}
+
 /// `owner` declares a setting and a value it opens to `other`; `other`
 /// writes both from its command, from a lifecycle hook and through its
 /// writer; what each write got goes to the log.
