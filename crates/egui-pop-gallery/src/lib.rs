@@ -408,7 +408,7 @@ impl Gallery {
             announce(&serde_json::json!({
                 "event": "ready",
                 "app": "egui-pop-gallery",
-                "version": env!("CARGO_PKG_VERSION"),
+                "version": pages::about::version(),
                 "title": TITLE,
                 "theme": spec.base,
                 "density": spec.density.name(),

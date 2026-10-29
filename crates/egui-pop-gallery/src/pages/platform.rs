@@ -73,7 +73,7 @@ pub fn add(builder: AppBuilder, real: bool, first: Option<Instance>) -> AppBuild
             .plugin(LogsPlugin::new("egui-pop-gallery"))
             .plugin(CrashPlugin::new(
                 "egui-pop-gallery",
-                env!("CARGO_PKG_VERSION"),
+                &super::about::version(),
             ))
             .plugin(FocusModePlugin::new())
             .plugin(PlatformPage { sim: None })

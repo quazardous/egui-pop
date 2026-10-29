@@ -30,6 +30,9 @@
 //! `egui` is re-exported: use `egui_pop::egui` to be sure to get the
 //! version egui-pop was built for (one egui-pop minor per egui minor).
 
+/// egui-pop's version: this crate's, the one an application depends on.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 pub use egui;
 /// eframe (feature `eframe`): the version applications run with.
 #[cfg(feature = "eframe")]

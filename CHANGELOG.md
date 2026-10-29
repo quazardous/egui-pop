@@ -12,6 +12,12 @@ publishes.
 
 ### Added
 
+- The gallery says which egui-pop it shows (egui-pop, egui-pop-gallery):
+  its version, in Help > About, its version info, its crash reports and
+  its `ready` announce, is the egui-pop it is built from, with the short
+  commit when known (`0.2.0 (abc1234)`): git's, else the
+  `EGUI_POP_GALLERY_COMMIT` variable, else none. The facade gains
+  `egui_pop::VERSION`.
 - Links open on the desktop (egui-pop-api, egui-pop-gallery): eframe is
   built with its `links` feature, so `Context::open_url` (About's links,
   the gallery's Help links, a terminal's links) opens the system's

@@ -3443,11 +3443,31 @@ fn the_gallerys_tips_pass_the_lint_and_one_points_at_its_button() {
 
 #[test]
 fn help_says_about_the_gallery_and_links_to_the_repository_and_the_docs() {
-    use egui_pop::api::about::{CMD_ABOUT, CMD_ABOUT_READ};
+    use egui_pop::api::about::{ABOUT, CMD_ABOUT, CMD_ABOUT_READ};
     use egui_pop::api::app::MENU_HELP;
     use egui_pop::model::menus::Item;
-    use egui_pop_gallery::pages::about::{CMD_DOCS, CMD_GITHUB};
+    use egui_pop_gallery::pages::about::{CMD_DOCS, CMD_GITHUB, COMMIT, version};
     let mut h = harness(options("pop-dark", Density::Comfortable, "about"));
+    // The gallery's version is the egui-pop it shows, with the commit
+    // when known.
+    let shown = h
+        .state()
+        .app
+        .handle()
+        .service(&ABOUT)
+        .unwrap()
+        .info()
+        .version;
+    assert_eq!(shown, version());
+    assert!(shown.starts_with(egui_pop::VERSION), "{shown}");
+    assert!(shown.ends_with(&format!("({COMMIT})")) || COMMIT.is_empty());
+    // The snapshots leave the commit out: it moves with every commit.
+    h.state()
+        .app
+        .handle()
+        .service(&ABOUT)
+        .unwrap()
+        .update(|info| info.version = egui_pop::VERSION.into());
     h.run();
     egui_pop_test::assert_all_named(&h);
     // The Help menu: the links, then About.
@@ -3515,13 +3535,10 @@ fn help_says_about_the_gallery_and_links_to_the_repository_and_the_docs() {
     })
     .flatten()
     .expect("the version info is in the clipboard");
-    assert!(
-        copied
-            .payload
-            .as_str()
-            .unwrap()
-            .starts_with("egui-pop gallery 0.0.0\negui-pop ")
-    );
+    assert!(copied.payload.as_str().unwrap().starts_with(&format!(
+        "egui-pop gallery {}\negui-pop ",
+        egui_pop::VERSION
+    )));
 }
 
 #[test]

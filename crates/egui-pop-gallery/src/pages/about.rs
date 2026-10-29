@@ -29,9 +29,23 @@ pub const CMD_GITHUB: CommandId = CommandId::from_static("gallery.help.github");
 /// Help > Documentation.
 pub const CMD_DOCS: CommandId = CommandId::from_static("gallery.help.docs");
 
+/// The commit the gallery is built from, short; empty when unknown
+/// (`build.rs`: git, else `EGUI_POP_GALLERY_COMMIT`).
+pub const COMMIT: &str = env!("EGUI_POP_GALLERY_COMMIT");
+
+/// The gallery's version: the egui-pop it shows, and the commit when
+/// known (`0.2.0 (abc1234)`).
+pub fn version() -> String {
+    if COMMIT.is_empty() {
+        egui_pop::VERSION.to_string()
+    } else {
+        format!("{} ({COMMIT})", egui_pop::VERSION)
+    }
+}
+
 /// What the gallery says about itself.
 pub fn info() -> AppInfo {
-    AppInfo::new(crate::TITLE, env!("CARGO_PKG_VERSION"))
+    AppInfo::new(crate::TITLE, &version())
         .description("egui-pop's components in every variant, state, theme and density.")
         .licence("MIT OR Apache-2.0")
         .author("The egui-pop contributors")
