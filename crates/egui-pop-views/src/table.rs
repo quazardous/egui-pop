@@ -616,7 +616,12 @@ struct Delegate<'a, K: Key> {
 
 impl<K: Key> TableDelegate for Delegate<'_, K> {
     fn prepare(&mut self, info: &PrefetchInfo) {
-        let n = (info.visible_rows.end - info.visible_rows.start) as usize;
+        // upstream: the range is reversed for a table clipped away, scrolled out
+        // of a scroll area around it.
+        let n = info
+            .visible_rows
+            .end
+            .saturating_sub(info.visible_rows.start) as usize;
         self.page = n.saturating_sub(2).max(1);
     }
 
