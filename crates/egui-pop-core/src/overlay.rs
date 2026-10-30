@@ -8,7 +8,7 @@
 //!   receives the click;
 //! - closing an overlay closes every overlay opened above it;
 //! - each overlay remembers the widget focused when it opened; when it
-//!   closes, the focus goes back there.
+//!   closes, the focus goes back there (see **Focus** below).
 //!
 //! [`show`] is the egui side: it keeps the stack in the context, draws an
 //! overlay (a modal with a backdrop, or an area placed next to an anchor
@@ -20,7 +20,17 @@
 //! the press in that very pass goes, and so does each repeat until the key
 //! is released. Else the key that opened it would answer it, unseen: egui
 //! clicks a focused widget on Enter or Space, the press and every repeat,
-//! and the modal's first focus is such a widget.
+//! and the modal's first focus is such a widget. A modal closing does the
+//! same for what is behind it: the Enter that accepts it does not click the
+//! button the focus goes back to, which would open it again.
+//!
+//! **Focus.** While a modal's layer is on top, egui takes the focus off any
+//! widget below it as that widget is drawn, and it stays on top for the
+//! pass after the last one drawing it. So the focus goes back once the
+//! widget can hold it, a pass or two after the closing, unless something
+//! else took the focus meanwhile (the command a dialog ran). An overlay
+//! opening in that gap (the next dialog of a queue) inherits the place, and
+//! gives it back in its turn. A widget gone by then takes nothing.
 //!
 //! **egui popups.** A combo box's list, a context menu or an egui menu
 //! opened from inside an overlay is an egui area of its own, drawn while
@@ -569,6 +579,10 @@ struct State {
     shown: Vec<Id>,
     shown_last: Vec<Id>,
     history: Vec<Closed>,
+    /// The modals in the stack.
+    modals: Vec<Id>,
+    /// Where the focus goes back, once the widget can hold it.
+    focus_back: Option<Id>,
 }
 
 const STATE: &str = "core.overlay";
@@ -689,6 +703,7 @@ pub fn begin_pass(ctx: &Context) -> bool {
         return false;
     }
     s.pass = now;
+    give_focus_back(ctx, &mut s, false);
     s.shown_last = std::mem::take(&mut s.shown);
     // A closing is news only to an owner still showing its overlay: one
     // left unseen would close the overlay the next time it opens.
@@ -738,13 +753,17 @@ pub fn begin_pass(ctx: &Context) -> bool {
 }
 
 fn settle(ctx: &Context, s: &mut State, closed: Vec<Closed>) {
-    // A widget gone since (the dialog before this one in a queue) cannot
-    // take it: egui would keep the id as focused, and AccessKit, told of a
-    // focus on a node that does not exist, panics.
-    if let Some(target) = closed.last().and_then(|c| c.restore_focus)
-        && crate::focus::peek_response(ctx, target).is_some()
-    {
-        ctx.memory_mut(|m| m.request_focus(target));
+    if let Some(target) = closed.last().and_then(|c| c.restore_focus) {
+        s.focus_back = Some(target);
+        give_focus_back(ctx, s, true);
+    }
+    let modals = std::mem::take(&mut s.modals);
+    let (gone, left) = modals
+        .into_iter()
+        .partition::<Vec<Id>, _>(|id| closed.iter().any(|c| c.id == *id));
+    s.modals = left;
+    if !gone.is_empty() {
+        swallow_held_keys(ctx);
     }
     for c in &closed {
         log::debug!(target: "egui_pop", "overlay `{}` closed: {:?}", c.label, c.reason);
@@ -755,6 +774,34 @@ fn settle(ctx: &Context, s: &mut State, closed: Vec<Closed>) {
         s.history.drain(..len - 32);
     }
     s.closed.extend(closed);
+}
+
+/// Gives the focus back when the widget can hold it; asks for another pass
+/// when a modal's layer still blocks it. `closing`: the overlay closes in
+/// this very call, and its own widget may still hold the focus. Later,
+/// whatever holds the focus took it meanwhile, and keeps it.
+///
+/// upstream: egui drops the focus of a widget drawn under the top modal
+/// layer, the previous pass's (docs/upstream.md).
+fn give_focus_back(ctx: &Context, s: &mut State, closing: bool) {
+    let Some(target) = s.focus_back else {
+        return;
+    };
+    // A widget gone since cannot take it: egui would keep the id as
+    // focused, and AccessKit, told of a focus on a node that does not
+    // exist, panics.
+    let Some(layer) = crate::focus::peek_response(ctx, target).map(|r| r.layer_id) else {
+        s.focus_back = None;
+        return;
+    };
+    if !ctx.memory(|m| m.allows_interaction(layer)) {
+        ctx.request_repaint();
+        return;
+    }
+    s.focus_back = None;
+    if closing || ctx.memory(|m| m.focused()).is_none() {
+        ctx.memory_mut(|m| m.request_focus(target));
+    }
 }
 
 /// Closes an overlay (and those above it) from code.
@@ -915,10 +962,12 @@ fn enter(ctx: &Context, spec: &OverlaySpec, open: &mut bool) -> bool {
         return false;
     }
     if !s.stack.contains(spec.id) {
-        let focused = ctx.memory(|m| m.focused());
+        // The place of one that just closed, as long as it is owed.
+        let focused = s.focus_back.take().or_else(|| ctx.memory(|m| m.focused()));
         let (_, closed) = s.stack.open(spec.clone(), focused);
         settle(ctx, &mut s, closed);
         if spec.kind == Kind::Modal {
+            s.modals.push(spec.id);
             swallow_held_keys(ctx);
         }
     } else if s.stack.specs().any(|o| o.id == spec.id && o != spec) {

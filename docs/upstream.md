@@ -203,6 +203,21 @@ limit.
 - **Remove when**: egui applies the layer's transform to the bounds it
   reports.
 
+## egui: the focus cannot be given back as a modal closes
+
+- **Compensated**: a widget drawn under the top modal layer gives up the
+  focus as it is drawn (`create_widget`, `allows_interaction`), and that
+  layer is the previous pass's (`top_modal_layer`). So `request_focus` on the
+  widget behind a modal is undone in the pass the modal closes, and in the
+  next when the modal was still drawn in that pass: on egui 0.36.2, the focus
+  ends on nothing.
+- **Upstream**: not filed yet.
+- **Workaround**: the overlay stack keeps the place and asks for the focus
+  once `allows_interaction` says the widget's layer can hold it (`// upstream:`
+  at `give_focus_back`, `crates/egui-pop-core/src/overlay.rs`).
+- **Remove when**: egui takes a modal layer off in the pass it stops being
+  drawn, or keeps a focus requested for a widget below it.
+
 ## egui: no side-effect free read of a widget's response
 
 - **Compensated**: `Context::read_response` runs the "clicked
