@@ -5722,6 +5722,103 @@ fn a_page_keeps_its_scroll_per_page() {
     );
 }
 
+/// What eframe keeps between runs, in memory.
+#[derive(Default)]
+struct KeptStorage(std::collections::HashMap<String, String>);
+
+impl eframe::Storage for KeptStorage {
+    fn get_string(&self, key: &str) -> Option<String> {
+        self.0.get(key).cloned()
+    }
+
+    fn set_string(&mut self, key: &str, value: String) {
+        self.0.insert(key.to_string(), value);
+    }
+
+    fn remove_string(&mut self, key: &str) {
+        self.0.remove(key);
+    }
+
+    fn flush(&mut self) {}
+}
+
+#[test]
+fn the_folds_the_sections_and_the_layout_survive_a_restart() {
+    use egui_pop::core::sections::{Layout, laid_out};
+    use egui_pop_gallery::pages::sections::{PUSHED, SHORT};
+    // Nothing is stored in a test: no run sees what another left.
+    let _fresh = Harness::builder()
+        .with_size(egui::vec2(1100.0, 720.0))
+        .shared_wgpu()
+        .build_eframe(|cc| {
+            assert!(cc.storage.is_none());
+            Gallery::from_creation_context(cc, Options::default()).expect("the gallery builds")
+        });
+    let mut h = harness(options("pop-dark", Density::Comfortable, "sections"));
+    h.run();
+    // Not the group of the page shown, which opens by itself at the start.
+    h.query_all_by_label("Theme")
+        .min_by(|a, b| a.rect().left().total_cmp(&b.rect().left()))
+        .expect("the group's row")
+        .click();
+    h.run();
+    assert_eq!(titled(&h, "Tokens table"), 0, "folded");
+    h.get_by_label("Outline, 4").click();
+    h.run();
+    let short = laid_out(&h.ctx, SHORT);
+    assert!(!short[1].open, "{short:?}");
+    let pushed = Layout::load(&h.ctx, PUSHED).expect("the stack's layout");
+    h.state()
+        .app
+        .handle()
+        .set_panel_visible(&egui_pop::api::history_view::PANEL_HISTORY, true);
+    h.run();
+    let layout = h.state().app.handle().layout();
+    assert_ne!(layout, Default::default());
+
+    // What eframe does at exit, and at the next start.
+    let mut kept = KeptStorage::default();
+    assert!(eframe::App::persist_egui_memory(h.state()));
+    h.ctx.memory(|m| eframe::set_value(&mut kept, "egui", m));
+    eframe::App::save(h.state_mut(), &mut kept);
+    drop(h);
+    let memory: egui::Memory = eframe::get_value(&kept, "egui").expect("egui's memory, read back");
+    let options = options("pop-dark", Density::Comfortable, "sections");
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(1100.0, 720.0))
+        .shared_wgpu()
+        .build_eframe(move |cc| {
+            cc.egui_ctx.memory_mut(|m| *m = memory);
+            let gallery = Gallery::from_creation_context(cc, options).expect("the gallery builds");
+            gallery.restore(&kept);
+            gallery
+        });
+    h.run();
+    assert_eq!(titled(&h, "Tokens table"), 0, "still folded");
+    assert!(!laid_out(&h.ctx, SHORT)[1].open);
+    assert_eq!(Layout::load(&h.ctx, PUSHED), Some(pushed));
+    assert_eq!(h.state().app.handle().layout(), layout);
+}
+
+#[test]
+fn a_scripted_run_keeps_nothing() {
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(1100.0, 720.0))
+        .shared_wgpu()
+        .build_eframe(|cc| {
+            let options = Options {
+                no_persistence: true,
+                ..Options::default()
+            };
+            Gallery::from_creation_context(cc, options).expect("the gallery builds")
+        });
+    h.run();
+    assert!(!eframe::App::persist_egui_memory(h.state()));
+    let mut kept = KeptStorage::default();
+    eframe::App::save(h.state_mut(), &mut kept);
+    assert!(kept.0.is_empty());
+}
+
 /// How many nodes bear a page's title: its row, and its heading when shown.
 fn titled(h: &Harness<'_, Gallery>, title: &str) -> usize {
     h.query_all_by_label(title).count()

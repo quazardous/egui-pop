@@ -927,6 +927,10 @@ publishes.
   `docs/workbench.md`.
 - The gallery's side bar starts 20 points wider, so that no page title is cut in
   any theme or density (egui-pop-gallery).
+- The gallery keeps the folds of its page list, its stacked sections, its panels'
+  sizes, its layout and the window's size and place across a restart, in a file on
+  the desktop and in local storage on the web (egui-pop-gallery; `docs/gallery.md`).
+  `--no-persistence`, or `--quit-after`, keeps nothing and reads nothing.
 - The gallery's list of pages is a tree (egui-pop-gallery; `docs/gallery.md`),
   through egui-pop's own tree view: its groups fold, with one scroll for all
   and one Tab stop. The folds are kept with the window's layout, and the group

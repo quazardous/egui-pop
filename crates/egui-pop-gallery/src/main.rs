@@ -2,7 +2,7 @@
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result {
-    use egui_pop_gallery::{Gallery, Options, TITLE, USAGE};
+    use egui_pop_gallery::{DEFAULT_SIZE, Gallery, Options, TITLE, USAGE};
 
     let mut options = match Options::parse(std::env::args().skip(1)) {
         Ok(o) => o,
@@ -34,6 +34,13 @@ fn main() -> eframe::Result {
             .with_inner_size(options.size)
             // The image surface shows through a hole in the interface.
             .with_transparent(options.wide_gamut),
+        // A size asked for wins over the one kept.
+        persist_window: options.persists() && options.size == DEFAULT_SIZE,
+        // eframe always reads its storage: a file not there reads as nothing,
+        // and with nothing to keep, none is written.
+        persistence_path: (!options.persists()).then(|| {
+            std::env::temp_dir().join(format!("egui-pop-gallery-{}.ron", std::process::id()))
+        }),
         ..Default::default()
     };
     eframe::run_native(
