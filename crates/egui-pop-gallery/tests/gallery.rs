@@ -3532,6 +3532,71 @@ fn the_sections_page_answers_the_keyboard() {
 }
 
 #[test]
+fn the_sections_page_grabs_titles_pulls_them_and_keeps_them_in_place() {
+    use egui::accesskit::Role;
+    use egui_pop::core::sections::laid_out;
+    use egui_pop_gallery::pages::sections::GRABBED;
+    let mut h = harness(options("pop-dark", Density::Comfortable, "sections"));
+    h.run();
+    let start = laid_out(&h.ctx, GRABBED);
+    let empty = |h: &Harness<'_, Gallery>| -> f32 {
+        laid_out(&h.ctx, GRABBED).iter().map(|s| s.empty).sum()
+    };
+    // A title stays a button named as ever, and the page has no unnamed node.
+    let reviews = h.get_by_role_and_label(Role::Button, "Reviews, 4");
+    assert_eq!(reviews.accesskit_node().data().is_expanded(), Some(true));
+    // Dragged: it stays under the pointer, and the next section gives.
+    let a = start[1].band.center();
+    h.drag_at(a);
+    h.run();
+    move_pointer(&mut h, a, 30.0);
+    let now = laid_out(&h.ctx, GRABBED);
+    assert!((now[1].band.top() - start[1].band.top() - 30.0).abs() < 1.0);
+    assert!((now[1].height - start[1].height + 30.0).abs() < 1.0);
+    assert!(now[1].open, "{now:?}");
+    h.drop_at(a + egui::vec2(0.0, 30.0));
+    h.run();
+    // Ctrl held: the sections below follow as a block, room opens under them.
+    let before = laid_out(&h.ctx, GRABBED);
+    h.event(egui::Event::ModifiersChanged(egui::Modifiers::COMMAND));
+    h.run();
+    let a = before[1].band.center();
+    h.drag_at(a);
+    h.run();
+    move_pointer(&mut h, a, -60.0);
+    let now = laid_out(&h.ctx, GRABBED);
+    assert!(
+        (now[0].height - before[0].height + 60.0).abs() < 1.0,
+        "{now:?}"
+    );
+    assert!((now[1].height - before[1].height).abs() < 1.0, "{now:?}");
+    assert!((now[2].height - before[2].height).abs() < 1.0, "{now:?}");
+    assert!((empty(&h) - 60.0).abs() < 1.0);
+    h.drop_at(a + egui::vec2(0.0, -60.0));
+    h.run();
+    h.event(egui::Event::ModifiersChanged(egui::Modifiers::NONE));
+    h.run();
+    h.snapshot("sections-pulled-pop-dark");
+    // A click folds the last: its title stays, its room stays empty.
+    let builds = laid_out(&h.ctx, GRABBED)[2].band;
+    h.get_by_label("Builds, 3").click();
+    h.run();
+    let now = laid_out(&h.ctx, GRABBED);
+    assert!(!now[2].open, "{now:?}");
+    assert!((now[2].band.top() - builds.top()).abs() < 0.5, "{now:?}");
+    assert!(empty(&h) > 100.0);
+    egui_pop_test::assert_all_named(&h);
+    // The playground's option: off, a click no longer keeps it.
+    h.get_by_label("Builds, 3").click();
+    h.run();
+    h.get_by_role_and_label(Role::CheckBox, "Titles stay when folded")
+        .click();
+    h.run();
+    egui_pop_test::assert_all_named(&h);
+    assert!(laid_out(&h.ctx, GRABBED)[2].open);
+}
+
+#[test]
 fn the_sections_page_scrolls_a_panel_too_short_and_no_other() {
     use egui::Key;
     use egui_pop::core::sections::laid_out;
