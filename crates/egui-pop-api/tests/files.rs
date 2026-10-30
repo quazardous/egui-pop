@@ -5,14 +5,15 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::{Duration, UNIX_EPOCH};
 
 use egui::accesskit::{Role, Toggled};
 use egui::{Key, Modifiers};
 use egui_kittest::Harness;
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use egui_pop_api::dialogs::{self, DIALOGS};
-use egui_pop_api::files::fs::{MemoryFs, SharedFs};
+use egui_pop_api::files::fs::{DirItem, FileSystem, MemoryFs, Meta, SharedFs};
 use egui_pop_api::files::preview::{
     Body, Handles, Preview, PreviewProvider, PreviewRequest, Shown,
 };
@@ -24,7 +25,9 @@ use egui_pop_api::host::Pending;
 use egui_pop_api::steps::Before;
 use egui_pop_api::{App, Ctx, Plugin, PluginError};
 use egui_pop_core::a11y;
-use egui_pop_model::ids::PluginId;
+use egui_pop_model::commands::Origin;
+use egui_pop_model::ids::{OwnerId, PluginId};
+use egui_pop_model::values::{Change, Set, Value};
 use egui_pop_test::walk::{self, Press};
 use serde_json::json;
 
@@ -2119,4 +2122,390 @@ fn the_view_and_the_size_are_kept_for_the_next_picker() {
         h.state().handle().debug_snapshot()["files"]["previews"]["queued"],
         0
     );
+}
+
+// The columns and the order.
+
+/// A folder of files whose size and date disagree with their names.
+fn sortable() -> SharedFs {
+    let at = |s| Some(UNIX_EPOCH + Duration::from_secs(s));
+    Arc::new(
+        MemoryFs::new()
+            .file_at("/d/IMG_10.jpg", vec![0; 3000], at(100))
+            .file_at("/d/IMG_9.jpg", vec![0; 10], at(300))
+            .file_at("/d/notes.txt", vec![0; 500], at(200))
+            .file("/d/README", vec![0; 1])
+            .dir("/d/Trips")
+            .dir("/d/Albums"),
+    )
+}
+
+fn sort_harness() -> Harness<'static, App> {
+    let app = App::builder()
+        .plugin(FilesPlugin::in_app().file_system(sortable()))
+        .build(&egui::Context::default())
+        .unwrap();
+    // The window holds the dialog: without the pane, all the columns fit.
+    files::want_preview(app.handle(), false);
+    Harness::builder()
+        .with_size(egui::vec2(900.0, 640.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app)
+}
+
+fn shown_names(h: &Harness<'static, App>) -> Vec<String> {
+    let names = picker_state(h, "shown");
+    let names = names.as_array().unwrap().iter();
+    names.map(|n| n.as_str().unwrap().to_string()).collect()
+}
+
+fn header_click(h: &mut Harness<'static, App>, name: &str) {
+    row(h, name).click();
+    settle(h);
+}
+
+#[test]
+fn names_read_naturally_with_folders_first() {
+    let mut h = sort_harness();
+    let _p = choose(&mut h, FileRequest::open("Open").directory("/d"));
+    assert_eq!(
+        shown_names(&h),
+        [
+            "Albums/",
+            "Trips/",
+            "IMG_9.jpg",
+            "IMG_10.jpg",
+            "notes.txt",
+            "README"
+        ]
+    );
+    assert_eq!(picker_state(&h, "sort"), "name");
+    assert_eq!(picker_state(&h, "folders_first"), true);
+    // Ascending by name at first: the arrow's name says so.
+    assert!(
+        h.query_by_role_and_label(Role::Button, "Name, sorted ascending")
+            .is_some()
+    );
+    egui_pop_test::assert_all_named(&h);
+}
+
+#[test]
+fn a_header_sorts_turns_and_is_kept_for_the_next_picker() {
+    let mut h = sort_harness();
+    let app = h.state().handle().clone();
+    let p = choose(&mut h, FileRequest::open("Open").directory("/d"));
+    // The newest first, folders still first (they have no time here).
+    header_click(&mut h, "Modified");
+    assert_eq!(
+        shown_names(&h),
+        [
+            "Albums/",
+            "Trips/",
+            "IMG_9.jpg",
+            "notes.txt",
+            "IMG_10.jpg",
+            "README"
+        ]
+    );
+    assert!(
+        h.query_by_role_and_label(Role::Button, "Modified, sorted descending")
+            .is_some()
+    );
+    assert_eq!(files::sort_order(&app).as_text(), "-modified");
+    // The same header again turns it; what has no time stays last.
+    header_click(&mut h, "Modified, sorted descending");
+    assert_eq!(
+        shown_names(&h)[2..],
+        ["IMG_10.jpg", "notes.txt", "IMG_9.jpg", "README"]
+    );
+    assert_eq!(files::sort_order(&app).as_text(), "modified");
+    // The largest first.
+    header_click(&mut h, "Size");
+    assert_eq!(
+        shown_names(&h)[2..],
+        ["IMG_10.jpg", "notes.txt", "IMG_9.jpg", "README"]
+    );
+    header_click(&mut h, "Size, sorted descending");
+    assert_eq!(
+        shown_names(&h)[2..],
+        ["README", "IMG_9.jpg", "notes.txt", "IMG_10.jpg"]
+    );
+    // By extension, those without one first.
+    header_click(&mut h, "Type");
+    assert_eq!(
+        shown_names(&h)[2..],
+        ["README", "IMG_9.jpg", "IMG_10.jpg", "notes.txt"]
+    );
+    assert_eq!(files::sort_order(&app).as_text(), "type");
+    // A click on a header leaves the keys where they were.
+    assert!(h.get_by_label("Filter, or type a path").is_focused());
+
+    cancel(&mut h, &p);
+    let _p = choose(&mut h, FileRequest::open("Open").directory("/d"));
+    assert_eq!(picker_state(&h, "sort"), "type");
+    assert!(
+        h.query_by_role_and_label(Role::Button, "Type, sorted ascending")
+            .is_some()
+    );
+}
+
+#[test]
+fn nonsense_in_the_store_is_the_order_by_name() {
+    let mut h = sort_harness();
+    let app = h.state().handle().clone();
+    assert_eq!(files::sort_order(&app).as_text(), "name");
+    let store = app.store();
+    egui_pop_core::lock(&store)
+        .set(
+            Set::new(
+                files::SORT,
+                Change::To(Value::Text("colour".into())),
+                Origin::User,
+            )
+            .by(&OwnerId::FRAMEWORK),
+        )
+        .unwrap();
+    let _p = choose(&mut h, FileRequest::open("Open").directory("/d"));
+    assert_eq!(picker_state(&h, "sort"), "name");
+}
+
+#[test]
+fn the_highlight_stays_on_its_entry_through_a_new_order() {
+    let mut h = sort_harness();
+    let _p = choose(&mut h, FileRequest::open("Open").directory("/d"));
+    click(&mut h, "notes.txt", Modifiers::NONE);
+    assert_eq!(highlighted(&h), "notes.txt");
+    let before = picker_state(&h, "highlight");
+    header_click(&mut h, "Name, sorted ascending");
+    assert_eq!(highlighted(&h), "notes.txt");
+    assert_ne!(picker_state(&h, "highlight"), before);
+}
+
+#[test]
+fn folders_first_is_a_setting_the_box_turns() {
+    let mut h = sort_harness();
+    let app = h.state().handle().clone();
+    assert!(files::folders_first(&app));
+    let p = choose(&mut h, FileRequest::open("Open").directory("/d"));
+    h.get_by_role_and_label(Role::CheckBox, "Folders first")
+        .click();
+    settle(&mut h);
+    assert!(!files::folders_first(&app));
+    assert_eq!(
+        shown_names(&h),
+        [
+            "Albums/",
+            "IMG_9.jpg",
+            "IMG_10.jpg",
+            "notes.txt",
+            "README",
+            "Trips/"
+        ]
+    );
+    cancel(&mut h, &p);
+    // Kept, and the setting itself moves an open picker.
+    let _p = choose(&mut h, FileRequest::open("Open").directory("/d"));
+    assert_eq!(picker_state(&h, "folders_first"), false);
+    files::want_folders_first(&app, true);
+    settle(&mut h);
+    assert_eq!(shown_names(&h)[..2], ["Albums/", "Trips/"]);
+}
+
+#[test]
+fn a_row_says_its_facts_and_a_folder_has_no_size() {
+    let mut h = sort_harness();
+    let _p = choose(&mut h, FileRequest::open("Open").directory("/d"));
+    let description =
+        |h: &Harness<'static, App>, name: &str| row(h, name).accesskit_node().description();
+    assert_eq!(
+        description(&h, "IMG_10.jpg").as_deref(),
+        Some("1970-01-01 00:01 UTC, 3.0 KB, JPG")
+    );
+    assert_eq!(description(&h, "README").as_deref(), Some("1 B, File"));
+    assert_eq!(description(&h, "Albums/").as_deref(), Some("Folder"));
+}
+
+#[test]
+fn choosing_a_folder_has_no_columns_that_would_say_nothing() {
+    let mut h = sort_harness();
+    let _p = choose(&mut h, FileRequest::folder("Folder").directory("/d"));
+    assert!(
+        h.query_by_role_and_label(Role::Button, "Modified")
+            .is_some()
+    );
+    assert!(h.query_by_role_and_label(Role::Button, "Size").is_none());
+    assert!(h.query_by_role_and_label(Role::Button, "Type").is_none());
+}
+
+#[test]
+fn the_grid_follows_the_same_order_and_its_headers_sort() {
+    let app = App::builder()
+        .plugin(FilesPlugin::in_app().file_system(sortable()))
+        .build(&egui::Context::default())
+        .unwrap();
+    let handle = app.handle().clone();
+    files::want_view(&handle, PickerView::Grid);
+    files::want_preview(&handle, false);
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(900.0, 640.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+    let _p = choose(&mut h, FileRequest::open("Open").directory("/d"));
+    assert_eq!(picker_state(&h, "view"), "grid");
+    header_click(&mut h, "Size");
+    assert_eq!(
+        shown_names(&h)[2..],
+        ["IMG_10.jpg", "notes.txt", "IMG_9.jpg", "README"]
+    );
+    // The cells lie in that order.
+    let x = |h: &Harness<'static, App>, name: &str| row(h, name).rect().left();
+    assert!(x(&h, "IMG_10.jpg") < x(&h, "notes.txt"));
+    assert!(x(&h, "notes.txt") < x(&h, "IMG_9.jpg"));
+    assert_eq!(files::sort_order(&handle).as_text(), "-size");
+    // The list's keeps it.
+    h.get_by_label("List").click();
+    settle(&mut h);
+    assert_eq!(picker_state(&h, "view"), "list");
+    assert!(row(&h, "IMG_10.jpg").rect().top() < row(&h, "notes.txt").rect().top());
+}
+
+#[test]
+fn while_the_filter_ranks_the_headers_say_why_they_do_not_sort() {
+    let mut h = sort_harness();
+    let _p = choose(&mut h, FileRequest::open("Open").directory("/d"));
+    type_in(&mut h, "img");
+    assert!(row(&h, "Size").accesskit_node().is_disabled());
+    // Not the order's arrow: the entries are not in that order now.
+    assert!(row(&h, "Name").accesskit_node().is_disabled());
+    row(&h, "Size").click();
+    settle(&mut h);
+    assert_eq!(picker_state(&h, "sort"), "name");
+    // Emptied, they sort again.
+    h.get_by_label("Filter, or type a path").focus();
+    settle(&mut h);
+    for _ in 0..3 {
+        key(&mut h, Key::Backspace, Modifiers::NONE);
+    }
+    assert_eq!(field(&h), "");
+    header_click(&mut h, "Size");
+    assert_eq!(picker_state(&h, "sort"), "-size");
+}
+
+/// A memory folder that counts what is read of it.
+#[derive(Debug)]
+struct Counted {
+    fs: MemoryFs,
+    reads: AtomicUsize,
+}
+
+impl FileSystem for Counted {
+    fn read_dir(&self, dir: &Path) -> std::io::Result<Vec<DirItem>> {
+        self.fs.read_dir(dir)
+    }
+    fn metadata(&self, path: &Path) -> std::io::Result<Meta> {
+        self.reads.fetch_add(1, Ordering::Relaxed);
+        self.fs.metadata(path)
+    }
+    fn read(&self, path: &Path, limit: usize) -> std::io::Result<Vec<u8>> {
+        self.fs.read(path, limit)
+    }
+}
+
+#[test]
+fn a_long_folder_reads_the_facts_it_shows_and_each_once() {
+    let mut fs = MemoryFs::new().dir("/raws");
+    for i in 0..2000 {
+        fs = fs.file(format!("/raws/IMG_{i:05}.cr3"), vec![0; i % 7]);
+    }
+    let counted = Arc::new(Counted {
+        fs,
+        reads: AtomicUsize::new(0),
+    });
+    let reads = counted.clone();
+    let request = FileRequest::open("Open").directory("/raws");
+    let picker = files::FilePicker::new_in(&request, counted);
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(900.0, 640.0))
+        .with_max_steps(64)
+        .build_ui_state(
+            |ui, picker: &mut files::FilePicker| {
+                picker.show(ui, &files::Places::default());
+            },
+            picker,
+        );
+    h.run();
+    let read = || reads.reads.load(Ordering::Relaxed);
+    // Only the rows in view are drawn, and only they read.
+    let (first, rows) = (read(), h.get_all_by_role(Role::Button).count());
+    assert!(rows < 100, "{rows} widgets for 2000 rows");
+    assert!(
+        first > 0 && first < 100,
+        "{first} reads for the rows in view"
+    );
+    assert!(h.query_by_label("IMG_00000.cr3").is_some());
+    assert!(h.query_by_label("IMG_01999.cr3").is_none());
+    // More frames read nothing more.
+    h.run();
+    assert_eq!(read(), first);
+    // Sorting by size reads the rest, once.
+    let size = files::sort::SortColumn::Size;
+    h.state_mut()
+        .set_sort(files::sort::PickerSort::default().click(size));
+    h.run();
+    let sorted = read();
+    assert!((2000..2000 + first).contains(&sorted), "{sorted} reads");
+    // Turning it reads nothing: the facts are known, the folder too.
+    let turned = h.state().sort.click(size);
+    h.state_mut().set_sort(turned);
+    h.run();
+    assert_eq!(read(), sorted);
+}
+
+#[test]
+fn the_arrows_bring_a_row_that_was_not_drawn_into_view() {
+    let (mut h, _) = grid_harness(2000, PickerView::List);
+    let _p = choose(&mut h, FileRequest::open("Open").directory("/raws"));
+    assert!(h.query_by_label("IMG_00200.cr3").is_none());
+    for _ in 0..200 {
+        h.key_press(Key::ArrowDown);
+    }
+    settle(&mut h);
+    assert_eq!(at(&h), 200);
+    let at = row(&h, "IMG_00200.cr3").rect();
+    let top = row(&h, "Name, sorted ascending").rect().bottom();
+    assert!(at.top() >= top - 1.0, "{at:?} under the headers at {top}");
+    assert!(h.query_by_label("IMG_00000.cr3").is_none());
+    // Back up, the same way.
+    for _ in 0..200 {
+        h.key_press(Key::ArrowUp);
+    }
+    settle(&mut h);
+    assert!(h.query_by_label("IMG_00000.cr3").is_some());
+}
+
+#[test]
+fn at_the_least_size_the_row_of_buttons_keeps_its_boxes() {
+    let root = tree("least-footer");
+    let mut h = large_harness();
+    let _p = choose(
+        &mut h,
+        FileRequest::open("Open")
+            .directory(&root)
+            .filter("Images", &["png", "jpg"]),
+    );
+    let at = dialog(&h);
+    drag(
+        &mut h,
+        at.max - egui::vec2(2.0, 2.0),
+        egui::vec2(-2000.0, -2000.0),
+    );
+    let least = dialog(&h);
+    assert!(least.width() < at.width(), "{least:?}");
+    let boxes = h.get_by_role_and_label(Role::CheckBox, "Preview").rect();
+    let cancel = h.get_by_role_and_label(Role::Button, "Cancel").rect();
+    assert!(
+        boxes.right() <= cancel.left(),
+        "{boxes:?} runs into {cancel:?}"
+    );
+    let open = h.get_by_role_and_label(Role::Button, "Open").rect();
+    assert!(open.right() <= least.right(), "{open:?} out of {least:?}");
+    let _ = std::fs::remove_dir_all(root);
 }

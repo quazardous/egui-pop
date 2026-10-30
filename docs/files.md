@@ -147,10 +147,10 @@ which swaps the first two (`SetFolder`).
   least `LIST_MIN_WIDTH` (240), and with less room the pane shrinks
   first, down to `PANE_MIN_WIDTH` (120), under which it is not drawn.
 - The dialog is yours to size: drag its edges and corners, down to
-  `PICKER_MIN_SIZE` and within the window. Its bottom right corner is a
+  `PICKER_MIN_SIZE` (640 by 280 points) and within the window. Its bottom right corner is a
   handle for the keyboard too: Tab reaches it, the arrows resize (with
   Shift, by bigger steps). The size starts at `PICKER_WIDTH` by
-  `PICKER_HEIGHT` (880 by 398 points) and is kept in the host's store
+  `PICKER_HEIGHT` (960 by 398 points) and is kept in the host's store
   (`settings/files.dialog_size`, read with `files::dialog_size`). A size
   that no longer fits the window when the picker opens (a smaller
   screen) goes back to the default; one the window comes to hold smaller
@@ -181,6 +181,38 @@ which swaps the first two (`SetFolder`).
   While the field holds text and the focus, `Left`, `Right`, `Home` and `End`
   move its cursor, and only `Up` and `Down` the highlight: `Tab` to a cell gives
   all of them to the grid, and the focus then follows the highlight.
+- The list has columns: the name, when it last changed (in UTC, as in the
+  pane), the size, and the type (a file's extension; a file without one says
+  File, a folder Folder). A folder has no size, so choosing a folder shows the
+  name and the time alone. When the list is too narrow for
+  them and at least `NAME_MIN_WIDTH` (140) of name, they go: the type first, the
+  modification time last; a name cut short shows whole in a tip.
+- Only the rows in view are drawn, so a folder of thousands of files costs what
+  a dialog's worth does. Tab walks the rows drawn, then leaves the list; the
+  arrows go on through the whole folder, scrolling.
+- A click on a header sorts by that column, and another turns it. The name and
+  the type start upwards, the size and the time with the largest and the newest
+  first, as Finder and Nautilus do. There is always an order: unlike the data
+  table's headers, these do not go back to none. The headers stay above the grid,
+  whose cells follow the same order, and Tab reaches them. The order is kept in
+  `settings/files.sort` (`name`, `-name` for downwards, and `size`, `modified`,
+  `type` the same way; `files::sort_order`), and the highlighted entry stays
+  highlighted, wherever it lands.
+- Names sort as people read them (`files::sort::natural_cmp`): `IMG_9` before
+  `IMG_10`, whatever the case. It compares characters rather than following a
+  language's collation, so `é` comes after `z`. What has no value in a column (a
+  folder's size and type, a time the file system does not give) goes last in both
+  directions, and the name settles ties, upwards.
+- Folders stay first in every order, in the same direction among themselves. The
+  Folders first box and the `files.folders_first` setting
+  (`files::folders_first`), as GTK's `sort-directories-first`, sort them among the
+  files instead.
+- While the field filters, its best matches come first, the order settling only
+  what ties: the headers are disabled then, their tip says why, and the arrow goes
+  until the field is empty. A typed path, and the name when saving, do not rank.
+- The size and the time are read off the file system once per listing, for the
+  rows in view; sorting by either reads them all then, on the interface thread, as
+  listing the folder does. Sorting by name or type reads nothing more.
 - Beside the folder: home, the recent places and the bookmarks, kept in
   the host's store (`settings/files.recent`, `settings/files.bookmarks`,
   saved with the settings).
@@ -244,8 +276,10 @@ which swaps the first two (`SetFolder`).
   journal says `file.folder_created`. An agent gives `{ "name" }` to the
   command and the folder is made at once.
 
-`FilePicker` is usable on its own, in any `Ui`: its list is
-`LIST_HEIGHT` (280) high, or takes the height left with `fill`. With no
+`FilePicker` is usable on its own, in any `Ui`: its list and headers are
+`LIST_HEIGHT` (280) high, or take the height left with `fill`. Its order is
+`FilePicker::sort` and `FilePicker::folders_first` (`set_sort`,
+`set_folders_first` keep the highlight on its entry); its caller remembers them. With no
 keymap to go through, it reads `Ctrl+A` and `Ctrl+Space` itself, and they do
 not rebind. A
 modal of your own that the person resizes is
@@ -395,7 +429,7 @@ The commands `file.new_folder` (`{ "name" }`, optional) and
 the yes to its question. The `when` key `filePickerNewFolder` says that an
 open picker offers a new folder. `file.select_all` and
 `file.toggle_selection` answer `{ "selected": n }`, and the `files` collector
-lists the picker's `selected`.
+lists the picker's `selected`, its `sort` and `folders_first`.
 
 The gallery's `files` page opens each kind of choice in a demo folder
 whose files are made by code at start (the repository holds no binary

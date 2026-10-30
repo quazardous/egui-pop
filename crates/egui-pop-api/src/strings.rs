@@ -400,6 +400,28 @@ pub const FILES_VIEW_LIST: StrKey = StrKey::new("egui-pop-files-view-list", "Lis
 pub const FILES_VIEW_GRID: StrKey = StrKey::new("egui-pop-files-view-grid", "Grid");
 pub const FILES_THUMBNAIL_SIZE: StrKey =
     StrKey::new("egui-pop-files-thumbnail-size", "Thumbnail size");
+/// The in-app picker's columns, and what they say of a folder and of a file
+/// without an extension.
+pub const FILES_COLUMN_NAME: StrKey = StrKey::new("egui-pop-files-column-name", "Name");
+pub const FILES_COLUMN_SIZE: StrKey = StrKey::new("egui-pop-files-column-size", "Size");
+pub const FILES_COLUMN_MODIFIED: StrKey = StrKey::new("egui-pop-files-column-modified", "Modified");
+pub const FILES_COLUMN_TYPE: StrKey = StrKey::new("egui-pop-files-column-type", "Type");
+pub const FILES_KIND_FOLDER: StrKey = StrKey::new("egui-pop-files-kind-folder", "Folder");
+pub const FILES_KIND_FILE: StrKey = StrKey::new("egui-pop-files-kind-file", "File");
+/// A column's header as a screen reader says it.
+pub const FILES_SORTED_UP: StrKey =
+    StrKey::new("egui-pop-files-sorted-up", "{ $column }, sorted ascending");
+pub const FILES_SORTED_DOWN: StrKey = StrKey::new(
+    "egui-pop-files-sorted-down",
+    "{ $column }, sorted descending",
+);
+/// Why the headers do not sort while the field filters.
+pub const FILES_SORT_RANKED: StrKey = StrKey::new(
+    "egui-pop-files-sort-ranked",
+    "While the field filters, the best matches come first",
+);
+pub const FILES_FOLDERS_FIRST: StrKey =
+    StrKey::new("egui-pop-files-folders-first", "Folders first");
 pub const FILES_PREVIEW: StrKey = StrKey::new("egui-pop-files-preview", "Preview");
 pub const FILES_PREVIEW_RESIZE: StrKey =
     StrKey::new("egui-pop-files-preview-resize", "Resize the preview");
@@ -1270,6 +1292,16 @@ pub const ALL: &[StrKey] = &[
     FILES_VIEW_LIST,
     FILES_VIEW_GRID,
     FILES_THUMBNAIL_SIZE,
+    FILES_COLUMN_NAME,
+    FILES_COLUMN_SIZE,
+    FILES_COLUMN_MODIFIED,
+    FILES_COLUMN_TYPE,
+    FILES_KIND_FOLDER,
+    FILES_KIND_FILE,
+    FILES_SORTED_UP,
+    FILES_SORTED_DOWN,
+    FILES_SORT_RANKED,
+    FILES_FOLDERS_FIRST,
     FILES_PREVIEW,
     FILES_PREVIEW_RESIZE,
     FILES_SELECTED,

@@ -2899,6 +2899,23 @@ fn the_files_page_shows_a_grid_of_thumbnails() {
 }
 
 #[test]
+fn the_files_page_sorts_the_picker_by_its_columns() {
+    use egui::accesskit::Role;
+    let mut h = harness(options("pop-dark", Density::Comfortable, "files"));
+    h.run();
+    h.get_by_label("Open an image…").click();
+    settle_picker(&mut h);
+    h.get_by_role_and_label(Role::Button, "Size").click();
+    settle_picker(&mut h);
+    let picker = |h: &Harness<'_, Gallery>, what: &str| {
+        h.state().app.handle().debug_snapshot()["files"]["open"][0]["picker"][what].clone()
+    };
+    assert_eq!(picker(&h, "sort"), "-size");
+    egui_pop_test::assert_all_named(&h);
+    h.snapshot("files-sorted-pop-dark");
+}
+
+#[test]
 fn the_files_page_previews_the_highlighted_file() {
     use egui_pop::model::commands::Origin;
     let root = egui_pop_gallery::pages::files::demo_folder();

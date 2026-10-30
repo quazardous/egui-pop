@@ -942,6 +942,14 @@ egui-pop-files-bookmark = Bookmark this folder
 
 egui-pop-files-bookmarks = Bookmarks
 
+egui-pop-files-column-modified = Modified
+
+egui-pop-files-column-name = Name
+
+egui-pop-files-column-size = Size
+
+egui-pop-files-column-type = Type
+
 egui-pop-files-create = Create
 
 egui-pop-files-dimensions = Dimensions
@@ -964,11 +972,17 @@ egui-pop-files-folder-selected = Selected: { $name }. The button chooses it, Ent
 
 egui-pop-files-folder-shown = Nothing selected: the button chooses the folder shown, { $name }
 
+egui-pop-files-folders-first = Folders first
+
 egui-pop-files-hidden = Hidden files
 
 egui-pop-files-home = Home
 
 egui-pop-files-items = Items
+
+egui-pop-files-kind-file = File
+
+egui-pop-files-kind-folder = Folder
 
 egui-pop-files-modified = Modified
 
@@ -1013,6 +1027,12 @@ egui-pop-files-selected-none = Nothing selected: Enter or the button acts on the
 egui-pop-files-selected-not-shown = Selected: { $count } ({ $hidden } not shown)
 
 egui-pop-files-size = Size
+
+egui-pop-files-sort-ranked = While the field filters, the best matches come first
+
+egui-pop-files-sorted-down = { $column }, sorted descending
+
+egui-pop-files-sorted-up = { $column }, sorted ascending
 
 egui-pop-files-thumbnail-size = Thumbnail size
 
@@ -2224,6 +2244,10 @@ setting-dialogs-closable =
 setting-dialogs-movable =
     .description = Every dialog has a header band to drag it by; Alt+F7 moves it with the arrow keys.
     .label = Movable dialogs
+
+setting-files-folders-first =
+    .description = egui-pop's file picker lists folders before files in every order; off, they sort among the files.
+    .label = Folders first in the file picker
 
 setting-files-native =
     .description = Choose files with the system's chooser when there is one; off, with egui-pop's own.
