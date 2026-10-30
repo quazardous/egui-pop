@@ -923,7 +923,8 @@ fn run(request: &PreviewRequest) -> Shown {
     Shown::Nothing
 }
 
-/// The width of the picker's preview pane.
+/// The width of the picker's preview pane (it shrinks when the list
+/// would get too narrow).
 pub const PANE_WIDTH: f32 = 240.0;
 /// The height of a preview's drawing in the pane.
 const PANE_HEIGHT: f32 = 180.0;

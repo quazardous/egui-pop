@@ -256,6 +256,34 @@ fn a_click_highlights_a_double_click_chooses() {
     let _ = std::fs::remove_dir_all(root);
 }
 
+#[test]
+fn the_preview_pane_keeps_the_dialog_s_size() {
+    let root = tree("preview-size");
+    let mut h = harness(None);
+    let app = h.state().handle().clone();
+    let _p = choose(&mut h, FileRequest::open("Open").directory(&root));
+    let id = app.service(&FILES).unwrap().open_ids()[0];
+    let modal = egui::Id::new(("egui_pop.files", id));
+    // The dialog's width and a list row's (rows fill the list's width).
+    let measure = |h: &mut Harness<'static, App>, on: bool| {
+        files::want_preview(&app, on);
+        for _ in 0..3 {
+            h.run();
+        }
+        let dialog = h.ctx.memory(|m| m.area_rect(modal)).unwrap().width();
+        let row = h.get_by_label("photos/").rect().width();
+        (dialog, row)
+    };
+    let (dialog_on, row_on) = measure(&mut h, true);
+    let (dialog_off, row_off) = measure(&mut h, false);
+    assert_eq!(dialog_on, dialog_off);
+    assert!(
+        row_on + files::preview::PANE_WIDTH <= row_off,
+        "the list gives the pane its width: {row_on} with it, {row_off} without"
+    );
+    let _ = std::fs::remove_dir_all(root);
+}
+
 /// A double click in one frame (the test kit's helper, which this crate
 /// cannot depend on; see docs/upstream.md).
 fn double_click(h: &mut Harness<'static, App>, label: &str) {

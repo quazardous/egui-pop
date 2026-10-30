@@ -60,7 +60,11 @@ draws the in-app picker where it wants it (`Files::show_inline`).
   (below) and its facts: a file's size and modification time (in UTC),
   a folder's items, dimensions, pages, and the provider's own. `Alt+P` (as in
   the Windows file explorer) or the Preview box shows or hides it; the
-  `files.preview` setting remembers.
+  `files.preview` setting remembers. The dialog keeps its size either
+  way (`PICKER_WIDTH`, 880 points): the pane (`preview::PANE_WIDTH`,
+  240) takes its width from the list's, the list keeps at least
+  `LIST_MIN_WIDTH` (240), and with less room the pane shrinks first,
+  down to `PANE_MIN_WIDTH` (120), under which it is not drawn.
 - Beside the folder: home, the recent places and the bookmarks, kept in
   the host's store (`settings/files.recent`, `settings/files.bookmarks`,
   saved with the settings).

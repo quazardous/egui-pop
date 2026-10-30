@@ -803,6 +803,13 @@ publishes.
 
 ### Changed
 
+- The in-app file picker keeps one size with the preview pane on or off
+  (egui-pop-api): its modal is `files::PICKER_WIDTH` (880 points) wide
+  either way, and the pane takes its width from the list's instead of
+  widening the dialog. The list keeps at least `files::LIST_MIN_WIDTH`
+  (240): with less room the pane shrinks, and under
+  `files::PANE_MIN_WIDTH` (120) it is not drawn. Without the preview,
+  the picker is wider than before (880 instead of 640).
 - `AppHandle::local` is public (egui-pop-api): a host or a plugin keeps
   its own state on the application side, one value per type, as
   egui-pop's own services do (a clipboard endpoint's state, for one).
