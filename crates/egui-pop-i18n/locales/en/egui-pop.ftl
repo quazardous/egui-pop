@@ -852,6 +852,8 @@ egui-pop-dialog-browse = Browse…
 
 egui-pop-dialog-filter = Filter
 
+egui-pop-dialog-resize = Resize { $dialog }
+
 egui-pop-editors-close = Close the search
 
 egui-pop-editors-code = Code editor

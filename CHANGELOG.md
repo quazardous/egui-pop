@@ -26,6 +26,12 @@ publishes.
   `model::sections` (`fit`, `plan_drag`, `pin_plan`). `Remembered::share`
   gives way to `Remembered::height`: a layout stored with shares keeps its
   fold state, and its sections read as sized by the list.
+- Resizable modals (egui-pop-core): `OverlaySpec::resizable(size, min)`,
+  with `overlay::modal_size`, `modal_resizing` and `modal_max_size`.
+  Edges and corners take the pointer, the bottom right corner is a
+  handle for the keyboard, a splitter named "Resize" and the overlay's
+  label (`egui-pop-dialog-resize`). Kit component `dialog-grip`. Other
+  modals do not change.
 - The gallery says which egui-pop it shows (egui-pop, egui-pop-gallery):
   its version, in Help > About, its version info, its crash reports and
   its `ready` announce, is the egui-pop it is built from, with the short

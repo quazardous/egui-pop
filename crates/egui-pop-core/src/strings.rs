@@ -114,6 +114,7 @@ pub const INPUT_MORE: StrKey = StrKey::new("egui-pop-input-more", "{ $label }, m
 /// The boundary between two sections of a stack, named after the one
 /// above it (`sections::Sections`).
 pub const SECTION_RESIZE: StrKey = StrKey::new("egui-pop-section-resize", "Resize { $section }");
+pub const DIALOG_RESIZE: StrKey = StrKey::new("egui-pop-dialog-resize", "Resize { $dialog }");
 /// A field's states, as markers and assistive technologies say them.
 pub const FIELD_REQUIRED: StrKey = StrKey::new("egui-pop-field-required", "Required");
 pub const FIELD_MODIFIED_SAVED: StrKey =
@@ -164,6 +165,7 @@ pub const ALL: &[StrKey] = &[
     INPUT_CHOICES,
     INPUT_MORE,
     SECTION_RESIZE,
+    DIALOG_RESIZE,
     FIELD_REQUIRED,
     FIELD_MODIFIED_SAVED,
     FIELD_MODIFIED_DEFAULT,

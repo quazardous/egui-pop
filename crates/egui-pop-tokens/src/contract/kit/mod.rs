@@ -19,6 +19,7 @@ mod command_button;
 mod command_palette_row;
 mod compare_pane;
 mod dialog;
+mod dialog_grip;
 mod dialog_header;
 mod dock_preview;
 mod editor_frame;
@@ -111,6 +112,7 @@ pub(super) const GROUPS: &[&[Required]] = &[
     command_palette_row::CONTRACT,
     compare_pane::CONTRACT,
     dialog::CONTRACT,
+    dialog_grip::CONTRACT,
     dialog_header::CONTRACT,
     dock_preview::CONTRACT,
     editor_frame::CONTRACT,

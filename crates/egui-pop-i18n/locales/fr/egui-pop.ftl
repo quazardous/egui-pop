@@ -1041,6 +1041,8 @@ egui-pop-retry = Réessayer
 
 egui-pop-section-resize = Redimensionner { $section }
 
+egui-pop-dialog-resize = Redimensionner { $dialog }
+
 egui-pop-settings-at-default = { $setting } est à sa valeur par défaut
 
 egui-pop-settings-fonts = Polices

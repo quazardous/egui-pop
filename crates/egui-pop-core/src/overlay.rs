@@ -30,10 +30,44 @@
 //! open in one window blocks the others ([`block_window`]), and
 //! [`modal_open`] says whether one is open anywhere; [`stack`] and
 //! [`rects`] are the current window's.
+//!
+//! **Resizable modals.** A modal declared with
+//! [`OverlaySpec::resizable`] is dragged by its edges and corners, down
+//! to a least size and within the window; it keeps the size asked when
+//! the window gets too small for it, and takes it back when the window
+//! grows again. Its bottom right corner is a handle (the kit's
+//! `dialog-grip`) for the keyboard too: it takes the focus, the arrows
+//! resize (with Shift, by bigger steps), and it is a splitter named
+//! "Resize" and the overlay's label, the size its value.
+//! [`modal_size`] reads the size, [`modal_resizing`] says whether a drag
+//! is going on. Every other modal is as wide as it is declared and as
+//! high as its content, as before.
+//!
+//! egui's `Window` has such edges, but it is not a modal (no backdrop,
+//! no stack) and names nothing for assistive technology; `Resize` only
+//! has a corner. So the grips are here, on the modal's own area.
+//!
+//! ```
+//! use egui_pop_core::overlay::{self, Kind, OverlaySpec};
+//!
+//! let ctx = egui::Context::default();
+//! let spec = OverlaySpec::new("big", "Big dialog", Kind::Modal)
+//!     .resizable(egui::vec2(500.0, 300.0), egui::vec2(200.0, 100.0));
+//! let mut open = true;
+//! let mut out = ctx.run_ui(Default::default(), |ui| {
+//!     overlay::show(ui.ctx(), &spec, &mut open, None, |ui| {
+//!         ui.label("Whatever the size, this fills it.");
+//!     });
+//! });
+//! out.textures_delta.clear();
+//! assert_eq!(overlay::modal_size(&ctx, spec.id), Some(egui::vec2(500.0, 300.0)));
+//! ```
 
 use std::collections::BTreeSet;
 
-use egui::{Context, Id, LayerId, Rect, Ui, ViewportId};
+use egui::{
+    Context, CursorIcon, Id, LayerId, NumExt as _, Rect, Sense, Ui, UiBuilder, Vec2, ViewportId,
+};
 use serde::Serialize;
 
 use crate::placement::{Placement, Side, place};
@@ -51,6 +85,16 @@ pub enum Kind {
     Popover,
     /// As a popover, for menus.
     Menu,
+}
+
+/// How a modal may be resized ([`OverlaySpec::resizable`]): sizes of its
+/// content, in points, as [`OverlaySpec::width`] is.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ModalSize {
+    /// The size it opens at (the window may hold it smaller).
+    pub size: Vec2,
+    /// The least size a drag leaves it (the window may hold it smaller).
+    pub min: Vec2,
 }
 
 /// An overlay as declared.
@@ -74,6 +118,10 @@ pub struct OverlaySpec {
     /// (`backdrop.opacity`): 1 by default, 0 for none (the interface stays
     /// as it is, still blocked).
     pub dim: f32,
+    /// A modal the person resizes; it then has the size asked, whatever
+    /// `width` says.
+    #[serde(skip)]
+    pub resize: Option<ModalSize>,
 }
 
 impl OverlaySpec {
@@ -87,7 +135,24 @@ impl OverlaySpec {
             width: None,
             offset: egui::Vec2::ZERO,
             dim: 1.0,
+            resize: None,
         }
+    }
+
+    /// A modal the person resizes: opening at `size` (of its content, in
+    /// points), dragged by its edges and corners down to `min` and
+    /// within the window. It has that size whatever its content needs:
+    /// what does not fit is clipped, so `add` lays itself out in the
+    /// room it is given. `width` no longer counts, and only a modal can
+    /// be resized (a popover or a menu says so in the log and stays as
+    /// it is).
+    pub fn resizable(mut self, size: Vec2, min: Vec2) -> Self {
+        if self.kind != Kind::Modal {
+            log::warn!(target: "egui_pop", "overlay `{}`: only a modal can be resized", self.label);
+            return self;
+        }
+        self.resize = Some(ModalSize { size, min });
+        self
     }
 
     /// A modal this far from the window's centre (points).
@@ -148,6 +213,132 @@ struct Entry {
     anchor: Option<Rect>,
     /// The egui layers (popups, menus) drawn from inside it last pass.
     popups: Vec<LayerId>,
+    /// A resizable modal's size, once shown.
+    geometry: Option<Geometry>,
+}
+
+/// Where a resizable modal is, as the person left it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Geometry {
+    /// Its content's size as asked: the window may hold it smaller.
+    size: Vec2,
+    /// Its centre's distance from where its declaration puts it: dragging
+    /// an edge leaves the opposite one in place.
+    shift: Vec2,
+    /// The whole dialog's rectangle when a grip was pressed, during a
+    /// drag.
+    grabbed: Option<Rect>,
+}
+
+impl Geometry {
+    /// The whole dialog's rectangle: `chrome` around the content, at
+    /// least `min` of content, inside `bounds`.
+    fn placed(&self, offset: Vec2, min: Vec2, chrome: Vec2, bounds: Rect) -> Rect {
+        let max = bounds.size();
+        let size = (self.size + chrome)
+            .at_most(max)
+            .at_least((min + chrome).at_most(max));
+        let rect = Rect::from_center_size(bounds.center() + offset + self.shift, size);
+        let left = rect.min.x.at_least(bounds.min.x) - rect.min.x;
+        let right = rect.max.x.at_most(bounds.max.x) - rect.max.x;
+        let top = rect.min.y.at_least(bounds.min.y) - rect.min.y;
+        let bottom = rect.max.y.at_most(bounds.max.y) - rect.max.y;
+        rect.translate(egui::vec2(left + right, top + bottom))
+    }
+
+    /// Takes the size and place of the whole dialog's `rect`.
+    fn set(&mut self, rect: Rect, offset: Vec2, chrome: Vec2, bounds: Rect) {
+        self.size = (rect.size() - chrome).round();
+        self.shift = rect.center() - bounds.center() - offset;
+    }
+}
+
+/// A grab on a resizable modal: the sides it moves (-1 the left or top
+/// one, 1 the right or bottom one, 0 neither).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Grip {
+    x: i8,
+    y: i8,
+}
+
+/// The edges first and the corners last, which win where they overlap;
+/// the handle is the last one.
+const GRIPS: [Grip; 8] = [
+    Grip { x: 0, y: -1 },
+    Grip { x: 0, y: 1 },
+    Grip { x: -1, y: 0 },
+    Grip { x: 1, y: 0 },
+    Grip { x: -1, y: -1 },
+    Grip { x: 1, y: -1 },
+    Grip { x: -1, y: 1 },
+    Grip { x: 1, y: 1 },
+];
+
+/// The handle: the bottom right corner.
+const HANDLE: Grip = Grip { x: 1, y: 1 };
+
+impl Grip {
+    /// Where it takes the pointer on the dialog's `rect`: `reach` on
+    /// either side of an edge, `corner` in from a corner.
+    fn zone(self, rect: Rect, reach: f32, corner: f32) -> Rect {
+        let span = |side: i8, min: f32, max: f32| match side {
+            -1 => min - reach..=min + corner,
+            1 => max - corner..=max + reach,
+            _ => min + corner..=max - corner,
+        };
+        let edge = |side: i8, min: f32, max: f32, other: i8| match (side, other) {
+            (-1, 0) => min - reach..=min + reach,
+            (1, 0) => max - reach..=max + reach,
+            _ => span(side, min, max),
+        };
+        Rect::from_x_y_ranges(
+            edge(self.x, rect.min.x, rect.max.x, self.y),
+            edge(self.y, rect.min.y, rect.max.y, self.x),
+        )
+    }
+
+    fn cursor(self) -> CursorIcon {
+        match (self.x, self.y) {
+            (0, _) => CursorIcon::ResizeVertical,
+            (_, 0) => CursorIcon::ResizeHorizontal,
+            (a, b) if a == b => CursorIcon::ResizeNwSe,
+            _ => CursorIcon::ResizeNeSw,
+        }
+    }
+
+    /// The dialog's rectangle `from`, its sides moved `by` the pointer:
+    /// the others stay, at least `min` remains and all of it is inside
+    /// `bounds`.
+    fn moved(self, from: Rect, by: Vec2, min: Vec2, bounds: Rect) -> Rect {
+        let mut r = from;
+        match self.x {
+            -1 => {
+                r.min.x = (from.min.x + by.x)
+                    .at_most(from.max.x - min.x)
+                    .at_least(bounds.min.x)
+            }
+            1 => {
+                r.max.x = (from.max.x + by.x)
+                    .at_least(from.min.x + min.x)
+                    .at_most(bounds.max.x)
+            }
+            _ => {}
+        }
+        match self.y {
+            -1 => {
+                r.min.y = (from.min.y + by.y)
+                    .at_most(from.max.y - min.y)
+                    .at_least(bounds.min.y)
+            }
+            1 => {
+                r.max.y = (from.max.y + by.y)
+                    .at_least(from.min.y + min.y)
+                    .at_most(bounds.max.y)
+            }
+            _ => {}
+        }
+        r
+    }
 }
 
 /// The stack, bottom first.
@@ -182,6 +373,7 @@ impl OverlayStack {
             rect: None,
             anchor: None,
             popups: Vec::new(),
+            geometry: None,
         });
         (Opened::New, Vec::new())
     }
@@ -605,6 +797,47 @@ pub fn rect(ctx: &Context, id: Id) -> Option<Rect> {
         .and_then(|e| e.rect)
 }
 
+/// A resizable modal's size as asked, of its content, in points, while
+/// it is open: what it opened at or what the person last left it at (the
+/// window may hold it smaller for now). `None` before it is first shown.
+pub fn modal_size(ctx: &Context, id: Id) -> Option<Vec2> {
+    let st = state(ctx);
+    let s = lock(&st);
+    let at = s.stack.position(id)?;
+    s.stack.entries[at].geometry.map(|g| g.size)
+}
+
+/// Whether the person is dragging a grip of this resizable modal: a
+/// size worth keeping comes once the drag is over.
+pub fn modal_resizing(ctx: &Context, id: Id) -> bool {
+    let st = state(ctx);
+    let s = lock(&st);
+    s.stack
+        .position(id)
+        .and_then(|at| s.stack.entries[at].geometry)
+        .is_some_and(|g| g.grabbed.is_some())
+}
+
+/// The largest size a modal's content can have in the window being
+/// drawn: a size above it is held back.
+pub fn modal_max_size(ctx: &Context) -> Vec2 {
+    let kit = crate::kit::Kit::of(ctx);
+    let dialog = &kit.dialog;
+    let chrome = dialog
+        .frame(crate::kit::State::REST, ctx.pixels_per_point())
+        .total_margin()
+        .sum();
+    (modal_bounds(ctx).size() - chrome).at_least(Vec2::ZERO)
+}
+
+/// Where a resizable modal stays: the window, less the dialog's padding.
+fn modal_bounds(ctx: &Context) -> Rect {
+    let kit = crate::kit::Kit::of(ctx);
+    let data = &kit.dialog.data;
+    ctx.content_rect()
+        .shrink2(egui::vec2(data.padding_x, data.padding_y))
+}
+
 /// Whether a modal overlay is open, in any window of the application
 /// (every window waits for it, see [`block_window`]).
 pub fn modal_open(ctx: &Context) -> bool {
@@ -733,6 +966,7 @@ pub fn show<R>(
     let rest = crate::kit::State::REST;
     let before = layers_now(ctx);
     let (inner, rect, own) = match spec.kind {
+        Kind::Modal if spec.resize.is_some() => resizable_modal(ctx, spec, add),
         Kind::Modal => {
             let backdrop = &kit.backdrop;
             let alpha = (backdrop.data.opacity * spec.dim).clamp(0.0, 1.0);
@@ -795,9 +1029,316 @@ pub fn show<R>(
     Some(inner)
 }
 
+/// Draws a modal of the size the person gave it ([`OverlaySpec::resizable`]),
+/// its grips over it.
+fn resizable_modal<R>(
+    ctx: &Context,
+    spec: &OverlaySpec,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> (R, Rect, Vec<LayerId>) {
+    let Some(resize) = spec.resize else {
+        unreachable!("called for a resizable modal");
+    };
+    let st = state(ctx);
+    let kit = crate::kit::Kit::of(ctx);
+    let rest = crate::kit::State::REST;
+    let dialog = &kit.dialog;
+    let chrome = dialog
+        .frame(rest, ctx.pixels_per_point())
+        .total_margin()
+        .sum();
+    let bounds = modal_bounds(ctx);
+    let geometry = {
+        let mut s = lock(&st);
+        let at = s.stack.position(spec.id).expect("entered");
+        *s.stack.entries[at].geometry.get_or_insert(Geometry {
+            size: resize.size,
+            shift: Vec2::ZERO,
+            grabbed: None,
+        })
+    };
+    let rect = geometry.placed(spec.offset, resize.min, chrome, bounds);
+    let alpha = (kit.backdrop.data.opacity * spec.dim).clamp(0.0, 1.0);
+    // Placed by hand, not anchored: the rectangle is known before the
+    // content, so a size never shows at the last size's place.
+    let area = egui::Area::new(spec.id)
+        .kind(egui::UiKind::Modal)
+        .sense(Sense::hover())
+        .order(egui::Order::Foreground)
+        .interactable(true)
+        .fixed_pos(rect.min);
+    let r = egui::Modal::new(spec.id)
+        .area(area)
+        .backdrop_color(kit.backdrop.style(rest).fill.gamma_multiply(alpha))
+        .frame(egui::Frame::NONE)
+        .show(ctx, |ui| {
+            let shadow = ui.visuals().window_shadow;
+            let shown = dialog.show(ui, rest, shadow, |ui| {
+                let room = Rect::from_min_size(ui.max_rect().min, rect.size() - chrome);
+                ui.advance_cursor_after_rect(room);
+                let mut content = ui.new_child(
+                    UiBuilder::new()
+                        .id_salt("egui_pop.overlay.content")
+                        .max_rect(room)
+                        .layout(egui::Layout::top_down(egui::Align::Min)),
+                );
+                // Up to the frame's edge: a focus ring may stand out.
+                content.set_clip_rect(room.expand2(chrome / 2.0).intersect(ui.clip_rect()));
+                add(&mut content)
+            });
+            grips(
+                ui,
+                spec,
+                resize,
+                geometry.grabbed,
+                shown.response.rect,
+                chrome,
+                bounds,
+            );
+            shown.inner
+        });
+    let own = vec![r.response.layer_id, r.backdrop_response.layer_id];
+    (r.inner, r.response.rect, own)
+}
+
+/// A resizable modal's grips over its `rect`: its edges and corners for
+/// the pointer, the bottom right corner also for the keyboard.
+fn grips(
+    ui: &mut Ui,
+    spec: &OverlaySpec,
+    resize: ModalSize,
+    held: Option<Rect>,
+    rect: Rect,
+    chrome: Vec2,
+    bounds: Rect,
+) {
+    let ctx = ui.ctx().clone();
+    let kit = crate::kit::Kit::of(&ctx);
+    let grip_kit = &kit.dialog_grip;
+    let (reach, side) = (grip_kit.data.width, grip_kit.data.height);
+    let min = (resize.min + chrome).at_most(bounds.size());
+    let st = state(&ctx);
+    let mut changed = None;
+    let mut grabbed = None;
+    let mut released = false;
+    let mut handle = None;
+    for grip in GRIPS {
+        let id = spec.id.with(("egui_pop.overlay.grip", grip.x, grip.y));
+        let sense = if grip == HANDLE {
+            Sense::DRAG | Sense::FOCUSABLE
+        } else {
+            Sense::DRAG
+        };
+        let r = ui.interact(grip.zone(rect, reach, side + reach / 2.0), id, sense);
+        if r.hovered() || r.dragged() {
+            ctx.set_cursor_icon(grip.cursor());
+        }
+        if r.drag_started() {
+            grabbed = Some(rect);
+        }
+        if r.dragged() {
+            let from = grabbed.or(held).unwrap_or(rect);
+            let by = ctx.input(
+                |i| match (i.pointer.latest_pos(), i.pointer.press_origin()) {
+                    (Some(now), Some(origin)) => now - origin,
+                    _ => Vec2::ZERO,
+                },
+            );
+            changed = Some(grip.moved(from, by, min, bounds));
+        }
+        if r.drag_stopped() {
+            released = true;
+        }
+        if grip == HANDLE {
+            handle = Some(r);
+        }
+    }
+    let Some(handle) = handle else {
+        return;
+    };
+    if handle.has_focus() {
+        ctx.memory_mut(|m| {
+            m.set_focus_lock_filter(
+                handle.id,
+                egui::EventFilter {
+                    horizontal_arrows: true,
+                    vertical_arrows: true,
+                    ..Default::default()
+                },
+            )
+        });
+        if let Some(by) = arrows(&ctx) {
+            changed = Some(HANDLE.moved(rect, by, min, bounds));
+        }
+    }
+    let size = rect.size() - chrome;
+    let name = crate::strings::tr_args(
+        &ctx,
+        &crate::strings::DIALOG_RESIZE,
+        &[("dialog", &spec.label)],
+    );
+    handle.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Other, true, &name));
+    ctx.accesskit_node_builder(handle.id, |node| {
+        node.set_role(egui::accesskit::Role::Splitter);
+        node.set_value(format!("{} × {}", size.x.round(), size.y.round()));
+    });
+    paint_handle(ui, &handle, rect, reach, side);
+    let mut s = lock(&st);
+    let Some(g) = s
+        .stack
+        .position(spec.id)
+        .and_then(|at| s.stack.entries[at].geometry.as_mut())
+    else {
+        return;
+    };
+    let before = *g;
+    if let Some(from) = grabbed {
+        g.grabbed = Some(from);
+    }
+    if let Some(new) = changed {
+        g.set(new, spec.offset, chrome, bounds);
+    }
+    if released {
+        g.grabbed = None;
+    }
+    if *g != before {
+        ctx.request_repaint();
+    }
+}
+
+/// How far the arrows pressed move the handle this pass: a step of the
+/// theme's spacing, four with Shift.
+fn arrows(ctx: &Context) -> Option<Vec2> {
+    let step = crate::theme::Tokens::of(ctx).space.m;
+    let keys = [
+        (egui::Key::ArrowLeft, egui::vec2(-1.0, 0.0)),
+        (egui::Key::ArrowRight, egui::vec2(1.0, 0.0)),
+        (egui::Key::ArrowUp, egui::vec2(0.0, -1.0)),
+        (egui::Key::ArrowDown, egui::vec2(0.0, 1.0)),
+    ];
+    let mut by = Vec2::ZERO;
+    ctx.input_mut(|i| {
+        for (key, way) in keys {
+            // Shift first: the plain key takes it too.
+            if i.consume_key(egui::Modifiers::SHIFT, key) {
+                by += way * step * 4.0;
+            }
+            if i.consume_key(egui::Modifiers::NONE, key) {
+                by += way * step;
+            }
+        }
+    });
+    (by != Vec2::ZERO).then_some(by)
+}
+
+/// The handle's mark, at the corner of the dialog's `rect`: the kit's
+/// box, and three lines across it.
+fn paint_handle(ui: &Ui, r: &egui::Response, rect: Rect, reach: f32, side: f32) {
+    let ctx = ui.ctx();
+    let kit = crate::kit::Kit::of(ctx);
+    let g = &kit.dialog_grip;
+    let state = crate::kit::State::from_response(r);
+    let ppp = ctx.pixels_per_point();
+    let mark = Rect::from_min_size(
+        rect.max - Vec2::splat(side + reach / 2.0),
+        Vec2::splat(side),
+    );
+    let painter = ui.painter();
+    g.paint(
+        &crate::kit::KitCx { painter, ppp },
+        &crate::kit::Part {
+            rect: mark,
+            room: mark,
+            state,
+            label: None,
+        },
+    );
+    let style = g.style(state);
+    let stroke = egui::Stroke::new(crate::scale::snap(style.border_width, ppp), style.text);
+    for part in [1.0, 0.65, 0.3] {
+        let along = side * part;
+        painter.line_segment(
+            [
+                mark.max - egui::vec2(along, 0.0),
+                mark.max - egui::vec2(0.0, along),
+            ],
+            stroke,
+        );
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_grip_moves_its_sides_and_leaves_the_others() {
+        let bounds = Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(800.0, 600.0));
+        let from = Rect::from_min_max(egui::pos2(100.0, 100.0), egui::pos2(500.0, 400.0));
+        let min = egui::vec2(100.0, 80.0);
+        let east = Grip { x: 1, y: 0 };
+        let r = east.moved(from, egui::vec2(50.0, 30.0), min, bounds);
+        assert_eq!((r.min, r.max), (from.min, egui::pos2(550.0, 400.0)));
+        let north_west = Grip { x: -1, y: -1 };
+        let r = north_west.moved(from, egui::vec2(-20.0, 10.0), min, bounds);
+        assert_eq!((r.min, r.max), (egui::pos2(80.0, 110.0), from.max));
+        // Never under the least size, never out of the window.
+        let r = east.moved(from, egui::vec2(-1000.0, 0.0), min, bounds);
+        assert_eq!(r.width(), 100.0);
+        let r = east.moved(from, egui::vec2(1000.0, 0.0), min, bounds);
+        assert_eq!(r.max.x, 800.0);
+        let r = north_west.moved(from, egui::vec2(-1000.0, -1000.0), min, bounds);
+        assert_eq!(r.min, bounds.min);
+    }
+
+    #[test]
+    fn a_grip_takes_the_pointer_at_its_edge_or_its_corner() {
+        let r = Rect::from_min_max(egui::pos2(100.0, 100.0), egui::pos2(500.0, 400.0));
+        let at = |p: (f32, f32)| {
+            GRIPS
+                .iter()
+                .rev()
+                .find(|g| g.zone(r, 5.0, 15.0).contains(egui::pos2(p.0, p.1)))
+                .map(|g| (g.x, g.y))
+        };
+        assert_eq!(at((500.0, 250.0)), Some((1, 0)));
+        assert_eq!(at((100.0, 250.0)), Some((-1, 0)));
+        assert_eq!(at((300.0, 100.0)), Some((0, -1)));
+        assert_eq!(at((300.0, 403.0)), Some((0, 1)));
+        assert_eq!(at((495.0, 395.0)), Some((1, 1)));
+        assert_eq!(at((105.0, 395.0)), Some((-1, 1)));
+        assert_eq!(at((495.0, 105.0)), Some((1, -1)));
+        assert_eq!(at((105.0, 105.0)), Some((-1, -1)));
+        assert_eq!(at((300.0, 250.0)), None);
+    }
+
+    #[test]
+    fn a_modal_too_big_for_the_window_is_held_back_and_keeps_its_size() {
+        let bounds = Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(400.0, 300.0));
+        let g = Geometry {
+            size: egui::vec2(1000.0, 800.0),
+            shift: egui::vec2(50.0, 0.0),
+            grabbed: None,
+        };
+        let rect = g.placed(
+            Vec2::ZERO,
+            egui::vec2(100.0, 100.0),
+            Vec2::splat(20.0),
+            bounds,
+        );
+        assert_eq!(rect, bounds);
+        // A least size larger than the window: the window wins.
+        let small = Geometry {
+            size: egui::vec2(500.0, 500.0),
+            ..g
+        };
+        let rect = small.placed(Vec2::ZERO, egui::vec2(900.0, 900.0), Vec2::ZERO, bounds);
+        assert_eq!(rect.size(), bounds.size());
+        // With room, the offset counts, and it stays inside.
+        let wide = Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(2000.0, 2000.0));
+        let rect = g.placed(egui::vec2(10.0, 0.0), Vec2::ZERO, Vec2::ZERO, wide);
+        assert_eq!(rect.center(), egui::pos2(1060.0, 1000.0));
+    }
 
     fn spec(name: &str, kind: Kind) -> OverlaySpec {
         OverlaySpec::new(name, name, kind)
