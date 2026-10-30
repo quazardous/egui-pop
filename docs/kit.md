@@ -349,6 +349,14 @@ compiled at install.
   portable request. `window.rest.border-width` and `border-color` draw a
   line around the window, inside its edges (the shell is laid out within
   it), except when maximized or full screen.
+- **Resizable dialogs and splitters** (`dialog-grip`, `splitter`). A
+  modal declared resizable takes the pointer `dialog-grip.width` on
+  either side of its edges, and draws three lines in `text`
+  (`border-width` wide) in a square `dialog-grip.height` across at its
+  bottom right corner, the handle that takes the keyboard (`focus`). A
+  splitter (`widgets::Splitter`) is a line `splitter.width` thick in the
+  middle of the room it takes the pointer on, in `rest`, `hover`,
+  `active` and `focus`.
 - **Side areas** (`area-strip`, `area-grip`). A folded side area is a
   strip (`area-strip.width`) with the `drag-handle` glyph and a line on
   the centre's side; a click unfolds it (`workbench.fold`). An open side

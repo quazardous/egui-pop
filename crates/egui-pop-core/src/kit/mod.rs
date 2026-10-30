@@ -670,6 +670,10 @@ components! {
     slider_value: "slider-value" => "plain",
     /// A spinner, colours only like `progress-ring`; its label in `text`.
     spinner: "spinner" => "plain",
+    /// The line between two panes side by side (`width` thick): hover,
+    /// active while dragged, `focus` with the keyboard
+    /// (`widgets::Splitter`).
+    splitter: "splitter" => "plain",
     /// A status bar indicator, colours only: its text by tone, its
     /// progress line (`border-color` the track, `indicator-*` the fill).
     status_indicator: "status-indicator" => "plain",

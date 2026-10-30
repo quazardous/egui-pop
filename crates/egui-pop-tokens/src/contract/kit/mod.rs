@@ -71,6 +71,7 @@ mod slider_thumb;
 mod slider_toggle;
 mod slider_value;
 mod spinner;
+mod splitter;
 mod status_indicator;
 mod tab;
 mod tab_bar;
@@ -164,6 +165,7 @@ pub(super) const GROUPS: &[&[Required]] = &[
     slider_toggle::CONTRACT,
     slider_value::CONTRACT,
     spinner::CONTRACT,
+    splitter::CONTRACT,
     status_indicator::CONTRACT,
     tab::CONTRACT,
     tab_bar::CONTRACT,

@@ -766,3 +766,57 @@ fn a_popover_cannot_be_made_resizable() {
         .resizable(egui::vec2(400.0, 200.0), egui::vec2(200.0, 100.0));
     assert_eq!(spec.resize, None);
 }
+
+#[test]
+fn a_splitter_says_its_value_and_keeps_to_its_limits() {
+    use egui::accesskit::Role;
+    use egui_pop_core::widgets::Splitter;
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(400.0, 200.0))
+        .build_ui_state(
+            |ui, width: &mut f32| {
+                let rect =
+                    egui::Rect::from_min_size(egui::pos2(100.0, 20.0), egui::vec2(10.0, 100.0));
+                let id = egui::Id::new("splitter");
+                Splitter::new(id, "Resize the pane", 50.0, 150.0, 100.0).show(ui, rect, width);
+            },
+            100.0_f32,
+        );
+    h.run();
+    let node = h.get_by_role_and_label(Role::Splitter, "Resize the pane");
+    assert_eq!(node.accesskit_node().numeric_value(), Some(100.0));
+    assert_eq!(node.accesskit_node().min_numeric_value(), Some(50.0));
+    assert_eq!(node.accesskit_node().max_numeric_value(), Some(150.0));
+    node.focus();
+    h.run();
+    // Before the line: right widens it.
+    h.key_press(Key::ArrowRight);
+    h.run();
+    let one = *h.state();
+    assert!(one > 100.0);
+    for _ in 0..40 {
+        h.key_press_modifiers(Modifiers::SHIFT, Key::ArrowRight);
+        h.run();
+    }
+    assert_eq!(*h.state(), 150.0);
+    for _ in 0..40 {
+        h.key_press_modifiers(Modifiers::SHIFT, Key::ArrowLeft);
+        h.run();
+    }
+    assert_eq!(*h.state(), 50.0);
+    h.key_press(Key::Enter);
+    h.run();
+    assert_eq!(*h.state(), 100.0);
+    // A drag past a limit and back: the line comes back with the pointer.
+    let at = egui::pos2(105.0, 60.0);
+    h.drag_at(at);
+    h.run();
+    h.hover_at(at + egui::vec2(200.0, 0.0));
+    h.run();
+    assert_eq!(*h.state(), 150.0);
+    h.hover_at(at + egui::vec2(10.0, 0.0));
+    h.run();
+    assert_eq!(*h.state(), 110.0);
+    h.drop_at(at + egui::vec2(10.0, 0.0));
+    h.run();
+}
