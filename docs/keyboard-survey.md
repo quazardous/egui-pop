@@ -701,7 +701,10 @@ one pull request. Numbers stay as they are, since the walk's tests name them;
 7. **Focus scrolls into view.** A widget focused by the keyboard is brought
    into its scroll area. `scroll_to_me` works for the scroll area drawn around
    the caller, so it belongs in `Input`, the slider and the kit's widgets
-   first; then an upstream issue for a general answer. Size: S to M.
+   first; then an upstream issue for a general answer. Size: S to M. Since the
+   gallery's pages got a scroll area ([the scrolling survey](scrolling-survey.md),
+   its item 2), the settings page's end can be reached by the wheel and the bar,
+   no longer cut; Tab still goes past the fold, so this stays open.
 8. **No stops that show nothing.** The frame's caption and a flyout's edge
    sense without `FOCUSABLE` (`Sense::CLICK | Sense::DRAG`, `Sense::DRAG`); the
    walk checks it stays so. An open menu's frame is one too, from egui: see

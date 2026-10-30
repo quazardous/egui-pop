@@ -921,6 +921,10 @@ publishes.
 
 ### Changed
 
+- Gallery pages and playgrounds scroll in a short window (egui-pop-gallery;
+  `docs/gallery.md`), each page keeping its place, but for those that stay inside
+  the zone themselves. The shell panels' being bare is now explained in
+  `docs/workbench.md`.
 - The gallery's list of pages is a tree (egui-pop-gallery; `docs/gallery.md`),
   through egui-pop's own tree view: its groups fold, with one scroll for all
   and one Tab stop. The folds are kept with the window's layout, and the group

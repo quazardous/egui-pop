@@ -118,7 +118,7 @@ fn show(ui: &mut Ui, app: &AppHandle, s: &mut State) {
     let text = serde_json::to_string_pretty(&snapshot[s.collector.as_str()]).unwrap_or_default();
     egui::ScrollArea::vertical()
         .id_salt("snapshot")
-        .max_height(220.0)
+        .max_height(super::fitted_height(ui, 220.0))
         .auto_shrink([false, true])
         .show(ui, |ui| {
             ui.label(RichText::new(text).monospace().size(t.font.small));

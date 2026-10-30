@@ -114,7 +114,7 @@ differ from "hover" only for keys and code.
 | Where | Scrolled by | Says so at rest? |
 |---|---|---|
 | Gallery, page list (side bar) | **Nothing, as the code reads:** a bare panel (below), and `pages` adds no scroll area | No bar and no scroll: cut at the window's bottom |
-| Gallery, pages | The 12 page files with their own `ScrollArea`; the other 46 have none, or none around the whole page (`table.rs`, for one) | No. Those without are cut if the window is short |
+| Gallery, pages | Read before item 2, which gave them a scroll area: the 12 page files with their own `ScrollArea`; the other 46 have none, or none around the whole page (`table.rs`, for one) | No. Those without are cut if the window is short |
 | Gallery, Lists and tables | `DataTable` (egui_table's `SplitScroll`), `ListView` (`views::rows`) | No; for the table, rows cut at its edge |
 | Gallery, Sections | Each body, and the stack when too short | Only the stack's bar |
 | Gallery, `scoped` page | A demonstration of a kit with `always` | Yes |
@@ -484,13 +484,17 @@ Sizes: S is under a day, M a few days. One pull request each.
    bar forced on as `Sections` does, with a snapshot at a short size. Item 4
    makes the forcing needless and removes it; the scroll area and the snapshot
    stay. Size: S.
-2. **Nothing in the gallery is cut without a way to it, and panels say what they
-   give.** The gallery's `page` wraps a page in a scroll area unless the page fills
-   the zone itself (a viewport, the workbench), by a flag on the story, with a test
-   walking every page at a short window. [Workbench](workbench.md) says that a
-   panel alone in its area has no scroll area and one in tabs has. Whether the
-   shell's panels should always scroll is a question for that page, not settled
-   here: a viewport in `MAIN` must not. Size: S.
+2. **Done: nothing in the gallery is cut without a way to it, and panels say what
+   they give.** The gallery's `page` and `playground` wrap a page in a scroll area
+   unless it stays inside the zone itself, by a list in the gallery's shell
+   (`shell::FILLS_THE_ZONE`) rather than a flag on the story, so the library does
+   not change. Read as a whole, few pages fill the zone: most canvases, stacks and
+   editors stand among text and controls, at sizes of their own, and scroll with
+   the page, keeping the wheel over themselves. A test walks every page at a short
+   window. [Workbench](workbench.md#panels-in-areas) says that a panel alone in its
+   area has no scroll area and one in tabs has. Whether the shell's panels should
+   always scroll is a question for that page, not settled here: a viewport in
+   `MAIN` must not.
 3. **The kit learns "thin and quiet at rest".** `visibility: rest` and the
    tokens above in `ScrollBarKit`, no theme using them yet, so no picture
    changes but one: the sections' forced bar takes the quiet look, as today's

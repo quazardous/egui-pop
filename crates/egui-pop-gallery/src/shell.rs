@@ -4,7 +4,8 @@
 
 use std::sync::Mutex;
 
-use egui::Ui;
+use egui::scroll_area::ScrollAreaOutput;
+use egui::{Rect, ScrollArea, Ui};
 use egui_pop::api::app::MENU_VIEW;
 use egui_pop::api::stories::StoryInfo;
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
@@ -30,11 +31,38 @@ pub struct Nav {
     in_view: Mutex<Option<StoryId>>,
     /// The list of pages: its fold, its cursor, how far it is scrolled.
     list: Mutex<TreeState<String>>,
+    /// The page as drawn last.
+    view: Mutex<Option<PageView>>,
+    /// The page's playground as drawn last.
+    playground: Mutex<Option<PageView>>,
+}
+
+/// How the page shown, or its playground, was drawn last: for the tests.
+#[derive(Clone, Copy, Debug)]
+pub struct PageView {
+    /// Where it may draw: its zone below the heading.
+    pub zone: Rect,
+    /// What it drew, in the same coordinates: taller than `zone` and it runs
+    /// past it. What the shell scrolls moves with the scroll.
+    pub content: Rect,
+    /// The scroll area the shell put around it; `None` for a page in
+    /// [`FILLS_THE_ZONE`].
+    pub scroll: Option<egui::Id>,
 }
 
 impl Nav {
     pub fn page(&self) -> StoryId {
         lock(&self.page).clone()
+    }
+
+    /// The page as drawn last; `None` before the first frame.
+    pub fn view(&self) -> Option<PageView> {
+        *lock(&self.view)
+    }
+
+    /// The page's playground as drawn last; `None` before the first frame.
+    pub fn playground_view(&self) -> Option<PageView> {
+        *lock(&self.playground)
     }
 
     /// Whether the list has yet to bring the page shown into view: once
@@ -121,6 +149,8 @@ impl Plugin for Shell {
                 page: Mutex::new(self.first.clone()),
                 in_view: Mutex::new(None),
                 list: Mutex::new(TreeState::new()),
+                view: Mutex::new(None),
+                playground: Mutex::new(None),
             },
         )?;
         app.set_context("galleryPage", self.first.as_str());
@@ -435,6 +465,54 @@ fn pages(ui: &mut Ui, app: &AppHandle) {
     }
 }
 
+/// The pages the shell draws without a scroll area around them: each keeps
+/// itself inside the zone, whatever its height. The others run as long as they
+/// like and scroll, canvases too: a canvas takes the wheel over itself, and the
+/// page's bar and the rest of the page move the page.
+pub const FILLS_THE_ZONE: &[&str] = &[
+    // A scroll area of their own around all but a line or two at the top.
+    "overview",
+    "tokens",
+    "builtins",
+    "icons",
+    "grading",
+    "inputs",
+    "platform",
+    "sliders",
+    // A canvas and the file beside it, both as tall as what is left.
+    "graph-file",
+];
+
+/// Whether a page is one of [`FILLS_THE_ZONE`].
+fn fills_the_zone(page: &StoryId) -> bool {
+    FILLS_THE_ZONE.contains(&page.as_str())
+}
+
+/// Draws a page or its playground in a scroll area filling what is left of the
+/// panel, its place kept per page. The bar takes its own room, only while it
+/// shows: over a page, it would take the clicks of what stands at the right edge.
+/// Both ways: egui widens a scroll area to content too wide for it when it does
+/// not scroll that way, which leaves the bar out of the panel.
+fn page_scroll<R>(
+    ui: &mut Ui,
+    kind: &'static str,
+    page: &StoryId,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> ScrollAreaOutput<R> {
+    let area = ScrollArea::both()
+        .id_salt((kind, page.as_str().to_owned()))
+        .auto_shrink(false);
+    let others = ui.spacing().scroll;
+    ui.scope(|ui| {
+        ui.spacing_mut().scroll.floating = false;
+        ui.scroll_area(area, |ui| {
+            ui.spacing_mut().scroll = others;
+            add(ui)
+        })
+    })
+    .inner
+}
+
 /// The page shown.
 fn page(ui: &mut Ui, app: &AppHandle) {
     let id = nav(app).page();
@@ -445,7 +523,24 @@ fn page(ui: &mut Ui, app: &AppHandle) {
     ui.heading(&info.title);
     ui.weak(&info.description);
     ui.separator();
-    app.show_story(ui, &id);
+    let zone = ui.available_rect_before_wrap();
+    let view = if fills_the_zone(&id) {
+        let content = ui.scope(|ui| app.show_story(ui, &id)).response.rect;
+        PageView {
+            zone,
+            content,
+            scroll: None,
+        }
+    } else {
+        // A bare panel scrolls nothing itself (docs/workbench.md).
+        let out = page_scroll(ui, "gallery.page", &id, |ui| app.show_story(ui, &id));
+        PageView {
+            zone,
+            content: Rect::from_min_size(out.inner_rect.min - out.state.offset, out.content_size),
+            scroll: Some(out.id),
+        }
+    };
+    *lock(&nav(app).view) = Some(view);
 }
 
 /// The page's playground.
@@ -453,7 +548,15 @@ fn playground(ui: &mut Ui, app: &AppHandle) {
     ui.heading("Playground");
     ui.separator();
     let id = nav(app).page();
-    if !app.show_playground(ui, &id) {
-        ui.weak("This page has no options.");
-    }
+    let zone = ui.available_rect_before_wrap();
+    let out = page_scroll(ui, "gallery.playground", &id, |ui| {
+        if !app.show_playground(ui, &id) {
+            ui.weak("This page has no options.");
+        }
+    });
+    *lock(&nav(app).playground) = Some(PageView {
+        zone,
+        content: Rect::from_min_size(out.inner_rect.min - out.state.offset, out.content_size),
+        scroll: Some(out.id),
+    });
 }

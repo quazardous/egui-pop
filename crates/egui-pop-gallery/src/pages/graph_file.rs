@@ -79,7 +79,7 @@ impl Plugin for GraphFilePage {
 pub fn show(ui: &mut Ui, app: &AppHandle, s: &mut State) {
     ui.label("Move, wire, delete or add nodes, or drag a parameter in the detail view: the file on the right changes only where the edit lands.");
     let width = ui.available_width().max(480.0);
-    let height = (ui.available_height() - 8.0).max(260.0);
+    let height = (ui.available_height() - 8.0).max(120.0);
     ui.horizontal_top(|ui| {
         let editor = GraphEditor::new(&s.graph, &mut s.view)
             .label("Graph file")

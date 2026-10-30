@@ -26,6 +26,15 @@ or Enter opens a page; the arrows walk the list, Left and Right fold and open
 a group, letters find a row. The folds are kept with the window's layout, and
 the group of the page shown opens by itself.
 
+A page scrolls, each keeping its place, as its playground does: a shell panel
+gives no scroll area of its own ([bare panels](workbench.md#panels-in-areas)). Those
+that stay inside the zone by themselves are marked (`shell::FILLS_THE_ZONE`): the
+pages with a scroll area of their own around nearly all of them (`overview`,
+`tokens`, `builtins`, `icons`, `grading`, `inputs`, `platform`, `sliders`), and
+`graph-file`, a canvas and the file beside it sized to what is left. A canvas in
+a scrolling page keeps the wheel over itself. A test walks every page in a short
+window.
+
 Pages: `overview` (the theme overview), `tokens`, `builtins` (egui's
 built-ins, and egui-pop's kit-drawn checkbox, radio, rows and chips), `roles` (layout by role: text roles, spacing by intent, cards and buttons by tone), `scoped` (egui's own buttons, toggles, combo box and text fields restyled by the kit in a scope), `theme-editor` (the theme editor), `fonts` (candidate font pairs side by side), `icons`, `indicators` (dots, badges, pips, flags, swatches), `sections` (collapsible sections stacked in a panel), `motion` (the motion clock), `values`, `history` (the application's history: its panel's list, a click jumping to a step), `sliders`, `inputs` (decorated inputs, field states and Tab order),
 `menus`, `toolbars` (toolbars of commands, More tools, a tool palette), `dialogs`, `files` (the file chooser), `toasts`, `tips` (tips of the day and

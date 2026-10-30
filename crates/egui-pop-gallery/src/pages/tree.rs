@@ -393,7 +393,7 @@ fn show(ui: &mut Ui, app: &AppHandle, p: &mut PageState) {
         .drag_drop(true)
         .rename(true)
         .app(app)
-        .height(300.0)
+        .height(super::fitted_height(ui, 300.0))
         .icon(|n| Some(if n.branch { Icon::Folder } else { Icon::File }.into()))
         .row_widgets(|ui, n| row_toggles(ui, &marks, &n.key, &n.label))
         .context_menu(app, ROW_MENU)
