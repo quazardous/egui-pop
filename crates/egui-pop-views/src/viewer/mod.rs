@@ -9,12 +9,15 @@
 //! other link.
 //!
 //! - **Pages**: markdown (rendered by egui_commonmark), images (egui's
-//!   loaders, PNG, JPEG and GIF), plain text. `docs:` pages come from the
+//!   loaders, PNG, JPEG and GIF), plain text, and with the `html` feature
+//!   a safe subset of HTML, mapped to the same blocks as markdown: no
+//!   scripts, styles, forms, frames or video, which are named on the page
+//!   and left to Open outside (without the feature, an HTML page gets an
+//!   error page offering Open outside). `docs:` pages come from the
 //!   [`Docs`] the application ships (`include_str!`), on native and on
 //!   the web build alike; remote pages and images come through a
 //!   [`Fetch`] the host gives (none by default: the viewer then opens
-//!   nothing remote and says so). HTML pages are not shown inside yet:
-//!   their error page offers Open outside.
+//!   nothing remote and says so).
 //! - **Navigation**: back and forward (the session's history, nothing
 //!   kept across runs), reload, an address bar (typing a target opens it
 //!   through the links service), anchors (`#install` scrolls to the
@@ -59,6 +62,8 @@
 //! assert_eq!(viewer.state()["status"], "shown");
 //! ```
 
+#[cfg(feature = "html")]
+mod html;
 mod page;
 mod view;
 
@@ -113,9 +118,10 @@ pub const ZOOM_STEPS: &[f32] = &[
 ];
 
 /// The pages and files an application ships for `docs:` links, by path
-/// (`guide/start.md`, `img/shot.png`). A link names a page with or
-/// without its `.md` (`docs:guide/start`), a folder its `index.md`
-/// (`docs:guide/`, and `docs:` alone the root's).
+/// (`guide/start.md`, `about.html`, `img/shot.png`). A link names a page
+/// with or without its `.md` or `.html` (`docs:guide/start`), a folder its
+/// `index.md` or `index.html` (`docs:guide/`, and `docs:` alone the
+/// root's).
 #[derive(Clone, Default)]
 pub struct Docs {
     files: BTreeMap<String, Arc<[u8]>>,
@@ -132,7 +138,8 @@ impl Docs {
         Self::default()
     }
 
-    /// A markdown page (`.md` added when the path has no extension).
+    /// A page: markdown, with `.md` added when the path has no extension,
+    /// or what its extension says (`about.html`).
     pub fn page(self, path: &str, markdown: &str) -> Self {
         let path = path.trim_matches('/');
         let path = if std::path::Path::new(path).extension().is_some() {
@@ -155,11 +162,17 @@ impl Docs {
         let p = page.trim_start_matches('/');
         let folder = p.trim_end_matches('/');
         let candidates = if folder.is_empty() {
-            vec!["index.md".to_string()]
+            vec!["index.md".to_string(), "index.html".to_string()]
         } else if p.ends_with('/') {
-            vec![format!("{folder}/index.md")]
+            vec![format!("{folder}/index.md"), format!("{folder}/index.html")]
         } else {
-            vec![p.to_string(), format!("{p}.md"), format!("{p}/index.md")]
+            vec![
+                p.to_string(),
+                format!("{p}.md"),
+                format!("{p}.html"),
+                format!("{p}/index.md"),
+                format!("{p}/index.html"),
+            ]
         };
         candidates
             .into_iter()
@@ -167,12 +180,15 @@ impl Docs {
     }
 
     /// The names a `docs:` link may use for each file (its path, a page
-    /// without `.md`, a folder for its `index.md`).
+    /// without `.md` or `.html`, a folder for its index).
     pub fn pages(&self) -> Vec<String> {
         let mut out = Vec::new();
         for path in self.files.keys() {
             out.push(path.clone());
-            if let Some(page) = path.strip_suffix(".md") {
+            if let Some(page) = path
+                .strip_suffix(".md")
+                .or_else(|| path.strip_suffix(".html"))
+            {
                 out.push(page.to_string());
                 if let Some(folder) = page.strip_suffix("index") {
                     out.push(folder.to_string());
@@ -232,11 +248,15 @@ pub struct Page {
     /// Its address, without the anchor.
     pub target: String,
     pub content: Content,
+    /// For a page that was HTML: the elements not shown (a script, a
+    /// video), named on the page; none for another page.
+    pub html: Option<Vec<String>>,
 }
 
 impl Page {
     fn kind(&self) -> &'static str {
         match self.content {
+            Content::Markdown(_) if self.html.is_some() => "html",
             Content::Markdown(_) => "markdown",
             Content::Image(_) => "image",
         }
@@ -554,6 +574,7 @@ impl Viewer {
             return self.fail(app, target, Failure::TooLarge, &detail);
         }
         let ext = extension(name);
+        let mut html = None;
         let content = match ext.as_str() {
             "" | "md" | "markdown" | "txt" => {
                 let text = String::from_utf8_lossy(&bytes);
@@ -568,14 +589,13 @@ impl Viewer {
                 app.egui().include_bytes(target.to_string(), bytes);
                 Content::Image(target.to_string())
             }
-            "html" | "htm" | "xhtml" => {
-                return self.fail(
-                    app,
-                    target,
-                    Failure::Unsupported,
-                    "HTML pages are not shown inside yet",
-                );
-            }
+            "html" | "htm" | "xhtml" => match read_html(app, target, &bytes) {
+                Ok((md, dropped)) => {
+                    html = Some(dropped);
+                    Content::Markdown(md)
+                }
+                Err(why) => return self.fail(app, target, Failure::Unsupported, why),
+            },
             other => {
                 let detail = format!("`.{other}` files are not shown inside");
                 return self.fail(app, target, Failure::Unsupported, &detail);
@@ -584,6 +604,7 @@ impl Viewer {
         let page = Arc::new(Page {
             target: target.to_string(),
             content,
+            html,
         });
         if let Content::Markdown(md) = &page.content {
             self.prepare_images(app, target, md);
@@ -970,10 +991,18 @@ impl Viewer {
     /// What the viewer shows and holds, for agents and the collector.
     pub fn state(&self) -> Json {
         let i = lock(&self.inner);
+        let mut links = Vec::new();
+        let mut dropped = Vec::new();
         let (status, kind, title, error, text, headings) = match &i.status {
             Status::Empty => ("empty", None, None, None, None, Vec::new()),
             Status::Loading(_) => ("loading", None, None, None, None, Vec::new()),
             Status::Shown(p) => {
+                if let Some(d) = &p.html {
+                    dropped.clone_from(d);
+                }
+                if let Content::Markdown(md) = &p.content {
+                    links = md.links();
+                }
                 let (title, text, headings) = match &p.content {
                     Content::Markdown(md) => (
                         md.title.clone(),
@@ -1041,9 +1070,35 @@ impl Viewer {
             "allowed_hosts": i.allowed,
             "headings": headings,
             "text": text,
+            "links": links,
+            "dropped": dropped,
             "fetch": self.fetch.is_some(),
         })
     }
+}
+
+/// An HTML page read for the viewer: its blocks, and the elements it does
+/// not show.
+#[cfg(feature = "html")]
+fn read_html(
+    app: &AppHandle,
+    target: &str,
+    bytes: &[u8],
+) -> Result<(Markdown, Vec<String>), &'static str> {
+    let policy = links::links(app).map(|l| l.policy()).unwrap_or_default();
+    let page = html::read(
+        &String::from_utf8_lossy(bytes),
+        &html::schemes(&policy, target),
+    );
+    let mut md = Markdown::parse(&page.markdown);
+    md.title = page.title.or(md.title);
+    Ok((md, page.dropped))
+}
+
+/// Without the `html` feature, HTML pages are for outside.
+#[cfg(not(feature = "html"))]
+fn read_html(_: &AppHandle, _: &str, _: &[u8]) -> Result<(Markdown, Vec<String>), &'static str> {
+    Err("this application is built without the viewer's HTML subset")
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -1174,7 +1229,7 @@ impl Plugin for ViewerPlugin {
         ctx.collector(
             FnCollector::new(
                 "viewer",
-                "The viewer: the page (its address, status or error, title, headings and text), the history back and forward, the search, the zoom, the images (ready, loading, blocked by host, failed) and the hosts allowed.",
+                "The viewer: the page (its address, status or error, title, headings, text, links and what its HTML did not show), the history back and forward, the search, the zoom, the images (ready, loading, blocked by host, failed) and the hosts allowed.",
             )
             .snapshot(move |_| c.state()),
         )?;
@@ -1282,7 +1337,7 @@ fn commands(ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
     )?
     .command(
         CommandSpec::new(CMD_STATE, "Read the viewer", CAT)
-            .description("The viewer's page (address, status or error, title, headings, text), its history, search, zoom, images and the hosts allowed.")
+            .description("The viewer's page (address, status or error, title, headings, text, links, what its HTML did not show), its history, search, zoom, images and the hosts allowed.")
             .hidden(),
         |call| {
             let v = viewer(call.app)?;

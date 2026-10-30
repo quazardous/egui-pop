@@ -64,6 +64,10 @@ views = ["dep:egui-pop-views"]
 ## markdown (egui_commonmark, MIT OR Apache-2.0) and images in a panel,
 ## the links service's way inside.
 views-markdown = ["views", "egui-pop-views/markdown"]
+## The viewer's safe HTML subset: pages parsed by html5ever (MIT OR
+## Apache-2.0) and mapped to the same blocks as markdown; no scripts, no
+## styles, no forms, no frames.
+views-html = ["views-markdown", "egui-pop-views/html"]
 ## Text and code editors, with syntect highlighting (`egui-pop-editors`,
 ## re-exported as `egui_pop::editors`).
 editors = ["dep:egui-pop-editors", "egui-pop-editors/syntect"]

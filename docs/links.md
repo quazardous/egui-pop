@@ -203,8 +203,8 @@ Inline::new("Press `Ctrl+K`, or read [the guide](docs:guide).")
 the application: a panel of the end side bar, detachable into its own
 window like any panel, one page at a time. `ViewerPlugin` installs it
 in the links service (`Links::set_inside`), so what the policy sends
-inside opens there: `docs:` pages, markdown pages on the application's
-documentation hosts (`Policy::docs_host`), local images.
+inside opens there: `docs:` pages, markdown and HTML pages on the
+application's documentation hosts (`Policy::docs_host`), local images.
 
 ```rust,ignore
 use egui_pop::views::viewer::{Docs, ViewerPlugin};
@@ -219,8 +219,9 @@ App::builder().plugin(
 );
 ```
 
-A `docs:` link names a page with or without `.md` (`docs:guide/start`),
-a folder its `index.md` (`docs:guide/`, `docs:` the root's), an anchor
+A `docs:` link names a page with or without `.md` or `.html`
+(`docs:guide/start`), a folder its index (`docs:guide/`, `docs:` the
+root's), an anchor
 its heading (`docs:guide/start#install`, the heading's text in lower
 case with dashes, or its `{#id}`). Links and images in a page resolve
 against it (`../img/panel.png`).
@@ -239,9 +240,10 @@ against it (`../img/panel.png`).
   are content; another `docs:` page stays inside, a web page goes
   outside; Ctrl+click or a middle click opens outside.
 - **What it shows**: markdown (egui_commonmark: tables, task lists,
-  footnotes, code), images (PNG, JPEG, GIF), text. HTML pages, videos
-  and full web pages are not shown inside: their error page offers
-  **Open outside**.
+  footnotes, code), images (PNG, JPEG, GIF), text, and a safe subset of
+  HTML with the `views-html` feature (see below). Videos and full web
+  pages are not shown inside: they open outside. Without the feature an
+  HTML page gets an error page offering **Open outside**.
 - **Remote pages and images** come through a `viewer::Fetch` the host
   gives (`ViewerPlugin::fetch`); without one nothing remote is loaded
   and the page says so. A remote image never loads before the user
@@ -261,7 +263,47 @@ against it (`../img/panel.png`).
 | `viewer.find_next`, `viewer.find_previous` | the matches |
 | `viewer.zoom_in`, `viewer.zoom_out`, `viewer.zoom_reset` | the page's zoom |
 | `viewer.open_outside`, `viewer.copy_link` | the page's address |
-| `viewer.state` | the page (address, status or error, title, headings, text), the history, the search, the zoom, the images and the hosts allowed |
+| `viewer.state` | the page (address, status or error, title, headings, text, links, what its HTML did not show), the history, the search, the zoom, the images and the hosts allowed |
+
+### The HTML subset
+
+With `views-html` (`egui-pop-views/html`), the viewer shows HTML pages:
+those the application ships (`Docs::page("about.html", ...)`) and those
+on its documentation hosts. Any other HTML page goes outside, like any
+web page: the policy decides, as for markdown.
+
+A page is parsed by html5ever, as a browser would (broken markup
+included), and mapped to markdown, then drawn as the same blocks: find in
+page, anchors, zoom and links work as on a markdown page.
+
+| Kept | As |
+|---|---|
+| `h1` to `h6` (with `id`) | headings and their anchors |
+| `p`, `div`, `section`, `article` and their like | paragraphs |
+| `ul`, `ol` (with `start`), `li`, `dl`, `dt`, `dd` | lists |
+| `table`, `thead`, `tbody`, `tr`, `th`, `td`, `caption` | a table, its first row as the header; no cell spans |
+| `blockquote`, `pre`, `hr` | quotes, code, a rule |
+| `em`, `strong`, `del`, `code`, `kbd`, `q`, `br` and their like | inline styles |
+| `a href` | a link, through the links service |
+| `img src alt` | an image, through the same rules as markdown's |
+
+- **Dropped with their content, and named in a bar over the page**:
+  `script`, `form` and its controls, `iframe`, `object`, `embed`, `audio`,
+  `video`, `canvas`, `template`, `dialog`, foreign `svg` and `math`. The
+  bar says **Open outside** shows the page whole; `viewer.state` lists
+  them as `dropped`.
+- **Never read**: every other attribute (`on*`, `style`, `class`, ...).
+  `<style>` is ignored, without being named: the page has the theme's
+  look. Any other element leaves its text.
+- **Links and images** keep an address that is relative or whose scheme
+  the policy allows; a link with another (`javascript:`, `data:`,
+  `vbscript:`, an unknown scheme, however spelled) is left as its text, an
+  image as its alt text. `command:` is kept only on `docs:` pages, `file:`
+  not on pages from the network. A kept link still meets the policy when
+  it is clicked: declared on a `docs:` page, content elsewhere. Remote
+  images wait for the same click as markdown's.
+- **No script runs, no style applies, and nothing is fetched** beyond the
+  page and the images allowed.
 
 The `viewer` collector of the debug bridge shows the same state;
 `viewer.shown` and `viewer.failed` go on the journal. The lint checks
@@ -269,7 +311,5 @@ declared `docs:` links against the pages the viewer has.
 
 ## Not yet
 
-- A safe HTML subset in the viewer (step 6 of ADR 0017): HTML pages
-  show an error page with Open outside meanwhile.
 - The lint does not yet walk the links inside `docs:` pages.
 - No webview: full web pages and videos open outside.

@@ -2260,6 +2260,174 @@ fn the_links_page_opens_declared_links_and_asks_for_content_and_agents() {
 }
 
 #[test]
+fn the_viewers_html_subset_keeps_blocks_and_drops_what_could_run() {
+    use egui::accesskit::Role;
+    use egui_pop::api::links::{self, How, RecordingOpener, Source};
+    use egui_pop::views::viewer::{self, VIEWER};
+    use serde_json::json;
+    let mut h = harness(options("pop-dark", Density::Comfortable, "viewer"));
+    h.run();
+    let app = h.state().app.handle().clone();
+    let rec = RecordingOpener::default();
+    links::links(&app)
+        .unwrap()
+        .set_opener(std::sync::Arc::new(rec.clone()));
+    h.get_by_role_and_label(Role::Link, "An HTML page").click();
+    h.run();
+    h.run();
+    let v = app.service(&VIEWER).unwrap();
+    let s = v.state();
+    assert_eq!(s["target"], "docs:about");
+    assert_eq!(s["status"], "shown");
+    assert_eq!(s["kind"], "html");
+    assert_eq!(s["title"], "An HTML page");
+    assert!(rec.records().is_empty(), "nothing went outside");
+    let mut results = egui_kittest::SnapshotResults::new();
+    results.add(h.try_snapshot("viewer-html-pop-dark"));
+
+    // The same blocks as markdown: headings with their anchors, a table,
+    // a list, code.
+    h.get_by_role_and_label(Role::Document, "Page");
+    // A table's cell is laid out twice by egui_commonmark.
+    assert!(h.query_all_by_value("Kept as it is").next().is_some());
+    assert_eq!(
+        s["headings"].as_array().unwrap()[1]["anchor"],
+        json!("what-it-keeps")
+    );
+
+    // A script, a form and a video are gone, and the page says so.
+    assert_eq!(s["dropped"], json!(["form", "script", "video"]));
+    h.get_by_value("Not shown here: form, script, video. Open outside shows the page whole.");
+    let text = s["text"].as_str().unwrap();
+    for gone in ["alert", "onclick", "onerror", "Send", "A form", "A video"] {
+        assert!(!text.contains(gone), "{gone} in {text}");
+    }
+    assert!(h.query_by_value("Send").is_none());
+
+    // A `javascript:` link is its text, with no link behind it; so is an
+    // `on*` handler's element, and the links left are the safe ones.
+    assert_eq!(
+        s["links"],
+        json!([
+            "guide.md",
+            "https://github.com/quazardous/egui-pop",
+            "https://www.youtube.com/watch?v=5TGDf7crzXI"
+        ])
+    );
+    // upstream: egui 0.36 announces a visible link of a page as a `Label`
+    // (docs/upstream.md), so links are found by their label, which a plain
+    // text does not have.
+    assert!(h.query_by_label("A link that would run a script").is_none());
+    h.get_by_value("A link that would run a script ").click();
+    h.run();
+    assert!(rec.records().is_empty(), "the dropped link opens nothing");
+    assert_eq!(v.state()["target"], "docs:about");
+
+    // A web link goes through the policy, on a click, as a declared link
+    // of a `docs:` page.
+    h.get_by_label("egui-pop on GitHub").click();
+    h.run();
+    h.run();
+    let r = rec.records();
+    assert_eq!(r.len(), 1, "one open: {r:?}");
+    assert_eq!(
+        (r[0].target.as_str(), r[0].how, r[0].source),
+        (
+            "https://github.com/quazardous/egui-pop",
+            How::Outside,
+            Source::Declared
+        )
+    );
+    // A video is a link: outside, never embedded, nothing fetched for it.
+    h.get_by_label("Terminal Velocity demo: 3 AI agents, 1 window")
+        .click();
+    h.run();
+    h.run();
+    let r = rec.records();
+    assert_eq!(r.len(), 2, "one more open: {r:?}");
+    assert_eq!(
+        (r[1].target.as_str(), r[1].how, r[1].kind),
+        (
+            "https://www.youtube.com/watch?v=5TGDf7crzXI",
+            How::Outside,
+            links::Kind::Video
+        )
+    );
+    let images = v.state()["images"].to_string();
+    assert!(!images.contains("youtube"), "{images}");
+    assert!(!images.contains("ytimg"), "{images}");
+    // A page's link stays inside.
+    h.get_by_label("the guide").click();
+    h.run();
+    h.run();
+    assert_eq!(v.state()["target"], "docs:guide.md");
+    app.run(viewer::CMD_BACK, json!({}));
+    h.run();
+    assert_eq!(v.state()["target"], "docs:about");
+    // Find in page reads its text.
+    app.run(viewer::CMD_FIND, json!({ "query": "kept" }));
+    h.run();
+    assert_eq!(v.state()["find"]["matches"], 1);
+    app.run(viewer::CMD_FIND, json!({ "query": "" }));
+    h.run();
+
+    // A policy that refuses a scheme keeps it out of the page: its links
+    // are text.
+    links::links(&app).unwrap().update_policy(|p| {
+        p.schemes.remove("https");
+    });
+    app.run(viewer::CMD_RELOAD, json!({}));
+    h.run();
+    assert_eq!(v.state()["links"], json!(["guide.md"]));
+    links::links(&app).unwrap().update_policy(|p| {
+        p.schemes.insert("https".into());
+    });
+
+    // On a documentation host: inside, its links are content, it may not
+    // run commands or read local files, and its images wait for the user.
+    let page = egui_pop_gallery::pages::viewer::REMOTE_PAGE;
+    links::links(&app).unwrap().update_policy(|p| {
+        p.docs_hosts.insert("docs.example.org".into());
+    });
+    links::open(&app, links::Request::new(page));
+    h.run();
+    h.run();
+    let s = v.state();
+    assert_eq!(
+        (s["target"].as_str(), s["kind"].as_str()),
+        (Some(page), Some("html"))
+    );
+    assert_eq!(s["links"], json!(["https://example.org/more"]));
+    let images = s["images"].as_array().unwrap();
+    assert!(
+        !images
+            .iter()
+            .any(|i| i["uri"].as_str().unwrap().starts_with("file:")),
+        "{images:?}"
+    );
+    let remote = images
+        .iter()
+        .find(|i| i["uri"] == egui_pop_gallery::pages::viewer::REMOTE_IMAGE)
+        .unwrap();
+    assert_eq!(remote["state"], "blocked");
+    assert_eq!(s["blocked_hosts"], json!(["images.example.org"]));
+    h.get_by_role_and_label(Role::Button, "Load images from images.example.org");
+    // This page holds no code block: egui_commonmark's has no name.
+    egui_pop_test::assert_all_named(&h);
+    // A page elsewhere stays outside.
+    links::open(
+        &app,
+        links::Request::new("https://elsewhere.example/a.html"),
+    );
+    h.run();
+    h.run();
+    assert_eq!(v.state()["target"], page);
+    let r = rec.records();
+    assert_eq!(r.last().unwrap().target, "https://elsewhere.example/a.html");
+    assert_eq!(r.last().unwrap().how, How::Outside);
+}
+
+#[test]
 fn the_viewer_shows_docs_pages_finds_zooms_and_asks_before_remote_images() {
     use egui::accesskit::Role;
     use egui_pop::api::links::{self, How, RecordingOpener, Source};

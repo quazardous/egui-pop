@@ -2219,7 +2219,7 @@ command-viewer-reload =
     .title = Recharger la page
 
 command-viewer-state =
-    .description = La page de la visionneuse (adresse, état ou erreur, titre, titres de sections, texte), son historique, sa recherche, son zoom, ses images et les hôtes autorisés.
+    .description = La page de la visionneuse (adresse, état ou erreur, titre, titres de sections, texte, liens, ce que son HTML n’a pas montré), son historique, sa recherche, son zoom, ses images et les hôtes autorisés.
     .title = Lire la visionneuse
 
 command-viewer-zoom-in =
@@ -2253,6 +2253,9 @@ egui-pop-views-viewer-find-none = Aucune correspondance
 egui-pop-views-viewer-find-previous = Correspondance précédente
 
 egui-pop-views-viewer-forward = Suivante
+
+# The bar over an HTML page: what it holds that the viewer does not show.
+egui-pop-views-viewer-simplified = Non affiché ici : { $what }. Ouvrir à l’extérieur montre la page entière.
 
 egui-pop-views-viewer-image-missing = Image non affichée : { $alt }
 

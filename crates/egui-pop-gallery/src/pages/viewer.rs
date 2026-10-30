@@ -1,6 +1,7 @@
 //! The viewer page: the gallery's own help pages (`docs:`) opened in the
-//! viewer panel, a page that is not there, an anchor, a remote image
-//! waiting for the user, and short texts in the inline subset.
+//! viewer panel, an HTML page in its safe subset, a page that is not
+//! there, an anchor, a remote image waiting for the user, and short texts
+//! in the inline subset.
 
 use std::sync::Arc;
 
@@ -20,13 +21,23 @@ pub const VIEWER_PAGE: PluginId = PluginId::from_static("gallery.viewer");
 /// fetch it, once its host is allowed.
 pub const REMOTE_IMAGE: &str = "https://images.example.org/banner.png";
 
+/// An HTML page on a documentation host: the gallery pretends to fetch
+/// it, for the tests that declare the host.
+pub const REMOTE_PAGE: &str = "https://docs.example.org/page.html";
+
 const GRADIENT: &[u8] = include_bytes!("viewer_docs/gradient.png");
+const REMOTE_HTML: &str = "<h1>A page from the network</h1>\
+    <p><a href=\"https://example.org/more\">More</a> and \
+    <a href=\"command:gallery.nothing\">a command it may not run</a>.</p>\
+    <p><img src=\"file:///etc/hostname\" alt=\"A local file\"></p>\
+    <p><img src=\"https://images.example.org/banner.png\" alt=\"A remote image\"></p>";
 
 /// The gallery's help pages.
 pub fn docs() -> Docs {
     Docs::new()
         .page("index", include_str!("viewer_docs/index.md"))
         .page("guide", include_str!("viewer_docs/guide.md"))
+        .page("about.html", include_str!("viewer_docs/about.html"))
         .file("gradient.png", GRADIENT)
 }
 
@@ -39,6 +50,8 @@ impl Fetch for PretendFetch {
     fn fetch(&self, url: &str, done: Box<dyn FnOnce(Fetched) + Send>) {
         if url == REMOTE_IMAGE {
             done(Ok(GRADIENT.to_vec()));
+        } else if url == REMOTE_PAGE {
+            done(Ok(REMOTE_HTML.as_bytes().to_vec()));
         } else {
             done(Err("the gallery does not reach the network".into()));
         }
@@ -71,10 +84,11 @@ impl Plugin for ViewerPage {
 
     fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
         ctx.link("gallery.viewer: the help", "docs:index")
-            .link("gallery.viewer: the guide", "docs:guide");
+            .link("gallery.viewer: the guide", "docs:guide")
+            .link("gallery.viewer: an HTML page", "docs:about");
         ctx.story(
             Story::new(StoryId::from_static("viewer"), "In-app viewer", show)
-                .description("The in-app viewer: the application's help pages, markdown and images in a panel, with back and forward, an address bar, find in page, zoom, remote images loaded only once allowed, and an error page; short texts with emphasis, code and links.")
+                .description("The in-app viewer: the application's help pages, markdown, a safe subset of HTML and images in a panel, with back and forward, an address bar, find in page, zoom, remote images loaded only once allowed, and an error page; short texts with emphasis, code and links.")
                 .group("Framework", 106),
         )?;
         Ok(())
@@ -94,6 +108,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
             "docs:guide#find-in-page",
         );
         links::link(ui, app, "The gradient image", "docs:gradient.png");
+        links::link(ui, app, "An HTML page", "docs:about");
     });
     section(ui, "Short texts");
     Inline::new("Tips, toasts and settings descriptions read a **small** part of markdown: *emphasis*, `code` and [links](docs:guide), or a bare https://github.com/quazardous/egui-pop.").show(ui, app);

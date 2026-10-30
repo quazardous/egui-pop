@@ -32,6 +32,17 @@ publishes.
   commit when known (`0.2.0 (abc1234)`): git's, else the
   `EGUI_POP_GALLERY_COMMIT` variable, else none. The facade gains
   `egui_pop::VERSION`.
+- The viewer shows a safe subset of HTML (egui-pop-views, feature `html`,
+  the facade's `views-html`; ADR 0017): pages the application ships
+  (`Docs::page("about.html", ...)`) and pages on its documentation hosts,
+  parsed by html5ever (MIT OR Apache-2.0) and mapped to the same blocks as
+  markdown, with find in page, anchors and links through the links
+  service. Scripts, forms, frames, audio, video and foreign SVG go with
+  their content and are named in a bar over the page; `on*`, `style` and
+  other attributes are never read; a link or an image whose scheme the
+  policy does not allow (`javascript:`, `data:`) is left as its text.
+  `docs:` links find `.html` pages and `index.html`, and `viewer.state`
+  gains `links` and `dropped`.
 - The in-app viewer (egui-pop-views, feature `markdown`, the facade's
   `views-markdown`; ADR 0017): `viewer::ViewerPlugin`, opt-in, a panel
   of the end side bar (detachable) showing one page at a time: the
@@ -44,8 +55,8 @@ publishes.
   `viewer::Fetch` the host gives (none by default); a remote image
   loads only after a click on "Load images from `host`", the host then
   remembered in the `viewer.image_hosts` setting. A page that cannot be
-  shown gets an error page with Retry, Open outside and Copy link;
-  HTML pages are not shown inside yet. Agents read it through
+  shown gets an error page with Retry, Open outside and Copy link.
+  Agents read it through
   `viewer.state` and the `viewer` collector. It brings egui_commonmark
   0.25 (MIT OR Apache-2.0, on egui 0.36), pulldown-cmark (MIT) and
   egui_extras' image loader (MIT OR Apache-2.0, decoding PNG, JPEG and

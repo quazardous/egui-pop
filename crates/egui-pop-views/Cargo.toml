@@ -36,6 +36,9 @@ pulldown-cmark = { version = "0.13", default-features = false, optional = true }
 egui_extras = { version = "0.36", default-features = false, features = ["image"], optional = true }
 # MIT OR Apache-2.0: the formats the viewer decodes.
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif"], optional = true }
+# MIT OR Apache-2.0: the HTML parser of the viewer's safe subset (feature
+# `html`); its tree is read through an allow-list and mapped to markdown.
+html5ever = { version = "0.40", optional = true }
 # MIT OR Apache-2.0: relative links and images resolved against a page.
 url = { workspace = true, optional = true }
 log = { workspace = true, optional = true }
@@ -44,6 +47,10 @@ log = { workspace = true, optional = true }
 ## The in-app viewer (`viewer`): markdown pages, `docs:` pages and images,
 ## with navigation, find in page and zoom.
 markdown = ["dep:egui_commonmark", "dep:pulldown-cmark", "dep:egui_extras", "dep:image", "dep:url", "dep:log"]
+## The viewer's safe HTML subset: HTML pages shipped by the application or on
+## its documentation hosts, parsed by html5ever and mapped to the same blocks
+## as markdown.
+html = ["markdown", "dep:html5ever"]
 
 [dev-dependencies]
 egui = { workspace = true, features = ["default_fonts"] }
