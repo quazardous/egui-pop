@@ -1104,6 +1104,10 @@ publishes.
   declared through modals was blocked by them. Rebinding changes the keys
   only. A keymap saved earlier keeps the bindings it holds until they are
   rebound again.
+- The gallery's page list scrolls (egui-pop-gallery): its 57 pages ran past
+  the window's bottom with no way to them. It has a scroll area of its own,
+  with its bar shown at rest, and the page shown comes into view when it
+  changes.
 - A page from the network no longer loads local files (egui-pop-views;
   ADR 0017): a markdown page on a documentation host read its `file:`
   images from the disk, whatever the page's origin, or drew them when an

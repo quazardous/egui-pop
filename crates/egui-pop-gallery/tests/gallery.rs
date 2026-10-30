@@ -5253,3 +5253,101 @@ fn escape_leaves_a_text_field_then_zen_mode() {
     h.run();
     assert!(!handle.zen());
 }
+
+/// The gallery in a window too short for its page list.
+fn short_window(page: &str) -> Harness<'static, Gallery> {
+    let options = options("pop-dark", Density::Comfortable, page);
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(1100.0, 420.0))
+        .shared_wgpu()
+        .build_eframe(move |cc| {
+            egui_pop::core::motion::freeze(&cc.egui_ctx, 0.0);
+            Gallery::from_creation_context(cc, options).expect("the gallery builds")
+        });
+    h.run();
+    h
+}
+
+/// A page's entry in the list: left of the page's heading of the same name.
+fn list_entry(h: &Harness<'_, Gallery>, title: &str) -> egui::Rect {
+    h.query_all_by_label(title)
+        .map(|n| n.rect())
+        .min_by(|a, b| a.left().total_cmp(&b.left()))
+        .unwrap_or_else(|| panic!("no entry `{title}`"))
+}
+
+/// Whether the list shows this rectangle whole: above the status bar.
+fn in_list_view(h: &Harness<'_, Gallery>, entry: egui::Rect) -> bool {
+    let top = h.get_by_label("Density").rect().bottom();
+    let bottom = h.get_by_label("You are in All photos").rect().top();
+    entry.top() >= top && entry.bottom() <= bottom
+}
+
+/// The title of the last page of the list.
+fn last_page(h: &Harness<'_, Gallery>) -> String {
+    let stories = egui_pop_gallery::shell::ordered(h.state().app.handle());
+    stories.last().unwrap().title.clone()
+}
+
+#[test]
+fn the_page_list_draws_its_bar_at_rest_in_a_short_window() {
+    let mut h = short_window("overview");
+    // Between the list's text and the page: nothing else stands there.
+    let left = list_entry(&h, "Tokens table").left();
+    let right = h.get_by_label("Surfaces").rect().left();
+    let bars: Vec<egui::Rect> = h
+        .output()
+        .shapes
+        .iter()
+        .filter_map(|clipped| match &clipped.shape {
+            egui::Shape::Rect(r) if r.fill.a() > 0 => Some(r.rect),
+            _ => None,
+        })
+        .filter(|r| r.left() > left && r.right() <= right)
+        .filter(|r| r.width() <= 12.0 && r.height() >= 20.0)
+        .collect();
+    assert!(!bars.is_empty(), "no bar with no pointer over the list");
+    // It leaves the longest title alone.
+    let longest = list_entry(&h, "Node graph from a file").right();
+    assert!(
+        bars.iter().all(|r| r.left() >= longest),
+        "{bars:?}, {longest}"
+    );
+    h.snapshot("pages-short-pop-dark");
+}
+
+#[test]
+fn the_page_list_reaches_its_last_page_by_the_wheel_in_a_short_window() {
+    let mut h = short_window("overview");
+    let last = last_page(&h);
+    assert!(!in_list_view(&h, list_entry(&h, &last)), "cut at the start");
+    let over = list_entry(&h, "Tokens table").center();
+    wheel_sections(&mut h, over, -200.0);
+    let entry = list_entry(&h, &last);
+    assert!(in_list_view(&h, entry), "{last} at {entry:?}");
+    // There, it takes a click.
+    h.get_by_label(&last).click();
+    h.run();
+    assert_eq!(h.query_all_by_label(&last).count(), 2, "and its page shows");
+}
+
+#[test]
+fn the_page_list_keeps_the_page_chosen_by_keys_in_view() {
+    // Alt+Up from the first page wraps round to the last.
+    let mut h = short_window("overview");
+    let last = last_page(&h);
+    h.key_press_modifiers(egui::Modifiers::ALT, egui::Key::ArrowUp);
+    h.run();
+    let entry = list_entry(&h, &last);
+    assert!(in_list_view(&h, entry), "{last} at {entry:?}");
+    h.key_press_modifiers(egui::Modifiers::ALT, egui::Key::ArrowDown);
+    h.run();
+    let first = title(&h, "overview");
+    let entry = list_entry(&h, &first);
+    assert!(in_list_view(&h, entry), "{first} at {entry:?}");
+    // Started on a page far down the list, it shows too.
+    let h = short_window("cursors");
+    let cursors = title(&h, "cursors");
+    let entry = list_entry(&h, &cursors);
+    assert!(in_list_view(&h, entry), "{cursors} at {entry:?}");
+}
