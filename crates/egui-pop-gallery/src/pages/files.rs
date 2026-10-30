@@ -52,7 +52,7 @@ impl Plugin for FilesPage {
         }
         ctx.story(
             Story::new(StoryId::from_static("files"), "Choosing files", show)
-                .description("The system's file chooser off the interface thread, or the in-app picker: keyboard, typed paths with completion, filters, recent places and bookmarks, a preview pane (images, text, documents, folders) from pluggable providers, a dialog you resize and a splitter beside the pane, a list or a grid of thumbnails with a size control, all remembered.")
+                .description("The system's file chooser off the interface thread, or the in-app picker: keyboard, typed paths with completion, filters, recent places and bookmarks, a preview pane (images, text, documents, folders) from pluggable providers, a dialog you resize and a splitter beside the pane, a list with columns to sort by or a grid of thumbnails with a size control, all remembered.")
                 .group("Components", 52),
         )?;
         Ok(())
@@ -95,6 +95,18 @@ pub fn demo_folder() -> PathBuf {
         }
         if let Ok(f) = std::fs::File::options().write(true).open(&p) {
             let _ = f.set_modified(demo_time());
+        }
+    }
+    // Last, for what was made above to count for nothing: the picker's list
+    // shows when a folder changed. Windows opens no folder this way, and keeps
+    // the real time.
+    for d in DEMO_DIRS {
+        let mut at = root.join(d);
+        while at != root {
+            if let Ok(f) = std::fs::File::open(&at) {
+                let _ = f.set_modified(demo_time());
+            }
+            at.pop();
         }
     }
     root

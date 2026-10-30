@@ -12,6 +12,22 @@ publishes.
 
 ### Added
 
+- Columns in the in-app file picker's list, sortable (egui-pop-api;
+  `docs/files.md`). The list shows when an entry last changed, its size and its
+  type; a click on a header sorts, another turns it, and the headers stay above
+  the grid, which follows the same order. The order is remembered
+  (`settings/files.sort`, `files::sort_order`). Folders stay first, unless the
+  Folders first box or the `files.folders_first` setting says otherwise, and
+  names sort naturally (`IMG_9` before `IMG_10`,
+  `files::sort::natural_cmp`). The highlight stays on its entry through a new
+  order. While the field filters, the best matches come first and the headers
+  say so. The list now draws only the rows in view, as the grid does, and reads
+  their facts once per listing: Tab walks the rows drawn, the arrows go on through
+  the whole folder. `PICKER_WIDTH` is 960 points (it was 880), for the columns beside
+  the pane, and `PICKER_MIN_SIZE` is 640 points wide (it was 520), for the new box
+  in the row of buttons; a size kept below it goes back to the default.
+  `widgets::SortHeader` (egui-pop-core) is the column header the data table uses
+  too, and `SelectableRow::name` names a row whose atoms say more than its name.
 - A thumbnail grid in the in-app file picker (egui-pop-api; `docs/files.md`).
   With previews, a switch shows the entries as a list or as a grid of the
   providers' images, a slider, `Ctrl`+wheel or `Ctrl` `+`/`-` setting their

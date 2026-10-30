@@ -43,6 +43,9 @@
 //! - **The in-app picker's size** is the person's: its modal is resized
 //!   by its edges and corners, a splitter sets the pane's width, and
 //!   both are kept in the host store ([`DIALOG_SIZE`], [`PANE_WIDTH`]).
+//! - **The in-app picker's order**: a click on a column's header sorts by it
+//!   ([`sort`]), in the list and the grid alike; it is kept in the host store
+//!   ([`SORT`]), and [`SETTING_FOLDERS_FIRST`] keeps folders first.
 //! - **The in-app picker's view**, with previews: a list, or a grid of
 //!   thumbnails from the same providers ([`PickerView`]), whose size is a
 //!   slider, `Ctrl` and the wheel, or `Ctrl` and `+` or `-`; only the cells
@@ -88,11 +91,12 @@ use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use egui::{EventFilter, Key, Modifiers, Ui, pos2, vec2};
+use egui::{AtomExt as _, EventFilter, Key, Modifiers, Sense, Ui, pos2, vec2};
 use egui_pop_core::a11y::{self, Politeness};
 use egui_pop_core::debug::FnCollector;
 use egui_pop_core::focus;
 use egui_pop_core::icon::Icon;
+use egui_pop_core::kit::{Kit, Part, State as PartState};
 use egui_pop_core::lock;
 use egui_pop_core::overlay::{self, Kind, OverlaySpec};
 use egui_pop_core::placeholder::SkeletonTokens;
@@ -119,9 +123,12 @@ use crate::strings as txt;
 use crate::zones::{self, Block};
 use crate::{Ctx, Plugin, PluginError};
 
+use self::sort::{PickerSort, SortColumn};
+
 pub mod fs;
 pub mod preview;
 pub mod providers;
+pub mod sort;
 
 use fs::{Meta, SharedFs};
 use preview::Previews;
@@ -161,6 +168,8 @@ const WHEN_SELECTS: &str = "filePickerSelects";
 pub const SETTING_NATIVE: SettingId = SettingId::from_static("files.native");
 /// The setting: the in-app picker shows its preview pane.
 pub const SETTING_PREVIEW: SettingId = SettingId::from_static("files.preview");
+/// Whether the in-app picker keeps folders before files in every order.
+pub const SETTING_FOLDERS_FIRST: SettingId = SettingId::from_static("files.folders_first");
 
 /// Where recent places are kept (a JSON list of folders, newest first).
 pub const RECENT: &str = "settings/files.recent";
@@ -177,6 +186,9 @@ pub const PANE_WIDTH: &str = "settings/files.pane_width";
 pub const VIEW: &str = "settings/files.view";
 /// Where the size of the in-app picker's thumbnails is kept, in points.
 pub const THUMBNAIL_SIZE: &str = "settings/files.thumbnail_size";
+/// Where the in-app picker's order is kept: `name`, `-name` (descending), and
+/// `size`, `modified` or `type` the same way ([`sort::PickerSort`]).
+pub const SORT: &str = "settings/files.sort";
 
 /// Where the last folder of each purpose is kept (a JSON list of
 /// `[purpose, folder]` pairs, newest first). See [`FileRequest::purpose`].
@@ -915,6 +927,12 @@ impl Plugin for FilesPlugin {
                 "egui-pop's file picker shows the selected file's preview and facts beside the list; Alt+P shows or hides it.",
             ),
         )?;
+        ctx.setting(
+            SETTING_FOLDERS_FIRST,
+            Descriptor::bool("Folders first in the file picker", true).description(
+                "egui-pop's file picker lists folders before files in every order; off, they sort among the files.",
+            ),
+        )?;
         {
             let store = ctx.app().store();
             let mut store = lock(&store);
@@ -964,6 +982,10 @@ impl Plugin for FilesPlugin {
                         f64::from(THUMBNAIL_MAX_SIZE),
                         f64::from(THUMBNAIL_DEFAULT_SIZE),
                     ),
+                ),
+                (
+                    SORT,
+                    Descriptor::text("File picker order", &PickerSort::default().as_text()),
                 ),
             ] {
                 store
@@ -1225,14 +1247,15 @@ fn places(app: &AppHandle) -> Places {
 }
 
 /// The width of the in-app picker's modal at first, the preview pane
-/// shown or not: wide enough for the places, the list and the full pane.
-pub const PICKER_WIDTH: f32 = 880.0;
+/// shown or not: wide enough for the places, the list with all its columns
+/// and the full pane.
+pub const PICKER_WIDTH: f32 = 960.0;
 /// The height of the in-app picker's modal at first: the list has its
 /// usual height ([`LIST_HEIGHT`]).
 pub const PICKER_HEIGHT: f32 = 398.0;
 /// The least size the in-app picker's modal is dragged to: the row of
 /// its filters and buttons fits, and a few entries.
-pub const PICKER_MIN_SIZE: egui::Vec2 = egui::vec2(520.0, 280.0);
+pub const PICKER_MIN_SIZE: egui::Vec2 = egui::vec2(640.0, 280.0);
 /// The list's height when the picker is not given a height to fill.
 pub const LIST_HEIGHT: f32 = 280.0;
 /// The narrowest the picker's list gets for the preview pane: under
@@ -1240,6 +1263,9 @@ pub const LIST_HEIGHT: f32 = 280.0;
 pub const LIST_MIN_WIDTH: f32 = 240.0;
 /// The narrowest preview pane drawn: with less room, it is not shown.
 pub const PANE_MIN_WIDTH: f32 = 120.0;
+/// The narrowest the name's column gets: with less room, the other columns
+/// go, the type first and the modification time last.
+pub const NAME_MIN_WIDTH: f32 = 140.0;
 
 /// The smallest thumbnails of the picker's grid, in points.
 pub const THUMBNAIL_MIN_SIZE: f32 = 64.0;
@@ -1361,6 +1387,8 @@ fn load_view(app: &AppHandle, picker: &mut FilePicker) {
     if !picker.thumbnail_dragging {
         picker.thumbnail_size = thumbnail_size(app);
     }
+    picker.set_sort(sort_order(app));
+    picker.set_folders_first(folders_first(app));
 }
 
 /// Keeps what the person changed of the view; a drag of the splitter
@@ -1377,6 +1405,12 @@ fn keep_view(app: &AppHandle, picker: &FilePicker) {
     }
     if !picker.thumbnail_dragging && picker.thumbnail_size != thumbnail_size(app) {
         want_thumbnail_size(app, picker.thumbnail_size);
+    }
+    if picker.sort != sort_order(app) {
+        want_sort_order(app, picker.sort);
+    }
+    if picker.folders_first != folders_first(app) {
+        want_folders_first(app, picker.folders_first);
     }
 }
 
@@ -1491,6 +1525,33 @@ pub fn want_thumbnail_size(app: &AppHandle, size: f32) {
     keep_value(app, THUMBNAIL_SIZE, Value::Float(f64::from(size)));
 }
 
+/// The in-app picker's order, as kept.
+pub fn sort_order(app: &AppHandle) -> PickerSort {
+    lock(&app.store())
+        .get(SORT)
+        .and_then(|e| e.value.as_text().and_then(PickerSort::parse))
+        .unwrap_or_default()
+}
+
+/// Keeps the in-app picker's order.
+pub fn want_sort_order(app: &AppHandle, sort: PickerSort) {
+    keep_value(app, SORT, Value::Text(sort.as_text()));
+}
+
+/// Whether the in-app picker keeps folders first (the setting).
+pub fn folders_first(app: &AppHandle) -> bool {
+    lock(&app.store())
+        .get(&format!("settings/{SETTING_FOLDERS_FIRST}"))
+        .and_then(|e| e.value.as_bool())
+        .unwrap_or(true)
+}
+
+/// Keeps folders first in the in-app picker, or not (the setting).
+pub fn want_folders_first(app: &AppHandle, on: bool) {
+    let path = format!("settings/{SETTING_FOLDERS_FIRST}");
+    keep_value(app, &path, Value::Bool(on));
+}
+
 /// The home folder, if known.
 pub fn home() -> Option<PathBuf> {
     std::env::var_os("HOME")
@@ -1510,7 +1571,7 @@ pub struct Places {
 /// How the in-app picker shows a folder's entries.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum PickerView {
-    /// One entry per row, by name.
+    /// One entry per row, with its facts in columns.
     #[default]
     List,
     /// Thumbnails from the preview providers (only with previews,
@@ -1535,6 +1596,112 @@ impl PickerView {
             _ => None,
         }
     }
+}
+
+/// A column of the picker's list, as it fits the width it has.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct ListColumn {
+    column: SortColumn,
+    /// Where its text starts, from the row's left.
+    left: f32,
+    width: f32,
+}
+
+impl SortColumn {
+    /// Its title.
+    fn title(self) -> &'static strings::StrKey {
+        match self {
+            SortColumn::Name => &txt::FILES_COLUMN_NAME,
+            SortColumn::Size => &txt::FILES_COLUMN_SIZE,
+            SortColumn::Modified => &txt::FILES_COLUMN_MODIFIED,
+            SortColumn::Type => &txt::FILES_COLUMN_TYPE,
+        }
+    }
+}
+
+/// A row's height in the picker's list, and its headers': a selectable row's.
+fn row_height(ui: &Ui) -> f32 {
+    let text = ui.text_style_height(&egui::TextStyle::Body);
+    ui.spacing()
+        .interact_size
+        .y
+        .max(text + 2.0 * ui.spacing().button_padding.y)
+}
+
+/// Lays columns out in a row `room` wide: `wanted` holds the width of each but
+/// the name, in the order they are given up, the last first, while the name has
+/// less than [`NAME_MIN_WIDTH`]. Their order on screen is the name, then
+/// `wanted`'s.
+fn fit_columns(room: f32, gap: f32, padding: f32, wanted: &[(SortColumn, f32)]) -> Vec<ListColumn> {
+    let mut kept = wanted.len();
+    let name_width = loop {
+        let others: f32 = wanted[..kept].iter().map(|(_, w)| w + gap).sum();
+        let name = room - 2.0 * padding - others;
+        if name >= NAME_MIN_WIDTH || kept == 0 {
+            break name.max(0.0);
+        }
+        kept -= 1;
+    };
+    let mut out = vec![ListColumn {
+        column: SortColumn::Name,
+        left: padding,
+        width: name_width,
+    }];
+    let mut left = padding + name_width + gap;
+    for &(column, width) in &wanted[..kept] {
+        out.push(ListColumn {
+            column,
+            left,
+            width,
+        });
+        left += width + gap;
+    }
+    out
+}
+
+/// The columns of a list `width` wide: wide enough for their title with its
+/// arrow, and for what they say. Choosing a folder lists only folders, which
+/// have no size and all one type.
+fn list_columns(ui: &Ui, width: f32, kind: ChooseKind) -> Vec<ListColumn> {
+    let ctx = ui.ctx();
+    let font = egui::TextStyle::Body.resolve(ui.style());
+    let measure = |text: String| {
+        ui.painter()
+            .layout_no_wrap(text, font.clone(), egui::Color32::PLACEHOLDER)
+            .size()
+    };
+    let inset = header_inset(ui, &Kit::of(ctx), &font);
+    let wanted = |column: SortColumn, sample: &str| {
+        let title = measure(strings::tr(ctx, column.title()));
+        // The arrow goes after the title, a little apart, as high as the text.
+        let header = title.x + title.y * 1.25 + inset;
+        (column, measure(sample.to_string()).x.max(header).ceil())
+    };
+    let folder = strings::tr(ctx, &txt::FILES_KIND_FOLDER);
+    let mut columns = vec![wanted(SortColumn::Modified, "0000-00-00 00:00 UTC")];
+    if kind != ChooseKind::Folder {
+        columns.push(wanted(SortColumn::Size, "999 MB"));
+        columns.push(wanted(SortColumn::Type, &folder));
+    }
+    let gap = Tokens::of(ctx).space.m;
+    fit_columns(width, gap, ui.spacing().button_padding.x, &columns)
+}
+
+/// How far a header's title starts from the left of its cell.
+fn header_inset(ui: &Ui, kit: &Kit, font: &egui::FontId) -> f32 {
+    let galley =
+        ui.painter()
+            .layout_no_wrap("A".to_string(), font.clone(), egui::Color32::PLACEHOLDER);
+    let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(100.0, 40.0));
+    let part = Part {
+        rect,
+        room: rect,
+        state: PartState::REST,
+        label: Some(&galley),
+    };
+    kit.table_header_cell
+        .label_rect(&part, galley.size())
+        .left()
 }
 
 /// A move of the highlight in the grid.
@@ -1627,6 +1794,15 @@ fn stem_chars(text: &str) -> (usize, usize) {
     (text[..start].chars().count(), text[..end].chars().count())
 }
 
+/// A folder as last read, and in which order its entries lie.
+#[derive(Clone, Debug)]
+struct Listing {
+    dir: PathBuf,
+    hidden: bool,
+    order: (PickerSort, bool),
+    entries: Arc<Vec<Entry>>,
+}
+
 /// The in-app picker: a folder's entries, a field that filters them
 /// (fuzzy) or takes a typed path (with completion), places, filters.
 /// Usable on its own: [`FilePicker::show`] in any `Ui`.
@@ -1657,6 +1833,10 @@ pub struct FilePicker {
     pub view: PickerView,
     /// The thumbnails' size in the grid, in points.
     pub thumbnail_size: f32,
+    /// The order of the entries, in the list and in the grid.
+    pub sort: PickerSort,
+    /// Folders come before files in every order.
+    pub folders_first: bool,
     /// The list takes the height left in the `Ui` it is drawn in (a
     /// dialog of a given size), rather than [`LIST_HEIGHT`].
     pub fill: bool,
@@ -1711,7 +1891,7 @@ pub struct FilePicker {
     /// the cells in view would read them every frame otherwise.
     metas: Arc<Mutex<HashMap<PathBuf, Option<Meta>>>>,
     /// Shared: the picker is copied every frame it is drawn.
-    listing: Option<(PathBuf, bool, Arc<Vec<Entry>>)>,
+    listing: Option<Listing>,
     fs: SharedFs,
     previews: Option<Previews>,
 }
@@ -1750,6 +1930,8 @@ impl FilePicker {
             pane_width: preview::PANE_WIDTH,
             view: PickerView::List,
             thumbnail_size: THUMBNAIL_DEFAULT_SIZE,
+            sort: PickerSort::default(),
+            folders_first: true,
             fill: false,
             error: None,
             naming: None,
@@ -1827,41 +2009,95 @@ impl FilePicker {
         self.filter().is_none_or(|f| f.accepts(path))
     }
 
-    /// The folder's entries: folders, then the files the filter accepts
-    /// (none when choosing a folder), by name; hidden ones only when
-    /// asked.
+    /// The folder's entries in the picker's order, those the filter accepts
+    /// (folders whatever the filter; none but folders when choosing a folder);
+    /// hidden ones only when asked. The folder is read once, and sorting by
+    /// size or by date reads every entry's facts once, off that listing.
     pub fn entries(&mut self) -> Vec<Entry> {
-        let key = (self.dir.clone(), self.show_hidden);
-        if let Some((d, h, e)) = &self.listing
-            && (d, *h) == (&key.0, key.1)
-        {
-            return e
-                .iter()
-                .filter(|x| x.is_dir || self.accepts(&x.path))
-                .cloned()
-                .collect();
+        let order = (self.sort, self.folders_first);
+        let read = self
+            .listing
+            .as_ref()
+            .is_none_or(|l| l.dir != self.dir || l.hidden != self.show_hidden);
+        if read {
+            let all: Vec<Entry> = self
+                .fs
+                .read_dir(&self.dir)
+                .map(|r| {
+                    r.into_iter()
+                        .map(|e| Entry {
+                            path: self.dir.join(&e.name),
+                            name: e.name,
+                            is_dir: e.is_dir,
+                        })
+                        .filter(|e| self.show_hidden || !e.name.starts_with('.'))
+                        .filter(|e| e.is_dir || self.kind != ChooseKind::Folder)
+                        .collect()
+                })
+                .unwrap_or_default();
+            lock(&self.metas).clear();
+            let all = sort::sort_entries(all, order.0, order.1, |e| self.meta_of(&e.path));
+            self.listing = Some(Listing {
+                dir: self.dir.clone(),
+                hidden: self.show_hidden,
+                order,
+                entries: Arc::new(all),
+            });
+        } else if let Some(l) = self.listing.as_ref().filter(|l| l.order != order) {
+            let all = sort::sort_entries(l.entries.to_vec(), order.0, order.1, |e| {
+                self.meta_of(&e.path)
+            });
+            if let Some(l) = &mut self.listing {
+                l.order = order;
+                l.entries = Arc::new(all);
+            }
         }
-        let mut all: Vec<Entry> = self
-            .fs
-            .read_dir(&self.dir)
-            .map(|r| {
-                r.into_iter()
-                    .map(|e| Entry {
-                        path: self.dir.join(&e.name),
-                        name: e.name,
-                        is_dir: e.is_dir,
-                    })
-                    .filter(|e| self.show_hidden || !e.name.starts_with('.'))
-                    .filter(|e| e.is_dir || self.kind != ChooseKind::Folder)
+        self.listing
+            .as_ref()
+            .map(|l| {
+                l.entries
+                    .iter()
+                    .filter(|x| x.is_dir || self.accepts(&x.path))
+                    .cloned()
                     .collect()
             })
-            .unwrap_or_default();
-        all.sort_by(|a, b| {
-            (!a.is_dir, a.name.to_lowercase()).cmp(&(!b.is_dir, b.name.to_lowercase()))
-        });
-        lock(&self.metas).clear();
-        self.listing = Some((key.0, key.1, Arc::new(all)));
-        self.entries()
+            .unwrap_or_default()
+    }
+
+    /// Takes another order; the highlighted entry stays highlighted, wherever
+    /// it lands, and comes into view.
+    pub fn set_sort(&mut self, sort: PickerSort) {
+        if sort != self.sort {
+            self.reorder(|p| p.sort = sort);
+        }
+    }
+
+    /// Keeps folders first, or sorts them among the files; the highlighted
+    /// entry stays highlighted, wherever it lands, and comes into view.
+    pub fn set_folders_first(&mut self, on: bool) {
+        if on != self.folders_first {
+            self.reorder(|p| p.folders_first = on);
+        }
+    }
+
+    fn reorder(&mut self, change: impl FnOnce(&mut FilePicker)) {
+        let at = self.highlighted().map(|e| e.path);
+        change(self);
+        if let Some(path) = at
+            && let Some(n) = self.visible().iter().position(|e| e.path == path)
+        {
+            self.highlight = n;
+        }
+        self.reveal_cell = true;
+        if let Some(ctx) = &self.ctx {
+            ctx.request_repaint();
+        }
+    }
+
+    /// Whether the field's text puts the entries in order of its best
+    /// matches, whatever the order asked.
+    fn ranks(&self) -> bool {
+        !self.is_path() && !self.text.trim().is_empty() && self.kind != ChooseKind::Save
     }
 
     /// Whether the field holds a path rather than a filter.
@@ -1890,11 +2126,11 @@ impl FilePicker {
     }
 
     /// The entries shown: all of them, or those the filter matches (best
-    /// first); with a typed path, those of its folder its last part
+    /// first, equals in the picker's order); with a typed path, those of its folder its last part
     /// starts.
     pub fn visible(&mut self) -> Vec<Entry> {
         let entries = self.entries();
-        if self.is_path() || self.text.trim().is_empty() || self.kind == ChooseKind::Save {
+        if !self.ranks() {
             return entries;
         }
         fuzzy::rank(&entries, self.text.trim(), |e| e.name.clone())
@@ -2403,6 +2639,8 @@ impl FilePicker {
             "view": self.view.as_str(),
             "thumbnail_size": self.thumbnail_size,
             "columns": self.columns,
+            "sort": self.sort.as_text(),
+            "folders_first": self.folders_first,
         })
     }
 
@@ -2692,7 +2930,7 @@ impl FilePicker {
                 self.highlight.saturating_sub(1)
             };
             self.move_highlight(to, &shown, extend || grid_extend);
-            self.reveal_cell = grid;
+            self.reveal_cell = true;
         }
         ui.add_space(t.space.s);
         let list_height = if self.fill {
@@ -2768,60 +3006,29 @@ impl FilePicker {
             }
             ui.vertical(|ui| {
                 ui.set_width(list_width);
+                let spacing = ui.spacing().item_spacing.y;
+                let row = row_height(ui);
+                let height = (list_height - row - spacing).max(0.0);
+                // The scroll bar takes its room only when there is one.
+                let scrolls = !grid && shown.len() as f32 * (row + spacing) > height;
+                let bar = ui.spacing().scroll.allocated_width();
+                let row_width = list_width - if scrolls { bar } else { 0.0 };
+                let columns = list_columns(ui, row_width, self.kind);
+                let order = self.sort;
+                self.column_headers(ui, &columns, list_width);
+                // A click on a header shows in this frame.
+                let sorted;
+                let shown: &[Entry] = if self.sort == order {
+                    &shown
+                } else {
+                    sorted = self.visible();
+                    &sorted
+                };
                 if grid {
-                    self.grid(ui, &shown, list_height, &mut answer);
-                    return;
+                    self.grid(ui, shown, height, &mut answer);
+                } else {
+                    self.list(ui, shown, &columns, row_width, height, &mut answer);
                 }
-                egui::ScrollArea::vertical()
-                    .id_salt("egui_pop.files.entries")
-                    .max_height(list_height)
-                    .auto_shrink([false, false])
-                    .show(ui, |ui| {
-                        // One entry per row (the row beside the places is
-                        // laid out left to right).
-                        ui.set_width(ui.available_width());
-                        ui.with_layout(egui::Layout::top_down_justified(egui::Align::Min), |ui| {
-                            let apart = self.selects_apart();
-                            let pointer =
-                                ui.input(|i| i.pointer.any_down() || i.pointer.any_released());
-                            let modifiers = ui.input(|i| i.modifiers);
-                            self.row_ids.clear();
-                            for (n, e) in shown.iter().enumerate() {
-                                let label = if e.is_dir {
-                                    format!("{}/", e.name)
-                                } else {
-                                    e.name.clone()
-                                };
-                                // Where a selection exists apart from the
-                                // highlight, a ring says where the highlight is.
-                                let selected = self.selected.contains(&e.path);
-                                let highlighted = n == self.highlight;
-                                let on = selected || (highlighted && !apart);
-                                let r = widgets::selectable_label(ui, on, label);
-                                if apart && highlighted {
-                                    ui.painter().rect_stroke(
-                                        r.rect,
-                                        t.radius.widget,
-                                        egui::Stroke::new(1.0, t.focus_ring),
-                                        egui::StrokeKind::Inside,
-                                    );
-                                }
-                                self.row_ids.push(r.id);
-                                // Tab through the rows moves the highlight too.
-                                let tabbed = r.gained_focus() && !pointer;
-                                if tabbed {
-                                    self.move_highlight(n, &shown, false);
-                                }
-                                if n == self.highlight && (down || up || tabbed) {
-                                    r.scroll_to_me(None);
-                                }
-                                self.entry_clicks(&r, n, &shown, modifiers, pointer, &mut answer);
-                            }
-                            if shown.is_empty() {
-                                ui.weak(strings::tr(ui.ctx(), &txt::NOTHING_MATCHES));
-                            }
-                        });
-                    });
             });
             if let Some(pane_width) = pane_width {
                 ui.add_space(t.space.m);
@@ -2903,6 +3110,13 @@ impl FilePicker {
                 &mut self.show_hidden,
                 strings::tr(ui.ctx(), &txt::FILES_HIDDEN),
             );
+            let mut folders_first = self.folders_first;
+            widgets::checkbox(
+                ui,
+                &mut folders_first,
+                strings::tr(ui.ctx(), &txt::FILES_FOLDERS_FIRST),
+            );
+            self.set_folders_first(folders_first);
             if self.previews.is_some() {
                 widgets::checkbox(
                     ui,
@@ -2979,6 +3193,214 @@ impl FilePicker {
             }
             self.thumbnail_dragging = out.response.dragged();
         });
+    }
+
+    /// The headers above the entries, in the list and the grid alike: a click
+    /// sorts, and the arrow says by what. While the field's filter ranks the
+    /// entries, the order is not theirs to give, and they say so.
+    fn column_headers(&mut self, ui: &mut Ui, columns: &[ListColumn], width: f32) {
+        let ctx = ui.ctx().clone();
+        let height = row_height(ui);
+        let (rect, _) = ui.allocate_exact_size(vec2(width, height), Sense::hover());
+        let ranks = self.ranks();
+        let kit = Kit::of(&ctx);
+        let font = egui::TextStyle::Body.resolve(ui.style());
+        let pointer = ui.input(|i| i.pointer.any_down() || i.pointer.any_released());
+        let inset = header_inset(ui, &kit, &font);
+        ui.add_enabled_ui(!ranks, |ui| {
+            for (n, c) in columns.iter().enumerate() {
+                let left = (rect.left() + c.left - inset).max(rect.left());
+                let right = columns
+                    .get(n + 1)
+                    .map_or(rect.right(), |next| rect.left() + next.left - inset);
+                let at =
+                    egui::Rect::from_min_max(pos2(left, rect.top()), pos2(right, rect.bottom()));
+                let title = strings::tr(&ctx, c.column.title());
+                let descending =
+                    (!ranks && self.sort.column == c.column).then_some(self.sort.descending);
+                let name = match descending {
+                    Some(true) => {
+                        strings::tr_args(&ctx, &txt::FILES_SORTED_DOWN, &[("column", &title)])
+                    }
+                    Some(false) => {
+                        strings::tr_args(&ctx, &txt::FILES_SORTED_UP, &[("column", &title)])
+                    }
+                    None => title.clone(),
+                };
+                let id = ui
+                    .id()
+                    .with("egui_pop.files.header")
+                    .with(c.column.as_str());
+                let r = widgets::SortHeader {
+                    title: &title,
+                    name: &name,
+                    descending,
+                    sortable: true,
+                }
+                .show(ui, &kit, at, id)
+                .on_disabled_hover_text(strings::tr(&ctx, &txt::FILES_SORT_RANKED));
+                if r.clicked() {
+                    self.set_sort(self.sort.click(c.column));
+                    // By the pointer: the keys go on as before.
+                    self.refocus |= pointer;
+                }
+            }
+        });
+    }
+
+    /// The list: the rows in view, each reading its facts once per listing.
+    fn list(
+        &mut self,
+        ui: &mut Ui,
+        shown: &[Entry],
+        columns: &[ListColumn],
+        width: f32,
+        height: f32,
+        answer: &mut Option<PickerAnswer>,
+    ) {
+        if shown.is_empty() {
+            ui.weak(strings::tr(ui.ctx(), &txt::NOTHING_MATCHES));
+        }
+        let reveal = std::mem::take(&mut self.reveal_cell) && !shown.is_empty();
+        let highlight = self.highlight.min(shown.len().saturating_sub(1));
+        let pointer = ui.input(|i| i.pointer.any_down() || i.pointer.any_released());
+        let modifiers = ui.input(|i| i.modifiers);
+        let cell = vec2(width, row_height(ui));
+        self.row_ids.clear();
+        self.columns = 1;
+        ThumbnailGrid::new(shown.len(), cell)
+            .id_salt("egui_pop.files.entries")
+            .max_height(height)
+            .reveal(reveal.then_some(highlight))
+            .show(ui, |ui, n| {
+                let r = self.list_row(ui, &shown[n], n, columns);
+                self.row_input(ui, &r, n, shown, modifiers, pointer, answer);
+            });
+    }
+
+    /// Draws row `n`: a selectable row, named by the entry's name, its other
+    /// columns said as its description.
+    fn list_row(
+        &mut self,
+        ui: &mut Ui,
+        e: &Entry,
+        n: usize,
+        columns: &[ListColumn],
+    ) -> egui::Response {
+        let t = Tokens::of(ui.ctx());
+        let label = if e.is_dir {
+            format!("{}/", e.name)
+        } else {
+            e.name.clone()
+        };
+        // Where a selection exists apart from the highlight, a ring says where
+        // the highlight is.
+        let on = self.selected.contains(&e.path) || (n == self.highlight && !self.selects_apart());
+        // Inside the row's padding.
+        let height = row_height(ui) - 2.0 * ui.spacing().button_padding.y;
+        let mut atoms = egui::Atoms::default();
+        let mut facts = Vec::new();
+        for c in columns {
+            let (text, align) = match c.column {
+                SortColumn::Name => (label.clone(), egui::Align2::LEFT_CENTER),
+                column => {
+                    let fact = self.fact_text(ui.ctx(), e, column);
+                    if !fact.is_empty() {
+                        facts.push(fact.clone());
+                    }
+                    let align = if column == SortColumn::Size {
+                        egui::Align2::RIGHT_CENTER
+                    } else {
+                        egui::Align2::LEFT_CENTER
+                    };
+                    (fact, align)
+                }
+            };
+            atoms.push_right(
+                text.atom_max_width(c.width)
+                    .atom_size(vec2(c.width, height))
+                    .atom_align(align),
+            );
+        }
+        let name_width = columns.first().map_or(0.0, |c| c.width);
+        let font = egui::TextStyle::Body.resolve(ui.style());
+        let cut = ui
+            .painter()
+            .layout_no_wrap(label.clone(), font, egui::Color32::PLACEHOLDER)
+            .size()
+            .x
+            > name_width;
+        // By its path: the focus stays on it as the rows scroll.
+        let r = ui
+            .push_id(&e.path, |ui| {
+                ui.spacing_mut().icon_spacing = t.space.m;
+                ui.with_layout(egui::Layout::top_down_justified(egui::Align::Min), |ui| {
+                    ui.add(
+                        widgets::SelectableRow::new(on, atoms)
+                            .name(label.clone())
+                            .steady(),
+                    )
+                })
+                .inner
+            })
+            .inner;
+        if !facts.is_empty() {
+            ui.ctx().accesskit_node_builder(r.id, |node| {
+                node.set_description(facts.join(", "));
+            });
+        }
+        if cut { r.on_hover_text(label) } else { r }
+    }
+
+    /// What a column says of an entry: empty for a folder's size, or a fact
+    /// the file system does not give.
+    fn fact_text(&self, ctx: &egui::Context, e: &Entry, column: SortColumn) -> String {
+        match column {
+            SortColumn::Name => e.name.clone(),
+            SortColumn::Size if e.is_dir => String::new(),
+            SortColumn::Size => self
+                .meta_of(&e.path)
+                .map_or_else(String::new, |m| preview::size_text(m.len)),
+            SortColumn::Modified => self
+                .meta_of(&e.path)
+                .and_then(|m| m.modified)
+                .map_or_else(String::new, preview::time_text),
+            SortColumn::Type if e.is_dir => strings::tr(ctx, &txt::FILES_KIND_FOLDER),
+            SortColumn::Type => match extension_dot(&e.name) {
+                Some(dot) => e.name[dot + 1..].to_uppercase(),
+                None => strings::tr(ctx, &txt::FILES_KIND_FILE),
+            },
+        }
+    }
+
+    /// What the row just drawn does with the pointer and the keys.
+    #[allow(clippy::too_many_arguments)]
+    fn row_input(
+        &mut self,
+        ui: &mut Ui,
+        r: &egui::Response,
+        n: usize,
+        shown: &[Entry],
+        modifiers: Modifiers,
+        pointer: bool,
+        answer: &mut Option<PickerAnswer>,
+    ) {
+        if self.selects_apart() && n == self.highlight {
+            let t = Tokens::of(ui.ctx());
+            ui.painter().rect_stroke(
+                r.rect,
+                t.radius.widget,
+                egui::Stroke::new(1.0, t.focus_ring),
+                egui::StrokeKind::Inside,
+            );
+        }
+        self.row_ids.push(r.id);
+        // Tab through the rows moves the highlight too.
+        if r.gained_focus() && !pointer {
+            self.move_highlight(n, shown, false);
+            r.scroll_to_me(None);
+        }
+        self.entry_clicks(r, n, shown, modifiers, pointer, answer);
     }
 
     /// The grid: the cells in view, each asking for its thumbnail (nothing
@@ -3399,6 +3821,35 @@ mod tests {
             std::fs::write(root.join(f), b"x").unwrap();
         }
         root
+    }
+
+    #[test]
+    fn the_columns_give_way_to_the_name_the_type_first() {
+        let wanted = [
+            (SortColumn::Modified, 150.0),
+            (SortColumn::Size, 60.0),
+            (SortColumn::Type, 50.0),
+        ];
+        let fit = |room| {
+            fit_columns(room, 10.0, 4.0, &wanted)
+                .iter()
+                .map(|c| c.column)
+                .collect::<Vec<_>>()
+        };
+        use SortColumn::*;
+        let all = 8.0 + NAME_MIN_WIDTH + 150.0 + 60.0 + 50.0 + 30.0;
+        assert_eq!(fit(all), [Name, Modified, Size, Type]);
+        assert_eq!(fit(all - 1.0), [Name, Modified, Size]);
+        assert_eq!(fit(all - 61.0), [Name, Modified]);
+        assert_eq!(fit(all - 131.0), [Name]);
+        // Too narrow even for the name: it is cut, and nothing goes negative.
+        assert_eq!(fit_columns(4.0, 10.0, 4.0, &wanted)[0].width, 0.0);
+        // Each starts where the one before ends, and the name takes what is left.
+        let columns = fit_columns(all + 40.0, 10.0, 4.0, &wanted);
+        assert_eq!(columns[0].left, 4.0);
+        assert_eq!(columns[0].width, NAME_MIN_WIDTH + 40.0);
+        assert_eq!(columns[1].left, 4.0 + NAME_MIN_WIDTH + 40.0 + 10.0);
+        assert_eq!(columns[2].left, columns[1].left + 160.0);
     }
 
     #[test]

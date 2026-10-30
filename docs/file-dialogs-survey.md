@@ -306,7 +306,7 @@ note matters for several items: the picker lives in `egui-pop-api` (L3),
 the data table in `egui-pop-views` (L4) and the thumbnail grid in
 `egui-pop-core` (L2, moved down from `egui-pop-viewport` for item 6);
 reuse means moving shared drawing down or the picker up, which is a
-decision of its own.
+decision of its own (item 7 moved the header's drawing down, not the table).
 
 1. **Keep the dialog's size when the preview is toggled; the preview
    takes its room from the list.** The modal's width stops depending on
@@ -355,7 +355,17 @@ decision of its own.
    header sorts, the sort is remembered, folders stay first (a setting,
    as GTK's `sort-directories-first`), and names sort naturally
    ("IMG_9" before "IMG_10", as Explorer). Photo folders are read by
-   date as often as by name. Size: M.
+   date as often as by name. Decided: the data table stays out, for three
+   reasons. It lives a layer above the picker; it brings its own selection,
+   which is not the picker's highlight and selection; and its headers cycle
+   through no order at all, which a listing does not have. What they share went
+   down to `egui-pop-core`: the header's drawing (`widgets::SortHeader`). The
+   picker's rows use the grid's virtualisation (`ThumbnailGrid`, one cell to a
+   row), so a row now reads its facts only when in view. A click sorts the
+   largest and the newest first, as Finder and Nautilus; the headers stay above
+   the grid, which has no other way to change the order. Natural order is our
+   own 30 lines: `natord`'s last release is from 2015, and `alphanumeric-sort`
+   compares by Unicode scalar values, which leaves case apart. Size: M.
 8. **Breadcrumbs for the folder, editable on demand.** The monospace
    path becomes clickable segments (each opens its folder; a segment's
    menu lists its subfolders, as Windows' address bar); `Ctrl+L`, or

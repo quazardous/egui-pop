@@ -470,6 +470,10 @@ egui-pop-field-reset 5a2e444b21057c4c
 egui-pop-files-all 45bed3078932475b
 egui-pop-files-bookmark 6b0e2a63b0284481
 egui-pop-files-bookmarks c1eb9494b4a5a554
+egui-pop-files-column-modified 4a4dc6e0a5c27f60
+egui-pop-files-column-name e8f800548ef8413c
+egui-pop-files-column-size 460e2b4dbac0e0ba
+egui-pop-files-column-type f97f51ee1be110cd
 egui-pop-files-create bd8bd1041b1d098d
 egui-pop-files-dimensions 9448f1438bcf86c6
 egui-pop-files-filter 629d424a814e621a
@@ -481,9 +485,12 @@ egui-pop-files-folder-name-invalid 6e15dee20c0f8d05
 egui-pop-files-folder-read-only d0186d5a53c8ebd6
 egui-pop-files-folder-selected ebe811749503bdda
 egui-pop-files-folder-shown 7bf55a39375ef73b
+egui-pop-files-folders-first 3ff697cfc68e8ffa
 egui-pop-files-hidden 98d3490afec5ff90
 egui-pop-files-home 4e79e04702088474
 egui-pop-files-items e0d1e5c84cf292a7
+egui-pop-files-kind-file 181d912a9545ccc3
+egui-pop-files-kind-folder 385fe1e894da806d
 egui-pop-files-modified 4a4dc6e0a5c27f60
 egui-pop-files-name 777f8f9acd9d0f37
 egui-pop-files-new-folder ce54c83f497e797f
@@ -506,6 +513,9 @@ egui-pop-files-selected b94bd277035f8891
 egui-pop-files-selected-none 06639adc9d49a67f
 egui-pop-files-selected-not-shown b92d4087c913b866
 egui-pop-files-size 460e2b4dbac0e0ba
+egui-pop-files-sort-ranked e152e2abf66757d0
+egui-pop-files-sorted-down 26c3550025343606
+egui-pop-files-sorted-up 3e593b33e0ce2cba
 egui-pop-files-thumbnail-size d4377170ede303ea
 egui-pop-files-type 20c8ac126ee3b079
 egui-pop-files-unbookmark d71391bfffa763c4
@@ -1090,6 +1100,8 @@ setting-dialogs-closable.description 52ace4aa7a7b8027
 setting-dialogs-closable.label 38b89c3e7eeca6cb
 setting-dialogs-movable.description 29f0049b1a088e5d
 setting-dialogs-movable.label 94438e9752d4ed0a
+setting-files-folders-first.description 17d75c17369de475
+setting-files-folders-first.label 542f2e1e00509936
 setting-files-native.description ce2b615f40df8940
 setting-files-native.label f2b00b77262f7a75
 setting-files-preview.description 01859a4b86882382

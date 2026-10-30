@@ -809,6 +809,26 @@ egui-pop-files-view-grid = Grille
 
 egui-pop-files-thumbnail-size = Taille des vignettes
 
+egui-pop-files-column-name = Nom
+
+egui-pop-files-column-size = Taille
+
+egui-pop-files-column-modified = Modifié
+
+egui-pop-files-column-type = Type
+
+egui-pop-files-kind-folder = Dossier
+
+egui-pop-files-kind-file = Fichier
+
+egui-pop-files-sorted-up = { $column }, tri croissant
+
+egui-pop-files-sorted-down = { $column }, tri décroissant
+
+egui-pop-files-sort-ranked = Tant que le champ filtre, les meilleures correspondances viennent d’abord
+
+egui-pop-files-folders-first = Dossiers d’abord
+
 egui-pop-files-selected = Sélection : { $count }
 
 egui-pop-files-selected-not-shown = Sélection : { $count } ({ $hidden } non affichés)
@@ -1944,6 +1964,10 @@ setting-files-native =
 setting-files-preview =
     .description = Le sélecteur de fichiers d’egui-pop montre l’aperçu et les informations du fichier sélectionné à côté de la liste ; Alt+P l’affiche ou le masque.
     .label = Aperçus dans le sélecteur de fichiers
+
+setting-files-folders-first =
+    .description = Le sélecteur de fichiers d’egui-pop liste les dossiers avant les fichiers dans tous les ordres ; désactivé, ils sont triés parmi les fichiers.
+    .label = Dossiers d’abord dans le sélecteur de fichiers
 
 setting-menus-icons =
     .description = Si les menus montrent les icônes des commandes dans une colonne à leur gauche (activé), aucune (désactivé), ou suivent le bureau (plateforme : désactivé sous GNOME, comme le dit KDE Plasma, activé ailleurs).
