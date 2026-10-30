@@ -5307,11 +5307,32 @@ fn the_page_list_draws_its_bar_at_rest_in_a_short_window() {
         .filter(|r| r.width() <= 12.0 && r.height() >= 20.0)
         .collect();
     assert!(!bars.is_empty(), "no bar with no pointer over the list");
-    // It leaves the longest title alone.
-    let longest = list_entry(&h, "Node graph from a file").right();
+    // It leaves the longest title alone. A title out of view has no node,
+    // and a row reaches under the bar: measured from where the text starts.
+    let start = h
+        .output()
+        .shapes
+        .iter()
+        .find_map(|clipped| match &clipped.shape {
+            egui::Shape::Text(t) if t.galley.text() == "Tokens table" => Some(t.pos.x),
+            _ => None,
+        })
+        .expect("the entry's text");
+    let font = egui::TextStyle::Body.resolve(&h.ctx.global_style());
+    let longest = egui_pop_gallery::shell::ordered(h.state().app.handle())
+        .iter()
+        .map(|s| {
+            h.ctx.fonts_mut(|f| {
+                f.layout_no_wrap(s.title.clone(), font.clone(), egui::Color32::WHITE)
+                    .size()
+                    .x
+            })
+        })
+        .fold(0.0, f32::max);
     assert!(
-        bars.iter().all(|r| r.left() >= longest),
-        "{bars:?}, {longest}"
+        bars.iter().all(|r| r.left() >= start + longest),
+        "{bars:?}, {}",
+        start + longest
     );
     h.snapshot("pages-short-pop-dark");
 }
@@ -5320,7 +5341,8 @@ fn the_page_list_draws_its_bar_at_rest_in_a_short_window() {
 fn the_page_list_reaches_its_last_page_by_the_wheel_in_a_short_window() {
     let mut h = short_window("overview");
     let last = last_page(&h);
-    assert!(!in_list_view(&h, list_entry(&h, &last)), "cut at the start");
+    // Rows out of view are not built.
+    assert!(h.query_by_label(&last).is_none(), "cut at the start");
     let over = list_entry(&h, "Tokens table").center();
     wheel_sections(&mut h, over, -200.0);
     let entry = list_entry(&h, &last);
@@ -5350,4 +5372,134 @@ fn the_page_list_keeps_the_page_chosen_by_keys_in_view() {
     let cursors = title(&h, "cursors");
     let entry = list_entry(&h, &cursors);
     assert!(in_list_view(&h, entry), "{cursors} at {entry:?}");
+}
+
+/// How many nodes bear a page's title: its row, and its heading when shown.
+fn titled(h: &Harness<'_, Gallery>, title: &str) -> usize {
+    h.query_all_by_label(title).count()
+}
+
+#[test]
+fn the_page_list_folds_its_groups_and_remembers() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "overview"));
+    h.run();
+    assert_eq!(titled(&h, "Icons"), 1);
+    h.get_by_label("Components").click();
+    h.run();
+    assert_eq!(titled(&h, "Icons"), 0, "folded");
+    assert_eq!(titled(&h, "Tokens table"), 1, "the others stay");
+    assert_eq!(h.state().page(), StoryId::from_static("overview"));
+    h.snapshot("pages-folded-pop-dark");
+    // With the window's layout: a new window finds it folded...
+    let reopened = |page: &str, data: egui::util::IdTypeMap| {
+        let options = options("pop-dark", Density::Comfortable, page);
+        let mut h = Harness::builder()
+            .with_size(egui::vec2(1100.0, 720.0))
+            .shared_wgpu()
+            .build_eframe(move |cc| {
+                cc.egui_ctx.memory_mut(|m| m.data = data);
+                egui_pop::core::motion::freeze(&cc.egui_ctx, 0.0);
+                Gallery::from_creation_context(cc, options).expect("the gallery builds")
+            });
+        h.run();
+        h
+    };
+    let data = h.ctx.memory(|m| m.data.clone());
+    let again = reopened("overview", data.clone());
+    assert_eq!(titled(&again, "Icons"), 0);
+    assert_eq!(titled(&again, "Tokens table"), 1);
+    // ... unless it starts on a page of that group.
+    let again = reopened("icons", data);
+    assert_eq!(titled(&again, "Icons"), 2);
+    assert_eq!(titled(&again, "Menus"), 1);
+    // A click opens it again.
+    h.get_by_label("Components").click();
+    h.run();
+    assert_eq!(titled(&h, "Icons"), 1);
+}
+
+#[test]
+fn the_page_list_opens_the_group_of_the_page_shown() {
+    let mut h = short_window("overview");
+    h.get_by_label("Components").click();
+    h.run();
+    assert_eq!(titled(&h, "Icons"), 0);
+    // By a link.
+    h.state().app.handle().run(
+        egui_pop_gallery::shell::CMD_PAGE,
+        serde_json::json!({ "page": "icons" }),
+    );
+    h.run();
+    assert_eq!(titled(&h, "Icons"), 2);
+    assert!(in_list_view(&h, list_entry(&h, "Icons")));
+    // Folded by hand on its own page, it stays so...
+    h.get_by_label("Components").click();
+    h.run();
+    assert_eq!(titled(&h, "Icons"), 1, "only the page's heading");
+    h.run();
+    assert_eq!(titled(&h, "Icons"), 1);
+    // ... until the page changes: Alt+Up and Alt+Down.
+    h.key_press_modifiers(egui::Modifiers::ALT, egui::Key::ArrowDown);
+    h.run();
+    assert_eq!(h.state().page(), StoryId::from_static("indicators"));
+    assert!(in_list_view(&h, list_entry(&h, "Indicators")));
+    h.get_by_label("Components").click();
+    h.run();
+    h.key_press_modifiers(egui::Modifiers::ALT, egui::Key::ArrowUp);
+    h.run();
+    assert_eq!(h.state().page(), StoryId::from_static("icons"));
+    assert!(in_list_view(&h, list_entry(&h, "Icons")));
+}
+
+#[test]
+fn the_page_list_works_by_the_keyboard() {
+    let mut h = short_window("tokens");
+    let page = |h: &Harness<'_, Gallery>| h.state().page();
+    // A click opens a page and gives the list the keyboard.
+    h.get_by_label("Theme overview").click();
+    h.run();
+    assert_eq!(page(&h), StoryId::from_static("overview"));
+    // The arrows move the cursor, and the page stays; Enter opens.
+    h.key_press(egui::Key::ArrowDown);
+    h.run();
+    assert_eq!(page(&h), StoryId::from_static("overview"));
+    h.key_press(egui::Key::Enter);
+    h.run();
+    assert_eq!(page(&h), StoryId::from_static("tokens"));
+    assert_eq!(titled(&h, "Tokens table"), 2);
+    // Left goes to the group, then folds it; Right opens it, then goes in.
+    h.key_press(egui::Key::ArrowLeft);
+    h.run();
+    assert_eq!(titled(&h, "Theme overview"), 1, "not folded yet");
+    h.key_press(egui::Key::ArrowLeft);
+    h.run();
+    assert_eq!(titled(&h, "Theme overview"), 0, "folded");
+    assert_eq!(titled(&h, "Tokens table"), 1, "the heading alone");
+    assert_eq!(page(&h), StoryId::from_static("tokens"));
+    h.key_press(egui::Key::ArrowRight);
+    h.run();
+    assert_eq!(titled(&h, "Tokens table"), 2, "open again");
+    h.key_press(egui::Key::ArrowRight);
+    h.run();
+    h.key_press(egui::Key::Enter);
+    h.run();
+    assert_eq!(page(&h), StoryId::from_static("overview"));
+    // End goes to the last row, which comes into view.
+    h.key_press(egui::Key::End);
+    h.run();
+    let last = last_page(&h);
+    assert!(in_list_view(&h, list_entry(&h, &last)), "{last}");
+    h.key_press(egui::Key::Enter);
+    h.run();
+    assert_eq!(titled(&h, &last), 2);
+    // Letters find a row.
+    h.key_press(egui::Key::Home);
+    h.run();
+    h.event(egui::Event::Text("t".into()));
+    h.event(egui::Event::Text("o".into()));
+    h.run();
+    h.key_press(egui::Key::Enter);
+    h.run();
+    assert_eq!(page(&h), StoryId::from_static("tokens"));
+    assert!(in_list_view(&h, list_entry(&h, "Tokens table")));
 }
