@@ -14,10 +14,13 @@
 //!   thread and awaited on a thread of its own.
 //! - **The in-app picker** ([`FilePicker`]), when the feature is off, no
 //!   portal answers (no session bus), or the `files.native` setting is
-//!   off: keyboard navigation (arrows, Enter, Backspace or `Alt+Up` for
-//!   the parent folder, `Ctrl+Enter` to choose the folder or the
-//!   selection, `Ctrl+Space` to select, `Ctrl+D` to bookmark), a typed
-//!   path with completion (`Tab`), the fuzzy filter of the choice dialog,
+//!   off: a click selects and a double click or Enter opens, keyboard
+//!   navigation (arrows, Enter, Backspace or `Alt+Up` for the parent
+//!   folder, `Ctrl+Enter` to choose the folder or the selection,
+//!   `Ctrl+D` to bookmark), several files selected with `Ctrl` or `Shift`
+//!   and a click, `Shift` and the arrows, `Ctrl+Space` and `Ctrl+A`
+//!   ([`CMD_TOGGLE_SELECTION`], [`CMD_SELECT_ALL`]), a typed path with
+//!   completion (`Tab`), the fuzzy filter of the choice dialog,
 //!   the request's filters, recent places and bookmarks kept in the host
 //!   store (`settings/files.recent`, `settings/files.bookmarks`), and the
 //!   last folder per purpose (`settings/files.last_folders`).
@@ -31,8 +34,8 @@
 //!   [`Files::set_file_system`].
 //! - **Previews** come from pluggable providers ([`preview`]): plugins
 //!   register theirs with [`Files::previews`]; they are made off the
-//!   interface thread, cancelled when the selection moves, and cached.
-//!   The in-app picker shows the selected entry's preview and facts in
+//!   interface thread, cancelled when the highlight moves, and cached.
+//!   The in-app picker shows the highlighted entry's preview and facts in
 //!   a pane beside the list (`Alt+P` shows or hides it; the
 //!   `files.preview` setting remembers). Built in ([`providers`]):
 //!   images (PNG and JPEG, feature `image-previews`), text and code,
@@ -80,6 +83,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use egui::{EventFilter, Key, Modifiers, Ui, pos2, vec2};
+use egui_pop_core::a11y::{self, Politeness};
 use egui_pop_core::debug::FnCollector;
 use egui_pop_core::focus;
 use egui_pop_core::lock;
@@ -128,10 +132,20 @@ pub const CMD_NEW_FOLDER: CommandId = CommandId::from_static("file.new_folder");
 /// The answer to the question before replacing a file: the choice ends
 /// with that file (`{ "id", "path" }`).
 pub const CMD_REPLACE: CommandId = CommandId::from_static("file.replace");
+/// Every file shown in the open in-app picker is selected (Ctrl+A, choosing
+/// several files, unless the field holds a path: the key is then the field's).
+pub const CMD_SELECT_ALL: CommandId = CommandId::from_static("file.select_all");
+/// The highlighted entry of the open in-app picker is selected or unselected
+/// (Ctrl+Space, choosing several files or a folder).
+pub const CMD_TOGGLE_SELECTION: CommandId = CommandId::from_static("file.toggle_selection");
 
 /// The context key: an open in-app picker can be asked for a new folder
 /// (saving, or choosing a folder).
 const WHEN_NEW_FOLDER: &str = "filePickerNewFolder";
+/// The context key: an open in-app picker selects all its files on request.
+const WHEN_SELECT_ALL: &str = "filePickerSelectAll";
+/// The context key: an open in-app picker selects apart from its highlight.
+const WHEN_SELECTS: &str = "filePickerSelects";
 
 /// The setting: use the system's chooser when there is one.
 pub const SETTING_NATIVE: SettingId = SettingId::from_static("files.native");
@@ -402,6 +416,17 @@ struct State {
     previews: Previews,
 }
 
+impl State {
+    /// The in-app picker commands speak to: the one in a modal first.
+    fn active_picker(&mut self) -> Option<&mut FilePicker> {
+        self.open
+            .iter_mut()
+            .filter(|o| o.picker.is_some())
+            .min_by_key(|o| o.inline)
+            .and_then(|o| o.picker.as_mut())
+    }
+}
+
 /// The choices open, as a service.
 #[derive(Clone, Debug, Default)]
 pub struct Files(Arc<Mutex<State>>);
@@ -600,18 +625,29 @@ impl Files {
         })
     }
 
+    /// `file.select_all` and `file.toggle_selection`: on the open in-app
+    /// picker (the one in a modal first); gives how many are selected.
+    fn select_on(
+        &self,
+        app: &AppHandle,
+        select: impl FnOnce(&mut FilePicker) -> Result<(), String>,
+    ) -> Result<Json, String> {
+        let selected = {
+            let mut s = lock(&self.0);
+            let picker = s.active_picker().ok_or("no in-app file picker is open")?;
+            select(picker)?;
+            picker.selected.len()
+        };
+        app.egui().request_repaint();
+        Ok(json!({ "selected": selected }))
+    }
+
     /// `file.new_folder`: in the open in-app picker (the one in a modal
     /// first), asks the new folder's name, or makes it with `name`.
     fn new_folder(&self, app: &AppHandle, name: Option<&str>) -> Result<Json, String> {
         let made = {
             let mut s = lock(&self.0);
-            let picker = s
-                .open
-                .iter_mut()
-                .filter(|o| o.picker.is_some())
-                .min_by_key(|o| o.inline)
-                .and_then(|o| o.picker.as_mut())
-                .ok_or("no in-app file picker is open")?;
+            let picker = s.active_picker().ok_or("no in-app file picker is open")?;
             if picker.asking.is_some() {
                 return Err("the picker waits for its question's answer".into());
             }
@@ -947,6 +983,27 @@ impl Plugin for FilesPlugin {
         )?;
         let f = files.clone();
         ctx.command(
+            CommandSpec::new(CMD_SELECT_ALL, "Select all files", "File")
+                .description("Selects every file shown in the open in-app file picker, choosing several. Refused, the reason shown in the picker, when none is shown.")
+                .when(WHEN_SELECT_ALL)
+                .key_with("Ctrl+A", BindOptions::global().through_modal()),
+            move |call| f.select_on(call.app, FilePicker::select_all),
+        )?;
+        let f = files.clone();
+        ctx.command(
+            CommandSpec::new(CMD_TOGGLE_SELECTION, "Select or unselect the entry", "File")
+                .description("Selects or unselects the highlighted entry of the open in-app file picker, choosing several files or a folder. A folder among files is not selected: the picker says so.")
+                .when(WHEN_SELECTS)
+                .key_with("Ctrl+Space", BindOptions::global().through_modal()),
+            move |call| {
+                f.select_on(call.app, |p| {
+                    p.toggle();
+                    Ok(())
+                })
+            },
+        )?;
+        let f = files.clone();
+        ctx.command(
             CommandSpec::new(CMD_REPLACE, "Replace the file", "File")
                 .description("The answer to the question before replacing a file: ends the choice `id` with `path`.")
                 .args(json!({ "id": 1, "path": "/tmp/a.png" }))
@@ -1001,15 +1058,25 @@ fn frame(ui: &mut Ui, app: &AppHandle) {
         .get(&format!("settings/{SETTING_NATIVE}"))
         .and_then(|e| e.value.as_bool())
         .unwrap_or(false);
-    let new_folder = {
+    let (new_folder, select_all, selects) = {
         let mut s = lock(&files.0);
         s.native = native;
-        s.open
-            .iter()
-            .filter_map(|o| o.picker.as_ref())
-            .any(|p| p.makes_folders() && p.asking.is_none())
+        let any = |test: &dyn Fn(&FilePicker) -> bool| {
+            s.open
+                .iter()
+                .filter_map(|o| o.picker.as_ref())
+                .any(|p| p.asking.is_none() && test(p))
+        };
+        (
+            any(&FilePicker::makes_folders),
+            any(&|p| p.kind == ChooseKind::OpenMany && !p.is_path()),
+            any(&FilePicker::selects_apart),
+        )
     };
-    app.set_context(WHEN_NEW_FOLDER, if new_folder { "true" } else { "false" });
+    let say = |on: bool| if on { "true" } else { "false" };
+    app.set_context(WHEN_NEW_FOLDER, say(new_folder));
+    app.set_context(WHEN_SELECT_ALL, say(select_all));
+    app.set_context(WHEN_SELECTS, say(selects));
     let done: Vec<(u64, FileRequest, Answer, Option<Resolver>)> = {
         let mut s = lock(&files.0);
         let mut done = Vec::new();
@@ -1241,6 +1308,7 @@ fn load_view(app: &AppHandle, picker: &mut FilePicker) {
         picker.refocus = true;
     }
     picker.new_folder_keys = app.keys_for(&CMD_NEW_FOLDER);
+    picker.declared_keys = true;
     picker.show_preview = preview_wanted(app);
     if !picker.pane_dragging {
         picker.pane_width = pane_width(app);
@@ -1430,9 +1498,11 @@ pub struct FilePicker {
     /// The field: a filter, or a path when it holds a separator or starts
     /// with `~`.
     pub text: String,
-    /// The entry highlighted among those shown.
+    /// The entry highlighted among those shown: where the arrows are, what
+    /// the preview is of, and what Enter acts on.
     pub highlight: usize,
-    /// Files selected (choosing several).
+    /// What is selected, in the folder shown: files (choosing several), or
+    /// one folder (choosing a folder, or saving: Enter goes into it).
     pub selected: BTreeSet<PathBuf>,
     pub show_hidden: bool,
     /// The preview pane is shown (with previews, [`FilePicker::with_previews`]).
@@ -1451,6 +1521,16 @@ pub struct FilePicker {
     naming_focus: bool,
     /// The keys of the new folder command, as the button's tip says them.
     new_folder_keys: Vec<String>,
+    /// The selection's keys are commands ([`Files`] draws this picker);
+    /// drawn on its own, it has no keymap and reads them itself.
+    declared_keys: bool,
+    /// Where `Shift` extends the selection from.
+    anchor: Option<PathBuf>,
+    /// What the selection line said last: a change is announced.
+    said: Option<String>,
+    /// The list's rows as last drawn: holding the focus, they leave the
+    /// picker's keys to the picker.
+    row_ids: Vec<egui::Id>,
     /// The name proposed when saving: back when a typed name was a folder.
     proposed: String,
     /// Asks before replacing a file.
@@ -1511,6 +1591,10 @@ impl FilePicker {
             naming: None,
             naming_focus: false,
             new_folder_keys: Vec::new(),
+            declared_keys: false,
+            anchor: None,
+            said: None,
+            row_ids: Vec::new(),
             proposed,
             confirm_overwrite: request.confirm_overwrite,
             asking: None,
@@ -1545,11 +1629,13 @@ impl FilePicker {
         &self.fs
     }
 
-    /// Shows another folder.
+    /// Shows another folder; the selection stays behind.
     pub fn go(&mut self, dir: PathBuf) {
         self.dir = dir;
         self.highlight = 0;
         self.error = None;
+        self.selected.clear();
+        self.anchor = None;
         if self.kind != ChooseKind::Save {
             self.text.clear();
         }
@@ -1707,10 +1793,16 @@ impl FilePicker {
         }
     }
 
-    /// Enter: into a folder, or the choice.
+    /// Enter: into a folder, or the choice. Saving, the folder selected
+    /// goes first: otherwise the field's name is what Enter takes.
     pub fn activate(&mut self) -> Option<PickerAnswer> {
         self.error = None;
         if self.kind == ChooseKind::Save {
+            if let Some(dir) = self.selected.first().cloned() {
+                self.go(dir);
+                self.select_stem = true;
+                return None;
+            }
             return self.save();
         }
         if self.is_path() {
@@ -1927,18 +2019,7 @@ impl FilePicker {
     /// folder), the selection, or what Enter would choose.
     pub fn accept(&mut self) -> Option<PickerAnswer> {
         match self.kind {
-            ChooseKind::Folder => {
-                let dir = if self.is_path() && self.fs.is_dir(&self.typed_path()) {
-                    self.typed_path()
-                } else {
-                    let shown = self.visible();
-                    match shown.get(self.highlight) {
-                        Some(e) if !self.text.trim().is_empty() => e.path.clone(),
-                        _ => self.dir.clone(),
-                    }
-                };
-                Some(PickerAnswer::Chosen(vec![dir]))
-            }
+            ChooseKind::Folder => Some(PickerAnswer::Chosen(vec![self.folder_choice()])),
             ChooseKind::OpenMany if !self.selected.is_empty() => Some(PickerAnswer::Chosen(
                 self.selected.iter().cloned().collect(),
             )),
@@ -1946,16 +2027,191 @@ impl FilePicker {
         }
     }
 
-    /// Selects or unselects the highlighted file (choosing several).
-    pub fn toggle(&mut self) {
-        if self.kind != ChooseKind::OpenMany {
-            return;
+    /// What choosing a folder takes now: a typed folder, the folder selected,
+    /// the entry the filter leaves highlighted, else the folder shown.
+    fn folder_choice(&mut self) -> PathBuf {
+        if self.is_path() && self.fs.is_dir(&self.typed_path()) {
+            return self.typed_path();
         }
-        let shown = self.visible();
-        if let Some(e) = shown.get(self.highlight).filter(|e| !e.is_dir)
-            && !self.selected.remove(&e.path)
+        if let Some(selected) = self.selected.first() {
+            return selected.clone();
+        }
+        if !self.text.trim().is_empty()
+            && let Some(e) = self.visible().get(self.highlight)
         {
-            self.selected.insert(e.path.clone());
+            return e.path.clone();
+        }
+        self.dir.clone()
+    }
+
+    /// Selects or unselects the highlighted entry: a file choosing several (a
+    /// folder is refused, the reason in [`error`](Self::error)), a folder
+    /// choosing one. Does nothing in the other kinds, which have no key for it.
+    pub fn toggle(&mut self) {
+        self.error = None;
+        let shown = self.visible();
+        if let Some(e) = shown.get(self.highlight) {
+            self.toggle_entry(e);
+        }
+    }
+
+    /// See [`toggle`](Self::toggle).
+    fn toggle_entry(&mut self, e: &Entry) {
+        match self.kind {
+            ChooseKind::OpenMany if e.is_dir => {
+                self.error = Some(self.say(&txt::FILES_SELECT_FOLDER, &[("name", &e.name)]));
+            }
+            ChooseKind::OpenMany => {
+                if !self.selected.remove(&e.path) {
+                    self.selected.insert(e.path.clone());
+                }
+                self.anchor = Some(e.path.clone());
+            }
+            ChooseKind::Folder => {
+                let was = self.selected.contains(&e.path);
+                self.selected.clear();
+                if !was {
+                    self.selected.insert(e.path.clone());
+                }
+            }
+            ChooseKind::Open | ChooseKind::Save => {}
+        }
+    }
+
+    /// Selects every file shown (choosing several). None to select is a
+    /// refusal: the reason is the picker's error, and the result.
+    pub fn select_all(&mut self) -> Result<(), String> {
+        self.error = None;
+        if self.kind != ChooseKind::OpenMany {
+            return Err("selecting all is offered when choosing several files".into());
+        }
+        let files: Vec<PathBuf> = self
+            .visible()
+            .into_iter()
+            .filter(|e| !e.is_dir)
+            .map(|e| e.path)
+            .collect();
+        if files.is_empty() {
+            let reason = self.say(&txt::FILES_SELECT_ALL_NONE, &[]);
+            self.error = Some(reason.clone());
+            return Err(reason);
+        }
+        self.selected.extend(files);
+        Ok(())
+    }
+
+    /// Whether a selection exists apart from the highlight: several files, or
+    /// the folder to choose, where the list opens with nothing selected.
+    fn selects_apart(&self) -> bool {
+        matches!(self.kind, ChooseKind::OpenMany | ChooseKind::Folder)
+    }
+
+    /// The highlight goes to the `to`th entry shown, from the arrows or Tab:
+    /// choosing several, it extends the selection with `extend`; choosing a
+    /// folder, or saving, it selects the folder it lands on.
+    fn move_highlight(&mut self, to: usize, shown: &[Entry], extend: bool) {
+        let Some(e) = shown.get(to) else {
+            return;
+        };
+        self.error = None;
+        let from = std::mem::replace(&mut self.highlight, to);
+        match self.kind {
+            ChooseKind::OpenMany if extend => self.extend_selection(from, to, shown),
+            ChooseKind::OpenMany => self.anchor = Some(e.path.clone()),
+            ChooseKind::Folder | ChooseKind::Save => {
+                self.selected.clear();
+                if e.is_dir {
+                    self.selected.insert(e.path.clone());
+                }
+            }
+            ChooseKind::Open => {}
+        }
+    }
+
+    /// The files between the anchor (else `from`) and `to`, as the selection.
+    fn extend_selection(&mut self, from: usize, to: usize, shown: &[Entry]) {
+        let anchor = self
+            .anchor
+            .as_ref()
+            .and_then(|a| shown.iter().position(|e| &e.path == a))
+            .unwrap_or(from);
+        self.anchor = shown.get(anchor).map(|e| e.path.clone());
+        self.selected = shown[anchor.min(to)..=anchor.max(to)]
+            .iter()
+            .filter(|e| !e.is_dir)
+            .map(|e| e.path.clone())
+            .collect();
+    }
+
+    /// A click on the `n`th entry shown, with these modifiers. It selects; it
+    /// does not open.
+    fn click_entry(&mut self, n: usize, shown: &[Entry], modifiers: Modifiers) {
+        let Some(e) = shown.get(n) else {
+            return;
+        };
+        self.error = None;
+        let from = std::mem::replace(&mut self.highlight, n);
+        match self.kind {
+            ChooseKind::OpenMany if modifiers.shift => self.extend_selection(from, n, shown),
+            ChooseKind::Folder | ChooseKind::OpenMany if modifiers.command => self.toggle_entry(e),
+            ChooseKind::OpenMany => {
+                self.selected.clear();
+                if !e.is_dir {
+                    self.selected.insert(e.path.clone());
+                }
+                self.anchor = Some(e.path.clone());
+            }
+            ChooseKind::Folder => {
+                self.selected.clear();
+                self.selected.insert(e.path.clone());
+            }
+            ChooseKind::Save => {
+                self.selected.clear();
+                if e.is_dir {
+                    self.selected.insert(e.path.clone());
+                } else {
+                    self.text = e.name.clone();
+                    self.select_stem = true;
+                }
+            }
+            ChooseKind::Open => {}
+        }
+    }
+
+    /// The line under the list, and what is announced when it changes: the
+    /// count of files selected, or what the folder selected means.
+    fn selection_line(&mut self) -> Option<String> {
+        match self.kind {
+            ChooseKind::OpenMany => {
+                let shown = self.visible();
+                let total = self.selected.len();
+                let hidden = self
+                    .selected
+                    .iter()
+                    .filter(|p| !shown.iter().any(|e| &&e.path == p))
+                    .count();
+                let (count, not_shown) = (total.to_string(), hidden.to_string());
+                let args = [("count", count.as_str()), ("hidden", not_shown.as_str())];
+                Some(match (total, hidden) {
+                    (0, _) => self.say(&txt::FILES_SELECTED_NONE, &[]),
+                    (_, 0) => self.say(&txt::FILES_SELECTED, &args),
+                    _ => self.say(&txt::FILES_SELECTED_NOT_SHOWN, &args),
+                })
+            }
+            ChooseKind::Folder => {
+                let choice = self.folder_choice();
+                let name = choice.file_name().map_or_else(
+                    || choice.display().to_string(),
+                    |n| n.to_string_lossy().into_owned(),
+                );
+                let key = if choice == self.dir {
+                    &txt::FILES_FOLDER_SHOWN
+                } else {
+                    &txt::FILES_FOLDER_SELECTED
+                };
+                Some(self.say(key, &[("name", &name)]))
+            }
+            ChooseKind::Open | ChooseKind::Save => None,
         }
     }
 
@@ -2009,7 +2265,10 @@ impl FilePicker {
         // The plain keys go to whichever widget Tab took the focus to
         // (the splitter's arrows, a button's Enter); else they are the
         // field's and the list's.
-        let elsewhere = !first && ui.memory(|m| m.focused()).is_some_and(|f| f != field_id);
+        let elsewhere = !first
+            && ui
+                .memory(|m| m.focused())
+                .is_some_and(|f| f != field_id && !self.row_ids.contains(&f));
         // Keys taken before the field sees them. Tab completes a path;
         // out of a path, it goes to the next widget.
         let empty = self.text.is_empty();
@@ -2018,10 +2277,13 @@ impl FilePicker {
             // First: egui matches a key asked without Alt with Alt held too,
             // so the plain Up below would take it.
             let alt_up = i.consume_key(Modifiers::ALT, Key::ArrowUp);
+            // Shift too, for the same reason.
+            let shift_down = !elsewhere && i.consume_key(Modifiers::SHIFT, Key::ArrowDown);
+            let shift_up = !elsewhere && i.consume_key(Modifiers::SHIFT, Key::ArrowUp);
             let mut plain = |key| !elsewhere && i.consume_key(Modifiers::NONE, key);
             let (down, up, enter) = (
-                plain(Key::ArrowDown),
-                plain(Key::ArrowUp),
+                shift_down || plain(Key::ArrowDown),
+                shift_up || plain(Key::ArrowUp),
                 plain(Key::Enter),
             );
             let tab = path && plain(Key::Tab);
@@ -2029,18 +2291,33 @@ impl FilePicker {
             (
                 down,
                 up,
+                shift_down || shift_up,
                 enter,
                 i.consume_key(Modifiers::COMMAND, Key::Enter),
                 tab,
                 alt_up || backspace,
-                i.consume_key(Modifiers::COMMAND, Key::Space),
                 i.consume_key(Modifiers::COMMAND, Key::D),
             )
         };
-        let (down, up, enter, accept, tab, parent, toggle, bookmark) = if waiting {
+        let (down, up, extend, enter, accept, tab, parent, bookmark) = if waiting {
             Default::default()
         } else {
             ui.input_mut(keys)
+        };
+        // Drawn on its own, the picker has no keymap for these.
+        let (toggle, select_all) = if waiting || self.declared_keys {
+            (false, false)
+        } else {
+            let (selects, all) = (
+                self.selects_apart(),
+                self.kind == ChooseKind::OpenMany && !path,
+            );
+            ui.input_mut(|i| {
+                (
+                    selects && i.consume_key(Modifiers::COMMAND, Key::Space),
+                    all && i.consume_key(Modifiers::COMMAND, Key::A),
+                )
+            })
         };
         // Alt+P, as the preview pane of the Windows file explorer.
         if !waiting
@@ -2133,6 +2410,11 @@ impl FilePicker {
         if field.changed() {
             self.highlight = 0;
             self.error = None;
+            // Typing says what is meant now: a name, or a filter's first match.
+            // Files selected stay, and the line under the list counts them.
+            if self.kind != ChooseKind::OpenMany {
+                self.selected.clear();
+            }
         }
         if tab && self.complete() {
             self.highlight = 0;
@@ -2155,11 +2437,17 @@ impl FilePicker {
             });
         }
         let shown = self.visible();
-        if down {
-            self.highlight = (self.highlight + 1).min(shown.len().saturating_sub(1));
-        }
-        if up {
-            self.highlight = self.highlight.saturating_sub(1);
+        if down || up {
+            // Choosing a folder the list opens with nothing selected: the first
+            // press selects the entry highlighted, rather than the one after it.
+            let to = if self.kind == ChooseKind::Folder && self.selected.is_empty() {
+                self.highlight
+            } else if down {
+                (self.highlight + 1).min(shown.len().saturating_sub(1))
+            } else {
+                self.highlight.saturating_sub(1)
+            };
+            self.move_highlight(to, &shown, extend);
         }
         ui.add_space(t.space.s);
         let list_height = if self.fill {
@@ -2244,32 +2532,47 @@ impl FilePicker {
                         // laid out left to right).
                         ui.set_width(ui.available_width());
                         ui.with_layout(egui::Layout::top_down_justified(egui::Align::Min), |ui| {
+                            let apart = self.selects_apart();
+                            let pointer =
+                                ui.input(|i| i.pointer.any_down() || i.pointer.any_released());
+                            let modifiers = ui.input(|i| i.modifiers);
+                            self.row_ids.clear();
                             for (n, e) in shown.iter().enumerate() {
                                 let label = if e.is_dir {
                                     format!("{}/", e.name)
                                 } else {
                                     e.name.clone()
                                 };
-                                // Selected files (choosing several) show as the
-                                // highlighted one does.
-                                let on = n == self.highlight || self.selected.contains(&e.path);
+                                // Where a selection exists apart from the
+                                // highlight, a ring says where the highlight is.
+                                let selected = self.selected.contains(&e.path);
+                                let highlighted = n == self.highlight;
+                                let on = selected || (highlighted && !apart);
                                 let r = widgets::selectable_label(ui, on, label);
-                                if n == self.highlight && (down || up) {
+                                if apart && highlighted {
+                                    ui.painter().rect_stroke(
+                                        r.rect,
+                                        t.radius.widget,
+                                        egui::Stroke::new(1.0, t.focus_ring),
+                                        egui::StrokeKind::Inside,
+                                    );
+                                }
+                                self.row_ids.push(r.id);
+                                // Tab through the rows moves the highlight too.
+                                let tabbed = r.gained_focus() && !pointer;
+                                if tabbed {
+                                    self.move_highlight(n, &shown, false);
+                                }
+                                if n == self.highlight && (down || up || tabbed) {
                                     r.scroll_to_me(None);
                                 }
-                                if r.double_clicked() {
-                                    self.highlight = n;
+                                if r.double_clicked() && !modifiers.command && !modifiers.shift {
+                                    self.click_entry(n, &shown, Modifiers::NONE);
                                     answer = answer.take().or_else(|| self.activate());
                                 } else if r.clicked() {
-                                    self.highlight = n;
-                                    if e.is_dir {
-                                        self.go(e.path.clone());
-                                    } else if self.kind == ChooseKind::OpenMany {
-                                        self.toggle();
-                                    } else if self.kind == ChooseKind::Save {
-                                        self.text = e.name.clone();
-                                        self.select_stem = true;
-                                    }
+                                    self.click_entry(n, &shown, modifiers);
+                                    // By the pointer: the keys go on as before.
+                                    self.refocus |= pointer;
                                 }
                             }
                             if shown.is_empty() {
@@ -2294,6 +2597,10 @@ impl FilePicker {
         if toggle {
             self.toggle();
         }
+        if select_all {
+            // A refusal is the picker's error, shown below the list.
+            let _ = self.select_all();
+        }
         if enter && answer.is_none() {
             answer = self.activate();
         }
@@ -2303,6 +2610,17 @@ impl FilePicker {
         let footer_top = ui.cursor().min.y;
         if let Some(e) = &self.error {
             ui.colored_label(t.status.danger, e);
+        }
+        let line = self.selection_line();
+        if let Some(line) = &line {
+            ui.label(line);
+        }
+        if self.said != line {
+            // Not what it says on opening: that is no change.
+            if let (Some(_), Some(line)) = (&self.said, &line) {
+                a11y::announce(ui.ctx(), line, Politeness::Polite);
+            }
+            self.said = line;
         }
         ui.add_space(t.space.m);
         ui.horizontal(|ui| {
@@ -2351,6 +2669,8 @@ impl FilePicker {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let verb = match self.kind {
                     ChooseKind::Open | ChooseKind::OpenMany => &txt::FILES_OPEN,
+                    // What it does now: it goes into the folder selected.
+                    ChooseKind::Save if !self.selected.is_empty() => &txt::FILES_OPEN,
                     ChooseKind::Save => &txt::FILES_SAVE,
                     ChooseKind::Folder => &txt::PICKER_CHOOSE_FOLDER,
                 };

@@ -363,6 +363,38 @@ pub const FILES_REPLACE_NO_DIALOGS: StrKey = StrKey::new(
     "egui-pop-files-replace-no-dialogs",
     "{ $name } already exists, and no dialog can ask whether to replace it: choose another name",
 );
+/// The count of files selected, choosing several.
+pub const FILES_SELECTED: StrKey = StrKey::new("egui-pop-files-selected", "Selected: { $count }");
+/// The same, some of them hidden now by the filter.
+pub const FILES_SELECTED_NOT_SHOWN: StrKey = StrKey::new(
+    "egui-pop-files-selected-not-shown",
+    "Selected: { $count } ({ $hidden } not shown)",
+);
+/// Choosing several, before anything is selected.
+pub const FILES_SELECTED_NONE: StrKey = StrKey::new(
+    "egui-pop-files-selected-none",
+    "Nothing selected: Enter or the button acts on the highlighted entry",
+);
+/// Why a folder is not selected, choosing several files.
+pub const FILES_SELECT_FOLDER: StrKey = StrKey::new(
+    "egui-pop-files-select-folder",
+    "{ $name } is a folder: it is not selected with the files, Enter goes into it",
+);
+/// Why selecting all did nothing.
+pub const FILES_SELECT_ALL_NONE: StrKey = StrKey::new(
+    "egui-pop-files-select-all-none",
+    "No file is shown to select",
+);
+/// Choosing a folder: what selecting one means.
+pub const FILES_FOLDER_SELECTED: StrKey = StrKey::new(
+    "egui-pop-files-folder-selected",
+    "Selected: { $name }. The button chooses it, Enter goes into it",
+);
+/// Choosing a folder, before anything is selected.
+pub const FILES_FOLDER_SHOWN: StrKey = StrKey::new(
+    "egui-pop-files-folder-shown",
+    "Nothing selected: the button chooses the folder shown, { $name }",
+);
 pub const FILES_PREVIEW: StrKey = StrKey::new("egui-pop-files-preview", "Preview");
 pub const FILES_PREVIEW_RESIZE: StrKey =
     StrKey::new("egui-pop-files-preview-resize", "Resize the preview");
@@ -1232,6 +1264,13 @@ pub const ALL: &[StrKey] = &[
     FILES_REPLACE_NO_DIALOGS,
     FILES_PREVIEW,
     FILES_PREVIEW_RESIZE,
+    FILES_SELECTED,
+    FILES_SELECTED_NOT_SHOWN,
+    FILES_SELECTED_NONE,
+    FILES_SELECT_FOLDER,
+    FILES_SELECT_ALL_NONE,
+    FILES_FOLDER_SELECTED,
+    FILES_FOLDER_SHOWN,
     FILES_PREVIEW_LOADING,
     FILES_PREVIEW_NONE,
     FILES_PREVIEW_FAILED,

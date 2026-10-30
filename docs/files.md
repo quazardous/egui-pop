@@ -96,12 +96,48 @@ which swaps the first two (`SetFolder`).
 - The field filters the folder with the fuzzy filter the choice dialog
   uses; with a `/` (or starting with `~`) it is a path, and `Tab`
   completes it.
-- Arrows move, Enter enters a folder or chooses a file; Backspace in an
-  empty field or `Alt+Up` goes to the parent folder; `Ctrl+Enter`
-  chooses the folder (choosing a folder) or the selection;
-  `Ctrl+Space` selects a file (choosing several); `Ctrl+D` bookmarks the
-  folder; Escape cancels (from the field, the first Escape lets go of
-  the focus, as everywhere in egui-pop).
+- A click selects; a double click or Enter opens: Enter on a folder goes
+  into it, on a file chooses it. A click no longer enters a folder, so a
+  mis-click navigates nowhere. `Ctrl` is Cmd on macOS, here as in the keymap.
+- Arrows move the highlight (what the preview is of, and what Enter acts
+  on); Backspace in an empty field or `Alt+Up` goes to the parent folder;
+  `Ctrl+Enter` chooses the folder (choosing a folder) or the selection;
+  `Ctrl+D` bookmarks the folder; Escape cancels (from the field, the first
+  Escape lets go of the focus, as everywhere in egui-pop).
+- The field keeps the keyboard: a click on a row gives it back, so typing
+  goes on filtering. Tab goes on to the rows: a row holding the focus moves
+  the highlight there, Space clicks it, and Enter and the arrows work from it
+  as from the field.
+- **Several files** (`FileRequest::open_many` only). A click selects that
+  file alone; `Ctrl`+click adds or takes one away; `Shift`+click and
+  `Shift`+arrows select from the last one clicked or moved to, as a range;
+  `Ctrl+Space` selects or unselects the highlighted file; `Ctrl+A` selects
+  every file shown. Plain arrows leave the selection as it is, for
+  `Ctrl+Space` further on. Selected rows are filled and a ring marks the
+  highlight, which is a separate thing here. A line under the list counts the
+  selection (`Selected: 3`, or `Selected: 3 (2 not shown)` when the filter
+  hides some, which stay selected), and each change is announced to screen
+  readers. With nothing selected, it says that Enter or the button acts on
+  the highlighted entry.
+  - Enter or the button then takes the selection, wherever the highlight is
+    among files. On a folder Enter goes into it, and going to another folder
+    leaves the selection behind, so nothing is chosen unseen. A double click
+    opens that file alone.
+  - A folder is not selected with the files: `Ctrl`+click or `Ctrl+Space` on
+    one says so in the picker, and a range leaves folders out. `Ctrl+A` with
+    no file shown says that too. In a typed path, `Ctrl+A` is the field's.
+  - `file.select_all` (Ctrl+A) and `file.toggle_selection` (Ctrl+Space) are
+    commands: rebindable, and only bound while a picker offers them
+    (`filePickerSelectAll`, `filePickerSelects`), so `Ctrl+A` selects the
+    field's text in any other request.
+- **One file.** Modifiers add nothing: any click or arrow moves the single
+  highlight, which is the selection.
+- **Choosing a folder.** Nothing is selected at first and the line under the
+  list says what the button takes: the folder shown. A click or an arrow
+  selects a folder in the list, and the line says the button now chooses it
+  and Enter goes into it; `Ctrl`+click or `Ctrl+Space` unselects it. The change
+  is announced. Typing a filter drops the selection for the filter's first
+  match.
 - Beside the list, a preview pane: the highlighted entry's preview
   (below) and its facts: a file's size and modification time (in UTC),
   a folder's items, dimensions, pages, and the provider's own. `Alt+P` (as in
@@ -134,6 +170,10 @@ which swaps the first two (`SetFolder`).
 
 ### Saving
 
+- **A folder in the list.** A click or an arrow selects it: Enter, and the
+  button, which reads Open then, go into it, the name kept. Typing in the field
+  takes the selection back, and Enter saves. A click on a file puts its name in
+  the field; an arrow onto a file leaves the name alone.
 - **The name.** The field proposes the request's name with its stem
   selected, whenever the field gets the focus: typing replaces the name
   and keeps the extension. A click in the field places the cursor as
@@ -187,7 +227,9 @@ which swaps the first two (`SetFolder`).
   command and the folder is made at once.
 
 `FilePicker` is usable on its own, in any `Ui`: its list is
-`LIST_HEIGHT` (280) high, or takes the height left with `fill`. A
+`LIST_HEIGHT` (280) high, or takes the height left with `fill`. With no
+keymap to go through, it reads `Ctrl+A` and `Ctrl+Space` itself, and they do
+not rebind. A
 modal of your own that the person resizes is
 `OverlaySpec::resizable` (`overlay` module).
 
@@ -324,7 +366,9 @@ field and entries, and answers a choice (`answer`).
 The commands `file.new_folder` (`{ "name" }`, optional) and
 `file.replace` (`{ "id", "path" }`, hidden) are the picker's new folder and
 the yes to its question. The `when` key `filePickerNewFolder` says that an
-open picker offers a new folder.
+open picker offers a new folder. `file.select_all` and
+`file.toggle_selection` answer `{ "selected": n }`, and the `files` collector
+lists the picker's `selected`.
 
 The gallery's `files` page opens each kind of choice in a demo folder
 whose files are made by code at start (the repository holds no binary
