@@ -2725,19 +2725,16 @@ fn the_files_page_chooses_with_the_in_app_picker() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "files"));
     h.run();
     h.get_by_label("Open an image…").click();
-    h.run();
-    h.run();
+    settle_picker(&mut h);
     assert!(h.query_by_label("harbour.png").is_some());
     assert!(h.query_by_label("notes.txt").is_none(), "filtered out");
     // The preview pane shows the highlighted entry's once it is made.
-    run_until(&mut h, |h| preview_state(h) != "loading");
     h.snapshot("files-pop-dark");
     h.get_by_label("Filter, or type a path").type_text("light");
-    // The preview's arrival repaints, on its own thread's time.
-    let _ = h.run_ok();
+    settle_picker(&mut h);
     h.key_press(egui::Key::Enter);
     for _ in 0..4 {
-        h.run();
+        settle_picker(&mut h);
     }
     assert!(
         h.query_by_label("Last choice: Photos/lighthouse.jpg")
@@ -2754,29 +2751,27 @@ fn the_files_page_resizes_the_picker() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "files"));
     h.run();
     h.get_by_label("Open an image…").click();
-    h.run();
-    h.run();
-    run_until(&mut h, |h| preview_state(h) != "loading");
+    settle_picker(&mut h);
     // A narrower pane beside the list, by the keyboard.
     h.get_by_role_and_label(Role::Splitter, "Resize the preview")
         .focus();
-    h.run();
+    settle_picker(&mut h);
     for _ in 0..2 {
         h.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::ArrowRight);
-        h.run();
+        settle_picker(&mut h);
     }
     // A smaller dialog, by its corner handle.
     h.get_by_role_and_label(Role::Splitter, "Resize Open an image")
         .focus();
-    h.run();
+    settle_picker(&mut h);
     for _ in 0..2 {
         h.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::ArrowLeft);
-        h.run();
+        settle_picker(&mut h);
         h.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::ArrowUp);
-        h.run();
+        settle_picker(&mut h);
     }
-    run_until(&mut h, |h| preview_state(h) != "loading");
-    h.run();
+    settle_picker(&mut h);
+    egui_pop_test::assert_all_named(&h);
     h.snapshot("files-resized-pop-dark");
 }
 
@@ -2787,12 +2782,9 @@ fn the_files_page_previews_the_highlighted_file() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "files"));
     h.run();
     h.get_by_label("Open an image…").click();
-    h.run();
-    h.run();
+    settle_picker(&mut h);
     h.get_by_label("Filter, or type a path").type_text("harb");
-    let _ = h.run_ok();
-    run_until(&mut h, |h| preview_state(h) == "ready");
-    h.run();
+    settle_picker(&mut h);
     let preview =
         || h.state().app.handle().debug_snapshot()["files"]["open"][0]["picker"]["preview"].clone();
     assert_eq!(preview()["provider"], "egui_pop.images", "{}", preview());
@@ -2801,14 +2793,13 @@ fn the_files_page_previews_the_highlighted_file() {
     h.snapshot("files-preview-pop-dark");
     // Alt+P hides the pane, and the setting remembers; again shows it.
     h.key_press_modifiers(egui::Modifiers::ALT, egui::Key::P);
-    let _ = h.run_ok();
-    let _ = h.run_ok();
+    settle_picker(&mut h);
     assert!(h.query_by_label("Dimensions").is_none());
     assert!(!egui_pop::api::files::preview_wanted(
         h.state().app.handle()
     ));
     h.key_press_modifiers(egui::Modifiers::ALT, egui::Key::P);
-    h.run();
+    settle_picker(&mut h);
     run_until(&mut h, |h| h.query_by_label("Dimensions").is_some());
     assert!(egui_pop::api::files::preview_wanted(h.state().app.handle()));
     // An agent reads the same metadata.
@@ -2838,6 +2829,22 @@ fn the_files_page_previews_the_highlighted_file() {
     assert_eq!(out["kind"], "folder", "{out}");
     assert_eq!(out["folders"], 2);
     assert_eq!(out["thumbnails"], 2);
+}
+
+/// Frames until no frame asks for another at once and the picker's preview
+/// is done. The preview's worker repaints on its own thread's time, and that
+/// stacks on the repaints of the frames around it, so `Harness::run` and its
+/// cap on the steps of one run would fail or not depending on the machine's
+/// load.
+fn settle_picker(h: &mut Harness<'_, Gallery>) {
+    for _ in 0..500 {
+        let quiet = h.try_run().is_ok();
+        if quiet && preview_state(h) != "loading" {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    panic!("the picker did not settle");
 }
 
 /// The state of the open picker's preview (`none` without one).

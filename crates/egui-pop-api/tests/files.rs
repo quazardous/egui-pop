@@ -47,20 +47,47 @@ fn harness(extra: Option<Box<dyn Plugin>>) -> Harness<'static, App> {
         .build_ui_state(|ui, app: &mut App| app.show(ui), app)
 }
 
+/// Frames until the picker has settled: no frame asks for another at once,
+/// the open dialog (placed once its size is known) has stopped moving, and
+/// the highlighted entry's preview is done. The preview's worker repaints on
+/// its own thread's time, and that stacks on the repaints of the frames around
+/// it (the opening's, a text cursor's blink), so `Harness::run` and its cap on
+/// the steps of one run would fail or not depending on the machine's load.
+fn settle(h: &mut Harness<'static, App>) {
+    let rect = |h: &Harness<'static, App>| {
+        let app = h.state().handle().clone();
+        let id = *app.service(&FILES)?.open_ids().first()?;
+        let modal = egui::Id::new(("egui_pop.files", id));
+        h.ctx.memory(|m| m.area_rect(modal))
+    };
+    let mut placed = rect(h);
+    for _ in 0..500 {
+        let quiet = h.try_run().is_ok();
+        let now = rect(h);
+        let snapshot = h.state().handle().debug_snapshot();
+        let loading = snapshot["files"]["open"][0]["picker"]["preview"]["state"] == "loading";
+        if quiet && now == placed && !loading {
+            return;
+        }
+        placed = now;
+        if loading {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    }
+    panic!("the picker did not settle");
+}
+
 fn choose(h: &mut Harness<'static, App>, request: FileRequest) -> Pending {
     let app = h.state().handle().clone();
     let f = app.service(&FILES).unwrap();
     let p = f.choose(&app, request);
-    // A modal is placed once its size is known: a few frames.
-    for _ in 0..3 {
-        h.run();
-    }
+    settle(h);
     p
 }
 
 fn result(h: &mut Harness<'static, App>, p: &Pending) -> Result<Chosen, String> {
     for _ in 0..4 {
-        h.run();
+        settle(h);
         if let Some(r) = p.take() {
             return files::chosen(&r);
         }
@@ -70,12 +97,12 @@ fn result(h: &mut Harness<'static, App>, p: &Pending) -> Result<Chosen, String> 
 
 fn key(h: &mut Harness<'static, App>, key: Key, modifiers: Modifiers) {
     h.key_press_modifiers(modifiers, key);
-    h.run();
+    settle(h);
 }
 
 fn type_in(h: &mut Harness<'static, App>, text: &str) {
     h.get_by_label("Filter, or type a path").type_text(text);
-    h.run();
+    settle(h);
 }
 
 #[test]
@@ -156,12 +183,12 @@ fn bookmarks_are_kept_and_listed() {
         files::bookmarks(h.state().handle()),
         vec![root.join("photos")]
     );
-    h.run();
+    settle(&mut h);
     assert!(h.query_by_label("Remove the bookmark").is_some());
     // The place takes back to the folder from elsewhere.
     key(&mut h, Key::ArrowUp, Modifiers::ALT);
     h.get_by_label("photos").click();
-    h.run();
+    settle(&mut h);
     let f = h.state().handle().service(&FILES).unwrap();
     assert_eq!(f.picker(f.open_ids()[0]).unwrap().dir, root.join("photos"));
     let _ = std::fs::remove_dir_all(root);
@@ -238,17 +265,17 @@ fn a_click_highlights_a_double_click_chooses() {
         FileRequest::open("Open").directory(root.join("photos")),
     );
     h.get_by_label("b.jpg").click();
-    h.run();
+    settle(&mut h);
     let f = h.state().handle().service(&FILES).unwrap();
     assert_eq!(f.picker(f.open_ids()[0]).unwrap().highlight, 2);
     h.get_by_label("2026/").click();
-    h.run();
+    settle(&mut h);
     assert_eq!(
         f.picker(f.open_ids()[0]).unwrap().dir,
         root.join("photos/2026")
     );
     h.get_by_label("Up").click();
-    h.run();
+    settle(&mut h);
     double_click(&mut h, "a.png");
     assert_eq!(
         result(&mut h, &p),
@@ -269,7 +296,7 @@ fn the_preview_pane_keeps_the_dialog_s_size() {
     let measure = |h: &mut Harness<'static, App>, on: bool| {
         files::want_preview(&app, on);
         for _ in 0..3 {
-            h.run();
+            settle(h);
         }
         let dialog = h.ctx.memory(|m| m.area_rect(modal)).unwrap().width();
         let row = h.get_by_label("photos/").rect().width();
@@ -313,15 +340,15 @@ fn dialog(h: &Harness<'static, App>) -> egui::Rect {
 /// Drags from a point by so much, and lets go.
 fn drag(h: &mut Harness<'static, App>, from: egui::Pos2, by: egui::Vec2) {
     h.hover_at(from);
-    h.run();
+    settle(h);
     h.drag_at(from);
-    h.run();
+    settle(h);
     for i in 1..=4 {
         h.hover_at(from + by * (i as f32 / 4.0));
-        h.run();
+        settle(h);
     }
     h.drop_at(from + by);
-    h.run();
+    settle(h);
 }
 
 fn pane_value(h: &Harness<'static, App>) -> f64 {
@@ -371,7 +398,7 @@ fn a_resized_dialog_is_kept_for_the_next_picker() {
     key(&mut h, Key::Escape, Modifiers::NONE);
     key(&mut h, Key::Escape, Modifiers::NONE);
     for _ in 0..3 {
-        h.run();
+        settle(&mut h);
     }
     assert!(app.service(&FILES).unwrap().open_ids().is_empty());
     let _p = choose(&mut h, FileRequest::open("Open").directory(&root));
@@ -418,7 +445,7 @@ fn the_window_holds_the_dialog_and_a_size_that_no_longer_fits_is_reset() {
     // is not forgotten.
     h.set_size(egui::vec2(640.0, 480.0));
     for _ in 0..3 {
-        h.run();
+        settle(&mut h);
     }
     assert!(
         h.ctx.content_rect().contains_rect(dialog(&h)),
@@ -428,17 +455,17 @@ fn the_window_holds_the_dialog_and_a_size_that_no_longer_fits_is_reset() {
     assert_eq!(files::dialog_size(&app), egui::vec2(1100.0, 700.0));
     h.set_size(egui::vec2(1280.0, 800.0));
     for _ in 0..3 {
-        h.run();
+        settle(&mut h);
     }
     assert_eq!(dialog(&h).size(), big.size());
     // Opening in a window too small for it: back to the default.
     key(&mut h, Key::Escape, Modifiers::NONE);
     key(&mut h, Key::Escape, Modifiers::NONE);
     for _ in 0..3 {
-        h.run();
+        settle(&mut h);
     }
     h.set_size(egui::vec2(640.0, 480.0));
-    h.run();
+    settle(&mut h);
     let _p = choose(&mut h, FileRequest::open("Open").directory(&root));
     assert!(
         h.ctx.content_rect().contains_rect(dialog(&h)),
@@ -492,7 +519,7 @@ fn the_splitter_moves_within_its_limits_and_is_kept() {
             }
         }
     }
-    h.run();
+    settle(&mut h);
     assert_eq!(pane_value(&h), f64::from(files::preview::PANE_WIDTH));
     assert_eq!(files::pane_width(&app), files::preview::PANE_WIDTH);
     // Another width is there for the next picker.
@@ -500,7 +527,7 @@ fn the_splitter_moves_within_its_limits_and_is_kept() {
     key(&mut h, Key::Escape, Modifiers::NONE);
     key(&mut h, Key::Escape, Modifiers::NONE);
     for _ in 0..3 {
-        h.run();
+        settle(&mut h);
     }
     let _p = choose(&mut h, FileRequest::open("Open").directory(&root));
     assert_eq!(pane_value(&h), 300.0);
@@ -521,7 +548,7 @@ fn tab_reaches_the_splitter_and_the_arrows_move_it() {
     let mut presses = 0;
     while !focused(&h) && presses < 6 {
         key(&mut h, Key::Tab, Modifiers::NONE);
-        h.run();
+        settle(&mut h);
         presses += 1;
     }
     assert!(focused(&h), "not reached in {presses} presses");
@@ -559,10 +586,10 @@ fn the_corner_handle_resizes_with_the_arrows() {
     let before = files::dialog_size(&app);
     h.get_by_role_and_label(Role::Splitter, "Resize Open")
         .focus();
-    h.run();
+    settle(&mut h);
     key(&mut h, Key::ArrowRight, Modifiers::NONE);
     key(&mut h, Key::ArrowDown, Modifiers::NONE);
-    h.run();
+    settle(&mut h);
     let after = files::dialog_size(&app);
     assert!(
         after.x > before.x && after.y > before.y,
@@ -590,7 +617,7 @@ fn toggling_the_preview_keeps_a_resized_dialog() {
     );
     let size = dialog(&h).size();
     key(&mut h, Key::P, Modifiers::ALT);
-    h.run();
+    settle(&mut h);
     assert!(!files::preview_wanted(&app));
     assert!(
         h.query_by_role_and_label(Role::Splitter, SPLITTER)
@@ -598,7 +625,7 @@ fn toggling_the_preview_keeps_a_resized_dialog() {
     );
     assert_eq!(dialog(&h).size(), size);
     key(&mut h, Key::P, Modifiers::ALT);
-    h.run();
+    settle(&mut h);
     assert!(
         h.query_by_role_and_label(Role::Splitter, SPLITTER)
             .is_some()
