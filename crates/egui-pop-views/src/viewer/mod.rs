@@ -38,7 +38,8 @@
 //!   images show their alt text and are named on the page and in
 //!   `viewer.state`.
 //! - **Failures** show an error page in place (not found, no connection,
-//!   too large, a type it cannot show) with Retry, Open outside and Copy link.
+//!   too large, a type it cannot show, an HTML page nested too deep to
+//!   parse) with Retry, Open outside and Copy link.
 //! - **Agents** read the viewer through `viewer.state` and the `viewer`
 //!   collector (the page, its status or error, the history, the search,
 //!   the zoom, the images waiting and the hosts allowed) and drive it
@@ -1127,7 +1128,7 @@ fn read_html(
     bytes: &[u8],
 ) -> Result<(Markdown, Vec<String>), &'static str> {
     let schemes = page_schemes(app, target);
-    let page = html::read(&String::from_utf8_lossy(bytes), &schemes);
+    let page = html::read(&String::from_utf8_lossy(bytes), &schemes)?;
     // A relative address the page cannot join is read as a path: only the
     // links' common check sees it.
     let mut md = Markdown::parse(&page::strip_links(&page.markdown, target, &schemes)?);

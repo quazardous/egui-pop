@@ -20,6 +20,12 @@
 //!   its content and is named in [`Html::dropped`]; a template's content
 //!   is never read; any other element leaves its text.
 //! - **Text** is escaped: it cannot become markdown, or HTML again.
+//! - **Nesting**: html5ever walks its stack of open elements for most tags,
+//!   so parsing grows with the square of the depth. A page nested past
+//!   [`MAX_NESTING`], or costing more than [`MAX_LOOKS`] at a lesser depth, is
+//!   refused while it is parsed, and the viewer shows its error page with Open
+//!   outside; past [`MAX_DEPTH`] the mapping keeps the text only and says so
+//!   in [`Html::dropped`].
 //!
 //! No HTML is written back, so nothing reads the result as HTML (and no
 //! mutation of the markup can happen on a second parse). ammonia, the
@@ -27,7 +33,7 @@
 //! passes the advisories needs cssparser, under the MPL 2.0 `deny.toml`
 //! refuses, and it would clean a markup this module does not emit.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::BTreeSet;
 
 use html5ever::interface::{ElemName, ElementFlags, NodeOrText, QuirksMode, TreeSink};
@@ -103,8 +109,30 @@ const BLOCKS: &[&str] = &[
 ];
 
 /// How deep the mapping follows the tree; deeper content is kept as plain
-/// text, so a hostile page cannot exhaust the stack.
+/// text, and said so, so a hostile page cannot exhaust the stack.
 const MAX_DEPTH: usize = 48;
+
+/// How deep a page may nest its elements at all. Parsing runs on the
+/// interface's thread and is quadratic in the depth (36 s at 20,000 levels
+/// in a debug build, 25 ms at 512); no page written by hand comes near this
+/// one, and Chromium's parser stops nesting at the same depth.
+const MAX_NESTING: usize = 512;
+
+/// Why a page too deep is not shown.
+pub(super) const TOO_DEEP: &str = "its elements are nested more than 512 levels deep";
+
+/// How many open elements html5ever may look at for a whole page: staying
+/// under [`MAX_NESTING`], a page still costs its depth for each of its tags
+/// (16 MiB of them at 500 levels takes minutes in a debug build). This is
+/// 1.5 million tags at 33 levels, all [`super::MAX_BYTES`] can hold.
+const MAX_LOOKS: u64 = 50_000_000;
+
+/// Why a page too long to parse is not shown.
+pub(super) const TOO_LONG: &str = "it has too many elements at too deep a level to parse here";
+
+/// How much of a page is parsed between two looks at these limits: at worst
+/// a third of this in levels past the limit.
+const CHUNK: usize = 1024;
 
 /// A page read: its markdown, and what it could not keep.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -112,19 +140,16 @@ pub(super) struct Html {
     pub markdown: String,
     /// Its `<title>`.
     pub title: Option<String>,
-    /// The elements dropped with their content and the images refused,
-    /// each once, sorted.
+    /// The elements dropped with their content, the images refused and
+    /// the nesting flattened, each once, sorted.
     pub dropped: Vec<String>,
 }
 
 /// Reads a page: parsed as a browser would (unclosed tags, misnesting),
-/// then mapped.
-pub(super) fn read(source: &str, schemes: &BTreeSet<String>) -> Html {
-    let mut opts = html5ever::ParseOpts::default();
-    // Nothing runs here: what a page shows without scripts is what counts.
-    opts.tree_builder.scripting_enabled = false;
-    let sink = html5ever::parse_document(Sink::default(), opts).one(source);
-    let nodes = sink.nodes.into_inner();
+/// then mapped; [`TOO_DEEP`] or [`TOO_LONG`] when parsing it would hold the
+/// interface.
+pub(super) fn read(source: &str, schemes: &BTreeSet<String>) -> Result<Html, &'static str> {
+    let nodes = parse(source, MAX_LOOKS)?;
     let mut reader = Reader {
         nodes: &nodes,
         schemes,
@@ -132,11 +157,33 @@ pub(super) fn read(source: &str, schemes: &BTreeSet<String>) -> Html {
         dropped: BTreeSet::new(),
     };
     let blocks = reader.flow(&nodes[DOCUMENT].kids, 0);
-    Html {
+    Ok(Html {
         markdown: blocks.join("\n\n"),
         title: reader.title,
         dropped: reader.dropped.into_iter().collect(),
+    })
+}
+
+/// Parses a page piece by piece, stopping at the first limit it passes.
+fn parse(source: &str, max_looks: u64) -> Result<Vec<Node>, &'static str> {
+    let mut opts = html5ever::ParseOpts::default();
+    // Nothing runs here: what a page shows without scripts is what counts.
+    opts.tree_builder.scripting_enabled = false;
+    let mut parser = html5ever::parse_document(Sink::default(), opts);
+    let mut rest = source;
+    while !rest.is_empty() {
+        let (chunk, after) = rest.split_at(rest.ceil_char_boundary(CHUNK));
+        parser.process(chunk.into());
+        rest = after;
+        let sink = &parser.tokenizer.sink.sink;
+        if sink.deepest.get() > MAX_NESTING {
+            return Err(TOO_DEEP);
+        }
+        if sink.looks.get() > max_looks {
+            return Err(TOO_LONG);
+        }
     }
+    Ok(parser.finish().nodes.into_inner())
 }
 
 // ---- The tree -----------------------------------------------------------
@@ -161,6 +208,8 @@ struct Node {
     parent: Option<usize>,
     kids: Vec<usize>,
     data: Data,
+    /// How far from the document it was put.
+    depth: usize,
 }
 
 /// An arena html5ever builds its tree in (markup5ever_rcdom says it is
@@ -169,6 +218,11 @@ struct Node {
 #[derive(Debug)]
 struct Sink {
     nodes: RefCell<Vec<Node>>,
+    /// The deepest a node was put.
+    deepest: Cell<usize>,
+    /// How many times the parser asked an element's name: how it walks its
+    /// stack of open elements.
+    looks: Cell<u64>,
 }
 
 impl Default for Sink {
@@ -178,7 +232,10 @@ impl Default for Sink {
                 parent: None,
                 kids: Vec::new(),
                 data: Data::Document,
+                depth: 0,
             }]),
+            deepest: Cell::new(0),
+            looks: Cell::new(0),
         }
     }
 }
@@ -190,6 +247,7 @@ impl Sink {
             parent: None,
             kids: Vec::new(),
             data,
+            depth: 0,
         });
         nodes.len() - 1
     }
@@ -226,6 +284,9 @@ impl Sink {
         let at = at.min(nodes[parent].kids.len());
         nodes[parent].kids.insert(at, child);
         nodes[child].parent = Some(parent);
+        let depth = nodes[parent].depth + 1;
+        nodes[child].depth = depth;
+        self.deepest.set(self.deepest.get().max(depth));
     }
 }
 
@@ -259,6 +320,7 @@ impl TreeSink for Sink {
     }
 
     fn elem_name<'a>(&'a self, target: &'a usize) -> Name {
+        self.looks.set(self.looks.get() + 1);
         match &self.nodes.borrow()[*target].data {
             Data::Element { name, .. } => Name(name.clone()),
             // html5ever asks only of elements it made.
@@ -293,9 +355,15 @@ impl TreeSink for Sink {
 
     fn append_doctype_to_document(&self, _: StrTendril, _: StrTendril, _: StrTendril) {}
 
-    fn get_template_contents(&self, _: &usize) -> usize {
-        // A place of its own, out of the document: never read.
-        self.add(Data::Other)
+    fn get_template_contents(&self, target: &usize) -> usize {
+        // A place of its own, out of the document: never read. Its elements
+        // are on the parser's stack all the same, so it counts as nested.
+        let contents = self.add(Data::Other);
+        let mut nodes = self.nodes.borrow_mut();
+        let depth = nodes[*target].depth + 1;
+        nodes[contents].depth = depth;
+        self.deepest.set(self.deepest.get().max(depth));
+        contents
     }
 
     fn same_node(&self, x: &usize, y: &usize) -> bool {
@@ -349,6 +417,9 @@ struct Reader<'a> {
     title: Option<String>,
     dropped: BTreeSet<String>,
 }
+
+/// What is said when the mapping stops following the tree.
+const FLATTENED: &str = "nesting past 48 levels";
 
 /// What an element is to the mapping.
 enum Class {
@@ -443,6 +514,7 @@ impl Reader<'_> {
                     if depth < MAX_DEPTH {
                         out.extend(self.block(k, tag, depth + 1));
                     } else {
+                        self.dropped.insert(FLATTENED.to_string());
                         let text = Inline::of_text(&self.text_of(k));
                         if !text.is_empty() {
                             out.push(text);
@@ -541,6 +613,7 @@ impl Reader<'_> {
                     if depth < MAX_DEPTH {
                         self.inline_kids(k, run, depth + 1);
                     } else {
+                        self.dropped.insert(FLATTENED.to_string());
                         run.text(&self.text_of(k));
                     }
                     run.space();
@@ -552,6 +625,7 @@ impl Reader<'_> {
 
     fn inline(&mut self, node: usize, tag: &str, run: &mut Inline, depth: usize) {
         if depth >= MAX_DEPTH {
+            self.dropped.insert(FLATTENED.to_string());
             run.text(&self.text_of(node));
             return;
         }
@@ -939,7 +1013,7 @@ mod tests {
     use super::*;
 
     fn read_page(source: &str) -> Html {
-        read(source, &schemes(&Policy::default(), "docs:page"))
+        read(source, &schemes(&Policy::default(), "docs:page")).unwrap()
     }
 
     fn md(source: &str) -> String {
@@ -1068,7 +1142,8 @@ mod tests {
             let h = read(
                 "<a href='command:x'>c</a><img src='file:///etc/passwd' alt=f>",
                 &schemes(&Policy::default(), page),
-            );
+            )
+            .unwrap();
             let m = Markdown::parse(&h.markdown);
             (m.links().len(), m.blocks[0].images.len())
         };
@@ -1082,11 +1157,12 @@ mod tests {
         let h = read(
             "<img src='file:///some/path.png' alt=Local><img src='data:x' alt=Data>",
             &web,
-        );
+        )
+        .unwrap();
         assert_eq!(h.dropped, ["file:///some/path.png"]);
         assert_eq!(h.markdown, "LocalData");
         let docs = schemes(&Policy::default(), "docs:page");
-        let h = read("<img src='file:///some/path.png' alt=Local>", &docs);
+        let h = read("<img src='file:///some/path.png' alt=Local>", &docs).unwrap();
         assert!(h.dropped.is_empty());
     }
 
@@ -1115,13 +1191,53 @@ mod tests {
     }
 
     #[test]
-    fn deep_nesting_stays_on_the_stack() {
-        for tag in ["blockquote", "div", "ul", "span", "b", "table"] {
-            let source = format!("<{tag}>").repeat(2_000) + "deep";
+    fn deep_nesting_stays_on_the_stack_and_says_it_was_flattened() {
+        for tag in ["blockquote", "div", "ul", "span", "b"] {
+            // The document's `html` and `body` count too.
+            let source = format!("<{tag}>").repeat(MAX_NESTING / 2) + "deep";
             let h = read_page(&source);
             assert!(h.markdown.contains("deep"), "{tag}");
+            assert_eq!(h.dropped, [FLATTENED], "{tag}");
             Markdown::parse(&h.markdown);
         }
+        assert!(read_page("<div>a</div>").dropped.is_empty());
+    }
+
+    #[test]
+    fn a_page_nested_past_the_limit_is_refused() {
+        let docs = schemes(&Policy::default(), "docs:page");
+        for tag in ["div", "span", "b", "blockquote", "ul", "template", "svg"] {
+            let source = format!("<{tag}>").repeat(MAX_NESTING + 1) + "deep";
+            assert_eq!(read(&source, &docs), Err(TOO_DEEP), "{tag}");
+        }
+        assert!(TOO_DEEP.contains(&MAX_NESTING.to_string()));
+        // Tags that do not nest are as many as a page likes.
+        for tag in ["br", "p", "li", "td"] {
+            let source = format!("<{tag}>").repeat(MAX_NESTING * 4);
+            assert!(read(&source, &docs).is_ok(), "{tag}");
+        }
+        // A character across two chunks stays whole.
+        let source = "é".repeat(CHUNK);
+        assert_eq!(read_page(&source).markdown, source);
+    }
+
+    #[test]
+    fn a_page_too_long_to_parse_under_the_limit_is_refused() {
+        let wide = |depth: usize| "<div>".repeat(depth) + &"<div></div>".repeat(1_000);
+        let looks = |source: &str| {
+            let mut opts = html5ever::ParseOpts::default();
+            opts.tree_builder.scripting_enabled = false;
+            let sink = html5ever::parse_document(Sink::default(), opts).one(source);
+            sink.looks.get()
+        };
+        // What a tag costs grows with the depth it is at.
+        let (shallow, deep) = (looks(&wide(10)), looks(&wide(500)));
+        assert!(deep > shallow * 10, "{shallow} {deep}");
+        assert!(parse(&wide(500), deep).is_ok());
+        assert_eq!(parse(&wide(500), deep / 2).err(), Some(TOO_LONG));
+        // An ordinary long page is far from the limit: 100,000 elements.
+        let long = "<main><section><p>a <b>b</b> <a href=c>d</a></p></section></main>";
+        assert!(looks(&long.repeat(20_000)) < MAX_LOOKS / 10);
     }
 
     #[test]

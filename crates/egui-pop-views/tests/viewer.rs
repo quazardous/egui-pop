@@ -471,3 +471,27 @@ fn markdown_and_html_keep_the_same_links_on_a_remote_page() {
     assert_eq!(read[0].0, json!(["https://e.example/", "next.md"]));
     assert_eq!(read[0].1, "web local cmd script bad next");
 }
+
+#[cfg(feature = "html")]
+#[test]
+fn a_page_nested_too_deep_fails_out_loud() {
+    let page = format!("{HOST}/deep.html");
+    // Parsing this one whole takes half a minute in a debug build.
+    let deep = "<div>".repeat(20_000) + "deep";
+    let net = Net::default()
+        .with(&page, deep.as_bytes())
+        .with(&format!("{HOST}/fine.html"), b"<div>fine</div>");
+    let app = app(Docs::new(), &net);
+    let started = std::time::Instant::now();
+    let s = open(app.handle(), &page);
+    assert!(started.elapsed().as_secs() < 10, "{:?}", started.elapsed());
+    assert_eq!(s["status"], "failed", "{s}");
+    assert_eq!(s["error"]["failure"], "unsupported");
+    assert!(
+        s["error"]["detail"].as_str().unwrap().contains("nested"),
+        "{s}"
+    );
+    // And the next page is shown as ever.
+    let s = open(app.handle(), &format!("{HOST}/fine.html"));
+    assert_eq!(s["status"], "shown", "{s}");
+}
