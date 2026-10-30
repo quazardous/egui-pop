@@ -344,6 +344,9 @@ From `crates/egui-pop-core` (`tab.rs`, `focus.rs`, `keys.rs`,
   (`a_resizable_modal_follows_its_grips_and_the_arrows`,
   `the_corner_handle_resizes_with_the_arrows`); the picker's keys
   (`the_keyboard_filters_enters_and_chooses`).
+- **[walk] Keys down when a modal comes up are not its own:** the key that
+  opened it does nothing in it until released, repeats included
+  (`holding_the_key_that_opened_a_dialog_does_not_answer_it_until_released`).
 - **[walk]** Tab in a dialog is egui's order inside the modal layer: it
   wraps, in drawing order, and F6 stays in. No dialog uses
   `ScopeKind::Modal`.
@@ -741,11 +744,13 @@ one pull request. Numbers stay as they are, since the walk's tests name them;
 19. **The graph as one stop.** A setting, on by default for large graphs: Tab
     enters and leaves the graph, arrows go between nodes, Enter goes into a
     node's parts, Escape back, as ports already do. Size: M.
-20. **Enter on a button does not answer the dialog it opens.** New from the
-    walk. A dialog ignores the Enter of the pass it opens in, as a key that was
-    not meant for it. A confirmation that can be skipped by pressing its
-    button's key defeats it, and egui-pop's own promise "Enter accepts" meets
-    its own "Enter clicks a focused button". Size: S.
+20. **Done: the key that opens a dialog does not answer it.** The dialog is
+    drawn after the page, in the pass of the press that clicked its button, and
+    reads the same press as its own; held, the first repeat clicks the button
+    the dialog focused, Space as much as Enter, Cancel as much as the action. A
+    modal overlay coming up now takes that pass's presses out of the input, and
+    the keys down stay out of it until released, before egui reads them
+    (`overlay.rs`, the walk's dialog tests).
 21. **A modal overlay gives the focus back.** New from the walk. Escape from a
     dialog or the palette returns to the widget that held the focus when it
     opened, as a popover already does and ARIA's modal dialog asks. Size: S.
@@ -832,7 +837,7 @@ compositor.
 | 13 | Menu from its focused button, arrows | the focus can leave | Second Down goes to the side list behind the menu | yes |
 | 14 | Tab with a menu open and a floating palette | the palette hides | It hides | yes |
 | 15 | Status popover, Tab past its last stop | (open) | Goes on through the window behind, popover still open; Escape returns to the item | new (item 22) |
-| 16 | Confirm dialog, danger on and off: first focus, Tab round | as `dialogs.rs` | Action first, Cancel for a danger, Tab wraps, F6 stays. **Also** Enter from the opening button answers a dialog at once (item 20), Escape leaves nothing focused (item 21) | yes, and two bugs |
+| 16 | Confirm dialog, danger on and off: first focus, Tab round | as `dialogs.rs` | Action first, Cancel for a danger, Tab wraps, F6 stays. **Also** Enter from the opening button answered a dialog at once (item 20, fixed), Escape leaves nothing focused (item 21) | yes, and two bugs |
 
 **Keys**
 
@@ -867,8 +872,8 @@ result: `focusedPanel` does not follow Tab.
 
 The order to follow for egui-pop now, by the same measure:
 
-1. **Item 20, Enter answers the dialog it opens.** A bug skipping a
-   confirmation, small to fix. New, and first.
+1. **Done: item 20, Enter answers the dialog it opens.** A bug skipping a
+   confirmation. New, and first.
 2. **Item 21, modal overlays give the focus back.** Small, and every dialog
    and palette use loses the place today. New.
 3. **Item 3, one focused panel.** Confirmed; still what Helios's keys depend on.

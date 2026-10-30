@@ -16,6 +16,12 @@
 //! the stack an overlay its owner lays out and draws itself (a side
 //! area's flyout), so it closes by the same rules.
 //!
+//! **Keys held.** A modal coming up reads no key that was already down:
+//! the press in that very pass goes, and so does each repeat until the key
+//! is released. Else the key that opened it would answer it, unseen: egui
+//! clicks a focused widget on Enter or Space, the press and every repeat,
+//! and the modal's first focus is such a widget.
+//!
 //! **egui popups.** A combo box's list, a context menu or an egui menu
 //! opened from inside an overlay is an egui area of its own, drawn while
 //! the overlay is drawn but outside its rect. Both [`show`] and [`hold`]
@@ -63,10 +69,11 @@
 //! assert_eq!(overlay::modal_size(&ctx, spec.id), Some(egui::vec2(500.0, 300.0)));
 //! ```
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 
 use egui::{
-    Context, CursorIcon, Id, LayerId, NumExt as _, Rect, Sense, Ui, UiBuilder, Vec2, ViewportId,
+    Context, CursorIcon, Event, Id, Key, LayerId, NumExt as _, Rect, Sense, Ui, UiBuilder, Vec2,
+    ViewportId,
 };
 use serde::Serialize;
 
@@ -731,7 +738,12 @@ pub fn begin_pass(ctx: &Context) -> bool {
 }
 
 fn settle(ctx: &Context, s: &mut State, closed: Vec<Closed>) {
-    if let Some(target) = closed.last().and_then(|c| c.restore_focus) {
+    // A widget gone since (the dialog before this one in a queue) cannot
+    // take it: egui would keep the id as focused, and AccessKit, told of a
+    // focus on a node that does not exist, panics.
+    if let Some(target) = closed.last().and_then(|c| c.restore_focus)
+        && crate::focus::peek_response(ctx, target).is_some()
+    {
         ctx.memory_mut(|m| m.request_focus(target));
     }
     for c in &closed {
@@ -906,12 +918,84 @@ fn enter(ctx: &Context, spec: &OverlaySpec, open: &mut bool) -> bool {
         let focused = ctx.memory(|m| m.focused());
         let (_, closed) = s.stack.open(spec.clone(), focused);
         settle(ctx, &mut s, closed);
+        if spec.kind == Kind::Modal {
+            swallow_held_keys(ctx);
+        }
     } else if s.stack.specs().any(|o| o.id == spec.id && o != spec) {
         // Declared differently this pass (Escape kept, moved).
         s.stack.update(spec.clone());
     }
     s.shown.push(spec.id);
     true
+}
+
+/// The keys each window ignores until they are released. It works on the
+/// input before egui reads it: nothing in the pass sees these presses, not
+/// a focused widget, Tab's or Escape's handling in egui, nor the key
+/// dispatcher.
+#[derive(Debug, Default)]
+struct HeldKeys(HashMap<ViewportId, Vec<Key>>);
+
+impl egui::plugin::Plugin for HeldKeys {
+    fn debug_name(&self) -> &'static str {
+        "egui_pop_core::overlay::held_keys"
+    }
+
+    fn input_hook(&mut self, _ctx: &Context, input: &mut egui::RawInput) {
+        if let Some(held) = self.0.get_mut(&input.viewport_id) {
+            forget_held_presses(&mut input.events, held);
+            if held.is_empty() {
+                self.0.remove(&input.viewport_id);
+            }
+        }
+    }
+}
+
+/// Removes the presses of the keys `held`, in the order they came: a
+/// release ends the hold, and a press after it is a fresh one. The window
+/// losing the focus ends them all, as it does for egui's own `keys_down`:
+/// no release will come.
+fn forget_held_presses(events: &mut Vec<Event>, held: &mut Vec<Key>) {
+    events.retain(|event| match event {
+        Event::Key {
+            key, pressed: true, ..
+        } => !held.contains(key),
+        Event::Key {
+            key,
+            pressed: false,
+            ..
+        } => {
+            held.retain(|k| k != key);
+            true
+        }
+        // Space comes as a key and as text.
+        Event::Text(text) if text == " " => !held.contains(&Key::Space),
+        Event::WindowFocused(false) => {
+            held.clear();
+            true
+        }
+        _ => true,
+    });
+}
+
+/// Takes this pass's presses out of the input, and has the keys down
+/// ignored until they are released ([`HeldKeys`]).
+fn swallow_held_keys(ctx: &Context) {
+    let held: Vec<Key> = ctx.input_mut(|i| {
+        let space = i.key_pressed(Key::Space);
+        i.events.retain(|e| match e {
+            Event::Key { pressed, .. } => !*pressed,
+            Event::Text(text) => !(space && text == " "),
+            _ => true,
+        });
+        i.keys_down.iter().copied().collect()
+    });
+    if held.is_empty() {
+        return;
+    }
+    let viewport = ctx.viewport_id();
+    ctx.add_plugin(HeldKeys::default());
+    ctx.with_plugin(|p: &mut HeldKeys| p.0.entry(viewport).or_default().extend(held));
 }
 
 /// Holds an overlay its owner draws itself (a flyout laid out against
@@ -1270,6 +1354,52 @@ fn paint_handle(ui: &Ui, r: &egui::Response, rect: Rect, reach: f32, side: f32) 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn key_event(key: Key, pressed: bool) -> Event {
+        Event::Key {
+            key,
+            physical_key: None,
+            pressed,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        }
+    }
+
+    #[test]
+    fn a_held_key_s_presses_go_until_its_release_and_a_later_press_stays() {
+        let mut held = vec![Key::Enter, Key::Space];
+        let mut events = vec![
+            key_event(Key::Enter, true),
+            key_event(Key::Space, true),
+            Event::Text(" ".to_string()),
+            key_event(Key::Tab, true),
+            key_event(Key::Enter, false),
+            key_event(Key::Enter, true),
+        ];
+        forget_held_presses(&mut events, &mut held);
+        assert_eq!(
+            events,
+            [
+                key_event(Key::Tab, true),
+                key_event(Key::Enter, false),
+                key_event(Key::Enter, true),
+            ]
+        );
+        assert_eq!(held, [Key::Space]);
+    }
+
+    #[test]
+    fn the_window_losing_the_focus_ends_what_is_held() {
+        let mut held = vec![Key::Enter];
+        let mut events = vec![
+            Event::WindowFocused(false),
+            Event::WindowFocused(true),
+            key_event(Key::Enter, true),
+        ];
+        forget_held_presses(&mut events, &mut held);
+        assert!(held.is_empty());
+        assert_eq!(events.len(), 3);
+    }
 
     #[test]
     fn a_grip_moves_its_sides_and_leaves_the_others() {

@@ -165,6 +165,23 @@ pub fn press<S>(h: &mut Harness<'_, S>, press: Press) -> Option<Stop> {
     focused(h)
 }
 
+/// Puts a key down and leaves it there, runs until the application settles
+/// and says what holds the focus. Calling it again while the key is down
+/// is a repeat, what a held key sends (egui counts it as a press, marked
+/// `repeat`); [`release`] lets go.
+pub fn hold<S>(h: &mut Harness<'_, S>, press: Press) -> Option<Stop> {
+    h.key_down_modifiers(press.modifiers, press.key);
+    let _ = h.run_ok();
+    focused(h)
+}
+
+/// Lets go of a key put down by [`hold`], and says what holds the focus.
+pub fn release<S>(h: &mut Harness<'_, S>, press: Press) -> Option<Stop> {
+    h.key_up_modifiers(press.modifiers, press.key);
+    let _ = h.run_ok();
+    focused(h)
+}
+
 /// Presses a key until the stop named `name` holds the focus, at most
 /// `limit` times: the keyboard's own way to a widget, where a test would
 /// otherwise put the focus on it with `.focus()`. `None` when the key does

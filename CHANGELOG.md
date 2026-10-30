@@ -20,6 +20,8 @@ publishes.
 - A tree for navigating (egui-pop-views; `docs/tree.md`).
   `TreeView::activate_on_click`: a click acts as Enter does, opening a leaf
   or folding a branch. `TreeState::reveal` brings a node's row into view.
+  walk loops or the focus is lost. `walk::hold` and `release` keep a key down
+  and let it go, each further `hold` a repeat.
 - Stacked sections' gestures (egui-pop-model, egui-pop-core;
   `docs/sections.md`, `docs/pointer-gestures.md`). `Sections::grab_titles`:
   a press on a title that moves resizes as a boundary does, one that does
@@ -1110,6 +1112,17 @@ publishes.
 
 - A row a tree or a list is asked to bring into view before its first pass
   shows (egui-pop-views): with no height yet it stopped just above the view.
+- The key that opens a dialog no longer answers it (egui-pop-core). Enter on
+  a button opening a confirmation also accepted it, in the same pass: the
+  command ran and the question never showed; held, Enter or Space then
+  answered it at the first repeat, Cancel included. A modal overlay coming up
+  now ignores every key already down until it is released, whatever opened it
+  (a button, a key binding, the palette, the dialog before it in a queue);
+  a fresh press answers as before.
+- Closing a dialog whose focus was to go back to a widget gone since no longer
+  leaves the focus on that widget (egui-pop-core): with AccessKit on, it
+  panicked (`Focused ID is not in the node list`), as the second dialog of a
+  queue did when answered.
 - `Alt+Up` goes to the parent folder in the in-app file picker
   (egui-pop-api), as documented: egui also matches a plain key with Alt held,
   so the plain Up key took it first and moved the highlight instead.

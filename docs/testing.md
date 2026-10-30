@@ -197,6 +197,9 @@ assert_eq!(walk::press(&mut h, ESCAPE), None); // nothing holds the focus
   `End::Limit`. A window has no outside: egui wraps Tab, so a walk ends
   looped unless a key drops the focus. `at` being the last stop means the
   key does not move it (a terminal keeps Tab).
+- **`hold`** puts a key down and leaves it there, each further call being
+  a repeat, and **`release`** lets go: what a held key does, where `press`
+  goes down and up in one frame.
 - **`reach`** presses a key until a stop of that name holds the focus: the
   way to a widget in a test about the keyboard.
 
