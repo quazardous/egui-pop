@@ -6,7 +6,9 @@ use egui_kittest::Harness;
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use egui_pop_viewport::change::{Change, Verdict};
 use egui_pop_viewport::histogram::{Channel, Clipping, Drag, Histogram};
-use egui_pop_viewport::thumbnail::{Thumbnail, fitted, thumbnail_grid};
+use egui_pop_viewport::thumbnail::{
+    Thumbnail, ThumbnailGrid, caption_height, fitted, thumbnail_grid,
+};
 
 #[test]
 fn a_thumbnail_is_named_selectable_and_clicked() {
@@ -53,6 +55,89 @@ fn the_grid_builds_only_the_rows_in_view() {
     assert!(h.query_by_label("Image 9999").is_none());
     let built = h.query_all_by_label_contains("Image ").count();
     assert!(built < 60, "{built} built");
+}
+
+#[test]
+fn the_grid_brings_a_cell_that_is_not_drawn_into_view_and_says_its_columns() {
+    let mut h = Harness::builder()
+        .with_size(vec2(420.0, 300.0))
+        .build_ui_state(
+            |ui, state: &mut (Option<usize>, usize)| {
+                let reveal = state.0.take();
+                state.1 = ThumbnailGrid::new(10_000, vec2(96.0, 72.0))
+                    .id_salt("reveal")
+                    .reveal(reveal)
+                    .show(ui, |ui, i| {
+                        ui.add(Thumbnail::new(format!("Image {i}")));
+                    });
+            },
+            (None, 0),
+        );
+    h.run();
+    assert_eq!(h.state().1, 4);
+    assert!(h.query_by_label("Image 4000").is_none());
+    h.state_mut().0 = Some(4000);
+    h.run();
+    let cell = h.get_by_label("Image 4000").rect();
+    assert!(cell.top() >= 0.0 && cell.bottom() <= 300.0, "{cell:?}");
+    // Already in view: nothing moves.
+    h.state_mut().0 = Some(4000);
+    h.run();
+    assert_eq!(h.get_by_label("Image 4000").rect(), cell);
+    // Back to the start.
+    h.state_mut().0 = Some(0);
+    h.run();
+    assert!(h.get_by_label("Image 0").rect().top() >= 0.0);
+}
+
+#[test]
+fn the_rows_of_the_grid_stay_where_they_are_as_it_scrolls() {
+    let mut h = Harness::builder()
+        .with_size(vec2(420.0, 300.0))
+        .build_ui_state(
+            |ui, reveal: &mut Option<usize>| {
+                ThumbnailGrid::new(1000, vec2(96.0, 72.0))
+                    .reveal(reveal.take())
+                    .show(ui, |ui, i| {
+                        ui.add(Thumbnail::new(format!("Image {i}")));
+                    });
+            },
+            None,
+        );
+    h.run();
+    // Scrolled past the first row, two rows still lie a pitch apart.
+    let pitch = |h: &Harness<'_, Option<usize>>, a: usize, b: usize| {
+        h.get_by_label(&format!("Image {b}")).rect().top()
+            - h.get_by_label(&format!("Image {a}")).rect().top()
+    };
+    let at_start = pitch(&h, 0, 4);
+    *h.state_mut() = Some(40);
+    h.run();
+    assert!((pitch(&h, 40, 44) - at_start).abs() < 0.5);
+    // Asked again from where it lies, it does not creep.
+    let top = h.get_by_label("Image 40").rect().top();
+    *h.state_mut() = Some(40);
+    h.run();
+    assert!((h.get_by_label("Image 40").rect().top() - top).abs() < 0.5);
+}
+
+#[test]
+fn a_caption_and_a_sign_stay_inside_the_thumbnail() {
+    let mut h = Harness::builder()
+        .with_size(vec2(200.0, 200.0))
+        .build_ui(|ui| {
+            let size = vec2(96.0, 96.0 + caption_height(ui));
+            let r = ui.add(
+                Thumbnail::new("A folder/")
+                    .caption("A folder with a name much too long for its thumbnail")
+                    .icon(egui_pop_core::icon::Icon::Folder)
+                    .size(size),
+            );
+            assert_eq!(r.rect.size(), size);
+        });
+    h.run();
+    // Named by its label; the caption is only drawn.
+    assert!(h.query_by_label("A folder/").is_some());
 }
 
 #[test]

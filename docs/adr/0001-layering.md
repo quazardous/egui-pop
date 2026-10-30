@@ -23,9 +23,9 @@ Crates are stacked; a crate depends only on crates of a lower layer:
 | L0 | `egui-pop-test-macros`: the test kit's attributes, a procedural macro crate without dependencies (amended 2026-10-20) | no |
 | L0 | `ortho-router`: orthogonal connector routing around rectangles, a standalone crate without dependencies, used by the node graph (amended 2026-10-21) | no |
 | L1 | `egui-pop-model`: commands, keymap, menus, panels, layouts, values, ids, diagnostics, documents | no |
-| L2 | `egui-pop-core`: theme, focus, keys, overlays, placement, accessibility, strings, icons, persistence, fault boundary, binding, debug bridge | yes |
+| L2 | `egui-pop-core`: theme, focus, keys, overlays, placement, accessibility, strings, icons, persistence, fault boundary, binding, thumbnails and their grid (moved down from the viewport for the file picker, amended 2026-10-30), debug bridge | yes |
 | L3 | `egui-pop-api`: plugins, the app builder, `Ctx`, zones and blocks, hooks, services, stories | yes |
-| L3 | `egui-pop-viewport`: the image viewport, thumbnails, the histogram (a component on the egui layer alone) | yes |
+| L3 | `egui-pop-viewport`: the image viewport, the histogram, thumbnails re-exported from core (a component on the egui layer alone) | yes |
 | L4 | `egui-pop-test`: test kit (dev-dependency only) | yes |
 | L4 | `egui-pop-i18n`: translations, a plugin (a component on the application API) | yes |
 | L4 | `egui-pop-platform`: platform services (single instance, notifications, tray, global shortcuts, logs and crash reports, focus mode), opt-in plugins | yes |

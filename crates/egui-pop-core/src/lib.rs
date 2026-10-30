@@ -53,6 +53,7 @@
 //!   migrations;
 //! - [`fault`]: fault boundaries showing an error card on panic;
 //! - [`binding`]: plain, bound and watch-only values;
+//! - [`thumbnail`]: thumbnails and a virtualised grid of them;
 //! - [`widgets`]: egui's checkbox, radio button, selectable row and
 //!   combo box arrow drawn through the kit, and a toggle chip;
 //! - [`state`]: typed slots for the state kept in egui's memory,
@@ -91,6 +92,7 @@ pub mod slider;
 pub mod strings;
 pub mod tab;
 pub mod theme;
+pub mod thumbnail;
 pub mod ui;
 pub mod widgets;
 

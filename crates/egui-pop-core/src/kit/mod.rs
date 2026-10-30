@@ -835,7 +835,7 @@ components! {
     thumb_layer: "thumb-layer" => "box",
     /// The box behind a cell's flag, labels and stars.
     thumb_overlay_badge: "thumb-overlay-badge" => "box",
-    /// A thumbnail of the viewport crate: selected, hover, focus.
+    /// A thumbnail ([`crate::thumbnail`]): selected, hover, focus.
     thumbnail: "thumbnail" => "box",
     /// A window's own title bar; its label is the window's title.
     title_bar: "title-bar" => "plain",
