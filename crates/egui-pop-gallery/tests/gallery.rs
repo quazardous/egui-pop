@@ -2777,6 +2777,59 @@ fn the_files_page_resizes_the_picker() {
 }
 
 #[test]
+fn the_files_page_saves_with_a_question_before_replacing() {
+    use egui::accesskit::Role;
+    let mut h = harness(options("pop-dark", Density::Comfortable, "files"));
+    h.run();
+    h.get_by_label("Save as…").click();
+    settle_picker(&mut h);
+    // The proposed name, its stem selected; New folder beside the folder.
+    // The list's row, and the preview pane's title.
+    assert!(h.query_all_by_label("harbour-edit.png").next().is_some());
+    egui_pop_test::assert_all_named(&h);
+    h.snapshot("files-save-pop-dark");
+    // The name of a new folder, by its key; Escape closes only the row.
+    h.key_press_modifiers(
+        egui::Modifiers::COMMAND | egui::Modifiers::SHIFT,
+        egui::Key::N,
+    );
+    settle_picker(&mut h);
+    assert!(
+        h.get_by_role_and_label(Role::TextInput, "Folder name")
+            .is_focused()
+    );
+    egui_pop_test::assert_all_named(&h);
+    h.snapshot("files-new-folder-pop-dark");
+    h.key_press(egui::Key::Escape);
+    settle_picker(&mut h);
+    assert!(h.query_by_label("Folder name").is_none());
+    // The file exists in the demo folder: saving asks, Cancel first.
+    h.get_by_role_and_label(Role::Button, "Save").click();
+    settle_picker(&mut h);
+    assert!(h.query_by_label("Replace harbour-edit.png?").is_some());
+    assert!(
+        h.query_all_by_role_and_label(Role::Button, "Cancel")
+            .any(|b| b.is_focused())
+    );
+    h.snapshot("files-replace-pop-dark");
+    h.key_press(egui::Key::Escape);
+    settle_picker(&mut h);
+    assert!(h.query_by_label("Replace harbour-edit.png?").is_none());
+    // Typing replaces the stem and keeps the extension.
+    h.get_by_label("File name, or a path").type_text("dawn");
+    settle_picker(&mut h);
+    h.key_press(egui::Key::Enter);
+    for _ in 0..4 {
+        settle_picker(&mut h);
+    }
+    assert!(
+        h.query_by_label("Last choice: Exports/dawn.png").is_some(),
+        "{:?}",
+        h.state().app.handle().debug_snapshot()["files"]
+    );
+}
+
+#[test]
 fn the_files_page_previews_the_highlighted_file() {
     use egui_pop::model::commands::Origin;
     let root = egui_pop_gallery::pages::files::demo_folder();

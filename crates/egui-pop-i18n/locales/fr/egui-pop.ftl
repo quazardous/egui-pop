@@ -245,6 +245,14 @@ command-editor-write =
     .description = Modifie le texte par `edit.change` : tout le `text` ; ou `text` entre `from` et `to` (`{"{"}line, col{"}"}` à partir de 0) ; ou une liste de `changes`. Une seule étape d’annulation.
     .title = Écrire le texte
 
+command-file-new-folder =
+    .description = Un nouveau dossier dans le sélecteur de fichiers intégré ouvert, qui le montre ensuite : demande son nom, ou le crée aussitôt avec `name`. Refusé sur un système de fichiers qui ne peut pas en créer (celui de la version web, en mémoire), la raison s’affichant dans le sélecteur.
+    .title = Nouveau dossier
+
+command-file-replace =
+    .description = La réponse à la question posée avant de remplacer un fichier : termine le choix `id` avec `path`.
+    .title = Remplacer le fichier
+
 command-file-preview =
     .description = Les métadonnées de l’aperçu d’un fichier ou d’un dossier (`path`), comme le sélecteur intégré les montre : s’il s’agit d’un dossier, sa taille et sa date de modification, le fournisseur, le genre d’aperçu, les dimensions, les pages, les comptes d’un dossier, les informations propres au fournisseur, ou pourquoi il n’y en a pas ; ni pixels ni texte.
     .title = Aperçu d’un fichier
@@ -790,6 +798,30 @@ egui-pop-files-preview-none = Pas d’aperçu
 egui-pop-files-recent = Récents
 
 egui-pop-files-save = Enregistrer
+
+egui-pop-files-new-folder = Nouveau dossier
+
+egui-pop-files-folder-name = Nom du dossier
+
+egui-pop-files-create = Créer
+
+egui-pop-files-folder-name-empty = Saisissez un nom pour le dossier
+
+egui-pop-files-folder-name-invalid = { $name } ne peut pas nommer un dossier : saisissez un seul nom, sans chemin
+
+egui-pop-files-folder-exists = { $name } existe déjà
+
+egui-pop-files-folder-failed = Impossible de créer { $name } : { $reason }
+
+egui-pop-files-folder-read-only = Ces fichiers sont en lecture seule : impossible de créer un dossier ici
+
+egui-pop-files-replace-title = Remplacer { $name } ?
+
+egui-pop-files-replace-detail = Ce fichier existe déjà dans { $folder }. Le remplacer écrase son contenu.
+
+egui-pop-files-replace = Remplacer
+
+egui-pop-files-replace-no-dialogs = { $name } existe déjà, et aucune boîte de dialogue ne peut demander s’il faut le remplacer : choisissez un autre nom
 
 egui-pop-files-size = Taille
 

@@ -250,9 +250,17 @@ command-editor-write =
     .description = Changes the text through `edit.change`: the whole `text`; or `text` between `from` and `to` (`{"{"}line, col{"}"}` from 0); or a list of `changes`. One undo step.
     .title = Write the text
 
+command-file-new-folder =
+    .description = A new folder in the open in-app file picker, which then shows it: asks its name, or makes it at once with `name`. Refused on a file system that cannot make one (the web build's, in memory), the reason shown in the picker.
+    .title = New folder
+
 command-file-preview =
     .description = A file's or a folder's preview metadata (`path`), as the in-app picker shows it: whether it is a folder, its size and modification time, the provider, the kind of preview, dimensions, pages, a folder's counts, the provider's facts, or why there is none; no pixels and no text.
     .title = Preview a file
+
+command-file-replace =
+    .description = The answer to the question before replacing a file: ends the choice `id` with `path`.
+    .title = Replace the file
 
 command-files-reveal =
     .description = Shows a file (`path`) selected in the file manager; an agent's request is confirmed by the user.
@@ -926,9 +934,23 @@ egui-pop-files-bookmark = Bookmark this folder
 
 egui-pop-files-bookmarks = Bookmarks
 
+egui-pop-files-create = Create
+
 egui-pop-files-dimensions = Dimensions
 
 egui-pop-files-filter = Filter, or type a path
+
+egui-pop-files-folder-exists = { $name } already exists
+
+egui-pop-files-folder-failed = Could not create { $name }: { $reason }
+
+egui-pop-files-folder-name = Folder name
+
+egui-pop-files-folder-name-empty = Type a name for the folder
+
+egui-pop-files-folder-name-invalid = { $name } cannot name a folder: type a single name, without a path
+
+egui-pop-files-folder-read-only = These files are read-only: no folder can be created here
 
 egui-pop-files-hidden = Hidden files
 
@@ -939,6 +961,8 @@ egui-pop-files-items = Items
 egui-pop-files-modified = Modified
 
 egui-pop-files-name = File name, or a path
+
+egui-pop-files-new-folder = New folder
 
 egui-pop-files-open = Open
 
@@ -955,6 +979,14 @@ egui-pop-files-preview-none = No preview
 egui-pop-files-preview-resize = Resize the preview
 
 egui-pop-files-recent = Recent
+
+egui-pop-files-replace = Replace
+
+egui-pop-files-replace-detail = This file already exists in { $folder }. Replacing it overwrites its contents.
+
+egui-pop-files-replace-no-dialogs = { $name } already exists, and no dialog can ask whether to replace it: choose another name
+
+egui-pop-files-replace-title = Replace { $name }?
 
 egui-pop-files-save = Save
 

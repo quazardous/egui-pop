@@ -166,6 +166,11 @@ Egui's built-ins in egui-pop's style, and restyled by a kit in a scope, values, 
   </tr>
   <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/files-resized-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/files-resized-pop-dark.png" width="200" alt="files-resized-pop-dark"></a><br>files-resized-pop-dark</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/files-save-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/files-save-pop-dark.png" width="200" alt="files-save-pop-dark"></a><br>files-save-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/files-new-folder-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/files-new-folder-pop-dark.png" width="200" alt="files-new-folder-pop-dark"></a><br>files-new-folder-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/files-replace-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/files-replace-pop-dark.png" width="200" alt="files-replace-pop-dark"></a><br>files-replace-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/toasts-long-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/toasts-long-pop-dark.png" width="200" alt="toasts-long-pop-dark"></a><br>toasts-long-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/toasts-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/toasts-pop-dark.png" width="200" alt="toasts-pop-dark"></a><br>toasts-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/toasts-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/toasts-pop-light.png" width="200" alt="toasts-pop-light"></a><br>toasts-pop-light</td>

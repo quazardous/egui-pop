@@ -323,6 +323,46 @@ pub const FILES_ALL: StrKey = StrKey::new("egui-pop-files-all", "All files");
 pub const FILES_HIDDEN: StrKey = StrKey::new("egui-pop-files-hidden", "Hidden files");
 pub const FILES_OPEN: StrKey = StrKey::new("egui-pop-files-open", "Open");
 pub const FILES_SAVE: StrKey = StrKey::new("egui-pop-files-save", "Save");
+/// The picker's button making a folder.
+pub const FILES_NEW_FOLDER: StrKey = StrKey::new("egui-pop-files-new-folder", "New folder");
+/// The label of the new folder's name.
+pub const FILES_FOLDER_NAME: StrKey = StrKey::new("egui-pop-files-folder-name", "Folder name");
+/// The button making the folder named.
+pub const FILES_CREATE: StrKey = StrKey::new("egui-pop-files-create", "Create");
+pub const FILES_FOLDER_NAME_EMPTY: StrKey = StrKey::new(
+    "egui-pop-files-folder-name-empty",
+    "Type a name for the folder",
+);
+pub const FILES_FOLDER_NAME_INVALID: StrKey = StrKey::new(
+    "egui-pop-files-folder-name-invalid",
+    "{ $name } cannot name a folder: type a single name, without a path",
+);
+pub const FILES_FOLDER_EXISTS: StrKey =
+    StrKey::new("egui-pop-files-folder-exists", "{ $name } already exists");
+pub const FILES_FOLDER_FAILED: StrKey = StrKey::new(
+    "egui-pop-files-folder-failed",
+    "Could not create { $name }: { $reason }",
+);
+/// Why a file system held in memory (the web build's) has no new folder.
+pub const FILES_FOLDER_READ_ONLY: StrKey = StrKey::new(
+    "egui-pop-files-folder-read-only",
+    "These files are read-only: no folder can be created here",
+);
+/// The question before replacing a file: its title.
+pub const FILES_REPLACE_TITLE: StrKey =
+    StrKey::new("egui-pop-files-replace-title", "Replace { $name }?");
+/// The question's consequences.
+pub const FILES_REPLACE_DETAIL: StrKey = StrKey::new(
+    "egui-pop-files-replace-detail",
+    "This file already exists in { $folder }. Replacing it overwrites its contents.",
+);
+/// The question's primary button.
+pub const FILES_REPLACE: StrKey = StrKey::new("egui-pop-files-replace", "Replace");
+/// The picker's refusal when no dialog can ask (no dialogs plugin).
+pub const FILES_REPLACE_NO_DIALOGS: StrKey = StrKey::new(
+    "egui-pop-files-replace-no-dialogs",
+    "{ $name } already exists, and no dialog can ask whether to replace it: choose another name",
+);
 pub const FILES_PREVIEW: StrKey = StrKey::new("egui-pop-files-preview", "Preview");
 pub const FILES_PREVIEW_RESIZE: StrKey =
     StrKey::new("egui-pop-files-preview-resize", "Resize the preview");
@@ -1178,6 +1218,18 @@ pub const ALL: &[StrKey] = &[
     FILES_HIDDEN,
     FILES_OPEN,
     FILES_SAVE,
+    FILES_NEW_FOLDER,
+    FILES_FOLDER_NAME,
+    FILES_CREATE,
+    FILES_FOLDER_NAME_EMPTY,
+    FILES_FOLDER_NAME_INVALID,
+    FILES_FOLDER_EXISTS,
+    FILES_FOLDER_FAILED,
+    FILES_FOLDER_READ_ONLY,
+    FILES_REPLACE_TITLE,
+    FILES_REPLACE_DETAIL,
+    FILES_REPLACE,
+    FILES_REPLACE_NO_DIALOGS,
     FILES_PREVIEW,
     FILES_PREVIEW_RESIZE,
     FILES_PREVIEW_LOADING,

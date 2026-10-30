@@ -899,6 +899,18 @@ impl Dialogs {
         id
     }
 
+    /// Shows a dialog now, ahead of the queue: a question that the dialog
+    /// shown is waiting for (a file picker inside it asking before
+    /// replacing a file). That one comes back once this one is answered.
+    pub(crate) fn open_now(&self, dialog: impl Into<DialogSpec>) -> u64 {
+        let id = self.open(dialog);
+        let mut s = lock(&self.0);
+        if let Some(open) = s.queue.pop_back() {
+            s.queue.push_front(open);
+        }
+        id
+    }
+
     /// Queues a dialog with a body of its own ([`Custom`]): the body is
     /// kept on the application's side and drawn every frame the dialog
     /// is shown. When the dialog says what its body needs
@@ -1268,6 +1280,18 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     let Some(mut open_dialog) = lock(&d.0).queue.front().cloned() else {
         return;
     };
+    // A dialog a question was put in front of leaves the stack before the
+    // question enters it: it would close what was opened above it once it
+    // stopped being shown. It comes back with the answer.
+    for under in lock(&d.0)
+        .queue
+        .iter()
+        .skip(1)
+        .map(|o| o.id)
+        .collect::<Vec<_>>()
+    {
+        overlay::close(&ctx, overlay_id(under));
+    }
     if !open_dialog.focused {
         // It comes up: hooks may stop it (it is cancelled).
         let out = app.step(&STEP_SHOW, d.describe(), |_, _| Ok(Json::Null));
@@ -1684,7 +1708,15 @@ fn body(ui: &mut Ui, app: &AppHandle, o: &mut Open, header: Header<'_>) -> Optio
                         o.picking = None;
                     }
                     Some(PickerAnswer::Cancel) => o.picking = None,
-                    Some(PickerAnswer::Bookmark(..)) | None => {}
+                    // This picker chooses an existing file or a folder:
+                    // it has no question to ask, and a folder it makes
+                    // has no one to tell.
+                    Some(
+                        PickerAnswer::Bookmark(..)
+                        | PickerAnswer::Replace(_)
+                        | PickerAnswer::FolderCreated(_),
+                    )
+                    | None => {}
                 }
             }
             // The file chooser's in-app picker, inside the dialog.

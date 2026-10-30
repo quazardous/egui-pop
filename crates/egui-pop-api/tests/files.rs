@@ -9,8 +9,9 @@ use egui::accesskit::Role;
 use egui::{Key, Modifiers};
 use egui_kittest::Harness;
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
+use egui_pop_api::dialogs::{self, DIALOGS};
 use egui_pop_api::files::{
-    self, Chosen, FILES, FileRequest, FilesPlugin, STEP_CHOOSE, STEP_CHOSEN,
+    self, CMD_NEW_FOLDER, Chosen, FILES, FileRequest, FilesPlugin, STEP_CHOOSE, STEP_CHOSEN,
 };
 use egui_pop_api::host::Pending;
 use egui_pop_api::steps::Before;
@@ -676,4 +677,503 @@ fn double_click(h: &mut Harness<'static, App>, label: &str) {
         }
     }
     h.step();
+}
+
+/// With the dialogs plugin, which asks before replacing a file.
+fn saving_harness(fs: Option<files::fs::SharedFs>) -> Harness<'static, App> {
+    let mut files = FilesPlugin::in_app();
+    if let Some(fs) = fs {
+        files = files.file_system(fs);
+    }
+    let app = App::builder()
+        .plugin(dialogs::DialogsPlugin)
+        .plugin(files)
+        .build(&egui::Context::default())
+        .unwrap();
+    Harness::builder()
+        .with_size(egui::vec2(900.0, 640.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app)
+}
+
+/// The field's text.
+fn field(h: &Harness<'static, App>) -> String {
+    let snapshot = h.state().handle().debug_snapshot();
+    snapshot["files"]["open"][0]["picker"]["text"]
+        .as_str()
+        .unwrap_or_default()
+        .to_string()
+}
+
+fn picker_state(h: &Harness<'static, App>, key: &str) -> serde_json::Value {
+    h.state().handle().debug_snapshot()["files"]["open"][0]["picker"][key].clone()
+}
+
+/// Enter in the field, the field holding a new name typed over the stem.
+fn save_as(h: &mut Harness<'static, App>, name: &str) {
+    let label = "File name, or a path";
+    h.get_by_label(label).type_text(name);
+    settle(h);
+    key(h, Key::Enter, Modifiers::NONE);
+}
+
+#[test]
+fn saving_over_a_file_asks_first_and_the_answer_decides() {
+    let root = tree("replace");
+    let mut h = saving_harness(None);
+    let p = choose(
+        &mut h,
+        FileRequest::save("Export", "a.png").directory(root.join("photos")),
+    );
+    key(&mut h, Key::Enter, Modifiers::NONE);
+    assert!(p.take().is_none(), "nothing chosen yet");
+    assert!(h.query_by_label("Replace a.png?").is_some());
+    // The dangerous answer is not the default: the focus is on Cancel, and
+    // the Enter that reached the question did not accept it.
+    assert!(
+        h.query_all_by_role_and_label(Role::Button, "Cancel")
+            .any(|b| b.is_focused())
+    );
+    // Escape closes the question only: the picker is still there, the
+    // stem selected again for another name.
+    key(&mut h, Key::Escape, Modifiers::NONE);
+    assert!(h.query_by_label("Replace a.png?").is_none());
+    assert!(p.take().is_none());
+    assert_eq!(field(&h), "a.png");
+    assert!(picker_state(&h, "asking").is_null());
+    assert!(h.get_by_label("File name, or a path").is_focused());
+    // Again, and Replace by the keyboard: from Cancel to the verb.
+    key(&mut h, Key::Enter, Modifiers::NONE);
+    assert!(h.query_by_label("Replace a.png?").is_some());
+    h.get_by_role_and_label(Role::Button, "Replace").focus();
+    settle(&mut h);
+    key(&mut h, Key::Enter, Modifiers::NONE);
+    assert_eq!(
+        result(&mut h, &p),
+        Ok(Chosen::Paths(vec![root.join("photos/a.png")]))
+    );
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn the_picker_waits_under_its_question() {
+    let root = tree("waits");
+    let mut h = saving_harness(None);
+    let p = choose(
+        &mut h,
+        FileRequest::save("Export", "a.png").directory(root.join("photos")),
+    );
+    key(&mut h, Key::Enter, Modifiers::NONE);
+    assert!(picker_state(&h, "asking").is_u64());
+    // The picker's own keys do nothing meanwhile.
+    key(&mut h, Key::ArrowUp, Modifiers::ALT);
+    key(&mut h, Key::N, Modifiers::COMMAND | Modifiers::SHIFT);
+    assert_eq!(picker_state(&h, "dir"), json!(root.join("photos")));
+    assert!(picker_state(&h, "new_folder").is_null());
+    assert_eq!(h.state().handle().service(&DIALOGS).unwrap().len(), 1);
+    assert!(p.take().is_none());
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn a_new_name_asks_nothing_and_the_opt_out_neither() {
+    let root = tree("no-question");
+    let mut h = saving_harness(None);
+    let dialogs = h.state().handle().service(&DIALOGS).unwrap();
+    let p = choose(
+        &mut h,
+        FileRequest::save("Export", "new.png").directory(root.join("photos")),
+    );
+    key(&mut h, Key::Enter, Modifiers::NONE);
+    assert_eq!(
+        result(&mut h, &p),
+        Ok(Chosen::Paths(vec![root.join("photos/new.png")]))
+    );
+    let p = choose(
+        &mut h,
+        FileRequest::save("Export", "a.png")
+            .directory(root.join("photos"))
+            .confirm_overwrite(false),
+    );
+    key(&mut h, Key::Enter, Modifiers::NONE);
+    assert_eq!(
+        result(&mut h, &p),
+        Ok(Chosen::Paths(vec![root.join("photos/a.png")]))
+    );
+    assert!(dialogs.is_empty());
+    assert!(dialogs.answered().is_empty());
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn who_answers_for_the_picker_is_not_asked_again() {
+    // An answer from outside the picker (the system's chooser ends this
+    // way, as a run-hook and an agent do) goes straight to `file.chosen`.
+    let root = tree("no-twice");
+    let mut h = saving_harness(None);
+    let dialogs = h.state().handle().service(&DIALOGS).unwrap();
+    let p = choose(
+        &mut h,
+        FileRequest::save("Export", "a.png").directory(root.join("photos")),
+    );
+    let f = h.state().handle().service(&FILES).unwrap();
+    f.deliver(f.open_ids()[0], Some(vec![root.join("photos/a.png")]))
+        .unwrap();
+    assert_eq!(
+        result(&mut h, &p),
+        Ok(Chosen::Paths(vec![root.join("photos/a.png")]))
+    );
+    assert!(dialogs.is_empty());
+    assert!(dialogs.answered().is_empty());
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn without_the_dialogs_plugin_nothing_is_replaced_and_the_picker_says_so() {
+    let root = tree("no-dialogs");
+    let mut h = harness(None);
+    let p = choose(
+        &mut h,
+        FileRequest::save("Export", "a.png").directory(root.join("photos")),
+    );
+    key(&mut h, Key::Enter, Modifiers::NONE);
+    settle(&mut h);
+    assert!(p.take().is_none());
+    assert!(
+        h.query_by_label_contains("no dialog can ask").is_some(),
+        "{}",
+        picker_state(&h, "error")
+    );
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn an_inline_picker_asks_over_the_dialog_it_is_in() {
+    let root = tree("inline");
+    let mut h = saving_harness(None);
+    let app = h.state().handle().clone();
+    let f = app.service(&FILES).unwrap();
+    let (id, p) = f.choose_inline(
+        &app,
+        FileRequest::save("Export", "a.png").directory(root.join("photos")),
+    );
+    let dialogs = app.service(&DIALOGS).unwrap();
+    let f2 = f.clone();
+    dialogs
+        .open_custom(
+            &app,
+            dialogs::Custom::closing("Export dialog"),
+            move |ui, app, _pass| {
+                f2.show_inline(ui, app, id);
+            },
+        )
+        .unwrap();
+    settle(&mut h);
+    assert!(h.query_by_label("Export dialog").is_some());
+    h.get_by_role_and_label(Role::Button, "Save").click();
+    settle(&mut h);
+    // The question is shown at once, not queued behind the dialog.
+    assert!(h.query_by_label("Replace a.png?").is_some());
+    assert!(h.query_by_label("Export dialog").is_none());
+    key(&mut h, Key::Escape, Modifiers::NONE);
+    settle(&mut h);
+    // Back to the dialog and its picker, which works again.
+    assert!(h.query_by_label("Export dialog").is_some());
+    assert!(p.take().is_none());
+    h.get_by_role_and_label(Role::Button, "Save").click();
+    settle(&mut h);
+    h.get_by_role_and_label(Role::Button, "Replace").click();
+    assert_eq!(
+        result(&mut h, &p),
+        Ok(Chosen::Paths(vec![root.join("photos/a.png")]))
+    );
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn the_filter_s_extension_is_added_and_follows_the_filter() {
+    let root = tree("extension");
+    let mut h = saving_harness(None);
+    // Typing replaces the stem only: the extension is kept.
+    let p = choose(
+        &mut h,
+        FileRequest::save("Export", "photo.png")
+            .directory(&root)
+            .filter("PNG", &["png"])
+            .filter("JPEG", &["jpg", "jpeg"]),
+    );
+    h.get_by_label("File name, or a path").type_text("dawn");
+    settle(&mut h);
+    assert_eq!(field(&h), "dawn.png");
+    // Another filter: the extension follows, the stem selected again.
+    h.get_by_label("File type").click();
+    settle(&mut h);
+    h.get_by_label_contains("JPEG").click();
+    settle(&mut h);
+    assert_eq!(field(&h), "dawn.jpg");
+    // All files: the name as it is.
+    h.get_by_label("File type").click();
+    settle(&mut h);
+    h.get_by_label("All files").click();
+    settle(&mut h);
+    assert_eq!(field(&h), "dawn.jpg");
+    key(&mut h, Key::Enter, Modifiers::NONE);
+    assert_eq!(
+        result(&mut h, &p),
+        Ok(Chosen::Paths(vec![root.join("dawn.jpg")]))
+    );
+    // A name without an extension gets the filter's on the way out.
+    let p = choose(
+        &mut h,
+        FileRequest::save("Export", "")
+            .directory(&root)
+            .filter("PNG", &["png"]),
+    );
+    save_as(&mut h, "plain");
+    assert_eq!(
+        result(&mut h, &p),
+        Ok(Chosen::Paths(vec![root.join("plain.png")]))
+    );
+    // An extension the person typed stays.
+    let p = choose(
+        &mut h,
+        FileRequest::save("Export", "")
+            .directory(&root)
+            .filter("PNG", &["png"]),
+    );
+    save_as(&mut h, "plain.tiff");
+    assert_eq!(
+        result(&mut h, &p),
+        Ok(Chosen::Paths(vec![root.join("plain.tiff")]))
+    );
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn an_added_extension_that_exists_asks_too() {
+    let root = tree("extension-asks");
+    let mut h = saving_harness(None);
+    let p = choose(
+        &mut h,
+        FileRequest::save("Export", "")
+            .directory(root.join("photos"))
+            .filter("PNG", &["png"]),
+    );
+    save_as(&mut h, "a");
+    assert!(h.query_by_label("Replace a.png?").is_some());
+    assert!(p.take().is_none());
+    assert_eq!(field(&h), "a.png");
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn a_new_folder_by_the_key_is_named_made_and_entered() {
+    let root = tree("new-folder");
+    let mut h = saving_harness(None);
+    let p = choose(
+        &mut h,
+        FileRequest::save("Export", "a.png").directory(&root),
+    );
+    key(&mut h, Key::N, Modifiers::COMMAND | Modifiers::SHIFT);
+    assert_eq!(picker_state(&h, "new_folder"), json!(""));
+    // Its name's field has the focus: typing goes there, by role and label.
+    assert!(
+        h.get_by_role_and_label(Role::TextInput, "Folder name")
+            .is_focused()
+    );
+    // No name: said, and the row stays.
+    key(&mut h, Key::Enter, Modifiers::NONE);
+    assert!(h.query_by_label("Type a name for the folder").is_some());
+    // A folder that exists: said, the name there to fix.
+    h.get_by_role_and_label(Role::TextInput, "Folder name")
+        .type_text("notes");
+    settle(&mut h);
+    key(&mut h, Key::Enter, Modifiers::NONE);
+    assert!(h.query_by_label("notes already exists").is_some());
+    assert_eq!(picker_state(&h, "new_folder"), json!("notes"));
+    // A path is no name.
+    for _ in 0..5 {
+        key(&mut h, Key::Backspace, Modifiers::NONE);
+    }
+    h.get_by_role_and_label(Role::TextInput, "Folder name")
+        .type_text("a/b");
+    settle(&mut h);
+    key(&mut h, Key::Enter, Modifiers::NONE);
+    assert!(h.query_by_label_contains("cannot name a folder").is_some());
+    assert!(!root.join("a").exists());
+    for _ in 0..3 {
+        key(&mut h, Key::Backspace, Modifiers::NONE);
+    }
+    h.get_by_role_and_label(Role::TextInput, "Folder name")
+        .type_text("Prints");
+    settle(&mut h);
+    key(&mut h, Key::Enter, Modifiers::NONE);
+    assert!(root.join("Prints").is_dir());
+    // Entered; the row gone; the name to save under still in the field,
+    // and the keyboard back there.
+    assert_eq!(picker_state(&h, "dir"), json!(root.join("Prints")));
+    assert!(picker_state(&h, "new_folder").is_null());
+    assert_eq!(field(&h), "a.png");
+    assert!(
+        h.get_by_label("File name, or a path").is_focused(),
+        "the field has the keyboard"
+    );
+    let journal = h.state().handle().events_since(0);
+    assert!(journal.iter().any(|e| e.name == "file.folder_created"));
+    key(&mut h, Key::Enter, Modifiers::NONE);
+    assert_eq!(
+        result(&mut h, &p),
+        Ok(Chosen::Paths(vec![root.join("Prints/a.png")]))
+    );
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn escape_closes_the_new_folder_row_not_the_picker() {
+    let root = tree("new-folder-escape");
+    let mut h = saving_harness(None);
+    let p = choose(&mut h, FileRequest::folder("Folder").directory(&root));
+    h.get_by_role_and_label(Role::Button, "New folder").click();
+    settle(&mut h);
+    assert_eq!(picker_state(&h, "new_folder"), json!(""));
+    h.get_by_role_and_label(Role::TextInput, "Folder name")
+        .type_text("Never");
+    settle(&mut h);
+    key(&mut h, Key::Escape, Modifiers::NONE);
+    assert!(picker_state(&h, "new_folder").is_null());
+    assert!(p.take().is_none());
+    assert!(h.query_by_label("Folder").is_some(), "the picker stays");
+    assert!(!root.join("Never").exists());
+    // From the row's buttons too.
+    h.get_by_role_and_label(Role::Button, "New folder").click();
+    settle(&mut h);
+    h.get_by_role_and_label(Role::Button, "Create").focus();
+    settle(&mut h);
+    key(&mut h, Key::Escape, Modifiers::NONE);
+    assert!(picker_state(&h, "new_folder").is_null());
+    assert!(p.take().is_none());
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn the_new_folder_key_is_a_command_and_rebinds() {
+    let root = tree("new-folder-key");
+    let mut h = saving_harness(None);
+    let app = h.state().handle().clone();
+    assert_eq!(app.keys_for(&CMD_NEW_FOLDER), vec!["Ctrl+Shift+N"]);
+    app.rebind(CMD_NEW_FOLDER, Some("Ctrl+Shift+F".into()));
+    settle(&mut h);
+    // No picker open: the rebound key keeps the command's clause, so it is
+    // not taken from whoever else wants it.
+    key(&mut h, Key::F, Modifiers::COMMAND | Modifiers::SHIFT);
+    let traces = app.debug_snapshot()["keys"]["traces"].clone();
+    assert_eq!(traces[0]["resolution"]["kind"], "nothing", "{traces}");
+    let _p = choose(&mut h, FileRequest::folder("Folder").directory(&root));
+    key(&mut h, Key::N, Modifiers::COMMAND | Modifiers::SHIFT);
+    assert!(picker_state(&h, "new_folder").is_null(), "no longer this");
+    key(&mut h, Key::F, Modifiers::COMMAND | Modifiers::SHIFT);
+    assert_eq!(picker_state(&h, "new_folder"), json!(""));
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn an_agent_makes_a_folder_and_opening_offers_none() {
+    use egui_pop_model::commands::Origin;
+    let root = tree("new-folder-agent");
+    let mut h = saving_harness(None);
+    let run = |h: &mut Harness<'static, App>, name: &str| {
+        h.state_mut()
+            .run(
+                &CMD_NEW_FOLDER,
+                json!({ "name": name }),
+                Origin::Agent("test".into()),
+            )
+            .now()
+            .unwrap()
+    };
+    assert!(run(&mut h, "Early").is_err(), "no picker is open");
+    let _p = choose(&mut h, FileRequest::folder("Folder").directory(&root));
+    let out = run(&mut h, "Prints").unwrap();
+    assert_eq!(out["path"], json!(root.join("Prints")));
+    assert!(root.join("Prints").is_dir());
+    settle(&mut h);
+    assert_eq!(picker_state(&h, "dir"), json!(root.join("Prints")));
+    assert!(run(&mut h, "../out").is_err());
+    let f = h.state().handle().service(&FILES).unwrap();
+    f.deliver(f.open_ids()[0], None).unwrap();
+    settle(&mut h);
+    // Opening a file: no button, and the key does nothing to the picker.
+    let _p = choose(&mut h, FileRequest::open("Open").directory(&root));
+    assert!(h.query_by_label("New folder").is_none());
+    key(&mut h, Key::N, Modifiers::COMMAND | Modifiers::SHIFT);
+    assert!(picker_state(&h, "new_folder").is_null());
+    assert!(run(&mut h, "Nope").is_err());
+    assert!(!root.join("Nope").exists());
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn a_read_only_file_system_refuses_a_new_folder_out_loud() {
+    let fs: files::fs::SharedFs =
+        std::sync::Arc::new(files::fs::MemoryFs::new().file("/demo/a.png", b"x".to_vec()));
+    let mut h = saving_harness(Some(fs));
+    let _p = choose(
+        &mut h,
+        FileRequest::save("Export", "a.png").directory("/demo"),
+    );
+    // The button is there, disabled.
+    let button = h.get_by_role_and_label(Role::Button, "New folder");
+    assert!(button.accesskit_node().is_disabled());
+    // The key says why, in the dialog.
+    key(&mut h, Key::N, Modifiers::COMMAND | Modifiers::SHIFT);
+    assert!(h.query_by_label_contains("read-only").is_some());
+    assert!(picker_state(&h, "new_folder").is_null());
+    // Replacing still asks: the question does not need to write.
+    key(&mut h, Key::Enter, Modifiers::NONE);
+    assert!(h.query_by_label("Replace a.png?").is_some());
+}
+
+#[test]
+fn saving_kinds_round_trip_the_opt_out() {
+    let r = FileRequest::save("Export", "a.png");
+    assert!(r.confirm_overwrite, "on by default");
+    let off = r.clone().confirm_overwrite(false);
+    assert_eq!(FileRequest::from_json(&off.to_json()).unwrap(), off);
+    // A request written before the option asks.
+    let mut old = r.to_json();
+    old.as_object_mut().unwrap().remove("confirm_overwrite");
+    assert!(FileRequest::from_json(&old).unwrap().confirm_overwrite);
+}
+
+#[test]
+fn no_key_accepts_the_question_from_where_its_focus_starts() {
+    // egui clicks a focused button on Enter or Space whatever the modifiers
+    // (`Context::create_widget`). The question's focus starts on Cancel, so
+    // each of these cancels it, and none reaches the picker below.
+    let root = tree("danger-keys");
+    for (k, modifiers) in [
+        (Key::Enter, Modifiers::NONE),
+        (Key::Enter, Modifiers::COMMAND),
+        (Key::Enter, Modifiers::ALT),
+        (Key::Enter, Modifiers::SHIFT),
+        (Key::Space, Modifiers::NONE),
+        (Key::Space, Modifiers::COMMAND),
+    ] {
+        let mut h = saving_harness(None);
+        let dialogs = h.state().handle().service(&DIALOGS).unwrap();
+        let p = choose(
+            &mut h,
+            FileRequest::save("Export", "a.png").directory(root.join("photos")),
+        );
+        key(&mut h, Key::Enter, Modifiers::NONE);
+        assert!(h.query_by_label("Replace a.png?").is_some());
+        key(&mut h, k, modifiers);
+        assert_eq!(
+            dialogs.answered().last().map(|(_, a, _)| a.clone()),
+            Some(dialogs::Answer::Cancel),
+            "{k:?} {modifiers:?}"
+        );
+        assert!(p.take().is_none(), "{k:?} {modifiers:?}: nothing chosen");
+        assert!(h.get_by_label("File name, or a path").is_focused());
+    }
+    let _ = std::fs::remove_dir_all(root);
 }

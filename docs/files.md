@@ -86,6 +86,60 @@ draws the in-app picker where it wants it (`Files::show_inline`).
   saved with the settings).
 - Below: the request's filters (and all files), hidden files.
 
+### Saving
+
+- **The name.** The field proposes the request's name with its stem
+  selected, whenever the field gets the focus: typing replaces the name
+  and keeps the extension. A click in the field places the cursor as
+  usual.
+- **The extension.** Enter or Save appends the active filter's first
+  extension to a name that has none (`dawn` gives `dawn.png`). When the
+  filter changes, a name whose extension one of the request's filters
+  names takes the new filter's first (`dawn.png` gives `dawn.jpg`), as
+  Windows' dialog does, unless the new filter accepts it too.
+  An extension no filter names is the person's and is never touched
+  (`dawn.tiff` stays under PNG), and all files, or a filter without
+  extensions, leaves the name as it is. A hidden file's name (`.config`)
+  gets no extension; what follows a dot in `Mr. Smith` holds a space and
+  is not one, so that name gets one.
+- **Replacing a file.** When the name exists, the picker asks first
+  through the dialogs plugin, with a `Confirm` in the danger style:
+  "Replace a.png?", the focus on Cancel. No key accepts it from there: Enter
+  and Space press the focused button whatever the modifiers (egui's rule), so
+  Ctrl+Enter or Space cancels; replacing takes a click on Replace, or Tab to
+  it first. Cancel or Escape gives the picker back, the keyboard in its field
+  and the stem selected for another name; Replace ends the choice
+  (`file.replace`). The picker is inert meanwhile. An
+  application that asks itself turns this off with
+  `FileRequest::confirm_overwrite(false)`.
+  - It is the in-app picker's question only, so egui-pop adds no second one
+    to a system chooser: a choice answered by the system goes straight to
+    `file.chosen`. egui-pop relies on the system's own question there and
+    has not run one to see it. `rfd` asks for it in its GTK and zenity
+    backends and leaves Windows' default (`FOS_OVERWRITEPROMPT`) alone; with
+    the desktop portal and macOS's save panel, the question is up to them.
+    `rfd` has no way to turn it off, so the opt-out does not reach them.
+    A run-hook on `file.choose`, `Files::deliver` and the bridge's `answer`
+    answer for themselves.
+  - Without the dialogs plugin nobody can ask: nothing is replaced, and the
+    picker says so and wants another name.
+  - A `FilePicker` drawn on its own answers `PickerAnswer::Replace(path)`:
+    its caller asks.
+  - Inside a dialog (`Files::show_inline`), the question comes up in that
+    dialog's place, and the dialog comes back after the answer, as it was. Its
+    overlay closes and opens again, so it is drawn anew.
+- **A new folder**, saving or choosing a folder: the New folder button, or
+  the `file.new_folder` command (Ctrl+Shift+N, rebindable, working through
+  the picker's modal and while typing). A row under the folder asks the
+  name: Enter or Create makes it through the file system
+  (`FileSystem::create_dir`) and goes into it, the name to save under
+  still in the field; Escape closes the row and leaves the picker open.
+  A name that is empty, holds a path or exists, or an error from the
+  system, shows in the picker, and the row stays to fix the name. The
+  name comes first, as in GTK and macOS, so nothing needs renaming. The
+  journal says `file.folder_created`. An agent gives `{ "name" }` to the
+  command and the folder is made at once.
+
 `FilePicker` is usable on its own, in any `Ui`: its list is
 `LIST_HEIGHT` (280) high, or takes the height left with `fill`. A
 modal of your own that the person resizes is
@@ -103,6 +157,14 @@ has no file system: an application gives the picker a `MemoryFs` there
 (`FilesPlugin::file_system`, or `Files::set_file_system` later), as the
 gallery does for its demo folder. `FilePicker::new_in` makes a picker
 on any file system.
+
+It writes one thing, a new folder, and only on a file system that says
+it can (`FileSystem::can_create_dirs`, `create_dir`). `StdFs` can. A
+`MemoryFs` is read-only, and a `FileSystem` of your own is too unless it
+says otherwise: the New folder button is disabled with the reason as its
+tip, and the key shows the reason in the picker. So on the web, whose
+picker reads from memory, no folder can be made, and it says so; saving
+still chooses a path and still asks before replacing a file held there.
 
 ## Previews
 
@@ -212,6 +274,11 @@ choice (the `Pending` gives the reason as an error) or redirects it to
 other paths. The journal says `file.cancelled`. The debug bridge's
 `files` collector shows the choices open, the in-app picker's folder,
 field and entries, and answers a choice (`answer`).
+
+The commands `file.new_folder` (`{ "name" }`, optional) and
+`file.replace` (`{ "id", "path" }`, hidden) are the picker's new folder and
+the yes to its question. The `when` key `filePickerNewFolder` says that an
+open picker offers a new folder.
 
 The gallery's `files` page opens each kind of choice in a demo folder
 whose files are made by code at start (the repository holds no binary

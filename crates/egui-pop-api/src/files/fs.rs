@@ -3,7 +3,10 @@
 //! build, which has no file system, and for tests.
 //!
 //! The picker and the preview providers read through a [`SharedFs`]:
-//! listing a folder, the facts of a path, the first bytes of a file.
+//! listing a folder, the facts of a path, the first bytes of a file. The
+//! picker's New folder is the one thing it writes: [`StdFs`] makes the
+//! folder, and a [`MemoryFs`] refuses (it is read-only; the picker says
+//! so).
 //!
 //! ```
 //! use std::path::Path;
@@ -52,6 +55,20 @@ pub trait FileSystem: Send + Sync + fmt::Debug {
 
     /// At most `limit` bytes from the start of a file.
     fn read(&self, path: &Path, limit: usize) -> io::Result<Vec<u8>>;
+
+    /// Whether it can make folders ([`FileSystem::create_dir`]): the
+    /// picker's New folder is disabled, with the reason, when it cannot.
+    fn can_create_dirs(&self) -> bool {
+        false
+    }
+
+    /// Makes a folder, whose parent exists. By default it cannot.
+    fn create_dir(&self, _path: &Path) -> io::Result<()> {
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "this file system cannot make folders",
+        ))
+    }
 
     /// Whether its paths are the system's own, so that other programs
     /// (a system thumbnailer) can open them.
@@ -107,6 +124,15 @@ impl FileSystem for StdFs {
             .take(limit as u64)
             .read_to_end(&mut out)?;
         Ok(out)
+    }
+
+    fn can_create_dirs(&self) -> bool {
+        // The web has no file system to write to.
+        !cfg!(target_arch = "wasm32")
+    }
+
+    fn create_dir(&self, path: &Path) -> io::Result<()> {
+        std::fs::create_dir(path)
     }
 
     fn is_native(&self) -> bool {
@@ -261,5 +287,12 @@ mod tests {
         assert!(fs.read_dir(Path::new("/r/a/x.txt")).is_err());
         assert!(fs.metadata(Path::new("/nope")).is_err());
         assert!(!fs.is_native());
+        // Read-only: the default of the trait.
+        assert!(!fs.can_create_dirs());
+        assert_eq!(
+            fs.create_dir(Path::new("/r/new")).unwrap_err().kind(),
+            io::ErrorKind::Unsupported
+        );
+        assert!(!fs.is_dir(Path::new("/r/new")));
     }
 }
