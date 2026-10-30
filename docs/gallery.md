@@ -20,6 +20,12 @@ global shortcut Ctrl+Alt+G, logs and crash reports in the user's state
 directory; without it they are simulated and nothing reaches the
 desktop).
 
+The side bar lists the pages in egui-pop's own tree view
+([the tree](tree.md)), one scroll for all, their groups as folders. A click
+or Enter opens a page; the arrows walk the list, Left and Right fold and open
+a group, letters find a row. The folds are kept with the window's layout, and
+the group of the page shown opens by itself.
+
 Pages: `overview` (the theme overview), `tokens`, `builtins` (egui's
 built-ins, and egui-pop's kit-drawn checkbox, radio, rows and chips), `roles` (layout by role: text roles, spacing by intent, cards and buttons by tone), `scoped` (egui's own buttons, toggles, combo box and text fields restyled by the kit in a scope), `theme-editor` (the theme editor), `fonts` (candidate font pairs side by side), `icons`, `indicators` (dots, badges, pips, flags, swatches), `sections` (collapsible sections stacked in a panel), `motion` (the motion clock), `values`, `history` (the application's history: its panel's list, a click jumping to a step), `sliders`, `inputs` (decorated inputs, field states and Tab order),
 `menus`, `toolbars` (toolbars of commands, More tools, a tool palette), `dialogs`, `files` (the file chooser), `toasts`, `tips` (tips of the day and
@@ -308,6 +314,7 @@ Zones and blocks, the workbench, the layout controls, palettes, arrangements, th
   <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/viewer-html-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/viewer-html-pop-dark.png" width="200" alt="viewer-html-pop-dark"></a><br>viewer-html-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/pages-short-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/pages-short-pop-dark.png" width="200" alt="pages-short-pop-dark"></a><br>pages-short-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/pages-folded-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/pages-folded-pop-dark.png" width="200" alt="pages-folded-pop-dark"></a><br>pages-folded-pop-dark</td>
   </tr>
 </table>
 

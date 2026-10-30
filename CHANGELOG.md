@@ -896,6 +896,12 @@ publishes.
 
 ### Changed
 
+- The gallery's list of pages is a tree (egui-pop-gallery; `docs/gallery.md`),
+  through egui-pop's own tree view: its groups fold, with one scroll for all
+  and one Tab stop. The folds are kept with the window's layout, and the group
+  of the page shown opens by itself. Arrows walk the list, Left and Right fold,
+  Enter or a click opens a page. The page "Node graph from a file" is now
+  "Graph from a file", which fits the indented column.
 - The in-app file picker keeps one size with the preview pane on or off
   (egui-pop-api): its modal is `files::PICKER_WIDTH` (880 points) wide
   either way, and the pane takes its width from the list's instead of

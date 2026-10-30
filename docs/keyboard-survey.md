@@ -707,7 +707,9 @@ one pull request. Numbers stay as they are, since the walk's tests name them;
    else a hint. Size: M.
 10. **The gallery's side list as a `ListView`.** One stop, arrows, Home, End,
     type-ahead; Enter opens the page and moves the focus into it. The catalogue
-    should show the good pattern. Size: S.
+    should show the good pattern. Size: S. Done with the tree view rather than
+    a list, its groups foldable; Enter opens the page and the focus stays in
+    the list.
 11. **egui 0.37.** Menus with arrows (#8548), the `Menu` key, several `Remove
     when` entries in the upstream register. It is its own migration and belongs
     in its own plan, whatever the keyboard says. Size: L.

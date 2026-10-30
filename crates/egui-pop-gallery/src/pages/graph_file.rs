@@ -53,7 +53,7 @@ impl Plugin for GraphFilePage {
     }
 
     fn title(&self) -> String {
-        "Node graph from a file".into()
+        "Graph from a file".into()
     }
 
     fn requires(&self) -> Vec<PluginId> {
@@ -64,7 +64,7 @@ impl Plugin for GraphFilePage {
         let state = Rc::new(RefCell::new(State::default()));
         let play = state.clone();
         ctx.story(
-            Story::new(StoryId::from_static("graph-file"), "Node graph from a file", move |ui, app| {
+            Story::new(StoryId::from_static("graph-file"), "Graph from a file", move |ui, app| {
                 show(ui, app, &mut state.borrow_mut())
             })
             .description("The node graph editor over a graph kept in a YAML file: each edit lands in the file's text where it applies, its comments and key order kept.")
