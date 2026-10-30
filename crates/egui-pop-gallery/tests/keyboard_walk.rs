@@ -11,25 +11,29 @@
 use std::cell::Cell;
 use std::sync::{Arc, Mutex};
 
-use egui::{Key, Modifiers};
+use egui::accesskit::Role;
+use egui::{Key, Modifiers, Sense};
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
 use egui_pop::api::dialogs::{self, Confirm};
+use egui_pop::api::steps::Before;
+use egui_pop::api::workbench::STEP_FOCUS;
 use egui_pop::api::{App, Ctx, DefaultPlugins, Plugin, PluginError, palettes};
+use egui_pop::core::focus;
 use egui_pop::core::sections::{Section, Sections};
 use egui_pop::core::tab::{self, ScopeKind, TabStop};
 use egui_pop::editors::terminal::{Sink, Spawn, Terminal, TerminalSource, TerminalState};
 use egui_pop::model::commands::{CommandSpec, Origin};
-use egui_pop::model::ids::{CommandId, PluginId};
+use egui_pop::model::ids::{CommandId, PanelId, PluginId};
 use egui_pop::model::layout::Node;
-use egui_pop::model::panels::Area;
+use egui_pop::model::panels::{Area, PanelSpec};
 use egui_pop::theme::ThemeSpec;
 use egui_pop_gallery::pages::workbench::{NOTES, OUTLINE};
 use egui_pop_gallery::{Gallery, Options};
 use egui_pop_test::SharedGpu as _;
 use egui_pop_test::themed;
 use egui_pop_test::walk::{self, ESCAPE, End, F6, Press, SHIFT_F6, SHIFT_TAB, Stop, TAB};
-use serde_json::Value as Json;
+use serde_json::{Value as Json, json};
 
 const ENTER: Press = Press::key(Key::Enter);
 const SPACE: Press = Press::key(Key::Space);
@@ -119,7 +123,6 @@ fn shift_tab_goes_round_the_other_way() {
 // The one thing to settle first: which panel the keys obey (item 3).
 
 #[test]
-#[ignore = "keyboard survey item 3: Tab into another panel leaves focusedPanel on the old one"]
 fn tab_into_another_panel_moves_the_focused_panel() {
     let mut h = with_panels();
     h.get_by_label("Sections of the document.").click();
@@ -131,7 +134,6 @@ fn tab_into_another_panel_moves_the_focused_panel() {
 }
 
 #[test]
-#[ignore = "keyboard survey item 3: a panel's focus command moves no widget focus"]
 fn a_panel_focus_command_gives_it_the_keyboard() {
     let mut h = with_panels();
     h.state_mut().app.run(
@@ -142,6 +144,348 @@ fn a_panel_focus_command_gives_it_the_keyboard() {
     let _ = h.run_ok();
     assert_eq!(h.state().app.handle().focused_panel(), Some(NOTES));
     assert_eq!(name(walk::focused(&h)), "Clear the notes…");
+}
+
+#[test]
+fn a_panel_with_only_text_holds_the_focus_itself_in_the_gallery() {
+    let mut h = with_panels();
+    h.state_mut().app.run(
+        &CommandId::new("gallery.outline.focus").unwrap(),
+        Json::Null,
+        Origin::User,
+    );
+    let _ = h.run_ok();
+    assert_eq!(h.state().app.handle().focused_panel(), Some(OUTLINE));
+    assert_eq!(name(walk::focused(&h)), "Outline");
+}
+
+#[test]
+fn the_menu_the_status_bar_and_nothing_leave_the_last_panel_focused() {
+    let mut h = harness("overview");
+    walk::reach(&mut h, TAB, "Pages", 40).expect("Tab reaches the side list");
+    let side = h.state().app.handle().focused_panel();
+    assert!(side.is_some());
+    walk::reach(&mut h, SHIFT_TAB, "No job", 10).expect("back to the status bar");
+    assert_eq!(h.state().app.handle().focused_panel(), side);
+    walk::reach(&mut h, SHIFT_TAB, "File", 40).expect("back to the menu");
+    assert_eq!(h.state().app.handle().focused_panel(), side);
+    assert_eq!(walk::press(&mut h, ESCAPE), None);
+    assert_eq!(h.state().app.handle().focused_panel(), side);
+    // A menu opened from the keyboard leaves the keys to the panel too.
+    walk::press(&mut h, ALT_F);
+    assert_eq!(h.state().app.handle().focused_panel(), side);
+}
+
+// One focused panel (item 3), in a small application with a panel of each kind.
+
+const IMAGE: PanelId = PanelId::from_static("demo.image");
+const LIST: PanelId = PanelId::from_static("demo.list");
+const EMPTY: PanelId = PanelId::from_static("demo.empty");
+const TOOLS: PanelId = PanelId::from_static("demo.tools");
+const SEARCH: PanelId = PanelId::from_static("demo.search");
+
+fn command(id: &str) -> CommandId {
+    CommandId::new(id).unwrap()
+}
+
+#[derive(Clone, Default)]
+struct Seen {
+    /// The runs of the command bound to `C` on the image.
+    circles: Arc<Mutex<u32>>,
+    /// The runs of the step `workbench.focus`.
+    focus_steps: Arc<Mutex<u32>>,
+    search: Arc<Mutex<String>>,
+}
+
+struct Panels(Seen);
+
+impl Plugin for Panels {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("demo")
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        let Seen {
+            circles,
+            focus_steps,
+            search,
+        } = self.0.clone();
+        let mut size = String::new();
+        ctx.panel(PanelSpec::new(IMAGE, "Image", Area::Center), |ui, _| {
+            let _ = ui.button("Zoom");
+            let (_, canvas) = ui.allocate_exact_size(egui::vec2(100.0, 100.0), Sense::click());
+            egui_pop::core::a11y::name(&canvas, egui::WidgetType::Image, "Canvas");
+            focus::prefer(ui.ctx(), canvas.id);
+        })?
+        .panel(PanelSpec::new(LIST, "List", Area::StartSide), |ui, _| {
+            egui::ScrollArea::vertical()
+                .max_height(60.0)
+                .show(ui, |ui| {
+                    for i in 0..30 {
+                        let _ = ui.button(format!("Row {i}"));
+                    }
+                });
+        })?
+        .panel(PanelSpec::new(EMPTY, "Empty", Area::Bottom), |ui, _| {
+            ui.label("Nothing to focus");
+        })?
+        .panel(
+            PanelSpec::new(TOOLS, "Tools", Area::EndSide)
+                .palette()
+                .min_size(160.0),
+            move |ui, _| {
+                ui.label("Brush");
+                ui.text_edit_singleline(&mut size);
+            },
+        )?
+        .panel(
+            PanelSpec::new(SEARCH, "Search", Area::Bottom),
+            move |ui, _| {
+                ui.text_edit_singleline(&mut *search.lock().unwrap());
+            },
+        )?;
+        ctx.command(
+            CommandSpec::new(CIRCLE, "Add a circle", "Demo")
+                .when("focusedPanel == 'demo.image'")
+                .key("C"),
+            move |_| {
+                *circles.lock().unwrap() += 1;
+                Ok(Json::Null)
+            },
+        )?;
+        ctx.command(
+            CommandSpec::new(GO_SEARCH, "Go to the search", "Demo").key("T"),
+            |call| {
+                call.app.focus_panel(&SEARCH);
+                Ok(Json::Null)
+            },
+        )?;
+        ctx.before(STEP_FOCUS, move |_, _| {
+            *focus_steps.lock().unwrap() += 1;
+            Before::Go
+        });
+        Ok(())
+    }
+}
+
+const CIRCLE: CommandId = CommandId::from_static("demo.circle");
+const GO_SEARCH: CommandId = CommandId::from_static("demo.go_search");
+
+fn panels() -> (Harness<'static, App>, Seen) {
+    let seen = Seen::default();
+    let app = App::builder()
+        .plugins(DefaultPlugins)
+        .plugin(Panels(seen.clone()))
+        .build(&egui::Context::default())
+        .unwrap();
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(1000.0, 700.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+    let _ = h.run_ok();
+    (h, seen)
+}
+
+fn run(h: &mut Harness<'_, App>, id: &str) {
+    h.state_mut().run(&command(id), Json::Null, Origin::User);
+    let _ = h.run_ok();
+}
+
+fn panel(h: &Harness<'_, App>) -> Option<PanelId> {
+    h.state().handle().focused_panel()
+}
+
+fn moves(h: &Harness<'_, App>) -> Vec<Json> {
+    let events = h.state().handle().events_since(0);
+    events
+        .into_iter()
+        .filter(|e| e.name == "workbench.focused")
+        .map(|e| e.data["panel"].clone())
+        .collect()
+}
+
+#[test]
+fn a_when_clause_on_the_focused_panel_follows_tab() {
+    let (mut h, seen) = panels();
+    walk::press(&mut h, Press::key(Key::C));
+    assert_eq!(*seen.circles.lock().unwrap(), 0, "no panel has the keys");
+    run(&mut h, "demo.image.focus");
+    walk::press(&mut h, Press::key(Key::C));
+    assert_eq!(*seen.circles.lock().unwrap(), 1);
+    reach_back_in(&mut h, "Row 0");
+    assert_eq!(panel(&h), Some(LIST));
+    walk::press(&mut h, Press::key(Key::C));
+    assert_eq!(*seen.circles.lock().unwrap(), 1, "Tab took the keys away");
+    walk::reach(&mut h, TAB, "Canvas", 80).expect("Tab goes back");
+    assert_eq!(panel(&h), Some(IMAGE));
+    walk::press(&mut h, Press::key(Key::C));
+    assert_eq!(*seen.circles.lock().unwrap(), 2);
+}
+
+#[test]
+fn a_panel_with_a_canvas_gives_it_the_focus_before_its_toolbar() {
+    let (mut h, _) = panels();
+    run(&mut h, "demo.image.focus");
+    assert_eq!(name(walk::focused(&h)), "Canvas");
+    assert_eq!(panel(&h), Some(IMAGE));
+}
+
+#[test]
+fn a_panel_with_nothing_to_focus_holds_the_focus_itself() {
+    let (mut h, _) = panels();
+    run(&mut h, "demo.empty.focus");
+    let stop = walk::focused(&h).expect("the panel holds it");
+    assert_eq!(stop.name, "Empty", "{stop}");
+    assert!(stop.visible, "{stop}");
+    assert_eq!(panel(&h), Some(EMPTY));
+    // Tab goes on from there, and the panel is no stop of its own.
+    let on = walk::press(&mut h, TAB).expect("Tab goes on");
+    assert_ne!(on.name, "Empty", "{on}");
+    let walked = walk::walk(&mut h, TAB, 200);
+    let named = walked.stops.iter().filter(|s| s.name == "Empty").count();
+    assert_eq!(named, 1, "its tab, the panel no more: {walked}");
+}
+
+#[test]
+fn escape_from_a_panel_holding_the_focus_itself_keeps_the_panel() {
+    let (mut h, _) = panels();
+    run(&mut h, "demo.empty.focus");
+    assert_eq!(walk::press(&mut h, ESCAPE), None);
+    assert_eq!(panel(&h), Some(EMPTY));
+}
+
+#[test]
+fn a_row_scrolled_out_of_its_panel_is_still_that_panels() {
+    let (mut h, _) = panels();
+    run(&mut h, "demo.list.focus");
+    let stop = walk::reach(&mut h, TAB, "Row 29", 80).expect("Tab gets there");
+    assert!(!stop.visible, "this test needs it out of view: {stop}");
+    assert_eq!(panel(&h), Some(LIST));
+}
+
+#[test]
+fn a_panel_focus_command_leaves_a_focus_already_inside_where_it_is() {
+    let (mut h, _) = panels();
+    run(&mut h, "demo.list.focus");
+    assert_eq!(name(walk::focused(&h)), "Row 0");
+    assert_eq!(name(walk::press(&mut h, TAB)), "Row 1");
+    run(&mut h, "demo.list.focus");
+    assert_eq!(name(walk::focused(&h)), "Row 1");
+}
+
+#[test]
+fn each_change_of_panel_is_published_once_and_runs_no_step() {
+    let (mut h, seen) = panels();
+    run(&mut h, "demo.list.focus");
+    assert_eq!(*seen.focus_steps.lock().unwrap(), 1);
+    assert_eq!(
+        moves(&h),
+        [json!("demo.list")],
+        "the command, then its widget"
+    );
+    // Within a panel, nothing to say.
+    walk::press(&mut h, TAB);
+    assert_eq!(moves(&h).len(), 1);
+    // Tab to another panel: one, and no step to loop back through.
+    walk::reach(&mut h, TAB, "Canvas", 80).expect("Tab gets there");
+    assert_eq!(moves(&h), [json!("demo.list"), json!("demo.image")]);
+    assert_eq!(*seen.focus_steps.lock().unwrap(), 1);
+}
+
+#[test]
+fn a_press_moves_the_panel_and_the_focus_going_away_does_not_bring_it_back() {
+    let (mut h, _) = panels();
+    run(&mut h, "demo.list.focus");
+    h.get_by_label("Nothing to focus").click();
+    let _ = h.run_ok();
+    assert_eq!(panel(&h), Some(EMPTY));
+    assert_eq!(walk::focused(&h), None);
+    let _ = h.run_ok();
+    assert_eq!(panel(&h), Some(EMPTY));
+}
+
+#[test]
+fn a_floating_palette_only_borrows_the_keys() {
+    let (mut h, _) = panels();
+    run(&mut h, "demo.image.focus");
+    // A press on its background: the keys stay on the image.
+    h.get_by_label("Brush").click();
+    let _ = h.run_ok();
+    assert_eq!(panel(&h), Some(IMAGE));
+    // Its field takes the keyboard, and gives it back.
+    h.get_by_role(Role::TextInput).click();
+    let _ = h.run_ok();
+    assert_eq!(panel(&h), Some(TOOLS));
+    assert_eq!(walk::press(&mut h, ESCAPE), None);
+    assert_eq!(panel(&h), Some(IMAGE));
+    // The same when it is given the keyboard, then closed.
+    run(&mut h, "demo.tools.focus");
+    assert_eq!(panel(&h), Some(TOOLS));
+    assert!(walk::focused(&h).is_some());
+    h.state().handle().set_panel_visible(&TOOLS, false);
+    let _ = h.run_ok();
+    assert_eq!(panel(&h), Some(IMAGE));
+}
+
+#[test]
+fn the_key_that_focuses_a_panel_is_not_typed_into_it() {
+    let (mut h, seen) = panels();
+    h.event(egui::Event::Key {
+        key: Key::T,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: Modifiers::NONE,
+    });
+    h.event(egui::Event::Text("t".to_string()));
+    let _ = h.run_ok();
+    assert_eq!(panel(&h), Some(SEARCH));
+    let stop = walk::focused(&h).expect("the field has the keyboard");
+    assert_eq!(stop.role, Role::TextInput, "{stop}");
+    assert_eq!(*seen.search.lock().unwrap(), "");
+}
+
+#[test]
+fn behind_a_modal_a_panel_focus_command_moves_only_the_logical_focus() {
+    let (mut h, _) = panels();
+    let d = h.state().handle().service(&dialogs::DIALOGS).unwrap();
+    d.open(Confirm::new("A question?", "Accept", CIRCLE));
+    let _ = h.run_ok();
+    let before = name(walk::focused(&h));
+    assert_eq!(before, "Accept");
+    run(&mut h, "demo.list.focus");
+    assert_eq!(panel(&h), Some(LIST));
+    assert_eq!(name(walk::focused(&h)), before);
+}
+
+#[test]
+fn an_agent_does_not_take_the_keyboard_from_someone_typing() {
+    let (mut h, _) = panels();
+    run(&mut h, "demo.search.focus");
+    let field = walk::focused(&h).expect("the field has the keyboard");
+    assert_eq!(field.role, Role::TextInput, "{field}");
+    let agent = Origin::Agent("a1".to_string());
+    h.state_mut()
+        .run(&command("demo.list.focus"), Json::Null, agent);
+    let _ = h.run_ok();
+    assert_eq!(panel(&h), Some(LIST));
+    assert_eq!(walk::focused(&h).map(|s| s.id), Some(field.id));
+}
+
+#[test]
+fn a_detached_panel_takes_the_focus_and_the_keys() {
+    let (mut h, _) = panels();
+    run(&mut h, "demo.image.focus");
+    h.state().handle().detach_panel(&LIST);
+    let _ = h.run_ok();
+    assert_eq!(panel(&h), Some(IMAGE));
+    h.get_by_label("Row 1").click();
+    let _ = h.run_ok();
+    assert_eq!(panel(&h), Some(LIST), "a press in its window");
+    run(&mut h, "demo.image.focus");
+    assert_eq!(name(walk::focused(&h)), "Canvas");
+    run(&mut h, "demo.list.focus");
+    assert_eq!(name(walk::focused(&h)), "Row 0");
+    assert_eq!(panel(&h), Some(LIST));
 }
 
 // Stops that show nothing (check 2, item 8).

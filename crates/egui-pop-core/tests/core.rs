@@ -820,3 +820,116 @@ fn a_splitter_says_its_value_and_keeps_to_its_limits() {
     h.drop_at(at + egui::vec2(10.0, 0.0));
     h.run();
 }
+
+/// Two scopes of two buttons each, what `take_moved` says at each pass.
+fn moved_app() -> (Harness<'static>, Arc<Mutex<Vec<focus::Moved>>>) {
+    let moved = Arc::new(Mutex::new(Vec::new()));
+    let seen = moved.clone();
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(300.0, 200.0))
+        .build_ui(move |ui| {
+            if let Some(m) = focus::take_moved(ui.ctx()) {
+                seen.lock().unwrap().push(m);
+            }
+            focus::scope(ui, "left", &[], |ui| {
+                let _ = ui.button("Left");
+            });
+            ui.label("Between");
+            focus::scope(ui, "right", &[], |ui| {
+                let _ = ui.button("Right");
+                // Out of the scope's place: its widgets still are its own.
+                let far =
+                    egui::Rect::from_min_size(egui::pos2(5000.0, 5000.0), egui::vec2(9.0, 9.0));
+                let id = egui::Id::new("far");
+                let r = ui.interact(far, id, egui::Sense::click());
+                a11y::name(&r, egui::WidgetType::Button, "Far");
+            });
+        });
+    h.run();
+    (h, moved)
+}
+
+fn names(m: &focus::Moved) -> (&'static str, Vec<String>) {
+    let of = |c: &[focus::ScopeRecord]| c.iter().map(|r| r.name.clone()).collect();
+    match m {
+        focus::Moved::Pressed(c) => ("pressed", of(c)),
+        focus::Moved::Focused(c) => ("focused", of(c)),
+        focus::Moved::Left => ("left", Vec::new()),
+    }
+}
+
+#[test]
+fn take_moved_says_each_move_of_the_focus_once() {
+    let (mut h, moved) = moved_app();
+    assert!(moved.lock().unwrap().is_empty());
+    h.get_by_role_and_label(egui::accesskit::Role::Button, "Left")
+        .focus();
+    h.run();
+    h.run();
+    h.get_by_role_and_label(egui::accesskit::Role::Button, "Right")
+        .focus();
+    h.run();
+    h.run();
+    h.key_press(Key::Escape);
+    h.run();
+    h.run();
+    let said: Vec<_> = moved.lock().unwrap().iter().map(names).collect();
+    assert_eq!(
+        said,
+        [
+            ("focused", vec!["left".to_string()]),
+            ("focused", vec!["right".to_string()]),
+            ("left", vec![]),
+        ]
+    );
+}
+
+#[test]
+fn a_widget_belongs_to_the_scope_it_was_drawn_in_wherever_it_lies() {
+    let (mut h, moved) = moved_app();
+    h.get_by_label("Far").focus();
+    h.run();
+    h.run();
+    assert_eq!(focus::chain_names(&h.ctx), ["right"]);
+    let said: Vec<_> = moved.lock().unwrap().iter().map(names).collect();
+    assert_eq!(said, [("focused", vec!["right".to_string()])]);
+}
+
+#[test]
+fn take_moved_says_where_a_press_landed_with_the_focus_elsewhere() {
+    let (mut h, moved) = moved_app();
+    h.get_by_role_and_label(egui::accesskit::Role::Button, "Right")
+        .focus();
+    h.run();
+    moved.lock().unwrap().clear();
+    h.get_by_role_and_label(egui::accesskit::Role::Button, "Left")
+        .click();
+    h.run();
+    let said: Vec<_> = moved.lock().unwrap().iter().map(names).collect();
+    assert_eq!(said[0], ("pressed", vec!["left".to_string()]));
+}
+
+#[test]
+fn take_moved_says_when_the_window_gets_the_system_focus_back() {
+    let (mut h, moved) = moved_app();
+    h.get_by_role_and_label(egui::accesskit::Role::Button, "Right")
+        .focus();
+    h.run();
+    h.run();
+    moved.lock().unwrap().clear();
+    let window = |h: &mut Harness<'static>, on| {
+        let info = h
+            .input_mut()
+            .viewports
+            .entry(egui::ViewportId::ROOT)
+            .or_default();
+        info.focused = Some(on);
+    };
+    window(&mut h, false);
+    h.run();
+    assert!(moved.lock().unwrap().is_empty());
+    window(&mut h, true);
+    h.run();
+    let said: Vec<_> = moved.lock().unwrap().iter().map(names).collect();
+    assert_eq!(said, [("focused", vec!["right".to_string()])]);
+}

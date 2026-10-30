@@ -393,6 +393,12 @@ impl<'a> Ctx<'a> {
                 .description(&fill(&txt::PANEL_FOCUS_DESCRIPTION)),
             move |call| {
                 call.app.focus_panel(&focus);
+                // Someone typing keeps the keyboard, whatever an agent asks.
+                if !matches!(call.origin, egui_pop_model::commands::Origin::User)
+                    && egui_pop_core::focus::text_input_owns_keyboard(&call.app.egui())
+                {
+                    call.app.workbench_mut().cancel_focus_request();
+                }
                 Ok(Json::Null)
             },
         )?

@@ -12,6 +12,21 @@ publishes.
 
 ### Added
 
+- One focused panel (egui-pop-api, egui-pop-core; `docs/workbench.md`).
+  `workbench.focus` and each panel's `.focus` command now give the panel the
+  widget focus: the widget it names with `focus::prefer` (the image viewport,
+  the library's grid and a text editor do), else its first focusable widget,
+  else the panel itself, a stop of its own that shows nothing and that Tab
+  leaves behind. `AppHandle::focused_panel`, now also the context key
+  `focusedPanel`, follows the widget focus however it arrived (Tab, a press, a
+  command), so `when` clauses follow the keyboard; each change is published
+  once as `workbench.focused`. The menu, the status bar, a dock's tabs or nothing
+  holding the focus leave the last panel focused. A floating palette or a
+  flyout only borrows the keys: a press in it moves nothing, a widget of it
+  taking the focus does, and they go back when it lets go. A press on a
+  palette no longer focuses the dock lying under it. New in `focus`:
+  `prefer`, `preferred`, `take_moved`, `Moved`; a widget now belongs to the
+  scopes it was drawn in, even scrolled out of their rectangle.
 - The last folder per purpose (egui-pop-api; `docs/files.md`).
   `FileRequest::purpose(key)` keeps the folder of each choice under `key`
   (`settings/files.last_folders`, `files::last_folder`), in the in-app picker

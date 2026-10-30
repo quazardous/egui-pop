@@ -24,7 +24,7 @@
 //! | `workbench.move` | `{ "panel", "area" }` (`center`, `start_side`, `end_side`, `bottom`) |
 //! | `workbench.show` | `{ "panel" }`: docks it back (its default area) and shows its tab |
 //! | `workbench.hide` | `{ "panel" }`: closes it (kept closed by the layout) |
-//! | `workbench.focus` | `{ "panel" }`: shows it and gives it the keyboard |
+//! | `workbench.focus` | `{ "panel" }`: shows it and gives it the keyboard: see [the focused panel](#the-focused-panel) |
 //! | `workbench.fold` | `{ "area", "folded" }`: an area folded to its strip, or unfolded |
 //! | `workbench.place` | `{ "area", "placement" }`: a side area lies `beside` the centre or `over` it |
 //! | `workbench.flyout` | `{ "panel", "open" }`: a folded side area's panel opens alone over the centre, or closes |
@@ -33,6 +33,37 @@
 //! | `workbench.attach` | `{ "panel" }`: a detached panel docked back |
 //! | `workbench.close_window` | `{ "panel" }`: a detached panel's window closes; the default docks it back, a veto keeps the window |
 //! | `workbench.zen` | `{ "zen" }`: zen mode on or off (see below) |
+//!
+//! # The focused panel
+//!
+//! [`AppHandle::focused_panel`], the context key `focusedPanel`, is the panel
+//! the keys obey. It follows the widget focus, however that arrived:
+//!
+//! - **Tab or any widget taking the focus:** its panel, the one it was drawn
+//!   in, is the focused panel.
+//! - **`workbench.focus` and `<panel>.focus`:** the panel is focused at once
+//!   and takes the widget focus in the next pass: the widget named by
+//!   `focus::prefer` in it (a canvas under a toolbar), else its first
+//!   focusable widget, else the panel itself, a stop of its own, named after
+//!   it and there only while it holds the focus, from which Tab goes on. It
+//!   stays where it is if the focus already is in the panel. Behind a modal,
+//!   or when an agent's command finds someone typing, only the logical focus
+//!   moves.
+//! - **A press** in a panel, whether or not a widget takes the focus.
+//! - **The focus leaving for something no panel holds** (the menu, the status
+//!   bar, a tab of a dock, nothing): the last panel stays focused until another
+//!   takes it, so a menu's command acts on the panel it was opened from.
+//! - **A floating palette or a flyout only borrows it:** a press in it moves
+//!   nothing, a widget of it taking the focus does, and when that lets go
+//!   (Escape, a click elsewhere, the palette closing) the keys go back to the
+//!   panel of the layout that had them. So a click on a palette's background
+//!   leaves the keys on the image, as in an image editor.
+//! - **A detached window** counts when its widget takes the focus or the
+//!   pointer presses in it, and the main window when it gets the system's focus
+//!   back. Each window keeps its own widget focus (egui does).
+//!
+//! Following is a plain write, not a step, so it cannot loop back into
+//! `workbench.focus`; each change is published once as `workbench.focused`.
 //!
 //! Each declared panel gets the commands `<panel>.focus` and
 //! `<panel>.toggle`.
@@ -83,6 +114,7 @@ use std::sync::Arc;
 
 use egui::{Color32, Id, Pos2, Rect, Ui, ViewportBuilder, ViewportId, WidgetInfo, WidgetType};
 use egui_dock::{DockArea, DockState, NodeIndex, Split, TabViewer};
+use egui_pop_core::focus;
 use egui_pop_core::kit::{
     BoxStyle, Corners, Glyph, Kit, KitCx, Part, Side, State, paint_box, paint_indicator,
 };
@@ -627,7 +659,14 @@ pub(crate) struct Workbench {
     pub dragging: Option<(PanelId, Area, Pos2)>,
     /// The drop hint drawn last frame.
     pub hint: Option<DropHint>,
+    /// The panel the keys obey: see [`Workbench::follow_focus`].
     pub focused: Option<PanelId>,
+    /// The last panel to be `focused` that lives in the layout proper: where
+    /// the keys go back to when a palette or a flyout lets go.
+    settled: Option<PanelId>,
+    /// A panel to give the widget focus to, and for how many passes it has
+    /// waited.
+    focus_request: Option<(PanelId, u8)>,
     /// The layout changed outside the docks: project it again.
     stale: bool,
     /// Docks taken out to be drawn: the layout is not read back then.
@@ -675,6 +714,8 @@ impl Default for Workbench {
             dragging: None,
             hint: None,
             focused: None,
+            settled: None,
+            focus_request: None,
             stale: true,
             taken: 0,
             templates: Vec::new(),
@@ -814,6 +855,111 @@ impl Workbench {
         }
     }
 
+    /// Whether a panel only borrows the keys: it floats above the layout, or
+    /// opens over the centre from a folded area. A press in it leaves them
+    /// where they are, and they go back when it lets go.
+    fn borrows_keys(&self, panel: &PanelId) -> bool {
+        self.layout.floating_of(panel).is_some()
+            || self
+                .layout
+                .area_of(panel)
+                .is_some_and(|a| self.layout.folded.contains(&a))
+    }
+
+    fn set_focused(&mut self, panel: &PanelId) {
+        if !self.borrows_keys(panel) {
+            self.settled = Some(panel.clone());
+        }
+        self.focused = Some(panel.clone());
+    }
+
+    /// A panel goes away: a panel only borrowing the keys gives them back.
+    fn forget_focus(&mut self, panel: &PanelId) {
+        if self.settled.as_ref() == Some(panel) {
+            self.settled = None;
+        }
+        if self.focused.as_ref() == Some(panel) {
+            self.focused = self.settled.clone();
+        }
+        if self.focus_request.as_ref().is_some_and(|(p, _)| p == panel) {
+            self.focus_request = None;
+        }
+    }
+
+    /// The panel drawn in these scopes (the innermost, should one be drawn
+    /// inside another).
+    fn panel_of(&self, chain: &[focus::ScopeRecord]) -> Option<PanelId> {
+        chain.iter().rev().find_map(|r| {
+            let spec = self
+                .specs
+                .iter()
+                .find(|s| crate::app::scope_name(s.id.as_str()) == r.name)?;
+            Some(spec.id.clone())
+        })
+    }
+
+    /// Follows the widget focus and the pointer: see
+    /// [the focused panel](self#the-focused-panel). Whether `focused` changed.
+    pub(crate) fn follow_focus(&mut self, moved: focus::Moved) -> bool {
+        let before = self.focused.clone();
+        match moved {
+            focus::Moved::Pressed(chain) => {
+                if let Some(p) = self.panel_of(&chain).filter(|p| !self.borrows_keys(p)) {
+                    self.set_focused(&p);
+                }
+            }
+            focus::Moved::Focused(chain) => {
+                if let Some(p) = self.panel_of(&chain) {
+                    self.set_focused(&p);
+                }
+            }
+            focus::Moved::Left => {
+                if self.focused.as_ref().is_some_and(|p| self.borrows_keys(p)) {
+                    self.focused = self.settled.clone();
+                }
+            }
+        }
+        // A flyout closed without the focus going anywhere.
+        if let Some(p) = &self.focused
+            && self.borrows_keys(p)
+            && self.layout.floating_of(p).is_none()
+            && self.flyout.as_ref() != Some(p)
+        {
+            self.focused = self.settled.clone();
+        }
+        before != self.focused
+    }
+
+    /// One more pass for a panel to take the widget focus. A panel that was
+    /// not drawn in this time (a hidden zone, a rolled palette) is left with
+    /// the logical focus: nothing steals the keyboard long after the command.
+    pub(crate) fn age_focus_request(&mut self) {
+        const PASSES: u8 = 4;
+        if let Some((_, age)) = &mut self.focus_request {
+            *age += 1;
+            if *age > PASSES {
+                self.focus_request = None;
+            }
+        }
+    }
+
+    /// The panel asked for keeps the logical focus only.
+    pub(crate) fn cancel_focus_request(&mut self) {
+        self.focus_request = None;
+    }
+
+    /// Takes the request to give a panel the widget focus, if it is this
+    /// panel's and a pass old: the input of the pass that asked (the key
+    /// bound to the command, an Enter on a button) is not read by the widget
+    /// that gets the focus.
+    pub(crate) fn take_focus_request(&mut self, panel: &PanelId) -> bool {
+        let ripe = matches!(&self.focus_request, Some((p, age)) if p == panel && *age > 0);
+        if ripe {
+            self.focus_request = None;
+        }
+        ripe
+    }
+
     pub fn apply(&mut self, change: &Change) -> Result<Json, String> {
         self.read_back();
         let spec_of = |p: &PanelId| {
@@ -841,9 +987,7 @@ impl Workbench {
             Change::Hide(p) => {
                 spec_of(p)?;
                 self.layout.hide(p);
-                if self.focused.as_ref() == Some(p) {
-                    self.focused = None;
-                }
+                self.forget_focus(p);
                 json!({ "panel": p, "shown": false })
             }
             Change::Focus(p) => {
@@ -852,9 +996,10 @@ impl Workbench {
                     self.reopen(&spec);
                 }
                 self.layout.activate(p);
-                self.focused = Some(p.clone());
                 let area = self.layout.area_of(p);
                 self.layout.folded.retain(|a| Some(*a) != area);
+                self.set_focused(p);
+                self.focus_request = Some((p.clone(), 0));
                 json!({ "panel": p, "focused": true })
             }
             Change::Detach(p) => {
@@ -956,9 +1101,7 @@ impl Workbench {
                     .collect();
                 for q in &panels {
                     self.layout.hide(q);
-                    if self.focused.as_ref() == Some(q) {
-                        self.focused = None;
-                    }
+                    self.forget_focus(q);
                 }
                 json!({ "panel": p, "panels": panels })
             }
@@ -2610,10 +2753,6 @@ impl TabViewer for Viewer<'_> {
     }
 
     fn ui(&mut self, ui: &mut Ui, tab: &mut PanelId) {
-        let rect = ui.max_rect();
-        if ui.input(|i| i.pointer.any_pressed()) && ui.rect_contains_pointer(rect) {
-            self.app.workbench_mut().focused = Some(tab.clone());
-        }
         self.app.show_panel(ui, tab);
     }
 

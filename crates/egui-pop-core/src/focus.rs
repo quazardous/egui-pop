@@ -18,6 +18,15 @@
 //! focus per window): in a detached panel's window, [`when_context`]
 //! says what has the keyboard there.
 //!
+//! A focused widget belongs to the scopes it was drawn in, wherever it lies:
+//! a row scrolled out of its panel is still that panel's. The place a pointer
+//! pressed has no widget to ask, so it goes by the scopes' rectangles.
+//!
+//! [`take_moved`] says when the focus went somewhere else, once per change,
+//! for what keeps a notion of its own of where the user is (the workbench's
+//! focused panel); [`prefer`] names the widget a scope's focus should land on
+//! when something hands the scope the keyboard.
+//!
 //! # Escape, in order
 //!
 //! With the focus plugin [`install`]ed, one press of Escape goes to the
@@ -52,6 +61,8 @@
 //!     });
 //! }
 //! ```
+
+use std::ops::Range;
 
 use egui::{Context, Id, LayerId, Pos2, Rect, Ui};
 use egui_pop_model::when::WhenContext;
@@ -96,6 +107,38 @@ struct State {
     claims: Vec<(Id, u64)>,
     /// The text input Escape took the focus from, and in which pass.
     escaped: Option<(Id, u64)>,
+    /// `building` and `last`'s other half.
+    drawn: Vec<Drawn>,
+    drawn_last: Vec<Drawn>,
+    /// The widget holding the focus when last looked at.
+    seen: Option<Id>,
+    /// Whether the window had the system's focus when last looked at.
+    window: Option<bool>,
+    /// What changed at the start of this pass, until asked.
+    moved: Option<Moved>,
+}
+
+/// What a scope is besides its record, by the same index: not part of
+/// [`ScopeRecord`], which the debug bridge shows.
+#[derive(Clone, Debug, Default)]
+struct Drawn {
+    /// The widgets drawn inside it, as their order in its layer.
+    widgets: Range<usize>,
+    /// The widget it wants to hand the focus to ([`prefer`]).
+    preferred: Option<Id>,
+}
+
+/// How the place the user works in changed, from [`take_moved`].
+#[derive(Clone, Debug, PartialEq)]
+pub enum Moved {
+    /// The pointer pressed there (or, in hover mode, moved there): the
+    /// scopes at that place, outermost first.
+    Pressed(Vec<ScopeRecord>),
+    /// A widget took the focus, or the window holding it got the system's
+    /// focus back: the focus chain.
+    Focused(Vec<ScopeRecord>),
+    /// The widget holding the focus let it go and nothing took it.
+    Left,
 }
 
 /// The focus state of the window being drawn: each window (a detached
@@ -130,14 +173,45 @@ pub fn peek_response(ctx: &Context, id: Id) -> Option<egui::Response> {
     r
 }
 
-/// What the focus chain is pointed at.
-fn target(ctx: &Context, pressed: Option<(LayerId, Pos2)>) -> Option<(LayerId, Pos2)> {
-    if let Some(id) = ctx.memory(|m| m.focused())
-        && let Some(r) = peek_response(ctx, id)
-    {
-        return Some((r.layer_id, r.interact_rect.center()));
+/// The deepest scope drawn around a widget of the last pass: the one whose
+/// widgets include it. Its place would not do: a row scrolled out of its
+/// panel lies over the next panel, or nowhere.
+fn holding(ctx: &Context, s: &State, id: Id) -> Option<Option<usize>> {
+    let (layer, order) = ctx.viewport(|v| v.prev_pass.widgets.order(id))?;
+    let at = s
+        .last
+        .iter()
+        .zip(&s.drawn_last)
+        .enumerate()
+        .filter(|(_, (r, d))| r.layer == layer && d.widgets.contains(&order))
+        .max_by_key(|(i, (r, _))| (r.depth, *i))
+        .map(|(i, _)| i);
+    Some(at)
+}
+
+/// The deepest scope the focus chain is pointed at.
+fn target(ctx: &Context, s: &State) -> Option<usize> {
+    if let Some(id) = ctx.memory(|m| m.focused()) {
+        if let Some(at) = holding(ctx, s, id) {
+            return at;
+        }
+        if let Some(r) = peek_response(ctx, id) {
+            return deepest(&s.last, r.layer_id, r.interact_rect.center());
+        }
     }
-    pressed
+    let (layer, pos) = s.pressed?;
+    deepest(&s.last, layer, pos)
+}
+
+/// A scope and those around it, outermost first.
+fn outward(scopes: &[ScopeRecord], mut at: Option<usize>) -> Vec<usize> {
+    let mut chain = Vec::new();
+    while let Some(i) = at {
+        chain.push(i);
+        at = scopes[i].parent;
+    }
+    chain.reverse();
+    chain
 }
 
 /// The deepest scope drawn at a place.
@@ -153,19 +227,15 @@ fn deepest(scopes: &[ScopeRecord], layer: LayerId, pos: Pos2) -> Option<usize> {
 /// In hover mode (`focus_mode`), the surface under the moving pointer
 /// gets the keys: the chain points there, and a widget holding the
 /// focus in another surface lets go of it.
-fn follow_pointer(ctx: &Context, s: &mut State) {
+///
+/// The place it moved to, if it did.
+fn follow_pointer(ctx: &Context, s: &mut State) -> Option<(LayerId, Pos2)> {
     if !crate::focus_mode::pointer_may_focus(ctx) {
-        return;
+        return None;
     }
-    let Some(pos) = ctx.input(|i| i.pointer.hover_pos()) else {
-        return;
-    };
-    let Some(layer) = ctx.layer_id_at(pos) else {
-        return;
-    };
-    let Some(under) = deepest(&s.last, layer, pos) else {
-        return;
-    };
+    let pos = ctx.input(|i| i.pointer.hover_pos())?;
+    let layer = ctx.layer_id_at(pos)?;
+    let under = deepest(&s.last, layer, pos)?;
     if let Some(id) = ctx.memory(|m| m.focused())
         && let Some(r) = peek_response(ctx, id)
         && deepest(&s.last, r.layer_id, r.interact_rect.center()) != Some(under)
@@ -173,6 +243,7 @@ fn follow_pointer(ctx: &Context, s: &mut State) {
         ctx.memory_mut(|m| m.surrender_focus(id));
     }
     s.pressed = Some((layer, pos));
+    Some((layer, pos))
 }
 
 fn rotate(ctx: &Context, s: &mut State) {
@@ -181,7 +252,9 @@ fn rotate(ctx: &Context, s: &mut State) {
         return;
     }
     s.pass = now;
+    let mut press = None;
     s.last = std::mem::take(&mut s.building);
+    s.drawn_last = std::mem::take(&mut s.drawn);
     s.passing_last = std::mem::take(&mut s.passing);
     s.open.clear();
     if let Some(pos) = ctx.input(|i| {
@@ -192,17 +265,35 @@ fn rotate(ctx: &Context, s: &mut State) {
     }) && let Some(layer) = ctx.layer_id_at(pos)
     {
         s.pressed = Some((layer, pos));
+        press = Some((layer, pos));
     }
-    follow_pointer(ctx, s);
-    s.chain.clear();
-    if let Some((layer, pos)) = target(ctx, s.pressed) {
-        let mut at = deepest(&s.last, layer, pos);
-        while let Some(i) = at {
-            s.chain.push(i);
-            at = s.last[i].parent;
-        }
-        s.chain.reverse();
+    press = follow_pointer(ctx, s).or(press);
+    s.chain = outward(&s.last, target(ctx, s));
+    s.moved = what_moved(ctx, s, press);
+}
+
+/// What changed since the last pass, given where the pointer pressed in this
+/// one. A press says where it landed even when the focus stays elsewhere
+/// until it is released.
+fn what_moved(ctx: &Context, s: &mut State, press: Option<(LayerId, Pos2)>) -> Option<Moved> {
+    let focused = ctx.memory(|m| m.focused());
+    let window = ctx.input(|i| i.viewport().focused);
+    let widget_changed = std::mem::replace(&mut s.seen, focused) != focused;
+    let came_back = std::mem::replace(&mut s.window, window) == Some(false) && window == Some(true);
+    let records = |s: &State, chain: &[usize]| -> Vec<ScopeRecord> {
+        chain.iter().map(|&i| s.last[i].clone()).collect()
+    };
+    if let Some((layer, pos)) = press {
+        let at = outward(&s.last, deepest(&s.last, layer, pos));
+        return Some(Moved::Pressed(records(s, &at)));
     }
+    if widget_changed {
+        return Some(match focused {
+            Some(_) => Moved::Focused(records(s, &s.chain)),
+            None => Moved::Left,
+        });
+    }
+    came_back.then(|| Moved::Focused(records(s, &s.chain)))
 }
 
 /// Draws `add` inside a named scope that sets `keys` (and `<name>Focus`)
@@ -229,6 +320,11 @@ pub fn scope<R>(
             layer: ui.layer_id(),
             rect: Rect::NOTHING,
         });
+        let first = widgets_in(ui);
+        s.drawn.push(Drawn {
+            widgets: first..first,
+            preferred: None,
+        });
         let i = s.building.len() - 1;
         s.open.push(i);
         i
@@ -245,8 +341,55 @@ pub fn scope<R>(
     if let Some(r) = s.building.get_mut(index) {
         r.rect = rect;
     }
+    let end = widgets_in(ui);
+    if let Some(d) = s.drawn.get_mut(index) {
+        d.widgets.end = end;
+    }
     s.open.pop();
     inner
+}
+
+/// How many widgets this pass drew so far in `ui`'s layer.
+fn widgets_in(ui: &Ui) -> usize {
+    let layer = ui.layer_id();
+    ui.ctx()
+        .viewport(|v| v.this_pass.widgets.get_layer(layer).count())
+}
+
+/// Names the widget the scopes open around it hand the focus to when asked
+/// (call it each pass, in the scope, where it is drawn): the canvas under a
+/// panel's toolbar, the list under its search field. Without one, a panel
+/// given the keyboard goes to its first focusable widget. The first widget
+/// to ask in a scope wins.
+pub fn prefer(ctx: &Context, id: Id) {
+    let st = state(ctx);
+    let mut s = lock(&st);
+    rotate(ctx, &mut s);
+    let open = s.open.clone();
+    for i in open {
+        if let Some(d) = s.drawn.get_mut(i) {
+            d.preferred.get_or_insert(id);
+        }
+    }
+}
+
+/// The widget named by [`prefer`] so far in the scope being drawn.
+pub fn preferred(ctx: &Context) -> Option<Id> {
+    let st = state(ctx);
+    let s = lock(&st);
+    let at = *s.open.last()?;
+    s.drawn.get(at)?.preferred
+}
+
+/// What moved since the last time this was asked, at most once per change
+/// and per window: where the pointer pressed, where a widget took the focus,
+/// or that the focus went nowhere. Read before the pass's drawing, it says
+/// what the end of the previous pass settled.
+pub fn take_moved(ctx: &Context) -> Option<Moved> {
+    let st = state(ctx);
+    let mut s = lock(&st);
+    rotate(ctx, &mut s);
+    s.moved.take()
 }
 
 /// Installs the focus plugin on a context (once; later calls do

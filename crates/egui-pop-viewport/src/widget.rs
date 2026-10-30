@@ -745,6 +745,8 @@ impl<'a> Viewport<'a> {
             ui.make_persistent_id(self.id),
             Sense::click_and_drag(),
         );
+        // Handed the keyboard, a panel gives it to the image, not its toolbar.
+        egui_pop_core::focus::prefer(ui.ctx(), response.id);
         let tokens = ViewportTokens::of(ui.ctx());
         let g = gestures::gestures(ui.ctx());
         let ppp = ui.ctx().pixels_per_point();
