@@ -172,6 +172,9 @@ of every crate with every feature on.
   in egui-pop and Helios against VS Code, JetBrains, Blender, darktable,
   Lightroom, GIMP, Qt, GTK and WAI-ARIA, the changes ranked, and the walk
   still owed.
+- [Scrolling survey](scrolling-survey.md): how desktops and applications show
+  scroll bars and treat the wheel, a recommended default (bars visible at
+  rest) and the changes ranked for egui-pop.
 - [API stability](stability.md): what each release promises.
 - [Governance](../GOVERNANCE.md): who decides, decisions as ADRs and
   requests for comments, what breaks an extension, deprecation windows.

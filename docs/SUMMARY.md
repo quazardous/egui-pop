@@ -58,6 +58,7 @@
 - [Threading survey](threading-survey.md)
 - [File dialogs survey](file-dialogs-survey.md)
 - [Keyboard survey](keyboard-survey.md)
+- [Scrolling survey](scrolling-survey.md)
 - [API stability](stability.md)
 - [Upstream workarounds](upstream.md)
 - [Advanced widgets](widgets.md)
