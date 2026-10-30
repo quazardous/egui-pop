@@ -369,6 +369,7 @@ fn markdown(ui: &mut Ui, v: &Viewer, base: &str, md: &Markdown, actions: &mut Ve
         (current, i.scroll_to.take(), i.images.clone())
     };
     let width = ui.available_width();
+    let before = ctx.viewport(|vp| vp.this_pass.widgets.get_layer(ui.layer_id()).count());
     let mut cache = lock(&v.cache);
     for (n, block) in md.blocks.iter().enumerate() {
         let source = block_source(&ctx, base, block, &md.references, &images);
@@ -406,6 +407,27 @@ fn markdown(ui: &mut Ui, v: &Viewer, base: &str, md: &Markdown, actions: &mut Ve
                 });
             }
         }
+    }
+    // upstream: egui_commonmark draws a code block as a read-only `TextEdit`
+    // without a name and keeps its id to itself (see docs/upstream.md).
+    name_code_blocks(ui, before);
+}
+
+/// Names the unnamed multi-line fields among the widgets drawn since `before`.
+fn name_code_blocks(ui: &Ui, before: usize) {
+    use egui::accesskit::Role;
+    let ctx = ui.ctx();
+    let drawn: Vec<egui::Id> = ctx.viewport(|vp| {
+        let widgets = vp.this_pass.widgets.get_layer(ui.layer_id());
+        widgets.skip(before).map(|w| w.id).collect()
+    });
+    let name = tr(ctx, &txt::VIEWER_CODE_BLOCK);
+    for id in drawn {
+        ctx.accesskit_node_builder(id, |node| {
+            if node.role() == Role::MultilineTextInput && node.label().is_none() {
+                node.set_label(name.as_str());
+            }
+        });
     }
 }
 

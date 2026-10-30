@@ -1918,6 +1918,8 @@ egui-pop-views-viewer-address = Address
 
 egui-pop-views-viewer-back = Back
 
+egui-pop-views-viewer-code-block = Code block
+
 egui-pop-views-viewer-empty = Nothing is open. Help pages and images open here.
 
 egui-pop-views-viewer-find = Find in page

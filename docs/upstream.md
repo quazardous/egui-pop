@@ -366,6 +366,26 @@ limit.
   cells of an empty region (`table.rs`, `// upstream:`).
 - **Remove when**: egui_table names its handles and skips empty regions.
 
+## egui_commonmark: a code block is an unnamed text field
+
+- **Compensated**: `egui_commonmark_backend::elements::code_block` draws
+  a code block as a read-only `egui::TextEdit::multiline` with no hint and
+  no label, so AccessKit reports a `MultilineTextInput` without a name; it
+  returns nothing, and the field's id comes from `ui.next_auto_id()`, so a
+  caller cannot name it. Seen on 0.25.0 (egui 0.36, the version in use);
+  0.26.0 (egui 0.37, the current release) and the `master` branch still draw
+  it the same way. The block's copy button is named by its glyph (`🗐`, then
+  `✔`).
+- **Reproduction**: `CommonMarkViewer::new().show(ui, &mut cache,
+  "```text\na\n```")` in an `egui_kittest` harness: the tree holds a node
+  of role `MultilineTextInput` with no label.
+- **Upstream**: not filed yet.
+- **Workaround**: `egui-pop-views`' viewer names the unnamed multi-line
+  fields among the widgets a page just drew, on their AccessKit nodes
+  (`viewer/view.rs`, `// upstream:`). The copy button keeps its glyph.
+- **Remove when**: egui_commonmark names its code blocks, or takes a name
+  for them.
+
 ## egui_kittest: no way to move a window to a screen of another scale
 
 - **Compensated**: `Harness::set_pixels_per_point` changes egui's zoom
