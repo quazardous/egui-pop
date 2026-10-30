@@ -112,6 +112,15 @@ pub(crate) fn begin_pass(ctx: &Context) {
     ctx.request_repaint();
 }
 
+/// Whether the pointer acted lately enough for what the focus does now to be
+/// its doing, see [`POINTER_PASSES`].
+pub(crate) fn pointer_lately(ctx: &Context) -> bool {
+    let now = pass(ctx);
+    let st = shared_in_window::<Reveal>(ctx, "core.focus.reveal");
+    let s = lock(&st);
+    s.pointer_at.is_some_and(|at| now <= at + POINTER_PASSES)
+}
+
 /// Moves the areas around a widget until it lies in each of them, the
 /// innermost first. Whether any moved.
 fn scroll_to(ctx: &Context, widget: &WidgetRect) -> bool {

@@ -81,6 +81,7 @@ pub mod motion;
 pub mod overlay;
 pub mod param;
 pub mod persist;
+mod place;
 pub mod placeholder;
 pub mod placement;
 pub mod pointer;
