@@ -1900,6 +1900,9 @@ impl FilePicker {
         let empty = self.text.is_empty();
         let path = self.is_path();
         let keys = |i: &mut egui::InputState| {
+            // First: egui matches a key asked without Alt with Alt held too,
+            // so the plain Up below would take it.
+            let alt_up = i.consume_key(Modifiers::ALT, Key::ArrowUp);
             let mut plain = |key| !elsewhere && i.consume_key(Modifiers::NONE, key);
             let (down, up, enter) = (
                 plain(Key::ArrowDown),
@@ -1914,7 +1917,7 @@ impl FilePicker {
                 enter,
                 i.consume_key(Modifiers::COMMAND, Key::Enter),
                 tab,
-                i.consume_key(Modifiers::ALT, Key::ArrowUp) || backspace,
+                alt_up || backspace,
                 i.consume_key(Modifiers::COMMAND, Key::Space),
                 i.consume_key(Modifiers::COMMAND, Key::D),
             )

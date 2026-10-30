@@ -1094,6 +1094,9 @@ publishes.
 
 ### Fixed
 
+- `Alt+Up` goes to the parent folder in the in-app file picker
+  (egui-pop-api), as documented: egui also matches a plain key with Alt held,
+  so the plain Up key took it first and moved the highlight instead.
 - A rebound key keeps how its command's key listens (egui-pop-model): the
   `when` clause and the options (`through_modal`, typing) of the binding it
   replaces. `Keymap::rebind` and `rebind_all` kept only the scope, so a rebound
