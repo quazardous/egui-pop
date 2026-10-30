@@ -241,6 +241,20 @@ limit.
 - **Remove when**: a scroll target bubbles to the outer areas as far as it needs
   to, or a widget's enclosing areas can be read.
 
+## egui: a focus dropped leaves no place
+
+- **Compensated**: when egui drops the focus (Escape, a widget no longer drawn) it
+  keeps no trace of it: Tab starts at the window's first stop, Shift+Tab at its
+  last, and a widget removed has no successor. Reproduced on egui 0.36.2 with the
+  plugin off (`crates/egui-pop-test/tests/focus_place.rs` fails).
+- **Upstream**: not filed yet.
+- **Workaround**: the focus plugin remembers the place
+  (`// upstream:` in `crates/egui-pop-core/src/place.rs`), holds back a Tab pressed
+  with nothing focused for the pass, so that a key binding can take it, then gives
+  the widget the focus back at the start of the next pass and tells egui to move
+  on from it, and hands a removed widget's focus on before egui's own end of pass.
+- **Remove when**: egui's focus has a notion of the last place, or a successor.
+
 ## egui: no side-effect free read of a widget's response
 
 - **Compensated**: `Context::read_response` runs the "clicked

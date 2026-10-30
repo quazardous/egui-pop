@@ -64,7 +64,8 @@ forums and bug trackers is marked as such.
   dialog or the command palette closed by Escape does not, against what
   reading the overlay's tests said ([walk]). After Escape, when the focused
   widget disappears, or when a button changes the panels, the next Tab
-  starts from the top of the window ([walk]).
+  used to start from the top of the window ([walk]); since item 6 it goes on from
+  the place, and a widget removed hands the focus to its neighbour.
 - **Enter opens a dialog and answers it.** Enter on a focused button that
   opens a dialog also accepts the dialog, unless it is a danger: the key is
   still there when the dialog is drawn in the same pass ([walk]). Space
@@ -241,15 +242,19 @@ From `crates/egui-pop-core` (`tab.rs`, `focus.rs`, `keys.rs`,
   when one closes.
 - **[walk] After Escape on any widget** egui drops the focus. The focus
   chain keeps the place, so the surface's keys go on working
-  ([test] `a_palette_takes_the_keyboard_only_when_clicked_and_escape_gives_it_back`),
-  but Tab starts from the first widget of the window, and **[read]** F6 from
-  the first panel.
-- **[walk] When the focused widget disappears** (a tab closed, a windowed
-  section's row scrolled out), the focus goes to nothing and Tab restarts
-  the same way. ARIA's advice is to send it to the next logical item.
-- **[walk] A button changing the panels loses the focus it holds**, not read
+  ([test] `a_palette_takes_the_keyboard_only_when_clicked_and_escape_gives_it_back`).
+  Tab used to start from the first widget of the window; since item 6 it goes on
+  from the place. **[read]** F6 still starts from the first panel (item 5).
+- **[walk] When the focused widget disappears**, the focus used to go to nothing
+  and Tab to restart. Since item 6 a tab closed hands the focus to the next one,
+  as ARIA advises, and a windowed section's row scrolled out leaves nothing
+  focused, with Tab going on from the place. After a menu closed, its layer is
+  gone: Tab still starts from the top (item 11).
+- **[walk] A button changing the panels lost the focus it held**, not read
   at first: "Open the demonstration panels" and "Close them" on the
-  workbench page, by Enter, leave nothing focused.
+  workbench page, by Enter, left nothing focused: they get a new id as the panels
+  change. Since item 6 the focus goes to what stands in their place, which is
+  them. A button that moved as well as changing id would hand it to a neighbour.
 - **[walk] A focused widget out of view stayed out of view** in a plain
   `ScrollArea`: the gallery's side list from its 23rd row, the settings page
   past "Log level". Since item 7, the keyboard's focus brings it in, nested
@@ -692,7 +697,7 @@ one pull request. Numbers stay as they are, since the walk's tests name them;
    the panel's own stop); `focused` follows the widget focus however it arrived,
    and stays on the last panel when it goes to the menu, the status bar or
    nothing. Palettes and flyouts only borrow it; detached windows count. The
-   widget last focused in the panel is not restored: that is items 5 and 6.
+   widget last focused in the panel is not restored: that is item 5.
    ([workbench](workbench.md#the-focused-panel)).
 4. **A focus you can see.** The focus plugin paints a ring from the `focus.ring`
    token around the focused widget at the end of the pass, unless the widget
@@ -706,10 +711,13 @@ one pull request. Numbers stay as they are, since the walk's tests name them;
    does today in a `tab::scope`: keep that test passing. egui does not list focusable widgets
    publicly; a small focusable marker at a region's start, with egui's
    "next" from it, is the first thing to try. Size: M, after 3.
-6. **Focus keeps its place.** The focus plugin remembers the last focused
+6. **Done: focus keeps its place.** The focus plugin remembers the last focused
    widget and rectangle. Tab after Escape, or after that widget vanished,
    continues from that place, not from the window's top; a removed row hands
-   the focus on to its neighbour. Size: S to M.
+   the focus on to its neighbour, the nearest stop in its scope first. A row
+   scrolled away hands nothing on, not to chase the wheel
+   ([Tab order](inputs.md#the-focus-keeps-its-place)). A place in a layer gone
+   leaves Tab as it was.
 7. **Focus scrolls into view.** Done, in one place rather than in each widget:
    the focus plugin moves the scroll areas around a widget when anything but
    the pointer focuses it, nested ones included, by the least that shows it and
@@ -839,14 +847,14 @@ compositor.
 | 1 | Tab until the focus returns; where is the status bar? Any stop unseen or unnamed? | status bar before the panels | Status bar before the panels. 72 stops on the first page, looping to File; 35 out of view (side list); 2 unnamed, the side lines | yes |
 | 2 | Caption, side line, flyout's edge are stops | yes, nothing shown | All three; caption and side lines change no pixel. **Also** an open menu's frame | yes, and one more |
 | 3 | Dock separators are stops; Ctrl and an arrow moves them | yes | Yes, Ctrl or Shift, along their axis, 16 points. No default layout has one (tested on a split area) | yes |
-| 4 | Focus a button, Escape, Tab | the window's first stop | File | yes |
-| 5 | A tab's close button, Enter, Tab | the same | **No close button exists** (`show_close_buttons(false)`). A focused tab closed by its command: nothing focused, Tab goes to File | premise wrong, result as said |
+| 4 | Focus a button, Escape, Tab | the window's first stop | File; since item 6, the stop after the button | yes |
+| 5 | A tab's close button, Enter, Tab | the same | **No close button exists** (`show_close_buttons(false)`). A focused tab closed by its command: nothing focused, Tab goes to File; since item 6, the next tab takes the focus | premise wrong, result as said |
 | 6 | Inputs page F6, Shift+F6; other pages F6 | works there, nothing elsewhere | As said: Street, Tags, Street; on overview, workbench, menus, terminal, settings, nothing | yes |
 | 7 | Up, Down in the side list; Left, Right | leaves for the page | Up and Down go row by row. Right goes to the side line, not the page; Left from there to a row out of view | nearly |
 | 8 | Side list's stops | one per story | 57 for 57 | yes |
 | 9 | Focused button against pressed; Ctrl+Enter; held Space | same pixels; clicks; repeats | Same pixels, and different from rest, so it is seen; Ctrl+Enter clicks; 4 presses, 4 clicks | yes, the look less bad than said |
 | 10 | Long form, Tab past the fold | out of view | Settings page: out of view from "Language" | yes |
-| 11 | A windowed row: focus it, scroll it away | (open) | The gallery's rows are not stops; with buttons as rows, focus goes to nothing, Tab restarts at the first stop. **Also** Tab cannot reach rows not drawn | new |
+| 11 | A windowed row: focus it, scroll it away | (open) | The gallery's rows are not stops; with buttons as rows, focus goes to nothing, Tab restarts at the first stop; since item 6, at the visible row nearest to the place. **Also** Tab cannot reach rows not drawn | new |
 
 **Menus and overlays**
 
@@ -902,7 +910,7 @@ The order to follow for egui-pop now, by the same measure:
 5. **Item 10, the side list as a `ListView`.** Up from tenth, for the same
    reason: 57 stops before any page, and it removes the worst of the rows out
    of view.
-6. **Item 6, focus keeps its place,** now also after a button changing the
+6. **Done: item 6, focus keeps its place,** also after a button changing the
    panels.
 7. **Item 8, no stops that show nothing,** with the menu's frame.
 8. **Item 5, F6 through the shell.** After 3 as planned. A terminal is not the
