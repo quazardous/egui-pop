@@ -19,7 +19,8 @@
 //!   selection, `Ctrl+Space` to select, `Ctrl+D` to bookmark), a typed
 //!   path with completion (`Tab`), the fuzzy filter of the choice dialog,
 //!   the request's filters, recent places and bookmarks kept in the host
-//!   store (`settings/files.recent`, `settings/files.bookmarks`).
+//!   store (`settings/files.recent`, `settings/files.bookmarks`), and the
+//!   last folder per purpose (`settings/files.last_folders`).
 //!   Saving, it appends the filter's extension to a name without one and
 //!   follows the filter when it changes, selects the name's stem, asks
 //!   before replacing a file ([`FileRequest::confirm_overwrite`], through
@@ -148,8 +149,15 @@ pub const DIALOG_SIZE: &str = "settings/files.dialog_size";
 /// Where the width of the in-app picker's preview pane is kept.
 pub const PANE_WIDTH: &str = "settings/files.pane_width";
 
+/// Where the last folder of each purpose is kept (a JSON list of
+/// `[purpose, folder]` pairs, newest first). See [`FileRequest::purpose`].
+pub const LAST_FOLDERS: &str = "settings/files.last_folders";
+
 /// How many recent places are kept.
 pub const RECENT_KEPT: usize = 8;
+/// How many purposes keep a last folder: the one chosen in the longest ago
+/// goes first.
+pub const LAST_FOLDERS_KEPT: usize = 32;
 
 /// What is chosen.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -198,8 +206,19 @@ pub struct FileRequest {
     /// The chooser's title.
     pub title: String,
     /// Where it starts (the last recent place, else home, by default).
+    /// With a [`purpose`](Self::purpose), only until that purpose has a
+    /// last folder, unless [`force_directory`](Self::force_directory) said
+    /// otherwise.
     #[serde(default)]
     pub directory: Option<PathBuf>,
+    /// The key the last folder is remembered under. See
+    /// [`FileRequest::purpose`].
+    #[serde(default)]
+    pub purpose: Option<String>,
+    /// `directory` wins over the purpose's last folder. See
+    /// [`FileRequest::force_directory`].
+    #[serde(default)]
+    pub force_directory: bool,
     /// The name proposed when saving.
     #[serde(default)]
     pub file_name: Option<String>,
@@ -221,6 +240,8 @@ impl FileRequest {
             kind,
             title: title.into(),
             directory: None,
+            purpose: None,
+            force_directory: false,
             file_name: None,
             filters: Vec::new(),
             confirm_overwrite: true,
@@ -249,6 +270,29 @@ impl FileRequest {
 
     pub fn directory(mut self, dir: impl Into<PathBuf>) -> Self {
         self.directory = Some(dir.into());
+        self
+    }
+
+    /// The choice's purpose: its last folder is remembered under this key,
+    /// so an import and an export do not share one (Windows' `SetClientGuid`,
+    /// the `identifier` of a macOS panel). The next choice of that purpose
+    /// starts there: [`directory`](Self::directory) is then the first-time
+    /// default (Windows' `SetDefaultFolder`), and the start when the last
+    /// folder is gone, before home. Recent places stay global, and a purpose
+    /// does not start in them. Without a purpose nothing is remembered per
+    /// choice and `directory` always wins.
+    pub fn purpose(mut self, key: &str) -> Self {
+        self.purpose = Some(key.into());
+        self
+    }
+
+    /// Always starts in `dir` (Windows' `SetFolder`), over the purpose's last
+    /// folder, which the choice still updates: for a request that names the
+    /// folder that matters this time, as a document's own. When `dir` is gone,
+    /// the last folder, then home.
+    pub fn force_directory(mut self, dir: impl Into<PathBuf>) -> Self {
+        self.directory = Some(dir.into());
+        self.force_directory = true;
         self
     }
 
@@ -494,7 +538,7 @@ impl Files {
         let fs = self.file_system();
         let previews = self.previews();
         let show_preview = preview_wanted(app);
-        let recent = recent(app);
+        let start = start_folder(app, &request, &fs);
         let mut s = lock(&self.0);
         let o = s
             .open
@@ -506,17 +550,16 @@ impl Files {
             o.via = Via::Native;
             let answer = o.answer.clone();
             drop(s);
-            native::start(&app.egui(), &request, recent.first().cloned(), answer);
+            native::start(&app.egui(), &request, start, answer);
             return Ok(json!({ "via": "native" }));
         }
         o.via = Via::InApp;
-        let mut picker = FilePicker::new_in(&request, fs.clone()).with_previews(previews);
+        let at = FileRequest {
+            directory: start,
+            ..request
+        };
+        let mut picker = FilePicker::new_in(&at, fs).with_previews(previews);
         picker.show_preview = show_preview;
-        if request.directory.is_none()
-            && let Some(dir) = recent.first().filter(|d| fs.is_dir(d))
-        {
-            picker.go(dir.clone());
-        }
         o.picker = Some(picker);
         Ok(json!({ "via": "in_app" }))
     }
@@ -629,6 +672,10 @@ fn write_list(app: &AppHandle, path: &str, list: &[PathBuf]) {
             .collect::<Vec<_>>(),
     )
     .unwrap_or_default();
+    write_text(app, path, text);
+}
+
+fn write_text(app: &AppHandle, path: &str, text: String) {
     let set = Set::new(path, Change::To(Value::Text(text)), Origin::User)
         .by(&OwnerId::FRAMEWORK)
         .untracked();
@@ -674,6 +721,69 @@ pub fn remember(app: &AppHandle, paths: &[PathBuf]) {
     }
     list.truncate(RECENT_KEPT);
     write_list(app, RECENT, &list);
+}
+
+/// The last folders by purpose, newest first.
+fn last_folders(app: &AppHandle) -> Vec<(String, PathBuf)> {
+    lock(&app.store())
+        .get(LAST_FOLDERS)
+        .and_then(|e| e.value.as_text().map(str::to_string))
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default()
+}
+
+/// The last folder of a purpose ([`FileRequest::purpose`]), whether or not it
+/// still exists.
+pub fn last_folder(app: &AppHandle, purpose: &str) -> Option<PathBuf> {
+    last_folders(app)
+        .into_iter()
+        .find_map(|(p, dir)| (p == purpose).then_some(dir))
+}
+
+/// Keeps the folder of a finished choice under its purpose, if it has one: the
+/// folder chosen, or the first path's parent.
+fn remember_folder(app: &AppHandle, request: &FileRequest, paths: &[PathBuf]) {
+    let (Some(purpose), Some(first)) = (&request.purpose, paths.first()) else {
+        return;
+    };
+    let dir = if request.kind == ChooseKind::Folder {
+        Some(first.as_path())
+    } else {
+        first.parent()
+    };
+    let Some(dir) = dir.filter(|d| !d.as_os_str().is_empty()) else {
+        return;
+    };
+    let mut list = last_folders(app);
+    list.retain(|(p, _)| p != purpose);
+    list.insert(0, (purpose.clone(), dir.to_path_buf()));
+    list.truncate(LAST_FOLDERS_KEPT);
+    // A folder whose name is not Unicode cannot be kept: the list stays as it was.
+    if let Ok(text) = serde_json::to_string(&list) {
+        write_text(app, LAST_FOLDERS, text);
+    }
+}
+
+/// Where a choice starts. Without a purpose, the request's folder else the
+/// last recent place, as given (the in-app picker checks it, the system's
+/// chooser does its own). With one, the first that exists: its last folder,
+/// the request's folder (the other way round when forced), home.
+fn start_folder(app: &AppHandle, request: &FileRequest, fs: &SharedFs) -> Option<PathBuf> {
+    let Some(purpose) = &request.purpose else {
+        return request
+            .directory
+            .clone()
+            .or_else(|| recent(app).first().cloned());
+    };
+    let existing = |d: Option<PathBuf>| d.filter(|d| fs.is_dir(d));
+    let last = existing(last_folder(app, purpose));
+    let asked = existing(request.directory.clone());
+    let (first, second) = if request.force_directory {
+        (asked, last)
+    } else {
+        (last, asked)
+    };
+    first.or(second).or_else(|| existing(home()))
 }
 
 /// The plugin's id.
@@ -757,7 +867,11 @@ impl Plugin for FilesPlugin {
         {
             let store = ctx.app().store();
             let mut store = lock(&store);
-            for (path, label) in [(RECENT, "Recent places"), (BOOKMARKS, "Bookmarks")] {
+            for (path, label) in [
+                (RECENT, "Recent places"),
+                (BOOKMARKS, "Bookmarks"),
+                (LAST_FOLDERS, "Last folders by purpose"),
+            ] {
                 store
                     .declare(
                         ctx.owner(),
@@ -949,6 +1063,7 @@ fn finish(
             let out = app.step(&STEP_CHOSEN, args, |app, args| {
                 let paths = paths_of(args);
                 remember(app, &paths);
+                remember_folder(app, request, &paths);
                 Ok(json!({ "paths": paths_json(&paths) }))
             });
             let r = match out {
@@ -2360,7 +2475,7 @@ mod native {
     pub(super) fn start(
         ctx: &egui::Context,
         request: &FileRequest,
-        recent: Option<PathBuf>,
+        start: Option<PathBuf>,
         answer: Arc<Mutex<Option<Answer>>>,
     ) {
         use std::future::Future;
@@ -2369,7 +2484,7 @@ mod native {
         use super::ChooseKind;
 
         let mut d = rfd::AsyncFileDialog::new().set_title(&request.title);
-        if let Some(dir) = request.directory.clone().or(recent) {
+        if let Some(dir) = start {
             d = d.set_directory(dir);
         }
         if let Some(name) = &request.file_name {
@@ -2420,7 +2535,7 @@ mod native {
     pub(super) fn start(
         _ctx: &egui::Context,
         _request: &FileRequest,
-        _recent: Option<PathBuf>,
+        _start: Option<PathBuf>,
         answer: Arc<Mutex<Option<Answer>>>,
     ) {
         // Never reached: `native_available` is false without the feature.

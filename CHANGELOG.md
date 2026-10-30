@@ -12,6 +12,14 @@ publishes.
 
 ### Added
 
+- The last folder per purpose (egui-pop-api; `docs/files.md`).
+  `FileRequest::purpose(key)` keeps the folder of each choice under `key`
+  (`settings/files.last_folders`, `files::last_folder`), in the in-app picker
+  and for the system's chooser through `rfd`'s `set_directory`, so an import
+  and an export do not share one. The next choice of that purpose starts
+  there: `directory` becomes the first-time default, and what follows a
+  folder that is gone, before home. `FileRequest::force_directory(dir)` starts
+  in `dir` whatever is remembered. Without a purpose nothing changes.
 - A keyboard walk in the test kit (egui-pop-test; `docs/testing.md`):
   `walk::walk`, `reach`, `press` and `focused` press real keys through the
   harness (Tab, Shift+Tab, F6, Escape...) and record what holds the focus

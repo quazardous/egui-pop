@@ -39,11 +39,57 @@ assert_eq!(files::chosen(&result), Ok(Chosen::Paths(vec!["/photos/harbour.png".i
 ```
 
 A request is one of `FileRequest::open`, `open_many`, `save` (with a
-proposed name) and `folder`, with a starting `directory` and `filter`s.
+proposed name) and `folder`, with a starting `directory`, a
+[`purpose`](#the-last-folder-per-purpose) and `filter`s.
 A path field of a form dialog (`Descriptor::path`) goes through the
 same chooser when its Browse button is pressed; inside a dialog of its
 own, an application starts the choice with `Files::choose_inline` and
 draws the in-app picker where it wants it (`Files::show_inline`).
+
+## The last folder per purpose
+
+`FileRequest::purpose("import")` names what the choice is for. Its last
+folder is kept under that key, so an import and an export do not share
+one, as Windows' `SetClientGuid` and the `identifier` of a macOS panel do.
+
+```rust
+use egui_pop::api::files::FileRequest;
+
+// Starts in ~/Pictures the first time, then where the last import was made.
+let import = FileRequest::open("Import").purpose("import").directory("/home/me/Pictures");
+// Always starts in the document's folder; still updates the last folder.
+let save_as = FileRequest::save("Save as", "a.png").purpose("export").force_directory("/work/doc");
+# let _ = (import, save_as);
+```
+
+With a purpose, a choice starts in the first of these that exists:
+
+1. the purpose's last folder (`files::last_folder`);
+2. the request's `directory`: a first-time default, as Windows' guidance
+   has it (`SetDefaultFolder`, which does not hide the last location,
+   rather than `SetFolder`, which does);
+3. home.
+
+So an explicit `directory` does not beat a remembered folder on later
+openings. A request that means it uses `FileRequest::force_directory`,
+which swaps the first two (`SetFolder`).
+
+- **What is kept.** On a choice only (a cancel keeps nothing): the folder
+  chosen, or the parent of the first path, as `file.chosen` gives it after
+  its hooks. It is in the host's store, saved with the settings
+  (`settings/files.last_folders`), for the last `LAST_FOLDERS_KEPT` (32)
+  purposes.
+- **Recent places stay global.** A purpose without a last folder or a
+  `directory` starts at home, not in the last recent place, which may be
+  another purpose's.
+- **No purpose** keeps nothing per choice: the request's `directory`, else
+  the last recent place, else home.
+- **The system's chooser** gets the same folder through `rfd`'s
+  `set_directory`, and only that: `rfd` has no `SetClientGuid`, and how far a
+  system honours a suggested folder is up to it. egui-pop has not run one to
+  see it.
+- A `FilePicker` drawn on its own has no store and starts in the request's
+  `directory`; its caller remembers.
 
 ## The in-app picker
 
@@ -256,7 +302,7 @@ impl PreviewProvider for Notes {
 | Step | Arguments | Default |
 |---|---|---|
 | `file.choose` | `{ "id", "request" }` | opens the system's chooser or the in-app picker |
-| `file.chosen` | `{ "id", "request", "paths" }` | remembers the places, gives the paths |
+| `file.chosen` | `{ "id", "request", "paths" }` | remembers the places and the purpose's last folder, gives the paths |
 
 For agents, the `file.preview` command (`{ "path" }`, kept out of the
 palette) gives a path's preview metadata as the pane shows it, made at
@@ -285,4 +331,5 @@ whose files are made by code at start (the repository holds no binary
 file): PNG and JPEG images drawn with the `image` crate, a text file, a
 Markdown document and a CSV table, written to the temporary folder on
 the desktop and given to the picker as a `MemoryFs` on the web, so the
-previews show there too.
+previews show there too. Open an image and Save as each have a purpose:
+each comes back to its own last folder, the others stay where they were.

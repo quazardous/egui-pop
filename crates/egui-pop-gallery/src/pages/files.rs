@@ -324,6 +324,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
         if ui.button("Open an image…").clicked() {
             asked = Some(
                 FileRequest::open("Open an image")
+                    .purpose("gallery.open_image")
                     .directory(root.join("Photos"))
                     .filter("Images", &["png", "jpg"]),
             );
@@ -334,6 +335,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
         if ui.button("Save as…").clicked() {
             asked = Some(
                 FileRequest::save("Export the image", "harbour-edit.png")
+                    .purpose("gallery.export_image")
                     .directory(root.join("Exports"))
                     .filter("PNG", &["png"]),
             );
