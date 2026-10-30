@@ -519,6 +519,7 @@ pub fn core_collectors() -> Vec<FnCollector> {
                     "text_size": r.spec().text_size,
                     "font_ui": r.spec().font_ui,
                     "font_mono": r.spec().font_mono,
+                    "scroll_bars": r.spec().scroll_bars.as_str(),
                 },
                 "dark": t.dark_mode(),
                 "counterpart": v.paired().then(|| other.resolved().spec().base.clone()),

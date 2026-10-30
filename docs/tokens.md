@@ -344,7 +344,11 @@ A theme is resolved from a `ThemeSpec`, in this order:
    token of their base they do not give, as an alias of it
    ([kit.md](kit.md#components-based-on-another));
 6. the user's **overrides**, raw values by path (aliases allowed); an
-   override of a base reaches the components based on it.
+   override of a base reaches the components based on it;
+7. the user's **fonts**, **text size** and **scroll bars**
+   (`ThemeSpec::font_ui`, `text_size`, `scroll_bars`): the last writes
+   `scroll-bar.visibility` and `placement`
+   ([kit.md](kit.md#scroll-bars)).
 
 ```rust
 use egui_pop::tokens::{Density, ThemeSpec, Themes};
@@ -634,4 +638,4 @@ fills each with its own variant, and `Tokens::of` gives the one of egui's
 theme of the moment. Install between frames; never change the global
 style mid-frame to theme one widget. The kit's `scroll-bar` becomes
 egui's `ScrollStyle` there, so every scroll area follows the theme's
-bars ([kit.md](kit.md#scroll-bars)).
+bars, or what the user chose over them ([kit.md](kit.md#scroll-bars)).

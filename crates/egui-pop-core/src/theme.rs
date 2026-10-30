@@ -57,7 +57,7 @@ use crate::kit::{Kit, Shapes, State};
 use crate::state::Slot;
 pub use egui_pop_tokens::{
     BUILT_IN_ACCENTS, BUILT_IN_THEMES, Counterpart, Density, FALLBACK_THEME, POP_THEMES,
-    ResolvedTokens, ThemeSpec, Themes, theme_label,
+    ResolvedTokens, ScrollBars, ThemeSpec, Themes, theme_label,
 };
 
 /// A token colour as an egui colour.

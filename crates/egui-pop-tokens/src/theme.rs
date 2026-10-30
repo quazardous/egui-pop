@@ -338,6 +338,44 @@ pub struct ThemeSpec {
     pub font_ui: Option<String>,
     /// A family the user puts first in `font.family.mono`.
     pub font_mono: Option<String>,
+    /// The user's choice over the theme's scroll bars
+    /// ([`ThemeSpec::scroll_bars`]).
+    pub scroll_bars: ScrollBars,
+}
+
+/// What the user asks of the scroll bars, over what the theme's
+/// `scroll-bar` says (`ThemeSpec::scroll_bars`, the
+/// `appearance.scroll_bars` setting).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ScrollBars {
+    /// What the theme says.
+    #[default]
+    Auto,
+    /// Full bars at rest, beside the content so that they cover none of it,
+    /// with a track even where the theme has none.
+    Always,
+    /// Nothing at rest: thin under the pointer, wide over the bar, over the
+    /// content.
+    Hover,
+}
+
+impl ScrollBars {
+    /// The setting's choices, in order.
+    pub const CHOICES: [&'static str; 3] = ["auto", "always", "hover"];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ScrollBars::Auto => "auto",
+            ScrollBars::Always => "always",
+            ScrollBars::Hover => "hover",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<ScrollBars> {
+        [ScrollBars::Auto, ScrollBars::Always, ScrollBars::Hover]
+            .into_iter()
+            .find(|c| c.as_str() == s)
+    }
 }
 
 /// The text sizes a user chooses from, as factors of a theme's size
@@ -381,6 +419,7 @@ impl ThemeSpec {
             text_size: 1.0,
             font_ui: None,
             font_mono: None,
+            scroll_bars: ScrollBars::Auto,
         }
     }
 
@@ -514,6 +553,23 @@ impl ThemeSpec {
         self
     }
 
+    /// The user's choice over the theme's scroll bars: `scroll-bar.visibility`
+    /// and `placement` take it when the theme resolves, for the theme and its
+    /// counterpart. `Auto` leaves the theme's.
+    ///
+    /// ```
+    /// use egui_pop_tokens::{ScrollBars, ThemeSpec, Themes, Value};
+    ///
+    /// let themes = Themes::default();
+    /// let full = themes.resolve(&ThemeSpec::new("pop-dark").scroll_bars(ScrollBars::Always));
+    /// let visibility = &full.get("scroll-bar.visibility").unwrap().value;
+    /// assert_eq!(visibility, &Value::Other("always".into()));
+    /// ```
+    pub fn scroll_bars(mut self, choice: ScrollBars) -> Self {
+        self.scroll_bars = choice;
+        self
+    }
+
     /// A family drawn first for interface text (`font.family.ui`), the
     /// theme's own families after it; `None` keeps the theme's.
     pub fn font_ui(mut self, family: Option<String>) -> Self {
@@ -555,6 +611,9 @@ impl ThemeSpec {
         }
         if (self.text_size - 1.0).abs() > f32::EPSILON {
             parts.push(format!("text {}%", (self.text_size * 100.0).round()));
+        }
+        if self.scroll_bars != ScrollBars::Auto {
+            parts.push(format!("scroll bars {}", self.scroll_bars.as_str()));
         }
         for f in [&self.font_ui, &self.font_mono].into_iter().flatten() {
             parts.push(f.clone());
@@ -1121,6 +1180,7 @@ impl Themes {
         }
         user_fonts(&mut raw, spec);
         text_size(&mut raw, spec.text_size);
+        user_scroll_bars(&mut raw, spec.scroll_bars);
 
         let mut tokens = BTreeMap::new();
         for (path, token) in &raw {
@@ -1193,6 +1253,38 @@ fn user_fonts(raw: &mut BTreeMap<String, RawToken>, spec: &ThemeSpec) {
             extensions: None,
         });
         entry.value = json!(list);
+    }
+}
+
+/// Writes the user's choice (`ThemeSpec::scroll_bars`) over the theme's
+/// `scroll-bar`. It sets the placement too: a full bar over the content would
+/// hide it, and egui always shows a bar beside the content. `Always` promises a
+/// track, so a theme's transparent one gives way to the track's default.
+fn user_scroll_bars(raw: &mut BTreeMap<String, RawToken>, choice: ScrollBars) {
+    let (visibility, placement) = match choice {
+        ScrollBars::Auto => return,
+        ScrollBars::Always => ("always", "beside"),
+        ScrollBars::Hover => ("hover", "over"),
+    };
+    for (path, value) in [
+        ("scroll-bar.visibility", visibility),
+        ("scroll-bar.placement", placement),
+    ] {
+        let entry = raw.entry(path.to_string()).or_insert_with(|| RawToken {
+            ty: Some("string".into()),
+            value: Json::Null,
+            description: None,
+            extensions: None,
+        });
+        entry.value = json!(value);
+    }
+    if choice == ScrollBars::Always
+        && let Ok((_, Value::Color(track))) = resolve_one(raw, "scroll-bar.track-fill")
+        && track.a == 0.0
+        && let Some(token) = raw.get_mut("scroll-bar.track-fill")
+    {
+        token.value = json!("{surface.sunken}");
+        token.extensions = without_alpha(token.extensions.as_ref());
     }
 }
 
