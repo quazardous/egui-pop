@@ -168,6 +168,10 @@ of every crate with every feature on.
 - [File dialogs survey](file-dialogs-survey.md): how the system dialogs,
   Blender, darktable, Lightroom and file managers lay out, preview, search
   and save, and the changes ranked for egui-pop's in-app picker.
+- [Keyboard survey](keyboard-survey.md): how far the keyboard alone gets
+  in egui-pop and Helios against VS Code, JetBrains, Blender, darktable,
+  Lightroom, GIMP, Qt, GTK and WAI-ARIA, the changes ranked, and the walk
+  still owed.
 - [API stability](stability.md): what each release promises.
 - [Governance](../GOVERNANCE.md): who decides, decisions as ADRs and
   requests for comments, what breaks an extension, deprecation windows.
