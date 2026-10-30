@@ -18,18 +18,29 @@
 //!   Up and Down while it has the keyboard. Sections give way in turn, the nearest
 //!   first, never in proportion, and it stops once they are all at their
 //!   least (`egui_pop_model::sections`). A double click, or Enter, drops
-//!   the heights set by hand.
+//!   the heights set by hand and any empty room.
 //! - In a panel too short, sections sized by the list give way first,
 //!   then those set by hand, from the bottom up; their stored heights
 //!   come back with the room, until the next drag aligns them on what is
 //!   shown. When even the least heights do not fit, the whole stack
 //!   scrolls, with a scrollbar then only.
+//! - [`Sections::grab_titles`] (off by default) makes the titles drag too:
+//!   a press that moves resizes as the line above does, one that does not
+//!   folds, and a double click drops the heights set by hand.
+//! - The keys of `gesture.sections.pull` (Ctrl with a drag by default, Cmd
+//!   on macOS, read from the pointer map) move the sections below as a
+//!   block, heights kept: only the section above changes, and empty room
+//!   opens under the last. The empty room is kept, with the layout, until
+//!   a drag takes it back or a double click drops it.
+//! - [`Sections::keep_titles`] (off by default) leaves a title where it is
+//!   when its section folds or opens ([`egui_pop_model::sections::keep_title`]).
 //! - A body is scrolled by the stack ([`Stack::section`]), windowed over
 //!   rows of one height, so that only those in view are drawn
 //!   ([`Stack::rows`]), or left to an application's own view
 //!   ([`Stack::bare`]). A wheel pushing past the end of a body's scroll
 //!   stops there: neither the stack nor a parent moves.
-//! - What is folded and the heights set by hand are remembered with the
+//! - What is folded, the heights set by hand and the empty room are
+//!   remembered with the
 //!   window's layout (egui's persisted memory, under the stack's name),
 //!   and readable as a [`Layout`] an application keeps with its own.
 //!
@@ -72,14 +83,17 @@ use std::ops::Range;
 use egui::accesskit::{Action, Role};
 use egui::scroll_area::{DragScroll, ScrollBarVisibility, ScrollSource};
 use egui::{
-    Color32, Context, CursorIcon, EventFilter, FontFamily, FontId, Id, Key, Rect, Response, Sense,
-    TextStyle, Ui, UiBuilder, WidgetInfo, WidgetType, pos2, vec2,
+    Color32, Context, CursorIcon, EventFilter, FontFamily, FontId, Id, Key, PointerButton, Rect,
+    Response, Sense, TextStyle, Ui, UiBuilder, WidgetInfo, WidgetType, pos2, vec2,
 };
+use egui_pop_model::keymap::Pointer;
+use egui_pop_model::pointer::{PointerMap, SCOPE_SECTIONS, gesture};
 use egui_pop_model::sections::{self as model, Asked, DragMode, Placed};
 use serde::{Deserialize, Serialize};
 
 use crate::indicator;
 use crate::kit::{Corners, Glyph, Kit, KitCx, Part, State, Visibility, paint_ring};
+use crate::pointer;
 use crate::state::Slot;
 use crate::strings::{self, SECTION_RESIZE};
 use crate::theme::{TextRole, Tokens};
@@ -105,6 +119,9 @@ pub struct Remembered {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Layout {
     pub sections: BTreeMap<String, Remembered>,
+    /// The empty room kept under the last section, in points.
+    #[serde(default)]
+    pub empty: f32,
 }
 
 impl Layout {
@@ -153,11 +170,13 @@ impl Layout {
         }
     }
 
-    /// Drops every height set by hand (a boundary's double click).
+    /// Drops every height set by hand and the empty room (a boundary's
+    /// double click): the sections share the panel again.
     pub fn reset_heights(&mut self) {
         for s in self.sections.values_mut() {
             s.height = None;
         }
+        self.empty = 0.0;
     }
 }
 
@@ -188,6 +207,11 @@ pub struct Laid {
     pub scroll: f32,
     /// The rows drawn on that pass, when windowed and open.
     pub window: Option<Range<usize>>,
+    /// The empty room under it, in points: only the last section has any
+    /// (all of it, when no section is open).
+    pub empty: f32,
+    /// How a drag under way resizes it, if one does.
+    pub drag: Option<DragMode>,
 }
 
 /// Each stack's sections as laid out on the last pass, by name.
@@ -204,14 +228,44 @@ fn laid_summary(laid: &Vec<Laid>) -> String {
                 .window
                 .as_ref()
                 .map_or(String::new(), |w| format!(" rows {}..{}", w.start, w.end));
-            match (s.open, s.by_hand) {
+            let part = match (s.open, s.by_hand) {
                 (false, _) => format!("{} folded", s.key),
                 (true, false) => format!("{} {:.0}{window}", s.key, s.height),
                 (true, true) => format!("{} {:.0} by hand{window}", s.key, s.height),
+            };
+            match s.drag {
+                Some(DragMode::Pull) => format!("{part} pulled"),
+                Some(_) => format!("{part} dragged"),
+                None => part,
             }
         })
         .collect();
-    parts.join(", ")
+    let mut text = parts.join(", ");
+    let empty: f32 = laid.iter().map(|s| s.empty).sum();
+    if empty > 0.5 {
+        text.push_str(&format!(", {empty:.0} empty"));
+    }
+    text
+}
+
+/// The stack as a drag found it, what its plans start from.
+#[derive(Clone, Debug)]
+struct Start {
+    heights: Vec<f32>,
+    hands: Vec<Option<f32>>,
+    empty: f32,
+}
+
+impl Start {
+    /// What the stack asks for, with the heights kept by hand as they were.
+    fn asked(&self, stack: &Shown<'_>) -> Vec<Asked> {
+        stack
+            .asked
+            .iter()
+            .zip(&self.hands)
+            .map(|(a, &hand)| Asked { hand, ..*a })
+            .collect()
+    }
 }
 
 /// A drag on a boundary: where it began and the stack it began from, so
@@ -219,12 +273,29 @@ fn laid_summary(laid: &Vec<Laid>) -> String {
 #[derive(Clone, Debug)]
 struct Drag {
     origin: f32,
-    heights: Vec<f32>,
-    hands: Vec<Option<f32>>,
+    from: Start,
+    /// How its plans move the stack.
+    mode: DragMode,
+    /// Where the pointer was on the last plan: where a change of mode
+    /// starts again from.
+    last: f32,
 }
 
 /// Each stack's drag under way, by name.
 const DRAG: Slot<Drag> = Slot::new("core.sections.drag");
+
+/// A click on a title, for as long as a second one would be a double click.
+#[derive(Clone, Debug)]
+struct TitleClick {
+    key: String,
+    /// The band it landed on, where the second click will land.
+    band: Rect,
+    /// When, in egui's time.
+    at: f64,
+}
+
+/// Each stack's last click on a title, by name.
+const TITLE_CLICK: Slot<TitleClick> = Slot::new("core.sections.title_click");
 
 /// The sections of the stack named `name` as drawn on the last pass, in
 /// order (empty when it was not drawn).
@@ -519,6 +590,8 @@ pub struct SectionsResponse {
 pub struct Sections {
     name: String,
     capitals: bool,
+    grab_titles: bool,
+    keep_titles: bool,
 }
 
 impl Sections {
@@ -528,6 +601,8 @@ impl Sections {
         Sections {
             name: name.into(),
             capitals: true,
+            grab_titles: false,
+            keep_titles: false,
         }
     }
 
@@ -535,6 +610,36 @@ impl Sections {
     /// editor's side bar does); their accessible names keep their case.
     pub fn capitals(mut self, capitals: bool) -> Self {
         self.capitals = capitals;
+        self
+    }
+
+    /// Whether a title drags as well as folds (no by default, as the line
+    /// above a band is what classic apps resize by, and a code editor's
+    /// headers reorder when dragged).
+    ///
+    /// A press that moves is a drag, by the same rules as a boundary's, the
+    /// title staying under the pointer; one that does not is a fold. A title
+    /// under a folded section resizes the first open one above, and with
+    /// nothing open above it does not move. A double click drops the heights
+    /// set by hand; as its first click has already folded, the section is
+    /// seen folded until the second. A band keeps its name and its role.
+    pub fn grab_titles(mut self, grab: bool) -> Self {
+        self.grab_titles = grab;
+        self
+    }
+
+    /// Whether a title stays where it is when its section folds or opens
+    /// (no by default, as a code editor's panes divide the room again, and
+    /// the title moves).
+    ///
+    /// Folding, the open sections above keep their shown height, as if set
+    /// by hand; those below move up, and with nothing below the room stays
+    /// empty. Opening, the section takes its room below its title, from the
+    /// sections below, then from the empty room. In a panel with no room for
+    /// it, those above still give way, and the title moves. A double click
+    /// gets the shares back.
+    pub fn keep_titles(mut self, keep: bool) -> Self {
+        self.keep_titles = keep;
         self
     }
 
@@ -589,7 +694,7 @@ impl Sections {
         } else {
             0.0
         };
-        let fit = model::fit(&asked, space);
+        let fit = model::fit(&asked, space, layout.empty);
         let tall = bands + fit.heights.iter().sum::<f32>();
         let overflows = finite && tall - room.height() > 0.5;
         let stack = Shown {
@@ -597,6 +702,7 @@ impl Sections {
             asked: &asked,
             heights: &fit.heights,
             space,
+            empty: fit.empty,
             step: row,
         };
 
@@ -604,6 +710,11 @@ impl Sections {
         let mut laid: Vec<Laid> = Vec::with_capacity(sections.len());
         let base = memory_id(&self.name);
         let reach = ui.style().interaction.resize_grab_radius_side;
+        let window = ctx.options(|o| o.input_options.max_double_click_delay);
+        let (now, released) =
+            ui.input(|i| (i.time, i.pointer.any_down() || i.pointer.any_released()));
+        let title_click = TITLE_CLICK.keyed(self.name.clone());
+        let last_click = title_click.get(&ctx);
         let draw = |ui: &mut Ui| {
             let left = ui.max_rect().left();
             let width = ui.available_width();
@@ -624,9 +735,21 @@ impl Sections {
                 let above = i
                     .checked_sub(1)
                     .and_then(|line| model::resized_above(&open, line));
-                if let Some(above) = above.filter(|_| asked[i..].iter().any(|a| a.open)) {
-                    let edge = Rect::from_x_y_ranges(band.x_range(), y - reach..=y + reach);
-                    hit.min.y = (hit.min.y + reach).min(hit.max.y);
+                let room_below = fit.empty > 0.5 || asked[i..].iter().any(|a| a.open);
+                // A title that drags keeps the whole band, or a press on its
+                // top would drag but never fold: the line is on the section's
+                // side alone, and under a folded section, whose title does
+                // the same, there is none.
+                let line = above
+                    .filter(|_| room_below)
+                    .filter(|&above| !self.grab_titles || above + 1 == i);
+                if let Some(above) = line {
+                    let edge = if self.grab_titles {
+                        Rect::from_x_y_ranges(band.x_range(), y - reach..=y)
+                    } else {
+                        hit.min.y = (hit.min.y + reach).min(hit.max.y);
+                        Rect::from_x_y_ranges(band.x_range(), y - reach..=y + reach)
+                    };
                     let id = base.with(("boundary", &laid[i - 1].key));
                     let sense = if above == i - 1 {
                         Sense::click_and_drag()
@@ -643,7 +766,7 @@ impl Sections {
                     if r.has_focus() {
                         ring = Some(edge);
                     }
-                    work_boundary(
+                    laid[above].drag = work_boundary(
                         ui,
                         &r,
                         &self.name,
@@ -651,17 +774,48 @@ impl Sections {
                         above,
                         &mut layout,
                         &mut response,
-                    );
+                    )
+                    .or(laid[above].drag);
                 }
-                let r = ui.interact(hit, base.with(("band", &section.key)), Sense::click());
+                let grabbed = above.filter(|_| self.grab_titles);
+                let sense = if grabbed.is_some() {
+                    Sense::click_and_drag()
+                } else {
+                    Sense::click()
+                };
+                let r = ui.interact(hit, base.with(("band", &section.key)), sense);
+                if let Some(above) = grabbed {
+                    laid[above].drag = work_drag(
+                        ui,
+                        &r,
+                        &self.name,
+                        &stack,
+                        above,
+                        &mut layout,
+                        &mut response,
+                    )
+                    .or(laid[above].drag);
+                }
                 self.paint_band(ui, &kit, &tokens, &section, band, &r, is_open);
                 name_band(&ctx, &r, &section.name(), is_open);
                 if overflows && r.gained_focus() {
                     r.scroll_to_me(None);
                 }
-                if r.clicked() || arrow_folds(ui, &r, is_open) {
-                    layout.set_open(&section.key, !is_open);
-                    response.toggled = Some((section.key.clone(), !is_open));
+                if self.grab_titles && r.double_clicked() {
+                    // Its first click folded: the second puts that back. Both
+                    // in one pass, they cancel out.
+                    if last_click.as_ref().is_some_and(|c| c.key == section.key) {
+                        stack.fold(&mut layout, &mut response, i, false);
+                    }
+                    self.reset(&ctx, &mut layout, &mut response);
+                } else if r.clicked() || arrow_folds(ui, &r, is_open) {
+                    stack.fold(&mut layout, &mut response, i, self.keep_titles);
+                    if self.grab_titles && r.clicked() {
+                        let at = now;
+                        let key = section.key.clone();
+                        title_click.set(&ctx, TitleClick { key, band, at });
+                        ctx.request_repaint_after_secs(window as f32);
+                    }
                 }
                 y = band.bottom();
                 let mut body_rect = None;
@@ -695,7 +849,28 @@ impl Sections {
                     body: body_rect,
                     scroll: drawn.as_ref().map_or(0.0, |d| d.scroll),
                     window: drawn.and_then(|d| d.window),
+                    empty: if i + 1 == asked.len() { fit.empty } else { 0.0 },
+                    drag: None,
                 });
+            }
+            // The fold may have taken the title from under the pointer: what
+            // moved there must not take the second click of a double click,
+            // nor the title lose it. Drawn last, so it has the pointer.
+            let moved = last_click
+                .as_ref()
+                .filter(|c| now - c.at <= window || released)
+                .and_then(|c| {
+                    let at = stack.keys.iter().position(|k| *k == c.key)?;
+                    ((laid[at].band.top() - c.band.top()).abs() > 0.5).then_some((at, c.band))
+                });
+            if let Some((at, band)) = moved {
+                let r = ui.interact(band, base.with("title_click"), Sense::click());
+                if r.double_clicked() {
+                    stack.fold(&mut layout, &mut response, at, false);
+                    self.reset(&ctx, &mut layout, &mut response);
+                } else if r.clicked() {
+                    stack.fold(&mut layout, &mut response, at, self.keep_titles);
+                }
             }
             // Painted last: the band under a boundary would cover its ring.
             if let Some(edge) = ring {
@@ -759,6 +934,14 @@ impl Sections {
         LAID.keyed(self.name.clone()).set(&ctx, laid);
         response.layout = layout;
         response
+    }
+
+    /// Drops the heights set by hand and the empty room.
+    fn reset(&self, ctx: &Context, layout: &mut Layout, response: &mut SectionsResponse) {
+        layout.reset_heights();
+        response.reset = true;
+        DRAG.keyed(self.name.clone()).remove(ctx);
+        TITLE_CLICK.keyed(self.name.clone()).remove(ctx);
     }
 
     /// Paints a band: the kit's `section-band`, its mark, its title and
@@ -905,6 +1088,8 @@ struct Shown<'a> {
     heights: &'a [f32],
     /// The height the open sections divide.
     space: f32,
+    /// The empty room shown under the last section.
+    empty: f32,
     /// How far an arrow key moves a boundary.
     step: f32,
 }
@@ -922,31 +1107,60 @@ impl Shown<'_> {
             .collect()
     }
 
-    /// The boundary under `above` moved `delta` from `heights`, what the
-    /// layout keeps by hand from `asked` on. The last open section fills
-    /// the panel, so a stack has no empty room under it. Says whether
-    /// this changes what is shown.
+    /// The boundary under `above` moved `delta` from `from`, in `mode`.
+    /// Says whether this changes what is shown.
     fn drag(
         &self,
         layout: &mut Layout,
-        asked: &[Asked],
-        heights: &[f32],
+        from: &Start,
         above: usize,
         delta: f32,
+        mode: DragMode,
     ) -> bool {
-        let plan = model::plan_drag(&self.placed(heights), above, delta, 0.0, DragMode::Push);
-        let hands = model::pin_plan(asked, self.space, &plan.heights);
+        let placed = self.placed(&from.heights);
+        let plan = model::plan_drag(&placed, above, delta, from.empty, mode);
+        let hands = model::pin_plan(&from.asked(self), self.space, plan.empty, &plan.heights);
         for (key, hand) in self.keys.iter().zip(hands) {
             layout.set_height(key, hand);
         }
+        layout.empty = plan.empty;
         let moved = |(a, b): (&f32, &f32)| (a - b).abs() > 0.01;
-        plan.heights.iter().zip(self.heights).any(moved)
+        (plan.empty - self.empty).abs() > 0.01 || plan.heights.iter().zip(self.heights).any(moved)
+    }
+
+    /// Where a drag or a key press starts from: the stack as shown.
+    fn start(&self) -> Start {
+        Start {
+            heights: self.heights.to_vec(),
+            hands: self.asked.iter().map(|a| a.hand).collect(),
+            empty: self.empty,
+        }
+    }
+
+    /// Folds or opens `section`, its title staying where it is if `keep`.
+    fn fold(
+        &self,
+        layout: &mut Layout,
+        response: &mut SectionsResponse,
+        section: usize,
+        keep: bool,
+    ) {
+        if keep {
+            let kept = model::keep_title(self.asked, self.heights, self.empty, section);
+            for (key, hand) in self.keys.iter().zip(kept.hands) {
+                layout.set_height(key, hand);
+            }
+            layout.empty = kept.empty;
+        }
+        let (key, open) = (&self.keys[section], !self.asked[section].open);
+        layout.set_open(key, open);
+        response.toggled = Some((key.clone(), open));
     }
 
     /// What the boundary under `above` can do from here, up and down.
     fn reach(&self, above: usize) -> (bool, f32) {
         let placed = self.placed(self.heights);
-        let plan = |delta| model::plan_drag(&placed, above, delta, 0.0, DragMode::Push);
+        let plan = |delta| model::plan_drag(&placed, above, delta, self.empty, DragMode::Push);
         (
             plan(-self.step).moved < 0.0,
             plan(self.space).heights[above],
@@ -975,8 +1189,101 @@ fn name_boundary(ctx: &Context, r: &Response, name: &str, stack: &Shown<'_>, abo
     });
 }
 
+/// Whether these keys and this button make a drag pull, in the map in force.
+fn pulls(map: &PointerMap, modifiers: egui::Modifiers, button: PointerButton) -> bool {
+    let drag = Pointer::Drag(pointer::button(button));
+    map.command(SCOPE_SECTIONS, &pointer::chord(modifiers, drag)) == Some(&gesture::SECTIONS_PULL)
+}
+
+/// How a drag under way moves the stack, by the keys held now and the
+/// button that holds it.
+fn drag_mode(ui: &Ui) -> DragMode {
+    let map = pointer::map(ui.ctx());
+    let pull = ui.input(|i| {
+        [
+            PointerButton::Primary,
+            PointerButton::Secondary,
+            PointerButton::Middle,
+            PointerButton::Extra1,
+            PointerButton::Extra2,
+        ]
+        .into_iter()
+        .any(|b| i.pointer.button_down(b) && pulls(&map, i.modifiers, b))
+    });
+    if pull { DragMode::Pull } else { DragMode::Push }
+}
+
+/// How the arrows on a boundary move the stack: as a primary drag with the
+/// same keys held would.
+fn keys_mode(ui: &Ui) -> DragMode {
+    let map = pointer::map(ui.ctx());
+    if ui.input(|i| pulls(&map, i.modifiers, PointerButton::Primary)) {
+        DragMode::Pull
+    } else {
+        DragMode::Push
+    }
+}
+
+/// What a pointer dragging `r` does to the section `above`, a boundary or a
+/// title alike. Says how it moves the stack, while it does.
+///
+/// The keys pressed or released during the drag change its mode from there:
+/// it starts again from the stack as shown, where the pointer last was, so
+/// nothing jumps.
+fn work_drag(
+    ui: &Ui,
+    r: &Response,
+    name: &str,
+    stack: &Shown<'_>,
+    above: usize,
+    layout: &mut Layout,
+    response: &mut SectionsResponse,
+) -> Option<DragMode> {
+    let ctx = ui.ctx();
+    let slot = DRAG.keyed(name.to_string());
+    if r.drag_started() {
+        let origin = ui
+            .input(|i| i.pointer.press_origin())
+            .map_or(r.rect.center().y, |p| p.y);
+        slot.set(
+            ctx,
+            Drag {
+                origin,
+                from: stack.start(),
+                mode: drag_mode(ui),
+                last: origin,
+            },
+        );
+    }
+    let mut mode = None;
+    if r.dragged() {
+        ctx.set_cursor_icon(CursorIcon::ResizeVertical);
+        let drag = slot
+            .get(ctx)
+            .filter(|d| d.from.heights.len() == stack.keys.len());
+        if let (Some(mut drag), Some(pointer)) = (drag, r.interact_pointer_pos()) {
+            let now = drag_mode(ui);
+            if now != drag.mode {
+                drag.origin = drag.last;
+                drag.from = stack.start();
+                drag.mode = now;
+            }
+            drag.last = pointer.y;
+            let delta = pointer.y - drag.origin;
+            response.resized |= stack.drag(layout, &drag.from, above, delta, drag.mode);
+            mode = Some(drag.mode);
+            slot.set(ctx, drag);
+        }
+    }
+    if r.drag_stopped() {
+        slot.remove(ctx);
+    }
+    mode
+}
+
 /// What the user does to the boundary under `above`: the pointer, the
-/// arrow keys, Enter and assistive technology's steps.
+/// arrow keys, Enter and assistive technology's steps. Says how a drag
+/// moves the stack, while one does.
 fn work_boundary(
     ui: &Ui,
     r: &Response,
@@ -985,12 +1292,11 @@ fn work_boundary(
     above: usize,
     layout: &mut Layout,
     response: &mut SectionsResponse,
-) {
+) -> Option<DragMode> {
     let ctx = ui.ctx();
-    if r.hovered() || r.dragged() {
+    if r.hovered() {
         ctx.set_cursor_icon(CursorIcon::ResizeVertical);
     }
-    let slot = DRAG.keyed(name.to_string());
     if r.has_focus() {
         // upstream: egui moves the focus with an arrow key unless the
         // widget says it uses them.
@@ -1007,38 +1313,10 @@ fn work_boundary(
     if r.double_clicked() || (r.has_focus() && ui.input(|i| i.key_pressed(Key::Enter))) {
         layout.reset_heights();
         response.reset = true;
-        slot.remove(ctx);
-        return;
+        DRAG.keyed(name.to_string()).remove(ctx);
+        return None;
     }
-    if r.drag_started() {
-        let origin = ui.input(|i| i.pointer.press_origin());
-        slot.set(
-            ctx,
-            Drag {
-                origin: origin.map_or(r.rect.center().y, |p| p.y),
-                heights: stack.heights.to_vec(),
-                hands: stack.asked.iter().map(|a| a.hand).collect(),
-            },
-        );
-    }
-    if r.dragged() {
-        let drag = slot
-            .get(ctx)
-            .filter(|d| d.heights.len() == stack.keys.len());
-        if let (Some(drag), Some(pointer)) = (drag, r.interact_pointer_pos()) {
-            let asked: Vec<Asked> = stack
-                .asked
-                .iter()
-                .zip(&drag.hands)
-                .map(|(a, &hand)| Asked { hand, ..*a })
-                .collect();
-            let delta = pointer.y - drag.origin;
-            response.resized |= stack.drag(layout, &asked, &drag.heights, above, delta);
-        }
-    }
-    if r.drag_stopped() {
-        slot.remove(ctx);
-    }
+    let dragging = work_drag(ui, r, name, stack, above, layout, response);
     let focused = r.has_focus();
     let steps = ui.input(|i| {
         let keys = if focused {
@@ -1051,8 +1329,10 @@ fn work_boundary(
     });
     if steps != 0.0 {
         let delta = steps * stack.step;
-        response.resized |= stack.drag(layout, stack.asked, stack.heights, above, delta);
+        let mode = keys_mode(ui);
+        response.resized |= stack.drag(layout, &stack.start(), above, delta, mode);
     }
+    dragging
 }
 
 /// Left folds a band with the keyboard and Right opens it, as a code
@@ -1121,6 +1401,8 @@ mod tests {
             body: None,
             scroll: 0.0,
             window: None,
+            empty: 0.0,
+            drag: None,
         };
         assert_eq!(
             laid_summary(&vec![
@@ -1135,5 +1417,18 @@ mod tests {
             ..laid("log", true, 200.0, false)
         };
         assert_eq!(laid_summary(&vec![windowed]), "log 200 rows 40..52");
+        // The empty room, and how a drag under way resizes a section.
+        let pulled = Laid {
+            drag: Some(DragMode::Pull),
+            ..laid("live", true, 120.0, true)
+        };
+        let last = Laid {
+            empty: 60.0,
+            ..laid("idle", true, 80.0, false)
+        };
+        assert_eq!(
+            laid_summary(&vec![pulled, last]),
+            "live 120 by hand pulled, idle 80, 60 empty"
+        );
     }
 }

@@ -1,7 +1,8 @@
 # Collapsible sections
 
-Status: third version (2026-10-30): windowed rows and the wheel contained,
-after heights set by hand and the push.
+Status: fourth version (2026-10-30): titles that drag, the pull and empty
+room, titles that stay, as options, after windowed rows and the wheel
+contained, heights set by hand and the push.
 
 A stack of collapsible sections fills a panel: each section is a title
 band (a disclosure mark, a title, a count) over its own scrolling body.
@@ -27,7 +28,9 @@ fn sessions(ui: &mut egui_pop::egui::Ui, live: &[String]) {
 - `Sections::new(name)`: the stack's name, unique in the application.
   Its layout is remembered under it, and agents read it by it.
   `capitals(false)` keeps the titles' case on screen (their accessible
-  names always keep it).
+  names always keep it). Two options, off by default: `grab_titles(true)`
+  makes the titles drag too and `keep_titles(true)` leaves a title where it
+  is when its section folds or opens.
 - `Section::new(key, title)`: the key is what the layout remembers;
   `count(n)` puts a count on the band (`99+` past 99),
   `min_height(points)` its body's least height (two rows by default),
@@ -42,7 +45,7 @@ fn sessions(ui: &mut egui_pop::egui::Ui, live: &[String]) {
 
 The heights' arithmetic is in `egui_pop::model::sections`, without egui:
 `fit` lays a stack out, `plan_drag` says what moving a boundary does
-(its `DragMode` leaves room for other gestures).
+(`DragMode::Push` or `Pull`), `keep_title` what folding keeps.
 
 ## Behaviour
 
@@ -73,8 +76,53 @@ The heights' arithmetic is in `egui_pop::model::sections`, without egui:
 - **Keyboard.** A boundary takes the focus in reading order, after the
   open section above it; the lines under folded sections do not, as they
   would be a second stop for the same pair. Up and Down move it by a
-  row, by the same rules; Enter drops the heights set by hand.
-- **Reset.** A double click on a boundary drops the heights set by hand.
+  row, by the same rules; Enter drops the heights set by hand. With the
+  keys of the pull held, they pull.
+- **Reset.** A double click on a boundary drops the heights set by hand
+  and any empty room.
+- **The pull.** With the keys of `gesture.sections.pull` held (Ctrl with a
+  drag by default, Cmd on macOS, in the pointer profile; rebindable in the
+  shortcuts editor,
+  [pointer-gestures.md](pointer-gestures.md)), a drag moves the sections
+  below as a block, their heights kept; only the section above changes:
+  - **Up:** it shrinks to its least, then those above it, the nearest first.
+    The block follows, and empty room opens under the last section.
+  - **Down:** the block goes into the empty room, then the last section
+    alone gives way, down to its least, and the drag stops.
+  - The keys pressed or released during a drag change the mode from there:
+    the drag starts again from the stack as shown, and nothing jumps.
+- **Empty room.** A stack with empty room under its last section keeps it,
+  in `Layout::empty`, until a drag takes it back or a double click drops it.
+  A plain drag takes it after the sections between, as a pull takes it
+  first. In a panel too short, it gives way after the sections sized by the
+  list and before those set by hand, and comes back with the room. A line
+  with only folded sections under it is a boundary while there is empty
+  room: the bands follow, and up it opens more.
+- **Titles that drag** (`grab_titles(true)`). A press on a title that moves
+  is a drag, by the rules above, the title staying under the pointer; one
+  that does not is a fold, anywhere on the band: the line above it takes
+  only the section's side of the border, and under a folded section, whose
+  title does the same, there is no line. A title under a folded section
+  resizes the first open one above, as the folded title does; with nothing
+  open above it does not move. The keyboard does not change.
+- **A double click on a title** drops the heights set by hand and any empty
+  room, with the option. Its first click has folded the section, which is
+  seen folded until the second: nothing can tell a first click from a single
+  one, and holding each fold back for the 0.3 s a second could take would
+  slow every fold. What holds is that the second lands on the title even if
+  the fold took it away (what moved under the pointer does not get the
+  click), that the fold ends as it was, and that the shares come back.
+- **Titles that stay** (`keep_titles(true)`). Folding or opening a section
+  leaves its title where it is, whatever does it, the keyboard included:
+  - **Folding:** the open sections above keep their shown height, as if set
+    by hand. Those below move up; with nothing open below, the room stays
+    empty. A second click at the same place lands on the same title. The
+    trade-off: those above no longer get the room a fold frees.
+  - **Opening:** the section takes its room below its title, from the
+    sections below, then from the empty room (with nothing open below, all
+    of it, or its own height when it has one). In a panel with no room for
+    it, those above still give way, and the title moves.
+  - **The shares back:** a double click.
 - **A panel too short.** Sections sized by the list give way first, down
   to their least; then those set by hand, from the bottom up. The last
   open section stays in view. The stored heights come back with the
@@ -113,7 +161,8 @@ The heights' arithmetic is in `egui_pop::model::sections`, without egui:
   own layout (`Layout::height` and `set_height` for one section). A
   section's height is kept while it is folded, so it opens again at its
   size. A layout stored with the shares of an earlier version keeps its
-  fold state, and its sections read as sized by the list.
+  fold state, and its sections read as sized by the list. `Layout::empty`
+  is the empty room kept, none in a layout stored before it.
 
 ## Classic conventions, and where this departs
 
@@ -131,7 +180,11 @@ Windows Explorer's navigation pane and Qt (`QToolBox`, `QSplitter`):
 | Left and Right on a header | VS Code folds and opens | The same |
 | Panel too short | VS Code's split view scrolls as a whole, its scrollbar when needed. Qt clips | Scrolls as a whole, the scrollbar then only |
 | Double click on the boundary | VS Code gives the views equal sizes again. `QSplitter` does nothing | The heights set by hand dropped: equal again, as VS Code |
-| Double click on the header | JetBrains maximises a tool window. VS Code folds then opens again | Two clicks, as VS Code: no maximise |
+| Double click on the header | JetBrains maximises a tool window. VS Code folds then opens again | Two clicks, as VS Code: no maximise. With `grab_titles`, the heights set by hand dropped too, a departure |
+| Drag on the header | VS Code's headers drag to reorder views. No app surveyed resizes from one | Nothing by default. With `grab_titles`, it resizes, a departure, and closes off reordering for that stack |
+| A modifier held on the sash | VS Code's Alt resizes both sides symmetrically. No equivalent of a block found | `gesture.sections.pull`, a departure: the sections below as a block |
+| Empty room under the last view | VS Code never leaves any (`distributeEmptySpace`) | Only after a pull or with `keep_titles`, a departure, until a double click |
+| A title when its section folds | VS Code's panes divide the room again, and the title moves | The same by default. With `keep_titles`, it stays, a departure |
 | Wheel at the end of a view | VS Code's lists keep it by default, even with nothing to scroll (`alwaysConsumeMouseWheel` in `listView.ts`). The web hands it to the page unless `overscroll-behavior: contain` | Kept, as VS Code, by a body with a scroll to end. A body with nothing to scroll hands it on, so that a stack too tall still takes a wheel over short sections |
 | Remembered | Fold and sizes, per workspace (VS Code, JetBrains), and the folded sidebar sections (Finder) | Fold and heights set by hand, with the window's layout |
 | Count | VS Code shows a badge on a view's header (Source Control's changes) | A pill after the title |
@@ -143,9 +196,9 @@ Departures, on purpose or not yet done:
   laid out in one pass, so a test sees the same frame each time.
 - Sections are not reordered by dragging their bands (VS Code's views
   are). Sections cannot be maximised or moved out of the stack either.
-
-Not yet: a drag and a double click on the title, as an option; Ctrl held
-in a drag, pulling the sections below as a block.
+- `grab_titles`, `keep_titles` and the pull are not any app's: they come from
+  an application's demand, so the two options stay off by default, and the
+  pull needs its keys held. The table's rows say what each departs from.
 
 ## The kit
 
@@ -168,13 +221,18 @@ The mark, the title and the count are `space.inline` apart.
   section's body, between its least and how far the stack lets it grow.
 - `sections::laid_out(ctx, name)` gives each section as drawn on the
   last pass: key, title, count, open, height, whether that height is set
-  by hand, band and body rectangles, how far its body is scrolled and,
-  when windowed, the rows drawn. The debug bridge's `state` collector
-  lists it as `core.sections.laid`, each section's height, whether it is
-  set by hand and its window in its summary.
+  by hand, band and body rectangles, how far its body is scrolled,
+  when windowed the rows drawn, the empty room under it (the last section's)
+  and how a drag under way resizes it (`Push` or `Pull`). The debug bridge's
+  `state` collector lists it as `core.sections.laid`, each section's height,
+  whether it is set by hand, its window and its drag (`dragged`, `pulled`)
+  in its summary, and the empty room at its end.
+- A title that drags stays a button named as it was. The pull's keys are not
+  announced on it; the arrows on a boundary do the same as a pull with them.
 - The gallery's `sections` page has its tests and snapshots: a stack
-  sized by the list, one already pushed, a panel too short, and a stack
-  of a long windowed section over a `views::List`.
+  sized by the list, one already pushed, a panel too short, a stack
+  of a long windowed section over a `views::List`, and a stack with both
+  options on, which the playground turns off.
 
 ## Survey: adopt, wrap or own
 
