@@ -189,8 +189,8 @@ impl ScrollBarKit {
     /// does not decide is kept: the content margin, the gap between a bar beside the content and the content,
     /// the fades). The thumb is drawn in the widget states' foreground
     /// colour (`foreground_color`), which a `ScrollBar` scope sets to the
-    /// kit's thumb fills. With the default kit, this is egui's own
-    /// `ScrollStyle::floating()`.
+    /// kit's thumb fills. With `hover` and egui's `min-length`, this is
+    /// egui's own `ScrollStyle::floating()`.
     pub fn style(&self, base: &ScrollStyle) -> ScrollStyle {
         let egui = ScrollStyle::floating();
         let mut s = *base;
@@ -273,6 +273,7 @@ pub(super) fn losses(t: &Tokens, kit: &super::Kit) -> Vec<String> {
 mod tests {
     use super::*;
     use crate::kit::{Kit, Shapes};
+    use egui_pop_tokens::contrast::contrast_ratio;
     use egui_pop_tokens::{ThemeSpec, Themes};
 
     fn kit(yaml: &str) -> Kit {
@@ -284,18 +285,94 @@ mod tests {
         Kit::compile(&t, &Shapes::default())
     }
 
+    /// What the thumb at rest looks like over `surface` once painted: egui's
+    /// `gamma_multiply` for its opacity, then its blending. Against the surface,
+    /// the ratio this gives is what WCAG's non-text contrast asks 3:1 of.
+    fn thumb_ratio(thumb: Color32, opacity: f32, surface: Color32) -> f32 {
+        let lift = |c: Color32| {
+            let [r, g, b, _] = c.to_array();
+            let unit = |v: u8| f32::from(v) / 255.0;
+            egui_pop_tokens::Color::rgb(unit(r), unit(g), unit(b))
+        };
+        contrast_ratio(
+            lift(surface.blend(thumb.gamma_multiply(opacity))),
+            lift(surface),
+        )
+    }
+
+    /// A built-in theme's bars show at rest, thin and quiet, and can be seen:
+    /// 3:1 on every surface a scroll area stands on. `contrast::PAIRS` holds
+    /// pairs of opaque tokens and has no egui to blend them with, so this is
+    /// here. `cargo test -p egui-pop-core thumb -- --nocapture` lists them.
     #[test]
-    fn the_default_kit_gives_egui_s_own_floating_bars() {
+    fn every_built_in_theme_s_thumb_at_rest_reaches_3_to_1() {
+        let mut failures = Vec::new();
         for name in egui_pop_tokens::BUILT_IN_THEMES {
             let t = Tokens::new(Themes::default().resolve(&ThemeSpec::new(*name)));
             let kit = Kit::compile(&t, &Shapes::default());
             assert!(kit.problems.is_empty(), "{name}: {:?}", kit.problems);
-            assert_eq!(
-                kit.scroll.style(&ScrollStyle::default()),
-                ScrollStyle::floating(),
-                "{name}"
-            );
+            let style = kit.scroll.style(&ScrollStyle::default());
+            // The thumb's fill in a scope, and the button's text outside one:
+            // no problem above means that they are the same.
+            let thumb = kit.scroll_bar.style(State::REST).fill;
+            let opacity = if style.floating {
+                style.dormant_handle_opacity
+            } else {
+                1.0
+            };
+            let mut line = format!("{name:28} {opacity:.2}");
+            for (surface, fill) in [
+                ("panel", t.surface.panel),
+                ("canvas", t.surface.canvas),
+                ("overlay", t.surface.overlay),
+                ("raised", t.surface.raised),
+                ("sunken", t.surface.sunken),
+            ] {
+                let ratio = thumb_ratio(thumb, opacity, fill);
+                line += &format!(" {surface} {ratio:.2}");
+                if ratio < 3.0 {
+                    failures.push(format!("{name}: {ratio:.2}:1 on {surface}"));
+                }
+            }
+            println!("{line}");
         }
+        assert!(failures.is_empty(), "{failures:?}");
+    }
+
+    #[test]
+    fn built_in_themes_show_quiet_bars_at_rest_but_high_contrast_ones_full_bars() {
+        for name in egui_pop_tokens::BUILT_IN_THEMES {
+            let t = Tokens::new(Themes::default().resolve(&ThemeSpec::new(*name)));
+            let bar = Kit::compile(&t, &Shapes::default()).scroll;
+            if name.contains("high-contrast") {
+                assert_eq!(bar.visibility, Visibility::Always, "{name}");
+                assert_eq!(bar.placement, Placement::Beside, "{name}");
+                assert_eq!(bar.width, 14.0, "{name}");
+            } else {
+                assert_eq!(bar.visibility, Visibility::Rest, "{name}");
+                assert_eq!(bar.placement, Placement::Over, "{name}");
+                assert_eq!(
+                    (bar.width, bar.width_rest, bar.room, bar.min_length),
+                    (10.0, 4.0, 6.0, 24.0),
+                    "{name}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn hover_still_gives_egui_s_own_floating_bars() {
+        let k = kit(r##"
+            $extends: "pop-dark"
+            scroll-bar:
+              visibility: {$type: "string", $value: "hover"}
+              min-length: {$type: "dimension", $value: {value: 12, unit: "px"}}
+            "##);
+        assert!(k.problems.is_empty(), "{:?}", k.problems);
+        assert_eq!(
+            k.scroll.style(&ScrollStyle::default()),
+            ScrollStyle::floating()
+        );
     }
 
     #[test]

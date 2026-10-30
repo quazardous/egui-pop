@@ -321,3 +321,14 @@ font:
       $value: {value: 15, unit: "px"}
     l:
       $value: {value: 16, unit: "px"}
+scroll-bar:
+  placement:
+    $type: "string"
+    $value: "beside"
+    $description: "A full bar takes room, so that it covers nothing."
+  visibility:
+    $type: "string"
+    $value: "always"
+  width:
+    $type: "dimension"
+    $value: {value: 14, unit: "px"}

@@ -1,6 +1,6 @@
 $description: "The `scroll-bar` component of the default kit (docs/kit.md), layered into pop-dark."
 scroll-bar:
-  $description: "The scroll bars of every scroll area, which egui draws (handler `scoped`): `width`, `width-rest`, `opacity-rest`, `room`, `min-length`, `margin`, `placement` and `visibility` become egui's `ScrollStyle` with the theme; the thumb's fill per state, its radius and the track are egui's widget colours in a `ScrollBar` scope (`UiPop::scroll_area`). The defaults are egui's own bars: floating, 10 points wide, shown under the pointer, the thumb in the button's text colours."
+  $description: "The scroll bars of every scroll area, which egui draws (handler `scoped`): `width`, `width-rest`, `opacity-rest`, `room`, `min-length`, `margin`, `placement` and `visibility` become egui's `ScrollStyle` with the theme; the thumb's fill per state, its radius and the track are egui's widget colours in a `ScrollBar` scope (`UiPop::scroll_area`). The defaults: shown at rest whenever the content overflows, 4 points wide and quiet, 10 points wide over the bar, floating with 6 points kept for it, the thumb in the button's text colours."
   shape:
     $type: "string"
     $value: "scoped"
@@ -21,7 +21,7 @@ scroll-bar:
     $description: "The content's width kept for the bar while it shows, under `visibility: rest`, so that the thumb at rest does not lie over it."
   min-length:
     $type: "dimension"
-    $value: {value: 12, unit: "px"}
+    $value: {value: 24, unit: "px"}
     $description: "The thumb at its shortest."
   margin:
     $type: "dimension"
@@ -32,7 +32,7 @@ scroll-bar:
     $description: "over: the bar floats over the content, which runs to the edge under it; beside: the bar takes room beside the content."
   visibility:
     $type: "string"
-    $value: "hover"
+    $value: "rest"
     $description: "always: shown at rest, at full width; rest: shown at rest too, thin and quiet (width-rest, opacity-rest, no track), wide over the bar, with room kept for it; hover: shown while the pointer is over the scroll area, thin until over the bar (egui's look); scroll: while scrolling (egui 0.36 has no such state: drawn as hover, and reported)."
   track-fill:
     $type: "color"

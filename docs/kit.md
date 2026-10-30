@@ -697,23 +697,24 @@ them two ways:
   `active` (dragged) fills, its `radius` and the `track-fill`; the
   content is drawn in the style outside the scope.
 
-| Token | Meaning | Default (egui's own bars) |
+| Token | Meaning | Default |
 |---|---|---|
 | `scroll-bar.width` | the bar at its widest, and its hit area | 10 |
 | `scroll-bar.width-rest` | the bar at rest, under `rest` | 4 |
-| `scroll-bar.opacity-rest` | the thumb's opacity at rest, 0 to 1, under `rest`: quiet, but 3:1 against the panel | 0.45, 0.6 in `pop-light` |
+| `scroll-bar.opacity-rest` | the thumb's opacity at rest, 0 to 1, under `rest`: quiet, but 3:1 against the surfaces (a test holds every built-in theme to it, through egui's blending) | 0.45, 0.6 in `pop-light`, more where a theme's text is close to its surfaces |
 | `scroll-bar.room` | the content's width kept for the bar while it shows, under `rest` | 6 |
-| `scroll-bar.min-length` | the thumb at its shortest | 12 |
+| `scroll-bar.min-length` | the thumb at its shortest | 24 |
 | `scroll-bar.margin` | between the bar and the scroll area's edge | 0 |
 | `scroll-bar.placement` | `over`: floats over the content, which runs to the edge under it; `beside`: takes room, the content is narrower by the bar, its margin and egui's 4 point gap | `over` |
-| `scroll-bar.visibility` | `always`: at rest too, at full width; `rest`: at rest too, thin and quiet with no track, whenever the content overflows, wide over the bar; `hover`: while the pointer is over the scroll area, thin until it is over the bar; `scroll`: while scrolling | `hover` |
+| `scroll-bar.visibility` | `always`: at rest too, at full width; `rest`: at rest too, thin and quiet with no track, whenever the content overflows, wide over the bar; `hover`: while the pointer is over the scroll area, thin until it is over the bar (egui's own); `scroll`: while scrolling | `rest` |
 | `scroll-bar.track-fill` | the track; transparent for none, in every scroll area | `{surface.sunken}` |
 | `scroll-bar.rest.fill`, `hover.fill`, `active.fill` | the thumb at rest, under the pointer, dragged | the button's text colours |
 | `scroll-bar.rest.radius` | the thumb's and track's corners; half the width or more rounds them fully | the button's |
 
-The defaults are egui's `ScrollStyle::floating()` with the button's
-colours, so the built-in themes look as egui does. A theme opts in with
-data only; tvty's bar (a 6 point thumb, fully rounded, 4 points from the
+The defaults are the survey's quiet bar with the button's colours, and the
+high contrast themes take `always`, `beside` the content and 14 wide, which
+covers nothing. A theme decides with data only: `visibility: hover` and a
+`min-length` of 12 are egui's `ScrollStyle::floating()`; tvty's bar (a 6 point thumb, fully rounded, 4 points from the
 edge, no track, over the content, shown at rest):
 
 ```yaml

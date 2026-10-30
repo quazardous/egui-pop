@@ -403,9 +403,7 @@ fn remember_folded(ctx: &egui::Context, list: &TreeState<String>, stories: &[Sto
 }
 
 /// The page list, a tree of egui-pop's with the groups as folders, its one
-/// scroll area filling the side bar: 57 pages do not fit a window. Its bar
-/// shows at rest, quiet, as the sections' stack's does, whatever the theme does
-/// for the other bars: nothing else says that the list goes on.
+/// scroll area filling the side bar: 57 pages do not fit a window.
 ///
 /// The selection marks the page shown, and only a page opening changes it;
 /// the cursor walks the list on its own, and Enter or a click opens.
@@ -437,12 +435,9 @@ fn pages(ui: &mut Ui, app: &AppHandle) {
             list.reveal(&key);
         }
     }
-    let others = ui.spacing().scroll;
-    let bar = Kit::of(ui.ctx()).scroll.seen_at_rest();
     // The bar's colours, as `UiPop::scroll_area` gives them.
     let out = ui
         .scoped(Stock::ScrollBar, Tone::Neutral, |ui| {
-            ui.spacing_mut().scroll = bar.style(&others);
             // The side bar is narrow: the two levels indent little.
             ui.spacing_mut().indent = t.space.m;
             TreeView::new("gallery.pages")
@@ -489,9 +484,9 @@ fn fills_the_zone(page: &StoryId) -> bool {
 }
 
 /// Draws a page or its playground in a scroll area filling what is left of the
-/// panel, its place kept per page. The bar shows at rest, quiet, and all of its
-/// width is kept for it, only while it shows: over a page, it would take the clicks
-/// of what stands at the right edge.
+/// panel, its place kept per page. All of the bar's width is kept for it, only
+/// while it shows: over a page, it would take the clicks of what stands at the
+/// right edge.
 /// Both ways: egui widens a scroll area to content too wide for it when it does
 /// not scroll that way, which leaves the bar out of the panel.
 fn page_scroll<R>(
@@ -504,7 +499,7 @@ fn page_scroll<R>(
         .id_salt((kind, page.as_str().to_owned()))
         .auto_shrink(false);
     let others = ui.spacing().scroll;
-    let mut bar = Kit::of(ui.ctx()).scroll.seen_at_rest();
+    let mut bar = Kit::of(ui.ctx()).scroll;
     bar.room = bar.width;
     ui.scope(|ui| {
         ui.spacing_mut().scroll = bar.style(&others);

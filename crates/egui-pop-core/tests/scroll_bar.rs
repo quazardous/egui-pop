@@ -75,10 +75,16 @@ fn painted(out: &FullOutput, fill: Color32) -> bool {
 
 #[test]
 fn the_scroll_bar_tokens_reach_egui_s_scroll_style() {
-    // The default kit is egui's own floating bars.
+    // The built-in bars: thin and quiet at rest, room kept for them.
     let ctx = Context::default();
     theme::install(&ctx, &ThemeSpec::new("pop-dark"));
-    assert_eq!(ctx.global_style().spacing.scroll, ScrollStyle::floating());
+    let s = ctx.global_style().spacing.scroll;
+    assert!(s.floating);
+    assert_eq!(s.bar_width, 10.0);
+    assert_eq!(s.floating_width, 4.0);
+    assert_eq!(s.floating_allocated_width, 6.0);
+    assert_eq!(s.handle_min_length, 24.0);
+    assert_eq!(s.dormant_handle_opacity, 0.45);
 
     theme::install_tokens(&ctx, tokens("tvty", TVTY));
     let kit = Kit::of(&ctx);
@@ -309,7 +315,7 @@ fn a_scoped_theme_s_scroll_bar_follows_the_scope() {
     let (inside, outside) = (inside.unwrap(), outside.unwrap());
     assert_eq!(inside.bar_width, 6.0);
     assert_eq!(inside.dormant_handle_opacity, 1.0);
-    assert_eq!(outside, ScrollStyle::floating());
+    assert_eq!(outside, ctx.global_style().spacing.scroll);
     // The scoped theme's thumb, at rest.
     assert!(painted(&out.expect("a frame ran"), THUMB));
 }

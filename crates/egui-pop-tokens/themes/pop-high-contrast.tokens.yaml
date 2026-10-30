@@ -65,3 +65,14 @@ selectable-row:
       $type: "color"
       $value: "{border.strong}"
       $description: "Every control outlined."
+scroll-bar:
+  placement:
+    $type: "string"
+    $value: "beside"
+    $description: "A full bar takes room, so that it covers nothing."
+  visibility:
+    $type: "string"
+    $value: "always"
+  width:
+    $type: "dimension"
+    $value: {value: 14, unit: "px"}

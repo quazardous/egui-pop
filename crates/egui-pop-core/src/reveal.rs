@@ -115,9 +115,15 @@ pub(crate) fn begin_pass(ctx: &Context) {
 /// Moves the areas around a widget until it lies in each of them, the
 /// innermost first. Whether any moved.
 fn scroll_to(ctx: &Context, widget: &WidgetRect) -> bool {
-    let spacing = ctx.global_style().spacing.item_spacing;
+    let style = ctx.global_style();
+    let spacing = style.spacing.item_spacing;
+    let room = style.spacing.scroll.allocated_width();
     let mut rect = widget.rect;
     let mut moved = false;
+    // What the areas inside cut off the end of the view: egui clips the content
+    // of an area by the room of its bar on the axis it does not scroll, even
+    // though that room lies at the area's own end, not at the clip's.
+    let mut cut = egui::Vec2::ZERO;
     for area in around(ctx, widget.id) {
         let Some(mut state) = State::load(ctx, area.id) else {
             continue;
@@ -127,7 +133,7 @@ fn scroll_to(ctx: &Context, widget: &WidgetRect) -> bool {
             let Some(bar) = area.bars[d] else {
                 continue;
             };
-            let mut end = bar.max[d];
+            let mut end = bar.max[d] - cut[d];
             // The other bar takes room at this one's end, unless it floats
             // over the content, where a widget should not stay under it either.
             if let Some(other) = area.bars[1 - d] {
@@ -140,6 +146,11 @@ fn scroll_to(ctx: &Context, widget: &WidgetRect) -> bool {
             state.store(ctx, area.id);
             rect = rect.translate(-delta);
             moved = true;
+        }
+        for d in 0..2 {
+            if area.bars[d].is_none() && area.bars[1 - d].is_some() {
+                cut[d] += room;
+            }
         }
     }
     moved
