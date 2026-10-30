@@ -122,6 +122,27 @@ limit.
 - **Remove when**: egui-pop moves to egui 0.37 (check that text typed in
   the pass of an AccessKit focus reaches the field without the plugin).
 
+## egui: a plugin's input hook runs in another window
+
+- **Compensated**: `Context::begin_pass` calls `Plugin::input_hook` before the
+  pass begins: the viewport stack and `Memory::viewport_id` are only set after
+  it. For an immediate viewport's pass they are still the parent's, and for a
+  deferred viewport's pass the context says the root and the memory says the
+  last window that ran. So `Memory::focused()` and `surrender_focus` in a hook
+  act on another window's focus, and no public method reads a given window's:
+  only `RawInput::viewport_id` tells which window the input is for. In a real
+  second window, Escape made the main window's text field let go and lost the
+  press, and a field of that window never got step 1 of the Escape order.
+- **Upstream**: not filed. egui's main branch has the same order (2026-10-30).
+- **Workaround**: the focus plugin notes at the end of each window's pass what
+  has the focus, the hook reads that for `RawInput::viewport_id`, and the focus
+  is let go in `on_begin_pass`, where the memory is that window's
+  (`focus::escape`, `// upstream:`). A host running passes with
+  `Context::begin_pass` and `end_pass` by hand has no `on_end_pass`, so no step
+  1 of the Escape order.
+- **Remove when**: egui runs the hook with the window's memory, or offers a
+  window's focus by id.
+
 ## egui: popups built from the context's style, not the opening `Ui`'s
 
 - **Compensated**: egui builds the `Ui` of every `Area` from the

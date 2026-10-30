@@ -1205,6 +1205,13 @@ publishes.
 
 ### Fixed
 
+- Escape in a detached window goes by that window's focus (egui-pop-core). The
+  focus plugin read the focus of another window: pressed in a detached window,
+  Escape made a text field of the main window let go and the press was lost, and
+  a text field of the detached window did not get the first step of the Escape
+  order, so the press also went on to what closes on Escape. A host running
+  passes with `Context::begin_pass` and `end_pass` by hand no longer gets that
+  first step.
 - No Tab stops that show nothing (egui-pop-core, egui-pop-api;
   `docs/inputs.md`). The window frame's caption, a flyout's edge and the edge of
   a side area lying over the centre are no longer stops: focused, they showed

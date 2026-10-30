@@ -68,7 +68,7 @@ use egui::{Context, Id, LayerId, Pos2, Rect, Ui};
 use egui_pop_model::when::WhenContext;
 use serde::Serialize;
 
-use crate::state::{lock, pass, shared, shared_in_window};
+use crate::state::{lock, pass, shared, shared_in_window, shared_of_window};
 
 /// One scope as drawn in a pass.
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -116,6 +116,12 @@ struct State {
     window: Option<bool>,
     /// What changed at the start of this pass, until asked.
     moved: Option<Moved>,
+    /// The widget this window's last pass left with the focus, and where it
+    /// was, for the input hook ([`remember_holder`]).
+    holder: Option<(Id, (LayerId, Pos2))>,
+    /// The text input Escape is taking the focus from, once this window's
+    /// pass has begun.
+    leaving: Option<Id>,
 }
 
 /// What a scope is besides its record, by the same index: not part of
@@ -537,12 +543,14 @@ impl egui::plugin::Plugin for FocusPlugin {
     }
 
     fn on_begin_pass(&mut self, ui: &mut Ui) {
+        leave_text_input(ui.ctx());
         crate::reveal::begin_pass(ui.ctx());
         crate::place::begin_pass(ui.ctx());
     }
 
     fn on_end_pass(&mut self, ui: &mut Ui) {
         crate::place::end_pass(ui.ctx());
+        remember_holder(ui.ctx());
     }
 }
 
@@ -619,28 +627,54 @@ fn is_escape(e: &egui::Event) -> bool {
 /// focus and swallows the press. Whatever had the focus, its place is
 /// kept for the focus chain (egui drops the focus on Escape before this
 /// pass draws), so the surface around it still gets the keys.
+///
+/// upstream: the input hook runs before the window's pass has begun, so
+/// the memory, the context's viewport and the responses are still another
+/// window's: its own focus is out of reach. This reads what the window's
+/// last pass left and lets go of the focus when the pass has begun
+/// (docs/upstream.md, "egui: a plugin's input hook runs in another window").
 fn escape(ctx: &Context, input: &mut egui::RawInput) {
     let Some(at) = input.events.iter().position(is_escape) else {
         return;
     };
-    let Some(id) = ctx.memory(|m| m.focused()) else {
+    let st = shared_of_window::<State>(ctx, "core.focus", input.viewport_id);
+    let mut s = lock(&st);
+    let Some((id, place)) = s.holder else {
         return;
     };
-    if let Some(r) = peek_response(ctx, id) {
-        let st = state(ctx);
-        lock(&st).pressed = Some((r.layer_id, r.interact_rect.center()));
-    }
-    let passes = {
-        let st = state(ctx);
-        let s = lock(&st);
-        s.passing.contains(&id) || s.passing_last.contains(&id)
-    };
-    if ctx.text_edit_focused() && !passes {
+    s.pressed = Some(place);
+    let passes = s.passing.contains(&id) || s.passing_last.contains(&id);
+    if egui::text_edit::TextEditState::load(ctx, id).is_some() && !passes {
         input.events.remove(at);
-        ctx.memory_mut(|m| m.surrender_focus(id));
-        lock(&state(ctx)).escaped = Some((id, pass(ctx)));
-        log::debug!(target: "egui_pop", "Escape: left the text input {id:?}");
+        s.leaving = Some(id);
     }
+}
+
+/// Lets go of the focus [`escape`] took a press for, now that the memory is
+/// this window's.
+fn leave_text_input(ctx: &Context) {
+    let st = state(ctx);
+    let mut s = lock(&st);
+    let Some(id) = s.leaving.take() else {
+        return;
+    };
+    ctx.memory_mut(|m| m.surrender_focus(id));
+    s.escaped = Some((id, pass(ctx)));
+    log::debug!(target: "egui_pop", "Escape: left the text input {id:?}");
+}
+
+/// Notes what the pass leaves with the focus, for the next pass's input hook.
+/// A widget not drawn in this pass is not kept: egui drops its focus as the
+/// pass ends.
+fn remember_holder(ctx: &Context) {
+    let holder = ctx
+        .memory(|m| m.focused())
+        .filter(|&id| ctx.viewport(|v| v.this_pass.widgets.contains(id)))
+        .and_then(|id| {
+            let r = peek_response(ctx, id)?;
+            Some((id, (r.layer_id, r.interact_rect.center())))
+        });
+    lock(&state(ctx)).holder = holder;
 }
 
 /// The scopes of the focus chain, outermost first.
