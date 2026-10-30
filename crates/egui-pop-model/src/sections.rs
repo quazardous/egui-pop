@@ -10,6 +10,8 @@
 //!   Nothing gives way in proportion: sections give in turn, the nearest
 //!   first, each down to its least height, as a code editor's split view
 //!   does.
+//! - [`resized_above`]: the section a boundary resizes: under a folded
+//!   section, the first open one above it.
 //! - [`pin_plan`]: the heights to keep by hand so that [`fit`] shows a
 //!   plan, the sections it did not touch staying sized by the list.
 //!
@@ -61,6 +63,18 @@ pub struct DragPlan {
     pub moved: f32,
     /// The empty room left under the last section.
     pub empty: f32,
+}
+
+/// The section a boundary resizes, the one on the line under the section
+/// `line`: `line` itself when open, else the first open one above it, past
+/// any folded ones (they have no height to change); `None` when nothing
+/// above is open, and the boundary cannot move. `open`: whether each
+/// section is, top first.
+///
+/// Folded bands between do not change the distance: they follow the
+/// section, so the line stays under the pointer in both directions.
+pub fn resized_above(open: &[bool], line: usize) -> Option<usize> {
+    (0..=line).rev().find(|&i| open.get(i) == Some(&true))
 }
 
 /// What moving the boundary under the section `above` by `delta` does
@@ -365,6 +379,27 @@ mod tests {
         let stack = [at(10.0, 60.0), folded(), at(20.0, 20.0), at(20.0, 20.0)];
         let plan = plan_drag(&stack, 2, -30.0, 0.0, DragMode::Push);
         assert_eq!(plan.heights, [30.0, 0.0, 20.0, 50.0]);
+    }
+
+    #[test]
+    fn a_boundary_under_a_folded_section_resizes_the_first_open_one_above() {
+        // Open above it: that one.
+        assert_eq!(resized_above(&[true, true], 0), Some(0));
+        // Folded above it: the first open one, past the folded ones.
+        assert_eq!(resized_above(&[true, false, true], 1), Some(0));
+        assert_eq!(resized_above(&[true, false, false, true], 2), Some(0));
+        // All folded above it: nothing to resize, the boundary stays.
+        assert_eq!(resized_above(&[false, true], 0), None);
+        assert_eq!(resized_above(&[false, false, true], 1), None);
+        assert_eq!(resized_above(&[true], 5), Some(0));
+        // Dragged down, a lower section never goes up: the section chosen
+        // grows and the last gives, the folded band between them following.
+        let stack = [at(10.0, 100.0), folded(), at(10.0, 100.0)];
+        let chosen = resized_above(&[true, false, true], 1).unwrap();
+        let plan = plan_drag(&stack, chosen, 30.0, 0.0, DragMode::Push);
+        assert_eq!(plan.heights, [130.0, 0.0, 70.0]);
+        let plan = plan_drag(&stack, chosen, -30.0, 0.0, DragMode::Push);
+        assert_eq!(plan.heights, [70.0, 0.0, 130.0]);
     }
 
     #[test]

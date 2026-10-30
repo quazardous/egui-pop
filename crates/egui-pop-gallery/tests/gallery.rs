@@ -3081,8 +3081,13 @@ fn the_sections_page_folds_opens_and_resizes_its_sections() {
         before[0].body.unwrap().height(),
         before[2].body.unwrap().height(),
     );
+    // Idle is folded, so the lines over and under it both resize Live.
+    let lines = h.get_all_by_role_and_label(Role::Splitter, "Resize Live");
+    assert_eq!(lines.count(), 2);
     let line = h
-        .get_by_role_and_label(Role::Splitter, "Resize Live")
+        .get_all_by_role_and_label(Role::Splitter, "Resize Live")
+        .next()
+        .unwrap()
         .rect();
     let a = line.center();
     h.drag_at(a);
@@ -3102,13 +3107,17 @@ fn the_sections_page_folds_opens_and_resizes_its_sections() {
     assert!((live_after + shut_after - live_h - shut_h).abs() < 1.0);
     assert!(after[0].by_hand && !after[2].by_hand, "{after:?}");
     // Resized, the boundary with the keyboard: its ring.
-    h.get_by_role_and_label(Role::Splitter, "Resize Live")
+    h.get_all_by_role_and_label(Role::Splitter, "Resize Live")
+        .next()
+        .unwrap()
         .focus();
     h.run();
     h.snapshot("sections-resized-pop-dark");
     // A double click on it gives the heights back.
     let line = h
-        .get_by_role_and_label(Role::Splitter, "Resize Live")
+        .get_all_by_role_and_label(Role::Splitter, "Resize Live")
+        .next()
+        .unwrap()
         .rect();
     egui_pop_test::double_click_at(&mut h, line.center());
     h.run();
