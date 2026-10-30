@@ -2748,6 +2748,39 @@ fn the_files_page_chooses_with_the_in_app_picker() {
 }
 
 #[test]
+fn the_files_page_resizes_the_picker() {
+    use egui::accesskit::Role;
+    let mut h = harness(options("pop-dark", Density::Comfortable, "files"));
+    h.run();
+    h.get_by_label("Open an image…").click();
+    h.run();
+    h.run();
+    run_until(&mut h, |h| preview_state(h) != "loading");
+    // A narrower pane beside the list, by the keyboard.
+    h.get_by_role_and_label(Role::Splitter, "Resize the preview")
+        .focus();
+    h.run();
+    for _ in 0..2 {
+        h.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::ArrowRight);
+        h.run();
+    }
+    // A smaller dialog, by its corner handle.
+    h.get_by_role_and_label(Role::Splitter, "Resize Open an image")
+        .focus();
+    h.run();
+    for _ in 0..2 {
+        h.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::ArrowLeft);
+        h.run();
+        h.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::ArrowUp);
+        h.run();
+    }
+    run_until(&mut h, |h| preview_state(h) != "loading");
+    h.run();
+    egui_pop_test::assert_all_named(&h);
+    h.snapshot("files-resized-pop-dark");
+}
+
+#[test]
 fn the_files_page_previews_the_highlighted_file() {
     use egui_pop::model::commands::Origin;
     let root = egui_pop_gallery::pages::files::demo_folder();

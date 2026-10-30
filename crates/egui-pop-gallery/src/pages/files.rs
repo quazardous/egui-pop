@@ -52,7 +52,7 @@ impl Plugin for FilesPage {
         }
         ctx.story(
             Story::new(StoryId::from_static("files"), "Choosing files", show)
-                .description("The system's file chooser off the interface thread, or the in-app picker: keyboard, typed paths with completion, filters, recent places and bookmarks, and a preview pane (images, text, documents, folders) from pluggable providers.")
+                .description("The system's file chooser off the interface thread, or the in-app picker: keyboard, typed paths with completion, filters, recent places and bookmarks, a preview pane (images, text, documents, folders) from pluggable providers, a dialog you resize and a splitter beside the pane, both remembered.")
                 .group("Components", 52),
         )?;
         Ok(())
@@ -395,7 +395,18 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                     "Typing",
                     "filters the folder (fuzzy), or takes a path with / or ~",
                 ),
-                ("Tab", "completes the typed path"),
+                (
+                    "Tab",
+                    "completes the typed path; else the next widget (the splitter, past the places)",
+                ),
+                (
+                    "Left, Right",
+                    "on the splitter: the pane's width (Enter: its default)",
+                ),
+                (
+                    "Arrows",
+                    "on the dialog's corner handle: the dialog's size",
+                ),
                 (
                     "Up, Down, Enter",
                     "move, then enter a folder or choose a file",

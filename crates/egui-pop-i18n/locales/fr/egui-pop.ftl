@@ -779,6 +779,8 @@ egui-pop-files-pages = Pages
 
 egui-pop-files-preview = Aperçu
 
+egui-pop-files-preview-resize = Redimensionner l'aperçu
+
 egui-pop-files-preview-failed = L’aperçu a échoué
 
 egui-pop-files-preview-loading = Chargement de l’aperçu…

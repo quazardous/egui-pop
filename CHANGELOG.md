@@ -26,6 +26,17 @@ publishes.
   `model::sections` (`fit`, `plan_drag`, `pin_plan`). `Remembered::share`
   gives way to `Remembered::height`: a layout stored with shares keeps its
   fold state, and its sections read as sized by the list.
+- The in-app file picker is resizable (egui-pop-api): its dialog is
+  dragged by its edges and corners, down to `PICKER_MIN_SIZE` and within
+  the window, a splitter between the list and the preview pane sets the
+  pane's width (focusable, with the arrow keys; a double click or Enter
+  gives the default back), and both are remembered
+  (`settings/files.dialog_size`, `settings/files.pane_width`). A size
+  that no longer fits the window at opening goes back to the default.
+  The list now takes the height of the dialog, and the pane scrolls when
+  it is taller. Tab out of a typed path leaves the field for the next
+  widget (in a path it still completes), and while another widget has
+  the focus the plain keys are its own.
 - Resizable modals (egui-pop-core): `OverlaySpec::resizable(size, min)`,
   with `overlay::modal_size`, `modal_resizing` and `modal_max_size`.
   Edges and corners take the pointer, the bottom right corner is a

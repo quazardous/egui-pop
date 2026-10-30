@@ -948,6 +948,8 @@ egui-pop-files-preview-loading = Loading the preview…
 
 egui-pop-files-preview-none = No preview
 
+egui-pop-files-preview-resize = Resize the preview
+
 egui-pop-files-recent = Recent
 
 egui-pop-files-save = Save
