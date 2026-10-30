@@ -14,6 +14,7 @@
 //!   section, the first open one above it.
 //! - [`pin_plan`]: the heights to keep by hand so that [`fit`] shows a
 //!   plan, the sections it did not touch staying sized by the list.
+//! - [`rows_least`]: the least height of a section of rows.
 //!
 //! ```
 //! use egui_pop_model::sections::{DragMode, Placed, plan_drag};
@@ -146,6 +147,12 @@ fn push_up(placed: &[Placed], above: usize, below: &[usize], asked: f32, plan: &
     let given = asked - owed;
     plan.moved = -given;
     plan.heights[below[0]] += given;
+}
+
+/// The least height of a section of `count` rows, each `row` tall: two
+/// rows, or all of them when it has fewer.
+pub fn rows_least(row: f32, count: usize) -> f32 {
+    count.min(2) as f32 * row
 }
 
 /// A section as a stack asks for it: what [`fit`] lays out.
@@ -570,6 +577,14 @@ mod tests {
                 .collect();
             assert_eq!(fit(&pinned, room).heights, plan, "{stack:?}");
         }
+    }
+
+    #[test]
+    fn a_section_of_rows_keeps_two_of_them_or_all_when_fewer() {
+        assert_eq!(rows_least(20.0, 0), 0.0);
+        assert_eq!(rows_least(20.0, 1), 20.0);
+        assert_eq!(rows_least(20.0, 2), 40.0);
+        assert_eq!(rows_least(20.0, 100_000), 40.0);
     }
 
     #[test]
