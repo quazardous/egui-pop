@@ -1,0 +1,241 @@
+//! Focus keeps its place: part of the focus plugin
+//! ([`focus::install`](crate::focus::install)).
+//!
+//! egui forgets a focus it drops: Escape, or a widget no longer drawn, leaves
+//! nothing focused, and the next Tab starts from the top of the window. So the
+//! plugin remembers the widget last focused and its rectangle:
+//!
+//! - **Tab and Shift+Tab with nothing focused** go on from that widget if it is
+//!   still drawn; if not, to the stop nearest to where it was.
+//! - **A widget removed while it holds the focus** hands it to the stop nearest
+//!   to where it was, in the same scope first: a removed row's neighbour, the
+//!   next tab. It happens as the pass ends, so nothing is ever focused that is
+//!   not drawn, and nothing in between sees an empty focus.
+//! - **A widget scrolled away, or removed by the pointer,** hands nothing on:
+//!   the user is looking elsewhere, and a focus jumping about would chase the
+//!   wheel. Tab still goes on from the place.
+//! - **A press on nothing forgets the place**, as does a place in a layer now
+//!   gone (a closed menu) or under a modal: Tab then does what egui does.
+//!
+//! A key binding on Tab goes first: nothing is focused, so it can resolve (the
+//! palettes' toggle, with `!widgetFocus`), and it takes the key from the place.
+//! So the place waits for the end of the pass to see whether the key is left.
+//!
+//! upstream: egui keeps no place when it drops the focus, and its Tab from
+//! nothing starts at the window's first stop (docs/upstream.md, "egui: a focus
+//! dropped leaves no place"). Its rule is otherwise "the widget after the
+//! focused one", so in the next pass, before anything is drawn, that widget gets
+//! the focus back and egui is told to move on. That pass holds no key press for
+//! the widget to read. It follows egui's order: in a `tab::scope`, the order of
+//! drawing rather than the scope's own.
+
+use egui::{Context, FocusDirection, Id, Key, LayerId, Rect, Vec2, WidgetRect};
+
+use crate::state::{lock, pass, shared_in_window};
+use crate::{focus, focus_mode, reveal};
+
+/// How long after a scroll (in passes) a widget going away went by that
+/// scroll: the row may leave a pass after the offset moved.
+const SCROLL_PASSES: u64 = 2;
+
+#[derive(Clone, Debug)]
+struct Place {
+    id: Id,
+    layer: LayerId,
+    /// Where it was last drawn, on screen.
+    rect: Rect,
+    /// The scopes it was drawn in, innermost first.
+    scopes: Vec<String>,
+}
+
+#[derive(Debug, Default)]
+struct Keep {
+    place: Option<Place>,
+    /// Tab was held back from egui this pass, Shift or not, for the end of the
+    /// pass to place if no binding takes it.
+    asked: Option<bool>,
+    /// Tab is to go on from the place in the next pass, Shift or not.
+    going: Option<bool>,
+    /// The widget given the focus back this pass, for Tab to go on from.
+    anchor: Option<Id>,
+    scrolled_at: Option<u64>,
+}
+
+/// Puts egui back at the place, or holds back a Tab pressed with nothing
+/// focused. Runs once egui has read the key and before anything is drawn.
+pub(crate) fn begin_pass(ctx: &Context) {
+    let st = shared_in_window::<Keep>(ctx, "core.focus.place");
+    let mut s = lock(&st);
+    s.anchor = None;
+    s.asked = None;
+    // Here: a scroll area takes the delta as it is drawn.
+    if ctx.input(|i| i.is_scrolling() || i.smooth_scroll_delta != Vec2::ZERO) {
+        s.scrolled_at = Some(pass(ctx));
+    }
+    let focused = ctx.memory(|m| m.focused());
+    if let Some(back) = s.going.take()
+        && focused.is_none()
+        && let Some(id) = s.place.as_ref().map(|p| p.id)
+    {
+        let direction = if back {
+            FocusDirection::Previous
+        } else {
+            FocusDirection::Next
+        };
+        ctx.memory_mut(|m| {
+            m.request_focus(id);
+            m.move_focus(direction);
+        });
+        s.anchor = Some(id);
+        return;
+    }
+    if focused.is_some() {
+        return;
+    }
+    let Some(back) = tab_pressed(ctx) else {
+        return;
+    };
+    let Some((id, layer)) = s.place.as_ref().map(|p| (p.id, p.layer)) else {
+        return;
+    };
+    if !ctx.memory(|m| m.allows_interaction(layer)) {
+        return;
+    }
+    let usable = ctx.viewport(|v| {
+        let widgets = &v.prev_pass.widgets;
+        widgets.contains(id) || widgets.get_layer(layer).any(|w| is_stop(w, id))
+    });
+    if usable {
+        ctx.memory_mut(|m| m.move_focus(FocusDirection::None));
+        s.asked = Some(back);
+    }
+}
+
+/// Remembers what holds the focus, or hands it on. Runs after the widgets are
+/// drawn and before egui's own end of pass, which would drop the focus of a
+/// widget it did not see.
+pub(crate) fn end_pass(ctx: &Context) {
+    let now = pass(ctx);
+    let st = shared_in_window::<Keep>(ctx, "core.focus.place");
+    let mut s = lock(&st);
+    let anchor = s.anchor.take();
+    let asked = s.asked.take();
+    let Some(id) = ctx.memory(|m| m.focused()) else {
+        if asked.is_some() && tab_pressed(ctx).is_some() {
+            let drawn = s
+                .place
+                .as_ref()
+                .is_some_and(|p| ctx.viewport(|v| v.this_pass.widgets.contains(p.id)));
+            if drawn {
+                s.going = asked;
+                ctx.request_repaint();
+            } else {
+                hand_on(ctx, &s);
+            }
+        } else if asked.is_none() && pointer_acted(ctx) {
+            s.place = None;
+        }
+        return;
+    };
+    let drawn = ctx.viewport(|v| v.this_pass.widgets.get(id).copied());
+    if let Some(widget) = drawn {
+        let scopes = match s.place.take() {
+            Some(place) if place.id == id => place.scopes,
+            _ => focus::scopes_holding(ctx, id),
+        };
+        s.place = Some(Place {
+            id,
+            layer: widget.layer_id,
+            rect: widget.rect,
+            scopes,
+        });
+        return;
+    }
+    // Focused and not drawn: asked for this pass and drawn in the next, unless
+    // it held the focus already or was given it back above.
+    if anchor != Some(id) && !ctx.memory(|m| m.had_focus_last_frame(id)) {
+        return;
+    }
+    let scrolled = s.scrolled_at.is_some_and(|at| now <= at + SCROLL_PASSES);
+    let by_hand = anchor != Some(id) && (scrolled || reveal::pointer_lately(ctx));
+    let known = s.place.as_ref().is_some_and(|p| p.id == id);
+    if (by_hand || !known || !hand_on(ctx, &s)) && anchor == Some(id) {
+        // egui keeps a focus it was just given, and AccessKit panics on a
+        // focus without a node.
+        ctx.memory_mut(|m| m.surrender_focus(id));
+    }
+}
+
+/// Gives the focus to the stop nearest to the place. Whether there was one.
+fn hand_on(ctx: &Context, s: &Keep) -> bool {
+    let Some(place) = &s.place else {
+        return false;
+    };
+    let Some(next) = nearest(ctx, place) else {
+        return false;
+    };
+    log::debug!(target: "egui_pop", "Focus: {:?} went away, {next:?} takes over", place.id);
+    ctx.memory_mut(|m| m.request_focus(next));
+    true
+}
+
+/// The stop this pass drew nearest to a place: in the innermost of its scopes
+/// that still holds one, else anywhere in its layer. The later one on a tie, as
+/// Tab would go there next.
+fn nearest(ctx: &Context, place: &Place) -> Option<Id> {
+    let screen = ctx.viewport_rect();
+    let spans = focus::spans_of(ctx, place.layer, &place.scopes);
+    ctx.viewport(|v| {
+        let drawn: Vec<&WidgetRect> = v.this_pass.widgets.get_layer(place.layer).collect();
+        let closest = |widgets: &[&WidgetRect]| {
+            let mut best: Option<(f32, Id)> = None;
+            for w in widgets {
+                if !is_stop(w, place.id) || !w.interact_rect.intersect(screen).is_positive() {
+                    continue;
+                }
+                let d = (w.rect.center() - place.rect.center()).length_sq();
+                if best.is_none_or(|(b, _)| d <= b) {
+                    best = Some((d, w.id));
+                }
+            }
+            best.map(|(_, id)| id)
+        };
+        spans
+            .iter()
+            .filter_map(|span| drawn.get(span.clone()))
+            .find_map(&closest)
+            .or_else(|| closest(&drawn))
+    })
+}
+
+/// A widget that can take the focus, other than `not`.
+fn is_stop(w: &WidgetRect, not: Id) -> bool {
+    w.id != not && w.enabled && w.sense.is_focusable()
+}
+
+/// The pointer pressed or let go, or it moves the focus (hover mode).
+fn pointer_acted(ctx: &Context) -> bool {
+    ctx.input(|i| i.pointer.any_pressed() || i.pointer.any_released())
+        || focus_mode::pointer_may_focus(ctx)
+}
+
+/// Tab as egui reads it: whether Shift was held.
+fn tab_pressed(ctx: &Context) -> Option<bool> {
+    ctx.input(|i| {
+        i.events.iter().find_map(|e| match e {
+            egui::Event::Key {
+                key: Key::Tab,
+                pressed: true,
+                modifiers,
+                ..
+            } if !modifiers.any() => Some(false),
+            egui::Event::Key {
+                key: Key::Tab,
+                pressed: true,
+                modifiers,
+                ..
+            } if modifiers.shift_only() => Some(true),
+            _ => None,
+        })
+    })
+}

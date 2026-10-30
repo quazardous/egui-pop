@@ -349,6 +349,53 @@ pub fn scope<R>(
     inner
 }
 
+/// The names of the scopes this pass drew around a widget, innermost first.
+/// Called at the end of the pass; empty if no scope was drawn in it.
+pub(crate) fn scopes_holding(ctx: &Context, id: Id) -> Vec<String> {
+    let st = state(ctx);
+    let s = lock(&st);
+    if s.pass != pass(ctx) {
+        return Vec::new();
+    }
+    let Some((layer, order)) = ctx.viewport(|v| v.this_pass.widgets.order(id)) else {
+        return Vec::new();
+    };
+    let at = s
+        .building
+        .iter()
+        .zip(&s.drawn)
+        .enumerate()
+        .filter(|(_, (r, d))| r.layer == layer && d.widgets.contains(&order))
+        .max_by_key(|(i, (r, _))| (r.depth, *i))
+        .map(|(i, _)| i);
+    let mut names: Vec<String> = outward(&s.building, at)
+        .into_iter()
+        .map(|i| s.building[i].name.clone())
+        .collect();
+    names.reverse();
+    names
+}
+
+/// The widgets this pass drew in each of these scopes, in the same order, as
+/// their order in the layer. A scope not drawn in this layer is left out.
+pub(crate) fn spans_of(ctx: &Context, layer: LayerId, names: &[String]) -> Vec<Range<usize>> {
+    let st = state(ctx);
+    let s = lock(&st);
+    if s.pass != pass(ctx) {
+        return Vec::new();
+    }
+    names
+        .iter()
+        .filter_map(|name| {
+            let at = s
+                .building
+                .iter()
+                .position(|r| r.layer == layer && r.name == *name)?;
+            Some(s.drawn.get(at)?.widgets.clone())
+        })
+        .collect()
+}
+
 /// How many widgets this pass drew so far in `ui`'s layer.
 fn widgets_in(ui: &Ui) -> usize {
     let layer = ui.layer_id();
@@ -395,9 +442,11 @@ pub fn take_moved(ctx: &Context) -> Option<Moved> {
 /// Installs the focus plugin on a context (once; later calls do
 /// nothing): Escape leaves a text input before anything else sees it,
 /// see [the order](self#escape-in-order), the keys typed with an AccessKit
-/// `Focus` action reach the field it focuses, and a widget the keyboard
+/// `Focus` action reach the field it focuses, a widget the keyboard
 /// focuses comes into view in the scroll areas around it, nested ones
-/// included (the pointer's focus leaves them where they are).
+/// included (the pointer's focus leaves them where they are), and the focus
+/// keeps its place: Tab after Escape or after the focused widget went away
+/// goes on from there, and a widget removed hands the focus to its neighbour.
 pub fn install(ctx: &Context) {
     // Once per context, whichever window asks.
     let st = shared::<State>(ctx, "core.focus");
@@ -489,6 +538,11 @@ impl egui::plugin::Plugin for FocusPlugin {
 
     fn on_begin_pass(&mut self, ui: &mut Ui) {
         crate::reveal::begin_pass(ui.ctx());
+        crate::place::begin_pass(ui.ctx());
+    }
+
+    fn on_end_pass(&mut self, ui: &mut Ui) {
+        crate::place::end_pass(ui.ctx());
     }
 }
 
