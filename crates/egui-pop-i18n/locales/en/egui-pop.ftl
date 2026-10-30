@@ -852,6 +852,8 @@ egui-pop-dialog-browse = Browse…
 
 egui-pop-dialog-filter = Filter
 
+egui-pop-dialog-resize = Resize { $dialog }
+
 egui-pop-editors-close = Close the search
 
 egui-pop-editors-code = Code editor
@@ -946,11 +948,15 @@ egui-pop-files-preview-loading = Loading the preview…
 
 egui-pop-files-preview-none = No preview
 
+egui-pop-files-preview-resize = Resize the preview
+
 egui-pop-files-recent = Recent
 
 egui-pop-files-save = Save
 
 egui-pop-files-size = Size
+
+egui-pop-files-type = File type
 
 egui-pop-files-unbookmark = Remove the bookmark
 

@@ -670,6 +670,10 @@ components! {
     slider_value: "slider-value" => "plain",
     /// A spinner, colours only like `progress-ring`; its label in `text`.
     spinner: "spinner" => "plain",
+    /// The line between two panes side by side (`width` thick): hover,
+    /// active while dragged, `focus` with the keyboard
+    /// (`widgets::Splitter`).
+    splitter: "splitter" => "plain",
     /// A status bar indicator, colours only: its text by tone, its
     /// progress line (`border-color` the track, `indicator-*` the fill).
     status_indicator: "status-indicator" => "plain",
@@ -721,6 +725,10 @@ components! {
     compare_pane: "compare-pane" => "box",
     /// A dialog's frame.
     dialog: "dialog" => "card",
+    /// A resizable dialog's corner handle (lines in `text`, in a square
+    /// `height` across, `border-width` wide); `width` is how far the
+    /// dialog's edges take the pointer on either side of them.
+    dialog_grip: "dialog-grip" => "plain",
     /// A dialog's title row, colours only: its title in `text`, on the
     /// header band of a movable dialog (`padding-y` below it).
     dialog_header: "dialog-header" => "plain",

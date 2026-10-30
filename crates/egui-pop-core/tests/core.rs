@@ -651,3 +651,172 @@ fn in_click_mode_moving_the_pointer_changes_nothing() {
     let report = egui_pop_core::focus_mode::get(&h.ctx).report();
     assert_eq!(report.mode, egui_pop_core::focus_mode::FocusMode::Click);
 }
+
+/// A resizable modal and a plain one (keep their ways apart), in a window
+/// of their own.
+fn modal_app(resizable: bool) -> Harness<'static, bool> {
+    Harness::builder()
+        .with_size(egui::vec2(800.0, 600.0))
+        .build_ui_state(
+            move |ui, open: &mut bool| {
+                overlay::begin_pass(ui.ctx());
+                let mut spec = OverlaySpec::new("modal", "Report", Kind::Modal).width(300.0);
+                if resizable {
+                    spec = spec.resizable(egui::vec2(400.0, 200.0), egui::vec2(200.0, 100.0));
+                }
+                overlay::show(ui.ctx(), &spec, open, None, |ui| {
+                    let _ = ui.button("Inside");
+                });
+            },
+            true,
+        )
+}
+
+fn modal_rect(h: &Harness<'static, bool>) -> egui::Rect {
+    overlay::rect(&h.ctx, egui::Id::new("modal")).unwrap()
+}
+
+#[test]
+fn a_resizable_modal_follows_its_grips_and_the_arrows() {
+    use egui::accesskit::Role;
+    let mut h = modal_app(true);
+    for _ in 0..3 {
+        h.run();
+    }
+    let id = egui::Id::new("modal");
+    assert_eq!(
+        overlay::modal_size(&h.ctx, id),
+        Some(egui::vec2(400.0, 200.0))
+    );
+    let start = modal_rect(&h);
+    // Whatever its content needs, the size asked; centred.
+    assert!(start.width() > 400.0 && start.height() > 200.0, "{start:?}");
+    assert!((start.center().x - 400.0).abs() < 1.0, "{start:?}");
+    // The left edge: the right one stays.
+    let from = egui::pos2(start.left(), start.center().y);
+    h.drag_at(from);
+    h.run();
+    h.hover_at(from + egui::vec2(-50.0, 0.0));
+    h.run();
+    assert!(overlay::modal_resizing(&h.ctx, id));
+    h.drop_at(from + egui::vec2(-50.0, 0.0));
+    h.run();
+    assert!(!overlay::modal_resizing(&h.ctx, id));
+    let wider = modal_rect(&h);
+    assert!(
+        (wider.left() - start.left() + 50.0).abs() < 1.5,
+        "{wider:?}"
+    );
+    assert!((wider.right() - start.right()).abs() < 1.5, "{wider:?}");
+    assert_eq!(
+        overlay::modal_size(&h.ctx, id),
+        Some(egui::vec2(450.0, 200.0))
+    );
+    // The handle: named, a value, the keyboard.
+    let handle = h.get_by_role_and_label(Role::Splitter, "Resize Report");
+    assert_eq!(
+        handle.accesskit_node().value().as_deref(),
+        Some("450 × 200")
+    );
+    handle.focus();
+    h.run();
+    h.key_press(Key::ArrowDown);
+    h.run();
+    let size = overlay::modal_size(&h.ctx, id).unwrap();
+    assert!(size.y > 200.0 && size.x == 450.0, "{size:?}");
+    h.key_press_modifiers(Modifiers::SHIFT, Key::ArrowLeft);
+    h.run();
+    assert!(overlay::modal_size(&h.ctx, id).unwrap().x < 450.0);
+    assert!(*h.state(), "the arrows close nothing");
+    // Escape still closes it.
+    h.key_press(Key::Escape);
+    h.run();
+    h.run();
+    assert!(!*h.state());
+    assert!(overlay::stack(&h.ctx).is_empty());
+}
+
+#[test]
+fn a_modal_that_does_not_opt_in_stays_as_it_is_declared() {
+    use egui::accesskit::Role;
+    let mut h = modal_app(false);
+    for _ in 0..3 {
+        h.run();
+    }
+    let id = egui::Id::new("modal");
+    assert_eq!(overlay::modal_size(&h.ctx, id), None);
+    assert!(
+        h.query_by_role_and_label(Role::Splitter, "Resize Report")
+            .is_none()
+    );
+    let start = modal_rect(&h);
+    let from = egui::pos2(start.right(), start.center().y);
+    h.drag_at(from);
+    h.run();
+    h.hover_at(from + egui::vec2(50.0, 0.0));
+    h.run();
+    h.drop_at(from + egui::vec2(50.0, 0.0));
+    h.run();
+    assert_eq!(modal_rect(&h), start);
+}
+
+#[test]
+fn a_popover_cannot_be_made_resizable() {
+    let spec = OverlaySpec::new("pop", "Options", Kind::Popover)
+        .resizable(egui::vec2(400.0, 200.0), egui::vec2(200.0, 100.0));
+    assert_eq!(spec.resize, None);
+}
+
+#[test]
+fn a_splitter_says_its_value_and_keeps_to_its_limits() {
+    use egui::accesskit::Role;
+    use egui_pop_core::widgets::Splitter;
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(400.0, 200.0))
+        .build_ui_state(
+            |ui, width: &mut f32| {
+                let rect =
+                    egui::Rect::from_min_size(egui::pos2(100.0, 20.0), egui::vec2(10.0, 100.0));
+                let id = egui::Id::new("splitter");
+                Splitter::new(id, "Resize the pane", 50.0, 150.0, 100.0).show(ui, rect, width);
+            },
+            100.0_f32,
+        );
+    h.run();
+    let node = h.get_by_role_and_label(Role::Splitter, "Resize the pane");
+    assert_eq!(node.accesskit_node().numeric_value(), Some(100.0));
+    assert_eq!(node.accesskit_node().min_numeric_value(), Some(50.0));
+    assert_eq!(node.accesskit_node().max_numeric_value(), Some(150.0));
+    node.focus();
+    h.run();
+    // Before the line: right widens it.
+    h.key_press(Key::ArrowRight);
+    h.run();
+    let one = *h.state();
+    assert!(one > 100.0);
+    for _ in 0..40 {
+        h.key_press_modifiers(Modifiers::SHIFT, Key::ArrowRight);
+        h.run();
+    }
+    assert_eq!(*h.state(), 150.0);
+    for _ in 0..40 {
+        h.key_press_modifiers(Modifiers::SHIFT, Key::ArrowLeft);
+        h.run();
+    }
+    assert_eq!(*h.state(), 50.0);
+    h.key_press(Key::Enter);
+    h.run();
+    assert_eq!(*h.state(), 100.0);
+    // A drag past a limit and back: the line comes back with the pointer.
+    let at = egui::pos2(105.0, 60.0);
+    h.drag_at(at);
+    h.run();
+    h.hover_at(at + egui::vec2(200.0, 0.0));
+    h.run();
+    assert_eq!(*h.state(), 150.0);
+    h.hover_at(at + egui::vec2(10.0, 0.0));
+    h.run();
+    assert_eq!(*h.state(), 110.0);
+    h.drop_at(at + egui::vec2(10.0, 0.0));
+    h.run();
+}

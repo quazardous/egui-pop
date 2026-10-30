@@ -32,6 +32,9 @@
 //!   `files.preview` setting remembers). Built in ([`providers`]):
 //!   images (PNG and JPEG, feature `image-previews`), text and code,
 //!   Markdown drawn simply, folders with their first images.
+//! - **The in-app picker's size** is the person's: its modal is resized
+//!   by its edges and corners, a splitter sets the pane's width, and
+//!   both are kept in the host store ([`DIALOG_SIZE`], [`PANE_WIDTH`]).
 //!
 //! Steps (ADR 0011):
 //!
@@ -66,7 +69,7 @@ use std::collections::{BTreeSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use egui::{Key, Modifiers, Ui};
+use egui::{EventFilter, Key, Modifiers, Ui, pos2, vec2};
 use egui_pop_core::debug::FnCollector;
 use egui_pop_core::lock;
 use egui_pop_core::overlay::{self, Kind, OverlaySpec};
@@ -116,6 +119,12 @@ pub const SETTING_PREVIEW: SettingId = SettingId::from_static("files.preview");
 pub const RECENT: &str = "settings/files.recent";
 /// Where bookmarks are kept (a JSON list of folders).
 pub const BOOKMARKS: &str = "settings/files.bookmarks";
+
+/// Where the in-app picker's size is kept (width and height of its
+/// content, in points).
+pub const DIALOG_SIZE: &str = "settings/files.dialog_size";
+/// Where the width of the in-app picker's preview pane is kept.
+pub const PANE_WIDTH: &str = "settings/files.pane_width";
 
 /// How many recent places are kept.
 pub const RECENT_KEPT: usize = 8;
@@ -422,12 +431,9 @@ impl Files {
         }) else {
             return false;
         };
-        picker.show_preview = preview_wanted(app);
-        let before = picker.show_preview;
+        load_view(app, &mut picker);
         let out = picker.show(ui, &places(app));
-        if picker.show_preview != before {
-            want_preview(app, picker.show_preview);
-        }
+        keep_view(app, &picker);
         settle(app, &answer, out, true);
         self.keep(id, picker);
         true
@@ -686,6 +692,28 @@ impl Plugin for FilesPlugin {
                     )
                     .map_err(|e| PluginError::Failed(format!("{path}: {e:?}")))?;
             }
+            // No settings of their own in the settings window: dragged,
+            // not typed.
+            let size = [f64::from(PICKER_WIDTH), f64::from(PICKER_HEIGHT)];
+            for (path, descriptor) in [
+                (
+                    DIALOG_SIZE,
+                    Descriptor::floats("File picker size", 2, 0.0, MAX_LENGTH, &size),
+                ),
+                (
+                    PANE_WIDTH,
+                    Descriptor::float(
+                        "File picker preview width",
+                        0.0,
+                        MAX_LENGTH,
+                        f64::from(preview::PANE_WIDTH),
+                    ),
+                ),
+            ] {
+                store
+                    .declare(ctx.owner(), path, descriptor)
+                    .map_err(|e| PluginError::Failed(format!("{path}: {e:?}")))?;
+            }
         }
         ctx.service(&FILES, files.clone())?;
         ctx.step(
@@ -855,24 +883,35 @@ fn places(app: &AppHandle) -> Places {
     }
 }
 
-/// The width of the in-app picker's modal, the preview pane shown or
-/// not: wide enough for the places, the list and the full pane.
+/// The width of the in-app picker's modal at first, the preview pane
+/// shown or not: wide enough for the places, the list and the full pane.
 pub const PICKER_WIDTH: f32 = 880.0;
+/// The height of the in-app picker's modal at first: the list has its
+/// usual height ([`LIST_HEIGHT`]).
+pub const PICKER_HEIGHT: f32 = 398.0;
+/// The least size the in-app picker's modal is dragged to: the row of
+/// its filters and buttons fits, and a few entries.
+pub const PICKER_MIN_SIZE: egui::Vec2 = egui::vec2(520.0, 280.0);
+/// The list's height when the picker is not given a height to fill.
+pub const LIST_HEIGHT: f32 = 280.0;
 /// The narrowest the picker's list gets for the preview pane: under
 /// it, the pane shrinks instead.
 pub const LIST_MIN_WIDTH: f32 = 240.0;
 /// The narrowest preview pane drawn: with less room, it is not shown.
 pub const PANE_MIN_WIDTH: f32 = 120.0;
 
+/// More than any window: what the store accepts for a length.
+const MAX_LENGTH: f64 = 65_536.0;
+
 /// Splits the room beside the places between the list and the preview
-/// pane (when it is on, with `gap` between them): the pane takes its
-/// full width from the list's while the list keeps `LIST_MIN_WIDTH`,
+/// pane (when it is on, with `gap` between them): the pane takes the
+/// width `wanted` from the list's while the list keeps `LIST_MIN_WIDTH`,
 /// then shrinks, down to `PANE_MIN_WIDTH`, under which it is hidden.
-fn split_list(available: f32, gap: f32, preview: bool) -> (f32, Option<f32>) {
+fn split_list(available: f32, gap: f32, preview: bool, wanted: f32) -> (f32, Option<f32>) {
     if !preview {
         return (available, None);
     }
-    let pane = (available - gap - LIST_MIN_WIDTH).min(preview::PANE_WIDTH);
+    let pane = (available - gap - LIST_MIN_WIDTH).min(wanted.max(PANE_MIN_WIDTH));
     if pane < PANE_MIN_WIDTH {
         (available, None)
     } else {
@@ -894,23 +933,75 @@ fn picker_overlay(ctx: &egui::Context, app: &AppHandle, files: &Files) {
         return;
     };
     let places = places(app);
-    picker.show_preview = preview_wanted(app);
-    let before = picker.show_preview;
+    load_view(app, &mut picker);
+    let modal = overlay_id(id);
     // One size, the preview on or off: the pane takes its width from
-    // the list's, so toggling it does not resize the dialog.
-    let spec = OverlaySpec::new(("egui_pop.files", id), &title, Kind::Modal).width(PICKER_WIDTH);
-    debug_assert_eq!(spec.id, overlay_id(id));
+    // the list's, so toggling it does not resize the dialog. The size at
+    // opening is what the person left, read once per dialog.
+    let size = overlay::modal_size(ctx, modal).unwrap_or_else(|| opening_size(ctx, app));
+    let spec = OverlaySpec::new(("egui_pop.files", id), &title, Kind::Modal)
+        .resizable(size, PICKER_MIN_SIZE);
+    debug_assert_eq!(spec.id, modal);
+    picker.fill = true;
     let mut open = true;
     let mut out = None;
     overlay::show(ctx, &spec, &mut open, None, |ui| {
         ui.heading(&title);
         out = picker.show(ui, &places);
     });
-    if picker.show_preview != before {
-        want_preview(app, picker.show_preview);
+    keep_view(app, &picker);
+    // What the person left, not what the window holds it to; a drag is
+    // kept once it is over.
+    if open
+        && !overlay::modal_resizing(ctx, modal)
+        && let Some(size) = overlay::modal_size(ctx, modal)
+        && size != dialog_size(app)
+    {
+        want_dialog_size(app, size);
     }
     settle(app, &answer, out, open);
     files.keep(id, picker);
+}
+
+/// The size the in-app picker opens at: the one kept, or back to the
+/// default when it no longer fits the window (or makes no sense).
+fn opening_size(ctx: &egui::Context, app: &AppHandle) -> egui::Vec2 {
+    let size = dialog_size(app);
+    let max = overlay::modal_max_size(ctx);
+    let fits = size.x >= PICKER_MIN_SIZE.x
+        && size.y >= PICKER_MIN_SIZE.y
+        && size.x <= max.x
+        && size.y <= max.y;
+    if fits {
+        return size;
+    }
+    let set = Set::new(DIALOG_SIZE, Change::Reset, Origin::User)
+        .by(&OwnerId::FRAMEWORK)
+        .untracked();
+    if let Err(e) = lock(&app.store()).set(set) {
+        log::warn!(target: "egui_pop", "{DIALOG_SIZE}: {e:?}");
+    }
+    dialog_size(app)
+}
+
+/// What the kept view says, for the picker to show: the preview pane on
+/// or off and its width (not during a drag of its splitter).
+fn load_view(app: &AppHandle, picker: &mut FilePicker) {
+    picker.show_preview = preview_wanted(app);
+    if !picker.pane_dragging {
+        picker.pane_width = pane_width(app);
+    }
+}
+
+/// Keeps what the person changed of the view; a drag of the splitter
+/// once it is over.
+fn keep_view(app: &AppHandle, picker: &FilePicker) {
+    if picker.show_preview != preview_wanted(app) {
+        want_preview(app, picker.show_preview);
+    }
+    if !picker.pane_dragging && picker.pane_width != pane_width(app) {
+        want_pane_width(app, picker.pane_width);
+    }
 }
 
 /// A path's preview metadata, as `file.preview` gives it: made now
@@ -955,6 +1046,46 @@ pub fn want_preview(app: &AppHandle, on: bool) {
     if let Err(e) = lock(&app.store()).set(set) {
         log::warn!(target: "egui_pop", "{SETTING_PREVIEW}: {e:?}");
     }
+}
+
+/// Writes a remembered length of the picker, outside any undo history.
+fn keep_lengths(app: &AppHandle, path: &str, value: Value) {
+    let set = Set::new(path, Change::To(value), Origin::User)
+        .by(&OwnerId::FRAMEWORK)
+        .untracked();
+    if let Err(e) = lock(&app.store()).set(set) {
+        log::warn!(target: "egui_pop", "{path}: {e:?}");
+    }
+}
+
+/// The in-app picker's size, as kept (it may not fit the window now).
+pub fn dialog_size(app: &AppHandle) -> egui::Vec2 {
+    let store = app.store();
+    let store = lock(&store);
+    match store.get(DIALOG_SIZE).map(|e| &e.value) {
+        Some(Value::Floats(f)) if f.len() == 2 => vec2(f[0] as f32, f[1] as f32),
+        _ => vec2(PICKER_WIDTH, PICKER_HEIGHT),
+    }
+}
+
+/// Keeps the in-app picker's size.
+pub fn want_dialog_size(app: &AppHandle, size: egui::Vec2) {
+    let value = Value::Floats(vec![f64::from(size.x), f64::from(size.y)]);
+    keep_lengths(app, DIALOG_SIZE, value);
+}
+
+/// The width of the in-app picker's preview pane, as kept (the room in
+/// the dialog may hold it smaller).
+pub fn pane_width(app: &AppHandle) -> f32 {
+    lock(&app.store())
+        .get(PANE_WIDTH)
+        .and_then(|e| e.value.as_f64())
+        .map_or(preview::PANE_WIDTH, |w| w as f32)
+}
+
+/// Keeps the width of the in-app picker's preview pane.
+pub fn want_pane_width(app: &AppHandle, width: f32) {
+    keep_lengths(app, PANE_WIDTH, Value::Float(f64::from(width)));
 }
 
 /// The home folder, if known.
@@ -1011,9 +1142,19 @@ pub struct FilePicker {
     pub show_hidden: bool,
     /// The preview pane is shown (with previews, [`FilePicker::with_previews`]).
     pub show_preview: bool,
+    /// The preview pane's width, as wanted: the room in the dialog may
+    /// hold it smaller.
+    pub pane_width: f32,
+    /// The list takes the height left in the `Ui` it is drawn in (a
+    /// dialog of a given size), rather than [`LIST_HEIGHT`].
+    pub fill: bool,
     /// Why the last Enter did nothing.
     pub error: Option<String>,
     focused: bool,
+    /// The splitter is being dragged.
+    pane_dragging: bool,
+    /// The height of what comes below the list, as last drawn.
+    footer_height: Option<f32>,
     listing: Option<(PathBuf, bool, Vec<Entry>)>,
     fs: SharedFs,
     previews: Option<Previews>,
@@ -1049,8 +1190,12 @@ impl FilePicker {
             selected: BTreeSet::new(),
             show_hidden: false,
             show_preview: false,
+            pane_width: preview::PANE_WIDTH,
+            fill: false,
             error: None,
             focused: false,
+            pane_dragging: false,
+            footer_height: None,
             listing: None,
             fs,
             previews: None,
@@ -1335,6 +1480,7 @@ impl FilePicker {
             "completions": self.completions(),
             "error": self.error,
             "preview": self.preview_state(),
+            "pane_width": self.pane_width,
         })
     }
 
@@ -1358,17 +1504,31 @@ impl FilePicker {
         let first = !self.focused;
         self.focused = true;
         let mut answer = None;
-        // Keys taken before the field sees them.
+        let field_id = ui.id().with("egui_pop.files.field");
+        // The plain keys go to whichever widget Tab took the focus to
+        // (the splitter's arrows, a button's Enter); else they are the
+        // field's and the list's.
+        let elsewhere = !first && ui.memory(|m| m.focused()).is_some_and(|f| f != field_id);
+        // Keys taken before the field sees them. Tab completes a path;
+        // out of a path, it goes to the next widget.
         let empty = self.text.is_empty();
+        let path = self.is_path();
         let (down, up, enter, accept, tab, parent, toggle, bookmark) = ui.input_mut(|i| {
+            let mut plain = |key| !elsewhere && i.consume_key(Modifiers::NONE, key);
+            let (down, up, enter) = (
+                plain(Key::ArrowDown),
+                plain(Key::ArrowUp),
+                plain(Key::Enter),
+            );
+            let tab = path && plain(Key::Tab);
+            let backspace = empty && plain(Key::Backspace);
             (
-                i.consume_key(Modifiers::NONE, Key::ArrowDown),
-                i.consume_key(Modifiers::NONE, Key::ArrowUp),
-                i.consume_key(Modifiers::NONE, Key::Enter),
+                down,
+                up,
+                enter,
                 i.consume_key(Modifiers::COMMAND, Key::Enter),
-                i.consume_key(Modifiers::NONE, Key::Tab),
-                i.consume_key(Modifiers::ALT, Key::ArrowUp)
-                    || (empty && i.consume_key(Modifiers::NONE, Key::Backspace)),
+                tab,
+                i.consume_key(Modifiers::ALT, Key::ArrowUp) || backspace,
                 i.consume_key(Modifiers::COMMAND, Key::Space),
                 i.consume_key(Modifiers::COMMAND, Key::D),
             )
@@ -1406,9 +1566,24 @@ impl FilePicker {
         };
         let field = ui.add(
             egui::TextEdit::singleline(&mut self.text)
+                .id(field_id)
                 .hint_text(strings::tr(ui.ctx(), hint))
                 .desired_width(f32::INFINITY),
         );
+        // In a path, Tab stays in the field: it completes.
+        if self.is_path() {
+            ui.memory_mut(|m| {
+                m.set_focus_lock_filter(
+                    field_id,
+                    EventFilter {
+                        tab: true,
+                        horizontal_arrows: true,
+                        vertical_arrows: true,
+                        ..Default::default()
+                    },
+                )
+            });
+        }
         egui_pop_core::a11y::name(
             &field,
             egui::WidgetType::TextEdit,
@@ -1449,6 +1624,16 @@ impl FilePicker {
             self.highlight = self.highlight.saturating_sub(1);
         }
         ui.add_space(t.space.s);
+        let list_height = if self.fill {
+            // What comes below the list keeps its room: its height as
+            // last drawn, or the row of buttons and the space above it.
+            let footer = self.footer_height.unwrap_or_else(|| {
+                ui.spacing().interact_size.y + t.space.m + ui.spacing().item_spacing.y
+            });
+            (ui.available_height() - footer).max(ui.spacing().interact_size.y)
+        } else {
+            LIST_HEIGHT
+        };
         ui.horizontal_top(|ui| {
             // Places.
             ui.vertical(|ui| {
@@ -1488,12 +1673,33 @@ impl FilePicker {
             // The gap: the space added below, and the row's own spacing
             // after the list.
             let gap = t.space.m + ui.spacing().item_spacing.x;
-            let (list_width, pane_width) = split_list(ui.available_width(), gap, preview_on);
+            let room = ui.available_width();
+            let (list_width, pane_width) = split_list(room, gap, preview_on, self.pane_width);
+            self.pane_dragging = false;
+            if let Some(mut width) = pane_width {
+                // Laid out before the entries, for Tab to reach it
+                // without going through them all.
+                let at = ui.cursor().min;
+                let rect = egui::Rect::from_min_size(
+                    pos2(at.x + list_width, at.y),
+                    vec2(gap, list_height),
+                );
+                let name = strings::tr(ui.ctx(), &txt::FILES_PREVIEW_RESIZE);
+                let id = ui.id().with("egui_pop.files.splitter");
+                let max = room - gap - LIST_MIN_WIDTH;
+                let r = widgets::Splitter::new(id, &name, PANE_MIN_WIDTH, max, preview::PANE_WIDTH)
+                    .after()
+                    .show(ui, rect, &mut width);
+                if r.changed() {
+                    self.pane_width = width;
+                }
+                self.pane_dragging = r.dragged();
+            }
             ui.vertical(|ui| {
                 ui.set_width(list_width);
                 egui::ScrollArea::vertical()
                     .id_salt("egui_pop.files.entries")
-                    .max_height(280.0)
+                    .max_height(list_height)
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
                         // One entry per row (the row beside the places is
@@ -1537,7 +1743,12 @@ impl FilePicker {
                 ui.add_space(t.space.m);
                 ui.vertical(|ui| {
                     ui.set_width(pane_width);
-                    self.preview_pane(ui);
+                    // As high as the list, whatever the preview's facts.
+                    egui::ScrollArea::vertical()
+                        .id_salt("egui_pop.files.pane")
+                        .max_height(list_height)
+                        .auto_shrink([false, true])
+                        .show(ui, |ui| self.preview_pane(ui));
                 });
             }
         });
@@ -1550,6 +1761,7 @@ impl FilePicker {
         if accept && answer.is_none() {
             answer = self.accept();
         }
+        let footer_top = ui.cursor().min.y;
         if let Some(e) = &self.error {
             ui.colored_label(t.status.danger, e);
         }
@@ -1571,11 +1783,15 @@ impl FilePicker {
                 let mut at = self.filter_index.min(names.len() - 1);
                 let combo =
                     widgets::combo_box("egui_pop.files.filter").selected_text(names[at].as_str());
-                ui.combo_box(combo, |ui| {
+                let list = ui.combo_box(combo, |ui| {
                     for (i, n) in names.iter().enumerate() {
                         widgets::selectable_value(ui, &mut at, i, n);
                     }
                 });
+                // No label beside it: a screen reader still needs its name.
+                let name = strings::tr(ui.ctx(), &txt::FILES_TYPE);
+                ui.ctx()
+                    .accesskit_node_builder(list.response.id, |node| node.set_label(name));
                 if at != self.filter_index {
                     self.filter_index = at;
                     self.highlight = 0;
@@ -1608,6 +1824,11 @@ impl FilePicker {
                 }
             });
         });
+        let footer = ui.cursor().min.y - footer_top;
+        if self.footer_height != Some(footer) {
+            self.footer_height = Some(footer);
+            ui.ctx().request_repaint();
+        }
         answer
     }
 }
@@ -1758,16 +1979,22 @@ mod tests {
     #[test]
     fn the_preview_pane_takes_the_list_s_width_and_shrinks_first() {
         // Off: all the room is the list's.
-        assert_eq!(split_list(700.0, 8.0, false), (700.0, None));
+        let wanted = preview::PANE_WIDTH;
+        assert_eq!(split_list(700.0, 8.0, false, wanted), (700.0, None));
         // Room for both: the full pane, from the list's width.
-        let (list, pane) = split_list(700.0, 8.0, true);
+        let (list, pane) = split_list(700.0, 8.0, true, wanted);
         assert_eq!(pane, Some(preview::PANE_WIDTH));
         assert_eq!(list, 700.0 - 8.0 - preview::PANE_WIDTH);
         // Less room: the pane shrinks, the list keeps its minimum.
-        let (list, pane) = split_list(LIST_MIN_WIDTH + 8.0 + 150.0, 8.0, true);
+        let (list, pane) = split_list(LIST_MIN_WIDTH + 8.0 + 150.0, 8.0, true, wanted);
         assert_eq!((list, pane), (LIST_MIN_WIDTH, Some(150.0)));
         // Too little: no pane at all.
-        assert_eq!(split_list(300.0, 8.0, true), (300.0, None));
+        assert_eq!(split_list(300.0, 8.0, true, wanted), (300.0, None));
+        // The width the person gave, within the limits.
+        let (list, pane) = split_list(700.0, 8.0, true, 300.0);
+        assert_eq!((list, pane), (392.0, Some(300.0)));
+        assert_eq!(split_list(700.0, 8.0, true, 10.0).1, Some(PANE_MIN_WIDTH));
+        assert_eq!(split_list(700.0, 8.0, true, 900.0).0, LIST_MIN_WIDTH);
     }
 
     #[test]

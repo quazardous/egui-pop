@@ -19,6 +19,7 @@ mod command_button;
 mod command_palette_row;
 mod compare_pane;
 mod dialog;
+mod dialog_grip;
 mod dialog_header;
 mod dock_preview;
 mod editor_frame;
@@ -70,6 +71,7 @@ mod slider_thumb;
 mod slider_toggle;
 mod slider_value;
 mod spinner;
+mod splitter;
 mod status_indicator;
 mod tab;
 mod tab_bar;
@@ -111,6 +113,7 @@ pub(super) const GROUPS: &[&[Required]] = &[
     command_palette_row::CONTRACT,
     compare_pane::CONTRACT,
     dialog::CONTRACT,
+    dialog_grip::CONTRACT,
     dialog_header::CONTRACT,
     dock_preview::CONTRACT,
     editor_frame::CONTRACT,
@@ -162,6 +165,7 @@ pub(super) const GROUPS: &[&[Required]] = &[
     slider_toggle::CONTRACT,
     slider_value::CONTRACT,
     spinner::CONTRACT,
+    splitter::CONTRACT,
     status_indicator::CONTRACT,
     tab::CONTRACT,
     tab_bar::CONTRACT,

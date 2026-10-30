@@ -26,6 +26,27 @@ publishes.
   `model::sections` (`fit`, `plan_drag`, `pin_plan`). `Remembered::share`
   gives way to `Remembered::height`: a layout stored with shares keeps its
   fold state, and its sections read as sized by the list.
+- The in-app file picker is resizable (egui-pop-api): its dialog is
+  dragged by its edges and corners, down to `PICKER_MIN_SIZE` and within
+  the window, a splitter between the list and the preview pane sets the
+  pane's width (focusable, with the arrow keys; a double click or Enter
+  gives the default back), and both are remembered
+  (`settings/files.dialog_size`, `settings/files.pane_width`). A size
+  that no longer fits the window at opening goes back to the default.
+  The list now takes the height of the dialog, and the pane scrolls when
+  it is taller. Tab out of a typed path leaves the field for the next
+  widget (in a path it still completes), and while another widget has
+  the focus the plain keys are its own. The list of file types is named
+  for screen readers ("File type").
+- Resizable modals (egui-pop-core): `OverlaySpec::resizable(size, min)`,
+  with `overlay::modal_size`, `modal_resizing` and `modal_max_size`.
+  Edges and corners take the pointer, the bottom right corner is a
+  handle for the keyboard, a splitter named "Resize" and the overlay's
+  label (`egui-pop-dialog-resize`). Kit component `dialog-grip`. Other
+  modals do not change.
+- `widgets::Splitter` (egui-pop-core): the line between two panes side
+  by side, with a role, a name, a value and its limits, arrow keys, a
+  double click for the default. Kit component `splitter`.
 - The gallery says which egui-pop it shows (egui-pop, egui-pop-gallery):
   its version, in Help > About, its version info, its crash reports and
   its `ready` announce, is the egui-pop it is built from, with the short

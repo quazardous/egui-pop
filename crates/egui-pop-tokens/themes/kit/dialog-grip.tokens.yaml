@@ -1,0 +1,43 @@
+$description: "The `dialog-grip` component of the default kit (docs/kit.md), layered into pop-dark."
+dialog-grip:
+  $description: "A resizable dialog's corner handle (a kit component): lines in `text`, `border-width` wide, in a square `height` across at the bottom right corner, over a box transparent by default; `focus` while it has the keyboard. `width` is how far the dialog's edges take the pointer on either side of them."
+  shape:
+    $type: "string"
+    $value: "plain"
+  width:
+    $type: "dimension"
+    $value: {value: 4, unit: "px"}
+  height:
+    $type: "dimension"
+    $value: {value: 8, unit: "px"}
+  rest:
+    fill:
+      $type: "color"
+      $value: "{transparent}"
+    border-color:
+      $type: "color"
+      $value: "{transparent}"
+    border-width:
+      $type: "dimension"
+      $value: {value: 1, unit: "px"}
+    text:
+      $type: "color"
+      $value: "{text.muted}"
+  hover:
+    text:
+      $type: "color"
+      $value: "{text.strong}"
+  active:
+    text:
+      $type: "color"
+      $value: "{accent.default}"
+  focus:
+    ring-color:
+      $type: "color"
+      $value: "{focus.ring}"
+    ring-width:
+      $type: "dimension"
+      $value: {value: 1, unit: "px"}
+    ring-offset:
+      $type: "dimension"
+      $value: {value: 1, unit: "px"}

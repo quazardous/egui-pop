@@ -779,6 +779,8 @@ egui-pop-files-pages = Pages
 
 egui-pop-files-preview = Aperçu
 
+egui-pop-files-preview-resize = Redimensionner l'aperçu
+
 egui-pop-files-preview-failed = L’aperçu a échoué
 
 egui-pop-files-preview-loading = Chargement de l’aperçu…
@@ -790,6 +792,8 @@ egui-pop-files-recent = Récents
 egui-pop-files-save = Enregistrer
 
 egui-pop-files-size = Taille
+
+egui-pop-files-type = Type de fichier
 
 egui-pop-files-unbookmark = Retirer des favoris
 
@@ -1040,6 +1044,8 @@ egui-pop-reset = Réinitialiser
 egui-pop-retry = Réessayer
 
 egui-pop-section-resize = Redimensionner { $section }
+
+egui-pop-dialog-resize = Redimensionner { $dialog }
 
 egui-pop-settings-at-default = { $setting } est à sa valeur par défaut
 

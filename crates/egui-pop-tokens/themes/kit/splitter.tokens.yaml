@@ -1,0 +1,37 @@
+$description: "The `splitter` component of the default kit (docs/kit.md), layered into pop-dark."
+splitter:
+  $description: "The line between two panes side by side (a kit component): `width` thick, in the middle of the room it takes the pointer on; `focus` while it has the keyboard."
+  shape:
+    $type: "string"
+    $value: "plain"
+  width:
+    $type: "dimension"
+    $value: {value: 1, unit: "px"}
+  rest:
+    fill:
+      $type: "color"
+      $value: "{border.default}"
+    border-color:
+      $type: "color"
+      $value: "{transparent}"
+    border-width:
+      $type: "dimension"
+      $value: {value: 0, unit: "px"}
+  hover:
+    fill:
+      $type: "color"
+      $value: "{text.strong}"
+  active:
+    fill:
+      $type: "color"
+      $value: "{accent.default}"
+  focus:
+    ring-color:
+      $type: "color"
+      $value: "{focus.ring}"
+    ring-width:
+      $type: "dimension"
+      $value: {value: 1, unit: "px"}
+    ring-offset:
+      $type: "dimension"
+      $value: {value: 2, unit: "px"}

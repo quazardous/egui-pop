@@ -21,6 +21,9 @@
 //! | `ComboBox::new(id, label)` | [`combo_box_labelled`]`(id, label)` |
 //! | a selectable label used as a toggle | [`ToggleChip`] |
 //!
+//! [`Splitter`] has no counterpart in egui, whose panels keep their
+//! resize lines to themselves and out of the keyboard's reach.
+//!
 //! A combo box's own box stays egui's: it follows `button` through
 //! egui's `Visuals` (`theme::visuals_with`); only its arrow is the kit's.
 
@@ -641,5 +644,123 @@ pub fn paint_combo_arrow(ui: &Ui, rect: Rect, visuals: &WidgetVisuals, open: boo
         ));
     } else {
         icon.paint(ui.painter(), rect, color);
+    }
+}
+
+/// The line between two panes side by side, in the room given to it: a
+/// width in `value`, changed by a drag, the left and right arrows while
+/// it has the keyboard (with Shift, by bigger steps), and given back to
+/// its default by a double click or Enter.
+///
+/// A splitter to assistive technology, with the name given, the width
+/// as its value and the range as its limits. Drawn by the kit's
+/// `splitter`.
+#[derive(Clone, Debug)]
+pub struct Splitter<'a> {
+    id: Id,
+    name: &'a str,
+    min: f32,
+    max: f32,
+    default: f32,
+    after: bool,
+}
+
+impl<'a> Splitter<'a> {
+    /// A splitter named `name`, for the width of the pane before it
+    /// (see [`Splitter::after`]), between `min` and `max`.
+    pub fn new(id: Id, name: &'a str, min: f32, max: f32, default: f32) -> Self {
+        Self {
+            id,
+            name,
+            min,
+            max: max.max(min),
+            default,
+            after: false,
+        }
+    }
+
+    /// The width is the one of the pane after it: moving it left widens
+    /// the pane.
+    pub fn after(mut self) -> Self {
+        self.after = true;
+        self
+    }
+
+    /// Lays it out over `rect` and applies what was done to `value`
+    /// (kept in whole points). The response says `changed`, and
+    /// `dragged` while a drag is going on.
+    pub fn show(self, ui: &mut Ui, rect: Rect, value: &mut f32) -> Response {
+        let ctx = ui.ctx().clone();
+        let mut r = ui.interact(rect, self.id, Sense::click_and_drag());
+        let before = *value;
+        let sign = if self.after { -1.0 } else { 1.0 };
+        if r.hovered() || r.dragged() {
+            ctx.set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+        }
+        if r.drag_started() {
+            ctx.data_mut(|d| d.insert_temp(self.id, before));
+        }
+        let mut new = before;
+        if r.dragged() {
+            // From where it was pressed: past a limit and back, the line
+            // comes back with the pointer.
+            let from = ctx.data(|d| d.get_temp::<f32>(self.id)).unwrap_or(before);
+            let by = ctx.input(
+                |i| match (i.pointer.latest_pos(), i.pointer.press_origin()) {
+                    (Some(now), Some(origin)) => now.x - origin.x,
+                    _ => 0.0,
+                },
+            );
+            new = from + sign * by;
+        }
+        if r.has_focus() {
+            ctx.memory_mut(|m| {
+                m.set_focus_lock_filter(
+                    self.id,
+                    egui::EventFilter {
+                        horizontal_arrows: true,
+                        vertical_arrows: true,
+                        ..Default::default()
+                    },
+                )
+            });
+            let step = crate::theme::Tokens::of(&ctx).space.m;
+            ctx.input_mut(|i| {
+                for (key, way) in [(egui::Key::ArrowLeft, -1.0), (egui::Key::ArrowRight, 1.0)] {
+                    // Shift first: the plain key takes it too.
+                    if i.consume_key(egui::Modifiers::SHIFT, key) {
+                        new += sign * way * step * 4.0;
+                    }
+                    if i.consume_key(egui::Modifiers::NONE, key) {
+                        new += sign * way * step;
+                    }
+                }
+                if i.consume_key(egui::Modifiers::NONE, egui::Key::Enter) {
+                    new = self.default;
+                }
+            });
+        }
+        if r.double_clicked() {
+            new = self.default;
+        }
+        let new = new.clamp(self.min, self.max).round();
+        if new != before {
+            *value = new;
+            r.mark_changed();
+            ctx.request_repaint();
+        }
+        r.widget_info(|| WidgetInfo::labeled(WidgetType::Other, true, self.name));
+        ctx.accesskit_node_builder(r.id, |node| {
+            node.set_role(egui::accesskit::Role::Splitter);
+            node.set_orientation(egui::accesskit::Orientation::Vertical);
+            node.set_numeric_value(f64::from(*value));
+            node.set_min_numeric_value(f64::from(self.min));
+            node.set_max_numeric_value(f64::from(self.max));
+        });
+        let kit = Kit::of(&ctx);
+        let line =
+            Rect::from_center_size(rect.center(), vec2(kit.splitter.data.width, rect.height()));
+        paint_box(ui, &kit.splitter, line, State::from_response(&r));
+        r
     }
 }
