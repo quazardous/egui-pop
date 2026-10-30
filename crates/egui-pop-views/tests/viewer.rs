@@ -296,7 +296,13 @@ fn links_in_a_remote_page_go_through_the_links_service() {
     service.trust("trusted.example");
     let v = viewer(h);
     let s = open(h, &page);
-    assert_eq!(s["links"].as_array().unwrap().len(), 5, "{s}");
+    // A local file and a command are the page's words, no longer links.
+    assert_eq!(
+        s["links"],
+        json!(["docs:other", "https://trusted.example/a", "next.md"]),
+        "{s}"
+    );
+    assert!(s["text"].as_str().unwrap().contains("local cmd"), "{s}");
     assert_eq!(s["dropped"], json!([]), "links are not images: {s}");
 
     // A trusted host opens, as content.
@@ -306,8 +312,8 @@ fn links_in_a_remote_page_go_through_the_links_service() {
     assert_eq!(records[0].target, "https://trusted.example/a");
     assert_eq!(records[0].source, Source::Content);
 
-    // A local file waits for the user, a command fails with the reason:
-    // neither runs.
+    // Asked for all the same, a local file waits for the user, a command
+    // fails with the reason: neither runs.
     for (dest, status) in [(file.as_str(), "asked"), ("command:x", "failed")] {
         rec.clear();
         v.follow(h, dest, false);
@@ -418,4 +424,50 @@ fn a_policy_without_http_holds_back_a_pages_images() {
         assert_eq!(viewer(h).load_images(h, "images.example.org"), Ok(1));
         assert_eq!(net.asked(), [secure], "{page}");
     }
+}
+
+#[test]
+fn a_local_page_keeps_its_links() {
+    let tmp = Temp::new("own-links");
+    let (file, _) = tmp.file("linked.pdf");
+    let docs = Docs::new().page("own", &format!("[f]({file}) [c](command:x) [d](docs:own)"));
+    let app = app(docs, &Net::default());
+    let s = open(app.handle(), "docs:own");
+    assert_eq!(s["links"].as_array().unwrap().len(), 3, "{s}");
+}
+
+#[cfg(feature = "html")]
+#[test]
+fn markdown_and_html_keep_the_same_links_on_a_remote_page() {
+    let tmp = Temp::new("agree");
+    let (file, path) = tmp.file("agree.pdf");
+    let path = path.display();
+    let mut read = Vec::new();
+    for (ext, body) in [
+        (
+            "md",
+            format!(
+                "[web](https://e.example/) [local]({file}) [cmd](command:x) \
+                 [script](javascript:x) [bad](<//[bad{path}>) [next](next.md)"
+            ),
+        ),
+        (
+            "html",
+            format!(
+                "<a href='https://e.example/'>web</a> <a href='{file}'>local</a> \
+                 <a href='command:x'>cmd</a> <a href='javascript:x'>script</a> \
+                 <a href='//[bad{path}'>bad</a> <a href='next.md'>next</a>"
+            ),
+        ),
+    ] {
+        let page = format!("{HOST}/agree.{ext}");
+        let net = Net::default().with(&page, body.as_bytes());
+        let app = app(Docs::new(), &net);
+        let s = open(app.handle(), &page);
+        assert_eq!(s["status"], "shown", "{s}");
+        read.push((s["links"].clone(), s["text"].clone()));
+    }
+    assert_eq!(read[0], read[1]);
+    assert_eq!(read[0].0, json!(["https://e.example/", "next.md"]));
+    assert_eq!(read[0].1, "web local cmd script bad next");
 }

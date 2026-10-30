@@ -66,6 +66,86 @@ fn is_local(origin: Option<&str>) -> bool {
     matches!(origin, Some("docs" | "file"))
 }
 
+/// Whether a page may keep a link: what it resolves to, read as the links
+/// service will read it, uses one of its schemes. An anchor stays.
+fn link_allowed(page: &str, dest: &str, schemes: &BTreeSet<String>) -> bool {
+    let resolved = resolve(page, dest);
+    if resolved.is_empty() || resolved.starts_with('#') {
+        return true;
+    }
+    Target::parse(&resolved).is_ok_and(|t| schemes.contains(t.scheme()))
+}
+
+/// How many times a page's markdown is read for the links it may not keep.
+const STRIP_PASSES: usize = 8;
+
+/// Why a page whose links are tangled is not shown.
+const TANGLED: &str = "its links are nested in each other too deeply to check";
+
+/// A page's markdown with the links it may not keep made plain text, their
+/// emphasis, code and images staying. Their text is escaped, but the brackets
+/// around one (`[[a](b)](c)`) can read as a link once it is gone, so this
+/// reads again until none is left, and gives up visibly: only a page written
+/// to get around this comes near the limit.
+pub(super) fn strip_links(
+    source: &str,
+    page: &str,
+    schemes: &BTreeSet<String>,
+) -> Result<String, &'static str> {
+    let mut text = std::borrow::Cow::Borrowed(source);
+    for _ in 0..STRIP_PASSES {
+        match strip_pass(&text, page, schemes) {
+            Some(next) => text = next.into(),
+            None => return Ok(text.into_owned()),
+        }
+    }
+    Err(TANGLED)
+}
+
+/// One reading of a page's markdown: what is left of it, when a link went.
+fn strip_pass(source: &str, page: &str, schemes: &BTreeSet<String>) -> Option<String> {
+    let mut out = String::with_capacity(source.len());
+    let mut copied = 0;
+    // The end of the link being made text.
+    let mut refused: Option<usize> = None;
+    let mut stripped = false;
+    // A link in an image's alt text is not drawn (`Markdown::parse`).
+    let mut images = 0usize;
+    for (event, range) in Parser::new_ext(source, options()).into_offset_iter() {
+        match event {
+            Event::Start(Tag::Image { .. }) => {
+                if refused.is_some() && images == 0 {
+                    out.push_str(&source[range]);
+                }
+                images += 1;
+            }
+            Event::End(TagEnd::Image) => images = images.saturating_sub(1),
+            _ if images > 0 => {}
+            Event::Start(Tag::Link { dest_url, .. })
+                if refused.is_none() && !link_allowed(page, &dest_url, schemes) =>
+            {
+                out.push_str(&source[copied..range.start]);
+                refused = Some(range.end);
+                stripped = true;
+            }
+            _ if refused.is_none() => {}
+            Event::End(TagEnd::Link) => copied = refused.take().unwrap_or(copied),
+            Event::Text(t) => out.push_str(&escape(&t)),
+            Event::Code(_) => out.push_str(&source[range]),
+            Event::InlineHtml(_) => out.push_str(&escape(&source[range])),
+            Event::SoftBreak | Event::HardBreak => out.push(' '),
+            Event::Start(Tag::Emphasis) | Event::End(TagEnd::Emphasis) => out.push('*'),
+            Event::Start(Tag::Strong) | Event::End(TagEnd::Strong) => out.push_str("**"),
+            Event::Start(Tag::Strikethrough) | Event::End(TagEnd::Strikethrough) => {
+                out.push_str("~~");
+            }
+            _ => {}
+        }
+    }
+    out.push_str(&source[copied..]);
+    stripped.then_some(out)
+}
+
 /// An image in a block: where its markdown is, its alt text and its
 /// address as written.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -137,7 +217,10 @@ impl Markdown {
                         }
                     }
                     match tag {
-                        Tag::Link { dest_url, .. } => cur.links.push(dest_url.to_string()),
+                        // A link in an image's alt text is part of it: not drawn.
+                        Tag::Link { dest_url, .. } if cur.image_depth == 0 => {
+                            cur.links.push(dest_url.to_string());
+                        }
                         // An image in another's alt text is part of it:
                         // the outermost is the one drawn.
                         Tag::Image { dest_url, .. } => {
@@ -445,6 +528,65 @@ Run `cargo add`.
     }
 
     #[test]
+    fn links_a_page_may_not_keep_become_text() {
+        let web = schemes(&Policy::default(), "https://docs.example.org/a.md");
+        let page = "https://docs.example.org/a.md";
+        let strip = |source: &str| strip_links(source, page, &web).unwrap();
+        for (source, text) in [
+            ("[a](file:///x)", "a"),
+            ("[a](FILE:///x)", "a"),
+            ("[a](command:x)", "a"),
+            ("[a](javascript:x)", "a"),
+            ("[a][r]\n\n[r]: file:///x", "a"),
+            ("[a]\n\n[a]: file:///x", "a"),
+            ("<file:///x>", "file:///x"),
+            ("[a](</some/path>) [b](<//[bad/path>)", "b"),
+            ("# [a](file:///x)", "a"),
+            ("> [a\n> b](file:///x)", "a b"),
+            ("- [a](file:///x)", "a"),
+            ("| h |\n|---|\n| [a\\|b](file:///x) |", "a|b"),
+        ] {
+            let page = Markdown::parse(&strip(source));
+            let links = page.links();
+            assert!(
+                links
+                    .iter()
+                    .all(|l| !l.contains("file") && !l.contains("bad")),
+                "{source}: {links:?}"
+            );
+            assert!(page.text().contains(text), "{source}: {}", page.text());
+        }
+        // What is around, and inside, stays.
+        assert_eq!(strip("a [b](file:///x) c"), "a b c");
+        assert_eq!(
+            strip("[*a* **b** ~~c~~ `d`](file:///x)"),
+            "*a* **b** ~~c~~ `d`"
+        );
+        assert_eq!(strip("[![a](b.png)](file:///x)"), "![a](b.png)");
+        assert_eq!(
+            strip("[a](https://e.example/) [b](next.md) [c](#d) [e](docs:f) [g](mailto:h@i.j)"),
+            "[a](https://e.example/) [b](next.md) [c](#d) [e](docs:f) [g](mailto:h@i.j)"
+        );
+        assert_eq!(strip("`[a](file:///x)`"), "`[a](file:///x)`");
+        // A link uncovered by removing another goes too.
+        for source in [
+            "[[r]](file:///x)\n\n[r]: file:///y",
+            "[a [b](file:///x) c](file:///y)",
+            "[[[a](file:///x)](file:///y)](file:///z)",
+        ] {
+            let read = Markdown::parse(&strip(source));
+            assert_eq!(read.links(), Vec::<String>::new(), "{source}");
+        }
+        // Past what a page does by accident, the page is refused.
+        let tangled = "[".repeat(40) + "a" + &"](file:///x)".repeat(40);
+        assert_eq!(strip_links(&tangled, page, &web), Err(TANGLED));
+        // A local page keeps them.
+        let docs = schemes(&Policy::default(), "docs:a");
+        let source = "[a](file:///x) [b](command:y)";
+        assert_eq!(strip_links(source, "docs:a", &docs).as_deref(), Ok(source));
+    }
+
+    #[test]
     fn a_block_read_alone_reads_as_it_did_on_its_page() {
         for source in [
             "    ![a](docs:img/a.png)\n",
@@ -465,6 +607,13 @@ Run `cargo add`.
                 assert_eq!(alone.links(), block.links, "{source:?}: {block:?}");
             }
         }
+    }
+
+    #[test]
+    fn a_link_in_an_image_alt_text_is_no_link() {
+        let m = Markdown::parse("![a [b](file:///x) c](d.png)");
+        assert_eq!(m.links(), Vec::<String>::new());
+        assert_eq!(m.blocks[0].images[0].alt, "a b c");
     }
 
     #[test]

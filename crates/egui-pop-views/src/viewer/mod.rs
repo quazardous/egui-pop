@@ -589,7 +589,10 @@ impl Viewer {
                 } else {
                     text.into_owned()
                 };
-                Content::Markdown(Markdown::parse(&text))
+                match page::strip_links(&text, target, &page_schemes(app, target)) {
+                    Ok(text) => Content::Markdown(Markdown::parse(&text)),
+                    Err(why) => return self.fail(app, target, Failure::Unsupported, why),
+                }
             }
             "png" | "jpg" | "jpeg" | "gif" => {
                 app.egui().include_bytes(target.to_string(), bytes);
@@ -1123,8 +1126,11 @@ fn read_html(
     target: &str,
     bytes: &[u8],
 ) -> Result<(Markdown, Vec<String>), &'static str> {
-    let page = html::read(&String::from_utf8_lossy(bytes), &page_schemes(app, target));
-    let mut md = Markdown::parse(&page.markdown);
+    let schemes = page_schemes(app, target);
+    let page = html::read(&String::from_utf8_lossy(bytes), &schemes);
+    // A relative address the page cannot join is read as a path: only the
+    // links' common check sees it.
+    let mut md = Markdown::parse(&page::strip_links(&page.markdown, target, &schemes)?);
     md.title = page.title.or(md.title);
     Ok((md, page.dropped))
 }

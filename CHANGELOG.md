@@ -1219,6 +1219,10 @@ publishes.
   page's images too, which only HTML pages did, and HTML pages name what it
   held back. An indented code block no longer loses its indent when drawn,
   which made its text an image or a link no check had read.
+- A markdown page in the viewer keeps the same links as an HTML page
+  (egui-pop-views; ADR 0017): what the page may not link to (`file:` and
+  `command:` on a page from the network, `javascript:`, a scheme the policy
+  removed, on any page) stays as plain text instead of asking on a click.
 - A data table scrolled out of a scroll area around it no longer panics
   (egui-pop-views).
 - A row a tree or a list is asked to bring into view before its first pass
