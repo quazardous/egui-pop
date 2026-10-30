@@ -284,3 +284,8 @@ accent:
 selection:
   $type: "color"
   $value: "{blue.5}"
+scroll-bar:
+  opacity-rest:
+    $type: "number"
+    $value: 0.65
+    $description: "The thumb at rest stays 3:1 on this theme's surfaces, whose text is closer to them."

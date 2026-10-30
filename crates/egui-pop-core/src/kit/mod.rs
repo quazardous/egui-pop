@@ -580,8 +580,9 @@ macro_rules! components {
             /// The window's own terms (`title-bar.buttons-side`,
             /// `title-bar.buttons-hover`, `window.corners`).
             pub window: WindowKit,
-            /// The scroll bars' terms (`scroll-bar.width`, `margin`,
-            /// `placement`, `visibility`, `track-fill`): egui's
+            /// The scroll bars' terms (`scroll-bar.width`, `width-rest`,
+            /// `opacity-rest`, `room`, `min-length`, `margin`, `placement`,
+            /// `visibility`, `track-fill`): egui's
             /// `ScrollStyle` ([`ScrollBarKit::style`]).
             pub scroll: ScrollBarKit,
             /// egui's own widgets' visuals in a scope, per [`Stock`] kind

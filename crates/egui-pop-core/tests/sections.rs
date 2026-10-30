@@ -1433,3 +1433,28 @@ fn the_empty_room_survives_a_round_trip_and_an_old_layout_has_none() {
     let old = r#"{"sections":{"a":{"open":true,"height":120.0}}}"#;
     assert_eq!(serde_json::from_str::<Layout>(old).unwrap().empty, 0.0);
 }
+
+/// A stack far too tall for its panel draws its one bar at rest, quiet: in the
+/// thumb's fill at the kit's `opacity-rest`, and at its `width-rest`.
+#[test]
+fn a_stack_too_tall_for_its_panel_shows_a_quiet_bar_at_rest() {
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(300.0, 60.0))
+        .build_ui(stack);
+    egui_pop_core::theme::install(&h.ctx, &egui_pop_core::theme::ThemeSpec::new("pop-dark"));
+    h.run();
+    let kit = egui_pop_core::kit::Kit::of(&h.ctx);
+    let tokens = egui_pop_core::theme::Tokens::of(&h.ctx);
+    let thumb = tokens.text.default.gamma_multiply(kit.scroll.opacity_rest);
+    let out = h.ctx.run_ui(egui::RawInput::default(), stack);
+    let bars: Vec<egui::Rect> = out
+        .shapes
+        .iter()
+        .filter_map(|c| match &c.shape {
+            egui::Shape::Rect(r) if r.fill == thumb => Some(r.rect),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(bars.len(), 1, "{bars:?}");
+    assert_eq!(bars[0].width(), kit.scroll.width_rest);
+}

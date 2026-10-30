@@ -92,7 +92,7 @@ use egui_pop_model::sections::{self as model, Asked, DragMode, Placed};
 use serde::{Deserialize, Serialize};
 
 use crate::indicator;
-use crate::kit::{Corners, Glyph, Kit, KitCx, Part, State, Visibility, paint_ring};
+use crate::kit::{Corners, Glyph, Kit, KitCx, Part, State, paint_ring};
 use crate::pointer;
 use crate::state::Slot;
 use crate::strings::{self, SECTION_RESIZE};
@@ -909,14 +909,12 @@ impl Sections {
                 } else {
                     ScrollBarVisibility::AlwaysHidden
                 });
-            // The stack's bar is seen as soon as it overflows, whatever
+            // The stack's bar is seen as soon as it overflows, quiet, whatever
             // the theme does for the bars of the bodies, which keep theirs.
             let bodies = ui.spacing().scroll;
             ui.scope(|ui| {
                 if overflows {
-                    let mut bar = kit.scroll;
-                    bar.visibility = Visibility::Always;
-                    ui.spacing_mut().scroll = bar.style(&bodies);
+                    ui.spacing_mut().scroll = kit.scroll.seen_at_rest().style(&bodies);
                 }
                 ui.scroll_area(area, |ui| {
                     ui.spacing_mut().scroll = bodies;

@@ -495,16 +495,17 @@ Sizes: S is under a day, M a few days. One pull request each.
    area has no scroll area and one in tabs has. Whether the shell's panels should
    always scroll is a question for that page, not settled here: a viewport in
    `MAIN` must not.
-3. **The kit learns "thin and quiet at rest".** `visibility: rest` and the
-   tokens above in `ScrollBarKit`, no theme using them yet, so no picture
-   changes but one: the sections' forced bar takes the quiet look, as today's
-   `always` is loud for that case. Size: S.
-4. **Visible at rest in the built-in themes.** The themes set it, the test that
-   holds them to `floating()` is replaced by a 3:1 test per theme, `pop-high-contrast`
-   takes `always`, the docs ([kit](kit.md#scroll-bars),
-   [tokens](tokens.md)) follow, and the snapshots are regenerated, which is most
-   of the work. Applications get it on their next update, with a changelog
-   line. Size: M.
+3. **Done: the kit learns "thin and quiet at rest".** `visibility: rest` and the
+   tokens above in `ScrollBarKit`, no theme using them yet, so the pictures that
+   change are those of the forced bars, which take the quiet look: the sections'
+   stack, and the gallery's list and pages. `ScrollBarKit::seen_at_rest` is that
+   forcing, and leaves an `always` bar as it is.
+4. **Done: visible at rest in the built-in themes.** The themes set it, the test
+   that held them to `floating()` is replaced by a 3:1 test per theme on every
+   surface, through egui's blending, which raises `opacity-rest` where a theme's
+   text is close to its surfaces. The high contrast themes take `always`, `beside`
+   the content so that it covers nothing. The gallery's list loses its forcing.
+   The snapshots are regenerated.
 5. **The `appearance.scroll_bars` setting.** `auto`, `always`, `hover`, on the
    settings page, applied when the theme's style is written. Size: S.
 6. **Keys on plain scroll areas.** Page Up/Down (the view's height less a row,

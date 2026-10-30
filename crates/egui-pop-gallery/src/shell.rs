@@ -9,7 +9,7 @@ use egui::{Rect, ScrollArea, Ui};
 use egui_pop::api::app::MENU_VIEW;
 use egui_pop::api::stories::StoryInfo;
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
-use egui_pop::core::kit::{Kit, Visibility};
+use egui_pop::core::kit::Kit;
 use egui_pop::core::lock;
 use egui_pop::core::ui::{Stock, Tone, UiPop};
 use egui_pop::core::widgets;
@@ -26,7 +26,7 @@ use crate::{PAGES, TITLE};
 /// The side bar's width at the start, in points: the longest page title whole
 /// in every theme and density, its bar at rest beside it (measured by the test
 /// `no_page_title_is_clipped_in_any_theme`).
-pub const SIDE_BAR_WIDTH: f32 = 190.0;
+pub const SIDE_BAR_WIDTH: f32 = 204.0;
 
 /// The page shown.
 #[derive(Debug)]
@@ -403,9 +403,7 @@ fn remember_folded(ctx: &egui::Context, list: &TreeState<String>, stories: &[Sto
 }
 
 /// The page list, a tree of egui-pop's with the groups as folders, its one
-/// scroll area filling the side bar: 57 pages do not fit a window. Its bar
-/// shows at rest as the sections' stack's does, whatever the theme does for
-/// the other bars: nothing else says that the list goes on.
+/// scroll area filling the side bar: 57 pages do not fit a window.
 ///
 /// The selection marks the page shown, and only a page opening changes it;
 /// the cursor walks the list on its own, and Enter or a click opens.
@@ -437,17 +435,9 @@ fn pages(ui: &mut Ui, app: &AppHandle) {
             list.reveal(&key);
         }
     }
-    let others = ui.spacing().scroll;
-    let mut bar = Kit::of(ui.ctx()).scroll;
-    bar.visibility = Visibility::Always;
     // The bar's colours, as `UiPop::scroll_area` gives them.
     let out = ui
         .scoped(Stock::ScrollBar, Tone::Neutral, |ui| {
-            let mut style = bar.style(&others);
-            // Thin until the pointer is over it, full width to the pointer
-            // all along: the list's longest titles reach this far.
-            style.floating_width = t.space.s;
-            ui.spacing_mut().scroll = style;
             // The side bar is narrow: the two levels indent little.
             ui.spacing_mut().indent = t.space.m;
             TreeView::new("gallery.pages")
@@ -494,8 +484,9 @@ fn fills_the_zone(page: &StoryId) -> bool {
 }
 
 /// Draws a page or its playground in a scroll area filling what is left of the
-/// panel, its place kept per page. The bar takes its own room, only while it
-/// shows: over a page, it would take the clicks of what stands at the right edge.
+/// panel, its place kept per page. All of the bar's width is kept for it, only
+/// while it shows: over a page, it would take the clicks of what stands at the
+/// right edge.
 /// Both ways: egui widens a scroll area to content too wide for it when it does
 /// not scroll that way, which leaves the bar out of the panel.
 fn page_scroll<R>(
@@ -508,8 +499,10 @@ fn page_scroll<R>(
         .id_salt((kind, page.as_str().to_owned()))
         .auto_shrink(false);
     let others = ui.spacing().scroll;
+    let mut bar = Kit::of(ui.ctx()).scroll;
+    bar.room = bar.width;
     ui.scope(|ui| {
-        ui.spacing_mut().scroll.floating = false;
+        ui.spacing_mut().scroll = bar.style(&others);
         ui.scroll_area(area, |ui| {
             ui.spacing_mut().scroll = others;
             add(ui)

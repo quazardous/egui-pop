@@ -75,10 +75,16 @@ fn painted(out: &FullOutput, fill: Color32) -> bool {
 
 #[test]
 fn the_scroll_bar_tokens_reach_egui_s_scroll_style() {
-    // The default kit is egui's own floating bars.
+    // The built-in bars: thin and quiet at rest, room kept for them.
     let ctx = Context::default();
     theme::install(&ctx, &ThemeSpec::new("pop-dark"));
-    assert_eq!(ctx.global_style().spacing.scroll, ScrollStyle::floating());
+    let s = ctx.global_style().spacing.scroll;
+    assert!(s.floating);
+    assert_eq!(s.bar_width, 10.0);
+    assert_eq!(s.floating_width, 4.0);
+    assert_eq!(s.floating_allocated_width, 6.0);
+    assert_eq!(s.handle_min_length, 24.0);
+    assert_eq!(s.dormant_handle_opacity, 0.45);
 
     theme::install_tokens(&ctx, tokens("tvty", TVTY));
     let kit = Kit::of(&ctx);
@@ -156,6 +162,132 @@ fn a_bar_shows_at_rest_only_when_its_visibility_says_always() {
     assert!(!at_rest("hover"));
 }
 
+/// A bar thin and quiet at rest, with room kept for it.
+const QUIET: &str = r##"
+$extends: "pop-dark"
+scroll-bar:
+  visibility: {$type: "string", $value: "rest"}
+  width-rest: {$type: "dimension", $value: {value: 4, unit: "px"}}
+  opacity-rest: {$type: "number", $value: 0.5}
+  room: {$type: "dimension", $value: {value: 6, unit: "px"}}
+  track-fill: {$type: "color", $value: "#ff0000"}
+  rest:
+    fill: {$type: "color", $value: "#4b4b4b"}
+  hover:
+    fill: {$type: "color", $value: "#5a5a5a"}
+"##;
+
+const HOVERED: Color32 = Color32::from_rgb(0x5a, 0x5a, 0x5a);
+
+/// The rectangles a frame painted in `fill`.
+fn rects(out: &FullOutput, fill: Color32) -> Vec<Rect> {
+    out.shapes
+        .iter()
+        .filter_map(|c| match &c.shape {
+            Shape::Rect(r) if r.fill == fill => Some(r.rect),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn a_quiet_bar_shows_at_rest_with_room_kept_when_the_content_overflows() {
+    let ctx = Context::default();
+    theme::install_tokens(&ctx, tokens("quiet", QUIET));
+    let thumb = THUMB.gamma_multiply(0.5);
+    let (mut outer, mut inner, mut out) = (0.0, 0.0, None);
+    // Long enough for the bar's fade in.
+    for _ in 0..60 {
+        out = Some(frame(&ctx, |ui| {
+            outer = ui.available_width();
+            let area = ScrollArea::vertical()
+                .id_salt("tall")
+                .max_height(120.0)
+                .auto_shrink(false);
+            inner = ui.scroll_area(area, tall_content).inner_rect.width();
+        }));
+    }
+    let out = out.expect("a frame ran");
+    assert_eq!(inner, outer - 6.0, "the room is kept");
+    let drawn = rects(&out, thumb);
+    assert_eq!(drawn.len(), 1, "one thumb at rest, at its opacity");
+    assert_eq!(drawn[0].width(), 4.0);
+    assert!(
+        !painted(&out, Color32::from_rgb(0xff, 0, 0)),
+        "no track at rest"
+    );
+}
+
+#[test]
+fn a_quiet_bar_is_not_there_when_the_content_fits_and_takes_no_room() {
+    let ctx = Context::default();
+    theme::install_tokens(&ctx, tokens("quiet", QUIET));
+    let (mut outer, mut inner, mut out) = (0.0, 0.0, None);
+    for _ in 0..3 {
+        out = Some(frame(&ctx, |ui| {
+            outer = ui.available_width();
+            let area = ScrollArea::vertical().id_salt("short").auto_shrink(false);
+            inner = ui
+                .scroll_area(area, |ui| {
+                    ui.label("One row");
+                })
+                .inner_rect
+                .width();
+        }));
+    }
+    assert_eq!(inner, outer);
+    assert!(!painted(
+        &out.expect("a frame ran"),
+        THUMB.gamma_multiply(0.5)
+    ));
+}
+
+#[test]
+fn a_quiet_bar_widens_over_the_bar_without_moving_the_content() {
+    let ctx = Context::default();
+    theme::install_tokens(&ctx, tokens("quiet", QUIET));
+    let mut time = 0.0;
+    let inner = std::cell::Cell::new(Rect::NOTHING);
+    let mut run = |events: Vec<egui::Event>| {
+        time += 0.1;
+        let input = RawInput {
+            screen_rect: Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(400.0, 300.0))),
+            time: Some(time),
+            events,
+            ..Default::default()
+        };
+        let mut out = ctx.run_ui(input, |ui| {
+            let area = ScrollArea::vertical()
+                .id_salt("tall")
+                .max_height(120.0)
+                .auto_shrink(false);
+            inner.set(ui.scroll_area(area, tall_content).inner_rect);
+        });
+        out.textures_delta.clear();
+        out
+    };
+    for _ in 0..3 {
+        run(Vec::new());
+    }
+    let at_rest = inner.get();
+    // In the bar's hit area, beyond the room kept for it, on the thumb.
+    let edge = at_rest.right() + 6.0;
+    let over = pos2(edge - 8.0, at_rest.top() + 2.0);
+    let mut out = run(vec![egui::Event::PointerMoved(over)]);
+    for _ in 0..5 {
+        out = run(Vec::new());
+    }
+    assert_eq!(inner.get(), at_rest, "the content did not move");
+    let thumb = rects(&out, HOVERED);
+    assert_eq!(thumb.len(), 1, "the thumb under the pointer, opaque");
+    assert_eq!(thumb[0].width(), 10.0, "the bar at its widest");
+    assert!(thumb[0].left() < at_rest.right(), "over the content by 4");
+    assert!(
+        painted(&out, Color32::from_rgb(0xff, 0, 0).gamma_multiply(0.7)),
+        "the track, over the bar"
+    );
+}
+
 #[test]
 fn a_scoped_theme_s_scroll_bar_follows_the_scope() {
     let ctx = Context::default();
@@ -183,7 +315,7 @@ fn a_scoped_theme_s_scroll_bar_follows_the_scope() {
     let (inside, outside) = (inside.unwrap(), outside.unwrap());
     assert_eq!(inside.bar_width, 6.0);
     assert_eq!(inside.dormant_handle_opacity, 1.0);
-    assert_eq!(outside, ScrollStyle::floating());
+    assert_eq!(outside, ctx.global_style().spacing.scroll);
     // The scoped theme's thumb, at rest.
     assert!(painted(&out.expect("a frame ran"), THUMB));
 }

@@ -34,19 +34,19 @@ pub const WINDOWED: &str = "gallery.windowed";
 pub const GRABBED: &str = "gallery.grabbed";
 
 /// The pretend panel's size.
-const PANEL: egui::Vec2 = vec2(150.0, 420.0);
+const PANEL: egui::Vec2 = vec2(146.0, 420.0);
 
 /// The pushed stack's panel: as tall, narrower (four columns share the page).
-const PUSHED_PANEL: egui::Vec2 = vec2(140.0, 420.0);
+const PUSHED_PANEL: egui::Vec2 = vec2(138.0, 420.0);
 
 /// The short panel: room for the bands and a little more.
-const SHORT_PANEL: egui::Vec2 = vec2(140.0, 150.0);
+const SHORT_PANEL: egui::Vec2 = vec2(138.0, 150.0);
 
 /// The windowed stack's panel: under the short one.
-const WINDOWED_PANEL: egui::Vec2 = vec2(140.0, 244.0);
+const WINDOWED_PANEL: egui::Vec2 = vec2(138.0, 244.0);
 
 /// The stack whose titles drag: narrow, as tall as the others.
-const GRABBED_PANEL: egui::Vec2 = vec2(140.0, 420.0);
+const GRABBED_PANEL: egui::Vec2 = vec2(138.0, 420.0);
 
 /// The pushed stack's layout: Inbox set tall, Drafts given way down to
 /// its least height, Sent taking what is left.

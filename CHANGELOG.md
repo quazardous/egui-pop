@@ -20,6 +20,15 @@ publishes.
   on a half-visible row does not make it jump. Windowed rows follow, Tab going
   through them as each one reached draws the next. An area with hidden bars is
   not followed.
+- Scroll bars thin and quiet at rest (egui-pop-core, egui-pop-tokens;
+  `docs/kit.md`). `scroll-bar.visibility` takes `rest`: whenever the content
+  overflows, the bar is drawn at rest at `scroll-bar.width-rest` (4 points) and
+  `scroll-bar.opacity-rest` (0.45, 0.6 in `pop-light`) with no track, widens to
+  `width` over the bar, and has `scroll-bar.room` (6 points) of the content's
+  width kept for it. `scroll-bar.min-length` sets the thumb's shortest length.
+  `ScrollBarKit::seen_at_rest` gives it to a bar that must be seen in any
+  theme: the sections' stack's bar, loud until now, takes it, as do the
+  gallery's pages.
 - One focused panel (egui-pop-api, egui-pop-core; `docs/workbench.md`).
   `workbench.focus` and each panel's `.focus` command now give the panel the
   widget focus: the widget it names with `focus::prefer` (the image viewport,
@@ -939,6 +948,17 @@ publishes.
   family drawing instead. English and French strings. Closes #50.
 
 ### Changed
+
+- Scroll bars show at rest in every built-in theme (egui-pop-tokens;
+  `docs/kit.md`, `docs/scrolling-survey.md`). `scroll-bar.visibility` is now
+  `rest`: whenever the content overflows, a bar 4 points wide and quiet (at least
+  3:1 on the theme's surfaces, held by a test), 10 points wide over the bar, its
+  thumb at least 24 points long (`scroll-bar.min-length`, 12 until now). Content
+  in a scroll area that overflows is narrower by 6 points (`scroll-bar.room`),
+  so that the bar does not lie over it: an application's snapshots change. The
+  high contrast themes take `always`, 14 points wide, `beside` the content. A
+  theme that wants egui's own bars back sets `visibility: hover`, `min-length`
+  12.
 
 - Gallery pages and playgrounds scroll in a short window (egui-pop-gallery;
   `docs/gallery.md`), each page keeping its place, but for those that stay inside

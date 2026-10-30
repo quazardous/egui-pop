@@ -14,6 +14,26 @@ pub(crate) const CONTRACT: &[Required] = &[
         "a scroll bar's width at its widest",
     ),
     comp(
+        "scroll-bar.width-rest",
+        "dimension",
+        "a scroll bar's width at rest, under `visibility: rest`",
+    ),
+    comp(
+        "scroll-bar.opacity-rest",
+        "number",
+        "how opaque a scroll bar's thumb is at rest, 0 to 1, under `visibility: rest`",
+    ),
+    comp(
+        "scroll-bar.room",
+        "dimension",
+        "the content's width kept for a scroll bar while it shows, under `visibility: rest`",
+    ),
+    comp(
+        "scroll-bar.min-length",
+        "dimension",
+        "a scroll bar's thumb at its shortest",
+    ),
+    comp(
         "scroll-bar.margin",
         "dimension",
         "between a scroll bar and the edge of its scroll area",
@@ -26,7 +46,7 @@ pub(crate) const CONTRACT: &[Required] = &[
     comp(
         "scroll-bar.visibility",
         "string",
-        "when a scroll bar shows: `always`, on `hover`, or while it `scroll`s",
+        "when a scroll bar shows: `always`, at `rest` too but thin and quiet, on `hover`, or while it `scroll`s",
     ),
     comp(
         "scroll-bar.track-fill",
