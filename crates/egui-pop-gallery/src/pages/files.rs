@@ -123,6 +123,8 @@ pub fn demo_files() -> &'static [(&'static str, Vec<u8>)] {
             ("Photos/2025/dunes.png", png(&dunes())),
             ("Photos/2026/meadow.jpg", jpeg(&meadow())),
             ("Photos/notes.txt", NOTES.as_bytes().to_vec()),
+            // What "Save as…" proposes: saving asks before replacing it.
+            ("Exports/harbour-edit.png", png(&harbour())),
             ("Documents/plan.md", PLAN.as_bytes().to_vec()),
             ("Documents/budget.csv", BUDGET.as_bytes().to_vec()),
         ]
@@ -422,5 +424,9 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                 ui.label(what);
                 ui.end_row();
             }
+            // Declared, so it says what it is bound to now.
+            ui.monospace(app.keys_for(&files::CMD_NEW_FOLDER).join(", "));
+            ui.label("a new folder (saving, or choosing a folder)");
+            ui.end_row();
         });
 }

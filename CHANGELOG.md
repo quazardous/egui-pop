@@ -35,6 +35,22 @@ publishes.
   a body's scroll now stops there, moving neither the stack nor a parent;
   over a band, or a body with nothing to scroll, it still scrolls a stack
   too tall. `Laid` says how far a body is scrolled and which rows it drew.
+- Saving in the in-app file picker (egui-pop-api; `docs/files.md`). It asks
+  before replacing an existing file, through the dialogs plugin; an
+  application that asks itself turns this off with
+  `FileRequest::confirm_overwrite(false)` (a new public field; the system's
+  choosers keep their own question, which `rfd` cannot turn off, and are
+  not asked twice). `PickerAnswer` gains `Replace` and `FolderCreated`:
+  a `FilePicker` drawn on its own asks its way. The active filter's first
+  extension is appended to a name without one, and follows the filter when
+  it changes (`FilePicker::set_filter`) as long as a filter of the request
+  names the extension; one the person typed stays. The name's stem is
+  selected when the field gets the focus. New folder, saving or choosing a
+  folder: a button and the `file.new_folder` command (Ctrl+Shift+N,
+  rebindable), through `FileSystem::create_dir`. `MemoryFs`, and so the web
+  build, is read-only: the button is disabled and the key says why. A typed
+  folder's name no longer stays in the field after entering it: the proposed
+  name comes back.
 - Stacked sections push (egui-pop-model, egui-pop-core; `docs/sections.md`):
   a boundary now moves the stack as a code editor's split view does. Its
   sections have heights set by hand, in points, the others sharing the
