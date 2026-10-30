@@ -358,6 +358,12 @@ impl<K: Key> TreeState<K> {
         }
     }
 
+    /// Brings a node's row into view at the next pass, if its row is
+    /// there by then (open its ancestors first).
+    pub fn reveal(&mut self, key: &K) {
+        self.reveal = Some(key.clone());
+    }
+
     /// Whether a node is being renamed.
     pub fn renaming(&self) -> Option<&K> {
         self.renaming.as_ref().map(|r| &r.key)
@@ -544,6 +550,7 @@ pub struct TreeView<'a, K: Key> {
     app: Option<&'a AppHandle>,
     drag_drop: bool,
     rename: bool,
+    activate_on_click: bool,
     height: Option<f32>,
     icon: Option<IconFn<'a, K>>,
     row_widgets: Option<RowFn<'a, K>>,
@@ -560,6 +567,7 @@ impl<K: Key> std::fmt::Debug for TreeView<'_, K> {
             .field("app", &self.app.is_some())
             .field("drag_drop", &self.drag_drop)
             .field("rename", &self.rename)
+            .field("activate_on_click", &self.activate_on_click)
             .field("height", &self.height)
             .field("icon", &self.icon.is_some())
             .field("row_widgets", &self.row_widgets.is_some())
@@ -579,6 +587,7 @@ impl<'a, K: Key> TreeView<'a, K> {
             app: None,
             drag_drop: false,
             rename: false,
+            activate_on_click: false,
             height: None,
             icon: None,
             row_widgets: None,
@@ -641,6 +650,14 @@ impl<'a, K: Key> TreeView<'a, K> {
     /// Nodes may be renamed in place (F2).
     pub fn rename(mut self, on: bool) -> Self {
         self.rename = on;
+        self
+    }
+
+    /// A click acts as Enter does: a leaf opens (`tree.activate`), a
+    /// branch opens or closes. For a tree that navigates, whose rows are
+    /// its links; the second click of a double click adds nothing.
+    pub fn activate_on_click(mut self, on: bool) -> Self {
+        self.activate_on_click = on;
         self
     }
 
@@ -920,7 +937,10 @@ impl<'a, K: Key> TreeView<'a, K> {
                                     &name,
                                 )
                             });
-                            if r.double_clicked() {
+                            let double = r.double_clicked();
+                            if double && self.activate_on_click {
+                                // The first click did it.
+                            } else if double {
                                 if node.branch {
                                     actions.push(Action::Expand(
                                         key.clone(),
@@ -953,6 +973,13 @@ impl<'a, K: Key> TreeView<'a, K> {
                                         j,
                                         mods,
                                     )));
+                                    if self.activate_on_click {
+                                        actions.push(if node.branch {
+                                            Action::Expand(key.clone(), !model.is_expanded(&key))
+                                        } else {
+                                            Action::Activate(key.clone())
+                                        });
+                                    }
                                 }
                             }
                             if self.drag_drop && r.drag_started() && renaming.is_none() {

@@ -17,6 +17,9 @@ publishes.
   harness (Tab, Shift+Tab, F6, Escape...) and record what holds the focus
   after each, its role, its name and whether it is on screen, until the
   walk loops or the focus is lost.
+- A tree for navigating (egui-pop-views; `docs/tree.md`).
+  `TreeView::activate_on_click`: a click acts as Enter does, opening a leaf
+  or folding a branch. `TreeState::reveal` brings a node's row into view.
 - Stacked sections' gestures (egui-pop-model, egui-pop-core;
   `docs/sections.md`, `docs/pointer-gestures.md`). `Sections::grab_titles`:
   a press on a title that moves resizes as a boundary does, one that does
@@ -1099,6 +1102,8 @@ publishes.
 
 ### Fixed
 
+- A row a tree or a list is asked to bring into view before its first pass
+  shows (egui-pop-views): with no height yet it stopped just above the view.
 - `Alt+Up` goes to the parent folder in the in-app file picker
   (egui-pop-api), as documented: egui also matches a plain key with Alt held,
   so the plain Up key took it first and moved the highlight instead.
