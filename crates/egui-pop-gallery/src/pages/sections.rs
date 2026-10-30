@@ -2,8 +2,11 @@
 //! sections (live, idle and shut sessions), each with its count, its
 //! least height and its own scrolling rows; bands fold and open, the
 //! line between two open sections resizes them, and a double click on
-//! it gives the heights back. The playground changes the counts and
-//! the capitals, and forgets the layout.
+//! it drops the heights set by hand. Beside it, a stack already pushed
+//! (one section set tall by hand, the next one down to its least) and
+//! a panel too short for its least heights, which scrolls as a whole.
+//! The playground changes the counts and the capitals, and forgets the
+//! layouts.
 
 use egui::{Stroke, Ui, vec2};
 use egui_pop::core::sections::{Layout, Section, Sections};
@@ -14,8 +17,29 @@ use egui_pop::theme::Tokens;
 /// The stack's name: its memory, and what agents and tests read.
 pub const STACK: &str = "gallery.sessions";
 
+/// The stack already pushed.
+pub const PUSHED: &str = "gallery.pushed";
+
+/// The stack in a panel too short for it.
+pub const SHORT: &str = "gallery.short";
+
 /// The pretend panel's size.
-const PANEL: egui::Vec2 = vec2(300.0, 420.0);
+const PANEL: egui::Vec2 = vec2(230.0, 420.0);
+
+/// The pushed stack's panel: as tall, narrower.
+const PUSHED_PANEL: egui::Vec2 = vec2(200.0, 420.0);
+
+/// The short panel: room for the bands and a little more.
+const SHORT_PANEL: egui::Vec2 = vec2(190.0, 150.0);
+
+/// The pushed stack's layout: Inbox set tall, Drafts given way down to
+/// its least height, Sent taking what is left.
+fn pushed_layout() -> Layout {
+    let mut layout = Layout::default();
+    layout.set_height("inbox", Some(180.0));
+    layout.set_height("drafts", Some(0.0));
+    layout
+}
 
 /// The page's state and the playground's options.
 #[derive(Clone, Debug)]
@@ -48,6 +72,8 @@ pub fn playground(ui: &mut Ui, state: &mut State) {
     widgets::checkbox(ui, &mut state.capitals, "Titles in capitals");
     if ui.button("Forget the layout").clicked() {
         Layout::default().store(ui.ctx(), STACK);
+        pushed_layout().store(ui.ctx(), PUSHED);
+        Layout::default().store(ui.ctx(), SHORT);
         state.last = Some("Layout forgotten".into());
     }
 }
@@ -61,32 +87,76 @@ fn rows(ui: &mut Ui, prefix: &str, n: u64, empty: &str) {
     }
 }
 
-pub fn show(ui: &mut Ui, state: &mut State) {
-    ui.label("Sections stacked in a panel: a click on a band (or Space and Enter) folds or opens it, the line between two open sections resizes them, a double click on that line gives the heights back. Each section scrolls its own rows and keeps two rows' height at least; the layout is remembered.");
-    ui.add_space(Tokens::of(ui.ctx()).space.group);
-    let border = Tokens::of(ui.ctx()).border.default;
-    let (live, shut, capitals) = (state.live, state.shut, state.capitals);
-    let response = ui
-        .allocate_ui(PANEL, |ui| {
+/// A pretend panel of a fixed size, with a caption over it.
+fn panel<R>(ui: &mut Ui, caption: &str, size: egui::Vec2, add: impl FnOnce(&mut Ui) -> R) -> R {
+    ui.vertical(|ui| {
+        ui.meta(caption);
+        let border = Tokens::of(ui.ctx()).border.default;
+        ui.allocate_ui(size, |ui| {
             egui::Frame::NONE
                 .stroke(Stroke::new(1.0, border))
                 .show(ui, |ui| {
-                    ui.set_min_size(PANEL);
-                    ui.set_max_size(PANEL);
-                    Sections::new(STACK).capitals(capitals).show(ui, |stack| {
-                        stack.section(Section::new("live", "Live").count(live), move |ui| {
-                            rows(ui, "Session", live, "No live session");
-                        });
-                        stack.section(Section::new("idle", "Idle").count(0), |ui| {
-                            rows(ui, "Idle", 0, "No idle session");
-                        });
-                        stack.section(
-                            Section::new("shut", "Shut").count(shut).open(false),
-                            move |ui| rows(ui, "Closed", shut, "No shut session"),
-                        );
-                    })
+                    ui.set_min_size(size);
+                    ui.set_max_size(size);
+                    add(ui)
                 })
                 .inner
+        })
+        .inner
+    })
+    .inner
+}
+
+pub fn show(ui: &mut Ui, state: &mut State) {
+    ui.label("Sections stacked in a panel: a click on a band (or Space and Enter, Left and Right) folds or opens it. The line between two open sections resizes them, with the pointer or Up and Down: the sections give way in turn, the nearest first, each down to its least height. A double click on that line (or Enter) drops the heights set by hand. Each section scrolls its own rows; the layout is remembered.");
+    ui.add_space(Tokens::of(ui.ctx()).space.group);
+    if Layout::load(ui.ctx(), PUSHED).is_none() {
+        pushed_layout().store(ui.ctx(), PUSHED);
+    }
+    let (live, shut, capitals) = (state.live, state.shut, state.capitals);
+    let response = ui
+        .horizontal_top(|ui| {
+            let response = panel(ui, "Sized by the list", PANEL, |ui| {
+                Sections::new(STACK).capitals(capitals).show(ui, |stack| {
+                    stack.section(Section::new("live", "Live").count(live), move |ui| {
+                        rows(ui, "Session", live, "No live session");
+                    });
+                    stack.section(Section::new("idle", "Idle").count(0), |ui| {
+                        rows(ui, "Idle", 0, "No idle session");
+                    });
+                    stack.section(
+                        Section::new("shut", "Shut").count(shut).open(false),
+                        move |ui| rows(ui, "Closed", shut, "No shut session"),
+                    );
+                })
+            });
+            panel(ui, "Pushed by hand", PUSHED_PANEL, |ui| {
+                Sections::new(PUSHED).capitals(capitals).show(ui, |stack| {
+                    stack.section(Section::new("inbox", "Inbox").count(14), |ui| {
+                        rows(ui, "Message", 14, "");
+                    });
+                    stack.section(Section::new("drafts", "Drafts").count(5), |ui| {
+                        rows(ui, "Draft", 5, "");
+                    });
+                    stack.section(Section::new("sent", "Sent").count(6), |ui| {
+                        rows(ui, "Sent", 6, "");
+                    });
+                });
+            });
+            panel(ui, "Too short: it scrolls", SHORT_PANEL, |ui| {
+                Sections::new(SHORT).capitals(capitals).show(ui, |stack| {
+                    stack.section(Section::new("open", "Open files").count(3), |ui| {
+                        rows(ui, "File", 3, "");
+                    });
+                    stack.section(Section::new("outline", "Outline").count(4), |ui| {
+                        rows(ui, "Symbol", 4, "");
+                    });
+                    stack.section(Section::new("timeline", "Timeline").count(2), |ui| {
+                        rows(ui, "Change", 2, "");
+                    });
+                });
+            });
+            response
         })
         .inner;
     if let Some((key, open)) = &response.toggled {
