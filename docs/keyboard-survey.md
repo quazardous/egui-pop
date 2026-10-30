@@ -13,12 +13,16 @@ and Helios.
 Read on 2026-10-30, against egui 0.36.2 (and 0.37.0 where it differs),
 egui_dock 0.21.1 and egui-pop's `main`.
 
-**How much of this was run.** Nothing. This study was written without
-building anything, so its first plan, a walk through the applications
-with the keyboard in a headless harness, is **still owed**
-([the walk](#the-walk-still-owed)). Every finding about today's state
-says where it comes from:
+**How much of this was run.** This study was first written without
+building anything. Its walk with the keyboard in a headless harness has
+since been run for egui-pop, on the gallery and a few small harnesses, on
+2026-10-30, with real key presses
+([the walk](#the-walk), checks 1 to 18); Helios's half, checks 19 to 26,
+is **still owed**. Every finding about today's state says where it comes
+from:
 
+- **[walk]**: seen by a keyboard walk (`egui_pop_test::walk`), pinned or
+  listed as a gap in `crates/egui-pop-gallery/tests/keyboard_walk.rs`.
 - **[read]**: from reading the code or a document; not seen happening.
   Treat it as a strong hypothesis.
 - **[test]**: an existing kittest test asserts it, named where it helps.
@@ -31,8 +35,8 @@ forums and bug trackers is marked as such.
 ## Summary
 
 - **F6 is built and reaches nothing.** `tab::scope` and F6 work
-  ([test] on the gallery's Inputs page), but no shell panel opens such a
-  scope, in egui-pop or in Helios ([read]; `docs/inputs.md` says so
+  ([walk] on the gallery's Inputs page), but no shell panel opens such a
+  scope ([walk] in the gallery, [read] in Helios; `docs/inputs.md` says so
   under "Not yet"). In an application, Tab through everything in drawing
   order is the only way across. F6 between regions is the one thing
   VS Code, GTK and the ARIA splitter pattern share.
@@ -40,26 +44,36 @@ forums and bug trackers is marked as such.
   obey (`focusedPanel`) follows clicks and `workbench.focus`; egui's
   focus follows Tab. `workbench.focus` promises "gives it the keyboard"
   and moves no widget focus; Tab into another panel does not change
-  `focusedPanel` ([read]). So in Helios, Tab from the image to the
-  filmstrip should leave `C` adding a circle mask. This is the first
-  thing the walk must check.
+  `focusedPanel` ([walk]: clicked in the Outline, then Tab to a button of
+  the Notes, it still names the Outline). So in Helios, Tab from the image
+  to the filmstrip should leave `C` adding a circle mask ([read], Helios's
+  walk is owed).
 - **The way in can be closed.** Where a palette floats and no widget has
   the focus, Tab hides the palettes instead of moving ([test]), and F6 is
-  inert. That is Helios's usual state ([read]). The habit is right for a
+  inert ([walk]). That is Helios's usual state ([read]). The habit is right for a
   photo editor (Lightroom, Photoshop, GIMP and darktable all do it), so
   the answer is F6, not giving Tab back.
-- **The focus is often hard to see or lands on nothing.** egui's own
-  widgets draw no focus ring: a focused button looks pressed. A window
-  frame's caption, a side panel's resize line and a flyout's edge are
-  focusable and show nothing when focused ([read]). A widget scrolled out
-  of view keeps the focus out of view ([read]). VS Code, Qt, GTK and ARIA
+- **The focus can land on nothing, or out of view.** A window frame's
+  caption, a side panel's resize line, a flyout's edge and an open menu's
+  frame are stops with no role and no name, and the first two change no
+  pixel when focused ([walk]). A focused plain button is seen, in the
+  accent's outline in `pop-dark`, but has the pressed button's pixels
+  ([walk]). A widget scrolled out of view keeps the focus out of view
+  ([walk]): 35 rows of the gallery's side list on its first screen, the end
+  of the settings page. VS Code, Qt, GTK and ARIA
   all show an indicator, and GTK and Qt know whether the keyboard moved it.
-- **The focus has no memory outside overlays.** Overlays give it back
-  ([test]). After Escape, or when the focused widget disappears, the next
-  Tab starts from the top of the window ([read]).
+- **The focus has little memory.** A popover gives it back ([walk]); a
+  dialog or the command palette closed by Escape does not, against what
+  reading the overlay's tests said ([walk]). After Escape, when the focused
+  widget disappears, or when a button changes the panels, the next Tab
+  starts from the top of the window ([walk]).
+- **Enter opens a dialog and answers it.** Enter on a focused button that
+  opens a dialog also accepts the dialog, unless it is a danger: the key is
+  still there when the dialog is drawn in the same pass ([walk]). Space
+  opens it and leaves it open. Reading did not see this.
 - **Menus are the weakest common part, and egui 0.37 fixes most of it.**
-  Alt and a letter opens a menu ([test]); after that egui 0.36 has no
-  arrow keys in it. There is no F10, no underlined letter, and no key for
+  Alt and a letter opens a menu ([walk]); after that egui 0.36 has no
+  arrow keys in it ([walk]). There is no F10, no underlined letter, and no key for
   a context menu ([read]). egui 0.37 brings arrow keys inside menus
   ([#8548](https://github.com/emilk/egui/pull/8548)) and a `Menu` key.
 - **The data views are already right.** Tree, list, table and grid take
@@ -70,8 +84,8 @@ forums and bug trackers is marked as such.
 - **Keys are complete, routes are not.** Every command runs from the
   palette (F1) and has rebindable keys, a resolver with a trace, and
   surfaces: ahead of most of these systems. The study's changes are about
-  moving focus, not about the keymap, with one exception: a rebound key
-  loses its `when` clause ([read], in `Keymap::rebind`).
+  moving focus, not about the keymap. The one exception read here, a
+  rebound key losing its `when` clause, has been fixed since ([walk]).
 
 ## egui today
 
@@ -163,68 +177,86 @@ From `crates/egui-pop-core` (`tab.rs`, `focus.rs`, `keys.rs`,
 
 ### Tab order
 
-- **[read] Only inputs and sliders are stops.** A plain button, list or
+- **[read] Inside a `tab::scope`, only inputs and sliders are stops.** A
+  plain button, list or
   tab is not. Inside a `tab::scope`, Tab from a stop goes to the next
   stop, so it jumps over anything that is not one (documented for modals,
   true of panels too). Wrapping shell panels in `tab::scope` as they
   stand would therefore lose their buttons: F6 cannot simply be turned on
   that way.
-- **[read] Application order is drawing order:** the title bar, menu bar,
-  **status bar**, then the workbench. The status bar comes before every
-  panel, because it is laid out first (`app.rs`). A popup's widgets come
-  where the code that opens it runs.
-- **[read] Stops that show nothing and answer no key:**
+- **[walk] Application order is drawing order:** the menu bar, the top
+  bar's own widgets, **the status bar**, the activity strip, the areas, the
+  centre last. The gallery's first page is 72 stops: 57 of the side list,
+  and its first eleven before any panel. The status bar comes before every
+  panel. A popup's widgets come where the code that opens it runs.
+- **[walk] Stops that show nothing and answer no key** (role `Unknown`, no
+  name; the first two compared pixel by pixel, focused against not):
   - the caption of an egui-pop window frame
     (`Sense::click_and_drag()`, `frame.rs`);
   - a side or bottom area's resize line (egui's `Panel`,
     `Sense::click_and_drag()`, drawn only when hovered or dragged);
-  - a flyout's edge (`Sense::drag()`, `workbench.rs`).
+  - a flyout's edge (`Sense::drag()`, `workbench.rs`);
+  - an open menu's frame, not read at first: Tab goes from File to it, then
+    to the first item.
 
   Palette edges avoid it (`Sense::CLICK | Sense::DRAG`), and a
   dialog's grips are focusable only on the handle meant for the keyboard.
-- **[read] Dock separators** do answer: focused, they brighten and move
-  16 points with **Shift or Ctrl** and an arrow (egui_dock). A plain arrow
-  leaves them. Nothing says so.
-- **[read] Each dock tab, and its close button where shown, is a stop**;
-  Enter or Space activates the tab. There is no key for the next tab of an area.
+- **[walk] Dock separators** do answer, where an area is split: focused,
+  they move 16 points with **Shift or Ctrl** and an arrow along their axis
+  (egui_dock). A plain arrow leaves them. Nothing says so. They are role
+  `Unknown` with no name too, and no default layout of the gallery has one.
+- **[walk] Each dock tab is a stop.** No close button ever is: the workbench
+  sets `show_close_buttons(false)`. **[read]** Enter or Space activates the
+  tab. There is no key for the next tab of an area.
 
 ### Moving between regions
 
-- **[read] F6 does nothing in an application**: the plugin is installed
+- **[walk] F6 does nothing in an application**: the plugin is installed
   by the first `tab::scope`, and only the gallery's Inputs page opens one.
-- **[read] `workbench.focus` is logical only.** `Change::Focus` shows and
+- **[walk] `workbench.focus` is logical only.** `Change::Focus` shows and
   activates the panel and sets `Workbench::focused`; nothing requests the
   widget focus. The other writer of `focused` is a pointer press in the
   dock's `ui`. So the panel `focusedPanel` names and the panel holding the
-  keyboard can differ. [test] `panel_commands_show_hide_and_focus` asserts
-  only `focused_panel`.
+  keyboard differ: after `gallery.notes.focus` nothing is focused, and after
+  Tab from a panel to the next, `focusedPanel` has not moved.
 - **[read] No panel has a default focus key**; an application binds them.
-- **[read] F6 and the terminal disagree.** `tab.rs` says a terminal keeps
-  Tab and F6, but `begin_pass` reads F6 before anything is drawn and
-  checks no filter. It costs nothing today, as F6 is inert; it will once
-  panels have scopes. [test] `every_key_goes_to_the_program_and_shift_escape_leaves`
-  covers what the terminal reads with no scope around.
+- **[walk] A terminal keeps F6, as `tab.rs` says.** Reading `begin_pass`
+  predicted the opposite. In a `tab::scope`, with another scope beside it,
+  F6 from a field goes to the other scope; from a focused terminal the focus
+  stays and the program reads `ESC [ 1 7 ~`.
 
 ### Where the focus gets lost
 
-- **[test] Overlays give it back:** `an_overlay_closes_on_escape_and_gives_the_focus_back`,
-  `escape_closes_only_the_top_overlay_and_focus_goes_back`.
+- **[walk] A popover gives it back; a dialog and the command palette do
+  not.** `an_overlay_closes_on_escape_and_gives_the_focus_back` and
+  `escape_closes_only_the_top_overlay_and_focus_goes_back` test overlays
+  that are not modal. Escape from a status popover returns to its status
+  item. Escape from a confirm dialog opened from a focused button, or from
+  the palette opened with F1, leaves nothing focused. Why is not settled;
+  the overlay's stack does ask for the focus back (`settle`), and egui takes
+  the focus off widgets under a modal.
 - **[read] egui's menus are not overlays**, so nothing restores the focus
   when one closes.
-- **[read] After Escape on any widget** egui drops the focus. The focus
+- **[walk] After Escape on any widget** egui drops the focus. The focus
   chain keeps the place, so the surface's keys go on working
   ([test] `a_palette_takes_the_keyboard_only_when_clicked_and_escape_gives_it_back`),
-  but Tab starts from the first widget of the window, and F6 from the
-  first panel.
-- **[read] When the focused widget disappears** (a row or tab closed, a
-  panel folded, a windowed section's row scrolled out), the focus goes to
-  nothing and Tab restarts the same way. ARIA's advice is to send it to
-  the next logical item.
-- **[read] A focused widget out of view stays out of view** in a plain
-  `ScrollArea`. Sections, the picker, the palette and dialogs' choices
+  but Tab starts from the first widget of the window, and **[read]** F6 from
+  the first panel.
+- **[walk] When the focused widget disappears** (a tab closed, a windowed
+  section's row scrolled out), the focus goes to nothing and Tab restarts
+  the same way. ARIA's advice is to send it to the next logical item.
+- **[walk] A button changing the panels loses the focus it holds**, not read
+  at first: "Open the demonstration panels" and "Close them" on the
+  workbench page, by Enter, leave nothing focused.
+- **[walk] A focused widget out of view stays out of view** in a plain
+  `ScrollArea`: the gallery's side list from its 23rd row, the settings page
+  past "Log level". Sections, the picker, the palette and dialogs' choices
   handle it themselves ([test] `the_sections_page_answers_the_keyboard`
-  for the boundaries, since PR #99); a settings form or a long list of
-  sliders does not.
+  for the boundaries, since PR #99).
+- **[walk] Windowed rows end where they are drawn.** With buttons as a
+  windowed section's rows, Tab goes through those drawn, 11 of 500, then
+  leaves the section: nothing scrolls, so the others cannot be reached by
+  Tab. The gallery's own windowed rows are labels, not stops.
 
 ### Where it cannot be seen
 
@@ -233,7 +265,10 @@ From `crates/egui-pop-core` (`tab.rs`, `focus.rs`, `keys.rs`,
   sliders have their `focus` states.
 - **[read] egui's widgets do not.** The kit's own loss report says it:
   "egui's widgets draw no focus ring", "egui's text fields draw no focus
-  ring". A focused plain button has the pressed look.
+  ring".
+- **[walk] A focused plain button has the pressed button's pixels,** and
+  those differ from rest: the accent's outline, in `pop-dark`, the only theme
+  compared. So it can be seen, and is not told from a press.
 - **[read] The ring has no idea who moved the focus**, so what a click
   focuses also shows it.
 
@@ -241,16 +276,21 @@ From `crates/egui-pop-core` (`tab.rs`, `focus.rs`, `keys.rs`,
 
 - **[test] Tab, where palettes float**, with no focused widget and no
   overlay: `tab_hides_and_shows_the_palettes_but_not_a_pinned_one`. It is
-  documented and rebindable. **[read]** `overlayOpen` reads egui-pop's
-  overlay stack, and egui's menus are not on it, so with a menu open and
-  nothing focused, Tab should hide the palettes behind it.
+  documented and rebindable. **[walk]** `overlayOpen` reads egui-pop's
+  overlay stack, and egui's menus are not on it: with a menu open and
+  nothing focused, Tab hides the palettes behind it.
 - **[read] Key bindings beat focused widgets.** The dispatcher consumes a
   key that resolves before anything is drawn. A global plain key therefore
   beats Space on a focused button or an arrow on a focused slider.
 - **[read] A broken chord swallows its last key**
   (`Ctrl+K` then a key that continues nothing). Standard, and bounded by a
   two-second timeout.
-- **[read, known] Enter and Space click whatever the modifiers.**
+- **[walk] Enter and Space click whatever the modifiers:** Ctrl+Enter opens
+  a side list's page, and a held Space clicks at every repeat (four presses,
+  four clicks).
+- **[walk] Enter reaches a dialog it has just opened,** which takes it as an
+  answer: on a confirm, the page's command ran and the dialog never showed.
+  A choice and a form close the same way; a danger stays open, on Cancel.
 - **[test, known] Alt+Up in the picker** was taken by the plain Up
   consumed first; fixed, and the fix's test is in `tests/files.rs`. The
   trap stays for every `consume_key` in the wrong order (`widgets.rs`
@@ -258,10 +298,9 @@ From `crates/egui-pop-core` (`tab.rs`, `focus.rs`, `keys.rs`,
 - **[test, known] Tab in the picker's path field** stayed there until
   PR #100: `tab_reaches_the_splitter_and_the_arrows_move_it`,
   `a_typed_path_completes_with_tab_and_backspace_goes_up`.
-- **[read, known] A rebound key loses its `when`.** `Keymap::rebind` and
-  `rebind_all` keep the lower layer's `scope` and pass `""` as the clause.
-  A key scoped to the library becomes a key everywhere. ADR 0007 says the
-  shortcuts editor copies the clause; it does not.
+- **[walk, fixed] A rebound key keeps its `when`,** since this study was
+  read: the gallery's `gallery.notes.ask_clear`, rebound, does nothing
+  outside the notes' window. Model test in `crates/egui-pop-model/tests/scopes.rs`.
 - **[test] Hidden by design:** a terminal takes everything but
   Shift+Escape; an editor takes Tab and gives way on Escape.
 
@@ -270,11 +309,14 @@ From `crates/egui-pop-core` (`tab.rs`, `focus.rs`, `keys.rs`,
 - **[test] Alt and a letter** opens a menu, inside "…" too:
   `alt_and_a_hidden_menus_key_opens_it_inside_the_more_menu`.
 - **[read] The letter is not shown.** It is given to AccessKit, not drawn.
-- **[read] Then there is no way down.** No widget is focused, so arrows
-  do nothing, and Tab starts at the top of the window and must go through
-  whatever is drawn before the popup.
-- **[read] With a menu opened from a focused button (Enter),** arrows use
-  egui's cone and can leave the menu (egui's #8327).
+- **[walk] Then there is no way down by arrow.** No widget is focused, so
+  arrows do nothing. Tab starts at the top of the window and goes through
+  what is drawn before the popup, which is drawn right after its button:
+  from Alt+F, three presses reach File's first item (File, the popup's
+  frame, the item). Escape closes it and leaves nothing focused.
+- **[walk] With a menu opened from a focused button (Enter),** arrows use
+  egui's cone and leave the menu (egui's #8327): the second Down from File
+  goes to a row of the side list behind it, the next comes back to "Quit".
 - **[read] No F10, nothing on a bare Alt, no Shift+F10.**
   `context_menu_with` answers the secondary
   click only, so nothing on a list row, tree node or graph node opens by
@@ -302,20 +344,20 @@ From `crates/egui-pop-core` (`tab.rs`, `focus.rs`, `keys.rs`,
   (`a_resizable_modal_follows_its_grips_and_the_arrows`,
   `the_corner_handle_resizes_with_the_arrows`); the picker's keys
   (`the_keyboard_filters_enters_and_chooses`).
-- **[read]** Tab in a dialog is egui's order inside the modal layer. It
-  should wrap correctly, in drawing order. No dialog uses
+- **[walk]** Tab in a dialog is egui's order inside the modal layer: it
+  wraps, in drawing order, and F6 stays in. No dialog uses
   `ScopeKind::Modal`.
-- **[test]** A status popover takes Tab inward
-  (`the_keyboard_opens_the_popover_and_tab_goes_into_it`). **[read]** What
-  happens past its end is not tested: egui's order wraps to the window's
-  top while the popover stays open.
+- **[walk]** A status popover takes Tab inward. Past its last stop, Tab goes
+  on to the status bar's next item behind it, and on through the window,
+  while the popover stays open.
 
 ### The gallery's side list
 
-**[read]** `shell.rs` draws one `selectable_label` per story, about 60, so
-about 60 Tab stops before the page. Enter opens a page and leaves the
-focus on its row. Up and Down go through egui's cone; Left and Right can
-leave for the page. No type-ahead, no scope. Everything the study praises
+**[walk]** `shell.rs` draws one `selectable_label` per story, 57, so 57 Tab
+stops before the page, none scrolling into view. Enter opens a page and
+leaves the focus on its row. Up and Down go through egui's cone, row by row;
+Right leaves for the side area's line beside it, and Left from that line
+lands on a row out of view. **[read]** No type-ahead, no scope. Everything the study praises
 in `egui-pop-views` is absent from the catalogue that shows it off.
 
 ### The graph
@@ -593,8 +635,8 @@ are underlined and documented on screen; Tab names use Ctrl+Tab.
 
 ## Comparison
 
-"–" means not found in what was read, not proof of absence. egui-pop and
-Helios are as read here, not as run.
+"–" means not found in what was read, not proof of absence. egui-pop is as
+walked where the sections above say so; Helios is as read here, not as run.
 
 | | egui-pop | Helios | VS Code | JetBrains | Blender | darktable | Lightroom | Photoshop | GIMP | Qt | GTK | ARIA |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -612,28 +654,22 @@ Helios are as read here, not as run.
 | Focus indicator | own widgets only | same | yes | – | – | – | – | – | – | yes | yes | required |
 | Knows keyboard from pointer | no | no | – | – | – | – | – | – | – | yes | yes | (browser) |
 | Sash by keyboard | sections, dialog, dock (hidden); not side panels | same | – | Ctrl+Alt+Shift+arrow | – | – | – | – | – | – | F8, then arrows | yes |
-| Focus back from overlays | yes | yes | – | – | – | – | – | – | – | – | – | yes |
-| Rebind keeps the clause | no | no | yes, from a UI action | – | – | – | – | – | – | – | – | – |
+| Focus back from overlays | popovers, not modals | as read: yes | – | – | – | – | – | – | – | – | – | yes |
+| Rebind keeps the clause | yes | yes | yes, from a UI action | – | – | – | – | – | – | – | – | – |
 
 ## What egui-pop and Helios should change
 
-Ranked by what it gives against what it costs. Pure egui-pop items first.
-S is an afternoon, M a few days, L longer. Each is one pull request. Items
-that come from reading only should be confirmed by the walk (item 1), and
-one that turns out false is simply dropped.
+Ranked by what it gives against what it costs, as read before the walk.
+Pure egui-pop items first. S is an afternoon, M a few days, L longer. Each is
+one pull request. Numbers stay as they are, since the walk's tests name them;
+[what the walk changes](#what-the-walk-changes) gives the order to follow now.
 
 ### egui-pop
 
-1. **A Tab walk in the test kit, and the first walks.** A helper in
-   `egui-pop-test` presses Tab until it comes back, and returns each stop's
-   name, role, rectangle, whether it is inside the window and its scroll
-   area, and the focus chain; tests for the gallery's shell. It is how the
-   walk gets done once a build is possible, and what keeps the rest from
-   regressing. Size: S.
-2. **A rebound key keeps its `when`.** `Keymap::rebind` and `rebind_all`
-   write, per distinct clause in the lower layer, the new key with that
-   clause; the removal stays. As VS Code. The bug makes a scoped plain key
-   global, and ADR 0007 already promises it. Size: S.
+1. **Done: a Tab walk in the test kit, and the first walks.** `egui_pop_test::walk`
+   and `crates/egui-pop-gallery/tests/keyboard_walk.rs` ([testing](testing.md#keyboard-walks)).
+2. **Done: a rebound key keeps its `when`,** in `Keymap::rebind` and
+   `rebind_all`, before the walk ran.
 3. **One focused panel.** `workbench.focus` hands over the widget focus (the
    widget last focused in the panel, else its first focusable), as its table
    says. When the widget focus moves into a panel by any means, `focused`
@@ -648,8 +684,8 @@ one that turns out false is simply dropped.
    the centre, floating palettes, an open flyout, the status bar. Built on the
    `focus::scope`s already there, not on `tab::scope`, so that Tab stays as it
    is. A region remembers its last focus. It lands on nothing that is not
-   focusable, and does nothing behind a modal. A terminal keeps F6
-   (`tab.rs`'s promise, to be made true). egui does not list focusable widgets
+   focusable, and does nothing behind a modal. A terminal keeps F6, as it
+   does today in a `tab::scope`: keep that test passing. egui does not list focusable widgets
    publicly; a small focusable marker at a region's start, with egui's
    "next" from it, is the first thing to try. Size: M, after 3.
 6. **Focus keeps its place.** The focus plugin remembers the last focused
@@ -662,7 +698,8 @@ one that turns out false is simply dropped.
    first; then an upstream issue for a general answer. Size: S to M.
 8. **No stops that show nothing.** The frame's caption and a flyout's edge
    sense without `FOCUSABLE` (`Sense::CLICK | Sense::DRAG`, `Sense::DRAG`); the
-   walk's helper checks it stays so. Size: S.
+   walk checks it stays so. An open menu's frame is one too, from egui: see
+   whether 0.37 still has it. Size: S.
 9. **Side areas' sashes are real splitters.** egui's resize line is replaced
    by egui-pop's own, as in `sections`: a stop with a ring, role and value,
    arrows, Shift for a larger step, Enter to reset (as sections, GTK, ARIA). Keep
@@ -693,11 +730,23 @@ one that turns out false is simply dropped.
     inside, back to the last. Then one PR each: toolbars (`toolbars.md` lists it),
     the activity bar, the status bar. Size: M, then S each.
 18. **Tabs by key.** `workbench.tab.next` and `.previous` for the focused area
-    (Ctrl+Page Down, Ctrl+Page Up, as VS Code), and a close button that is not a
-    stop of its own. Size: S to M.
+    (Ctrl+Page Down, Ctrl+Page Up, as VS Code). Close buttons are not shown, so
+    they are no stops today; one added later should not be a stop of its own.
+    Size: S to M.
 19. **The graph as one stop.** A setting, on by default for large graphs: Tab
     enters and leaves the graph, arrows go between nodes, Enter goes into a
     node's parts, Escape back, as ports already do. Size: M.
+20. **Enter on a button does not answer the dialog it opens.** New from the
+    walk. A dialog ignores the Enter of the pass it opens in, as a key that was
+    not meant for it. A confirmation that can be skipped by pressing its
+    button's key defeats it, and egui-pop's own promise "Enter accepts" meets
+    its own "Enter clicks a focused button". Size: S.
+21. **A modal overlay gives the focus back.** New from the walk. Escape from a
+    dialog or the palette returns to the widget that held the focus when it
+    opened, as a popover already does and ARIA's modal dialog asks. Size: S.
+22. **Tab past a popover's end.** New from the walk. It cycles inside or closes
+    the popover (ARIA's menu closes on Tab), not walking the window behind it
+    with the popover open. Size: S.
 
 ### Helios
 
@@ -742,50 +791,57 @@ one that turns out false is simply dropped.
   these editors; no one asks. The commands that place a shape remain.
 - **Arrow keys between regions, tmux-style.** F6 and direct keys are enough.
 
-## The walk still owed
+## The walk
 
-The first plan asked for a keyboard walk through Helios and the gallery in a
-headless harness. It did not run, as there was no disk to build. It is still
-owed, before or with the first change. Each check confirms or removes a
-finding above; the expected result is what reading predicts.
+Run on 2026-10-30 for egui-pop: 18 checks on the gallery at 1100 by 720 in
+`pop-dark`, on egui 0.36.2, and on small harnesses where the gallery has no
+such case, all by real key presses through kittest
+(`crates/egui-pop-gallery/tests/keyboard_walk.rs`, `crates/egui-pop-test/tests/walk.rs`).
+Each confirmed gap is an ignored test whose reason names its item:
+`cargo test -p egui-pop-gallery --test keyboard_walk -- --ignored` lists them.
+"Right" says whether reading predicted the result. None of it ran in a real
+window; item 20 and check 9's pixels are worth seeing once in a nested
+compositor.
 
 **Gallery and shell**
 
-1. Start, press Tab until the focus returns. List each stop: where is the status
-   bar? Is any stop not visible, or without a name?
-2. Are the frame's caption, a side area's resize line and a flyout's edge stops
-   (expected: yes, nothing shown)?
-3. Are dock separators stops, and do Ctrl+arrows move them (expected: yes)?
-4. Focus a button, press Escape, press Tab (expected: the window's first stop).
-5. Focus a tab's close button, press Enter, press Tab (expected: the same).
-6. Inputs page: F6 and Shift+F6; on other pages, F6 (expected: nothing).
-7. Up and Down in the side list; Left and Right from it (expected: leaves for
-   the page).
-8. The side list's stops, by count (expected: one per story).
-9. A focused plain button: pixels against pressed (expected: the same); Ctrl+Enter
-   clicks; a held Space clicks repeatedly.
-10. A long settings form: Tab past the fold (expected: the focus out of view).
-11. A windowed section: focus a row, scroll it away.
+| # | Check | Predicted | Result | Right? |
+|---|---|---|---|---|
+| 1 | Tab until the focus returns; where is the status bar? Any stop unseen or unnamed? | status bar before the panels | Status bar before the panels. 72 stops on the first page, looping to File; 35 out of view (side list); 2 unnamed, the side lines | yes |
+| 2 | Caption, side line, flyout's edge are stops | yes, nothing shown | All three; caption and side lines change no pixel. **Also** an open menu's frame | yes, and one more |
+| 3 | Dock separators are stops; Ctrl and an arrow moves them | yes | Yes, Ctrl or Shift, along their axis, 16 points. No default layout has one (tested on a split area) | yes |
+| 4 | Focus a button, Escape, Tab | the window's first stop | File | yes |
+| 5 | A tab's close button, Enter, Tab | the same | **No close button exists** (`show_close_buttons(false)`). A focused tab closed by its command: nothing focused, Tab goes to File | premise wrong, result as said |
+| 6 | Inputs page F6, Shift+F6; other pages F6 | works there, nothing elsewhere | As said: Street, Tags, Street; on overview, workbench, menus, terminal, settings, nothing | yes |
+| 7 | Up, Down in the side list; Left, Right | leaves for the page | Up and Down go row by row. Right goes to the side line, not the page; Left from there to a row out of view | nearly |
+| 8 | Side list's stops | one per story | 57 for 57 | yes |
+| 9 | Focused button against pressed; Ctrl+Enter; held Space | same pixels; clicks; repeats | Same pixels, and different from rest, so it is seen; Ctrl+Enter clicks; 4 presses, 4 clicks | yes, the look less bad than said |
+| 10 | Long form, Tab past the fold | out of view | Settings page: out of view from "Language" | yes |
+| 11 | A windowed row: focus it, scroll it away | (open) | The gallery's rows are not stops; with buttons as rows, focus goes to nothing, Tab restarts at the first stop. **Also** Tab cannot reach rows not drawn | new |
 
 **Menus and overlays**
 
-12. Alt and a letter, then Down, Tab and Escape (expected: Down nothing, Tab from
-    the window's top, Escape closes). The focus afterwards?
-13. A menu opened with Enter from its focused button, then the arrows (expected:
-    the focus can leave the menu).
-14. Tab with a menu open and a floating palette, nothing focused (expected: the
-    palette hides).
-15. A status popover: Tab past its last stop.
-16. Confirm dialog, danger on and off: first focus; Tab all the way round.
+| # | Check | Predicted | Result | Right? |
+|---|---|---|---|---|
+| 12 | Alt and a letter, Down, Tab, Escape | Down nothing, Tab from the top, Escape closes | As said; File's first item is 3 Tabs away. Nothing focused afterwards | yes |
+| 13 | Menu from its focused button, arrows | the focus can leave | Second Down goes to the side list behind the menu | yes |
+| 14 | Tab with a menu open and a floating palette | the palette hides | It hides | yes |
+| 15 | Status popover, Tab past its last stop | (open) | Goes on through the window behind, popover still open; Escape returns to the item | new (item 22) |
+| 16 | Confirm dialog, danger on and off: first focus, Tab round | as `dialogs.rs` | Action first, Cancel for a danger, Tab wraps, F6 stays. **Also** Enter from the opening button answers a dialog at once (item 20), Escape leaves nothing focused (item 21) | yes, and two bugs |
 
 **Keys**
 
-17. Rebind a `when`-scoped command in the user layer and press it elsewhere
-    (expected: fires).
-18. F6 with a focused terminal, once a shell scope exists (expected: the terminal
-    does not receive it, against the docs).
+| # | Check | Predicted | Result | Right? |
+|---|---|---|---|---|
+| 17 | Rebind a `when`-scoped command, press it elsewhere | fires | Does not fire: fixed since it was read | no longer |
+| 18 | F6 with a focused terminal in a scope | the terminal does not receive it | **The terminal receives it and keeps the focus**, as `tab.rs` promises. F6 from a field beside it moves | **no** |
 
-**Helios**
+**Still owed: Helios**
+
+It did not run, as this pull request stays in egui-pop. Each check confirms or
+removes a finding above; the expected result is what reading predicts. The
+answer to check 19's first half is already expected from egui-pop's own
+result: `focusedPanel` does not follow Tab.
 
 19. From the image (clicked), Tab until the filmstrip, press `C` (expected: a
     circle mask), press `3` (expected: no rating).
@@ -801,6 +857,35 @@ finding above; the expected result is what reading predicts.
     focus.
 26. Viewport: focus by Tab; arrows pan; `C`, then Enter and Escape; what reaches a
     placed shape.
+
+### What the walk changes
+
+The order to follow for egui-pop now, by the same measure:
+
+1. **Item 20, Enter answers the dialog it opens.** A bug skipping a
+   confirmation, small to fix. New, and first.
+2. **Item 21, modal overlays give the focus back.** Small, and every dialog
+   and palette use loses the place today. New.
+3. **Item 3, one focused panel.** Confirmed; still what Helios's keys depend on.
+   First of the larger ones.
+4. **Item 7, focus scrolls into view,** up from seventh: it is the first thing
+   a Tab user meets, 35 stops out of view on the gallery's first screen.
+   It should say what to do about windowed rows, which Tab cannot reach.
+5. **Item 10, the side list as a `ListView`.** Up from tenth, for the same
+   reason: 57 stops before any page, and it removes the worst of the rows out
+   of view.
+6. **Item 6, focus keeps its place,** now also after a button changing the
+   panels.
+7. **Item 8, no stops that show nothing,** with the menu's frame.
+8. **Item 5, F6 through the shell.** After 3 as planned. A terminal is not the
+   risk it was read to be.
+9. **Item 22, a popover's end,** and **item 15.** Small, confirmed.
+10. **Item 4, a focus you can see,** down from fourth: a plain button does show
+    the focus, the gap is telling it from a press and from the pointer's, and the
+    stops that show nothing are item 8's.
+
+Items 9, 11 to 14, 16 to 19 keep their order after these; 9, 11, 14 and 16 are
+confirmed by the walk, 12, 13, 17 and 19 were not walked. Item 2 is done.
 
 ## Sources
 

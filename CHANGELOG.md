@@ -12,6 +12,11 @@ publishes.
 
 ### Added
 
+- A keyboard walk in the test kit (egui-pop-test; `docs/testing.md`):
+  `walk::walk`, `reach`, `press` and `focused` press real keys through the
+  harness (Tab, Shift+Tab, F6, Escape...) and record what holds the focus
+  after each, its role, its name and whether it is on screen, until the
+  walk loops or the focus is lost.
 - Stacked sections' gestures (egui-pop-model, egui-pop-core;
   `docs/sections.md`, `docs/pointer-gestures.md`). `Sections::grab_titles`:
   a press on a title that moves resizes as a boundary does, one that does
