@@ -170,8 +170,8 @@ of every crate with every feature on.
   and save, and the changes ranked for egui-pop's in-app picker.
 - [Keyboard survey](keyboard-survey.md): how far the keyboard alone gets
   in egui-pop and Helios against VS Code, JetBrains, Blender, darktable,
-  Lightroom, GIMP, Qt, GTK and WAI-ARIA, the changes ranked, and the walk
-  still owed.
+  Lightroom, GIMP, Qt, GTK and WAI-ARIA, the changes ranked, and egui-pop's
+  walk (Helios's is still owed).
 - [Scrolling survey](scrolling-survey.md): how desktops and applications show
   scroll bars and treat the wheel, a recommended default (bars visible at
   rest) and the changes ranked for egui-pop.
