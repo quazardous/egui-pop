@@ -12,6 +12,14 @@ publishes.
 
 ### Added
 
+- The focus comes into view (egui-pop-core; `docs/inputs.md`). With the focus
+  plugin, which an application has, a widget focused by anything but the pointer
+  (Tab, an arrow, a command, a screen reader) comes into view in the scroll areas
+  around it, nested ones included, whatever the panel: no widget has anything to
+  do. It moves by the least that shows it, once per move, never animated. A click
+  on a half-visible row does not make it jump. Windowed rows follow, Tab going
+  through them as each one reached draws the next. An area with hidden bars is
+  not followed.
 - One focused panel (egui-pop-api, egui-pop-core; `docs/workbench.md`).
   `workbench.focus` and each panel's `.focus` command now give the panel the
   widget focus: the widget it names with `focus::prefer` (the image viewport,
