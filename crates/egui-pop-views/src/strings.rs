@@ -157,6 +157,8 @@ pub const VIEWER_UNSUPPORTED: StrKey = StrKey::new(
 );
 /// The viewer's content's accessible name.
 pub const VIEWER_PAGE: StrKey = StrKey::new("egui-pop-views-viewer-page", "Page");
+/// A code block's accessible name.
+pub const VIEWER_CODE_BLOCK: StrKey = StrKey::new("egui-pop-views-viewer-code-block", "Code block");
 
 /// Every string the views show, for catalogues and tests.
 pub const ALL: &[StrKey] = &[
@@ -201,6 +203,7 @@ pub const ALL: &[StrKey] = &[
     FILTER_TO,
     MARK_BEST,
     VIEWER_BACK,
+    VIEWER_CODE_BLOCK,
     VIEWER_FORWARD,
     VIEWER_RELOAD,
     VIEWER_ADDRESS,

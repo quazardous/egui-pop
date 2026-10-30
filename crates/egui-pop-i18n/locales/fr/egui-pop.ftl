@@ -2308,6 +2308,8 @@ egui-pop-views-viewer-address = Adresse
 
 egui-pop-views-viewer-back = Précédente
 
+egui-pop-views-viewer-code-block = Bloc de code
+
 egui-pop-views-viewer-empty = Rien n’est ouvert. Les pages d’aide et les images s’ouvrent ici.
 
 egui-pop-views-viewer-find = Rechercher dans la page

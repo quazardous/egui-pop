@@ -1230,6 +1230,8 @@ publishes.
   is parsed and shows the error page, with Open outside; `viewer.state` and
   `viewer.failed` say why. Past 48 levels the mapping flattens to text as
   before, and now says so in the bar over the page.
+- A code block in the viewer has an accessible name, "Code block"
+  (egui-pop-views): egui_commonmark draws it as an unnamed text field.
 - A data table scrolled out of a scroll area around it no longer panics
   (egui-pop-views).
 - A row a tree or a list is asked to bring into view before its first pass

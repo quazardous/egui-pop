@@ -55,3 +55,5 @@ html = ["markdown", "dep:html5ever"]
 [dev-dependencies]
 egui = { workspace = true, features = ["default_fonts"] }
 egui_kittest = { workspace = true }
+# No version: a dev-dependency back up the layers, dropped when published.
+egui-pop-test = { path = "../egui-pop-test" }

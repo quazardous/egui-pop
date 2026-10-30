@@ -495,3 +495,36 @@ fn a_page_nested_too_deep_fails_out_loud() {
     let s = open(app.handle(), &format!("{HOST}/fine.html"));
     assert_eq!(s["status"], "shown", "{s}");
 }
+
+#[test]
+fn a_code_block_is_named() {
+    let docs = Docs::new().page(
+        "code",
+        "# Code\n\n```text\nplain\n```\n\n- item\n\n  ```text\n  in a list\n  ```\n",
+    );
+    let opened = Arc::new(Mutex::new(false));
+    let once = opened.clone();
+    let net = Net::default();
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(1000.0, 640.0))
+        .build_ui_state(
+            move |ui, app: &mut Option<App>| {
+                let app =
+                    app.get_or_insert_with(|| plugins(docs.clone(), &net).build(ui.ctx()).unwrap());
+                if !std::mem::replace(&mut *once.lock().unwrap(), true) {
+                    links::open(app.handle(), Request::new("docs:code"));
+                }
+                app.show(ui);
+            },
+            None,
+        );
+    h.run();
+    h.run();
+    assert_eq!(
+        h.query_all_by_label("Code block").count(),
+        2,
+        "{}",
+        egui_pop_test::a11y_tree(&h)
+    );
+    egui_pop_test::assert_all_named(&h);
+}
