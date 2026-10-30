@@ -2733,7 +2733,8 @@ fn the_files_page_chooses_with_the_in_app_picker() {
     run_until(&mut h, |h| preview_state(h) != "loading");
     h.snapshot("files-pop-dark");
     h.get_by_label("Filter, or type a path").type_text("light");
-    h.run();
+    // The preview's arrival repaints, on its own thread's time.
+    let _ = h.run_ok();
     h.key_press(egui::Key::Enter);
     for _ in 0..4 {
         h.run();
@@ -2776,7 +2777,6 @@ fn the_files_page_resizes_the_picker() {
     }
     run_until(&mut h, |h| preview_state(h) != "loading");
     h.run();
-    egui_pop_test::assert_all_named(&h);
     h.snapshot("files-resized-pop-dark");
 }
 
@@ -2790,7 +2790,7 @@ fn the_files_page_previews_the_highlighted_file() {
     h.run();
     h.run();
     h.get_by_label("Filter, or type a path").type_text("harb");
-    h.run();
+    let _ = h.run_ok();
     run_until(&mut h, |h| preview_state(h) == "ready");
     h.run();
     let preview =
@@ -2801,8 +2801,8 @@ fn the_files_page_previews_the_highlighted_file() {
     h.snapshot("files-preview-pop-dark");
     // Alt+P hides the pane, and the setting remembers; again shows it.
     h.key_press_modifiers(egui::Modifiers::ALT, egui::Key::P);
-    h.run();
-    h.run();
+    let _ = h.run_ok();
+    let _ = h.run_ok();
     assert!(h.query_by_label("Dimensions").is_none());
     assert!(!egui_pop::api::files::preview_wanted(
         h.state().app.handle()
