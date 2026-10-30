@@ -10,9 +10,10 @@
 //!   list's `start` are read. `on*`, `style`, `class` and every other
 //!   attribute are never looked at.
 //! - **Addresses**: a link or an image keeps its address when it is
-//!   relative or its scheme is allowed ([`schemes`]); otherwise a link
+//!   relative or its scheme is allowed (`page::schemes`); otherwise a link
 //!   stays as plain text and an image as its alt text (`javascript:`,
-//!   `data:`, however spelled: the address is read as a browser would).
+//!   `data:`, however spelled: the address is read as a browser would). A
+//!   `file:` image refused is named in [`Html::dropped`].
 //! - **Elements**: what is mapped is drawn; an element from [`DROPPED`] (a
 //!   script, a form, a frame, a video, foreign SVG or MathML) goes with
 //!   its content and is named in [`Html::dropped`]; a template's content
@@ -28,7 +29,6 @@
 use std::cell::RefCell;
 use std::collections::BTreeSet;
 
-use egui_pop_model::links::Policy;
 use html5ever::interface::{ElemName, ElementFlags, NodeOrText, QuirksMode, TreeSink};
 use html5ever::tendril::{StrTendril, TendrilSink};
 use html5ever::{Attribute, LocalName, Namespace, QualName, ns};
@@ -111,32 +111,9 @@ pub(super) struct Html {
     pub markdown: String,
     /// Its `<title>`.
     pub title: Option<String>,
-    /// The elements dropped with their content, each once, sorted.
+    /// The elements dropped with their content and the `file:` images
+    /// refused, each once, sorted.
     pub dropped: Vec<String>,
-}
-
-/// The schemes a page's links and images may use, from the links
-/// service's policy (the host may have changed it): never those that run
-/// or embed content, `command:` only on the application's own `docs:`
-/// pages, `file:` not from the network. The policy still decides each
-/// open.
-pub(super) fn schemes(policy: &Policy, page: &str) -> BTreeSet<String> {
-    let mut all: BTreeSet<String> = policy
-        .schemes
-        .iter()
-        .chain(&policy.app_schemes)
-        .map(|s| s.to_ascii_lowercase())
-        .collect();
-    for never in ["javascript", "vbscript", "data", "blob", "about"] {
-        all.remove(never);
-    }
-    if !page.starts_with("docs:") {
-        all.remove("command");
-    }
-    if page.starts_with("http:") || page.starts_with("https:") {
-        all.remove("file");
-    }
-    all
 }
 
 /// Reads a page: parsed as a browser would (unclosed tags, misnesting),
@@ -592,7 +569,16 @@ impl Reader<'_> {
                 let alt = collapse(self.attr(node, "alt").unwrap_or_default());
                 match self.address(node, "src") {
                     Some(src) => run.raw(&format!("![{}](<{src}>)", escape(&alt))),
-                    None => run.text(&alt),
+                    None => {
+                        let refused = self
+                            .attr(node, "src")
+                            .and_then(|src| url::Url::parse(src.trim()).ok())
+                            .filter(|u| u.scheme() == "file");
+                        if let Some(file) = refused {
+                            self.dropped.insert(file.to_string());
+                        }
+                        run.text(&alt);
+                    }
                 }
             }
             "a" => match self.address(node, "href") {
@@ -946,7 +932,9 @@ impl Inline {
 
 #[cfg(test)]
 mod tests {
-    use super::super::page::Markdown;
+    use egui_pop_model::links::Policy;
+
+    use super::super::page::{Markdown, schemes};
     use super::*;
 
     fn read_page(source: &str) -> Html {
@@ -1085,6 +1073,20 @@ mod tests {
         };
         assert_eq!(links("docs:page"), (1, 1));
         assert_eq!(links("https://docs.example.org/a.html"), (0, 0));
+    }
+
+    #[test]
+    fn a_local_image_a_remote_page_may_not_load_is_named() {
+        let web = schemes(&Policy::default(), "https://docs.example.org/a.html");
+        let h = read(
+            "<img src='file:///some/path.png' alt=Local><img src='data:x' alt=Data>",
+            &web,
+        );
+        assert_eq!(h.dropped, ["file:///some/path.png"]);
+        assert_eq!(h.markdown, "LocalData");
+        let docs = schemes(&Policy::default(), "docs:page");
+        let h = read("<img src='file:///some/path.png' alt=Local>", &docs);
+        assert!(h.dropped.is_empty());
     }
 
     #[test]

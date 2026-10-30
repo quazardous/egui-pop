@@ -252,6 +252,11 @@ against it (`../img/panel.png`).
   remembered in the `viewer.image_hosts` setting (empty it to be asked
   again). Images on the page's own host (a documentation host) load at
   once. Allowing a host is the user's alone: agents cannot.
+- **Local files** load only from a page that is itself local (`docs:`,
+  `file:`). A page from the network never reads one: its `file:` image
+  shows its alt text and is named in the bar over the page and in
+  `viewer.state`'s `dropped`, however the address is spelled. Its links
+  still go through the links service, as content.
 - **Failures** (not found, no connection, too large, a type it cannot
   show) show an error page in place with **Retry**, **Open outside**
   and **Copy link**, and `viewer.failed` on the journal.
@@ -263,7 +268,7 @@ against it (`../img/panel.png`).
 | `viewer.find_next`, `viewer.find_previous` | the matches |
 | `viewer.zoom_in`, `viewer.zoom_out`, `viewer.zoom_reset` | the page's zoom |
 | `viewer.open_outside`, `viewer.copy_link` | the page's address |
-| `viewer.state` | the page (address, status or error, title, headings, text, links, what its HTML did not show), the history, the search, the zoom, the images and the hosts allowed |
+| `viewer.state` | the page (address, status or error, title, headings, text, links, what it did not show), the history, the search, the zoom, the images and the hosts allowed |
 
 ### The HTML subset
 
@@ -299,7 +304,8 @@ page, anchors, zoom and links work as on a markdown page.
   the policy allows; a link with another (`javascript:`, `data:`,
   `vbscript:`, an unknown scheme, however spelled) is left as its text, an
   image as its alt text. `command:` is kept only on `docs:` pages, `file:`
-  not on pages from the network. A kept link still meets the policy when
+  not on pages from the network (a `file:` image refused is named in the
+  bar, as on a markdown page). A kept link still meets the policy when
   it is clicked: declared on a `docs:` page, content elsewhere. Remote
   images wait for the same click as markdown's.
 - **No script runs, no style applies, and nothing is fetched** beyond the

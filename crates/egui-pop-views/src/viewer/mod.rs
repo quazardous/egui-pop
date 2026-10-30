@@ -34,7 +34,9 @@
 //!   loaded" with a button loading them; the host is remembered in the
 //!   `viewer.image_hosts` setting (cleared there). Images on the page's
 //!   own host (a documentation host the application declares) load at
-//!   once.
+//!   once. A page from the network never loads a local file: its `file:`
+//!   images show their alt text and are named on the page and in
+//!   `viewer.state`.
 //! - **Failures** show an error page in place (not found, no connection,
 //!   too large, a type it cannot show) with Retry, Open outside and Copy
 //!   link.
@@ -248,15 +250,17 @@ pub struct Page {
     /// Its address, without the anchor.
     pub target: String,
     pub content: Content,
-    /// For a page that was HTML: the elements not shown (a script, a
-    /// video), named on the page; none for another page.
-    pub html: Option<Vec<String>>,
+    /// Whether it was HTML.
+    pub html: bool,
+    /// What it asked for and does not show, named on the page: an HTML
+    /// page's elements (a script, a video), a remote page's local images.
+    pub dropped: Vec<String>,
 }
 
 impl Page {
     fn kind(&self) -> &'static str {
         match self.content {
-            Content::Markdown(_) if self.html.is_some() => "html",
+            Content::Markdown(_) if self.html => "html",
             Content::Markdown(_) => "markdown",
             Content::Image(_) => "image",
         }
@@ -491,6 +495,8 @@ impl Viewer {
             i.generation += 1;
             i.status = Status::Loading(target.to_string());
             i.scroll_to = None;
+            // Those still on the page are asked about again.
+            i.images.retain(|_, s| !matches!(s, Image::Blocked(_)));
             i.generation
         };
         let parsed = Target::parse(target).ok();
@@ -574,7 +580,8 @@ impl Viewer {
             return self.fail(app, target, Failure::TooLarge, &detail);
         }
         let ext = extension(name);
-        let mut html = None;
+        let mut html = false;
+        let mut dropped = Vec::new();
         let content = match ext.as_str() {
             "" | "md" | "markdown" | "txt" => {
                 let text = String::from_utf8_lossy(&bytes);
@@ -590,8 +597,9 @@ impl Viewer {
                 Content::Image(target.to_string())
             }
             "html" | "htm" | "xhtml" => match read_html(app, target, &bytes) {
-                Ok((md, dropped)) => {
-                    html = Some(dropped);
+                Ok((md, elements)) => {
+                    html = true;
+                    dropped = elements;
                     Content::Markdown(md)
                 }
                 Err(why) => return self.fail(app, target, Failure::Unsupported, why),
@@ -601,19 +609,24 @@ impl Viewer {
                 return self.fail(app, target, Failure::Unsupported, &detail);
             }
         };
-        let page = Arc::new(Page {
-            target: target.to_string(),
-            content,
-            html,
-        });
-        if let Content::Markdown(md) = &page.content {
-            self.prepare_images(app, target, md);
+        if let Content::Markdown(md) = &content {
+            for uri in self.prepare_images(app, target, md) {
+                if !dropped.contains(&uri) {
+                    dropped.push(uri);
+                }
+            }
             let mut cache = lock(&self.cache);
             cache.link_hooks_clear();
             for l in md.links() {
                 cache.add_link_hook(l);
             }
         }
+        let page = Arc::new(Page {
+            target: target.to_string(),
+            content,
+            html,
+            dropped,
+        });
         {
             let mut i = lock(&self.inner);
             i.status = Status::Shown(page.clone());
@@ -635,16 +648,27 @@ impl Viewer {
     }
 
     /// Hands each image of a page to egui, fetches those it may, and
-    /// keeps the others waiting for the user.
-    fn prepare_images(&self, app: &AppHandle, base: &str, md: &Markdown) {
+    /// keeps the others waiting for the user. Returns the local files the
+    /// page may not load: never read, and forgotten if an earlier page
+    /// had them, so they are not drawn from what it left.
+    fn prepare_images(&self, app: &AppHandle, base: &str, md: &Markdown) -> Vec<String> {
         let page_host = host_of(base);
+        let reads_files = page_schemes(app, base).contains("file");
+        let mut refused = Vec::new();
         let ctx = app.egui();
         for img in md.blocks.iter().flat_map(|b| &b.images) {
             let uri = resolve(base, &img.dest);
+            let parsed = Target::parse(&uri).ok();
+            if !reads_files && parsed.as_ref().map(Target::scheme) == Some("file") {
+                lock(&self.inner).images.remove(&uri);
+                if !refused.contains(&uri) {
+                    refused.push(uri);
+                }
+                continue;
+            }
             if lock(&self.inner).images.contains_key(&uri) {
                 continue;
             }
-            let parsed = Target::parse(&uri).ok();
             let state = match parsed.as_ref().map(Target::scheme) {
                 Some("docs") => {
                     let page = parsed
@@ -686,6 +710,7 @@ impl Viewer {
             };
             lock(&self.inner).images.insert(uri, state);
         }
+        refused
     }
 
     fn fetch_image(&self, app: &AppHandle, uri: &str) -> Image {
@@ -997,9 +1022,7 @@ impl Viewer {
             Status::Empty => ("empty", None, None, None, None, Vec::new()),
             Status::Loading(_) => ("loading", None, None, None, None, Vec::new()),
             Status::Shown(p) => {
-                if let Some(d) = &p.html {
-                    dropped.clone_from(d);
-                }
+                dropped.clone_from(&p.dropped);
                 if let Content::Markdown(md) = &p.content {
                     links = md.links();
                 }
@@ -1077,6 +1100,12 @@ impl Viewer {
     }
 }
 
+/// The schemes a page may use, by the links service's policy.
+fn page_schemes(app: &AppHandle, page: &str) -> BTreeSet<String> {
+    let policy = links::links(app).map(|l| l.policy()).unwrap_or_default();
+    page::schemes(&policy, page)
+}
+
 /// An HTML page read for the viewer: its blocks, and the elements it does
 /// not show.
 #[cfg(feature = "html")]
@@ -1085,11 +1114,7 @@ fn read_html(
     target: &str,
     bytes: &[u8],
 ) -> Result<(Markdown, Vec<String>), &'static str> {
-    let policy = links::links(app).map(|l| l.policy()).unwrap_or_default();
-    let page = html::read(
-        &String::from_utf8_lossy(bytes),
-        &html::schemes(&policy, target),
-    );
+    let page = html::read(&String::from_utf8_lossy(bytes), &page_schemes(app, target));
     let mut md = Markdown::parse(&page.markdown);
     md.title = page.title.or(md.title);
     Ok((md, page.dropped))

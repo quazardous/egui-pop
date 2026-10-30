@@ -2398,6 +2398,7 @@ fn the_viewers_html_subset_keeps_blocks_and_drops_what_could_run() {
         (Some(page), Some("html"))
     );
     assert_eq!(s["links"], json!(["https://example.org/more"]));
+    assert_eq!(s["dropped"], json!(["file:///etc/hostname"]));
     let images = s["images"].as_array().unwrap();
     assert!(
         !images

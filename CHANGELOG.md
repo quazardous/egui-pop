@@ -1034,6 +1034,17 @@ publishes.
 
 ### Fixed
 
+- A page from the network no longer loads local files (egui-pop-views;
+  ADR 0017): a markdown page on a documentation host read its `file:`
+  images from the disk, whatever the page's origin, or drew them when an
+  earlier local page had loaded them. Its `file:` images now show their
+  alt text and are named in the bar over the page and in `viewer.state`'s
+  `dropped`, on HTML pages too, which refused them without saying so. Both
+  read one policy (`file:` only on `docs:` and `file:` pages). A `docs:`
+  page's own images are unchanged, and so are a page's links. An image in
+  another's alt text no longer escapes the viewer's checks, and images
+  waiting for a host's click stay with their page instead of following to
+  the next one. `viewer::Page` has `html: bool` and `dropped`.
 - `On::Pass` handlers run once per pass (egui-pop-api): under eframe
   and kittest's `build_eframe`, the `logic` hook and `App::show` both
   ran `App::logic`, so every handler ran twice a frame. A second call
