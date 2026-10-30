@@ -82,6 +82,11 @@
       "keys": "Shift+PrimaryDrag",
       "command": "gesture.value.fine",
       "scope": "surface:widget.value"
+    },
+    {
+      "keys": "Ctrl+PrimaryDrag",
+      "command": "gesture.sections.pull",
+      "scope": "surface:widget.sections"
     }
   ]
 }

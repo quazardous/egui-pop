@@ -310,6 +310,10 @@ command-gesture-image-zoom-toggle =
     .description = Goes to 100 % around the pointer when the image fits, else fits it.
     .title = Image: fit or 100 %
 
+command-gesture-sections-pull =
+    .description = A drag on a boundary or a title with these keys moves the sections below as a block, keeping their heights.
+    .title = Sections: pull as a block
+
 command-gesture-value-coarse =
     .description = These keys make a slider's drag, arrows and wheel ten times coarser.
     .title = Values: coarser

@@ -6,7 +6,7 @@ use egui_pop_model::keymap::{
 };
 use egui_pop_model::pointer::{
     self, GESTURES, ImageDoubleClick, PROFILE_OWNER, PointerMap, SCOPE_GRAPH, SCOPE_IMAGE,
-    SCOPE_VALUE, SCOPES, SliderWheel, ValueKeys, gesture,
+    SCOPE_SECTIONS, SCOPE_VALUE, SCOPES, SliderWheel, ValueKeys, gesture,
 };
 use egui_pop_model::values::{SettingsDoc, settings_schema};
 
@@ -168,6 +168,13 @@ fn the_six_profiles_ship_with_known_gestures_in_their_scopes() {
             assert_eq!(map.command(scope, &chord("Pinch")), Some(zoom), "{}", p.id);
             assert_eq!(map.command(scope, &chord("Scroll")), Some(pan), "{}", p.id);
         }
+        // Every profile pulls sections with Ctrl (Cmd on macOS) and a drag.
+        assert_eq!(
+            map.command(SCOPE_SECTIONS, &chord("Ctrl+PrimaryDrag")),
+            Some(&gesture::SECTIONS_PULL),
+            "{}",
+            p.id
+        );
     }
 }
 

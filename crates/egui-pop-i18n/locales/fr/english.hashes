@@ -154,6 +154,8 @@ command-gesture-image-zoom-toggle.description 20ef7bc5602c7709
 command-gesture-image-zoom-toggle.title 53a0002677b61b96
 command-gesture-image-zoom.description e62171fe04c5474e
 command-gesture-image-zoom.title d21ee20e3967f908
+command-gesture-sections-pull.description ddef40949dafbd9a
+command-gesture-sections-pull.title d4286d187faa5f14
 command-gesture-value-coarse.description 80f4d5a28640a696
 command-gesture-value-coarse.title 1b8f8ea1a70ab444
 command-gesture-value-fine.description 014fe9bb1fb841fd
