@@ -35,6 +35,8 @@
 //! - `viewport::TestSource` (feature `viewport`): a tile source for the
 //!   image viewport, every pixel its own colour, served when the test
 //!   says;
+//! - [`walk`]: a keyboard walk, real key presses and what holds the focus
+//!   after each;
 //! - [`macro@critical`]: the mark of a test that runs on every change,
 //!   whatever a selective run skips (see `docs/testing.md`).
 //!
@@ -56,6 +58,7 @@ pub use gpu::{SharedGpu, gpu_lock, shared_renderer, shared_setup};
 
 pub mod hosts;
 pub mod jobs;
+pub mod walk;
 
 pub use egui_pop_test_macros::critical;
 #[cfg(feature = "viewport")]
