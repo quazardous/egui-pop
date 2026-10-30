@@ -14,12 +14,13 @@ use std::sync::{Arc, Mutex};
 use egui::{Key, Modifiers};
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
-use egui_pop::api::palettes;
+use egui_pop::api::dialogs::{self, Confirm};
+use egui_pop::api::{App, Ctx, DefaultPlugins, Plugin, PluginError, palettes};
 use egui_pop::core::sections::{Section, Sections};
 use egui_pop::core::tab::{self, ScopeKind, TabStop};
 use egui_pop::editors::terminal::{Sink, Spawn, Terminal, TerminalSource, TerminalState};
-use egui_pop::model::commands::Origin;
-use egui_pop::model::ids::CommandId;
+use egui_pop::model::commands::{CommandSpec, Origin};
+use egui_pop::model::ids::{CommandId, PluginId};
 use egui_pop::model::layout::Node;
 use egui_pop::model::panels::Area;
 use egui_pop::theme::ThemeSpec;
@@ -605,16 +606,200 @@ fn a_dialog_starts_on_its_action_or_on_cancel_for_a_danger_and_tab_wraps_in_it()
     assert_eq!(walked.names(), ["Delete 3 images", "Cancel"], "{walked}");
 }
 
+/// What the dialogs page's commands ran: one per accepted dialog.
+fn sent(h: &Harness<'_, Gallery>) -> String {
+    h.state()
+        .app
+        .handle()
+        .context()
+        .get("galleryDialogSent")
+        .to_string()
+}
+
 #[test]
-#[ignore = "keyboard survey item 20: the Enter that opens a dialog from a focused button also accepts it"]
 fn enter_on_a_button_opening_a_dialog_leaves_it_open() {
     let mut h = harness("dialogs");
     reach_back(&mut h, "Confirm an export");
-    walk::press(&mut h, ENTER);
-    let context = h.state().app.handle().context();
-    let sent = context.get("galleryDialogSent");
-    assert_eq!(sent, "", "accepted by the key that opened it");
+    assert_eq!(name(walk::press(&mut h, ENTER)), "Export");
+    assert_eq!(sent(&h), "", "accepted by the key that opened it");
     assert!(h.query_by_label("Export the page?").is_some());
+    // A fresh press answers it.
+    walk::press(&mut h, ENTER);
+    assert_ne!(sent(&h), "");
+    assert!(h.query_by_label("Export the page?").is_none());
+}
+
+#[test]
+fn every_dialog_of_the_page_stays_open_on_the_key_that_opened_it() {
+    for (button, title) in [
+        ("Confirm an export", "Export the page?"),
+        ("Delete three images", "Delete 3 images?"),
+        ("Export settings", "Quality"),
+        ("Pick a side", "Which side?"),
+        ("Show a notice", "Saved"),
+        ("Confirm, with a close button", "Share the page?"),
+    ] {
+        for key in [ENTER, SPACE] {
+            let mut h = harness("dialogs");
+            reach_back(&mut h, button);
+            walk::hold(&mut h, key);
+            assert!(h.query_by_label(title).is_some(), "{button}, {key:?}");
+            // Held, whatever it now has the focus on.
+            for _ in 0..3 {
+                walk::hold(&mut h, key);
+            }
+            walk::release(&mut h, key);
+            assert!(h.query_by_label(title).is_some(), "{button}, {key:?} held");
+            assert_eq!(sent(&h), "", "{button}, {key:?}");
+        }
+    }
+}
+
+#[test]
+fn holding_the_key_that_opened_a_dialog_does_not_answer_it_until_released() {
+    for key in [ENTER, SPACE] {
+        let mut h = harness("dialogs");
+        reach_back(&mut h, "Confirm an export");
+        assert_eq!(name(walk::hold(&mut h, key)), "Export");
+        // The repeats, with the focus now on the action.
+        for _ in 0..5 {
+            assert_eq!(name(walk::hold(&mut h, key)), "Export");
+            assert!(h.query_by_label("Export the page?").is_some(), "{key:?}");
+        }
+        assert_eq!(sent(&h), "", "{key:?}");
+        walk::release(&mut h, key);
+        assert!(h.query_by_label("Export the page?").is_some(), "{key:?}");
+        // Released, the same key answers.
+        walk::press(&mut h, key);
+        assert_ne!(sent(&h), "", "{key:?}");
+    }
+}
+
+#[test]
+fn a_danger_held_open_does_not_go_to_its_cancel() {
+    let mut h = harness("dialogs");
+    reach_back(&mut h, "Delete three images");
+    assert_eq!(name(walk::hold(&mut h, ENTER)), "Cancel");
+    walk::hold(&mut h, ENTER);
+    assert!(h.query_by_label("Delete 3 images?").is_some());
+    walk::release(&mut h, ENTER);
+    assert!(h.query_by_label("Delete 3 images?").is_some());
+}
+
+#[test]
+fn another_key_is_not_held_back_by_the_one_that_opened_the_dialog() {
+    let mut h = harness("dialogs");
+    reach_back(&mut h, "Confirm an export");
+    walk::hold(&mut h, ENTER);
+    // Enter still down: Tab goes on, Space clicks what is focused.
+    assert_eq!(name(walk::press(&mut h, TAB)), "Cancel");
+    walk::press(&mut h, SPACE);
+    assert!(h.query_by_label("Export the page?").is_none());
+    assert_eq!(sent(&h), "");
+    walk::release(&mut h, ENTER);
+}
+
+const ASK: CommandId = CommandId::from_static("doc.ask");
+const ANSWERED: CommandId = CommandId::from_static("doc.answered");
+
+/// A command opening a dialog, on a key of its own and in the palette.
+struct Asking(Arc<Mutex<Vec<&'static str>>>);
+
+impl Plugin for Asking {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("doc")
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        let runs = self.0.clone();
+        ctx.command(
+            CommandSpec::new(ASK, "Ask a question", "Doc").key("Ctrl+Enter"),
+            |call| {
+                let d = call.app.service(&dialogs::DIALOGS).expect("default plugin");
+                d.open(Confirm::new("A question?", "Accept", ANSWERED));
+                Ok(Json::Null)
+            },
+        )?;
+        ctx.command(CommandSpec::new(ANSWERED, "Answered", "Doc"), move |_| {
+            runs.lock().unwrap().push("answered");
+            Ok(Json::Null)
+        })?;
+        Ok(())
+    }
+}
+
+fn asking() -> (Harness<'static, App>, Arc<Mutex<Vec<&'static str>>>) {
+    let runs = Arc::new(Mutex::new(Vec::new()));
+    let app = App::builder()
+        .plugins(DefaultPlugins)
+        .plugin(Asking(runs.clone()))
+        .build(&egui::Context::default())
+        .unwrap();
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(800.0, 600.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+    let _ = h.run_ok();
+    (h, runs)
+}
+
+const CTRL_ENTER: Press = Press {
+    modifiers: CTRL,
+    key: Key::Enter,
+};
+
+#[test]
+fn a_key_binding_held_does_not_answer_the_dialog_it_opens() {
+    let (mut h, runs) = asking();
+    walk::hold(&mut h, CTRL_ENTER);
+    assert!(h.query_by_label("A question?").is_some());
+    for _ in 0..3 {
+        walk::hold(&mut h, CTRL_ENTER);
+    }
+    walk::release(&mut h, CTRL_ENTER);
+    assert!(h.query_by_label("A question?").is_some());
+    assert!(runs.lock().unwrap().is_empty());
+    walk::press(&mut h, ENTER);
+    assert_eq!(*runs.lock().unwrap(), ["answered"]);
+}
+
+#[test]
+fn enter_in_the_palette_does_not_answer_the_dialog_its_command_opens() {
+    let (mut h, runs) = asking();
+    walk::press(&mut h, Press::key(Key::F1));
+    h.event(egui::Event::Text("Ask a question".to_string()));
+    let _ = h.run_ok();
+    walk::hold(&mut h, ENTER);
+    assert!(h.query_by_label("A question?").is_some());
+    walk::hold(&mut h, ENTER);
+    walk::hold(&mut h, ENTER);
+    assert!(h.query_by_label("A question?").is_some());
+    assert!(runs.lock().unwrap().is_empty());
+    walk::release(&mut h, ENTER);
+    walk::press(&mut h, ENTER);
+    assert_eq!(*runs.lock().unwrap(), ["answered"]);
+}
+
+#[test]
+fn a_held_enter_that_answers_a_dialog_does_not_answer_the_next_in_the_queue() {
+    let (mut h, runs) = asking();
+    let d = h.state().handle().service(&dialogs::DIALOGS).unwrap();
+    d.open(Confirm::new("First?", "Accept", ANSWERED));
+    d.open(Confirm::new("Second?", "Accept", ANSWERED));
+    let _ = h.run_ok();
+    walk::hold(&mut h, ENTER);
+    assert_eq!(*runs.lock().unwrap(), ["answered"]);
+    assert!(h.query_by_label("Second?").is_some());
+    walk::hold(&mut h, ENTER);
+    walk::hold(&mut h, ENTER);
+    assert_eq!(
+        *runs.lock().unwrap(),
+        ["answered"],
+        "the same key still down"
+    );
+    assert!(h.query_by_label("Second?").is_some());
+    walk::release(&mut h, ENTER);
+    walk::press(&mut h, ENTER);
+    assert_eq!(*runs.lock().unwrap(), ["answered", "answered"]);
 }
 
 #[test]
