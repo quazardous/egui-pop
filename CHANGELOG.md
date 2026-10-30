@@ -1133,6 +1133,8 @@ publishes.
 
 ### Fixed
 
+- A data table scrolled out of a scroll area around it no longer panics
+  (egui-pop-views).
 - A row a tree or a list is asked to bring into view before its first pass
   shows (egui-pop-views): with no height yet it stopped just above the view.
 - The key that opens a dialog no longer answers it (egui-pop-core). Enter on

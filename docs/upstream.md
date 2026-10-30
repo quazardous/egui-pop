@@ -299,7 +299,9 @@ limit.
 - **Compensated**: the column resize handles are interactive widgets
   without an accessible name; `TableDelegate::row_ui` and
   `header_cell_ui` are called once per region (sticky and scrolled
-  columns), also for the sticky region when there are no sticky columns.
+  columns), also for the sticky region when there are no sticky columns;
+  `TableDelegate::prepare` gets a reversed `visible_rows` when the table is
+  clipped away, scrolled out of a scroll area around it.
 - **Upstream**: egui_table lives in rerun-io/egui_crates now. Not filed
   yet (drafts:
   [upstream-drafts/egui_crates-table-resize-handle-name.md](upstream-drafts/egui_crates-table-resize-handle-name.md)
