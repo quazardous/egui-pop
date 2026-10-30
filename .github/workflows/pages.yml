@@ -72,6 +72,9 @@ jobs:
       # snapshots and the logo, then the gallery, the docs and the API.
       - name: Assemble the site and check the landing page's links
         run: |
+          # A restored cache may hold the last site: `cp -r` would then nest
+          # the gallery and the docs one level down.
+          rm -rf target/site
           mkdir -p target/site/img
           cp tools/site/index.html target/site/index.html
           cp docs/logo/egui-pop.svg target/site/img/
