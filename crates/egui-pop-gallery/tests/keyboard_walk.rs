@@ -11,7 +11,6 @@
 use std::cell::Cell;
 use std::sync::{Arc, Mutex};
 
-use egui::accesskit::Role;
 use egui::{Key, Modifiers};
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
@@ -101,9 +100,9 @@ fn tab_goes_round_the_window_with_the_status_bar_before_the_panels() {
     let at = |name: &str| walked.position(name).expect(name);
     assert!(at("Help") < at("Theme"), "{walked}");
     assert!(at("Reduced motion") < at("No job"), "{walked}");
-    assert!(at("No job") < at("Theme overview"), "{walked}");
+    assert!(at("No job") < at("Pages"), "{walked}");
     // The next panels' lines come after the side list, then the inspector.
-    assert!(at("Layout by role") < at("Token paths"), "{walked}");
+    assert!(at("Pages") < at("Token paths"), "{walked}");
 }
 
 #[test]
@@ -343,7 +342,6 @@ fn a_windowed_row_scrolled_away_keeps_the_place() {
 // Focus out of view (checks 1, 10, 11; item 7).
 
 #[test]
-#[ignore = "keyboard survey item 7: Tab goes down the side list out of view, none of it scrolls"]
 fn the_side_list_scrolls_to_the_focus() {
     let mut h = harness("overview");
     let walked = walk::walk(&mut h, TAB, 200);
@@ -390,26 +388,27 @@ fn f6_goes_to_a_region_on_every_page() {
 // The gallery's side list (checks 7 and 8; items 10 and 16).
 
 #[test]
-fn up_and_down_go_through_the_side_list_and_enter_opens_a_page_keeping_the_row() {
+fn up_and_down_go_through_the_side_list_and_enter_opens_a_page_keeping_the_focus() {
     let mut h = harness("overview");
-    walk::reach(&mut h, TAB, "Menus", 40).expect("Tab reaches the row");
-    assert_eq!(name(walk::press(&mut h, DOWN)), "Toolbars");
-    assert_eq!(name(walk::press(&mut h, UP)), "Menus");
-    assert_eq!(name(walk::press(&mut h, ENTER)), "Menus");
-    assert_eq!(h.state().page().as_str(), "menus");
+    walk::reach(&mut h, TAB, "Pages", 40).expect("Tab reaches the list");
+    // The list holds the focus as one; its cursor starts on the page shown.
+    assert_eq!(name(walk::press(&mut h, DOWN)), "Pages");
+    assert_eq!(name(walk::press(&mut h, DOWN)), "Pages");
+    assert_eq!(name(walk::press(&mut h, UP)), "Pages");
+    assert_eq!(h.state().page().as_str(), "overview");
+    assert_eq!(name(walk::press(&mut h, ENTER)), "Pages");
+    assert_eq!(h.state().page().as_str(), "tokens");
 }
 
 #[test]
-#[ignore = "keyboard survey item 16: a plain arrow leaves the side list for the line beside it"]
 fn a_plain_arrow_stays_in_its_region() {
     let mut h = harness("overview");
-    walk::reach(&mut h, TAB, "Menus", 40).expect("Tab reaches the row");
+    walk::reach(&mut h, TAB, "Pages", 40).expect("Tab reaches the list");
     let stop = walk::press(&mut h, RIGHT).expect("the focus stays");
-    assert_ne!(stop.role, Role::Unknown, "{stop}");
+    assert_eq!(stop.name, "Pages", "{stop}");
 }
 
 #[test]
-#[ignore = "keyboard survey item 10: the side list is one stop per story"]
 fn the_side_list_is_one_stop() {
     let mut h = harness("overview");
     let titles: Vec<String> = h
@@ -430,8 +429,14 @@ fn the_side_list_is_one_stop() {
 #[test]
 #[ignore = "keyboard survey item 14: Ctrl+Enter clicks a focused plain button"]
 fn ctrl_enter_does_not_click_a_plain_button() {
-    let mut h = harness("overview");
-    walk::reach(&mut h, TAB, "Tokens table", 40).expect("Tab reaches the row");
+    let clicks = Cell::new(0);
+    let mut h = themed(&ThemeSpec::default(), egui::vec2(200.0, 80.0), |ui| {
+        if ui.button("Go").clicked() {
+            clicks.set(clicks.get() + 1);
+        }
+    });
+    let _ = h.run_ok();
+    walk::reach(&mut h, TAB, "Go", 4).expect("Tab reaches the button");
     let key = Key::Enter;
     walk::press(
         &mut h,
@@ -440,7 +445,8 @@ fn ctrl_enter_does_not_click_a_plain_button() {
             key,
         },
     );
-    assert_eq!(h.state().page().as_str(), "overview");
+    drop(h);
+    assert_eq!(clicks.get(), 0);
 }
 
 #[test]

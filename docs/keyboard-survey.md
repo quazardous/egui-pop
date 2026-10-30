@@ -360,6 +360,9 @@ Right leaves for the side area's line beside it, and Left from that line
 lands on a row out of view. **[read]** No type-ahead, no scope. Everything the study praises
 in `egui-pop-views` is absent from the catalogue that shows it off.
 
+Since this walk, the list is the tree view (item 10): one stop named "Pages",
+with arrows, Home, End and type-ahead, Left and Right folding its groups.
+
 ### The graph
 
 **[test]** `the_keyboard_picks_two_ports_and_connects_them`: Enter on two
