@@ -1,22 +1,23 @@
-//! The gallery's shell plugin: the page list in the side bar, the page in
-//! the main zone, its playground in the inspector, the theme switchers in
+//! The gallery's shell plugin: the page list in the side bar (a tree, its
+//! groups foldable), the page in the main zone, its playground in the inspector, the theme switchers in
 //! the top bar, and commands to move between pages.
 
 use std::sync::Mutex;
 
 use egui::Ui;
-use egui::scroll_area::ScrollArea;
 use egui_pop::api::app::MENU_VIEW;
 use egui_pop::api::stories::StoryInfo;
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
 use egui_pop::core::kit::{Kit, Visibility};
 use egui_pop::core::lock;
-use egui_pop::core::ui::UiPop;
+use egui_pop::core::ui::{Stock, Tone, UiPop};
 use egui_pop::core::widgets;
 use egui_pop::model::commands::CommandSpec;
 use egui_pop::model::ids::{BlockId, CommandId, PluginId, StoryId};
 use egui_pop::prelude::{Block, ServiceToken, zones};
 use egui_pop::theme::{self, Density, Tokens};
+use egui_pop::views::Mode;
+use egui_pop::views::tree::{Node, Signal, Sink, TreeSource, TreeState, TreeView};
 use serde_json::{Value as Json, json};
 
 use crate::{PAGES, TITLE};
@@ -27,6 +28,8 @@ pub struct Nav {
     page: Mutex<StoryId>,
     /// The page the list last brought into view.
     in_view: Mutex<Option<StoryId>>,
+    /// The list of pages: its fold, its cursor, how far it is scrolled.
+    list: Mutex<TreeState<String>>,
 }
 
 impl Nav {
@@ -117,6 +120,7 @@ impl Plugin for Shell {
             Nav {
                 page: Mutex::new(self.first.clone()),
                 in_view: Mutex::new(None),
+                list: Mutex::new(TreeState::new()),
             },
         )?;
         app.set_context("galleryPage", self.first.as_str());
@@ -309,46 +313,126 @@ fn preference_label(p: egui::ThemePreference) -> &'static str {
     }
 }
 
-/// The page list, by group, in a scroll area of its own filling the side
-/// bar: 57 pages do not fit a window. Its bar shows at rest as the sections'
-/// stack's does, whatever the theme does for the other bars: nothing else
-/// says that the list goes on.
+/// The tree's key of a group of pages.
+fn group_key(group: &str) -> String {
+    format!("group:{group}")
+}
+
+/// The tree's key of a page.
+fn page_key(page: &StoryId) -> String {
+    format!("page:{page}")
+}
+
+/// The groups in the order listed.
+fn groups(stories: &[StoryInfo]) -> Vec<&str> {
+    let mut groups: Vec<&str> = stories.iter().map(|s| s.group.as_str()).collect();
+    groups.dedup();
+    groups
+}
+
+/// The list of pages as a tree: the groups and their pages, known at once.
+struct PageTree<'a>(&'a [StoryInfo]);
+
+impl TreeSource<String> for PageTree<'_> {
+    fn load(&self, parent: Option<&String>, sink: Sink<String>) {
+        sink.deliver(match parent {
+            None => groups(self.0)
+                .into_iter()
+                .map(|g| Node::branch(group_key(g), g))
+                .collect(),
+            Some(group) => self
+                .0
+                .iter()
+                .filter(|s| group_key(&s.group) == *group)
+                .map(|s| Node::leaf(page_key(&s.id), &s.title))
+                .collect(),
+        });
+    }
+}
+
+/// Where the folded groups are remembered: with the window's layout, in
+/// egui's persisted memory, as the stacked sections' are. A group not named
+/// there is open.
+fn folded_id() -> egui::Id {
+    egui::Id::new("gallery.pages.folded")
+}
+
+/// Keeps the groups folded now with the window's layout.
+fn remember_folded(ctx: &egui::Context, list: &TreeState<String>, stories: &[StoryInfo]) {
+    let folded: Vec<String> = groups(stories)
+        .into_iter()
+        .filter(|g| !list.model().is_expanded(&group_key(g)))
+        .map(String::from)
+        .collect();
+    ctx.data_mut(|d| d.insert_persisted(folded_id(), folded));
+}
+
+/// The page list, a tree of egui-pop's with the groups as folders, its one
+/// scroll area filling the side bar: 57 pages do not fit a window. Its bar
+/// shows at rest as the sections' stack's does, whatever the theme does for
+/// the other bars: nothing else says that the list goes on.
+///
+/// The selection marks the page shown, and only a page opening changes it;
+/// the cursor walks the list on its own, and Enter or a click opens.
 fn pages(ui: &mut Ui, app: &AppHandle) {
     let t = Tokens::of(ui.ctx());
     let nav = nav(app);
-    let current = nav.page();
     let bring_into_view = nav.to_bring_into_view();
+    let stories = ordered(app);
+    let mut list = lock(&nav.list);
+    if list.model().is_empty() {
+        let folded: Vec<String> = ui
+            .ctx()
+            .data_mut(|d| d.get_persisted(folded_id()))
+            .unwrap_or_default();
+        for g in groups(&stories) {
+            list.set_expanded(&group_key(g), !folded.iter().any(|f| f == g));
+        }
+    }
+    if bring_into_view {
+        let page = nav.page();
+        if let Some(shown) = stories.iter().find(|s| s.id == page) {
+            let group = group_key(&shown.group);
+            if !list.model().is_expanded(&group) {
+                list.set_expanded(&group, true);
+                remember_folded(ui.ctx(), &list, &stories);
+            }
+            let key = page_key(&page);
+            list.set_selection([key.clone()], Some(key.clone()));
+            list.reveal(&key);
+        }
+    }
     let others = ui.spacing().scroll;
     let mut bar = Kit::of(ui.ctx()).scroll;
     bar.visibility = Visibility::Always;
-    ui.scope(|ui| {
-        let mut style = bar.style(&others);
-        // Thin until the pointer is over it, full width to the pointer all
-        // along: the list's longest titles reach this far.
-        style.floating_width = t.space.s;
-        ui.spacing_mut().scroll = style;
-        let area = ScrollArea::vertical()
-            .id_salt("gallery.pages")
-            .auto_shrink([false, false]);
-        ui.scroll_area(area, |ui| {
-            ui.spacing_mut().scroll = others;
-            let mut group = None;
-            for s in ordered(app) {
-                if group.as_ref() != Some(&s.group) {
-                    ui.add_space(t.space.s);
-                    ui.weak(&s.group);
-                    group = Some(s.group.clone());
-                }
-                let entry = widgets::selectable_label(ui, s.id == current, &s.title);
-                if s.id == current && bring_into_view {
-                    entry.scroll_to_me(None);
-                }
-                if entry.clicked() {
+    // The bar's colours, as `UiPop::scroll_area` gives them.
+    let out = ui
+        .scoped(Stock::ScrollBar, Tone::Neutral, |ui| {
+            let mut style = bar.style(&others);
+            // Thin until the pointer is over it, full width to the pointer
+            // all along: the list's longest titles reach this far.
+            style.floating_width = t.space.s;
+            ui.spacing_mut().scroll = style;
+            // The side bar is narrow: the two levels indent little.
+            ui.spacing_mut().indent = t.space.m;
+            TreeView::new("gallery.pages")
+                .label("Pages")
+                .mode(Mode::None)
+                .activate_on_click(true)
+                .show(ui, &mut list, &PageTree(&stories))
+        })
+        .inner;
+    for signal in out.signals {
+        match signal {
+            Signal::Activate { key } => {
+                if let Some(s) = stories.iter().find(|s| page_key(&s.id) == key) {
                     nav.set(app, s.id.clone());
                 }
             }
-        });
-    });
+            Signal::Expand { .. } => remember_folded(ui.ctx(), &list, &stories),
+            _ => {}
+        }
+    }
 }
 
 /// The page shown.
