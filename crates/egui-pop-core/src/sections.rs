@@ -24,6 +24,11 @@
 //!   come back with the room, until the next drag aligns them on what is
 //!   shown. When even the least heights do not fit, the whole stack
 //!   scrolls, with a scrollbar then only.
+//! - A body is scrolled by the stack ([`Stack::section`]), windowed over
+//!   rows of one height, so that only those in view are drawn
+//!   ([`Stack::rows`]), or left to an application's own view
+//!   ([`Stack::bare`]). A wheel pushing past the end of a body's scroll
+//!   stops there: neither the stack nor a parent moves.
 //! - What is folded and the heights set by hand are remembered with the
 //!   window's layout (egui's persisted memory, under the stack's name),
 //!   and readable as a [`Layout`] an application keeps with its own.
@@ -62,12 +67,13 @@
 //! ```
 
 use std::collections::BTreeMap;
+use std::ops::Range;
 
 use egui::accesskit::{Action, Role};
 use egui::scroll_area::{DragScroll, ScrollBarVisibility, ScrollSource};
 use egui::{
     Color32, Context, CursorIcon, EventFilter, FontFamily, FontId, Id, Key, Rect, Response, Sense,
-    Ui, UiBuilder, WidgetInfo, WidgetType, pos2, vec2,
+    TextStyle, Ui, UiBuilder, WidgetInfo, WidgetType, pos2, vec2,
 };
 use egui_pop_model::sections::{self as model, Asked, DragMode, Placed};
 use serde::{Deserialize, Serialize};
@@ -177,6 +183,11 @@ pub struct Laid {
     /// Its body, when open.
     #[serde(skip)]
     pub body: Option<Rect>,
+    /// How far its body is scrolled, in points (0 when folded, and for a
+    /// bare body, whose scroll is the application's).
+    pub scroll: f32,
+    /// The rows drawn on that pass, when windowed and open.
+    pub window: Option<Range<usize>>,
 }
 
 /// Each stack's sections as laid out on the last pass, by name.
@@ -188,10 +199,16 @@ const LAID: Slot<Vec<Laid>> = Slot::summarised("core.sections.laid", laid_summar
 fn laid_summary(laid: &Vec<Laid>) -> String {
     let parts: Vec<String> = laid
         .iter()
-        .map(|s| match (s.open, s.by_hand) {
-            (false, _) => format!("{} folded", s.key),
-            (true, false) => format!("{} {:.0}", s.key, s.height),
-            (true, true) => format!("{} {:.0} by hand", s.key, s.height),
+        .map(|s| {
+            let window = s
+                .window
+                .as_ref()
+                .map_or(String::new(), |w| format!(" rows {}..{}", w.start, w.end));
+            match (s.open, s.by_hand) {
+                (false, _) => format!("{} folded", s.key),
+                (true, false) => format!("{} {:.0}{window}", s.key, s.height),
+                (true, true) => format!("{} {:.0} by hand{window}", s.key, s.height),
+            }
         })
         .collect();
     parts.join(", ")
@@ -215,15 +232,26 @@ pub fn laid_out(ctx: &Context, name: &str) -> Vec<Laid> {
     LAID.keyed(name.to_string()).get(ctx).unwrap_or_default()
 }
 
+/// The height of a row when the application names none
+/// ([`Section::row_height`]): the theme's interactive height, or the body
+/// text's when that is taller.
+pub fn row_height(ui: &Ui) -> f32 {
+    ui.spacing()
+        .interact_size
+        .y
+        .max(ui.text_style_height(&TextStyle::Body))
+}
+
 /// One section: a key (stable, what the layout remembers it by), a
-/// title, an optional count, its least height and whether it starts
-/// open.
+/// title, an optional count, its least height, its rows' height and
+/// whether it starts open.
 #[derive(Clone, Debug)]
 pub struct Section {
     key: String,
     title: String,
     count: Option<u64>,
     min_height: Option<f32>,
+    row_height: Option<f32>,
     open: bool,
 }
 
@@ -235,6 +263,7 @@ impl Section {
             title: title.into(),
             count: None,
             min_height: None,
+            row_height: None,
             open: true,
         }
     }
@@ -246,10 +275,19 @@ impl Section {
         self
     }
 
-    /// Its body's least height, in points: two rows by default (room
-    /// for two rows, or the line saying it is empty).
+    /// Its body's least height, in points. By default, room for two rows
+    /// (or the line saying it is empty); for a windowed section
+    /// ([`Stack::rows`]), two rows, or all of them when it has fewer.
     pub fn min_height(mut self, points: f32) -> Self {
         self.min_height = Some(points.max(0.0));
+        self
+    }
+
+    /// The height of its rows, in points, at least one (by default the
+    /// theme's, [`row_height`]): what its least height counts, and what
+    /// [`Stack::rows`] windows by.
+    pub fn row_height(mut self, points: f32) -> Self {
+        self.row_height = Some(points.max(1.0));
         self
     }
 
@@ -270,7 +308,121 @@ impl Section {
     }
 }
 
-type Body<'a> = Box<dyn FnOnce(&mut Ui) + 'a>;
+/// Draws the rows in a window, handed their range.
+type DrawRows<'a> = Box<dyn FnOnce(&mut Ui, Range<usize>) + 'a>;
+
+/// What a section draws under its band.
+enum Body<'a> {
+    /// Anything, in a scroll area.
+    Scrolled(Box<dyn FnOnce(&mut Ui) + 'a>),
+    /// `count` rows of one height, in a scroll area, drawn by the window.
+    Rows { count: usize, draw: DrawRows<'a> },
+    /// An application's own view, which scrolls itself.
+    Bare(Box<dyn FnOnce(&mut Ui) + 'a>),
+}
+
+/// What drawing a body says.
+struct Drawn {
+    /// How far it is scrolled.
+    scroll: f32,
+    /// The rows drawn.
+    window: Option<Range<usize>>,
+    /// Whether the wheel over it stops there: it has a scroll of its own,
+    /// with somewhere to go.
+    holds_wheel: bool,
+}
+
+impl Body<'_> {
+    /// Its least height, unless the section names one.
+    fn least(&self, ui: &Ui, row: f32) -> f32 {
+        match self {
+            Body::Rows { count, .. } => {
+                model::rows_least(row, *count) + ui.spacing().scroll.content_margin.sum().y
+            }
+            Body::Scrolled(_) | Body::Bare(_) => 2.0 * row,
+        }
+    }
+
+    /// Draws it in `ui`, as tall as the section. `salt` tells its scroll
+    /// from the others'; `row` is its rows' height.
+    fn draw(self, ui: &mut Ui, salt: &str, row: f32) -> Drawn {
+        let height = ui.max_rect().height();
+        let area = egui::ScrollArea::vertical()
+            .id_salt(("egui_pop.sections.scroll", salt))
+            .auto_shrink([false, false])
+            .max_height(height)
+            .min_scrolled_height(0.0);
+        match self {
+            Body::Scrolled(draw) => {
+                let out = area.show(ui, draw);
+                Drawn {
+                    scroll: out.state.offset.y,
+                    window: None,
+                    holds_wheel: scrolled(ui.ctx(), &out),
+                }
+            }
+            Body::Rows { count, draw } => {
+                // Rows touch, as a list's: their height is all that places them.
+                ui.spacing_mut().item_spacing.y = 0.0;
+                let mut window = None;
+                let out = area.show_rows(ui, row, count, |ui, range| {
+                    window = Some(range.clone());
+                    draw(ui, range);
+                });
+                Drawn {
+                    scroll: out.state.offset.y,
+                    window,
+                    holds_wheel: scrolled(ui.ctx(), &out),
+                }
+            }
+            Body::Bare(draw) => {
+                draw(ui);
+                Drawn {
+                    scroll: 0.0,
+                    window: None,
+                    holds_wheel: true,
+                }
+            }
+        }
+    }
+}
+
+/// After a body's scroll area: says whether it has somewhere to scroll,
+/// and asks for another pass when its offset changed.
+///
+/// upstream: a scroll area clamps its offset after drawing and asks for no
+/// repaint, so a body grown, or left with fewer rows, would show blank rows
+/// under its last one until something else repaints (docs/upstream.md).
+fn scrolled<R>(ctx: &Context, out: &egui::scroll_area::ScrollAreaOutput<R>) -> bool {
+    let id = out.id.with("egui_pop.sections.offset");
+    let offset = out.state.offset.y;
+    let before = ctx.data_mut(|d| d.get_temp::<f32>(id));
+    if before != Some(offset) {
+        ctx.data_mut(|d| d.insert_temp(id, offset));
+        if before.is_some() {
+            ctx.request_repaint();
+        }
+    }
+    out.content_size.y - out.inner_rect.height() > 0.5
+}
+
+/// Keeps the wheel over a body from reaching what scrolls around it.
+///
+/// upstream: a scroll area at its end leaves the wheel to its parents, and
+/// nothing asks it to keep it (docs/upstream.md). Taken as egui's own scroll
+/// area takes it, and only by the axis it would take.
+fn contain_wheel(ui: &Ui, body: Rect) {
+    if !ui.is_enabled() || !ui.rect_contains_pointer(body) {
+        return;
+    }
+    let both = ui.style().always_scroll_the_only_direction;
+    ui.input_mut(|i| {
+        i.smooth_scroll_delta.y = 0.0;
+        if both {
+            i.smooth_scroll_delta.x = 0.0;
+        }
+    });
+}
 
 /// The sections a stack is given, in order ([`Sections::show`]).
 pub struct Stack<'a> {
@@ -289,7 +441,60 @@ impl<'a> Stack<'a> {
     /// Adds a section, `body` its rows (called only while it is open,
     /// in a scroll area of its own).
     pub fn section(&mut self, section: Section, body: impl FnOnce(&mut Ui) + 'a) -> &mut Self {
-        self.sections.push((section, Box::new(body)));
+        self.sections
+            .push((section, Body::Scrolled(Box::new(body))));
+        self
+    }
+
+    /// Adds a section of `count` rows of one height ([`Section::row_height`])
+    /// in a scroll area of its own, windowed: `draw` is called only while
+    /// it is open, with the rows in view and the one past them, on every
+    /// pass, so the window follows the section's size and scroll.
+    ///
+    /// It draws them from the top of its `ui`, which has no spacing between
+    /// items, each exactly that tall (with [`Ui::add_sized`], say), or they
+    /// drift from their place in the scroll.
+    /// Its least height is two rows, or all of them when it has fewer.
+    ///
+    /// ```
+    /// use egui_pop_core::sections::{Section, Sections, laid_out, row_height};
+    ///
+    /// let ctx = egui::Context::default();
+    /// let mut out = ctx.run_ui(Default::default(), |ui| {
+    ///     let height = row_height(ui);
+    ///     Sections::new("log").show(ui, |stack| {
+    ///         stack.rows(Section::new("lines", "Lines"), 100_000, move |ui, range| {
+    ///             for i in range {
+    ///                 let width = ui.available_width();
+    ///                 ui.add_sized([width, height], egui::Label::new(format!("Line {i}")));
+    ///             }
+    ///         });
+    ///     });
+    /// });
+    /// out.textures_delta.clear();
+    /// let window = laid_out(&ctx, "log")[0].window.clone().unwrap();
+    /// assert!(window.len() < 1_000, "{window:?}");
+    /// ```
+    pub fn rows(
+        &mut self,
+        section: Section,
+        count: usize,
+        draw: impl FnOnce(&mut Ui, Range<usize>) + 'a,
+    ) -> &mut Self {
+        let draw = Box::new(draw);
+        self.sections.push((section, Body::Rows { count, draw }));
+        self
+    }
+
+    /// Adds a section whose `body` has no scroll area around it (called
+    /// only while it is open): for an application's own view that scrolls
+    /// itself, such as a virtualised list, which would otherwise nest two
+    /// scrolls. It fills the body, clipped to it.
+    ///
+    /// The stack cannot see into that view, so the wheel over a bare body
+    /// always stops there, whether or not the view has anywhere to go.
+    pub fn bare(&mut self, section: Section, body: impl FnOnce(&mut Ui) + 'a) -> &mut Self {
+        self.sections.push((section, Body::Bare(Box::new(body))));
         self
     }
 }
@@ -346,7 +551,7 @@ impl Sections {
         let ctx = ui.ctx().clone();
         let kit = Kit::of(&ctx);
         let tokens = Tokens::of(&ctx);
-        let row = ui.spacing().interact_size.y;
+        let row = row_height(ui);
         let band_h = if kit.section_band.data.height > 0.0 {
             kit.section_band.data.height
         } else {
@@ -362,11 +567,13 @@ impl Sections {
         }
         let asked: Vec<Asked> = sections
             .iter()
-            .map(|(s, _)| {
+            .map(|(s, body)| {
                 let remembered = layout.sections[&s.key];
                 Asked {
                     open: remembered.open,
-                    least: s.min_height.unwrap_or(2.0 * row),
+                    least: s
+                        .min_height
+                        .unwrap_or_else(|| body.least(ui, s.row_height.unwrap_or(row))),
                     hand: remembered.height.filter(|h| h.is_finite()),
                 }
             })
@@ -458,6 +665,7 @@ impl Sections {
                 }
                 y = band.bottom();
                 let mut body_rect = None;
+                let mut drawn = None;
                 if is_open {
                     let rect = Rect::from_min_size(pos2(left, y), vec2(width, fit.heights[i]));
                     let mut child = ui.new_child(
@@ -467,12 +675,12 @@ impl Sections {
                             .layout(egui::Layout::top_down(egui::Align::Min)),
                     );
                     child.set_clip_rect(rect.intersect(ui.clip_rect()));
-                    egui::ScrollArea::vertical()
-                        .id_salt(("egui_pop.sections.scroll", &section.key))
-                        .auto_shrink([false, false])
-                        .max_height(rect.height())
-                        .min_scrolled_height(0.0)
-                        .show(&mut child, body);
+                    let shown =
+                        body.draw(&mut child, &section.key, section.row_height.unwrap_or(row));
+                    if shown.holds_wheel {
+                        contain_wheel(&child, rect);
+                    }
+                    drawn = Some(shown);
                     y = rect.bottom();
                     body_rect = Some(rect);
                 }
@@ -485,6 +693,8 @@ impl Sections {
                     by_hand: fit.by_hand[i],
                     band,
                     body: body_rect,
+                    scroll: drawn.as_ref().map_or(0.0, |d| d.scroll),
+                    window: drawn.and_then(|d| d.window),
                 });
             }
             // Painted last: the band under a boundary would cover its ring.
@@ -909,6 +1119,8 @@ mod tests {
             by_hand,
             band: Rect::ZERO,
             body: None,
+            scroll: 0.0,
+            window: None,
         };
         assert_eq!(
             laid_summary(&vec![
@@ -918,5 +1130,10 @@ mod tests {
             ]),
             "live 120 by hand, idle 80, shut folded"
         );
+        let windowed = Laid {
+            window: Some(40..52),
+            ..laid("log", true, 200.0, false)
+        };
+        assert_eq!(laid_summary(&vec![windowed]), "log 200 rows 40..52");
     }
 }

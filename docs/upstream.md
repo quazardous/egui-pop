@@ -62,6 +62,22 @@ limit.
 - **Remove when**: kittest ships a `double_click` helper or a per-step
   time.
 
+## egui: a scroll area cannot keep the wheel at its end
+
+- **What is compensated:** a `ScrollArea` at the end of its range leaves
+  the wheel's delta in the input, so the next scroll area out moves
+  instead, with no option to keep it (the web's `overscroll-behavior:
+  contain`). And it clamps its offset after drawing and asks for no
+  repaint, so a body that grew, or lost rows, shows blank room under its
+  last row until something else repaints.
+- **Tracked upstream:** not filed yet.
+- **Workaround:** `core::sections`: after a body's scroll area, the pointer
+  over it, `contain_wheel` clears the vertical delta from the input, as
+  `ScrollArea` itself does when it takes a wheel; `scrolled` asks for a
+  repaint when the offset changed since the last pass.
+- **When it can go:** when `ScrollArea` has such an option and repaints
+  after clamping.
+
 ## egui: a selectable button changes size under the pointer
 
 - **Compensated**: `Button::selectable` draws no frame at rest (neither
