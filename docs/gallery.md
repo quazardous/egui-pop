@@ -107,7 +107,7 @@ Themes, design tokens, the theme editor, icons and scaling.
 
 ### Widgets
 
-Egui's built-ins in egui-pop's style, and restyled by a kit in a scope, values, the history (its list, an agent's step, one undone), sliders, inputs (decorators, field states, Tab order), menus, toolbars (icons, titles, More tools, a tool palette), dialogs (movable ones, a clear backdrop), file choosing (and an image's preview), toasts, micro-indicators (still under reduced motion), collapsible sections (folded, resized, a windowed one scrolled to its end), and progress (bars, rings, meters, spinners; still under reduced motion).
+Egui's built-ins in egui-pop's style, and restyled by a kit in a scope, values, the history (its list, an agent's step, one undone), sliders, inputs (decorators, field states, Tab order), menus, toolbars (icons, titles, More tools, a tool palette), dialogs (movable ones, a clear backdrop), file choosing (and an image's preview), toasts, micro-indicators (still under reduced motion), collapsible sections (folded, resized, a windowed one scrolled to its end, pulled with empty room under the last), and progress (bars, rings, meters, spinners; still under reduced motion).
 
 <table>
   <tr>
@@ -123,79 +123,80 @@ Egui's built-ins in egui-pop's style, and restyled by a kit in a scope, values, 
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/sections-resized-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/sections-resized-pop-dark.png" width="200" alt="sections-resized-pop-dark"></a><br>sections-resized-pop-dark</td>
   </tr>
   <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/sections-pulled-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/sections-pulled-pop-dark.png" width="200" alt="sections-pulled-pop-dark"></a><br>sections-pulled-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/sections-scrolled-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/sections-scrolled-pop-dark.png" width="200" alt="sections-scrolled-pop-dark"></a><br>sections-scrolled-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/builtins-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/builtins-pop-dark.png" width="200" alt="builtins-pop-dark"></a><br>builtins-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/builtins-pop-dark-compact.png"><img src="../crates/egui-pop-gallery/tests/snapshots/builtins-pop-dark-compact.png" width="200" alt="builtins-pop-dark-compact"></a><br>builtins-pop-dark-compact</td>
-    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/builtins-pop-high-contrast.png"><img src="../crates/egui-pop-gallery/tests/snapshots/builtins-pop-high-contrast.png" width="200" alt="builtins-pop-high-contrast"></a><br>builtins-pop-high-contrast</td>
   </tr>
   <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/builtins-pop-high-contrast.png"><img src="../crates/egui-pop-gallery/tests/snapshots/builtins-pop-high-contrast.png" width="200" alt="builtins-pop-high-contrast"></a><br>builtins-pop-high-contrast</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/builtins-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/builtins-pop-light.png" width="200" alt="builtins-pop-light"></a><br>builtins-pop-light</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/values-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/values-pop-dark.png" width="200" alt="values-pop-dark"></a><br>values-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/values-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/values-pop-light.png" width="200" alt="values-pop-light"></a><br>values-pop-light</td>
-    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/menus-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/menus-pop-dark.png" width="200" alt="menus-pop-dark"></a><br>menus-pop-dark</td>
   </tr>
   <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/menus-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/menus-pop-dark.png" width="200" alt="menus-pop-dark"></a><br>menus-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/menus-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/menus-pop-light.png" width="200" alt="menus-pop-light"></a><br>menus-pop-light</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/menus-kit-bar.png"><img src="../crates/egui-pop-gallery/tests/snapshots/menus-kit-bar.png" width="200" alt="menus-kit-bar"></a><br>menus-kit-bar</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/menus-compact.png"><img src="../crates/egui-pop-gallery/tests/snapshots/menus-compact.png" width="200" alt="menus-compact"></a><br>menus-compact</td>
-    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/menus-high-contrast.png"><img src="../crates/egui-pop-gallery/tests/snapshots/menus-high-contrast.png" width="200" alt="menus-high-contrast"></a><br>menus-high-contrast</td>
   </tr>
   <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/menus-high-contrast.png"><img src="../crates/egui-pop-gallery/tests/snapshots/menus-high-contrast.png" width="200" alt="menus-high-contrast"></a><br>menus-high-contrast</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/menus-icons-off.png"><img src="../crates/egui-pop-gallery/tests/snapshots/menus-icons-off.png" width="200" alt="menus-icons-off"></a><br>menus-icons-off</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/toolbars-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/toolbars-pop-dark.png" width="200" alt="toolbars-pop-dark"></a><br>toolbars-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/toolbars-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/toolbars-pop-light.png" width="200" alt="toolbars-pop-light"></a><br>toolbars-pop-light</td>
-    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/toolbars-compact.png"><img src="../crates/egui-pop-gallery/tests/snapshots/toolbars-compact.png" width="200" alt="toolbars-compact"></a><br>toolbars-compact</td>
   </tr>
   <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/toolbars-compact.png"><img src="../crates/egui-pop-gallery/tests/snapshots/toolbars-compact.png" width="200" alt="toolbars-compact"></a><br>toolbars-compact</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/toolbars-more.png"><img src="../crates/egui-pop-gallery/tests/snapshots/toolbars-more.png" width="200" alt="toolbars-more"></a><br>toolbars-more</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/palette-icons.png"><img src="../crates/egui-pop-gallery/tests/snapshots/palette-icons.png" width="200" alt="palette-icons"></a><br>palette-icons</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/dialogs-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/dialogs-pop-dark.png" width="200" alt="dialogs-pop-dark"></a><br>dialogs-pop-dark</td>
-    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/dialogs-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/dialogs-pop-light.png" width="200" alt="dialogs-pop-light"></a><br>dialogs-pop-light</td>
   </tr>
   <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/dialogs-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/dialogs-pop-light.png" width="200" alt="dialogs-pop-light"></a><br>dialogs-pop-light</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/dialogs-closable-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/dialogs-closable-pop-dark.png" width="200" alt="dialogs-closable-pop-dark"></a><br>dialogs-closable-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/dialogs-closable-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/dialogs-closable-pop-light.png" width="200" alt="dialogs-closable-pop-light"></a><br>dialogs-closable-pop-light</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/dialogs-movable-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/dialogs-movable-pop-dark.png" width="200" alt="dialogs-movable-pop-dark"></a><br>dialogs-movable-pop-dark</td>
-    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/dialogs-movable-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/dialogs-movable-pop-light.png" width="200" alt="dialogs-movable-pop-light"></a><br>dialogs-movable-pop-light</td>
   </tr>
   <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/dialogs-movable-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/dialogs-movable-pop-light.png" width="200" alt="dialogs-movable-pop-light"></a><br>dialogs-movable-pop-light</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/dialogs-clear-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/dialogs-clear-pop-dark.png" width="200" alt="dialogs-clear-pop-dark"></a><br>dialogs-clear-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/files-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/files-pop-dark.png" width="200" alt="files-pop-dark"></a><br>files-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/files-preview-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/files-preview-pop-dark.png" width="200" alt="files-preview-pop-dark"></a><br>files-preview-pop-dark</td>
+  </tr>
+  <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/files-resized-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/files-resized-pop-dark.png" width="200" alt="files-resized-pop-dark"></a><br>files-resized-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/toasts-long-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/toasts-long-pop-dark.png" width="200" alt="toasts-long-pop-dark"></a><br>toasts-long-pop-dark</td>
-  </tr>
-  <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/toasts-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/toasts-pop-dark.png" width="200" alt="toasts-pop-dark"></a><br>toasts-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/toasts-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/toasts-pop-light.png" width="200" alt="toasts-pop-light"></a><br>toasts-pop-light</td>
+  </tr>
+  <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/sliders-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/sliders-pop-dark.png" width="200" alt="sliders-pop-dark"></a><br>sliders-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/sliders-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/sliders-pop-light.png" width="200" alt="sliders-pop-light"></a><br>sliders-pop-light</td>
-  </tr>
-  <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/progress-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/progress-pop-dark.png" width="200" alt="progress-pop-dark"></a><br>progress-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/progress-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/progress-pop-light.png" width="200" alt="progress-pop-light"></a><br>progress-pop-light</td>
+  </tr>
+  <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/progress-reduced-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/progress-reduced-pop-dark.png" width="200" alt="progress-reduced-pop-dark"></a><br>progress-reduced-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/inputs-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/inputs-pop-dark.png" width="200" alt="inputs-pop-dark"></a><br>inputs-pop-dark</td>
-  </tr>
-  <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/inputs-pop-dark-compact.png"><img src="../crates/egui-pop-gallery/tests/snapshots/inputs-pop-dark-compact.png" width="200" alt="inputs-pop-dark-compact"></a><br>inputs-pop-dark-compact</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/inputs-pop-high-contrast.png"><img src="../crates/egui-pop-gallery/tests/snapshots/inputs-pop-high-contrast.png" width="200" alt="inputs-pop-high-contrast"></a><br>inputs-pop-high-contrast</td>
+  </tr>
+  <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/inputs-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/inputs-pop-light.png" width="200" alt="inputs-pop-light"></a><br>inputs-pop-light</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/progress-busy-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/progress-busy-pop-dark.png" width="200" alt="progress-busy-pop-dark"></a><br>progress-busy-pop-dark</td>
-  </tr>
-  <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/placeholders-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/placeholders-pop-dark.png" width="200" alt="placeholders-pop-dark"></a><br>placeholders-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/dialogs-kit-square.png"><img src="../crates/egui-pop-gallery/tests/snapshots/dialogs-kit-square.png" width="200" alt="dialogs-kit-square"></a><br>dialogs-kit-square</td>
+  </tr>
+  <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/sliders-kit-flat.png"><img src="../crates/egui-pop-gallery/tests/snapshots/sliders-kit-flat.png" width="200" alt="sliders-kit-flat"></a><br>sliders-kit-flat</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/builtins-kit-toggles.png"><img src="../crates/egui-pop-gallery/tests/snapshots/builtins-kit-toggles.png" width="200" alt="builtins-kit-toggles"></a><br>builtins-kit-toggles</td>
-  </tr>
-  <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/roles-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/roles-pop-dark.png" width="200" alt="roles-pop-dark"></a><br>roles-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/roles-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/roles-pop-light.png" width="200" alt="roles-pop-light"></a><br>roles-pop-light</td>
-    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/scoped-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/scoped-pop-dark.png" width="200" alt="scoped-pop-dark"></a><br>scoped-pop-dark</td>
-    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/scoped-kit-restyled.png"><img src="../crates/egui-pop-gallery/tests/snapshots/scoped-kit-restyled.png" width="200" alt="scoped-kit-restyled"></a><br>scoped-kit-restyled</td>
   </tr>
   <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/scoped-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/scoped-pop-dark.png" width="200" alt="scoped-pop-dark"></a><br>scoped-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/scoped-kit-restyled.png"><img src="../crates/egui-pop-gallery/tests/snapshots/scoped-kit-restyled.png" width="200" alt="scoped-kit-restyled"></a><br>scoped-kit-restyled</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/history-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/history-pop-dark.png" width="200" alt="history-pop-dark"></a><br>history-pop-dark</td>
   </tr>
 </table>

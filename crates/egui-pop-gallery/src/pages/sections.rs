@@ -6,8 +6,10 @@
 //! (one section set tall by hand, the next one down to its least) and
 //! a panel too short for its least heights, which scrolls as a whole,
 //! and a stack of a long windowed section over a list that scrolls
-//! itself. The playground changes the counts and the capitals, and
-//! forgets the layouts.
+//! itself. A last stack has titles that drag and stay where they are when
+//! folded, Ctrl held in a drag pulling the sections below as a block (the
+//! pointer profile's `gesture.sections.pull`). The playground changes the
+//! counts, the capitals and those two options, and forgets the layouts.
 
 use egui::{Stroke, Ui, vec2};
 use egui_pop::core::sections::{self, Layout, Section, Sections};
@@ -28,17 +30,23 @@ pub const SHORT: &str = "gallery.short";
 /// The stack of a windowed section and a list.
 pub const WINDOWED: &str = "gallery.windowed";
 
-/// The pretend panel's size.
-const PANEL: egui::Vec2 = vec2(230.0, 420.0);
+/// The stack whose titles drag and keep their place.
+pub const GRABBED: &str = "gallery.grabbed";
 
-/// The pushed stack's panel: as tall, narrower.
-const PUSHED_PANEL: egui::Vec2 = vec2(200.0, 420.0);
+/// The pretend panel's size.
+const PANEL: egui::Vec2 = vec2(165.0, 420.0);
+
+/// The pushed stack's panel: as tall, narrower (four columns share the page).
+const PUSHED_PANEL: egui::Vec2 = vec2(150.0, 420.0);
 
 /// The short panel: room for the bands and a little more.
-const SHORT_PANEL: egui::Vec2 = vec2(190.0, 150.0);
+const SHORT_PANEL: egui::Vec2 = vec2(150.0, 150.0);
 
 /// The windowed stack's panel: under the short one.
-const WINDOWED_PANEL: egui::Vec2 = vec2(190.0, 244.0);
+const WINDOWED_PANEL: egui::Vec2 = vec2(150.0, 244.0);
+
+/// The stack whose titles drag: narrow, as tall as the others.
+const GRABBED_PANEL: egui::Vec2 = vec2(150.0, 420.0);
 
 /// The pushed stack's layout: Inbox set tall, Drafts given way down to
 /// its least height, Sent taking what is left.
@@ -75,6 +83,10 @@ pub struct State {
     /// The windowed section's rows.
     pub lines: u64,
     pub capitals: bool,
+    /// The last stack's titles drag.
+    pub grab_titles: bool,
+    /// The last stack's titles stay where they are when folded.
+    pub keep_titles: bool,
     /// The list in the bare section.
     folders: ListState<usize>,
     /// What the user last did to the stack.
@@ -88,6 +100,8 @@ impl Default for State {
             shut: 12,
             lines: 5_000,
             capitals: true,
+            grab_titles: true,
+            keep_titles: true,
             folders: ListState::new(),
             last: None,
         }
@@ -105,11 +119,14 @@ pub fn playground(ui: &mut Ui, state: &mut State) {
     ui.add(egui::DragValue::new(&mut state.lines).range(0..=1_000_000))
         .labelled_by(l.id);
     widgets::checkbox(ui, &mut state.capitals, "Titles in capitals");
+    widgets::checkbox(ui, &mut state.grab_titles, "Titles drag");
+    widgets::checkbox(ui, &mut state.keep_titles, "Titles stay when folded");
     if ui.button("Forget the layout").clicked() {
         Layout::default().store(ui.ctx(), STACK);
         pushed_layout().store(ui.ctx(), PUSHED);
         Layout::default().store(ui.ctx(), SHORT);
         Layout::default().store(ui.ctx(), WINDOWED);
+        Layout::default().store(ui.ctx(), GRABBED);
         state.last = Some("Layout forgotten".into());
     }
 }
@@ -144,12 +161,13 @@ fn panel<R>(ui: &mut Ui, caption: &str, size: egui::Vec2, add: impl FnOnce(&mut 
 }
 
 pub fn show(ui: &mut Ui, state: &mut State) {
-    ui.label("Sections stacked in a panel: a click on a band (or Space and Enter, Left and Right) folds or opens it. The line between two open sections resizes them, with the pointer or Up and Down: the sections give way in turn, the nearest first, each down to its least height. A double click on that line (or Enter) drops the heights set by hand. Each section scrolls its own rows, a wheel stopping at their end; the layout is remembered.");
+    ui.label("Sections stacked in a panel: a click on a band (or Space and Enter, Left and Right) folds or opens it. The line between two open sections resizes them, with the pointer or Up and Down: the sections give way in turn, the nearest first, each down to its least height. A double click on that line (or Enter) drops the heights set by hand. With Ctrl held, a drag moves the sections below as a block, opening empty room under the last. In the last panel a title drags too, stays where it is when folded, and a double click on it gets the shares back. Each section scrolls its own rows, a wheel stopping at their end; the layout is remembered.");
     ui.add_space(Tokens::of(ui.ctx()).space.group);
     if Layout::load(ui.ctx(), PUSHED).is_none() {
         pushed_layout().store(ui.ctx(), PUSHED);
     }
     let (live, shut, lines, capitals) = (state.live, state.shut, state.lines, state.capitals);
+    let (grab, keep) = (state.grab_titles, state.keep_titles);
     let folders = &mut state.folders;
     let response = ui
         .horizontal_top(|ui| {
@@ -220,6 +238,23 @@ pub fn show(ui: &mut Ui, state: &mut State) {
                             });
                         });
                 });
+            });
+            panel(ui, "Titles drag and stay", GRABBED_PANEL, |ui| {
+                Sections::new(GRABBED)
+                    .capitals(capitals)
+                    .grab_titles(grab)
+                    .keep_titles(keep)
+                    .show(ui, |stack| {
+                        stack.section(Section::new("tickets", "Tickets").count(7), |ui| {
+                            rows(ui, "Ticket", 7, "");
+                        });
+                        stack.section(Section::new("reviews", "Reviews").count(4), |ui| {
+                            rows(ui, "Review", 4, "");
+                        });
+                        stack.section(Section::new("builds", "Builds").count(3), |ui| {
+                            rows(ui, "Build", 3, "");
+                        });
+                    });
             });
             response
         })
