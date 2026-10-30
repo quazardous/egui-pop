@@ -3075,7 +3075,7 @@ fn the_sections_page_folds_opens_and_resizes_its_sections() {
     assert!(h.query_by_label("Opened shut").is_some());
     assert!(h.query_by_label("Closed 1").is_some());
     // The line above Idle is a boundary between Live and Shut: dragged
-    // down, Live grows and Shut shrinks, each at least its least height.
+    // down, Live grows and Shut, the last, shrinks, the heights by hand.
     let before = laid_out(&h.ctx, STACK);
     let (live_h, shut_h) = (
         before[0].body.unwrap().height(),
@@ -3100,6 +3100,11 @@ fn the_sections_page_folds_opens_and_resizes_its_sections() {
     );
     assert!(live_after > live_h + 30.0, "{live_h} -> {live_after}");
     assert!((live_after + shut_after - live_h - shut_h).abs() < 1.0);
+    assert!(after[0].by_hand && !after[2].by_hand, "{after:?}");
+    // Resized, the boundary with the keyboard: its ring.
+    h.get_by_role_and_label(Role::Splitter, "Resize Live")
+        .focus();
+    h.run();
     h.snapshot("sections-resized-pop-dark");
     // A double click on it gives the heights back.
     let line = h
@@ -3109,6 +3114,7 @@ fn the_sections_page_folds_opens_and_resizes_its_sections() {
     h.run();
     assert!(h.query_by_label("Heights given back").is_some());
     let reset = laid_out(&h.ctx, STACK);
+    assert!(!reset[0].by_hand, "{reset:?}");
     assert!(
         (reset[0].body.unwrap().height() - reset[2].body.unwrap().height()).abs() < 1.0,
         "{reset:?}"
@@ -3116,6 +3122,223 @@ fn the_sections_page_folds_opens_and_resizes_its_sections() {
     // The layout is remembered: a new pass keeps it.
     h.run();
     assert_eq!(open(&h), [true, false, true]);
+}
+
+/// A drag on a splitter of the sections page, in steps, ending at `by`
+/// from where it began; the pointer stays down unless `drop`.
+fn drag_splitter(h: &mut Harness<'_, Gallery>, name: &str, by: f32, drop: bool) {
+    let a = h
+        .get_by_role_and_label(egui::accesskit::Role::Splitter, name)
+        .rect()
+        .center();
+    h.drag_at(a);
+    h.run();
+    move_pointer(h, a, by);
+    if drop {
+        h.drop_at(a + egui::vec2(0.0, by));
+        h.run();
+    }
+}
+
+fn move_pointer(h: &mut Harness<'_, Gallery>, a: egui::Pos2, by: f32) {
+    for i in 1..=4 {
+        h.hover_at(a + egui::vec2(0.0, by * i as f32 / 4.0));
+        h.run();
+    }
+}
+
+#[test]
+fn the_sections_page_pushes_and_the_border_follows_the_pointer() {
+    use egui::accesskit::Role;
+    use egui_pop::core::sections::laid_out;
+    use egui_pop_gallery::pages::sections::PUSHED;
+    let mut h = harness(options("pop-dark", Density::Comfortable, "sections"));
+    h.run();
+    let heights = |h: &Harness<'_, Gallery>| -> Vec<f32> {
+        laid_out(&h.ctx, PUSHED).iter().map(|s| s.height).collect()
+    };
+    // As the page shows it: Inbox tall by hand, Drafts at its least by
+    // hand, Sent taking what is left.
+    let start = laid_out(&h.ctx, PUSHED);
+    assert_eq!(
+        start.iter().map(|s| s.by_hand).collect::<Vec<_>>(),
+        [true, true, false]
+    );
+    let least = start[1].height;
+    let [inbox, _, sent] = heights(&h)[..] else {
+        panic!("three sections")
+    };
+    // Down: Drafts is at its least, so Sent gives, and the border stays
+    // under the pointer.
+    let line = h
+        .get_by_role_and_label(Role::Splitter, "Resize Inbox")
+        .rect();
+    let a = line.center();
+    h.drag_at(a);
+    h.run();
+    move_pointer(&mut h, a, 30.0);
+    let now = laid_out(&h.ctx, PUSHED);
+    assert!((now[0].height - inbox - 30.0).abs() < 1.0, "{now:?}");
+    assert!((now[2].height - sent + 30.0).abs() < 1.0, "{now:?}");
+    assert!((now[1].band.top() - start[1].band.top() - 30.0).abs() < 1.0);
+    // Further than the stack can give: a hard stop, every section below
+    // at its least.
+    h.hover_at(a + egui::vec2(0.0, 1000.0));
+    h.run();
+    let stop = heights(&h);
+    assert!(
+        (stop[1] - least).abs() < 0.1 && (stop[2] - least).abs() < 0.1,
+        "{stop:?}"
+    );
+    // Back up in the same drag: from where it began, so nothing drifted.
+    h.hover_at(a);
+    h.run();
+    let back = heights(&h);
+    assert!(
+        (back[0] - inbox).abs() < 1.0 && (back[2] - sent).abs() < 1.0,
+        "{back:?}"
+    );
+    // Up: Inbox gives and the first open section below takes it all;
+    // Sent does not move.
+    move_pointer(&mut h, a, -60.0);
+    let up = heights(&h);
+    assert!((up[0] - inbox + 60.0).abs() < 1.0, "{up:?}");
+    assert!((up[1] - least - 60.0).abs() < 1.0, "{up:?}");
+    assert!((up[2] - sent).abs() < 1.0, "{up:?}");
+    h.drop_at(a + egui::vec2(0.0, -60.0));
+    h.run();
+    // The drag below this boundary moves Drafts by hand, on what shows.
+    drag_splitter(&mut h, "Resize Drafts", 20.0, true);
+    let last = heights(&h);
+    assert!((last[1] - up[1] - 20.0).abs() < 1.0, "{last:?}");
+    assert!((last[2] - up[2] + 20.0).abs() < 1.0, "{last:?}");
+}
+
+#[test]
+fn the_sections_page_answers_the_keyboard() {
+    use egui::accesskit::Role;
+    use egui::{Key, Modifiers};
+    use egui_pop::core::sections::laid_out;
+    use egui_pop_gallery::pages::sections::PUSHED;
+    let mut h = harness(options("pop-dark", Density::Comfortable, "sections"));
+    h.run();
+    let height = |h: &Harness<'_, Gallery>, i: usize| laid_out(&h.ctx, PUSHED)[i].height;
+    // A boundary takes the focus: a splitter, its value the height above.
+    let line = h.get_by_role_and_label(Role::Splitter, "Resize Inbox");
+    let value = line.accesskit_node().numeric_value().unwrap() as f32;
+    assert!((value - height(&h, 0)).abs() < 0.1, "{value}");
+    line.focus();
+    h.run();
+    assert!(
+        h.get_by_role_and_label(Role::Splitter, "Resize Inbox")
+            .is_focused()
+    );
+    // Up and Down move it through the planner and keep the focus.
+    let (inbox, drafts, sent) = (height(&h, 0), height(&h, 1), height(&h, 2));
+    h.key_press(Key::ArrowUp);
+    h.run();
+    let step = inbox - height(&h, 0);
+    assert!(step > 0.0, "up shrinks the section above");
+    assert!(
+        (height(&h, 1) - drafts - step).abs() < 0.1,
+        "the one below grows"
+    );
+    assert!((height(&h, 2) - sent).abs() < 0.1, "the last stays");
+    assert!(
+        h.get_by_role_and_label(Role::Splitter, "Resize Inbox")
+            .is_focused()
+    );
+    h.key_press(Key::ArrowDown);
+    h.key_press(Key::ArrowDown);
+    h.run();
+    assert!((height(&h, 0) - inbox - step).abs() < 0.1);
+    assert!((height(&h, 1) - drafts).abs() < 0.1);
+    assert!((height(&h, 2) - sent + step).abs() < 0.1);
+    // Tab goes in reading order: the band below, its boundary, the next.
+    h.key_press(Key::Tab);
+    h.run();
+    assert!(h.get_by_label("Drafts, 5").is_focused());
+    h.key_press(Key::Tab);
+    h.run();
+    assert!(
+        h.get_by_role_and_label(Role::Splitter, "Resize Drafts")
+            .is_focused()
+    );
+    h.key_press(Key::Tab);
+    h.run();
+    assert!(h.get_by_label("Sent, 6").is_focused());
+    h.key_press_modifiers(Modifiers::SHIFT, Key::Tab);
+    h.run();
+    assert!(
+        h.get_by_role_and_label(Role::Splitter, "Resize Drafts")
+            .is_focused()
+    );
+    // Left folds a focused band, a second Left does nothing, Right opens.
+    let band = h.get_by_label("Sent, 6");
+    band.focus();
+    h.run();
+    let open = |h: &Harness<'_, Gallery>| laid_out(&h.ctx, PUSHED)[2].open;
+    assert!(open(&h));
+    h.key_press(Key::ArrowLeft);
+    h.run();
+    assert!(!open(&h));
+    assert!(
+        h.get_by_label("Sent, 6").is_focused(),
+        "the arrow keeps the focus"
+    );
+    h.key_press(Key::ArrowLeft);
+    h.run();
+    assert!(!open(&h));
+    h.key_press(Key::ArrowRight);
+    h.run();
+    assert!(open(&h));
+    assert_eq!(
+        h.get_by_label("Sent, 6")
+            .accesskit_node()
+            .data()
+            .is_expanded(),
+        Some(true)
+    );
+    // Enter on a boundary drops the heights set by hand, as a double click.
+    h.get_by_role_and_label(Role::Splitter, "Resize Inbox")
+        .focus();
+    h.run();
+    h.key_press(Key::Enter);
+    h.run();
+    assert!(
+        h.query_by_label("Heights given back").is_none(),
+        "another stack"
+    );
+    assert!(laid_out(&h.ctx, PUSHED).iter().all(|s| !s.by_hand));
+    egui_pop_test::assert_all_named(&h);
+}
+
+#[test]
+fn the_sections_page_scrolls_a_panel_too_short_and_no_other() {
+    use egui::Key;
+    use egui_pop::core::sections::laid_out;
+    use egui_pop_gallery::pages::sections::{PUSHED, SHORT};
+    let mut h = harness(options("pop-dark", Density::Comfortable, "sections"));
+    h.run();
+    let short = laid_out(&h.ctx, SHORT);
+    let top = short[0].band.top();
+    // Every section at its least, the stack taller than its panel.
+    assert!(short.iter().all(|s| s.open && !s.by_hand), "{short:?}");
+    assert!(short[2].body.unwrap().bottom() - top > 150.0, "{short:?}");
+    // A stack that fits fills its panel exactly.
+    let pushed = laid_out(&h.ctx, PUSHED);
+    let tall = pushed[2].body.unwrap().bottom() - pushed[0].band.top();
+    assert!((tall - 420.0).abs() < 1.0, "{tall}");
+    // The focus going to a section out of view scrolls the stack to it.
+    h.get_by_label("Outline, 4").focus();
+    h.run();
+    for _ in 0..2 {
+        h.key_press(Key::Tab);
+        h.run();
+    }
+    assert!(h.get_by_label("Timeline, 2").is_focused());
+    let scrolled = laid_out(&h.ctx, SHORT);
+    assert!(scrolled[0].band.top() < top, "{scrolled:?}");
 }
 
 #[test]
