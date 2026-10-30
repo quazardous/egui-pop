@@ -28,6 +28,8 @@
 //!   written from them;
 //! - [`panels`] and [`layout`]: declared panels, a saved arrangement and
 //!   its repair;
+//! - [`sections`]: how a stack of collapsible sections shares a panel,
+//!   and what a drag on a boundary between two of them does;
 //! - [`values`]: the value store (descriptors, writes with origins,
 //!   gestures, undo, listeners, settings);
 //! - [`doc`]: versioned documents and their migrations;
@@ -57,6 +59,7 @@ pub mod order;
 pub mod panels;
 pub mod pointer;
 pub mod registry;
+pub mod sections;
 pub mod tab;
 pub mod values;
 pub mod when;
