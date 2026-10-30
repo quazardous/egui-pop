@@ -12,6 +12,20 @@ publishes.
 
 ### Added
 
+- Stacked sections' gestures (egui-pop-model, egui-pop-core;
+  `docs/sections.md`, `docs/pointer-gestures.md`). `Sections::grab_titles`:
+  a press on a title that moves resizes as a boundary does, one that does
+  not folds, and a double click drops the heights set by hand.
+  `gesture.sections.pull`, in the new `surface:widget.sections` scope, bound
+  to `Ctrl+PrimaryDrag` in every pointer profile and rebindable in the
+  shortcuts editor (`DragMode::Pull`): a drag moves the sections below as a
+  block, keeping their heights, and pressing or releasing the keys during it
+  changes the mode with no jump. Empty room under the last section is kept
+  by `model::sections::fit` and in `Layout::empty`, until a drag takes it or
+  a double click drops it. `Sections::keep_titles`: folding or opening a
+  section leaves its title where it is (`model::sections::keep_title`). Both
+  options are off by default. `Laid` says the empty room and how a drag
+  resizes a section.
 - Stacked sections' rows and scroll (egui-pop-model, egui-pop-core;
   `docs/sections.md`): `Stack::rows` windows a section of rows of one
   height (`Section::row_height`, the theme's by default) through egui's
