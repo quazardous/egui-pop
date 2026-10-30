@@ -5323,6 +5323,16 @@ fn the_page_list_draws_its_bar_at_rest_in_a_short_window() {
     assert!(!bars.is_empty(), "no bar with no pointer over the list");
     // It leaves the longest title alone. A title out of view has no node,
     // and a row reaches under the bar: measured from where the text starts.
+    let (end, limit) = page_title_room(&h);
+    assert!(limit >= end, "{limit}, {end}");
+    h.snapshot("pages-short-pop-dark");
+}
+
+/// Where the page list's text starts and where the longest title ends, in the
+/// window's coordinates, and what stands in the way at rest: the row's end, or
+/// the list's bar.
+fn page_title_room(h: &Harness<'_, Gallery>) -> (f32, f32) {
+    let entry = list_entry(h, "Tokens table");
     let start = h
         .output()
         .shapes
@@ -5343,12 +5353,40 @@ fn the_page_list_draws_its_bar_at_rest_in_a_short_window() {
             })
         })
         .fold(0.0, f32::max);
-    assert!(
-        bars.iter().all(|r| r.left() >= start + longest),
-        "{bars:?}, {}",
-        start + longest
-    );
-    h.snapshot("pages-short-pop-dark");
+    let page = h.get_by_label("Surfaces").rect().left();
+    let limit = h
+        .output()
+        .shapes
+        .iter()
+        .filter_map(|clipped| match &clipped.shape {
+            egui::Shape::Rect(r) if r.fill.a() > 0 => Some(r.rect),
+            _ => None,
+        })
+        .filter(|r| r.left() > start && r.right() <= page)
+        .filter(|r| r.width() <= 12.0 && r.height() >= 20.0)
+        .map(|r| r.left())
+        .fold(entry.right(), f32::min);
+    (start + longest, limit)
+}
+
+#[test]
+fn no_page_title_is_clipped_in_any_theme() {
+    let mut cut = Vec::new();
+    let mut widest = 0.0_f32;
+    for theme in BUILT_IN_THEMES {
+        for density in Density::ALL {
+            let h = short_window_in(theme, density, "overview");
+            let (end, limit) = page_title_room(&h);
+            // What the side bar's width must be for this theme and density.
+            let width = egui_pop_gallery::shell::SIDE_BAR_WIDTH + end - limit;
+            widest = widest.max(width);
+            if end > limit {
+                cut.push(format!("{theme} {density:?}: {width:.1}"));
+            }
+        }
+    }
+    println!("the side bar needs {widest:.1}");
+    assert!(cut.is_empty(), "the side bar is too narrow in {cut:?}");
 }
 
 #[test]

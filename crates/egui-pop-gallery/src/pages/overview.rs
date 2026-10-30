@@ -33,13 +33,22 @@ pub fn playground(ui: &mut Ui, state: &mut State) {
 
 /// A swatch with its name, and its path when asked.
 fn named(ui: &mut Ui, state: &State, fill: Color32, name: &str, path: &str) {
-    ui.vertical(|ui| {
-        swatch(ui, fill, vec2(88.0, 40.0)).on_hover_text(path);
-        ui.label(name);
-        if state.show_paths {
-            ui.small(path);
-        }
+    // Its size asked for first: a wrapping row can then tell when to wrap.
+    ui.allocate_ui(vec2(88.0, 40.0), |ui| {
+        ui.vertical(|ui| {
+            swatch(ui, fill, vec2(88.0, 40.0)).on_hover_text(path);
+            ui.label(name);
+            if state.show_paths {
+                ui.small(path);
+            }
+        });
     });
+}
+
+/// A row of swatches wrapping at the page's edge, their tops in line.
+fn wrapped_row(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
+    let layout = egui::Layout::left_to_right(egui::Align::TOP).with_main_wrap(true);
+    ui.with_layout(layout, add);
 }
 
 pub fn show(ui: &mut Ui, state: &mut State) {
@@ -48,7 +57,7 @@ pub fn show(ui: &mut Ui, state: &mut State) {
         .auto_shrink([false, false])
         .show(ui, |ui| {
             section(ui, "Surfaces");
-            ui.horizontal_wrapped(|ui| {
+            wrapped_row(ui, |ui| {
                 let s = &t.surface;
                 for (fill, name, path) in [
                     (s.canvas, "canvas", "surface.canvas"),
@@ -67,7 +76,7 @@ pub fn show(ui: &mut Ui, state: &mut State) {
             text_samples(ui, &t);
 
             section(ui, "Accent");
-            ui.horizontal_wrapped(|ui| {
+            wrapped_row(ui, |ui| {
                 let a = &t.accent;
                 for (fill, name, path) in [
                     (a.default, "default", "accent.default"),
