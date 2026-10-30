@@ -9,6 +9,7 @@ use std::sync::{Arc, Mutex};
 
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
+use egui_pop_api::dialogs::DialogsPlugin;
 use egui_pop_api::links::{self, LinksPlugin, Policy, RecordingOpener, Request, Source};
 use egui_pop_api::{App, AppHandle};
 use egui_pop_views::viewer::{Docs, Fetch, Fetched, VIEWER, Viewer, ViewerPlugin};
@@ -43,6 +44,7 @@ impl Fetch for Net {
 
 fn plugins(docs: Docs, net: &Net) -> egui_pop_api::AppBuilder {
     App::builder()
+        .plugin(DialogsPlugin)
         .plugin(LinksPlugin::default().policy(Policy::default().docs_host("docs.example.org")))
         .plugin(
             ViewerPlugin::default()
@@ -62,6 +64,8 @@ fn viewer(app: &AppHandle) -> Arc<Viewer> {
 /// Opens a page as a click would and takes what the network brought.
 fn open(app: &AppHandle, target: &str) -> Value {
     links::open(app, Request::new(target));
+    // The page, then the images it asked for.
+    viewer(app).poll(app);
     viewer(app).poll(app);
     viewer(app).state()
 }
@@ -162,6 +166,7 @@ fn a_remote_page_reaches_no_local_image_however_it_is_spelled() {
         let app = app(Docs::new(), &net);
         let s = open(app.handle(), &page);
         assert_eq!(local_images(&s), Vec::<String>::new(), "{markdown}: {s}");
+        assert_eq!(s["dropped"].as_array().unwrap().len(), 1, "{markdown}: {s}");
     }
 }
 
@@ -244,7 +249,8 @@ fn what_a_remote_page_was_refused_shows_in_the_bar() {
     h.get_by_value(&format!(
         "Not shown here: {file}. Open outside shows the page whole."
     ));
-    h.get_by_value("Image not shown: a secret");
+    // Its alt text in place of the image (drawn in two runs of text).
+    assert!(h.query_all_by_value(": a secret").next().is_some());
 }
 
 #[test]
@@ -300,8 +306,9 @@ fn links_in_a_remote_page_go_through_the_links_service() {
     assert_eq!(records[0].target, "https://trusted.example/a");
     assert_eq!(records[0].source, Source::Content);
 
-    // A local file waits for the user, a command is refused: neither runs.
-    for (dest, status) in [(file.as_str(), "asked"), ("command:x", "refused")] {
+    // A local file waits for the user, a command fails with the reason:
+    // neither runs.
+    for (dest, status) in [(file.as_str(), "asked"), ("command:x", "failed")] {
         rec.clear();
         v.follow(h, dest, false);
         assert!(rec.records().is_empty(), "{dest}");
