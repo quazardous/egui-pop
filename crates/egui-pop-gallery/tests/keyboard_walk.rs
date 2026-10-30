@@ -582,12 +582,15 @@ fn a_side_areas_edge_lying_over_the_centre_is_no_stop() {
 }
 
 #[test]
-#[ignore = "keyboard survey item 8: an open menu's frame is a stop showing nothing"]
 fn a_menus_frame_is_no_stop() {
     let mut h = harness("overview");
     walk::press(&mut h, ALT_F);
     let walked = walk::walk(&mut h, TAB, 3);
     assert_ne!(walked.stops[1].name, "", "{walked}");
+    // Nor on the way back: the first item, then the menu's button.
+    let settings = walked.stops[1].name.clone();
+    assert_eq!(name(walk::press(&mut h, SHIFT_TAB)), settings, "{walked}");
+    assert_eq!(name(walk::press(&mut h, SHIFT_TAB)), "File", "{walked}");
 }
 
 // Dock separators (check 3).
@@ -903,7 +906,7 @@ fn alt_and_a_letter_opens_a_menu_tab_goes_in_and_escape_closes_it() {
     assert!(egui_pop_test::a11y_tree(&h).contains("Quit"));
     let walked = walk::walk(&mut h, TAB, 3);
     assert_eq!(walked.stops[0].name, "File", "{walked}");
-    assert!(walked.stops[2].name.starts_with("Settings"), "{walked}");
+    assert!(walked.stops[1].name.starts_with("Settings"), "{walked}");
     assert_eq!(walk::press(&mut h, ESCAPE), None);
     assert!(!egui_pop_test::a11y_tree(&h).contains("Quit"));
     assert_eq!(name(walk::press(&mut h, TAB)), "File");

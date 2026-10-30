@@ -28,6 +28,12 @@
 //! the focus back and egui is told to move on. That pass holds no key press for
 //! the widget to read. It follows egui's order: in a `tab::scope`, the order of
 //! drawing rather than the scope's own.
+//!
+//! upstream: egui 0.36's `Popup` senses `Sense::click()`, so a popup's frame is a
+//! stop with no role and no name (docs/upstream.md, "egui: a popup's frame is a
+//! Tab stop"), and nothing lets `MenuButton` or `ComboBox` say otherwise. So Tab
+//! landing on one moves on in the next pass, the way it was going. A focus put
+//! there by anything else is dropped. Remove with egui 0.37.
 
 use egui::{Context, FocusDirection, Id, Key, LayerId, Rect, Vec2, WidgetRect};
 
@@ -37,6 +43,10 @@ use crate::{focus, focus_mode, reveal};
 /// How long after a scroll (in passes) a widget going away went by that
 /// scroll: the row may leave a pass after the offset moved.
 const SCROLL_PASSES: u64 = 2;
+
+/// How long after Tab (in passes) the focus it moved lands: in its own pass,
+/// with Shift the next, one more going on from the place.
+const TAB_PASSES: u64 = 2;
 
 #[derive(Clone, Debug)]
 struct Place {
@@ -59,6 +69,11 @@ struct Keep {
     /// The widget given the focus back this pass, for Tab to go on from.
     anchor: Option<Id>,
     scrolled_at: Option<u64>,
+    /// When Tab was last pressed, and whether Shift was held.
+    tabbed: Option<(u64, bool)>,
+    /// A popup's frame holds the focus, to move on in the next pass, backwards
+    /// or not.
+    past_frame: Option<(Id, bool)>,
 }
 
 /// Puts egui back at the place, or holds back a Tab pressed with nothing
@@ -72,19 +87,23 @@ pub(crate) fn begin_pass(ctx: &Context) {
     if ctx.input(|i| i.is_scrolling() || i.smooth_scroll_delta != Vec2::ZERO) {
         s.scrolled_at = Some(pass(ctx));
     }
+    if let Some(back) = tab_pressed(ctx) {
+        s.tabbed = Some((pass(ctx), back));
+    }
     let focused = ctx.memory(|m| m.focused());
+    if let Some((frame, back)) = s.past_frame.take()
+        && focused == Some(frame)
+    {
+        ctx.memory_mut(|m| m.move_focus(direction(back)));
+        return;
+    }
     if let Some(back) = s.going.take()
         && focused.is_none()
         && let Some(id) = s.place.as_ref().map(|p| p.id)
     {
-        let direction = if back {
-            FocusDirection::Previous
-        } else {
-            FocusDirection::Next
-        };
         ctx.memory_mut(|m| {
             m.request_focus(id);
-            m.move_focus(direction);
+            m.move_focus(direction(back));
         });
         s.anchor = Some(id);
         return;
@@ -139,6 +158,18 @@ pub(crate) fn end_pass(ctx: &Context) {
     };
     let drawn = ctx.viewport(|v| v.this_pass.widgets.get(id).copied());
     if let Some(widget) = drawn {
+        if is_popup_frame(&widget) {
+            // Not a place. Tab long gone, or the frame is all it finds (a popup
+            // of text alone, and no stop in the window): let go.
+            match s.tabbed.filter(|&(at, _)| now <= at + TAB_PASSES) {
+                Some((_, back)) => {
+                    s.past_frame = Some((id, back));
+                    ctx.request_repaint();
+                }
+                None => ctx.memory_mut(|m| m.surrender_focus(id)),
+            }
+            return;
+        }
         let scopes = match s.place.take() {
             Some(place) if place.id == id => place.scopes,
             _ => focus::scopes_holding(ctx, id),
@@ -210,7 +241,20 @@ fn nearest(ctx: &Context, place: &Place) -> Option<Id> {
 
 /// A widget that can take the focus, other than `not`.
 fn is_stop(w: &WidgetRect, not: Id) -> bool {
-    w.id != not && w.enabled && w.sense.is_focusable()
+    w.id != not && w.enabled && w.sense.is_focusable() && !is_popup_frame(w)
+}
+
+/// The widget an `Area` makes of its own background, focusable only in a popup.
+fn is_popup_frame(w: &WidgetRect) -> bool {
+    w.id == w.layer_id.id.with("move")
+}
+
+fn direction(back: bool) -> FocusDirection {
+    if back {
+        FocusDirection::Previous
+    } else {
+        FocusDirection::Next
+    }
 }
 
 /// The pointer pressed or let go, or it moves the focus (hover mode).

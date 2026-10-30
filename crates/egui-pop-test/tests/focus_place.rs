@@ -9,7 +9,7 @@ use egui_kittest::kittest::Queryable as _;
 use egui_pop_core::focus;
 use egui_pop_core::theme::ThemeSpec;
 use egui_pop_test::themed;
-use egui_pop_test::walk::{self, ESCAPE, SHIFT_TAB, Stop, TAB};
+use egui_pop_test::walk::{self, ESCAPE, Press, SHIFT_TAB, Stop, TAB};
 
 fn page<'a>(ui: impl FnMut(&mut Ui) + 'a) -> Harness<'a> {
     let mut h = themed(&ThemeSpec::default(), vec2(300.0, 300.0), ui);
@@ -320,4 +320,87 @@ fn a_row_scrolled_away_hands_nothing_on_and_tab_goes_on_from_the_place() {
     let next = walk::press(&mut h, TAB).expect("Tab takes a row");
     assert!(next.name.starts_with("Row"), "{next}");
     assert!(next.visible, "{next}");
+}
+
+// A popup's frame is no stop (keyboard survey, item 8).
+
+/// A button opening a menu, a button after it.
+fn menu<'a>() -> Harness<'a> {
+    let mut h = page(|ui| {
+        let open = ui.button("Open");
+        egui::Popup::menu(&open).show(|ui| {
+            let _ = ui.button("One");
+            let _ = ui.button("Two");
+        });
+        let _ = ui.button("After");
+    });
+    reach(&mut h, "Open");
+    walk::press(&mut h, Press::key(Key::Enter));
+    h
+}
+
+#[test]
+fn tab_passes_over_a_popups_frame() {
+    let mut h = menu();
+    assert_eq!(name(walk::press(&mut h, TAB)), "One");
+    assert_eq!(name(walk::press(&mut h, TAB)), "Two");
+}
+
+#[test]
+fn shift_tab_passes_over_a_popups_frame() {
+    let mut h = menu();
+    assert_eq!(name(walk::press(&mut h, TAB)), "One");
+    assert_eq!(name(walk::press(&mut h, SHIFT_TAB)), "Open");
+    assert_eq!(name(walk::focused(&h)), "Open");
+}
+
+#[test]
+fn tab_passes_over_a_combo_boxs_frame() {
+    let mut choice = 0;
+    let mut h = page(move |ui| {
+        egui::ComboBox::from_label("Choice")
+            .selected_text("Pick")
+            .show_ui(ui, |ui| {
+                ui.selectable_value(&mut choice, 0, "First");
+                ui.selectable_value(&mut choice, 1, "Second");
+            });
+    });
+    walk::press(&mut h, TAB);
+    walk::press(&mut h, Press::key(Key::Enter));
+    assert!(h.query_by_label("Second").is_some(), "the list is open");
+    assert_eq!(name(walk::press(&mut h, TAB)), "First");
+}
+
+#[test]
+fn a_popup_with_no_stop_and_none_behind_it_lets_the_focus_go_and_settles() {
+    let mut h = page(|ui| {
+        let at = ui.label("Anchor");
+        egui::Popup::from_response(&at).show(|ui| ui.label("Text alone"));
+    });
+    h.key_press(Key::Tab);
+    assert!(h.try_run().is_ok(), "the focus does not go round for ever");
+    assert_eq!(walk::focused(&h), None);
+}
+
+#[test]
+fn focus_put_on_a_popups_frame_by_other_means_is_dropped() {
+    let frame: Shared<Option<Id>> = Arc::default();
+    let seen = frame.clone();
+    let mut h = page(move |ui| {
+        let open = ui.button("Open");
+        let shown = egui::Popup::menu(&open).show(|ui| {
+            let _ = ui.button("One");
+        });
+        *seen.lock().unwrap() = shown.map(|s| s.response.layer_id.id.with("move"));
+    });
+    reach(&mut h, "Open");
+    walk::press(&mut h, Press::key(Key::Enter));
+    // Long after the key that opened it.
+    for _ in 0..4 {
+        h.step();
+    }
+    let id = frame.lock().unwrap().expect("the menu is open");
+    h.ctx.memory_mut(|m| m.request_focus(id));
+    let _ = h.run_ok();
+    assert_eq!(walk::focused(&h), None);
 }

@@ -255,6 +255,21 @@ limit.
   on from it, and hands a removed widget's focus on before egui's own end of pass.
 - **Remove when**: egui's focus has a notion of the last place, or a successor.
 
+## egui: a popup's frame is a Tab stop
+
+- **Compensated**: `Popup` senses `Sense::click()` by default, so the frame of
+  every popup (`MenuButton`, `SubMenu`, `Popup::menu`, a context menu, a combo
+  box's list) is a focusable widget with no role and no name, showing nothing:
+  Tab goes from a menu's button to its frame, then to its first item. Only a
+  `Popup` built by hand can set another sense; `MenuButton`, `ComboBox` and
+  `Response::context_menu` have nowhere to say it. Reproduced on egui 0.36.2 with
+  the plugin off (`crates/egui-pop-test/tests/focus_place.rs` fails).
+- **Upstream**: fixed in egui 0.37.0, whose `Popup` senses `Sense::CLICK`.
+- **Workaround**: when the focus lands on a popup's frame, the focus plugin
+  moves it on in the next pass, the way Tab was going
+  (`// upstream:` in `crates/egui-pop-core/src/place.rs`).
+- **Remove when**: egui-pop moves to egui 0.37.
+
 ## egui: no side-effect free read of a widget's response
 
 - **Compensated**: `Context::read_response` runs the "clicked
