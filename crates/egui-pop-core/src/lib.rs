@@ -21,6 +21,7 @@
 //!   and split buttons, a dropdown) and the split button;
 //! - [`tab`]: Tab order in focus scopes (reading order, indices,
 //!   groups; cycling in a modal) and F6 between panels;
+//! - [`regions`]: F6 through a window's parts, built on focus scopes;
 //! - [`param`]: the editor a value descriptor calls for, in the three
 //!   binding modes;
 //! - [`slider`]: darktable-style sliders (soft and hard range, fine
@@ -86,6 +87,7 @@ pub mod placeholder;
 pub mod placement;
 pub mod pointer;
 pub mod progress;
+pub mod regions;
 mod reveal;
 pub mod scale;
 pub mod sections;
