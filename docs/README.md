@@ -103,7 +103,7 @@ of every crate with every feature on.
   input (placeholder, icons, prefix and suffix, a clear button, attached
   and split buttons, a dropdown), the field states every input shows
   (modified, required, invalid, disabled with a reason, read-only,
-  pending), Tab order per focus scope and F6 between panels; the survey
+  pending), Tab order per focus scope and F6 between regions; the survey
   behind them.
 - [The tree](tree.md): a live tree over a lazy, asynchronous source,
   edits at any time, selection, keyboard, drag and drop, rename, steps.
