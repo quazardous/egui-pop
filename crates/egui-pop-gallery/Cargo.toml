@@ -32,7 +32,8 @@ required-features = ["trace"]
 [dependencies]
 egui-pop = { workspace = true, features = ["viewport", "graph-yaml", "imaging", "views", "views-markdown", "views-html", "editors", "i18n", "platform"] }
 egui = { workspace = true, features = ["default_fonts"] }
-eframe = { workspace = true, features = ["default_fonts", "wgpu", "accesskit", "wayland", "x11", "links"] }
+# `persistence`: the folds, the sections and the layout survive a restart.
+eframe = { workspace = true, features = ["default_fonts", "wgpu", "accesskit", "wayland", "x11", "links", "persistence"] }
 serde_json.workspace = true
 # The files page's demo images, drawn and encoded at start.
 image = { workspace = true, features = ["png", "jpeg"] }

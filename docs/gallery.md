@@ -12,8 +12,9 @@ cargo run -p egui-pop-gallery -- --help
 Options: `--theme`, `--density` (`comfortable` or `compact`),
 `--accent`, `--reduced-motion`, `--page` (the page shown first),
 `--lang` (the language setting's default: `en`, `fr` or `system`),
-`--quit-after <frames>`, `--dump-debug` and `--detach <panel>` (a panel
-opened in a window of its own at start) for scripted runs, and
+`--quit-after <frames>`, `--dump-debug`, `--no-persistence` and
+`--detach <panel>` (a panel opened in a window of its own at start) for
+scripted runs, and
 `--platform` (the desktop's own platform services: a single instance
 answering `gallery://page/<name>` links, notifications, a tray icon, the
 global shortcut Ctrl+Alt+G, logs and crash reports in the user's state
@@ -34,6 +35,16 @@ pages with a scroll area of their own around nearly all of them (`overview`,
 `graph-file`, a canvas and the file beside it sized to what is left. A canvas in
 a scrolling page keeps the wheel over itself. A test walks every page in a short
 window.
+
+**What survives a restart** (eframe's `persistence`): the folds of the page list,
+the stacked sections, the panels' sizes and how far pages are scrolled (egui's
+memory), the workbench's layout, and on the desktop the window's size and place.
+They are in a file in the application's data directory, or in the browser's local
+storage for this origin on the web, where egui's memory is under its shared key
+`egui_memory_ron` and they are written when the page loses the focus and
+every 30 seconds. The page, the theme and the settings start over. `--size` wins
+over the size kept. `--no-persistence` or `--quit-after` run the gallery with
+nothing read and nothing kept, as `tools/wbox/app.sh` does.
 
 Pages: `overview` (the theme overview), `tokens`, `builtins` (egui's
 built-ins, and egui-pop's kit-drawn checkbox, radio, rows and chips), `roles` (layout by role: text roles, spacing by intent, cards and buttons by tone), `scoped` (egui's own buttons, toggles, combo box and text fields restyled by the kit in a scope), `theme-editor` (the theme editor), `fonts` (candidate font pairs side by side), `icons`, `indicators` (dots, badges, pips, flags, swatches), `sections` (collapsible sections stacked in a panel), `motion` (the motion clock), `values`, `history` (the application's history: its panel's list, a click jumping to a step), `sliders`, `inputs` (decorated inputs, field states and Tab order),

@@ -31,7 +31,10 @@ Options:
   --detach <panel>       open a panel and detach it into a window of its
                          own at start (gallery.notes, on the workbench
                          page)
-  --quit-after <frames>  exit by itself after this many frames
+  --no-persistence       neither read nor keep the folds, the sections and
+                         the layout of earlier runs, nor the window's place
+  --quit-after <frames>  exit by itself after this many frames (implies
+                         --no-persistence)
   --dump-debug           with --quit-after: print the debug bridge's
                          snapshot (event \"debug\") before quitting
   --help                 this text
@@ -58,6 +61,8 @@ pub struct Options {
     pub detach: Option<String>,
     /// Close the window after this many frames.
     pub quit_after: Option<u64>,
+    /// `--no-persistence`: nothing read from earlier runs, nothing kept.
+    pub no_persistence: bool,
     /// Print the JSON start and quit lines on stdout.
     pub announce: bool,
     /// Print the debug bridge's snapshot when quitting.
@@ -82,6 +87,7 @@ impl Default for Options {
             size: DEFAULT_SIZE,
             detach: None,
             quit_after: None,
+            no_persistence: false,
             announce: false,
             dump_debug: false,
             platform: false,
@@ -92,6 +98,12 @@ impl Default for Options {
 }
 
 impl Options {
+    /// Whether this run reads and keeps what earlier runs left. A scripted
+    /// run must start the same every time.
+    pub fn persists(&self) -> bool {
+        !self.no_persistence && self.quit_after.is_none()
+    }
+
     /// Reads the arguments (without the program name).
     pub fn parse<I, S>(args: I) -> Result<Options, String>
     where
@@ -127,6 +139,7 @@ impl Options {
                             .map_err(|_| format!("--quit-after: `{v}` is not a frame count"))?,
                     );
                 }
+                "--no-persistence" => o.no_persistence = true,
                 "--help" | "-h" => o.help = true,
                 other => return Err(format!("unknown option `{other}` (see --help)")),
             }
@@ -172,8 +185,10 @@ mod tests {
             "--wide-gamut",
             "--detach",
             "gallery.notes",
+            "--no-persistence",
         ])
         .unwrap();
+        assert!(o.no_persistence && !o.persists());
         assert_eq!(o.theme, "pop-light");
         assert_eq!(o.density, Density::Compact);
         assert_eq!(o.page, "tokens");
@@ -188,6 +203,8 @@ mod tests {
             Options::parse(Vec::<String>::new()).unwrap(),
             Options::default()
         );
+        assert!(Options::default().persists());
+        assert!(!Options::parse(["--quit-after", "1"]).unwrap().persists());
     }
 
     #[test]

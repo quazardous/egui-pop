@@ -21,7 +21,9 @@ here="$(cd "$(dirname "$0")" && pwd)"
 bin="${CARGO_TARGET_DIR:-$here/../../target}/release/egui-pop-gallery"
 out="${GALLERY_OUT:-$here/out}"
 mkdir -p "$out"
-args=(--theme "${GALLERY_THEME:-pop-dark}"
+# Every run the same, whatever an earlier one left.
+args=(--no-persistence
+      --theme "${GALLERY_THEME:-pop-dark}"
       --density "${GALLERY_DENSITY:-comfortable}"
       --page "${GALLERY_PAGE:-overview}")
 [ -n "${GALLERY_ACCENT:-}" ] && args+=(--accent "$GALLERY_ACCENT")

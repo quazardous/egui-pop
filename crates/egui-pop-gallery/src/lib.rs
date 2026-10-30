@@ -27,7 +27,7 @@ mod options;
 pub mod pages;
 pub mod shell;
 
-pub use options::{Options, USAGE};
+pub use options::{DEFAULT_SIZE, Options, USAGE};
 
 use pages::story::PagePlugin;
 
@@ -339,6 +339,10 @@ fn take_instance() -> Option<egui_pop::platform::instance::Instance> {
         .take()
 }
 
+/// Where the workbench's layout is kept, in eframe's storage: a file on the
+/// desktop, the browser's local storage on the web.
+const LAYOUT_KEY: &str = "gallery.layout";
+
 /// The gallery application: the egui-pop app, and the options of a
 /// scripted run.
 #[derive(Debug)]
@@ -348,6 +352,7 @@ pub struct Gallery {
     quit_after: Option<u64>,
     announce: bool,
     dump_debug: bool,
+    persists: bool,
 }
 
 impl Gallery {
@@ -381,6 +386,9 @@ impl Gallery {
             }
         }
         let gallery = Gallery::new(&cc.egui_ctx, options)?;
+        if let Some(storage) = cc.storage.filter(|_| gallery.persists) {
+            gallery.restore(storage);
+        }
         // What draws the interface, for About's version info.
         if let Some(rs) = cc.wgpu_render_state.as_ref()
             && let Some(about) = gallery.app.handle().service(&egui_pop::api::about::ABOUT)
@@ -392,8 +400,20 @@ impl Gallery {
         Ok(gallery)
     }
 
+    /// Puts back the layout kept by an earlier run. One no longer readable is
+    /// dropped; the workbench repairs one that does not fit today's panels.
+    pub fn restore(&self, storage: &dyn eframe::Storage) {
+        let kept = storage
+            .get_string(LAYOUT_KEY)
+            .and_then(|text| serde_json::from_str(&text).ok());
+        if let Some(layout) = kept {
+            self.app.handle().set_layout(layout);
+        }
+    }
+
     /// The gallery on a context, its theme installed.
     pub fn new(ctx: &egui::Context, options: Options) -> Result<Gallery, BuildError> {
+        let persists = options.persists();
         let app = builder(&options).build(ctx)?;
         // The theme asked for is shown, whatever the system's light or
         // dark mode: the switcher's "Mode" offers to follow it.
@@ -441,6 +461,7 @@ impl Gallery {
             quit_after: options.quit_after,
             announce: options.announce,
             dump_debug: options.dump_debug,
+            persists,
         })
     }
 
@@ -491,6 +512,21 @@ fn announce(line: &serde_json::Value) {
 impl eframe::App for Gallery {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         Gallery::logic(self, ctx);
+    }
+
+    /// The rest of what survives a restart is in egui's memory
+    /// ([`eframe::App::persist_egui_memory`]): the folds of the page list, the
+    /// stacked sections, the panels' sizes, how far pages are scrolled.
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        if self.persists
+            && let Ok(text) = serde_json::to_string(&self.app.handle().layout())
+        {
+            storage.set_string(LAYOUT_KEY, text);
+        }
+    }
+
+    fn persist_egui_memory(&self) -> bool {
+        self.persists
     }
 
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
