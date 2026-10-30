@@ -3559,6 +3559,97 @@ fn the_sections_page_scrolls_a_panel_too_short_and_no_other() {
     assert!(scrolled[0].band.top() < top, "{scrolled:?}");
 }
 
+/// Over `at`, a wheel's notches down (negative) or up, in one gesture so
+/// that egui does not smooth it over many passes.
+fn wheel_sections(h: &mut Harness<'_, Gallery>, at: egui::Pos2, notches: f32) {
+    let event = |delta, phase| egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Line,
+        delta: egui::vec2(0.0, delta),
+        modifiers: egui::Modifiers::NONE,
+        phase,
+    };
+    h.hover_at(at);
+    h.run();
+    h.event(event(0.0, egui::TouchPhase::Start));
+    h.event(event(notches, egui::TouchPhase::Move));
+    h.run();
+    h.event(event(0.0, egui::TouchPhase::End));
+    h.run();
+}
+
+#[test]
+fn the_sections_page_windows_a_long_section_and_a_list_keeps_its_own_scroll() {
+    use egui::accesskit::Role;
+    use egui_pop::core::sections::laid_out;
+    use egui_pop_gallery::pages::sections::WINDOWED;
+    let mut h = harness(options("pop-dark", Density::Comfortable, "sections"));
+    h.run();
+    let laid = laid_out(&h.ctx, WINDOWED);
+    assert_eq!(laid[0].key, "log");
+    let window = laid[0].window.clone().unwrap();
+    assert!(window.start == 0 && window.len() < 20, "{window:?}");
+    // By role and label: 5000 lines, and only those in view are there.
+    h.get_by_role_and_label(Role::Button, "Log, 5000");
+    assert!(h.query_by_label("Line 1").is_some());
+    assert!(h.query_by_label("Line 4000").is_none());
+    // Far down: another window of the same size.
+    let body = laid[0].body.unwrap().center();
+    let top = laid[0].band.top();
+    wheel_sections(&mut h, body, -2_000.0);
+    let laid = laid_out(&h.ctx, WINDOWED);
+    let far = laid[0].window.clone().unwrap();
+    assert!(far.start > 1_000 && far.len() < 20, "{far:?}");
+    assert!(h.query_by_label("Line 1").is_none());
+    assert_eq!(laid[0].band.top(), top);
+    // Then past the end: it stops there and the stack does not move.
+    wheel_sections(&mut h, body, -20_000.0);
+    assert!(h.query_by_label("Line 5000").is_some());
+    let end = laid_out(&h.ctx, WINDOWED);
+    wheel_sections(&mut h, body, -8.0);
+    let after = laid_out(&h.ctx, WINDOWED);
+    assert_eq!(after[0].scroll, end[0].scroll);
+    assert_eq!(after[0].band.top(), top);
+    h.snapshot("sections-scrolled-pop-dark");
+
+    // The list below scrolls itself, in a body with no scroll of ours.
+    assert!(h.query_by_label("Folders").is_some());
+    assert_eq!(after[1].window, None);
+    assert!(h.query_by_label("Folder 40").is_none());
+    let list = after[1].body.unwrap().center();
+    wheel_sections(&mut h, list, -200.0);
+    assert!(h.query_by_label("Folder 40").is_some());
+    let after = laid_out(&h.ctx, WINDOWED);
+    assert_eq!(after[1].band.top(), end[1].band.top(), "the stack stays");
+    assert_eq!(after[1].scroll, 0.0);
+}
+
+#[test]
+fn the_sections_page_stops_a_wheel_at_a_bodys_end_and_scrolls_a_stack_from_its_band() {
+    use egui_pop::core::sections::laid_out;
+    use egui_pop_gallery::pages::sections::SHORT;
+    let mut h = harness(options("pop-dark", Density::Comfortable, "sections"));
+    h.run();
+    let start = laid_out(&h.ctx, SHORT);
+    let top = start[0].band.top();
+    // The first section's rows overflow it: they scroll, to their end, and
+    // there it stops, though the stack around it could still go down.
+    let body = start[0].body.unwrap().center();
+    wheel_sections(&mut h, body, -40.0);
+    let end = laid_out(&h.ctx, SHORT);
+    assert!(end[0].scroll > 0.0, "{end:?}");
+    assert_eq!(end[0].band.top(), top);
+    wheel_sections(&mut h, body, -40.0);
+    let past = laid_out(&h.ctx, SHORT);
+    assert_eq!(past[0].scroll, end[0].scroll);
+    assert_eq!(past[0].band.top(), top, "the stack does not move");
+    // Over a band, the stack too tall takes the wheel, and the body stays.
+    let band = past[0].band.center();
+    wheel_sections(&mut h, band, -1.0);
+    let moved = laid_out(&h.ctx, SHORT);
+    assert!(moved[0].band.top() < top, "{moved:?}");
+    assert_eq!(moved[0].scroll, end[0].scroll);
+}
+
 #[test]
 fn the_progress_page_gives_values_and_ranges_and_still_frames() {
     use egui::accesskit::Role;

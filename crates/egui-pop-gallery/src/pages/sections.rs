@@ -4,15 +4,17 @@
 //! line between two open sections resizes them, and a double click on
 //! it drops the heights set by hand. Beside it, a stack already pushed
 //! (one section set tall by hand, the next one down to its least) and
-//! a panel too short for its least heights, which scrolls as a whole.
-//! The playground changes the counts and the capitals, and forgets the
-//! layouts.
+//! a panel too short for its least heights, which scrolls as a whole,
+//! and a stack of a long windowed section over a list that scrolls
+//! itself. The playground changes the counts and the capitals, and
+//! forgets the layouts.
 
 use egui::{Stroke, Ui, vec2};
-use egui_pop::core::sections::{Layout, Section, Sections};
+use egui_pop::core::sections::{self, Layout, Section, Sections};
 use egui_pop::core::ui::UiPop;
 use egui_pop::core::widgets;
 use egui_pop::theme::Tokens;
+use egui_pop::views::list::{ListRows, ListState, ListView};
 
 /// The stack's name: its memory, and what agents and tests read.
 pub const STACK: &str = "gallery.sessions";
@@ -23,6 +25,9 @@ pub const PUSHED: &str = "gallery.pushed";
 /// The stack in a panel too short for it.
 pub const SHORT: &str = "gallery.short";
 
+/// The stack of a windowed section and a list.
+pub const WINDOWED: &str = "gallery.windowed";
+
 /// The pretend panel's size.
 const PANEL: egui::Vec2 = vec2(230.0, 420.0);
 
@@ -31,6 +36,9 @@ const PUSHED_PANEL: egui::Vec2 = vec2(200.0, 420.0);
 
 /// The short panel: room for the bands and a little more.
 const SHORT_PANEL: egui::Vec2 = vec2(190.0, 150.0);
+
+/// The windowed stack's panel: under the short one.
+const WINDOWED_PANEL: egui::Vec2 = vec2(190.0, 244.0);
 
 /// The pushed stack's layout: Inbox set tall, Drafts given way down to
 /// its least height, Sent taking what is left.
@@ -41,12 +49,34 @@ fn pushed_layout() -> Layout {
     layout
 }
 
+/// The rows of the list in a bare section.
+#[derive(Debug)]
+struct Folders;
+
+impl ListRows<usize> for Folders {
+    fn len(&self) -> usize {
+        40
+    }
+
+    fn key(&self, row: usize) -> usize {
+        row
+    }
+
+    fn label(&self, row: usize) -> String {
+        format!("Folder {}", row + 1)
+    }
+}
+
 /// The page's state and the playground's options.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct State {
     pub live: u64,
     pub shut: u64,
+    /// The windowed section's rows.
+    pub lines: u64,
     pub capitals: bool,
+    /// The list in the bare section.
+    folders: ListState<usize>,
     /// What the user last did to the stack.
     pub last: Option<String>,
 }
@@ -56,7 +86,9 @@ impl Default for State {
         State {
             live: 3,
             shut: 12,
+            lines: 5_000,
             capitals: true,
+            folders: ListState::new(),
             last: None,
         }
     }
@@ -69,11 +101,15 @@ pub fn playground(ui: &mut Ui, state: &mut State) {
     let l = ui.label("Shut sessions");
     ui.add(egui::DragValue::new(&mut state.shut).range(0..=200))
         .labelled_by(l.id);
+    let l = ui.label("Log lines");
+    ui.add(egui::DragValue::new(&mut state.lines).range(0..=1_000_000))
+        .labelled_by(l.id);
     widgets::checkbox(ui, &mut state.capitals, "Titles in capitals");
     if ui.button("Forget the layout").clicked() {
         Layout::default().store(ui.ctx(), STACK);
         pushed_layout().store(ui.ctx(), PUSHED);
         Layout::default().store(ui.ctx(), SHORT);
+        Layout::default().store(ui.ctx(), WINDOWED);
         state.last = Some("Layout forgotten".into());
     }
 }
@@ -108,12 +144,13 @@ fn panel<R>(ui: &mut Ui, caption: &str, size: egui::Vec2, add: impl FnOnce(&mut 
 }
 
 pub fn show(ui: &mut Ui, state: &mut State) {
-    ui.label("Sections stacked in a panel: a click on a band (or Space and Enter, Left and Right) folds or opens it. The line between two open sections resizes them, with the pointer or Up and Down: the sections give way in turn, the nearest first, each down to its least height. A double click on that line (or Enter) drops the heights set by hand. Each section scrolls its own rows; the layout is remembered.");
+    ui.label("Sections stacked in a panel: a click on a band (or Space and Enter, Left and Right) folds or opens it. The line between two open sections resizes them, with the pointer or Up and Down: the sections give way in turn, the nearest first, each down to its least height. A double click on that line (or Enter) drops the heights set by hand. Each section scrolls its own rows, a wheel stopping at their end; the layout is remembered.");
     ui.add_space(Tokens::of(ui.ctx()).space.group);
     if Layout::load(ui.ctx(), PUSHED).is_none() {
         pushed_layout().store(ui.ctx(), PUSHED);
     }
-    let (live, shut, capitals) = (state.live, state.shut, state.capitals);
+    let (live, shut, lines, capitals) = (state.live, state.shut, state.lines, state.capitals);
+    let folders = &mut state.folders;
     let response = ui
         .horizontal_top(|ui| {
             let response = panel(ui, "Sized by the list", PANEL, |ui| {
@@ -143,17 +180,45 @@ pub fn show(ui: &mut Ui, state: &mut State) {
                     });
                 });
             });
-            panel(ui, "Too short: it scrolls", SHORT_PANEL, |ui| {
-                Sections::new(SHORT).capitals(capitals).show(ui, |stack| {
-                    stack.section(Section::new("open", "Open files").count(3), |ui| {
-                        rows(ui, "File", 3, "");
+            ui.vertical(|ui| {
+                panel(ui, "Too short: it scrolls", SHORT_PANEL, |ui| {
+                    Sections::new(SHORT).capitals(capitals).show(ui, |stack| {
+                        stack.section(Section::new("open", "Open files").count(3), |ui| {
+                            rows(ui, "File", 3, "");
+                        });
+                        stack.section(Section::new("outline", "Outline").count(4), |ui| {
+                            rows(ui, "Symbol", 4, "");
+                        });
+                        stack.section(Section::new("timeline", "Timeline").count(2), |ui| {
+                            rows(ui, "Change", 2, "");
+                        });
                     });
-                    stack.section(Section::new("outline", "Outline").count(4), |ui| {
-                        rows(ui, "Symbol", 4, "");
-                    });
-                    stack.section(Section::new("timeline", "Timeline").count(2), |ui| {
-                        rows(ui, "Change", 2, "");
-                    });
+                });
+                panel(ui, "Windowed, and a list", WINDOWED_PANEL, |ui| {
+                    let height = sections::row_height(ui);
+                    Sections::new(WINDOWED)
+                        .capitals(capitals)
+                        .show(ui, |stack| {
+                            stack.rows(
+                                Section::new("log", "Log").count(lines),
+                                lines as usize,
+                                move |ui, range| {
+                                    let width = ui.available_width();
+                                    for i in range {
+                                        ui.allocate_ui_with_layout(
+                                            vec2(width, height),
+                                            egui::Layout::left_to_right(egui::Align::Center),
+                                            |ui| ui.label(format!("Line {}", i + 1)),
+                                        );
+                                    }
+                                },
+                            );
+                            stack.bare(Section::new("folders", "Folders").count(40), |ui| {
+                                ListView::new("gallery.sections.folders")
+                                    .label("Folders")
+                                    .show(ui, folders, &mut Folders);
+                            });
+                        });
                 });
             });
             response
