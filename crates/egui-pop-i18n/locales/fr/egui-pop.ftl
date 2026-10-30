@@ -803,6 +803,12 @@ egui-pop-files-preview-loading = Chargement de l’aperçu…
 
 egui-pop-files-preview-none = Pas d’aperçu
 
+egui-pop-files-view-list = Liste
+
+egui-pop-files-view-grid = Grille
+
+egui-pop-files-thumbnail-size = Taille des vignettes
+
 egui-pop-files-selected = Sélection : { $count }
 
 egui-pop-files-selected-not-shown = Sélection : { $count } ({ $hidden } non affichés)

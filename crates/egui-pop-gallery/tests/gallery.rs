@@ -2877,6 +2877,28 @@ fn the_files_page_selects_several_and_says_what_a_folder_selected_means() {
 }
 
 #[test]
+fn the_files_page_shows_a_grid_of_thumbnails() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "files"));
+    h.run();
+    h.get_by_label("Open an image…").click();
+    settle_picker(&mut h);
+    h.get_by_label("Grid").click();
+    settle_thumbnails(&mut h);
+    assert!(h.query_by_label("harbour.png").is_some());
+    let picker = |h: &Harness<'_, Gallery>, what: &str| {
+        h.state().app.handle().debug_snapshot()["files"]["open"][0]["picker"][what].clone()
+    };
+    assert_eq!(picker(&h, "view"), "grid");
+    h.snapshot("files-grid-pop-dark");
+    // In the dialog, Ctrl and + are the thumbnails', not the interface's scale.
+    let (size, zoom) = (picker(&h, "thumbnail_size"), h.ctx.zoom_factor());
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::Plus);
+    settle_thumbnails(&mut h);
+    assert!(picker(&h, "thumbnail_size").as_f64() > size.as_f64());
+    assert_eq!(h.ctx.zoom_factor(), zoom);
+}
+
+#[test]
 fn the_files_page_previews_the_highlighted_file() {
     use egui_pop::model::commands::Origin;
     let root = egui_pop_gallery::pages::files::demo_folder();
@@ -2946,6 +2968,19 @@ fn settle_picker(h: &mut Harness<'_, Gallery>) {
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
     panic!("the picker did not settle");
+}
+
+/// Frames until the picker's grid has all it has in view.
+fn settle_thumbnails(h: &mut Harness<'_, Gallery>) {
+    for _ in 0..500 {
+        settle_picker(h);
+        let previews = h.state().app.handle().debug_snapshot()["files"]["previews"].clone();
+        if previews["queued"] == 0 && previews["running"].is_null() {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    panic!("the thumbnails did not settle");
 }
 
 /// The state of the open picker's preview (`none` without one).

@@ -12,6 +12,21 @@ publishes.
 
 ### Added
 
+- A thumbnail grid in the in-app file picker (egui-pop-api; `docs/files.md`).
+  With previews, a switch shows the entries as a list or as a grid of the
+  providers' images, a slider, `Ctrl`+wheel or `Ctrl` `+`/`-` setting their
+  size; both are remembered (`settings/files.view`,
+  `settings/files.thumbnail_size`). Only the cells in view ask for a thumbnail,
+  with a placeholder until it is made: `Previews::want` and
+  `Previews::thumbnail` are a queue for what a grid has in view, behind the
+  preview asked with `get`, what leaves the view leaving it, and the cache keeps
+  what is in view over its cap. In the grid the arrows move in two dimensions,
+  `Home` and `End` go to the ends, and Enter is the list's. The list is as it
+  was. The drawing of thumbnails moved down to `egui_pop_core::thumbnail`
+  (`egui_pop_viewport::thumbnail` re-exports it), with a new `ThumbnailGrid`
+  (where it scrolls, its height, a cell to bring into view, its columns) and
+  `Thumbnail::caption` and `Thumbnail::icon`; `thumbnail_grid`'s rows no longer
+  shift by a few points as it scrolls.
 - The focus comes into view (egui-pop-core; `docs/inputs.md`). With the focus
   plugin, which an application has, a widget focused by anything but the pointer
   (Tab, an arrow, a command, a screen reader) comes into view in the scroll areas

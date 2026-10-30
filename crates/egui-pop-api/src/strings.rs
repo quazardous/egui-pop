@@ -395,6 +395,11 @@ pub const FILES_FOLDER_SHOWN: StrKey = StrKey::new(
     "egui-pop-files-folder-shown",
     "Nothing selected: the button chooses the folder shown, { $name }",
 );
+/// The in-app picker's views, and the size of its thumbnails.
+pub const FILES_VIEW_LIST: StrKey = StrKey::new("egui-pop-files-view-list", "List");
+pub const FILES_VIEW_GRID: StrKey = StrKey::new("egui-pop-files-view-grid", "Grid");
+pub const FILES_THUMBNAIL_SIZE: StrKey =
+    StrKey::new("egui-pop-files-thumbnail-size", "Thumbnail size");
 pub const FILES_PREVIEW: StrKey = StrKey::new("egui-pop-files-preview", "Preview");
 pub const FILES_PREVIEW_RESIZE: StrKey =
     StrKey::new("egui-pop-files-preview-resize", "Resize the preview");
@@ -1262,6 +1267,9 @@ pub const ALL: &[StrKey] = &[
     FILES_REPLACE_DETAIL,
     FILES_REPLACE,
     FILES_REPLACE_NO_DIALOGS,
+    FILES_VIEW_LIST,
+    FILES_VIEW_GRID,
+    FILES_THUMBNAIL_SIZE,
     FILES_PREVIEW,
     FILES_PREVIEW_RESIZE,
     FILES_SELECTED,
