@@ -230,6 +230,90 @@ fn a_band_is_clicked_right_up_to_its_boundary_and_the_boundary_wins_at_the_line(
 }
 
 #[test]
+fn a_boundary_under_a_folded_section_resizes_the_first_open_one_above() {
+    // A open, B and C folded, D open.
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(300.0, 600.0))
+        .build_ui(|ui| {
+            Sections::new(NAME).show(ui, |stack| {
+                stack.section(Section::new("a", "Aa").min_height(40.0), |_| {});
+                stack.section(Section::new("b", "Bb").open(false), |_| {});
+                stack.section(Section::new("c", "Cc").open(false), |_| {});
+                stack.section(Section::new("d", "Dd").min_height(40.0), |_| {});
+            });
+        });
+    h.run();
+    let start = laid_out(&h.ctx, NAME);
+    // Three lines, all named after the section they resize, one a stop.
+    let lines = h
+        .get_all_by_role_and_label(Role::Splitter, "Resize Aa")
+        .count();
+    assert_eq!(lines, 3);
+    for (at, line) in [(1, 30.0), (2, -30.0), (3, 30.0), (3, -30.0)] {
+        // Each line: drag it by this much, and it stays under the pointer.
+        let before = laid_out(&h.ctx, NAME);
+        let a = egui::pos2(before[at].band.center().x, before[at].band.top());
+        h.drag_at(a);
+        h.run();
+        h.hover_at(a + egui::vec2(0.0, line));
+        h.run();
+        let now = laid_out(&h.ctx, NAME);
+        assert!(
+            (now[0].height - before[0].height - line).abs() < 1.0,
+            "{at} {now:?}"
+        );
+        assert!(
+            (now[3].height - before[3].height + line).abs() < 1.0,
+            "{at} {now:?}"
+        );
+        assert!(
+            (now[at].band.top() - before[at].band.top() - line).abs() < 1.0,
+            "{at} {now:?}"
+        );
+        // No section goes up as the line goes down.
+        if line > 0.0 {
+            for (n, b) in now.iter().zip(&before) {
+                assert!(n.band.top() >= b.band.top() - 0.1, "{at} {now:?}");
+            }
+        }
+        h.drop_at(a + egui::vec2(0.0, line));
+        h.run();
+    }
+    assert_ne!(start, laid_out(&h.ctx, NAME));
+}
+
+#[test]
+fn with_nothing_open_above_a_line_is_no_boundary() {
+    // A folded, B open: the line above B moves nothing; it folds nothing.
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(300.0, 600.0))
+        .build_ui(|ui| {
+            Sections::new(NAME).show(ui, |stack| {
+                stack.section(Section::new("a", "Aa").open(false), |_| {});
+                stack.section(Section::new("b", "Bb"), |_| {});
+                stack.section(Section::new("c", "Cc"), |_| {});
+            });
+        });
+    h.run();
+    assert_eq!(
+        h.query_all_by_role_and_label(Role::Splitter, "Resize Aa")
+            .count(),
+        0
+    );
+    let before = laid_out(&h.ctx, NAME);
+    let a = egui::pos2(before[1].band.center().x, before[1].band.top());
+    h.drag_at(a);
+    h.run();
+    h.hover_at(a + egui::vec2(0.0, 40.0));
+    h.run();
+    h.drop_at(a + egui::vec2(0.0, 40.0));
+    h.run();
+    let after = laid_out(&h.ctx, NAME);
+    assert_eq!(after[1].height, before[1].height);
+    assert_eq!(after[1].band, before[1].band);
+}
+
+#[test]
 fn the_debug_bridge_says_each_height_and_whether_it_is_set_by_hand() {
     let mut h = harness(600.0);
     let mut layout = Layout::default();

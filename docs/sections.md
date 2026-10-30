@@ -50,10 +50,12 @@ The heights' arithmetic is in `egui_pop::model::sections`, without egui:
   open one therefore sit at the panel's bottom. Each body keeps its least
   height.
 - **Resize.** The line above a band is a boundary when an open section
-  lies just above it and another one below it. It follows the pointer in
-  both directions, from the heights at the start of the drag, so it does
-  not drift and gives back what it took when the pointer returns. Nothing
-  gives way in proportion:
+  lies above it and another one below it. It resizes the first open
+  section above, past any folded ones: the line under a folded section
+  and the line above it do the same, and the folded bands between follow.
+  It follows the pointer in both directions, from the heights at the
+  start of the drag, so it does not drift and gives back what it took
+  when the pointer returns. Nothing gives way in proportion:
   - **Down:** the sections between the boundary and the last shrink, the
     nearest first, each down to its least; then the last does. The drag
     stops once the whole stack is at its least.
@@ -63,8 +65,9 @@ The heights' arithmetic is in `egui_pop::model::sections`, without egui:
   - Folded sections are skipped. A section that gives way or moves gets
     a height of its own; one the list would not move stays in the list.
 - **Keyboard.** A boundary takes the focus in reading order, after the
-  section above it. Up and Down move it by a row, by the same rules;
-  Enter drops the heights set by hand.
+  open section above it; the lines under folded sections do not, as they
+  would be a second stop for the same pair. Up and Down move it by a
+  row, by the same rules; Enter drops the heights set by hand.
 - **Reset.** A double click on a boundary drops the heights set by hand.
 - **A panel too short.** Sections sized by the list give way first, down
   to their least; then those set by hand, from the bottom up. The last
@@ -129,9 +132,10 @@ The mark, the title and the count are `space.inline` apart.
 
 - A band is a button named by its title and its count ("Live, 3"),
   expanded or not.
-- A boundary is a splitter named after the section above it ("Resize
-  Live", the `egui-pop-section-resize` string), focusable, with its
-  increment and decrement actions. Its value is the height of that
+- A boundary is a splitter named after the section it resizes ("Resize
+  Live", the `egui-pop-section-resize` string), with its increment and
+  decrement actions; the one above a folded band takes the focus, and
+  the lines under folded bands carry the same name. Its value is the height of that
   section's body, between its least and how far the stack lets it grow.
 - `sections::laid_out(ctx, name)` gives each section as drawn on the
   last pass: key, title, count, open, height, whether that height is set

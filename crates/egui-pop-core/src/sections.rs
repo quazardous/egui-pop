@@ -12,9 +12,10 @@
 //!   open section always takes what is left. Each keeps a least height
 //!   (two rows by default, [`Section::min_height`]) and scrolls its own
 //!   body.
-//! - The line above a band, between two open sections, is a boundary. It
-//!   follows the pointer when dragged, or moves by a row with Up and Down
-//!   while it has the keyboard. Sections give way in turn, the nearest
+//! - The line above a band, between two open sections, is a boundary (the
+//!   first open section above is the one it resizes, past any folded
+//!   ones). It follows the pointer when dragged, or moves by a row with
+//!   Up and Down while it has the keyboard. Sections give way in turn, the nearest
 //!   first, never in proportion, and it stops once they are all at their
 //!   least (`egui_pop_model::sections`). A double click, or Enter, drops
 //!   the heights set by hand.
@@ -371,6 +372,7 @@ impl Sections {
             })
             .collect();
         let keys: Vec<String> = sections.iter().map(|(s, _)| s.key.clone()).collect();
+        let open: Vec<bool> = asked.iter().map(|a| a.open).collect();
 
         let room = ui.available_rect_before_wrap();
         let finite = room.height().is_finite();
@@ -408,15 +410,26 @@ impl Sections {
                 // A boundary is registered between the section above it
                 // and the band under it, so Tab reaches it in reading
                 // order; the band leaves it the room it would otherwise
-                // win under the pointer.
-                if i > 0 && asked[i - 1].open && asked[i..].iter().any(|a| a.open) {
+                // win under the pointer. Under a folded section it resizes
+                // the first open one above, as the line above that folded
+                // section does, which alone takes the focus: one stop per
+                // pair of open sections.
+                let above = i
+                    .checked_sub(1)
+                    .and_then(|line| model::resized_above(&open, line));
+                if let Some(above) = above.filter(|_| asked[i..].iter().any(|a| a.open)) {
                     let edge = Rect::from_x_y_ranges(band.x_range(), y - reach..=y + reach);
                     hit.min.y = (hit.min.y + reach).min(hit.max.y);
                     let id = base.with(("boundary", &laid[i - 1].key));
-                    let r = ui.interact(edge, id, Sense::click_and_drag());
-                    let title = &laid[i - 1].title;
+                    let sense = if above == i - 1 {
+                        Sense::click_and_drag()
+                    } else {
+                        Sense::CLICK | Sense::DRAG
+                    };
+                    let r = ui.interact(edge, id, sense);
+                    let title = &laid[above].title;
                     let name = strings::tr_args(&ctx, &SECTION_RESIZE, &[("section", title)]);
-                    name_boundary(&ctx, &r, &name, &stack, i - 1);
+                    name_boundary(&ctx, &r, &name, &stack, above);
                     if overflows && r.gained_focus() {
                         r.scroll_to_me(None);
                     }
@@ -428,7 +441,7 @@ impl Sections {
                         &r,
                         &self.name,
                         &stack,
-                        i - 1,
+                        above,
                         &mut layout,
                         &mut response,
                     );
