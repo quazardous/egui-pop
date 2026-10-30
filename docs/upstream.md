@@ -36,13 +36,19 @@ limit.
   when `selectable_labels` is on (egui's default), whose AccessKit
   update (`update_accesskit_for_text_widget`, with `Role::Label`)
   overwrites the role: screen readers, and tests looking for a link by
-  its role, see a plain label.
-- **Upstream**: not filed yet.
+  its role, see a plain label. On egui 0.36.2, `ui.link` and
+  `ui.hyperlink_to` report `Label` with selectable labels on and `Link`
+  with them off. A link scrolled out of view keeps `Link`, as its text
+  is not drawn. Links drawn by egui_commonmark in the viewer's pages
+  keep the limit too.
+- **Upstream**: fixed by <https://github.com/emilk/egui/pull/8574>,
+  released in egui 0.37.0; nothing to file.
 - **Workaround**: `egui_pop::api::links::Link` sets the role back to
   `Link` on the node after drawing it (`crates/egui-pop-api/src/links.rs`).
   egui's own `Hyperlink` on the built-in widgets page keeps the
   limit.
-- **Remove when**: the text selection keeps the role the widget gave.
+- **Remove when**: the bump to egui 0.37 (the text selection keeps the
+  role the widget gave).
 
 ## egui_kittest: no double click from queued events
 
