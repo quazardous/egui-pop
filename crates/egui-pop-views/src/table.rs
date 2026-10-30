@@ -37,12 +37,13 @@
 //! }
 //! ```
 
-use egui::{Id, Rect, Response, Sense, Ui, WidgetInfo, WidgetType};
+use egui::{Id, Response, Sense, Ui, WidgetInfo, WidgetType};
 use egui_pop_api::AppHandle;
 use egui_pop_api::steps::Outcome;
 use egui_pop_core::binding::SharedStore;
-use egui_pop_core::kit::{Glyph, Kit, KitCx, Part, State};
+use egui_pop_core::kit::{Kit, KitCx, Part, State};
 use egui_pop_core::strings::{tr, tr_args};
+use egui_pop_core::widgets::SortHeader;
 use egui_pop_model::commands::Origin;
 use egui_pop_model::ids::OwnerId;
 use egui_pop_model::values::{Change, DeclareError, Descriptor, Set, Value};
@@ -641,53 +642,13 @@ impl<K: Key> TableDelegate for Delegate<'_, K> {
             Some(_) => tr_args(ui.ctx(), &s::SORTED_UP, &[("column", &c.title)]),
             None => c.title.clone(),
         };
-        let sense = if c.sortable {
-            Sense::click()
-        } else {
-            Sense::hover()
-        };
-        let r = ui.interact(rect, ui.id().with("sort"), sense);
-        let kind = if c.sortable {
-            WidgetType::Button
-        } else {
-            WidgetType::Label
-        };
-        r.widget_info(move || WidgetInfo::labeled(kind, true, &name));
-        let state = State::REST
-            .with(State::HOVER, c.sortable && r.hovered())
-            .with(State::ACTIVE, c.sortable && r.is_pointer_button_down_on())
-            .with(State::SELECTED, sorted.is_some());
-        let font = egui::TextStyle::Body.resolve(ui.style());
-        let galley = ui
-            .painter()
-            .layout_no_wrap(c.title.clone(), font, egui::Color32::PLACEHOLDER);
-        let cell = &self.kit.table_header_cell;
-        let cx = KitCx {
-            painter: ui.painter(),
-            ppp: ui.ctx().pixels_per_point(),
-        };
-        let part = Part {
-            rect,
-            room: rect,
-            state,
-            label: Some(&galley),
-        };
-        cell.paint_part(&cx, &part);
-        // The sort direction: the kit's glyph, after the title.
-        if let Some(s) = sorted {
-            let glyph = self.kit.glyph(if s.descending {
-                Glyph::SortDescending
-            } else {
-                Glyph::SortAscending
-            });
-            let label = cell.label_rect(&part, galley.size());
-            let side = galley.size().y;
-            let at = Rect::from_min_size(
-                egui::pos2(label.right() + side * 0.25, label.top()),
-                egui::vec2(side, side),
-            );
-            glyph.paint(ui.painter(), at, cell.style(state).text);
+        let r = SortHeader {
+            title: &c.title,
+            name: &name,
+            descending: sorted.map(|s| s.descending),
+            sortable: c.sortable,
         }
+        .show(ui, &self.kit, rect, ui.id().with("sort"));
         if c.sortable && r.clicked() {
             self.sort_to = Some(Sort::next(self.sort, &c.id));
         }
