@@ -159,6 +159,15 @@ stop is left to egui, whose Tab order is the order of drawing; a
 focused widget that takes the keys itself (a terminal) keeps Tab and
 F6.
 
+### What is no stop
+
+A widget that would show nothing focused and answers no key senses without
+`FOCUSABLE`: `Sense::CLICK | Sense::DRAG` or `Sense::DRAG` rather than
+`Sense::click_and_drag()` or `Sense::drag()`. egui-pop's window caption and its
+flyout's edge do so. With the focus plugin, Tab passes over the frame
+of a popup (a menu, a context menu, a combo box's list), which egui 0.36 makes a
+stop. A side area's resize line is still one, as egui draws it.
+
 ### The focus keeps its place
 
 With the focus plugin (`focus::install`; an application has it), the focus
