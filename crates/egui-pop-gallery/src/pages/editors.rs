@@ -162,7 +162,7 @@ fn text_page(ui: &mut Ui, app: &AppHandle, state: &EditorState, log: &mut Log) {
     let out = TextSurface::new()
         .label("Notes")
         .app(app)
-        .height(220.0)
+        .height(super::fitted_height(ui, 220.0))
         .status(true)
         .show(ui, state);
     for s in &out.signals {
@@ -460,7 +460,7 @@ fn code_page(ui: &mut Ui, app: &AppHandle, p: &mut CodePage) {
     let out = CodeEditor::new()
         .label("main.rs")
         .app(app)
-        .height(320.0)
+        .height(super::fitted_height(ui, 320.0))
         .show(ui, &p.state);
     for s in &out.signals {
         p.log.push(describe(s));

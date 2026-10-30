@@ -14,6 +14,15 @@ tabs and splits over [egui_dock](https://github.com/Adanos020/egui_dock),
 saves where the user put them and repairs that layout at the next start.
 The shell's side bar, main and inspector zones are panels of their areas.
 
+**Bare panels.** A shell panel is declared `bare` (`PanelSpec::bare`): alone in
+its area it is drawn plainly, with no tab bar and no scroll area from anyone. What
+its blocks draw past its end is cut, and nothing says so. Beside another panel the
+same content is in a tab, and egui_dock gives a tab's body a scroll area on both
+axes. So a block in `SIDE_BAR`, `MAIN` or `INSPECTOR` that may run long brings its
+own scroll area, and one sized to what it is given stays inside it: a viewport
+filling `MAIN` must not scroll. The gallery shows both: its pages get a scroll area
+each, but for those filling the zone themselves (`shell::FILLS_THE_ZONE`).
+
 ![The gallery's Workbench page: Outline beside the side bar, Properties
 beside the inspector, Console and Notes in the bottom
 panel](screenshots/workbench-pop-dark.png)

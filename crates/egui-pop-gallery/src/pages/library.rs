@@ -453,7 +453,7 @@ fn library(ui: &mut Ui, app: &AppHandle, p: &mut PageState, thumbs: &Thumbs) {
             .label("Images")
             .app(app)
             .keymap(keymap.clone())
-            .height(300.0)
+            .height(super::fitted_height(ui, 300.0))
             .show(ui, &mut p.state, &items, thumbs)
             .signals;
         signals.extend(
@@ -542,7 +542,7 @@ fn compare(ui: &mut Ui, p: &mut PageState, thumbs: &Thumbs) {
     let out = CompareView::new("gallery.compare")
         .synced(p.synced)
         .best(p.best)
-        .height(360.0)
+        .height(super::fitted_height(ui, 360.0))
         .show(ui, &mut p.compare, &panes, thumbs);
     if let Some(k) = out.best {
         p.best = Some(k);

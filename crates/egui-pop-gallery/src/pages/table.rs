@@ -265,7 +265,7 @@ fn show(ui: &mut Ui, app: &AppHandle, p: &mut PageState) {
         .mode(Mode::Multiple)
         .app(app)
         .store(&store, PREFIX)
-        .height(260.0)
+        .height(super::fitted_height(ui, 260.0))
         .show(ui, &mut p.table, &mut p.photos);
     if out.sorted || !p.sorted_once {
         p.photos.sort(p.table.sort());

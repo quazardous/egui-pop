@@ -5256,9 +5256,23 @@ fn escape_leaves_a_text_field_then_zen_mode() {
 
 /// The gallery in a window too short for its page list.
 fn short_window(page: &str) -> Harness<'static, Gallery> {
-    let options = options("pop-dark", Density::Comfortable, page);
+    short_window_in("pop-dark", Density::Comfortable, page)
+}
+
+/// [`short_window`], in a theme and a density.
+fn short_window_in(theme: &str, density: Density, page: &str) -> Harness<'static, Gallery> {
+    sized_window(theme, density, page, 420.0)
+}
+
+fn sized_window(
+    theme: &str,
+    density: Density,
+    page: &str,
+    height: f32,
+) -> Harness<'static, Gallery> {
+    let options = options(theme, density, page);
     let mut h = Harness::builder()
-        .with_size(egui::vec2(1100.0, 420.0))
+        .with_size(egui::vec2(1100.0, height))
         .shared_wgpu()
         .build_eframe(move |cc| {
             egui_pop::core::motion::freeze(&cc.egui_ctx, 0.0);
@@ -5372,6 +5386,302 @@ fn the_page_list_keeps_the_page_chosen_by_keys_in_view() {
     let cursors = title(&h, "cursors");
     let entry = list_entry(&h, &cursors);
     assert!(in_list_view(&h, entry), "{cursors} at {entry:?}");
+}
+
+/// The page shown, as drawn last.
+fn page_view(h: &Harness<'_, Gallery>) -> egui_pop_gallery::shell::PageView {
+    let nav = h
+        .state()
+        .app
+        .handle()
+        .service(&egui_pop_gallery::shell::NAV);
+    nav.unwrap().view().expect("a page was drawn")
+}
+
+/// The vertical scroll bars of a window, as drawn last.
+fn vertical_bars<S>(h: &Harness<'_, S>) -> Vec<egui::Rect> {
+    h.query_all_by_role(egui::accesskit::Role::ScrollBar)
+        .map(|n| n.rect())
+        .filter(|r| r.height() > r.width())
+        .collect()
+}
+
+/// Bars standing side by side over most of a view's height: two scrollings of
+/// the same thing, as far as anyone looking can tell.
+fn double_bars(bars: &[egui::Rect], view: egui::Rect) -> Vec<(egui::Rect, egui::Rect)> {
+    let mut double = Vec::new();
+    for (i, a) in bars.iter().enumerate() {
+        for b in &bars[i + 1..] {
+            let close = (a.right() - b.right()).abs() < 24.0;
+            let shared = a.intersect(*b).intersect(view).height();
+            if close && shared > 0.75 * view.height() {
+                double.push((*a, *b));
+            }
+        }
+    }
+    double
+}
+
+#[test]
+fn double_bars_are_told_from_a_list_in_a_page() {
+    let nested = |inner: f32| {
+        let mut h = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(300.0, 300.0))
+            .build_ui(move |ui| {
+                egui::ScrollArea::vertical()
+                    .id_salt("outer")
+                    .auto_shrink(false)
+                    .show(ui, |ui| {
+                        egui::ScrollArea::vertical()
+                            .id_salt("inner")
+                            .max_height(inner)
+                            .auto_shrink(false)
+                            .show(ui, |ui| ui.allocate_space(egui::vec2(50.0, 2000.0)));
+                        ui.allocate_space(egui::vec2(50.0, 2000.0));
+                    });
+            });
+        h.run();
+        let bars = vertical_bars(&h);
+        assert_eq!(bars.len(), 2, "{bars:?}");
+        double_bars(
+            &bars,
+            egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(300.0, 300.0)),
+        )
+        .len()
+    };
+    assert_eq!(nested(290.0), 1);
+    assert_eq!(nested(100.0), 0);
+}
+
+/// The lowest texts of a page in a window tall enough for all of it, the lowest
+/// first: what the page ends with. Those of a list windowing its rows come and
+/// go, hence a few.
+fn page_ends_with(theme: &str, density: Density, page: &str) -> Vec<String> {
+    let mut h = sized_window(theme, density, page, 2400.0);
+    run_page(&mut h, page);
+    let zone = page_view(&h).zone;
+    let mut named: Vec<(f32, String)> = h
+        .root()
+        .children_recursive()
+        .filter_map(|n| {
+            let node = n.accesskit_node();
+            let b = node.bounding_box()?;
+            let center = egui::pos2((b.x0 + b.x1) as f32 / 2.0, (b.y0 + b.y1) as f32 / 2.0);
+            zone.contains(center)
+                .then_some((b.y1 as f32, node.label()?))
+        })
+        .filter(|(_, label)| !label.is_empty())
+        .collect();
+    named.sort_by(|a, b| b.0.total_cmp(&a.0));
+    let unique = |label: &String| h.query_all_by_label(label).count() == 1;
+    named
+        .into_iter()
+        .map(|(_, label)| label)
+        .filter(unique)
+        .take(8)
+        .collect()
+}
+
+/// A page in a short window: its last content comes into view, the shell's
+/// scroll or the page's own bringing it there, or the page fits; and no two
+/// bars stand side by side. Says whether the shell's scroll had anything to do.
+fn check_short_page(theme: &str, density: Density, page: &str) -> Result<bool, String> {
+    use egui::scroll_area::State;
+    let end = page_ends_with(theme, density, page);
+    let mut h = short_window_in(theme, density, page);
+    run_page(&mut h, page);
+    let view = page_view(&h);
+    let double = double_bars(&vertical_bars(&h), view.zone);
+    if !double.is_empty() {
+        return Err(format!("{page}: two bars side by side: {double:?}"));
+    }
+    let mut scrolls = false;
+    match view.scroll {
+        None => {
+            if view.content.bottom() > view.zone.bottom() + 1.0 {
+                return Err(format!(
+                    "{page} is marked as filling the zone and runs past it: {:?} in {:?}",
+                    view.content, view.zone
+                ));
+            }
+        }
+        Some(id) => {
+            scrolls = view.content.height() > view.zone.height() + 1.0;
+            let mut state = State::load(&h.ctx, id).expect("the page's scroll");
+            state.offset = egui::Vec2::splat(100_000.0);
+            state.store(&h.ctx, id);
+            let _ = h.run_ok();
+            let at_end = page_view(&h);
+            if at_end.content.bottom() > at_end.zone.bottom() + 1.0
+                || at_end.content.right() > at_end.zone.right() + 1.0
+            {
+                return Err(format!(
+                    "{page}: at the end of its scroll, {:?} still runs past {:?}",
+                    at_end.content, at_end.zone
+                ));
+            }
+        }
+    }
+    // From the end of the shell's scroll, a scroll inside the page brings the
+    // last text the rest of the way: egui gives such a request to the innermost
+    // scroll area alone.
+    let mut seen_end = end.is_empty();
+    for end in &end {
+        let Some(node) = h.query_all_by_label(end).next() else {
+            continue;
+        };
+        node.scroll_to_me();
+        // Through its animation.
+        for _ in 0..40 {
+            h.step();
+        }
+        let Some(node) = h.query_all_by_label(end).next() else {
+            continue;
+        };
+        let r = node.rect();
+        let zone = page_view(&h).zone;
+        let seen = r.intersect(zone).height().max(0.0);
+        // Above the view is no matter: the page goes on below it, where this
+        // text's lower neighbours have no name of their own.
+        if r.bottom() > zone.bottom() + 4.0 && seen + 4.0 < r.height().min(zone.height()) {
+            return Err(format!("{page}: `{end}` at {r:?} stays below {zone:?}"));
+        }
+        seen_end = true;
+        break;
+    }
+    // The image grid windows its rows down to the page's end: the scroll above
+    // says for it that the end comes.
+    if !seen_end && page != "images" {
+        return Err(format!("{page}: none of its last texts is drawn: {end:?}"));
+    }
+    let diagnostics = h.state().app.handle().diagnostics();
+    if !diagnostics.is_empty() {
+        return Err(format!("{page}: {diagnostics:?}"));
+    }
+    Ok(scrolls)
+}
+
+fn every_page_ends_in_a_short_window(theme: &str, density: Density) {
+    let mut problems = Vec::new();
+    let mut scrolling = 0;
+    for page in PAGES {
+        match check_short_page(theme, density, page) {
+            Ok(true) => scrolling += 1,
+            Ok(false) => {}
+            Err(problem) => problems.push(problem),
+        }
+    }
+    assert!(
+        problems.is_empty(),
+        "{theme} {density:?}:\n{}",
+        problems.join("\n")
+    );
+    // Not all of it for nothing: most pages are longer than this window.
+    assert!(scrolling >= 25, "only {scrolling} pages scrolled");
+}
+
+#[test]
+fn every_page_ends_in_a_short_window_in_pop_dark() {
+    every_page_ends_in_a_short_window("pop-dark", Density::Comfortable);
+}
+
+#[test]
+fn every_page_ends_in_a_short_window_in_pop_high_contrast() {
+    every_page_ends_in_a_short_window("pop-high-contrast", Density::Comfortable);
+}
+
+#[test]
+fn every_playground_ends_in_a_short_window() {
+    let mut problems = Vec::new();
+    for page in PAGES {
+        let mut h = short_window(page);
+        run_page(&mut h, page);
+        let nav = h
+            .state()
+            .app
+            .handle()
+            .service(&egui_pop_gallery::shell::NAV);
+        let nav = nav.unwrap();
+        let view = nav.playground_view().expect("a playground was drawn");
+        let id = view.scroll.expect("every playground scrolls");
+        let mut state = egui::scroll_area::State::load(&h.ctx, id).expect("its scroll");
+        state.offset.y = 100_000.0;
+        state.store(&h.ctx, id);
+        let _ = h.run_ok();
+        let view = nav.playground_view().expect("a playground was drawn");
+        if view.content.bottom() > view.zone.bottom() + 1.0 {
+            problems.push(format!("{page}: {:?} past {:?}", view.content, view.zone));
+        }
+    }
+    assert!(problems.is_empty(), "{problems:?}");
+}
+
+#[test]
+fn a_page_scrolls_by_the_wheel_in_a_short_window_and_a_canvas_keeps_it() {
+    use egui::scroll_area::State;
+    let offset = |h: &Harness<'_, Gallery>| {
+        let id = page_view(h).scroll.expect("the page's scroll");
+        State::load(&h.ctx, id).expect("its state").offset.y
+    };
+    // Hover asks for frames here, for a tooltip: no `Harness::run`.
+    let wheel = |h: &mut Harness<'_, Gallery>, at: egui::Pos2, notches: f32| {
+        let event = |delta, phase| egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Line,
+            delta: egui::vec2(0.0, delta),
+            modifiers: egui::Modifiers::NONE,
+            phase,
+        };
+        h.hover_at(at);
+        let _ = h.run_ok();
+        h.event(event(0.0, egui::TouchPhase::Start));
+        h.event(event(notches, egui::TouchPhase::Move));
+        let _ = h.run_ok();
+        h.event(event(0.0, egui::TouchPhase::End));
+        let _ = h.run_ok();
+    };
+    let mut h = short_window("settings");
+    assert_eq!(offset(&h), 0.0);
+    // At the page's left edge: no field there takes the wheel.
+    let over = page_view(&h).zone.left_center() + egui::vec2(4.0, 0.0);
+    wheel(&mut h, over, -200.0);
+    let view = page_view(&h);
+    assert!(offset(&h) > 0.0);
+    assert!(
+        view.content.bottom() <= view.zone.bottom() + 1.0,
+        "{view:?}"
+    );
+    assert!(!vertical_bars(&h).is_empty());
+    h.snapshot("page-short-pop-dark");
+    // The wheel over a node graph pans it: its page stays.
+    let mut h = short_window("node-graph");
+    let over = h.get_by_label("Processing graph").rect().center();
+    wheel(&mut h, over, -3.0);
+    assert_eq!(offset(&h), 0.0);
+}
+
+#[test]
+fn a_page_keeps_its_scroll_per_page() {
+    use egui::scroll_area::State;
+    let mut h = short_window("settings");
+    let settings = page_view(&h).scroll.expect("the page's scroll");
+    let mut state = State::load(&h.ctx, settings).expect("its state");
+    state.offset.y = 40.0;
+    state.store(&h.ctx, settings);
+    h.run();
+    // The next page starts at its top, and back, the page is where it was.
+    h.key_press_modifiers(egui::Modifiers::ALT, egui::Key::ArrowDown);
+    h.run();
+    let next = page_view(&h).scroll;
+    assert_ne!(next, Some(settings));
+    if let Some(next) = next {
+        assert_eq!(State::load(&h.ctx, next).expect("its state").offset.y, 0.0);
+    }
+    h.key_press_modifiers(egui::Modifiers::ALT, egui::Key::ArrowUp);
+    h.run();
+    assert_eq!(
+        State::load(&h.ctx, settings).expect("its state").offset.y,
+        40.0
+    );
 }
 
 /// How many nodes bear a page's title: its row, and its heading when shown.

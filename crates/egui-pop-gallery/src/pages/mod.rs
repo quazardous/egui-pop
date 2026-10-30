@@ -64,6 +64,15 @@ pub mod viewport;
 pub mod workbench;
 pub mod zones;
 
+/// The height of a list or an editor in a page: `wanted`, and less when little
+/// of the view is left, as in a short window. A list with a bar of its own
+/// stays clearly shorter than the view, so that it never stands as tall as the
+/// page's bar, right beside it.
+pub(crate) fn fitted_height(ui: &Ui, wanted: f32) -> f32 {
+    const LEAST: f32 = 120.0;
+    ui.available_height().clamp(LEAST.min(wanted), wanted)
+}
+
 /// A section title with the theme's section spacing above it.
 pub(crate) fn section(ui: &mut Ui, title: &str) {
     ui.space_role(Space::Section);
