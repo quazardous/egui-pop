@@ -1,6 +1,7 @@
 # Collapsible sections
 
-Status: second version (2026-10-30): heights set by hand and the push.
+Status: third version (2026-10-30): windowed rows and the wheel contained,
+after heights set by hand and the push.
 
 A stack of collapsible sections fills a panel: each section is a title
 band (a disclosure mark, a title, a count) over its own scrolling body.
@@ -30,7 +31,12 @@ fn sessions(ui: &mut egui_pop::egui::Ui, live: &[String]) {
 - `Section::new(key, title)`: the key is what the layout remembers;
   `count(n)` puts a count on the band (`99+` past 99),
   `min_height(points)` its body's least height (two rows by default),
-  `open(false)` folds it until the user opens it.
+  `row_height(points)` its rows' height (the theme's by default,
+  `sections::row_height`), `open(false)` folds it until the user opens it.
+- Three kinds of body: `stack.section(section, |ui| ...)` draws anything
+  in a scroll area, `stack.rows(section, count, |ui, range| ...)` draws
+  windowed rows in one, and `stack.bare(section, |ui| ...)` leaves the
+  scroll to an application's own view.
 - `show` returns what the user did this pass (`toggled`, `resized`,
   `reset`) and the layout after it.
 
@@ -76,6 +82,30 @@ The heights' arithmetic is in `egui_pop::model::sections`, without egui:
   least heights do not fit, the whole stack scrolls, with a scrollbar
   shown then only.
 - **Scroll.** Each body scrolls on its own.
+- **Windowed rows.** `stack.rows` goes through egui's
+  `ScrollArea::show_rows`: its closure is given the rows in view and one
+  past them, and draws those alone, each exactly the row's height, with no
+  spacing between them, as a list's. The
+  window is worked out again on every pass, so it follows the section's
+  size, its scroll and its count, with no blank row left: when the rows
+  under a scroll shrink, the stack asks for a pass by itself. Nothing is
+  kept around the window, as a row is cheap to draw on the pass it comes
+  into view.
+- **Least height with rows.** Two rows, or all of them when there are
+  fewer (none: a band alone). `min_height` still wins.
+- **A body without scroll area.** `stack.bare` gives an application's own
+  scrolling view the whole body, clipped to it, as `views::List`, which
+  in a scroll area would nest two scrolls.
+- **The wheel.** A wheel pushing past the end of a body's scroll stops
+  there: neither the stack nor anything around it moves. So does one over
+  a bare body, always: the stack cannot see whether the view inside has
+  anywhere to go. Over a band, or a body with nothing to scroll, it
+  scrolls a stack too tall, which would otherwise have nowhere to take a
+  wheel; a stack with nowhere to go leaves it to what is around it, as
+  that is no section's scroll. The contract is that nothing moves, not
+  that nothing is drawn: eframe repaints on every wheel event
+  (`egui-winit` answers each with `repaint: true`), so a widget cannot
+  promise a pass is saved.
 - **Remembered.** Which sections are folded, and the heights set by hand,
   are kept in egui's persisted memory under the stack's name, so they
   come back with the window's layout. `Layout::load` and `Layout::store`
@@ -102,6 +132,7 @@ Windows Explorer's navigation pane and Qt (`QToolBox`, `QSplitter`):
 | Panel too short | VS Code's split view scrolls as a whole, its scrollbar when needed. Qt clips | Scrolls as a whole, the scrollbar then only |
 | Double click on the boundary | VS Code gives the views equal sizes again. `QSplitter` does nothing | The heights set by hand dropped: equal again, as VS Code |
 | Double click on the header | JetBrains maximises a tool window. VS Code folds then opens again | Two clicks, as VS Code: no maximise |
+| Wheel at the end of a view | VS Code's lists keep it by default, even with nothing to scroll (`alwaysConsumeMouseWheel` in `listView.ts`). The web hands it to the page unless `overscroll-behavior: contain` | Kept, as VS Code, by a body with a scroll to end. A body with nothing to scroll hands it on, so that a stack too tall still takes a wheel over short sections |
 | Remembered | Fold and sizes, per workspace (VS Code, JetBrains), and the folded sidebar sections (Finder) | Fold and heights set by hand, with the window's layout |
 | Count | VS Code shows a badge on a view's header (Source Control's changes) | A pill after the title |
 | Titles | VS Code: capitals, small and bold | The same by default (`capitals`) |
@@ -114,9 +145,7 @@ Departures, on purpose or not yet done:
   are). Sections cannot be maximised or moved out of the stack either.
 
 Not yet: a drag and a double click on the title, as an option; Ctrl held
-in a drag, pulling the sections below as a block; windowed rows in a
-section, a body without its scroll area, and a wheel stopping at the end
-of a section's scroll.
+in a drag, pulling the sections below as a block.
 
 ## The kit
 
@@ -139,11 +168,13 @@ The mark, the title and the count are `space.inline` apart.
   section's body, between its least and how far the stack lets it grow.
 - `sections::laid_out(ctx, name)` gives each section as drawn on the
   last pass: key, title, count, open, height, whether that height is set
-  by hand, band and body rectangles. The debug bridge's `state` collector
-  lists it as `core.sections.laid`, each section's height and whether it
-  is set by hand in its summary.
+  by hand, band and body rectangles, how far its body is scrolled and,
+  when windowed, the rows drawn. The debug bridge's `state` collector
+  lists it as `core.sections.laid`, each section's height, whether it is
+  set by hand and its window in its summary.
 - The gallery's `sections` page has its tests and snapshots: a stack
-  sized by the list, one already pushed, and a panel too short.
+  sized by the list, one already pushed, a panel too short, and a stack
+  of a long windowed section over a `views::List`.
 
 ## Survey: adopt, wrap or own
 

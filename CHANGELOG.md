@@ -12,6 +12,15 @@ publishes.
 
 ### Added
 
+- Stacked sections' rows and scroll (egui-pop-model, egui-pop-core;
+  `docs/sections.md`): `Stack::rows` windows a section of rows of one
+  height (`Section::row_height`, the theme's by default) through egui's
+  `show_rows`, drawing those in view alone, its least height two rows or
+  all of them when fewer. `Stack::bare` leaves a body without a scroll
+  area, for an application's own scrolling view. A wheel past the end of
+  a body's scroll now stops there, moving neither the stack nor a parent;
+  over a band, or a body with nothing to scroll, it still scrolls a stack
+  too tall. `Laid` says how far a body is scrolled and which rows it drew.
 - Stacked sections push (egui-pop-model, egui-pop-core; `docs/sections.md`):
   a boundary now moves the stack as a code editor's split view does. Its
   sections have heights set by hand, in points, the others sharing the
