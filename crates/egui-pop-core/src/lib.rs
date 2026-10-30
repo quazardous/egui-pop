@@ -84,6 +84,7 @@ pub mod placeholder;
 pub mod placement;
 pub mod pointer;
 pub mod progress;
+mod reveal;
 pub mod scale;
 pub mod sections;
 pub mod slider;

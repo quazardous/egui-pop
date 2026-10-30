@@ -394,8 +394,10 @@ pub fn take_moved(ctx: &Context) -> Option<Moved> {
 
 /// Installs the focus plugin on a context (once; later calls do
 /// nothing): Escape leaves a text input before anything else sees it,
-/// see [the order](self#escape-in-order), and the keys typed with an
-/// AccessKit `Focus` action reach the field it focuses.
+/// see [the order](self#escape-in-order), the keys typed with an AccessKit
+/// `Focus` action reach the field it focuses, and a widget the keyboard
+/// focuses comes into view in the scroll areas around it, nested ones
+/// included (the pointer's focus leaves them where they are).
 pub fn install(ctx: &Context) {
     // Once per context, whichever window asks.
     let st = shared::<State>(ctx, "core.focus");
@@ -483,6 +485,10 @@ impl egui::plugin::Plugin for FocusPlugin {
     fn input_hook(&mut self, ctx: &Context, input: &mut egui::RawInput) {
         hold_after_accesskit_focus(ctx, input);
         escape(ctx, input);
+    }
+
+    fn on_begin_pass(&mut self, ui: &mut Ui) {
+        crate::reveal::begin_pass(ui.ctx());
     }
 }
 
