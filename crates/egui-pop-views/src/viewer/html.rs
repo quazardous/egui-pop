@@ -12,8 +12,9 @@
 //! - **Addresses**: a link or an image keeps its address when it is
 //!   relative or its scheme is allowed (`page::schemes`); otherwise a link
 //!   stays as plain text and an image as its alt text (`javascript:`,
-//!   `data:`, however spelled: the address is read as a browser would). A
-//!   `file:` image refused is named in [`Html::dropped`].
+//!   `data:`, however spelled: the address is read as a browser would). An
+//!   image refused that the viewer could read (`page::IMAGE_SCHEMES`) is
+//!   named in [`Html::dropped`].
 //! - **Elements**: what is mapped is drawn; an element from [`DROPPED`] (a
 //!   script, a form, a frame, a video, foreign SVG or MathML) goes with
 //!   its content and is named in [`Html::dropped`]; a template's content
@@ -33,7 +34,7 @@ use html5ever::interface::{ElemName, ElementFlags, NodeOrText, QuirksMode, TreeS
 use html5ever::tendril::{StrTendril, TendrilSink};
 use html5ever::{Attribute, LocalName, Namespace, QualName, ns};
 
-use super::page::escape;
+use super::page::{IMAGE_SCHEMES, escape};
 
 /// Elements dropped with their content; each found is named to the user,
 /// who can open the page outside.
@@ -111,8 +112,8 @@ pub(super) struct Html {
     pub markdown: String,
     /// Its `<title>`.
     pub title: Option<String>,
-    /// The elements dropped with their content and the `file:` images
-    /// refused, each once, sorted.
+    /// The elements dropped with their content and the images refused,
+    /// each once, sorted.
     pub dropped: Vec<String>,
 }
 
@@ -573,9 +574,9 @@ impl Reader<'_> {
                         let refused = self
                             .attr(node, "src")
                             .and_then(|src| url::Url::parse(src.trim()).ok())
-                            .filter(|u| u.scheme() == "file");
-                        if let Some(file) = refused {
-                            self.dropped.insert(file.to_string());
+                            .filter(|u| IMAGE_SCHEMES.contains(&u.scheme()));
+                        if let Some(image) = refused {
+                            self.dropped.insert(image.to_string());
                         }
                         run.text(&alt);
                     }

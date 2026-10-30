@@ -1211,6 +1211,14 @@ publishes.
   nothing and answered no key. They work as before with the pointer. With the
   focus plugin, Tab and Shift+Tab pass over the frame of a popup, a menu's, a
   context menu's or a combo box's list, so File's first item is one Tab from File. A side area's resize line is still a stop.
+- A page in the viewer reads fewer images (egui-pop-views; ADR 0017). A page
+  from the network no longer reads the files the application ships: its `docs:`
+  images show their alt text and are named in the bar over the page and in
+  `viewer.state`'s `dropped`, like its `file:` images; its links to `docs:`
+  pages stay. A policy removing `http` or `https` now holds back a markdown
+  page's images too, which only HTML pages did, and HTML pages name what it
+  held back. An indented code block no longer loses its indent when drawn,
+  which made its text an image or a link no check had read.
 - A data table scrolled out of a scroll area around it no longer panics
   (egui-pop-views).
 - A row a tree or a list is asked to bring into view before its first pass

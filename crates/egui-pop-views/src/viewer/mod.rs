@@ -38,8 +38,7 @@
 //!   images show their alt text and are named on the page and in
 //!   `viewer.state`.
 //! - **Failures** show an error page in place (not found, no connection,
-//!   too large, a type it cannot show) with Retry, Open outside and Copy
-//!   link.
+//!   too large, a type it cannot show) with Retry, Open outside and Copy link.
 //! - **Agents** read the viewer through `viewer.state` and the `viewer`
 //!   collector (the page, its status or error, the history, the search,
 //!   the zoom, the images waiting and the hosts allowed) and drive it
@@ -73,7 +72,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 
 use egui_commonmark::CommonMarkCache;
-use egui_pop_api::links::{self, How, Inside, OpenCall, Request, Source, Target};
+use egui_pop_api::links::{self, How, Inside, OpenCall, Policy, Request, Source, Target};
 use egui_pop_api::services::ServiceToken;
 use egui_pop_api::{AppHandle, Ctx, Plugin, PluginError};
 use egui_pop_core::debug::FnCollector;
@@ -648,18 +647,20 @@ impl Viewer {
     }
 
     /// Hands each image of a page to egui, fetches those it may, and
-    /// keeps the others waiting for the user. Returns the local files the
-    /// page may not load: never read, and forgotten if an earlier page
-    /// had them, so they are not drawn from what it left.
+    /// keeps the others waiting for the user. Returns the images the page
+    /// may not load (a scheme it may not read): never read, and forgotten
+    /// if an earlier page had them, so they are not drawn from what it
+    /// left.
     fn prepare_images(&self, app: &AppHandle, base: &str, md: &Markdown) -> Vec<String> {
         let page_host = host_of(base);
-        let reads_files = page_schemes(app, base).contains("file");
+        let readable = page_image_schemes(app, base);
         let mut refused = Vec::new();
         let ctx = app.egui();
         for img in md.blocks.iter().flat_map(|b| &b.images) {
             let uri = resolve(base, &img.dest);
             let parsed = Target::parse(&uri).ok();
-            if !reads_files && parsed.as_ref().map(Target::scheme) == Some("file") {
+            let scheme = parsed.as_ref().map(Target::scheme);
+            if scheme.is_some_and(|s| page::IMAGE_SCHEMES.contains(&s) && !readable.contains(s)) {
                 lock(&self.inner).images.remove(&uri);
                 if !refused.contains(&uri) {
                     refused.push(uri);
@@ -669,7 +670,7 @@ impl Viewer {
             if lock(&self.inner).images.contains_key(&uri) {
                 continue;
             }
-            let state = match parsed.as_ref().map(Target::scheme) {
+            let state = match scheme {
                 Some("docs") => {
                     let page = parsed
                         .as_ref()
@@ -1100,10 +1101,18 @@ impl Viewer {
     }
 }
 
+fn policy(app: &AppHandle) -> Policy {
+    links::links(app).map(|l| l.policy()).unwrap_or_default()
+}
+
 /// The schemes a page may use, by the links service's policy.
 fn page_schemes(app: &AppHandle, page: &str) -> BTreeSet<String> {
-    let policy = links::links(app).map(|l| l.policy()).unwrap_or_default();
-    page::schemes(&policy, page)
+    page::schemes(&policy(app), page)
+}
+
+/// The schemes a page's images may use, by the links service's policy.
+fn page_image_schemes(app: &AppHandle, page: &str) -> BTreeSet<String> {
+    page::image_schemes(&policy(app), page)
 }
 
 /// An HTML page read for the viewer: its blocks, and the elements it does

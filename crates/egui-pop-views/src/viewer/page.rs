@@ -6,7 +6,7 @@
 use std::collections::BTreeSet;
 
 use egui_pop_model::links::{Policy, Target};
-use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag, TagEnd};
+use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 
 /// The parser's options: egui_commonmark's, with heading attributes
 /// (`# Title {#id}`), so both read a page the same way.
@@ -23,7 +23,8 @@ pub fn options() -> Options {
 /// service's policy (the host may have changed it): never those that run
 /// or embed content, `command:` only on the application's own `docs:`
 /// pages, `file:` only on a page that is itself local (`docs:`, `file:`),
-/// never from the network. The policy still decides each open.
+/// never from the network. The policy still decides each open. Images
+/// narrow this further ([`image_schemes`]).
 pub(super) fn schemes(policy: &Policy, page: &str) -> BTreeSet<String> {
     let mut all: BTreeSet<String> = policy
         .schemes
@@ -39,10 +40,30 @@ pub(super) fn schemes(policy: &Policy, page: &str) -> BTreeSet<String> {
     if origin != Some("docs") {
         all.remove("command");
     }
-    if !matches!(origin, Some("docs" | "file")) {
+    if !is_local(origin) {
         all.remove("file");
     }
     all
+}
+
+/// The schemes the viewer reads an image from.
+pub(super) const IMAGE_SCHEMES: &[&str] = &["docs", "file", "http", "https"];
+
+/// The schemes a page's images may use: those of its links, except that a
+/// page from the network may link to the application's `docs:` pages but
+/// not read their files.
+pub(super) fn image_schemes(policy: &Policy, page: &str) -> BTreeSet<String> {
+    let mut all = schemes(policy, page);
+    let parsed = Target::parse(page).ok();
+    if !is_local(parsed.as_ref().map(Target::scheme)) {
+        all.remove("docs");
+    }
+    all
+}
+
+/// Whether a page's scheme says it is the application's or on the disk.
+fn is_local(origin: Option<&str>) -> bool {
+    matches!(origin, Some("docs" | "file"))
 }
 
 /// An image in a block: where its markdown is, its alt text and its
@@ -103,6 +124,12 @@ impl Markdown {
                 Event::Start(tag) => {
                     if depth == 0 {
                         start = range.start;
+                        // Its text starts after the indent that makes it
+                        // code: without it, drawn alone, it would be markup
+                        // nothing here read (an image, a link).
+                        if matches!(tag, Tag::CodeBlock(CodeBlockKind::Indented)) {
+                            start = source[..start].rfind('\n').map_or(0, |at| at + 1);
+                        }
                         cur = Pending::default();
                         if let Tag::Heading { level, id, .. } = tag {
                             cur.level = Some(level_of(*level));
@@ -415,6 +442,29 @@ Run `cargo add`.
             "![a ![b](b.png) c](outer.png)"
         );
         assert_eq!(images[1].dest, "d.png");
+    }
+
+    #[test]
+    fn a_block_read_alone_reads_as_it_did_on_its_page() {
+        for source in [
+            "    ![a](docs:img/a.png)\n",
+            "    [a](file:///x)\n",
+            "\t![a](docs:img/a.png)\n",
+            "para\n\n    ![a](docs:b.png)\n",
+            "    x\n\n    ![a](docs:b.png)\n",
+            "> x\n>\n>     ![a](docs:b.png)\n",
+            "- x\n\n      ![a](docs:b.png)\n",
+            "   ```\n   ![a](docs:b.png)\n   ```\n",
+            "<div>\n\n![a](docs:b.png)\n\n</div>\n",
+            "[^1]\n\n[^1]: ![a](docs:b.png) [c](file:///x)\n",
+        ] {
+            for block in Markdown::parse(source).blocks {
+                let alone = Markdown::parse(&block.source);
+                let read: Vec<_> = alone.blocks.iter().flat_map(|b| &b.images).collect();
+                assert_eq!(read.len(), block.images.len(), "{source:?}: {block:?}");
+                assert_eq!(alone.links(), block.links, "{source:?}: {block:?}");
+            }
+        }
     }
 
     #[test]
