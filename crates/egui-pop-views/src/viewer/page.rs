@@ -3,6 +3,9 @@
 //! each block's plain text, its heading's anchor, its links and its
 //! images. No egui here.
 
+use std::collections::BTreeSet;
+
+use egui_pop_model::links::{Policy, Target};
 use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 
 /// The parser's options: egui_commonmark's, with heading attributes
@@ -14,6 +17,32 @@ pub fn options() -> Options {
         | Options::ENABLE_FOOTNOTES
         | Options::ENABLE_DEFINITION_LIST
         | Options::ENABLE_HEADING_ATTRIBUTES
+}
+
+/// The schemes a page's links and images may use, from the links
+/// service's policy (the host may have changed it): never those that run
+/// or embed content, `command:` only on the application's own `docs:`
+/// pages, `file:` only on a page that is itself local (`docs:`, `file:`),
+/// never from the network. The policy still decides each open.
+pub(super) fn schemes(policy: &Policy, page: &str) -> BTreeSet<String> {
+    let mut all: BTreeSet<String> = policy
+        .schemes
+        .iter()
+        .chain(&policy.app_schemes)
+        .map(|s| s.to_ascii_lowercase())
+        .collect();
+    for never in ["javascript", "vbscript", "data", "blob", "about"] {
+        all.remove(never);
+    }
+    let parsed = Target::parse(page).ok();
+    let origin = parsed.as_ref().map(Target::scheme);
+    if origin != Some("docs") {
+        all.remove("command");
+    }
+    if !matches!(origin, Some("docs" | "file")) {
+        all.remove("file");
+    }
+    all
 }
 
 /// An image in a block: where its markdown is, its alt text and its
@@ -82,15 +111,25 @@ impl Markdown {
                     }
                     match tag {
                         Tag::Link { dest_url, .. } => cur.links.push(dest_url.to_string()),
+                        // An image in another's alt text is part of it:
+                        // the outermost is the one drawn.
                         Tag::Image { dest_url, .. } => {
-                            cur.image = Some((range.clone(), dest_url.to_string(), String::new()));
+                            if cur.image.is_none() {
+                                cur.image =
+                                    Some((range.clone(), dest_url.to_string(), String::new()));
+                            }
+                            cur.image_depth += 1;
                         }
                         _ => {}
                     }
                     depth += 1;
                 }
                 Event::End(end) => {
+                    if matches!(end, TagEnd::Image) {
+                        cur.image_depth = cur.image_depth.saturating_sub(1);
+                    }
                     if matches!(end, TagEnd::Image)
+                        && cur.image_depth == 0
                         && let Some((r, dest, alt)) = cur.image.take()
                     {
                         cur.images.push(ImageRef {
@@ -206,6 +245,8 @@ struct Pending {
     links: Vec<String>,
     images: Vec<ImageRef>,
     image: Option<(std::ops::Range<usize>, String, String)>,
+    /// How many images are open around the text being read.
+    image_depth: usize,
 }
 
 fn level_of(level: HeadingLevel) -> u8 {
@@ -359,6 +400,21 @@ Run `cargo add`.
         assert!(m.references.contains("[site]: <https://example.org/>"));
         assert_eq!(m.find("INSTALL"), [3]);
         assert_eq!(m.find("the"), [1, 1]);
+    }
+
+    #[test]
+    fn an_image_inside_an_image_leaves_no_address_unread() {
+        let source = "![a ![b](b.png) c](outer.png) and ![d](d.png)";
+        let m = Markdown::parse(source);
+        let images = &m.blocks[0].images;
+        assert_eq!(images.len(), 2, "{images:?}");
+        assert_eq!(images[0].dest, "outer.png");
+        assert_eq!(images[0].alt, "a b c");
+        assert_eq!(
+            &source[images[0].range.clone()],
+            "![a ![b](b.png) c](outer.png)"
+        );
+        assert_eq!(images[1].dest, "d.png");
     }
 
     #[test]

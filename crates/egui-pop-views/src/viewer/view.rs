@@ -262,14 +262,15 @@ fn images_bar(ui: &mut Ui, v: &Viewer, actions: &mut Vec<Action>) {
     }
 }
 
-/// What an HTML page does not show, said out loud.
+/// What a page does not show, said out loud.
 fn simplified_bar(ui: &mut Ui, v: &Viewer) {
     let Status::Shown(page) = v.status() else {
         return;
     };
-    let Some(dropped) = page.html.as_ref().filter(|d| !d.is_empty()) else {
+    let dropped = &page.dropped;
+    if dropped.is_empty() {
         return;
-    };
+    }
     ui.horizontal_wrapped(|ui| {
         ui.add(Icon::Info.size(Size::Inline).tone(Tone::Info));
         ui.label(tr_args(
