@@ -489,11 +489,12 @@ impl<'a> TitleBar<'a> {
         );
         // The caption: drag, double click, right click. Widgets on the
         // bar are drawn after it and take their clicks first. In full
-        // screen the bar neither moves the window nor maximizes it.
+        // screen the bar neither moves the window nor maximizes it. No Tab
+        // stop: focused, it would show nothing and answer no key.
         let drag = ui.interact(
             bar,
             ui.id().with("egui_pop.caption"),
-            Sense::click_and_drag(),
+            Sense::CLICK | Sense::DRAG,
         );
         let mut request = None;
         if drag.double_clicked() {

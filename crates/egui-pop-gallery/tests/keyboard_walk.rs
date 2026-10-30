@@ -25,7 +25,7 @@ use egui_pop::core::tab::{self, ScopeKind, TabStop};
 use egui_pop::editors::terminal::{Sink, Spawn, Terminal, TerminalSource, TerminalState};
 use egui_pop::model::commands::{CommandSpec, Origin};
 use egui_pop::model::ids::{CommandId, PanelId, PluginId};
-use egui_pop::model::layout::Node;
+use egui_pop::model::layout::{Node, Placement};
 use egui_pop::model::panels::{Area, PanelSpec};
 use egui_pop::theme::ThemeSpec;
 use egui_pop_gallery::pages::workbench::{NOTES, OUTLINE};
@@ -513,14 +513,14 @@ fn nameless(page: &str) -> Vec<Stop> {
 }
 
 #[test]
-#[ignore = "keyboard survey items 8 and 9: a side area's line is a stop with no role and no name"]
+#[ignore = "keyboard survey item 9: a side area's line is a stop with no role and no name"]
 fn every_stop_says_what_it_is() {
     let lines = nameless("overview");
     assert_eq!(lines, Vec::<Stop>::new());
 }
 
 #[test]
-#[ignore = "keyboard survey items 8 and 9: a side area's line shows nothing when focused"]
+#[ignore = "keyboard survey item 9: a side area's line shows nothing when focused"]
 fn a_focused_side_areas_line_shows_it() {
     let mut h = harness("overview");
     let at_rest = h.render().unwrap();
@@ -535,7 +535,6 @@ fn a_focused_side_areas_line_shows_it() {
 }
 
 #[test]
-#[ignore = "keyboard survey item 8: the frame's caption is a stop showing nothing"]
 fn a_frames_caption_is_no_stop() {
     // The frame page draws the frame's own title bar as its preview.
     let caption = nameless("frame");
@@ -546,7 +545,6 @@ fn a_frames_caption_is_no_stop() {
 }
 
 #[test]
-#[ignore = "keyboard survey item 8: a flyout's edge is a stop showing nothing"]
 fn a_flyouts_edge_is_no_stop() {
     let mut h = harness("workbench");
     reach_back(&mut h, "Start side: fold");
@@ -562,6 +560,25 @@ fn a_flyouts_edge_is_no_stop() {
         .iter()
         .find(|s| s.name.is_empty() && (s.rect.center().x - rect.max.x).abs() < 10.0);
     assert!(edge.is_none(), "{edge:?}");
+}
+
+#[test]
+fn a_side_areas_edge_lying_over_the_centre_is_no_stop() {
+    let (mut h, _) = panels();
+    let app = h.state().handle().clone();
+    let placed = app.place_area(Area::StartSide, Placement::Over).unwrap();
+    assert!(placed.ok(), "{placed:?}");
+    let _ = h.run_ok();
+    let rect = app.area_rect(Area::StartSide).expect("drawn");
+    // Nothing focused, Tab would hide the palettes.
+    run(&mut h, "demo.list.focus");
+    let walked = walk::walk(&mut h, TAB, 200);
+    assert!(matches!(walked.end, End::Looped { .. }), "{walked}");
+    let edge = walked
+        .stops
+        .iter()
+        .find(|s| s.name.is_empty() && (s.rect.center().x - rect.max.x).abs() < 10.0);
+    assert!(edge.is_none(), "{walked}");
 }
 
 #[test]

@@ -2266,9 +2266,10 @@ fn draw_flyout(
                     ui.visuals().widgets.noninteractive.bg_stroke,
                 );
             }
-            // Resized from that edge; the width is saved once let go.
+            // Resized from that edge; the width is saved once let go. The
+            // pointer's alone: no Tab stop, focused it would show nothing.
             let edge = Rect::from_x_y_ranges(x - reach..=x + reach, rect.y_range());
-            let r = ui.interact(edge, id.with("resize"), egui::Sense::drag());
+            let r = ui.interact(edge, id.with("resize"), egui::Sense::DRAG);
             if r.hovered() || r.dragged() {
                 ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
             }
@@ -2369,10 +2370,10 @@ fn lie_over(
                     ui.visuals().widgets.noninteractive.bg_stroke,
                 );
             }
-            // Resized from that edge.
+            // Resized from that edge, by the pointer alone, as a flyout's.
             let reach = ui.style().interaction.resize_grab_radius_side;
             let edge = Rect::from_x_y_ranges(x - reach..=x + reach, rect.y_range());
-            let r = ui.interact(edge, id.with("resize"), egui::Sense::drag());
+            let r = ui.interact(edge, id.with("resize"), egui::Sense::DRAG);
             if r.hovered() || r.dragged() {
                 ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
             }
