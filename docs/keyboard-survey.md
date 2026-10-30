@@ -297,6 +297,10 @@ From `crates/egui-pop-core` (`tab.rs`, `focus.rs`, `keys.rs`,
 - **[test, known] Tab in the picker's path field** stayed there until
   PR #100: `tab_reaches_the_splitter_and_the_arrows_move_it`,
   `a_typed_path_completes_with_tab_and_backspace_goes_up`.
+- **[walk, fixed] The picker's rows held the focus and nothing else:** Tab
+  reached them, but the highlight stayed behind and the picker's keys went
+  dead. The highlight follows now, and the arrows and Enter work from a row:
+  `tab_through_the_rows_moves_the_highlight_and_the_keys_answer_there`.
 - **[walk, fixed] A rebound key keeps its `when`,** since this study was
   read: the gallery's `gallery.notes.ask_clear`, rebound, does nothing
   outside the notes' window. Model test in `crates/egui-pop-model/tests/scopes.rs`.

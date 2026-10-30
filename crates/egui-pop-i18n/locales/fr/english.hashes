@@ -130,6 +130,10 @@ command-file-preview.description 4815c49f71f424ee
 command-file-preview.title 9d7e43897e327a20
 command-file-replace.description 21a6c50bee1f2a7f
 command-file-replace.title ffa6f124b8b7a5d4
+command-file-select-all.description 69a5e38e49c4ae66
+command-file-select-all.title c12d5d89697d9251
+command-file-toggle-selection.description 2f03748f427bffb2
+command-file-toggle-selection.title f7354804919f56e8
 command-files-reveal.description 0642c89e4cee83ae
 command-files-reveal.title b82654d7af1ac299
 command-gesture-graph-fit.description af1bccabc6fb1040
@@ -475,6 +479,8 @@ egui-pop-files-folder-name a65e586f86af8432
 egui-pop-files-folder-name-empty 22d4c9c552b8dd7b
 egui-pop-files-folder-name-invalid 6e15dee20c0f8d05
 egui-pop-files-folder-read-only d0186d5a53c8ebd6
+egui-pop-files-folder-selected ebe811749503bdda
+egui-pop-files-folder-shown 7bf55a39375ef73b
 egui-pop-files-hidden 98d3490afec5ff90
 egui-pop-files-home 4e79e04702088474
 egui-pop-files-items e0d1e5c84cf292a7
@@ -494,6 +500,11 @@ egui-pop-files-replace-detail ca72badd238045e4
 egui-pop-files-replace-no-dialogs 584a96426b813f29
 egui-pop-files-replace-title 1e08067e950afbaf
 egui-pop-files-save 835b5f8f6d37f13e
+egui-pop-files-select-all-none 8d669ccd53dbba2c
+egui-pop-files-select-folder c0a8b07be8badee5
+egui-pop-files-selected b94bd277035f8891
+egui-pop-files-selected-none 06639adc9d49a67f
+egui-pop-files-selected-not-shown b92d4087c913b866
 egui-pop-files-size 460e2b4dbac0e0ba
 egui-pop-files-type 20c8ac126ee3b079
 egui-pop-files-unbookmark d71391bfffa763c4

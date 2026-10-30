@@ -1080,6 +1080,7 @@ dependencies = [
  "egui",
  "egui-pop-core",
  "egui-pop-model",
+ "egui-pop-test",
  "egui-pop-win32",
  "egui_dock",
  "egui_kittest",

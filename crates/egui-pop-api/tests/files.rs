@@ -5,18 +5,21 @@
 
 use std::path::{Path, PathBuf};
 
-use egui::accesskit::Role;
+use egui::accesskit::{Role, Toggled};
 use egui::{Key, Modifiers};
 use egui_kittest::Harness;
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use egui_pop_api::dialogs::{self, DIALOGS};
 use egui_pop_api::files::{
-    self, CMD_NEW_FOLDER, Chosen, FILES, FileRequest, FilesPlugin, STEP_CHOOSE, STEP_CHOSEN,
+    self, CMD_NEW_FOLDER, CMD_SELECT_ALL, CMD_TOGGLE_SELECTION, Chosen, FILES, FileRequest,
+    FilesPlugin, STEP_CHOOSE, STEP_CHOSEN,
 };
 use egui_pop_api::host::Pending;
 use egui_pop_api::steps::Before;
 use egui_pop_api::{App, Ctx, Plugin, PluginError};
+use egui_pop_core::a11y;
 use egui_pop_model::ids::PluginId;
+use egui_pop_test::walk::{self, Press};
 use serde_json::json;
 
 /// A folder tree of its own per test.
@@ -269,14 +272,6 @@ fn a_click_highlights_a_double_click_chooses() {
     settle(&mut h);
     let f = h.state().handle().service(&FILES).unwrap();
     assert_eq!(f.picker(f.open_ids()[0]).unwrap().highlight, 2);
-    h.get_by_label("2026/").click();
-    settle(&mut h);
-    assert_eq!(
-        f.picker(f.open_ids()[0]).unwrap().dir,
-        root.join("photos/2026")
-    );
-    h.get_by_label("Up").click();
-    settle(&mut h);
     double_click(&mut h, "a.png");
     assert_eq!(
         result(&mut h, &p),
@@ -1355,5 +1350,398 @@ fn without_a_purpose_the_request_and_the_recent_places_decide() {
     let p = choose(&mut h, FileRequest::open("Open"));
     assert!(shown(&h, "a.png"));
     cancel(&mut h, &p);
+    let _ = std::fs::remove_dir_all(root);
+}
+
+// Selecting: a click selects, a double click or Enter opens.
+
+/// A row of the list: the preview pane may repeat its name, as a label.
+fn row<'a>(h: &'a Harness<'static, App>, name: &'a str) -> egui_kittest::Node<'a> {
+    h.get_by_role_and_label(Role::Button, name)
+}
+
+fn click(h: &mut Harness<'static, App>, name: &str, modifiers: Modifiers) {
+    row(h, name).click_modifiers(modifiers);
+    settle(h);
+}
+
+/// A key through the keyboard walk's own press, then the picker settled.
+fn press(h: &mut Harness<'static, App>, key: Key, modifiers: Modifiers) {
+    walk::press(h, Press { modifiers, key });
+    settle(h);
+}
+
+fn selected(h: &Harness<'static, App>) -> Vec<String> {
+    let names = picker_state(h, "selected");
+    let names = names.as_array().unwrap().iter();
+    names
+        .map(|p| {
+            let name = Path::new(p.as_str().unwrap()).file_name().unwrap();
+            name.to_string_lossy().into_owned()
+        })
+        .collect()
+}
+
+/// The line under the list, or an error: the live region may repeat it.
+fn line(h: &Harness<'static, App>, text: &str) -> bool {
+    h.query_by_role_and_label(Role::Label, text).is_some()
+}
+
+fn said(h: &Harness<'static, App>, text: &str) -> bool {
+    a11y::announcements(&h.ctx).iter().any(|a| a.text == text)
+}
+
+fn highlighted(h: &Harness<'static, App>) -> String {
+    let at = picker_state(h, "highlight").as_u64().unwrap() as usize;
+    picker_state(h, "shown")[at].as_str().unwrap().to_string()
+}
+
+#[test]
+fn a_click_selects_a_folder_and_enter_or_a_double_click_goes_in() {
+    let root = tree("click-folder");
+    let mut h = harness(None);
+    let _p = choose(&mut h, FileRequest::open("Open").directory(&root));
+    let dir = |h: &Harness<'static, App>| PathBuf::from(picker_state(h, "dir").as_str().unwrap());
+    click(&mut h, "photos/", Modifiers::NONE);
+    assert_eq!(dir(&h), root, "a click does not go in");
+    assert_eq!(highlighted(&h), "photos/");
+    press(&mut h, Key::Enter, Modifiers::NONE);
+    assert_eq!(dir(&h), root.join("photos"));
+    press(&mut h, Key::ArrowUp, Modifiers::ALT);
+    assert_eq!(dir(&h), root);
+    double_click(&mut h, "notes/");
+    settle(&mut h);
+    assert_eq!(dir(&h), root.join("notes"));
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn choosing_one_file_has_no_selection_and_no_count() {
+    let root = tree("one-file");
+    let mut h = harness(None);
+    let p = choose(
+        &mut h,
+        FileRequest::open("Open").directory(root.join("photos")),
+    );
+    assert!(h.query_all_by_label_contains("selected").next().is_none());
+    // Modifiers change nothing: the highlight goes there, one at a time.
+    click(&mut h, "a.png", Modifiers::COMMAND);
+    click(&mut h, "c.txt", Modifiers::SHIFT);
+    assert_eq!(highlighted(&h), "c.txt");
+    press(&mut h, Key::ArrowUp, Modifiers::SHIFT);
+    assert_eq!(highlighted(&h), "b.jpg");
+    assert_eq!(selected(&h), Vec::<String>::new());
+    // No such keys here: Ctrl+A stays the field's.
+    type_in(&mut h, "jp");
+    press(&mut h, Key::A, Modifiers::COMMAND);
+    type_in(&mut h, "b");
+    assert_eq!(field(&h), "b");
+    press(&mut h, Key::Enter, Modifiers::NONE);
+    assert_eq!(
+        result(&mut h, &p),
+        Ok(Chosen::Paths(vec![root.join("photos/b.jpg")]))
+    );
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn ctrl_and_shift_clicks_select_several_and_the_count_says_it() {
+    let root = tree("many-clicks");
+    let mut h = harness(None);
+    let p = choose(
+        &mut h,
+        FileRequest::open_many("Many").directory(root.join("photos")),
+    );
+    assert!(
+        h.query_all_by_label_contains("Nothing selected")
+            .next()
+            .is_some()
+    );
+    // A click selects that one.
+    click(&mut h, "a.png", Modifiers::NONE);
+    assert!(line(&h, "Selected: 1"));
+    assert!(said(&h, "Selected: 1"), "the count is announced");
+    // Ctrl adds and takes away.
+    click(&mut h, "c.txt", Modifiers::COMMAND);
+    assert_eq!(selected(&h), ["a.png", "c.txt"]);
+    assert!(line(&h, "Selected: 2"));
+    let on = |h: &Harness<'static, App>, name| row(h, name).accesskit_node().toggled();
+    assert_eq!(on(&h, "c.txt"), Some(Toggled::True));
+    assert_eq!(on(&h, "b.jpg"), Some(Toggled::False));
+    click(&mut h, "a.png", Modifiers::COMMAND);
+    assert_eq!(selected(&h), ["c.txt"]);
+    // Shift: from the last one clicked, the folders left out.
+    click(&mut h, "c.txt", Modifiers::SHIFT);
+    assert_eq!(selected(&h), ["a.png", "b.jpg", "c.txt"]);
+    assert!(said(&h, "Selected: 3"));
+    click(&mut h, "2026/", Modifiers::SHIFT);
+    assert_eq!(selected(&h), ["a.png"], "the range is from the same anchor");
+    // A plain click starts again; a folder cannot join, and says so.
+    click(&mut h, "b.jpg", Modifiers::NONE);
+    assert_eq!(selected(&h), ["b.jpg"]);
+    click(&mut h, "c.txt", Modifiers::COMMAND);
+    click(&mut h, "2026/", Modifiers::COMMAND);
+    assert_eq!(selected(&h), ["b.jpg", "c.txt"]);
+    assert!(h.query_by_label_contains("2026 is a folder").is_some());
+    // The highlight is on the folder: Enter would go in, Ctrl+Enter chooses.
+    press(&mut h, Key::Enter, Modifiers::COMMAND);
+    assert_eq!(
+        result(&mut h, &p),
+        Ok(Chosen::Paths(vec![
+            root.join("photos/b.jpg"),
+            root.join("photos/c.txt")
+        ]))
+    );
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn a_double_click_opens_that_file_alone() {
+    let root = tree("many-double");
+    let mut h = harness(None);
+    let p = choose(
+        &mut h,
+        FileRequest::open_many("Many").directory(root.join("photos")),
+    );
+    click(&mut h, "a.png", Modifiers::NONE);
+    double_click(&mut h, "c.txt");
+    assert_eq!(
+        result(&mut h, &p),
+        Ok(Chosen::Paths(vec![root.join("photos/c.txt")]))
+    );
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn the_arrows_move_the_highlight_shift_extends_and_the_preview_follows() {
+    let root = tree("many-keys");
+    let mut h = harness(None);
+    let p = choose(
+        &mut h,
+        FileRequest::open_many("Many").directory(root.join("photos")),
+    );
+    assert_eq!(highlighted(&h), "2026/");
+    press(&mut h, Key::ArrowDown, Modifiers::NONE);
+    assert_eq!(highlighted(&h), "a.png");
+    assert_eq!(selected(&h), Vec::<String>::new());
+    press(&mut h, Key::ArrowDown, Modifiers::SHIFT);
+    assert_eq!(selected(&h), ["a.png", "b.jpg"]);
+    assert!(line(&h, "Selected: 2"));
+    let preview = picker_state(&h, "preview");
+    assert_eq!(
+        preview["path"],
+        root.join("photos/b.jpg").display().to_string()
+    );
+    // Plain arrows keep the selection, for Ctrl+Space further on.
+    press(&mut h, Key::ArrowDown, Modifiers::NONE);
+    assert_eq!(highlighted(&h), "c.txt");
+    assert_eq!(selected(&h), ["a.png", "b.jpg"]);
+    press(&mut h, Key::Space, Modifiers::COMMAND);
+    assert_eq!(selected(&h), ["a.png", "b.jpg", "c.txt"]);
+    press(&mut h, Key::Space, Modifiers::COMMAND);
+    assert_eq!(selected(&h), ["a.png", "b.jpg"]);
+    // Shift, back up through the anchor Ctrl+Space set.
+    press(&mut h, Key::ArrowUp, Modifiers::SHIFT);
+    assert_eq!(selected(&h), ["b.jpg", "c.txt"]);
+    press(&mut h, Key::Enter, Modifiers::NONE);
+    assert_eq!(
+        result(&mut h, &p),
+        Ok(Chosen::Paths(vec![
+            root.join("photos/b.jpg"),
+            root.join("photos/c.txt")
+        ]))
+    );
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn ctrl_a_selects_what_is_shown_a_typed_path_keeps_the_key() {
+    let root = tree("many-all");
+    let mut h = harness(None);
+    let _p = choose(
+        &mut h,
+        FileRequest::open_many("Many").directory(root.join("photos")),
+    );
+    let app = h.state().handle().clone();
+    assert_eq!(app.keys_for(&CMD_SELECT_ALL), vec!["Ctrl+A"]);
+    assert_eq!(app.keys_for(&CMD_TOGGLE_SELECTION), vec!["Ctrl+Space"]);
+    // With the filter: what it leaves, and the filter's text is not selected.
+    type_in(&mut h, "pn");
+    press(&mut h, Key::A, Modifiers::COMMAND);
+    assert_eq!(selected(&h), ["a.png"]);
+    type_in(&mut h, "g");
+    assert_eq!(field(&h), "png");
+    // What the filter hides stays selected, and the count says so.
+    press(&mut h, Key::Backspace, Modifiers::NONE);
+    press(&mut h, Key::Backspace, Modifiers::NONE);
+    press(&mut h, Key::Backspace, Modifiers::NONE);
+    press(&mut h, Key::A, Modifiers::COMMAND);
+    assert_eq!(selected(&h), ["a.png", "b.jpg", "c.txt"]);
+    assert!(line(&h, "Selected: 3"));
+    type_in(&mut h, "jp");
+    assert!(line(&h, "Selected: 3 (2 not shown)"));
+    // In a typed path, the key is the field's.
+    let path = root.join("photos").display().to_string();
+    h.get_by_label("Filter, or type a path").type_text("/");
+    settle(&mut h);
+    press(&mut h, Key::A, Modifiers::COMMAND);
+    type_in(&mut h, &path);
+    assert_eq!(
+        field(&h),
+        path,
+        "the field's text was selected and replaced"
+    );
+    // Another folder: the selection stays behind; nothing to select is said.
+    press(&mut h, Key::Enter, Modifiers::NONE);
+    press(&mut h, Key::Enter, Modifiers::NONE);
+    assert_eq!(selected(&h), Vec::<String>::new());
+    assert_eq!(
+        picker_state(&h, "dir"),
+        root.join("photos/2026").display().to_string()
+    );
+    press(&mut h, Key::A, Modifiers::COMMAND);
+    assert!(line(&h, "No file is shown to select"));
+    assert!(picker_state(&h, "error").is_string());
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn the_selection_keys_are_commands_and_rebind() {
+    let root = tree("many-rebind");
+    let mut h = harness(None);
+    let app = h.state().handle().clone();
+    app.rebind(CMD_SELECT_ALL, Some("Ctrl+Shift+F".into()));
+    settle(&mut h);
+    // No picker open: the key is not taken from whoever else wants it.
+    key(&mut h, Key::F, Modifiers::COMMAND | Modifiers::SHIFT);
+    let traces = app.debug_snapshot()["keys"]["traces"].clone();
+    assert_eq!(traces[0]["resolution"]["kind"], "nothing", "{traces}");
+    let _p = choose(
+        &mut h,
+        FileRequest::open_many("Many").directory(root.join("photos")),
+    );
+    press(&mut h, Key::A, Modifiers::COMMAND);
+    assert_eq!(selected(&h), Vec::<String>::new(), "no longer this");
+    press(&mut h, Key::F, Modifiers::COMMAND | Modifiers::SHIFT);
+    assert_eq!(selected(&h).len(), 3);
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn choosing_a_folder_says_what_selecting_means() {
+    let root = tree("folder-select");
+    let mut h = harness(None);
+    let p = choose(&mut h, FileRequest::folder("Folder").directory(&root));
+    let name = root.file_name().unwrap().to_string_lossy().into_owned();
+    let shown = format!("Nothing selected: the button chooses the folder shown, {name}");
+    assert!(line(&h, &shown));
+    const PHOTOS: &str = "Selected: photos. The button chooses it, Enter goes into it";
+    // A click selects, and the line says so; Ctrl+Space takes it back.
+    click(&mut h, "photos/", Modifiers::NONE);
+    assert_eq!(selected(&h), ["photos"]);
+    assert!(line(&h, PHOTOS));
+    assert!(said(&h, PHOTOS), "what it says is announced");
+    press(&mut h, Key::Space, Modifiers::COMMAND);
+    assert_eq!(selected(&h), Vec::<String>::new());
+    assert!(line(&h, &shown));
+    // The arrows select too, from the entry highlighted.
+    press(&mut h, Key::ArrowDown, Modifiers::NONE);
+    assert_eq!(selected(&h), ["photos"]);
+    // Enter goes in: the selection stays behind, and this folder is the choice.
+    press(&mut h, Key::Enter, Modifiers::NONE);
+    assert_eq!(selected(&h), Vec::<String>::new());
+    assert_eq!(
+        picker_state(&h, "dir"),
+        root.join("photos").display().to_string()
+    );
+    press(&mut h, Key::ArrowDown, Modifiers::NONE);
+    assert_eq!(selected(&h), ["2026"]);
+    press(&mut h, Key::Enter, Modifiers::COMMAND);
+    assert_eq!(
+        result(&mut h, &p),
+        Ok(Chosen::Paths(vec![root.join("photos/2026")]))
+    );
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn saving_a_selected_folder_goes_in_and_the_name_stays() {
+    let root = tree("save-select");
+    let mut h = saving_harness(None);
+    let p = choose(
+        &mut h,
+        FileRequest::save("Save", "new.png").directory(&root),
+    );
+    // Selected, the button says what it does; a file's name fills the field.
+    click(&mut h, "photos/", Modifiers::NONE);
+    assert!(h.query_by_role_and_label(Role::Button, "Save").is_none());
+    assert_eq!(field(&h), "new.png");
+    h.get_by_role_and_label(Role::Button, "Open").click();
+    settle(&mut h);
+    assert_eq!(
+        picker_state(&h, "dir"),
+        root.join("photos").display().to_string()
+    );
+    assert_eq!(field(&h), "new.png");
+    assert!(h.query_by_role_and_label(Role::Button, "Save").is_some());
+    // The stem is selected again: typing replaces it.
+    click(&mut h, "2026/", Modifiers::NONE);
+    press(&mut h, Key::Enter, Modifiers::NONE);
+    assert_eq!(
+        picker_state(&h, "dir"),
+        root.join("photos/2026").display().to_string()
+    );
+    h.get_by_label("File name, or a path").type_text("dawn");
+    settle(&mut h);
+    assert_eq!(field(&h), "dawn.png");
+    press(&mut h, Key::ArrowUp, Modifiers::ALT);
+    click(&mut h, "c.txt", Modifiers::NONE);
+    assert_eq!(field(&h), "c.txt");
+    // An arrow onto a folder selects it; typing a name takes it back.
+    press(&mut h, Key::ArrowUp, Modifiers::NONE);
+    press(&mut h, Key::ArrowUp, Modifiers::NONE);
+    press(&mut h, Key::ArrowUp, Modifiers::NONE);
+    assert_eq!(selected(&h), ["2026"]);
+    h.get_by_label("File name, or a path").type_text("x");
+    settle(&mut h);
+    assert_eq!(selected(&h), Vec::<String>::new());
+    press(&mut h, Key::Enter, Modifiers::NONE);
+    assert_eq!(
+        result(&mut h, &p),
+        Ok(Chosen::Paths(vec![root.join("photos/x.txt")]))
+    );
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn tab_through_the_rows_moves_the_highlight_and_the_keys_answer_there() {
+    let root = tree("rows-walk");
+    let mut h = harness(None);
+    let _p = choose(
+        &mut h,
+        FileRequest::open_many("Many").directory(root.join("photos")),
+    );
+    let stop = walk::reach(&mut h, walk::TAB, "a.png", 40).expect("Tab reaches the rows");
+    assert_eq!(stop.role, Role::Button);
+    settle(&mut h);
+    assert_eq!(highlighted(&h), "a.png");
+    // Space clicks the row: it selects, and the focus stays.
+    press(&mut h, Key::Space, Modifiers::NONE);
+    assert_eq!(selected(&h), ["a.png"]);
+    assert_eq!(walk::focused(&h).unwrap().name, "a.png");
+    // The arrows and Shift are the picker's from there, in the field again.
+    press(&mut h, Key::ArrowDown, Modifiers::SHIFT);
+    assert_eq!(selected(&h), ["a.png", "b.jpg"]);
+    assert!(h.get_by_label("Filter, or type a path").is_focused());
+    // Back on a folder's row, Enter goes in.
+    let stop = walk::reach(&mut h, walk::SHIFT_TAB, "2026/", 40);
+    assert!(stop.is_some(), "Shift+Tab reaches the folder");
+    settle(&mut h);
+    assert_eq!(highlighted(&h), "2026/");
+    press(&mut h, Key::Enter, Modifiers::NONE);
+    assert_eq!(
+        picker_state(&h, "dir"),
+        root.join("photos/2026").display().to_string()
+    );
     let _ = std::fs::remove_dir_all(root);
 }

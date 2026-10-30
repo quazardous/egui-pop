@@ -245,6 +245,14 @@ command-editor-write =
     .description = Modifie le texte par `edit.change` : tout le `text` ; ou `text` entre `from` et `to` (`{"{"}line, col{"}"}` à partir de 0) ; ou une liste de `changes`. Une seule étape d’annulation.
     .title = Écrire le texte
 
+command-file-select-all =
+    .description = Sélectionne tous les fichiers affichés dans le sélecteur de fichiers intégré ouvert, pour en choisir plusieurs. Refusé, la raison s’affichant dans le sélecteur, quand aucun n’est affiché.
+    .title = Sélectionner tous les fichiers
+
+command-file-toggle-selection =
+    .description = Sélectionne ou désélectionne l’entrée en surbrillance du sélecteur de fichiers intégré ouvert, pour choisir plusieurs fichiers ou un dossier. Un dossier parmi des fichiers n’est pas sélectionné : le sélecteur le dit.
+    .title = Sélectionner ou désélectionner l’entrée
+
 command-file-new-folder =
     .description = Un nouveau dossier dans le sélecteur de fichiers intégré ouvert, qui le montre ensuite : demande son nom, ou le crée aussitôt avec `name`. Refusé sur un système de fichiers qui ne peut pas en créer (celui de la version web, en mémoire), la raison s’affichant dans le sélecteur.
     .title = Nouveau dossier
@@ -794,6 +802,20 @@ egui-pop-files-preview-failed = L’aperçu a échoué
 egui-pop-files-preview-loading = Chargement de l’aperçu…
 
 egui-pop-files-preview-none = Pas d’aperçu
+
+egui-pop-files-selected = Sélection : { $count }
+
+egui-pop-files-selected-not-shown = Sélection : { $count } ({ $hidden } non affichés)
+
+egui-pop-files-selected-none = Rien de sélectionné : Entrée ou le bouton agit sur l’entrée en surbrillance
+
+egui-pop-files-select-folder = { $name } est un dossier : il n’est pas sélectionné avec les fichiers, Entrée y entre
+
+egui-pop-files-select-all-none = Aucun fichier affiché à sélectionner
+
+egui-pop-files-folder-selected = Sélection : { $name }. Le bouton le choisit, Entrée y entre
+
+egui-pop-files-folder-shown = Rien de sélectionné : le bouton choisit le dossier affiché, { $name }
 
 egui-pop-files-recent = Récents
 

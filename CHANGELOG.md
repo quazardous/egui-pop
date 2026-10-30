@@ -27,6 +27,17 @@ publishes.
   palette no longer focuses the dock lying under it. New in `focus`:
   `prefer`, `preferred`, `take_moved`, `Moved`; a widget now belongs to the
   scopes it was drawn in, even scrolled out of their rectangle.
+- The in-app file picker's selection (egui-pop-api; `docs/files.md`). A click
+  selects and a double click or Enter opens: a single click no longer enters
+  a folder. Choosing several files, `Ctrl`+click, `Shift`+click, `Shift`+arrows
+  and `Ctrl+A` select, and a line under the list counts the selection, each
+  change announced to screen readers; going to another folder leaves the
+  selection behind. Choosing a folder, a click or an arrow selects one, and the
+  line says what the button and Enter do with it. Saving, a selected folder is
+  gone into by Enter and by the button, which reads Open then. New commands:
+  `file.select_all` (`Ctrl+A`) and `file.toggle_selection` (`Ctrl+Space`, a key
+  the picker read itself so far), bound only while a picker offers them. Tab
+  through the rows moves the highlight, and Enter on a row opens it.
 - The last folder per purpose (egui-pop-api; `docs/files.md`).
   `FileRequest::purpose(key)` keeps the folder of each choice under `key`
   (`settings/files.last_folders`, `files::last_folder`), in the in-app picker

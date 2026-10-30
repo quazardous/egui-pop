@@ -262,6 +262,14 @@ command-file-replace =
     .description = The answer to the question before replacing a file: ends the choice `id` with `path`.
     .title = Replace the file
 
+command-file-select-all =
+    .description = Selects every file shown in the open in-app file picker, choosing several. Refused, the reason shown in the picker, when none is shown.
+    .title = Select all files
+
+command-file-toggle-selection =
+    .description = Selects or unselects the highlighted entry of the open in-app file picker, choosing several files or a folder. A folder among files is not selected: the picker says so.
+    .title = Select or unselect the entry
+
 command-files-reveal =
     .description = Shows a file (`path`) selected in the file manager; an agent's request is confirmed by the user.
     .title = Show in folder
@@ -952,6 +960,10 @@ egui-pop-files-folder-name-invalid = { $name } cannot name a folder: type a sing
 
 egui-pop-files-folder-read-only = These files are read-only: no folder can be created here
 
+egui-pop-files-folder-selected = Selected: { $name }. The button chooses it, Enter goes into it
+
+egui-pop-files-folder-shown = Nothing selected: the button chooses the folder shown, { $name }
+
 egui-pop-files-hidden = Hidden files
 
 egui-pop-files-home = Home
@@ -989,6 +1001,16 @@ egui-pop-files-replace-no-dialogs = { $name } already exists, and no dialog can 
 egui-pop-files-replace-title = Replace { $name }?
 
 egui-pop-files-save = Save
+
+egui-pop-files-select-all-none = No file is shown to select
+
+egui-pop-files-select-folder = { $name } is a folder: it is not selected with the files, Enter goes into it
+
+egui-pop-files-selected = Selected: { $count }
+
+egui-pop-files-selected-none = Nothing selected: Enter or the button acts on the highlighted entry
+
+egui-pop-files-selected-not-shown = Selected: { $count } ({ $hidden } not shown)
 
 egui-pop-files-size = Size
 
