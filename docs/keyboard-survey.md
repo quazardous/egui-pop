@@ -50,10 +50,10 @@ forums and bug trackers is marked as such.
   inert ([walk]). That is Helios's usual state ([read]). The habit is right for a
   photo editor (Lightroom, Photoshop, GIMP and darktable all do it), so
   the answer is F6, not giving Tab back.
-- **The focus can land on nothing, or out of view.** A window frame's
-  caption, a side panel's resize line, a flyout's edge and an open menu's
-  frame are stops with no role and no name, and the first two change no
-  pixel when focused ([walk]). A focused plain button is seen, in the
+- **The focus can land on nothing, or out of view.** A side panel's resize
+  line is a stop with no role and no name, and changes no pixel when focused
+  ([walk]); a window frame's caption, a flyout's edge and an open menu's frame
+  were too, until item 8. A focused plain button is seen, in the
   accent's outline in `pop-dark`, but has the pressed button's pixels
   ([walk]). A widget out of view used to keep the focus out of view
   ([walk]): 35 rows of the gallery's side list on its first screen, the end
@@ -191,17 +191,17 @@ From `crates/egui-pop-core` (`tab.rs`, `focus.rs`, `keys.rs`,
   and its first eleven before any panel. The status bar comes before every
   panel. A popup's widgets come where the code that opens it runs.
 - **[walk] Stops that show nothing and answer no key** (role `Unknown`, no
-  name; the first two compared pixel by pixel, focused against not):
-  - the caption of an egui-pop window frame
-    (`Sense::click_and_drag()`, `frame.rs`);
-  - a side or bottom area's resize line (egui's `Panel`,
-    `Sense::click_and_drag()`, drawn only when hovered or dragged);
-  - a flyout's edge (`Sense::drag()`, `workbench.rs`);
-  - an open menu's frame, not read at first: Tab goes from File to it, then
-    to the first item.
+  name; compared pixel by pixel, focused against not): a side or bottom area's
+  resize line (egui's `Panel`, `Sense::click_and_drag()`, drawn only when hovered
+  or dragged). Item 9 makes it a real splitter.
 
-  Palette edges avoid it (`Sense::CLICK | Sense::DRAG`), and a
-  dialog's grips are focusable only on the handle meant for the keyboard.
+  Since item 8 these are no stops: the caption of an egui-pop window frame and a
+  flyout's edge, and an area's edge lying over the centre, sense without
+  `FOCUSABLE`, as palette edges did; a dialog's grips are focusable only on the
+  handle meant for the keyboard. Any popup's frame (a menu, a submenu, a context
+  menu, a combo box's list), not read at first, is egui 0.36's: Tab went from
+  File to it, then to the first item. The focus plugin moves on past it, and
+  egui 0.37 drops it ([upstream](upstream.md#egui-a-popups-frame-is-a-tab-stop)).
 - **[walk] Dock separators** do answer, where an area is split: focused,
   they move 16 points with **Shift or Ctrl** and an arrow along their axis
   (egui_dock). A plain arrow leaves them. Nothing says so. They are role
@@ -728,10 +728,13 @@ one pull request. Numbers stay as they are, since the walk's tests name them;
    next, so Tab goes through them; a view with its own cursor stays one stop and
    scrolls to it itself. An area with hidden bars cannot be found, and what it
    holds keeps calling `scroll_to_me`.
-8. **No stops that show nothing.** The frame's caption and a flyout's edge
-   sense without `FOCUSABLE` (`Sense::CLICK | Sense::DRAG`, `Sense::DRAG`); the
-   walk checks it stays so. An open menu's frame is one too, from egui: see
-   whether 0.37 still has it. Size: S.
+8. **Done: no stops that show nothing.** The frame's caption and a flyout's edge
+   sense without `FOCUSABLE` (`Sense::CLICK | Sense::DRAG`, `Sense::DRAG`), and so
+   does an area's edge lying over the centre, not listed at first; the walk checks
+   it stays so. They had no key to lose, so a flyout's width stays the pointer's.
+   An open menu's frame is any popup's, from egui: 0.37 no longer has it (its
+   `Popup` senses `Sense::CLICK`), and until then the focus plugin moves on past
+   it. A side area's line is still one: item 9.
 9. **Side areas' sashes are real splitters.** egui's resize line is replaced
    by egui-pop's own, as in `sections`: a stop with a ring, role and value,
    arrows, Shift for a larger step, Enter to reset (as sections, GTK, ARIA). Keep
@@ -845,7 +848,7 @@ compositor.
 | # | Check | Predicted | Result | Right? |
 |---|---|---|---|---|
 | 1 | Tab until the focus returns; where is the status bar? Any stop unseen or unnamed? | status bar before the panels | Status bar before the panels. 72 stops on the first page, looping to File; 35 out of view (side list); 2 unnamed, the side lines | yes |
-| 2 | Caption, side line, flyout's edge are stops | yes, nothing shown | All three; caption and side lines change no pixel. **Also** an open menu's frame | yes, and one more |
+| 2 | Caption, side line, flyout's edge are stops | yes, nothing shown | All three; caption and side lines change no pixel. **Also** an open menu's frame. Since item 8, only the side lines | yes, and one more |
 | 3 | Dock separators are stops; Ctrl and an arrow moves them | yes | Yes, Ctrl or Shift, along their axis, 16 points. No default layout has one (tested on a split area) | yes |
 | 4 | Focus a button, Escape, Tab | the window's first stop | File; since item 6, the stop after the button | yes |
 | 5 | A tab's close button, Enter, Tab | the same | **No close button exists** (`show_close_buttons(false)`). A focused tab closed by its command: nothing focused, Tab goes to File; since item 6, the next tab takes the focus | premise wrong, result as said |
@@ -860,7 +863,7 @@ compositor.
 
 | # | Check | Predicted | Result | Right? |
 |---|---|---|---|---|
-| 12 | Alt and a letter, Down, Tab, Escape | Down nothing, Tab from the top, Escape closes | As said; File's first item is 3 Tabs away. Nothing focused afterwards | yes |
+| 12 | Alt and a letter, Down, Tab, Escape | Down nothing, Tab from the top, Escape closes | As said; File's first item is 3 Tabs away, since item 8 two. Nothing focused afterwards | yes |
 | 13 | Menu from its focused button, arrows | the focus can leave | Second Down goes to the side list behind the menu | yes |
 | 14 | Tab with a menu open and a floating palette | the palette hides | It hides | yes |
 | 15 | Status popover, Tab past its last stop | (open) | Goes on through the window behind, popover still open; Escape returns to the item | new (item 22) |
@@ -912,7 +915,7 @@ The order to follow for egui-pop now, by the same measure:
    of view.
 6. **Done: item 6, focus keeps its place,** also after a button changing the
    panels.
-7. **Item 8, no stops that show nothing,** with the menu's frame.
+7. **Done: item 8, no stops that show nothing,** with the menu's frame.
 8. **Item 5, F6 through the shell.** After 3 as planned. A terminal is not the
    risk it was read to be.
 9. **Item 22, a popover's end,** and **item 15.** Small, confirmed.

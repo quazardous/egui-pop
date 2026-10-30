@@ -1205,6 +1205,12 @@ publishes.
 
 ### Fixed
 
+- No Tab stops that show nothing (egui-pop-core, egui-pop-api;
+  `docs/inputs.md`). The window frame's caption, a flyout's edge and the edge of
+  a side area lying over the centre are no longer stops: focused, they showed
+  nothing and answered no key. They work as before with the pointer. With the
+  focus plugin, Tab and Shift+Tab pass over the frame of a popup, a menu's, a
+  context menu's or a combo box's list, so File's first item is one Tab from File. A side area's resize line is still a stop.
 - A data table scrolled out of a scroll area around it no longer panics
   (egui-pop-views).
 - A row a tree or a list is asked to bring into view before its first pass
