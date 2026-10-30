@@ -846,8 +846,8 @@ fn tab_follows_reading_order_and_groups_and_f6_moves_between_panels() {
         seen,
         ["Tags", "Quality", "Size", "Open the form in a modal"]
     );
-    // F6 again: back to the address, where the focus was.
-    tab(&mut h, egui::Key::F6, false);
+    // Shift+F6: back to the address, where the focus was.
+    tab(&mut h, egui::Key::F6, true);
     assert_eq!(focused_label(&h, &all), "Postcode");
     let order = egui_pop::core::tab::order(&h.ctx, "inputs-options");
     assert_eq!(order.len(), 4, "one stop per field and the button");

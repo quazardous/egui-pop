@@ -913,101 +913,109 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
                     gap: kit.header_band.data.padding_y,
                 };
                 let shadow = ui.visuals().window_shadow;
-                let framed = window.show(ui, State::REST, shadow, |ui| {
-                    match inner {
-                        Some(i) => {
-                            ui.set_min_width(i.x);
-                            ui.set_max_width(i.x);
-                        }
-                        None => {
-                            ui.set_min_width(min);
-                            ui.set_max_width(max);
-                        }
-                    }
-                    let top = ui.cursor().top();
-                    // The room left under the bands for a resized one.
-                    let body = |ui: &Ui| {
-                        inner
-                            .filter(|_| unrolled)
-                            .map(|i| (top + i.y - ui.cursor().top()).max(0.0))
-                    };
-                    if g.is_lone() {
-                        let m = &g.members[0];
-                        let (_, b) = band::begin(ui, &style, |ui, state| {
-                            let title = &titles[&m.panel];
-                            band_row(ui, &t, title, state, m, Some(g.pinned), &mut asked);
-                        });
-                        if !m.rolled {
-                            match body(ui) {
-                                Some(h) => scrolled(ui, id, h, |ui| app.show_panel(ui, &m.panel)),
-                                None => app.show_panel(ui, &m.panel),
+                let region = focus::Region::new(
+                    format!("region.palette.{}", crate::app::scope_name(lead.as_str())),
+                    crate::workbench::RANK_PALETTE,
+                );
+                let framed = focus::region(ui, &region, |ui| {
+                    window.show(ui, State::REST, shadow, |ui| {
+                        match inner {
+                            Some(i) => {
+                                ui.set_min_width(i.x);
+                                ui.set_max_width(i.x);
                             }
+                            None => {
+                                ui.set_min_width(min);
+                                ui.set_max_width(max);
+                            }
+                        }
+                        let top = ui.cursor().top();
+                        // The room left under the bands for a resized one.
+                        let body = |ui: &Ui| {
+                            inner
+                                .filter(|_| unrolled)
+                                .map(|i| (top + i.y - ui.cursor().top()).max(0.0))
+                        };
+                        if g.is_lone() {
+                            let m = &g.members[0];
+                            let (_, b) = band::begin(ui, &style, |ui, state| {
+                                let title = &titles[&m.panel];
+                                band_row(ui, &t, title, state, m, Some(g.pinned), &mut asked);
+                            });
+                            if !m.rolled {
+                                match body(ui) {
+                                    Some(h) => {
+                                        scrolled(ui, id, h, |ui| app.show_panel(ui, &m.panel))
+                                    }
+                                    None => app.show_panel(ui, &m.panel),
+                                }
+                            }
+                            band::paint(ui, &b, &style);
+                            moved = Some(b);
+                            return;
+                        }
+                        // The group's band (its tabs, for tabs), then each
+                        // member shown under its own.
+                        let joined = g
+                            .panels()
+                            .map(|p| titles[p].as_str())
+                            .collect::<Vec<_>>()
+                            .join(" · ");
+                        let tabs = g.arrangement == Arrangement::Tabs;
+                        let (_, b) = band::begin(ui, &style, |ui, state| {
+                            group_row(ui, &t, &joined, &g, &titles, state, &mut asked);
+                        });
+                        let mut column = |ui: &mut Ui| {
+                            for m in &g.members {
+                                if tabs && m.panel != *g.shown() {
+                                    continue;
+                                }
+                                let shown = m.shown().clone();
+                                if !bands.is_empty() {
+                                    ui.add_space(gap);
+                                }
+                                // Room for the member's band to reach up into.
+                                ui.add_space(style.padding);
+                                let top = ui.cursor().top() - style.padding;
+                                let (mb, bottom) = ui
+                                    .push_id(("egui_pop.palette.member", m.panel.as_str()), |ui| {
+                                        let (_, mb) = band::begin(ui, &style, |ui, state| {
+                                            if m.is_tabs() {
+                                                tabs_row(ui, &t, m, &titles, &mut asked);
+                                            } else {
+                                                let title = &titles[&m.panel];
+                                                band_row(ui, &t, title, state, m, None, &mut asked);
+                                            }
+                                        });
+                                        if !m.rolled {
+                                            app.show_panel(ui, &shown);
+                                        }
+                                        (mb, ui.min_rect().bottom())
+                                    })
+                                    .inner;
+                                bands.push(MemberBand {
+                                    panel: shown,
+                                    tabs: m.is_tabs(),
+                                    band: mb,
+                                    top,
+                                    bottom,
+                                });
+                            }
+                            // Painted once the column's width is known.
+                            for mb in &bands {
+                                band::paint(ui, &mb.band, &style);
+                            }
+                        };
+                        match body(ui) {
+                            Some(h) => scrolled(ui, id, h, |ui| {
+                                ui.set_min_width(ui.available_width());
+                                column(ui);
+                            }),
+                            None => column(ui),
                         }
                         band::paint(ui, &b, &style);
                         moved = Some(b);
-                        return;
-                    }
-                    // The group's band (its tabs, for tabs), then each
-                    // member shown under its own.
-                    let joined = g
-                        .panels()
-                        .map(|p| titles[p].as_str())
-                        .collect::<Vec<_>>()
-                        .join(" · ");
-                    let tabs = g.arrangement == Arrangement::Tabs;
-                    let (_, b) = band::begin(ui, &style, |ui, state| {
-                        group_row(ui, &t, &joined, &g, &titles, state, &mut asked);
-                    });
-                    let mut column = |ui: &mut Ui| {
-                        for m in &g.members {
-                            if tabs && m.panel != *g.shown() {
-                                continue;
-                            }
-                            let shown = m.shown().clone();
-                            if !bands.is_empty() {
-                                ui.add_space(gap);
-                            }
-                            // Room for the member's band to reach up into.
-                            ui.add_space(style.padding);
-                            let top = ui.cursor().top() - style.padding;
-                            let (mb, bottom) = ui
-                                .push_id(("egui_pop.palette.member", m.panel.as_str()), |ui| {
-                                    let (_, mb) = band::begin(ui, &style, |ui, state| {
-                                        if m.is_tabs() {
-                                            tabs_row(ui, &t, m, &titles, &mut asked);
-                                        } else {
-                                            let title = &titles[&m.panel];
-                                            band_row(ui, &t, title, state, m, None, &mut asked);
-                                        }
-                                    });
-                                    if !m.rolled {
-                                        app.show_panel(ui, &shown);
-                                    }
-                                    (mb, ui.min_rect().bottom())
-                                })
-                                .inner;
-                            bands.push(MemberBand {
-                                panel: shown,
-                                tabs: m.is_tabs(),
-                                band: mb,
-                                top,
-                                bottom,
-                            });
-                        }
-                        // Painted once the column's width is known.
-                        for mb in &bands {
-                            band::paint(ui, &mb.band, &style);
-                        }
-                    };
-                    match body(ui) {
-                        Some(h) => scrolled(ui, id, h, |ui| {
-                            ui.set_min_width(ui.available_width());
-                            column(ui);
-                        }),
-                        None => column(ui),
-                    }
-                    band::paint(ui, &b, &style);
-                    moved = Some(b);
+                    })
                 });
                 let grip = palette_dimension(ui.ctx(), "palette.grip", 6.0);
                 edges = resize_edges(ui, id, framed.response.rect, grip, unrolled);

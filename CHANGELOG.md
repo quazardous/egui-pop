@@ -12,6 +12,16 @@ publishes.
 
 ### Added
 
+- F6 and Shift+F6 go through an application's regions (egui-pop-api,
+  egui-pop-core; `docs/inputs.md`): the activity bar, the side and bottom areas,
+  the centre, each palette, an open flyout, the status bar, as the commands
+  `workbench.next_region` and `workbench.previous_region`. A region remembers
+  its last focus, one with nothing focusable is passed over, and nothing moves
+  behind a modal or with a menu or popover open. Tab is unchanged: where palettes
+  float and nothing is focused it still hides them, and F6 is the way in. A panel
+  `tab::scope` takes its region's turn and F6 goes on out of it, where it used to
+  cycle among such scopes alone. `focus::region` and `regions::next` give the same
+  outside an application.
 - Columns in the in-app file picker's list, sortable (egui-pop-api;
   `docs/files.md`). The list shows when an entry last changed, its size and its
   type; a click on a header sorts, another turns it, and the headers stay above

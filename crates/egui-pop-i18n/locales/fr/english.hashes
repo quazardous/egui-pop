@@ -358,6 +358,10 @@ command-workbench-layout-sideBarPosition.description 326d78f56e32ca0c
 command-workbench-layout-sideBarPosition.title 9377f826bd726ce4
 command-workbench-leave-zen.description 1f1cdceb5029699c
 command-workbench-leave-zen.title 807fcda4df4c8836
+command-workbench-next-region.description f70cc22932de1c13
+command-workbench-next-region.title 5bc664b02200e3be
+command-workbench-previous-region.description b7ab3302080ad9bf
+command-workbench-previous-region.title 3e485e9867b167b6
 command-workbench-toggle-panel.description 32ec8f8f14f0aee9
 command-workbench-toggle-panel.title e2a922a82ec8940f
 command-workbench-toggle-primarySideBar.description 6abebaff6edb9c44

@@ -3219,6 +3219,21 @@ impl App {
             "workbenchZen && !modePushed && !overlayOpen && !textInputFocus",
             Layer::Default,
         )?;
+        // F6, as VS Code, GTK and the ARIA splitter pattern have it.
+        ctx.command(
+            CommandSpec::new(crate::workbench::CMD_NEXT_REGION, "Go to the next region", "View")
+                .description("Moves the keyboard to the next part of the window: the activity bar, a side or bottom area, the centre, a palette, the flyout, the status bar.")
+                .when("!modalOpen")
+                .key("F6"),
+            |call| crate::workbench::go_to_region(call.app, call.origin, false),
+        )?
+        .command(
+            CommandSpec::new(crate::workbench::CMD_PREVIOUS_REGION, "Go to the previous region", "View")
+                .description("Moves the keyboard to the previous part of the window.")
+                .when("!modalOpen")
+                .key("Shift+F6"),
+            |call| crate::workbench::go_to_region(call.app, call.origin, true),
+        )?;
         crate::palettes::declare(&mut ctx)?;
         for (i, (menu, label)) in [
             (MENU_FILE, "File"),
@@ -5341,7 +5356,8 @@ impl App {
         }
         if h.zone_has_blocks(&zones::STATUS_BAR) {
             egui::Panel::bottom(Id::new("egui_pop.status")).show(ui, |ui| {
-                focus::scope(ui, "statusBar", &[], |ui| {
+                let region = focus::Region::new("statusBar", crate::workbench::RANK_STATUS_BAR);
+                focus::region(ui, &region, |ui| {
                     ui.horizontal(|ui| h.show_zone(ui, &zones::STATUS_BAR));
                 });
             });

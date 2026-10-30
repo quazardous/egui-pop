@@ -19,9 +19,9 @@ use egui_pop::api::dialogs::{self, Confirm};
 use egui_pop::api::steps::Before;
 use egui_pop::api::workbench::STEP_FOCUS;
 use egui_pop::api::{App, Ctx, DefaultPlugins, Plugin, PluginError, palettes};
-use egui_pop::core::focus;
 use egui_pop::core::sections::{Section, Sections};
 use egui_pop::core::tab::{self, ScopeKind, TabStop};
+use egui_pop::core::{focus, regions};
 use egui_pop::editors::terminal::{Sink, Spawn, Terminal, TerminalSource, TerminalState};
 use egui_pop::model::commands::{CommandSpec, Origin};
 use egui_pop::model::ids::{CommandId, PanelId, PluginId};
@@ -759,23 +759,215 @@ fn tab_goes_through_windowed_rows_past_those_drawn() {
 // F6 (check 6, item 5).
 
 #[test]
-fn f6_goes_between_the_inputs_pages_scopes_and_back() {
+fn f6_goes_between_the_inputs_pages_scopes_and_on() {
     let mut h = harness("inputs");
-    assert_eq!(name(walk::press(&mut h, F6)), "Street");
+    walk::reach(&mut h, F6, "Street", 6).expect("F6 reaches the page's first scope");
     assert_eq!(name(walk::press(&mut h, F6)), "Tags");
-    assert_eq!(name(walk::press(&mut h, F6)), "Street");
-    assert_eq!(name(walk::press(&mut h, SHIFT_F6)), "Tags");
     assert_eq!(name(walk::press(&mut h, SHIFT_F6)), "Street");
+    assert_eq!(name(walk::press(&mut h, F6)), "Tags");
+    // Their turn over, F6 goes on: they keep no one in.
+    assert_ne!(name(walk::press(&mut h, F6)), "Street");
 }
 
 #[test]
-#[ignore = "keyboard survey item 5: no shell panel opens a scope, F6 does nothing outside the inputs page"]
 fn f6_goes_to_a_region_on_every_page() {
     for page in ["overview", "workbench", "menus", "settings"] {
         let mut h = harness(page);
         assert!(walk::press(&mut h, F6).is_some(), "{page}");
         assert!(walk::press(&mut h, SHIFT_F6).is_some(), "{page}");
     }
+}
+
+// F6 through the shell (item 5).
+
+/// The names F6 goes through once round, from where the focus is.
+fn f6_round(h: &mut Harness<'_, App>, key: Press) -> Vec<String> {
+    let walked = walk::walk(h, key, 12);
+    assert!(matches!(walked.end, End::Looped { at: 0 }), "{walked}");
+    walked.stops.into_iter().map(|s| s.name).collect()
+}
+
+#[test]
+fn f6_goes_through_the_regions_in_order_and_shift_f6_back() {
+    let (mut h, _) = panels();
+    let round = f6_round(&mut h, F6);
+    // The side area, the bottom one (a panel of text in front, holding the
+    // focus itself), the centre by what it prefers, the palette's unnamed field.
+    assert_eq!(round, ["Row 0", "Empty", "Canvas", ""]);
+    let (mut h, _) = panels();
+    assert_eq!(f6_round(&mut h, SHIFT_F6), ["", "Canvas", "Empty", "Row 0"]);
+}
+
+#[test]
+fn a_region_remembers_its_last_focus() {
+    let (mut h, _) = panels();
+    assert_eq!(name(walk::press(&mut h, F6)), "Row 0");
+    assert_eq!(name(walk::press(&mut h, TAB)), "Row 1");
+    assert_eq!(name(walk::press(&mut h, F6)), "Empty");
+    assert_eq!(name(walk::press(&mut h, SHIFT_F6)), "Row 1");
+}
+
+#[test]
+fn f6_after_escape_goes_on_from_the_place() {
+    let (mut h, _) = panels();
+    run(&mut h, "demo.search.focus");
+    assert_eq!(walk::press(&mut h, ESCAPE), None);
+    assert_eq!(name(walk::press(&mut h, F6)), "Canvas");
+}
+
+#[test]
+fn f6_into_a_panel_of_text_alone_gives_it_the_keys() {
+    let (mut h, _) = panels();
+    run(&mut h, "demo.empty.focus");
+    let own = walk::focused(&h).expect("the panel holds the focus");
+    assert_eq!(own.name, "Empty");
+    assert_eq!(panel(&h), Some(EMPTY));
+    assert_eq!(name(walk::press(&mut h, F6)), "Canvas");
+    assert_eq!(panel(&h), Some(IMAGE));
+    assert_eq!(name(walk::press(&mut h, SHIFT_F6)), "Empty");
+    assert_eq!(panel(&h), Some(EMPTY));
+}
+
+#[test]
+fn f6_is_the_way_in_where_tab_hides_the_palettes() {
+    let (mut h, _) = panels();
+    // Nothing focused: Tab hides them, and they keep their rule.
+    assert_eq!(walk::press(&mut h, TAB), None);
+    assert!(palettes::hidden(h.state().handle()));
+    assert_eq!(walk::press(&mut h, TAB), None);
+    assert!(!palettes::hidden(h.state().handle()));
+    // F6 goes in, to a palette as to the rest, and Tab then moves.
+    let field = walk::press(&mut h, SHIFT_F6).expect("F6 goes in");
+    assert_eq!(field.role, Role::TextInput, "{field}");
+    assert_eq!(panel(&h), Some(TOOLS));
+    assert!(walk::press(&mut h, TAB).is_some());
+    assert!(!palettes::hidden(h.state().handle()));
+    // Hidden, a palette is no region.
+    let (mut h, _) = panels();
+    walk::press(&mut h, TAB);
+    assert!(palettes::hidden(h.state().handle()));
+    assert_eq!(f6_round(&mut h, F6), ["Row 0", "Empty", "Canvas"]);
+}
+
+#[test]
+fn f6_does_not_change_what_tab_goes_through() {
+    let (mut h, _) = panels();
+    run(&mut h, "demo.list.focus");
+    assert_eq!(name(walk::press(&mut h, TAB)), "Row 1");
+    assert_eq!(name(walk::press(&mut h, SHIFT_TAB)), "Row 0");
+}
+
+#[test]
+fn f6_stays_behind_a_modal() {
+    let (mut h, _) = panels();
+    let d = h.state().handle().service(&dialogs::DIALOGS).unwrap();
+    d.open(Confirm::new("A question?", "Accept", CIRCLE));
+    let _ = h.run_ok();
+    assert_eq!(name(walk::focused(&h)), "Accept");
+    assert_eq!(name(walk::press(&mut h, F6)), "Accept");
+    assert_eq!(name(walk::press(&mut h, SHIFT_F6)), "Accept");
+}
+
+#[test]
+fn f6_leaves_nothing_open_behind_it() {
+    // A popover keeps the focus, for Escape first.
+    let mut h = popover();
+    assert_eq!(name(walk::press(&mut h, TAB)), "Dismiss all");
+    assert_eq!(name(walk::press(&mut h, F6)), "Dismiss all");
+    assert!(h.query_by_label("Dismiss all").is_some());
+    // So does an open menu.
+    let mut h = harness("overview");
+    walk::press(&mut h, ALT_F);
+    let _ = h.run_ok();
+    assert!(egui::Popup::is_any_open(&h.ctx));
+    assert_eq!(walk::press(&mut h, F6), None);
+    assert!(egui::Popup::is_any_open(&h.ctx));
+}
+
+#[test]
+fn an_open_flyout_is_a_region() {
+    let mut h = harness("workbench");
+    reach_back(&mut h, "Start side: fold");
+    walk::press(&mut h, ENTER);
+    walk::reach(&mut h, TAB, "Side bar", 60).expect("Tab reaches the strip's icon");
+    walk::press(&mut h, ENTER);
+    assert!(h.state().app.handle().flyout().is_some());
+    let inside = |h: &Harness<'_, Gallery>| {
+        let rect = h.state().app.handle().flyout().and_then(|f| f.1).unwrap();
+        walk::focused(h).is_some_and(|s| rect.contains(s.rect.center()))
+    };
+    let found = (0..12).any(|_| {
+        walk::press(&mut h, F6);
+        inside(&h)
+    });
+    assert!(found, "F6 reaches the flyout");
+    // It goes on from there, the flyout still open.
+    walk::press(&mut h, F6);
+    assert!(!inside(&h));
+    assert!(h.state().app.handle().flyout().is_some());
+}
+
+#[test]
+fn f6_in_zen_mode_has_the_centre_alone() {
+    let (mut h, _) = panels();
+    h.state().handle().set_zen(true);
+    let _ = h.run_ok();
+    assert_eq!(f6_round(&mut h, F6), ["Canvas"]);
+}
+
+#[test]
+fn regions_go_by_rank_passing_over_one_with_nothing_to_focus() {
+    let mut h = themed(&ThemeSpec::default(), egui::vec2(400.0, 300.0), |ui| {
+        focus::region(ui, &focus::Region::new("last", 2), |ui| {
+            let _ = ui.button("Last");
+        });
+        focus::region(ui, &focus::Region::new("text", 1), |ui| {
+            ui.label("Only text");
+        });
+        focus::region(ui, &focus::Region::new("first", 0), |ui| {
+            let _ = ui.button("First");
+        });
+        let f6 = ui.input(|i| i.key_pressed(Key::F6));
+        if f6 && let Some(hop) = regions::next(ui.ctx(), false) {
+            ui.memory_mut(|m| m.request_focus(hop.target.expect("no region holds it")));
+        }
+    });
+    let _ = h.run_ok();
+    let walked = walk::walk(&mut h, F6, 6);
+    assert_eq!(walked.names(), ["First", "Last"], "{walked}");
+}
+
+#[test]
+fn f6_is_a_binding_like_any_other() {
+    let (mut h, _) = panels();
+    let handle = h.state().handle().clone();
+    assert_eq!(
+        handle.keys_for(&egui_pop::api::workbench::CMD_NEXT_REGION),
+        ["F6"]
+    );
+    assert_eq!(
+        handle.keys_for(&egui_pop::api::workbench::CMD_PREVIOUS_REGION),
+        ["Shift+F6"]
+    );
+    // An agent's run moves it too, unless someone is typing.
+    let agent = Origin::Agent("a1".to_string());
+    h.state_mut().run(
+        &egui_pop::api::workbench::CMD_NEXT_REGION,
+        Json::Null,
+        agent.clone(),
+    );
+    let _ = h.run_ok();
+    assert_eq!(name(walk::focused(&h)), "Row 0");
+    run(&mut h, "demo.search.focus");
+    let field = walk::focused(&h).expect("the field has the keyboard");
+    assert_eq!(field.role, Role::TextInput, "{field}");
+    h.state_mut().run(
+        &egui_pop::api::workbench::CMD_NEXT_REGION,
+        Json::Null,
+        agent,
+    );
+    let _ = h.run_ok();
+    assert_eq!(walk::focused(&h).map(|s| s.id), Some(field.id));
 }
 
 // The gallery's side list (checks 7 and 8; items 10 and 16).
@@ -1324,6 +1516,50 @@ impl TerminalSource for Recorder {
         self.0.lock().unwrap().extend_from_slice(bytes);
         Ok(())
     }
+}
+
+struct ShellPanel(TerminalState);
+
+const SHELL_PANEL: PanelId = PanelId::from_static("shell.panel");
+
+impl Plugin for ShellPanel {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("shell")
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        let state = self.0.clone();
+        ctx.panel(
+            PanelSpec::new(SHELL_PANEL, "Shell", Area::Center),
+            move |ui, _| {
+                let _ = Terminal::new().label("Shell").show(ui, &state);
+            },
+        )?;
+        ctx.panel(PanelSpec::new(LIST, "List", Area::StartSide), |ui, _| {
+            let _ = ui.button("Row");
+        })?;
+        Ok(())
+    }
+}
+
+#[test]
+fn a_focused_terminal_in_a_panel_keeps_f6() {
+    let recorder = Recorder::default();
+    let state = TerminalState::new("walk.shell", recorder.clone());
+    let app = App::builder()
+        .plugins(DefaultPlugins)
+        .plugin(ShellPanel(state))
+        .build(&egui::Context::default())
+        .unwrap();
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(1000.0, 700.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+    let _ = h.run_ok();
+    // F6 goes in; there it is the program's, and Shift+Escape the way out.
+    assert_eq!(name(walk::press(&mut h, F6)), "Row");
+    assert_eq!(name(walk::press(&mut h, F6)), "Shell");
+    assert_eq!(name(walk::press(&mut h, F6)), "Shell");
+    assert_eq!(recorder.0.lock().unwrap().as_slice(), b"\x1b[17~");
 }
 
 #[test]
