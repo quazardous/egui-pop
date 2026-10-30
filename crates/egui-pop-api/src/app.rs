@@ -673,6 +673,9 @@ pub(crate) struct Shared {
     edge_to_edge: std::cell::Cell<bool>,
     /// The system's text scaling (`AppBuilder::system_text_scale`).
     system_text_scale: std::cell::Cell<crate::text::SystemTextScale>,
+    /// Whether the system always shows its scroll bars
+    /// (`AppBuilder::system_always_shows_scroll_bars`).
+    system_scroll_bars: std::cell::Cell<bool>,
     /// The main menu drawn as a bar under the title.
     menu_bar: std::cell::Cell<bool>,
     /// The window the user worked in last (focused, clicked or typed
@@ -799,6 +802,7 @@ impl AppHandle {
             drawing_areas: std::cell::Cell::new(false),
             edge_to_edge: std::cell::Cell::new(false),
             system_text_scale: std::cell::Cell::default(),
+            system_scroll_bars: std::cell::Cell::default(),
             menu_bar: std::cell::Cell::new(true),
             active_window: std::cell::Cell::new(egui::ViewportId::ROOT),
             shell_sizes: RefCell::default(),
@@ -2144,6 +2148,12 @@ impl AppHandle {
         self.0.system_text_scale.get()
     }
 
+    /// Whether the system always shows its scroll bars
+    /// (`AppBuilder::system_always_shows_scroll_bars`).
+    pub fn system_always_shows_scroll_bars(&self) -> bool {
+        self.0.system_scroll_bars.get()
+    }
+
     /// Whether the main menu is drawn as a bar under the title
     /// (`AppBuilder::menu_bar`).
     pub fn menu_bar(&self) -> bool {
@@ -2449,6 +2459,7 @@ pub struct AppBuilder {
     host: Option<Box<dyn Host>>,
     system_focus: Option<SystemFocus>,
     system_text_scale: crate::text::SystemTextScale,
+    system_scroll_bars: bool,
     edge_to_edge: bool,
     menu_bar: bool,
     shell_sizes: Vec<(PanelId, f32)>,
@@ -2520,6 +2531,7 @@ impl AppBuilder {
             host: None,
             system_focus: None,
             system_text_scale: crate::text::SystemTextScale::default(),
+            system_scroll_bars: false,
             edge_to_edge: false,
             menu_bar: true,
             shell_sizes: Vec::new(),
@@ -2763,6 +2775,16 @@ impl AppBuilder {
         self
     }
 
+    /// Whether the system was asked always to show its scroll bars: `true`
+    /// makes the `auto` of the `appearance.scroll_bars` setting show full
+    /// bars. One way only, so there is no value for a system that hides them:
+    /// that is most systems' default, and nobody chose it. Not given, `false`;
+    /// egui-pop reads nothing itself.
+    pub fn system_always_shows_scroll_bars(mut self, always: bool) -> Self {
+        self.system_scroll_bars = always;
+        self
+    }
+
     /// Sorts the plugins, connects them, installs the theme and resolves
     /// the declarations, on a context.
     pub fn build(self, ctx: &Context) -> Result<App, BuildError> {
@@ -2813,6 +2835,7 @@ impl AppBuilder {
             installed: None,
             accent_setting: None,
             text_seen: crate::text::Seen::default(),
+            scroll_bars_seen: None,
             preference: None,
             persist: self.persist,
             kits: Vec::new(),
@@ -2832,6 +2855,7 @@ impl AppBuilder {
             .map(|p| Writer::new(p, egui_pop_core::persist::DEBOUNCE));
         app.handle.0.edge_to_edge.set(self.edge_to_edge);
         app.handle.0.system_text_scale.set(self.system_text_scale);
+        app.handle.0.system_scroll_bars.set(self.system_scroll_bars);
         app.handle.0.menu_bar.set(self.menu_bar);
         *app.handle.0.shell_sizes.borrow_mut() = self.shell_sizes;
         app.handle.workbench_mut().layout.folded = self.folded;
@@ -2985,6 +3009,8 @@ pub struct App {
     /// The text settings as last seen (they change the spec when they
     /// change).
     text_seen: crate::text::Seen,
+    /// What the scroll bars' setting asked for when last seen.
+    scroll_bars_seen: Option<theme::ScrollBars>,
     /// The light or dark preference applied since the last install.
     preference: Option<egui::ThemePreference>,
     persist: Option<Persist>,
@@ -3298,6 +3324,7 @@ impl App {
         ctx.setting(SETTING_FOCUS, focus)?;
         crate::zoom::register(&mut ctx)?;
         crate::text::register(&mut ctx, handle.system_text_scale())?;
+        crate::scroll_bars::register(&mut ctx)?;
         crate::sliders::register(&mut ctx)?;
         crate::pointer::register(&mut ctx, pointer_profile)?;
         ctx.setting(
@@ -4747,7 +4774,9 @@ impl App {
             self.accent_setting = Some(accent);
         }
         let mut wanted = service.spec();
-        if crate::text::apply(&self.handle, &mut self.text_seen, &mut wanted) {
+        let text = crate::text::apply(&self.handle, &mut self.text_seen, &mut wanted);
+        let bars = crate::scroll_bars::apply(&self.handle, &mut self.scroll_bars_seen, &mut wanted);
+        if text || bars {
             service.set(wanted);
         }
         let spec = service.spec();

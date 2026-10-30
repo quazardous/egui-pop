@@ -2195,6 +2195,16 @@ setting-appearance-language =
 
 setting-appearance-language-choice-system = system
 
+setting-appearance-scroll-bars =
+    .description = When content overflows: bars as the theme draws them (auto), full bars beside the content (always), or none until the pointer is over it (hover). Auto gives full bars too when the application reports that the system always shows them.
+    .label = Scroll bars
+
+setting-appearance-scroll-bars-choice-always = always
+
+setting-appearance-scroll-bars-choice-auto = auto
+
+setting-appearance-scroll-bars-choice-hover = hover
+
 setting-appearance-text-size =
     .description = Makes the text larger or smaller, without the spacing (the interface zoom scales everything). Nothing was read from the system: the default is 100%.
     .label = Text size
