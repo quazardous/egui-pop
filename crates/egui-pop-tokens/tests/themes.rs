@@ -2,8 +2,8 @@
 //! overlays touch what they should, problems fall back instead of breaking.
 
 use egui_pop_tokens::{
-    BUILT_IN_ACCENTS, BUILT_IN_THEMES, Color, Density, Error, POP_THEMES, ThemeSpec, Themes, Tier,
-    TokenFile, Value, Warning, contract,
+    BUILT_IN_ACCENTS, BUILT_IN_THEMES, Color, Density, Error, POP_THEMES, ScrollBars, ThemeSpec,
+    Themes, Tier, TokenFile, Value, Warning, contract,
 };
 use serde_json::json;
 
@@ -1325,4 +1325,93 @@ fn a_scale_given_by_its_seed_is_generated_when_resolved() {
     assert_eq!(back.seeds().0["blue"], Seed::new(seed, Scheme::Dark));
     file.set_seed("blue", None);
     assert_eq!(file.extensions, None);
+}
+
+fn scroll_bar_terms(resolved: &egui_pop_tokens::ResolvedTokens) -> (&str, &str) {
+    let term = |path: &str| match &resolved.get(path).unwrap().value {
+        Value::Other(serde_json::Value::String(s)) => s.as_str(),
+        other => panic!("{path}: {other:?}"),
+    };
+    (term("scroll-bar.visibility"), term("scroll-bar.placement"))
+}
+
+#[test]
+fn the_user_s_scroll_bars_win_over_every_theme_and_auto_leaves_them() {
+    let themes = Themes::default();
+    for name in BUILT_IN_THEMES {
+        let spec = ThemeSpec::new(*name);
+        assert_eq!(spec.scroll_bars, ScrollBars::Auto, "{name}");
+        let always = themes.resolve(&spec.clone().scroll_bars(ScrollBars::Always));
+        assert!(
+            always.problems().is_empty(),
+            "{name}: {:?}",
+            always.problems()
+        );
+        assert_eq!(scroll_bar_terms(&always), ("always", "beside"), "{name}");
+        let hover = themes.resolve(&spec.clone().scroll_bars(ScrollBars::Hover));
+        assert!(
+            hover.problems().is_empty(),
+            "{name}: {:?}",
+            hover.problems()
+        );
+        assert_eq!(scroll_bar_terms(&hover), ("hover", "over"), "{name}");
+    }
+    // Auto is the theme's, whatever it is: its high contrast is full bars.
+    let high = themes.resolve(&ThemeSpec::new("pop-high-contrast"));
+    assert_eq!(scroll_bar_terms(&high), ("always", "beside"));
+    let quiet = themes.resolve(&ThemeSpec::new("pop-dark"));
+    assert_eq!(scroll_bar_terms(&quiet), ("rest", "over"));
+}
+
+#[test]
+fn always_gives_a_track_where_the_theme_has_none_and_keeps_a_theme_s_own() {
+    let track = |overrides: Option<serde_json::Value>| {
+        let mut spec = ThemeSpec::new("pop-dark").scroll_bars(ScrollBars::Always);
+        if let Some(value) = overrides {
+            spec = spec.override_token("scroll-bar.track-fill", value);
+        }
+        let resolved = Themes::default().resolve(&spec);
+        assert!(resolved.problems().is_empty(), "{:?}", resolved.problems());
+        let value = resolved.get("scroll-bar.track-fill").unwrap().value.clone();
+        let sunken = resolved.get("surface.sunken").unwrap().value.clone();
+        (value, sunken)
+    };
+    let (transparent, sunken) = track(Some(json!("{transparent}")));
+    assert_eq!(transparent, sunken);
+    let (own, sunken) = track(Some(json!("#ff0000")));
+    assert_ne!(own, sunken);
+    // Without `always`, a theme's transparent track stays.
+    let hover = Themes::default().resolve(
+        &ThemeSpec::new("pop-dark")
+            .scroll_bars(ScrollBars::Hover)
+            .override_token("scroll-bar.track-fill", json!("{transparent}")),
+    );
+    let Value::Color(c) = hover.get("scroll-bar.track-fill").unwrap().value else {
+        panic!("a colour");
+    };
+    assert_eq!(c.a, 0.0);
+}
+
+#[test]
+fn a_pair_s_two_variants_take_the_user_s_scroll_bars() {
+    let themes = Themes::default();
+    let spec = ThemeSpec::new("pop-dark").scroll_bars(ScrollBars::Always);
+    let other = themes.resolve_counterpart(&spec).expect("pop-dark has one");
+    assert_eq!(other.spec().base, "pop-light");
+    assert_eq!(scroll_bar_terms(&other), ("always", "beside"));
+}
+
+#[test]
+fn the_scroll_bars_setting_s_values_round_trip() {
+    for value in ScrollBars::CHOICES {
+        assert_eq!(ScrollBars::parse(value).unwrap().as_str(), value);
+    }
+    assert_eq!(ScrollBars::parse("scroll"), None);
+    assert_eq!(ScrollBars::default(), ScrollBars::Auto);
+    let spec = ThemeSpec::new("pop-dark").scroll_bars(ScrollBars::Hover);
+    assert!(
+        spec.label().contains("scroll bars hover"),
+        "{}",
+        spec.label()
+    );
 }
