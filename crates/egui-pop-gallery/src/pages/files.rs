@@ -415,9 +415,9 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                     "Up, Down, Enter",
                     "move, then enter a folder or choose a file",
                 ),
+                ("Shift+Up, Shift+Down", "extend the selection (several)"),
                 ("Backspace, Alt+Up", "the parent folder"),
                 ("Ctrl+Enter", "choose the folder, or the selection"),
-                ("Ctrl+Space", "select a file (choosing several)"),
                 ("Ctrl+D", "bookmark the folder"),
                 ("Alt+P", "show or hide the preview pane"),
                 ("Escape", "cancel (from the field: twice)"),
@@ -429,6 +429,12 @@ fn show(ui: &mut Ui, app: &AppHandle) {
             // Declared, so it says what it is bound to now.
             ui.monospace(app.keys_for(&files::CMD_NEW_FOLDER).join(", "));
             ui.label("a new folder (saving, or choosing a folder)");
+            ui.end_row();
+            ui.monospace(app.keys_for(&files::CMD_TOGGLE_SELECTION).join(", "));
+            ui.label("select or unselect the entry (several, or a folder)");
+            ui.end_row();
+            ui.monospace(app.keys_for(&files::CMD_SELECT_ALL).join(", "));
+            ui.label("select every file shown (several)");
             ui.end_row();
         });
 }
