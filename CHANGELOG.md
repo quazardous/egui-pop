@@ -1119,6 +1119,14 @@ publishes.
   now ignores every key already down until it is released, whatever opened it
   (a button, a key binding, the palette, the dialog before it in a queue);
   a fresh press answers as before.
+- A dialog and the command palette give the focus back when they close
+  (egui-pop-core), to the widget that held it when they opened, as a popover
+  already did: egui takes the focus off a widget drawn under a modal's layer,
+  which stays on top a pass longer, so the focus asked for on closing was
+  undone and Tab started over. The next dialog of a queue inherits the place. A
+  command run by the answer that takes the focus itself keeps it. The key that
+  closes a modal does not reach what is behind it until released: held, the
+  Enter that accepts a dialog does not click its button again.
 - Closing a dialog whose focus was to go back to a widget gone since no longer
   leaves the focus on that widget (egui-pop-core): with AccessKit on, it
   panicked (`Focused ID is not in the node list`), as the second dialog of a

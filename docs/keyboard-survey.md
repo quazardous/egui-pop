@@ -227,14 +227,15 @@ From `crates/egui-pop-core` (`tab.rs`, `focus.rs`, `keys.rs`,
 
 ### Where the focus gets lost
 
-- **[walk] A popover gives it back; a dialog and the command palette do
-  not.** `an_overlay_closes_on_escape_and_gives_the_focus_back` and
-  `escape_closes_only_the_top_overlay_and_focus_goes_back` test overlays
-  that are not modal. Escape from a status popover returns to its status
-  item. Escape from a confirm dialog opened from a focused button, or from
-  the palette opened with F1, leaves nothing focused. Why is not settled;
-  the overlay's stack does ask for the focus back (`settle`), and egui takes
-  the focus off widgets under a modal.
+- **[walk] Overlays give it back, modal or not.**
+  `an_overlay_closes_on_escape_and_gives_the_focus_back` and
+  `escape_closes_only_the_top_overlay_and_focus_goes_back` for overlays that
+  are not modal; `escape_from_a_dialog_gives_the_focus_back_to_its_button`,
+  `escape_from_the_palette_gives_the_focus_back` for the others. Until item
+  21, a modal left nothing focused: the stack asked for the focus in the pass
+  it closed, and egui takes it off any widget drawn under the top modal layer,
+  which is the previous pass's; the stack now asks once the layer is gone. A
+  focus requested for a widget gone since is dropped.
 - **[read] egui's menus are not overlays**, so nothing restores the focus
   when one closes.
 - **[walk] After Escape on any widget** egui drops the focus. The focus
@@ -751,9 +752,10 @@ one pull request. Numbers stay as they are, since the walk's tests name them;
     modal overlay coming up now takes that pass's presses out of the input, and
     the keys down stay out of it until released, before egui reads them
     (`overlay.rs`, the walk's dialog tests).
-21. **A modal overlay gives the focus back.** New from the walk. Escape from a
-    dialog or the palette returns to the widget that held the focus when it
-    opened, as a popover already does and ARIA's modal dialog asks. Size: S.
+21. **Done: a modal overlay gives the focus back,** to the widget that held the
+    focus when it opened, as a popover does and ARIA's modal dialog asks, by
+    Escape, an answer or a button. The stack did ask for it: egui's focus rule
+    undid it (see "Where the focus gets lost").
 22. **Tab past a popover's end.** New from the walk. It cycles inside or closes
     the popover (ARIA's menu closes on Tab), not walking the window behind it
     with the popover open. Size: S.
@@ -837,7 +839,7 @@ compositor.
 | 13 | Menu from its focused button, arrows | the focus can leave | Second Down goes to the side list behind the menu | yes |
 | 14 | Tab with a menu open and a floating palette | the palette hides | It hides | yes |
 | 15 | Status popover, Tab past its last stop | (open) | Goes on through the window behind, popover still open; Escape returns to the item | new (item 22) |
-| 16 | Confirm dialog, danger on and off: first focus, Tab round | as `dialogs.rs` | Action first, Cancel for a danger, Tab wraps, F6 stays. **Also** Enter from the opening button answered a dialog at once (item 20, fixed), Escape leaves nothing focused (item 21) | yes, and two bugs |
+| 16 | Confirm dialog, danger on and off: first focus, Tab round | as `dialogs.rs` | Action first, Cancel for a danger, Tab wraps, F6 stays. **Also** Enter from the opening button answered a dialog at once (item 20, fixed), Escape left nothing focused (item 21, fixed) | yes, and two bugs |
 
 **Keys**
 
@@ -874,8 +876,8 @@ The order to follow for egui-pop now, by the same measure:
 
 1. **Done: item 20, Enter answers the dialog it opens.** A bug skipping a
    confirmation. New, and first.
-2. **Item 21, modal overlays give the focus back.** Small, and every dialog
-   and palette use loses the place today. New.
+2. **Done: item 21, modal overlays give the focus back.** Every dialog and
+   palette use lost the place. New.
 3. **Item 3, one focused panel.** Confirmed; still what Helios's keys depend on.
    First of the larger ones.
 4. **Item 7, focus scrolls into view,** up from seventh: it is the first thing

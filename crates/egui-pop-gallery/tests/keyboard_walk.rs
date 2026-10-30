@@ -742,6 +742,12 @@ fn asking() -> (Harness<'static, App>, Arc<Mutex<Vec<&'static str>>>) {
     (h, runs)
 }
 
+/// Goes to a stop of the small harness, by keys.
+#[track_caller]
+fn reach_back_in(h: &mut Harness<'_, App>, name: &str) -> Stop {
+    walk::reach(h, TAB, name, 60).unwrap_or_else(|| panic!("Tab reaches {name}"))
+}
+
 const CTRL_ENTER: Press = Press {
     modifiers: CTRL,
     key: Key::Enter,
@@ -803,7 +809,6 @@ fn a_held_enter_that_answers_a_dialog_does_not_answer_the_next_in_the_queue() {
 }
 
 #[test]
-#[ignore = "keyboard survey item 21: a dialog closed by Escape leaves nothing focused"]
 fn escape_from_a_dialog_gives_the_focus_back_to_its_button() {
     let mut h = harness("dialogs");
     reach_back(&mut h, "Confirm an export");
@@ -812,7 +817,6 @@ fn escape_from_a_dialog_gives_the_focus_back_to_its_button() {
 }
 
 #[test]
-#[ignore = "keyboard survey item 21: the command palette closed by Escape leaves nothing focused"]
 fn escape_from_the_palette_gives_the_focus_back() {
     let mut h = harness("dialogs");
     reach_back(&mut h, "Confirm an export");
@@ -821,6 +825,72 @@ fn escape_from_the_palette_gives_the_focus_back() {
         "Command palette"
     );
     assert_eq!(name(walk::press(&mut h, ESCAPE)), "Confirm an export");
+}
+
+#[test]
+fn answering_a_dialog_gives_the_focus_back_too() {
+    let mut h = harness("dialogs");
+    reach_back(&mut h, "Confirm an export");
+    walk::press(&mut h, ENTER);
+    // Accepted by Enter.
+    assert_eq!(name(walk::press(&mut h, ENTER)), "Confirm an export");
+    assert_ne!(sent(&h), "");
+    // Cancelled by its button, with Tab and Space.
+    walk::press(&mut h, ENTER);
+    assert_eq!(name(walk::press(&mut h, TAB)), "Cancel");
+    assert_eq!(name(walk::press(&mut h, SPACE)), "Confirm an export");
+}
+
+#[test]
+fn a_held_enter_accepting_a_dialog_does_not_click_the_button_behind_it() {
+    let mut h = harness("dialogs");
+    reach_back(&mut h, "Confirm an export");
+    walk::press(&mut h, ENTER);
+    assert_eq!(name(walk::hold(&mut h, ENTER)), "Confirm an export");
+    assert!(h.query_by_label("Export the page?").is_none());
+    for _ in 0..3 {
+        walk::hold(&mut h, ENTER);
+        assert!(h.query_by_label("Export the page?").is_none());
+    }
+    walk::release(&mut h, ENTER);
+    // Released, the button works again.
+    assert_eq!(name(walk::press(&mut h, ENTER)), "Export");
+}
+
+#[test]
+fn a_queue_gives_the_focus_back_to_what_held_it_before_the_first() {
+    let mut h = harness("dialogs");
+    reach_back(&mut h, "Confirm an export");
+    let d = h
+        .state()
+        .app
+        .handle()
+        .service(&dialogs::DIALOGS)
+        .expect("default plugin");
+    // The button opens one, and a second waits behind it.
+    walk::press(&mut h, ENTER);
+    d.open(Confirm::new(
+        "Second?",
+        "Accept",
+        CommandId::from_static("none"),
+    ));
+    walk::press(&mut h, ESCAPE);
+    assert!(h.query_by_label("Second?").is_some());
+    assert_eq!(name(walk::focused(&h)), "Accept");
+    assert_eq!(name(walk::press(&mut h, ESCAPE)), "Confirm an export");
+}
+
+#[test]
+fn a_dialog_opened_from_the_palette_gives_the_focus_back_to_what_held_it_before_the_palette() {
+    let (mut h, runs) = asking();
+    reach_back_in(&mut h, "File");
+    walk::press(&mut h, Press::key(Key::F1));
+    h.event(egui::Event::Text("Ask a question".to_string()));
+    let _ = h.run_ok();
+    walk::press(&mut h, ENTER);
+    assert!(h.query_by_label("A question?").is_some());
+    assert_eq!(name(walk::press(&mut h, ENTER)), "File");
+    assert_eq!(*runs.lock().unwrap(), ["answered"]);
 }
 
 // Keys (checks 17 and 18).
