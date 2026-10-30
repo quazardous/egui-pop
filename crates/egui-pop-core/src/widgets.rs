@@ -23,6 +23,7 @@
 //!
 //! [`Splitter`] has no counterpart in egui, whose panels keep their
 //! resize lines to themselves and out of the keyboard's reach.
+//! [`SortHeader`], a column's header, has none either.
 //!
 //! A combo box's own box stays egui's: it follows `button` through
 //! egui's `Visuals` (`theme::visuals_with`); only its arrow is the kit's.
@@ -359,6 +360,7 @@ pub struct SelectableRow<'a> {
     glyph: Option<Icon>,
     steady: bool,
     wrap: bool,
+    name: Option<String>,
 }
 
 impl std::fmt::Debug for SelectableRow<'_> {
@@ -378,7 +380,16 @@ impl<'a> SelectableRow<'a> {
             glyph: None,
             steady: false,
             wrap: false,
+            name: None,
         }
+    }
+
+    /// Its name for assistive technology, when its atoms say more than
+    /// its name: the cells of a row with columns.
+    #[inline]
+    pub fn name(mut self, name: impl Into<String>) -> Self {
+        self.name = Some(name.into());
+        self
     }
 
     /// Keeps the row's size in every state. Like egui's selectable
@@ -400,9 +411,10 @@ impl<'a> SelectableRow<'a> {
 }
 
 impl Widget for SelectableRow<'_> {
-    fn ui(self, ui: &mut Ui) -> Response {
+    fn ui(mut self, ui: &mut Ui) -> Response {
         let kit = Kit::of(ui.ctx());
-        row_ui(ui, &kit.selectable_row, self, None)
+        let name = self.name.take();
+        row_ui(ui, &kit.selectable_row, self, name)
     }
 }
 
@@ -473,6 +485,7 @@ impl Widget for ToggleChip<'_> {
             glyph,
             steady: false,
             wrap: false,
+            name: None,
         };
         let mut r = row_ui(ui, &kit.toggle_chip, row, name);
         if r.clicked() {
@@ -499,6 +512,7 @@ fn row_ui(
         glyph,
         steady,
         wrap,
+        name: _,
     } = row;
     let text = atoms.text().map(String::from);
     // upstream: as egui's selectable button, the row is framed (its
@@ -585,6 +599,81 @@ fn row_ui(
 /// through the kit.
 pub fn selectable_label<'a>(ui: &mut Ui, selected: bool, atoms: impl IntoAtoms<'a>) -> Response {
     ui.add(SelectableRow::new(selected, atoms))
+}
+
+/// A column's header: its box is the kit's `table-header-cell` component,
+/// `selected` while the rows are sorted by it, the direction the kit's
+/// `sort-ascending` or `sort-descending` glyph after the title. A button for
+/// assistive technology, a label when it does not sort. The data table's and
+/// the file picker's.
+#[derive(Clone, Copy, Debug)]
+pub struct SortHeader<'a> {
+    /// What it shows.
+    pub title: &'a str,
+    /// Its name for assistive technology, which says the direction.
+    pub name: &'a str,
+    /// Whether the rows are sorted by it, and whether downwards.
+    pub descending: Option<bool>,
+    /// Whether a click sorts.
+    pub sortable: bool,
+}
+
+impl SortHeader<'_> {
+    /// Draws it over `rect`. The caller decides what a click does.
+    pub fn show(self, ui: &Ui, kit: &Kit, rect: Rect, id: egui::Id) -> Response {
+        let sense = if self.sortable {
+            Sense::click()
+        } else {
+            Sense::hover()
+        };
+        let r = ui.interact(rect, id, sense);
+        let kind = if self.sortable {
+            WidgetType::Button
+        } else {
+            WidgetType::Label
+        };
+        let enabled = ui.is_enabled();
+        r.widget_info(|| WidgetInfo::labeled(kind, enabled, self.name));
+        let state = State::REST
+            .with(State::HOVER, self.sortable && r.hovered())
+            .with(
+                State::ACTIVE,
+                self.sortable && r.is_pointer_button_down_on(),
+            )
+            .with(State::SELECTED, self.descending.is_some())
+            .with(State::DISABLED, !enabled);
+        let font = egui::TextStyle::Body.resolve(ui.style());
+        let galley = ui
+            .painter()
+            .layout_no_wrap(self.title.to_owned(), font, Color32::PLACEHOLDER);
+        let cell = &kit.table_header_cell;
+        let cx = KitCx {
+            painter: ui.painter(),
+            ppp: ui.ctx().pixels_per_point(),
+        };
+        let part = Part {
+            rect,
+            room: rect,
+            state,
+            label: Some(&galley),
+        };
+        cell.paint_part(&cx, &part);
+        if let Some(descending) = self.descending {
+            let glyph = kit.glyph(if descending {
+                Glyph::SortDescending
+            } else {
+                Glyph::SortAscending
+            });
+            let label = cell.label_rect(&part, galley.size());
+            let side = galley.size().y;
+            let at = Rect::from_min_size(
+                pos2(label.right() + side * 0.25, label.top()),
+                Vec2::splat(side),
+            );
+            glyph.paint(ui.painter(), at, cell.style(state).text);
+        }
+        r
+    }
 }
 
 /// A selectable row setting `current` to `value` when clicked:
