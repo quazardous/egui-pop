@@ -328,3 +328,94 @@ fn links_in_a_remote_page_go_through_the_links_service() {
     assert_eq!(v.state()["target"], "docs:other");
     assert!(rec.records().is_empty());
 }
+
+#[test]
+fn a_remote_page_loads_no_file_the_application_ships() {
+    let shipped = b"shipped bytes".as_slice();
+    let docs = || {
+        Docs::new()
+            .file("img/a.png", shipped)
+            .page("kept", "![k](img/a.png)")
+    };
+    let mut pages = vec![
+        ("md", "![a](docs:img/a.png)"),
+        ("md", "![a](DOCS:img/a.png)"),
+        ("md", "![a][r]\n\n[r]: docs:img/a.png"),
+        ("md", "[![a](docs:img/a.png)](https://example.org/)"),
+    ];
+    if cfg!(feature = "html") {
+        pages.push(("html", "<img src='docs:img/a.png' alt=a>"));
+        pages.push(("html", "<img src=' DOCS:img/a.png' alt=a>"));
+    }
+    for (ext, body) in pages {
+        let page = format!("{HOST}/shipped.{ext}");
+        let net = Net::default().with(&page, body.as_bytes());
+        let app = app(docs(), &net);
+        let h = app.handle();
+        // Even with the file in egui's hands from a local page before it.
+        let s = open(h, "docs:kept");
+        assert_eq!(image_state(&s, "docs:img/a.png").as_deref(), Some("ready"));
+        let s = open(h, &page);
+        assert_eq!(s["status"], "shown", "{body}: {s}");
+        assert_eq!(s["dropped"].as_array().unwrap().len(), 1, "{body}: {s}");
+        let refused = s["dropped"][0].as_str().unwrap();
+        assert!(refused.to_lowercase().starts_with("docs:"), "{body}: {s}");
+        // Not ready, so drawn as its alt text.
+        assert_eq!(image_state(&s, refused), None, "{body}: {s}");
+    }
+    // A link to the application's pages is no image: it stays.
+    let page = format!("{HOST}/link.md");
+    let net = Net::default().with(&page, b"[help](docs:kept)");
+    let app = app(docs(), &net);
+    let s = open(app.handle(), &page);
+    assert_eq!(s["links"], json!(["docs:kept"]), "{s}");
+    assert_eq!(s["dropped"], json!([]), "{s}");
+}
+
+/// An application whose policy reads no plain `http`.
+fn https_only(docs: Docs, net: &Net) -> App {
+    let mut policy = Policy::default().docs_host("docs.example.org");
+    policy.schemes.remove("http");
+    App::builder()
+        .plugin(DialogsPlugin)
+        .plugin(LinksPlugin::default().policy(policy))
+        .plugin(
+            ViewerPlugin::default()
+                .docs(docs)
+                .fetch(Arc::new(net.clone())),
+        )
+        .build(&egui::Context::default())
+        .unwrap()
+}
+
+#[test]
+fn a_policy_without_http_holds_back_a_pages_images() {
+    let image = "http://images.example.org/a.png";
+    let secure = "https://images.example.org/a.png";
+    let mut pages = vec!["page"];
+    if cfg!(feature = "html") {
+        pages.push("html.html");
+    }
+    let docs = Docs::new()
+        .page("page", &format!("![a]({image})\n\n![b]({secure})"))
+        .page(
+            "html.html",
+            &format!("<img src='{image}' alt=a><img src='{secure}' alt=b>"),
+        );
+    for page in pages {
+        let net = Net::default();
+        let app = https_only(docs.clone(), &net);
+        let h = app.handle();
+        let s = open(h, &format!("docs:{page}"));
+        assert_eq!(image_state(&s, image), None, "{page}: {s}");
+        assert_eq!(s["dropped"], json!([image]), "{page}: said out loud");
+        assert_eq!(
+            image_state(&s, secure).as_deref(),
+            Some("blocked"),
+            "{page}: {s}"
+        );
+        assert_eq!(s["blocked_hosts"], json!(["images.example.org"]));
+        assert_eq!(viewer(h).load_images(h, "images.example.org"), Ok(1));
+        assert_eq!(net.asked(), [secure], "{page}");
+    }
+}
