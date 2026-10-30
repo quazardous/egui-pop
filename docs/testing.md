@@ -160,10 +160,58 @@ each run (the `junit` artifact) list every test's time.
   (`app`, `harness_for`), at a given scale (`app_at`, `SCALES`,
   `at_scales`, `set_native_scale`), and checks (`assert_all_named`,
   `assert_keymap_clean`, `assert_writes_declared`, `a11y_tree`).
+- **Keyboard walks** ([below](#keyboard-walks)): real key presses, and
+  what holds the focus after each.
 - **Snapshots** (`crates/egui-pop-gallery/tests/snapshots`): the gallery's
   pages rendered with wgpu, per theme; thresholds per operating system in
   `kittest.toml`. Regenerate with `UPDATE_SNAPSHOTS=1 cargo test -p
   egui-pop-gallery` and look at the images in the diff.
+
+## Keyboard walks
+
+Putting the focus on a widget through AccessKit (`.focus()`) shows what
+the widget does once focused, not that the keyboard gets there. A walk
+(`egui_pop_test::walk`) only presses keys, through the harness, and looks
+at egui's focus after each:
+
+```rust,ignore
+use egui_pop_test::walk::{self, End, ESCAPE, SHIFT_TAB, TAB};
+
+let walked = walk::walk(&mut h, TAB, 200); // until it loops or is lost
+assert_eq!(walked.end, End::Looped { at: 0 });
+assert!(walked.stops.iter().all(|s| s.visible), "{walked}");
+
+let stop = walk::reach(&mut h, SHIFT_TAB, "Save", 40).expect("the keyboard gets there");
+assert_eq!(walk::press(&mut h, ESCAPE), None); // nothing holds the focus
+```
+
+- **`press`** presses one key (`TAB`, `SHIFT_TAB`, `F6`, `SHIFT_F6`,
+  `ESCAPE`, or any `Press`), runs until the application settles and
+  returns the `Stop` holding the focus, if any; **`focused`** only looks.
+- **`Stop`** says what holds it: `role`, `name`, `rect`, `visible` (any of
+  it on screen, not scrolled or clipped away; a layer drawn over it does
+  not count) and egui's `id`. A stop with no role and no name is a focusable
+  widget that declares nothing.
+- **`walk`** presses one key until the focus comes back to a stop seen, or
+  nothing holds it, or a limit: `End::Looped { at }`, `End::Lost`,
+  `End::Limit`. A window has no outside: egui wraps Tab, so a walk ends
+  looped unless a key drops the focus. `at` being the last stop means the
+  key does not move it (a terminal keeps Tab).
+- **`reach`** presses a key until a stop of that name holds the focus: the
+  way to a widget in a test about the keyboard.
+
+`crates/egui-pop-gallery/tests/keyboard_walk.rs` walks the gallery for the
+[keyboard survey](keyboard-survey.md): what holds is pinned, and a gap is an
+ignored test asserting what the survey asks, its reason naming the survey's
+item, so that
+
+```sh
+cargo test -p egui-pop-gallery --test keyboard_walk -- --ignored
+```
+
+lists what is still open, each failing. The change closing an item removes
+its `ignore`. A page's stops come last in the window's order, so these tests
+get there with Shift+Tab: each press is a few passes of the whole gallery.
 
 ## One GPU device per test process
 
