@@ -200,7 +200,7 @@ fn shots() -> Vec<Shot> {
             "dialogs-pop-dark",
             "dialogs",
             "pop-dark",
-            &[Click(609, 224), Wait(0.5)],
+            &[Click(625, 224), Wait(0.5)],
             true,
         ),
         // Warning, Error, then "Success with an action": the success
@@ -209,7 +209,7 @@ fn shots() -> Vec<Shot> {
             "toasts-pop-light",
             "toasts",
             "pop-light",
-            &[Click(564, 209), Click(623, 209), Click(456, 209)],
+            &[Click(580, 209), Click(639, 209), Click(472, 209)],
             false,
         ),
         shot("values-pop-dark", "values", "pop-dark", &[], false),
@@ -264,7 +264,7 @@ fn shots() -> Vec<Shot> {
             "workbench-pop-dark",
             "workbench",
             "pop-dark",
-            &[Click(396, 172), Wait(0.5)],
+            &[Click(412, 172), Wait(0.5)],
             false,
         ),
     ];

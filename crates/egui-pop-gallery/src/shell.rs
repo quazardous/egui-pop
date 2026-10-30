@@ -23,6 +23,11 @@ use serde_json::{Value as Json, json};
 
 use crate::{PAGES, TITLE};
 
+/// The side bar's width at the start, in points: the longest page title whole
+/// in every theme and density, its bar at rest beside it (measured by the test
+/// `no_page_title_is_clipped_in_any_theme`).
+pub const SIDE_BAR_WIDTH: f32 = 190.0;
+
 /// The page shown.
 #[derive(Debug)]
 pub struct Nav {

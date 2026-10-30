@@ -107,6 +107,10 @@ pub fn builder(options: &Options) -> AppBuilder {
         .host(host::GalleryHost::new(waiting.clone()))
         .name("egui-pop gallery")
         .theme(spec)
+        .shell_panel_size(
+            egui_pop::api::workbench::PANEL_SIDE_BAR,
+            shell::SIDE_BAR_WIDTH,
+        )
         .plugins(egui_pop::api::DefaultPlugins)
         // The desktop's thumbnails in the file picker, for what egui-pop
         // does not preview itself.
