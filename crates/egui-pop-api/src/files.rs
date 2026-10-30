@@ -855,6 +855,31 @@ fn places(app: &AppHandle) -> Places {
     }
 }
 
+/// The width of the in-app picker's modal, the preview pane shown or
+/// not: wide enough for the places, the list and the full pane.
+pub const PICKER_WIDTH: f32 = 880.0;
+/// The narrowest the picker's list gets for the preview pane: under
+/// it, the pane shrinks instead.
+pub const LIST_MIN_WIDTH: f32 = 240.0;
+/// The narrowest preview pane drawn: with less room, it is not shown.
+pub const PANE_MIN_WIDTH: f32 = 120.0;
+
+/// Splits the room beside the places between the list and the preview
+/// pane (when it is on, with `gap` between them): the pane takes its
+/// full width from the list's while the list keeps `LIST_MIN_WIDTH`,
+/// then shrinks, down to `PANE_MIN_WIDTH`, under which it is hidden.
+fn split_list(available: f32, gap: f32, preview: bool) -> (f32, Option<f32>) {
+    if !preview {
+        return (available, None);
+    }
+    let pane = (available - gap - LIST_MIN_WIDTH).min(preview::PANE_WIDTH);
+    if pane < PANE_MIN_WIDTH {
+        (available, None)
+    } else {
+        (available - gap - pane, Some(pane))
+    }
+}
+
 /// The in-app picker of the first choice that has one (and is not drawn
 /// by its caller), in a modal.
 fn picker_overlay(ctx: &egui::Context, app: &AppHandle, files: &Files) {
@@ -871,12 +896,9 @@ fn picker_overlay(ctx: &egui::Context, app: &AppHandle, files: &Files) {
     let places = places(app);
     picker.show_preview = preview_wanted(app);
     let before = picker.show_preview;
-    let width = if before {
-        640.0 + preview::PANE_WIDTH
-    } else {
-        640.0
-    };
-    let spec = OverlaySpec::new(("egui_pop.files", id), &title, Kind::Modal).width(width);
+    // One size, the preview on or off: the pane takes its width from
+    // the list's, so toggling it does not resize the dialog.
+    let spec = OverlaySpec::new(("egui_pop.files", id), &title, Kind::Modal).width(PICKER_WIDTH);
     debug_assert_eq!(spec.id, overlay_id(id));
     let mut open = true;
     let mut out = None;
@@ -1463,11 +1485,10 @@ impl FilePicker {
             // Not a separator: in a row it takes the row's height, which
             // grows with it in a modal.
             ui.add_space(t.space.m);
-            let list_width = if preview_on {
-                (ui.available_width() - preview::PANE_WIDTH - t.space.m).max(160.0)
-            } else {
-                ui.available_width()
-            };
+            // The gap: the space added below, and the row's own spacing
+            // after the list.
+            let gap = t.space.m + ui.spacing().item_spacing.x;
+            let (list_width, pane_width) = split_list(ui.available_width(), gap, preview_on);
             ui.vertical(|ui| {
                 ui.set_width(list_width);
                 egui::ScrollArea::vertical()
@@ -1512,10 +1533,10 @@ impl FilePicker {
                         });
                     });
             });
-            if preview_on {
+            if let Some(pane_width) = pane_width {
                 ui.add_space(t.space.m);
                 ui.vertical(|ui| {
-                    ui.set_width(preview::PANE_WIDTH);
+                    ui.set_width(pane_width);
                     self.preview_pane(ui);
                 });
             }
@@ -1732,6 +1753,21 @@ mod tests {
             std::fs::write(root.join(f), b"x").unwrap();
         }
         root
+    }
+
+    #[test]
+    fn the_preview_pane_takes_the_list_s_width_and_shrinks_first() {
+        // Off: all the room is the list's.
+        assert_eq!(split_list(700.0, 8.0, false), (700.0, None));
+        // Room for both: the full pane, from the list's width.
+        let (list, pane) = split_list(700.0, 8.0, true);
+        assert_eq!(pane, Some(preview::PANE_WIDTH));
+        assert_eq!(list, 700.0 - 8.0 - preview::PANE_WIDTH);
+        // Less room: the pane shrinks, the list keeps its minimum.
+        let (list, pane) = split_list(LIST_MIN_WIDTH + 8.0 + 150.0, 8.0, true);
+        assert_eq!((list, pane), (LIST_MIN_WIDTH, Some(150.0)));
+        // Too little: no pane at all.
+        assert_eq!(split_list(300.0, 8.0, true), (300.0, None));
     }
 
     #[test]
