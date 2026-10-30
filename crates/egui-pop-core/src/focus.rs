@@ -27,6 +27,8 @@
 //! focused panel); [`prefer`] names the widget a scope's focus should land on
 //! when something hands the scope the keyboard.
 //!
+//! A [`region`] is a scope F6 goes to, see [`regions`](crate::regions).
+//!
 //! # Escape, in order
 //!
 //! With the focus plugin [`install`]ed, one press of Escape goes to the
@@ -62,6 +64,7 @@
 //! }
 //! ```
 
+use std::collections::HashMap;
 use std::ops::Range;
 
 use egui::{Context, Id, LayerId, Pos2, Rect, Ui};
@@ -83,6 +86,9 @@ pub struct ScopeRecord {
     pub layer: LayerId,
     #[serde(skip)]
     pub rect: Rect,
+    /// A [`region`]: its place in F6's order, lowest first.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub region: Option<u32>,
 }
 
 #[derive(Debug, Default)]
@@ -122,6 +128,8 @@ struct State {
     /// The text input Escape is taking the focus from, once this window's
     /// pass has begun.
     leaving: Option<Id>,
+    /// The widget focused last in each region, by name.
+    remembered: HashMap<String, Id>,
 }
 
 /// What a scope is besides its record, by the same index: not part of
@@ -132,6 +140,8 @@ struct Drawn {
     widgets: Range<usize>,
     /// The widget it wants to hand the focus to ([`prefer`]).
     preferred: Option<Id>,
+    /// A [`Region::holding`]: its content can hold the focus itself.
+    holding: bool,
 }
 
 /// How the place the user works in changed, from [`take_moved`].
@@ -276,6 +286,18 @@ fn rotate(ctx: &Context, s: &mut State) {
     press = follow_pointer(ctx, s).or(press);
     s.chain = outward(&s.last, target(ctx, s));
     s.moved = what_moved(ctx, s, press);
+    remember_in_region(ctx, s);
+}
+
+/// Notes the focused widget for the region around it.
+fn remember_in_region(ctx: &Context, s: &mut State) {
+    let Some(id) = ctx.memory(|m| m.focused()) else {
+        return;
+    };
+    if let Some(&at) = s.chain.iter().rev().find(|&&i| s.last[i].region.is_some()) {
+        let name = s.last[at].name.clone();
+        s.remembered.insert(name, id);
+    }
 }
 
 /// What changed since the last pass, given where the pointer pressed in this
@@ -310,6 +332,51 @@ pub fn scope<R>(
     keys: &[(&str, &str)],
     add: impl FnOnce(&mut Ui) -> R,
 ) -> R {
+    open_scope(ui, name, keys, None, add)
+}
+
+/// What makes a scope a region of the window, for [`region`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Region {
+    name: String,
+    rank: u32,
+    holding: bool,
+}
+
+impl Region {
+    /// A region named `name`, in F6's order by `rank`, lowest first. Regions
+    /// of one rank go in the order they were drawn.
+    pub fn new(name: impl Into<String>, rank: u32) -> Self {
+        Self {
+            name: name.into(),
+            rank,
+            holding: false,
+        }
+    }
+
+    /// Its content can hold the focus itself when no scope inside it has a
+    /// focusable widget (a panel of text alone): F6 then says so
+    /// ([`Hop::target`](crate::regions::Hop::target)) rather than land on a
+    /// widget around that content (a dock's tab).
+    pub fn holding(mut self, holding: bool) -> Self {
+        self.holding = holding;
+        self
+    }
+}
+
+/// A [`scope`] that F6 goes to: a part of the window (an area, a palette, the
+/// status bar), see [`regions`](crate::regions). Don't draw one inside another.
+pub fn region<R>(ui: &mut Ui, region: &Region, add: impl FnOnce(&mut Ui) -> R) -> R {
+    open_scope(ui, &region.name, &[], Some(region), add)
+}
+
+fn open_scope<R>(
+    ui: &mut Ui,
+    name: &str,
+    keys: &[(&str, &str)],
+    region: Option<&Region>,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> R {
     let st = state(ui.ctx());
     let index = {
         let mut s = lock(&st);
@@ -325,11 +392,13 @@ pub fn scope<R>(
             depth,
             layer: ui.layer_id(),
             rect: Rect::NOTHING,
+            region: region.map(|r| r.rank),
         });
         let first = widgets_in(ui);
         s.drawn.push(Drawn {
             widgets: first..first,
             preferred: None,
+            holding: region.is_some_and(|r| r.holding),
         });
         let i = s.building.len() - 1;
         s.open.push(i);
@@ -353,6 +422,63 @@ pub fn scope<R>(
     }
     s.open.pop();
     inner
+}
+
+/// A region as the last pass drew it, for [`regions`](crate::regions).
+#[derive(Clone, Debug)]
+pub(crate) struct DrawnRegion {
+    pub name: String,
+    pub holding: bool,
+    pub layer: LayerId,
+    /// Its widgets, as their order in its layer.
+    pub widgets: Range<usize>,
+    /// Those of the scopes inside it.
+    pub inner: Vec<Range<usize>>,
+    pub preferred: Option<Id>,
+    pub remembered: Option<Id>,
+}
+
+/// The regions the last pass drew, in F6's order, and which one the focus chain
+/// is in, as an index of them.
+pub(crate) fn drawn_regions(ctx: &Context) -> (Vec<DrawnRegion>, Option<usize>) {
+    let st = state(ctx);
+    let mut s = lock(&st);
+    rotate(ctx, &mut s);
+    let mut at: Vec<(u32, usize)> = (s.last.iter().enumerate())
+        .filter_map(|(i, r)| Some((r.region?, i)))
+        .collect();
+    at.sort_by_key(|&(rank, _)| rank);
+    let here = s.chain.iter().rev().find(|&&i| s.last[i].region.is_some());
+    let current = here.and_then(|h| at.iter().position(|&(_, i)| i == *h));
+    let regions = at.iter().map(|&(_, i)| {
+        let (r, d) = (&s.last[i], &s.drawn_last[i]);
+        let inner = (0..s.last.len())
+            .filter(|&j| j != i && outward(&s.last, Some(j)).contains(&i))
+            .map(|j| s.drawn_last[j].widgets.clone());
+        DrawnRegion {
+            name: r.name.clone(),
+            holding: d.holding,
+            layer: r.layer,
+            widgets: d.widgets.clone(),
+            inner: inner.collect(),
+            preferred: d.preferred,
+            remembered: s.remembered.get(&r.name).copied(),
+        }
+    });
+    (regions.collect(), current)
+}
+
+/// Whether the window's last pass drew a region. Reads without starting this
+/// pass's scopes: a plugin asks before the focus has settled.
+pub(crate) fn has_regions(ctx: &Context) -> bool {
+    let st = state(ctx);
+    let s = lock(&st);
+    let scopes = if s.pass == pass(ctx) {
+        &s.last
+    } else {
+        &s.building
+    };
+    scopes.iter().any(|r| r.region.is_some())
 }
 
 /// The names of the scopes this pass drew around a widget, innermost first.

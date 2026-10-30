@@ -241,7 +241,12 @@ fn nearest(ctx: &Context, place: &Place) -> Option<Id> {
 
 /// A widget that can take the focus, other than `not`.
 fn is_stop(w: &WidgetRect, not: Id) -> bool {
-    w.id != not && w.enabled && w.sense.is_focusable() && !is_popup_frame(w)
+    w.id != not && can_focus(w)
+}
+
+/// A widget that can take the focus.
+pub(crate) fn can_focus(w: &WidgetRect) -> bool {
+    w.enabled && w.sense.is_focusable() && !is_popup_frame(w)
 }
 
 /// The widget an `Area` makes of its own background, focusable only in a popup.

@@ -23,7 +23,9 @@
 //!   which goes on in the order widgets were drawn (to the next panel).
 //! - **F6 and Shift+F6** move to the next or previous panel scope that
 //!   has stops, to the stop focused there last (or its first). F6 does
-//!   nothing while a modal scope or a modal overlay is open.
+//!   nothing while a modal scope or a modal overlay is open. In a window
+//!   with [`regions`](crate::regions) (an application's), F6 is theirs, and
+//!   the panel scopes of a region take that region's turn.
 //! - The focus on a widget that is not a stop is left to egui (its own
 //!   Tab order is the order widgets were drawn), and a focused widget
 //!   that takes the keys itself (a terminal) keeps Tab and F6.
@@ -232,6 +234,57 @@ pub fn order(ctx: &Context, name: &str) -> Vec<Id> {
         .unwrap_or_default()
 }
 
+/// A panel scope F6 can go to, as [`regions`](crate::regions) reads it.
+#[derive(Clone, Debug)]
+pub(crate) struct PanelHop {
+    /// Its first stop drawn, to tell which region holds it.
+    pub first: Id,
+    /// Where F6 lands in it.
+    pub target: Id,
+    /// The focus is in it.
+    pub here: bool,
+}
+
+/// The panel scopes with stops the last pass drew, in the order drawn.
+pub(crate) fn panel_hops(ctx: &Context) -> Vec<PanelHop> {
+    let focused = ctx.memory(|m| m.focused());
+    let at = focused.and_then(|f| {
+        let r = crate::focus::peek_response(ctx, f)?;
+        Some((r.layer_id, r.rect.center()))
+    });
+    let st = state(ctx);
+    let mut s = lock(&st);
+    rotate(ctx, &mut s);
+    let drawn = s.last.iter().filter(|sc| sc.kind == ScopeKind::Panel);
+    drawn
+        .filter_map(|sc| {
+            let order = sc.order();
+            let target = s
+                .remembered
+                .get(&sc.name)
+                .filter(|r| order.contains(r))
+                .or(order.first())?;
+            let holds = focused.is_some_and(|f| sc.stops.iter().any(|x| x.id == f));
+            let lies = at.is_some_and(|(layer, pos)| sc.layer == layer && sc.rect.contains(pos));
+            Some(PanelHop {
+                first: sc.stops.first()?.id,
+                target: *target,
+                here: holds || lies,
+            })
+        })
+        .collect()
+}
+
+/// Whether a modal scope with stops was drawn in the last pass.
+pub(crate) fn modal_drawn(ctx: &Context) -> bool {
+    let st = state(ctx);
+    let mut s = lock(&st);
+    rotate(ctx, &mut s);
+    s.last
+        .iter()
+        .any(|sc| sc.kind == ScopeKind::Modal && sc.has_stops())
+}
+
 /// Installs the Tab plugin on a context (once; [`scope`] does it).
 pub fn install(ctx: &Context) {
     let st = state(ctx);
@@ -322,6 +375,10 @@ fn begin_pass(ctx: &Context) {
         }
     }
     if let Some(back) = pressed(ctx, Key::F6) {
+        // F6 is the regions' here, through the application's key binding.
+        if crate::focus::has_regions(ctx) {
+            return;
+        }
         let modal = s
             .last
             .iter()
