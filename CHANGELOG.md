@@ -20,6 +20,15 @@ publishes.
   on a half-visible row does not make it jump. Windowed rows follow, Tab going
   through them as each one reached draws the next. An area with hidden bars is
   not followed.
+- Scroll bars thin and quiet at rest (egui-pop-core, egui-pop-tokens;
+  `docs/kit.md`). `scroll-bar.visibility` takes `rest`: whenever the content
+  overflows, the bar is drawn at rest at `scroll-bar.width-rest` (4 points) and
+  `scroll-bar.opacity-rest` (0.45, 0.6 in `pop-light`) with no track, widens to
+  `width` over the bar, and has `scroll-bar.room` (6 points) of the content's
+  width kept for it. `scroll-bar.min-length` sets the thumb's shortest length.
+  No built-in theme uses `rest` yet. `ScrollBarKit::seen_at_rest` gives it to
+  a bar that must be seen in any theme: the sections' stack's bar, loud until
+  now, takes it, as do the gallery's page list and pages.
 - One focused panel (egui-pop-api, egui-pop-core; `docs/workbench.md`).
   `workbench.focus` and each panel's `.focus` command now give the panel the
   widget focus: the widget it names with `focus::prefer` (the image viewport,

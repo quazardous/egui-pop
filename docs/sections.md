@@ -128,7 +128,8 @@ The heights' arithmetic is in `egui_pop::model::sections`, without egui:
   open section stays in view. The stored heights come back with the
   room; the next drag first aligns them on what is shown. When even the
   least heights do not fit, the whole stack scrolls, with a scrollbar
-  shown then only.
+  shown then only, thin and quiet at rest whatever the theme does for other
+  bars (`ScrollBarKit::seen_at_rest`).
 - **Scroll.** Each body scrolls on its own.
 - **Windowed rows.** `stack.rows` goes through egui's
   `ScrollArea::show_rows`: its closure is given the rows in view and one

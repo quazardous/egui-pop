@@ -1,12 +1,28 @@
 $description: "The `scroll-bar` component of the default kit (docs/kit.md), layered into pop-dark."
 scroll-bar:
-  $description: "The scroll bars of every scroll area, which egui draws (handler `scoped`): `width`, `margin`, `placement` and `visibility` become egui's `ScrollStyle` with the theme; the thumb's fill per state, its radius and the track are egui's widget colours in a `ScrollBar` scope (`UiPop::scroll_area`). The defaults are egui's own bars: floating, 10 points wide, shown under the pointer, the thumb in the button's text colours."
+  $description: "The scroll bars of every scroll area, which egui draws (handler `scoped`): `width`, `width-rest`, `opacity-rest`, `room`, `min-length`, `margin`, `placement` and `visibility` become egui's `ScrollStyle` with the theme; the thumb's fill per state, its radius and the track are egui's widget colours in a `ScrollBar` scope (`UiPop::scroll_area`). The defaults are egui's own bars: floating, 10 points wide, shown under the pointer, the thumb in the button's text colours."
   shape:
     $type: "string"
     $value: "scoped"
   width:
     $type: "dimension"
     $value: {value: 10, unit: "px"}
+  width-rest:
+    $type: "dimension"
+    $value: {value: 4, unit: "px"}
+    $description: "The bar at rest, under `visibility: rest`. It is sensed at `width` all the same."
+  opacity-rest:
+    $type: "number"
+    $value: 0.45
+    $description: "How opaque the thumb is at rest, 0 to 1, under `visibility: rest`: quiet, but at least 3:1 against the panel."
+  room:
+    $type: "dimension"
+    $value: {value: 6, unit: "px"}
+    $description: "The content's width kept for the bar while it shows, under `visibility: rest`, so that the thumb at rest does not lie over it."
+  min-length:
+    $type: "dimension"
+    $value: {value: 12, unit: "px"}
+    $description: "The thumb at its shortest."
   margin:
     $type: "dimension"
     $value: {value: 0, unit: "px"}
@@ -17,7 +33,7 @@ scroll-bar:
   visibility:
     $type: "string"
     $value: "hover"
-    $description: "always: shown at rest, at full width; hover: shown while the pointer is over the scroll area, thin until over the bar (egui's look); scroll: while scrolling (egui 0.36 has no such state: drawn as hover, and reported)."
+    $description: "always: shown at rest, at full width; rest: shown at rest too, thin and quiet (width-rest, opacity-rest, no track), wide over the bar, with room kept for it; hover: shown while the pointer is over the scroll area, thin until over the bar (egui's look); scroll: while scrolling (egui 0.36 has no such state: drawn as hover, and reported)."
   track-fill:
     $type: "color"
     $value: "{surface.sunken}"

@@ -495,10 +495,11 @@ Sizes: S is under a day, M a few days. One pull request each.
    area has no scroll area and one in tabs has. Whether the shell's panels should
    always scroll is a question for that page, not settled here: a viewport in
    `MAIN` must not.
-3. **The kit learns "thin and quiet at rest".** `visibility: rest` and the
-   tokens above in `ScrollBarKit`, no theme using them yet, so no picture
-   changes but one: the sections' forced bar takes the quiet look, as today's
-   `always` is loud for that case. Size: S.
+3. **Done: the kit learns "thin and quiet at rest".** `visibility: rest` and the
+   tokens above in `ScrollBarKit`, no theme using them yet, so the pictures that
+   change are those of the forced bars, which take the quiet look: the sections'
+   stack, and the gallery's list and pages. `ScrollBarKit::seen_at_rest` is that
+   forcing, and leaves an `always` bar as it is.
 4. **Visible at rest in the built-in themes.** The themes set it, the test that
    holds them to `floating()` is replaced by a 3:1 test per theme, `pop-high-contrast`
    takes `always`, the docs ([kit](kit.md#scroll-bars),

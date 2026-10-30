@@ -65,7 +65,8 @@ does not change with the state.
 | `font-size` | | the size of its text, in points (an alias of a `font.*` size); the widget's own size when not given |
 | `margin` | | on `scroll-bar`: between the bar and its scroll area's edge |
 | `placement` | | on `scroll-bar`: `over` the content (floating, the content runs under it) or `beside` it (taking room) |
-| `visibility` | | on `scroll-bar`: `always` (at rest too), on `hover` of the scroll area, or while it `scroll`s |
+| `visibility` | | on `scroll-bar`: `always` (at rest too, at full width), at `rest` too but thin and quiet, on `hover` of the scroll area, or while it `scroll`s |
+| `width-rest`, `opacity-rest`, `room`, `min-length` | | on `scroll-bar`: the bar at rest under `rest`, the room kept for it, the thumb at its shortest |
 | `track-fill` | | on `scroll-bar`: the track behind the thumb (transparent: none) |
 | `shadow-offset-x`, `shadow-offset-y`, `shadow-blur`, `shadow-spread`, `shadow-color` | | the shadow the part casts (egui's `Shadow`; none when not given): usually aliases of a `shadow.*` group; on `side-area`, cast while it lies over the centre, `shadow-offset-x` towards the centre |
 
@@ -203,7 +204,8 @@ dropped in silence. Replacing one means an egui-pop-drawn widget.
   kit paints the box into a slot reserved under it. `command-button`,
   `command-palette-row` and `empty-state` are painted the same way.
 - **`scroll-bar` through egui's `ScrollStyle`.** Its `width`,
-  `margin`, `placement`, `visibility` and whether it has a track are
+  `width-rest`, `opacity-rest`, `room`, `min-length`, `margin`,
+  `placement`, `visibility` and whether it has a track are
   written into egui's style with the theme, so every scroll area
   follows them, an application's own included; its thumb's colours
   and corners, which egui takes from the widget states, are the kit's
@@ -680,8 +682,9 @@ fn view(ui: &mut egui_pop::egui::Ui, fit: &mut bool, mode: &mut usize, name: &mu
 egui draws every scroll area's bars. The kit's `scroll-bar` reaches
 them two ways:
 
-- **With the theme, in every scroll area.** `width`, `margin`,
-  `placement` and `visibility`, and whether there is a track, become
+- **With the theme, in every scroll area.** `width`, `width-rest`,
+  `opacity-rest`, `room`, `min-length`, `margin`, `placement` and
+  `visibility`, and whether there is a track, become
   egui's `ScrollStyle` when the theme is installed
   (`ScrollBarKit::style`, `Kit::scroll`), and in a scoped theme. An
   application's own `egui::ScrollArea` follows them with nothing to
@@ -696,10 +699,14 @@ them two ways:
 
 | Token | Meaning | Default (egui's own bars) |
 |---|---|---|
-| `scroll-bar.width` | the bar at its widest | 10 |
+| `scroll-bar.width` | the bar at its widest, and its hit area | 10 |
+| `scroll-bar.width-rest` | the bar at rest, under `rest` | 4 |
+| `scroll-bar.opacity-rest` | the thumb's opacity at rest, 0 to 1, under `rest`: quiet, but 3:1 against the panel | 0.45, 0.6 in `pop-light` |
+| `scroll-bar.room` | the content's width kept for the bar while it shows, under `rest` | 6 |
+| `scroll-bar.min-length` | the thumb at its shortest | 12 |
 | `scroll-bar.margin` | between the bar and the scroll area's edge | 0 |
 | `scroll-bar.placement` | `over`: floats over the content, which runs to the edge under it; `beside`: takes room, the content is narrower by the bar, its margin and egui's 4 point gap | `over` |
-| `scroll-bar.visibility` | `always`: at rest too, at full width; `hover`: while the pointer is over the scroll area, thin until it is over the bar; `scroll`: while scrolling | `hover` |
+| `scroll-bar.visibility` | `always`: at rest too, at full width; `rest`: at rest too, thin and quiet with no track, whenever the content overflows, wide over the bar; `hover`: while the pointer is over the scroll area, thin until it is over the bar; `scroll`: while scrolling | `hover` |
 | `scroll-bar.track-fill` | the track; transparent for none, in every scroll area | `{surface.sunken}` |
 | `scroll-bar.rest.fill`, `hover.fill`, `active.fill` | the thumb at rest, under the pointer, dragged | the button's text colours |
 | `scroll-bar.rest.radius` | the thumb's and track's corners; half the width or more rounds them fully | the button's |
@@ -739,13 +746,32 @@ fn tickets(ui: &mut egui_pop::egui::Ui, rows: &[String]) {
 }
 ```
 
+`rest` is the survey's quiet bar ([Scrolling survey](scrolling-survey.md)).
+All of it is `ScrollStyle`: `floating_width`, `dormant_handle_opacity`,
+`floating_allocated_width` and `handle_min_length` take its tokens, the track
+opacities leave only the one over the bar. What `ScrollStyle` cannot say:
+
+- The hit area is the whole `width`, always: 4 points of the content beside
+  a 6 point room lose their clicks to the bar, even with the bar thin. A view
+  with something clickable at its right edge keeps `width` as its room (the
+  gallery's pages do).
+- The opacity is one number: egui has none per surface, so the ratio of
+  3:1 holds on the surface it was chosen for, and differs on others.
+- A bar `beside` the content is opaque and at full width, so `rest` needs
+  `over`.
+- A bar forced on by a scroll area (`ScrollBarVisibility`) and a bar shown
+  because the content overflows look the same; a view that wants a bar a
+  `hover` theme hides takes `ScrollBarKit::seen_at_rest`, as the sections'
+  stack does.
+
 What egui cannot draw is in the kit's problems: a thumb whose colours
 or radius differ from the button's (egui's scroll areas outside a
 `ScrollBar` scope draw the button's), a track in another colour than
 `surface.sunken` outside a scope, `visibility: scroll` (egui 0.36 has no
-while-scrolling state: drawn as `hover`), and a bar `beside` the content
+while-scrolling state: drawn as `hover`), a bar `beside` the content
 not `always` visible (egui shows such a bar whenever the content
-overflows). The gallery's `scoped` page shows one, restyled in its
+overflows, and opaque under `rest`), a `width-rest` wider than `width`, and
+an `opacity-rest` outside 0 to 1. The gallery's `scoped` page shows one, restyled in its
 `scoped-kit-restyled` snapshot.
 
 Known limits of this first step:

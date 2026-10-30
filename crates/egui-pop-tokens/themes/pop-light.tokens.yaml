@@ -189,3 +189,8 @@ surface:
     $value: "{gray.3}"
   overlay:
     $value: "{gray.0}"
+scroll-bar:
+  opacity-rest:
+    $type: "number"
+    $value: 0.6
+    $description: "Dark ink on a light panel needs more than the dark theme's to reach 3:1."
