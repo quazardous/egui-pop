@@ -335,6 +335,7 @@ Zones and blocks, the workbench, the layout controls, palettes, arrangements, th
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/viewer-html-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/viewer-html-pop-dark.png" width="200" alt="viewer-html-pop-dark"></a><br>viewer-html-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/pages-short-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/pages-short-pop-dark.png" width="200" alt="pages-short-pop-dark"></a><br>pages-short-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/pages-folded-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/pages-folded-pop-dark.png" width="200" alt="pages-folded-pop-dark"></a><br>pages-folded-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/page-short-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/page-short-pop-dark.png" width="200" alt="page-short-pop-dark"></a><br>page-short-pop-dark</td>
   </tr>
 </table>
 
