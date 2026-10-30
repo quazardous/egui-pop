@@ -1097,16 +1097,7 @@ impl Keymap {
         keys: Option<&str>,
     ) -> Result<(), String> {
         let parsed = keys.map(Keys::parse).transpose()?;
-        let scope = self
-            .rules
-            .iter()
-            .filter(|s| {
-                s.item.binding.layer < layer
-                    && s.item.binding.action == Action::Run(command.clone())
-            })
-            .max_by_key(|s| s.item.binding.layer)
-            .map(|s| s.item.binding.options.scope.clone())
-            .unwrap_or_default();
+        let (when, options) = self.declared(layer, command);
         self.reset(owner, layer, command);
         self.bind(owner, layer, "", Action::Remove(command.clone()), "")?;
         if let Some(k) = parsed {
@@ -1115,14 +1106,25 @@ impl Keymap {
                 layer,
                 &k.to_string(),
                 Action::Run(command.clone()),
-                "",
-                BindOptions {
-                    scope,
-                    ..BindOptions::default()
-                },
+                &when,
+                options,
             )?;
         }
         Ok(())
+    }
+
+    /// How a command's keys listen below `layer`: their clause and options,
+    /// which a rebound key keeps; only the keys change.
+    fn declared(&self, layer: Layer, command: &CommandId) -> (String, BindOptions) {
+        self.rules
+            .iter()
+            .filter(|s| {
+                s.item.binding.layer < layer
+                    && s.item.binding.action == Action::Run(command.clone())
+            })
+            .max_by_key(|s| s.item.binding.layer)
+            .map(|s| (s.item.binding.when.clone(), s.item.binding.options.clone()))
+            .unwrap_or_default()
     }
 
     /// [`Keymap::rebind`] with several keys at once (none: no key at
@@ -1139,16 +1141,7 @@ impl Keymap {
             .iter()
             .map(|k| Keys::parse(k))
             .collect::<Result<Vec<_>, _>>()?;
-        let scope = self
-            .rules
-            .iter()
-            .filter(|s| {
-                s.item.binding.layer < layer
-                    && s.item.binding.action == Action::Run(command.clone())
-            })
-            .max_by_key(|s| s.item.binding.layer)
-            .map(|s| s.item.binding.options.scope.clone())
-            .unwrap_or_default();
+        let (when, options) = self.declared(layer, command);
         self.reset(owner, layer, command);
         self.bind(owner, layer, "", Action::Remove(command.clone()), "")?;
         for k in parsed {
@@ -1157,11 +1150,8 @@ impl Keymap {
                 layer,
                 &k.to_string(),
                 Action::Run(command.clone()),
-                "",
-                BindOptions {
-                    scope: scope.clone(),
-                    ..BindOptions::default()
-                },
+                &when,
+                options.clone(),
             )?;
         }
         Ok(())
