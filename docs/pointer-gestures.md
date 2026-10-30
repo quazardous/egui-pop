@@ -33,6 +33,7 @@ scope of a canvas kind:
 | `surface:canvas.image` (the image viewport) | `gesture.image.zoom` (holding at fit and 100 %), `zoom_free`, `pan`, `pan_x`, `pan_y`, `zoom_cycle` (100 %, 200 %, fit), `fit`, `zoom_toggle` (fit or 100 %) |
 | `surface:canvas.graph` (the node graph) | `gesture.graph.zoom`, `pan`, `pan_x`, `pan_y`, `fit` |
 | `surface:widget.value` (sliders) | `gesture.value.step` (its wheel's modifiers step a slider without the focus), `fine` and `coarse` (their drag's modifiers: ten times finer or coarser, for drags, arrows and the wheel), `panel` (its wheel's modifiers leave the wheel to the panel) |
+| `surface:widget.sections` (stacked sections) | `gesture.sections.pull` (a drag on a boundary or a title moves the sections below as a block; its keys also make the arrows on a boundary do so, [sections.md](sections.md)) |
 
 The keymap's layers, removals, conflicts and resolution trace apply
 unchanged ([plugins.md](plugins.md)); the key dispatcher never sees a
@@ -65,6 +66,7 @@ application; where it has no equivalent the gesture is left unbound.
 | Steps a slider without the focus | Alt + wheel | the wheel; Ctrl+Alt + wheel scrolls the panel | — | — | Ctrl + wheel | Ctrl + wheel |
 | Finer / coarser drag | Ctrl / Shift | Ctrl / Shift | Alt / Shift | Shift / — | Shift / Ctrl | Ctrl / Shift |
 | Finer / coarser arrows | as the drag | as the drag | as the drag | Alt / Shift | as the drag | as the drag |
+| Pulls stacked sections as a block | Ctrl + drag | Ctrl + drag | Ctrl + drag | Ctrl + drag | Ctrl + drag | Ctrl + drag |
 
 In every profile a drag with Space held pans the image and the graph,
 Escape cancels a drag, a primary drag on a handle moves it and the wheel
@@ -131,7 +133,9 @@ modifiers kept: egui merges a pinch with Ctrl and the wheel once it
 smooths the delta) and looks each gesture up in its scope
 (`PointerMap::command`). The image viewport's `Gestures` and the
 graph's take their pointer part from it (`viewport::gestures::ViewGestures`),
-sliders their modifiers (`core::slider::Gestures::from_map`);
+sliders their modifiers (`core::slider::Gestures::from_map`), stacked
+sections whether a drag pulls (`core::sections`, as long as it lasts, so
+that a key pressed or released changes the mode from there);
 `set_gestures` still sets either outright.
 
 The image viewport and the graph give a **hint** while the pointer is

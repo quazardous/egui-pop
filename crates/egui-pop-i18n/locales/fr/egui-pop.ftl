@@ -2019,6 +2019,10 @@ command-gesture-value-fine =
     .description = Ces touches rendent le glissement, les flèches et la molette d’un curseur dix fois plus fins.
     .title = Valeurs : plus fin
 
+command-gesture-sections-pull =
+    .description = Un glissement sur une limite ou un titre avec ces touches déplace les sections du dessous d’un bloc, sans changer leurs hauteurs.
+    .title = Sections : tirer d’un bloc
+
 command-gesture-value-coarse =
     .description = Ces touches rendent le glissement, les flèches et la molette d’un curseur dix fois plus grossiers.
     .title = Valeurs : plus grossier

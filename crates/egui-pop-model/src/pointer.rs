@@ -45,8 +45,10 @@ pub const SCOPE_IMAGE: &str = "canvas.image";
 pub const SCOPE_GRAPH: &str = "canvas.graph";
 /// Sliders and other values' scope.
 pub const SCOPE_VALUE: &str = "widget.value";
+/// Stacked sections' scope.
+pub const SCOPE_SECTIONS: &str = "widget.sections";
 /// Every scope a profile binds, in the order the editor shows them.
-pub const SCOPES: [&str; 3] = [SCOPE_IMAGE, SCOPE_GRAPH, SCOPE_VALUE];
+pub const SCOPES: [&str; 4] = [SCOPE_IMAGE, SCOPE_GRAPH, SCOPE_VALUE, SCOPE_SECTIONS];
 
 /// The profile a library or an application gets unless it picks one.
 pub const DEFAULT_PROFILE: &str = "document";
@@ -88,6 +90,8 @@ pub mod gesture {
     pub const VALUE_COARSE: CommandId = CommandId::from_static("gesture.value.coarse");
     /// The wheel scrolls the panel, even over a value.
     pub const VALUE_PANEL: CommandId = CommandId::from_static("gesture.value.panel");
+    /// A drag on a boundary or a title moves the sections below as a block.
+    pub const SECTIONS_PULL: CommandId = CommandId::from_static("gesture.sections.pull");
 }
 
 /// A gesture command as declared: its id, its scope, its title and what
@@ -203,6 +207,12 @@ pub const GESTURES: &[GestureSpec] = &[
         scope: SCOPE_VALUE,
         title: "Values: scroll the panel",
         description: "The wheel with these keys scrolls the panel, even over a slider.",
+    },
+    GestureSpec {
+        id: gesture::SECTIONS_PULL,
+        scope: SCOPE_SECTIONS,
+        title: "Sections: pull as a block",
+        description: "A drag on a boundary or a title with these keys moves the sections below as a block, keeping their heights.",
     },
 ];
 
