@@ -1177,3 +1177,16 @@ fn no_key_accepts_the_question_from_where_its_focus_starts() {
     }
     let _ = std::fs::remove_dir_all(root);
 }
+
+#[test]
+fn alt_up_goes_to_the_parent_folder() {
+    let root = tree("alt-up");
+    let mut h = harness(None);
+    let _p = choose(
+        &mut h,
+        FileRequest::open("Open").directory(root.join("photos")),
+    );
+    key(&mut h, Key::ArrowUp, Modifiers::ALT);
+    assert_eq!(picker_state(&h, "dir"), json!(root));
+    let _ = std::fs::remove_dir_all(root);
+}
