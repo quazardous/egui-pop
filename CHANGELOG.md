@@ -1223,6 +1223,13 @@ publishes.
   (egui-pop-views; ADR 0017): what the page may not link to (`file:` and
   `command:` on a page from the network, `javascript:`, a scheme the policy
   removed, on any page) stays as plain text instead of asking on a click.
+- A very deeply nested HTML page no longer freezes the viewer (egui-pop-views):
+  parsing is quadratic in the depth and runs on the interface's thread, about
+  half a minute at 20,000 levels in a debug build. A page nested more than 512
+  levels deep, or too long to parse at the depth it keeps, is refused while it
+  is parsed and shows the error page, with Open outside; `viewer.state` and
+  `viewer.failed` say why. Past 48 levels the mapping flattens to text as
+  before, and now says so in the bar over the page.
 - A data table scrolled out of a scroll area around it no longer panics
   (egui-pop-views).
 - A row a tree or a list is asked to bring into view before its first pass

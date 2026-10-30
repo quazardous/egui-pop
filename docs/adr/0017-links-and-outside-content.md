@@ -276,3 +276,16 @@ for anything to read again, so a sanitiser's reason to exist (markup
 handed to a browser) does not arise. This replaces what the decision and
 the survey above say of ammonia. Left: the lint walking the
 links inside `docs:` pages, an opt-in online check of declared links.
+
+What a page in the viewer reaches (2026-10-30): one check for markdown and
+HTML. A link keeps its markup when what it resolves to uses a scheme the
+page may use, and stays as text otherwise, so a page from the network has
+no `file:` link to confirm; the confirmation of question 8 stays for a
+page or an application that may link to a file. An image reads a scheme the
+page may use and, from the network, never `docs:`, though a link there
+stays; what is refused is named on the page. Nesting past 512 levels
+is refused while the page is parsed, on an error page: parsing stays on
+the interface's thread, as it must on the web build, and is quadratic in
+the depth. A limit needs no second path through the viewer; parsing on a
+thread would need one on native alone, and the limit on the web all the
+same.
