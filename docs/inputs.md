@@ -159,6 +159,31 @@ stop is left to egui, whose Tab order is the order of drawing; a
 focused widget that takes the keys itself (a terminal) keeps Tab and
 F6.
 
+### The focus comes into view
+
+With the focus plugin (`focus::install`; an application has it), a widget
+the keyboard focuses comes into view in the scroll areas around it, nested
+ones included, whatever panel it lies in. A widget has nothing to do for it.
+
+- **By anything but the pointer**: Tab, an arrow, a command, a screen reader.
+  A click on a half-visible row does not make it jump, in click mode or as the
+  pointer hands the focus over in hover mode.
+- **Once per move**: the wheel can then take the focused widget away.
+- **By the least that shows it**, with the item spacing around it. A widget
+  longer than the view stays where it is.
+- **Never animated**, whatever the motion setting: a key held down has no moving
+  target to chase, and reduced motion asks for nothing more.
+- **Windowed rows** (`show_rows`): a row not drawn is no stop. Each row reached
+  scrolls the next one into the drawn window, so Tab goes through them all, one
+  by one, both ways. A list, a tree or a grid from `egui-pop-views` is one stop
+  and scrolls to its own cursor.
+- **Not found**: an area with `ScrollBarVisibility::AlwaysHidden` shows no bar
+  to read its reach from: what it holds calls `Response::scroll_to_me` on
+  gaining the focus, as the stack of sections does.
+
+How it finds the areas, and why a widget's own `scroll_to_me` would not do, is
+in [the upstream register](upstream.md#egui-a-scroll-target-stops-at-the-innermost-scroll-area).
+
 ## Not yet
 
 - A **formal form layout** (labels in a column, sections, help text,

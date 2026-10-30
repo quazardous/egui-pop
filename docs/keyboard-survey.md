@@ -55,9 +55,10 @@ forums and bug trackers is marked as such.
   frame are stops with no role and no name, and the first two change no
   pixel when focused ([walk]). A focused plain button is seen, in the
   accent's outline in `pop-dark`, but has the pressed button's pixels
-  ([walk]). A widget scrolled out of view keeps the focus out of view
+  ([walk]). A widget out of view used to keep the focus out of view
   ([walk]): 35 rows of the gallery's side list on its first screen, the end
-  of the settings page. VS Code, Qt, GTK and ARIA
+  of the settings page; since item 7 the keyboard's focus brings it in. VS Code,
+  Qt, GTK and ARIA
   all show an indicator, and GTK and Qt know whether the keyboard moved it.
 - **The focus has little memory.** A popover gives it back ([walk]); a
   dialog or the command palette closed by Escape does not, against what
@@ -118,7 +119,9 @@ From egui 0.36.2's source (`memory/mod.rs`, `context.rs`,
 - **Nothing scrolls to the focus.** egui's `Response::scroll_to_me` must
   be called by the widget; no widget or container calls it on gaining the
   focus (`sections.rs`, `files.rs`, `palette.rs` and `dialogs.rs` in
-  egui-pop call it themselves).
+  egui-pop call it themselves), and the target it sets reaches only the
+  innermost scroll area. Since item 7, egui-pop's focus plugin does it for
+  every widget.
 - **No focus ring.** `Widgets::style` gives a focused widget the `active`
   look, the same as pressed. `debug.show_focused_widget` exists as a debug
   tool. There is no record of whether the keyboard or the pointer moved
@@ -247,15 +250,20 @@ From `crates/egui-pop-core` (`tab.rs`, `focus.rs`, `keys.rs`,
 - **[walk] A button changing the panels loses the focus it holds**, not read
   at first: "Open the demonstration panels" and "Close them" on the
   workbench page, by Enter, leave nothing focused.
-- **[walk] A focused widget out of view stays out of view** in a plain
+- **[walk] A focused widget out of view stayed out of view** in a plain
   `ScrollArea`: the gallery's side list from its 23rd row, the settings page
-  past "Log level". Sections, the picker, the palette and dialogs' choices
-  handle it themselves ([test] `the_sections_page_answers_the_keyboard`
-  for the boundaries, since PR #99).
-- **[walk] Windowed rows end where they are drawn.** With buttons as a
-  windowed section's rows, Tab goes through those drawn, 11 of 500, then
-  leaves the section: nothing scrolls, so the others cannot be reached by
-  Tab. The gallery's own windowed rows are labels, not stops.
+  past "Log level". Since item 7, the keyboard's focus brings it in, nested
+  areas included (`every_stop_of_the_first_page_comes_into_view_both_ways`,
+  `crates/egui-pop-test/tests/focus_into_view.rs`). Sections, the picker, the
+  palette and dialogs' choices had their own call, which stays
+  ([test] `the_sections_page_answers_the_keyboard` for the boundaries, since
+  PR #99).
+- **[walk] Windowed rows ended where they were drawn.** With buttons as a
+  windowed section's rows, Tab went through those drawn, 11 of 500, then left
+  the section. Since item 7 each row reached scrolls the next one into the
+  drawn window, so Tab goes on through them, both ways. A row not drawn is
+  still no stop: Tab cannot jump to it. The gallery's own windowed rows are
+  labels, not stops.
 
 ### Where it cannot be seen
 
@@ -702,13 +710,16 @@ one pull request. Numbers stay as they are, since the walk's tests name them;
    widget and rectangle. Tab after Escape, or after that widget vanished,
    continues from that place, not from the window's top; a removed row hands
    the focus on to its neighbour. Size: S to M.
-7. **Focus scrolls into view.** A widget focused by the keyboard is brought
-   into its scroll area. `scroll_to_me` works for the scroll area drawn around
-   the caller, so it belongs in `Input`, the slider and the kit's widgets
-   first; then an upstream issue for a general answer. Size: S to M. Since the
-   gallery's pages got a scroll area ([the scrolling survey](scrolling-survey.md),
-   its item 2), the settings page's end can be reached by the wheel and the bar,
-   no longer cut; Tab still goes past the fold, so this stays open.
+7. **Focus scrolls into view.** Done, in one place rather than in each widget:
+   the focus plugin moves the scroll areas around a widget when anything but
+   the pointer focuses it, nested ones included, by the least that shows it and
+   without an animation ([Tab order](inputs.md#tab-order)). `scroll_to_me` could
+   not do it from outside a widget, and reaches only the innermost area
+   ([upstream](upstream.md#egui-a-scroll-target-stops-at-the-innermost-scroll-area)).
+   Windowed rows: a row not drawn is no stop, and each row reached draws the
+   next, so Tab goes through them; a view with its own cursor stays one stop and
+   scrolls to it itself. An area with hidden bars cannot be found, and what it
+   holds keeps calling `scroll_to_me`.
 8. **No stops that show nothing.** The frame's caption and a flyout's edge
    sense without `FOCUSABLE` (`Sense::CLICK | Sense::DRAG`, `Sense::DRAG`); the
    walk checks it stays so. An open menu's frame is one too, from egui: see
@@ -885,9 +896,9 @@ The order to follow for egui-pop now, by the same measure:
 2. **Done: item 21, modal overlays give the focus back.** Every dialog and
    palette use lost the place. New.
 3. **Done: item 3, one focused panel.** What Helios's keys depend on.
-4. **Item 7, focus scrolls into view,** up from seventh: it is the first thing
-   a Tab user meets, 35 stops out of view on the gallery's first screen.
-   It should say what to do about windowed rows, which Tab cannot reach.
+4. **Done: item 7, focus scrolls into view,** up from seventh: it is the first
+   thing a Tab user meets, 35 stops out of view on the gallery's first screen.
+   Windowed rows follow, each one reached drawing the next.
 5. **Item 10, the side list as a `ListView`.** Up from tenth, for the same
    reason: 57 stops before any page, and it removes the worst of the rows out
    of view.

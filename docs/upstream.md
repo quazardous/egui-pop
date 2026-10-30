@@ -218,6 +218,29 @@ limit.
 - **Remove when**: egui takes a modal layer off in the pass it stops being
   drawn, or keeps a focus requested for a widget below it.
 
+## egui: a scroll target stops at the innermost scroll area
+
+- **Compensated**: `Response::scroll_to_me` and `Ui::scroll_to_rect` set a target
+  that the innermost `ScrollArea` takes whole, on both axes, even when it cannot
+  move on that axis or does not overflow, so the areas around it never see it
+  (`Prepared::end`). Reproduced on egui 0.36.2 with plain egui, a button in an
+  area nested in a scrolled area: `scroll_to_me` leaves it out of view
+  (`egui_scroll_target_stops_at_the_innermost_area`,
+  `crates/egui-pop-test/tests/focus_into_view.rs`). And nothing says which areas
+  hold a widget, or lets a central hook set a target for them:
+  `Action::ScrollIntoView`, which a hook could inject, stops at the same place
+  and always centres.
+- **Upstream**: not filed yet. The nearest is [#985](https://github.com/emilk/egui/issues/985), from 2023, asking for a way to name the area: it saw every area scroll, the opposite of 0.36.2.
+- **Workaround**: the focus plugin writes the offsets of the areas itself, from
+  the previous pass (`// upstream:` in `crates/egui-pop-core/src/reveal.rs`): the
+  ids in `PassState::used_ids` holding a `scroll_area::State` are the areas; the
+  widgets `id.with(axis)` are their bars, giving their reach; the widgets between
+  the area's content `Ui` and its bars are what it holds. These are egui's
+  internals read through public items: the test file above fails if a bump
+  changes them. An area with hidden bars is not found.
+- **Remove when**: a scroll target bubbles to the outer areas as far as it needs
+  to, or a widget's enclosing areas can be read.
+
 ## egui: no side-effect free read of a widget's response
 
 - **Compensated**: `Context::read_response` runs the "clicked

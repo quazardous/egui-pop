@@ -357,7 +357,21 @@ fn escape_from_a_panel_holding_the_focus_itself_keeps_the_panel() {
 fn a_row_scrolled_out_of_its_panel_is_still_that_panels() {
     let (mut h, _) = panels();
     run(&mut h, "demo.list.focus");
-    let stop = walk::reach(&mut h, TAB, "Row 29", 80).expect("Tab gets there");
+    let row = walk::reach(&mut h, TAB, "Row 29", 80).expect("Tab gets there");
+    assert!(row.visible, "the keyboard's focus comes into view: {row}");
+    // The wheel can still take it away.
+    h.event(egui::Event::PointerMoved(row.rect.center()));
+    let _ = h.run_ok();
+    for _ in 0..6 {
+        h.event(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Line,
+            delta: egui::vec2(0.0, 20.0),
+            phase: egui::TouchPhase::Move,
+            modifiers: Modifiers::NONE,
+        });
+        let _ = h.run_ok();
+    }
+    let stop = walk::focused(&h).expect("it keeps the focus");
     assert!(!stop.visible, "this test needs it out of view: {stop}");
     assert_eq!(panel(&h), Some(LIST));
 }
@@ -660,6 +674,7 @@ fn rows<'a>() -> Harness<'a> {
         });
         let _ = ui.button("After");
     });
+    focus::install(&h.ctx);
     let _ = h.run_ok();
     h
 }
@@ -684,7 +699,8 @@ fn a_windowed_row_scrolled_away_keeps_the_place() {
     assert_ne!(name(walk::press(&mut h, TAB)), "Before");
 }
 
-// Focus out of view (checks 1, 10, 11; item 7).
+// Focus into view (checks 1, 10, 11; item 7). Plain areas, nesting and the
+// pointer are in `crates/egui-pop-test/tests/focus_into_view.rs`.
 
 #[test]
 fn the_side_list_scrolls_to_the_focus() {
@@ -694,7 +710,6 @@ fn the_side_list_scrolls_to_the_focus() {
 }
 
 #[test]
-#[ignore = "keyboard survey item 7: Tab goes past the fold of a long form, it does not scroll"]
 fn a_long_form_scrolls_to_the_focus() {
     let mut h = harness("settings");
     let walked = walk::walk(&mut h, SHIFT_TAB, 200);
@@ -702,7 +717,17 @@ fn a_long_form_scrolls_to_the_focus() {
 }
 
 #[test]
-#[ignore = "keyboard survey item 7: Tab leaves windowed rows after those drawn; the others cannot be reached"]
+fn every_stop_of_the_first_page_comes_into_view_both_ways() {
+    let mut h = harness("overview");
+    let forth = walk::walk(&mut h, TAB, 200);
+    assert_eq!(forth.end, End::Looped { at: 0 }, "{forth}");
+    assert!(forth.stops.iter().all(|s| s.visible), "{forth}");
+    let back = walk::walk(&mut h, SHIFT_TAB, 200);
+    assert_eq!(back.stops.len(), forth.stops.len(), "{back}");
+    assert!(back.stops.iter().all(|s| s.visible), "{back}");
+}
+
+#[test]
 fn tab_goes_through_windowed_rows_past_those_drawn() {
     let mut h = rows();
     walk::reach(&mut h, TAB, "Row 40", 100).expect("Tab reaches a row below the window");
