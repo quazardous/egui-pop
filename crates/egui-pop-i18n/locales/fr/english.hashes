@@ -506,8 +506,11 @@ egui-pop-files-selected b94bd277035f8891
 egui-pop-files-selected-none 06639adc9d49a67f
 egui-pop-files-selected-not-shown b92d4087c913b866
 egui-pop-files-size 460e2b4dbac0e0ba
+egui-pop-files-thumbnail-size d4377170ede303ea
 egui-pop-files-type 20c8ac126ee3b079
 egui-pop-files-unbookmark d71391bfffa763c4
+egui-pop-files-view-grid 88f43b0d239d3469
+egui-pop-files-view-list 52d27082aa325209
 egui-pop-fonts-numbers 76f0efa9563698d0
 egui-pop-fonts-origin-bundled a012ac3bcaa1fe74
 egui-pop-fonts-origin-file af4c8dffda0c1053

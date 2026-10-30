@@ -13,6 +13,11 @@
 //!   [`Shown::Loading`]; the frame never waits. Asking for another path
 //!   cancels the one asked before ([`PreviewRequest::cancelled`]). On
 //!   the web, which has no threads, the preview is made in the frame.
+//! - **Many at once**: a grid says which paths are in view each frame
+//!   ([`Previews::want`]) and reads what is made ([`Previews::thumbnail`]).
+//!   The worker makes them in that order, after the preview asked with
+//!   [`Previews::get`]; a path scrolled out of view leaves the queue, or is
+//!   cancelled in the making.
 //! - **Cached** by path, size and modification time, up to a size in
 //!   bytes ([`Previews::set_cache_bytes`], 64 MiB by default; the oldest
 //!   go first). Providers read at most [`PreviewRequest::max_bytes`].
@@ -48,7 +53,7 @@
 //! assert_eq!(ready.provider, "shout");
 //! ```
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::{Path, PathBuf};
@@ -567,20 +572,33 @@ struct Job {
     request: PreviewRequest,
 }
 
+/// What the worker makes.
+#[derive(Debug)]
+struct Running {
+    key: Key,
+    cancel: Arc<AtomicBool>,
+    /// Asked by a grid: it stops when out of view.
+    thumbnail: bool,
+}
+
 #[derive(Debug)]
 struct State {
     providers: Vec<Registered>,
     cache: HashMap<Key, Shown>,
     /// Oldest first.
     order: VecDeque<Key>,
+    /// What a grid has in view: kept over the cache's cap, or a view larger
+    /// than the cache would make its thumbnails again for ever.
+    in_view: HashSet<Key>,
+    /// What a grid has in view and is not made yet, in its order.
+    thumbnails: VecDeque<Job>,
     bytes: usize,
     cap: usize,
     max_side: u32,
     max_bytes: usize,
     /// Waiting for the worker (the last asked: those before are dropped).
     job: Option<Job>,
-    /// What the worker makes, and its cancel flag.
-    running: Option<(Key, Arc<AtomicBool>)>,
+    running: Option<Running>,
     worker: bool,
     repaint: Option<egui::Context>,
 }
@@ -591,6 +609,8 @@ impl Default for State {
             providers: Vec::new(),
             cache: HashMap::new(),
             order: VecDeque::new(),
+            in_view: HashSet::new(),
+            thumbnails: VecDeque::new(),
             bytes: 0,
             cap: CACHE_BYTES,
             max_side: MAX_SIDE,
@@ -613,17 +633,38 @@ impl State {
         if size > self.cap {
             return;
         }
+        let mut kept = Vec::new();
         while self.bytes + size > self.cap {
             let Some(oldest) = self.order.pop_front() else {
                 break;
             };
-            if let Some(old) = self.cache.remove(&oldest) {
+            if self.in_view.contains(&oldest) {
+                kept.push(oldest);
+            } else if let Some(old) = self.cache.remove(&oldest) {
                 self.bytes = self.bytes.saturating_sub(old.bytes());
             }
+        }
+        for k in kept.into_iter().rev() {
+            self.order.push_front(k);
         }
         self.bytes += size;
         self.order.push_back(key.clone());
         self.cache.insert(key, shown);
+    }
+
+    /// Whether `key` is being made, or waits to be.
+    fn asked(&self, key: &Key) -> bool {
+        self.running.as_ref().is_some_and(|r| r.key == *key)
+            || self.job.as_ref().is_some_and(|j| j.key == *key)
+    }
+
+    /// What the worker takes next: the preview asked, then what a grid has
+    /// in view. Says whether it is the latter.
+    fn next_job(&mut self) -> Option<(Job, bool)> {
+        self.job
+            .take()
+            .map(|j| (j, false))
+            .or_else(|| self.thumbnails.pop_front().map(|j| (j, true)))
     }
 }
 
@@ -730,17 +771,16 @@ impl Previews {
         if let Some(shown) = s.cache.get(&key) {
             return shown.clone();
         }
-        if s.running.as_ref().is_some_and(|(k, _)| *k == key)
-            || s.job.as_ref().is_some_and(|j| j.key == key)
-        {
+        if s.asked(&key) {
             return Shown::Loading;
         }
         if s.providers.is_empty() {
             return Shown::Nothing;
         }
-        // Another path was asked before: it is not wanted any more.
-        if let Some((_, cancel)) = &s.running {
-            cancel.store(true, Ordering::Relaxed);
+        // Another path was asked before: it is not wanted any more. A
+        // thumbnail gives way too, and is asked again while in view.
+        if let Some(running) = &s.running {
+            running.cancel.store(true, Ordering::Relaxed);
         }
         s.repaint = Some(ctx.clone());
         if cfg!(target_arch = "wasm32") {
@@ -761,6 +801,96 @@ impl Previews {
         Shown::Loading
     }
 
+    /// The paths a grid has in view, in the order it wants them, and their
+    /// facts (the frame reads no file here): replaces what it said before.
+    /// What is not made yet goes to the worker, one at a time, behind the
+    /// preview asked with [`Previews::get`], and the context is woken as each
+    /// is ready; what left the view leaves the queue, and is cancelled when
+    /// in the making. None: nothing is wanted any more.
+    pub fn want(&self, ctx: &egui::Context, fs: &SharedFs, wanted: &[(PathBuf, Meta)]) {
+        let mut s = lock(&self.0.state);
+        s.thumbnails.clear();
+        s.in_view.clear();
+        let (max_side, max_bytes) = (s.max_side, s.max_bytes);
+        // Only for what is not made: most frames have nothing to ask.
+        let mut chain: Option<Arc<[Registered]>> = None;
+        for (path, meta) in wanted {
+            let key = Key {
+                path: path.clone(),
+                len: meta.len,
+                modified: meta.modified,
+                max_side,
+            };
+            s.in_view.insert(key.clone());
+            if s.providers.is_empty() || s.cache.contains_key(&key) || s.asked(&key) {
+                continue;
+            }
+            let chain = chain
+                .get_or_insert_with(|| s.providers.clone().into())
+                .clone();
+            let request = PreviewRequest {
+                path: path.clone(),
+                meta: *meta,
+                mime: mime_of(path),
+                max_side,
+                max_bytes,
+                fs: fs.clone(),
+                cancel: Arc::default(),
+                chain,
+            };
+            s.thumbnails.push_back(Job { key, request });
+        }
+        if let Some(running) = &s.running
+            && running.thumbnail
+            && !s.in_view.contains(&running.key)
+        {
+            running.cancel.store(true, Ordering::Relaxed);
+        }
+        if s.thumbnails.is_empty() {
+            return;
+        }
+        s.repaint = Some(ctx.clone());
+        if cfg!(target_arch = "wasm32") {
+            // No threads: one per frame, for the frames to go on.
+            drop(s);
+            self.make_one();
+            ctx.request_repaint();
+        } else if !s.worker {
+            s.worker = true;
+            drop(s);
+            self.spawn();
+        } else {
+            drop(s);
+            self.0.wake.notify_all();
+        }
+    }
+
+    /// A path's thumbnail as it is now, its facts given (the frame reads no
+    /// file here): made, or [`Shown::Loading`] whether it was asked or not.
+    pub fn thumbnail(&self, path: &Path, meta: &Meta) -> Shown {
+        let s = lock(&self.0.state);
+        let key = Key {
+            path: path.to_path_buf(),
+            len: meta.len,
+            modified: meta.modified,
+            max_side: s.max_side,
+        };
+        match s.cache.get(&key) {
+            Some(shown) => shown.clone(),
+            None if s.providers.is_empty() => Shown::Nothing,
+            None => Shown::Loading,
+        }
+    }
+
+    /// Makes what comes next, on this thread.
+    fn make_one(&self) {
+        let job = lock(&self.0.state).next_job();
+        if let Some((job, _)) = job {
+            let shown = run(&job.request);
+            lock(&self.0.state).put(job.key, shown);
+        }
+    }
+
     /// What is known of a path's preview without asking for it.
     pub fn peek(&self, fs: &SharedFs, path: &Path) -> Shown {
         let (key, _) = match self.job(fs, path) {
@@ -771,9 +901,7 @@ impl Previews {
         if let Some(shown) = s.cache.get(&key) {
             return shown.clone();
         }
-        if s.running.as_ref().is_some_and(|(k, _)| *k == key)
-            || s.job.as_ref().is_some_and(|j| j.key == key)
-        {
+        if s.asked(&key) {
             return Shown::Loading;
         }
         if s.providers.is_empty() {
@@ -803,8 +931,10 @@ impl Previews {
     pub fn cancel(&self) {
         let mut s = lock(&self.0.state);
         s.job = None;
-        if let Some((_, cancel)) = &s.running {
-            cancel.store(true, Ordering::Relaxed);
+        s.thumbnails.clear();
+        s.in_view.clear();
+        if let Some(running) = &s.running {
+            running.cancel.store(true, Ordering::Relaxed);
         }
     }
 
@@ -822,7 +952,8 @@ impl Previews {
             "cached": s.cache.len(),
             "cache_bytes": s.bytes,
             "cache_cap": s.cap,
-            "running": s.running.as_ref().map(|(k, _)| k.path.display().to_string()),
+            "running": s.running.as_ref().map(|r| r.key.path.display().to_string()),
+            "queued": s.thumbnails.len(),
         })
     }
 
@@ -834,15 +965,8 @@ impl Previews {
         if let Err(e) = spawned {
             log::warn!(target: "egui_pop", "files: no thread for previews: {e}");
             // Made in the frame, then.
-            let job = {
-                let mut s = lock(&self.0.state);
-                s.worker = false;
-                s.job.take()
-            };
-            if let Some(job) = job {
-                let shown = run(&job.request);
-                lock(&self.0.state).put(job.key, shown);
-            }
+            lock(&self.0.state).worker = false;
+            self.make_one();
         }
     }
 }
@@ -855,7 +979,7 @@ fn worker(weak: &std::sync::Weak<Shared>) {
         };
         let job = {
             let mut s = lock(&shared.state);
-            if s.job.is_none() {
+            if s.job.is_none() && s.thumbnails.is_empty() {
                 s = match shared
                     .wake
                     .wait_timeout(s, std::time::Duration::from_millis(500))
@@ -864,14 +988,18 @@ fn worker(weak: &std::sync::Weak<Shared>) {
                     Err(e) => e.into_inner().0,
                 };
             }
-            let job = s.job.take();
-            if let Some(j) = &job {
-                s.running = Some((j.key.clone(), j.request.cancel.clone()));
+            let job = s.next_job();
+            if let Some((j, thumbnail)) = &job {
+                s.running = Some(Running {
+                    key: j.key.clone(),
+                    cancel: j.request.cancel.clone(),
+                    thumbnail: *thumbnail,
+                });
             }
             job
         };
         // Not held while waiting for the next one: the service may go.
-        let Some(job) = job else {
+        let Some((job, _)) = job else {
             continue;
         };
         let shown = run(&job.request);
@@ -1322,6 +1450,131 @@ mod tests {
             assert!(Instant::now() < deadline, "the cancel was not seen");
             std::thread::sleep(Duration::from_millis(2));
         }
+    }
+
+    /// The paths in `/many`, with their facts.
+    fn many(n: usize) -> (SharedFs, Vec<(PathBuf, Meta)>) {
+        let mut memory = MemoryFs::new();
+        for i in 0..n {
+            memory = memory.file(format!("/many/{i}.txt"), b"x".to_vec());
+        }
+        let fs: SharedFs = Arc::new(memory);
+        let wanted = (0..n)
+            .map(|i| {
+                let path = PathBuf::from(format!("/many/{i}.txt"));
+                let meta = fs.metadata(&path).unwrap();
+                (path, meta)
+            })
+            .collect();
+        (fs, wanted)
+    }
+
+    fn until(what: &str, mut done: impl FnMut() -> bool) {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !done() {
+            assert!(Instant::now() < deadline, "{what}");
+            std::thread::sleep(Duration::from_millis(2));
+        }
+    }
+
+    #[test]
+    fn a_grid_gets_all_it_has_in_view_and_only_that() {
+        static MADE: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
+        let p = Previews::default();
+        p.register(fake("text", Handles::new().mime(&["text/*"]), 0, |r| {
+            lock(&MADE).push(r.path.clone());
+            named(r)
+        }));
+        let ctx = egui::Context::default();
+        let (fs, all) = many(1000);
+        let view = &all[..20];
+        assert!(matches!(
+            p.thumbnail(&view[0].0, &view[0].1),
+            Shown::Loading
+        ));
+        p.want(&ctx, &fs, view);
+        until("the worker made what is in view", || {
+            view.iter()
+                .all(|(path, meta)| matches!(p.thumbnail(path, meta), Shown::Ready(_)))
+        });
+        let made = lock(&MADE).clone();
+        assert_eq!(made.len(), 20);
+        assert_eq!(made[0], view[0].0, "in the order asked");
+        // Already made: nothing more is asked.
+        p.want(&ctx, &fs, view);
+        assert_eq!(p.describe()["queued"], 0);
+    }
+
+    #[test]
+    fn what_leaves_the_view_leaves_the_queue_and_stops_in_the_making() {
+        let p = Previews::default();
+        p.register(fake("slow", Handles::new().mime(&["*/*"]), 0, |r| {
+            let until = Instant::now() + Duration::from_secs(10);
+            while !r.cancelled() && Instant::now() < until {
+                std::thread::sleep(Duration::from_millis(2));
+            }
+            Err("stopped".into())
+        }));
+        let ctx = egui::Context::default();
+        let (fs, all) = many(10);
+        p.want(&ctx, &fs, &all[..5]);
+        until("the worker started", || !p.describe()["running"].is_null());
+        assert_eq!(p.describe()["queued"], 4);
+        // Scrolled away: the first is cancelled, the others are not made.
+        p.want(&ctx, &fs, &all[8..]);
+        assert!(p.describe()["queued"].as_u64() <= Some(2));
+        until("the cancel was seen", || {
+            p.describe()["running"].as_str() != Some("/many/0.txt")
+        });
+        assert!(matches!(p.thumbnail(&all[0].0, &all[0].1), Shown::Loading));
+        p.cancel();
+        assert_eq!(p.describe()["queued"], 0);
+    }
+
+    #[test]
+    fn the_preview_asked_goes_before_a_grid_s_queue() {
+        let p = Previews::default();
+        p.register(fake("slow", Handles::new().mime(&["*/*"]), 0, |r| {
+            let until = Instant::now() + Duration::from_secs(10);
+            while !r.cancelled() && Instant::now() < until {
+                std::thread::sleep(Duration::from_millis(2));
+            }
+            named(r)
+        }));
+        let ctx = egui::Context::default();
+        let (fs, all) = many(10);
+        p.want(&ctx, &fs, &all[..5]);
+        until("the worker started", || !p.describe()["running"].is_null());
+        // The pane asks: the thumbnail in the making gives way.
+        assert!(matches!(p.get(&ctx, &fs, &all[9].0), Shown::Loading));
+        until("the pane's preview was made", || {
+            p.describe()["running"].as_str() == Some("/many/9.txt")
+        });
+        p.cancel();
+    }
+
+    #[test]
+    fn what_is_in_view_stays_over_the_cache_s_cap() {
+        let p = Previews::default();
+        p.register(fake("text", Handles::new().mime(&["text/*"]), 0, named));
+        let ctx = egui::Context::default();
+        let (fs, all) = many(8);
+        // Room for less than the view.
+        p.set_cache_bytes(1000);
+        p.want(&ctx, &fs, &all);
+        until("the worker made all of the view", || {
+            all.iter()
+                .all(|(path, meta)| matches!(p.thumbnail(path, meta), Shown::Ready(_)))
+        });
+        // Out of view, they go as soon as the room is needed.
+        let (others, more) = many(16);
+        p.want(&ctx, &others, &more[8..]);
+        until("the old ones went", || {
+            more[8..]
+                .iter()
+                .all(|(path, meta)| matches!(p.thumbnail(path, meta), Shown::Ready(_)))
+        });
+        assert!(matches!(p.thumbnail(&all[0].0, &all[0].1), Shown::Loading));
     }
 
     #[test]

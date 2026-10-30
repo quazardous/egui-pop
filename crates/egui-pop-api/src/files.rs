@@ -43,6 +43,12 @@
 //! - **The in-app picker's size** is the person's: its modal is resized
 //!   by its edges and corners, a splitter sets the pane's width, and
 //!   both are kept in the host store ([`DIALOG_SIZE`], [`PANE_WIDTH`]).
+//! - **The in-app picker's view**, with previews: a list, or a grid of
+//!   thumbnails from the same providers ([`PickerView`]), whose size is a
+//!   slider, `Ctrl` and the wheel, or `Ctrl` and `+` or `-`; only the cells
+//!   in view ask for a thumbnail ([`Previews::want`]), a placeholder stands
+//!   in until it is made, and the arrows move in two dimensions. Both are
+//!   kept in the host store ([`VIEW`], [`THUMBNAIL_SIZE`]).
 //!
 //! Steps (ADR 0011):
 //!
@@ -78,7 +84,7 @@
 //! assert_eq!(f.describe()["open"][0]["via"], "in_app");
 //! ```
 
-use std::collections::{BTreeSet, VecDeque};
+use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -86,10 +92,14 @@ use egui::{EventFilter, Key, Modifiers, Ui, pos2, vec2};
 use egui_pop_core::a11y::{self, Politeness};
 use egui_pop_core::debug::FnCollector;
 use egui_pop_core::focus;
+use egui_pop_core::icon::Icon;
 use egui_pop_core::lock;
 use egui_pop_core::overlay::{self, Kind, OverlaySpec};
+use egui_pop_core::placeholder::SkeletonTokens;
+use egui_pop_core::slider::Slider;
 use egui_pop_core::strings::{self, CANCEL};
 use egui_pop_core::theme::Tokens;
+use egui_pop_core::thumbnail::{self, Thumbnail, ThumbnailGrid};
 use egui_pop_core::ui::UiPop as _;
 use egui_pop_core::widgets;
 use egui_pop_model::commands::{CommandSpec, Origin};
@@ -113,7 +123,7 @@ pub mod fs;
 pub mod preview;
 pub mod providers;
 
-use fs::SharedFs;
+use fs::{Meta, SharedFs};
 use preview::Previews;
 
 /// The file chooser, as a service.
@@ -162,6 +172,11 @@ pub const BOOKMARKS: &str = "settings/files.bookmarks";
 pub const DIALOG_SIZE: &str = "settings/files.dialog_size";
 /// Where the width of the in-app picker's preview pane is kept.
 pub const PANE_WIDTH: &str = "settings/files.pane_width";
+
+/// Where the in-app picker's view is kept ([`PickerView`]).
+pub const VIEW: &str = "settings/files.view";
+/// Where the size of the in-app picker's thumbnails is kept, in points.
+pub const THUMBNAIL_SIZE: &str = "settings/files.thumbnail_size";
 
 /// Where the last folder of each purpose is kept (a JSON list of
 /// `[purpose, folder]` pairs, newest first). See [`FileRequest::purpose`].
@@ -933,6 +948,23 @@ impl Plugin for FilesPlugin {
                         f64::from(preview::PANE_WIDTH),
                     ),
                 ),
+                (
+                    VIEW,
+                    Descriptor::choice(
+                        "File picker view",
+                        &[PickerView::List.as_str(), PickerView::Grid.as_str()],
+                        PickerView::List.as_str(),
+                    ),
+                ),
+                (
+                    THUMBNAIL_SIZE,
+                    Descriptor::float(
+                        "File picker thumbnail size",
+                        f64::from(THUMBNAIL_MIN_SIZE),
+                        f64::from(THUMBNAIL_MAX_SIZE),
+                        f64::from(THUMBNAIL_DEFAULT_SIZE),
+                    ),
+                ),
             ] {
                 store
                     .declare(ctx.owner(), path, descriptor)
@@ -1209,6 +1241,18 @@ pub const LIST_MIN_WIDTH: f32 = 240.0;
 /// The narrowest preview pane drawn: with less room, it is not shown.
 pub const PANE_MIN_WIDTH: f32 = 120.0;
 
+/// The smallest thumbnails of the picker's grid, in points.
+pub const THUMBNAIL_MIN_SIZE: f32 = 64.0;
+/// The largest thumbnails of the picker's grid, in points: the side
+/// previews are made at by default ([`preview::MAX_SIDE`]).
+pub const THUMBNAIL_MAX_SIZE: f32 = 256.0;
+/// The size of the picker's thumbnails at first, in points.
+pub const THUMBNAIL_DEFAULT_SIZE: f32 = 128.0;
+/// `Ctrl` and `+` or `-` multiply or divide the thumbnails' size by this.
+const THUMBNAIL_STEP: f32 = 1.25;
+/// The width of the slider of the thumbnails' size.
+const THUMBNAIL_SLIDER_WIDTH: f32 = 170.0;
+
 /// More than any window: what the store accepts for a length.
 const MAX_LENGTH: f64 = 65_536.0;
 
@@ -1313,6 +1357,10 @@ fn load_view(app: &AppHandle, picker: &mut FilePicker) {
     if !picker.pane_dragging {
         picker.pane_width = pane_width(app);
     }
+    picker.view = view(app);
+    if !picker.thumbnail_dragging {
+        picker.thumbnail_size = thumbnail_size(app);
+    }
 }
 
 /// Keeps what the person changed of the view; a drag of the splitter
@@ -1323,6 +1371,12 @@ fn keep_view(app: &AppHandle, picker: &FilePicker) {
     }
     if !picker.pane_dragging && picker.pane_width != pane_width(app) {
         want_pane_width(app, picker.pane_width);
+    }
+    if picker.view != view(app) {
+        want_view(app, picker.view);
+    }
+    if !picker.thumbnail_dragging && picker.thumbnail_size != thumbnail_size(app) {
+        want_thumbnail_size(app, picker.thumbnail_size);
     }
 }
 
@@ -1370,8 +1424,8 @@ pub fn want_preview(app: &AppHandle, on: bool) {
     }
 }
 
-/// Writes a remembered length of the picker, outside any undo history.
-fn keep_lengths(app: &AppHandle, path: &str, value: Value) {
+/// Writes a remembered value of the picker, outside any undo history.
+fn keep_value(app: &AppHandle, path: &str, value: Value) {
     let set = Set::new(path, Change::To(value), Origin::User)
         .by(&OwnerId::FRAMEWORK)
         .untracked();
@@ -1393,7 +1447,7 @@ pub fn dialog_size(app: &AppHandle) -> egui::Vec2 {
 /// Keeps the in-app picker's size.
 pub fn want_dialog_size(app: &AppHandle, size: egui::Vec2) {
     let value = Value::Floats(vec![f64::from(size.x), f64::from(size.y)]);
-    keep_lengths(app, DIALOG_SIZE, value);
+    keep_value(app, DIALOG_SIZE, value);
 }
 
 /// The width of the in-app picker's preview pane, as kept (the room in
@@ -1407,7 +1461,34 @@ pub fn pane_width(app: &AppHandle) -> f32 {
 
 /// Keeps the width of the in-app picker's preview pane.
 pub fn want_pane_width(app: &AppHandle, width: f32) {
-    keep_lengths(app, PANE_WIDTH, Value::Float(f64::from(width)));
+    keep_value(app, PANE_WIDTH, Value::Float(f64::from(width)));
+}
+
+/// The in-app picker's view, as kept.
+pub fn view(app: &AppHandle) -> PickerView {
+    lock(&app.store())
+        .get(VIEW)
+        .and_then(|e| e.value.as_text().and_then(PickerView::parse))
+        .unwrap_or_default()
+}
+
+/// Keeps the in-app picker's view.
+pub fn want_view(app: &AppHandle, view: PickerView) {
+    keep_value(app, VIEW, Value::Choice(view.as_str().into()));
+}
+
+/// The size of the in-app picker's thumbnails, as kept.
+pub fn thumbnail_size(app: &AppHandle) -> f32 {
+    lock(&app.store())
+        .get(THUMBNAIL_SIZE)
+        .and_then(|e| e.value.as_f64())
+        .map_or(THUMBNAIL_DEFAULT_SIZE, |s| s as f32)
+}
+
+/// Keeps the size of the in-app picker's thumbnails.
+pub fn want_thumbnail_size(app: &AppHandle, size: f32) {
+    let size = size.clamp(THUMBNAIL_MIN_SIZE, THUMBNAIL_MAX_SIZE);
+    keep_value(app, THUMBNAIL_SIZE, Value::Float(f64::from(size)));
 }
 
 /// The home folder, if known.
@@ -1424,6 +1505,68 @@ pub struct Places {
     pub home: Option<PathBuf>,
     pub recent: Vec<PathBuf>,
     pub bookmarks: Vec<PathBuf>,
+}
+
+/// How the in-app picker shows a folder's entries.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum PickerView {
+    /// One entry per row, by name.
+    #[default]
+    List,
+    /// Thumbnails from the preview providers (only with previews,
+    /// [`FilePicker::with_previews`]: a list without them).
+    Grid,
+}
+
+impl PickerView {
+    /// Its name in the store.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            PickerView::List => "list",
+            PickerView::Grid => "grid",
+        }
+    }
+
+    /// The view of a name in the store.
+    pub fn parse(name: &str) -> Option<PickerView> {
+        match name {
+            "list" => Some(PickerView::List),
+            "grid" => Some(PickerView::Grid),
+            _ => None,
+        }
+    }
+}
+
+/// A move of the highlight in the grid.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum GridMove {
+    Left,
+    Right,
+    Up,
+    Down,
+    Home,
+    End,
+}
+
+impl GridMove {
+    /// Where it lands from entry `at`, in `count` entries with `columns` in a
+    /// row. Down from the row above a shorter last one takes the last entry,
+    /// and from the last row stays, as file managers do.
+    fn target(self, at: usize, columns: usize, count: usize) -> usize {
+        let last = count.saturating_sub(1);
+        let columns = columns.max(1);
+        match self {
+            GridMove::Left => at.saturating_sub(1),
+            GridMove::Right => (at + 1).min(last),
+            GridMove::Up if at >= columns => at - columns,
+            GridMove::Up => at,
+            GridMove::Down if at + columns <= last => at + columns,
+            GridMove::Down if at / columns < last / columns => last,
+            GridMove::Down => at,
+            GridMove::Home => 0,
+            GridMove::End => last,
+        }
+    }
 }
 
 /// One entry of a folder.
@@ -1510,6 +1653,10 @@ pub struct FilePicker {
     /// The preview pane's width, as wanted: the room in the dialog may
     /// hold it smaller.
     pub pane_width: f32,
+    /// How the entries are shown.
+    pub view: PickerView,
+    /// The thumbnails' size in the grid, in points.
+    pub thumbnail_size: f32,
     /// The list takes the height left in the `Ui` it is drawn in (a
     /// dialog of a given size), rather than [`LIST_HEIGHT`].
     pub fill: bool,
@@ -1549,7 +1696,22 @@ pub struct FilePicker {
     pane_dragging: bool,
     /// The height of what comes below the list, as last drawn.
     footer_height: Option<f32>,
-    listing: Option<(PathBuf, bool, Vec<Entry>)>,
+    /// The cells in a row of the grid, as last drawn.
+    columns: usize,
+    /// The grid brings the highlighted cell into view at the next frame.
+    reveal_cell: bool,
+    /// The highlighted cell takes the focus when it is next drawn: the
+    /// keyboard is moving from cell to cell.
+    focus_cell: bool,
+    /// The slider of the thumbnails' size is being dragged.
+    thumbnail_dragging: bool,
+    /// The grid asked for thumbnails at the last frame.
+    asked_thumbnails: bool,
+    /// The facts of the files the grid has shown, read once per listing:
+    /// the cells in view would read them every frame otherwise.
+    metas: Arc<Mutex<HashMap<PathBuf, Option<Meta>>>>,
+    /// Shared: the picker is copied every frame it is drawn.
+    listing: Option<(PathBuf, bool, Arc<Vec<Entry>>)>,
     fs: SharedFs,
     previews: Option<Previews>,
 }
@@ -1586,6 +1748,8 @@ impl FilePicker {
             show_hidden: false,
             show_preview: false,
             pane_width: preview::PANE_WIDTH,
+            view: PickerView::List,
+            thumbnail_size: THUMBNAIL_DEFAULT_SIZE,
             fill: false,
             error: None,
             naming: None,
@@ -1604,6 +1768,12 @@ impl FilePicker {
             focused: false,
             pane_dragging: false,
             footer_height: None,
+            columns: 1,
+            reveal_cell: false,
+            focus_cell: false,
+            thumbnail_dragging: false,
+            asked_thumbnails: false,
+            metas: Arc::default(),
             listing: None,
             fs,
             previews: None,
@@ -1633,6 +1803,7 @@ impl FilePicker {
     pub fn go(&mut self, dir: PathBuf) {
         self.dir = dir;
         self.highlight = 0;
+        self.reveal_cell = true;
         self.error = None;
         self.selected.clear();
         self.anchor = None;
@@ -1688,7 +1859,8 @@ impl FilePicker {
         all.sort_by(|a, b| {
             (!a.is_dir, a.name.to_lowercase()).cmp(&(!b.is_dir, b.name.to_lowercase()))
         });
-        self.listing = Some((key.0, key.1, all));
+        lock(&self.metas).clear();
+        self.listing = Some((key.0, key.1, Arc::new(all)));
         self.entries()
     }
 
@@ -2185,11 +2357,8 @@ impl FilePicker {
             ChooseKind::OpenMany => {
                 let shown = self.visible();
                 let total = self.selected.len();
-                let hidden = self
-                    .selected
-                    .iter()
-                    .filter(|p| !shown.iter().any(|e| &&e.path == p))
-                    .count();
+                let paths: HashSet<&PathBuf> = shown.iter().map(|e| &e.path).collect();
+                let hidden = self.selected.iter().filter(|p| !paths.contains(p)).count();
                 let (count, not_shown) = (total.to_string(), hidden.to_string());
                 let args = [("count", count.as_str()), ("hidden", not_shown.as_str())];
                 Some(match (total, hidden) {
@@ -2231,6 +2400,9 @@ impl FilePicker {
             "asking": self.asking,
             "preview": self.preview_state(),
             "pane_width": self.pane_width,
+            "view": self.view.as_str(),
+            "thumbnail_size": self.thumbnail_size,
+            "columns": self.columns,
         })
     }
 
@@ -2305,6 +2477,51 @@ impl FilePicker {
             ui.input_mut(keys)
         };
         // Drawn on its own, the picker has no keymap for these.
+        // The grid's moves in two dimensions. The field keeps the keys that
+        // move its cursor while it holds text and the focus.
+        let grid = self.grid_on();
+        let in_cell = self.focus_cell
+            || ui
+                .memory(|m| m.focused())
+                .is_some_and(|f| self.row_ids.contains(&f));
+        let editing = !empty && ui.memory(|m| m.has_focus(field_id));
+        let (grid_move, grid_extend) = if grid && !waiting && !elsewhere && !editing {
+            ui.input_mut(|i| {
+                let mut moved = (None, false);
+                for (key, to) in [
+                    (Key::ArrowLeft, GridMove::Left),
+                    (Key::ArrowRight, GridMove::Right),
+                    (Key::Home, GridMove::Home),
+                    (Key::End, GridMove::End),
+                ] {
+                    // Shift first: egui matches a key asked without it with
+                    // it held too.
+                    if i.consume_key(Modifiers::SHIFT, key) {
+                        moved = (Some(to), true);
+                    } else if i.consume_key(Modifiers::NONE, key) {
+                        moved = (Some(to), false);
+                    }
+                }
+                moved
+            })
+        } else {
+            (None, false)
+        };
+        if grid && !waiting {
+            let (bigger, smaller) = ui.input_mut(|i| {
+                (
+                    i.consume_key(Modifiers::COMMAND, Key::Plus)
+                        || i.consume_key(Modifiers::COMMAND, Key::Equals),
+                    i.consume_key(Modifiers::COMMAND, Key::Minus),
+                )
+            });
+            if bigger {
+                self.resize_thumbnails(self.thumbnail_size * THUMBNAIL_STEP);
+            }
+            if smaller {
+                self.resize_thumbnails(self.thumbnail_size / THUMBNAIL_STEP);
+            }
+        }
         let (toggle, select_all) = if waiting || self.declared_keys {
             (false, false)
         } else {
@@ -2343,7 +2560,15 @@ impl FilePicker {
             if self.makes_folders() {
                 self.new_folder_button(ui);
             }
-            ui.monospace(self.dir.display().to_string());
+            if self.previews.is_some() {
+                self.view_controls(ui);
+                // Cut rather than pushing past the dialog: the controls took
+                // room from it.
+                let dir = egui::RichText::new(self.dir.display().to_string()).monospace();
+                ui.add(egui::Label::new(dir).truncate());
+            } else {
+                ui.monospace(self.dir.display().to_string());
+            }
         });
         let mut back_to_field = false;
         if self.naming.is_some() {
@@ -2386,8 +2611,15 @@ impl FilePicker {
             &strings::tr(ui.ctx(), hint),
         );
         let refocus = std::mem::take(&mut self.refocus);
-        if first || tab || parent || down || up || enter || back_to_field || refocus {
+        // In the grid, the arrows leave the focus where it is: on a cell, it
+        // follows the highlight.
+        let cell_stays = grid && in_cell;
+        let arrows = down || up;
+        if first || tab || parent || (arrows && !cell_stays) || enter || back_to_field || refocus {
             field.request_focus();
+            self.focus_cell = false;
+        } else if (arrows || grid_move.is_some()) && cell_stays {
+            self.focus_cell = true;
         }
         // The stem when the field gets the focus, not under a click placing
         // the cursor: typing replaces the name and keeps its extension.
@@ -2409,6 +2641,7 @@ impl FilePicker {
         }
         if field.changed() {
             self.highlight = 0;
+            self.reveal_cell = true;
             self.error = None;
             // Typing says what is meant now: a name, or a filter's first match.
             // Files selected stay, and the line under the list counts them.
@@ -2437,17 +2670,29 @@ impl FilePicker {
             });
         }
         let shown = self.visible();
-        if down || up {
+        let grid_move = grid_move.or(if !grid {
+            None
+        } else if down {
+            Some(GridMove::Down)
+        } else if up {
+            Some(GridMove::Up)
+        } else {
+            None
+        });
+        if down || up || grid_move.is_some() {
             // Choosing a folder the list opens with nothing selected: the first
             // press selects the entry highlighted, rather than the one after it.
             let to = if self.kind == ChooseKind::Folder && self.selected.is_empty() {
                 self.highlight
+            } else if let Some(grid_move) = grid_move {
+                grid_move.target(self.highlight, self.columns, shown.len())
             } else if down {
                 (self.highlight + 1).min(shown.len().saturating_sub(1))
             } else {
                 self.highlight.saturating_sub(1)
             };
-            self.move_highlight(to, &shown, extend);
+            self.move_highlight(to, &shown, extend || grid_extend);
+            self.reveal_cell = grid;
         }
         ui.add_space(t.space.s);
         let list_height = if self.fill {
@@ -2523,6 +2768,10 @@ impl FilePicker {
             }
             ui.vertical(|ui| {
                 ui.set_width(list_width);
+                if grid {
+                    self.grid(ui, &shown, list_height, &mut answer);
+                    return;
+                }
                 egui::ScrollArea::vertical()
                     .id_salt("egui_pop.files.entries")
                     .max_height(list_height)
@@ -2566,14 +2815,7 @@ impl FilePicker {
                                 if n == self.highlight && (down || up || tabbed) {
                                     r.scroll_to_me(None);
                                 }
-                                if r.double_clicked() && !modifiers.command && !modifiers.shift {
-                                    self.click_entry(n, &shown, Modifiers::NONE);
-                                    answer = answer.take().or_else(|| self.activate());
-                                } else if r.clicked() {
-                                    self.click_entry(n, &shown, modifiers);
-                                    // By the pointer: the keys go on as before.
-                                    self.refocus |= pointer;
-                                }
+                                self.entry_clicks(&r, n, &shown, modifiers, pointer, &mut answer);
                             }
                             if shown.is_empty() {
                                 ui.weak(strings::tr(ui.ctx(), &txt::NOTHING_MATCHES));
@@ -2594,6 +2836,9 @@ impl FilePicker {
                 });
             }
         });
+        if !grid && self.asked_thumbnails {
+            self.want_thumbnails(ui.ctx(), &[]);
+        }
         if toggle {
             self.toggle();
         }
@@ -2692,6 +2937,255 @@ impl FilePicker {
 }
 
 impl FilePicker {
+    /// Whether the entries are drawn as a grid: it needs the providers.
+    fn grid_on(&self) -> bool {
+        self.view == PickerView::Grid && self.previews.is_some()
+    }
+
+    /// A new size for the thumbnails; the highlighted cell stays in view.
+    fn resize_thumbnails(&mut self, size: f32) {
+        self.thumbnail_size = size.clamp(THUMBNAIL_MIN_SIZE, THUMBNAIL_MAX_SIZE);
+        self.reveal_cell = true;
+    }
+
+    /// The list or grid switch, and the thumbnails' size with the grid.
+    fn view_controls(&mut self, ui: &mut Ui) {
+        for (view, name) in [
+            (PickerView::List, &txt::FILES_VIEW_LIST),
+            (PickerView::Grid, &txt::FILES_VIEW_GRID),
+        ] {
+            let name = strings::tr(ui.ctx(), name);
+            if widgets::selectable_label(ui, self.view == view, name).clicked() && self.view != view
+            {
+                self.view = view;
+                self.reveal_cell = true;
+            }
+        }
+        self.thumbnail_dragging = false;
+        if self.view != PickerView::Grid {
+            return;
+        }
+        let name = strings::tr(ui.ctx(), &txt::FILES_THUMBNAIL_SIZE);
+        let height = ui.spacing().interact_size.y;
+        ui.allocate_ui(vec2(THUMBNAIL_SLIDER_WIDTH, height), |ui| {
+            let mut size = f64::from(self.thumbnail_size);
+            let range = f64::from(THUMBNAIL_MIN_SIZE)..=f64::from(THUMBNAIL_MAX_SIZE);
+            let out = Slider::new(&mut size, &name, range)
+                .step(1.0)
+                .default(f64::from(THUMBNAIL_DEFAULT_SIZE))
+                .show(ui);
+            if out.response.changed() {
+                self.resize_thumbnails(size as f32);
+            }
+            self.thumbnail_dragging = out.response.dragged();
+        });
+    }
+
+    /// The grid: the cells in view, each asking for its thumbnail (nothing
+    /// else does). `Ctrl` and the wheel over it change their size.
+    fn grid(
+        &mut self,
+        ui: &mut Ui,
+        shown: &[Entry],
+        height: f32,
+        answer: &mut Option<PickerAnswer>,
+    ) {
+        let area = egui::Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), height));
+        if ui.rect_contains_pointer(area) {
+            let zoom = ui.input(|i| i.zoom_delta());
+            if (zoom - 1.0).abs() > f32::EPSILON {
+                self.resize_thumbnails(self.thumbnail_size * zoom);
+            }
+        }
+        let cell = {
+            let side = self.thumbnail_size;
+            vec2(side, side + thumbnail::caption_height(ui))
+        };
+        if shown.is_empty() {
+            ui.weak(strings::tr(ui.ctx(), &txt::NOTHING_MATCHES));
+        }
+        let reveal = std::mem::take(&mut self.reveal_cell) && !shown.is_empty();
+        let highlight = self.highlight.min(shown.len().saturating_sub(1));
+        let pointer = ui.input(|i| i.pointer.any_down() || i.pointer.any_released());
+        let modifiers = ui.input(|i| i.modifiers);
+        let mut in_view = Vec::new();
+        self.row_ids.clear();
+        self.columns = ThumbnailGrid::new(shown.len(), cell)
+            .id_salt("egui_pop.files.grid")
+            .max_height(height)
+            .reveal(reveal.then_some(highlight))
+            .show(ui, |ui, n| {
+                let r = self.grid_cell(ui, n, shown, cell, &mut in_view);
+                self.cell_input(ui, &r, n, shown, modifiers, pointer, answer);
+            });
+        if !in_view.is_empty() || self.asked_thumbnails {
+            self.want_thumbnails(ui.ctx(), &in_view);
+        }
+    }
+
+    /// Tells the providers which files the grid has in view.
+    fn want_thumbnails(&mut self, ctx: &egui::Context, in_view: &[(PathBuf, Meta)]) {
+        if let Some(previews) = &self.previews {
+            previews.want(ctx, &self.fs, in_view);
+        }
+        self.asked_thumbnails = !in_view.is_empty();
+    }
+
+    /// Draws cell `n`, in the `Ui` the grid gave it: its thumbnail, or what
+    /// stands in for it. A cell in view that has no thumbnail yet asks for
+    /// one.
+    fn grid_cell(
+        &mut self,
+        ui: &mut Ui,
+        n: usize,
+        shown: &[Entry],
+        cell: egui::Vec2,
+        in_view: &mut Vec<(PathBuf, Meta)>,
+    ) -> egui::Response {
+        let e = &shown[n];
+        let selected = self.selected.contains(&e.path);
+        let highlighted = n == self.highlight;
+        let apart = self.selects_apart();
+        let label = if e.is_dir {
+            format!("{}/", e.name)
+        } else {
+            e.name.clone()
+        };
+        let mut cell_widget = Thumbnail::new(label)
+            .caption(e.name.as_str())
+            .size(cell)
+            .selected(selected || (highlighted && !apart));
+        let visible = ui.is_rect_visible(egui::Rect::from_min_size(ui.cursor().min, cell));
+        let mut failed = None;
+        if e.is_dir {
+            cell_widget = cell_widget.icon(Icon::Folder);
+        } else if !visible {
+            // In a row built around the view: nothing is asked for it.
+            cell_widget = cell_widget.placeholder(SkeletonTokens::of(ui.ctx()).fill);
+        } else {
+            match self.meta_of(&e.path) {
+                None => cell_widget = cell_widget.icon(Icon::Warning),
+                Some(meta) => {
+                    // Whatever it has now, for the cache to keep it.
+                    in_view.push((e.path.clone(), meta));
+                    let made = match &self.previews {
+                        Some(previews) => previews.thumbnail(&e.path, &meta),
+                        None => preview::Shown::Nothing,
+                    };
+                    cell_widget = match &made {
+                        preview::Shown::Loading => {
+                            cell_widget.placeholder(SkeletonTokens::of(ui.ctx()).fill)
+                        }
+                        preview::Shown::Ready(ready) => {
+                            let image = match &ready.preview.body {
+                                preview::Body::Image(image) => Some(image.size),
+                                _ => None,
+                            };
+                            match (image, ready.texture(ui.ctx(), 0)) {
+                                (Some([w, h]), Some(texture)) => {
+                                    cell_widget.image(texture.id(), [w as u32, h as u32])
+                                }
+                                _ => cell_widget.icon(Icon::File),
+                            }
+                        }
+                        preview::Shown::Nothing => cell_widget.icon(Icon::File),
+                        preview::Shown::Failed(reason) => {
+                            failed = Some(reason.clone());
+                            cell_widget.icon(Icon::Warning)
+                        }
+                    };
+                }
+            }
+        }
+        // By its path: the focus stays on it as the rows scroll.
+        let r = ui.push_id(&e.path, |ui| ui.add(cell_widget)).inner;
+        match failed {
+            Some(reason) => r.on_hover_text(reason),
+            None => r,
+        }
+    }
+
+    /// A file's facts, read once per listing.
+    fn meta_of(&self, path: &Path) -> Option<Meta> {
+        *lock(&self.metas)
+            .entry(path.to_path_buf())
+            .or_insert_with(|| self.fs.metadata(path).ok())
+    }
+
+    /// What the cell just drawn does with the pointer and the keys.
+    #[allow(clippy::too_many_arguments)]
+    fn cell_input(
+        &mut self,
+        ui: &mut Ui,
+        r: &egui::Response,
+        n: usize,
+        shown: &[Entry],
+        modifiers: Modifiers,
+        pointer: bool,
+        answer: &mut Option<PickerAnswer>,
+    ) {
+        if self.selects_apart() && n == self.highlight {
+            let t = Tokens::of(ui.ctx());
+            ui.painter().rect_stroke(
+                r.rect,
+                t.radius.widget,
+                egui::Stroke::new(1.0, t.focus_ring),
+                egui::StrokeKind::Inside,
+            );
+        }
+        self.row_ids.push(r.id);
+        // The grid's own arrows, not egui's moves from widget to widget.
+        if r.has_focus() {
+            ui.memory_mut(|m| {
+                m.set_focus_lock_filter(
+                    r.id,
+                    EventFilter {
+                        horizontal_arrows: true,
+                        vertical_arrows: true,
+                        ..Default::default()
+                    },
+                )
+            });
+        }
+        // Tab through the cells moves the highlight too.
+        if r.gained_focus() && !pointer && n != self.highlight {
+            self.move_highlight(n, shown, false);
+            r.scroll_to_me(None);
+        }
+        if self.focus_cell && n == self.highlight {
+            self.focus_cell = false;
+            r.request_focus();
+        }
+        self.entry_clicks(r, n, shown, modifiers, pointer, answer);
+        // A filter holds text: the arrows must reach the grid, so the cell
+        // keeps the focus. Saving, the field holds the name just taken.
+        if r.clicked() && self.kind != ChooseKind::Save && !self.text.is_empty() {
+            self.refocus = false;
+            r.request_focus();
+        }
+    }
+
+    /// What a click does on an entry, the same in the list and the grid. It
+    /// selects; a double click opens.
+    fn entry_clicks(
+        &mut self,
+        r: &egui::Response,
+        n: usize,
+        shown: &[Entry],
+        modifiers: Modifiers,
+        pointer: bool,
+        answer: &mut Option<PickerAnswer>,
+    ) {
+        if r.double_clicked() && !modifiers.command && !modifiers.shift {
+            self.click_entry(n, shown, Modifiers::NONE);
+            *answer = answer.take().or_else(|| self.activate());
+        } else if r.clicked() {
+            self.click_entry(n, shown, modifiers);
+            // By the pointer: the keys go on as before.
+            self.refocus |= pointer;
+        }
+    }
+
     /// The New folder button: disabled, with the reason, on a file system
     /// that cannot make one (the key says the same in the picker).
     fn new_folder_button(&mut self, ui: &mut Ui) {
@@ -2905,6 +3399,28 @@ mod tests {
             std::fs::write(root.join(f), b"x").unwrap();
         }
         root
+    }
+
+    #[test]
+    fn a_move_in_the_grid_lands_as_in_a_file_manager() {
+        use GridMove::*;
+        // Ten entries, four in a row: 0 1 2 3 / 4 5 6 7 / 8 9.
+        let to = |m: GridMove, at| m.target(at, 4, 10);
+        assert_eq!(to(Right, 3), 4, "to the next row's start");
+        assert_eq!(to(Left, 4), 3, "to the row before's end");
+        assert_eq!(to(Left, 0), 0);
+        assert_eq!(to(Right, 9), 9);
+        assert_eq!(to(Down, 1), 5);
+        assert_eq!(to(Up, 5), 1);
+        assert_eq!(to(Up, 2), 2, "the first row stays");
+        assert_eq!(to(Down, 6), 9, "above the short last row: its last entry");
+        assert_eq!(to(Down, 9), 9, "the last row stays");
+        assert_eq!(to(Down, 8), 8);
+        assert_eq!(to(Home, 6), 0);
+        assert_eq!(to(End, 6), 9);
+        // Nothing shown, and a width of one.
+        assert_eq!(End.target(0, 4, 0), 0);
+        assert_eq!(Down.target(0, 1, 3), 1);
     }
 
     #[test]

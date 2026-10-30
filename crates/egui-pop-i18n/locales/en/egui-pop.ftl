@@ -1014,9 +1014,15 @@ egui-pop-files-selected-not-shown = Selected: { $count } ({ $hidden } not shown)
 
 egui-pop-files-size = Size
 
+egui-pop-files-thumbnail-size = Thumbnail size
+
 egui-pop-files-type = File type
 
 egui-pop-files-unbookmark = Remove the bookmark
+
+egui-pop-files-view-grid = Grid
+
+egui-pop-files-view-list = List
 
 egui-pop-fonts-numbers = Values line their digits up:
 

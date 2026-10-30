@@ -52,7 +52,7 @@ impl Plugin for FilesPage {
         }
         ctx.story(
             Story::new(StoryId::from_static("files"), "Choosing files", show)
-                .description("The system's file chooser off the interface thread, or the in-app picker: keyboard, typed paths with completion, filters, recent places and bookmarks, a preview pane (images, text, documents, folders) from pluggable providers, a dialog you resize and a splitter beside the pane, both remembered.")
+                .description("The system's file chooser off the interface thread, or the in-app picker: keyboard, typed paths with completion, filters, recent places and bookmarks, a preview pane (images, text, documents, folders) from pluggable providers, a dialog you resize and a splitter beside the pane, a list or a grid of thumbnails with a size control, all remembered.")
                 .group("Components", 52),
         )?;
         Ok(())
@@ -416,6 +416,8 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                     "move, then enter a folder or choose a file",
                 ),
                 ("Shift+Up, Shift+Down", "extend the selection (several)"),
+                ("Left, Right, Home, End", "in the grid: move, too"),
+                ("Ctrl+Plus, Ctrl+Minus", "in the grid: the thumbnails' size"),
                 ("Backspace, Alt+Up", "the parent folder"),
                 ("Ctrl+Enter", "choose the folder, or the selection"),
                 ("Ctrl+D", "bookmark the folder"),

@@ -163,6 +163,24 @@ which swaps the first two (`SetFolder`).
   Enter gives the default width back (`preview::PANE_WIDTH`, 240). The
   width is kept in `settings/files.pane_width` (`files::pane_width`). The
   places column keeps its fixed 150 points.
+- With previews, a switch beside the folder shows the entries as a list or as a
+  grid of thumbnails from the same providers (`PickerView`, kept in
+  `settings/files.view`, read with `files::view`); a picker without previews
+  keeps its list. The thumbnails' size goes from `THUMBNAIL_MIN_SIZE` to
+  `THUMBNAIL_MAX_SIZE` (64 to 256 points, 128 at first): the slider beside the
+  switch, `Ctrl` and the wheel over the grid, or `Ctrl` and `+` or `-`; it is
+  kept in `settings/files.thumbnail_size` (`files::thumbnail_size`). Only the
+  cells in view ask for a thumbnail, so a folder of thousands of raws costs what
+  a dialog's worth does: what leaves the view leaves the worker's queue (see
+  Previews). A placeholder stands in until a thumbnail is made; a folder shows
+  its sign and asks for nothing, a file without an image the file's sign, a
+  failure a warning with its reason in a tip.
+- In the grid, the four arrows move the highlight in two dimensions, `Home` and
+  `End` go to the first and the last entry, and `Shift` with any of them extends
+  a selection of several files; Enter, a click and a double click are the list's.
+  While the field holds text and the focus, `Left`, `Right`, `Home` and `End`
+  move its cursor, and only `Up` and `Down` the highlight: `Tab` to a cell gives
+  all of them to the grid, and the focus then follows the highlight.
 - Beside the folder: home, the recent places and the bookmarks, kept in
   the host's store (`settings/files.recent`, `settings/files.bookmarks`,
   saved with the settings).
@@ -338,6 +356,15 @@ impl PreviewProvider for Notes {
   document drawn simply, a folder's counts and first thumbnails, or
   nothing) and facts: dimensions, pages, and labelled facts of the
   provider's own.
+
+A grid asks differently from the pane: `Previews::want` says each frame which
+paths it has in view, in order and with their facts, and `Previews::thumbnail`
+reads what is made, neither touching the file system in the frame. The worker
+makes them one at a time, behind the preview asked with `get`, which a thumbnail
+in the making gives way to; a path that left the view leaves the queue, and is
+cancelled in the making. They share the cache and its key with the pane, so the
+highlighted cell's preview is there at once; what is in view is kept over the
+cache's cap, rather than made again for ever.
 
 ## Steps
 

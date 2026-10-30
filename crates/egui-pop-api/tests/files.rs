@@ -4,15 +4,21 @@
 //! steps.
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 use egui::accesskit::{Role, Toggled};
 use egui::{Key, Modifiers};
 use egui_kittest::Harness;
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use egui_pop_api::dialogs::{self, DIALOGS};
+use egui_pop_api::files::fs::{MemoryFs, SharedFs};
+use egui_pop_api::files::preview::{
+    Body, Handles, Preview, PreviewProvider, PreviewRequest, Shown,
+};
 use egui_pop_api::files::{
     self, CMD_NEW_FOLDER, CMD_SELECT_ALL, CMD_TOGGLE_SELECTION, Chosen, FILES, FileRequest,
-    FilesPlugin, STEP_CHOOSE, STEP_CHOSEN,
+    FilesPlugin, PickerView, STEP_CHOOSE, STEP_CHOSEN,
 };
 use egui_pop_api::host::Pending;
 use egui_pop_api::steps::Before;
@@ -1744,4 +1750,373 @@ fn tab_through_the_rows_moves_the_highlight_and_the_keys_answer_there() {
         root.join("photos/2026").display().to_string()
     );
     let _ = std::fs::remove_dir_all(root);
+}
+
+// The grid.
+
+/// A provider of images that notes what it is asked for, and waits while
+/// `hold` is set.
+#[derive(Debug, Default)]
+struct Raws {
+    asked: std::sync::Mutex<Vec<PathBuf>>,
+    hold: std::sync::atomic::AtomicBool,
+}
+
+impl PreviewProvider for Raws {
+    fn id(&self) -> &str {
+        "raws"
+    }
+    fn handles(&self) -> Handles {
+        Handles::new().extensions(&["cr3"])
+    }
+    fn preview(&self, request: &PreviewRequest) -> Result<Option<Preview>, String> {
+        self.asked.lock().unwrap().push(request.path.clone());
+        while self.hold.load(Ordering::Relaxed) && !request.cancelled() {
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+        let image = egui::ColorImage::filled([12, 8], egui::Color32::GRAY);
+        Ok(Some(Preview::new(Body::Image(Arc::new(image)))))
+    }
+}
+
+/// `IMG_00000.cr3` and on, in `/raws` in memory, with a folder first.
+fn raws(count: usize) -> SharedFs {
+    let mut fs = MemoryFs::new().dir("/raws/Selects");
+    for i in 0..count {
+        fs = fs.file(format!("/raws/IMG_{i:05}.cr3"), vec![0; 16]);
+    }
+    Arc::new(fs)
+}
+
+/// A picker over `count` raws, in the view kept, its pane off.
+fn grid_harness(count: usize, view: PickerView) -> (Harness<'static, App>, Arc<Raws>) {
+    let app = App::builder()
+        .plugin(FilesPlugin::in_app().file_system(raws(count)))
+        .build(&egui::Context::default())
+        .unwrap();
+    let handle = app.handle().clone();
+    let provider = Arc::new(Raws::default());
+    let shared: Arc<dyn PreviewProvider> = provider.clone();
+    handle.service(&FILES).unwrap().previews().register(shared);
+    files::want_preview(&handle, false);
+    files::want_view(&handle, view);
+    let h = Harness::builder()
+        .with_size(egui::vec2(900.0, 640.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+    (h, provider)
+}
+
+/// Frames until the worker has made all that the grid has in view.
+fn settle_thumbnails(h: &mut Harness<'static, App>) {
+    for _ in 0..1000 {
+        let quiet = h.try_run().is_ok();
+        let previews = h.state().handle().debug_snapshot()["files"]["previews"].clone();
+        if quiet && previews["queued"] == 0 && previews["running"].is_null() {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    panic!("the thumbnails did not settle");
+}
+
+fn state(h: &Harness<'static, App>, what: &str) -> serde_json::Value {
+    h.state().handle().debug_snapshot()["files"]["open"][0]["picker"][what].clone()
+}
+
+fn at(h: &Harness<'static, App>) -> u64 {
+    state(h, "highlight").as_u64().unwrap()
+}
+
+#[test]
+fn the_list_stays_the_view_at_first_and_has_no_grid_without_previews() {
+    let (mut h, _) = grid_harness(3, PickerView::List);
+    let app = h.state().handle().clone();
+    assert_eq!(files::view(&app), PickerView::List);
+    let _p = choose(&mut h, FileRequest::open("Open").directory("/raws"));
+    assert_eq!(state(&h, "view"), "list");
+    assert!(h.query_by_label("Thumbnail size").is_none());
+    assert!(h.query_by_label("IMG_00000.cr3").is_some());
+    // Left and Right are the field's alone in the list.
+    h.get_by_label("Filter, or type a path").type_text("IMG");
+    settle(&mut h);
+    press(&mut h, Key::ArrowDown, Modifiers::NONE);
+    let before = at(&h);
+    press(&mut h, Key::ArrowLeft, Modifiers::NONE);
+    press(&mut h, Key::Home, Modifiers::NONE);
+    assert_eq!(at(&h), before);
+
+    // A picker without previews offers no switch, and shows a list.
+    let request = FileRequest::open("Open").directory("/raws");
+    let mut picker = files::FilePicker::new_in(&request, raws(3));
+    picker.view = PickerView::Grid;
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(900.0, 640.0))
+        .build_ui_state(
+            |ui, picker: &mut files::FilePicker| {
+                picker.show(ui, &files::Places::default());
+            },
+            picker,
+        );
+    h.run();
+    assert!(h.query_by_label("Grid").is_none());
+    assert!(h.query_by_label("IMG_00000.cr3").is_some());
+}
+
+#[test]
+fn only_the_cells_in_view_ask_for_a_thumbnail_among_thousands() {
+    let (mut h, raws) = grid_harness(5000, PickerView::Grid);
+    let _p = choose(&mut h, FileRequest::open("Open").directory("/raws"));
+    settle_thumbnails(&mut h);
+    let asked = |raws: &Raws| raws.asked.lock().unwrap().clone();
+    let first = asked(&raws);
+    let columns = state(&h, "columns").as_u64().unwrap() as usize;
+    assert!(columns > 1, "{columns} columns");
+    assert!(!first.is_empty());
+    // A dialog's worth, however many there are.
+    assert!(first.len() <= 8 * columns, "{} asked", first.len());
+    // What was asked is what is drawn; a cell far away is not.
+    for path in &first {
+        let name = path.file_name().unwrap().to_str().unwrap();
+        assert!(h.query_by_label(name).is_some(), "{name} is not drawn");
+    }
+    assert!(h.query_by_label("IMG_04999.cr3").is_none());
+    // Nothing more is asked while nothing moves.
+    for _ in 0..5 {
+        h.step();
+    }
+    settle_thumbnails(&mut h);
+    assert_eq!(asked(&raws).len(), first.len());
+    // Jumping to the end asks for the end, not for what lies between.
+    press(&mut h, Key::End, Modifiers::NONE);
+    settle_thumbnails(&mut h);
+    let now = asked(&raws);
+    assert!(h.query_by_label("IMG_04999.cr3").is_some());
+    assert!(now.iter().any(|p| p.ends_with("IMG_04999.cr3")));
+    assert!(
+        now.len() <= first.len() * 2 + 8 * columns,
+        "{} asked",
+        now.len()
+    );
+    // In the same folder, the first cells come from the cache going back.
+    press(&mut h, Key::Home, Modifiers::NONE);
+    settle_thumbnails(&mut h);
+    assert_eq!(
+        asked(&raws).iter().filter(|p| **p == first[0]).count(),
+        1,
+        "already made"
+    );
+}
+
+#[test]
+fn a_placeholder_stands_in_and_the_frames_go_on_until_a_thumbnail_is_made() {
+    let (mut h, raws) = grid_harness(40, PickerView::Grid);
+    raws.hold.store(true, Ordering::Relaxed);
+    let _p = choose(&mut h, FileRequest::open("Open").directory("/raws"));
+    // The worker holds the first; every cell is drawn all the same, and
+    // the keyboard answers.
+    h.try_run().ok();
+    assert!(h.query_by_label("IMG_00000.cr3").is_some());
+    assert!(h.query_by_label("IMG_00001.cr3").is_some());
+    press(&mut h, Key::ArrowRight, Modifiers::NONE);
+    assert_eq!(at(&h), 1);
+    let app = h.state().handle().clone();
+    let files_service = app.service(&FILES).unwrap();
+    let path = Path::new("/raws/IMG_00000.cr3");
+    let meta = files_service.file_system().metadata(path).unwrap();
+    let previews = files_service.previews();
+    assert!(matches!(previews.thumbnail(path, &meta), Shown::Loading));
+    assert!(previews.describe()["queued"].as_u64() > Some(0));
+    // Made once it is let go.
+    raws.hold.store(false, Ordering::Relaxed);
+    settle_thumbnails(&mut h);
+    assert!(matches!(previews.thumbnail(path, &meta), Shown::Ready(_)));
+}
+
+#[test]
+fn the_arrows_move_in_two_dimensions_home_and_end_and_enter_as_in_the_list() {
+    let (mut h, _) = grid_harness(30, PickerView::Grid);
+    let p = choose(&mut h, FileRequest::open("Open").directory("/raws"));
+    settle_thumbnails(&mut h);
+    let columns = state(&h, "columns").as_u64().unwrap();
+    assert!(columns > 1);
+    assert_eq!(at(&h), 0);
+    // The folder comes first, then the files: 31 entries.
+    press(&mut h, Key::ArrowRight, Modifiers::NONE);
+    assert_eq!(at(&h), 1);
+    press(&mut h, Key::ArrowDown, Modifiers::NONE);
+    assert_eq!(at(&h), 1 + columns);
+    press(&mut h, Key::ArrowLeft, Modifiers::NONE);
+    assert_eq!(at(&h), columns);
+    press(&mut h, Key::ArrowUp, Modifiers::NONE);
+    assert_eq!(at(&h), 0);
+    press(&mut h, Key::End, Modifiers::NONE);
+    assert_eq!(at(&h), 30);
+    assert_eq!(highlighted(&h), "IMG_00029.cr3");
+    press(&mut h, Key::Home, Modifiers::NONE);
+    assert_eq!(at(&h), 0);
+    // Enter goes into a folder...
+    assert_eq!(highlighted(&h), "Selects/");
+    press(&mut h, Key::Enter, Modifiers::NONE);
+    assert_eq!(state(&h, "dir"), "/raws/Selects");
+    press(&mut h, Key::Backspace, Modifiers::NONE);
+    settle_thumbnails(&mut h);
+    // ...and chooses a file.
+    press(&mut h, Key::End, Modifiers::NONE);
+    press(&mut h, Key::Enter, Modifiers::NONE);
+    assert_eq!(
+        result(&mut h, &p).unwrap(),
+        Chosen::Paths(vec![PathBuf::from("/raws/IMG_00029.cr3")])
+    );
+}
+
+#[test]
+fn shift_extends_the_selection_in_the_grid() {
+    let (mut h, _) = grid_harness(20, PickerView::Grid);
+    let _p = choose(&mut h, FileRequest::open_many("Many").directory("/raws"));
+    settle_thumbnails(&mut h);
+    press(&mut h, Key::ArrowRight, Modifiers::NONE);
+    press(&mut h, Key::ArrowRight, Modifiers::SHIFT);
+    assert_eq!(selected(&h), ["IMG_00000.cr3", "IMG_00001.cr3"]);
+    let columns = state(&h, "columns").as_u64().unwrap() as usize;
+    press(&mut h, Key::ArrowDown, Modifiers::SHIFT);
+    assert_eq!(selected(&h).len(), columns + 2);
+    press(&mut h, Key::End, Modifiers::SHIFT);
+    assert_eq!(selected(&h).len(), 20);
+}
+
+#[test]
+fn the_field_keeps_the_keys_that_edit_its_text() {
+    let (mut h, _) = grid_harness(20, PickerView::Grid);
+    let _p = choose(&mut h, FileRequest::open("Open").directory("/raws"));
+    settle_thumbnails(&mut h);
+    type_in(&mut h, "IMG");
+    assert_eq!(at(&h), 0);
+    press(&mut h, Key::ArrowRight, Modifiers::NONE);
+    press(&mut h, Key::End, Modifiers::NONE);
+    assert_eq!(at(&h), 0, "the cursor in the text moved, not the highlight");
+    // Up and Down have no use there: they move the highlight, as in the list.
+    press(&mut h, Key::ArrowDown, Modifiers::NONE);
+    assert!(at(&h) > 0);
+}
+
+#[test]
+fn tab_reaches_a_cell_and_the_focus_follows_the_arrows_through_a_long_grid() {
+    let (mut h, _) = grid_harness(2000, PickerView::Grid);
+    let _p = choose(&mut h, FileRequest::open("Open").directory("/raws"));
+    settle_thumbnails(&mut h);
+    let stop = walk::reach(&mut h, walk::TAB, "IMG_00000.cr3", 60).expect("Tab reaches the cells");
+    assert_eq!(stop.role, Role::Button);
+    settle_thumbnails(&mut h);
+    assert_eq!(highlighted(&h), "IMG_00000.cr3");
+    press(&mut h, Key::ArrowRight, Modifiers::NONE);
+    settle_thumbnails(&mut h);
+    assert_eq!(highlighted(&h), "IMG_00001.cr3");
+    assert_eq!(walk::focused(&h).unwrap().name, "IMG_00001.cr3");
+    // Far away: the cell is not drawn when the key is pressed, and has the
+    // focus once it is, in view.
+    press(&mut h, Key::End, Modifiers::NONE);
+    settle_thumbnails(&mut h);
+    let stop = walk::focused(&h).expect("the focus followed");
+    assert_eq!(stop.name, "IMG_01999.cr3");
+    assert!(stop.visible, "{stop}");
+    // Enter there, as in the list.
+    press(&mut h, Key::Home, Modifiers::NONE);
+    settle_thumbnails(&mut h);
+    assert_eq!(highlighted(&h), "Selects/");
+    assert_eq!(walk::focused(&h).unwrap().name, "Selects/");
+    press(&mut h, Key::Enter, Modifiers::NONE);
+    assert_eq!(state(&h, "dir"), "/raws/Selects");
+    assert!(h.get_by_label("Filter, or type a path").is_focused());
+}
+
+#[test]
+fn a_click_selects_a_double_click_opens_in_the_grid() {
+    let (mut h, _) = grid_harness(6, PickerView::Grid);
+    let p = choose(&mut h, FileRequest::open("Open").directory("/raws"));
+    settle_thumbnails(&mut h);
+    h.get_by_label("IMG_00002.cr3").click();
+    settle_thumbnails(&mut h);
+    assert_eq!(highlighted(&h), "IMG_00002.cr3");
+    assert!(p.take().is_none(), "a click does not open");
+    // Back to the field, whose keys go on.
+    assert!(h.get_by_label("Filter, or type a path").is_focused());
+    let pos = h.get_by_label("IMG_00003.cr3").rect().center();
+    {
+        let events = &mut h.input_mut().events;
+        events.push(egui::Event::PointerMoved(pos));
+        for _ in 0..2 {
+            for pressed in [true, false] {
+                events.push(egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: Modifiers::NONE,
+                });
+            }
+        }
+    }
+    assert_eq!(
+        result(&mut h, &p).unwrap(),
+        Chosen::Paths(vec![PathBuf::from("/raws/IMG_00003.cr3")])
+    );
+}
+
+#[test]
+fn the_view_and_the_size_are_kept_for_the_next_picker() {
+    let (mut h, _) = grid_harness(40, PickerView::List);
+    let app = h.state().handle().clone();
+    let _p = choose(&mut h, FileRequest::open("Open").directory("/raws"));
+    h.get_by_label("Grid").click();
+    settle_thumbnails(&mut h);
+    assert_eq!(state(&h, "view"), "grid");
+    assert_eq!(files::view(&app), PickerView::Grid);
+    assert_eq!(files::thumbnail_size(&app), files::THUMBNAIL_DEFAULT_SIZE);
+    let before = state(&h, "columns").as_u64().unwrap();
+    // Ctrl and + or -, and Ctrl and the wheel (which egui reads as a zoom).
+    press(&mut h, Key::Plus, Modifiers::COMMAND);
+    settle_thumbnails(&mut h);
+    let bigger = files::thumbnail_size(&app);
+    assert!(bigger > files::THUMBNAIL_DEFAULT_SIZE);
+    assert!(state(&h, "columns").as_u64().unwrap() < before);
+    press(&mut h, Key::Minus, Modifiers::COMMAND);
+    settle_thumbnails(&mut h);
+    assert!((files::thumbnail_size(&app) - files::THUMBNAIL_DEFAULT_SIZE).abs() < 0.01);
+    let over = h.get_by_label("IMG_00000.cr3").rect().center();
+    h.hover_at(over);
+    h.input_mut().events.push(egui::Event::Zoom(0.8));
+    settle_thumbnails(&mut h);
+    assert!(files::thumbnail_size(&app) < files::THUMBNAIL_DEFAULT_SIZE);
+    // A slider says it too, and the size stays within its limits.
+    let slider = h.get_by_role_and_label(Role::Slider, "Thumbnail size");
+    assert!(slider.rect().width() > 0.0);
+    for _ in 0..40 {
+        press(&mut h, Key::Minus, Modifiers::COMMAND);
+    }
+    settle_thumbnails(&mut h);
+    assert_eq!(files::thumbnail_size(&app), files::THUMBNAIL_MIN_SIZE);
+    for _ in 0..40 {
+        press(&mut h, Key::Plus, Modifiers::COMMAND);
+    }
+    settle_thumbnails(&mut h);
+    assert_eq!(files::thumbnail_size(&app), files::THUMBNAIL_MAX_SIZE);
+    // A second picker opens as the first was left.
+    key(&mut h, Key::Escape, Modifiers::NONE);
+    key(&mut h, Key::Escape, Modifiers::NONE);
+    settle(&mut h);
+    assert!(app.service(&FILES).unwrap().open_ids().is_empty());
+    let _p = choose(&mut h, FileRequest::open("Open").directory("/raws"));
+    assert_eq!(state(&h, "view"), "grid");
+    assert_eq!(
+        state(&h, "thumbnail_size").as_f64(),
+        Some(f64::from(files::THUMBNAIL_MAX_SIZE))
+    );
+    // Back to the list: the grid's queue is dropped.
+    h.get_by_label("List").click();
+    settle_thumbnails(&mut h);
+    assert_eq!(files::view(&app), PickerView::List);
+    assert!(h.query_by_label("Thumbnail size").is_none());
+    assert_eq!(
+        h.state().handle().debug_snapshot()["files"]["previews"]["queued"],
+        0
+    );
 }

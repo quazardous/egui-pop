@@ -304,8 +304,9 @@ From the code on `main` (`crates/egui-pop-api/src/files.rs` and
 Sizes: S is under a day, M a few days, L a week or more. The layering
 note matters for several items: the picker lives in `egui-pop-api` (L3),
 the data table in `egui-pop-views` (L4) and the thumbnail grid in
-`egui-pop-viewport` (L3, a sibling); reuse means moving shared drawing
-down or the picker up, which is a decision of its own.
+`egui-pop-core` (L2, moved down from `egui-pop-viewport` for item 6);
+reuse means moving shared drawing down or the picker up, which is a
+decision of its own.
 
 1. **Keep the dialog's size when the preview is toggled; the preview
    takes its room from the list.** The modal's width stops depending on
@@ -347,9 +348,9 @@ down or the picker up, which is a decision of its own.
    slider and `Ctrl`+wheel or `Ctrl` `+`/`-`, virtualised for folders of
    thousands of raws, a placeholder until a thumbnail is there. This is
    the feature GTK users waited 18 years for, and the one a photo
-   editor's open and import dialogs need most. The viewport crate's
-   `thumbnail_grid` already does the drawing; the layering question
-   above decides where the picker gets it. Size: L.
+   editor's open and import dialogs need most. Decided: `thumbnail_grid`
+   moved down to `egui-pop-core`, for the picker and the viewport crate
+   alike. Size: L.
 7. **Columns in the list: size, modified, type, sortable.** Clicking a
    header sorts, the sort is remembered, folders stay first (a setting,
    as GTK's `sort-directories-first`), and names sort naturally
