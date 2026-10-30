@@ -308,3 +308,69 @@ fn bindings_whose_clauses_never_hold_together_do_not_conflict() {
         .unwrap();
     assert_eq!(k.conflicts().len(), 2);
 }
+
+#[test]
+fn a_rebound_key_listens_as_the_declared_one_does() {
+    let mut k = Keymap::new();
+    k.bind_with(
+        &FW,
+        Layer::Default,
+        "Ctrl+Shift+N",
+        Action::run("files.new"),
+        "",
+        BindOptions::global().through_modal(),
+    )
+    .unwrap();
+    k.rebind(
+        &OwnerId::USER,
+        Layer::User,
+        &CommandId::from_static("files.new"),
+        Some("Ctrl+Shift+F"),
+    )
+    .unwrap();
+    let modal = chain(&["dialog"]).flag("modalOpen", true);
+    assert_eq!(k.resolve(&keys("Ctrl+Shift+F"), &modal), run("files.new"));
+    assert_eq!(
+        k.resolve(&keys("Ctrl+Shift+N"), &modal),
+        Resolution::Nothing
+    );
+}
+
+#[test]
+fn a_rebound_key_keeps_the_declared_clause() {
+    let mut k = Keymap::new();
+    k.bind(
+        &FW,
+        Layer::Default,
+        "Ctrl+Shift+N",
+        Action::run("files.new"),
+        "pickerOpen",
+    )
+    .unwrap();
+    k.rebind(
+        &OwnerId::USER,
+        Layer::User,
+        &CommandId::from_static("files.new"),
+        Some("Ctrl+Shift+F"),
+    )
+    .unwrap();
+    assert_eq!(
+        k.resolve(&keys("Ctrl+Shift+F"), &chain(&[])),
+        Resolution::Nothing
+    );
+    let open = chain(&[]).flag("pickerOpen", true);
+    assert_eq!(k.resolve(&keys("Ctrl+Shift+F"), &open), run("files.new"));
+    // Several keys at once, as a pointer gesture's triggers.
+    k.rebind_all(
+        &OwnerId::USER,
+        Layer::User,
+        &CommandId::from_static("files.new"),
+        &["Ctrl+Shift+G"],
+    )
+    .unwrap();
+    assert_eq!(
+        k.resolve(&keys("Ctrl+Shift+G"), &chain(&[])),
+        Resolution::Nothing
+    );
+    assert_eq!(k.resolve(&keys("Ctrl+Shift+G"), &open), run("files.new"));
+}

@@ -1078,6 +1078,13 @@ publishes.
 
 ### Fixed
 
+- A rebound key keeps how its command's key listens (egui-pop-model): the
+  `when` clause and the options (`through_modal`, typing) of the binding it
+  replaces. `Keymap::rebind` and `rebind_all` kept only the scope, so a rebound
+  key fired where the command does not apply and swallowed the key, and one
+  declared through modals was blocked by them. Rebinding changes the keys
+  only. A keymap saved earlier keeps the bindings it holds until they are
+  rebound again.
 - A page from the network no longer loads local files (egui-pop-views;
   ADR 0017): a markdown page on a documentation host read its `file:`
   images from the disk, whatever the page's origin, or drew them when an
