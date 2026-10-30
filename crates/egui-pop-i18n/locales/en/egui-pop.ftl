@@ -956,6 +956,8 @@ egui-pop-files-save = Save
 
 egui-pop-files-size = Size
 
+egui-pop-files-type = File type
+
 egui-pop-files-unbookmark = Remove the bookmark
 
 egui-pop-fonts-numbers = Values line their digits up:

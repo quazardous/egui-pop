@@ -36,7 +36,8 @@ publishes.
   The list now takes the height of the dialog, and the pane scrolls when
   it is taller. Tab out of a typed path leaves the field for the next
   widget (in a path it still completes), and while another widget has
-  the focus the plain keys are its own.
+  the focus the plain keys are its own. The list of file types is named
+  for screen readers ("File type").
 - Resizable modals (egui-pop-core): `OverlaySpec::resizable(size, min)`,
   with `overlay::modal_size`, `modal_resizing` and `modal_max_size`.
   Edges and corners take the pointer, the bottom right corner is a

@@ -793,6 +793,8 @@ egui-pop-files-save = Enregistrer
 
 egui-pop-files-size = Taille
 
+egui-pop-files-type = Type de fichier
+
 egui-pop-files-unbookmark = Retirer des favoris
 
 egui-pop-fonts-numbers = Les valeurs alignent leurs chiffres :

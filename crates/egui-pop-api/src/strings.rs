@@ -318,6 +318,7 @@ pub const FILES_UNBOOKMARK: StrKey =
 pub const FILES_HOME: StrKey = StrKey::new("egui-pop-files-home", "Home");
 pub const FILES_RECENT: StrKey = StrKey::new("egui-pop-files-recent", "Recent");
 pub const FILES_BOOKMARKS: StrKey = StrKey::new("egui-pop-files-bookmarks", "Bookmarks");
+pub const FILES_TYPE: StrKey = StrKey::new("egui-pop-files-type", "File type");
 pub const FILES_ALL: StrKey = StrKey::new("egui-pop-files-all", "All files");
 pub const FILES_HIDDEN: StrKey = StrKey::new("egui-pop-files-hidden", "Hidden files");
 pub const FILES_OPEN: StrKey = StrKey::new("egui-pop-files-open", "Open");
@@ -1172,6 +1173,7 @@ pub const ALL: &[StrKey] = &[
     FILES_HOME,
     FILES_RECENT,
     FILES_BOOKMARKS,
+    FILES_TYPE,
     FILES_ALL,
     FILES_HIDDEN,
     FILES_OPEN,

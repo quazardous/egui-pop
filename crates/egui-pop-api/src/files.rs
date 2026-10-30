@@ -1783,11 +1783,15 @@ impl FilePicker {
                 let mut at = self.filter_index.min(names.len() - 1);
                 let combo =
                     widgets::combo_box("egui_pop.files.filter").selected_text(names[at].as_str());
-                ui.combo_box(combo, |ui| {
+                let list = ui.combo_box(combo, |ui| {
                     for (i, n) in names.iter().enumerate() {
                         widgets::selectable_value(ui, &mut at, i, n);
                     }
                 });
+                // No label beside it: a screen reader still needs its name.
+                let name = strings::tr(ui.ctx(), &txt::FILES_TYPE);
+                ui.ctx()
+                    .accesskit_node_builder(list.response.id, |node| node.set_label(name));
                 if at != self.filter_index {
                     self.filter_index = at;
                     self.highlight = 0;
