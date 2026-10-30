@@ -1190,3 +1190,170 @@ fn alt_up_goes_to_the_parent_folder() {
     assert_eq!(picker_state(&h, "dir"), json!(root));
     let _ = std::fs::remove_dir_all(root);
 }
+
+/// Answers the open choice as the chooser would, and waits for its result.
+fn answer(h: &mut Harness<'static, App>, p: &Pending, path: PathBuf) {
+    let f = h.state().handle().service(&FILES).unwrap();
+    f.deliver(f.open_ids()[0], Some(vec![path.clone()]))
+        .unwrap();
+    assert_eq!(result(h, p), Ok(Chosen::Paths(vec![path])));
+}
+
+/// Cancels the open choice with the keyboard: the field lets go of the
+/// focus, then the picker cancels.
+fn cancel(h: &mut Harness<'static, App>, p: &Pending) {
+    key(h, Key::Escape, Modifiers::NONE);
+    key(h, Key::Escape, Modifiers::NONE);
+    assert_eq!(result(h, p), Ok(Chosen::Cancelled));
+}
+
+fn shown(h: &Harness<'static, App>, label: &str) -> bool {
+    h.query_all_by_label(label).next().is_some()
+}
+
+/// Home as the picker falls back on it.
+fn home_or_root() -> PathBuf {
+    files::home().unwrap_or_else(|| PathBuf::from("/"))
+}
+
+#[test]
+fn a_second_opening_starts_in_the_purposes_last_folder() {
+    let root = tree("purpose-again");
+    let mut h = harness(None);
+    let request = || {
+        FileRequest::open("Import")
+            .purpose("import")
+            .directory(&root)
+    };
+    // The first time, the request's folder.
+    let p = choose(&mut h, request());
+    assert!(shown(&h, "photos/"));
+    assert!(!shown(&h, "a.png"));
+    // Chosen with the keyboard, in a folder below.
+    type_in(&mut h, "pho");
+    key(&mut h, Key::Enter, Modifiers::NONE);
+    key(&mut h, Key::ArrowDown, Modifiers::NONE);
+    key(&mut h, Key::Enter, Modifiers::NONE);
+    assert_eq!(
+        result(&mut h, &p),
+        Ok(Chosen::Paths(vec![root.join("photos/a.png")]))
+    );
+    assert_eq!(
+        files::last_folder(h.state().handle(), "import"),
+        Some(root.join("photos"))
+    );
+    // The same request starts there now, its `directory` a first-time default.
+    let p = choose(&mut h, request());
+    assert!(shown(&h, "a.png"));
+    assert!(!shown(&h, "photos/"));
+    // A cancel keeps nothing: wandering off does not move the last folder.
+    key(&mut h, Key::ArrowUp, Modifiers::ALT);
+    assert!(shown(&h, "notes/"));
+    cancel(&mut h, &p);
+    let p = choose(&mut h, request());
+    assert!(shown(&h, "a.png"));
+    assert!(!shown(&h, "notes/"));
+    cancel(&mut h, &p);
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn two_purposes_keep_their_own_folders() {
+    let root = tree("purpose-two");
+    let mut h = harness(None);
+    let import = || FileRequest::open("Import").purpose("import");
+    let export = || FileRequest::save("Export", "new.md").purpose("export");
+
+    let p = choose(&mut h, import().directory(&root));
+    answer(&mut h, &p, root.join("photos/a.png"));
+    // Another purpose does not start in it, with a folder of its own...
+    let p = choose(&mut h, export().directory(root.join("notes")));
+    assert!(shown(&h, "todo.md"));
+    assert!(!shown(&h, "a.png"));
+    answer(&mut h, &p, root.join("notes/new.md"));
+    // ... or without one, though it is the last recent place too: home.
+    let p = choose(&mut h, FileRequest::open("Other").purpose("other"));
+    assert_eq!(picker_state(&h, "dir"), json!(home_or_root()));
+    cancel(&mut h, &p);
+
+    // Each comes back to its own.
+    let p = choose(&mut h, import());
+    assert!(shown(&h, "a.png"));
+    assert!(!shown(&h, "todo.md"));
+    cancel(&mut h, &p);
+    let p = choose(&mut h, export());
+    assert!(shown(&h, "todo.md"));
+    assert!(!shown(&h, "a.png"));
+    cancel(&mut h, &p);
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn a_gone_last_folder_falls_back_to_the_request_then_home() {
+    let root = tree("purpose-gone");
+    let gone = root.join("photos/2026");
+    let mut h = harness(None);
+    let request = || FileRequest::folder("Folder").purpose("folder");
+    // Choosing a folder keeps that folder, not its parent.
+    let p = choose(&mut h, request().directory(&root));
+    answer(&mut h, &p, gone.clone());
+    assert_eq!(
+        files::last_folder(h.state().handle(), "folder"),
+        Some(gone.clone())
+    );
+    let p = choose(&mut h, request().directory(root.join("notes")));
+    assert_eq!(picker_state(&h, "dir"), json!(gone));
+    cancel(&mut h, &p);
+
+    std::fs::remove_dir_all(&gone).unwrap();
+    let p = choose(&mut h, request().directory(root.join("notes")));
+    assert_eq!(picker_state(&h, "dir"), json!(root.join("notes")));
+    cancel(&mut h, &p);
+    let p = choose(&mut h, request());
+    assert_eq!(picker_state(&h, "dir"), json!(home_or_root()));
+    cancel(&mut h, &p);
+    let p = choose(&mut h, request().directory(root.join("nowhere")));
+    assert_eq!(picker_state(&h, "dir"), json!(home_or_root()));
+    cancel(&mut h, &p);
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn a_forced_directory_beats_the_last_folder_and_still_updates_it() {
+    let root = tree("purpose-forced");
+    let mut h = harness(None);
+    let request = || FileRequest::open("Import").purpose("import");
+    let p = choose(&mut h, request().directory(&root));
+    answer(&mut h, &p, root.join("photos/a.png"));
+
+    let p = choose(&mut h, request().force_directory(root.join("notes")));
+    assert!(shown(&h, "todo.md"));
+    answer(&mut h, &p, root.join("notes/todo.md"));
+    assert_eq!(
+        files::last_folder(h.state().handle(), "import"),
+        Some(root.join("notes"))
+    );
+    // A forced folder that is gone gives way to the last one.
+    let p = choose(&mut h, request().force_directory(root.join("nowhere")));
+    assert_eq!(picker_state(&h, "dir"), json!(root.join("notes")));
+    cancel(&mut h, &p);
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn without_a_purpose_the_request_and_the_recent_places_decide() {
+    let root = tree("purpose-none");
+    let mut h = harness(None);
+    let p = choose(&mut h, FileRequest::open("Open").directory(&root));
+    answer(&mut h, &p, root.join("photos/a.png"));
+    // The request's folder wins, on every opening.
+    let p = choose(&mut h, FileRequest::open("Open").directory(&root));
+    assert!(shown(&h, "photos/"));
+    assert!(!shown(&h, "a.png"));
+    cancel(&mut h, &p);
+    // Without one, the last recent place, as ever.
+    let p = choose(&mut h, FileRequest::open("Open"));
+    assert!(shown(&h, "a.png"));
+    cancel(&mut h, &p);
+    let _ = std::fs::remove_dir_all(root);
+}
