@@ -629,7 +629,6 @@ fn a_side_areas_line_moves_with_the_arrows() {
 // Where the focus goes after it is lost (checks 4, 5, 11; item 6).
 
 #[test]
-#[ignore = "keyboard survey item 6: after Escape, Tab restarts at the window's first stop"]
 fn after_escape_tab_goes_on_from_the_place() {
     let mut h = harness("dialogs");
     reach_back(&mut h, "Pick a side");
@@ -638,7 +637,6 @@ fn after_escape_tab_goes_on_from_the_place() {
 }
 
 #[test]
-#[ignore = "keyboard survey item 6: a focused tab that goes away leaves nothing focused, Tab restarts at the top"]
 fn a_focused_tab_that_goes_away_hands_the_focus_on() {
     let mut h = with_panels();
     reach_back(&mut h, "Notes");
@@ -652,7 +650,6 @@ fn a_focused_tab_that_goes_away_hands_the_focus_on() {
 }
 
 #[test]
-#[ignore = "keyboard survey item 6: a button changing the panels loses the focus it holds"]
 fn a_button_rearranging_the_panels_keeps_the_focus() {
     let mut h = harness("workbench");
     reach_back(&mut h, "Open the demonstration panels");
@@ -660,6 +657,13 @@ fn a_button_rearranging_the_panels_keeps_the_focus() {
         name(walk::press(&mut h, ENTER)),
         "Open the demonstration panels"
     );
+}
+
+#[test]
+fn a_button_closing_the_panels_keeps_the_focus() {
+    let mut h = with_panels();
+    reach_back(&mut h, "Close them");
+    assert_eq!(name(walk::press(&mut h, ENTER)), "Close them");
 }
 
 fn rows<'a>() -> Harness<'a> {
@@ -680,7 +684,6 @@ fn rows<'a>() -> Harness<'a> {
 }
 
 #[test]
-#[ignore = "keyboard survey item 6: a windowed row scrolled away loses the focus, Tab restarts at the top"]
 fn a_windowed_row_scrolled_away_keeps_the_place() {
     let mut h = rows();
     let row = walk::reach(&mut h, TAB, "Row 3", 10).expect("Tab reaches it");

@@ -159,6 +159,29 @@ stop is left to egui, whose Tab order is the order of drawing; a
 focused widget that takes the keys itself (a terminal) keeps Tab and
 F6.
 
+### The focus keeps its place
+
+With the focus plugin (`focus::install`; an application has it), the focus
+remembers the widget it was last on and that widget's rectangle.
+
+- **Escape, then Tab or Shift+Tab**: goes on from that widget. Escape itself still
+  leaves nothing focused. So does a widget disabled while focused.
+- **The focused widget is removed**: the focus goes to the stop nearest to where
+  it was, in the innermost scope around it that still holds one, else in its
+  layer: the row taking its place, the row before if it was the last, the next
+  tab. A button opening or closing panels may be rebuilt under a new id; it keeps
+  the focus if it stands in the same place.
+- **The focused widget scrolled away, or removed by the pointer**: the focus goes
+  to nothing and stays out of the way of the wheel, and Tab goes to the visible
+  stop nearest to the place. If the widget is back by then, Tab goes on from it.
+- **A key binding on Tab goes first**: nothing is focused, so the palettes' toggle
+  still takes Tab after Escape, and the place waits.
+- **Inside a `tab::scope`**, going on from the place follows the order of drawing,
+  not the scope's reading order.
+- **Forgotten**: a press on nothing forgets the place; a place under a modal or in
+  a layer now gone (a closed menu) is not used. Tab then does what egui does, from
+  the window's first stop or its last.
+
 ### The focus comes into view
 
 With the focus plugin (`focus::install`; an application has it), a widget

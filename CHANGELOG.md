@@ -27,6 +27,14 @@ publishes.
   (where it scrolls, its height, a cell to bring into view, its columns) and
   `Thumbnail::caption` and `Thumbnail::icon`; `thumbnail_grid`'s rows no longer
   shift by a few points as it scrolls.
+- The focus keeps its place (egui-pop-core; `docs/inputs.md`). With the focus
+  plugin, which an application has, Tab and Shift+Tab after Escape, or after the
+  focused widget went away, go on from where it was instead of the window's
+  first stop or its last. A focused widget removed hands the focus to the stop
+  nearest to where it was, in the same scope first: the row taking its place, the
+  next tab, a button rebuilt where it stood when a button opens or closes panels.
+  A row scrolled away or a widget removed by the pointer hands nothing on, Tab
+  going on from the place; a press on nothing forgets it.
 - The focus comes into view (egui-pop-core; `docs/inputs.md`). With the focus
   plugin, which an application has, a widget focused by anything but the pointer
   (Tab, an arrow, a command, a screen reader) comes into view in the scroll areas
