@@ -48,7 +48,14 @@ pub(crate) fn show<R>(
     if let Some(h) = height {
         area = area.max_height(h).min_scrolled_height(h);
     }
-    let target = match (scroll.to.take(), scroll.reveal.take()) {
+    // Before its first pass a view has no height to bring a row into: the
+    // row waits for the next pass.
+    let measured = scroll.height > 0.0;
+    if !measured && scroll.reveal.is_some() {
+        ui.ctx().request_repaint();
+    }
+    let reveal = if measured { scroll.reveal.take() } else { None };
+    let target = match (scroll.to.take(), reveal) {
         (Some(o), _) => Some(o),
         (None, Some(i)) => Some(nav::reveal(i, row_h, scroll.offset, scroll.height)),
         _ => None,

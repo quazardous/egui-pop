@@ -466,6 +466,97 @@ fn a_selection_of_nodes_not_loaded_waits_for_their_branch() {
     assert_eq!(s.selection().keys(), &["e"]);
 }
 
+/// A tree whose rows are links: the selection marks the page shown, the
+/// cursor moves on its own, a click or Enter opens.
+fn links_harness(state: TreeState<String>, size: egui::Vec2) -> Harness<'static, TreeApp> {
+    let app = TreeApp {
+        app: None,
+        state,
+        source: Source {
+            asked: Arc::default(),
+            slow: None,
+        },
+        signals: Vec::new(),
+    };
+    Harness::builder().with_size(size).build_ui_state(
+        |ui, t: &mut TreeApp| {
+            let out = TreeView::new("links")
+                .label("Links")
+                .mode(Mode::None)
+                .activate_on_click(true)
+                .show(ui, &mut t.state, &t.source);
+            t.signals.extend(out.signals);
+        },
+        app,
+    )
+}
+
+fn activated(h: &mut Harness<'_, TreeApp>) -> Vec<String> {
+    let signals = std::mem::take(&mut h.state_mut().signals);
+    signals
+        .into_iter()
+        .filter_map(|s| match s {
+            tree::Signal::Activate { key } => Some(key),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn a_click_activates_when_asked_and_the_selection_stays_the_applications() {
+    let mut state = TreeState::new();
+    state.set_expanded(&"a".to_string(), true);
+    let mut h = links_harness(state, egui::vec2(400.0, 600.0));
+    h.run();
+    let shown = "a/1".to_string();
+    h.state_mut()
+        .state
+        .set_selection([shown.clone()], Some(shown.clone()));
+    // A click on a leaf opens it, and only moves the cursor.
+    h.get_by_label("File a2").click();
+    h.run();
+    assert_eq!(activated(&mut h), ["a/2"]);
+    let s = &h.state().state;
+    assert_eq!(s.selection().keys(), std::slice::from_ref(&shown));
+    assert_eq!(s.selection().cursor().map(String::as_str), Some("a/2"));
+    // A click on a branch opens or closes it.
+    h.get_by_label("Folder B").click();
+    h.run();
+    assert!(h.state().state.model().is_expanded(&"b".into()));
+    h.get_by_label("Folder B").click();
+    h.run();
+    assert!(!h.state().state.model().is_expanded(&"b".into()));
+    assert!(activated(&mut h).is_empty());
+    // The keys move the cursor alone; Enter opens.
+    h.get_by_label("File a3").click();
+    h.run();
+    assert_eq!(activated(&mut h), ["a/3"]);
+    h.key_press(Key::ArrowUp);
+    h.run();
+    assert!(activated(&mut h).is_empty(), "the arrows open nothing");
+    h.key_press(Key::Enter);
+    h.run();
+    assert_eq!(activated(&mut h), ["a/2"]);
+}
+
+#[test]
+fn a_node_revealed_comes_into_view_from_the_first_pass() {
+    let mut state = TreeState::new();
+    for k in ["a", "b", "c", "d", "e"] {
+        state.set_expanded(&k.to_string(), true);
+    }
+    // Before the view has any height.
+    state.reveal(&"e/3".to_string());
+    let mut h = links_harness(state, egui::vec2(400.0, 120.0));
+    h.run();
+    assert!(h.query_by_label("File e3").is_some());
+    assert!(h.query_by_label("Folder A").is_none(), "it scrolled");
+    // And later, back up.
+    h.state_mut().state.reveal(&"a".to_string());
+    h.run();
+    assert!(h.query_by_label("Folder A").is_some());
+}
+
 /// Files labelled with their size, named apart.
 struct Decorated(Source);
 

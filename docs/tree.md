@@ -225,6 +225,12 @@ assert!(state.selection().is_empty());
 assert!(state.pending_selection().is_some());
 ```
 
+`TreeState::reveal` brings a node's row into view at the next pass.
+`TreeView::activate_on_click` makes a click act as Enter does, for a tree
+whose rows are links (the gallery's list of pages): with `Mode::None`, the
+selection set by `set_selection` marks the page shown while the cursor
+moves on its own, and Enter or a click opens.
+
 A click on the triangle or a double click opens a branch. With
 `TreeView::drag_drop(true)`, nodes (the selection, when the dragged node
 is in it) are dragged before, after or inside a node; a node never goes
