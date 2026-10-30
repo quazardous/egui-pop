@@ -2830,6 +2830,53 @@ fn the_files_page_saves_with_a_question_before_replacing() {
 }
 
 #[test]
+fn the_files_page_selects_several_and_says_what_a_folder_selected_means() {
+    use egui::accesskit::Role;
+    use egui::{Key, Modifiers};
+    let mut h = harness(options("pop-dark", Density::Comfortable, "files"));
+    h.run();
+    h.get_by_label("Open several…").click();
+    settle_picker(&mut h);
+    // A click selects the folder; Enter goes in.
+    h.get_by_role_and_label(Role::Button, "Photos/").click();
+    settle_picker(&mut h);
+    h.key_press(Key::Enter);
+    settle_picker(&mut h);
+    h.get_by_role_and_label(Role::Button, "harbour.png").click();
+    settle_picker(&mut h);
+    h.get_by_role_and_label(Role::Button, "notes.txt")
+        .click_modifiers(Modifiers::COMMAND);
+    settle_picker(&mut h);
+    assert!(
+        h.query_by_role_and_label(Role::Label, "Selected: 2")
+            .is_some()
+    );
+    egui_pop_test::assert_all_named(&h);
+    h.hover_at(egui::pos2(5.0, 5.0));
+    settle_picker(&mut h);
+    h.snapshot("files-several-pop-dark");
+    h.key_press(Key::Escape);
+    settle_picker(&mut h);
+    h.key_press(Key::Escape);
+    settle_picker(&mut h);
+    h.get_by_label("Choose a folder…").click();
+    settle_picker(&mut h);
+    h.get_by_role_and_label(Role::Button, "Photos/").click();
+    settle_picker(&mut h);
+    assert!(
+        h.query_by_role_and_label(
+            Role::Label,
+            "Selected: Photos. The button chooses it, Enter goes into it"
+        )
+        .is_some()
+    );
+    egui_pop_test::assert_all_named(&h);
+    h.hover_at(egui::pos2(5.0, 5.0));
+    settle_picker(&mut h);
+    h.snapshot("files-folder-pop-dark");
+}
+
+#[test]
 fn the_files_page_previews_the_highlighted_file() {
     use egui_pop::model::commands::Origin;
     let root = egui_pop_gallery::pages::files::demo_folder();
