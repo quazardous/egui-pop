@@ -326,7 +326,7 @@ command-viewer-open-outside.description 0c5c255501719ee0
 command-viewer-open-outside.title 1ecbebc737a2ebc4
 command-viewer-reload.description 5ea29a86bf87c556
 command-viewer-reload.title 6af4cf03064308bc
-command-viewer-state.description 6906ead2c7dadb97
+command-viewer-state.description 02b770fa3f46d974
 command-viewer-state.title 00be7c46b53b5292
 command-viewer-zoom-in.description caca95761b99962d
 command-viewer-zoom-in.title 478c40b29e267999
@@ -939,6 +939,7 @@ egui-pop-views-viewer-no-connection 66588710f753b0b8
 egui-pop-views-viewer-not-found b421983c7277fc3b
 egui-pop-views-viewer-page a4a8537f9e2322ec
 egui-pop-views-viewer-reload cdc9d7538372728a
+egui-pop-views-viewer-simplified 30c986b3d5b1e999
 egui-pop-views-viewer-too-large b0423a4c0750a043
 egui-pop-views-viewer-unsupported 1dc70ceabb0867b1
 egui-pop-views-viewer-zoom 4e800b29deda4ca6

@@ -259,3 +259,20 @@ crate, and drawn in tips, toasts and settings descriptions. Left: the
 HTML subset (step 6, its pages show an error page with Open outside),
 the lint walking the links inside `docs:` pages, an opt-in online check
 of declared links.
+
+Step 6 (2026-10-30): the HTML subset, feature `html` of `egui-pop-views`
+(the facade's `views-html`). A page is parsed by html5ever (MIT OR
+Apache-2.0) and mapped to the viewer's blocks through markdown, as
+decided. **ammonia is replaced (decided by the owner, 2026-10-30)**: every
+release of it since 4.1 depends on cssparser, cssparser-macros and
+dtoa-short (MPL-2.0, not optional), which `deny.toml` refuses, and the
+4.0 line, the last without them, fails its advisories check
+(RUSTSEC-2021-0157, RUSTSEC-2021-0158, RUSTSEC-2026-0373). The allow-list
+is owned instead, in the mapping: only `href`, `src`, `alt`, a heading's
+`id` and a list's `start` are read, addresses are checked against the
+policy's schemes, scripts, forms, frames and media go with their content
+and are named on the page, text is escaped, and no HTML is written back
+for anything to read again, so a sanitiser's reason to exist (markup
+handed to a browser) does not arise. This replaces what the decision and
+the survey above say of ammonia. Left: the lint walking the
+links inside `docs:` pages, an opt-in online check of declared links.

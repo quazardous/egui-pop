@@ -30,7 +30,7 @@ name = "threading"
 required-features = ["trace"]
 
 [dependencies]
-egui-pop = { workspace = true, features = ["viewport", "graph-yaml", "imaging", "views", "views-markdown", "editors", "i18n", "platform"] }
+egui-pop = { workspace = true, features = ["viewport", "graph-yaml", "imaging", "views", "views-markdown", "views-html", "editors", "i18n", "platform"] }
 egui = { workspace = true, features = ["default_fonts"] }
 eframe = { workspace = true, features = ["default_fonts", "wgpu", "accesskit", "wayland", "x11", "links"] }
 serde_json.workspace = true

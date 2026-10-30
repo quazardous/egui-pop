@@ -128,6 +128,11 @@ pub const VIEWER_IMAGES_LOAD: StrKey = StrKey::new(
     "egui-pop-views-viewer-images-load",
     "Load images from { $host }",
 );
+/// The bar over an HTML page: what it holds that the viewer does not show.
+pub const VIEWER_SIMPLIFIED: StrKey = StrKey::new(
+    "egui-pop-views-viewer-simplified",
+    "Not shown here: { $what }. Open outside shows the page whole.",
+);
 /// In place of an image that is not shown.
 pub const VIEWER_IMAGE_MISSING: StrKey = StrKey::new(
     "egui-pop-views-viewer-image-missing",
@@ -212,6 +217,7 @@ pub const ALL: &[StrKey] = &[
     VIEWER_LOADING,
     VIEWER_IMAGES_BLOCKED,
     VIEWER_IMAGES_LOAD,
+    VIEWER_SIMPLIFIED,
     VIEWER_IMAGE_MISSING,
     VIEWER_NOT_FOUND,
     VIEWER_NO_CONNECTION,

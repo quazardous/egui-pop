@@ -655,7 +655,7 @@ command-viewer-reload =
     .title = Reload the page
 
 command-viewer-state =
-    .description = The viewer's page (address, status or error, title, headings, text), its history, search, zoom, images and the hosts allowed.
+    .description = The viewer's page (address, status or error, title, headings, text, links, what its HTML did not show), its history, search, zoom, images and the hosts allowed.
     .title = Read the viewer
 
 command-viewer-zoom-in =
@@ -1879,6 +1879,8 @@ egui-pop-views-viewer-not-found = This page does not exist
 egui-pop-views-viewer-page = Page
 
 egui-pop-views-viewer-reload = Reload
+
+egui-pop-views-viewer-simplified = Not shown here: { $what }. Open outside shows the page whole.
 
 egui-pop-views-viewer-too-large = This page is too large to show here
 

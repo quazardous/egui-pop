@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>An HTML page</title>
+  <style>h1 { color: red }</style>
+  <script>alert("from the head")</script>
+</head>
+<body onload="alert('body')">
+  <h1 style="color: red" onclick="alert('heading')">An HTML page</h1>
+  <p>This page is HTML, read through the viewer's <em>safe subset</em> and drawn with
+    the <strong>same blocks</strong> as <a href="guide.md">the guide</a>.
+    <a href="https://github.com/quazardous/egui-pop" onmouseover="alert('link')">egui-pop on GitHub</a>
+    opens outside.</p>
+  <p><a href="javascript:alert('link')">A link that would run a script</a> stays as its text.</p>
+  <p>A video is a link and opens outside:
+    <a href="https://www.youtube.com/watch?v=5TGDf7crzXI">Terminal Velocity demo: 3 AI agents, 1 window</a>.</p>
+
+  <h2 id="what-it-keeps">What it keeps</h2>
+  <ul>
+    <li>Lists, <code>code</code> and <del>struck</del> text</li>
+    <li>Nested ones
+      <ol><li>First</li><li>Second</li></ol>
+    </li>
+  </ul>
+  <table>
+    <tr><th>Element</th><th>Here</th></tr>
+    <tr><td>table</td><td>Kept as it is</td></tr>
+    <tr><td>script</td><td>Dropped</td></tr>
+  </table>
+  <blockquote>A quote stays a quote.</blockquote>
+  <pre>Code keeps
+  its lines.</pre>
+  <p><img src="gradient.png" onerror="alert('image')" alt="A gradient shipped with the pages"></p>
+
+  <h2>What it drops</h2>
+  <p>Scripts, forms and videos, named above the page.</p>
+  <script>alert("from the body")</script>
+  <form action="/send"><label>A form</label><input name="a"><button>Send</button></form>
+  <video src="movie.mp4" controls>A video</video>
+</body>
+</html>
