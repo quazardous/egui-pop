@@ -129,6 +129,18 @@ impl<T: Clone + Send + Sync + 'static> Slot<T> {
         }
     }
 
+    /// A slot per context whose values say themselves what the debug
+    /// bridge should read, when their `Debug` form would not fit in a
+    /// summary.
+    pub const fn summarised(name: &'static str, summary: fn(&T) -> String) -> Self {
+        Self {
+            name,
+            key: None,
+            summary,
+            _t: PhantomData,
+        }
+    }
+
     /// A slot per context whose values have no `Debug` form (handles,
     /// trait objects): summarised by their type.
     pub const fn opaque(name: &'static str) -> Self {

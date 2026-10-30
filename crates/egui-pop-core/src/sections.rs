@@ -3,18 +3,29 @@
 //! code editor's side bar stacks its views.
 //!
 //! - A click on a band, or Space or Enter while it has the keyboard,
-//!   folds or opens its section. A folded section keeps its band in
-//!   place; open sections share the panel's height, so the bands of
-//!   folded sections below the last open one sit at the panel's bottom.
-//! - The line above a band, between two open sections, is a boundary:
-//!   dragged, it resizes the open section above it against the next
-//!   open one below; a double click gives every section its share back
-//!   (equal shares).
-//! - Each section keeps a least height (two rows by default,
-//!   [`Section::min_height`]) and scrolls its own body.
-//! - What is folded and the shares are remembered with the window's
-//!   layout (egui's persisted memory, under the stack's name), and
-//!   readable as a [`Layout`] an application keeps with its own.
+//!   folds or opens its section; Left folds it and Right opens it. A
+//!   folded section keeps its band in place; open sections fill the
+//!   panel's height, so the bands of folded sections below the last open
+//!   one sit at the panel's bottom.
+//! - A section's height is set by hand, in points, or sized by the list:
+//!   those never set by hand share what the others leave, and the last
+//!   open section always takes what is left. Each keeps a least height
+//!   (two rows by default, [`Section::min_height`]) and scrolls its own
+//!   body.
+//! - The line above a band, between two open sections, is a boundary. It
+//!   follows the pointer when dragged, or moves by a row with Up and Down
+//!   while it has the keyboard. Sections give way in turn, the nearest
+//!   first, never in proportion, and it stops once they are all at their
+//!   least (`egui_pop_model::sections`). A double click, or Enter, drops
+//!   the heights set by hand.
+//! - In a panel too short, sections sized by the list give way first,
+//!   then those set by hand, from the bottom up; their stored heights
+//!   come back with the room, until the next drag aligns them on what is
+//!   shown. When even the least heights do not fit, the whole stack
+//!   scrolls, with a scrollbar then only.
+//! - What is folded and the heights set by hand are remembered with the
+//!   window's layout (egui's persisted memory, under the stack's name),
+//!   and readable as a [`Layout`] an application keeps with its own.
 //!
 //! The kit draws the band (`section-band`, handler `section`), its mark
 //! (`section-disclosure`, the `disclosure-open` and `disclosure-closed`
@@ -25,9 +36,9 @@
 //! count ("Live, 3"), expanded or not for assistive technology; a
 //! boundary is a splitter named after the section above it ("Resize
 //! Live"), its value the height of that section's body. [`laid_out`]
-//! gives each section as drawn on the last pass (the debug bridge's
-//! `state` collector lists it too), so an agent reads the stack rather
-//! than pixels.
+//! gives each section as drawn on the last pass, with its height and
+//! whether that was set by hand (the debug bridge's `state` collector
+//! lists it too), so an agent reads the stack rather than pixels.
 //!
 //! ```
 //! use egui_pop_core::sections::{Section, Sections};
@@ -51,27 +62,33 @@
 
 use std::collections::BTreeMap;
 
-use egui::accesskit::Role;
+use egui::accesskit::{Action, Role};
+use egui::scroll_area::{DragScroll, ScrollBarVisibility, ScrollSource};
 use egui::{
-    Color32, Context, CursorIcon, FontFamily, FontId, Id, Rect, Response, Sense, Ui, UiBuilder,
-    WidgetInfo, WidgetType, pos2, vec2,
+    Color32, Context, CursorIcon, EventFilter, FontFamily, FontId, Id, Key, Rect, Response, Sense,
+    Ui, UiBuilder, WidgetInfo, WidgetType, pos2, vec2,
 };
+use egui_pop_model::sections::{self as model, Asked, DragMode, Placed};
 use serde::{Deserialize, Serialize};
 
 use crate::indicator;
-use crate::kit::{Glyph, Kit, KitCx, Part, State};
+use crate::kit::{Corners, Glyph, Kit, KitCx, Part, State, Visibility, paint_ring};
 use crate::state::Slot;
 use crate::strings::{self, SECTION_RESIZE};
 use crate::theme::{TextRole, Tokens};
+use crate::ui::UiPop;
 
 /// What a stack remembers of one section.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Remembered {
     /// Whether the section is open.
     pub open: bool,
-    /// Its share of the height the open sections divide (1 by default):
-    /// kept while folded, so a section opens again at its size.
-    pub share: f32,
+    /// Its height set by hand, in points; none when sized by the list
+    /// (a layout stored with the shares of earlier versions reads so).
+    /// Kept while folded, so a section opens again at its size, and while
+    /// it is the last open one, which takes what the others leave.
+    #[serde(default)]
+    pub height: Option<f32>,
 }
 
 /// What a stack remembers, by section key: kept in egui's persisted
@@ -107,14 +124,32 @@ impl Layout {
     pub fn set_open(&mut self, key: &str, open: bool) {
         self.sections
             .entry(key.to_string())
-            .or_insert(Remembered { open, share: 1.0 })
+            .or_insert(Remembered { open, height: None })
             .open = open;
     }
 
-    /// Gives every section its share back (a boundary's double click).
+    /// A section's height set by hand, if it has one.
+    pub fn height(&self, key: &str) -> Option<f32> {
+        self.sections.get(key).and_then(|s| s.height)
+    }
+
+    /// Sets a section's height by hand, as a drag would, or gives it back
+    /// to the list. It opens as the stack first shows it when the layout
+    /// does not know it yet.
+    pub fn set_height(&mut self, key: &str, height: Option<f32>) {
+        match self.sections.get_mut(key) {
+            Some(s) => s.height = height,
+            None => {
+                self.sections
+                    .insert(key.to_string(), Remembered { open: true, height });
+            }
+        }
+    }
+
+    /// Drops every height set by hand (a boundary's double click).
     pub fn reset_heights(&mut self) {
         for s in self.sections.values_mut() {
-            s.share = 1.0;
+            s.height = None;
         }
     }
 }
@@ -130,6 +165,11 @@ pub struct Laid {
     pub title: String,
     pub count: Option<u64>,
     pub open: bool,
+    /// Its body's height, in points (0 when folded).
+    pub height: f32,
+    /// Whether that height is its own, set by hand. Never for the last
+    /// open section, which takes what the others leave.
+    pub by_hand: bool,
     /// Its band.
     #[serde(skip)]
     pub band: Rect,
@@ -139,7 +179,34 @@ pub struct Laid {
 }
 
 /// Each stack's sections as laid out on the last pass, by name.
-const LAID: Slot<Vec<Laid>> = Slot::new("core.sections.laid");
+const LAID: Slot<Vec<Laid>> = Slot::summarised("core.sections.laid", laid_summary);
+
+/// Each section in a few words, for the debug bridge: all of them fit in
+/// a slot's summary, which `Debug` and the rectangles would not.
+#[allow(clippy::ptr_arg)] // A slot's summary takes a reference to its value.
+fn laid_summary(laid: &Vec<Laid>) -> String {
+    let parts: Vec<String> = laid
+        .iter()
+        .map(|s| match (s.open, s.by_hand) {
+            (false, _) => format!("{} folded", s.key),
+            (true, false) => format!("{} {:.0}", s.key, s.height),
+            (true, true) => format!("{} {:.0} by hand", s.key, s.height),
+        })
+        .collect();
+    parts.join(", ")
+}
+
+/// A drag on a boundary: where it began and the stack it began from, so
+/// that the border follows the pointer without drifting.
+#[derive(Clone, Debug)]
+struct Drag {
+    origin: f32,
+    heights: Vec<f32>,
+    hands: Vec<Option<f32>>,
+}
+
+/// Each stack's drag under way, by name.
+const DRAG: Slot<Drag> = Slot::new("core.sections.drag");
 
 /// The sections of the stack named `name` as drawn on the last pass, in
 /// order (empty when it was not drawn).
@@ -231,9 +298,10 @@ impl<'a> Stack<'a> {
 pub struct SectionsResponse {
     /// A section folded (`false`) or opened (`true`), by key.
     pub toggled: Option<(String, bool)>,
-    /// A boundary was dragged.
+    /// A boundary moved, dragged or from the keyboard.
     pub resized: bool,
-    /// A boundary was double-clicked: every share given back.
+    /// A boundary was double-clicked, or Enter pressed on it: every
+    /// height set by hand dropped.
     pub reset: bool,
     /// The layout after the pass.
     pub layout: Layout,
@@ -288,127 +356,177 @@ impl Sections {
         for (s, _) in &sections {
             layout.sections.entry(s.key.clone()).or_insert(Remembered {
                 open: s.open,
-                share: 1.0,
+                height: None,
             });
         }
-        let remembered: Vec<Remembered> = sections
+        let asked: Vec<Asked> = sections
             .iter()
-            .map(|(s, _)| layout.sections[&s.key])
+            .map(|(s, _)| {
+                let remembered = layout.sections[&s.key];
+                Asked {
+                    open: remembered.open,
+                    least: s.min_height.unwrap_or(2.0 * row),
+                    hand: remembered.height.filter(|h| h.is_finite()),
+                }
+            })
             .collect();
-        let mins: Vec<f32> = sections
-            .iter()
-            .map(|(s, _)| s.min_height.unwrap_or(2.0 * row))
-            .collect();
+        let keys: Vec<String> = sections.iter().map(|(s, _)| s.key.clone()).collect();
 
         let room = ui.available_rect_before_wrap();
-        let n = sections.len() as f32;
-        let space = if room.height().is_finite() {
-            (room.height() - n * band_h).max(0.0)
+        let finite = room.height().is_finite();
+        let bands = sections.len() as f32 * band_h;
+        let space = if finite {
+            (room.height() - bands).max(0.0)
         } else {
             0.0
         };
-        let open: Vec<usize> = (0..sections.len())
-            .filter(|&i| remembered[i].open)
-            .collect();
-        let shares: Vec<(f32, f32)> = open
-            .iter()
-            .map(|&i| (remembered[i].share.max(0.01), mins[i]))
-            .collect();
-        let heights = distribute(space, &shares);
-        let mut body_h = vec![0.0; sections.len()];
-        for (k, &i) in open.iter().enumerate() {
-            body_h[i] = heights[k];
-        }
+        let fit = model::fit(&asked, space);
+        let tall = bands + fit.heights.iter().sum::<f32>();
+        let overflows = finite && tall - room.height() > 0.5;
+        let stack = Shown {
+            keys: &keys,
+            asked: &asked,
+            heights: &fit.heights,
+            space,
+            step: row,
+        };
 
         let mut response = SectionsResponse::default();
-        let mut laid = Vec::with_capacity(sections.len());
-        let mut y = room.top();
+        let mut laid: Vec<Laid> = Vec::with_capacity(sections.len());
         let base = memory_id(&self.name);
-        for (i, (section, body)) in sections.into_iter().enumerate() {
-            let is_open = remembered[i].open;
-            let band = Rect::from_min_size(pos2(room.left(), y), vec2(room.width(), band_h));
-            let r = ui.interact(band, base.with(("band", &section.key)), Sense::click());
-            self.paint_band(ui, &kit, &tokens, &section, band, &r, is_open);
-            name_band(&ctx, &r, &section.name(), is_open);
-            if r.clicked() {
-                layout.set_open(&section.key, !is_open);
-                response.toggled = Some((section.key.clone(), !is_open));
-            }
-            y = band.bottom();
-            let mut body_rect = None;
-            if is_open {
-                let rect = Rect::from_min_size(pos2(room.left(), y), vec2(room.width(), body_h[i]));
-                let mut child = ui.new_child(
-                    UiBuilder::new()
-                        .id_salt(("egui_pop.sections.body", &self.name, &section.key))
-                        .max_rect(rect)
-                        .layout(egui::Layout::top_down(egui::Align::Min)),
-                );
-                child.set_clip_rect(rect.intersect(ui.clip_rect()));
-                egui::ScrollArea::vertical()
-                    .id_salt(("egui_pop.sections.scroll", &section.key))
-                    .auto_shrink([false, false])
-                    .max_height(rect.height())
-                    .show(&mut child, body);
-                y = rect.bottom();
-                body_rect = Some(rect);
-            }
-            laid.push(Laid {
-                key: section.key,
-                title: section.title,
-                count: section.count,
-                open: is_open,
-                band,
-                body: body_rect,
-            });
-        }
-
-        // The boundaries, registered after the bands so they win the
-        // pointer over a band's top edge.
         let reach = ui.style().interaction.resize_grab_radius_side;
-        for i in 1..laid.len() {
-            let above = i - 1;
-            let Some(below) = (i..laid.len()).find(|&j| laid[j].open) else {
-                break;
-            };
-            if !laid[above].open {
-                continue;
-            }
-            let top = laid[i].band.top();
-            let edge = Rect::from_x_y_ranges(room.x_range(), top - reach..=top + reach);
-            let id = base.with(("boundary", &laid[above].key));
-            let r = ui.interact(edge, id, Sense::DRAG | Sense::CLICK);
-            let name = strings::tr_args(&ctx, &SECTION_RESIZE, &[("section", &laid[above].title)]);
-            let value = body_h[above];
-            r.widget_info(|| WidgetInfo::labeled(WidgetType::Other, true, &name));
-            ctx.accesskit_node_builder(r.id, |node| {
-                node.set_role(Role::Splitter);
-                node.set_numeric_value(f64::from(value));
-            });
-            if r.hovered() || r.dragged() {
-                ctx.set_cursor_icon(CursorIcon::ResizeVertical);
-            }
-            if r.double_clicked() {
-                layout.reset_heights();
-                response.reset = true;
-            } else if r.dragged() && r.drag_delta().y != 0.0 {
-                let (ha, hb) = (body_h[above], body_h[below]);
-                let total = ha + hb;
-                if total > 0.0 {
-                    let max_a = (total - mins[below]).max(mins[above]);
-                    let new_a = (ha + r.drag_delta().y).clamp(mins[above], max_a);
-                    let (ka, kb) = (&laid[above].key, &laid[below].key);
-                    let pool = layout.sections[ka].share + layout.sections[kb].share;
-                    let share_a = pool * new_a / total;
-                    if let Some(s) = layout.sections.get_mut(ka) {
-                        s.share = share_a.max(0.01);
+        let draw = |ui: &mut Ui| {
+            let left = ui.max_rect().left();
+            let width = ui.available_width();
+            let top = ui.cursor().min.y;
+            let mut y = top;
+            let mut ring = None;
+            for (i, (section, body)) in sections.into_iter().enumerate() {
+                let is_open = asked[i].open;
+                let band = Rect::from_min_size(pos2(left, y), vec2(width, band_h));
+                let mut hit = band;
+                // A boundary is registered between the section above it
+                // and the band under it, so Tab reaches it in reading
+                // order; the band leaves it the room it would otherwise
+                // win under the pointer.
+                if i > 0 && asked[i - 1].open && asked[i..].iter().any(|a| a.open) {
+                    let edge = Rect::from_x_y_ranges(band.x_range(), y - reach..=y + reach);
+                    hit.min.y = (hit.min.y + reach).min(hit.max.y);
+                    let id = base.with(("boundary", &laid[i - 1].key));
+                    let r = ui.interact(edge, id, Sense::click_and_drag());
+                    let title = &laid[i - 1].title;
+                    let name = strings::tr_args(&ctx, &SECTION_RESIZE, &[("section", title)]);
+                    name_boundary(&ctx, &r, &name, &stack, i - 1);
+                    if overflows && r.gained_focus() {
+                        r.scroll_to_me(None);
                     }
-                    if let Some(s) = layout.sections.get_mut(kb) {
-                        s.share = (pool - share_a).max(0.01);
+                    if r.has_focus() {
+                        ring = Some(edge);
                     }
-                    response.resized = true;
+                    work_boundary(
+                        ui,
+                        &r,
+                        &self.name,
+                        &stack,
+                        i - 1,
+                        &mut layout,
+                        &mut response,
+                    );
                 }
+                let r = ui.interact(hit, base.with(("band", &section.key)), Sense::click());
+                self.paint_band(ui, &kit, &tokens, &section, band, &r, is_open);
+                name_band(&ctx, &r, &section.name(), is_open);
+                if overflows && r.gained_focus() {
+                    r.scroll_to_me(None);
+                }
+                if r.clicked() || arrow_folds(ui, &r, is_open) {
+                    layout.set_open(&section.key, !is_open);
+                    response.toggled = Some((section.key.clone(), !is_open));
+                }
+                y = band.bottom();
+                let mut body_rect = None;
+                if is_open {
+                    let rect = Rect::from_min_size(pos2(left, y), vec2(width, fit.heights[i]));
+                    let mut child = ui.new_child(
+                        UiBuilder::new()
+                            .id_salt(("egui_pop.sections.body", &self.name, &section.key))
+                            .max_rect(rect)
+                            .layout(egui::Layout::top_down(egui::Align::Min)),
+                    );
+                    child.set_clip_rect(rect.intersect(ui.clip_rect()));
+                    egui::ScrollArea::vertical()
+                        .id_salt(("egui_pop.sections.scroll", &section.key))
+                        .auto_shrink([false, false])
+                        .max_height(rect.height())
+                        .min_scrolled_height(0.0)
+                        .show(&mut child, body);
+                    y = rect.bottom();
+                    body_rect = Some(rect);
+                }
+                laid.push(Laid {
+                    key: section.key,
+                    title: section.title,
+                    count: section.count,
+                    open: is_open,
+                    height: fit.heights[i],
+                    by_hand: fit.by_hand[i],
+                    band,
+                    body: body_rect,
+                });
             }
+            // Painted last: the band under a boundary would cover its ring.
+            if let Some(edge) = ring {
+                let painter = ui.painter();
+                let cx = KitCx {
+                    painter,
+                    ppp: ui.ctx().pixels_per_point(),
+                };
+                let focus = kit.section_band.data.states.get(State::FOCUS);
+                paint_ring(&cx, edge, focus, Corners::All);
+            }
+            let end = if finite && !overflows {
+                y.min(top + room.height())
+            } else {
+                y
+            };
+            ui.advance_cursor_after_rect(Rect::from_min_max(
+                pos2(left, top),
+                pos2(left + width, end.max(top)),
+            ));
+        };
+        if finite {
+            // Always in this area, overflowing or not, so that a body's
+            // own scroll keeps its place when the panel crosses the line.
+            let area = egui::ScrollArea::vertical()
+                .id_salt(("egui_pop.sections.stack", &self.name))
+                .auto_shrink([false, false])
+                .max_height(room.height())
+                .min_scrolled_height(0.0)
+                .scroll_source(ScrollSource {
+                    drag: DragScroll::Never,
+                    ..ScrollSource::default()
+                })
+                .scroll_bar_visibility(if overflows {
+                    ScrollBarVisibility::AlwaysVisible
+                } else {
+                    ScrollBarVisibility::AlwaysHidden
+                });
+            // The stack's bar is seen as soon as it overflows, whatever
+            // the theme does for the bars of the bodies, which keep theirs.
+            let bodies = ui.spacing().scroll;
+            ui.scope(|ui| {
+                if overflows {
+                    let mut bar = kit.scroll;
+                    bar.visibility = Visibility::Always;
+                    ui.spacing_mut().scroll = bar.style(&bodies);
+                }
+                ui.scroll_area(area, |ui| {
+                    ui.spacing_mut().scroll = bodies;
+                    draw(ui);
+                });
+            });
+        } else {
+            draw(ui);
         }
 
         if response.toggled.is_some() || response.resized || response.reset {
@@ -416,10 +534,6 @@ impl Sections {
         }
         layout.store(&ctx, &self.name);
         LAID.keyed(self.name.clone()).set(&ctx, laid);
-        ui.advance_cursor_after_rect(Rect::from_min_max(
-            room.min,
-            pos2(room.right(), y.max(room.top())),
-        ));
         response.layout = layout;
         response
     }
@@ -561,62 +675,235 @@ fn name_band(ctx: &Context, r: &Response, name: &str, open: bool) {
     ctx.accesskit_node_builder(r.id, |node| node.set_expanded(open));
 }
 
-/// Divides `space` between parts by their shares, each at least its
-/// least height (`(share, min)`); when the least heights do not fit,
-/// each gets its least and the stack overflows.
-fn distribute(space: f32, parts: &[(f32, f32)]) -> Vec<f32> {
-    let mut pinned = vec![false; parts.len()];
-    loop {
-        let fixed: f32 = parts
+/// The stack as this pass shows it: what a boundary works from.
+struct Shown<'a> {
+    keys: &'a [String],
+    asked: &'a [Asked],
+    heights: &'a [f32],
+    /// The height the open sections divide.
+    space: f32,
+    /// How far an arrow key moves a boundary.
+    step: f32,
+}
+
+impl Shown<'_> {
+    fn placed(&self, heights: &[f32]) -> Vec<Placed> {
+        self.asked
             .iter()
-            .zip(&pinned)
-            .filter(|(_, p)| **p)
-            .map(|((_, m), _)| *m)
-            .sum();
-        let shares: f32 = parts
-            .iter()
-            .zip(&pinned)
-            .filter(|(_, p)| !**p)
-            .map(|((s, _), _)| *s)
-            .sum();
-        let free = (space - fixed).max(0.0);
-        let mut changed = false;
-        for (i, (share, min)) in parts.iter().enumerate() {
-            if !pinned[i] && shares > 0.0 && free * share / shares < *min {
-                pinned[i] = true;
-                changed = true;
-            }
+            .zip(heights)
+            .map(|(a, &height)| Placed {
+                open: a.open,
+                least: a.least,
+                height,
+            })
+            .collect()
+    }
+
+    /// The boundary under `above` moved `delta` from `heights`, what the
+    /// layout keeps by hand from `asked` on. The last open section fills
+    /// the panel, so a stack has no empty room under it. Says whether
+    /// this changes what is shown.
+    fn drag(
+        &self,
+        layout: &mut Layout,
+        asked: &[Asked],
+        heights: &[f32],
+        above: usize,
+        delta: f32,
+    ) -> bool {
+        let plan = model::plan_drag(&self.placed(heights), above, delta, 0.0, DragMode::Push);
+        let hands = model::pin_plan(asked, self.space, &plan.heights);
+        for (key, hand) in self.keys.iter().zip(hands) {
+            layout.set_height(key, hand);
         }
-        if !changed {
-            return parts
+        let moved = |(a, b): (&f32, &f32)| (a - b).abs() > 0.01;
+        plan.heights.iter().zip(self.heights).any(moved)
+    }
+
+    /// What the boundary under `above` can do from here, up and down.
+    fn reach(&self, above: usize) -> (bool, f32) {
+        let placed = self.placed(self.heights);
+        let plan = |delta| model::plan_drag(&placed, above, delta, 0.0, DragMode::Push);
+        (
+            plan(-self.step).moved < 0.0,
+            plan(self.space).heights[above],
+        )
+    }
+}
+
+/// Names a boundary for assistive technology: a splitter, its value the
+/// height of the section above it, with the actions the arrows have.
+fn name_boundary(ctx: &Context, r: &Response, name: &str, stack: &Shown<'_>, above: usize) {
+    let value = stack.heights[above];
+    let (shrinks, most) = stack.reach(above);
+    r.widget_info(|| WidgetInfo::labeled(WidgetType::Other, true, name));
+    ctx.accesskit_node_builder(r.id, |node| {
+        node.set_role(Role::Splitter);
+        node.set_numeric_value(f64::from(value));
+        node.set_min_numeric_value(f64::from(stack.asked[above].least.min(value)));
+        node.set_max_numeric_value(f64::from(most));
+        node.set_numeric_value_step(f64::from(stack.step));
+        if most > value {
+            node.add_action(Action::Increment);
+        }
+        if shrinks {
+            node.add_action(Action::Decrement);
+        }
+    });
+}
+
+/// What the user does to the boundary under `above`: the pointer, the
+/// arrow keys, Enter and assistive technology's steps.
+fn work_boundary(
+    ui: &Ui,
+    r: &Response,
+    name: &str,
+    stack: &Shown<'_>,
+    above: usize,
+    layout: &mut Layout,
+    response: &mut SectionsResponse,
+) {
+    let ctx = ui.ctx();
+    if r.hovered() || r.dragged() {
+        ctx.set_cursor_icon(CursorIcon::ResizeVertical);
+    }
+    let slot = DRAG.keyed(name.to_string());
+    if r.has_focus() {
+        // upstream: egui moves the focus with an arrow key unless the
+        // widget says it uses them.
+        ui.memory_mut(|m| {
+            m.set_focus_lock_filter(
+                r.id,
+                EventFilter {
+                    vertical_arrows: true,
+                    ..Default::default()
+                },
+            );
+        });
+    }
+    if r.double_clicked() || (r.has_focus() && ui.input(|i| i.key_pressed(Key::Enter))) {
+        layout.reset_heights();
+        response.reset = true;
+        slot.remove(ctx);
+        return;
+    }
+    if r.drag_started() {
+        let origin = ui.input(|i| i.pointer.press_origin());
+        slot.set(
+            ctx,
+            Drag {
+                origin: origin.map_or(r.rect.center().y, |p| p.y),
+                heights: stack.heights.to_vec(),
+                hands: stack.asked.iter().map(|a| a.hand).collect(),
+            },
+        );
+    }
+    if r.dragged() {
+        let drag = slot
+            .get(ctx)
+            .filter(|d| d.heights.len() == stack.keys.len());
+        if let (Some(drag), Some(pointer)) = (drag, r.interact_pointer_pos()) {
+            let asked: Vec<Asked> = stack
+                .asked
                 .iter()
-                .zip(&pinned)
-                .map(|((share, min), p)| {
-                    if *p || shares <= 0.0 {
-                        *min
-                    } else {
-                        free * share / shares
-                    }
-                })
+                .zip(&drag.hands)
+                .map(|(a, &hand)| Asked { hand, ..*a })
                 .collect();
+            let delta = pointer.y - drag.origin;
+            response.resized |= stack.drag(layout, &asked, &drag.heights, above, delta);
         }
     }
+    if r.drag_stopped() {
+        slot.remove(ctx);
+    }
+    let focused = r.has_focus();
+    let steps = ui.input(|i| {
+        let keys = if focused {
+            i.num_presses(Key::ArrowDown) as f32 - i.num_presses(Key::ArrowUp) as f32
+        } else {
+            0.0
+        };
+        keys + i.num_accesskit_action_requests(r.id, Action::Increment) as f32
+            - i.num_accesskit_action_requests(r.id, Action::Decrement) as f32
+    });
+    if steps != 0.0 {
+        let delta = steps * stack.step;
+        response.resized |= stack.drag(layout, stack.asked, stack.heights, above, delta);
+    }
+}
+
+/// Left folds a band with the keyboard and Right opens it, as a code
+/// editor's headers do. Says whether the band changes.
+fn arrow_folds(ui: &Ui, r: &Response, open: bool) -> bool {
+    if !r.has_focus() {
+        return false;
+    }
+    // upstream: as for a boundary, the arrows would move the focus.
+    ui.memory_mut(|m| {
+        m.set_focus_lock_filter(
+            r.id,
+            EventFilter {
+                horizontal_arrows: true,
+                ..Default::default()
+            },
+        );
+    });
+    let key = if open {
+        Key::ArrowLeft
+    } else {
+        Key::ArrowRight
+    };
+    ui.input(|i| i.key_pressed(key))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::distribute;
+    use super::*;
 
     #[test]
-    fn shares_divide_the_room_and_least_heights_hold() {
+    fn a_layout_with_the_old_shares_reads_as_sized_by_the_list() {
+        let old =
+            r#"{"sections":{"live":{"open":false,"share":2.5},"idle":{"open":true,"share":0.5}}}"#;
+        let layout: Layout = serde_json::from_str(old).unwrap();
+        assert_eq!(layout.is_open("live"), Some(false));
+        assert_eq!(layout.is_open("idle"), Some(true));
+        assert_eq!(layout.height("live"), None);
+        assert_eq!(layout.height("idle"), None);
+    }
+
+    #[test]
+    fn a_layout_keeps_its_heights_through_a_round_trip_and_drops_them_on_reset() {
+        let mut layout = Layout::default();
+        layout.set_open("live", false);
+        layout.set_height("live", Some(120.0));
+        layout.set_height("idle", Some(40.0));
+        let text = serde_json::to_string(&layout).unwrap();
+        let mut back: Layout = serde_json::from_str(&text).unwrap();
+        assert_eq!(back, layout);
+        back.reset_heights();
+        assert_eq!(back.height("live"), None);
+        assert_eq!(back.is_open("live"), Some(false), "the fold stays");
+    }
+
+    #[test]
+    fn the_debug_summary_names_every_section_height() {
+        let laid = |key: &str, open, height, by_hand| Laid {
+            key: key.to_string(),
+            title: key.to_string(),
+            count: None,
+            open,
+            height,
+            by_hand,
+            band: Rect::ZERO,
+            body: None,
+        };
         assert_eq!(
-            distribute(300.0, &[(1.0, 10.0), (2.0, 10.0)]),
-            [100.0, 200.0]
+            laid_summary(&vec![
+                laid("live", true, 120.0, true),
+                laid("idle", true, 80.0, false),
+                laid("shut", false, 0.0, false),
+            ]),
+            "live 120 by hand, idle 80, shut folded"
         );
-        // The small share is pinned at its least height.
-        assert_eq!(distribute(100.0, &[(0.1, 40.0), (1.0, 10.0)]), [40.0, 60.0]);
-        // Not enough room: each its least.
-        assert_eq!(distribute(30.0, &[(1.0, 20.0), (1.0, 20.0)]), [20.0, 20.0]);
-        assert!(distribute(100.0, &[]).is_empty());
     }
 }

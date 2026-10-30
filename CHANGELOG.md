@@ -12,6 +12,20 @@ publishes.
 
 ### Added
 
+- Stacked sections push (egui-pop-model, egui-pop-core; `docs/sections.md`):
+  a boundary now moves the stack as a code editor's split view does. Its
+  sections have heights set by hand, in points, the others sharing the
+  rest and the last open one taking what is left. Dragged, the border
+  follows the pointer and sections give way in turn, the nearest first,
+  never in proportion, to a hard stop. In a panel too short, those sized
+  by the list give first, then those set by hand; when even the least
+  heights do not fit, the whole stack scrolls, with a scrollbar then only.
+  A boundary takes the focus (Up and Down move it, Enter drops the heights
+  set by hand), Left and Right fold and open a focused band, and
+  `sections::Laid` gains `height` and `by_hand`. The arithmetic is
+  `model::sections` (`fit`, `plan_drag`, `pin_plan`). `Remembered::share`
+  gives way to `Remembered::height`: a layout stored with shares keeps its
+  fold state, and its sections read as sized by the list.
 - The gallery says which egui-pop it shows (egui-pop, egui-pop-gallery):
   its version, in Help > About, its version info, its crash reports and
   its `ready` announce, is the egui-pop it is built from, with the short
