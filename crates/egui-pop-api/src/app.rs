@@ -1474,6 +1474,12 @@ impl AppHandle {
         base.set("modalOpen", flag(overlay::modal_open(ctx)));
         base.set("canUndo", flag(self.can_undo()));
         base.set("canRedo", flag(self.can_redo()));
+        if let Some(wb) = self.try_workbench() {
+            base.set(
+                "focusedPanel",
+                wb.focused.as_ref().map_or("", PanelId::as_str),
+            );
+        }
         if let Some(panel) = self.window_panel(ctx.viewport_id()) {
             base.set(CONTEXT_WINDOW, panel.as_str());
         }
@@ -2045,12 +2051,77 @@ impl AppHandle {
         let scope = scope_name(id.as_str());
         ui.push_id(("egui_pop_panel", id.as_str()), |ui| {
             focus::scope(ui, &scope, &[], |ui| {
+                let taking = self.takes_the_focus(ui.ctx(), id, &scope);
+                let stop = self.panel_stop(ui, id, title, taking);
                 fault::boundary(ui, "panel", title, |ui| draw(ui, self));
+                if taking {
+                    settle_panel_focus(ui, stop);
+                }
             });
         });
         if let Some(p) = self.0.panels.borrow_mut().get_mut(id) {
             p.draw = Some(draw);
         }
+    }
+
+    /// Whether a panel about to be drawn is to take the widget focus now.
+    fn takes_the_focus(&self, ctx: &Context, id: &PanelId, scope: &str) -> bool {
+        if !self.workbench_mut().take_focus_request(id) {
+            return false;
+        }
+        ctx.request_repaint();
+        // Its own window comes forward, if another has the system's focus.
+        if ctx.input(|i| i.viewport().focused) == Some(false) {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+        }
+        // Egui would take the focus straight off a widget under a modal.
+        if overlay::modal_open(ctx) {
+            return false;
+        }
+        let inside =
+            focus::focused(ctx).is_some() && focus::chain(ctx).iter().any(|r| r.name == scope);
+        !inside
+    }
+
+    /// The panel's own stop: there to start from when it takes the focus,
+    /// and to hold it if nothing in the panel can. It shows nothing and is
+    /// not a Tab stop otherwise.
+    fn panel_stop(&self, ui: &mut Ui, id: &PanelId, title: &str, taking: bool) -> Id {
+        let stop = Id::new(("egui_pop.panel_stop", id.as_str()));
+        if taking {
+            ui.memory_mut(|m| {
+                m.request_focus(stop);
+                m.move_focus(egui::FocusDirection::Next);
+            });
+        }
+        if taking || ui.memory(|m| m.has_focus(stop)) {
+            let r = ui.interact(ui.max_rect(), stop, egui::Sense::focusable_noninteractive());
+            a11y::name(&r, egui::WidgetType::Panel, title);
+        }
+        stop
+    }
+
+    /// Keeps `focused` up with where the focus went, and starts a pass for a
+    /// panel waiting for the widget focus.
+    fn follow_focus(&self, ctx: &Context) {
+        if ctx.viewport_id() == egui::ViewportId::ROOT {
+            self.workbench_mut().age_focus_request();
+        }
+        if let Some(moved) = focus::take_moved(ctx)
+            && self.workbench_mut().follow_focus(moved)
+        {
+            self.publish_focused();
+        }
+    }
+
+    fn publish_focused(&self) {
+        let panel = self.focused_panel();
+        self.publish(
+            "egui_pop",
+            None,
+            "workbench.focused",
+            json!({ "panel": panel }),
+        );
     }
 
     pub(crate) fn workbench_mut(&self) -> RefMut<'_, crate::workbench::Workbench> {
@@ -2144,7 +2215,9 @@ impl AppHandle {
         self.workbench_mut().hint.clone()
     }
 
-    /// The panel that last had the pointer pressed in it, or was focused.
+    /// The panel the keys obey, the context key `focusedPanel`: the last that
+    /// held the widget focus, had the pointer pressed in it or was given the
+    /// keyboard (`crate::workbench`'s "The focused panel").
     pub fn focused_panel(&self) -> Option<PanelId> {
         self.workbench_mut().focused.clone()
     }
@@ -2158,10 +2231,14 @@ impl AppHandle {
         }
         let (step, args) = change.step();
         let id = step.clone();
+        let focused = self.focused_panel();
         let out = self.step(&step, args, move |app, args| {
             let c = crate::workbench::Change::from_args(&id, args)?;
             app.workbench_mut().apply(&c)
         });
+        if self.focused_panel() != focused {
+            self.publish_focused();
+        }
         // A palette's change, once done, is news.
         if let (Some(event), Outcome::Done(Ok(result))) = (change.event(), &out) {
             self.publish("egui_pop", None, event, result.clone());
@@ -2285,7 +2362,9 @@ impl AppHandle {
         self.change_workbench(crate::workbench::Change::Attach(panel.clone()))
     }
 
-    /// Shows a panel and gives it the keyboard (`workbench.focus`).
+    /// Shows a panel and gives it the keyboard (`workbench.focus`): it is the
+    /// focused panel at once, and its first focusable widget has the focus in
+    /// the next pass (`crate::workbench`'s "The focused panel").
     pub fn focus_panel(&self, panel: &PanelId) -> Option<Outcome> {
         self.change_workbench(crate::workbench::Change::Focus(panel.clone()))
     }
@@ -2319,6 +2398,23 @@ fn zen_result(outcome: Option<Outcome>, on: bool) -> Result<Json, String> {
     match outcome {
         Some(o) => outcome_result(o),
         None => Ok(json!({ "zen": on })),
+    }
+}
+
+/// After a panel asked for the focus and drew its content: the widget it
+/// prefers takes it. Else the first focusable widget took it already, and if
+/// none did, the panel's own stop keeps it. The last marker ends egui's search
+/// for "the next widget": it would go on past the panel.
+fn settle_panel_focus(ui: &mut Ui, stop: Id) {
+    let end = stop.with("end");
+    let rect = egui::Rect::from_min_size(ui.max_rect().min, egui::Vec2::ZERO);
+    ui.interact(rect, end, egui::Sense::focusable_noninteractive());
+    let settled = match focus::preferred(ui.ctx()) {
+        Some(preferred) => Some(preferred),
+        None => ui.memory(|m| m.has_focus(end)).then_some(stop),
+    };
+    if let Some(id) = settled {
+        ui.memory_mut(|m| m.request_focus(id));
     }
 }
 
@@ -5147,6 +5243,7 @@ impl App {
     /// viewport: the main window, or a detached panel's) in that window's
     /// context: its focus chain, its overlays, `window`.
     fn dispatch_keys(&mut self, ctx: &Context) {
+        self.handle.follow_focus(ctx);
         let cx = self.handle.when_context();
         let dispatched = if self.handle.0.capturing.get() {
             Vec::new()

@@ -40,14 +40,11 @@ forums and bug trackers is marked as such.
   under "Not yet"). In an application, Tab through everything in drawing
   order is the only way across. F6 between regions is the one thing
   VS Code, GTK and the ARIA splitter pattern share.
-- **Two ideas of "focused panel" that do not talk.** The panel the keys
-  obey (`focusedPanel`) follows clicks and `workbench.focus`; egui's
-  focus follows Tab. `workbench.focus` promises "gives it the keyboard"
-  and moves no widget focus; Tab into another panel does not change
-  `focusedPanel` ([walk]: clicked in the Outline, then Tab to a button of
-  the Notes, it still names the Outline). So in Helios, Tab from the image
-  to the filmstrip should leave `C` adding a circle mask ([read], Helios's
-  walk is owed).
+- **One focused panel, since item 3.** `focusedPanel` used to follow clicks and
+  `workbench.focus` while egui's focus followed Tab, so in Helios Tab from the
+  image to the filmstrip should have left `C` adding a circle mask ([read],
+  Helios's walk is owed). `workbench.focus` now hands over the widget focus and
+  `focusedPanel` follows it ([walk]).
 - **The way in can be closed.** Where a palette floats and no widget has
   the focus, Tab hides the palettes instead of moving ([test]), and F6 is
   inert ([walk]). That is Helios's usual state ([read]). The habit is right for a
@@ -213,12 +210,13 @@ From `crates/egui-pop-core` (`tab.rs`, `focus.rs`, `keys.rs`,
 
 - **[walk] F6 does nothing in an application**: the plugin is installed
   by the first `tab::scope`, and only the gallery's Inputs page opens one.
-- **[walk] `workbench.focus` is logical only.** `Change::Focus` shows and
-  activates the panel and sets `Workbench::focused`; nothing requests the
-  widget focus. The other writer of `focused` is a pointer press in the
-  dock's `ui`. So the panel `focusedPanel` names and the panel holding the
-  keyboard differ: after `gallery.notes.focus` nothing is focused, and after
-  Tab from a panel to the next, `focusedPanel` has not moved.
+- **[walk] Done, item 3: one focused panel.** `workbench.focus` and `<panel>.focus`
+  give the panel the widget focus (what it names with `focus::prefer`, its first
+  focusable, or the panel's own stop), and `focused` follows any widget taking
+  the focus and any press ([workbench](workbench.md#the-focused-panel)). Until
+  then only a command and a press in a dock wrote it: after
+  `gallery.notes.focus` nothing was focused, and after Tab from a panel to the
+  next, `focusedPanel` had not moved.
 - **[read] No panel has a default focus key**; an application binds them.
 - **[walk] A terminal keeps F6, as `tab.rs` says.** Reading `begin_pass`
   predicted the opposite. In a `tab::scope`, with another scope beside it,
@@ -396,7 +394,7 @@ From `crates/helios-gui` and `docs/gui.md`.
   image, graph, culling. A test checks the default map has no conflict and
   no global letter: `the_default_map_has_no_conflict_and_no_global_letter`.
   The scopes are only as right as `focusedPanel`, see above.
-- **[read] A wrong panel after Tab.** From the image, Tab to the filmstrip
+- **[read] A wrong panel after Tab, until item 3 reaches Helios.** From the image, Tab to the filmstrip
   should leave `C`, `E`, `G`, `P` and `M` adding masks, and `0` to `5` not
   rating. The tests get to a panel by clicking
   (`a_click_elsewhere_ends_typing_and_takes_the_focus`) or by command
@@ -677,12 +675,13 @@ one pull request. Numbers stay as they are, since the walk's tests name them;
    and `crates/egui-pop-gallery/tests/keyboard_walk.rs` ([testing](testing.md#keyboard-walks)).
 2. **Done: a rebound key keeps its `when`,** in `Keymap::rebind` and
    `rebind_all`, before the walk ran.
-3. **One focused panel.** `workbench.focus` hands over the widget focus (the
-   widget last focused in the panel, else its first focusable), as its table
-   says. When the widget focus moves into a panel by any means, `focused`
-   follows it. Helios's `focusedPanel` is then right after Tab. It needs care
-   for a panel without a focusable widget (only the logical focus moves), for
-   palettes, and for detached windows. Size: M.
+3. **Done: one focused panel.** `workbench.focus` hands over the widget focus
+   (what the panel names with `focus::prefer`, else its first focusable, else
+   the panel's own stop); `focused` follows the widget focus however it arrived,
+   and stays on the last panel when it goes to the menu, the status bar or
+   nothing. Palettes and flyouts only borrow it; detached windows count. The
+   widget last focused in the panel is not restored: that is items 5 and 6.
+   ([workbench](workbench.md#the-focused-panel)).
 4. **A focus you can see.** The focus plugin paints a ring from the `focus.ring`
    token around the focused widget at the end of the pass, unless the widget
    paints its own, and only when the keyboard last moved the focus, as GTK's
@@ -853,7 +852,7 @@ compositor.
 It did not run, as this pull request stays in egui-pop. Each check confirms or
 removes a finding above; the expected result is what reading predicts. The
 answer to check 19's first half is already expected from egui-pop's own
-result: `focusedPanel` does not follow Tab.
+result, before item 3: `focusedPanel` did not follow Tab.
 
 19. From the image (clicked), Tab until the filmstrip, press `C` (expected: a
     circle mask), press `3` (expected: no rating).
@@ -878,8 +877,7 @@ The order to follow for egui-pop now, by the same measure:
    confirmation. New, and first.
 2. **Done: item 21, modal overlays give the focus back.** Every dialog and
    palette use lost the place. New.
-3. **Item 3, one focused panel.** Confirmed; still what Helios's keys depend on.
-   First of the larger ones.
+3. **Done: item 3, one focused panel.** What Helios's keys depend on.
 4. **Item 7, focus scrolls into view,** up from seventh: it is the first thing
    a Tab user meets, 35 stops out of view on the gallery's first screen.
    It should say what to do about windowed rows, which Tab cannot reach.

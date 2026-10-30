@@ -100,6 +100,8 @@ pub(crate) fn show(ui: &mut Ui, state: &EditorState, o: &Options<'_>) -> EditorO
         assist_ui::poll(state, &mut signals);
     }
     let response = focus::scope(ui, SURFACE, &[("editorKind", kind)], |ui| {
+        // Handed the keyboard, a panel gives it to the text, not the find bar.
+        focus::prefer(ui.ctx(), id);
         // The kit's frame, its focus ring while the text has the keyboard.
         let focused = ui.memory(|m| m.has_focus(id));
         let look = State::REST.with(State::FOCUS, focused);

@@ -992,6 +992,8 @@ impl<'a> ThumbGrid<'a> {
             mem.extent = out.inner_rect.width();
         }
         let response = ui.interact(out.inner_rect, id, Sense::focusable_noninteractive());
+        // Handed the keyboard, a panel gives it to the grid, not its filters.
+        egui_pop_core::focus::prefer(ui.ctx(), id);
         egui_pop_core::a11y::name(&response, WidgetType::Other, &label);
         if take_focus {
             response.request_focus();

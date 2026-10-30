@@ -74,7 +74,9 @@ assert!(h.move_panel(&TREE, Area::EndSide).unwrap().ok());
 assert_eq!(h.layout().area_of(&TREE), Some(Area::EndSide));
 ```
 
-Each panel gets `<id>.focus` and `<id>.toggle` commands. The layout
+Each panel gets `<id>.focus` and `<id>.toggle` commands. `AppHandle::focused_panel`,
+the context key `focusedPanel`, is the panel the keys obey; see
+[The focused panel](#the-focused-panel). The layout
 changes through the steps `workbench.move`, `workbench.show`,
 `workbench.hide`, `workbench.focus`, `workbench.fold`,
 `workbench.place`, `workbench.flyout`, `workbench.flyout_size` and
@@ -97,6 +99,62 @@ ghost's area, index among the tabs it joins and rect), `overlay_rects`
 `workbench` collector (`drop_hint.preview: {area, index, rect}`), which
 also shows the layout, each area's rect, the focused panel and the tab
 being dragged.
+
+### The focused panel
+
+There is one: the panel the widget focus is in, or the last one it was in.
+`when` clauses reading `focusedPanel` follow the keyboard.
+
+| What happens | `focusedPanel` | The widget focus |
+|---|---|---|
+| Tab or a widget takes the focus, in a panel | that panel | that widget |
+| `workbench.focus`, `<panel>.focus`, `focus_panel` | that panel, at once | in the next pass, see below |
+| A press in a panel | that panel | as the widget pressed decides |
+| The focus goes to the menu, the status bar or a dock's tab | unchanged | there |
+| Escape, or the focused widget going away | unchanged | none |
+| A panel closes while focused | none, or back from a palette | none |
+
+**Handing a panel the keyboard.** It shows the panel, then gives the focus to
+the widget the panel named with `egui_pop::core::focus::prefer`; without one, to
+its first focusable widget; without any, to the panel itself. If the focus is
+in the panel already it stays where it is. Behind a modal, or when a command
+from an agent, a script or a device finds someone typing in a field, only
+`focusedPanel` moves. The focus lands a pass later, so the key that ran the command is not
+typed into the field it lands on.
+
+- **A canvas** is a widget like another: one that senses clicks or drags is
+  focusable, and a panel whose toolbar comes first says `focus::prefer(ui.ctx(),
+  response.id)` so the canvas gets the keyboard. The image viewport does, as do
+  the library's grid (over its filters) and a text editor (over its find bar).
+  A panel with a search field first and a list below should do the same.
+- **A panel with nothing focusable** holds the focus itself: a stop named after
+  the panel, drawn only while it holds the focus, so it is no extra Tab stop.
+  Tab goes on from there. It shows nothing yet ([item 4 of the keyboard
+  survey](keyboard-survey.md)).
+
+**The last panel stays** when the focus goes to something no panel holds. In
+egui a menu's items take the focus and nothing gives it back when it closes, and
+Escape on any widget leaves nothing focused: if `focusedPanel` emptied, opening
+a menu or pressing Escape would turn off every key of the panel worked in, and
+a command in that menu would act on nothing. VS Code has both kinds of keys:
+`focusedView`, `sideBarFocus` and `panelFocus` empty on blur, `activeEditor`,
+`activeViewlet` and `activePanel` stay. `focusedPanel` is of the second kind.
+Whether a widget holds the focus at all is `widgetFocus`.
+
+**Palettes and flyouts only borrow the keys.** A press on one leaves them where
+they were: a click on a palette's background keeps the keys on the image, as in
+an image editor. A widget of it taking the focus (a press on a field, Tab, its
+`.focus` command) does move them, and when it lets go (Escape, a click
+elsewhere, the palette closing) they go back to the panel of the layout that
+had them.
+
+**Detached windows.** egui keeps a focus per window. A widget taking the focus
+in a window, a press in it or the window getting the system's focus back moves
+`focusedPanel`; `<panel>.focus` raises the panel's window.
+
+Following is a plain write, not a step: it cannot loop back through
+`workbench.focus`. Each change, from either side, is published once as the event
+`workbench.focused` (`{ "panel" }`).
 
 A side area lies **beside** the centre, taking its room, or **over**
 it (`workbench.place`, `{ "area", "placement": "over" }`;
