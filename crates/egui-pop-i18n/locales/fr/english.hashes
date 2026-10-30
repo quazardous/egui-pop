@@ -1075,6 +1075,11 @@ setting-appearance-interface-zoom.label 5b75cc0eca132e0b
 setting-appearance-language-choice-system 86937a88d8b574ba
 setting-appearance-language.description c13504293ea0277b
 setting-appearance-language.label 3e94737db692401b
+setting-appearance-scroll-bars-choice-always 2f25054a585490a2
+setting-appearance-scroll-bars-choice-auto 382c2a029fe4147c
+setting-appearance-scroll-bars-choice-hover 96f62e3744de980d
+setting-appearance-scroll-bars.description 0bb375c9cf382630
+setting-appearance-scroll-bars.label 719ce3eaa8c2734c
 setting-appearance-text-size-choice-100- a79925dcb743ba9b
 setting-appearance-text-size-choice-115- 3173cee591f15a01
 setting-appearance-text-size-choice-130- b2ba8df6f49783cc

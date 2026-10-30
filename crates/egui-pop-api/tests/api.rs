@@ -668,11 +668,12 @@ fn settings_persist_and_come_back_with_their_plugin() {
     // palettes', the menu icons) come first.
     let settings = app.handle().settings();
     let ids: Vec<_> = settings.iter().map(|s| s.id.clone()).collect();
-    assert_eq!(settings.len(), 17, "{ids:?}");
+    assert_eq!(settings.len(), 18, "{ids:?}");
     for id in [
         egui_pop_api::SETTING_THEME_PREFERENCE,
         egui_pop_api::SETTING_ACCENT_COLOR,
         egui_pop_api::SETTING_FOCUS,
+        egui_pop_api::scroll_bars::SETTING_SCROLL_BARS,
         egui_pop_api::zoom::SETTING_ZOOM,
         egui_pop_api::workbench::SETTING_PANEL_ALIGNMENT,
         egui_pop_api::layout_controls::SETTING_SIDE_BAR_POSITION,

@@ -506,8 +506,15 @@ Sizes: S is under a day, M a few days. One pull request each.
    text is close to its surfaces. The high contrast themes take `always`, `beside`
    the content so that it covers nothing. The gallery's list loses its forcing.
    The snapshots are regenerated.
-5. **The `appearance.scroll_bars` setting.** `auto`, `always`, `hover`, on the
-   settings page, applied when the theme's style is written. Size: S.
+5. **Done: the `appearance.scroll_bars` setting.** `auto`, `always`, `hover`, on
+   the settings page, written into the theme's spec and taking over
+   `scroll-bar.visibility` and `placement` when the theme resolves, so that it
+   reaches the style with the theme and keeps across a change of theme. `always`
+   goes `beside` the content, as a full bar over it would hide it, and brings a track
+   where a theme has none; `hover` goes `over` it, as egui always shows a bar
+   beside the content. The rule that a system only raises `auto` is in, through
+   `AppBuilder::system_always_shows_scroll_bars`; item 10 is what reads the system
+   and gives it.
 6. **Keys on plain scroll areas.** Page Up/Down (the view's height less a row,
    Apple's "unit of overlap"), Home/End, the arrows by a line, on the area under
    the pointer or holding the focus, unless a widget inside takes the key; bound
@@ -533,7 +540,8 @@ Sizes: S is under a day, M a few days. One pull request each.
    `text_scale`, with the same sources: on GNOME the portal's
    `org.gnome.desktop.interface` `overlay-scrolling` (and its change signal), on
    Windows `UISettings.AutoHideScrollBars`, or the registry as `text_scale`
-   does, on macOS `NSScroller`'s preferred style. Feeds `auto`. Size: M.
+   does, on macOS `NSScroller`'s preferred style. Feeds `auto`, through
+   `AppBuilder::system_always_shows_scroll_bars`. Size: M.
 11. **The system's reduced motion.** The portal's `reduced-motion`,
     `SPI_GETCLIENTAREAANIMATION`, macOS's accessibility flag, into
     `ThemeSpec::reduced_motion` until the user sets it. Wider than scrolling, and

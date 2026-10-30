@@ -1899,6 +1899,16 @@ setting-appearance-language =
 
 setting-appearance-language-choice-system = Système
 
+setting-appearance-scroll-bars =
+    .description = Quand le contenu déborde : des barres telles que le thème les dessine (automatique), des barres pleines à côté du contenu (toujours), ou rien tant que le pointeur n’est pas dessus (au survol). Automatique donne aussi des barres pleines quand l’application signale que le système affiche toujours les siennes.
+    .label = Barres de défilement
+
+setting-appearance-scroll-bars-choice-always = toujours
+
+setting-appearance-scroll-bars-choice-auto = automatique
+
+setting-appearance-scroll-bars-choice-hover = au survol
+
 setting-appearance-text-size =
     .description = Agrandit ou réduit le texte, sans les espacements (le zoom de l’interface agrandit tout). Rien n’a été lu du système : la valeur par défaut est 100 %.
     .label = Taille du texte

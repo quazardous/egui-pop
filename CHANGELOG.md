@@ -12,6 +12,15 @@ publishes.
 
 ### Added
 
+- A setting for the scroll bars (egui-pop-api, egui-pop-tokens;
+  `docs/kit.md`): `appearance.scroll_bars` under Appearance. `auto` leaves them
+  to the theme; `always` shows full bars beside the content, with a track even
+  where the theme has none; `hover` shows nothing until the pointer is over the
+  area. It reaches every scroll area with the theme and stays when the theme
+  changes. `ThemeSpec::scroll_bars` is the same outside an application, and
+  `AppBuilder::system_always_shows_scroll_bars` raises `auto` to `always` for an
+  application that knows the system always shows its bars; nothing lowers it, and
+  egui-pop reads no system yet.
 - F6 and Shift+F6 go through an application's regions (egui-pop-api,
   egui-pop-core; `docs/inputs.md`): the activity bar, the side and bottom areas,
   the centre, each palette, an open flyout, the status bar, as the commands

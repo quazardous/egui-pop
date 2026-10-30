@@ -209,7 +209,8 @@ dropped in silence. Replacing one means an egui-pop-drawn widget.
   written into egui's style with the theme, so every scroll area
   follows them, an application's own included; its thumb's colours
   and corners, which egui takes from the widget states, are the kit's
-  in a `ScrollBar` scope ([below](#scroll-bars)).
+  in a `ScrollBar` scope ([below](#scroll-bars)). The user's
+  `appearance.scroll_bars` decides over `visibility` and `placement`.
 - **`side-area`.** egui draws the separator line, with its
   non-interactive stroke: `border-width` 0 hides it; another width than
   the button's, or a colour other than `border.default`, is reported.
@@ -746,6 +747,31 @@ fn tickets(ui: &mut egui_pop::egui::Ui, rows: &[String]) {
     });
 }
 ```
+
+**The user decides over the theme.** `appearance.scroll_bars`, under Settings ›
+Appearance, is written into the theme's spec (`ThemeSpec::scroll_bars`) and takes
+over `visibility` and `placement` when the theme resolves, so it reaches every
+scroll area, for both variants of a pair, and stays when the theme changes:
+
+| Choice | Bars | Tokens |
+|---|---|---|
+| `auto` (default) | what the theme says | the theme's |
+| `always` | full and opaque, with a track, covering nothing | `visibility: always`, `placement: beside`; a transparent `track-fill` becomes `{surface.sunken}`, any other stays |
+| `hover` | nothing at rest, egui's own over the content | `visibility: hover`, `placement: over` |
+
+The system goes one way only: an application that knows the system always shows
+its bars says so with `AppBuilder::system_always_shows_scroll_bars`, and `auto`
+then gives what `always` gives, without saving anything; a choice stays the user's.
+A system hiding its bars lowers nothing, as that is most systems' default and
+nobody chose it. egui-pop reads no system yet
+([the survey's item 10](scrolling-survey.md#what-egui-pop-should-take-ranked)).
+
+Three things stay outside the choice. A scoped theme keeps what its own spec says.
+The stack of [Collapsible sections](sections.md) still shows its quiet bar under
+`hover`, as it does on a `hover` theme: it is forced when the stack overflows
+(`ScrollBarKit::seen_at_rest`). And under `always` or `hover`, the theme editor's
+preview of `visibility` and `placement` shows the choice, not the edit; the edit
+is saved all the same.
 
 `rest` is the survey's quiet bar ([Scrolling survey](scrolling-survey.md)).
 All of it is `ScrollStyle`: `floating_width`, `dormant_handle_opacity`,
