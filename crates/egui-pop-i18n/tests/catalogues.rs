@@ -3,8 +3,10 @@
 //! declarations of every egui-pop plugin, and must be up to date; every
 //! other locale must translate all of it, from the English of now.
 //! Regenerate the English and stamp new translations with
-//! `UPDATE_CATALOGUES=1 cargo test -p egui-pop-i18n --test catalogues`.
+//! `UPDATE_CATALOGUES=1 cargo test -p egui-pop-i18n --test catalogues`,
+//! with as many test threads as you like.
 
+use std::fs::File;
 use std::path::Path;
 
 use egui_pop_api::App;
@@ -114,17 +116,57 @@ fn dir() -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("locales")
 }
 
+/// The right to touch the catalogues' files, until dropped. A file lock
+/// and not a mutex: nextest runs each test in a process of its own, and each
+/// `File` conflicts with the others in one process too.
+fn writing_lock() -> File {
+    let lock = File::create(Path::new(env!("CARGO_TARGET_TMPDIR")).join("catalogues.lock"))
+        .expect("the lock file opens");
+    lock.lock().expect("the lock is taken");
+    lock
+}
+
+/// Regenerates the English under `dir`, then stamps new translations from
+/// that English. `std::fs::write` empties a file before filling it, and a
+/// stamp made from an English caught then drops every key: only under
+/// [`writing_lock`].
+fn update(dir: &Path, messages: &Messages) {
+    std::fs::write(
+        dir.join("en/egui-pop.ftl"),
+        extract::english(messages, HEADER),
+    )
+    .unwrap();
+    let catalogs = Catalogs::read(dir).unwrap();
+    for locale in TRANSLATED {
+        // New translations are stamped with the English they were made
+        // from; translations of changed English are reviewed by hand.
+        let hashes = check::stamp(&catalogs, locale, false).unwrap();
+        std::fs::write(
+            dir.join(locale).join(check::HASHES),
+            check::write_hashes(&hashes),
+        )
+        .unwrap();
+    }
+}
+
+/// With `UPDATE_CATALOGUES`, the update, whichever test comes first; the lock
+/// it returns keeps the other test's update off the files this test reads.
+fn update_when_asked(messages: &Messages) -> Option<File> {
+    std::env::var_os("UPDATE_CATALOGUES").map(|_| {
+        let lock = writing_lock();
+        update(&dir(), messages);
+        lock
+    })
+}
+
 #[egui_pop_test_macros::critical]
 #[test]
 fn the_english_catalogue_is_generated_from_the_code() {
     let messages = messages();
+    let _updating = update_when_asked(&messages);
     let path = dir().join("en/egui-pop.ftl");
     let current = std::fs::read_to_string(&path).unwrap_or_default();
     let fresh = extract::english(&messages, HEADER);
-    if std::env::var_os("UPDATE_CATALOGUES").is_some() {
-        std::fs::write(&path, &fresh).unwrap();
-        return;
-    }
     assert!(
         current == fresh,
         "locales/en/egui-pop.ftl is out of date: run UPDATE_CATALOGUES=1 cargo test -p egui-pop-i18n --test catalogues"
@@ -135,20 +177,8 @@ fn the_english_catalogue_is_generated_from_the_code() {
 #[test]
 fn every_locale_translates_everything_and_nothing_else() {
     let messages = messages();
-    let mut catalogs = Catalogs::read(&dir()).unwrap();
-    if std::env::var_os("UPDATE_CATALOGUES").is_some() {
-        // New translations are stamped with the English they were made
-        // from; translations of changed English are reviewed by hand.
-        for locale in TRANSLATED {
-            let hashes = check::stamp(&catalogs, locale, false).unwrap();
-            std::fs::write(
-                dir().join(locale).join(check::HASHES),
-                check::write_hashes(&hashes),
-            )
-            .unwrap();
-        }
-        catalogs = Catalogs::read(&dir()).unwrap();
-    }
+    let _updating = update_when_asked(&messages);
+    let catalogs = Catalogs::read(&dir()).unwrap();
     let report = check::check(&catalogs);
     assert!(report.faults.is_empty(), "{report}");
     for l in &report.locales {
@@ -166,4 +196,41 @@ fn every_locale_translates_everything_and_nothing_else() {
         );
         assert!(l.unused.is_empty(), "{}: unused {:?}", l.locale, l.unused);
     }
+}
+
+/// Updates at once, each under the lock as the tests' are, on a copy of the
+/// catalogues: none finds the stamps other than one update alone leaves them.
+#[test]
+fn updates_at_once_leave_every_stamp_in_place() {
+    let messages = messages();
+    let scratch =
+        Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("catalogues-{}", std::process::id()));
+    {
+        let _lock = writing_lock();
+        for file in ["en/egui-pop.ftl", "fr/egui-pop.ftl", "fr/english.hashes"] {
+            let to = scratch.join(file);
+            std::fs::create_dir_all(to.parent().unwrap()).unwrap();
+            std::fs::copy(dir().join(file), to).unwrap();
+        }
+        update(&scratch, &messages);
+    }
+    let stamps = scratch.join("fr").join(check::HASHES);
+    let alone = std::fs::read_to_string(&stamps).unwrap();
+    assert!(
+        alone.lines().count() > 1000,
+        "{} lines",
+        alone.lines().count()
+    );
+    std::thread::scope(|threads| {
+        for _ in 0..4 {
+            threads.spawn(|| {
+                for _ in 0..10 {
+                    let _lock = writing_lock();
+                    update(&scratch, &messages);
+                    assert!(std::fs::read_to_string(&stamps).unwrap() == alone);
+                }
+            });
+        }
+    });
+    let _ = std::fs::remove_dir_all(&scratch);
 }
