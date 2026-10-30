@@ -718,6 +718,14 @@ command-workbench-leave-zen =
     .description = Shows the whole workbench again.
     .title = Leave zen mode
 
+command-workbench-next-region =
+    .description = Moves the keyboard to the next part of the window: the activity bar, a side or bottom area, the centre, a palette, the flyout, the status bar.
+    .title = Go to the next region
+
+command-workbench-previous-region =
+    .description = Moves the keyboard to the previous part of the window.
+    .title = Go to the previous region
+
 command-workbench-toggle-panel =
     .description = Shows or hides the bottom panel: hidden, it keeps its panels.
     .title = Toggle panel

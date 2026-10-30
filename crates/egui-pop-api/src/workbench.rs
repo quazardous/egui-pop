@@ -65,6 +65,17 @@
 //! Following is a plain write, not a step, so it cannot loop back into
 //! `workbench.focus`; each change is published once as `workbench.focused`.
 //!
+//! # Moving between regions
+//!
+//! `workbench.next_region` (F6) and `workbench.previous_region` (Shift+F6) move
+//! the keyboard through the window's regions: the activity bar, the start side
+//! area, the end side area, the bottom area, the centre, each palette drawn, an
+//! open flyout, the status bar. Each landing follows
+//! [`egui_pop_core::regions`]: an area without anything to focus in its panel
+//! takes it as `workbench.focus` does, on the panel's own stop. A menu or a
+//! popover open (not a flyout) keeps the focus, for Escape first, and so does a
+//! modal; so does someone typing when an agent asks.
+//!
 //! Each declared panel gets the commands `<panel>.focus` and
 //! `<panel>.toggle`.
 //!
@@ -152,6 +163,15 @@ pub const STEP_FLYOUT_SIZE: StepId = StepId::from_static("workbench.flyout_size"
 pub const CMD_ZEN: egui_pop_model::ids::CommandId =
     egui_pop_model::ids::CommandId::from_static("workbench.zen");
 /// Leaves zen mode (Escape while in it).
+/// The keyboard to the next region of the window (F6): see
+/// [Moving between regions](self#moving-between-regions).
+pub const CMD_NEXT_REGION: egui_pop_model::ids::CommandId =
+    egui_pop_model::ids::CommandId::from_static("workbench.next_region");
+
+/// The keyboard to the previous region of the window (Shift+F6).
+pub const CMD_PREVIOUS_REGION: egui_pop_model::ids::CommandId =
+    egui_pop_model::ids::CommandId::from_static("workbench.previous_region");
+
 pub const CMD_LEAVE_ZEN: egui_pop_model::ids::CommandId =
     egui_pop_model::ids::CommandId::from_static("workbench.leave_zen");
 
@@ -1625,7 +1645,8 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
         bar.resizable(false)
             .exact_size(t.size.icon_panel + 2.0 * t.space.s + 2.0 * t.space.xs)
             .show(ui, |ui| {
-                egui_pop_core::focus::scope(ui, "activityBar", &[], |ui| {
+                let region = focus::Region::new("activityBar", RANK_ACTIVITY_BAR);
+                focus::region(ui, &region, |ui| {
                     app.show_zone(ui, &crate::zones::ACTIVITY_BAR);
                 });
             });
@@ -2095,6 +2116,80 @@ fn strip_icon(
     }
 }
 
+// F6's order (`egui_pop_core::regions`); palettes, of one rank, go as drawn.
+const RANK_ACTIVITY_BAR: u32 = 0;
+const RANK_START_SIDE: u32 = 10;
+const RANK_END_SIDE: u32 = 11;
+const RANK_BOTTOM: u32 = 12;
+const RANK_CENTER: u32 = 20;
+pub(crate) const RANK_PALETTE: u32 = 30;
+const RANK_FLYOUT: u32 = 40;
+pub(crate) const RANK_STATUS_BAR: u32 = 50;
+
+fn rank_of(area: Area) -> u32 {
+    match area {
+        Area::StartSide => RANK_START_SIDE,
+        Area::EndSide => RANK_END_SIDE,
+        Area::Bottom => RANK_BOTTOM,
+        Area::Center => RANK_CENTER,
+    }
+}
+
+/// An area's region's name.
+fn area_region(area: Area) -> String {
+    format!("region.area.{}", area_name(area))
+}
+
+/// Runs `workbench.next_region` or `workbench.previous_region`: see
+/// [Moving between regions](self#moving-between-regions).
+pub(crate) fn go_to_region(
+    app: &AppHandle,
+    origin: &egui_pop_model::commands::Origin,
+    back: bool,
+) -> Result<Json, String> {
+    let ctx = app.egui();
+    let agent = !matches!(origin, egui_pop_model::commands::Origin::User);
+    if (agent && focus::text_input_owns_keyboard(&ctx)) || open_on_top(app, &ctx) {
+        return Ok(json!({ "moved": false }));
+    }
+    let Some(hop) = egui_pop_core::regions::next(&ctx, back) else {
+        return Ok(json!({ "moved": false }));
+    };
+    match hop.target {
+        Some(id) => ctx.memory_mut(|m| {
+            m.request_focus(id);
+            m.move_focus(egui::FocusDirection::None);
+        }),
+        None => {
+            // A panel of text alone holds the focus itself, its own stop.
+            let area = Area::ALL
+                .into_iter()
+                .find(|a| area_region(*a) == hop.region);
+            let active = area.map(|a| {
+                let wb = app.workbench_mut();
+                let panels: Vec<PanelId> = wb.layout.active_in(a).into_iter().cloned().collect();
+                panels
+            });
+            let panel = active.and_then(|p| p.into_iter().find(|p| drawable(app, p)));
+            if let Some(panel) = panel {
+                app.focus_panel(&panel);
+            }
+        }
+    }
+    Ok(json!({ "moved": true, "region": hop.region }))
+}
+
+/// A menu or a popover is open, not the flyout: Escape comes first, F6 would
+/// leave it open behind the focus.
+fn open_on_top(app: &AppHandle, ctx: &egui::Context) -> bool {
+    let flyout = app.workbench_mut().flyout.clone();
+    let flyout = flyout.map(|p| Id::new(flyout_overlay(&p)));
+    egui::Popup::is_any_open(ctx)
+        || egui_pop_core::overlay::stack(ctx)
+            .iter()
+            .any(|o| Some(o.id) != flyout)
+}
+
 /// What names a panel's flyout in the overlay stack.
 fn flyout_overlay(panel: &PanelId) -> (&'static str, &str) {
     ("egui_pop.flyout", panel.as_str())
@@ -2221,38 +2316,47 @@ fn draw_flyout(
             );
             inner.set_clip_rect(body);
             inner.set_min_size(inner.available_size());
-            // The band: the title, then the pin button at the end.
-            let pin =
-                strings::tr_args(inner.ctx(), &txt::WORKBENCH_FLYOUT_PIN, &[("panel", title)]);
-            let button = t.size.control_height.max(24.0);
-            let header = kit.header_band.style(State::REST).text;
-            // The pin first, from the end: a truncated title laid out
-            // before it would take the whole row and push it out.
-            let pinned = inner
-                .horizontal(|ui| {
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let pinned = egui_pop_core::band::button(
-                            ui,
-                            button,
-                            egui_pop_core::icon::Icon::Unlock,
-                            &pin,
-                            false,
-                        )
-                        .clicked();
-                        ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                            ui.add(
-                                egui::Label::new(egui::RichText::new(title).strong().color(header))
-                                    .truncate()
-                                    .selectable(false),
+            let region = focus::Region::new("region.flyout", RANK_FLYOUT);
+            let pinned = focus::region(&mut inner, &region, |inner| {
+                // The band: the title, then the pin button at the end.
+                let pin =
+                    strings::tr_args(inner.ctx(), &txt::WORKBENCH_FLYOUT_PIN, &[("panel", title)]);
+                let button = t.size.control_height.max(24.0);
+                let header = kit.header_band.style(State::REST).text;
+                // The pin first, from the end: a truncated title laid out
+                // before it would take the whole row and push it out.
+                let pinned = inner
+                    .horizontal(|ui| {
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            let pinned = egui_pop_core::band::button(
+                                ui,
+                                button,
+                                egui_pop_core::icon::Icon::Unlock,
+                                &pin,
+                                false,
+                            )
+                            .clicked();
+                            ui.with_layout(
+                                egui::Layout::left_to_right(egui::Align::Center),
+                                |ui| {
+                                    ui.add(
+                                        egui::Label::new(
+                                            egui::RichText::new(title).strong().color(header),
+                                        )
+                                        .truncate()
+                                        .selectable(false),
+                                    );
+                                },
                             );
-                        });
-                        pinned
+                            pinned
+                        })
+                        .inner
                     })
-                    .inner
-                })
-                .inner;
-            inner.separator();
-            app.show_panel(&mut inner, panel);
+                    .inner;
+                inner.separator();
+                app.show_panel(inner, panel);
+                pinned
+            });
             if pinned {
                 app.change_workbench(Change::Flyout(panel.clone(), false));
                 app.focus_panel(panel);
@@ -2458,6 +2562,13 @@ fn visible_in(app: &AppHandle, area: Area) -> bool {
 
 /// Draws one area: a bare panel alone plainly, else its dock.
 fn draw_area(app: &AppHandle, ui: &mut Ui, area: Area) {
+    let region =
+        focus::Region::new(area_region(area), rank_of(area)).holding(visible_in(app, area));
+    focus::region(ui, &region, |ui| draw_dock(app, ui, area));
+}
+
+/// Draws an area's dock, or its one bare panel.
+fn draw_dock(app: &AppHandle, ui: &mut Ui, area: Area) {
     let Some(mut dock) = app.workbench_mut().take_dock(area) else {
         return;
     };

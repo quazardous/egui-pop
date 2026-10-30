@@ -34,22 +34,23 @@ forums and bug trackers is marked as such.
 
 ## Summary
 
-- **F6 is built and reaches nothing.** `tab::scope` and F6 work
-  ([walk] on the gallery's Inputs page), but no shell panel opens such a
-  scope ([walk] in the gallery, [read] in Helios; `docs/inputs.md` says so
-  under "Not yet"). In an application, Tab through everything in drawing
-  order is the only way across. F6 between regions is the one thing
-  VS Code, GTK and the ARIA splitter pattern share.
+- **F6 was built and reached nothing, until item 5.** `tab::scope` and F6
+  worked ([walk] on the gallery's Inputs page), but no shell panel opened such a
+  scope ([walk] in the gallery, [read] in Helios), and Tab through everything in
+  drawing order was the only way across. F6 between regions is the one thing
+  VS Code, GTK and the ARIA splitter pattern share; it now goes through the
+  shell's regions ([walk], [inputs](inputs.md#f6-through-the-regions)).
 - **One focused panel, since item 3.** `focusedPanel` used to follow clicks and
   `workbench.focus` while egui's focus followed Tab, so in Helios Tab from the
   image to the filmstrip should have left `C` adding a circle mask ([read],
   Helios's walk is owed). `workbench.focus` now hands over the widget focus and
   `focusedPanel` follows it ([walk]).
-- **The way in can be closed.** Where a palette floats and no widget has
-  the focus, Tab hides the palettes instead of moving ([test]), and F6 is
-  inert ([walk]). That is Helios's usual state ([read]). The habit is right for a
-  photo editor (Lightroom, Photoshop, GIMP and darktable all do it), so
-  the answer is F6, not giving Tab back.
+- **The way in could be closed.** Where a palette floats and no widget has
+  the focus, Tab hides the palettes instead of moving ([test]), and F6 was
+  inert ([walk], until item 5). That is Helios's usual state ([read]). The habit
+  is right for a photo editor (Lightroom, Photoshop, GIMP and darktable all do
+  it), so the answer is F6, not giving Tab back: F6 now goes in ([walk]) and
+  Tab keeps its rule.
 - **The focus can land on nothing, or out of view.** A side panel's resize
   line is a stop with no role and no name, and changes no pixel when focused
   ([walk]); a window frame's caption, a flyout's edge and an open menu's frame
@@ -212,8 +213,11 @@ From `crates/egui-pop-core` (`tab.rs`, `focus.rs`, `keys.rs`,
 
 ### Moving between regions
 
-- **[walk] F6 does nothing in an application**: the plugin is installed
-  by the first `tab::scope`, and only the gallery's Inputs page opens one.
+- **[walk] Done, item 5: F6 through the shell.** F6 used to do nothing in an
+  application: the plugin is installed by the first `tab::scope`, and only the
+  gallery's Inputs page opened one. Now `workbench.next_region` and
+  `.previous_region` go through the regions
+  ([inputs](inputs.md#f6-through-the-regions)).
 - **[walk] Done, item 3: one focused panel.** `workbench.focus` and `<panel>.focus`
   give the panel the widget focus (what it names with `focus::prefer`, its first
   focusable, or the panel's own stop), and `focused` follows any widget taking
@@ -244,7 +248,7 @@ From `crates/egui-pop-core` (`tab.rs`, `focus.rs`, `keys.rs`,
   chain keeps the place, so the surface's keys go on working
   ([test] `a_palette_takes_the_keyboard_only_when_clicked_and_escape_gives_it_back`).
   Tab used to start from the first widget of the window; since item 6 it goes on
-  from the place. **[read]** F6 still starts from the first panel (item 5).
+  from the place, and since item 5 F6 goes on from the region.
 - **[walk] When the focused widget disappears**, the focus used to go to nothing
   and Tab to restart. Since item 6 a tab closed hands the focus to the next one,
   as ARIA advises, and a windowed section's row scrolled out leaves nothing
@@ -662,7 +666,7 @@ walked where the sections above say so; Helios is as read here, not as run.
 
 | | egui-pop | Helios | VS Code | JetBrains | Blender | darktable | Lightroom | Photoshop | GIMP | Qt | GTK | ARIA |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Regions by cycling | F6, only in a `tab::scope` | no | F6 | – | – | – | – | – | – | – | F6 in panes | F6, optional |
+| Regions by cycling | F6 | no | F6 | – | – | – | – | – | – | – | F6 in panes | F6, optional |
 | Regions directly | commands, no default key | commands, no default key | Ctrl+1 | Alt+1..0 | pointer | module focus keys | F5–F8, toggles | Tab, toggles | Tab, toggles | Alt+letter | – | – |
 | Back to the work | no | no | – | Escape, then F12 back | pointer | – | – | – | "focus on the image" | – | – | Escape to opener |
 | Tab order | drawing, or scope | drawing | – | – | fields only | text fields (forum) | – | – | next widget | construction, editable | focus chain | author's |
@@ -703,14 +707,17 @@ one pull request. Numbers stay as they are, since the walk's tests name them;
    token around the focused widget at the end of the pass, unless the widget
    paints its own, and only when the keyboard last moved the focus, as GTK's
    and Qt's flags do. Stays within the widget's clip. Size: M.
-5. **F6 through the shell.** Regions: the activity bar, each visible area,
-   the centre, floating palettes, an open flyout, the status bar. Built on the
-   `focus::scope`s already there, not on `tab::scope`, so that Tab stays as it
-   is. A region remembers its last focus. It lands on nothing that is not
-   focusable, and does nothing behind a modal. A terminal keeps F6, as it
-   does today in a `tab::scope`: keep that test passing. egui does not list focusable widgets
-   publicly; a small focusable marker at a region's start, with egui's
-   "next" from it, is the first thing to try. Size: M, after 3.
+5. **Done: F6 through the shell.** Regions: the activity bar, each visible area,
+   the centre, floating palettes, an open flyout, the status bar, as commands on
+   F6 and Shift+F6. Built on focus scopes, not on `tab::scope`, so that Tab stays
+   as it is. A region remembers its last focus, and is passed over with nothing
+   focusable; nothing moves behind a modal, nor with a menu or popover open (not
+   asked at first: F6 would leave it behind the focus). A terminal keeps F6: its
+   routing takes the key before any binding. The focusable marker first thought
+   of was not needed: the last pass's widget rectangles carry each widget's sense
+   in the order drawn, as the place's neighbour (item 6) reads them. A `tab::scope`
+   of a region takes that region's turn rather than keep F6 inside it
+   ([inputs](inputs.md#f6-through-the-regions)).
 6. **Done: focus keeps its place.** The focus plugin remembers the last focused
    widget and rectangle. Tab after Escape, or after that widget vanished,
    continues from that place, not from the window's top; a removed row hands
@@ -791,9 +798,8 @@ one pull request. Numbers stay as they are, since the walk's tests name them;
 ### Helios
 
 1. **Say what Tab is, and F6 is the way in.** Keep Tab hiding the palettes where
-   nothing has the focus; correct `docs/gui.md`; mention F6 in the tips. *Not
-   decided.*
-   Size: S, after egui-pop 5.
+   nothing has the focus, as decided; correct `docs/gui.md`; mention F6 in the
+   tips. Size: S, now egui-pop 5 is done.
 2. **Keys for panels.** A proposal: `Ctrl+1` the image, `Ctrl+2` the graph,
    `Ctrl+3` the vault, then the Parameters, Modules, Filmstrip, as VS Code and
    JetBrains give direct keys; free in the default map as read. *Not decided.*
@@ -837,6 +843,7 @@ Run on 2026-10-30 for egui-pop: 18 checks on the gallery at 1100 by 720 in
 `pop-dark`, on egui 0.36.2, and on small harnesses where the gallery has no
 such case, all by real key presses through kittest
 (`crates/egui-pop-gallery/tests/keyboard_walk.rs`, `crates/egui-pop-test/tests/walk.rs`).
+Item 5's round was added after it (`f6_goes_through_the_regions_in_order...`).
 Each confirmed gap is an ignored test whose reason names its item:
 `cargo test -p egui-pop-gallery --test keyboard_walk -- --ignored` lists them.
 "Right" says whether reading predicted the result. None of it ran in a real
@@ -852,7 +859,7 @@ compositor.
 | 3 | Dock separators are stops; Ctrl and an arrow moves them | yes | Yes, Ctrl or Shift, along their axis, 16 points. No default layout has one (tested on a split area) | yes |
 | 4 | Focus a button, Escape, Tab | the window's first stop | File; since item 6, the stop after the button | yes |
 | 5 | A tab's close button, Enter, Tab | the same | **No close button exists** (`show_close_buttons(false)`). A focused tab closed by its command: nothing focused, Tab goes to File; since item 6, the next tab takes the focus | premise wrong, result as said |
-| 6 | Inputs page F6, Shift+F6; other pages F6 | works there, nothing elsewhere | As said: Street, Tags, Street; on overview, workbench, menus, terminal, settings, nothing | yes |
+| 6 | Inputs page F6, Shift+F6; other pages F6 | works there, nothing elsewhere | As said: Street, Tags, Street; on overview, workbench, menus, terminal, settings, nothing. Since item 5, a region on every page, and the page's scopes in the centre's turn | yes |
 | 7 | Up, Down in the side list; Left, Right | leaves for the page | Up and Down go row by row. Right goes to the side line, not the page; Left from there to a row out of view | nearly |
 | 8 | Side list's stops | one per story | 57 for 57 | yes |
 | 9 | Focused button against pressed; Ctrl+Enter; held Space | same pixels; clicks; repeats | Same pixels, and different from rest, so it is seen; Ctrl+Enter clicks; 4 presses, 4 clicks | yes, the look less bad than said |
@@ -874,7 +881,7 @@ compositor.
 | # | Check | Predicted | Result | Right? |
 |---|---|---|---|---|
 | 17 | Rebind a `when`-scoped command, press it elsewhere | fires | Does not fire: fixed since it was read | no longer |
-| 18 | F6 with a focused terminal in a scope | the terminal does not receive it | **The terminal receives it and keeps the focus**, as `tab.rs` promises. F6 from a field beside it moves | **no** |
+| 18 | F6 with a focused terminal in a scope | the terminal does not receive it | **The terminal receives it and keeps the focus**, as `tab.rs` promises. F6 from a field beside it moves. Since item 5, the same in an application's panel | **no** |
 
 **Still owed: Helios**
 
@@ -916,8 +923,8 @@ The order to follow for egui-pop now, by the same measure:
 6. **Done: item 6, focus keeps its place,** also after a button changing the
    panels.
 7. **Done: item 8, no stops that show nothing,** with the menu's frame.
-8. **Item 5, F6 through the shell.** After 3 as planned. A terminal is not the
-   risk it was read to be.
+8. **Done: item 5, F6 through the shell.** After 3 as planned. A terminal is not
+   the risk it was read to be.
 9. **Item 22, a popover's end,** and **item 15.** Small, confirmed.
 10. **Item 4, a focus you can see,** down from fourth: a plain button does show
     the focus, the gap is telling it from a press and from the pointer's, and the

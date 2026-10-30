@@ -4,7 +4,7 @@ egui-pop's inputs are one component, the **decorated input**
 (`egui_pop_core::input`), around a text, number, path or search field;
 one **field state** model (`egui_pop_model::field`) that every input
 shows the same way, the sliders included; and a **Tab order** decided
-per focus scope (`egui_pop_core::tab`), with F6 between panels.
+per focus scope (`egui_pop_core::tab`), with F6 between the window's regions.
 
 ![the inputs page](../crates/egui-pop-gallery/tests/snapshots/inputs-pop-dark.png)
 
@@ -144,12 +144,14 @@ fn options(ui: &mut egui::Ui, tags: &mut String, quality: &mut String) {
   last stop comes the first); in a `ScopeKind::Panel` scope, Tab past
   its ends goes on in egui's order. **F6** and Shift+F6 move to the next
   or previous panel scope, to the stop focused there last (its first
-  the first time); F6 does nothing while a modal is open.
+  the first time); F6 does nothing while a modal is open. In an
+  application, F6 goes through [the window's regions](#f6-through-the-regions),
+  and a region's panel scopes take its turn.
 
 | Key | What it does |
 |---|---|
 | Tab, Shift+Tab | The next or previous stop of the scope |
-| F6, Shift+F6 | The next or previous panel |
+| F6, Shift+F6 | The next or previous panel, or [region](#f6-through-the-regions) |
 | Enter, Space on a ✕ or a button | Presses it |
 
 The order is computed from the stops drawn in the previous pass
@@ -158,6 +160,39 @@ focus before anything is drawn. The focus on a widget that is not a
 stop is left to egui, whose Tab order is the order of drawing; a
 focused widget that takes the keys itself (a terminal) keeps Tab and
 F6.
+
+### F6 through the regions
+
+In an application, `workbench.next_region` (F6) and
+`workbench.previous_region` (Shift+F6) go through the parts of the window: the
+activity bar, the start side area, the end side area, the bottom area, the
+centre, each palette, an open flyout, the status bar. Tab stays as it is: a
+region is a focus scope (`focus::region`), not a Tab scope. They are commands
+like others, in the palette's list and rebindable.
+
+- **Where it lands**: the widget focused there last; else the one named with
+  `focus::prefer`; else the first focusable widget of what the region holds (a
+  panel before its dock's tab, a palette's field before its band); else, in an
+  area, the panel itself, as [`workbench.focus`](workbench.md#the-focused-panel)
+  does; else whatever else there can take the focus. A region with nothing to
+  land on is passed over.
+- **From nothing**: the first region, or the last with Shift. After Escape or a
+  press, from the region the user was in, which the focus chain still names.
+- **A panel `tab::scope`** takes its region's turn, one stop of the round each,
+  and F6 goes on out of them. What lies around them in the region is reached by
+  Tab.
+- **It does nothing** behind a modal, with a menu or a popover open (Escape comes
+  first: F6 would leave it open behind the focus), and for an agent while someone
+  is typing. A flyout stays open as F6 leaves it, like a palette.
+- **A focused terminal keeps F6**, like every key, for its program; Shift+Escape
+  leaves it.
+- **Hidden palettes are no region.** Where palettes float and nothing has the
+  focus, Tab still hides them: F6 is the way in, and Tab moves from there.
+- **Each window has its own**: a detached panel's window draws no region, so F6
+  stays there, for the panel scopes it may have.
+- **Without an application**, `focus::region` draws a region and
+  `regions::next` says where F6 goes; a window with no region keeps
+  `tab::scope`'s F6.
 
 ### What is no stop
 
@@ -222,9 +257,8 @@ in [the upstream register](upstream.md#egui-a-scroll-target-stops-at-the-innermo
   inline errors and an error summary, built from value descriptors) and
   the `Form` dialog on it come next, with the decision on how
   components are mounted in hosts.
-- The application shell's own panels are not Tab scopes yet: an
-  application wraps a panel's content in `tab::scope` for F6 to reach
-  it.
+- The application shell's own panels are not Tab scopes: an application
+  wraps a panel's content in `tab::scope` for reading order inside it.
 ## Why its own
 
 egui's `TextEdit` is the field (with its hint text); nothing in the

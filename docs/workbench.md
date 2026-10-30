@@ -118,6 +118,7 @@ There is one: the panel the widget focus is in, or the last one it was in.
 |---|---|---|
 | Tab or a widget takes the focus, in a panel | that panel | that widget |
 | `workbench.focus`, `<panel>.focus`, `focus_panel` | that panel, at once | in the next pass, see below |
+| F6 or Shift+F6 ([regions](inputs.md#f6-through-the-regions)) | the panel it lands in | the region's last, or as below |
 | A press in a panel | that panel | as the widget pressed decides |
 | The focus goes to the menu, the status bar or a dock's tab | unchanged | there |
 | Escape, or the focused widget going away | unchanged | none |

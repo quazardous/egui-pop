@@ -2225,6 +2225,14 @@ setting-workbench-side-bar-position-choice-left = gauche
 
 setting-workbench-side-bar-position-choice-right = droite
 
+command-workbench-next-region =
+    .description = Amène le clavier à la partie suivante de la fenêtre : la barre d’activité, une zone latérale ou du bas, le centre, une palette, le volet, la barre d’état.
+    .title = Aller à la région suivante
+
+command-workbench-previous-region =
+    .description = Amène le clavier à la partie précédente de la fenêtre.
+    .title = Aller à la région précédente
+
 command-workbench-toggle-primarySideBar =
     .description = Affiche ou masque la barre latérale principale : masquée, elle se replie sur sa bande et garde ses panneaux.
     .title = Afficher ou masquer la barre latérale principale
