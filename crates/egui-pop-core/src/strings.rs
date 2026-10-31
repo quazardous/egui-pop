@@ -65,6 +65,8 @@ pub const CANCEL: StrKey = StrKey::new("egui-pop-cancel", "Cancel");
 pub const CLOSE: StrKey = StrKey::new("egui-pop-close", "Close");
 pub const RESET: StrKey = StrKey::new("egui-pop-reset", "Reset");
 pub const RETRY: StrKey = StrKey::new("egui-pop-retry", "Retry");
+pub const SCROLLABLE_CONTENT: StrKey =
+    StrKey::new("egui-pop-scrollable-content", "Scrollable content");
 pub const FAULT_TITLE: StrKey = StrKey::new("egui-pop-fault-title", "{ $name } stopped working");
 pub const FAULT_BODY: StrKey = StrKey::new(
     "egui-pop-fault-body",
@@ -135,6 +137,7 @@ pub const ALL: &[StrKey] = &[
     CLOSE,
     RESET,
     RETRY,
+    SCROLLABLE_CONTENT,
     FAULT_TITLE,
     FAULT_BODY,
     HELD_BY,

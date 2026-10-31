@@ -12,6 +12,15 @@ publishes.
 
 ### Added
 
+- Keys on scroll areas (egui-pop-core, egui-pop-views; `docs/inputs.md`):
+  `UiPop::scroll_area` answers Page Up and Down (its height less a row), Home, End
+  and the arrows, holding the focus or, with nothing focused, under the pointer,
+  the innermost first. An area that overflows with nothing focusable inside is now
+  a Tab stop, "Scrollable content" with a ring; with something to focus or nothing
+  to scroll it is none. A focused text input or widget sensing drags keeps the keys,
+  and `focus::takes_keys` says so for another, as the list, the grid and the rating
+  do. Bindings go first, and what a bound key sends while held no longer reaches
+  the widgets. Only areas drawn through `UiPop::scroll_area` have this.
 - A popover keeps Tab (egui-pop-core, egui-pop-api; `docs/inputs.md`): Tab past its
   last stop comes back to its first, Shift+Tab the other way, where it used to walk
   the window behind with the popover still open. Tab from outside goes in, and a

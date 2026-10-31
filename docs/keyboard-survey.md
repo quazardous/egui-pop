@@ -873,6 +873,8 @@ compositor.
 | 10 | Long form, Tab past the fold | out of view | Settings page: out of view from "Language" | yes |
 | 11 | A windowed row: focus it, scroll it away | (open) | The gallery's rows are not stops; with buttons as rows, focus goes to nothing, Tab restarts at the first stop; since item 6, at the visible row nearest to the place. **Also** Tab cannot reach rows not drawn | new |
 
+| 27 | Scroll areas (added with item 6 of [the scrolling survey](scrolling-survey.md)): a stop with nothing focusable and something to scroll; the keys; a binding on them | only the first | As said, on small harnesses (`crates/egui-pop-test/tests/scroll_keys.rs`): no stop with a button inside or nothing to scroll, a ring when focused; a binding wins, held too | new |
+
 **Menus and overlays**
 
 | # | Check | Predicted | Result | Right? |

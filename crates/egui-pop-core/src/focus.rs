@@ -130,6 +130,8 @@ struct State {
     leaving: Option<Id>,
     /// The widget focused last in each region, by name.
     remembered: HashMap<String, Id>,
+    /// The widgets that said this pass that they read navigation keys.
+    taking: Vec<Id>,
 }
 
 /// What a scope is besides its record, by the same index: not part of
@@ -272,6 +274,7 @@ fn rotate(ctx: &Context, s: &mut State) {
     s.last = std::mem::take(&mut s.building);
     s.drawn_last = std::mem::take(&mut s.drawn);
     s.passing_last = std::mem::take(&mut s.passing);
+    s.taking.clear();
     s.open.clear();
     if let Some(pos) = ctx.input(|i| {
         i.pointer
@@ -606,6 +609,30 @@ pub fn keep_tab(ui: &mut Ui) {
     if installed {
         crate::place::keep_tab(ui);
     }
+}
+
+/// Says that a widget reads Page Up, Page Down, Home or End while focused (call
+/// it each pass it is drawn, before the scroll area around it ends), so that the
+/// area leaves them to it. A widget sensing drags needs none of this, nor does a
+/// text input: a list, a grid or a row of stars does.
+///
+/// upstream: egui's widgets read keys without taking them from the input, so a
+/// scroll area cannot see what a widget inside it has read (docs/upstream.md,
+/// "egui: a scroll area reads no key").
+pub fn takes_keys(ctx: &Context, id: Id) {
+    let st = state(ctx);
+    let mut s = lock(&st);
+    rotate(ctx, &mut s);
+    s.taking.push(id);
+}
+
+/// Whether a widget said this pass that it reads navigation keys, see
+/// [`takes_keys`].
+pub(crate) fn keys_taken_by(ctx: &Context, id: Id) -> bool {
+    let st = state(ctx);
+    let mut s = lock(&st);
+    rotate(ctx, &mut s);
+    s.taking.contains(&id)
 }
 
 /// Lets Escape through a text input (call it each pass it is drawn):

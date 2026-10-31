@@ -1,6 +1,7 @@
 //! The key dispatcher: egui key events become chords, chords resolve
 //! through the keymap in the focus chain's context (ADR 0007), and the
-//! keys that resolve are consumed before widgets see them.
+//! keys that resolve are consumed before widgets see them, and so is what such
+//! a key sends while it is held.
 //!
 //! While a text input owns the keyboard
 //! ([`crate::focus::text_input_owns_keyboard`]: a text field has the
@@ -75,6 +76,9 @@ pub struct KeyDispatcher {
     /// Seconds before a shortcut in progress is dropped.
     pub timeout: f64,
     traces: VecDeque<Trace>,
+    /// The keys a binding took and that are still down: what a held key sends
+    /// goes with its press, not to the widgets.
+    held: Vec<Key>,
 }
 
 impl Default for KeyDispatcher {
@@ -84,6 +88,7 @@ impl Default for KeyDispatcher {
             pending_since: 0.0,
             timeout: 2.0,
             traces: VecDeque::new(),
+            held: Vec::new(),
         }
     }
 }
@@ -138,8 +143,29 @@ impl KeyDispatcher {
         });
         let mut out = Vec::new();
         let mut consumed: Vec<(usize, Chord)> = Vec::new();
+        ctx.input(|i| {
+            for (n, e) in i.events.iter().enumerate() {
+                match e {
+                    Event::Key {
+                        key,
+                        pressed: false,
+                        ..
+                    } => self.held.retain(|k| k != key),
+                    Event::Key {
+                        key,
+                        pressed: true,
+                        repeat: true,
+                        modifiers,
+                        ..
+                    } if self.held.contains(key) => consumed.push((n, chord_of(*key, *modifiers))),
+                    _ => {}
+                }
+            }
+        });
         for (n, key, modifiers) in presses {
             let chord = chord_of(key, modifiers);
+            // A new press: the release of the last one may have gone elsewhere.
+            self.held.retain(|k| *k != key);
             let mut keys = self.pending.clone();
             keys.push(chord.clone());
             let keys = Keys(keys);
@@ -150,6 +176,7 @@ impl KeyDispatcher {
                 Resolution::Run(command) => {
                     self.pending.clear();
                     consumed.push((n, chord));
+                    self.held.push(key);
                     out.push(Dispatch {
                         command,
                         keys: keys.to_string(),

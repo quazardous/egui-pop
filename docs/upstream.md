@@ -78,6 +78,20 @@ limit.
 - **When it can go:** when `ScrollArea` has such an option and repaints
   after clamping.
 
+## egui: a scroll area reads no key
+
+- **What is compensated:** a `ScrollArea` reads no key, says neither which ways
+  it may scroll nor whether it has something to scroll on them, and egui's
+  widgets read keys without taking them from the input (`Slider`'s arrows, a
+  `TextEdit`'s Home and End), so nothing after them can tell a key was used.
+- **Tracked upstream:** not filed yet.
+- **Workaround:** `core::scroll_keys`, behind `UiPop::scroll_area`: after the
+  content, it reads which ways there are from the bars' widgets and writes the
+  offset to the area's `State`, for the next pass. A focused widget keeps the
+  keys if it is a text input, senses drags or says so (`focus::takes_keys`).
+- **When it can go:** when `ScrollArea` has keys of its own, and a widget's use
+  of a key can be seen.
+
 ## egui: a selectable button changes size under the pointer
 
 - **Compensated**: `Button::selectable` draws no frame at rest (neither

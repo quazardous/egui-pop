@@ -97,7 +97,8 @@ differ from "hover" only for keys and code.
   containment and the only forced bar.
 - **Keys.** The data views (`views::nav`, the list, the tree, the library's
   grid), the terminal and the editor read Page Up/Down and Home/End. A plain
-  scroll area does not.
+  scroll area did not, as this page was written; `UiPop::scroll_area` does since
+  item 6.
 - **Profiles** ([Pointer gestures](pointer-gestures.md)) set the three
   modifiers through `InputOptions`, not the speed. `input.wheel_device` sorts
   mice from trackpads for canvases.
@@ -515,13 +516,18 @@ Sizes: S is under a day, M a few days. One pull request each.
    beside the content. The rule that a system only raises `auto` is in, through
    `AppBuilder::system_always_shows_scroll_bars`; item 10 is what reads the system
    and gives it.
-6. **Keys on plain scroll areas.** Page Up/Down (the view's height less a row,
-   Apple's "unit of overlap"), Home/End, the arrows by a line, on the area under
-   the pointer or holding the focus, unless a widget inside takes the key; bound
-   through the keymap's scope, so a binding wins. In `UiPop::scroll_area`, and
-   item 9 brings the others. The focus question (is a scroll area a Tab stop?)
-   is the hard part: a stop only when it has nothing focusable inside, as
-   browsers do. Size: M.
+6. **Done: keys on plain scroll areas.** Page Up/Down (the view's height less a
+   row, Apple's "unit of overlap"), Home/End, the arrows by a row, in
+   `UiPop::scroll_area`; item 9 brings the others. A stop only when something
+   overflows with nothing focusable inside, as browsers do. The area holding the
+   focus goes first, the one under the pointer only with nothing focused, as a
+   widget elsewhere may be reading the key. A binding wins as the dispatcher takes
+   the key first, in whichever scope it is bound, and what it sends while held: the
+   area opens no focus scope of its own, as one would change what F6, hover mode
+   and the focus's place read as the panel's, so nothing can be bound to "in a
+   scroll area". egui's widgets read keys without taking them, so a focused widget
+   keeps them by sensing drags or by `focus::takes_keys`, and the arrows stay
+   egui's while one is focused ([inputs](inputs.md#keys-on-a-scroll-area)).
 7. **Containment as an option, used by what nests.** `contain_wheel` moves out
    of sections into `UiPop::scroll_area` (`.contain_wheel(true)`), used by the
    views (`views::rows`, the grid, the table), popups and dialogs, the terminal
