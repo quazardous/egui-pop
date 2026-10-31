@@ -1149,6 +1149,8 @@ egui-pop-reset = Réinitialiser
 
 egui-pop-retry = Réessayer
 
+egui-pop-scrollable-content = Contenu défilant
+
 egui-pop-section-resize = Redimensionner { $section }
 
 egui-pop-dialog-resize = Redimensionner { $dialog }

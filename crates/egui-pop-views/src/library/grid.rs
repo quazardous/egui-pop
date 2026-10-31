@@ -995,6 +995,7 @@ impl<'a> ThumbGrid<'a> {
         // Handed the keyboard, a panel gives it to the grid, not its filters.
         egui_pop_core::focus::prefer(ui.ctx(), id);
         egui_pop_core::a11y::name(&response, WidgetType::Other, &label);
+        egui_pop_core::focus::takes_keys(ui.ctx(), id);
         if take_focus {
             response.request_focus();
         }

@@ -1340,6 +1340,8 @@ egui-pop-reset = Reset
 
 egui-pop-retry = Retry
 
+egui-pop-scrollable-content = Scrollable content
+
 egui-pop-section-resize = Resize { $section }
 
 egui-pop-settings-at-default = { $setting } is at its default

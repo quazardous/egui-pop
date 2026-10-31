@@ -172,6 +172,12 @@ pub trait UiPop: sealed::Sealed {
     /// Every scroll area already takes the bar's width, margin,
     /// placement and visibility from the theme (egui's `ScrollStyle`);
     /// this scope adds the colours, which egui shares with buttons.
+    ///
+    /// It also answers Page Up, Page Down, Home, End and the arrows, under the
+    /// pointer or holding the focus, unless a binding or a widget inside takes
+    /// them, and takes the focus itself when it overflows with nothing focusable
+    /// inside. A widget reading those keys without sensing drags says so with
+    /// [`focus::takes_keys`](crate::focus::takes_keys).
     fn scroll_area<R>(
         &mut self,
         area: ScrollArea,
@@ -245,10 +251,13 @@ impl UiPop for Ui {
         // gets the style outside the scope back.
         let style = self.style().clone();
         self.scoped(Stock::ScrollBar, Tone::Neutral, |ui| {
-            area.show(ui, |ui| {
+            let start = crate::scroll_keys::start(ui);
+            let out = area.show(ui, |ui| {
                 ui.set_style(style);
                 add(ui)
-            })
+            });
+            crate::scroll_keys::answer(ui, &out, start);
+            out
         })
         .inner
     }

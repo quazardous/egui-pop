@@ -224,6 +224,13 @@ pub(crate) fn end_pass(ctx: &Context) {
     }
 }
 
+/// A scroll area moved by a key: as with the wheel, a widget going away by that
+/// hands nothing on.
+pub(crate) fn scrolled(ctx: &Context) {
+    let st = shared_in_window::<Keep>(ctx, "core.focus.place");
+    lock(&st).scrolled_at = Some(pass(ctx));
+}
+
 /// Makes the popover being drawn keep Tab, its content drawn: see
 /// [`focus::keep_tab`].
 pub(crate) fn keep_tab(ui: &mut Ui) {

@@ -90,6 +90,7 @@ pub mod progress;
 pub mod regions;
 mod reveal;
 pub mod scale;
+mod scroll_keys;
 pub mod sections;
 pub mod slider;
 pub mod strings;

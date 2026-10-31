@@ -91,6 +91,7 @@ pub(crate) fn show<R>(
     scroll.height = out.inner_rect.height();
     let response = ui.interact(out.inner_rect, id, Sense::focusable_noninteractive());
     egui_pop_core::a11y::name(&response, egui::WidgetType::Other, label);
+    egui_pop_core::focus::takes_keys(ui.ctx(), id);
     if response.has_focus() {
         ui.memory_mut(|m| {
             m.set_focus_lock_filter(

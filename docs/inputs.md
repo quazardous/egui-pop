@@ -203,6 +203,40 @@ flyout's edge do so. With the focus plugin, Tab passes over the frame
 of a popup (a menu, a context menu, a combo box's list), which egui 0.36 makes a
 stop. A side area's resize line is still one, as egui draws it.
 
+### Keys on a scroll area
+
+`UiPop::scroll_area` answers the keys egui's own scroll area does not. The others,
+on `egui::ScrollArea` directly, do not yet.
+
+| Key | Moves it |
+|---|---|
+| Page Up, Page Down | By its height less a row |
+| Home, End | To its start, to its end |
+| The arrows | By a row, unless a widget inside holds the focus (below) |
+
+Pages, Home and End go down the area, or along it when it scrolls only sideways.
+A move is not animated, whatever the motion setting, and a held key goes on.
+
+- **Which area**: the one holding the focus. With nothing focused, the one under
+  the pointer, unless a popup is open. With the focus elsewhere, a key goes nowhere
+  new, as a widget there may be reading it. The innermost goes first; at its end
+  the key goes on to the area around it, as the wheel does.
+- **A binding goes first**: the dispatcher takes a key that resolves, in whatever
+  scope it is bound, along with what it sends while held.
+- **A widget inside goes first**: a text input, or a focused widget sensing drags (a
+  slider, a canvas, an editor, a terminal), keeps these keys. So does one naming
+  itself with `focus::takes_keys` (each pass, as it is drawn): a list, a grid, a row
+  of stars. Another focused widget (a button, a link) leaves the pages, Home and
+  End to the area, and the arrows to egui, which moves the focus.
+- **A Tab stop only when nothing else can be**, as a browser's scroller: an area
+  overflowing, with nothing focusable inside, takes the focus (role `ScrollView`,
+  named "Scrollable content"), shows the `focus.ring` around it and has the arrows.
+  An area with nothing to scroll is no stop, and neither is one starting to fit. A
+  click does not focus it; the pointer over it is enough.
+- **Not there**: an area with hidden bars (`ScrollBarVisibility::AlwaysHidden`), or
+  scrolling without them (`ScrollSource`), has no keys, as it has no bar to say
+  which ways it goes. A key with a modifier is not the area's.
+
 ### A popover keeps Tab
 
 With the focus plugin (`focus::install`; an application has it), Tab does not walk

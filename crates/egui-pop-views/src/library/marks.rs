@@ -321,6 +321,7 @@ impl RatingStars {
         let star = self.size.unwrap_or(t.size.icon_inline.max(12.0) + 4.0);
         let (rect, response) =
             ui.allocate_exact_size(vec2(star * f32::from(MAX_RATING), star), Sense::click());
+        egui_pop_core::focus::takes_keys(ui.ctx(), response.id);
         let at = |x: f32| (((x - rect.left()) / star).floor() as i32).clamp(0, 4) as u8 + 1;
         let hover = response.hover_pos().map(|p| at(p.x));
         let mut changed = None;
