@@ -2845,6 +2845,23 @@ fn a_long_path_in_a_narrow_dialog_keeps_its_end_and_collapses_its_start() {
 }
 
 #[test]
+fn with_too_little_room_beside_the_controls_the_breadcrumbs_take_their_own_row() {
+    let deep = "/one-long-folder-name/two-long-folder-name/three";
+    let fs: SharedFs = Arc::new(MemoryFs::new().dir(deep));
+    let mut h = narrow_harness(fs);
+    // Saving adds New folder to the row, and the grid its slider.
+    let _p = choose(&mut h, FileRequest::save("Save", "a.png").directory(deep));
+    let at = dialog(&h);
+    let up = row(&h, "Up").rect();
+    let crumb = row(&h, "Open folder three").rect();
+    assert!(crumb.top() >= up.bottom(), "{crumb:?} beside {up:?}");
+    assert!(crumb.right() <= at.right(), "{crumb:?} out of {at:?}");
+    // The field comes after them, and nothing overlaps.
+    let field = h.get_by_label("File name, or a path").rect();
+    assert!(field.top() >= crumb.bottom(), "{field:?} under {crumb:?}");
+}
+
+#[test]
 fn a_name_too_long_for_the_row_alone_is_cut_and_stays_inside() {
     let name = "a-name-so-long-that-no-dialog-of-the-least-size-has-room-for-it-in-its-row-of-controls-and-even-a-row-of-its-own-would-not-hold-it-at-all-really";
     let deep = format!("/top/{name}");
