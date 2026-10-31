@@ -2933,6 +2933,49 @@ fn the_files_page_shows_the_folder_as_breadcrumbs() {
 }
 
 #[test]
+fn the_files_page_groups_a_raw_with_its_sidecars() {
+    let root = egui_pop_gallery::pages::files::demo_folder();
+    let mut h = harness(options("pop-dark", Density::Comfortable, "files"));
+    h.run();
+    h.get_by_label("Open several…").click();
+    settle_picker(&mut h);
+    h.get_by_label("Filter, or type a path")
+        .type_text(&root.join("Photos/2026").display().to_string());
+    settle_picker(&mut h);
+    h.key_press(egui::Key::Enter);
+    settle_picker(&mut h);
+    let picker = |h: &Harness<'_, Gallery>, what: &str| {
+        h.state().app.handle().debug_snapshot()["files"]["open"][0]["picker"][what].clone()
+    };
+    assert_eq!(
+        picker(&h, "shown"),
+        serde_json::json!(["meadow.jpg", "reef.cr3"])
+    );
+    assert_eq!(
+        picker(&h, "groups")[1]["badges"],
+        serde_json::json!(["XMP", "JPEG"])
+    );
+    h.key_press(egui::Key::ArrowDown);
+    for _ in 0..3 {
+        settle_picker(&mut h);
+    }
+    // No provider reads the RAW: its JPEG stands in.
+    let stand_in = picker(&h, "preview")["stand_in"].clone();
+    assert!(
+        stand_in.as_str().is_some_and(|p| p.ends_with("reef.jpg")),
+        "{stand_in}"
+    );
+    egui_pop_test::assert_all_named(&h);
+    h.snapshot("files-grouped-pop-dark");
+    h.get_by_label("Grid").click();
+    for _ in 0..3 {
+        settle_thumbnails(&mut h);
+    }
+    egui_pop_test::assert_all_named(&h);
+    h.snapshot("files-grouped-grid-pop-dark");
+}
+
+#[test]
 fn the_files_page_previews_the_highlighted_file() {
     use egui_pop::model::commands::Origin;
     let root = egui_pop_gallery::pages::files::demo_folder();

@@ -12,6 +12,7 @@ use std::time::{Duration, SystemTime};
 
 use egui::Ui;
 use egui_pop::api::files::fs::MemoryFs;
+use egui_pop::api::files::groups::SidecarRule;
 use egui_pop::api::files::{self, FILES, FileRequest};
 use egui_pop::api::host::Pending;
 use egui_pop::api::stories::Story;
@@ -49,6 +50,13 @@ impl Plugin for FilesPage {
             && let Some(f) = ctx.app().service(&FILES)
         {
             f.set_file_system(Arc::new(demo_memory_folder()));
+        }
+        // A photo application's rule, as this page's own: egui-pop has none.
+        if let Some(f) = ctx.app().service(&FILES) {
+            let photos =
+                SidecarRule::new("gallery.photos", &["cr3", "jpg", "png"], &["xmp", "jpg"])
+                    .badge("jpg", "JPEG");
+            f.groupings().register(Arc::new(photos));
         }
         ctx.story(
             Story::new(StoryId::from_static("files"), "Choosing files", show)
@@ -134,6 +142,12 @@ pub fn demo_files() -> &'static [(&'static str, Vec<u8>)] {
             ("Photos/lighthouse.jpg", jpeg(&lighthouse())),
             ("Photos/2025/dunes.png", png(&dunes())),
             ("Photos/2026/meadow.jpg", jpeg(&meadow())),
+            ("Photos/2026/meadow.xmp", XMP.as_bytes().to_vec()),
+            // No provider reads this RAW: its JPEG stands in, in the grid and
+            // in the pane.
+            ("Photos/2026/reef.cr3", RAW.to_vec()),
+            ("Photos/2026/reef.cr3.xmp", XMP.as_bytes().to_vec()),
+            ("Photos/2026/reef.jpg", jpeg(&dunes())),
             ("Photos/notes.txt", NOTES.as_bytes().to_vec()),
             // What "Save as…" proposes: saving asks before replacing it.
             ("Exports/harbour-edit.png", png(&harbour())),
@@ -142,6 +156,11 @@ pub fn demo_files() -> &'static [(&'static str, Vec<u8>)] {
         ]
     })
 }
+
+/// Not a RAW, and no text either: only the name says what it would be.
+const RAW: &[u8] = &[0xff, 0x00, 0xfe, 0x01, 0xfd, 0x02, 0xfc, 0x03];
+
+const XMP: &str = "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"/>\n";
 
 const NOTES: &str = "Harbour walk, 14 March
 
