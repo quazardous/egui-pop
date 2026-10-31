@@ -590,6 +590,24 @@ pub fn install(ctx: &Context) {
     }
 }
 
+/// Makes the popover being drawn keep Tab: past its last stop Tab comes back to
+/// its first, Shift+Tab the other way, and Tab from outside it goes in, so that
+/// nothing walks the window behind it while it stays open. With no stop in it,
+/// it closes as Tab goes on. A focused widget taking Tab itself keeps it.
+///
+/// Call it at the end of the popover's content, each pass, with the focus plugin
+/// installed ([`install`]; otherwise it does nothing, and Tab goes on as egui has
+/// it). An overlay of [`Kind::Popover`](crate::overlay::Kind::Popover) does so by
+/// itself while it is the top one; this is for an [`egui::Popup`] used as a
+/// popover. A menu has its own keys, and a flyout (`overlay::hold`) stays open as
+/// the focus leaves it.
+pub fn keep_tab(ui: &mut Ui) {
+    let installed = lock(&shared::<State>(ui.ctx(), "core.focus")).installed;
+    if installed {
+        crate::place::keep_tab(ui);
+    }
+}
+
 /// Lets Escape through a text input (call it each pass it is drawn):
 /// Escape then goes on to the overlay around it, as for a search field
 /// that is the whole of a popup (the command palette), instead of

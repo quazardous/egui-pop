@@ -3,13 +3,17 @@
 
 use std::sync::{Arc, Mutex};
 
-use egui::{Id, Key, Modifiers, PointerButton, Pos2, ScrollArea, Ui, vec2};
+use egui::{Id, Key, Modifiers, PointerButton, Pos2, ScrollArea, TextEdit, Ui, vec2};
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
 use egui_pop_core::focus;
+use egui_pop_core::overlay::{self, Anchor, Kind, OverlaySpec};
+use egui_pop_core::placement::Side;
 use egui_pop_core::theme::ThemeSpec;
 use egui_pop_test::themed;
-use egui_pop_test::walk::{self, ESCAPE, Press, SHIFT_TAB, Stop, TAB};
+use egui_pop_test::walk::{self, ESCAPE, End, Press, SHIFT_TAB, Stop, TAB};
+
+const ENTER: Press = Press::key(Key::Enter);
 
 fn page<'a>(ui: impl FnMut(&mut Ui) + 'a) -> Harness<'a> {
     let mut h = themed(&ThemeSpec::default(), vec2(300.0, 300.0), ui);
@@ -403,4 +407,229 @@ fn focus_put_on_a_popups_frame_by_other_means_is_dropped() {
     h.ctx.memory_mut(|m| m.request_focus(id));
     let _ = h.run_ok();
     assert_eq!(walk::focused(&h), None);
+}
+
+// A popover keeps Tab.
+
+/// A page around a popover that the button "Item" opens: "Before" and "After"
+/// stand behind it. `inside` is its content.
+fn popover<'a>(
+    start_open: bool,
+    mut inside: impl FnMut(&mut Ui) + 'a,
+) -> (Harness<'a>, Shared<bool>) {
+    let open = Arc::new(Mutex::new(start_open));
+    let flag = open.clone();
+    let h = page(move |ui| {
+        let _ = ui.button("Before");
+        let item = ui.button("Item");
+        let mut shown = *flag.lock().unwrap() || item.clicked();
+        let spec = OverlaySpec::new("pop", "Options", Kind::Popover);
+        let anchor = Anchor {
+            rect: item.rect,
+            side: Side::Bottom,
+        };
+        overlay::show(ui.ctx(), &spec, &mut shown, Some(anchor), &mut inside);
+        *flag.lock().unwrap() = shown;
+        let _ = ui.button("After");
+    });
+    (h, open)
+}
+
+fn two_stops(ui: &mut Ui) {
+    let _ = ui.button("One");
+    let _ = ui.button("Two");
+}
+
+/// The popover open from its item, by the keyboard.
+fn opened<'a>(inside: impl FnMut(&mut Ui) + 'a) -> (Harness<'a>, Shared<bool>) {
+    let (mut h, open) = popover(false, inside);
+    reach(&mut h, "Item");
+    walk::press(&mut h, ENTER);
+    let _ = h.run_ok();
+    assert!(*open.lock().unwrap());
+    (h, open)
+}
+
+#[test]
+fn tab_cycles_in_a_popover_and_escape_goes_back_to_its_item() {
+    let (mut h, open) = opened(two_stops);
+    let walked = walk::walk(&mut h, TAB, 6);
+    assert_eq!(walked.names(), ["One", "Two"], "{walked}");
+    assert_eq!(walked.end, End::Looped { at: 0 });
+    assert_eq!(name(walk::focused(&h)), "One");
+    assert_eq!(name(walk::press(&mut h, SHIFT_TAB)), "Two");
+    assert_eq!(name(walk::press(&mut h, SHIFT_TAB)), "One");
+    assert!(*open.lock().unwrap());
+    assert_eq!(name(walk::press(&mut h, ESCAPE)), "Item");
+    assert!(!*open.lock().unwrap());
+    egui_pop_test::assert_all_named(&h);
+}
+
+#[test]
+fn tab_stays_on_a_popovers_only_stop() {
+    let (mut h, open) = opened(|ui| {
+        let _ = ui.button("Only");
+    });
+    assert_eq!(name(walk::press(&mut h, TAB)), "Only");
+    assert_eq!(name(walk::press(&mut h, TAB)), "Only");
+    assert_eq!(name(walk::press(&mut h, SHIFT_TAB)), "Only");
+    assert!(*open.lock().unwrap());
+}
+
+#[test]
+fn shift_tab_from_the_item_goes_to_the_popovers_last_stop() {
+    let (mut h, open) = opened(two_stops);
+    assert_eq!(name(walk::press(&mut h, SHIFT_TAB)), "Two");
+    assert!(*open.lock().unwrap());
+}
+
+#[test]
+fn tab_from_nothing_or_from_behind_goes_into_a_popover() {
+    let (mut h, _) = popover(true, two_stops);
+    assert_eq!(name(walk::press(&mut h, TAB)), "One");
+    let (mut h, _) = popover(true, two_stops);
+    assert_eq!(name(walk::press(&mut h, SHIFT_TAB)), "Two");
+    // From a widget drawn before it, and one after it.
+    let (mut h, open) = opened(two_stops);
+    *open.lock().unwrap() = false;
+    let _ = h.run_ok();
+    reach(&mut h, "Before");
+    *open.lock().unwrap() = true;
+    let _ = h.run_ok();
+    assert_eq!(name(walk::press(&mut h, TAB)), "One");
+    *open.lock().unwrap() = false;
+    let _ = h.run_ok();
+    reach(&mut h, "After");
+    *open.lock().unwrap() = true;
+    let _ = h.run_ok();
+    assert_eq!(name(walk::press(&mut h, SHIFT_TAB)), "Two");
+}
+
+#[test]
+fn a_popover_with_no_stop_closes_as_tab_goes_on() {
+    let (mut h, open) = opened(|ui| {
+        ui.label("Only text");
+    });
+    assert_eq!(name(walk::press(&mut h, TAB)), "After");
+    assert!(!*open.lock().unwrap());
+    let (mut h, open) = opened(|ui| {
+        ui.label("Only text");
+    });
+    assert_eq!(name(walk::press(&mut h, SHIFT_TAB)), "Before");
+    assert!(!*open.lock().unwrap());
+}
+
+#[test]
+fn a_widget_taking_tab_keeps_it_at_a_popovers_end() {
+    let mut code = String::new();
+    let (mut h, open) = opened(move |ui| {
+        let _ = ui.button("One");
+        ui.add(TextEdit::multiline(&mut code).lock_focus(true));
+    });
+    assert_eq!(name(walk::press(&mut h, TAB)), "One");
+    let field = walk::press(&mut h, TAB).expect("Tab reaches the field");
+    assert_ne!(field.name, "One");
+    assert_eq!(walk::press(&mut h, TAB).map(|s| s.id), Some(field.id));
+    assert!(*open.lock().unwrap());
+}
+
+#[test]
+fn an_arrow_does_not_rest_on_the_end_of_a_popovers_order() {
+    let (mut h, _) = opened(two_stops);
+    assert_eq!(name(walk::press(&mut h, SHIFT_TAB)), "Two");
+    for key in [
+        Key::ArrowDown,
+        Key::ArrowLeft,
+        Key::ArrowRight,
+        Key::ArrowUp,
+    ] {
+        let at = walk::press(&mut h, Press::key(key)).expect("the focus stays");
+        assert!(!at.name.is_empty(), "{key:?} landed on a stop with no name");
+    }
+}
+
+#[test]
+fn a_removed_last_stop_hands_the_focus_to_a_real_stop() {
+    let rows: Shared<Vec<&str>> = Arc::new(Mutex::new(vec!["One", "Two"]));
+    let drawn = rows.clone();
+    let (mut h, _) = opened(move |ui| {
+        for row in drawn.lock().unwrap().iter() {
+            let _ = ui.button(*row);
+        }
+    });
+    assert_eq!(name(walk::press(&mut h, SHIFT_TAB)), "Two");
+    rows.lock().unwrap().retain(|r| *r != "Two");
+    let _ = h.run_ok();
+    assert_eq!(name(walk::focused(&h)), "One");
+}
+
+#[test]
+fn a_flyout_held_by_its_owner_lets_tab_go_on() {
+    let mut open = true;
+    let mut h = page(move |ui| {
+        let spec = OverlaySpec::new("flyout", "Flyout", Kind::Popover);
+        let (ctx, rect) = (ui.ctx().clone(), ui.max_rect());
+        overlay::hold(&ctx, &spec, &mut open, None, rect, || {
+            let _ = ui.button("Inside");
+        });
+        let _ = ui.button("After");
+    });
+    assert_eq!(name(walk::press(&mut h, TAB)), "Inside");
+    assert_eq!(name(walk::press(&mut h, TAB)), "After");
+}
+
+#[test]
+fn a_menu_of_the_stack_is_left_to_its_own_keys() {
+    let mut open = true;
+    let mut h = page(move |ui| {
+        let spec = OverlaySpec::new("menu", "Menu", Kind::Menu);
+        overlay::show(ui.ctx(), &spec, &mut open, None, |ui| {
+            let _ = ui.button("Entry");
+        });
+        let _ = ui.button("After");
+    });
+    assert_eq!(name(walk::press(&mut h, TAB)), "Entry");
+    assert_eq!(name(walk::press(&mut h, TAB)), "After");
+}
+
+#[test]
+fn an_egui_popup_keeps_tab_when_it_asks() {
+    let id = Id::new("popup");
+    let mut h = page(move |ui| {
+        let _ = ui.button("Before");
+        let item = ui.button("Item");
+        egui::Popup::from_toggle_button_response(&item)
+            .id(id)
+            .kind(egui::PopupKind::Popup)
+            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+            .show(|ui| {
+                two_stops(ui);
+                focus::keep_tab(ui);
+            });
+        let _ = ui.button("After");
+    });
+    reach(&mut h, "Item");
+    walk::press(&mut h, ENTER);
+    let _ = h.run_ok();
+    assert!(egui::Popup::is_id_open(&h.ctx, id));
+    let walked = walk::walk(&mut h, TAB, 6);
+    assert_eq!(walked.names(), ["One", "Two"], "{walked}");
+    assert_eq!(walked.end, End::Looped { at: 0 });
+    assert_eq!(name(walk::press(&mut h, SHIFT_TAB)), "Two");
+    assert!(egui::Popup::is_id_open(&h.ctx, id));
+}
+
+#[test]
+fn keep_tab_without_the_focus_plugin_leaves_tab_as_it_was() {
+    let mut open = true;
+    let mut h = themed(&ThemeSpec::default(), vec2(300.0, 300.0), move |ui| {
+        let spec = OverlaySpec::new("pop", "Options", Kind::Popover);
+        overlay::show(ui.ctx(), &spec, &mut open, None, |ui| {
+            let _ = ui.button("Inside");
+        });
+        let _ = ui.button("After");
+    });
+    let _ = h.run_ok();
+    assert_eq!(name(walk::press(&mut h, TAB)), "Inside");
+    assert_eq!(name(walk::press(&mut h, TAB)), "After");
 }

@@ -418,6 +418,7 @@ pub(crate) fn popover(ui: &mut Ui, app: &AppHandle, response: &egui::Response) {
                 .max_height(360.0)
                 .auto_shrink([false, true])
                 .show(ui, |ui| show(ui, app));
+            egui_pop_core::focus::keep_tab(ui);
         });
 }
 

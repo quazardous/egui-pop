@@ -12,6 +12,13 @@ publishes.
 
 ### Added
 
+- A popover keeps Tab (egui-pop-core, egui-pop-api; `docs/inputs.md`): Tab past its
+  last stop comes back to its first, Shift+Tab the other way, where it used to walk
+  the window behind with the popover still open. Tab from outside goes in, and a
+  popover with no stop closes as Tab goes on. A focused widget taking Tab keeps it.
+  An `overlay::show` popover on top of the stack and the status bar's popovers do
+  it; `focus::keep_tab` asks for it in an `egui::Popup`. Menus and flyouts are
+  unchanged.
 - Breadcrumbs for the in-app file picker's folder (egui-pop-api; `docs/files.md`):
   the monospace path is now clickable segments, each opening its folder, with a
   chevron listing its subfolders, as Windows' address bar. Every part is a named

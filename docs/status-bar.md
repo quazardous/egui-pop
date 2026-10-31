@@ -75,7 +75,8 @@ stack.
 - A click on the item, or Enter when it has the focus, opens it above
   the item; a second click closes it. The item's `command`, when it
   has one, is no longer run by the click: the popover can run it.
-- Tab goes from the item into the popover; Escape or a click outside
+- Tab goes from the item into the popover and [stays there](inputs.md#a-popover-keeps-tab),
+  coming back to the first stop after the last; Escape or a click outside
   closes it, and the focus goes back to the item.
 - `status.item.open` (`{ "id", "open" }`) opens or closes it for an
   agent; `strips::open_popover` and `strips::open_item` in code.
