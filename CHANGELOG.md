@@ -19,6 +19,19 @@ publishes.
   An `overlay::show` popover on top of the stack and the status bar's popovers do
   it; `focus::keep_tab` asks for it in an `egui::Popup`. Menus and flyouts are
   unchanged.
+- Grouped files in the in-app file picker (egui-pop-api, egui-pop-core;
+  `docs/files.md`): a RAW with its sidecars as one entry, in the list and the
+  grid, with badges (`+XMP`, `+JPEG`). An application declares the rule
+  (`FilesPlugin::grouping`, `Files::groupings`, a `FileGrouping` or a
+  `SidecarRule` by extension); egui-pop has none, and nothing changes without one.
+  Choosing the entry gives the main file in `paths`, and
+  `files::chosen_groups` the others, whoever answered the choice. Columns, order
+  and selection go by the main file, the field also finds a group by its members'
+  names, and a filter refusing the main file leaves the members entries of their
+  own. A member's image stands in where no provider previews the main file.
+  A Group files switch, kept in `settings/files.grouped`, shows every file; saving,
+  choosing a folder and `FileRequest::ungrouped` never group. `Indicator::measure`
+  says how much room a mark takes. French included.
 - Breadcrumbs for the in-app file picker's folder (egui-pop-api; `docs/files.md`):
   the monospace path is now clickable segments, each opening its folder, with a
   chevron listing its subfolders, as Windows' address bar. Every part is a named

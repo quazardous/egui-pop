@@ -245,6 +245,8 @@ which swaps the first two (`SetFolder`).
   the host's store (`settings/files.recent`, `settings/files.bookmarks`,
   saved with the settings).
 - Below: the request's filters (and all files), hidden files.
+- Files that go together can be one entry, by the application's rules: see
+  [Grouped files](#grouped-files).
 
 ### Saving
 
@@ -315,6 +317,76 @@ modal of your own that the person resizes is
 
 How other dialogs do it, and what the picker should take from them:
 the [file dialogs survey](file-dialogs-survey.md).
+
+### Grouped files
+
+An application declares which files go together, and they are one entry: a RAW
+with its sidecars, as Lightroom shows a RAW and its JPEG, and darktable and
+digiKam treat an XMP. egui-pop has the mechanism and no rule: nothing groups
+until a grouping is declared, and it has no list of photo extensions of its own.
+
+```rust
+use std::sync::Arc;
+use egui_pop::api::files::groups::SidecarRule;
+use egui_pop::api::files::FilesPlugin;
+
+// x.xmp, x.cr3.xmp and x.jpg belong to x.cr3; the badge says +XMP, +JPEG.
+let photos = SidecarRule::new("my_app.photos", &["cr3", "nef", "arw"], &["xmp", "jpg"])
+    .badge("jpg", "JPEG");
+let files = FilesPlugin::default().grouping(Arc::new(photos));
+# let _ = files;
+```
+
+A plugin registers on the service instead, `Files::groupings().register(...)`,
+and takes it back in its `disconnect` (`Groupings::unregister`). A
+`SidecarRule` goes by extension, whatever its case, and an exact stem; the main
+extensions come in the order they win, so `&["cr3", "jpg"]` makes `x.jpg` a
+member beside `x.cr3` and a main file of its own otherwise. Anything else, such
+as darktable's duplicates (`x_01.cr3.xmp`), is a `FileGrouping` of your own: it
+is given a folder's file names, without folders or hidden files, and gives groups
+of names. It is asked once per listing, on the interface thread, as the folder is
+read, and reads no file. What makes no sense in its answer is ignored and the file
+stays an entry of its own (a name not there, a file an earlier group or grouping
+took); one that panics counts for nothing, and the log says so.
+
+- **The entry.** It stands for the main file: its name, its size, its time and
+  its type in the columns, in the grid's cell and in every order. It says the
+  others with badges (`+XMP`, `+JPEG`) at the end of the name's column or in the
+  cell's corner, `+2` when they do not fit, and its description and the badges'
+  tip name them. The pane lists them under the facts. Arrows, ranges and `Ctrl+A`
+  go by entries, and `Selected: 2` counts groups.
+- **What a choice gives.** `paths` holds the main file, as `files::chosen` reads it,
+  so a caller who does not care changes nothing. The result's `groups`, which
+  `files::chosen_groups` reads, holds `FileGroup { main, members, badges }` for each
+  path that heads a group, and `file.chosen`'s arguments hold them too for
+  a before-hook. A redirected choice gives the groups of where it leads. They
+  come from the paths at the end of the choice, so a run-hook, `Files::deliver`,
+  the bridge's `answer` and the system's chooser give them as well; the system's
+  window shows each file apart, and a member chosen there is only that file.
+  A `FilePicker` drawn on its own takes `with_grouping`, answers with the main
+  file, and tells its caller the rest with `group_of`.
+- **Filters.** The group forms over the whole folder, and the filter judges its
+  main file: under `Raws (*.cr3)` an entry still has its `+XMP`, and under
+  `Sidecars (*.xmp)`, which refuses the RAW, each XMP is an entry of its own.
+- **The field.** A group answers to its members' names too, and choosing it still
+  gives the main file. A typed path is a path: `/shoot/x.jpg` chooses that file
+  alone, and its completions list every file.
+- **Previews.** Only the main file is asked for a preview, in the pane and in the
+  grid's queue. Where no provider gives it one (`Nothing`, or a failure), its
+  members are asked in turn, and the first image stands in, with `Preview from
+  x.jpg` under it in the pane; the facts stay the main file's, but for what the
+  provider said of the image, such as its dimensions. A sidecar's text does not
+  stand in for a photo. The `files` collector says it as `stand_in`.
+- **Each file its own entry.** The Group files switch beside the view shows
+  every file, to reach a member with the pointer, and a choice then gives no
+  groups. It shows only with a grouping declared, and is kept in
+  `settings/files.grouped` (`files::grouped`), outside the settings window where
+  it would mean nothing without a grouping. Switching back moves the highlight to
+  the group that takes its file in, and a member selected leaves the selection.
+- **Not grouped.** Saving and choosing a folder never group, as a name to save
+  under must see every file it could replace. A hidden file joins no group, even
+  shown. `FileRequest::ungrouped()` turns groups off for a choice that wants a
+  sidecar as much as a RAW.
 
 ### Where it reads
 
@@ -433,7 +505,7 @@ cache's cap, rather than made again for ever.
 | Step | Arguments | Default |
 |---|---|---|
 | `file.choose` | `{ "id", "request" }` | opens the system's chooser or the in-app picker |
-| `file.chosen` | `{ "id", "request", "paths" }` | remembers the places and the purpose's last folder, gives the paths |
+| `file.chosen` | `{ "id", "request", "paths" }`, and `"groups"` when some are | remembers the places and the purpose's last folder, gives the paths and their groups |
 
 For agents, the `file.preview` command (`{ "path" }`, kept out of the
 palette) gives a path's preview metadata as the pane shows it, made at
@@ -457,7 +529,8 @@ The commands `file.new_folder` (`{ "name" }`, optional) and
 the yes to its question. The `when` key `filePickerNewFolder` says that an
 open picker offers a new folder. `file.select_all` and
 `file.toggle_selection` answer `{ "selected": n }`, and the `files` collector
-lists the picker's `selected`, its `sort` and `folders_first`.
+lists the picker's `selected`, its `sort` and `folders_first`, its `grouped` and
+`groups`, and the `groupings` declared.
 
 The gallery's `files` page opens each kind of choice in a demo folder
 whose files are made by code at start (the repository holds no binary
@@ -466,3 +539,5 @@ Markdown document and a CSV table, written to the temporary folder on
 the desktop and given to the picker as a `MemoryFs` on the web, so the
 previews show there too. Open an image and Save as each have a purpose:
 each comes back to its own last folder, the others stay where they were.
+`Photos/2026` holds a pretend RAW and a JPEG with sidecars, grouped by a rule the
+page declares for itself.

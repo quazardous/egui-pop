@@ -63,7 +63,7 @@ use std::time::SystemTime;
 
 use egui::{ColorImage, RichText, TextureHandle, TextureOptions, Ui};
 use egui_pop_core::lock;
-use egui_pop_core::strings::tr;
+use egui_pop_core::strings::{tr, tr_args};
 use egui_pop_core::theme::Tokens;
 use serde_json::{Value as Json, json};
 
@@ -1061,6 +1061,19 @@ const PANE_HEIGHT: f32 = 180.0;
 /// (a file's size and modification time, a folder's items, dimensions,
 /// pages, the provider's).
 pub fn pane(ui: &mut Ui, name: &str, meta: Option<&Meta>, shown: &Shown) {
+    pane_for(ui, name, meta, shown, None);
+}
+
+/// [`pane`], the preview possibly another file's: a member of the entry's group
+/// standing in for it, named under the image. The size and the time stay the
+/// entry's own.
+pub(super) fn pane_for(
+    ui: &mut Ui,
+    name: &str,
+    meta: Option<&Meta>,
+    shown: &Shown,
+    stand_in: Option<&str>,
+) {
     let t = Tokens::of(ui.ctx());
     ui.add(egui::Label::new(RichText::new(name).strong()).truncate());
     ui.add_space(t.space.xs);
@@ -1080,11 +1093,19 @@ pub fn pane(ui: &mut Ui, name: &str, meta: Option<&Meta>, shown: &Shown) {
         }
         Shown::Ready(r) => {
             body(ui, r, name);
+            if let Some(member) = stand_in {
+                let said = tr_args(ui.ctx(), &txt::FILES_GROUP_STAND_IN, &[("name", member)]);
+                ui.add(egui::Label::new(RichText::new(said).weak()).truncate());
+            }
             Some(r)
         }
     };
     ui.add_space(t.space.s);
-    let meta = ready.map(|r| &r.meta).or(meta);
+    let meta = if stand_in.is_some() {
+        meta
+    } else {
+        ready.map(|r| &r.meta).or(meta)
+    };
     let mut rows: Vec<(String, String)> = Vec::new();
     if let Some(m) = meta.filter(|m| !m.is_dir) {
         rows.push((tr(ui.ctx(), &txt::FILES_SIZE), size_text(m.len)));

@@ -437,6 +437,21 @@ pub const FILES_SORT_RANKED: StrKey = StrKey::new(
 );
 pub const FILES_FOLDERS_FIRST: StrKey =
     StrKey::new("egui-pop-files-folders-first", "Folders first");
+/// The picker's switch: files that go together are one entry.
+pub const FILES_GROUP: StrKey = StrKey::new("egui-pop-files-group", "Group files");
+/// That switch's tip.
+pub const FILES_GROUP_TIP: StrKey = StrKey::new(
+    "egui-pop-files-group-tip",
+    "Files that go together show as one entry, and choosing it gives the main one; off, each is an entry of its own",
+);
+/// What a group's entry says of its other files.
+pub const FILES_GROUP_WITH: StrKey =
+    StrKey::new("egui-pop-files-group-with", "Grouped with { $members }");
+/// The title over a group's other files in the preview pane.
+pub const FILES_GROUP_MEMBERS: StrKey = StrKey::new("egui-pop-files-group-members", "Grouped with");
+/// Under a preview that is a group member's, for a main file without one.
+pub const FILES_GROUP_STAND_IN: StrKey =
+    StrKey::new("egui-pop-files-group-stand-in", "Preview from { $name }");
 pub const FILES_PREVIEW: StrKey = StrKey::new("egui-pop-files-preview", "Preview");
 pub const FILES_PREVIEW_RESIZE: StrKey =
     StrKey::new("egui-pop-files-preview-resize", "Resize the preview");
@@ -1323,6 +1338,11 @@ pub const ALL: &[StrKey] = &[
     FILES_SORTED_DOWN,
     FILES_SORT_RANKED,
     FILES_FOLDERS_FIRST,
+    FILES_GROUP,
+    FILES_GROUP_TIP,
+    FILES_GROUP_WITH,
+    FILES_GROUP_MEMBERS,
+    FILES_GROUP_STAND_IN,
     FILES_PREVIEW,
     FILES_PREVIEW_RESIZE,
     FILES_SELECTED,

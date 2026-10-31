@@ -297,7 +297,7 @@ From the code on `main` (`crates/egui-pop-api/src/files.rs` and
 | New folder | yes | yes | yes | yes | yes | no | yes (destination) | **no** |
 | App options in the dialog | portal `choices` | custom widget | `IFileDialogCustomize` | `accessoryView` | operator options | the import's own | options panels | inline mode only |
 | Remembered | size, sidebar, view, sort, hidden | size, view, pane width | last folder per GUID | state per identifier | per operator | last place and folder | last source | preview on/off, recent, bookmarks |
-| Sidecars as one | no | no | no | no | no | XMP read on import | RAW+JPEG one photo | no |
+| Sidecars as one | no | no | no | no | no | XMP read on import | RAW+JPEG one photo | no (now: a hook, item 9) |
 
 ## What egui-pop's picker should take, ranked
 
@@ -386,7 +386,19 @@ decision of its own (item 7 moved the header's drawing down, not the table).
    ("+XMP", "+JPEG") and choosing it giving the main file (with the
    group available to the application). egui-pop provides the
    mechanism, the application the rules; Lightroom's default and
-   darktable's sidecars show the need. Size: M.
+   darktable's sidecars show the need. **Done:** `files::groups`, a
+   `FileGrouping` given with `FilesPlugin::grouping` or `Files::groupings`, and
+   `SidecarRule` for the usual case by extension; egui-pop declares none, and no
+   preset of photo extensions either. A chosen group gives the main file in
+   `paths`, its members through `files::chosen_groups` and the `file.chosen`
+   step, whoever answered the choice (the system's chooser too, whose window
+   shows each file apart). Choices the item left open: the group forms over the
+   whole folder and the filter judges its main file, so a filter refusing it
+   leaves the members entries of their own; saving and choosing a folder never
+   group; a switch in the picker lets each file be its own entry, the way to a
+   member with the pointer, as Lightroom's "treat as separate" does; the columns
+   say the main file's facts; and a member's image stands in for a main file no
+   provider previews, which a RAW without a provider is. Size: M.
 10. **Application options inside the dialog.** A slot where the
     application draws its options next to the buttons (Windows'
     customize interface, the portal's `choices`, `accessoryView`,
