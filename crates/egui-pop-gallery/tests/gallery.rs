@@ -3035,27 +3035,42 @@ fn the_files_page_previews_the_highlighted_file() {
 /// is done. The preview's worker repaints on its own thread's time, and that
 /// stacks on the repaints of the frames around it, so `Harness::run` and its
 /// cap on the steps of one run would fail or not depending on the machine's
-/// load.
+/// load. Being done has to be seen before a frame as well as after it: the
+/// state is read from the worker, and a preview finished between the last frame
+/// and that reading is done without having been drawn.
 fn settle_picker(h: &mut Harness<'_, Gallery>) {
+    let mut done_before = false;
     for _ in 0..500 {
         let quiet = h.try_run().is_ok();
-        if quiet && preview_state(h) != "loading" {
+        let done = quiet && preview_state(h) != "loading";
+        if done && done_before {
             return;
         }
-        std::thread::sleep(std::time::Duration::from_millis(10));
+        done_before = done;
+        if !done {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
     }
     panic!("the picker did not settle");
 }
 
-/// Frames until the picker's grid has all it has in view.
+/// Frames until the picker's grid has all it has in view, and has drawn it: as
+/// for [`settle_picker`], a thumbnail finished after the last frame is seen as
+/// done while its cell still shows the placeholder, so nothing left to make has
+/// to be seen before a frame as well as after it.
 fn settle_thumbnails(h: &mut Harness<'_, Gallery>) {
+    let mut done_before = false;
     for _ in 0..500 {
         settle_picker(h);
         let previews = h.state().app.handle().debug_snapshot()["files"]["previews"].clone();
-        if previews["queued"] == 0 && previews["running"].is_null() {
+        let done = previews["queued"] == 0 && previews["running"].is_null();
+        if done && done_before {
             return;
         }
-        std::thread::sleep(std::time::Duration::from_millis(10));
+        done_before = done;
+        if !done {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
     }
     panic!("the thumbnails did not settle");
 }
