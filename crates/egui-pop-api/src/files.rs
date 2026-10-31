@@ -3599,7 +3599,6 @@ impl FilePicker {
         let mut chosen = None;
         let mut leave = false;
         popup.show(|ui| {
-            ui.set_max_width(CRUMB_MENU_WIDTH);
             let Some(items) = items.as_deref() else {
                 return;
             };
@@ -3611,6 +3610,19 @@ impl FilePicker {
                 ui.weak(strings::tr(ui.ctx(), &txt::FILES_CRUMB_NONE));
                 return;
             }
+            // As wide as its longest name, up to a limit: its items fill the menu.
+            let font = egui::TextStyle::Button.resolve(ui.style());
+            let widest = list.iter().fold(0.0_f32, |widest, item| {
+                let name = item.name.clone();
+                let galley =
+                    ui.painter()
+                        .layout_no_wrap(name, font.clone(), egui::Color32::PLACEHOLDER);
+                widest.max(galley.size().x)
+            });
+            let room = widest
+                + 2.0 * ui.spacing().button_padding.x
+                + ui.spacing().scroll.allocated_width();
+            ui.set_width(room.ceil().min(CRUMB_MENU_WIDTH));
             let on_path = list.iter().position(|c| self.dir.starts_with(&c.path));
             let mut ids = Vec::with_capacity(list.len());
             egui::ScrollArea::vertical()

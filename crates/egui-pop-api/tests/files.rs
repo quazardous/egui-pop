@@ -2604,6 +2604,8 @@ fn a_segment_s_menu_lists_its_subfolders_by_name() {
         .filter(|l| ["IMG_9", "IMG_10", "sub", ".hidden", "file.txt"].contains(&l.as_str()))
         .collect();
     assert_eq!(names, ["IMG_9", "IMG_10", "sub"]);
+    // The menu is as wide as its names, not as wide as it may get.
+    assert!(row(&h, "IMG_10").rect().width() < 160.0);
     click(&mut h, "IMG_10", Modifiers::NONE);
     assert_eq!(picker_state(&h, "dir"), "/top/IMG_10");
     assert!(h.get_by_label(FIELD).is_focused());
