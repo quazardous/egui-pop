@@ -203,6 +203,25 @@ flyout's edge do so. With the focus plugin, Tab passes over the frame
 of a popup (a menu, a context menu, a combo box's list), which egui 0.36 makes a
 stop. A side area's resize line is still one, as egui draws it.
 
+### A popover keeps Tab
+
+With the focus plugin (`focus::install`; an application has it), Tab does not walk
+the window behind an open popover.
+
+- **Past its last stop**, Tab comes back to its first, and Shift+Tab from its first
+  goes to its last, as in a dialog. Escape or a click outside is the way out, and
+  the focus goes back to what opened it.
+- **From outside it**, whether the widget that opened it, another or nothing, Tab
+  goes in at its first stop and Shift+Tab at its last. The widget that opened it is
+  not one of the stops.
+- **With no stop in it**, it closes, and Tab goes on from where it was.
+- **A focused widget taking Tab itself** (a terminal, an editor, a text field with
+  `lock_focus`) keeps the key; Escape or Shift+Escape leaves it first, as anywhere.
+- **Which**: an overlay of `Kind::Popover` on top of the stack, the status bar's
+  popovers and its jobs popover. An `egui::Popup` used as a popover asks for it with
+  `focus::keep_tab(ui)` at the end of its content. A menu has its own keys, and a
+  flyout (`overlay::hold`) stays open as the focus leaves it, like a palette.
+
 ### The focus keeps its place
 
 With the focus plugin (`focus::install`; an application has it), the focus

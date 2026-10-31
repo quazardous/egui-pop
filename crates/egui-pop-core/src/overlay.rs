@@ -40,6 +40,11 @@
 //! Escape is left to it (it closes first, the overlay at the next
 //! press).
 //!
+//! **Tab.** A [`Kind::Popover`] on top of the stack keeps Tab, cycling through
+//! its stops ([`crate::focus::keep_tab`]), with the focus plugin installed. A
+//! menu's keys are its own, and an overlay held by its owner ([`hold`], a flyout)
+//! lets the focus leave.
+//!
 //! **Windows.** Each window has its own stack: an overlay belongs to the
 //! window it is shown in (a detached panel's window, egui's viewport),
 //! and Escape and outside clicks there close only its overlays. A modal
@@ -812,6 +817,26 @@ pub fn close(ctx: &Context, id: Id) {
     settle(ctx, &mut s, closed);
 }
 
+/// Closes a popover with nothing to hold Tab, leaving the focus where Tab took
+/// it: on the stack, or an [`egui::Popup`] of that id.
+pub(crate) fn close_for_tab(ctx: &Context, id: Id) {
+    let st = state(ctx);
+    let mut s = lock(&st);
+    let mut closed = s.stack.close(id);
+    for c in &mut closed {
+        c.restore_focus = None;
+    }
+    settle(ctx, &mut s, closed);
+    drop(s);
+    egui::Popup::close_id(ctx, id);
+}
+
+/// Whether an egui layer is a popup (a combo box's list) the top overlay opened.
+pub(crate) fn opened_by_top(ctx: &Context, layer: LayerId) -> bool {
+    let st = state(ctx);
+    lock(&st).stack.top_popups().contains(&layer)
+}
+
 /// The window an overlay is open in, if it is open in any.
 pub fn window_of(ctx: &Context, id: Id) -> Option<ViewportId> {
     all(ctx)
@@ -1152,7 +1177,12 @@ pub fn show<R>(
                 .fixed_pos(placed.rect.min)
                 .show(ctx, |ui| {
                     let shadow = ui.visuals().popup_shadow;
-                    kit.popover.show(ui, rest, shadow, add).inner
+                    let inner = kit.popover.show(ui, rest, shadow, add).inner;
+                    let top = lock(&st).stack.top().is_some_and(|t| t.id == spec.id);
+                    if spec.kind == Kind::Popover && top {
+                        crate::focus::keep_tab(ui);
+                    }
+                    inner
                 });
             (r.inner, r.response.rect, vec![r.response.layer_id])
         }

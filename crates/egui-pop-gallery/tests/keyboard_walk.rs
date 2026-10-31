@@ -1158,17 +1158,48 @@ fn tab_goes_into_a_popover_and_escape_goes_back_to_its_item() {
 }
 
 #[test]
-#[ignore = "keyboard survey item 22: Tab past a popover's last stop goes behind it, the popover stays open"]
-fn tab_past_a_popovers_end_does_not_leave_it_open_behind() {
+fn tab_past_a_popovers_end_comes_back_to_its_first_stop() {
     let mut h = popover();
-    let inside = ["Dismiss all", "Add a warning"];
-    for _ in 0..3 {
-        let at = name(walk::press(&mut h, TAB));
-        assert!(
-            inside.contains(&at.as_str()) || h.query_by_label("Dismiss all").is_none(),
-            "{at}"
-        );
-    }
+    let walked = walk::walk(&mut h, TAB, 6);
+    assert_eq!(walked.names(), ["Dismiss all", "Add a warning"], "{walked}");
+    assert_eq!(walked.end, End::Looped { at: 0 });
+    assert_eq!(name(walk::focused(&h)), "Dismiss all");
+    assert_eq!(name(walk::press(&mut h, SHIFT_TAB)), "Add a warning");
+    assert_eq!(name(walk::press(&mut h, SHIFT_TAB)), "Dismiss all");
+    assert!(h.query_by_label("Dismiss all").is_some());
+    assert_eq!(name(walk::press(&mut h, ESCAPE)), "Problems");
+    assert!(h.query_by_label("Dismiss all").is_none());
+}
+
+#[test]
+fn shift_tab_from_a_popovers_item_goes_in_at_its_last_stop() {
+    let mut h = popover();
+    assert_eq!(name(walk::press(&mut h, SHIFT_TAB)), "Add a warning");
+    assert!(h.query_by_label("Dismiss all").is_some());
+}
+
+#[test]
+fn tab_stays_in_the_jobs_popover() {
+    let mut h = harness("jobs");
+    h.get_by_label("Start the demo jobs").click();
+    let _ = h.run_ok();
+    let item = (0..80).any(|_| name(walk::press(&mut h, TAB)).starts_with("Jobs: "));
+    assert!(item, "Tab reaches the status item");
+    walk::press(&mut h, ENTER);
+    let _ = h.run_ok();
+    let open = |h: &Harness<'_, Gallery>| egui_pop::api::jobs_centre::popover_open(&h.ctx);
+    assert!(open(&h));
+    let walked = walk::walk(&mut h, TAB, 40);
+    assert_eq!(walked.end, End::Looped { at: 0 }, "{walked}");
+    assert!(open(&h));
+    // The walk ended on its first stop.
+    let last = walked.stops.last().unwrap().id;
+    assert_eq!(walk::press(&mut h, SHIFT_TAB).map(|s| s.id), Some(last));
+    assert_eq!(
+        walk::press(&mut h, TAB).map(|s| s.id),
+        Some(walked.stops[0].id)
+    );
+    assert!(open(&h));
 }
 
 // Dialogs (check 16, items 20 and 21).

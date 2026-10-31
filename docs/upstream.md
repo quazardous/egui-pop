@@ -297,6 +297,25 @@ limit.
   (`// upstream:` in `crates/egui-pop-core/src/place.rs`).
 - **Remove when**: egui-pop moves to egui 0.37.
 
+## egui: Tab wraps only in a modal layer
+
+- **Compensated**: Tab goes by drawing order through the whole window and wraps
+  only inside `Memory::set_modal_layer`, which also blocks the pointer below, so a
+  popover closed by a click outside cannot use it. A focused widget's
+  `EventFilter` says whether it takes Tab, but neither the filter nor the direction
+  egui read from the key can be asked, so whether a press will move the focus is
+  unknown before the pass. Read in egui 0.36.2 (`Focus::begin_pass`,
+  `interested_in_focus`).
+- **Upstream**: no issue filed yet.
+- **Workaround**: `focus::keep_tab`. egui moves the focus by its own rule, so a
+  widget taking Tab keeps it, and the focus plugin corrects where it landed: a
+  hidden stop ends the popover's order, for Tab from the last stop to land on, and
+  the next pass moves the focus from there, or from a widget behind, to the
+  popover's first or last stop (`// upstream:` in
+  `crates/egui-pop-core/src/place.rs`).
+- **Remove when**: egui can wrap Tab in a layer without blocking the pointer, or
+  says where a press of Tab is going.
+
 ## egui: no side-effect free read of a widget's response
 
 - **Compensated**: `Context::read_response` runs the "clicked

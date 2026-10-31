@@ -370,9 +370,9 @@ From `crates/egui-pop-core` (`tab.rs`, `focus.rs`, `keys.rs`,
 - **[walk]** Tab in a dialog is egui's order inside the modal layer: it
   wraps, in drawing order, and F6 stays in. No dialog uses
   `ScopeKind::Modal`.
-- **[walk]** A status popover takes Tab inward. Past its last stop, Tab goes
-  on to the status bar's next item behind it, and on through the window,
-  while the popover stays open.
+- **[walk]** A status popover takes Tab inward. Past its last stop, Tab used to
+  go on to the status bar's next item behind it, and on through the window,
+  while the popover stayed open; since item 22 it comes back to the first stop.
 
 ### The gallery's side list
 
@@ -791,9 +791,16 @@ one pull request. Numbers stay as they are, since the walk's tests name them;
     focus when it opened, as a popover does and ARIA's modal dialog asks, by
     Escape, an answer or a button. The stack did ask for it: egui's focus rule
     undid it (see "Where the focus gets lost").
-22. **Tab past a popover's end.** New from the walk. It cycles inside or closes
-    the popover (ARIA's menu closes on Tab), not walking the window behind it
-    with the popover open. Size: S.
+22. **Done: Tab past a popover's end.** New from the walk. It cycles inside rather
+    than close: a popover holds a small form or a list with actions, which closing
+    would lose, and it is what a dialog's Tab does here and
+    [a GTK popover's](https://gitlab.gnome.org/GNOME/gtk/-/raw/main/gtk/gtkpopover.c)
+    there ("cycle around with (Shift+)Tab"); ARIA's menu closes on Tab, and a menu
+    has its own keys. Shift+Tab goes the other way, Tab from outside goes in, a
+    focused widget taking Tab keeps it, and a popover with no stop closes as Tab
+    goes on (GTK's keeps the focus where it is; here that would leave the popover
+    open behind it). A flyout is left out: it stays open as the focus leaves it,
+    like a palette ([inputs](inputs.md#a-popover-keeps-tab)).
 
 ### Helios
 
@@ -873,7 +880,7 @@ compositor.
 | 12 | Alt and a letter, Down, Tab, Escape | Down nothing, Tab from the top, Escape closes | As said; File's first item is 3 Tabs away, since item 8 two. Nothing focused afterwards | yes |
 | 13 | Menu from its focused button, arrows | the focus can leave | Second Down goes to the side list behind the menu | yes |
 | 14 | Tab with a menu open and a floating palette | the palette hides | It hides | yes |
-| 15 | Status popover, Tab past its last stop | (open) | Goes on through the window behind, popover still open; Escape returns to the item | new (item 22) |
+| 15 | Status popover, Tab past its last stop | (open) | Goes on through the window behind, popover still open; Escape returns to the item; since item 22, back to its first stop | new (item 22) |
 | 16 | Confirm dialog, danger on and off: first focus, Tab round | as `dialogs.rs` | Action first, Cancel for a danger, Tab wraps, F6 stays. **Also** Enter from the opening button answered a dialog at once (item 20, fixed), Escape left nothing focused (item 21, fixed) | yes, and two bugs |
 
 **Keys**
@@ -925,7 +932,7 @@ The order to follow for egui-pop now, by the same measure:
 7. **Done: item 8, no stops that show nothing,** with the menu's frame.
 8. **Done: item 5, F6 through the shell.** After 3 as planned. A terminal is not
    the risk it was read to be.
-9. **Item 22, a popover's end,** and **item 15.** Small, confirmed.
+9. **Done: item 22, a popover's end;** then **item 15.** Small, confirmed.
 10. **Item 4, a focus you can see,** down from fourth: a plain button does show
     the focus, the gap is telling it from a press and from the pointer's, and the
     stops that show nothing are item 8's.

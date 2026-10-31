@@ -34,11 +34,27 @@
 //! Tab stop"), and nothing lets `MenuButton` or `ComboBox` say otherwise. So Tab
 //! landing on one moves on in the next pass, the way it was going. A focus put
 //! there by anything else is dropped. Remove with egui 0.37.
+//!
+//! **A popover keeps Tab** ([`focus::keep_tab`]): past its last stop Tab comes
+//! back to its first, and Shift+Tab the other way, as in a dialog; Tab from
+//! outside it goes in. Only Escape or a click outside leaves, and a popover with
+//! no stop closes as Tab goes on. A focused widget taking Tab itself (a terminal,
+//! an editor) keeps it, as elsewhere.
+//!
+//! upstream: egui wraps Tab only in a modal layer, which would take the pointer
+//! too, and it does not say whether a focused widget takes Tab (its event filter
+//! is private), so the key cannot be judged before the pass (docs/upstream.md,
+//! "egui: Tab wraps only in a modal layer"). So egui moves the focus by its own
+//! rule and the plugin puts it right, before anything is drawn when it can. A stop
+//! with no rectangle, no role and no pixel ends the popover's order, a focus guard
+//! as on the web: Tab from the last stop lands there rather than on a widget
+//! behind, which would see the focus for a pass. Going back needs none, as egui
+//! hands the focus over at the start of the next pass.
 
-use egui::{Context, FocusDirection, Id, Key, LayerId, Rect, Vec2, WidgetRect};
+use egui::{Context, FocusDirection, Id, Key, LayerId, Rect, Sense, Ui, Vec2, WidgetRect};
 
 use crate::state::{lock, pass, shared_in_window};
-use crate::{focus, focus_mode, reveal};
+use crate::{focus, focus_mode, overlay, reveal};
 
 /// How long after a scroll (in passes) a widget going away went by that
 /// scroll: the row may leave a pass after the offset moved.
@@ -74,6 +90,10 @@ struct Keep {
     /// A popup's frame holds the focus, to move on in the next pass, backwards
     /// or not.
     past_frame: Option<(Id, bool)>,
+    /// What held the focus when Tab was last pressed.
+    tab_from: Option<Id>,
+    /// The popover keeping Tab, and the pass that last drew it.
+    keeping: Option<(LayerId, u64)>,
 }
 
 /// Puts egui back at the place, or holds back a Tab pressed with nothing
@@ -87,10 +107,12 @@ pub(crate) fn begin_pass(ctx: &Context) {
     if ctx.input(|i| i.is_scrolling() || i.smooth_scroll_delta != Vec2::ZERO) {
         s.scrolled_at = Some(pass(ctx));
     }
+    keep_in_popover(ctx, &mut s);
+    let focused = ctx.memory(|m| m.focused());
     if let Some(back) = tab_pressed(ctx) {
         s.tabbed = Some((pass(ctx), back));
+        s.tab_from = focused;
     }
-    let focused = ctx.memory(|m| m.focused());
     if let Some((frame, back)) = s.past_frame.take()
         && focused == Some(frame)
     {
@@ -158,6 +180,11 @@ pub(crate) fn end_pass(ctx: &Context) {
     };
     let drawn = ctx.viewport(|v| v.this_pass.widgets.get(id).copied());
     if let Some(widget) = drawn {
+        if is_tab_end(&widget) {
+            // Not a place: the next pass moves it on.
+            ctx.request_repaint();
+            return;
+        }
         if is_popup_frame(&widget) {
             // Not a place. Tab long gone, or the frame is all it finds (a popup
             // of text alone, and no stop in the window): let go.
@@ -195,6 +222,89 @@ pub(crate) fn end_pass(ctx: &Context) {
         // focus without a node.
         ctx.memory_mut(|m| m.surrender_focus(id));
     }
+}
+
+/// Makes the popover being drawn keep Tab, its content drawn: see
+/// [`focus::keep_tab`].
+pub(crate) fn keep_tab(ui: &mut Ui) {
+    let ctx = ui.ctx().clone();
+    let layer = ui.layer_id();
+    {
+        let st = shared_in_window::<Keep>(&ctx, "core.focus.place");
+        lock(&st).keeping = Some((layer, pass(&ctx)));
+    }
+    let has_stop = ctx.viewport(|v| v.this_pass.widgets.get_layer(layer).any(can_focus));
+    if !has_stop {
+        return;
+    }
+    let at = Rect::from_min_size(ui.min_rect().left_bottom(), Vec2::ZERO);
+    let end = ui.interact(at, tab_end(layer), Sense::FOCUSABLE);
+    ctx.accesskit_node_builder(end.id, |node| {
+        node.set_role(egui::accesskit::Role::GenericContainer);
+        node.set_hidden();
+    });
+}
+
+/// Puts right where Tab left the focus, with a popover keeping it: on the end of
+/// its order, on its frame, or behind it.
+fn keep_in_popover(ctx: &Context, s: &mut Keep) {
+    let now = pass(ctx);
+    let Some((layer, _)) = s.keeping.filter(|&(_, at)| at + 1 >= now) else {
+        s.keeping = None;
+        return;
+    };
+    let Some(id) = ctx.memory(|m| m.focused()) else {
+        return;
+    };
+    let on_end = id == tab_end(layer);
+    let Some((_, back)) = s.tabbed.filter(|&(at, _)| now <= at + TAB_PASSES) else {
+        if on_end {
+            // An arrow's cone, or a screen reader: it stays where it was.
+            let place = s.place.as_ref().map(|p| p.id);
+            let drawn = |p: &Id| ctx.viewport(|v| v.prev_pass.widgets.contains(*p));
+            match place.filter(drawn) {
+                Some(place) => ctx.memory_mut(|m| m.request_focus(place)),
+                None => ctx.memory_mut(|m| m.surrender_focus(id)),
+            }
+        }
+        return;
+    };
+    if !ctx.memory(|m| m.allows_interaction(layer)) {
+        return;
+    }
+    let landed = ctx.viewport(|v| v.prev_pass.widgets.get(id).map(|w| w.layer_id));
+    let behind = s.tab_from != Some(id)
+        && landed.is_some_and(|l| l != layer && !overlay::opened_by_top(ctx, l));
+    if !(on_end || behind || id == frame_of(layer)) {
+        return;
+    }
+    let stop = ctx.viewport(|v| {
+        let mut stops = v
+            .prev_pass
+            .widgets
+            .get_layer(layer)
+            .filter(|w| can_focus(w));
+        let stop = if back { stops.last() } else { stops.next() };
+        stop.map(|w| w.id)
+    });
+    match stop {
+        Some(stop) => {
+            log::debug!(target: "egui_pop", "Focus: Tab stays in the popover, on {stop:?}");
+            ctx.memory_mut(|m| m.request_focus(stop));
+            s.tabbed = None;
+        }
+        None if behind => overlay::close_for_tab(ctx, layer.id),
+        None => {}
+    }
+}
+
+/// The stop that ends a popover's Tab order.
+fn tab_end(layer: LayerId) -> Id {
+    layer.id.with("egui_pop.tab_end")
+}
+
+fn is_tab_end(w: &WidgetRect) -> bool {
+    w.id == tab_end(w.layer_id)
 }
 
 /// Gives the focus to the stop nearest to the place. Whether there was one.
@@ -246,12 +356,16 @@ fn is_stop(w: &WidgetRect, not: Id) -> bool {
 
 /// A widget that can take the focus.
 pub(crate) fn can_focus(w: &WidgetRect) -> bool {
-    w.enabled && w.sense.is_focusable() && !is_popup_frame(w)
+    w.enabled && w.sense.is_focusable() && !is_popup_frame(w) && !is_tab_end(w)
 }
 
 /// The widget an `Area` makes of its own background, focusable only in a popup.
 fn is_popup_frame(w: &WidgetRect) -> bool {
-    w.id == w.layer_id.id.with("move")
+    w.id == frame_of(w.layer_id)
+}
+
+fn frame_of(layer: LayerId) -> Id {
+    layer.id.with("move")
 }
 
 fn direction(back: bool) -> FocusDirection {
