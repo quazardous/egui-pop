@@ -18,8 +18,8 @@ use egui_pop_api::files::preview::{
     Body, Handles, Preview, PreviewProvider, PreviewRequest, Shown,
 };
 use egui_pop_api::files::{
-    self, CMD_NEW_FOLDER, CMD_SELECT_ALL, CMD_TOGGLE_SELECTION, Chosen, FILES, FileRequest,
-    FilesPlugin, PickerView, STEP_CHOOSE, STEP_CHOSEN,
+    self, CMD_EDIT_PATH, CMD_NEW_FOLDER, CMD_SELECT_ALL, CMD_TOGGLE_SELECTION, Chosen, FILES,
+    FileRequest, FilesPlugin, PickerView, STEP_CHOOSE, STEP_CHOSEN,
 };
 use egui_pop_api::host::Pending;
 use egui_pop_api::steps::Before;
@@ -2508,4 +2508,368 @@ fn at_the_least_size_the_row_of_buttons_keeps_its_boxes() {
     let open = h.get_by_role_and_label(Role::Button, "Open").rect();
     assert!(open.right() <= least.right(), "{open:?} out of {least:?}");
     let _ = std::fs::remove_dir_all(root);
+}
+
+const FIELD: &str = "Filter, or type a path";
+
+fn focused_name(h: &Harness<'static, App>) -> String {
+    walk::focused(h).map(|s| s.name).unwrap_or_default()
+}
+
+#[test]
+fn a_press_on_the_view_gives_the_keyboard_back_to_the_field() {
+    let (mut h, _) = grid_harness(3, PickerView::List);
+    let _p = choose(&mut h, FileRequest::open("Open").directory("/raws"));
+    click(&mut h, "Grid", Modifiers::NONE);
+    assert_eq!(state(&h, "view"), "grid");
+    assert!(h.get_by_label(FIELD).is_focused());
+    h.event(egui::Event::Text("img".into()));
+    settle(&mut h);
+    assert_eq!(field(&h), "img");
+    // A press on what is already on does the same.
+    click(&mut h, "Grid", Modifiers::NONE);
+    assert!(h.get_by_label(FIELD).is_focused());
+    click(&mut h, "List", Modifiers::NONE);
+    assert!(h.get_by_label(FIELD).is_focused());
+    // By the keyboard, the focus stays where it is, to go on from there.
+    walk::reach(&mut h, walk::SHIFT_TAB, "Grid", 60).expect("Shift+Tab reaches the switch");
+    press(&mut h, Key::Space, Modifiers::NONE);
+    assert_eq!(state(&h, "view"), "grid");
+    assert_eq!(focused_name(&h), "Grid");
+}
+
+#[test]
+fn a_press_on_up_gives_the_keyboard_back_to_the_field() {
+    let (mut h, _) = grid_harness(3, PickerView::List);
+    let _p = choose(&mut h, FileRequest::open("Open").directory("/raws"));
+    click(&mut h, "Up", Modifiers::NONE);
+    assert_eq!(picker_state(&h, "dir"), "/");
+    assert!(h.get_by_label(FIELD).is_focused());
+}
+
+/// A tree in memory for the breadcrumbs, the folder shown deep in it.
+fn crumbs_fs() -> SharedFs {
+    Arc::new(
+        MemoryFs::new()
+            .file("/top/file.txt", vec![0; 1])
+            .file("/top/sub/a.png", vec![0; 1])
+            .dir("/top/sub/empty")
+            .dir("/top/IMG_10")
+            .dir("/top/IMG_9")
+            .dir("/top/.hidden"),
+    )
+}
+
+fn crumbs_harness(fs: SharedFs) -> Harness<'static, App> {
+    let app = App::builder()
+        .plugin(FilesPlugin::in_app().file_system(fs))
+        .build(&egui::Context::default())
+        .unwrap();
+    Harness::builder()
+        .with_size(egui::vec2(1100.0, 640.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app)
+}
+
+#[test]
+fn a_segment_opens_its_folder_and_the_field_keeps_the_keyboard() {
+    let mut h = crumbs_harness(crumbs_fs());
+    let _p = choose(
+        &mut h,
+        FileRequest::open("Open").directory("/top/sub/empty"),
+    );
+    click(&mut h, "Open folder top", Modifiers::NONE);
+    assert_eq!(picker_state(&h, "dir"), "/top");
+    assert!(h.get_by_label(FIELD).is_focused());
+    // The folder shown is a segment too: it says so, and it stays where it is.
+    let current = row(&h, "Open folder top");
+    assert_eq!(
+        current.accesskit_node().description(),
+        Some("The folder shown".to_string())
+    );
+    click(&mut h, "Open folder top", Modifiers::NONE);
+    assert_eq!(picker_state(&h, "dir"), "/top");
+    assert!(h.query_by_label("Open folder sub").is_none());
+    click(&mut h, "Open folder /", Modifiers::NONE);
+    assert_eq!(picker_state(&h, "dir"), "/");
+}
+
+#[test]
+fn a_segment_s_menu_lists_its_subfolders_by_name() {
+    let mut h = crumbs_harness(crumbs_fs());
+    let _p = choose(&mut h, FileRequest::open("Open").directory("/top/sub"));
+    click(&mut h, "Subfolders of top", Modifiers::NONE);
+    let names: Vec<String> = h
+        .get_all_by_role(Role::Button)
+        .filter_map(|n| n.accesskit_node().label())
+        .filter(|l| ["IMG_9", "IMG_10", "sub", ".hidden", "file.txt"].contains(&l.as_str()))
+        .collect();
+    assert_eq!(names, ["IMG_9", "IMG_10", "sub"]);
+    // The menu is as wide as its names, not as wide as it may get.
+    assert!(row(&h, "IMG_10").rect().width() < 160.0);
+    click(&mut h, "IMG_10", Modifiers::NONE);
+    assert_eq!(picker_state(&h, "dir"), "/top/IMG_10");
+    assert!(h.get_by_label(FIELD).is_focused());
+    // Closed by the pointer, nothing chosen: the keyboard is the field's again.
+    click(&mut h, "Subfolders of /", Modifiers::NONE);
+    assert!(h.query_by_label("top").is_some());
+    click(&mut h, "Subfolders of /", Modifiers::NONE);
+    assert!(h.query_by_label("top").is_none());
+    assert!(h.get_by_label(FIELD).is_focused());
+    // A folder with none says so.
+    click(&mut h, "Subfolders of IMG_10", Modifiers::NONE);
+    assert!(h.query_all_by_label("No subfolders").next().is_some());
+}
+
+#[test]
+fn the_keyboard_reaches_every_segment_and_walks_its_menu() {
+    let mut h = crumbs_harness(crumbs_fs());
+    let _p = choose(&mut h, FileRequest::open("Open").directory("/top/sub"));
+    let tour = walk::walk(&mut h, walk::SHIFT_TAB, 60);
+    let names = tour.names();
+    for name in [
+        "Open folder /",
+        "Subfolders of /",
+        "Open folder top",
+        "Subfolders of top",
+        "Open folder sub",
+        "Subfolders of sub",
+    ] {
+        assert!(names.contains(&name), "{name} not in {names:?}");
+    }
+    assert!(names.iter().all(|n| !n.is_empty()), "{names:?}");
+    settle(&mut h);
+    // By the keyboard, the menu takes the focus: the folder on the path first.
+    walk::reach(&mut h, walk::TAB, "Subfolders of top", 60).expect("Tab reaches the chevron");
+    press(&mut h, Key::Enter, Modifiers::NONE);
+    assert_eq!(focused_name(&h), "sub");
+    // The arrows go round the menu.
+    press(&mut h, Key::ArrowDown, Modifiers::NONE);
+    assert_eq!(focused_name(&h), "IMG_9");
+    press(&mut h, Key::ArrowUp, Modifiers::NONE);
+    assert_eq!(focused_name(&h), "sub");
+    press(&mut h, Key::ArrowUp, Modifiers::NONE);
+    assert_eq!(focused_name(&h), "IMG_10");
+    // Escape closes the menu, not the dialog, and the focus is back.
+    press(&mut h, Key::Escape, Modifiers::NONE);
+    assert!(h.query_by_label("IMG_9").is_none());
+    assert_eq!(focused_name(&h), "Subfolders of top");
+    assert_eq!(picker_state(&h, "dir"), "/top/sub");
+    // Tab closes it too, rather than walking on under it.
+    press(&mut h, Key::Enter, Modifiers::NONE);
+    press(&mut h, Key::Tab, Modifiers::NONE);
+    assert!(h.query_by_label("IMG_9").is_none());
+    assert_eq!(focused_name(&h), "Subfolders of top");
+    // Enter chooses, and the field has the keyboard.
+    press(&mut h, Key::Enter, Modifiers::NONE);
+    press(&mut h, Key::ArrowDown, Modifiers::NONE);
+    press(&mut h, Key::Enter, Modifiers::NONE);
+    assert_eq!(picker_state(&h, "dir"), "/top/IMG_9");
+    assert!(h.get_by_label(FIELD).is_focused());
+    // Enter on a segment goes there the same.
+    walk::reach(&mut h, walk::SHIFT_TAB, "Open folder top", 60).expect("Shift+Tab reaches it");
+    press(&mut h, Key::Enter, Modifiers::NONE);
+    assert_eq!(picker_state(&h, "dir"), "/top");
+    assert!(h.get_by_label(FIELD).is_focused());
+}
+
+#[test]
+fn ctrl_l_puts_the_folder_into_the_field() {
+    let mut h = crumbs_harness(crumbs_fs());
+    let _p = choose(&mut h, FileRequest::open("Open").directory("/top/sub"));
+    walk::reach(&mut h, walk::TAB, "a.png", 60).expect("Tab reaches the rows");
+    press(&mut h, Key::L, Modifiers::COMMAND);
+    assert_eq!(field(&h), "/top/sub/");
+    assert!(h.get_by_label(FIELD).is_focused());
+    // The cursor is at the end: typing goes on from the folder, and Enter goes.
+    h.event(egui::Event::Text("empty".into()));
+    settle(&mut h);
+    assert_eq!(field(&h), "/top/sub/empty");
+    press(&mut h, Key::Enter, Modifiers::NONE);
+    assert_eq!(picker_state(&h, "dir"), "/top/sub/empty");
+    assert_eq!(field(&h), "");
+    // A path being typed is not replaced, a filter is.
+    type_in(&mut h, "../..");
+    press(&mut h, Key::L, Modifiers::COMMAND);
+    assert_eq!(field(&h), "../..");
+    press(&mut h, Key::Enter, Modifiers::NONE);
+    assert_eq!(picker_state(&h, "dir"), "/top");
+    type_in(&mut h, "img");
+    press(&mut h, Key::L, Modifiers::COMMAND);
+    assert_eq!(field(&h), "/top/");
+    // It is a command: rebindable, and an agent's too.
+    let app = h.state().handle().clone();
+    assert_eq!(app.keys_for(&CMD_EDIT_PATH), ["Ctrl+L"]);
+    click(&mut h, "Open folder /", Modifiers::NONE);
+    h.state_mut()
+        .run(&CMD_EDIT_PATH, json!({}), Origin::Agent("test".into()))
+        .now()
+        .unwrap()
+        .unwrap();
+    settle(&mut h);
+    assert_eq!(field(&h), "/");
+}
+
+#[test]
+fn a_slash_or_a_tilde_typed_on_the_list_starts_a_path() {
+    let mut h = crumbs_harness(crumbs_fs());
+    let _p = choose(&mut h, FileRequest::open("Open").directory("/top/sub"));
+    for (typed, then) in [("/", "top"), ("~", "/x")] {
+        walk::reach(&mut h, walk::TAB, "a.png", 60).expect("Tab reaches the rows");
+        h.event(egui::Event::Text(typed.into()));
+        settle(&mut h);
+        assert_eq!(field(&h), typed);
+        assert!(h.get_by_label(FIELD).is_focused());
+        // Typing goes on after it, without selecting anything first.
+        h.event(egui::Event::Text(then.into()));
+        settle(&mut h);
+        assert_eq!(field(&h), format!("{typed}{then}"));
+        // Empty again, and out of a path: the rows take the keys again.
+        type_clear(&mut h);
+    }
+    // Elsewhere than on the list, nothing is taken: a segment has the focus.
+    walk::reach(&mut h, walk::SHIFT_TAB, "Open folder top", 60).expect("Shift+Tab reaches it");
+    h.event(egui::Event::Text("/".into()));
+    settle(&mut h);
+    assert_eq!(field(&h), "");
+}
+
+/// The field emptied, with the keys a person would press.
+fn type_clear(h: &mut Harness<'static, App>) {
+    while !field(h).is_empty() {
+        press(h, Key::Backspace, Modifiers::NONE);
+    }
+}
+
+#[test]
+fn the_picker_on_its_own_reads_ctrl_l_itself() {
+    let picker = files::FilePicker::new_in(
+        &FileRequest::open("Open").directory("/top/sub"),
+        crumbs_fs(),
+    );
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(900.0, 600.0))
+        .build_ui_state(
+            |ui, p: &mut files::FilePicker| {
+                p.show(ui, &files::Places::default());
+            },
+            picker,
+        );
+    h.run();
+    walk::press(
+        &mut h,
+        Press {
+            modifiers: Modifiers::COMMAND,
+            key: Key::L,
+        },
+    );
+    h.run();
+    assert_eq!(h.state().text, "/top/sub/");
+}
+
+#[test]
+fn saving_ctrl_l_keeps_the_name_and_a_path_brings_it_back() {
+    let fs: SharedFs = Arc::new(MemoryFs::new().file("/d/a.txt", vec![0; 1]).dir("/d/sub"));
+    let mut h = saving_harness(Some(fs));
+    let p = choose(
+        &mut h,
+        FileRequest::save("Save", "name.png").directory("/d"),
+    );
+    press(&mut h, Key::L, Modifiers::COMMAND);
+    assert_eq!(field(&h), "/d/name.png");
+    // The stem is selected, as it is on opening: typing replaces it.
+    save_as(&mut h, "other");
+    let got = result(&mut h, &p).unwrap();
+    assert!(matches!(got, Chosen::Paths(ref paths) if paths[0] == Path::new("/d/other.png")));
+
+    let _p = choose(
+        &mut h,
+        FileRequest::save("Save", "name.png").directory("/d"),
+    );
+    h.get_by_label("File name, or a path").type_text("edited");
+    settle(&mut h);
+    assert_eq!(field(&h), "edited.png");
+    walk::reach(&mut h, walk::TAB, "sub/", 60).expect("Tab reaches the rows");
+    h.event(egui::Event::Text("/".into()));
+    settle(&mut h);
+    assert_eq!(field(&h), "/");
+    h.event(egui::Event::Text("d/sub".into()));
+    settle(&mut h);
+    press(&mut h, Key::Enter, Modifiers::NONE);
+    assert_eq!(picker_state(&h, "dir"), "/d/sub");
+    assert_eq!(field(&h), "edited.png");
+}
+
+/// A path too long for the row, in the least dialog, the grid's controls beside it.
+fn narrow_harness(fs: SharedFs) -> Harness<'static, App> {
+    let h = crumbs_harness(fs);
+    let app = h.state().handle().clone();
+    files::want_dialog_size(&app, files::PICKER_MIN_SIZE);
+    files::want_view(&app, PickerView::Grid);
+    h
+}
+
+#[test]
+fn a_long_path_in_a_narrow_dialog_keeps_its_end_and_collapses_its_start() {
+    let deep = "/one-long-folder-name/two-long-folder-name/three-long-folder-name/four-folder/five";
+    let fs: SharedFs = Arc::new(MemoryFs::new().dir(deep).dir(format!("{deep}/six")));
+    let mut h = narrow_harness(fs);
+    let _p = choose(&mut h, FileRequest::open("Open").directory(deep));
+    let at = dialog(&h);
+    assert!(at.width() < 800.0, "{at:?}");
+    // The end of the path is there, its chevron too, inside the dialog.
+    for name in ["Open folder five", "Subfolders of five"] {
+        let r = row(&h, name).rect();
+        assert!(r.right() <= at.right(), "{name} {r:?} out of {at:?}");
+    }
+    // The start is behind a button, in the same row and order.
+    assert!(h.query_by_label("Open folder /").is_none());
+    assert!(
+        h.query_by_label("Open folder one-long-folder-name")
+            .is_none()
+    );
+    let above = row(&h, "Folders above").rect();
+    assert!(above.right() <= row(&h, "Open folder five").rect().left());
+    // Its menu holds them, the nearest first.
+    click(&mut h, "Folders above", Modifiers::NONE);
+    let names: Vec<String> = h
+        .get_all_by_role(Role::Button)
+        .filter_map(|n| n.accesskit_node().label())
+        .filter(|l| l == "/" || l == "one-long-folder-name")
+        .collect();
+    assert_eq!(names, ["one-long-folder-name", "/"]);
+    click(&mut h, "/", Modifiers::NONE);
+    assert_eq!(picker_state(&h, "dir"), "/");
+    // Now short: nothing collapses.
+    assert!(h.query_by_label("Folders above").is_none());
+    assert!(h.query_by_label("Open folder /").is_some());
+}
+
+#[test]
+fn with_too_little_room_beside_the_controls_the_breadcrumbs_take_their_own_row() {
+    let deep = "/one-long-folder-name/two-long-folder-name/three";
+    let fs: SharedFs = Arc::new(MemoryFs::new().dir(deep));
+    let mut h = narrow_harness(fs);
+    // Saving adds New folder to the row, and the grid its slider.
+    let _p = choose(&mut h, FileRequest::save("Save", "a.png").directory(deep));
+    let at = dialog(&h);
+    let up = row(&h, "Up").rect();
+    let crumb = row(&h, "Open folder three").rect();
+    assert!(crumb.top() >= up.bottom(), "{crumb:?} beside {up:?}");
+    assert!(crumb.right() <= at.right(), "{crumb:?} out of {at:?}");
+    // The field comes after them, and nothing overlaps.
+    let field = h.get_by_label("File name, or a path").rect();
+    assert!(field.top() >= crumb.bottom(), "{field:?} under {crumb:?}");
+}
+
+#[test]
+fn a_name_too_long_for_the_row_alone_is_cut_and_stays_inside() {
+    let name = "a-name-so-long-that-no-dialog-of-the-least-size-has-room-for-it-in-its-row-of-controls-and-even-a-row-of-its-own-would-not-hold-it-at-all-really";
+    let deep = format!("/top/{name}");
+    let fs: SharedFs = Arc::new(MemoryFs::new().dir(&deep));
+    let mut h = narrow_harness(fs);
+    let _p = choose(&mut h, FileRequest::open("Open").directory(&deep));
+    let at = dialog(&h);
+    let chevron = row(&h, &format!("Subfolders of {name}")).rect();
+    assert!(chevron.right() <= at.right(), "{chevron:?} out of {at:?}");
+    assert!(row(&h, &format!("Open folder {name}")).rect().width() > 40.0);
 }

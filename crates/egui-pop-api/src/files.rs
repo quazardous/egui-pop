@@ -52,6 +52,11 @@
 //!   in view ask for a thumbnail ([`Previews::want`]), a placeholder stands
 //!   in until it is made, and the arrows move in two dimensions. Both are
 //!   kept in the host store ([`VIEW`], [`THUMBNAIL_SIZE`]).
+//! - **The in-app picker's folder** reads as breadcrumbs: each segment opens its
+//!   folder, the chevron after it lists its subfolders, and with too little room
+//!   the start collapses behind a menu, the deepest segments staying.
+//!   [`CMD_EDIT_PATH`] (Ctrl+L), or typing `/` or `~` on an entry, puts a path
+//!   into the field, which takes both.
 //!
 //! Steps (ADR 0011):
 //!
@@ -155,6 +160,9 @@ pub const CMD_SELECT_ALL: CommandId = CommandId::from_static("file.select_all");
 /// The highlighted entry of the open in-app picker is selected or unselected
 /// (Ctrl+Space, choosing several files or a folder).
 pub const CMD_TOGGLE_SELECTION: CommandId = CommandId::from_static("file.toggle_selection");
+/// The open in-app picker's folder goes into its field, as a path to edit
+/// (Ctrl+L). Saving, the name stays at its end.
+pub const CMD_EDIT_PATH: CommandId = CommandId::from_static("file.edit_path");
 
 /// The context key: an open in-app picker can be asked for a new folder
 /// (saving, or choosing a folder).
@@ -163,6 +171,8 @@ const WHEN_NEW_FOLDER: &str = "filePickerNewFolder";
 const WHEN_SELECT_ALL: &str = "filePickerSelectAll";
 /// The context key: an open in-app picker selects apart from its highlight.
 const WHEN_SELECTS: &str = "filePickerSelects";
+/// The context key: an in-app picker is open, and not waiting for an answer.
+const WHEN_EDIT_PATH: &str = "filePickerEditPath";
 
 /// The setting: use the system's chooser when there is one.
 pub const SETTING_NATIVE: SettingId = SettingId::from_static("files.native");
@@ -652,7 +662,7 @@ impl Files {
         })
     }
 
-    /// `file.select_all` and `file.toggle_selection`: on the open in-app
+    /// `file.select_all`, `file.toggle_selection` and `file.edit_path`: on the open in-app
     /// picker (the one in a modal first); gives how many are selected.
     fn select_on(
         &self,
@@ -1058,6 +1068,19 @@ impl Plugin for FilesPlugin {
         )?;
         let f = files.clone();
         ctx.command(
+            CommandSpec::new(CMD_EDIT_PATH, "Edit the folder's path", "File")
+                .description("Puts the folder of the open in-app file picker into its field, as a path to edit; saving, the name stays at its end. A path already typed stays as it is.")
+                .when(WHEN_EDIT_PATH)
+                .key_with("Ctrl+L", BindOptions::global().through_modal()),
+            move |call| {
+                f.select_on(call.app, |p| {
+                    p.edit_path();
+                    Ok(())
+                })
+            },
+        )?;
+        let f = files.clone();
+        ctx.command(
             CommandSpec::new(CMD_REPLACE, "Replace the file", "File")
                 .description("The answer to the question before replacing a file: ends the choice `id` with `path`.")
                 .args(json!({ "id": 1, "path": "/tmp/a.png" }))
@@ -1112,7 +1135,7 @@ fn frame(ui: &mut Ui, app: &AppHandle) {
         .get(&format!("settings/{SETTING_NATIVE}"))
         .and_then(|e| e.value.as_bool())
         .unwrap_or(false);
-    let (new_folder, select_all, selects) = {
+    let (new_folder, select_all, selects, edit_path) = {
         let mut s = lock(&files.0);
         s.native = native;
         let any = |test: &dyn Fn(&FilePicker) -> bool| {
@@ -1125,12 +1148,14 @@ fn frame(ui: &mut Ui, app: &AppHandle) {
             any(&FilePicker::makes_folders),
             any(&|p| p.kind == ChooseKind::OpenMany && !p.is_path()),
             any(&FilePicker::selects_apart),
+            any(&|_| true),
         )
     };
     let say = |on: bool| if on { "true" } else { "false" };
     app.set_context(WHEN_NEW_FOLDER, say(new_folder));
     app.set_context(WHEN_SELECT_ALL, say(select_all));
     app.set_context(WHEN_SELECTS, say(selects));
+    app.set_context(WHEN_EDIT_PATH, say(edit_path));
     let done: Vec<(u64, FileRequest, Answer, Option<Resolver>)> = {
         let mut s = lock(&files.0);
         let mut done = Vec::new();
@@ -1246,6 +1271,12 @@ fn places(app: &AppHandle) -> Places {
     }
 }
 
+/// Whether a click came from the pointer: its press left nothing focused, where
+/// Enter or Space leave the focus on the widget.
+fn by_pointer(r: &egui::Response) -> bool {
+    r.clicked_by(egui::PointerButton::Primary)
+}
+
 /// The width of the in-app picker's modal at first, the preview pane
 /// shown or not: wide enough for the places, the list with all its columns
 /// and the full pane.
@@ -1278,6 +1309,14 @@ pub const THUMBNAIL_DEFAULT_SIZE: f32 = 128.0;
 const THUMBNAIL_STEP: f32 = 1.25;
 /// The width of the slider of the thumbnails' size.
 const THUMBNAIL_SLIDER_WIDTH: f32 = 170.0;
+
+/// With less room than this beside the controls, the breadcrumbs take a row of
+/// their own: the deepest segment would hardly show.
+const CRUMBS_MIN_WIDTH: f32 = 160.0;
+/// How wide a breadcrumb's menu gets: a longer name is cut.
+const CRUMB_MENU_WIDTH: f32 = 320.0;
+/// How high a breadcrumb's menu gets: it scrolls past that.
+const CRUMB_MENU_HEIGHT: f32 = 320.0;
 
 /// More than any window: what the store accepts for a length.
 const MAX_LENGTH: f64 = 65_536.0;
@@ -1794,6 +1833,72 @@ fn stem_chars(text: &str) -> (usize, usize) {
     (text[..start].chars().count(), text[..end].chars().count())
 }
 
+/// A folder on the breadcrumbs, or in one of their menus.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Crumb {
+    name: String,
+    path: PathBuf,
+}
+
+/// A path without `.`, and without `..` where the folder it leaves is named: a
+/// typed `../` would otherwise stay in the path and read as a folder.
+fn without_dots(path: &Path) -> PathBuf {
+    use std::path::Component;
+    let mut out = PathBuf::new();
+    for part in path.components() {
+        match part {
+            Component::CurDir => {}
+            Component::ParentDir => match out.components().next_back() {
+                Some(Component::Normal(_)) => {
+                    out.pop();
+                }
+                Some(Component::RootDir | Component::Prefix(_)) => {}
+                _ => out.push(part),
+            },
+            _ => out.push(part),
+        }
+    }
+    out
+}
+
+/// The folders a folder lies in and itself, the root first.
+fn crumbs_of(dir: &Path) -> Vec<Crumb> {
+    let dir = without_dots(dir);
+    let mut out: Vec<Crumb> = dir
+        .ancestors()
+        .filter(|p| !p.as_os_str().is_empty())
+        .map(|p| Crumb {
+            name: p.file_name().map_or_else(
+                || p.display().to_string(),
+                |n| n.to_string_lossy().into_owned(),
+            ),
+            path: p.to_path_buf(),
+        })
+        .collect();
+    out.reverse();
+    out
+}
+
+/// The first crumb shown, given each one's width: all of them when they fit,
+/// else as many of the deepest as fit beside the button standing for the others
+/// (`collapsed` wide). The deepest stays whatever the room.
+fn first_crumb(widths: &[f32], room: f32, collapsed: f32) -> usize {
+    if widths.iter().sum::<f32>() <= room {
+        return 0;
+    }
+    let room = room - collapsed;
+    let mut used = 0.0;
+    let mut first = widths.len();
+    for (n, width) in widths.iter().enumerate().rev() {
+        used += width;
+        if used > room && first < widths.len() {
+            break;
+        }
+        first = n;
+    }
+    first
+}
+
 /// A folder as last read, and in which order its entries lie.
 #[derive(Clone, Debug)]
 struct Listing {
@@ -1869,6 +1974,16 @@ pub struct FilePicker {
     refocus: bool,
     /// The name's stem is selected in the field at the next frame.
     select_stem: bool,
+    /// The field's cursor goes to its end at the next frame.
+    cursor_to_end: bool,
+    /// What the open breadcrumb menu lists, read as it opened (none: the folder
+    /// could not be read). Shared: the picker is copied every frame it is drawn.
+    crumb_menu: Option<Arc<Option<Vec<Crumb>>>>,
+    /// The keyboard opened that menu: its first item takes the focus, and the
+    /// focus goes back to its button as it closes.
+    crumb_menu_keys: bool,
+    /// That first item is still to take the focus.
+    crumb_menu_focus: bool,
     /// Where text is translated, once drawn.
     ctx: Option<egui::Context>,
     focused: bool,
@@ -1946,6 +2061,10 @@ impl FilePicker {
             asking: None,
             refocus: false,
             select_stem: request.kind == ChooseKind::Save,
+            cursor_to_end: false,
+            crumb_menu: None,
+            crumb_menu_keys: false,
+            crumb_menu_focus: false,
             ctx: None,
             focused: false,
             pane_dragging: false,
@@ -1983,7 +2102,7 @@ impl FilePicker {
 
     /// Shows another folder; the selection stays behind.
     pub fn go(&mut self, dir: PathBuf) {
-        self.dir = dir;
+        self.dir = without_dots(&dir);
         self.highlight = 0;
         self.reveal_cell = true;
         self.error = None;
@@ -2098,6 +2217,58 @@ impl FilePicker {
     /// matches, whatever the order asked.
     fn ranks(&self) -> bool {
         !self.is_path() && !self.text.trim().is_empty() && self.kind != ChooseKind::Save
+    }
+
+    /// Ctrl+L: the folder goes into the field, as a path to edit, and the field
+    /// takes the focus; a path already typed stays. Saving, the name stays at the
+    /// path's end with its stem selected, and comes back if the path leads to
+    /// another folder instead.
+    pub fn edit_path(&mut self) {
+        self.refocus = true;
+        self.select_stem = self.kind == ChooseKind::Save;
+        self.cursor_to_end = self.kind != ChooseKind::Save;
+        if self.is_path() {
+            return;
+        }
+        let dir = self.dir.display().to_string();
+        let separator = if dir.ends_with(['/', std::path::MAIN_SEPARATOR]) {
+            String::new()
+        } else {
+            std::path::MAIN_SEPARATOR.to_string()
+        };
+        let name = self.keep_name();
+        self.text = format!("{dir}{separator}{name}");
+        self.text_changed();
+    }
+
+    /// `/` or `~` typed on an entry: the field takes it, and the focus.
+    fn start_path(&mut self, typed: &str) {
+        self.keep_name();
+        self.text = typed.to_string();
+        self.text_changed();
+        self.refocus = true;
+        self.cursor_to_end = true;
+    }
+
+    /// Saving, the name in the field, as a path is about to take its place: it
+    /// is the one to come back once in a folder.
+    fn keep_name(&mut self) -> String {
+        if self.kind != ChooseKind::Save || self.is_path() {
+            return String::new();
+        }
+        self.proposed = self.text.clone();
+        self.text.clone()
+    }
+
+    /// The field says something else now: a name, or a filter's first match.
+    /// Files selected stay, and the line under the list counts them.
+    fn text_changed(&mut self) {
+        self.highlight = 0;
+        self.reveal_cell = true;
+        self.error = None;
+        if self.kind != ChooseKind::OpenMany {
+            self.selected.clear();
+        }
     }
 
     /// Whether the field holds a path rather than a filter.
@@ -2672,6 +2843,9 @@ impl FilePicker {
             ui.disable();
         }
         let field_id = ui.id().with("egui_pop.files.field");
+        if !waiting {
+            self.path_keys(ui);
+        }
         // The plain keys go to whichever widget Tab took the focus to
         // (the splitter's arrows, a button's Enter); else they are the
         // field's and the list's.
@@ -2783,31 +2957,37 @@ impl FilePicker {
         }
         let preview_on = self.show_preview && self.previews.is_some();
         let bookmarked = places.bookmarks.contains(&self.dir);
+        let mut crumbs_below = false;
         ui.horizontal(|ui| {
-            if ui.button(strings::tr(ui.ctx(), &txt::PICKER_UP)).clicked() {
+            let r = ui.button(strings::tr(ui.ctx(), &txt::PICKER_UP));
+            if r.clicked() {
                 self.up();
+                self.refocus |= by_pointer(&r);
             }
             let label = if bookmarked {
                 &txt::FILES_UNBOOKMARK
             } else {
                 &txt::FILES_BOOKMARK
             };
-            if ui.button(strings::tr(ui.ctx(), label)).clicked() {
+            let r = ui.button(strings::tr(ui.ctx(), label));
+            if r.clicked() {
                 answer = Some(PickerAnswer::Bookmark(self.dir.clone(), !bookmarked));
+                self.refocus |= by_pointer(&r);
             }
             if self.makes_folders() {
                 self.new_folder_button(ui);
             }
             if self.previews.is_some() {
                 self.view_controls(ui);
-                // Cut rather than pushing past the dialog: the controls took
-                // room from it.
-                let dir = egui::RichText::new(self.dir.display().to_string()).monospace();
-                ui.add(egui::Label::new(dir).truncate());
-            } else {
-                ui.monospace(self.dir.display().to_string());
+            }
+            crumbs_below = ui.available_width() < CRUMBS_MIN_WIDTH;
+            if !crumbs_below {
+                self.breadcrumbs(ui);
             }
         });
+        if crumbs_below {
+            ui.horizontal(|ui| self.breadcrumbs(ui));
+        }
         let mut back_to_field = false;
         if self.naming.is_some() {
             back_to_field = self.naming_row(ui, &mut answer);
@@ -2878,24 +3058,19 @@ impl FilePicker {
             state.store(ui.ctx(), field.id);
         }
         if field.changed() {
-            self.highlight = 0;
-            self.reveal_cell = true;
-            self.error = None;
-            // Typing says what is meant now: a name, or a filter's first match.
-            // Files selected stay, and the line under the list counts them.
-            if self.kind != ChooseKind::OpenMany {
-                self.selected.clear();
-            }
+            self.text_changed();
         }
-        if tab && self.complete() {
+        let completed = tab && self.complete();
+        if completed {
             self.highlight = 0;
-            if let Some(mut state) = egui::TextEdit::load_state(ui.ctx(), field.id) {
-                let end = egui::text::CCursor::new(self.text.chars().count());
-                state
-                    .cursor
-                    .set_char_range(Some(egui::text::CCursorRange::one(end)));
-                state.store(ui.ctx(), field.id);
-            }
+        }
+        if std::mem::take(&mut self.cursor_to_end) || completed {
+            let mut state = egui::TextEdit::load_state(ui.ctx(), field.id).unwrap_or_default();
+            let end = egui::text::CCursor::new(self.text.chars().count());
+            state
+                .cursor
+                .set_char_range(Some(egui::text::CCursorRange::one(end)));
+            state.store(ui.ctx(), field.id);
         }
         let completions = self.completions();
         if !completions.is_empty() {
@@ -3169,10 +3344,14 @@ impl FilePicker {
             (PickerView::Grid, &txt::FILES_VIEW_GRID),
         ] {
             let name = strings::tr(ui.ctx(), name);
-            if widgets::selectable_label(ui, self.view == view, name).clicked() && self.view != view
-            {
-                self.view = view;
-                self.reveal_cell = true;
+            let r = widgets::selectable_label(ui, self.view == view, name);
+            if r.clicked() {
+                if self.view != view {
+                    self.view = view;
+                    self.reveal_cell = true;
+                }
+                // A press leaves nothing focused: typing goes on filtering.
+                self.refocus |= by_pointer(&r);
             }
         }
         self.thumbnail_dragging = false;
@@ -3193,6 +3372,337 @@ impl FilePicker {
             }
             self.thumbnail_dragging = out.response.dragged();
         });
+    }
+
+    /// The keys that put a path into the field, read before anything is drawn:
+    /// Ctrl+L, and `/` or `~` typed while an entry has the focus (by what they
+    /// type: the keys making them differ from layout to layout).
+    fn path_keys(&mut self, ui: &mut Ui) {
+        if !self.declared_keys && ui.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::L)) {
+            self.edit_path();
+        }
+        if !ui
+            .memory(|m| m.focused())
+            .is_some_and(|f| self.row_ids.contains(&f))
+        {
+            return;
+        }
+        let typed = ui.input_mut(|i| {
+            let at = i
+                .events
+                .iter()
+                .position(|e| matches!(e, egui::Event::Text(t) if t == "/" || t == "~"))?;
+            match i.events.remove(at) {
+                egui::Event::Text(t) => Some(t),
+                _ => None,
+            }
+        });
+        if let Some(typed) = typed {
+            self.start_path(&typed);
+            ui.ctx().request_repaint();
+        }
+    }
+
+    /// The folder as breadcrumbs, in the room left in the row: each segment opens
+    /// its folder, the chevron after it lists its subfolders. What does not fit
+    /// is the start of the path, behind a button listing it; the deepest segment
+    /// is cut only if it does not fit alone.
+    fn breadcrumbs(&mut self, ui: &mut Ui) {
+        let t = Tokens::of(ui.ctx());
+        let ctx = ui.ctx().clone();
+        let crumbs = crumbs_of(&self.dir);
+        ui.spacing_mut().item_spacing.x = 0.0;
+        let room = ui.available_width();
+        let padding = 2.0 * ui.spacing().button_padding.x;
+        let font = egui::TextStyle::Button.resolve(ui.style());
+        let text_width = |text: &str| {
+            ui.painter()
+                .layout_no_wrap(text.to_string(), font.clone(), egui::Color32::PLACEHOLDER)
+                .size()
+                .x
+        };
+        let chevron = vec2(
+            t.size.icon_inline + t.space.xs,
+            ui.spacing().interact_size.y,
+        );
+        // Each as wide as it will be drawn, its chevron with it; the deepest is
+        // strong.
+        let name_widths: Vec<f32> = crumbs
+            .iter()
+            .enumerate()
+            .map(|(n, c)| {
+                let width = if n + 1 == crumbs.len() {
+                    let strong = egui::RichText::new(&c.name).strong();
+                    egui::WidgetText::from(strong)
+                        .into_galley(
+                            ui,
+                            Some(egui::TextWrapMode::Extend),
+                            f32::INFINITY,
+                            font.clone(),
+                        )
+                        .size()
+                        .x
+                } else {
+                    text_width(&c.name)
+                };
+                // Rounded up: a fraction over would push the row out.
+                (width + padding).ceil()
+            })
+            .collect();
+        let widths: Vec<f32> = name_widths.iter().map(|w| w + chevron.x).collect();
+        let collapsed_width = (text_width("…") + padding).ceil();
+        let first = first_crumb(&widths, room, collapsed_width);
+        let mut chosen = None;
+        if first > 0 {
+            let name = strings::tr(&ctx, &txt::FILES_CRUMB_COLLAPSED);
+            let r = ui
+                .add(egui::Button::new("…").frame_when_inactive(false))
+                .on_hover_text(&name);
+            a11y::name(&r, egui::WidgetType::Button, &name);
+            let above: Vec<Crumb> = crumbs[..first].iter().rev().cloned().collect();
+            chosen = self.crumb_menu(ui, &r, move |_| Some(above));
+        }
+        let left = if first > 0 {
+            room - collapsed_width
+        } else {
+            room
+        };
+        for (n, crumb) in crumbs.iter().enumerate().skip(first) {
+            let current = n + 1 == crumbs.len();
+            let mut text = egui::RichText::new(&crumb.name);
+            if current {
+                text = text.strong();
+            }
+            let button = egui::Button::new(text).frame_when_inactive(false);
+            let fits = (left - chevron.x).max(chevron.x);
+            // By its path: the focus stays on it as the start collapses.
+            let r = ui
+                .push_id((&crumb.path, "open"), |ui| {
+                    if current && name_widths[n] > fits {
+                        ui.allocate_ui(vec2(fits, chevron.y), |ui| ui.add(button.truncate()))
+                            .inner
+                    } else {
+                        ui.add(button)
+                    }
+                })
+                .inner;
+            let name = strings::tr_args(&ctx, &txt::FILES_CRUMB_OPEN, &[("name", &crumb.name)]);
+            a11y::name(&r, egui::WidgetType::Button, &name);
+            if current {
+                let shown = strings::tr(&ctx, &txt::FILES_CRUMB_CURRENT);
+                ctx.accesskit_node_builder(r.id, |node| node.set_description(shown));
+            }
+            let r = r.on_hover_text(crumb.path.display().to_string());
+            if r.clicked() {
+                chosen = Some(crumb.path.clone());
+            }
+            let name =
+                strings::tr_args(&ctx, &txt::FILES_CRUMB_SUBFOLDERS, &[("name", &crumb.name)]);
+            let r = ui
+                .push_id(&crumb.path, |ui| {
+                    ui.add(
+                        egui::Button::new("")
+                            .min_size(chevron)
+                            .frame_when_inactive(false),
+                    )
+                })
+                .inner
+                .on_hover_text(&name);
+            a11y::name(&r, egui::WidgetType::Button, &name);
+            let dir = crumb.path.clone();
+            let popup = egui::Popup::default_response_id(&r);
+            let color = ui.style().interact(&r).text_color();
+            let icon = if egui::Popup::is_id_open(&ctx, popup) {
+                Icon::ChevronDown
+            } else {
+                Icon::ChevronRight
+            };
+            let side = t.size.icon_inline.min(r.rect.height());
+            icon.paint(
+                ui.painter(),
+                egui::Rect::from_center_size(r.rect.center(), vec2(side, side)),
+                color,
+            );
+            chosen = self
+                .crumb_menu(ui, &r, move |picker| picker.subfolders(&dir))
+                .or(chosen);
+        }
+        if let Some(dir) = chosen {
+            // The folder shown, asked again: it is read again.
+            if dir == self.dir {
+                self.listing = None;
+            }
+            self.go(dir);
+            self.refocus = true;
+            ctx.request_repaint();
+        }
+    }
+
+    /// A folder's subfolders by name, hidden ones only when the list shows them.
+    /// None when it cannot be read.
+    fn subfolders(&self, dir: &Path) -> Option<Vec<Crumb>> {
+        let mut names: Vec<String> = self
+            .fs
+            .read_dir(dir)
+            .ok()?
+            .into_iter()
+            .filter(|e| e.is_dir && (self.show_hidden || !e.name.starts_with('.')))
+            .map(|e| e.name)
+            .collect();
+        names.sort_by(|a, b| sort::natural_cmp(a, b));
+        Some(
+            names
+                .into_iter()
+                .map(|name| Crumb {
+                    path: dir.join(&name),
+                    name,
+                })
+                .collect(),
+        )
+    }
+
+    /// The menu under a breadcrumb's `button`, listing what `read` gives as it
+    /// opens: the folder chosen. By the keyboard it is walked with the arrows,
+    /// Tab or Escape close it, and the focus goes back to the button; by the
+    /// pointer, the focus goes back to the field, for typing to go on.
+    fn crumb_menu(
+        &mut self,
+        ui: &Ui,
+        button: &egui::Response,
+        read: impl FnOnce(&Self) -> Option<Vec<Crumb>>,
+    ) -> Option<PathBuf> {
+        let ctx = ui.ctx().clone();
+        let popup =
+            egui::Popup::menu(button).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside);
+        let id = popup.get_id();
+        let was_open = egui::Popup::is_id_open(&ctx, id);
+        if button.clicked() && !was_open {
+            let items = read(self);
+            self.crumb_menu_keys = !by_pointer(button);
+            self.crumb_menu_focus = self.crumb_menu_keys;
+            // Nothing to walk: what the menu says is read out.
+            let empty = match &items {
+                None => Some(&txt::FILES_CRUMB_UNREADABLE),
+                Some(list) if list.is_empty() => Some(&txt::FILES_CRUMB_NONE),
+                Some(_) => None,
+            };
+            if let Some(empty) = empty {
+                a11y::announce(&ctx, strings::tr(&ctx, empty), Politeness::Polite);
+            }
+            self.crumb_menu = Some(Arc::new(items));
+        }
+        ctx.accesskit_node_builder(button.id, |node| {
+            node.set_has_popup(egui::accesskit::HasPopup::Menu);
+            node.set_expanded(was_open);
+        });
+        let items = self.crumb_menu.clone();
+        let mut chosen = None;
+        let mut leave = false;
+        popup.show(|ui| {
+            let Some(items) = items.as_deref() else {
+                return;
+            };
+            let Some(list) = items.as_ref() else {
+                ui.weak(strings::tr(ui.ctx(), &txt::FILES_CRUMB_UNREADABLE));
+                return;
+            };
+            if list.is_empty() {
+                ui.weak(strings::tr(ui.ctx(), &txt::FILES_CRUMB_NONE));
+                return;
+            }
+            // As wide as its longest name, up to a limit: its items fill the menu.
+            let font = egui::TextStyle::Button.resolve(ui.style());
+            let widest = list.iter().fold(0.0_f32, |widest, item| {
+                let name = item.name.clone();
+                let galley =
+                    ui.painter()
+                        .layout_no_wrap(name, font.clone(), egui::Color32::PLACEHOLDER);
+                widest.max(galley.size().x)
+            });
+            let room = widest
+                + 2.0 * ui.spacing().button_padding.x
+                + ui.spacing().scroll.allocated_width();
+            ui.set_width(room.ceil().min(CRUMB_MENU_WIDTH));
+            let on_path = list.iter().position(|c| self.dir.starts_with(&c.path));
+            let mut ids = Vec::with_capacity(list.len());
+            egui::ScrollArea::vertical()
+                .id_salt("egui_pop.files.crumb_menu")
+                .max_height(CRUMB_MENU_HEIGHT)
+                .show(ui, |ui| {
+                    for (n, item) in list.iter().enumerate() {
+                        let r = ui.add(
+                            egui::Button::new(&item.name)
+                                .selected(on_path == Some(n))
+                                .truncate(),
+                        );
+                        a11y::name(&r, egui::WidgetType::Button, &item.name);
+                        if r.clicked() {
+                            chosen = Some(item.path.clone());
+                        }
+                        ids.push(r.id);
+                    }
+                });
+            if chosen.is_some() {
+                ui.close();
+            }
+            // The sizing pass draws nothing to focus.
+            if self.crumb_menu_focus && !ui.is_sizing_pass() {
+                self.crumb_menu_focus = false;
+                ui.memory_mut(|m| m.request_focus(ids[on_path.unwrap_or(0)]));
+                ui.ctx().request_repaint();
+            }
+            if let Some(at) = ui
+                .memory(|m| m.focused())
+                .and_then(|f| ids.iter().position(|i| *i == f))
+            {
+                // The arrows stay in the menu, and Tab does not walk on under it.
+                ui.memory_mut(|m| {
+                    m.set_focus_lock_filter(
+                        ids[at],
+                        EventFilter {
+                            tab: true,
+                            vertical_arrows: true,
+                            ..Default::default()
+                        },
+                    )
+                });
+                let (down, up, tab) = ui.input_mut(|i| {
+                    (
+                        i.consume_key(Modifiers::NONE, Key::ArrowDown),
+                        i.consume_key(Modifiers::NONE, Key::ArrowUp),
+                        i.consume_key(Modifiers::SHIFT, Key::Tab)
+                            || i.consume_key(Modifiers::NONE, Key::Tab),
+                    )
+                });
+                let to = if down {
+                    Some((at + 1) % ids.len())
+                } else if up {
+                    Some((at + ids.len() - 1) % ids.len())
+                } else {
+                    None
+                };
+                if let Some(to) = to {
+                    ui.memory_mut(|m| m.request_focus(ids[to]));
+                    ui.ctx().request_repaint();
+                }
+                if tab {
+                    leave = true;
+                    ui.close();
+                }
+            }
+        });
+        if was_open && !egui::Popup::is_id_open(&ctx, id) {
+            self.crumb_menu = None;
+            if chosen.is_none() {
+                if self.crumb_menu_keys || leave {
+                    button.request_focus();
+                } else {
+                    self.refocus = true;
+                }
+                ctx.request_repaint();
+            }
+        }
+        chosen
     }
 
     /// The headers above the entries, in the list and the grid alike: a click
@@ -3821,6 +4331,37 @@ mod tests {
             std::fs::write(root.join(f), b"x").unwrap();
         }
         root
+    }
+
+    #[test]
+    fn breadcrumbs_read_from_the_root_without_dots() {
+        let names = |path: &str| -> Vec<String> {
+            crumbs_of(Path::new(path))
+                .into_iter()
+                .map(|c| c.name)
+                .collect()
+        };
+        assert_eq!(names("/home/me/photos"), ["/", "home", "me", "photos"]);
+        assert_eq!(names("/"), ["/"]);
+        assert_eq!(names("/home/me/../you/./a/"), ["/", "home", "you", "a"]);
+        assert_eq!(names("/../a"), ["/", "a"]);
+        let crumbs = crumbs_of(Path::new("/home/me"));
+        assert_eq!(crumbs[1].path, Path::new("/home"));
+        assert_eq!(without_dots(Path::new("../a/./b/..")), Path::new("../a"));
+    }
+
+    #[test]
+    fn the_start_of_a_path_collapses_and_the_deepest_stays() {
+        let widths = [10.0, 20.0, 30.0, 40.0];
+        // All of them fit: no button for the others.
+        assert_eq!(first_crumb(&widths, 100.0, 5.0), 0);
+        // The button takes its room from what is left.
+        assert_eq!(first_crumb(&widths, 99.0, 5.0), 1);
+        assert_eq!(first_crumb(&widths, 75.0, 5.0), 2);
+        assert_eq!(first_crumb(&widths, 74.0, 5.0), 3);
+        // Too narrow even for the deepest: it stays, and is cut.
+        assert_eq!(first_crumb(&widths, 10.0, 5.0), 3);
+        assert_eq!(first_crumb(&[50.0], 10.0, 5.0), 0);
     }
 
     #[test]

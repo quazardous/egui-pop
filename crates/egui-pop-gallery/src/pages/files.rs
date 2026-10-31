@@ -416,6 +416,18 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                     "completes the typed path; else the next widget (the splitter, past the places)",
                 ),
                 (
+                    "/, ~",
+                    "on an entry: start a path in the field, from the root or from home",
+                ),
+                (
+                    "Enter, Space",
+                    "on a segment of the path: open that folder; on its chevron: list its subfolders",
+                ),
+                (
+                    "Up, Down, Tab, Escape",
+                    "in a segment's menu: move, or close it and go back to the chevron",
+                ),
+                (
                     "Left, Right",
                     "on the splitter: the pane's width (Enter: its default)",
                 ),
@@ -443,6 +455,9 @@ fn show(ui: &mut Ui, app: &AppHandle) {
             // Declared, so it says what it is bound to now.
             ui.monospace(app.keys_for(&files::CMD_NEW_FOLDER).join(", "));
             ui.label("a new folder (saving, or choosing a folder)");
+            ui.end_row();
+            ui.monospace(app.keys_for(&files::CMD_EDIT_PATH).join(", "));
+            ui.label("put the folder into the field, as a path to edit");
             ui.end_row();
             ui.monospace(app.keys_for(&files::CMD_TOGGLE_SELECTION).join(", "));
             ui.label("select or unselect the entry (several, or a folder)");

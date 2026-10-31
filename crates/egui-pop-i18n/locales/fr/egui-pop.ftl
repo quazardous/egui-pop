@@ -253,6 +253,10 @@ command-file-toggle-selection =
     .description = Sélectionne ou désélectionne l’entrée en surbrillance du sélecteur de fichiers intégré ouvert, pour choisir plusieurs fichiers ou un dossier. Un dossier parmi des fichiers n’est pas sélectionné : le sélecteur le dit.
     .title = Sélectionner ou désélectionner l’entrée
 
+command-file-edit-path =
+    .description = Met le dossier du sélecteur de fichiers intégré ouvert dans son champ, comme un chemin à modifier ; à l’enregistrement, le nom reste à sa fin. Un chemin déjà saisi reste tel quel.
+    .title = Modifier le chemin du dossier
+
 command-file-new-folder =
     .description = Un nouveau dossier dans le sélecteur de fichiers intégré ouvert, qui le montre ensuite : demande son nom, ou le crée aussitôt avec `name`. Refusé sur un système de fichiers qui ne peut pas en créer (celui de la version web, en mémoire), la raison s’affichant dans le sélecteur.
     .title = Nouveau dossier
@@ -808,6 +812,18 @@ egui-pop-files-view-list = Liste
 egui-pop-files-view-grid = Grille
 
 egui-pop-files-thumbnail-size = Taille des vignettes
+
+egui-pop-files-crumb-open = Ouvrir le dossier { $name }
+
+egui-pop-files-crumb-current = Le dossier affiché
+
+egui-pop-files-crumb-subfolders = Sous-dossiers de { $name }
+
+egui-pop-files-crumb-collapsed = Dossiers au-dessus
+
+egui-pop-files-crumb-none = Aucun sous-dossier
+
+egui-pop-files-crumb-unreadable = Ce dossier ne peut pas être lu
 
 egui-pop-files-column-name = Nom
 
