@@ -1240,6 +1240,9 @@ publishes.
 
 ### Fixed
 
+- A click on List, Grid, Up or the bookmark button in the in-app file picker left
+  nothing focused, so typing reached no field (egui-pop-api): the keyboard goes
+  back to the field.
 - Escape in a detached window goes by that window's focus (egui-pop-core). The
   focus plugin read the focus of another window: pressed in a detached window,
   Escape made a text field of the main window let go and the press was lost, and

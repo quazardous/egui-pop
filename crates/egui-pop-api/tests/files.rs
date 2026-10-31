@@ -2509,3 +2509,40 @@ fn at_the_least_size_the_row_of_buttons_keeps_its_boxes() {
     assert!(open.right() <= least.right(), "{open:?} out of {least:?}");
     let _ = std::fs::remove_dir_all(root);
 }
+
+const FIELD: &str = "Filter, or type a path";
+
+fn focused_name(h: &Harness<'static, App>) -> String {
+    walk::focused(h).map(|s| s.name).unwrap_or_default()
+}
+
+#[test]
+fn a_press_on_the_view_gives_the_keyboard_back_to_the_field() {
+    let (mut h, _) = grid_harness(3, PickerView::List);
+    let _p = choose(&mut h, FileRequest::open("Open").directory("/raws"));
+    click(&mut h, "Grid", Modifiers::NONE);
+    assert_eq!(state(&h, "view"), "grid");
+    assert!(h.get_by_label(FIELD).is_focused());
+    h.event(egui::Event::Text("img".into()));
+    settle(&mut h);
+    assert_eq!(field(&h), "img");
+    // A press on what is already on does the same.
+    click(&mut h, "Grid", Modifiers::NONE);
+    assert!(h.get_by_label(FIELD).is_focused());
+    click(&mut h, "List", Modifiers::NONE);
+    assert!(h.get_by_label(FIELD).is_focused());
+    // By the keyboard, the focus stays where it is, to go on from there.
+    walk::reach(&mut h, walk::SHIFT_TAB, "Grid", 60).expect("Shift+Tab reaches the switch");
+    press(&mut h, Key::Space, Modifiers::NONE);
+    assert_eq!(state(&h, "view"), "grid");
+    assert_eq!(focused_name(&h), "Grid");
+}
+
+#[test]
+fn a_press_on_up_gives_the_keyboard_back_to_the_field() {
+    let (mut h, _) = grid_harness(3, PickerView::List);
+    let _p = choose(&mut h, FileRequest::open("Open").directory("/raws"));
+    click(&mut h, "Up", Modifiers::NONE);
+    assert_eq!(picker_state(&h, "dir"), "/");
+    assert!(h.get_by_label(FIELD).is_focused());
+}

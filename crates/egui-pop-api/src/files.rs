@@ -1246,6 +1246,12 @@ fn places(app: &AppHandle) -> Places {
     }
 }
 
+/// Whether a click came from the pointer: its press left nothing focused, where
+/// Enter or Space leave the focus on the widget.
+fn by_pointer(r: &egui::Response) -> bool {
+    r.clicked_by(egui::PointerButton::Primary)
+}
+
 /// The width of the in-app picker's modal at first, the preview pane
 /// shown or not: wide enough for the places, the list with all its columns
 /// and the full pane.
@@ -2784,16 +2790,20 @@ impl FilePicker {
         let preview_on = self.show_preview && self.previews.is_some();
         let bookmarked = places.bookmarks.contains(&self.dir);
         ui.horizontal(|ui| {
-            if ui.button(strings::tr(ui.ctx(), &txt::PICKER_UP)).clicked() {
+            let r = ui.button(strings::tr(ui.ctx(), &txt::PICKER_UP));
+            if r.clicked() {
                 self.up();
+                self.refocus |= by_pointer(&r);
             }
             let label = if bookmarked {
                 &txt::FILES_UNBOOKMARK
             } else {
                 &txt::FILES_BOOKMARK
             };
-            if ui.button(strings::tr(ui.ctx(), label)).clicked() {
+            let r = ui.button(strings::tr(ui.ctx(), label));
+            if r.clicked() {
                 answer = Some(PickerAnswer::Bookmark(self.dir.clone(), !bookmarked));
+                self.refocus |= by_pointer(&r);
             }
             if self.makes_folders() {
                 self.new_folder_button(ui);
@@ -3169,10 +3179,14 @@ impl FilePicker {
             (PickerView::Grid, &txt::FILES_VIEW_GRID),
         ] {
             let name = strings::tr(ui.ctx(), name);
-            if widgets::selectable_label(ui, self.view == view, name).clicked() && self.view != view
-            {
-                self.view = view;
-                self.reveal_cell = true;
+            let r = widgets::selectable_label(ui, self.view == view, name);
+            if r.clicked() {
+                if self.view != view {
+                    self.view = view;
+                    self.reveal_cell = true;
+                }
+                // A press leaves nothing focused: typing goes on filtering.
+                self.refocus |= by_pointer(&r);
             }
         }
         self.thumbnail_dragging = false;
