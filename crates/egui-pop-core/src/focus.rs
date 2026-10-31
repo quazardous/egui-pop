@@ -843,6 +843,23 @@ pub fn focused(ctx: &Context) -> Option<Id> {
     ctx.memory(|m| m.focused())
 }
 
+/// The widget a window's last pass left with the focus, for a plugin's input
+/// hook, which should ask this with [`RawInput::viewport_id`] and not the
+/// memory: for most windows, the memory is still another window's there. To let
+/// go of that focus, wait for the window's pass to begin (`on_begin_pass`).
+///
+/// It needs the focus plugin ([`install`]), which keeps it, and a host running
+/// its passes through [`Context::run_ui`]: otherwise this answers `None`.
+///
+/// upstream: no public method reads a given window's focus (docs/upstream.md,
+/// "egui: a plugin's input hook runs in another window").
+///
+/// [`RawInput::viewport_id`]: egui::RawInput::viewport_id
+pub fn focused_in_window(ctx: &Context, window: egui::ViewportId) -> Option<Id> {
+    let st = shared_of_window::<State>(ctx, "core.focus", window);
+    lock(&st).holder.map(|(id, _)| id)
+}
+
 /// The scopes recorded in the previous pass (for the debug bridge).
 pub fn scopes(ctx: &Context) -> Vec<ScopeRecord> {
     let st = state(ctx);

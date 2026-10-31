@@ -1255,6 +1255,16 @@ publishes.
 - A typed `../` in the in-app file picker stayed in its folder's path, where Up
   then went wrong (egui-pop-api): the folder's path no longer holds `.` or `..`
   after a named folder.
+- A terminal's keys go by the focus of the window they were typed in
+  (egui-pop-editors, egui-pop-core). The routing read the focus of another
+  window: typed in a detached window, keys went to a terminal focused in the main
+  window, past that window's own text field, Shift+Escape there made the main
+  window's terminal leave, and a terminal in a detached window got none of its
+  keys. With three windows opened at different times, a terminal could also miss
+  its keys in its own window. `focus::focused_in_window` is new: what a window's
+  last pass left with the focus, for a plugin's input hook. A terminal now
+  installs the focus plugin if the host did not, and in a host running passes with
+  `Context::begin_pass` and `end_pass` by hand it gets no keys.
 - Escape in a detached window goes by that window's focus (egui-pop-core). The
   focus plugin read the focus of another window: pressed in a detached window,
   Escape made a text field of the main window let go and the press was lost, and

@@ -139,7 +139,13 @@ limit.
   is let go in `on_begin_pass`, where the memory is that window's
   (`focus::escape`, `// upstream:`). A host running passes with
   `Context::begin_pass` and `end_pass` by hand has no `on_end_pass`, so no step
-  1 of the Escape order.
+  1 of the Escape order, and a terminal gets no keys.
+- **Also compensated**: the terminal's key routing, which had the same cause.
+  In real windows, keys typed in a detached window went to a terminal focused
+  in the main window, past that window's own text field, and a terminal in a
+  detached window got none of its keys. It reads the same note
+  (`focus::focused_in_window`) and lets go on Shift+Escape in `on_begin_pass`
+  (`terminal::keys`, `// upstream:`).
 - **Remove when**: egui runs the hook with the window's memory, or offers a
   window's focus by id.
 

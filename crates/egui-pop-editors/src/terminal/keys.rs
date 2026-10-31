@@ -5,9 +5,9 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use egui::{Context, Event, Id, Key, Modifiers, RawInput};
-use egui_pop_core::lock;
+use egui::{Context, Event, Id, Key, Modifiers, RawInput, ViewportId};
 use egui_pop_core::state::Slot;
+use egui_pop_core::{focus, lock};
 
 /// The xterm modifier parameter (1 + Shift + 2 Alt + 4 Ctrl), when any.
 fn modifier_param(m: Modifiers) -> Option<u8> {
@@ -139,16 +139,31 @@ pub(crate) fn is_leave(key: Key, m: Modifiers) -> bool {
     key == Key::Escape && m.shift && !m.ctrl && !m.alt && !m.mac_cmd
 }
 
-/// The terminals drawn (this pass and the previous) and the events taken
-/// for the focused one.
+/// The terminals a window drew, this pass and the previous. Kept by window:
+/// each window counts its own passes.
+#[derive(Debug, Default)]
+struct Drawn {
+    pass: u64,
+    this: Vec<Id>,
+    last: Vec<Id>,
+}
+
+impl Drawn {
+    fn holds(&self, id: Id) -> bool {
+        self.this.contains(&id) || self.last.contains(&id)
+    }
+}
+
+/// The terminals drawn and the events taken for the focused one in each window.
 #[derive(Debug, Default)]
 struct Routing {
     installed: bool,
-    pass: u64,
-    drawn: Vec<Id>,
-    drawn_last: Vec<Id>,
+    drawn: HashMap<ViewportId, Drawn>,
     taken: HashMap<Id, Vec<Event>>,
     left: Vec<Id>,
+    /// The terminal the leave chord takes the focus from, once its window's
+    /// pass has begun.
+    leaving: HashMap<ViewportId, Id>,
 }
 
 fn routing(ctx: &Context) -> Arc<Mutex<Routing>> {
@@ -162,16 +177,19 @@ pub(crate) fn register(ctx: &Context, id: Id) {
     let r = routing(ctx);
     let mut r = lock(&r);
     let pass = ctx.cumulative_pass_nr();
-    if r.pass != pass {
-        r.pass = pass;
-        r.drawn_last = std::mem::take(&mut r.drawn);
+    let drawn = r.drawn.entry(ctx.viewport_id()).or_default();
+    if drawn.pass != pass {
+        drawn.pass = pass;
+        drawn.last = std::mem::take(&mut drawn.this);
     }
-    if !r.drawn.contains(&id) {
-        r.drawn.push(id);
+    if !drawn.this.contains(&id) {
+        drawn.this.push(id);
     }
     if !r.installed {
         r.installed = true;
         drop(r);
+        // The routing asks it what has the focus in each window.
+        focus::install(ctx);
         ctx.add_plugin(KeyRouting);
     }
 }
@@ -197,13 +215,19 @@ impl egui::plugin::Plugin for KeyRouting {
         "egui_pop_editors::terminal"
     }
 
+    /// upstream: the input hook runs before the window's pass has begun, so
+    /// the memory is still another window's: this goes by what the focus plugin
+    /// noted for the window the input is for, and the leave chord lets go of the
+    /// focus when the pass has begun (docs/upstream.md, "egui: a plugin's input
+    /// hook runs in another window").
     fn input_hook(&mut self, ctx: &Context, input: &mut RawInput) {
-        let Some(id) = ctx.memory(|m| m.focused()) else {
+        let window = input.viewport_id;
+        let Some(id) = focus::focused_in_window(ctx, window) else {
             return;
         };
         let r = routing(ctx);
         let mut r = lock(&r);
-        if !r.drawn.contains(&id) && !r.drawn_last.contains(&id) {
+        if !r.drawn.get(&window).is_some_and(|d| d.holds(id)) {
             return;
         }
         let mut taken = Vec::new();
@@ -237,9 +261,17 @@ impl egui::plugin::Plugin for KeyRouting {
         if leave {
             r.left.push(id);
             r.taken.remove(&id);
+            r.leaving.insert(window, id);
             drop(r);
+            ctx.request_repaint_of(window);
+        }
+    }
+
+    fn on_begin_pass(&mut self, ui: &mut egui::Ui) {
+        let ctx = ui.ctx();
+        let leaving = lock(&routing(ctx)).leaving.remove(&ctx.viewport_id());
+        if let Some(id) = leaving {
             ctx.memory_mut(|m| m.surrender_focus(id));
-            ctx.request_repaint();
         }
     }
 }
