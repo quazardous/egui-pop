@@ -14,6 +14,7 @@ use egui_kittest::Harness;
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use egui_pop_api::dialogs::{self, DIALOGS};
 use egui_pop_api::files::fs::{DirItem, FileSystem, MemoryFs, Meta, SharedFs};
+use egui_pop_api::files::groups::SidecarRule;
 use egui_pop_api::files::preview::{
     Body, Handles, Preview, PreviewProvider, PreviewRequest, Shown,
 };
@@ -2872,4 +2873,587 @@ fn a_name_too_long_for_the_row_alone_is_cut_and_stays_inside() {
     let chevron = row(&h, &format!("Subfolders of {name}")).rect();
     assert!(chevron.right() <= at.right(), "{chevron:?} out of {at:?}");
     assert!(row(&h, &format!("Open folder {name}")).rect().width() > 40.0);
+}
+
+// Grouped files.
+
+/// A shoot in memory: a RAW with its sidecars, a RAW with one, a JPEG with no
+/// RAW, a sidecar that goes with nothing, a hidden file, a folder.
+fn shoot() -> SharedFs {
+    let at = |s| Some(UNIX_EPOCH + Duration::from_secs(s));
+    Arc::new(
+        MemoryFs::new()
+            .file_at("/s/IMG_1.cr3", vec![0; 30], at(100))
+            .file_at("/s/IMG_1.xmp", vec![0; 9000], at(900))
+            .file_at("/s/IMG_1.jpg", vec![0; 8000], at(800))
+            .file_at("/s/IMG_2.cr3", vec![0; 20], at(200))
+            .file_at("/s/IMG_2.cr3.xmp", vec![0; 7000], at(700))
+            .file_at("/s/alone.jpg", vec![0; 10], at(300))
+            .file_at("/s/stray.xmp", vec![0; 5], at(400))
+            .file_at("/s/.IMG_2.xmp", vec![0; 5], at(500))
+            .dir("/s/Selects"),
+    )
+}
+
+fn photo_rule() -> Arc<SidecarRule> {
+    Arc::new(SidecarRule::new("test.photos", &["cr3"], &["xmp", "jpg"]).badge("jpg", "JPEG"))
+}
+
+fn grouped_harness(fs: SharedFs) -> Harness<'static, App> {
+    let app = App::builder()
+        .plugin(
+            FilesPlugin::in_app()
+                .without_builtin_previews()
+                .file_system(fs)
+                .grouping(photo_rule()),
+        )
+        .build(&egui::Context::default())
+        .unwrap();
+    files::want_preview(app.handle(), false);
+    Harness::builder()
+        .with_size(egui::vec2(900.0, 640.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app)
+}
+
+fn group_result(
+    h: &mut Harness<'static, App>,
+    p: &Pending,
+) -> (Vec<PathBuf>, Vec<files::groups::FileGroup>) {
+    for _ in 0..4 {
+        settle(h);
+        if let Some(r) = p.take() {
+            let Ok(Chosen::Paths(paths)) = files::chosen(&r) else {
+                panic!("{r:?}");
+            };
+            return (paths, files::chosen_groups(&r));
+        }
+    }
+    panic!("no result");
+}
+
+const ENTRIES: [&str; 5] = [
+    "Selects/",
+    "alone.jpg",
+    "IMG_1.cr3",
+    "IMG_2.cr3",
+    "stray.xmp",
+];
+
+/// The badges drawn: what each says, and where.
+fn badges(h: &Harness<'static, App>) -> Vec<(String, egui::Rect)> {
+    let drawn = egui_pop_core::indicator::drawn(&h.ctx);
+    drawn
+        .into_iter()
+        .filter(|r| r.id.starts_with("files.badge:"))
+        .map(|r| {
+            let at = egui::pos2(r.rect[0], r.rect[1]);
+            let size = egui::vec2(r.rect[2], r.rect[3]);
+            (r.text.unwrap(), egui::Rect::from_min_size(at, size))
+        })
+        .collect()
+}
+
+#[test]
+fn a_raw_and_its_sidecars_are_one_entry_and_choosing_it_gives_the_raw() {
+    let mut h = grouped_harness(shoot());
+    let p = choose(&mut h, FileRequest::open("Open").directory("/s"));
+    assert_eq!(shown_names(&h), ENTRIES);
+    assert_eq!(state(&h, "grouped"), true);
+    assert_eq!(
+        state(&h, "groups")[0],
+        json!({
+            "main": "IMG_1.cr3",
+            "members": ["IMG_1.xmp", "IMG_1.jpg"],
+            "badges": ["XMP", "JPEG"],
+        })
+    );
+    // The badges are there, and take nothing from the next column.
+    let row_rect = row(&h, "IMG_1.cr3").rect();
+    let marks: Vec<(String, egui::Rect)> = badges(&h)
+        .into_iter()
+        .filter(|(_, at)| row_rect.contains_rect(*at))
+        .collect();
+    let says: Vec<&str> = marks.iter().map(|(text, _)| text.as_str()).collect();
+    // Painted from the end of the column: the last first.
+    assert_eq!(says, ["+JPEG", "+XMP"]);
+    let cell = row(&h, "IMG_1.cr3");
+    assert_eq!(
+        cell.accesskit_node().description().as_deref(),
+        Some("Grouped with IMG_1.xmp, IMG_1.jpg, 1970-01-01 00:01 UTC, 30 B, CR3")
+    );
+    let name_ends = row(&h, "Modified").rect().left();
+    assert!(marks[0].1.right() <= name_ends, "over the next column");
+    assert!(
+        marks[1].1.right() <= marks[0].1.left(),
+        "one over the other"
+    );
+
+    key(&mut h, Key::ArrowDown, Modifiers::NONE);
+    key(&mut h, Key::ArrowDown, Modifiers::NONE);
+    key(&mut h, Key::Enter, Modifiers::NONE);
+    let (paths, groups) = group_result(&mut h, &p);
+    assert_eq!(paths, [PathBuf::from("/s/IMG_1.cr3")]);
+    assert_eq!(groups.len(), 1);
+    assert_eq!(groups[0].main, Path::new("/s/IMG_1.cr3"));
+    assert_eq!(
+        groups[0].members,
+        [Path::new("/s/IMG_1.xmp"), Path::new("/s/IMG_1.jpg")]
+    );
+    assert_eq!(groups[0].badges, ["XMP", "JPEG"]);
+}
+
+#[test]
+fn without_a_grouping_declared_nothing_groups_and_no_switch_shows() {
+    let app = App::builder()
+        .plugin(FilesPlugin::in_app().file_system(shoot()))
+        .build(&egui::Context::default())
+        .unwrap();
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(900.0, 640.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+    let p = choose(&mut h, FileRequest::open("Open").directory("/s"));
+    assert_eq!(shown_names(&h).len(), 8);
+    assert_eq!(state(&h, "grouped"), false);
+    assert!(h.query_by_label("Group files").is_none());
+    assert!(badges(&h).is_empty());
+    let app = h.state().handle().clone();
+    let f = app.service(&FILES).unwrap();
+    f.deliver(f.open_ids()[0], Some(vec!["/s/IMG_1.cr3".into()]))
+        .unwrap();
+    let (_, groups) = group_result(&mut h, &p);
+    assert!(groups.is_empty());
+}
+
+#[test]
+fn a_filter_refusing_the_main_file_leaves_its_sidecars_entries_of_their_own() {
+    let mut h = grouped_harness(shoot());
+    let _p = choose(
+        &mut h,
+        FileRequest::open("Open")
+            .directory("/s")
+            .filter("Sidecars", &["xmp"])
+            .filter("Raws", &["cr3"]),
+    );
+    assert_eq!(
+        shown_names(&h),
+        ["Selects/", "IMG_1.xmp", "IMG_2.cr3.xmp", "stray.xmp"]
+    );
+    assert!(badges(&h).is_empty());
+    // Accepted, the main file brings its group, whatever the filter says of the
+    // others.
+    let app = h.state().handle().clone();
+    let f = app.service(&FILES).unwrap();
+    let id = f.open_ids()[0];
+    let mut picker = f.picker(id).unwrap();
+    picker.set_filter(1);
+    let names: Vec<String> = picker.visible().into_iter().map(|e| e.name).collect();
+    assert_eq!(names, ["Selects", "IMG_1.cr3", "IMG_2.cr3"]);
+    let group = picker.group_of(Path::new("/s/IMG_1.cr3")).unwrap();
+    assert_eq!(group.member_names(), ["IMG_1.xmp", "IMG_1.jpg"]);
+}
+
+#[test]
+fn several_groups_select_as_one_each_and_a_range_gives_their_main_files() {
+    let mut h = grouped_harness(shoot());
+    let p = choose(
+        &mut h,
+        FileRequest::open_many("Open")
+            .directory("/s")
+            .filter("Raws", &["cr3"]),
+    );
+    key(&mut h, Key::A, Modifiers::COMMAND);
+    assert!(h.query_all_by_label("Selected: 2").next().is_some());
+    key(&mut h, Key::Enter, Modifiers::COMMAND);
+    let (paths, groups) = group_result(&mut h, &p);
+    assert_eq!(
+        paths,
+        [PathBuf::from("/s/IMG_1.cr3"), PathBuf::from("/s/IMG_2.cr3")]
+    );
+    let mains: Vec<&Path> = groups.iter().map(|g| g.main.as_path()).collect();
+    assert_eq!(
+        mains,
+        [Path::new("/s/IMG_1.cr3"), Path::new("/s/IMG_2.cr3")]
+    );
+    assert_eq!(groups[1].member_names(), ["IMG_2.cr3.xmp"]);
+    assert_eq!(groups[1].badges, ["XMP"]);
+}
+
+#[test]
+fn a_filter_finds_a_group_by_its_members_and_a_typed_path_takes_a_member_alone() {
+    let mut h = grouped_harness(shoot());
+    let _p = choose(&mut h, FileRequest::open("Open").directory("/s"));
+    type_in(&mut h, "IMG_2.cr3.xmp");
+    assert_eq!(shown_names(&h), ["IMG_2.cr3"]);
+
+    // A path is a path: that file, and no group.
+    let mut h = grouped_harness(shoot());
+    let p = choose(&mut h, FileRequest::open("Open").directory("/s"));
+    type_in(&mut h, "/s/IMG_1.jpg");
+    let completions = state(&h, "completions");
+    assert!(
+        completions.to_string().contains("IMG_1.jpg"),
+        "{completions}"
+    );
+    key(&mut h, Key::Enter, Modifiers::NONE);
+    let (paths, groups) = group_result(&mut h, &p);
+    assert_eq!(paths, [PathBuf::from("/s/IMG_1.jpg")]);
+    assert!(groups.is_empty());
+}
+
+#[test]
+fn an_entry_sorts_by_its_main_file_s_facts() {
+    let mut h = grouped_harness(shoot());
+    let _p = choose(&mut h, FileRequest::open("Open").directory("/s"));
+    header_click(&mut h, "Size");
+    assert_eq!(state(&h, "sort"), "-size");
+    // By the raw's bytes, 30 and 20, not their sidecars' thousands.
+    assert_eq!(
+        shown_names(&h),
+        [
+            "Selects/",
+            "IMG_1.cr3",
+            "IMG_2.cr3",
+            "alone.jpg",
+            "stray.xmp"
+        ]
+    );
+    header_click(&mut h, "Modified");
+    assert_eq!(state(&h, "sort"), "-modified");
+    // Selects has no date of its own in memory, and IMG_1's sidecars do not
+    // bring it up: stray at 400, alone at 300, then the raws at 200 and 100.
+    assert_eq!(
+        shown_names(&h),
+        [
+            "Selects/",
+            "stray.xmp",
+            "alone.jpg",
+            "IMG_2.cr3",
+            "IMG_1.cr3"
+        ]
+    );
+    header_click(&mut h, "Type");
+    assert_eq!(
+        shown_names(&h),
+        [
+            "Selects/",
+            "IMG_1.cr3",
+            "IMG_2.cr3",
+            "alone.jpg",
+            "stray.xmp"
+        ]
+    );
+}
+
+#[test]
+fn the_switch_shows_every_file_is_kept_and_ends_groups() {
+    let mut h = grouped_harness(shoot());
+    let p = choose(&mut h, FileRequest::open_many("Open").directory("/s"));
+    h.get_by_label("Group files").click();
+    settle(&mut h);
+    assert_eq!(state(&h, "grouped"), false);
+    assert_eq!(state(&h, "groups"), json!([]));
+    assert_eq!(shown_names(&h).len(), 8);
+    assert!(badges(&h).is_empty());
+    let app = h.state().handle().clone();
+    assert!(!files::grouped(&app));
+
+    row(&h, "IMG_1.xmp").click();
+    settle(&mut h);
+    assert_eq!(state(&h, "selected"), json!(["/s/IMG_1.xmp"]));
+    assert_eq!(state(&h, "highlight"), 4);
+    // The highlight on a member follows it into its group, and the member
+    // leaves the selection.
+    h.get_by_label("Group files").click();
+    settle(&mut h);
+    assert_eq!(shown_names(&h), ENTRIES);
+    assert_eq!(state(&h, "selected"), json!([]));
+    assert_eq!(state(&h, "highlight"), 2, "on the group that took it in");
+    assert!(files::grouped(&app));
+
+    // Off, a choice of the raw is the raw alone.
+    h.get_by_label("Group files").click();
+    settle(&mut h);
+    row(&h, "IMG_1.cr3").click();
+    settle(&mut h);
+    key(&mut h, Key::Enter, Modifiers::COMMAND);
+    let (paths, groups) = group_result(&mut h, &p);
+    assert_eq!(paths, [PathBuf::from("/s/IMG_1.cr3")]);
+    assert!(groups.is_empty());
+}
+
+#[test]
+fn saving_choosing_a_folder_and_an_ungrouped_request_show_every_file() {
+    let mut h = grouped_harness(shoot());
+    let _p = choose(&mut h, FileRequest::save("Save", "new.cr3").directory("/s"));
+    assert_eq!(state(&h, "grouped"), false);
+    assert!(h.query_by_label("Group files").is_none());
+    assert_eq!(shown_names(&h).len(), 8);
+    key(&mut h, Key::Escape, Modifiers::NONE);
+    key(&mut h, Key::Escape, Modifiers::NONE);
+
+    let p = choose(
+        &mut h,
+        FileRequest::open("Open").directory("/s").ungrouped(),
+    );
+    assert_eq!(state(&h, "grouped"), false);
+    assert!(h.query_by_label("Group files").is_none());
+    assert_eq!(shown_names(&h).len(), 8);
+    let app = h.state().handle().clone();
+    let f = app.service(&FILES).unwrap();
+    f.deliver(
+        *f.open_ids().last().unwrap(),
+        Some(vec!["/s/IMG_1.cr3".into()]),
+    )
+    .unwrap();
+    let (_, groups) = group_result(&mut h, &p);
+    assert!(groups.is_empty());
+    // A request round-trips with it, and an old one groups.
+    let request = FileRequest::open("Open").ungrouped();
+    assert_eq!(FileRequest::from_json(&request.to_json()), Ok(request));
+    let old = json!({ "kind": "open", "title": "Open" });
+    assert!(FileRequest::from_json(&old).unwrap().group_files);
+}
+
+#[test]
+fn whoever_answers_a_choice_gives_its_groups() {
+    // As the system's chooser and an agent answer: a path, and no picker.
+    let mut h = grouped_harness(shoot());
+    let p = choose(&mut h, FileRequest::open_many("Open").directory("/s"));
+    let app = h.state().handle().clone();
+    let f = app.service(&FILES).unwrap();
+    let paths = [
+        "/s/IMG_2.cr3",
+        "/s/alone.jpg",
+        "/s/IMG_1.xmp",
+        "/gone/a.cr3",
+    ]
+    .map(PathBuf::from);
+    f.deliver(f.open_ids()[0], Some(paths.to_vec())).unwrap();
+    let (given, groups) = group_result(&mut h, &p);
+    assert_eq!(given, paths);
+    assert_eq!(groups.len(), 1, "a member is that file, not its group");
+    assert_eq!(groups[0].main, Path::new("/s/IMG_2.cr3"));
+    let last = &h.state().handle().debug_snapshot()["files"]["last"][0]["outcome"];
+    assert_eq!(last["groups"][0]["members"], json!(["/s/IMG_2.cr3.xmp"]));
+    assert_eq!(
+        h.state().handle().debug_snapshot()["files"]["groupings"],
+        json!(["test.photos"])
+    );
+}
+
+/// Sees `file.chosen`, and sends the choice to another raw.
+#[derive(Default)]
+struct Redirects(Arc<std::sync::Mutex<Vec<serde_json::Value>>>);
+
+impl Plugin for Redirects {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("redirects")
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        let seen = self.0.clone();
+        ctx.before(STEP_CHOSEN, move |_, args| {
+            seen.lock().unwrap().push(args["groups"].clone());
+            let mut args = args.clone();
+            args["paths"] = json!(["/s/IMG_2.cr3"]);
+            Before::Redirect(args)
+        });
+        Ok(())
+    }
+}
+
+#[test]
+fn a_hook_sees_the_groups_and_a_redirect_gives_those_of_where_it_leads() {
+    let plugin = Redirects::default();
+    let seen = plugin.0.clone();
+    let app = App::builder()
+        .plugin(
+            FilesPlugin::in_app()
+                .file_system(shoot())
+                .grouping(photo_rule()),
+        )
+        .plugin(plugin)
+        .build(&egui::Context::default())
+        .unwrap();
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(900.0, 640.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+    let p = choose(&mut h, FileRequest::open("Open").directory("/s"));
+    let app = h.state().handle().clone();
+    let f = app.service(&FILES).unwrap();
+    f.deliver(f.open_ids()[0], Some(vec!["/s/IMG_1.cr3".into()]))
+        .unwrap();
+    let (paths, groups) = group_result(&mut h, &p);
+    assert_eq!(paths, [PathBuf::from("/s/IMG_2.cr3")]);
+    assert_eq!(groups[0].main, Path::new("/s/IMG_2.cr3"));
+    assert_eq!(seen.lock().unwrap()[0][0]["main"], "/s/IMG_1.cr3");
+}
+
+/// Previews one extension, as an image, and says what it was asked.
+#[derive(Debug, Default)]
+struct JpegsOnly(std::sync::Mutex<Vec<PathBuf>>);
+
+impl PreviewProvider for JpegsOnly {
+    fn id(&self) -> &str {
+        "jpegs"
+    }
+    fn handles(&self) -> Handles {
+        Handles::new().mime(&["*/*"])
+    }
+    fn preview(&self, request: &PreviewRequest) -> Result<Option<Preview>, String> {
+        self.0.lock().unwrap().push(request.path.clone());
+        if request.extension().as_deref() != Some("jpg") {
+            return Ok(None);
+        }
+        let image = egui::ColorImage::filled([12, 8], egui::Color32::GRAY);
+        Ok(Some(
+            Preview::new(Body::Image(Arc::new(image))).fact("From", "jpeg"),
+        ))
+    }
+}
+
+/// A picker of `shoot()`, with a provider of JPEGs.
+fn stand_in_harness(view: PickerView, preview: bool) -> (Harness<'static, App>, Arc<JpegsOnly>) {
+    let provider = Arc::new(JpegsOnly::default());
+    let app = App::builder()
+        .plugin(
+            FilesPlugin::in_app()
+                .without_builtin_previews()
+                .file_system(shoot())
+                .grouping(photo_rule()),
+        )
+        .build(&egui::Context::default())
+        .unwrap();
+    let handle = app.handle().clone();
+    let shared: Arc<dyn PreviewProvider> = provider.clone();
+    handle.service(&FILES).unwrap().previews().register(shared);
+    files::want_preview(&handle, preview);
+    files::want_view(&handle, view);
+    let h = Harness::builder()
+        .with_size(egui::vec2(900.0, 640.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+    (h, provider)
+}
+
+fn asked(provider: &JpegsOnly) -> Vec<String> {
+    let mut names: Vec<String> = provider
+        .0
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    names.dedup();
+    names
+}
+
+#[test]
+fn the_grid_asks_for_main_files_and_for_a_member_when_one_has_no_thumbnail() {
+    let (mut h, provider) = stand_in_harness(PickerView::Grid, false);
+    let _p = choose(&mut h, FileRequest::open("Open").directory("/s"));
+    // Rounds of the view: the raws, then their members in turn.
+    for _ in 0..4 {
+        settle_thumbnails(&mut h);
+    }
+    // IMG_1 has no preview: its XMP is asked, and its JPEG stands in. IMG_2 has
+    // only an XMP, which gives nothing either.
+    assert_eq!(
+        asked(&provider),
+        [
+            "IMG_1.cr3",
+            "IMG_1.jpg",
+            "IMG_1.xmp",
+            "IMG_2.cr3",
+            "IMG_2.cr3.xmp",
+            "alone.jpg",
+            "stray.xmp",
+        ]
+    );
+    assert!(badges(&h).iter().any(|(text, _)| text == "+XMP"));
+    let cell = row(&h, "IMG_1.cr3");
+    assert_eq!(
+        cell.accesskit_node().description().as_deref(),
+        Some("Grouped with IMG_1.xmp, IMG_1.jpg")
+    );
+    // Arrows go through entries: a group is one cell.
+    key(&mut h, Key::End, Modifiers::NONE);
+    assert_eq!(at(&h), 4);
+}
+
+#[test]
+fn a_member_is_not_asked_when_its_main_file_has_a_preview() {
+    let provider = Arc::new(JpegsOnly::default());
+    let fs: SharedFs = Arc::new(
+        MemoryFs::new()
+            .file("/j/a.jpg", vec![1; 4])
+            .file("/j/a.xmp", vec![1; 4]),
+    );
+    let rule = SidecarRule::new("test.jpegs", &["jpg"], &["xmp"]);
+    let app = App::builder()
+        .plugin(
+            FilesPlugin::in_app()
+                .without_builtin_previews()
+                .file_system(fs)
+                .grouping(Arc::new(rule)),
+        )
+        .build(&egui::Context::default())
+        .unwrap();
+    let handle = app.handle().clone();
+    let shared: Arc<dyn PreviewProvider> = provider.clone();
+    handle.service(&FILES).unwrap().previews().register(shared);
+    files::want_view(&handle, PickerView::Grid);
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(900.0, 640.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+    let _p = choose(&mut h, FileRequest::open("Open").directory("/j"));
+    settle_thumbnails(&mut h);
+    assert_eq!(asked(&provider), ["a.jpg"]);
+}
+
+#[test]
+fn the_pane_shows_a_member_s_image_for_a_main_file_without_one_and_its_own_facts() {
+    let (mut h, _provider) = stand_in_harness(PickerView::List, true);
+    let _p = choose(&mut h, FileRequest::open("Open").directory("/s"));
+    key(&mut h, Key::ArrowDown, Modifiers::NONE);
+    key(&mut h, Key::ArrowDown, Modifiers::NONE);
+    for _ in 0..4 {
+        settle(&mut h);
+    }
+    let preview = state(&h, "preview");
+    assert_eq!(preview["path"], "/s/IMG_1.cr3");
+    assert_eq!(preview["stand_in"], "/s/IMG_1.jpg", "{preview}");
+    assert_eq!(preview["state"], "ready", "{preview}");
+    assert!(h.query_by_label("Preview from IMG_1.jpg").is_some());
+    // The raw's size, not the JPEG's.
+    assert!(h.query_by_label("30 B").is_some());
+    assert!(h.query_by_label("Grouped with").is_some());
+    assert!(h.query_by_label("IMG_1.xmp").is_some());
+    egui_pop_test::assert_all_named(&h);
+    // A sidecar that is no image stands in for nothing.
+    key(&mut h, Key::ArrowDown, Modifiers::NONE);
+    for _ in 0..4 {
+        settle(&mut h);
+    }
+    let preview = state(&h, "preview");
+    assert_eq!(preview["path"], "/s/IMG_2.cr3");
+    assert_eq!(preview["state"], "none", "{preview}");
+    assert!(preview.get("stand_in").is_none());
+}
+
+#[test]
+fn a_picker_on_its_own_takes_groupings_and_tells_its_caller_the_group() {
+    let groupings = files::groups::Groupings::default();
+    groupings.register(photo_rule());
+    let mut picker = files::FilePicker::new_in(&FileRequest::open("Open").directory("/s"), shoot())
+        .with_grouping(groupings.clone());
+    let names: Vec<String> = picker.entries().into_iter().map(|e| e.name).collect();
+    assert_eq!(names.len(), 5, "{names:?}");
+    let group = picker.group_of(Path::new("/s/IMG_2.cr3")).unwrap();
+    assert_eq!(group.member_names(), ["IMG_2.cr3.xmp"]);
+    assert!(picker.group_of(Path::new("/s/alone.jpg")).is_none());
+    // A rule taken away counts at the next listing.
+    assert!(groupings.unregister("test.photos"));
+    assert_eq!(picker.entries().len(), 8);
+    assert!(picker.group_of(Path::new("/s/IMG_2.cr3")).is_none());
 }

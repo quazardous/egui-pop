@@ -941,6 +941,12 @@ impl Indicator {
         Pulse::Moving(phase)
     }
 
+    /// How much room the mark takes, for a caller placing it with
+    /// [`paint_at`](Self::paint_at).
+    pub fn measure(&self, ui: &Ui) -> Vec2 {
+        self.mark_size(ui.painter(), &Looks::of(ui.ctx()))
+    }
+
     /// Adds it inline and returns its response (its target when
     /// interactive): the same as `ui.add`.
     pub fn show(self, ui: &mut Ui) -> Response {

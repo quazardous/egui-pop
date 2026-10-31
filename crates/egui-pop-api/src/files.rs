@@ -57,13 +57,17 @@
 //!   the start collapses behind a menu, the deepest segments staying.
 //!   [`CMD_EDIT_PATH`] (Ctrl+L), or typing `/` or `~` on an entry, puts a path
 //!   into the field, which takes both.
+//! - **Grouped files** ([`groups`]): with a grouping declared by the application
+//!   ([`FilesPlugin::grouping`], [`Files::groupings`]), files that go together are
+//!   one entry of the in-app picker, a RAW with its sidecars, with a badge
+//!   (`+XMP`). Choosing it gives the main file, and [`chosen_groups`] the others.
 //!
 //! Steps (ADR 0011):
 //!
 //! | Step | Arguments | Default |
 //! |---|---|---|
 //! | `file.choose` | `{ "id", "request" }` | opens the system's chooser or the in-app picker |
-//! | `file.chosen` | `{ "id", "request", "paths" }` | remembers the places, gives the paths |
+//! | `file.chosen` | `{ "id", "request", "paths" }`, and `"groups"` when some are | remembers the places, gives the paths and their groups |
 //!
 //! A run-hook on `file.choose` replaces the whole chooser: it answers
 //! `{ "paths": [...] }` or `{ "cancelled": true }` at once, or anything
@@ -101,7 +105,8 @@ use egui_pop_core::a11y::{self, Politeness};
 use egui_pop_core::debug::FnCollector;
 use egui_pop_core::focus;
 use egui_pop_core::icon::Icon;
-use egui_pop_core::kit::{Kit, Part, State as PartState};
+use egui_pop_core::indicator::{Anchor, Indicator};
+use egui_pop_core::kit::{Kit, Part, State as PartState, Tone};
 use egui_pop_core::lock;
 use egui_pop_core::overlay::{self, Kind, OverlaySpec};
 use egui_pop_core::placeholder::SkeletonTokens;
@@ -131,11 +136,13 @@ use crate::{Ctx, Plugin, PluginError};
 use self::sort::{PickerSort, SortColumn};
 
 pub mod fs;
+pub mod groups;
 pub mod preview;
 pub mod providers;
 pub mod sort;
 
 use fs::{Meta, SharedFs};
+use groups::{FileGroup, FileGrouping, Groupings};
 use preview::Previews;
 
 /// The file chooser, as a service.
@@ -199,6 +206,10 @@ pub const THUMBNAIL_SIZE: &str = "settings/files.thumbnail_size";
 /// Where the in-app picker's order is kept: `name`, `-name` (descending), and
 /// `size`, `modified` or `type` the same way ([`sort::PickerSort`]).
 pub const SORT: &str = "settings/files.sort";
+/// Where it is kept whether the in-app picker groups files, with groupings
+/// declared ([`groups`]). Not a setting of the settings window: without a
+/// grouping it would do nothing.
+pub const GROUPED: &str = "settings/files.grouped";
 
 /// Where the last folder of each purpose is kept (a JSON list of
 /// `[purpose, folder]` pairs, newest first). See [`FileRequest::purpose`].
@@ -279,6 +290,10 @@ pub struct FileRequest {
     /// (on by default). See [`FileRequest::confirm_overwrite`].
     #[serde(default = "asks")]
     pub confirm_overwrite: bool,
+    /// Opening files, the application's groupings apply (on by default). See
+    /// [`FileRequest::ungrouped`].
+    #[serde(default = "asks")]
+    pub group_files: bool,
 }
 
 fn asks() -> bool {
@@ -296,6 +311,7 @@ impl FileRequest {
             file_name: None,
             filters: Vec::new(),
             confirm_overwrite: true,
+            group_files: true,
         }
     }
 
@@ -368,6 +384,15 @@ impl FileRequest {
         self
     }
 
+    /// Every file is an entry of its own and a choice gives no groups, whatever
+    /// the application's groupings ([`groups`]): for a choice that is after a
+    /// sidecar as much as a RAW. Saving and choosing a folder never group: a name
+    /// to save under must see every file it could replace.
+    pub fn ungrouped(mut self) -> Self {
+        self.group_files = false;
+        self
+    }
+
     pub fn to_json(&self) -> Json {
         serde_json::to_value(self).unwrap_or(Json::Null)
     }
@@ -391,6 +416,15 @@ pub fn chosen(result: &Result<Json, String>) -> Result<Chosen, String> {
         return Ok(Chosen::Cancelled);
     }
     Ok(Chosen::Paths(paths_of(json)))
+}
+
+/// The groups a choice's result holds ([`groups`]): one for each path chosen
+/// that heads a group, none otherwise. [`chosen`] gives the paths, each group's
+/// main among them; the members come from here.
+pub fn chosen_groups(result: &Result<Json, String>) -> Vec<FileGroup> {
+    result
+        .as_ref()
+        .map_or_else(|_| Vec::new(), groups::from_json)
 }
 
 fn paths_of(json: &Json) -> Vec<PathBuf> {
@@ -451,6 +485,7 @@ struct State {
     /// Where the in-app picker reads (none: the system's file system).
     fs: Option<SharedFs>,
     previews: Previews,
+    groupings: Groupings,
 }
 
 impl State {
@@ -505,6 +540,29 @@ impl Files {
     /// registers its providers here ([`Previews::register`]).
     pub fn previews(&self) -> Previews {
         lock(&self.0).previews.clone()
+    }
+
+    /// The groupings of files: a plugin declares its own here
+    /// ([`Groupings::register`]).
+    pub fn groupings(&self) -> Groupings {
+        lock(&self.0).groupings.clone()
+    }
+
+    /// The groups the paths of a finished choice head: none saving, choosing a
+    /// folder, for a request that turned them off, or with the person's box off.
+    fn groups_of(
+        &self,
+        app: &AppHandle,
+        request: &FileRequest,
+        paths: &[PathBuf],
+    ) -> Vec<FileGroup> {
+        let groups = matches!(request.kind, ChooseKind::Open | ChooseKind::OpenMany)
+            && request.group_files
+            && grouped(app);
+        if !groups {
+            return Vec::new();
+        }
+        self.groupings().of_paths(&self.file_system(), paths)
     }
 
     /// Starts a choice; its result comes later through the [`Pending`].
@@ -599,6 +657,7 @@ impl Files {
         let native = lock(&self.0).native && native_available();
         let fs = self.file_system();
         let previews = self.previews();
+        let groupings = self.groupings();
         let show_preview = preview_wanted(app);
         let start = start_folder(app, &request, &fs);
         let mut s = lock(&self.0);
@@ -620,7 +679,9 @@ impl Files {
             directory: start,
             ..request
         };
-        let mut picker = FilePicker::new_in(&at, fs).with_previews(previews);
+        let mut picker = FilePicker::new_in(&at, fs)
+            .with_previews(previews)
+            .with_grouping(groupings);
         picker.show_preview = show_preview;
         o.picker = Some(picker);
         Ok(json!({ "via": "in_app" }))
@@ -659,6 +720,7 @@ impl Files {
             }).collect::<Vec<_>>(),
             "last": s.last.iter().cloned().collect::<Vec<_>>(),
             "previews": s.previews.describe(),
+            "groupings": s.groupings.ids(),
         })
     }
 
@@ -868,6 +930,7 @@ pub struct FilesPlugin {
     native: bool,
     fs: Option<SharedFs>,
     builtin_previews: bool,
+    groupings: Vec<Arc<dyn FileGrouping>>,
 }
 
 impl Default for FilesPlugin {
@@ -877,6 +940,7 @@ impl Default for FilesPlugin {
             native: true,
             fs: None,
             builtin_previews: true,
+            groupings: Vec::new(),
         }
     }
 }
@@ -888,6 +952,7 @@ impl FilesPlugin {
             native: false,
             fs: None,
             builtin_previews: true,
+            groupings: Vec::new(),
         }
     }
 
@@ -902,6 +967,14 @@ impl FilesPlugin {
     /// only those plugins register.
     pub fn without_builtin_previews(mut self) -> Self {
         self.builtin_previews = false;
+        self
+    }
+
+    /// Files that go together are one entry of the in-app picker, by this
+    /// grouping of the application's ([`groups`]). egui-pop declares none of its
+    /// own. Several apply in the order given.
+    pub fn grouping(mut self, grouping: Arc<dyn FileGrouping>) -> Self {
+        self.groupings.push(grouping);
         self
     }
 }
@@ -924,6 +997,9 @@ impl Plugin for FilesPlugin {
             for p in providers::builtin() {
                 files.previews().register(p);
             }
+        }
+        for grouping in &self.groupings {
+            files.groupings().register(grouping.clone());
         }
         ctx.setting(
             SETTING_NATIVE,
@@ -997,6 +1073,7 @@ impl Plugin for FilesPlugin {
                     SORT,
                     Descriptor::text("File picker order", &PickerSort::default().as_text()),
                 ),
+                (GROUPED, Descriptor::bool("File picker groups files", true)),
             ] {
                 store
                     .declare(ctx.owner(), path, descriptor)
@@ -1204,13 +1281,27 @@ fn finish(
             Ok(Json::Null)
         }
         Some(paths) => {
-            let args =
+            let found = files.groups_of(app, request, &paths);
+            let mut args =
                 json!({ "id": id, "request": request.to_json(), "paths": paths_json(&paths) });
+            if !found.is_empty() {
+                args["groups"] = groups::to_json(&found);
+            }
             let out = app.step(&STEP_CHOSEN, args, |app, args| {
-                let paths = paths_of(args);
-                remember(app, &paths);
-                remember_folder(app, request, &paths);
-                Ok(json!({ "paths": paths_json(&paths) }))
+                let chosen = paths_of(args);
+                remember(app, &chosen);
+                remember_folder(app, request, &chosen);
+                let mut out = json!({ "paths": paths_json(&chosen) });
+                // A hook may have redirected the choice: its groups, then.
+                let last = if chosen == paths {
+                    found.clone()
+                } else {
+                    files.groups_of(app, request, &chosen)
+                };
+                if !last.is_empty() {
+                    out["groups"] = groups::to_json(&last);
+                }
+                Ok(out)
             });
             let r = match out {
                 Outcome::Done(r) => r,
@@ -1428,6 +1519,7 @@ fn load_view(app: &AppHandle, picker: &mut FilePicker) {
     }
     picker.set_sort(sort_order(app));
     picker.set_folders_first(folders_first(app));
+    picker.set_grouped(grouped(app));
 }
 
 /// Keeps what the person changed of the view; a drag of the splitter
@@ -1450,6 +1542,9 @@ fn keep_view(app: &AppHandle, picker: &FilePicker) {
     }
     if picker.folders_first != folders_first(app) {
         want_folders_first(app, picker.folders_first);
+    }
+    if picker.grouped != grouped(app) {
+        want_grouped(app, picker.grouped);
     }
 }
 
@@ -1589,6 +1684,19 @@ pub fn folders_first(app: &AppHandle) -> bool {
 pub fn want_folders_first(app: &AppHandle, on: bool) {
     let path = format!("settings/{SETTING_FOLDERS_FIRST}");
     keep_value(app, &path, Value::Bool(on));
+}
+
+/// Whether the in-app picker groups files, with groupings declared.
+pub fn grouped(app: &AppHandle) -> bool {
+    lock(&app.store())
+        .get(GROUPED)
+        .and_then(|e| e.value.as_bool())
+        .unwrap_or(true)
+}
+
+/// Keeps whether the in-app picker groups files.
+pub fn want_grouped(app: &AppHandle, on: bool) {
+    keep_value(app, GROUPED, Value::Bool(on));
 }
 
 /// The home folder, if known.
@@ -1906,6 +2014,12 @@ struct Listing {
     hidden: bool,
     order: (PickerSort, bool),
     entries: Arc<Vec<Entry>>,
+    /// Groups were looked for.
+    grouped: bool,
+    /// The folder's groups, by main file.
+    groups: Arc<HashMap<PathBuf, FileGroup>>,
+    /// The main file of each member.
+    members: Arc<HashMap<PathBuf, PathBuf>>,
 }
 
 /// The in-app picker: a folder's entries, a field that filters them
@@ -1942,6 +2056,9 @@ pub struct FilePicker {
     pub sort: PickerSort,
     /// Folders come before files in every order.
     pub folders_first: bool,
+    /// Files that go together are one entry, with groupings declared
+    /// ([`FilePicker::with_grouping`]) and when opening files.
+    pub grouped: bool,
     /// The list takes the height left in the `Ui` it is drawn in (a
     /// dialog of a given size), rather than [`LIST_HEIGHT`].
     pub fill: bool,
@@ -2009,6 +2126,9 @@ pub struct FilePicker {
     listing: Option<Listing>,
     fs: SharedFs,
     previews: Option<Previews>,
+    groupings: Option<Groupings>,
+    /// The request leaves groups on ([`FileRequest::ungrouped`]).
+    request_groups: bool,
 }
 
 impl FilePicker {
@@ -2047,6 +2167,7 @@ impl FilePicker {
             thumbnail_size: THUMBNAIL_DEFAULT_SIZE,
             sort: PickerSort::default(),
             folders_first: true,
+            grouped: true,
             fill: false,
             error: None,
             naming: None,
@@ -2078,6 +2199,8 @@ impl FilePicker {
             listing: None,
             fs,
             previews: None,
+            groupings: None,
+            request_groups: request.group_files,
         }
     }
 
@@ -2087,6 +2210,41 @@ impl FilePicker {
         self.previews = Some(previews);
         self.show_preview = true;
         self
+    }
+
+    /// Files that go together are one entry, by these groupings ([`groups`]).
+    /// Drawn on its own, the picker answers with the main files: its caller
+    /// reads the others with [`group_of`](Self::group_of).
+    pub fn with_grouping(mut self, groupings: Groupings) -> Self {
+        self.groupings = Some(groupings);
+        self
+    }
+
+    /// Whether this choice can group files: opening files, the request not
+    /// against it, with a grouping declared.
+    fn can_group(&self) -> bool {
+        matches!(self.kind, ChooseKind::Open | ChooseKind::OpenMany)
+            && self.request_groups
+            && self.groupings.as_ref().is_some_and(|g| !g.is_empty())
+    }
+
+    /// Whether it groups now.
+    fn grouping_on(&self) -> bool {
+        self.grouped && self.can_group()
+    }
+
+    /// The group a file heads, in the folder as last listed.
+    pub fn group_of(&self, path: &Path) -> Option<&FileGroup> {
+        self.listing.as_ref()?.groups.get(path)
+    }
+
+    /// Whether a file is left out of the entries, for its group's: the filter
+    /// has to accept the main file, or the member stays an entry of its own.
+    fn absorbed(&self, listing: &Listing, path: &Path) -> bool {
+        listing
+            .members
+            .get(path)
+            .is_some_and(|main| self.accepts(main))
     }
 
     /// The entry the preview is of: the highlighted one.
@@ -2134,10 +2292,9 @@ impl FilePicker {
     /// size or by date reads every entry's facts once, off that listing.
     pub fn entries(&mut self) -> Vec<Entry> {
         let order = (self.sort, self.folders_first);
-        let read = self
-            .listing
-            .as_ref()
-            .is_none_or(|l| l.dir != self.dir || l.hidden != self.show_hidden);
+        let read = self.listing.as_ref().is_none_or(|l| {
+            l.dir != self.dir || l.hidden != self.show_hidden || l.grouped != self.grouping_on()
+        });
         if read {
             let all: Vec<Entry> = self
                 .fs
@@ -2155,12 +2312,16 @@ impl FilePicker {
                 })
                 .unwrap_or_default();
             lock(&self.metas).clear();
+            let (groups, members) = self.groups_in(&all);
             let all = sort::sort_entries(all, order.0, order.1, |e| self.meta_of(&e.path));
             self.listing = Some(Listing {
                 dir: self.dir.clone(),
                 hidden: self.show_hidden,
                 order,
                 entries: Arc::new(all),
+                grouped: self.grouping_on(),
+                groups: Arc::new(groups),
+                members: Arc::new(members),
             });
         } else if let Some(l) = self.listing.as_ref().filter(|l| l.order != order) {
             let all = sort::sort_entries(l.entries.to_vec(), order.0, order.1, |e| {
@@ -2177,10 +2338,55 @@ impl FilePicker {
                 l.entries
                     .iter()
                     .filter(|x| x.is_dir || self.accepts(&x.path))
+                    .filter(|x| !self.absorbed(l, &x.path))
                     .cloned()
                     .collect()
             })
             .unwrap_or_default()
+    }
+
+    /// The groups among a folder's entries, by main file, and each member's main
+    /// file. A hidden file joins no group, shown or not.
+    #[allow(clippy::type_complexity)]
+    fn groups_in(&self, all: &[Entry]) -> (HashMap<PathBuf, FileGroup>, HashMap<PathBuf, PathBuf>) {
+        let Some(groupings) = self.groupings.as_ref().filter(|_| self.grouping_on()) else {
+            return Default::default();
+        };
+        let names: Vec<&str> = all
+            .iter()
+            .filter(|e| !e.is_dir && !e.name.starts_with('.'))
+            .map(|e| e.name.as_str())
+            .collect();
+        let mut groups = HashMap::new();
+        let mut members = HashMap::new();
+        for group in groupings.in_folder(&self.dir, &names) {
+            for member in &group.members {
+                members.insert(member.clone(), group.main.clone());
+            }
+            groups.insert(group.main.clone(), group);
+        }
+        (groups, members)
+    }
+
+    /// Groups files or leaves each its own entry: the highlight stays on its
+    /// entry, or goes to the group that takes it in, and a member selected
+    /// leaves the selection for what its group's entry stands for.
+    pub fn set_grouped(&mut self, on: bool) {
+        if on == self.grouped {
+            return;
+        }
+        self.reorder(|p| p.grouped = on);
+        self.entries();
+        let Some(listing) = self.listing.clone() else {
+            return;
+        };
+        let taken: Vec<PathBuf> = (self.selected.iter())
+            .filter(|p| self.absorbed(&listing, p))
+            .cloned()
+            .collect();
+        for path in taken {
+            self.selected.remove(&path);
+        }
     }
 
     /// Takes another order; the highlighted entry stays highlighted, wherever
@@ -2202,10 +2408,13 @@ impl FilePicker {
     fn reorder(&mut self, change: impl FnOnce(&mut FilePicker)) {
         let at = self.highlighted().map(|e| e.path);
         change(self);
-        if let Some(path) = at
-            && let Some(n) = self.visible().iter().position(|e| e.path == path)
-        {
-            self.highlight = n;
+        if let Some(path) = at {
+            let shown = self.visible();
+            let main = self.listing.as_ref().and_then(|l| l.members.get(&path));
+            let path = main.unwrap_or(&path);
+            if let Some(n) = shown.iter().position(|e| e.path == *path) {
+                self.highlight = n;
+            }
         }
         self.reveal_cell = true;
         if let Some(ctx) = &self.ctx {
@@ -2304,9 +2513,19 @@ impl FilePicker {
         if !self.ranks() {
             return entries;
         }
-        fuzzy::rank(&entries, self.text.trim(), |e| e.name.clone())
+        // A group answers to its members' names too.
+        let mut names = Vec::with_capacity(entries.len());
+        for (n, e) in entries.iter().enumerate() {
+            names.push((n, e.name.clone()));
+            if let Some(group) = self.group_of(&e.path) {
+                names.extend(group.member_names().into_iter().map(|m| (n, m)));
+            }
+        }
+        let mut seen = HashSet::new();
+        fuzzy::rank(&names, self.text.trim(), |(_, name)| name.clone())
             .into_iter()
-            .map(|(i, _)| entries[i].clone())
+            .filter(|(i, _)| seen.insert(names[*i].0))
+            .map(|(i, _)| entries[names[i].0].clone())
             .collect()
     }
 
@@ -2812,6 +3031,14 @@ impl FilePicker {
             "columns": self.columns,
             "sort": self.sort.as_text(),
             "folders_first": self.folders_first,
+            "grouped": self.grouping_on(),
+            "groups": shown.iter().take(64).filter_map(|e| {
+                self.group_of(&e.path).map(|g| json!({
+                    "main": e.name,
+                    "members": g.member_names(),
+                    "badges": g.badges,
+                }))
+            }).collect::<Vec<_>>(),
         })
     }
 
@@ -2824,9 +3051,41 @@ impl FilePicker {
         let Some(e) = self.highlighted() else {
             return Json::Null;
         };
-        let mut d = previews.peek(&self.fs, &e.path).describe();
+        let (shown, stand_in) = self.preview_of(&e, |path| previews.peek(&self.fs, path));
+        let mut d = shown.describe();
         d["path"] = json!(e.path.display().to_string());
+        if let Some(member) = stand_in {
+            d["stand_in"] = json!(member.display().to_string());
+        }
         d
+    }
+
+    /// The preview of an entry, by `ask`: its own, else, for a group's main file
+    /// without one, the image of the first member that has one, and that member.
+    /// A member is asked only then, in turn, and a sidecar's text never stands in
+    /// for a photo.
+    fn preview_of(
+        &self,
+        e: &Entry,
+        mut ask: impl FnMut(&Path) -> preview::Shown,
+    ) -> (preview::Shown, Option<PathBuf>) {
+        let own = ask(&e.path);
+        if !matches!(own, preview::Shown::Nothing | preview::Shown::Failed(_)) {
+            return (own, None);
+        }
+        for member in self.group_of(&e.path).map_or(&[][..], |g| &g.members) {
+            let shown = ask(member);
+            match &shown {
+                preview::Shown::Loading => return (shown, None),
+                preview::Shown::Ready(ready)
+                    if matches!(ready.preview.body, preview::Body::Image(_)) =>
+                {
+                    return (shown, Some(member.clone()));
+                }
+                _ => {}
+            }
+        }
+        (own, None)
     }
 
     /// Draws the picker; its answer when given.
@@ -2979,6 +3238,9 @@ impl FilePicker {
             }
             if self.previews.is_some() {
                 self.view_controls(ui);
+            }
+            if self.can_group() {
+                self.group_control(ui);
             }
             crumbs_below = ui.available_width() < CRUMBS_MIN_WIDTH;
             if !crumbs_below {
@@ -3372,6 +3634,20 @@ impl FilePicker {
             }
             self.thumbnail_dragging = out.response.dragged();
         });
+    }
+
+    /// The switch that groups files or lets each be an entry of its own, the way
+    /// to a member with the pointer. Only with a grouping to switch.
+    fn group_control(&mut self, ui: &mut Ui) {
+        let ctx = ui.ctx().clone();
+        let name = strings::tr(&ctx, &txt::FILES_GROUP);
+        let r = widgets::selectable_label(ui, self.grouped, name)
+            .on_hover_text(strings::tr(&ctx, &txt::FILES_GROUP_TIP));
+        if r.clicked() {
+            self.set_grouped(!self.grouped);
+            // A press leaves nothing focused: typing goes on filtering.
+            self.refocus |= by_pointer(&r);
+        }
     }
 
     /// The keys that put a path into the field, read before anything is drawn:
@@ -3810,9 +4086,39 @@ impl FilePicker {
         let height = row_height(ui) - 2.0 * ui.spacing().button_padding.y;
         let mut atoms = egui::Atoms::default();
         let mut facts = Vec::new();
+        let group = self.group_of(&e.path).cloned();
+        let name_column = columns.first().map_or(0.0, |c| c.width);
+        // The badges keep to the end of the name's column, and at most half of it.
+        let marks = group
+            .as_ref()
+            .map_or_else(Vec::new, |g| group_marks(ui, g, name_column / 2.0));
+        let marks_room = marks_width(ui, &marks);
+        let reserved = if marks.is_empty() {
+            0.0
+        } else {
+            marks_room + t.space.m
+        };
+        if let Some(group) = &group {
+            facts.push(group_said(ui.ctx(), group));
+        }
         for c in columns {
             let (text, align) = match c.column {
-                SortColumn::Name => (label.clone(), egui::Align2::LEFT_CENTER),
+                SortColumn::Name => {
+                    let width = (c.width - reserved).max(0.0);
+                    atoms.push_right(
+                        label
+                            .clone()
+                            .atom_max_width(width)
+                            .atom_size(vec2(width, height))
+                            .atom_align(egui::Align2::LEFT_CENTER),
+                    );
+                    if !marks.is_empty() {
+                        // In the place of the badges, painted over it: the
+                        // columns after it stay under their headers.
+                        atoms.push_right(String::new().atom_size(vec2(marks_room, height)));
+                    }
+                    continue;
+                }
                 column => {
                     let fact = self.fact_text(ui.ctx(), e, column);
                     if !fact.is_empty() {
@@ -3832,7 +4138,7 @@ impl FilePicker {
                     .atom_align(align),
             );
         }
-        let name_width = columns.first().map_or(0.0, |c| c.width);
+        let name_width = name_column - reserved;
         let font = egui::TextStyle::Body.resolve(ui.style());
         let cut = ui
             .painter()
@@ -3858,6 +4164,11 @@ impl FilePicker {
             ui.ctx().accesskit_node_builder(r.id, |node| {
                 node.set_description(facts.join(", "));
             });
+        }
+        if let (Some(group), Some(c)) = (&group, columns.first()) {
+            let left = r.rect.left() + c.left;
+            let host = egui::Rect::from_x_y_ranges(left..=left + c.width, r.rect.y_range());
+            paint_marks(ui, host, Anchor::End, &marks, group);
         }
         if cut { r.on_hover_text(label) } else { r }
     }
@@ -4001,7 +4312,21 @@ impl FilePicker {
                     // Whatever it has now, for the cache to keep it.
                     in_view.push((e.path.clone(), meta));
                     let made = match &self.previews {
-                        Some(previews) => previews.thumbnail(&e.path, &meta),
+                        Some(previews) => {
+                            let (made, _) = self.preview_of(e, |path| {
+                                if path == e.path {
+                                    return previews.thumbnail(path, &meta);
+                                }
+                                match self.meta_of(path) {
+                                    Some(meta) => {
+                                        in_view.push((path.to_path_buf(), meta));
+                                        previews.thumbnail(path, &meta)
+                                    }
+                                    None => preview::Shown::Nothing,
+                                }
+                            });
+                            made
+                        }
                         None => preview::Shown::Nothing,
                     };
                     cell_widget = match &made {
@@ -4031,10 +4356,20 @@ impl FilePicker {
         }
         // By its path: the focus stays on it as the rows scroll.
         let r = ui.push_id(&e.path, |ui| ui.add(cell_widget)).inner;
-        match failed {
+        let r = match failed {
             Some(reason) => r.on_hover_text(reason),
             None => r,
+        };
+        if let Some(group) = self.group_of(&e.path) {
+            let said = group_said(ui.ctx(), group);
+            ui.ctx().accesskit_node_builder(r.id, |node| {
+                node.set_description(said);
+            });
+            let host = r.rect.shrink(Tokens::of(ui.ctx()).space.xs);
+            let marks = group_marks(ui, group, host.width());
+            paint_marks(ui, host, Anchor::TopEnd, &marks, group);
         }
+        r
     }
 
     /// A file's facts, read once per listing.
@@ -4199,14 +4534,79 @@ impl FilePicker {
         };
         match self.highlighted() {
             Some(e) => {
-                let shown = previews.get(ui.ctx(), &self.fs, &e.path);
+                let ctx = ui.ctx().clone();
+                let (shown, stand_in) =
+                    self.preview_of(&e, |path| previews.get(&ctx, &self.fs, path));
                 let meta = self.fs.metadata(&e.path).ok();
-                preview::pane(ui, &e.name, meta.as_ref(), &shown);
+                let stand_in = stand_in
+                    .as_ref()
+                    .and_then(|p| p.file_name())
+                    .map(|n| n.to_string_lossy());
+                preview::pane_for(ui, &e.name, meta.as_ref(), &shown, stand_in.as_deref());
+                if let Some(group) = self.group_of(&e.path) {
+                    let t = Tokens::of(&ctx);
+                    ui.add_space(t.space.s);
+                    ui.weak(strings::tr(&ctx, &txt::FILES_GROUP_MEMBERS));
+                    for name in group.member_names() {
+                        ui.add(egui::Label::new(name).truncate());
+                    }
+                }
             }
             None => {
                 ui.weak(strings::tr(ui.ctx(), &txt::FILES_PREVIEW_NONE));
             }
         }
+    }
+}
+
+/// What a group's entry says to a screen reader and in its badges' tip.
+fn group_said(ctx: &egui::Context, group: &FileGroup) -> String {
+    let members = group.member_names().join(", ");
+    strings::tr_args(ctx, &txt::FILES_GROUP_WITH, &[("members", &members)])
+}
+
+/// A badge of a group's entry.
+fn group_mark(text: &str) -> Indicator {
+    Indicator::text(text).tone(Tone::Neutral).overhang(false)
+}
+
+/// The room between a group's badges.
+fn marks_gap(ui: &Ui) -> f32 {
+    Tokens::of(ui.ctx()).space.xs
+}
+
+/// How wide these badges are, side by side.
+fn marks_width(ui: &Ui, marks: &[String]) -> f32 {
+    let gap = marks_gap(ui);
+    marks
+        .iter()
+        .map(|m| group_mark(m).measure(ui).x + gap)
+        .sum()
+}
+
+/// A group's badges, `+XMP` and `+JPEG`, in `room`; with too little, `+2`.
+fn group_marks(ui: &Ui, group: &FileGroup, room: f32) -> Vec<String> {
+    let all: Vec<String> = group.badges.iter().map(|b| format!("+{b}")).collect();
+    if !all.is_empty() && marks_width(ui, &all) <= room {
+        all
+    } else {
+        vec![format!("+{}", group.members.len())]
+    }
+}
+
+/// Paints badges from the end of `host`, the last at the end; their tip names
+/// the members. They take no click: the entry under them does.
+fn paint_marks(ui: &mut Ui, host: egui::Rect, anchor: Anchor, marks: &[String], group: &FileGroup) {
+    let said = group_said(ui.ctx(), group);
+    let gap = marks_gap(ui);
+    let mut host = host;
+    for mark in marks.iter().rev() {
+        // By an id: agents read them in the `indicators` collector.
+        let id = format!("files.badge:{}:{mark}", group.main.display());
+        let mark = group_mark(mark).id(id).tooltip(said.clone());
+        let width = mark.measure(ui).x;
+        mark.paint_at(ui, host, anchor);
+        host.set_right(host.right() - width - gap);
     }
 }
 

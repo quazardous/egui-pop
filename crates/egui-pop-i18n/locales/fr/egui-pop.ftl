@@ -783,6 +783,16 @@ egui-pop-files-dimensions = Dimensions
 
 egui-pop-files-filter = Filtrer, ou saisir un chemin
 
+egui-pop-files-group = Grouper les fichiers
+
+egui-pop-files-group-members = Groupé avec
+
+egui-pop-files-group-stand-in = Aperçu tiré de { $name }
+
+egui-pop-files-group-tip = Les fichiers qui vont ensemble forment une seule entrée, et la choisir donne le fichier principal ; désactivé, chacun a sa propre entrée
+
+egui-pop-files-group-with = Groupé avec { $members }
+
 egui-pop-files-hidden = Fichiers cachés
 
 egui-pop-files-home = Dossier personnel

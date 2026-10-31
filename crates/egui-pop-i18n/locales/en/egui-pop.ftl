@@ -998,6 +998,16 @@ egui-pop-files-folder-shown = Nothing selected: the button chooses the folder sh
 
 egui-pop-files-folders-first = Folders first
 
+egui-pop-files-group = Group files
+
+egui-pop-files-group-members = Grouped with
+
+egui-pop-files-group-stand-in = Preview from { $name }
+
+egui-pop-files-group-tip = Files that go together show as one entry, and choosing it gives the main one; off, each is an entry of its own
+
+egui-pop-files-group-with = Grouped with { $members }
+
 egui-pop-files-hidden = Hidden files
 
 egui-pop-files-home = Home
