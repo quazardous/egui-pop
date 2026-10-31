@@ -96,6 +96,34 @@ which swaps the first two (`SetFolder`).
 - The field filters the folder with the fuzzy filter the choice dialog
   uses; with a `/` (or starting with `~`) it is a path, and `Tab`
   completes it.
+- The folder reads as breadcrumbs, beside the row's controls (under them when
+  they leave too little room). A segment opens its folder; the chevron after it
+  lists its subfolders, by name, hidden ones only when the list shows them. A
+  segment on the folder shown reads that folder again. When the path does not
+  fit, its start collapses behind a `…` button listing those folders, the nearest
+  first: the deepest segments stay, and the deepest alone is cut only when it
+  does not fit by itself.
+  - Every segment, chevron and `…` is a named stop (`Open folder photos`,
+    `Subfolders of photos`, `Folders above`). Enter or Space on a chevron opens
+    its menu with the focus on the folder on the path, else on the first; Up and
+    Down go round it, Enter chooses, Tab or Escape close it and the focus goes
+    back to the chevron. A folder without subfolders or that cannot be read says
+    so, in the menu and to a screen reader.
+  - Choosing a folder this way hands the keyboard to the field, as a click on a
+    row does.
+- `Ctrl+L` (the `file.edit_path` command, rebindable, for agents too) puts the
+  folder into the field as a path to edit, the cursor at its end, in place of a
+  filter; a path being typed stays. Typing `/` or `~` while an entry has the focus
+  starts a path there, as in GTK and macOS. They are what is typed, whichever keys
+  make them on the layout. There is no second field: the one that filters takes
+  the path, and completes it with `Tab`. Saving, `Ctrl+L` keeps the name at the
+  path's end with its stem selected, and a path that leads to another folder
+  brings that name back there.
+- A click on Up, the bookmark button, List or Grid gives the keyboard back to the
+  field, where a press would otherwise leave nothing focused; with Enter or Space
+  the focus stays on the button. A typed `..` is resolved in the folder's path:
+  `go` takes it out by its name, without asking the file system, so `a/link/..` is
+  `a`, even if `link` is a link elsewhere.
 - A click selects; a double click or Enter opens: Enter on a folder goes
   into it, on a file chooses it. A click no longer enters a folder, so a
   mis-click navigates nowhere. `Ctrl` is Cmd on macOS, here as in the keymap.
@@ -280,7 +308,7 @@ which swaps the first two (`SetFolder`).
 `LIST_HEIGHT` (280) high, or take the height left with `fill`. Its order is
 `FilePicker::sort` and `FilePicker::folders_first` (`set_sort`,
 `set_folders_first` keep the highlight on its entry); its caller remembers them. With no
-keymap to go through, it reads `Ctrl+A` and `Ctrl+Space` itself, and they do
+keymap to go through, it reads `Ctrl+A`, `Ctrl+Space` and `Ctrl+L` itself, and they do
 not rebind. A
 modal of your own that the person resizes is
 `OverlaySpec::resizable` (`overlay` module).

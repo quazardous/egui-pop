@@ -250,6 +250,10 @@ command-editor-write =
     .description = Changes the text through `edit.change`: the whole `text`; or `text` between `from` and `to` (`{"{"}line, col{"}"}` from 0); or a list of `changes`. One undo step.
     .title = Write the text
 
+command-file-edit-path =
+    .description = Puts the folder of the open in-app file picker into its field, as a path to edit; saving, the name stays at its end. A path already typed stays as it is.
+    .title = Edit the folder's path
+
 command-file-new-folder =
     .description = A new folder in the open in-app file picker, which then shows it: asks its name, or makes it at once with `name`. Refused on a file system that cannot make one (the web build's, in memory), the reason shown in the picker.
     .title = New folder
@@ -959,6 +963,18 @@ egui-pop-files-column-size = Size
 egui-pop-files-column-type = Type
 
 egui-pop-files-create = Create
+
+egui-pop-files-crumb-collapsed = Folders above
+
+egui-pop-files-crumb-current = The folder shown
+
+egui-pop-files-crumb-none = No subfolders
+
+egui-pop-files-crumb-open = Open folder { $name }
+
+egui-pop-files-crumb-subfolders = Subfolders of { $name }
+
+egui-pop-files-crumb-unreadable = This folder cannot be read
 
 egui-pop-files-dimensions = Dimensions
 

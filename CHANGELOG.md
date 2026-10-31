@@ -12,6 +12,12 @@ publishes.
 
 ### Added
 
+- Breadcrumbs for the in-app file picker's folder (egui-pop-api; `docs/files.md`):
+  the monospace path is now clickable segments, each opening its folder, with a
+  chevron listing its subfolders, as Windows' address bar. Every part is a named
+  stop, and the menus go by the keyboard. `Ctrl+L` (`file.edit_path`, rebindable),
+  or `/` or `~` typed on an entry, puts a path into the existing field. French
+  included.
 - A setting for the scroll bars (egui-pop-api, egui-pop-tokens;
   `docs/kit.md`): `appearance.scroll_bars` under Appearance. `auto` leaves them
   to the theme; `always` shows full bars beside the content, with a track even
@@ -1240,9 +1246,15 @@ publishes.
 
 ### Fixed
 
+- The in-app file picker keeps the end of a long path (egui-pop-api): in a narrow
+  dialog the controls cut the deepest folders, the ones that matter most. The
+  start of the path now collapses behind a menu.
 - A click on List, Grid, Up or the bookmark button in the in-app file picker left
   nothing focused, so typing reached no field (egui-pop-api): the keyboard goes
   back to the field.
+- A typed `../` in the in-app file picker stayed in its folder's path, where Up
+  then went wrong (egui-pop-api): the folder's path no longer holds `.` or `..`
+  after a named folder.
 - Escape in a detached window goes by that window's focus (egui-pop-core). The
   focus plugin read the focus of another window: pressed in a detached window,
   Escape made a text field of the main window let go and the press was lost, and

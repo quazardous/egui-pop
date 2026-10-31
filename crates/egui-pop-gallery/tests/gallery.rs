@@ -2916,6 +2916,23 @@ fn the_files_page_sorts_the_picker_by_its_columns() {
 }
 
 #[test]
+fn the_files_page_shows_the_folder_as_breadcrumbs() {
+    use egui::accesskit::Role;
+    let root = egui_pop_gallery::pages::files::demo_folder();
+    let name = root.file_name().unwrap().to_string_lossy().into_owned();
+    let mut h = harness(options("pop-dark", Density::Comfortable, "files"));
+    h.run();
+    h.get_by_label("Open an image…").click();
+    settle_picker(&mut h);
+    h.get_by_role_and_label(Role::Button, &format!("Subfolders of {name}"))
+        .click();
+    settle_picker(&mut h);
+    assert!(h.query_by_label("Photos").is_some());
+    egui_pop_test::assert_all_named(&h);
+    h.snapshot("files-breadcrumbs-pop-dark");
+}
+
+#[test]
 fn the_files_page_previews_the_highlighted_file() {
     use egui_pop::model::commands::Origin;
     let root = egui_pop_gallery::pages::files::demo_folder();

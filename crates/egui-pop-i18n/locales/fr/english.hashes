@@ -124,6 +124,8 @@ command-editor-undo.description 5dde22e4b03efa03
 command-editor-undo.title ddfb37209e42e01c
 command-editor-write.description b3b0d1d3ff5c1123
 command-editor-write.title 3445f8530fb91884
+command-file-edit-path.description 55c57a3608feea58
+command-file-edit-path.title 87f2f08386a1c113
 command-file-new-folder.description b84c47f53786ed10
 command-file-new-folder.title ce54c83f497e797f
 command-file-preview.description 4815c49f71f424ee
@@ -479,6 +481,12 @@ egui-pop-files-column-name e8f800548ef8413c
 egui-pop-files-column-size 460e2b4dbac0e0ba
 egui-pop-files-column-type f97f51ee1be110cd
 egui-pop-files-create bd8bd1041b1d098d
+egui-pop-files-crumb-collapsed e2172f6631841467
+egui-pop-files-crumb-current cbb2211b33660e85
+egui-pop-files-crumb-none af91add2e8610979
+egui-pop-files-crumb-open 1f90c998bef9195c
+egui-pop-files-crumb-subfolders 491a93e8d4d4c8ec
+egui-pop-files-crumb-unreadable 3ceb0a0269cc9681
 egui-pop-files-dimensions 9448f1438bcf86c6
 egui-pop-files-filter 629d424a814e621a
 egui-pop-files-folder-exists fdc91addb17847b8

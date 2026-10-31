@@ -400,6 +400,21 @@ pub const FILES_VIEW_LIST: StrKey = StrKey::new("egui-pop-files-view-list", "Lis
 pub const FILES_VIEW_GRID: StrKey = StrKey::new("egui-pop-files-view-grid", "Grid");
 pub const FILES_THUMBNAIL_SIZE: StrKey =
     StrKey::new("egui-pop-files-thumbnail-size", "Thumbnail size");
+/// The in-app picker's breadcrumbs: what each part is called, and what a
+/// segment's menu says when it has nothing to list.
+pub const FILES_CRUMB_OPEN: StrKey =
+    StrKey::new("egui-pop-files-crumb-open", "Open folder { $name }");
+pub const FILES_CRUMB_CURRENT: StrKey =
+    StrKey::new("egui-pop-files-crumb-current", "The folder shown");
+pub const FILES_CRUMB_SUBFOLDERS: StrKey =
+    StrKey::new("egui-pop-files-crumb-subfolders", "Subfolders of { $name }");
+pub const FILES_CRUMB_COLLAPSED: StrKey =
+    StrKey::new("egui-pop-files-crumb-collapsed", "Folders above");
+pub const FILES_CRUMB_NONE: StrKey = StrKey::new("egui-pop-files-crumb-none", "No subfolders");
+pub const FILES_CRUMB_UNREADABLE: StrKey = StrKey::new(
+    "egui-pop-files-crumb-unreadable",
+    "This folder cannot be read",
+);
 /// The in-app picker's columns, and what they say of a folder and of a file
 /// without an extension.
 pub const FILES_COLUMN_NAME: StrKey = StrKey::new("egui-pop-files-column-name", "Name");
@@ -1292,6 +1307,12 @@ pub const ALL: &[StrKey] = &[
     FILES_VIEW_LIST,
     FILES_VIEW_GRID,
     FILES_THUMBNAIL_SIZE,
+    FILES_CRUMB_OPEN,
+    FILES_CRUMB_CURRENT,
+    FILES_CRUMB_SUBFOLDERS,
+    FILES_CRUMB_COLLAPSED,
+    FILES_CRUMB_NONE,
+    FILES_CRUMB_UNREADABLE,
     FILES_COLUMN_NAME,
     FILES_COLUMN_SIZE,
     FILES_COLUMN_MODIFIED,

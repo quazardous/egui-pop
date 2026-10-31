@@ -372,7 +372,14 @@ decision of its own (item 7 moved the header's drawing down, not the table).
    typing `/` or `~` when the list has the focus, puts the path into the
    field. GTK and macOS both open path entry on `/` and `~`; egui-pop's
    field already understands both, so this is the entry point, not a
-   second field. Size: M.
+   second field. **Done:** the segments sit beside the row's controls and
+   collapse from the start behind a `…` menu, so the deepest stay; a chevron
+   after each is a stop of its own, which costs two Tab stops per segment
+   against one with a key on the segment, for a menu anyone can find, by the
+   pointer too. Its menu reads the folder as it opens, not each frame, and a
+   press on a chevron or on List or Grid hands the keyboard back to the field.
+   `Ctrl+L` is the command `file.edit_path`. A crates.io search (2026-10-31) found
+   no egui breadcrumb widget to adopt, and `TextEdit` stays the field. Size: M.
 9. **Grouped files: RAW with its sidecars as one entry.** A grouping
    hook on the files service (an application declares that `x.xmp`,
    `x.cr3.xmp` or `x.jpg` belong to `x.cr3`), the entry showing a badge
