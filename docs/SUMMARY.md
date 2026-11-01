@@ -12,6 +12,7 @@
 - [The theme editor](theme-editor.md)
 - [Plugins, commands and steps](plugins.md)
 - [State or event: what to use](state-or-event.md)
+- [Linked panels](linked-panels.md)
 - [The context stack](contexts.md)
 - [History](history.md)
 - [The clipboard](clipboard.md)

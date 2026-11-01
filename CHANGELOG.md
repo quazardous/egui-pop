@@ -12,6 +12,9 @@ publishes.
 
 ### Added
 
+- `docs/linked-panels.md`: a selection in one view driving a preview in another panel,
+  which layer owns what, what each view says of its selection, panels moved, closed
+  or detached, slow previews, and how others do it.
 - A `linked-panels` page in the gallery (egui-pop-gallery; `docs/gallery.md`): a list
   on the page drives a slow preview in a panel of its own, closed, moved or detached.
 - `Libraries::cursor` (egui-pop-views): the cursor a library published, beside its

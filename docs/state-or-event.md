@@ -50,6 +50,7 @@ egui-pop keeps both out of the frame:
 | A value others display and may edit (a setting, a parameter) | the value store: `Ctx::setting`, or a path declared on `AppHandle::store()`; widgets bind it with `Binding::bound`, views with `Binding::watch` | a copy per panel written back every frame |
 | A value another plugin may write too | the owner names it a writer: `Descriptor::writers` (or `any_writer`); the other plugin writes through its command, its hooks or `Ctx::writer` | two plugins writing the same value, the last one winning ([who writes a value](#who-writes-a-value)) |
 | To react when a value changes | `Ctx::on_change(prefix, f)` on the store | comparing with last frame's value in `ui()` |
+| A selection another panel follows | a value in the store, read when that panel draws ([linked panels](linked-panels.md)) | computing a preview for a panel nobody sees |
 | A request someone must act on once (delete, save, open) | a command: `Ctx::command`, asked with `AppHandle::run` | a flag in the store that the next frame forgets or reads twice |
 | A moment others may observe, veto, replace or extend | a step: `Ctx::step`, run with `AppHandle::step`; others use `Ctx::before`, `replace`, `after` | a callback list of its own, or a flag others poll |
 | To follow what happened (steps, context changes) | the journal: each step publishes a signal, read with `AppHandle::events_since` | a "last event" value that two readers race to clear |
@@ -294,6 +295,8 @@ plugin set ends with `egui_pop_test::assert_writes_declared(&app)`.
 - [Plugins, commands and steps](plugins.md): commands, hooks, steps.
 - [The context stack](contexts.md): places, modes, kernel state and
   view state.
+- [Linked panels](linked-panels.md): a selection driving a preview in
+  another panel.
 - [ADR 0009](adr/0009-value-binding.md) (binding a value),
   [ADR 0011](adr/0011-lifecycle-steps.md) (steps) and
   [ADR 0016](adr/0016-one-writer-per-value.md) (one writer per value).
