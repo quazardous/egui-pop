@@ -16,7 +16,7 @@ authors.workspace = true
 workspace = true
 
 [features]
-default = ["instance", "notify", "tray", "keys", "logs", "crash", "focus", "text-scale", "clipboard", "open"]
+default = ["instance", "notify", "tray", "keys", "logs", "crash", "focus", "text-scale", "wheel-lines", "clipboard", "open"]
 ## A single instance: a second launch hands its arguments and links to
 ## the running one (`instance`).
 instance = ["dep:interprocess"]
@@ -42,6 +42,9 @@ open = ["dep:opener"]
 ## The system's text scaling read in-process, to seed the text size
 ## (`text_scale`).
 text-scale = ["dep:ashpd", "dep:futures-lite", "dep:async-io", "dep:winreg"]
+## The system's lines a wheel's notch read in-process, to seed the wheel speed
+## (`wheel_lines`).
+wheel-lines = ["dep:winreg"]
 ## The system clipboard over arboard: files, images, HTML and text, the
 ## primary selection (`clipboard`).
 clipboard = ["dep:arboard", "dep:png", "dep:base64"]
@@ -100,7 +103,8 @@ futures-lite = { version = "2", optional = true }
 async-io = { version = "2", optional = true }
 
 [target.'cfg(windows)'.dependencies]
-# MIT: the registry, read in-process (the focus mode, the text scaling).
+# MIT: the registry, read in-process (the focus mode, the text scaling, the
+# wheel's lines).
 winreg = { version = "0.55", optional = true }
 
 [dev-dependencies]

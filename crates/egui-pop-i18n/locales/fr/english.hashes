@@ -1175,6 +1175,8 @@ setting-input-wheel-device-choice-mouse 5f2621c2513a74d2
 setting-input-wheel-device-choice-trackpad 6a14f8103f0cae39
 setting-input-wheel-device.description 78ffc641448d30d7
 setting-input-wheel-device.label 554fd75522ec1644
+setting-input-wheel-speed.description ffb0ae6c48bc6ccc
+setting-input-wheel-speed.label 00052e1dcc4984b7
 setting-menus-icons-choice-off 721d4f4fe78bec18
 setting-menus-icons-choice-on c9cf4429f7cac946
 setting-menus-icons-choice-platform 315089c975359810

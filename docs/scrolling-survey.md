@@ -541,10 +541,15 @@ Sizes: S is under a day, M a few days. One pull request each.
    layer of its own, and an area under it does not see the wheel, which a test
    holds. A plain panel with no scroll around it has nothing to chain to. Plain
    bodies keep chaining: a sizeable text in a panel should not trap the wheel.
-8. **Wheel speed.** `input.wheel_speed`, in Settings › Input, multiplying
-   `line_scroll_speed`, and read from `SPI_GETWHEELSCROLLLINES` as its default on
-   Windows (3 lines being today's 40 points). Canvases read it too, through
-   `wheel_inputs`. Size: S.
+8. **Done: wheel speed.** `input.wheel_speed`, in Settings › Input, multiplying
+   `line_scroll_speed`, published with the pointer map, and 0.25 to 5 by quarters.
+   Canvases read it too, through `wheel_inputs`, so their wheel zoom follows; a
+   slider's wheel still steps once a notch. Its default on Windows comes from the
+   lines a notch (3 lines being today's 40 points), through
+   `AppBuilder::system_wheel_lines` as egui-pop reads nothing itself, and
+   `egui_pop_platform::wheel_lines` reads `WheelScrollLines` from the registry
+   rather than calling `SPI_GETWHEELSCROLLLINES`, as `text_scale` does, which keeps
+   the crate free of `unsafe`. "One screen at a time" counts as 3.
 9. **The library's scroll areas go through `UiPop::scroll_area`.** About 25 in
    `egui-pop-api`, `-views`, `-viewport`, `-editors`: mechanical, and it gives a
    kit's thumb colours and items 6 and 7 a single way in. A view that draws in

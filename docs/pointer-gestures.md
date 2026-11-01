@@ -92,7 +92,12 @@ slider under the pointer) and `input.image_double_click` (`fit`,
 `leave`, `nothing`). `input.wheel_device` settles what sends wheel
 events: `auto` takes lines for a mouse wheel and points for a
 trackpad, `mouse` and `trackpad` say it outright (some mice send
-points).
+points). `input.wheel_speed` multiplies how far a notch goes, in scroll areas
+and on the canvases that read it through `wheel_inputs`, zoom included; what
+comes in points is left alone, whichever device sends it, and a slider's wheel
+still steps once a notch. Its default is 1, or the system's lines a notch over 3
+when the application gives them with `AppBuilder::system_wheel_lines`
+(`egui_pop_platform::wheel_lines::read`, Windows only).
 
 ```rust
 use egui_pop::api::{App, DefaultPlugins};

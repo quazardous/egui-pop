@@ -2255,6 +2255,10 @@ setting-input-wheel-device-choice-mouse = souris
 
 setting-input-wheel-device-choice-trackpad = pavé tactile
 
+setting-input-wheel-speed =
+    .description = La distance d’un cran de molette de souris, en défilement et sur les canevas, 1 étant la distance habituelle. Ce qu’envoie un pavé tactile reste tel quel.
+    .label = Vitesse de la molette
+
 setting-workbench-side-bar-position =
     .description = Où se trouve la barre latérale principale : à gauche, la secondaire à droite (gauche), ou l’inverse (droite).
     .label = Position de la barre latérale principale
