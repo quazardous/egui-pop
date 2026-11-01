@@ -131,6 +131,29 @@ the title, the host and the duration the application declares, a play
 icon, a click opening the browser. Its image is either shipped with the
 application or fetched only after the user allows that host.
 
+### Playing a local video
+
+Added on 2026-11-01, for the
+[revision of the ADR](0017-links-and-outside-content.md#local-video-inside-revised-2026-11-01).
+The versions and licences are those crates.io gave that day. "Plays" means what
+the viewer needs: pictures and sound in step, seek, volume, from any common file.
+
+| Crate | Licence | What it brings | Verdict |
+|---|---|---|---|
+| [`gstreamer`](https://crates.io/crates/gstreamer), [`gstreamer-app`](https://crates.io/crates/gstreamer-app), [`gstreamer-video`](https://crates.io/crates/gstreamer-video) 0.25 | MIT OR Apache-2.0; the [GStreamer libraries](https://gstreamer.freedesktop.org/documentation/frequently-asked-questions/licensing.html) are LGPL and installed on the system, not crates | a whole player (`playbin`): file formats and decoders by plugin, sound, a shared clock, seek, volume; its threads decode, an `appsink` hands over the pictures; Rust 1.92 | **adopt** behind the feature; the page, the controls and the stopping are **owned** |
+| [`iced_video_player`](https://github.com/jazzfool/iced_video_player) 0.6 | MIT OR Apache-2.0 | the same design for iced: `playbin`, an `appsink`, a texture | **a model only**, read for the design; no code taken, though its licence would allow it. It uses GStreamer 0.23 and iced's renderer |
+| [`egui-sharkplayer`](https://codeberg.org/sharkyshark/egui-sharkplayer) 0.5 | Unlicense, over [`libmpv2`](https://crates.io/crates/libmpv2) (LGPL-2.1) | a player for egui | **reject**: egui 0.35 against our 0.36; OpenGL first with a slow wgpu path; `libmpv2` is a crate under the LGPL, which `deny.toml` refuses |
+| [`egui-video`](https://github.com/n00kii/egui-video) 0.9 | MIT | a player for egui | **reject**: last release in 2024; ffmpeg and SDL2 |
+| [`re_video`](https://crates.io/crates/re_video) 0.41 (Rerun) | MIT OR Apache-2.0 | video decoding for Rerun's viewer, read briefly from its manifest and not tried: optional rav1d for AV1, `ffmpeg-sidecar` to drive a separate `ffmpeg` executable; nothing for sound output among its dependencies; many of Rerun's own crates; Rust 1.98 against our 1.95 | **reject**: a decoder, not a player; we would own what GStreamer gives |
+| [`video-rs`](https://crates.io/crates/video-rs) 0.12 | MIT OR Apache-2.0, over [`ffmpeg-next`](https://crates.io/crates/ffmpeg-next) | frames read and written through ffmpeg's libraries, which must be there at build and run time like GStreamer's; read briefly from its manifest and not tried: nothing for sound output among its dependencies | **reject**: same system dependency, far less of a player |
+
+Neither of the two last is better than GStreamer for this. Both would leave
+sound output and keeping it in step to be written here, and neither removes a
+system library or a separate program for common formats.
+
+The bindings link GStreamer's libraries when the program starts, so their
+absence cannot be turned into an error page: see the ADR.
+
 ### Prior art
 
 | Application | Links and help | Embedded content | What carries over |
@@ -473,6 +496,9 @@ Read on 2026-10-28.
   URIs (<https://www.eliostruyf.com/command-uri-vscode-webview-open-files-links/>),
   the integrated browser
   (<https://code.visualstudio.com/docs/debugtest/integrated-browser>)
+- GStreamer's licensing:
+  <https://gstreamer.freedesktop.org/documentation/frequently-asked-questions/licensing.html>,
+  `playbin`: <https://gstreamer.freedesktop.org/documentation/playback/playbin.html>
 - Blender's help system:
   <https://docs.blender.org/manual/en/latest/getting_started/help.html>
 - Krita's welcome screen: <https://docs.krita.org/reference_manual/welcome_screen.html>,
