@@ -13,7 +13,9 @@
 //!   a safe subset of HTML, mapped to the same blocks as markdown: no
 //!   scripts, styles, forms, frames or video, which are named on the page
 //!   and left to Open outside (without the feature, an HTML page gets an
-//!   error page offering Open outside). `docs:` pages come from the
+//!   error page offering Open outside). With the `video` feature, a local
+//!   video file plays here (see `video`); remote video stays outside. `docs:`
+//!   pages come from the
 //!   [`Docs`] the application ships (`include_str!`), on native and on
 //!   the web build alike; remote pages and images come through a
 //!   [`Fetch`] the host gives (none by default: the viewer then opens
@@ -64,9 +66,12 @@
 //! assert_eq!(viewer.state()["status"], "shown");
 //! ```
 
+#[cfg(all(feature = "video", not(target_arch = "wasm32")))]
+mod gst_player;
 #[cfg(feature = "html")]
 mod html;
 mod page;
+mod video;
 mod view;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -81,11 +86,18 @@ use egui_pop_core::lock;
 use egui_pop_model::commands::{CommandSpec, Origin};
 use egui_pop_model::ids::{CommandId, PanelId, PluginId, SettingId};
 use egui_pop_model::keymap::BindOptions;
+use egui_pop_model::links::VIDEOS;
 use egui_pop_model::panels::{Area, PanelSpec};
 use egui_pop_model::values::{Change, Descriptor, Set, Value};
 use serde_json::{Value as Json, json};
 
+#[cfg(all(feature = "video", not(target_arch = "wasm32")))]
+pub use gst_player::{GStreamer, write_test_clip};
 pub use page::{Block, ImageRef, Markdown, has_scheme, resolve, slug};
+pub use video::{
+    SEEK_STEP, VIDEO_CONTEXT, VIDEO_SURFACE, VOLUME_STEP, VideoBackend, VideoFrame, VideoPlayer,
+    VideoRequest, VideoState, VideoStatus, clock, rgba_image,
+};
 
 /// The plugin's id.
 pub const PLUGIN: PluginId = PluginId::from_static("egui_pop.viewer");
@@ -111,6 +123,13 @@ pub const CMD_OPEN_OUTSIDE: CommandId = CommandId::from_static("viewer.open_outs
 pub const CMD_COPY_LINK: CommandId = CommandId::from_static("viewer.copy_link");
 pub const CMD_LOAD_IMAGES: CommandId = CommandId::from_static("viewer.load_images");
 pub const CMD_STATE: CommandId = CommandId::from_static("viewer.state");
+pub const CMD_VIDEO_TOGGLE: CommandId = CommandId::from_static("viewer.video_toggle");
+pub const CMD_VIDEO_BACK: CommandId = CommandId::from_static("viewer.video_back");
+pub const CMD_VIDEO_AHEAD: CommandId = CommandId::from_static("viewer.video_ahead");
+pub const CMD_VIDEO_LOUDER: CommandId = CommandId::from_static("viewer.video_louder");
+pub const CMD_VIDEO_QUIETER: CommandId = CommandId::from_static("viewer.video_quieter");
+pub const CMD_VIDEO_SEEK: CommandId = CommandId::from_static("viewer.video_seek");
+pub const CMD_VIDEO_VOLUME: CommandId = CommandId::from_static("viewer.video_volume");
 
 /// The largest page or image shown, in bytes.
 pub const MAX_BYTES: usize = 16 * 1024 * 1024;
@@ -222,6 +241,8 @@ pub enum Failure {
     NoConnection,
     TooLarge,
     Unsupported,
+    /// A video that cannot be played: no player, no plugin, a bad file.
+    Playback,
 }
 
 impl Failure {
@@ -232,6 +253,7 @@ impl Failure {
             Failure::NoConnection => &s::VIEWER_NO_CONNECTION,
             Failure::TooLarge => &s::VIEWER_TOO_LARGE,
             Failure::Unsupported => &s::VIEWER_UNSUPPORTED,
+            Failure::Playback => &s::VIEWER_VIDEO_FAILED,
         }
     }
 }
@@ -242,6 +264,8 @@ pub enum Content {
     Markdown(Markdown),
     /// An image, by the address its bytes are given to egui under.
     Image(String),
+    /// A local video file, played by the viewer's video player.
+    Video(std::path::PathBuf),
 }
 
 /// A page shown.
@@ -263,6 +287,7 @@ impl Page {
             Content::Markdown(_) if self.html => "html",
             Content::Markdown(_) => "markdown",
             Content::Image(_) => "image",
+            Content::Video(_) => "video",
         }
     }
 }
@@ -364,6 +389,7 @@ pub struct Viewer {
     inner: Mutex<Inner>,
     inbox: Inbox,
     cache: Mutex<CommonMarkCache>,
+    video: Mutex<video::Video>,
 }
 
 impl std::fmt::Debug for Viewer {
@@ -414,7 +440,13 @@ impl Viewer {
             inner: Mutex::new(Inner::default()),
             inbox: Arc::default(),
             cache: Mutex::new(CommonMarkCache::default()),
+            video: Mutex::new(video::Video::new(video::default_backend())),
         }
+    }
+
+    /// Replaces what plays local videos (none: they open outside).
+    pub fn set_video_backend(&self, backend: Option<Arc<dyn VideoBackend>>) {
+        lock(&self.video).set_backend(backend);
     }
 
     /// The pages the application ships.
@@ -490,6 +522,8 @@ impl Viewer {
     }
 
     fn load(&self, app: &AppHandle, target: &str, fragment: Option<&str>) {
+        // Whatever comes next, a video playing stops here.
+        self.stop_video(app);
         let generation = {
             let mut i = lock(&self.inner);
             i.generation += 1;
@@ -524,6 +558,9 @@ impl Viewer {
                     .as_ref()
                     .and_then(Target::local_path)
                     .unwrap_or_default();
+                if self.plays_video() && VIDEOS.contains(&extension(&path).as_str()) {
+                    return self.open_video(app, target, &path);
+                }
                 match read_file(&path) {
                     Ok(bytes) => self.finish(app, target, &path, bytes, fragment),
                     Err((failure, e)) => self.fail(app, target, failure, &e),
@@ -788,6 +825,7 @@ impl Viewer {
 
     /// Takes what fetches brought (each pass).
     pub fn poll(&self, app: &AppHandle) {
+        self.poll_video(app);
         let arrived: Vec<(Arrival, Fetched)> = std::mem::take(&mut *lock(&self.inbox));
         for (what, result) in arrived {
             match what {
@@ -890,7 +928,7 @@ impl Viewer {
         let matches = match &i.status {
             Status::Shown(p) => match &p.content {
                 Content::Markdown(md) => md.find(&i.find.query),
-                Content::Image(_) => Vec::new(),
+                Content::Image(_) | Content::Video(_) => Vec::new(),
             },
             _ => Vec::new(),
         };
@@ -1020,6 +1058,8 @@ impl Viewer {
 
     /// What the viewer shows and holds, for agents and the collector.
     pub fn state(&self) -> Json {
+        let video = self.video_state();
+        let plays_video = self.plays_video();
         let i = lock(&self.inner);
         let mut links = Vec::new();
         let mut dropped = Vec::new();
@@ -1042,7 +1082,7 @@ impl Viewer {
                             })
                             .collect(),
                     ),
-                    Content::Image(_) => (None, None, Vec::new()),
+                    Content::Image(_) | Content::Video(_) => (None, None, Vec::new()),
                 };
                 ("shown", Some(p.kind()), title, None, text, headings)
             }
@@ -1101,6 +1141,8 @@ impl Viewer {
             "links": links,
             "dropped": dropped,
             "fetch": self.fetch.is_some(),
+            "video": video,
+            "plays_video": plays_video,
         })
     }
 }
@@ -1179,6 +1221,10 @@ impl Inside for Shows {
     fn docs_pages(&self) -> Option<Vec<String>> {
         Some(self.0.docs.pages())
     }
+
+    fn plays_video(&self) -> bool {
+        self.0.plays_video()
+    }
 }
 
 /// The viewer as a plugin (opt-in): the panel, the service, the links
@@ -1188,6 +1234,7 @@ impl Inside for Shows {
 pub struct ViewerPlugin {
     docs: Docs,
     fetch: Option<Arc<dyn Fetch>>,
+    video: Option<Arc<dyn VideoBackend>>,
 }
 
 impl std::fmt::Debug for ViewerPlugin {
@@ -1195,6 +1242,7 @@ impl std::fmt::Debug for ViewerPlugin {
         f.debug_struct("ViewerPlugin")
             .field("docs", &self.docs)
             .field("fetch", &self.fetch.is_some())
+            .field("video", &self.video.as_ref().map(|b| b.name().to_string()))
             .finish()
     }
 }
@@ -1209,6 +1257,13 @@ impl ViewerPlugin {
     /// How remote pages and images are fetched (none: never).
     pub fn fetch(mut self, fetch: Arc<dyn Fetch>) -> Self {
         self.fetch = Some(fetch);
+        self
+    }
+
+    /// What plays local videos, in place of this build's (GStreamer with the
+    /// `video` feature, nothing without it).
+    pub fn video(mut self, backend: Arc<dyn VideoBackend>) -> Self {
+        self.video = Some(backend);
         self
     }
 }
@@ -1241,6 +1296,9 @@ impl Plugin for ViewerPlugin {
         let v = app
             .service(&VIEWER)
             .ok_or_else(|| PluginError::Failed("the viewer service is missing".into()))?;
+        if let Some(backend) = &self.video {
+            v.set_video_backend(Some(backend.clone()));
+        }
         if let Some(l) = links::links(&app) {
             l.set_inside(Some(Arc::new(Shows(v.clone()))));
         }
@@ -1276,6 +1334,7 @@ impl Plugin for ViewerPlugin {
         )?;
         ctx.on(egui_pop_api::hooks::On::Pass, |app, _| {
             if let Ok(v) = viewer(app) {
+                v.video_pass(app);
                 v.poll(app);
             }
         });
@@ -1283,14 +1342,27 @@ impl Plugin for ViewerPlugin {
     }
 
     fn disconnect(&mut self, ctx: &mut Ctx<'_>) {
-        if let Some(l) = links::links(&ctx.app()) {
+        let app = ctx.app();
+        if let Ok(v) = viewer(&app) {
+            v.stop_video(&app);
+        }
+        if let Some(l) = links::links(&app) {
             l.set_inside(None);
         }
     }
 }
 
+const CAT: &str = "Viewer";
+
+/// A command of the video page, on a key of its picture. Declared in every
+/// build, as the catalogues name it, and only runnable with a video page shown.
+fn video_key(id: CommandId, title: &str, key: &str) -> CommandSpec {
+    CommandSpec::new(id, title, CAT)
+        .when(VIDEO_CONTEXT)
+        .key_with(key, BindOptions::surface(VIDEO_SURFACE))
+}
+
 fn commands(ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
-    const CAT: &str = "Viewer";
     ctx.command(
         CommandSpec::new(CMD_BACK, "Back", CAT)
             .description("Shows the viewer's previous page.")
@@ -1384,6 +1456,53 @@ fn commands(ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
             let v = viewer(call.app)?;
             v.allowed_hosts(call.app);
             Ok(v.state())
+        },
+    )?
+    .command(
+        video_key(CMD_VIDEO_TOGGLE, "Play or pause the video", "Space")
+            .description("Plays or pauses the video the viewer shows; from its end, plays it from the start."),
+        |call| viewer(call.app)?.video_toggle(call.app),
+    )?
+    .command(
+        video_key(CMD_VIDEO_BACK, "Move the video back", "Left")
+            .description("Moves the viewer's video back a few seconds."),
+        |call| viewer(call.app)?.video_seek_by(call.app, -video::SEEK_STEP.as_secs_f64()),
+    )?
+    .command(
+        video_key(CMD_VIDEO_AHEAD, "Move the video ahead", "Right")
+            .description("Moves the viewer's video ahead a few seconds."),
+        |call| viewer(call.app)?.video_seek_by(call.app, video::SEEK_STEP.as_secs_f64()),
+    )?
+    .command(
+        video_key(CMD_VIDEO_LOUDER, "Make the video louder", "Up")
+            .description("Raises the volume of the viewer's video one step."),
+        |call| viewer(call.app)?.video_volume_by(call.app, video::VOLUME_STEP),
+    )?
+    .command(
+        video_key(CMD_VIDEO_QUIETER, "Make the video quieter", "Down")
+            .description("Lowers the volume of the viewer's video one step."),
+        |call| viewer(call.app)?.video_volume_by(call.app, -video::VOLUME_STEP),
+    )?
+    .command(
+        CommandSpec::new(CMD_VIDEO_SEEK, "Move the video to a time", CAT)
+            .description("Moves the viewer's video to a position (`seconds`).")
+            .when(VIDEO_CONTEXT)
+            .args(json!({ "seconds": 12.5 }))
+            .hidden(),
+        |call| {
+            let seconds = call.args["seconds"].as_f64().ok_or("`seconds` is missing")?;
+            viewer(call.app)?.video_seek_to(call.app, seconds)
+        },
+    )?
+    .command(
+        CommandSpec::new(CMD_VIDEO_VOLUME, "Set the video's volume", CAT)
+            .description("Sets the volume of the viewer's video (`volume`, from 0 to 1).")
+            .when(VIDEO_CONTEXT)
+            .args(json!({ "volume": 0.5 }))
+            .hidden(),
+        |call| {
+            let volume = call.args["volume"].as_f64().ok_or("`volume` is missing")?;
+            viewer(call.app)?.video_volume(call.app, volume as f32)
         },
     )?;
     Ok(())

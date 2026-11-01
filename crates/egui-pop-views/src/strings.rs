@@ -155,6 +155,31 @@ pub const VIEWER_UNSUPPORTED: StrKey = StrKey::new(
     "egui-pop-views-viewer-unsupported",
     "This page cannot be shown here",
 );
+/// A video page's button while paused.
+pub const VIEWER_VIDEO_PLAY: StrKey = StrKey::new("egui-pop-views-viewer-video-play", "Play");
+/// A video page's button while playing.
+pub const VIEWER_VIDEO_PAUSE: StrKey = StrKey::new("egui-pop-views-viewer-video-pause", "Pause");
+/// A video page's position slider.
+pub const VIEWER_VIDEO_POSITION: StrKey =
+    StrKey::new("egui-pop-views-viewer-video-position", "Position");
+/// A video page's volume slider.
+pub const VIEWER_VIDEO_VOLUME: StrKey = StrKey::new("egui-pop-views-viewer-video-volume", "Volume");
+/// A video page's time.
+pub const VIEWER_VIDEO_TIME: StrKey = StrKey::new(
+    "egui-pop-views-viewer-video-time",
+    "{ $elapsed } / { $total }",
+);
+/// A video page's picture, its accessible name.
+pub const VIEWER_VIDEO_PICTURE: StrKey =
+    StrKey::new("egui-pop-views-viewer-video-picture", "Video: { $name }");
+/// A video page before its first picture.
+pub const VIEWER_VIDEO_LOADING: StrKey =
+    StrKey::new("egui-pop-views-viewer-video-loading", "Opening the video…");
+/// The title of the error page of a video that cannot be played.
+pub const VIEWER_VIDEO_FAILED: StrKey = StrKey::new(
+    "egui-pop-views-viewer-video-failed",
+    "This video cannot be played here",
+);
 /// The viewer's content's accessible name.
 pub const VIEWER_PAGE: StrKey = StrKey::new("egui-pop-views-viewer-page", "Page");
 /// A code block's accessible name.
@@ -227,6 +252,14 @@ pub const ALL: &[StrKey] = &[
     VIEWER_TOO_LARGE,
     VIEWER_UNSUPPORTED,
     VIEWER_PAGE,
+    VIEWER_VIDEO_PLAY,
+    VIEWER_VIDEO_PAUSE,
+    VIEWER_VIDEO_POSITION,
+    VIEWER_VIDEO_VOLUME,
+    VIEWER_VIDEO_TIME,
+    VIEWER_VIDEO_PICTURE,
+    VIEWER_VIDEO_LOADING,
+    VIEWER_VIDEO_FAILED,
 ];
 
 #[cfg(test)]

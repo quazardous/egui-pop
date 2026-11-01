@@ -2362,6 +2362,34 @@ command-viewer-state =
     .description = La page de la visionneuse (adresse, état ou erreur, titre, titres de sections, texte, liens, ce que son HTML n’a pas montré), son historique, sa recherche, son zoom, ses images et les hôtes autorisés.
     .title = Lire la visionneuse
 
+command-viewer-video-ahead =
+    .description = Avance la vidéo de la visionneuse de quelques secondes.
+    .title = Avancer la vidéo
+
+command-viewer-video-back =
+    .description = Recule la vidéo de la visionneuse de quelques secondes.
+    .title = Reculer la vidéo
+
+command-viewer-video-louder =
+    .description = Monte le volume de la vidéo de la visionneuse d’un cran.
+    .title = Monter le son de la vidéo
+
+command-viewer-video-quieter =
+    .description = Baisse le volume de la vidéo de la visionneuse d’un cran.
+    .title = Baisser le son de la vidéo
+
+command-viewer-video-seek =
+    .description = Amène la vidéo de la visionneuse à une position (`seconds`).
+    .title = Amener la vidéo à un instant
+
+command-viewer-video-toggle =
+    .description = Lit ou met en pause la vidéo de la visionneuse ; depuis sa fin, la relit depuis le début.
+    .title = Lire ou mettre en pause la vidéo
+
+command-viewer-video-volume =
+    .description = Règle le volume de la vidéo de la visionneuse (`volume`, de 0 à 1).
+    .title = Régler le volume de la vidéo
+
 command-viewer-zoom-in =
     .description = Agrandit la page de la visionneuse d’un cran.
     .title = Agrandir la page
@@ -2418,6 +2446,22 @@ egui-pop-views-viewer-reload = Recharger
 egui-pop-views-viewer-too-large = Cette page est trop grande pour être affichée ici
 
 egui-pop-views-viewer-unsupported = Cette page ne peut pas être affichée ici
+
+egui-pop-views-viewer-video-failed = Cette vidéo ne peut pas être lue ici
+
+egui-pop-views-viewer-video-loading = Ouverture de la vidéo…
+
+egui-pop-views-viewer-video-pause = Pause
+
+egui-pop-views-viewer-video-picture = Vidéo : { $name }
+
+egui-pop-views-viewer-video-play = Lecture
+
+egui-pop-views-viewer-video-position = Position
+
+egui-pop-views-viewer-video-time = { $elapsed } / { $total }
+
+egui-pop-views-viewer-video-volume = Volume
 
 egui-pop-views-viewer-zoom = Zoom de la page : { $zoom }
 

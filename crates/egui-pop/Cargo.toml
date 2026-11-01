@@ -68,6 +68,11 @@ views-markdown = ["views", "egui-pop-views/markdown"]
 ## Apache-2.0) and mapped to the same blocks as markdown; no scripts, no
 ## styles, no forms, no frames.
 views-html = ["views-markdown", "egui-pop-views/html"]
+## The viewer's video page: local video files played inside, through
+## GStreamer (the crates are MIT OR Apache-2.0; its libraries are LGPL and
+## installed on the system, needed to build and to run). Off by default: no
+## default build and no web build needs GStreamer.
+views-video = ["views-markdown", "egui-pop-views/video"]
 ## Text and code editors, with syntect highlighting (`egui-pop-editors`,
 ## re-exported as `egui_pop::editors`).
 editors = ["dep:egui-pop-editors", "egui-pop-editors/syntect"]

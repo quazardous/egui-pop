@@ -16,7 +16,7 @@ use egui_pop_core::theme::Tokens;
 use egui_pop_model::commands::Origin;
 
 use super::page::{Markdown, escape, resolve};
-use super::{Content, Image, Status, Viewer};
+use super::{Content, Image, Status, Viewer, video};
 use crate::strings as txt;
 
 /// What the user asked for while the panel was drawn.
@@ -33,10 +33,12 @@ enum Action {
     FindClose,
     Find(String),
     Zoom(i32),
+    Video(video::Act),
 }
 
 /// Draws the viewer's panel.
 pub(super) fn show(ui: &mut Ui, app: &AppHandle, v: &Viewer) {
+    v.video_in_view(app);
     v.poll(app);
     let mut actions = Vec::new();
     focus::scope(ui, super::SURFACE, &[], |ui| {
@@ -81,6 +83,7 @@ pub(super) fn show(ui: &mut Ui, app: &AppHandle, v: &Viewer) {
             Action::Zoom(by) => {
                 v.zoom_step(by);
             }
+            Action::Video(act) => v.video_act(app, act),
         }
         ui.ctx().request_repaint();
     }
@@ -320,6 +323,11 @@ fn body(ui: &mut Ui, v: &Viewer, actions: &mut Vec<Action>) {
                 }
             });
         }
+        Status::Shown(page) if matches!(page.content, Content::Video(_)) => {
+            let mut acts = Vec::new();
+            video::draw(ui, v, &mut acts);
+            actions.extend(acts.into_iter().map(Action::Video));
+        }
         Status::Shown(page) => {
             let (zoom, restore) = {
                 let mut i = lock(&v.inner);
@@ -345,6 +353,8 @@ fn body(ui: &mut Ui, v: &Viewer, actions: &mut Vec<Action>) {
                     Content::Image(uri) => {
                         ui.add(egui::Image::from_uri(uri).fit_to_original_size(zoom));
                     }
+                    // Drawn above, without the scrolling.
+                    Content::Video(_) => {}
                 }
             });
             lock(&v.inner).scroll = out.state.offset.y;
