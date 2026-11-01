@@ -1,6 +1,7 @@
 # 0017: Links and outside content: one service opens them, an egui-native viewer shows what is safe, the rest goes outside
 
-Date: 2026-10-28. Status: **accepted** (2026-10-28).
+Date: 2026-10-28. Status: **accepted** (2026-10-28), revised on 2026-11-01
+for local video ([below](#local-video-inside-revised-2026-11-01)).
 
 The analysis behind it (what exists today, what egui and eframe do with
 a link, a survey of openers, markdown and HTML renderers, webviews and
@@ -72,7 +73,8 @@ target and picks the default (`Auto`):
 | Target | Plain click | Ctrl+click, middle click |
 |---|---|---|
 | Web page (`https:`, `http:`) | the system browser; a new tab on the web build | the same |
-| Video (YouTube, Vimeo, a remote video file) | the system browser; never embedded | the same |
+| Video on the web (YouTube, Vimeo, a remote video file) | the system browser; not embedded (an [open question](#local-video-inside-revised-2026-11-01)) | the same |
+| Local video file | the viewer when it has a video player (the opt-in `video` feature), else as a local file below | outside |
 | Markdown or HTML page shipped by the application (`docs:` pages) | the in-app viewer when its plugin is present, else the online copy in the browser | outside |
 | Remote markdown or HTML | the browser, unless its host is one the application declares as its documentation | outside |
 | Image | local: the viewer, else the system's default application; remote: the browser | outside |
@@ -105,7 +107,9 @@ feature); HTML is parsed by html5ever, cleaned by ammonia's allow-list
 (no scripts, no styles, no forms, no iframes) and mapped to the same
 blocks as markdown; images go through egui's loaders. It works on
 native and on the web build alike. What needs a real web engine
-(YouTube, full HTML, JavaScript) opens outside. **No webview now**: wry
+(YouTube, full HTML, JavaScript) opens outside. A local video file plays
+inside when the opt-in video page is built in, without a web engine.
+**No webview now**: wry
 needs GTK and X11 for a child view on Linux and the egui integration is
 experimental; Servo and Blitz bring MPL code that `deny.toml` refuses.
 An opt-in webview plugin stays an open question.
@@ -169,8 +173,9 @@ confirmation are **owned**: no crate has them. wry and egui_webview
 - Help pages and shipped HTML render offline, on native and the web,
   with no web engine in the binary.
 - No third-party request happens before the user asks.
-- Videos and full web pages are never shown inside; that is a choice,
-  revisited only with the webview question.
+- Remote videos and full web pages are not shown inside; that is a choice,
+  revisited only with the webview question or a trial of an embedded player
+  (no promise either way). Local videos play inside with the `video` feature.
 - The terminal's Ctrl+click moves onto `links::open` (source: content);
   the `files.reveal` command the toasts' example names becomes real.
 
@@ -289,3 +294,33 @@ the interface's thread, as it must on the web build, and is quadratic in
 the depth. A limit needs no second path through the viewer; parsing on a
 thread would need one on native alone, and the limit on the web all the
 same.
+
+## Local video inside (revised 2026-11-01)
+
+This revises "video opens outside" for **local files only**, as the owner
+decided on 2026-11-01. With the opt-in `video` feature of `egui-pop-views` (the
+facade's `views-video`), a local video file plays in the viewer: play and pause,
+seek, volume, the time, with sound. Without the feature, on the web build, or
+with a host that gives no player, it opens outside as any local file, after the
+same confirmation.
+
+- **The policy** classifies a local file with a video extension as `Kind::Video`
+  and sends it inside when `Caps::video` is set, which the links service reads
+  from the viewer (`Inside::plays_video`). It is confirmed as a local image is:
+  not inside, except for an agent; always outside.
+- **Remote video and YouTube stay outside.** Whether an embedded player is worth
+  a trial is an **open question**: nothing here promises one, and a trial decides
+  nothing until the owner has read its result.
+- **GStreamer** decodes (`gstreamer`, `gstreamer-app`, `gstreamer-video`, MIT OR
+  Apache-2.0). Its libraries are LGPL and installed on the system, not crates:
+  no LGPL code enters the crate tree, and `deny.toml` is unchanged. The survey is
+  in the [appendix](0017-links-and-outside-content-analysis.md#playing-a-local-video).
+  The player sits behind `VideoBackend`, which a host may replace.
+- **Default builds and the web build do not need GStreamer.** The crates are
+  optional and never built for `wasm32`.
+- **A machine without GStreamer's libraries does not start a binary built with
+  the feature**: the bindings link them. An application offering the feature
+  declares them as a package dependency. What is missing at run time beyond that
+  (the `playbin` plugin, a demuxer, a decoder) and what cannot be read (a bad
+  file, a refused permission) ends on the viewer's error page with **Open
+  outside**.
