@@ -91,6 +91,16 @@ impl Plugin for ViewerPage {
                 .description("The in-app viewer: the application's help pages, markdown, a safe subset of HTML and images in a panel, with back and forward, an address bar, find in page, zoom, remote images loaded only once allowed, and an error page; short texts with emphasis, code and links.")
                 .group("Framework", 106),
         )?;
+        #[cfg(feature = "video")]
+        ctx.story(
+            Story::new(
+                StoryId::from_static("viewer-video"),
+                "Video in the viewer",
+                video::show,
+            )
+            .description("A local video file played in the in-app viewer, through the system's GStreamer: Play and Pause, the position, the volume and the time, a file it cannot play on an error page with Open outside, a remote video left outside.")
+            .group("Framework", 107),
+        )?;
         Ok(())
     }
 }
@@ -126,5 +136,68 @@ fn show(ui: &mut Ui, app: &AppHandle) {
             s["back"].as_array().map_or(0, Vec::len),
             s["forward"].as_array().map_or(0, Vec::len),
         ));
+    }
+}
+
+/// The video story (feature `video`): a clip written at the user's asking, as
+/// the repository holds no video.
+#[cfg(feature = "video")]
+mod video {
+    use std::path::PathBuf;
+    use std::sync::OnceLock;
+
+    use egui::Ui;
+    use egui_pop::api::AppHandle;
+    use egui_pop::api::links;
+    use egui_pop::views::viewer::write_test_clip;
+
+    use super::section;
+
+    /// The clip and a file that is no video, or why not.
+    static FILES: OnceLock<Result<(PathBuf, PathBuf), String>> = OnceLock::new();
+
+    fn write(ctx: egui::Context) {
+        let _ = FILES.get_or_init(|| {
+            let dir = std::env::temp_dir();
+            let pid = std::process::id();
+            let clip = dir.join(format!("egui-pop-gallery-clip-{pid}.avi"));
+            let bad = dir.join(format!("egui-pop-gallery-not-a-video-{pid}.mp4"));
+            write_test_clip(&clip, 5)?;
+            std::fs::write(&bad, [0x5a; 4096]).map_err(|e| e.to_string())?;
+            Ok((clip, bad))
+        });
+        ctx.request_repaint();
+    }
+
+    pub(super) fn show(ui: &mut Ui, app: &AppHandle) {
+        ui.label("A local video file opens in the viewer. On its picture: Space plays or pauses, Left and Right move by five seconds, Up and Down change the volume.");
+        section(ui, "A clip written by GStreamer's test sources");
+        match FILES.get() {
+            None => {
+                if ui.button("Write the clip").clicked() {
+                    let ctx = ui.ctx().clone();
+                    std::thread::spawn(move || write(ctx));
+                }
+            }
+            Some(Err(why)) => {
+                ui.label(format!("The clip could not be written: {why}"));
+            }
+            Some(Ok((clip, bad))) => {
+                ui.horizontal_wrapped(|ui| {
+                    let clip = format!("file://{}", clip.display());
+                    links::link(ui, app, "The clip", &clip);
+                    let bad = format!("file://{}", bad.display());
+                    links::link(ui, app, "A file that is no video", &bad);
+                });
+            }
+        }
+        section(ui, "A remote video");
+        ui.label("Stays outside: it opens in the browser.");
+        links::link(
+            ui,
+            app,
+            "A video on the web",
+            "https://example.org/clip.mp4",
+        );
     }
 }
