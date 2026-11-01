@@ -12,6 +12,8 @@ publishes.
 
 ### Added
 
+- A `linked-panels` page in the gallery (egui-pop-gallery; `docs/gallery.md`): a list
+  on the page drives a slow preview in a panel of its own, closed, moved or detached.
 - `Libraries::cursor` (egui-pop-views): the cursor a library published, beside its
   selection, for a preview in another panel.
 - `Files::highlighted` (egui-pop-api): the entry highlighted in the in-app picker of

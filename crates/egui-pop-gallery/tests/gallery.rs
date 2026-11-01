@@ -1954,6 +1954,96 @@ fn the_workbench_page_detaches_a_panel_into_its_own_window() {
     assert!(app.panel_visible(&notes));
 }
 
+/// Runs frames until a text shows; a preview's load takes its time on a
+/// worker.
+fn wait_for_label(h: &mut Harness<'_, Gallery>, label: &str) {
+    let start = std::time::Instant::now();
+    loop {
+        let _ = h.run_ok();
+        if h.query_by_label(label).is_some() {
+            return;
+        }
+        assert!(
+            start.elapsed() < std::time::Duration::from_secs(30),
+            "`{label}` never showed"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+}
+
+/// Presses a key in the page's list, whatever a window covers.
+fn key_in_linked_list(h: &mut Harness<'_, Gallery>, key: egui::Key) {
+    h.get_by_label("Photos to preview").focus();
+    h.run();
+    h.key_press(key);
+    h.run();
+}
+
+#[test]
+fn the_linked_panels_preview_follows_docked_detached_and_reopened() {
+    use egui_pop::model::commands::Origin;
+    use egui_pop::model::values::{Change, Set, Value};
+    use egui_pop_gallery::pages::linked::{PREVIEW, SELECTION};
+    let mut h = harness(options("pop-dark", Density::Comfortable, "linked-panels"));
+    h.run();
+    let app = h.state().app.handle().clone();
+    // Closed, it computes nothing.
+    assert!(!app.panel_visible(&PREVIEW));
+    h.get_by_label("Harbour at dawn").click();
+    h.run();
+    assert!(h.query_by_label("Selected: Harbour at dawn").is_some());
+    assert!(h.query_by_label("Previews computed: 0").is_some());
+    // Opened, it picks up the current selection.
+    h.get_by_label("Open the preview").click();
+    wait_for_label(&mut h, "Preview of Harbour at dawn");
+    // Docked, it follows.
+    key_in_linked_list(&mut h, egui::Key::ArrowDown);
+    assert!(h.query_by_label("Selected: Market street").is_some());
+    wait_for_label(&mut h, "Preview of Market street");
+    // Detached, it keeps what it shows and follows from its window.
+    app.detach_panel(&PREVIEW);
+    h.run();
+    h.run();
+    assert_eq!(app.layout().auxiliary.len(), 1);
+    assert_eq!(app.layout().auxiliary[0].panel, PREVIEW);
+    wait_for_label(&mut h, "Preview of Market street");
+    key_in_linked_list(&mut h, egui::Key::ArrowDown);
+    wait_for_label(&mut h, "Preview of Old bridge");
+    // Selected elsewhere (an agent writing the value): the panel and the
+    // list both follow.
+    let store = app.store();
+    egui_pop::core::lock(&store)
+        .set(
+            Set::new(
+                SELECTION,
+                Change::To(Value::Text("Lighthouse".into())),
+                Origin::User,
+            )
+            .untracked(),
+        )
+        .unwrap();
+    wait_for_label(&mut h, "Preview of Lighthouse");
+    assert!(h.query_by_label("Selected: Lighthouse").is_some());
+    assert!(h.query_by_label("Previews computed: 4").is_some());
+    // Closed again, a change computes nothing; reopened, it shows the
+    // current selection, and only that was computed.
+    app.attach_panel(&PREVIEW);
+    h.run();
+    app.set_panel_visible(&PREVIEW, false);
+    h.run();
+    assert!(app.layout().auxiliary.is_empty());
+    assert!(!app.panel_visible(&PREVIEW));
+    key_in_linked_list(&mut h, egui::Key::ArrowUp);
+    key_in_linked_list(&mut h, egui::Key::ArrowUp);
+    assert!(h.query_by_label("Selected: Snow on the pass").is_some());
+    assert!(h.query_by_label("Previews computed: 4").is_some());
+    assert!(h.query_by_label_contains("Preview of").is_none());
+    app.set_panel_visible(&PREVIEW, true);
+    wait_for_label(&mut h, "Preview of Snow on the pass");
+    assert!(h.query_by_label("Previews computed: 5").is_some());
+    assert!(h.state().app.handle().diagnostics().is_empty());
+}
+
 #[test]
 fn the_arrangements_page_switches_saves_and_vetoes() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "arrangements"));

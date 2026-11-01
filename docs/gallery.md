@@ -62,8 +62,9 @@ library), `text-editor`,
 `palettes`, `arrangements`, `contexts` (the context stack: places and modes, and the status bar that follows them), `clipboard` (typed items copied between palettes, paste special's previews), `links` (one policy for every link: declared links, links that ask first, local files, an agent's request), `viewer` (help pages, markdown, a safe subset of HTML and images in a panel), `strips` (the activity bar, and status items: live states, a popover, hover cards), `jobs` (a pretend host's
 background jobs), `frame`, `scale`, `pointer` (pointer gesture profiles),
 `platform` (the platform services),
-`settings`, `i18n` (translations) and `debug` (the debug
-bridge). `Alt+Down` and `Alt+Up` go to the next and previous page,
+`settings`, `i18n` (translations), `debug` (the debug
+bridge) and `linked-panels` (a list driving a slow preview in another
+panel, closed, moved or detached). `Alt+Down` and `Alt+Up` go to the next and previous page,
 `Ctrl+Shift+T` to the next theme.
 
 It also builds for the web (`wasm32-unknown-unknown`, with Trunk from
