@@ -67,7 +67,7 @@ impl VideoBackend for GStreamer {
             playbin.set_property("audio-sink", &sink);
         }
         let mailbox = Mailbox::default();
-        playbin.set_property("video-sink", &picture_sink(&mailbox, &request.egui));
+        playbin.set_property("video-sink", picture_sink(&mailbox, &request.egui));
         let bus = playbin
             .bus()
             .ok_or("GStreamer's `playbin` element has no bus")?;
