@@ -41,7 +41,7 @@ const FAULT: Slot<Fault> = Slot::new("core.fault");
 const FAILED: Slot<Vec<Id>> = Slot::new("core.fault.failed");
 
 /// The panic's message.
-fn message(payload: &(dyn std::any::Any + Send)) -> String {
+pub(crate) fn message(payload: &(dyn std::any::Any + Send)) -> String {
     if let Some(s) = payload.downcast_ref::<&str>() {
         (*s).to_string()
     } else if let Some(s) = payload.downcast_ref::<String>() {

@@ -12,6 +12,11 @@ publishes.
 
 ### Added
 
+- `latest::Latest` (egui-pop-core): a slow load that follows a selection. A panel
+  asks for the current key each time it draws; the latest asked wins, a load asked
+  in between never starts, one running is told through `Cancel` and its result
+  dropped, one load runs at a time, and nothing runs while the panel is hidden.
+  A load that panics says so instead of blocking the next one.
 - Keys on scroll areas (egui-pop-core, egui-pop-views; `docs/inputs.md`):
   `UiPop::scroll_area` answers Page Up and Down (its height less a row), Home, End
   and the arrows, holding the focus or, with nothing focused, under the pointer,
