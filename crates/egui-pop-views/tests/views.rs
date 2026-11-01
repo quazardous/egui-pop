@@ -824,6 +824,110 @@ fn a_list_selects_with_the_pointer_and_the_keyboard() {
     assert!(h.state().0.selection().is_empty());
 }
 
+/// Over `at`, a wheel's lines down. In one gesture, as a touchpad's, so that egui
+/// does not smooth it over many passes.
+fn wheel<S>(h: &mut Harness<'_, S>, at: egui::Pos2, lines: f32) {
+    let event = |delta, phase| egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Line,
+        delta: egui::vec2(0.0, delta),
+        modifiers: Modifiers::NONE,
+        phase,
+    };
+    h.hover_at(at);
+    h.run();
+    h.event(event(0.0, egui::TouchPhase::Start));
+    h.event(event(-lines, egui::TouchPhase::Move));
+    h.run();
+    h.event(event(0.0, egui::TouchPhase::End));
+    h.run();
+}
+
+/// In a panel that scrolls: the view above a tall page, and where the panel is.
+struct InPanel {
+    list: ListState<u32>,
+    table: TableState<u32>,
+    rows: Rows,
+    use_table: bool,
+    panel: f32,
+}
+
+fn in_panel(rows_in_view: u32, use_table: bool) -> Harness<'static, InPanel> {
+    Harness::builder()
+        .with_size(egui::vec2(400.0, 400.0))
+        .build_ui_state(
+            |ui, p: &mut InPanel| {
+                let out = egui::ScrollArea::vertical()
+                    .id_salt("panel")
+                    .show(ui, |ui| {
+                        if p.use_table {
+                            let columns = COLUMNS();
+                            DataTable::new("files", &columns).height(150.0).show(
+                                ui,
+                                &mut p.table,
+                                &mut p.rows,
+                            );
+                        } else {
+                            ListView::new("rows")
+                                .height(150.0)
+                                .show(ui, &mut p.list, &mut p.rows);
+                        }
+                        ui.allocate_space(egui::vec2(10.0, 2000.0));
+                    });
+                p.panel = out.state.offset.y;
+            },
+            InPanel {
+                list: ListState::new(),
+                table: TableState::new(),
+                rows: rows(rows_in_view),
+                use_table,
+                panel: 0.0,
+            },
+        )
+}
+
+#[test]
+fn a_list_keeps_the_wheel_at_its_end_in_a_panel_that_scrolls() {
+    let mut h = in_panel(30, false);
+    h.run();
+    assert!(h.query_by_label("Row 00029").is_none());
+    for _ in 0..12 {
+        wheel(&mut h, egui::pos2(100.0, 75.0), 4.0);
+    }
+    assert!(h.query_by_label("Row 00029").is_some(), "at its end");
+    assert_eq!(h.state().panel, 0.0);
+}
+
+#[test]
+fn a_list_with_nothing_to_scroll_hands_the_wheel_on() {
+    let mut h = in_panel(2, false);
+    h.run();
+    wheel(&mut h, egui::pos2(100.0, 75.0), 4.0);
+    assert!(h.state().panel > 0.0);
+}
+
+#[test]
+fn a_table_keeps_the_wheel_at_its_end_in_a_panel_that_scrolls() {
+    let mut h = in_panel(30, true);
+    h.run();
+    for _ in 0..12 {
+        wheel(&mut h, egui::pos2(100.0, 75.0), 4.0);
+    }
+    // The row and its cell both carry the name.
+    assert!(
+        h.query_all_by_label("Row 00029").next().is_some(),
+        "at its end"
+    );
+    assert_eq!(h.state().panel, 0.0);
+}
+
+#[test]
+fn a_table_with_nothing_to_scroll_hands_the_wheel_on() {
+    let mut h = in_panel(2, true);
+    h.run();
+    wheel(&mut h, egui::pos2(100.0, 75.0), 4.0);
+    assert!(h.state().panel > 0.0);
+}
+
 /// A table row by its name (its cells carry their own labels).
 fn row<'h, S>(h: &'h Harness<'_, S>, label: &'h str) -> egui_kittest::Node<'h> {
     h.get_by_role_and_label(egui::accesskit::Role::Button, label)

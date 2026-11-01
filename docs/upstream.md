@@ -71,10 +71,11 @@ limit.
   repaint, so a body that grew, or lost rows, shows blank room under its
   last row until something else repaints.
 - **Tracked upstream:** not filed yet.
-- **Workaround:** `core::sections`: after a body's scroll area, the pointer
-  over it, `contain_wheel` clears the vertical delta from the input, as
-  `ScrollArea` itself does when it takes a wheel; `scrolled` asks for a
-  repaint when the offset changed since the last pass.
+- **Workaround:** `core::ui::contain_wheel`, used by sections, the views and
+  `UiPop::scroll_area_contained`: after a scroll area, the pointer over it, it
+  clears the delta of the ways it can go from the input, as `ScrollArea` itself
+  does when it takes a wheel; `core::sections::scrolled` asks for a repaint when
+  the offset changed since the last pass.
 - **When it can go:** when `ScrollArea` has such an option and repaints
   after clamping.
 

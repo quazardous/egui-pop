@@ -237,6 +237,25 @@ A move is not animated, whatever the motion setting, and a held key goes on.
   scrolling without them (`ScrollSource`), has no keys, as it has no bar to say
   which ways it goes. A key with a modifier is not the area's.
 
+### The wheel at a scroll area's end
+
+At its end a scroll area leaves the wheel to the area around it, as egui does. That
+suits a plain body, as a sizeable text in a panel should not trap the wheel, but in
+a list a notch too many moves the panel under the pointer, and the next lands on
+another widget. So what nests keeps it:
+
+- **The views** do so themselves: the list, the tree, the library's grid, the
+  thumbnail grid, the table, the editor, a section's body. The terminal takes every
+  wheel over it.
+- **An area of yours**: `ui.scroll_area_contained(area, add)` in place of
+  `ui.scroll_area`, or `ui::contain_wheel(ui, &out)` after one you show yourself
+  (`show_viewport`, `show_rows`).
+- **Only the ways it can go.** A list with nothing to scroll hands the wheel on, and
+  a sideways wheel goes on past an area that only scrolls down. An area with its bars
+  hidden holds nothing, as it has no bar to say which ways it goes.
+- **Popups and dialogs** need none of this: each is a layer of its own, and what
+  scrolls under it does not see the wheel.
+
 ### A popover keeps Tab
 
 With the focus plugin (`focus::install`; an application has it), Tab does not walk

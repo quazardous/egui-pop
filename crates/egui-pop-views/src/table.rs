@@ -457,6 +457,18 @@ impl<'a> DataTable<'a> {
             }
             None => draw(ui),
         };
+        // upstream: egui_table says nothing of its scroll area, so what overflows
+        // comes from the sizes it was given.
+        let wide = state.widths.iter().sum::<f32>();
+        let tall = len as f32 * row_h + row_h + 4.0;
+        egui_pop_core::ui::contain_wheel_in(
+            ui,
+            inner.rect,
+            [
+                wide > inner.rect.width() + 0.5,
+                tall > inner.rect.height() + 0.5,
+            ],
+        );
         let take_focus = delegate.take_focus;
         let sort_to = delegate.sort_to.take();
         state.page = delegate.page;

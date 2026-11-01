@@ -27,6 +27,12 @@ publishes.
   in between never starts, one running is told through `Cancel` and its result
   dropped, one load runs at a time, and nothing runs while the panel is hidden.
   A load that panics says so instead of blocking the next one.
+- The wheel stays in what nests (egui-pop-core, egui-pop-views, egui-pop-editors,
+  egui-pop-api; `docs/inputs.md`): a wheel past the end of a list, a tree, a grid, a
+  table, an editor or the file picker's preview no longer moves the panel around it.
+  With nothing to scroll they still hand it on. `UiPop::scroll_area_contained` and
+  `ui::contain_wheel` ask the same of an application's own areas; plain areas keep
+  chaining.
 - Keys on scroll areas (egui-pop-core, egui-pop-views; `docs/inputs.md`):
   `UiPop::scroll_area` answers Page Up and Down (its height less a row), Home, End
   and the arrows, holding the focus or, with nothing focused, under the pointer,

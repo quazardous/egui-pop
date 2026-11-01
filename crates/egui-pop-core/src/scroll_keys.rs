@@ -134,7 +134,7 @@ pub(crate) fn answer<R>(ui: &mut Ui, out: &ScrollAreaOutput<R>, start: usize) {
 ///
 /// upstream: `ScrollArea` keeps to itself which ways it may scroll, and content
 /// wider than a vertical area overflows a way it cannot go.
-fn axes<R>(ctx: &Context, out: &ScrollAreaOutput<R>) -> [bool; 2] {
+pub(crate) fn axes<R>(ctx: &Context, out: &ScrollAreaOutput<R>) -> [bool; 2] {
     let more = out.content_size - out.inner_rect.size();
     [0_usize, 1_usize].map(|d| {
         more[d] > 0.5

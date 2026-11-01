@@ -93,8 +93,8 @@ differ from "hover" only for keys and code.
   a bar at rest always lies over the content.
 - **Sections** force the bar on when the whole stack overflows, and only
   then. A wheel over a body stops there (`contain_wheel`, see
-  [Collapsible sections](sections.md)). This is the only place with
-  containment and the only forced bar.
+  [Collapsible sections](sections.md)). This was the only place with
+  containment as this page was written, until item 7, and is the only forced bar.
 - **Keys.** The data views (`views::nav`, the list, the tree, the library's
   grid), the terminal and the editor read Page Up/Down and Home/End. A plain
   scroll area did not, as this page was written; `UiPop::scroll_area` does since
@@ -528,12 +528,19 @@ Sizes: S is under a day, M a few days. One pull request each.
    scroll area". egui's widgets read keys without taking them, so a focused widget
    keeps them by sensing drags or by `focus::takes_keys`, and the arrows stay
    egui's while one is focused ([inputs](inputs.md#keys-on-a-scroll-area)).
-7. **Containment as an option, used by what nests.** `contain_wheel` moves out
-   of sections into `UiPop::scroll_area` (`.contain_wheel(true)`), used by the
-   views (`views::rows`, the grid, the table), popups and dialogs, the terminal
-   and the editor. A plain panel with no scroll around it has nothing to chain
-   to. Plain bodies keep chaining: a sizeable text in a panel should not trap
-   the wheel. Size: S.
+7. **Done: containment as an option, used by what nests.** `contain_wheel` moved
+   out of sections to `core::ui`, with `UiPop::scroll_area_contained` for an area
+   drawn through the kit, as `ScrollArea` is egui's type and takes no option of
+   ours. Until item 9 the views call `ui::contain_wheel` after their own area: the
+   list and the tree (`views::rows`), the library's grid, the thumbnail grid, the
+   editor, and the table through `contain_wheel_in`, as `egui_table` hides its area.
+   So do the file picker's previews, in their pane's own area. It holds only the
+   ways with something to scroll, so a short list hands the wheel on, as a section's
+   body does. Two the plan named take nothing. The terminal already took every
+   wheel over it, whether its scrollback moves or not. A popup or a dialog is a
+   layer of its own, and an area under it does not see the wheel, which a test
+   holds. A plain panel with no scroll around it has nothing to chain to. Plain
+   bodies keep chaining: a sizeable text in a panel should not trap the wheel.
 8. **Wheel speed.** `input.wheel_speed`, in Settings › Input, multiplying
    `line_scroll_speed`, and read from `SPI_GETWHEELSCROLLLINES` as its default on
    Windows (3 lines being today's 40 points). Canvases read it too, through

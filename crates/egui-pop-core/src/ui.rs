@@ -27,7 +27,7 @@
 //! short; [`role_text`] and [`Space::points`] serve the rest.
 
 use egui::scroll_area::ScrollAreaOutput;
-use egui::{ComboBox, InnerResponse, Response, RichText, ScrollArea, Shadow, Ui, WidgetText};
+use egui::{ComboBox, InnerResponse, Rect, Response, RichText, ScrollArea, Shadow, Ui, WidgetText};
 
 use crate::fonts::{self, Role, Weight};
 use crate::kit::{Kit, State};
@@ -109,6 +109,51 @@ pub(crate) fn role_family(ctx: &egui::Context, weight: Weight) -> Option<egui::F
         .then_some(family)
 }
 
+/// Keeps the wheel over a scroll area just drawn from what scrolls around it, for
+/// a view that shows its own `ScrollArea` (`show_viewport`, `show_rows`);
+/// [`UiPop::scroll_area_contained`] does it for the others. Call it right after
+/// the area, in the `Ui` it was shown in.
+///
+/// Only on the ways the area can go: with nothing to scroll one way, the wheel
+/// goes on to the area around it that way, so a short list does not stop a panel
+/// scrolling under the pointer. It reads those ways from the bars, as the keys do:
+/// an area with its bars hidden holds nothing.
+///
+/// upstream: a scroll area at its end leaves the wheel to its parents, and nothing
+/// asks it to keep it (docs/upstream.md).
+pub fn contain_wheel<R>(ui: &Ui, out: &ScrollAreaOutput<R>) {
+    let ways = crate::scroll_keys::axes(ui.ctx(), out);
+    // A bar beside the content lies outside the area's inner rectangle, and egui
+    // takes the wheel over it.
+    let over = ui.ctx().viewport(|v| {
+        [0_usize, 1_usize]
+            .iter()
+            .filter(|d| ways[**d])
+            .filter_map(|d| v.this_pass.widgets.get(out.id.with(*d)))
+            .fold(out.inner_rect, |rect, bar| rect.union(bar.rect))
+    });
+    contain_wheel_in(ui, over, ways);
+}
+
+/// [`contain_wheel`] for what scrolls in a way a [`ScrollAreaOutput`] does not
+/// tell: over `rect`, the wheel stops on the ways of `ways` (`[x, y]`) that are
+/// set. Taken as egui's own scroll area takes it, and only by the axis it would
+/// take.
+pub fn contain_wheel_in(ui: &Ui, rect: Rect, ways: [bool; 2]) {
+    if !ways[0] && !ways[1] || !ui.is_enabled() || !ui.rect_contains_pointer(rect) {
+        return;
+    }
+    let either = ui.style().always_scroll_the_only_direction && ways[0] != ways[1];
+    ui.input_mut(|i| {
+        if ways[0] || either {
+            i.smooth_scroll_delta.x = 0.0;
+        }
+        if ways[1] || either {
+            i.smooth_scroll_delta.y = 0.0;
+        }
+    });
+}
+
 mod sealed {
     pub trait Sealed {}
     impl Sealed for egui::Ui {}
@@ -179,6 +224,18 @@ pub trait UiPop: sealed::Sealed {
     /// inside. A widget reading those keys without sensing drags says so with
     /// [`focus::takes_keys`](crate::focus::takes_keys).
     fn scroll_area<R>(
+        &mut self,
+        area: ScrollArea,
+        add: impl FnOnce(&mut Ui) -> R,
+    ) -> ScrollAreaOutput<R>;
+
+    /// [`UiPop::scroll_area`] keeping the wheel at its ends ([`contain_wheel`]),
+    /// for what nests in something else that scrolls: a list in a panel, a
+    /// preview in a pane. A plain body keeps [`UiPop::scroll_area`], as a sizeable
+    /// text in a panel should not trap the wheel. A popup or a dialog needs
+    /// neither: it is a layer of its own, and what scrolls under it does not see
+    /// the wheel.
+    fn scroll_area_contained<R>(
         &mut self,
         area: ScrollArea,
         add: impl FnOnce(&mut Ui) -> R,
@@ -260,6 +317,16 @@ impl UiPop for Ui {
             out
         })
         .inner
+    }
+
+    fn scroll_area_contained<R>(
+        &mut self,
+        area: ScrollArea,
+        add: impl FnOnce(&mut Ui) -> R,
+    ) -> ScrollAreaOutput<R> {
+        let out = self.scroll_area(area, add);
+        contain_wheel(self, &out);
+        out
     }
 }
 

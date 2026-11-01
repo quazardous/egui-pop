@@ -64,6 +64,54 @@ fn click_editor<S>(h: &mut Harness<'_, S>, label: &str) {
 }
 
 #[test]
+fn an_editor_keeps_the_wheel_at_its_end_in_a_panel_that_scrolls() {
+    struct InPanel {
+        state: EditorState,
+        panel: f32,
+    }
+    let text = (0..40).map(|i| format!("line {i}\n")).collect::<String>();
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(600.0, 400.0))
+        .build_ui_state(
+            |ui, p: &mut InPanel| {
+                egui_pop_core::focus::install(ui.ctx());
+                let out = egui::ScrollArea::vertical()
+                    .id_salt("panel")
+                    .show(ui, |ui| {
+                        TextSurface::new()
+                            .label("Notes")
+                            .height(150.0)
+                            .show(ui, &p.state);
+                        ui.allocate_space(egui::vec2(10.0, 2000.0));
+                    });
+                p.panel = out.state.offset.y;
+            },
+            InPanel {
+                state: EditorState::new("notes", &text),
+                panel: 0.0,
+            },
+        );
+    h.run();
+    let event = |delta, phase| egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Line,
+        delta: egui::vec2(0.0, delta),
+        modifiers: Modifiers::NONE,
+        phase,
+    };
+    h.hover_at(egui::pos2(100.0, 75.0));
+    h.run();
+    // In one gesture, as a touchpad's, so that egui does not smooth it.
+    for _ in 0..12 {
+        h.event(event(0.0, egui::TouchPhase::Start));
+        h.event(event(-8.0, egui::TouchPhase::Move));
+        h.run();
+        h.event(event(0.0, egui::TouchPhase::End));
+        h.run();
+    }
+    assert_eq!(h.state().panel, 0.0);
+}
+
+#[test]
 fn typing_moving_and_escape_leaving() {
     let mut h = alone(EditorState::new("notes", "hello"), false);
     h.run();

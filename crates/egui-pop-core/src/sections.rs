@@ -477,24 +477,6 @@ fn scrolled<R>(ctx: &Context, out: &egui::scroll_area::ScrollAreaOutput<R>) -> b
     out.content_size.y - out.inner_rect.height() > 0.5
 }
 
-/// Keeps the wheel over a body from reaching what scrolls around it.
-///
-/// upstream: a scroll area at its end leaves the wheel to its parents, and
-/// nothing asks it to keep it (docs/upstream.md). Taken as egui's own scroll
-/// area takes it, and only by the axis it would take.
-fn contain_wheel(ui: &Ui, body: Rect) {
-    if !ui.is_enabled() || !ui.rect_contains_pointer(body) {
-        return;
-    }
-    let both = ui.style().always_scroll_the_only_direction;
-    ui.input_mut(|i| {
-        i.smooth_scroll_delta.y = 0.0;
-        if both {
-            i.smooth_scroll_delta.x = 0.0;
-        }
-    });
-}
-
 /// The sections a stack is given, in order ([`Sections::show`]).
 pub struct Stack<'a> {
     sections: Vec<(Section, Body<'a>)>,
@@ -832,7 +814,7 @@ impl Sections {
                     let shown =
                         body.draw(&mut child, &section.key, section.row_height.unwrap_or(row));
                     if shown.holds_wheel {
-                        contain_wheel(&child, rect);
+                        crate::ui::contain_wheel_in(&child, rect, [false, true]);
                     }
                     drawn = Some(shown);
                     y = rect.bottom();

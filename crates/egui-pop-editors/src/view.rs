@@ -386,6 +386,7 @@ fn text_area(
             );
             response
         });
+    egui_pop_core::ui::contain_wheel(ui, &out);
     let response = out.inner;
     let label = o
         .label
