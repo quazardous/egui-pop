@@ -96,6 +96,7 @@ platform = [
     "platform-crash",
     "platform-focus",
     "platform-text-scale",
+    "platform-wheel-lines",
     "platform-clipboard",
     "platform-thumbnails",
     "platform-open",
@@ -122,6 +123,9 @@ platform-focus = ["dep:egui-pop-platform", "egui-pop-platform/focus"]
 ## The system's text scaling read in-process, the text size's default
 ## (`egui_pop::platform::text_scale`).
 platform-text-scale = ["dep:egui-pop-platform", "egui-pop-platform/text-scale"]
+## The system's lines a wheel's notch read in-process, the wheel speed's default
+## (`egui_pop::platform::wheel_lines`).
+platform-wheel-lines = ["dep:egui-pop-platform", "egui-pop-platform/wheel-lines"]
 ## The system clipboard over arboard: files, images, HTML, the primary
 ## selection (`egui_pop::platform::clipboard`).
 platform-clipboard = ["dep:egui-pop-platform", "egui-pop-platform/clipboard"]

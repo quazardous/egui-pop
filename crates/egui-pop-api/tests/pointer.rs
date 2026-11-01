@@ -23,6 +23,69 @@ fn passes(app: &mut App, ctx: &egui::Context, n: usize) {
     }
 }
 
+fn line_speed(ctx: &egui::Context) -> f32 {
+    ctx.options(|o| o.input_options.line_scroll_speed)
+}
+
+#[test]
+fn the_wheel_speed_setting_reaches_egui_and_the_canvases() {
+    let ctx = egui::Context::default();
+    let mut app = App::builder().build(&ctx).unwrap();
+    passes(&mut app, &ctx, 2);
+    let usual = egui::InputOptions::default().line_scroll_speed;
+    assert_eq!(line_speed(&ctx), usual);
+    egui_pop_core::lock(&app.handle().store())
+        .set(
+            Set::new(
+                &format!("settings/{}", pointer::SETTING_WHEEL_SPEED),
+                Change::To(Value::Float(2.0)),
+                Origin::User,
+            )
+            .by(&OwnerId::FRAMEWORK),
+        )
+        .unwrap();
+    passes(&mut app, &ctx, 2);
+    assert_eq!(egui_pop_core::pointer::map(&ctx).wheel_speed, 2.0);
+    assert_eq!(line_speed(&ctx), usual * 2.0);
+    // A canvas reads a notch at that speed, a trackpad's points as they came.
+    let event = |unit| egui::Event::MouseWheel {
+        unit,
+        delta: egui::vec2(0.0, 1.0),
+        modifiers: egui::Modifiers::NONE,
+        phase: egui::TouchPhase::Move,
+    };
+    let input = egui::RawInput {
+        events: vec![
+            event(egui::MouseWheelUnit::Line),
+            event(egui::MouseWheelUnit::Point),
+        ],
+        ..Default::default()
+    };
+    let mut read = Vec::new();
+    let mut out = ctx.run_ui(input, |ui| {
+        read = egui_pop_core::pointer::wheel_inputs(ui.ctx());
+    });
+    out.textures_delta.clear();
+    assert_eq!(read[0].delta.y, usual * 2.0);
+    assert_eq!(read[1].delta.y, 1.0);
+}
+
+#[test]
+fn the_system_s_lines_are_the_wheel_speed_s_default() {
+    assert_eq!(pointer::wheel_speed_of_lines(3), 1.0);
+    assert_eq!(pointer::wheel_speed_of_lines(6), 2.0);
+    assert_eq!(pointer::wheel_speed_of_lines(100), 5.0);
+    assert_eq!(pointer::wheel_speed_of_lines(0), 0.25);
+    let ctx = egui::Context::default();
+    let mut app = App::builder().system_wheel_lines(6).build(&ctx).unwrap();
+    passes(&mut app, &ctx, 2);
+    assert_eq!(pointer::wheel_speed(app.handle()), 2.0);
+    assert_eq!(
+        line_speed(&ctx),
+        egui::InputOptions::default().line_scroll_speed * 2.0
+    );
+}
+
 #[test]
 fn the_default_profile_is_document_and_the_context_gets_its_map() {
     let ctx = egui::Context::default();

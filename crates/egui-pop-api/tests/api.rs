@@ -668,7 +668,7 @@ fn settings_persist_and_come_back_with_their_plugin() {
     // palettes', the menu icons) come first.
     let settings = app.handle().settings();
     let ids: Vec<_> = settings.iter().map(|s| s.id.clone()).collect();
-    assert_eq!(settings.len(), 18, "{ids:?}");
+    assert_eq!(settings.len(), 19, "{ids:?}");
     for id in [
         egui_pop_api::SETTING_THEME_PREFERENCE,
         egui_pop_api::SETTING_ACCENT_COLOR,
@@ -683,6 +683,7 @@ fn settings_persist_and_come_back_with_their_plugin() {
         egui_pop_api::pointer::SETTING_SLIDER_WHEEL,
         egui_pop_api::pointer::SETTING_IMAGE_DOUBLE_CLICK,
         egui_pop_api::pointer::SETTING_WHEEL_DEVICE,
+        egui_pop_api::pointer::SETTING_WHEEL_SPEED,
     ] {
         assert!(ids[..settings.len() - 1].contains(&id), "{ids:?}");
     }

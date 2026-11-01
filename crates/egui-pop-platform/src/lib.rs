@@ -24,6 +24,8 @@
 //! - [`text_scale`]: the system's text scaling read in-process (the
 //!   Settings portal, KDE's font DPI, the registry), the default of the
 //!   text size setting.
+//! - [`wheel_lines`]: the system's lines a wheel's notch (the registry on
+//!   Windows), the default of the wheel speed setting.
 //! - [`clipboard`]: the system clipboard over arboard (files, images,
 //!   HTML, text, the primary selection), the clipboard's system backend.
 //! - [`thumbnails`] (off by default): the system's thumbnails as a
@@ -64,4 +66,6 @@ pub mod text_scale;
 pub mod thumbnails;
 #[cfg(feature = "tray")]
 pub mod tray;
+#[cfg(feature = "wheel-lines")]
+pub mod wheel_lines;
 pub mod window;

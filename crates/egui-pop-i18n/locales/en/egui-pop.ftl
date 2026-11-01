@@ -2395,6 +2395,10 @@ setting-input-wheel-device-choice-mouse = mouse
 
 setting-input-wheel-device-choice-trackpad = trackpad
 
+setting-input-wheel-speed =
+    .description = How far a notch of a mouse wheel goes, in scrolling and on the canvases, 1 being the usual distance. What a trackpad sends is left as it is.
+    .label = Wheel speed
+
 setting-menus-icons =
     .description = Whether menus show the commands' icons in a column on their left (on), none (off), or follow the desktop (platform: off on GNOME, as KDE Plasma says, on elsewhere).
     .label = Menu icons

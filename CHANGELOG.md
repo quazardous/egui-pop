@@ -27,6 +27,12 @@ publishes.
   GStreamer's libraries to start. Without it a local video opens outside as before,
   and `Kind` now says `video` for it where it said `file`; `Caps` has a new `video`
   field. Remote video stays outside. `VideoBackend` replaces the player.
+- Wheel speed (egui-pop-model, egui-pop-core, egui-pop-api, egui-pop-platform;
+  `docs/pointer-gestures.md`): `input.wheel_speed`, in Settings, multiplies how far
+  a mouse wheel's notch goes, in scroll areas and on canvases. A trackpad's points
+  are left alone. `AppBuilder::system_wheel_lines` seeds it, and
+  `egui_pop_platform::wheel_lines::read` reads the lines on Windows. A map published
+  with `pointer::set_map` now sets egui's `line_scroll_speed`.
 - `docs/linked-panels.md`: a selection in one view driving a preview in another panel,
   which layer owns what, what each view says of its selection, panels moved, closed
   or detached, slow previews, and how others do it.

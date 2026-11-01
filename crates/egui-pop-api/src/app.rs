@@ -676,6 +676,8 @@ pub(crate) struct Shared {
     /// Whether the system always shows its scroll bars
     /// (`AppBuilder::system_always_shows_scroll_bars`).
     system_scroll_bars: std::cell::Cell<bool>,
+    /// The system's lines a wheel's notch (`AppBuilder::system_wheel_lines`).
+    system_wheel_lines: std::cell::Cell<u32>,
     /// The main menu drawn as a bar under the title.
     menu_bar: std::cell::Cell<bool>,
     /// The window the user worked in last (focused, clicked or typed
@@ -803,6 +805,7 @@ impl AppHandle {
             edge_to_edge: std::cell::Cell::new(false),
             system_text_scale: std::cell::Cell::default(),
             system_scroll_bars: std::cell::Cell::default(),
+            system_wheel_lines: std::cell::Cell::new(crate::pointer::SYSTEM_WHEEL_LINES),
             menu_bar: std::cell::Cell::new(true),
             active_window: std::cell::Cell::new(egui::ViewportId::ROOT),
             shell_sizes: RefCell::default(),
@@ -2154,6 +2157,12 @@ impl AppHandle {
         self.0.system_scroll_bars.get()
     }
 
+    /// The system's lines a wheel's notch (`AppBuilder::system_wheel_lines`; 3 when
+    /// none was given).
+    pub fn system_wheel_lines(&self) -> u32 {
+        self.0.system_wheel_lines.get()
+    }
+
     /// Whether the main menu is drawn as a bar under the title
     /// (`AppBuilder::menu_bar`).
     pub fn menu_bar(&self) -> bool {
@@ -2460,6 +2469,7 @@ pub struct AppBuilder {
     system_focus: Option<SystemFocus>,
     system_text_scale: crate::text::SystemTextScale,
     system_scroll_bars: bool,
+    system_wheel_lines: u32,
     edge_to_edge: bool,
     menu_bar: bool,
     shell_sizes: Vec<(PanelId, f32)>,
@@ -2532,6 +2542,7 @@ impl AppBuilder {
             system_focus: None,
             system_text_scale: crate::text::SystemTextScale::default(),
             system_scroll_bars: false,
+            system_wheel_lines: crate::pointer::SYSTEM_WHEEL_LINES,
             edge_to_edge: false,
             menu_bar: true,
             shell_sizes: Vec::new(),
@@ -2785,6 +2796,15 @@ impl AppBuilder {
         self
     }
 
+    /// The lines a notch of the wheel moves on the system
+    /// (`egui_pop_platform::wheel_lines::read` reads it): the default of the
+    /// `input.wheel_speed` setting, 3 lines being 1, until the user chooses one.
+    /// Not given, 3; egui-pop reads nothing itself.
+    pub fn system_wheel_lines(mut self, lines: u32) -> Self {
+        self.system_wheel_lines = lines;
+        self
+    }
+
     /// Sorts the plugins, connects them, installs the theme and resolves
     /// the declarations, on a context.
     pub fn build(self, ctx: &Context) -> Result<App, BuildError> {
@@ -2856,6 +2876,7 @@ impl AppBuilder {
         app.handle.0.edge_to_edge.set(self.edge_to_edge);
         app.handle.0.system_text_scale.set(self.system_text_scale);
         app.handle.0.system_scroll_bars.set(self.system_scroll_bars);
+        app.handle.0.system_wheel_lines.set(self.system_wheel_lines);
         app.handle.0.menu_bar.set(self.menu_bar);
         *app.handle.0.shell_sizes.borrow_mut() = self.shell_sizes;
         app.handle.workbench_mut().layout.folded = self.folded;
@@ -3326,7 +3347,7 @@ impl App {
         crate::text::register(&mut ctx, handle.system_text_scale())?;
         crate::scroll_bars::register(&mut ctx)?;
         crate::sliders::register(&mut ctx)?;
-        crate::pointer::register(&mut ctx, pointer_profile)?;
+        crate::pointer::register(&mut ctx, pointer_profile, handle.system_wheel_lines())?;
         ctx.setting(
             crate::workbench::SETTING_PANEL_ALIGNMENT,
             egui_pop_model::values::Descriptor::choice(

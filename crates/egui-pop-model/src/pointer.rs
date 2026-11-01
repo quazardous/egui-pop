@@ -499,6 +499,9 @@ pub struct PointerMap {
     /// The modifiers of a value's arrow-key steps, when not its drag's.
     pub value_keys: ValueKeys,
     pub wheel_device: WheelDevice,
+    /// What a wheel's lines are multiplied by (`input.wheel_speed`); 1: egui's own
+    /// points a line.
+    pub wheel_speed: f32,
     pub bindings: Vec<PointerBinding>,
 }
 
@@ -543,6 +546,7 @@ impl PointerMap {
             input: profile.input.clone(),
             value_keys: profile.value_keys.clone(),
             wheel_device: WheelDevice::Auto,
+            wheel_speed: 1.0,
             bindings,
         }
     }

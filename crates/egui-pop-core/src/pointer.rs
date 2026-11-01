@@ -5,7 +5,8 @@
 //! The application API publishes the map from the keymap and the
 //! pointer profile ([`set_map`]); without it, canvases follow the
 //! default profile (Document). egui's own scrolling follows the
-//! profile's modifiers ([`apply_input_options`]).
+//! profile's modifiers ([`apply_input_options`]) and the wheel speed
+//! ([`apply_wheel_speed`]).
 //!
 //! egui merges a pinch with Ctrl and the wheel, and turns units into
 //! points before widgets see them; a profile needs both apart, so the
@@ -58,7 +59,7 @@ pub fn default_map() -> Arc<PointerMap> {
 }
 
 /// Publishes a pointer map, and makes egui's scrolling follow its
-/// modifiers.
+/// modifiers and its wheel speed.
 pub fn set_map(ctx: &Context, map: PointerMap) {
     set_shared_map(ctx, Arc::new(map));
 }
@@ -67,6 +68,7 @@ pub fn set_map(ctx: &Context, map: PointerMap) {
 /// is still there ([`published`]).
 pub fn set_shared_map(ctx: &Context, map: Arc<PointerMap>) {
     apply_input_options(ctx, &map.input);
+    apply_wheel_speed(ctx, map.wheel_speed);
     MAP.set(ctx, map);
 }
 
@@ -249,6 +251,21 @@ pub fn modifiers_from_text(text: &str) -> Modifiers {
     Chord::parse_modifiers(text)
         .map(|c| modifiers_of(&c))
         .unwrap_or(Modifiers::NONE)
+}
+
+/// Makes a wheel's lines worth `speed` times egui's own points a line, in scroll
+/// areas and in [`wheel_inputs`]. What a trackpad sends is in points already, and
+/// stays as it is. A speed that is not a positive number counts as 1.
+pub fn apply_wheel_speed(ctx: &Context, speed: f32) {
+    let speed = if speed.is_finite() && speed > 0.0 {
+        speed
+    } else {
+        1.0
+    };
+    let line = egui::InputOptions::default().line_scroll_speed * speed;
+    if ctx.options(|o| o.input_options.line_scroll_speed) != line {
+        ctx.options_mut(|o| o.input_options.line_scroll_speed = line);
+    }
 }
 
 /// Makes egui's scrolling (scroll areas, `zoom_delta`) follow a

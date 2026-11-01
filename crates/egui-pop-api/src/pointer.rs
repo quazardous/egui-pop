@@ -5,7 +5,8 @@
 //! [`AppBuilder::pointer_profile`]; a retired id such as `adobe` names
 //! its successor, `lightroom`), the options
 //! each profile gives its default for (`input.slider_wheel`,
-//! `input.image_double_click`), the wheel device (`input.wheel_device`),
+//! `input.image_double_click`), the wheel device (`input.wheel_device`) and
+//! speed (`input.wheel_speed`),
 //! and the gesture commands (`gesture.image.zoom`...) the profile binds
 //! to pointer chords in the keymap's default layer
 //! (`docs/pointer-gestures.md`).
@@ -50,6 +51,14 @@ pub const SETTING_IMAGE_DOUBLE_CLICK: SettingId =
     SettingId::from_static("input.image_double_click");
 /// The setting: what sends wheel events (`auto`, `mouse`, `trackpad`).
 pub const SETTING_WHEEL_DEVICE: SettingId = SettingId::from_static("input.wheel_device");
+/// The setting: what a mouse wheel's lines are multiplied by.
+pub const SETTING_WHEEL_SPEED: SettingId = SettingId::from_static("input.wheel_speed");
+
+/// The lines a notch moves on a system nobody changed, which is 1 on the speed.
+pub const SYSTEM_WHEEL_LINES: u32 = 3;
+
+/// The least and the most of `input.wheel_speed`.
+const WHEEL_SPEEDS: (f64, f64) = (0.25, 5.0);
 
 /// Keeps or drops the user's pointer gesture changes (`{ "value":
 /// "keep" | "drop" }`): what the dialog shown on a change of profile
@@ -123,6 +132,20 @@ pub fn options(app: &AppHandle, profile: &Profile) -> (pointer::Options, WheelDe
     (o, device)
 }
 
+/// The speed the system's lines a notch seed: [`SYSTEM_WHEEL_LINES`] are 1, and
+/// what the setting cannot hold is its nearest end.
+pub fn wheel_speed_of_lines(lines: u32) -> f64 {
+    (f64::from(lines) / f64::from(SYSTEM_WHEEL_LINES)).clamp(WHEEL_SPEEDS.0, WHEEL_SPEEDS.1)
+}
+
+/// The wheel speed in force: the setting's, else 1.
+pub fn wheel_speed(app: &AppHandle) -> f32 {
+    lock(&app.store())
+        .get(&path(&SETTING_WHEEL_SPEED))
+        .and_then(|e| e.value.as_f64())
+        .map_or(1.0, |v| v as f32)
+}
+
 /// The gesture commands whose bindings the user changed.
 pub fn overrides(app: &AppHandle) -> Vec<CommandId> {
     GESTURES
@@ -152,6 +175,7 @@ pub(crate) fn map(app: &AppHandle, keymap: &Keymap) -> PointerMap {
     let (options, device) = options(app, p);
     m.options = options;
     m.wheel_device = device;
+    m.wheel_speed = wheel_speed(app);
     m
 }
 
@@ -176,6 +200,7 @@ pub(crate) fn settings_print(app: &AppHandle) -> String {
     ]
     .iter()
     .map(|id| choice(app, id).unwrap_or_default())
+    .chain([wheel_speed(app).to_string()])
     .collect::<Vec<_>>()
     .join("|")
 }
@@ -214,8 +239,13 @@ pub(crate) fn ask_about_overrides(app: &AppHandle, profile: &Profile) {
 }
 
 /// The framework's registrations: the settings, the gesture commands,
-/// the default profile's bindings.
-pub(crate) fn register(ctx: &mut Ctx<'_>, default_profile: &str) -> Result<(), CtxError> {
+/// the default profile's bindings. The wheel speed's default is the system's
+/// lines a notch.
+pub(crate) fn register(
+    ctx: &mut Ctx<'_>,
+    default_profile: &str,
+    system_wheel_lines: u32,
+) -> Result<(), CtxError> {
     let ids = pointer::ids();
     let default_profile = pointer::canonical_id(default_profile);
     let default = if ids.contains(&default_profile) {
@@ -255,6 +285,19 @@ pub(crate) fn register(ctx: &mut Ctx<'_>, default_profile: &str) -> Result<(), C
         Descriptor::choice("Wheel device", &WheelDevice::CHOICES, "auto").description(
             "What sends wheel events: auto tells a mouse wheel (lines) from a trackpad (points); some mice send points too, and choosing mouse or trackpad settles it.",
         ),
+    )?;
+    ctx.setting(
+        SETTING_WHEEL_SPEED,
+        Descriptor::float(
+            "Wheel speed",
+            WHEEL_SPEEDS.0,
+            WHEEL_SPEEDS.1,
+            wheel_speed_of_lines(system_wheel_lines),
+        )
+        .description(
+            "How far a notch of a mouse wheel goes, in scrolling and on the canvases, 1 being the usual distance. What a trackpad sends is left as it is.",
+        )
+        .step(0.25),
     )?;
     for g in GESTURES {
         ctx.declare(
