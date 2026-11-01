@@ -644,6 +644,15 @@ impl Files {
         true
     }
 
+    /// The entry highlighted in the in-app picker of a choice (the one its
+    /// preview is of, where the arrows are): what another panel follows
+    /// (`docs/linked-panels.md`). `None` without a picker or an entry.
+    pub fn highlighted(&self, id: u64) -> Option<Entry> {
+        let mut s = lock(&self.0);
+        let picker = s.open.iter_mut().find(|o| o.id == id)?.picker.as_mut()?;
+        picker.highlighted()
+    }
+
     fn keep(&self, id: u64, picker: FilePicker) {
         let mut s = lock(&self.0);
         if let Some(o) = s.open.iter_mut().find(|o| o.id == id) {
@@ -5005,6 +5014,21 @@ mod tests {
         assert_eq!(d["preview"]["path"], "/demo/a.fake");
         p.show_preview = false;
         assert!(p.describe()["preview"].is_null());
+    }
+
+    #[test]
+    fn a_picker_drawn_in_a_panel_says_what_it_highlights() {
+        let root = PathBuf::from("/demo");
+        let fs: SharedFs = Arc::new(fs::MemoryFs::new().dir(root.join("sub")));
+        let app = crate::App::builder()
+            .plugin(FilesPlugin::in_app().file_system(fs))
+            .build(&egui::Context::default())
+            .unwrap();
+        let h = app.handle().clone();
+        let files = h.service(&FILES).unwrap();
+        let (id, _pending) = files.choose_inline(&h, FileRequest::open("Open").directory(&root));
+        assert_eq!(files.highlighted(id).unwrap().name, "sub");
+        assert!(files.highlighted(id + 1).is_none());
     }
 
     #[test]

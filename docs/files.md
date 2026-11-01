@@ -44,7 +44,9 @@ proposed name) and `folder`, with a starting `directory`, a
 A path field of a form dialog (`Descriptor::path`) goes through the
 same chooser when its Browse button is pressed; inside a dialog of its
 own, an application starts the choice with `Files::choose_inline` and
-draws the in-app picker where it wants it (`Files::show_inline`).
+draws the in-app picker where it wants it (`Files::show_inline`). `Files::highlighted`
+says which entry it highlights, for another panel to follow
+([linked panels](linked-panels.md)).
 
 ## The last folder per purpose
 
