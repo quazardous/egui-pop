@@ -165,6 +165,46 @@ jobs:
             **/tests/snapshots/*.new.png
           if-no-files-found: ignore
 
+  # The viewer's video page (feature `video`), the one build needing GStreamer:
+  # the other jobs build without it. It tests on a clip it writes itself, so
+  # the plugins are there for the test sources, the AVI muxer and demuxer.
+  video:
+    name: Viewer's video (GStreamer)
+    needs: changes
+    if: needs.changes.outputs.test == 'true'
+    runs-on: ubuntu-24.04
+    env:
+      WGPU_BACKEND: vulkan
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install GStreamer and lavapipe
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mesa-vulkan-drivers \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            gstreamer1.0-plugins-base gstreamer1.0-plugins-good
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: video
+      - run: cargo clippy -p egui-pop-views -p egui-pop-gallery -p egui-pop --all-targets --locked --features egui-pop-views/video,egui-pop-gallery/video,egui-pop/views-video -- -D warnings
+      - run: cargo doc -p egui-pop-views -p egui-pop --no-deps --locked --features egui-pop-views/video,egui-pop/views-video
+      - run: cargo test -p egui-pop-views --locked --features video --lib viewer
+      - run: cargo test -p egui-pop-views --locked --features video --test viewer_video --test viewer_gstreamer
+      - run: cargo test -p egui-pop-gallery --locked --features video --test viewer_video
+      - name: Upload snapshot differences
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: video-snapshot-diffs
+          path: |
+            **/tests/snapshots/*.diff.png
+            **/tests/snapshots/*.new.png
+          if-no-files-found: ignore
+
   deny:
     name: Licences and advisories
     needs: changes
@@ -233,6 +273,12 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@v5
+      # It documents the features other than unstable ones, `views-video` among
+      # them, whose bindings ask for GStreamer's development packages.
+      - name: Install GStreamer's development packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
       - uses: dtolnay/rust-toolchain@stable
       - uses: taiki-e/install-action@v2
         with:
@@ -244,7 +290,7 @@ jobs:
   ci:
     name: CI
     if: always()
-    needs: [changes, fmt, clippy, doc, book, test, deny, wasm, package, semver]
+    needs: [changes, fmt, clippy, doc, book, test, video, deny, wasm, package, semver]
     runs-on: ubuntu-24.04
     steps:
       - env:
