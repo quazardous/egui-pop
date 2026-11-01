@@ -682,6 +682,34 @@ command-viewer-state =
     .description = The viewer's page (address, status or error, title, headings, text, links, what its HTML did not show), its history, search, zoom, images and the hosts allowed.
     .title = Read the viewer
 
+command-viewer-video-ahead =
+    .description = Moves the viewer's video ahead a few seconds.
+    .title = Move the video ahead
+
+command-viewer-video-back =
+    .description = Moves the viewer's video back a few seconds.
+    .title = Move the video back
+
+command-viewer-video-louder =
+    .description = Raises the volume of the viewer's video one step.
+    .title = Make the video louder
+
+command-viewer-video-quieter =
+    .description = Lowers the volume of the viewer's video one step.
+    .title = Make the video quieter
+
+command-viewer-video-seek =
+    .description = Moves the viewer's video to a position (`seconds`).
+    .title = Move the video to a time
+
+command-viewer-video-toggle =
+    .description = Plays or pauses the video the viewer shows; from its end, plays it from the start.
+    .title = Play or pause the video
+
+command-viewer-video-volume =
+    .description = Sets the volume of the viewer's video (`volume`, from 0 to 1).
+    .title = Set the video's volume
+
 command-viewer-zoom-in =
     .description = Makes the viewer's page larger, one step.
     .title = Zoom in the page
@@ -2013,6 +2041,22 @@ egui-pop-views-viewer-simplified = Not shown here: { $what }. Open outside shows
 egui-pop-views-viewer-too-large = This page is too large to show here
 
 egui-pop-views-viewer-unsupported = This page cannot be shown here
+
+egui-pop-views-viewer-video-failed = This video cannot be played here
+
+egui-pop-views-viewer-video-loading = Opening the video…
+
+egui-pop-views-viewer-video-pause = Pause
+
+egui-pop-views-viewer-video-picture = Video: { $name }
+
+egui-pop-views-viewer-video-play = Play
+
+egui-pop-views-viewer-video-position = Position
+
+egui-pop-views-viewer-video-time = { $elapsed } / { $total }
+
+egui-pop-views-viewer-video-volume = Volume
 
 egui-pop-views-viewer-zoom = Page zoom: { $zoom }
 

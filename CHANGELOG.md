@@ -12,6 +12,17 @@ publishes.
 
 ### Added
 
+- Local video in the in-app viewer (egui-pop-views, egui-pop-model, egui-pop-api;
+  `docs/links.md`, ADR 0017): with the new opt-in feature `views-video`
+  (`egui-pop-views/video`), a local video file plays in the viewer through the
+  system's GStreamer, with sound: Play and Pause, position, volume, the time,
+  Space and the arrows on the picture, on an error page with Open outside when it
+  cannot play. Decoding stays off the interface's thread, and leaving the page or
+  hiding its panel stops the player. The feature is off by default, and neither
+  default builds nor the web build need GStreamer; a binary built with it needs
+  GStreamer's libraries to start. Without it a local video opens outside as before,
+  and `Kind` now says `video` for it where it said `file`; `Caps` has a new `video`
+  field. Remote video stays outside. `VideoBackend` replaces the player.
 - `docs/linked-panels.md`: a selection in one view driving a preview in another panel,
   which layer owns what, what each view says of its selection, panels moved, closed
   or detached, slow previews, and how others do it.

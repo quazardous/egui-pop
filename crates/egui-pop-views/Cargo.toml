@@ -43,6 +43,14 @@ html5ever = { version = "0.40", optional = true }
 url = { workspace = true, optional = true }
 log = { workspace = true, optional = true }
 
+# MIT OR Apache-2.0: the viewer's video page (feature `video`), bindings to
+# the system's GStreamer libraries (LGPL, installed apart, not crates). Not
+# on the web, where the feature only says that video opens outside.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+gstreamer = { version = "0.25", optional = true }
+gstreamer-app = { version = "0.25", optional = true }
+gstreamer-video = { version = "0.25", optional = true }
+
 [features]
 ## The in-app viewer (`viewer`): markdown pages, `docs:` pages and images,
 ## with navigation, find in page and zoom.
@@ -51,6 +59,10 @@ markdown = ["dep:egui_commonmark", "dep:pulldown-cmark", "dep:egui_extras", "dep
 ## its documentation hosts, parsed by html5ever and mapped to the same blocks
 ## as markdown.
 html = ["markdown", "dep:html5ever"]
+## The viewer's video page: local video files played inside, through the
+## system's GStreamer. Building it needs GStreamer's development packages,
+## running it GStreamer's libraries and plugins (docs/links.md).
+video = ["markdown", "dep:gstreamer", "dep:gstreamer-app", "dep:gstreamer-video"]
 
 [dev-dependencies]
 egui = { workspace = true, features = ["default_fonts"] }

@@ -50,7 +50,8 @@ The policy classifies the target from its scheme, host and extension
 | Target | A click | Ctrl+click, middle click |
 |---|---|---|
 | Web page (`https:`, `http:`) | the system browser; a new tab on the web build | the same |
-| Video (YouTube, Vimeo, a remote video file) | the browser, never embedded | the same |
+| Video on the web (YouTube, Vimeo, a remote video file) | the browser, not embedded | the same |
+| Local video file | the viewer's video page with `views-video` (see below), else as a local file | outside |
 | `mailto:` | the mail client (the same tab on the web, which hands it over) | the same |
 | `docs:` page | the viewer when there is one (see below), else its online copy (`Policy::docs_online`) | outside |
 | Local file | its default application, after a confirmation; a program refused, Show in folder offered | Show in folder |
@@ -241,9 +242,10 @@ against it (`../img/panel.png`).
   outside; Ctrl+click or a middle click opens outside.
 - **What it shows**: markdown (egui_commonmark: tables, task lists,
   footnotes, code), images (PNG, JPEG, GIF), text, and a safe subset of
-  HTML with the `views-html` feature (see below). Videos and full web
-  pages are not shown inside: they open outside. Without the feature an
-  HTML page gets an error page offering **Open outside**.
+  HTML with the `views-html` feature (see below), local video files with
+  the `views-video` feature (see below). Remote videos and full web pages
+  are not shown inside: they open outside. Without the feature an HTML page
+  gets an error page offering **Open outside**.
 - **Remote pages and images** come through a `viewer::Fetch` the host
   gives (`ViewerPlugin::fetch`); without one nothing remote is loaded
   and the page says so. A remote image never loads before the user
@@ -268,7 +270,9 @@ against it (`../img/panel.png`).
 | `viewer.find_next`, `viewer.find_previous` | the matches |
 | `viewer.zoom_in`, `viewer.zoom_out`, `viewer.zoom_reset` | the page's zoom |
 | `viewer.open_outside`, `viewer.copy_link` | the page's address |
-| `viewer.state` | the page (address, status or error, title, headings, text, links, what it did not show), the history, the search, the zoom, the images and the hosts allowed |
+| `viewer.state` | the page (address, status or error, title, headings, text, links, what it did not show), the history, the search, the zoom, the images and the hosts allowed, the video |
+| `viewer.video_toggle`, `viewer.video_back`, `viewer.video_ahead`, `viewer.video_louder`, `viewer.video_quieter` | a video page's keys |
+| `viewer.video_seek`, `viewer.video_volume` | `seconds`, `volume` (from 0 to 1): a video page's position and volume |
 
 ### The HTML subset
 
@@ -311,6 +315,42 @@ page, anchors, zoom and links work as on a markdown page.
 - **No script runs, no style applies, and nothing is fetched** beyond the
   page and the images allowed.
 
+### The video page
+
+With `views-video` (`egui-pop-views/video`, off by default), a local video file
+(`.mp4`, `.webm`, `.mov`, `.mkv`, `.ogv`, `.m4v`, `.avi`) opens in the viewer.
+Without the feature, on the web build, or with no player, it opens outside as any
+local file. A remote video stays outside either way.
+
+| Control | Mouse | Keys |
+|---|---|---|
+| Play, Pause | **Play** or **Pause**, or a click on the picture | Space on the picture |
+| Position | the slider (a drag seeks when it ends) | Left and Right on the picture, five seconds; the slider's own keys |
+| Volume | the slider, kept for the session | Up and Down on the picture; the slider's own keys |
+
+- It opens paused on its first picture, with the focus on the picture, so that
+  nothing makes a sound before the user asks.
+- GStreamer's threads decode; each pass uploads only the last picture. Only a
+  playing video asks for repaints.
+- Leaving the page stops the player. So does its panel going out of view (closed,
+  or a tab behind another): showing it again opens the file at the same place,
+  paused.
+- **What it needs.** To build: GStreamer's development packages
+  (`libgstreamer1.0-dev` and `libgstreamer-plugins-base1.0-dev` on Debian and
+  Ubuntu). To run: GStreamer's libraries, its base plugins, and the plugins for
+  the files to play. The crates are MIT OR Apache-2.0; GStreamer itself is LGPL
+  and stays a system library.
+- **Failures** (a plugin or a codec missing, a file it cannot read) end on the
+  error page, with **Retry**, **Open outside** and **Copy link**, and
+  `viewer.failed` on the journal; a problem it plays on through (no sound device)
+  is a line on the page. **The binary links GStreamer's libraries: without them
+  installed it does not start**, so an application declares them as a dependency
+  of its package.
+- `viewer::VideoBackend` (`ViewerPlugin::video`) replaces the player;
+  `viewer::GStreamer::audio_sink` names the element the sound goes to.
+- `viewer::write_test_clip` writes a small clip from GStreamer's test sources, for
+  tests and the gallery's story (`cargo run -p egui-pop-gallery --features video`).
+
 The `viewer` collector of the debug bridge shows the same state;
 `viewer.shown` and `viewer.failed` go on the journal. The lint checks
 declared `docs:` links against the pages the viewer has.
@@ -318,4 +358,5 @@ declared `docs:` links against the pages the viewer has.
 ## Not yet
 
 - The lint does not yet walk the links inside `docs:` pages.
-- No webview: full web pages and videos open outside.
+- No webview: full web pages and remote videos open outside. Whether an embedded
+  player is worth a trial is an open question (ADR 0017).
