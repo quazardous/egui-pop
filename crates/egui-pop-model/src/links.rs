@@ -106,7 +106,7 @@ impl Source {
 pub enum Kind {
     /// A web page (`https:`, `http:`).
     Web,
-    /// A video: a video host's page, or a remote video file.
+    /// A video: a video host's page, or a video file, remote or local.
     Video,
     /// A page the application ships (`docs:`).
     Doc,
@@ -219,7 +219,8 @@ pub const EXECUTABLE: &[&str] = &[
 const IMAGES: &[&str] = &[
     "png", "jpg", "jpeg", "gif", "webp", "avif", "bmp", "svg", "tif", "tiff", "heic", "jxl",
 ];
-const VIDEOS: &[&str] = &["mp4", "webm", "mov", "mkv", "ogv", "m4v", "avi"];
+/// The extensions of video files, in lower case.
+pub const VIDEOS: &[&str] = &["mp4", "webm", "mov", "mkv", "ogv", "m4v", "avi"];
 
 impl Target {
     /// Parses a URL, or an absolute local path (`/home/a.png`,
@@ -485,6 +486,10 @@ pub struct Caps {
     pub reveal: bool,
     /// A viewer inside the application for pages and images.
     pub inside: bool,
+    /// That viewer plays local video files too (the viewer's video page,
+    /// an opt-in feature). Remote video stays outside whatever this says.
+    #[serde(default)]
+    pub video: bool,
 }
 
 impl Caps {
@@ -494,6 +499,7 @@ impl Caps {
         files: true,
         reveal: true,
         inside: true,
+        video: true,
     };
     /// Web pages and mail only (egui's own opener).
     pub const WEB: Caps = Caps {
@@ -501,6 +507,7 @@ impl Caps {
         files: false,
         reveal: false,
         inside: false,
+        video: false,
     };
     /// Nothing.
     pub const NONE: Caps = Caps {
@@ -508,6 +515,7 @@ impl Caps {
         files: false,
         reveal: false,
         inside: false,
+        video: false,
     };
 }
 
@@ -784,6 +792,9 @@ impl Policy {
                     _ if IMAGES.contains(&t.extension().unwrap_or_default().as_str()) => {
                         Kind::Image
                     }
+                    _ if VIDEOS.contains(&t.extension().unwrap_or_default().as_str()) => {
+                        Kind::Video
+                    }
                     _ => Kind::File,
                 }
             }
@@ -834,10 +845,13 @@ impl Policy {
                 caps.inside && t.host_ascii().is_some_and(|h| under(h, &self.docs_hosts))
             }
             Kind::Image => caps.inside && local,
+            Kind::Video => caps.inside && caps.video && local,
             _ => false,
         };
         d.how = match (r.how, kind) {
-            (How::Reveal, Kind::File | Kind::Folder | Kind::Image) if local => How::Reveal,
+            (How::Reveal, Kind::File | Kind::Folder | Kind::Image | Kind::Video) if local => {
+                How::Reveal
+            }
             (How::Reveal, _) => {
                 return refuse(
                     d,
@@ -904,7 +918,9 @@ impl Policy {
                 (_, _, How::Inside) if kind != Kind::AppLink => None,
                 (Source::Declared, _, How::Reveal) => None,
                 (Source::Declared, Kind::Folder, _) => None,
-                (_, Kind::File | Kind::Image, How::Outside) if local => Some("local file"),
+                (_, Kind::File | Kind::Image | Kind::Video, How::Outside) if local => {
+                    Some("local file")
+                }
                 (Source::Declared, _, _) => None,
                 (_, Kind::Folder, _) | (_, _, How::Reveal) => Some("local file"),
                 (_, Kind::AppLink | Kind::Mail, _) => Some("content"),
@@ -1107,6 +1123,49 @@ mod tests {
                 .refused,
             Some(Reason::Device)
         );
+    }
+
+    #[test]
+    fn a_local_video_opens_inside_only_when_the_viewer_plays_video() {
+        let t = "file:///tmp/clip.MP4";
+        let policy = Policy::default();
+        let web_and_files = Caps {
+            inside: true,
+            video: false,
+            ..Caps::ALL
+        };
+        // As any local file without the video page: outside, confirmed.
+        let d = policy.decide(&Request::new(t), &web_and_files, None);
+        assert_eq!(
+            (d.kind, d.how, d.confirm),
+            (Kind::Video, How::Outside, true)
+        );
+        let d = policy.decide(&Request::new(t).how(How::Inside), &web_and_files, None);
+        assert_eq!((d.how, d.confirm), (How::Outside, true));
+        // With it: inside, as a local image; outside and Reveal as asked.
+        let d = policy.decide(&Request::new(t), &Caps::ALL, None);
+        assert_eq!(
+            (d.kind, d.how, d.confirm),
+            (Kind::Video, How::Inside, false)
+        );
+        let d = policy.decide(&Request::new(t).how(How::Outside), &Caps::ALL, None);
+        assert_eq!((d.how, d.confirm), (How::Outside, true));
+        let d = policy.decide(&Request::new(t).how(How::Reveal), &Caps::ALL, None);
+        assert_eq!(d.how, How::Reveal);
+        // A viewer that has no video page is not one because the opener is.
+        let no_viewer = Caps {
+            inside: false,
+            ..Caps::ALL
+        };
+        assert_eq!(
+            policy.decide(&Request::new(t), &no_viewer, None).how,
+            How::Outside
+        );
+        // Remote video stays outside, viewer or not.
+        for remote in ["https://example.org/clip.mp4", "https://youtu.be/abc"] {
+            let d = policy.decide(&Request::new(remote), &Caps::ALL, None);
+            assert_eq!((d.kind, d.how), (Kind::Video, How::Outside), "{remote}");
+        }
     }
 
     #[test]

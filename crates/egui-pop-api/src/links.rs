@@ -162,8 +162,9 @@ pub trait Opener: Send + Sync {
 /// What shows pages and images inside the application (the viewer of
 /// `egui_pop_views::viewer`, or the host's own): the links service hands
 /// it each request the policy sends inside (`docs:` pages, pages on the
-/// application's documentation hosts, local images), after the policy
-/// and the user's confirmation.
+/// application's documentation hosts, local images, and local videos when
+/// it [`plays`](Inside::plays_video) them), after the policy and the user's
+/// confirmation.
 pub trait Inside: Send + Sync {
     /// Its name, as the `links` collector shows it.
     fn name(&self) -> &str;
@@ -175,6 +176,12 @@ pub trait Inside: Send + Sync {
     /// the declared `docs:` links against them.
     fn docs_pages(&self) -> Option<Vec<String>> {
         None
+    }
+
+    /// Whether it plays local video files: without that they open
+    /// outside, as any local file.
+    fn plays_video(&self) -> bool {
+        false
     }
 }
 
@@ -412,7 +419,13 @@ impl Links {
     /// showing pages inside when a viewer is installed.
     pub fn caps(&self) -> Caps {
         let mut caps = self.opener().caps();
-        caps.inside |= self.inside().is_some();
+        match self.inside() {
+            Some(inside) => {
+                caps.inside = true;
+                caps.video = inside.plays_video();
+            }
+            None => caps.video &= caps.inside,
+        }
         caps
     }
 
@@ -738,7 +751,7 @@ fn perform(
     if d.how == How::Inside
         && matches!(
             d.kind,
-            Kind::Doc | Kind::Markdown | Kind::Html | Kind::Image
+            Kind::Doc | Kind::Markdown | Kind::Html | Kind::Image | Kind::Video
         )
     {
         // The viewer, else an opener that shows pages itself.
@@ -935,7 +948,9 @@ fn show_confirm(app: &AppHandle, id: u64, req: &Request, d: &Decision) -> Result
             strings::tr_args(&ctx, &txt::LINKS_CONFIRM_AGENT, &[("agent", &source_of(o))])
         }
         (_, How::Reveal, _) => strings::tr(&ctx, &txt::LINKS_CONFIRM_REVEAL),
-        (_, _, Kind::File | Kind::Image | Kind::Folder) if target.scheme() == "file" => {
+        (_, _, Kind::File | Kind::Image | Kind::Video | Kind::Folder)
+            if target.scheme() == "file" =>
+        {
             strings::tr(&ctx, &txt::LINKS_CONFIRM_FILE)
         }
         _ => strings::tr(&ctx, &txt::LINKS_CONFIRM_TITLE),
