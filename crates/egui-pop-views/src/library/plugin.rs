@@ -190,6 +190,16 @@ impl Libraries {
             .map(|e| e.selection.clone())
     }
 
+    /// The cursor published for a library (the image the keyboard is on),
+    /// if it has one: what a preview in another panel usually follows.
+    pub fn cursor(&self, id: &str) -> Option<Json> {
+        lock(&self.inner)
+            .entries
+            .get(id)
+            .map(|e| e.cursor.clone())
+            .filter(|c| !c.is_null())
+    }
+
     /// The library a command acts on.
     fn target(&self, args: &Json) -> Result<String, String> {
         let i = lock(&self.inner);

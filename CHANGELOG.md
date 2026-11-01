@@ -12,6 +12,8 @@ publishes.
 
 ### Added
 
+- `Libraries::cursor` (egui-pop-views): the cursor a library published, beside its
+  selection, for a preview in another panel.
 - `Files::highlighted` (egui-pop-api): the entry highlighted in the in-app picker of
   a choice, for another panel to follow. A picker the `Files` service holds had no
   way to say it but the debug bridge.

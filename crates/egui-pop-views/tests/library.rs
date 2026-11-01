@@ -499,3 +499,24 @@ fn a_library_not_drawn_keeps_its_latest_requests_and_counts_the_others() {
     assert_eq!(shoot["waiting"], 0);
     assert_eq!(shoot["dropped"], 36);
 }
+
+#[test]
+fn the_registry_says_a_librarys_selection_and_cursor() {
+    let mut h = harness(40, false, true, CullKeymap::lightroom());
+    h.run();
+    let app = h.state_mut().app.as_mut().unwrap();
+    let reg = app.handle().service(&LIBRARIES).unwrap();
+    assert_eq!(reg.cursor("shoot"), None);
+    app.run(
+        &CMD_SELECT,
+        json!({ "library": "shoot", "keys": [3, 4], "cursor": 4 }),
+        Origin::Agent("t".into()),
+    )
+    .now()
+    .unwrap()
+    .unwrap();
+    h.run();
+    assert_eq!(reg.selection("shoot"), Some(vec![json!(3), json!(4)]));
+    assert_eq!(reg.cursor("shoot"), Some(json!(4)));
+    assert_eq!(reg.cursor("elsewhere"), None);
+}
