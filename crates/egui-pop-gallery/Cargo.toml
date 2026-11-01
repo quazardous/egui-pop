@@ -21,6 +21,9 @@ graph-pdf = ["egui-pop/graph-pdf"]
 ## The system's file chooser in the gallery (tests always use the in-app
 ## picker, so this is off by default).
 native-dialogs = ["egui-pop/native-dialogs"]
+## The viewer page plays a clip it generates (`egui-pop/views-video`), through
+## the system's GStreamer; off by default so that no build needs it.
+video = ["egui-pop/views-video"]
 ## egui-pop's and egui's profiling scopes as `tracing` spans, for the
 ## `threading` example (docs/threading.md).
 trace = ["dep:tracing", "dep:profiling", "profiling/profile-with-tracing"]
