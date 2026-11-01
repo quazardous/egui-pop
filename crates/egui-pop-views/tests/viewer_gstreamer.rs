@@ -191,7 +191,11 @@ fn an_element_gstreamer_does_not_have_gives_the_error_page() {
 #[test]
 fn a_file_that_is_not_there_gives_the_not_found_page() {
     let file = Temp::new("missing", "mkv");
-    let mut h = shown(silent(), &file.target());
+    // The links service refuses a missing file first, with a toast: this is for
+    // a file gone between the policy and the viewer, or asked of it directly.
+    let mut h = shown(silent(), "docs:other");
+    let app = handle(&h);
+    viewer(&h).navigate(&app, &file.target(), true);
     let s = until(&mut h, "the failure", |s| s["status"] == "failed");
     assert_eq!(s["error"]["failure"], "not_found", "{s}");
 }
