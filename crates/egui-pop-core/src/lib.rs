@@ -54,6 +54,8 @@
 //!   migrations;
 //! - [`fault`]: fault boundaries showing an error card on panic;
 //! - [`binding`]: plain, bound and watch-only values;
+//! - [`latest`]: a slow load following a selection, the latest asked
+//!   winning, nothing run behind a hidden panel;
 //! - [`thumbnail`]: thumbnails and a virtualised grid of them;
 //! - [`widgets`]: egui's checkbox, radio button, selectable row and
 //!   combo box arrow drawn through the kit, and a toggle chip;
@@ -78,6 +80,7 @@ pub mod indicator;
 pub mod input;
 pub mod keys;
 pub mod kit;
+pub mod latest;
 pub mod motion;
 pub mod overlay;
 pub mod param;
