@@ -138,6 +138,59 @@ fn harness(n: u32, stacked: bool, with_app: bool, keymap: CullKeymap) -> Harness
         )
 }
 
+#[test]
+fn a_grid_keeps_the_wheel_at_its_end_in_a_panel_that_scrolls() {
+    struct InPanel {
+        state: LibraryState<u32>,
+        shoot: Shoot,
+        panel: f32,
+    }
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(800.0, 600.0))
+        .build_ui_state(
+            |ui, p: &mut InPanel| {
+                let out = egui::ScrollArea::vertical()
+                    .id_salt("panel")
+                    .show(ui, |ui| {
+                        ThumbGrid::new("grid").height(200.0).show(
+                            ui,
+                            &mut p.state,
+                            &p.shoot,
+                            &Thumbs,
+                        );
+                        ui.allocate_space(egui::vec2(10.0, 2000.0));
+                    });
+                p.panel = out.state.offset.y;
+            },
+            InPanel {
+                state: LibraryState::new("shoot"),
+                shoot: Shoot {
+                    n: 60,
+                    stacked: false,
+                },
+                panel: 0.0,
+            },
+        );
+    h.run();
+    let event = |delta, phase| egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Line,
+        delta: egui::vec2(0.0, delta),
+        modifiers: Modifiers::NONE,
+        phase,
+    };
+    h.hover_at(egui::pos2(100.0, 100.0));
+    h.run();
+    // In one gesture, as a touchpad's, so that egui does not smooth it.
+    for _ in 0..12 {
+        h.event(event(0.0, egui::TouchPhase::Start));
+        h.event(event(-8.0, egui::TouchPhase::Move));
+        h.run();
+        h.event(event(0.0, egui::TouchPhase::End));
+        h.run();
+    }
+    assert_eq!(h.state().panel, 0.0);
+}
+
 fn cursor(h: &Harness<'_, Lib>) -> Option<u32> {
     h.state().state.selection().cursor().copied()
 }

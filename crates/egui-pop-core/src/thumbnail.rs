@@ -287,7 +287,7 @@ impl ThumbnailGrid {
         // Rows lie one row height and the `Ui`'s spacing apart: the pitch
         // `show_rows` works the first row in view out from.
         let pitch = cell.y + ui.spacing().item_spacing.y;
-        area.show_rows(ui, cell.y, rows, |ui, range| {
+        let out = area.show_rows(ui, cell.y, rows, |ui, range| {
             if let Some(i) = reveal {
                 let top = ui.max_rect().top() + ((i / per_row) as f32 - range.start as f32) * pitch;
                 let left = ui.max_rect().left();
@@ -313,6 +313,7 @@ impl ThumbnailGrid {
                 });
             }
         });
+        crate::ui::contain_wheel(ui, &out);
         per_row
     }
 }

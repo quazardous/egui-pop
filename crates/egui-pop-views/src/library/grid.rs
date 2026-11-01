@@ -984,6 +984,7 @@ impl<'a> ThumbGrid<'a> {
         });
         ops.extend(cell_ops);
         mem.band = band;
+        egui_pop_core::ui::contain_wheel(ui, &out);
         if grid {
             mem.offset = out.state.offset.y;
             mem.extent = out.inner_rect.height();

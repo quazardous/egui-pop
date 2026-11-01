@@ -1163,7 +1163,9 @@ fn body(ui: &mut Ui, ready: &Ready, name: &str) {
             }
         }
         Body::Text { text, truncated } => {
-            egui::ScrollArea::vertical()
+            // In the pane's own scroll area: the wheel stops here, as it does
+            // over the list beside it.
+            let out = egui::ScrollArea::vertical()
                 .id_salt("egui_pop.files.preview.text")
                 .max_height(area.y)
                 .auto_shrink([false, true])
@@ -1173,9 +1175,10 @@ fn body(ui: &mut Ui, ready: &Ready, name: &str) {
                         ui.weak("…");
                     }
                 });
+            egui_pop_core::ui::contain_wheel(ui, &out);
         }
         Body::Markdown(blocks) => {
-            egui::ScrollArea::vertical()
+            let out = egui::ScrollArea::vertical()
                 .id_salt("egui_pop.files.preview.document")
                 .max_height(area.y)
                 .auto_shrink([false, true])
@@ -1206,6 +1209,7 @@ fn body(ui: &mut Ui, ready: &Ready, name: &str) {
                         }
                     }
                 });
+            egui_pop_core::ui::contain_wheel(ui, &out);
         }
         Body::Folder { thumbnails, .. } => {
             let side = ((area.x - t.space.xs) / 2.0).floor();

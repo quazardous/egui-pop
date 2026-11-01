@@ -87,6 +87,7 @@ pub(crate) fn show<R>(
             },
         )
     });
+    egui_pop_core::ui::contain_wheel(ui, &out);
     scroll.offset = out.state.offset.y;
     scroll.height = out.inner_rect.height();
     let response = ui.interact(out.inner_rect, id, Sense::focusable_noninteractive());
