@@ -12,6 +12,9 @@ publishes.
 
 ### Added
 
+- `Files::highlighted` (egui-pop-api): the entry highlighted in the in-app picker of
+  a choice, for another panel to follow. A picker the `Files` service holds had no
+  way to say it but the debug bridge.
 - `latest::Latest` (egui-pop-core): a slow load that follows a selection. A panel
   asks for the current key each time it draws; the latest asked wins, a load asked
   in between never starts, one running is told through `Cancel` and its result
