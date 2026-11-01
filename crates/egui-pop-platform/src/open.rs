@@ -54,6 +54,7 @@ impl Opener for SystemOpener {
                 files: true,
                 reveal: true,
                 inside: false,
+                video: false,
             }
         }
     }
