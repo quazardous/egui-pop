@@ -40,6 +40,9 @@ of every crate with every feature on.
 - [State or event: what to use](state-or-event.md): how a plugin
   shares data (the value store, commands, steps, the context stack,
   services), the per-frame trap, one example done both ways.
+- [Linked panels](linked-panels.md): a selection in one view driving a
+  preview in another panel, what each view says of its selection, panels
+  moved, closed or detached, slow previews.
 - [The context stack](contexts.md): places (a drill-down and its
   breadcrumb) and modes (global states and their chips) owned by the
   kernel and projected by the interface, kernel state and view state,

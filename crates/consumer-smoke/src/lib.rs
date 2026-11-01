@@ -38,6 +38,9 @@ pub mod contexts {}
 #[doc = include_str!("../../../docs/state-or-event.md")]
 pub mod state_or_event {}
 
+#[doc = include_str!("../../../docs/linked-panels.md")]
+pub mod linked_panels {}
+
 #[doc = include_str!("../../../docs/viewport.md")]
 pub mod viewport {}
 
