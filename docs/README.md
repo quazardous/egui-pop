@@ -23,6 +23,10 @@ of every crate with every feature on.
 
 - [Getting started](getting-started.md): the application template, a
   plugin application, the command palette and the paved road.
+- [Using parts without App](standalone.md): what a plain egui or eframe
+  application uses alone (tokens, the theme, kits, components, the
+  viewport, views, editors), its entry point, and what needs the
+  framework.
 - [Themes](themes.md): picking and adjusting a theme, every built-in
   theme.
 - [Visual kits](kit.md): what components look like, as data per state

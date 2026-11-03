@@ -115,6 +115,7 @@ assert_eq!(out.now(), Some(Ok(serde_json::json!("hello"))));
 
 Fifteen built-in themes, two densities, five accents, any token
 overridden. More in [Themes](https://github.com/quazardous/egui-pop/blob/main/docs/themes.md).
+No `App` needed for this: see [Using parts without App](https://github.com/quazardous/egui-pop/blob/main/docs/standalone.md).
 
 ```rust
 use egui_pop::egui;
