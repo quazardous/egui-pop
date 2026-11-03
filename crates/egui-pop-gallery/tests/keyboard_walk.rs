@@ -8,7 +8,6 @@
 //! `ignore`. "Check" numbers are the survey's walk, "item" numbers its
 //! ranked list.
 
-use std::cell::Cell;
 use std::sync::{Arc, Mutex};
 
 use egui::accesskit::Role;
@@ -1045,53 +1044,8 @@ fn the_side_list_is_one_stop() {
 
 // Enter and Space on a plain button (check 9, items 4 and 14).
 
-#[test]
-#[ignore = "keyboard survey item 14: Ctrl+Enter clicks a focused plain button"]
-fn ctrl_enter_does_not_click_a_plain_button() {
-    let clicks = Cell::new(0);
-    let mut h = themed(&ThemeSpec::default(), egui::vec2(200.0, 80.0), |ui| {
-        if ui.button("Go").clicked() {
-            clicks.set(clicks.get() + 1);
-        }
-    });
-    let _ = h.run_ok();
-    walk::reach(&mut h, TAB, "Go", 4).expect("Tab reaches the button");
-    let key = Key::Enter;
-    walk::press(
-        &mut h,
-        Press {
-            modifiers: CTRL,
-            key,
-        },
-    );
-    drop(h);
-    assert_eq!(clicks.get(), 0);
-}
-
-#[test]
-#[ignore = "keyboard survey item 14: a held Space clicks at every repeat"]
-fn a_held_space_clicks_once() {
-    let clicks = Cell::new(0);
-    let mut h = themed(&ThemeSpec::default(), egui::vec2(200.0, 80.0), |ui| {
-        if ui.button("Go").clicked() {
-            clicks.set(clicks.get() + 1);
-        }
-    });
-    let _ = h.run_ok();
-    walk::press(&mut h, TAB);
-    for repeat in [false, true, true, true] {
-        h.event(egui::Event::Key {
-            key: Key::Space,
-            physical_key: None,
-            pressed: true,
-            repeat,
-            modifiers: Modifiers::NONE,
-        });
-        let _ = h.run_ok();
-    }
-    drop(h);
-    assert_eq!(clicks.get(), 1);
-}
+// Item 14 (Enter and Space with a modifier or repeated do not click a plain
+// button) needs the key dispatcher: `crates/egui-pop-api/tests/plain_clicks.rs`.
 
 /// The button at rest, focused and pressed, as rendered.
 fn rendered_states() -> [image::RgbaImage; 3] {
