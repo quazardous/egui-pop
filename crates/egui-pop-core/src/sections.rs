@@ -248,36 +248,38 @@ fn laid_summary(laid: &Vec<Laid>) -> String {
     text
 }
 
-/// The stack as a drag found it, what its plans start from.
+/// The heights kept by hand when a drag or a key press began: what its plans
+/// are pinned against, so that a section the drag leaves alone stays in the
+/// list.
 #[derive(Clone, Debug)]
-struct Start {
-    heights: Vec<f32>,
-    hands: Vec<Option<f32>>,
-    empty: f32,
-}
+struct Hands(Vec<Option<f32>>);
 
-impl Start {
+impl Hands {
     /// What the stack asks for, with the heights kept by hand as they were.
     fn asked(&self, stack: &Shown<'_>) -> Vec<Asked> {
         stack
             .asked
             .iter()
-            .zip(&self.hands)
+            .zip(&self.0)
             .map(|(a, &hand)| Asked { hand, ..*a })
             .collect()
     }
 }
 
-/// A drag on a boundary: where it began and the stack it began from, so
-/// that the border follows the pointer without drifting.
+/// A drag on a boundary: where the pointer was pressed and where the
+/// boundary was then, so that it stays under the pointer without drifting.
+/// Each pass plans from the stack as shown: what the drag shrank stays
+/// shrunk, and the room a move back gives goes where a fresh drag would put
+/// it.
 #[derive(Clone, Debug)]
 struct Drag {
     origin: f32,
-    from: Start,
-    /// How its plans move the stack.
-    mode: DragMode,
-    /// Where the pointer was on the last plan: where a change of mode
-    /// starts again from.
+    /// The heights above the boundary, summed, when the drag began: how far
+    /// it has moved since is what they are now, less this.
+    top: f32,
+    hands: Hands,
+    /// Where the pointer was on the last pass: no move goes further than
+    /// the pointer has since.
     last: f32,
 }
 
@@ -1087,20 +1089,21 @@ impl Shown<'_> {
             .collect()
     }
 
-    /// The boundary under `above` moved `delta` from `from`, in `mode`.
-    /// Says whether this changes what is shown.
+    /// The boundary under `above` moved `delta` from where the stack shows
+    /// it, in `mode`, pinned against `hands`. Says whether this changes what
+    /// is shown.
     fn drag(
         &self,
         layout: &mut Layout,
-        from: &Start,
+        hands: &Hands,
         above: usize,
         delta: f32,
         mode: DragMode,
     ) -> bool {
-        let placed = self.placed(&from.heights);
-        let plan = model::plan_drag(&placed, above, delta, from.empty, mode);
-        let hands = model::pin_plan(&from.asked(self), self.space, plan.empty, &plan.heights);
-        for (key, hand) in self.keys.iter().zip(hands) {
+        let placed = self.placed(self.heights);
+        let plan = model::plan_drag(&placed, above, delta, self.empty, mode);
+        let pinned = model::pin_plan(&hands.asked(self), self.space, plan.empty, &plan.heights);
+        for (key, hand) in self.keys.iter().zip(pinned) {
             layout.set_height(key, hand);
         }
         layout.empty = plan.empty;
@@ -1108,13 +1111,16 @@ impl Shown<'_> {
         (plan.empty - self.empty).abs() > 0.01 || plan.heights.iter().zip(self.heights).any(moved)
     }
 
-    /// Where a drag or a key press starts from: the stack as shown.
-    fn start(&self) -> Start {
-        Start {
-            heights: self.heights.to_vec(),
-            hands: self.asked.iter().map(|a| a.hand).collect(),
-            empty: self.empty,
-        }
+    /// The heights kept by hand as shown: what a drag or a key press pins
+    /// its plans against.
+    fn hands(&self) -> Hands {
+        Hands(self.asked.iter().map(|a| a.hand).collect())
+    }
+
+    /// How far down the boundary under `above` is: the heights above it,
+    /// summed (the folded bands between do not change).
+    fn top(&self, above: usize) -> f32 {
+        self.heights[..=above].iter().sum()
     }
 
     /// Folds or opens `section`, its title staying where it is if `keep`.
@@ -1207,9 +1213,12 @@ fn keys_mode(ui: &Ui) -> DragMode {
 /// What a pointer dragging `r` does to the section `above`, a boundary or a
 /// title alike. Says how it moves the stack, while it does.
 ///
-/// The keys pressed or released during the drag change its mode from there:
-/// it starts again from the stack as shown, where the pointer last was, so
-/// nothing jumps.
+/// Each pass moves the boundary from where the stack shows it to where the
+/// pointer wants it, as a fresh drag would: what the drag shrank stays
+/// shrunk, and past a stop nothing moves until the pointer is back on the
+/// boundary. The keys pressed or released during the drag change only how
+/// the next moves give way; no move goes further than the pointer did since
+/// the last pass, so nothing jumps.
 fn work_drag(
     ui: &Ui,
     r: &Response,
@@ -1229,8 +1238,8 @@ fn work_drag(
             ctx,
             Drag {
                 origin,
-                from: stack.start(),
-                mode: drag_mode(ui),
+                top: stack.top(above),
+                hands: stack.hands(),
                 last: origin,
             },
         );
@@ -1240,19 +1249,21 @@ fn work_drag(
         ctx.set_cursor_icon(CursorIcon::ResizeVertical);
         let drag = slot
             .get(ctx)
-            .filter(|d| d.from.heights.len() == stack.keys.len());
+            .filter(|d| d.hands.0.len() == stack.keys.len());
         if let (Some(mut drag), Some(pointer)) = (drag, r.interact_pointer_pos()) {
             let now = drag_mode(ui);
-            if now != drag.mode {
-                drag.origin = drag.last;
-                drag.from = stack.start();
-                drag.mode = now;
+            let wanted = pointer.y - drag.origin;
+            // A boundary stopped short of the pointer in one mode may go
+            // further in the other: it catches up as the pointer moves,
+            // never faster, so that nothing jumps when the keys change.
+            let reach = (pointer.y - drag.last).abs();
+            let delta = (wanted - (stack.top(above) - drag.top)).clamp(-reach, reach);
+            if delta.abs() > 0.01 {
+                response.resized |= stack.drag(layout, &drag.hands, above, delta, now);
             }
             drag.last = pointer.y;
-            let delta = pointer.y - drag.origin;
-            response.resized |= stack.drag(layout, &drag.from, above, delta, drag.mode);
-            mode = Some(drag.mode);
             slot.set(ctx, drag);
+            mode = Some(now);
         }
     }
     if r.drag_stopped() {
@@ -1310,7 +1321,7 @@ fn work_boundary(
     if steps != 0.0 {
         let delta = steps * stack.step;
         let mode = keys_mode(ui);
-        response.resized |= stack.drag(layout, &stack.start(), above, delta, mode);
+        response.resized |= stack.drag(layout, &stack.hands(), above, delta, mode);
     }
     dragging
 }

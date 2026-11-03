@@ -96,10 +96,11 @@ pub fn resized_above(open: &[bool], line: usize) -> Option<usize> {
 /// (down if positive), from the heights in `placed`; `empty` is the room
 /// under the last section.
 ///
-/// A plan is always computed from the same starting heights during a
-/// drag, with the whole distance from where it began, so a boundary
-/// follows the pointer without drifting and gives back what it took when
-/// the pointer returns. When `above` is not an open section or no section
+/// A drag plans each move from the heights shown, by the distance between
+/// the boundary and the pointer, so that it stays under the pointer: what a
+/// drag shrank stays shrunk, and a move back gives the room where a fresh
+/// drag would. Plans compose: a move of `a` then of `b` the same way is a
+/// move of `a + b`. When `above` is not an open section or no section
 /// lies below it, no boundary is there: nothing moves and the
 /// plan says so (`moved` is 0). With only folded sections below it, nothing
 /// else can give or take: down, it takes the empty room, and up, it opens
@@ -543,12 +544,47 @@ mod tests {
     }
 
     #[test]
-    fn a_plan_comes_back_when_the_pointer_does() {
+    fn plans_compose_and_a_move_back_does_not_undo_what_a_move_shrank() {
         let stack = [at(56.0, 300.0), at(56.0, 200.0), at(28.0, 128.0)];
-        let there = drag(&stack, 0, 700.0, 0.0);
-        assert_eq!(there.heights[0], 544.0);
-        // From the same start, the distance is all that counts.
-        assert_eq!(drag(&stack, 0, 300.0, 0.0).heights, [300.0, 200.0, 128.0]);
+        let placed = |plan: &DragPlan| -> Vec<Placed> {
+            stack
+                .iter()
+                .zip(&plan.heights)
+                .map(|(p, &height)| Placed { height, ..*p })
+                .collect()
+        };
+        for mode in [DragMode::Push, DragMode::Pull] {
+            for (a, b) in [
+                (40.0, 130.0),
+                (-30.0, -50.0),
+                (100.0, 60.0),
+                (-200.0, -90.0),
+            ] {
+                let once = plan_drag(&stack, 0, a + b, 20.0, mode);
+                let first = plan_drag(&stack, 0, a, 20.0, mode);
+                let twice = plan_drag(&placed(&first), 0, b, first.empty, mode);
+                assert_eq!(once.heights, twice.heights, "{mode:?} {a} {b}");
+                assert_eq!(once.empty, twice.empty, "{mode:?} {a} {b}");
+            }
+        }
+        // Down past the second's least, the last gives 30; back up by as much
+        // as it went down, the last keeps what it gave and the second takes
+        // the room, as a fresh drag up would.
+        let down = drag(&stack, 0, 474.0, 0.0);
+        assert_eq!(down.heights, [474.0, 56.0, 98.0]);
+        let back = plan_drag(&placed(&down), 0, -174.0, 0.0, DragMode::Push);
+        assert_eq!(back.heights, [300.0, 230.0, 98.0]);
+        // The same past a folded section: the next open one takes the room.
+        let stack = [at(56.0, 300.0), folded(), at(56.0, 200.0), at(28.0, 128.0)];
+        let down = plan_drag(&stack, 0, 174.0, 0.0, DragMode::Push);
+        assert_eq!(down.heights, [474.0, 0.0, 56.0, 98.0]);
+        let placed: Vec<Placed> = stack
+            .iter()
+            .zip(&down.heights)
+            .map(|(p, &height)| Placed { height, ..*p })
+            .collect();
+        let back = plan_drag(&placed, 0, -174.0, 0.0, DragMode::Push);
+        assert_eq!(back.heights, [300.0, 0.0, 230.0, 98.0]);
     }
 
     #[test]

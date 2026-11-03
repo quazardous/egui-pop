@@ -874,7 +874,7 @@ fn a_title_that_drags_moves_under_the_pointer_and_a_press_that_does_not_folds() 
     assert!((now[0].height - start[0].height - 30.0).abs() < 1.0);
     assert!((now[1].height - start[1].height + 30.0).abs() < 1.0);
     assert_eq!(now[0].drag, Some(egui_pop_model::sections::DragMode::Push));
-    // Up in the same drag: from where it began, no drift.
+    // Up in the same drag: the title under the pointer, no drift.
     h.hover_at(from + egui::vec2(0.0, -30.0));
     h.run();
     let up = laid_out(&h.ctx, NAME);
@@ -1457,4 +1457,342 @@ fn a_stack_too_tall_for_its_panel_shows_a_quiet_bar_at_rest() {
         .collect();
     assert_eq!(bars.len(), 1, "{bars:?}");
     assert_eq!(bars[0].width(), kit.scroll.width_rest);
+}
+
+/// The owner's gesture: a title dragged down past the next section's least,
+/// so that the last one gives too, then back up in the same drag. What the
+/// drag shrank stays shrunk: the room goes to the section just below the
+/// boundary, as a fresh drag up would put it, and the last does not bounce.
+#[test]
+fn a_drag_back_up_leaves_what_it_shrank_and_the_next_section_takes_the_room() {
+    for grab in [false, true] {
+        let mut h = options(600.0, grab, true);
+        h.run();
+        let start = heights(&h);
+        let top = band(&h, "b").top();
+        let from = if grab {
+            band(&h, "b").center()
+        } else {
+            boundary(&h, "Resize Aa")
+        };
+        // Down, past Bb's least: Cc gives 30.
+        let deep = start[1] - 40.0 + 30.0;
+        drag_from(&mut h, from, deep);
+        let down = heights(&h);
+        let want = [start[0] + deep, 40.0, start[2] - 30.0];
+        assert!(close(&down, &want), "grab {grab}: {down:?}");
+        // Back up, pass by pass, to where it began: Cc stays shrunk.
+        for i in 1..=8 {
+            h.hover_at(from + egui::vec2(0.0, deep - deep * i as f32 / 8.0));
+            h.run();
+            let now = heights(&h);
+            assert!(
+                (now[2] - down[2]).abs() < 0.5,
+                "grab {grab}, step {i}: {now:?}"
+            );
+        }
+        let back = heights(&h);
+        let want = [start[0], start[1] + 30.0, start[2] - 30.0];
+        assert!(close(&back, &want), "grab {grab}: {back:?}");
+        // The boundary is under the pointer all along: no drift.
+        assert!((band(&h, "b").top() - top).abs() < 0.5);
+        h.drop_at(from);
+        h.run();
+        Layout::default().store(&h.ctx, NAME);
+        h.run();
+    }
+}
+
+/// Down, up, down again in one drag: each leg is a fresh drag from the stack
+/// as shown, the boundary under the pointer. Going down again, the section
+/// just below gives first, then the last, from what they have now.
+#[test]
+fn a_drag_down_up_and_down_again_gives_way_from_the_stack_as_shown() {
+    let mut h = options(600.0, false, false);
+    h.run();
+    let start = heights(&h);
+    let top = band(&h, "b").top();
+    let from = boundary(&h, "Resize Aa");
+    let deep = start[1] - 40.0 + 30.0;
+    drag_from(&mut h, from, deep);
+    // Up past where it began: Aa gives, Bb takes it all, Cc stays.
+    h.hover_at(from + egui::vec2(0.0, -50.0));
+    h.run();
+    let up = heights(&h);
+    let want = [start[0] - 50.0, start[1] + 80.0, start[2] - 30.0];
+    assert!(close(&up, &want), "{up:?}");
+    // Down again to the same place: Bb gives first, back to its least; Cc,
+    // which it never reached, is as the first leg left it.
+    h.hover_at(from + egui::vec2(0.0, deep));
+    h.run();
+    let again = heights(&h);
+    assert!(
+        close(&again, &[start[0] + deep, 40.0, start[2] - 30.0]),
+        "{again:?}"
+    );
+    assert!((band(&h, "b").top() - top - deep).abs() < 0.5);
+    // Further: Cc gives, down to its least, and the drag stops there.
+    h.hover_at(from + egui::vec2(0.0, 2_000.0));
+    h.run();
+    let stop = heights(&h);
+    assert!(
+        (stop[1] - 40.0).abs() < 0.1 && (stop[2] - 40.0).abs() < 0.1,
+        "{stop:?}"
+    );
+    // Back from beyond the stop: nothing moves until the pointer is back
+    // on the boundary, which then follows it.
+    let at_stop = band(&h, "b").top();
+    h.hover_at(egui::pos2(from.x, at_stop + 100.0));
+    h.run();
+    assert!((band(&h, "b").top() - at_stop).abs() < 0.5);
+    h.hover_at(egui::pos2(from.x, at_stop - 20.0 + (from.y - top)));
+    h.run();
+    assert!((band(&h, "b").top() - at_stop + 20.0).abs() < 0.5);
+    let back = heights(&h);
+    assert!(
+        (back[2] - 40.0).abs() < 0.1,
+        "Cc stays at its least: {back:?}"
+    );
+    h.drop_at(from);
+    h.run();
+}
+
+/// A tiny seeded generator, so the sequences are the same on every run.
+struct Seeded(u64);
+
+impl Seeded {
+    fn next(&mut self) -> u64 {
+        // xorshift64*
+        self.0 ^= self.0 >> 12;
+        self.0 ^= self.0 << 25;
+        self.0 ^= self.0 >> 27;
+        self.0.wrapping_mul(0x2545_f491_4f6c_dd1d)
+    }
+
+    fn below(&mut self, n: u64) -> u64 {
+        self.next() % n
+    }
+}
+
+/// One thing a hand does during a drag.
+#[derive(Clone, Copy, Debug)]
+enum Act {
+    /// The pointer moves by this much.
+    Move(f32),
+    /// The pull's keys pressed (`true`) or released, the pointer still.
+    Keys(bool),
+    /// Both, in one pass.
+    KeysAndMove(bool, f32),
+}
+
+/// A drag watched pass by pass: no band jumps (moves further than the
+/// pointer did), the room is all accounted for, and the dragged boundary
+/// goes toward where the pointer wants it, never past it.
+struct Watch {
+    from: egui::Pos2,
+    /// The pointer's distance from where it was pressed.
+    at: f32,
+    /// The top of the band under the boundary when the drag began.
+    top: f32,
+    total: f32,
+    pull: bool,
+    done: Vec<Act>,
+}
+
+fn room(h: &Harness<'_>) -> f32 {
+    heights(h).iter().sum::<f32>() + empty(h)
+}
+
+impl Watch {
+    fn begin(h: &mut Harness<'_>, grab: bool, pull: bool) -> Watch {
+        hold(h, if pull { PULL } else { egui::Modifiers::NONE });
+        let from = if grab {
+            band(h, "b").center()
+        } else {
+            boundary(h, "Resize Aa")
+        };
+        let w = Watch {
+            from,
+            at: 0.0,
+            top: band(h, "b").top(),
+            total: room(h),
+            pull,
+            done: Vec::new(),
+        };
+        h.drag_at(from);
+        h.run();
+        w
+    }
+
+    fn act(&mut self, h: &mut Harness<'_>, act: Act) {
+        self.done.push(act);
+        let before = laid_out(&h.ctx, NAME);
+        let (keys, by) = match act {
+            Act::Move(by) => (None, by),
+            Act::Keys(pull) => (Some(pull), 0.0),
+            Act::KeysAndMove(pull, by) => (Some(pull), by),
+        };
+        if let Some(pull) = keys {
+            self.pull = pull;
+            let m = if pull { PULL } else { egui::Modifiers::NONE };
+            h.event(egui::Event::ModifiersChanged(m));
+        }
+        self.at += by;
+        h.hover_at(self.from + egui::vec2(0.0, self.at));
+        h.run();
+        let after = laid_out(&h.ctx, NAME);
+        let said = format!("after {:?}", self.done);
+        for (b, a) in before.iter().zip(&after) {
+            let jump = (a.band.top() - b.band.top())
+                .abs()
+                .max((a.height - b.height).abs());
+            assert!(jump <= by.abs() + 0.5, "{} jumped {jump}: {said}", a.key);
+        }
+        assert!((room(h) - self.total).abs() < 0.5, "room: {said}");
+        let (was, now) = (before[1].band.top(), after[1].band.top());
+        let wanted = self.top + self.at;
+        let (lo, hi) = (was.min(wanted) - 0.5, was.max(wanted) + 0.5);
+        assert!(
+            (lo..=hi).contains(&now),
+            "the boundary went from {was} to {now}, the pointer wants {wanted}: {said}"
+        );
+    }
+
+    /// Back to where it was pressed, plain, by way of 300 points above it,
+    /// then dropped: the boundary is back where it began. A boundary the keys
+    /// left short of the pointer catches up as the pointer comes toward it,
+    /// which the way up or the way down does.
+    fn end(mut self, h: &mut Harness<'_>) {
+        if self.pull {
+            self.act(h, Act::Keys(false));
+        }
+        let up = -300.0 - self.at;
+        for _ in 0..4 {
+            self.act(h, Act::Move(up / 4.0));
+        }
+        for _ in 0..6 {
+            self.act(h, Act::Move(50.0));
+        }
+        let now = band(h, "b").top();
+        assert!(
+            (now - self.top).abs() < 0.5,
+            "back at {now}, began at {}: after {:?}",
+            self.top,
+            self.done
+        );
+        h.drop_at(self.from + egui::vec2(0.0, self.at));
+        h.run();
+        hold(h, egui::Modifiers::NONE);
+    }
+}
+
+/// Plays `acts` in one drag on Aa's boundary (or Bb's title).
+fn play(grab: bool, empty_first: bool, pull: bool, acts: &[Act]) {
+    let mut h = options(600.0, grab, false);
+    h.run();
+    if empty_first {
+        hold(&mut h, PULL);
+        let from = boundary(&h, "Resize Aa");
+        drag_from(&mut h, from, -60.0);
+        h.drop_at(from + egui::vec2(0.0, -60.0));
+        h.run();
+        hold(&mut h, egui::Modifiers::NONE);
+        assert!(empty(&h) > 50.0);
+    }
+    let mut w = Watch::begin(&mut h, grab, pull);
+    for &act in acts {
+        w.act(&mut h, act);
+    }
+    w.end(&mut h);
+}
+
+/// Seeded sequences of moves and of the pull's keys pressed and released in
+/// a drag: no band jumps, and the boundary stays under the pointer.
+#[test]
+fn keys_pressed_and_released_in_a_drag_never_make_a_band_jump() {
+    let mut failed = Vec::new();
+    for seed in 1..=24u64 {
+        let mut rng = Seeded(seed.wrapping_mul(0x9e37_79b9_7f4a_7c15));
+        let grab = rng.below(2) == 0;
+        let empty_first = rng.below(3) == 0;
+        let start = rng.below(2) == 0;
+        let mut pull = start;
+        let first = 10.0 + rng.below(30) as f32;
+        let mut acts = vec![Act::Move(if rng.below(2) == 0 { first } else { -first })];
+        for _ in 0..24 {
+            let by = rng.below(241) as f32 - 120.0;
+            acts.push(match rng.below(10) {
+                0..=5 => Act::Move(by),
+                6 | 7 => {
+                    pull = !pull;
+                    Act::Keys(pull)
+                }
+                _ => {
+                    pull = !pull;
+                    Act::KeysAndMove(pull, by)
+                }
+            });
+        }
+        let played = std::panic::catch_unwind(|| play(grab, empty_first, start, &acts));
+        if played.is_err() {
+            failed.push(format!(
+                "seed {seed}: grab {grab}, empty {empty_first}, pull {start}, {acts:?}"
+            ));
+        }
+    }
+    assert!(failed.is_empty(), "{failed:#?}");
+}
+
+/// Found by the seeded sequences: the pull's keys released with the pointer
+/// past the top stop started the drag again from the pointer, not from the
+/// boundary, so the next move down took the boundary down with it, away
+/// from a pointer still above it.
+#[test]
+fn keys_released_past_the_top_stop_leave_the_boundary_until_the_pointer_is_back() {
+    for grab in [false, true] {
+        let acts = [Act::Move(-20.0), Act::Move(-400.0), Act::Keys(false)];
+        play(
+            grab,
+            false,
+            true,
+            &[&acts[..], &[Act::Move(100.0)]].concat(),
+        );
+    }
+}
+
+/// The same past the bottom stop: the keys pressed there, a move up that
+/// leaves the pointer under the boundary does not move it.
+#[test]
+fn keys_pressed_past_the_bottom_stop_leave_the_boundary_until_the_pointer_is_back() {
+    for empty_first in [false, true] {
+        let acts = [
+            Act::Move(20.0),
+            Act::Move(800.0),
+            Act::KeysAndMove(true, -100.0),
+            Act::Move(-200.0),
+        ];
+        play(true, empty_first, false, &acts);
+    }
+}
+
+/// Found by the seeded sequences once the boundary stayed under the pointer:
+/// a pull stopped short of the pointer (the last at its least), then the keys
+/// released as the pointer moved on. A push could go further, and the
+/// boundary jumped to the pointer in one pass; it now catches up no faster
+/// than the pointer moves.
+#[test]
+fn keys_released_short_of_the_pointer_let_the_boundary_catch_up_no_faster_than_it() {
+    for grab in [false, true] {
+        let acts = [
+            Act::Move(33.0),
+            Act::KeysAndMove(false, 17.0),
+            Act::Keys(true),
+            Act::Move(118.0),
+            Act::Move(-1.0),
+            Act::KeysAndMove(false, 61.0),
+            Act::Move(-30.0),
+            Act::Move(-30.0),
+        ];
+        play(grab, false, true, &acts);
+    }
 }

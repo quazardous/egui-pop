@@ -3725,28 +3725,86 @@ fn the_sections_page_pushes_and_the_border_follows_the_pointer() {
         (stop[1] - least).abs() < 0.1 && (stop[2] - least).abs() < 0.1,
         "{stop:?}"
     );
-    // Back up in the same drag: from where it began, so nothing drifted.
+    // Back up in the same drag, to where it began: the border is under the
+    // pointer again, nothing drifted. What the drag shrank stays shrunk:
+    // the room goes to Drafts, the first open section below, as a fresh
+    // drag up would put it, and Sent stays at its least.
     h.hover_at(a);
     h.run();
     let back = heights(&h);
-    assert!(
-        (back[0] - inbox).abs() < 1.0 && (back[2] - sent).abs() < 1.0,
-        "{back:?}"
-    );
+    assert!((back[0] - inbox).abs() < 1.0, "{back:?}");
+    assert!((back[1] - sent).abs() < 1.0, "{back:?}");
+    assert!((back[2] - least).abs() < 0.1, "{back:?}");
     // Up: Inbox gives and the first open section below takes it all;
     // Sent does not move.
     move_pointer(&mut h, a, -60.0);
     let up = heights(&h);
     assert!((up[0] - inbox + 60.0).abs() < 1.0, "{up:?}");
-    assert!((up[1] - least - 60.0).abs() < 1.0, "{up:?}");
-    assert!((up[2] - sent).abs() < 1.0, "{up:?}");
+    assert!((up[1] - sent - 60.0).abs() < 1.0, "{up:?}");
+    assert!((up[2] - least).abs() < 0.1, "{up:?}");
     h.drop_at(a + egui::vec2(0.0, -60.0));
     h.run();
     // The drag below this boundary moves Drafts by hand, on what shows.
-    drag_splitter(&mut h, "Resize Drafts", 20.0, true);
+    drag_splitter(&mut h, "Resize Drafts", -20.0, true);
     let last = heights(&h);
-    assert!((last[1] - up[1] - 20.0).abs() < 1.0, "{last:?}");
-    assert!((last[2] - up[2] + 20.0).abs() < 1.0, "{last:?}");
+    assert!((last[1] - up[1] + 20.0).abs() < 1.0, "{last:?}");
+    assert!((last[2] - up[2] - 20.0).abs() < 1.0, "{last:?}");
+}
+
+/// The owner's gesture on the stack whose titles drag: Reviews's title
+/// dragged down past its least, so that Builds gives too, then back up in
+/// the same drag. Builds stays as small as the drag made it: the room goes
+/// to Reviews, and nothing bounces.
+#[test]
+fn the_sections_page_leaves_what_a_title_drag_shrank_when_it_comes_back() {
+    use egui_pop::core::sections::laid_out;
+    use egui_pop_gallery::pages::sections::GRABBED;
+    let mut h = harness(options("pop-dark", Density::Comfortable, "sections"));
+    h.run();
+    let heights = |h: &Harness<'_, Gallery>| -> Vec<f32> {
+        laid_out(&h.ctx, GRABBED).iter().map(|s| s.height).collect()
+    };
+    let start = laid_out(&h.ctx, GRABBED);
+    let at = start[1].band.center();
+    let top = start[1].band.top();
+    // Builds's least: as low as a drag down takes it.
+    h.drag_at(at);
+    h.run();
+    move_pointer(&mut h, at, 1_000.0);
+    let least = heights(&h)[2];
+    h.hover_at(at);
+    h.run();
+    h.drop_at(at);
+    h.run();
+    egui_pop::core::sections::Layout::default().store(&h.ctx, GRABBED);
+    h.run();
+    // Down, Reviews to its least, then Builds 20 under its height.
+    let reviews = start[1].height - least;
+    let deep = reviews + 20.0;
+    h.drag_at(at);
+    h.run();
+    move_pointer(&mut h, at, deep);
+    let down = heights(&h);
+    assert!((down[1] - least).abs() < 0.1, "{down:?}");
+    assert!((down[2] - start[2].height + 20.0).abs() < 1.0, "{down:?}");
+    // Back up, pass by pass, and past where it began: Builds does not grow.
+    for i in 1..=10 {
+        h.hover_at(at + egui::vec2(0.0, deep - (deep + 40.0) * i as f32 / 10.0));
+        h.run();
+        let now = heights(&h);
+        assert!((now[2] - down[2]).abs() < 0.5, "step {i}: {now:?}");
+        let title = laid_out(&h.ctx, GRABBED)[1].band.top();
+        let wanted = top + deep - (deep + 40.0) * i as f32 / 10.0;
+        assert!(
+            (title - wanted).abs() < 1.0,
+            "step {i}: the title left the pointer"
+        );
+    }
+    let back = heights(&h);
+    assert!((back[0] - start[0].height + 40.0).abs() < 1.0, "{back:?}");
+    assert!((back[1] - start[1].height - 60.0).abs() < 1.0, "{back:?}");
+    h.drop_at(at + egui::vec2(0.0, -40.0));
+    h.run();
 }
 
 #[test]
