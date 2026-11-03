@@ -63,7 +63,7 @@ copied)` draws its body anywhere (the gallery's page does).
 ```text
 Darkroom 1.2.0
 egui-pop 0.2.0
-egui 0.36
+egui 0.37
 Platform: linux x86_64
 Renderer: wgpu: Vulkan, llvmpipe
 ```

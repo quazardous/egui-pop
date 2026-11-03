@@ -151,7 +151,7 @@ Through `App::debug_call`, `about.read` in the gallery answers:
   "data": {
     "authors": ["The egui-pop contributors"],
     "description": "egui-pop's components in every variant, state, theme and density.",
-    "egui": "0.36",
+    "egui": "0.37",
     "egui_pop": "0.2.0",
     "licences": ["MIT OR Apache-2.0"],
     "links": {
@@ -164,7 +164,7 @@ Through `App::debug_call`, `about.read` in the gallery answers:
     "platform": "linux x86_64",
     "renderer": null,
     "version": "0.2.0 (59ba7f9f)",
-    "version_info": "egui-pop gallery 0.2.0 (59ba7f9f)\negui-pop 0.2.0\negui 0.36\nPlatform: linux x86_64\n"
+    "version_info": "egui-pop gallery 0.2.0 (59ba7f9f)\negui-pop 0.2.0\negui 0.37\nPlatform: linux x86_64\n"
   }
 }
 ```

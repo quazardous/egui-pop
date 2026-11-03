@@ -2,6 +2,10 @@
 
 Status: analysis, 2026-11-03. Nothing here is decided; the sections and
 toolbars direction is accepted in [ADR 0022](adr/0022-sections-and-toolbars-in-egui-stack.md).
+Since then egui-pop has moved to egui 0.37 and draws its docks with
+egui_stack, which has the first changes listed at the end of this page;
+the workarounds those changes allow egui-pop to drop are still in place,
+to be removed one by one.
 
 [egui_stack](https://github.com/quazardous/egui_stack) continues
 [egui_dock](https://github.com/anhosh/egui_dock) (MIT, its full history

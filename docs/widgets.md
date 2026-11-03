@@ -105,7 +105,7 @@ requires. A verdict changed on 2026-11-03 says why.
 | Crate | Version (date) | egui | Licence | What | Verdict |
 |---|---|---|---|---|---|
 | egui_plot | 0.38.0 (2026-10-19) | 0.37 | MIT OR Apache-2.0 | Lines, bars, boxes | Debug panels only; our scopes are images fed by the engine |
-| egui_dock | 0.21.1 (2026-08-06) | 0.36 | MIT | Docking, tabs, splits | **Adopted**, to be replaced by [egui_stack](https://github.com/quazardous/egui_stack), its continuation on egui 0.37 (changed 2026-11-03: egui_dock has no release for 0.37; [#145](https://github.com/quazardous/egui-pop/issues/145)). It cannot veto a drop by destination (see `upstream.md`) |
+| egui_dock | 0.21.1 (2026-08-06) | 0.36 | MIT | Docking, tabs, splits | Adopted, then **replaced** by [egui_stack](https://github.com/quazardous/egui_stack), its continuation on egui 0.37 (changed 2026-11-03: egui_dock has no release for 0.37; [#145](https://github.com/quazardous/egui-pop/issues/145)). egui-pop's areas are still docks of their own (see `upstream.md`) |
 | egui_tiles | 0.18.0 (2026-10-19) | 0.37 | MIT OR Apache-2.0 | Rerun's tiling, now in the rerun-io/egui_crates repository | Not needed next to egui_stack; a source of ideas and code for it, with credit ([directions](egui-stack-directions.md)) |
 | egui-notify | 0.24.0 (2026-10-30) | 0.37 | MIT | Toasts | Ideas only, now taken: the slide, the corners and the toast's states are in egui-pop's toasts, with credit (`crates/egui-pop-api/src/toasts.rs`, `NOTICE`). Not a dependency: it keeps a string queue, with no commands and no state to inspect, and 0.24 pulls egui-phosphor from git |
 | egui-toast | 0.22.0 (2026-08-08) | 0.36 | MIT | Toasts | Same as egui-notify (ideas only) |
@@ -114,7 +114,7 @@ requires. A verdict changed on 2026-11-03 says why.
 | egui_graph_edit | 0.9.1 (2026-07-13) | 0.35 | MIT | Node graphs | Same |
 | egui_graphs | 0.32.0 (2026-08-31) | 0.36 | MIT | A petgraph viewer | Not an editor |
 | egui_ltreeview | 0.10.0 (2026-10-25) | 0.37 | MIT | Tree view: multi-select, keyboard, drag and drop, context menu; the caller keeps the data | **Own** (decided 2026-10-13, see "Data views" below); the drop zones (before, inside, after) follow its idea |
-| egui_table | 0.11.0 (2026-10-19) | 0.37 | MIT OR Apache-2.0 | Rerun's virtualized table (sticky header, resizable columns), now in rerun-io/egui_crates | **Wrapped** (decided 2026-10-13): `egui-pop-views`' data table, on 0.10 until egui-pop moves to egui 0.37 |
+| egui_table | 0.11.0 (2026-10-19) | 0.37 | MIT OR Apache-2.0 | Rerun's virtualized table (sticky header, resizable columns), now in rerun-io/egui_crates | **Wrapped** (decided 2026-10-13): `egui-pop-views`' data table |
 | egui_extras `TableBuilder` | 0.37.0 (2026-10-15) | 0.37 | MIT OR Apache-2.0 | egui's own table: rows in view, resizable columns, striped | **Skip** (2026-10-13): widths only in egui's memory, no sticky columns |
 | egui_virtual_list | 0.13.0 (2026-10-19) | 0.37 | MIT | Virtual list with rows of varying height, measured and cached | **Own** the thumbnail grid (decided 2026-10-13, see docs/library.md): cells of one size need no measuring, and End must reach the last of 100 000 images at once. Kept as the candidate for lists of rows of varying height (history, logs) |
 | egui_infinite_scroll | 0.13.0 (2026-10-19) | 0.37 | MIT | Pages loaded on scroll | Ideas only: our fetches are windowed by the host |
