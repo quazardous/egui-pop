@@ -294,9 +294,13 @@ fn commands(ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
     )?;
     ctx.command(
         CommandSpec::new(CMD_SEND, "Send input", CAT)
-            .description("Sends `text` to the program through `terminal.input` (with `enter`, followed by Enter).")
+            .description("Sends `text` to the program through `terminal.input` (with `enter`, followed by Enter). Not offered to agents unless the application offers it (`AppBuilder::offer_command_to_agents`): in a shell, it runs what it types.")
             .hidden()
-            .args(json!({ "terminal": "shell", "text": "ls -l", "enter": true })),
+            .args(json!({ "terminal": "shell", "text": "ls -l", "enter": true }))
+            // It types into the program: in a PTY shell, any command the
+            // user could run. Kept from agents unless the application
+            // offers it.
+            .no_agent(),
         |call| {
             let t = target(call)?;
             let mut text = call.args["text"].as_str().ok_or("`text` is missing")?.to_string();

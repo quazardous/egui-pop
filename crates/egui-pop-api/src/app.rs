@@ -541,6 +541,9 @@ pub(crate) struct Registries {
     /// Icons set on commands another plugin may own
     /// (`Ctx::command_icon`), applied in contribution order.
     pub command_icons: OwnedList<CommandIcon>,
+    /// Commands the application offers to agents whatever they declare
+    /// (`AppBuilder::offer_command_to_agents`).
+    pub offered: BTreeSet<CommandId>,
 }
 
 /// An icon set on a command whoever declared it (`Ctx::command_icon`):
@@ -563,6 +566,7 @@ impl Registries {
             lifecycle: OwnedList::new(),
             settings: Registry::new(),
             command_icons: OwnedList::new(),
+            offered: BTreeSet::new(),
         }
     }
 
@@ -2693,6 +2697,7 @@ pub struct AppBuilder {
     cache: Option<egui_pop_core::tokens::cache::Cache>,
     writer_check: Option<egui_pop_model::values::WriterCheck>,
     offered: Vec<String>,
+    offered_commands: Vec<CommandId>,
 }
 
 /// Draws around the whole application (`AppBuilder::wrap`): gets the
@@ -2758,6 +2763,7 @@ impl AppBuilder {
             store: None,
             writer_check: None,
             offered: Vec::new(),
+            offered_commands: Vec::new(),
             host: None,
             system_focus: None,
             system_text_scale: crate::text::SystemTextScale::default(),
@@ -3001,6 +3007,19 @@ impl AppBuilder {
         self
     }
 
+    /// Offers a command to agents whatever it declares
+    /// (`CommandSpec::no_agent`): `terminal.send`, for an agent the
+    /// application trusts to type into its terminals. The agent then runs
+    /// it through the bridge (`commands.run`) and the commands a handler
+    /// starts for it, as the user would. A command kept from agents
+    /// usually reaches the system or acts for the person: offer one only
+    /// knowing what it does. A command that is not declared once the
+    /// plugins are connected is reported (`agent-offer-unknown`).
+    pub fn offer_command_to_agents(mut self, command: CommandId) -> Self {
+        self.offered_commands.push(command);
+        self
+    }
+
     /// The window manager's focus mode (`focus_mode::read_system()`
     /// reads it). Not given, it is read by `run_native` and taken as
     /// click elsewhere (tests stay the same on every desktop).
@@ -3146,6 +3165,7 @@ impl AppBuilder {
         }
         let infos = kits.iter().map(|k| k.data.info()).collect();
         app.kits = kits;
+        app.reg.offered = self.offered_commands.iter().cloned().collect();
         app.framework(
             self.theme,
             themes,
@@ -3163,6 +3183,16 @@ impl AppBuilder {
             if let Err(error) = app.connect_slot(i) {
                 let plugin = app.plugins[i].id.clone();
                 return Err(BuildError::Connect { plugin, error });
+            }
+        }
+        for c in &self.offered_commands {
+            if app.reg.commands.spec(c).is_none() {
+                app.handle.0.diagnostics.borrow_mut().warn(
+                    "agent-offer-unknown",
+                    None,
+                    c.to_string(),
+                    "`AppBuilder::offer_command_to_agents` names no declared command; nothing is offered",
+                );
             }
         }
         for a in &self.offered {

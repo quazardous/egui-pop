@@ -640,9 +640,13 @@ impl<'a> Ctx<'a> {
 pub(crate) fn add_command(
     reg: &mut Registries,
     owner: &OwnerId,
-    spec: CommandSpec,
+    mut spec: CommandSpec,
     handler: Option<CommandFn>,
 ) -> Result<(), CtxError> {
+    if reg.offered.contains(&spec.id) {
+        // The application offers it (`AppBuilder::offer_command_to_agents`).
+        spec.agent = true;
+    }
     for k in &spec.keys {
         egui_pop_model::keymap::Keys::parse(&k.keys).map_err(|error| CtxError::Keys {
             keys: k.keys.clone(),

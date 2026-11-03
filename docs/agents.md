@@ -370,6 +370,14 @@ The bridge has one caller identity: every command it runs is
   call is refused and journaled (`debug.call.refused`). Every call that
   goes on, the agent's and the user's, runs through the `debug.call`
   step a plugin may veto (a kiosk build).
+- **Typing into a terminal.** `terminal.send` writes to a terminal's
+  program, in a pseudo-terminal shell (the `editors-pty` feature, as in
+  the gallery) any command the user could run: it is not offered to
+  agents. An application whose agent should type offers it
+  (`AppBuilder::offer_command_to_agents(CMD_SEND)`, see
+  [Editors](editors.md)), and the input still goes through
+  `terminal.input` with the agent's origin, where a hook can narrow or
+  veto it.
 - **The `agent` flag.** `commands.run` refuses a command declared with
   `CommandSpec::no_agent()` (and an unknown one) with "`<id>` is not
   offered to agents". In egui-pop and the gallery: quitting, the
@@ -554,12 +562,9 @@ What is not protected today. None of these is fixed by documenting it.
   origin is not carried into work a handler leaves for later (a
   thread, a host's `Reply::Later` that starts other commands): code
   there names the origin itself, with `AppHandle::run_as`.
-- **Commands that reach the system are offered by default.**
-  `terminal.send` writes to a terminal's program: with a pseudo-terminal
-  shell open (the `editors-pty` feature, as in the gallery), an agent
-  types into the user's shell without a confirmation, unless the
-  application vetoes `terminal.input` for agents. Every new command is
-  offered until it says `.no_agent()`.
+- **A new command is offered by default.** Every command an application
+  or a plugin declares is offered to agents until it says
+  `.no_agent()`: one that reaches the system must say so itself.
 - **What is not a command does not reach the host's dispatch.**
   Collector actions (`store.set`, `contexts.hold`... the `debug.call`
   step covers them), code calling a step or `AppHandle::undo` directly
