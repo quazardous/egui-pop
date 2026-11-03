@@ -478,6 +478,14 @@ pub const FILES_PREVIEW_FAILED: StrKey =
     StrKey::new("egui-pop-files-preview-failed", "The preview failed");
 pub const FILES_SIZE: StrKey = StrKey::new("egui-pop-files-size", "Size");
 pub const FILES_ITEMS: StrKey = StrKey::new("egui-pop-files-items", "Items");
+/// The name of the picker's entries for assistive technology.
+pub const FILES_ENTRIES_OF: StrKey =
+    StrKey::new("egui-pop-files-entries-of", "Files in { $folder }");
+/// Said when the picker shows another folder.
+pub const FILES_FOLDER_OPENED: StrKey = StrKey::new(
+    "egui-pop-files-folder-opened",
+    "{ $folder }, entries: { $count }",
+);
 pub const FILES_DIMENSIONS: StrKey = StrKey::new("egui-pop-files-dimensions", "Dimensions");
 pub const FILES_PAGES: StrKey = StrKey::new("egui-pop-files-pages", "Pages");
 /// A photo's facts in the preview pane.
@@ -1408,6 +1416,8 @@ pub const ALL: &[StrKey] = &[
     FILES_PREVIEW_FAILED,
     FILES_SIZE,
     FILES_ITEMS,
+    FILES_FOLDER_OPENED,
+    FILES_ENTRIES_OF,
     FILES_DIMENSIONS,
     FILES_PAGES,
     FILES_TAKEN,

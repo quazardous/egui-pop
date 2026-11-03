@@ -256,6 +256,12 @@ which swaps the first two (`SetFolder`).
   the volumes mounted under Devices (a camera card is the first place of a photo
   import), the recent places and the bookmarks. See [Places](#places).
 - Below: the request's filters (and all files), hidden files.
+- For assistive technology, the entries, in the list or the grid, are a list
+  box named by the folder (`Files in Photos`; several selectable when choosing several files), each
+  entry an option, selected as its row shows, and the highlighted entry its
+  current one (`active descendant`). The preview pane is a group named Preview.
+  Another folder is announced with how many entries it shows (`2026, entries:
+  12`). The grid's thumbnails are never smaller than 64 points.
 - Files that go together can be one entry, by the application's rules: see
   [Grouped files](#grouped-files).
 
