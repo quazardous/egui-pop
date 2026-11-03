@@ -781,9 +781,11 @@ one pull request. Numbers stay as they are, since the walk's tests name them;
     are not given letters (planned at first): the arrows reach them, and every
     item's letter would be a burden on translations, as "What to skip" says of
     dialogs; left until asked.
-13. **A key for context menus.** Shift+F10 and `Menu` open the focused widget's
-    declared menu at its rectangle; a list, tree or grid opens for its cursor.
-    After 11 for `Menu`; Shift+F10 can come first. Size: M.
+13. **Done: a key for context menus.** Shift+F10 and `Menu` open the focused
+    widget's context menu under it (`pointer::claim::context_menu`, and so
+    `menus::context_menu_with`), and a tree's for its cursor row; Down then goes
+    in. Lists and grids declare no context menu of their own, so there was
+    nothing to open there; the graph's node menus follow the same function.
 14. **Done: modifiers on Enter and Space.** Enter or Space with Ctrl, Alt, Shift
     or Command, or a key repeat, does not click a focused plain button unless
     bound. Done in the dispatcher's pass, after the keymap, for widgets that

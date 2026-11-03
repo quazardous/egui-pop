@@ -76,6 +76,9 @@ impl Plugin for Doc {
                     let r = ui.label(path);
                     menus::context_menu_with(&r, app, &ROW, json!({ "path": path }));
                 }
+                // A widget the keyboard reaches, for the context menu key.
+                let r = ui.button("node/blur");
+                menus::context_menu_with(&r, app, &ROW, json!({ "path": "node/blur" }));
             }),
         );
         Ok(())
@@ -474,4 +477,35 @@ fn a_widget_that_claims_the_right_click_keeps_it_from_the_menu_around_it() {
         pointer["uses"],
         json!([{ "widget": "Swatch", "gesture": "SecondaryClick", "does": "Resets the colour" }])
     );
+}
+
+#[test]
+fn the_context_menu_key_opens_the_focused_widgets_menu_under_it() {
+    use egui_pop_test::walk::{self, Press, TAB};
+    for press in [
+        Press {
+            modifiers: egui::Modifiers::SHIFT,
+            key: egui::Key::F10,
+        },
+        Press::key(egui::Key::Menu),
+    ] {
+        let Setup { mut h, runs, .. } = setup();
+        let button = walk::reach(&mut h, TAB, "node/blur", 40).expect("Tab reaches it");
+        assert!(h.query_by_label("doc.reset").is_none());
+        walk::press(&mut h, press);
+        let item = h.get_by_label("doc.reset").rect();
+        assert!(
+            item.top() >= button.rect.bottom() - 1.0,
+            "under it: {item:?}"
+        );
+        // Down goes in, Enter runs the item with the widget's arguments.
+        walk::press(&mut h, Press::key(egui::Key::ArrowDown));
+        walk::press(&mut h, Press::key(egui::Key::Enter));
+        h.run();
+        assert_eq!(
+            *runs.borrow(),
+            [(RESET, json!({ "hard": true, "path": "node/blur" }))],
+            "{press:?}"
+        );
+    }
 }

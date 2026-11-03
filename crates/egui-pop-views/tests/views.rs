@@ -726,6 +726,36 @@ fn a_context_menu_is_for_the_row_clicked_not_the_selection() {
 }
 
 #[test]
+fn the_context_menu_key_opens_the_cursor_rows_menu() {
+    let mut h = rich_harness();
+    h.run();
+    h.get_by_label("Folder A").click();
+    h.run();
+    for _ in 0..2 {
+        h.key_press(Key::ArrowDown);
+        h.run();
+    }
+    assert_eq!(
+        h.state().state.selection().cursor().map(String::as_str),
+        Some("c")
+    );
+    h.event(egui::Event::Key {
+        key: Key::F10,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: egui::Modifiers::SHIFT,
+    });
+    h.run();
+    h.run();
+    assert!(h.state().signals.iter().any(|s| matches!(s,
+        tree::Signal::Context { key } if key == "c")));
+    let row = h.get_by_label("Folder C").rect();
+    let item = h.get_by_label("Delete Folder C").rect();
+    assert!(item.top() >= row.bottom() - 1.0, "under the row: {item:?}");
+}
+
+#[test]
 fn drops_are_refused_by_the_call_site_and_by_the_source() {
     let mut h = rich_harness();
     h.run();
