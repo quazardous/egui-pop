@@ -29,6 +29,12 @@ impl Plugin for Demo {
             zones::MAIN,
             Block::add(BlockId::from_static("demo.main"), 0, |ui, _| {
                 ui.label("main body");
+                let combo = egui::ComboBox::from_id_salt("demo.pick")
+                    .selected_text("Pick")
+                    .show_ui(ui, |ui| {
+                        ui.label("first choice");
+                    });
+                egui_pop_core::a11y::name(&combo.response, egui::Role::ComboBox, "Pick");
             }),
         )
         .block(
@@ -331,4 +337,26 @@ fn an_application_binds_its_own_key_and_the_hint_names_the_key_leaving() {
     assert!(handle.zen());
     // No key leaves it but the toggle: the hint names that one.
     assert!(on_screen(&h, "Zen mode: Ctrl+K Z to leave"));
+}
+
+#[test]
+fn escape_closes_an_open_egui_popup_before_it_leaves_zen_mode() {
+    let mut h = harness();
+    let handle = h.state().handle().clone();
+    handle.run(CMD_ZEN, serde_json::json!(null));
+    h.run();
+    assert!(handle.zen());
+    assert_eq!(handle.when_context().get("overlayOpen"), "false");
+    h.get_by_label("Pick").click();
+    h.run();
+    assert!(shown(&h, "first choice"), "the list is open");
+    // An egui popup counts as an overlay, as egui-pop's own do.
+    assert_eq!(handle.when_context().get("overlayOpen"), "true");
+    h.key_press(egui::Key::Escape);
+    h.run();
+    assert!(!shown(&h, "first choice"), "Escape closed the list");
+    assert!(handle.zen(), "and left zen mode alone");
+    h.key_press(egui::Key::Escape);
+    h.run();
+    assert!(!handle.zen(), "the next Escape leaves it");
 }

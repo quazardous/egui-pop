@@ -1135,7 +1135,6 @@ fn arrows_stay_in_a_menu_opened_from_its_button() {
 }
 
 #[test]
-#[ignore = "keyboard survey item 15: Tab with a menu open and nothing focused hides the palettes behind it"]
 fn tab_with_a_menu_open_leaves_the_palettes() {
     let mut h = harness("palettes");
     reach_back(&mut h, "Open the palettes");

@@ -1679,12 +1679,15 @@ impl AppHandle {
     /// chain's, the overlays'. They are the window's being drawn: in a
     /// detached panel's window, its focus chain and its overlays, and
     /// `window` holds the panel's id (empty in the main window);
-    /// `modalOpen` says whether a modal is open in any window.
+    /// `modalOpen` says whether a modal is open in any window;
+    /// `overlayOpen`, whether egui-pop's overlay stack holds anything or
+    /// an egui popup (a menu, a combo box's list) is open.
     pub fn when_context(&self) -> WhenContext {
         let mut base = self.context();
         let ctx = &self.egui();
         let flag = |on: bool| if on { "true" } else { "false" };
-        base.set("overlayOpen", flag(!overlay::stack(ctx).is_empty()));
+        let overlay_open = !overlay::stack(ctx).is_empty() || egui::Popup::is_any_open(ctx);
+        base.set("overlayOpen", flag(overlay_open));
         base.set("modalOpen", flag(overlay::modal_open(ctx)));
         base.set("canUndo", flag(self.can_undo()));
         base.set("canRedo", flag(self.can_redo()));
