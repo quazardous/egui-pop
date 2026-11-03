@@ -153,3 +153,104 @@ fn inside_flatpak_the_socket_is_in_the_apps_shared_runtime_directory() {
     );
     assert_eq!(instance::flatpak_socket_with("x", |_| None), None);
 }
+
+/// Records who each link was opened for.
+struct Witness(Arc<Mutex<Vec<egui_pop_model::commands::Origin>>>);
+
+impl Plugin for Witness {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("witness")
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        let seen = self.0.clone();
+        ctx.command(
+            CommandSpec::new(CommandId::from_static("demo.open"), "Open", "Demo"),
+            move |call| {
+                seen.lock().unwrap().push(call.origin.clone());
+                // What the handler starts goes on as the link's origin;
+                // it may not claim the user's.
+                call.app
+                    .run(CommandId::from_static("demo.after"), Json::Null);
+                call.app.run_as(
+                    CommandId::from_static("demo.after"),
+                    Json::Null,
+                    egui_pop_model::commands::Origin::User,
+                );
+                Ok(Json::Null)
+            },
+        )?;
+        let seen = self.0.clone();
+        ctx.command(
+            CommandSpec::new(CommandId::from_static("demo.after"), "After", "Demo"),
+            move |call| {
+                seen.lock().unwrap().push(call.origin.clone());
+                Ok(Json::Null)
+            },
+        )?;
+        Ok(())
+    }
+}
+
+#[test]
+fn a_link_from_a_launch_is_not_the_users_gesture() {
+    use egui_pop_model::commands::Origin;
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let first = Instance::detached(Launch {
+        args: vec!["demo://first".into()],
+        ..Launch::default()
+    });
+    let ctx = egui::Context::default();
+    let mut app = App::builder()
+        .plugin(Witness(seen.clone()))
+        .plugin(
+            InstancePlugin::new(first)
+                .scheme("demo")
+                .links(CommandId::from_static("demo.open")),
+        )
+        .build(&ctx)
+        .unwrap();
+    app.logic(&ctx);
+    app.logic(&ctx);
+    let remote = instance::deeplink_origin();
+    assert_eq!(remote, Origin::Remote("deeplink".into()));
+    // The link, then the command it started; the claim to be the user
+    // was refused.
+    assert_eq!(*seen.lock().unwrap(), vec![remote.clone(), remote.clone()]);
+    let h = app.handle().clone();
+    let trace = h
+        .step_traces()
+        .into_iter()
+        .find(|t| t.step.as_str() == "deeplink.open")
+        .unwrap();
+    assert_eq!(trace.args["origin"], "remote:deeplink");
+    let refused = h
+        .events_since(0)
+        .into_iter()
+        .find(|e| e.name == "command.refused")
+        .unwrap();
+    assert_eq!(refused.source, "remote:deeplink");
+    assert_eq!(refused.data["origin"], "user");
+    // A later launch's link, the same.
+    seen.lock().unwrap().clear();
+    h.service(&LAUNCHES).unwrap().deliver(Launch {
+        args: vec!["demo://two".into()],
+        ..Launch::default()
+    });
+    app.logic(&ctx);
+    app.logic(&ctx);
+    assert_eq!(seen.lock().unwrap().first(), Some(&remote));
+    // A link of the scheme run by the user (a click in the application)
+    // runs as the user.
+    seen.lock().unwrap().clear();
+    let _ = app.run(
+        &instance::CMD_DEEPLINK,
+        json!({ "url": "demo://three" }),
+        Origin::User,
+    );
+    app.logic(&ctx);
+    app.logic(&ctx);
+    let seen = seen.lock().unwrap();
+    assert_eq!(seen[0], Origin::User);
+    assert!(seen[1..].iter().all(|o| *o == Origin::User), "{seen:?}");
+}

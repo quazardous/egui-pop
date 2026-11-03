@@ -26,5 +26,6 @@ after the fact except to mark it superseded by a later one.
 | [0018](0018-agent-collector-actions.md) | Collector actions say whether agents may call them, through one step | 2026-11-03 |
 | [0019](0019-actions-act-as-their-caller.md) | Collector actions and value writes act as their caller | 2026-11-03 |
 | [0020](0020-answers-carry-their-caller.md) | Answers carry their caller, and a dialog keeps its command's flag | 2026-11-03 |
+| [0021](0021-origin-along-the-chain.md) | The origin goes along the chain of commands; deep links are remote | 2026-11-03 |
 
 Template: copy any of them; keep it to half a page.

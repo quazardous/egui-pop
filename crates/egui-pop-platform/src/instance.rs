@@ -16,10 +16,22 @@
 //!   window comes to the front ([`crate::window::raise`]) and each link
 //!   runs `deeplink.open`. Veto it to stay in the background; replace it
 //!   to open the files a second launch names.
-//! - `deeplink.open`: a link to open, `{ "url" }`, from a later launch or
-//!   from the first launch's own arguments (at start). By default the
-//!   plugin's [`links`](InstancePlugin::links) command runs with
-//!   `{ "url" }`; without one the step fails, and says so.
+//! - `deeplink.open`: a link to open, `{ "url", "origin" }`, from a later
+//!   launch or from the first launch's own arguments (at start). By
+//!   default the plugin's [`links`](InstancePlugin::links) command runs
+//!   with `{ "url" }`; without one the step fails, and says so.
+//!
+//! A link from a launch is not the user's gesture: any program of the
+//! user's (a web page in a browser, another application) may launch the
+//! application with one. Its command runs as [`deeplink_origin`]
+//! (`Origin::Remote("deeplink")`, `remote:deeplink` on the journal and in
+//! the step's `origin`): the handler sees it in `Call::origin`, the
+//! commands it starts inherit it, it may not run one as the user, and it
+//! writes values as `remote:deeplink`, held to their writers. A handler
+//! that changes or deletes anything on a link asks the user first (a
+//! dialog: the user's answer runs as the user). A link of the
+//! application's scheme clicked inside the application runs as the click
+//! did.
 //!
 //! The launches handed over are kept ([`LAUNCHES`], [`Launches::history`]);
 //! [`Launches::deliver`] hands one over in-process, as a test or the
@@ -60,7 +72,7 @@ use egui_pop_api::services::ServiceToken;
 use egui_pop_api::steps::StepSpec;
 use egui_pop_api::{AppHandle, Ctx, Plugin, PluginError};
 use egui_pop_core::lock;
-use egui_pop_model::commands::CommandSpec;
+use egui_pop_model::commands::{CommandSpec, Origin};
 use egui_pop_model::ids::{CommandId, PluginId, StepId};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value as Json, json};
@@ -396,14 +408,26 @@ impl InstancePlugin {
     }
 }
 
-/// Runs `deeplink.open` for a link.
-fn open_link(app: &AppHandle, links: Option<&CommandId>, url: &str) {
+/// The origin of a link from outside the application: a launch, the
+/// first one's arguments or a later one's through the single-instance
+/// socket. Any program of the user's may launch the application with a
+/// link (a web page's, another application's), so the link is not the
+/// user's own gesture.
+pub fn deeplink_origin() -> Origin {
+    Origin::Remote("deeplink".into())
+}
+
+/// Runs `deeplink.open` for a link, for `origin`: [`deeplink_origin`]
+/// for a launch's, the click's own for a link clicked in the
+/// application (`deeplink.open`, the command).
+fn open_link(app: &AppHandle, links: Option<&CommandId>, url: &str, origin: Origin) {
     let links = links.cloned();
-    app.step(&STEP_DEEPLINK, json!({ "url": url }), move |app, args| {
+    let args = json!({ "url": url, "origin": egui_pop_api::host::source_of(&origin) });
+    app.step(&STEP_DEEPLINK, args, move |app, args| {
         let Some(command) = links else {
             return Err("no command opens links (InstancePlugin::links)".into());
         };
-        app.run(command.clone(), json!({ "url": args["url"] }));
+        app.run_as(command.clone(), json!({ "url": args["url"] }), origin);
         Ok(json!({ "command": command }))
     });
 }
@@ -443,7 +467,7 @@ impl Plugin for InstancePlugin {
                 .no_agent(),
             move |call| {
                 let url = call.args["url"].as_str().ok_or("`url` is missing")?;
-                open_link(call.app, links.as_ref(), url);
+                open_link(call.app, links.as_ref(), url, call.origin.clone());
                 Ok(json!({ "url": url }))
             },
         )?;
@@ -467,7 +491,7 @@ impl Plugin for InstancePlugin {
         ctx.on(On::Started, move |app, _| {
             if !std::mem::replace(&mut opened, true) {
                 for url in &first {
-                    open_link(app, links.as_ref(), url);
+                    open_link(app, links.as_ref(), url, deeplink_origin());
                 }
             }
         });
@@ -493,7 +517,7 @@ impl Plugin for InstancePlugin {
                         })
                         .unwrap_or_default();
                     for url in &urls {
-                        open_link(app, links.as_ref(), url);
+                        open_link(app, links.as_ref(), url, deeplink_origin());
                     }
                     Ok(json!({ "raised": true, "links": urls.len() }))
                 });

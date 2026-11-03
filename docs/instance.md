@@ -52,7 +52,7 @@ application's id and the user's name. Nothing else is written.
 | Step | Arguments | Default |
 |---|---|---|
 | `instance.second_launch` | `args`, `cwd`, `links` (the arguments in one of the plugin's schemes) | the main window comes to the front, then each link runs `deeplink.open` |
-| `deeplink.open` | `url` | the plugin's `links` command runs with `{ "url" }`; without one the step fails and says so |
+| `deeplink.open` | `url`, `origin` | the plugin's `links` command runs with `{ "url" }`, for `origin`; without one the step fails and says so |
 
 A click on a link in one of the plugin's schemes inside the
 application (the [links service](links.md)) opens it in-process, with
@@ -119,6 +119,28 @@ assert_eq!(ran, ["viewer.open_link"]);
 `Instance::detached` is an instance listening to nothing, for tests and
 for applications that are single some other way; `Launches::deliver`
 hands a launch over in-process.
+
+## Who opens a link
+
+A link that comes with a launch is not the user's gesture: any program
+of the user's can start the application with one (a web page in a
+browser, a script, another application), and a later launch reaches the
+running one through the single-instance socket. So the links command
+runs for `Origin::Remote("deeplink")` (`instance::deeplink_origin`,
+`remote:deeplink` on the journal and in the step's `origin`), not for
+the user:
+
+- the handler sees it in `Call::origin`;
+- the commands it starts with `AppHandle::run` run for it too, and it
+  may not run one as the user (`command.refused` on the journal);
+- the values it writes are written as `remote:deeplink`, held to their
+  declared writers.
+
+A handler that changes or deletes anything on a link asks the user
+first, in a dialog: the user's answer runs its command as the user. A
+link of the application's own scheme clicked inside the application
+(the `deeplink.open` command, run by the links service) runs for the
+click's origin, the user's.
 
 ## Platforms
 
