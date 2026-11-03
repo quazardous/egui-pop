@@ -260,6 +260,26 @@ command-file-toggle-selection =
     .description = Sélectionne ou désélectionne l’entrée en surbrillance du sélecteur de fichiers intégré ouvert, pour choisir plusieurs fichiers ou un dossier. Un dossier parmi des fichiers n’est pas sélectionné : le sélecteur le dit.
     .title = Sélectionner ou désélectionner l’entrée
 
+command-file-back =
+    .description = Le sélecteur de fichiers intégré ouvert revient au dossier qu’il montrait avant ; rien s’il n’y en a pas.
+    .title = Précédent
+
+command-file-forward =
+    .description = Le sélecteur de fichiers intégré ouvert repart vers le dossier d’où il est revenu ; rien s’il n’y en a pas.
+    .title = Suivant
+
+command-file-reload =
+    .description = Relit le dossier du sélecteur de fichiers intégré ouvert.
+    .title = Recharger le dossier
+
+command-file-toggle-hidden =
+    .description = Affiche ou masque les fichiers cachés du sélecteur de fichiers intégré ouvert.
+    .title = Afficher ou masquer les fichiers cachés
+
+command-file-toggle-preview =
+    .description = Affiche ou masque le volet d’aperçu du sélecteur de fichiers intégré, gardé pour le suivant (le réglage `files.preview`).
+    .title = Afficher ou masquer l’aperçu
+
 command-file-edit-path =
     .description = Met le dossier du sélecteur de fichiers intégré ouvert dans son champ, comme un chemin à modifier ; à l’enregistrement, le nom reste à sa fin. Un chemin déjà saisi reste tel quel.
     .title = Modifier le chemin du dossier

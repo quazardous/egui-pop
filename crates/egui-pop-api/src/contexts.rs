@@ -1939,6 +1939,8 @@ impl Plugin for ContextsPlugin {
             CommandSpec::new(CMD_BACK, "Back", category)
                 .icon("chevron-left")
                 .description("Pops the last pushed mode, else leaves the place shown for its parent.")
+                // Under a modal its key is the modal's: the file picker's back.
+                .when("!modalOpen")
                 .key("Alt+Left"),
             |call| outcome_json(request(call.app, Envelope::new(Request::Back), call.origin)),
         )?

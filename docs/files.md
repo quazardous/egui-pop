@@ -134,6 +134,14 @@ which swaps the first two (`SetFolder`).
   `Ctrl+Enter` chooses the folder (choosing a folder) or the selection;
   `Ctrl+D` bookmarks the folder; Escape cancels (from the field, the first
   Escape lets go of the focus, as everywhere in egui-pop).
+- `Alt+Left` and `Alt+Right` go back and forward through the folders shown
+  (as Windows and Blender), `Ctrl+H` shows or hides hidden files (as GTK and
+  KDE), `F5` reads the folder again, `Alt+P` shows or hides the preview. They
+  are commands of the keymap (`file.back`, `file.forward`,
+  `file.toggle_hidden`, `file.reload`, `file.toggle_preview`), so they can be
+  rebound, and the check boxes' tips say their keys as bound. A `FilePicker`
+  drawn on its own reads the default keys itself (`go_back`, `go_forward`,
+  `reload`).
 - The field keeps the keyboard: a click on a row gives it back, so typing
   goes on filtering. Tab goes on to the rows: a row holding the focus moves
   the highlight there, Space clicks it, and Enter and the arrows work from it
