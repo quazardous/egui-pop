@@ -1200,9 +1200,9 @@ fn saving_kinds_round_trip_the_opt_out() {
 
 #[test]
 fn no_key_accepts_the_question_from_where_its_focus_starts() {
-    // egui clicks a focused button on Enter or Space whatever the modifiers
-    // (`Context::create_widget`). The question's focus starts on Cancel, so
-    // each of these cancels it, and none reaches the picker below.
+    // The question's focus starts on Cancel: Enter or Space alone cancels it;
+    // with a modifier they click no plain button (the key dispatcher takes
+    // them out), so the question stays. None reaches the picker below.
     let root = tree("danger-keys");
     for (k, modifiers) in [
         (Key::Enter, Modifiers::NONE),
@@ -1221,12 +1221,17 @@ fn no_key_accepts_the_question_from_where_its_focus_starts() {
         key(&mut h, Key::Enter, Modifiers::NONE);
         assert!(h.query_by_label("Replace a.png?").is_some());
         key(&mut h, k, modifiers);
+        assert!(p.take().is_none(), "{k:?} {modifiers:?}: nothing chosen");
+        if modifiers.any() {
+            assert!(dialogs.answered().is_empty(), "{k:?} {modifiers:?}");
+            assert!(h.query_by_label("Replace a.png?").is_some());
+            continue;
+        }
         assert_eq!(
             dialogs.answered().last().map(|(_, a, _)| a.clone()),
             Some(dialogs::Answer::Cancel),
             "{k:?} {modifiers:?}"
         );
-        assert!(p.take().is_none(), "{k:?} {modifiers:?}: nothing chosen");
         assert!(h.get_by_label("File name, or a path").is_focused());
     }
     let _ = std::fs::remove_dir_all(root);

@@ -310,7 +310,8 @@ From `crates/egui-pop-core` (`tab.rs`, `focus.rs`, `keys.rs`,
   two-second timeout.
 - **[walk] Enter and Space click whatever the modifiers:** Ctrl+Enter opens
   a side list's page, and a held Space clicks at every repeat (four presses,
-  four clicks).
+  four clicks). Fixed by item 14 for plain widgets, where the key dispatcher
+  runs.
 - **[walk] Enter reaches a dialog it has just opened,** which takes it as an
   answer: on a confirm, the page's command ran and the dialog never showed.
   A choice and a form close the same way; a danger stays open, on Cancel.
@@ -776,10 +777,13 @@ one pull request. Numbers stay as they are, since the walk's tests name them;
 13. **A key for context menus.** Shift+F10 and `Menu` open the focused widget's
     declared menu at its rectangle; a list, tree or grid opens for its cursor.
     After 11 for `Menu`; Shift+F10 can come first. Size: M.
-14. **Modifiers on Enter and Space.** Enter or Space with Ctrl, Alt or Shift, or
-    a key repeat, does not click a focused plain button unless bound. Done in
-    the dispatcher's pass for widgets that only sense clicks; an upstream issue
-    with it, from the reproduction first. Size: S.
+14. **Done: modifiers on Enter and Space.** Enter or Space with Ctrl, Alt, Shift
+    or Command, or a key repeat, does not click a focused plain button unless
+    bound. Done in the dispatcher's pass, after the keymap, for widgets that
+    sense clicks and not drags (a slider, a splitter, a text field read their
+    own keys); an application without the dispatcher keeps egui's rule
+    ([upstream](upstream.md#egui-enter-and-space-click-whatever-the-modifiers);
+    the issue is not filed yet).
 15. **Done: `overlayOpen` sees egui's popups.** The context key is true while
     egui-pop's overlay stack holds anything or any egui popup is open (a menu,
     a combo box's list), so Tab behind an open menu no longer hides the

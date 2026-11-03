@@ -362,6 +362,20 @@ limit.
 - **Remove when**: egui's resize line reads the arrows and Enter, and takes a
   name.
 
+## egui: Enter and Space click whatever the modifiers
+
+- **Compensated**: a focused widget sensing clicks is clicked by any press of
+  Enter or Space (`Context::create_widget`, `key_pressed`), with Ctrl, Alt or
+  Shift held, and at every repeat of a key held down: Ctrl+Enter clicks a
+  focused button, and a held Space clicks it many times. A native button
+  clicks on a press alone, once.
+- **Upstream**: not filed yet.
+- **Workaround**: the key dispatcher, once the keymap has taken what it binds,
+  takes such presses out of the input when the focused widget senses clicks
+  and not drags (`// upstream:` in `crates/egui-pop-core/src/keys.rs`,
+  `quiet_plain_clicks`).
+- **Remove when**: egui clicks on a plain, first press only.
+
 ## egui: Tab wraps only in a modal layer
 
 - **Compensated**: Tab goes by drawing order through the whole window and wraps

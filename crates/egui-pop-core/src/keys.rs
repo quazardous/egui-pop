@@ -219,6 +219,46 @@ impl KeyDispatcher {
                 });
             });
         }
+        quiet_plain_clicks(ctx);
         out
     }
+}
+
+/// Enter and Space click a focused plain widget only when pressed alone and
+/// once: with Ctrl, Alt, Shift or Command, or repeated while held, they are
+/// taken out of the input before the widget reads them, as a native button
+/// does. A binding on such a key has already run and taken it (this comes
+/// after the keymap), and a widget sensing drags (a slider, a splitter, a
+/// text field) reads its own keys and is left alone.
+///
+/// upstream: egui clicks a focused widget sensing clicks on any press of
+/// Enter or Space, whatever the modifiers, at each repeat
+/// (docs/upstream.md, "egui: Enter and Space click whatever the modifiers").
+fn quiet_plain_clicks(ctx: &Context) {
+    let Some(id) = ctx.memory(|m| m.focused()) else {
+        return;
+    };
+    let plain = ctx.viewport(|v| {
+        v.prev_pass
+            .widgets
+            .get(id)
+            .is_some_and(|w| w.enabled && w.sense.senses_click() && !w.sense.senses_drag())
+    });
+    if !plain {
+        return;
+    }
+    ctx.input_mut(|i| {
+        i.events.retain(|e| {
+            !matches!(
+                e,
+                Event::Key {
+                    key: Key::Enter | Key::Space,
+                    pressed: true,
+                    repeat,
+                    modifiers,
+                    ..
+                } if *repeat || modifiers.any()
+            )
+        });
+    });
 }
