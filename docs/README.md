@@ -179,6 +179,9 @@ of every crate with every feature on.
   scroll bars and treat the wheel, a recommended default (bars visible at
   rest) and the changes ranked for egui-pop.
 - [API stability](stability.md): what each release promises.
+- [How quality is held](quality.md): AI-assisted development, the
+  checks every change passes before it merges, and what they do not
+  cover.
 - [Governance](../GOVERNANCE.md): who decides, decisions as ADRs and
   requests for comments, what breaks an extension, deprecation windows.
 - [Upstream workarounds](upstream.md): what egui-pop compensates for in

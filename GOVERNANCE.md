@@ -36,6 +36,13 @@ may land in the same pull request or after it, never before.
 Smaller decisions live in the commit that makes them: what was chosen,
 and why (a survey of existing crates, when one was adopted or not).
 
+## How quality is held
+
+egui-pop is developed with AI assistance. The rules agents follow, the
+checks every pull request passes before it merges (and which of them
+block it), and what those checks do not cover are in
+[How quality is held](docs/quality.md).
+
 ## Versions
 
 egui-pop follows [Semantic Versioning](https://semver.org/) with **one
