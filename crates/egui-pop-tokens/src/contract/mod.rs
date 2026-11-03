@@ -391,6 +391,11 @@ const CORE: &[Required] = &[
         "number",
         "how many times a mark calling attention pulses",
     ),
+    sys(
+        "motion.toast.slide",
+        "duration",
+        "a toast sliding in from its corner's side and out again",
+    ),
     comp(
         "palette.magnet",
         "dimension",

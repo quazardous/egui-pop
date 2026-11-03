@@ -26,6 +26,19 @@ publishes.
   needs WebKitGTK's development packages, and brings one crate under MPL-2.0
   (`option-ext`), allowed in `deny.toml` as a narrow exception; cargo-deny now
   checks only the platforms egui-pop builds.
+- Toasts (egui-pop-api, egui-pop-core, egui-pop-tokens; `docs/notifications.md`),
+  with ideas from egui-notify (MIT): they slide in from their corner's side and out
+  again in `motion.toast.slide` (200 ms; a fade in the middle of an edge), and
+  appear and go at once under reduced motion; a thin bar in the level's colour
+  empties as a toast's time runs and stops while the pointer is over it (the time
+  now stops there, and goes on from where it stopped); they show in the corner the
+  new `appearance.toast_corner` setting chooses (the four corners, the middle of the
+  top or bottom edge; `AppBuilder::toast_corner` gives its default, bottom right
+  otherwise), the newest the nearest to the edge; and they cast the shadow overlays
+  cast (`toast.shadow-*`, aliases of `shadow.popup.*`; it was none). `Shown` gains
+  `since`, `phase`, `left` and `held`; `Toasts::leaving` lists those sliding out
+  (in the `toasts` collector too); toasts keep their time on the motion clock
+  (`core::motion::now`), so a frozen clock holds them.
 - Devtools' inspect mode (egui-pop-api, egui-pop-core; `docs/debugging.md`):
   `devtools.inspect` (Ctrl+Shift+C, View menu, palette, devtools panel; with the
   `developer.devtools` setting on) outlines the widget under the pointer in every

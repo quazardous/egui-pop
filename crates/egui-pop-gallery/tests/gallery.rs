@@ -581,6 +581,9 @@ fn long_toasts_wrap_before_their_buttons_in_two_languages() {
     h.run();
     h.get_by_label("Long text").click();
     h.run();
+    // Past their slide in.
+    egui_pop::core::motion::freeze(&h.ctx, 1.0);
+    h.run();
     egui_pop_test::assert_all_named(&h);
     h.snapshot("toasts-long-pop-dark");
 }
@@ -595,6 +598,9 @@ fn toasts_show_in_a_corner_and_their_action_runs() {
             h.get_by_label(b).click();
             h.run();
         }
+        // Past their slide in.
+        egui_pop::core::motion::freeze(&h.ctx, 1.0);
+        h.run();
         egui_pop_test::assert_all_named(&h);
         results.add(h.try_snapshot(format!("toasts-{theme}")));
         h.get_by_label("Show").click();

@@ -122,7 +122,9 @@ without it.
    values line their digits up, [Fonts](fonts.md)), `motion.duration`,
    `motion.spinner.{delay, min, turn}` (300 ms before a busy indicator
    shows, 500 ms at least once shown, a spinner's turn),
-   `motion.progress.travel`, `motion.skeleton.shimmer`, `opacity.scrim`.
+   `motion.progress.travel`, `motion.skeleton.shimmer`,
+   `motion.toast.slide` (a toast sliding in and out; none under reduced
+   motion), `opacity.scrim`.
 
 3. **Component**: one component's tokens, each an alias of a system token
    (or, for a component based on another, of its base's token under the
