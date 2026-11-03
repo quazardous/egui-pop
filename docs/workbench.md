@@ -178,6 +178,13 @@ the centre's side resizes it. The placement is saved with the layout
 (`over`), like folding; a plugin may veto the step. The centre never
 folds: `workbench.fold` refuses it.
 
+The line between a side or bottom area lying beside the centre and the
+centre resizes the area: by a drag, or with the keyboard once Tab or
+Shift+Tab reaches it ("Resize the start side bar", a splitter to assistive
+technology). An arrow across the line moves it 16 points, with Shift 64,
+and Enter gives the area its default size back, as a dock separator and a
+section's boundary do.
+
 ### Strip icons and flyouts
 
 A side area's strip (folded, or lying over the centre) shows one icon

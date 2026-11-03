@@ -751,12 +751,17 @@ one pull request. Numbers stay as they are, since the walk's tests name them;
    it stays so. They had no key to lose, so a flyout's width stays the pointer's.
    An open menu's frame is any popup's, from egui: 0.37 no longer has it (its
    `Popup` senses `Sense::CLICK`), and until then the focus plugin moves on past
-   it. A side area's line is still one: item 9.
-9. **Side areas' sashes are real splitters.** egui's resize line is replaced
-   by egui-pop's own, as in `sections`: a stop with a ring, role and value,
-   arrows, Shift for a larger step, Enter to reset (as sections, GTK, ARIA). Keep
-   JetBrains' Ctrl+Alt+Shift+arrows out unless asked. Dock separators get a plain-arrow move if egui_dock takes it,
-   else a hint. Size: M.
+   it. A side area's line is still one, named and moved by keys since item 9.
+9. **Done: side areas' sashes are real splitters.** Amended: egui 0.37 already
+   makes a panel's resize line a `Splitter` with a value and AccessKit's
+   increment, decrement and set value, and egui_stack's dock separators take
+   plain arrows, so egui's line stays rather than being replaced. The workbench
+   names it after its area ("Resize the start side bar") and gives it the keys:
+   an arrow across it moves it 16 points, Shift 64, Enter puts the default size
+   back (as sections, GTK, ARIA, and the dock separators), handed to egui as a
+   set value so that its clamping and storing apply. JetBrains'
+   Ctrl+Alt+Shift+arrows stay out. Its ring is item 4's
+   ([workbench](workbench.md#panels-in-areas)).
 10. **The gallery's side list as a `ListView`.** One stop, arrows, Home, End,
     type-ahead; Enter opens the page and moves the focus into it. The catalogue
     should show the good pattern. Size: S. Done with the tree view rather than
@@ -952,7 +957,7 @@ The order to follow for egui-pop now, by the same measure:
     the focus, the gap is telling it from a press and from the pointer's, and the
     stops that show nothing are item 8's.
 
-Items 9, 11 to 14, 16 to 19 keep their order after these; 9, 11, 14 and 16 are
+Items 9, 11 to 14, 16 to 19 keep their order after these (9 done); 9, 11, 14 and 16 are
 confirmed by the walk, 12, 13, 17 and 19 were not walked. Item 2 is done.
 
 ## Sources

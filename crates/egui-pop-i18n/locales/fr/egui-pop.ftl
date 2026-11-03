@@ -614,6 +614,8 @@ egui-pop-area-center = le centre
 
 egui-pop-area-end-side = la barre latérale de fin
 
+egui-pop-area-resize = Redimensionner { $area }
+
 egui-pop-area-start-side = la barre latérale de début
 
 egui-pop-busy = Occupé

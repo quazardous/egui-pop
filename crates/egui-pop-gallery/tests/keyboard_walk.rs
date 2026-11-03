@@ -516,19 +516,18 @@ fn nameless(page: &str) -> Vec<Stop> {
 }
 
 #[test]
-#[ignore = "keyboard survey item 9: a side area's line is a stop with no role and no name"]
 fn every_stop_says_what_it_is() {
     let lines = nameless("overview");
     assert_eq!(lines, Vec::<Stop>::new());
 }
 
 #[test]
-#[ignore = "keyboard survey item 9: a side area's line shows nothing when focused"]
+#[ignore = "keyboard survey item 4: a side area's line shows nothing when focused"]
 fn a_focused_side_areas_line_shows_it() {
     let mut h = harness("overview");
     let at_rest = h.render().unwrap();
     let walked = walk::walk(&mut h, SHIFT_TAB, 200);
-    let line = walked.stops.iter().find(|s| s.name.is_empty()).unwrap();
+    let line = walked.stops.iter().find(|s| is_side_line(s)).unwrap();
     let mut h = harness("overview");
     while walk::focused(&h).is_none_or(|s| s.id != line.id) {
         walk::press(&mut h, SHIFT_TAB);
@@ -642,16 +641,39 @@ fn a_dock_separator_is_a_stop_and_moves_with_the_arrows() {
     assert_ne!(across.map(|s| s.id), Some(separator.id));
 }
 
+/// A side or bottom area's line, by its name.
+fn is_side_line(s: &Stop) -> bool {
+    s.role == Role::Splitter && s.name.starts_with("Resize the ")
+}
+
 #[test]
-#[ignore = "keyboard survey item 9: no key moves a side area's line"]
 fn a_side_areas_line_moves_with_the_arrows() {
     let mut h = harness("overview");
+    let start = |s: &Stop| is_side_line(s) && s.name == "Resize the start side bar";
     let line = (0..200)
-        .find_map(|_| walk::press(&mut h, SHIFT_TAB).filter(|s| s.name.is_empty()))
+        .find_map(|_| walk::press(&mut h, SHIFT_TAB).filter(start))
         .expect("the line is a stop");
-    let moved = walk::press(&mut h, Press::key(Key::ArrowLeft)).expect("the focus stays");
-    assert_eq!(moved.id, line.id);
-    assert_ne!(moved.rect, line.rect);
+    let x = |s: Stop| s.rect.center().x;
+    let press = |h: &mut Harness<'_, Gallery>, modifiers, key| {
+        let s = walk::press(h, Press { modifiers, key }).expect("the focus stays");
+        assert_eq!(s.id, line.id, "{s}");
+        s
+    };
+    // On the left: Right widens it, by 16 points, Shift by 64; Enter puts
+    // its default back.
+    let wider = press(&mut h, Modifiers::NONE, Key::ArrowRight);
+    assert_eq!(x(wider), x(line.clone()) + 16.0);
+    let back = press(&mut h, Modifiers::NONE, Key::ArrowLeft);
+    assert_eq!(x(back), x(line.clone()));
+    let much = press(&mut h, Modifiers::SHIFT, Key::ArrowRight);
+    assert_eq!(x(much), x(line.clone()) + 64.0);
+    let reset = press(&mut h, Modifiers::NONE, Key::Enter);
+    assert_eq!(x(reset), x(line.clone()));
+    // Down is not its own: it leaves for egui's cone, or does nothing.
+    let along = walk::press(&mut h, Press::key(Key::ArrowDown));
+    if let Some(stays) = along.filter(|s| s.id == line.id) {
+        assert_eq!(x(stays), x(line.clone()));
+    }
 }
 
 // Where the focus goes after it is lost (checks 4, 5, 11; item 6).

@@ -807,6 +807,8 @@ egui-pop-area-center = the centre
 
 egui-pop-area-end-side = the end side bar
 
+egui-pop-area-resize = Resize { $area }
+
 egui-pop-area-start-side = the start side bar
 
 egui-pop-arrangement-name = Name

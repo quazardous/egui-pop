@@ -487,6 +487,7 @@ pub const AREA_CENTER: StrKey = StrKey::new("egui-pop-area-center", "the centre"
 pub const AREA_START_SIDE: StrKey = StrKey::new("egui-pop-area-start-side", "the start side bar");
 pub const AREA_END_SIDE: StrKey = StrKey::new("egui-pop-area-end-side", "the end side bar");
 pub const AREA_BOTTOM: StrKey = StrKey::new("egui-pop-area-bottom", "the bottom panel");
+pub const AREA_RESIZE: StrKey = StrKey::new("egui-pop-area-resize", "Resize { $area }");
 pub const WORKBENCH_MOVE_TO: StrKey =
     StrKey::new("egui-pop-workbench-move-to", "Move to { $area }");
 pub const WORKBENCH_STAYS_OUT: StrKey = StrKey::new(
@@ -1410,6 +1411,7 @@ pub const ALL: &[StrKey] = &[
     AREA_START_SIDE,
     AREA_END_SIDE,
     AREA_BOTTOM,
+    AREA_RESIZE,
     WORKBENCH_MOVE_TO,
     WORKBENCH_STAYS_OUT,
     WORKBENCH_DETACH,
