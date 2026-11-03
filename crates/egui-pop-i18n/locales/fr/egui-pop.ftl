@@ -1262,6 +1262,8 @@ egui-pop-shortcuts-search-by-key = Chercher par touche
 
 egui-pop-shortcuts-show-all = Afficher toutes les commandes
 
+egui-pop-slider-entry = { $label }, valeur saisie
+
 egui-pop-slider-maximum = { $label }, maximum
 
 egui-pop-slider-minimum = { $label }, minimum
@@ -2023,7 +2025,7 @@ setting-developer-show-keys =
     .label = Afficher les clés de traduction
 
 setting-dialogs-closable =
-    .description = Un ✕ au bout de la ligne de titre de chaque dialogue, qui fait ce que fait Échap.
+    .description = Un bouton de fermeture au bout de la ligne de titre de chaque dialogue, qui fait ce que fait Échap.
     .label = Bouton de fermeture sur chaque dialogue
 
 setting-dialogs-movable =

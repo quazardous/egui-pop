@@ -750,6 +750,7 @@ egui-pop-shortcuts-target-user d7c4f12fbf94b7a8
 egui-pop-shortcuts-target-workspace 229d7a8b8907536e
 egui-pop-shortcuts-widget-uses ac5ec03abb877a65
 egui-pop-shortcuts-widget-uses-note b4dc796d915b0be7
+egui-pop-slider-entry 28f7ba41d2252176
 egui-pop-slider-maximum c0721adb004bac87
 egui-pop-slider-minimum acae05dcb02987f1
 egui-pop-status-announce d09126c76706e2d1
@@ -1160,7 +1161,7 @@ setting-developer-log-level.description ef2c9fed741aeec7
 setting-developer-log-level.label 43ff95a11c8936c3
 setting-developer-show-keys.description 3edf370057b38677
 setting-developer-show-keys.label 340776331e19a4a5
-setting-dialogs-closable.description 52ace4aa7a7b8027
+setting-dialogs-closable.description 75314c319d29eb8a
 setting-dialogs-closable.label 38b89c3e7eeca6cb
 setting-dialogs-movable.description 29f0049b1a088e5d
 setting-dialogs-movable.label 94438e9752d4ed0a

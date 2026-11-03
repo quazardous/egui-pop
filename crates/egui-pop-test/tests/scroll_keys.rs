@@ -220,7 +220,8 @@ fn a_focused_button_inside_lets_the_area_page_and_keeps_the_arrows() {
 fn a_focused_text_field_inside_keeps_the_keys() {
     let mut value = String::from("text");
     let (mut h, id) = with(move |ui| {
-        ui.add(TextEdit::singleline(&mut value));
+        ui.add(TextEdit::singleline(&mut value))
+            .accessible_name("Value");
         text(ui);
     });
     walk::press(&mut h, TAB).expect("Tab gets there");
@@ -233,7 +234,8 @@ fn a_focused_text_field_inside_keeps_the_keys() {
 fn a_focused_slider_inside_keeps_the_keys() {
     let mut value = 5.0_f32;
     let (mut h, id) = with(move |ui| {
-        ui.add(Slider::new(&mut value, 0.0..=10.0).show_value(false));
+        ui.add(Slider::new(&mut value, 0.0..=10.0).show_value(false))
+            .accessible_name("Value");
         text(ui);
     });
     walk::press(&mut h, TAB).expect("Tab gets there");
