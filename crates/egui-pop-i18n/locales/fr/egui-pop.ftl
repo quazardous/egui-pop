@@ -1984,6 +1984,22 @@ setting-appearance-theme-preference-choice-light = clair
 
 setting-appearance-theme-preference-choice-system = comme le système
 
+setting-appearance-toast-corner =
+    .description = Où s’affichent les notifications : dans un coin de la fenêtre, ou au milieu de son bord haut ou bas. La plus récente est la plus proche du bord.
+    .label = Coin des notifications
+
+setting-appearance-toast-corner-choice-bottom-center = en bas au centre
+
+setting-appearance-toast-corner-choice-bottom-left = en bas à gauche
+
+setting-appearance-toast-corner-choice-bottom-right = en bas à droite
+
+setting-appearance-toast-corner-choice-top-center = en haut au centre
+
+setting-appearance-toast-corner-choice-top-left = en haut à gauche
+
+setting-appearance-toast-corner-choice-top-right = en haut à droite
+
 setting-developer-devtools =
     .description = Permet d’ouvrir le panneau des outils de développement (F12) : résolutions des touches, journal, étapes, focus, échelle et chaque collecteur de débogage.
     .label = Outils de développement

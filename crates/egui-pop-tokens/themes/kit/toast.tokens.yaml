@@ -13,6 +13,23 @@ toast:
   width:
     $type: "dimension"
     $value: "{size.toast.width}"
+  # The shadow it casts: the elevation of what lies over the interface
+  # (menus, popovers), as overlays have it.
+  shadow-offset-x:
+    $type: "dimension"
+    $value: "{shadow.popup.offset-x}"
+  shadow-offset-y:
+    $type: "dimension"
+    $value: "{shadow.popup.offset-y}"
+  shadow-blur:
+    $type: "dimension"
+    $value: "{shadow.popup.blur}"
+  shadow-spread:
+    $type: "dimension"
+    $value: "{shadow.popup.spread}"
+  shadow-color:
+    $type: "color"
+    $value: "{shadow.popup.color}"
   rest:
     fill:
       $type: "color"

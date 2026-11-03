@@ -2328,6 +2328,22 @@ setting-appearance-theme-preference-choice-light = light
 
 setting-appearance-theme-preference-choice-system = system
 
+setting-appearance-toast-corner =
+    .description = Where toasts show: a corner of the window, or the middle of its top or bottom edge. The newest is the nearest to the edge.
+    .label = Toast corner
+
+setting-appearance-toast-corner-choice-bottom-center = bottom-center
+
+setting-appearance-toast-corner-choice-bottom-left = bottom-left
+
+setting-appearance-toast-corner-choice-bottom-right = bottom-right
+
+setting-appearance-toast-corner-choice-top-center = top-center
+
+setting-appearance-toast-corner-choice-top-left = top-left
+
+setting-appearance-toast-corner-choice-top-right = top-right
+
 setting-developer-devtools =
     .description = Lets the devtools panel open (F12): key resolutions, the journal, steps, focus, scale and every debug collector.
     .label = Devtools

@@ -62,6 +62,56 @@ notifications are shown from a thread of their own, since the D-Bus
 call can block) and publishes `notify.failed` with the error. A toast
 carries the notification's first action.
 
+## Toasts
+
+The in-app toasts are the `ToastsPlugin`'s (in `DefaultPlugins`;
+`egui_pop::api::toasts`): a level, a text, one action, a close button,
+and a job's progress when given one. Information and success go after
+4 s, warnings after 8 s, errors stay until closed; a thin bar in the
+level's colour empties as the time runs. The pointer over a toast stops
+its time (and its bar); it goes on from where it stopped once the
+pointer leaves.
+
+They show in the corner the `appearance.toast_corner` setting chooses,
+under Appearance: `top-left`, `top-center`, `top-right`, `bottom-left`,
+`bottom-center` or `bottom-right` (the default). An application gives
+its own default with `AppBuilder::toast_corner`:
+
+```rust
+use egui_pop::api::toasts::Corner;
+use egui_pop::prelude::*;
+
+let app = App::builder()
+    .plugins(DefaultPlugins)
+    .toast_corner(Corner::TopRight)
+    .build(&egui_pop::egui::Context::default())
+    .unwrap();
+assert_eq!(egui_pop::api::toasts::corner(app.handle()), Corner::TopRight);
+```
+
+The newest is always the nearest to the edge: at the bottom under a
+bottom corner, on top under a top one. A toast slides in from its
+corner's side and out again when it goes, in `motion.toast.slide`
+(200 ms) with a cubic ease-out; in the middle of an edge it comes from
+the edge and fades. Under reduced motion it appears and goes at once,
+and its bar steps once a second.
+Toasts cast the shadow of what lies over the interface: `toast.shadow-*`,
+aliases of `shadow.popup.*`, as menus and popovers have it.
+
+Their state is data: `Toasts::shown` (each with its `phase`, `appear`,
+`idle`, its time `left` as the bar shows it, and whether the pointer
+`held` it), `Toasts::leaving` (gone, still sliding out: painted only,
+with nothing to press and nothing for a screen reader) and
+`Toasts::history`, all in the debug bridge's `toasts` collector. Their
+time runs on the motion clock (`core::motion`), so a test freezes it
+and steps it.
+
+The slide with its appear, idle and disappear states, the time-left bar
+that stops under the pointer, the corner as a choice, the newest nearest
+the edge and the shadow are ideas taken from
+[egui-notify](https://github.com/ItsEthra/egui-notify) (MIT; see
+`NOTICE`).
+
 ## The steps
 
 | Step | Arguments | Default |

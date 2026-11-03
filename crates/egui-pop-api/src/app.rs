@@ -725,6 +725,8 @@ pub(crate) struct Shared {
     system_scroll_bars: std::cell::Cell<bool>,
     /// The system's lines a wheel's notch (`AppBuilder::system_wheel_lines`).
     system_wheel_lines: std::cell::Cell<u32>,
+    /// Where the toasts show by default (`AppBuilder::toast_corner`).
+    toast_corner: std::cell::Cell<crate::toasts::Corner>,
     /// The main menu drawn as a bar under the title.
     menu_bar: std::cell::Cell<bool>,
     /// The window the user worked in last (focused, clicked or typed
@@ -854,6 +856,7 @@ impl AppHandle {
             system_text_scale: std::cell::Cell::default(),
             system_scroll_bars: std::cell::Cell::default(),
             system_wheel_lines: std::cell::Cell::new(crate::pointer::SYSTEM_WHEEL_LINES),
+            toast_corner: std::cell::Cell::default(),
             menu_bar: std::cell::Cell::new(true),
             active_window: std::cell::Cell::new(egui::ViewportId::ROOT),
             shell_sizes: RefCell::default(),
@@ -2691,6 +2694,7 @@ pub struct AppBuilder {
     on_exit: Vec<ExitFn>,
     name: Option<String>,
     panel_alignment: crate::workbench::PanelAlignment,
+    toast_corner: crate::toasts::Corner,
     pointer_profile: String,
     kits: Vec<KitSource>,
     user_kits: bool,
@@ -2778,6 +2782,7 @@ impl AppBuilder {
             on_exit: Vec::new(),
             name: None,
             panel_alignment: crate::workbench::PanelAlignment::Center,
+            toast_corner: crate::toasts::Corner::default(),
             pointer_profile: egui_pop_model::pointer::DEFAULT_PROFILE.into(),
             kits: Vec::new(),
             user_kits: false,
@@ -2791,6 +2796,13 @@ impl AppBuilder {
     /// given).
     pub fn panel_alignment(mut self, alignment: crate::workbench::PanelAlignment) -> Self {
         self.panel_alignment = alignment;
+        self
+    }
+
+    /// Where the toasts show by default (the `appearance.toast_corner`
+    /// setting's default; the bottom-right corner unless given).
+    pub fn toast_corner(mut self, corner: crate::toasts::Corner) -> Self {
+        self.toast_corner = corner;
         self
     }
 
@@ -3128,6 +3140,7 @@ impl AppBuilder {
         app.handle.0.system_text_scale.set(self.system_text_scale);
         app.handle.0.system_scroll_bars.set(self.system_scroll_bars);
         app.handle.0.system_wheel_lines.set(self.system_wheel_lines);
+        app.handle.0.toast_corner.set(self.toast_corner);
         app.handle.0.menu_bar.set(self.menu_bar);
         *app.handle.0.shell_sizes.borrow_mut() = self.shell_sizes;
         app.handle.workbench_mut().layout.folded = self.folded;
@@ -3625,6 +3638,7 @@ impl App {
         crate::zoom::register(&mut ctx)?;
         crate::text::register(&mut ctx, handle.system_text_scale())?;
         crate::scroll_bars::register(&mut ctx)?;
+        crate::toasts::register(&mut ctx, handle.0.toast_corner.get())?;
         crate::sliders::register(&mut ctx)?;
         crate::pointer::register(&mut ctx, pointer_profile, handle.system_wheel_lines())?;
         ctx.setting(

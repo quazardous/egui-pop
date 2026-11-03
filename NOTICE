@@ -23,6 +23,18 @@ Plex Sans and IBM Plex Mono (Copyright 2017 IBM Corp., with Reserved Font
 Name "Plex"). Their sources, versions and changes are in that folder's
 README.md. No published crate includes them.
 
+Toasts
+------
+
+egui-pop's toasts (crates/egui-pop-api/src/toasts.rs) take ideas from
+egui-notify (https://github.com/ItsEthra/egui-notify), MIT, Copyright (c)
+2022-2023 ItsEthra: the slide in and out from the corner's side with
+appear, idle and disappear states and a cubic ease-out (src/toast.rs,
+src/lib.rs), the time-left bar that stops under the pointer, the newest
+toast nearest the edge and the shadow (src/lib.rs), and the corner as a
+choice (src/anchor.rs). No code is copied; the shapes are close. Its
+licence is the MIT licence below.
+
 Editor-inspired themes
 ----------------------
 
@@ -60,7 +72,7 @@ authors. "GitHub" is a trademark of GitHub, Inc.
 Each theme file also records its source (repository, file, version,
 commit, licence) under "$extensions" -> "org.egui-pop.source".
 
-The MIT licence of each project above:
+The MIT licence of egui-notify and of each project above:
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the

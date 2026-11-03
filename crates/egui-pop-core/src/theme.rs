@@ -293,6 +293,9 @@ pub struct MotionTokens {
     /// How many times a mark calling attention pulses
     /// (`motion.pulse.count`).
     pub pulse_count: u32,
+    /// A toast sliding in from its corner's side, and out again
+    /// (`motion.toast.slide`; none under reduced motion).
+    pub toast_slide: f32,
 }
 
 /// Shadows under what lies over the interface (`shadow.*`), as egui's.
@@ -492,6 +495,7 @@ impl Tokens {
                         .dimension("motion.pulse.count")
                         .unwrap_or(3.0)
                         .clamp(0.0, 100.0) as u32,
+                    toast_slide: s("motion.toast.slide"),
                 }
             },
             resolved: Arc::new(resolved),

@@ -492,6 +492,11 @@ motion:
       $type: "number"
       $value: 3
       $description: "How many times a mark calling attention pulses before it stays still."
+  toast:
+    slide:
+      $type: "duration"
+      $value: {value: 200, unit: "ms"}
+      $description: "A toast sliding in from its corner's side, and out again (none under reduced motion)."
 palette:
   $description: "Palettes and toolboxes floating over the interface, never modal."
   magnet:
