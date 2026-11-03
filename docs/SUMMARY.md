@@ -62,6 +62,7 @@
 - [Keyboard survey](keyboard-survey.md)
 - [Scrolling survey](scrolling-survey.md)
 - [API stability](stability.md)
+- [Changesets and releases](releasing.md)
 - [How quality is held](quality.md)
 - [Upstream workarounds](upstream.md)
 - [egui_stack directions](egui-stack-directions.md)

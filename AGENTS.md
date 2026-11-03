@@ -23,6 +23,7 @@
 | `crates/egui-pop-gallery` | The catalogue app, a plugin app; its pages are the snapshot fixtures. |
 | `crates/consumer-smoke` | Compiles the README and guide snippets (not published). |
 | `docs/adr/` | Architecture decisions. Read them before changing a registry. |
+| `.changeset/`, `knope.toml` | Pending changesets and the release configuration: knope raises the versions, `cargo xtask release-notes` writes `CHANGELOG.md` (`docs/releasing.md`). |
 | `docs/tokens.md` | The token tiers and how to add a theme. |
 | `template/` | The `cargo generate` application template, identical to `crates/egui-pop/examples/minimal.rs` (a test checks it). |
 | `templates/extension` | The extension template: a third-party crate (a plugin, a component with tokens and strings, a story, a step, an agent command, kittest tests), a workspace member so the gate keeps it building; `cargo generate` writes its `Cargo.toml.liquid`. |
@@ -51,8 +52,19 @@ layering`.
 ## Rules
 
 - English everywhere; MIT; no code copied from GPL, LGPL or MPL projects.
-- One purpose per commit, signed off (`git commit -s`), CHANGELOG entry
-  for what users notice.
+- One purpose per commit, signed off (`git commit -s`), its subject in
+  Conventional Commits (`feat(views): ...`, `fix(core)!: ...`; types and
+  scopes in CONTRIBUTING.md), and so is the pull request's title.
+- What users notice comes with a changeset in `.changeset/`: the crates,
+  each one's bump (`patch`, `minor`, `major`) and the entry's text. A
+  break is `major` (before 1.0 it makes a new minor, 0.2 to 0.3), and
+  every published crate depending on the broken one takes `major` too.
+  Never edit `CHANGELOG.md` by hand; a change users do not notice inside
+  a published crate is labelled `internal`. Details in
+  `docs/releasing.md`; `cargo xtask changeset-check --base origin/main`
+  checks locally.
+- Never publish or tag: `knope release` prepares a release as a pull
+  request; publishing and tagging are the owner's.
 - GUI runs only headless (kittest, or wbox); never open a window on a
   desktop session from automation.
 - A new crate goes into the layering table of

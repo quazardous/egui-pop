@@ -1,0 +1,29 @@
+name: Pull request title
+
+# A squash merge makes the title the commit's subject: it follows
+# Conventional Commits (CONTRIBUTING.md, "Commit subjects"). Its own
+# workflow, so that editing the title checks it again without running CI.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions: {}
+
+jobs:
+  title:
+    name: Pull request title
+    runs-on: ubuntu-24.04
+    steps:
+      - env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          types='feat|fix|perf|refactor|docs|test|build|ci|chore|style|revert'
+          if printf '%s' "$TITLE" | grep -Eq "^($types)(\([a-z0-9._/-]+\))?!?: [^ ].*[^ ]$"; then
+            echo "ok: $TITLE"
+          else
+            echo "::error::The title is not a Conventional Commits subject: $TITLE"
+            echo "Expected: <type>(<scope>)!: <what changed>, with <type> one of"
+            echo "${types//|/, }; the scope and the ! (a breaking change) are optional."
+            echo "Example: feat(views): the list sorts by any column"
+            exit 1
+          fi

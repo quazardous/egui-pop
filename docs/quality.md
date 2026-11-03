@@ -14,8 +14,8 @@ as plainly, what those checks do not cover.
   ([API stability](stability.md)) and [governance](../GOVERNANCE.md).
 - **Agents work under written rules**: [AGENTS.md](../AGENTS.md) and
   [CONTRIBUTING.md](../CONTRIBUTING.md). One purpose per commit, every
-  commit building and passing its tests, signed off, with a changelog
-  entry for what users notice; a component comes with interaction
+  commit building and passing its tests, signed off, with a Conventional
+  Commits subject and a changeset for what users notice; a component comes with interaction
   tests, a gallery page and snapshots; an existing crate is surveyed
   before writing our own.
 - **Changes reach `main` through pull requests**, and a pull request
@@ -42,7 +42,9 @@ Every build there treats warnings as errors (`RUSTFLAGS` and
 `RUSTDOCFLAGS` set to `-D warnings`), and every job but the semver
 checks uses the locked dependencies and the minimum supported Rust
 version. One check, `CI`, is required by the
-branch protection of `main`: it fails when any job below failed.
+branch protection of `main`: it fails when any job below failed. A
+separate workflow, `Pull request title`, checks that the title follows
+Conventional Commits; it runs again when the title is edited.
 
 | Job | What it checks | Blocks a merge |
 |---|---|---|
@@ -56,7 +58,8 @@ branch protection of `main`: it fails when any job below failed.
 | Licences and advisories | `cargo deny check`: every dependency's licence accepted by `deny.toml`, security advisories, banned crates, sources | yes |
 | Gallery for the web | the gallery built for `wasm32-unknown-unknown` with Trunk, then started in headless Chrome: it fails on a panic or without the start line | yes |
 | Packaging | `cargo publish --workspace --dry-run`: every published crate packages with its metadata | yes |
-| Semver checks | `cargo semver-checks` on the `egui-pop` facade against its last release | no, informative: before 1.0 a minor may break the API |
+| Changesets | `cargo xtask changeset-check`: a pull request changing a published crate adds a changeset (or is labelled `internal`); changesets name published crates and known bumps; a break travels up to the dependents | yes |
+| Semver checks | `cargo semver-checks` on every published crate against its latest release on crates.io, with the versions the pending changesets lead to: a break needs a `major` changeset ([Changesets and releases](releasing.md#semver-checks)) | yes |
 
 The tests job runs, among others:
 
@@ -119,7 +122,8 @@ test again, then publishes them.
   operating system (`kittest.toml`); when they are regenerated, only the
   person or agent looking at the diff judges whether the new images are
   right.
-- **API compatibility** is reported, not enforced (semver checks are
-  informative), and before 1.0 a minor may break the API
-  ([API stability](stability.md)).
+- **API compatibility** is checked on Rust signatures only:
+  `cargo semver-checks` does not see the extension contract's other
+  parts (tokens, steps, commands, strings), which the changeset's author
+  judges ([GOVERNANCE.md](../GOVERNANCE.md#what-breaks-an-extension)).
 - **No performance or memory gate**, no fuzzing.

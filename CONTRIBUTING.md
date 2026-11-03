@@ -30,8 +30,58 @@ dependencies must be under a permissive licence accepted by `deny.toml`.
 
 A pull request does one thing: a component, a fix, a theme, a refactoring.
 Keep each commit building and passing its tests, with a message saying what
-changed and why. Add an entry to the `Unreleased` section of
-[CHANGELOG.md](CHANGELOG.md) for anything a user of the crates would notice.
+changed and why.
+
+## Changesets
+
+Anything a user of the crates would notice comes with a **changeset**: a
+file in `.changeset/` naming the crates the change touches, the bump each
+takes, and the changelog entry, written for users. Do not edit
+[CHANGELOG.md](CHANGELOG.md): the release writes it from the changesets.
+
+```markdown
+---
+egui-pop-views: minor
+egui-pop: minor
+---
+
+The list sorts by any column: click its header, or `list.sort`.
+```
+
+`knope document-change` writes one for you (`cargo install knope --locked`).
+The bump says what the change is:
+
+- `patch`: a fix;
+- `minor`: an addition, or a change that breaks nothing;
+- `major`: a breaking change. **Before 1.0, a breaking change takes a
+  new minor version** (0.2.x to 0.3.0): the changeset still says `major`,
+  and knope applies it to the middle number while the version starts with
+  0. Additions and fixes then share the last number (0.2.3 to 0.2.4).
+
+A break travels up: every published crate depending on a crate that takes
+a `major` takes a `major` too, up to the `egui-pop` facade. A change users
+do not notice (tests, docs, a refactoring) needs no changeset; inside a
+published crate, label the pull request `internal`. CI checks all of this;
+the details, and how a release is made, are in
+[Changesets and releases](docs/releasing.md).
+
+## Commit subjects
+
+Commit subjects and pull request titles follow
+[Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/):
+`type(scope): what changed`, with `!` before the colon for a breaking
+change. Types: `feat`, `fix`, `perf`, `refactor`, `docs`, `test`,
+`build`, `ci`, `chore`, `style`, `revert`; the scope is the crate without
+its `egui-pop-` prefix (`core`, `views`) or the area (`gallery`, `xtask`,
+`ci`), and may be left out:
+
+```
+feat(views): the list sorts by any column
+fix(core)!: a focus scope restores the focus it took
+```
+
+A squash merge makes the pull request's title the commit's subject; CI
+checks the title.
 
 ## Tic and toc
 
@@ -83,7 +133,10 @@ device per process (a Vulkan loader crash), is in
 [docs/testing.md](docs/testing.md).
 
 CI also runs `cargo deny check`, builds the gallery for
-`wasm32-unknown-unknown` and runs `cargo semver-checks` on `egui-pop`.
+`wasm32-unknown-unknown`, checks the changesets and the pull request's
+title, and runs `cargo semver-checks` on every published crate against
+crates.io, with the versions the pending changesets lead to: a break
+without a `major` changeset fails.
 On a pull request, CI runs only the jobs and the tests the change can
 affect (`cargo xtask affected` says which, and why); `main` runs
 everything. The rules are in
@@ -132,30 +185,14 @@ updated.
 
 ## Releasing
 
-Publishing is the owner's call. Each crate has its own version
-([API stability](docs/stability.md#versions-of-the-crates)): raise the
-version of each crate that changed since it was last published (and of
-the crates above it when the change breaks), raise a requirement in
-`[workspace.dependencies]` when a crate needs the newer version, and
-date `CHANGELOG.md`'s entries as a release listing those versions.
-Then:
-
-```sh
-cargo xtask publish --dry-run     # the plan, and crates changed but not raised
-cargo xtask publish               # publish what is not on crates.io yet
-```
-
-The crates come from `cargo metadata` (every package not marked
-`publish = false`), ordered by their dependencies; a version already on
-crates.io is skipped. crates.io limits how many new crates an account
-publishes at once: a refused crate is tried again after `--interval`
-seconds (600 by default), and running the task again resumes where it
-stopped. The dry run also names each crate whose folder changed since
-the commit its current version was published from (which crates.io
-keeps in the published crate): its version still needs raising.
-
-Only a minor release of the `egui-pop` crate is tagged, `vX.Y.0`, on the
-commit it was published from; the other releases need no tag.
+Publishing is the owner's call. `knope release` raises the versions from
+the pending changesets, writes the release into `CHANGELOG.md` and
+commits it (`chore(release): ...`); the release goes through a pull
+request; once it is merged, `cargo xtask publish` publishes what is not
+on crates.io yet, by hand, and `cargo xtask tag` tags a minor of the
+facade (`vX.Y.0`). Each crate has its own version
+([API stability](docs/stability.md#versions-of-the-crates)). The steps
+are in [Changesets and releases](docs/releasing.md#releasing).
 
 ## Upstream limits
 
