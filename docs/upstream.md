@@ -376,6 +376,18 @@ limit.
   `quiet_plain_clicks`).
 - **Remove when**: egui clicks on a plain, first press only.
 
+## egui: arrows move the focus anywhere
+
+- **Compensated**: a plain arrow on a focused widget that does not lock it moves
+  the focus to the best widget in a cone that way, across any container: from a
+  side list's last row to the line beside it, then into the page; from a menu's
+  button to a row behind the menu. Only a modal layer bounds it.
+- **Upstream**: not filed yet.
+- **Workaround**: the focus plugin undoes a move made by a plain arrow that
+  leaves the F6 region holding the focus (`// upstream:` in
+  `crates/egui-pop-core/src/stay.rs`).
+- **Remove when**: egui bounds its arrow moves to a container (a focus scope).
+
 ## egui: Tab wraps only in a modal layer
 
 - **Compensated**: Tab goes by drawing order through the whole window and wraps
