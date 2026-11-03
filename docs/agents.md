@@ -12,9 +12,11 @@ egui-pop opens no socket and no port for it. An agent is code that holds
 the `App` (a test, a harness, a transport the application writes
 itself); it discovers the collectors and commands as JSON, runs the
 commands offered to agents, reads every collector's state, and calls
-collector actions. What keeps an action away from it is the command's
-`agent` flag, the command's `when` clause, step hooks and the host; the
-[known gaps](#known-gaps) list what nothing checks.
+the collector actions offered to agents. What keeps an action away from
+it is the command's or the collector action's `agent` flag, the
+command's `when` clause, step hooks (`debug.call` for every collector
+action) and the host; the [known gaps](#known-gaps) list what nothing
+checks.
 
 ## What an agent connects to
 
@@ -25,10 +27,11 @@ connect to, loopback or not. It is reached by Rust calls:
 
 | Call | What it does |
 |---|---|
-| `AppHandle::debug_describe()` | every collector: name, description, actions (each with `mutates` and an example of its arguments) |
+| `AppHandle::debug_describe()` | every collector: name, description, actions (each with `mutates`, `agent` and an example of its arguments) |
 | `AppHandle::debug_snapshot()` | every collector's snapshot, by name, as one JSON object |
-| `AppHandle::debug_call(collector, action, args)` | calls an action; always returns a `Feedback`; `commands.run` is queued for the next frame |
+| `AppHandle::debug_call(collector, action, args)` | calls an action as the agent (`debug-bridge`); always returns a `Feedback`; `commands.run` is queued for the next frame |
 | `App::debug_call(collector, action, args)` | the same, but `commands.run` runs at once and its result is in the feedback |
+| `AppHandle::debug_call_as(collector, action, args, origin)`, `App::debug_call_as` | the same for another caller: the user's calls (the devtools panel, a debug page) pass `Origin::User` |
 | `AppHandle::debug_log()` | the last 64 feedback blocks, refusals included |
 
 **Always there.** Every `App` builds its bridge with the core collectors
@@ -39,10 +42,12 @@ have it, as debug builds do.
 **Devtools is a view, not a gate.** `DevtoolsPlugin` (opt-in) shows the
 same collectors in a panel, opened with `F12` once the
 `developer.devtools` setting is on (off by default). The setting gates
-the panel only; the bridge answers Rust calls whatever its value. An
-action run from the panel goes through the `devtools.call` step, which a
-plugin may veto; calls made directly on the bridge do not go through
-that step. See [Debugging](debugging.md).
+the panel only; the bridge answers Rust calls whatever its value. The
+panel is the user's: an action run from it goes through the
+`devtools.call` step, then, as the user, through the `debug.call` step
+every collector action goes through; a plugin may veto either, and a
+veto of `debug.call` covers the panel and agents alike. See
+[Debugging](debugging.md).
 
 **Reaching it from another process** takes a transport the application
 writes (a socket, stdin, an MCP server...) that turns requests into
@@ -72,9 +77,9 @@ answers it:
   "name": "store",
   "description": "The value store: every path, its value, its owner, who may write it and who changed it.",
   "actions": [
-    { "name": "get", "description": "Reads a value with its descriptor.", "mutates": false, "args": { "path": "settings/x" } },
-    { "name": "set", "description": "Writes a value as an agent (`path`, `value`).", "mutates": true, "args": { "path": "settings/x", "value": 1 } },
-    { "name": "undo", "description": "Undoes the last change of values.", "mutates": true, "args": null }
+    { "name": "get", "description": "Reads a value with its descriptor.", "mutates": false, "agent": true, "args": { "path": "settings/x" } },
+    { "name": "set", "description": "Writes a value (`path`, `value`), marked as the debug bridge's; for the user only (agents run the `value.set` command).", "mutates": true, "agent": false, "args": { "path": "settings/x", "value": 1 } },
+    { "name": "undo", "description": "Undoes the last change of values; for the user only (agents run the `value.undo` command).", "mutates": true, "agent": false, "args": null }
   ]
 }
 ```
@@ -188,16 +193,46 @@ above.)
 
 ### Act through collector actions
 
-Besides `commands.run`, collectors offer actions of their own. Those
-flagged `mutates` in the gallery: `screen.set_interface_zoom`,
-`focus.clear`, `overlays.close_top`, `announcements.announce`,
-`plugins.set_enabled`, `store.set`, `store.undo`, `i18n.set_locale`,
-`i18n.clear_missing`, `contexts.request`, `contexts.hold`,
-`contexts.release`, `dialogs.answer`, `files.answer`, the `jobs` actions
-(`cancel`, `pause`, `resume`, `retry`, `dismiss`, `clear`),
-`toasts.dismiss` and `viewport.set_view`. Read-only ones: `state.slot`,
-`fonts.check`, `icons.search`, `journal.since`, `store.get`,
-`mounts.where_can`, `mounts.check`, `frame.hit`.
+Besides `commands.run`, collectors offer actions of their own. Each
+says whether agents may call it (`agent`): by default those that only
+read, and none that writes. In the gallery, agents may call
+`commands.run` (the command's own `agent` flag is checked) and the
+read-only actions: `state.slot`, `fonts.check`, `icons.search`,
+`journal.since`, `store.get`, `mounts.where_can`, `mounts.check`,
+`frame.hit` and the gallery's `gallery.viewport.wait_idle`. The actions
+that write are the user's (the devtools panel, a debug page):
+`screen.set_interface_zoom`, `focus.clear`, `overlays.close_top`,
+`announcements.announce`, `plugins.set_enabled`, `store.set`,
+`store.undo`, `i18n.set_locale`, `i18n.clear_missing`,
+`contexts.request`, `contexts.hold`, `contexts.release`,
+`dialogs.answer`, `files.answer`, the `jobs` actions (`cancel`, `pause`,
+`resume`, `retry`, `dismiss`, `clear`), `toasts.dismiss` and
+`viewport.set_view`. Most have a command an agent runs instead
+(`value.set`, `value.undo`, `job.cancel`, `context.hold`...).
+
+An agent's call to an action not offered to it is refused before
+anything runs, in the bridge's log and on the journal:
+
+```json
+{ "ok": false, "collector": "store", "action": "set", "mutates": true, "message": "`store.set` refused: it is not offered to agents; only the user may call it", "data": null }
+```
+
+```json
+{ "seq": 7, "source": "agent:debug-bridge", "cause": null, "name": "debug.call.refused", "data": { "collector": "store", "action": "set", "args": { "path": "settings/x", "value": 1 }, "reason": "it is not offered to agents; only the user may call it" } }
+```
+
+Every other call, the user's included, runs through the `debug.call`
+step (`{ "collector", "action", "args", "origin" }`), whose
+before-hooks may veto it ("`journal.since` vetoed by kiosk: ...",
+`debug.call.vetoed` on the journal). A call that writes is published as
+`debug.call`; one that only reads is published and traced only when
+vetoed, so polling fills neither the journal nor the steps' traces.
+
+An application may offer a writing action to agents it trusts with it
+(a test harness, its own automation): `AppBuilder::offer_to_agents`
+(`"dialogs.answer"`); a name that matches no action is reported
+(`agent-offer-unknown`). A collector declares its own with
+`FnCollector::agent`.
 
 ### Wait
 
@@ -326,6 +361,12 @@ The bridge has one caller identity: every command it runs is
 `Origin::Agent("debug-bridge")`, and the journal's source is
 `agent:debug-bridge`. What is checked:
 
+- **Collector actions' `agent` flag.** An action that writes is the
+  user's unless it says otherwise (only `commands.run` does) or the
+  application offers it (`AppBuilder::offer_to_agents`): the agent's
+  call is refused and journaled (`debug.call.refused`). Every call that
+  goes on, the agent's and the user's, runs through the `debug.call`
+  step a plugin may veto (a kiosk build).
 - **The `agent` flag.** `commands.run` refuses a command declared with
   `CommandSpec::no_agent()` (and an unknown one) with "`<id>` is not
   offered to agents". In egui-pop and the gallery: quitting, the
@@ -356,9 +397,12 @@ The bridge has one caller identity: every command it runs is
 
 - Declare the command with `.no_agent()`; it stays in menus, keys and
   the palette.
-- When a dialog confirms an action, veto the `dialog.answer` step unless its
+- When a dialog confirms an action and the application offers
+  `dialogs.answer` to agents, veto the `dialog.answer` step unless its
   `origin` is `user`, as the links plugin does: accepting a dialog runs
   its command whatever the command's `agent` flag (see the gaps).
+- To refuse a collector action to everyone, the user's devtools panel
+  included, veto the `debug.call` step for it.
 - When a step does the work, veto it from a before-hook for agents
   (the origin is in the arguments when the step carries it).
 - In the host's `dispatch`, refuse `Origin::Agent` for the commands it
@@ -453,24 +497,19 @@ What is not protected today. None of these is fixed by documenting it.
 - **The bridge cannot be turned off.** It is in every build, release
   included; there is no feature or setting to remove it or to make it
   read-only. Any code in the process (a plugin included) can call it.
-- **Collector actions ignore the `agent` flag and have no veto.** Only
-  `commands.run` checks the flag. `dialogs.answer`, `files.answer`
-  (answers an open file choice with any paths), `plugins.set_enabled`
-  (disconnects any plugin, with the hooks it registered, including one
-  that guards agent actions), `store.set`, `contexts.hold`, the `jobs`
-  actions, `overlays.close_top` and the others run without a step a
-  plugin could veto. `devtools.call` is vetoable only for calls from the
-  devtools panel.
-- **Bridge writes bypass the writers check.** `store.set` and the
-  `value.set` / `value.reset` commands write as the framework, which may
-  write any path: a value's declared writers ([ADR 0016](adr/0016-one-writer-per-value.md)) do not apply.
-  For example, a bridge call turns on `settings/developer.devtools`,
+- **Bridge writes bypass the writers check.** The `value.set` /
+  `value.reset` commands an agent runs, and `store.set` (the user's, or
+  an agent's once the application offers it), write as the framework,
+  which may write any path: a value's declared writers ([ADR 0016](adr/0016-one-writer-per-value.md)) do not apply.
+  For example, `value.set` turns on `settings/developer.devtools`,
   whose writers are its owner only.
 - **Accepting a dialog runs its command for the agent, whatever its
-  flag.** `dialogs.answer` with `accept` runs the dialog's command with
-  the agent's origin without checking the command's `agent` flag; only
-  the links plugin vetoes such answers. An application with
-  confirmations must veto the `dialog.answer` step itself (above).
+  flag.** Once an application offers `dialogs.answer` to agents, an
+  `accept` runs the dialog's command with the agent's origin without
+  checking the command's `agent` flag; only the links plugin vetoes such
+  answers. Such an application must veto the `dialog.answer` step
+  itself (above). `files.answer`, offered, answers an open file choice
+  with any paths.
 - **Origin is a label, not a credential.** `App::run`,
   `AppHandle::run_as` and the steps take any `Origin` from code in the
   process and do not check the `agent` flag; a command's handler that

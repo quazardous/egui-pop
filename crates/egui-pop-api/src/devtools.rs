@@ -10,8 +10,12 @@
 //! as JSON with its actions (an action that mutates says so).
 //!
 //! Steps (ADR 0011): `devtools.call` (`{ "collector", "action",
-//! "args" }`): a collector action run from the panel; a plugin may veto
-//! it (a kiosk build, an action too dangerous to offer).
+//! "args" }`): a collector action run from the panel ([`call`]); a
+//! plugin may veto it (an action too dangerous to offer in the panel).
+//! The panel is the user's: its default calls the action as the user
+//! (`AppHandle::debug_call_as`), through the `debug.call` step every
+//! call of the bridge goes through, so a veto there (a kiosk build)
+//! covers the panel and agents alike.
 
 use std::sync::{Arc, Mutex};
 
@@ -19,7 +23,7 @@ use egui::Ui;
 use egui_pop_core::lock;
 use egui_pop_core::strings;
 use egui_pop_core::widgets;
-use egui_pop_model::commands::CommandSpec;
+use egui_pop_model::commands::{CommandSpec, Origin};
 use egui_pop_model::ids::{CommandId, PanelId, PluginId, SettingId, StepId};
 use egui_pop_model::panels::{Area, PanelSpec};
 use egui_pop_model::values::Descriptor;
@@ -61,6 +65,25 @@ struct State {
 #[derive(Debug, Default)]
 pub struct DevtoolsPlugin {
     state: Arc<Mutex<State>>,
+}
+
+/// Runs a collector's action as the panel's buttons do: through the
+/// `devtools.call` step, whose default calls it as the user
+/// (`Origin::User`) through the `debug.call` step.
+pub fn call(app: &AppHandle, collector: &str, action: &str, args: Json) -> crate::steps::Outcome {
+    app.step(
+        &STEP_CALL,
+        json!({ "collector": collector, "action": action, "args": args }),
+        |app, args| {
+            let f = app.debug_call_as(
+                args["collector"].as_str().unwrap_or_default(),
+                args["action"].as_str().unwrap_or_default(),
+                &args["args"],
+                Origin::User,
+            );
+            if f.ok { Ok(f.data) } else { Err(f.message) }
+        },
+    )
 }
 
 /// Whether the setting lets devtools open.
@@ -316,19 +339,7 @@ fn collectors(ui: &mut Ui, app: &AppHandle, s: &mut State) {
                 {
                     let args: Json =
                         serde_json::from_str(&s.args).unwrap_or_else(|_| a["args"].clone());
-                    let collector = s.collector.clone();
-                    let out = app.step(
-                        &STEP_CALL,
-                        json!({ "collector": collector, "action": name, "args": args }),
-                        |app, args| {
-                            let f = app.debug_call(
-                                args["collector"].as_str().unwrap_or_default(),
-                                args["action"].as_str().unwrap_or_default(),
-                                &args["args"],
-                            );
-                            if f.ok { Ok(f.data) } else { Err(f.message) }
-                        },
-                    );
+                    let out = call(app, &s.collector, &name, args);
                     s.last = Some(match out {
                         crate::steps::Outcome::Done(Ok(v)) => format!("ok: {v}"),
                         crate::steps::Outcome::Done(Err(e)) => format!("failed: {e}"),

@@ -273,11 +273,19 @@ fn the_debug_bridge_sees_and_moves_the_viewport() {
         .unwrap();
     let snap = bridge.snapshot_of(&h.ctx, "viewport").unwrap();
     assert_eq!(snap["viewports"]["v"]["view"]["fit"], true, "{snap}");
-    let f = bridge.call(
+    let args = serde_json::json!({ "name": "v", "zoom": 1.0, "center": [10.0, 20.0] });
+    // Moving it is the user's (devtools), not an agent's.
+    let f = bridge.call(&h.ctx, "viewport", "set_view", &args);
+    assert!(
+        !f.ok && f.message.contains("not offered to agents"),
+        "{f:?}"
+    );
+    let f = bridge.call_as(
         &h.ctx,
         "viewport",
         "set_view",
-        &serde_json::json!({ "name": "v", "zoom": 1.0, "center": [10.0, 20.0] }),
+        &args,
+        &egui_pop_core::model::commands::Origin::User,
     );
     assert!(f.ok && f.mutates, "{f:?}");
     h.run();

@@ -130,7 +130,10 @@ impl Plugin for ScanEstimate {
 The debug bridge's `jobs` collector shows every job (state, fraction,
 counts, time left, the end of its log) and `idle`, what an agent waits
 for; its actions `cancel`, `pause`, `resume`, `retry`, `dismiss` and
-`clear` do what the buttons do.
+`clear` do what the buttons do, for the user (devtools). They write, so
+the bridge's agent is refused them: it runs the `job.cancel`,
+`job.pause`, `job.resume` and `job.retry` commands instead
+([Agents](agents.md)).
 
 `egui_pop_test::jobs::FakeHost` is a host whose jobs a test scripts,
 event by event, without threads; it answers the job commands now, later

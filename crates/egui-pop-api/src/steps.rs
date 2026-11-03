@@ -206,6 +206,7 @@ pub(crate) fn run(
     args: Json,
     hooks: Vec<(OwnerId, HookFn)>,
     declared: bool,
+    quiet: bool,
     default: impl FnOnce(&AppHandle, &Json) -> Result<Json, String>,
 ) -> (Outcome, StepTrace) {
     let mut trace = StepTrace {
@@ -272,7 +273,9 @@ pub(crate) fn run(
         Ok(v) => json!({ "args": args, "result": v }),
         Err(e) => json!({ "args": args, "error": e }),
     };
-    app.publish("egui_pop", None, step.as_str(), data);
+    if !quiet {
+        app.publish("egui_pop", None, step.as_str(), data);
+    }
     trace.args = args;
     trace.result = Some(result.clone());
     (Outcome::Done(result), trace)

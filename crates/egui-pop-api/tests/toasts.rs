@@ -107,15 +107,19 @@ fn information_expires_errors_stay_and_the_queue_waits() {
         h.step();
     }
     assert!(on_screen(&h, "Disk full"), "an error stays");
-    // Closed by its button, or by an agent through the bridge.
+    // Closed by its button, or through the bridge by the user (devtools;
+    // an agent may not unless the application offers it).
     h.get_by_label("Close: Disk full").click();
     h.run();
     assert!(!on_screen(&h, "Disk full"));
     assert!(on_screen(&h, "Note 3"), "its turn came");
     let id = t.shown()[0].id;
-    let f = h
-        .state_mut()
-        .debug_call("toasts", "dismiss", &json!({ "id": id }));
+    let f = h.state_mut().debug_call_as(
+        "toasts",
+        "dismiss",
+        &json!({ "id": id }),
+        egui_pop_model::commands::Origin::User,
+    );
     assert!(f.ok, "{}", f.message);
     assert!(!t.shown().iter().any(|s| s.id == id));
     let snapshot = h.state().handle().debug_snapshot();

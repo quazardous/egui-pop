@@ -43,8 +43,20 @@ impl Plugin for Doc {
 }
 
 fn harness() -> (Harness<'static, App>, Runs, dialogs::Dialogs) {
+    harness_with(App::builder())
+}
+
+/// The bridge's agent may answer dialogs: the application offers it
+/// `dialogs.answer`, which writes and so is the user's by default.
+fn agent_harness() -> (Harness<'static, App>, Runs, dialogs::Dialogs) {
+    harness_with(App::builder().offer_to_agents("dialogs.answer"))
+}
+
+fn harness_with(
+    builder: egui_pop_api::AppBuilder,
+) -> (Harness<'static, App>, Runs, dialogs::Dialogs) {
     let runs: Runs = Rc::default();
-    let app = App::builder()
+    let app = builder
         .plugins(DefaultPlugins)
         .plugin(Doc(runs.clone()))
         .build(&egui::Context::default())
@@ -149,7 +161,22 @@ fn a_form_edits_typed_fields_and_picks_a_path_in_the_app() {
 
 #[test]
 fn an_agent_sees_and_answers_what_a_person_would() {
-    let (mut h, runs, d) = harness();
+    // Unless the application offers it, an agent may not answer.
+    let (mut h, _, d) = harness();
+    d.open(Choose::new("Which side?", &["Left", "Right"], GO));
+    h.run();
+    let feedback = h.state_mut().debug_call(
+        "dialogs",
+        "answer",
+        &json!({ "answer": "choose", "index": 1 }),
+    );
+    assert!(
+        feedback.message.contains("not offered to agents"),
+        "{}",
+        feedback.message
+    );
+    assert_eq!(d.len(), 1);
+    let (mut h, runs, d) = agent_harness();
     d.open(Choose::new("Which side?", &["Left", "Right"], GO));
     h.run();
     let snapshot = h.state().handle().debug_snapshot();
@@ -235,7 +262,7 @@ fn a_choice_answers_its_option_s_value_and_its_filter_narrows_the_list() {
 
 #[test]
 fn an_agent_answers_by_value_and_a_form_shows_its_values_plainly() {
-    let (mut h, runs, d) = harness();
+    let (mut h, runs, d) = agent_harness();
     d.open(
         Form::new("Export", "Export", GO)
             .field("quality", Descriptor::int("Quality", 1, 100, 90))

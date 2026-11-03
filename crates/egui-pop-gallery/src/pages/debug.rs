@@ -108,7 +108,13 @@ fn show(ui: &mut Ui, app: &AppHandle, s: &mut State) {
                     .on_hover_text(a["description"].as_str().unwrap_or_default())
                     .clicked()
                 {
-                    let f = app.debug_call(&s.collector, name, &a["args"]);
+                    // A person's click: the user's call, not the agent's.
+                    let f = app.debug_call_as(
+                        &s.collector,
+                        name,
+                        &a["args"],
+                        egui_pop::model::commands::Origin::User,
+                    );
                     s.feedback = serde_json::to_value(f).ok();
                 }
             }

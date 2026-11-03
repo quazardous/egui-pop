@@ -184,15 +184,22 @@ fn the_collector_asks_the_host_and_forgets_finished_jobs() {
     let h = app.handle().clone();
     h.publish("host", None, "job.started", json!({ "id": "e" }));
     pass(&mut app);
+    // The user, as the jobs centre's buttons or devtools; an agent is
+    // refused (it runs the host's job commands instead).
     let out = app.debug_call("jobs", "cancel", &json!({ "id": "e" }));
+    assert!(out.message.contains("not offered to agents"), "{out:?}");
+    let out = app.debug_call_as("jobs", "cancel", &json!({ "id": "e" }), Origin::User);
     assert!(out.ok, "{out:?}");
-    let out = app.debug_call("jobs", "cancel", &json!({ "id": "nope" }));
+    let out = app.debug_call_as("jobs", "cancel", &json!({ "id": "nope" }), Origin::User);
     assert!(!out.ok);
     pass(&mut app);
     pass(&mut app);
     let jobs = h.service(&JOBS).unwrap();
     assert_eq!(jobs.job("e").unwrap().state, JobState::Cancelled);
-    assert!(app.debug_call("jobs", "dismiss", &json!({ "id": "e" })).ok);
+    assert!(
+        app.debug_call_as("jobs", "dismiss", &json!({ "id": "e" }), Origin::User)
+            .ok
+    );
     assert!(jobs.job("e").is_none());
 }
 

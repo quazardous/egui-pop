@@ -2060,7 +2060,7 @@ impl Plugin for ContextsPlugin {
                 move |_, args| {
                     let app = w2.get()?;
                     let env: Envelope = parse(args, "a context request")?;
-                    outcome_json(request(&app, env, &Origin::Agent("debug-bridge".into())))
+                    outcome_json(request(&app, env, &egui_pop_core::debug::agent()))
                 },
             )
             .args(json!({ "request": { "op": "back" }, "dry_run": true }))
