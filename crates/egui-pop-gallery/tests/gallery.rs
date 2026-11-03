@@ -27,6 +27,9 @@ fn harness_from(
 ) -> Harness<'static, Gallery> {
     builder
         .with_size(egui::vec2(1100.0, 720.0))
+        // egui 0.37 takes a few more passes to settle: a style or a text
+        // changing everywhere at once, the scroll physics coming to rest.
+        .with_max_steps(8)
         .shared_wgpu()
         .build_eframe(move |cc| {
             // Motion moves only when a test says: the same frames on
@@ -253,6 +256,15 @@ fn quit_after_closes_the_window() {
     );
 }
 
+/// Of the nodes named `label`, the highest on screen: on the menus page,
+/// the open menu's item rather than the menu drawn in place below it
+/// (egui orders popups in the tree as it likes, and changed it in 0.37).
+fn topmost<'h>(h: &'h Harness<'_, Gallery>, label: &'h str) -> egui_kittest::Node<'h> {
+    h.query_all_by_label(label)
+        .min_by(|a, b| a.rect().top().total_cmp(&b.rect().top()))
+        .unwrap_or_else(|| panic!("no node named {label}"))
+}
+
 fn context_key(h: &Harness<'_, Gallery>, key: &str) -> String {
     h.state().app.handle().context().get(key).to_string()
 }
@@ -265,7 +277,7 @@ fn menus_show_keys_ticks_and_greyed_items_and_run_commands() {
     // The View menu of the bar: a toggle, ticked, with its key.
     h.get_by_label("View").click();
     h.run();
-    // Drawn in place on the page, and in the open menu (the last one).
+    // Drawn in place on the page, and in the open menu (the higher one).
     for grid in h.query_all_by_label("Show grid") {
         assert_eq!(grid.accesskit_node().role(), Role::CheckBox);
         assert_eq!(grid.accesskit_node().toggled(), Some(Toggled::True));
@@ -277,7 +289,7 @@ fn menus_show_keys_ticks_and_greyed_items_and_run_commands() {
             .keys_for(&egui_pop_gallery::pages::menus::CMD_GRID),
         ["Ctrl+Shift+G"]
     );
-    h.query_all_by_label("Show grid").last().unwrap().click();
+    topmost(&h, "Show grid").click();
     h.run();
     assert_eq!(context_key(&h, "galleryGrid"), "false");
     // Snapping needs the grid: greyed now, in the card's menu.
@@ -297,7 +309,7 @@ fn menus_show_keys_ticks_and_greyed_items_and_run_commands() {
     h.run();
     assert_eq!(context_key(&h, "galleryGrid"), "true");
     // A submenu: its items run the command with their arguments.
-    h.query_all_by_label("Zoom").last().unwrap().hover();
+    topmost(&h, "Zoom").hover();
     h.run();
     h.query_all_by_label("200%").last().unwrap().click();
     h.run();
@@ -313,7 +325,7 @@ fn menu_snapshots() {
         h.run();
         h.get_by_label("Card with a context menu").click_secondary();
         h.run();
-        h.query_all_by_label("Zoom").last().unwrap().hover();
+        topmost(&h, "Zoom").hover();
         h.run();
         results.add(h.try_snapshot(format!("menus-{theme}")));
     }
@@ -324,7 +336,7 @@ fn open_card_menu(h: &mut Harness<'_, Gallery>) {
     h.run();
     h.get_by_label("Card with a context menu").click_secondary();
     h.run();
-    h.query_all_by_label("Zoom").last().unwrap().hover();
+    topmost(h, "Zoom").hover();
     h.run();
 }
 
@@ -5015,7 +5027,7 @@ fn a_kit_restyles_menu_items_from_the_theme_alone() {
     h.run();
     h.get_by_label("Card with a context menu").click_secondary();
     h.run();
-    h.query_all_by_label("Zoom").last().unwrap().hover();
+    topmost(&h, "Zoom").hover();
     h.run();
     h.snapshot("menus-kit-bar");
 }
@@ -5623,6 +5635,7 @@ fn sized_window(
     let options = options(theme, density, page);
     let mut h = Harness::builder()
         .with_size(egui::vec2(1100.0, height))
+        .with_max_steps(8)
         .shared_wgpu()
         .build_eframe(move |cc| {
             egui_pop::core::motion::freeze(&cc.egui_ctx, 0.0);

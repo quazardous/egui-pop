@@ -543,7 +543,8 @@ impl AssistProvider for Slow {
 
 fn settle<S>(h: &mut Harness<'_, S>, done: impl Fn(&Harness<'_, S>) -> bool) {
     for _ in 0..200 {
-        h.run();
+        // egui 0.37 may take more passes than `run` allows to settle.
+        let _ = h.try_run();
         if done(h) {
             return;
         }

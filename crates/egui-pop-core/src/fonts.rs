@@ -2151,10 +2151,19 @@ mod tests {
         let ctx = Context::default();
         install(&ctx, &names(&["Ubuntu"]), &names(&["Hack"]));
         pass(&ctx);
-        // Installed by the first ask, but egui takes it at its next pass:
-        // the second ask in the same frame must not hand it out.
-        assert_eq!(specimen(&ctx, "Hack", Weight::REGULAR), None);
-        assert_eq!(specimen(&ctx, "Hack", Weight::REGULAR), None);
+        // Installed by the first ask, but once the pass has laid text out
+        // egui takes it at its next pass: the second ask in the same frame
+        // must not hand it out. (egui 0.37 takes it at once before any
+        // text is laid out.)
+        let mut asks = Vec::new();
+        ctx.run_ui(egui::RawInput::default(), |ui| {
+            ui.label("Text first");
+            asks.push(specimen(ui.ctx(), "Hack", Weight::REGULAR));
+            asks.push(specimen(ui.ctx(), "Hack", Weight::REGULAR));
+        })
+        .textures_delta
+        .clear();
+        assert_eq!(asks, [None, None]);
         pass(&ctx);
         assert!(specimen(&ctx, "Hack", Weight::REGULAR).is_some());
     }
