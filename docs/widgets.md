@@ -193,15 +193,14 @@ Tracked in [#24](https://github.com/quazardous/egui-pop/issues/24).
 - **egui_dock** 0.21.1 requires egui 0.36 and has no release for 0.37.
   egui-pop moves to [egui_stack](https://github.com/quazardous/egui_stack)
   instead: egui_dock's continuation (MIT, its history kept), on egui
-  0.37, not on crates.io yet
-  ([#145](https://github.com/quazardous/egui-pop/issues/145);
-  [directions](egui-stack-directions.md)).
+  0.37, released on crates.io as 0.22
+  ([directions](egui-stack-directions.md)).
 - **egui-phosphor** 0.14.0 requires egui 0.36. Its upstream pull request
   ([amPerl/egui-phosphor#49](https://github.com/amPerl/egui-phosphor/pull/49))
   moves it to 0.37; until it is released, a fork pinned by revision
   ([#146](https://github.com/quazardous/egui-pop/issues/146)).
-- While either is a git dependency, egui-pop cannot be published to
-  crates.io, and applications using egui-pop from git need the same
+- While the egui-phosphor patch remains, egui-pop cannot be published
+  to crates.io, and applications using egui-pop from git need the same
   `[patch]`.
 - Nothing else in the tree holds it back: egui_table 0.11 and
   egui_commonmark 0.26 already require egui 0.37, so both move with the
