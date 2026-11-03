@@ -5,6 +5,7 @@
 # Guides
 
 - [Getting started](getting-started.md)
+- [Using parts without App](standalone.md)
 - [Themes](themes.md)
 - [Visual kits](kit.md)
   - [Kits as packages](kit-packages.md)

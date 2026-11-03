@@ -11,6 +11,9 @@
 #[doc = include_str!("../../../docs/getting-started.md")]
 pub mod getting_started {}
 
+#[doc = include_str!("../../../docs/standalone.md")]
+pub mod standalone {}
+
 #[doc = include_str!("../../../docs/themes.md")]
 pub mod themes {}
 
