@@ -48,6 +48,7 @@
 - [Tips](tips.md)
 - [About the application](about.md)
 - [Debugging](debugging.md)
+- [Agents and the debug bridge](agents.md)
 - [Extensions](extensions.md)
 - [The gallery](gallery.md)
 

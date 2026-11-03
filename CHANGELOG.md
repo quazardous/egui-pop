@@ -12,6 +12,10 @@ publishes.
 
 ### Added
 
+- `docs/agents.md`: how an agent reaches an application through the debug bridge
+  (in process; egui-pop opens no socket), discovering and running commands, reading
+  state and the journal, the replies' shapes with an example run in consumer-smoke,
+  what is refused and how to keep an action off the agent surface, and the known gaps.
 - Local video in the in-app viewer (egui-pop-views, egui-pop-model, egui-pop-api;
   `docs/links.md`, ADR 0017): with the new opt-in feature `views-video`
   (`egui-pop-views/video`), a local video file plays in the viewer through the
