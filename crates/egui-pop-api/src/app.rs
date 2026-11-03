@@ -488,6 +488,44 @@ pub struct Call<'a> {
 /// A command handler.
 pub type CommandFn = Rc<dyn Fn(&Call<'_>) -> Result<Json, String>>;
 
+/// Why code acting for `acting` may not run a command as `origin`: only
+/// the user's own actions run as the user, and an agent's stay an
+/// agent's (the `agent` flag is checked for them).
+fn escalation(acting: &Origin, origin: &Origin) -> Option<String> {
+    match (acting, origin) {
+        (Origin::User, _) => None,
+        (a, o) if a == o => None,
+        (Origin::Agent(_), Origin::Agent(_)) => None,
+        (a, Origin::User) => Some(format!(
+            "a command running for {} may not run another as the user; ask the user (a dialog)",
+            source_of(a)
+        )),
+        (Origin::Agent(_), o) => Some(format!(
+            "a command running for {} may not run another as {}",
+            source_of(acting),
+            source_of(o)
+        )),
+        _ => None,
+    }
+}
+
+/// While alive, the code running acts for an origin
+/// (`AppHandle::acting_origin`).
+struct ActingFor<'a>(&'a AppHandle);
+
+impl<'a> ActingFor<'a> {
+    fn new(app: &'a AppHandle, origin: &Origin) -> Self {
+        app.0.acting.borrow_mut().push(origin.clone());
+        Self(app)
+    }
+}
+
+impl Drop for ActingFor<'_> {
+    fn drop(&mut self) {
+        self.0.0.acting.borrow_mut().pop();
+    }
+}
+
 /// The registries plugins fill through `Ctx`.
 pub(crate) struct Registries {
     /// Declarations, each with its in-process handler if it has one.
@@ -661,6 +699,9 @@ pub(crate) struct Shared {
     panels: RefCell<BTreeMap<PanelId, PanelView>>,
     stories: RefCell<Registry<StoryId, StoryEntry>>,
     requests: RefCell<Vec<Request>>,
+    /// The origins of the commands running now, innermost last: what a
+    /// command a handler starts inherits (`AppHandle::run`).
+    acting: RefCell<Vec<Origin>>,
     context: RefCell<WhenContext>,
     workbench: RefCell<crate::workbench::Workbench>,
     /// Indicators fed by the journal, and the last event fed.
@@ -797,6 +838,7 @@ impl AppHandle {
             panels: RefCell::new(BTreeMap::new()),
             stories: RefCell::new(Registry::new()),
             requests: RefCell::new(Vec::new()),
+            acting: RefCell::new(Vec::new()),
             context: RefCell::new(WhenContext::new()),
             workbench: RefCell::new(crate::workbench::Workbench::default()),
             indicators: RefCell::new(OwnedList::new()),
@@ -1522,18 +1564,50 @@ impl AppHandle {
             .expect("the framework provides the theme")
     }
 
-    /// Asks for a command, run by the user before the next frame.
+    /// Asks for a command, run before the next frame for whoever the
+    /// code asking acts for ([`AppHandle::acting_origin`]): the user, or
+    /// the origin of the command whose handler asks. A command an agent
+    /// started runs the commands it starts as that agent.
     pub fn run(&self, command: CommandId, args: Json) {
-        self.run_as(command, args, Origin::User);
+        self.run_as(command, args, self.acting_origin());
     }
 
-    /// Asks for a command with an origin.
+    /// Asks for a command with an origin. While a command runs for
+    /// anyone but the user, its handler may not claim the user's origin,
+    /// and one running for an agent may not claim any other than an
+    /// agent's: such a request is refused, on the journal
+    /// (`command.refused`, from the origin acting) and in the log. To act
+    /// for the user, ask the user (a dialog: the user's answer runs its
+    /// command as the user).
     pub fn run_as(&self, command: CommandId, args: Json, origin: Origin) {
+        let acting = self.acting_origin();
+        if let Some(reason) = escalation(&acting, &origin) {
+            log::warn!(target: "egui_pop", "command `{command}`: {reason}");
+            self.publish(
+                &source_of(&acting),
+                None,
+                "command.refused",
+                json!({ "command": command, "origin": source_of(&origin), "reason": reason }),
+            );
+            return;
+        }
         self.push_request(Request::Run {
             command,
             args,
             origin,
         });
+    }
+
+    /// Who the code running now acts for: the origin of the innermost
+    /// command whose handler (or host dispatch) is running, else the
+    /// user. A command's handler gets it as `Call::origin` too.
+    pub fn acting_origin(&self) -> Origin {
+        self.0
+            .acting
+            .borrow()
+            .last()
+            .cloned()
+            .unwrap_or(Origin::User)
     }
 
     /// Asks for a plugin to be connected or disconnected before the next
@@ -5075,6 +5149,20 @@ impl App {
         origin: Origin,
         cx: &WhenContext,
     ) -> Reply {
+        // A command kept from agents does not run for one, whoever asks.
+        if matches!(origin, Origin::Agent(_))
+            && self.reg.commands.spec(command).is_some_and(|s| !s.agent)
+        {
+            let msg = format!("`{command}` is not offered to agents");
+            self.handle.publish(
+                &source_of(&origin),
+                None,
+                "command.refused",
+                json!({ "command": command, "origin": source_of(&origin), "reason": msg }),
+            );
+            self.record(command, &args, &origin, Err(msg.clone()));
+            return Reply::Done(Err(msg));
+        }
         let handler = match self.reg.commands.prepare(command, cx) {
             Ok(h) => h.clone(),
             Err(e) => {
@@ -5098,6 +5186,7 @@ impl App {
             let result = match &handler {
                 Some(h) => {
                     let _scope = owner.as_ref().map(egui_pop_model::values::enter_scope);
+                    let _acting = ActingFor::new(&self.handle, &origin);
                     h(&Call {
                         args: &args,
                         origin: &origin,
@@ -5116,6 +5205,7 @@ impl App {
             .borrow_mut()
             .take()
             .expect("a command dispatched from inside a dispatch is queued (AppHandle::run)");
+        let acting = ActingFor::new(&self.handle, &origin);
         let reply = host.dispatch(
             &Dispatch::new(
                 command,
@@ -5128,6 +5218,7 @@ impl App {
             )
             .owned_by(owner.as_ref()),
         );
+        drop(acting);
         *self.handle.0.host.borrow_mut() = Some(host);
         match reply {
             Reply::Done(result) => {

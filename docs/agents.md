@@ -387,6 +387,25 @@ The bridge has one caller identity: every command it runs is
 - **The clipboard.** An agent copies and pastes in its own slot
   (`agent:debug-bridge`): it neither reads nor overwrites what the user
   copied unless the owner allows it ([The clipboard](clipboard.md)).
+- **The chain of commands.** A command's handler runs for its origin
+  (`Call::origin`, `AppHandle::acting_origin`), and the commands it
+  starts with `AppHandle::run` run for the same origin: an agent's
+  command starts the agent's commands. While a command runs for anyone
+  but the user, its handler may not run another as the user
+  (`AppHandle::run_as` with `Origin::User` is refused, `command.refused`
+  on the journal); one running for an agent may only name an agent. To
+  act for the user, the handler asks the user: a dialog whose answer,
+  the user's, runs its command as the user. `App::run` and
+  `AppHandle::run_as` refuse a command not offered to agents to an
+  agent origin, wherever it comes from (`command.refused`).
+- **Deep links.** A link that comes with a launch, the first one's or a
+  later one's through the single-instance socket, runs the
+  application's links command as `Origin::Remote("deeplink")`
+  (`instance::deeplink_origin`), not as the user: any program of the
+  user's may launch the application with a link. The handler sees it,
+  what it starts inherits it, it may not claim the user, and its writes
+  are held to the values' writers. A handler that changes anything on a
+  link asks the user first ([Instance](instance.md)).
 - **Dialogs and file choices.** `dialogs.answer` and `files.answer`
   answer as their caller. Accepting a dialog runs its command with the
   caller's origin, and an answer that would run a command not offered to
@@ -522,14 +541,13 @@ What is not protected today. None of these is fixed by documenting it.
   `origin` in the `file.chosen` step, `by` in the `files` collector's
   last choices), but nothing refuses it: a consumer that acts only on a
   person's choice checks it, or a hook on `file.chosen` vetoes it.
-- **Origin is a label, not a credential.** `App::run`,
-  `AppHandle::run_as` and the steps take any `Origin` from code in the
-  process and do not check the `agent` flag; a command's handler that
-  runs another with `AppHandle::run` runs it as `Origin::User`, so the
-  agent's origin is lost along the chain. For example, `deeplink.open`
-  runs the application's links command as the user, and a deep link can
-  come from any later launch of the application by the same user,
-  through the single-instance socket.
+- **Origin is a label, not a credential.** Code in the process names
+  any `Origin` outside a command's handler: a plugin's own code, a
+  step's hook or a timer may still run a command as the user. Only the
+  chain from a command running for someone else is held (above). The
+  origin is not carried into work a handler leaves for later (a
+  thread, a host's `Reply::Later` that starts other commands): code
+  there names the origin itself, with `AppHandle::run_as`.
 - **Commands that reach the system are offered by default.**
   `terminal.send` writes to a terminal's program: with a pseudo-terminal
   shell open (the `editors-pty` feature, as in the gallery), an agent

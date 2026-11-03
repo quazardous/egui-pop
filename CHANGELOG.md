@@ -1096,6 +1096,24 @@ publishes.
 
 ### Changed
 
+- **Breaking (commands, deep links):** the origin goes along the chain of commands
+  (egui-pop-api, egui-pop-platform; `docs/agents.md`, `docs/instance.md`, ADR 0021).
+  While a command's handler runs, `AppHandle::acting_origin` is its origin, and
+  `AppHandle::run` runs the commands it starts for that origin, no longer as the
+  user. While a command runs for anyone but the user, `AppHandle::run_as` refuses
+  `Origin::User`, and one running for an agent refuses any origin but an agent's:
+  `command.refused` on the journal. `App::run` (and so every queued run) refuses a
+  command not offered to agents for an agent origin (`command.refused`). A deep
+  link from a launch runs the links command for `Origin::Remote("deeplink")`
+  (`instance::deeplink_origin`), with `origin` in the `deeplink.open` step's
+  arguments; a link clicked inside the application runs for the click's origin.
+  **Migration:** a handler that ran other commands as the user while serving an
+  agent, a script or a deep link asks the user instead (a dialog: the user's
+  answer runs as the user), or lets them run for its own origin. A links command
+  that acted on a deep link as the user's gesture reads `Call::origin` and asks
+  before it changes anything. Code that ran a `no_agent` command with an agent
+  origin through `App::run` gets an error.
+
 - **Breaking (dialogs, file choices, debug bridge):** answers carry their caller
   (egui-pop-api; `docs/agents.md`, `docs/files.md`, ADR 0020). The `dialogs.answer`,
   `files.answer` and `contexts` actions act as their caller instead of a fixed
