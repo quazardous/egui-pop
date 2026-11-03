@@ -4,6 +4,17 @@
 [graph]
 # Test-only tools (snapshot diffing in egui_kittest) are not shipped.
 exclude-dev = true
+# The platforms egui-pop builds for. Code only for others (wry's Android
+# part, for one) is never compiled and is not checked.
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "aarch64-unknown-linux-gnu",
+    "x86_64-pc-windows-msvc",
+    "aarch64-pc-windows-msvc",
+    "x86_64-apple-darwin",
+    "aarch64-apple-darwin",
+    "wasm32-unknown-unknown",
+]
 
 [advisories]
 # Unmaintained crates are reported for direct dependencies only.
@@ -56,6 +67,15 @@ allow = ["BSL-1.0"]
 [[licenses.exceptions]]
 crate = "ksni"
 allow = ["Unlicense"]
+
+# The webview trial (feature `views-webview`, off by default, Linux only):
+# wry finds its data folder through `dirs`, whose `dirs-sys` uses
+# `option-ext` (MPL-2.0). MPL-2.0 is copyleft per file: the crate is used
+# unmodified and none of egui-pop's code falls under it. Accepted by the
+# lead maintainer for this crate only; any other MPL crate is still refused.
+[[licenses.exceptions]]
+crate = "option-ext"
+allow = ["MPL-2.0"]
 
 [licenses.private]
 # The gallery is not published.

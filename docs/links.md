@@ -388,9 +388,8 @@ before. Other remote video stays outside either way.
   (`libwebkit2gtk-4.1-dev` on Debian and Ubuntu, `webkit2gtk4.1-devel` on
   Fedora). To run: WebKitGTK 4.1 and GStreamer's plugins for the video's codecs.
   **The binary links WebKitGTK: without it installed it does not start.** One
-  crate wry brings on Linux, `option-ext` (through `dirs`), is MPL-2.0, which
-  `deny.toml` refuses: `cargo deny check --all-features` fails with this feature
-  (ADR 0017).
+  crate wry brings on Linux, `option-ext` (through `dirs`), is MPL-2.0; `deny.toml`
+  allows it as a narrow exception for that crate alone (ADR 0017).
 - **Failures** (WebKitGTK cannot start, the web view cannot open) end on the
   error page, with **Retry**, **Open outside** and **Copy link**.
 - `viewer::EmbedBackend` (`ViewerPlugin::web_video`) replaces the web view.
