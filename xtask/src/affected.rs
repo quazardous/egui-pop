@@ -44,6 +44,8 @@ const EVERYTHING: &[&str] = &[
     ".config/",
     ".cargo/",
     "xtask/",
+    // The release configuration: the semver job raises versions with it.
+    "knope.toml",
     // The test kit and its attributes: every crate's tests use them.
     "crates/egui-pop-test/",
     "crates/egui-pop-test-macros/",
@@ -54,6 +56,10 @@ const EVERYTHING: &[&str] = &[
 /// The docs site's own files, outside `docs/`: they change the book
 /// alone (`book.toml`, `tools/book/`).
 const BOOK: &[&str] = &["book.toml", "tools/book/"];
+
+/// The changesets: the next release's notes and bumps, read by knope and
+/// `cargo xtask changeset-check` (its own CI job), built by nothing.
+const CHANGESETS: &str = ".changeset/";
 
 /// Test binaries that read the documentation, besides `consumer-smoke`
 /// (its doctests are the guides' code).
@@ -116,7 +122,7 @@ pub struct Selection {
     pub binaries: BTreeSet<(String, String)>,
     /// Critical tests that run besides, outside what is above.
     pub critical: Vec<Critical>,
-    /// The change touches nothing but documentation.
+    /// The change touches nothing but documentation (or changesets).
     pub docs_only: bool,
     pub jobs: Jobs,
 }
@@ -556,6 +562,7 @@ fn select_in(
     };
     let mut docs = false;
     let mut site = false;
+    let mut notes = false;
     let mut code = false;
     let wasm = build_closure(packages, "egui-pop-gallery");
     let api = build_closure(packages, "egui-pop");
@@ -573,6 +580,12 @@ fn select_in(
             sel.full = true;
             sel.reasons
                 .push(format!("{path}: under {prefix}, runs everything"));
+            continue;
+        }
+        if path.starts_with(CHANGESETS) {
+            notes = true;
+            sel.reasons
+                .push(format!("{path}: a changeset, nothing to build"));
             continue;
         }
         if BOOK.iter().any(|p| path.starts_with(*p)) {
@@ -678,7 +691,7 @@ fn select_in(
         .into_iter()
         .filter(|(p, _)| !sel.packages.contains(p))
         .collect();
-    sel.docs_only = (docs || site) && !code;
+    sel.docs_only = (docs || site || notes) && !code;
     if docs && !jobs.clippy {
         jobs.doc = true;
     }
@@ -1090,6 +1103,25 @@ mod tests {
                 "{path}"
             );
         }
+    }
+
+    #[test]
+    fn a_changeset_builds_nothing() {
+        let ws = workspace();
+        let sel = select(&ws, &changed(&[".changeset/fix.md"]), &critical(), false);
+        assert!(!sel.full && sel.docs_only);
+        assert!(sel.packages.is_empty() && sel.binaries.is_empty());
+        let j = sel.jobs;
+        assert!(
+            !j.fmt
+                && !j.clippy
+                && !j.doc
+                && !j.book
+                && !j.wasm
+                && !j.package
+                && !j.semver
+                && !j.deny
+        );
     }
 
     #[test]

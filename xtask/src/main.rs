@@ -10,6 +10,10 @@
 //! files it touches and the workspace's dependency graph, and runs those
 //! tests (`affected.rs`).
 //!
+//! `changeset-check`, `release-notes` and `tag` check the changesets,
+//! write a release into the changelog after knope raised the versions,
+//! and tag a minor of the facade (`release.rs`, `docs/releasing.md`).
+//!
 //! `screenshots [filter]` refreshes every image of the documentation:
 //! it builds the gallery in release mode, captures each shot headless
 //! through wbox (`tools/wbox/shoot.py`, one nested compositor per shot),
@@ -26,6 +30,7 @@ use std::process::{Command, ExitCode, Stdio};
 
 mod affected;
 mod publish;
+mod release;
 
 use ab_glyph::{Font as _, FontRef, PxScale, ScaleFont as _};
 use image::imageops::{self, FilterType as Resize};
@@ -50,6 +55,17 @@ Tasks:
                          the tests and CI jobs a change needs, from the
                          files it touches and the dependency graph; --run
                          runs those tests (`cargo xtask affected --help`)
+  changeset-check [--base REV] [--internal]
+                         check the pending changesets (known crates and
+                         bumps, a break travelling up to the dependents);
+                         with --base, that a change to a published crate
+                         since REV adds one, unless --internal
+  release-notes [--no-commit]
+                         after knope's PrepareRelease (`knope release`):
+                         write the release into CHANGELOG.md from the
+                         changesets it consumed, then commit it, signed off
+  tag                    tag the facade's minor, vX.Y.0, on HEAD once it is
+                         on crates.io (local; pushing it is left to you)
 
 Environment:
   WBOX_PYTHON            the Python with the wbox library (default: the
@@ -292,6 +308,9 @@ fn main() -> ExitCode {
         Some("hosts") => hosts(),
         Some("publish") => publish::publish(&args[1..]),
         Some("affected") => affected::affected(&args[1..]),
+        Some("changeset-check") => release::check(&args[1..]),
+        Some("release-notes") => release::notes(&args[1..]),
+        Some("tag") => release::tag(&args[1..]),
         Some("-h" | "--help") => {
             println!("{USAGE}");
             Ok(())
