@@ -87,7 +87,14 @@ impl State {
     /// `ACTIVE` while pressed, `FOCUS` with the keyboard focus, `DISABLED`
     /// when not enabled. What only the widget knows (`SELECTED`) it adds
     /// with [`State::with`].
+    ///
+    /// A focused widget whose state comes from here shows its focus by the
+    /// kit, so the focus plugin paints no ring of its own around it
+    /// ([`focus::own_ring`](crate::focus::own_ring)).
     pub fn from_response(r: &Response) -> State {
+        if r.has_focus() {
+            crate::ring::own(&r.ctx, r.id);
+        }
         State::REST
             .with(State::HOVER, r.hovered())
             .with(State::ACTIVE, r.is_pointer_button_down_on())

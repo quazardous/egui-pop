@@ -218,6 +218,10 @@ impl<'a> Terminal<'a> {
             response.request_focus();
         }
         let focused = ctx.memory(|m| m.has_focus(id));
+        if focused {
+            // The kit's terminal frame shows it.
+            egui_pop_core::focus::own_ring(&ctx, id);
+        }
         let (events, left) = keys::take(&ctx, id);
         if left {
             signals.push(TerminalSignal::Left);

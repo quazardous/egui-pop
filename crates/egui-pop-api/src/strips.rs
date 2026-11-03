@@ -896,6 +896,9 @@ fn activity_bar(ui: &mut Ui, app: &AppHandle) {
                 .with(KitState::ACTIVE, r.is_pointer_button_down_on())
                 .with(KitState::FOCUS, r.has_focus())
                 .with(KitState::SELECTED, on);
+            if r.has_focus() {
+                egui_pop_core::focus::own_ring(&r.ctx, r.id);
+            }
             let part = Part {
                 rect,
                 room: rect,

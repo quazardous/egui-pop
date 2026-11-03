@@ -915,6 +915,7 @@ impl<'a> Viewport<'a> {
             after(&painter, &mapping);
         }
         if response.has_focus() {
+            egui_pop_core::focus::own_ring(&response.ctx, response.id);
             Kit::of(ui.ctx()).viewport_focus.paint(
                 &KitCx {
                     painter: &painter,

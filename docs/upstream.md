@@ -333,6 +333,20 @@ limit.
 - **Remove when**: now, egui-pop being on egui 0.37; a follow-up of the
   move (issue #24).
 
+## egui: a focused widget shows no focus of its own
+
+- **Compensated**: egui's widgets draw no focus ring: a focused button takes
+  the pressed button's look (`Widgets::style` gives `active` for a press and for
+  the focus alike), and a focused label or custom widget shows nothing. Its
+  `show_focused_widget` is a debug outline, shown for any focus, a click's
+  included.
+- **Upstream**: not filed yet.
+- **Workaround**: the focus plugin rings the focused widget at the end of the
+  pass when the keyboard put the focus there, unless the widget says it shows
+  its own (`crates/egui-pop-core/src/ring.rs`, `focus::own_ring`).
+- **Remove when**: egui draws a focus indicator of its own, for the keyboard's
+  focus only.
+
 ## egui: Tab wraps only in a modal layer
 
 - **Compensated**: Tab goes by drawing order through the whole window and wraps

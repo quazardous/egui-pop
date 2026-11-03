@@ -4259,6 +4259,7 @@ impl FilePicker {
         answer: &mut Option<PickerAnswer>,
     ) {
         if self.selects_apart() && n == self.highlight {
+            egui_pop_core::focus::own_ring(ui.ctx(), r.id);
             let t = Tokens::of(ui.ctx());
             ui.painter().rect_stroke(
                 r.rect,
@@ -4444,6 +4445,7 @@ impl FilePicker {
         answer: &mut Option<PickerAnswer>,
     ) {
         if self.selects_apart() && n == self.highlight {
+            egui_pop_core::focus::own_ring(ui.ctx(), r.id);
             let t = Tokens::of(ui.ctx());
             ui.painter().rect_stroke(
                 r.rect,

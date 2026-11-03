@@ -393,6 +393,7 @@ impl RatingStars {
                 paint::star(painter, c, star * 0.45, fill, lt.star_empty);
             }
             if response.has_focus() {
+                egui_pop_core::focus::own_ring(ui.ctx(), response.id);
                 painter.rect_stroke(
                     rect.expand(1.0),
                     t.radius.widget,
@@ -538,6 +539,9 @@ fn toggle(
             .with(State::SELECTED, on)
             .with(State::HOVER, r.hovered() && !on)
             .with(State::FOCUS, r.has_focus());
+        if r.has_focus() {
+            egui_pop_core::focus::own_ring(ui.ctx(), r.id);
+        }
         Kit::of(ui.ctx()).mark_toggle.paint(
             &KitCx {
                 painter,

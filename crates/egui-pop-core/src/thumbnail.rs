@@ -135,6 +135,9 @@ impl Widget for Thumbnail {
             .with(State::SELECTED, self.selected)
             .with(State::HOVER, response.hovered() && !self.selected)
             .with(State::FOCUS, response.has_focus());
+        if response.has_focus() {
+            crate::focus::own_ring(ui.ctx(), response.id);
+        }
         kit.thumbnail.paint(
             &KitCx {
                 painter: ui.painter(),

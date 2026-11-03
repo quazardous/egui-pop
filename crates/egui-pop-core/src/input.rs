@@ -648,6 +648,18 @@ impl<'a> Input<'a> {
                 || [&clear, &reset, &chevron]
                     .iter()
                     .any(|r| r.as_ref().is_some_and(Response::has_focus));
+            // The field's outline shows the focus of the field and its parts.
+            for r in [
+                Some(&response),
+                clear.as_ref(),
+                reset.as_ref(),
+                chevron.as_ref(),
+            ]
+            .into_iter()
+            .flatten()
+            {
+                crate::focus::own_ring(&r.ctx, r.id);
+            }
             let stroke = if focused {
                 Stroke::new(2.0, t.focus_ring)
             } else if response.hovered() && ui.is_enabled() {
@@ -803,6 +815,7 @@ fn part(ui: &mut Ui, rect: Rect, id: Id, look: PartLook<'_>, label: &str) -> Res
             ui.painter().rect_filled(sq, radius, t.surface.hover);
         }
         if r.has_focus() {
+            crate::focus::own_ring(ui.ctx(), r.id);
             ui.painter().rect_stroke(
                 sq,
                 radius,
@@ -847,6 +860,7 @@ fn attached_part(ui: &mut Ui, rect: Rect, id: Id, look: PartLook<'_>, label: &st
         let radius = CornerRadius::same(b(State::REST).radius.round().clamp(0.0, 255.0) as u8);
         ui.painter().rect_filled(rect, radius, fill);
         let stroke = if r.has_focus() {
+            crate::focus::own_ring(ui.ctx(), r.id);
             Stroke::new(2.0, t.focus_ring)
         } else {
             Stroke::new(1.0, kit.field.style(State::REST).border_color)

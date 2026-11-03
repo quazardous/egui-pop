@@ -103,6 +103,9 @@ pub(crate) fn show(ui: &mut Ui, state: &EditorState, o: &Options<'_>) -> EditorO
         focus::prefer(ui.ctx(), id);
         // The kit's frame, its focus ring while the text has the keyboard.
         let focused = ui.memory(|m| m.has_focus(id));
+        if focused {
+            focus::own_ring(ui.ctx(), id);
+        }
         let look = State::REST.with(State::FOCUS, focused);
         Kit::of(ui.ctx())
             .editor_frame

@@ -224,6 +224,9 @@ fn swatches(ui: &mut Ui, app: &AppHandle) {
             let (rect, response) = ui.allocate_exact_size(vec2(side, side), Sense::click());
             ui.painter()
                 .rect_filled(rect, t.radius.widget, Color32::from_rgb(r, g, b));
+            if response.has_focus() {
+                egui_pop::core::focus::own_ring(&response.ctx, response.id);
+            }
             let stroke = if chosen == name || response.has_focus() {
                 egui::Stroke::new(2.0, t.focus_ring)
             } else {

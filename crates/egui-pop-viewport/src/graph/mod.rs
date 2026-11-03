@@ -1217,6 +1217,7 @@ impl Cx<'_, '_, '_> {
             a11y::name(&resp, egui::Role::Button, &name);
             self.bounds(gid, band);
             if resp.has_focus() {
+                egui_pop_core::focus::own_ring(&resp.ctx, resp.id);
                 self.ring(painter, band);
             }
             if resp.clicked() {
@@ -1331,6 +1332,7 @@ impl Cx<'_, '_, '_> {
         });
         self.bounds(sid, r);
         if resp.has_focus() {
+            egui_pop_core::focus::own_ring(&resp.ctx, resp.id);
             self.ring(painter, r);
         }
         if resp.clicked() {
@@ -1434,6 +1436,7 @@ impl Cx<'_, '_, '_> {
         });
         self.bounds(nid, r);
         if resp.has_focus() {
+            egui_pop_core::focus::own_ring(&resp.ctx, resp.id);
             self.focused = Some(i);
             self.ring(painter, r);
             lock_keys(ui, nid, false);
@@ -1496,6 +1499,7 @@ impl Cx<'_, '_, '_> {
             );
             self.bounds(cid, c);
             if cr.has_focus() {
+                egui_pop_core::focus::own_ring(&cr.ctx, cr.id);
                 self.ring(painter, c);
             }
             if cr.clicked() {
@@ -1666,6 +1670,7 @@ impl Cx<'_, '_, '_> {
                 painter.circle_stroke(at, PORT_R + 3.0, Stroke::new(1.0, color));
             }
             if pr.has_focus() {
+                egui_pop_core::focus::own_ring(&pr.ctx, pr.id);
                 painter.circle_stroke(
                     at,
                     PORT_R + 4.0,

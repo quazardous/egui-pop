@@ -94,6 +94,7 @@ pub mod pointer;
 pub mod progress;
 pub mod regions;
 mod reveal;
+mod ring;
 pub mod scale;
 mod scroll_keys;
 pub mod sections;

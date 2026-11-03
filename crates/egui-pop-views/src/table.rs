@@ -479,6 +479,8 @@ impl<'a> DataTable<'a> {
         let response = ui.interact(inner.rect, id, Sense::focusable_noninteractive());
         egui_pop_core::a11y::name(&response, Role::Unknown, &label);
         if response.has_focus() {
+            // Its cursor row shows it.
+            egui_pop_core::focus::own_ring(ui.ctx(), id);
             ui.memory_mut(|m| {
                 m.set_focus_lock_filter(
                     id,

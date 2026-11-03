@@ -1095,7 +1095,6 @@ fn a_focused_plain_button_is_seen() {
 }
 
 #[test]
-#[ignore = "keyboard survey item 4: a focused plain button looks pressed"]
 fn a_focused_plain_button_does_not_look_pressed() {
     let [_, focused, pressed] = rendered_states();
     assert_ne!(focused, pressed);

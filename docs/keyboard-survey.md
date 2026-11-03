@@ -290,6 +290,9 @@ From `crates/egui-pop-core` (`tab.rs`, `focus.rs`, `keys.rs`,
   compared. So it can be seen, and is not told from a press.
 - **[read] The ring has no idea who moved the focus**, so what a click
   focuses also shows it.
+- **Since item 4,** the focus plugin rings what the keyboard focused, egui's
+  widgets included, unless the widget shows its focus itself; a click
+  focuses without that ring. egui-pop's own kit rings still show on a click.
 
 ### What eats a key
 
@@ -707,10 +710,13 @@ one pull request. Numbers stay as they are, since the walk's tests name them;
    nothing. Palettes and flyouts only borrow it; detached windows count. The
    widget last focused in the panel is not restored: that is item 5.
    ([workbench](workbench.md#the-focused-panel)).
-4. **A focus you can see.** The focus plugin paints a ring from the `focus.ring`
-   token around the focused widget at the end of the pass, unless the widget
-   paints its own, and only when the keyboard last moved the focus, as GTK's
-   and Qt's flags do. Stays within the widget's clip. Size: M.
+4. **Done: a focus you can see.** The focus plugin paints a ring from the
+   `focus.ring` token around the focused widget at the end of the pass, unless
+   the widget paints its own, and only when the keyboard last moved the focus,
+   as GTK's and Qt's flags do. It stays within the widget's clip. A widget says
+   it paints its own with `focus::own_ring`; a kit state from
+   `State::from_response` says it by itself, and egui's text fields are left
+   alone ([inputs](inputs.md#a-focus-you-can-see)).
 5. **Done: F6 through the shell.** Regions: the activity bar, each visible area,
    the centre, floating palettes, an open flyout, the status bar, as commands on
    F6 and Shift+F6. Built on focus scopes, not on `tab::scope`, so that Tab stays
@@ -942,7 +948,7 @@ The order to follow for egui-pop now, by the same measure:
 8. **Done: item 5, F6 through the shell.** After 3 as planned. A terminal is not
    the risk it was read to be.
 9. **Done: item 22, a popover's end;** then **done: item 15.** Small, confirmed.
-10. **Item 4, a focus you can see,** down from fourth: a plain button does show
+10. **Done: item 4, a focus you can see,** down from fourth: a plain button does show
     the focus, the gap is telling it from a press and from the pointer's, and the
     stops that show nothing are item 8's.
 

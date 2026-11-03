@@ -622,6 +622,7 @@ fn picture(ui: &mut Ui, v: &Viewer, height: f32, name: &str) -> egui::Response {
                     );
                 });
                 egui_pop_core::focus::takes_keys(&ctx, response.id);
+                egui_pop_core::focus::own_ring(&ctx, response.id);
                 painter.rect_stroke(
                     rect,
                     0.0,

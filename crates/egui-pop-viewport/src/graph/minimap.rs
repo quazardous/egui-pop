@@ -120,6 +120,7 @@ impl<'a> GraphMinimap<'a> {
             painter.rect_stroke(frame, 0.0, Stroke::new(1.5, nav.frame), StrokeKind::Inside);
         }
         if response.has_focus() {
+            egui_pop_core::focus::own_ring(&response.ctx, response.id);
             ui.painter().rect_stroke(
                 rect.expand(2.0),
                 radius,

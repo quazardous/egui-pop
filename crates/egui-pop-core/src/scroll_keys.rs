@@ -162,6 +162,7 @@ fn stop(ui: &mut Ui, id: Id, rect: Rect) {
                 },
             );
         });
+        crate::focus::own_ring(&ctx, id);
         let ring = Stroke::new(2.0, Tokens::of(&ctx).focus_ring);
         ui.painter()
             .rect_stroke(rect, 0.0, ring, StrokeKind::Inside);
