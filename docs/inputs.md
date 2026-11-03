@@ -256,6 +256,15 @@ another widget. So what nests keeps it:
 - **Popups and dialogs** need none of this: each is a layer of its own, and what
   scrolls under it does not see the wheel.
 
+### Arrows stay in their region
+
+With the focus plugin, a plain arrow on a widget that does not read it moves
+the focus as egui has it, to the nearest widget that way, but not out of the
+region holding the focus (the parts F6 goes through: a side area, the centre, a
+palette, the status bar): such a move is undone in the next pass, and the focus
+stays where it was. Tab and F6 cross regions; a widget outside every region
+keeps egui's rule.
+
 ### A popover keeps Tab
 
 With the focus plugin (`focus::install`; an application has it), Tab does not walk

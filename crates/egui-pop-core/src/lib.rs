@@ -99,6 +99,7 @@ pub mod scale;
 mod scroll_keys;
 pub mod sections;
 pub mod slider;
+mod stay;
 pub mod strings;
 pub mod tab;
 pub mod theme;

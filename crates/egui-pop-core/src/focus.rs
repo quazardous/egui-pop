@@ -735,6 +735,7 @@ impl egui::plugin::Plugin for FocusPlugin {
 
     fn on_begin_pass(&mut self, ui: &mut Ui) {
         leave_text_input(ui.ctx());
+        crate::stay::begin_pass(ui.ctx());
         crate::reveal::begin_pass(ui.ctx());
         crate::place::begin_pass(ui.ctx());
     }

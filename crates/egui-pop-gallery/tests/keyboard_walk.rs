@@ -635,9 +635,10 @@ fn a_dock_separator_is_a_stop_and_moves_with_the_arrows() {
     assert_eq!(y(moved), separator.rect.min.y + 64.0);
     let moved = press(&mut h, Modifiers::NONE, Key::Enter);
     assert_eq!(y(moved), separator.rect.min.y);
-    // Across the line, an arrow leaves for the cone.
+    // Across the line, the cone would take the focus out of the side area,
+    // its region: the arrow is undone (item 16).
     let across = walk::press(&mut h, Press::key(Key::ArrowRight));
-    assert_ne!(across.map(|s| s.id), Some(separator.id));
+    assert_eq!(across.map(|s| s.id), Some(separator.id));
 }
 
 /// A side or bottom area's line, by its name.

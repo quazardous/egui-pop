@@ -796,9 +796,13 @@ one pull request. Numbers stay as they are, since the walk's tests name them;
     a combo box's list), so Tab behind an open menu no longer hides the
     palettes, and Escape there closes the menu rather than leave zen mode or
     pop a mode.
-16. **Arrows stay in the region.** A plain arrow that would take the focus out
-    of its `focus::scope` is undone, so that the cone cannot jump panels. Size:
-    S to M; confirm with the walk first.
+16. **Done: arrows stay in the region.** A plain arrow that takes the focus out
+    of the F6 region holding it (a `focus::region`, rather than any
+    `focus::scope`: a region is what F6 crosses) is undone by the focus plugin
+    in the next pass, before anything is drawn, so that egui's cone cannot jump
+    panels; Tab and F6 cross. A widget outside every region keeps egui's rule
+    ([inputs](inputs.md#arrows-stay-in-their-region),
+    [upstream](upstream.md#egui-arrows-move-the-focus-anywhere)).
 17. **A roving helper, then toolbars and strips.** `tab::roving`: one stop, arrows
     inside, back to the last. Then one PR each: toolbars (`toolbars.md` lists it),
     the activity bar, the status bar. Size: M, then S each.
