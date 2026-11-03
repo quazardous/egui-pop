@@ -997,6 +997,8 @@ egui-pop-files-all = All files
 
 egui-pop-files-bookmark = Bookmark this folder
 
+egui-pop-files-bookmark-name = Bookmark name
+
 egui-pop-files-bookmarks = Bookmarks
 
 egui-pop-files-column-modified = Modified
@@ -1021,7 +1023,15 @@ egui-pop-files-crumb-subfolders = Subfolders of { $name }
 
 egui-pop-files-crumb-unreadable = This folder cannot be read
 
+egui-pop-files-desktop = Desktop
+
+egui-pop-files-devices = Devices
+
 egui-pop-files-dimensions = Dimensions
+
+egui-pop-files-documents = Documents
+
+egui-pop-files-downloads = Downloads
 
 egui-pop-files-filter = Filter, or type a path
 
@@ -1065,6 +1075,12 @@ egui-pop-files-kind-folder = Folder
 
 egui-pop-files-modified = Modified
 
+egui-pop-files-move-down = Move down
+
+egui-pop-files-move-up = Move up
+
+egui-pop-files-music = Music
+
 egui-pop-files-name = File name, or a path
 
 egui-pop-files-new-folder = New folder
@@ -1072,6 +1088,8 @@ egui-pop-files-new-folder = New folder
 egui-pop-files-open = Open
 
 egui-pop-files-pages = Pages
+
+egui-pop-files-pictures = Pictures
 
 egui-pop-files-preview = Preview
 
@@ -1084,6 +1102,8 @@ egui-pop-files-preview-none = No preview
 egui-pop-files-preview-resize = Resize the preview
 
 egui-pop-files-recent = Recent
+
+egui-pop-files-rename-bookmark = Rename…
 
 egui-pop-files-replace = Replace
 
@@ -1118,6 +1138,8 @@ egui-pop-files-thumbnail-size = Thumbnail size
 egui-pop-files-type = File type
 
 egui-pop-files-unbookmark = Remove the bookmark
+
+egui-pop-files-videos = Videos
 
 egui-pop-files-view-grid = Grid
 

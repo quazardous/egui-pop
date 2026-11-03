@@ -805,6 +805,17 @@ egui-pop-files-group-with = Groupé avec { $members }
 egui-pop-files-hidden = Fichiers cachés
 
 egui-pop-files-home = Dossier personnel
+egui-pop-files-desktop = Bureau
+egui-pop-files-documents = Documents
+egui-pop-files-downloads = Téléchargements
+egui-pop-files-pictures = Images
+egui-pop-files-music = Musique
+egui-pop-files-videos = Vidéos
+egui-pop-files-devices = Périphériques
+egui-pop-files-rename-bookmark = Renommer…
+egui-pop-files-move-up = Monter
+egui-pop-files-move-down = Descendre
+egui-pop-files-bookmark-name = Nom du favori
 
 egui-pop-files-items = Éléments
 

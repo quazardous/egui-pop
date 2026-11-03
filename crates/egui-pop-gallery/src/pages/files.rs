@@ -13,6 +13,7 @@ use std::time::{Duration, SystemTime};
 use egui::Ui;
 use egui_pop::api::files::fs::MemoryFs;
 use egui_pop::api::files::groups::SidecarRule;
+use egui_pop::api::files::places::{SystemFolder, SystemPlaces, Volume};
 use egui_pop::api::files::{self, FILES, FileRequest};
 use egui_pop::api::host::Pending;
 use egui_pop::api::stories::Story;
@@ -52,7 +53,22 @@ impl Plugin for FilesPage {
             f.set_file_system(Arc::new(demo_memory_folder()));
         }
         // A photo application's rule, as this page's own: egui-pop has none.
+        // And the system's places from the demo folder, the same on every
+        // machine: its pictures and documents, and a camera card.
         if let Some(f) = ctx.app().service(&FILES) {
+            f.set_system_places(Arc::new(|| {
+                let root = demo_root();
+                SystemPlaces {
+                    folders: vec![
+                        (SystemFolder::Documents, root.join("Documents")),
+                        (SystemFolder::Pictures, root.join("Photos")),
+                    ],
+                    volumes: vec![Volume {
+                        name: "EOS_DIGITAL".into(),
+                        path: root.join("Photos/2026"),
+                    }],
+                }
+            }));
             let photos =
                 SidecarRule::new("gallery.photos", &["cr3", "jpg", "png"], &["xmp", "jpg"])
                     .badge("jpg", "JPEG");

@@ -50,6 +50,15 @@ fn tree(name: &str) -> PathBuf {
     root
 }
 
+/// No folders or volumes of the system's in the side bar: the machine's would
+/// add places, and Tab stops.
+fn no_system_places(app: App) -> App {
+    if let Some(f) = app.handle().service(&FILES) {
+        f.set_system_places(Arc::new(Default::default));
+    }
+    app
+}
+
 fn harness(extra: Option<Box<dyn Plugin>>) -> Harness<'static, App> {
     harness_with(App::builder(), extra)
 }
@@ -62,7 +71,7 @@ fn harness_with(
     if let Some(p) = extra {
         b = b.boxed(p);
     }
-    let app = b.build(&egui::Context::default()).unwrap();
+    let app = no_system_places(b.build(&egui::Context::default()).unwrap());
     Harness::builder()
         .with_size(egui::vec2(900.0, 640.0))
         .build_ui_state(|ui, app: &mut App| app.show(ui), app)
@@ -374,6 +383,7 @@ fn sized_harness(size: egui::Vec2) -> Harness<'static, App> {
     let app = App::builder()
         .plugin(FilesPlugin::in_app())
         .build(&egui::Context::default())
+        .map(no_system_places)
         .unwrap();
     Harness::builder()
         .with_size(size)
@@ -743,6 +753,7 @@ fn saving_harness(fs: Option<files::fs::SharedFs>) -> Harness<'static, App> {
         .plugin(dialogs::DialogsPlugin)
         .plugin(files)
         .build(&egui::Context::default())
+        .map(no_system_places)
         .unwrap();
     Harness::builder()
         .with_size(egui::vec2(900.0, 640.0))
@@ -1851,6 +1862,7 @@ fn grid_harness(count: usize, view: PickerView) -> (Harness<'static, App>, Arc<R
     let app = App::builder()
         .plugin(FilesPlugin::in_app().file_system(raws(count)))
         .build(&egui::Context::default())
+        .map(no_system_places)
         .unwrap();
     let handle = app.handle().clone();
     let provider = Arc::new(Raws::default());
@@ -2199,6 +2211,7 @@ fn sort_harness() -> Harness<'static, App> {
     let app = App::builder()
         .plugin(FilesPlugin::in_app().file_system(sortable()))
         .build(&egui::Context::default())
+        .map(no_system_places)
         .unwrap();
     // The window holds the dialog: without the pane, all the columns fit.
     files::want_preview(app.handle(), false);
@@ -2396,6 +2409,7 @@ fn the_grid_follows_the_same_order_and_its_headers_sort() {
     let app = App::builder()
         .plugin(FilesPlugin::in_app().file_system(sortable()))
         .build(&egui::Context::default())
+        .map(no_system_places)
         .unwrap();
     let handle = app.handle().clone();
     files::want_view(&handle, PickerView::Grid);
@@ -2619,6 +2633,7 @@ fn crumbs_harness(fs: SharedFs) -> Harness<'static, App> {
     let app = App::builder()
         .plugin(FilesPlugin::in_app().file_system(fs))
         .build(&egui::Context::default())
+        .map(no_system_places)
         .unwrap();
     Harness::builder()
         .with_size(egui::vec2(1100.0, 640.0))
@@ -2962,6 +2977,7 @@ fn grouped_harness(fs: SharedFs) -> Harness<'static, App> {
                 .grouping(photo_rule()),
         )
         .build(&egui::Context::default())
+        .map(no_system_places)
         .unwrap();
     files::want_preview(app.handle(), false);
     Harness::builder()
@@ -3061,6 +3077,7 @@ fn without_a_grouping_declared_nothing_groups_and_no_switch_shows() {
     let app = App::builder()
         .plugin(FilesPlugin::in_app().file_system(shoot()))
         .build(&egui::Context::default())
+        .map(no_system_places)
         .unwrap();
     let mut h = Harness::builder()
         .with_size(egui::vec2(900.0, 640.0))
@@ -3328,6 +3345,7 @@ fn a_hook_sees_the_groups_and_a_redirect_gives_those_of_where_it_leads() {
         )
         .plugin(plugin)
         .build(&egui::Context::default())
+        .map(no_system_places)
         .unwrap();
     let mut h = Harness::builder()
         .with_size(egui::vec2(900.0, 640.0))
@@ -3377,6 +3395,7 @@ fn stand_in_harness(view: PickerView, preview: bool) -> (Harness<'static, App>, 
                 .grouping(photo_rule()),
         )
         .build(&egui::Context::default())
+        .map(no_system_places)
         .unwrap();
     let handle = app.handle().clone();
     let shared: Arc<dyn PreviewProvider> = provider.clone();
@@ -3452,6 +3471,7 @@ fn a_member_is_not_asked_when_its_main_file_has_a_preview() {
                 .grouping(Arc::new(rule)),
         )
         .build(&egui::Context::default())
+        .map(no_system_places)
         .unwrap();
     let handle = app.handle().clone();
     let shared: Arc<dyn PreviewProvider> = provider.clone();
@@ -3659,4 +3679,126 @@ fn choices_round_trip_and_an_older_request_reads_without_them() {
     let mut older = FileRequest::open("Open").to_json();
     older.as_object_mut().unwrap().remove("choices");
     assert!(FileRequest::from_json(&older).unwrap().choices.is_empty());
+}
+
+#[test]
+fn the_side_bar_lists_the_system_s_folders_and_volumes() {
+    use egui_pop_api::files::places::{SystemFolder, SystemPlaces, Volume};
+    let root = tree("places");
+    let mut h = harness(None);
+    let (photos, card) = (root.join("photos"), root.join("notes"));
+    let asked = Arc::new(AtomicUsize::new(0));
+    let count = asked.clone();
+    h.state()
+        .handle()
+        .service(&FILES)
+        .unwrap()
+        .set_system_places(Arc::new(move || {
+            count.fetch_add(1, Ordering::SeqCst);
+            SystemPlaces {
+                folders: vec![(SystemFolder::Pictures, photos.clone())],
+                volumes: vec![Volume {
+                    name: "EOS_DIGITAL".into(),
+                    path: card.clone(),
+                }],
+            }
+        }));
+    let _p = choose(&mut h, FileRequest::open("Open").directory(&root));
+    assert!(h.query_by_label("Pictures").is_some());
+    assert!(h.query_by_label("Devices").is_some());
+    // Read as the picker opened, not each frame.
+    assert_eq!(asked.load(Ordering::SeqCst), 1);
+    h.get_by_label("EOS_DIGITAL").click();
+    settle(&mut h);
+    let f = h.state().handle().service(&FILES).unwrap();
+    assert_eq!(f.picker(f.open_ids()[0]).unwrap().dir, root.join("notes"));
+    h.get_by_label("Pictures").click();
+    settle(&mut h);
+    assert_eq!(f.picker(f.open_ids()[0]).unwrap().dir, root.join("photos"));
+    assert_eq!(asked.load(Ordering::SeqCst), 1);
+    let _ = std::fs::remove_dir_all(root);
+}
+
+/// The side bar's bookmarks, in their order, as the picker shows them.
+fn marks_shown(h: &Harness<'static, App>, names: &[&str]) -> Vec<String> {
+    let mut found: Vec<(f32, String)> = names
+        .iter()
+        .filter_map(|n| {
+            h.query_by_label(n)
+                .map(|node| (node.rect().top(), (*n).to_owned()))
+        })
+        .collect();
+    found.sort_by(|a, b| a.0.total_cmp(&b.0));
+    found.into_iter().map(|(_, n)| n).collect()
+}
+
+#[test]
+fn a_bookmark_is_renamed_moved_and_removed_from_its_menu() {
+    let root = tree("mark-menu");
+    let mut h = harness(None);
+    let app = h.state().handle().clone();
+    files::set_bookmark(&app, &root.join("photos"), true);
+    files::set_bookmark(&app, &root.join("notes"), true);
+    // In an empty folder: the list names no entry as the bookmarks.
+    let _p = choose(
+        &mut h,
+        FileRequest::open("Open").directory(root.join("photos/2026")),
+    );
+    assert_eq!(marks_shown(&h, &["photos", "notes"]), ["photos", "notes"]);
+    // Down.
+    h.get_by_label("photos").click_secondary();
+    settle(&mut h);
+    h.get_by_label("Move down").click();
+    settle(&mut h);
+    assert_eq!(
+        files::bookmarks(&app),
+        vec![root.join("notes"), root.join("photos")]
+    );
+    assert_eq!(marks_shown(&h, &["photos", "notes"]), ["notes", "photos"]);
+    // The first has no Move up, the last no Move down.
+    h.get_by_label("notes").click_secondary();
+    settle(&mut h);
+    assert!(h.query_by_label("Move up").is_none());
+    h.key_press(Key::Escape);
+    settle(&mut h);
+    // Renamed: the name typed over the old one, Enter keeps it.
+    h.get_by_label("photos").click_secondary();
+    settle(&mut h);
+    h.get_by_label("Rename…").click();
+    settle(&mut h);
+    let field = h.get_by_role_and_label(Role::TextInput, "Bookmark name");
+    assert_eq!(field.value().as_deref(), Some("photos"));
+    h.get_by_role_and_label(Role::TextInput, "Bookmark name")
+        .type_text("Shoots");
+    settle(&mut h);
+    key(&mut h, Key::Enter, Modifiers::NONE);
+    assert_eq!(
+        files::bookmark_names(&app),
+        vec![(root.join("photos"), "Shoots".to_owned())]
+    );
+    assert!(h.query_by_label("Shoots").is_some());
+    assert_eq!(
+        app.service(&FILES).unwrap().open_ids().len(),
+        1,
+        "the picker is still open"
+    );
+    // Escape keeps the old name, and the picker open.
+    h.get_by_label("Shoots").click_secondary();
+    settle(&mut h);
+    h.get_by_label("Rename…").click();
+    settle(&mut h);
+    h.get_by_role_and_label(Role::TextInput, "Bookmark name")
+        .type_text("Nope");
+    settle(&mut h);
+    key(&mut h, Key::Escape, Modifiers::NONE);
+    assert!(h.query_by_label("Shoots").is_some());
+    assert_eq!(app.service(&FILES).unwrap().open_ids().len(), 1);
+    // Removed, with its name.
+    h.get_by_label("Shoots").click_secondary();
+    settle(&mut h);
+    h.get_by_label("Remove the bookmark").click();
+    settle(&mut h);
+    assert_eq!(files::bookmarks(&app), vec![root.join("notes")]);
+    assert!(files::bookmark_names(&app).is_empty());
+    let _ = std::fs::remove_dir_all(root);
 }

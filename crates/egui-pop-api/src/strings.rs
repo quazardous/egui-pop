@@ -318,6 +318,22 @@ pub const FILES_UNBOOKMARK: StrKey =
 pub const FILES_HOME: StrKey = StrKey::new("egui-pop-files-home", "Home");
 pub const FILES_RECENT: StrKey = StrKey::new("egui-pop-files-recent", "Recent");
 pub const FILES_BOOKMARKS: StrKey = StrKey::new("egui-pop-files-bookmarks", "Bookmarks");
+/// The system's folders in the picker's side bar.
+pub const FILES_DESKTOP: StrKey = StrKey::new("egui-pop-files-desktop", "Desktop");
+pub const FILES_DOCUMENTS: StrKey = StrKey::new("egui-pop-files-documents", "Documents");
+pub const FILES_DOWNLOADS: StrKey = StrKey::new("egui-pop-files-downloads", "Downloads");
+pub const FILES_PICTURES: StrKey = StrKey::new("egui-pop-files-pictures", "Pictures");
+pub const FILES_MUSIC: StrKey = StrKey::new("egui-pop-files-music", "Music");
+pub const FILES_VIDEOS: StrKey = StrKey::new("egui-pop-files-videos", "Videos");
+/// The heading of the volumes mounted, in the picker's side bar.
+pub const FILES_DEVICES: StrKey = StrKey::new("egui-pop-files-devices", "Devices");
+/// A bookmark's menu.
+pub const FILES_RENAME_BOOKMARK: StrKey = StrKey::new("egui-pop-files-rename-bookmark", "Rename…");
+pub const FILES_MOVE_UP: StrKey = StrKey::new("egui-pop-files-move-up", "Move up");
+pub const FILES_MOVE_DOWN: StrKey = StrKey::new("egui-pop-files-move-down", "Move down");
+/// The field renaming a bookmark.
+pub const FILES_BOOKMARK_NAME: StrKey =
+    StrKey::new("egui-pop-files-bookmark-name", "Bookmark name");
 pub const FILES_TYPE: StrKey = StrKey::new("egui-pop-files-type", "File type");
 pub const FILES_ALL: StrKey = StrKey::new("egui-pop-files-all", "All files");
 pub const FILES_HIDDEN: StrKey = StrKey::new("egui-pop-files-hidden", "Hidden files");
@@ -1316,6 +1332,17 @@ pub const ALL: &[StrKey] = &[
     FILES_HOME,
     FILES_RECENT,
     FILES_BOOKMARKS,
+    FILES_DESKTOP,
+    FILES_DOCUMENTS,
+    FILES_DOWNLOADS,
+    FILES_PICTURES,
+    FILES_MUSIC,
+    FILES_VIDEOS,
+    FILES_DEVICES,
+    FILES_RENAME_BOOKMARK,
+    FILES_MOVE_UP,
+    FILES_MOVE_DOWN,
+    FILES_BOOKMARK_NAME,
     FILES_TYPE,
     FILES_ALL,
     FILES_HIDDEN,
