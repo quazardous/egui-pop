@@ -1,11 +1,13 @@
 # Advanced widgets: a survey, and what egui-pop should have
 
-Status: **survey** (2026-10-12). It answers which advanced widgets
-egui-pop should have, progress bars and spinners first, and whether each
-one is egui's built-in, a crate to adopt or wrap, or our own. Crate
-versions were checked on crates.io on 2026-10-12. Unless said otherwise,
-each crate depends on egui 0.36, the version egui-pop uses, and is MIT
-and/or Apache-2.0.
+Status: **survey** (2026-10-12, crates refreshed 2026-11-03). It
+answers which advanced widgets egui-pop should have, progress bars and
+spinners first, and whether each one is egui's built-in, a crate to
+adopt or wrap, or our own. Each crate's latest version, its date, the
+egui version it requires and its licence were read from crates.io on
+2026-11-03. egui-pop is on egui 0.36; egui 0.37.0 was released on
+2026-10-15, and what it brings and what holds the move back are in
+sections 2.3 and 2.4.
 
 The first application is a photo editor: a darkroom (image viewport,
 parameter sliders, curves, scopes), a lighttable (tens of thousands of
@@ -78,8 +80,9 @@ Patterns that come back across libraries:
 
 ### 2.1 What egui 0.36 has
 
-The latest egui release is 0.36.2 (2026-09-08); 0.37 has not been
-released.
+egui-pop uses egui 0.36.2 (2026-09-08). The latest release is egui
+0.37.0, with eframe, egui_extras and egui_kittest 0.37.0 (2026-10-15);
+section 2.3 says what it changes for the gaps below.
 
 | Built in | What it does | Gaps for us |
 |---|---|---|
@@ -96,54 +99,113 @@ released.
 
 ### 2.2 Crates
 
-| Crate | Version | What | Verdict |
-|---|---|---|---|
-| egui_plot | 0.37.0 | Lines, bars, boxes | Debug panels only; our scopes are images fed by the engine |
-| egui_dock | 0.21.1 (MIT) | Docking, tabs, splits | **Adopted** already; it cannot veto a drop by destination (see `upstream.md`) |
-| egui_tiles | 0.17.1 | Rerun's tiling | Not needed next to egui_dock |
-| egui-notify | 0.23.0 (MIT) | Toasts | Ideas only (stacking, animation): it keeps a string queue, with no commands and no state to inspect |
-| egui-toast | 0.22.0 (MIT) | Toasts | Same as egui-notify |
-| egui-snarl | 0.12.0 | Node graph that owns `Snarl<T>` | Reference for wire and pin interaction; the graph view is **our own** |
-| egui_node_editor | 0.11.0 | Node editor | Too young (few downloads); reference at most |
-| egui_graph_edit | 0.9.1 (egui 0.36) | Node graphs | Same |
-| egui_graphs | 0.32.0 | A petgraph viewer | Not an editor |
-| egui_ltreeview | 0.9.0 (MIT) | Tree view: multi-select, keyboard, drag and drop, context menu; the caller keeps the data | **Own** (decided 2026-10-13, see "Data views" below); the drop zones (before, inside, after) follow its idea |
-| egui_table | 0.10.0 (MIT OR Apache-2.0) | Rerun's virtualized table (sticky header, resizable columns) | **Wrap** (decided 2026-10-13): `egui-pop-views`' data table |
-| egui_extras `TableBuilder` | 0.36 (MIT OR Apache-2.0) | egui's own table: rows in view, resizable columns, striped | **Skip** (2026-10-13): widths only in egui's memory, no sticky columns |
-| egui_virtual_list | 0.12.0 (MIT) | Virtual list with rows of varying height, measured and cached | **Own** the thumbnail grid (decided 2026-10-13, see docs/library.md): cells of one size need no measuring, and End must reach the last of 100 000 images at once. Kept as the candidate for lists of rows of varying height (history, logs) |
-| egui_infinite_scroll | 0.12.0 | Pages loaded on scroll | Ideas only: our fetches are windowed by the host |
-| egui_dnd | 0.17.0 | Reorder by drag and drop, animated | **Adopt** for reorderable lists (export targets, module order in a stack); the order is written back through a command |
-| egui-modal | 0.6.0 (egui 0.30) | Modals | **Dead**: egui's `Modal` replaces it |
-| catppuccin-egui | 5.7.0 (up to egui 0.33) | Themes | Stale; our tokens replace it |
-| egui_double_slider | 4.0.0 (**Apache-2.0** only) | A range slider | **Skip** (2026-10-13): ideas only for the range slider (see "Sliders" below) |
-| egui_fader | 0.1.2 (MIT) | An audio fader | **Skip** (2026-10-13): a vertical audio idiom, no soft range or typed entry |
-| egui_knob | 0.6.3 | Knob | Skip (knobs fit audio, not photos) |
-| egui_colors | 0.13.0 | 12-step palettes | Theme work only |
-| egui_colorgradient | 0.2.3 (2025, older egui) | Gradient editor | Reference only |
-| egui-keyframe | 0.1.0 | Keyframes and curve editing | Reference for curve handles; too young |
-| egui_timeline | 0.3.0 (2025) | Timeline for media | Reference only |
-| egui_chip | 0.3.1 | Chips | Too small to depend on; ideas only |
-| egui-dropdown / egui_autocomplete | 0.16.0 / 15.0.0 | Autocomplete text fields | Ideas for the tag input; our palette's fuzzy matcher is enough |
-| egui-multiselect | 0.8.0 | Multiselect | Skip |
-| egui_suspense | 0.13.0 | Loading and error UIs for async data | Ideas only (the loading, error and retry triad); progress comes from the host |
-| egui_inbox | 0.13.0 | A channel that wakes egui | The host's `Waker` already does this |
-| egui-async | 0.7.0 | Async helpers | Skip: the host owns execution |
-| egui_animation | 0.13.0 | Easing and transitions | Optional; motion must follow tokens and reduced motion |
-| egui_flex, egui_taffy | 0.8.0, 0.14.0 | Flex or CSS layout | Skip for now (wrapping tag lists may want flex) |
-| egui-file-dialog | 0.15.0 | File dialog drawn in egui | **Wrap** as the fallback behind rfd (decided in Helios) |
-| egui_json_tree | 0.17.0 | JSON tree with search | **Adopt** for the debug bridge and the journal viewer |
-| egui_commonmark | 0.25.0 | Markdown | Later, for help and tips |
-| egui_logger, egui_tracing | 0.12.0, 0.3.0 (Unlicense) | Log views | Later; the journal viewer is ours |
-| egui-phosphor | 0.14.0 | Icons | **Adopted** |
-| egui_circular_progress_bar | 2.0.0 | Ring progress | **Skip: GPL-3.0** cannot go into an MIT library. A ring is a few lines of painting anyway |
-| egui-data-table | 0.11.0 | Editable data table | Skip: non-standard licence, little use |
-| re_ui | 0.38.1 (MIT/Apache, fonts OFL) | Rerun's UI kit: list items, design tokens | Ideas only (too coupled to Rerun) |
+Version and date: the latest release on crates.io; egui: the version it
+requires. A verdict changed on 2026-11-03 says why.
+
+| Crate | Version (date) | egui | Licence | What | Verdict |
+|---|---|---|---|---|---|
+| egui_plot | 0.38.0 (2026-10-19) | 0.37 | MIT OR Apache-2.0 | Lines, bars, boxes | Debug panels only; our scopes are images fed by the engine |
+| egui_dock | 0.21.1 (2026-08-06) | 0.36 | MIT | Docking, tabs, splits | **Adopted**, to be replaced by [egui_stack](https://github.com/quazardous/egui_stack), its continuation on egui 0.37 (changed 2026-11-03: egui_dock has no release for 0.37; [#145](https://github.com/quazardous/egui-pop/issues/145)). It cannot veto a drop by destination (see `upstream.md`) |
+| egui_tiles | 0.18.0 (2026-10-19) | 0.37 | MIT OR Apache-2.0 | Rerun's tiling, now in the rerun-io/egui_crates repository | Not needed next to egui_stack; a source of ideas and code for it, with credit ([directions](egui-stack-directions.md)) |
+| egui-notify | 0.24.0 (2026-10-30) | 0.37 | MIT | Toasts | Ideas only, now taken: the slide, the corners and the toast's states are in egui-pop's toasts, with credit (`crates/egui-pop-api/src/toasts.rs`, `NOTICE`). Not a dependency: it keeps a string queue, with no commands and no state to inspect, and 0.24 pulls egui-phosphor from git |
+| egui-toast | 0.22.0 (2026-08-08) | 0.36 | MIT | Toasts | Same as egui-notify (ideas only) |
+| egui-snarl | 0.12.0 (2026-08-26) | 0.36 | MIT OR Apache-2.0 | Node graph that owns `Snarl<T>` | Reference for wire and pin interaction; the graph view is **our own** |
+| egui_node_editor | 0.11.0 (2026-08-21) | 0.36 | MIT | Node editor | Too young (few downloads); reference at most |
+| egui_graph_edit | 0.9.1 (2026-07-13) | 0.35 | MIT | Node graphs | Same |
+| egui_graphs | 0.32.0 (2026-08-31) | 0.36 | MIT | A petgraph viewer | Not an editor |
+| egui_ltreeview | 0.10.0 (2026-10-25) | 0.37 | MIT | Tree view: multi-select, keyboard, drag and drop, context menu; the caller keeps the data | **Own** (decided 2026-10-13, see "Data views" below); the drop zones (before, inside, after) follow its idea |
+| egui_table | 0.11.0 (2026-10-19) | 0.37 | MIT OR Apache-2.0 | Rerun's virtualized table (sticky header, resizable columns), now in rerun-io/egui_crates | **Wrapped** (decided 2026-10-13): `egui-pop-views`' data table, on 0.10 until egui-pop moves to egui 0.37 |
+| egui_extras `TableBuilder` | 0.37.0 (2026-10-15) | 0.37 | MIT OR Apache-2.0 | egui's own table: rows in view, resizable columns, striped | **Skip** (2026-10-13): widths only in egui's memory, no sticky columns |
+| egui_virtual_list | 0.13.0 (2026-10-19) | 0.37 | MIT | Virtual list with rows of varying height, measured and cached | **Own** the thumbnail grid (decided 2026-10-13, see docs/library.md): cells of one size need no measuring, and End must reach the last of 100 000 images at once. Kept as the candidate for lists of rows of varying height (history, logs) |
+| egui_infinite_scroll | 0.13.0 (2026-10-19) | 0.37 | MIT | Pages loaded on scroll | Ideas only: our fetches are windowed by the host |
+| egui_dnd | 0.18.0 (2026-10-19) | 0.37 | MIT | Reorder by drag and drop, animated | **Adopt** for reorderable lists (export targets, module order in a stack); the order is written back through a command. Not a dependency yet |
+| egui-modal | 0.6.0 (2024-12-21) | 0.30 | MIT | Modals | **Dead**: egui's `Modal` replaces it |
+| catppuccin-egui | 5.7.0 (2025-11-15) | 0.26 to 0.33 | MIT | Themes | Stale; our tokens replace it |
+| egui_double_slider | 4.0.0 (2026-08-19) | 0.36 | **Apache-2.0** only | A range slider | **Skip** (2026-10-13): ideas only for the range slider (see "Sliders" below) |
+| egui_fader | 0.1.2 (2025-06-12) | 0.31 | MIT | An audio fader | **Skip** (2026-10-13): a vertical audio idiom, no soft range or typed entry |
+| egui_knob | 0.6.3 (2026-09-01) | 0.36 | MIT | Knob | Skip (knobs fit audio, not photos) |
+| egui_colors | 0.14.0 (2026-10-16) | 0.37 | MIT | 12-step palettes | Theme work only |
+| egui_colorgradient | 0.2.3 (2025-07-25) | 0.32 | MIT | Gradient editor | Reference only |
+| egui-keyframe | 0.1.0 (2026-02-13) | 0.33 | MIT OR Apache-2.0 | Keyframes and curve editing | Reference for curve handles; too young |
+| egui_timeline | 0.5.0 (2026-10-26) | 0.36 | MIT OR Apache-2.0 | Timeline for media (nannou) | Reference only |
+| egui_chip | 0.3.1 (2025-11-16) | 0.33 | MIT OR Apache-2.0 | Chips | Too small to depend on; ideas only |
+| egui-dropdown / egui_autocomplete | 0.16.0 (2026-09-04) / 15.0.0 (2026-09-06) | 0.36 | MIT | Autocomplete text fields | Ideas for the tag input; our palette's fuzzy matcher is enough |
+| egui-multiselect | 0.8.0 (2026-04-01) | 0.34 (through eframe) | MIT | Multiselect | Skip |
+| egui_suspense | 0.14.0 (2026-10-19) | 0.37 | MIT | Loading and error UIs for async data | Ideas only (the loading, error and retry triad); progress comes from the host |
+| egui_inbox | 0.14.0 (2026-10-19) | 0.37 | MIT | A channel that wakes egui | The host's `Waker` already does this |
+| egui-async | 0.8.0 (2026-10-19) | 0.37 | MIT OR Apache-2.0 | Async helpers | Skip: the host owns execution |
+| egui_animation | 0.14.0 (2026-10-19) | 0.37 | MIT | Easing and transitions | Optional; motion must follow tokens and reduced motion |
+| egui_flex, egui_taffy | 0.9.0 (2026-10-19), 0.16.0 (2026-10-22) | 0.37 | MIT | Flex or CSS layout | Skip for now (wrapping tag lists may want flex) |
+| egui-file-dialog | 0.15.0 (2026-08-08) | 0.36 | MIT | File dialog drawn in egui | **Skip** (changed 2026-11-03: it was to be wrapped as the fallback behind rfd; that fallback is egui-pop's own in-app picker, [Choosing files](files.md)) |
+| egui_json_tree | 0.17.0 (2026-08-15) | 0.36 | MIT OR Apache-2.0 | JSON tree with search | **Adopt** for the debug bridge and the journal viewer. Not a dependency yet |
+| egui_commonmark | 0.26.0 (2026-10-15) | 0.37 | MIT OR Apache-2.0 | Markdown | **Adopted** (changed 2026-11-03: it was "later"; the viewer's `markdown` feature in `egui-pop-views` uses 0.25, [links](links.md)) |
+| egui_logger, egui_tracing | 0.13.0 (2026-10-16), 0.3.0 (2026-04-10) | 0.37, 0.34 | MIT, Unlicense | Log views | Later; the journal viewer is ours |
+| egui-phosphor | 0.14.0 (2026-09-10) | 0.36 | MIT OR Apache-2.0 | Icons | **Adopted**; on egui 0.36 until its pull request for 0.37 is released ([#146](https://github.com/quazardous/egui-pop/issues/146), section 2.4) |
+| egui_circular_progress_bar | 2.0.0 (2026-08-19) | 0.36 | **GPL-3.0** | Ring progress | **Skip: GPL-3.0** cannot go into an MIT library. A ring is a few lines of painting anyway |
+| egui-data-table | 0.11.0 (2026-08-01) | 0.35 | non-standard | Editable data table | Skip: non-standard licence, little use |
+| re_ui | 0.41.0 (2026-10-28) | 0.37 | MIT OR Apache-2.0 (fonts OFL-1.1, Bitstream Vera) | Rerun's UI kit: list items, design tokens | Ideas only (too coupled to Rerun) |
 
 **What we learn:** egui has the primitives (painting, `Popup`, `Modal`,
 virtual scrolling, `Scene`, AccessKit) and no advanced widgets that are
 maintained. The crates that are maintained and have no model of their
-own are egui_dock, egui_table, egui_ltreeview, egui_dnd, egui_json_tree
-and egui-file-dialog. Everything about progress is ours to build.
+own are egui_dock (now continued as egui_stack), egui_table,
+egui_ltreeview, egui_dnd, egui_json_tree and egui-file-dialog. Many
+crates followed egui 0.37 within two weeks (egui_table, egui_ltreeview,
+egui_dnd); egui_dock, egui-phosphor, egui_json_tree and
+egui-file-dialog had not on 2026-11-03. Everything about progress is ours, and is built
+([Jobs and progress](progress.md)).
+
+### 2.3 egui 0.37: what it brings us
+
+Read from egui's and egui_kittest's 0.37.0 changelogs (2026-11-03).
+Fonts, colour emoji and the fixes egui-pop works around have their own
+pages: [Fonts](fonts.md), [Upstream](upstream.md) (each entry says
+whether 0.37 removes it), and [Scrolling](scrolling-survey.md). Two
+changes are work the bump itself must do, not options: `WidgetType` is
+replaced by `egui::Role` (accesskit's `Role`), and `Id::new` is
+deprecated (with `Id::unique`, `IdSaltSet` and `IdSaltMap` as the new
+ways), while the workspace denies warnings.
+
+| In 0.37 | What it could replace or improve in egui-pop | Follow-up |
+|---|---|---|
+| `egui::Role` replacing `WidgetType` | `a11y::name` (`crates/egui-pop-core/src/a11y.rs`) takes a `WidgetType`; about 180 uses across the crates and tests. With the role itself, custom widgets can say `Tab`, `Splitter`, `Status` or `Dialog`, which `WidgetType` could not, and the `accesskit_node_builder` calls that set a role by hand (`overlay.rs`, the splitter handle) become ordinary | **Part of the bump** (required) |
+| `Response::accessible_name`, `Ui::label_inputs_by` / `Ui::name_inputs` | `egui-pop-test`'s `unnamed_interactive` and `assert_all_named` (`crates/egui-pop-test/src/lib.rs`) read the label or `labelled_by` from the tree; the gallery pairs labels and values with `labelled_by` by hand (`crates/egui-pop-gallery/src/shell.rs`, `pages/builtins.rs`). `label_inputs_by` would name a form's inputs from their row label in one call. egui_kittest 0.37 also fails a test when an input has no name, which overlaps our check (ours covers every interactive role, buttons included, so it stays) | **Yes, small**: use `label_inputs_by` in forms and the settings pages; fix what kittest's new check finds during the bump |
+| `Area::role`, named `Ui`, `Area`, `Popup` and `Tooltip`, better popup, menu, modal and panel trees | Dialogs are an `Area` of kind `Modal` (`crates/egui-pop-core/src/overlay.rs`, the modal area) with no `Dialog` role; popovers and hover cards (`overlay.rs`, `hover_card.rs`) and the toast area (`crates/egui-pop-api/src/toasts.rs`) neither. A screen reader would announce a dialog with its title | **Yes**: `Dialog` with the title for dialogs, `Group` or `Tooltip` for popovers, after the bump |
+| `StyleProvider` (feature `experimental`): per-widget styles chosen by class | The kits (`crates/egui-pop-core/src/kit/`, [kit.md](kit.md)) paint egui-pop's own widgets from tokens, while egui's built-in widgets only get the global `Visuals` from `theme::visuals_with` (`crates/egui-pop-core/src/theme.rs`). A provider could give `Button`, `Checkbox`, `TextEdit` and `DragValue` their kit parts by class | **Watch**: experimental, behind a feature, its API may change; read it again at 0.38 |
+| `RangeSlider` | egui-pop owns its range slider (`crates/egui-pop-core/src/slider/range.rs`): soft and hard ranges, typed entry, fine adjustment, steps and hooks, none of which egui's has | **No**: keep ours; compare its AccessKit output for ideas |
+| `CompletionPopup` (completion under a `TextEdit`) | The tag input's completion (`crates/egui-pop-views/src/library/tags.rs`) and the palette (`crates/egui-pop-api/src/palette.rs`) use egui-pop's fuzzy matcher and overlay stack; the code editors' assist (`crates/egui-pop-editors/src/assist.rs`) does not use `TextEdit` | **No** for now: ours is placed, inspected and driven like every overlay. Ideas only |
+| kittest videos (feature `video`, `KITTEST_RECORD=1`, ffmpeg) | Interaction tests are read from their code and snapshots ([testing](testing.md)); a video of a failing keyboard walk (`crates/egui-pop-gallery/tests/keyboard_walk.rs`) or of a drag would say more | **Yes, small**: document it in testing.md; never on in CI by default |
+| Kinetic scrolling with a rubber band (`KineticScrollStyle`) | Already planned at the bump: off under reduced motion, no bounce on panels of sliders ([Scrolling, item 14](scrolling-survey.md)); `theme.rs` already turns egui's scroll animation off for reduced motion | **Part of the bump** (planned) |
+| `InputState::scroll_source` (`MouseWheelSource`: wheel, trackpad, momentum) | `pointer::wheel_pointer` (`crates/egui-pop-core/src/pointer.rs`) guesses a mouse from a scroll in lines and a trackpad from one in points, with a `WheelDevice` setting to override. egui knows the source only on macOS (and winit's pan gestures); elsewhere it says `Unknown`, so the guess stays. Sliders and the viewport could ignore `Momentum`, so a flick does not keep changing a value after the fingers lift | **Yes, small**: use the source when known, ignore momentum on value widgets |
+| `Id::unique`, `IdSaltSet`, `IdSaltMap`; `Id::new` deprecated | About 200 `Id::new` calls in 85 files, most for state slots and areas. `Id::unique` makes an id that cannot collide, which suits the overlay stack and the debug bridge's handles | **Part of the bump** (required) |
+| Galley cache shared across viewports | Panels floated into OS windows (`crates/egui-pop-api/src/workbench.rs`, `show_viewport_immediate`) no longer evict each other's laid-out text | Nothing to do: free with the bump |
+
+Also of note: `Event::PasteImage` for the clipboard ([clipboard](clipboard.md)),
+`KeyboardShortcut::conflicts_with_text_editing` next to the focus rules of
+the key dispatcher, `Context::set_repaint_observer`, which could tell the debug
+bridge who asked for a frame, and `HarnessBuilder::with_context_setup` for the test
+kit's themed harness.
+
+### 2.4 What blocks the move to egui 0.37
+
+Tracked in [#24](https://github.com/quazardous/egui-pop/issues/24).
+
+- **egui_dock** 0.21.1 requires egui 0.36 and has no release for 0.37.
+  egui-pop moves to [egui_stack](https://github.com/quazardous/egui_stack)
+  instead: egui_dock's continuation (MIT, its history kept), on egui
+  0.37, not on crates.io yet
+  ([#145](https://github.com/quazardous/egui-pop/issues/145);
+  [directions](egui-stack-directions.md)).
+- **egui-phosphor** 0.14.0 requires egui 0.36. Its upstream pull request
+  ([amPerl/egui-phosphor#49](https://github.com/amPerl/egui-phosphor/pull/49))
+  moves it to 0.37; until it is released, a fork pinned by revision
+  ([#146](https://github.com/quazardous/egui-pop/issues/146)).
+- While either is a git dependency, egui-pop cannot be published to
+  crates.io, and applications using egui-pop from git need the same
+  `[patch]`.
+- Nothing else in the tree holds it back: egui_table 0.11 and
+  egui_commonmark 0.26 already require egui 0.37, so both move with the
+  bump.
 
 ### Data views: what was checked (2026-10-13)
 
@@ -214,20 +276,22 @@ one state model for every field (modified, required, invalid with a
 message, disabled with a reason, read-only, pending) drawn from tokens
 with an icon per state, given to AccessKit and to agents; Tab order by
 reading order, explicit indices and groups, scopes cycling in a modal,
-F6 between panels. Licences are MIT or Apache-2.0 unless said.
+F6 between panels. Licences are MIT or Apache-2.0 unless said; the
+versions, their dates and the egui each requires were refreshed on
+2026-11-03, and no decision changed.
 
-| Crate | Version, licence | What it has | Decision |
+| Crate | Version (date), licence, egui | What it has | Decision |
 |---|---|---|---|
-| egui's `TextEdit` | 0.36, MIT OR Apache-2.0 | The field: editing, selection, undo, IME, a hint text (AccessKit placeholder), its own prefix and suffix, a frame it can drop | **Wrap**: it is the field inside the decorated input, without its frame; the slots, buttons and states are drawn around it |
+| egui's `TextEdit` | 0.36 (0.37.0 released 2026-10-15), MIT OR Apache-2.0 | The field: editing, selection, undo, IME, a hint text (AccessKit placeholder), its own prefix and suffix, a frame it can drop | **Wrap**: it is the field inside the decorated input, without its frame; the slots, buttons and states are drawn around it |
 | egui's focus | 0.36 | Tab in drawing order; a modal layer keeps the focus inside it; `scroll_to_me` for a widget to call, reaching the innermost scroll area only | **Own** the order on top: reading order, indices and groups per scope, F6; egui's order stays for widgets outside a scope. **Own** the focus coming into view and keeping its place, in the focus plugin ([Tab order](inputs.md#the-focus-keeps-its-place)) |
-| egui_form | 0.10, MIT, egui 0.36 | Validation through `garde` or `validator`: a field wrapper turning red with its message after it loses the focus, and the focus sent to the first invalid field on submit | **Ideas** for the formal form layout (errors after leaving a field, focus to the first error); its validation reports stay the application's, and it has no required or disabled state, no tokens, no Tab order |
-| egui-dropdown | 0.16, MIT, egui 0.36 | A text box with a list of matches under it | **Skip**: the dropdown chevron opens the input's choices; matching as one types is the tag input's and the palette's (the fuzzy matcher) |
-| egui_autocomplete | 15.0, MIT, egui 0.36 | Completion under a text box | **Skip**, for the same reason |
-| egui-typed-input | 0.1, MIT OR Apache-2.0, egui 0.32 to 0.33 | Parsed text inputs that refuse what does not parse | **Ideas** only (an older egui); a number field reads what a slider's typed entry reads |
-| egui-probe, egui_struct, egui_field_editor | 0.13 MIT OR Apache-2.0; 0.4 MIT (2024); 0.6 MIT | Forms derived from structs | **Skip**: forms come from value descriptors (as the `Form` dialog) |
-| kylig-ui, functora-egui, egui-antd | 0.3, 0.1, 0.1 (MIT; egui 0.36, 0.36, 0.34) | Kits with inputs, selects and buttons in their own style | **Skip**: young, styled outside the tokens, without field states or AccessKit for them |
-| egui-modal | 0.6, MIT, egui 0.30 | Modals | **Dead** (as in section 2.2): egui's `Modal` keeps the focus in its layer |
-| egui_path_picker | 0.2, **GPL-3.0** | A path field with a browse button | **Skip: GPL** cannot go into an MIT library; the path input with an attached Browse button covers it |
+| egui_form | 0.11.0 (2026-10-19), MIT, egui 0.37 | Validation through `garde` or `validator`: a field wrapper turning red with its message after it loses the focus, and the focus sent to the first invalid field on submit | **Ideas** for the formal form layout (errors after leaving a field, focus to the first error); its validation reports stay the application's, and it has no required or disabled state, no tokens, no Tab order |
+| egui-dropdown | 0.16.0 (2026-09-04), MIT, egui 0.36 | A text box with a list of matches under it | **Skip**: the dropdown chevron opens the input's choices; matching as one types is the tag input's and the palette's (the fuzzy matcher) |
+| egui_autocomplete | 15.0.0 (2026-09-06), MIT, egui 0.36 | Completion under a text box | **Skip**, for the same reason |
+| egui-typed-input | 0.1.3 (2026-03-11), MIT OR Apache-2.0, egui 0.32 to 0.33 | Parsed text inputs that refuse what does not parse | **Ideas** only (an older egui); a number field reads what a slider's typed entry reads |
+| egui-probe, egui_struct, egui_field_editor | 0.13.0 (2026-08-26), MIT OR Apache-2.0, egui 0.36; 0.4.2 (2024-07-09), MIT, egui 0.21; 0.7.0 (2026-10-20), MIT, egui 0.37 | Forms derived from structs | **Skip**: forms come from value descriptors (as the `Form` dialog) |
+| kylig-ui, functora-egui, egui-antd | 0.9.0 (2026-11-03), 0.2.0 (2026-10-19), 0.1.2 (2026-05-05); MIT; egui 0.36, 0.36, 0.34 | Kits with inputs, selects and buttons in their own style | **Skip**: young, styled outside the tokens, without field states or AccessKit for them |
+| egui-modal | 0.6.0 (2024-12-21), MIT, egui 0.30 | Modals | **Dead** (as in section 2.2): egui's `Modal` keeps the focus in its layer |
+| egui_path_picker | 0.2.0 (2025-09-02), **GPL-3.0-only**, egui 0.32 | A path field with a browse button | **Skip: GPL** cannot go into an MIT library; the path input with an attached Browse button covers it |
 
 **Decision: own** the decorated input, the field states and the Tab
 order, around egui's `TextEdit`; no dependency is added. No code was
@@ -243,17 +307,18 @@ deleted, keys, and the targeted adjustment (a value picked in the
 image); lift, gamma and gain wheels and a hue and saturation picker
 with a luminance slider; a zoom control and a navigator on the
 viewport's own state; AccessKit roles and values, and every finished
-change a step.
+change a step. Versions, dates and egui requirements refreshed on
+2026-11-03; no decision changed.
 
-| Crate | Version, licence | What it has | Decision |
+| Crate | Version (date), licence, egui | What it has | Decision |
 |---|---|---|---|
-| egui_plot | 0.37, MIT OR Apache-2.0, egui 0.36 | Plots: lines, bar charts, its own axes, grid, legend, pan and zoom, box zoom | **Own** the histogram: a plot widget brings axes and its own pan and zoom, while the histogram is a compact strip whose drag belongs to the application; filling the bins takes a mesh of a few dozen lines (kept from the first histogram) |
+| egui_plot | 0.38.0 (2026-10-19), MIT OR Apache-2.0, egui 0.37 | Plots: lines, bar charts, its own axes, grid, legend, pan and zoom, box zoom | **Own** the histogram: a plot widget brings axes and its own pan and zoom, while the histogram is a compact strip whose drag belongs to the application; filling the bins takes a mesh of a few dozen lines (kept from the first histogram) |
 | egui's colour picker | egui 0.36, MIT OR Apache-2.0 | A saturation and value square with a hue bar (`color_picker_hsva_2d`), colour buttons | **Own** the wheels: no wheel, no relative drag around a neutral centre, no hook; the swatch button stays egui's |
-| egui_oklch_color_picker | 0.1, MIT, egui 0.33 | An OKLCH picker | Skip: one release, an older egui, no grading wheels |
-| egui-keyframe | 0.1, MIT OR Apache-2.0, egui 0.33 | Keyframes and animation curves on a timeline | Skip: curves of time, not tone curves; no application spline, no pick |
-| egui-colorgradient | 0.2, MIT, egui 0.32 | A gradient editor (stops along a bar) | Skip: the slider's gradient track covers what is needed |
-| egui_minimap | 0.4, MIT OR Apache-2.0, egui 0.35 | A scrolling minimap of rows (text, hex bytes) | Skip: not an image navigator; the navigator draws the application's proxy and shares the viewport's state |
-| rsplot | 0.5, MIT OR Apache-2.0, egui 0.34 | Scientific plots on wgpu | Skip: an older egui, far more than a histogram |
+| egui_oklch_color_picker | 0.1.0 (2026-07-28), MIT, egui 0.33 | An OKLCH picker | Skip: one release, an older egui, no grading wheels |
+| egui-keyframe | 0.1.0 (2026-02-13), MIT OR Apache-2.0, egui 0.33 | Keyframes and animation curves on a timeline | Skip: curves of time, not tone curves; no application spline, no pick |
+| egui-colorgradient | 0.2.3 (2025-07-25), MIT, egui 0.32 | A gradient editor (stops along a bar) | Skip: the slider's gradient track covers what is needed |
+| egui_minimap | 0.4.0 (2026-07-25), MIT OR Apache-2.0, egui 0.35 | A scrolling minimap of rows (text, hex bytes) | Skip: not an image navigator; the navigator draws the application's proxy and shares the viewport's state |
+| rsplot | 0.6.1 (2026-10-17), MIT OR Apache-2.0, egui 0.36 | Scientific plots on wgpu | Skip: far more than a histogram (it has caught up with egui 0.36, so its egui is no longer a reason) |
 
 No code was taken from any of them. The curve's default spline, a
 monotone cubic, follows Fritsch and Carlson's published method.
@@ -468,7 +533,7 @@ egui-pop widget bound to values and commands; "adopt" = used as it is;
 | **Segmented control and toggle switch** | Mutually exclusive options in one row; an on/off switch | Mantine `SegmentedControl`, Ant `Segmented`, Blueprint `SegmentedControl`, `AdwToggleGroup`, Carbon `ContentSwitcher`; MUI and Mantine `Switch`, `AdwSwitchRow` | **Own**, on `selectable_value` and the egui demo's switch | View modes, module blend modes, settings | Role radio group for the segmented control, switch for the toggle |
 | **Tree view** | Expand and collapse, multi-select, keyboard, drag and drop, context menu, lazy children | Blueprint `Tree`, Fluent `Tree`, Carbon `TreeView`, MUI X `TreeView`, `QTreeView` | **Own** (done: `egui-pop-views`, docs/tree.md) | Folders, collections, tag hierarchy, the graph's outline | Lazy children come from the host |
 | **Data table** | Virtualized, sortable, resizable columns, sticky header | Blueprint `Table`, MUI X `DataGrid`, Carbon `DataTable`, Fluent `DataGrid` | **Wrap egui_table** (done: `egui-pop-views`, docs/table.md) | Metadata, the queue panel, the history of jobs | Sorting and widths are values; selection by key |
-| **Dock, split panes and tabs** | Dockable panels, splits, editor tabs | JetBrains tool windows, VS Code, `QDockWidget`, `AdwTabView`, shadcn `Resizable`, Ant `Splitter` | **Adopt egui_dock** (decided) | The whole shell | Drop veto worked around (see `upstream.md`) |
+| **Dock, split panes and tabs** | Dockable panels, splits, editor tabs | JetBrains tool windows, VS Code, `QDockWidget`, `AdwTabView`, shadcn `Resizable`, Ant `Splitter` | **Adopt egui_dock** (decided), then its continuation egui_stack with egui 0.37 ([#145](https://github.com/quazardous/egui-pop/issues/145)) | The whole shell | Drop veto worked around (see `upstream.md`) |
 | **Histogram** | Draws supplied bins (per channel, log or linear), clipping markers | Lightroom, darktable, Capture One | **Own**, done (`viewport::histogram`, clipping and drag 2026-10-13) | The darkroom, the import preview | Data from the host; egui-pop only draws |
 | **Node graph editor** | Nodes with headers, pins, wires, semantic zoom, stacks | imgui-node-editor, imnodes, egui-snarl | **Own** (decided), snarl as reference | The graph view | A large item; the header shows the job state of each node (states and badges above) |
 
@@ -504,7 +569,7 @@ egui-pop widget bound to values and commands; "adopt" = used as it is;
 | Timeline | Images or events over time, zoomable | darktable lighttable timeline, Tracy, egui_timeline | Own | Browse by capture date; job history over time |
 | Gradient editor | Stops on a track | ImGui gradient gists, egui_colorgradient | Own | Gradient masks, theme work |
 | Guided tour, teaching popover | Steps that point at parts of the interface | Ant `Tour`, Fluent `TeachingPopover` | Own on overlays | Tips (a Helios surface) |
-| Markdown view | Rich text for help | egui_commonmark | Adopt | Help, tips, release notes |
+| Markdown view | Rich text for help | egui_commonmark | Adopted (the viewer's `markdown` feature, [links](links.md)) | Help, tips, release notes |
 | Log view | Filterable log lines | egui_logger, egui_tracing | Own on the virtual list | Diagnostics |
 | Taskbar and dock progress, system notifications | Outside the window | Windows `ITaskbarList3`, the macOS dock, Unity `LauncherEntry` | Platform code (winit has none) | Long exports while the window is hidden |
 | Shortcut editor | Captures a key chord | `QKeySequenceEdit`, VS Code keybindings editor | Own, on the keymap model | Keymap settings |
@@ -700,7 +765,10 @@ Sources:
   <https://www.nngroup.com/articles/progress-indicators/>
 - egui 0.36.2 source (`widgets/progress_bar.rs`, `widgets/spinner.rs`):
   <https://github.com/emilk/egui>
-- crates.io pages of each crate named in section 2.2, checked on
-  2026-10-12.
+- egui 0.37.0 changelog:
+  <https://github.com/emilk/egui/blob/main/CHANGELOG.md>; egui_kittest's:
+  <https://github.com/emilk/egui/blob/main/crates/egui_kittest/CHANGELOG.md>
+- crates.io's API for each crate named in section 2 (latest version,
+  its date, licence and dependencies), read on 2026-11-03.
 - darktable background jobs (`src/control/progress.c`) and bauhaus
   sliders (`src/bauhaus/bauhaus.c`): <https://github.com/darktable-org/darktable>
