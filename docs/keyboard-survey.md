@@ -345,6 +345,10 @@ From `crates/egui-pop-core` (`tab.rs`, `focus.rs`, `keys.rs`,
 - **[walk] With a menu opened from a focused button (Enter),** arrows use
   egui's cone and leave the menu (egui's #8327): the second Down from File
   goes to a row of the side list behind it, the next comes back to "Quit".
+- **Since egui 0.37 (item 11),** Down enters a menu opened by its letter or
+  from its focused button, and the arrows stay in it: the walk's gap tests
+  pass. **Since item 12,** F10 opens the first menu and the letters are
+  underlined while Alt is held.
 - **[read] No F10, nothing on a bare Alt, no Shift+F10.**
   `context_menu_with` answers the secondary
   click only, so nothing on a list row, tree node or graph node opens by
@@ -768,12 +772,15 @@ one pull request. Numbers stay as they are, since the walk's tests name them;
     should show the good pattern. Size: S. Done with the tree view rather than
     a list, its groups foldable; Enter opens the page and the focus stays in
     the list.
-11. **egui 0.37.** Menus with arrows (#8548), the `Menu` key, several `Remove
-    when` entries in the upstream register. It is its own migration and belongs
-    in its own plan, whatever the keyboard says. Size: L.
-12. **F10 and visible letters.** F10 opens the first menu; the access letter is
-    underlined (while Alt is held, as Windows and Qt do), with menu items given
-    letters too. After 11. Size: S.
+11. **Done: egui 0.37.** Menus with arrows (#8548), the `Menu` key, several
+    `Remove when` entries in the upstream register. Done as its own migration;
+    the walk's two menu gap tests pass on it and are no longer ignored.
+12. **Done, amended: F10 and visible letters.** F10 opens the first menu, and the
+    arrows go through it (egui 0.37's menus); a menu's access letter is
+    underlined in the bar while Alt is held, as Windows and Qt do. Menu items
+    are not given letters (planned at first): the arrows reach them, and every
+    item's letter would be a burden on translations, as "What to skip" says of
+    dialogs; left until asked.
 13. **A key for context menus.** Shift+F10 and `Menu` open the focused widget's
     declared menu at its rectangle; a list, tree or grid opens for its cursor.
     After 11 for `Menu`; Shift+F10 can come first. Size: M.

@@ -1092,7 +1092,14 @@ fn alt_and_a_letter_opens_a_menu_tab_goes_in_and_escape_closes_it() {
 }
 
 #[test]
-#[ignore = "keyboard survey item 11: arrows do nothing in a menu opened by Alt and a letter"]
+fn f10_opens_the_first_menu_and_down_goes_in() {
+    let mut h = harness("overview");
+    walk::press(&mut h, Press::key(Key::F10));
+    assert!(egui_pop_test::a11y_tree(&h).contains("Quit"));
+    assert!(name(walk::press(&mut h, DOWN)).starts_with("Settings"));
+}
+
+#[test]
 fn down_enters_a_menu_opened_by_its_letter() {
     let mut h = harness("overview");
     walk::press(&mut h, ALT_F);
@@ -1100,7 +1107,6 @@ fn down_enters_a_menu_opened_by_its_letter() {
 }
 
 #[test]
-#[ignore = "keyboard survey item 11: arrows leave a menu opened from its button, for what lies behind it"]
 fn arrows_stay_in_a_menu_opened_from_its_button() {
     let mut h = harness("overview");
     assert_eq!(name(walk::press(&mut h, TAB)), "File");

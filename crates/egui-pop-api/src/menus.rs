@@ -300,7 +300,9 @@ pub fn bar(ui: &mut Ui, app: &AppHandle, menu: &MenuId) {
 ///
 /// Each menu has an access key: the first letter of its label not taken
 /// by a menu before it. Alt and that letter open the menu, in the bar or
-/// inside "…"; a key binding on the same keys wins. Where each menu went,
+/// inside "…", and the letter is underlined while Alt is held; F10 opens
+/// the first menu, as on Windows and in Qt and GTK. A key binding on the
+/// same keys wins. The arrows then go through the menu. Where each menu went,
 /// and its access key, is [`bar_layout`] (the `menu_bar` debug
 /// collector).
 pub fn bar_within(ui: &mut Ui, app: &AppHandle, menu: &MenuId, reserve: f32) {
@@ -335,23 +337,30 @@ pub fn bar_within(ui: &mut Ui, app: &AppHandle, menu: &MenuId, reserve: f32) {
         available,
         kept,
     });
-    // Alt and an access key: the menu it opens, if enabled.
+    // Alt and an access key: the menu it opens, if enabled. F10: the first.
     let pressed = ui.input_mut(|i| {
-        cache.menus.iter().position(|m| {
+        let by_letter = cache.menus.iter().position(|m| {
             m.enabled
                 && m.key
                     .and_then(|k| egui::Key::from_name(&k.to_ascii_uppercase().to_string()))
                     .is_some_and(|k| i.consume_key(egui::Modifiers::ALT, k))
+        });
+        by_letter.or_else(|| {
+            let first = cache.menus.iter().position(|m| m.enabled)?;
+            i.consume_key(egui::Modifiers::NONE, egui::Key::F10)
+                .then_some(first)
         })
     });
+    let alt = ui.input(|i| i.modifiers.alt);
     for (i, m) in cache.menus[..kept].iter().enumerate() {
         ui.add_enabled_ui(m.enabled, |ui| {
             let id = ui.next_auto_id();
             if pressed == Some(i) {
                 egui::Popup::open_id(&ctx, id.with("popup"));
             }
-            let (r, _) = MenuButton::new(m.label.as_str())
-                .ui(ui, |ui| items(ui, app, &m.menu, &cx, &Json::Null, 0));
+            let label = access_label(ui, &m.label, m.key.filter(|_| alt));
+            let (r, _) =
+                MenuButton::new(label).ui(ui, |ui| items(ui, app, &m.menu, &cx, &Json::Null, 0));
             access_key(&ctx, r.id, m.key);
         });
     }
@@ -540,6 +549,33 @@ pub(crate) fn refit_needed(app: &AppHandle, menu: &MenuId, reserve: f32) -> bool
         .get(menu)
         .and_then(|c| c.fitted.as_ref())
         .is_some_and(|f| fit(&f.widths, f.gap, f.more, f.available - reserve) != f.kept)
+}
+
+/// A menu's label with its access letter underlined, as Windows and Qt show
+/// it while Alt is held; the label alone without a letter.
+fn access_label(ui: &Ui, label: &str, key: Option<char>) -> egui::WidgetText {
+    // The letter is the first of its kind in the label (`access_letter`).
+    let at = key.and_then(|k| {
+        label
+            .char_indices()
+            .find(|(_, c)| c.to_lowercase().eq(k.to_lowercase()))
+            .map(|(i, c)| (i, i + c.len_utf8()))
+    });
+    let Some((from, to)) = at else {
+        return label.into();
+    };
+    let mut job = egui::text::LayoutJob::default();
+    let font = egui::FontSelection::Style(egui::TextStyle::Button);
+    for (text, underline) in [
+        (&label[..from], false),
+        (&label[from..to], true),
+        (&label[to..], false),
+    ] {
+        let text = RichText::new(text);
+        let text = if underline { text.underline() } else { text };
+        text.append_to(&mut job, ui.style(), font.clone(), egui::Align::Center);
+    }
+    job.into()
 }
 
 /// A label's access key: its first letter or digit not taken, lower case.
