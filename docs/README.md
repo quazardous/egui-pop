@@ -190,6 +190,10 @@ of every crate with every feature on.
   requests for comments, what breaks an extension, deprecation windows.
 - [Upstream workarounds](upstream.md): what egui-pop compensates for in
   its dependencies, and how a limit is handled.
+- [egui_stack directions](egui-stack-directions.md): how egui_stack, the
+  continuation of egui_dock, could fit egui-pop (theming, drop veto,
+  keyboard, accessibility, windows, layout state, sections and toolbars,
+  ideas from egui_tiles), ranked, with the first changes to land.
 - [Architecture decisions](adr/README.md): one page per decision.
 - [Advanced widgets](widgets.md): a survey of advanced widgets and how
   egui-pop gets them.

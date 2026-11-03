@@ -64,6 +64,7 @@
 - [API stability](stability.md)
 - [How quality is held](quality.md)
 - [Upstream workarounds](upstream.md)
+- [egui_stack directions](egui-stack-directions.md)
 - [Advanced widgets](widgets.md)
 - [Fonts](fonts.md)
 
@@ -94,6 +95,7 @@
   - [0019: Actions act as their caller](adr/0019-actions-act-as-their-caller.md)
   - [0020: Answers carry their caller](adr/0020-answers-carry-their-caller.md)
   - [0021: The origin along the chain](adr/0021-origin-along-the-chain.md)
+  - [0022: Sections and toolbars in egui_stack](adr/0022-sections-and-toolbars-in-egui-stack.md)
 - [Micro-indicators, the design](design/indicators.md)
 - [Icons: an inventory](icons.md)
 - [Pointer gestures, a study](design/pointer-gestures.md)
