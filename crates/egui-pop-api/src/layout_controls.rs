@@ -30,7 +30,7 @@
 //!   Menus and the palette show the toggle commands' icons mirrored the
 //!   same way ([`command_icon`]).
 
-use egui::{Rect, Response, Sense, Ui, WidgetInfo, WidgetType, vec2};
+use egui::{Rect, Response, Role, Sense, Ui, WidgetInfo, vec2};
 use egui_pop_core::icon::{Icon, Size};
 use egui_pop_core::kit::{Kit, KitCx, Part, State};
 use egui_pop_core::lock;
@@ -429,9 +429,9 @@ fn button(ui: &mut Ui, icon: Icon, name: &str, tip: &str, on: Option<bool>) -> R
     let name = name.to_string();
     match on {
         Some(on) => {
-            response.widget_info(|| WidgetInfo::selected(WidgetType::Button, enabled, on, &name));
+            response.widget_info(|| WidgetInfo::selected(Role::Button, enabled, on, &name));
         }
-        None => response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, enabled, &name)),
+        None => response.widget_info(|| WidgetInfo::labeled(Role::Button, enabled, &name)),
     }
     response.on_hover_text(tip)
 }

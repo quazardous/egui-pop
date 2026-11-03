@@ -96,7 +96,8 @@ impl Window {
                 out.response
             }
             Content::Field(text) => ui.add(
-                egui::TextEdit::singleline(&mut *text.borrow_mut()).id(Id::new(("field", self.id))),
+                egui::TextEdit::singleline(&mut *text.borrow_mut())
+                    .id(Id::unique(("field", self.id))),
             ),
         };
         if self.wants_focus.take() {

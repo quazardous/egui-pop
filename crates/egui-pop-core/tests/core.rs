@@ -476,7 +476,7 @@ fn icon_strokes_are_whole_physical_pixels_at_every_scale() {
             .build_ui(|ui| {
                 let painter = ui.ctx().layer_painter(egui::LayerId::new(
                     egui::Order::Foreground,
-                    egui::Id::new("icons"),
+                    egui::Id::unique("icons"),
                 ));
                 for (row, icon) in Icon::ALL.iter().enumerate() {
                     for (col, side) in [12.0, 13.5, 16.0, 20.0, 24.0].into_iter().enumerate() {
@@ -673,7 +673,7 @@ fn modal_app(resizable: bool) -> Harness<'static, bool> {
 }
 
 fn modal_rect(h: &Harness<'static, bool>) -> egui::Rect {
-    overlay::rect(&h.ctx, egui::Id::new("modal")).unwrap()
+    overlay::rect(&h.ctx, egui::Id::unique("modal")).unwrap()
 }
 
 #[test]
@@ -683,7 +683,7 @@ fn a_resizable_modal_follows_its_grips_and_the_arrows() {
     for _ in 0..3 {
         h.run();
     }
-    let id = egui::Id::new("modal");
+    let id = egui::Id::unique("modal");
     assert_eq!(
         overlay::modal_size(&h.ctx, id),
         Some(egui::vec2(400.0, 200.0))
@@ -743,7 +743,7 @@ fn a_modal_that_does_not_opt_in_stays_as_it_is_declared() {
     for _ in 0..3 {
         h.run();
     }
-    let id = egui::Id::new("modal");
+    let id = egui::Id::unique("modal");
     assert_eq!(overlay::modal_size(&h.ctx, id), None);
     assert!(
         h.query_by_role_and_label(Role::Splitter, "Resize Report")
@@ -777,7 +777,7 @@ fn a_splitter_says_its_value_and_keeps_to_its_limits() {
             |ui, width: &mut f32| {
                 let rect =
                     egui::Rect::from_min_size(egui::pos2(100.0, 20.0), egui::vec2(10.0, 100.0));
-                let id = egui::Id::new("splitter");
+                let id = egui::Id::unique("splitter");
                 Splitter::new(id, "Resize the pane", 50.0, 150.0, 100.0).show(ui, rect, width);
             },
             100.0_f32,
@@ -840,9 +840,9 @@ fn moved_app() -> (Harness<'static>, Arc<Mutex<Vec<focus::Moved>>>) {
                 // Out of the scope's place: its widgets still are its own.
                 let far =
                     egui::Rect::from_min_size(egui::pos2(5000.0, 5000.0), egui::vec2(9.0, 9.0));
-                let id = egui::Id::new("far");
+                let id = egui::Id::unique("far");
                 let r = ui.interact(far, id, egui::Sense::click());
-                a11y::name(&r, egui::WidgetType::Button, "Far");
+                a11y::name(&r, egui::Role::Button, "Far");
             });
         });
     h.run();

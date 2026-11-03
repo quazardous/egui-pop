@@ -84,7 +84,7 @@ fn an_editor_keeps_the_wheel_at_its_end_in_a_panel_that_scrolls() {
                             .show(ui, &p.state);
                         ui.allocate_space(egui::vec2(10.0, 2000.0));
                     });
-                p.panel = out.state.offset.y;
+                p.panel = out.state.clamped_offset().y;
             },
             InPanel {
                 state: EditorState::new("notes", &text),
@@ -97,6 +97,7 @@ fn an_editor_keeps_the_wheel_at_its_end_in_a_panel_that_scrolls() {
         delta: egui::vec2(0.0, delta),
         modifiers: Modifiers::NONE,
         phase,
+        source: egui::MouseWheelSource::Wheel,
     };
     h.hover_at(egui::pos2(100.0, 75.0));
     h.run();

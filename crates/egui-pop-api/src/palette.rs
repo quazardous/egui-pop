@@ -479,11 +479,14 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                         let state = row_state(ui, on);
                         let under = ui.painter().add(egui::Shape::Noop);
                         let slot =
-                            egui::Id::new(("egui_pop_palette_icon", h.entry.command.as_str()));
+                            egui::Id::unique(("egui_pop_palette_icon", h.entry.command.as_str()));
                         let label = highlighted(row, state, &h.label, &h.positions);
                         let mut atoms: Vec<egui::Atom<'_>> = Vec::with_capacity(2);
                         if column {
-                            atoms.push(egui::Atom::custom(slot, egui::vec2(side, side)));
+                            atoms.push(egui::Atom::custom(
+                                egui::IdSalt::new(slot),
+                                egui::vec2(side, side),
+                            ));
                         }
                         atoms.push(label.into());
                         let mut b = egui::Button::new(egui::Atoms::from(atoms))
@@ -508,7 +511,9 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                             b = b.shortcut_text(egui::RichText::new(keys).color(muted));
                         }
                         let r = b.atom_ui(ui);
-                        if let (Some(rect), Some((icon, name))) = (r.rect(slot), &icons[i]) {
+                        if let (Some(rect), Some((icon, name))) =
+                            (r.rect(egui::IdSalt::new(slot)), &icons[i])
+                        {
                             icon.paint(ui.painter(), rect, row.style(state).text);
                             egui_pop_core::icon::registry::record(&ctx, "palette", &h.label, name);
                         }

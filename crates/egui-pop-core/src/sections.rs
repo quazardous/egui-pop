@@ -84,7 +84,7 @@ use egui::accesskit::{Action, Role};
 use egui::scroll_area::{DragScroll, ScrollBarVisibility, ScrollSource};
 use egui::{
     Color32, Context, CursorIcon, EventFilter, FontFamily, FontId, Id, Key, PointerButton, Rect,
-    Response, Sense, TextStyle, Ui, UiBuilder, WidgetInfo, WidgetType, pos2, vec2,
+    Response, Sense, TextStyle, Ui, UiBuilder, WidgetInfo, pos2, vec2,
 };
 use egui_pop_model::keymap::Pointer;
 use egui_pop_model::pointer::{PointerMap, SCOPE_SECTIONS, gesture};
@@ -181,7 +181,7 @@ impl Layout {
 }
 
 fn memory_id(name: &str) -> Id {
-    Id::new(("egui_pop.sections", name))
+    Id::unique(("egui_pop.sections", name))
 }
 
 /// A section as laid out on the last pass ([`laid_out`]).
@@ -429,7 +429,7 @@ impl Body<'_> {
             Body::Scrolled(draw) => {
                 let out = area.show(ui, draw);
                 Drawn {
-                    scroll: out.state.offset.y,
+                    scroll: out.state.clamped_offset().y,
                     window: None,
                     holds_wheel: scrolled(ui.ctx(), &out),
                 }
@@ -443,7 +443,7 @@ impl Body<'_> {
                     draw(ui, range);
                 });
                 Drawn {
-                    scroll: out.state.offset.y,
+                    scroll: out.state.clamped_offset().y,
                     window,
                     holds_wheel: scrolled(ui.ctx(), &out),
                 }
@@ -468,7 +468,7 @@ impl Body<'_> {
 /// under its last one until something else repaints (docs/upstream.md).
 fn scrolled<R>(ctx: &Context, out: &egui::scroll_area::ScrollAreaOutput<R>) -> bool {
     let id = out.id.with("egui_pop.sections.offset");
-    let offset = out.state.offset.y;
+    let offset = out.state.clamped_offset().y;
     let before = ctx.data_mut(|d| d.get_temp::<f32>(id));
     if before != Some(offset) {
         ctx.data_mut(|d| d.insert_temp(id, offset));
@@ -1059,7 +1059,7 @@ impl Sections {
 
 /// Names a band for assistive technology: a button, expanded or not.
 fn name_band(ctx: &Context, r: &Response, name: &str, open: bool) {
-    crate::a11y::name(r, WidgetType::Button, name);
+    crate::a11y::name(r, Role::Button, name);
     ctx.accesskit_node_builder(r.id, |node| node.set_expanded(open));
 }
 
@@ -1159,7 +1159,7 @@ impl Shown<'_> {
 fn name_boundary(ctx: &Context, r: &Response, name: &str, stack: &Shown<'_>, above: usize) {
     let value = stack.heights[above];
     let (shrinks, most) = stack.reach(above);
-    r.widget_info(|| WidgetInfo::labeled(WidgetType::Other, true, name));
+    r.widget_info(|| WidgetInfo::labeled(Role::Unknown, true, name));
     ctx.accesskit_node_builder(r.id, |node| {
         node.set_role(Role::Splitter);
         node.set_numeric_value(f64::from(value));

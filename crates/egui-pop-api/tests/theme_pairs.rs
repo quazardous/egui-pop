@@ -180,7 +180,7 @@ fn the_theme_editor_edits_the_variant_shown_and_keeps_the_pair() {
     assert_eq!(editor.draft().base(), "pop-dark");
 }
 
-/// Two panels sharing the bottom area: drawn in an egui_dock dock.
+/// Two panels sharing the bottom area: drawn in an egui_stack dock.
 struct Docked;
 
 impl Plugin for Docked {

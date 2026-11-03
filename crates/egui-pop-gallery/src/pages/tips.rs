@@ -123,7 +123,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
         tips::mark(ui.button("Import"), IMPORT_TARGET);
     });
     // Shown once when the page first opens.
-    let once = egui::Id::new("gallery.tips.pointing-shown");
+    let once = egui::Id::unique("gallery.tips.pointing-shown");
     if !ui.ctx().data(|d| d.get_temp::<bool>(once).unwrap_or(false)) {
         ui.ctx().data_mut(|d| d.insert_temp(once, true));
         if let Some(t) = app.service(&TIPS) {

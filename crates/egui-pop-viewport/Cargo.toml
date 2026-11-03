@@ -49,7 +49,7 @@ profiling.workspace = true
 egui.workspace = true
 # The node graph's orthogonal wires (a crate of this workspace, no egui).
 ortho-router.workspace = true
-egui-wgpu = { version = "0.36", default-features = false, optional = true }
+egui-wgpu = { version = "0.37", default-features = false, optional = true }
 # MIT OR Apache-2.0: f32 to half-float conversion for tile textures.
 half = { version = "2", optional = true }
 egui-pop-core.workspace = true
@@ -67,7 +67,7 @@ fontdb = { version = "0.23", optional = true, default-features = false, features
 svg2pdf = { version = "0.13", optional = true, default-features = false, features = ["text"] }
 
 [dev-dependencies]
-eframe = { workspace = true, features = ["default_fonts", "wgpu", "wayland", "x11"] }
+eframe = { workspace = true, features = ["default_fonts", "wgpu", "wayland", "x11", "clipboard"] }
 egui = { workspace = true, features = ["default_fonts"] }
 egui_kittest = { workspace = true, features = ["wgpu", "snapshot"] }
 # Path only: a dev-dependency without a version is left out when

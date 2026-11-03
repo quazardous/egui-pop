@@ -1307,7 +1307,7 @@ fn frame(ui: &mut Ui, app: &AppHandle) {
 }
 
 fn overlay_id(id: u64) -> egui::Id {
-    egui::Id::new(("egui_pop.files", id))
+    egui::Id::unique(("egui_pop.files", id))
 }
 
 /// Ends a choice: `file.chosen` for paths, the journal for a cancel.
@@ -3157,7 +3157,7 @@ impl FilePicker {
         if waiting {
             ui.disable();
         }
-        let field_id = ui.id().with("egui_pop.files.field");
+        let field_id = ui.scope_id().with("egui_pop.files.field");
         if !waiting {
             self.path_keys(ui);
         }
@@ -3341,11 +3341,7 @@ impl FilePicker {
                 )
             });
         }
-        egui_pop_core::a11y::name(
-            &field,
-            egui::WidgetType::TextEdit,
-            &strings::tr(ui.ctx(), hint),
-        );
+        egui_pop_core::a11y::name(&field, egui::Role::TextInput, &strings::tr(ui.ctx(), hint));
         let refocus = std::mem::take(&mut self.refocus);
         // In the grid, the arrows leave the focus where it is: on a cell, it
         // follows the highlight.
@@ -3487,7 +3483,7 @@ impl FilePicker {
                     vec2(gap, list_height),
                 );
                 let name = strings::tr(ui.ctx(), &txt::FILES_PREVIEW_RESIZE);
-                let id = ui.id().with("egui_pop.files.splitter");
+                let id = ui.scope_id().with("egui_pop.files.splitter");
                 let max = room - gap - LIST_MIN_WIDTH;
                 let r = widgets::Splitter::new(id, &name, PANE_MIN_WIDTH, max, preview::PANE_WIDTH)
                     .after()
@@ -3790,7 +3786,7 @@ impl FilePicker {
             let r = ui
                 .add(egui::Button::new("…").frame_when_inactive(false))
                 .on_hover_text(&name);
-            a11y::name(&r, egui::WidgetType::Button, &name);
+            a11y::name(&r, egui::Role::Button, &name);
             let above: Vec<Crumb> = crumbs[..first].iter().rev().cloned().collect();
             chosen = self.crumb_menu(ui, &r, move |_| Some(above));
         }
@@ -3819,7 +3815,7 @@ impl FilePicker {
                 })
                 .inner;
             let name = strings::tr_args(&ctx, &txt::FILES_CRUMB_OPEN, &[("name", &crumb.name)]);
-            a11y::name(&r, egui::WidgetType::Button, &name);
+            a11y::name(&r, egui::Role::Button, &name);
             if current {
                 let shown = strings::tr(&ctx, &txt::FILES_CRUMB_CURRENT);
                 ctx.accesskit_node_builder(r.id, |node| node.set_description(shown));
@@ -3840,7 +3836,7 @@ impl FilePicker {
                 })
                 .inner
                 .on_hover_text(&name);
-            a11y::name(&r, egui::WidgetType::Button, &name);
+            a11y::name(&r, egui::Role::Button, &name);
             let dir = crumb.path.clone();
             let popup = egui::Popup::default_response_id(&r);
             let color = ui.style().interact(&r).text_color();
@@ -3967,7 +3963,7 @@ impl FilePicker {
                                 .selected(on_path == Some(n))
                                 .truncate(),
                         );
-                        a11y::name(&r, egui::WidgetType::Button, &item.name);
+                        a11y::name(&r, egui::Role::Button, &item.name);
                         if r.clicked() {
                             chosen = Some(item.path.clone());
                         }
@@ -4070,7 +4066,7 @@ impl FilePicker {
                     None => title.clone(),
                 };
                 let id = ui
-                    .id()
+                    .scope_id()
                     .with("egui_pop.files.header")
                     .with(c.column.as_str());
                 let r = widgets::SortHeader {
@@ -4534,7 +4530,7 @@ impl FilePicker {
     /// back to the picker's field: the row closed.
     fn naming_row(&mut self, ui: &mut Ui, answer: &mut Option<PickerAnswer>) -> bool {
         let ctx = ui.ctx().clone();
-        let id = ui.id().with("egui_pop.files.new_folder");
+        let id = ui.scope_id().with("egui_pop.files.new_folder");
         // Escape takes the focus from a field before anything else sees
         // it; from the row's buttons, it comes this way.
         let mut close = focus::escape_left(&ctx, id)
@@ -4550,7 +4546,7 @@ impl FilePicker {
                     .id(id)
                     .desired_width(ui.available_width() / 2.0),
             );
-            egui_pop_core::a11y::name(&edit, egui::WidgetType::TextEdit, &label);
+            egui_pop_core::a11y::name(&edit, egui::Role::TextInput, &label);
             if std::mem::take(&mut self.naming_focus) {
                 edit.request_focus();
             }

@@ -473,7 +473,7 @@ impl Plugin for ToastsPlugin {
 
 /// The area the toasts are drawn in.
 pub(crate) fn area_id() -> Id {
-    Id::new("egui_pop.toasts")
+    Id::unique("egui_pop.toasts")
 }
 
 /// Where a toast's size is kept, for its slide and its picture going.

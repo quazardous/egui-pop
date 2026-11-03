@@ -36,7 +36,7 @@
 //! ```
 
 use egui::text::LayoutJob;
-use egui::{Context, FontId, Id, Key, Modifiers, Response, TextFormat, Ui, WidgetType};
+use egui::{Context, FontId, Id, Key, Modifiers, Response, Role, TextFormat, Ui};
 use egui_pop_model::ids::CommandId;
 use serde::Serialize;
 use serde_json::Value as Json;
@@ -321,7 +321,7 @@ pub struct HoverCard {
 impl HoverCard {
     pub fn new(id: impl std::hash::Hash + std::fmt::Debug) -> Self {
         Self {
-            id: Id::new(id),
+            id: Id::unique(id),
             side: Side::Bottom,
         }
     }
@@ -503,7 +503,7 @@ pub fn paint(ui: &mut Ui, card: &Card, focus: bool) -> Option<Link> {
                 ui.horizontal_wrapped(|ui| {
                     for l in links {
                         let r = ui.link(&l.label);
-                        crate::a11y::name(&r, WidgetType::Button, &l.label);
+                        crate::a11y::name(&r, Role::Button, &l.label);
                         if std::mem::take(&mut first_link) {
                             r.request_focus();
                         }

@@ -53,6 +53,7 @@ fn the_wheel_speed_setting_reaches_egui_and_the_canvases() {
         delta: egui::vec2(0.0, 1.0),
         modifiers: egui::Modifiers::NONE,
         phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Wheel,
     };
     let input = egui::RawInput {
         events: vec![

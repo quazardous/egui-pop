@@ -633,7 +633,7 @@ fn rich_harness() -> Harness<'static, RichApp> {
                             if on { "hidden" } else { "shown" },
                         ));
                         r.widget_info(|| {
-                            egui::WidgetInfo::selected(egui::WidgetType::Checkbox, true, on, &name)
+                            egui::WidgetInfo::selected(egui::Role::CheckBox, true, on, &name)
                         });
                         if r.clicked() && !hidden.remove(&n.key) {
                             hidden.insert(n.key.clone());
@@ -832,6 +832,7 @@ fn wheel<S>(h: &mut Harness<'_, S>, at: egui::Pos2, lines: f32) {
         delta: egui::vec2(0.0, delta),
         modifiers: Modifiers::NONE,
         phase,
+        source: egui::MouseWheelSource::Wheel,
     };
     h.hover_at(at);
     h.run();
@@ -873,7 +874,7 @@ fn in_panel(rows_in_view: u32, use_table: bool) -> Harness<'static, InPanel> {
                         }
                         ui.allocate_space(egui::vec2(10.0, 2000.0));
                     });
-                p.panel = out.state.offset.y;
+                p.panel = out.state.clamped_offset().y;
             },
             InPanel {
                 list: ListState::new(),

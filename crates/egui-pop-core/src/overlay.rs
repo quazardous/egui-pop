@@ -149,7 +149,7 @@ pub struct OverlaySpec {
 impl OverlaySpec {
     pub fn new(id: impl std::hash::Hash + std::fmt::Debug, label: &str, kind: Kind) -> Self {
         Self {
-            id: Id::new(id),
+            id: Id::unique(id),
             label: label.into(),
             kind,
             dismiss_on_escape: true,
@@ -687,7 +687,7 @@ pub fn block_window(ctx: &Context) -> Option<ViewportId> {
         .style(crate::kit::State::REST)
         .fill
         .gamma_multiply(backdrop.data.opacity.clamp(0.0, 1.0));
-    let r = egui::Modal::new(Id::new(("egui_pop.window_blocked", here)))
+    let r = egui::Modal::new(Id::unique(("egui_pop.window_blocked", here)))
         .backdrop_color(fill)
         .frame(egui::Frame::NONE)
         .show(ctx, |_| {});
@@ -1340,7 +1340,7 @@ fn grips(
         &crate::strings::DIALOG_RESIZE,
         &[("dialog", &spec.label)],
     );
-    handle.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Other, true, &name));
+    handle.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Unknown, true, &name));
     ctx.accesskit_node_builder(handle.id, |node| {
         node.set_role(egui::accesskit::Role::Splitter);
         node.set_value(format!("{} × {}", size.x.round(), size.y.round()));
@@ -1560,8 +1560,8 @@ mod tests {
     #[test]
     fn escape_closes_only_the_top_overlay_and_focus_goes_back() {
         let mut s = OverlayStack::new();
-        let f1 = Id::new("field");
-        let f2 = Id::new("button in dialog");
+        let f1 = Id::unique("field");
+        let f2 = Id::unique("button in dialog");
         s.open(spec("dialog", Kind::Modal), Some(f1));
         s.open(spec("menu", Kind::Menu), Some(f2));
         let c = s.escape();
@@ -1579,7 +1579,7 @@ mod tests {
     #[test]
     fn an_overlay_declared_again_changes_in_place() {
         let mut s = OverlayStack::new();
-        s.open(spec("dialog", Kind::Modal), Some(Id::new("field")));
+        s.open(spec("dialog", Kind::Modal), Some(Id::unique("field")));
         s.open(spec("menu", Kind::Menu), None);
         // Escape kept for a while (a dialog moved by the keys): nothing
         // above it closes.
@@ -1590,23 +1590,23 @@ mod tests {
         assert!(s.update(spec("dialog", Kind::Modal)));
         let c = s.escape();
         assert_eq!(labels(&c), ["dialog"]);
-        assert_eq!(c[0].restore_focus, Some(Id::new("field")));
+        assert_eq!(c[0].restore_focus, Some(Id::unique("field")));
         assert!(!s.update(spec("ghost", Kind::Modal)));
     }
 
     #[test]
     fn closing_an_overlay_closes_those_above_it_and_restores_the_lowest_focus() {
         let mut s = OverlayStack::new();
-        s.open(spec("a", Kind::Popover), Some(Id::new(1)));
-        s.open(spec("b", Kind::Menu), Some(Id::new(2)));
-        s.open(spec("c", Kind::Menu), Some(Id::new(3)));
-        let c = s.close(Id::new("b"));
+        s.open(spec("a", Kind::Popover), Some(Id::unique(1)));
+        s.open(spec("b", Kind::Menu), Some(Id::unique(2)));
+        s.open(spec("c", Kind::Menu), Some(Id::unique(3)));
+        let c = s.close(Id::unique("b"));
         assert_eq!(labels(&c), ["c", "b"]);
         assert_eq!(c[0].reason, Reason::Parent);
         assert_eq!(c[1].reason, Reason::Closed);
-        assert_eq!(c.last().unwrap().restore_focus, Some(Id::new(2)));
+        assert_eq!(c.last().unwrap().restore_focus, Some(Id::unique(2)));
         assert_eq!(s.len(), 1);
-        assert!(s.close(Id::new("ghost")).is_empty());
+        assert!(s.close(Id::unique("ghost")).is_empty());
     }
 
     #[test]
@@ -1615,7 +1615,7 @@ mod tests {
         s.open(spec("menu", Kind::Menu), None);
         s.open(spec("submenu", Kind::Menu), None);
         // A click in the first menu closes the submenu only.
-        assert_eq!(labels(&s.click(Some(Id::new("menu")))), ["submenu"]);
+        assert_eq!(labels(&s.click(Some(Id::unique("menu")))), ["submenu"]);
         // A click on the interface closes the menu.
         assert_eq!(labels(&s.click(None)), ["menu"]);
         s.open(spec("dialog", Kind::Modal), None);
@@ -1629,7 +1629,7 @@ mod tests {
     fn a_press_on_a_popovers_anchor_is_not_outside_it() {
         let mut s = OverlayStack::new();
         s.open(spec("popover", Kind::Popover), None);
-        let id = Id::new("popover");
+        let id = Id::unique("popover");
         s.set_rect(
             id,
             Rect::from_min_max((100.0, 0.0).into(), (200.0, 80.0).into()),
@@ -1650,12 +1650,12 @@ mod tests {
     fn a_press_on_a_popup_an_overlay_opened_is_not_outside_it() {
         let mut s = OverlayStack::new();
         s.open(spec("flyout", Kind::Popover), None);
-        let id = Id::new("flyout");
+        let id = Id::unique("flyout");
         s.set_rect(
             id,
             Rect::from_min_max((0.0, 0.0).into(), (100.0, 400.0).into()),
         );
-        let combo = LayerId::new(egui::Order::Foreground, Id::new("combo list"));
+        let combo = LayerId::new(egui::Order::Foreground, Id::unique("combo list"));
         s.set_popups(id, vec![combo]);
         assert_eq!(s.top_popups(), [combo]);
         // On the combo box's list, past the flyout's edge: inside.
@@ -1663,7 +1663,7 @@ mod tests {
         assert_eq!(s.hit_on(past, Some(combo)), Some(id));
         assert!(s.click(s.hit_on(past, Some(combo))).is_empty());
         // Another layer there, or none: outside, it closes.
-        let other = LayerId::new(egui::Order::Foreground, Id::new("elsewhere"));
+        let other = LayerId::new(egui::Order::Foreground, Id::unique("elsewhere"));
         assert_eq!(s.hit_on(past, Some(other)), None);
         assert_eq!(s.hit(past), None);
         assert_eq!(labels(&s.click(None)), ["flyout"]);
@@ -1676,11 +1676,11 @@ mod tests {
         assert!(!s.is_blocked(None));
         s.open(spec("dialog", Kind::Modal), None);
         s.open(spec("menu", Kind::Menu), None);
-        assert_eq!(s.modal(), Some(Id::new("dialog")));
+        assert_eq!(s.modal(), Some(Id::unique("dialog")));
         assert!(s.is_blocked(None));
-        assert!(s.is_blocked(Some(Id::new("popover"))));
-        assert!(!s.is_blocked(Some(Id::new("dialog"))));
-        assert!(!s.is_blocked(Some(Id::new("menu"))));
+        assert!(s.is_blocked(Some(Id::unique("popover"))));
+        assert!(!s.is_blocked(Some(Id::unique("dialog"))));
+        assert!(!s.is_blocked(Some(Id::unique("menu"))));
     }
 
     #[test]
@@ -1717,7 +1717,7 @@ mod tests {
                     assert!(c.len() <= 1);
                 }
                 2 => {
-                    let c = s.close(Id::new(n));
+                    let c = s.close(Id::unique(n));
                     assert_eq!(s.len() + c.len(), before);
                 }
                 _ => {
@@ -1783,7 +1783,7 @@ mod tests {
         let ctx = Context::default();
         let spec = OverlaySpec::new("flyout", "Flyout", Kind::Popover);
         let rect = Rect::from_min_max((0.0, 0.0).into(), (100.0, 300.0).into());
-        let popup = Id::new("a combo box's list");
+        let popup = Id::unique("a combo box's list");
         let mut open = true;
         // A foreground area past the overlay's edge, drawn while the
         // overlay draws, over several passes (egui keeps the layers of

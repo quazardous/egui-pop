@@ -119,7 +119,7 @@ pub fn show(ui: &mut Ui, app: &AppHandle, state: &mut State, waiting: &Waiting) 
         motion::wake_at(&ctx, until);
     }
     ui.add(Spinner::new().label("Loading thumbnails").delayed(
-        egui::Id::new("gallery.progress.load"),
+        egui::Id::unique("gallery.progress.load"),
         since,
         busy,
     ));

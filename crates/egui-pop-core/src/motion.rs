@@ -245,13 +245,13 @@ mod tests {
     fn a_short_job_never_shows_and_a_long_one_stays_its_minimum() {
         let ctx = Context::default();
         let clock = freeze(&ctx, 10.0);
-        let id = Id::new("a");
+        let id = Id::unique("a");
         // Done in 200 ms: nothing ever shown.
         clock.set(10.2);
         assert!(!Busy::new(id, 10.0).visible(&ctx, true));
         assert!(!Busy::new(id, 10.0).visible(&ctx, false));
         // A long one shows after the delay, until it ends.
-        let id = Id::new("b");
+        let id = Id::unique("b");
         clock.set(11.0);
         assert!(Busy::new(id, 10.0).visible(&ctx, true));
         clock.set(12.0);

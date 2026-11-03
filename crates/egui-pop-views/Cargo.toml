@@ -24,16 +24,16 @@ serde.workspace = true
 serde_json.workspace = true
 # MIT OR Apache-2.0: Rerun's virtualised table (sticky header, resizable
 # columns); the data table wraps it.
-egui_table = "0.10"
+egui_table = "0.11"
 # MIT OR Apache-2.0: the viewer's markdown (feature `markdown`), its
-# version tied to egui's (0.25 is on egui 0.36).
-egui_commonmark = { version = "0.25", default-features = false, features = ["pulldown_cmark"], optional = true }
+# version tied to egui's (0.26 is on egui 0.37).
+egui_commonmark = { version = "0.26", default-features = false, features = ["pulldown_cmark"], optional = true }
 # MIT: the parser egui_commonmark uses; the viewer reads a page's blocks,
 # headings, links and images with it.
 pulldown-cmark = { version = "0.13", default-features = false, optional = true }
 # MIT OR Apache-2.0: egui's image loader (decoding only; no file or http
 # loader is installed, the viewer hands the bytes over itself).
-egui_extras = { version = "0.36", default-features = false, features = ["image"], optional = true }
+egui_extras = { version = "0.37", default-features = false, features = ["image"], optional = true }
 # MIT OR Apache-2.0: the formats the viewer decodes.
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif"], optional = true }
 # MIT OR Apache-2.0: the HTML parser of the viewer's safe subset (feature

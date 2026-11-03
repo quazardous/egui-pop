@@ -206,7 +206,7 @@ fn palette(ui: &mut Ui, app: &AppHandle, name: &str, label: &str, p: &Palette) {
     }
     let value = colors.join(", ");
     response.widget_info(|| {
-        let mut info = egui::WidgetInfo::labeled(egui::WidgetType::Button, true, label);
+        let mut info = egui::WidgetInfo::labeled(egui::Role::Button, true, label);
         info.current_text_value = Some(value.clone());
         info
     });
@@ -259,7 +259,7 @@ fn show(ui: &mut Ui, app: &AppHandle, a: &Palette, b: &Palette, greys: &Palette)
         }
     }
     section(ui, "A text field keeps its own copy and paste");
-    let id = egui::Id::new("gallery.clipboard.note");
+    let id = egui::Id::unique("gallery.clipboard.note");
     let mut note = ui
         .data(|d| d.get_temp::<String>(id))
         .unwrap_or_else(|| "Select me and copy".into());

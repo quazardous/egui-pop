@@ -242,7 +242,7 @@ fn a_dialog_opened_from_a_detached_window_shows_there_and_blocks_the_others() {
     r.frame();
     assert_eq!(h.active_window(), log);
     let (id, _) = r.dialogs.current().expect("a dialog is open");
-    let overlay_id = egui::Id::new(("egui_pop.dialog", id));
+    let overlay_id = egui::Id::unique(("egui_pop.dialog", id));
     r.frame();
     assert_eq!(overlay::window_of(&r.ctx, overlay_id), Some(log));
     assert_eq!(overlay::modal_windows(&r.ctx), [log]);
@@ -272,7 +272,7 @@ fn a_dialog_whose_window_closes_comes_to_the_main_window() {
     press(log, Key::D);
     r.frame();
     let (id, _) = r.dialogs.current().expect("a dialog is open");
-    let overlay_id = egui::Id::new(("egui_pop.dialog", id));
+    let overlay_id = egui::Id::unique(("egui_pop.dialog", id));
     assert_eq!(overlay::window_of(&r.ctx, overlay_id), Some(log));
     // The window closes (docked back): the dialog is still to answer.
     assert!(h.change_workbench(Change::CloseWindow(LOG)).unwrap().ok());
@@ -297,7 +297,7 @@ fn a_dialog_opened_from_the_main_window_blocks_a_detached_one() {
     r.frame();
     r.frame();
     let (id, _) = r.dialogs.current().expect("a dialog is open");
-    let overlay_id = egui::Id::new(("egui_pop.dialog", id));
+    let overlay_id = egui::Id::unique(("egui_pop.dialog", id));
     assert_eq!(
         overlay::window_of(&r.ctx, overlay_id),
         Some(ViewportId::ROOT)
@@ -310,12 +310,12 @@ fn a_dialog_opened_from_the_main_window_blocks_a_detached_one() {
 
 /// The palette's overlay id.
 fn palette_overlay() -> egui::Id {
-    egui::Id::new("egui_pop.palette")
+    egui::Id::unique("egui_pop.palette")
 }
 
 /// The toasts' area id.
 fn toasts_area() -> egui::Id {
-    egui::Id::new("egui_pop.toasts")
+    egui::Id::unique("egui_pop.toasts")
 }
 
 #[test]

@@ -44,8 +44,8 @@ use std::collections::BTreeMap;
 
 use egui::containers::menu::MenuConfig;
 use egui::{
-    Align, Align2, Color32, FontId, Layout, Rect, Response, Sense, Ui, UiKind, UiStackInfo,
-    WidgetInfo, WidgetType, pos2, vec2,
+    Align, Align2, Color32, FontId, Layout, Rect, Response, Role, Sense, Ui, UiKind, UiStackInfo,
+    WidgetInfo, pos2, vec2,
 };
 use egui_pop_core::icon::{Icon, IconRef, Size};
 use egui_pop_core::kit::{Glyph, Kit, KitCx, Part, State};
@@ -444,16 +444,15 @@ impl<'a> Toolbar<'a> {
             (ToolKind::Command, true, true) => {
                 let checked = tr.checked;
                 response.widget_info(|| {
-                    WidgetInfo::selected(WidgetType::RadioButton, enabled, checked, &name)
+                    WidgetInfo::selected(Role::RadioButton, enabled, checked, &name)
                 });
             }
             (ToolKind::Command, true, false) => {
                 let checked = tr.checked;
-                response.widget_info(|| {
-                    WidgetInfo::selected(WidgetType::Button, enabled, checked, &name)
-                });
+                response
+                    .widget_info(|| WidgetInfo::selected(Role::Button, enabled, checked, &name));
             }
-            _ => response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, enabled, &name)),
+            _ => response.widget_info(|| WidgetInfo::labeled(Role::Button, enabled, &name)),
         }
         if tr.busy {
             ctx.accesskit_node_builder(response.id, |node| node.set_busy());
@@ -595,7 +594,7 @@ impl<'a> Toolbar<'a> {
                 .paint(ui.painter(), at, look.style(state).text);
         }
         let label = name.clone();
-        response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, &label));
+        response.widget_info(|| WidgetInfo::labeled(Role::Button, true, &label));
         let response = response.on_hover_text(name);
         let menu = self.menu.clone();
         self.popup(&response, cx, move |ui, app, cx, args| {
@@ -764,7 +763,7 @@ impl Tool {
         let busy = crate::busy::busy_shown(
             app,
             ctx,
-            egui::Id::new(("egui_pop_toolbar_busy", c.id.as_str(), &title)),
+            egui::Id::unique(("egui_pop_toolbar_busy", c.id.as_str(), &title)),
             c.id,
         );
         Tool {

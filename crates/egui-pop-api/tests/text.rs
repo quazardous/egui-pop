@@ -150,7 +150,7 @@ fn resting_on_a_family_in_the_picker_previews_it_before_it_is_picked() {
     let mut h = harness(ThemeSpec::new("pop-dark"));
     // A system face of the test's own: nothing depends on the machine.
     let ubuntu = egui::FontDefinitions::default().font_data["Ubuntu-Light"]
-        .font
+        .bytes()
         .to_vec();
     fonts::set_system_faces(
         &h.ctx,

@@ -1769,7 +1769,7 @@ fn the_workbench_page_shows_a_dragged_tab_s_ghost_where_it_would_land() {
         .get_by_label("Properties of the selection.")
         .rect()
         .center();
-    // Event by event, a frame each, as egui_dock follows a tab's drag.
+    // Event by event, a frame each, as egui_stack follows a tab's drag.
     let pointer = |h: &mut Harness<'_, Gallery>, e: egui::Event| {
         h.input_mut().events.push(e);
         h.step();
@@ -4013,6 +4013,7 @@ fn wheel_sections(h: &mut Harness<'_, Gallery>, at: egui::Pos2, notches: f32) {
         delta: egui::vec2(0.0, delta),
         modifiers: egui::Modifiers::NONE,
         phase,
+        source: egui::MouseWheelSource::Wheel,
     };
     h.hover_at(at);
     h.run();
@@ -5454,6 +5455,7 @@ fn the_shortcuts_editor_adds_a_gesture_done_on_its_pad() {
         delta: egui::vec2(0.0, 1.0),
         modifiers: egui::Modifiers::ALT,
         phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Wheel,
     });
     h.run();
     h.get_by_label("Use Alt+Wheel").click();
@@ -5852,7 +5854,6 @@ fn page_ends_with(theme: &str, density: Density, page: &str) -> Vec<String> {
 /// scroll or the page's own bringing it there, or the page fits; and no two
 /// bars stand side by side. Says whether the shell's scroll had anything to do.
 fn check_short_page(theme: &str, density: Density, page: &str) -> Result<bool, String> {
-    use egui::scroll_area::State;
     let end = page_ends_with(theme, density, page);
     let mut h = short_window_in(theme, density, page);
     run_page(&mut h, page);
@@ -5873,9 +5874,10 @@ fn check_short_page(theme: &str, density: Density, page: &str) -> Result<bool, S
         }
         Some(id) => {
             scrolls = view.content.height() > view.zone.height() + 1.0;
-            let mut state = State::load(&h.ctx, id).expect("the page's scroll");
-            state.offset = egui::Vec2::splat(100_000.0);
-            state.store(&h.ctx, id);
+            assert!(
+                egui_pop::core::ui::set_scroll_offset(&h.ctx, id, egui::Vec2::splat(100_000.0)),
+                "the page's scroll"
+            );
             let _ = h.run_ok();
             let at_end = page_view(&h);
             if at_end.content.bottom() > at_end.zone.bottom() + 1.0
@@ -5970,9 +5972,10 @@ fn every_playground_ends_in_a_short_window() {
         let nav = nav.unwrap();
         let view = nav.playground_view().expect("a playground was drawn");
         let id = view.scroll.expect("every playground scrolls");
-        let mut state = egui::scroll_area::State::load(&h.ctx, id).expect("its scroll");
-        state.offset.y = 100_000.0;
-        state.store(&h.ctx, id);
+        assert!(
+            egui_pop::core::ui::set_scroll_offset(&h.ctx, id, egui::vec2(0.0, 100_000.0)),
+            "its scroll"
+        );
         let _ = h.run_ok();
         let view = nav.playground_view().expect("a playground was drawn");
         if view.content.bottom() > view.zone.bottom() + 1.0 {
@@ -5987,7 +5990,10 @@ fn a_page_scrolls_by_the_wheel_in_a_short_window_and_a_canvas_keeps_it() {
     use egui::scroll_area::State;
     let offset = |h: &Harness<'_, Gallery>| {
         let id = page_view(h).scroll.expect("the page's scroll");
-        State::load(&h.ctx, id).expect("its state").offset.y
+        State::load(&h.ctx, id)
+            .expect("its state")
+            .clamped_offset()
+            .y
     };
     // Hover asks for frames here, for a tooltip: no `Harness::run`.
     let wheel = |h: &mut Harness<'_, Gallery>, at: egui::Pos2, notches: f32| {
@@ -5996,6 +6002,7 @@ fn a_page_scrolls_by_the_wheel_in_a_short_window_and_a_canvas_keeps_it() {
             delta: egui::vec2(0.0, delta),
             modifiers: egui::Modifiers::NONE,
             phase,
+            source: egui::MouseWheelSource::Wheel,
         };
         h.hover_at(at);
         let _ = h.run_ok();
@@ -6030,9 +6037,10 @@ fn a_page_keeps_its_scroll_per_page() {
     use egui::scroll_area::State;
     let mut h = short_window("settings");
     let settings = page_view(&h).scroll.expect("the page's scroll");
-    let mut state = State::load(&h.ctx, settings).expect("its state");
-    state.offset.y = 40.0;
-    state.store(&h.ctx, settings);
+    assert!(
+        egui_pop::core::ui::set_scroll_offset(&h.ctx, settings, egui::vec2(0.0, 40.0)),
+        "its state"
+    );
     h.run();
     // The next page starts at its top, and back, the page is where it was.
     h.key_press_modifiers(egui::Modifiers::ALT, egui::Key::ArrowDown);
@@ -6040,12 +6048,21 @@ fn a_page_keeps_its_scroll_per_page() {
     let next = page_view(&h).scroll;
     assert_ne!(next, Some(settings));
     if let Some(next) = next {
-        assert_eq!(State::load(&h.ctx, next).expect("its state").offset.y, 0.0);
+        assert_eq!(
+            State::load(&h.ctx, next)
+                .expect("its state")
+                .clamped_offset()
+                .y,
+            0.0
+        );
     }
     h.key_press_modifiers(egui::Modifiers::ALT, egui::Key::ArrowUp);
     h.run();
     assert_eq!(
-        State::load(&h.ctx, settings).expect("its state").offset.y,
+        State::load(&h.ctx, settings)
+            .expect("its state")
+            .clamped_offset()
+            .y,
         40.0
     );
 }

@@ -75,7 +75,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 
-use egui::{Id, RichText, Ui, WidgetInfo, WidgetType};
+use egui::{Id, RichText, Ui, WidgetInfo};
 use egui_pop_core::fonts::{Face, FontFile, Role, Weight};
 use egui_pop_core::state::Slot;
 use egui_pop_core::strings;
@@ -2160,7 +2160,7 @@ fn toolbar(ui: &mut Ui, app: &AppHandle, editor: &ThemeEditor) {
                 .desired_width(240.0),
         );
         drop(s);
-        r.widget_info(|| WidgetInfo::labeled(WidgetType::TextEdit, true, &hint));
+        r.widget_info(|| WidgetInfo::labeled(egui::Role::TextInput, true, &hint));
     });
 }
 
@@ -2431,7 +2431,7 @@ fn detail(
         };
         let r = ui.add(egui::TextEdit::singleline(&mut text).desired_width(220.0));
         let name = strings::tr_args(&ctx, &txt::THEME_EDITOR_VALUE_OF, &[("token", path)]);
-        egui_pop_core::a11y::name(&r, WidgetType::TextEdit, &name);
+        egui_pop_core::a11y::name(&r, egui::Role::TextInput, &name);
         if r.changed() || r.has_focus() {
             lock(&editor.state).typing = Some((path.to_string(), text.clone()));
         }
@@ -2495,7 +2495,7 @@ fn hex_field(
             .font(egui::TextStyle::Monospace)
             .desired_width(80.0),
     );
-    egui_pop_core::a11y::name(&r, WidgetType::TextEdit, name);
+    egui_pop_core::a11y::name(&r, egui::Role::TextInput, name);
     if r.changed() || r.has_focus() {
         lock(&editor.state).hex = Some((key.to_string(), text.clone()));
     }
@@ -2540,7 +2540,7 @@ fn generator(
             &mut c32,
             egui::color_picker::Alpha::Opaque,
         );
-        r.widget_info(|| WidgetInfo::labeled(WidgetType::ColorButton, true, &name));
+        r.widget_info(|| WidgetInfo::labeled(egui::Role::ColorWell, true, &name));
         if r.changed() {
             let [r8, g8, b8, _] = c32.to_srgba_unmultiplied();
             seed = Color::rgb(
@@ -2627,7 +2627,7 @@ fn value_widget(
                 b: f32::from(b8) / 255.0,
                 a: f32::from(a8) / 255.0,
             };
-            r.widget_info(|| WidgetInfo::labeled(WidgetType::ColorButton, true, &name));
+            r.widget_info(|| WidgetInfo::labeled(egui::Role::ColorWell, true, &name));
             let hex_name = strings::tr_args(&ctx, &txt::THEME_EDITOR_HEX_OF, &[("token", path)]);
             if let Some(typed) = hex_field(ui, editor, path, *c, &hex_name, false) {
                 say(
@@ -2653,7 +2653,7 @@ fn value_widget(
                 0.25
             };
             let r = ui.add(egui::DragValue::new(&mut x).speed(speed).suffix(unit));
-            r.widget_info(|| WidgetInfo::labeled(WidgetType::DragValue, true, &name));
+            r.widget_info(|| WidgetInfo::labeled(egui::Role::SpinButton, true, &name));
             let to = match &t.value {
                 Value::Dimension(_) => json!({ "value": x, "unit": "px" }),
                 Value::Duration(_) => json!({ "value": x, "unit": "ms" }),
@@ -2899,7 +2899,7 @@ fn fonts_tab(ui: &mut Ui, app: &AppHandle, editor: &ThemeEditor) {
                     .hint_text(&hint)
                     .desired_width(200.0),
             );
-            egui_pop_core::a11y::name(&r, WidgetType::TextEdit, &hint);
+            egui_pop_core::a11y::name(&r, egui::Role::TextInput, &hint);
             let add = ui.button(tr(&txt::THEME_EDITOR_ADD)).clicked()
                 || (r.lost_focus() && ui.input(|inp| inp.key_pressed(egui::Key::Enter)));
             if add && !typed.trim().is_empty() {
@@ -3033,7 +3033,7 @@ fn installed_families(
                 .hint_text(&hint)
                 .desired_width(200.0),
         );
-        egui_pop_core::a11y::name(&r, WidgetType::TextEdit, &hint);
+        egui_pop_core::a11y::name(&r, egui::Role::TextInput, &hint);
     });
     {
         let mut s = lock(&editor.state);
@@ -3210,7 +3210,7 @@ pub fn sample(ui: &mut Ui) {
                 .hint_text(&hint)
                 .desired_width(140.0),
         );
-        egui_pop_core::a11y::name(&r, WidgetType::TextEdit, &hint);
+        egui_pop_core::a11y::name(&r, egui::Role::TextInput, &hint);
     });
     let _ = widgets::selectable_label(ui, true, tr(&txt::THEME_EDITOR_SAMPLE_SELECTED));
     ui.add(egui::ProgressBar::new(level).desired_width(220.0));
@@ -3324,7 +3324,7 @@ fn file(ui: &mut Ui, app: &AppHandle, editor: &ThemeEditor) {
                     .desired_rows(6)
                     .desired_width(f32::INFINITY),
             );
-            r.widget_info(|| WidgetInfo::labeled(WidgetType::TextEdit, true, &label));
+            r.widget_info(|| WidgetInfo::labeled(egui::Role::TextInput, true, &label));
             if r.changed() {
                 lock(&editor.state).file_text = text;
             }

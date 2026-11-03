@@ -2,7 +2,7 @@
 //! small, the part in view framed, the rest veiled.
 
 use egui::{
-    Key, Pos2, Rect, Response, Sense, Stroke, StrokeKind, Ui, Vec2, WidgetInfo, WidgetType, vec2,
+    Key, Pos2, Rect, Response, Role, Sense, Stroke, StrokeKind, Ui, Vec2, WidgetInfo, vec2,
 };
 use egui_pop_core::state::Slot;
 use egui_pop_core::strings;
@@ -141,7 +141,7 @@ impl<'a> GraphMinimap<'a> {
         );
         let enabled = ui.is_enabled();
         response.widget_info(|| {
-            let mut info = WidgetInfo::labeled(WidgetType::Other, enabled, &label);
+            let mut info = WidgetInfo::labeled(Role::Unknown, enabled, &label);
             info.current_text_value = Some(value.clone());
             info
         });

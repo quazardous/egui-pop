@@ -367,8 +367,8 @@ pub fn bar_within(ui: &mut Ui, app: &AppHandle, menu: &MenuId, reserve: f32) {
         if open.is_some() {
             egui::Popup::open_id(&ctx, id.with("popup"));
         }
-        let mark = Id::new(("egui_pop_menu_more", menu.as_str()));
-        let button = Button::new(Atom::custom(mark, vec2(side, side)));
+        let mark = Id::unique(("egui_pop_menu_more", menu.as_str()));
+        let button = Button::new(Atom::custom(egui::IdSalt::new(mark), vec2(side, side)));
         let (r, _) = MenuButton::from_button(button).ui(ui, |ui| {
             for (i, m) in hidden.iter().enumerate() {
                 ui.add_enabled_ui(m.enabled, |ui| {
@@ -386,7 +386,7 @@ pub fn bar_within(ui: &mut Ui, app: &AppHandle, menu: &MenuId, reserve: f32) {
         });
         let rect = Rect::from_center_size(r.rect.center(), vec2(side, side));
         icon.paint(ui.painter(), rect, ui.style().interact(&r).text_color());
-        r.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &name));
+        r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &name));
         r.on_hover_text(name);
     }
     let layout = BarLayout {
@@ -662,7 +662,7 @@ impl From<Pos2> for At {
 
 /// The popup's egui id.
 pub(crate) fn popup_id() -> Id {
-    Id::new("egui_pop.menu.popup")
+    Id::unique("egui_pop.menu.popup")
 }
 
 /// Opens a declared menu as a popup under a rectangle or at a point,
@@ -964,7 +964,7 @@ impl Columns {
     /// The gutter's atom, first in a row; none when the menu keeps no
     /// gutter.
     fn gutter_atom(&self, id: Id, side: f32) -> Option<Atom<'static>> {
-        (self.gutter > 0.0).then(|| Atom::custom(id, vec2(self.gutter, side)))
+        (self.gutter > 0.0).then(|| Atom::custom(egui::IdSalt::new(id), vec2(self.gutter, side)))
     }
 }
 
@@ -1159,7 +1159,7 @@ fn command_row(
     } else {
         None
     };
-    let tick = Id::new(("egui_pop_menu_tick", menu.as_str(), id.as_str(), &title));
+    let tick = Id::unique(("egui_pop_menu_tick", menu.as_str(), id.as_str(), &title));
     let text_id = tick.with("label");
     let blank = tick.with("arrow");
     let kit = Kit::of(&ctx);
@@ -1174,7 +1174,7 @@ fn command_row(
             let label = item_text(ui, item, state, title.as_str());
             let mut atoms: Vec<Atom<'_>> = Vec::with_capacity(5);
             atoms.extend(columns.gutter_atom(tick, side));
-            atoms.push(label.atom_id(text_id));
+            atoms.push(label.atom_id(egui::IdSalt::new(text_id)));
             if shortcut.is_some() || columns.arrow {
                 atoms.push(Atom::grow());
             }
@@ -1186,7 +1186,7 @@ fn command_row(
                 );
             }
             if columns.arrow {
-                atoms.push(Atom::custom(blank, vec2(side, side)));
+                atoms.push(Atom::custom(egui::IdSalt::new(blank), vec2(side, side)));
             }
             let button = Button::new(egui::Atoms::from(atoms))
                 .fill(Color32::TRANSPARENT)
@@ -1209,7 +1209,7 @@ fn command_row(
         (false, false, Some(_)) => Mark::Icon,
         (false, false, None) => Mark::None,
     };
-    if let Some(rect) = r.rect(tick) {
+    if let Some(rect) = r.rect(egui::IdSalt::new(tick)) {
         // The mark keeps the item's resting colour (greyed when
         // disabled), never a tone: high contrast keeps the text's.
         let disabled = why.is_some();
@@ -1257,7 +1257,7 @@ fn command_row(
             icon: icon.as_ref().map(|(_, n)| n.clone()),
             mark,
             label_x: r
-                .rect(text_id)
+                .rect(egui::IdSalt::new(text_id))
                 .map_or(0.0, |l| l.left() - r.response.rect.left()),
             gutter: columns.gutter,
         },
@@ -1269,9 +1269,9 @@ fn command_row(
             label.unwrap_or_else(|| title_of(&ctx, &spec, id)),
         );
         let kind = if radio {
-            egui::WidgetType::RadioButton
+            egui::Role::RadioButton
         } else {
-            egui::WidgetType::Checkbox
+            egui::Role::CheckBox
         };
         response.widget_info(|| egui::WidgetInfo::selected(kind, on, checked, &name));
     }
@@ -1360,8 +1360,8 @@ fn submenu(
     let open = MenuState::from_ui(ui, |state, _| {
         state.open_item == Some(SubMenu::id_from_widget_id(my_id))
     });
-    let space = Id::new(("egui_pop_menu_space", menu.as_str()));
-    let arrow = Id::new(("egui_pop_menu_arrow", menu.as_str()));
+    let space = Id::unique(("egui_pop_menu_space", menu.as_str()));
+    let arrow = Id::unique(("egui_pop_menu_arrow", menu.as_str()));
     let text_id = space.with("label");
     let kit = Kit::of(ui.ctx());
     let item = &kit.menu_item;
@@ -1370,15 +1370,15 @@ fn submenu(
     let state = item_state(ui, my_id).with(State::SELECTED, open);
     let mut atoms: Vec<Atom<'_>> = Vec::with_capacity(4);
     atoms.extend(columns.gutter_atom(space, side));
-    atoms.push(item_text(ui, item, state, label).atom_id(text_id));
+    atoms.push(item_text(ui, item, state, label).atom_id(egui::IdSalt::new(text_id)));
     atoms.push(Atom::grow());
-    atoms.push(Atom::custom(arrow, vec2(side, side)));
+    atoms.push(Atom::custom(egui::IdSalt::new(arrow), vec2(side, side)));
     let button = Button::new(egui::Atoms::from(atoms))
         .fill(Color32::TRANSPARENT)
         .stroke(Stroke::NONE);
     let r = button.atom_ui(ui);
     paint_item(ui, item, slot, r.response.rect, state);
-    if let Some(rect) = r.rect(arrow) {
+    if let Some(rect) = r.rect(egui::IdSalt::new(arrow)) {
         kit.glyph(Glyph::Submenu).paint(
             ui.painter(),
             rect.shrink(rect.width() * 0.15),
@@ -1390,7 +1390,7 @@ fn submenu(
         .show(ui, &r.response, |ui| {
             items(ui, app, menu, cx, args, depth + 1)
         });
-    r.rect(text_id)
+    r.rect(egui::IdSalt::new(text_id))
         .map_or(0.0, |l| l.left() - r.response.rect.left())
 }
 

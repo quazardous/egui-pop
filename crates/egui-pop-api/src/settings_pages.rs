@@ -59,7 +59,7 @@ use std::cell::RefCell;
 use std::fmt;
 use std::rc::Rc;
 
-use egui::{Ui, WidgetType};
+use egui::{Role, Ui};
 use egui_pop_core::a11y;
 use egui_pop_core::lock;
 use egui_pop_core::strings;
@@ -528,7 +528,7 @@ pub(crate) fn header(ui: &mut Ui, app: &AppHandle, page: &SettingsPage) {
             ));
         a11y::name(
             &r,
-            WidgetType::Button,
+            Role::Button,
             &strings::tr_args(&ctx, &txt::SETTINGS_RESET_PAGE_NAME, &name),
         );
         if r.clicked() {
@@ -556,7 +556,7 @@ pub(crate) fn search_hit(
         let r = ui.small_button(strings::tr(&ctx, &txt::SETTINGS_OPEN_PAGE));
         a11y::name(
             &r,
-            WidgetType::Button,
+            Role::Button,
             &strings::tr_args(
                 &ctx,
                 &txt::SETTINGS_OPEN_PAGE_NAME,

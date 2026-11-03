@@ -212,6 +212,7 @@ fn a_double_click_on_a_handle_resets_it_and_the_wheel_adjusts_it() {
         delta: vec2(0.0, 50.0),
         modifiers: Modifiers::NONE,
         phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Wheel,
     });
     h.run_steps(10);
     assert!(

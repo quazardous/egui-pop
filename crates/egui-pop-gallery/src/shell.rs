@@ -389,7 +389,7 @@ impl TreeSource<String> for PageTree<'_> {
 /// egui's persisted memory, as the stacked sections' are. A group not named
 /// there is open.
 fn folded_id() -> egui::Id {
-    egui::Id::new("gallery.pages.folded")
+    egui::Id::unique("gallery.pages.folded")
 }
 
 /// Keeps the groups folded now with the window's layout.
@@ -534,7 +534,10 @@ fn page(ui: &mut Ui, app: &AppHandle) {
         let out = page_scroll(ui, "gallery.page", &id, |ui| app.show_story(ui, &id));
         PageView {
             zone,
-            content: Rect::from_min_size(out.inner_rect.min - out.state.offset, out.content_size),
+            content: Rect::from_min_size(
+                out.inner_rect.min - out.state.unclamped_offset(),
+                out.content_size,
+            ),
             scroll: Some(out.id),
         }
     };
@@ -554,7 +557,10 @@ fn playground(ui: &mut Ui, app: &AppHandle) {
     });
     *lock(&nav(app).playground) = Some(PageView {
         zone,
-        content: Rect::from_min_size(out.inner_rect.min - out.state.offset, out.content_size),
+        content: Rect::from_min_size(
+            out.inner_rect.min - out.state.unclamped_offset(),
+            out.content_size,
+        ),
         scroll: Some(out.id),
     });
 }

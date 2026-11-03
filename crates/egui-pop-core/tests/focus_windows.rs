@@ -25,7 +25,7 @@ struct Seen {
 type Sights = Rc<RefCell<HashMap<ViewportId, Seen>>>;
 
 fn field(window: ViewportId) -> Id {
-    Id::new(("field", window))
+    Id::unique(("field", window))
 }
 
 fn child() -> ViewportId {

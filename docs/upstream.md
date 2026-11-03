@@ -47,8 +47,9 @@ limit.
   `Link` on the node after drawing it (`crates/egui-pop-api/src/links.rs`).
   egui's own `Hyperlink` on the built-in widgets page keeps the
   limit.
-- **Remove when**: the bump to egui 0.37 (the text selection keeps the
-  role the widget gave).
+- **Remove when**: now, egui-pop being on egui 0.37 (check that the text
+  selection keeps the role the widget gave); a follow-up of the move
+  (issue #24).
 
 ## egui_kittest: no double click from queued events
 
@@ -93,6 +94,23 @@ limit.
 - **When it can go:** when `ScrollArea` has keys of its own, and a widget's use
   of a key can be seen.
 
+## egui: a scroll area's offset cannot be set from outside
+
+- **Compensated**: egui 0.37 made the offset of a scroll area's `State`
+  private, with getters (`clamped_offset`, `unclamped_offset`) and no
+  setter. `ScrollArea::scroll_offset` sets it only for whoever builds the
+  area, and `Ui::scroll_with_delta` or a scroll target reach only the
+  innermost area being drawn. egui-pop moves areas it did not build:
+  the focus brought into view through every area around it
+  (`core::reveal`), and the keys of a scroll area (`core::scroll_keys`).
+- **Upstream**: not filed yet (a `State::set_offset`, or a public field
+  again).
+- **Workaround**: `egui_pop_core::ui::set_scroll_offset` round-trips the
+  state through its serde form (egui's `serde` feature, turned on by
+  egui-pop-core) with the new offset (`// upstream:`); kinetic scrolling
+  in progress stops there.
+- **Remove when**: egui's scroll state can be given an offset.
+
 ## egui: a selectable button changes size under the pointer
 
 - **Compensated**: `Button::selectable` draws no frame at rest (neither
@@ -110,8 +128,9 @@ limit.
   keep egui's sizes, and `SelectableRow::steady` keeps the framed size
   in every state: the rows of a `Choose` dialog are steady
   (`dialogs::choice_row`, `// upstream:`).
-- **Remove when**: egui-pop moves to egui 0.37 (check that a selectable
-  row keeps its size under the pointer).
+- **Remove when**: now, egui-pop being on egui 0.37 (check that a
+  selectable row keeps its size under the pointer); a follow-up of the
+  move (issue #24).
 
 ## egui: input in the pass of an AccessKit focus is lost
 
@@ -134,8 +153,9 @@ limit.
   the start of the next pass, when the field has the focus
   (`focus::hold_after_accesskit_focus`, `// upstream:`). It covers every
   text field in the context, egui-pop's and an application's own.
-- **Remove when**: egui-pop moves to egui 0.37 (check that text typed in
-  the pass of an AccessKit focus reaches the field without the plugin).
+- **Remove when**: now, egui-pop being on egui 0.37 (check that text
+  typed in the pass of an AccessKit focus reaches the field without the
+  plugin); a follow-up of the move (issue #24).
 
 ## egui: a plugin's input hook runs in another window
 
@@ -310,7 +330,8 @@ limit.
 - **Workaround**: when the focus lands on a popup's frame, the focus plugin
   moves it on in the next pass, the way Tab was going
   (`// upstream:` in `crates/egui-pop-core/src/place.rs`).
-- **Remove when**: egui-pop moves to egui 0.37.
+- **Remove when**: now, egui-pop being on egui 0.37; a follow-up of the
+  move (issue #24).
 
 ## egui: Tab wraps only in a modal layer
 
@@ -447,6 +468,21 @@ limit.
 - **Remove when**: egui_commonmark names its code blocks, or takes a name
   for them.
 
+## egui_commonmark: a code block's copy button is a symbol
+
+- **Compensated**: egui_commonmark 0.26 draws a code block's copy button
+  as the text `🗐` (and `✔` once copied). egui 0.37's bundled fonts have
+  no `🗐`: the viewer shows a box there, and egui_kittest 0.37, which
+  panics on a missing glyph by default, fails a test drawing a code
+  block.
+- **Upstream**: not filed yet (draw the button as an icon, or let the
+  application hide it).
+- **Workaround**: the tests drawing the viewer's code blocks allow
+  missing glyphs (`HarnessBuilder::allow_missing_glyphs`, `// upstream:`).
+  The button still shows a box.
+- **Remove when**: egui_commonmark draws its copy button without a
+  symbol the fonts may lack.
+
 ## egui_kittest: no way to move a window to a screen of another scale
 
 - **Compensated**: `Harness::set_pixels_per_point` changes egui's zoom
@@ -472,34 +508,46 @@ limit.
   `Ctrl+Alt+0`, rebindable like any command.
 - **Remove when**: never; this is egui-pop's design.
 
-## egui_dock: no per-tab, per-destination drop veto
+## egui_stack: no drop between two docks
 
-- **Compensated**: egui_dock has no hook to refuse dropping a given tab
-  in a given place (only `allowed_in_windows` and the global
-  `AllowedSplits`), while egui-pop panels declare the areas they may live
-  in.
-- **Upstream**: <https://github.com/anhosh/egui_dock/issues/351> (related
-  to #163 there).
+- **Compensated**: egui-pop panels declare the areas they may live in,
+  and egui_dock had no hook to refuse dropping a given tab in a given
+  place (only `allowed_in_windows` and the global `AllowedSplits`), so
+  each area is a dock of its own. A dock follows a tab's drag only inside
+  itself.
+- **Upstream**: egui_dock's <https://github.com/anhosh/egui_dock/issues/351>
+  (related to #163 there). egui-pop now draws its docks with
+  [egui_stack](https://github.com/quazardous/egui_stack), which continues
+  egui_dock and adds the veto: `TabViewer::drop_allowed(tab, destination)`
+  and a public `DockArea::dragged_tab`. Using them means one dock for the
+  whole workbench, its areas the main surface's splits ("fixed" nodes, the
+  move still a `workbench.move` step): see
+  [egui_stack directions](egui-stack-directions.md), 2.1.
 - **Workaround**: each area is a dock of its own, its tabs never allowed
-  into egui_dock's windows; a tab dropped over another area is moved
+  into egui_stack's windows; a tab dropped over another area is moved
   there by the workbench (`egui_pop_api::workbench`) when the panel's
   rules allow it, and refused otherwise, with the drop hint saying why
   and the refusal reported (no silent no-op, ADR 0003). `Layout::repair`
   moves panels found in an area they may not be in.
-- **Remove when**: the hook lands in egui_dock.
+- **Remove when**: the workbench draws its areas in one egui_stack dock,
+  with `drop_allowed` as the veto.
 
 ## egui: symbols missing from the default fonts
 
 - **Compensated**: symbols such as ✓ ▸ ◆ ● render as missing glyphs with
   egui's default fonts.
-- **Upstream**: fixed by <https://github.com/emilk/egui/pull/8491>
-  ("Render any glyph on native", merged, expected in egui 0.37).
+- **Upstream**: <https://github.com/emilk/egui/pull/8491> ("Render any
+  glyph on native", in egui 0.37.0) draws a glyph the fonts lack from the
+  system's fonts, through an opt-in font provider (eframe's
+  `system_fonts` feature, off in egui-pop). egui's bundled fonts still
+  lack these symbols, and neither the web nor kittest has a provider.
 - **Workaround**: icons are named by role (`egui_pop_core::icon::Icon`)
   and drawn from the Phosphor icon font (`phosphor` feature), installed
   in a family of its own, or painted with lines and fills; widgets never
   put symbols in text. egui's `SubMenuButton` arrow (`⏵`) is replaced
   by a painted chevron in egui-pop's menus.
-- **Remove when**: egui-pop moves to egui 0.37.
+- **Remove when**: every backend egui-pop runs on (native, web, kittest)
+  draws these symbols; until then icons stay named by role.
 
 ## eframe: no list of screens when a window is placed
 
@@ -610,8 +658,8 @@ limit.
   nothing, that paste is refused when the owner's text is no longer
   there. It fires on the release, not the press, and a key repeat
   pastes once.
-- **Remove when**: egui-pop moves to egui 0.37: turn
-  `clipboard_shortcuts` off in the native options, bind Ctrl+C, Ctrl+X
+- **Remove when**: now, egui-pop being on egui 0.37 (a follow-up of the
+  move, issue #24): turn `clipboard_shortcuts` off in the native options, bind Ctrl+C, Ctrl+X
   and Ctrl+V (and Windows' Insert and Delete chords) in the keymap for
   every backend, and give text fields their copy, cut and paste events
   from the system backend (egui's `TextEdit` reads `Event::Copy`,

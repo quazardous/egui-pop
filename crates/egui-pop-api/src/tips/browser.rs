@@ -65,7 +65,7 @@ pub fn browser(ui: &mut Ui, app: &AppHandle) {
             let label = strings::tr(&ctx, &txt::TIPS_ORIGIN_ON);
             let r = ui.checkbox(&mut on, &label);
             let name = strings::tr_args(&ctx, &txt::TIPS_ORIGIN_ON_NAME, &[("origin", &title)]);
-            egui_pop_core::a11y::name(&r, egui::WidgetType::Checkbox, &name);
+            egui_pop_core::a11y::name(&r, egui::Role::CheckBox, &name);
             if r.changed()
                 && let Err(e) = tips.set_origin_on(app, &origin, on)
             {
@@ -93,7 +93,7 @@ pub fn browser(ui: &mut Ui, app: &AppHandle) {
                     }
                     let r = ui.small_button(strings::tr(&ctx, &txt::TIPS_SHOW));
                     let name = strings::tr_args(&ctx, &txt::TIPS_SHOW_NAME, &[("tip", &tip_title)]);
-                    egui_pop_core::a11y::name(&r, egui::WidgetType::Button, &name);
+                    egui_pop_core::a11y::name(&r, egui::Role::Button, &name);
                     if r.clicked()
                         && let Err(e) = tips.show(app, &tip.id)
                     {

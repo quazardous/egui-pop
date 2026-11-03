@@ -391,11 +391,11 @@ impl Plugin for Swatches {
                 move |ui, app| {
                     use egui_pop_core::pointer::claim::{self, SecondaryClaim};
                     let rect = egui::Rect::from_min_size(ui.cursor().min, egui::vec2(300.0, 120.0));
-                    let card = ui.interact(rect, ui.id().with("card"), egui::Sense::click());
+                    let card = ui.interact(rect, ui.scope_id().with("card"), egui::Sense::click());
                     ui.add(egui::Label::new("plain").selectable(false));
                     let swatch = ui.allocate_response(egui::vec2(40.0, 40.0), egui::Sense::drag());
                     swatch.widget_info(|| {
-                        egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "swatch")
+                        egui::WidgetInfo::labeled(egui::Role::Button, true, "swatch")
                     });
                     claim::claim_secondary(
                         &swatch,

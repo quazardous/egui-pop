@@ -24,7 +24,7 @@
 //! }
 //! ```
 
-use egui::{Key as EKey, Modifiers, Response, TextEdit, Ui, WidgetType};
+use egui::{Key as EKey, Modifiers, Response, Role, TextEdit, Ui};
 use egui_pop_api::AppHandle;
 use egui_pop_core::strings::{tr, tr_args};
 use egui_pop_core::theme::Tokens;
@@ -393,7 +393,7 @@ impl<'a> SearchField<'a> {
     pub fn show(self, ui: &mut Ui, state: &mut SearchState) -> SearchOutput {
         let t = Tokens::of(ui.ctx());
         let ctx = ui.ctx().clone();
-        let text_id = egui::Id::new(("egui_pop_views::search", &self.library));
+        let text_id = egui::Id::unique(("egui_pop_views::search", &self.library));
         let label = self.label.clone().unwrap_or_else(|| tr(&ctx, &s::SEARCH));
         let registry = self.app.and_then(|a| a.service(&LIBRARIES));
         let mut proposed: Option<Filter> = None;
@@ -460,18 +460,18 @@ impl<'a> SearchField<'a> {
                             .hint_text(label.clone())
                             .desired_width(self.width.unwrap_or(180.0)),
                     );
-                    egui_pop_core::a11y::name(&field, WidgetType::TextEdit, &label);
+                    egui_pop_core::a11y::name(&field, Role::TextInput, &label);
                     let add = ui.menu_button("+", |ui| add_menu(ui, &mut state.chips));
                     egui_pop_core::a11y::name(
                         &add.response,
-                        WidgetType::Button,
+                        Role::Button,
                         &tr(&ctx, &s::ADD_FILTER),
                     );
                     if !state.chips.is_empty() || !state.text.is_empty() {
                         let clear = ui.button("×");
                         egui_pop_core::a11y::name(
                             &clear,
-                            WidgetType::Button,
+                            Role::Button,
                             &tr(&ctx, &s::CLEAR_FILTERS),
                         );
                         if clear.clicked() {

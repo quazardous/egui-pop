@@ -97,7 +97,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
         .unit("EV");
     param::param(ui, &watched, Mode::Watch(&store, "gallery/values/exposure"));
     section(ui, "Plain: the caller's own value");
-    let id = PLAIN.keyed(ui.id());
+    let id = PLAIN.keyed(ui.scope_id());
     let mut plain = id.get(ui.ctx()).map_or(Value::Float(0.5), Value::Float);
     let opacity = Descriptor::float("Opacity", 0.0, 1.0, 1.0)
         .display(100.0, 0)

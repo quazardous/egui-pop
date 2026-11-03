@@ -14,7 +14,7 @@ struct Bytes(Arc<FontData>);
 
 impl AsRef<[u8]> for Bytes {
     fn as_ref(&self) -> &[u8] {
-        &self.0.font
+        self.0.bytes()
     }
 }
 
@@ -33,7 +33,7 @@ pub(super) fn database(faces: &[InstalledFace]) -> (Database, String) {
         let Some(data) = bundled.font_data.get(&key) else {
             continue;
         };
-        if all.iter().any(|f| f.data.font == data.font) {
+        if all.iter().any(|f| f.data.bytes() == data.bytes()) {
             continue;
         }
         all.push(InstalledFace {

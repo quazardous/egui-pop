@@ -22,11 +22,11 @@ use crate::strings as txt;
 struct Targets(BTreeMap<String, (u64, Rect)>);
 
 fn targets_id() -> Id {
-    Id::new("egui_pop.tips.targets")
+    Id::unique("egui_pop.tips.targets")
 }
 
 fn card_id() -> Id {
-    Id::new("egui_pop.tips.card")
+    Id::unique("egui_pop.tips.card")
 }
 
 /// Names a rectangle a tip may point at (a tip's `target`): call it each
@@ -78,7 +78,7 @@ fn halo(ctx: &Context, t: &Tokens, rect: Rect) {
     let color = halo_color(t);
     let painter = ctx.layer_painter(LayerId::new(
         Order::Foreground,
-        Id::new("egui_pop.tips.halo"),
+        Id::unique("egui_pop.tips.halo"),
     ));
     let r = rect.expand(t.space.s);
     let radius = t.radius.widget + t.space.s;
@@ -197,7 +197,7 @@ fn show_card(ctx: &Context, app: &AppHandle, tips: &Tips, tip: &Tip) {
                     let name =
                         strings::tr_args(ui.ctx(), &txt::TIPS_GOT_IT_NAME, &[("tip", &title)]);
                     let r = ui.button(&got);
-                    egui_pop_core::a11y::name(&r, egui::WidgetType::Button, &name);
+                    egui_pop_core::a11y::name(&r, egui::Role::Button, &name);
                     if r.clicked()
                         && let Err(e) = tips.got_it(app)
                     {

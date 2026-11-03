@@ -353,7 +353,7 @@ pub(super) fn draw(ui: &mut Ui, app: &AppHandle, v: &Viewer) {
     let (rect, response) = ui.allocate_exact_size(vec2(width, height), Sense::hover());
     egui_pop_core::a11y::name(
         &response,
-        egui::WidgetType::Image,
+        egui::Role::Image,
         &tr_args(&ctx, &txt::VIEWER_VIDEO_PICTURE, &[("name", &id)]),
     );
     let painter = ui.painter_at(rect);

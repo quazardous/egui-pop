@@ -31,7 +31,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use egui::{Key, Ui, WidgetType};
+use egui::{Key, Ui};
 use egui_pop_core::a11y;
 use egui_pop_core::fonts::{self, Origin as FaceOrigin, Role};
 use egui_pop_core::keys::chord_of;
@@ -605,7 +605,7 @@ fn history(ui: &mut Ui, app: &AppHandle) {
                 Some(st) => strings::tr_args(&ctx, with_step, &[("change", st)]),
                 None => strings::tr(&ctx, nothing),
             });
-        a11y::name(&r, WidgetType::Button, &strings::tr(&ctx, name));
+        a11y::name(&r, egui::Role::Button, &strings::tr(&ctx, name));
         if r.clicked() {
             if redo {
                 crate::history::redo_in(app, &SETTINGS, &Origin::User);
@@ -679,7 +679,7 @@ fn setting_reset_button(ui: &mut Ui, app: &AppHandle, e: &SettingEntry, label: &
         ));
     a11y::name(
         &r,
-        WidgetType::Button,
+        egui::Role::Button,
         &strings::tr_args(ui.ctx(), &txt::SETTINGS_RESET_SETTING, &setting),
     );
     if r.clicked() {
@@ -1182,7 +1182,7 @@ fn shortcuts(ui: &mut Ui, app: &AppHandle, st: &mut State, filter: &str) {
                         let add = ui.small_button(strings::tr(&ctx, &txt::SHORTCUTS_POINTER_ADD));
                         a11y::name(
                             &add,
-                            WidgetType::Button,
+                            egui::Role::Button,
                             &strings::tr_args(&ctx, &txt::SHORTCUTS_POINTER_ADD_NAME, &command),
                         );
                         if add.clicked() {
@@ -1194,7 +1194,7 @@ fn shortcuts(ui: &mut Ui, app: &AppHandle, st: &mut State, filter: &str) {
                     let change = ui.small_button(strings::tr(&ctx, &txt::SHORTCUTS_CHANGE));
                     a11y::name(
                         &change,
-                        WidgetType::Button,
+                        egui::Role::Button,
                         &strings::tr_args(&ctx, &txt::SHORTCUTS_CHANGE_NAME, &command),
                     );
                     if change.clicked() {
@@ -1204,7 +1204,7 @@ fn shortcuts(ui: &mut Ui, app: &AppHandle, st: &mut State, filter: &str) {
                         let none = ui.small_button(strings::tr(&ctx, &txt::SHORTCUTS_NO_KEY));
                         a11y::name(
                             &none,
-                            WidgetType::Button,
+                            egui::Role::Button,
                             &strings::tr_args(&ctx, &txt::SHORTCUTS_NO_KEY_NAME, &command),
                         );
                         if none.clicked() {
@@ -1215,7 +1215,7 @@ fn shortcuts(ui: &mut Ui, app: &AppHandle, st: &mut State, filter: &str) {
                         let reset = ui.small_button(strings::tr(ui.ctx(), &RESET));
                         a11y::name(
                             &reset,
-                            WidgetType::Button,
+                            egui::Role::Button,
                             &strings::tr_args(&ctx, &txt::SHORTCUTS_DEFAULT_NAME, &command),
                         );
                         if reset.clicked() {
@@ -1281,7 +1281,7 @@ fn reset_button(
         let reset = ui.small_button(strings::tr(ctx, &RESET));
         a11y::name(
             &reset,
-            WidgetType::Button,
+            egui::Role::Button,
             &strings::tr_args(ctx, &txt::SHORTCUTS_DEFAULT_NAME, command),
         );
         if reset.clicked() {
@@ -1339,7 +1339,7 @@ fn gesture_keys(
             let remove = ui.small_button("✕");
             a11y::name(
                 &remove,
-                WidgetType::Button,
+                egui::Role::Button,
                 &strings::tr_args(
                     ctx,
                     &txt::SHORTCUTS_POINTER_REMOVE_NAME,
@@ -1395,7 +1395,7 @@ fn pointer_pad(ui: &mut Ui, app: &AppHandle, st: &mut State, target: Layer) {
     let (rect, pad) = ui.allocate_exact_size(size, egui::Sense::click_and_drag());
     a11y::name(
         &pad,
-        WidgetType::Other,
+        egui::Role::Unknown,
         &strings::tr(&ctx, &txt::SHORTCUTS_POINTER_PAD_NAME),
     );
     if pad.hovered() {

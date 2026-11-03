@@ -74,7 +74,7 @@ use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-use egui::{Ui, WidgetType};
+use egui::{Role, Ui};
 use egui_pop_core::a11y::{self, Politeness};
 use egui_pop_core::debug::FnCollector;
 use egui_pop_core::lock;
@@ -1278,7 +1278,7 @@ pub fn scroll_area<R>(
         slot.set(ui.ctx(), generation);
     }
     let out = area.show(ui, add);
-    let y = out.state.offset.y;
+    let y = out.state.clamped_offset().y;
     let changed = match saved {
         Some(s) => (s - y).abs() > 0.5,
         None => y > 0.5,
@@ -1458,7 +1458,7 @@ pub fn mode_chips(ui: &mut Ui, app: &AppHandle) {
             let title = &chip.title;
             let r = ui.add(widgets::SelectableRow::new(true, format!("{title}  ×")));
             let name = strings::tr_args(ui.ctx(), &txt::CONTEXT_LEAVE_MODE, &[("mode", title)]);
-            a11y::name(&r, WidgetType::Button, &name);
+            a11y::name(&r, Role::Button, &name);
             let r = r.on_hover_text(name.as_str());
             if r.clicked() {
                 leave = Some(chip.leave());

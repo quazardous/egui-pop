@@ -78,7 +78,7 @@ fn settle(h: &mut Harness<'static, App>) {
     let rect = |h: &Harness<'static, App>| {
         let app = h.state().handle().clone();
         let id = *app.service(&FILES)?.open_ids().first()?;
-        let modal = egui::Id::new(("egui_pop.files", id));
+        let modal = egui::Id::unique(("egui_pop.files", id));
         h.ctx.memory(|m| m.area_rect(modal))
     };
     let mut placed = rect(h);
@@ -346,7 +346,7 @@ fn the_preview_pane_keeps_the_dialog_s_size() {
     let app = h.state().handle().clone();
     let _p = choose(&mut h, FileRequest::open("Open").directory(&root));
     let id = app.service(&FILES).unwrap().open_ids()[0];
-    let modal = egui::Id::new(("egui_pop.files", id));
+    let modal = egui::Id::unique(("egui_pop.files", id));
     // The dialog's width and a list row's (rows fill the list's width).
     let measure = |h: &mut Harness<'static, App>, on: bool| {
         files::want_preview(&app, on);
@@ -388,7 +388,7 @@ fn large_harness() -> Harness<'static, App> {
 fn dialog(h: &Harness<'static, App>) -> egui::Rect {
     let app = h.state().handle().clone();
     let id = app.service(&FILES).unwrap().open_ids()[0];
-    let modal = egui::Id::new(("egui_pop.files", id));
+    let modal = egui::Id::unique(("egui_pop.files", id));
     h.ctx.memory(|m| m.area_rect(modal)).unwrap()
 }
 

@@ -182,7 +182,11 @@ fn card() -> Harness<'static, Card> {
         .with_size(vec2(260.0, 300.0))
         .build_ui_state(
             |ui, s: &mut Card| {
-                let card = ui.interact(ui.max_rect(), egui::Id::new("card"), egui::Sense::click());
+                let card = ui.interact(
+                    ui.max_rect(),
+                    egui::Id::unique("card"),
+                    egui::Sense::click(),
+                );
                 ui.add(egui::Label::new("Plain").selectable(false));
                 let out = CurveEditor::new(&mut s.points, "Tone curve")
                     .size(vec2(200.0, 200.0))

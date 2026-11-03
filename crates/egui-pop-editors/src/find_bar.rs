@@ -62,7 +62,7 @@ fn icon_button(ui: &mut Ui, icon: Icon, label: &str) -> bool {
             button.style(part.state).text,
         );
     }
-    egui_pop_core::a11y::name(&r, egui::WidgetType::Button, label);
+    egui_pop_core::a11y::name(&r, egui::Role::Button, label);
     r.on_hover_text(label).clicked()
 }
 
