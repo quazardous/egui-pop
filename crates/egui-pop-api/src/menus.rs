@@ -348,7 +348,9 @@ pub fn bar_within(ui: &mut Ui, app: &AppHandle, menu: &MenuId, reserve: f32) {
         });
         by_letter.or_else(|| {
             let first = cache.menus.iter().position(|m| m.enabled)?;
-            i.consume_key(egui::Modifiers::NONE, egui::Key::F10)
+            // F10 alone: egui matches keys ignoring Shift, and Shift+F10 is
+            // the context menu key.
+            (!i.modifiers.any() && i.consume_key(egui::Modifiers::NONE, egui::Key::F10))
                 .then_some(first)
         })
     });
