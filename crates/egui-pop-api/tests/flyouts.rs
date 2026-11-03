@@ -365,12 +365,14 @@ impl Plugin for Form {
                 .default_size(120.0),
             move |ui, _| {
                 let mut m = mode.lock().unwrap();
-                egui::ComboBox::from_id_salt("demo.form.mode")
+                let _ = egui::ComboBox::from_id_salt("demo.form.mode")
                     .selected_text(m.clone())
                     .show_ui(ui, |ui| {
                         ui.selectable_value(&mut *m, "Fast".to_owned(), "Fast");
                         ui.selectable_value(&mut *m, FINE.to_owned(), FINE);
-                    });
+                    })
+                    .response
+                    .accessible_name("Mode");
                 ui.button("Options").context_menu(|ui| {
                     if ui.button(MARK).clicked() {
                         *marked.lock().unwrap() = true;

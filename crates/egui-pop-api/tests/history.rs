@@ -118,7 +118,8 @@ fn pad(strokes: Strokes) -> P {
                             ui.add_space(20.0);
                             let _ = ui.button("In the pad");
                             let mut text = String::from("note");
-                            ui.add(egui::TextEdit::singleline(&mut text).id_salt("pad.note"));
+                            ui.add(egui::TextEdit::singleline(&mut text).id_salt("pad.note"))
+                                .accessible_name("Note");
                             ui.add_space(20.0);
                         });
                     });

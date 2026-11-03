@@ -235,13 +235,15 @@ impl Plugin for Panels {
                 .min_size(160.0),
             move |ui, _| {
                 ui.label("Brush");
-                ui.text_edit_singleline(&mut size);
+                ui.text_edit_singleline(&mut size)
+                    .accessible_name("Brush size");
             },
         )?
         .panel(
             PanelSpec::new(SEARCH, "Search", Area::Bottom),
             move |ui, _| {
-                ui.text_edit_singleline(&mut *search.lock().unwrap());
+                ui.text_edit_singleline(&mut *search.lock().unwrap())
+                    .accessible_name("Search");
             },
         )?;
         ctx.command(
@@ -794,10 +796,13 @@ fn f6_goes_through_the_regions_in_order_and_shift_f6_back() {
     let (mut h, _) = panels();
     let round = f6_round(&mut h, F6);
     // The side area, the bottom one (a panel of text in front, holding the
-    // focus itself), the centre by what it prefers, the palette's unnamed field.
-    assert_eq!(round, ["Row 0", "Empty", "Canvas", ""]);
+    // focus itself), the centre by what it prefers, the palette's field.
+    assert_eq!(round, ["Row 0", "Empty", "Canvas", "Brush size"]);
     let (mut h, _) = panels();
-    assert_eq!(f6_round(&mut h, SHIFT_F6), ["", "Canvas", "Empty", "Row 0"]);
+    assert_eq!(
+        f6_round(&mut h, SHIFT_F6),
+        ["Brush size", "Canvas", "Empty", "Row 0"]
+    );
 }
 
 #[test]
@@ -1603,7 +1608,7 @@ fn a_focused_terminal_in_a_scope_keeps_f6() {
     let mut h = themed(&ThemeSpec::default(), egui::vec2(600.0, 400.0), |ui| {
         egui_pop::core::focus::install(ui.ctx());
         tab::scope(ui, "first", ScopeKind::Panel, |ui| {
-            let field = ui.text_edit_singleline(&mut text);
+            let field = ui.text_edit_singleline(&mut text).accessible_name("Text");
             tab::stop(ui, &field, TabStop::new());
             let _ = Terminal::new()
                 .label("Shell")

@@ -525,7 +525,8 @@ fn a_widget_taking_tab_keeps_it_at_a_popovers_end() {
     let mut code = String::new();
     let (mut h, open) = opened(move |ui| {
         let _ = ui.button("One");
-        ui.add(TextEdit::multiline(&mut code).lock_focus(true));
+        ui.add(TextEdit::multiline(&mut code).lock_focus(true))
+            .accessible_name("Code");
     });
     assert_eq!(name(walk::press(&mut h, TAB)), "One");
     let field = walk::press(&mut h, TAB).expect("Tab reaches the field");

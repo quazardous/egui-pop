@@ -1043,7 +1043,7 @@ impl Plugin for DialogsPlugin {
         ctx.setting(
             SETTING_CLOSABLE,
             Descriptor::bool("Close button on every dialog", false).description(
-                "A ✕ at the right end of each dialog's title row, doing what Escape does.",
+                "A close button at the right end of each dialog's title row, doing what Escape does.",
             ),
         )?;
         ctx.setting(

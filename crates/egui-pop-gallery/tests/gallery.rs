@@ -10,7 +10,22 @@ use egui_pop_gallery::{Gallery, Options, PAGES};
 use egui_pop_test::SharedGpu as _;
 
 fn harness(options: Options) -> Harness<'static, Gallery> {
-    Harness::builder()
+    harness_from(Harness::builder(), options)
+}
+
+/// [`harness`] for the viewer's pages: egui_commonmark draws a code
+/// block's copy button as a symbol egui 0.37's fonts lack.
+// upstream: docs/upstream.md, "egui_commonmark: a code block's copy button
+// is a symbol".
+fn viewer_harness(options: Options) -> Harness<'static, Gallery> {
+    harness_from(Harness::builder().allow_missing_glyphs(), options)
+}
+
+fn harness_from(
+    builder: egui_kittest::HarnessBuilder<Gallery>,
+    options: Options,
+) -> Harness<'static, Gallery> {
+    builder
         .with_size(egui::vec2(1100.0, 720.0))
         .shared_wgpu()
         .build_eframe(move |cc| {
@@ -2361,7 +2376,7 @@ fn the_viewers_html_subset_keeps_blocks_and_drops_what_could_run() {
     use egui_pop::api::links::{self, How, RecordingOpener, Source};
     use egui_pop::views::viewer::{self, VIEWER};
     use serde_json::json;
-    let mut h = harness(options("pop-dark", Density::Comfortable, "viewer"));
+    let mut h = viewer_harness(options("pop-dark", Density::Comfortable, "viewer"));
     h.run();
     let app = h.state().app.handle().clone();
     let rec = RecordingOpener::default();
@@ -2530,7 +2545,7 @@ fn the_viewer_shows_docs_pages_finds_zooms_and_asks_before_remote_images() {
     use egui_pop::api::links::{self, How, RecordingOpener, Source};
     use egui_pop::views::viewer::{self, VIEWER};
     use serde_json::json;
-    let mut h = harness(options("pop-dark", Density::Comfortable, "viewer"));
+    let mut h = viewer_harness(options("pop-dark", Density::Comfortable, "viewer"));
     h.run();
     let app = h.state().app.handle().clone();
     egui_pop_test::assert_links_clean(&h.state().app);
@@ -5485,7 +5500,12 @@ fn the_shortcuts_editor_adds_a_gesture_done_on_its_pad() {
 fn the_font_pairs_page_compares_each_pair_and_measures_their_digits() {
     use egui_pop::core::fonts::{self, Weight};
     use egui_pop_gallery::pages::fonts::{CANDIDATES, all_equal, digit_advances};
-    let mut h = harness(options("pop-dark", Density::Comfortable, "fonts"));
+    // The page shows each pair's coverage: a face without a sample's
+    // letter (egui's Ubuntu Light has no Vietnamese) draws a box there.
+    let mut h = harness_from(
+        Harness::builder().allow_missing_glyphs(),
+        options("pop-dark", Density::Comfortable, "fonts"),
+    );
     h.run();
     for c in &CANDIDATES {
         assert!(h.query_by_label(c.title).is_some(), "{}", c.title);

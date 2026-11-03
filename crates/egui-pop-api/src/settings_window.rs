@@ -1336,15 +1336,16 @@ fn gesture_keys(
         }
         for k in keys {
             ui.monospace(k).labelled_by(name);
-            let remove = ui.small_button("✕");
-            a11y::name(
-                &remove,
-                egui::Role::Button,
-                &strings::tr_args(
-                    ctx,
-                    &txt::SHORTCUTS_POINTER_REMOVE_NAME,
-                    &[("keys", k), ("command", label)],
-                ),
+            // An icon, never a symbol in text: egui 0.37's fonts have no ✕.
+            let remove = ui.add(
+                egui_pop_core::icon::Icon::Close
+                    .size(egui_pop_core::icon::Size::Inline)
+                    .label(&strings::tr_args(
+                        ctx,
+                        &txt::SHORTCUTS_POINTER_REMOVE_NAME,
+                        &[("keys", k), ("command", label)],
+                    ))
+                    .sense_click(),
             );
             if remove.clicked() {
                 let rest: Vec<&str> = keys

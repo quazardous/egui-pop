@@ -1503,6 +1503,8 @@ egui-pop-shortcuts-widget-uses = Widgets' own gestures
 
 egui-pop-shortcuts-widget-uses-note = These widgets keep these gestures for themselves: context menus and the pointer profile leave them alone there.
 
+egui-pop-slider-entry = { $label }, typed value
+
 egui-pop-slider-maximum = { $label }, maximum
 
 egui-pop-slider-minimum = { $label }, minimum
@@ -2367,7 +2369,7 @@ setting-developer-show-keys =
     .label = Show translation keys
 
 setting-dialogs-closable =
-    .description = A ✕ at the right end of each dialog's title row, doing what Escape does.
+    .description = A close button at the right end of each dialog's title row, doing what Escape does.
     .label = Close button on every dialog
 
 setting-dialogs-movable =

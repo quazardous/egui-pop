@@ -6,12 +6,18 @@ use egui_pop_test::{a11y_tree, assert_all_named, double_click, themed, unnamed_i
 
 #[test]
 fn unnamed_interactive_nodes_are_found() {
-    let mut h = themed(&ThemeSpec::default(), egui::vec2(300.0, 120.0), |ui| {
-        let _ = ui.button("Named");
-        // A button with an empty label says nothing to a screen reader.
-        let _ = ui.button("");
-        ui.label("Text is not interactive");
-    });
+    // kittest's own check (egui 0.37) would fail the run on the unnamed
+    // button this test is about: off here.
+    let mut h = egui_kittest::Harness::builder()
+        .with_size(egui::vec2(300.0, 120.0))
+        .with_accessibility_check(false)
+        .build_ui(|ui| {
+            let _ = ui.button("Named");
+            // A button with an empty label says nothing to a screen reader.
+            let _ = ui.button("");
+            ui.label("Text is not interactive");
+        });
+    egui_pop_core::theme::install(&h.ctx, &ThemeSpec::default());
     h.run();
     let unnamed = unnamed_interactive(&h);
     assert_eq!(unnamed.len(), 1, "{unnamed:?}");

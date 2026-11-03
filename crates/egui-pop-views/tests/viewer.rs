@@ -505,7 +505,10 @@ fn a_code_block_is_named() {
     let opened = Arc::new(Mutex::new(false));
     let once = opened.clone();
     let net = Net::default();
+    // upstream: egui_commonmark's copy button is a symbol egui 0.37's fonts
+    // lack (docs/upstream.md).
     let mut h = Harness::builder()
+        .allow_missing_glyphs()
         .with_size(egui::vec2(1000.0, 640.0))
         .build_ui_state(
             move |ui, app: &mut Option<App>| {

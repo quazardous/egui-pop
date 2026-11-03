@@ -42,7 +42,8 @@ impl Plugin for Demo {
                 .min_size(160.0),
             move |ui, _| {
                 ui.label("Brush");
-                ui.text_edit_singleline(&mut size);
+                ui.text_edit_singleline(&mut size)
+                    .accessible_name("Brush size");
             },
         )?
         .panel(

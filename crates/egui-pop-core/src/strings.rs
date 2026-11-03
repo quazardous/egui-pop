@@ -83,6 +83,9 @@ pub const RESTORE: StrKey = StrKey::new("egui-pop-frame-restore", "Restore");
 /// A full screen window's button in place of maximize.
 pub const EXIT_FULLSCREEN: StrKey =
     StrKey::new("egui-pop-frame-exit-fullscreen", "Exit full screen");
+/// A slider's typed entry, open over its bar, as assistive technologies
+/// name it.
+pub const SLIDER_ENTRY: StrKey = StrKey::new("egui-pop-slider-entry", "{ $label }, typed value");
 /// A range slider's thumbs, as assistive technologies name them.
 pub const SLIDER_MINIMUM: StrKey = StrKey::new("egui-pop-slider-minimum", "{ $label }, minimum");
 pub const SLIDER_MAXIMUM: StrKey = StrKey::new("egui-pop-slider-maximum", "{ $label }, maximum");
@@ -147,6 +150,7 @@ pub const ALL: &[StrKey] = &[
     MAXIMIZE,
     RESTORE,
     EXIT_FULLSCREEN,
+    SLIDER_ENTRY,
     SLIDER_MINIMUM,
     SLIDER_MAXIMUM,
     BUSY,

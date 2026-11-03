@@ -228,7 +228,7 @@ fn a_click_on_a_half_visible_widget_does_not_scroll() {
     let mut h = page(move |ui| {
         ScrollArea::vertical().show(ui, |ui| {
             ui.allocate_space(vec2(10.0, SIZE.y - 24.0));
-            let r = ui.text_edit_singleline(&mut text);
+            let r = ui.text_edit_singleline(&mut text).accessible_name("Text");
             *seen.lock().unwrap() = (r.id, r.rect);
             ui.allocate_space(vec2(10.0, 400.0));
         });
