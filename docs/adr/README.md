@@ -28,5 +28,6 @@ after the fact except to mark it superseded by a later one.
 | [0020](0020-answers-carry-their-caller.md) | Answers carry their caller, and a dialog keeps its command's flag | 2026-11-03 |
 | [0021](0021-origin-along-the-chain.md) | The origin goes along the chain of commands; deep links are remote | 2026-11-03 |
 | [0022](0022-sections-and-toolbars-in-egui-stack.md) | Sections and a toolbar row move into egui_stack as plain-egui cores; egui-pop wraps them (accepted, [analysis](../egui-stack-directions.md)) | 2026-11-03 |
+| [0023](0023-every-command-through-the-host.md) | Every command goes through the host's dispatch; history walks are held to the writers | 2026-11-03 |
 
 Template: copy any of them; keep it to half a page.

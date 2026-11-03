@@ -1339,6 +1339,27 @@ impl Store {
         self.walk(history, origin, true, None)
     }
 
+    /// As [`Store::undo_in`], written by `by` (`Origin::writer`): refused
+    /// when `by` is not one of the writers of every path of the step.
+    pub fn undo_in_by(
+        &mut self,
+        history: &ScopeId,
+        origin: &Origin,
+        by: &OwnerId,
+    ) -> Result<Option<Step>, Refused> {
+        self.walk(history, origin, false, Some(by))
+    }
+
+    /// As [`Store::redo_in`], written by `by`.
+    pub fn redo_in_by(
+        &mut self,
+        history: &ScopeId,
+        origin: &Origin,
+        by: &OwnerId,
+    ) -> Result<Option<Step>, Refused> {
+        self.walk(history, origin, true, Some(by))
+    }
+
     /// Whether an undo (or a redo) of a history would be refused, without
     /// making it: the step it would take, or `None` when there is none.
     pub fn check_walk(&self, history: &ScopeId, redo: bool) -> Result<Option<&Step>, Refused> {
@@ -1361,21 +1382,57 @@ impl Store {
         to: u64,
         origin: &Origin,
     ) -> Result<Option<usize>, Refused> {
+        self.jump_in_with(history, to, origin, None)
+    }
+
+    /// As [`Store::jump_in`], written by `by`: every step on the way is
+    /// checked against the writers of its paths first.
+    pub fn jump_in_by(
+        &mut self,
+        history: &ScopeId,
+        to: u64,
+        origin: &Origin,
+        by: &OwnerId,
+    ) -> Result<Option<usize>, Refused> {
+        self.jump_in_with(history, to, origin, Some(by))
+    }
+
+    fn jump_in_with(
+        &mut self,
+        history: &ScopeId,
+        to: u64,
+        origin: &Origin,
+        by: Option<&OwnerId>,
+    ) -> Result<Option<usize>, Refused> {
         let Some((redo, count)) = self.plan_jump(history, to) else {
             // A replaced step: back to where its line left, then along it.
             return Ok(self
                 .jump_replaced(history, to, origin, false)?
                 .map(|steps| steps.len()));
         };
+        let mut barred = None;
         {
             let h = &self.histories[history];
             let list = if redo { &h.redo } else { &h.undo };
             for step in list.iter().rev().take(count) {
                 self.can_replay(step)?;
+                if let Some(by) = by
+                    && barred.is_none()
+                {
+                    barred = step
+                        .changes
+                        .iter()
+                        .find(|(p, _, _)| !self.may_write(p, by))
+                        .map(|(p, _, _)| p.clone());
+                }
             }
         }
+        if let Some(path) = barred {
+            // Said as a write would be: refused, in the diagnostics.
+            self.check_writer(&path, by)?;
+        }
         for _ in 0..count {
-            self.walk(history, origin, redo, None)?;
+            self.walk(history, origin, redo, by)?;
         }
         Ok(Some(count))
     }

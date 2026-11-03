@@ -542,10 +542,13 @@ fn store_walk(
         let step = s.check_walk(scope, redo).map_err(refused)?;
         return Ok(step.map(|st| step_info(scope, st)).into_iter().collect());
     }
+    // Walked by the origin's writer: an agent may not take back what it
+    // may not write (the user's writer, the framework, may).
+    let by = origin.writer();
     let step = if redo {
-        s.redo_in(scope, origin)
+        s.redo_in_by(scope, origin, &by)
     } else {
-        s.undo_in(scope, origin)
+        s.undo_in_by(scope, origin, &by)
     }
     .map_err(refused)?;
     Ok(step.map(|st| step_info(scope, &st)).into_iter().collect())
@@ -596,7 +599,8 @@ fn store_jump(
         }
         return Ok(walked);
     }
-    s.jump_in(scope, to, origin).map_err(refused)?;
+    s.jump_in_by(scope, to, origin, &origin.writer())
+        .map_err(refused)?;
     Ok(walked)
 }
 
@@ -655,10 +659,11 @@ impl StoreScope {
         if let Some(label) = s.gesture_open(&self.info.id) {
             return Err(in_progress(label));
         }
+        let by = origin.writer();
         let step = if redo {
-            s.redo_in(&self.info.id, origin)
+            s.redo_in_by(&self.info.id, origin, &by)
         } else {
-            s.undo_in(&self.info.id, origin)
+            s.undo_in_by(&self.info.id, origin, &by)
         }
         .map_err(refused)?;
         Ok(step.map(|st| step_info(&self.info.id, &st)))

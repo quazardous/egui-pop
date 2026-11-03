@@ -1096,6 +1096,22 @@ publishes.
 
 ### Changed
 
+- **Breaking (host, undo):** every command goes through `Host::dispatch`, and history
+  walks are held to the writers (egui-pop-api, egui-pop-model; `docs/agents.md`, ADR
+  0023). The 29 commands whose handler calls the host itself (`edit.undo`,
+  `edit.redo`, `history.*`, the context stack's `nav.*` and `context.*`, the
+  clipboard's `edit.cut/copy/paste/pasteSpecial` and `clipboard.*`) are dispatched
+  too: `Dispatch::deferred` says so, `run_local` approves them and answers `null`
+  at once, and their handler runs once the dispatch returns. A host guarding
+  `dispatch` (refusing agents) now guards them. An undo, redo, jump, snapshot
+  restore, out-of-order undo or walk to a replaced line writes by the walker's
+  writer (`Origin::writer`): an agent's is refused on a value it may not write,
+  all or nothing (`Store::undo_in_by`, `redo_in_by`, `jump_in_by`). **Migration:**
+  a host that ran every command itself without `run_local` answers these 29 with
+  `run_local` (or its own result); a host that timed `run_local` reads
+  `Dispatch::deferred`. An application whose agents undo values they do not own
+  names them among the values' writers (`Descriptor::writers`).
+
 - **Breaking (commands, deep links):** the origin goes along the chain of commands
   (egui-pop-api, egui-pop-platform; `docs/agents.md`, `docs/instance.md`, ADR 0021).
   While a command's handler runs, `AppHandle::acting_origin` is its origin, and

@@ -5,7 +5,7 @@
 
 use std::collections::BTreeMap;
 
-use super::{Origin, OwnerId, Refused, Step, Store, Value};
+use super::{Origin, Refused, Step, Store, Value};
 use crate::history::{At, Refusal, RefusalKind, ScopeId, Snapshot, may_undo_out_of_order};
 
 /// A redo list a new step dropped.
@@ -185,12 +185,18 @@ impl Store {
             group: None,
         };
         self.can_replay(&step).map_err(held)?;
+        // Written by the origin's writer: the user's is the framework, an
+        // agent's is held to the paths' writers, all or nothing.
+        let by = origin.writer();
+        for (path, _, _) in &step.changes {
+            self.check_writer(path, Some(&by)).map_err(held)?;
+        }
         if dry_run {
             return Ok(step);
         }
         for (path, _, new) in &step.changes {
             if self.entries[path].value != *new {
-                self.write(path, new.clone(), origin, Some(OwnerId::FRAMEWORK));
+                self.write(path, new.clone(), origin, Some(by.clone()));
             }
         }
         self.next_step += 1;
@@ -234,7 +240,7 @@ impl Store {
                 return Ok(step);
             }
             return self
-                .undo_in(history, origin)
+                .undo_in_by(history, origin, &origin.writer())
                 .map_err(held)?
                 .ok_or_else(|| nothing(format!("no step {id} in `{history}`")));
         }
@@ -319,12 +325,23 @@ impl Store {
         for s in back.iter().chain(&along) {
             self.can_replay(s)?;
         }
+        // Walked by the origin's writer, every path checked first.
+        let by = origin.writer();
+        let barred = back
+            .iter()
+            .chain(&along)
+            .flat_map(|s| s.changes.iter().map(|(p, _, _)| p))
+            .find(|p| !self.may_write(p, &by))
+            .cloned();
+        if let Some(path) = barred {
+            self.check_writer(&path, Some(&by))?;
+        }
         let walked: Vec<Step> = back.into_iter().chain(along).collect();
         if dry_run {
             return Ok(Some(walked));
         }
         for _ in 0..count {
-            self.walk(history, origin, redo, None)?;
+            self.walk(history, origin, redo, Some(&by))?;
         }
         let h = self.histories.get_mut(history).expect("still there");
         let line = h.replaced.remove(b);
@@ -335,7 +352,7 @@ impl Store {
         h.redo = line.steps.into_iter().rev().collect();
         h.rev += 1;
         for _ in 0..=pos {
-            self.walk(history, origin, true, None)?;
+            self.walk(history, origin, true, Some(&by))?;
         }
         Ok(Some(walked))
     }
