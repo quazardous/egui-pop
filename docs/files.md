@@ -507,7 +507,7 @@ cache's cap, rather than made again for ever.
 | Step | Arguments | Default |
 |---|---|---|
 | `file.choose` | `{ "id", "request" }` | opens the system's chooser or the in-app picker |
-| `file.chosen` | `{ "id", "request", "paths" }`, and `"groups"` when some are | remembers the places and the purpose's last folder, gives the paths and their groups |
+| `file.chosen` | `{ "id", "request", "paths", "origin" }`, and `"groups"` when some are | remembers the places and the purpose's last folder, gives the paths and their groups |
 
 For agents, the `file.preview` command (`{ "path" }`, kept out of the
 palette) gives a path's preview metadata as the pane shows it, made at
@@ -525,7 +525,13 @@ choice (the `Pending` gives the reason as an error) or redirects it to
 other paths. The journal says `file.cancelled`. The debug bridge's
 `files` collector shows the choices open, the in-app picker's folder,
 field and entries, and answers a choice (`answer`: the user's, unless
-the application offers it to agents, see [Agents](agents.md)).
+the application offers it to agents, see [Agents](agents.md)). Who
+answered goes with the choice: `files::chosen_origin` on its result
+(`Origin::User` for the picker, the system's chooser or a plugin's
+`Files::deliver`; the agent's for `files.answer` or
+`Files::deliver_as`), `origin` in the `file.chosen` step's arguments
+and `by` in the collector's last choices. A consumer that should act
+only on a person's choice checks it, or vetoes `file.chosen` for others.
 
 The commands `file.new_folder` (`{ "name" }`, optional) and
 `file.replace` (`{ "id", "path" }`, hidden) are the picker's new folder and
