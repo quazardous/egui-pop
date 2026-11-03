@@ -12,7 +12,8 @@
 //! What a widget does with an arrow itself (a list moving its cursor, a widget
 //! handing the focus on) is its own: only a move done in the pass of the press,
 //! out of a region, is undone. A widget outside every region, or a window with
-//! none, keeps egui's rule.
+//! none, keeps egui's rule, and so does a move into a menu or popup above the
+//! page (a context menu opened from the keyboard, Down then going in).
 //!
 //! upstream: egui moves the focus by arrow to the best widget in a cone, across
 //! any container, with nothing to bound it but a modal layer
@@ -36,6 +37,13 @@ fn region_of(ctx: &Context, regions: &[DrawnRegion], id: Id) -> Option<usize> {
     regions
         .iter()
         .position(|r| r.layer == layer && r.widgets.contains(&order))
+}
+
+/// Whether a widget of the last pass lies on a layer above the page's (a menu,
+/// a popup): an arrow going into one opened from the region is its own.
+fn over_the_page(ctx: &Context, id: Id) -> bool {
+    ctx.viewport(|v| v.prev_pass.widgets.order(id))
+        .is_some_and(|(layer, _)| layer.order > egui::Order::Middle)
 }
 
 /// Whether the input holds a press of an arrow alone.
@@ -70,6 +78,7 @@ pub(crate) fn begin_pass(ctx: &Context) {
         let (regions, _) = focus::drawn_regions(ctx);
         if let Some(left) = region_of(ctx, &regions, from)
             && region_of(ctx, &regions, to) != Some(left)
+            && !over_the_page(ctx, to)
         {
             log::debug!(target: "egui_pop", "Focus: an arrow stays in region {}", regions[left].name);
             ctx.memory_mut(|m| m.request_focus(from));
