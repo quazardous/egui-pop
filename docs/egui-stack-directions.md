@@ -137,7 +137,7 @@ bridges egui's widgets today ([kit](kit.md#bridges-to-egui)).
 **Today.** egui_stack's only veto is `allowed_in_windows(tab)` (egui_stack
 `src/widgets/tab_viewer.rs:93`, read at `show/mod.rs:222-230` and
 `leaf.rs:1414-1423`) and the global `AllowedSplits`
-([upstream](upstream.md#egui_dock-no-per-tab-per-destination-drop-veto)).
+([upstream](upstream.md#egui_stack-no-drop-between-two-docks)).
 egui-pop panels declare the areas they may live in, so each area is a
 dock of its own, windows are refused (`workbench.rs:2965`), and a drag
 leaving an area is followed by egui-pop: it guesses the dragged tab by
