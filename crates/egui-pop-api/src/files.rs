@@ -61,13 +61,18 @@
 //!   ([`FilesPlugin::grouping`], [`Files::groupings`]), files that go together are
 //!   one entry of the in-app picker, a RAW with its sidecars, with a badge
 //!   (`+XMP`). Choosing it gives the main file, and [`chosen_groups`] the others.
+//! - **The application's options** ([`FileRequest::choice`],
+//!   [`FileRequest::check`]): combo boxes and check boxes above the in-app
+//!   picker's buttons, in the desktop portal's shape; the choice gives their
+//!   values back ([`chosen_choices`]). `rfd` cannot show them, so a request
+//!   with choices opens the in-app picker.
 //!
 //! Steps (ADR 0011):
 //!
 //! | Step | Arguments | Default |
 //! |---|---|---|
 //! | `file.choose` | `{ "id", "request" }` | opens the system's chooser or the in-app picker |
-//! | `file.chosen` | `{ "id", "request", "paths", "origin" }`, and `"groups"` when some are | remembers the places, gives the paths and their groups |
+//! | `file.chosen` | `{ "id", "request", "paths", "origin" }`, `"groups"` when some are, `"choices"` when the request has some | remembers the places, gives the paths, their groups and the choices |
 //!
 //! A run-hook on `file.choose` replaces the whole chooser: it answers
 //! `{ "paths": [...] }` or `{ "cancelled": true }` at once, or anything
@@ -100,7 +105,7 @@
 //! assert_eq!(f.describe()["open"][0]["via"], "in_app");
 //! ```
 
-use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -265,8 +270,47 @@ impl FileFilter {
     }
 }
 
-/// What a choice asks for.
+/// An option of the application's, shown by the in-app picker beside its
+/// buttons and given back with the paths ([`chosen_choices`]): a combo box of
+/// values, or a check box. Its shape is the desktop portal's `choices`: an id,
+/// a label, the values offered as `(id, label)`, and the value it starts with;
+/// no values make a check box, whose value is `"true"` or `"false"`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FileChoice {
+    pub id: String,
+    /// What the picker says beside it, translated by the application.
+    pub label: String,
+    /// The values offered, `(id, label)`; none: a check box.
+    #[serde(default)]
+    pub options: Vec<(String, String)>,
+    /// The value it starts with: an option's id, or `"true"` or `"false"`.
+    pub default: String,
+}
+
+impl FileChoice {
+    /// A check box.
+    pub fn is_check(&self) -> bool {
+        self.options.is_empty()
+    }
+
+    /// Whether `value` is one this choice can take.
+    pub fn accepts(&self, value: &str) -> bool {
+        if self.is_check() {
+            value == "true" || value == "false"
+        } else {
+            self.options.iter().any(|(id, _)| id == value)
+        }
+    }
+}
+
+/// The application's choices as a choice ends with them: each id with its
+/// value ([`chosen_choices`]).
+pub type ChoiceValues = BTreeMap<String, String>;
+
+/// What a choice asks for. Built with its constructors ([`FileRequest::open`]
+/// and the others) and their builders: a field added later breaks nobody.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct FileRequest {
     pub kind: ChooseKind,
     /// The chooser's title.
@@ -298,6 +342,10 @@ pub struct FileRequest {
     /// [`FileRequest::ungrouped`].
     #[serde(default = "asks")]
     pub group_files: bool,
+    /// The application's options, shown beside the in-app picker's buttons.
+    /// See [`FileRequest::choice`].
+    #[serde(default)]
+    pub choices: Vec<FileChoice>,
 }
 
 fn asks() -> bool {
@@ -316,6 +364,7 @@ impl FileRequest {
             filters: Vec::new(),
             confirm_overwrite: true,
             group_files: true,
+            choices: Vec::new(),
         }
     }
 
@@ -397,6 +446,70 @@ impl FileRequest {
         self
     }
 
+    /// An option of the application's, a combo box offering `options`
+    /// (`(id, label)`) and starting on `default`: the in-app picker shows it
+    /// beside its buttons, and the choice gives back the value picked
+    /// ([`chosen_choices`]), as Windows' customize interface, macOS's accessory
+    /// view and the desktop portal's `choices` do; an import's "Only new
+    /// photos", an export's format. A request with choices opens the in-app
+    /// picker even where the system's chooser is used: `rfd` cannot show them.
+    pub fn choice(
+        mut self,
+        id: &str,
+        label: &str,
+        options: &[(&str, &str)],
+        default: &str,
+    ) -> Self {
+        self.choices.push(FileChoice {
+            id: id.into(),
+            label: label.into(),
+            options: options
+                .iter()
+                .map(|(id, label)| ((*id).into(), (*label).into()))
+                .collect(),
+            default: default.into(),
+        });
+        self
+    }
+
+    /// An option of the application's as a check box, on or off at first; its
+    /// value is `"true"` or `"false"`. See [`FileRequest::choice`].
+    pub fn check(mut self, id: &str, label: &str, default: bool) -> Self {
+        self.choices.push(FileChoice {
+            id: id.into(),
+            label: label.into(),
+            options: Vec::new(),
+            default: default.to_string(),
+        });
+        self
+    }
+
+    /// Each choice with the value it starts with.
+    pub fn choice_defaults(&self) -> ChoiceValues {
+        self.choices
+            .iter()
+            .map(|c| (c.id.clone(), c.default.clone()))
+            .collect()
+    }
+
+    /// `values` over the defaults, each checked: an unknown id or a value its
+    /// choice cannot take is refused.
+    pub fn choice_values(&self, values: &ChoiceValues) -> Result<ChoiceValues, String> {
+        let mut out = self.choice_defaults();
+        for (id, value) in values {
+            let c = self
+                .choices
+                .iter()
+                .find(|c| &c.id == id)
+                .ok_or_else(|| format!("no choice `{id}` in this request"))?;
+            if !c.accepts(value) {
+                return Err(format!("`{value}` is not a value of the choice `{id}`"));
+            }
+            out.insert(id.clone(), value.clone());
+        }
+        Ok(out)
+    }
+
     pub fn to_json(&self) -> Json {
         serde_json::to_value(self).unwrap_or(Json::Null)
     }
@@ -442,6 +555,27 @@ pub fn chosen_groups(result: &Result<Json, String>) -> Vec<FileGroup> {
     result
         .as_ref()
         .map_or_else(|_| Vec::new(), groups::from_json)
+}
+
+/// The application's choices a choice ended with ([`FileRequest::choice`]):
+/// each id with its value, empty when cancelled or without choices.
+pub fn chosen_choices(result: &Result<Json, String>) -> ChoiceValues {
+    result
+        .as_ref()
+        .ok()
+        .and_then(|j| j.get("choices"))
+        .map(choices_of)
+        .unwrap_or_default()
+}
+
+fn choices_of(json: &Json) -> ChoiceValues {
+    json.as_object()
+        .map(|m| {
+            m.iter()
+                .filter_map(|(k, v)| Some((k.clone(), v.as_str()?.to_owned())))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 fn paths_of(json: &Json) -> Vec<PathBuf> {
@@ -492,6 +626,9 @@ struct Open {
     /// Who answered it: the user (the picker, a chooser) unless
     /// [`Files::deliver_as`] says otherwise.
     by: Origin,
+    /// The application's choices as whoever answered set them
+    /// ([`Files::set_choices`]), over the in-app picker's.
+    choices: Option<ChoiceValues>,
 }
 
 #[derive(Debug, Default)]
@@ -612,6 +749,7 @@ impl Files {
                 picker: None,
                 inline,
                 by: Origin::User,
+                choices: None,
             });
             id
         };
@@ -625,6 +763,11 @@ impl Files {
             Outcome::Vetoed { reason, .. } => Some(Err(reason)),
             Outcome::Done(Err(e)) => Some(Err(e)),
             Outcome::Done(Ok(v)) => {
+                if let Some(c) = v.get("choices")
+                    && let Err(e) = self.set_choices(id, &choices_of(c))
+                {
+                    log::warn!(target: "egui_pop", "file.choose: {e}");
+                }
                 if v.get("paths").is_some() {
                     let _ = self.deliver(id, Some(paths_of(&v)));
                 } else if v.get("cancelled").and_then(Json::as_bool) == Some(true) {
@@ -684,7 +827,8 @@ impl Files {
     /// The default of `file.choose`: the system's chooser when it is
     /// available and wanted, else the in-app picker.
     fn start(&self, app: &AppHandle, id: u64, request: FileRequest) -> Result<Json, String> {
-        let native = lock(&self.0).native && native_available();
+        // `rfd` cannot show the application's choices: the in-app picker does.
+        let native = lock(&self.0).native && native_available() && request.choices.is_empty();
         let fs = self.file_system();
         let previews = self.previews();
         let groupings = self.groupings();
@@ -741,6 +885,32 @@ impl Files {
             .ok_or_else(|| format!("no choice {id} is open"))?;
         o.by = origin;
         *lock(&o.answer) = Some(answer);
+        Ok(())
+    }
+
+    /// Sets the application's choices of an open choice ([`FileRequest::choice`])
+    /// as its answer goes: for a run-hook replacing the chooser, with
+    /// [`Files::deliver`]. The values are checked against the request; those
+    /// not given keep the in-app picker's, else their defaults.
+    pub fn set_choices(&self, id: u64, values: &ChoiceValues) -> Result<(), String> {
+        let mut s = lock(&self.0);
+        let o = s
+            .open
+            .iter_mut()
+            .find(|o| o.id == id)
+            .ok_or_else(|| format!("no choice {id} is open"))?;
+        let mut base = o
+            .choices
+            .clone()
+            .or_else(|| o.picker.as_ref().map(|p| p.choice_values.clone()))
+            .unwrap_or_else(|| o.request.choice_defaults());
+        base.extend(
+            o.request
+                .choice_values(values)?
+                .into_iter()
+                .filter(|(k, _)| values.contains_key(k)),
+        );
+        o.choices = Some(base);
         Ok(())
     }
 
@@ -1128,14 +1298,14 @@ impl Plugin for FilesPlugin {
         ctx.step(
             StepSpec::new(
                 STEP_CHOOSE,
-                "A choice of files starts; a run-hook replaces the chooser (answer `paths` or `cancelled`, or later through `Files::deliver`).",
+                "A choice of files starts; a run-hook replaces the chooser (answer `paths` or `cancelled`, and `choices` for the request's, or later through `Files::deliver`).",
             )
             .args(json!({ "id": 1, "request": FileRequest::open("Open").to_json() })),
         )?;
         ctx.step(
             StepSpec::new(
                 STEP_CHOSEN,
-                "Paths were chosen; a veto refuses them, a redirect changes them.",
+                "Paths were chosen, with the request's `choices` when it has some; a veto refuses them, a redirect changes them.",
             )
             .args(json!({ "id": 1, "request": FileRequest::open("Open").to_json(), "paths": ["/tmp/a.png"] })),
         )?;
@@ -1224,7 +1394,7 @@ impl Plugin for FilesPlugin {
             .snapshot(move |_| a.describe())
             .action_as(
                 "answer",
-                "Answers a choice as its caller (the origin goes with the result): `id`, and `paths` (a list) or `cancel: true`.",
+                "Answers a choice as its caller (the origin goes with the result): `id`, and `paths` (a list) or `cancel: true`; `choices` (id to value) sets the application's options, checked against the request.",
                 true,
                 move |_, args, origin| {
                     let id = args.get("id").and_then(Json::as_u64).ok_or("`id` is missing")?;
@@ -1233,6 +1403,9 @@ impl Plugin for FilesPlugin {
                     } else {
                         Some(paths_of(args))
                     };
+                    if let Some(c) = args.get("choices") {
+                        b.set_choices(id, &choices_of(c))?;
+                    }
                     b.deliver_as(id, answer, origin.clone())?;
                     Ok(json!({ "queued": true }))
                 },
@@ -1278,7 +1451,14 @@ fn frame(ui: &mut Ui, app: &AppHandle) {
     app.set_context(WHEN_SELECT_ALL, say(select_all));
     app.set_context(WHEN_SELECTS, say(selects));
     app.set_context(WHEN_EDIT_PATH, say(edit_path));
-    let done: Vec<(u64, FileRequest, Answer, Option<Resolver>, Origin)> = {
+    let done: Vec<(
+        u64,
+        FileRequest,
+        Answer,
+        ChoiceValues,
+        Option<Resolver>,
+        Origin,
+    )> = {
         let mut s = lock(&files.0);
         let mut done = Vec::new();
         let mut i = 0;
@@ -1287,7 +1467,11 @@ fn frame(ui: &mut Ui, app: &AppHandle) {
             match answer {
                 Some(a) => {
                     let o = s.open.remove(i);
-                    done.push((o.id, o.request, a, o.resolver, o.by));
+                    let choices = o
+                        .choices
+                        .or_else(|| o.picker.map(|p| p.choice_values))
+                        .unwrap_or_else(|| o.request.choice_defaults());
+                    done.push((o.id, o.request, a, choices, o.resolver, o.by));
                 }
                 None => i += 1,
             }
@@ -1299,8 +1483,9 @@ fn frame(ui: &mut Ui, app: &AppHandle) {
         // Nothing to preview for them any more.
         files.previews().cancel();
     }
-    for (id, request, answer, resolver, by) in done {
+    for (id, request, answer, choices, resolver, by) in done {
         overlay::close(&ctx, overlay_id(id));
+        let answer = answer.map(|paths| (paths, choices));
         finish(app, &files, id, &request, answer, resolver, &by);
     }
     picker_overlay(&ctx, app, &files);
@@ -1310,13 +1495,14 @@ fn overlay_id(id: u64) -> egui::Id {
     egui::Id::unique(("egui_pop.files", id))
 }
 
-/// Ends a choice: `file.chosen` for paths, the journal for a cancel.
+/// Ends a choice: `file.chosen` for paths (and the application's choices),
+/// the journal for a cancel.
 fn finish(
     app: &AppHandle,
     files: &Files,
     id: u64,
     request: &FileRequest,
-    answer: Answer,
+    answer: Option<(Vec<PathBuf>, ChoiceValues)>,
     resolver: Option<Resolver>,
     by: &Origin,
 ) {
@@ -1331,7 +1517,7 @@ fn finish(
                 Ok(json!({ "cancelled": true, "origin": by }))
             }
         }
-        Some(paths) => {
+        Some((paths, choices)) => {
             let found = files.groups_of(app, request, &paths);
             let mut args = json!({
                 "id": id,
@@ -1342,11 +1528,18 @@ fn finish(
             if !found.is_empty() {
                 args["groups"] = groups::to_json(&found);
             }
+            if !request.choices.is_empty() {
+                args["choices"] = json!(choices);
+            }
             let out = app.step(&STEP_CHOSEN, args, |app, args| {
                 let chosen = paths_of(args);
                 remember(app, &chosen);
                 remember_folder(app, request, &chosen);
                 let mut out = json!({ "paths": paths_json(&chosen), "origin": by });
+                // A before-hook may have changed them, as the paths.
+                if let Some(c) = args.get("choices") {
+                    out["choices"] = c.clone();
+                }
                 // A hook may have redirected the choice: its groups, then.
                 let last = if chosen == paths {
                     found.clone()
@@ -2185,6 +2378,9 @@ pub struct FilePicker {
     groupings: Option<Groupings>,
     /// The request leaves groups on ([`FileRequest::ungrouped`]).
     request_groups: bool,
+    /// The application's options ([`FileRequest::choice`]), and their values.
+    choices: Vec<FileChoice>,
+    choice_values: ChoiceValues,
 }
 
 impl FilePicker {
@@ -2257,7 +2453,30 @@ impl FilePicker {
             previews: None,
             groupings: None,
             request_groups: request.group_files,
+            choices: request.choices.clone(),
+            choice_values: request.choice_defaults(),
         }
+    }
+
+    /// The application's choices ([`FileRequest::choice`]) as they stand: each
+    /// id with its value.
+    pub fn choices(&self) -> &ChoiceValues {
+        &self.choice_values
+    }
+
+    /// Sets one of the application's choices; refused for an id the request
+    /// does not have or a value it cannot take.
+    pub fn set_choice(&mut self, id: &str, value: &str) -> Result<(), String> {
+        let c = self
+            .choices
+            .iter()
+            .find(|c| c.id == id)
+            .ok_or_else(|| format!("no choice `{id}` in this request"))?;
+        if !c.accepts(value) {
+            return Err(format!("`{value}` is not a value of the choice `{id}`"));
+        }
+        self.choice_values.insert(id.into(), value.into());
+        Ok(())
     }
 
     /// Shows the selected entry's preview in a pane beside the list,
@@ -3087,6 +3306,7 @@ impl FilePicker {
             "columns": self.columns,
             "sort": self.sort.as_text(),
             "folders_first": self.folders_first,
+            "choices": self.choice_values,
             "grouped": self.grouping_on(),
             "groups": shown.iter().take(64).filter_map(|e| {
                 self.group_of(&e.path).map(|g| json!({
@@ -3563,6 +3783,10 @@ impl FilePicker {
             }
             self.said = line;
         }
+        if !self.choices.is_empty() {
+            ui.add_space(t.space.s);
+            self.choice_row(ui);
+        }
         ui.add_space(t.space.m);
         ui.horizontal(|ui| {
             if !self.filters.is_empty() {
@@ -3652,6 +3876,44 @@ impl FilePicker {
     }
 
     /// The list or grid switch, and the thumbnails' size with the grid.
+    /// The application's choices, on a line of their own above the buttons:
+    /// a check box, or a label and its combo box.
+    fn choice_row(&mut self, ui: &mut Ui) {
+        let values = &mut self.choice_values;
+        ui.horizontal_wrapped(|ui| {
+            for c in &self.choices {
+                let value = values
+                    .entry(c.id.clone())
+                    .or_insert_with(|| c.default.clone());
+                if c.is_check() {
+                    let mut on = value == "true";
+                    if widgets::checkbox(ui, &mut on, c.label.as_str()).changed() {
+                        *value = on.to_string();
+                    }
+                    continue;
+                }
+                ui.label(c.label.as_str());
+                let shown = c
+                    .options
+                    .iter()
+                    .find(|(id, _)| id == value)
+                    .map_or(value.as_str(), |(_, label)| label.as_str())
+                    .to_owned();
+                let combo = widgets::combo_box(("egui_pop.files.choice", c.id.as_str()))
+                    .selected_text(shown);
+                let list = ui.combo_box(combo, |ui| {
+                    for (id, label) in &c.options {
+                        widgets::selectable_value(ui, value, id.clone(), label.as_str());
+                    }
+                });
+                // The label beside it is not its name for a screen reader.
+                let name = c.label.clone();
+                ui.ctx()
+                    .accesskit_node_builder(list.response.id, |node| node.set_label(name));
+            }
+        });
+    }
+
     fn view_controls(&mut self, ui: &mut Ui) {
         for (view, name) in [
             (PickerView::List, &txt::FILES_VIEW_LIST),

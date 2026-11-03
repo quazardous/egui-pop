@@ -3511,3 +3511,152 @@ fn a_picker_on_its_own_takes_groupings_and_tells_its_caller_the_group() {
     assert_eq!(picker.entries().len(), 8);
     assert!(picker.group_of(Path::new("/s/IMG_2.cr3")).is_none());
 }
+
+/// An import's options, as Helios asks them.
+fn with_choices(request: FileRequest) -> FileRequest {
+    request.check("only_new", "Only new photos", false).choice(
+        "format",
+        "Format",
+        &[("jpeg", "JPEG"), ("tiff", "TIFF")],
+        "jpeg",
+    )
+}
+
+fn values(pairs: &[(&str, &str)]) -> files::ChoiceValues {
+    pairs
+        .iter()
+        .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+        .collect()
+}
+
+#[test]
+fn the_application_s_choices_come_back_with_the_paths() {
+    let root = tree("choices");
+    let mut h = harness(None);
+    let before = h.state().handle().last_event();
+    let p = choose(
+        &mut h,
+        with_choices(FileRequest::open("Import").directory(root.join("photos"))),
+    );
+    // Above the buttons, with their names.
+    let check = h.get_by_role_and_label(Role::CheckBox, "Only new photos");
+    assert_eq!(check.accesskit_node().toggled(), Some(Toggled::False));
+    check.click();
+    settle(&mut h);
+    h.get_by_role_and_label(Role::ComboBox, "Format").click();
+    settle(&mut h);
+    h.get_by_label("TIFF").click();
+    settle(&mut h);
+    let snap = h.state().handle().debug_snapshot();
+    assert_eq!(
+        snap["files"]["open"][0]["picker"]["choices"],
+        json!({ "format": "tiff", "only_new": "true" })
+    );
+    double_click(&mut h, "a.png");
+    let r = (0..4)
+        .find_map(|_| {
+            settle(&mut h);
+            p.take()
+        })
+        .expect("a result");
+    assert_eq!(
+        files::chosen(&r),
+        Ok(Chosen::Paths(vec![root.join("photos/a.png")]))
+    );
+    assert_eq!(
+        files::chosen_choices(&r),
+        values(&[("format", "tiff"), ("only_new", "true")])
+    );
+    let app = h.state().handle().clone();
+    let chosen = app
+        .events_since(before)
+        .into_iter()
+        .find(|e| e.name == "file.chosen")
+        .unwrap();
+    assert_eq!(chosen.data["args"]["choices"]["format"], "tiff");
+    // Without choices, nothing more in the result.
+    let p = choose(
+        &mut h,
+        FileRequest::open("Open").directory(root.join("photos")),
+    );
+    double_click(&mut h, "a.png");
+    let r = (0..4)
+        .find_map(|_| {
+            settle(&mut h);
+            p.take()
+        })
+        .expect("a result");
+    assert!(r.as_ref().unwrap().get("choices").is_none());
+    assert!(files::chosen_choices(&r).is_empty());
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn whoever_answers_sets_the_choices_checked_and_the_rest_keep_their_defaults() {
+    let root = tree("choices-agent");
+    let mut h = harness_with(App::builder().offer_to_agents("files.answer"), None);
+    let p = choose(
+        &mut h,
+        with_choices(FileRequest::open("Import").directory(&root)),
+    );
+    let id = h.state().handle().service(&FILES).unwrap().open_ids()[0];
+    let path = root.join("notes/todo.md");
+    for wrong in [json!({ "format": "png" }), json!({ "recursive": "true" })] {
+        let feedback = h.state_mut().debug_call(
+            "files",
+            "answer",
+            &json!({ "id": id, "paths": [&path], "choices": wrong }),
+        );
+        assert!(!feedback.ok, "{wrong} was taken");
+    }
+    let feedback = h.state_mut().debug_call(
+        "files",
+        "answer",
+        &json!({ "id": id, "paths": [&path], "choices": { "format": "tiff" } }),
+    );
+    assert!(feedback.ok, "{}", feedback.message);
+    let r = (0..4)
+        .find_map(|_| {
+            settle(&mut h);
+            p.take()
+        })
+        .expect("a result");
+    assert_eq!(
+        files::chosen_choices(&r),
+        values(&[("format", "tiff"), ("only_new", "false")])
+    );
+    // A plugin answering through `deliver` with nothing set: the defaults.
+    let p = choose(
+        &mut h,
+        with_choices(FileRequest::open("Import").directory(&root)),
+    );
+    let f = h.state().handle().service(&FILES).unwrap();
+    let id = f.open_ids()[0];
+    f.set_choices(id, &values(&[("only_new", "true")])).unwrap();
+    f.deliver(id, Some(vec![path.clone()])).unwrap();
+    let r = (0..4)
+        .find_map(|_| {
+            settle(&mut h);
+            p.take()
+        })
+        .expect("a result");
+    assert_eq!(
+        files::chosen_choices(&r),
+        values(&[("format", "jpeg"), ("only_new", "true")])
+    );
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn choices_round_trip_and_an_older_request_reads_without_them() {
+    let request = with_choices(FileRequest::open("Import"));
+    assert_eq!(FileRequest::from_json(&request.to_json()).unwrap(), request);
+    assert!(request.choices[0].is_check());
+    assert_eq!(
+        request.choice_defaults(),
+        values(&[("format", "jpeg"), ("only_new", "false")])
+    );
+    let mut older = FileRequest::open("Open").to_json();
+    older.as_object_mut().unwrap().remove("choices");
+    assert!(FileRequest::from_json(&older).unwrap().choices.is_empty());
+}

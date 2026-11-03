@@ -2974,6 +2974,12 @@ fn the_files_page_selects_several_and_says_what_a_folder_selected_means() {
         h.query_by_role_and_label(Role::Label, "Selected: 2")
             .is_some()
     );
+    // The page's options, above the buttons.
+    assert!(h.query_by_role_and_label(Role::ComboBox, "Then").is_some());
+    assert!(
+        h.query_by_role_and_label(Role::CheckBox, "Include subfolders")
+            .is_some()
+    );
     egui_pop_test::assert_all_named(&h);
     h.hover_at(egui::pos2(5.0, 5.0));
     settle_picker(&mut h);
