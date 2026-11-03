@@ -387,6 +387,13 @@ The bridge has one caller identity: every command it runs is
 - **The clipboard.** An agent copies and pastes in its own slot
   (`agent:debug-bridge`): it neither reads nor overwrites what the user
   copied unless the owner allows it ([The clipboard](clipboard.md)).
+- **Dialogs and file choices.** `dialogs.answer` and `files.answer`
+  answer as their caller. Accepting a dialog runs its command with the
+  caller's origin, and an answer that would run a command not offered to
+  agents is refused to anyone but the user, even when the application
+  offers `dialogs.answer` (`dialog.answer.refused` on the journal); an
+  agent may still cancel it. A file choice carries its origin to its
+  consumer (`files::chosen_origin`).
 - **The value store.** An agent writes as itself
   (`agent:debug-bridge`, `Origin::writer`), through `value.set`,
   `value.reset`, `value.undo`, `value.redo` and, when offered,
@@ -409,10 +416,11 @@ The bridge has one caller identity: every command it runs is
 
 - Declare the command with `.no_agent()`; it stays in menus, keys and
   the palette.
-- When a dialog confirms an action and the application offers
-  `dialogs.answer` to agents, veto the `dialog.answer` step unless its
-  `origin` is `user`, as the links plugin does: accepting a dialog runs
-  its command whatever the command's `agent` flag (see the gaps).
+- A dialog whose command is declared `.no_agent()` is accepted by the
+  user only, even when the application offers `dialogs.answer` to
+  agents. When a dialog confirms an action whose command agents may run
+  otherwise, veto the `dialog.answer` step unless its `origin` is
+  `user`, as the links plugin does.
 - To refuse a collector action to everyone, the user's devtools panel
   included, veto the `debug.call` step for it.
 - When a step does the work, veto it from a before-hook for agents
@@ -509,13 +517,11 @@ What is not protected today. None of these is fixed by documenting it.
 - **The bridge cannot be turned off.** It is in every build, release
   included; there is no feature or setting to remove it or to make it
   read-only. Any code in the process (a plugin included) can call it.
-- **Accepting a dialog runs its command for the agent, whatever its
-  flag.** Once an application offers `dialogs.answer` to agents, an
-  `accept` runs the dialog's command with the agent's origin without
-  checking the command's `agent` flag; only the links plugin vetoes such
-  answers. Such an application must veto the `dialog.answer` step
-  itself (above). `files.answer`, offered, answers an open file choice
-  with any paths.
+- **An offered `files.answer` answers a choice with any paths.** The
+  origin goes with the choice (`files::chosen_origin` on its result,
+  `origin` in the `file.chosen` step, `by` in the `files` collector's
+  last choices), but nothing refuses it: a consumer that acts only on a
+  person's choice checks it, or a hook on `file.chosen` vetoes it.
 - **Origin is a label, not a credential.** `App::run`,
   `AppHandle::run_as` and the steps take any `Origin` from code in the
   process and do not check the `agent` flag; a command's handler that

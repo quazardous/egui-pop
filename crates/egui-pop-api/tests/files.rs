@@ -265,16 +265,57 @@ fn an_agent_answers_through_the_bridge() {
     assert_eq!(open["via"], "in_app");
     assert_eq!(open["picker"]["shown"], json!(["notes/", "photos/"]));
     let id = open["id"].as_u64().unwrap();
+    let before = h.state().handle().last_event();
     let feedback = h.state_mut().debug_call(
         "files",
         "answer",
         &json!({ "id": id, "paths": [root.join("notes/todo.md")] }),
     );
     assert!(feedback.ok, "{}", feedback.message);
+    // The agent's origin goes with the choice: in the result, the step,
+    // the bridge's record.
+    let r = (0..4)
+        .find_map(|_| {
+            settle(&mut h);
+            p.take()
+        })
+        .expect("a result");
     assert_eq!(
-        result(&mut h, &p),
+        files::chosen(&r),
         Ok(Chosen::Paths(vec![root.join("notes/todo.md")]))
     );
+    assert_eq!(
+        files::chosen_origin(&r),
+        Origin::Agent("debug-bridge".into())
+    );
+    let app = h.state().handle().clone();
+    let chosen = app
+        .events_since(before)
+        .into_iter()
+        .find(|e| e.name == "file.chosen")
+        .unwrap();
+    assert_eq!(chosen.data["args"]["origin"], "agent:debug-bridge");
+    let last = app.debug_snapshot()["files"]["last"].clone();
+    assert_eq!(
+        last.as_array().unwrap().last().unwrap()["by"],
+        "agent:debug-bridge"
+    );
+    // A person's choice says so.
+    let p = choose(&mut h, FileRequest::open("Open").directory(&root));
+    let id = h.state().handle().service(&FILES).unwrap().open_ids()[0];
+    h.state()
+        .handle()
+        .service(&FILES)
+        .unwrap()
+        .deliver(id, Some(vec![root.join("notes/todo.md")]))
+        .unwrap();
+    let r = (0..4)
+        .find_map(|_| {
+            settle(&mut h);
+            p.take()
+        })
+        .expect("a result");
+    assert_eq!(files::chosen_origin(&r), Origin::User);
     let _ = std::fs::remove_dir_all(root);
 }
 

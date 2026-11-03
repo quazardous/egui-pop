@@ -2047,35 +2047,36 @@ impl Plugin for ContextsPlugin {
         ctx.collector(
             FnCollector::new(
                 "contexts",
-                "The context stack: the owner's state (places, modes, revision), its holds and frames; the projection (its key, the context keys it set, the layouts and view states kept); the last context events; warnings: the stack's own keys set by hand (`hand_writes`), frames that can be on together binding the same keys (`clashes`). `request` asks for a transition as an agent; `hold` and `release`.",
+                "The context stack: the owner's state (places, modes, revision), its holds and frames; the projection (its key, the context keys it set, the layouts and view states kept); the last context events; warnings: the stack's own keys set by hand (`hand_writes`), frames that can be on together binding the same keys (`clashes`). `request` asks for a transition as its caller; `hold` and `release`, held in the caller's name.",
             )
             .snapshot(move |_| match w1.get() {
                 Ok(app) => describe(&app),
                 Err(_) => Json::Null,
             })
-            .action(
+            .action_as(
                 "request",
-                "Asks the owner for a transition (`request`, `if_rev`, `dry_run`), as an agent.",
+                "Asks the owner for a transition (`request`, `if_rev`, `dry_run`), as its caller.",
                 true,
-                move |_, args| {
+                move |_, args, origin| {
                     let app = w2.get()?;
                     let env: Envelope = parse(args, "a context request")?;
-                    outcome_json(request(&app, env, &egui_pop_core::debug::agent()))
+                    outcome_json(request(&app, env, origin))
                 },
             )
             .args(json!({ "request": { "op": "back" }, "dry_run": true }))
-            .action(
+            .action_as(
                 "hold",
-                "Holds groups of the stack (`groups`, `reason`); its token.",
+                "Holds groups of the stack (`groups`, `reason`) in the caller's name; its token.",
                 true,
-                move |_, args| {
+                move |_, args, origin| {
                     let app = w3.get()?;
                     let groups: Vec<GroupId> = match args.get("groups") {
                         Some(g) if !g.is_null() => parse(g, "`groups`")?,
                         _ => Vec::new(),
                     };
-                    let reason = args["reason"].as_str().unwrap_or("held by an agent");
-                    Ok(json!({ "token": hold(&app, groups, reason, "agent:debug-bridge")? }))
+                    let reason = args["reason"].as_str().unwrap_or("held through the debug bridge");
+                    let by = crate::host::source_of(origin);
+                    Ok(json!({ "token": hold(&app, groups, reason, &by)? }))
                 },
             )
             .args(json!({ "groups": [], "reason": "an agent holds the stack" }))

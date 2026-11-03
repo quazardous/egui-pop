@@ -67,8 +67,13 @@
 //!
 //! Every open dialog is data: the debug bridge's `dialogs` collector
 //! shows the current one (a form's values also as a plain `values` map)
-//! and answers it (`answer`), so an agent sees and answers what a person
-//! would, with its origin recorded.
+//! and answers it (`answer`, the user's unless the application offers it
+//! to agents) as its caller, so an agent sees and answers what a person
+//! would, with its origin recorded. Accepting a dialog runs its command
+//! with the answer's origin; an answer that would run a command not
+//! offered to agents (`CommandSpec::no_agent`) is refused to anyone but
+//! the user, whoever gives it (`dialog.answer.refused` on the journal),
+//! and the dialog stays open.
 //!
 //! Steps (ADR 0011): `dialog.show` runs when a dialog comes up (a
 //! before-hook may veto it: it is cancelled), `dialog.answer` around each
@@ -1085,15 +1090,19 @@ impl Plugin for DialogsPlugin {
             .args(json!({ "dialog": { "kind": "choose", "id": 1 }, "answer": { "answer": "choose", "index": 0 }, "origin": "user" })),
         )?;
         let (a, b) = (dialogs.clone(), dialogs);
+        let weak = ctx.app().downgrade();
         ctx.collector(
             FnCollector::new(
                 "dialogs",
-                "The dialog shown (kind, title, fields, verb, command) and how many wait; `answer` answers it as an agent.",
+                "The dialog shown (kind, title, fields, verb, command) and how many wait; `answer` answers it as its caller.",
             )
             .snapshot(move |_| json!({ "current": a.describe(), "answered": a.answered() }))
-            .action("answer", "Answers the dialog shown: accept (with `values`), choose (`value` or `index`) or cancel.", true, move |_, args| {
+            .action_as("answer", "Answers the dialog shown as its caller: accept (with `values`), choose (`value` or `index`) or cancel. An answer that would run a command not offered to agents is the user's only.", true, move |_, args, origin| {
                 let answer = Answer::from_json(args)?;
-                b.answer(answer, egui_pop_core::debug::agent())?;
+                let app = weak.get()?;
+                let open = lock(&b.0).queue.front().cloned().ok_or("no dialog is open")?;
+                refuse_unoffered(&app, &open, &answer, origin)?;
+                b.answer(answer, origin.clone())?;
                 Ok(json!({ "queued": true }))
             })
             .args(json!({ "answer": "accept", "values": {} })),
@@ -1114,14 +1123,10 @@ pub(crate) fn overlay_id(dialog: u64) -> egui::Id {
 /// How many answers are remembered.
 const ANSWERED: usize = 16;
 
-/// Applies an answer to the shown dialog: runs its command if accepted.
-fn apply(app: &AppHandle, d: &Dialogs, answer: Answer, origin: Origin) -> Result<(), String> {
-    let open = lock(&d.0)
-        .queue
-        .front()
-        .cloned()
-        .ok_or("no dialog is open")?;
-    let run = match (&open.dialog, &answer) {
+/// The command an answer runs, with its arguments: `None` when it runs
+/// none (a cancel, an information).
+fn target(open: &Open, answer: &Answer) -> Result<Option<(CommandId, Json)>, String> {
+    Ok(match (&open.dialog, &answer) {
         (_, Answer::Cancel) => None,
         (Dialog::Confirm(c), Answer::Accept { .. }) => Some((c.command.clone(), c.args.clone())),
         (Dialog::Info(_), Answer::Accept { .. }) => None,
@@ -1178,7 +1183,61 @@ fn apply(app: &AppHandle, d: &Dialogs, answer: Answer, origin: Origin) -> Result
             Some((c.command.clone(), Json::Object(args)))
         }
         (_, a) => return Err(format!("{a:?} does not answer this dialog")),
+    })
+}
+
+/// Refuses an answer that would run, for anyone but the user, a command
+/// not offered to agents (`CommandSpec::no_agent`): said on the journal
+/// (`dialog.answer.refused`, from the caller) and as the error.
+fn refuse_unoffered(
+    app: &AppHandle,
+    open: &Open,
+    answer: &Answer,
+    origin: &Origin,
+) -> Result<(), String> {
+    if *origin == Origin::User {
+        return Ok(());
+    }
+    let Some((command, _)) = target(open, answer)? else {
+        return Ok(());
     };
+    let offered = app
+        .commands()
+        .iter()
+        .any(|(s, _)| s.id == command && s.agent);
+    if offered {
+        return Ok(());
+    }
+    let reason = format!(
+        "accepting `{}` runs `{command}`, which is not offered to agents; only the user may",
+        open.dialog.title()
+    );
+    app.publish(
+        &source_of(origin),
+        None,
+        "dialog.answer.refused",
+        json!({
+            "id": open.id,
+            "title": open.dialog.title(),
+            "answer": answer,
+            "command": command,
+            "reason": reason,
+        }),
+    );
+    Err(reason)
+}
+
+/// Applies an answer to the shown dialog: runs its command if accepted,
+/// as `origin`; refused when that command is not offered to agents and
+/// `origin` is not the user.
+fn apply(app: &AppHandle, d: &Dialogs, answer: Answer, origin: Origin) -> Result<(), String> {
+    let open = lock(&d.0)
+        .queue
+        .front()
+        .cloned()
+        .ok_or("no dialog is open")?;
+    refuse_unoffered(app, &open, &answer, &origin)?;
+    let run = target(&open, &answer)?;
     if let Dialog::Custom(c) = &open.dialog {
         app.local::<Bodies>().0.borrow_mut().remove(&open.id);
         if let Some(needs) = &c.needs {

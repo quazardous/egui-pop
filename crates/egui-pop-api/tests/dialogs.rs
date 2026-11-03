@@ -21,6 +21,8 @@ use egui_pop_model::values::{Change, Descriptor, PathKind, Set, Value};
 use serde_json::{Value as Json, json};
 
 const GO: CommandId = CommandId::from_static("doc.go");
+/// Kept from agents.
+const PURGE: CommandId = CommandId::from_static("doc.purge");
 
 type Runs = Rc<RefCell<Vec<(Json, Origin)>>>;
 
@@ -38,6 +40,15 @@ impl Plugin for Doc {
                 .push((call.args.clone(), call.origin.clone()));
             Ok(Json::Null)
         })?;
+        let runs = self.0.clone();
+        ctx.command(
+            CommandSpec::new(PURGE, "Purge", "Doc").no_agent(),
+            move |call| {
+                runs.borrow_mut()
+                    .push((call.args.clone(), call.origin.clone()));
+                Ok(Json::Null)
+            },
+        )?;
         Ok(())
     }
 }
@@ -867,4 +878,80 @@ fn a_choice_s_rows_keep_their_size_under_the_pointer_and_line_up() {
             assert!((sx - x).abs() < 0.5, "{text:?} starts at {sx}, not {x}");
         }
     }
+}
+
+#[test]
+fn an_agent_may_not_accept_what_runs_a_command_kept_from_agents() {
+    // Even with `dialogs.answer` offered to it.
+    let (mut h, runs, d) = agent_harness();
+    d.open(Confirm::new("Purge everything?", "Purge", PURGE));
+    h.run();
+    let app = h.state().handle().clone();
+    let before = app.last_event();
+    let f = h
+        .state_mut()
+        .debug_call("dialogs", "answer", &json!({ "answer": "accept" }));
+    assert!(!f.ok, "{f:?}");
+    assert!(
+        f.message
+            .contains("`doc.purge`, which is not offered to agents"),
+        "{}",
+        f.message
+    );
+    h.run();
+    h.run();
+    assert!(runs.borrow().is_empty());
+    assert_eq!(d.len(), 1, "the dialog stays");
+    let refused = app
+        .events_since(before)
+        .into_iter()
+        .find(|e| e.name == "dialog.answer.refused")
+        .unwrap();
+    assert_eq!(refused.source, "agent:debug-bridge");
+    assert_eq!(refused.data["command"], "doc.purge");
+    // The same answer from code with an agent's origin: refused when
+    // applied, the dialog keeps it as its error.
+    d.answer(
+        dialogs::Answer::Accept {
+            values: Default::default(),
+        },
+        Origin::Agent("script".into()),
+    )
+    .unwrap();
+    h.run();
+    h.run();
+    assert!(runs.borrow().is_empty());
+    assert_eq!(d.len(), 1);
+    // The agent may still cancel it.
+    let f = h
+        .state_mut()
+        .debug_call("dialogs", "answer", &json!({ "answer": "cancel" }));
+    assert!(f.ok, "{f:?}");
+    h.run();
+    h.run();
+    assert!(d.is_empty());
+    // The user accepts it, through the bridge (devtools) as by the button.
+    d.open(Confirm::new("Purge everything?", "Purge", PURGE));
+    h.run();
+    let f = h.state_mut().debug_call_as(
+        "dialogs",
+        "answer",
+        &json!({ "answer": "accept" }),
+        Origin::User,
+    );
+    assert!(f.ok, "{f:?}");
+    h.run();
+    h.run();
+    assert_eq!(runs.borrow().len(), 1);
+    assert_eq!(runs.borrow()[0].1, Origin::User);
+    // An agent's accept of an offered command runs it as the agent.
+    d.open(Confirm::new("Go?", "Go", GO));
+    h.run();
+    let f = h
+        .state_mut()
+        .debug_call("dialogs", "answer", &json!({ "answer": "accept" }));
+    assert!(f.ok, "{f:?}");
+    h.run();
+    h.run();
+    assert_eq!(runs.borrow()[1].1, Origin::Agent("debug-bridge".into()));
 }

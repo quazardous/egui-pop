@@ -67,15 +67,19 @@
 //! | Step | Arguments | Default |
 //! |---|---|---|
 //! | `file.choose` | `{ "id", "request" }` | opens the system's chooser or the in-app picker |
-//! | `file.chosen` | `{ "id", "request", "paths" }`, and `"groups"` when some are | remembers the places, gives the paths and their groups |
+//! | `file.chosen` | `{ "id", "request", "paths", "origin" }`, and `"groups"` when some are | remembers the places, gives the paths and their groups |
 //!
 //! A run-hook on `file.choose` replaces the whole chooser: it answers
 //! `{ "paths": [...] }` or `{ "cancelled": true }` at once, or anything
 //! else and later [`Files::deliver`]. A before-hook on `file.chosen` may
 //! veto the choice (the result is the reason, as an error) or redirect
-//! it to other paths. The journal says `file.cancelled` when the person
-//! cancels. The debug bridge's `files` collector shows the choices open
-//! and answers them (`answer`), as a person would. The `file.preview`
+//! it to other paths. The journal says `file.cancelled` when the choice
+//! is cancelled, from whoever cancelled it. The debug bridge's `files`
+//! collector shows the choices open and answers them (`answer`, the
+//! user's unless offered to agents), as its caller: the result carries
+//! the origin ([`chosen_origin`]), and so does `file.chosen` (`origin`,
+//! as the journal writes it), so a hook may refuse a choice no person
+//! made. The `file.preview`
 //! command gives agents a path's preview metadata ([`preview_metadata`]).
 //!
 //! The question before replacing a file is the in-app picker's own: the
@@ -418,6 +422,19 @@ pub fn chosen(result: &Result<Json, String>) -> Result<Chosen, String> {
     Ok(Chosen::Paths(paths_of(json)))
 }
 
+/// Who answered a choice, from its result: the user (the picker, the
+/// system's chooser, a plugin's) unless an agent or a script answered it
+/// through the debug bridge. A consumer that should act only on a
+/// person's choice checks it.
+pub fn chosen_origin(result: &Result<Json, String>) -> Origin {
+    result
+        .as_ref()
+        .ok()
+        .and_then(|j| j.get("origin"))
+        .and_then(|o| serde_json::from_value(o.clone()).ok())
+        .unwrap_or(Origin::User)
+}
+
 /// The groups a choice's result holds ([`groups`]): one for each path chosen
 /// that heads a group, none otherwise. [`chosen`] gives the paths, each group's
 /// main among them; the members come from here.
@@ -472,6 +489,9 @@ struct Open {
     /// Its in-app picker is drawn by the caller ([`Files::show_inline`]),
     /// not in a modal of its own.
     inline: bool,
+    /// Who answered it: the user (the picker, a chooser) unless
+    /// [`Files::deliver_as`] says otherwise.
+    by: Origin,
 }
 
 #[derive(Debug, Default)]
@@ -591,6 +611,7 @@ impl Files {
                 answer: Arc::default(),
                 picker: None,
                 inline,
+                by: Origin::User,
             });
             id
         };
@@ -697,14 +718,28 @@ impl Files {
     }
 
     /// Answers a choice (applied on the next frame): paths, or `None`
-    /// for cancelled. For a run-hook replacing the chooser, and agents.
+    /// for cancelled, as the user. For a run-hook replacing the chooser.
     pub fn deliver(&self, id: u64, answer: Option<Vec<PathBuf>>) -> Result<(), String> {
-        let s = lock(&self.0);
+        self.deliver_as(id, answer, Origin::User)
+    }
+
+    /// As [`Files::deliver`], answered by `origin` (an agent through the
+    /// debug bridge): the origin goes with the choice, to the
+    /// `file.chosen` step (`origin`), the journal and the result
+    /// ([`chosen_origin`]).
+    pub fn deliver_as(
+        &self,
+        id: u64,
+        answer: Option<Vec<PathBuf>>,
+        origin: Origin,
+    ) -> Result<(), String> {
+        let mut s = lock(&self.0);
         let o = s
             .open
-            .iter()
+            .iter_mut()
             .find(|o| o.id == id)
             .ok_or_else(|| format!("no choice {id} is open"))?;
+        o.by = origin;
         *lock(&o.answer) = Some(answer);
         Ok(())
     }
@@ -786,13 +821,13 @@ impl Files {
             .and_then(|o| o.picker.clone())
     }
 
-    fn note(&self, id: u64, title: &str, outcome: Json) {
+    fn note(&self, id: u64, title: &str, outcome: Json, by: &str) {
         let mut s = lock(&self.0);
         if s.last.len() == 16 {
             s.last.pop_front();
         }
         s.last
-            .push_back(json!({ "id": id, "title": title, "outcome": outcome }));
+            .push_back(json!({ "id": id, "title": title, "outcome": outcome, "by": by }));
     }
 }
 
@@ -1183,21 +1218,21 @@ impl Plugin for FilesPlugin {
         ctx.collector(
             FnCollector::new(
                 "files",
-                "The file choices open (request, chooser, the in-app picker's folder and entries) and the last ones; `answer` answers one as an agent.",
+                "The file choices open (request, chooser, the in-app picker's folder and entries) and the last ones (`by`: who answered); `answer` answers one as its caller.",
             )
             .snapshot(move |_| a.describe())
-            .action(
+            .action_as(
                 "answer",
-                "Answers a choice: `id`, and `paths` (a list) or `cancel: true`.",
+                "Answers a choice as its caller (the origin goes with the result): `id`, and `paths` (a list) or `cancel: true`.",
                 true,
-                move |_, args| {
+                move |_, args, origin| {
                     let id = args.get("id").and_then(Json::as_u64).ok_or("`id` is missing")?;
                     let answer = if args.get("cancel").and_then(Json::as_bool) == Some(true) {
                         None
                     } else {
                         Some(paths_of(args))
                     };
-                    b.deliver(id, answer)?;
+                    b.deliver_as(id, answer, origin.clone())?;
                     Ok(json!({ "queued": true }))
                 },
             )
@@ -1242,7 +1277,7 @@ fn frame(ui: &mut Ui, app: &AppHandle) {
     app.set_context(WHEN_SELECT_ALL, say(select_all));
     app.set_context(WHEN_SELECTS, say(selects));
     app.set_context(WHEN_EDIT_PATH, say(edit_path));
-    let done: Vec<(u64, FileRequest, Answer, Option<Resolver>)> = {
+    let done: Vec<(u64, FileRequest, Answer, Option<Resolver>, Origin)> = {
         let mut s = lock(&files.0);
         let mut done = Vec::new();
         let mut i = 0;
@@ -1251,7 +1286,7 @@ fn frame(ui: &mut Ui, app: &AppHandle) {
             match answer {
                 Some(a) => {
                     let o = s.open.remove(i);
-                    done.push((o.id, o.request, a, o.resolver));
+                    done.push((o.id, o.request, a, o.resolver, o.by));
                 }
                 None => i += 1,
             }
@@ -1263,9 +1298,9 @@ fn frame(ui: &mut Ui, app: &AppHandle) {
         // Nothing to preview for them any more.
         files.previews().cancel();
     }
-    for (id, request, answer, resolver) in done {
+    for (id, request, answer, resolver, by) in done {
         overlay::close(&ctx, overlay_id(id));
-        finish(app, &files, id, &request, answer, resolver);
+        finish(app, &files, id, &request, answer, resolver, &by);
     }
     picker_overlay(&ctx, app, &files);
 }
@@ -1282,17 +1317,27 @@ fn finish(
     request: &FileRequest,
     answer: Answer,
     resolver: Option<Resolver>,
+    by: &Origin,
 ) {
+    let source = crate::host::source_of(by);
     let result = match answer {
         None => {
-            app.publish("user", None, "file.cancelled", json!({ "id": id }));
-            files.note(id, &request.title, json!("cancelled"));
-            Ok(Json::Null)
+            app.publish(&source, None, "file.cancelled", json!({ "id": id }));
+            files.note(id, &request.title, json!("cancelled"), &source);
+            if *by == Origin::User {
+                Ok(Json::Null)
+            } else {
+                Ok(json!({ "cancelled": true, "origin": by }))
+            }
         }
         Some(paths) => {
             let found = files.groups_of(app, request, &paths);
-            let mut args =
-                json!({ "id": id, "request": request.to_json(), "paths": paths_json(&paths) });
+            let mut args = json!({
+                "id": id,
+                "request": request.to_json(),
+                "paths": paths_json(&paths),
+                "origin": source,
+            });
             if !found.is_empty() {
                 args["groups"] = groups::to_json(&found);
             }
@@ -1300,7 +1345,7 @@ fn finish(
                 let chosen = paths_of(args);
                 remember(app, &chosen);
                 remember_folder(app, request, &chosen);
-                let mut out = json!({ "paths": paths_json(&chosen) });
+                let mut out = json!({ "paths": paths_json(&chosen), "origin": by });
                 // A hook may have redirected the choice: its groups, then.
                 let last = if chosen == paths {
                     found.clone()
@@ -1323,6 +1368,7 @@ fn finish(
                     Ok(v) => v.clone(),
                     Err(e) => json!({ "refused": e }),
                 },
+                &source,
             );
             r
         }

@@ -1096,6 +1096,24 @@ publishes.
 
 ### Changed
 
+- **Breaking (dialogs, file choices, debug bridge):** answers carry their caller
+  (egui-pop-api; `docs/agents.md`, `docs/files.md`, ADR 0020). The `dialogs.answer`,
+  `files.answer` and `contexts` actions act as their caller instead of a fixed
+  `debug-bridge`: the user's call from devtools answers, requests and holds as the
+  user. Accepting a dialog whose command is not offered to agents
+  (`CommandSpec::no_agent`) is refused to anyone but the user, even when
+  `dialogs.answer` is offered, and whoever answers (`Dialogs::answer` included):
+  the journal says `dialog.answer.refused` and the dialog stays open; cancelling it
+  stays allowed. A file choice carries who made it: `files::chosen_origin` on its
+  result, `origin` in the `file.chosen` step's arguments, `by` in the `files`
+  collector's last choices; `Files::deliver_as` answers as an origin. A choice an
+  agent cancels resolves to `{ "cancelled": true, "origin": .. }` instead of `null`
+  (`files::chosen` reads both). **Migration:** an agent that accepted confirmations
+  of commands kept from agents now gets an error; offer the command to agents if it
+  should, or leave the answer to the user. A consumer of file choices that should
+  act only on a person's choice checks `files::chosen_origin`. A hook on
+  `file.chosen` reads `origin`.
+
 - **Breaking (debug bridge, value store):** collector actions and value writes act as
   their caller (egui-pop-model, egui-pop-core, egui-pop-api; `docs/agents.md`, ADR
   0019). `Collector::call` takes the call's origin; `FnCollector::action_as` gives it
