@@ -347,6 +347,21 @@ limit.
 - **Remove when**: egui draws a focus indicator of its own, for the keyboard's
   focus only.
 
+## egui: a panel's resize line takes no key
+
+- **Compensated**: since 0.37 a resizable `Panel`'s line is a focusable
+  `Splitter` named "Resize panel", answering AccessKit's increment, decrement
+  and set value, but no key: Tab reaches it and the arrows go on to the next
+  widget. Its name does not say which panel, and its id is not given out.
+- **Upstream**: not filed yet.
+- **Workaround**: the workbench gives its areas' lines the keys (an arrow
+  across it, Shift, Enter) as an AccessKit set value, so that egui's clamping
+  and storing apply, and names each after its area; it rebuilds the line's id
+  the way egui does (`// upstream:` in `crates/egui-pop-api/src/workbench.rs`,
+  `sash_id`), which the keyboard walk's tests check.
+- **Remove when**: egui's resize line reads the arrows and Enter, and takes a
+  name.
+
 ## egui: Tab wraps only in a modal layer
 
 - **Compensated**: Tab goes by drawing order through the whole window and wraps

@@ -1695,6 +1695,7 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
             Area::StartSide | Area::EndSide => egui::Panel::right(id),
             _ => egui::Panel::bottom(id),
         };
+        sash_keys(ui, area, id, flipped, default);
         let pad = |p: f32| p.round().clamp(0.0, 127.0) as i8;
         let side = &kit.side_area.data;
         let shown =
@@ -1713,6 +1714,9 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
                     draw_area(app, ui, area);
                 });
         app.workbench_mut().rects.insert(area, shown.response.rect);
+        // egui names the line "Resize panel": which one, it cannot say.
+        let name = strings::tr_args(&ctx, &txt::AREA_RESIZE, &[("area", &area_text(&ctx, area))]);
+        ctx.accesskit_node_builder(sash_id(ui, id), |node| node.set_label(name));
         grip(&ctx, &kit, area, shown.response.rect, flipped);
     }
     let mut central = egui::CentralPanel::default();
@@ -2497,6 +2501,85 @@ fn lie_over(
 /// A side area's resize grip (the kit's `area-grip`) at the middle of its
 /// edge, above the panels; egui takes the drag. Nothing is drawn while
 /// the kit's grip is transparent in every state (the default kit).
+/// The line resizing an area: egui's resize handle of the area's panel,
+/// shown in `ui` under `panel`.
+///
+/// upstream: egui does not give a panel's ids out; this is how it makes them
+/// (`Panel::id`, `resize_widget_id`), checked by the keyboard walk's tests.
+fn sash_id(ui: &Ui, panel: Id) -> Id {
+    ui.scope_id().with(panel).with("__resize")
+}
+
+/// How far an arrow moves an area's line, in points; Shift moves it four
+/// times as far (as egui_stack's separators).
+const SASH_STEP: f32 = 16.0;
+
+/// Keys on the line of a side or bottom area while it has the focus, before
+/// the area is drawn: the arrows move it, with Shift by bigger steps, and
+/// Enter gives the area back its default size, as a dock separator or a
+/// section's boundary does.
+///
+/// upstream: egui's panel resize handle answers the pointer and AccessKit
+/// (`Increment`, `Decrement`, `SetValue`), not the keyboard. The keys are
+/// handed to it as an AccessKit `SetValue`, so its own clamping and storing
+/// apply.
+fn sash_keys(ui: &Ui, area: Area, panel: Id, flipped: bool, default: f32) {
+    use egui::accesskit::{Action, ActionData, ActionRequest, TreeId};
+    use egui::{Key, Modifiers};
+    let ctx = ui.ctx();
+    let handle = sash_id(ui, panel);
+    if !ctx.memory(|m| m.has_focus(handle)) {
+        return;
+    }
+    let (grow, shrink, axis) = match area {
+        Area::StartSide | Area::EndSide if on_left(area, flipped) => {
+            (Key::ArrowRight, Key::ArrowLeft, 0)
+        }
+        Area::StartSide | Area::EndSide => (Key::ArrowLeft, Key::ArrowRight, 0),
+        _ => (Key::ArrowUp, Key::ArrowDown, 1),
+    };
+    // The arrows across the line are its own; along it, egui's.
+    ctx.memory_mut(|m| {
+        m.set_focus_lock_filter(
+            handle,
+            egui::EventFilter {
+                horizontal_arrows: axis == 0,
+                vertical_arrows: axis == 1,
+                ..Default::default()
+            },
+        );
+    });
+    let (by, reset) = ctx.input_mut(|i| {
+        let mut by = 0.0;
+        for (key, way) in [(grow, 1.0), (shrink, -1.0)] {
+            // Shift first: the plain key takes it too.
+            if i.consume_key(Modifiers::SHIFT, key) {
+                by += way * SASH_STEP * 4.0;
+            }
+            if i.consume_key(Modifiers::NONE, key) {
+                by += way * SASH_STEP;
+            }
+        }
+        (by, i.consume_key(Modifiers::NONE, Key::Enter))
+    });
+    if by == 0.0 && !reset {
+        return;
+    }
+    let available = ui.available_rect_before_wrap().size()[axis].max(1.0);
+    let now = egui::containers::panel::PanelState::load(ctx, ui.scope_id().with(panel))
+        .map_or(default, |s| s.size()[axis]);
+    let size = if reset { default } else { now + by };
+    ctx.input_mut(|i| {
+        i.events
+            .push(egui::Event::AccessKitActionRequest(ActionRequest {
+                action: Action::SetValue,
+                target_tree: TreeId::ROOT,
+                target_node: handle.accesskit_id(),
+                data: Some(ActionData::NumericValue(f64::from(size / available))),
+            }));
+    });
+}
+
 fn grip(ctx: &egui::Context, kit: &Kit, area: Area, rect: Rect, flipped: bool) {
     let g = &kit.area_grip;
     if [State::REST, State::HOVER, State::ACTIVE]
