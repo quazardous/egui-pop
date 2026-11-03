@@ -748,6 +748,7 @@ impl Sections {
                         r.scroll_to_me(None);
                     }
                     if r.has_focus() {
+                        crate::focus::own_ring(&ctx, r.id);
                         ring = Some(edge);
                     }
                     laid[above].drag = work_boundary(

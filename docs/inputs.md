@@ -323,6 +323,24 @@ ones included, whatever panel it lies in. A widget has nothing to do for it.
 How it finds the areas, and why a widget's own `scroll_to_me` would not do, is
 in [the upstream register](upstream.md#egui-a-scroll-target-stops-at-the-innermost-scroll-area).
 
+### A focus you can see
+
+With the focus plugin, the widget the keyboard focused gets a ring of the
+`focus.ring` token, painted at the end of the pass on the widget's layer.
+egui's own widgets draw none: a focused button looked like a pressed one.
+
+- **Only by the keyboard**: Tab, an arrow, F6, a command, a screen reader. A
+  click focuses without a ring, as GTK's and Qt's focus flags and the web's
+  `:focus-visible` have it, and the next press of the pointer takes the ring
+  away. `focus::ring_shown` says which case holds now.
+- **Inside the widget**: the ring is drawn inside the part of the widget that
+  shows, so it never spills over a panel's or a scroll area's edge.
+- **Not twice**: a widget showing its focus itself calls `focus::own_ring` each
+  pass it has the focus. One painting a kit state from `State::from_response`
+  has it said for it, and egui's text fields, which outline themselves, are
+  left alone. egui-pop's sliders, fields, views, editors, graph and viewport
+  show their own.
+
 ## Not yet
 
 - A **formal form layout** (labels in a column, sections, help text,

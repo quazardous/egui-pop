@@ -634,6 +634,7 @@ fn paint(
         painter.rect_stroke(frame, 0.0, Stroke::new(1.5, t.frame), StrokeKind::Inside);
     }
     if response.has_focus() {
+        egui_pop_core::focus::own_ring(&response.ctx, response.id);
         painter.rect_stroke(
             rect,
             tokens.radius.widget,

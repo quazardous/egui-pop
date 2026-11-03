@@ -575,6 +575,7 @@ fn paint(
     painter.circle(puck, r, fill, Stroke::new(2.0, t.puck_outline));
     painter.circle_stroke(puck, r + 1.5, Stroke::new(1.0, t.puck));
     if response.has_focus() {
+        egui_pop_core::focus::own_ring(&response.ctx, response.id);
         painter.circle_stroke(center, radius + 2.0, Stroke::new(2.0, tokens.focus_ring));
     }
 }

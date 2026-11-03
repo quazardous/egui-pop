@@ -105,6 +105,9 @@ pub(crate) fn show<R>(
             )
         });
     }
+    if response.has_focus() {
+        egui_pop_core::focus::own_ring(ui.ctx(), id);
+    }
     paint_view(ui, &kit, out.inner_rect, response.has_focus());
     (out.inner, response, out.inner_rect)
 }

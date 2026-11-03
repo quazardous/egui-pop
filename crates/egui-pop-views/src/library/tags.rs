@@ -131,6 +131,9 @@ impl TagChip {
                 .with(State::SELECTED, self.selected)
                 .with(State::HOVER, response.hovered() && !self.selected)
                 .with(State::FOCUS, response.has_focus());
+            if response.has_focus() {
+                egui_pop_core::focus::own_ring(ui.ctx(), response.id);
+            }
             chip.paint_part(
                 &KitCx {
                     painter: ui.painter(),

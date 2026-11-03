@@ -2063,6 +2063,9 @@ fn strip_icon(
         .with(State::ACTIVE, r.is_pointer_button_down_on())
         .with(State::FOCUS, r.has_focus())
         .with(State::SELECTED, visible);
+    if r.has_focus() {
+        egui_pop_core::focus::own_ring(&r.ctx, r.id);
+    }
     let item = &kit.activity_bar_item;
     let cx = KitCx {
         painter: ui.painter(),
@@ -2876,6 +2879,10 @@ impl TabViewer for Viewer<'_> {
                 let title = self.app.panel_title(&response.ctx, tab);
                 egui_pop_core::a11y::name(response, egui::Role::Button, &title);
             }
+        }
+        if response.has_focus() {
+            // Painted in the kit's focus state, with the other tabs.
+            egui_pop_core::focus::own_ring(&response.ctx, response.id);
         }
         self.seen.push(SeenTab {
             panel: tab.clone(),

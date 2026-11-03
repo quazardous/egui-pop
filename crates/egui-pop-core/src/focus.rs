@@ -611,6 +611,26 @@ pub fn keep_tab(ui: &mut Ui) {
     }
 }
 
+/// Says that a widget shows its own focus (call it each pass it is drawn), so
+/// that the focus plugin paints no ring around it. A widget painting a kit
+/// state from [`State::from_response`](crate::kit::State::from_response) has
+/// it said for it.
+///
+/// With the focus plugin [`install`]ed, a widget the keyboard focused gets a
+/// ring of the `focus.ring` token at the end of the pass, unless it says this;
+/// a click focuses without one ([`ring_shown`]).
+pub fn own_ring(ctx: &Context, id: Id) {
+    crate::ring::own(ctx, id);
+}
+
+/// Whether the keyboard moved the focus to the widget holding it now (Tab, an
+/// arrow, a command, a screen reader), rather than the pointer: the focus plugin
+/// then rings it. A widget with a focus look of its own may keep that look for
+/// this case, as the web's `:focus-visible` does.
+pub fn ring_shown(ctx: &Context) -> bool {
+    crate::ring::visible(ctx)
+}
+
 /// Says that a widget reads Page Up, Page Down, Home or End while focused (call
 /// it each pass it is drawn, before the scroll area around it ends), so that the
 /// area leaves them to it. A widget sensing drags needs none of this, nor does a
@@ -721,6 +741,7 @@ impl egui::plugin::Plugin for FocusPlugin {
 
     fn on_end_pass(&mut self, ui: &mut Ui) {
         crate::place::end_pass(ui.ctx());
+        crate::ring::end_pass(ui.ctx());
         remember_holder(ui.ctx());
     }
 }

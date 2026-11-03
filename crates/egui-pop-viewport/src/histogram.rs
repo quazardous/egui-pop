@@ -482,6 +482,7 @@ fn paint(
     }
     if draggable {
         if response.has_focus() {
+            egui_pop_core::focus::own_ring(&response.ctx, response.id);
             painter.rect_stroke(
                 rect,
                 radius,

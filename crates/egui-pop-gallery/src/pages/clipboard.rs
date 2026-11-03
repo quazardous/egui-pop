@@ -180,6 +180,7 @@ fn palette(ui: &mut Ui, app: &AppHandle, name: &str, label: &str, p: &Palette) {
         response.request_focus();
     }
     let stroke = if response.has_focus() {
+        egui_pop::core::focus::own_ring(&response.ctx, response.id);
         Stroke::new(2.0, t.accent.default)
     } else {
         Stroke::new(1.0, t.border.default)

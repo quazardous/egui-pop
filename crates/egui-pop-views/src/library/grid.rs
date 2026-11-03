@@ -1003,6 +1003,9 @@ impl<'a> ThumbGrid<'a> {
                 )
             });
         }
+        if response.has_focus() {
+            egui_pop_core::focus::own_ring(ui.ctx(), id);
+        }
         rows::paint_view(
             ui,
             &egui_pop_core::kit::Kit::of(ui.ctx()),
