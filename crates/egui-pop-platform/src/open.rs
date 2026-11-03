@@ -55,6 +55,7 @@ impl Opener for SystemOpener {
                 reveal: true,
                 inside: false,
                 video: false,
+                web_video: false,
             }
         }
     }

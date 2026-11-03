@@ -294,6 +294,43 @@ impl Target {
         })
     }
 
+    /// The video of a YouTube link, when it names one: `watch?v=<id>`,
+    /// `youtu.be/<id>`, `embed/<id>`, `shorts/<id>` and `live/<id>` on
+    /// `youtube.com`, `youtube-nocookie.com` and their subdomains, over
+    /// `https:` only. The id is YouTube's eleven letters, digits, `-` and
+    /// `_`; anything else names no video.
+    pub fn youtube_id(&self) -> Option<String> {
+        if self.scheme() != "https" {
+            return None;
+        }
+        let host = self
+            .host_ascii()?
+            .trim_end_matches('.')
+            .to_ascii_lowercase();
+        let on = |domain: &str| host == domain || host.ends_with(&format!(".{domain}"));
+        let mut path = self.url.path_segments()?.filter(|s| !s.is_empty());
+        let id = if host == "youtu.be" {
+            path.next()?.to_string()
+        } else if on("youtube.com") || on("youtube-nocookie.com") {
+            match path.next()? {
+                "watch" => self
+                    .url
+                    .query_pairs()
+                    .find(|(k, _)| k == "v")
+                    .map(|(_, v)| v.into_owned())?,
+                "embed" | "shorts" | "live" => path.next()?.to_string(),
+                _ => return None,
+            }
+        } else {
+            return None;
+        };
+        let valid = id.len() == 11
+            && id
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_');
+        valid.then_some(id)
+    }
+
     /// The local path of a `file:` target.
     pub fn local_path(&self) -> Option<String> {
         if self.scheme() != "file" {
@@ -487,9 +524,13 @@ pub struct Caps {
     /// A viewer inside the application for pages and images.
     pub inside: bool,
     /// That viewer plays local video files too (the viewer's video page,
-    /// an opt-in feature). Remote video stays outside whatever this says.
+    /// an opt-in feature).
     #[serde(default)]
     pub video: bool,
+    /// That viewer plays YouTube links too, in a web view (the viewer's
+    /// opt-in `webview` feature). Other remote video stays outside.
+    #[serde(default)]
+    pub web_video: bool,
 }
 
 impl Caps {
@@ -500,6 +541,7 @@ impl Caps {
         reveal: true,
         inside: true,
         video: true,
+        web_video: true,
     };
     /// Web pages and mail only (egui's own opener).
     pub const WEB: Caps = Caps {
@@ -508,6 +550,7 @@ impl Caps {
         reveal: false,
         inside: false,
         video: false,
+        web_video: false,
     };
     /// Nothing.
     pub const NONE: Caps = Caps {
@@ -516,6 +559,7 @@ impl Caps {
         reveal: false,
         inside: false,
         video: false,
+        web_video: false,
     };
 }
 
@@ -845,7 +889,8 @@ impl Policy {
                 caps.inside && t.host_ascii().is_some_and(|h| under(h, &self.docs_hosts))
             }
             Kind::Image => caps.inside && local,
-            Kind::Video => caps.inside && caps.video && local,
+            Kind::Video if local => caps.inside && caps.video,
+            Kind::Video => caps.inside && caps.web_video && t.youtube_id().is_some(),
             _ => false,
         };
         d.how = match (r.how, kind) {
@@ -915,7 +960,11 @@ impl Policy {
             Some("disguised")
         } else {
             match (r.source, kind, d.how) {
-                (_, _, How::Inside) if kind != Kind::AppLink => None,
+                // A remote video inside reaches its host as the browser
+                // would: confirmed as a link outside is.
+                (_, _, How::Inside) if kind != Kind::AppLink && (local || kind != Kind::Video) => {
+                    None
+                }
                 (Source::Declared, _, How::Reveal) => None,
                 (Source::Declared, Kind::Folder, _) => None,
                 (_, Kind::File | Kind::Image | Kind::Video, How::Outside) if local => {
@@ -1161,11 +1210,73 @@ mod tests {
             policy.decide(&Request::new(t), &no_viewer, None).how,
             How::Outside
         );
-        // Remote video stays outside, viewer or not.
+        // Remote video other than a YouTube video stays outside, viewer or
+        // not.
         for remote in ["https://example.org/clip.mp4", "https://youtu.be/abc"] {
             let d = policy.decide(&Request::new(remote), &Caps::ALL, None);
             assert_eq!((d.kind, d.how), (Kind::Video, How::Outside), "{remote}");
         }
+    }
+
+    #[test]
+    fn youtube_links_name_their_video() {
+        let id = |t: &str| Target::parse(t).unwrap().youtube_id();
+        for t in [
+            "https://www.youtube.com/watch?v=5TGDf7crzXI",
+            "https://youtube.com/watch?feature=share&v=5TGDf7crzXI&t=10",
+            "https://m.youtube.com/watch?v=5TGDf7crzXI",
+            "https://youtu.be/5TGDf7crzXI?t=3",
+            "https://www.youtube.com/embed/5TGDf7crzXI",
+            "https://www.youtube-nocookie.com/embed/5TGDf7crzXI",
+            "https://www.youtube.com/shorts/5TGDf7crzXI",
+            "https://www.youtube.com/live/5TGDf7crzXI",
+        ] {
+            assert_eq!(id(t).as_deref(), Some("5TGDf7crzXI"), "{t}");
+        }
+        for t in [
+            "http://www.youtube.com/watch?v=5TGDf7crzXI",
+            "https://www.youtube.com/watch?v=x",
+            "https://www.youtube.com/watch?v=5TGDf7crzXI%22",
+            "https://www.youtube.com/channel/5TGDf7crzXI",
+            "https://youtube.com.example.org/watch?v=5TGDf7crzXI",
+            "https://notyoutube.com/watch?v=5TGDf7crzXI",
+            "https://vimeo.com/5TGDf7crzXI",
+            "https://youtu.be/",
+        ] {
+            assert_eq!(id(t), None, "{t}");
+        }
+    }
+
+    #[test]
+    fn a_youtube_video_opens_inside_only_when_the_viewer_plays_it() {
+        let t = "https://www.youtube.com/watch?v=5TGDf7crzXI";
+        let policy = Policy::default();
+        let without = Caps {
+            web_video: false,
+            ..Caps::ALL
+        };
+        let d = policy.decide(&Request::new(t), &without, None);
+        assert_eq!((d.kind, d.how), (Kind::Video, How::Outside));
+        let d = policy.decide(&Request::new(t), &Caps::ALL, None);
+        assert_eq!(
+            (d.kind, d.how, d.confirm),
+            (Kind::Video, How::Inside, false)
+        );
+        // Ctrl+click still means outside.
+        let d = policy.decide(&Request::new(t).how(How::Outside), &Caps::ALL, None);
+        assert_eq!(d.how, How::Outside);
+        // From content, the host is asked about as it is outside.
+        let d = policy.decide(&Request::new(t).source(Source::Content), &Caps::ALL, None);
+        assert_eq!((d.how, d.confirm), (How::Inside, true));
+        // Not without a viewer, whatever the opener says.
+        let no_viewer = Caps {
+            inside: false,
+            ..Caps::ALL
+        };
+        assert_eq!(
+            policy.decide(&Request::new(t), &no_viewer, None).how,
+            How::Outside
+        );
     }
 
     #[test]

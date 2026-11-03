@@ -57,9 +57,9 @@ web-time = "1"
 # The Windows layer of the frame (stubs elsewhere).
 egui-pop-win32.workspace = true
 
-[target.'cfg(windows)'.dependencies]
+[target.'cfg(any(windows, target_os = "linux"))'.dependencies]
 # MIT OR Apache-2.0 OR Zlib: the window handle eframe gives, to subclass
-# the window for its hit tests.
+# the window for its hit tests (Windows), or to know its X11 id (Linux).
 raw-window-handle = "0.6"
 
 [dev-dependencies]

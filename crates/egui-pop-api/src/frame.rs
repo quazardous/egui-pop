@@ -273,6 +273,8 @@ const DECORATED: Slot<bool> = Slot::new("api.frame.decorated");
 const BAR_IN_FULL_SCREEN: Slot<u64> = Slot::new("api.frame.bar_in_full_screen");
 /// A window's native handle, per window.
 const NATIVE_WINDOW: Slot<isize> = Slot::new("api.frame.native_window");
+/// The main window's X11 id, when it is an X11 window.
+const X11_WINDOW: Slot<u64> = Slot::new("api.frame.x11_window");
 
 impl Plugin for FramePlugin {
     fn id(&self) -> PluginId {
@@ -602,9 +604,26 @@ pub fn set_native_window(ctx: &Context, viewport: egui::ViewportId, handle: isiz
     NATIVE_WINDOW.keyed(viewport).set(ctx, handle);
 }
 
-/// Records the main window's handle from eframe's creation context.
+/// Records the main window's X11 id (Linux, the window on X11 or Xwayland):
+/// what a native view inside it, such as the viewer's web view, is made a
+/// child of. `AppBuilder::run_native` does it; an application starting
+/// eframe itself calls [`record_native_window`].
+pub fn set_x11_window(ctx: &Context, window: u64) {
+    X11_WINDOW.set(ctx, window);
+}
+
+/// The main window's X11 id, when it is an X11 window: none on Wayland, on
+/// other systems, headless, or when it was not recorded.
+pub fn x11_window(ctx: &Context) -> Option<u64> {
+    X11_WINDOW.get(ctx)
+}
+
+/// Records the main window's native handle from eframe's creation context:
+/// the `HWND` on Windows ([`set_native_window`]), the X11 id on Linux's X11
+/// ([`set_x11_window`]). `AppBuilder::run_native` calls it; an application
+/// starting eframe itself calls it from its creation context.
 #[cfg(all(feature = "eframe", not(target_arch = "wasm32")))]
-pub(crate) fn record_native_window(cc: &eframe::CreationContext<'_>) {
+pub fn record_native_window(cc: &eframe::CreationContext<'_>) {
     #[cfg(windows)]
     {
         use raw_window_handle::{HasWindowHandle, RawWindowHandle};
@@ -614,7 +633,20 @@ pub(crate) fn record_native_window(cc: &eframe::CreationContext<'_>) {
             set_native_window(&cc.egui_ctx, egui::ViewportId::ROOT, w.hwnd.get());
         }
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    {
+        use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+        if let Ok(h) = cc.window_handle() {
+            match h.as_raw() {
+                // `c_ulong`: 64 bits here, 32 on a 32-bit system.
+                #[allow(clippy::useless_conversion)]
+                RawWindowHandle::Xlib(w) => set_x11_window(&cc.egui_ctx, u64::from(w.window)),
+                RawWindowHandle::Xcb(w) => set_x11_window(&cc.egui_ctx, w.window.get().into()),
+                _ => {}
+            }
+        }
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
     let _ = cc;
 }
 

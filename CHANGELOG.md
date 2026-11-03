@@ -12,6 +12,19 @@ publishes.
 
 ### Added
 
+- YouTube in the viewer, a trial (egui-pop-views, egui-pop-model, egui-pop-api;
+  ADR 0017, `docs/links.md`): with the opt-in `webview` feature (the facade's
+  `views-webview`, Linux only), a YouTube link plays in the viewer in a web view
+  (wry over the system's WebKitGTK), YouTube's privacy-enhanced player loaded
+  with a referrer (`ViewerPlugin::embed_referrer`): a child window over the
+  panel on X11, a window of its own on Wayland. Without the feature, or with
+  Ctrl+click, it opens outside as before; a web view that cannot open ends on
+  the error page with Open outside. `Caps::web_video`,
+  `Inside::plays_web_video`, `Target::youtube_id`, `viewer::EmbedBackend`
+  (`ViewerPlugin::web_video`) and `frame::x11_window`; `frame::record_native_window`
+  is public and records the main window's X11 id. Building with the feature
+  needs WebKitGTK's development packages, and brings a crate under MPL-2.0
+  (`option-ext`) that `cargo deny check --all-features` refuses.
 - Devtools' inspect mode (egui-pop-api, egui-pop-core; `docs/debugging.md`):
   `devtools.inspect` (Ctrl+Shift+C, View menu, palette, devtools panel; with the
   `developer.devtools` setting on) outlines the widget under the pointer in every

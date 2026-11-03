@@ -154,6 +154,57 @@ system library or a separate program for common formats.
 The bindings link GStreamer's libraries when the program starts, so their
 absence cannot be turned into an error page: see the ADR.
 
+### YouTube in a web view: the trial
+
+Run on 2026-11-03 with WebKitGTK 4.1 (2.54) and wry 0.57.1, in labwc, headless
+(pixman renderer), 1280x800, on the test video `5TGDf7crzXI`. A screenshot
+counts as playing when later ones show later pictures of the video.
+
+**What YouTube's player needs: a referrer.** Loaded in WebKitGTK directly
+(a Python probe) and then through wry:
+
+| How the player was loaded | Result |
+|---|---|
+| `youtube.com/embed/<id>` as the page, no referrer | YouTube's error 153 (player configuration) |
+| a page of `about:blank` origin (wry's `with_html`, which passes no base URL) holding an `<iframe>` of the player | error 153 |
+| a page of a wry custom protocol (`with_custom_protocol`, a secure scheme) holding the `<iframe>` | error 153 |
+| a page with an `https:` base URL holding the `<iframe>` (`youtube.com`) | loads, still at 0:00 after 24 s |
+| the same on `youtube-nocookie.com` | plays |
+| `youtube-nocookie.com/embed/<id>` as the page, with a `Referer` header (`https://app.example.org/`, `https://localhost/`, `https://github.com/`) | plays |
+| `youtube.com/embed/<id>` as the page, with a `Referer` header | plays |
+
+So the wry API is `WebViewBuilder::with_url_and_headers` with `Referer`: wry
+0.57's `with_html` gives no base URL, and a custom scheme's origin is not
+taken. The trial loads the privacy-enhanced host.
+
+**In a real egui-pop window** (the gallery, release build, its "YouTube in the
+viewer" story, the link clicked):
+
+| Path | Result |
+|---|---|
+| Wayland: winit on Wayland, the web view in a GTK window of its own | plays (pictures move between 20 s and 44 s); the panel says the video plays in its own window |
+| X11: winit and GDK on Xwayland, the web view a child window over the viewer panel | plays inside the panel, at the panel's place |
+| X11, the viewer's tab put behind another | the web view goes; brought back, it opens again and plays from the start |
+| X11, the panel resized | not checked in the compositor (the drag did not move the dock's splitter); a widget test checks that the place given to the web view follows the panel |
+
+Two things had to be found on the way. wry's `build_as_child` takes a window
+handle, which only `unsafe` code can make from the window's X11 id here (the
+workspace forbids `unsafe`): the child is made as wry makes it, an X11 child
+window (through x11rb, safe) taken by GDK as a foreign window holding a GTK
+window, with wry's `build_gtk` inside. And that X11 window must be destroyed only
+after GTK let go of it: destroyed first, GDK's next request failed and GDK ended
+the program on the X11 error.
+
+**GTK's loop beside eframe:** `gtk::init` on the interface's thread (restricted
+to X11 by `gdk::set_allowed_backends("x11")` when the main window is an X11
+one), then each application pass turns the loop without blocking
+(`gtk::events_pending` and `gtk::main_iteration_do(false)`, at most 64 events),
+and asks for another pass in 15 ms while a web view is open. Nothing else runs
+GTK's loop, so it stays on one thread with egui.
+
+Sound was cut off from the later runs (its server pointed nowhere), and
+WebKitGTK played on without it.
+
 ### Prior art
 
 | Application | Links and help | Embedded content | What carries over |
@@ -452,7 +503,8 @@ through our loader; the choice is remembered for that host.
 5. The viewer: markdown, `docs:` pages, navigation, find, zoom, the
    image consent.
 6. The HTML subset.
-7. The webview question, if the owner asks for it.
+7. The webview question, if the owner asks for it: a YouTube trial, behind a
+   feature, [above](#youtube-in-a-web-view-the-trial).
 
 ## Sources
 

@@ -43,11 +43,12 @@ jobs:
           python3 tools/book/summary.py
           python3 tools/book/links.py target/book
       # `--all-features` below includes the viewer's video page, whose bindings
-      # ask for GStreamer's development packages.
-      - name: Install GStreamer's development packages
+      # ask for GStreamer's development packages, and its web view, WebKitGTK's.
+      - name: Install GStreamer's and WebKitGTK's development packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
+          sudo apt-get install -y libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            libwebkit2gtk-4.1-dev
       # Every feature, so the facade's optional crates and each crate's
       # optional modules are documented; Windows-only crates document
       # their stubs. The tools and the gallery, unpublished, are left out.

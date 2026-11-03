@@ -14,7 +14,9 @@
 //!   scripts, styles, forms, frames or video, which are named on the page
 //!   and left to Open outside (without the feature, an HTML page gets an
 //!   error page offering Open outside). With the `video` feature, a local
-//!   video file plays here (see `video`); remote video stays outside. `docs:`
+//!   video file plays here (see `video`); with the `webview` feature, on
+//!   Linux, a YouTube link plays here in a web view (see `embed`); other
+//!   remote video stays outside. `docs:`
 //!   pages come from the
 //!   [`Docs`] the application ships (`include_str!`), on native and on
 //!   the web build alike; remote pages and images come through a
@@ -66,6 +68,7 @@
 //! assert_eq!(viewer.state()["status"], "shown");
 //! ```
 
+mod embed;
 #[cfg(all(feature = "video", not(target_arch = "wasm32")))]
 mod gst_player;
 #[cfg(feature = "html")]
@@ -73,6 +76,8 @@ mod html;
 mod page;
 mod video;
 mod view;
+#[cfg(all(feature = "webview", target_os = "linux"))]
+mod wry_view;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
@@ -91,6 +96,9 @@ use egui_pop_model::panels::{Area, PanelSpec};
 use egui_pop_model::values::{Change, Descriptor, Set, Value};
 use serde_json::{Value as Json, json};
 
+pub use embed::{
+    DEFAULT_REFERRER, EmbedBackend, EmbedRequest, Embedded, PUMP, Placement, embed_url,
+};
 #[cfg(all(feature = "video", not(target_arch = "wasm32")))]
 pub use gst_player::{GStreamer, write_test_clip};
 pub use page::{Block, ImageRef, Markdown, has_scheme, resolve, slug};
@@ -98,6 +106,8 @@ pub use video::{
     SEEK_STEP, VIDEO_CONTEXT, VIDEO_SURFACE, VOLUME_STEP, VideoBackend, VideoFrame, VideoPlayer,
     VideoRequest, VideoState, VideoStatus, clock, rgba_image,
 };
+#[cfg(all(feature = "webview", target_os = "linux"))]
+pub use wry_view::Wry;
 
 /// The plugin's id.
 pub const PLUGIN: PluginId = PluginId::from_static("egui_pop.viewer");
@@ -266,6 +276,8 @@ pub enum Content {
     Image(String),
     /// A local video file, played by the viewer's video player.
     Video(std::path::PathBuf),
+    /// A YouTube video, by its id, played in a web view.
+    YouTube(String),
 }
 
 /// A page shown.
@@ -288,6 +300,7 @@ impl Page {
             Content::Markdown(_) => "markdown",
             Content::Image(_) => "image",
             Content::Video(_) => "video",
+            Content::YouTube(_) => "youtube",
         }
     }
 }
@@ -390,6 +403,7 @@ pub struct Viewer {
     inbox: Inbox,
     cache: Mutex<CommonMarkCache>,
     video: Mutex<video::Video>,
+    embed: Mutex<embed::Embed>,
 }
 
 impl std::fmt::Debug for Viewer {
@@ -441,6 +455,7 @@ impl Viewer {
             inbox: Arc::default(),
             cache: Mutex::new(CommonMarkCache::default()),
             video: Mutex::new(video::Video::new(video::default_backend())),
+            embed: Mutex::new(embed::Embed::new(embed::default_backend())),
         }
     }
 
@@ -524,6 +539,7 @@ impl Viewer {
     fn load(&self, app: &AppHandle, target: &str, fragment: Option<&str>) {
         // Whatever comes next, a video playing stops here.
         self.stop_video(app);
+        self.stop_embed();
         let generation = {
             let mut i = lock(&self.inner);
             i.generation += 1;
@@ -565,6 +581,16 @@ impl Viewer {
                     Ok(bytes) => self.finish(app, target, &path, bytes, fragment),
                     Err((failure, e)) => self.fail(app, target, failure, &e),
                 }
+            }
+            Some("https")
+                if self.plays_web_video()
+                    && parsed.as_ref().and_then(Target::youtube_id).is_some() =>
+            {
+                let id = parsed
+                    .as_ref()
+                    .and_then(Target::youtube_id)
+                    .unwrap_or_default();
+                self.open_embed(app, target, id);
             }
             Some("http" | "https") => match &self.fetch {
                 Some(fetch) => {
@@ -928,7 +954,7 @@ impl Viewer {
         let matches = match &i.status {
             Status::Shown(p) => match &p.content {
                 Content::Markdown(md) => md.find(&i.find.query),
-                Content::Image(_) | Content::Video(_) => Vec::new(),
+                Content::Image(_) | Content::Video(_) | Content::YouTube(_) => Vec::new(),
             },
             _ => Vec::new(),
         };
@@ -1060,6 +1086,8 @@ impl Viewer {
     pub fn state(&self) -> Json {
         let video = self.video_state();
         let plays_video = self.plays_video();
+        let embed = self.embed_state();
+        let plays_web_video = self.plays_web_video();
         let i = lock(&self.inner);
         let mut links = Vec::new();
         let mut dropped = Vec::new();
@@ -1082,7 +1110,9 @@ impl Viewer {
                             })
                             .collect(),
                     ),
-                    Content::Image(_) | Content::Video(_) => (None, None, Vec::new()),
+                    Content::Image(_) | Content::Video(_) | Content::YouTube(_) => {
+                        (None, None, Vec::new())
+                    }
                 };
                 ("shown", Some(p.kind()), title, None, text, headings)
             }
@@ -1143,6 +1173,8 @@ impl Viewer {
             "fetch": self.fetch.is_some(),
             "video": video,
             "plays_video": plays_video,
+            "embed": embed,
+            "plays_web_video": plays_web_video,
         })
     }
 }
@@ -1225,6 +1257,10 @@ impl Inside for Shows {
     fn plays_video(&self) -> bool {
         self.0.plays_video()
     }
+
+    fn plays_web_video(&self) -> bool {
+        self.0.plays_web_video()
+    }
 }
 
 /// The viewer as a plugin (opt-in): the panel, the service, the links
@@ -1235,6 +1271,8 @@ pub struct ViewerPlugin {
     docs: Docs,
     fetch: Option<Arc<dyn Fetch>>,
     video: Option<Arc<dyn VideoBackend>>,
+    embed: Option<Arc<dyn EmbedBackend>>,
+    referrer: Option<String>,
 }
 
 impl std::fmt::Debug for ViewerPlugin {
@@ -1243,6 +1281,8 @@ impl std::fmt::Debug for ViewerPlugin {
             .field("docs", &self.docs)
             .field("fetch", &self.fetch.is_some())
             .field("video", &self.video.as_ref().map(|b| b.name().to_string()))
+            .field("embed", &self.embed.as_ref().map(|b| b.name().to_string()))
+            .field("referrer", &self.referrer)
             .finish()
     }
 }
@@ -1264,6 +1304,21 @@ impl ViewerPlugin {
     /// `video` feature, nothing without it).
     pub fn video(mut self, backend: Arc<dyn VideoBackend>) -> Self {
         self.video = Some(backend);
+        self
+    }
+
+    /// What plays YouTube links in a web view, in place of this build's (wry
+    /// with the `webview` feature on Linux, nothing otherwise).
+    pub fn web_video(mut self, backend: Arc<dyn EmbedBackend>) -> Self {
+        self.embed = Some(backend);
+        self
+    }
+
+    /// The address the web view's request says it comes from (its `Referer`,
+    /// which YouTube's player needs): the application's own site, ideally.
+    /// [`DEFAULT_REFERRER`] otherwise.
+    pub fn embed_referrer(mut self, referrer: impl Into<String>) -> Self {
+        self.referrer = Some(referrer.into());
         self
     }
 }
@@ -1298,6 +1353,12 @@ impl Plugin for ViewerPlugin {
             .ok_or_else(|| PluginError::Failed("the viewer service is missing".into()))?;
         if let Some(backend) = &self.video {
             v.set_video_backend(Some(backend.clone()));
+        }
+        if let Some(backend) = &self.embed {
+            v.set_embed_backend(Some(backend.clone()));
+        }
+        if let Some(referrer) = &self.referrer {
+            lock(&v.embed).set_referrer(referrer.clone());
         }
         if let Some(l) = links::links(&app) {
             l.set_inside(Some(Arc::new(Shows(v.clone()))));
@@ -1335,6 +1396,7 @@ impl Plugin for ViewerPlugin {
         ctx.on(egui_pop_api::hooks::On::Pass, |app, _| {
             if let Ok(v) = viewer(app) {
                 v.video_pass(app);
+                v.embed_pass(app);
                 v.poll(app);
             }
         });
@@ -1345,6 +1407,7 @@ impl Plugin for ViewerPlugin {
         let app = ctx.app();
         if let Ok(v) = viewer(&app) {
             v.stop_video(&app);
+            v.stop_embed();
         }
         if let Some(l) = links::links(&app) {
             l.set_inside(None);

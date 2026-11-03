@@ -205,6 +205,32 @@ jobs:
             **/tests/snapshots/*.new.png
           if-no-files-found: ignore
 
+  # The viewer's YouTube page (feature `webview`), the one build needing
+  # WebKitGTK: the other jobs build without it. Its tests use a pretend web
+  # view and run in the test job; here the wry backend builds and is linted.
+  webview:
+    name: Viewer's web view (WebKitGTK)
+    needs: changes
+    if: needs.changes.outputs.test == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install WebKitGTK's development packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: webview
+      - run: cargo clippy -p egui-pop-views -p egui-pop-gallery -p egui-pop --all-targets --locked --features egui-pop-views/webview,egui-pop-gallery/webview,egui-pop/views-webview -- -D warnings
+      - run: cargo doc -p egui-pop-views -p egui-pop --no-deps --locked --features egui-pop-views/webview,egui-pop/views-webview
+      - run: cargo test -p egui-pop-views --locked --features webview --lib viewer
+      - run: cargo test -p egui-pop-views --locked --features webview --test viewer_embed
+
   deny:
     name: Licences and advisories
     needs: changes
@@ -273,12 +299,14 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@v5
-      # It documents the features other than unstable ones, `views-video` among
-      # them, whose bindings ask for GStreamer's development packages.
-      - name: Install GStreamer's development packages
+      # It documents the features other than unstable ones: `views-video`, whose
+      # bindings ask for GStreamer's development packages, and `views-webview`,
+      # WebKitGTK's.
+      - name: Install GStreamer's and WebKitGTK's development packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
+          sudo apt-get install -y libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            libwebkit2gtk-4.1-dev
       - uses: dtolnay/rust-toolchain@stable
       - uses: taiki-e/install-action@v2
         with:
@@ -290,7 +318,7 @@ jobs:
   ci:
     name: CI
     if: always()
-    needs: [changes, fmt, clippy, doc, book, test, video, deny, wasm, package, semver]
+    needs: [changes, fmt, clippy, doc, book, test, video, webview, deny, wasm, package, semver]
     runs-on: ubuntu-24.04
     steps:
       - env:

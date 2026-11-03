@@ -51,6 +51,16 @@ gstreamer = { version = "0.25", optional = true }
 gstreamer-app = { version = "0.25", optional = true }
 gstreamer-video = { version = "0.25", optional = true }
 
+# MIT OR Apache-2.0: the viewer's web view (feature `webview`), over the
+# system's WebKitGTK (LGPL, installed apart, not a crate); gtk and gdkx11
+# (MIT) start GTK, turn its loop and take the child window on X11, which x11rb
+# (MIT OR Apache-2.0, already in the tree) makes without `unsafe`.
+[target.'cfg(target_os = "linux")'.dependencies]
+wry = { version = "0.57", optional = true }
+gtk = { version = "0.18", optional = true }
+gdkx11 = { version = "0.18", optional = true }
+x11rb = { version = "0.13", optional = true }
+
 [features]
 ## The in-app viewer (`viewer`): markdown pages, `docs:` pages and images,
 ## with navigation, find in page and zoom.
@@ -63,6 +73,10 @@ html = ["markdown", "dep:html5ever"]
 ## system's GStreamer. Building it needs GStreamer's development packages,
 ## running it GStreamer's libraries and plugins (docs/links.md).
 video = ["markdown", "dep:gstreamer", "dep:gstreamer-app", "dep:gstreamer-video"]
+## The viewer's YouTube page: a YouTube link played inside, in a web view
+## (wry over the system's WebKitGTK, Linux only for now). Building it needs
+## WebKitGTK's development packages, running it WebKitGTK (docs/links.md).
+webview = ["markdown", "dep:wry", "dep:gtk", "dep:gdkx11", "dep:x11rb"]
 
 [dev-dependencies]
 egui = { workspace = true, features = ["default_fonts"] }

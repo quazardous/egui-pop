@@ -1,7 +1,9 @@
 # 0017: Links and outside content: one service opens them, an egui-native viewer shows what is safe, the rest goes outside
 
 Date: 2026-10-28. Status: **accepted** (2026-10-28), revised on 2026-11-01
-for local video ([below](#local-video-inside-revised-2026-11-01)).
+for local video ([below](#local-video-inside-revised-2026-11-01)), amended on
+2026-11-03 by a YouTube trial behind a feature
+([below](#youtube-inside-a-trial-amended-2026-11-03)).
 
 The analysis behind it (what exists today, what egui and eframe do with
 a link, a survey of openers, markdown and HTML renderers, webviews and
@@ -73,7 +75,7 @@ target and picks the default (`Auto`):
 | Target | Plain click | Ctrl+click, middle click |
 |---|---|---|
 | Web page (`https:`, `http:`) | the system browser; a new tab on the web build | the same |
-| Video on the web (YouTube, Vimeo, a remote video file) | the system browser; not embedded (an [open question](#local-video-inside-revised-2026-11-01)) | the same |
+| Video on the web (YouTube, Vimeo, a remote video file) | the system browser; a YouTube video in the viewer's web view with the opt-in `webview` feature on Linux ([a trial](#youtube-inside-a-trial-amended-2026-11-03)) | the same |
 | Local video file | the viewer when it has a video player (the opt-in `video` feature), else as a local file below | outside |
 | Markdown or HTML page shipped by the application (`docs:` pages) | the in-app viewer when its plugin is present, else the online copy in the browser | outside |
 | Remote markdown or HTML | the browser, unless its host is one the application declares as its documentation | outside |
@@ -324,3 +326,39 @@ same confirmation.
   (the `playbin` plugin, a demuxer, a decoder) and what cannot be read (a bad
   file, a refused permission) ends on the viewer's error page with **Open
   outside**.
+
+## YouTube inside: a trial (amended 2026-11-03)
+
+A trial of an embedded player, behind an opt-in feature, off by default. It
+decides nothing about a general web view; whether it stays is the owner's call.
+
+- **What.** With the `webview` feature of `egui-pop-views` (the facade's
+  `views-webview`), on Linux, a YouTube link (`watch?v=`, `youtu.be/`, `embed/`,
+  `shorts/`, `live/`, over `https:`) plays in the viewer, in a web view: wry
+  (MIT OR Apache-2.0) over the system's WebKitGTK. The policy sends a remote
+  video inside only when the viewer says it plays it (`Caps::web_video`,
+  `Inside::plays_web_video`) and the link names a YouTube video; everything
+  else (other hosts, Ctrl+click, no feature, another system, the web build)
+  opens outside as before. A link from content is still confirmed for an
+  untrusted host, as outside: the web view reaches YouTube as the browser
+  would.
+- **What loads.** The privacy-enhanced player
+  (`youtube-nocookie.com/embed/<id>`) as the page itself, its request carrying
+  a `Referer` (`ViewerPlugin::embed_referrer`, `https://localhost/` by
+  default) through wry's `with_url_and_headers`: without one YouTube's player
+  refuses to play (its error 153). Every other navigation is refused in the web
+  view and handed to the links service, outside.
+- **Where.** On X11 (Xwayland included) a child window over the panel, following
+  it; on Wayland, or with the panel detached, a window of its own: wry's child
+  web views need X11. GTK starts on the interface's thread and its loop is
+  turned once per pass, without blocking, while a web view is open.
+- **Costs.** WebKitGTK must be installed to build and to run (the binary links
+  it). A child web view floats above egui: egui's popups over the panel go
+  under it. On Linux wry brings `option-ext` (through `dirs`), MPL-2.0, which
+  `deny.toml` refuses: `cargo deny check` passes with default features and
+  fails with `--all-features`; the Android-only part of wry adds `dom_query`,
+  `selectors`, `cssparser`, `cssparser-macros` and `dtoa-short`, MPL-2.0 too.
+  `deny.toml` is unchanged. **Open question for the owner:** accept that crate
+  behind the feature, find a way around it, or drop the trial.
+- **What was checked**, in a headless nested compositor: the trial's
+  [results](0017-links-and-outside-content-analysis.md#youtube-in-a-web-view-the-trial).

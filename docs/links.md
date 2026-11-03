@@ -50,7 +50,7 @@ The policy classifies the target from its scheme, host and extension
 | Target | A click | Ctrl+click, middle click |
 |---|---|---|
 | Web page (`https:`, `http:`) | the system browser; a new tab on the web build | the same |
-| Video on the web (YouTube, Vimeo, a remote video file) | the browser, not embedded | the same |
+| Video on the web (YouTube, Vimeo, a remote video file) | the browser; a YouTube video in the viewer's web view with `views-webview` on Linux (see below) | the same |
 | Local video file | the viewer's video page with `views-video` (see below), else as a local file | outside |
 | `mailto:` | the mail client (the same tab on the web, which hands it over) | the same |
 | `docs:` page | the viewer when there is one (see below), else its online copy (`Policy::docs_online`) | outside |
@@ -243,8 +243,9 @@ against it (`../img/panel.png`).
 - **What it shows**: markdown (egui_commonmark: tables, task lists,
   footnotes, code), images (PNG, JPEG, GIF), text, and a safe subset of
   HTML with the `views-html` feature (see below), local video files with
-  the `views-video` feature (see below). Remote videos and full web pages
-  are not shown inside: they open outside. Without the feature an HTML page
+  the `views-video` feature (see below), YouTube videos with the
+  `views-webview` feature on Linux (see below). Other remote videos and full
+  web pages are not shown inside: they open outside. Without the feature an HTML page
   gets an error page offering **Open outside**.
 - **Remote pages and images** come through a `viewer::Fetch` the host
   gives (`ViewerPlugin::fetch`); without one nothing remote is loaded
@@ -352,6 +353,48 @@ local file. A remote video stays outside either way.
 - `viewer::write_test_clip` writes a small clip from GStreamer's test sources, for
   tests and the gallery's story (`cargo run -p egui-pop-gallery --features video`).
 
+### The YouTube page
+
+With `views-webview` (`egui-pop-views/webview`, off by default, Linux only for
+now), a YouTube link (`youtube.com/watch?v=`, `youtu.be/`, `embed/`, `shorts/`,
+`live/`) plays in the viewer, in a web view: wry (MIT OR Apache-2.0) over the
+system's WebKitGTK. Without the feature, on another system, on the web build, or
+when Ctrl+click or a middle click asks for outside, it opens in the browser as
+before. Other remote video stays outside either way.
+
+- **What loads**: YouTube's privacy-enhanced player,
+  `https://www.youtube-nocookie.com/embed/<id>`, as the web view's page, its
+  request carrying a `Referer`: YouTube's player refuses to play without one
+  (its error 153). `ViewerPlugin::embed_referrer` sets it, the application's own
+  site ideally; `viewer::DEFAULT_REFERRER` (`https://localhost/`) otherwise.
+  Nothing else loads in the web view: a link the player follows (its title,
+  "Watch on YouTube") is opened outside through the links service, as content.
+- **Where**: on X11 (or Xwayland), with the panel in the main window, the web
+  view is a child window over the panel, following it as it moves and resizes.
+  On Wayland, or with the panel detached, it opens in a window of its own (wry's
+  child web views need X11); the page then says so, and once that window is
+  closed offers **Show the video**. A child web view is a native window above
+  egui: popups over the panel are drawn under it.
+- **Its loop**: GTK starts on the interface's thread when the first web view
+  opens (on X11 when the main window is an X11 one), and its loop is turned
+  without blocking once per pass; while a web view is open the page asks for a
+  pass every 15 ms (`viewer::PUMP`).
+- Leaving the page closes the web view. So does its panel going out of view, or
+  the user closing its own window: showing it again starts the video again.
+- **The main window's X11 id** comes from `frame::record_native_window`, which
+  `AppBuilder::run_native` calls; an application starting eframe itself calls it
+  from its creation context.
+- **What it needs.** To build: WebKitGTK's development packages
+  (`libwebkit2gtk-4.1-dev` on Debian and Ubuntu, `webkit2gtk4.1-devel` on
+  Fedora). To run: WebKitGTK 4.1 and GStreamer's plugins for the video's codecs.
+  **The binary links WebKitGTK: without it installed it does not start.** One
+  crate wry brings on Linux, `option-ext` (through `dirs`), is MPL-2.0, which
+  `deny.toml` refuses: `cargo deny check --all-features` fails with this feature
+  (ADR 0017).
+- **Failures** (WebKitGTK cannot start, the web view cannot open) end on the
+  error page, with **Retry**, **Open outside** and **Copy link**.
+- `viewer::EmbedBackend` (`ViewerPlugin::web_video`) replaces the web view.
+
 The `viewer` collector of the debug bridge shows the same state;
 `viewer.shown` and `viewer.failed` go on the journal. The lint checks
 declared `docs:` links against the pages the viewer has.
@@ -359,5 +402,6 @@ declared `docs:` links against the pages the viewer has.
 ## Not yet
 
 - The lint does not yet walk the links inside `docs:` pages.
-- No webview: full web pages and remote videos open outside. Whether an embedded
-  player is worth a trial is an open question (ADR 0017).
+- No general web view: full web pages and remote videos other than YouTube open
+  outside. The YouTube page is a trial (ADR 0017); it has no Windows or macOS
+  backend yet.
