@@ -1,11 +1,19 @@
 //! egui-pop: themable, accessible, agent-drivable components for egui.
 //!
-//! Early days: this release holds the design tokens and the theme. Themes
-//! are DTCG token files (see [`tokens`]) in three tiers (palette, roles,
-//! components), composed from a base theme (dark, light, high contrast), a
-//! density, an accent and overrides, and turned into egui's own style so
-//! egui's widgets and other crates' widgets match. Custom widgets read the
-//! typed [`theme::Tokens`] from the context.
+//! The facade over the egui-pop crates: an application framework (`App`,
+//! plugins, commands with their keys, menus and palette, zones and a
+//! docking workbench, dialogs, toasts, settings, an undo history, a debug
+//! bridge an agent can drive) and parts usable on their own (design tokens
+//! and themes, visual kits, widgets, the image viewport, data views,
+//! editors). What is stable and what is experimental is in the README;
+//! what works without `App` is in the guide's "Using parts without App".
+//!
+//! The smallest start: themes are DTCG token files (see [`tokens`]) in
+//! three tiers (palette, roles, components), composed from a base theme
+//! (dark, light, high contrast), a density, an accent and overrides, and
+//! turned into egui's own style so egui's widgets and other crates'
+//! widgets match. Custom widgets read the typed [`theme::Tokens`] from the
+//! context.
 //!
 //! ```
 //! use egui_pop::theme::{self, Density, ThemeSpec};
