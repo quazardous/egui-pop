@@ -1,0 +1,501 @@
+# Agents and the debug bridge
+
+A command "yields its agent surface" ([CREDO](../CREDO.md)): unless it
+says otherwise, every command an application declares can be run by an
+agent through the **debug bridge**, with the arguments its spec
+describes, and the run is marked as the agent's. This page says what
+that bridge is, how an agent reaches it, what it can and cannot do, and
+what is not protected today.
+
+In short: the bridge is a Rust API inside the application's process.
+egui-pop opens no socket and no port for it. An agent is code that holds
+the `App` (a test, a harness, a transport the application writes
+itself); it discovers the collectors and commands as JSON, runs the
+commands offered to agents, reads every collector's state, and calls
+collector actions. What keeps an action away from it is the command's
+`agent` flag, the command's `when` clause, step hooks and the host; the
+[known gaps](#known-gaps) list what nothing checks.
+
+## What an agent connects to
+
+**No transport.** The bridge (`egui_pop::core::debug::DebugBridge`) is a
+list of *collectors* held by each `App`. Nothing in egui-pop listens on
+a TCP port, a local socket or a pipe for it, and there is no address to
+connect to, loopback or not. It is reached by Rust calls:
+
+| Call | What it does |
+|---|---|
+| `AppHandle::debug_describe()` | every collector: name, description, actions (each with `mutates` and an example of its arguments) |
+| `AppHandle::debug_snapshot()` | every collector's snapshot, by name, as one JSON object |
+| `AppHandle::debug_call(collector, action, args)` | calls an action; always returns a `Feedback`; `commands.run` is queued for the next frame |
+| `App::debug_call(collector, action, args)` | the same, but `commands.run` runs at once and its result is in the feedback |
+| `AppHandle::debug_log()` | the last 64 feedback blocks, refusals included |
+
+**Always there.** Every `App` builds its bridge with the core collectors
+and registers its own and its plugins' when it is built. There is no
+Cargo feature, setting or build kind that removes it: release builds
+have it, as debug builds do.
+
+**Devtools is a view, not a gate.** `DevtoolsPlugin` (opt-in) shows the
+same collectors in a panel, opened with `F12` once the
+`developer.devtools` setting is on (off by default). The setting gates
+the panel only; the bridge answers Rust calls whatever its value. An
+action run from the panel goes through the `devtools.call` step, which a
+plugin may veto; calls made directly on the bridge do not go through
+that step. See [Debugging](debugging.md).
+
+**Reaching it from another process** takes a transport the application
+writes (a socket, stdin, an MCP server...) that turns requests into
+`debug_call`s on the UI thread. egui-pop provides none. The ways out of
+the process that do exist are not the bridge:
+
+- the gallery's `--dump-debug` prints the bridge's snapshot as one JSON
+  line on stdout when it quits by `--quit-after` (read only, the gallery
+  only; see [tools/wbox](../tools/wbox));
+- [tools/wbox](../tools/wbox) drives a real gallery window in a nested,
+  headless compositor: screenshots, clicks and keys, as a person would;
+- the single-instance plugin of `egui-pop-platform`
+  ([instance.md](instance.md)) listens on a local socket for later
+  launches of the same application; what they hand over (arguments,
+  working directory, links) reaches the `instance.second_launch` and
+  `deeplink.open` steps, not the bridge.
+
+## What it can do
+
+### Discover
+
+`debug_describe()` lists the collectors. One entry, as the gallery
+answers it:
+
+```json
+{
+  "name": "store",
+  "description": "The value store: every path, its value, its owner, who may write it and who changed it.",
+  "actions": [
+    { "name": "get", "description": "Reads a value with its descriptor.", "mutates": false, "args": { "path": "settings/x" } },
+    { "name": "set", "description": "Writes a value as an agent (`path`, `value`).", "mutates": true, "args": { "path": "settings/x", "value": 1 } },
+    { "name": "undo", "description": "Undoes the last change of values.", "mutates": true, "args": null }
+  ]
+}
+```
+
+The `commands` collector's snapshot lists every command with what an
+agent needs to run it: `id`, `title`, `category`, `description`, `when`
+(where it applies), `keys`, `agent` (offered to agents or not), `args`
+(a description of its arguments: free JSON, a schema or an example,
+`null` when it takes none), `running`, `owner` and its icons; beside
+them, the `context` (the context keys in force) and `history` (the last
+runs). In the gallery:
+
+```json
+{
+  "id": "about.read",
+  "title": "Read about the application",
+  "category": "Help",
+  "description": "The application's name, version, description, licences, authors and links, egui-pop's and egui's versions, the platform, the renderer and the version info as text.",
+  "when": "",
+  "keys": [],
+  "agent": true,
+  "args": null,
+  "running": false,
+  "owner": "egui_pop.about",
+  "icon": null,
+  "icon_on": null,
+  "icon_set_by": null,
+  "unknown_icons": []
+}
+```
+
+### Run a command
+
+`commands.run` takes `{ "id", "args" }`. The bridge checks that the
+command exists and is offered to agents, then runs it with
+`Origin::Agent("debug-bridge")`. The reply is a `Feedback`, the same
+shape for every call, success or not:
+
+| Field | Meaning |
+|---|---|
+| `ok` | the call succeeded |
+| `collector`, `action` | what was called |
+| `mutates` | the action is one that changes the application (whether or not it did) |
+| `message` | what happened, in a sentence |
+| `data` | the result, `null` on failure |
+
+Through `App::debug_call`, `about.read` in the gallery answers:
+
+```json
+{
+  "ok": true,
+  "collector": "commands",
+  "action": "run",
+  "mutates": true,
+  "message": "`about.read` ran; the application may have changed",
+  "data": {
+    "authors": ["The egui-pop contributors"],
+    "description": "egui-pop's components in every variant, state, theme and density.",
+    "egui": "0.36",
+    "egui_pop": "0.2.0",
+    "licences": ["MIT OR Apache-2.0"],
+    "links": {
+      "docs": "https://quazardous.github.io/egui-pop/docs/",
+      "issues": "https://github.com/quazardous/egui-pop/issues",
+      "repository": "https://github.com/quazardous/egui-pop",
+      "website": "https://quazardous.github.io/egui-pop/"
+    },
+    "name": "egui-pop gallery",
+    "platform": "linux x86_64",
+    "renderer": null,
+    "version": "0.2.0 (59ba7f9f)",
+    "version_info": "egui-pop gallery 0.2.0 (59ba7f9f)\negui-pop 0.2.0\negui 0.36\nPlatform: linux x86_64\n"
+  }
+}
+```
+
+Through `AppHandle::debug_call` the run is only queued:
+
+```json
+{ "ok": true, "collector": "commands", "action": "run", "mutates": true, "message": "`commands.run` done; the application changed", "data": { "queued": true } }
+```
+
+A command whose host answers later (`Reply::Later`) gives
+`"data": { "pending": true }` and the message "`<id>` is running; its
+result goes to the journal".
+
+### Read state and results
+
+- Every collector's snapshot: focus and the focus chain, overlays,
+  fields (each input's label, kind and state), indicators, the
+  announcements made to screen readers, the theme, the store (every
+  path, value, owner, writers, last writer), the context stack, dialogs,
+  file choices, jobs, the workbench, the windows' scale, and those of the
+  plugins connected (about 50 in the gallery).
+- The value store also as commands: `value.list`, `value.get`,
+  `value.set`, `value.reset`, `value.undo`, `value.redo`.
+- The journal: `journal.since` with `{ "seq": n }` returns the events
+  after `n`. Each run of a command leaves a `command.dispatched` event
+  and a `command.done` (or `command.failed`) event whose `cause` is the
+  dispatch:
+
+```json
+[
+  { "seq": 1, "source": "agent:debug-bridge", "cause": null, "name": "command.dispatched", "data": { "command": "about.read", "args": null } },
+  { "seq": 2, "source": "agent:debug-bridge", "cause": 1, "name": "command.done", "data": { "command": "about.read", "result": { "name": "egui-pop gallery" } } }
+]
+```
+
+(The second event's `result` is cut here; it is the whole answer shown
+above.)
+
+### Act through collector actions
+
+Besides `commands.run`, collectors offer actions of their own. Those
+flagged `mutates` in the gallery: `screen.set_interface_zoom`,
+`focus.clear`, `overlays.close_top`, `announcements.announce`,
+`plugins.set_enabled`, `store.set`, `store.undo`, `i18n.set_locale`,
+`i18n.clear_missing`, `contexts.request`, `contexts.hold`,
+`contexts.release`, `dialogs.answer`, `files.answer`, the `jobs` actions
+(`cancel`, `pause`, `resume`, `retry`, `dismiss`, `clear`),
+`toasts.dismiss` and `viewport.set_view`. Read-only ones: `state.slot`,
+`fonts.check`, `icons.search`, `journal.since`, `store.get`,
+`mounts.where_can`, `mounts.check`, `frame.hit`.
+
+### Wait
+
+There is no blocking wait on the bridge. An agent polls: `journal.since`
+for a command's `command.done`, the `steps` collector for the last runs
+of each step (who vetoed, redirected, ran), the `jobs` collector's
+`idle`. An application may add its own (the gallery's
+`gallery.viewport.wait_idle`).
+
+### Screenshots and the accessibility tree
+
+Not through the bridge. In tests, egui_kittest renders frames and
+`egui_pop_test::a11y_tree` prints the accessibility tree
+([Testing](testing.md)); for a real window, wbox takes screenshots. The
+bridge gives the same information as data: the `fields`, `focus`,
+`indicators` and `announcements` collectors.
+
+## An example, end to end
+
+An application with two commands, one kept off the agent surface. The
+agent discovers the bridge, lists the commands offered to it, runs one,
+reads its result and the journal, and is refused the other. This block
+is compiled and run with the guides (`cargo test -p consumer-smoke
+--doc`).
+
+```rust
+use egui_pop::egui;
+use egui_pop::prelude::*;
+use serde_json::{Value as Json, json};
+
+struct Notes;
+
+impl Plugin for Notes {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("notes")
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        ctx.command(
+            CommandSpec::new(CommandId::from_static("notes.count"), "Count notes", "Notes")
+                .description("How many notes a folder holds (`folder`).")
+                .args(json!({ "folder": "inbox" })),
+            |call| Ok(json!({ "folder": call.args["folder"], "count": 3 })),
+        )?;
+        // Never run by an agent.
+        ctx.command(
+            CommandSpec::new(CommandId::from_static("notes.purge"), "Purge notes", "Notes")
+                .no_agent(),
+            |_| Ok(Json::Null),
+        )?;
+        Ok(())
+    }
+}
+
+let ctx = egui::Context::default();
+let mut app = App::builder()
+    .plugins(DefaultPlugins)
+    .plugin(Notes)
+    .build(&ctx)
+    .unwrap();
+
+// 1. Discover the collectors and their actions.
+let described = app.handle().debug_describe();
+let commands = described
+    .as_array()
+    .unwrap()
+    .iter()
+    .find(|c| c["name"] == "commands")
+    .unwrap();
+assert_eq!(commands["actions"][0]["name"], "run");
+assert_eq!(commands["actions"][0]["mutates"], true);
+
+// 2. The commands offered to agents, with their arguments.
+let snapshot = app.handle().debug_snapshot();
+let offered: Vec<&Json> = snapshot["commands"]["commands"]
+    .as_array()
+    .unwrap()
+    .iter()
+    .filter(|c| c["agent"] == true)
+    .collect();
+let count = offered.iter().find(|c| c["id"] == "notes.count").unwrap();
+assert_eq!(count["args"], json!({ "folder": "inbox" }));
+assert!(!offered.iter().any(|c| c["id"] == "notes.purge"));
+
+// 3. Run one: `App::debug_call` runs it now and returns its result.
+let before = app.handle().last_event();
+let f = app.debug_call(
+    "commands",
+    "run",
+    &json!({ "id": "notes.count", "args": { "folder": "inbox" } }),
+);
+assert!(f.ok, "{}", f.message);
+assert_eq!(f.data, json!({ "folder": "inbox", "count": 3 }));
+
+// 4. The journal says the agent did it.
+let events = app.debug_call("journal", "since", &json!({ "seq": before }));
+let done = events
+    .data
+    .as_array()
+    .unwrap()
+    .iter()
+    .find(|e| e["name"] == "command.done")
+    .unwrap();
+assert_eq!(done["source"], "agent:debug-bridge");
+assert_eq!(done["data"]["result"]["count"], 3);
+
+// 5. The command kept off the surface is refused, and says why.
+let f = app.debug_call("commands", "run", &json!({ "id": "notes.purge" }));
+assert!(!f.ok);
+assert_eq!(
+    f.message,
+    "`commands.run` failed: `notes.purge` is not offered to agents"
+);
+```
+
+The JSON replies shown on this page were captured from the gallery
+itself, headless: a test built it with `Gallery::new` on a plain
+`egui::Context` (no window, no GPU), ran one frame of `App::logic`, and
+printed `debug_describe`, the `commands` snapshot and the feedback of
+`commands.run` (`about.read`, `app.quit`), `journal.since`, `store.get`
+and `store.set`.
+
+## What it cannot do, and the trust model
+
+The bridge has one caller identity: every command it runs is
+`Origin::Agent("debug-bridge")`, and the journal's source is
+`agent:debug-bridge`. What is checked:
+
+- **The `agent` flag.** `commands.run` refuses a command declared with
+  `CommandSpec::no_agent()` (and an unknown one) with "`<id>` is not
+  offered to agents". In egui-pop and the gallery: quitting, the
+  window's close, minimise, maximise and menu, opening devtools,
+  `deeplink.open`, `links.confirmed` (the confirmed link), the pointer
+  gestures, `viewer.load_images`, and a few gallery commands. 31 of the
+  gallery's 259 commands are not offered.
+- **Where a command applies.** A command whose `when` clause does not
+  hold in the current context is refused ("does not apply here"), for an
+  agent as for a key.
+- **Links.** A link an agent asks to open (`links.open`, `files.reveal`,
+  `viewer.open_outside`) is always confirmed by the user, and the links
+  plugin vetoes any answer to that confirmation but the user's: an agent
+  may cancel it, not accept it ([Links](links.md)).
+- **The clipboard.** An agent copies and pastes in its own slot
+  (`agent:debug-bridge`): it neither reads nor overwrites what the user
+  copied unless the owner allows it ([The clipboard](clipboard.md)).
+- **The value store.** A write is refused when the value is held by
+  someone else's gesture, changed since `if_seq`, or invalid for its
+  type; past the soft range only with `force`.
+- **Steps.** Every step's before-hooks see its arguments and may veto
+  it; steps that carry an `origin` (`dialog.answer`, `terminal.input`
+  among them) let a hook refuse agents only.
+- **The host.** Every command dispatched to the host carries its origin
+  (`Dispatch::origin`): a host may refuse agents there, in one place.
+
+### Keeping an action off the agent surface
+
+- Declare the command with `.no_agent()`; it stays in menus, keys and
+  the palette.
+- When a dialog confirms an action, veto the `dialog.answer` step unless its
+  `origin` is `user`, as the links plugin does: accepting a dialog runs
+  its command whatever the command's `agent` flag (see the gaps).
+- When a step does the work, veto it from a before-hook for agents
+  (the origin is in the arguments when the step carries it).
+- In the host's `dispatch`, refuse `Origin::Agent` for the commands it
+  should never run for one. This does not cover the commands run in the
+  interface without the host's dispatch (undo and redo, `history.*`,
+  the context stack's commands, the clipboard's), which take the two
+  ways above.
+
+```rust
+use egui_pop::api::dialogs::STEP_ANSWER;
+use egui_pop::api::host::{Dispatch, Host, Journal, LocalHost, Reply, Waker};
+use egui_pop::egui;
+use egui_pop::prelude::*;
+use serde_json::{Value as Json, json};
+
+/// The default host, refusing agents the `notes.` commands.
+struct Guarded(LocalHost);
+
+impl Host for Guarded {
+    fn dispatch(&mut self, d: &Dispatch<'_>) -> Reply {
+        if matches!(d.origin, Origin::Agent(_)) && d.command.as_str().starts_with("notes.") {
+            return Reply::Done(Err(format!("`{}` is not for agents", d.command)));
+        }
+        self.0.dispatch(d)
+    }
+    fn journal(&self) -> Option<&Journal> {
+        self.0.journal()
+    }
+    fn journal_mut(&mut self) -> Option<&mut Journal> {
+        self.0.journal_mut()
+    }
+    fn store(&self) -> SharedStore {
+        self.0.store()
+    }
+    fn set_waker(&mut self, waker: Waker) {
+        self.0.set_waker(waker);
+    }
+    fn layout_document(&self) -> Option<String> {
+        self.0.layout_document()
+    }
+}
+
+struct Notes;
+
+impl Plugin for Notes {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("notes")
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        ctx.command(
+            CommandSpec::new(CommandId::from_static("notes.count"), "Count notes", "Notes"),
+            |_| Ok(json!(3)),
+        )?;
+        // Only the user accepts a dialog; an agent may still cancel one.
+        ctx.before(STEP_ANSWER, |_, args| {
+            let cancel = args["answer"]["answer"] == "cancel";
+            if !cancel && args["origin"] != "user" {
+                Before::Veto("only the user answers dialogs".into())
+            } else {
+                Before::Go
+            }
+        });
+        Ok(())
+    }
+}
+
+let mut app = App::builder()
+    .host(Guarded(LocalHost::new(SharedStore::default())))
+    .plugins(DefaultPlugins)
+    .plugin(Notes)
+    .build(&egui::Context::default())
+    .unwrap();
+let count = CommandId::from_static("notes.count");
+let f = app.debug_call("commands", "run", &json!({ "id": "notes.count" }));
+assert!(!f.ok);
+assert!(f.message.contains("is not for agents"), "{}", f.message);
+// The user still runs it.
+assert_eq!(app.run(&count, Json::Null, Origin::User).now(), Some(Ok(json!(3))));
+```
+
+## Known gaps
+
+What is not protected today. None of these is fixed by documenting it.
+
+- **No transport, no authentication.** egui-pop has no notion of who
+  the agent is: every bridge call is `debug-bridge`. An application that
+  exposes the bridge over a socket or a pipe gives whoever reaches it
+  everything below; any local process able to connect to that transport
+  is an agent. Access control is the transport's, and egui-pop offers no
+  helper for it.
+- **The bridge cannot be turned off.** It is in every build, release
+  included; there is no feature or setting to remove it or to make it
+  read-only. Any code in the process (a plugin included) can call it.
+- **Collector actions ignore the `agent` flag and have no veto.** Only
+  `commands.run` checks the flag. `dialogs.answer`, `files.answer`
+  (answers an open file choice with any paths), `plugins.set_enabled`
+  (disconnects any plugin, with the hooks it registered, including one
+  that guards agent actions), `store.set`, `contexts.hold`, the `jobs`
+  actions, `overlays.close_top` and the others run without a step a
+  plugin could veto. `devtools.call` is vetoable only for calls from the
+  devtools panel.
+- **Bridge writes bypass the writers check.** `store.set` and the
+  `value.set` / `value.reset` commands write as the framework, which may
+  write any path: a value's declared writers ([ADR 0016](adr/0016-one-writer-per-value.md)) do not apply.
+  For example, a bridge call turns on `settings/developer.devtools`,
+  whose writers are its owner only.
+- **Accepting a dialog runs its command for the agent, whatever its
+  flag.** `dialogs.answer` with `accept` runs the dialog's command with
+  the agent's origin without checking the command's `agent` flag; only
+  the links plugin vetoes such answers. An application with
+  confirmations must veto the `dialog.answer` step itself (above).
+- **Origin is a label, not a credential.** `App::run`,
+  `AppHandle::run_as` and the steps take any `Origin` from code in the
+  process and do not check the `agent` flag; a command's handler that
+  runs another with `AppHandle::run` runs it as `Origin::User`, so the
+  agent's origin is lost along the chain. For example, `deeplink.open`
+  runs the application's links command as the user, and a deep link can
+  come from any later launch of the application by the same user,
+  through the single-instance socket.
+- **Commands that reach the system are offered by default.**
+  `terminal.send` writes to a terminal's program: with a pseudo-terminal
+  shell open (the `editors-pty` feature, as in the gallery), an agent
+  types into the user's shell without a confirmation, unless the
+  application vetoes `terminal.input` for agents. Every new command is
+  offered until it says `.no_agent()`.
+- **The host's dispatch does not see every command.** Undo, redo,
+  `history.*`, the context stack's commands and the clipboard's run in
+  the interface without `Host::dispatch`, so a guard there does not see
+  them.
+- **Snapshots are not redacted.** Every value in the store, the file
+  choices and their folders, the terminal steps with their arguments
+  (`terminal_io`), the journal's arguments and results are readable
+  through the bridge.
+- **`mutates` is per action, not per command.** `commands.run` is
+  always flagged `mutates`, read-only commands included (`about.read`,
+  `value.get`); commands carry no read-only flag an agent could rely on.
+- **No wait and no rate limit.** An agent polls; nothing limits how
+  often it calls. A refused `commands.run` is in the bridge's log
+  (`debug_log`, the last 64 calls), not in the journal.

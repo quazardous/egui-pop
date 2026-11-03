@@ -86,7 +86,8 @@ start (a panel, a setting, a command), see
 
 ## A command with a shortcut
 
-Declared once: its key, menu entry, palette entry and agent surface come
+Declared once: its key, menu entry, palette entry and
+[agent surface](https://github.com/quazardous/egui-pop/blob/main/docs/agents.md) come
 from it. More in [Plugins, commands and steps](https://github.com/quazardous/egui-pop/blob/main/docs/plugins.md).
 
 ```rust

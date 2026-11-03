@@ -151,6 +151,10 @@ of every crate with every feature on.
   application's name, version, licences, authors and links, its version
   info to copy, `about.read` for agents.
 - [Debugging](debugging.md): the debug bridge and devtools.
+- [Agents and the debug bridge](agents.md): how an agent reaches an
+  application (in process, no socket), discovering and running
+  commands, reading state, the replies' shapes, what is refused, and
+  the known gaps.
 - [Extensions](extensions.md): the known extensions in three tiers
   (official, community, featured), the entry format, how to get listed
   and the checks an entry passes; the extension template
