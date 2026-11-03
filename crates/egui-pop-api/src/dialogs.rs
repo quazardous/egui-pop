@@ -1768,14 +1768,9 @@ fn body(ui: &mut Ui, app: &AppHandle, o: &mut Open, header: Header<'_>) -> Optio
                     }
                     Some(PickerAnswer::Cancel) => o.picking = None,
                     // This picker chooses an existing file or a folder:
-                    // it has no question to ask, and a folder it makes
-                    // has no one to tell.
-                    Some(
-                        PickerAnswer::Bookmark(..)
-                        | PickerAnswer::Replace(_)
-                        | PickerAnswer::FolderCreated(_),
-                    )
-                    | None => {}
+                    // it has no question to ask, a folder it makes has no
+                    // one to tell, and it lists no bookmarks.
+                    Some(_) | None => {}
                 }
             }
             // The file chooser's in-app picker, inside the dialog.

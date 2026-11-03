@@ -21,8 +21,9 @@
 //!   and a click, `Shift` and the arrows, `Ctrl+Space` and `Ctrl+A`
 //!   ([`CMD_TOGGLE_SELECTION`], [`CMD_SELECT_ALL`]), a typed path with
 //!   completion (`Tab`), the fuzzy filter of the choice dialog,
-//!   the request's filters, recent places and bookmarks kept in the host
-//!   store (`settings/files.recent`, `settings/files.bookmarks`), and the
+//!   the request's filters, the system's folders and volumes ([`places`]),
+//!   recent places and bookmarks (renamed and moved from their menu) kept in
+//!   the host store (`settings/files.recent`, `settings/files.bookmarks`), and the
 //!   last folder per purpose (`settings/files.last_folders`).
 //!   Saving, it appends the filter's extension to a name without one and
 //!   follows the filter when it changes, selects the name's stem, asks
@@ -146,12 +147,14 @@ use self::sort::{PickerSort, SortColumn};
 
 pub mod fs;
 pub mod groups;
+pub mod places;
 pub mod preview;
 pub mod providers;
 pub mod sort;
 
 use fs::{Meta, SharedFs};
 use groups::{FileGroup, FileGrouping, Groupings};
+use places::SystemPlaces;
 use preview::Previews;
 
 /// The file chooser, as a service.
@@ -201,6 +204,9 @@ pub const SETTING_FOLDERS_FIRST: SettingId = SettingId::from_static("files.folde
 pub const RECENT: &str = "settings/files.recent";
 /// Where bookmarks are kept (a JSON list of folders).
 pub const BOOKMARKS: &str = "settings/files.bookmarks";
+/// Where the names given to bookmarks are kept (a JSON list of
+/// `[folder, name]` pairs). See [`rename_bookmark`].
+pub const BOOKMARK_NAMES: &str = "settings/files.bookmark_names";
 
 /// Where the in-app picker's size is kept (width and height of its
 /// content, in points).
@@ -643,6 +649,20 @@ struct State {
     fs: Option<SharedFs>,
     previews: Previews,
     groupings: Groupings,
+    /// The system's places, as read when a picker last opened.
+    system: Option<SystemPlaces>,
+    /// Where they come from (none: the system, [`places::system_places`]).
+    system_source: Option<PlaceSource>,
+}
+
+/// Where the system's places come from ([`Files::set_system_places`]).
+#[derive(Clone)]
+struct PlaceSource(Arc<dyn Fn() -> SystemPlaces + Send + Sync>);
+
+impl std::fmt::Debug for PlaceSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("PlaceSource")
+    }
 }
 
 impl State {
@@ -801,7 +821,7 @@ impl Files {
             return false;
         };
         load_view(app, &mut picker);
-        let out = picker.show(ui, &places(app));
+        let out = picker.show(ui, &places(app, self));
         keep_view(app, &picker);
         settle(app, id, &mut picker, &answer, out, true);
         self.keep(id, picker);
@@ -834,6 +854,10 @@ impl Files {
         let groupings = self.groupings();
         let show_preview = preview_wanted(app);
         let start = start_folder(app, &request, &fs);
+        if !native {
+            // Volumes come and go: read when a picker opens, not each frame.
+            self.refresh_system_places();
+        }
         let mut s = lock(&self.0);
         let o = s
             .open
@@ -912,6 +936,36 @@ impl Files {
         );
         o.choices = Some(base);
         Ok(())
+    }
+
+    /// Gives the system's places the in-app picker lists (its folders and the
+    /// volumes mounted) from `source` rather than from the system
+    /// ([`places::system_places`]): a demo's, a sandbox's, a test's. It is
+    /// asked when a picker opens.
+    pub fn set_system_places(&self, source: Arc<dyn Fn() -> SystemPlaces + Send + Sync>) {
+        let mut s = lock(&self.0);
+        s.system_source = Some(PlaceSource(source));
+        s.system = None;
+    }
+
+    /// The system's places as last read, read now if never.
+    fn system_places(&self) -> SystemPlaces {
+        if let Some(p) = lock(&self.0).system.clone() {
+            return p;
+        }
+        self.refresh_system_places()
+    }
+
+    /// Reads the system's places again: when a picker opens.
+    fn refresh_system_places(&self) -> SystemPlaces {
+        let source = lock(&self.0).system_source.clone();
+        let read = match source {
+            Some(PlaceSource(f)) => f(),
+            None if cfg!(target_arch = "wasm32") => SystemPlaces::default(),
+            None => places::system_places(),
+        };
+        lock(&self.0).system = Some(read.clone());
+        read
     }
 
     /// The choices open, by id.
@@ -1043,13 +1097,54 @@ pub fn bookmarks(app: &AppHandle) -> Vec<PathBuf> {
     read_list(app, BOOKMARKS)
 }
 
-/// Bookmarks a folder, or removes its bookmark.
+/// Bookmarks a folder, or removes its bookmark (and the name it was given).
 pub fn set_bookmark(app: &AppHandle, dir: &Path, on: bool) {
     let mut list = bookmarks(app);
     list.retain(|p| p != dir);
     if on {
         list.push(dir.to_path_buf());
+    } else {
+        rename_bookmark(app, dir, "");
     }
+    write_list(app, BOOKMARKS, &list);
+}
+
+/// The names given to bookmarks, by folder.
+pub fn bookmark_names(app: &AppHandle) -> Vec<(PathBuf, String)> {
+    lock(&app.store())
+        .get(BOOKMARK_NAMES)
+        .and_then(|e| e.value.as_text().map(str::to_string))
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default()
+}
+
+/// Gives a bookmark a name of its own in the picker's side bar; an empty name
+/// (or only spaces) gives it back its folder's.
+pub fn rename_bookmark(app: &AppHandle, dir: &Path, name: &str) {
+    let mut names = bookmark_names(app);
+    let before = names.len();
+    names.retain(|(d, _)| d != dir);
+    let name = name.trim();
+    if name.is_empty() && names.len() == before {
+        return;
+    }
+    if !name.is_empty() {
+        names.push((dir.to_path_buf(), name.to_owned()));
+    }
+    // A folder whose name is not Unicode cannot be kept: the names stay as they were.
+    if let Ok(text) = serde_json::to_string(&names) {
+        write_text(app, BOOKMARK_NAMES, text);
+    }
+}
+
+/// Moves a bookmark to `to` in the list (clamped to its end).
+pub fn move_bookmark(app: &AppHandle, dir: &Path, to: usize) {
+    let mut list = bookmarks(app);
+    let Some(at) = list.iter().position(|p| p == dir) else {
+        return;
+    };
+    let d = list.remove(at);
+    list.insert(to.min(list.len()), d);
     write_list(app, BOOKMARKS, &list);
 }
 
@@ -1239,6 +1334,7 @@ impl Plugin for FilesPlugin {
             for (path, label) in [
                 (RECENT, "Recent places"),
                 (BOOKMARKS, "Bookmarks"),
+                (BOOKMARK_NAMES, "Bookmark names"),
                 (LAST_FOLDERS, "Last folders by purpose"),
             ] {
                 store
@@ -1586,6 +1682,8 @@ fn settle(
         Some(PickerAnswer::Chosen(paths)) => *lock(answer) = Some(Some(paths)),
         Some(PickerAnswer::Cancel) => *lock(answer) = Some(None),
         Some(PickerAnswer::Bookmark(dir, on)) => set_bookmark(app, &dir, on),
+        Some(PickerAnswer::RenameBookmark(dir, name)) => rename_bookmark(app, &dir, &name),
+        Some(PickerAnswer::MoveBookmark(dir, to)) => move_bookmark(app, &dir, to),
         Some(PickerAnswer::Replace(path)) => picker.ask_replace(app, id, &path),
         Some(PickerAnswer::FolderCreated(path)) => folder_created(app, &path),
         None if !open => *lock(answer) = Some(None),
@@ -1603,11 +1701,13 @@ fn folder_created(app: &AppHandle, path: &Path) {
     );
 }
 
-fn places(app: &AppHandle) -> Places {
+fn places(app: &AppHandle, files: &Files) -> Places {
     Places {
         home: home(),
+        system: files.system_places(),
         recent: recent(app),
         bookmarks: bookmarks(app),
+        bookmark_names: bookmark_names(app),
     }
 }
 
@@ -1629,6 +1729,8 @@ pub const PICKER_HEIGHT: f32 = 398.0;
 pub const PICKER_MIN_SIZE: egui::Vec2 = egui::vec2(640.0, 280.0);
 /// The list's height when the picker is not given a height to fill.
 pub const LIST_HEIGHT: f32 = 280.0;
+/// The width of the in-app picker's side bar of places, in points.
+const PLACES_WIDTH: f32 = 150.0;
 /// The narrowest the picker's list gets for the preview pane: under
 /// it, the pane shrinks instead.
 pub const LIST_MIN_WIDTH: f32 = 240.0;
@@ -1690,7 +1792,7 @@ fn picker_overlay(ctx: &egui::Context, app: &AppHandle, files: &Files) {
     }) else {
         return;
     };
-    let places = places(app);
+    let places = places(app, files);
     load_view(app, &mut picker);
     let modal = overlay_id(id);
     // One size, the preview on or off: the pane takes its width from
@@ -1700,8 +1802,9 @@ fn picker_overlay(ctx: &egui::Context, app: &AppHandle, files: &Files) {
     let mut spec = OverlaySpec::new(("egui_pop.files", id), &title, Kind::Modal)
         .resizable(size, PICKER_MIN_SIZE);
     debug_assert_eq!(spec.id, modal);
-    if picker.naming.is_some() {
-        // Escape closes the row asking a new folder's name, not the picker.
+    if picker.naming.is_some() || picker.renaming.is_some() {
+        // Escape closes the row asking a new folder's name, or a bookmark's,
+        // not the picker.
         spec = spec.keep_on_escape();
     }
     picker.fill = true;
@@ -1956,12 +2059,35 @@ pub fn home() -> Option<PathBuf> {
         .filter(|d| d.is_dir())
 }
 
-/// Places the picker lists beside the folder.
+/// Places the picker lists beside the folder: home, the system's folders,
+/// the volumes mounted, recent places and bookmarks. Made with
+/// `Places::default()` and its fields.
 #[derive(Clone, Debug, Default, PartialEq)]
+#[non_exhaustive]
 pub struct Places {
     pub home: Option<PathBuf>,
+    /// The system's folders and volumes ([`places::system_places`]).
+    pub system: SystemPlaces,
     pub recent: Vec<PathBuf>,
     pub bookmarks: Vec<PathBuf>,
+    /// The names given to bookmarks ([`rename_bookmark`]).
+    pub bookmark_names: Vec<(PathBuf, String)>,
+}
+
+impl Places {
+    /// A bookmark's name: the one given, else its folder's.
+    pub fn bookmark_name(&self, dir: &Path) -> String {
+        self.bookmark_names
+            .iter()
+            .find_map(|(d, n)| (d == dir).then(|| n.clone()))
+            .unwrap_or_else(|| folder_name(dir))
+    }
+}
+
+fn folder_name(dir: &Path) -> String {
+    dir.file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| dir.display().to_string())
 }
 
 /// How the in-app picker shows a folder's entries.
@@ -2142,6 +2268,7 @@ pub struct Entry {
 
 /// What the picker answers.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum PickerAnswer {
     Chosen(Vec<PathBuf>),
     Cancel,
@@ -2154,6 +2281,10 @@ pub enum PickerAnswer {
     Replace(PathBuf),
     /// This folder was made, and the picker shows it.
     FolderCreated(PathBuf),
+    /// Give this bookmark this name (empty: its folder's).
+    RenameBookmark(PathBuf, String),
+    /// Move this bookmark to this place in the list.
+    MoveBookmark(PathBuf, usize),
 }
 
 /// Where the file's own name starts in a name or a typed path.
@@ -2333,6 +2464,10 @@ pub struct FilePicker {
     proposed: String,
     /// Asks before replacing a file.
     confirm_overwrite: bool,
+    /// The bookmark being renamed, and the name typed.
+    renaming: Option<(PathBuf, String)>,
+    /// That field takes the focus.
+    renaming_focus: bool,
     /// The dialog asking whether to replace a file: the picker waits.
     asking: Option<u64>,
     /// The question closed: the field takes the focus back, which it lost
@@ -2431,6 +2566,8 @@ impl FilePicker {
             row_ids: Vec::new(),
             proposed,
             confirm_overwrite: request.confirm_overwrite,
+            renaming: None,
+            renaming_focus: false,
             asking: None,
             refocus: false,
             select_stem: request.kind == ChooseKind::Save,
@@ -3655,35 +3792,16 @@ impl FilePicker {
         ui.horizontal_top(|ui| {
             // Places.
             ui.vertical(|ui| {
-                ui.set_width(150.0);
-                let mut place = |ui: &mut Ui, name: &str, dir: &Path| {
-                    if widgets::selectable_label(ui, self.dir == dir, name)
-                        .on_hover_text(dir.display().to_string())
-                        .clicked()
-                    {
-                        self.go(dir.to_path_buf());
-                    }
-                };
-                if let Some(h) = &places.home {
-                    place(ui, &strings::tr(ui.ctx(), &txt::FILES_HOME), h);
-                }
-                for (title, list) in [
-                    (&txt::FILES_RECENT, &places.recent),
-                    (&txt::FILES_BOOKMARKS, &places.bookmarks),
-                ] {
-                    if list.is_empty() {
-                        continue;
-                    }
-                    ui.add_space(t.space.s);
-                    ui.weak(strings::tr(ui.ctx(), title));
-                    for d in list {
-                        let name = d
-                            .file_name()
-                            .map(|n| n.to_string_lossy().into_owned())
-                            .unwrap_or_else(|| d.display().to_string());
-                        place(ui, &name, d);
-                    }
-                }
+                ui.set_width(PLACES_WIDTH);
+                egui::ScrollArea::vertical()
+                    .id_salt("egui_pop.files.places")
+                    .max_height(list_height)
+                    .auto_shrink([false, true])
+                    .show(ui, |ui| {
+                        if let Some(a) = self.side_bar(ui, places) {
+                            answer = Some(a);
+                        }
+                    });
             });
             // Not a separator: in a row it takes the row's height, which
             // grows with it in a modal.
@@ -3875,7 +3993,6 @@ impl FilePicker {
         self.reveal_cell = true;
     }
 
-    /// The list or grid switch, and the thumbnails' size with the grid.
     /// The application's choices, on a line of their own above the buttons:
     /// a check box, or a label and its combo box.
     fn choice_row(&mut self, ui: &mut Ui) {
@@ -3914,6 +4031,130 @@ impl FilePicker {
         });
     }
 
+    /// A place of the side bar: a click opens its folder.
+    fn place(&mut self, ui: &mut Ui, name: &str, dir: &Path) -> egui::Response {
+        let r = widgets::selectable_label(ui, self.dir == dir, name)
+            .on_hover_text(dir.display().to_string());
+        if r.clicked() {
+            self.go(dir.to_path_buf());
+        }
+        r
+    }
+
+    /// The side bar: home, the system's folders, the volumes, recent places
+    /// and bookmarks, each bookmark with a menu to rename, move or remove it.
+    fn side_bar(&mut self, ui: &mut Ui, places: &Places) -> Option<PickerAnswer> {
+        let t = Tokens::of(ui.ctx());
+        let ctx = ui.ctx().clone();
+        let mut out = None;
+        if let Some(h) = &places.home {
+            self.place(ui, &strings::tr(&ctx, &txt::FILES_HOME), h);
+        }
+        for (folder, dir) in &places.system.folders {
+            self.place(ui, &strings::tr(&ctx, folder.title()), dir);
+        }
+        if !places.system.volumes.is_empty() {
+            ui.add_space(t.space.s);
+            ui.weak(strings::tr(&ctx, &txt::FILES_DEVICES));
+            for v in &places.system.volumes {
+                self.place(ui, &v.name, &v.path);
+            }
+        }
+        if !places.recent.is_empty() {
+            ui.add_space(t.space.s);
+            ui.weak(strings::tr(&ctx, &txt::FILES_RECENT));
+            for d in &places.recent {
+                self.place(ui, &folder_name(d), d);
+            }
+        }
+        if places.bookmarks.is_empty() {
+            return None;
+        }
+        ui.add_space(t.space.s);
+        ui.weak(strings::tr(&ctx, &txt::FILES_BOOKMARKS));
+        let last = places.bookmarks.len() - 1;
+        for (i, d) in places.bookmarks.iter().enumerate() {
+            if self.renaming.as_ref().is_some_and(|(at, _)| at == d) {
+                if let Some(a) = self.rename_field(ui, d) {
+                    out = Some(a);
+                }
+                continue;
+            }
+            let name = places.bookmark_name(d);
+            let r = self.place(ui, &name, d);
+            egui_pop_core::pointer::claim::context_menu(&r, |ui| {
+                if ui
+                    .button(strings::tr(&ctx, &txt::FILES_RENAME_BOOKMARK))
+                    .clicked()
+                {
+                    self.renaming = Some((d.clone(), name.clone()));
+                    self.renaming_focus = true;
+                    ui.close();
+                }
+                if i > 0 && ui.button(strings::tr(&ctx, &txt::FILES_MOVE_UP)).clicked() {
+                    out = Some(PickerAnswer::MoveBookmark(d.clone(), i - 1));
+                    ui.close();
+                }
+                if i < last
+                    && ui
+                        .button(strings::tr(&ctx, &txt::FILES_MOVE_DOWN))
+                        .clicked()
+                {
+                    out = Some(PickerAnswer::MoveBookmark(d.clone(), i + 1));
+                    ui.close();
+                }
+                if ui
+                    .button(strings::tr(&ctx, &txt::FILES_UNBOOKMARK))
+                    .clicked()
+                {
+                    out = Some(PickerAnswer::Bookmark(d.clone(), false));
+                    ui.close();
+                }
+            });
+        }
+        out
+    }
+
+    /// The field renaming a bookmark, in its place: Enter, or leaving it,
+    /// keeps the name; Escape keeps the old one.
+    fn rename_field(&mut self, ui: &mut Ui, dir: &Path) -> Option<PickerAnswer> {
+        let ctx = ui.ctx().clone();
+        let id = ui.make_persistent_id(("egui_pop.files.rename", dir));
+        let label = strings::tr(&ctx, &txt::FILES_BOOKMARK_NAME);
+        let escaped = focus::escape_left(&ctx, id)
+            || (ui.memory(|m| m.has_focus(id))
+                && ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape)));
+        let (_, text) = self.renaming.as_mut()?;
+        let edit = ui.add(
+            egui::TextEdit::singleline(text)
+                .id(id)
+                .desired_width(f32::INFINITY),
+        );
+        egui_pop_core::a11y::name(&edit, egui::Role::TextInput, &label);
+        if std::mem::take(&mut self.renaming_focus) {
+            edit.request_focus();
+            // Its text selected, to type the new name over it.
+            let mut state = egui::text_edit::TextEditState::load(&ctx, id).unwrap_or_default();
+            let all = egui::text::CCursorRange::two(
+                egui::text::CCursor::new(0),
+                egui::text::CCursor::new(text.chars().count()),
+            );
+            state.cursor.set_char_range(Some(all));
+            state.store(&ctx, id);
+            return None;
+        }
+        if escaped {
+            self.renaming = None;
+            return None;
+        }
+        if edit.lost_focus() {
+            let (dir, name) = self.renaming.take()?;
+            return Some(PickerAnswer::RenameBookmark(dir, name));
+        }
+        None
+    }
+
+    /// The list or grid switch, and the thumbnails' size with the grid.
     fn view_controls(&mut self, ui: &mut Ui) {
         for (view, name) in [
             (PickerView::List, &txt::FILES_VIEW_LIST),
