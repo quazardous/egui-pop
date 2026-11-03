@@ -64,7 +64,12 @@ Three tiers:
   the parameter widget, icons. Their behaviour and commands are kept;
   their drawing follows the theme and may be refined.
 - The test kit (`egui-pop-test`): harnesses and checks, the helpers at
-  several scales, the shared GPU device.
+  several scales, the shared GPU device, the `critical` attribute
+  (from `egui-pop-test-macros`).
+- Translations (`egui-pop-i18n`): catalogues and their fallback chains,
+  the rule that a plugin's catalogue carries its id, the language
+  setting, locale formatting, the `i18n.resolve` step, the key
+  extractor and checks.
 - The window's own frame (`egui_pop_core::frame`, `egui_pop_api::frame`)
   and its published hit regions (`HitRegions`, `HitTable`): the shape
   of the regions is what a platform layer reads.
@@ -91,8 +96,24 @@ Three tiers:
   adopt them.
 - The shell's hooks for applications: `AppBuilder::wrap`,
   `main_edge_to_edge`, `on_exit`, `run_native_with`.
+- Visual kits (`egui_pop_core::kit`, kit folders, `AppBuilder::kit`):
+  a kit's boxes per state and tone, its handlers and its package format
+  may still move; the tokens a kit reads follow the tokens' tier.
+- The other components: the context stack, undo histories and the
+  history panel, the clipboard, links, choosing files, jobs and
+  progress, toolbars, the status bar, collapsible sections,
+  micro-indicators, inputs and field states, tips, About, the theme
+  editor. Their steps and commands are kept; their API may move
+  while the first applications adopt them.
 - The image viewport (`egui-pop-viewport`): its view model, mapping,
-  signals and hooks may still move while the first application adopts it.
+  signals and hooks may still move while the first application adopts it;
+  so may the image tools on it (the histogram, curves, colour wheels,
+  the zoom control and navigator, their steps in `egui-pop-imaging`),
+  the node graph (`egui_pop::viewport::graph`) and its wire router
+  (`ortho-router`).
+- The data views (`egui-pop-views`): the tree, the list, the data table,
+  the in-app viewer and the photo library.
+- The text and code editors and the terminal (`egui-pop-editors`).
 - The platform services (`egui-pop-platform`): their steps are kept;
   their backends, services and the system scope's registration state
   (`egui_pop_api::system_keys`) may move while the first applications
@@ -103,4 +124,6 @@ Three tiers:
 
 - Pixel output: snapshots are refreshed when the drawing improves.
 - The gallery and the application template: examples, not APIs.
+- The operating system layers (`egui-pop-win32`, `egui-pop-wayland`):
+  they serve the window frame and the viewport, which carry the promise.
 - Undocumented items and the `pub(crate)` internals.
