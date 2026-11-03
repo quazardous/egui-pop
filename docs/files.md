@@ -251,6 +251,31 @@ which swaps the first two (`SetFolder`).
 - Files that go together can be one entry, by the application's rules: see
   [Grouped files](#grouped-files).
 
+### Places
+
+- **The system's folders** come from the XDG user directories on Linux and
+  the BSDs (`user-dirs.dirs`, so a French desktop's `Images` is Pictures), and
+  from the folders of the same names in home on macOS and Windows (a folder
+  Windows moved elsewhere, to OneDrive for instance, is not found). One that
+  does not exist, or is home itself, is not listed.
+- **Devices** are the volumes mounted: on Linux the mount points under
+  `/run/media/<user>`, `/media/<user>`, `/media` and `/mnt` (a folder on
+  another device than its parent's), on macOS `/Volumes` without the system's
+  own, on Windows the drives from `C:`. They are read when a picker opens, not
+  each frame.
+- **An application's own.** `Files::set_system_places` gives them instead of
+  the system's (`files::places::SystemPlaces`): a demo, a sandbox, tests. The
+  gallery gives its demo folder's. The web build has none.
+- **Bookmarks.** `Ctrl+D` or the button bookmarks the folder. A bookmark's
+  menu (a secondary click) renames it, moves it up or down, or removes it. A
+  name is typed over the old one: Enter, or leaving the field, keeps it; Escape
+  keeps the old one; an empty name gives back the folder's. The functions
+  `files::rename_bookmark`, `files::move_bookmark` and `files::set_bookmark` do
+  the same for an application.
+- **Kept** in the host's store with the settings: `settings/files.recent`,
+  `settings/files.bookmarks`, and the names given in
+  `settings/files.bookmark_names`.
+
 ### Saving
 
 - **A folder in the list.** A click or an arrow selects it: Enter, and the
@@ -430,31 +455,6 @@ let only_new = choices.get("only_new").map(String::as_str) == Some("true");
   with choices opens the in-app picker even where the system's chooser is used
   (`files.native`), so that the options are seen, not silently left at their
   defaults.
-
-### Places
-
-- **The system's folders** come from the XDG user directories on Linux and
-  the BSDs (`user-dirs.dirs`, so a French desktop's `Images` is Pictures), and
-  from the folders of the same names in home on macOS and Windows (a folder
-  Windows moved elsewhere, to OneDrive for instance, is not found). One that
-  does not exist, or is home itself, is not listed.
-- **Devices** are the volumes mounted: on Linux the mount points under
-  `/run/media/<user>`, `/media/<user>`, `/media` and `/mnt` (a folder on
-  another device than its parent's), on macOS `/Volumes` without the system's
-  own, on Windows the drives from `C:`. They are read when a picker opens, not
-  each frame.
-- **An application's own.** `Files::set_system_places` gives them instead of
-  the system's (`files::places::SystemPlaces`): a demo, a sandbox, tests. The
-  gallery gives its demo folder's. The web build has none.
-- **Bookmarks.** `Ctrl+D` or the button bookmarks the folder. A bookmark's
-  menu (a secondary click) renames it, moves it up or down, or removes it. A
-  name is typed over the old one: Enter, or leaving the field, keeps it; Escape
-  keeps the old one; an empty name gives back the folder's. The functions
-  `files::rename_bookmark`, `files::move_bookmark` and `files::set_bookmark` do
-  the same for an application.
-- **Kept** in the host's store with the settings: `settings/files.recent`,
-  `settings/files.bookmarks`, and the names given in
-  `settings/files.bookmark_names`.
 
 ### Where it reads
 
