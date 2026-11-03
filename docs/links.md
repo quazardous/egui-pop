@@ -347,7 +347,8 @@ local file. A remote video stays outside either way.
   installed it does not start**, so an application declares them as a dependency
   of its package.
 - `viewer::VideoBackend` (`ViewerPlugin::video`) replaces the player;
-  `viewer::GStreamer::audio_sink` names the element the sound goes to.
+  `viewer::GStreamer::audio_sink` names the element the sound goes to, kept in
+  time with the pictures even when silent (`fakesink`).
 - `viewer::write_test_clip` writes a small clip from GStreamer's test sources, for
   tests and the gallery's story (`cargo run -p egui-pop-gallery --features video`).
 

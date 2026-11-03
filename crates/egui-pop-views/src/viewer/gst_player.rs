@@ -39,7 +39,8 @@ pub struct GStreamer {
 impl GStreamer {
     /// The element a video's sound goes to, by its factory's name
     /// (`pulsesink`, `fakesink` for silence); by default what GStreamer
-    /// finds for this system.
+    /// finds for this system. It is set to keep time with the pictures
+    /// (`sync`), as a silent sink otherwise would not.
     pub fn audio_sink(mut self, element: &str) -> Self {
         self.audio_sink = Some(element.to_string());
         self
@@ -64,6 +65,13 @@ impl VideoBackend for GStreamer {
             let sink = gst::ElementFactory::make(name)
                 .build()
                 .map_err(|_| format!("GStreamer has no `{name}` element for the sound"))?;
+            // The sound keeps time with the pictures: a sink that does not
+            // (`fakesink` by default) takes the whole track at once, and
+            // the position `playbin` gives, the furthest of its sinks', is
+            // then the end from the first moment of playing.
+            if sink.has_property_with_type("sync", bool::static_type()) {
+                sink.set_property("sync", true);
+            }
             playbin.set_property("audio-sink", &sink);
         }
         let mailbox = Mailbox::default();
