@@ -396,6 +396,8 @@ impl ComponentKit {
 /// A component's data and the handler that draws it.
 #[derive(Clone)]
 pub struct Component {
+    /// The component's token name (`tab`, `list-row`).
+    pub name: String,
     pub data: ComponentKit,
     /// The handler's name (`tab.shape`).
     pub shape: String,
@@ -412,6 +414,14 @@ impl Component {
 
     /// Paints a part's box.
     pub fn paint(&self, cx: &KitCx<'_>, part: &Part<'_>) {
+        crate::inspect::painted(
+            cx.painter,
+            &self.name,
+            &self.shape,
+            part.state,
+            part.rect,
+            self.style(part.state),
+        );
         self.handler.paint(cx, &self.data, part);
     }
 
@@ -498,6 +508,14 @@ impl Component {
                 ppp,
             };
             paint_ring(&cx, r.response.rect, &b, Corners::All);
+            crate::inspect::painted(
+                cx.painter,
+                &self.name,
+                &self.shape,
+                state,
+                r.response.rect,
+                &b,
+            );
             return r;
         }
         let slot = ui.painter().add(Shape::Noop);
@@ -559,6 +577,7 @@ impl Component {
 impl std::fmt::Debug for Component {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Component")
+            .field("name", &self.name)
             .field("shape", &self.shape)
             .field("data", &self.data)
             .finish_non_exhaustive()
@@ -1004,6 +1023,7 @@ impl Kit {
             };
             let egui_frame = Arc::ptr_eq(&handler, &shapes::CARD);
             Component {
+                name: name.to_string(),
                 data,
                 shape,
                 handler,

@@ -558,3 +558,32 @@ fn playground(ui: &mut Ui, app: &AppHandle) {
         scroll: Some(out.id),
     });
 }
+
+/// What the inspect mode's dialog adds in the gallery: the page shown,
+/// its story and plugin, and whether the element is on the page or in its
+/// playground.
+pub fn inspect_rows(
+    app: &AppHandle,
+    pick: &egui_pop::core::inspect::Pick,
+) -> Vec<(String, String)> {
+    let Some(nav) = app.service(&NAV) else {
+        return Vec::new();
+    };
+    let page = nav.page();
+    let mut rows = Vec::new();
+    if let Some(s) = app.stories().into_iter().find(|s| s.id == page) {
+        rows.push(("Page".to_string(), format!("{} ({})", s.title, s.group)));
+        rows.push(("Story".to_string(), page.to_string()));
+        rows.push(("Story plugin".to_string(), s.owner.to_string()));
+    } else {
+        rows.push(("Story".to_string(), page.to_string()));
+    }
+    let zone = pick.regions.iter().rev().find_map(|r| r.zone.as_deref());
+    let part = match zone {
+        Some(z) if z == zones::MAIN.as_str() => "the page",
+        Some(z) if z == zones::INSPECTOR.as_str() => "its playground",
+        _ => "outside the page",
+    };
+    rows.push(("In".to_string(), part.to_string()));
+    rows
+}

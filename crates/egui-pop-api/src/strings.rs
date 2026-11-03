@@ -623,6 +623,19 @@ pub const DEVTOOLS_CONTEXT_KEYS: StrKey =
 pub const DEVTOOLS_ARGUMENTS: StrKey = StrKey::new("egui-pop-devtools-arguments", "Arguments");
 pub const DEVTOOLS_MUTATES: StrKey =
     StrKey::new("egui-pop-devtools-mutates", "{ $action } (mutates)");
+/// The devtools panel's button entering the inspect mode.
+pub const INSPECT_BUTTON: StrKey = StrKey::new("egui-pop-inspect-button", "Inspect an element");
+/// Shown at the top of each window while the inspect mode is on.
+pub const INSPECT_HINT: StrKey = StrKey::new(
+    "egui-pop-inspect-hint",
+    "Inspecting: click an element, or move with Tab and the arrows and press Enter. Escape leaves.",
+);
+/// The inspect dialog's title.
+pub const INSPECT_TITLE: StrKey = StrKey::new("egui-pop-inspect-title", "Inspected element");
+pub const INSPECT_COPY: StrKey = StrKey::new("egui-pop-inspect-copy", "Copy");
+pub const INSPECT_COPIED: StrKey = StrKey::new("egui-pop-inspect-copied", "Copied.");
+pub const INSPECT_PICK_ANOTHER: StrKey =
+    StrKey::new("egui-pop-inspect-pick-another", "Pick another");
 
 // Jobs.
 
@@ -1446,6 +1459,12 @@ pub const ALL: &[StrKey] = &[
     DEVTOOLS_CONTEXT_KEYS,
     DEVTOOLS_ARGUMENTS,
     DEVTOOLS_MUTATES,
+    INSPECT_BUTTON,
+    INSPECT_HINT,
+    INSPECT_TITLE,
+    INSPECT_COPY,
+    INSPECT_COPIED,
+    INSPECT_PICK_ANOTHER,
     THEME_EDITOR_MISSING,
     THEME_EDITOR_START,
     THEME_EDITOR_UNDO,

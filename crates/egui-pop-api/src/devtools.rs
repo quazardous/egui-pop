@@ -9,6 +9,9 @@
 //! chain and the overlays, the scale of each window, and every collector
 //! as JSON with its actions (an action that mutates says so).
 //!
+//! The inspect mode ([`inspect`], `devtools.inspect`, Ctrl+Shift+C):
+//! click an element to see what egui-pop knows of it, and copy it.
+//!
 //! Steps (ADR 0011): `devtools.call` (`{ "collector", "action",
 //! "args" }`): a collector action run from the panel ([`call`]); a
 //! plugin may veto it (an action too dangerous to offer in the panel).
@@ -33,6 +36,8 @@ use crate::app::{AppHandle, MENU_VIEW};
 use crate::steps::StepSpec;
 use crate::strings as txt;
 use crate::{Ctx, Plugin, PluginError};
+
+pub mod inspect;
 
 /// The setting that lets devtools open.
 pub const SETTING_DEVTOOLS: SettingId = SettingId::from_static("developer.devtools");
@@ -65,6 +70,20 @@ struct State {
 #[derive(Debug, Default)]
 pub struct DevtoolsPlugin {
     state: Arc<Mutex<State>>,
+    describe: Option<inspect::Describe>,
+}
+
+impl DevtoolsPlugin {
+    /// What the application adds to an inspected element: rows of a
+    /// name and a value (the gallery: its page and story).
+    #[must_use]
+    pub fn describe(
+        mut self,
+        f: impl Fn(&AppHandle, &egui_pop_core::inspect::Pick) -> Vec<(String, String)> + 'static,
+    ) -> Self {
+        self.describe = Some(inspect::Describe(std::rc::Rc::new(f)));
+        self
+    }
 }
 
 /// Runs a collector's action as the panel's buttons do: through the
@@ -136,6 +155,7 @@ impl Plugin for DevtoolsPlugin {
                 Ok(json!({ "open": !shown }))
             },
         )?;
+        inspect::connect(ctx, self.describe.clone())?;
         let state = self.state.clone();
         ctx.panel(
             PanelSpec::new(PANEL_DEVTOOLS, "Devtools", Area::Bottom)
@@ -179,6 +199,8 @@ fn show(ui: &mut Ui, app: &AppHandle, state: &Arc<Mutex<State>>) {
     }
     let mut s = lock(state);
     ui.horizontal(|ui| {
+        inspect::button(ui, app);
+        ui.separator();
         for (i, name) in txt::DEVTOOLS_TABS.iter().enumerate() {
             let name = strings::tr(ui.ctx(), name);
             if widgets::selectable_label(ui, s.tab == i, name).clicked() {

@@ -2041,15 +2041,15 @@ impl AppHandle {
     /// declared draws nothing (and was reported when zones were
     /// resolved).
     pub fn show_zone(&self, ui: &mut Ui, zone: &ZoneId) {
-        let plan: Vec<(usize, Vec<usize>, String)> = match self.0.zones.borrow().resolved.get(zone)
-        {
-            Some(blocks) => blocks
-                .iter()
-                .map(|r| (r.draw, r.wraps.clone(), r.id.to_string()))
-                .collect(),
-            None => return,
-        };
-        for (draw, wraps, id) in plan {
+        let plan: Vec<(usize, Vec<usize>, String, OwnerId)> =
+            match self.0.zones.borrow().resolved.get(zone) {
+                Some(blocks) => blocks
+                    .iter()
+                    .map(|r| (r.draw, r.wraps.clone(), r.id.to_string(), r.owner.clone()))
+                    .collect(),
+                None => return,
+            };
+        for (draw, wraps, id, owner) in plan {
             let taken = {
                 let mut z = self.0.zones.borrow_mut();
                 let base = z.contributions.get_mut(draw).and_then(|c| c.block.take());
@@ -2083,6 +2083,14 @@ impl AppHandle {
                         }
                     }
                     draw_chain(ui, self, draw_fn, &mut wrap_fns);
+                    // What the inspect mode names the block by.
+                    egui_pop_core::inspect::region(
+                        ui,
+                        "block",
+                        &id,
+                        Some(zone.as_str()),
+                        owner.as_str(),
+                    );
                     let mut back = wrap_fns.into_iter();
                     for (_, b) in &mut wrap_blocks {
                         if let Block::Wrap { wrap, .. } = b
@@ -2173,8 +2181,8 @@ impl AppHandle {
             .panels
             .borrow_mut()
             .get_mut(id)
-            .and_then(|p| p.draw.take());
-        let Some(mut draw) = taken else {
+            .and_then(|p| Some((p.draw.take()?, p.owner.clone())));
+        let Some((mut draw, owner)) = taken else {
             return;
         };
         let scope = scope_name(id.as_str());
@@ -2183,6 +2191,8 @@ impl AppHandle {
                 let taking = self.takes_the_focus(ui.ctx(), id, &scope);
                 let stop = self.panel_stop(ui, id, title, taking);
                 fault::boundary(ui, "panel", title, |ui| draw(ui, self));
+                // What the inspect mode names the panel by.
+                egui_pop_core::inspect::region(ui, "panel", id.as_str(), None, owner.as_str());
                 if taking {
                     settle_panel_focus(ui, stop);
                 }
