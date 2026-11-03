@@ -23,8 +23,9 @@ publishes.
   `Inside::plays_web_video`, `Target::youtube_id`, `viewer::EmbedBackend`
   (`ViewerPlugin::web_video`) and `frame::x11_window`; `frame::record_native_window`
   is public and records the main window's X11 id. Building with the feature
-  needs WebKitGTK's development packages, and brings a crate under MPL-2.0
-  (`option-ext`) that `cargo deny check --all-features` refuses.
+  needs WebKitGTK's development packages, and brings one crate under MPL-2.0
+  (`option-ext`), allowed in `deny.toml` as a narrow exception; cargo-deny now
+  checks only the platforms egui-pop builds.
 - Devtools' inspect mode (egui-pop-api, egui-pop-core; `docs/debugging.md`):
   `devtools.inspect` (Ctrl+Shift+C, View menu, palette, devtools panel; with the
   `developer.devtools` setting on) outlines the widget under the pointer in every

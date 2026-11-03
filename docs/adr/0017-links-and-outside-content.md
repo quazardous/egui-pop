@@ -355,10 +355,11 @@ decides nothing about a general web view; whether it stays is the owner's call.
 - **Costs.** WebKitGTK must be installed to build and to run (the binary links
   it). A child web view floats above egui: egui's popups over the panel go
   under it. On Linux wry brings `option-ext` (through `dirs`), MPL-2.0, which
-  `deny.toml` refuses: `cargo deny check` passes with default features and
-  fails with `--all-features`; the Android-only part of wry adds `dom_query`,
-  `selectors`, `cssparser`, `cssparser-macros` and `dtoa-short`, MPL-2.0 too.
-  `deny.toml` is unchanged. **Open question for the owner:** accept that crate
-  behind the feature, find a way around it, or drop the trial.
+  `deny.toml` refuses in general; the lead maintainer accepted it (2026-11-03)
+  as a narrow exception for that crate alone: it is copyleft per file, used
+  unmodified behind an opt-in feature, and none of egui-pop's code falls under
+  it. wry's Android-only part (`dom_query`, `selectors`, `cssparser`,
+  `cssparser-macros`, `dtoa-short`, MPL-2.0 too) is never compiled for the
+  platforms egui-pop builds, which `deny.toml` now lists (`[graph] targets`).
 - **What was checked**, in a headless nested compositor: the trial's
   [results](0017-links-and-outside-content-analysis.md#youtube-in-a-web-view-the-trial).
