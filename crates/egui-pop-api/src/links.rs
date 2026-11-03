@@ -162,8 +162,9 @@ pub trait Opener: Send + Sync {
 /// What shows pages and images inside the application (the viewer of
 /// `egui_pop_views::viewer`, or the host's own): the links service hands
 /// it each request the policy sends inside (`docs:` pages, pages on the
-/// application's documentation hosts, local images, and local videos when
-/// it [`plays`](Inside::plays_video) them), after the policy and the user's
+/// application's documentation hosts, local images, local videos when it
+/// [`plays`](Inside::plays_video) them, YouTube videos when it
+/// [`plays`](Inside::plays_web_video) those), after the policy and the user's
 /// confirmation.
 pub trait Inside: Send + Sync {
     /// Its name, as the `links` collector shows it.
@@ -181,6 +182,12 @@ pub trait Inside: Send + Sync {
     /// Whether it plays local video files: without that they open
     /// outside, as any local file.
     fn plays_video(&self) -> bool {
+        false
+    }
+
+    /// Whether it plays YouTube links (in a web view): without that they
+    /// open outside, as any web video.
+    fn plays_web_video(&self) -> bool {
         false
     }
 }
@@ -423,8 +430,12 @@ impl Links {
             Some(inside) => {
                 caps.inside = true;
                 caps.video = inside.plays_video();
+                caps.web_video = inside.plays_web_video();
             }
-            None => caps.video &= caps.inside,
+            None => {
+                caps.video &= caps.inside;
+                caps.web_video &= caps.inside;
+            }
         }
         caps
     }

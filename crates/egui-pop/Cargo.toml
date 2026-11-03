@@ -73,6 +73,11 @@ views-html = ["views-markdown", "egui-pop-views/html"]
 ## installed on the system, needed to build and to run). Off by default: no
 ## default build and no web build needs GStreamer.
 views-video = ["views-markdown", "egui-pop-views/video"]
+## The viewer's YouTube page: YouTube links played inside, in a web view (wry,
+## MIT OR Apache-2.0, over the system's WebKitGTK, LGPL, needed to build and to
+## run; Linux only for now). Off by default: no default build and no web build
+## needs WebKitGTK.
+views-webview = ["views-markdown", "egui-pop-views/webview"]
 ## Text and code editors, with syntect highlighting (`egui-pop-editors`,
 ## re-exported as `egui_pop::editors`).
 editors = ["dep:egui-pop-editors", "egui-pop-editors/syntect"]

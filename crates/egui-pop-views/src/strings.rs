@@ -175,6 +175,14 @@ pub const VIEWER_VIDEO_PICTURE: StrKey =
 /// A video page before its first picture.
 pub const VIEWER_VIDEO_LOADING: StrKey =
     StrKey::new("egui-pop-views-viewer-video-loading", "Opening the video…");
+/// A YouTube page whose web view is in a window of its own.
+pub const VIEWER_EMBED_OWN_WINDOW: StrKey = StrKey::new(
+    "egui-pop-views-viewer-embed-own-window",
+    "This video plays in a window of its own",
+);
+/// A YouTube page's button, once its own window was closed.
+pub const VIEWER_EMBED_SHOW: StrKey =
+    StrKey::new("egui-pop-views-viewer-embed-show", "Show the video");
 /// The title of the error page of a video that cannot be played.
 pub const VIEWER_VIDEO_FAILED: StrKey = StrKey::new(
     "egui-pop-views-viewer-video-failed",
@@ -260,6 +268,8 @@ pub const ALL: &[StrKey] = &[
     VIEWER_VIDEO_PICTURE,
     VIEWER_VIDEO_LOADING,
     VIEWER_VIDEO_FAILED,
+    VIEWER_EMBED_OWN_WINDOW,
+    VIEWER_EMBED_SHOW,
 ];
 
 #[cfg(test)]

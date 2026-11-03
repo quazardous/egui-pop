@@ -101,6 +101,16 @@ impl Plugin for ViewerPage {
             .description("A local video file played in the in-app viewer, through the system's GStreamer: Play and Pause, the position, the volume and the time, a file it cannot play on an error page with Open outside, a remote video left outside.")
             .group("Framework", 107),
         )?;
+        #[cfg(feature = "webview")]
+        ctx.story(
+            Story::new(
+                StoryId::from_static("viewer-youtube"),
+                "YouTube in the viewer",
+                youtube::show,
+            )
+            .description("A YouTube link played in the in-app viewer, in a web view (wry over WebKitGTK, Linux): inside the panel on X11, in a window of its own on Wayland; Ctrl+click still opens it outside, and a web view that cannot open ends on the error page with Open outside.")
+            .group("Framework", 108),
+        )?;
         Ok(())
     }
 }
@@ -193,6 +203,34 @@ mod video {
         }
         section(ui, "A remote video");
         ui.label("Stays outside: it opens in the browser.");
+        links::link(
+            ui,
+            app,
+            "A video on the web",
+            "https://example.org/clip.mp4",
+        );
+    }
+}
+
+/// The YouTube story (feature `webview`): a link to a video, played in the
+/// viewer's web view. Nothing is fetched before the link is clicked.
+#[cfg(feature = "webview")]
+mod youtube {
+    use egui::Ui;
+    use egui_pop::api::AppHandle;
+    use egui_pop::api::links;
+
+    use super::section;
+
+    /// The video the story links to.
+    pub const VIDEO: &str = "https://www.youtube.com/watch?v=5TGDf7crzXI";
+
+    pub(super) fn show(ui: &mut Ui, app: &AppHandle) {
+        ui.label("A YouTube link opens in the viewer, in YouTube's privacy-enhanced player. On X11 the player sits over the panel and follows it; on Wayland it opens in a window of its own. Ctrl+click opens it outside.");
+        section(ui, "A video on YouTube");
+        links::link(ui, app, "Terminal Velocity demo", VIDEO);
+        section(ui, "Other video");
+        ui.label("Stays outside: only YouTube plays inside.");
         links::link(
             ui,
             app,

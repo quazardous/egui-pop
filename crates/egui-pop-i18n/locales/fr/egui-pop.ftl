@@ -2431,6 +2431,10 @@ egui-pop-views-viewer-back = Précédente
 
 egui-pop-views-viewer-code-block = Bloc de code
 
+egui-pop-views-viewer-embed-own-window = Cette vidéo est lue dans sa propre fenêtre
+
+egui-pop-views-viewer-embed-show = Afficher la vidéo
+
 egui-pop-views-viewer-empty = Rien n’est ouvert. Les pages d’aide et les images s’ouvrent ici.
 
 egui-pop-views-viewer-find = Rechercher dans la page

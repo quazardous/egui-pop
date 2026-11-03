@@ -16,7 +16,7 @@ use egui_pop_core::theme::Tokens;
 use egui_pop_model::commands::Origin;
 
 use super::page::{Markdown, escape, resolve};
-use super::{Content, Image, Status, Viewer, video};
+use super::{Content, Image, Status, Viewer, embed, video};
 use crate::strings as txt;
 
 /// What the user asked for while the panel was drawn.
@@ -47,7 +47,7 @@ pub(super) fn show(ui: &mut Ui, app: &AppHandle, v: &Viewer) {
         images_bar(ui, v, &mut actions);
         simplified_bar(ui, v);
         ui.separator();
-        body(ui, v, &mut actions);
+        body(ui, app, v, &mut actions);
     });
     for a in actions {
         match a {
@@ -284,7 +284,7 @@ fn simplified_bar(ui: &mut Ui, v: &Viewer) {
     });
 }
 
-fn body(ui: &mut Ui, v: &Viewer, actions: &mut Vec<Action>) {
+fn body(ui: &mut Ui, app: &AppHandle, v: &Viewer, actions: &mut Vec<Action>) {
     let ctx = ui.ctx().clone();
     let status = v.status();
     match status {
@@ -323,6 +323,9 @@ fn body(ui: &mut Ui, v: &Viewer, actions: &mut Vec<Action>) {
                 }
             });
         }
+        Status::Shown(page) if matches!(page.content, Content::YouTube(_)) => {
+            embed::draw(ui, app, v);
+        }
         Status::Shown(page) if matches!(page.content, Content::Video(_)) => {
             let mut acts = Vec::new();
             video::draw(ui, v, &mut acts);
@@ -354,7 +357,7 @@ fn body(ui: &mut Ui, v: &Viewer, actions: &mut Vec<Action>) {
                         ui.add(egui::Image::from_uri(uri).fit_to_original_size(zoom));
                     }
                     // Drawn above, without the scrolling.
-                    Content::Video(_) => {}
+                    Content::Video(_) | Content::YouTube(_) => {}
                 }
             });
             lock(&v.inner).scroll = out.state.offset.y;

@@ -387,6 +387,10 @@ impl Gallery {
                 );
             }
         }
+        // The window's native handle: the viewer's web view is its child on
+        // X11.
+        #[cfg(not(target_arch = "wasm32"))]
+        egui_pop::api::frame::record_native_window(cc);
         let gallery = Gallery::new(&cc.egui_ctx, options)?;
         if let Some(storage) = cc.storage.filter(|_| gallery.persists) {
             gallery.restore(storage);

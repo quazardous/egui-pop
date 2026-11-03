@@ -52,6 +52,7 @@ branch protection of `main`: it fails when any job below failed.
 | Docs site | the mdBook builds, `docs/SUMMARY.md` lists every page of the index, no link is broken | yes |
 | Tests (lavapipe) | unit and integration tests with cargo-nextest, and doctests (below) | yes |
 | Viewer's video | the one build with GStreamer: clippy, docs and the video tests | yes |
+| Viewer's web view | the one build with WebKitGTK: clippy, docs and the YouTube page's tests | yes |
 | Licences and advisories | `cargo deny check`: every dependency's licence accepted by `deny.toml`, security advisories, banned crates, sources | yes |
 | Gallery for the web | the gallery built for `wasm32-unknown-unknown` with Trunk, then started in headless Chrome: it fails on a panic or without the start line | yes |
 | Packaging | `cargo publish --workspace --dry-run`: every published crate packages with its metadata | yes |

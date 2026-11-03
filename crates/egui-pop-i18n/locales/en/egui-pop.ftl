@@ -2023,6 +2023,10 @@ egui-pop-views-viewer-back = Back
 
 egui-pop-views-viewer-code-block = Code block
 
+egui-pop-views-viewer-embed-own-window = This video plays in a window of its own
+
+egui-pop-views-viewer-embed-show = Show the video
+
 egui-pop-views-viewer-empty = Nothing is open. Help pages and images open here.
 
 egui-pop-views-viewer-find = Find in page
