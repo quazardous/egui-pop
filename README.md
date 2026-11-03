@@ -258,6 +258,18 @@ which move only when their code does.
 |---|---|---|
 | 0.1.x | 0.36 | 1.95 |
 
+## How quality is held
+
+egui-pop is developed with AI assistance: most of its code is written by
+AI coding agents, to the maintainer's plan and recorded design
+decisions. Every pull request merges only after CI passes: formatting,
+clippy with warnings as errors, unit, UI (egui_kittest) and snapshot
+tests per theme, the layering test, licence and advisory checks, the
+docs build, a web smoke test and a packaging dry run. Windows, macOS and
+real windows are not tested in CI. The checks, which ones block a merge,
+and what they leave out are in
+[How quality is held](https://github.com/quazardous/egui-pop/blob/main/docs/quality.md).
+
 ## Contributing
 
 See [CONTRIBUTING.md](https://github.com/quazardous/egui-pop/blob/main/CONTRIBUTING.md) (with a section for extension
