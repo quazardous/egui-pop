@@ -13,8 +13,13 @@ family misses, see [fonts.md](fonts.md)), the settings window
 the custom pages), the pointer (`pointer`: the profile in force, the
 hint, and the widgets that claim the secondary button, see
 [pointer-gestures.md](pointer-gestures.md)), each with a JSON snapshot and
-actions flagged `mutates`; every call returns a feedback block. A person
-reads it in the gallery, an agent or a test reads the same data as JSON.
+actions flagged `mutates` and `agent`; every call returns a feedback
+block. A person reads it in the gallery, an agent or a test reads the
+same data as JSON. The bridge's calls are the agent's: it may call the
+actions that only read and `commands.run`, while those that write are
+the user's (`debug_call_as` with `Origin::User`, as devtools does); every
+call goes through the `debug.call` step a plugin may veto (see
+[Agents](agents.md)).
 
 ```rust
 use egui_pop::egui;
@@ -85,8 +90,10 @@ show the last key resolutions with each binding's verdict, the journal,
 the steps with their hooks and last runs, the focus chain, overlays and
 context keys, each window's scale (the `screen` collector), and every
 collector as JSON with its actions. An action run from the panel goes
-through the `devtools.call` step, which a plugin may veto (a kiosk
-build, an action too dangerous to offer).
+through the `devtools.call` step, which a plugin may veto (an action too
+dangerous to offer in the panel), then, as the user's call, through the
+bridge's `debug.call` step, whose veto (a kiosk build) covers the panel
+and agents alike.
 
 ```rust
 use egui_pop::api::devtools::{DevtoolsPlugin, PANEL_DEVTOOLS};

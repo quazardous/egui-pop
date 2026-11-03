@@ -876,14 +876,121 @@ impl AppHandle {
         self.0.bridge.borrow().snapshot(&self.egui())
     }
 
-    /// Calls a collector's action; always returns a feedback block.
-    /// `commands.run` is queued here (the App runs it before the next
-    /// frame); `App::debug_call` runs it at once.
+    /// Calls a collector's action as the agent
+    /// (`Origin::Agent("debug-bridge")`); always returns a feedback
+    /// block. An action not offered to agents is refused, and every
+    /// call goes through the [`STEP_DEBUG_CALL`] step (see
+    /// [`AppHandle::debug_call_as`]). `commands.run` is queued here (the
+    /// App runs it before the next frame); `App::debug_call` runs it at
+    /// once.
     pub fn debug_call(&self, collector: &str, action: &str, args: &Json) -> Feedback {
-        self.0
-            .bridge
-            .borrow_mut()
-            .call(&self.egui(), collector, action, args)
+        self.debug_call_as(collector, action, args, egui_pop_core::debug::agent())
+    }
+
+    /// Calls a collector's action for `origin`: the agent's calls go
+    /// through [`AppHandle::debug_call`], the user's (the devtools
+    /// panel, a debug page) come here with `Origin::User`. Only the user
+    /// may call an action not offered to agents: for anyone else it is
+    /// refused, in the bridge's log and on the journal
+    /// (`debug.call.refused`, from the caller). Every other call runs
+    /// through the [`STEP_DEBUG_CALL`] step, which a plugin may veto
+    /// (`debug.call.vetoed` on the journal).
+    pub fn debug_call_as(
+        &self,
+        collector: &str,
+        action: &str,
+        args: &Json,
+        origin: Origin,
+    ) -> Feedback {
+        let (spec, refusal) = {
+            let b = self.0.bridge.borrow();
+            (
+                b.action(collector, action),
+                b.refusal(collector, action, &origin),
+            )
+        };
+        let Some(spec) = spec else {
+            // No such action: the bridge's answer lists what exists.
+            return self.0.bridge.borrow_mut().call_as(
+                &self.egui(),
+                collector,
+                action,
+                args,
+                &origin,
+            );
+        };
+        let source = source_of(&origin);
+        if let Some(reason) = refusal {
+            let feedback =
+                self.0
+                    .bridge
+                    .borrow_mut()
+                    .call_as(&self.egui(), collector, action, args, &origin);
+            self.publish(
+                &source,
+                None,
+                "debug.call.refused",
+                json!({ "collector": collector, "action": action, "args": args, "reason": reason }),
+            );
+            return feedback;
+        }
+        let mut ran: Option<Feedback> = None;
+        let asked =
+            json!({ "collector": collector, "action": action, "args": args, "origin": source });
+        // An action that only reads is not published nor traced when it
+        // runs (an agent polling would fill both); its veto is.
+        let out = self.step_with(&STEP_DEBUG_CALL, asked, !spec.mutates, |app, a| {
+            let f = app.0.bridge.borrow_mut().call_as(
+                &app.egui(),
+                a["collector"].as_str().unwrap_or_default(),
+                a["action"].as_str().unwrap_or_default(),
+                &a["args"],
+                // The caller stays who it is, whatever a redirection says.
+                &origin,
+            );
+            // Only the message: the data may be large (the journal's own
+            // events, for `journal.since`).
+            let result = if f.ok {
+                Ok(json!({ "message": f.message }))
+            } else {
+                Err(f.message.clone())
+            };
+            ran = Some(f);
+            result
+        });
+        let feedback = |ok: bool, message: String, data: Json| Feedback {
+            ok,
+            collector: collector.into(),
+            action: action.into(),
+            mutates: spec.mutates,
+            message,
+            data,
+        };
+        let feedback = match out {
+            Outcome::Done(result) => match ran {
+                Some(f) => return f,
+                // A plugin's run-hook did it instead.
+                None => match result {
+                    Ok(data) => feedback(
+                        true,
+                        format!("`{collector}.{action}` done by a plugin"),
+                        data,
+                    ),
+                    Err(e) => feedback(
+                        false,
+                        format!("`{collector}.{action}` failed: {e}"),
+                        Json::Null,
+                    ),
+                },
+            },
+            Outcome::Vetoed { by, reason } => feedback(
+                false,
+                format!("`{collector}.{action}` vetoed by {by}: {reason}"),
+                Json::Null,
+            ),
+        };
+        self.0.bridge.borrow_mut().record(feedback.clone());
+        feedback
     }
 
     /// The feedback blocks of the last bridge calls.
@@ -1245,6 +1352,18 @@ impl AppHandle {
         args: Json,
         default: impl FnOnce(&AppHandle, &Json) -> Result<Json, String>,
     ) -> Outcome {
+        self.step_with(step, args, false, default)
+    }
+
+    /// As [`AppHandle::step`]; `quiet`, a run that is not vetoed is
+    /// neither published nor traced.
+    pub(crate) fn step_with(
+        &self,
+        step: &StepId,
+        args: Json,
+        quiet: bool,
+        default: impl FnOnce(&AppHandle, &Json) -> Result<Json, String>,
+    ) -> Outcome {
         let hooks: Vec<(OwnerId, HookFn)> = self
             .0
             .step_hooks
@@ -1254,7 +1373,10 @@ impl AppHandle {
             .map(|s| (s.owner.clone(), s.item.f.clone()))
             .collect();
         let declared = self.0.steps.borrow().contains(step);
-        let (outcome, trace) = crate::steps::run(self, step, args, hooks, declared, default);
+        let (outcome, trace) = crate::steps::run(self, step, args, hooks, declared, quiet, default);
+        if quiet && outcome.vetoed().is_none() {
+            return outcome;
+        }
         let mut traces = self.0.step_traces.borrow_mut();
         traces.push_back(trace);
         while traces.len() > crate::steps::TRACES {
@@ -2484,6 +2606,7 @@ pub struct AppBuilder {
     user_kits: bool,
     cache: Option<egui_pop_core::tokens::cache::Cache>,
     writer_check: Option<egui_pop_model::values::WriterCheck>,
+    offered: Vec<String>,
 }
 
 /// Draws around the whole application (`AppBuilder::wrap`): gets the
@@ -2501,6 +2624,16 @@ pub type ExitFn = Box<dyn FnMut(&AppHandle)>;
 /// wait for the exit: what changes is written about a second later
 /// (`AppHandle::save_later`).
 pub const STEP_EXIT: StepId = StepId::from_static("app.exit");
+/// A debug collector's action is called (`{ "collector", "action",
+/// "args", "origin" }`, the origin as the journal's sources write it:
+/// `agent:debug-bridge`, `user`): by an agent through the bridge
+/// (`AppHandle::debug_call`) or by the user (`AppHandle::debug_call_as`,
+/// the devtools panel). A before-hook may veto it, for every caller (a
+/// kiosk build); the caller is not redirected. An action that only reads
+/// is published and traced only when vetoed. An agent's call to an
+/// action not offered to agents never reaches the step: it is refused
+/// first (`debug.call.refused`).
+pub const STEP_DEBUG_CALL: StepId = StepId::from_static("debug.call");
 /// The workbench's layout is loaded (`{ "document" }`, from
 /// `Host::layout_document`): at the start, and on `App::load_layout`. A
 /// before-hook may redirect the document or veto; a run-hook loads it
@@ -2538,6 +2671,7 @@ impl AppBuilder {
             persist: None,
             store: None,
             writer_check: None,
+            offered: Vec::new(),
             host: None,
             system_focus: None,
             system_text_scale: crate::text::SystemTextScale::default(),
@@ -2769,6 +2903,18 @@ impl AppBuilder {
         self
     }
 
+    /// Offers a debug collector's action to agents (`dialogs.answer`):
+    /// the bridge's agent (`AppHandle::debug_call`) may then call it,
+    /// whatever the action declares. An action that writes is for the
+    /// user only by default; offer one only to agents the application
+    /// trusts with it (a test harness, its own automation). A name that
+    /// matches no action once the plugins are connected is reported
+    /// (`agent-offer-unknown`).
+    pub fn offer_to_agents(mut self, action: &str) -> Self {
+        self.offered.push(action.into());
+        self
+    }
+
     /// The window manager's focus mode (`focus_mode::read_system()`
     /// reads it). Not given, it is read by `run_native` and taken as
     /// click elsewhere (tests stay the same on every desktop).
@@ -2924,10 +3070,27 @@ impl AppBuilder {
         )
         .expect("the framework's registrations are valid");
         app.install_collectors();
+        for a in &self.offered {
+            app.handle.0.bridge.borrow_mut().offer_to_agents(a);
+        }
         for i in 0..app.plugins.len() {
             if let Err(error) = app.connect_slot(i) {
                 let plugin = app.plugins[i].id.clone();
                 return Err(BuildError::Connect { plugin, error });
+            }
+        }
+        for a in &self.offered {
+            let known = a
+                .split_once('.')
+                .and_then(|(c, n)| app.handle.0.bridge.borrow().action(c, n))
+                .is_some();
+            if !known {
+                app.handle.0.diagnostics.borrow_mut().warn(
+                    "agent-offer-unknown",
+                    None,
+                    a.clone(),
+                    "`AppBuilder::offer_to_agents` names no debug collector's action (`collector.action`); nothing is offered",
+                );
             }
         }
         app.load_documents();
@@ -3374,6 +3537,13 @@ impl App {
         ctx.service(&FOCUS_MODE, modes)?;
         ctx.step(
             crate::steps::StepSpec::new(
+                STEP_DEBUG_CALL,
+                "A debug collector's action is called (`collector`, `action`, `args`), by an agent or the user (`origin`).",
+            )
+            .args(json!({ "collector": "store", "action": "get", "args": { "path": "settings/x" }, "origin": "agent:debug-bridge" })),
+        )?;
+        ctx.step(
+            crate::steps::StepSpec::new(
                 STEP_EXIT,
                 "The application closes; the default saves the settings, keymap and layout.",
             )
@@ -3522,7 +3692,7 @@ impl App {
                         "history": app.history(),
                     })
                 })
-                .action("run", "Runs a command offered to agents (`id`, `args`).", true, move |_, args| {
+                .action("run", "Runs a command offered to agents (`id`, `args`), as the agent `debug-bridge` whoever calls.", true, move |_, args| {
                     let app = up(&w2)?;
                     let id = args.get("id").and_then(Json::as_str).ok_or("`id` is missing")?;
                     let id = CommandId::new(id).map_err(|e| e.to_string())?;
@@ -3530,9 +3700,11 @@ impl App {
                     if !offered {
                         return Err(format!("`{id}` is not offered to agents"));
                     }
-                    app.run_as(id, args.get("args").cloned().unwrap_or(Json::Null), Origin::Agent("debug-bridge".into()));
+                    app.run_as(id, args.get("args").cloned().unwrap_or(Json::Null), egui_pop_core::debug::agent());
                     Ok(json!({ "queued": true }))
                 })
+                // The command's own `agent` flag is checked.
+                .agent(true)
                 .args(json!({ "id": "app.palette", "args": null })),
         )
         .expect("distinct names");
@@ -3826,11 +3998,27 @@ impl App {
             .expect("distinct names");
     }
 
-    /// Calls the debug bridge; `commands.run` runs at once and its result
-    /// is in the feedback.
+    /// Calls the debug bridge as the agent (`AppHandle::debug_call`);
+    /// `commands.run` runs at once and its result is in the feedback.
     pub fn debug_call(&mut self, collector: &str, action: &str, args: &Json) -> Feedback {
-        let feedback = self.handle.debug_call(collector, action, args);
-        if collector == "commands" && action == "run" && feedback.ok {
+        self.debug_call_as(collector, action, args, egui_pop_core::debug::agent())
+    }
+
+    /// Calls the debug bridge for `origin` (`AppHandle::debug_call_as`);
+    /// `commands.run` runs at once and its result is in the feedback.
+    pub fn debug_call_as(
+        &mut self,
+        collector: &str,
+        action: &str,
+        args: &Json,
+        origin: Origin,
+    ) -> Feedback {
+        let feedback = self.handle.debug_call_as(collector, action, args, origin);
+        if collector == "commands"
+            && action == "run"
+            && feedback.ok
+            && feedback.data == json!({ "queued": true })
+        {
             self.handle.0.requests.borrow_mut().pop();
             let id = args
                 .get("id")
@@ -3840,7 +4028,7 @@ impl App {
                 let reply = self.run(
                     &id,
                     args.get("args").cloned().unwrap_or(Json::Null),
-                    Origin::Agent("debug-bridge".into()),
+                    egui_pop_core::debug::agent(),
                 );
                 let Some(result) = reply.now() else {
                     return Feedback {

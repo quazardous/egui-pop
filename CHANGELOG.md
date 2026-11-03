@@ -1084,6 +1084,31 @@ publishes.
 
 ### Changed
 
+- **Breaking (debug bridge):** every collector action says whether agents may call
+  it, and the bridge's calls are the agent's (egui-pop-core, egui-pop-api,
+  egui-pop-gallery; `docs/agents.md`, `docs/debugging.md`, ADR 0018). `ActionSpec`
+  has a new field `agent`, shown by `debug_describe`: by default an action that only reads is
+  offered to agents and one that writes is not (`FnCollector::agent` says
+  otherwise; only `commands.run` does, the command's own flag still checked). An
+  agent's call (`DebugBridge::call`, `AppHandle::debug_call`, `App::debug_call`, as
+  `Origin::Agent("debug-bridge")`) to an action not offered is refused before it
+  runs, in the bridge's log and on the journal (`debug.call.refused`): among them
+  `store.set`, `store.undo`, `plugins.set_enabled`, `dialogs.answer`,
+  `files.answer`, `toasts.dismiss`, the `contexts` and `jobs` actions,
+  `focus.clear`, `overlays.close_top`, `announcements.announce`,
+  `screen.set_interface_zoom`, `i18n.set_locale`, `i18n.clear_missing` and
+  `viewport.set_view`. Every other call goes through the new `debug.call` step
+  (`STEP_DEBUG_CALL`), which a plugin may veto for every caller; the devtools panel
+  calls as the user (`devtools::call`), through `devtools.call` and then
+  `debug.call`. A call that only reads is published and traced only when vetoed.
+  **Migration:** code that calls a writing action as the user (a debug page, a
+  test acting as the person) calls `debug_call_as(collector, action, args,
+  Origin::User)` (`DebugBridge::call_as` without an application); an application
+  that lets its agents call one offers it with
+  `AppBuilder::offer_to_agents("dialogs.answer")` (`DebugBridge::offer_to_agents`);
+  an agent sets values with the `value.set` command and acts on jobs with the
+  `job.*` commands. Code building `ActionSpec` by hand sets `agent`.
+
 - Scroll bars show at rest in every built-in theme (egui-pop-tokens;
   `docs/kit.md`, `docs/scrolling-survey.md`). `scroll-bar.visibility` is now
   `rest`: whenever the content overflows, a bar 4 points wide and quiet (at least

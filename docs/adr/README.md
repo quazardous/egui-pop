@@ -23,5 +23,6 @@ after the fact except to mark it superseded by a later one.
 | [0015](0015-clipboard.md) | The clipboard: typed items owned by the kernel, offered in several formats, hooked at each boundary ([analysis](0015-clipboard-analysis.md)) | 2026-10-18 |
 | [0016](0016-one-writer-per-value.md) | One writer per value: a path's writers are declared, a write names its scope | 2026-10-20 |
 | [0017](0017-links-and-outside-content.md) | Links and outside content: one service opens them, an egui-native viewer shows what is safe, the rest goes outside ([analysis](0017-links-and-outside-content-analysis.md)) | 2026-10-28 |
+| [0018](0018-agent-collector-actions.md) | Collector actions say whether agents may call them, through one step | 2026-11-03 |
 
 Template: copy any of them; keep it to half a page.

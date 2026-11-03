@@ -51,7 +51,14 @@ fn tree(name: &str) -> PathBuf {
 }
 
 fn harness(extra: Option<Box<dyn Plugin>>) -> Harness<'static, App> {
-    let mut b = App::builder().plugin(FilesPlugin::in_app());
+    harness_with(App::builder(), extra)
+}
+
+fn harness_with(
+    b: egui_pop_api::AppBuilder,
+    extra: Option<Box<dyn Plugin>>,
+) -> Harness<'static, App> {
+    let mut b = b.plugin(FilesPlugin::in_app());
     if let Some(p) = extra {
         b = b.boxed(p);
     }
@@ -250,7 +257,8 @@ fn a_plugin_replaces_the_chooser_and_vetoes_a_choice() {
 #[test]
 fn an_agent_answers_through_the_bridge() {
     let root = tree("agent");
-    let mut h = harness(None);
+    // `files.answer` writes: the application offers it to its agent.
+    let mut h = harness_with(App::builder().offer_to_agents("files.answer"), None);
     let p = choose(&mut h, FileRequest::open("Open").directory(&root));
     let snap = h.state().handle().debug_snapshot();
     let open = &snap["files"]["open"][0];

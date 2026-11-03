@@ -90,6 +90,7 @@
   - [0016: One writer per value](adr/0016-one-writer-per-value.md)
   - [0017: Links and outside content](adr/0017-links-and-outside-content.md)
     - [Analysis](adr/0017-links-and-outside-content-analysis.md)
+  - [0018: Agents and collector actions](adr/0018-agent-collector-actions.md)
 - [Micro-indicators, the design](design/indicators.md)
 - [Icons: an inventory](icons.md)
 - [Pointer gestures, a study](design/pointer-gestures.md)

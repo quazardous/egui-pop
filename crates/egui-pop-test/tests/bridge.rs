@@ -3,7 +3,7 @@
 
 use egui_pop_api::zones::{self, Block};
 use egui_pop_api::{App, Ctx, Plugin, PluginError};
-use egui_pop_model::commands::CommandSpec;
+use egui_pop_model::commands::{CommandSpec, Origin};
 use egui_pop_model::ids::{BlockId, CommandId, PluginId, SettingId};
 use egui_pop_model::values::Descriptor;
 use serde_json::json;
@@ -111,10 +111,23 @@ fn calls_return_feedback_and_say_whether_they_change_things() {
     let f = app.debug_call("store", "get", &json!({ "path": "settings/demo.level" }));
     assert!(f.ok && !f.mutates);
     assert_eq!(f.data["value"], 3);
+    // Writing is the user's: the agent is refused, the user's call
+    // (devtools) is clamped.
     let f = app.debug_call(
         "store",
         "set",
         &json!({ "path": "settings/demo.level", "value": 99 }),
+    );
+    assert!(
+        !f.ok && f.mutates && f.message.contains("not offered to agents"),
+        "{}",
+        f.message
+    );
+    let f = app.debug_call_as(
+        "store",
+        "set",
+        &json!({ "path": "settings/demo.level", "value": 99 }),
+        Origin::User,
     );
     assert!(f.ok && f.mutates, "{}", f.message);
     assert_eq!(f.data["value"], 10);
@@ -132,16 +145,28 @@ fn calls_return_feedback_and_say_whether_they_change_things() {
         "{}",
         f.message
     );
-    // Disconnecting through the bridge takes the plugin's block away.
+    // Disconnecting through the bridge takes the plugin's block away: the
+    // user may, the agent may not.
     let f = app.debug_call(
         "plugins",
         "set_enabled",
         &json!({ "id": "demo", "enabled": false }),
     );
+    assert!(
+        !f.ok && f.message.contains("not offered to agents"),
+        "{}",
+        f.message
+    );
+    let f = app.debug_call_as(
+        "plugins",
+        "set_enabled",
+        &json!({ "id": "demo", "enabled": false }),
+        Origin::User,
+    );
     assert!(f.ok && f.mutates);
     h.run();
     assert!(egui_kittest::kittest::Queryable::query_by_label(&h, "Hello").is_none());
-    assert_eq!(h.state().handle().debug_log().len(), 7);
+    assert_eq!(h.state().handle().debug_log().len(), 9);
 }
 
 #[test]

@@ -4,8 +4,17 @@
 //! anything changed; actions that change something are flagged
 //! `mutates`. Agents, test tools and debug pages use the same bridge.
 //!
+//! Every action also says whether agents may call it (`agent`): by
+//! default those that only read, and none that writes unless it says
+//! so ([`FnCollector::agent`]) or the application offers it
+//! ([`DebugBridge::offer_to_agents`]). [`DebugBridge::call`] is the
+//! agent's (`Origin::Agent("debug-bridge")`) and refuses the others;
+//! [`DebugBridge::call_as`] names who calls, and only the user may call
+//! an action not offered to agents.
+//!
 //! ```
 //! use egui_pop_core::debug::{DebugBridge, FnCollector};
+//! use egui_pop_model::commands::Origin;
 //! use serde_json::json;
 //!
 //! let ctx = egui::Context::default();
@@ -13,21 +22,29 @@
 //! bridge.register(
 //!     FnCollector::new("clock", "A clock.")
 //!         .snapshot(|_| json!({ "ticks": 3 }))
-//!         .action("tick", "Advances the clock.", true, |_, _| Ok(json!({ "ticks": 4 }))),
+//!         .action("tick", "Advances the clock.", true, |_, _| Ok(json!({ "ticks": 4 })))
+//!         .action("read", "Reads the clock.", false, |_, _| Ok(json!({ "ticks": 3 }))),
 //! ).unwrap();
+//! // It writes: not for agents, the user may.
 //! let f = bridge.call(&ctx, "clock", "tick", &json!(null));
+//! assert!(!f.ok && f.message.contains("not offered to agents"), "{}", f.message);
+//! let f = bridge.call_as(&ctx, "clock", "tick", &json!(null), &Origin::User);
 //! assert!(f.ok && f.mutates);
+//! // It reads: agents may.
+//! assert!(bridge.call(&ctx, "clock", "read", &json!(null)).ok);
 //! let f = bridge.call(&ctx, "clock", "explode", &json!(null));
 //! assert!(!f.ok);
 //! assert!(f.message.contains("tick"), "it lists the actions: {}", f.message);
 //! ```
 
-use std::collections::VecDeque;
+use std::collections::{BTreeSet, VecDeque};
 use std::fmt;
 
 use egui::Context;
 use serde::Serialize;
 use serde_json::{Value as Json, json};
+
+use egui_pop_model::commands::Origin;
 
 use crate::binding::SharedStore;
 use crate::state::lock;
@@ -40,6 +57,9 @@ pub struct ActionSpec {
     pub description: String,
     /// It changes the application.
     pub mutates: bool,
+    /// Agents may call it (`Origin::Agent`); otherwise only the user
+    /// may. By default, an action that does not mutate.
+    pub agent: bool,
     /// An example of its arguments (`null` when it takes none).
     pub args: Json,
 }
@@ -117,10 +137,22 @@ impl FnCollector {
                 name: name.into(),
                 description: description.into(),
                 mutates,
+                agent: !mutates,
                 args: Json::Null,
             },
             Box::new(f),
         ));
+        self
+    }
+
+    /// Whether agents may call the last action added (by default, when
+    /// it does not mutate). Offer a writing action only when an agent
+    /// running it cannot do what the user would not: it acts with the
+    /// agent's origin, through checks that refuse it what it may not do.
+    pub fn agent(mut self, offered: bool) -> Self {
+        if let Some((spec, _)) = self.actions.last_mut() {
+            spec.agent = offered;
+        }
         self
     }
 
@@ -161,11 +193,22 @@ impl Collector for FnCollector {
 /// How many feedback blocks the bridge keeps.
 pub const KEPT: usize = 64;
 
+/// The identity of the bridge's calls: `Origin::Agent("debug-bridge")`.
+pub const AGENT: &str = "debug-bridge";
+
+/// The origin of the bridge's calls.
+pub fn agent() -> Origin {
+    Origin::Agent(AGENT.into())
+}
+
 /// The collectors, by name.
 #[derive(Default)]
 pub struct DebugBridge {
     collectors: Vec<Box<dyn Collector>>,
     log: VecDeque<Feedback>,
+    /// Actions offered to agents by the application
+    /// (`collector.action`), whatever they declare.
+    offered: BTreeSet<String>,
 }
 
 impl fmt::Debug for DebugBridge {
@@ -214,6 +257,56 @@ impl DebugBridge {
             .collect()
     }
 
+    /// Offers an action to agents (`collector.action`, `dialogs.answer`)
+    /// whatever it declares: the application's choice, for an agent it
+    /// trusts with it (a test harness, a kiosk's own automation).
+    pub fn offer_to_agents(&mut self, action: &str) {
+        self.offered.insert(action.into());
+    }
+
+    /// The actions the application offered to agents.
+    pub fn offered(&self) -> impl Iterator<Item = &str> {
+        self.offered.iter().map(String::as_str)
+    }
+
+    /// A collector's actions, with what the application offered.
+    fn actions_of(&self, c: &dyn Collector) -> Vec<ActionSpec> {
+        let mut actions = c.actions();
+        for a in &mut actions {
+            if self.offered.contains(&format!("{}.{}", c.name(), a.name)) {
+                a.agent = true;
+            }
+        }
+        actions
+    }
+
+    /// An action, as agents see it (`agent` says whether they may call
+    /// it); `None` when there is no such collector or action.
+    pub fn action(&self, collector: &str, action: &str) -> Option<ActionSpec> {
+        let c = self.collectors.iter().find(|c| c.name() == collector)?;
+        self.actions_of(c.as_ref())
+            .into_iter()
+            .find(|a| a.name == action)
+    }
+
+    /// Why `origin` may not call the action: `None` when it may (or
+    /// when there is no such action: the call says so). Only the user
+    /// may call an action not offered to agents.
+    pub fn refusal(&self, collector: &str, action: &str, origin: &Origin) -> Option<String> {
+        let spec = self.action(collector, action)?;
+        (!spec.agent && *origin != Origin::User)
+            .then(|| "it is not offered to agents; only the user may call it".to_string())
+    }
+
+    /// Keeps a feedback block in the log (a call refused or vetoed
+    /// before it reached the bridge).
+    pub fn record(&mut self, feedback: Feedback) {
+        if self.log.len() == KEPT {
+            self.log.pop_front();
+        }
+        self.log.push_back(feedback);
+    }
+
     /// Every collector, its description and actions.
     pub fn describe(&self) -> Json {
         Json::Array(
@@ -223,7 +316,7 @@ impl DebugBridge {
                     json!({
                         "name": c.name(),
                         "description": c.description(),
-                        "actions": c.actions(),
+                        "actions": self.actions_of(c.as_ref()),
                     })
                 })
                 .collect(),
@@ -247,9 +340,35 @@ impl DebugBridge {
             .map(|c| c.snapshot(ctx))
     }
 
-    /// Calls an action. Unknown collectors and actions get a feedback
-    /// listing what exists.
+    /// Calls an action as the agent (`Origin::Agent("debug-bridge")`):
+    /// an action not offered to agents is refused. Unknown collectors
+    /// and actions get a feedback listing what exists.
     pub fn call(&mut self, ctx: &Context, collector: &str, action: &str, args: &Json) -> Feedback {
+        self.call_as(ctx, collector, action, args, &agent())
+    }
+
+    /// Calls an action for `origin`: only the user may call an action
+    /// not offered to agents ([`DebugBridge::refusal`]).
+    pub fn call_as(
+        &mut self,
+        ctx: &Context,
+        collector: &str,
+        action: &str,
+        args: &Json,
+        origin: &Origin,
+    ) -> Feedback {
+        if let Some(reason) = self.refusal(collector, action, origin) {
+            let feedback = Feedback {
+                ok: false,
+                collector: collector.into(),
+                action: action.into(),
+                mutates: self.action(collector, action).is_some_and(|a| a.mutates),
+                message: format!("`{collector}.{action}` refused: {reason}"),
+                data: Json::Null,
+            };
+            self.record(feedback.clone());
+            return feedback;
+        }
         let names = self.names();
         let feedback = match self.collectors.iter_mut().find(|c| c.name() == collector) {
             None => Feedback {
@@ -312,10 +431,7 @@ impl DebugBridge {
         if feedback.mutates && feedback.ok {
             ctx.request_repaint();
         }
-        if self.log.len() == KEPT {
-            self.log.pop_front();
-        }
-        self.log.push_back(feedback.clone());
+        self.record(feedback.clone());
         feedback
     }
 
@@ -577,10 +693,9 @@ pub fn store_collector(store: SharedStore) -> FnCollector {
     .args(json!({ "path": "settings/x" }))
     .action(
         "set",
-        "Writes a value as an agent (`path`, `value`).",
+        "Writes a value (`path`, `value`), marked as the debug bridge's; for the user only (agents run the `value.set` command).",
         true,
         move |_, args| {
-            use egui_pop_model::commands::Origin;
             use egui_pop_model::values::{Change, Set, Value};
             let path = args
                 .get("path")
@@ -596,11 +711,7 @@ pub fn store_collector(store: SharedStore) -> FnCollector {
             let value = Value::from_json(ty, v)?;
             let a = s
                 .set(
-                    Set::new(
-                        path,
-                        Change::To(value),
-                        Origin::Agent("debug-bridge".into()),
-                    )
+                    Set::new(path, Change::To(value), agent())
                     // The agent acts as a person would, through the
                     // framework.
                     .by(&egui_pop_model::ids::OwnerId::FRAMEWORK),
@@ -612,14 +723,10 @@ pub fn store_collector(store: SharedStore) -> FnCollector {
     .args(json!({ "path": "settings/x", "value": 1 }))
     .action(
         "undo",
-        "Undoes the last change of values.",
+        "Undoes the last change of values; for the user only (agents run the `value.undo` command).",
         true,
         move |_, _| {
-            let label = lock(&s4)
-                .undo(&egui_pop_model::commands::Origin::Agent(
-                    "debug-bridge".into(),
-                ))
-                .map_err(|r| r.to_string())?;
+            let label = lock(&s4).undo(&agent()).map_err(|r| r.to_string())?;
             Ok(json!({ "undone": label }))
         },
     )

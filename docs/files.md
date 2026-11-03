@@ -524,7 +524,8 @@ through `Files::deliver`. A before-hook on `file.chosen` refuses a
 choice (the `Pending` gives the reason as an error) or redirects it to
 other paths. The journal says `file.cancelled`. The debug bridge's
 `files` collector shows the choices open, the in-app picker's folder,
-field and entries, and answers a choice (`answer`).
+field and entries, and answers a choice (`answer`: the user's, unless
+the application offers it to agents, see [Agents](agents.md)).
 
 The commands `file.new_folder` (`{ "name" }`, optional) and
 `file.replace` (`{ "id", "path" }`, hidden) are the picker's new folder and

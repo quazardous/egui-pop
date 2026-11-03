@@ -1093,7 +1093,7 @@ impl Plugin for DialogsPlugin {
             .snapshot(move |_| json!({ "current": a.describe(), "answered": a.answered() }))
             .action("answer", "Answers the dialog shown: accept (with `values`), choose (`value` or `index`) or cancel.", true, move |_, args| {
                 let answer = Answer::from_json(args)?;
-                b.answer(answer, Origin::Agent("debug-bridge".into()))?;
+                b.answer(answer, egui_pop_core::debug::agent())?;
                 Ok(json!({ "queued": true }))
             })
             .args(json!({ "answer": "accept", "values": {} })),
