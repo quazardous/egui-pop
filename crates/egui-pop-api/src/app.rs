@@ -953,14 +953,15 @@ impl AppHandle {
         args: &Json,
         origin: Origin,
     ) -> Feedback {
-        let (spec, refusal) = {
+        let (spec, refusal, mutates) = {
             let b = self.0.bridge.borrow();
             (
                 b.action(collector, action),
-                b.refusal(collector, action, &origin),
+                b.refusal(collector, action, args, &origin),
+                b.mutates(collector, action, args).unwrap_or(true),
             )
         };
-        let Some(spec) = spec else {
+        if spec.is_none() {
             // No such action: the bridge's answer lists what exists.
             return self.0.bridge.borrow_mut().call_as(
                 &self.egui(),
@@ -969,7 +970,7 @@ impl AppHandle {
                 args,
                 &origin,
             );
-        };
+        }
         let source = source_of(&origin);
         if let Some(reason) = refusal {
             let feedback =
@@ -988,9 +989,10 @@ impl AppHandle {
         let mut ran: Option<Feedback> = None;
         let asked =
             json!({ "collector": collector, "action": action, "args": args, "origin": source });
-        // An action that only reads is not published nor traced when it
-        // runs (an agent polling would fill both); its veto is.
-        let out = self.step_with(&STEP_DEBUG_CALL, asked, !spec.mutates, |app, a| {
+        // A call that only reads is not published nor traced when it runs
+        // (an agent polling would fill both); its veto and its failure
+        // are.
+        let out = self.step_with(&STEP_DEBUG_CALL, asked, !mutates, |app, a| {
             let f = app.0.bridge.borrow_mut().call_as(
                 &app.egui(),
                 a["collector"].as_str().unwrap_or_default(),
@@ -1013,7 +1015,7 @@ impl AppHandle {
             ok,
             collector: collector.into(),
             action: action.into(),
-            mutates: spec.mutates,
+            mutates,
             message,
             data,
         };
@@ -1406,8 +1408,8 @@ impl AppHandle {
         self.step_with(step, args, false, default)
     }
 
-    /// As [`AppHandle::step`]; `quiet`, a run that is not vetoed is
-    /// neither published nor traced.
+    /// As [`AppHandle::step`]; `quiet`, a run that succeeds is neither
+    /// published nor traced (a veto or a failure is).
     pub(crate) fn step_with(
         &self,
         step: &StepId,
@@ -1425,7 +1427,7 @@ impl AppHandle {
             .collect();
         let declared = self.0.steps.borrow().contains(step);
         let (outcome, trace) = crate::steps::run(self, step, args, hooks, declared, quiet, default);
-        if quiet && outcome.vetoed().is_none() {
+        if quiet && outcome.ok() {
             return outcome;
         }
         let mut traces = self.0.step_traces.borrow_mut();
@@ -2702,6 +2704,7 @@ pub struct AppBuilder {
     writer_check: Option<egui_pop_model::values::WriterCheck>,
     offered: Vec<String>,
     offered_commands: Vec<CommandId>,
+    bridge_mode: egui_pop_core::debug::BridgeMode,
 }
 
 /// Draws around the whole application (`AppBuilder::wrap`): gets the
@@ -2724,10 +2727,11 @@ pub const STEP_EXIT: StepId = StepId::from_static("app.exit");
 /// `agent:debug-bridge`, `user`): by an agent through the bridge
 /// (`AppHandle::debug_call`) or by the user (`AppHandle::debug_call_as`,
 /// the devtools panel). A before-hook may veto it, for every caller (a
-/// kiosk build); the caller is not redirected. An action that only reads
-/// is published and traced only when vetoed. An agent's call to an
-/// action not offered to agents never reaches the step: it is refused
-/// first (`debug.call.refused`).
+/// kiosk build); the caller is not redirected. A call that only reads (a
+/// read-only command's `commands.run` included) is published and traced
+/// only when vetoed or failed. A call the bridge's mode or the action's
+/// `agent` flag refuses never reaches the step: it is refused first
+/// (`debug.call.refused`).
 pub const STEP_DEBUG_CALL: StepId = StepId::from_static("debug.call");
 /// The workbench's layout is loaded (`{ "document" }`, from
 /// `Host::layout_document`): at the start, and on `App::load_layout`. A
@@ -2768,6 +2772,7 @@ impl AppBuilder {
             writer_check: None,
             offered: Vec::new(),
             offered_commands: Vec::new(),
+            bridge_mode: egui_pop_core::debug::BridgeMode::On,
             host: None,
             system_focus: None,
             system_text_scale: crate::text::SystemTextScale::default(),
@@ -3019,6 +3024,18 @@ impl AppBuilder {
         self
     }
 
+    /// What the debug bridge lets anyone but the user do: `On` (the
+    /// default: every action and command offered to agents), `ReadOnly`
+    /// (only calls that change nothing: actions with `mutates: false` and
+    /// `commands.run` of a command declared `read_only`), or `Off` (no
+    /// call). The user's calls (the devtools panel, `debug_call_as` with
+    /// `Origin::User`) are never refused by it; snapshots stay readable
+    /// by code in the process.
+    pub fn debug_bridge(mut self, mode: egui_pop_core::debug::BridgeMode) -> Self {
+        self.bridge_mode = mode;
+        self
+    }
+
     /// Offers a command to agents whatever it declares
     /// (`CommandSpec::no_agent`): `terminal.send`, for an agent the
     /// application trusts to type into its terminals. The agent then runs
@@ -3189,6 +3206,7 @@ impl AppBuilder {
         )
         .expect("the framework's registrations are valid");
         app.install_collectors();
+        app.handle.0.bridge.borrow_mut().set_mode(self.bridge_mode);
         for a in &self.offered {
             app.handle.0.bridge.borrow_mut().offer_to_agents(a);
         }
@@ -3794,7 +3812,7 @@ impl App {
                 .ok_or_else(|| "the application is gone".to_string())
         };
         let mut b = h.0.bridge.borrow_mut();
-        let (w1, w2) = (h.weak(), h.weak());
+        let (w1, w2, w3) = (h.weak(), h.weak(), h.weak());
         b.register(
             FnCollector::new("commands", "Every command: id, title, keys, where it applies, its icon and \"on\" icon by name (with the names that do not resolve), owner; the last runs.")
                 .snapshot(move |_| {
@@ -3810,6 +3828,7 @@ impl App {
                             "when": s.when,
                             "keys": palette.iter().find(|e| e.command == s.id).map(|e| e.keys.clone()).unwrap_or_default(),
                             "agent": s.agent,
+                            "read_only": s.read_only,
                             "args": s.args,
                             "running": app.running(&s.id),
                             "owner": owner,
@@ -3839,6 +3858,12 @@ impl App {
                 })
                 // The command's own `agent` flag is checked.
                 .agent(true)
+                // Running a read-only command changes nothing.
+                .mutates_when(move |args| {
+                    let Ok(app) = up(&w3) else { return true };
+                    let Some(id) = args.get("id").and_then(Json::as_str) else { return true };
+                    !app.commands().iter().any(|(s, _)| s.id.as_str() == id && s.read_only)
+                })
                 .args(json!({ "id": "app.palette", "args": null })),
         )
         .expect("distinct names");

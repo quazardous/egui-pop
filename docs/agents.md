@@ -34,10 +34,20 @@ connect to, loopback or not. It is reached by Rust calls:
 | `AppHandle::debug_call_as(collector, action, args, origin)`, `App::debug_call_as` | the same for another caller: the user's calls (the devtools panel, a debug page) pass `Origin::User` |
 | `AppHandle::debug_log()` | the last 64 feedback blocks, refusals included |
 
-**Always there.** Every `App` builds its bridge with the core collectors
-and registers its own and its plugins' when it is built. There is no
-Cargo feature, setting or build kind that removes it: release builds
-have it, as debug builds do.
+**Always there, on, read-only or off.** Every `App` builds its bridge
+with the core collectors and registers its own and its plugins' when it
+is built, in release builds as in debug builds. What it lets anyone but
+the user do is the application's choice, `AppBuilder::debug_bridge`:
+
+| Mode | Agents (any origin but the user) |
+|---|---|
+| `BridgeMode::On` (default) | every action and command offered to them |
+| `BridgeMode::ReadOnly` | only calls that change nothing: actions with `mutates: false`, and `commands.run` of a command declared `read_only` |
+| `BridgeMode::Off` | nothing: every call is refused ("the debug bridge is off") |
+
+The user's calls (the devtools panel, `debug_call_as` with
+`Origin::User`) are never refused by the mode. Refusals go on the
+journal (`debug.call.refused`).
 
 **Devtools is a view, not a gate.** `DevtoolsPlugin` (opt-in) shows the
 same collectors in a panel, opened with `F12` once the
@@ -125,7 +135,7 @@ shape for every call, success or not:
 |---|---|
 | `ok` | the call succeeded |
 | `collector`, `action` | what was called |
-| `mutates` | the action is one that changes the application (whether or not it did) |
+| `mutates` | the call is one that changes the application (whether or not it did): the action's flag, and for `commands.run` the command's (`false` for a command declared `read_only`) |
 | `message` | what happened, in a sentence |
 | `data` | the result, `null` on failure |
 
@@ -136,7 +146,7 @@ Through `App::debug_call`, `about.read` in the gallery answers:
   "ok": true,
   "collector": "commands",
   "action": "run",
-  "mutates": true,
+  "mutates": false,
   "message": "`about.read` ran; the application may have changed",
   "data": {
     "authors": ["The egui-pop contributors"],
@@ -162,7 +172,7 @@ Through `App::debug_call`, `about.read` in the gallery answers:
 Through `AppHandle::debug_call` the run is only queued:
 
 ```json
-{ "ok": true, "collector": "commands", "action": "run", "mutates": true, "message": "`commands.run` done; the application changed", "data": { "queued": true } }
+{ "ok": true, "collector": "commands", "action": "run", "mutates": false, "message": "`commands.run` done; nothing changed", "data": { "queued": true } }
 ```
 
 A command whose host answers later (`Reply::Later`) gives
@@ -228,8 +238,11 @@ Every other call, the user's included, runs through the `debug.call`
 step (`{ "collector", "action", "args", "origin" }`), whose
 before-hooks may veto it ("`journal.since` vetoed by kiosk: ...",
 `debug.call.vetoed` on the journal). A call that writes is published as
-`debug.call`; one that only reads is published and traced only when
-vetoed, so polling fills neither the journal nor the steps' traces.
+`debug.call`; one that only reads (a read-only command's
+`commands.run` included) is published and traced only when vetoed or
+failed, so polling fills neither the journal nor the steps' traces. A
+refused `commands.run` (a command not offered to agents, or unknown) is
+on the journal once, as a failed `debug.call` with the reason.
 
 An application may offer a writing action to agents it trusts with it
 (a test harness, its own automation): `AppBuilder::offer_to_agents`
@@ -547,9 +560,10 @@ What is not protected today. None of these is fixed by documenting it.
   everything below; any local process able to connect to that transport
   is an agent. Access control is the transport's, and egui-pop offers no
   helper for it.
-- **The bridge cannot be turned off.** It is in every build, release
-  included; there is no feature or setting to remove it or to make it
-  read-only. Any code in the process (a plugin included) can call it.
+- **Code in the process is the user if it says so.** The bridge's mode
+  holds anyone but the user; code in the process (a plugin included)
+  that calls `debug_call_as` with `Origin::User` is not held. Turning
+  the bridge off keeps out agents, not in-process code.
 - **An offered `files.answer` answers a choice with any paths.** The
   origin goes with the choice (`files::chosen_origin` on its result,
   `origin` in the `file.chosen` step, `by` in the `files` collector's
@@ -574,9 +588,11 @@ What is not protected today. None of these is fixed by documenting it.
   choices and their folders, the terminal steps with their arguments
   (`terminal_io`), the journal's arguments and results are readable
   through the bridge.
-- **`mutates` is per action, not per command.** `commands.run` is
-  always flagged `mutates`, read-only commands included (`about.read`,
-  `value.get`); commands carry no read-only flag an agent could rely on.
-- **No wait and no rate limit.** An agent polls; nothing limits how
-  often it calls. A refused `commands.run` is in the bridge's log
-  (`debug_log`, the last 64 calls), not in the journal.
+- **A command's read-only flag is its author's word.** `commands.run`
+  reports `mutates` from the command's `read_only` flag, and a read-only
+  bridge runs only those; a command that says it only reads and writes
+  all the same is not caught.
+- **No wait and no rate limit.** An agent polls (`journal.since`, a
+  collector's snapshot); nothing blocks until something happens, and
+  nothing limits how often it calls. A transport that exposes the bridge
+  limits the rate itself.

@@ -10,7 +10,9 @@
 //! ([`DebugBridge::offer_to_agents`]). [`DebugBridge::call`] is the
 //! agent's (`Origin::Agent("debug-bridge")`) and refuses the others;
 //! [`DebugBridge::call_as`] names who calls, and only the user may call
-//! an action not offered to agents.
+//! an action not offered to agents. The bridge's [`BridgeMode`] holds
+//! anyone but the user: on, read-only (only calls that do not mutate)
+//! or off.
 //!
 //! ```
 //! use egui_pop_core::debug::{DebugBridge, FnCollector};
@@ -86,6 +88,15 @@ pub trait Collector {
         Vec::new()
     }
     fn snapshot(&self, ctx: &Context) -> Json;
+    /// Whether this call of an action changes the application: its
+    /// `mutates`, unless the action says per call (`commands.run` of a
+    /// read-only command does not). `None`: no such action.
+    fn mutates(&self, action: &str, _args: &Json) -> Option<bool> {
+        self.actions()
+            .into_iter()
+            .find(|a| a.name == action)
+            .map(|a| a.mutates)
+    }
     /// Runs an action for `origin`, who called it: an action that acts
     /// does so as its caller (writes a value, runs a command, answers a
     /// dialog).
@@ -102,6 +113,7 @@ pub trait Collector {
 
 type SnapshotFn = Box<dyn Fn(&Context) -> Json>;
 type ActionFn = Box<dyn FnMut(&Context, &Json, &Origin) -> Result<Json, String>>;
+type MutatesFn = Box<dyn Fn(&Json) -> bool>;
 
 /// A collector made of closures.
 pub struct FnCollector {
@@ -109,6 +121,8 @@ pub struct FnCollector {
     description: String,
     snapshot: SnapshotFn,
     actions: Vec<(ActionSpec, ActionFn)>,
+    /// Per action, whether a call mutates when it depends on the call.
+    mutates_when: Vec<(String, MutatesFn)>,
 }
 
 impl fmt::Debug for FnCollector {
@@ -126,6 +140,7 @@ impl FnCollector {
             description: description.into(),
             snapshot: Box::new(|_| Json::Null),
             actions: Vec::new(),
+            mutates_when: Vec::new(),
         }
     }
 
@@ -179,6 +194,17 @@ impl FnCollector {
         self
     }
 
+    /// Whether a call of the last action added mutates, from its
+    /// arguments (`commands.run`: unless its command is read-only); its
+    /// declared `mutates` stays what it may do at most.
+    pub fn mutates_when(mut self, f: impl Fn(&Json) -> bool + 'static) -> Self {
+        if let Some((spec, _)) = self.actions.last() {
+            let name = spec.name.clone();
+            self.mutates_when.push((name, Box::new(f)));
+        }
+        self
+    }
+
     /// Sets the example arguments of the last action added.
     pub fn args(mut self, example: Json) -> Self {
         if let Some((spec, _)) = self.actions.last_mut() {
@@ -203,6 +229,22 @@ impl Collector for FnCollector {
 
     fn snapshot(&self, ctx: &Context) -> Json {
         (self.snapshot)(ctx)
+    }
+
+    fn mutates(&self, action: &str, args: &Json) -> Option<bool> {
+        let declared = self
+            .actions
+            .iter()
+            .find(|(s, _)| s.name == action)
+            .map(|(s, _)| s.mutates)?;
+        Some(
+            declared
+                && self
+                    .mutates_when
+                    .iter()
+                    .find(|(n, _)| n == action)
+                    .is_none_or(|(_, f)| f(args)),
+        )
     }
 
     fn call(
@@ -230,6 +272,22 @@ pub fn agent() -> Origin {
     Origin::Agent(AGENT.into())
 }
 
+/// What the bridge lets anyone but the user do
+/// (`AppBuilder::debug_bridge`): the user's calls (devtools, a debug
+/// page) are never refused by it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BridgeMode {
+    /// Every action offered to agents (the default).
+    #[default]
+    On,
+    /// Only the calls that do not mutate: actions with `mutates: false`,
+    /// `commands.run` of a read-only command.
+    ReadOnly,
+    /// No call at all.
+    Off,
+}
+
 /// The collectors, by name.
 #[derive(Default)]
 pub struct DebugBridge {
@@ -238,6 +296,7 @@ pub struct DebugBridge {
     /// Actions offered to agents by the application
     /// (`collector.action`), whatever they declare.
     offered: BTreeSet<String>,
+    mode: BridgeMode,
 }
 
 impl fmt::Debug for DebugBridge {
@@ -318,13 +377,53 @@ impl DebugBridge {
             .find(|a| a.name == action)
     }
 
-    /// Why `origin` may not call the action: `None` when it may (or
-    /// when there is no such action: the call says so). Only the user
-    /// may call an action not offered to agents.
-    pub fn refusal(&self, collector: &str, action: &str, origin: &Origin) -> Option<String> {
+    /// What the bridge lets anyone but the user do.
+    pub fn set_mode(&mut self, mode: BridgeMode) {
+        self.mode = mode;
+    }
+
+    pub fn mode(&self) -> BridgeMode {
+        self.mode
+    }
+
+    /// Whether this call changes the application (`None`: no such
+    /// action).
+    pub fn mutates(&self, collector: &str, action: &str, args: &Json) -> Option<bool> {
+        self.collectors
+            .iter()
+            .find(|c| c.name() == collector)?
+            .mutates(action, args)
+    }
+
+    /// Why `origin` may not make this call: `None` when it may (or when
+    /// there is no such action: the call says so). Anyone but the user is
+    /// held to the bridge's mode ([`BridgeMode`]) and to the action's
+    /// `agent` flag; the user never is.
+    pub fn refusal(
+        &self,
+        collector: &str,
+        action: &str,
+        args: &Json,
+        origin: &Origin,
+    ) -> Option<String> {
         let spec = self.action(collector, action)?;
-        (!spec.agent && *origin != Origin::User)
-            .then(|| "it is not offered to agents; only the user may call it".to_string())
+        if *origin == Origin::User {
+            return None;
+        }
+        if self.mode == BridgeMode::Off {
+            return Some("the debug bridge is off; only the user may call it".into());
+        }
+        if !spec.agent {
+            return Some("it is not offered to agents; only the user may call it".into());
+        }
+        if self.mode == BridgeMode::ReadOnly
+            && self.mutates(collector, action, args).unwrap_or(true)
+        {
+            return Some(
+                "the debug bridge is read-only and this call changes the application".into(),
+            );
+        }
+        None
     }
 
     /// Keeps a feedback block in the log (a call refused or vetoed
@@ -386,12 +485,12 @@ impl DebugBridge {
         args: &Json,
         origin: &Origin,
     ) -> Feedback {
-        if let Some(reason) = self.refusal(collector, action, origin) {
+        if let Some(reason) = self.refusal(collector, action, args, origin) {
             let feedback = Feedback {
                 ok: false,
                 collector: collector.into(),
                 action: action.into(),
-                mutates: self.action(collector, action).is_some_and(|a| a.mutates),
+                mutates: self.mutates(collector, action, args).unwrap_or(false),
                 message: format!("`{collector}.{action}` refused: {reason}"),
                 data: Json::Null,
             };
@@ -430,7 +529,7 @@ impl DebugBridge {
                         data: Json::Null,
                     },
                     Some(spec) => {
-                        let mutates = spec.mutates;
+                        let mutates = c.mutates(action, args).unwrap_or(spec.mutates);
                         match c.call(ctx, action, args, origin) {
                             Ok(data) => Feedback {
                                 ok: true,

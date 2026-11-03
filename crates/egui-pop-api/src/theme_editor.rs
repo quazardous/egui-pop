@@ -1702,6 +1702,7 @@ impl Plugin for ThemeEditorPlugin {
             CommandSpec::new(CMD_THEME_READ, "Read the theme", CAT)
                 .description("The theme being edited: its base, the tokens changed, the history and the failing contrast pairs; with `path`, one token, its value, alias and contrast readouts.")
                 .hidden()
+                .read_only()
                 .args(json!({ "path": "accent.default" })),
             move |call| {
                 let path = call.args.get("path").and_then(Json::as_str);

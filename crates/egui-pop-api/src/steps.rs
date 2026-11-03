@@ -273,7 +273,8 @@ pub(crate) fn run(
         Ok(v) => json!({ "args": args, "result": v }),
         Err(e) => json!({ "args": args, "error": e }),
     };
-    if !quiet {
+    // Quiet, a run is published only when it fails.
+    if !quiet || result.is_err() {
         app.publish("egui_pop", None, step.as_str(), data);
     }
     trace.args = args;

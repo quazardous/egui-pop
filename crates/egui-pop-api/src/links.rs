@@ -1633,7 +1633,8 @@ impl Plugin for LinksPlugin {
         .command(
             CommandSpec::new(CMD_CHECK, "Check a link", category)
                 .description("What a link (`target`) is and how it would open (`how`, `source`): its kind, the way, whether the user would be asked, the policy's verdict and the opener's capabilities; nothing is opened and no step runs.")
-                .args(json!({ "target": "https://example.org/", "how": "auto" })),
+                .args(json!({ "target": "https://example.org/", "how": "auto" }))
+                .read_only(),
             |call| {
                 let req = request_of(call.args, call.origin, "target")?;
                 let d = decide(call.app, &req)?;

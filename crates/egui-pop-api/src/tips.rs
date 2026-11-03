@@ -855,7 +855,8 @@ impl Plugin for TipsPlugin {
         ctx.command(
             CommandSpec::new(CMD_TIPS_LIST, "List the tips", CAT)
                 .description("Every tip registered: its id, English title and text, whether it is contextual and whether it was dismissed.")
-                .hidden(),
+                .hidden()
+                .read_only(),
             |call| {
                 let tips = call
                     .app

@@ -1123,6 +1123,26 @@ publishes.
 
 ### Changed
 
+- **Breaking (debug bridge, commands):** the bridge has a mode, commands a read-only
+  flag (egui-pop-core, egui-pop-model, egui-pop-api, egui-pop-editors,
+  egui-pop-imaging; `docs/agents.md`, ADR 0024). `AppBuilder::debug_bridge` takes a
+  `BridgeMode`: `On` (the default, as before), `ReadOnly` (only calls that change
+  nothing) or `Off` (every call refused); the user's calls (devtools,
+  `debug_call_as(.., Origin::User)`) are never held to it, and refusals are on the
+  journal (`debug.call.refused`). `CommandSpec::read_only` marks a command that only
+  reads; `commands.run` reports `mutates: false` for one, and the commands
+  collector shows `read_only`. Marked: `value.get`, `value.list`, `about.read`,
+  `clipboard.read`, `clipboard.offers`, `context.read`, `history.list`,
+  `history.read`, `links.check`, `file.preview`, `tips.list`, `theme.read`,
+  `editor.read`, `terminal.read`, `graph.read`. A call that only reads is now also
+  published (as a failed `debug.call`) when it fails, so a refused `commands.run`
+  is on the journal once whatever its command. `Collector::mutates` and
+  `FnCollector::mutates_when` say per call whether an action mutates;
+  `DebugBridge::refusal` takes the call's arguments. **Migration:** a `Collector`
+  implemented by hand keeps working (`mutates` has a default); code calling
+  `DebugBridge::refusal` passes the arguments; an application's own commands that
+  only read add `.read_only()` to be run by a read-only bridge.
+
 - **Breaking (terminal, agents):** `terminal.send` is no longer offered to agents
   (egui-pop-editors, egui-pop-api; `docs/editors.md`, `docs/agents.md`). It types
   into the terminal's program, in a PTY shell any command the user could run; an

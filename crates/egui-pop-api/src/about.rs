@@ -300,7 +300,8 @@ impl Plugin for AboutPlugin {
         ctx.command(
             CommandSpec::new(CMD_ABOUT_READ, "Read about the application", CAT)
                 .description("The application's name, version, description, licences, authors and links, egui-pop's and egui's versions, the platform, the renderer and the version info as text.")
-                .hidden(),
+                .hidden()
+                .read_only(),
             |call| {
                 let about = call
                     .app

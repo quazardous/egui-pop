@@ -271,6 +271,7 @@ fn commands(ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
         CommandSpec::new(CMD_READ, "Read the terminal", CAT)
             .description("The terminal's text: its scrollback and screen (or lines `from_line` to `to_line`, from 0, end excluded; `screen` alone for the screen), with the cursor, the size and the session's state.")
             .hidden()
+            .read_only()
             .args(json!({ "terminal": "shell", "from_line": 0, "to_line": 50, "screen": false })),
         |call| {
             let t = target(call)?;

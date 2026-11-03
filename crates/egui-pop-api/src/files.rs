@@ -1144,7 +1144,8 @@ impl Plugin for FilesPlugin {
             CommandSpec::new(CMD_PREVIEW, "Preview a file", "File")
                 .description("A file's or a folder's preview metadata (`path`), as the in-app picker shows it: whether it is a folder, its size and modification time, the provider, the kind of preview, dimensions, pages, a folder's counts, the provider's facts, or why there is none; no pixels and no text.")
                 .args(json!({ "path": "/tmp/a.png" }))
-                .hidden(),
+                .hidden()
+                .read_only(),
             move |call| {
                 let path = call
                     .args
