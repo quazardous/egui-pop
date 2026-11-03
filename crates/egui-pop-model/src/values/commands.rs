@@ -113,7 +113,8 @@ pub fn register_with<H>(
         CommandSpec::new(id("value.list"), "List values", "Values")
             .description("The values under a path prefix (`prefix`).")
             .args(json!({ "prefix": "settings/" }))
-            .hidden(),
+            .hidden()
+            .read_only(),
         wrap(Box::new(move |args, _| {
             let prefix = args.get("prefix").and_then(Json::as_str).unwrap_or("");
             let store = s.lock().unwrap_or_else(PoisonError::into_inner);
@@ -132,7 +133,8 @@ pub fn register_with<H>(
         CommandSpec::new(id("value.get"), "Read a value", "Values")
             .description("A value with its descriptor (`path`).")
             .args(json!({ "path": "settings/x" }))
-            .hidden(),
+            .hidden()
+            .read_only(),
         wrap(Box::new(move |args, _| {
             let path = path_of(args)?;
             let store = s.lock().unwrap_or_else(PoisonError::into_inner);

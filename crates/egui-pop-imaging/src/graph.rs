@@ -287,6 +287,7 @@ pub(crate) fn connect(ctx: &mut Ctx<'_>) -> Result<(), CtxError> {
         CommandSpec::new(CMD_GRAPH_READ, "Read the graph", CAT)
             .description("The graph a node editor drew last: nodes (place, ports, group, parameters), wires, groups, the kinds it can add, the selection, the level and the part in view.")
             .hidden()
+            .read_only()
             .args(json!({ "graph": "main" })),
         |call| {
             let (graphs, name) = target(call)?;

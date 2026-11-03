@@ -578,6 +578,7 @@ fn commands(ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
         CommandSpec::new(CMD_READ, "Read the text", CAT)
             .description("The editor's text (or lines `from_line` to `to_line`, from 0, end excluded), with its version, selection and state.")
             .hidden()
+            .read_only()
             .args(json!({ "editor": "notes", "from_line": 0, "to_line": 50 })),
         |call| {
             let s = target(call)?;

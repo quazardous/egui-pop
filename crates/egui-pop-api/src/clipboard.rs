@@ -2358,7 +2358,8 @@ impl Plugin for ClipboardPlugin {
         .command(
             CommandSpec::new(CMD_OFFERS, "What the clipboard offers", category)
                 .description("What a slot holds (`slot`): its type, title, formats and revision; with `target`, every way it fits there, each with its preview.")
-                .args(json!({ "target": "demo.swatches" })),
+                .args(json!({ "target": "demo.swatches" }))
+                .read_only(),
             |call| {
                 let slot = slot_arg(call.args, call.origin);
                 with_owner(call.app, |c| c.may_use(call.origin, &slot)).ok_or(NO_PLUGIN)??;
@@ -2391,7 +2392,8 @@ impl Plugin for ClipboardPlugin {
         .command(
             CommandSpec::new(CMD_READ, "Read the clipboard", category)
                 .description("A slot's item (`slot`, the session's own by default), payload included; the user's is refused to an agent unless the host allows it.")
-                .args(json!({ "slot": null })),
+                .args(json!({ "slot": null }))
+                .read_only(),
             |call| {
                 let slot = slot_arg(call.args, call.origin);
                 with_owner(call.app, |c| c.may_use(call.origin, &slot)).ok_or(NO_PLUGIN)??;

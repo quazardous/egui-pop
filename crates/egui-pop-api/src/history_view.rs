@@ -138,14 +138,16 @@ impl Plugin for HistoryPlugin {
         ctx.command(
             CommandSpec::new(CMD_LIST, "List the histories", category)
                 .description("Every history (its scope: id, title, whether it is local or durable, its cap), whether it is active in the window, its revision, head and counts, and where Undo and Redo go now with what they would do.")
-                .hidden(),
+                .hidden()
+                .read_only(),
             |call| Ok(history::snapshot(call.app)),
         )?
         .command(
             CommandSpec::new(CMD_READ, "Read a history", category)
                 .description("A history's steps (`scope`; none: where Undo goes now): `undo`, oldest first, and `redo`, the next one last; each step's id, label and its text in the interface's language, origin, group, place and time; the history's revision and head; its `snapshots`, the `replaced` steps its owner keeps (each with the step it came `after`) and the `features` its owner supports.")
                 .args(json!({ "scope": "app" }))
-                .hidden(),
+                .hidden()
+                .read_only(),
             |call| {
                 let scope = scope_arg(call.app, call.args, Walk::Undo)?;
                 let line = history::line(call.app, &scope)

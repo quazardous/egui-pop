@@ -123,6 +123,11 @@ pub struct CommandSpec {
     pub palette: bool,
     /// Offered to agents through the debug bridge.
     pub agent: bool,
+    /// It only reads: running it changes nothing in the application
+    /// (`about.read`, `value.get`). The debug bridge reports it
+    /// (`commands.run` does not mutate then) and a read-only bridge runs
+    /// only these.
+    pub read_only: bool,
     /// A description of its arguments (free JSON, a schema or an
     /// example); `null` when it takes none.
     pub args: Json,
@@ -150,6 +155,7 @@ impl CommandSpec {
             menus: Vec::new(),
             palette: true,
             agent: true,
+            read_only: false,
             args: Json::Null,
             icon: None,
             icon_on: None,
@@ -230,6 +236,14 @@ impl CommandSpec {
     /// Kept away from agents.
     pub fn no_agent(mut self) -> Self {
         self.agent = false;
+        self
+    }
+
+    /// It only reads: running it changes nothing in the application (no
+    /// value, file, window or state of any kind). Say it only when true:
+    /// a read-only debug bridge runs these and refuses the others.
+    pub fn read_only(mut self) -> Self {
+        self.read_only = true;
         self
     }
 
