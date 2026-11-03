@@ -1289,7 +1289,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "egui",
  "egui-pop-api",
@@ -1309,7 +1309,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop-api"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "eframe",
  "egui",
@@ -1331,7 +1331,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "egui",
  "egui-phosphor",
@@ -1349,7 +1349,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop-editors"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "egui",
  "egui-pop-api",
@@ -1396,7 +1396,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop-i18n"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "egui",
  "egui-pop-api",
@@ -1421,7 +1421,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop-imaging"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "base64 0.22.1",
  "egui",
@@ -1433,7 +1433,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop-model"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "egui-pop-test-macros",
  "idna",
@@ -1445,7 +1445,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop-platform"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "arboard",
  "ashpd",
@@ -1473,7 +1473,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop-test"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "egui",
  "egui-pop-api",
@@ -1492,7 +1492,7 @@ version = "0.1.0"
 
 [[package]]
 name = "egui-pop-tokens"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "egui-pop-test-macros",
  "flate2",
@@ -1503,7 +1503,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop-viewport"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "eframe",
  "egui",
@@ -1528,7 +1528,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop-views"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "egui",
  "egui-pop-api",
@@ -1567,7 +1567,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop-win32"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "windows-sys 0.61.2",
 ]
