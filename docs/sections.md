@@ -1,8 +1,8 @@
 # Collapsible sections
 
-Status: fourth version (2026-10-30): titles that drag, the pull and empty
-room, titles that stay, as options, after windowed rows and the wheel
-contained, heights set by hand and the push.
+Status: fifth version (2026-11-03): within one drag, what it shrank stays
+shrunk, after titles that drag, the pull and empty room, titles that stay,
+windowed rows and the wheel contained, heights set by hand and the push.
 
 A stack of collapsible sections fills a panel: each section is a title
 band (a disclosure mark, a title, a count) over its own scrolling body.
@@ -62,9 +62,11 @@ The heights' arithmetic is in `egui_pop::model::sections`, without egui:
   lies above it and another one below it. It resizes the first open
   section above, past any folded ones: the line under a folded section
   and the line above it do the same, and the folded bands between follow.
-  It follows the pointer in both directions, from the heights at the
-  start of the drag, so it does not drift and gives back what it took
-  when the pointer returns. Nothing gives way in proportion:
+  It follows the pointer in both directions and stays under it: it does
+  not drift. Each move starts from the stack as shown, as a fresh drag
+  would, so what a drag shrank stays shrunk: going back, the room goes
+  where a drag that way puts it, and a section at its least is not given
+  back what it lost. Nothing gives way in proportion:
   - **Down:** the sections between the boundary and the last shrink, the
     nearest first, each down to its least; then the last does. The drag
     stops once the whole stack is at its least.
@@ -73,11 +75,22 @@ The heights' arithmetic is in `egui_pop::model::sections`, without egui:
     nothing else moves.
   - Folded sections are skipped. A section that gives way or moves gets
     a height of its own; one the list would not move stays in the list.
+  - **Down, up and down again** in one drag: down, the next section gives,
+    to its least, then the last; up, the section above gives and the next
+    one below takes all the room, the last keeping what it gave; down
+    again, the next one gives first, back to its least, and only then the
+    last, from what it has now. The stops are where they were, the border
+    staying under the pointer, but the stack is not the one the first leg
+    showed: the last is as small as the drag ever made it.
+  - **Past a stop**, nothing moves until the pointer is back on the
+    boundary, which then follows it.
 - **Keyboard.** A boundary takes the focus in reading order, after the
   open section above it; the lines under folded sections do not, as they
   would be a second stop for the same pair. Up and Down move it by a
-  row, by the same rules; Enter drops the heights set by hand. With the
-  keys of the pull held, they pull.
+  row, by the same rules: each press is a move from the stack as shown,
+  as a drag's, so a row down then a row up leaves the last as the first
+  press left it. Enter drops the heights set by hand. With the keys of the
+  pull held, they pull.
 - **Reset.** A double click on a boundary drops the heights set by hand
   and any empty room.
 - **The pull.** With the keys of `gesture.sections.pull` held (Ctrl with a
@@ -90,11 +103,21 @@ The heights' arithmetic is in `egui_pop::model::sections`, without egui:
   - **Down:** the block goes into the empty room, then the last section
     alone gives way, down to its least, and the drag stops.
   - The keys pressed or released during a drag change the mode from there:
-    the drag starts again from the stack as shown, and nothing jumps.
+    the next moves give way as that mode does, from the stack as shown, and
+    nothing jumps. The border keeps to the pointer through the change, a
+    stop included: the keys alone move nothing, and no pass moves anything
+    further than the pointer moved since the last. Where the new mode stops
+    short of the pointer, nothing moves until the pointer is back on the
+    boundary; where it lets a boundary stopped by the old mode go further, the
+    boundary catches up as the pointer moves, never faster than it: closing
+    in while the pointer comes toward it, keeping its distance while the
+    pointer moves away.
 - **Empty room.** A stack with empty room under its last section keeps it,
   in `Layout::empty`, until a drag takes it back or a double click drops it.
   A plain drag takes it after the sections between, as a pull takes it
-  first. In a panel too short, it gives way after the sections sized by the
+  first. In one drag, room a plain drag took is not given back to the
+  empty room when the pointer returns: the next section below takes it, as
+  a drag up does; only a pull up opens empty room again. In a panel too short, it gives way after the sections sized by the
   list and before those set by hand, and comes back with the room. A line
   with only folded sections under it is a boundary while there is empty
   room: the bands follow, and up it opens more.
@@ -167,7 +190,7 @@ The heights' arithmetic is in `egui_pop::model::sections`, without egui:
 
 ## Classic conventions, and where this departs
 
-Compared, 2026-10-27, with VS Code's side bar views (Explorer, Source
+Compared, 2026-10-27 (within one drag, 2026-11-03), with VS Code's side bar views (Explorer, Source
 Control), JetBrains IDEs' tool windows, the macOS Finder sidebar,
 Windows Explorer's navigation pane and Qt (`QToolBox`, `QSplitter`):
 
@@ -177,6 +200,8 @@ Windows Explorer's navigation pane and Qt (`QToolBox`, `QSplitter`):
 | Folded header | Stays in place. VS Code pins the headers below the last open view to the bottom | The same as VS Code |
 | Resize | A sash between two open views (VS Code), a splitter handle (`QSplitter`, JetBrains' split tool windows). Finder and Explorer do not resize sections: their sidebar scrolls as one | A boundary on the line above a band, as VS Code |
 | Who gives way | VS Code's `SplitView.resize`: the views past the sash, the nearest first, each clamped in turn, to a hard stop. `QSplitter` the same by default | The same: the sections below going down, those above going up, and the first open section below takes the room going up |
+| Back in the same drag | VS Code plans every move from the sizes saved when the sash was pressed ([`splitview.ts`](https://github.com/microsoft/vscode/blob/main/src/vs/base/browser/ui/splitview/splitview.ts), `onSashStart` keeps `sizes`, `onSashChange` resizes from them by `current - start`), so a view pushed smaller grows back when the pointer returns. `QSplitter` moves from the widgets' geometry as it is ([`qsplitter.cpp`](https://github.com/qt/qtbase/blob/dev/src/widgets/widgets/qsplitter.cpp), `moveSplitter` and `doMove` read each widget's `rect`): a handle pushed along stays where it was pushed, and the neighbour grows | As `QSplitter`, departing from VS Code: what the drag shrank stays shrunk, the next section takes the room |
+| Keys during a drag | VS Code's Alt pressed or released mid-drag starts the drag again from the sizes and the pointer then (`resetSashDragState`): a sash stopped short of the pointer stays that far from it | From the stack as shown, as VS Code, departing on the stop: the border keeps to the pointer, catching up no faster than it moves |
 | Keyboard on the sash | VS Code has none; WAI-ARIA's window splitter moves with the arrows and resets with Enter | The arrows and Enter, as WAI-ARIA |
 | Left and Right on a header | VS Code folds and opens | The same |
 | Panel too short | VS Code's split view scrolls as a whole, its scrollbar when needed. Qt clips | Scrolls as a whole, the scrollbar then only |

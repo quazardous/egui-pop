@@ -1372,6 +1372,18 @@ publishes.
 
 ### Fixed
 
+- A section a drag shrank grew back when the pointer returned in the same drag
+  (egui-pop-core, egui-pop-model): in a stack of three, dragging the middle
+  title down past its least shrank the last one, which bounced back on the way
+  up. Each move now starts from the stack as shown, as a fresh drag would: what
+  the drag shrank stays shrunk, and the room goes to the first open section
+  below the boundary. The boundary still stays under the pointer.
+- The pull's keys pressed or released during a section drag past a stop left
+  the boundary away from the pointer, or made it jump to it (egui-pop-core):
+  the drag started again from where the pointer was, not from the boundary.
+  Past a stop nothing moves until the pointer is back on the boundary, and a
+  boundary the new mode lets go further catches up no faster than the pointer
+  moves.
 - The in-app file picker keeps the end of a long path (egui-pop-api): in a narrow
   dialog the controls cut the deepest folders, the ones that matter most. The
   start of the path now collapses behind a menu.
