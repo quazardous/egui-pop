@@ -1,7 +1,7 @@
 # egui_stack: directions for egui-pop
 
 Status: analysis, 2026-11-03. Nothing here is decided; the sections and
-toolbars direction is proposed in [ADR 0022](adr/0022-sections-and-toolbars-in-egui-stack.md).
+toolbars direction is accepted in [ADR 0022](adr/0022-sections-and-toolbars-in-egui-stack.md).
 
 [egui_stack](https://github.com/quazardous/egui_stack) continues
 [egui_dock](https://github.com/anhosh/egui_dock) (MIT, its full history
@@ -414,7 +414,7 @@ What exists in egui-pop:
   (`fit`, `:870`), separators that never end a row.
 
 **Direction P: a plain-egui core in egui_stack, egui-pop wraps it**
-(proposed in [ADR 0022](adr/0022-sections-and-toolbars-in-egui-stack.md)):
+(accepted in [ADR 0022](adr/0022-sections-and-toolbars-in-egui-stack.md)):
 
 | In egui_stack | Stays in egui-pop |
 |---|---|

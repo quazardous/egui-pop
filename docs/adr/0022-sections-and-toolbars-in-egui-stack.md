@@ -1,6 +1,6 @@
 # 0022: Sections and a toolbar row move into egui_stack as plain-egui cores; egui-pop wraps them
 
-Date: 2026-11-03. Status: proposed.
+Date: 2026-11-03. Status: accepted (2026-11-03, by the lead maintainer).
 
 ## Context
 
