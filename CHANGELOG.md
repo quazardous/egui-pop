@@ -8,7 +8,9 @@ egui minor. Each crate has its own version
 names the crate it changes, and a release lists the versions it
 publishes.
 
-## Unreleased
+## 0.3.0 (2026-11-03)
+
+Published: egui-pop-tokens 0.2.1, egui-pop-win32 0.2.1, egui-pop-model 0.3.0, egui-pop-core 0.3.0, egui-pop-api 0.3.0, egui-pop-test 0.3.0, egui-pop-viewport 0.3.0, egui-pop-i18n 0.3.0, egui-pop-editors 0.3.0, egui-pop-platform 0.3.0, egui-pop-views 0.3.0, egui-pop-imaging 0.3.0, egui-pop 0.3.0.
 
 ### Added
 
