@@ -3593,6 +3593,21 @@ impl App {
                 .when("!modalOpen")
                 .key("Shift+F6"),
             |call| crate::workbench::go_to_region(call.app, call.origin, true),
+        )?
+        // Ctrl+Page Down and Up, as VS Code and browsers have them.
+        .command(
+            CommandSpec::new(crate::workbench::CMD_NEXT_TAB, "Go to the next tab", "View")
+                .description("Shows and focuses the next tab of the focused panel's group.")
+                .when("!modalOpen")
+                .key("Ctrl+PageDown"),
+            |call| crate::workbench::go_to_tab(call.app, false),
+        )?
+        .command(
+            CommandSpec::new(crate::workbench::CMD_PREVIOUS_TAB, "Go to the previous tab", "View")
+                .description("Shows and focuses the previous tab of the focused panel's group.")
+                .when("!modalOpen")
+                .key("Ctrl+PageUp"),
+            |call| crate::workbench::go_to_tab(call.app, true),
         )?;
         crate::palettes::declare(&mut ctx)?;
         for (i, (menu, label)) in [

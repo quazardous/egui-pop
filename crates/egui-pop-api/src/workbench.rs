@@ -165,6 +165,14 @@ pub const CMD_ZEN: egui_pop_model::ids::CommandId =
 /// Leaves zen mode (Escape while in it).
 /// The keyboard to the next region of the window (F6): see
 /// [Moving between regions](self#moving-between-regions).
+/// The keyboard to the next tab of the focused panel's tab group
+/// (Ctrl+Page Down).
+pub const CMD_NEXT_TAB: egui_pop_model::ids::CommandId =
+    egui_pop_model::ids::CommandId::from_static("workbench.tab.next");
+/// The keyboard to the previous tab of the focused panel's tab group
+/// (Ctrl+Page Up).
+pub const CMD_PREVIOUS_TAB: egui_pop_model::ids::CommandId =
+    egui_pop_model::ids::CommandId::from_static("workbench.tab.previous");
 pub const CMD_NEXT_REGION: egui_pop_model::ids::CommandId =
     egui_pop_model::ids::CommandId::from_static("workbench.next_region");
 
@@ -2184,6 +2192,40 @@ pub(crate) fn go_to_region(
         }
     }
     Ok(json!({ "moved": true, "region": hop.region }))
+}
+
+/// The panel beside `panel` in its tab group, the previous one with `back`,
+/// wrapping; none for a panel alone in its group.
+fn tab_beside(node: &Node, panel: &PanelId, back: bool) -> Option<PanelId> {
+    match node {
+        Node::Tabs { panels, .. } => {
+            let i = panels.iter().position(|p| p == panel)?;
+            let n = panels.len();
+            (n > 1).then(|| panels[if back { (i + n - 1) % n } else { (i + 1) % n }].clone())
+        }
+        Node::Split { a, b, .. } => {
+            tab_beside(a, panel, back).or_else(|| tab_beside(b, panel, back))
+        }
+    }
+}
+
+/// Moves the keyboard to the tab beside the focused panel's, in its group, as
+/// VS Code's Ctrl+Page Down and Up: that panel is shown and focused, through
+/// the `workbench.focus` step.
+pub(crate) fn go_to_tab(app: &AppHandle, back: bool) -> Result<Json, String> {
+    let focused = app.try_workbench().and_then(|wb| wb.focused.clone());
+    let Some(panel) = focused else {
+        return Ok(json!({ "moved": false }));
+    };
+    let layout = app.layout();
+    let target = (layout.areas.iter()).find_map(|(_, node)| tab_beside(node, &panel, back));
+    let Some(target) = target else {
+        return Ok(json!({ "moved": false }));
+    };
+    match app.focus_panel(&target) {
+        Some(Outcome::Vetoed { by, reason }) => Err(format!("stopped by `{by}`: {reason}")),
+        _ => Ok(json!({ "moved": true, "panel": target })),
+    }
 }
 
 /// A menu or a popover is open, not the flyout: Escape comes first, F6 would
