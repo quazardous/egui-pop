@@ -499,6 +499,7 @@ egui-pop-files-all 45bed3078932475b
 egui-pop-files-bookmark 6b0e2a63b0284481
 egui-pop-files-bookmark-name d6f8334d610b5af6
 egui-pop-files-bookmarks c1eb9494b4a5a554
+egui-pop-files-camera 2084bc593dd90bf4
 egui-pop-files-column-modified 4a4dc6e0a5c27f60
 egui-pop-files-column-name e8f800548ef8413c
 egui-pop-files-column-size 460e2b4dbac0e0ba
@@ -515,7 +516,9 @@ egui-pop-files-devices 3a9b15217ec0d856
 egui-pop-files-dimensions 9448f1438bcf86c6
 egui-pop-files-documents c901a6cd9405fa95
 egui-pop-files-downloads fa6341d7af74e884
+egui-pop-files-exposure 4a9a022c75d279d6
 egui-pop-files-filter 629d424a814e621a
+egui-pop-files-focal-length a1b22c0663955b34
 egui-pop-files-folder-exists fdc91addb17847b8
 egui-pop-files-folder-failed 619403ff2c5abe26
 egui-pop-files-folder-name a65e586f86af8432
@@ -535,6 +538,7 @@ egui-pop-files-home 4e79e04702088474
 egui-pop-files-items e0d1e5c84cf292a7
 egui-pop-files-kind-file 181d912a9545ccc3
 egui-pop-files-kind-folder 385fe1e894da806d
+egui-pop-files-lens 666f135f6076a31d
 egui-pop-files-modified 4a4dc6e0a5c27f60
 egui-pop-files-move-down a7408a34290b19ae
 egui-pop-files-move-up fb1761b9e307ec99
@@ -549,6 +553,8 @@ egui-pop-files-preview-failed f604c6983efc1035
 egui-pop-files-preview-loading 9744c34a0d5ec1da
 egui-pop-files-preview-none 0c446dff9a1be9c0
 egui-pop-files-preview-resize 82d514fc12419954
+egui-pop-files-rating 36690a4e79cfa166
+egui-pop-files-rating-value df2cadf36e533a28
 egui-pop-files-recent ab73b8f8d0246524
 egui-pop-files-rename-bookmark d18d5eae53db6fcd
 egui-pop-files-replace 9ba5b7f30958fca3
@@ -565,6 +571,7 @@ egui-pop-files-size 460e2b4dbac0e0ba
 egui-pop-files-sort-ranked e152e2abf66757d0
 egui-pop-files-sorted-down 26c3550025343606
 egui-pop-files-sorted-up 3e593b33e0ce2cba
+egui-pop-files-taken a6a6c5403125d6ce
 egui-pop-files-thumbnail-size d4377170ede303ea
 egui-pop-files-type 20c8ac126ee3b079
 egui-pop-files-unbookmark d71391bfffa763c4

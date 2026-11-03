@@ -826,6 +826,13 @@ egui-pop-files-name = Nom du fichier, ou un chemin
 egui-pop-files-open = Ouvrir
 
 egui-pop-files-pages = Pages
+egui-pop-files-taken = Prise de vue
+egui-pop-files-camera = Appareil
+egui-pop-files-lens = Objectif
+egui-pop-files-exposure = Exposition
+egui-pop-files-focal-length = Focale
+egui-pop-files-rating = Note
+egui-pop-files-rating-value = { $stars } sur 5
 
 egui-pop-files-preview = Aperçu
 
