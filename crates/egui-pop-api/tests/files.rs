@@ -16,7 +16,7 @@ use egui_pop_api::dialogs::{self, DIALOGS};
 use egui_pop_api::files::fs::{DirItem, FileSystem, MemoryFs, Meta, SharedFs};
 use egui_pop_api::files::groups::SidecarRule;
 use egui_pop_api::files::preview::{
-    Body, Handles, Preview, PreviewProvider, PreviewRequest, Shown,
+    Body, Handles, PhotoFacts, Preview, PreviewProvider, PreviewRequest, Shown,
 };
 use egui_pop_api::files::{
     self, CMD_EDIT_PATH, CMD_NEW_FOLDER, CMD_SELECT_ALL, CMD_TOGGLE_SELECTION, Chosen, FILES,
@@ -3801,4 +3801,96 @@ fn a_bookmark_is_renamed_moved_and_removed_from_its_menu() {
     assert_eq!(files::bookmarks(&app), vec![root.join("notes")]);
     assert!(files::bookmark_names(&app).is_empty());
     let _ = std::fs::remove_dir_all(root);
+}
+
+/// Reads a raw's metadata, as an application's provider would.
+#[derive(Debug)]
+struct RawFacts;
+
+impl PreviewProvider for RawFacts {
+    fn id(&self) -> &str {
+        "raw-facts"
+    }
+    fn handles(&self) -> Handles {
+        Handles::new().extensions(&["cr3"])
+    }
+    fn preview(&self, _: &PreviewRequest) -> Result<Option<Preview>, String> {
+        Ok(Some(
+            Preview::new(Body::Empty).dimensions(6000, 4000).photo(
+                PhotoFacts::default()
+                    .taken("2026:01:15 10:04:00")
+                    .camera("Canon EOS R6")
+                    .lens("RF 35mm F1.8")
+                    .shutter(1.0 / 250.0)
+                    .aperture(5.6)
+                    .iso(200)
+                    .focal_length(35.0)
+                    .rating(3),
+            ),
+        ))
+    }
+}
+
+#[test]
+fn a_photo_s_facts_show_in_one_order_with_its_rating() {
+    let fs: SharedFs = Arc::new(MemoryFs::new().file_at(
+        "/p/IMG_1.cr3",
+        b"raw".to_vec(),
+        Some(UNIX_EPOCH + Duration::from_secs(60)),
+    ));
+    let app = App::builder()
+        .plugin(
+            FilesPlugin::in_app()
+                .without_builtin_previews()
+                .file_system(fs),
+        )
+        .build(&egui::Context::default())
+        .unwrap();
+    let handle = app.handle().clone();
+    handle
+        .service(&FILES)
+        .unwrap()
+        .previews()
+        .register(Arc::new(RawFacts));
+    files::want_preview(&handle, true);
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(900.0, 640.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+    let _p = choose(&mut h, FileRequest::open("Open").directory("/p"));
+    // The pane's, not the list's header of the same name.
+    let top = |h: &Harness<'static, App>, label: &str| {
+        h.get_by_role_and_label(Role::Label, label).rect().top()
+    };
+    for (label, value) in [
+        ("Taken", "2026-01-15 10:04:00"),
+        ("Camera", "Canon EOS R6"),
+        ("Lens", "RF 35mm F1.8"),
+        ("Exposure", "1/250 s  f/5.6  ISO 200"),
+        ("Focal length", "35 mm"),
+        ("Rating", "3 of 5"),
+    ] {
+        assert!(
+            (top(&h, label) - top(&h, value)).abs() < 1.0,
+            "{label} beside {value}"
+        );
+    }
+    // Dimensions, the photo's facts, the rating, then the file's time.
+    let order = [
+        "Dimensions",
+        "Taken",
+        "Camera",
+        "Lens",
+        "Exposure",
+        "Focal length",
+        "Rating",
+        "Modified",
+    ];
+    for pair in order.windows(2) {
+        assert!(top(&h, pair[0]) < top(&h, pair[1]), "{pair:?}");
+    }
+    let snap = handle.debug_snapshot();
+    let photo = &snap["files"]["open"][0]["picker"]["preview"]["photo"];
+    assert_eq!(photo["camera"], "Canon EOS R6");
+    assert_eq!(photo["rating"], 3);
+    egui_pop_test::assert_all_named(&h);
 }

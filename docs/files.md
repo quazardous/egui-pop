@@ -556,8 +556,33 @@ impl PreviewProvider for Notes {
   yet: the provider gives that as its reason. The web has none.
 - **What a preview holds.** A body (an image, a text's first lines, a
   document drawn simply, a folder's counts and first thumbnails, or
-  nothing) and facts: dimensions, pages, and labelled facts of the
-  provider's own.
+  nothing) and facts: dimensions, pages, a photo's facts, and labelled
+  facts of the provider's own.
+- **A photo's facts** (`PhotoFacts`, given with `Preview::photo`): when it
+  was taken, the camera, the lens, the exposure, the focal length and the
+  rating. The pane shows them in that order whichever provider read them, as
+  Dolphin's information panel and a photo application's loupe do, after the
+  dimensions and before the file's time: the exposure on one line
+  (`1/250 s  f/5.6  ISO 200`), the focal length in millimetres, the rating as
+  five stars (read as "3 of 5" by a screen reader). The time taken is the
+  camera's, without a zone; EXIF's `2026:01:15 10:04:00` reads as a date.
+  egui-pop reads no EXIF itself: an application's provider of raws fills
+  them, and agents read them as `photo` in the preview's metadata.
+
+```rust
+use egui_pop::api::files::preview::{Body, PhotoFacts, Preview};
+
+let preview = Preview::new(Body::Empty).dimensions(6000, 4000).photo(
+    PhotoFacts::default()
+        .taken("2026:01:15 10:04:00")
+        .camera("Canon EOS R6")
+        .shutter(1.0 / 250.0)
+        .aperture(5.6)
+        .iso(200)
+        .rating(3),
+);
+# let _ = preview;
+```
 
 A grid asks differently from the pane: `Previews::want` says each frame which
 paths it has in view, in order and with their facts, and `Previews::thumbnail`

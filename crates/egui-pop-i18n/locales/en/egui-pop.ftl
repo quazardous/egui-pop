@@ -1001,6 +1001,8 @@ egui-pop-files-bookmark-name = Bookmark name
 
 egui-pop-files-bookmarks = Bookmarks
 
+egui-pop-files-camera = Camera
+
 egui-pop-files-column-modified = Modified
 
 egui-pop-files-column-name = Name
@@ -1033,7 +1035,11 @@ egui-pop-files-documents = Documents
 
 egui-pop-files-downloads = Downloads
 
+egui-pop-files-exposure = Exposure
+
 egui-pop-files-filter = Filter, or type a path
+
+egui-pop-files-focal-length = Focal length
 
 egui-pop-files-folder-exists = { $name } already exists
 
@@ -1073,6 +1079,8 @@ egui-pop-files-kind-file = File
 
 egui-pop-files-kind-folder = Folder
 
+egui-pop-files-lens = Lens
+
 egui-pop-files-modified = Modified
 
 egui-pop-files-move-down = Move down
@@ -1100,6 +1108,10 @@ egui-pop-files-preview-loading = Loading the preview…
 egui-pop-files-preview-none = No preview
 
 egui-pop-files-preview-resize = Resize the preview
+
+egui-pop-files-rating = Rating
+
+egui-pop-files-rating-value = { $stars } of 5
 
 egui-pop-files-recent = Recent
 
@@ -1132,6 +1144,8 @@ egui-pop-files-sort-ranked = While the field filters, the best matches come firs
 egui-pop-files-sorted-down = { $column }, sorted descending
 
 egui-pop-files-sorted-up = { $column }, sorted ascending
+
+egui-pop-files-taken = Taken
 
 egui-pop-files-thumbnail-size = Thumbnail size
 

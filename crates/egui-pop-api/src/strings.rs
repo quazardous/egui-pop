@@ -480,6 +480,16 @@ pub const FILES_SIZE: StrKey = StrKey::new("egui-pop-files-size", "Size");
 pub const FILES_ITEMS: StrKey = StrKey::new("egui-pop-files-items", "Items");
 pub const FILES_DIMENSIONS: StrKey = StrKey::new("egui-pop-files-dimensions", "Dimensions");
 pub const FILES_PAGES: StrKey = StrKey::new("egui-pop-files-pages", "Pages");
+/// A photo's facts in the preview pane.
+pub const FILES_TAKEN: StrKey = StrKey::new("egui-pop-files-taken", "Taken");
+pub const FILES_CAMERA: StrKey = StrKey::new("egui-pop-files-camera", "Camera");
+pub const FILES_LENS: StrKey = StrKey::new("egui-pop-files-lens", "Lens");
+pub const FILES_EXPOSURE: StrKey = StrKey::new("egui-pop-files-exposure", "Exposure");
+pub const FILES_FOCAL_LENGTH: StrKey = StrKey::new("egui-pop-files-focal-length", "Focal length");
+pub const FILES_RATING: StrKey = StrKey::new("egui-pop-files-rating", "Rating");
+/// A rating's stars, as a screen reader says them.
+pub const FILES_RATING_VALUE: StrKey =
+    StrKey::new("egui-pop-files-rating-value", "{ $stars } of 5");
 pub const FILES_MODIFIED: StrKey = StrKey::new("egui-pop-files-modified", "Modified");
 
 // Toasts.
@@ -1400,6 +1410,13 @@ pub const ALL: &[StrKey] = &[
     FILES_ITEMS,
     FILES_DIMENSIONS,
     FILES_PAGES,
+    FILES_TAKEN,
+    FILES_CAMERA,
+    FILES_LENS,
+    FILES_EXPOSURE,
+    FILES_FOCAL_LENGTH,
+    FILES_RATING,
+    FILES_RATING_VALUE,
     FILES_MODIFIED,
     TOAST_INFO,
     TOAST_SUCCESS,

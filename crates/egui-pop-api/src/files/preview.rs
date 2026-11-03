@@ -204,17 +204,171 @@ pub fn mime_of(path: &Path) -> Option<&'static str> {
     })
 }
 
-/// A preview: what to draw and the facts to say.
+/// A preview: what to draw and the facts to say. Made with [`Preview::new`] and
+/// its builders.
 #[derive(Clone, Debug, Default)]
+#[non_exhaustive]
 pub struct Preview {
     pub body: Body,
     /// An image's or a page's width and height, in pixels.
     pub dimensions: Option<[u32; 2]>,
     /// A document's pages.
     pub pages: Option<u32>,
+    /// What a photo's metadata says ([`PhotoFacts`]): shown in one order,
+    /// the same way whichever provider read it.
+    pub photo: Option<PhotoFacts>,
     /// Further facts, a label and a value each, in the interface's
     /// language.
     pub facts: Vec<(String, String)>,
+}
+
+/// What a photo's metadata says (EXIF, XMP), as a provider reads it: the
+/// preview pane shows it in one order, as Dolphin's information panel and a
+/// photo application's loupe do, whichever provider read it. Made with
+/// [`PhotoFacts::default`] and its builders.
+#[derive(Clone, Debug, Default, PartialEq)]
+#[non_exhaustive]
+pub struct PhotoFacts {
+    /// When it was taken, as the camera says: its local time, without a
+    /// zone (`2026-01-15 10:04:00`).
+    pub taken: Option<String>,
+    /// The camera (make and model).
+    pub camera: Option<String>,
+    pub lens: Option<String>,
+    /// The exposure time, in seconds.
+    pub shutter: Option<f64>,
+    /// The aperture's f-number.
+    pub aperture: Option<f32>,
+    pub iso: Option<u32>,
+    /// The focal length, in millimetres.
+    pub focal_length: Option<f32>,
+    /// From 0 to 5 stars.
+    pub rating: Option<u8>,
+}
+
+impl PhotoFacts {
+    /// When it was taken. EXIF's form (`2026:01:15 10:04:00`) reads as a date
+    /// (`2026-01-15 10:04:00`); anything else is shown as given.
+    pub fn taken(mut self, when: &str) -> Self {
+        let when = when.trim();
+        let b = when.as_bytes();
+        let exif = b.len() >= 10
+            && b[4] == b':'
+            && b[7] == b':'
+            && b[..4]
+                .iter()
+                .chain(&b[5..7])
+                .chain(&b[8..10])
+                .all(u8::is_ascii_digit);
+        self.taken = Some(if exif {
+            format!(
+                "{}-{}-{}{}",
+                &when[..4],
+                &when[5..7],
+                &when[8..10],
+                &when[10..]
+            )
+        } else {
+            when.to_owned()
+        });
+        self
+    }
+
+    pub fn camera(mut self, camera: &str) -> Self {
+        self.camera = Some(camera.trim().to_owned());
+        self
+    }
+
+    pub fn lens(mut self, lens: &str) -> Self {
+        self.lens = Some(lens.trim().to_owned());
+        self
+    }
+
+    /// The exposure time, in seconds.
+    pub fn shutter(mut self, seconds: f64) -> Self {
+        self.shutter = Some(seconds);
+        self
+    }
+
+    /// The aperture's f-number.
+    pub fn aperture(mut self, f_number: f32) -> Self {
+        self.aperture = Some(f_number);
+        self
+    }
+
+    pub fn iso(mut self, iso: u32) -> Self {
+        self.iso = Some(iso);
+        self
+    }
+
+    /// The focal length, in millimetres.
+    pub fn focal_length(mut self, mm: f32) -> Self {
+        self.focal_length = Some(mm);
+        self
+    }
+
+    /// From 0 to 5 stars (more is 5).
+    pub fn rating(mut self, stars: u8) -> Self {
+        self.rating = Some(stars.min(5));
+        self
+    }
+
+    /// The exposure as one line: `1/250 s  f/5.6  ISO 200`; `None` without
+    /// any of the three.
+    pub fn exposure_text(&self) -> Option<String> {
+        let parts: Vec<String> = [
+            self.shutter.map(shutter_text),
+            self.aperture
+                .map(|f| format!("f/{}", short_number(f64::from(f)))),
+            self.iso.map(|iso| format!("ISO {iso}")),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+        (!parts.is_empty()).then(|| parts.join("  "))
+    }
+
+    /// The metadata, as agents read it.
+    pub fn describe(&self) -> Json {
+        let mut d = json!({});
+        let mut put = |k: &str, v: Json| {
+            if !v.is_null() {
+                d[k] = v;
+            }
+        };
+        put("taken", json!(self.taken));
+        put("camera", json!(self.camera));
+        put("lens", json!(self.lens));
+        put("shutter", json!(self.shutter));
+        put("aperture", json!(self.aperture));
+        put("iso", json!(self.iso));
+        put("focal_length", json!(self.focal_length));
+        put("rating", json!(self.rating));
+        d
+    }
+}
+
+/// An exposure time as photographers say it: `1/250 s` under a second (the
+/// fraction rounded), `2 s` or `1.5 s` from a second.
+fn shutter_text(seconds: f64) -> String {
+    if seconds > 0.0 && seconds < 1.0 {
+        let n = (1.0 / seconds).round() as u64;
+        // 0.4 s is 1/2.5 s: a fraction that rounds far from it reads better as a number.
+        if ((1.0 / n as f64) - seconds).abs() / seconds < 0.1 {
+            return format!("1/{n} s");
+        }
+    }
+    format!("{} s", short_number(seconds))
+}
+
+/// A number with at most one decimal, none when it is whole: `8`, `5.6`.
+fn short_number(x: f64) -> String {
+    let r = (x * 10.0).round() / 10.0;
+    if r.fract() == 0.0 {
+        format!("{r:.0}")
+    } else {
+        format!("{r:.1}")
+    }
 }
 
 impl Preview {
@@ -232,6 +386,12 @@ impl Preview {
 
     pub fn pages(mut self, pages: u32) -> Self {
         self.pages = Some(pages);
+        self
+    }
+
+    /// What the photo's metadata says.
+    pub fn photo(mut self, facts: PhotoFacts) -> Self {
+        self.photo = Some(facts);
         self
     }
 
@@ -275,6 +435,9 @@ impl Preview {
         }
         if let Body::Text { truncated, .. } = &self.body {
             d["truncated"] = json!(truncated);
+        }
+        if let Some(photo) = &self.photo {
+            d["photo"] = photo.describe();
         }
         if !self.facts.is_empty() {
             d["facts"] = self
@@ -1124,6 +1287,27 @@ pub(super) fn pane_for(
             rows.push((tr(ui.ctx(), &txt::FILES_PAGES), n.to_string()));
         }
     }
+    let photo = ready.and_then(|r| r.preview.photo.as_ref());
+    if let Some(f) = photo {
+        for (key, value) in [
+            (&txt::FILES_TAKEN, f.taken.clone()),
+            (&txt::FILES_CAMERA, f.camera.clone()),
+            (&txt::FILES_LENS, f.lens.clone()),
+            (&txt::FILES_EXPOSURE, f.exposure_text()),
+            (
+                &txt::FILES_FOCAL_LENGTH,
+                f.focal_length
+                    .map(|mm| format!("{} mm", short_number(f64::from(mm)))),
+            ),
+        ] {
+            if let Some(v) = value.filter(|v| !v.is_empty()) {
+                rows.push((tr(ui.ctx(), key), v));
+            }
+        }
+    }
+    // The rating ends the photo's facts: the rows after it are the file's.
+    let rating = photo.and_then(|f| f.rating);
+    let photo_end = rows.len();
     // A file's: a folder's changes with what is put in it.
     if let Some(at) = meta.filter(|m| !m.is_dir).and_then(|m| m.modified) {
         rows.push((tr(ui.ctx(), &txt::FILES_MODIFIED), time_text(at)));
@@ -1131,16 +1315,90 @@ pub(super) fn pane_for(
     if let Some(p) = ready.map(|r| &r.preview) {
         rows.extend(p.facts.iter().cloned());
     }
+    let total = rows.len();
     egui::Grid::new("egui_pop.files.preview.facts")
         .num_columns(2)
         .spacing([t.space.m, t.space.xs])
         .show(ui, |ui| {
-            for (label, value) in rows {
+            for (n, (label, value)) in rows.into_iter().enumerate() {
+                if n == photo_end
+                    && let Some(stars) = rating
+                {
+                    ui.weak(tr(ui.ctx(), &txt::FILES_RATING));
+                    rating_stars(ui, stars);
+                    ui.end_row();
+                }
                 ui.weak(label);
                 ui.label(value);
                 ui.end_row();
             }
+            if photo_end == total
+                && let Some(stars) = rating
+            {
+                ui.weak(tr(ui.ctx(), &txt::FILES_RATING));
+                rating_stars(ui, stars);
+                ui.end_row();
+            }
         });
+}
+
+/// A rating as five stars, those rated filled; read as "3 of 5".
+fn rating_stars(ui: &mut Ui, stars: u8) -> egui::Response {
+    let t = Tokens::of(ui.ctx());
+    let side = ui.text_style_height(&egui::TextStyle::Body);
+    let gap = t.space.xs;
+    let size = egui::vec2(5.0 * side + 4.0 * gap, side);
+    let (rect, response) = ui.allocate_exact_size(size, egui::Sense::hover());
+    let said = tr_args(
+        ui.ctx(),
+        &txt::FILES_RATING_VALUE,
+        &[("stars", &stars.to_string())],
+    );
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, &said));
+    if ui.is_rect_visible(rect) {
+        let p = ui.painter();
+        for k in 0..5u8 {
+            let c = rect.left_center() + egui::vec2(side / 2.0 + f32::from(k) * (side + gap), 0.0);
+            let points = star_points(c, side * 0.5, side * 0.2);
+            if k < stars {
+                // Convex pieces: the pentagon inside and a triangle per point.
+                let inner: Vec<egui::Pos2> = points.iter().skip(1).step_by(2).copied().collect();
+                p.add(egui::Shape::convex_polygon(
+                    inner,
+                    t.text.default,
+                    egui::Stroke::NONE,
+                ));
+                for i in 0..5 {
+                    let tip = points[2 * i];
+                    let a = points[(2 * i + 9) % 10];
+                    let b = points[2 * i + 1];
+                    p.add(egui::Shape::convex_polygon(
+                        vec![a, tip, b],
+                        t.text.default,
+                        egui::Stroke::NONE,
+                    ));
+                }
+            } else {
+                p.add(egui::Shape::closed_line(
+                    points,
+                    egui::Stroke::new(1.0, t.text.muted),
+                ));
+            }
+        }
+    }
+    response
+}
+
+/// A five-pointed star's outline, its first point up: points and inner corners
+/// in turn, clockwise.
+fn star_points(center: egui::Pos2, outer: f32, inner: f32) -> Vec<egui::Pos2> {
+    (0..10)
+        .map(|i| {
+            let r = if i % 2 == 0 { outer } else { inner };
+            let a = -std::f32::consts::FRAC_PI_2 + i as f32 * std::f32::consts::PI / 5.0;
+            center + egui::vec2(a.cos(), a.sin()) * r
+        })
+        .collect()
 }
 
 /// A size that fits `image` in `area`, keeping its proportions, never
@@ -1282,6 +1540,30 @@ pub fn time_text(t: SystemTime) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_photo_s_exposure_reads_as_photographers_say_it() {
+        assert_eq!(shutter_text(1.0 / 250.0), "1/250 s");
+        assert_eq!(shutter_text(1.0 / 3.0), "1/3 s");
+        assert_eq!(shutter_text(0.4), "0.4 s");
+        assert_eq!(shutter_text(2.0), "2 s");
+        assert_eq!(shutter_text(1.5), "1.5 s");
+        let f = PhotoFacts::default().aperture(8.0).iso(100);
+        assert_eq!(f.exposure_text().as_deref(), Some("f/8  ISO 100"));
+        assert_eq!(PhotoFacts::default().exposure_text(), None);
+        assert_eq!(
+            PhotoFacts::default()
+                .taken("2026:01:15 10:04:00")
+                .taken
+                .as_deref(),
+            Some("2026-01-15 10:04:00")
+        );
+        assert_eq!(
+            PhotoFacts::default().taken("15 January").taken.as_deref(),
+            Some("15 January")
+        );
+        assert_eq!(PhotoFacts::default().rating(9).rating, Some(5));
+    }
     use crate::files::fs::MemoryFs;
     use std::time::{Duration, Instant};
 
