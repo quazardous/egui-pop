@@ -84,9 +84,8 @@ rfd = "0.17"
 # (eframe and egui_kittest already depend on it).
 image = { version = "0.25", default-features = false }
 # MIT: docked tabs and splits for the workbench's areas. egui_stack
-# continues egui_dock 0.21 on egui 0.37; it is not on crates.io yet, so it
-# comes from git, pinned (issue #145).
-egui_stack = { version = "0.22.0", git = "https://github.com/quazardous/egui_stack", rev = "f891bc70290c8fb17ad8ecece01977982b3f1d80", default-features = false }
+# continues egui_dock 0.21 on egui 0.37.
+egui_stack = { version = "0.22", default-features = false }
 egui-pop = { version = "0.3.0", path = "crates/egui-pop" }
 
 [workspace.lints.rust]
@@ -98,7 +97,8 @@ all = { level = "warn", priority = -1 }
 
 # Temporary: egui-phosphor has no release on egui 0.37 yet. This fork
 # carries its open pull request updating it (amPerl/egui-phosphor#49).
-# crates.io refuses git dependencies: egui-pop cannot be published while
-# this patch, and the git egui_stack above, remain (issues #145, #146).
+# A patch does not reach crates.io: published as is, egui-pop would
+# require egui-phosphor 0.14, on egui 0.36, so egui-pop is not published
+# while this patch remains (issue #146).
 [patch.crates-io]
 egui-phosphor = { git = "https://github.com/quazardous/egui-phosphor", rev = "01e8c1144cac3f551ceb834b6d26ddf36ba502cd" }
