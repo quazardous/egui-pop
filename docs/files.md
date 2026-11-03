@@ -390,6 +390,46 @@ took); one that panics counts for nothing, and the log says so.
   shown. `FileRequest::ungrouped()` turns groups off for a choice that wants a
   sidecar as much as a RAW.
 
+### The application's options
+
+A choice can carry options of the application's, shown above the picker's
+buttons and given back with the paths: an import's "Only new photos", an
+export's format. Their shape is the desktop portal's `choices` (Windows'
+customize interface and macOS's accessory view do the same): a combo box of
+values, or a check box.
+
+```rust
+use egui_pop::api::files::{self, FileRequest};
+
+let request = FileRequest::open_many("Import")
+    .check("only_new", "Only new photos", true)
+    .choice("copy", "Files", &[("add", "Add in place"), ("copy", "Copy")], "add");
+# let _ = request;
+// When the choice ends:
+# let result: Result<serde_json::Value, String> = Ok(serde_json::json!({ "paths": [], "choices": { "only_new": "true", "copy": "add" } }));
+let choices = files::chosen_choices(&result);
+let only_new = choices.get("only_new").map(String::as_str) == Some("true");
+# assert!(only_new);
+```
+
+- **Values.** Each choice ends with a value: an option's id, or `"true"` or
+  `"false"` for a check box. `files::chosen_choices` gives every id with its
+  value, the defaults included; a cancelled choice and a request without
+  choices give none, and the result then has no `choices`.
+- **The labels are the application's**, translated by it; each combo box takes
+  its label as its name for a screen reader.
+- **Whoever answers.** The picker's values, unless a run-hook on `file.choose`
+  answers `choices` with its `paths`, or calls `Files::set_choices` before
+  `Files::deliver`, or the bridge's `answer` gives `choices`. Each value is
+  checked against the request: an id it does not have or a value its choice
+  cannot take is refused. `file.chosen` carries them in its arguments, and a
+  before-hook may change them as it may redirect the paths. A `FilePicker`
+  drawn on its own gives them with `choices`, and `set_choice` sets one.
+- **The system's chooser cannot show them.** `rfd` has no way to: a request
+  with choices opens the in-app picker even where the system's chooser is used
+  (`files.native`), so that the options are seen, not silently left at their
+  defaults.
+
 ### Where it reads
 
 The picker reads through a `files::fs::FileSystem`: the system's

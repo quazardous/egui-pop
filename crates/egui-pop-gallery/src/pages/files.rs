@@ -361,7 +361,18 @@ fn show(ui: &mut Ui, app: &AppHandle) {
             );
         }
         if ui.button("Open several…").clicked() {
-            asked = Some(FileRequest::open_many("Open files").directory(&root));
+            // An import's options, given back with the paths.
+            asked = Some(
+                FileRequest::open_many("Open files")
+                    .directory(&root)
+                    .check("subfolders", "Include subfolders", false)
+                    .choice(
+                        "then",
+                        "Then",
+                        &[("open", "Open them"), ("copy", "Import a copy")],
+                        "open",
+                    ),
+            );
         }
         if ui.button("Save as…").clicked() {
             asked = Some(
@@ -382,11 +393,23 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     let pending = PENDING.get(&ctx).flatten();
     if let Some(r) = pending.as_ref().and_then(Pending::take) {
         let text = match files::chosen(&r) {
-            Ok(files::Chosen::Paths(paths)) => paths
-                .iter()
-                .map(|p| p.strip_prefix(&root).unwrap_or(p).display().to_string())
-                .collect::<Vec<_>>()
-                .join(", "),
+            Ok(files::Chosen::Paths(paths)) => {
+                let mut text = paths
+                    .iter()
+                    .map(|p| p.strip_prefix(&root).unwrap_or(p).display().to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let choices = files::chosen_choices(&r);
+                if !choices.is_empty() {
+                    let said = choices
+                        .iter()
+                        .map(|(k, v)| format!("{k}: {v}"))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    text = format!("{text} ({said})");
+                }
+                text
+            }
             Ok(files::Chosen::Cancelled) => "cancelled".into(),
             Err(e) => format!("refused: {e}"),
         };
