@@ -599,7 +599,7 @@ fn a_menus_frame_is_no_stop() {
 // Dock separators (check 3).
 
 #[test]
-fn a_dock_separator_is_a_stop_and_moves_with_shift_or_ctrl_and_an_arrow() {
+fn a_dock_separator_is_a_stop_and_moves_with_the_arrows() {
     let mut h = with_panels();
     let app = h.state().app.handle().clone();
     let mut layout = app.layout();
@@ -618,7 +618,8 @@ fn a_dock_separator_is_a_stop_and_moves_with_shift_or_ctrl_and_an_arrow() {
     }
     assert_eq!(app.set_layout(layout), Vec::<String>::new());
     let _ = h.run_ok();
-    let line = |s: &Stop| s.name.is_empty() && s.rect.height() < 10.0 && s.rect.width() < 200.0;
+    // egui_stack names its separators ("Resize", from its labels).
+    let line = |s: &Stop| s.name == "Resize" && s.rect.height() < 10.0 && s.rect.width() < 200.0;
     let separator = (0..200)
         .find_map(|_| walk::press(&mut h, TAB).filter(line))
         .expect("Tab reaches the separator");
@@ -626,15 +627,19 @@ fn a_dock_separator_is_a_stop_and_moves_with_shift_or_ctrl_and_an_arrow() {
         walk::press(h, Press { modifiers, key }).expect("it keeps the focus")
     };
     let y = |s: Stop| s.rect.min.y;
-    let moved = press(&mut h, Modifiers::SHIFT, Key::ArrowDown);
+    // Along its axis a plain arrow moves it 16 points, Shift 64, and
+    // Enter puts it back in the middle.
+    let moved = press(&mut h, Modifiers::NONE, Key::ArrowDown);
     assert_eq!(y(moved), separator.rect.min.y + 16.0);
-    let moved = press(&mut h, CTRL, Key::ArrowUp);
+    let moved = press(&mut h, Modifiers::NONE, Key::ArrowUp);
     assert_eq!(y(moved), separator.rect.min.y);
-    // Across the line, it does not move; a plain arrow leaves for the cone.
-    let moved = press(&mut h, CTRL, Key::ArrowRight);
-    assert_eq!(moved.id, separator.id);
+    let moved = press(&mut h, Modifiers::SHIFT, Key::ArrowDown);
+    assert_eq!(y(moved), separator.rect.min.y + 64.0);
+    let moved = press(&mut h, Modifiers::NONE, Key::Enter);
     assert_eq!(y(moved), separator.rect.min.y);
-    assert_ne!(walk::press(&mut h, DOWN).map(|s| s.id), Some(separator.id));
+    // Across the line, an arrow leaves for the cone.
+    let across = walk::press(&mut h, Press::key(Key::ArrowRight));
+    assert_ne!(across.map(|s| s.id), Some(separator.id));
 }
 
 #[test]

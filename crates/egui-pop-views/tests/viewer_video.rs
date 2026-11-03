@@ -344,14 +344,26 @@ fn only_a_playing_video_asks_for_repaints() {
     let pretend = Pretend::default();
     // `shown` ran until nothing asked for a pass: paused, it settles.
     let mut h = shown(&pretend, &clip.target());
-    assert!(h.try_run().is_ok(), "paused");
+    h.run();
+    assert_eq!(repaint_delay(&h), Duration::MAX, "paused");
     h.get_by_role_and_label(Role::Button, "Play").click();
-    assert!(h.try_run().is_err(), "playing");
+    h.run();
+    assert_eq!(pretend.log().state, VideoState::Playing);
+    // Playing, each pass asks for the next one, at the latest when the
+    // time shown moves (egui_kittest runs only the immediate ones).
+    assert!(repaint_delay(&h) < Duration::from_secs(1), "playing");
     h.get_by_role_and_label(Role::Button, "Pause").click();
-    assert!(h.try_run().is_ok(), "paused again");
+    h.run();
+    assert_eq!(repaint_delay(&h), Duration::MAX, "paused again");
     pretend.log().state = VideoState::Ended;
     h.step();
-    assert!(h.try_run().is_ok(), "ended");
+    h.run();
+    assert_eq!(repaint_delay(&h), Duration::MAX, "ended");
+}
+
+/// How soon the last pass asked for another one.
+fn repaint_delay(h: &Shown<'_>) -> Duration {
+    h.output().viewport_output[&egui::ViewportId::ROOT].repaint_delay
 }
 
 #[test]

@@ -387,9 +387,10 @@ fn wheel(h: &mut Harness<'_>, at: egui::Pos2, notches: f32) {
     h.run();
     h.event(event(0.0, egui::TouchPhase::Start));
     h.event(event(notches, egui::TouchPhase::Move));
-    h.run();
+    settle(h);
     h.event(event(0.0, egui::TouchPhase::End));
-    h.run();
+    // egui 0.37's scroll physics take a few more passes to come to rest.
+    settle(h);
 }
 
 fn laid(h: &Harness<'_>, key: &str) -> egui_pop_core::sections::Laid {
@@ -1797,4 +1798,15 @@ fn keys_released_short_of_the_pointer_let_the_boundary_catch_up_no_faster_than_i
         ];
         play(grab, false, true, &acts);
     }
+}
+
+/// Runs until nothing asks for another pass, over more passes than
+/// `Harness::run` allows.
+fn settle(h: &mut Harness<'_>) {
+    for _ in 0..4 {
+        if h.try_run().is_ok() {
+            return;
+        }
+    }
+    panic!("never settled");
 }
