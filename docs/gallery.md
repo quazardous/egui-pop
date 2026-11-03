@@ -353,7 +353,7 @@ Zones and blocks, the workbench, the layout controls, palettes, arrangements, th
 
 ### Application services
 
-Settings, shortcuts, pointer gesture profiles, tips, About (the page and its dialog), platform services, translations, the developer tools, and the jobs centre (a job's log console open, in the page and in the status bar's popover).
+Settings, shortcuts, pointer gesture profiles, tips, About (the page and its dialog), platform services, translations, the developer tools (with the inspect mode's dialog), and the jobs centre (a job's log console open, in the page and in the status bar's popover).
 
 <table>
   <tr>
@@ -372,6 +372,7 @@ Settings, shortcuts, pointer gesture profiles, tips, About (the page and its dia
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/pointer-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/pointer-pop-dark.png" width="200" alt="pointer-pop-dark"></a><br>pointer-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/about-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/about-pop-dark.png" width="200" alt="about-pop-dark"></a><br>about-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/about-dialog-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/about-dialog-pop-dark.png" width="200" alt="about-dialog-pop-dark"></a><br>about-dialog-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/inspect-dialog-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/inspect-dialog-pop-dark.png" width="200" alt="inspect-dialog-pop-dark"></a><br>inspect-dialog-pop-dark</td>
   </tr>
 </table>
 

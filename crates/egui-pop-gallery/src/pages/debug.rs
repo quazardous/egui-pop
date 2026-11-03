@@ -162,7 +162,6 @@ fn show(ui: &mut Ui, app: &AppHandle, s: &mut State) {
 }
 
 fn playground(ui: &mut Ui, app: &AppHandle, s: &mut State) {
-    let _ = app;
     ui.label("Things the collectors see:");
     let r = ui.button("Open a popover");
     if r.clicked() {
@@ -193,4 +192,17 @@ fn playground(ui: &mut Ui, app: &AppHandle, s: &mut State) {
         }
         ui.label("The fragile box is fine.");
     });
+    ui.separator();
+    // The inspect mode (devtools): click an element, see what egui-pop
+    // knows of it, copy that into a report.
+    let on = egui_pop::api::devtools::enabled(app);
+    if ui
+        .add_enabled(on, egui::Button::new("Inspect an element (Ctrl+Shift+C)"))
+        .clicked()
+    {
+        app.run(egui_pop::api::devtools::inspect::CMD_INSPECT, Json::Null);
+    }
+    if !on {
+        ui.weak("Turn on Settings > Developer > Devtools to inspect.");
+    }
 }

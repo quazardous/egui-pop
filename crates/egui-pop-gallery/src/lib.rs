@@ -298,7 +298,7 @@ pub fn builder(options: &Options) -> AppBuilder {
         .plugin(pages::strips::StripsPage)
         .plugin(jobs_plugin(&jobs_sim))
         .plugin(pages::jobs::JobsPage { sim: jobs_sim })
-        .plugin(egui_pop::api::devtools::DevtoolsPlugin::default())
+        .plugin(egui_pop::api::devtools::DevtoolsPlugin::default().describe(shell::inspect_rows))
         .plugin(pages::frame::FramePage)
         .plugin(pages::scale::ScalePage)
         .plugin(pages::pointer::PointerPage)

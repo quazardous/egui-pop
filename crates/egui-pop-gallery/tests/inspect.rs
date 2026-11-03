@@ -1,0 +1,201 @@
+//! Devtools' inspect mode in the gallery: a click picks an element
+//! without reaching it, the dialog names it, Copy puts it on the
+//! clipboard; in a detached panel too; by the keyboard; Escape leaves.
+
+use egui::accesskit::Role;
+use egui_kittest::Harness;
+use egui_kittest::kittest::Queryable as _;
+use egui_pop::api::AppHandle;
+use egui_pop::api::devtools::inspect;
+use egui_pop::model::clipboard::Slot;
+use egui_pop::model::commands::Origin;
+use egui_pop::model::values::{Change, Set, Value};
+use egui_pop::theme::Density;
+use egui_pop_gallery::{Gallery, Options};
+use egui_pop_test::SharedGpu as _;
+
+fn harness(page: &str) -> Harness<'static, Gallery> {
+    let options = Options {
+        theme: "pop-dark".to_string(),
+        density: Density::Comfortable,
+        page: page.to_string(),
+        ..Options::default()
+    };
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(1100.0, 720.0))
+        .shared_wgpu()
+        .build_eframe(move |cc| {
+            egui_pop::core::motion::freeze(&cc.egui_ctx, 0.0);
+            Gallery::from_creation_context(cc, options).expect("the gallery builds")
+        });
+    h.run();
+    let app = handle(&h);
+    egui_pop::core::lock(&app.store())
+        .set(Set::new(
+            "settings/developer.devtools",
+            Change::To(Value::Bool(true)),
+            Origin::User,
+        ))
+        .unwrap();
+    h.run();
+    h
+}
+
+fn handle(h: &Harness<'_, Gallery>) -> AppHandle {
+    h.state().app.handle().clone()
+}
+
+/// Ctrl+Shift+C, as in browsers.
+fn chord(h: &mut Harness<'_, Gallery>) {
+    h.key_press_modifiers(egui::Modifiers::CTRL | egui::Modifiers::SHIFT, egui::Key::C);
+    h.run();
+    h.run();
+}
+
+fn copied(app: &AppHandle) -> String {
+    egui_pop::api::clipboard::with_owner(app, |c| c.get(&Slot::User))
+        .flatten()
+        .expect("copied into the user's slot")
+        .fallbacks
+        .iter()
+        .find(|r| r.format == egui_pop::model::clipboard::TEXT)
+        .and_then(|r| r.data.as_str().map(String::from))
+        .expect("a text fallback")
+}
+
+fn line<'a>(text: &'a str, name: &str) -> &'a str {
+    text.lines()
+        .find_map(|l| l.strip_prefix(&format!("{name}: ")))
+        .unwrap_or_else(|| panic!("no `{name}` line in\n{text}"))
+}
+
+#[test]
+fn a_click_names_the_button_without_pressing_it_and_copy_holds_it() {
+    let mut h = harness("debug");
+    let app = handle(&h);
+    chord(&mut h);
+    assert!(inspect::active(&app));
+    h.get_by_label("Announce \"Saved\"").click();
+    h.run();
+    h.run();
+    // Not pressed: nothing announced.
+    assert!(egui_pop::core::a11y::announcements(&h.ctx).is_empty());
+    assert!(!inspect::active(&app));
+    h.get_by_label("Inspected element");
+    h.get_by_label("Button \"Announce \\\"Saved\\\"\" (widget)");
+    let mut results = egui_kittest::SnapshotResults::new();
+    results.add(h.try_snapshot("inspect-dialog-pop-dark"));
+    h.get_by_role_and_label(Role::Button, "Copy").click();
+    h.run();
+    h.get_by_label("Copied.");
+    let text = copied(&app);
+    assert!(
+        text.starts_with("Element: Button \"Announce \\\"Saved\\\"\" (widget)\n"),
+        "{text}"
+    );
+    assert_eq!(line(&text, "Role"), "Button");
+    assert_eq!(line(&text, "Name"), "Announce \"Saved\"");
+    assert_eq!(line(&text, "Window"), "main");
+    assert_eq!(line(&text, "Zone"), "app.inspector");
+    assert_eq!(line(&text, "Block"), "gallery.playground");
+    assert_eq!(line(&text, "Panel"), "app.inspector");
+    assert_eq!(line(&text, "Story plugin"), "gallery.debug");
+    assert_eq!(
+        line(&text, "Theme"),
+        "pop-dark (dark), kit built-in, density comfortable"
+    );
+    assert_eq!(line(&text, "Enabled"), "yes");
+    assert_eq!(line(&text, "Page"), "Debug bridge (Framework)");
+    assert_eq!(line(&text, "Story"), "debug");
+    assert_eq!(line(&text, "In"), "its playground");
+    assert_eq!(line(&text, "Picked by"), "pointer");
+    // The JSON form beside it, and the collector.
+    let snapshot = app.debug_snapshot();
+    let last = &snapshot["inspect"]["last"];
+    assert_eq!(last["text"], text.as_str());
+    assert_eq!(last["json"]["element"]["role"], "Button");
+    assert_eq!(last["json"]["app"]["Story"], "debug");
+    // Pick another: the dialog goes, the mode is back.
+    h.get_by_role_and_label(Role::Button, "Pick another")
+        .click();
+    h.run();
+    h.run();
+    assert!(inspect::active(&app));
+    assert!(h.query_by_label("Inspected element").is_none());
+}
+
+#[test]
+fn a_detached_panel_is_inspected_in_its_window() {
+    let mut h = harness("workbench");
+    let app = handle(&h);
+    h.get_by_label("Open the demonstration panels").click();
+    h.run();
+    h.get_by_label("Detach Notes into a window").click();
+    h.run();
+    h.run();
+    assert_eq!(app.layout().auxiliary.len(), 1);
+    chord(&mut h);
+    assert!(inspect::active(&app));
+    h.get_by_label("Clear the notes…").click();
+    h.run();
+    h.run();
+    // Not pressed: no question about clearing.
+    assert!(h.query_by_label("Clear the notes?").is_none());
+    h.get_by_label("Inspected element");
+    h.get_by_role_and_label(Role::Button, "Copy").click();
+    h.run();
+    let text = copied(&app);
+    assert_eq!(line(&text, "Name"), "Clear the notes…");
+    assert_eq!(line(&text, "Panel"), "gallery.notes");
+    assert_eq!(line(&text, "Window"), "panel gallery.notes");
+    assert_eq!(line(&text, "Plugin"), "gallery.workbench");
+}
+
+#[test]
+fn the_keyboard_moves_between_widgets_and_enter_picks() {
+    let mut h = harness("debug");
+    let app = handle(&h);
+    chord(&mut h);
+    h.key_press(egui::Key::Tab);
+    h.run();
+    h.key_press(egui::Key::Tab);
+    h.run();
+    h.key_press(egui::Key::Enter);
+    h.run();
+    h.run();
+    assert!(!inspect::active(&app));
+    let second = inspect::last(&app).expect("picked");
+    assert_eq!(second.element.how, "keyboard");
+    // One Tab less is another widget.
+    h.get_by_role_and_label(Role::Button, "Pick another")
+        .click();
+    h.run();
+    h.run();
+    h.key_press(egui::Key::Tab);
+    h.run();
+    h.key_press(egui::Key::Enter);
+    h.run();
+    h.run();
+    let first = inspect::last(&app).expect("picked");
+    assert_ne!(first.element.id, second.element.id);
+}
+
+#[test]
+fn escape_leaves_and_a_click_then_reaches_the_button() {
+    let mut h = harness("debug");
+    let app = handle(&h);
+    chord(&mut h);
+    assert!(inspect::active(&app));
+    h.key_press(egui::Key::Escape);
+    h.run();
+    assert!(!inspect::active(&app));
+    h.get_by_label("Announce \"Saved\"").click();
+    h.run();
+    assert!(h.query_by_label("Inspected element").is_none());
+    assert_eq!(egui_pop::core::a11y::announcements(&h.ctx).len(), 1);
+    // A second press of the chord leaves too.
+    chord(&mut h);
+    assert!(inspect::active(&app));
+    chord(&mut h);
+    assert!(!inspect::active(&app));
+}

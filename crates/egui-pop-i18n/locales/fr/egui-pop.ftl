@@ -33,6 +33,9 @@ category-view = Affichage
 
 category-window = Fenêtre
 
+clip-application-x-egui-pop-inspect-json =
+    .title = un élément inspecté
+
 command-about =
     .description = Le nom de l’application, sa version, sa licence, ses auteurs et ses liens, avec ses informations de version à copier.
     .title = À propos de { $application }
@@ -172,6 +175,10 @@ command-crash-reveal =
 command-deeplink-open =
     .description = Ouvre un lien du schéma propre à l’application (`url`) par l’étape `deeplink.open`.
     .title = Ouvrir un lien de l’application
+
+command-devtools-inspect =
+    .description = Entre dans le mode inspection ou en sort : cliquez sur un élément (ou atteignez-le avec Tab et les flèches, puis Entrée) pour voir ce qu’egui-pop en sait (quand le réglage Outils de développement est activé).
+    .title = Inspecter un élément
 
 command-dialogs-move =
     .description = Déplace le dialogue affiché avec les flèches ; Entrée garde la place, Échap le remet où il était.
@@ -988,6 +995,18 @@ egui-pop-input-choices = { $label }, choix
 egui-pop-input-clear = Effacer { $label }
 
 egui-pop-input-more = { $label }, plus
+
+egui-pop-inspect-button = Inspecter un élément
+
+egui-pop-inspect-copied = Copié.
+
+egui-pop-inspect-copy = Copier
+
+egui-pop-inspect-hint = Inspection : cliquez sur un élément, ou déplacez-vous avec Tab et les flèches puis appuyez sur Entrée. Échap pour sortir.
+
+egui-pop-inspect-pick-another = En choisir un autre
+
+egui-pop-inspect-title = Élément inspecté
 
 egui-pop-job-action-name = { $action } : { $job }
 

@@ -61,7 +61,8 @@
 //!   combo box arrow drawn through the kit, and a toggle chip;
 //! - [`state`]: typed slots for the state kept in egui's memory,
 //!   listed by the debug bridge;
-//! - [`debug`]: the debug bridge and its collectors.
+//! - [`debug`]: the debug bridge and its collectors;
+//! - [`inspect`]: the element picker behind devtools' inspect mode.
 
 pub mod a11y;
 pub mod band;
@@ -78,6 +79,7 @@ pub mod icon;
 pub mod icon_set;
 pub mod indicator;
 pub mod input;
+pub mod inspect;
 pub mod keys;
 pub mod kit;
 pub mod latest;

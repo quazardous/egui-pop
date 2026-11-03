@@ -18,6 +18,7 @@ category-values 0e9206c70dea46eb
 category-view 9cb14957d0a66a9e
 category-viewer 0111455edf9c95c7
 category-window 091ff0a5b7d5ed9d
+clip-application-x-egui-pop-inspect-json.title 152bdf9ddf98243f
 command-about-read.description 06ed706c6376d552
 command-about-read.title db312930f9856d95
 command-about.description 30c0275d84dc5428
@@ -88,6 +89,8 @@ command-crash-reveal.description e039b5328a31627c
 command-crash-reveal.title fc7f6a28bfaf4aa8
 command-deeplink-open.description 031619f6e67cdf44
 command-deeplink-open.title c0fee5be543b96c0
+command-devtools-inspect.description af11fc8a685657b1
+command-devtools-inspect.title 87a52cb311d12ce8
 command-dialogs-move.description dcf98be63ecae961
 command-dialogs-move.title a273c065a7d7359a
 command-edit-copy.description a3eea3fbff61f7b1
@@ -595,6 +598,12 @@ egui-pop-indicator-warning b31f78108878cdd7
 egui-pop-input-choices 83ea13c7bbd04b65
 egui-pop-input-clear 690f28f6adce6a02
 egui-pop-input-more 9e92b8e84c4936a0
+egui-pop-inspect-button 87a52cb311d12ce8
+egui-pop-inspect-copied 6a1af6540e3f5739
+egui-pop-inspect-copy 424486452ba52062
+egui-pop-inspect-hint 485c2b10a5a067f2
+egui-pop-inspect-pick-another 1e2626e2d33f00ab
+egui-pop-inspect-title ede4415ccaba9928
 egui-pop-job-action-name 853d74aaa6f6d374
 egui-pop-job-asked d7bce35f00506b13
 egui-pop-job-cancelled 3fa4bf73465b82da

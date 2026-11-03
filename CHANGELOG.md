@@ -12,6 +12,18 @@ publishes.
 
 ### Added
 
+- Devtools' inspect mode (egui-pop-api, egui-pop-core; `docs/debugging.md`):
+  `devtools.inspect` (Ctrl+Shift+C, View menu, palette, devtools panel; with the
+  `developer.devtools` setting on) outlines the widget under the pointer in every
+  window, detached panels included; a click picks it without reaching it, Tab, the
+  arrows and Enter pick by the keyboard, Escape leaves. A dialog shows its role,
+  name, egui id, rectangle and window, the zone, block or panel and the plugin
+  drawing it, the theme, kit, density and kit part, focus and enabled state, and
+  what the application adds (`DevtoolsPlugin::describe`; the gallery: its page and
+  story). Copy puts a text block with its JSON form on the clipboard; the last pick
+  is the `inspect` collector's. `egui_pop_core::inspect` is the picker;
+  `kit::Component` gains a `name` field. While the devtools setting is on,
+  egui-winit's Ctrl+Shift+C copy event is given back as the key.
 - `docs/agents.md`: how an agent reaches an application through the debug bridge
   (in process; egui-pop opens no socket), discovering and running commands, reading
   state and the journal, the replies' shapes with an example run in consumer-smoke,

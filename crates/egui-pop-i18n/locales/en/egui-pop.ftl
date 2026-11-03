@@ -38,6 +38,9 @@ category-viewer = Viewer
 
 category-window = Window
 
+clip-application-x-egui-pop-inspect-json =
+    .title = an inspected element
+
 command-about =
     .description = The application's name, version, licence, authors and links, with its version info to copy.
     .title = About { $application }
@@ -177,6 +180,10 @@ command-crash-reveal =
 command-deeplink-open =
     .description = Opens a link of the application's own scheme (`url`) through the `deeplink.open` step.
     .title = Open an application link
+
+command-devtools-inspect =
+    .description = Enters or leaves the inspect mode: click an element (or reach it with Tab and the arrows, then Enter) to see what egui-pop knows of it (when the Devtools setting is on).
+    .title = Inspect an element
 
 command-dialogs-move =
     .description = Moves the dialog shown with the arrow keys; Enter keeps the place, Escape puts it back.
@@ -1191,6 +1198,18 @@ egui-pop-input-choices = { $label }, choices
 egui-pop-input-clear = Clear { $label }
 
 egui-pop-input-more = { $label }, more
+
+egui-pop-inspect-button = Inspect an element
+
+egui-pop-inspect-copied = Copied.
+
+egui-pop-inspect-copy = Copy
+
+egui-pop-inspect-hint = Inspecting: click an element, or move with Tab and the arrows and press Enter. Escape leaves.
+
+egui-pop-inspect-pick-another = Pick another
+
+egui-pop-inspect-title = Inspected element
 
 egui-pop-job-action-name = { $action }: { $job }
 
