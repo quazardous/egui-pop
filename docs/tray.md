@@ -8,7 +8,7 @@ through the host. The facade re-exports it with the `platform` feature
 (or `platform-tray` alone):
 
 ```toml
-egui-pop = { version = "0.1", features = ["platform-tray"] }
+egui-pop = { version = "0.3", features = ["platform-tray"] }
 ```
 
 It wraps [tray-icon](https://crates.io/crates/tray-icon): the

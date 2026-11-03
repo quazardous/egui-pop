@@ -9,7 +9,7 @@ after the application; the facade re-exports it as
 `platform-instance` alone):
 
 ```toml
-egui-pop = { version = "0.1", features = ["platform-instance"] }
+egui-pop = { version = "0.3", features = ["platform-instance"] }
 ```
 
 ## At the top of `main`
