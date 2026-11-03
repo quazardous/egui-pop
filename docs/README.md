@@ -183,6 +183,8 @@ of every crate with every feature on.
   scroll bars and treat the wheel, a recommended default (bars visible at
   rest) and the changes ranked for egui-pop.
 - [API stability](stability.md): what each release promises.
+- [Changesets and releases](releasing.md): the changeset each change
+  adds, commit subjects, the checks, and how a release is made.
 - [How quality is held](quality.md): AI-assisted development, the
   checks every change passes before it merges, and what they do not
   cover.

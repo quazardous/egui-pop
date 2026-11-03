@@ -1,0 +1,163 @@
+# Versions and releases with knope (https://knope.tech), from the
+# changesets in `.changeset/` (docs/releasing.md).
+#
+# One package per published crate, each with its own version: its
+# manifest, its requirement in `[workspace.dependencies]` and its entry
+# in `Cargo.lock`. The packages have no `changelog`: knope would write
+# one section per package without naming it, and two packages released
+# at the same version would overwrite each other in a shared file. The
+# one CHANGELOG.md is written by `cargo xtask release-notes`, from the
+# same changesets, after `PrepareRelease`.
+#
+# Before 1.0, knope applies a `major` change to the middle number (0.2.x
+# to 0.3.0) and `minor` and `patch` to the last one.
+
+[changes]
+# Changes come from changesets only. Commit subjects follow Conventional
+# Commits (CONTRIBUTING.md), but are not read: a change described by both
+# a changeset and a `feat:` commit would be counted twice.
+ignore_conventional_commits = true
+
+[packages.egui-pop-tokens]
+versioned_files = [
+    "crates/egui-pop-tokens/Cargo.toml",
+    { path = "Cargo.toml", dependency = "egui-pop-tokens" },
+    { path = "Cargo.lock", dependency = "egui-pop-tokens" },
+]
+
+[packages.ortho-router]
+versioned_files = [
+    "crates/ortho-router/Cargo.toml",
+    { path = "Cargo.toml", dependency = "ortho-router" },
+    { path = "Cargo.lock", dependency = "ortho-router" },
+]
+
+[packages.egui-pop-win32]
+versioned_files = [
+    "crates/egui-pop-win32/Cargo.toml",
+    { path = "Cargo.toml", dependency = "egui-pop-win32" },
+    { path = "Cargo.lock", dependency = "egui-pop-win32" },
+]
+
+[packages.egui-pop-wayland]
+versioned_files = [
+    "crates/egui-pop-wayland/Cargo.toml",
+    { path = "Cargo.toml", dependency = "egui-pop-wayland" },
+    { path = "Cargo.lock", dependency = "egui-pop-wayland" },
+]
+
+[packages.egui-pop-model]
+versioned_files = [
+    "crates/egui-pop-model/Cargo.toml",
+    { path = "Cargo.toml", dependency = "egui-pop-model" },
+    { path = "Cargo.lock", dependency = "egui-pop-model" },
+]
+
+[packages.egui-pop-core]
+versioned_files = [
+    "crates/egui-pop-core/Cargo.toml",
+    { path = "Cargo.toml", dependency = "egui-pop-core" },
+    { path = "Cargo.lock", dependency = "egui-pop-core" },
+]
+
+[packages.egui-pop-api]
+versioned_files = [
+    "crates/egui-pop-api/Cargo.toml",
+    { path = "Cargo.toml", dependency = "egui-pop-api" },
+    { path = "Cargo.lock", dependency = "egui-pop-api" },
+]
+
+[packages.egui-pop-viewport]
+versioned_files = [
+    "crates/egui-pop-viewport/Cargo.toml",
+    { path = "Cargo.toml", dependency = "egui-pop-viewport" },
+    { path = "Cargo.lock", dependency = "egui-pop-viewport" },
+]
+
+[packages.egui-pop-i18n]
+versioned_files = [
+    "crates/egui-pop-i18n/Cargo.toml",
+    { path = "Cargo.toml", dependency = "egui-pop-i18n" },
+    { path = "Cargo.lock", dependency = "egui-pop-i18n" },
+]
+
+[packages.egui-pop-platform]
+versioned_files = [
+    "crates/egui-pop-platform/Cargo.toml",
+    { path = "Cargo.toml", dependency = "egui-pop-platform" },
+    { path = "Cargo.lock", dependency = "egui-pop-platform" },
+]
+
+[packages.egui-pop-views]
+versioned_files = [
+    "crates/egui-pop-views/Cargo.toml",
+    { path = "Cargo.toml", dependency = "egui-pop-views" },
+    { path = "Cargo.lock", dependency = "egui-pop-views" },
+]
+
+[packages.egui-pop-editors]
+versioned_files = [
+    "crates/egui-pop-editors/Cargo.toml",
+    { path = "Cargo.toml", dependency = "egui-pop-editors" },
+    { path = "Cargo.lock", dependency = "egui-pop-editors" },
+]
+
+[packages.egui-pop-imaging]
+versioned_files = [
+    "crates/egui-pop-imaging/Cargo.toml",
+    { path = "Cargo.toml", dependency = "egui-pop-imaging" },
+    { path = "Cargo.lock", dependency = "egui-pop-imaging" },
+]
+
+[packages.egui-pop-test-macros]
+versioned_files = [
+    "crates/egui-pop-test-macros/Cargo.toml",
+    { path = "Cargo.toml", dependency = "egui-pop-test-macros" },
+    { path = "Cargo.lock", dependency = "egui-pop-test-macros" },
+]
+
+[packages.egui-pop-test]
+versioned_files = [
+    "crates/egui-pop-test/Cargo.toml",
+    { path = "Cargo.toml", dependency = "egui-pop-test" },
+    { path = "Cargo.lock", dependency = "egui-pop-test" },
+]
+
+[packages.egui-pop]
+versioned_files = [
+    "crates/egui-pop/Cargo.toml",
+    { path = "Cargo.toml", dependency = "egui-pop" },
+    { path = "Cargo.lock", dependency = "egui-pop" },
+]
+
+# `knope document-change`: writes a changeset, asking for the crates,
+# their bumps and the text.
+[[workflows]]
+name = "document-change"
+
+[[workflows.steps]]
+type = "CreateChangeFile"
+
+# `knope release`: raises the versions from the changesets and deletes
+# them, then `cargo xtask release-notes` writes the release into
+# CHANGELOG.md and commits it ("chore(release): ..."). No tag and no
+# publishing: those follow the merge, by hand (docs/releasing.md).
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+
+[[workflows.steps]]
+type = "Command"
+command = "cargo xtask release-notes"
+
+# `knope pending-versions`: the versions the pending changesets lead to,
+# written in place and not committed. CI's semver job runs it so that
+# a break declared `major` is checked against the version it will ship.
+[[workflows]]
+name = "pending-versions"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+allow_empty = true

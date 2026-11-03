@@ -52,7 +52,9 @@ as it supports that egui. That is the `egui-pop` crate's version; each
 sub-crate has its own, which moves only when the crate does (see
 [API stability](docs/stability.md#versions-of-the-crates)). Before 1.0 a minor may break the API; patch
 releases only add or fix. What each item promises (stable, supported,
-experimental) is in [API stability](docs/stability.md).
+experimental) is in [API stability](docs/stability.md); how versions are
+raised from each pull request's changeset, and how a release is made, is
+in [Changesets and releases](docs/releasing.md).
 
 ## What breaks an extension
 
@@ -87,7 +89,7 @@ are refreshed.
 
 - A stable item to be removed is first **deprecated** in a minor: the
   Rust item carries `#[deprecated]` naming its replacement, and the
-  changelog's `Deprecated` section says how to move. It is removed no
+  changelog entry (its changeset) says it is deprecated and how to move. It is removed no
   earlier than the **next minor**, so an extension always has one full
   egui cycle in which both the old and the new work.
 - For what is not Rust, the old name keeps working through that same

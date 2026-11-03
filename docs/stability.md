@@ -29,6 +29,10 @@ crates that changed: a fix in `egui-pop-views` is a new
   the crates above re-export, so each of them takes a new minor too, up
   to the facade.
 
+The versions are raised mechanically, from the changeset each pull
+request adds, and checked by `cargo semver-checks` against crates.io
+([Changesets and releases](releasing.md)).
+
 Three tiers:
 
 - **Stable**: kept within a minor; breaking it waits for the next minor

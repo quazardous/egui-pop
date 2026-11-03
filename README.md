@@ -290,7 +290,8 @@ AI coding agents, to the maintainer's plan and recorded design
 decisions. Every pull request merges only after CI passes: formatting,
 clippy with warnings as errors, unit, UI (egui_kittest) and snapshot
 tests per theme, the layering test, licence and advisory checks, the
-docs build, a web smoke test and a packaging dry run. Windows, macOS and
+docs build, a web smoke test, a packaging dry run, a changeset for what
+users notice and semver checks against crates.io. Windows, macOS and
 real windows are not tested in CI. The checks, which ones block a merge,
 and what they leave out are in
 [How quality is held](https://github.com/quazardous/egui-pop/blob/main/docs/quality.md).

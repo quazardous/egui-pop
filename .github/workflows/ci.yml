@@ -4,7 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
-    # `labeled`: adding the ci:full label runs everything at once.
+    # `labeled`: adding the ci:full label runs everything at once, and
+    # the internal label lets the changeset check pass.
     types: [opened, synchronize, reopened, labeled]
 
 env:
@@ -13,6 +14,8 @@ env:
   RUSTDOCFLAGS: -D warnings
   # The minimum supported Rust version; also the toolchain CI checks with.
   RUST_TOOLCHAIN: "1.95"
+  # knope, which raises the versions from the changesets (knope.toml).
+  KNOPE_VERSION: "0.23.2"
 
 jobs:
   # What the change needs (docs/testing.md, "Selection"): every other job
@@ -290,13 +293,41 @@ jobs:
       # order; nothing is uploaded.
       - run: cargo publish --workspace --dry-run --no-verify --locked
 
+  # A pull request changing a published crate adds a changeset, unless it
+  # is labelled internal; the pending changesets are consistent
+  # (docs/releasing.md).
+  changeset:
+    name: Changesets
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: xtask
+      - env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          INTERNAL: ${{ contains(github.event.pull_request.labels.*.name, 'internal') }}
+        run: |
+          if [ "$INTERNAL" = true ]; then
+            cargo xtask changeset-check --base "$BASE" --internal
+          else
+            cargo xtask changeset-check --base "$BASE"
+          fi
+
+  # Every published crate against its latest release on crates.io, with
+  # the versions the pending changesets lead to: a break passes when its
+  # changeset says major (a new minor before 1.0), fails otherwise.
   semver:
     name: Semver checks
     needs: changes
     if: needs.changes.outputs.semver == 'true'
     runs-on: ubuntu-24.04
-    # Informative while the crates are at 0.0.x.
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v5
       # It documents the features other than unstable ones: `views-video`, whose
@@ -311,14 +342,24 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-semver-checks
-      - run: cargo semver-checks check-release -p egui-pop
+      - uses: knope-dev/action@19617851f9f13ab2f27a05989c55efb18aca3675 # v2.1.2
+        with:
+          version: ${{ env.KNOPE_VERSION }}
+      # Raises the versions in this checkout only; nothing is committed.
+      - name: The versions the pending changesets lead to
+        run: |
+          git config user.name ci
+          git config user.email ci@invalid
+          knope pending-versions
+          git status --short
+      - run: cargo semver-checks check-release --workspace
 
   # The one required check: every job above passed or was skipped. A
   # skipped job reports nothing, so branch protection names this one.
   ci:
     name: CI
     if: always()
-    needs: [changes, fmt, clippy, doc, book, test, video, webview, deny, wasm, package, semver]
+    needs: [changes, fmt, clippy, doc, book, test, video, webview, deny, wasm, package, changeset, semver]
     runs-on: ubuntu-24.04
     steps:
       - env:
