@@ -323,6 +323,28 @@ fn a_when_clause_on_the_focused_panel_follows_tab() {
 }
 
 #[test]
+fn ctrl_page_down_and_up_go_through_the_tabs_of_the_focused_group() {
+    let (mut h, _) = panels();
+    run(&mut h, "demo.search.focus");
+    assert_eq!(panel(&h), Some(SEARCH));
+    let ctrl = |key| Press {
+        modifiers: CTRL,
+        key,
+    };
+    // The bottom area's group: Empty, then Search; it wraps.
+    walk::press(&mut h, ctrl(Key::PageDown));
+    assert_eq!(panel(&h), Some(EMPTY));
+    walk::press(&mut h, ctrl(Key::PageDown));
+    assert_eq!(panel(&h), Some(SEARCH));
+    walk::press(&mut h, ctrl(Key::PageUp));
+    assert_eq!(panel(&h), Some(EMPTY));
+    // A panel alone in its group stays.
+    run(&mut h, "demo.list.focus");
+    walk::press(&mut h, ctrl(Key::PageDown));
+    assert_eq!(panel(&h), Some(LIST));
+}
+
+#[test]
 fn a_panel_with_a_canvas_gives_it_the_focus_before_its_toolbar() {
     let (mut h, _) = panels();
     run(&mut h, "demo.image.focus");

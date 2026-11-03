@@ -765,6 +765,14 @@ command-workbench-previous-region =
     .description = Moves the keyboard to the previous part of the window.
     .title = Go to the previous region
 
+command-workbench-tab-next =
+    .description = Shows and focuses the next tab of the focused panel's group.
+    .title = Go to the next tab
+
+command-workbench-tab-previous =
+    .description = Shows and focuses the previous tab of the focused panel's group.
+    .title = Go to the previous tab
+
 command-workbench-toggle-panel =
     .description = Shows or hides the bottom panel: hidden, it keeps its panels.
     .title = Toggle panel

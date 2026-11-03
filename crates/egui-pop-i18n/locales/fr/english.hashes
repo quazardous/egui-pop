@@ -381,6 +381,10 @@ command-workbench-next-region.description f70cc22932de1c13
 command-workbench-next-region.title 5bc664b02200e3be
 command-workbench-previous-region.description b7ab3302080ad9bf
 command-workbench-previous-region.title 3e485e9867b167b6
+command-workbench-tab-next.description 97760e80916200a5
+command-workbench-tab-next.title e1d824b5dfaea413
+command-workbench-tab-previous.description 24159430929b9945
+command-workbench-tab-previous.title 6abb73bef7b039eb
 command-workbench-toggle-panel.description 32ec8f8f14f0aee9
 command-workbench-toggle-panel.title e2a922a82ec8940f
 command-workbench-toggle-primarySideBar.description 6abebaff6edb9c44

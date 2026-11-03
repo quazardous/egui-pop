@@ -2314,6 +2314,14 @@ command-workbench-previous-region =
     .description = Amène le clavier à la partie précédente de la fenêtre.
     .title = Aller à la région précédente
 
+command-workbench-tab-next =
+    .description = Affiche et active l’onglet suivant du groupe du panneau actif.
+    .title = Aller à l’onglet suivant
+
+command-workbench-tab-previous =
+    .description = Affiche et active l’onglet précédent du groupe du panneau actif.
+    .title = Aller à l’onglet précédent
+
 command-workbench-toggle-primarySideBar =
     .description = Affiche ou masque la barre latérale principale : masquée, elle se replie sur sa bande et garde ses panneaux.
     .title = Afficher ou masquer la barre latérale principale

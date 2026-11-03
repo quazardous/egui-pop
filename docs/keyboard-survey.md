@@ -806,10 +806,11 @@ one pull request. Numbers stay as they are, since the walk's tests name them;
 17. **A roving helper, then toolbars and strips.** `tab::roving`: one stop, arrows
     inside, back to the last. Then one PR each: toolbars (`toolbars.md` lists it),
     the activity bar, the status bar. Size: M, then S each.
-18. **Tabs by key.** `workbench.tab.next` and `.previous` for the focused area
-    (Ctrl+Page Down, Ctrl+Page Up, as VS Code). Close buttons are not shown, so
-    they are no stops today; one added later should not be a stop of its own.
-    Size: S to M.
+18. **Done: tabs by key.** `workbench.tab.next` and `.previous` show and focus
+    the tab beside the focused panel's, in its group, wrapping (Ctrl+Page Down,
+    Ctrl+Page Up, as VS Code), through the `workbench.focus` step. Close buttons
+    are not shown, so they are no stops today; one added later should not be a
+    stop of its own (egui_stack's `TabFocus::Roving` makes them none, item 17).
 19. **The graph as one stop.** A setting, on by default for large graphs: Tab
     enters and leaves the graph, arrows go between nodes, Enter goes into a
     node's parts, Escape back, as ports already do. Size: M.
