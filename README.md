@@ -284,6 +284,17 @@ which move only when their code does.
 | 0.1.x | 0.36 | 1.95 |
 | 0.2.x | 0.36 | 1.95 |
 | 0.3.x | 0.36 | 1.95 |
+| 0.4.x | 0.37 | 1.95 |
+
+`main` is on egui 0.37 and is not on crates.io yet: egui_stack (the
+docking crate) and egui-phosphor have no release on egui 0.37, so the
+workspace takes them from git (issues
+[#145](https://github.com/quazardous/egui-pop/issues/145) and
+[#146](https://github.com/quazardous/egui-pop/issues/146)), and
+crates.io refuses git dependencies. Until both are released, stay on
+0.3 with egui 0.36, or depend on egui-pop through git with the same
+`[patch.crates-io]` entry for egui-phosphor in your own `Cargo.toml`
+(patches do not carry over from a dependency).
 
 ## How quality is held
 

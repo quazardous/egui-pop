@@ -92,7 +92,7 @@ Three tiers:
 - The focus mode and its system readers.
 - The slider's gestures as data (`slider::Gestures`): profiles of input
   are not designed yet.
-- The workbench (`egui_pop_api::workbench`): areas over egui_dock,
+- The workbench (`egui_pop_api::workbench`): areas over egui_stack,
   placement rules, auxiliary windows; arrangements
   (`egui_pop_api::arrangements`); strips and indicators
   (`egui_pop_api::strips`); devtools (`egui_pop_api::devtools`). Their

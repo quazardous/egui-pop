@@ -207,6 +207,9 @@ From `crates/egui-pop-core` (`tab.rs`, `focus.rs`, `keys.rs`,
   they move 16 points with **Shift or Ctrl** and an arrow along their axis
   (egui_dock). A plain arrow leaves them. Nothing says so. They are role
   `Unknown` with no name too, and no default layout of the gallery has one.
+  Since egui-pop moved to egui_stack: a plain arrow along the axis moves
+  them 16 points, Shift 64, Enter puts them back in the middle, and they
+  are `Splitter`s named "Resize" with their fraction as value.
 - **[walk] Each dock tab is a stop.** No close button ever is: the workbench
   sets `show_close_buttons(false)`. **[read]** Enter or Space activates the
   tab. There is no key for the next tab of an area.

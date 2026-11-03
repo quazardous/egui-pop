@@ -10,14 +10,15 @@ watch it on the journal, veto or redirect it, replace it or follow it.
 
 A plugin declares panels with their rules; the workbench places them in
 areas (the centre, the start and end side bars, the bottom panel), as
-tabs and splits over [egui_dock](https://github.com/Adanos020/egui_dock),
+tabs and splits over [egui_stack](https://github.com/quazardous/egui_stack)
+(the continuation of egui_dock),
 saves where the user put them and repairs that layout at the next start.
 The shell's side bar, main and inspector zones are panels of their areas.
 
 **Bare panels.** A shell panel is declared `bare` (`PanelSpec::bare`): alone in
 its area it is drawn plainly, with no tab bar and no scroll area from anyone. What
 its blocks draw past its end is cut, and nothing says so. Beside another panel the
-same content is in a tab, and egui_dock gives a tab's body a scroll area on both
+same content is in a tab, and egui_stack gives a tab's body a scroll area on both
 axes. So a block in `SIDE_BAR`, `MAIN` or `INSPECTOR` that may run long brings its
 own scroll area, and one sized to what it is given stays inside it: a viewport
 filling `MAIN` must not scroll. The gallery shows both: its pages get a scroll area
@@ -96,7 +97,7 @@ ghost of the dragged tab (the kit's `tab-preview`, with the tab's title
 and width as laid out once per drag) where the drop puts it: after the
 last tab of the area's first tab bar, or at the top of an area drawn
 bare or closed. A refused drop shows no ghost. The tabs already there
-are not pushed aside, and the ghost is always at the end: egui_dock
+are not pushed aside, and the ghost is always at the end: egui_stack
 only follows a drag within its own area, so it gives no insertion
 index for a tab coming from another one, and a drop on an area appends
 to its first tabs (making room live and dropping between tabs are
