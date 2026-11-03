@@ -25,6 +25,29 @@ done once. Not an official egui crate.
 
 [![The egui-pop gallery in pop-dark: the theme overview](https://github.com/quazardous/egui-pop/raw/main/docs/screenshots/overview-pop-dark.png)](https://quazardous.github.io/egui-pop/gallery/)
 
+## What is stable, what is extra
+
+The core is always built; the rest comes with Cargo features of the
+`egui-pop` facade. Each part sits in a tier of
+[API stability](https://github.com/quazardous/egui-pop/blob/main/docs/stability.md):
+stable (kept within a minor), supported (kept unless a defect forces a
+change) or experimental (may change in any release).
+
+| Part | Crate (feature) | Tier |
+|---|---|---|
+| Design tokens, themes, the DTCG format | `egui-pop-tokens` | stable |
+| Ids, commands, keymap, menus, value store, saved documents | `egui-pop-model` | stable |
+| Theme, focus, key dispatch, overlays, persistence, value binding | `egui-pop-core` | stable |
+| `Plugin`, `Ctx`, `App`, zones and blocks, hooks, steps | `egui-pop-api` | stable |
+| Command palette, dialogs, toasts, settings, menus, sliders, icons | `egui-pop-api` | supported |
+| Test kit | `egui-pop-test` | supported |
+| Translations | `egui-pop-i18n` (`i18n`) | supported |
+| Workbench, host contract, visual kits, the other components | `egui-pop-api`, `egui-pop-core` | experimental |
+| Image viewport, image tools, node graph | `egui-pop-viewport` (`viewport`), `egui-pop-imaging` (`imaging`) | experimental |
+| Tree, list, data table, viewer, photo library | `egui-pop-views` (`views`) | experimental |
+| Text and code editors, terminal | `egui-pop-editors` (`editors`) | experimental |
+| Platform services | `egui-pop-platform` (`platform`) | experimental |
+
 ## Quickstart
 
 ```sh
@@ -257,6 +280,7 @@ which move only when their code does.
 | egui-pop | egui | Rust |
 |---|---|---|
 | 0.1.x | 0.36 | 1.95 |
+| 0.2.x | 0.36 | 1.95 |
 
 ## How quality is held
 
