@@ -31,7 +31,8 @@
 //! - [`bar`] draws a menu as a menu bar (the shell draws `app.main`),
 //!   moving the menus that do not fit into a "…" menu;
 //! - [`show`] draws a menu's items inside an open menu or popup;
-//! - [`context_menu`] opens a declared menu on a widget's secondary click,
+//! - [`context_menu`] opens a declared menu on a widget's secondary click
+//!   (or Shift+F10 and the `Menu` key while it has the focus),
 //!   and [`context_menu_with`] with arguments of the moment (the clicked
 //!   row's path), merged into every item's command and seen by the `when`
 //!   clauses as `args.<key>`; not where a widget claimed the secondary
@@ -647,13 +648,29 @@ pub fn context_menu(response: &Response, app: &AppHandle, menu: &MenuId) {
 /// path): merged into every item's command arguments, and seen by `when`
 /// clauses as `args.<key>`.
 pub fn context_menu_with(response: &Response, app: &AppHandle, menu: &MenuId, args: Json) {
+    let by_key =
+        response.has_focus() && egui_pop_core::pointer::claim::menu_key(&response.ctx, true);
+    context_menu_opened(response, app, menu, args, by_key);
+}
+
+/// As [`context_menu_with`], `by_key` saying that the keyboard opens it now
+/// (Shift+F10 or the `Menu` key, read with
+/// [`claim::menu_key`](egui_pop_core::pointer::claim::menu_key)): for a row of
+/// a widget that keeps the focus itself, a tree's cursor row.
+pub fn context_menu_opened(
+    response: &Response,
+    app: &AppHandle,
+    menu: &MenuId,
+    args: Json,
+    by_key: bool,
+) {
     let key = CONTEXT_MENU.keyed(response.id);
-    if egui_pop_core::pointer::claim::opens_context_menu(response) {
+    if by_key || egui_pop_core::pointer::claim::opens_context_menu(response) {
         let opened = open_step(app, menu, args, "context");
         let state = opened.map(|args| (with_args(&app.when_context(), &args), args));
         key.set(&response.ctx, state);
     }
-    egui_pop_core::pointer::claim::context_menu(response, |ui| {
+    egui_pop_core::pointer::claim::context_menu_opened(response, by_key, |ui| {
         let state = key
             .get(ui.ctx())
             .unwrap_or_else(|| Some((app.when_context(), Json::Null)));

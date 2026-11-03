@@ -802,7 +802,12 @@ impl<'a, K: Key> TreeView<'a, K> {
                                 None => continue,
                             };
                             let r = ui.interact(rect, id.with(("row", &key)), rows::ROW_SENSE);
-                            if egui_pop_core::pointer::claim::opens_context_menu(&r) {
+                            // The context menu key opens the cursor row's menu.
+                            let by_key = focused
+                                && context_menu.is_some()
+                                && selection.cursor() == Some(&key)
+                                && egui_pop_core::pointer::claim::menu_key(ui.ctx(), true);
+                            if by_key || egui_pop_core::pointer::claim::opens_context_menu(&r) {
                                 *context = open_context(app, tree, &key, &mut signals);
                             }
                             // The menu, for the node the step settled on.
@@ -811,18 +816,21 @@ impl<'a, K: Key> TreeView<'a, K> {
                             {
                                 match context_menu.as_mut() {
                                     Some(ContextMenu::Declared(app, menu)) => {
-                                        menus::context_menu_with(
+                                        menus::context_menu_opened(
                                             &r,
                                             app,
                                             menu,
                                             json!({ "tree": tree, "key": target }),
+                                            by_key,
                                         );
                                     }
                                     Some(ContextMenu::Ui(add)) => {
                                         if let Some(n) = model.node(target) {
-                                            egui_pop_core::pointer::claim::context_menu(&r, |ui| {
-                                                add(ui, n)
-                                            });
+                                            egui_pop_core::pointer::claim::context_menu_opened(
+                                                &r,
+                                                by_key,
+                                                |ui| add(ui, n),
+                                            );
                                         }
                                     }
                                     None => {}

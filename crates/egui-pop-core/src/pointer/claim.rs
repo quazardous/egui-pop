@@ -294,30 +294,88 @@ pub fn claimed(ctx: &Context, gesture: Secondary) -> Option<Claimed> {
     claimed_at(ctx, at, gesture)
 }
 
-/// Whether a secondary click on `response` opens its context menu: it
-/// was clicked with the secondary button, and no widget claimed that
-/// click there.
+/// Whether `response` opens its context menu in this pass: a secondary
+/// click no widget claimed there, or the context menu key (Shift+F10, or
+/// the `Menu` key) while it has the focus.
 pub fn opens_context_menu(response: &Response) -> bool {
-    response.secondary_clicked() && claimed(&response.ctx, Secondary::Click).is_none()
+    (response.secondary_clicked() && claimed(&response.ctx, Secondary::Click).is_none())
+        || (response.has_focus() && menu_key(&response.ctx, false))
 }
 
+/// Whether the context menu key was pressed in this pass: Shift+F10, as on
+/// Windows, in GTK and Qt, or the `Menu` key alone. With `take`, the press
+/// is taken out of the input. A widget holding the focus for its rows (a
+/// tree, a list) asks this to open its cursor's menu.
+pub fn menu_key(ctx: &Context, take: bool) -> bool {
+    let pressed = |i: &egui::InputState| {
+        i.events.iter().any(|e| {
+            matches!(
+                e,
+                egui::Event::Key { key: egui::Key::F10, pressed: true, modifiers, .. }
+                    if modifiers.shift_only()
+            ) || matches!(
+                e,
+                egui::Event::Key { key: egui::Key::Menu, pressed: true, modifiers, .. }
+                    if !modifiers.any()
+            )
+        })
+    };
+    if !take {
+        return ctx.input(pressed);
+    }
+    ctx.input_mut(|i| {
+        let was = pressed(i);
+        if was {
+            i.consume_key(egui::Modifiers::SHIFT, egui::Key::F10);
+            i.consume_key(egui::Modifiers::NONE, egui::Key::Menu);
+        }
+        was
+    })
+}
+
+/// Where a context menu opened by the keyboard shows: under its widget,
+/// rather than at the pointer.
+const BY_KEY: Slot<bool> = Slot::new("egui_pop.context_menu_by_key");
+
 /// egui's [`Response::context_menu`], unless a widget claimed the
-/// secondary click where it happened: then the menu does not open.
+/// secondary click where it happened: then the menu does not open. The
+/// context menu key opens it too while `response` has the focus, under the
+/// widget rather than at the pointer.
 pub fn context_menu<R>(
     response: &Response,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> Option<InnerResponse<R>> {
+    let by_key = response.has_focus() && menu_key(&response.ctx, true);
+    context_menu_opened(response, by_key, add)
+}
+
+/// As [`context_menu`], `by_key` saying that the keyboard opens it now: for a
+/// widget whose rows open menus while the focus stays on the widget (a
+/// tree's cursor row), which asks [`menu_key`] itself.
+pub fn context_menu_opened<R>(
+    response: &Response,
+    by_key: bool,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> Option<InnerResponse<R>> {
+    let keyed = BY_KEY.keyed(response.id);
     let open = if response.secondary_clicked() {
+        keyed.set(&response.ctx, false);
         opens_context_menu(response).then_some(SetOpenCommand::Bool(true))
+    } else if by_key {
+        keyed.set(&response.ctx, true);
+        Some(SetOpenCommand::Bool(true))
     } else if response.clicked() {
         Some(SetOpenCommand::Bool(false))
     } else {
         None
     };
-    egui::Popup::menu(response)
-        .open_memory(open)
-        .at_pointer_fixed()
-        .show(add)
+    let popup = egui::Popup::menu(response).open_memory(open);
+    let popup = if keyed.get(&response.ctx).unwrap_or(false) {
+        popup
+    } else {
+        popup.at_pointer_fixed()
+    };
+    popup.show(add)
 }
 
 /// The claims in force and the uses seen, as the `pointer` collector
