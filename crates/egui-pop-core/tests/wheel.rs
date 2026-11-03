@@ -19,6 +19,7 @@ fn wheel(h: &mut Harness<'_>, at: Pos2, delta: egui::Vec2) {
         delta,
         modifiers: egui::Modifiers::NONE,
         phase,
+        source: egui::MouseWheelSource::Wheel,
     };
     h.hover_at(at);
     h.run();
@@ -41,7 +42,7 @@ fn page<'a>(outer: Rc<Cell<egui::Vec2>>, inner: impl FnMut(&mut Ui) + 'a) -> Har
                 inner(ui);
                 ui.allocate_space(vec2(2000.0, 2000.0));
             });
-            outer.set(out.state.offset);
+            outer.set(out.state.clamped_offset());
         })
 }
 
@@ -76,7 +77,7 @@ fn a_contained_area_keeps_the_wheel_at_its_end() {
     let seen = inner.clone();
     let mut h = page(outer.clone(), move |ui| {
         let out = ui.scroll_area_contained(tall(100.0), |ui| content(ui, 150.0));
-        seen.set(out.state.offset.y);
+        seen.set(out.state.clamped_offset().y);
     });
     h.run();
     for _ in 0..4 {
@@ -159,7 +160,7 @@ fn a_thumbnail_grid_keeps_the_wheel_at_its_end() {
 fn a_wheel_over_a_popup_stays_out_of_what_is_under_it() {
     let outer = Rc::new(Cell::new(egui::Vec2::ZERO));
     let mut h = page(outer.clone(), |ui| {
-        egui::Area::new(egui::Id::new("popup"))
+        egui::Area::new(egui::Id::unique("popup"))
             .order(egui::Order::Foreground)
             .fixed_pos(pos2(10.0, 10.0))
             .show(ui.ctx(), |ui| {

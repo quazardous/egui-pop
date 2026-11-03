@@ -124,6 +124,7 @@ fn ctrl_and_the_wheel_zoom_and_stop_at_100_percent() {
         delta: vec2(0.0, 2000.0),
         modifiers: Modifiers::COMMAND,
         phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Wheel,
     });
     h.run_steps(60);
     assert_eq!(h.state().view.zoom, Zoom::Px(1.0));
@@ -133,6 +134,7 @@ fn ctrl_and_the_wheel_zoom_and_stop_at_100_percent() {
         delta: vec2(0.0, 100.0),
         modifiers: Modifiers::COMMAND,
         phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Wheel,
     });
     h.run_steps(60);
     let Zoom::Px(z) = h.state().view.zoom else {
@@ -247,6 +249,7 @@ fn a_before_hook_clamps_or_vetoes_the_zoom() {
         delta: vec2(0.0, 3000.0),
         modifiers: Modifiers::COMMAND,
         phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Wheel,
     });
     h.run_steps(60);
     assert_eq!(h.state().view.zoom, Zoom::Px(2.0));

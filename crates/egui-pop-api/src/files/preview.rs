@@ -1159,7 +1159,7 @@ fn body(ui: &mut Ui, ready: &Ready, name: &str) {
         Body::Image(image) => {
             if let Some(tex) = ready.texture(ui.ctx(), 0) {
                 let r = ui.image((tex.id(), fit(image.size, area)));
-                egui_pop_core::a11y::name(&r, egui::WidgetType::Image, name);
+                egui_pop_core::a11y::name(&r, egui::Role::Image, name);
             }
         }
         Body::Text { text, truncated } => {
@@ -1227,7 +1227,7 @@ fn body(ui: &mut Ui, ready: &Ready, name: &str) {
                             egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
                             egui::Color32::WHITE,
                         );
-                        egui_pop_core::a11y::name(&r, egui::WidgetType::Image, name);
+                        egui_pop_core::a11y::name(&r, egui::Role::Image, name);
                     }
                 }
             });

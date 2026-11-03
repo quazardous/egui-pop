@@ -134,7 +134,7 @@ fn scroll_to(ctx: &Context, widget: &WidgetRect) -> bool {
     // though that room lies at the area's own end, not at the clip's.
     let mut cut = egui::Vec2::ZERO;
     for area in around(ctx, widget.id) {
-        let Some(mut state) = State::load(ctx, area.id) else {
+        let Some(state) = State::load(ctx, area.id) else {
             continue;
         };
         let mut delta = egui::Vec2::ZERO;
@@ -150,9 +150,9 @@ fn scroll_to(ctx: &Context, widget: &WidgetRect) -> bool {
             }
             delta[d] = distance(rect.min[d], rect.max[d], bar.min[d], end, spacing[d]);
         }
-        if delta != egui::Vec2::ZERO {
-            state.offset += delta;
-            state.store(ctx, area.id);
+        if delta != egui::Vec2::ZERO
+            && crate::ui::set_scroll_offset(ctx, area.id, state.clamped_offset() + delta)
+        {
             rect = rect.translate(-delta);
             moved = true;
         }

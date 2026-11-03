@@ -2311,7 +2311,7 @@ impl AppHandle {
     /// and to hold it if nothing in the panel can. It shows nothing and is
     /// not a Tab stop otherwise.
     fn panel_stop(&self, ui: &mut Ui, id: &PanelId, title: &str, taking: bool) -> Id {
-        let stop = Id::new(("egui_pop.panel_stop", id.as_str()));
+        let stop = Id::unique(("egui_pop.panel_stop", id.as_str()));
         if taking {
             ui.memory_mut(|m| {
                 m.request_focus(stop);
@@ -2320,7 +2320,7 @@ impl AppHandle {
         }
         if taking || ui.memory(|m| m.has_focus(stop)) {
             let r = ui.interact(ui.max_rect(), stop, egui::Sense::focusable_noninteractive());
-            a11y::name(&r, egui::WidgetType::Panel, title);
+            a11y::name(&r, egui::Role::Pane, title);
         }
         stop
     }
@@ -5716,7 +5716,7 @@ impl App {
         ui.ctx()
             .layer_painter(egui::LayerId::new(
                 egui::Order::Foreground,
-                Id::new("egui_pop.window_outline"),
+                Id::unique("egui_pop.window_outline"),
             ))
             .rect_stroke(rect, 0.0, outline, egui::StrokeKind::Inside);
         ui.scope_builder(
@@ -5738,7 +5738,7 @@ impl App {
         if h.zone_has_blocks(&zones::TITLE) {
             // No least height: a title zone whose blocks draw nothing (the
             // system draws the frame) takes no room.
-            egui::Panel::top(Id::new("egui_pop.title"))
+            egui::Panel::top(Id::unique("egui_pop.title"))
                 .frame(egui::Frame::NONE)
                 // The kit's `title-bar` draws the line under the bar.
                 .show_separator_line(false)
@@ -5748,7 +5748,7 @@ impl App {
                 });
         }
         if h.menu_bar() {
-            egui::Panel::top(Id::new("egui_pop.top")).show(ui, |ui| {
+            egui::Panel::top(Id::unique("egui_pop.top")).show(ui, |ui| {
                 focus::scope(ui, "topBar", &[], |ui| {
                     egui::MenuBar::new().ui(ui, |ui| {
                         // The top bar's blocks keep the width they took
@@ -5775,14 +5775,14 @@ impl App {
                 });
             });
         } else if h.zone_has_blocks(&zones::TOP_BAR) {
-            egui::Panel::top(Id::new("egui_pop.top")).show(ui, |ui| {
+            egui::Panel::top(Id::unique("egui_pop.top")).show(ui, |ui| {
                 focus::scope(ui, "topBar", &[], |ui| {
                     ui.horizontal(|ui| h.show_zone(ui, &zones::TOP_BAR));
                 });
             });
         }
         if h.zone_has_blocks(&zones::STATUS_BAR) {
-            egui::Panel::bottom(Id::new("egui_pop.status")).show(ui, |ui| {
+            egui::Panel::bottom(Id::unique("egui_pop.status")).show(ui, |ui| {
                 let region = focus::Region::new("statusBar", crate::workbench::RANK_STATUS_BAR);
                 focus::region(ui, &region, |ui| {
                     ui.horizontal(|ui| h.show_zone(ui, &zones::STATUS_BAR));

@@ -213,11 +213,11 @@ impl Plugin for Demo {
                 let g = ui.button("Grey swatch");
                 clipboard::bind(app, "g", g.id);
                 let mut name = ui
-                    .data(|d| d.get_temp::<String>(egui::Id::new("demo.name")))
+                    .data(|d| d.get_temp::<String>(egui::Id::unique("demo.name")))
                     .unwrap_or_default();
                 ui.add(egui::TextEdit::singleline(&mut name).hint_text("Name"))
                     .labelled_by(ui.label("Name").id);
-                ui.data_mut(|d| d.insert_temp(egui::Id::new("demo.name"), name));
+                ui.data_mut(|d| d.insert_temp(egui::Id::unique("demo.name"), name));
             }),
         );
         Ok(())
@@ -469,7 +469,7 @@ fn text_fields_keep_egui_s_own_copy_and_paste() {
     assert_eq!(rev(&app), before);
     let name = h
         .ctx
-        .data(|d| d.get_temp::<String>(egui::Id::new("demo.name")));
+        .data(|d| d.get_temp::<String>(egui::Id::unique("demo.name")));
     assert_eq!(name.as_deref(), Some("Ada"));
 }
 

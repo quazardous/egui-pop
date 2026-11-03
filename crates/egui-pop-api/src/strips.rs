@@ -66,7 +66,7 @@ use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Mutex;
 
-use egui::{Color32, Context, Rect, RichText, WidgetType};
+use egui::{Color32, Context, Rect, RichText, Role};
 use egui::{Sense, Ui, vec2};
 use egui_pop_core::a11y::{self, Politeness};
 use egui_pop_core::debug::FnCollector;
@@ -888,7 +888,7 @@ fn activity_bar(ui: &mut Ui, app: &AppHandle) {
             let on = !folded && shown.contains(&p.id);
             let side = t.size.icon_panel + 2.0 * t.space.s;
             let (rect, r) = ui.allocate_exact_size(vec2(side, side), Sense::click());
-            egui_pop_core::a11y::name(&r, egui::WidgetType::Button, &title);
+            egui_pop_core::a11y::name(&r, egui::Role::Button, &title);
             // Selected, never hovered then: the shown panel's item keeps
             // its look under the pointer.
             let state = KitState::REST
@@ -1124,13 +1124,13 @@ fn status_context(ui: &mut Ui, app: &AppHandle) {
                 let r = ui.label(RichText::new(&crumbs[*i]).small().strong());
                 let name =
                     strings::tr_args(ui.ctx(), &txt::CONTEXT_HERE, &[("place", &crumbs[*i])]);
-                a11y::name(&r, WidgetType::Label, &name);
+                a11y::name(&r, Role::Label, &name);
             }
             Seg::Crumb(i) => {
                 let name =
                     strings::tr_args(ui.ctx(), &txt::CONTEXT_GO_TO, &[("place", &crumbs[*i])]);
                 let r = ui.add(egui::Button::new(RichText::new(&crumbs[*i]).small()).frame(false));
-                a11y::name(&r, WidgetType::Button, &name);
+                a11y::name(&r, Role::Button, &name);
                 if r.on_hover_text(name).clicked() {
                     jump_to = Some(*i);
                 }
@@ -1145,14 +1145,14 @@ fn status_context(ui: &mut Ui, app: &AppHandle) {
                             &[("place", &crumbs[i])],
                         );
                         let b = ui.button(&crumbs[i]);
-                        a11y::name(&b, WidgetType::Button, &go);
+                        a11y::name(&b, Role::Button, &go);
                         if b.clicked() {
                             jump_to = Some(i);
                             ui.close();
                         }
                     }
                 });
-                a11y::name(&r.response, WidgetType::Button, &name);
+                a11y::name(&r.response, Role::Button, &name);
                 r.response.on_hover_text(name);
             }
         }
@@ -1339,7 +1339,7 @@ fn indicators(ui: &mut Ui, app: &AppHandle) {
         if !hidden.is_empty() {
             let bar = ui.interact(
                 ui.max_rect(),
-                ui.id().with("egui_pop_status_bar"),
+                ui.scope_id().with("egui_pop_status_bar"),
                 Sense::click(),
             );
             egui_pop_core::pointer::claim::context_menu(&bar, |ui| {
@@ -1380,7 +1380,7 @@ fn overflow(ui: &mut Ui, app: &AppHandle, gave_way: &[&(Indicator, IndicatorStat
             }
         }
     });
-    a11y::name(&r.response, WidgetType::Button, &name);
+    a11y::name(&r.response, Role::Button, &name);
     let rect = r.response.rect;
     r.response.on_hover_text(name);
     let open = OPEN.get(&ctx);
@@ -1520,7 +1520,7 @@ fn item(
     let box_ = kit.status_indicator.style_toned(state.tone, KitState::REST);
     let color = box_.text;
     let busy = egui_pop_core::motion::Busy::new(
-        egui::Id::new(("egui_pop_indicator_busy", &ind.id)),
+        egui::Id::unique(("egui_pop_indicator_busy", &ind.id)),
         state.busy.unwrap_or(0.0),
     )
     .visible(&ctx, state.busy.is_some());
@@ -1571,15 +1571,15 @@ fn item(
                     // the clicks too.
                     Some((i, name)) => {
                         let side = t.size.icon_inline;
-                        let slot = egui::Id::new(("egui_pop_indicator_icon", &ind.id));
-                        let mark = egui::Atom::custom(slot, vec2(side, side));
+                        let slot = egui::Id::unique(("egui_pop_indicator_icon", &ind.id));
+                        let mark = egui::Atom::custom(egui::IdSalt::new(slot), vec2(side, side));
                         let button = if text.is_empty() {
                             egui::Button::new(mark)
                         } else {
                             egui::Button::new((mark, label))
                         };
                         let r = button.frame(false).atom_ui(ui);
-                        if let Some(rect) = r.rect(slot) {
+                        if let Some(rect) = r.rect(egui::IdSalt::new(slot)) {
                             i.paint(ui.painter(), rect, color);
                         }
                         egui_pop_core::icon::registry::record(&ctx, "status", &ind.label, name);
@@ -1587,7 +1587,7 @@ fn item(
                             // The icon alone: its label names it.
                             let name = ind.label.clone();
                             r.response.widget_info(|| {
-                                egui::WidgetInfo::labeled(WidgetType::Button, true, &name)
+                                egui::WidgetInfo::labeled(Role::Button, true, &name)
                             });
                         }
                         r.response

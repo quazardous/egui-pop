@@ -579,7 +579,7 @@ fn picture(ui: &mut Ui, v: &Viewer, height: f32, name: &str) -> egui::Response {
             let (rect, response) = ui.allocate_exact_size(size, Sense::click());
             egui_pop_core::a11y::name(
                 &response,
-                egui::WidgetType::Image,
+                egui::Role::Image,
                 &tr_args(&ctx, &txt::VIEWER_VIDEO_PICTURE, &[("name", name)]),
             );
             let painter = ui.painter_at(rect);

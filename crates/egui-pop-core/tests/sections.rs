@@ -168,6 +168,7 @@ fn only_a_real_overflow_makes_the_stack_taller_than_its_panel() {
         delta: egui::vec2(0.0, -30.0),
         phase: egui::TouchPhase::Move,
         modifiers: egui::Modifiers::NONE,
+        source: egui::MouseWheelSource::Wheel,
     });
     h.run();
     assert!(laid_out(&h.ctx, NAME)[0].band.top() < top);
@@ -380,6 +381,7 @@ fn wheel(h: &mut Harness<'_>, at: egui::Pos2, notches: f32) {
         delta: egui::vec2(0.0, delta),
         modifiers: egui::Modifiers::NONE,
         phase,
+        source: egui::MouseWheelSource::Wheel,
     };
     h.hover_at(at);
     h.run();
@@ -603,7 +605,7 @@ fn nested(parent: Rc<Cell<f32>>) -> impl FnMut(&mut egui::Ui) {
                 });
                 ui.add_space(2_000.0);
             });
-        parent.set(out.state.offset.y);
+        parent.set(out.state.clamped_offset().y);
     }
 }
 
@@ -735,7 +737,7 @@ fn a_bare_body_is_given_the_whole_body_for_its_own_scroll() {
                                 ui.label(format!("Own {i}"));
                             }
                         });
-                    inner.set((rect, out.state.offset.y));
+                    inner.set((rect, out.state.clamped_offset().y));
                 });
             });
         });

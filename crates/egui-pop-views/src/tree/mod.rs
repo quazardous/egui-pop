@@ -58,8 +58,7 @@ pub mod model;
 use std::sync::{Arc, Mutex};
 
 use egui::{
-    Context, Id, Modifiers, Rect, Response, TextEdit, Ui, UiBuilder, WidgetInfo, WidgetType, pos2,
-    vec2,
+    Context, Id, Modifiers, Rect, Response, Role, TextEdit, Ui, UiBuilder, WidgetInfo, pos2, vec2,
 };
 use egui_pop_api::steps::Outcome;
 use egui_pop_api::{AppHandle, menus};
@@ -711,7 +710,7 @@ impl<'a, K: Key> TreeView<'a, K> {
         state: &mut TreeState<K>,
         source: &dyn TreeSource<K>,
     ) -> TreeOutput<K> {
-        let id = Id::new(("egui_pop_views::tree", &self.id));
+        let id = Id::unique(("egui_pop_views::tree", &self.id));
         state
             .inbox
             .lock()
@@ -904,7 +903,7 @@ impl<'a, K: Key> TreeView<'a, K> {
                                 );
                                 egui_pop_core::a11y::name(
                                     &edit,
-                                    WidgetType::TextEdit,
+                                    Role::TextInput,
                                     &tr_args(ui.ctx(), &s::RENAME, &[("name", node.name())]),
                                 );
                                 if ren.focus {
@@ -930,12 +929,7 @@ impl<'a, K: Key> TreeView<'a, K> {
                             }
                             let name = node.label.clone();
                             r.widget_info(move || {
-                                WidgetInfo::selected(
-                                    WidgetType::SelectableLabel,
-                                    true,
-                                    selected,
-                                    &name,
-                                )
+                                WidgetInfo::selected(Role::Button, true, selected, &name)
                             });
                             let double = r.double_clicked();
                             if double && self.activate_on_click {

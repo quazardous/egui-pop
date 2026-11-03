@@ -345,7 +345,7 @@ mod tests {
     fn at(ctx: &Context, rect: Rect, claim: SecondaryClaim) {
         claim_secondary_rect(
             ctx,
-            Id::new(&claim.widget),
+            Id::unique(&claim.widget),
             LayerId::background(),
             rect,
             claim,

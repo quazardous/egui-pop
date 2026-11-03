@@ -1,5 +1,5 @@
 //! The workbench: panels in areas from their declarations, placement
-//! rules, changes through steps a plugin may veto, tabs over egui_dock,
+//! rules, changes through steps a plugin may veto, tabs over egui_stack,
 //! the layout saved and repaired, zones placed in areas.
 
 use egui_kittest::Harness;

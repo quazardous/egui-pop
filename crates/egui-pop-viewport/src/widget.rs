@@ -15,8 +15,8 @@ use std::time::Duration;
 use std::sync::Arc;
 
 use egui::{
-    Color32, Id, Key, PointerButton, Pos2, Rect, Response, Sense, Stroke, StrokeKind, Ui, Vec2,
-    WidgetInfo, WidgetType, pos2,
+    Color32, Id, Key, PointerButton, Pos2, Rect, Response, Role, Sense, Stroke, StrokeKind, Ui,
+    Vec2, WidgetInfo, pos2,
 };
 use egui_pop_core::kit::{Kit, KitCx, Part, State};
 use egui_pop_core::model::keymap::Pointer;
@@ -638,7 +638,7 @@ impl Frame<'_> {
 impl<'a> Viewport<'a> {
     /// A viewport; `id_salt` tells it apart from others in the same `Ui`
     /// and names it in the debug bridge.
-    pub fn new(id_salt: impl egui::AsId) -> Viewport<'a> {
+    pub fn new(id_salt: impl egui::AsIdSalt) -> Viewport<'a> {
         Viewport {
             source: None,
             before: None,
@@ -646,7 +646,7 @@ impl<'a> Viewport<'a> {
             overlays: &[],
             readout: false,
             name: format!("{id_salt:?}").trim_matches('"').to_string(),
-            id: Id::new(id_salt),
+            id: Id::unique(id_salt),
             image_size: None,
             label: None,
             pixel_grid: true,
@@ -1278,7 +1278,7 @@ fn name(response: &Response, label: Option<&str>, zoom: Option<f64>) {
         str::to_string,
     );
     response.widget_info(move || {
-        let mut info = WidgetInfo::labeled(WidgetType::Other, true, &label);
+        let mut info = WidgetInfo::labeled(Role::Unknown, true, &label);
         if let Some(z) = zoom {
             info.value = Some(z * 100.0);
             info.current_text_value = Some(format!("{:.0} %", z * 100.0));

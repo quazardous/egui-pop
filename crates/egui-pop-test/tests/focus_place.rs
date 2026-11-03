@@ -228,7 +228,7 @@ fn a_place_under_a_modal_leaves_tab_in_the_modal() {
         let _ = ui.button("Behind");
         let _ = ui.button("Next");
         if *drawn.lock().unwrap() {
-            egui::Modal::new(Id::new("modal")).show(ui.ctx(), |ui| {
+            egui::Modal::new(Id::unique("modal")).show(ui.ctx(), |ui| {
                 let _ = ui.button("Inside");
             });
         }
@@ -248,7 +248,7 @@ fn a_place_in_a_layer_gone_leaves_tab_to_egui() {
         let _ = ui.button("One");
         let _ = ui.button("Two");
         if *drawn.lock().unwrap() {
-            egui::Area::new(Id::new("popup"))
+            egui::Area::new(Id::unique("popup"))
                 .fixed_pos(Pos2::new(150.0, 150.0))
                 .show(ui.ctx(), |ui| {
                     let _ = ui.button("Popped");
@@ -309,6 +309,7 @@ fn wheel<S>(h: &mut Harness<'_, S>, at: Pos2, times: usize) {
             delta: vec2(0.0, -20.0),
             phase: egui::TouchPhase::Move,
             modifiers: Modifiers::NONE,
+            source: egui::MouseWheelSource::Wheel,
         });
         let _ = h.run_ok();
     }
@@ -594,7 +595,7 @@ fn a_menu_of_the_stack_is_left_to_its_own_keys() {
 
 #[test]
 fn an_egui_popup_keeps_tab_when_it_asks() {
-    let id = Id::new("popup");
+    let id = Id::unique("popup");
     let mut h = page(move |ui| {
         let _ = ui.button("Before");
         let item = ui.button("Item");

@@ -28,10 +28,10 @@
 //! scroll (docs/upstream.md, "egui: a scroll area reads no key").
 
 use egui::accesskit::Role;
-use egui::containers::scroll_area::{ScrollAreaOutput, State};
+use egui::containers::scroll_area::ScrollAreaOutput;
 use egui::{
     Context, Event, EventFilter, Id, Key, LayerId, Rect, Sense, Stroke, StrokeKind, TextStyle, Ui,
-    Vec2, WidgetType,
+    Vec2,
 };
 
 use crate::focus;
@@ -96,7 +96,7 @@ pub(crate) fn answer<R>(ui: &mut Ui, out: &ScrollAreaOutput<R>, start: usize) {
         });
         plain.collect::<Vec<_>>()
     });
-    let mut offset = out.state.offset;
+    let mut offset = out.state.clamped_offset();
     let mut used = Vec::new();
     for key in presses {
         let Some(next) = moved(key, reach, axes, offset, view, max, line) else {
@@ -110,11 +110,9 @@ pub(crate) fn answer<R>(ui: &mut Ui, out: &ScrollAreaOutput<R>, start: usize) {
     if used.is_empty() {
         return;
     }
-    let Some(mut state) = State::load(&ctx, out.id) else {
+    if !crate::ui::set_scroll_offset(&ctx, out.id, offset) {
         return;
-    };
-    state.offset = offset;
-    state.store(&ctx, out.id);
+    }
     ctx.input_mut(|i| {
         i.events.retain(|e| {
             !matches!(
@@ -150,11 +148,7 @@ pub(crate) fn axes<R>(ctx: &Context, out: &ScrollAreaOutput<R>) -> [bool; 2] {
 fn stop(ui: &mut Ui, id: Id, rect: Rect) {
     let ctx = ui.ctx().clone();
     let r = ui.interact(rect, id, Sense::FOCUSABLE);
-    crate::a11y::name(
-        &r,
-        WidgetType::Other,
-        &tr(&ctx, &strings::SCROLLABLE_CONTENT),
-    );
+    crate::a11y::name(&r, Role::Unknown, &tr(&ctx, &strings::SCROLLABLE_CONTENT));
     ctx.accesskit_node_builder(id, |node| node.set_role(Role::ScrollView));
     if r.has_focus() {
         // Or egui's arrows would move the focus out rather than the area.

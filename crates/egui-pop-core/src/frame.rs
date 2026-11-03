@@ -40,8 +40,8 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 use egui::{
-    Color32, Context, CursorIcon, Pos2, Rect, ResizeDirection, Sense, Ui, Vec2, ViewportCommand,
-    ViewportId, WidgetType, pos2, vec2,
+    Color32, Context, CursorIcon, Pos2, Rect, ResizeDirection, Role, Sense, Ui, Vec2,
+    ViewportCommand, ViewportId, pos2, vec2,
 };
 use serde::Serialize;
 
@@ -493,7 +493,7 @@ impl<'a> TitleBar<'a> {
         // stop: focused, it would show nothing and answer no key.
         let drag = ui.interact(
             bar,
-            ui.id().with("egui_pop.caption"),
+            ui.scope_id().with("egui_pop.caption"),
             Sense::CLICK | Sense::DRAG,
         );
         let mut request = None;
@@ -654,8 +654,8 @@ impl<'a> TitleBar<'a> {
             let at = kit.title_bar.label_rect(&part, galley.size());
             title_rect = Some(at);
             let title = self.title;
-            ui.interact(at, ui.id().with("egui_pop.title"), Sense::hover())
-                .widget_info(|| egui::WidgetInfo::labeled(WidgetType::Label, true, title));
+            ui.interact(at, ui.scope_id().with("egui_pop.title"), Sense::hover())
+                .widget_info(|| egui::WidgetInfo::labeled(Role::Label, true, title));
             kit.title_bar.paint_label(
                 &KitCx {
                     painter: ui.painter(),
@@ -741,9 +741,9 @@ fn window_button(ui: &mut Ui, rect: Rect, which: Button, look: Look, group: bool
         },
     );
     let name = name.as_str();
-    let id = ui.id().with(("egui_pop.window_button", which as u8));
+    let id = ui.scope_id().with(("egui_pop.window_button", which as u8));
     let response = ui.interact(rect, id, Sense::click());
-    a11y::name(&response, WidgetType::Button, name);
+    a11y::name(&response, Role::Button, name);
     let kit = Kit::of(ui.ctx());
     // On Windows the system, not egui, may see the pointer over the
     // button (its hit test answers for it): drawn as hovered then.

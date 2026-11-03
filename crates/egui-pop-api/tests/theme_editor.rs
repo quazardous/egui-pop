@@ -656,9 +656,13 @@ fn fake_system_fonts(ctx: &egui::Context) {
             Face::from_owned(
                 "Fake Serif",
                 Weight::REGULAR,
-                bundled["Ubuntu-Light"].font.to_vec(),
+                bundled["Ubuntu-Light"].bytes().to_vec(),
             ),
-            Face::from_owned("Fake Mono", Weight::REGULAR, bundled["Hack"].font.to_vec()),
+            Face::from_owned(
+                "Fake Mono",
+                Weight::REGULAR,
+                bundled["Hack"].bytes().to_vec(),
+            ),
         ]),
     );
 }

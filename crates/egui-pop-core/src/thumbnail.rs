@@ -23,8 +23,8 @@
 //! ```
 
 use egui::{
-    Color32, Id, Rect, Response, Sense, TextStyle, TextWrapMode, TextureId, Ui, Vec2, Widget,
-    WidgetInfo, WidgetText, WidgetType, pos2, vec2,
+    Color32, Id, Rect, Response, Role, Sense, TextStyle, TextWrapMode, TextureId, Ui, Vec2, Widget,
+    WidgetInfo, WidgetText, pos2, vec2,
 };
 
 use crate::icon::Icon;
@@ -190,9 +190,7 @@ impl Widget for Thumbnail {
         }
         let label = self.label;
         let selected = self.selected;
-        response.widget_info(move || {
-            WidgetInfo::selected(WidgetType::SelectableLabel, true, selected, &label)
-        });
+        response.widget_info(move || WidgetInfo::selected(Role::Button, true, selected, &label));
         response
     }
 }
@@ -243,8 +241,8 @@ impl ThumbnailGrid {
     }
 
     /// What tells its scrolling from another grid's in the same `Ui`.
-    pub fn id_salt(mut self, salt: impl egui::AsId) -> ThumbnailGrid {
-        self.id_salt = Some(Id::new(salt));
+    pub fn id_salt(mut self, salt: impl egui::AsIdSalt) -> ThumbnailGrid {
+        self.id_salt = Some(Id::unique(salt));
         self
     }
 

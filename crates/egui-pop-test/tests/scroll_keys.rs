@@ -36,7 +36,7 @@ fn text(ui: &mut egui::Ui) {
 
 /// The offset of an area drawn at the root, by its salt.
 fn offset_of(ctx: &Context, id: Id) -> egui::Vec2 {
-    State::load(ctx, id).map_or(egui::Vec2::ZERO, |s| s.offset)
+    State::load(ctx, id).map_or(egui::Vec2::ZERO, |s| s.clamped_offset())
 }
 
 /// A harness drawing `content` in the area, and where to read its offset.

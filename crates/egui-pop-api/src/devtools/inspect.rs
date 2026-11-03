@@ -472,7 +472,7 @@ fn hint(ui: &Ui) {
     let text = strings::tr(ctx, &txt::INSPECT_HINT);
     let painter = ctx.layer_painter(egui::LayerId::new(
         egui::Order::Debug,
-        egui::Id::new("egui_pop.inspect.hint"),
+        egui::Id::unique("egui_pop.inspect.hint"),
     ));
     let screen = ctx.content_rect();
     let galley = painter.layout(

@@ -68,23 +68,25 @@ egui-pop-wayland = { version = "0.2.0", path = "crates/egui-pop-wayland" }
 egui-pop-views = { version = "0.3.0", path = "crates/egui-pop-views" }
 egui-pop-editors = { version = "0.3.0", path = "crates/egui-pop-editors", default-features = false }
 egui-pop-imaging = { version = "0.3.0", path = "crates/egui-pop-imaging" }
-egui = { version = "0.36", default-features = false }
+egui = { version = "0.37", default-features = false }
 # MIT OR Apache-2.0: the scopes egui, egui-wgpu and wgpu already use;
 # compiled out unless a profiler backend is chosen (docs/threading.md).
 profiling = { version = "1", default-features = false }
-egui_kittest = "0.36"
+egui_kittest = "0.37"
 # MIT OR Apache-2.0: the test kit shares one wgpu device per process.
-egui-wgpu = { version = "0.36", default-features = false }
+egui-wgpu = { version = "0.37", default-features = false }
 # MIT OR Apache-2.0 (the Phosphor icons themselves are MIT).
 egui-phosphor = { version = "0.14", default-features = false, features = ["regular"] }
-eframe = { version = "0.36", default-features = false }
+eframe = { version = "0.37", default-features = false }
 # MIT; the system's file chooser (xdg portal on Linux).
 rfd = "0.17"
 # MIT OR Apache-2.0: PNG and JPEG decoded for the file picker's previews
 # (eframe and egui_kittest already depend on it).
 image = { version = "0.25", default-features = false }
-# MIT: docked tabs and splits for the workbench's areas.
-egui_dock = { version = "0.21", default-features = false }
+# MIT: docked tabs and splits for the workbench's areas. egui_stack
+# continues egui_dock 0.21 on egui 0.37; it is not on crates.io yet, so it
+# comes from git, pinned (issue #145).
+egui_stack = { version = "0.22.0", git = "https://github.com/quazardous/egui_stack", rev = "f891bc70290c8fb17ad8ecece01977982b3f1d80", default-features = false }
 egui-pop = { version = "0.3.0", path = "crates/egui-pop" }
 
 [workspace.lints.rust]
@@ -93,3 +95,10 @@ missing_debug_implementations = "warn"
 
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
+
+# Temporary: egui-phosphor has no release on egui 0.37 yet. This fork
+# carries its open pull request updating it (amPerl/egui-phosphor#49).
+# crates.io refuses git dependencies: egui-pop cannot be published while
+# this patch, and the git egui_stack above, remain (issues #145, #146).
+[patch.crates-io]
+egui-phosphor = { git = "https://github.com/quazardous/egui-phosphor", rev = "01e8c1144cac3f551ceb834b6d26ddf36ba502cd" }

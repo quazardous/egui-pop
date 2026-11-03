@@ -71,7 +71,7 @@ pub(crate) fn show(app: &AppHandle, ctx: &Context) {
     if !held && strength <= 0.0 {
         return;
     }
-    let r = egui::Area::new(Id::new("egui_pop.zen.way_out"))
+    let r = egui::Area::new(Id::unique("egui_pop.zen.way_out"))
         .order(Order::Foreground)
         .anchor(Align2::CENTER_TOP, Vec2::ZERO)
         .show(ctx, |ui| {

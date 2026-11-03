@@ -91,3 +91,10 @@ allow-wildcard-paths = true
 unknown-registry = "deny"
 unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+# Temporary, until both are on crates.io on egui 0.37: egui_stack, the
+# continuation of egui_dock (issue #145), and the egui-phosphor fork
+# patched in the workspace's Cargo.toml (issue #146).
+allow-git = [
+    "https://github.com/quazardous/egui_stack",
+    "https://github.com/quazardous/egui-phosphor",
+]

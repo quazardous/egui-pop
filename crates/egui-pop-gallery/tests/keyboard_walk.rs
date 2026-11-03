@@ -214,7 +214,7 @@ impl Plugin for Panels {
         ctx.panel(PanelSpec::new(IMAGE, "Image", Area::Center), |ui, _| {
             let _ = ui.button("Zoom");
             let (_, canvas) = ui.allocate_exact_size(egui::vec2(100.0, 100.0), Sense::click());
-            egui_pop::core::a11y::name(&canvas, egui::WidgetType::Image, "Canvas");
+            egui_pop::core::a11y::name(&canvas, egui::Role::Image, "Canvas");
             focus::prefer(ui.ctx(), canvas.id);
         })?
         .panel(PanelSpec::new(LIST, "List", Area::StartSide), |ui, _| {
@@ -368,6 +368,7 @@ fn a_row_scrolled_out_of_its_panel_is_still_that_panels() {
             delta: egui::vec2(0.0, 20.0),
             phase: egui::TouchPhase::Move,
             modifiers: Modifiers::NONE,
+            source: egui::MouseWheelSource::Wheel,
         });
         let _ = h.run_ok();
     }
@@ -715,6 +716,7 @@ fn a_windowed_row_scrolled_away_keeps_the_place() {
             delta: egui::vec2(0.0, -20.0),
             phase: egui::TouchPhase::Move,
             modifiers: Modifiers::NONE,
+            source: egui::MouseWheelSource::Wheel,
         });
         let _ = h.run_ok();
     }

@@ -37,7 +37,7 @@
 //! }
 //! ```
 
-use egui::{Id, Response, Sense, Ui, WidgetInfo, WidgetType};
+use egui::{Id, Response, Role, Sense, Ui, WidgetInfo};
 use egui_pop_api::AppHandle;
 use egui_pop_api::steps::Outcome;
 use egui_pop_core::binding::SharedStore;
@@ -370,7 +370,7 @@ impl<'a> DataTable<'a> {
         state: &mut TableState<K>,
         rows: &mut dyn TableRows<K>,
     ) -> TableOutput<K> {
-        let id = Id::new(("egui_pop_views::table", &self.id));
+        let id = Id::unique(("egui_pop_views::table", &self.id));
         self.read_store(state);
         let len = rows.len();
         list::retain(&mut state.selection, &mut state.len, len, &|i| rows.key(i));
@@ -402,7 +402,7 @@ impl<'a> DataTable<'a> {
                 egui_table::Column::new(*w)
                     .range(c.min_width..=f32::INFINITY)
                     .resizable(c.resizable)
-                    .id(Id::new(("column", &c.id)))
+                    .id(Id::unique(("column", &c.id)))
             })
             .collect();
         let mut table = egui_table::Table::new()
@@ -477,7 +477,7 @@ impl<'a> DataTable<'a> {
             .clone()
             .unwrap_or_else(|| tr(ui.ctx(), &s::TABLE));
         let response = ui.interact(inner.rect, id, Sense::focusable_noninteractive());
-        egui_pop_core::a11y::name(&response, WidgetType::Other, &label);
+        egui_pop_core::a11y::name(&response, Role::Unknown, &label);
         if response.has_focus() {
             ui.memory_mut(|m| {
                 m.set_focus_lock_filter(
@@ -501,7 +501,7 @@ impl<'a> DataTable<'a> {
                 .read_response(table_id.with(c.id_for(i)).with("resize"))
             {
                 let name = format!("{} ↔", self.columns[i].title);
-                r.widget_info(move || WidgetInfo::labeled(WidgetType::Other, true, &name));
+                r.widget_info(move || WidgetInfo::labeled(Role::Unknown, true, &name));
             }
         }
 
@@ -660,7 +660,7 @@ impl<K: Key> TableDelegate for Delegate<'_, K> {
             descending: sorted.map(|s| s.descending),
             sortable: c.sortable,
         }
-        .show(ui, &self.kit, rect, ui.id().with("sort"));
+        .show(ui, &self.kit, rect, ui.scope_id().with("sort"));
         if c.sortable && r.clicked() {
             self.sort_to = Some(Sort::next(self.sort, &c.id));
         }
@@ -675,7 +675,7 @@ impl<K: Key> TableDelegate for Delegate<'_, K> {
         }
         let key = self.rows.key(row);
         let rect = ui.max_rect();
-        let r = ui.interact(rect, ui.id().with("select"), Sense::CLICK);
+        let r = ui.interact(rect, ui.scope_id().with("select"), Sense::CLICK);
         let selected = self.selection.contains(&key);
         let cursor = self.focused && self.selection.cursor() == Some(&key);
         let state = rows::state(selected, r.hovered(), cursor);
@@ -699,9 +699,7 @@ impl<K: Key> TableDelegate for Delegate<'_, K> {
                 Some(rows::text_color(&self.kit.list_row, state));
         }
         let name = self.rows.label(row);
-        r.widget_info(move || {
-            WidgetInfo::selected(WidgetType::SelectableLabel, true, selected, &name)
-        });
+        r.widget_info(move || WidgetInfo::selected(Role::Button, true, selected, &name));
         if r.clicked() {
             self.take_focus = true;
             let mods = ui.input(|i| i.modifiers);

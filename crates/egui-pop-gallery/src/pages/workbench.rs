@@ -145,7 +145,7 @@ impl Plugin for WorkbenchPage {
         });
         ctx.story(
             Story::new(StoryId::from_static("workbench"), "Workbench", show)
-                .description("Panels in areas over egui_dock, each with its placement rules (where it may go, its smallest and default sizes), changed by named steps another plugin may veto.")
+                .description("Panels in areas over egui_stack, each with its placement rules (where it may go, its smallest and default sizes), changed by named steps another plugin may veto.")
                 .group("Framework", 102),
         )?;
         Ok(())

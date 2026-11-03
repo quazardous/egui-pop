@@ -60,6 +60,7 @@ fn wheel<S>(h: &mut Harness<'_, S>, unit: MouseWheelUnit, delta: Vec2, modifiers
         delta,
         modifiers,
         phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Wheel,
     });
     h.run();
 }
@@ -76,6 +77,7 @@ fn burst(h: &mut Harness<'_, Scene>, modifiers: Modifiers) {
         delta: vec2(0.0, 60.0),
         modifiers,
         phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Wheel,
     });
     h.step();
     let settled = h.state().view;
@@ -463,7 +465,7 @@ fn graph_under_claim(profile: &str, claim: Option<egui::Rect>) -> Harness<'stati
                 if let Some(rect) = claim {
                     claim::claim_secondary_rect(
                         ui.ctx(),
-                        egui::Id::new("pad"),
+                        egui::Id::unique("pad"),
                         ui.layer_id(),
                         rect,
                         SecondaryClaim::new("Pad").drag("Draws a stroke"),

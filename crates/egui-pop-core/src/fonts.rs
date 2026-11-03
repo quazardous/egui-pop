@@ -601,12 +601,12 @@ impl Face {
 
     /// Its file's size, in bytes.
     pub fn len(&self) -> usize {
-        self.data.font.len()
+        self.data.bytes().len()
     }
 
     /// Whether its file is empty (it never draws).
     pub fn is_empty(&self) -> bool {
-        self.data.font.is_empty()
+        self.data.bytes().is_empty()
     }
 
     /// Whether its digits `0` to `9` share one advance (tabular figures
@@ -626,7 +626,7 @@ impl Face {
 /// missing or the face cannot be read.
 fn advances(data: &FontData, chars: &[char]) -> Option<Vec<f32>> {
     use skrifa::MetadataProvider as _;
-    let font = skrifa::FontRef::from_index(data.font.as_ref(), data.index).ok()?;
+    let font = skrifa::FontRef::from_index(data.bytes(), data.index).ok()?;
     let charmap = font.charmap();
     let metrics = font.glyph_metrics(
         skrifa::instance::Size::unscaled(),
@@ -2017,7 +2017,7 @@ mod tests {
         let faces = pop_bundled();
         assert_eq!(faces.len(), 3);
         for f in faces {
-            assert!(inspect(f.data.font.as_ref()).is_ok(), "{f:?}");
+            assert!(inspect(f.data.bytes()).is_ok(), "{f:?}");
         }
         let inter = &faces[0];
         assert!(
@@ -2254,8 +2254,8 @@ mod tests {
     fn faces_given_as_the_system_s_are_listed_found_and_reported() {
         let ctx = Context::default();
         let bundled = FontDefinitions::default().font_data;
-        let hack = bundled["Hack"].font.to_vec();
-        let ubuntu = bundled["Ubuntu-Light"].font.to_vec();
+        let hack = bundled["Hack"].bytes().to_vec();
+        let ubuntu = bundled["Ubuntu-Light"].bytes().to_vec();
         set_system_faces(
             &ctx,
             Some(vec![
@@ -2326,7 +2326,7 @@ mod tests {
                 faces
                     .iter()
                     .map(|(family, file)| {
-                        Face::from_owned(family, Weight::REGULAR, bundled[*file].font.to_vec())
+                        Face::from_owned(family, Weight::REGULAR, bundled[*file].bytes().to_vec())
                     })
                     .collect(),
             ),
@@ -2528,7 +2528,9 @@ mod tests {
     fn families_list_egui_s_the_registered_and_the_user_s_with_their_origin() {
         let ctx = Context::default();
         register(&ctx, Face::from_static("Inter", Weight::REGULAR, INTER_VAR));
-        let hack = FontDefinitions::default().font_data["Hack"].font.to_vec();
+        let hack = FontDefinitions::default().font_data["Hack"]
+            .bytes()
+            .to_vec();
         register(
             &ctx,
             Face {

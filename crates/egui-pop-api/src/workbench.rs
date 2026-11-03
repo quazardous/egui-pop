@@ -1,5 +1,5 @@
 //! The workbench: panels in areas (the centre, the start and end side
-//! bars, the bottom panel), as tabs and splits drawn by `egui_dock`. The
+//! bars, the bottom panel), as tabs and splits drawn by `egui_stack`. The
 //! versioned layout document (`egui_pop_model::layout::Layout`) is the
 //! saved form; each area's dock is how it is drawn and rearranged by
 //! hand, and is read back into the layout after each frame.
@@ -123,8 +123,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
-use egui::{Color32, Id, Pos2, Rect, Ui, ViewportBuilder, ViewportId, WidgetInfo, WidgetType};
-use egui_dock::{DockArea, DockState, NodeIndex, Split, TabViewer};
+use egui::{Color32, Id, Pos2, Rect, Role, Ui, ViewportBuilder, ViewportId, WidgetInfo};
 use egui_pop_core::focus;
 use egui_pop_core::kit::{
     BoxStyle, Corners, Glyph, Kit, KitCx, Part, Side, State, paint_box, paint_indicator,
@@ -134,6 +133,7 @@ use egui_pop_core::strings;
 use egui_pop_model::ids::{PanelId, StepId, ZoneId};
 use egui_pop_model::layout::{FloatingGroup, Join, Layout, Node, Placement};
 use egui_pop_model::panels::{Area, PanelSpec, Panels, Place};
+use egui_stack::{DockArea, DockState, NodeIndex, Split, TabViewer};
 use serde_json::{Value as Json, json};
 
 use crate::app::AppHandle;
@@ -1262,7 +1262,7 @@ impl Workbench {
         self.docks.iter().find_map(|(area, dock)| {
             let base = dock_id(*area);
             dock.iter_all_tabs().find_map(|(path, tab)| {
-                // How egui_dock names a tab's drag (`show/leaf.rs`).
+                // How egui_stack names a tab's drag (`show/leaf.rs`).
                 let id = base
                     .with((path.surface, "surface"))
                     .with((path.node, "node"))
@@ -1430,7 +1430,7 @@ pub(crate) fn windows(
             let full_screen = egui_pop_core::frame::full_screen(&vctx);
             if own && (!full_screen || crate::frame::bar_in_fullscreen(app)) {
                 egui_pop_core::frame::resize_edges(&vctx);
-                let out = egui::Panel::top(Id::new(("egui_pop.aux.title", panel.as_str())))
+                let out = egui::Panel::top(Id::unique(("egui_pop.aux.title", panel.as_str())))
                     .frame(egui::Frame::NONE)
                     .show(ui, |ui| {
                         egui_pop_core::frame::TitleBar::new(&title)
@@ -1496,7 +1496,7 @@ pub fn window_id(panel: &PanelId) -> ViewportId {
 
 /// An area's dock id.
 pub(crate) fn dock_id(area: Area) -> Id {
-    Id::new(("egui_pop.area", area_name(area)))
+    Id::unique(("egui_pop.area", area_name(area)))
 }
 /// An area as the interface names it ("the start side bar").
 fn area_text(ctx: &egui::Context, area: Area) -> String {
@@ -1522,7 +1522,7 @@ fn refusal(ctx: &egui::Context, spec: &PanelSpec, title: &str, area: Area) -> Op
     })
 }
 
-/// An area's tree of tabs and splits as an `egui_dock` state. The
+/// An area's tree of tabs and splits as an `egui_stack` state. The
 /// layout document stays the saved form; the dock is how it is drawn
 /// and moved by hand.
 pub(crate) fn to_dock(node: &Node) -> DockState<PanelId> {
@@ -1539,12 +1539,12 @@ fn leading_tabs(node: &Node) -> Vec<PanelId> {
     }
 }
 
-fn fill(tree: &mut egui_dock::Tree<PanelId>, at: NodeIndex, node: &Node) {
+fn fill(tree: &mut egui_stack::Tree<PanelId>, at: NodeIndex, node: &Node) {
     match node {
         Node::Tabs { panels, active } => {
-            if let egui_dock::Node::Leaf(leaf) = &mut tree[at] {
+            if let egui_stack::Node::Leaf(leaf) = &mut tree[at] {
                 leaf.tabs.clone_from(panels);
-                leaf.active = egui_dock::TabIndex((*active).min(panels.len().saturating_sub(1)));
+                leaf.active = egui_stack::TabIndex((*active).min(panels.len().saturating_sub(1)));
             }
         }
         Node::Split {
@@ -1562,7 +1562,7 @@ fn fill(tree: &mut egui_dock::Tree<PanelId>, at: NodeIndex, node: &Node) {
                 at,
                 side,
                 ratio.clamp(0.05, 0.95),
-                egui_dock::Node::leaf_with(leading_tabs(b)),
+                egui_stack::Node::leaf_with(leading_tabs(b)),
             );
             fill(tree, first, a);
             fill(tree, second, b);
@@ -1575,18 +1575,18 @@ pub(crate) fn from_dock(dock: &DockState<PanelId>) -> Option<Node> {
     read(dock.main_surface(), NodeIndex::root())
 }
 
-fn read(tree: &egui_dock::Tree<PanelId>, at: NodeIndex) -> Option<Node> {
+fn read(tree: &egui_stack::Tree<PanelId>, at: NodeIndex) -> Option<Node> {
     if at.0 >= tree.len() {
         return None;
     }
     match &tree[at] {
-        egui_dock::Node::Empty => None,
-        egui_dock::Node::Leaf(leaf) => (!leaf.tabs.is_empty()).then(|| Node::Tabs {
+        egui_stack::Node::Empty => None,
+        egui_stack::Node::Leaf(leaf) => (!leaf.tabs.is_empty()).then(|| Node::Tabs {
             panels: leaf.tabs.clone(),
             active: leaf.active.0.min(leaf.tabs.len() - 1),
         }),
-        egui_dock::Node::Vertical(s) | egui_dock::Node::Horizontal(s) => {
-            let vertical = matches!(tree[at], egui_dock::Node::Vertical(_));
+        egui_stack::Node::Vertical(s) | egui_stack::Node::Horizontal(s) => {
+            let vertical = matches!(tree[at], egui_stack::Node::Vertical(_));
             match (read(tree, at.left()), read(tree, at.right())) {
                 (Some(a), Some(b)) => Some(Node::Split {
                     vertical,
@@ -1636,7 +1636,7 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
     if !zen && app.zone_has_blocks(&crate::zones::ACTIVITY_BAR) {
         let t = egui_pop_core::theme::Tokens::of(&ctx);
         // Beside the primary side bar, as VS Code's.
-        let id = Id::new("egui_pop.activity_bar");
+        let id = Id::unique("egui_pop.activity_bar");
         let bar = if flipped {
             egui::Panel::right(id)
         } else {
@@ -1740,7 +1740,7 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
     if let Some(old) = held
         && flyout.as_ref() != Some(&old)
     {
-        egui_pop_core::overlay::close(&ctx, Id::new(flyout_overlay(&old)));
+        egui_pop_core::overlay::close(&ctx, Id::unique(flyout_overlay(&old)));
     }
     let mut drawn = None;
     if let Some(panel) = flyout {
@@ -1811,7 +1811,7 @@ fn draw_strip(app: &AppHandle, ui: &mut Ui, kit: &Kit, area: Area, open: bool) -
             );
             let r = ui.interact(rect, id.with("unfold"), egui::Sense::click());
             let label = name.clone();
-            r.widget_info(move || WidgetInfo::labeled(WidgetType::Button, true, &label));
+            r.widget_info(move || WidgetInfo::labeled(Role::Button, true, &label));
             let r = r.on_hover_text(name);
             let state = State::from_response(&r).with(State::SELECTED, open);
             let b = component.style(state);
@@ -2040,7 +2040,7 @@ fn strip_icon(
     let id = dock_id(area).with(("egui_pop.strip_icon", panel.as_str()));
     let r = ui.interact(rect, id, egui::Sense::click());
     let label = title.clone();
-    r.widget_info(move || WidgetInfo::labeled(WidgetType::Button, true, &label));
+    r.widget_info(move || WidgetInfo::labeled(Role::Button, true, &label));
     let indicator = panel_indicator(app, panel);
     let mut tip = title.clone();
     if let Some(key) = panel_key(app, panel) {
@@ -2183,7 +2183,7 @@ pub(crate) fn go_to_region(
 /// leave it open behind the focus.
 fn open_on_top(app: &AppHandle, ctx: &egui::Context) -> bool {
     let flyout = app.workbench_mut().flyout.clone();
-    let flyout = flyout.map(|p| Id::new(flyout_overlay(&p)));
+    let flyout = flyout.map(|p| Id::unique(flyout_overlay(&p)));
     egui::Popup::is_any_open(ctx)
         || egui_pop_core::overlay::stack(ctx)
             .iter()
@@ -2530,7 +2530,7 @@ fn grip(ctx: &egui::Context, kit: &Kit, area: Area, rect: Rect, flipped: bool) {
     );
     let painter = ctx.layer_painter(egui::LayerId::new(
         egui::Order::Middle,
-        Id::new("egui_pop.area_grips"),
+        Id::unique("egui_pop.area_grips"),
     ));
     let rect = Rect::from_center_size(centre, size);
     g.paint(
@@ -2647,11 +2647,11 @@ fn first_bar(ui: &Ui, dock: &DockState<PanelId>, kit: &Kit, seen: &[SeenTab]) ->
 struct Viewer<'a> {
     app: &'a AppHandle,
     prepared: &'a HashMap<PanelId, PreparedTab>,
-    /// The tabs egui_dock laid out this pass, for the kit to paint.
+    /// The tabs egui_stack laid out this pass, for the kit to paint.
     seen: Vec<SeenTab>,
 }
 
-/// A tab egui_dock laid out and took the input of: where, on which layer
+/// A tab egui_stack laid out and took the input of: where, on which layer
 /// (a dragged tab floats), and its interaction.
 struct SeenTab {
     panel: PanelId,
@@ -2662,11 +2662,11 @@ struct SeenTab {
     focused: bool,
 }
 
-/// egui_dock lays the tabs out and takes their input; the kit paints them
+/// egui_stack lays the tabs out and takes their input; the kit paints them
 /// (`egui_pop_core::kit`). Its own tab painting is made invisible, and
 /// each tab is as wide as the kit measures it.
-fn dock_style(style: &egui::Style, kit: &Kit) -> egui_dock::Style {
-    let mut s = egui_dock::Style::from_egui(style);
+fn dock_style(style: &egui::Style, kit: &Kit) -> egui_stack::Style {
+    let mut s = egui_stack::Style::from_egui(style);
     let clear = Color32::TRANSPARENT;
     s.tab_bar.bg_fill = clear;
     s.tab_bar.hline_color = clear;
@@ -2703,7 +2703,7 @@ struct PreparedTab {
     width: f32,
 }
 
-/// An area's prepared tabs and egui_dock style, kept across passes: a tab
+/// An area's prepared tabs and egui_stack style, kept across passes: a tab
 /// is translated again only when its title changes, and
 /// everything when the kit (a theme install, a light or dark switch) or
 /// the scale changes; the style again when egui's style does. Per dock
@@ -2720,9 +2720,9 @@ struct TabCache {
     /// for.
     key: Option<(u32, Option<usize>)>,
     tabs: HashMap<PanelId, PreparedTab>,
-    /// egui_dock's style and the egui style it was made from (kept, as
+    /// egui_stack's style and the egui style it was made from (kept, as
     /// the kit is).
-    style: Option<(Arc<egui::Style>, Arc<egui_dock::Style>)>,
+    style: Option<(Arc<egui::Style>, Arc<egui_stack::Style>)>,
 }
 
 impl TabCache {
@@ -2768,7 +2768,7 @@ impl TabCache {
         }
     }
 
-    fn dock_style(&mut self, style: &Arc<egui::Style>, kit: &Kit) -> egui_dock::Style {
+    fn dock_style(&mut self, style: &Arc<egui::Style>, kit: &Kit) -> egui_stack::Style {
         match &self.style {
             Some((from, dock)) if Arc::ptr_eq(from, style) => (**dock).clone(),
             _ => {
@@ -2781,7 +2781,7 @@ impl TabCache {
 }
 
 /// Paints the tab bars and the tabs of an area with the kit, over what
-/// egui_dock laid out.
+/// egui_stack laid out.
 fn paint_tabs(
     ui: &Ui,
     dock: &DockState<PanelId>,
@@ -2853,11 +2853,11 @@ impl TabViewer for Viewer<'_> {
     type Tab = PanelId;
 
     fn id(&mut self, tab: &mut PanelId) -> Id {
-        Id::new(("egui_pop.panel", tab.as_str()))
+        Id::unique(("egui_pop.panel", tab.as_str()))
     }
 
     fn title(&mut self, tab: &mut PanelId) -> egui::WidgetText {
-        // The prepared label: egui_dock lays nothing out again.
+        // The prepared label: egui_stack lays nothing out again.
         match self.prepared.get(tab) {
             Some(p) => p.label.clone().into(),
             None => self.app.panel_title(&self.app.egui(), tab).into(),
@@ -2869,12 +2869,12 @@ impl TabViewer for Viewer<'_> {
     }
 
     fn on_tab_button(&mut self, tab: &mut PanelId, response: &egui::Response) {
-        // egui_dock's tab buttons carry no name: give them their panel's.
+        // egui_stack's tab buttons carry no name: give them their panel's.
         match self.prepared.get(tab) {
-            Some(p) => egui_pop_core::a11y::name(response, egui::WidgetType::Button, &p.title),
+            Some(p) => egui_pop_core::a11y::name(response, egui::Role::Button, &p.title),
             None => {
                 let title = self.app.panel_title(&response.ctx, tab);
-                egui_pop_core::a11y::name(response, egui::WidgetType::Button, &title);
+                egui_pop_core::a11y::name(response, egui::Role::Button, &title);
             }
         }
         self.seen.push(SeenTab {
@@ -2890,16 +2890,16 @@ impl TabViewer for Viewer<'_> {
     fn tab_style_override(
         &self,
         tab: &PanelId,
-        global: &egui_dock::TabStyle,
-    ) -> Option<egui_dock::TabStyle> {
+        global: &egui_stack::TabStyle,
+    ) -> Option<egui_stack::TabStyle> {
         let width = self.prepared.get(tab)?.width;
-        Some(egui_dock::TabStyle {
+        Some(egui_stack::TabStyle {
             minimum_width: Some(width),
             ..global.clone()
         })
     }
 
-    fn context_menu(&mut self, ui: &mut Ui, tab: &mut PanelId, _path: egui_dock::NodePath) {
+    fn context_menu(&mut self, ui: &mut Ui, tab: &mut PanelId, _path: egui_stack::TabPath) {
         let spec = self.app.workbench_mut().spec(tab).cloned();
         let Some(spec) = spec else { return };
         let ctx = ui.ctx().clone();
@@ -2969,11 +2969,11 @@ impl TabViewer for Viewer<'_> {
     }
 }
 
-/// Follows a tab drag; dropped over another area, `egui_dock` (which
+/// Follows a tab drag; dropped over another area, `egui_stack` (which
 /// only sees its own area) leaves it, and the workbench moves it there,
 /// or says why it may not go.
-// upstream: egui_dock has no per-tab, per-destination drop veto (see
-// docs/upstream.md).
+// upstream: each area is a dock of its own, and a dock follows a drag only
+// inside itself (docs/upstream.md, "egui_stack: no drop between two docks").
 fn follow_drag(app: &AppHandle, ctx: &egui::Context) {
     let pos = ctx.input(|i| i.pointer.latest_pos());
     let dragged = app.workbench_mut().dragged_tab(ctx);
@@ -3058,7 +3058,7 @@ fn drop_hint(app: &AppHandle, ctx: &egui::Context) {
     let t = egui_pop_core::theme::Tokens::of(ctx);
     let painter = ctx.layer_painter(egui::LayerId::new(
         egui::Order::Foreground,
-        Id::new("egui_pop.workbench.drop"),
+        Id::unique("egui_pop.workbench.drop"),
     ));
     let label = why.map(|why| {
         let font = egui::FontId::proportional(t.font.body);

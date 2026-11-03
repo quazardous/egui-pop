@@ -274,7 +274,7 @@ fn problems_popover(ui: &mut Ui, app: &AppHandle) {
 
 /// The node's popover: a small connection form.
 fn node_popover(ui: &mut Ui, app: &AppHandle) {
-    let id = egui::Id::new("gallery.node.host");
+    let id = egui::Id::unique("gallery.node.host");
     let mut host: String = ui
         .data(|d| d.get_temp(id))
         .unwrap_or_else(|| "node-1.local".to_string());

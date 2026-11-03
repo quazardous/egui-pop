@@ -138,7 +138,10 @@ fn areas_side_by_side_leave_each_other_alone() {
             let right = ScrollArea::vertical()
                 .id_salt("right")
                 .show(&mut columns[1], |ui| buttons(ui, "Right", 30));
-            *out = [left.state.offset.y, right.state.offset.y];
+            *out = [
+                left.state.clamped_offset().y,
+                right.state.clamped_offset().y,
+            ];
         });
     });
     walk::reach(&mut h, TAB, "Left 29", 40).expect("Tab gets there");
@@ -157,7 +160,7 @@ fn a_stop_in_view_scrolls_nothing() {
     let seen = offset.clone();
     let mut h = page(move |ui| {
         let out = ScrollArea::vertical().show(ui, |ui| buttons(ui, "Row", 40));
-        *seen.lock().unwrap() = out.state.offset.y;
+        *seen.lock().unwrap() = out.state.clamped_offset().y;
     });
     walk::reach(&mut h, TAB, "Row 2", 5).expect("Tab gets there");
     assert_eq!(*offset.lock().unwrap(), 0.0);
@@ -193,6 +196,7 @@ fn the_wheel_can_take_a_focused_widget_away_again() {
             delta: vec2(0.0, 20.0),
             phase: egui::TouchPhase::Move,
             modifiers: Modifiers::NONE,
+            source: egui::MouseWheelSource::Wheel,
         });
         let _ = h.run_ok();
     }

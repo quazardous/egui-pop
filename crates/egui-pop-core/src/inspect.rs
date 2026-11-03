@@ -727,7 +727,7 @@ fn end_pass(ctx: &Context) {
 /// Draws the outline and its label over everything.
 fn outline(ctx: &Context, rect: Rect, label: &str) {
     let t = Tokens::of(ctx);
-    let painter = ctx.layer_painter(LayerId::new(Order::Debug, Id::new("egui_pop.inspect")));
+    let painter = ctx.layer_painter(LayerId::new(Order::Debug, Id::unique("egui_pop.inspect")));
     painter.rect(
         rect,
         0.0,

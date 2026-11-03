@@ -38,7 +38,9 @@ svg = ["dep:resvg"]
 theme-zip = ["egui-pop-tokens/zip"]
 
 [dependencies]
-egui.workspace = true
+# `serde`: a scroll area is moved through its state's serde form
+# (`ui::set_scroll_offset`), egui 0.37 having no setter for it.
+egui = { workspace = true, features = ["serde"] }
 egui-phosphor = { workspace = true, optional = true }
 # MIT: the system's fonts by family and weight (feature `system-fonts`).
 fontdb = { version = "0.23", optional = true }

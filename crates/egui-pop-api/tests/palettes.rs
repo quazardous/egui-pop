@@ -1087,7 +1087,7 @@ fn tree(ui: &mut egui::Ui, keys: &Mutex<Vec<egui::Key>>) {
     // The tree first, as a tree view registers itself before its rows.
     let rect = egui::Rect::from_min_size(ui.cursor().min, egui::vec2(ui.available_width(), 48.0));
     let tree = ui.interact(rect, id, egui::Sense::focusable_noninteractive());
-    tree.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Other, true, "Mask tree"));
+    tree.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Unknown, true, "Mask tree"));
     for row in ["Mask 1", "Mask 2"] {
         if ui.button(row).clicked() {
             ui.memory_mut(|m| m.request_focus(id));

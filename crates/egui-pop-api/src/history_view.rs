@@ -426,7 +426,7 @@ fn previewed(
 /// asks the owner for a preview; a step's context menu undoes that one
 /// step, when the owner allows it.
 pub fn show(ui: &mut Ui, app: &AppHandle) {
-    let view = ui.id();
+    let view = ui.scope_id();
     rows(ui, app, view);
     // After the rows: a preview none of them asked for in this pass ends.
     history::rows_drawn(app, view);

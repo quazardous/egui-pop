@@ -139,7 +139,7 @@ fn toolbar(ui: &mut Ui, v: &Viewer, actions: &mut Vec<Action>) {
             let z = ui
                 .add(egui::Button::new(&zoom).small())
                 .on_hover_text(&zoom_name);
-            egui_pop_core::a11y::name(&z, egui::WidgetType::Button, &zoom_name);
+            egui_pop_core::a11y::name(&z, egui::Role::Button, &zoom_name);
             if z.clicked() {
                 actions.push(Action::Zoom(0));
             }
@@ -149,7 +149,7 @@ fn toolbar(ui: &mut Ui, v: &Viewer, actions: &mut Vec<Action>) {
                     .desired_width(ui.available_width())
                     .hint_text(&address),
             );
-            egui_pop_core::a11y::name(&edit, egui::WidgetType::TextEdit, &address);
+            egui_pop_core::a11y::name(&edit, egui::Role::TextInput, &address);
             if edit.lost_focus() && ui.input(|inp| inp.key_pressed(egui::Key::Enter)) {
                 actions.push(Action::Go(i.address.clone()));
             } else if !edit.has_focus()
@@ -176,7 +176,7 @@ fn find_bar(ui: &mut Ui, v: &Viewer, actions: &mut Vec<Action>) {
                 .desired_width(180.0)
                 .hint_text(&name),
         );
-        egui_pop_core::a11y::name(&edit, egui::WidgetType::TextEdit, &name);
+        egui_pop_core::a11y::name(&edit, egui::Role::TextInput, &name);
         if std::mem::take(&mut i.find.focus) {
             edit.request_focus();
         }
@@ -360,7 +360,7 @@ fn body(ui: &mut Ui, app: &AppHandle, v: &Viewer, actions: &mut Vec<Action>) {
                     Content::Video(_) | Content::YouTube(_) => {}
                 }
             });
-            lock(&v.inner).scroll = out.state.offset.y;
+            lock(&v.inner).scroll = out.state.clamped_offset().y;
         }
     }
 }

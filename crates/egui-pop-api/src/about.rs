@@ -75,7 +75,7 @@ pub const EGUI_POP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// The egui series egui-pop is built against (one egui-pop minor per
 /// egui minor); a test keeps it in step with the workspace.
-pub const EGUI_VERSION: &str = "0.36";
+pub const EGUI_VERSION: &str = "0.37";
 
 /// Draws the application's icon in a square of the given side.
 pub type IconFn = Arc<dyn Fn(&mut Ui, f32) + Send + Sync>;

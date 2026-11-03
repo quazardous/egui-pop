@@ -154,6 +154,32 @@ pub fn contain_wheel_in(ui: &Ui, rect: Rect, ways: [bool; 2]) {
     });
 }
 
+/// Moves the scroll area of id `id` (its [`ScrollAreaOutput::id`]) to
+/// `offset`, in points from its start, as from the next time it is drawn;
+/// `false` when no such area has been drawn. Kinetic scrolling in
+/// progress stops there.
+///
+/// upstream: egui 0.37 made the scroll state's offset private and has no
+/// setter, so this goes through the state's serde form (docs/upstream.md).
+pub fn set_scroll_offset(ctx: &egui::Context, id: egui::Id, offset: egui::Vec2) -> bool {
+    use egui::scroll_area::State;
+    let Some(state) = State::load(ctx, id) else {
+        return false;
+    };
+    let Ok(mut value) = serde_json::to_value(state) else {
+        return false;
+    };
+    let (Some(fields), Ok(offset)) = (value.as_object_mut(), serde_json::to_value(offset)) else {
+        return false;
+    };
+    fields.insert("offset".to_owned(), offset);
+    let Ok(state) = serde_json::from_value::<State>(value) else {
+        return false;
+    };
+    state.store(ctx, id);
+    true
+}
+
 mod sealed {
     pub trait Sealed {}
     impl Sealed for egui::Ui {}
