@@ -324,7 +324,7 @@ impl Store {
             return Ok(Some(walked));
         }
         for _ in 0..count {
-            self.walk(history, origin, redo)?;
+            self.walk(history, origin, redo, None)?;
         }
         let h = self.histories.get_mut(history).expect("still there");
         let line = h.replaced.remove(b);
@@ -335,7 +335,7 @@ impl Store {
         h.redo = line.steps.into_iter().rev().collect();
         h.rev += 1;
         for _ in 0..=pos {
-            self.walk(history, origin, true)?;
+            self.walk(history, origin, true, None)?;
         }
         Ok(Some(walked))
     }

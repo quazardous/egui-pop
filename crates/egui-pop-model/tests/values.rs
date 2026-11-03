@@ -19,6 +19,11 @@ fn agent() -> Origin {
 
 /// A mixer's values: a gain in dB with a soft range, a mute, a limit.
 fn mixer() -> Store {
+    mixer_for(&[])
+}
+
+/// The mixer, its gain also written by `writers`.
+fn mixer_for(writers: &[OwnerId]) -> Store {
     let mut store = Store::new();
     store
         .declare(
@@ -28,7 +33,8 @@ fn mixer() -> Store {
                 .soft(-24.0, 6.0)
                 .step(0.1)
                 .coarse(1.0)
-                .unit("dB"),
+                .unit("dB")
+                .writers(writers),
         )
         .unwrap();
     store
@@ -402,11 +408,38 @@ fn settings_are_saved_as_their_differences_and_read_back() {
 
 #[test]
 fn the_commands_drive_the_store_with_their_origin() {
-    let store = Arc::new(Mutex::new(mixer()));
-    let mut r = Commands::new();
-    register(&mut r, &FW, store.clone()).unwrap();
     let cx = WhenContext::new();
     let id = CommandId::from_static;
+    // An agent writes as itself (`agent:a1`), held to the value's
+    // writers: not one of the gain's here.
+    let closed = Arc::new(Mutex::new(mixer()));
+    let mut r = Commands::new();
+    register(&mut r, &FW, closed.clone()).unwrap();
+    let refused = r
+        .run(
+            &id("value.set"),
+            json!({ "path": GAIN, "value": 3 }),
+            agent(),
+            &cx,
+        )
+        .unwrap_err();
+    assert!(refused.contains("\"refused\":\"not_writer\""), "{refused}");
+    assert_eq!(gain(&closed.lock().unwrap()), 0.0);
+    // The user writes through the framework.
+    r.run(
+        &id("value.set"),
+        json!({ "path": GAIN, "value": 3 }),
+        Origin::User,
+        &cx,
+    )
+    .unwrap();
+    assert_eq!(gain(&closed.lock().unwrap()), 3.0);
+    assert_eq!(agent().writer().as_str(), "agent:a1");
+    assert_eq!(Origin::User.writer(), OwnerId::FRAMEWORK);
+    // The gain names the agent among its writers.
+    let store = Arc::new(Mutex::new(mixer_for(&[agent().writer()])));
+    let mut r = Commands::new();
+    register(&mut r, &FW, store.clone()).unwrap();
     let a = r
         .run(
             &id("value.set"),
@@ -454,6 +487,23 @@ fn the_commands_drive_the_store_with_their_origin() {
         .unwrap();
     assert_eq!(undone["undone"], json!("set mixer/gain"));
     assert_eq!(gain(&store.lock().unwrap()), 6.0);
+    // The agent's undo is held to the writers too: it may not undo the
+    // user's mute.
+    r.run(
+        &id("value.set"),
+        json!({ "path": "mixer/mute", "value": true }),
+        Origin::User,
+        &cx,
+    )
+    .unwrap();
+    let refused = r
+        .run(&id("value.undo"), json!(null), agent(), &cx)
+        .unwrap_err();
+    assert!(refused.contains("mixer/mute"), "{refused}");
+    let undone = r
+        .run(&id("value.undo"), json!(null), Origin::User, &cx)
+        .unwrap();
+    assert_eq!(undone["undone"], json!("set mixer/mute"));
 }
 
 #[test]

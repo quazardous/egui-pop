@@ -91,6 +91,7 @@
   - [0017: Links and outside content](adr/0017-links-and-outside-content.md)
     - [Analysis](adr/0017-links-and-outside-content-analysis.md)
   - [0018: Agents and collector actions](adr/0018-agent-collector-actions.md)
+  - [0019: Actions act as their caller](adr/0019-actions-act-as-their-caller.md)
 - [Micro-indicators, the design](design/indicators.md)
 - [Icons: an inventory](icons.md)
 - [Pointer gestures, a study](design/pointer-gestures.md)

@@ -3702,15 +3702,19 @@ impl App {
                         "history": app.history(),
                     })
                 })
-                .action("run", "Runs a command offered to agents (`id`, `args`), as the agent `debug-bridge` whoever calls.", true, move |_, args| {
+                .action_as("run", "Runs a command (`id`, `args`) as its caller: anyone but the user only a command offered to agents.", true, move |_, args, origin| {
                     let app = up(&w2)?;
                     let id = args.get("id").and_then(Json::as_str).ok_or("`id` is missing")?;
                     let id = CommandId::new(id).map_err(|e| e.to_string())?;
-                    let offered = app.commands().iter().any(|(s, _)| s.id == id && s.agent);
-                    if !offered {
-                        return Err(format!("`{id}` is not offered to agents"));
+                    let known = app.commands().iter().find(|(s, _)| s.id == id).map(|(s, _)| s.agent);
+                    match known {
+                        None => return Err(format!("`{id}` is not offered to agents")),
+                        Some(false) if *origin != Origin::User => {
+                            return Err(format!("`{id}` is not offered to agents"));
+                        }
+                        Some(_) => {}
                     }
-                    app.run_as(id, args.get("args").cloned().unwrap_or(Json::Null), egui_pop_core::debug::agent());
+                    app.run_as(id, args.get("args").cloned().unwrap_or(Json::Null), origin.clone());
                     Ok(json!({ "queued": true }))
                 })
                 // The command's own `agent` flag is checked.
@@ -4023,7 +4027,9 @@ impl App {
         args: &Json,
         origin: Origin,
     ) -> Feedback {
-        let feedback = self.handle.debug_call_as(collector, action, args, origin);
+        let feedback = self
+            .handle
+            .debug_call_as(collector, action, args, origin.clone());
         if collector == "commands"
             && action == "run"
             && feedback.ok
@@ -4035,11 +4041,7 @@ impl App {
                 .and_then(Json::as_str)
                 .and_then(|i| CommandId::new(i).ok());
             if let Some(id) = id {
-                let reply = self.run(
-                    &id,
-                    args.get("args").cloned().unwrap_or(Json::Null),
-                    egui_pop_core::debug::agent(),
-                );
+                let reply = self.run(&id, args.get("args").cloned().unwrap_or(Json::Null), origin);
                 let Some(result) = reply.now() else {
                     return Feedback {
                         message: format!("`{id}` is running; its result goes to the journal"),

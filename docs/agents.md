@@ -78,8 +78,8 @@ answers it:
   "description": "The value store: every path, its value, its owner, who may write it and who changed it.",
   "actions": [
     { "name": "get", "description": "Reads a value with its descriptor.", "mutates": false, "agent": true, "args": { "path": "settings/x" } },
-    { "name": "set", "description": "Writes a value (`path`, `value`), marked as the debug bridge's; for the user only (agents run the `value.set` command).", "mutates": true, "agent": false, "args": { "path": "settings/x", "value": 1 } },
-    { "name": "undo", "description": "Undoes the last change of values; for the user only (agents run the `value.undo` command).", "mutates": true, "agent": false, "args": null }
+    { "name": "set", "description": "Writes a value (`path`, `value`) as its caller: the user through the framework, anyone else as itself, held to the value's writers (`Origin::writer`); for the user only unless offered (agents run the `value.set` command).", "mutates": true, "agent": false, "args": { "path": "settings/x", "value": 1 } },
+    { "name": "undo", "description": "Undoes the last change of values as its caller, refused when it may not write one of them; for the user only unless offered (agents run the `value.undo` command).", "mutates": true, "agent": false, "args": null }
   ]
 }
 ```
@@ -115,7 +115,10 @@ runs). In the gallery:
 
 `commands.run` takes `{ "id", "args" }`. The bridge checks that the
 command exists and is offered to agents, then runs it with
-`Origin::Agent("debug-bridge")`. The reply is a `Feedback`, the same
+`Origin::Agent("debug-bridge")`. A collector action acts as its caller:
+called by the user (the devtools panel, `debug_call_as` with
+`Origin::User`), `commands.run` runs the command as the user, a command
+kept from agents included. The reply is a `Feedback`, the same
 shape for every call, success or not:
 
 | Field | Meaning |
@@ -384,9 +387,18 @@ The bridge has one caller identity: every command it runs is
 - **The clipboard.** An agent copies and pastes in its own slot
   (`agent:debug-bridge`): it neither reads nor overwrites what the user
   copied unless the owner allows it ([The clipboard](clipboard.md)).
-- **The value store.** A write is refused when the value is held by
-  someone else's gesture, changed since `if_seq`, or invalid for its
-  type; past the soft range only with `force`.
+- **The value store.** An agent writes as itself
+  (`agent:debug-bridge`, `Origin::writer`), through `value.set`,
+  `value.reset`, `value.undo`, `value.redo` and, when offered,
+  `store.set` and `store.undo`: a value's declared writers
+  ([ADR 0016](adr/0016-one-writer-per-value.md)) apply, so it is
+  refused a setting only its owner writes (`settings/developer.devtools`)
+  and the undo of a change to one. To let it write a value, name it
+  among the value's writers (`Descriptor::writers`). The user writes
+  through the framework, as the settings form does. A write is also
+  refused when the value is held by someone else's gesture, changed
+  since `if_seq`, or invalid for its type; past the soft range only with
+  `force`.
 - **Steps.** Every step's before-hooks see its arguments and may veto
   it; steps that carry an `origin` (`dialog.answer`, `terminal.input`
   among them) let a hook refuse agents only.
@@ -497,12 +509,6 @@ What is not protected today. None of these is fixed by documenting it.
 - **The bridge cannot be turned off.** It is in every build, release
   included; there is no feature or setting to remove it or to make it
   read-only. Any code in the process (a plugin included) can call it.
-- **Bridge writes bypass the writers check.** The `value.set` /
-  `value.reset` commands an agent runs, and `store.set` (the user's, or
-  an agent's once the application offers it), write as the framework,
-  which may write any path: a value's declared writers ([ADR 0016](adr/0016-one-writer-per-value.md)) do not apply.
-  For example, `value.set` turns on `settings/developer.devtools`,
-  whose writers are its owner only.
 - **Accepting a dialog runs its command for the agent, whatever its
   flag.** Once an application offers `dialogs.answer` to agents, an
   `accept` runs the dialog's command with the agent's origin without

@@ -52,6 +52,38 @@ pub enum Origin {
     Remote(String),
 }
 
+impl Origin {
+    /// Who writes a value for this origin (ADR 0016): a person writes
+    /// through the framework, which may write any path; anyone else
+    /// writes as itself (`agent:debug-bridge`, `script:<name>`...), so a
+    /// value's declared writers apply. A name an id cannot hold is
+    /// written with `_` for each character it refuses.
+    pub fn writer(&self) -> OwnerId {
+        let (kind, name) = match self {
+            Origin::User => return OwnerId::FRAMEWORK,
+            Origin::Agent(n) => ("agent", n),
+            Origin::Script(n) => ("script", n),
+            Origin::Device(n) => ("device", n),
+            Origin::Remote(n) => ("remote", n),
+        };
+        let text = format!("{kind}:{name}");
+        OwnerId::new(text.clone()).unwrap_or_else(|_| {
+            let clean: String = text
+                .chars()
+                .take(128)
+                .map(|c| {
+                    if c.is_ascii_alphanumeric() || "._:/-".contains(c) {
+                        c
+                    } else {
+                        '_'
+                    }
+                })
+                .collect();
+            OwnerId::new(clean).unwrap_or(OwnerId::from_static("unnamed"))
+        })
+    }
+}
+
 /// Where a command's menu entry goes.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct MenuPlacement {
